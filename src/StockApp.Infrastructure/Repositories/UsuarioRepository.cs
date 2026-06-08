@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 using StockApp.Infrastructure.Persistence;
 
 namespace StockApp.Infrastructure.Repositories;
@@ -23,6 +24,9 @@ public class UsuarioRepository : IUsuarioRepository
     public Task<bool> ExisteAlgunUsuarioAsync()
         => _ctx.Usuarios.AnyAsync();
 
+    public Task<int> ContarAdminsActivosAsync()
+        => _ctx.Usuarios.CountAsync(u => u.Rol == RolUsuario.Admin && u.Activo);
+
     public async Task<int> AgregarAsync(Usuario usuario)
     {
         _ctx.Usuarios.Add(usuario);
@@ -36,11 +40,8 @@ public class UsuarioRepository : IUsuarioRepository
         return _ctx.SaveChangesAsync();
     }
 
-    public async Task ActualizarUltimoAccesoAsync(int usuarioId, DateTime fechaAcceso)
-    {
-        var usuario = await ObtenerPorIdAsync(usuarioId);
-        if (usuario is null) return;
-        usuario.UltimoAcceso = fechaAcceso;
-        await _ctx.SaveChangesAsync();
-    }
+    public Task ActualizarUltimoAccesoAsync(int usuarioId, DateTime fechaAcceso)
+        => _ctx.Usuarios
+               .Where(u => u.Id == usuarioId)
+               .ExecuteUpdateAsync(s => s.SetProperty(u => u.UltimoAcceso, fechaAcceso));
 }
