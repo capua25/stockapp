@@ -255,3 +255,80 @@ Solo accesibles por **Admin**. Todos exportables a **CSV**:
 - Ubicación del archivo SQLite (carpeta de datos del usuario vs junto al ejecutable).
 - Datos semilla iniciales (unidades de medida por defecto).
 - ¿El Admin puede ver/editar precios siempre, o también querés que ciertos cambios de precio requieran confirmación extra? *(Por ahora: edición directa, auditada.)*
+
+---
+
+## 11. Distribución, actualización y licenciamiento
+
+### 11.1. Instalador (Velopack)
+
+- El proyecto de presentación (Avalonia) se empaqueta como **self-contained**, con el runtime .NET 10 incluido: la PC de la ferretería no necesita tener nada instalado previamente.
+- `vpk pack` genera el instalador para **Windows** (`Setup.exe`) y **Linux** (`AppImage`).
+- El instalador **no toca** la base de datos ni ningún dato del usuario.
+
+### 11.2. Actualizador automático in-app (Velopack)
+
+- Al arrancar, la app consulta el feed de actualizaciones desde una **URL propia**, con **fallback** a un repo de GitHub público si el dominio falla.
+- **Implementación del fallback:** un `IUpdateSource` personalizado que encadena `[HttpSource(dominio propio), GithubSource(repo público)]`; intenta el primario y, si falla por excepción o timeout, cae al secundario. Velopack no trae fallback nativo entre fuentes, por eso se implementa esta clase (sobreescribiendo `GetReleaseFeed` y `DownloadReleaseEntry` de la interfaz `IUpdateSource`).
+- El publish sube los mismos assets a **ambos orígenes** (dominio + GitHub release, vía `vpk upload`). Ambos orígenes deben tener exactamente las mismas versiones y canal para que el fallback sea transparente.
+- **Updates diferenciales (delta):** el cliente baja solo lo que cambió.
+- **Nota de seguridad:** el repo de GitHub es **público** y contiene solo releases (no código fuente). No se embebe ningún token. El control no es esconder el binario sino el licenciamiento (§11.4).
+
+### 11.3. UX del actualizador por severidad
+
+Cada release declara un metadato `severity` en el feed: `normal` | `important` | `critical`.
+La app lee ese nivel y se comporta así:
+
+| Severidad | Comportamiento | Si no puede descargar |
+|-----------|---------------|----------------------|
+| `normal` | Banner discreto; la actualización se aplica al próximo reinicio voluntario | Reintenta en silencio |
+| `important` | Cartel modal llamativo al arrancar; posponible, pero insiste en cada arranque | Reintenta en cada arranque |
+| `critical` | Cartel rojo prominente que **bloquea** el uso hasta actualizar | Entra en **MODO DEGRADADO**: la app sigue operable (la ferretería debe poder vender), pero muestra un banner rojo permanente no-cerrable "Actualización crítica pendiente"; reintenta en cada arranque |
+
+El texto de cada cartel sale de las **release notes** (markdown) de esa versión.
+
+### 11.4. Licenciamiento (control de uso)
+
+- **Objetivo:** controlar *quién puede usar la app* (modelo de venta única), no esconder el binario.
+- **Dos capas complementarias:**
+  - **Licencia** = "¿esta instalación está autorizada?" (nivel instalación).
+  - **Usuarios + Roles** (§7) = "¿quién sos dentro?" (nivel persona).
+  La autenticación sola no controla el uso; la licencia sola no controla quién opera.
+- **Licencia offline firmada** con criptografía asimétrica: el desarrollador firma con su clave **privada** (nunca sale de su poder); la app trae embebida la clave **pública** (no es secreta) y valida la firma 100% local, sin internet.
+- **Perpetua, sin expiración** (venta única, sin suscripción).
+- **Atada a la máquina** (machine fingerprint) para evitar copiar la misma licencia a varias PCs. Fingerprint cross-platform: Windows → `MachineGuid` del registro; Linux → `/etc/machine-id` (abstraído por plataforma).
+- **Flujo de reemisión ante cambio de PC:** la app muestra su "código de máquina"; el cliente se lo envía al desarrollador; un **generador de licencias** (herramienta CLI de uso interno, con la clave privada, que *nunca* se distribuye con la app) emite una licencia nueva atada a la nueva máquina.
+- **Sin licencia válida:** la app muestra una pantalla de bloqueo que exhibe el código de máquina para poder solicitar la licencia.
+- **Honestidad técnica:** ningún esquema de licencia en una app desktop es inquebrantable; es disuasión proporcional al riesgo (B2B, ferreterías).
+
+### 11.5. Estrategia de backup de la BD SQLite
+
+Dos disparadores, una sola política de limpieza:
+
+- **Backup pre-migración:** antes de aplicar migraciones de esquema (`Database.Migrate()`), para rollback inmediato si la migración falla.
+- **Backup periódico:** cada 12 horas copia el `.db` a `backups/` con timestamp. **Trigger híbrido** (la app es desktop, no un servicio 24/7): al arrancar compara el timestamp persistido del último backup y, si pasaron ≥12 h (incluso con la app cerrada toda la noche), hace uno; además un timer dispara cada 12 h mientras la app corre.
+- **Retención unificada:** se eliminan *todos* los backups (periódicos y pre-migración) de más de 7 días.
+- **Salvaguarda 1:** la limpieza *siempre* conserva al menos el backup más reciente, aunque tenga más de 7 días (evita quedar en cero si la app no se abre por mucho tiempo).
+- **Salvaguarda 2:** si un backup falla (disco lleno, permisos), se loguea y **no rompe la app**.
+
+### 11.6. Migraciones de esquema de la BD
+
+- La BD vive en el **directorio de datos del usuario** (`%LOCALAPPDATA%\StockApp\` en Windows, `~/.local/share/StockApp/` en Linux), nunca dentro de la carpeta de la app, porque Velopack reemplaza esa carpeta entera en cada update y se perderían los datos.
+- Al arrancar, la app aplica las migraciones pendientes con `Database.Migrate()` (forward-only, versionadas en el repo), siempre **después** del backup pre-migración (§11.5).
+
+### 11.7. Componentes nuevos en la solución
+
+- **Generador de licencias** (CLI de uso interno, nunca distribuido con la app).
+- **Validador de licencia + cálculo de machine fingerprint** (en la app, abstraído por OS).
+- **Custom `IUpdateSource`** con fallback dominio → GitHub.
+- **Servicio de backup** (pre-migración + periódico con retención).
+- **Servicio de migración** con backup previo integrado.
+
+### 11.8. Testing
+
+| Componente | Tipo de test | Qué cubre |
+|------------|-------------|-----------|
+| Migración + backup | xUnit (BD temporal) | Esquema viejo → migrar → datos intactos + backup creado + limpieza respeta 7 días y conserva el más reciente |
+| Validación de licencia | xUnit | Licencia válida / inválida / firma adulterada / máquina distinta |
+| Backup periódico | xUnit | Lógica "pasaron ≥12 h" y retención |
+| Packaging Velopack | Validación manual por OS | No unit-testeable |
