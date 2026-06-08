@@ -1,0 +1,12 @@
+/home/capua25/workspace/stockapp/src/StockApp.Domain/bin/Debug/net8.0/StockApp.Domain.deps.json
+/home/capua25/workspace/stockapp/src/StockApp.Domain/bin/Debug/net8.0/StockApp.Domain.dll
+/home/capua25/workspace/stockapp/src/StockApp.Domain/bin/Debug/net8.0/StockApp.Domain.pdb
+/home/capua25/workspace/stockapp/src/StockApp.Domain/obj/Debug/net8.0/StockApp.Domain.GeneratedMSBuildEditorConfig.editorconfig
+/home/capua25/workspace/stockapp/src/StockApp.Domain/obj/Debug/net8.0/StockApp.Domain.AssemblyInfoInputs.cache
+/home/capua25/workspace/stockapp/src/StockApp.Domain/obj/Debug/net8.0/StockApp.Domain.AssemblyInfo.cs
+/home/capua25/workspace/stockapp/src/StockApp.Domain/obj/Debug/net8.0/StockApp.Domain.csproj.CoreCompileInputs.cache
+/home/capua25/workspace/stockapp/src/StockApp.Domain/obj/Debug/net8.0/StockApp.Domain.sourcelink.json
+/home/capua25/workspace/stockapp/src/StockApp.Domain/obj/Debug/net8.0/StockApp.Domain.dll
+/home/capua25/workspace/stockapp/src/StockApp.Domain/obj/Debug/net8.0/refint/StockApp.Domain.dll
+/home/capua25/workspace/stockapp/src/StockApp.Domain/obj/Debug/net8.0/StockApp.Domain.pdb
+/home/capua25/workspace/stockapp/src/StockApp.Domain/obj/Debug/net8.0/ref/StockApp.Domain.dll
