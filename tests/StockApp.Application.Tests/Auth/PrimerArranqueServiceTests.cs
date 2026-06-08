@@ -61,7 +61,47 @@ public class PrimerArranqueServiceTests
     {
         var (svc, _, _) = Crear(hayUsuarios: true);
 
+        // Fix 6: la contraseña debe cumplir el mínimo (≥6 chars) para llegar al check de usuarios
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => svc.CrearAdminInicialAsync("admin", "pwd"));
+            () => svc.CrearAdminInicialAsync("admin", "password123"));
+    }
+
+    // ── Fix 6: validación de contraseña ──────────────────────────────────────
+
+    [Fact]
+    public async Task CrearAdminInicial_ContrasenaVacia_LanzaArgumentException()
+    {
+        var (svc, _, _) = Crear(hayUsuarios: false);
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => svc.CrearAdminInicialAsync("admin", ""));
+    }
+
+    [Fact]
+    public async Task CrearAdminInicial_ContrasenaWhitespace_LanzaArgumentException()
+    {
+        var (svc, _, _) = Crear(hayUsuarios: false);
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => svc.CrearAdminInicialAsync("admin", "   "));
+    }
+
+    [Fact]
+    public async Task CrearAdminInicial_ContrasenaConMenosDe6Chars_LanzaArgumentException()
+    {
+        var (svc, _, _) = Crear(hayUsuarios: false);
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => svc.CrearAdminInicialAsync("admin", "12345"));
+    }
+
+    [Fact]
+    public async Task CrearAdminInicial_ContrasenaConExactamente6Chars_Funciona()
+    {
+        var (svc, repo, _) = Crear(hayUsuarios: false);
+
+        await svc.CrearAdminInicialAsync("admin", "123456");
+
+        repo.Verify(r => r.AgregarAsync(It.IsAny<Usuario>()), Times.Once);
     }
 }
