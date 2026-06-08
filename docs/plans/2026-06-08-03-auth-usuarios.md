@@ -2,6 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Nota — recuperación de acceso:** este incremento implementa el **camino feliz**
+> (multi-admin + reset mutuo). El **token de reset firmado** (último recurso) NO es
+> parte del Inc 3: se implementa en el **Inc 7** junto a la infraestructura criptográfica
+> del licenciamiento, de la que depende. Ver spec §5.1 para el detalle completo.
+
 **Goal:** Construir la lógica completa de autenticación, sesión, ABM de usuarios, autorización
 por rol y auditoría de eventos sensibles sobre las entidades `Usuario` y `LogAuditoria` que
 ya existen desde el Inc 2. El foco es la capa Application e Infrastructure; la UI de Avalonia
@@ -862,6 +867,19 @@ git add src/StockApp.Application/Auth/PrimerArranqueService.cs \
 git commit -m "feat(auth): asistente de primer arranque (seed del Admin inicial)"
 ```
 
+### Paso adicional — recomendación del Admin de respaldo
+
+Inmediatamente después de crear el Admin inicial, el asistente **recomienda** (no obliga)
+crear un segundo usuario Admin de respaldo. Muestra un aviso explícito: si se pierde el
+único acceso Admin, se necesitará el procedimiento de último recurso (Inc 7).
+
+El usuario puede continuar sin crear el segundo Admin; es un paso **opcional**.
+
+**Criterio de aceptación / test:** el servicio o VM del asistente expone un método o
+propiedad `SugiereAdminDeRespaldo` (o equivalente) que retorna `true` tras crear el Admin
+inicial. La UI lo usa para mostrar la pantalla de sugerencia. El flujo permite avanzar sin
+crear el segundo Admin (ninguna excepción, ningún bloqueo).
+
 ---
 
 ## Task 5: Autorización en la capa Application
@@ -1385,6 +1403,13 @@ public class UsuarioService
     }
 }
 ```
+
+**Reset de contraseña de otro usuario (incluido otro Admin):**
+`CambiarContrasenaAsync` no distingue el rol del usuario objetivo: un Admin puede
+resetear la contraseña de cualquier usuario, **incluyendo a otro Admin**. Esto es
+el "camino feliz" de recuperación de acceso (ver spec §5.1). El test
+`CambioContrasena_Admin_HashYRegistraAuditoria` cubre este caso — la acción queda
+registrada en `LogAuditoria` como `AccionAuditada.CambioContrasena`.
 
 - [ ] **Step 6: Correr los tests**
 
