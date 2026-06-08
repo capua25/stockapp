@@ -1,3 +1,4 @@
+using StockApp.Application.Auth;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Infrastructure.Auth;
@@ -34,6 +35,20 @@ public class InMemorySessionTests
         Assert.True(_session.EstaAutenticado);
         Assert.NotNull(_session.UsuarioActual);
         Assert.Equal("admin", _session.UsuarioActual!.NombreUsuario);
+    }
+
+    [Fact]
+    public void Login_SnapshotNoContieneHash()
+    {
+        // La sesión guarda un snapshot inmutable sin HashContrasena
+        _session.IniciarSesion(UsuarioAdmin());
+
+        var snapshot = _session.UsuarioActual!;
+        Assert.IsType<UsuarioSesion>(snapshot);
+        // UsuarioSesion no tiene propiedad HashContrasena — no compila si la agregás
+        Assert.Equal(1, snapshot.Id);
+        Assert.Equal("admin", snapshot.NombreUsuario);
+        Assert.Equal(RolUsuario.Admin, snapshot.Rol);
     }
 
     [Fact]

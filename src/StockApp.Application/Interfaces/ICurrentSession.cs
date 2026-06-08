@@ -1,3 +1,4 @@
+using StockApp.Application.Auth;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 
@@ -12,13 +13,13 @@ public interface ICurrentSession
     /// <summary>true si hay un usuario logueado.</summary>
     bool EstaAutenticado { get; }
 
-    /// <summary>El usuario actual, o null si no hay sesión.</summary>
-    Usuario? UsuarioActual { get; }
+    /// <summary>Snapshot de identidad del usuario actual, o null si no hay sesión.</summary>
+    UsuarioSesion? UsuarioActual { get; }
 
     /// <summary>Atajo: rol del usuario actual, o null si no hay sesión.</summary>
     RolUsuario? RolActual { get; }
 
-    /// <summary>Establece <paramref name="usuario"/> como usuario activo de la sesión.</summary>
+    /// <summary>Proyecta <paramref name="usuario"/> a un snapshot <see cref="UsuarioSesion"/> y lo establece como sesión activa.</summary>
     void IniciarSesion(Usuario usuario);
 
     /// <summary>Limpia la sesión. La app sigue corriendo; es necesario loguearse de nuevo.</summary>
