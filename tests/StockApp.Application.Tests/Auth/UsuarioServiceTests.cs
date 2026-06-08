@@ -11,13 +11,16 @@ namespace StockApp.Application.Tests.Auth;
 
 public class UsuarioServiceTests
 {
+    private static UsuarioSesion SesionAdmin(int id = 1) =>
+        new(id, "admin", RolUsuario.Admin, null);
+
     private static (UsuarioService service,
                     Mock<IUsuarioRepository> repoMock,
                     Mock<IPasswordHasher> hasherMock,
                     Mock<ICurrentSession> sessionMock,
                     Mock<IAuthSvc> authMock,
                     Mock<IAuditLogger> auditMock)
-        Crear(RolUsuario rolSesion = RolUsuario.Admin)
+        Crear(RolUsuario rolSesion = RolUsuario.Admin, int idSesion = 1)
     {
         var repo    = new Mock<IUsuarioRepository>();
         var hasher  = new Mock<IPasswordHasher>();
@@ -26,6 +29,7 @@ public class UsuarioServiceTests
         var audit   = new Mock<IAuditLogger>();
 
         session.Setup(s => s.RolActual).Returns(rolSesion);
+        session.Setup(s => s.UsuarioActual).Returns(SesionAdmin(idSesion));
         hasher.Setup(h => h.Hash(It.IsAny<string>())).Returns("$2a$12$hashed");
 
         // Admin: Verificar no lanza
@@ -43,8 +47,6 @@ public class UsuarioServiceTests
     public async Task AltaUsuario_Admin_CreaConHashYEventoAuditoria()
     {
         var (svc, repo, hasher, session, _, audit) = Crear();
-        session.Setup(s => s.UsuarioActual).Returns(new Usuario
-            { Id = 1, NombreUsuario = "admin", Rol = RolUsuario.Admin, HashContrasena = "h", FechaAlta = DateTime.UtcNow });
 
         await svc.AltaUsuarioAsync("operador2", "Nombre Completo", "pwd123", RolUsuario.Operador);
 
@@ -68,10 +70,9 @@ public class UsuarioServiceTests
             Id = 5, NombreUsuario = "operador1", HashContrasena = "h",
             Rol = RolUsuario.Operador, Activo = true, FechaAlta = DateTime.UtcNow
         };
-        var (svc, repo, _, session, _, audit) = Crear();
-        session.Setup(s => s.UsuarioActual).Returns(new Usuario
-            { Id = 1, NombreUsuario = "admin", Rol = RolUsuario.Admin, HashContrasena = "h", FechaAlta = DateTime.UtcNow });
+        var (svc, repo, _, session, _, audit) = Crear(idSesion: 1);
         repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(usuario);
+        repo.Setup(r => r.ContarAdminsActivosAsync()).ReturnsAsync(1);
 
         await svc.BajaLogicaAsync(5);
 
@@ -83,12 +84,58 @@ public class UsuarioServiceTests
     }
 
     [Fact]
+    public async Task BajaLogica_NoSePuedeAutoEliminar()
+    {
+        var usuario = new Usuario
+        {
+            Id = 1, NombreUsuario = "admin", HashContrasena = "h",
+            Rol = RolUsuario.Admin, Activo = true, FechaAlta = DateTime.UtcNow
+        };
+        var (svc, repo, _, _, _, _) = Crear(idSesion: 1);
+        repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(usuario);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => svc.BajaLogicaAsync(1));
+    }
+
+    [Fact]
+    public async Task BajaLogica_NoSePuedeDeshabilitarUltimoAdmin()
+    {
+        var usuario = new Usuario
+        {
+            Id = 2, NombreUsuario = "admin2", HashContrasena = "h",
+            Rol = RolUsuario.Admin, Activo = true, FechaAlta = DateTime.UtcNow
+        };
+        var (svc, repo, _, _, _, _) = Crear(idSesion: 1);
+        repo.Setup(r => r.ObtenerPorIdAsync(2)).ReturnsAsync(usuario);
+        repo.Setup(r => r.ContarAdminsActivosAsync()).ReturnsAsync(1); // único Admin activo
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => svc.BajaLogicaAsync(2));
+    }
+
+    [Fact]
+    public async Task BajaLogica_Admin_ConOtroAdminActivo_Funciona()
+    {
+        var usuario = new Usuario
+        {
+            Id = 2, NombreUsuario = "admin2", HashContrasena = "h",
+            Rol = RolUsuario.Admin, Activo = true, FechaAlta = DateTime.UtcNow
+        };
+        var (svc, repo, _, _, _, audit) = Crear(idSesion: 1);
+        repo.Setup(r => r.ObtenerPorIdAsync(2)).ReturnsAsync(usuario);
+        repo.Setup(r => r.ContarAdminsActivosAsync()).ReturnsAsync(2); // hay otro Admin
+
+        await svc.BajaLogicaAsync(2);
+
+        repo.Verify(r => r.ActualizarAsync(It.Is<Usuario>(u => u.Activo == false)), Times.Once);
+    }
+
+    [Fact]
     public async Task AltaUsuario_Operador_LanzaUnauthorized()
     {
         var (svc, _, _, _, _, _) = Crear(rolSesion: RolUsuario.Operador);
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(
-            () => svc.AltaUsuarioAsync("x", null, "pwd", RolUsuario.Operador));
+            () => svc.AltaUsuarioAsync("x", null, "pwd123", RolUsuario.Operador));
     }
 
     [Fact]
@@ -100,8 +147,6 @@ public class UsuarioServiceTests
             Rol = RolUsuario.Operador, Activo = true, FechaAlta = DateTime.UtcNow
         };
         var (svc, repo, _, session, _, audit) = Crear();
-        session.Setup(s => s.UsuarioActual).Returns(new Usuario
-            { Id = 1, NombreUsuario = "admin", Rol = RolUsuario.Admin, HashContrasena = "h", FechaAlta = DateTime.UtcNow });
         repo.Setup(r => r.ObtenerPorIdAsync(3)).ReturnsAsync(usuario);
 
         await svc.CambiarRolAsync(3, RolUsuario.Admin);
@@ -111,25 +156,123 @@ public class UsuarioServiceTests
             It.IsAny<int>(), AccionAuditada.CambioRol, "Usuario", 3, It.IsAny<string>()), Times.Once);
     }
 
+    // ── CambiarContrasenaAsync (Fix 7) ──────────────────────────────────────
+
     [Fact]
-    public async Task CambioContrasena_Admin_HashYRegistraAuditoria()
+    public async Task CambioContrasena_AdminReseteandoOtroUsuario_NoRequiereContrasenaActual()
+    {
+        // Admin (id=1) resetea la contraseña de otro usuario (id=4) — no requiere contrasenaActual
+        var usuario = new Usuario
+        {
+            Id = 4, NombreUsuario = "alguien", HashContrasena = "hash_viejo",
+            Rol = RolUsuario.Operador, Activo = true, FechaAlta = DateTime.UtcNow
+        };
+        var (svc, repo, hasher, session, _, audit) = Crear(idSesion: 1);
+        repo.Setup(r => r.ObtenerPorIdAsync(4)).ReturnsAsync(usuario);
+
+        await svc.CambiarContrasenaAsync(4, "nuevaContrasena123");
+
+        hasher.Verify(h => h.Hash("nuevaContrasena123"), Times.Once);
+        repo.Verify(r => r.ActualizarAsync(It.Is<Usuario>(u =>
+            u.HashContrasena == "$2a$12$hashed")), Times.Once);
+        audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), AccionAuditada.CambioContrasena, "Usuario", 4, It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task CambioContrasena_AutoCambio_SinContrasenaActual_LanzaUnauthorized()
+    {
+        // El usuario (id=1) intenta cambiar su propia contraseña sin proveer la actual
+        var (svc, repo, _, _, _, _) = Crear(idSesion: 1);
+        var usuario = new Usuario
+        {
+            Id = 1, NombreUsuario = "admin", HashContrasena = "hash_actual",
+            Rol = RolUsuario.Admin, Activo = true, FechaAlta = DateTime.UtcNow
+        };
+        repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(usuario);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => svc.CambiarContrasenaAsync(1, "nuevaContrasena123", contrasenaActualPlan: null));
+    }
+
+    [Fact]
+    public async Task CambioContrasena_AutoCambio_ContrasenaActualIncorrecta_LanzaUnauthorized()
+    {
+        var usuario = new Usuario
+        {
+            Id = 1, NombreUsuario = "admin", HashContrasena = "hash_actual",
+            Rol = RolUsuario.Admin, Activo = true, FechaAlta = DateTime.UtcNow
+        };
+        var (svc, repo, hasher, _, _, _) = Crear(idSesion: 1);
+        repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(usuario);
+        hasher.Setup(h => h.Verify("contrasenaIncorrecta", "hash_actual")).Returns(false);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => svc.CambiarContrasenaAsync(1, "nuevaContrasena123", "contrasenaIncorrecta"));
+    }
+
+    [Fact]
+    public async Task CambioContrasena_AutoCambio_ContrasenaActualCorrecta_Funciona()
+    {
+        var usuario = new Usuario
+        {
+            Id = 1, NombreUsuario = "admin", HashContrasena = "hash_actual",
+            Rol = RolUsuario.Admin, Activo = true, FechaAlta = DateTime.UtcNow
+        };
+        var (svc, repo, hasher, _, _, audit) = Crear(idSesion: 1);
+        repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(usuario);
+        hasher.Setup(h => h.Verify("contrasenaCorrecta", "hash_actual")).Returns(true);
+
+        await svc.CambiarContrasenaAsync(1, "nuevaContrasena123", "contrasenaCorrecta");
+
+        hasher.Verify(h => h.Hash("nuevaContrasena123"), Times.Once);
+        repo.Verify(r => r.ActualizarAsync(It.IsAny<Usuario>()), Times.Once);
+        audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), AccionAuditada.CambioContrasena, "Usuario", 1, It.IsAny<string>()), Times.Once);
+    }
+
+    // ── Fix 6: validación mínima de contraseña ────────────────────────────────
+
+    [Fact]
+    public async Task AltaUsuario_ContrasenaVacia_LanzaArgumentException()
+    {
+        var (svc, _, _, _, _, _) = Crear();
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => svc.AltaUsuarioAsync("nuevo", null, "", RolUsuario.Operador));
+    }
+
+    [Fact]
+    public async Task AltaUsuario_ContrasenaConMenosDe6Chars_LanzaArgumentException()
+    {
+        var (svc, _, _, _, _, _) = Crear();
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => svc.AltaUsuarioAsync("nuevo", null, "12345", RolUsuario.Operador));
+    }
+
+    [Fact]
+    public async Task AltaUsuario_ContrasenaConExactamente6Chars_Funciona()
+    {
+        var (svc, repo, _, _, _, _) = Crear();
+
+        await svc.AltaUsuarioAsync("nuevo", null, "123456", RolUsuario.Operador);
+
+        repo.Verify(r => r.AgregarAsync(It.IsAny<Usuario>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task CambioContrasena_NuevaContrasenaConMenosDe6Chars_LanzaArgumentException()
     {
         var usuario = new Usuario
         {
             Id = 4, NombreUsuario = "alguien", HashContrasena = "hash_viejo",
             Rol = RolUsuario.Operador, Activo = true, FechaAlta = DateTime.UtcNow
         };
-        var (svc, repo, hasher, session, _, audit) = Crear();
-        session.Setup(s => s.UsuarioActual).Returns(new Usuario
-            { Id = 1, NombreUsuario = "admin", Rol = RolUsuario.Admin, HashContrasena = "h", FechaAlta = DateTime.UtcNow });
+        var (svc, repo, _, _, _, _) = Crear(idSesion: 1);
         repo.Setup(r => r.ObtenerPorIdAsync(4)).ReturnsAsync(usuario);
 
-        await svc.CambiarContrasenaAsync(4, "nuevaContrasena");
-
-        hasher.Verify(h => h.Hash("nuevaContrasena"), Times.Once);
-        repo.Verify(r => r.ActualizarAsync(It.Is<Usuario>(u =>
-            u.HashContrasena == "$2a$12$hashed")), Times.Once);
-        audit.Verify(a => a.RegistrarAsync(
-            It.IsAny<int>(), AccionAuditada.CambioContrasena, "Usuario", 4, It.IsAny<string>()), Times.Once);
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => svc.CambiarContrasenaAsync(4, "12345"));
     }
 }
