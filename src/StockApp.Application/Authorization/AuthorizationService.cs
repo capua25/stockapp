@@ -9,6 +9,8 @@ namespace StockApp.Application.Authorization;
 /// </summary>
 public class AuthorizationService : IAuthorizationService
 {
+    // Acciones habilitadas para Operador. VerReportes y GestionarUsuarios están
+    // deliberadamente AUSENTES: son exclusivas de Admin (fail-closed por diseño).
     private static readonly HashSet<string> AccionesOperador =
     [
         Permisos.GestionarCatalogo,
