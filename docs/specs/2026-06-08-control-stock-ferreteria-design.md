@@ -173,6 +173,48 @@ Registra cambios sensibles (no los movimientos de stock, que ya tienen su `Usuar
 - **Baja de usuarios**: lógica (`Activo = false`), nunca física, para no romper el
   historial de movimientos y auditoría que referencia al usuario.
 
+### 5.1. Recuperación de acceso del Admin
+
+BCrypt es **one-way**: las contraseñas no se recuperan, se **resetean** (se sobrescribe
+el hash). En una app desktop con SQLite local, la seguridad real es física (quien tiene
+la PC tiene los datos). La estrategia de recuperación combina dos mecanismos:
+
+#### Mecanismo 1 — Multi-admin + reset mutuo *(camino feliz — Inc 3)*
+
+- El asistente de primer arranque **recomienda** (no obliga) crear un segundo usuario
+  Admin de respaldo, con un aviso claro: si se pierde el único acceso Admin, será
+  necesario el procedimiento de último recurso.
+- Cualquier Admin puede resetear la contraseña de otro usuario (incluido otro Admin)
+  desde el ABM de usuarios. La operación queda registrada en `LogAuditoria` con
+  `AccionAuditada.CambioContrasena`.
+
+#### Mecanismo 2 — Token de reset firmado *(último recurso — Inc 7)*
+
+Desde la pantalla de login, una opción "No puedo entrar / resetear Admin" dispara este
+flujo:
+
+1. La app genera un **desafío** aleatorio (nonce) y lo muestra junto con el **código de
+   máquina** (mismo fingerprint que el licenciamiento, §11.4).
+2. El usuario comunica ambos datos al desarrollador.
+3. El desarrollador, con su CLI interna (la misma del generador de licencias, con su
+   **clave privada**), emite un **token de reset** firmado que ata
+   `{ máquina + desafío + acción=reset }`.
+4. La app valida:
+   - La **firma** con la clave pública embebida.
+   - Que el **desafío** coincide con el que ella misma generó.
+   - Que el token corresponde a **esta máquina** (fingerprint).
+5. Si todo valida, permite establecer una nueva contraseña para el Admin (o recrear el
+   usuario Admin si se perdieron todos).
+
+**Propiedades del token:**
+- **Un solo uso**: válido únicamente para ese desafío puntual; no se puede reutilizar.
+- **Atado a la máquina**: no es transferible a otra PC.
+- La operación queda registrada en `LogAuditoria`.
+
+**Dependencia:** reutiliza la infraestructura criptográfica asimétrica del licenciamiento
+(§11.4). Por eso se implementa en el Inc 7, cuando esa cripto ya existe y además el
+producto recién se distribuye a clientes reales.
+
 ---
 
 ## 6. Regla de negocio clave: integridad del stock
