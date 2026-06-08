@@ -8,6 +8,7 @@ public interface IUsuarioRepository
     Task<Usuario?> ObtenerPorIdAsync(int id);
     Task<IReadOnlyList<Usuario>> ListarTodosAsync();
     Task<bool> ExisteAlgunUsuarioAsync();
+    Task<int> ContarAdminsActivosAsync();
     Task<int> AgregarAsync(Usuario usuario);
     Task ActualizarAsync(Usuario usuario);
     Task ActualizarUltimoAccesoAsync(int usuarioId, DateTime fechaAcceso);

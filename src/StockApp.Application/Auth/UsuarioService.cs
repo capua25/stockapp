@@ -37,6 +37,9 @@ public class UsuarioService
     {
         _auth.Verificar(_session.RolActual, Permisos.GestionarUsuarios);
 
+        // Fix 6: validación mínima de contraseña
+        ContrasenaValidator.Validar(contrasenaPlan);
+
         var nuevo = new Usuario
         {
             NombreUsuario  = nombreUsuario,
@@ -60,8 +63,21 @@ public class UsuarioService
     {
         _auth.Verificar(_session.RolActual, Permisos.GestionarUsuarios);
 
+        // Fix 2: no auto-baja
+        if (usuarioId == _session.UsuarioActual!.Id)
+            throw new InvalidOperationException("Un usuario no puede darse de baja a sí mismo.");
+
         var usuario = await _repo.ObtenerPorIdAsync(usuarioId)
             ?? throw new KeyNotFoundException($"Usuario {usuarioId} no encontrado.");
+
+        // Fix 2: proteger último Admin activo
+        if (usuario.Rol == RolUsuario.Admin && usuario.Activo)
+        {
+            var adminsActivos = await _repo.ContarAdminsActivosAsync();
+            if (adminsActivos <= 1)
+                throw new InvalidOperationException(
+                    "No se puede deshabilitar al último Admin activo del sistema.");
+        }
 
         usuario.Activo = false;
         await _repo.ActualizarAsync(usuario);
@@ -91,12 +107,35 @@ public class UsuarioService
             $"Rol: {rolAnterior} → {nuevoRol}");
     }
 
-    public async Task CambiarContrasenaAsync(int usuarioId, string nuevaContrasenaPlan)
+    /// <summary>
+    /// Cambia la contraseña de un usuario.
+    /// - Auto-cambio (usuarioId == sesión actual): REQUIERE <paramref name="contrasenaActualPlan"/> para verificar identidad.
+    /// - Reset administrativo (Admin cambia la de otro): no requiere la contraseña actual del otro (reset mutuo, §5.1).
+    /// </summary>
+    public async Task CambiarContrasenaAsync(
+        int usuarioId,
+        string nuevaContrasenaPlan,
+        string? contrasenaActualPlan = null)
     {
         _auth.Verificar(_session.RolActual, Permisos.GestionarUsuarios);
 
+        // Fix 6: validación mínima de contraseña
+        ContrasenaValidator.Validar(nuevaContrasenaPlan);
+
         var usuario = await _repo.ObtenerPorIdAsync(usuarioId)
             ?? throw new KeyNotFoundException($"Usuario {usuarioId} no encontrado.");
+
+        // Fix 7: auto-cambio requiere contraseña actual
+        if (usuarioId == _session.UsuarioActual!.Id)
+        {
+            if (string.IsNullOrWhiteSpace(contrasenaActualPlan))
+                throw new UnauthorizedAccessException(
+                    "Para cambiar tu propia contraseña debés confirmar la contraseña actual.");
+
+            if (!_hasher.Verify(contrasenaActualPlan, usuario.HashContrasena))
+                throw new UnauthorizedAccessException(
+                    "La contraseña actual no es correcta.");
+        }
 
         usuario.HashContrasena = _hasher.Hash(nuevaContrasenaPlan);
         await _repo.ActualizarAsync(usuario);
@@ -105,6 +144,6 @@ public class UsuarioService
             _session.UsuarioActual!.Id,
             AccionAuditada.CambioContrasena,
             "Usuario", usuarioId,
-            "Cambio de contraseña por Admin");
+            "Cambio de contraseña");
     }
 }
