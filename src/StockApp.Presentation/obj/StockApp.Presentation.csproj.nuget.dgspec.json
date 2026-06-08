@@ -1,0 +1,293 @@
+{
+  "format": 1,
+  "restore": {
+    "/home/capua25/workspace/stockapp/src/StockApp.Presentation/StockApp.Presentation.csproj": {}
+  },
+  "projects": {
+    "/home/capua25/workspace/stockapp/src/StockApp.Application/StockApp.Application.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "/home/capua25/workspace/stockapp/src/StockApp.Application/StockApp.Application.csproj",
+        "projectName": "StockApp.Application",
+        "projectPath": "/home/capua25/workspace/stockapp/src/StockApp.Application/StockApp.Application.csproj",
+        "packagesPath": "/home/capua25/.nuget/packages/",
+        "outputPath": "/home/capua25/workspace/stockapp/src/StockApp.Application/obj/",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "/home/capua25/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {
+              "/home/capua25/workspace/stockapp/src/StockApp.Domain/StockApp.Domain.csproj": {
+                "projectPath": "/home/capua25/workspace/stockapp/src/StockApp.Domain/StockApp.Domain.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "/home/capua25/.dotnet/sdk/8.0.420/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "/home/capua25/workspace/stockapp/src/StockApp.Domain/StockApp.Domain.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "/home/capua25/workspace/stockapp/src/StockApp.Domain/StockApp.Domain.csproj",
+        "projectName": "StockApp.Domain",
+        "projectPath": "/home/capua25/workspace/stockapp/src/StockApp.Domain/StockApp.Domain.csproj",
+        "packagesPath": "/home/capua25/.nuget/packages/",
+        "outputPath": "/home/capua25/workspace/stockapp/src/StockApp.Domain/obj/",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "/home/capua25/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "/home/capua25/.dotnet/sdk/8.0.420/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "/home/capua25/workspace/stockapp/src/StockApp.Infrastructure/StockApp.Infrastructure.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "/home/capua25/workspace/stockapp/src/StockApp.Infrastructure/StockApp.Infrastructure.csproj",
+        "projectName": "StockApp.Infrastructure",
+        "projectPath": "/home/capua25/workspace/stockapp/src/StockApp.Infrastructure/StockApp.Infrastructure.csproj",
+        "packagesPath": "/home/capua25/.nuget/packages/",
+        "outputPath": "/home/capua25/workspace/stockapp/src/StockApp.Infrastructure/obj/",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "/home/capua25/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {
+              "/home/capua25/workspace/stockapp/src/StockApp.Application/StockApp.Application.csproj": {
+                "projectPath": "/home/capua25/workspace/stockapp/src/StockApp.Application/StockApp.Application.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "dependencies": {
+            "Microsoft.EntityFrameworkCore.Design": {
+              "include": "Runtime, Build, Native, ContentFiles, Analyzers, BuildTransitive",
+              "suppressParent": "All",
+              "target": "Package",
+              "version": "[8.*, )"
+            },
+            "Microsoft.EntityFrameworkCore.Sqlite": {
+              "target": "Package",
+              "version": "[8.*, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "/home/capua25/.dotnet/sdk/8.0.420/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "/home/capua25/workspace/stockapp/src/StockApp.Presentation/StockApp.Presentation.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "/home/capua25/workspace/stockapp/src/StockApp.Presentation/StockApp.Presentation.csproj",
+        "projectName": "StockApp.Presentation",
+        "projectPath": "/home/capua25/workspace/stockapp/src/StockApp.Presentation/StockApp.Presentation.csproj",
+        "packagesPath": "/home/capua25/.nuget/packages/",
+        "outputPath": "/home/capua25/workspace/stockapp/src/StockApp.Presentation/obj/",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "/home/capua25/.nuget/NuGet/NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {
+              "/home/capua25/workspace/stockapp/src/StockApp.Application/StockApp.Application.csproj": {
+                "projectPath": "/home/capua25/workspace/stockapp/src/StockApp.Application/StockApp.Application.csproj"
+              },
+              "/home/capua25/workspace/stockapp/src/StockApp.Infrastructure/StockApp.Infrastructure.csproj": {
+                "projectPath": "/home/capua25/workspace/stockapp/src/StockApp.Infrastructure/StockApp.Infrastructure.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "dependencies": {
+            "Avalonia": {
+              "target": "Package",
+              "version": "[12.0.4, )"
+            },
+            "Avalonia.Desktop": {
+              "target": "Package",
+              "version": "[12.0.4, )"
+            },
+            "Avalonia.Fonts.Inter": {
+              "target": "Package",
+              "version": "[12.0.4, )"
+            },
+            "Avalonia.Themes.Fluent": {
+              "target": "Package",
+              "version": "[12.0.4, )"
+            },
+            "AvaloniaUI.DiagnosticsSupport": {
+              "target": "Package",
+              "version": "[2.2.1, )"
+            },
+            "CommunityToolkit.Mvvm": {
+              "target": "Package",
+              "version": "[8.4.1, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "/home/capua25/.dotnet/sdk/8.0.420/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}
