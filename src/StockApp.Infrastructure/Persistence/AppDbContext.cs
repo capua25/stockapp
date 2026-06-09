@@ -55,12 +55,15 @@ public class AppDbContext : DbContext
         {
             e.Property(c => c.Nombre).IsRequired();
             e.HasIndex(c => c.Nombre).IsUnique();
+            e.Property(c => c.Activo).HasDefaultValue(true);
         });
 
         // ── Proveedor ─────────────────────────────────────────────────────────
         modelBuilder.Entity<Proveedor>(e =>
         {
             e.Property(p => p.Nombre).IsRequired();
+            e.HasIndex(p => p.Nombre).IsUnique();
+            e.Property(p => p.Activo).HasDefaultValue(true);
         });
 
         // ── UnidadMedida ──────────────────────────────────────────────────────
@@ -68,6 +71,9 @@ public class AppDbContext : DbContext
         {
             e.Property(u => u.Nombre).IsRequired();
             e.Property(u => u.Abreviatura).IsRequired().HasMaxLength(10);
+            e.HasIndex(u => u.Nombre).IsUnique();
+            e.HasIndex(u => u.Abreviatura).IsUnique();
+            e.Property(u => u.Activo).HasDefaultValue(true);
         });
 
         // ── MovimientoStock ───────────────────────────────────────────────────
