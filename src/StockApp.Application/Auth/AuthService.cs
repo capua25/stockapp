@@ -10,7 +10,7 @@ public record LoginResult(bool Exitoso, LoginError? Error = null)
     public static LoginResult Fallo(LoginError e)   => new(false, e);
 }
 
-public class AuthService
+public class AuthService : IAuthService
 {
     private readonly IUsuarioRepository _repo;
     private readonly IPasswordHasher    _hasher;

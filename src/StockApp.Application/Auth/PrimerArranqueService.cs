@@ -8,7 +8,7 @@ namespace StockApp.Application.Auth;
 /// Detecta si la BD no tiene ningún usuario y, en ese caso, orquesta la creación
 /// del primer Admin. No define una contraseña por defecto: la elige el usuario en ese momento.
 /// </summary>
-public class PrimerArranqueService
+public class PrimerArranqueService : IPrimerArranqueService
 {
     private readonly IUsuarioRepository _repo;
     private readonly IPasswordHasher    _hasher;

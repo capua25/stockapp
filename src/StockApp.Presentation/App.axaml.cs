@@ -41,11 +41,17 @@ public partial class App : AvaloniaApp
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.MainWindow = new MainWindow
+            var shell = _serviceProvider.GetRequiredService<ShellViewModel>();
+
+            var mainWindow = new MainWindow
             {
-                DataContext = new MainWindowViewModel(),
+                DataContext = shell,
             };
 
+            // Inicializa el shell de forma asíncrona antes de mostrar la ventana.
+            shell.InicializarAsync().GetAwaiter().GetResult();
+
+            desktop.MainWindow = mainWindow;
             desktop.Exit += (_, _) => _serviceProvider?.Dispose();
         }
 
@@ -98,9 +104,14 @@ public partial class App : AvaloniaApp
         services.AddSingleton<IAuthorizationService, AuthorizationService>();
 
         // Servicios de Application: transient — sin estado propio
-        services.AddTransient<AuthService>();
-        services.AddTransient<PrimerArranqueService>();
-        services.AddTransient<UsuarioService>();
+        services.AddTransient<IAuthService, AuthService>();
+        services.AddTransient<IPrimerArranqueService, PrimerArranqueService>();
+        services.AddTransient<IUsuarioService, UsuarioService>();
+
+        // ── Presentation: ViewModels del shell ───────────────────────────────
+
+        // ShellViewModel: singleton — vive toda la vida de la app
+        services.AddSingleton<ShellViewModel>();
 
         return services.BuildServiceProvider();
     }
