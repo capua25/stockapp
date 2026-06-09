@@ -13,7 +13,7 @@ public class AuthorizationServiceTests
     [Theory]
     [InlineData(Permisos.GestionarUsuarios)]
     [InlineData(Permisos.VerReportes)]
-    [InlineData(Permisos.GestionarCatalogo)]
+    [InlineData(Permisos.GestionarProductos)]
     [InlineData(Permisos.RegistrarMovimientos)]
     public void Admin_PuedeEjecutarCualquierAccion(string accion)
     {
@@ -24,7 +24,7 @@ public class AuthorizationServiceTests
     // ── Operador: acciones permitidas ────────────────────────────────────────
 
     [Theory]
-    [InlineData(Permisos.GestionarCatalogo)]
+    [InlineData(Permisos.GestionarProductos)]
     [InlineData(Permisos.RegistrarMovimientos)]
     [InlineData(Permisos.RecalcularStock)]
     public void Operador_PuedeEjecutarAccionesOperativas(string accion)
@@ -44,12 +44,21 @@ public class AuthorizationServiceTests
             () => _svc.Verificar(RolUsuario.Operador, accion));
     }
 
+    // ── Operador NO puede gestionar tablas maestras ──────────────────────────
+
+    [Fact]
+    public void Operador_NoTieneGestionarTablasMaestras_LanzaUnauthorized()
+    {
+        Assert.Throws<UnauthorizedAccessException>(
+            () => _svc.Verificar(RolUsuario.Operador, Permisos.GestionarTablasMaestras));
+    }
+
     // ── Sin sesión ────────────────────────────────────────────────────────────
 
     [Fact]
     public void SinSesion_CualquierAccionLanzaExcepcion()
     {
         Assert.Throws<UnauthorizedAccessException>(
-            () => _svc.Verificar(null, Permisos.GestionarCatalogo));
+            () => _svc.Verificar(null, Permisos.GestionarProductos));
     }
 }
