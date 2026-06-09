@@ -1,0 +1,118 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="480" d:DesignHeight="600"
+             x:Class="StockApp.Presentation.Views.PrimerArranqueView"
+             x:DataType="vm:PrimerArranqueViewModel">
+
+    <ScrollViewer>
+        <Border Padding="40" HorizontalAlignment="Center" VerticalAlignment="Center" Width="420">
+            <StackPanel Spacing="16">
+
+                <!-- Encabezado -->
+                <TextBlock Text="Bienvenido a StockApp"
+                           FontSize="22"
+                           FontWeight="Bold"
+                           HorizontalAlignment="Center" />
+
+                <TextBlock Text="Es la primera vez que iniciás la app. Creá el usuario administrador."
+                           HorizontalAlignment="Center"
+                           TextWrapping="Wrap"
+                           Opacity="0.7" />
+
+                <!-- Formulario del Admin inicial -->
+                <Panel IsVisible="{Binding !MostrarRecomendacion2doAdmin}">
+                    <StackPanel Spacing="12">
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Nombre de usuario" />
+                            <TextBox Text="{Binding NombreUsuario}"
+                                     PlaceholderText="ej. admin" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Contraseña (mínimo 6 caracteres)" />
+                            <TextBox Text="{Binding Contrasena}"
+                                     PasswordChar="●"
+                                     PlaceholderText="Contraseña" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Confirmar contraseña" />
+                            <TextBox Text="{Binding ConfirmarContrasena}"
+                                     PasswordChar="●"
+                                     PlaceholderText="Repetí la contraseña" />
+                        </StackPanel>
+
+                        <!-- Mensaje de error -->
+                        <TextBlock Text="{Binding MensajeError}"
+                                   Foreground="Red"
+                                   IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                   TextWrapping="Wrap" />
+
+                        <Button Content="Crear Admin"
+                                Command="{Binding CrearAdminCommand}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center" />
+
+                    </StackPanel>
+                </Panel>
+
+                <!-- Recomendación de 2do Admin -->
+                <Panel IsVisible="{Binding MostrarRecomendacion2doAdmin}">
+                    <StackPanel Spacing="12">
+
+                        <Border Background="#FFF3CD" BorderBrush="#FFC107" BorderThickness="1"
+                                CornerRadius="4" Padding="12">
+                            <TextBlock TextWrapping="Wrap">
+                                <Run FontWeight="Bold" Text="Recomendación: " />
+                                <Run Text="Creá un segundo usuario Admin de respaldo. Si perdés el acceso al primero, necesitarás otro Admin para entrar." />
+                            </TextBlock>
+                        </Border>
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Nombre de usuario del 2do Admin" />
+                            <TextBox Text="{Binding NombreUsuario2doAdmin}"
+                                     PlaceholderText="ej. admin2" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Contraseña" />
+                            <TextBox Text="{Binding Contrasena2doAdmin}"
+                                     PasswordChar="●"
+                                     PlaceholderText="Contraseña" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Confirmar contraseña" />
+                            <TextBox Text="{Binding ConfirmarContrasena2doAdmin}"
+                                     PasswordChar="●"
+                                     PlaceholderText="Repetí la contraseña" />
+                        </StackPanel>
+
+                        <!-- Mensaje de error del 2do Admin -->
+                        <TextBlock Text="{Binding MensajeError2doAdmin}"
+                                   Foreground="Red"
+                                   IsVisible="{Binding MensajeError2doAdmin, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                   TextWrapping="Wrap" />
+
+                        <Button Content="Crear 2do Admin"
+                                Command="{Binding CrearSegundoAdminCommand}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center" />
+
+                        <Button Content="Continuar sin 2do Admin"
+                                Command="{Binding ContinuarSin2doAdminCommand}"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Center" />
+
+                    </StackPanel>
+                </Panel>
+
+            </StackPanel>
+        </Border>
+    </ScrollViewer>
+
+</UserControl>

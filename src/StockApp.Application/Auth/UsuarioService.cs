@@ -9,7 +9,7 @@ namespace StockApp.Application.Auth;
 /// ABM de usuarios. Solo para Admin: todas las operaciones verifican autorización
 /// antes de ejecutar. Nunca borra físicamente; usa baja lógica.
 /// </summary>
-public class UsuarioService
+public class UsuarioService : IUsuarioService
 {
     private readonly IUsuarioRepository    _repo;
     private readonly IPasswordHasher       _hasher;

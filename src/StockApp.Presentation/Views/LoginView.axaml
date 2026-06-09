@@ -1,0 +1,53 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="300"
+             x:Class="StockApp.Presentation.Views.LoginView"
+             x:DataType="vm:LoginViewModel">
+
+    <Border Padding="40" HorizontalAlignment="Center" VerticalAlignment="Center" Width="360">
+        <StackPanel Spacing="16">
+
+            <TextBlock Text="StockApp"
+                       FontSize="24"
+                       FontWeight="Bold"
+                       HorizontalAlignment="Center"
+                       Margin="0,0,0,8" />
+
+            <TextBlock Text="Ingresá tus credenciales para continuar."
+                       HorizontalAlignment="Center"
+                       Opacity="0.7" />
+
+            <!-- Usuario -->
+            <StackPanel Spacing="4">
+                <TextBlock Text="Usuario" />
+                <TextBox Text="{Binding NombreUsuario}"
+                         PlaceholderText="Nombre de usuario" />
+            </StackPanel>
+
+            <!-- Contraseña -->
+            <StackPanel Spacing="4">
+                <TextBlock Text="Contraseña" />
+                <TextBox Text="{Binding Contrasena}"
+                         PasswordChar="●"
+                         PlaceholderText="Contraseña" />
+            </StackPanel>
+
+            <!-- Mensaje de error -->
+            <TextBlock Text="{Binding MensajeError}"
+                       Foreground="Red"
+                       IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       TextWrapping="Wrap" />
+
+            <!-- Botón -->
+            <Button Content="Entrar"
+                    Command="{Binding EntrarCommand}"
+                    HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Center" />
+
+        </StackPanel>
+    </Border>
+
+</UserControl>
