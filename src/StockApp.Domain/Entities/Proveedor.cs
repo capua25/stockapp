@@ -8,4 +8,5 @@ public class Proveedor
     public string? Email { get; set; }
     public string? Direccion { get; set; }
     public string? Notas { get; set; }
+    public bool Activo { get; set; } = true;  // baja lógica
 }
