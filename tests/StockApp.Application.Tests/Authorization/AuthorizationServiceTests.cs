@@ -15,6 +15,7 @@ public class AuthorizationServiceTests
     [InlineData(Permisos.VerReportes)]
     [InlineData(Permisos.GestionarProductos)]
     [InlineData(Permisos.RegistrarMovimientos)]
+    [InlineData(Permisos.GestionarTablasMaestras)]
     public void Admin_PuedeEjecutarCualquierAccion(string accion)
     {
         // No debe lanzar
