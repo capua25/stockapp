@@ -1,0 +1,65 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels.Catalogo"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="480" d:DesignHeight="420"
+             x:Class="StockApp.Presentation.Views.Catalogo.ProveedorFormView"
+             x:DataType="vm:ProveedorFormViewModel">
+
+    <ScrollViewer>
+        <Border Padding="24" MaxWidth="460">
+            <StackPanel Spacing="12">
+
+                <TextBlock Text="Nuevo proveedor"
+                           FontSize="18"
+                           FontWeight="Bold"
+                           Margin="0,0,0,8" />
+
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Nombre (obligatorio)" />
+                    <TextBox Text="{Binding Nombre}"
+                             PlaceholderText="Nombre del proveedor" />
+                </StackPanel>
+
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Teléfono" />
+                    <TextBox Text="{Binding Telefono}"
+                             PlaceholderText="Teléfono (opcional)" />
+                </StackPanel>
+
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Email" />
+                    <TextBox Text="{Binding Email}"
+                             PlaceholderText="Email (opcional)" />
+                </StackPanel>
+
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Dirección" />
+                    <TextBox Text="{Binding Direccion}"
+                             PlaceholderText="Dirección (opcional)" />
+                </StackPanel>
+
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Notas" />
+                    <TextBox Text="{Binding Notas}"
+                             PlaceholderText="Notas adicionales"
+                             AcceptsReturn="True"
+                             Height="60" />
+                </StackPanel>
+
+                <TextBlock Text="{Binding MensajeError}"
+                           Foreground="Red"
+                           IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                           TextWrapping="Wrap" />
+
+                <Button Content="Guardar"
+                        Command="{Binding GuardarCommand}"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Center" />
+
+            </StackPanel>
+        </Border>
+    </ScrollViewer>
+
+</UserControl>
