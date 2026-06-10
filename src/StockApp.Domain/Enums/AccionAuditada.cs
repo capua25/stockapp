@@ -22,4 +22,8 @@ public enum AccionAuditada
     BajaUnidadMedida       = 14,   // reservado (baja lógica con Activo=false)
     ModificacionUnidadMedida = 15,
     ModificacionProducto   = 16,
+
+    // ── Movimientos de Stock — Incremento 5 (append-only a partir de 17) ──────
+    RegistroMovimiento     = 17,
+    RecalculoStock         = 18,
 }

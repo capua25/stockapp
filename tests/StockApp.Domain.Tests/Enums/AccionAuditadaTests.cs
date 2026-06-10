@@ -134,4 +134,13 @@ public class AccionAuditadaTests
         Assert.True((int)accion >= 7,
             $"{accion} debería tener índice >= 7, pero tiene {(int)accion}");
     }
+
+    // ── Incremento 5 — Movimientos de Stock (append-only a partir de 17) ──────
+
+    [Fact]
+    public void AccionAuditada_ValoresNumericos_SonExactos()
+    {
+        Assert.Equal(17, (int)AccionAuditada.RegistroMovimiento);
+        Assert.Equal(18, (int)AccionAuditada.RecalculoStock);
+    }
 }
