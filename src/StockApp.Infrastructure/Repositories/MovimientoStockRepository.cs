@@ -84,6 +84,70 @@ public class MovimientoStockRepository : IMovimientoStockRepository
     }
 
     /// <inheritdoc/>
-    public Task<IReadOnlyList<MovimientoHistorialDto>> ObtenerHistorialAsync(HistorialMovimientoFiltro filtro)
-        => throw new NotImplementedException();
+    /// Filtros combinables con AND; OrderByDescending(Fecha).
+    /// Running balance calculado en memoria (StockAnterior/StockNuevo) por producto,
+    /// acumulando en orden ASC y luego invirtiendo para la vista DESC.
+    public async Task<IReadOnlyList<MovimientoHistorialDto>> ObtenerHistorialAsync(HistorialMovimientoFiltro filtro)
+    {
+        // Construir query con filtros condicionales encadenados (patrón ProductoRepository.BuscarAsync)
+        var q = _ctx.MovimientosStock
+            .Include(m => m.Producto)
+            .AsQueryable();
+
+        if (filtro.ProductoId.HasValue)
+            q = q.Where(m => m.ProductoId == filtro.ProductoId.Value);
+
+        if (filtro.Tipo.HasValue)
+            q = q.Where(m => m.Tipo == filtro.Tipo.Value);
+
+        if (filtro.FechaDesde.HasValue)
+            q = q.Where(m => m.Fecha >= filtro.FechaDesde.Value);
+
+        if (filtro.FechaHasta.HasValue)
+            q = q.Where(m => m.Fecha <= filtro.FechaHasta.Value);
+
+        // Traer ordenado ASC para calcular running balance correctamente
+        var movimientos = await q
+            .OrderBy(m => m.ProductoId)
+            .ThenBy(m => m.Fecha)
+            .ThenBy(m => m.Id)
+            .ToListAsync();
+
+        if (movimientos.Count == 0)
+            return Array.Empty<MovimientoHistorialDto>();
+
+        // Running balance por producto (acumulación ASC)
+        var acumulado = new Dictionary<int, decimal>();
+        var items = new List<MovimientoHistorialDto>(movimientos.Count);
+
+        foreach (var m in movimientos)
+        {
+            if (!acumulado.ContainsKey(m.ProductoId))
+                acumulado[m.ProductoId] = 0m;
+
+            var stockAnterior = acumulado[m.ProductoId];
+            var delta         = m.Tipo == TipoMovimiento.Entrada ? m.Cantidad : -m.Cantidad;
+            var stockNuevo    = stockAnterior + delta;
+            acumulado[m.ProductoId] = stockNuevo;
+
+            items.Add(new MovimientoHistorialDto(
+                MovimientoId:   m.Id,
+                ProductoId:     m.ProductoId,
+                ProductoNombre: m.Producto?.Nombre ?? string.Empty,
+                Tipo:           m.Tipo,
+                Motivo:         m.Motivo,
+                Cantidad:       m.Cantidad,
+                PrecioUnitario: m.PrecioUnitario,
+                StockAnterior:  stockAnterior,
+                StockNuevo:     stockNuevo,
+                Comentario:     m.Comentario,
+                Fecha:          m.Fecha,
+                UsuarioId:      m.UsuarioId
+            ));
+        }
+
+        // Invertir a DESC para la vista (HM-S07: OrderByDescending(Fecha))
+        items.Reverse();
+        return items;
+    }
 }
