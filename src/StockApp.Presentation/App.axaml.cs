@@ -11,6 +11,7 @@ using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Interfaces;
+using StockApp.Application.Movimientos;
 using StockApp.Infrastructure.Auth;
 using StockApp.Infrastructure.Persistence;
 using StockApp.Infrastructure.Platform;
@@ -123,6 +124,11 @@ public partial class App : AvaloniaApp
         services.AddTransient<ICategoriaService, CategoriaService>();
         services.AddTransient<IProveedorService, ProveedorService>();
         services.AddTransient<IUnidadMedidaService, UnidadMedidaService>();
+
+        // ── Inc 5: movimientos — repositorio y servicio ───────────────────────
+
+        services.AddTransient<IMovimientoStockRepository, MovimientoStockRepository>();
+        services.AddTransient<IMovimientoStockService, MovimientoStockService>();
 
         // ── Inc 4: navegación ─────────────────────────────────────────────────
 
