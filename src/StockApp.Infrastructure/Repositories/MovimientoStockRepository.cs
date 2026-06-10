@@ -61,8 +61,27 @@ public class MovimientoStockRepository : IMovimientoStockRepository
     }
 
     /// <inheritdoc/>
-    public Task RecalcularAtomicoAsync(RecalculoAtomicoArgs args)
-        => throw new NotImplementedException();
+    /// ATÓMICO: update Producto.StockActual + insert LogAuditoria (Accion=18)
+    /// en UN solo SaveChangesAsync. Mismo principio que RegistrarMovimientoAtomicoAsync.
+    public async Task RecalcularAtomicoAsync(RecalculoAtomicoArgs args)
+    {
+        var producto = await _ctx.Productos.FindAsync(args.ProductoId)
+            ?? throw new KeyNotFoundException($"Producto {args.ProductoId} no encontrado.");
+
+        producto.StockActual = args.StockNuevo;
+
+        _ctx.LogsAuditoria.Add(new LogAuditoria
+        {
+            UsuarioId = args.UsuarioId,
+            Fecha     = DateTime.UtcNow,
+            Accion    = AccionAuditada.RecalculoStock,   // 18
+            Entidad   = "Producto",
+            EntidadId = args.ProductoId,
+            Detalle   = args.DetalleAuditoria
+        });
+
+        await _ctx.SaveChangesAsync();
+    }
 
     /// <inheritdoc/>
     public Task<IReadOnlyList<MovimientoHistorialDto>> ObtenerHistorialAsync(HistorialMovimientoFiltro filtro)

@@ -256,6 +256,38 @@ public class MovimientoStockRepositoryTests : IDisposable
         Assert.Equal((int)AccionAuditada.RegistroMovimiento, (int)log.Accion);
         Assert.Equal(17, (int)log.Accion);
     }
+
+    // ── C5: RecalcularAtomicoAsync ────────────────────────────────────────────
+
+    [Fact]
+    public async Task RecalcularAtomicoAsync_ProductoExiste_ActualizaStockYAuditaConAccion18()
+    {
+        var (_, usuario, producto) = await SeedBaseAsync(stockInicial: 50m);
+        int productoId = producto.Id;
+        int usuarioId  = usuario.Id;
+
+        var args = new RecalculoAtomicoArgs(
+            ProductoId:       productoId,
+            StockNuevo:       30m,   // recalculado por el service
+            UsuarioId:        usuarioId,
+            DetalleAuditoria: "Recálculo; StockAnterior=50; StockNuevo=30; Total=3"
+        );
+
+        await _repo.RecalcularAtomicoAsync(args);
+
+        // Verificar con context fresco
+        var opts2 = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlite(_connection)
+            .Options;
+        await using var ctx2 = new AppDbContext(opts2);
+
+        var productoFresh = await ctx2.Productos.FindAsync(productoId);
+        Assert.Equal(30m, productoFresh!.StockActual);
+
+        Assert.Equal(1, await ctx2.LogsAuditoria.CountAsync());
+        var log = await ctx2.LogsAuditoria.FirstAsync();
+        Assert.Equal(18, (int)log.Accion);   // AccionAuditada.RecalculoStock
+    }
 }
 
 /// <summary>
