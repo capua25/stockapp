@@ -21,6 +21,7 @@ using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels;
 using StockApp.Presentation.ViewModels.Catalogo;
+using StockApp.Presentation.ViewModels.Movimientos;
 using StockApp.Presentation.Views;
 
 namespace StockApp.Presentation;
@@ -133,6 +134,10 @@ public partial class App : AvaloniaApp
 
         // ── Inc 5: confirmación de stock insuficiente ─────────────────────────
         services.AddSingleton<IConfirmacionService, ConfirmacionService>();
+
+        // ── Inc 5: VMs de movimientos ─────────────────────────────────────────
+        services.AddTransient<MovimientoRegistroViewModel>();
+        services.AddTransient<MovimientoHistorialViewModel>();
 
         // ── Inc 4: navegación ─────────────────────────────────────────────────
 
