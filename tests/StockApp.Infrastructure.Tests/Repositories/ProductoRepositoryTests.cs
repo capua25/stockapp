@@ -120,27 +120,32 @@ public class ProductoRepositoryTests : IDisposable
         Assert.All(result, p => Assert.Contains("Aceite", p.Nombre));
     }
 
-    // ── BuscarAsync: nombre — comportamiento REAL de case-sensitivity en SQLite ──
+    // ── BuscarAsync: nombre — case-insensitive ASCII ──────────────────────────
 
     [Fact]
-    public async Task BuscarAsync_PorNombre_EsCaseSensitiveEnSQLiteInMemory()
+    public async Task BuscarAsync_PorNombre_EsCaseInsensitiveAscii()
     {
-        // HALLAZGO: EF Core con SQLite in-memory (DataSource=:memory: + OpenConnection)
-        // evalúa Contains() mediante SQLite LIKE, pero en el proveedor in-memory de SQLite
-        // el LIKE resulta case-sensitive (al menos para caracteres con mezcla de mayúsculas).
-        // Búsqueda "aceite" NO encuentra "Aceite de Oliva".
-        // COMPORTAMIENTO REAL, no el deseado — el test documenta lo que realmente ocurre.
-        // NOTA: si se necesita búsqueda case-insensitive real, habría que aplicar
-        // EF.Functions.Collate(p.Nombre, "NOCASE") o normalizar a minúsculas en la query.
+        // EF.Functions.Like en SQLite usa el operador LIKE que es case-insensitive
+        // para caracteres ASCII por defecto. "aceite" debe encontrar "Aceite de Oliva"
+        // y "MARTILLO" debe encontrar "Martillo".
+        // Limitación conocida: acentos (á/Á) siguen siendo case-sensitive — mejora futura.
         var (repo, um) = await SeedUmAsync();
         await repo.AgregarAsync(NuevoProducto("A001", "Aceite de Oliva", um));
+        await repo.AgregarAsync(NuevoProducto("A002", "Martillo", um));
         _ctx.ChangeTracker.Clear();
 
-        var resultExacto = await repo.BuscarAsync(sku: null, codigoBarras: null, nombre: "Aceite");
-        var resultLower  = await repo.BuscarAsync(sku: null, codigoBarras: null, nombre: "aceite");
+        var resultLower   = await repo.BuscarAsync(sku: null, codigoBarras: null, nombre: "aceite");
+        var resultUpper   = await repo.BuscarAsync(sku: null, codigoBarras: null, nombre: "MARTILLO");
+        var resultMixed   = await repo.BuscarAsync(sku: null, codigoBarras: null, nombre: "mArTiLlO");
 
-        Assert.Single(resultExacto);        // case exacto → encuentra
-        Assert.Empty(resultLower);          // lowercase → NO encuentra (case-sensitive en SQLite in-memory)
+        Assert.Single(resultLower);                              // "aceite" → encuentra "Aceite de Oliva"
+        Assert.Equal("Aceite de Oliva", resultLower[0].Nombre);
+
+        Assert.Single(resultUpper);                              // "MARTILLO" → encuentra "Martillo"
+        Assert.Equal("Martillo", resultUpper[0].Nombre);
+
+        Assert.Single(resultMixed);                              // mixed case también
+        Assert.Equal("Martillo", resultMixed[0].Nombre);
     }
 
     // ── BuscarAsync: sin filtros = todos ─────────────────────────────────────
