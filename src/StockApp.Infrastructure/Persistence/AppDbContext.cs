@@ -86,6 +86,9 @@ public class AppDbContext : DbContext
                 .HasForeignKey(m => m.ProductoId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(m => m.Usuario).WithMany()
                 .HasForeignKey(m => m.UsuarioId).OnDelete(DeleteBehavior.Restrict);
+            // Índice compuesto para acelerar historial por producto+fecha (PA-04)
+            e.HasIndex(m => new { m.ProductoId, m.Fecha })
+             .HasDatabaseName("IX_MovimientosStock_ProductoId_Fecha");
         });
 
         // ── LogAuditoria ──────────────────────────────────────────────────────
