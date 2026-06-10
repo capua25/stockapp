@@ -1,3 +1,4 @@
+using System;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -6,6 +7,7 @@ using StockApp.Application.Catalogo;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 
@@ -65,7 +67,36 @@ public partial class MovimientoRegistroViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(PuedeRegistrar))]
     private async Task RegistrarAsync()
     {
-        // Implementación completa en D3
-        await Task.CompletedTask;
+        MensajeError = null;
+
+        var dto = new RegistrarMovimientoDto(
+            ProductoId:     ProductoSeleccionado!.Id,
+            Tipo:           Tipo,
+            Motivo:         Motivo,
+            Cantidad:       Cantidad,
+            PrecioUnitario: PrecioUnitario,
+            Comentario:     Comentario);
+
+        try
+        {
+            await _service.RegistrarAsync(dto, forzar: false);
+            _navigation.Navegar<MovimientoHistorialViewModel>();
+        }
+        catch (StockInsuficienteException ex)
+        {
+            var mensaje = $"El stock quedará en {ex.StockResultante}. ¿Confirmar la salida igual?";
+            var confirmar = await _confirmacion.PreguntarAsync(mensaje);
+
+            if (confirmar)
+            {
+                await _service.RegistrarAsync(dto, forzar: true);
+                _navigation.Navegar<MovimientoHistorialViewModel>();
+            }
+            // Si rechaza, no hace nada — el usuario puede corregir la cantidad
+        }
+        catch (Exception ex)
+        {
+            MensajeError = ex.Message;
+        }
     }
 }

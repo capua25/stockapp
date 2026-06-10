@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Moq;
@@ -5,6 +6,7 @@ using StockApp.Application.Catalogo;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Movimientos;
@@ -89,5 +91,114 @@ public class MovimientoRegistroViewModelTests
         vm.Cantidad = 0m;
 
         Assert.False(vm.RegistrarCommand.CanExecute(null));
+    }
+
+    // ── D3 — RegistrarAsync: 4 caminos ───────────────────────────────────────
+
+    [Fact]
+    public async Task RegistrarAsync_Exitoso_NavegaAHistorial()
+    {
+        var (vm, svcMock, _, navMock, _) = Crear();
+        vm.ProductoSeleccionado = new Producto { Id = 1, Nombre = "Azúcar" };
+        vm.Cantidad = 5m;
+
+        var dto = new MovimientoRegistradoDto(
+            MovimientoId: 1,
+            ProductoId: 1,
+            Tipo: TipoMovimiento.Entrada,
+            Motivo: MotivoMovimiento.Compra,
+            Cantidad: 5m,
+            PrecioUnitario: 10m,
+            StockAnterior: 0m,
+            StockNuevo: 5m,
+            Fecha: DateTime.UtcNow);
+
+        svcMock
+            .Setup(s => s.RegistrarAsync(It.IsAny<RegistrarMovimientoDto>(), false))
+            .ReturnsAsync(dto);
+
+        await vm.RegistrarCommand.ExecuteAsync(null);
+
+        navMock.Verify(n => n.Navegar<MovimientoHistorialViewModel>(), Times.Once);
+        Assert.Null(vm.MensajeError);
+    }
+
+    [Fact]
+    public async Task RegistrarAsync_StockInsuficiente_Confirma_ReintentaConForzarTrue()
+    {
+        var (vm, svcMock, _, navMock, confirmMock) = Crear();
+        vm.ProductoSeleccionado = new Producto { Id = 1, Nombre = "Azúcar", StockActual = 3m };
+        vm.Cantidad = 10m;
+
+        var ex = new StockInsuficienteException(productoId: 1, stockActual: 3m, cantidadSolicitada: 10m);
+
+        svcMock
+            .SetupSequence(s => s.RegistrarAsync(It.IsAny<RegistrarMovimientoDto>(), false))
+            .ThrowsAsync(ex);
+
+        var dtoForzado = new MovimientoRegistradoDto(
+            MovimientoId: 2,
+            ProductoId: 1,
+            Tipo: TipoMovimiento.Salida,
+            Motivo: MotivoMovimiento.Venta,
+            Cantidad: 10m,
+            PrecioUnitario: 5m,
+            StockAnterior: 3m,
+            StockNuevo: -7m,
+            Fecha: DateTime.UtcNow);
+
+        svcMock
+            .Setup(s => s.RegistrarAsync(It.IsAny<RegistrarMovimientoDto>(), true))
+            .ReturnsAsync(dtoForzado);
+
+        confirmMock
+            .Setup(c => c.PreguntarAsync(It.IsAny<string>()))
+            .ReturnsAsync(true);
+
+        await vm.RegistrarCommand.ExecuteAsync(null);
+
+        svcMock.Verify(s => s.RegistrarAsync(It.IsAny<RegistrarMovimientoDto>(), true), Times.Once);
+        navMock.Verify(n => n.Navegar<MovimientoHistorialViewModel>(), Times.Once);
+    }
+
+    [Fact]
+    public async Task RegistrarAsync_StockInsuficiente_Rechaza_NoReinvocaServicio()
+    {
+        var (vm, svcMock, _, navMock, confirmMock) = Crear();
+        vm.ProductoSeleccionado = new Producto { Id = 1, Nombre = "Azúcar", StockActual = 3m };
+        vm.Cantidad = 10m;
+
+        var ex = new StockInsuficienteException(productoId: 1, stockActual: 3m, cantidadSolicitada: 10m);
+
+        svcMock
+            .Setup(s => s.RegistrarAsync(It.IsAny<RegistrarMovimientoDto>(), false))
+            .ThrowsAsync(ex);
+
+        confirmMock
+            .Setup(c => c.PreguntarAsync(It.IsAny<string>()))
+            .ReturnsAsync(false);
+
+        await vm.RegistrarCommand.ExecuteAsync(null);
+
+        svcMock.Verify(s => s.RegistrarAsync(It.IsAny<RegistrarMovimientoDto>(), true), Times.Never);
+        navMock.Verify(n => n.Navegar<MovimientoHistorialViewModel>(), Times.Never);
+    }
+
+    [Fact]
+    public async Task RegistrarAsync_OtraExcepcion_SetMensajeError()
+    {
+        var (vm, svcMock, _, navMock, _) = Crear();
+        vm.ProductoSeleccionado = new Producto { Id = 1, Nombre = "Azúcar" };
+        vm.Cantidad = 5m;
+
+        svcMock
+            .Setup(s => s.RegistrarAsync(It.IsAny<RegistrarMovimientoDto>(), false))
+            .ThrowsAsync(new InvalidOperationException("Producto inactivo, no se permiten movimientos."));
+
+        await vm.RegistrarCommand.ExecuteAsync(null);
+
+        Assert.NotNull(vm.MensajeError);
+        Assert.Contains("Producto inactivo", vm.MensajeError);
+        navMock.Verify(n => n.Navegar<MovimientoHistorialViewModel>(), Times.Never);
     }
 }
