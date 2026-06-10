@@ -288,6 +288,156 @@ public class MovimientoStockRepositoryTests : IDisposable
         var log = await ctx2.LogsAuditoria.FirstAsync();
         Assert.Equal(18, (int)log.Accion);   // AccionAuditada.RecalculoStock
     }
+
+    // ── C6: ObtenerHistorialAsync con filtros combinables ─────────────────────
+
+    /// Helper para seed de movimientos múltiples con fechas configurables.
+    private async Task<(Producto p1, Producto p2, Usuario u)> SeedHistorialAsync()
+    {
+        var um = NuevaUm();
+        var usuario = NuevoUsuario("hist_user");
+        _ctx.UnidadesMedida.Add(um);
+        _ctx.Usuarios.Add(usuario);
+        await _ctx.SaveChangesAsync();
+
+        var p1 = NuevoProducto("HIST001", um, 100m);
+        p1.Nombre = "Producto Alfa";
+        var p2 = NuevoProducto("HIST002", um, 200m);
+        p2.Nombre = "Producto Beta";
+        _ctx.Productos.AddRange(p1, p2);
+        await _ctx.SaveChangesAsync();
+
+        var base1 = new DateTime(2026, 1, 10, 0, 0, 0, DateTimeKind.Utc);
+        _ctx.MovimientosStock.AddRange(
+            // p1: 2 entradas, 1 salida
+            new MovimientoStock { ProductoId = p1.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Cantidad = 10m, PrecioUnitario = 5m, Fecha = base1,               Motivo = MotivoMovimiento.Compra },
+            new MovimientoStock { ProductoId = p1.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Salida,  Cantidad = 3m,  PrecioUnitario = 8m, Fecha = base1.AddDays(1),    Motivo = MotivoMovimiento.Venta  },
+            new MovimientoStock { ProductoId = p1.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Cantidad = 5m,  PrecioUnitario = 5m, Fecha = base1.AddDays(2),    Motivo = MotivoMovimiento.Compra },
+            // p2: 1 entrada
+            new MovimientoStock { ProductoId = p2.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Cantidad = 20m, PrecioUnitario = 3m, Fecha = base1.AddDays(3),    Motivo = MotivoMovimiento.Compra }
+        );
+        await _ctx.SaveChangesAsync();
+        _ctx.ChangeTracker.Clear();
+
+        return (p1, p2, usuario);
+    }
+
+    [Fact]
+    public async Task ObtenerHistorialAsync_SinFiltros_DevuelveTodosOrdenadosDesc()
+    {
+        var (_, _, _) = await SeedHistorialAsync();
+
+        var resultado = await _repo.ObtenerHistorialAsync(new HistorialMovimientoFiltro());
+
+        Assert.Equal(4, resultado.Count);
+        // Ordenados DESC por Fecha → el más reciente primero
+        for (int i = 0; i < resultado.Count - 1; i++)
+            Assert.True(resultado[i].Fecha >= resultado[i + 1].Fecha);
+    }
+
+    [Fact]
+    public async Task ObtenerHistorialAsync_FiltroPorProducto_DevuelveSoloDelProducto()
+    {
+        var (p1, _, _) = await SeedHistorialAsync();
+
+        var resultado = await _repo.ObtenerHistorialAsync(new HistorialMovimientoFiltro(ProductoId: p1.Id));
+
+        Assert.Equal(3, resultado.Count);
+        Assert.All(resultado, m => Assert.Equal(p1.Id, m.ProductoId));
+        Assert.All(resultado, m => Assert.Equal("Producto Alfa", m.ProductoNombre));
+    }
+
+    [Fact]
+    public async Task ObtenerHistorialAsync_FiltroPorTipo_DevuelveSoloTipoIndicado()
+    {
+        var (_, _, _) = await SeedHistorialAsync();
+
+        var resultado = await _repo.ObtenerHistorialAsync(new HistorialMovimientoFiltro(Tipo: TipoMovimiento.Salida));
+
+        Assert.Single(resultado);
+        Assert.Equal(TipoMovimiento.Salida, resultado[0].Tipo);
+    }
+
+    [Fact]
+    public async Task ObtenerHistorialAsync_FiltroPorPeriodo_AplicaFechaDesdeHasta()
+    {
+        var (_, _, _) = await SeedHistorialAsync();
+        var base1 = new DateTime(2026, 1, 10, 0, 0, 0, DateTimeKind.Utc);
+
+        // FechaDesde=día 10, FechaHasta=día 11 → sólo los 2 primeros movimientos
+        var resultado = await _repo.ObtenerHistorialAsync(new HistorialMovimientoFiltro(
+            FechaDesde: base1,
+            FechaHasta: base1.AddDays(1)));
+
+        Assert.Equal(2, resultado.Count);
+    }
+
+    [Fact]
+    public async Task ObtenerHistorialAsync_FiltrosCombinados_AplicaAnd()
+    {
+        var (p1, _, _) = await SeedHistorialAsync();
+        var base1 = new DateTime(2026, 1, 10, 0, 0, 0, DateTimeKind.Utc);
+
+        // p1 + Tipo=Entrada + FechaDesde=día10 → sólo el primer movimiento de p1
+        var resultado = await _repo.ObtenerHistorialAsync(new HistorialMovimientoFiltro(
+            ProductoId: p1.Id,
+            Tipo:       TipoMovimiento.Entrada,
+            FechaDesde: base1,
+            FechaHasta: base1.AddDays(1)));
+
+        Assert.Single(resultado);
+        Assert.Equal(p1.Id,               resultado[0].ProductoId);
+        Assert.Equal(TipoMovimiento.Entrada, resultado[0].Tipo);
+    }
+
+    [Fact]
+    public async Task ObtenerHistorialAsync_SinCoincidencias_DevuelveVacio()
+    {
+        var (_, _, _) = await SeedHistorialAsync();
+
+        // Fecha en el pasado lejano → sin coincidencias
+        var resultado = await _repo.ObtenerHistorialAsync(new HistorialMovimientoFiltro(
+            FechaDesde: new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            FechaHasta: new DateTime(2020, 12, 31, 0, 0, 0, DateTimeKind.Utc)));
+
+        Assert.Empty(resultado);
+    }
+
+    [Fact]
+    public async Task ObtenerHistorialAsync_RunningBalance_StockAnteriorYNuevoCorrectos()
+    {
+        // Seed de 1 producto con 2 entradas para verificar running balance
+        var um      = NuevaUm();
+        var usuario = NuevoUsuario("rb_user");
+        _ctx.UnidadesMedida.Add(um);
+        _ctx.Usuarios.Add(usuario);
+        await _ctx.SaveChangesAsync();
+
+        var p = NuevoProducto("RB001", um, 0m);
+        _ctx.Productos.Add(p);
+        await _ctx.SaveChangesAsync();
+
+        var t0 = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc);
+        _ctx.MovimientosStock.AddRange(
+            new MovimientoStock { ProductoId = p.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Cantidad = 10m, PrecioUnitario = 5m, Fecha = t0,            Motivo = MotivoMovimiento.Compra },
+            new MovimientoStock { ProductoId = p.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Cantidad = 5m,  PrecioUnitario = 5m, Fecha = t0.AddHours(1), Motivo = MotivoMovimiento.Compra }
+        );
+        await _ctx.SaveChangesAsync();
+        _ctx.ChangeTracker.Clear();
+
+        var resultado = await _repo.ObtenerHistorialAsync(new HistorialMovimientoFiltro(ProductoId: p.Id));
+
+        // Resultado ordenado DESC: mov2 (t0+1h) primero, mov1 (t0) segundo
+        Assert.Equal(2, resultado.Count);
+
+        // mov más reciente (5 entrada): StockAnterior=10, StockNuevo=15
+        Assert.Equal(10m, resultado[0].StockAnterior);
+        Assert.Equal(15m, resultado[0].StockNuevo);
+
+        // mov más antiguo (10 entrada): StockAnterior=0, StockNuevo=10
+        Assert.Equal(0m,  resultado[1].StockAnterior);
+        Assert.Equal(10m, resultado[1].StockNuevo);
+    }
 }
 
 /// <summary>
