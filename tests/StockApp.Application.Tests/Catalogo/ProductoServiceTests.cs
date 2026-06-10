@@ -15,13 +15,15 @@ public class ProductoServiceTests
                     Mock<IProductoRepository> repoMock,
                     Mock<ICurrentSession> sessionMock,
                     Mock<IAuthSvc> authMock,
-                    Mock<IAuditLogger> auditMock)
+                    Mock<IAuditLogger> auditMock,
+                    Mock<IUnidadMedidaRepository> umRepoMock)
         Crear(RolUsuario rol = RolUsuario.Admin, int idSesion = 1)
     {
         var repo    = new Mock<IProductoRepository>();
         var session = new Mock<ICurrentSession>();
         var auth    = new Mock<IAuthSvc>();
         var audit   = new Mock<IAuditLogger>();
+        var umRepo  = new Mock<IUnidadMedidaRepository>();
 
         session.Setup(s => s.RolActual).Returns(rol);
         var sesionHelper = new StockApp.Application.Auth.UsuarioSesion(idSesion, "usuario", rol, null);
@@ -32,8 +34,12 @@ public class ProductoServiceTests
         else
             auth.Setup(a => a.Verificar(RolUsuario.Operador, Permisos.GestionarProductos));
 
-        var svc = new ProductoService(repo.Object, session.Object, auth.Object, audit.Object);
-        return (svc, repo, session, auth, audit);
+        // Por defecto la unidad de medida con id > 0 existe — evita romper tests existentes
+        umRepo.Setup(r => r.ObtenerPorIdAsync(It.IsAny<int>()))
+              .ReturnsAsync(new UnidadMedida { Id = 1, Nombre = "Unidad", Abreviatura = "u" });
+
+        var svc = new ProductoService(repo.Object, session.Object, auth.Object, audit.Object, umRepo.Object);
+        return (svc, repo, session, auth, audit, umRepo);
     }
 
     // ─── Alta ────────────────────────────────────────────────────────────────
@@ -41,7 +47,7 @@ public class ProductoServiceTests
     [Fact]
     public async Task AltaAsync_CodigoDuplicado_LanzaInvalidOperation()
     {
-        var (svc, repo, _, _, _) = Crear();
+        var (svc, repo, _, _, _, _) = Crear();
         repo.Setup(r => r.ExisteCodigoAsync("SKU-001", null)).ReturnsAsync(true);
 
         var p = new Producto { Codigo = "SKU-001", Nombre = "Fideos", UnidadMedidaId = 1 };
@@ -51,7 +57,7 @@ public class ProductoServiceTests
     [Fact]
     public async Task AltaAsync_CodigoBarrasDuplicado_LanzaInvalidOperation()
     {
-        var (svc, repo, _, _, _) = Crear();
+        var (svc, repo, _, _, _, _) = Crear();
         repo.Setup(r => r.ExisteCodigoAsync("SKU-002", null)).ReturnsAsync(false);
         repo.Setup(r => r.ExisteCodigoBarrasAsync("7891234567890", null)).ReturnsAsync(true);
 
@@ -62,7 +68,7 @@ public class ProductoServiceTests
     [Fact]
     public async Task AltaAsync_PrecioNegativo_LanzaArgumentException()
     {
-        var (svc, repo, _, _, _) = Crear();
+        var (svc, repo, _, _, _, _) = Crear();
         repo.Setup(r => r.ExisteCodigoAsync(It.IsAny<string>(), null)).ReturnsAsync(false);
 
         var p = new Producto { Codigo = "SKU-003", Nombre = "Fideos", UnidadMedidaId = 1, PrecioCosto = -1m };
@@ -72,7 +78,7 @@ public class ProductoServiceTests
     [Fact]
     public async Task AltaAsync_PrecioVentaNegativo_LanzaArgumentException()
     {
-        var (svc, repo, _, _, _) = Crear();
+        var (svc, repo, _, _, _, _) = Crear();
         repo.Setup(r => r.ExisteCodigoAsync(It.IsAny<string>(), null)).ReturnsAsync(false);
 
         var p = new Producto { Codigo = "SKU-004", Nombre = "Fideos", UnidadMedidaId = 1, PrecioVenta = -0.01m };
@@ -82,7 +88,7 @@ public class ProductoServiceTests
     [Fact]
     public async Task AltaAsync_Exitosa_RetornaId_RegistraAuditoria()
     {
-        var (svc, repo, _, _, audit) = Crear();
+        var (svc, repo, _, _, audit, _) = Crear();
         repo.Setup(r => r.ExisteCodigoAsync("SKU-001", null)).ReturnsAsync(false);
         repo.Setup(r => r.AgregarAsync(It.IsAny<Producto>())).ReturnsAsync(42);
 
@@ -105,7 +111,7 @@ public class ProductoServiceTests
             Id = 5, Codigo = "SKU-001", Nombre = "Fideos",
             UnidadMedidaId = 1, PrecioVenta = 100m, PrecioCosto = 50m, Activo = true
         };
-        var (svc, repo, _, _, audit) = Crear();
+        var (svc, repo, _, _, audit, _) = Crear();
         repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(original);
         repo.Setup(r => r.ExisteCodigoBarrasAsync(It.IsAny<string>(), It.IsAny<int?>())).ReturnsAsync(false);
 
@@ -130,7 +136,7 @@ public class ProductoServiceTests
             Id = 5, Codigo = "SKU-001", Nombre = "Fideos",
             UnidadMedidaId = 1, PrecioVenta = 100m, PrecioCosto = 50m, Activo = true
         };
-        var (svc, repo, _, _, audit) = Crear();
+        var (svc, repo, _, _, audit, _) = Crear();
         repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(original);
         repo.Setup(r => r.ExisteCodigoBarrasAsync(It.IsAny<string>(), It.IsAny<int?>())).ReturnsAsync(false);
 
@@ -155,7 +161,7 @@ public class ProductoServiceTests
             Id = 3, Codigo = "SKU-003", Nombre = "Arroz",
             UnidadMedidaId = 1, CodigoBarras = "111", Activo = true
         };
-        var (svc, repo, _, _, _) = Crear();
+        var (svc, repo, _, _, _, _) = Crear();
         repo.Setup(r => r.ObtenerPorIdAsync(3)).ReturnsAsync(original);
         repo.Setup(r => r.ExisteCodigoBarrasAsync("222", 3)).ReturnsAsync(true);
 
@@ -173,7 +179,7 @@ public class ProductoServiceTests
     public async Task BajaLogicaAsync_Exitosa_ActivoFalse_Audita()
     {
         var p = new Producto { Id = 5, Codigo = "SKU-001", Nombre = "Fideos", UnidadMedidaId = 1, Activo = true };
-        var (svc, repo, _, _, audit) = Crear();
+        var (svc, repo, _, _, audit, _) = Crear();
         repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(p);
 
         await svc.BajaLogicaAsync(5);
@@ -188,7 +194,7 @@ public class ProductoServiceTests
     public async Task BajaLogicaAsync_YaInactivo_LanzaInvalidOperation()
     {
         var p = new Producto { Id = 5, Codigo = "SKU-001", Nombre = "Fideos", UnidadMedidaId = 1, Activo = false };
-        var (svc, repo, _, _, _) = Crear();
+        var (svc, repo, _, _, _, _) = Crear();
         repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(p);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => svc.BajaLogicaAsync(5));
@@ -204,7 +210,7 @@ public class ProductoServiceTests
             Id = 7, Codigo = "SKU-007", Nombre = "Pan",
             UnidadMedidaId = 1, PrecioCosto = 50m, PrecioVenta = 100m, Activo = true
         };
-        var (svc, repo, _, _, audit) = Crear();
+        var (svc, repo, _, _, audit, _) = Crear();
         repo.Setup(r => r.ObtenerPorIdAsync(7)).ReturnsAsync(p);
 
         await svc.CambiarPrecioAsync(7, 55m, 110m);
@@ -225,7 +231,7 @@ public class ProductoServiceTests
         {
             new() { Id = 1, Codigo = "SKU-001", Nombre = "Fideos", UnidadMedidaId = 1, Activo = true }
         };
-        var (svc, repo, _, _, _) = Crear();
+        var (svc, repo, _, _, _, _) = Crear();
         repo.Setup(r => r.BuscarAsync("SKU-001", null, null)).ReturnsAsync(lista.AsReadOnly());
 
         var resultado = await svc.BuscarAsync("SKU-001", null, null);
@@ -242,7 +248,7 @@ public class ProductoServiceTests
             new() { Id = 1, Nombre = "Fideos finos", UnidadMedidaId = 1, Activo = true },
             new() { Id = 2, Nombre = "Fideos gruesos", UnidadMedidaId = 1, Activo = true }
         };
-        var (svc, repo, _, _, _) = Crear();
+        var (svc, repo, _, _, _, _) = Crear();
         repo.Setup(r => r.BuscarAsync(null, null, "fideos")).ReturnsAsync(lista.AsReadOnly());
 
         var resultado = await svc.BuscarAsync(null, null, "fideos");
@@ -253,7 +259,7 @@ public class ProductoServiceTests
     [Fact]
     public async Task BuscarAsync_SinResultados_RetornaListaVacia()
     {
-        var (svc, repo, _, _, _) = Crear();
+        var (svc, repo, _, _, _, _) = Crear();
         repo.Setup(r => r.BuscarAsync(null, null, "xyz999"))
             .ReturnsAsync(new List<Producto>().AsReadOnly());
 
@@ -267,7 +273,7 @@ public class ProductoServiceTests
     [Fact]
     public async Task Operador_TieneGestionarProductos_NoLanzaUnauthorized()
     {
-        var (svc, repo, _, auth, _) = Crear(RolUsuario.Operador, idSesion: 2);
+        var (svc, repo, _, auth, _, _) = Crear(RolUsuario.Operador, idSesion: 2);
         repo.Setup(r => r.ExisteCodigoAsync("SKU-OP", null)).ReturnsAsync(false);
         repo.Setup(r => r.AgregarAsync(It.IsAny<Producto>())).ReturnsAsync(10);
 
@@ -277,6 +283,41 @@ public class ProductoServiceTests
 
         Assert.Null(ex);
         auth.Verify(a => a.Verificar(RolUsuario.Operador, Permisos.GestionarProductos), Times.Once);
+    }
+
+    // ─── Validación de existencia de UnidadMedida (W2) ───────────────────────
+
+    [Fact]
+    public async Task AltaAsync_UnidadMedidaInexistente_LanzaArgumentException()
+    {
+        // UnidadMedidaId = 99 (Id > 0 pero no existe en la BD)
+        var (svc, repo, _, _, _, umRepo) = Crear();
+        umRepo.Setup(r => r.ObtenerPorIdAsync(99)).ReturnsAsync((UnidadMedida?)null);
+
+        var p = new Producto { Codigo = "SKU-UM", Nombre = "Fideos", UnidadMedidaId = 99 };
+        await Assert.ThrowsAsync<ArgumentException>(() => svc.AltaAsync(p));
+    }
+
+    [Fact]
+    public async Task ModificarAsync_UnidadMedidaInexistente_LanzaArgumentException()
+    {
+        // Modificar cambiando UnidadMedidaId a uno que no existe
+        var original = new Producto
+        {
+            Id = 10, Codigo = "SKU-010", Nombre = "Arroz",
+            UnidadMedidaId = 1, Activo = true
+        };
+        var (svc, repo, _, _, _, umRepo) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(10)).ReturnsAsync(original);
+        repo.Setup(r => r.ExisteCodigoBarrasAsync(It.IsAny<string>(), It.IsAny<int?>())).ReturnsAsync(false);
+        umRepo.Setup(r => r.ObtenerPorIdAsync(99)).ReturnsAsync((UnidadMedida?)null);
+
+        var modificado = new Producto
+        {
+            Id = 10, Codigo = "SKU-010", Nombre = "Arroz",
+            UnidadMedidaId = 99, Activo = true
+        };
+        await Assert.ThrowsAsync<ArgumentException>(() => svc.ModificarAsync(modificado));
     }
 }
 

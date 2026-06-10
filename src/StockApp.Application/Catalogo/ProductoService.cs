@@ -11,21 +11,24 @@ namespace StockApp.Application.Catalogo;
 /// </summary>
 public class ProductoService : IProductoService
 {
-    private readonly IProductoRepository    _repo;
-    private readonly ICurrentSession        _session;
-    private readonly IAuthorizationService  _auth;
-    private readonly IAuditLogger           _audit;
+    private readonly IProductoRepository     _repo;
+    private readonly ICurrentSession         _session;
+    private readonly IAuthorizationService   _auth;
+    private readonly IAuditLogger            _audit;
+    private readonly IUnidadMedidaRepository _umRepo;
 
     public ProductoService(
-        IProductoRepository   repo,
-        ICurrentSession       session,
-        IAuthorizationService auth,
-        IAuditLogger          audit)
+        IProductoRepository     repo,
+        ICurrentSession         session,
+        IAuthorizationService   auth,
+        IAuditLogger            audit,
+        IUnidadMedidaRepository umRepo)
     {
-        _repo    = repo;
+        _repo   = repo;
         _session = session;
         _auth    = auth;
         _audit   = audit;
+        _umRepo  = umRepo;
     }
 
     public async Task<int> AltaAsync(Producto producto)
@@ -39,6 +42,8 @@ public class ProductoService : IProductoService
             throw new ArgumentException("El código (SKU) del producto es obligatorio.");
         if (producto.UnidadMedidaId <= 0)
             throw new ArgumentException("La unidad de medida es obligatoria.");
+        if (await _umRepo.ObtenerPorIdAsync(producto.UnidadMedidaId) is null)
+            throw new ArgumentException($"La unidad de medida {producto.UnidadMedidaId} no existe.");
         if (producto.PrecioCosto < 0)
             throw new ArgumentException("El precio de costo no puede ser negativo.");
         if (producto.PrecioVenta < 0)
@@ -74,6 +79,11 @@ public class ProductoService : IProductoService
             && producto.CodigoBarras != original.CodigoBarras
             && await _repo.ExisteCodigoBarrasAsync(producto.CodigoBarras, producto.Id))
             throw new InvalidOperationException($"Ya existe un producto con el código de barras '{producto.CodigoBarras}'.");
+
+        // Validar que la UnidadMedida existe si cambió (evita DbUpdateException de FK)
+        if (producto.UnidadMedidaId != original.UnidadMedidaId
+            && await _umRepo.ObtenerPorIdAsync(producto.UnidadMedidaId) is null)
+            throw new ArgumentException($"La unidad de medida {producto.UnidadMedidaId} no existe.");
 
         if (producto.PrecioCosto < 0)
             throw new ArgumentException("El precio de costo no puede ser negativo.");
