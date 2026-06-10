@@ -29,6 +29,19 @@
                         HorizontalContentAlignment="Left"
                         Background="Transparent" />
 
+                <!-- Movimientos: visible para Admin y Operador -->
+                <Button Content="Registrar movimiento"
+                        Command="{Binding NavMovimientosCommand}"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Background="Transparent" />
+
+                <Button Content="Historial de movimientos"
+                        Command="{Binding NavHistorialMovimientosCommand}"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Background="Transparent" />
+
                 <!-- Tablas maestras: solo Admin -->
                 <TextBlock Text="Tablas maestras"
                            FontWeight="SemiBold"

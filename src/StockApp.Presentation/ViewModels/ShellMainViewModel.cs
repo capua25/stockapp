@@ -4,6 +4,7 @@ using StockApp.Application.Interfaces;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.ViewModels.Catalogo;
+using StockApp.Presentation.ViewModels.Movimientos;
 
 namespace StockApp.Presentation.ViewModels;
 
@@ -48,4 +49,12 @@ public partial class ShellMainViewModel : ViewModelBase
 
     [RelayCommand]
     private void NavUnidadesMedida() => _navigation.Navegar<UnidadMedidaListViewModel>();
+
+    // ── Movimientos (Inc 5): Operador + Admin ─────────────────────────────────
+
+    [RelayCommand]
+    private void NavMovimientos() => _navigation.Navegar<MovimientoRegistroViewModel>();
+
+    [RelayCommand]
+    private void NavHistorialMovimientos() => _navigation.Navegar<MovimientoHistorialViewModel>();
 }
