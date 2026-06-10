@@ -2,19 +2,23 @@
 using AvaloniaApp = Avalonia.Application;
 
 using Avalonia.Controls.ApplicationLifetimes;
+using System;
 using System.IO;
 using Avalonia.Markup.Xaml;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
+using StockApp.Application.Catalogo;
 using StockApp.Application.Interfaces;
 using StockApp.Infrastructure.Auth;
 using StockApp.Infrastructure.Persistence;
 using StockApp.Infrastructure.Platform;
 using StockApp.Infrastructure.Repositories;
 using StockApp.Infrastructure.Services;
+using StockApp.Presentation.Navigation;
 using StockApp.Presentation.ViewModels;
+using StockApp.Presentation.ViewModels.Catalogo;
 using StockApp.Presentation.Views;
 
 namespace StockApp.Presentation;
@@ -107,6 +111,35 @@ public partial class App : AvaloniaApp
         services.AddTransient<IAuthService, AuthService>();
         services.AddTransient<IPrimerArranqueService, PrimerArranqueService>();
         services.AddTransient<IUsuarioService, UsuarioService>();
+
+        // ── Inc 4: catálogo — repositorios y servicios ───────────────────────
+
+        services.AddTransient<IProductoRepository, ProductoRepository>();
+        services.AddTransient<ICategoriaRepository, CategoriaRepository>();
+        services.AddTransient<IProveedorRepository, ProveedorRepository>();
+        services.AddTransient<IUnidadMedidaRepository, UnidadMedidaRepository>();
+
+        services.AddTransient<IProductoService, ProductoService>();
+        services.AddTransient<ICategoriaService, CategoriaService>();
+        services.AddTransient<IProveedorService, ProveedorService>();
+        services.AddTransient<IUnidadMedidaService, UnidadMedidaService>();
+
+        // ── Inc 4: navegación ─────────────────────────────────────────────────
+
+        // NavigationService: singleton — mantiene el VM activo para toda la sesión
+        services.AddSingleton<INavigationService>(sp =>
+            new NavigationService(t => sp.GetRequiredService(t)));
+
+        // VMs de catálogo: transient — se resuelven por el NavigationService
+        services.AddTransient<ShellMainViewModel>();
+        services.AddTransient<ProductoListViewModel>();
+        services.AddTransient<ProductoFormViewModel>();
+        services.AddTransient<CategoriaListViewModel>();
+        services.AddTransient<CategoriaFormViewModel>();
+        services.AddTransient<ProveedorListViewModel>();
+        services.AddTransient<ProveedorFormViewModel>();
+        services.AddTransient<UnidadMedidaListViewModel>();
+        services.AddTransient<UnidadMedidaFormViewModel>();
 
         // ── Presentation: ViewModels del shell ───────────────────────────────
 
