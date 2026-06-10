@@ -140,4 +140,52 @@ public class MovimientoStockRepositoryTests : IDisposable
         Assert.Equal(0m, neto);
         Assert.Equal(0,  total);
     }
+
+    // ── C3: RegistrarMovimientoAtomicoAsync (éxito — single SaveChanges) ──────
+
+    [Fact]
+    public async Task RegistrarMovimientoAtomicoAsync_DatosValidos_PersisteTresRegistros()
+    {
+        var (_, usuario, producto) = await SeedBaseAsync(stockInicial: 50m);
+        int productoId = producto.Id;
+        int usuarioId  = usuario.Id;
+
+        var movimiento = new MovimientoStock
+        {
+            ProductoId    = productoId,
+            UsuarioId     = usuarioId,
+            Tipo          = TipoMovimiento.Entrada,
+            Cantidad      = 20m,
+            PrecioUnitario = 5m,
+            Fecha         = DateTime.UtcNow,
+            Motivo        = MotivoMovimiento.Compra
+        };
+
+        var args = new RegistroAtomicoArgs(
+            Movimiento:       movimiento,
+            ProductoId:       productoId,
+            StockNuevo:       70m,        // 50 + 20
+            UsuarioId:        usuarioId,
+            DetalleAuditoria: "ProductoId=1; Tipo=Entrada; Cantidad=20; StockAnterior=50; StockNuevo=70"
+        );
+
+        var movId = await _repo.RegistrarMovimientoAtomicoAsync(args);
+
+        // Verificar con context FRESCO sobre la misma conexión
+        var opts2 = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlite(_connection)
+            .Options;
+        await using var ctx2 = new AppDbContext(opts2);
+
+        Assert.True(movId > 0, "Debe retornar el Id generado del movimiento");
+        Assert.Equal(1, await ctx2.MovimientosStock.CountAsync());
+
+        var productoFresh = await ctx2.Productos.FindAsync(productoId);
+        Assert.Equal(70m, productoFresh!.StockActual);
+
+        Assert.Equal(1, await ctx2.LogsAuditoria.CountAsync());
+        var log = await ctx2.LogsAuditoria.FirstAsync();
+        Assert.Equal((int)AccionAuditada.RegistroMovimiento, (int)log.Accion);
+        Assert.Equal(17, (int)log.Accion);
+    }
 }

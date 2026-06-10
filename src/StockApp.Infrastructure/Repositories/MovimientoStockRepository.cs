@@ -32,8 +32,33 @@ public class MovimientoStockRepository : IMovimientoStockRepository
     }
 
     /// <inheritdoc/>
-    public Task<int> RegistrarMovimientoAtomicoAsync(RegistroAtomicoArgs args)
-        => throw new NotImplementedException();
+    /// ATÓMICO: los 3 cambios (insert movimiento + update StockActual + insert LogAuditoria)
+    /// se stagean sobre el MISMO change tracker y se persisten en UN solo SaveChangesAsync.
+    /// EF Core envuelve ese flush en una transacción implícita (BEGIN/COMMIT/ROLLBACK).
+    public async Task<int> RegistrarMovimientoAtomicoAsync(RegistroAtomicoArgs args)
+    {
+        // 1) Producto trackeado por ESTE context (mismo change tracker que el flush)
+        var producto = await _ctx.Productos.FindAsync(args.ProductoId)
+            ?? throw new KeyNotFoundException($"Producto {args.ProductoId} no encontrado.");
+
+        // 2) Stagear los 3 cambios sobre el mismo change tracker
+        _ctx.MovimientosStock.Add(args.Movimiento);          // insert movimiento
+        producto.StockActual = args.StockNuevo;              // update stock (entidad trackeada)
+        _ctx.LogsAuditoria.Add(new LogAuditoria
+        {
+            UsuarioId = args.UsuarioId,
+            Fecha     = DateTime.UtcNow,
+            Accion    = AccionAuditada.RegistroMovimiento,   // 17
+            Entidad   = "MovimientoStock",
+            EntidadId = args.ProductoId,                     // referencia al producto (MovimientoId aún no existe)
+            Detalle   = args.DetalleAuditoria
+        });
+
+        // 3) UN solo flush → transacción implícita atómica
+        await _ctx.SaveChangesAsync();
+
+        return args.Movimiento.Id;   // Id generado por la BD tras el flush
+    }
 
     /// <inheritdoc/>
     public Task RecalcularAtomicoAsync(RecalculoAtomicoArgs args)
