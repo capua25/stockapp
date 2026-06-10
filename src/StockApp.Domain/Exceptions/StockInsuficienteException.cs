@@ -6,12 +6,12 @@ namespace StockApp.Domain.Exceptions;
 /// </summary>
 public class StockInsuficienteException : Exception
 {
-    public int ProductoId          { get; }
-    public int StockActual         { get; }
-    public int CantidadSolicitada  { get; }
-    public int StockResultante     { get; }
+    public int ProductoId           { get; }
+    public decimal StockActual      { get; }
+    public decimal CantidadSolicitada { get; }
+    public decimal StockResultante  { get; }
 
-    public StockInsuficienteException(int productoId, int stockActual, int cantidadSolicitada)
+    public StockInsuficienteException(int productoId, decimal stockActual, decimal cantidadSolicitada)
         : base($"Stock insuficiente para el producto {productoId}: "
                + $"tenés {stockActual} unidades pero solicitaste {cantidadSolicitada}. "
                + $"El stock resultante sería {stockActual - cantidadSolicitada}.")
