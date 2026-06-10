@@ -482,3 +482,7 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Andamiaje SDD local — no versionar
+.atl/
+openspec/
