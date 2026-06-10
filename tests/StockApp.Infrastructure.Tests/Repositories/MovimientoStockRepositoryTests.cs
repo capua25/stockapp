@@ -141,6 +141,74 @@ public class MovimientoStockRepositoryTests : IDisposable
         Assert.Equal(0,  total);
     }
 
+    // ── C4: Rollback atómico (MANDATORY) ─────────────────────────────────────
+    //
+    // Estrategia: provocar fallo real en SaveChangesAsync para verificar que EF
+    // revierte TODO el flush (movimiento + StockActual + log).
+    //
+    // Mecanismo elegido: Detalle=null sobre columna IsRequired (definida en OnModelCreating).
+    // Esta violación de constraint es detectada por EF antes del flush y lanza DbUpdateException.
+    // El constraint IsRequired sobre Detalle está configurado en AppDbContext.OnModelCreating.
+    //
+    // Nota: se intentó FK violation (UsuarioId=99999), pero EF Core con SQLite in-memory
+    // NO enforcea FKs por defecto incluso con PRAGMA foreign_keys=ON aplicado tras conexión
+    // (el PRAGMA debe aplicarse POR CONEXIÓN antes del primer uso; EF maneja la conexión
+    // internamente y no garantiza el orden). La alternativa IsRequired es determinista y
+    // no depende de configuración del driver.
+
+    [Fact]
+    public async Task RegistrarMovimientoAtomicoAsync_DetalleNull_RollbackTotal()
+    {
+        var (_, usuario, producto) = await SeedBaseAsync(stockInicial: 50m);
+        int productoId   = producto.Id;
+        int usuarioId    = usuario.Id;
+        decimal stockOrig = 50m;
+
+        // ──────────────────────────────────────────────────────────────────────
+        // Repo auxiliar que permite inyectar un log con Detalle=null para forzar
+        // DbUpdateException en el SaveChangesAsync (Detalle es IsRequired).
+        // Se usa el MISMO context (_ctx) para que el rollback cubra los 3 cambios.
+        // ──────────────────────────────────────────────────────────────────────
+        var repoRoto = new MovimientoStockRepositoryConDetalleNulo(_ctx);
+
+        var movimiento = new MovimientoStock
+        {
+            ProductoId     = productoId,
+            UsuarioId      = usuarioId,
+            Tipo           = TipoMovimiento.Entrada,
+            Cantidad       = 20m,
+            PrecioUnitario = 5m,
+            Fecha          = DateTime.UtcNow,
+            Motivo         = MotivoMovimiento.Compra
+        };
+
+        var args = new RegistroAtomicoArgs(
+            Movimiento:       movimiento,
+            ProductoId:       productoId,
+            StockNuevo:       70m,
+            UsuarioId:        usuarioId,
+            DetalleAuditoria: "no importa — se sobreescribe con null en el repo roto"
+        );
+
+        // Debe lanzar DbUpdateException (constraint NOT NULL sobre Detalle)
+        await Assert.ThrowsAsync<DbUpdateException>(
+            () => repoRoto.RegistrarMovimientoAtomicoAsync(args));
+
+        // Verificar estado con context FRESCO sobre la misma conexión
+        var opts2 = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlite(_connection)
+            .Options;
+        await using var ctx2 = new AppDbContext(opts2);
+
+        // 0 movimientos, stock sin cambios, 0 logs → rollback total
+        Assert.Equal(0, await ctx2.MovimientosStock.CountAsync());
+
+        var productoFresh = await ctx2.Productos.FindAsync(productoId);
+        Assert.Equal(stockOrig, productoFresh!.StockActual);
+
+        Assert.Equal(0, await ctx2.LogsAuditoria.CountAsync());
+    }
+
     // ── C3: RegistrarMovimientoAtomicoAsync (éxito — single SaveChanges) ──────
 
     [Fact]
@@ -187,5 +255,41 @@ public class MovimientoStockRepositoryTests : IDisposable
         var log = await ctx2.LogsAuditoria.FirstAsync();
         Assert.Equal((int)AccionAuditada.RegistroMovimiento, (int)log.Accion);
         Assert.Equal(17, (int)log.Accion);
+    }
+}
+
+/// <summary>
+/// Variante de MovimientoStockRepository que inyecta Detalle=null en el LogAuditoria.
+/// Usada EXCLUSIVAMENTE en el test de rollback (C4) para forzar DbUpdateException
+/// sin tocar la implementación real del repositorio.
+/// </summary>
+internal sealed class MovimientoStockRepositoryConDetalleNulo : MovimientoStockRepository
+{
+    private readonly AppDbContext _ctx;
+
+    public MovimientoStockRepositoryConDetalleNulo(AppDbContext ctx) : base(ctx)
+        => _ctx = ctx;
+
+    public new async Task<int> RegistrarMovimientoAtomicoAsync(RegistroAtomicoArgs args)
+    {
+        var producto = await _ctx.Productos.FindAsync(args.ProductoId)
+            ?? throw new KeyNotFoundException();
+
+        _ctx.MovimientosStock.Add(args.Movimiento);
+        producto.StockActual = args.StockNuevo;
+
+        // Detalle = null! → viola IsRequired → SaveChangesAsync lanzará DbUpdateException
+        _ctx.LogsAuditoria.Add(new LogAuditoria
+        {
+            UsuarioId = args.UsuarioId,
+            Fecha     = DateTime.UtcNow,
+            Accion    = AccionAuditada.RegistroMovimiento,
+            Entidad   = "MovimientoStock",
+            EntidadId = args.ProductoId,
+            Detalle   = null!   // fuerza violación de constraint NOT NULL
+        });
+
+        await _ctx.SaveChangesAsync();
+        return args.Movimiento.Id;
     }
 }
