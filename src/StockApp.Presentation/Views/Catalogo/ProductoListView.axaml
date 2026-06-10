@@ -1,0 +1,50 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels.Catalogo"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="700" d:DesignHeight="500"
+             x:Class="StockApp.Presentation.Views.Catalogo.ProductoListView"
+             x:DataType="vm:ProductoListViewModel">
+
+    <DockPanel Margin="16">
+
+        <!-- Encabezado con búsqueda y botón nuevo -->
+        <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">
+
+            <TextBlock Text="Productos"
+                       FontSize="20"
+                       FontWeight="Bold" />
+
+            <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto">
+                <TextBox Grid.Column="0"
+                         Text="{Binding FiltroBusqueda}"
+                         PlaceholderText="Buscar por nombre, SKU o código de barras..."
+                         Margin="0,0,8,0" />
+                <Button Grid.Column="1"
+                        Content="Buscar"
+                        Command="{Binding BuscarCommand}"
+                        Margin="0,0,8,0" />
+                <Button Grid.Column="2"
+                        Content="Nuevo"
+                        Command="{Binding NuevoCommand}" />
+            </Grid>
+
+        </StackPanel>
+
+        <!-- Listado -->
+        <ListBox ItemsSource="{Binding Items}">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <StackPanel Orientation="Horizontal" Spacing="16" Margin="4">
+                        <TextBlock Text="{Binding Codigo}" Width="100" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding Nombre}" Width="250" />
+                        <TextBlock Text="{Binding PrecioVenta, StringFormat='$ {0:F2}'}" Width="100" />
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+
+    </DockPanel>
+
+</UserControl>
