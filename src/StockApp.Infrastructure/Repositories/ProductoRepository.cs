@@ -18,8 +18,15 @@ public class ProductoRepository : IProductoRepository
     /// Búsqueda con filtros LINQ condicionales (design D-SEARCH).
     /// Cada parámetro no nulo/vacío agrega un Where encadenado.
     /// Sin filtros → devuelve todos, ordenados por Nombre.
-    /// Contains() se traduce a LIKE '%x%' en SQLite, que es case-insensitive
-    /// para ASCII por defecto — comportamiento documentado y testeado.
+    ///
+    /// Nombre usa EF.Functions.Like() en lugar de Contains() porque el operador
+    /// LIKE de SQLite es case-insensitive para ASCII por defecto, lo que permite
+    /// buscar "aceite" y encontrar "Aceite de Oliva".
+    /// Limitación conocida: acentos (á/Á) siguen siendo case-sensitive — mejora futura.
+    ///
+    /// Wildcards % y _ en el término de búsqueda no se escapan actualmente:
+    /// un % literal en nombre actuaría como wildcard LIKE. Para MVP esto es aceptable
+    /// (% y _ son raros en nombres de productos).
     /// </summary>
     public async Task<IReadOnlyList<Producto>> BuscarAsync(string? sku, string? codigoBarras, string? nombre)
     {
@@ -32,7 +39,7 @@ public class ProductoRepository : IProductoRepository
             q = q.Where(p => p.CodigoBarras != null && p.CodigoBarras.Contains(codigoBarras));
 
         if (!string.IsNullOrWhiteSpace(nombre))
-            q = q.Where(p => p.Nombre.Contains(nombre));
+            q = q.Where(p => EF.Functions.Like(p.Nombre, $"%{nombre}%"));
 
         return await q.OrderBy(p => p.Nombre).ToListAsync();
     }
