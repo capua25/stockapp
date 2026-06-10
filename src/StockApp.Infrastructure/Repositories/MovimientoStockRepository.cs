@@ -18,8 +18,18 @@ public class MovimientoStockRepository : IMovimientoStockRepository
         => _ctx.Productos.FindAsync(productoId).AsTask();
 
     /// <inheritdoc/>
-    public Task<(decimal Neto, int Total)> SumarMovimientosAsync(int productoId)
-        => throw new NotImplementedException();
+    public async Task<(decimal Neto, int Total)> SumarMovimientosAsync(int productoId)
+    {
+        var movs = _ctx.MovimientosStock.Where(m => m.ProductoId == productoId);
+        var entradas = await movs
+            .Where(m => m.Tipo == TipoMovimiento.Entrada)
+            .SumAsync(m => (decimal?)m.Cantidad) ?? 0m;
+        var salidas = await movs
+            .Where(m => m.Tipo == TipoMovimiento.Salida)
+            .SumAsync(m => (decimal?)m.Cantidad) ?? 0m;
+        var total = await movs.CountAsync();
+        return (entradas - salidas, total);
+    }
 
     /// <inheritdoc/>
     public Task<int> RegistrarMovimientoAtomicoAsync(RegistroAtomicoArgs args)

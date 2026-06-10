@@ -106,4 +106,38 @@ public class MovimientoStockRepositoryTests : IDisposable
 
         Assert.Null(resultado);
     }
+
+    // ── C2: SumarMovimientosAsync ─────────────────────────────────────────────
+
+    [Fact]
+    public async Task SumarMovimientosAsync_MovimientosMixtos_DevuelveNetoYTotal()
+    {
+        var (_, usuario, producto) = await SeedBaseAsync();
+
+        // 10 entrada + 5 entrada - 3 salida = neto 12, total 3
+        _ctx.MovimientosStock.AddRange(
+            new MovimientoStock { ProductoId = producto.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Cantidad = 10m, PrecioUnitario = 5m, Fecha = DateTime.UtcNow, Motivo = MotivoMovimiento.Compra },
+            new MovimientoStock { ProductoId = producto.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Cantidad = 5m,  PrecioUnitario = 5m, Fecha = DateTime.UtcNow, Motivo = MotivoMovimiento.Compra },
+            new MovimientoStock { ProductoId = producto.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Salida,  Cantidad = 3m,  PrecioUnitario = 5m, Fecha = DateTime.UtcNow, Motivo = MotivoMovimiento.Venta  }
+        );
+        await _ctx.SaveChangesAsync();
+        _ctx.ChangeTracker.Clear();
+
+        var (neto, total) = await _repo.SumarMovimientosAsync(producto.Id);
+
+        Assert.Equal(12m, neto);
+        Assert.Equal(3,   total);
+    }
+
+    [Fact]
+    public async Task SumarMovimientosAsync_SinMovimientos_DevuelveCeroYTotal0()
+    {
+        var (_, _, producto) = await SeedBaseAsync();
+        _ctx.ChangeTracker.Clear();
+
+        var (neto, total) = await _repo.SumarMovimientosAsync(producto.Id);
+
+        Assert.Equal(0m, neto);
+        Assert.Equal(0,  total);
+    }
 }
