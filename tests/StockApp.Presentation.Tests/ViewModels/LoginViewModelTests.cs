@@ -2,7 +2,10 @@ using Moq;
 using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
+using StockApp.Domain.Enums;
+using StockApp.Presentation.Navigation;
 using StockApp.Presentation.ViewModels;
+using StockApp.Presentation.ViewModels.Catalogo;
 using Xunit;
 
 namespace StockApp.Presentation.Tests.ViewModels;
@@ -13,10 +16,21 @@ public class LoginViewModelTests
 
     private static ShellViewModel CrearShellFake()
     {
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
+
+        var navSvc = new NavigationService(t =>
+        {
+            if (t == typeof(ShellMainViewModel))
+                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>());
+            throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
+        });
+
         return new ShellViewModel(
             Mock.Of<IPrimerArranqueService>(),
             Mock.Of<IAuthService>(),
-            Mock.Of<IUsuarioService>());
+            Mock.Of<IUsuarioService>(),
+            navSvc);
     }
 
     private static (LoginViewModel vm, Mock<IAuthService> authMock, ShellViewModel shell)
@@ -72,7 +86,7 @@ public class LoginViewModelTests
 
         await vm.EntrarCommand.ExecuteAsync(null);
 
-        Assert.IsType<MainWindowViewModel>(shell.CurrentViewModel);
+        Assert.IsType<ShellMainViewModel>(shell.CurrentViewModel);
         Assert.Null(vm.MensajeError);
     }
 
@@ -91,7 +105,7 @@ public class LoginViewModelTests
         await vm.EntrarCommand.ExecuteAsync(null);
 
         Assert.Equal("Usuario o contraseña incorrectos.", vm.MensajeError);
-        Assert.IsNotType<MainWindowViewModel>(shell.CurrentViewModel);
+        Assert.IsNotType<ShellMainViewModel>(shell.CurrentViewModel);
     }
 
     [Theory]

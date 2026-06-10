@@ -1,6 +1,10 @@
 using Moq;
 using StockApp.Application.Auth;
+using StockApp.Application.Interfaces;
+using StockApp.Domain.Enums;
+using StockApp.Presentation.Navigation;
 using StockApp.Presentation.ViewModels;
+using StockApp.Presentation.ViewModels.Catalogo;
 using Xunit;
 
 namespace StockApp.Presentation.Tests.ViewModels;
@@ -17,10 +21,21 @@ public class ShellViewModelTests
             .Setup(p => p.RequiereCrearAdminAsync())
             .ReturnsAsync(requiereCrearAdmin);
 
+        // NavigationService real con un resolver que devuelve un ShellMainViewModel stub
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
+        var navSvc = new NavigationService(t =>
+        {
+            if (t == typeof(ShellMainViewModel))
+                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>());
+            throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
+        });
+
         var shell = new ShellViewModel(
             primerArranqueMock.Object,
             Mock.Of<IAuthService>(),
-            Mock.Of<IUsuarioService>());
+            Mock.Of<IUsuarioService>(),
+            navSvc);
 
         return (shell, primerArranqueMock);
     }
@@ -70,12 +85,12 @@ public class ShellViewModelTests
     }
 
     [Fact]
-    public void MostrarContenidoPrincipal_EstableceMainWindowViewModel()
+    public void MostrarContenidoPrincipal_EstableceShellMainViewModel()
     {
         var (shell, _) = Crear(requiereCrearAdmin: false);
 
         shell.MostrarContenidoPrincipal();
 
-        Assert.IsType<MainWindowViewModel>(shell.CurrentViewModel);
+        Assert.IsType<ShellMainViewModel>(shell.CurrentViewModel);
     }
 }

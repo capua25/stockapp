@@ -1,18 +1,20 @@
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using StockApp.Application.Auth;
+using StockApp.Presentation.Navigation;
 
 namespace StockApp.Presentation.ViewModels;
 
 /// <summary>
 /// Shell de navegación. Decide qué pantalla mostrar en función del estado de la app:
-/// primer arranque → login → contenido principal.
+/// primer arranque → login → contenido principal (ShellMainViewModel con menú lateral).
 /// </summary>
 public partial class ShellViewModel : ViewModelBase
 {
     private readonly IPrimerArranqueService _primerArranqueService;
     private readonly IAuthService           _authService;
     private readonly IUsuarioService        _usuarioService;
+    private readonly INavigationService     _navigation;
 
     [ObservableProperty]
     private ViewModelBase? _currentViewModel;
@@ -20,11 +22,13 @@ public partial class ShellViewModel : ViewModelBase
     public ShellViewModel(
         IPrimerArranqueService primerArranqueService,
         IAuthService           authService,
-        IUsuarioService        usuarioService)
+        IUsuarioService        usuarioService,
+        INavigationService     navigation)
     {
         _primerArranqueService = primerArranqueService;
         _authService           = authService;
         _usuarioService        = usuarioService;
+        _navigation            = navigation;
     }
 
     /// <summary>
@@ -54,6 +58,9 @@ public partial class ShellViewModel : ViewModelBase
 
     public void MostrarContenidoPrincipal()
     {
-        CurrentViewModel = new MainWindowViewModel();
+        // Navega al shell principal con menú lateral, que a su vez usa INavigationService
+        // para manejar la región de contenido del catálogo.
+        _navigation.Navegar<ShellMainViewModel>();
+        CurrentViewModel = _navigation.Actual;
     }
 }

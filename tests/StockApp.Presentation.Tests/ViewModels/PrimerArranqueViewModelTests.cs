@@ -1,7 +1,10 @@
 using Moq;
 using StockApp.Application.Auth;
 using StockApp.Application.Interfaces;
+using StockApp.Domain.Enums;
+using StockApp.Presentation.Navigation;
 using StockApp.Presentation.ViewModels;
+using StockApp.Presentation.ViewModels.Catalogo;
 using Xunit;
 
 namespace StockApp.Presentation.Tests.ViewModels;
@@ -12,10 +15,21 @@ public class PrimerArranqueViewModelTests
 
     private static ShellViewModel CrearShellFake()
     {
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
+
+        var navSvc = new NavigationService(t =>
+        {
+            if (t == typeof(ShellMainViewModel))
+                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>());
+            throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
+        });
+
         return new ShellViewModel(
             Mock.Of<IPrimerArranqueService>(),
             Mock.Of<IAuthService>(),
-            Mock.Of<IUsuarioService>());
+            Mock.Of<IUsuarioService>(),
+            navSvc);
     }
 
     private record Contexto(
