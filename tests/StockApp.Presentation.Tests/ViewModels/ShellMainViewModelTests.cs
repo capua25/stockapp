@@ -4,6 +4,7 @@ using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.ViewModels;
 using StockApp.Presentation.ViewModels.Catalogo;
+using StockApp.Presentation.ViewModels.Movimientos;
 using Xunit;
 
 namespace StockApp.Presentation.Tests.ViewModels;
@@ -80,5 +81,37 @@ public class ShellMainViewModelTests
         vm.NavUnidadesMedidaCommand.Execute(null);
 
         navMock.Verify(n => n.Navegar<UnidadMedidaListViewModel>(), Times.Once);
+    }
+
+    // ── D6 — Navegación a movimientos ────────────────────────────────────────
+
+    [Fact]
+    public void NavMovimientos_LlamaNavegar_AMovimientoRegistroViewModel()
+    {
+        var (vm, _, navMock) = Crear(RolUsuario.Operador);
+
+        vm.NavMovimientosCommand.Execute(null);
+
+        navMock.Verify(n => n.Navegar<MovimientoRegistroViewModel>(), Times.Once);
+    }
+
+    [Fact]
+    public void NavHistorialMovimientos_LlamaNavegar_AMovimientoHistorialViewModel()
+    {
+        var (vm, _, navMock) = Crear(RolUsuario.Operador);
+
+        vm.NavHistorialMovimientosCommand.Execute(null);
+
+        navMock.Verify(n => n.Navegar<MovimientoHistorialViewModel>(), Times.Once);
+    }
+
+    [Fact]
+    public void NavMovimientos_Admin_LlamaNavegar_AMovimientoRegistroViewModel()
+    {
+        var (vm, _, navMock) = Crear(RolUsuario.Admin);
+
+        vm.NavMovimientosCommand.Execute(null);
+
+        navMock.Verify(n => n.Navegar<MovimientoRegistroViewModel>(), Times.Once);
     }
 }
