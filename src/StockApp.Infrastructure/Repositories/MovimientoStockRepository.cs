@@ -104,7 +104,13 @@ public class MovimientoStockRepository : IMovimientoStockRepository
             q = q.Where(m => m.Fecha >= filtro.FechaDesde.Value);
 
         if (filtro.FechaHasta.HasValue)
-            q = q.Where(m => m.Fecha <= filtro.FechaHasta.Value);
+        {
+            // HM-04: FechaHasta sin hora se normaliza a fin del día (23:59:59.9999999).
+            // Usamos .Date.AddDays(1).AddTicks(-1) para cubrir el día completo,
+            // independientemente de si el usuario pasó medianoche u otra hora.
+            var fechaHastaFinDia = filtro.FechaHasta.Value.Date.AddDays(1).AddTicks(-1);
+            q = q.Where(m => m.Fecha <= fechaHastaFinDia);
+        }
 
         // Traer ordenado ASC para calcular running balance correctamente
         var movimientos = await q
