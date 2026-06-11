@@ -1,0 +1,40 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="360" d:DesignHeight="160"
+        x:Class="StockApp.Presentation.Views.Dialogs.ConfirmacionDialog"
+        Title="Confirmar operación"
+        Width="360"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        ShowInTaskbar="False">
+
+    <Border Padding="24">
+        <StackPanel Spacing="20">
+
+            <TextBlock x:Name="MensajeText"
+                       TextWrapping="Wrap"
+                       FontSize="14" />
+
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Right"
+                        Spacing="8">
+
+                <Button x:Name="CancelarButton"
+                        Content="Cancelar"
+                        Width="100"
+                        Click="OnCancelarClick" />
+
+                <Button x:Name="ConfirmarButton"
+                        Content="Sí, continuar"
+                        Width="110"
+                        Click="OnConfirmarClick" />
+
+            </StackPanel>
+
+        </StackPanel>
+    </Border>
+
+</Window>
