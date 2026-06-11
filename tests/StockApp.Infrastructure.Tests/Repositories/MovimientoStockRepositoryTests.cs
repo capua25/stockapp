@@ -403,6 +403,49 @@ public class MovimientoStockRepositoryTests : IDisposable
         Assert.Empty(resultado);
     }
 
+    /// <summary>
+    /// HM-04: FechaHasta sin componente de hora (medianoche) debe tratarse como fin de día.
+    /// Un movimiento registrado a las 15:00 del mismo día de FechaHasta debe ser incluido.
+    /// </summary>
+    [Fact]
+    public async Task ObtenerHistorialAsync_FechaHastaMedianoche_IncluyeMovimientosDelMismoDia()
+    {
+        // Seed: producto con un movimiento a las 15:00 del 2026-06-10
+        var um      = NuevaUm();
+        var usuario = NuevoUsuario("hm04_user");
+        _ctx.UnidadesMedida.Add(um);
+        _ctx.Usuarios.Add(usuario);
+        await _ctx.SaveChangesAsync();
+
+        var p = NuevoProducto("HM04", um, 0m);
+        _ctx.Productos.Add(p);
+        await _ctx.SaveChangesAsync();
+
+        var fechaMovimiento = new DateTime(2026, 6, 10, 15, 0, 0, DateTimeKind.Utc);
+        _ctx.MovimientosStock.Add(new MovimientoStock
+        {
+            ProductoId     = p.Id,
+            UsuarioId      = usuario.Id,
+            Tipo           = TipoMovimiento.Entrada,
+            Cantidad       = 5m,
+            PrecioUnitario = 10m,
+            Fecha          = fechaMovimiento,
+            Motivo         = MotivoMovimiento.Compra
+        });
+        await _ctx.SaveChangesAsync();
+        _ctx.ChangeTracker.Clear();
+
+        // FechaHasta = mismo día pero a las 00:00:00 (medianoche) → debe tratarse como fin de día
+        var fechaHasta = new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc);
+
+        var resultado = await _repo.ObtenerHistorialAsync(new HistorialMovimientoFiltro(
+            FechaHasta: fechaHasta));
+
+        // HM-04: el movimiento de las 15:00 SÍ debe aparecer (FechaHasta = fin del día)
+        Assert.Single(resultado);
+        Assert.Equal(p.Id, resultado[0].ProductoId);
+    }
+
     [Fact]
     public async Task ObtenerHistorialAsync_RunningBalance_StockAnteriorYNuevoCorrectos()
     {
