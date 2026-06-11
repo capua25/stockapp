@@ -487,6 +487,9 @@ public class MovimientoStockRepositoryTests : IDisposable
 /// Variante de MovimientoStockRepository que inyecta Detalle=null en el LogAuditoria.
 /// Usada EXCLUSIVAMENTE en el test de rollback (C4) para forzar DbUpdateException
 /// sin tocar la implementación real del repositorio.
+/// El método base es virtual → este override es verdadero (no method hiding).
+/// Así la verificación del rollback es válida aunque el objeto se tipifique
+/// por la clase base o por la interfaz IMovimientoStockRepository (WARNING-02 resuelto).
 /// </summary>
 internal sealed class MovimientoStockRepositoryConDetalleNulo : MovimientoStockRepository
 {
@@ -495,7 +498,7 @@ internal sealed class MovimientoStockRepositoryConDetalleNulo : MovimientoStockR
     public MovimientoStockRepositoryConDetalleNulo(AppDbContext ctx) : base(ctx)
         => _ctx = ctx;
 
-    public new async Task<int> RegistrarMovimientoAtomicoAsync(RegistroAtomicoArgs args)
+    public override async Task<int> RegistrarMovimientoAtomicoAsync(RegistroAtomicoArgs args)
     {
         var producto = await _ctx.Productos.FindAsync(args.ProductoId)
             ?? throw new KeyNotFoundException();

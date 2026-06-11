@@ -35,7 +35,7 @@ public class MovimientoStockRepository : IMovimientoStockRepository
     /// ATÓMICO: los 3 cambios (insert movimiento + update StockActual + insert LogAuditoria)
     /// se stagean sobre el MISMO change tracker y se persisten en UN solo SaveChangesAsync.
     /// EF Core envuelve ese flush en una transacción implícita (BEGIN/COMMIT/ROLLBACK).
-    public async Task<int> RegistrarMovimientoAtomicoAsync(RegistroAtomicoArgs args)
+    public virtual async Task<int> RegistrarMovimientoAtomicoAsync(RegistroAtomicoArgs args)
     {
         // 1) Producto trackeado por ESTE context (mismo change tracker que el flush)
         var producto = await _ctx.Productos.FindAsync(args.ProductoId)
