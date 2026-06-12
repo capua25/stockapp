@@ -163,6 +163,7 @@ public partial class App : AvaloniaApp
         services.AddTransient<StockCategoriaViewModel>();
         services.AddTransient<HistorialPorProductoViewModel>();
         services.AddTransient<MasMovidosViewModel>();
+        services.AddTransient<AuditoriaLogViewModel>();
 
         // ── Inc 4: navegación ─────────────────────────────────────────────────
 
