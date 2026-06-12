@@ -74,7 +74,7 @@ public class CsvExporterTests
 
         var resultado = _exporter.Exportar(items, new[] { "Nombre", "Detalle" });
 
-        Assert.Equal('﻿', resultado[0]);
+        Assert.Equal('\uFEFF', resultado[0]);
     }
 
     [Fact]
@@ -110,5 +110,26 @@ public class CsvExporterTests
         var resultado = _exporter.Exportar(items, new[] { "Detalle", "Nombre" });
 
         Assert.StartsWith("﻿Detalle,Nombre\r\nok,Harina\r\n", resultado);
+    }
+
+    [Fact]
+    public void Exportar_ColumnaInexistente_LanzaArgumentException()
+    {
+        var items = new[] { new Fila("Harina", "ok") };
+
+        var ex = Assert.Throws<ArgumentException>(
+            () => _exporter.Exportar(items, new[] { "Nombre", "NoExiste" }));
+
+        Assert.Contains("NoExiste", ex.Message);
+    }
+
+    [Fact]
+    public void Exportar_ColeccionVacia_SoloBomYHeader()
+    {
+        var items = Array.Empty<Fila>();
+
+        var resultado = _exporter.Exportar(items, new[] { "Nombre", "Detalle" });
+
+        Assert.Equal("\uFEFFNombre,Detalle\r\n", resultado);
     }
 }
