@@ -37,4 +37,12 @@ public class ReporteStockService : IReporteStockService
 
         return (items, totales);
     }
+
+    public async Task<IReadOnlyList<StockCategoriaDto>> ObtenerStockPorCategoriaAsync()
+    {
+        // Autorización fail-closed: PRIMERO, antes de tocar el repo.
+        _auth.Verificar(_session.RolActual, Permisos.VerReportes);
+
+        return await _repo.ObtenerStockPorCategoriaAsync();
+    }
 }

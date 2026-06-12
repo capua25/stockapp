@@ -11,4 +11,10 @@ public interface IReporteStockService
     /// </summary>
     /// <exception cref="UnauthorizedAccessException">Si el rol no tiene permiso para ver reportes.</exception>
     Task<(IReadOnlyList<ValorizacionItemDto> Items, ValorizacionTotalesDto Totales)> ObtenerValorizacionAsync();
+
+    /// <summary>
+    /// Resumen de stock agrupado por categoría. El agrupamiento lo realiza el repo.
+    /// </summary>
+    /// <exception cref="UnauthorizedAccessException">Si el rol no tiene permiso para ver reportes.</exception>
+    Task<IReadOnlyList<StockCategoriaDto>> ObtenerStockPorCategoriaAsync();
 }

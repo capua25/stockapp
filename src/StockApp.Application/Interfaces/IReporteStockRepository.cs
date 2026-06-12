@@ -14,4 +14,11 @@ public interface IReporteStockRepository
     /// y Categoria resuelta. Retorna lista vacía si no hay productos.
     /// </summary>
     Task<IReadOnlyList<ValorizacionItemDto>> ObtenerValorizacionAsync();
+
+    /// <summary>
+    /// Resumen de stock agrupado por categoría, con CantidadProductos/StockTotal/
+    /// ValorCosto/ValorVenta ya agregados y la categoría null resuelta a "Sin categoría".
+    /// Retorna lista vacía si no hay productos.
+    /// </summary>
+    Task<IReadOnlyList<StockCategoriaDto>> ObtenerStockPorCategoriaAsync();
 }
