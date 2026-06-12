@@ -76,10 +76,13 @@ public class ReporteStockRepositoryValorizacionTests : IDisposable
         _ctx.Categorias.Add(cat);
         await _ctx.SaveChangesAsync();
 
-        var activo1   = NuevoProducto("ACT001", "Agua",   um, stockActual: 10m, precioCosto: 2m,  precioVenta: 5m,  categoria: cat);
+        // Insertar en orden INVERSO al alfabético (Jugo primero, Agua después)
+        // para que el Id de inserción sea distinto al orden esperado por Nombre.
+        // Esto fuerza que el OrderBy(p => p.Nombre) sea verificable.
         var activo2   = NuevoProducto("ACT002", "Jugo",   um, stockActual: 4m,  precioCosto: 3m,  precioVenta: 7m,  categoria: cat);
+        var activo1   = NuevoProducto("ACT001", "Agua",   um, stockActual: 10m, precioCosto: 2m,  precioVenta: 5m,  categoria: cat);
         var inactivo  = NuevoProducto("INA001", "Vino",   um, stockActual: 8m,  precioCosto: 10m, precioVenta: 20m, activo: false, categoria: cat);
-        _ctx.Productos.AddRange(activo1, activo2, inactivo);
+        _ctx.Productos.AddRange(activo2, activo1, inactivo);
         await _ctx.SaveChangesAsync();
         _ctx.ChangeTracker.Clear();
 
@@ -89,16 +92,18 @@ public class ReporteStockRepositoryValorizacionTests : IDisposable
         Assert.Equal(2, resultado.Count);
         Assert.DoesNotContain(resultado, x => x.Codigo == "INA001");
 
-        // Ordenado por Nombre: Agua, Jugo
-        Assert.Equal("Agua", resultado[0].Nombre);
-        Assert.Equal("Jugo", resultado[1].Nombre);
+        // Verificar que está ordenado alfabéticamente por Nombre a pesar del orden de inserción inverso
+        var nombresResultado = resultado.Select(r => r.Nombre).ToArray();
+        Assert.Equal(new[] { "Agua", "Jugo" }, nombresResultado);
 
         // ValorCosto/ValorVenta = Stock * precio
         var agua = resultado[0];
+        Assert.Equal("Agua", agua.Nombre);
         Assert.Equal(10m * 2m, agua.ValorCosto);   // 20
         Assert.Equal(10m * 5m, agua.ValorVenta);   // 50
 
         var jugo = resultado[1];
+        Assert.Equal("Jugo", jugo.Nombre);
         Assert.Equal(4m * 3m, jugo.ValorCosto);    // 12
         Assert.Equal(4m * 7m, jugo.ValorVenta);    // 28
     }

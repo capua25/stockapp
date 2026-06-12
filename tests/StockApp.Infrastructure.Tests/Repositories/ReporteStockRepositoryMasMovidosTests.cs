@@ -172,21 +172,29 @@ public class ReporteStockRepositoryMasMovidosTests : IDisposable
         _ctx.Productos.Add(p);
         await _ctx.SaveChangesAsync();
 
-        // Movimiento a las 18:00hs del 2026-06-10
-        var fechaMov = new DateTime(2026, 6, 10, 18, 0, 0, DateTimeKind.Utc);
-        _ctx.MovimientosStock.Add(Mov(p.Id, usuario.Id, 7m, fechaMov));
+        // Movimiento a las 18:00hs del 2026-06-10 (debe INCLUIRSE)
+        var fechaMovDentro = new DateTime(2026, 6, 10, 18, 0, 0, DateTimeKind.Utc);
+        // Movimiento a las 00:00hs del 2026-06-11 (debe EXCLUIRSE - día siguiente)
+        var fechaMovFuera = new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc);
+
+        _ctx.MovimientosStock.AddRange(
+            Mov(p.Id, usuario.Id, 7m, fechaMovDentro),
+            Mov(p.Id, usuario.Id, 3m, fechaMovFuera)
+        );
         await _ctx.SaveChangesAsync();
         _ctx.ChangeTracker.Clear();
 
-        // FechaHasta = mismo día a medianoche (00:00) → el ajuste a fin de día debe
-        // incluir el movimiento de las 18:00.
+        // FechaHasta = 2026-06-10 a medianoche (00:00) → el ajuste a fin de día debe
+        // incluir todos los movimientos del 10 (18:00hs) pero EXCLUIR el del 11 (00:00hs).
         var fechaHasta = new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc);
 
         var resultado = await _repo.ObtenerMasMovidosAsync(null, fechaHasta, topN: 10);
 
+        // Solo el movimiento del día dentro del rango debe estar incluido
         Assert.Single(resultado);
         Assert.Equal("FH", resultado[0].Codigo);
-        Assert.Equal(7m,   resultado[0].VolumenTotal);
+        Assert.Equal(7m,   resultado[0].VolumenTotal);      // Solo el del 10 (7m)
+        Assert.Equal(1,    resultado[0].CantidadMovimientos); // Un solo movimiento
     }
 
     [Fact]
