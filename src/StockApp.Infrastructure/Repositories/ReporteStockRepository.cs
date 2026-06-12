@@ -44,8 +44,19 @@ public class ReporteStockRepository : IReporteStockRepository
     }
 
     /// <inheritdoc/>
-    public Task<IReadOnlyList<StockCategoriaDto>> ObtenerStockPorCategoriaAsync()
-        => throw new NotImplementedException();
+    public async Task<IReadOnlyList<StockCategoriaDto>> ObtenerStockPorCategoriaAsync()
+    {
+        return await _ctx.Productos
+            .Where(p => p.Activo)
+            .GroupBy(p => p.Categoria != null ? p.Categoria.Nombre : SinCategoria)
+            .Select(g => new StockCategoriaDto(
+                g.Key,
+                g.Count(),
+                g.Sum(p => p.StockActual),
+                g.Sum(p => p.StockActual * p.PrecioCosto),
+                g.Sum(p => p.StockActual * p.PrecioVenta)))
+            .ToListAsync();
+    }
 
     /// <inheritdoc/>
     public Task<IReadOnlyList<MasMovidoDto>> ObtenerMasMovidosAsync(
