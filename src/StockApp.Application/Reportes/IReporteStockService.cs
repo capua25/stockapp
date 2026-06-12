@@ -1,3 +1,5 @@
+using StockApp.Application.Movimientos;
+
 namespace StockApp.Application.Reportes;
 
 /// <summary>
@@ -25,4 +27,12 @@ public interface IReporteStockService
     /// <exception cref="UnauthorizedAccessException">Si el rol no tiene permiso para ver reportes.</exception>
     Task<IReadOnlyList<MasMovidoDto>> ObtenerMasMovidosAsync(
         DateTime? fechaDesde, DateTime? fechaHasta, int topN = 20);
+
+    /// <summary>
+    /// Historial de movimientos de un producto. Delega al servicio de movimientos
+    /// del Inc 5 (D2): no reimplementa la lógica de historial ni el running balance.
+    /// </summary>
+    /// <exception cref="UnauthorizedAccessException">Si el rol no tiene permiso para ver reportes.</exception>
+    Task<IReadOnlyList<MovimientoHistorialDto>> ObtenerHistorialPorProductoAsync(
+        int productoId, DateTime? fechaDesde, DateTime? fechaHasta);
 }
