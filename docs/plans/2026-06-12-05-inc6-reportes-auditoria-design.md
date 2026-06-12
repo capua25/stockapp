@@ -503,4 +503,190 @@ asegurar compatibilidad. No reimplementar la lógica.
 > A completar en la fase `sdd-tasks`. TDD estricto: test rojo → impl mínima → verde → commit.
 > Un commit por task, conventional commits.
 
-<!-- sdd-tasks pendiente -->
+> TDD estricto: test rojo → impl mínima → verde → commit. Un commit por task, conventional commits.
+> Total: 19 tasks, ~75 tests nuevos. Orden: A1→A2→B1→B2→B3→B4→B5→C1→C2→C3→C4→C5→D1→D2→D3→D4→D5→D6→E1→E2
+
+### Bloque A — Application: Exportación CSV (transversal, va primero)
+
+#### A1 — Application: ICsvExporter + CsvExporter
+
+**Archivos:** `Application/Exportacion/ICsvExporter.cs`, `Application/Exportacion/CsvExporter.cs`, `Application.Tests/Exportacion/CsvExporterTests.cs` — **Dep:** ninguna
+
+- [ ] A1.1 Escribir 9 tests que fallan: `Exportar_CampoSimple_SinComillas`, `Exportar_CampoConComa_EntreComillas`, `Exportar_CampoConComillaDoble_Duplicada`, `Exportar_CampoConSaltoDeLinea_EntreComillas`, `Exportar_CampoVacio_SinComillas`, `Exportar_BomUtf8_AlInicio` (verifica `resultado[0] == '﻿'`), `Exportar_Acentos_NoCorrompen`, `Exportar_FinDeLinea_EsCRLF` (verifica que las filas terminan en `\r\n`, NO en solo `\n`), `Exportar_OrdenColumnas_Deterministico` (fija el header exacto esperado; falla si el orden varía)
+- [ ] A1.2 Definir `ICsvExporter` con `string Exportar<T>(IEnumerable<T> items, IReadOnlyList<string> columnOrder)`; el parámetro `columnOrder` recibe la lista de nombres de propiedades en el orden deseado, resolviendo el no-determinismo de `Type.GetProperties()`
+- [ ] A1.3 Implementar `CsvExporter`: BOM `﻿` al inicio; CRLF explícito (`\r\n`) por fila — NO usar `sb.AppendLine` (en Linux emite solo `\n`); escapado RFC 4180 (campo con `,`, `"` o salto de línea va entre comillas dobles; `"` interno se duplica)
+- [ ] A1.4 `dotnet test Application.Tests/Exportacion` verde → commit: `feat(app): ICsvExporter + CsvExporter RFC 4180 con BOM UTF-8 y CRLF explícito`
+
+#### A2 — Application: DTOs de Reportes y Auditoría
+
+**Archivos:** `Application/Reportes/Dtos.cs`, `Application/Auditoria/Dtos.cs` — **Dep:** A1
+
+- [ ] A2.1 Crear `Application/Reportes/Dtos.cs` con records: `ValorizacionItemDto`, `ValorizacionTotalesDto`, `StockCategoriaDto`, `MasMovidoDto` (firmas según diseño)
+- [ ] A2.2 Crear `Application/Auditoria/Dtos.cs` con record: `AuditoriaItemDto`
+- [ ] A2.3 `dotnet build StockApp.sln` → commit: `feat(app): DTOs de Reportes y Auditoría como records`
+
+---
+
+### Bloque B — Application: Interfaces + Servicios
+
+#### B1 — Application: IReporteStockRepository + IReporteStockService + ReporteStockService.ObtenerValorizacionAsync
+
+**Archivos:** `Application/Interfaces/IReporteStockRepository.cs`, `Application/Reportes/IReporteStockService.cs`, `Application/Reportes/ReporteStockService.cs`, `Application.Tests/Reportes/ReporteStockServiceValorizacionTests.cs` — **Dep:** A2
+
+- [ ] B1.1 Escribir 4 tests: `ObtenerValorizacionAsync_CalculaValorCostoYValorVenta_Correcto`, `ObtenerValorizacionAsync_ProductoSinCategoria_Retorna_SinCategoria`, `ObtenerValorizacionAsync_CalculaTotalesCorrectamente`, `ObtenerValorizacionAsync_Operador_LanzaUnauthorizedAccessException`
+- [ ] B1.2 Definir `IReporteStockRepository` con `ObtenerValorizacionAsync()`; definir `IReporteStockService` con `ObtenerValorizacionAsync()`
+- [ ] B1.3 Implementar `ReporteStockService.ObtenerValorizacionAsync`: guard `_auth.Verificar(_session.RolActual, Permisos.VerReportes)` fail-closed antes de ejecutar la query; delega a `IReporteStockRepository`
+- [ ] B1.4 `dotnet test Application.Tests/Reportes` verde → commit: `feat(app): ReporteStockService.ObtenerValorizacionAsync TDD — cálculo y autorización`
+
+#### B2 — Application: ReporteStockService.ObtenerStockPorCategoriaAsync
+
+**Archivos:** `Application/Reportes/ReporteStockService.cs` (mod), `Application.Tests/Reportes/ReporteStockServiceCategoriaTests.cs` — **Dep:** B1
+
+- [ ] B2.1 Escribir 3 tests: `ObtenerStockPorCategoriaAsync_AgrupaCorrectamente`, `ObtenerStockPorCategoriaAsync_NullCategoria_GrupoSinCategoria`, `ObtenerStockPorCategoriaAsync_Operador_LanzaUnauthorized`
+- [ ] B2.2 Agregar `ObtenerStockPorCategoriaAsync()` a `IReporteStockRepository` e implementar en `ReporteStockService` con guard
+- [ ] B2.3 `dotnet test Application.Tests/Reportes` verde → commit: `feat(app): ReporteStockService.ObtenerStockPorCategoriaAsync TDD`
+
+#### B3 — Application: ReporteStockService.ObtenerMasMovidosAsync
+
+**Archivos:** `Application/Reportes/ReporteStockService.cs` (mod), `Application.Tests/Reportes/ReporteStockServiceMasMovidosTests.cs` — **Dep:** B1
+
+- [ ] B3.1 Escribir 4 tests: `ObtenerMasMovidosAsync_OrdenadoPorVolumenTotalDesc`, `ObtenerMasMovidosAsync_TopNRespetado`, `ObtenerMasMovidosAsync_SinMovimientos_ListaVacia`, `ObtenerMasMovidosAsync_Operador_LanzaUnauthorized`
+- [ ] B3.2 Agregar `ObtenerMasMovidosAsync(DateTime? fechaDesde, DateTime? fechaHasta, int topN)` a `IReporteStockRepository` e implementar en `ReporteStockService` con guard; `FechaHasta` se pasa cruda al repositorio (el ajuste fin de día lo aplica Infrastructure)
+- [ ] B3.3 `dotnet test Application.Tests/Reportes` verde → commit: `feat(app): ReporteStockService.ObtenerMasMovidosAsync TDD`
+
+#### B4 — Application: ReporteStockService.ObtenerHistorialPorProductoAsync (D2 — delegación pura)
+
+**Archivos:** `Application/Reportes/ReporteStockService.cs` (mod), `Application.Tests/Reportes/ReporteStockServiceHistorialTests.cs` — **Dep:** B1
+
+- [ ] B4.1 Escribir 2 tests: `ObtenerHistorialPorProductoAsync_DelegaAMovimientoStockService` (verifica que llama a `MovimientoStockService.ObtenerHistorialAsync` con los mismos parámetros), `ObtenerHistorialPorProductoAsync_Operador_LanzaUnauthorized`
+- [ ] B4.2 Implementar `ObtenerHistorialPorProductoAsync`: guard primero; luego delega a `IMovimientoStockService.ObtenerHistorialAsync` — NO reimplementar lógica (decisión D2)
+- [ ] B4.3 `dotnet test Application.Tests/Reportes` verde → commit: `feat(app): ReporteStockService.ObtenerHistorialPorProductoAsync — delegación a Inc5 + guard`
+
+#### B5 — Application: IAuditoriaQueryService + AuditoriaQueryService
+
+**Archivos:** `Application/Auditoria/IAuditoriaQueryService.cs`, `Application/Auditoria/AuditoriaQueryService.cs`, `Application/Interfaces/IAuditoriaQueryRepository.cs`, `Application.Tests/Auditoria/AuditoriaQueryServiceTests.cs` — **Dep:** A2
+
+- [ ] B5.1 Escribir 5 tests: `ObtenerLogAsync_FiltraPorUsuario`, `ObtenerLogAsync_FiltraPorFechas`, `ObtenerLogAsync_FechaHasta_AplicadaComoFinDeDia`, `ObtenerLogAsync_OrdenadoPorFechaDesc`, `ObtenerLogAsync_Operador_LanzaUnauthorized`
+- [ ] B5.2 Definir `IAuditoriaQueryRepository` con `ObtenerLogAsync(int? usuarioId, DateTime? fechaDesde, DateTime? fechaHasta)`; definir `IAuditoriaQueryService`
+- [ ] B5.3 Implementar `AuditoriaQueryService`: guard `Permisos.VerReportes` fail-closed; delega a `IAuditoriaQueryRepository`
+- [ ] B5.4 `dotnet test Application.Tests/Auditoria` verde → commit: `feat(app): AuditoriaQueryService TDD — filtros + autorización`
+
+---
+
+### Bloque C — Infrastructure: Repositorios EF
+
+#### C1 — Infrastructure: ReporteStockRepository.ObtenerValorizacionAsync
+
+**Archivos:** `Infrastructure/Repositories/ReporteStockRepository.cs`, `Infrastructure.Tests/Repositories/ReporteStockRepositoryValorizacionTests.cs` — **Dep:** B1
+
+- [ ] C1.1 Escribir 3 tests integration (SQLite in-memory + EnsureCreated): `ObtenerValorizacionAsync_RetornaProductosActivos`, `ObtenerValorizacionAsync_ProductoSinCategoria_GrupoSinCategoria`, `ObtenerValorizacionAsync_TotalesCorrectos`
+- [ ] C1.2 Implementar `ReporteStockRepository.ObtenerValorizacionAsync` con `Include(p => p.Categoria)`, null-coalescido `"Sin categoría"`, `OrderBy(p => p.Nombre)`
+- [ ] C1.3 `dotnet test Infrastructure.Tests/Repositories` verde → commit: `feat(infra): ReporteStockRepository.ObtenerValorizacionAsync + integration tests`
+
+#### C2 — Infrastructure: ReporteStockRepository.ObtenerStockPorCategoriaAsync
+
+**Archivos:** `Infrastructure/Repositories/ReporteStockRepository.cs` (mod), `Infrastructure.Tests/Repositories/ReporteStockRepositoryCategoriaTests.cs` — **Dep:** C1, B2
+
+- [ ] C2.1 Escribir 3 tests: `ObtenerStockPorCategoriaAsync_AgrupaCorrectamente`, `ObtenerStockPorCategoriaAsync_GrupoSinCategoria_Presente`, `ObtenerStockPorCategoriaAsync_CategoriasSinProductosActivos_NoAparecen`
+- [ ] C2.2 Implementar `ObtenerStockPorCategoriaAsync`: `GroupBy` con null-coalescido; `Sum(StockActual)`, `Sum(StockActual * PrecioCosto)`, `Sum(StockActual * PrecioVenta)`
+- [ ] C2.3 `dotnet test Infrastructure.Tests/Repositories` verde → commit: `feat(infra): ReporteStockRepository.ObtenerStockPorCategoriaAsync + integration tests`
+
+#### C3 — Infrastructure: ReporteStockRepository.ObtenerMasMovidosAsync
+
+**Archivos:** `Infrastructure/Repositories/ReporteStockRepository.cs` (mod), `Infrastructure.Tests/Repositories/ReporteStockRepositoryMasMovidosTests.cs` — **Dep:** C1, B3
+
+- [ ] C3.1 Escribir 4 tests: `ObtenerMasMovidosAsync_OrdenadoPorVolumenDesc`, `ObtenerMasMovidosAsync_TopNRespetado`, `ObtenerMasMovidosAsync_FechaHastaFinDeDia`, `ObtenerMasMovidosAsync_SinMovimientos_ListaVacia`
+- [ ] C3.2 Implementar `ObtenerMasMovidosAsync`: `GroupBy(m => m.ProductoId)`; `FechaHasta` ajustada con `fechaHasta.Value.Date.AddDays(1).AddTicks(-1)`; `OrderByDescending(x => x.VolumenTotal).Take(topN)`
+- [ ] C3.3 `dotnet test Infrastructure.Tests/Repositories` verde → commit: `feat(infra): ReporteStockRepository.ObtenerMasMovidosAsync + integration tests`
+
+#### C4 — Infrastructure: AuditoriaQueryRepository
+
+**Archivos:** `Infrastructure/Repositories/AuditoriaQueryRepository.cs`, `Infrastructure.Tests/Repositories/AuditoriaQueryRepositoryTests.cs` — **Dep:** B5
+
+- [ ] C4.1 Escribir 4 tests: `ObtenerLogAsync_FiltraPorUsuarioId`, `ObtenerLogAsync_FiltraPorFechas_FechaHastaFinDeDia`, `ObtenerLogAsync_SinFiltros_RetornaAll`, `ObtenerLogAsync_OrdenadoPorFechaDesc`
+- [ ] C4.2 Implementar `AuditoriaQueryRepository`: `FechaHasta` ajustada con `fechaHasta.Value.Date.AddDays(1).AddTicks(-1)`; `Include(l => l.Usuario)`; `OrderByDescending(l => l.Fecha)`
+- [ ] C4.3 `dotnet test Infrastructure.Tests/Repositories` verde → commit: `feat(infra): AuditoriaQueryRepository EF + integration tests`
+
+#### C5 — Infrastructure: registro DI
+
+**Archivos:** `Infrastructure/DependencyInjection.cs` (o donde se registran los servicios del Inc 5) — **Dep:** C1–C4, B1–B5
+
+- [ ] C5.1 Registrar en el contenedor DI: `IReporteStockRepository` → `ReporteStockRepository`; `IAuditoriaQueryRepository` → `AuditoriaQueryRepository`; `IReporteStockService` → `ReporteStockService`; `IAuditoriaQueryService` → `AuditoriaQueryService`; `ICsvExporter` → `CsvExporter`
+- [ ] C5.2 `dotnet build StockApp.sln` → commit: `feat(infra): registro DI de repositorios y servicios de reportes y auditoría`
+
+---
+
+### Bloque D — Presentation: ViewModels + Views
+
+#### D1 — Presentation: paquete Avalonia.Controls.DataGrid
+
+**Archivos:** `src/StockApp.Presentation/StockApp.Presentation.csproj`, `src/StockApp.Presentation/App.axaml` — **Dep:** C5
+
+- [ ] D1.1 Agregar referencia NuGet `Avalonia.Controls.DataGrid` al proyecto Presentation
+- [ ] D1.2 Registrar styles del DataGrid en `App.axaml`: `<StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml"/>` (o equivalente para la versión instalada)
+- [ ] D1.3 `dotnet build StockApp.sln` → commit: `feat(presentation): agregar Avalonia.Controls.DataGrid al proyecto`
+
+#### D2 — Presentation: ValorizacionViewModel + ValorizacionView
+
+**Archivos:** `Presentation/ViewModels/Reportes/ValorizacionViewModel.cs`, `Presentation/Views/Reportes/ValorizacionView.axaml` — **Dep:** D1
+
+- [ ] D2.1 Escribir 2 tests: `BuscarCommand_LlamaObtenerValorizacionAsync_YPopulaItems`, `ExportarCommand_LlamaExportarConOrdenColumnasFijo`
+- [ ] D2.2 Implementar `ValorizacionViewModel`: `[ObservableProperty] IReadOnlyList<ValorizacionItemDto> Items`; `[RelayCommand] BuscarAsync()`; `[RelayCommand] ExportarAsync()` — usa `ICsvExporter.Exportar(Items, columnOrder)` + `IStorageProvider` para file picker; montos (`ValorCosto`, `ValorVenta`) alineados a la derecha en el DataGrid
+- [ ] D2.3 Crear `ValorizacionView.axaml` con `DataGrid` vinculado a `Items`
+- [ ] D2.4 `dotnet test` verde → commit: `feat(presentation): ValorizacionViewModel + ValorizacionView`
+
+#### D3 — Presentation: StockCategoriaViewModel + StockCategoriaView
+
+**Archivos:** `Presentation/ViewModels/Reportes/StockCategoriaViewModel.cs`, `Presentation/Views/Reportes/StockCategoriaView.axaml` — **Dep:** D1
+
+- [ ] D3.1 Escribir 2 tests: `BuscarCommand_LlamaObtenerStockPorCategoriaAsync_YPopulaItems`, `ExportarCommand_LlamaExportarConItems`
+- [ ] D3.2 Implementar `StockCategoriaViewModel` + View con DataGrid; columnas de montos alineadas a la derecha
+- [ ] D3.3 `dotnet test` verde → commit: `feat(presentation): StockCategoriaViewModel + StockCategoriaView`
+
+#### D4 — Presentation: HistorialPorProductoViewModel + HistorialPorProductoView
+
+**Archivos:** `Presentation/ViewModels/Reportes/HistorialPorProductoViewModel.cs`, `Presentation/Views/Reportes/HistorialPorProductoView.axaml` — **Dep:** D1
+
+- [ ] D4.1 Escribir 2 tests: `BuscarCommand_LlamaObtenerHistorialPorProductoAsync_ConParametros`, `ExportarCommand_LlamaExportarConItems`
+- [ ] D4.2 Implementar `HistorialPorProductoViewModel`: `[ObservableProperty]` para `ProductoId`, `FechaDesde`, `FechaHasta` + View con DataGrid
+- [ ] D4.3 `dotnet test` verde → commit: `feat(presentation): HistorialPorProductoViewModel + HistorialPorProductoView`
+
+#### D5 — Presentation: MasMovidosViewModel + MasMovidosView
+
+**Archivos:** `Presentation/ViewModels/Reportes/MasMovidosViewModel.cs`, `Presentation/Views/Reportes/MasMovidosView.axaml` — **Dep:** D1
+
+- [ ] D5.1 Escribir 2 tests: `BuscarCommand_LlamaObtenerMasMovidosAsync_ConTopN`, `ExportarCommand_LlamaExportarConItems`
+- [ ] D5.2 Implementar `MasMovidosViewModel`: `[ObservableProperty]` para `FechaDesde`, `FechaHasta`, `TopN` (default 20) + View con DataGrid; columna `VolumenTotal` alineada a la derecha
+- [ ] D5.3 `dotnet test` verde → commit: `feat(presentation): MasMovidosViewModel + MasMovidosView`
+
+#### D6 — Presentation: AuditoriaLogViewModel + AuditoriaLogView
+
+**Archivos:** `Presentation/ViewModels/Reportes/AuditoriaLogViewModel.cs`, `Presentation/Views/Reportes/AuditoriaLogView.axaml` — **Dep:** D1
+
+- [ ] D6.1 Escribir 2 tests: `BuscarCommand_LlamaObtenerLogAsync_ConFiltros`, `ExportarCommand_LlamaExportarConItems`
+- [ ] D6.2 Implementar `AuditoriaLogViewModel`: `[ObservableProperty]` para `UsuarioId?`, `FechaDesde`, `FechaHasta` + View con DataGrid
+- [ ] D6.3 `dotnet test` verde → commit: `feat(presentation): AuditoriaLogViewModel + AuditoriaLogView`
+
+---
+
+### Bloque E — Navegación + Cierre
+
+#### E1 — Presentation: navegación grupo "Reportes" en ShellMainViewModel
+
+**Archivos:** `Presentation/ViewModels/ShellMainViewModel.cs` (mod), `Presentation.Tests/ViewModels/ShellMainViewModelReportesTests.cs` — **Dep:** D2–D6
+
+- [ ] E1.1 Escribir 3 tests: `Admin_VeEntradasGrupoReportes`, `Operador_NoVeEntradasGrupoReportes`, `NavReportes_LlamaNavegar_ConViewModelCorrecto`
+- [ ] E1.2 Agregar en `ShellMainViewModel` 5 commands de navegación bajo el grupo "Reportes" (`NavValorizacion`, `NavStockCategoria`, `NavHistorialPorProducto`, `NavMasMovidos`, `NavAuditoriaLog`), visibles solo cuando `EsAdmin`; registrar los 5 ViewModels en DI como `Transient`
+- [ ] E1.3 `dotnet test` verde → commit: `feat(presentation): navegación grupo Reportes en ShellMainViewModel — solo Admin`
+
+#### E2 — Cierre del Incremento 6
+
+**Archivos:** `docs/plans/2026-06-08-00-roadmap.md` — **Dep:** E1
+
+- [ ] E2.1 Ejecutar `dotnet build StockApp.sln` y `dotnet test` — confirmar 0 errores y sin regresiones del Inc 5
+- [ ] E2.2 Marcar Incremento 6 como completado en `docs/plans/2026-06-08-00-roadmap.md`
+- [ ] E2.3 Commit: `docs(plans): marcar Incremento 6 (Reportes + Auditoría) como completado`
+
+---
+
+**Total tasks: 19 | Tests nuevos estimados: ~75 | Commits: 19 (uno por task)**
