@@ -21,4 +21,12 @@ public interface IReporteStockRepository
     /// Retorna lista vacía si no hay productos.
     /// </summary>
     Task<IReadOnlyList<StockCategoriaDto>> ObtenerStockPorCategoriaAsync();
+
+    /// <summary>
+    /// Productos más movidos en el período, ordenados por volumen total descendente
+    /// y limitados a <paramref name="topN"/>. El repo ajusta FechaHasta a fin de día
+    /// y aplica el orden y el Take(topN). Retorna lista vacía si no hay movimientos.
+    /// </summary>
+    Task<IReadOnlyList<MasMovidoDto>> ObtenerMasMovidosAsync(
+        DateTime? fechaDesde, DateTime? fechaHasta, int topN);
 }
