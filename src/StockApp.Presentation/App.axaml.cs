@@ -7,11 +7,14 @@ using System.IO;
 using Avalonia.Markup.Xaml;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using StockApp.Application.Auditoria;
 using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
+using StockApp.Application.Exportacion;
 using StockApp.Application.Interfaces;
 using StockApp.Application.Movimientos;
+using StockApp.Application.Reportes;
 using StockApp.Infrastructure.Auth;
 using StockApp.Infrastructure.Persistence;
 using StockApp.Infrastructure.Platform;
@@ -22,6 +25,7 @@ using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels;
 using StockApp.Presentation.ViewModels.Catalogo;
 using StockApp.Presentation.ViewModels.Movimientos;
+using StockApp.Presentation.ViewModels.Reportes;
 using StockApp.Presentation.Views;
 
 namespace StockApp.Presentation;
@@ -135,9 +139,31 @@ public partial class App : AvaloniaApp
         // ── Inc 5: confirmación de stock insuficiente ─────────────────────────
         services.AddSingleton<IConfirmacionService, ConfirmacionService>();
 
+        // ── Inc 6: reportes y auditoría — repositorios y servicios ────────────
+
+        // Repositorios: transient — dependen de AppDbContext (Scoped), evita captive dependency.
+        services.AddTransient<IReporteStockRepository, ReporteStockRepository>();
+        services.AddTransient<IAuditoriaQueryRepository, AuditoriaQueryRepository>();
+
+        // Servicios de Application: transient — sin estado propio.
+        services.AddTransient<IReporteStockService, ReporteStockService>();
+        services.AddTransient<IAuditoriaQueryService, AuditoriaQueryService>();
+        services.AddTransient<ICsvExporter, CsvExporter>();
+
+        // ── Inc 6: guardado de archivos (file picker) ─────────────────────────
+        // Singleton — sin estado, accede a la ventana principal vía IStorageProvider.
+        services.AddSingleton<IServicioGuardadoArchivo, ServicioGuardadoArchivo>();
+
         // ── Inc 5: VMs de movimientos ─────────────────────────────────────────
         services.AddTransient<MovimientoRegistroViewModel>();
         services.AddTransient<MovimientoHistorialViewModel>();
+
+        // ── Inc 6: VMs de reportes ────────────────────────────────────────────
+        services.AddTransient<ValorizacionViewModel>();
+        services.AddTransient<StockCategoriaViewModel>();
+        services.AddTransient<HistorialPorProductoViewModel>();
+        services.AddTransient<MasMovidosViewModel>();
+        services.AddTransient<AuditoriaLogViewModel>();
 
         // ── Inc 4: navegación ─────────────────────────────────────────────────
 
