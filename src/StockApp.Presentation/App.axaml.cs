@@ -161,6 +161,7 @@ public partial class App : AvaloniaApp
         // ── Inc 6: VMs de reportes ────────────────────────────────────────────
         services.AddTransient<ValorizacionViewModel>();
         services.AddTransient<StockCategoriaViewModel>();
+        services.AddTransient<HistorialPorProductoViewModel>();
 
         // ── Inc 4: navegación ─────────────────────────────────────────────────
 
