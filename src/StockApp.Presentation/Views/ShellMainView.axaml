@@ -70,6 +70,48 @@
                         Background="Transparent"
                         IsVisible="{Binding EsAdmin}" />
 
+                <!-- Reportes: solo Admin -->
+                <TextBlock Text="Reportes"
+                           FontWeight="SemiBold"
+                           Margin="8,8,0,4"
+                           IsVisible="{Binding EsAdmin}"
+                           Opacity="0.6" />
+
+                <Button Content="Valorización de inventario"
+                        Command="{Binding NavValorizacionCommand}"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Background="Transparent"
+                        IsVisible="{Binding EsAdmin}" />
+
+                <Button Content="Stock por categoría"
+                        Command="{Binding NavStockCategoriaCommand}"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Background="Transparent"
+                        IsVisible="{Binding EsAdmin}" />
+
+                <Button Content="Historial por producto"
+                        Command="{Binding NavHistorialPorProductoCommand}"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Background="Transparent"
+                        IsVisible="{Binding EsAdmin}" />
+
+                <Button Content="Productos más movidos"
+                        Command="{Binding NavMasMovidosCommand}"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Background="Transparent"
+                        IsVisible="{Binding EsAdmin}" />
+
+                <Button Content="Log de auditoría"
+                        Command="{Binding NavAuditoriaLogCommand}"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
+                        Background="Transparent"
+                        IsVisible="{Binding EsAdmin}" />
+
             </StackPanel>
         </Border>
 
