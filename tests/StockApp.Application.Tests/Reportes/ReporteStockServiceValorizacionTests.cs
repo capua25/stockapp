@@ -1,6 +1,7 @@
 using Moq;
 using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
+using StockApp.Application.Movimientos;
 using StockApp.Application.Reportes;
 using StockApp.Domain.Enums;
 using Xunit;
@@ -18,16 +19,18 @@ public class ReporteStockServiceValorizacionTests
                     Mock<IAuthSvc> authMock)
         Crear(RolUsuario rol = RolUsuario.Admin)
     {
-        var repo    = new Mock<IReporteStockRepository>();
-        var session = new Mock<ICurrentSession>();
-        var auth    = new Mock<IAuthSvc>();
+        var repo        = new Mock<IReporteStockRepository>();
+        var movimientos = new Mock<IMovimientoStockService>();
+        var session     = new Mock<ICurrentSession>();
+        var auth        = new Mock<IAuthSvc>();
 
         session.Setup(s => s.RolActual).Returns(rol);
 
         // Por defecto auth no lanza (permiso concedido)
         auth.Setup(a => a.Verificar(It.IsAny<RolUsuario?>(), It.IsAny<string>()));
 
-        var svc = new ReporteStockService(repo.Object, session.Object, auth.Object);
+        var svc = new ReporteStockService(
+            repo.Object, movimientos.Object, session.Object, auth.Object);
         return (svc, repo, session, auth);
     }
 
