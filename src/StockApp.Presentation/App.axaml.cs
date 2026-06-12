@@ -162,6 +162,7 @@ public partial class App : AvaloniaApp
         services.AddTransient<ValorizacionViewModel>();
         services.AddTransient<StockCategoriaViewModel>();
         services.AddTransient<HistorialPorProductoViewModel>();
+        services.AddTransient<MasMovidosViewModel>();
 
         // ── Inc 4: navegación ─────────────────────────────────────────────────
 
