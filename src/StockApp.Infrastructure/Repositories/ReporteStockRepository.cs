@@ -59,7 +59,55 @@ public class ReporteStockRepository : IReporteStockRepository
     }
 
     /// <inheritdoc/>
-    public Task<IReadOnlyList<MasMovidoDto>> ObtenerMasMovidosAsync(
+    public async Task<IReadOnlyList<MasMovidoDto>> ObtenerMasMovidosAsync(
         DateTime? fechaDesde, DateTime? fechaHasta, int topN)
-        => throw new NotImplementedException();
+    {
+        // FechaHasta se ajusta a fin de día (23:59:59.9999999) para incluir todos
+        // los movimientos del día indicado, sin importar la hora con que se pasó.
+        var fechaHastaFinDia = fechaHasta?.Date.AddDays(1).AddTicks(-1);
+
+        // ADAPTACIÓN SQLite (REGLA DE ORO): la query de referencia con
+        // GroupBy(m => m.ProductoId).Select(g => new MasMovidoDto(g.Key,
+        // g.First().Producto.Codigo, ...)).OrderByDescending(x => x.VolumenTotal)
+        // NO traduce: EF intenta traducir el OrderByDescending sobre el DTO proyectado
+        // junto con g.First().Producto navigation y lanza InvalidOperationException.
+        //
+        // Estrategia: la AGREGACIÓN (GroupBy + Count + Sum por ProductoId) SÍ traduce a
+        // SQL, así que se ejecuta server-side. Luego se traen los agregados a memoria,
+        // se resuelven Codigo/Nombre con un lookup de productos, y el OrderByDescending +
+        // Take(topN) se aplica client-side sobre el set ya reducido (una fila por producto).
+        var agregados = await _ctx.MovimientosStock
+            .Where(m => (fechaDesde == null || m.Fecha >= fechaDesde)
+                     && (fechaHastaFinDia == null || m.Fecha <= fechaHastaFinDia))
+            .GroupBy(m => m.ProductoId)
+            .Select(g => new
+            {
+                ProductoId = g.Key,
+                Cantidad   = g.Count(),
+                Volumen    = g.Sum(m => m.Cantidad)
+            })
+            .ToListAsync();
+
+        if (agregados.Count == 0)
+            return Array.Empty<MasMovidoDto>();
+
+        // Lookup de Codigo/Nombre para los productos involucrados (una sola query).
+        var productoIds = agregados.Select(a => a.ProductoId).ToList();
+        var productos = await _ctx.Productos
+            .Where(p => productoIds.Contains(p.Id))
+            .Select(p => new { p.Id, p.Codigo, p.Nombre })
+            .ToListAsync();
+        var porId = productos.ToDictionary(p => p.Id);
+
+        return agregados
+            .Select(a => new MasMovidoDto(
+                a.ProductoId,
+                porId.TryGetValue(a.ProductoId, out var p) ? p.Codigo : string.Empty,
+                porId.TryGetValue(a.ProductoId, out var p2) ? p2.Nombre : string.Empty,
+                a.Cantidad,
+                a.Volumen))
+            .OrderByDescending(x => x.VolumenTotal)
+            .Take(topN)
+            .ToList();
+    }
 }
