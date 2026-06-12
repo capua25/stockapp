@@ -25,6 +25,7 @@ using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels;
 using StockApp.Presentation.ViewModels.Catalogo;
 using StockApp.Presentation.ViewModels.Movimientos;
+using StockApp.Presentation.ViewModels.Reportes;
 using StockApp.Presentation.Views;
 
 namespace StockApp.Presentation;
@@ -149,9 +150,16 @@ public partial class App : AvaloniaApp
         services.AddTransient<IAuditoriaQueryService, AuditoriaQueryService>();
         services.AddTransient<ICsvExporter, CsvExporter>();
 
+        // ── Inc 6: guardado de archivos (file picker) ─────────────────────────
+        // Singleton — sin estado, accede a la ventana principal vía IStorageProvider.
+        services.AddSingleton<IServicioGuardadoArchivo, ServicioGuardadoArchivo>();
+
         // ── Inc 5: VMs de movimientos ─────────────────────────────────────────
         services.AddTransient<MovimientoRegistroViewModel>();
         services.AddTransient<MovimientoHistorialViewModel>();
+
+        // ── Inc 6: VMs de reportes ────────────────────────────────────────────
+        services.AddTransient<ValorizacionViewModel>();
 
         // ── Inc 4: navegación ─────────────────────────────────────────────────
 
