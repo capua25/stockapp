@@ -7,11 +7,14 @@ using System.IO;
 using Avalonia.Markup.Xaml;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using StockApp.Application.Auditoria;
 using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
+using StockApp.Application.Exportacion;
 using StockApp.Application.Interfaces;
 using StockApp.Application.Movimientos;
+using StockApp.Application.Reportes;
 using StockApp.Infrastructure.Auth;
 using StockApp.Infrastructure.Persistence;
 using StockApp.Infrastructure.Platform;
@@ -134,6 +137,17 @@ public partial class App : AvaloniaApp
 
         // ── Inc 5: confirmación de stock insuficiente ─────────────────────────
         services.AddSingleton<IConfirmacionService, ConfirmacionService>();
+
+        // ── Inc 6: reportes y auditoría — repositorios y servicios ────────────
+
+        // Repositorios: transient — dependen de AppDbContext (transient), evita captive dependency.
+        services.AddTransient<IReporteStockRepository, ReporteStockRepository>();
+        services.AddTransient<IAuditoriaQueryRepository, AuditoriaQueryRepository>();
+
+        // Servicios de Application: transient — sin estado propio.
+        services.AddTransient<IReporteStockService, ReporteStockService>();
+        services.AddTransient<IAuditoriaQueryService, AuditoriaQueryService>();
+        services.AddTransient<ICsvExporter, CsvExporter>();
 
         // ── Inc 5: VMs de movimientos ─────────────────────────────────────────
         services.AddTransient<MovimientoRegistroViewModel>();
