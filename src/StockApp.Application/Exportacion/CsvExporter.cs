@@ -12,7 +12,7 @@ namespace StockApp.Application.Exportacion;
 /// </summary>
 public sealed class CsvExporter : ICsvExporter
 {
-    private const char Bom = '﻿';
+    private const char Bom = '\uFEFF';
     private const string Crlf = "\r\n";
 
     /// <inheritdoc />
@@ -27,9 +27,12 @@ public sealed class CsvExporter : ICsvExporter
         // Header: nombres de columnas en el orden provisto, escapados.
         AppendFila(sb, columnOrder.Select(Escapar));
 
-        // Cache de PropertyInfo por nombre para no resolver por cada fila.
+        // Resolución anticipada de PropertyInfo por columna para no resolver por cada fila.
         var propiedades = columnOrder
-            .Select(nombre => typeof(T).GetProperty(nombre))
+            .Select(nombre =>
+                typeof(T).GetProperty(nombre, BindingFlags.Public | BindingFlags.Instance)
+                    ?? throw new ArgumentException(
+                        $"La propiedad '{nombre}' no existe en {typeof(T).Name}.", nameof(columnOrder)))
             .ToArray();
 
         foreach (var item in items)
