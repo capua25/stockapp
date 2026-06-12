@@ -45,4 +45,15 @@ public class ReporteStockService : IReporteStockService
 
         return await _repo.ObtenerStockPorCategoriaAsync();
     }
+
+    public async Task<IReadOnlyList<MasMovidoDto>> ObtenerMasMovidosAsync(
+        DateTime? fechaDesde, DateTime? fechaHasta, int topN = 20)
+    {
+        // Autorización fail-closed: PRIMERO, antes de tocar el repo.
+        _auth.Verificar(_session.RolActual, Permisos.VerReportes);
+
+        // Parámetros se pasan TAL CUAL: el ajuste de FechaHasta, el orden y el
+        // Take(topN) son responsabilidad del repo (C3).
+        return await _repo.ObtenerMasMovidosAsync(fechaDesde, fechaHasta, topN);
+    }
 }
