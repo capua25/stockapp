@@ -5,6 +5,7 @@ using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.ViewModels.Catalogo;
 using StockApp.Presentation.ViewModels.Movimientos;
+using StockApp.Presentation.ViewModels.Reportes;
 
 namespace StockApp.Presentation.ViewModels;
 
@@ -57,4 +58,21 @@ public partial class ShellMainViewModel : ViewModelBase
 
     [RelayCommand]
     private void NavHistorialMovimientos() => _navigation.Navegar<MovimientoHistorialViewModel>();
+
+    // ── Reportes (Inc 6): solo Admin ──────────────────────────────────────────
+
+    [RelayCommand]
+    private void NavValorizacion() => _navigation.Navegar<ValorizacionViewModel>();
+
+    [RelayCommand]
+    private void NavStockCategoria() => _navigation.Navegar<StockCategoriaViewModel>();
+
+    [RelayCommand]
+    private void NavHistorialPorProducto() => _navigation.Navegar<HistorialPorProductoViewModel>();
+
+    [RelayCommand]
+    private void NavMasMovidos() => _navigation.Navegar<MasMovidosViewModel>();
+
+    [RelayCommand]
+    private void NavAuditoriaLog() => _navigation.Navegar<AuditoriaLogViewModel>();
 }
