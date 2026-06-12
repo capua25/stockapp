@@ -141,7 +141,7 @@ public partial class App : AvaloniaApp
 
         // ── Inc 6: reportes y auditoría — repositorios y servicios ────────────
 
-        // Repositorios: transient — dependen de AppDbContext (transient), evita captive dependency.
+        // Repositorios: transient — dependen de AppDbContext (Scoped), evita captive dependency.
         services.AddTransient<IReporteStockRepository, ReporteStockRepository>();
         services.AddTransient<IAuditoriaQueryRepository, AuditoriaQueryRepository>();
 

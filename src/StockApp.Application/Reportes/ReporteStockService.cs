@@ -68,6 +68,12 @@ public class ReporteStockService : IReporteStockService
         // Autorización fail-closed: PRIMERO, antes de delegar.
         _auth.Verificar(_session.RolActual, Permisos.VerReportes);
 
+        // DOBLE-GUARD: este método verifica VerReportes; el servicio delegado
+        // (IMovimientoStockService.ObtenerHistorialAsync) verifica RegistrarMovimientos.
+        // Hoy es seguro porque VerReportes es Admin-only y Admin tiene todos los permisos.
+        // Si la matriz de roles evoluciona (ej. dar VerReportes a un rol sin RegistrarMovimientos),
+        // este reporte fallará. Tener presente si se cambian permisos.
+
         // D2: no reimplementamos el historial; delegamos al servicio de movimientos
         // del Inc 5, que ya resuelve el running balance y el ajuste de fechas.
         var filtro = new HistorialMovimientoFiltro(
