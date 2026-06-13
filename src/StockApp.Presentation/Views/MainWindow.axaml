@@ -11,6 +11,14 @@
         MinWidth="400"
         MinHeight="300">
 
-    <ContentControl Content="{Binding CurrentViewModel}" />
+    <Grid>
+        <!-- Capa base: contenido principal de la app (login, catálogo, etc.) -->
+        <ContentControl Content="{Binding CurrentViewModel}" />
+
+        <!-- Capa superior: overlay de actualización (banner, modal o bloqueo).
+             Cuando OverlayActualizacion es null, el ContentControl no renderiza nada. -->
+        <ContentControl Content="{Binding OverlayActualizacion}"
+                        IsVisible="{Binding OverlayActualizacion, Converter={x:Static ObjectConverters.IsNotNull}}" />
+    </Grid>
 
 </Window>
