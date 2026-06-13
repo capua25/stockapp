@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using StockApp.Application.Auth;
 using StockApp.Presentation.Actualizaciones;
@@ -21,6 +22,14 @@ public partial class ShellViewModel : ViewModelBase
 
     [ObservableProperty]
     private ViewModelBase? _currentViewModel;
+
+    /// <summary>
+    /// ViewModel del overlay de actualización activo (banner, modal o bloqueo),
+    /// o null cuando no hay actualización pendiente. Se asigna en el UI thread
+    /// tras completar la evaluación en background.
+    /// </summary>
+    [ObservableProperty]
+    private ViewModelBase? _overlayActualizacion;
 
     public ShellViewModel(
         IPrimerArranqueService  primerArranqueService,
@@ -48,15 +57,30 @@ public partial class ShellViewModel : ViewModelBase
             MostrarLogin();
 
         // Fire-and-forget controlado: el coordinador no debe tumbar el arranque si falla.
+        // La asignación del overlay se hace en el UI thread (Dispatcher) porque dispara binding.
         _ = Task.Run(async () =>
         {
             try
             {
                 await _coordinadorActualizacion.EvaluarEnArranqueAsync();
+                var overlay = CoordinadorActualizacion.ResolverOverlayViewModel(
+                    _coordinadorActualizacion.AccionUxActual);
+
+                // Asignar en UI thread: Dispatcher puede no estar disponible en tests
+                // (sin app Avalonia activa); se usa TryGetOrCreateDispatcher para ser seguro.
+                if (Dispatcher.UIThread.CheckAccess())
+                {
+                    OverlayActualizacion = overlay;
+                }
+                else
+                {
+                    Dispatcher.UIThread.Post(() => OverlayActualizacion = overlay);
+                }
             }
             catch (Exception)
             {
                 // Silencio: no interrumpir la app si el chequeo de updates falla.
+                // OverlayActualizacion permanece null (seguro).
             }
         });
     }

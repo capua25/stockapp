@@ -100,4 +100,94 @@ public class ShellViewModelActualizacionTests
         var exception = await Record.ExceptionAsync(() => shell.InicializarAsync());
         Assert.Null(exception);
     }
+
+    [Fact]
+    public async Task InicializarAsync_BannerDiscreto_OverlayActualizacionEsBannerViewModel()
+    {
+        // Arrange: update service devuelve BannerDiscreto
+        var updateMock = new Mock<IUpdateService>();
+        updateMock
+            .Setup(s => s.BuscarAsync(default))
+            .ReturnsAsync(new UpdateCheckResult(
+                HayUpdate: true,
+                Version: "1.1.0",
+                Severity: UpdateSeverity.Normal,
+                NotasMarkdown: "nueva versión"));
+
+        var coordinador = new CoordinadorActualizacion(
+            updateMock.Object,
+            new PoliticaUxActualizacion());
+
+        var primerArranqueMock = new Mock<IPrimerArranqueService>();
+        primerArranqueMock
+            .Setup(p => p.RequiereCrearAdminAsync())
+            .ReturnsAsync(false);
+
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
+        var navSvc = new NavigationService(t =>
+        {
+            if (t == typeof(ShellMainViewModel))
+                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>());
+            throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
+        });
+
+        var shell = new ShellViewModel(
+            primerArranqueMock.Object,
+            Mock.Of<IAuthService>(),
+            Mock.Of<IUsuarioService>(),
+            navSvc,
+            coordinador);
+
+        // Act
+        await shell.InicializarAsync();
+
+        // El coordinador corre en background; esperamos a que complete.
+        await Task.Delay(300);
+
+        // Assert: el overlay debe ser un BannerViewModel
+        Assert.IsType<ActualizacionBannerViewModel>(shell.OverlayActualizacion);
+    }
+
+    [Fact]
+    public async Task InicializarAsync_SinUpdate_OverlayActualizacionEsNull()
+    {
+        // Arrange: no hay update → overlay debe quedar null
+        var updateMock = new Mock<IUpdateService>();
+        updateMock
+            .Setup(s => s.BuscarAsync(default))
+            .ReturnsAsync(UpdateCheckResult.SinUpdate);
+
+        var coordinador = new CoordinadorActualizacion(
+            updateMock.Object,
+            new PoliticaUxActualizacion());
+
+        var primerArranqueMock = new Mock<IPrimerArranqueService>();
+        primerArranqueMock
+            .Setup(p => p.RequiereCrearAdminAsync())
+            .ReturnsAsync(false);
+
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
+        var navSvc = new NavigationService(t =>
+        {
+            if (t == typeof(ShellMainViewModel))
+                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>());
+            throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
+        });
+
+        var shell = new ShellViewModel(
+            primerArranqueMock.Object,
+            Mock.Of<IAuthService>(),
+            Mock.Of<IUsuarioService>(),
+            navSvc,
+            coordinador);
+
+        // Act
+        await shell.InicializarAsync();
+        await Task.Delay(300);
+
+        // Assert
+        Assert.Null(shell.OverlayActualizacion);
+    }
 }
