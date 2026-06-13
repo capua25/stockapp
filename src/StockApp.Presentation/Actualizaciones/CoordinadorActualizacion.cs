@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using StockApp.Application.Actualizaciones;
+using StockApp.Presentation.ViewModels;
 
 namespace StockApp.Presentation.Actualizaciones;
 
@@ -29,6 +30,21 @@ public sealed class CoordinadorActualizacion
         _updateService = updateService;
         _politica      = politica;
     }
+
+    /// <summary>
+    /// Mapea una <see cref="AccionUx"/> al ViewModel de overlay correspondiente, o null si no
+    /// hay overlay (ModoUx.Ninguno). Método estático y puro: facilita pruebas unitarias.
+    /// </summary>
+    public static ViewModelBase? ResolverOverlayViewModel(AccionUx accion) =>
+        accion.Modo switch
+        {
+            ModoUx.Ninguno          => null,
+            ModoUx.BannerDiscreto   => new ActualizacionBannerViewModel(accion),
+            ModoUx.ModalPosponible  => new ActualizacionModalViewModel(accion),
+            ModoUx.BloqueoCritico   => new ActualizacionBloqueoViewModel(accion),
+            ModoUx.ModoDegradado    => new ActualizacionBloqueoViewModel(accion),
+            _                       => null,
+        };
 
     /// <summary>
     /// Evalúa si hay actualización disponible y decide la acción de UI.
