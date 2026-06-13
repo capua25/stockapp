@@ -18,15 +18,28 @@ public class ViewLocator : IDataTemplate
     {
         if (param is null)
             return null;
-        
+
         var name = param.GetType().FullName!.Replace("ViewModel", "View", StringComparison.Ordinal);
         var type = Type.GetType(name);
+
+        // Fallback: algunas Views viven en un subnamespace "Views" dentro del namespace del VM.
+        // Ej: VM en "...Actualizaciones.ActualizacionBannerViewModel" →
+        //     View en "...Actualizaciones.Views.ActualizacionBannerView".
+        if (type is null)
+        {
+            var lastDot = name.LastIndexOf('.');
+            if (lastDot >= 0)
+            {
+                var fallbackName = name[..lastDot] + ".Views" + name[lastDot..];
+                type = Type.GetType(fallbackName);
+            }
+        }
 
         if (type != null)
         {
             return (Control)Activator.CreateInstance(type)!;
         }
-        
+
         return new TextBlock { Text = "Not Found: " + name };
     }
 
