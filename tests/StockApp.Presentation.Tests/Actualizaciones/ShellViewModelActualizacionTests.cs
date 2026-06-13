@@ -55,8 +55,8 @@ public class ShellViewModelActualizacionTests
         // Act
         await shell.InicializarAsync();
 
-        // El coordinador corre en background (fire-and-forget), damos un margen para que complete.
-        await Task.Delay(200);
+        // Awaitamos la tarea de background directamente (determinista).
+        await shell._tareaActualizacion;
 
         // Assert: el coordinador evaluó (BuscarAsync fue llamado exactamente una vez).
         updateMock.Verify(s => s.BuscarAsync(default), Times.Once);
@@ -142,8 +142,8 @@ public class ShellViewModelActualizacionTests
         // Act
         await shell.InicializarAsync();
 
-        // El coordinador corre en background; esperamos a que complete.
-        await Task.Delay(300);
+        // Awaitamos la tarea de background directamente (determinista, sin Task.Delay).
+        await shell._tareaActualizacion;
 
         // Assert: el overlay debe ser un BannerViewModel
         Assert.IsType<ActualizacionBannerViewModel>(shell.OverlayActualizacion);
@@ -185,7 +185,7 @@ public class ShellViewModelActualizacionTests
 
         // Act
         await shell.InicializarAsync();
-        await Task.Delay(300);
+        await shell._tareaActualizacion;
 
         // Assert
         Assert.Null(shell.OverlayActualizacion);

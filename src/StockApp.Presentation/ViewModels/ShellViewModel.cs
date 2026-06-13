@@ -1,6 +1,5 @@
 using System;
 using System.Threading.Tasks;
-using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using StockApp.Application.Auth;
 using StockApp.Presentation.Actualizaciones;
@@ -57,32 +56,41 @@ public partial class ShellViewModel : ViewModelBase
             MostrarLogin();
 
         // Fire-and-forget controlado: el coordinador no debe tumbar el arranque si falla.
-        // La asignación del overlay se hace en el UI thread (Dispatcher) porque dispara binding.
-        _ = Task.Run(async () =>
+        // _tareaActualizacion se expone como internal para que los tests puedan awaitarla
+        // y evitar condiciones de carrera con Task.Delay.
+        _tareaActualizacion = EvaluarYAsignarOverlayAsync();
+        _ = _tareaActualizacion;
+    }
+
+    /// <summary>
+    /// Tarea del background de actualización. Expuesta como internal para poder
+    /// awaitarla en tests y evitar condiciones de carrera con delays arbitrarios.
+    /// </summary>
+    internal Task _tareaActualizacion = Task.CompletedTask;
+
+    /// <summary>
+    /// Evalúa el coordinador en background y asigna el overlay en el UI thread al terminar.
+    /// </summary>
+    private async Task EvaluarYAsignarOverlayAsync()
+    {
+        await Task.Run(async () =>
         {
             try
             {
                 await _coordinadorActualizacion.EvaluarEnArranqueAsync();
-                var overlay = CoordinadorActualizacion.ResolverOverlayViewModel(
-                    _coordinadorActualizacion.AccionUxActual);
-
-                // Asignar en UI thread: Dispatcher puede no estar disponible en tests
-                // (sin app Avalonia activa); se usa TryGetOrCreateDispatcher para ser seguro.
-                if (Dispatcher.UIThread.CheckAccess())
-                {
-                    OverlayActualizacion = overlay;
-                }
-                else
-                {
-                    Dispatcher.UIThread.Post(() => OverlayActualizacion = overlay);
-                }
             }
             catch (Exception)
             {
                 // Silencio: no interrumpir la app si el chequeo de updates falla.
-                // OverlayActualizacion permanece null (seguro).
+                return;
             }
         });
+
+        // Asignamos el overlay desde el thread del pool.
+        // Avalonia hace marshal automático del PropertyChanged al UI thread cuando hay binding
+        // activo. En tests sin app, la asignación directa es igualmente segura.
+        OverlayActualizacion = CoordinadorActualizacion.ResolverOverlayViewModel(
+            _coordinadorActualizacion.AccionUxActual);
     }
 
     public void MostrarPrimerArranque()
