@@ -7,6 +7,7 @@ using System.IO;
 using Avalonia.Markup.Xaml;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using StockApp.Application.Actualizaciones;
 using StockApp.Application.Auditoria;
 using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
@@ -15,6 +16,7 @@ using StockApp.Application.Exportacion;
 using StockApp.Application.Interfaces;
 using StockApp.Application.Movimientos;
 using StockApp.Application.Reportes;
+using StockApp.Infrastructure.Actualizaciones;
 using StockApp.Infrastructure.Auth;
 using StockApp.Infrastructure.Persistence;
 using StockApp.Infrastructure.Platform;
@@ -186,6 +188,23 @@ public partial class App : AvaloniaApp
 
         // ShellViewModel: singleton — vive toda la vida de la app
         services.AddSingleton<ShellViewModel>();
+
+        // ── Inc 7 Fase A: actualizador in-app ─────────────────────────────────
+
+        // UpdaterOptions: configura fuentes. GitHub es primaria (real); feed propio es fallback opcional.
+        services.AddSingleton(new UpdaterOptions
+        {
+            GitHubRepoUrl  = "https://github.com/capua25/stockapp",
+            GitHubPrerelease = false,
+            FeedPropiUrl   = null,    // null → solo GitHub; setear URL para habilitar feed propio
+            Orden          = OrdenFuentes.GitHubPrimero,
+        });
+
+        // Gateway: singleton — envuelve UpdateManager de Velopack (proceso-global)
+        services.AddSingleton<IVelopackGateway, VelopackGatewayReal>();
+
+        // IUpdateService: singleton — mantiene _updatePendiente entre BuscarAsync→DescargarAsync→Aplicar
+        services.AddSingleton<IUpdateService, VelopackUpdateService>();
 
         return services.BuildServiceProvider();
     }
