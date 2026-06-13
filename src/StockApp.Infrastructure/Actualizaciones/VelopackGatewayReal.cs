@@ -8,6 +8,7 @@ namespace StockApp.Infrastructure.Actualizaciones;
 /// Adaptador delgado sobre <see cref="UpdateManager"/> real de Velopack.
 /// Esta clase es el único punto que toca Velopack directamente.
 /// No contiene lógica de negocio: solo traduce llamadas a la API de Velopack.
+/// Construye la fuente encadenada a partir de <see cref="UpdaterOptions"/>.
 /// Absorbe <see cref="NotInstalledException"/> (app corriendo fuera del instalador).
 /// NO es unit-testeable — validar manualmente en Bloque D (empaquetado).
 /// </summary>
@@ -15,8 +16,9 @@ public sealed class VelopackGatewayReal : IVelopackGateway
 {
     private readonly UpdateManager _manager;
 
-    public VelopackGatewayReal(IUpdateSource source)
+    public VelopackGatewayReal(UpdaterOptions options)
     {
+        var source = BuildSource(options);
         _manager = new UpdateManager(source);
     }
 
@@ -43,4 +45,26 @@ public sealed class VelopackGatewayReal : IVelopackGateway
     /// <inheritdoc />
     public void AplicarYReiniciar(UpdateInfo update)
         => _manager.ApplyUpdatesAndRestart(update.TargetFullRelease);
+
+    // ── construcción de fuente encadenada ─────────────────────────────────────
+
+    private static IUpdateSource BuildSource(UpdaterOptions options)
+    {
+        var github = new GithubSource(
+            options.GitHubRepoUrl,
+            options.GitHubAccessToken,
+            options.GitHubPrerelease);
+
+        // Si no hay feed propio configurado, usamos GitHub directamente (sin overhead de fallback).
+        if (string.IsNullOrWhiteSpace(options.FeedPropiUrl))
+            return github;
+
+        var feedPropio = new SimpleWebSource(options.FeedPropiUrl);
+
+        var fuentesOrdenadas = options.Orden == OrdenFuentes.FeedPropioPrimero
+            ? new IUpdateSource[] { feedPropio, github }
+            : new IUpdateSource[] { github, feedPropio };
+
+        return new FallbackUpdateSource(fuentesOrdenadas);
+    }
 }
