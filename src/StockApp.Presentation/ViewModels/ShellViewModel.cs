@@ -1,6 +1,8 @@
+using System;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using StockApp.Application.Auth;
+using StockApp.Presentation.Actualizaciones;
 using StockApp.Presentation.Navigation;
 
 namespace StockApp.Presentation.ViewModels;
@@ -11,28 +13,32 @@ namespace StockApp.Presentation.ViewModels;
 /// </summary>
 public partial class ShellViewModel : ViewModelBase
 {
-    private readonly IPrimerArranqueService _primerArranqueService;
-    private readonly IAuthService           _authService;
-    private readonly IUsuarioService        _usuarioService;
-    private readonly INavigationService     _navigation;
+    private readonly IPrimerArranqueService  _primerArranqueService;
+    private readonly IAuthService            _authService;
+    private readonly IUsuarioService         _usuarioService;
+    private readonly INavigationService      _navigation;
+    private readonly CoordinadorActualizacion _coordinadorActualizacion;
 
     [ObservableProperty]
     private ViewModelBase? _currentViewModel;
 
     public ShellViewModel(
-        IPrimerArranqueService primerArranqueService,
-        IAuthService           authService,
-        IUsuarioService        usuarioService,
-        INavigationService     navigation)
+        IPrimerArranqueService  primerArranqueService,
+        IAuthService            authService,
+        IUsuarioService         usuarioService,
+        INavigationService      navigation,
+        CoordinadorActualizacion coordinadorActualizacion)
     {
-        _primerArranqueService = primerArranqueService;
-        _authService           = authService;
-        _usuarioService        = usuarioService;
-        _navigation            = navigation;
+        _primerArranqueService    = primerArranqueService;
+        _authService              = authService;
+        _usuarioService           = usuarioService;
+        _navigation               = navigation;
+        _coordinadorActualizacion = coordinadorActualizacion;
     }
 
     /// <summary>
     /// Debe llamarse una sola vez al arrancar la app. Decide el primer VM a mostrar.
+    /// Dispara el chequeo de actualizaciones en background sin bloquear el arranque.
     /// </summary>
     public async Task InicializarAsync()
     {
@@ -40,6 +46,19 @@ public partial class ShellViewModel : ViewModelBase
             MostrarPrimerArranque();
         else
             MostrarLogin();
+
+        // Fire-and-forget controlado: el coordinador no debe tumbar el arranque si falla.
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _coordinadorActualizacion.EvaluarEnArranqueAsync();
+            }
+            catch (Exception)
+            {
+                // Silencio: no interrumpir la app si el chequeo de updates falla.
+            }
+        });
     }
 
     public void MostrarPrimerArranque()

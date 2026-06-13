@@ -1,7 +1,9 @@
 using Moq;
+using StockApp.Application.Actualizaciones;
 using StockApp.Application.Auth;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Enums;
+using StockApp.Presentation.Actualizaciones;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.ViewModels;
 using StockApp.Presentation.ViewModels.Catalogo;
@@ -31,11 +33,16 @@ public class ShellViewModelTests
             throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
         });
 
+        var updateStub = new Mock<IUpdateService>();
+        updateStub.Setup(s => s.BuscarAsync(default)).ReturnsAsync(UpdateCheckResult.SinUpdate);
+        var coordinador = new CoordinadorActualizacion(updateStub.Object, new PoliticaUxActualizacion());
+
         var shell = new ShellViewModel(
             primerArranqueMock.Object,
             Mock.Of<IAuthService>(),
             Mock.Of<IUsuarioService>(),
-            navSvc);
+            navSvc,
+            coordinador);
 
         return (shell, primerArranqueMock);
     }

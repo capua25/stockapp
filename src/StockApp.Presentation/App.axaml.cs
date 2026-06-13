@@ -22,6 +22,7 @@ using StockApp.Infrastructure.Persistence;
 using StockApp.Infrastructure.Platform;
 using StockApp.Infrastructure.Repositories;
 using StockApp.Infrastructure.Services;
+using StockApp.Presentation.Actualizaciones;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels;
@@ -205,6 +206,11 @@ public partial class App : AvaloniaApp
 
         // IUpdateService: singleton — mantiene _updatePendiente entre BuscarAsync→DescargarAsync→Aplicar
         services.AddSingleton<IUpdateService, VelopackUpdateService>();
+
+        // CoordinadorActualizacion: singleton — orquesta chequeo→política en background al arranque.
+        // Los ViewModels de actualización (Banner/Modal/Bloqueo) se instancian directamente
+        // con la AccionUx resultante; no se registran en DI porque toman AccionUx en su constructor.
+        services.AddSingleton<CoordinadorActualizacion>();
 
         return services.BuildServiceProvider();
     }
