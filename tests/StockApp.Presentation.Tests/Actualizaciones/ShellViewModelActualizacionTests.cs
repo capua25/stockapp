@@ -55,6 +55,9 @@ public class ShellViewModelActualizacionTests
         // Act
         await shell.InicializarAsync();
 
+        // El coordinador corre en background (fire-and-forget), damos un margen para que complete.
+        await Task.Delay(200);
+
         // Assert: el coordinador evaluó (BuscarAsync fue llamado exactamente una vez).
         updateMock.Verify(s => s.BuscarAsync(default), Times.Once);
     }
