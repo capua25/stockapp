@@ -11,6 +11,7 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.*" />
+    <PackageReference Include="Velopack" Version="1.2.0" />
   </ItemGroup>
 
   <PropertyGroup>
