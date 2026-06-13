@@ -1,0 +1,31 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.Actualizaciones"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="50"
+             x:Class="StockApp.Presentation.Actualizaciones.Views.ActualizacionBannerView"
+             x:DataType="vm:ActualizacionBannerViewModel">
+
+    <!-- Banner discreto (severity: normal). No bloquea. -->
+    <Border Background="#E8F4FD" BorderBrush="#2196F3" BorderThickness="0,0,0,1"
+            Padding="12,6">
+        <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <TextBlock Text="Nueva versión disponible."
+                           VerticalAlignment="Center"
+                           FontWeight="Medium" />
+                <TextBlock Text="{Binding TextoMarkdown}"
+                           VerticalAlignment="Center"
+                           Opacity="0.7"
+                           TextTrimming="CharacterEllipsis"
+                           MaxWidth="500" />
+            </StackPanel>
+            <Button Grid.Column="1"
+                    Content="Actualizar al reiniciar"
+                    Command="{Binding ActualizarAlReiniciarCommand}"
+                    VerticalAlignment="Center" />
+        </Grid>
+    </Border>
+
+</UserControl>
