@@ -1,4 +1,5 @@
 using Velopack;
+using Velopack.Exceptions;
 using Velopack.Sources;
 
 namespace StockApp.Infrastructure.Actualizaciones;
@@ -7,6 +8,7 @@ namespace StockApp.Infrastructure.Actualizaciones;
 /// Adaptador delgado sobre <see cref="UpdateManager"/> real de Velopack.
 /// Esta clase es el único punto que toca Velopack directamente.
 /// No contiene lógica de negocio: solo traduce llamadas a la API de Velopack.
+/// Absorbe <see cref="NotInstalledException"/> (app corriendo fuera del instalador).
 /// NO es unit-testeable — validar manualmente en Bloque D (empaquetado).
 /// </summary>
 public sealed class VelopackGatewayReal : IVelopackGateway
@@ -22,8 +24,17 @@ public sealed class VelopackGatewayReal : IVelopackGateway
     public bool EstaInstalado => _manager.IsInstalled;
 
     /// <inheritdoc />
-    public Task<UpdateInfo?> BuscarUpdateAsync(CancellationToken ct = default)
-        => _manager.CheckForUpdatesAsync();
+    public async Task<UpdateInfo?> BuscarUpdateAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            return await _manager.CheckForUpdatesAsync();
+        }
+        catch (NotInstalledException)
+        {
+            return null;
+        }
+    }
 
     /// <inheritdoc />
     public Task DescargarUpdateAsync(UpdateInfo update, Action<int>? progreso = null, CancellationToken ct = default)

@@ -15,8 +15,8 @@ public interface IVelopackGateway
     bool EstaInstalado { get; }
 
     /// <summary>
-    /// Consulta la fuente encadenada. Devuelve <c>null</c> si no hay update disponible.
-    /// Lanza <see cref="Velopack.Exceptions.NotInstalledException"/> si la app no está instalada.
+    /// Consulta la fuente encadenada. Devuelve <c>null</c> si no hay update disponible
+    /// o si la app no está instalada (NotInstalledException se absorbe aquí, no se propaga).
     /// </summary>
     Task<UpdateInfo?> BuscarUpdateAsync(CancellationToken ct = default);
 
