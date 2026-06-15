@@ -7,7 +7,7 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <!-- Versionado: single source of truth. Editar SOLO acá antes de empaquetar.
          Los scripts build/pack-win.ps1 y build/pack-linux.sh leen este valor
-         y lo pasan a `vpk pack --packVersion`. -->
+         y lo pasan a `vpk pack (parametro packVersion)`. -->
     <Version>0.1.0</Version>
     <InformationalVersion>$(Version)</InformationalVersion>
   </PropertyGroup>
