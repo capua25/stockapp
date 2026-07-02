@@ -67,7 +67,7 @@ if (-not (Get-Command vpk -ErrorAction SilentlyContinue)) {
     Abort "vpk no encontrado. Instala con: dotnet tool install -g vpk"
 }
 
-$vpkVersion = vpk --version 2>&1 | Select-Object -First 1
+$vpkVersion = (Get-Command vpk).Source
 Write-Host "  vpk: $vpkVersion"
 
 if (-not (Test-Path $CsprojPath)) {
@@ -129,6 +129,7 @@ if ($LASTEXITCODE -ne 0) { Abort "vpk pack fallo (codigo $LASTEXITCODE)." }
 Write-Host ""
 Write-Host "Empaquetado completado exitosamente." -ForegroundColor Green
 Write-Host ""
+# NOTA: confirmar los nombres reales de los .nupkg al empaquetar (V1); vpk incluye el channel en el nombre (ej: StockApp-X.Y.Z-win-full.nupkg).
 Write-Host "Artefactos generados en: $OutputDir"
 Write-Host "  Setup.exe               -> instalador para el usuario final"
 Write-Host "  StockApp-$Version-full.nupkg -> paquete completo"
