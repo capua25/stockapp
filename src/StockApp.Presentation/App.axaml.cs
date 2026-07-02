@@ -6,6 +6,7 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using StockApp.Application.Actualizaciones;
@@ -45,6 +46,13 @@ public partial class App : AvaloniaApp
 
     public override void OnFrameworkInitializationCompleted()
     {
+        // Captura excepciones no manejadas del hilo de UI de Avalonia (ej. lanzadas desde
+        // handlers de eventos o bindings). Dispatcher.UIThread ya está inicializado en este
+        // punto del ciclo de vida. No marcamos e.Handled = true para no alterar el
+        // comportamiento de crash existente: solo agregamos visibilidad vía crash.log.
+        Dispatcher.UIThread.UnhandledException += (_, e) =>
+            Program.LogFatal("UIThread", e.Exception);
+
         _serviceProvider = ConfigurarServicios();
 
         // Inicializa la BD (backup pre-migración + migrate) y arranca el backup periódico.
@@ -64,6 +72,12 @@ public partial class App : AvaloniaApp
             // y en el thread pool, para no deadlockear el UI thread ni disparar PropertyChanged
             // desde un hilo no-UI con el binding ya activo.
             Task.Run(() => shell.InicializarAsync()).GetAwaiter().GetResult();
+
+            // Defensivo: por defecto ShutdownMode es OnLastWindowClose, lo que puede apagar
+            // la app si transitoriamente queda sin ventanas visibles (ej. un diálogo modal
+            // que se cierra antes de que la ventana principal termine de mostrarse). Fijamos
+            // explícitamente que el ciclo de vida dependa solo del cierre de MainWindow.
+            desktop.ShutdownMode = Avalonia.Controls.ShutdownMode.OnMainWindowClose;
 
             var mainWindow = new MainWindow
             {
