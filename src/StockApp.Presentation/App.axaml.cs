@@ -212,6 +212,10 @@ public partial class App : AvaloniaApp
         // IUpdateService: singleton — mantiene _updatePendiente entre BuscarAsync→DescargarAsync→Aplicar
         services.AddSingleton<IUpdateService, VelopackUpdateService>();
 
+        // PoliticaUxActualizacion: singleton — sin dependencias propias, decide AccionUx a partir
+        // de UpdateCheckResult. Requerida por CoordinadorActualizacion.
+        services.AddSingleton<PoliticaUxActualizacion>();
+
         // CoordinadorActualizacion: singleton — orquesta chequeo→política en background al arranque.
         // Los ViewModels de actualización (Banner/Modal/Bloqueo) se instancian directamente
         // con la AccionUx resultante; no se registran en DI porque toman AccionUx en su constructor.
