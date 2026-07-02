@@ -4,6 +4,7 @@ using AvaloniaApp = Avalonia.Application;
 using Avalonia.Controls.ApplicationLifetimes;
 using System;
 using System.IO;
+using System.Threading.Tasks;
 using Avalonia.Markup.Xaml;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -46,24 +47,28 @@ public partial class App : AvaloniaApp
     {
         _serviceProvider = ConfigurarServicios();
 
-        // Inicializa la BD (backup pre-migración + migrate) y arranca el backup periódico
+        // Inicializa la BD (backup pre-migración + migrate) y arranca el backup periódico.
+        // Se corre en el thread pool (Task.Run) para evitar el DEADLOCK que produce bloquear
+        // el UI thread de Avalonia sobre cadenas async que postean su continuación al contexto capturado.
         var initializer = _serviceProvider.GetRequiredService<DatabaseInitializer>();
-        initializer.InicializarAsync().GetAwaiter().GetResult();
+        Task.Run(() => initializer.InicializarAsync()).GetAwaiter().GetResult();
 
         var backupPeriodico = _serviceProvider.GetRequiredService<BackupPeriodicoService>();
-        backupPeriodico.IniciarAsync().GetAwaiter().GetResult();
+        Task.Run(() => backupPeriodico.IniciarAsync()).GetAwaiter().GetResult();
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var shell = _serviceProvider.GetRequiredService<ShellViewModel>();
 
+            // Inicializa el shell (decide login / primer arranque) ANTES de asignar el DataContext,
+            // y en el thread pool, para no deadlockear el UI thread ni disparar PropertyChanged
+            // desde un hilo no-UI con el binding ya activo.
+            Task.Run(() => shell.InicializarAsync()).GetAwaiter().GetResult();
+
             var mainWindow = new MainWindow
             {
                 DataContext = shell,
             };
-
-            // Inicializa el shell de forma asíncrona antes de mostrar la ventana.
-            shell.InicializarAsync().GetAwaiter().GetResult();
 
             desktop.MainWindow = mainWindow;
             desktop.Exit += (_, _) => _serviceProvider?.Dispose();
