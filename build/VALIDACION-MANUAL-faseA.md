@@ -88,7 +88,7 @@ Si `vpk` no aparece en el PATH después de `dotnet tool install -g vpk`, agregar
   ```
 - **Resultado esperado**:
   - El script termina sin errores.
-  - Se crea `releases/linux/` con: `StockApp-0.1.0-linux.AppImage`, `StockApp-0.1.0-full.nupkg`, `releases.linux.json`.
+  - Se crea `releases/linux/` con: `StockApp.AppImage`, `StockApp-0.1.0-linux-full.nupkg`, `releases.linux.json`, `assets.linux.json`, `RELEASES-linux`.
 - **Resultado**: [ ] PASA (smoke-test WSL)  [ ] FALLA  [ ] NO CORRIDO
   - Notas: ______________________________________
 
@@ -117,8 +117,8 @@ Si `vpk` no aparece en el PATH después de `dotnet tool install -g vpk`, agregar
 - **Estado en esta ronda**: 🔲 Pendiente (falta entorno — sin máquina Linux limpia)
 - **Precondición**: `AppImage` generado en V2. Máquina Linux sin .NET instalado.
 - **Pasos**:
-  1. Copiar el `.AppImage` a `$HOME` en la máquina destino.
-  2. `chmod +x StockApp-0.1.0-linux.AppImage`
+  1. Copiar el `StockApp.AppImage` a `$HOME` en la máquina destino.
+  2. `chmod +x StockApp.AppImage`
   3. Ejecutarlo.
 - **Resultado esperado**: La app arranca sin requerir .NET preinstalado en el sistema.
 - **Resultado**: [ ] PASA  [ ] FALLA  [ ] NO EJECUTADO (sin entorno)
@@ -277,6 +277,8 @@ Usar este flujo para V5, V6 y V7. Comandos concretos:
    - Subir **todo el contenido** de `releases/win/` (o `releases/linux/`, según el OS empaquetado), incluido `releases.<channel>.json` — es el archivo que la app descarga para detectar updates.
 
 5. **Importante**: conservar el contenido de `releases/` entre versiones (no borrar la carpeta entre corridas). Es lo que le permite a `vpk` generar el `-delta.nupkg` en vez de forzar siempre descarga full.
+
+**Nota sobre nombres de artefactos**: en Windows vpk OMITE el channel del nombre del .nupkg (ej: `StockApp-0.1.0-full.nupkg`) porque "win" es el channel por defecto. En Linux SÍ lo incluye (ej: `StockApp-0.1.0-linux-full.nupkg`) y el AppImage sale sin versión (`StockApp.AppImage`). Verificado en ambos OS.
 
 ---
 

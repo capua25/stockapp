@@ -129,7 +129,7 @@ if ($LASTEXITCODE -ne 0) { Abort "vpk pack fallo (codigo $LASTEXITCODE)." }
 Write-Host ""
 Write-Host "Empaquetado completado exitosamente." -ForegroundColor Green
 Write-Host ""
-# NOTA: confirmar los nombres reales de los .nupkg al empaquetar (V1); vpk incluye el channel en el nombre (ej: StockApp-X.Y.Z-win-full.nupkg).
+# NOTA (verificado V1): en Windows vpk NO incluye el channel en el nombre del .nupkg -> StockApp-X.Y.Z-full.nupkg. (En Linux si lo incluye: StockApp-X.Y.Z-linux-full.nupkg.)
 Write-Host "Artefactos generados en: $OutputDir"
 Write-Host "  Setup.exe               -> instalador para el usuario final"
 Write-Host "  StockApp-$Version-full.nupkg -> paquete completo"
