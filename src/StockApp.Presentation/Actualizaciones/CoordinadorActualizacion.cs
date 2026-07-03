@@ -77,4 +77,29 @@ public sealed class CoordinadorActualizacion
 
         AccionUxActual = _politica.Decidir(resultado, descargaPosible);
     }
+
+    /// <summary>
+    /// Ejecuta el flujo real de "aplicar actualización" disparado por el usuario desde
+    /// cualquiera de los overlays (banner, modal o bloqueo): descarga y luego aplica +
+    /// reinicia. Para <see cref="ModoUx.BloqueoCritico"/> la descarga ya pudo haber
+    /// ocurrido en <see cref="EvaluarEnArranqueAsync"/>; <see cref="IUpdateService"/>
+    /// mantiene su propio estado interno del update pendiente, por lo que volver a
+    /// invocar <c>DescargarAsync</c> aquí es seguro.
+    /// No debe tumbar la UI: cualquier error de descarga o aplicación se atrapa y se
+    /// reporta como <c>false</c> en vez de propagar la excepción.
+    /// </summary>
+    /// <returns><c>true</c> si el flujo se ejecutó sin errores; <c>false</c> si falló.</returns>
+    public async Task<bool> AplicarActualizacionAsync()
+    {
+        try
+        {
+            await _updateService.DescargarAsync();
+            _updateService.AplicarYReiniciar();
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 }

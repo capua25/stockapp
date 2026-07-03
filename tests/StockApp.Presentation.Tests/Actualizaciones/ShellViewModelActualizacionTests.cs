@@ -327,4 +327,117 @@ public class ShellViewModelActualizacionTests
         // Assert: el overlay debe ser el ActualizacionBannerViewModel esperado.
         Assert.IsType<ActualizacionBannerViewModel>(shell.OverlayActualizacion);
     }
+
+    // ── Wiring de los botones del overlay (aplicar / posponer) ─────────────────
+
+    [Fact]
+    public async Task Banner_ActualizarAlReiniciarSolicitado_DisparaDescargaYAplicarYReiniciar()
+    {
+        // Arrange: update service devuelve BannerDiscreto, y responde OK a descarga/aplicar.
+        var updateMock = new Mock<IUpdateService>();
+        updateMock
+            .Setup(s => s.BuscarAsync(default))
+            .ReturnsAsync(new UpdateCheckResult(
+                HayUpdate: true,
+                Version: "1.1.0",
+                Severity: UpdateSeverity.Normal,
+                NotasMarkdown: "nueva versión"));
+        updateMock
+            .Setup(s => s.DescargarAsync(null, default))
+            .Returns(Task.CompletedTask);
+        updateMock
+            .Setup(s => s.AplicarYReiniciar());
+
+        var coordinador = new CoordinadorActualizacion(
+            updateMock.Object,
+            new PoliticaUxActualizacion());
+
+        var primerArranqueMock = new Mock<IPrimerArranqueService>();
+        primerArranqueMock
+            .Setup(p => p.RequiereCrearAdminAsync())
+            .ReturnsAsync(false);
+
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
+        var navSvc = new NavigationService(t =>
+        {
+            if (t == typeof(ShellMainViewModel))
+                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>(), InfoAppStub);
+            throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
+        });
+
+        var shell = new ShellViewModel(
+            primerArranqueMock.Object,
+            Mock.Of<IAuthService>(),
+            Mock.Of<IUsuarioService>(),
+            navSvc,
+            coordinador,
+            new FakeUiDispatcher(),
+            InfoAppStub);
+
+        await shell.InicializarAsync();
+        await shell._tareaActualizacion;
+
+        var banner = Assert.IsType<ActualizacionBannerViewModel>(shell.OverlayActualizacion);
+
+        // Act: el usuario clickea "Actualizar ahora".
+        banner.ActualizarAlReiniciarCommand.Execute(null);
+        await shell._tareaAplicarActualizacion;
+
+        // Assert: se disparó el flujo real de aplicar (descarga + aplicar y reiniciar).
+        updateMock.Verify(s => s.DescargarAsync(null, default), Times.Once);
+        updateMock.Verify(s => s.AplicarYReiniciar(), Times.Once);
+    }
+
+    [Fact]
+    public async Task Banner_PosponerSolicitado_CierraElOverlay()
+    {
+        // Arrange: update service devuelve BannerDiscreto.
+        var updateMock = new Mock<IUpdateService>();
+        updateMock
+            .Setup(s => s.BuscarAsync(default))
+            .ReturnsAsync(new UpdateCheckResult(
+                HayUpdate: true,
+                Version: "1.1.0",
+                Severity: UpdateSeverity.Normal,
+                NotasMarkdown: "nueva versión"));
+
+        var coordinador = new CoordinadorActualizacion(
+            updateMock.Object,
+            new PoliticaUxActualizacion());
+
+        var primerArranqueMock = new Mock<IPrimerArranqueService>();
+        primerArranqueMock
+            .Setup(p => p.RequiereCrearAdminAsync())
+            .ReturnsAsync(false);
+
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
+        var navSvc = new NavigationService(t =>
+        {
+            if (t == typeof(ShellMainViewModel))
+                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>(), InfoAppStub);
+            throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
+        });
+
+        var shell = new ShellViewModel(
+            primerArranqueMock.Object,
+            Mock.Of<IAuthService>(),
+            Mock.Of<IUsuarioService>(),
+            navSvc,
+            coordinador,
+            new FakeUiDispatcher(),
+            InfoAppStub);
+
+        await shell.InicializarAsync();
+        await shell._tareaActualizacion;
+
+        var banner = Assert.IsType<ActualizacionBannerViewModel>(shell.OverlayActualizacion);
+
+        // Act: el usuario clickea "Más tarde".
+        banner.PosponerCommand.Execute(null);
+
+        // Assert: el overlay se cierra (queda null).
+        Assert.Null(shell.OverlayActualizacion);
+    }
 }

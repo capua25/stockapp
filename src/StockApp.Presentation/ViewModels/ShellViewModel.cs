@@ -100,7 +100,78 @@ public partial class ShellViewModel : ViewModelBase
         // un fake que ejecuta inline (sin depender de Dispatcher.UIThread, no inicializado ahí).
         var overlay = CoordinadorActualizacion.ResolverOverlayViewModel(
             _coordinadorActualizacion.AccionUxActual);
+
+        SuscribirEventosOverlay(overlay);
+
         _uiDispatcher.Post(() => OverlayActualizacion = overlay);
+    }
+
+    /// <summary>
+    /// Conecta los eventos de "aplicar actualización" y "posponer" del overlay resuelto al
+    /// flujo real: aplicar dispara <see cref="CoordinadorActualizacion.AplicarActualizacionAsync"/>
+    /// (descarga + reinicio); posponer cierra el overlay. Cada VM de overlay expone eventos con
+    /// nombres propios (banner/modal/bloqueo), por eso se resuelve por tipo concreto.
+    /// </summary>
+    private void SuscribirEventosOverlay(ViewModelBase? overlay)
+    {
+        switch (overlay)
+        {
+            case ActualizacionBannerViewModel banner:
+                banner.ActualizarAlReiniciarSolicitado += () => DispararAplicarActualizacion(banner);
+                banner.PosponerSolicitado += CerrarOverlayActualizacion;
+                break;
+
+            case ActualizacionModalViewModel modal:
+                modal.ActualizarAhoraSolicitado += () => DispararAplicarActualizacion(null);
+                modal.PosponerSolicitado += CerrarOverlayActualizacion;
+                break;
+
+            case ActualizacionBloqueoViewModel bloqueo:
+                bloqueo.AplicarYReiniciarSolicitado += () => DispararAplicarActualizacion(null);
+                break;
+        }
+    }
+
+    /// <summary>Cierra el overlay de actualización (usado por "Más tarde"/posponer).</summary>
+    private void CerrarOverlayActualizacion()
+        => _uiDispatcher.Post(() => OverlayActualizacion = null);
+
+    /// <summary>
+    /// Tarea del background disparada por el último "aplicar actualización" (banner/modal/
+    /// bloqueo). Expuesta como internal para que los tests puedan awaitarla de forma
+    /// determinista, igual que <see cref="_tareaActualizacion"/>.
+    /// </summary>
+    internal Task _tareaAplicarActualizacion = Task.CompletedTask;
+
+    /// <summary>
+    /// Dispara el flujo real de aplicar la actualización (descarga + reinicio) en background,
+    /// sin bloquear el UI thread. Si <paramref name="banner"/> no es null (overlay banner),
+    /// marca <see cref="ActualizacionBannerViewModel.OperacionEnCurso"/> para deshabilitar el
+    /// botón mientras dura la operación, y lo despeja si el flujo falla (si tiene éxito, la app
+    /// se reinicia y el flag deja de importar).
+    /// </summary>
+    private void DispararAplicarActualizacion(ActualizacionBannerViewModel? banner)
+    {
+        if (banner is not null)
+            _uiDispatcher.Post(() => banner.OperacionEnCurso = true);
+
+        _tareaAplicarActualizacion = Task.Run(async () =>
+        {
+            bool exito = false;
+            try
+            {
+                exito = await _coordinadorActualizacion.AplicarActualizacionAsync();
+            }
+            catch (Exception)
+            {
+                // Silencio: no interrumpir la UI si aplicar la actualización falla.
+                // AplicarActualizacionAsync ya atrapa sus propios errores; este catch es
+                // defensivo por si algo inesperado escapa del flujo.
+            }
+
+            if (banner is not null && !exito)
+                _uiDispatcher.Post(() => banner.OperacionEnCurso = false);
+        });
     }
 
     public void MostrarPrimerArranque()

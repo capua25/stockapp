@@ -27,6 +27,7 @@
                         BorderThickness="0" />
                 <Button Content="Actualizar ahora"
                         Command="{Binding ActualizarAlReiniciarCommand}"
+                        IsEnabled="{Binding !OperacionEnCurso}"
                         Background="#2196F3"
                         Foreground="White" />
             </StackPanel>

@@ -22,6 +22,14 @@ public partial class ActualizacionBannerViewModel : ViewModelBase
     [ObservableProperty]
     private string? _version;
 
+    /// <summary>
+    /// True mientras se está aplicando la actualización (descarga + reinicio) tras el click
+    /// en "Actualizar ahora". La View deshabilita el botón mientras tanto para evitar doble click.
+    /// La asigna <see cref="ViewModels.ShellViewModel"/>, que orquesta el flujo real.
+    /// </summary>
+    [ObservableProperty]
+    private bool _operacionEnCurso;
+
     /// <summary>Título de la franja, ej. "Nueva versión v0.1.2 disponible".</summary>
     public string Titulo =>
         string.IsNullOrWhiteSpace(Version)
