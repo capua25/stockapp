@@ -44,6 +44,7 @@
             <!-- Botón -->
             <Button Content="Entrar"
                     Command="{Binding EntrarCommand}"
+                    IsDefault="True"
                     HorizontalAlignment="Stretch"
                     HorizontalContentAlignment="Center" />
 

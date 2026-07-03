@@ -54,6 +54,7 @@
 
                         <Button Content="Crear Admin"
                                 Command="{Binding CrearAdminCommand}"
+                                IsDefault="True"
                                 HorizontalAlignment="Stretch"
                                 HorizontalContentAlignment="Center" />
 
@@ -100,6 +101,7 @@
 
                         <Button Content="Crear 2do Admin"
                                 Command="{Binding CrearSegundoAdminCommand}"
+                                IsDefault="True"
                                 HorizontalAlignment="Stretch"
                                 HorizontalContentAlignment="Center" />
 
