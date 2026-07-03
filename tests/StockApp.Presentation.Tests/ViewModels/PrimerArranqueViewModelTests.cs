@@ -5,6 +5,7 @@ using StockApp.Application.Interfaces;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Actualizaciones;
 using StockApp.Presentation.Navigation;
+using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels;
 using StockApp.Presentation.ViewModels.Catalogo;
 using Xunit;
@@ -14,6 +15,15 @@ namespace StockApp.Presentation.Tests.ViewModels;
 public class PrimerArranqueViewModelTests
 {
     // ── helpers ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Fake de IUiDispatcher: ejecuta inline (sin depender de Dispatcher.UIThread real,
+    /// no inicializado en tests unitarios sin Application de Avalonia).
+    /// </summary>
+    private sealed class FakeUiDispatcher : IUiDispatcher
+    {
+        public void Post(Action accion) => accion();
+    }
 
     private static ShellViewModel CrearShellFake()
     {
@@ -36,7 +46,8 @@ public class PrimerArranqueViewModelTests
             Mock.Of<IAuthService>(),
             Mock.Of<IUsuarioService>(),
             navSvc,
-            coordinador);
+            coordinador,
+            new FakeUiDispatcher());
     }
 
     private record Contexto(

@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using StockApp.Application.Auth;
 using StockApp.Presentation.Actualizaciones;
 using StockApp.Presentation.Navigation;
+using StockApp.Presentation.Services;
 
 namespace StockApp.Presentation.ViewModels;
 
@@ -18,6 +19,7 @@ public partial class ShellViewModel : ViewModelBase
     private readonly IUsuarioService         _usuarioService;
     private readonly INavigationService      _navigation;
     private readonly CoordinadorActualizacion _coordinadorActualizacion;
+    private readonly IUiDispatcher           _uiDispatcher;
 
     [ObservableProperty]
     private ViewModelBase? _currentViewModel;
@@ -35,13 +37,15 @@ public partial class ShellViewModel : ViewModelBase
         IAuthService            authService,
         IUsuarioService         usuarioService,
         INavigationService      navigation,
-        CoordinadorActualizacion coordinadorActualizacion)
+        CoordinadorActualizacion coordinadorActualizacion,
+        IUiDispatcher           uiDispatcher)
     {
         _primerArranqueService    = primerArranqueService;
         _authService              = authService;
         _usuarioService           = usuarioService;
         _navigation               = navigation;
         _coordinadorActualizacion = coordinadorActualizacion;
+        _uiDispatcher             = uiDispatcher;
     }
 
     /// <summary>
@@ -86,11 +90,14 @@ public partial class ShellViewModel : ViewModelBase
             }
         });
 
-        // Asignamos el overlay desde el thread del pool.
-        // Avalonia hace marshal automático del PropertyChanged al UI thread cuando hay binding
-        // activo. En tests sin app, la asignación directa es igualmente segura.
-        OverlayActualizacion = CoordinadorActualizacion.ResolverOverlayViewModel(
+        // Resolvemos el overlay (todavía en el thread del pool) y marshaleamos la asignación
+        // al UI thread vía IUiDispatcher: OverlayActualizacion tiene binding activo en
+        // MainWindow.axaml, y asignarla desde un hilo del thread-pool dispara PropertyChanged
+        // fuera del UI thread, lo que puede crashear. En tests, IUiDispatcher se reemplaza por
+        // un fake que ejecuta inline (sin depender de Dispatcher.UIThread, no inicializado ahí).
+        var overlay = CoordinadorActualizacion.ResolverOverlayViewModel(
             _coordinadorActualizacion.AccionUxActual);
+        _uiDispatcher.Post(() => OverlayActualizacion = overlay);
     }
 
     public void MostrarPrimerArranque()

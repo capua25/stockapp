@@ -161,6 +161,10 @@ public partial class App : AvaloniaApp
         // ── Inc 5: confirmación de stock insuficiente ─────────────────────────
         services.AddSingleton<IConfirmacionService, ConfirmacionService>();
 
+        // ── Marshaling al UI thread para asignaciones desde background (ej: overlay
+        // de actualización en ShellViewModel) ─────────────────────────────────────
+        services.AddSingleton<IUiDispatcher, AvaloniaUiDispatcher>();
+
         // ── Inc 6: reportes y auditoría — repositorios y servicios ────────────
 
         // Repositorios: transient — dependen de AppDbContext (Scoped), evita captive dependency.
