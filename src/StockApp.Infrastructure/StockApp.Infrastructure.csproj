@@ -11,6 +11,11 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.*" />
+    <!-- Override transitivo: SQLitePCLRaw 2.1.11 (via EFCore.Sqlite) tiene la vulnerabilidad
+         ALTA GHSA-2m69-gcr7-jv3q (CVE-2025-6965). 3.0.3 es la primera versión publicada
+         fuera del rango afectado (<= 2.1.11). Ver stockapp/deuda-seguridad-sqlitepclraw-nu1903. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.3" />
+    <PackageReference Include="SQLitePCLRaw.core" Version="3.0.3" />
     <PackageReference Include="Velopack" Version="1.2.0" />
   </ItemGroup>
 
