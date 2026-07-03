@@ -113,5 +113,15 @@ public partial class ShellViewModel : ViewModelBase
         // para manejar la región de contenido del catálogo.
         _navigation.Navegar<ShellMainViewModel>();
         CurrentViewModel = _navigation.Actual;
+
+        // Navega a la pantalla de bienvenida como contenido inicial de la región central.
+        // Orden crítico: Navegar<ShellMainViewModel>() dispara el evento Cambiado del
+        // INavigationService, pero el handler en ShellMainViewModel descarta la asignación
+        // porque ReferenceEquals(Actual, this) es true en ese momento (Actual ES el shell) —
+        // evita que el shell se contenga a sí mismo. Recién después de fijar CurrentViewModel
+        // = Actual (el shell ya es el contenido externo) navegamos a InicioViewModel: ahora
+        // Actual pasa a ser InicioViewModel, el guard ya no aplica, y el handler del shell
+        // asigna CurrentContent = InicioViewModel. Así la región central deja de quedar vacía.
+        _navigation.Navegar<InicioViewModel>();
     }
 }

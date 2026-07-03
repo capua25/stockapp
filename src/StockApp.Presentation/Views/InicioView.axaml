@@ -1,0 +1,144 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
+             x:Class="StockApp.Presentation.Views.InicioView"
+             x:DataType="vm:InicioViewModel">
+
+    <ScrollViewer>
+        <StackPanel Margin="24" Spacing="20">
+
+            <!-- Encabezado -->
+            <StackPanel Spacing="4">
+                <TextBlock Text="{Binding Saludo}"
+                           FontSize="28"
+                           FontWeight="Bold" />
+
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <TextBlock Text="Sesión iniciada como"
+                               FontSize="14"
+                               Opacity="0.6" />
+                    <TextBlock Text="{Binding RolTexto}"
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               Opacity="0.6" />
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Accesos rápidos -->
+            <StackPanel Spacing="12">
+
+                <TextBlock Text="Accesos rápidos"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           Opacity="0.7" />
+
+                <WrapPanel>
+
+                    <Button Command="{Binding IrAProductosCommand}"
+                            Width="200"
+                            Height="90"
+                            Background="#F5F5F5"
+                            BorderBrush="#DDDDDD"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Margin="0,0,12,12"
+                            Padding="16">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Productos"
+                                       FontWeight="SemiBold" />
+                            <TextBlock Text="Ver y administrar el catálogo"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Opacity="0.6" />
+                        </StackPanel>
+                    </Button>
+
+                    <Button Command="{Binding IrARegistrarMovimientoCommand}"
+                            Width="200"
+                            Height="90"
+                            Background="#F5F5F5"
+                            BorderBrush="#DDDDDD"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Margin="0,0,12,12"
+                            Padding="16">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Registrar movimiento"
+                                       FontWeight="SemiBold" />
+                            <TextBlock Text="Cargar entradas y salidas de stock"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Opacity="0.6" />
+                        </StackPanel>
+                    </Button>
+
+                    <Button Command="{Binding IrAHistorialMovimientosCommand}"
+                            Width="200"
+                            Height="90"
+                            Background="#F5F5F5"
+                            BorderBrush="#DDDDDD"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Margin="0,0,12,12"
+                            Padding="16">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Historial de movimientos"
+                                       FontWeight="SemiBold" />
+                            <TextBlock Text="Consultar movimientos registrados"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Opacity="0.6" />
+                        </StackPanel>
+                    </Button>
+
+                    <Button Command="{Binding IrAValorizacionCommand}"
+                            IsVisible="{Binding EsAdmin}"
+                            Width="200"
+                            Height="90"
+                            Background="#F5F5F5"
+                            BorderBrush="#DDDDDD"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Margin="0,0,12,12"
+                            Padding="16">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Valorización de inventario"
+                                       FontWeight="SemiBold" />
+                            <TextBlock Text="Ver el valor total del stock"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Opacity="0.6" />
+                        </StackPanel>
+                    </Button>
+
+                    <Button Command="{Binding IrAAuditoriaCommand}"
+                            IsVisible="{Binding EsAdmin}"
+                            Width="200"
+                            Height="90"
+                            Background="#F5F5F5"
+                            BorderBrush="#DDDDDD"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Margin="0,0,12,12"
+                            Padding="16">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Log de auditoría"
+                                       FontWeight="SemiBold" />
+                            <TextBlock Text="Revisar la actividad del sistema"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Opacity="0.6" />
+                        </StackPanel>
+                    </Button>
+
+                </WrapPanel>
+
+            </StackPanel>
+
+        </StackPanel>
+    </ScrollViewer>
+
+</UserControl>
