@@ -1,8 +1,8 @@
 severity: normal
 
-# StockApp 0.1.4
+# StockApp 0.1.5
 
-- Actualizador rediseñado: aviso más claro y botón que aplica la actualización correctamente.
+- Actualizador con aviso más claro y botón que aplica la actualización.
 - La versión de la app se muestra en pantalla.
 - Correcciones de estabilidad y mejoras menores.
 
