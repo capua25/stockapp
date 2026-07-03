@@ -34,7 +34,7 @@ public class LoginViewModelTests
         var navSvc = new NavigationService(t =>
         {
             if (t == typeof(ShellMainViewModel))
-                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>());
+                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"));
             if (t == typeof(InicioViewModel))
                 return new InicioViewModel(sessionMock.Object, Mock.Of<INavigationService>());
             throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
@@ -50,7 +50,8 @@ public class LoginViewModelTests
             Mock.Of<IUsuarioService>(),
             navSvc,
             coordinador,
-            new FakeUiDispatcher());
+            new FakeUiDispatcher(),
+            Mock.Of<IInfoApp>(x => x.Version == "0.0.0"));
     }
 
     private static (LoginViewModel vm, Mock<IAuthService> authMock, ShellViewModel shell)
@@ -62,7 +63,7 @@ public class LoginViewModelTests
             .ReturnsAsync(resultado);
 
         var shell = CrearShellFake();
-        var vm    = new LoginViewModel(authMock.Object, shell);
+        var vm    = new LoginViewModel(authMock.Object, shell, Mock.Of<IInfoApp>(x => x.Version == "0.0.0"));
         return (vm, authMock, shell);
     }
 
@@ -144,6 +145,20 @@ public class LoginViewModelTests
         Assert.Equal("Usuario o contraseña incorrectos.", vm.MensajeError);
     }
 
+    // ── tests: versión de la app ─────────────────────────────────────────────
+
+    [Fact]
+    public void VersionTexto_ExponeVersionDeIInfoApp_ConPrefijoV()
+    {
+        var authMock = new Mock<IAuthService>();
+        var shell    = CrearShellFake();
+        var infoApp  = Mock.Of<IInfoApp>(x => x.Version == "9.9.9");
+
+        var vm = new LoginViewModel(authMock.Object, shell, infoApp);
+
+        Assert.Equal("v9.9.9", vm.VersionTexto);
+    }
+
     // ── tests: OperacionEnCurso desactiva el botón ───────────────────────────
 
     [Fact]
@@ -156,7 +171,7 @@ public class LoginViewModelTests
             .Returns(tcs.Task);
 
         var shell = CrearShellFake();
-        var vm    = new LoginViewModel(authMock.Object, shell);
+        var vm    = new LoginViewModel(authMock.Object, shell, Mock.Of<IInfoApp>(x => x.Version == "0.0.0"));
         vm.NombreUsuario = "admin";
         vm.Contrasena    = "secreto";
 

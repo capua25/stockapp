@@ -16,6 +16,8 @@ namespace StockApp.Presentation.Tests.Actualizaciones;
 
 public class ShellViewModelActualizacionTests
 {
+    private static readonly IInfoApp InfoAppStub = Mock.Of<IInfoApp>(x => x.Version == "0.0.0");
+
     /// <summary>
     /// Fake de IUiDispatcher para tests: por defecto ejecuta inline (equivalente al
     /// comportamiento previo sin marshaling), o encola las acciones para poder verificar
@@ -63,7 +65,7 @@ public class ShellViewModelActualizacionTests
         var navSvc = new NavigationService(t =>
         {
             if (t == typeof(ShellMainViewModel))
-                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>());
+                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>(), InfoAppStub);
             throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
         });
 
@@ -73,7 +75,8 @@ public class ShellViewModelActualizacionTests
             Mock.Of<IUsuarioService>(),
             navSvc,
             coordinador,
-            new FakeUiDispatcher());
+            new FakeUiDispatcher(),
+            InfoAppStub);
 
         // Act
         await shell.InicializarAsync();
@@ -108,7 +111,7 @@ public class ShellViewModelActualizacionTests
         var navSvc = new NavigationService(t =>
         {
             if (t == typeof(ShellMainViewModel))
-                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>());
+                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>(), InfoAppStub);
             throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
         });
 
@@ -118,7 +121,8 @@ public class ShellViewModelActualizacionTests
             Mock.Of<IUsuarioService>(),
             navSvc,
             coordinador,
-            new FakeUiDispatcher());
+            new FakeUiDispatcher(),
+            InfoAppStub);
 
         // Act + Assert: no lanza excepción
         var exception = await Record.ExceptionAsync(() => shell.InicializarAsync());
@@ -152,7 +156,7 @@ public class ShellViewModelActualizacionTests
         var navSvc = new NavigationService(t =>
         {
             if (t == typeof(ShellMainViewModel))
-                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>());
+                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>(), InfoAppStub);
             throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
         });
 
@@ -162,7 +166,8 @@ public class ShellViewModelActualizacionTests
             Mock.Of<IUsuarioService>(),
             navSvc,
             coordinador,
-            new FakeUiDispatcher());
+            new FakeUiDispatcher(),
+            InfoAppStub);
 
         // Act
         await shell.InicializarAsync();
@@ -197,7 +202,7 @@ public class ShellViewModelActualizacionTests
         var navSvc = new NavigationService(t =>
         {
             if (t == typeof(ShellMainViewModel))
-                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>());
+                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>(), InfoAppStub);
             throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
         });
 
@@ -207,7 +212,8 @@ public class ShellViewModelActualizacionTests
             Mock.Of<IUsuarioService>(),
             navSvc,
             coordinador,
-            new FakeUiDispatcher());
+            new FakeUiDispatcher(),
+            InfoAppStub);
 
         // Act
         await shell.InicializarAsync();
@@ -244,7 +250,7 @@ public class ShellViewModelActualizacionTests
         var navSvc = new NavigationService(t =>
         {
             if (t == typeof(ShellMainViewModel))
-                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>());
+                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>(), InfoAppStub);
             throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
         });
 
@@ -256,7 +262,8 @@ public class ShellViewModelActualizacionTests
             Mock.Of<IUsuarioService>(),
             navSvc,
             coordinador,
-            fakeDispatcher);
+            fakeDispatcher,
+            InfoAppStub);
 
         // Act
         await shell.InicializarAsync();
@@ -300,7 +307,7 @@ public class ShellViewModelActualizacionTests
         var navSvc = new NavigationService(t =>
         {
             if (t == typeof(ShellMainViewModel))
-                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>());
+                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>(), InfoAppStub);
             throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
         });
 
@@ -310,7 +317,8 @@ public class ShellViewModelActualizacionTests
             Mock.Of<IUsuarioService>(),
             navSvc,
             coordinador,
-            new FakeUiDispatcher()); // EjecutarInline = true por defecto
+            new FakeUiDispatcher(),
+            InfoAppStub); // EjecutarInline = true por defecto
 
         // Act
         await shell.InicializarAsync();

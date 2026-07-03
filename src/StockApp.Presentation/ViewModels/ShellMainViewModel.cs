@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
+using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Catalogo;
 using StockApp.Presentation.ViewModels.Movimientos;
 using StockApp.Presentation.ViewModels.Reportes;
@@ -18,8 +19,14 @@ public partial class ShellMainViewModel : ViewModelBase
 {
     private readonly ICurrentSession    _session;
     private readonly INavigationService _navigation;
+    private readonly IInfoApp           _infoApp;
 
     public bool EsAdmin => _session.RolActual == RolUsuario.Admin;
+
+    /// <summary>
+    /// Número de versión de la app para mostrar al pie del menú lateral (ej. "v0.1.1").
+    /// </summary>
+    public string VersionTexto => $"v{_infoApp.Version}";
 
     /// <summary>
     /// ViewModel activo en la región de contenido. Se actualiza cuando el INavigationService
@@ -28,10 +35,11 @@ public partial class ShellMainViewModel : ViewModelBase
     [ObservableProperty]
     private ViewModelBase? _currentContent;
 
-    public ShellMainViewModel(ICurrentSession session, INavigationService navigation)
+    public ShellMainViewModel(ICurrentSession session, INavigationService navigation, IInfoApp infoApp)
     {
         _session    = session;
         _navigation = navigation;
+        _infoApp    = infoApp;
 
         // Suscribirse al evento del servicio para actualizar la región de contenido
         _navigation.Cambiado += () =>

@@ -15,7 +15,17 @@
                 BorderBrush="#DDDDDD"
                 BorderThickness="0,0,1,0"
                 Padding="8">
-            <StackPanel Spacing="4">
+            <DockPanel>
+
+                <!-- Versión de la app: discreta, fija al pie del menú lateral -->
+                <TextBlock Text="{Binding VersionTexto}"
+                           DockPanel.Dock="Bottom"
+                           FontSize="11"
+                           Opacity="0.5"
+                           HorizontalAlignment="Center"
+                           Margin="0,8,0,4" />
+
+                <StackPanel Spacing="4">
 
                 <TextBlock Text="StockApp"
                            FontSize="18"
@@ -112,7 +122,8 @@
                         Background="Transparent"
                         IsVisible="{Binding EsAdmin}" />
 
-            </StackPanel>
+                </StackPanel>
+            </DockPanel>
         </Border>
 
         <!-- Región de contenido: manejada por INavigationService + ViewLocator -->

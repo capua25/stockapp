@@ -2,6 +2,7 @@ using Moq;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
+using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels;
 using StockApp.Presentation.ViewModels.Catalogo;
 using StockApp.Presentation.ViewModels.Movimientos;
@@ -21,7 +22,7 @@ public class ShellMainViewModelTests
 
         var navMock = new Mock<INavigationService>();
 
-        var vm = new ShellMainViewModel(sessionMock.Object, navMock.Object);
+        var vm = new ShellMainViewModel(sessionMock.Object, navMock.Object, Mock.Of<IInfoApp>(x => x.Version == "0.0.0"));
         return (vm, sessionMock, navMock);
     }
 
@@ -41,6 +42,20 @@ public class ShellMainViewModelTests
         var (vm, _, _) = Crear(RolUsuario.Operador);
 
         Assert.False(vm.EsAdmin);
+    }
+
+    // ── tests: versión de la app ─────────────────────────────────────────────
+
+    [Fact]
+    public void VersionTexto_ExponeVersionDeIInfoApp_ConPrefijoV()
+    {
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
+        var infoApp = Mock.Of<IInfoApp>(x => x.Version == "9.9.9");
+
+        var vm = new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>(), infoApp);
+
+        Assert.Equal("v9.9.9", vm.VersionTexto);
     }
 
     [Fact]

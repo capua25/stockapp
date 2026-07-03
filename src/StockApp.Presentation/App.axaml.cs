@@ -165,6 +165,9 @@ public partial class App : AvaloniaApp
         // de actualización en ShellViewModel) ─────────────────────────────────────
         services.AddSingleton<IUiDispatcher, AvaloniaUiDispatcher>();
 
+        // ── Info de la app (versión mostrada en login y shell) ────────────────
+        services.AddSingleton<IInfoApp, InfoApp>();
+
         // ── Inc 6: reportes y auditoría — repositorios y servicios ────────────
 
         // Repositorios: transient — dependen de AppDbContext (Scoped), evita captive dependency.

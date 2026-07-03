@@ -48,6 +48,13 @@
                     HorizontalAlignment="Stretch"
                     HorizontalContentAlignment="Center" />
 
+            <!-- Versión de la app: discreta, al pie del formulario -->
+            <TextBlock Text="{Binding VersionTexto}"
+                       FontSize="11"
+                       Opacity="0.5"
+                       HorizontalAlignment="Center"
+                       Margin="0,16,0,0" />
+
         </StackPanel>
     </Border>
 

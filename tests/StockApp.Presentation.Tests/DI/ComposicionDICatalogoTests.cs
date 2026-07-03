@@ -8,6 +8,7 @@ using StockApp.Infrastructure.Persistence;
 using StockApp.Infrastructure.Repositories;
 using StockApp.Infrastructure.Services;
 using StockApp.Presentation.Navigation;
+using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels;
 using StockApp.Presentation.ViewModels.Catalogo;
 using Xunit;
@@ -52,6 +53,9 @@ public class ComposicionDICatalogoTests
         // ── Navegación ────────────────────────────────────────────────────────
         services.AddSingleton<INavigationService>(sp =>
             new NavigationService(t => sp.GetRequiredService(t)));
+
+        // ── Info de la app (versión mostrada en login y shell) ────────────────
+        services.AddSingleton<IInfoApp, InfoApp>();
 
         // ── ViewModels de catálogo (transient, igual que App.axaml.cs) ────────
         services.AddTransient<ShellMainViewModel>();

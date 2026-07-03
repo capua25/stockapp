@@ -2,6 +2,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Auth;
+using StockApp.Presentation.Services;
 
 namespace StockApp.Presentation.ViewModels;
 
@@ -14,6 +15,7 @@ public partial class LoginViewModel : ViewModelBase
 {
     private readonly IAuthService   _authService;
     private readonly ShellViewModel _shell;
+    private readonly IInfoApp       _infoApp;
 
     // ── propiedades observables ──────────────────────────────────────────────
 
@@ -34,11 +36,17 @@ public partial class LoginViewModel : ViewModelBase
 
     // ── constructor ──────────────────────────────────────────────────────────
 
-    public LoginViewModel(IAuthService authService, ShellViewModel shell)
+    public LoginViewModel(IAuthService authService, ShellViewModel shell, IInfoApp infoApp)
     {
         _authService = authService;
         _shell       = shell;
+        _infoApp     = infoApp;
     }
+
+    /// <summary>
+    /// Número de versión de la app para mostrar al pie de la pantalla de login (ej. "v0.1.1").
+    /// </summary>
+    public string VersionTexto => $"v{_infoApp.Version}";
 
     // ── comando ──────────────────────────────────────────────────────────────
 

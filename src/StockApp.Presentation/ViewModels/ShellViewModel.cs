@@ -20,6 +20,7 @@ public partial class ShellViewModel : ViewModelBase
     private readonly INavigationService      _navigation;
     private readonly CoordinadorActualizacion _coordinadorActualizacion;
     private readonly IUiDispatcher           _uiDispatcher;
+    private readonly IInfoApp                _infoApp;
 
     [ObservableProperty]
     private ViewModelBase? _currentViewModel;
@@ -38,7 +39,8 @@ public partial class ShellViewModel : ViewModelBase
         IUsuarioService         usuarioService,
         INavigationService      navigation,
         CoordinadorActualizacion coordinadorActualizacion,
-        IUiDispatcher           uiDispatcher)
+        IUiDispatcher           uiDispatcher,
+        IInfoApp                infoApp)
     {
         _primerArranqueService    = primerArranqueService;
         _authService              = authService;
@@ -46,6 +48,7 @@ public partial class ShellViewModel : ViewModelBase
         _navigation               = navigation;
         _coordinadorActualizacion = coordinadorActualizacion;
         _uiDispatcher             = uiDispatcher;
+        _infoApp                  = infoApp;
     }
 
     /// <summary>
@@ -111,7 +114,7 @@ public partial class ShellViewModel : ViewModelBase
 
     public void MostrarLogin()
     {
-        CurrentViewModel = new LoginViewModel(_authService, this);
+        CurrentViewModel = new LoginViewModel(_authService, this, _infoApp);
     }
 
     public void MostrarContenidoPrincipal()

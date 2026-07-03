@@ -2,6 +2,7 @@ using Moq;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
+using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels;
 using StockApp.Presentation.ViewModels.Reportes;
 using Xunit;
@@ -23,7 +24,7 @@ public class ShellMainViewModelReportesTests
 
         var navMock = new Mock<INavigationService>();
 
-        var vm = new ShellMainViewModel(sessionMock.Object, navMock.Object);
+        var vm = new ShellMainViewModel(sessionMock.Object, navMock.Object, Mock.Of<IInfoApp>(x => x.Version == "0.0.0"));
         return (vm, sessionMock, navMock);
     }
 

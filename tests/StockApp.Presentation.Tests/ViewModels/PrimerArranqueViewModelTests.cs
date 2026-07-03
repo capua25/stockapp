@@ -14,6 +14,8 @@ namespace StockApp.Presentation.Tests.ViewModels;
 
 public class PrimerArranqueViewModelTests
 {
+    private static readonly IInfoApp InfoAppStub = Mock.Of<IInfoApp>(x => x.Version == "0.0.0");
+
     // ── helpers ──────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -33,7 +35,7 @@ public class PrimerArranqueViewModelTests
         var navSvc = new NavigationService(t =>
         {
             if (t == typeof(ShellMainViewModel))
-                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>());
+                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>(), InfoAppStub);
             throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
         });
 
@@ -47,7 +49,8 @@ public class PrimerArranqueViewModelTests
             Mock.Of<IUsuarioService>(),
             navSvc,
             coordinador,
-            new FakeUiDispatcher());
+            new FakeUiDispatcher(),
+            InfoAppStub);
     }
 
     private record Contexto(
