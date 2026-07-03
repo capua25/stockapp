@@ -53,8 +53,6 @@ public partial class LoginViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(PuedeEntrar))]
     private async Task EntrarAsync()
     {
-        Program.LogTrace("Login", "EntrarAsync inicio");
-
         OperacionEnCurso = true;
         MensajeError     = null;
 
@@ -62,13 +60,9 @@ public partial class LoginViewModel : ViewModelBase
         {
             var resultado = await _authService.LoginAsync(NombreUsuario, Contrasena);
 
-            Program.LogTrace("Login", $"LoginAsync Exitoso={resultado.Exitoso}");
-
             if (resultado.Exitoso)
             {
-                Program.LogTrace("Login", "antes de MostrarContenidoPrincipal");
                 _shell.MostrarContenidoPrincipal();
-                Program.LogTrace("Login", "despues de MostrarContenidoPrincipal");
             }
             else
             {

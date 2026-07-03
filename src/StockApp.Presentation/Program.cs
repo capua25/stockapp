@@ -82,32 +82,4 @@ sealed class Program
         }
     }
 
-    /// <summary>
-    /// Escribe una entrada de traza a %LocalAppData%\StockApp\logs\trace.log.
-    /// Instrumentación DIAGNÓSTICA TEMPORAL para cazar el shutdown ordenado (exit 0
-    /// sin excepción) que ocurre tras un login exitoso. Nunca debe tirar: si falla
-    /// la escritura, se traga la excepción silenciosamente.
-    /// </summary>
-    internal static void LogTrace(string origen, string mensaje)
-    {
-        try
-        {
-            var logsDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "StockApp",
-                "logs");
-
-            Directory.CreateDirectory(logsDir);
-
-            var logPath = Path.Combine(logsDir, "trace.log");
-
-            var entrada = $"[{DateTime.Now:yyyy-MM-ddTHH:mm:ss.fffzzz}] {origen}: {mensaje}{Environment.NewLine}";
-
-            File.AppendAllText(logPath, entrada);
-        }
-        catch
-        {
-            // El logger nunca debe tirar: si falla la escritura, no hay nada más que hacer acá.
-        }
-    }
 }
