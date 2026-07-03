@@ -109,9 +109,16 @@ public partial class ShellViewModel : ViewModelBase
 
     public void MostrarContenidoPrincipal()
     {
+        Program.LogTrace("Shell", "MostrarContenidoPrincipal inicio");
+
         // Navega al shell principal con menú lateral, que a su vez usa INavigationService
         // para manejar la región de contenido del catálogo.
         _navigation.Navegar<ShellMainViewModel>();
+
+        Program.LogTrace("Shell", $"Navegado. Actual={_navigation.Actual?.GetType().Name}");
+
         CurrentViewModel = _navigation.Actual;
+
+        Program.LogTrace("Shell", "CurrentViewModel asignado");
     }
 }

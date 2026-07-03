@@ -85,7 +85,20 @@ public partial class App : AvaloniaApp
             };
 
             desktop.MainWindow = mainWindow;
-            desktop.Exit += (_, _) => _serviceProvider?.Dispose();
+
+            Program.LogTrace("Arranque", $"MainWindow asignada. ShutdownMode={desktop.ShutdownMode}");
+
+            desktop.ShutdownRequested += (_, e) =>
+                Program.LogTrace("ShutdownRequested", $"Cancel={e.Cancel}\n{Environment.StackTrace}");
+
+            mainWindow.Closing += (_, e) =>
+                Program.LogTrace("MainWindow.Closing", Environment.StackTrace);
+
+            desktop.Exit += (_, e) =>
+            {
+                Program.LogTrace("Exit", $"code={e.ApplicationExitCode}\n{Environment.StackTrace}");
+                _serviceProvider?.Dispose();
+            };
         }
 
         base.OnFrameworkInitializationCompleted();
