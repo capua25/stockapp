@@ -29,4 +29,5 @@ public record AccionUx(
     ModoUx Modo,
     string? TextoMarkdown,
     bool Posponible,
-    bool ReintentaEnArranque);
+    bool ReintentaEnArranque,
+    string? Version = null);

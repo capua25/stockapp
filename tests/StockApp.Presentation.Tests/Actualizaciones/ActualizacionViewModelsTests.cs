@@ -23,17 +23,49 @@ public class ActualizacionBannerViewModelTests
 
         Assert.True(vm.EsPosponible);
     }
+
+    [Fact]
+    public void Titulo_IncluyeLaVersion_CuandoAccionUxLaTrae()
+    {
+        var accion = new AccionUx(ModoUx.BannerDiscreto, null, Posponible: true, ReintentaEnArranque: true, Version: "0.1.2");
+        var vm = new ActualizacionBannerViewModel(accion);
+
+        Assert.Equal("Nueva versión v0.1.2 disponible", vm.Titulo);
+    }
+
+    [Fact]
+    public void Titulo_UsaTextoGenerico_CuandoNoHayVersion()
+    {
+        var accion = new AccionUx(ModoUx.BannerDiscreto, null, Posponible: true, ReintentaEnArranque: true);
+        var vm = new ActualizacionBannerViewModel(accion);
+
+        Assert.Equal("Nueva versión disponible", vm.Titulo);
+    }
+
+    [Fact]
+    public void PosponerCommand_DisparaPosponerSolicitado()
+    {
+        var accion = new AccionUx(ModoUx.BannerDiscreto, null, Posponible: true, ReintentaEnArranque: true);
+        var vm = new ActualizacionBannerViewModel(accion);
+
+        var disparado = false;
+        vm.PosponerSolicitado += () => disparado = true;
+
+        vm.PosponerCommand.Execute(null);
+
+        Assert.True(disparado);
+    }
 }
 
 public class ActualizacionModalViewModelTests
 {
     [Fact]
-    public void TextoMarkdown_Refleja_TextoDeAccionUx()
+    public void TextoMarkdown_QuedaLimpio_SinLaLineaDeSeverity()
     {
         var accion = new AccionUx(ModoUx.ModalPosponible, "severity: important\n\nActualización importante.", Posponible: true, ReintentaEnArranque: true);
         var vm = new ActualizacionModalViewModel(accion);
 
-        Assert.Equal("severity: important\n\nActualización importante.", vm.TextoMarkdown);
+        Assert.Equal("Actualización importante.", vm.TextoMarkdown);
     }
 
     [Fact]
@@ -49,12 +81,12 @@ public class ActualizacionModalViewModelTests
 public class ActualizacionBloqueoViewModelTests
 {
     [Fact]
-    public void TextoMarkdown_Refleja_TextoDeAccionUx()
+    public void TextoMarkdown_QuedaLimpio_SinLaLineaDeSeverity()
     {
         var accion = new AccionUx(ModoUx.BloqueoCritico, "severity: critical\n\nActualización urgente.", Posponible: false, ReintentaEnArranque: true);
         var vm = new ActualizacionBloqueoViewModel(accion);
 
-        Assert.Equal("severity: critical\n\nActualización urgente.", vm.TextoMarkdown);
+        Assert.Equal("Actualización urgente.", vm.TextoMarkdown);
     }
 
     [Fact]

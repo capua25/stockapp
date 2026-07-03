@@ -26,7 +26,7 @@ public partial class ActualizacionModalViewModel : ViewModelBase
 
     public ActualizacionModalViewModel(AccionUx accion)
     {
-        _textoMarkdown = accion.TextoMarkdown;
+        _textoMarkdown = FormateadorNotasActualizacion.Limpiar(accion.TextoMarkdown);
         _esPosponible  = accion.Posponible;
     }
 

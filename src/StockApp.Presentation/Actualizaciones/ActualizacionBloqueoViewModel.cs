@@ -38,7 +38,7 @@ public partial class ActualizacionBloqueoViewModel : ViewModelBase
 
     public ActualizacionBloqueoViewModel(AccionUx accion)
     {
-        _textoMarkdown  = accion.TextoMarkdown;
+        _textoMarkdown  = FormateadorNotasActualizacion.Limpiar(accion.TextoMarkdown);
         _esPosponible   = accion.Posponible;   // siempre false para critical
         _esModoDegradado = accion.Modo == ModoUx.ModoDegradado;
     }

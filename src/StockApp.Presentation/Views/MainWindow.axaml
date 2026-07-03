@@ -16,9 +16,14 @@
         <ContentControl Content="{Binding CurrentViewModel}" />
 
         <!-- Capa superior: overlay de actualización (banner, modal o bloqueo).
-             Cuando OverlayActualizacion es null, el ContentControl no renderiza nada. -->
+             Cuando OverlayActualizacion es null, el ContentControl no renderiza nada.
+             HorizontalContentAlignment/VerticalContentAlignment en Stretch: cada overlay
+             define su propia alineación (el banner se ancla arriba, el modal/bloqueo se
+             centran) mediante el HorizontalAlignment/VerticalAlignment de su Border raíz. -->
         <ContentControl Content="{Binding OverlayActualizacion}"
-                        IsVisible="{Binding OverlayActualizacion, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                        IsVisible="{Binding OverlayActualizacion, Converter={x:Static ObjectConverters.IsNotNull}}"
+                        HorizontalContentAlignment="Stretch"
+                        VerticalContentAlignment="Stretch" />
     </Grid>
 
 </Window>
