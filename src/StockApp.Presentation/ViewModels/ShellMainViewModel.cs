@@ -34,7 +34,17 @@ public partial class ShellMainViewModel : ViewModelBase
         _navigation = navigation;
 
         // Suscribirse al evento del servicio para actualizar la región de contenido
-        _navigation.Cambiado += () => CurrentContent = _navigation.Actual;
+        _navigation.Cambiado += () =>
+        {
+            // El contenido del shell nunca puede ser el propio shell: evita la recursión
+            // ShellMainView dentro de ShellMainView (StackOverflow al renderizar).
+            // Se compara por referencia contra 'this' (no con el tipo) porque es la guardia
+            // más estricta posible: excluye exactamente la instancia que causaría el ciclo,
+            // sin descartar por error una futura subclase de ShellMainViewModel que sí
+            // debiera poder navegarse como contenido válido.
+            if (!ReferenceEquals(_navigation.Actual, this))
+                CurrentContent = _navigation.Actual;
+        };
     }
 
     // ── comandos de navegación ────────────────────────────────────────────────
