@@ -1,12 +1,10 @@
 severity: normal
 
-# StockApp 0.1.2
+# StockApp 0.1.4
 
-- Nueva pantalla de bienvenida al iniciar sesión, con accesos rápidos.
-- La tecla Enter ahora confirma los formularios de inicio de sesión.
-- El número de versión de la app se muestra en pantalla (login y menú).
-- Mejoras de estabilidad en el actualizador.
-- Actualización de seguridad en el motor de base de datos.
+- Actualizador rediseñado: aviso más claro y botón que aplica la actualización correctamente.
+- La versión de la app se muestra en pantalla.
+- Correcciones de estabilidad y mejoras menores.
 
 ---
 <!-- INSTRUCCIONES PARA EL PUBLICADOR — leer antes de empaquetar:
