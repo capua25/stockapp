@@ -1,9 +1,12 @@
 severity: normal
 
-# StockApp 0.1.0
+# StockApp 0.1.2
 
-- Primera version distribuible de StockApp.
-- Incluye catalogo de productos, movimientos de stock, reportes y auditoria.
+- Nueva pantalla de bienvenida al iniciar sesión, con accesos rápidos.
+- La tecla Enter ahora confirma los formularios de inicio de sesión.
+- El número de versión de la app se muestra en pantalla (login y menú).
+- Mejoras de estabilidad en el actualizador.
+- Actualización de seguridad en el motor de base de datos.
 
 ---
 <!-- INSTRUCCIONES PARA EL PUBLICADOR — leer antes de empaquetar:
