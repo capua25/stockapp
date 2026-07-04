@@ -24,11 +24,13 @@
 
                 <Button x:Name="CancelarButton"
                         Content="Cancelar"
+                        Classes="secondary"
                         Width="100"
                         Click="OnCancelarClick" />
 
                 <Button x:Name="ConfirmarButton"
                         Content="Sí, continuar"
+                        Classes="primary"
                         Width="110"
                         Click="OnConfirmarClick" />
 

@@ -37,7 +37,7 @@
 
             <!-- Mensaje de error -->
             <TextBlock Text="{Binding MensajeError}"
-                       Foreground="Red"
+                       Foreground="{DynamicResource DangerBrush}"
                        IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                        TextWrapping="Wrap" />
 
