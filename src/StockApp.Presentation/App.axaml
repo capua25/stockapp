@@ -8,9 +8,21 @@
     <Application.DataTemplates>
         <local:ViewLocator/>
     </Application.DataTemplates>
-  
+
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceInclude Source="avares://StockApp.Presentation/Themes/Tokens.axaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+
     <Application.Styles>
         <FluentTheme />
         <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml"/>
+
+        <!-- StockApp UI Kit: capa aditiva, incluida DESPUÉS de FluentTheme para overridear.
+             Reversible quitando estos dos StyleInclude. -->
+        <StyleInclude Source="avares://StockApp.Presentation/Themes/Typography.axaml"/>
     </Application.Styles>
 </Application>

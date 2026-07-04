@@ -1,0 +1,47 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         StockApp UI Kit — Tipografía.
+         NOTA (verificado leyendo Program.cs): BuildAvaloniaApp() ya llama
+         .WithInterFont(), que fija FontManagerOptions.DefaultFamilyName a
+         Inter para toda la app. Inter YA se renderiza hoy aunque ningún XAML
+         lo declare explícitamente. El recurso InterFontFamily de acá abajo
+         NO es necesario para que Inter aparezca (ya aparece); existe para no
+         depender implícitamente de una línea de Program.cs no asociada a
+         tipografía, y para poder referenciarlo explícitamente si en el futuro
+         se agrega una ventana/AppBuilder secundario o un tema oscuro.
+         ════════════════════════════════════════════════════════════════════ -->
+    <Styles.Resources>
+        <FontFamily x:Key="InterFontFamily">avares://Avalonia.Fonts.Inter/Assets#Inter</FontFamily>
+    </Styles.Resources>
+
+    <Style Selector="Window, UserControl">
+        <Setter Property="FontFamily" Value="{DynamicResource InterFontFamily}" />
+    </Style>
+
+    <!-- ── Escala tipográfica (clases) ──────────────────────────────────────
+         título de vista 20/SemiBold · sección 16/Medium · body 14 · caption 12 -->
+    <Style Selector="TextBlock.titulo-vista">
+        <Setter Property="FontSize" Value="20" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource TextoPrimarioBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.seccion">
+        <Setter Property="FontSize" Value="16" />
+        <Setter Property="FontWeight" Value="Medium" />
+        <Setter Property="Foreground" Value="{DynamicResource TextoPrimarioBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.body">
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Foreground" Value="{DynamicResource TextoPrimarioBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.caption">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{DynamicResource TextoSecundarioBrush}" />
+    </Style>
+
+</Styles>

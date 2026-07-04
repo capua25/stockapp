@@ -1,0 +1,63 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         StockApp UI Kit — Tokens de color.
+         Único lugar de verdad de la paleta. Typography.axaml, Controls.axaml
+         y las vistas referencian estos recursos vía DynamicResource, nunca
+         hex hardcodeado. Ver docs/superpowers/specs/2026-07-04-ui-uplift-design.md.
+         ════════════════════════════════════════════════════════════════════ -->
+
+    <!-- ── Colores base ─────────────────────────────────────────────────── -->
+    <Color x:Key="ColorBrand">#2563EB</Color>
+    <Color x:Key="ColorBrandHover">#1D4ED8</Color>
+    <Color x:Key="ColorBrandPressed">#1E40AF</Color>
+    <Color x:Key="ColorBrandSuave">#EFF6FF</Color>
+
+    <Color x:Key="ColorFondo">#F8FAFC</Color>
+    <Color x:Key="ColorSuperficie">#FFFFFF</Color>
+    <Color x:Key="ColorBorde">#E2E8F0</Color>
+
+    <Color x:Key="ColorTextoPrimario">#0F172A</Color>
+    <Color x:Key="ColorTextoSecundario">#64748B</Color>
+
+    <Color x:Key="ColorSuccess">#16A34A</Color>
+    <Color x:Key="ColorWarning">#D97706</Color>
+    <Color x:Key="ColorDanger">#DC2626</Color>
+    <Color x:Key="ColorDangerHover">#B91C1C</Color>
+    <Color x:Key="ColorDangerPressed">#991B1B</Color>
+    <Color x:Key="ColorInfo">#0EA5E9</Color>
+
+    <!-- Estado deshabilitado: derivados neutros, necesarios para los estados
+         :disabled de Controls.axaml (Tarea 2). No forman parte de la paleta
+         semántica pedida en la spec pero son indispensables para que los
+         botones/inputs deshabilitados no se vean rotos. -->
+    <Color x:Key="ColorDeshabilitadoFondo">#F1F5F9</Color>
+    <Color x:Key="ColorDeshabilitadoTexto">#94A3B8</Color>
+    <Color x:Key="ColorDeshabilitadoBorde">#E2E8F0</Color>
+
+    <!-- ── Brushes (lo que efectivamente se referencia desde XAML) ────────── -->
+    <SolidColorBrush x:Key="BrandBrush" Color="{StaticResource ColorBrand}" />
+    <SolidColorBrush x:Key="BrandHoverBrush" Color="{StaticResource ColorBrandHover}" />
+    <SolidColorBrush x:Key="BrandPressedBrush" Color="{StaticResource ColorBrandPressed}" />
+    <SolidColorBrush x:Key="BrandSuaveBrush" Color="{StaticResource ColorBrandSuave}" />
+
+    <SolidColorBrush x:Key="FondoBrush" Color="{StaticResource ColorFondo}" />
+    <SolidColorBrush x:Key="SuperficieBrush" Color="{StaticResource ColorSuperficie}" />
+    <SolidColorBrush x:Key="BordeBrush" Color="{StaticResource ColorBorde}" />
+
+    <SolidColorBrush x:Key="TextoPrimarioBrush" Color="{StaticResource ColorTextoPrimario}" />
+    <SolidColorBrush x:Key="TextoSecundarioBrush" Color="{StaticResource ColorTextoSecundario}" />
+
+    <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource ColorSuccess}" />
+    <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource ColorWarning}" />
+    <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource ColorDanger}" />
+    <SolidColorBrush x:Key="DangerHoverBrush" Color="{StaticResource ColorDangerHover}" />
+    <SolidColorBrush x:Key="DangerPressedBrush" Color="{StaticResource ColorDangerPressed}" />
+    <SolidColorBrush x:Key="InfoBrush" Color="{StaticResource ColorInfo}" />
+
+    <SolidColorBrush x:Key="DeshabilitadoFondoBrush" Color="{StaticResource ColorDeshabilitadoFondo}" />
+    <SolidColorBrush x:Key="DeshabilitadoTextoBrush" Color="{StaticResource ColorDeshabilitadoTexto}" />
+    <SolidColorBrush x:Key="DeshabilitadoBordeBrush" Color="{StaticResource ColorDeshabilitadoBorde}" />
+
+</ResourceDictionary>
