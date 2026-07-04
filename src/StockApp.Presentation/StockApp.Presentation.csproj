@@ -46,6 +46,14 @@
     <PackageReference Include="SQLitePCLRaw.core" Version="3.0.3" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.9" />
     <PackageReference Include="Velopack" Version="1.2.0" />
+    <!-- Iconos consistentes en sidebar y botones clave (Tarea 3, UI Kit).
+         Verificado en nuget.org 2026-07-04: Optris.Icons.Avalonia 12.0.7 depende de
+         "Avalonia >= 12.0.1" (compatible con nuestro 12.0.4) y soporta net10.0.
+         Si pasó tiempo desde que se escribió este plan, correr primero
+         "dotnet list package /outdated" en este proyecto para confirmar que 12.0.7
+         sigue siendo la última estable antes de fijar la versión. -->
+    <PackageReference Include="Optris.Icons.Avalonia" Version="12.0.7" />
+    <PackageReference Include="Optris.Icons.Avalonia.MaterialDesign" Version="12.0.7" />
   </ItemGroup>
 
   <ItemGroup>

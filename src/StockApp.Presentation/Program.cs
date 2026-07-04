@@ -1,4 +1,6 @@
 ﻿using Avalonia;
+using Optris.Icons.Avalonia;
+using Optris.Icons.Avalonia.MaterialDesign;
 using System;
 using System.IO;
 using System.Threading.Tasks;
@@ -43,13 +45,20 @@ sealed class Program
 
     // Avalonia configuration, don't remove; also used by visual designer.
     public static AppBuilder BuildAvaloniaApp()
-        => AppBuilder.Configure<App>()
+    {
+        // Registro del proveedor de iconos Material Design (Tarea 3, UI Kit).
+        // Se hace acá (no en App.axaml.cs) para que también esté disponible en el
+        // previewer de diseño XAML, que solo invoca este método y no App.OnFrameworkInitializationCompleted.
+        IconProvider.Current.Register<MaterialDesignIconProvider>();
+
+        return AppBuilder.Configure<App>()
             .UsePlatformDetect()
 #if DEBUG
             .WithDeveloperTools()
 #endif
             .WithInterFont()
             .LogToTrace();
+    }
 
     /// <summary>
     /// Escribe una entrada de crash a %LocalAppData%\StockApp\logs\crash.log.
