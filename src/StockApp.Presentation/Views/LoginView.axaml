@@ -24,7 +24,8 @@
             <StackPanel Spacing="4">
                 <TextBlock Text="Usuario" />
                 <TextBox Text="{Binding NombreUsuario}"
-                         PlaceholderText="Nombre de usuario" />
+                         PlaceholderText="Nombre de usuario"
+                         KeyDown="OnCampoKeyDown" />
             </StackPanel>
 
             <!-- Contraseña -->
@@ -32,7 +33,8 @@
                 <TextBlock Text="Contraseña" />
                 <TextBox Text="{Binding Contrasena}"
                          PasswordChar="●"
-                         PlaceholderText="Contraseña" />
+                         PlaceholderText="Contraseña"
+                         KeyDown="OnCampoKeyDown" />
             </StackPanel>
 
             <!-- Mensaje de error -->
