@@ -24,5 +24,6 @@
         <!-- StockApp UI Kit: capa aditiva, incluida DESPUÉS de FluentTheme para overridear.
              Reversible quitando estos dos StyleInclude. -->
         <StyleInclude Source="avares://StockApp.Presentation/Themes/Typography.axaml"/>
+        <StyleInclude Source="avares://StockApp.Presentation/Themes/Controls.axaml"/>
     </Application.Styles>
 </Application>

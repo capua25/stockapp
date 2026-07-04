@@ -1,0 +1,144 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         StockApp UI Kit — Controles globales.
+         Aditivo sobre FluentTheme: los estilos de Button de acá abajo SOLO
+         aplican a controles con clase explícita (Button.primary, Button.
+         secondary, Button.ghost, Button.danger, Border.card). Un Button sin
+         clase sigue viéndose con el FluentTheme default. TextBox/ComboBox
+         SÍ son globales (sin clase requerida): ver Deliverable de la Tarea 2.
+         ════════════════════════════════════════════════════════════════════ -->
+
+    <!-- ── Button: primary (acción principal) ──────────────────────────────── -->
+    <Style Selector="Button.primary">
+        <Setter Property="Background" Value="{DynamicResource BrandBrush}" />
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="16,8" />
+        <Setter Property="FontWeight" Value="Medium" />
+    </Style>
+    <Style Selector="Button.primary:pointerover">
+        <Setter Property="Background" Value="{DynamicResource BrandHoverBrush}" />
+    </Style>
+    <Style Selector="Button.primary:pressed">
+        <Setter Property="Background" Value="{DynamicResource BrandPressedBrush}" />
+    </Style>
+    <Style Selector="Button.primary:disabled">
+        <Setter Property="Background" Value="{DynamicResource DeshabilitadoFondoBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource DeshabilitadoTextoBrush}" />
+    </Style>
+
+    <!-- ── Button: secondary (outline) ─────────────────────────────────────── -->
+    <Style Selector="Button.secondary">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource BrandBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BrandBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="16,8" />
+        <Setter Property="FontWeight" Value="Medium" />
+    </Style>
+    <Style Selector="Button.secondary:pointerover">
+        <Setter Property="Background" Value="{DynamicResource BrandSuaveBrush}" />
+    </Style>
+    <Style Selector="Button.secondary:pressed">
+        <Setter Property="Background" Value="{DynamicResource BrandSuaveBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BrandPressedBrush}" />
+    </Style>
+    <Style Selector="Button.secondary:disabled">
+        <Setter Property="Foreground" Value="{DynamicResource DeshabilitadoTextoBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource DeshabilitadoBordeBrush}" />
+    </Style>
+
+    <!-- ── Button: ghost (sidebar / toolbar) ───────────────────────────────── -->
+    <Style Selector="Button.ghost">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource TextoPrimarioBrush}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="HorizontalContentAlignment" Value="Left" />
+    </Style>
+    <Style Selector="Button.ghost:pointerover">
+        <Setter Property="Background" Value="{DynamicResource BrandSuaveBrush}" />
+    </Style>
+    <Style Selector="Button.ghost:pressed">
+        <Setter Property="Background" Value="{DynamicResource BrandSuaveBrush}" />
+    </Style>
+    <Style Selector="Button.ghost:disabled">
+        <Setter Property="Foreground" Value="{DynamicResource DeshabilitadoTextoBrush}" />
+    </Style>
+    <!-- Estado activo (Tarea 4): fondo brand suave + texto brand + seminegrita.
+         Se combina con .ghost vía Classes.active="{Binding ...}" en el sidebar. -->
+    <Style Selector="Button.ghost.active">
+        <Setter Property="Background" Value="{DynamicResource BrandSuaveBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource BrandBrush}" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <!-- ── Button: danger (destructivo) ────────────────────────────────────── -->
+    <Style Selector="Button.danger">
+        <Setter Property="Background" Value="{DynamicResource DangerBrush}" />
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="16,8" />
+        <Setter Property="FontWeight" Value="Medium" />
+    </Style>
+    <Style Selector="Button.danger:pointerover">
+        <Setter Property="Background" Value="{DynamicResource DangerHoverBrush}" />
+    </Style>
+    <Style Selector="Button.danger:pressed">
+        <Setter Property="Background" Value="{DynamicResource DangerPressedBrush}" />
+    </Style>
+    <Style Selector="Button.danger:disabled">
+        <Setter Property="Background" Value="{DynamicResource DeshabilitadoFondoBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource DeshabilitadoTextoBrush}" />
+    </Style>
+
+    <!-- ── TextBox (global, sin clase requerida) ────────────────────────────── -->
+    <Style Selector="TextBox">
+        <Setter Property="Background" Value="{DynamicResource SuperficieBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BordeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="10,8" />
+        <Setter Property="Foreground" Value="{DynamicResource TextoPrimarioBrush}" />
+    </Style>
+    <Style Selector="TextBox:focus">
+        <Setter Property="BorderBrush" Value="{DynamicResource BrandBrush}" />
+        <Setter Property="BorderThickness" Value="2" />
+    </Style>
+    <Style Selector="TextBox.error">
+        <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}" />
+    </Style>
+
+    <!-- ── ComboBox (global, sin clase requerida) ───────────────────────────── -->
+    <Style Selector="ComboBox">
+        <Setter Property="Background" Value="{DynamicResource SuperficieBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BordeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="10,8" />
+    </Style>
+    <Style Selector="ComboBox:focus">
+        <Setter Property="BorderBrush" Value="{DynamicResource BrandBrush}" />
+        <Setter Property="BorderThickness" Value="2" />
+    </Style>
+    <Style Selector="ComboBox.error">
+        <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}" />
+    </Style>
+
+    <!-- ── Card (Border) ────────────────────────────────────────────────────── -->
+    <Style Selector="Border.card">
+        <Setter Property="Background" Value="{DynamicResource SuperficieBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BordeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="16" />
+        <Setter Property="BoxShadow" Value="0 1 3 0 #1A0F172A" />
+    </Style>
+
+</Styles>
