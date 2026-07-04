@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels"
+             xmlns:i="https://github.com/projektanker/icons.avalonia"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
@@ -11,16 +12,16 @@
 
         <!-- Menú lateral -->
         <Border Grid.Column="0"
-                Background="#F5F5F5"
-                BorderBrush="#DDDDDD"
+                Background="{DynamicResource FondoBrush}"
+                BorderBrush="{DynamicResource BordeBrush}"
                 BorderThickness="0,0,1,0"
                 Padding="8">
             <DockPanel>
 
                 <!-- Versión de la app: discreta, fija al pie del menú lateral -->
                 <TextBlock Text="{Binding VersionTexto}"
+                           Classes="caption"
                            DockPanel.Dock="Bottom"
-                           FontSize="11"
                            Opacity="0.5"
                            HorizontalAlignment="Center"
                            Margin="0,8,0,4" />
@@ -28,32 +29,35 @@
                 <StackPanel Spacing="4">
 
                 <TextBlock Text="StockApp"
-                           FontSize="18"
-                           FontWeight="Bold"
+                           Classes="titulo-vista"
                            Margin="8,8,8,16" />
 
                 <!-- Productos: visible para Admin y Operador -->
                 <Button Content="Productos"
                         Command="{Binding NavProductosCommand}"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        Background="Transparent" />
+                        Classes="ghost"
+                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Productos}"
+                        i:Attached.Icon="mdi-package-variant"
+                        HorizontalAlignment="Stretch" />
 
                 <!-- Movimientos: visible para Admin y Operador -->
                 <Button Content="Registrar movimiento"
                         Command="{Binding NavMovimientosCommand}"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        Background="Transparent" />
+                        Classes="ghost"
+                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Movimientos}"
+                        i:Attached.Icon="mdi-swap-horizontal"
+                        HorizontalAlignment="Stretch" />
 
                 <Button Content="Historial de movimientos"
                         Command="{Binding NavHistorialMovimientosCommand}"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        Background="Transparent" />
+                        Classes="ghost"
+                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=HistorialMovimientos}"
+                        i:Attached.Icon="mdi-history"
+                        HorizontalAlignment="Stretch" />
 
                 <!-- Tablas maestras: solo Admin -->
                 <TextBlock Text="Tablas maestras"
+                           Classes="caption"
                            FontWeight="SemiBold"
                            Margin="8,8,0,4"
                            IsVisible="{Binding EsAdmin}"
@@ -61,27 +65,31 @@
 
                 <Button Content="Categorías"
                         Command="{Binding NavCategoriasCommand}"
+                        Classes="ghost"
+                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Categorias}"
+                        i:Attached.Icon="mdi-shape"
                         HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        Background="Transparent"
                         IsVisible="{Binding EsAdmin}" />
 
                 <Button Content="Proveedores"
                         Command="{Binding NavProveedoresCommand}"
+                        Classes="ghost"
+                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Proveedores}"
+                        i:Attached.Icon="mdi-truck"
                         HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        Background="Transparent"
                         IsVisible="{Binding EsAdmin}" />
 
                 <Button Content="Unidades de medida"
                         Command="{Binding NavUnidadesMedidaCommand}"
+                        Classes="ghost"
+                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=UnidadesMedida}"
+                        i:Attached.Icon="mdi-ruler"
                         HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        Background="Transparent"
                         IsVisible="{Binding EsAdmin}" />
 
                 <!-- Reportes: solo Admin -->
                 <TextBlock Text="Reportes"
+                           Classes="caption"
                            FontWeight="SemiBold"
                            Margin="8,8,0,4"
                            IsVisible="{Binding EsAdmin}"
@@ -89,37 +97,42 @@
 
                 <Button Content="Valorización de inventario"
                         Command="{Binding NavValorizacionCommand}"
+                        Classes="ghost"
+                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Valorizacion}"
+                        i:Attached.Icon="mdi-currency-usd"
                         HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        Background="Transparent"
                         IsVisible="{Binding EsAdmin}" />
 
                 <Button Content="Stock por categoría"
                         Command="{Binding NavStockCategoriaCommand}"
+                        Classes="ghost"
+                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=StockCategoria}"
+                        i:Attached.Icon="mdi-chart-pie"
                         HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        Background="Transparent"
                         IsVisible="{Binding EsAdmin}" />
 
                 <Button Content="Historial por producto"
                         Command="{Binding NavHistorialPorProductoCommand}"
+                        Classes="ghost"
+                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=HistorialPorProducto}"
+                        i:Attached.Icon="mdi-file-document"
                         HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        Background="Transparent"
                         IsVisible="{Binding EsAdmin}" />
 
                 <Button Content="Productos más movidos"
                         Command="{Binding NavMasMovidosCommand}"
+                        Classes="ghost"
+                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=MasMovidos}"
+                        i:Attached.Icon="mdi-trending-up"
                         HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        Background="Transparent"
                         IsVisible="{Binding EsAdmin}" />
 
                 <Button Content="Log de auditoría"
                         Command="{Binding NavAuditoriaLogCommand}"
+                        Classes="ghost"
+                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=AuditoriaLog}"
+                        i:Attached.Icon="mdi-shield-search"
                         HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left"
-                        Background="Transparent"
                         IsVisible="{Binding EsAdmin}" />
 
                 </StackPanel>

@@ -129,4 +129,116 @@ public class ShellMainViewModelTests
 
         navMock.Verify(n => n.Navegar<MovimientoRegistroViewModel>(), Times.Once);
     }
+
+    // ── Tarea 4 (UI Kit): estado activo del sidebar ──────────────────────────
+
+    [Fact]
+    public void NavProductos_EstableceSeccionActiva_Productos()
+    {
+        var (vm, _, _) = Crear(RolUsuario.Operador);
+
+        vm.NavProductosCommand.Execute(null);
+
+        Assert.Equal("Productos", vm.SeccionActiva);
+    }
+
+    [Fact]
+    public void NavCategorias_EstableceSeccionActiva_Categorias()
+    {
+        var (vm, _, _) = Crear(RolUsuario.Admin);
+
+        vm.NavCategoriasCommand.Execute(null);
+
+        Assert.Equal("Categorias", vm.SeccionActiva);
+    }
+
+    [Fact]
+    public void NavProveedores_EstableceSeccionActiva_Proveedores()
+    {
+        var (vm, _, _) = Crear(RolUsuario.Admin);
+
+        vm.NavProveedoresCommand.Execute(null);
+
+        Assert.Equal("Proveedores", vm.SeccionActiva);
+    }
+
+    [Fact]
+    public void NavUnidadesMedida_EstableceSeccionActiva_UnidadesMedida()
+    {
+        var (vm, _, _) = Crear(RolUsuario.Admin);
+
+        vm.NavUnidadesMedidaCommand.Execute(null);
+
+        Assert.Equal("UnidadesMedida", vm.SeccionActiva);
+    }
+
+    [Fact]
+    public void NavMovimientos_EstableceSeccionActiva_Movimientos()
+    {
+        var (vm, _, _) = Crear(RolUsuario.Operador);
+
+        vm.NavMovimientosCommand.Execute(null);
+
+        Assert.Equal("Movimientos", vm.SeccionActiva);
+    }
+
+    [Fact]
+    public void NavHistorialMovimientos_EstableceSeccionActiva_HistorialMovimientos()
+    {
+        var (vm, _, _) = Crear(RolUsuario.Operador);
+
+        vm.NavHistorialMovimientosCommand.Execute(null);
+
+        Assert.Equal("HistorialMovimientos", vm.SeccionActiva);
+    }
+
+    [Fact]
+    public void NavValorizacion_EstableceSeccionActiva_Valorizacion()
+    {
+        var (vm, _, _) = Crear(RolUsuario.Admin);
+
+        vm.NavValorizacionCommand.Execute(null);
+
+        Assert.Equal("Valorizacion", vm.SeccionActiva);
+    }
+
+    [Fact]
+    public void NavStockCategoria_EstableceSeccionActiva_StockCategoria()
+    {
+        var (vm, _, _) = Crear(RolUsuario.Admin);
+
+        vm.NavStockCategoriaCommand.Execute(null);
+
+        Assert.Equal("StockCategoria", vm.SeccionActiva);
+    }
+
+    [Fact]
+    public void NavHistorialPorProducto_EstableceSeccionActiva_HistorialPorProducto()
+    {
+        var (vm, _, _) = Crear(RolUsuario.Admin);
+
+        vm.NavHistorialPorProductoCommand.Execute(null);
+
+        Assert.Equal("HistorialPorProducto", vm.SeccionActiva);
+    }
+
+    [Fact]
+    public void NavMasMovidos_EstableceSeccionActiva_MasMovidos()
+    {
+        var (vm, _, _) = Crear(RolUsuario.Admin);
+
+        vm.NavMasMovidosCommand.Execute(null);
+
+        Assert.Equal("MasMovidos", vm.SeccionActiva);
+    }
+
+    [Fact]
+    public void NavAuditoriaLog_EstableceSeccionActiva_AuditoriaLog()
+    {
+        var (vm, _, _) = Crear(RolUsuario.Admin);
+
+        vm.NavAuditoriaLogCommand.Execute(null);
+
+        Assert.Equal("AuditoriaLog", vm.SeccionActiva);
+    }
 }

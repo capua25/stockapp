@@ -55,42 +55,94 @@ public partial class ShellMainViewModel : ViewModelBase
         };
     }
 
+    /// <summary>
+    /// Nombre lógico de la sección actualmente activa en el sidebar (ej. "Productos").
+    /// Se usa desde ShellMainView.axaml para resaltar el ítem de navegación seleccionado
+    /// (Classes.active + ObjectConverters.Equal). Null hasta la primera navegación.
+    /// </summary>
+    [ObservableProperty]
+    private string? _seccionActiva;
+
     // ── comandos de navegación ────────────────────────────────────────────────
 
     [RelayCommand]
-    private void NavProductos() => _navigation.Navegar<ProductoListViewModel>();
+    private void NavProductos()
+    {
+        SeccionActiva = "Productos";
+        _navigation.Navegar<ProductoListViewModel>();
+    }
 
     [RelayCommand]
-    private void NavCategorias() => _navigation.Navegar<CategoriaListViewModel>();
+    private void NavCategorias()
+    {
+        SeccionActiva = "Categorias";
+        _navigation.Navegar<CategoriaListViewModel>();
+    }
 
     [RelayCommand]
-    private void NavProveedores() => _navigation.Navegar<ProveedorListViewModel>();
+    private void NavProveedores()
+    {
+        SeccionActiva = "Proveedores";
+        _navigation.Navegar<ProveedorListViewModel>();
+    }
 
     [RelayCommand]
-    private void NavUnidadesMedida() => _navigation.Navegar<UnidadMedidaListViewModel>();
+    private void NavUnidadesMedida()
+    {
+        SeccionActiva = "UnidadesMedida";
+        _navigation.Navegar<UnidadMedidaListViewModel>();
+    }
 
     // ── Movimientos (Inc 5): Operador + Admin ─────────────────────────────────
 
     [RelayCommand]
-    private void NavMovimientos() => _navigation.Navegar<MovimientoRegistroViewModel>();
+    private void NavMovimientos()
+    {
+        SeccionActiva = "Movimientos";
+        _navigation.Navegar<MovimientoRegistroViewModel>();
+    }
 
     [RelayCommand]
-    private void NavHistorialMovimientos() => _navigation.Navegar<MovimientoHistorialViewModel>();
+    private void NavHistorialMovimientos()
+    {
+        SeccionActiva = "HistorialMovimientos";
+        _navigation.Navegar<MovimientoHistorialViewModel>();
+    }
 
     // ── Reportes (Inc 6): solo Admin ──────────────────────────────────────────
 
     [RelayCommand]
-    private void NavValorizacion() => _navigation.Navegar<ValorizacionViewModel>();
+    private void NavValorizacion()
+    {
+        SeccionActiva = "Valorizacion";
+        _navigation.Navegar<ValorizacionViewModel>();
+    }
 
     [RelayCommand]
-    private void NavStockCategoria() => _navigation.Navegar<StockCategoriaViewModel>();
+    private void NavStockCategoria()
+    {
+        SeccionActiva = "StockCategoria";
+        _navigation.Navegar<StockCategoriaViewModel>();
+    }
 
     [RelayCommand]
-    private void NavHistorialPorProducto() => _navigation.Navegar<HistorialPorProductoViewModel>();
+    private void NavHistorialPorProducto()
+    {
+        SeccionActiva = "HistorialPorProducto";
+        _navigation.Navegar<HistorialPorProductoViewModel>();
+    }
 
     [RelayCommand]
-    private void NavMasMovidos() => _navigation.Navegar<MasMovidosViewModel>();
+    private void NavMasMovidos()
+    {
+        SeccionActiva = "MasMovidos";
+        _navigation.Navegar<MasMovidosViewModel>();
+    }
 
     [RelayCommand]
-    private void NavAuditoriaLog() => _navigation.Navegar<AuditoriaLogViewModel>();
+    private void NavAuditoriaLog()
+    {
+        SeccionActiva = "AuditoriaLog";
+        _navigation.Navegar<AuditoriaLogViewModel>();
+    }
 }
