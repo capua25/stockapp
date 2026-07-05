@@ -7,43 +7,48 @@
              x:Class="StockApp.Presentation.Views.Catalogo.ProductoListView"
              x:DataType="vm:ProductoListViewModel">
 
-    <DockPanel Margin="16">
+    <DockPanel Margin="24">
 
-        <!-- Encabezado con búsqueda y botón nuevo -->
-        <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">
+        <TextBlock DockPanel.Dock="Top"
+                   Text="Productos"
+                   Classes="titulo-vista"
+                   Margin="0,0,0,16" />
 
-            <TextBlock Text="Productos"
-                       FontSize="20"
-                       FontWeight="Bold" />
+        <Border Classes="card">
+            <DockPanel>
 
-            <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto">
-                <TextBox Grid.Column="0"
-                         Text="{Binding FiltroBusqueda}"
-                         PlaceholderText="Buscar por nombre, SKU o código de barras..."
-                         Margin="0,0,8,0" />
-                <Button Grid.Column="1"
-                        Content="Buscar"
-                        Command="{Binding BuscarCommand}"
-                        Margin="0,0,8,0" />
-                <Button Grid.Column="2"
-                        Content="Nuevo"
-                        Command="{Binding NuevoCommand}" />
-            </Grid>
+                <!-- Encabezado con búsqueda y botón nuevo -->
+                <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto" Margin="0,0,0,12">
+                    <TextBox Grid.Column="0"
+                             Text="{Binding FiltroBusqueda}"
+                             PlaceholderText="Buscar por nombre, SKU o código de barras..."
+                             Margin="0,0,8,0" />
+                    <Button Grid.Column="1"
+                            Classes="secondary"
+                            Content="Buscar"
+                            Command="{Binding BuscarCommand}"
+                            Margin="0,0,8,0" />
+                    <Button Grid.Column="2"
+                            Classes="primary"
+                            Content="Nuevo"
+                            Command="{Binding NuevoCommand}" />
+                </Grid>
 
-        </StackPanel>
+                <!-- Listado -->
+                <ListBox ItemsSource="{Binding Items}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" Spacing="16" Margin="4">
+                                <TextBlock Text="{Binding Codigo}" Width="100" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding Nombre}" Width="250" />
+                                <TextBlock Text="{Binding PrecioVenta, StringFormat='$ {0:F2}'}" Width="100" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
 
-        <!-- Listado -->
-        <ListBox ItemsSource="{Binding Items}">
-            <ListBox.ItemTemplate>
-                <DataTemplate>
-                    <StackPanel Orientation="Horizontal" Spacing="16" Margin="4">
-                        <TextBlock Text="{Binding Codigo}" Width="100" FontWeight="SemiBold" />
-                        <TextBlock Text="{Binding Nombre}" Width="250" />
-                        <TextBlock Text="{Binding PrecioVenta, StringFormat='$ {0:F2}'}" Width="100" />
-                    </StackPanel>
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-        </ListBox>
+            </DockPanel>
+        </Border>
 
     </DockPanel>
 

@@ -8,12 +8,11 @@
              x:DataType="vm:ProveedorFormViewModel">
 
     <ScrollViewer>
-        <Border Padding="24" MaxWidth="460">
+        <Border Classes="card" Padding="24" Margin="24" MaxWidth="460">
             <StackPanel Spacing="12">
 
                 <TextBlock Text="Nuevo proveedor"
-                           FontSize="18"
-                           FontWeight="Bold"
+                           Classes="titulo-vista"
                            Margin="0,0,0,8" />
 
                 <StackPanel Spacing="4">
@@ -49,11 +48,12 @@
                 </StackPanel>
 
                 <TextBlock Text="{Binding MensajeError}"
-                           Foreground="Red"
+                           Foreground="{DynamicResource DangerBrush}"
                            IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                            TextWrapping="Wrap" />
 
-                <Button Content="Guardar"
+                <Button Classes="primary"
+                        Content="Guardar"
                         Command="{Binding GuardarCommand}"
                         HorizontalAlignment="Stretch"
                         HorizontalContentAlignment="Center" />
