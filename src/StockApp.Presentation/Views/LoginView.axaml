@@ -5,14 +5,14 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="300"
              x:Class="StockApp.Presentation.Views.LoginView"
-             x:DataType="vm:LoginViewModel">
+             x:DataType="vm:LoginViewModel"
+             Background="{DynamicResource FondoBrush}">
 
-    <Border Padding="40" HorizontalAlignment="Center" VerticalAlignment="Center" Width="360">
+    <Border Classes="card" Padding="40" HorizontalAlignment="Center" VerticalAlignment="Center" Width="360">
         <StackPanel Spacing="16">
 
             <TextBlock Text="StockApp"
-                       FontSize="24"
-                       FontWeight="Bold"
+                       Classes="titulo-vista"
                        HorizontalAlignment="Center"
                        Margin="0,0,0,8" />
 
@@ -45,6 +45,7 @@
 
             <!-- Botón -->
             <Button Content="Entrar"
+                    Classes="primary"
                     Command="{Binding EntrarCommand}"
                     IsDefault="True"
                     HorizontalAlignment="Stretch"

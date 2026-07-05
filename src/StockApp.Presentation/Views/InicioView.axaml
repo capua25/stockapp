@@ -11,132 +11,133 @@
         <StackPanel Margin="24" Spacing="20">
 
             <!-- Encabezado -->
-            <StackPanel Spacing="4">
-                <TextBlock Text="{Binding Saludo}"
-                           FontSize="28"
-                           FontWeight="Bold" />
+            <Border Classes="card">
+                <StackPanel Spacing="4">
+                    <TextBlock Text="{Binding Saludo}"
+                               Classes="titulo-vista" />
 
-                <StackPanel Orientation="Horizontal" Spacing="4">
-                    <TextBlock Text="Sesión iniciada como"
-                               FontSize="14"
-                               Opacity="0.6" />
-                    <TextBlock Text="{Binding RolTexto}"
-                               FontSize="14"
-                               FontWeight="SemiBold"
-                               Opacity="0.6" />
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <TextBlock Text="Sesión iniciada como"
+                                   FontSize="14"
+                                   Opacity="0.6" />
+                        <TextBlock Text="{Binding RolTexto}"
+                                   FontSize="14"
+                                   FontWeight="SemiBold"
+                                   Opacity="0.6" />
+                    </StackPanel>
                 </StackPanel>
-            </StackPanel>
+            </Border>
 
             <!-- Accesos rápidos -->
-            <StackPanel Spacing="12">
+            <Border Classes="card">
+                <StackPanel Spacing="12">
 
-                <TextBlock Text="Accesos rápidos"
-                           FontSize="16"
-                           FontWeight="SemiBold"
-                           Opacity="0.7" />
+                    <TextBlock Text="Accesos rápidos"
+                               Classes="seccion" />
 
-                <WrapPanel>
+                    <WrapPanel>
 
-                    <Button Command="{Binding IrAProductosCommand}"
-                            Width="200"
-                            Height="90"
-                            Background="{DynamicResource FondoBrush}"
-                            BorderBrush="{DynamicResource BordeBrush}"
-                            BorderThickness="1"
-                            CornerRadius="6"
-                            Margin="0,0,12,12"
-                            Padding="16">
-                        <StackPanel Spacing="4">
-                            <TextBlock Text="Productos"
-                                       FontWeight="SemiBold" />
-                            <TextBlock Text="Ver y administrar el catálogo"
-                                       FontSize="12"
-                                       TextWrapping="Wrap"
-                                       Opacity="0.6" />
-                        </StackPanel>
-                    </Button>
+                        <Button Command="{Binding IrAProductosCommand}"
+                                Width="200"
+                                Height="90"
+                                Background="{DynamicResource FondoBrush}"
+                                BorderBrush="{DynamicResource BordeBrush}"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Margin="0,0,12,12"
+                                Padding="16">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Productos"
+                                           FontWeight="SemiBold" />
+                                <TextBlock Text="Ver y administrar el catálogo"
+                                           FontSize="12"
+                                           TextWrapping="Wrap"
+                                           Opacity="0.6" />
+                            </StackPanel>
+                        </Button>
 
-                    <Button Command="{Binding IrARegistrarMovimientoCommand}"
-                            Width="200"
-                            Height="90"
-                            Background="{DynamicResource FondoBrush}"
-                            BorderBrush="{DynamicResource BordeBrush}"
-                            BorderThickness="1"
-                            CornerRadius="6"
-                            Margin="0,0,12,12"
-                            Padding="16">
-                        <StackPanel Spacing="4">
-                            <TextBlock Text="Registrar movimiento"
-                                       FontWeight="SemiBold" />
-                            <TextBlock Text="Cargar entradas y salidas de stock"
-                                       FontSize="12"
-                                       TextWrapping="Wrap"
-                                       Opacity="0.6" />
-                        </StackPanel>
-                    </Button>
+                        <Button Command="{Binding IrARegistrarMovimientoCommand}"
+                                Width="200"
+                                Height="90"
+                                Background="{DynamicResource FondoBrush}"
+                                BorderBrush="{DynamicResource BordeBrush}"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Margin="0,0,12,12"
+                                Padding="16">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Registrar movimiento"
+                                           FontWeight="SemiBold" />
+                                <TextBlock Text="Cargar entradas y salidas de stock"
+                                           FontSize="12"
+                                           TextWrapping="Wrap"
+                                           Opacity="0.6" />
+                            </StackPanel>
+                        </Button>
 
-                    <Button Command="{Binding IrAHistorialMovimientosCommand}"
-                            Width="200"
-                            Height="90"
-                            Background="{DynamicResource FondoBrush}"
-                            BorderBrush="{DynamicResource BordeBrush}"
-                            BorderThickness="1"
-                            CornerRadius="6"
-                            Margin="0,0,12,12"
-                            Padding="16">
-                        <StackPanel Spacing="4">
-                            <TextBlock Text="Historial de movimientos"
-                                       FontWeight="SemiBold" />
-                            <TextBlock Text="Consultar movimientos registrados"
-                                       FontSize="12"
-                                       TextWrapping="Wrap"
-                                       Opacity="0.6" />
-                        </StackPanel>
-                    </Button>
+                        <Button Command="{Binding IrAHistorialMovimientosCommand}"
+                                Width="200"
+                                Height="90"
+                                Background="{DynamicResource FondoBrush}"
+                                BorderBrush="{DynamicResource BordeBrush}"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Margin="0,0,12,12"
+                                Padding="16">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Historial de movimientos"
+                                           FontWeight="SemiBold" />
+                                <TextBlock Text="Consultar movimientos registrados"
+                                           FontSize="12"
+                                           TextWrapping="Wrap"
+                                           Opacity="0.6" />
+                            </StackPanel>
+                        </Button>
 
-                    <Button Command="{Binding IrAValorizacionCommand}"
-                            IsVisible="{Binding EsAdmin}"
-                            Width="200"
-                            Height="90"
-                            Background="{DynamicResource FondoBrush}"
-                            BorderBrush="{DynamicResource BordeBrush}"
-                            BorderThickness="1"
-                            CornerRadius="6"
-                            Margin="0,0,12,12"
-                            Padding="16">
-                        <StackPanel Spacing="4">
-                            <TextBlock Text="Valorización de inventario"
-                                       FontWeight="SemiBold" />
-                            <TextBlock Text="Ver el valor total del stock"
-                                       FontSize="12"
-                                       TextWrapping="Wrap"
-                                       Opacity="0.6" />
-                        </StackPanel>
-                    </Button>
+                        <Button Command="{Binding IrAValorizacionCommand}"
+                                IsVisible="{Binding EsAdmin}"
+                                Width="200"
+                                Height="90"
+                                Background="{DynamicResource FondoBrush}"
+                                BorderBrush="{DynamicResource BordeBrush}"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Margin="0,0,12,12"
+                                Padding="16">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Valorización de inventario"
+                                           FontWeight="SemiBold" />
+                                <TextBlock Text="Ver el valor total del stock"
+                                           FontSize="12"
+                                           TextWrapping="Wrap"
+                                           Opacity="0.6" />
+                            </StackPanel>
+                        </Button>
 
-                    <Button Command="{Binding IrAAuditoriaCommand}"
-                            IsVisible="{Binding EsAdmin}"
-                            Width="200"
-                            Height="90"
-                            Background="{DynamicResource FondoBrush}"
-                            BorderBrush="{DynamicResource BordeBrush}"
-                            BorderThickness="1"
-                            CornerRadius="6"
-                            Margin="0,0,12,12"
-                            Padding="16">
-                        <StackPanel Spacing="4">
-                            <TextBlock Text="Log de auditoría"
-                                       FontWeight="SemiBold" />
-                            <TextBlock Text="Revisar la actividad del sistema"
-                                       FontSize="12"
-                                       TextWrapping="Wrap"
-                                       Opacity="0.6" />
-                        </StackPanel>
-                    </Button>
+                        <Button Command="{Binding IrAAuditoriaCommand}"
+                                IsVisible="{Binding EsAdmin}"
+                                Width="200"
+                                Height="90"
+                                Background="{DynamicResource FondoBrush}"
+                                BorderBrush="{DynamicResource BordeBrush}"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Margin="0,0,12,12"
+                                Padding="16">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Log de auditoría"
+                                           FontWeight="SemiBold" />
+                                <TextBlock Text="Revisar la actividad del sistema"
+                                           FontSize="12"
+                                           TextWrapping="Wrap"
+                                           Opacity="0.6" />
+                            </StackPanel>
+                        </Button>
 
-                </WrapPanel>
+                    </WrapPanel>
 
-            </StackPanel>
+                </StackPanel>
+            </Border>
 
         </StackPanel>
     </ScrollViewer>

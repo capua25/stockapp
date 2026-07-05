@@ -5,16 +5,16 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="480" d:DesignHeight="600"
              x:Class="StockApp.Presentation.Views.PrimerArranqueView"
-             x:DataType="vm:PrimerArranqueViewModel">
+             x:DataType="vm:PrimerArranqueViewModel"
+             Background="{DynamicResource FondoBrush}">
 
     <ScrollViewer>
-        <Border Padding="40" HorizontalAlignment="Center" VerticalAlignment="Center" Width="420">
+        <Border Classes="card" Padding="40" HorizontalAlignment="Center" VerticalAlignment="Center" Width="420">
             <StackPanel Spacing="16">
 
                 <!-- Encabezado -->
                 <TextBlock Text="Bienvenido a StockApp"
-                           FontSize="22"
-                           FontWeight="Bold"
+                           Classes="titulo-vista"
                            HorizontalAlignment="Center" />
 
                 <TextBlock Text="Es la primera vez que iniciás la app. Creá el usuario administrador."
@@ -48,11 +48,12 @@
 
                         <!-- Mensaje de error -->
                         <TextBlock Text="{Binding MensajeError}"
-                                   Foreground="Red"
+                                   Foreground="{DynamicResource DangerBrush}"
                                    IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                    TextWrapping="Wrap" />
 
                         <Button Content="Crear Admin"
+                                Classes="primary"
                                 Command="{Binding CrearAdminCommand}"
                                 IsDefault="True"
                                 HorizontalAlignment="Stretch"
@@ -65,7 +66,7 @@
                 <Panel IsVisible="{Binding MostrarRecomendacion2doAdmin}">
                     <StackPanel Spacing="12">
 
-                        <Border Background="#FFF3CD" BorderBrush="#FFC107" BorderThickness="1"
+                        <Border BorderBrush="{DynamicResource WarningBrush}" BorderThickness="1"
                                 CornerRadius="4" Padding="12">
                             <TextBlock TextWrapping="Wrap">
                                 <Run FontWeight="Bold" Text="Recomendación: " />
@@ -95,17 +96,19 @@
 
                         <!-- Mensaje de error del 2do Admin -->
                         <TextBlock Text="{Binding MensajeError2doAdmin}"
-                                   Foreground="Red"
+                                   Foreground="{DynamicResource DangerBrush}"
                                    IsVisible="{Binding MensajeError2doAdmin, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                    TextWrapping="Wrap" />
 
                         <Button Content="Crear 2do Admin"
+                                Classes="primary"
                                 Command="{Binding CrearSegundoAdminCommand}"
                                 IsDefault="True"
                                 HorizontalAlignment="Stretch"
                                 HorizontalContentAlignment="Center" />
 
                         <Button Content="Continuar sin 2do Admin"
+                                Classes="secondary"
                                 Command="{Binding ContinuarSin2doAdminCommand}"
                                 HorizontalAlignment="Stretch"
                                 HorizontalContentAlignment="Center" />
