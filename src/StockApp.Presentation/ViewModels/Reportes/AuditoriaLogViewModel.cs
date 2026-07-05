@@ -46,6 +46,9 @@ public partial class AuditoriaLogViewModel : ViewModelBase
     [ObservableProperty]
     private IReadOnlyList<AuditoriaItemDto> _items = new List<AuditoriaItemDto>();
 
+    [ObservableProperty]
+    private string? _mensajeError;
+
     public AuditoriaLogViewModel(
         IAuditoriaQueryService servicio,
         ICsvExporter csvExporter,
@@ -60,6 +63,13 @@ public partial class AuditoriaLogViewModel : ViewModelBase
     [RelayCommand]
     private async Task BuscarAsync()
     {
+        if (FechaDesde is not null && FechaHasta is not null && FechaDesde > FechaHasta)
+        {
+            MensajeError = "La fecha 'Desde' no puede ser posterior a 'Hasta'.";
+            return;
+        }
+
+        MensajeError = null;
         Items = await _servicio.ObtenerLogAsync(UsuarioId, FechaDesde, FechaHasta);
     }
 

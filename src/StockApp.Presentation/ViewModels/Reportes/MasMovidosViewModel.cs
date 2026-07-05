@@ -45,6 +45,9 @@ public partial class MasMovidosViewModel : ViewModelBase
     [ObservableProperty]
     private IReadOnlyList<MasMovidoDto> _items = new List<MasMovidoDto>();
 
+    [ObservableProperty]
+    private string? _mensajeError;
+
     public MasMovidosViewModel(
         IReporteStockService servicio,
         ICsvExporter csvExporter,
@@ -59,6 +62,13 @@ public partial class MasMovidosViewModel : ViewModelBase
     [RelayCommand]
     private async Task BuscarAsync()
     {
+        if (FechaDesde is not null && FechaHasta is not null && FechaDesde > FechaHasta)
+        {
+            MensajeError = "La fecha 'Desde' no puede ser posterior a 'Hasta'.";
+            return;
+        }
+
+        MensajeError = null;
         Items = await _servicio.ObtenerMasMovidosAsync(FechaDesde, FechaHasta, TopN);
     }
 

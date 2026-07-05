@@ -8,7 +8,7 @@
              x:Class="StockApp.Presentation.Views.ShellMainView"
              x:DataType="vm:ShellMainViewModel">
 
-    <Grid ColumnDefinitions="200,*" Background="{DynamicResource FondoBrush}">
+    <Grid ColumnDefinitions="232,*" Background="{DynamicResource FondoBrush}">
 
         <!-- Menú lateral: verde bosque oscuro sólido, look dashboard SaaS -->
         <Border Grid.Column="0"
@@ -37,10 +37,11 @@
                         Classes="ghost"
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Productos}"
                         HorizontalAlignment="Stretch">
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <i:Icon Value="mdi-package-variant" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Text="Productos" VerticalAlignment="Center" />
-                    </StackPanel>
+                    <Grid ColumnDefinitions="Auto,*">
+                        <i:Icon Grid.Column="0" Value="mdi-package-variant" Foreground="{DynamicResource SidebarTextoBrush}" />
+                        <TextBlock Grid.Column="1" Text="Productos" VerticalAlignment="Center"
+                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                    </Grid>
                 </Button>
 
                 <!-- Movimientos: visible para Admin y Operador -->
@@ -48,20 +49,22 @@
                         Classes="ghost"
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Movimientos}"
                         HorizontalAlignment="Stretch">
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <i:Icon Value="mdi-swap-horizontal" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Text="Registrar movimiento" VerticalAlignment="Center" />
-                    </StackPanel>
+                    <Grid ColumnDefinitions="Auto,*">
+                        <i:Icon Grid.Column="0" Value="mdi-swap-horizontal" Foreground="{DynamicResource SidebarTextoBrush}" />
+                        <TextBlock Grid.Column="1" Text="Registrar movimiento" VerticalAlignment="Center"
+                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                    </Grid>
                 </Button>
 
                 <Button Command="{Binding NavHistorialMovimientosCommand}"
                         Classes="ghost"
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=HistorialMovimientos}"
                         HorizontalAlignment="Stretch">
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <i:Icon Value="mdi-history" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Text="Historial de movimientos" VerticalAlignment="Center" />
-                    </StackPanel>
+                    <Grid ColumnDefinitions="Auto,*">
+                        <i:Icon Grid.Column="0" Value="mdi-history" Foreground="{DynamicResource SidebarTextoBrush}" />
+                        <TextBlock Grid.Column="1" Text="Historial de movimientos" VerticalAlignment="Center"
+                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                    </Grid>
                 </Button>
 
                 <!-- Tablas maestras: solo Admin -->
@@ -78,10 +81,11 @@
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Categorias}"
                         HorizontalAlignment="Stretch"
                         IsVisible="{Binding EsAdmin}">
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <i:Icon Value="mdi-shape" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Text="Categorías" VerticalAlignment="Center" />
-                    </StackPanel>
+                    <Grid ColumnDefinitions="Auto,*">
+                        <i:Icon Grid.Column="0" Value="mdi-shape" Foreground="{DynamicResource SidebarTextoBrush}" />
+                        <TextBlock Grid.Column="1" Text="Categorías" VerticalAlignment="Center"
+                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                    </Grid>
                 </Button>
 
                 <Button Command="{Binding NavProveedoresCommand}"
@@ -89,10 +93,11 @@
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Proveedores}"
                         HorizontalAlignment="Stretch"
                         IsVisible="{Binding EsAdmin}">
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <i:Icon Value="mdi-truck" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Text="Proveedores" VerticalAlignment="Center" />
-                    </StackPanel>
+                    <Grid ColumnDefinitions="Auto,*">
+                        <i:Icon Grid.Column="0" Value="mdi-truck" Foreground="{DynamicResource SidebarTextoBrush}" />
+                        <TextBlock Grid.Column="1" Text="Proveedores" VerticalAlignment="Center"
+                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                    </Grid>
                 </Button>
 
                 <Button Command="{Binding NavUnidadesMedidaCommand}"
@@ -100,10 +105,11 @@
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=UnidadesMedida}"
                         HorizontalAlignment="Stretch"
                         IsVisible="{Binding EsAdmin}">
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <i:Icon Value="mdi-ruler" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Text="Unidades de medida" VerticalAlignment="Center" />
-                    </StackPanel>
+                    <Grid ColumnDefinitions="Auto,*">
+                        <i:Icon Grid.Column="0" Value="mdi-ruler" Foreground="{DynamicResource SidebarTextoBrush}" />
+                        <TextBlock Grid.Column="1" Text="Unidades de medida" VerticalAlignment="Center"
+                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                    </Grid>
                 </Button>
 
                 <!-- Reportes: solo Admin -->
@@ -120,10 +126,11 @@
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Valorizacion}"
                         HorizontalAlignment="Stretch"
                         IsVisible="{Binding EsAdmin}">
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <i:Icon Value="mdi-currency-usd" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Text="Valorización de inventario" VerticalAlignment="Center" />
-                    </StackPanel>
+                    <Grid ColumnDefinitions="Auto,*">
+                        <i:Icon Grid.Column="0" Value="mdi-currency-usd" Foreground="{DynamicResource SidebarTextoBrush}" />
+                        <TextBlock Grid.Column="1" Text="Valorización de inventario" VerticalAlignment="Center"
+                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                    </Grid>
                 </Button>
 
                 <Button Command="{Binding NavStockCategoriaCommand}"
@@ -131,10 +138,11 @@
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=StockCategoria}"
                         HorizontalAlignment="Stretch"
                         IsVisible="{Binding EsAdmin}">
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <i:Icon Value="mdi-chart-pie" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Text="Stock por categoría" VerticalAlignment="Center" />
-                    </StackPanel>
+                    <Grid ColumnDefinitions="Auto,*">
+                        <i:Icon Grid.Column="0" Value="mdi-chart-pie" Foreground="{DynamicResource SidebarTextoBrush}" />
+                        <TextBlock Grid.Column="1" Text="Stock por categoría" VerticalAlignment="Center"
+                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                    </Grid>
                 </Button>
 
                 <Button Command="{Binding NavHistorialPorProductoCommand}"
@@ -142,10 +150,11 @@
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=HistorialPorProducto}"
                         HorizontalAlignment="Stretch"
                         IsVisible="{Binding EsAdmin}">
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <i:Icon Value="mdi-file-document" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Text="Historial por producto" VerticalAlignment="Center" />
-                    </StackPanel>
+                    <Grid ColumnDefinitions="Auto,*">
+                        <i:Icon Grid.Column="0" Value="mdi-file-document" Foreground="{DynamicResource SidebarTextoBrush}" />
+                        <TextBlock Grid.Column="1" Text="Historial por producto" VerticalAlignment="Center"
+                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                    </Grid>
                 </Button>
 
                 <Button Command="{Binding NavMasMovidosCommand}"
@@ -153,10 +162,11 @@
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=MasMovidos}"
                         HorizontalAlignment="Stretch"
                         IsVisible="{Binding EsAdmin}">
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <i:Icon Value="mdi-trending-up" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Text="Productos más movidos" VerticalAlignment="Center" />
-                    </StackPanel>
+                    <Grid ColumnDefinitions="Auto,*">
+                        <i:Icon Grid.Column="0" Value="mdi-trending-up" Foreground="{DynamicResource SidebarTextoBrush}" />
+                        <TextBlock Grid.Column="1" Text="Productos más movidos" VerticalAlignment="Center"
+                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                    </Grid>
                 </Button>
 
                 <Button Command="{Binding NavAuditoriaLogCommand}"
@@ -164,10 +174,11 @@
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=AuditoriaLog}"
                         HorizontalAlignment="Stretch"
                         IsVisible="{Binding EsAdmin}">
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <i:Icon Value="mdi-shield-search" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Text="Log de auditoría" VerticalAlignment="Center" />
-                    </StackPanel>
+                    <Grid ColumnDefinitions="Auto,*">
+                        <i:Icon Grid.Column="0" Value="mdi-shield-search" Foreground="{DynamicResource SidebarTextoBrush}" />
+                        <TextBlock Grid.Column="1" Text="Log de auditoría" VerticalAlignment="Center"
+                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                    </Grid>
                 </Button>
 
                 </StackPanel>

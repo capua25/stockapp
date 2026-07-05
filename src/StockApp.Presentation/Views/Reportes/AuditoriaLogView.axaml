@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Reportes"
+             xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="600"
@@ -15,7 +16,7 @@
                    Margin="0,0,0,16" />
 
         <Border Classes="card">
-            <Grid RowDefinitions="Auto,*">
+            <Grid RowDefinitions="Auto,Auto,*">
 
                 <!-- Filtros + acciones -->
                 <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,0,0,12">
@@ -23,15 +24,23 @@
                     <NumericUpDown Value="{Binding UsuarioId}" Minimum="0" Width="120"
                                    FormatString="0" Increment="1" />
                     <TextBlock Text="Desde:" VerticalAlignment="Center" />
-                    <DatePicker SelectedDate="{Binding FechaDesde}" />
+                    <DatePicker SelectedDate="{Binding FechaDesde, Converter={StaticResource DateTimeOffsetDateTimeConverter}}" />
                     <TextBlock Text="Hasta:" VerticalAlignment="Center" />
-                    <DatePicker SelectedDate="{Binding FechaHasta}" />
+                    <DatePicker SelectedDate="{Binding FechaHasta, Converter={StaticResource DateTimeOffsetDateTimeConverter}}" />
                     <Button Classes="primary" Content="Buscar" Command="{Binding BuscarCommand}" />
                     <Button Classes="secondary" Content="Exportar CSV" Command="{Binding ExportarCommand}" />
                 </StackPanel>
 
+                <!-- Mensaje de error -->
+                <TextBlock Grid.Row="1"
+                           Text="{Binding MensajeError}"
+                           Foreground="{DynamicResource DangerBrush}"
+                           IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                           Margin="0,0,0,12"
+                           TextWrapping="Wrap" />
+
                 <!-- Grilla de auditoría -->
-                <DataGrid Grid.Row="1"
+                <DataGrid Grid.Row="2"
                           ItemsSource="{Binding Items}"
                           IsReadOnly="True"
                           CanUserResizeColumns="True"
@@ -51,6 +60,14 @@
                         <DataGridTextColumn Header="Detalle" Binding="{Binding Detalle}" Width="*" />
                     </DataGrid.Columns>
                 </DataGrid>
+
+                <!-- Empty state: solo visible cuando no hay resultados cargados -->
+                <TextBlock Grid.Row="2"
+                           Text="Realizá una búsqueda para ver resultados"
+                           Classes="caption"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           IsVisible="{Binding Items, Converter={x:Static conv:ColeccionVaciaConverter.Instance}}" />
 
             </Grid>
         </Border>

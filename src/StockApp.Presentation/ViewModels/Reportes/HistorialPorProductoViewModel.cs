@@ -53,6 +53,9 @@ public partial class HistorialPorProductoViewModel : ViewModelBase
     [ObservableProperty]
     private IReadOnlyList<MovimientoHistorialDto> _items = new List<MovimientoHistorialDto>();
 
+    [ObservableProperty]
+    private string? _mensajeError;
+
     public HistorialPorProductoViewModel(
         IReporteStockService servicio,
         ICsvExporter csvExporter,
@@ -67,6 +70,13 @@ public partial class HistorialPorProductoViewModel : ViewModelBase
     [RelayCommand]
     private async Task BuscarAsync()
     {
+        if (FechaDesde is not null && FechaHasta is not null && FechaDesde > FechaHasta)
+        {
+            MensajeError = "La fecha 'Desde' no puede ser posterior a 'Hasta'.";
+            return;
+        }
+
+        MensajeError = null;
         Items = await _servicio.ObtenerHistorialPorProductoAsync(ProductoId, FechaDesde, FechaHasta);
     }
 

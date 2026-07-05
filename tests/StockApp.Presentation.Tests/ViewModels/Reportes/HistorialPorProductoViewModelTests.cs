@@ -103,4 +103,34 @@ public class HistorialPorProductoViewModelTests
 
         guardadoMock.Verify(g => g.GuardarTextoAsync(csvResultante, "historial-producto.csv"), Times.Once);
     }
+
+    [Fact]
+    public async Task BuscarCommand_ConRangoInvertido_NoLlamaAlServicioYSeteaMensajeError()
+    {
+        var (vm, servicioMock, _, _) = Crear();
+
+        vm.FechaDesde = new DateTime(2026, 2, 1);
+        vm.FechaHasta = new DateTime(2026, 1, 1);
+
+        await vm.BuscarCommand.ExecuteAsync(null);
+
+        servicioMock.Verify(s => s.ObtenerHistorialPorProductoAsync(
+            It.IsAny<int>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>()), Times.Never);
+        Assert.False(string.IsNullOrEmpty(vm.MensajeError));
+    }
+
+    [Fact]
+    public async Task BuscarCommand_ConRangoValido_LimpiaMensajeError()
+    {
+        var (vm, servicioMock, _, _) = Crear();
+
+        vm.FechaDesde = new DateTime(2026, 1, 1);
+        vm.FechaHasta = new DateTime(2026, 1, 31);
+
+        await vm.BuscarCommand.ExecuteAsync(null);
+
+        Assert.True(string.IsNullOrEmpty(vm.MensajeError));
+        servicioMock.Verify(s => s.ObtenerHistorialPorProductoAsync(
+            It.IsAny<int>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>()), Times.Once);
+    }
 }

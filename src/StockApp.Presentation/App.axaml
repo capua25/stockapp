@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="StockApp.Presentation.App"
              xmlns:local="using:StockApp.Presentation"
+             xmlns:conv="using:StockApp.Presentation.Converters"
              RequestedThemeVariant="Default">
              <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
 
@@ -14,6 +15,10 @@
             <ResourceDictionary.MergedDictionaries>
                 <ResourceInclude Source="avares://StockApp.Presentation/Themes/Tokens.axaml"/>
             </ResourceDictionary.MergedDictionaries>
+
+            <!-- Converter compartido: DatePicker.SelectedDate es DateTimeOffset?, los
+                 ViewModels de reportes exponen DateTime? — ver Converters/DateTimeOffsetDateTimeConverter.cs -->
+            <conv:DateTimeOffsetDateTimeConverter x:Key="DateTimeOffsetDateTimeConverter"/>
         </ResourceDictionary>
     </Application.Resources>
 
