@@ -7,6 +7,13 @@ namespace StockApp.Infrastructure.Actualizaciones;
 public sealed class UpdaterOptions
 {
     /// <summary>
+    /// URL de fallback del repositorio de GitHub, usada cuando la configuración
+    /// (appsettings.json, key "Updater:GitHubRepoUrl") falta o viene vacía.
+    /// Red de seguridad defensiva — no depende de que el archivo exista en runtime.
+    /// </summary>
+    public const string GitHubRepoUrlDefault = "https://github.com/capua25/stockapp";
+
+    /// <summary>
     /// URL del feed propio (SimpleWebSource). Ejemplo: "https://releases.miapp.com/stable/".
     /// Si es null o vacío, esa fuente se omite de la cadena.
     /// </summary>

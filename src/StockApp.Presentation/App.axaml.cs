@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using StockApp.Application.Actualizaciones;
 using StockApp.Application.Auditoria;
@@ -94,6 +95,14 @@ public partial class App : AvaloniaApp
     private static ServiceProvider ConfigurarServicios()
     {
         var services = new ServiceCollection();
+
+        // Configuración externa: appsettings.json es opcional (optional: true) para que su
+        // ausencia en el output no tire excepción — en ese caso se cae al fallback defensivo
+        // de UpdaterOptions.GitHubRepoUrlDefault más abajo.
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
+            .Build();
 
         // ── Inc 2: infraestructura de datos y backup ──────────────────────────
 
@@ -220,10 +229,23 @@ public partial class App : AvaloniaApp
         // ── Inc 7 Fase A: actualizador in-app ─────────────────────────────────
 
         // UpdaterOptions: configura fuentes. GitHub es primaria (real); feed propio es fallback opcional.
+        // La URL y el flag de prerelease vienen de appsettings.json (sección "Updater"); si la key
+        // falta o el archivo no existe, se cae al fallback defensivo de UpdaterOptions.
+        var repoUrl = configuration["Updater:GitHubRepoUrl"];
+        if (string.IsNullOrWhiteSpace(repoUrl))
+        {
+            repoUrl = UpdaterOptions.GitHubRepoUrlDefault;
+        }
+
+        if (!bool.TryParse(configuration["Updater:GitHubPrerelease"], out var prerelease))
+        {
+            prerelease = false;
+        }
+
         services.AddSingleton(new UpdaterOptions
         {
-            GitHubRepoUrl  = "https://github.com/capua25/stockapp",
-            GitHubPrerelease = false,
+            GitHubRepoUrl  = repoUrl,
+            GitHubPrerelease = prerelease,
             FeedPropiUrl   = null,    // null → solo GitHub; setear URL para habilitar feed propio
             Orden          = OrdenFuentes.GitHubPrimero,
         });
