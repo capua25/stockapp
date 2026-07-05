@@ -22,10 +22,12 @@
 
     <!-- ── Escala tipográfica (clases) ──────────────────────────────────────
          título de vista 20/SemiBold · sección 16/Medium · body 14 · caption 12 -->
+    <!-- Foreground usa BrandPressedBrush (#166534), no BrandBrush (#16A34A):
+         sobre fondos claros (Fondo/Superficie) da mejor contraste para texto. -->
     <Style Selector="TextBlock.titulo-vista">
         <Setter Property="FontSize" Value="20" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{DynamicResource BrandBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource BrandPressedBrush}" />
     </Style>
 
     <Style Selector="TextBlock.seccion">

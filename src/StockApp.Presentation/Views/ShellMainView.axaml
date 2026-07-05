@@ -8,19 +8,18 @@
              x:Class="StockApp.Presentation.Views.ShellMainView"
              x:DataType="vm:ShellMainViewModel">
 
-    <Grid ColumnDefinitions="200,*">
+    <Grid ColumnDefinitions="200,*" Background="{DynamicResource FondoBrush}">
 
-        <!-- Menú lateral -->
+        <!-- Menú lateral: verde bosque oscuro sólido, look dashboard SaaS -->
         <Border Grid.Column="0"
-                Background="{DynamicResource FondoBrush}"
-                BorderBrush="{DynamicResource BordeBrush}"
-                BorderThickness="0,0,1,0"
+                Background="{DynamicResource SidebarBrush}"
                 Padding="8">
             <DockPanel>
 
                 <!-- Versión de la app: discreta, fija al pie del menú lateral -->
                 <TextBlock Text="{Binding VersionTexto}"
                            Classes="caption"
+                           Foreground="{DynamicResource SidebarTextoBrush}"
                            DockPanel.Dock="Bottom"
                            Opacity="0.5"
                            HorizontalAlignment="Center"
@@ -30,6 +29,7 @@
 
                 <TextBlock Text="StockApp"
                            Classes="titulo-vista"
+                           Foreground="{DynamicResource SidebarTextoBrush}"
                            Margin="8,8,8,16" />
 
                 <!-- Productos: visible para Admin y Operador -->
@@ -38,7 +38,7 @@
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Productos}"
                         HorizontalAlignment="Stretch">
                     <StackPanel Orientation="Horizontal" Spacing="10">
-                        <i:Icon Value="mdi-package-variant" Foreground="{DynamicResource BrandBrush}" />
+                        <i:Icon Value="mdi-package-variant" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Text="Productos" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
@@ -49,7 +49,7 @@
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Movimientos}"
                         HorizontalAlignment="Stretch">
                     <StackPanel Orientation="Horizontal" Spacing="10">
-                        <i:Icon Value="mdi-swap-horizontal" Foreground="{DynamicResource BrandBrush}" />
+                        <i:Icon Value="mdi-swap-horizontal" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Text="Registrar movimiento" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
@@ -59,7 +59,7 @@
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=HistorialMovimientos}"
                         HorizontalAlignment="Stretch">
                     <StackPanel Orientation="Horizontal" Spacing="10">
-                        <i:Icon Value="mdi-history" Foreground="{DynamicResource BrandBrush}" />
+                        <i:Icon Value="mdi-history" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Text="Historial de movimientos" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
@@ -67,6 +67,7 @@
                 <!-- Tablas maestras: solo Admin -->
                 <TextBlock Text="Tablas maestras"
                            Classes="caption"
+                           Foreground="{DynamicResource SidebarTextoBrush}"
                            FontWeight="SemiBold"
                            Margin="8,8,0,4"
                            IsVisible="{Binding EsAdmin}"
@@ -78,7 +79,7 @@
                         HorizontalAlignment="Stretch"
                         IsVisible="{Binding EsAdmin}">
                     <StackPanel Orientation="Horizontal" Spacing="10">
-                        <i:Icon Value="mdi-shape" Foreground="{DynamicResource BrandBrush}" />
+                        <i:Icon Value="mdi-shape" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Text="Categorías" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
@@ -89,7 +90,7 @@
                         HorizontalAlignment="Stretch"
                         IsVisible="{Binding EsAdmin}">
                     <StackPanel Orientation="Horizontal" Spacing="10">
-                        <i:Icon Value="mdi-truck" Foreground="{DynamicResource BrandBrush}" />
+                        <i:Icon Value="mdi-truck" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Text="Proveedores" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
@@ -100,7 +101,7 @@
                         HorizontalAlignment="Stretch"
                         IsVisible="{Binding EsAdmin}">
                     <StackPanel Orientation="Horizontal" Spacing="10">
-                        <i:Icon Value="mdi-ruler" Foreground="{DynamicResource BrandBrush}" />
+                        <i:Icon Value="mdi-ruler" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Text="Unidades de medida" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
@@ -108,6 +109,7 @@
                 <!-- Reportes: solo Admin -->
                 <TextBlock Text="Reportes"
                            Classes="caption"
+                           Foreground="{DynamicResource SidebarTextoBrush}"
                            FontWeight="SemiBold"
                            Margin="8,8,0,4"
                            IsVisible="{Binding EsAdmin}"
@@ -119,7 +121,7 @@
                         HorizontalAlignment="Stretch"
                         IsVisible="{Binding EsAdmin}">
                     <StackPanel Orientation="Horizontal" Spacing="10">
-                        <i:Icon Value="mdi-currency-usd" Foreground="{DynamicResource BrandBrush}" />
+                        <i:Icon Value="mdi-currency-usd" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Text="Valorización de inventario" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
@@ -130,7 +132,7 @@
                         HorizontalAlignment="Stretch"
                         IsVisible="{Binding EsAdmin}">
                     <StackPanel Orientation="Horizontal" Spacing="10">
-                        <i:Icon Value="mdi-chart-pie" Foreground="{DynamicResource BrandBrush}" />
+                        <i:Icon Value="mdi-chart-pie" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Text="Stock por categoría" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
@@ -141,7 +143,7 @@
                         HorizontalAlignment="Stretch"
                         IsVisible="{Binding EsAdmin}">
                     <StackPanel Orientation="Horizontal" Spacing="10">
-                        <i:Icon Value="mdi-file-document" Foreground="{DynamicResource BrandBrush}" />
+                        <i:Icon Value="mdi-file-document" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Text="Historial por producto" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
@@ -152,7 +154,7 @@
                         HorizontalAlignment="Stretch"
                         IsVisible="{Binding EsAdmin}">
                     <StackPanel Orientation="Horizontal" Spacing="10">
-                        <i:Icon Value="mdi-trending-up" Foreground="{DynamicResource BrandBrush}" />
+                        <i:Icon Value="mdi-trending-up" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Text="Productos más movidos" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
@@ -163,7 +165,7 @@
                         HorizontalAlignment="Stretch"
                         IsVisible="{Binding EsAdmin}">
                     <StackPanel Orientation="Horizontal" Spacing="10">
-                        <i:Icon Value="mdi-shield-search" Foreground="{DynamicResource BrandBrush}" />
+                        <i:Icon Value="mdi-shield-search" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Text="Log de auditoría" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>

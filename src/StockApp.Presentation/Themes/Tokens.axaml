@@ -36,6 +36,19 @@
     <Color x:Key="ColorDeshabilitadoTexto">#94A3B8</Color>
     <Color x:Key="ColorDeshabilitadoBorde">#E2E8F0</Color>
 
+    <!-- Sidebar (dashboard shell): verde bosque oscuro, look SaaS. Blanco
+         sobre ColorSidebar da ~10:1 (AAA). Independiente de la escala brand
+         de acciones (#16A34A/#15803D/#166534) aunque comparte tono. -->
+    <Color x:Key="ColorSidebar">#14532D</Color>
+    <Color x:Key="ColorSidebarActivo">#166534</Color>
+    <Color x:Key="ColorSidebarAccent">#4ADE80</Color>
+    <Color x:Key="ColorSidebarTexto">#FFFFFF</Color>
+    <!-- Overlays translúcidos para hover/pressed de ítems ghost sobre el
+         fondo oscuro del sidebar (no hay Deshabilitado*/BrandSuave que sirvan
+         sobre fondo oscuro). -->
+    <Color x:Key="ColorSidebarHoverOverlay">#22FFFFFF</Color>
+    <Color x:Key="ColorSidebarPressedOverlay">#33FFFFFF</Color>
+
     <!-- ── Brushes (lo que efectivamente se referencia desde XAML) ────────── -->
     <SolidColorBrush x:Key="BrandBrush" Color="{StaticResource ColorBrand}" />
     <SolidColorBrush x:Key="BrandHoverBrush" Color="{StaticResource ColorBrandHover}" />
@@ -59,5 +72,12 @@
     <SolidColorBrush x:Key="DeshabilitadoFondoBrush" Color="{StaticResource ColorDeshabilitadoFondo}" />
     <SolidColorBrush x:Key="DeshabilitadoTextoBrush" Color="{StaticResource ColorDeshabilitadoTexto}" />
     <SolidColorBrush x:Key="DeshabilitadoBordeBrush" Color="{StaticResource ColorDeshabilitadoBorde}" />
+
+    <SolidColorBrush x:Key="SidebarBrush" Color="{StaticResource ColorSidebar}" />
+    <SolidColorBrush x:Key="SidebarActivoBrush" Color="{StaticResource ColorSidebarActivo}" />
+    <SolidColorBrush x:Key="SidebarAccentBrush" Color="{StaticResource ColorSidebarAccent}" />
+    <SolidColorBrush x:Key="SidebarTextoBrush" Color="{StaticResource ColorSidebarTexto}" />
+    <SolidColorBrush x:Key="SidebarHoverOverlayBrush" Color="{StaticResource ColorSidebarHoverOverlay}" />
+    <SolidColorBrush x:Key="SidebarPressedOverlayBrush" Color="{StaticResource ColorSidebarPressedOverlay}" />
 
 </ResourceDictionary>
