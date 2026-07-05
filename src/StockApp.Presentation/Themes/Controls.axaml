@@ -71,10 +71,17 @@
         <Setter Property="Foreground" Value="{DynamicResource DeshabilitadoTextoBrush}" />
     </Style>
     <!-- Estado activo (Tarea 4): fondo brand suave + texto brand + seminegrita.
-         Se combina con .ghost vía Classes.active="{Binding ...}" en el sidebar. -->
+         Se combina con .ghost vía Classes.active="{Binding ...}" en el sidebar.
+         Foreground usa BrandPressedBrush (no BrandBrush) porque BrandBrush
+         (#16A34A) sobre BrandSuaveBrush (#DCFCE7) da contraste ~3.0:1,
+         insuficiente para texto normal (AA exige 4.5:1); BrandPressedBrush
+         (#166534) da ~6.5:1. El acento verde vivo (#16A34A) queda en la
+         barra izquierda de 3px, que no tiene restricción de contraste de texto. -->
     <Style Selector="Button.ghost.active">
         <Setter Property="Background" Value="{DynamicResource BrandSuaveBrush}" />
-        <Setter Property="Foreground" Value="{DynamicResource BrandBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource BrandPressedBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BrandBrush}" />
+        <Setter Property="BorderThickness" Value="3,0,0,0" />
         <Setter Property="FontWeight" Value="SemiBold" />
     </Style>
 
@@ -132,9 +139,15 @@
     </Style>
 
     <!-- ── Card (Border) ────────────────────────────────────────────────────── -->
+    <!-- Acento de color discreto: BorderBrush pasa de neutro (BordeBrush) a
+         verde suave (BrandSuaveBrush). Avalonia Border no soporta un brush
+         distinto por lado, así que un "borde superior verde" requeriría
+         anidar un Border extra en cada vista que usa Border.card (fuera de
+         alcance); el tinte uniforme en verde suave da el acento pedido sin
+         tocar el BoxShadow ni el resto del look. -->
     <Style Selector="Border.card">
         <Setter Property="Background" Value="{DynamicResource SuperficieBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource BordeBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BrandSuaveBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="10" />
         <Setter Property="Padding" Value="16" />

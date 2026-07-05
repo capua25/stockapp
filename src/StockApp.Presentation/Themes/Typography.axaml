@@ -25,7 +25,7 @@
     <Style Selector="TextBlock.titulo-vista">
         <Setter Property="FontSize" Value="20" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{DynamicResource TextoPrimarioBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource BrandBrush}" />
     </Style>
 
     <Style Selector="TextBlock.seccion">
