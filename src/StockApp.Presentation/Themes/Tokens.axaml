@@ -9,10 +9,10 @@
          ════════════════════════════════════════════════════════════════════ -->
 
     <!-- ── Colores base ─────────────────────────────────────────────────── -->
-    <Color x:Key="ColorBrand">#2563EB</Color>
-    <Color x:Key="ColorBrandHover">#1D4ED8</Color>
-    <Color x:Key="ColorBrandPressed">#1E40AF</Color>
-    <Color x:Key="ColorBrandSuave">#EFF6FF</Color>
+    <Color x:Key="ColorBrand">#16A34A</Color>
+    <Color x:Key="ColorBrandHover">#15803D</Color>
+    <Color x:Key="ColorBrandPressed">#166534</Color>
+    <Color x:Key="ColorBrandSuave">#DCFCE7</Color>
 
     <Color x:Key="ColorFondo">#F8FAFC</Color>
     <Color x:Key="ColorSuperficie">#FFFFFF</Color>
