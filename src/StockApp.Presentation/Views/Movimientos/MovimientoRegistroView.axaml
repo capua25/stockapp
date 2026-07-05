@@ -8,12 +8,11 @@
              x:DataType="vm:MovimientoRegistroViewModel">
 
     <ScrollViewer>
-        <Border Padding="24" MaxWidth="480">
+        <Border Classes="card" Padding="24" Margin="24" MaxWidth="480">
             <StackPanel Spacing="12">
 
                 <TextBlock Text="Registrar movimiento de stock"
-                           FontSize="18"
-                           FontWeight="Bold"
+                           Classes="titulo-vista"
                            Margin="0,0,0,8" />
 
                 <StackPanel Spacing="4">
@@ -24,11 +23,12 @@
 
                 <!-- Mensaje de error -->
                 <TextBlock Text="{Binding MensajeError}"
-                           Foreground="Red"
+                           Foreground="{DynamicResource DangerBrush}"
                            IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                            TextWrapping="Wrap" />
 
-                <Button Content="Registrar"
+                <Button Classes="primary"
+                        Content="Registrar"
                         Command="{Binding RegistrarCommand}"
                         HorizontalAlignment="Stretch"
                         HorizontalContentAlignment="Center" />

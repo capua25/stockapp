@@ -6,56 +6,67 @@
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
              x:Class="StockApp.Presentation.Views.Reportes.ValorizacionView"
              x:DataType="vm:ValorizacionViewModel">
-    <Grid RowDefinitions="Auto,*,Auto">
 
-        <!-- Barra de acciones -->
-        <Border Grid.Row="0" Padding="16,8" Background="#F5F5F5">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button Content="Buscar" Command="{Binding BuscarCommand}" />
-                <Button Content="Exportar CSV" Command="{Binding ExportarCommand}" />
-            </StackPanel>
+    <DockPanel Margin="24">
+
+        <TextBlock DockPanel.Dock="Top"
+                   Text="Valorización de inventario"
+                   Classes="titulo-vista"
+                   Margin="0,0,0,16" />
+
+        <Border Classes="card">
+            <Grid RowDefinitions="Auto,*,Auto">
+
+                <!-- Barra de acciones -->
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,12">
+                    <Button Classes="primary" Content="Buscar" Command="{Binding BuscarCommand}" />
+                    <Button Classes="secondary" Content="Exportar CSV" Command="{Binding ExportarCommand}" />
+                </StackPanel>
+
+                <!-- Grilla de valorización -->
+                <DataGrid Grid.Row="1"
+                          ItemsSource="{Binding Items}"
+                          IsReadOnly="True"
+                          CanUserResizeColumns="True"
+                          GridLinesVisibility="Horizontal">
+                    <DataGrid.Styles>
+                        <!-- Columnas numéricas (montos) alineadas a la derecha. -->
+                        <Style Selector="DataGridCell.num">
+                            <Setter Property="HorizontalContentAlignment" Value="Right" />
+                        </Style>
+                    </DataGrid.Styles>
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Código" Binding="{Binding Codigo}" Width="100" />
+                        <DataGridTextColumn Header="Nombre" Binding="{Binding Nombre}" Width="*" />
+                        <DataGridTextColumn Header="Categoría" Binding="{Binding Categoria}" Width="140" />
+                        <DataGridTextColumn Header="Stock" Binding="{Binding StockActual}" Width="100"
+                                            CellStyleClasses="num" />
+                        <DataGridTextColumn Header="P. Costo" Binding="{Binding PrecioCosto}" Width="110"
+                                            CellStyleClasses="num" />
+                        <DataGridTextColumn Header="P. Venta" Binding="{Binding PrecioVenta}" Width="110"
+                                            CellStyleClasses="num" />
+                        <DataGridTextColumn Header="Valor Costo" Binding="{Binding ValorCosto}" Width="120"
+                                            CellStyleClasses="num" />
+                        <DataGridTextColumn Header="Valor Venta" Binding="{Binding ValorVenta}" Width="120"
+                                            CellStyleClasses="num" />
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <!-- Totales -->
+                <StackPanel Grid.Row="2"
+                            Orientation="Horizontal"
+                            Spacing="24"
+                            Margin="0,12,0,0"
+                            IsVisible="{Binding Totales, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <TextBlock Text="Total Valor Costo:" Classes="seccion" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Totales.TotalValorCosto}" Classes="body" VerticalAlignment="Center" />
+                    <TextBlock Text="Total Valor Venta:" Classes="seccion" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Totales.TotalValorVenta}" Classes="body" VerticalAlignment="Center" />
+                </StackPanel>
+
+            </Grid>
         </Border>
 
-        <!-- Grilla de valorización -->
-        <DataGrid Grid.Row="1"
-                  Margin="8"
-                  ItemsSource="{Binding Items}"
-                  IsReadOnly="True"
-                  CanUserResizeColumns="True"
-                  GridLinesVisibility="Horizontal">
-            <DataGrid.Styles>
-                <!-- Columnas numéricas (montos) alineadas a la derecha. -->
-                <Style Selector="DataGridCell.num">
-                    <Setter Property="HorizontalContentAlignment" Value="Right" />
-                </Style>
-            </DataGrid.Styles>
-            <DataGrid.Columns>
-                <DataGridTextColumn Header="Código" Binding="{Binding Codigo}" Width="100" />
-                <DataGridTextColumn Header="Nombre" Binding="{Binding Nombre}" Width="*" />
-                <DataGridTextColumn Header="Categoría" Binding="{Binding Categoria}" Width="140" />
-                <DataGridTextColumn Header="Stock" Binding="{Binding StockActual}" Width="100"
-                                    CellStyleClasses="num" />
-                <DataGridTextColumn Header="P. Costo" Binding="{Binding PrecioCosto}" Width="110"
-                                    CellStyleClasses="num" />
-                <DataGridTextColumn Header="P. Venta" Binding="{Binding PrecioVenta}" Width="110"
-                                    CellStyleClasses="num" />
-                <DataGridTextColumn Header="Valor Costo" Binding="{Binding ValorCosto}" Width="120"
-                                    CellStyleClasses="num" />
-                <DataGridTextColumn Header="Valor Venta" Binding="{Binding ValorVenta}" Width="120"
-                                    CellStyleClasses="num" />
-            </DataGrid.Columns>
-        </DataGrid>
+    </DockPanel>
 
-        <!-- Totales -->
-        <Border Grid.Row="2" Padding="16,8" Background="#F5F5F5"
-                IsVisible="{Binding Totales, Converter={x:Static ObjectConverters.IsNotNull}}">
-            <StackPanel Orientation="Horizontal" Spacing="24">
-                <TextBlock Text="Total Valor Costo:" FontWeight="Bold" VerticalAlignment="Center" />
-                <TextBlock Text="{Binding Totales.TotalValorCosto}" VerticalAlignment="Center" />
-                <TextBlock Text="Total Valor Venta:" FontWeight="Bold" VerticalAlignment="Center" />
-                <TextBlock Text="{Binding Totales.TotalValorVenta}" VerticalAlignment="Center" />
-            </StackPanel>
-        </Border>
-
-    </Grid>
 </UserControl>

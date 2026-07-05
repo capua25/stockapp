@@ -6,44 +6,54 @@
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
              x:Class="StockApp.Presentation.Views.Reportes.MasMovidosView"
              x:DataType="vm:MasMovidosViewModel">
-    <Grid RowDefinitions="Auto,*">
 
-        <!-- Filtros + acciones -->
-        <Border Grid.Row="0" Padding="16,8" Background="#F5F5F5">
-            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                <TextBlock Text="Desde:" VerticalAlignment="Center" />
-                <DatePicker SelectedDate="{Binding FechaDesde}" />
-                <TextBlock Text="Hasta:" VerticalAlignment="Center" />
-                <DatePicker SelectedDate="{Binding FechaHasta}" />
-                <TextBlock Text="Top N:" VerticalAlignment="Center" />
-                <NumericUpDown Value="{Binding TopN}" Minimum="1" Width="120"
-                               FormatString="0" Increment="1" />
-                <Button Content="Buscar" Command="{Binding BuscarCommand}" />
-                <Button Content="Exportar CSV" Command="{Binding ExportarCommand}" />
-            </StackPanel>
+    <DockPanel Margin="24">
+
+        <TextBlock DockPanel.Dock="Top"
+                   Text="Productos más movidos"
+                   Classes="titulo-vista"
+                   Margin="0,0,0,16" />
+
+        <Border Classes="card">
+            <Grid RowDefinitions="Auto,*">
+
+                <!-- Filtros + acciones -->
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,0,0,12">
+                    <TextBlock Text="Desde:" VerticalAlignment="Center" />
+                    <DatePicker SelectedDate="{Binding FechaDesde}" />
+                    <TextBlock Text="Hasta:" VerticalAlignment="Center" />
+                    <DatePicker SelectedDate="{Binding FechaHasta}" />
+                    <TextBlock Text="Top N:" VerticalAlignment="Center" />
+                    <NumericUpDown Value="{Binding TopN}" Minimum="1" Width="120"
+                                   FormatString="0" Increment="1" />
+                    <Button Classes="primary" Content="Buscar" Command="{Binding BuscarCommand}" />
+                    <Button Classes="secondary" Content="Exportar CSV" Command="{Binding ExportarCommand}" />
+                </StackPanel>
+
+                <!-- Grilla de más movidos -->
+                <DataGrid Grid.Row="1"
+                          ItemsSource="{Binding Items}"
+                          IsReadOnly="True"
+                          CanUserResizeColumns="True"
+                          GridLinesVisibility="Horizontal">
+                    <DataGrid.Styles>
+                        <Style Selector="DataGridCell.num">
+                            <Setter Property="HorizontalContentAlignment" Value="Right" />
+                        </Style>
+                    </DataGrid.Styles>
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Código" Binding="{Binding Codigo}" Width="120" />
+                        <DataGridTextColumn Header="Nombre" Binding="{Binding Nombre}" Width="*" />
+                        <DataGridTextColumn Header="Movimientos" Binding="{Binding CantidadMovimientos}" Width="150"
+                                            CellStyleClasses="num" />
+                        <DataGridTextColumn Header="Volumen Total" Binding="{Binding VolumenTotal}" Width="150"
+                                            CellStyleClasses="num" />
+                    </DataGrid.Columns>
+                </DataGrid>
+
+            </Grid>
         </Border>
 
-        <!-- Grilla de más movidos -->
-        <DataGrid Grid.Row="1"
-                  Margin="8"
-                  ItemsSource="{Binding Items}"
-                  IsReadOnly="True"
-                  CanUserResizeColumns="True"
-                  GridLinesVisibility="Horizontal">
-            <DataGrid.Styles>
-                <Style Selector="DataGridCell.num">
-                    <Setter Property="HorizontalContentAlignment" Value="Right" />
-                </Style>
-            </DataGrid.Styles>
-            <DataGrid.Columns>
-                <DataGridTextColumn Header="Código" Binding="{Binding Codigo}" Width="120" />
-                <DataGridTextColumn Header="Nombre" Binding="{Binding Nombre}" Width="*" />
-                <DataGridTextColumn Header="Movimientos" Binding="{Binding CantidadMovimientos}" Width="150"
-                                    CellStyleClasses="num" />
-                <DataGridTextColumn Header="Volumen Total" Binding="{Binding VolumenTotal}" Width="150"
-                                    CellStyleClasses="num" />
-            </DataGrid.Columns>
-        </DataGrid>
+    </DockPanel>
 
-    </Grid>
 </UserControl>
