@@ -11,6 +11,10 @@ namespace StockApp.Application.Catalogo;
 /// </summary>
 public class UnidadMedidaService : IUnidadMedidaService
 {
+    // Nombre/abreviatura de la unidad de medida sembrada por defecto (ver GarantizarUnidadPorDefectoAsync).
+    private const string NombreUnidadPorDefecto      = "Unidad";
+    private const string AbreviaturaUnidadPorDefecto = "u";
+
     private readonly IUnidadMedidaRepository _repo;
     private readonly ICurrentSession         _session;
     private readonly IAuthorizationService   _auth;
@@ -111,5 +115,39 @@ public class UnidadMedidaService : IUnidadMedidaService
     {
         _auth.Verificar(_session.RolActual, Permisos.GestionarTablasMaestras);
         return await _repo.ListarTodasAsync();
+    }
+
+    public async Task<IReadOnlyList<UnidadMedida>> ListarActivasAsync()
+    {
+        _auth.Verificar(_session.RolActual, Permisos.GestionarProductos);
+        var todas = await _repo.ListarTodasAsync();
+        return todas.Where(u => u.Activo).ToList();
+    }
+
+    public async Task<UnidadMedida> GarantizarUnidadPorDefectoAsync()
+    {
+        _auth.Verificar(_session.RolActual, Permisos.GestionarProductos);
+
+        var todas = await _repo.ListarTodasAsync();
+        var existente = todas.FirstOrDefault(u =>
+            string.Equals(u.Nombre, NombreUnidadPorDefecto, StringComparison.OrdinalIgnoreCase));
+        if (existente is not null)
+            return existente;
+
+        var nueva = new UnidadMedida
+        {
+            Nombre      = NombreUnidadPorDefecto,
+            Abreviatura = AbreviaturaUnidadPorDefecto,
+        };
+        var id = await _repo.AgregarAsync(nueva);
+        nueva.Id = id;
+
+        await _audit.RegistrarAsync(
+            _session.UsuarioActual!.Id,
+            AccionAuditada.AltaUnidadMedida,
+            "UnidadMedida", id,
+            $"Alta automática (seed por defecto) — Nombre: {nueva.Nombre}, Abreviatura: {nueva.Abreviatura}");
+
+        return nueva;
     }
 }

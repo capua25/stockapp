@@ -51,6 +51,33 @@
                              Text="{Binding PrecioVenta}" />
                 </Grid>
 
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Unidad de medida (obligatorio)" />
+                    <ComboBox ItemsSource="{Binding UnidadesMedida}"
+                              SelectedItem="{Binding UnidadMedidaSeleccionada}"
+                              HorizontalAlignment="Stretch">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Nombre}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
+
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Categoría" />
+                    <ComboBox ItemsSource="{Binding Categorias}"
+                              SelectedItem="{Binding CategoriaSeleccionada}"
+                              PlaceholderText="Sin categoría"
+                              HorizontalAlignment="Stretch">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Nombre}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
+
                 <!-- Mensaje de error -->
                 <TextBlock Text="{Binding MensajeError}"
                            Foreground="{DynamicResource DangerBrush}"

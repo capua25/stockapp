@@ -132,4 +132,33 @@ public class CategoriaServiceTests
 
         Assert.Null(ex);
     }
+
+    // ─── ListarActivasAsync ──────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ListarActivasAsync_FiltraInactivas()
+    {
+        var (svc, repo, _, _, _) = Crear();
+        repo.Setup(r => r.ListarTodasAsync()).ReturnsAsync(new List<Categoria>
+        {
+            new() { Id = 1, Nombre = "Bebidas", Activo = true },
+            new() { Id = 2, Nombre = "Discontinuada", Activo = false },
+        });
+
+        var activas = await svc.ListarActivasAsync();
+
+        Assert.Single(activas);
+        Assert.Equal("Bebidas", activas[0].Nombre);
+    }
+
+    [Fact]
+    public async Task ListarActivasAsync_Operador_NoLanzaUnauthorized()
+    {
+        var (svc, repo, _, _, _) = Crear(RolUsuario.Operador);
+        repo.Setup(r => r.ListarTodasAsync()).ReturnsAsync(new List<Categoria>());
+
+        var ex = await Record.ExceptionAsync(() => svc.ListarActivasAsync());
+
+        Assert.Null(ex);
+    }
 }

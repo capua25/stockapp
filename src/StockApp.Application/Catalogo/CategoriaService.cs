@@ -101,4 +101,11 @@ public class CategoriaService : ICategoriaService
         _auth.Verificar(_session.RolActual, Permisos.GestionarTablasMaestras);
         return await _repo.ListarTodasAsync();
     }
+
+    public async Task<IReadOnlyList<Categoria>> ListarActivasAsync()
+    {
+        _auth.Verificar(_session.RolActual, Permisos.GestionarProductos);
+        var todas = await _repo.ListarTodasAsync();
+        return todas.Where(c => c.Activo).ToList();
+    }
 }
