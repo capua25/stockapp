@@ -23,6 +23,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StockApp.Infrastructure.Tes
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StockApp.Presentation.Tests", "tests\StockApp.Presentation.Tests\StockApp.Presentation.Tests.csproj", "{FD1F35C7-B594-4450-ACDC-5DA0F723DAED}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{07C2787E-EAC7-C090-1BA3-A61EC2A24D84}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StockApp.Seeder", "tools\StockApp.Seeder\StockApp.Seeder.csproj", "{CBDF09F5-F9C4-4998-9D82-16F4CAA32EDE}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -129,6 +133,18 @@ Global
 		{FD1F35C7-B594-4450-ACDC-5DA0F723DAED}.Release|x64.Build.0 = Release|Any CPU
 		{FD1F35C7-B594-4450-ACDC-5DA0F723DAED}.Release|x86.ActiveCfg = Release|Any CPU
 		{FD1F35C7-B594-4450-ACDC-5DA0F723DAED}.Release|x86.Build.0 = Release|Any CPU
+		{CBDF09F5-F9C4-4998-9D82-16F4CAA32EDE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CBDF09F5-F9C4-4998-9D82-16F4CAA32EDE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CBDF09F5-F9C4-4998-9D82-16F4CAA32EDE}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{CBDF09F5-F9C4-4998-9D82-16F4CAA32EDE}.Debug|x64.Build.0 = Debug|Any CPU
+		{CBDF09F5-F9C4-4998-9D82-16F4CAA32EDE}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{CBDF09F5-F9C4-4998-9D82-16F4CAA32EDE}.Debug|x86.Build.0 = Debug|Any CPU
+		{CBDF09F5-F9C4-4998-9D82-16F4CAA32EDE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CBDF09F5-F9C4-4998-9D82-16F4CAA32EDE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CBDF09F5-F9C4-4998-9D82-16F4CAA32EDE}.Release|x64.ActiveCfg = Release|Any CPU
+		{CBDF09F5-F9C4-4998-9D82-16F4CAA32EDE}.Release|x64.Build.0 = Release|Any CPU
+		{CBDF09F5-F9C4-4998-9D82-16F4CAA32EDE}.Release|x86.ActiveCfg = Release|Any CPU
+		{CBDF09F5-F9C4-4998-9D82-16F4CAA32EDE}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -142,5 +158,6 @@ Global
 		{53F3B00D-4CFD-4DA0-84D8-863E1207B36A} = {E17B7D0E-5A3F-4A16-BCB9-E7E1A69B5408}
 		{3B952836-8968-467C-A338-15A35524F726} = {E17B7D0E-5A3F-4A16-BCB9-E7E1A69B5408}
 		{FD1F35C7-B594-4450-ACDC-5DA0F723DAED} = {E17B7D0E-5A3F-4A16-BCB9-E7E1A69B5408}
+		{CBDF09F5-F9C4-4998-9D82-16F4CAA32EDE} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 	EndGlobalSection
 EndGlobal
