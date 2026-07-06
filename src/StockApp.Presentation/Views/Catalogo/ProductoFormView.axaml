@@ -52,7 +52,7 @@
                 </Grid>
 
                 <StackPanel Spacing="4">
-                    <TextBlock Text="Unidad de medida (obligatorio)" />
+                    <TextBlock Text="Unidad de medida" />
                     <ComboBox ItemsSource="{Binding UnidadesMedida}"
                               SelectedItem="{Binding UnidadMedidaSeleccionada}"
                               HorizontalAlignment="Stretch">
