@@ -44,14 +44,26 @@
                     </Grid>
                 </Button>
 
-                <!-- Movimientos: visible para Admin y Operador -->
-                <Button Command="{Binding NavMovimientosCommand}"
+                <!-- Registrar Entrada: visible para Admin y Operador -->
+                <Button Command="{Binding NavRegistrarEntradaCommand}"
                         Classes="ghost"
-                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Movimientos}"
+                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=RegistrarEntrada}"
                         HorizontalAlignment="Stretch">
                     <Grid ColumnDefinitions="Auto,*">
-                        <i:Icon Grid.Column="0" Value="mdi-swap-horizontal" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Grid.Column="1" Text="Registrar movimiento" VerticalAlignment="Center"
+                        <i:Icon Grid.Column="0" Value="mdi-tray-arrow-down" Foreground="{DynamicResource SidebarTextoBrush}" />
+                        <TextBlock Grid.Column="1" Text="Registrar Entrada" VerticalAlignment="Center"
+                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                </Button>
+
+                <!-- Registrar Salida: visible para Admin y Operador -->
+                <Button Command="{Binding NavRegistrarSalidaCommand}"
+                        Classes="ghost"
+                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=RegistrarSalida}"
+                        HorizontalAlignment="Stretch">
+                    <Grid ColumnDefinitions="Auto,*">
+                        <i:Icon Grid.Column="0" Value="mdi-tray-arrow-up" Foreground="{DynamicResource SidebarTextoBrush}" />
+                        <TextBlock Grid.Column="1" Text="Registrar Salida" VerticalAlignment="Center"
                                    Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
                     </Grid>
                 </Button>

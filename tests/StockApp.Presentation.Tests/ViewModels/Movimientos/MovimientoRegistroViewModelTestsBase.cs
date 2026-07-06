@@ -5,7 +5,6 @@ using Moq;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Entities;
-using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
@@ -14,37 +13,45 @@ using Xunit;
 
 namespace StockApp.Presentation.Tests.ViewModels.Movimientos;
 
-public class MovimientoRegistroViewModelTests
+/// <summary>
+/// Tests comunes a toda subclase de <see cref="MovimientoRegistroViewModelBase"/>
+/// (Entrada/Salida). Cada derivada concreta implementa <see cref="CrearVm"/> para instanciar
+/// su VM concreto; xUnit ejecuta estos [Fact] heredados en cada clase derivada.
+/// </summary>
+public abstract class MovimientoRegistroViewModelTestsBase
 {
+    /// <summary>Crea la instancia concreta del VM bajo test con los mocks provistos.</summary>
+    protected abstract MovimientoRegistroViewModelBase CrearVm(
+        IMovimientoStockService service,
+        IProductoService productoService,
+        INavigationService navigation,
+        IConfirmacionService confirmacion);
+
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    private static (
-        MovimientoRegistroViewModel vm,
+    private (
+        MovimientoRegistroViewModelBase vm,
         Mock<IMovimientoStockService> svcMock,
         Mock<IProductoService> productoMock,
         Mock<INavigationService> navMock,
         Mock<IConfirmacionService> confirmMock)
-        Crear()
+        Crear(IReadOnlyList<Producto>? productos = null)
     {
-        var svcMock     = new Mock<IMovimientoStockService>();
+        var svcMock      = new Mock<IMovimientoStockService>();
         var productoMock = new Mock<IProductoService>();
-        var navMock     = new Mock<INavigationService>();
-        var confirmMock = new Mock<IConfirmacionService>();
+        var navMock      = new Mock<INavigationService>();
+        var confirmMock  = new Mock<IConfirmacionService>();
 
         productoMock
             .Setup(s => s.BuscarAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
-            .ReturnsAsync(new List<Producto>());
+            .ReturnsAsync(productos ?? new List<Producto>());
 
-        var vm = new MovimientoRegistroViewModel(
-            svcMock.Object,
-            productoMock.Object,
-            navMock.Object,
-            confirmMock.Object);
+        var vm = CrearVm(svcMock.Object, productoMock.Object, navMock.Object, confirmMock.Object);
 
         return (vm, svcMock, productoMock, navMock, confirmMock);
     }
 
-    // ── D2 — CanExecute tests ─────────────────────────────────────────────────
+    // ── CanExecute ───────────────────────────────────────────────────────────
 
     [Fact]
     public void RegistrarCommand_SinProducto_EstaDeshabilitado()
@@ -93,7 +100,7 @@ public class MovimientoRegistroViewModelTests
         Assert.False(vm.RegistrarCommand.CanExecute(null));
     }
 
-    // ── D3 — RegistrarAsync: 4 caminos ───────────────────────────────────────
+    // ── RegistrarAsync: 4 caminos ─────────────────────────────────────────────
 
     [Fact]
     public async Task RegistrarAsync_Exitoso_NavegaAHistorial()
@@ -105,8 +112,8 @@ public class MovimientoRegistroViewModelTests
         var dto = new MovimientoRegistradoDto(
             MovimientoId: 1,
             ProductoId: 1,
-            Tipo: TipoMovimiento.Entrada,
-            Motivo: MotivoMovimiento.Compra,
+            Tipo: vm.Tipo,
+            Motivo: vm.Motivo,
             Cantidad: 5m,
             PrecioUnitario: 10m,
             StockAnterior: 0m,
@@ -139,8 +146,8 @@ public class MovimientoRegistroViewModelTests
         var dtoForzado = new MovimientoRegistradoDto(
             MovimientoId: 2,
             ProductoId: 1,
-            Tipo: TipoMovimiento.Salida,
-            Motivo: MotivoMovimiento.Venta,
+            Tipo: vm.Tipo,
+            Motivo: vm.Motivo,
             Cantidad: 10m,
             PrecioUnitario: 5m,
             StockAnterior: 3m,
@@ -200,5 +207,26 @@ public class MovimientoRegistroViewModelTests
         Assert.NotNull(vm.MensajeError);
         Assert.Contains("Producto inactivo", vm.MensajeError);
         navMock.Verify(n => n.Navegar<MovimientoHistorialViewModel>(), Times.Never);
+    }
+
+    // ── InicializarAsync ───────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task InicializarAsync_CargaProductos()
+    {
+        var productos = new List<Producto>
+        {
+            new Producto { Id = 1, Nombre = "Activo",   Activo = true },
+            new Producto { Id = 2, Nombre = "Inactivo", Activo = false },
+        };
+
+        var (vm, _, _, _, _) = Crear(productos);
+
+        await vm.InicializarAsync();
+
+        // Solo productos activos: IProductoService.BuscarAsync no filtra por Activo,
+        // así que el filtro tiene que aplicarse en el VM tras traerlos.
+        Assert.Single(vm.Productos);
+        Assert.Equal("Activo", vm.Productos[0].Nombre);
     }
 }

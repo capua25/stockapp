@@ -2,9 +2,9 @@ using Avalonia.Controls;
 
 namespace StockApp.Presentation.Views.Movimientos;
 
-public partial class MovimientoRegistroView : UserControl
+public partial class MovimientoFormControl : UserControl
 {
-    public MovimientoRegistroView()
+    public MovimientoFormControl()
     {
         InitializeComponent();
     }

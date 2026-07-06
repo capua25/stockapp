@@ -100,14 +100,25 @@ public class InicioViewModelTests
     }
 
     [Fact]
-    public void IrARegistrarMovimiento_LlamaNavegar_AMovimientoRegistroViewModel()
+    public void IrARegistrarEntrada_LlamaNavegar_AEntradaRegistroViewModel()
     {
         var usuario = new UsuarioSesion(1, "jperez", RolUsuario.Operador, "Juan Pérez");
         var (vm, _, navMock) = Crear(usuario);
 
-        vm.IrARegistrarMovimientoCommand.Execute(null);
+        vm.IrARegistrarEntradaCommand.Execute(null);
 
-        navMock.Verify(n => n.Navegar<MovimientoRegistroViewModel>(), Times.Once);
+        navMock.Verify(n => n.Navegar<EntradaRegistroViewModel>(), Times.Once);
+    }
+
+    [Fact]
+    public void IrARegistrarSalida_LlamaNavegar_ASalidaRegistroViewModel()
+    {
+        var usuario = new UsuarioSesion(1, "jperez", RolUsuario.Operador, "Juan Pérez");
+        var (vm, _, navMock) = Crear(usuario);
+
+        vm.IrARegistrarSalidaCommand.Execute(null);
+
+        navMock.Verify(n => n.Navegar<SalidaRegistroViewModel>(), Times.Once);
     }
 
     [Fact]

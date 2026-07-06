@@ -35,7 +35,7 @@ public class ComposicionDIMovimientosTests
         services.AddSingleton<IAuthorizationService, AuthorizationService>();
         services.AddTransient<IAuditLogger, AuditService>();
 
-        // ── Catálogo (requerido por MovimientoRegistroViewModel → IProductoService) ──
+        // ── Catálogo (requerido por Entrada/SalidaRegistroViewModel → IProductoService) ──
         services.AddTransient<IProductoRepository, ProductoRepository>();
         services.AddTransient<IUnidadMedidaRepository, UnidadMedidaRepository>();
         services.AddTransient<IProductoService, ProductoService>();
@@ -50,7 +50,8 @@ public class ComposicionDIMovimientosTests
         services.AddSingleton<IConfirmacionService, ConfirmacionService>();
 
         // ── ViewModels de movimientos ─────────────────────────────────────────
-        services.AddTransient<MovimientoRegistroViewModel>();
+        services.AddTransient<EntradaRegistroViewModel>();
+        services.AddTransient<SalidaRegistroViewModel>();
         services.AddTransient<MovimientoHistorialViewModel>();
 
         return services.BuildServiceProvider();
@@ -77,12 +78,21 @@ public class ComposicionDIMovimientosTests
     // ─── ViewModels (D5) ──────────────────────────────────────────────────────
 
     [Fact]
-    public void Contenedor_Resuelve_MovimientoRegistroViewModel()
+    public void Contenedor_Resuelve_EntradaRegistroViewModel()
     {
         var sp = CrearContenedor();
-        var vm = sp.GetRequiredService<MovimientoRegistroViewModel>();
+        var vm = sp.GetRequiredService<EntradaRegistroViewModel>();
         Assert.NotNull(vm);
-        Assert.IsType<MovimientoRegistroViewModel>(vm);
+        Assert.IsType<EntradaRegistroViewModel>(vm);
+    }
+
+    [Fact]
+    public void Contenedor_Resuelve_SalidaRegistroViewModel()
+    {
+        var sp = CrearContenedor();
+        var vm = sp.GetRequiredService<SalidaRegistroViewModel>();
+        Assert.NotNull(vm);
+        Assert.IsType<SalidaRegistroViewModel>(vm);
     }
 
     [Fact]

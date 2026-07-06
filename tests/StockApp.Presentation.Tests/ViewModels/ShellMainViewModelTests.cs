@@ -101,13 +101,23 @@ public class ShellMainViewModelTests
     // ── D6 — Navegación a movimientos ────────────────────────────────────────
 
     [Fact]
-    public void NavMovimientos_LlamaNavegar_AMovimientoRegistroViewModel()
+    public void NavRegistrarEntrada_LlamaNavegar_AEntradaRegistroViewModel()
     {
         var (vm, _, navMock) = Crear(RolUsuario.Operador);
 
-        vm.NavMovimientosCommand.Execute(null);
+        vm.NavRegistrarEntradaCommand.Execute(null);
 
-        navMock.Verify(n => n.Navegar<MovimientoRegistroViewModel>(), Times.Once);
+        navMock.Verify(n => n.Navegar<EntradaRegistroViewModel>(), Times.Once);
+    }
+
+    [Fact]
+    public void NavRegistrarSalida_LlamaNavegar_ASalidaRegistroViewModel()
+    {
+        var (vm, _, navMock) = Crear(RolUsuario.Operador);
+
+        vm.NavRegistrarSalidaCommand.Execute(null);
+
+        navMock.Verify(n => n.Navegar<SalidaRegistroViewModel>(), Times.Once);
     }
 
     [Fact]
@@ -121,13 +131,23 @@ public class ShellMainViewModelTests
     }
 
     [Fact]
-    public void NavMovimientos_Admin_LlamaNavegar_AMovimientoRegistroViewModel()
+    public void NavRegistrarEntrada_Admin_LlamaNavegar_AEntradaRegistroViewModel()
     {
         var (vm, _, navMock) = Crear(RolUsuario.Admin);
 
-        vm.NavMovimientosCommand.Execute(null);
+        vm.NavRegistrarEntradaCommand.Execute(null);
 
-        navMock.Verify(n => n.Navegar<MovimientoRegistroViewModel>(), Times.Once);
+        navMock.Verify(n => n.Navegar<EntradaRegistroViewModel>(), Times.Once);
+    }
+
+    [Fact]
+    public void NavRegistrarSalida_Admin_LlamaNavegar_ASalidaRegistroViewModel()
+    {
+        var (vm, _, navMock) = Crear(RolUsuario.Admin);
+
+        vm.NavRegistrarSalidaCommand.Execute(null);
+
+        navMock.Verify(n => n.Navegar<SalidaRegistroViewModel>(), Times.Once);
     }
 
     // ── Tarea 4 (UI Kit): estado activo del sidebar ──────────────────────────
@@ -173,13 +193,23 @@ public class ShellMainViewModelTests
     }
 
     [Fact]
-    public void NavMovimientos_EstableceSeccionActiva_Movimientos()
+    public void NavRegistrarEntrada_EstableceSeccionActiva_RegistrarEntrada()
     {
         var (vm, _, _) = Crear(RolUsuario.Operador);
 
-        vm.NavMovimientosCommand.Execute(null);
+        vm.NavRegistrarEntradaCommand.Execute(null);
 
-        Assert.Equal("Movimientos", vm.SeccionActiva);
+        Assert.Equal("RegistrarEntrada", vm.SeccionActiva);
+    }
+
+    [Fact]
+    public void NavRegistrarSalida_EstableceSeccionActiva_RegistrarSalida()
+    {
+        var (vm, _, _) = Crear(RolUsuario.Operador);
+
+        vm.NavRegistrarSalidaCommand.Execute(null);
+
+        Assert.Equal("RegistrarSalida", vm.SeccionActiva);
     }
 
     [Fact]

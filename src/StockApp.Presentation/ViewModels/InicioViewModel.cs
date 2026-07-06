@@ -41,7 +41,10 @@ public partial class InicioViewModel : ViewModelBase
     private void IrAProductos() => _navigation.Navegar<ProductoListViewModel>();
 
     [RelayCommand]
-    private void IrARegistrarMovimiento() => _navigation.Navegar<MovimientoRegistroViewModel>();
+    private void IrARegistrarEntrada() => _navigation.Navegar<EntradaRegistroViewModel>();
+
+    [RelayCommand]
+    private void IrARegistrarSalida() => _navigation.Navegar<SalidaRegistroViewModel>();
 
     [RelayCommand]
     private void IrAHistorialMovimientos() => _navigation.Navegar<MovimientoHistorialViewModel>();

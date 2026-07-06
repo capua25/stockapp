@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -14,10 +16,12 @@ using StockApp.Presentation.Services;
 namespace StockApp.Presentation.ViewModels.Movimientos;
 
 /// <summary>
-/// Formulario de registro de movimiento de stock.
-/// Maneja stock insuficiente con confirmación del usuario.
+/// Base del formulario de registro de movimiento de stock. El tipo de movimiento (Entrada/Salida)
+/// y los motivos disponibles quedan fijos por subclase (ver <see cref="EntradaRegistroViewModel"/>
+/// y <see cref="SalidaRegistroViewModel"/>). Concentra la carga de productos y el registro,
+/// incluyendo el manejo de stock insuficiente con confirmación del usuario.
 /// </summary>
-public partial class MovimientoRegistroViewModel : ViewModelBase
+public abstract partial class MovimientoRegistroViewModelBase : ViewModelBase
 {
     private readonly IMovimientoStockService _service;
     private readonly IProductoService        _productoService;
@@ -26,30 +30,36 @@ public partial class MovimientoRegistroViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(RegistrarCommand))]
-    private Producto? _productoSeleccionado;
+    protected Producto? _productoSeleccionado;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(RegistrarCommand))]
-    private decimal _cantidad;
+    protected decimal _cantidad;
 
     [ObservableProperty]
-    private TipoMovimiento _tipo = TipoMovimiento.Entrada;
+    protected MotivoMovimiento _motivo;
 
     [ObservableProperty]
-    private MotivoMovimiento _motivo = MotivoMovimiento.Compra;
+    protected decimal? _precioUnitario;
 
     [ObservableProperty]
-    private decimal? _precioUnitario;
+    protected string? _comentario;
 
     [ObservableProperty]
-    private string? _comentario;
-
-    [ObservableProperty]
-    private string? _mensajeError;
+    protected string? _mensajeError;
 
     public ObservableCollection<Producto> Productos { get; } = new();
 
-    public MovimientoRegistroViewModel(
+    /// <summary>Tipo de movimiento fijo de la pantalla concreta (Entrada o Salida).</summary>
+    public abstract TipoMovimiento Tipo { get; }
+
+    /// <summary>Motivos habilitados para elegir, filtrados según el tipo fijo de la pantalla.</summary>
+    public abstract IReadOnlyList<MotivoMovimiento> MotivosDisponibles { get; }
+
+    /// <summary>Título de la pantalla, mostrado en el encabezado del formulario.</summary>
+    public abstract string Titulo { get; }
+
+    protected MovimientoRegistroViewModelBase(
         IMovimientoStockService service,
         IProductoService productoService,
         INavigationService navigation,
@@ -59,6 +69,20 @@ public partial class MovimientoRegistroViewModel : ViewModelBase
         _productoService = productoService;
         _navigation      = navigation;
         _confirmacion    = confirmacion;
+    }
+
+    /// <summary>
+    /// Carga los productos activos disponibles para elegir en el combo. IProductoService.BuscarAsync
+    /// no filtra por Activo (devuelve todos), así que el filtro se aplica en memoria tras traerlos:
+    /// no deben poder registrarse movimientos contra productos dados de baja.
+    /// </summary>
+    public async Task InicializarAsync()
+    {
+        var productos = await _productoService.BuscarAsync(null, null, null);
+
+        Productos.Clear();
+        foreach (var p in productos.Where(p => p.Activo))
+            Productos.Add(p);
     }
 
     private bool PuedeRegistrar()

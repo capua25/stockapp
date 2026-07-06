@@ -56,7 +56,7 @@
                             </StackPanel>
                         </Button>
 
-                        <Button Command="{Binding IrARegistrarMovimientoCommand}"
+                        <Button Command="{Binding IrARegistrarEntradaCommand}"
                                 Width="200"
                                 Height="90"
                                 Background="{DynamicResource FondoBrush}"
@@ -66,9 +66,28 @@
                                 Margin="0,0,12,12"
                                 Padding="16">
                             <StackPanel Spacing="4">
-                                <TextBlock Text="Registrar movimiento"
+                                <TextBlock Text="Registrar Entrada"
                                            FontWeight="SemiBold" />
-                                <TextBlock Text="Cargar entradas y salidas de stock"
+                                <TextBlock Text="Cargar entradas de stock"
+                                           FontSize="12"
+                                           TextWrapping="Wrap"
+                                           Opacity="0.6" />
+                            </StackPanel>
+                        </Button>
+
+                        <Button Command="{Binding IrARegistrarSalidaCommand}"
+                                Width="200"
+                                Height="90"
+                                Background="{DynamicResource FondoBrush}"
+                                BorderBrush="{DynamicResource BordeBrush}"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Margin="0,0,12,12"
+                                Padding="16">
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Registrar Salida"
+                                           FontWeight="SemiBold" />
+                                <TextBlock Text="Cargar salidas de stock"
                                            FontSize="12"
                                            TextWrapping="Wrap"
                                            Opacity="0.6" />

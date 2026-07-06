@@ -193,7 +193,8 @@ public partial class App : AvaloniaApp
         services.AddSingleton<IServicioGuardadoArchivo, ServicioGuardadoArchivo>();
 
         // ── Inc 5: VMs de movimientos ─────────────────────────────────────────
-        services.AddTransient<MovimientoRegistroViewModel>();
+        services.AddTransient<EntradaRegistroViewModel>();
+        services.AddTransient<SalidaRegistroViewModel>();
         services.AddTransient<MovimientoHistorialViewModel>();
 
         // ── Inc 6: VMs de reportes ────────────────────────────────────────────

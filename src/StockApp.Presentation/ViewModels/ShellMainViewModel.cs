@@ -96,10 +96,17 @@ public partial class ShellMainViewModel : ViewModelBase
     // ── Movimientos (Inc 5): Operador + Admin ─────────────────────────────────
 
     [RelayCommand]
-    private void NavMovimientos()
+    private void NavRegistrarEntrada()
     {
-        SeccionActiva = "Movimientos";
-        _navigation.Navegar<MovimientoRegistroViewModel>();
+        SeccionActiva = "RegistrarEntrada";
+        _navigation.Navegar<EntradaRegistroViewModel>();
+    }
+
+    [RelayCommand]
+    private void NavRegistrarSalida()
+    {
+        SeccionActiva = "RegistrarSalida";
+        _navigation.Navegar<SalidaRegistroViewModel>();
     }
 
     [RelayCommand]
