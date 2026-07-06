@@ -1,9 +1,10 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Movimientos"
+             xmlns:beh="using:StockApp.Presentation.Behaviors"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
+             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="600"
              x:Class="StockApp.Presentation.Views.Movimientos.MovimientoHistorialView"
              x:DataType="vm:MovimientoHistorialViewModel">
 
@@ -15,27 +16,93 @@
                    Margin="0,0,0,16" />
 
         <Border Classes="card">
-            <Grid RowDefinitions="Auto,*">
+            <Grid RowDefinitions="Auto,Auto,*">
 
                 <!-- Barra de filtros -->
-                <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,12">
-                    <Button Classes="primary"
-                            Content="Buscar"
-                            Command="{Binding BuscarCommand}" />
-                    <Button Classes="secondary"
-                            Content="Recalcular stock"
-                            Command="{Binding RecalcularCommand}" />
+                <WrapPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
+                    <StackPanel Spacing="4" Margin="0,0,12,8">
+                        <TextBlock Text="Producto" Classes="caption" />
+                        <ComboBox ItemsSource="{Binding Productos}"
+                                  SelectedItem="{Binding ProductoFiltroSeleccionado}"
+                                  PlaceholderText="Todos"
+                                  MinWidth="180">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Nombre}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <StackPanel Spacing="4" Margin="0,0,12,8">
+                        <TextBlock Text="Tipo" Classes="caption" />
+                        <ComboBox ItemsSource="{Binding TiposDisponibles}"
+                                  SelectedItem="{Binding TipoFiltroSeleccionado}"
+                                  MinWidth="140">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Nombre}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <StackPanel Spacing="4" Margin="0,0,12,8">
+                        <TextBlock Text="Desde" Classes="caption" />
+                        <CalendarDatePicker SelectedDate="{Binding FechaDesde}"
+                                            PlaceholderText="dd/mm/aaaa"
+                                            SelectedDateFormat="Custom"
+                                            CustomDateFormatString="dd/MM/yyyy"
+                                            beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
+                    </StackPanel>
+
+                    <StackPanel Spacing="4" Margin="0,0,12,8">
+                        <TextBlock Text="Hasta" Classes="caption" />
+                        <CalendarDatePicker SelectedDate="{Binding FechaHasta}"
+                                            PlaceholderText="dd/mm/aaaa"
+                                            SelectedDateFormat="Custom"
+                                            CustomDateFormatString="dd/MM/yyyy"
+                                            beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
+                    </StackPanel>
+
+                    <StackPanel Spacing="4" VerticalAlignment="Bottom" Orientation="Horizontal" Margin="0,0,0,8">
+                        <Button Classes="primary"
+                                Content="Buscar"
+                                Command="{Binding BuscarCommand}"
+                                Margin="0,0,8,0" />
+                        <Button Classes="secondary"
+                                Content="Recalcular stock"
+                                Command="{Binding RecalcularCommand}" />
+                    </StackPanel>
+                </WrapPanel>
+
+                <!-- Producto a recalcular -->
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,0,0,12">
+                    <TextBlock Text="Producto a recalcular (ID):" VerticalAlignment="Center" />
+                    <NumericUpDown Value="{Binding ProductoIdParaRecalcular}" Minimum="0" Width="140"
+                                   FormatString="0" Increment="1" />
                 </StackPanel>
 
                 <!-- Listado -->
-                <ListBox Grid.Row="1"
-                         ItemsSource="{Binding Items}">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding ProductoNombre}" />
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
+                <DataGrid Grid.Row="2"
+                          ItemsSource="{Binding Items}"
+                          IsReadOnly="True"
+                          CanUserSortColumns="True"
+                          CanUserResizeColumns="True"
+                          GridLinesVisibility="Horizontal">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha}" Width="150" />
+                        <DataGridTextColumn Header="Producto" Binding="{Binding ProductoNombre}" Width="160" />
+                        <DataGridTextColumn Header="Tipo" Binding="{Binding Tipo}" Width="90" />
+                        <DataGridTextColumn Header="Motivo" Binding="{Binding Motivo}" Width="100" />
+                        <DataGridTextColumn Header="Cantidad" Binding="{Binding Cantidad}" Width="90" />
+                        <DataGridTextColumn Header="Precio" Binding="{Binding PrecioUnitario, StringFormat='$ {0:F2}'}" Width="100" />
+                        <DataGridTextColumn Header="Stock ant." Binding="{Binding StockAnterior}" Width="100" />
+                        <DataGridTextColumn Header="Stock nuevo" Binding="{Binding StockNuevo}" Width="100" />
+                        <DataGridTextColumn Header="Usuario" Binding="{Binding UsuarioNombre}" Width="120" />
+                        <DataGridTextColumn Header="Comentario" Binding="{Binding Comentario}" Width="*" />
+                    </DataGrid.Columns>
+                </DataGrid>
 
             </Grid>
         </Border>

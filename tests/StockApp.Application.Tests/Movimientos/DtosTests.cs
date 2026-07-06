@@ -111,7 +111,8 @@ public class DtosTests
             StockNuevo: 18m,
             Comentario: null,
             Fecha: fecha,
-            UsuarioId: 1);
+            UsuarioId: 1,
+            UsuarioNombre: "Admin");
 
         Assert.Equal(7, dto.MovimientoId);
         Assert.Equal(3, dto.ProductoId);
@@ -125,6 +126,7 @@ public class DtosTests
         Assert.Null(dto.Comentario);
         Assert.Equal(fecha, dto.Fecha);
         Assert.Equal(1, dto.UsuarioId);
+        Assert.Equal("Admin", dto.UsuarioNombre);
     }
 
     [Fact]

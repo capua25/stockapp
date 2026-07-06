@@ -481,6 +481,73 @@ public class MovimientoStockRepositoryTests : IDisposable
         Assert.Equal(0m,  resultado[1].StockAnterior);
         Assert.Equal(10m, resultado[1].StockNuevo);
     }
+
+    // ── UsuarioNombre en el historial ─────────────────────────────────────────
+
+    [Fact]
+    public async Task ObtenerHistorialAsync_PopulaUsuarioNombre_ConNombreCompleto()
+    {
+        var um = NuevaUm();
+        var usuario = NuevoUsuario("jperez");
+        usuario.NombreCompleto = "Juan Pérez";
+        _ctx.UnidadesMedida.Add(um);
+        _ctx.Usuarios.Add(usuario);
+        await _ctx.SaveChangesAsync();
+
+        var p = NuevoProducto("USR001", um, 0m);
+        _ctx.Productos.Add(p);
+        await _ctx.SaveChangesAsync();
+
+        _ctx.MovimientosStock.Add(new MovimientoStock
+        {
+            ProductoId     = p.Id,
+            UsuarioId      = usuario.Id,
+            Tipo           = TipoMovimiento.Entrada,
+            Cantidad       = 5m,
+            PrecioUnitario = 10m,
+            Fecha          = DateTime.UtcNow,
+            Motivo         = MotivoMovimiento.Compra
+        });
+        await _ctx.SaveChangesAsync();
+        _ctx.ChangeTracker.Clear();
+
+        var resultado = await _repo.ObtenerHistorialAsync(new HistorialMovimientoFiltro(ProductoId: p.Id));
+
+        Assert.Single(resultado);
+        Assert.Equal("Juan Pérez", resultado[0].UsuarioNombre);
+    }
+
+    [Fact]
+    public async Task ObtenerHistorialAsync_PopulaUsuarioNombre_FallbackANombreUsuarioSiNoHayNombreCompleto()
+    {
+        var um = NuevaUm();
+        var usuario = NuevoUsuario("mgomez"); // NombreCompleto queda null (default del helper)
+        _ctx.UnidadesMedida.Add(um);
+        _ctx.Usuarios.Add(usuario);
+        await _ctx.SaveChangesAsync();
+
+        var p = NuevoProducto("USR002", um, 0m);
+        _ctx.Productos.Add(p);
+        await _ctx.SaveChangesAsync();
+
+        _ctx.MovimientosStock.Add(new MovimientoStock
+        {
+            ProductoId     = p.Id,
+            UsuarioId      = usuario.Id,
+            Tipo           = TipoMovimiento.Entrada,
+            Cantidad       = 5m,
+            PrecioUnitario = 10m,
+            Fecha          = DateTime.UtcNow,
+            Motivo         = MotivoMovimiento.Compra
+        });
+        await _ctx.SaveChangesAsync();
+        _ctx.ChangeTracker.Clear();
+
+        var resultado = await _repo.ObtenerHistorialAsync(new HistorialMovimientoFiltro(ProductoId: p.Id));
+
+        Assert.Single(resultado);
+        Assert.Equal("mgomez", resultado[0].UsuarioNombre);
+    }
 }
 
 /// <summary>

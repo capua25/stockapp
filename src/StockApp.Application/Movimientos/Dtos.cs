@@ -43,7 +43,8 @@ public record MovimientoHistorialDto(
     decimal StockNuevo,
     string? Comentario,
     DateTime Fecha,
-    int UsuarioId);
+    int UsuarioId,
+    string UsuarioNombre);
 
 /// <summary>Resultado del recálculo de stock (RS-08).</summary>
 public record RecalculoResultadoDto(

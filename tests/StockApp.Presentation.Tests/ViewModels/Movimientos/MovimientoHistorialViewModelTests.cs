@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Moq;
+using StockApp.Application.Catalogo;
 using StockApp.Application.Movimientos;
+using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.ViewModels.Movimientos;
@@ -27,23 +30,35 @@ public class MovimientoHistorialViewModelTests
             StockNuevo: 10m,
             Comentario: null,
             Fecha: DateTime.UtcNow,
-            UsuarioId: 1);
+            UsuarioId: 1,
+            UsuarioNombre: "Admin");
+
+    private static Producto CrearProducto(int id, string nombre = "Producto", bool activo = true)
+        => new() { Id = id, Nombre = nombre, Codigo = $"SKU{id}", Activo = activo };
 
     private static (
         MovimientoHistorialViewModel vm,
         Mock<IMovimientoStockService> svcMock,
-        Mock<INavigationService> navMock)
-        Crear(IReadOnlyList<MovimientoHistorialDto>? items = null)
+        Mock<INavigationService> navMock,
+        Mock<IProductoService> productoSvcMock)
+        Crear(
+            IReadOnlyList<MovimientoHistorialDto>? items = null,
+            IReadOnlyList<Producto>? productos = null)
     {
         var svcMock = new Mock<IMovimientoStockService>();
         var navMock = new Mock<INavigationService>();
+        var productoSvcMock = new Mock<IProductoService>();
 
         svcMock
             .Setup(s => s.ObtenerHistorialAsync(It.IsAny<HistorialMovimientoFiltro>()))
             .ReturnsAsync(items ?? new List<MovimientoHistorialDto>());
 
-        var vm = new MovimientoHistorialViewModel(svcMock.Object, navMock.Object);
-        return (vm, svcMock, navMock);
+        productoSvcMock
+            .Setup(s => s.BuscarAsync(null, null, null))
+            .ReturnsAsync(productos ?? new List<Producto>());
+
+        var vm = new MovimientoHistorialViewModel(svcMock.Object, navMock.Object, productoSvcMock.Object);
+        return (vm, svcMock, navMock, productoSvcMock);
     }
 
     // ── D4 tests ──────────────────────────────────────────────────────────────
@@ -52,7 +67,7 @@ public class MovimientoHistorialViewModelTests
     public async Task CargarAsync_PopulaItems()
     {
         var lista = new List<MovimientoHistorialDto> { CrearDto(1), CrearDto(2) };
-        var (vm, svcMock, _) = Crear(lista);
+        var (vm, svcMock, _, _) = Crear(lista);
 
         await vm.CargarAsync();
 
@@ -63,7 +78,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public async Task CargarAsync_SinResultados_ItemsVacio()
     {
-        var (vm, _, _) = Crear(new List<MovimientoHistorialDto>());
+        var (vm, _, _, _) = Crear(new List<MovimientoHistorialDto>());
 
         await vm.CargarAsync();
 
@@ -73,7 +88,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public async Task BuscarAsync_ConFiltros_DelegaAlServiceConFiltrosConstruidos()
     {
-        var (vm, svcMock, _) = Crear();
+        var (vm, svcMock, _, _) = Crear();
         vm.FiltroProductoId = 5;
         vm.FiltroTipo = TipoMovimiento.Salida;
         vm.FechaDesde = new DateTime(2026, 1, 1);
@@ -91,7 +106,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public async Task BuscarAsync_SinFiltros_DelegaFiltroVacio()
     {
-        var (vm, svcMock, _) = Crear();
+        var (vm, svcMock, _, _) = Crear();
 
         await vm.BuscarCommand.ExecuteAsync(null);
 
@@ -106,7 +121,7 @@ public class MovimientoHistorialViewModelTests
     public async Task RecalcularAsync_LlamaRecalcularStockAsync_YActualizaLista()
     {
         var lista = new List<MovimientoHistorialDto> { CrearDto(1) };
-        var (vm, svcMock, _) = Crear(lista);
+        var (vm, svcMock, _, _) = Crear(lista);
         vm.ProductoIdParaRecalcular = 1;
 
         svcMock
@@ -127,11 +142,84 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public async Task RecalcularAsync_SinProductoSeleccionado_NoLlamaServicio()
     {
-        var (vm, svcMock, _) = Crear();
+        var (vm, svcMock, _, _) = Crear();
         vm.ProductoIdParaRecalcular = null;
 
         await vm.RecalcularCommand.ExecuteAsync(null);
 
         svcMock.Verify(s => s.RecalcularStockAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    // ── InicializarAsync / filtro de producto y tipo ──────────────────────────
+
+    [Fact]
+    public async Task InicializarAsync_PopulaSoloProductosActivos()
+    {
+        var productos = new List<Producto>
+        {
+            CrearProducto(1, "Activo", activo: true),
+            CrearProducto(2, "Inactivo", activo: false),
+        };
+        var (vm, _, _, productoSvcMock) = Crear(productos: productos);
+
+        await vm.InicializarAsync();
+
+        productoSvcMock.Verify(s => s.BuscarAsync(null, null, null), Times.Once);
+        Assert.Single(vm.Productos);
+        Assert.Equal("Activo", vm.Productos[0].Nombre);
+    }
+
+    [Fact]
+    public async Task InicializarAsync_TambienCargaHistorial()
+    {
+        var lista = new List<MovimientoHistorialDto> { CrearDto(1) };
+        var (vm, svcMock, _, _) = Crear(items: lista);
+
+        await vm.InicializarAsync();
+
+        svcMock.Verify(s => s.ObtenerHistorialAsync(It.IsAny<HistorialMovimientoFiltro>()), Times.Once);
+        Assert.Single(vm.Items);
+    }
+
+    [Fact]
+    public void ProductoFiltroSeleccionado_AlAsignar_DerivaFiltroProductoId()
+    {
+        var (vm, _, _, _) = Crear();
+        var producto = CrearProducto(7, "Azúcar");
+
+        vm.ProductoFiltroSeleccionado = producto;
+
+        Assert.Equal(7, vm.FiltroProductoId);
+    }
+
+    [Fact]
+    public void ProductoFiltroSeleccionado_AlLimpiar_FiltroProductoIdVuelveANull()
+    {
+        var (vm, _, _, _) = Crear();
+        vm.ProductoFiltroSeleccionado = CrearProducto(7);
+
+        vm.ProductoFiltroSeleccionado = null;
+
+        Assert.Null(vm.FiltroProductoId);
+    }
+
+    [Fact]
+    public void TipoFiltroSeleccionado_PorDefecto_EsTodos()
+    {
+        var (vm, _, _, _) = Crear();
+
+        Assert.Null(vm.TipoFiltroSeleccionado!.Valor);
+        Assert.Null(vm.FiltroTipo);
+    }
+
+    [Fact]
+    public void TipoFiltroSeleccionado_AlAsignarSalida_DerivaFiltroTipo()
+    {
+        var (vm, _, _, _) = Crear();
+        var opcionSalida = vm.TiposDisponibles.Single(o => o.Valor == TipoMovimiento.Salida);
+
+        vm.TipoFiltroSeleccionado = opcionSalida;
+
+        Assert.Equal(TipoMovimiento.Salida, vm.FiltroTipo);
     }
 }

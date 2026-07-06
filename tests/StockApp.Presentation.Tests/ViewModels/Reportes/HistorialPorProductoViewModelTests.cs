@@ -30,7 +30,8 @@ public class HistorialPorProductoViewModelTests
             StockNuevo: 10m,
             Comentario: "alta inicial",
             Fecha: new DateTime(2026, 1, 15),
-            UsuarioId: 3);
+            UsuarioId: 3,
+            UsuarioNombre: "Admin");
 
     private static (
         HistorialPorProductoViewModel vm,

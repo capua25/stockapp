@@ -1,13 +1,22 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using StockApp.Application.Catalogo;
 using StockApp.Application.Movimientos;
+using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
 
 namespace StockApp.Presentation.ViewModels.Movimientos;
+
+/// <summary>
+/// Opción de filtro por tipo de movimiento para el ComboBox del historial.
+/// Valor=null representa "Todos" (sin filtro de tipo).
+/// </summary>
+public sealed record OpcionTipoMovimiento(string Nombre, TipoMovimiento? Valor);
 
 /// <summary>
 /// ViewModel del historial de movimientos de stock con filtros y recálculo.
@@ -16,6 +25,7 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
 {
     private readonly IMovimientoStockService _service;
     private readonly INavigationService      _navigation;
+    private readonly IProductoService        _productoService;
 
     [ObservableProperty]
     private int? _filtroProductoId;
@@ -32,14 +42,58 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
     [ObservableProperty]
     private int? _productoIdParaRecalcular;
 
+    /// <summary>Producto seleccionado en el ComboBox de filtro (null = "Todos").</summary>
+    [ObservableProperty]
+    private Producto? _productoFiltroSeleccionado;
+
+    /// <summary>Opción de tipo seleccionada en el ComboBox de filtro (Valor=null = "Todos").</summary>
+    [ObservableProperty]
+    private OpcionTipoMovimiento? _tipoFiltroSeleccionado;
+
     public ObservableCollection<MovimientoHistorialDto> Items { get; } = new();
+
+    /// <summary>Productos activos disponibles para el ComboBox de filtro.</summary>
+    public ObservableCollection<Producto> Productos { get; } = new();
+
+    /// <summary>Opciones fijas para el ComboBox de filtro por tipo ("Todos", "Entrada", "Salida").</summary>
+    public ObservableCollection<OpcionTipoMovimiento> TiposDisponibles { get; } = new()
+    {
+        new OpcionTipoMovimiento("Todos", null),
+        new OpcionTipoMovimiento("Entrada", TipoMovimiento.Entrada),
+        new OpcionTipoMovimiento("Salida", TipoMovimiento.Salida),
+    };
 
     public MovimientoHistorialViewModel(
         IMovimientoStockService service,
-        INavigationService navigation)
+        INavigationService navigation,
+        IProductoService productoService)
     {
-        _service    = service;
-        _navigation = navigation;
+        _service         = service;
+        _navigation      = navigation;
+        _productoService = productoService;
+
+        _tipoFiltroSeleccionado = TiposDisponibles[0];
+    }
+
+    partial void OnProductoFiltroSeleccionadoChanged(Producto? value)
+        => FiltroProductoId = value?.Id;
+
+    partial void OnTipoFiltroSeleccionadoChanged(OpcionTipoMovimiento? value)
+        => FiltroTipo = value?.Valor;
+
+    /// <summary>
+    /// Inicialización de la vista: carga los productos activos para el filtro
+    /// y el historial completo. Se invoca una sola vez al mostrar la vista
+    /// (no hay hook de navegación que lo dispare, ver code-behind).
+    /// </summary>
+    public async Task InicializarAsync()
+    {
+        var productos = await _productoService.BuscarAsync(null, null, null);
+        Productos.Clear();
+        foreach (var p in productos.Where(p => p.Activo))
+            Productos.Add(p);
+
+        await CargarAsync();
     }
 
     public async Task CargarAsync()

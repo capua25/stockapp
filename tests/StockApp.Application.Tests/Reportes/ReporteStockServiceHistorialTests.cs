@@ -46,7 +46,8 @@ public class ReporteStockServiceHistorialTests
             StockNuevo:      5m,
             Comentario:      null,
             Fecha:           new DateTime(2026, 1, 1),
-            UsuarioId:       1);
+            UsuarioId:       1,
+            UsuarioNombre:   "Admin");
 
     // ── Tests ─────────────────────────────────────────────────────────────────
 

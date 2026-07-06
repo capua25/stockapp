@@ -354,7 +354,7 @@ public class MovimientoStockServiceTests
         var esperado = new List<MovimientoHistorialDto>
         {
             new(1, 1, "P", TipoMovimiento.Entrada, MotivoMovimiento.Compra,
-                10m, 100m, 0m, 10m, null, DateTime.UtcNow, 1)
+                10m, 100m, 0m, 10m, null, DateTime.UtcNow, 1, "Admin")
         };
         repo.Setup(r => r.ObtenerHistorialAsync(It.IsAny<HistorialMovimientoFiltro>()))
             .ReturnsAsync(esperado);

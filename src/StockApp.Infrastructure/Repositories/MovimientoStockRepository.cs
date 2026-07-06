@@ -92,6 +92,7 @@ public class MovimientoStockRepository : IMovimientoStockRepository
         // Construir query con filtros condicionales encadenados (patrón ProductoRepository.BuscarAsync)
         var q = _ctx.MovimientosStock
             .Include(m => m.Producto)
+            .Include(m => m.Usuario)
             .AsQueryable();
 
         if (filtro.ProductoId.HasValue)
@@ -148,7 +149,8 @@ public class MovimientoStockRepository : IMovimientoStockRepository
                 StockNuevo:     stockNuevo,
                 Comentario:     m.Comentario,
                 Fecha:          m.Fecha,
-                UsuarioId:      m.UsuarioId
+                UsuarioId:      m.UsuarioId,
+                UsuarioNombre:  m.Usuario?.NombreCompleto ?? m.Usuario?.NombreUsuario ?? string.Empty
             ));
         }
 
