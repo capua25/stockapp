@@ -260,6 +260,54 @@ public class ProductoRepositoryTests : IDisposable
         Assert.Equal(3, result.Count);
     }
 
+    // ── BuscarAsync / BuscarPorTextoAsync: Include de UnidadMedida y Categoria ──
+    // (fix: los métodos hacían ToListAsync() sin .Include(), y con lazy loading
+    // deshabilitado las navegaciones llegaban null tras leer de la DB real).
+
+    [Fact]
+    public async Task BuscarAsync_IncluyeUnidadMedidaYCategoria()
+    {
+        var (repo, um) = await SeedUmAsync();
+        var categoria = new Categoria { Nombre = "Bebidas" };
+        _ctx.Categorias.Add(categoria);
+        await _ctx.SaveChangesAsync();
+
+        var p = NuevoProducto("SKU001", "Producto Test", um);
+        p.Categoria = categoria;
+        await repo.AgregarAsync(p);
+        _ctx.ChangeTracker.Clear();
+
+        var result = await repo.BuscarAsync(sku: null, codigoBarras: null, nombre: null);
+
+        Assert.Single(result);
+        Assert.NotNull(result[0].UnidadMedida);
+        Assert.Equal("Unidad", result[0].UnidadMedida!.Nombre);
+        Assert.NotNull(result[0].Categoria);
+        Assert.Equal("Bebidas", result[0].Categoria!.Nombre);
+    }
+
+    [Fact]
+    public async Task BuscarPorTextoAsync_IncluyeUnidadMedidaYCategoria()
+    {
+        var (repo, um) = await SeedUmAsync();
+        var categoria = new Categoria { Nombre = "Limpieza" };
+        _ctx.Categorias.Add(categoria);
+        await _ctx.SaveChangesAsync();
+
+        var p = NuevoProducto("SKU001", "Producto Test", um);
+        p.Categoria = categoria;
+        await repo.AgregarAsync(p);
+        _ctx.ChangeTracker.Clear();
+
+        var result = await repo.BuscarPorTextoAsync("Producto");
+
+        Assert.Single(result);
+        Assert.NotNull(result[0].UnidadMedida);
+        Assert.Equal("Unidad", result[0].UnidadMedida!.Nombre);
+        Assert.NotNull(result[0].Categoria);
+        Assert.Equal("Limpieza", result[0].Categoria!.Nombre);
+    }
+
     // ── ExisteCodigoAsync ─────────────────────────────────────────────────────
 
     [Fact]

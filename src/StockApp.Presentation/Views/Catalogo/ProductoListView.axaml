@@ -35,17 +35,20 @@
                 </Grid>
 
                 <!-- Listado -->
-                <ListBox ItemsSource="{Binding Items}">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <StackPanel Orientation="Horizontal" Spacing="16" Margin="4">
-                                <TextBlock Text="{Binding Codigo}" Width="100" FontWeight="SemiBold" />
-                                <TextBlock Text="{Binding Nombre}" Width="250" />
-                                <TextBlock Text="{Binding PrecioVenta, StringFormat='$ {0:F2}'}" Width="100" />
-                            </StackPanel>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
+                <DataGrid ItemsSource="{Binding Items}"
+                          IsReadOnly="True"
+                          CanUserSortColumns="True"
+                          CanUserResizeColumns="True"
+                          GridLinesVisibility="Horizontal">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Código" Binding="{Binding Codigo}" Width="100" />
+                        <DataGridTextColumn Header="Nombre" Binding="{Binding Nombre}" Width="*" />
+                        <DataGridTextColumn Header="Costo" Binding="{Binding PrecioCosto, StringFormat='$ {0:F2}'}" Width="100" />
+                        <DataGridTextColumn Header="Venta" Binding="{Binding PrecioVenta, StringFormat='$ {0:F2}'}" Width="100" />
+                        <DataGridTextColumn Header="Unidad" Binding="{Binding UnidadMedida.Nombre}" Width="120" />
+                        <DataGridTextColumn Header="Categoría" Binding="{Binding Categoria.Nombre, TargetNullValue='—'}" Width="140" />
+                    </DataGrid.Columns>
+                </DataGrid>
 
             </DockPanel>
         </Border>

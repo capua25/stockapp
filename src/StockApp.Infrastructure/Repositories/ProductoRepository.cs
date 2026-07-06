@@ -30,7 +30,10 @@ public class ProductoRepository : IProductoRepository
     /// </summary>
     public async Task<IReadOnlyList<Producto>> BuscarAsync(string? sku, string? codigoBarras, string? nombre)
     {
-        var q = _ctx.Productos.AsQueryable();
+        var q = _ctx.Productos
+            .Include(p => p.UnidadMedida)
+            .Include(p => p.Categoria)
+            .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(sku))
             q = q.Where(p => p.Codigo.Contains(sku));
@@ -54,7 +57,10 @@ public class ProductoRepository : IProductoRepository
     /// </summary>
     public async Task<IReadOnlyList<Producto>> BuscarPorTextoAsync(string? texto)
     {
-        var q = _ctx.Productos.AsQueryable();
+        var q = _ctx.Productos
+            .Include(p => p.UnidadMedida)
+            .Include(p => p.Categoria)
+            .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(texto))
         {
