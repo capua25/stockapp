@@ -24,9 +24,15 @@
                     <NumericUpDown Value="{Binding UsuarioId}" Minimum="0" Width="120"
                                    FormatString="0" Increment="1" />
                     <TextBlock Text="Desde:" VerticalAlignment="Center" />
-                    <DatePicker SelectedDate="{Binding FechaDesde, Converter={StaticResource DateTimeOffsetDateTimeConverter}}" />
+                    <CalendarDatePicker SelectedDate="{Binding FechaDesde}"
+                                        PlaceholderText="dd/mm/aaaa"
+                                        SelectedDateFormat="Custom"
+                                        CustomDateFormatString="dd/MM/yyyy" />
                     <TextBlock Text="Hasta:" VerticalAlignment="Center" />
-                    <DatePicker SelectedDate="{Binding FechaHasta, Converter={StaticResource DateTimeOffsetDateTimeConverter}}" />
+                    <CalendarDatePicker SelectedDate="{Binding FechaHasta}"
+                                        PlaceholderText="dd/mm/aaaa"
+                                        SelectedDateFormat="Custom"
+                                        CustomDateFormatString="dd/MM/yyyy" />
                     <Button Classes="primary" Content="Buscar" Command="{Binding BuscarCommand}" />
                     <Button Classes="secondary" Content="Exportar CSV" Command="{Binding ExportarCommand}" />
                 </StackPanel>

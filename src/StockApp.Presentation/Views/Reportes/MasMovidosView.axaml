@@ -21,9 +21,15 @@
                 <!-- Filtros + acciones -->
                 <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,0,0,12">
                     <TextBlock Text="Desde:" VerticalAlignment="Center" />
-                    <DatePicker SelectedDate="{Binding FechaDesde, Converter={StaticResource DateTimeOffsetDateTimeConverter}}" />
+                    <CalendarDatePicker SelectedDate="{Binding FechaDesde}"
+                                        PlaceholderText="dd/mm/aaaa"
+                                        SelectedDateFormat="Custom"
+                                        CustomDateFormatString="dd/MM/yyyy" />
                     <TextBlock Text="Hasta:" VerticalAlignment="Center" />
-                    <DatePicker SelectedDate="{Binding FechaHasta, Converter={StaticResource DateTimeOffsetDateTimeConverter}}" />
+                    <CalendarDatePicker SelectedDate="{Binding FechaHasta}"
+                                        PlaceholderText="dd/mm/aaaa"
+                                        SelectedDateFormat="Custom"
+                                        CustomDateFormatString="dd/MM/yyyy" />
                     <TextBlock Text="Top N:" VerticalAlignment="Center" />
                     <NumericUpDown Value="{Binding TopN}" Minimum="1" Width="120"
                                    FormatString="0" Increment="1" />
