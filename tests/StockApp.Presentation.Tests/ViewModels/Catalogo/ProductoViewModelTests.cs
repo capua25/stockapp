@@ -62,6 +62,31 @@ public class ProductoListViewModelTests
     }
 
     [Fact]
+    public async Task FiltroBusqueda_AlCambiar_DisparaBusquedaAutomaticaConDebounce()
+    {
+        var (vm, svcMock, _) = Crear();
+
+        vm.FiltroBusqueda = "aceite";
+        await vm._tareaDebounce;
+
+        svcMock.Verify(s => s.BuscarPorTextoAsync("aceite"), Times.Once);
+    }
+
+    [Fact]
+    public async Task FiltroBusqueda_CambiosRapidosSeguidos_CancelaBusquedaObsoleta()
+    {
+        var (vm, svcMock, _) = Crear();
+
+        vm.FiltroBusqueda = "ace";
+        vm.FiltroBusqueda = "aceite";
+        await vm._tareaDebounce;
+
+        svcMock.Verify(s => s.BuscarPorTextoAsync("aceite"), Times.Once);
+        svcMock.Verify(s => s.BuscarPorTextoAsync("ace"), Times.Never);
+        svcMock.Verify(s => s.BuscarPorTextoAsync(It.IsAny<string?>()), Times.Once);
+    }
+
+    [Fact]
     public async Task NuevoCommand_NavegaAProductoFormViewModel()
     {
         var (vm, _, navMock) = Crear();
