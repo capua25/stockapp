@@ -56,6 +56,8 @@ public class ProductoService : IProductoService
             && await _repo.ExisteCodigoBarrasAsync(producto.CodigoBarras, null))
             throw new InvalidOperationException($"Ya existe un producto con el código de barras '{producto.CodigoBarras}'.");
 
+        producto.FechaAlta = DateTime.UtcNow;
+
         var id = await _repo.AgregarAsync(producto);
 
         await _audit.RegistrarAsync(

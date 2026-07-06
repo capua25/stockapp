@@ -101,6 +101,29 @@ public class ProductoServiceTests
             "Producto", 42, It.IsAny<string>()), Times.Once);
     }
 
+    // ─── Alta: FechaAlta ─────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task AltaAsync_Exitosa_SeteaFechaAltaConValorActual()
+    {
+        var (svc, repo, _, _, _, _) = Crear();
+        repo.Setup(r => r.ExisteCodigoAsync("SKU-FA1", null)).ReturnsAsync(false);
+
+        Producto? capturado = null;
+        repo.Setup(r => r.AgregarAsync(It.IsAny<Producto>()))
+            .Callback<Producto>(p => capturado = p)
+            .ReturnsAsync(1);
+
+        var antes = DateTime.UtcNow.AddSeconds(-1);
+        var p = new Producto { Codigo = "SKU-FA1", Nombre = "Fideos", UnidadMedidaId = 1 };
+        await svc.AltaAsync(p);
+        var despues = DateTime.UtcNow.AddSeconds(1);
+
+        Assert.NotNull(capturado);
+        Assert.NotEqual(default, capturado!.FechaAlta);
+        Assert.InRange(capturado.FechaAlta, antes, despues);
+    }
+
     // ─── Modificar ───────────────────────────────────────────────────────────
 
     [Fact]
