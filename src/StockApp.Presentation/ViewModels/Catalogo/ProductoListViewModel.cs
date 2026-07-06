@@ -38,7 +38,8 @@ public partial class ProductoListViewModel : ViewModelBase
     [RelayCommand]
     private async Task BuscarAsync()
     {
-        var resultados = await _service.BuscarAsync(null, null, FiltroBusqueda);
+        // Búsqueda por término único: matchea por Nombre, SKU o código de barras (lógica OR).
+        var resultados = await _service.BuscarPorTextoAsync(FiltroBusqueda);
         Items.Clear();
         foreach (var p in resultados)
             Items.Add(p);

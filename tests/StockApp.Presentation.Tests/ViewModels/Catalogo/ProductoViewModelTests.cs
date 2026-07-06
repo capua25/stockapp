@@ -20,6 +20,9 @@ public class ProductoListViewModelTests
         svcMock
             .Setup(s => s.BuscarAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
             .ReturnsAsync(productos ?? new List<Producto>());
+        svcMock
+            .Setup(s => s.BuscarPorTextoAsync(It.IsAny<string?>()))
+            .ReturnsAsync(productos ?? new List<Producto>());
 
         var navMock = new Mock<INavigationService>();
         var vm = new ProductoListViewModel(svcMock.Object, navMock.Object);
@@ -46,14 +49,16 @@ public class ProductoListViewModelTests
     }
 
     [Fact]
-    public async Task Buscar_FiltroNombre_InvocaBuscarAsyncConNombre()
+    public async Task Buscar_FiltroTexto_InvocaBuscarPorTextoAsyncConElTermino()
     {
+        // El buscador debe matchear por Nombre, SKU o código de barras (lógica OR),
+        // por eso delega en BuscarPorTextoAsync y no en BuscarAsync(sku, codigoBarras, nombre).
         var (vm, svcMock, _) = Crear();
         vm.FiltroBusqueda = "aceite";
 
         await vm.BuscarCommand.ExecuteAsync(null);
 
-        svcMock.Verify(s => s.BuscarAsync(null, null, "aceite"), Times.Once);
+        svcMock.Verify(s => s.BuscarPorTextoAsync("aceite"), Times.Once);
     }
 
     [Fact]

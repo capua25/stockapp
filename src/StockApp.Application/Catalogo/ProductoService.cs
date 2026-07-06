@@ -197,4 +197,10 @@ public class ProductoService : IProductoService
         _auth.Verificar(_session.RolActual, Permisos.GestionarProductos);
         return await _repo.BuscarAsync(sku, codigoBarras, nombre);
     }
+
+    public async Task<IReadOnlyList<Producto>> BuscarPorTextoAsync(string? texto)
+    {
+        _auth.Verificar(_session.RolActual, Permisos.GestionarProductos);
+        return await _repo.BuscarPorTextoAsync(texto);
+    }
 }

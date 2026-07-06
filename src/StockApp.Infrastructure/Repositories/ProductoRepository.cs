@@ -44,6 +44,30 @@ public class ProductoRepository : IProductoRepository
         return await q.OrderBy(p => p.Nombre).ToListAsync();
     }
 
+    /// <summary>
+    /// Búsqueda por término único: matchea si el término aparece en Codigo (SKU), CodigoBarras
+    /// o Nombre — lógica OR entre campos (design fix del buscador, que prometía buscar por
+    /// "nombre, SKU o código de barras" pero solo filtraba por Nombre).
+    /// Usa EF.Functions.Like() en los tres campos para mantener la misma case-insensitividad
+    /// ASCII que ya tenía el filtro de Nombre en <see cref="BuscarAsync"/>.
+    /// Término vacío/null → sin filtro, devuelve todos ordenados por Nombre.
+    /// </summary>
+    public async Task<IReadOnlyList<Producto>> BuscarPorTextoAsync(string? texto)
+    {
+        var q = _ctx.Productos.AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(texto))
+        {
+            var patron = $"%{texto}%";
+            q = q.Where(p =>
+                EF.Functions.Like(p.Codigo, patron)
+                || (p.CodigoBarras != null && EF.Functions.Like(p.CodigoBarras, patron))
+                || EF.Functions.Like(p.Nombre, patron));
+        }
+
+        return await q.OrderBy(p => p.Nombre).ToListAsync();
+    }
+
     public Task<bool> ExisteCodigoAsync(string codigo, int? excluyendoId = null)
         => excluyendoId.HasValue
             ? _ctx.Productos.AnyAsync(p => p.Codigo == codigo && p.Id != excluyendoId.Value)

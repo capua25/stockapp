@@ -182,6 +182,84 @@ public class ProductoRepositoryTests : IDisposable
         Assert.Equal("SKU001", result[0].Codigo);
     }
 
+    // ── BuscarPorTextoAsync: término único con lógica OR entre Codigo/CodigoBarras/Nombre ──
+
+    [Fact]
+    public async Task BuscarPorTextoAsync_TerminoMatcheaPorSku_RetornaProducto()
+    {
+        var (repo, um) = await SeedUmAsync();
+        await repo.AgregarAsync(NuevoProducto("SKU-XYZ", "Producto Cualquiera", um));
+        await repo.AgregarAsync(NuevoProducto("OTRO001", "Otro Producto", um));
+        _ctx.ChangeTracker.Clear();
+
+        var result = await repo.BuscarPorTextoAsync("XYZ");
+
+        Assert.Single(result);
+        Assert.Equal("SKU-XYZ", result[0].Codigo);
+    }
+
+    [Fact]
+    public async Task BuscarPorTextoAsync_TerminoMatcheaPorCodigoBarras_RetornaProducto()
+    {
+        var (repo, um) = await SeedUmAsync();
+        await repo.AgregarAsync(NuevoProducto("A001", "Producto A", um, codigoBarras: "7791234567890"));
+        await repo.AgregarAsync(NuevoProducto("A002", "Producto B", um, codigoBarras: "1112223334445"));
+        _ctx.ChangeTracker.Clear();
+
+        var result = await repo.BuscarPorTextoAsync("7791234");
+
+        Assert.Single(result);
+        Assert.Equal("A001", result[0].Codigo);
+    }
+
+    [Fact]
+    public async Task BuscarPorTextoAsync_TerminoMatcheaPorNombre_RetornaProducto()
+    {
+        var (repo, um) = await SeedUmAsync();
+        await repo.AgregarAsync(NuevoProducto("A001", "Aceite de Oliva", um));
+        await repo.AgregarAsync(NuevoProducto("A002", "Vinagre", um));
+        _ctx.ChangeTracker.Clear();
+
+        var result = await repo.BuscarPorTextoAsync("Aceite");
+
+        Assert.Single(result);
+        Assert.Equal("Aceite de Oliva", result[0].Nombre);
+    }
+
+    [Fact]
+    public async Task BuscarPorTextoAsync_TerminoVacioONulo_RetornaTodos()
+    {
+        var (repo, um) = await SeedUmAsync();
+        await repo.AgregarAsync(NuevoProducto("B001", "Zapato", um));
+        await repo.AgregarAsync(NuevoProducto("A001", "Alfajor", um));
+        _ctx.ChangeTracker.Clear();
+
+        var resultNulo  = await repo.BuscarPorTextoAsync(null);
+        var resultVacio = await repo.BuscarPorTextoAsync("");
+
+        Assert.Equal(2, resultNulo.Count);
+        Assert.Equal(2, resultVacio.Count);
+        Assert.Equal("Alfajor", resultNulo[0].Nombre); // OrderBy Nombre
+    }
+
+    [Fact]
+    public async Task BuscarPorTextoAsync_TerminoUnico_MatcheaPorCualquierCampo_LogicaOr()
+    {
+        // Un mismo término "abc" matchea a p1 por Codigo, p2 por Nombre y p3 por CodigoBarras.
+        // Confirma que los tres campos se combinan con OR (no AND) y que Codigo/CodigoBarras
+        // también son case-insensitive ASCII, igual que Nombre.
+        var (repo, um) = await SeedUmAsync();
+        await repo.AgregarAsync(NuevoProducto("ABC001", "Zapato", um));
+        await repo.AgregarAsync(NuevoProducto("ZZZ999", "Abcoleta", um));
+        await repo.AgregarAsync(NuevoProducto("QQQ111", "Vinagre", um, codigoBarras: "7abc1234567890"));
+        await repo.AgregarAsync(NuevoProducto("NOPE01", "Sin relacion", um, codigoBarras: "0000000000000"));
+        _ctx.ChangeTracker.Clear();
+
+        var result = await repo.BuscarPorTextoAsync("abc");
+
+        Assert.Equal(3, result.Count);
+    }
+
     // ── ExisteCodigoAsync ─────────────────────────────────────────────────────
 
     [Fact]

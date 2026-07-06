@@ -268,6 +268,40 @@ public class ProductoServiceTests
         Assert.Empty(resultado);
     }
 
+    // ─── Búsqueda por término único (OR entre Codigo/CodigoBarras/Nombre) ────
+
+    [Fact]
+    public async Task BuscarPorTextoAsync_DelegaAlRepositorioConElTermino()
+    {
+        var lista = new List<Producto>
+        {
+            new() { Id = 1, Codigo = "SKU-001", Nombre = "Fideos", UnidadMedidaId = 1, Activo = true }
+        };
+        var (svc, repo, _, _, _, _) = Crear();
+        repo.Setup(r => r.BuscarPorTextoAsync("fideos")).ReturnsAsync(lista.AsReadOnly());
+
+        var resultado = await svc.BuscarPorTextoAsync("fideos");
+
+        Assert.Single(resultado);
+        repo.Verify(r => r.BuscarPorTextoAsync("fideos"), Times.Once);
+    }
+
+    [Fact]
+    public async Task BuscarPorTextoAsync_TerminoNulo_DelegaYRetornaTodos()
+    {
+        var lista = new List<Producto>
+        {
+            new() { Id = 1, Nombre = "A", UnidadMedidaId = 1, Activo = true },
+            new() { Id = 2, Nombre = "B", UnidadMedidaId = 1, Activo = true }
+        };
+        var (svc, repo, _, _, _, _) = Crear();
+        repo.Setup(r => r.BuscarPorTextoAsync(null)).ReturnsAsync(lista.AsReadOnly());
+
+        var resultado = await svc.BuscarPorTextoAsync(null);
+
+        Assert.Equal(2, resultado.Count);
+    }
+
     // ─── Control cruzado auth ─────────────────────────────────────────────────
 
     [Fact]
