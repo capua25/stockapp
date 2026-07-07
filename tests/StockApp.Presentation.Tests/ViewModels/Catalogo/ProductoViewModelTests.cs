@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -7,6 +8,7 @@ using Moq;
 using StockApp.Application.Catalogo;
 using StockApp.Domain.Entities;
 using StockApp.Presentation.Navigation;
+using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Catalogo;
 using Xunit;
 
@@ -16,7 +18,7 @@ public class ProductoListViewModelTests
 {
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    private static (ProductoListViewModel vm, Mock<IProductoService> svcMock, Mock<INavigationService> navMock)
+    private static (ProductoListViewModel vm, Mock<IProductoService> svcMock, Mock<INavigationService> navMock, Mock<IConfirmacionService> confirmMock)
         Crear(IReadOnlyList<Producto>? productos = null)
     {
         var svcMock = new Mock<IProductoService>();
@@ -26,10 +28,18 @@ public class ProductoListViewModelTests
         svcMock
             .Setup(s => s.BuscarPorTextoAsync(It.IsAny<string?>()))
             .ReturnsAsync(productos ?? new List<Producto>());
+        svcMock
+            .Setup(s => s.BajaLogicaAsync(It.IsAny<int>()))
+            .Returns(Task.CompletedTask);
 
         var navMock = new Mock<INavigationService>();
-        var vm = new ProductoListViewModel(svcMock.Object, navMock.Object);
-        return (vm, svcMock, navMock);
+
+        var confirmMock = new Mock<IConfirmacionService>();
+        confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(true);
+        confirmMock.Setup(c => c.InformarAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
+
+        var vm = new ProductoListViewModel(svcMock.Object, navMock.Object, confirmMock.Object);
+        return (vm, svcMock, navMock, confirmMock);
     }
 
     // ── D3.1 tests ────────────────────────────────────────────────────────────
@@ -42,7 +52,7 @@ public class ProductoListViewModelTests
             new() { Id = 1, Codigo = "P001", Nombre = "Producto Uno" },
             new() { Id = 2, Codigo = "P002", Nombre = "Producto Dos" }
         };
-        var (vm, svcMock, _) = Crear(productos);
+        var (vm, svcMock, _, _) = Crear(productos);
 
         await vm.CargarAsync();
 
@@ -56,7 +66,7 @@ public class ProductoListViewModelTests
     {
         // El buscador debe matchear por Nombre, SKU o código de barras (lógica OR),
         // por eso delega en BuscarPorTextoAsync y no en BuscarAsync(sku, codigoBarras, nombre).
-        var (vm, svcMock, _) = Crear();
+        var (vm, svcMock, _, _) = Crear();
         vm.FiltroBusqueda = "aceite";
 
         await vm.BuscarCommand.ExecuteAsync(null);
@@ -67,7 +77,7 @@ public class ProductoListViewModelTests
     [Fact]
     public async Task FiltroBusqueda_AlCambiar_DisparaBusquedaAutomaticaConDebounce()
     {
-        var (vm, svcMock, _) = Crear();
+        var (vm, svcMock, _, _) = Crear();
 
         vm.FiltroBusqueda = "aceite";
         await vm._tareaDebounce;
@@ -78,7 +88,7 @@ public class ProductoListViewModelTests
     [Fact]
     public async Task FiltroBusqueda_CambiosRapidosSeguidos_CancelaBusquedaObsoleta()
     {
-        var (vm, svcMock, _) = Crear();
+        var (vm, svcMock, _, _) = Crear();
 
         vm.FiltroBusqueda = "ace";
         vm.FiltroBusqueda = "aceite";
@@ -92,7 +102,7 @@ public class ProductoListViewModelTests
     [Fact]
     public async Task NuevoCommand_NavegaAProductoFormViewModel()
     {
-        var (vm, _, navMock) = Crear();
+        var (vm, _, navMock, _) = Crear();
 
         await vm.NuevoCommand.ExecuteAsync(null);
 
@@ -102,7 +112,7 @@ public class ProductoListViewModelTests
     [Fact]
     public async Task CargarAsync_SinProductos_ItemsVacio()
     {
-        var (vm, _, _) = Crear(new List<Producto>());
+        var (vm, _, _, _) = Crear(new List<Producto>());
 
         await vm.CargarAsync();
 
@@ -119,7 +129,7 @@ public class ProductoListViewModelTests
             new() { Id = 1, Codigo = "P001", Nombre = "Producto Uno" },
             new() { Id = 2, Codigo = "P002", Nombre = "Producto Dos" }
         };
-        var (vm, _, _) = Crear(productos);
+        var (vm, _, _, _) = Crear(productos);
 
         await vm.CargarAsync();
 
@@ -137,7 +147,7 @@ public class ProductoListViewModelTests
             new() { Id = 2, Codigo = "P001", Nombre = "Aceite" },
             new() { Id = 3, Codigo = "P002", Nombre = "Manteca" }
         };
-        var (vm, _, _) = Crear(desordenados);
+        var (vm, _, _, _) = Crear(desordenados);
         await vm.CargarAsync();
 
         vm.ItemsView.SortDescriptions.Add(
@@ -153,7 +163,7 @@ public class ProductoListViewModelTests
     [Fact]
     public async Task Items_TrasRecarga_SeReflejanEnItemsView()
     {
-        var (vm, svcMock, _) = Crear(new List<Producto> { new() { Id = 1, Codigo = "P001", Nombre = "Uno" } });
+        var (vm, svcMock, _, _) = Crear(new List<Producto> { new() { Id = 1, Codigo = "P001", Nombre = "Uno" } });
         await vm.CargarAsync();
         Assert.Single(vm.ItemsView.Cast<Producto>());
 
@@ -171,6 +181,192 @@ public class ProductoListViewModelTests
 
         Assert.Equal(3, vm.Items.Count);
         Assert.Equal(3, vm.ItemsView.Cast<Producto>().Count());
+    }
+
+    // ── BajaCommand: baja lógica con confirmación (mismo patrón que Categoria/Proveedor/UnidadMedida) ──
+
+    [Fact]
+    public async Task BajaCommand_ConItemSeleccionado_PideConfirmacionYLlamaServicio()
+    {
+        var producto = new Producto { Id = 5, Codigo = "P005", Nombre = "Prueba", Activo = true };
+        var (vm, svcMock, _, confirmMock) = Crear(new List<Producto> { producto });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = producto;
+
+        await vm.BajaCommand.ExecuteAsync(null);
+
+        confirmMock.Verify(c => c.PreguntarAsync(It.IsAny<string>()), Times.Once);
+        svcMock.Verify(s => s.BajaLogicaAsync(5), Times.Once);
+    }
+
+    [Fact]
+    public async Task BajaCommand_SiNoConfirma_NoLlamaServicio()
+    {
+        var producto = new Producto { Id = 5, Codigo = "P005", Nombre = "Prueba", Activo = true };
+        var (vm, svcMock, _, confirmMock) = Crear(new List<Producto> { producto });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = producto;
+        confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(false);
+
+        await vm.BajaCommand.ExecuteAsync(null);
+
+        svcMock.Verify(s => s.BajaLogicaAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task BajaCommand_ServicioLanzaInvalidOperationException_NoPropagaYInforma()
+    {
+        var producto = new Producto { Id = 5, Codigo = "P005", Nombre = "Prueba", Activo = true };
+        var (vm, svcMock, _, confirmMock) = Crear(new List<Producto> { producto });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = producto;
+
+        var mensaje = "El producto 5 ya está inactivo.";
+        svcMock.Setup(s => s.BajaLogicaAsync(5)).ThrowsAsync(new InvalidOperationException(mensaje));
+
+        // No debe propagar la excepción (regresión real del crash en las otras entidades de catálogo).
+        await vm.BajaCommand.ExecuteAsync(null);
+
+        confirmMock.Verify(c => c.InformarAsync(mensaje), Times.Once);
+    }
+
+    [Fact]
+    public async Task BajaCommand_ServicioLanzaKeyNotFoundException_NoPropagaYInforma()
+    {
+        var producto = new Producto { Id = 5, Codigo = "P005", Nombre = "Prueba", Activo = true };
+        var (vm, svcMock, _, confirmMock) = Crear(new List<Producto> { producto });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = producto;
+
+        var mensaje = "Producto 5 no encontrado.";
+        svcMock.Setup(s => s.BajaLogicaAsync(5)).ThrowsAsync(new KeyNotFoundException(mensaje));
+
+        await vm.BajaCommand.ExecuteAsync(null);
+
+        confirmMock.Verify(c => c.InformarAsync(mensaje), Times.Once);
+    }
+
+    [Fact]
+    public void BajaCommand_SinSeleccion_EstaDeshabilitado()
+    {
+        var (vm, _, _, _) = Crear();
+
+        Assert.False(vm.BajaCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task BajaCommand_ItemInactivo_EstaDeshabilitado()
+    {
+        var producto = new Producto { Id = 5, Codigo = "P005", Nombre = "Prueba", Activo = false };
+        var (vm, _, _, _) = Crear(new List<Producto> { producto });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = producto;
+
+        Assert.False(vm.BajaCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task BajaCommand_ItemActivo_EstaHabilitado()
+    {
+        var producto = new Producto { Id = 5, Codigo = "P005", Nombre = "Prueba", Activo = true };
+        var (vm, _, _, _) = Crear(new List<Producto> { producto });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = producto;
+
+        Assert.True(vm.BajaCommand.CanExecute(null));
+    }
+
+    // ── EditarCommand: navega al form en modo edición con el producto seleccionado ──
+
+    [Fact]
+    public void EditarCommand_SinSeleccion_EstaDeshabilitado()
+    {
+        var (vm, _, _, _) = Crear();
+
+        Assert.False(vm.EditarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task EditarCommand_ConItemSeleccionado_EstaHabilitado()
+    {
+        var producto = new Producto { Id = 5, Codigo = "P005", Nombre = "Prueba" };
+        var (vm, _, _, _) = Crear(new List<Producto> { producto });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = producto;
+
+        Assert.True(vm.EditarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task EditarCommand_ItemInactivo_EstaDeshabilitado()
+    {
+        // Regla de negocio: un producto dado de baja (Activo=false) no debe poder editarse,
+        // igual que ya ocurre con BajaCommand.
+        var producto = new Producto { Id = 5, Codigo = "P005", Nombre = "Prueba", Activo = false };
+        var (vm, _, _, _) = Crear(new List<Producto> { producto });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = producto;
+
+        Assert.False(vm.EditarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task EditarCommand_ItemActivo_EstaHabilitado()
+    {
+        var producto = new Producto { Id = 5, Codigo = "P005", Nombre = "Prueba", Activo = true };
+        var (vm, _, _, _) = Crear(new List<Producto> { producto });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = producto;
+
+        Assert.True(vm.EditarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task EditarCommand_ConItemSeleccionado_NavegaAProductoFormViewModelConInicializador()
+    {
+        var producto = new Producto { Id = 5, Codigo = "P005", Nombre = "Prueba" };
+        var (vm, _, navMock, _) = Crear(new List<Producto> { producto });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = producto;
+
+        await vm.EditarCommand.ExecuteAsync(null);
+
+        navMock.Verify(
+            n => n.Navegar<ProductoFormViewModel>(It.IsAny<Action<ProductoFormViewModel>>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task EditarCommand_ElInicializadorPrecargaElProductoSeleccionado()
+    {
+        var producto = new Producto
+        {
+            Id = 5, Codigo = "P005", Nombre = "Prueba", UnidadMedidaId = 1, PrecioCosto = 10, PrecioVenta = 20
+        };
+        var (vm, _, navMock, _) = Crear(new List<Producto> { producto });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = producto;
+
+        Action<ProductoFormViewModel>? inicializadorCapturado = null;
+        navMock
+            .Setup(n => n.Navegar<ProductoFormViewModel>(It.IsAny<Action<ProductoFormViewModel>>()))
+            .Callback<Action<ProductoFormViewModel>>(a => inicializadorCapturado = a);
+
+        await vm.EditarCommand.ExecuteAsync(null);
+
+        Assert.NotNull(inicializadorCapturado);
+
+        var formVm = new ProductoFormViewModel(
+            new Mock<IProductoService>().Object,
+            new Mock<IUnidadMedidaService>().Object,
+            new Mock<ICategoriaService>().Object,
+            new Mock<INavigationService>().Object);
+
+        inicializadorCapturado!(formVm);
+
+        Assert.True(formVm.EsEdicion);
+        Assert.Equal("P005", formVm.Codigo);
+        Assert.Equal("Prueba", formVm.Nombre);
     }
 }
 
@@ -192,6 +388,9 @@ public class ProductoFormViewModelTests
         svcMock
             .Setup(s => s.AltaAsync(It.IsAny<Producto>()))
             .ReturnsAsync(1);
+        svcMock
+            .Setup(s => s.ModificarAsync(It.IsAny<Producto>()))
+            .Returns(Task.CompletedTask);
         svcMock
             .Setup(s => s.BuscarAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
             .ReturnsAsync(new List<Producto>());
@@ -340,5 +539,175 @@ public class ProductoFormViewModelTests
         Assert.Single(vm.Categorias);
         Assert.Equal("Bebidas", vm.Categorias[0].Nombre);
         Assert.Null(vm.CategoriaSeleccionada);
+    }
+
+    // ── Modo edición: CargarParaEditar + bifurcación de GuardarAsync ───────────
+
+    [Fact]
+    public void Titulo_PorDefecto_EsNuevoProducto()
+    {
+        var (vm, _, _, _, _) = Crear();
+
+        Assert.Equal("Nuevo producto", vm.Titulo);
+        Assert.False(vm.EsEdicion);
+    }
+
+    [Fact]
+    public void CargarParaEditar_SeteaEsEdicionYCamposDelProducto()
+    {
+        var (vm, _, _, _, _) = Crear();
+        var producto = new Producto
+        {
+            Id = 9,
+            Codigo = "P009",
+            Nombre = "Aceite",
+            CodigoBarras = "7791234567890",
+            Descripcion = "Aceite de girasol",
+            PrecioCosto = 100m,
+            PrecioVenta = 150m,
+        };
+
+        vm.CargarParaEditar(producto);
+
+        Assert.True(vm.EsEdicion);
+        Assert.Equal("P009", vm.Codigo);
+        Assert.Equal("Aceite", vm.Nombre);
+        Assert.Equal("7791234567890", vm.CodigoBarras);
+        Assert.Equal("Aceite de girasol", vm.Descripcion);
+        Assert.Equal(100m, vm.PrecioCosto);
+        Assert.Equal(150m, vm.PrecioVenta);
+    }
+
+    [Fact]
+    public void CargarParaEditar_CambiaTituloAEditarProducto()
+    {
+        var (vm, _, _, _, _) = Crear();
+
+        vm.CargarParaEditar(new Producto { Id = 9, Codigo = "P009", Nombre = "Aceite" });
+
+        Assert.Equal("Editar producto", vm.Titulo);
+    }
+
+    [Fact]
+    public async Task InicializarAsync_ModoEdicion_PreseleccionaUnidadYCategoriaOriginales()
+    {
+        var kilogramo = new UnidadMedida { Id = 2, Nombre = "Kilogramo", Abreviatura = "kg", Activo = true };
+        var bebidas = new Categoria { Id = 7, Nombre = "Bebidas", Activo = true };
+        var (vm, _, _, _, _) = Crear(
+            unidades: new List<UnidadMedida> { UnidadPorDefecto, kilogramo },
+            categorias: new List<Categoria> { bebidas });
+
+        vm.CargarParaEditar(new Producto
+        {
+            Id = 9, Codigo = "P009", Nombre = "Aceite", UnidadMedidaId = kilogramo.Id, CategoriaId = bebidas.Id
+        });
+
+        await vm.InicializarAsync();
+
+        Assert.Same(kilogramo, vm.UnidadMedidaSeleccionada);
+        Assert.Same(bebidas, vm.CategoriaSeleccionada);
+    }
+
+    [Fact]
+    public async Task InicializarAsync_ModoEdicion_SinCategoriaOriginal_CategoriaSeleccionadaEsNull()
+    {
+        var (vm, _, _, _, _) = Crear();
+
+        vm.CargarParaEditar(new Producto
+        {
+            Id = 9, Codigo = "P009", Nombre = "Aceite", UnidadMedidaId = UnidadPorDefecto.Id, CategoriaId = null
+        });
+
+        await vm.InicializarAsync();
+
+        Assert.Null(vm.CategoriaSeleccionada);
+    }
+
+    [Fact]
+    public async Task GuardarCommand_ModoEdicion_LlamaModificarAsyncNoAltaAsync()
+    {
+        var (vm, svcMock, _, _, _) = Crear();
+        vm.CargarParaEditar(new Producto
+        {
+            Id = 9, Codigo = "P009", Nombre = "Aceite", UnidadMedidaId = UnidadPorDefecto.Id
+        });
+        await vm.InicializarAsync();
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svcMock.Verify(s => s.ModificarAsync(It.Is<Producto>(p => p.Id == 9)), Times.Once);
+        svcMock.Verify(s => s.AltaAsync(It.IsAny<Producto>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GuardarCommand_ModoEdicion_PreservaProveedorIdYStockMinimoOriginales()
+    {
+        var (vm, svcMock, _, _, _) = Crear();
+        vm.CargarParaEditar(new Producto
+        {
+            Id = 9,
+            Codigo = "P009",
+            Nombre = "Aceite",
+            UnidadMedidaId = UnidadPorDefecto.Id,
+            ProveedorId = 3,
+            StockMinimo = 12m,
+        });
+        await vm.InicializarAsync();
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svcMock.Verify(s => s.ModificarAsync(It.Is<Producto>(p =>
+            p.ProveedorId == 3 && p.StockMinimo == 12m)), Times.Once);
+    }
+
+    [Fact]
+    public async Task GuardarCommand_ModoEdicion_Exitoso_NavegaAListado()
+    {
+        var (vm, _, _, _, navMock) = Crear();
+        vm.CargarParaEditar(new Producto
+        {
+            Id = 9, Codigo = "P009", Nombre = "Aceite", UnidadMedidaId = UnidadPorDefecto.Id
+        });
+        await vm.InicializarAsync();
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        navMock.Verify(n => n.Navegar<ProductoListViewModel>(), Times.Once);
+    }
+
+    [Fact]
+    public async Task GuardarCommand_ModoEdicion_ServicioLanzaExcepcionDeDominio_MuestraMensajeErrorYNoCrashea()
+    {
+        var (vm, svcMock, _, _, _) = Crear();
+        vm.CargarParaEditar(new Producto
+        {
+            Id = 9, Codigo = "P009", Nombre = "Aceite", UnidadMedidaId = UnidadPorDefecto.Id
+        });
+        await vm.InicializarAsync();
+
+        var mensaje = "Ya existe un producto con el código de barras '7791234567890'.";
+        svcMock.Setup(s => s.ModificarAsync(It.IsAny<Producto>()))
+            .ThrowsAsync(new InvalidOperationException(mensaje));
+
+        // No debe propagar la excepción — se muestra amigable en MensajeError, igual que AltaAsync.
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        Assert.Equal(mensaje, vm.MensajeError);
+    }
+
+    [Fact]
+    public async Task GuardarCommand_ModoAlta_SigueFuncionandoTrasAgregarModoEdicion()
+    {
+        // Regresión: el bifurcado por EsEdicion no debe romper el flujo de alta existente.
+        var (vm, svcMock, _, _, navMock) = Crear();
+        vm.Codigo = "P010";
+        vm.Nombre = "Producto Nuevo";
+        vm.UnidadMedidaSeleccionada = UnidadPorDefecto;
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svcMock.Verify(s => s.AltaAsync(It.IsAny<Producto>()), Times.Once);
+        svcMock.Verify(s => s.ModificarAsync(It.IsAny<Producto>()), Times.Never);
+        navMock.Verify(n => n.Navegar<ProductoListViewModel>(), Times.Once);
     }
 }

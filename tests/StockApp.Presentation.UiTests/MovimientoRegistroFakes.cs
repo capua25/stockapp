@@ -63,6 +63,10 @@ internal sealed class NavigationServiceFake : INavigationService
     public void Navegar<TVm>() where TVm : ViewModelBase
     {
     }
+
+    public void Navegar<TVm>(Action<TVm> inicializar) where TVm : ViewModelBase
+    {
+    }
 }
 
 internal sealed class ConfirmacionServiceFake : IConfirmacionService

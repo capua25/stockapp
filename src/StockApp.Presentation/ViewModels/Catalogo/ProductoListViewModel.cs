@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,6 +9,7 @@ using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Catalogo;
 using StockApp.Domain.Entities;
 using StockApp.Presentation.Navigation;
+using StockApp.Presentation.Services;
 
 namespace StockApp.Presentation.ViewModels.Catalogo;
 
@@ -19,8 +21,9 @@ public partial class ProductoListViewModel : ViewModelBase
     /// <summary>Espera de debounce antes de disparar la búsqueda automática mientras se escribe.</summary>
     private const int DebounceMs = 300;
 
-    private readonly IProductoService   _service;
-    private readonly INavigationService _navigation;
+    private readonly IProductoService     _service;
+    private readonly INavigationService   _navigation;
+    private readonly IConfirmacionService _confirmacion;
 
     private CancellationTokenSource? _debounceCts;
 
@@ -34,6 +37,11 @@ public partial class ProductoListViewModel : ViewModelBase
     [ObservableProperty]
     private string? _filtroBusqueda;
 
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(BajaCommand))]
+    [NotifyCanExecuteChangedFor(nameof(EditarCommand))]
+    private Producto? _itemSeleccionado;
+
     public ObservableCollection<Producto> Items { get; } = new();
 
     /// <summary>
@@ -45,10 +53,14 @@ public partial class ProductoListViewModel : ViewModelBase
     /// </summary>
     public DataGridCollectionView ItemsView { get; }
 
-    public ProductoListViewModel(IProductoService service, INavigationService navigation)
+    public ProductoListViewModel(
+        IProductoService     service,
+        INavigationService   navigation,
+        IConfirmacionService confirmacion)
     {
-        _service    = service;
-        _navigation = navigation;
+        _service      = service;
+        _navigation   = navigation;
+        _confirmacion = confirmacion;
 
         ItemsView = new DataGridCollectionView(Items);
     }
@@ -110,4 +122,53 @@ public partial class ProductoListViewModel : ViewModelBase
     [RelayCommand]
     private async Task NuevoAsync()
         => await Task.Run(() => _navigation.Navegar<ProductoFormViewModel>());
+
+    /// <summary>
+    /// Compartido entre Editar y Baja: un producto inactivo (dado de baja) no admite ninguna
+    /// de las dos operaciones, solo se puede operar sobre productos activos.
+    /// </summary>
+    private bool PuedeOperarSobreSeleccionado()
+        => ItemSeleccionado is not null && ItemSeleccionado.Activo;
+
+    /// <summary>
+    /// Navega al formulario en modo edición, precargando el producto seleccionado vía el
+    /// overload de <see cref="INavigationService.Navegar{TVm}(Action{TVm})"/>: el VM se resuelve
+    /// fresco desde DI y luego se inicializa con <see cref="ProductoFormViewModel.CargarParaEditar"/>
+    /// antes de publicarse como pantalla actual.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(PuedeOperarSobreSeleccionado))]
+    private async Task EditarAsync()
+    {
+        if (ItemSeleccionado is null) return;
+
+        var producto = ItemSeleccionado;
+        await Task.Run(() =>
+            _navigation.Navegar<ProductoFormViewModel>(vm => vm.CargarParaEditar(producto)));
+    }
+
+    /// <summary>
+    /// Da de baja el producto seleccionado, previa confirmación del usuario. Las excepciones
+    /// de dominio esperables (ej: ya está inactivo, o fue borrado por otra sesión) NO deben
+    /// propagar y matar el proceso — mismo patrón que CategoriaListViewModel/ProveedorListViewModel/
+    /// UnidadMedidaListViewModel tras el fix del crash de baja lógica.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(PuedeOperarSobreSeleccionado))]
+    private async Task BajaAsync()
+    {
+        if (ItemSeleccionado is null) return;
+
+        var confirmar = await _confirmacion.PreguntarAsync(
+            $"¿Confirma dar de baja el producto \"{ItemSeleccionado.Nombre}\"?");
+        if (!confirmar) return;
+
+        try
+        {
+            await _service.BajaLogicaAsync(ItemSeleccionado.Id);
+            await CargarAsync();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or KeyNotFoundException)
+        {
+            await _confirmacion.InformarAsync(ex.Message);
+        }
+    }
 }

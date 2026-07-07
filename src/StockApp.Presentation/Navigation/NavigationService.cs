@@ -25,4 +25,12 @@ public sealed class NavigationService : INavigationService
         Actual = (ViewModelBase)_resolver(typeof(TVm));
         Cambiado?.Invoke();
     }
+
+    public void Navegar<TVm>(Action<TVm> inicializar) where TVm : ViewModelBase
+    {
+        var vm = (TVm)_resolver(typeof(TVm));
+        inicializar(vm);
+        Actual = vm;
+        Cambiado?.Invoke();
+    }
 }

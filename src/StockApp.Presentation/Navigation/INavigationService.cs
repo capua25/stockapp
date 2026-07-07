@@ -19,4 +19,13 @@ public interface INavigationService
     /// Resuelve <typeparamref name="TVm"/> desde el contenedor DI y lo establece como VM actual.
     /// </summary>
     void Navegar<TVm>() where TVm : ViewModelBase;
+
+    /// <summary>
+    /// Resuelve <typeparamref name="TVm"/> desde el contenedor DI, ejecuta <paramref name="inicializar"/>
+    /// sobre la instancia recién creada (por ejemplo, para precargar un modo edición con datos de
+    /// un item seleccionado en otra pantalla) y luego la establece como VM actual. El VM sigue
+    /// resolviéndose fresco desde DI, igual que <see cref="Navegar{TVm}()"/> — este overload solo
+    /// agrega un paso de inicialización antes de publicarlo.
+    /// </summary>
+    void Navegar<TVm>(Action<TVm> inicializar) where TVm : ViewModelBase;
 }

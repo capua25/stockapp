@@ -11,13 +11,17 @@
         <Border Classes="card" Padding="24" Margin="24" MaxWidth="480">
             <StackPanel Spacing="12">
 
-                <TextBlock Text="Nuevo producto"
+                <TextBlock Text="{Binding Titulo}"
                            Classes="titulo-vista"
                            Margin="0,0,0,8" />
 
                 <StackPanel Spacing="4">
                     <TextBlock Text="SKU (obligatorio)" />
+                    <!-- En modo edición el SKU no es editable: ProductoService.ModificarAsync
+                         ignora cambios al Código (no lo reasigna sobre la entidad original),
+                         así que permitir tipearlo confundiría al usuario sin efecto real. -->
                     <TextBox Text="{Binding Codigo}"
+                             IsEnabled="{Binding !EsEdicion}"
                              PlaceholderText="Ej: P001" />
                 </StackPanel>
 
