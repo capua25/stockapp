@@ -7,7 +7,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Movimientos;
-using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
 
@@ -23,7 +22,7 @@ public sealed record OpcionTipoMovimiento(string Nombre, TipoMovimiento? Valor);
 /// Opción de filtro por producto para el ComboBox del historial.
 /// Valor=null representa "Todos" (sin filtro de producto).
 /// </summary>
-public sealed record OpcionProducto(string Nombre, Producto? Valor);
+public sealed record OpcionProducto(string Nombre, ProductoDto? Valor);
 
 /// <summary>
 /// ViewModel del historial de movimientos de stock con filtros y recálculo.
