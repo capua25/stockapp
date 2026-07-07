@@ -92,8 +92,8 @@
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha}" Width="150" />
                         <DataGridTextColumn Header="Producto" Binding="{Binding ProductoNombre}" Width="160" />
-                        <DataGridTextColumn Header="Tipo" Binding="{Binding Tipo}" Width="90" />
-                        <DataGridTextColumn Header="Motivo" Binding="{Binding Motivo}" Width="100" />
+                        <DataGridTextColumn Header="Tipo" Binding="{Binding TipoNombre}" Width="90" />
+                        <DataGridTextColumn Header="Motivo" Binding="{Binding MotivoNombre}" Width="100" />
                         <DataGridTextColumn Header="Cantidad" Binding="{Binding Cantidad}" Width="90" />
                         <DataGridTextColumn Header="Precio" Binding="{Binding PrecioUnitario, StringFormat='$ {0:F2}'}" Width="100" />
                         <DataGridTextColumn Header="Stock ant." Binding="{Binding StockAnterior}" Width="100" />

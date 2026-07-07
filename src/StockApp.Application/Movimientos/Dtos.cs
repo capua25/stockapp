@@ -44,7 +44,14 @@ public record MovimientoHistorialDto(
     string? Comentario,
     DateTime Fecha,
     int UsuarioId,
-    string UsuarioNombre);
+    string UsuarioNombre)
+{
+    /// <summary>Texto del tipo de movimiento, para mostrar y ordenar alfabéticamente en el DataGrid.</summary>
+    public string TipoNombre => Tipo.ToString();
+
+    /// <summary>Texto del motivo de movimiento, para mostrar y ordenar alfabéticamente en el DataGrid.</summary>
+    public string MotivoNombre => Motivo.ToString();
+}
 
 /// <summary>Resultado del recálculo de stock (RS-08).</summary>
 public record RecalculoResultadoDto(

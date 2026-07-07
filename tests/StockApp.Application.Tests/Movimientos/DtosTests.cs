@@ -130,6 +130,28 @@ public class DtosTests
     }
 
     [Fact]
+    public void MovimientoHistorialDto_TipoNombreYMotivoNombre_DevuelvenTextoDelEnum()
+    {
+        var dto = new MovimientoHistorialDto(
+            MovimientoId: 8,
+            ProductoId: 3,
+            ProductoNombre: "Fideos 500g",
+            Tipo: TipoMovimiento.Entrada,
+            Motivo: MotivoMovimiento.Ajuste,
+            Cantidad: 2m,
+            PrecioUnitario: 200m,
+            StockAnterior: 20m,
+            StockNuevo: 22m,
+            Comentario: null,
+            Fecha: DateTime.UtcNow,
+            UsuarioId: 1,
+            UsuarioNombre: "Admin");
+
+        Assert.Equal("Entrada", dto.TipoNombre);
+        Assert.Equal("Ajuste", dto.MotivoNombre);
+    }
+
+    [Fact]
     public void RecalculoResultadoDto_PropiedadesAccesibles()
     {
         var dto = new RecalculoResultadoDto(
