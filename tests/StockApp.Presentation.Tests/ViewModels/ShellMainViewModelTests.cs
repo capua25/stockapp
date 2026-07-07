@@ -26,6 +26,28 @@ public class ShellMainViewModelTests
         return (vm, sessionMock, navMock);
     }
 
+    // ── Inicio ───────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void NavInicio_LlamaNavegar_AInicioViewModel()
+    {
+        var (vm, _, navMock) = Crear(RolUsuario.Operador);
+
+        vm.NavInicioCommand.Execute(null);
+
+        navMock.Verify(n => n.Navegar<InicioViewModel>(), Times.Once);
+    }
+
+    [Fact]
+    public void NavInicio_EstableceSeccionActiva_Inicio()
+    {
+        var (vm, _, _) = Crear(RolUsuario.Operador);
+
+        vm.NavInicioCommand.Execute(null);
+
+        Assert.Equal("Inicio", vm.SeccionActiva);
+    }
+
     // ── D2.1 tests ────────────────────────────────────────────────────────────
 
     [Fact]

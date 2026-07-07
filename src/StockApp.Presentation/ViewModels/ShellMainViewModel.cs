@@ -66,6 +66,13 @@ public partial class ShellMainViewModel : ViewModelBase
     // ── comandos de navegación ────────────────────────────────────────────────
 
     [RelayCommand]
+    private void NavInicio()
+    {
+        SeccionActiva = "Inicio";
+        _navigation.Navegar<InicioViewModel>();
+    }
+
+    [RelayCommand]
     private void NavProductos()
     {
         SeccionActiva = "Productos";

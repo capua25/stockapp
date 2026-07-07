@@ -32,6 +32,18 @@
                            Foreground="{DynamicResource SidebarTextoBrush}"
                            Margin="8,8,8,16" />
 
+                <!-- Inicio: visible para Admin y Operador -->
+                <Button Command="{Binding NavInicioCommand}"
+                        Classes="ghost"
+                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Inicio}"
+                        HorizontalAlignment="Stretch">
+                    <Grid ColumnDefinitions="Auto,*">
+                        <i:Icon Grid.Column="0" Value="mdi-home" Foreground="{DynamicResource SidebarTextoBrush}" />
+                        <TextBlock Grid.Column="1" Text="Inicio" VerticalAlignment="Center"
+                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                </Button>
+
                 <!-- Productos: visible para Admin y Operador -->
                 <Button Command="{Binding NavProductosCommand}"
                         Classes="ghost"
