@@ -122,12 +122,14 @@ Pieza central: **un solo lugar** en el cliente (un `DelegatingHandler` o `ApiCli
 
 | Fase | Qué se hace | Estado al terminar |
 |---|---|---|
-| 0 — Contratos | Extraer `StockApp.Contracts` (interfaces + DTOs + enums). Agregar DTOs de catálogo y wrapper de valorización. | La app de hoy sigue andando. Refactor puro, tests verdes. |
+| 0 — DTOs de contrato | Introducir `ProductoDto` (única entidad de catálogo con navegación) en las lecturas de catálogo + envolver la valorización en `ValorizacionReporteDto`. In-process, tests verdes. | La app de hoy sigue andando. Refactor puro, tests verdes. |
 | 1 — Datos a PostgreSQL | Proveedor Npgsql, migraciones Postgres, `Infrastructure.Tests` contra Postgres. Transacción atómica de stock + tests de concurrencia. | Capa de datos probada sobre Postgres. |
 | 2 — Servidor API | Crear `StockApp.Api`: endpoints sobre los services, JWT, políticas de autorización, mapeo `ProblemDetails`, TLS. Tests de integración. | Servidor 100% funcional y testeado. Desktop vieja intacta. |
 | 3 — Flip del cliente | `HttpXxxService` en Presentation. Cambiar DI en `App.axaml.cs`: HTTP clients + token handler en lugar de services/repos/DbContext. Sacar referencia a Infrastructure. Login contra la API. | Ya es cliente-servidor. ViewModels sin tocar. |
 | 4 — Usuarios + hardening | Completar ABM de gestión de usuarios. Empaquetado del servidor, setup de Postgres, cert TLS, bootstrap del primer admin. | Listo para piloto. |
 | 5 — Finanzas (spec aparte) | Su propio ciclo, encima de esta fundación. | Fuera del alcance de este spec. |
+
+**Refinamiento YAGNI de la Fase 0 (decidido en planificación):** la extracción del proyecto `StockApp.Contracts` se DIFIERE a la Fase 2/3. Un proyecto de contratos compartidos solo se justifica cuando hay dos consumidores reales — servidor + cliente HTTP —; hoy sigue habiendo un solo proceso. Por ahora los DTOs nacen en `Application`, siguiendo la convención existente, y se mudarán a `Contracts` cuando ese proyecto se extraiga. Además, solo `Producto` necesita DTO en esta fase: `Categoria`, `Proveedor` y `UnidadMedida` son entidades planas (sin navegación) y serializan bien tal cual; sus DTOs se harán si y cuando hagan falta.
 
 **Detalles de despliegue:**
 - **Backups:** hoy `BackupService` copia el archivo SQLite; con Postgres pasa a `pg_dump` programado server-side. El concepto sigue, el mecanismo cambia.
