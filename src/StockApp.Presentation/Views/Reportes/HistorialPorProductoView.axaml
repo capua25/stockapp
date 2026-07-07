@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Reportes"
+             xmlns:dto="using:StockApp.Application.Movimientos"
              xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:beh="using:StockApp.Presentation.Behaviors"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -60,18 +61,27 @@
                         </Style>
                     </DataGrid.Styles>
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha, Converter={x:Static conv:FechaUtcALocalConverter.Instance}, StringFormat='dd/MM/yyyy HH:mm'}" Width="160" />
-                        <DataGridTextColumn Header="Tipo" Binding="{Binding Tipo}" Width="100" />
-                        <DataGridTextColumn Header="Motivo" Binding="{Binding Motivo}" Width="100" />
-                        <DataGridTextColumn Header="Cantidad" Binding="{Binding Cantidad}" Width="110"
+                        <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha, Converter={x:Static conv:FechaUtcALocalConverter.Instance}, StringFormat='dd/MM/yyyy HH:mm'}" Width="Auto" />
+                        <DataGridTextColumn Header="Tipo" Binding="{Binding Tipo}" Width="Auto" />
+                        <DataGridTextColumn Header="Motivo" Binding="{Binding Motivo}" Width="Auto" />
+                        <DataGridTextColumn Header="Cantidad" Binding="{Binding Cantidad}" Width="Auto"
                                             CellStyleClasses="num" />
-                        <DataGridTextColumn Header="P. Unitario" Binding="{Binding PrecioUnitario}" Width="110"
+                        <DataGridTextColumn Header="P. Unitario" Binding="{Binding PrecioUnitario}" Width="Auto"
                                             CellStyleClasses="num" />
-                        <DataGridTextColumn Header="Stock Ant." Binding="{Binding StockAnterior}" Width="110"
+                        <DataGridTextColumn Header="Stock Ant." Binding="{Binding StockAnterior}" Width="Auto"
                                             CellStyleClasses="num" />
-                        <DataGridTextColumn Header="Stock Nuevo" Binding="{Binding StockNuevo}" Width="110"
+                        <DataGridTextColumn Header="Stock Nuevo" Binding="{Binding StockNuevo}" Width="Auto"
                                             CellStyleClasses="num" />
-                        <DataGridTextColumn Header="Comentario" Binding="{Binding Comentario}" Width="*" />
+                        <DataGridTemplateColumn Header="Comentario" Width="*" SortMemberPath="Comentario">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:MovimientoHistorialDto">
+                                    <TextBlock Text="{Binding Comentario}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding Comentario}"
+                                               VerticalAlignment="Center" Margin="4,0" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                     </DataGrid.Columns>
                 </DataGrid>
 

@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Reportes"
+             xmlns:dto="using:StockApp.Application.Reportes"
              xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:beh="using:StockApp.Presentation.Behaviors"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -60,15 +61,24 @@
                         </Style>
                     </DataGrid.Styles>
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Código" Binding="{Binding Codigo}" Width="120" />
-                        <DataGridTextColumn Header="Nombre" Binding="{Binding Nombre}" Width="*" />
-                        <DataGridTextColumn Binding="{Binding CantidadMovimientos}" Width="140"
+                        <DataGridTextColumn Header="Código" Binding="{Binding Codigo}" Width="Auto" />
+                        <DataGridTemplateColumn Header="Nombre" Width="*" SortMemberPath="Nombre">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:MasMovidoDto">
+                                    <TextBlock Text="{Binding Nombre}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding Nombre}"
+                                               VerticalAlignment="Center" Margin="4,0" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Binding="{Binding CantidadMovimientos}" Width="Auto"
                                             CellStyleClasses="num">
                             <DataGridTextColumn.Header>
                                 <TextBlock Text="Movimientos" HorizontalAlignment="Right" TextAlignment="Right" />
                             </DataGridTextColumn.Header>
                         </DataGridTextColumn>
-                        <DataGridTextColumn Binding="{Binding VolumenTotal}" Width="140"
+                        <DataGridTextColumn Binding="{Binding VolumenTotal}" Width="Auto"
                                             CellStyleClasses="num">
                             <DataGridTextColumn.Header>
                                 <TextBlock Text="Volumen Total" HorizontalAlignment="Right" TextAlignment="Right" />

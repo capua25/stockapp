@@ -92,16 +92,34 @@
                           CanUserResizeColumns="True"
                           GridLinesVisibility="Horizontal">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha, Converter={x:Static conv:FechaUtcALocalConverter.Instance}, StringFormat='dd/MM/yyyy HH:mm', DataType={x:Type dto:MovimientoHistorialDto}}" Width="150" />
-                        <DataGridTextColumn Header="Producto" Binding="{Binding ProductoNombre, DataType={x:Type dto:MovimientoHistorialDto}}" Width="160" />
-                        <DataGridTextColumn Header="Tipo" Binding="{Binding TipoNombre, DataType={x:Type dto:MovimientoHistorialDto}}" Width="90" />
-                        <DataGridTextColumn Header="Motivo" Binding="{Binding MotivoNombre, DataType={x:Type dto:MovimientoHistorialDto}}" Width="100" />
-                        <DataGridTextColumn Header="Cantidad" Binding="{Binding Cantidad, DataType={x:Type dto:MovimientoHistorialDto}}" Width="90" />
-                        <DataGridTextColumn Header="Precio" Binding="{Binding PrecioUnitario, StringFormat='$ {0:F2}', DataType={x:Type dto:MovimientoHistorialDto}}" Width="100" />
-                        <DataGridTextColumn Header="Stock ant." Binding="{Binding StockAnterior, DataType={x:Type dto:MovimientoHistorialDto}}" Width="100" />
-                        <DataGridTextColumn Header="Stock nuevo" Binding="{Binding StockNuevo, DataType={x:Type dto:MovimientoHistorialDto}}" Width="100" />
-                        <DataGridTextColumn Header="Usuario" Binding="{Binding UsuarioNombre, DataType={x:Type dto:MovimientoHistorialDto}}" Width="120" />
-                        <DataGridTextColumn Header="Comentario" Binding="{Binding Comentario, DataType={x:Type dto:MovimientoHistorialDto}}" Width="*" />
+                        <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha, Converter={x:Static conv:FechaUtcALocalConverter.Instance}, StringFormat='dd/MM/yyyy HH:mm', DataType={x:Type dto:MovimientoHistorialDto}}" Width="Auto" />
+                        <DataGridTemplateColumn Header="Producto" Width="2*" SortMemberPath="ProductoNombre">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:MovimientoHistorialDto">
+                                    <TextBlock Text="{Binding ProductoNombre}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding ProductoNombre}"
+                                               VerticalAlignment="Center" Margin="4,0" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="Tipo" Binding="{Binding TipoNombre, DataType={x:Type dto:MovimientoHistorialDto}}" Width="Auto" />
+                        <DataGridTextColumn Header="Motivo" Binding="{Binding MotivoNombre, DataType={x:Type dto:MovimientoHistorialDto}}" Width="Auto" />
+                        <DataGridTextColumn Header="Cantidad" Binding="{Binding Cantidad, DataType={x:Type dto:MovimientoHistorialDto}}" Width="Auto" />
+                        <DataGridTextColumn Header="Precio" Binding="{Binding PrecioUnitario, StringFormat='$ {0:F2}', DataType={x:Type dto:MovimientoHistorialDto}}" Width="Auto" />
+                        <DataGridTextColumn Header="Stock ant." Binding="{Binding StockAnterior, DataType={x:Type dto:MovimientoHistorialDto}}" Width="Auto" />
+                        <DataGridTextColumn Header="Stock nuevo" Binding="{Binding StockNuevo, DataType={x:Type dto:MovimientoHistorialDto}}" Width="Auto" />
+                        <DataGridTextColumn Header="Usuario" Binding="{Binding UsuarioNombre, DataType={x:Type dto:MovimientoHistorialDto}}" Width="Auto" />
+                        <DataGridTemplateColumn Header="Comentario" Width="3*" SortMemberPath="Comentario">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:MovimientoHistorialDto">
+                                    <TextBlock Text="{Binding Comentario}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding Comentario}"
+                                               VerticalAlignment="Center" Margin="4,0" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                     </DataGrid.Columns>
                 </DataGrid>
 

@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Reportes"
+             xmlns:dto="using:StockApp.Application.Reportes"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
@@ -36,18 +37,36 @@
                         </Style>
                     </DataGrid.Styles>
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Código" Binding="{Binding Codigo}" Width="100" />
-                        <DataGridTextColumn Header="Nombre" Binding="{Binding Nombre}" Width="*" />
-                        <DataGridTextColumn Header="Categoría" Binding="{Binding Categoria}" Width="140" />
-                        <DataGridTextColumn Header="Stock" Binding="{Binding StockActual}" Width="100"
+                        <DataGridTextColumn Header="Código" Binding="{Binding Codigo}" Width="Auto" />
+                        <DataGridTemplateColumn Header="Nombre" Width="2*" SortMemberPath="Nombre">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:ValorizacionItemDto">
+                                    <TextBlock Text="{Binding Nombre}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding Nombre}"
+                                               VerticalAlignment="Center" Margin="4,0" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="Categoría" Width="*" SortMemberPath="Categoria">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:ValorizacionItemDto">
+                                    <TextBlock Text="{Binding Categoria}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding Categoria}"
+                                               VerticalAlignment="Center" Margin="4,0" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="Stock" Binding="{Binding StockActual}" Width="Auto"
                                             CellStyleClasses="num" />
-                        <DataGridTextColumn Header="P. Costo" Binding="{Binding PrecioCosto}" Width="110"
+                        <DataGridTextColumn Header="P. Costo" Binding="{Binding PrecioCosto}" Width="Auto"
                                             CellStyleClasses="num" />
-                        <DataGridTextColumn Header="P. Venta" Binding="{Binding PrecioVenta}" Width="110"
+                        <DataGridTextColumn Header="P. Venta" Binding="{Binding PrecioVenta}" Width="Auto"
                                             CellStyleClasses="num" />
-                        <DataGridTextColumn Header="Valor Costo" Binding="{Binding ValorCosto}" Width="120"
+                        <DataGridTextColumn Header="Valor Costo" Binding="{Binding ValorCosto}" Width="Auto"
                                             CellStyleClasses="num" />
-                        <DataGridTextColumn Header="Valor Venta" Binding="{Binding ValorVenta}" Width="120"
+                        <DataGridTextColumn Header="Valor Venta" Binding="{Binding ValorVenta}" Width="Auto"
                                             CellStyleClasses="num" />
                     </DataGrid.Columns>
                 </DataGrid>

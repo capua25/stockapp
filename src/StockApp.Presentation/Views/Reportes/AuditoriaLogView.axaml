@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Reportes"
+             xmlns:dto="using:StockApp.Application.Auditoria"
              xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:beh="using:StockApp.Presentation.Behaviors"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -60,13 +61,22 @@
                         </Style>
                     </DataGrid.Styles>
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha, Converter={x:Static conv:FechaUtcALocalConverter.Instance}, StringFormat='dd/MM/yyyy HH:mm'}" Width="160" />
-                        <DataGridTextColumn Header="Usuario" Binding="{Binding NombreUsuario}" Width="150" />
-                        <DataGridTextColumn Header="Acción" Binding="{Binding Accion}" Width="160" />
-                        <DataGridTextColumn Header="Entidad" Binding="{Binding Entidad}" Width="120" />
-                        <DataGridTextColumn Header="Entidad ID" Binding="{Binding EntidadId}" Width="110"
+                        <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha, Converter={x:Static conv:FechaUtcALocalConverter.Instance}, StringFormat='dd/MM/yyyy HH:mm'}" Width="Auto" />
+                        <DataGridTextColumn Header="Usuario" Binding="{Binding NombreUsuario}" Width="Auto" />
+                        <DataGridTextColumn Header="Acción" Binding="{Binding Accion}" Width="Auto" />
+                        <DataGridTextColumn Header="Entidad" Binding="{Binding Entidad}" Width="Auto" />
+                        <DataGridTextColumn Header="Entidad ID" Binding="{Binding EntidadId}" Width="Auto"
                                             CellStyleClasses="num" />
-                        <DataGridTextColumn Header="Detalle" Binding="{Binding Detalle}" Width="*" />
+                        <DataGridTemplateColumn Header="Detalle" Width="*" SortMemberPath="Detalle">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:AuditoriaItemDto">
+                                    <TextBlock Text="{Binding Detalle}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding Detalle}"
+                                               VerticalAlignment="Center" Margin="4,0" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                     </DataGrid.Columns>
                 </DataGrid>
 
