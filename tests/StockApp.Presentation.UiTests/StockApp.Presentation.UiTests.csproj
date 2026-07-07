@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Banco de pruebas headless para reproducir/verificar el bug de sort por click de
+         encabezado en Avalonia.Controls.DataGrid (AvaloniaUI/Avalonia.Controls.DataGrid#232,
+         transferido desde avaloniaui/avalonia#21129). Ver DataGridSortClickTests.cs. -->
+    <PackageReference Include="Avalonia" Version="12.0.5" />
+    <PackageReference Include="Avalonia.Markup.Xaml.Loader" Version="12.0.5" />
+    <PackageReference Include="Avalonia.Headless" Version="12.0.5" />
+    <PackageReference Include="Avalonia.Headless.XUnit" Version="12.0.5" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.5" />
+    <!-- Version del DataGrid a validar: se pisa manualmente durante la investigación
+         (12.0.0 = reproduce el bug; 12.0.1 = fix upstream confirmado). -->
+    <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.0.1" />
+    <!-- Avalonia.Headless.XUnit 12.0.4 depende de xunit.v3.extensibility.core (xunit v3),
+         no de xunit v2 clasico: hay que usar el paquete xunit.v3 + un runner v3-compatible,
+         si no [AvaloniaFact] no es reconocido y "dotnet test" reporta 0 tests sin error. -->
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit.v3" Version="3.2.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

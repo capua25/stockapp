@@ -30,11 +30,17 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="12.0.4" />
-    <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.0.0" />
-    <PackageReference Include="Avalonia.Desktop" Version="12.0.4" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.4" />
-    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.0.4" />
+    <!-- Avalonia.Controls.DataGrid 12.0.1 fixea AvaloniaUI/Avalonia.Controls.DataGrid#232
+         (sort por click de header roto con compiled bindings, ver DataGridColumn.GetSortPropertyName
+         chequeando CompiledBindingExtension en vez de CompiledBinding). 12.0.1 exige
+         Avalonia >= 12.0.5 como dependencia transitiva, por eso el resto de los paquetes
+         de Avalonia core suben en conjunto a 12.0.5. Verificado con banco de pruebas headless
+         en tests/StockApp.Presentation.UiTests (click real de puntero sobre el header). -->
+    <PackageReference Include="Avalonia" Version="12.0.5" />
+    <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.0.1" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.0.5" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.0.5" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.0.5" />
     <PackageReference Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.1">
       <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
       <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
