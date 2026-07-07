@@ -60,9 +60,9 @@ public class ReporteStockServiceValorizacionTests
         repo.Setup(r => r.ObtenerValorizacionAsync())
             .ReturnsAsync(items);
 
-        var (resultItems, _) = await svc.ObtenerValorizacionAsync();
+        var resultado = await svc.ObtenerValorizacionAsync();
 
-        var item = Assert.Single(resultItems);
+        var item = Assert.Single(resultado.Items);
         Assert.Equal(150m, item.ValorCosto);
         Assert.Equal(200m, item.ValorVenta);
     }
@@ -80,10 +80,10 @@ public class ReporteStockServiceValorizacionTests
         repo.Setup(r => r.ObtenerValorizacionAsync())
             .ReturnsAsync(items);
 
-        var (_, totales) = await svc.ObtenerValorizacionAsync();
+        var resultado = await svc.ObtenerValorizacionAsync();
 
-        Assert.Equal(350m, totales.TotalValorCosto); // 100 + 200 + 50
-        Assert.Equal(575m, totales.TotalValorVenta); // 150 + 350 + 75
+        Assert.Equal(350m, resultado.Totales.TotalValorCosto); // 100 + 200 + 50
+        Assert.Equal(575m, resultado.Totales.TotalValorVenta); // 150 + 350 + 75
     }
 
     [Fact]
@@ -94,9 +94,9 @@ public class ReporteStockServiceValorizacionTests
         repo.Setup(r => r.ObtenerValorizacionAsync())
             .ReturnsAsync(items);
 
-        var (resultItems, _) = await svc.ObtenerValorizacionAsync();
+        var resultado = await svc.ObtenerValorizacionAsync();
 
-        var item = Assert.Single(resultItems);
+        var item = Assert.Single(resultado.Items);
         Assert.Equal("Sin categoría", item.Categoria);
     }
 

@@ -32,3 +32,12 @@ public record MasMovidoDto(
     string Nombre,
     int CantidadMovimientos,
     decimal VolumenTotal);
+
+/// <summary>
+/// Envoltorio serializable de la valorización: reemplaza la tupla nombrada
+/// (Items, Totales) que no serializa de forma estándar por HTTP (Fase 0 de la
+/// migración client-server — fricción #2 del spec).
+/// </summary>
+public record ValorizacionReporteDto(
+    IReadOnlyList<ValorizacionItemDto> Items,
+    ValorizacionTotalesDto Totales);
