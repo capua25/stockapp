@@ -56,9 +56,9 @@ public partial class ValorizacionViewModel : ViewModelBase
     [RelayCommand]
     private async Task BuscarAsync()
     {
-        var (items, totales) = await _servicio.ObtenerValorizacionAsync();
-        Items = items;
-        Totales = totales;
+        var resultado = await _servicio.ObtenerValorizacionAsync();
+        Items = resultado.Items;
+        Totales = resultado.Totales;
     }
 
     /// <summary>
