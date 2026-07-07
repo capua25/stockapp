@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Collections;
 using Moq;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Movimientos;
@@ -246,5 +248,60 @@ public class MovimientoHistorialViewModelTests
         vm.TipoFiltroSeleccionado = opcionSalida;
 
         Assert.Equal(TipoMovimiento.Salida, vm.FiltroTipo);
+    }
+
+    // ── ItemsView: fix de ordenamiento por click en encabezados (Avalonia 12, regresión #21129) ──
+
+    [Fact]
+    public async Task ItemsView_EsOrdenable()
+    {
+        var lista = new List<MovimientoHistorialDto> { CrearDto(1), CrearDto(2) };
+        var (vm, _, _, _) = Crear(lista);
+
+        await vm.CargarAsync();
+
+        Assert.NotNull(vm.ItemsView);
+        Assert.IsType<DataGridCollectionView>(vm.ItemsView);
+        Assert.True(vm.ItemsView.CanSort);
+    }
+
+    [Fact]
+    public async Task ItemsView_AlAplicarSortDescription_OrdenaLosItems()
+    {
+        var desordenados = new List<MovimientoHistorialDto>
+        {
+            CrearDto(1) with { Fecha = new DateTime(2026, 6, 15) },
+            CrearDto(2) with { Fecha = new DateTime(2026, 1, 10) },
+            CrearDto(3) with { Fecha = new DateTime(2026, 3, 20) },
+        };
+        var (vm, _, _, _) = Crear(desordenados);
+        await vm.CargarAsync();
+
+        vm.ItemsView.SortDescriptions.Add(
+            DataGridSortDescription.FromPath(nameof(MovimientoHistorialDto.Fecha), ListSortDirection.Ascending));
+
+        var ordenados = vm.ItemsView.Cast<MovimientoHistorialDto>().ToList();
+        Assert.Equal(3, ordenados.Count);
+        Assert.Equal(new DateTime(2026, 1, 10), ordenados[0].Fecha);
+        Assert.Equal(new DateTime(2026, 3, 20), ordenados[1].Fecha);
+        Assert.Equal(new DateTime(2026, 6, 15), ordenados[2].Fecha);
+    }
+
+    [Fact]
+    public async Task Items_TrasRecarga_SeReflejanEnItemsView()
+    {
+        var (vm, svcMock, _, _) = Crear(new List<MovimientoHistorialDto> { CrearDto(1) });
+        await vm.CargarAsync();
+        Assert.Single(vm.ItemsView.Cast<MovimientoHistorialDto>());
+
+        var nuevaLista = new List<MovimientoHistorialDto> { CrearDto(10), CrearDto(11), CrearDto(12) };
+        svcMock
+            .Setup(s => s.ObtenerHistorialAsync(It.IsAny<HistorialMovimientoFiltro>()))
+            .ReturnsAsync(nuevaLista);
+
+        await vm.CargarAsync();
+
+        Assert.Equal(3, vm.Items.Count);
+        Assert.Equal(3, vm.ItemsView.Cast<MovimientoHistorialDto>().Count());
     }
 }

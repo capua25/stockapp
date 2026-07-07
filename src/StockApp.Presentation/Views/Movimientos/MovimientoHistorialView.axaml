@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Movimientos"
+             xmlns:dto="using:StockApp.Application.Movimientos"
              xmlns:beh="using:StockApp.Presentation.Behaviors"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -84,22 +85,22 @@
 
                 <!-- Listado -->
                 <DataGrid Grid.Row="2"
-                          ItemsSource="{Binding Items}"
+                          ItemsSource="{Binding ItemsView}"
                           IsReadOnly="True"
                           CanUserSortColumns="True"
                           CanUserResizeColumns="True"
                           GridLinesVisibility="Horizontal">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha}" Width="150" />
-                        <DataGridTextColumn Header="Producto" Binding="{Binding ProductoNombre}" Width="160" />
-                        <DataGridTextColumn Header="Tipo" Binding="{Binding TipoNombre}" Width="90" />
-                        <DataGridTextColumn Header="Motivo" Binding="{Binding MotivoNombre}" Width="100" />
-                        <DataGridTextColumn Header="Cantidad" Binding="{Binding Cantidad}" Width="90" />
-                        <DataGridTextColumn Header="Precio" Binding="{Binding PrecioUnitario, StringFormat='$ {0:F2}'}" Width="100" />
-                        <DataGridTextColumn Header="Stock ant." Binding="{Binding StockAnterior}" Width="100" />
-                        <DataGridTextColumn Header="Stock nuevo" Binding="{Binding StockNuevo}" Width="100" />
-                        <DataGridTextColumn Header="Usuario" Binding="{Binding UsuarioNombre}" Width="120" />
-                        <DataGridTextColumn Header="Comentario" Binding="{Binding Comentario}" Width="*" />
+                        <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha, DataType={x:Type dto:MovimientoHistorialDto}}" Width="150" />
+                        <DataGridTextColumn Header="Producto" Binding="{Binding ProductoNombre, DataType={x:Type dto:MovimientoHistorialDto}}" Width="160" />
+                        <DataGridTextColumn Header="Tipo" Binding="{Binding TipoNombre, DataType={x:Type dto:MovimientoHistorialDto}}" Width="90" />
+                        <DataGridTextColumn Header="Motivo" Binding="{Binding MotivoNombre, DataType={x:Type dto:MovimientoHistorialDto}}" Width="100" />
+                        <DataGridTextColumn Header="Cantidad" Binding="{Binding Cantidad, DataType={x:Type dto:MovimientoHistorialDto}}" Width="90" />
+                        <DataGridTextColumn Header="Precio" Binding="{Binding PrecioUnitario, StringFormat='$ {0:F2}', DataType={x:Type dto:MovimientoHistorialDto}}" Width="100" />
+                        <DataGridTextColumn Header="Stock ant." Binding="{Binding StockAnterior, DataType={x:Type dto:MovimientoHistorialDto}}" Width="100" />
+                        <DataGridTextColumn Header="Stock nuevo" Binding="{Binding StockNuevo, DataType={x:Type dto:MovimientoHistorialDto}}" Width="100" />
+                        <DataGridTextColumn Header="Usuario" Binding="{Binding UsuarioNombre, DataType={x:Type dto:MovimientoHistorialDto}}" Width="120" />
+                        <DataGridTextColumn Header="Comentario" Binding="{Binding Comentario, DataType={x:Type dto:MovimientoHistorialDto}}" Width="*" />
                     </DataGrid.Columns>
                 </DataGrid>
 

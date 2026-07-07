@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Catalogo"
+             xmlns:ent="using:StockApp.Domain.Entities"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="700" d:DesignHeight="500"
@@ -35,18 +36,18 @@
                 </Grid>
 
                 <!-- Listado -->
-                <DataGrid ItemsSource="{Binding Items}"
+                <DataGrid ItemsSource="{Binding ItemsView}"
                           IsReadOnly="True"
                           CanUserSortColumns="True"
                           CanUserResizeColumns="True"
                           GridLinesVisibility="Horizontal">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Código" Binding="{Binding Codigo}" Width="100" />
-                        <DataGridTextColumn Header="Nombre" Binding="{Binding Nombre}" Width="*" />
-                        <DataGridTextColumn Header="Costo" Binding="{Binding PrecioCosto, StringFormat='$ {0:F2}'}" Width="100" />
-                        <DataGridTextColumn Header="Venta" Binding="{Binding PrecioVenta, StringFormat='$ {0:F2}'}" Width="100" />
-                        <DataGridTextColumn Header="Unidad" Binding="{Binding UnidadMedida.Nombre}" Width="120" />
-                        <DataGridTextColumn Header="Categoría" Binding="{Binding Categoria.Nombre, TargetNullValue='—'}" Width="140" />
+                        <DataGridTextColumn Header="Código" Binding="{Binding Codigo, DataType={x:Type ent:Producto}}" Width="100" />
+                        <DataGridTextColumn Header="Nombre" Binding="{Binding Nombre, DataType={x:Type ent:Producto}}" Width="*" />
+                        <DataGridTextColumn Header="Costo" Binding="{Binding PrecioCosto, StringFormat='$ {0:F2}', DataType={x:Type ent:Producto}}" Width="100" />
+                        <DataGridTextColumn Header="Venta" Binding="{Binding PrecioVenta, StringFormat='$ {0:F2}', DataType={x:Type ent:Producto}}" Width="100" />
+                        <DataGridTextColumn Header="Unidad" Binding="{Binding UnidadMedida.Nombre, DataType={x:Type ent:Producto}}" Width="120" />
+                        <DataGridTextColumn Header="Categoría" Binding="{Binding Categoria.Nombre, TargetNullValue='—', DataType={x:Type ent:Producto}}" Width="140" />
                     </DataGrid.Columns>
                 </DataGrid>
 

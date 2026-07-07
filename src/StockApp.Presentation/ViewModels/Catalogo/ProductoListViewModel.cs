@@ -2,6 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Catalogo;
@@ -35,10 +36,21 @@ public partial class ProductoListViewModel : ViewModelBase
 
     public ObservableCollection<Producto> Items { get; } = new();
 
+    /// <summary>
+    /// Vista sobre <see cref="Items"/> que habilita el ordenamiento por click en encabezados
+    /// del DataGrid. Necesaria por una regresión de Avalonia 12 (AvaloniaUI/Avalonia#21129):
+    /// bindear el DataGrid directo a una ObservableCollection con CanUserSortColumns="True"
+    /// ya no ordena. Se crea una única vez envolviendo Items, así los Clear/Add de
+    /// CargarAsync/EjecutarBusquedaAsync se reflejan automáticamente vía INotifyCollectionChanged.
+    /// </summary>
+    public DataGridCollectionView ItemsView { get; }
+
     public ProductoListViewModel(IProductoService service, INavigationService navigation)
     {
         _service    = service;
         _navigation = navigation;
+
+        ItemsView = new DataGridCollectionView(Items);
     }
 
     public async Task CargarAsync()

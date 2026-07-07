@@ -1,5 +1,8 @@
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Collections;
 using Moq;
 using StockApp.Application.Catalogo;
 using StockApp.Domain.Entities;
@@ -104,6 +107,70 @@ public class ProductoListViewModelTests
         await vm.CargarAsync();
 
         Assert.Empty(vm.Items);
+    }
+
+    // ── ItemsView: fix de ordenamiento por click en encabezados (Avalonia 12, regresión #21129) ──
+
+    [Fact]
+    public async Task ItemsView_EsOrdenable()
+    {
+        var productos = new List<Producto>
+        {
+            new() { Id = 1, Codigo = "P001", Nombre = "Producto Uno" },
+            new() { Id = 2, Codigo = "P002", Nombre = "Producto Dos" }
+        };
+        var (vm, _, _) = Crear(productos);
+
+        await vm.CargarAsync();
+
+        Assert.NotNull(vm.ItemsView);
+        Assert.IsType<DataGridCollectionView>(vm.ItemsView);
+        Assert.True(vm.ItemsView.CanSort);
+    }
+
+    [Fact]
+    public async Task ItemsView_AlAplicarSortDescription_OrdenaLosItems()
+    {
+        var desordenados = new List<Producto>
+        {
+            new() { Id = 1, Codigo = "P003", Nombre = "Zapallo" },
+            new() { Id = 2, Codigo = "P001", Nombre = "Aceite" },
+            new() { Id = 3, Codigo = "P002", Nombre = "Manteca" }
+        };
+        var (vm, _, _) = Crear(desordenados);
+        await vm.CargarAsync();
+
+        vm.ItemsView.SortDescriptions.Add(
+            DataGridSortDescription.FromPath(nameof(Producto.Nombre), ListSortDirection.Ascending));
+
+        var ordenados = vm.ItemsView.Cast<Producto>().ToList();
+        Assert.Equal(3, ordenados.Count);
+        Assert.Equal("Aceite", ordenados[0].Nombre);
+        Assert.Equal("Manteca", ordenados[1].Nombre);
+        Assert.Equal("Zapallo", ordenados[2].Nombre);
+    }
+
+    [Fact]
+    public async Task Items_TrasRecarga_SeReflejanEnItemsView()
+    {
+        var (vm, svcMock, _) = Crear(new List<Producto> { new() { Id = 1, Codigo = "P001", Nombre = "Uno" } });
+        await vm.CargarAsync();
+        Assert.Single(vm.ItemsView.Cast<Producto>());
+
+        var nuevaLista = new List<Producto>
+        {
+            new() { Id = 10, Codigo = "P010", Nombre = "Diez" },
+            new() { Id = 11, Codigo = "P011", Nombre = "Once" },
+            new() { Id = 12, Codigo = "P012", Nombre = "Doce" }
+        };
+        svcMock
+            .Setup(s => s.BuscarAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .ReturnsAsync(nuevaLista);
+
+        await vm.CargarAsync();
+
+        Assert.Equal(3, vm.Items.Count);
+        Assert.Equal(3, vm.ItemsView.Cast<Producto>().Count());
     }
 }
 
