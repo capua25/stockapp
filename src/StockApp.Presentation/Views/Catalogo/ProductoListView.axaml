@@ -1,7 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Catalogo"
-             xmlns:ent="using:StockApp.Domain.Entities"
+             xmlns:dto="using:StockApp.Application.Catalogo"
              xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -62,7 +62,7 @@
                     <DataGrid.Columns>
                         <DataGridTemplateColumn Header="Código" Width="Auto" SortMemberPath="Codigo">
                             <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate x:DataType="ent:Producto">
+                                <DataTemplate x:DataType="dto:ProductoDto">
                                     <TextBlock Text="{Binding Codigo}"
                                                Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
                                                VerticalAlignment="Center" Margin="4,0" />
@@ -71,7 +71,7 @@
                         </DataGridTemplateColumn>
                         <DataGridTemplateColumn Header="Nombre" Width="2*" SortMemberPath="Nombre">
                             <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate x:DataType="ent:Producto">
+                                <DataTemplate x:DataType="dto:ProductoDto">
                                     <TextBlock Text="{Binding Nombre}"
                                                Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
                                                TextTrimming="CharacterEllipsis"
@@ -82,7 +82,7 @@
                         </DataGridTemplateColumn>
                         <DataGridTemplateColumn Header="Costo" Width="Auto" SortMemberPath="PrecioCosto">
                             <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate x:DataType="ent:Producto">
+                                <DataTemplate x:DataType="dto:ProductoDto">
                                     <TextBlock Text="{Binding PrecioCosto, StringFormat='$ {0:F2}'}"
                                                Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
                                                VerticalAlignment="Center" Margin="4,0" />
@@ -91,7 +91,7 @@
                         </DataGridTemplateColumn>
                         <DataGridTemplateColumn Header="Venta" Width="Auto" SortMemberPath="PrecioVenta">
                             <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate x:DataType="ent:Producto">
+                                <DataTemplate x:DataType="dto:ProductoDto">
                                     <TextBlock Text="{Binding PrecioVenta, StringFormat='$ {0:F2}'}"
                                                Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
                                                VerticalAlignment="Center" Margin="4,0" />
@@ -100,36 +100,36 @@
                         </DataGridTemplateColumn>
                         <DataGridTemplateColumn Header="Stock" Width="Auto" SortMemberPath="StockActual">
                             <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate x:DataType="ent:Producto">
+                                <DataTemplate x:DataType="dto:ProductoDto">
                                     <TextBlock Text="{Binding StockActual}"
                                                Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
                                                VerticalAlignment="Center" Margin="4,0" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Unidad" Width="Auto" SortMemberPath="UnidadMedida.Nombre">
+                        <DataGridTemplateColumn Header="Unidad" Width="Auto" SortMemberPath="UnidadMedidaNombre">
                             <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate x:DataType="ent:Producto">
-                                    <TextBlock Text="{Binding UnidadMedida.Nombre}"
+                                <DataTemplate x:DataType="dto:ProductoDto">
+                                    <TextBlock Text="{Binding UnidadMedidaNombre}"
                                                Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
                                                VerticalAlignment="Center" Margin="4,0" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Categoría" Width="*" SortMemberPath="Categoria.Nombre">
+                        <DataGridTemplateColumn Header="Categoría" Width="*" SortMemberPath="CategoriaNombre">
                             <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate x:DataType="ent:Producto">
-                                    <TextBlock Text="{Binding Categoria.Nombre, TargetNullValue='—'}"
+                                <DataTemplate x:DataType="dto:ProductoDto">
+                                    <TextBlock Text="{Binding CategoriaNombre, TargetNullValue='—'}"
                                                Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
                                                TextTrimming="CharacterEllipsis"
-                                               ToolTip.Tip="{Binding Categoria.Nombre, TargetNullValue='—'}"
+                                               ToolTip.Tip="{Binding CategoriaNombre, TargetNullValue='—'}"
                                                VerticalAlignment="Center" Margin="4,0" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
                         <DataGridTemplateColumn Header="Estado" Width="Auto" CanUserSort="False">
                             <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate x:DataType="ent:Producto">
+                                <DataTemplate x:DataType="dto:ProductoDto">
                                     <Border Classes="badge-inactiva" IsVisible="{Binding !Activo}">
                                         <TextBlock Text="Inactiva" Classes="badge-inactiva-texto" />
                                     </Border>

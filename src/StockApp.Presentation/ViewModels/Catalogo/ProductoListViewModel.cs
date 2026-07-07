@@ -7,7 +7,6 @@ using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Catalogo;
-using StockApp.Domain.Entities;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 
@@ -40,9 +39,9 @@ public partial class ProductoListViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(BajaCommand))]
     [NotifyCanExecuteChangedFor(nameof(EditarCommand))]
-    private Producto? _itemSeleccionado;
+    private ProductoDto? _itemSeleccionado;
 
-    public ObservableCollection<Producto> Items { get; } = new();
+    public ObservableCollection<ProductoDto> Items { get; } = new();
 
     /// <summary>
     /// Vista sobre <see cref="Items"/> que habilita el ordenamiento por click en encabezados
