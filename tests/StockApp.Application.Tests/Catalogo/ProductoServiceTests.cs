@@ -376,5 +376,73 @@ public class ProductoServiceTests
         };
         await Assert.ThrowsAsync<ArgumentException>(() => svc.ModificarAsync(modificado));
     }
+
+    // ─── Mapeo a ProductoDto (Fase 0 — migración client-server) ──────────────
+
+    [Fact]
+    public async Task BuscarAsync_MapeaANombresPlanosDeCategoriaYUnidadMedida()
+    {
+        var categoria = new Categoria { Id = 3, Nombre = "Almacén", Activo = true };
+        var unidad = new UnidadMedida { Id = 1, Nombre = "Kilogramo", Abreviatura = "kg", Activo = true };
+        var producto = new Producto
+        {
+            Id = 1, Codigo = "SKU-001", CodigoBarras = "111", Nombre = "Fideos",
+            Descripcion = "Fideos secos", CategoriaId = 3, Categoria = categoria,
+            ProveedorId = 9, UnidadMedidaId = 1, UnidadMedida = unidad,
+            PrecioCosto = 10m, PrecioVenta = 20m, StockActual = 5m, StockMinimo = 2m,
+            Activo = true, FechaAlta = new DateTime(2026, 1, 1)
+        };
+        var (svc, repo, _, _, _, _) = Crear();
+        repo.Setup(r => r.BuscarAsync(null, null, null)).ReturnsAsync(new List<Producto> { producto });
+
+        var resultado = await svc.BuscarAsync(null, null, null);
+
+        var dto = Assert.Single(resultado);
+        Assert.Equal(1, dto.Id);
+        Assert.Equal("SKU-001", dto.Codigo);
+        Assert.Equal("111", dto.CodigoBarras);
+        Assert.Equal("Fideos", dto.Nombre);
+        Assert.Equal("Fideos secos", dto.Descripcion);
+        Assert.Equal(3, dto.CategoriaId);
+        Assert.Equal("Almacén", dto.CategoriaNombre);
+        Assert.Equal(9, dto.ProveedorId);
+        Assert.Equal(1, dto.UnidadMedidaId);
+        Assert.Equal("Kilogramo", dto.UnidadMedidaNombre);
+        Assert.Equal(10m, dto.PrecioCosto);
+        Assert.Equal(20m, dto.PrecioVenta);
+        Assert.Equal(5m, dto.StockActual);
+        Assert.Equal(2m, dto.StockMinimo);
+        Assert.True(dto.Activo);
+        Assert.Equal(new DateTime(2026, 1, 1), dto.FechaAlta);
+    }
+
+    [Fact]
+    public async Task BuscarAsync_ProductoSinCategoriaCargada_CategoriaNombreEsNull()
+    {
+        var unidad = new UnidadMedida { Id = 1, Nombre = "Unidad", Abreviatura = "u", Activo = true };
+        var producto = new Producto
+        {
+            Id = 2, Codigo = "SKU-002", Nombre = "Arroz", CategoriaId = null, Categoria = null,
+            UnidadMedidaId = 1, UnidadMedida = unidad, Activo = true
+        };
+        var (svc, repo, _, _, _, _) = Crear();
+        repo.Setup(r => r.BuscarAsync(null, null, null)).ReturnsAsync(new List<Producto> { producto });
+
+        var resultado = await svc.BuscarAsync(null, null, null);
+
+        Assert.Null(Assert.Single(resultado).CategoriaNombre);
+    }
+
+    [Fact]
+    public async Task BuscarPorTextoAsync_TambienMapeaAProductoDto()
+    {
+        var producto = new Producto { Id = 4, Codigo = "SKU-004", Nombre = "Fideos", UnidadMedidaId = 1, Activo = true };
+        var (svc, repo, _, _, _, _) = Crear();
+        repo.Setup(r => r.BuscarPorTextoAsync("fideos")).ReturnsAsync(new List<Producto> { producto });
+
+        var resultado = await svc.BuscarPorTextoAsync("fideos");
+
+        Assert.Equal("SKU-004", Assert.Single(resultado).Codigo);
+    }
 }
 

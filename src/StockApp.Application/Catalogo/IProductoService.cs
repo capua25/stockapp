@@ -8,6 +8,6 @@ public interface IProductoService
     Task ModificarAsync(Producto producto);
     Task BajaLogicaAsync(int id);
     Task CambiarPrecioAsync(int id, decimal precioCosto, decimal precioVenta);
-    Task<IReadOnlyList<Producto>> BuscarAsync(string? sku, string? codigoBarras, string? nombre);
-    Task<IReadOnlyList<Producto>> BuscarPorTextoAsync(string? texto);
+    Task<IReadOnlyList<ProductoDto>> BuscarAsync(string? sku, string? codigoBarras, string? nombre);
+    Task<IReadOnlyList<ProductoDto>> BuscarPorTextoAsync(string? texto);
 }
