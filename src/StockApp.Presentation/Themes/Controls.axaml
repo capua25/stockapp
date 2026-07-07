@@ -1,5 +1,6 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:conv="using:StockApp.Presentation.Converters">
 
     <!-- ════════════════════════════════════════════════════════════════════
          StockApp UI Kit — Controles globales.
@@ -146,6 +147,13 @@
         <Setter Property="CornerRadius" Value="6" />
         <Setter Property="Padding" Value="10,8" />
         <Setter Property="Foreground" Value="{DynamicResource TextoPrimarioBrush}" />
+        <!-- Política: ninguna excepción cruda de .NET (p. ej. InvalidCastException/FormatException
+             de un binding TwoWay que falla al convertir texto a un número) debe llegar a la UI.
+             DataValidationErrors.ErrorConverter transforma cada error ANTES de que quede expuesto
+             en DataValidationErrors.Errors (ver ErrorValidacionConverter.cs), así que blindar acá
+             una sola vez alcanza para TODO TextBox de la app, sin tocar el ErrorTemplate ni el
+             Template (dónde/cómo se ve el error queda igual al default de FluentTheme). -->
+        <Setter Property="(DataValidationErrors.ErrorConverter)" Value="{x:Static conv:ErrorValidacionConverter.Instance}" />
     </Style>
     <Style Selector="TextBox:focus">
         <Setter Property="BorderBrush" Value="{DynamicResource BrandBrush}" />
@@ -162,6 +170,8 @@
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="6" />
         <Setter Property="Padding" Value="10,8" />
+        <!-- Misma política que TextBox: ver comentario de arriba. -->
+        <Setter Property="(DataValidationErrors.ErrorConverter)" Value="{x:Static conv:ErrorValidacionConverter.Instance}" />
     </Style>
     <Style Selector="ComboBox:focus">
         <Setter Property="BorderBrush" Value="{DynamicResource BrandBrush}" />

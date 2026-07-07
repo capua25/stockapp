@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Movimientos"
+             xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="500" d:DesignHeight="450"
@@ -43,7 +44,13 @@
 
                 <StackPanel Spacing="4">
                     <TextBlock Text="Precio unitario" />
-                    <TextBox Text="{Binding PrecioUnitario}"
+                    <!-- PrecioUnitario es decimal? (opcional): el conversor default de Avalonia
+                         no mapea "" a null y explota con InvalidCastException al vaciar el campo
+                         (bug real reproducido en tests). DecimalOpcionalConverter trata "" como
+                         null y, si el texto no es numérico, devuelve un BindingNotification en
+                         vez de lanzar (ver Converters/DecimalOpcionalConverter.cs). -->
+                    <TextBox Name="PrecioUnitarioBox"
+                             Text="{Binding PrecioUnitario, Converter={x:Static conv:DecimalOpcionalConverter.Instance}}"
                              PlaceholderText="Opcional" />
                 </StackPanel>
 

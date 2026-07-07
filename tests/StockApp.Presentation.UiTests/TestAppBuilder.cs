@@ -11,12 +11,15 @@ using Avalonia.Themes.Fluent;
 namespace StockApp.Presentation.UiTests;
 
 /// <summary>
-/// Host headless minimo para el banco de pruebas de sort por click en DataGrid.
-/// Carga el mismo FluentTheme + Fluent.xaml del DataGrid que usa la app real
-/// (ver src/StockApp.Presentation/App.axaml), para reproducir fielmente el
-/// comportamiento (temas/estilos) de DataGridColumnHeader.
+/// Host headless minimo para el banco de pruebas de sort por click en DataGrid, y tambien para
+/// MovimientoFormControlValidacionTests.cs (bug de InvalidCastException en "Precio unitario" +
+/// politica de DataValidationErrors.ErrorConverter). Carga el mismo FluentTheme + Fluent.xaml
+/// del DataGrid que usa la app real (ver src/StockApp.Presentation/App.axaml), y ADEMAS
+/// Tokens/Typography/Controls del StockApp UI Kit real (mismo orden que App.axaml: FluentTheme
+/// primero, Controls.axaml despues para poder overridear), para reproducir fielmente el
+/// comportamiento real de estilos/recursos (DataGridColumnHeader, TextBox, DataValidationErrors).
 /// </summary>
-public class TestApp : Application
+public class TestApp : Avalonia.Application
 {
     public TestApp()
     {
@@ -37,10 +40,27 @@ public class TestApp : Application
         Resources["DataGridCurrencyVisualPrimaryBrush"] = new SolidColorBrush(Colors.Transparent);
         Resources["DataGridFillerColumnGridLinesBrush"] = new SolidColorBrush(Colors.Transparent);
 
+        Resources.MergedDictionaries.Add(new Avalonia.Markup.Xaml.Styling.ResourceInclude(
+            new Uri("avares://StockApp.Presentation.UiTests/"))
+        {
+            Source = new Uri("avares://StockApp.Presentation/Themes/Tokens.axaml")
+        });
+
         Styles.Add(new FluentTheme());
         Styles.Add(new StyleInclude(new Uri("avares://StockApp.Presentation.UiTests/"))
         {
             Source = new Uri("avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml")
+        });
+
+        // StockApp UI Kit real, mismo orden que App.axaml (despues del FluentTheme, para poder
+        // overridear): Controls.axaml es donde vive la politica de DataValidationErrors.ErrorConverter.
+        Styles.Add(new StyleInclude(new Uri("avares://StockApp.Presentation.UiTests/"))
+        {
+            Source = new Uri("avares://StockApp.Presentation/Themes/Typography.axaml")
+        });
+        Styles.Add(new StyleInclude(new Uri("avares://StockApp.Presentation.UiTests/"))
+        {
+            Source = new Uri("avares://StockApp.Presentation/Themes/Controls.axaml")
         });
     }
 

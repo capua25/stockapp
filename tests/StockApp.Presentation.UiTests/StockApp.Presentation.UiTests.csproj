@@ -34,4 +34,12 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Referenciados para MovimientoFormControlValidacionTests.cs: reproduce con la vista y
+         el tema REALES el bug de InvalidCastException al vaciar "Precio unitario" y verifica
+         la política de DataValidationErrors.ErrorConverter en Themes/Controls.axaml. -->
+    <ProjectReference Include="..\..\src\StockApp.Application\StockApp.Application.csproj" />
+    <ProjectReference Include="..\..\src\StockApp.Presentation\StockApp.Presentation.csproj" />
+  </ItemGroup>
+
 </Project>
