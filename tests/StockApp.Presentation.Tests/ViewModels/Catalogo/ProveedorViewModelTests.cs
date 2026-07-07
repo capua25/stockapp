@@ -1,9 +1,11 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Moq;
 using StockApp.Application.Catalogo;
 using StockApp.Domain.Entities;
 using StockApp.Presentation.Navigation;
+using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Catalogo;
 using Xunit;
 
@@ -13,7 +15,7 @@ public class ProveedorListViewModelTests
 {
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    private static (ProveedorListViewModel vm, Mock<IProveedorService> svcMock, Mock<INavigationService> navMock)
+    private static (ProveedorListViewModel vm, Mock<IProveedorService> svcMock, Mock<INavigationService> navMock, Mock<IConfirmacionService> confirmMock)
         Crear(IReadOnlyList<Proveedor>? proveedores = null)
     {
         var svcMock = new Mock<IProveedorService>();
@@ -25,8 +27,13 @@ public class ProveedorListViewModelTests
             .Returns(Task.CompletedTask);
 
         var navMock = new Mock<INavigationService>();
-        var vm = new ProveedorListViewModel(svcMock.Object, navMock.Object);
-        return (vm, svcMock, navMock);
+
+        var confirmMock = new Mock<IConfirmacionService>();
+        confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(true);
+        confirmMock.Setup(c => c.InformarAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
+
+        var vm = new ProveedorListViewModel(svcMock.Object, navMock.Object, confirmMock.Object);
+        return (vm, svcMock, navMock, confirmMock);
     }
 
     // ── D5.1 tests ────────────────────────────────────────────────────────────
@@ -39,7 +46,7 @@ public class ProveedorListViewModelTests
             new() { Id = 1, Nombre = "Proveedor Uno" },
             new() { Id = 2, Nombre = "Proveedor Dos" }
         };
-        var (vm, svcMock, _) = Crear(proveedores);
+        var (vm, svcMock, _, _) = Crear(proveedores);
 
         await vm.CargarAsync();
 
@@ -51,7 +58,7 @@ public class ProveedorListViewModelTests
     [Fact]
     public async Task NuevoCommand_NavegaAProveedorFormViewModel()
     {
-        var (vm, _, navMock) = Crear();
+        var (vm, _, navMock, _) = Crear();
 
         await vm.NuevoCommand.ExecuteAsync(null);
 
@@ -59,16 +66,94 @@ public class ProveedorListViewModelTests
     }
 
     [Fact]
-    public async Task BajaCommand_ConItemSeleccionado_LlamaServicio()
+    public async Task BajaCommand_ConItemSeleccionado_PideConfirmacionYLlamaServicio()
     {
         var prov = new Proveedor { Id = 7, Nombre = "Prov Prueba", Activo = true };
-        var (vm, svcMock, _) = Crear(new List<Proveedor> { prov });
+        var (vm, svcMock, _, confirmMock) = Crear(new List<Proveedor> { prov });
         await vm.CargarAsync();
         vm.ItemSeleccionado = prov;
 
         await vm.BajaCommand.ExecuteAsync(null);
 
+        confirmMock.Verify(c => c.PreguntarAsync(It.IsAny<string>()), Times.Once);
         svcMock.Verify(s => s.BajaLogicaAsync(7), Times.Once);
+    }
+
+    [Fact]
+    public async Task BajaCommand_SiNoConfirma_NoLlamaServicio()
+    {
+        var prov = new Proveedor { Id = 7, Nombre = "Prov Prueba", Activo = true };
+        var (vm, svcMock, _, confirmMock) = Crear(new List<Proveedor> { prov });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = prov;
+        confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(false);
+
+        await vm.BajaCommand.ExecuteAsync(null);
+
+        svcMock.Verify(s => s.BajaLogicaAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task BajaCommand_ServicioLanzaInvalidOperationException_NoPropagaYInforma()
+    {
+        var prov = new Proveedor { Id = 7, Nombre = "Prov Prueba", Activo = true };
+        var (vm, svcMock, _, confirmMock) = Crear(new List<Proveedor> { prov });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = prov;
+
+        var mensaje = "El proveedor 7 ya está inactivo.";
+        svcMock.Setup(s => s.BajaLogicaAsync(7)).ThrowsAsync(new InvalidOperationException(mensaje));
+
+        // No debe propagar la excepción (regresión del crash real).
+        await vm.BajaCommand.ExecuteAsync(null);
+
+        confirmMock.Verify(c => c.InformarAsync(mensaje), Times.Once);
+    }
+
+    [Fact]
+    public async Task BajaCommand_ServicioLanzaKeyNotFoundException_NoPropagaYInforma()
+    {
+        var prov = new Proveedor { Id = 7, Nombre = "Prov Prueba", Activo = true };
+        var (vm, svcMock, _, confirmMock) = Crear(new List<Proveedor> { prov });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = prov;
+
+        var mensaje = "Proveedor 7 no encontrado.";
+        svcMock.Setup(s => s.BajaLogicaAsync(7)).ThrowsAsync(new KeyNotFoundException(mensaje));
+
+        await vm.BajaCommand.ExecuteAsync(null);
+
+        confirmMock.Verify(c => c.InformarAsync(mensaje), Times.Once);
+    }
+
+    [Fact]
+    public void BajaCommand_SinSeleccion_EstaDeshabilitado()
+    {
+        var (vm, _, _, _) = Crear();
+
+        Assert.False(vm.BajaCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task BajaCommand_ItemInactivo_EstaDeshabilitado()
+    {
+        var prov = new Proveedor { Id = 7, Nombre = "Prov Prueba", Activo = false };
+        var (vm, _, _, _) = Crear(new List<Proveedor> { prov });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = prov;
+
+        Assert.False(vm.BajaCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task BajaCommand_ItemActivo_EstaHabilitado()
+    {
+        var prov = new Proveedor { Id = 7, Nombre = "Prov Prueba", Activo = true };
+        var (vm, _, _, _) = Crear(new List<Proveedor> { prov });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = prov;
+
+        Assert.True(vm.BajaCommand.CanExecute(null));
     }
 }
 

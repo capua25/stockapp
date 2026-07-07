@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Catalogo"
+             xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="700" d:DesignHeight="450"
@@ -30,10 +31,20 @@
                          SelectedItem="{Binding ItemSeleccionado}">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
+                            <!-- Entidades inactivas: contenido atenuado (Opacity vía converter) +
+                                 badge "Inactiva" a full opacidad — el badge queda FUERA del panel
+                                 atenuado para que siga siendo legible (la opacidad es multiplicativa
+                                 por el árbol visual en Avalonia). -->
                             <StackPanel Orientation="Horizontal" Spacing="16" Margin="4">
-                                <TextBlock Text="{Binding Nombre}" Width="250" />
-                                <TextBlock Text="{Binding Telefono}" Width="120" Opacity="0.7" />
-                                <TextBlock Text="{Binding Email}"    Width="200" Opacity="0.7" />
+                                <StackPanel Orientation="Horizontal" Spacing="16"
+                                            Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}">
+                                    <TextBlock Text="{Binding Nombre}" Width="250" />
+                                    <TextBlock Text="{Binding Telefono}" Width="120" Opacity="0.7" />
+                                    <TextBlock Text="{Binding Email}"    Width="200" Opacity="0.7" />
+                                </StackPanel>
+                                <Border Classes="badge-inactiva" IsVisible="{Binding !Activo}">
+                                    <TextBlock Text="Inactiva" Classes="badge-inactiva-texto" />
+                                </Border>
                             </StackPanel>
                         </DataTemplate>
                     </ListBox.ItemTemplate>

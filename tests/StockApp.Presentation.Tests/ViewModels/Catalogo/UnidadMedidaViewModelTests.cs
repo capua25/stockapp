@@ -1,9 +1,11 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Moq;
 using StockApp.Application.Catalogo;
 using StockApp.Domain.Entities;
 using StockApp.Presentation.Navigation;
+using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Catalogo;
 using Xunit;
 
@@ -13,7 +15,7 @@ public class UnidadMedidaListViewModelTests
 {
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    private static (UnidadMedidaListViewModel vm, Mock<IUnidadMedidaService> svcMock, Mock<INavigationService> navMock)
+    private static (UnidadMedidaListViewModel vm, Mock<IUnidadMedidaService> svcMock, Mock<INavigationService> navMock, Mock<IConfirmacionService> confirmMock)
         Crear(IReadOnlyList<UnidadMedida>? unidades = null)
     {
         var svcMock = new Mock<IUnidadMedidaService>();
@@ -25,8 +27,13 @@ public class UnidadMedidaListViewModelTests
             .Returns(Task.CompletedTask);
 
         var navMock = new Mock<INavigationService>();
-        var vm = new UnidadMedidaListViewModel(svcMock.Object, navMock.Object);
-        return (vm, svcMock, navMock);
+
+        var confirmMock = new Mock<IConfirmacionService>();
+        confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(true);
+        confirmMock.Setup(c => c.InformarAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
+
+        var vm = new UnidadMedidaListViewModel(svcMock.Object, navMock.Object, confirmMock.Object);
+        return (vm, svcMock, navMock, confirmMock);
     }
 
     // ── D6.1 tests ────────────────────────────────────────────────────────────
@@ -39,7 +46,7 @@ public class UnidadMedidaListViewModelTests
             new() { Id = 1, Nombre = "Unidad", Abreviatura = "u" },
             new() { Id = 2, Nombre = "Kilogramo", Abreviatura = "kg" }
         };
-        var (vm, svcMock, _) = Crear(unidades);
+        var (vm, svcMock, _, _) = Crear(unidades);
 
         await vm.CargarAsync();
 
@@ -51,7 +58,7 @@ public class UnidadMedidaListViewModelTests
     [Fact]
     public async Task NuevoCommand_NavegaAUnidadMedidaFormViewModel()
     {
-        var (vm, _, navMock) = Crear();
+        var (vm, _, navMock, _) = Crear();
 
         await vm.NuevoCommand.ExecuteAsync(null);
 
@@ -59,16 +66,94 @@ public class UnidadMedidaListViewModelTests
     }
 
     [Fact]
-    public async Task BajaCommand_ConItemSeleccionado_LlamaServicio()
+    public async Task BajaCommand_ConItemSeleccionado_PideConfirmacionYLlamaServicio()
     {
         var um = new UnidadMedida { Id = 3, Nombre = "Metro", Abreviatura = "m", Activo = true };
-        var (vm, svcMock, _) = Crear(new List<UnidadMedida> { um });
+        var (vm, svcMock, _, confirmMock) = Crear(new List<UnidadMedida> { um });
         await vm.CargarAsync();
         vm.ItemSeleccionado = um;
 
         await vm.BajaCommand.ExecuteAsync(null);
 
+        confirmMock.Verify(c => c.PreguntarAsync(It.IsAny<string>()), Times.Once);
         svcMock.Verify(s => s.BajaLogicaAsync(3), Times.Once);
+    }
+
+    [Fact]
+    public async Task BajaCommand_SiNoConfirma_NoLlamaServicio()
+    {
+        var um = new UnidadMedida { Id = 3, Nombre = "Metro", Abreviatura = "m", Activo = true };
+        var (vm, svcMock, _, confirmMock) = Crear(new List<UnidadMedida> { um });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = um;
+        confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(false);
+
+        await vm.BajaCommand.ExecuteAsync(null);
+
+        svcMock.Verify(s => s.BajaLogicaAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task BajaCommand_ServicioLanzaInvalidOperationException_NoPropagaYInforma()
+    {
+        var um = new UnidadMedida { Id = 3, Nombre = "Metro", Abreviatura = "m", Activo = true };
+        var (vm, svcMock, _, confirmMock) = Crear(new List<UnidadMedida> { um });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = um;
+
+        var mensaje = "La unidad de medida 3 ya está inactiva.";
+        svcMock.Setup(s => s.BajaLogicaAsync(3)).ThrowsAsync(new InvalidOperationException(mensaje));
+
+        // No debe propagar la excepción (regresión del crash real).
+        await vm.BajaCommand.ExecuteAsync(null);
+
+        confirmMock.Verify(c => c.InformarAsync(mensaje), Times.Once);
+    }
+
+    [Fact]
+    public async Task BajaCommand_ServicioLanzaKeyNotFoundException_NoPropagaYInforma()
+    {
+        var um = new UnidadMedida { Id = 3, Nombre = "Metro", Abreviatura = "m", Activo = true };
+        var (vm, svcMock, _, confirmMock) = Crear(new List<UnidadMedida> { um });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = um;
+
+        var mensaje = "UnidadMedida 3 no encontrada.";
+        svcMock.Setup(s => s.BajaLogicaAsync(3)).ThrowsAsync(new KeyNotFoundException(mensaje));
+
+        await vm.BajaCommand.ExecuteAsync(null);
+
+        confirmMock.Verify(c => c.InformarAsync(mensaje), Times.Once);
+    }
+
+    [Fact]
+    public void BajaCommand_SinSeleccion_EstaDeshabilitado()
+    {
+        var (vm, _, _, _) = Crear();
+
+        Assert.False(vm.BajaCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task BajaCommand_ItemInactivo_EstaDeshabilitado()
+    {
+        var um = new UnidadMedida { Id = 3, Nombre = "Metro", Abreviatura = "m", Activo = false };
+        var (vm, _, _, _) = Crear(new List<UnidadMedida> { um });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = um;
+
+        Assert.False(vm.BajaCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task BajaCommand_ItemActivo_EstaHabilitado()
+    {
+        var um = new UnidadMedida { Id = 3, Nombre = "Metro", Abreviatura = "m", Activo = true };
+        var (vm, _, _, _) = Crear(new List<UnidadMedida> { um });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = um;
+
+        Assert.True(vm.BajaCommand.CanExecute(null));
     }
 }
 

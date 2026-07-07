@@ -31,4 +31,26 @@ public class ConfirmacionServiceTests
 
         Assert.False(resultado);
     }
+
+    [Fact]
+    public async Task IConfirmacionService_InformarAsync_EsMockeable()
+    {
+        var mock = new Mock<IConfirmacionService>();
+        mock.Setup(s => s.InformarAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
+
+        await mock.Object.InformarAsync("Ocurrió un error.");
+
+        mock.Verify(s => s.InformarAsync("Ocurrió un error."), Times.Once);
+    }
+
+    [Fact]
+    public async Task ConfirmacionService_InformarAsync_SinAppAvalonia_NoLanza()
+    {
+        // Sin Avalonia.Application.Current inicializado (tests headless), InformarAsync debe
+        // resolver sin excepción en vez de intentar abrir un diálogo real — mismo criterio
+        // defensivo que PreguntarAsync.
+        var svc = new ConfirmacionService();
+
+        await svc.InformarAsync("Ocurrió un error.");
+    }
 }

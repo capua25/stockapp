@@ -40,4 +40,32 @@ public class ConfirmacionService : IConfirmacionService
         var resultado = await dialog.ShowDialog<bool>(owner);
         return resultado;
     }
+
+    /// <inheritdoc />
+    public Task InformarAsync(string mensaje)
+    {
+        // Mismo criterio defensivo que PreguntarAsync: sin aplicación Avalonia inicializada
+        // (ej: tests headless), no hay dónde mostrar el diálogo — no hacemos nada.
+        if (AvaloniaApp.Current is null)
+            return Task.CompletedTask;
+
+        return Dispatcher.UIThread.InvokeAsync(() => MostrarMensajeAsync(mensaje));
+    }
+
+    private static async Task MostrarMensajeAsync(string mensaje)
+    {
+        var lifetime = AvaloniaApp.Current?.ApplicationLifetime
+            as IClassicDesktopStyleApplicationLifetime;
+
+        var owner = lifetime?.MainWindow;
+
+        if (owner is null)
+        {
+            // No hay ventana principal disponible: no hay nada más que hacer.
+            return;
+        }
+
+        var dialog = new MensajeDialog(mensaje);
+        await dialog.ShowDialog(owner);
+    }
 }

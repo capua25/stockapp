@@ -47,14 +47,37 @@ public partial class App : AvaloniaApp
 
     public override void OnFrameworkInitializationCompleted()
     {
+        _serviceProvider = ConfigurarServicios();
+
         // Captura excepciones no manejadas del hilo de UI de Avalonia (ej. lanzadas desde
         // handlers de eventos o bindings). Dispatcher.UIThread ya está inicializado en este
-        // punto del ciclo de vida. No marcamos e.Handled = true para no alterar el
-        // comportamiento de crash existente: solo agregamos visibilidad vía crash.log.
+        // punto del ciclo de vida.
+        //
+        // Antes NO se marcaba e.Handled = true a propósito ("para no alterar el comportamiento
+        // de crash existente"): la app moría igual ante cualquier excepción no atrapada, solo
+        // que con más visibilidad vía crash.log. Se revierte esa decisión: un crash real (dar
+        // de baja una unidad de medida ya inactiva — InvalidOperationException de una regla de
+        // negocio VÁLIDA, propagada sin manejar desde un [RelayCommand]) demostró que dejar
+        // morir el proceso ante una excepción de dominio esperable es un bug sistémico, no un
+        // comportamiento aceptable. Esta red es el ÚLTIMO recurso: el manejo fino (confirmación
+        // + try/catch de las excepciones de dominio esperables) va en los comandos que pueden
+        // fallar — ver BajaAsync en UnidadMedidaListViewModel/CategoriaListViewModel/
+        // ProveedorListViewModel. Si algo se escapa igual de esa capa fina (bug no previsto),
+        // acá se loguea a crash.log y se informa al usuario en vez de crashear, reusando el
+        // mismo mecanismo de aviso (IConfirmacionService.InformarAsync) que usan los comandos.
         Dispatcher.UIThread.UnhandledException += (_, e) =>
+        {
             Program.LogFatal("UIThread", e.Exception);
+            e.Handled = true;
 
-        _serviceProvider = ConfigurarServicios();
+            var confirmacion = _serviceProvider?.GetService<IConfirmacionService>();
+            if (confirmacion is not null)
+            {
+                _ = confirmacion.InformarAsync(
+                    "Ocurrió un error inesperado. Podés seguir usando la aplicación; " +
+                    "si el problema persiste, contactá a soporte.");
+            }
+        };
 
         // Inicializa la BD (backup pre-migración + migrate) y arranca el backup periódico.
         // Se corre en el thread pool (Task.Run) para evitar el DEADLOCK que produce bloquear

@@ -68,4 +68,6 @@ internal sealed class NavigationServiceFake : INavigationService
 internal sealed class ConfirmacionServiceFake : IConfirmacionService
 {
     public Task<bool> PreguntarAsync(string mensaje) => Task.FromResult(true);
+
+    public Task InformarAsync(string mensaje) => Task.CompletedTask;
 }

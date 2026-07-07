@@ -57,6 +57,10 @@ public class ComposicionDICatalogoTests
         // ── Info de la app (versión mostrada en login y shell) ────────────────
         services.AddSingleton<IInfoApp, InfoApp>();
 
+        // ── Confirmación (singleton, igual que App.axaml.cs) — requerida por los
+        //    ListViewModel de catálogo desde el fix del crash al dar de baja ────
+        services.AddSingleton<IConfirmacionService, ConfirmacionService>();
+
         // ── ViewModels de catálogo (transient, igual que App.axaml.cs) ────────
         services.AddTransient<ShellMainViewModel>();
         services.AddTransient<ProductoListViewModel>();

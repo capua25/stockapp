@@ -1,9 +1,11 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Moq;
 using StockApp.Application.Catalogo;
 using StockApp.Domain.Entities;
 using StockApp.Presentation.Navigation;
+using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Catalogo;
 using Xunit;
 
@@ -13,7 +15,7 @@ public class CategoriaListViewModelTests
 {
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    private static (CategoriaListViewModel vm, Mock<ICategoriaService> svcMock, Mock<INavigationService> navMock)
+    private static (CategoriaListViewModel vm, Mock<ICategoriaService> svcMock, Mock<INavigationService> navMock, Mock<IConfirmacionService> confirmMock)
         Crear(IReadOnlyList<Categoria>? categorias = null)
     {
         var svcMock = new Mock<ICategoriaService>();
@@ -25,8 +27,13 @@ public class CategoriaListViewModelTests
             .Returns(Task.CompletedTask);
 
         var navMock = new Mock<INavigationService>();
-        var vm = new CategoriaListViewModel(svcMock.Object, navMock.Object);
-        return (vm, svcMock, navMock);
+
+        var confirmMock = new Mock<IConfirmacionService>();
+        confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(true);
+        confirmMock.Setup(c => c.InformarAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
+
+        var vm = new CategoriaListViewModel(svcMock.Object, navMock.Object, confirmMock.Object);
+        return (vm, svcMock, navMock, confirmMock);
     }
 
     // ── D4.1 tests ────────────────────────────────────────────────────────────
@@ -39,7 +46,7 @@ public class CategoriaListViewModelTests
             new() { Id = 1, Nombre = "Electrónica" },
             new() { Id = 2, Nombre = "Ferretería" }
         };
-        var (vm, svcMock, _) = Crear(categorias);
+        var (vm, svcMock, _, _) = Crear(categorias);
 
         await vm.CargarAsync();
 
@@ -51,7 +58,7 @@ public class CategoriaListViewModelTests
     [Fact]
     public async Task NuevoCommand_NavegaACategoriaFormViewModel()
     {
-        var (vm, _, navMock) = Crear();
+        var (vm, _, navMock, _) = Crear();
 
         await vm.NuevoCommand.ExecuteAsync(null);
 
@@ -59,16 +66,94 @@ public class CategoriaListViewModelTests
     }
 
     [Fact]
-    public async Task BajaCommand_ConItemSeleccionado_LlamaServicio()
+    public async Task BajaCommand_ConItemSeleccionado_PideConfirmacionYLlamaServicio()
     {
         var cat = new Categoria { Id = 5, Nombre = "Prueba", Activo = true };
-        var (vm, svcMock, _) = Crear(new List<Categoria> { cat });
+        var (vm, svcMock, _, confirmMock) = Crear(new List<Categoria> { cat });
         await vm.CargarAsync();
         vm.ItemSeleccionado = cat;
 
         await vm.BajaCommand.ExecuteAsync(null);
 
+        confirmMock.Verify(c => c.PreguntarAsync(It.IsAny<string>()), Times.Once);
         svcMock.Verify(s => s.BajaLogicaAsync(5), Times.Once);
+    }
+
+    [Fact]
+    public async Task BajaCommand_SiNoConfirma_NoLlamaServicio()
+    {
+        var cat = new Categoria { Id = 5, Nombre = "Prueba", Activo = true };
+        var (vm, svcMock, _, confirmMock) = Crear(new List<Categoria> { cat });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = cat;
+        confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(false);
+
+        await vm.BajaCommand.ExecuteAsync(null);
+
+        svcMock.Verify(s => s.BajaLogicaAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task BajaCommand_ServicioLanzaInvalidOperationException_NoPropagaYInforma()
+    {
+        var cat = new Categoria { Id = 5, Nombre = "Prueba", Activo = true };
+        var (vm, svcMock, _, confirmMock) = Crear(new List<Categoria> { cat });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = cat;
+
+        var mensaje = "La categoría 5 ya está inactiva.";
+        svcMock.Setup(s => s.BajaLogicaAsync(5)).ThrowsAsync(new InvalidOperationException(mensaje));
+
+        // No debe propagar la excepción (regresión del crash real).
+        await vm.BajaCommand.ExecuteAsync(null);
+
+        confirmMock.Verify(c => c.InformarAsync(mensaje), Times.Once);
+    }
+
+    [Fact]
+    public async Task BajaCommand_ServicioLanzaKeyNotFoundException_NoPropagaYInforma()
+    {
+        var cat = new Categoria { Id = 5, Nombre = "Prueba", Activo = true };
+        var (vm, svcMock, _, confirmMock) = Crear(new List<Categoria> { cat });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = cat;
+
+        var mensaje = "Categoría 5 no encontrada.";
+        svcMock.Setup(s => s.BajaLogicaAsync(5)).ThrowsAsync(new KeyNotFoundException(mensaje));
+
+        await vm.BajaCommand.ExecuteAsync(null);
+
+        confirmMock.Verify(c => c.InformarAsync(mensaje), Times.Once);
+    }
+
+    [Fact]
+    public void BajaCommand_SinSeleccion_EstaDeshabilitado()
+    {
+        var (vm, _, _, _) = Crear();
+
+        Assert.False(vm.BajaCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task BajaCommand_ItemInactivo_EstaDeshabilitado()
+    {
+        var cat = new Categoria { Id = 5, Nombre = "Prueba", Activo = false };
+        var (vm, _, _, _) = Crear(new List<Categoria> { cat });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = cat;
+
+        Assert.False(vm.BajaCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task BajaCommand_ItemActivo_EstaHabilitado()
+    {
+        var cat = new Categoria { Id = 5, Nombre = "Prueba", Activo = true };
+        var (vm, _, _, _) = Crear(new List<Categoria> { cat });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = cat;
+
+        Assert.True(vm.BajaCommand.CanExecute(null));
     }
 }
 
