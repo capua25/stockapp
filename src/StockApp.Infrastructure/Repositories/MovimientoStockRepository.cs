@@ -154,8 +154,13 @@ public class MovimientoStockRepository : IMovimientoStockRepository
             ));
         }
 
-        // Invertir a DESC para la vista (HM-S07: OrderByDescending(Fecha))
-        items.Reverse();
+        // Orden final DESC por Fecha GLOBAL (HM-S07), no por ProductoId.
+        // items.Reverse() invertía la lista ASC por ProductoId+Fecha, lo que dejaba
+        // el resultado ordenado por ProductoId DESC como clave primaria (BUG-02).
+        items = items
+            .OrderByDescending(i => i.Fecha)
+            .ThenByDescending(i => i.MovimientoId)
+            .ToList();
         return items;
     }
 }

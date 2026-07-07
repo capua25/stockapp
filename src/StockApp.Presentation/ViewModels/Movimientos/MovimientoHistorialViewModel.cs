@@ -19,6 +19,12 @@ namespace StockApp.Presentation.ViewModels.Movimientos;
 public sealed record OpcionTipoMovimiento(string Nombre, TipoMovimiento? Valor);
 
 /// <summary>
+/// Opción de filtro por producto para el ComboBox del historial.
+/// Valor=null representa "Todos" (sin filtro de producto).
+/// </summary>
+public sealed record OpcionProducto(string Nombre, Producto? Valor);
+
+/// <summary>
 /// ViewModel del historial de movimientos de stock con filtros y recálculo.
 /// </summary>
 public partial class MovimientoHistorialViewModel : ViewModelBase
@@ -42,9 +48,9 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
     [ObservableProperty]
     private int? _productoIdParaRecalcular;
 
-    /// <summary>Producto seleccionado en el ComboBox de filtro (null = "Todos").</summary>
+    /// <summary>Opción de producto seleccionada en el ComboBox de filtro (Valor=null = "Todos").</summary>
     [ObservableProperty]
-    private Producto? _productoFiltroSeleccionado;
+    private OpcionProducto? _productoFiltroSeleccionado;
 
     /// <summary>Opción de tipo seleccionada en el ComboBox de filtro (Valor=null = "Todos").</summary>
     [ObservableProperty]
@@ -52,8 +58,8 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
 
     public ObservableCollection<MovimientoHistorialDto> Items { get; } = new();
 
-    /// <summary>Productos activos disponibles para el ComboBox de filtro.</summary>
-    public ObservableCollection<Producto> Productos { get; } = new();
+    /// <summary>Opciones de producto disponibles para el ComboBox de filtro ("Todos" + productos activos).</summary>
+    public ObservableCollection<OpcionProducto> Productos { get; } = new();
 
     /// <summary>Opciones fijas para el ComboBox de filtro por tipo ("Todos", "Entrada", "Salida").</summary>
     public ObservableCollection<OpcionTipoMovimiento> TiposDisponibles { get; } = new()
@@ -75,8 +81,8 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
         _tipoFiltroSeleccionado = TiposDisponibles[0];
     }
 
-    partial void OnProductoFiltroSeleccionadoChanged(Producto? value)
-        => FiltroProductoId = value?.Id;
+    partial void OnProductoFiltroSeleccionadoChanged(OpcionProducto? value)
+        => FiltroProductoId = value?.Valor?.Id;
 
     partial void OnTipoFiltroSeleccionadoChanged(OpcionTipoMovimiento? value)
         => FiltroTipo = value?.Valor;
@@ -90,8 +96,11 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
     {
         var productos = await _productoService.BuscarAsync(null, null, null);
         Productos.Clear();
+        Productos.Add(new OpcionProducto("Todos", null));
         foreach (var p in productos.Where(p => p.Activo))
-            Productos.Add(p);
+            Productos.Add(new OpcionProducto(p.Nombre, p));
+
+        ProductoFiltroSeleccionado = Productos[0];
 
         await CargarAsync();
     }

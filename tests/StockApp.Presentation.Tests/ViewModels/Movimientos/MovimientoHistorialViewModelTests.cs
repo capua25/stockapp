@@ -153,7 +153,7 @@ public class MovimientoHistorialViewModelTests
     // ── InicializarAsync / filtro de producto y tipo ──────────────────────────
 
     [Fact]
-    public async Task InicializarAsync_PopulaSoloProductosActivos()
+    public async Task InicializarAsync_PopulaOpcionTodosYProductosActivos()
     {
         var productos = new List<Producto>
         {
@@ -165,8 +165,22 @@ public class MovimientoHistorialViewModelTests
         await vm.InicializarAsync();
 
         productoSvcMock.Verify(s => s.BuscarAsync(null, null, null), Times.Once);
-        Assert.Single(vm.Productos);
-        Assert.Equal("Activo", vm.Productos[0].Nombre);
+        Assert.Equal(2, vm.Productos.Count);
+        Assert.Equal("Todos", vm.Productos[0].Nombre);
+        Assert.Null(vm.Productos[0].Valor);
+        Assert.Equal("Activo", vm.Productos[1].Nombre);
+    }
+
+    [Fact]
+    public async Task InicializarAsync_PreseleccionaOpcionTodos()
+    {
+        var (vm, _, _, _) = Crear();
+
+        await vm.InicializarAsync();
+
+        Assert.NotNull(vm.ProductoFiltroSeleccionado);
+        Assert.Null(vm.ProductoFiltroSeleccionado!.Valor);
+        Assert.Null(vm.FiltroProductoId);
     }
 
     [Fact]
@@ -182,21 +196,32 @@ public class MovimientoHistorialViewModelTests
     }
 
     [Fact]
-    public void ProductoFiltroSeleccionado_AlAsignar_DerivaFiltroProductoId()
+    public void ProductoFiltroSeleccionado_AlAsignarProductoReal_DerivaFiltroProductoId()
     {
         var (vm, _, _, _) = Crear();
         var producto = CrearProducto(7, "Azúcar");
 
-        vm.ProductoFiltroSeleccionado = producto;
+        vm.ProductoFiltroSeleccionado = new OpcionProducto(producto.Nombre, producto);
 
         Assert.Equal(7, vm.FiltroProductoId);
     }
 
     [Fact]
-    public void ProductoFiltroSeleccionado_AlLimpiar_FiltroProductoIdVuelveANull()
+    public void ProductoFiltroSeleccionado_AlSeleccionarTodos_FiltroProductoIdVuelveANull()
     {
         var (vm, _, _, _) = Crear();
-        vm.ProductoFiltroSeleccionado = CrearProducto(7);
+        vm.ProductoFiltroSeleccionado = new OpcionProducto("Azúcar", CrearProducto(7));
+
+        vm.ProductoFiltroSeleccionado = new OpcionProducto("Todos", null);
+
+        Assert.Null(vm.FiltroProductoId);
+    }
+
+    [Fact]
+    public void ProductoFiltroSeleccionado_AlAsignarNull_FiltroProductoIdVuelveANull()
+    {
+        var (vm, _, _, _) = Crear();
+        vm.ProductoFiltroSeleccionado = new OpcionProducto("Azúcar", CrearProducto(7));
 
         vm.ProductoFiltroSeleccionado = null;
 

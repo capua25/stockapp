@@ -335,6 +335,52 @@ public class MovimientoStockRepositoryTests : IDisposable
             Assert.True(resultado[i].Fecha >= resultado[i + 1].Fecha);
     }
 
+    /// <summary>
+    /// BUG-02: el orden final debe ser por Fecha DESC GLOBAL, sin importar ProductoId.
+    /// Repro: p1 tiene ID bajo pero un movimiento de fecha RECIENTE (hoy); p2 tiene ID alto
+    /// pero un movimiento de fecha VIEJA (hace 30 días). El cálculo del running balance
+    /// necesita recorrer ASC por ProductoId+Fecha, pero el `.Reverse()` sobre esa lista deja
+    /// el resultado ordenado por ProductoId DESC como clave primaria — entierra el movimiento
+    /// reciente de p1 debajo del movimiento viejo de p2. El test existente
+    /// `ObtenerHistorialAsync_SinFiltros_DevuelveTodosOrdenadosDesc` no detecta esto porque
+    /// su fixture (SeedHistorialAsync) alinea ID y fecha en la misma dirección.
+    /// </summary>
+    [Fact]
+    public async Task ObtenerHistorialAsync_OrdenPorFechaDesc_NoDependeDelProductoId()
+    {
+        var um = NuevaUm();
+        var usuario = NuevoUsuario("orden_user");
+        _ctx.UnidadesMedida.Add(um);
+        _ctx.Usuarios.Add(usuario);
+        await _ctx.SaveChangesAsync();
+
+        var p1 = NuevoProducto("ORD001", um, 0m); // ID bajo (creado primero)
+        p1.Nombre = "Producto Reciente";
+        var p2 = NuevoProducto("ORD002", um, 0m); // ID alto (creado después)
+        p2.Nombre = "Producto Viejo";
+        _ctx.Productos.AddRange(p1, p2);
+        await _ctx.SaveChangesAsync();
+
+        var fechaVieja     = DateTime.UtcNow.AddDays(-30);
+        var fechaReciente  = DateTime.UtcNow;
+
+        _ctx.MovimientosStock.AddRange(
+            // p2 (ID alto): movimiento viejo
+            new MovimientoStock { ProductoId = p2.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Cantidad = 10m, PrecioUnitario = 5m, Fecha = fechaVieja,    Motivo = MotivoMovimiento.Compra },
+            // p1 (ID bajo): movimiento reciente
+            new MovimientoStock { ProductoId = p1.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Cantidad = 5m,  PrecioUnitario = 5m, Fecha = fechaReciente, Motivo = MotivoMovimiento.Compra }
+        );
+        await _ctx.SaveChangesAsync();
+        _ctx.ChangeTracker.Clear();
+
+        var resultado = await _repo.ObtenerHistorialAsync(new HistorialMovimientoFiltro());
+
+        Assert.Equal(2, resultado.Count);
+        // El primer item debe ser el movimiento MÁS RECIENTE (p1), pese a tener ProductoId menor.
+        Assert.Equal(p1.Id, resultado[0].ProductoId);
+        Assert.Equal(p2.Id, resultado[1].ProductoId);
+    }
+
     [Fact]
     public async Task ObtenerHistorialAsync_FiltroPorProducto_DevuelveSoloDelProducto()
     {

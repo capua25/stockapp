@@ -24,7 +24,6 @@
                         <TextBlock Text="Producto" Classes="caption" />
                         <ComboBox ItemsSource="{Binding Productos}"
                                   SelectedItem="{Binding ProductoFiltroSeleccionado}"
-                                  PlaceholderText="Todos"
                                   MinWidth="180">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate>
