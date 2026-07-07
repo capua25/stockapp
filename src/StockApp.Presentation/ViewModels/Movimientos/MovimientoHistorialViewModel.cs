@@ -132,14 +132,28 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
         var filtro = new HistorialMovimientoFiltro(
             ProductoId: FiltroProductoId,
             Tipo: FiltroTipo,
-            FechaDesde: FechaDesde,
-            FechaHasta: FechaHasta);
+            FechaDesde: ALocalAUtc(FechaDesde),
+            FechaHasta: ALocalAUtc(FechaHasta));
 
         var resultados = await _service.ObtenerHistorialAsync(filtro);
         Items.Clear();
         foreach (var item in resultados)
             Items.Add(item);
     }
+
+    /// <summary>
+    /// Convierte una fecha LOCAL (la que produce el <c>CalendarDatePicker</c> bindeado a
+    /// FechaDesde/FechaHasta, ver XAML) a UTC antes de pasarla al filtro. El repositorio
+    /// compara contra <c>MovimientoStock.Fecha</c>, persistida en UTC
+    /// (<c>DateTime.UtcNow</c>) — sin esta conversión, con UTC-3 el rango queda desalineado:
+    /// un movimiento de las 23:00 hora local puede caer fuera de "hasta hoy" (bug de huso
+    /// horario). Contrato: <see cref="StockApp.Application.Interfaces.IMovimientoStockRepository"/>
+    /// siempre recibe fechas en UTC.
+    /// </summary>
+    private static DateTime? ALocalAUtc(DateTime? fechaLocal)
+        => fechaLocal.HasValue
+            ? DateTime.SpecifyKind(fechaLocal.Value, DateTimeKind.Local).ToUniversalTime()
+            : null;
 
     [RelayCommand]
     private async Task RecalcularAsync()

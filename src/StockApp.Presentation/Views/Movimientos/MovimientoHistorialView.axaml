@@ -3,6 +3,7 @@
              xmlns:vm="using:StockApp.Presentation.ViewModels.Movimientos"
              xmlns:dto="using:StockApp.Application.Movimientos"
              xmlns:beh="using:StockApp.Presentation.Behaviors"
+             xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="600"
@@ -91,7 +92,7 @@
                           CanUserResizeColumns="True"
                           GridLinesVisibility="Horizontal">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha, DataType={x:Type dto:MovimientoHistorialDto}}" Width="150" />
+                        <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha, Converter={x:Static conv:FechaUtcALocalConverter.Instance}, StringFormat='dd/MM/yyyy HH:mm', DataType={x:Type dto:MovimientoHistorialDto}}" Width="150" />
                         <DataGridTextColumn Header="Producto" Binding="{Binding ProductoNombre, DataType={x:Type dto:MovimientoHistorialDto}}" Width="160" />
                         <DataGridTextColumn Header="Tipo" Binding="{Binding TipoNombre, DataType={x:Type dto:MovimientoHistorialDto}}" Width="90" />
                         <DataGridTextColumn Header="Motivo" Binding="{Binding MotivoNombre, DataType={x:Type dto:MovimientoHistorialDto}}" Width="100" />

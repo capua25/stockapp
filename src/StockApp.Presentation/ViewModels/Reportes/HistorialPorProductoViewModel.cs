@@ -77,8 +77,21 @@ public partial class HistorialPorProductoViewModel : ViewModelBase
         }
 
         MensajeError = null;
-        Items = await _servicio.ObtenerHistorialPorProductoAsync(ProductoId, FechaDesde, FechaHasta);
+        Items = await _servicio.ObtenerHistorialPorProductoAsync(
+            ProductoId, ALocalAUtc(FechaDesde), ALocalAUtc(FechaHasta));
     }
+
+    /// <summary>
+    /// Convierte una fecha LOCAL (la que produce el <c>CalendarDatePicker</c> bindeado a
+    /// FechaDesde/FechaHasta, ver XAML) a UTC antes de pasarla al servicio. El repositorio
+    /// subyacente (MovimientoStockRepository) compara contra <c>MovimientoStock.Fecha</c>,
+    /// persistida en UTC — sin esta conversión, con UTC-3 el rango queda desalineado (bug de
+    /// huso horario). Contrato: el servicio siempre recibe fechas en UTC.
+    /// </summary>
+    private static DateTime? ALocalAUtc(DateTime? fechaLocal)
+        => fechaLocal.HasValue
+            ? DateTime.SpecifyKind(fechaLocal.Value, DateTimeKind.Local).ToUniversalTime()
+            : null;
 
     /// <summary>
     /// Exporta <see cref="Items"/> a CSV con el orden de columnas fijo y delega el guardado.

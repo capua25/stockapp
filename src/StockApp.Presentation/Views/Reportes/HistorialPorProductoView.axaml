@@ -60,7 +60,7 @@
                         </Style>
                     </DataGrid.Styles>
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha}" Width="160" />
+                        <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha, Converter={x:Static conv:FechaUtcALocalConverter.Instance}, StringFormat='dd/MM/yyyy HH:mm'}" Width="160" />
                         <DataGridTextColumn Header="Tipo" Binding="{Binding Tipo}" Width="100" />
                         <DataGridTextColumn Header="Motivo" Binding="{Binding Motivo}" Width="100" />
                         <DataGridTextColumn Header="Cantidad" Binding="{Binding Cantidad}" Width="110"

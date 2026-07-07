@@ -1,3 +1,4 @@
+using System.Globalization;
 using StockApp.Application.Exportacion;
 using Xunit;
 
@@ -131,5 +132,43 @@ public class CsvExporterTests
         var resultado = _exporter.Exportar(items, new[] { "Nombre", "Detalle" });
 
         Assert.Equal("\uFEFFNombre,Detalle\r\n", resultado);
+    }
+
+    // \u2500\u2500 Fix bug de huso horario: columnas DateTime se exportan en hora LOCAL \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+    private sealed record FilaConFecha(string Nombre, DateTime Fecha);
+
+    /// <summary>
+    /// Bug real: CsvExporter serializa por reflexi\u00F3n con <c>valor.ToString()</c>, lo que
+    /// emit\u00EDa la fecha UTC cruda (misma causa ra\u00EDz que la grilla, ver
+    /// FechaUtcALocalConverter). Debe convertir a hora local con formato expl\u00EDcito, igual
+    /// que la UI, para que el CSV no contradiga lo que el usuario ve en pantalla.
+    /// </summary>
+    [Fact]
+    public void Exportar_ColumnaDateTime_ConvierteAHoraLocalConFormatoExplicito()
+    {
+        var fechaUtc = new DateTime(2026, 6, 10, 15, 0, 0, DateTimeKind.Utc);
+        var items = new[] { new FilaConFecha("Harina", fechaUtc) };
+
+        var resultado = _exporter.Exportar(items, new[] { "Nombre", "Fecha" });
+
+        var esperado = fechaUtc.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture);
+        Assert.Contains($"Harina,{esperado}\r\n", resultado);
+    }
+
+    [Fact]
+    public void Exportar_ColumnaDateTimeConKindUnspecified_SeInterpretaComoUtc()
+    {
+        // Reproduce el gotcha de EF Core + SQLite: al releer, el DateTime vuelve Unspecified
+        // aunque el valor almacenado sea un instante UTC.
+        var comoVuelveDeSqlite = new DateTime(2026, 6, 10, 15, 0, 0, DateTimeKind.Unspecified);
+        var items = new[] { new FilaConFecha("Harina", comoVuelveDeSqlite) };
+
+        var resultado = _exporter.Exportar(items, new[] { "Nombre", "Fecha" });
+
+        var esperado = DateTime.SpecifyKind(comoVuelveDeSqlite, DateTimeKind.Utc)
+            .ToLocalTime()
+            .ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture);
+        Assert.Contains($"Harina,{esperado}\r\n", resultado);
     }
 }

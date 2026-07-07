@@ -59,10 +59,35 @@ public class MasMovidosViewModelTests
 
         await vm.BuscarCommand.ExecuteAsync(null);
 
+        // BUG DE HUSO HORARIO: desde/hasta vienen en hora LOCAL del CalendarDatePicker; el VM
+        // debe convertirlas a UTC antes de delegar al servicio (que compara contra
+        // MovimientoStock.Fecha, persistida en UTC). Offset calculado desde TimeZoneInfo.Local
+        // para no acoplar el test a la TZ del entorno.
+        var offsetDesde = TimeZoneInfo.Local.GetUtcOffset(desde);
+        var offsetHasta = TimeZoneInfo.Local.GetUtcOffset(hasta);
         Assert.Equal(20, vm.TopN);
-        servicioMock.Verify(s => s.ObtenerMasMovidosAsync(desde, hasta, 20), Times.Once);
+        servicioMock.Verify(s => s.ObtenerMasMovidosAsync(
+            desde - offsetDesde, hasta - offsetHasta, 20), Times.Once);
         Assert.Equal(2, vm.Items.Count);
         Assert.Same(items, vm.Items);
+    }
+
+    /// <summary>
+    /// Reproduce el bug reportado por el usuario (Argentina, UTC-3): sin la conversión, un
+    /// movimiento de las 23:00 hora local caía fuera del filtro "hasta hoy".
+    /// </summary>
+    [Fact]
+    public async Task BuscarCommand_ConFechaLocal_ConvierteAUtcAntesDeDelegarAlServicio()
+    {
+        var (vm, servicioMock, _, _) = Crear();
+        var fechaLocal = new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Unspecified);
+        vm.FechaDesde = fechaLocal;
+
+        await vm.BuscarCommand.ExecuteAsync(null);
+
+        var offset = TimeZoneInfo.Local.GetUtcOffset(fechaLocal);
+        servicioMock.Verify(s => s.ObtenerMasMovidosAsync(
+            fechaLocal - offset, null, 20), Times.Once);
     }
 
     [Fact]

@@ -93,16 +93,43 @@ public class MovimientoHistorialViewModelTests
         var (vm, svcMock, _, _) = Crear();
         vm.FiltroProductoId = 5;
         vm.FiltroTipo = TipoMovimiento.Salida;
-        vm.FechaDesde = new DateTime(2026, 1, 1);
-        vm.FechaHasta = new DateTime(2026, 12, 31);
+        var fechaDesdeLocal = new DateTime(2026, 1, 1);
+        var fechaHastaLocal = new DateTime(2026, 12, 31);
+        vm.FechaDesde = fechaDesdeLocal;
+        vm.FechaHasta = fechaHastaLocal;
 
         await vm.BuscarCommand.ExecuteAsync(null);
 
+        // BUG DE HUSO HORARIO: FechaDesde/FechaHasta vienen en hora LOCAL del CalendarDatePicker;
+        // el repo compara contra MovimientoStock.Fecha (persistida en UTC), así que el VM debe
+        // convertir antes de delegar. Offset calculado desde TimeZoneInfo.Local, no hardcodeado,
+        // para no acoplar el test a la TZ del entorno (America/Montevideo, UTC-3, en CI/dev).
+        var offsetDesde = TimeZoneInfo.Local.GetUtcOffset(fechaDesdeLocal);
+        var offsetHasta = TimeZoneInfo.Local.GetUtcOffset(fechaHastaLocal);
         svcMock.Verify(s => s.ObtenerHistorialAsync(It.Is<HistorialMovimientoFiltro>(f =>
             f.ProductoId == 5 &&
             f.Tipo == TipoMovimiento.Salida &&
-            f.FechaDesde == new DateTime(2026, 1, 1) &&
-            f.FechaHasta == new DateTime(2026, 12, 31))), Times.Once);
+            f.FechaDesde == fechaDesdeLocal - offsetDesde &&
+            f.FechaHasta == fechaHastaLocal - offsetHasta)), Times.Once);
+    }
+
+    /// <summary>
+    /// HM-HORARIO: reproduce el bug reportado por el usuario (Argentina, UTC-3) — un
+    /// movimiento de las 23:00 hora local caía fuera del filtro "hasta hoy" porque
+    /// FechaHasta se comparaba cruda contra Fecha (UTC) sin convertir.
+    /// </summary>
+    [Fact]
+    public async Task BuscarAsync_ConFechaLocal_ConvierteAUtcAntesDeDelegarAlService()
+    {
+        var (vm, svcMock, _, _) = Crear();
+        var fechaLocal = new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Unspecified);
+        vm.FechaDesde = fechaLocal;
+
+        await vm.BuscarCommand.ExecuteAsync(null);
+
+        var offset = TimeZoneInfo.Local.GetUtcOffset(fechaLocal);
+        svcMock.Verify(s => s.ObtenerHistorialAsync(It.Is<HistorialMovimientoFiltro>(f =>
+            f.FechaDesde == fechaLocal - offset)), Times.Once);
     }
 
     [Fact]

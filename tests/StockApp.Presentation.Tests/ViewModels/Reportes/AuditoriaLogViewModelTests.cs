@@ -61,9 +61,32 @@ public class AuditoriaLogViewModelTests
 
         await vm.BuscarCommand.ExecuteAsync(null);
 
-        servicioMock.Verify(s => s.ObtenerLogAsync(9, desde, hasta), Times.Once);
+        // BUG DE HUSO HORARIO: desde/hasta vienen en hora LOCAL del CalendarDatePicker; el VM
+        // debe convertirlas a UTC antes de delegar al servicio (que compara contra
+        // LogAuditoria.Fecha, persistida en UTC). Offset calculado desde TimeZoneInfo.Local
+        // para no acoplar el test a la TZ del entorno.
+        var offsetDesde = TimeZoneInfo.Local.GetUtcOffset(desde);
+        var offsetHasta = TimeZoneInfo.Local.GetUtcOffset(hasta);
+        servicioMock.Verify(s => s.ObtenerLogAsync(9, desde - offsetDesde, hasta - offsetHasta), Times.Once);
         Assert.Equal(2, vm.Items.Count);
         Assert.Same(items, vm.Items);
+    }
+
+    /// <summary>
+    /// Reproduce el bug reportado por el usuario (Argentina, UTC-3): sin la conversión, un
+    /// registro de auditoría de las 23:00 hora local caía fuera del filtro "hasta hoy".
+    /// </summary>
+    [Fact]
+    public async Task BuscarCommand_ConFechaLocal_ConvierteAUtcAntesDeDelegarAlServicio()
+    {
+        var (vm, servicioMock, _, _) = Crear();
+        var fechaLocal = new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Unspecified);
+        vm.FechaDesde = fechaLocal;
+
+        await vm.BuscarCommand.ExecuteAsync(null);
+
+        var offset = TimeZoneInfo.Local.GetUtcOffset(fechaLocal);
+        servicioMock.Verify(s => s.ObtenerLogAsync(null, fechaLocal - offset, null), Times.Once);
     }
 
     [Fact]
