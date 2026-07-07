@@ -12,7 +12,7 @@ public interface IReporteStockService
     /// Valorización de stock: items por producto + totales agregados.
     /// </summary>
     /// <exception cref="UnauthorizedAccessException">Si el rol no tiene permiso para ver reportes.</exception>
-    Task<(IReadOnlyList<ValorizacionItemDto> Items, ValorizacionTotalesDto Totales)> ObtenerValorizacionAsync();
+    Task<ValorizacionReporteDto> ObtenerValorizacionAsync();
 
     /// <summary>
     /// Resumen de stock agrupado por categoría. El agrupamiento lo realiza el repo.

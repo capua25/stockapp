@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using Moq;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Movimientos;
-using StockApp.Domain.Entities;
 using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
@@ -29,13 +28,20 @@ public abstract class MovimientoRegistroViewModelTestsBase
 
     // ── helpers ──────────────────────────────────────────────────────────────
 
+    private static ProductoDto CrearProductoDto(int id, string nombre, decimal stockActual = 0m)
+        => new ProductoDto(
+            Id: id, Codigo: $"SKU{id}", CodigoBarras: null, Nombre: nombre, Descripcion: null,
+            CategoriaId: null, CategoriaNombre: null, ProveedorId: null, UnidadMedidaId: 1,
+            UnidadMedidaNombre: "Unidad", PrecioCosto: 0m, PrecioVenta: 0m, StockActual: stockActual,
+            StockMinimo: 0m, Activo: true, FechaAlta: default);
+
     private (
         MovimientoRegistroViewModelBase vm,
         Mock<IMovimientoStockService> svcMock,
         Mock<IProductoService> productoMock,
         Mock<INavigationService> navMock,
         Mock<IConfirmacionService> confirmMock)
-        Crear(IReadOnlyList<Producto>? productos = null)
+        Crear(IReadOnlyList<ProductoDto>? productos = null)
     {
         var svcMock      = new Mock<IMovimientoStockService>();
         var productoMock = new Mock<IProductoService>();
@@ -44,7 +50,7 @@ public abstract class MovimientoRegistroViewModelTestsBase
 
         productoMock
             .Setup(s => s.BuscarAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
-            .ReturnsAsync(productos ?? new List<Producto>());
+            .ReturnsAsync(productos ?? new List<ProductoDto>());
 
         var vm = CrearVm(svcMock.Object, productoMock.Object, navMock.Object, confirmMock.Object);
 
@@ -75,7 +81,7 @@ public abstract class MovimientoRegistroViewModelTestsBase
     public void RegistrarCommand_SoloProductoSeteado_EstaDeshabilitado()
     {
         var (vm, _, _, _, _) = Crear();
-        vm.ProductoSeleccionado = new Producto { Id = 1, Nombre = "Azúcar" };
+        vm.ProductoSeleccionado = CrearProductoDto(1, "Azúcar");
 
         Assert.False(vm.RegistrarCommand.CanExecute(null));
     }
@@ -84,7 +90,7 @@ public abstract class MovimientoRegistroViewModelTestsBase
     public void RegistrarCommand_ProductoYCantidad_EstaHabilitado()
     {
         var (vm, _, _, _, _) = Crear();
-        vm.ProductoSeleccionado = new Producto { Id = 1, Nombre = "Azúcar" };
+        vm.ProductoSeleccionado = CrearProductoDto(1, "Azúcar");
         vm.Cantidad = 10m;
 
         Assert.True(vm.RegistrarCommand.CanExecute(null));
@@ -94,7 +100,7 @@ public abstract class MovimientoRegistroViewModelTestsBase
     public void RegistrarCommand_CantidadCero_EstaDeshabilitado()
     {
         var (vm, _, _, _, _) = Crear();
-        vm.ProductoSeleccionado = new Producto { Id = 1, Nombre = "Azúcar" };
+        vm.ProductoSeleccionado = CrearProductoDto(1, "Azúcar");
         vm.Cantidad = 0m;
 
         Assert.False(vm.RegistrarCommand.CanExecute(null));
@@ -106,7 +112,7 @@ public abstract class MovimientoRegistroViewModelTestsBase
     public async Task RegistrarAsync_Exitoso_NavegaAHistorial()
     {
         var (vm, svcMock, _, navMock, _) = Crear();
-        vm.ProductoSeleccionado = new Producto { Id = 1, Nombre = "Azúcar" };
+        vm.ProductoSeleccionado = CrearProductoDto(1, "Azúcar");
         vm.Cantidad = 5m;
 
         var dto = new MovimientoRegistradoDto(
@@ -134,7 +140,7 @@ public abstract class MovimientoRegistroViewModelTestsBase
     public async Task RegistrarAsync_StockInsuficiente_Confirma_ReintentaConForzarTrue()
     {
         var (vm, svcMock, _, navMock, confirmMock) = Crear();
-        vm.ProductoSeleccionado = new Producto { Id = 1, Nombre = "Azúcar", StockActual = 3m };
+        vm.ProductoSeleccionado = CrearProductoDto(1, "Azúcar", stockActual: 3m);
         vm.Cantidad = 10m;
 
         var ex = new StockInsuficienteException(productoId: 1, stockActual: 3m, cantidadSolicitada: 10m);
@@ -172,7 +178,7 @@ public abstract class MovimientoRegistroViewModelTestsBase
     public async Task RegistrarAsync_StockInsuficiente_Rechaza_NoReinvocaServicio()
     {
         var (vm, svcMock, _, navMock, confirmMock) = Crear();
-        vm.ProductoSeleccionado = new Producto { Id = 1, Nombre = "Azúcar", StockActual = 3m };
+        vm.ProductoSeleccionado = CrearProductoDto(1, "Azúcar", stockActual: 3m);
         vm.Cantidad = 10m;
 
         var ex = new StockInsuficienteException(productoId: 1, stockActual: 3m, cantidadSolicitada: 10m);
@@ -195,7 +201,7 @@ public abstract class MovimientoRegistroViewModelTestsBase
     public async Task RegistrarAsync_OtraExcepcion_SetMensajeError()
     {
         var (vm, svcMock, _, navMock, _) = Crear();
-        vm.ProductoSeleccionado = new Producto { Id = 1, Nombre = "Azúcar" };
+        vm.ProductoSeleccionado = CrearProductoDto(1, "Azúcar");
         vm.Cantidad = 5m;
 
         svcMock
@@ -214,10 +220,10 @@ public abstract class MovimientoRegistroViewModelTestsBase
     [Fact]
     public async Task InicializarAsync_CargaProductos()
     {
-        var productos = new List<Producto>
+        var productos = new List<ProductoDto>
         {
-            new Producto { Id = 1, Nombre = "Activo",   Activo = true },
-            new Producto { Id = 2, Nombre = "Inactivo", Activo = false },
+            CrearProductoDto(1, "Activo"),
+            CrearProductoDto(2, "Inactivo") with { Activo = false },
         };
 
         var (vm, _, _, _, _) = Crear(productos);

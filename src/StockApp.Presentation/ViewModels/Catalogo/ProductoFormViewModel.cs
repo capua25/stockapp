@@ -110,7 +110,7 @@ public partial class ProductoFormViewModel : ViewModelBase
     /// UnidadMedidaId/CategoriaId se guardan acá y se resuelven contra las colecciones una vez
     /// cargadas en InicializarAsync.
     /// </summary>
-    public void CargarParaEditar(Producto producto)
+    public void CargarParaEditar(ProductoDto producto)
     {
         EsEdicion    = true;
         _productoId  = producto.Id;

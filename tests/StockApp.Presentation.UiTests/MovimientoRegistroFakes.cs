@@ -43,11 +43,11 @@ internal sealed class ProductoServiceFake : IProductoService
     public Task CambiarPrecioAsync(int id, decimal precioCosto, decimal precioVenta)
         => throw new NotSupportedException("No usado en este banco de pruebas.");
 
-    public Task<IReadOnlyList<Producto>> BuscarAsync(string? sku, string? codigoBarras, string? nombre)
-        => Task.FromResult<IReadOnlyList<Producto>>(Array.Empty<Producto>());
+    public Task<IReadOnlyList<ProductoDto>> BuscarAsync(string? sku, string? codigoBarras, string? nombre)
+        => Task.FromResult<IReadOnlyList<ProductoDto>>(Array.Empty<ProductoDto>());
 
-    public Task<IReadOnlyList<Producto>> BuscarPorTextoAsync(string? texto)
-        => Task.FromResult<IReadOnlyList<Producto>>(Array.Empty<Producto>());
+    public Task<IReadOnlyList<ProductoDto>> BuscarPorTextoAsync(string? texto)
+        => Task.FromResult<IReadOnlyList<ProductoDto>>(Array.Empty<ProductoDto>());
 }
 
 internal sealed class NavigationServiceFake : INavigationService

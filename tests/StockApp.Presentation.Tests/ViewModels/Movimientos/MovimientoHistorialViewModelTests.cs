@@ -7,7 +7,6 @@ using Avalonia.Collections;
 using Moq;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Movimientos;
-using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.ViewModels.Movimientos;
@@ -35,8 +34,12 @@ public class MovimientoHistorialViewModelTests
             UsuarioId: 1,
             UsuarioNombre: "Admin");
 
-    private static Producto CrearProducto(int id, string nombre = "Producto", bool activo = true)
-        => new() { Id = id, Nombre = nombre, Codigo = $"SKU{id}", Activo = activo };
+    private static ProductoDto CrearProducto(int id, string nombre = "Producto", bool activo = true)
+        => new ProductoDto(
+            Id: id, Codigo: $"SKU{id}", CodigoBarras: null, Nombre: nombre, Descripcion: null,
+            CategoriaId: null, CategoriaNombre: null, ProveedorId: null, UnidadMedidaId: 1,
+            UnidadMedidaNombre: "Unidad", PrecioCosto: 0m, PrecioVenta: 0m, StockActual: 0m,
+            StockMinimo: 0m, Activo: activo, FechaAlta: default);
 
     private static (
         MovimientoHistorialViewModel vm,
@@ -45,7 +48,7 @@ public class MovimientoHistorialViewModelTests
         Mock<IProductoService> productoSvcMock)
         Crear(
             IReadOnlyList<MovimientoHistorialDto>? items = null,
-            IReadOnlyList<Producto>? productos = null)
+            IReadOnlyList<ProductoDto>? productos = null)
     {
         var svcMock = new Mock<IMovimientoStockService>();
         var navMock = new Mock<INavigationService>();
@@ -57,7 +60,7 @@ public class MovimientoHistorialViewModelTests
 
         productoSvcMock
             .Setup(s => s.BuscarAsync(null, null, null))
-            .ReturnsAsync(productos ?? new List<Producto>());
+            .ReturnsAsync(productos ?? new List<ProductoDto>());
 
         var vm = new MovimientoHistorialViewModel(svcMock.Object, navMock.Object, productoSvcMock.Object);
         return (vm, svcMock, navMock, productoSvcMock);
@@ -184,7 +187,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public async Task InicializarAsync_PopulaOpcionTodosYProductosActivos()
     {
-        var productos = new List<Producto>
+        var productos = new List<ProductoDto>
         {
             CrearProducto(1, "Activo", activo: true),
             CrearProducto(2, "Inactivo", activo: false),

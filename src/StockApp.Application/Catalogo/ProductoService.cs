@@ -1,3 +1,4 @@
+using System.Linq;
 using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
@@ -194,15 +195,41 @@ public class ProductoService : IProductoService
             detalle);
     }
 
-    public async Task<IReadOnlyList<Producto>> BuscarAsync(string? sku, string? codigoBarras, string? nombre)
+    public async Task<IReadOnlyList<ProductoDto>> BuscarAsync(string? sku, string? codigoBarras, string? nombre)
     {
         _auth.Verificar(_session.RolActual, Permisos.GestionarProductos);
-        return await _repo.BuscarAsync(sku, codigoBarras, nombre);
+        var productos = await _repo.BuscarAsync(sku, codigoBarras, nombre);
+        return productos.Select(AProductoDto).ToList();
     }
 
-    public async Task<IReadOnlyList<Producto>> BuscarPorTextoAsync(string? texto)
+    public async Task<IReadOnlyList<ProductoDto>> BuscarPorTextoAsync(string? texto)
     {
         _auth.Verificar(_session.RolActual, Permisos.GestionarProductos);
-        return await _repo.BuscarPorTextoAsync(texto);
+        var productos = await _repo.BuscarPorTextoAsync(texto);
+        return productos.Select(AProductoDto).ToList();
     }
+
+    /// <summary>
+    /// Mapeo a mano (no hay AutoMapper en el repo) de la entidad de Domain a ProductoDto.
+    /// UnidadMedidaNombre usa "??" porque en tests unitarios la navegación puede no estar
+    /// poblada (Producto.UnidadMedida queda null si no se setea explícitamente); en producción
+    /// el repo siempre hace .Include(UnidadMedida).
+    /// </summary>
+    private static ProductoDto AProductoDto(Producto p) => new ProductoDto(
+        Id:                 p.Id,
+        Codigo:             p.Codigo,
+        CodigoBarras:       p.CodigoBarras,
+        Nombre:             p.Nombre,
+        Descripcion:        p.Descripcion,
+        CategoriaId:        p.CategoriaId,
+        CategoriaNombre:    p.Categoria?.Nombre,
+        ProveedorId:        p.ProveedorId,
+        UnidadMedidaId:     p.UnidadMedidaId,
+        UnidadMedidaNombre: p.UnidadMedida?.Nombre ?? string.Empty,
+        PrecioCosto:        p.PrecioCosto,
+        PrecioVenta:        p.PrecioVenta,
+        StockActual:        p.StockActual,
+        StockMinimo:        p.StockMinimo,
+        Activo:             p.Activo,
+        FechaAlta:          p.FechaAlta);
 }

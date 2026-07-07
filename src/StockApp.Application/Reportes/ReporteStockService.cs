@@ -28,8 +28,7 @@ public class ReporteStockService : IReporteStockService
         _auth        = auth;
     }
 
-    public async Task<(IReadOnlyList<ValorizacionItemDto> Items, ValorizacionTotalesDto Totales)>
-        ObtenerValorizacionAsync()
+    public async Task<ValorizacionReporteDto> ObtenerValorizacionAsync()
     {
         // Autorización fail-closed: PRIMERO, antes de tocar el repo.
         _auth.Verificar(_session.RolActual, Permisos.VerReportes);
@@ -40,7 +39,7 @@ public class ReporteStockService : IReporteStockService
             TotalValorCosto: items.Sum(i => i.ValorCosto),
             TotalValorVenta: items.Sum(i => i.ValorVenta));
 
-        return (items, totales);
+        return new ValorizacionReporteDto(items, totales);
     }
 
     public async Task<IReadOnlyList<StockCategoriaDto>> ObtenerStockPorCategoriaAsync()

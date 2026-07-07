@@ -7,7 +7,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Movimientos;
-using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
@@ -30,7 +29,7 @@ public abstract partial class MovimientoRegistroViewModelBase : ViewModelBase
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(RegistrarCommand))]
-    protected Producto? _productoSeleccionado;
+    protected ProductoDto? _productoSeleccionado;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(RegistrarCommand))]
@@ -48,7 +47,7 @@ public abstract partial class MovimientoRegistroViewModelBase : ViewModelBase
     [ObservableProperty]
     protected string? _mensajeError;
 
-    public ObservableCollection<Producto> Productos { get; } = new();
+    public ObservableCollection<ProductoDto> Productos { get; } = new();
 
     /// <summary>Tipo de movimiento fijo de la pantalla concreta (Entrada o Salida).</summary>
     public abstract TipoMovimiento Tipo { get; }

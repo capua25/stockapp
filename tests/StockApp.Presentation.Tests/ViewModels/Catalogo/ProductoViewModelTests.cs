@@ -18,16 +18,25 @@ public class ProductoListViewModelTests
 {
     // ── helpers ──────────────────────────────────────────────────────────────
 
+    private static ProductoDto CrearProductoDto(
+        int id, string codigo, string nombre, bool activo = true,
+        int unidadMedidaId = 1, decimal precioCosto = 0m, decimal precioVenta = 0m)
+        => new ProductoDto(
+            Id: id, Codigo: codigo, CodigoBarras: null, Nombre: nombre, Descripcion: null,
+            CategoriaId: null, CategoriaNombre: null, ProveedorId: null, UnidadMedidaId: unidadMedidaId,
+            UnidadMedidaNombre: "Unidad", PrecioCosto: precioCosto, PrecioVenta: precioVenta,
+            StockActual: 0m, StockMinimo: 0m, Activo: activo, FechaAlta: default);
+
     private static (ProductoListViewModel vm, Mock<IProductoService> svcMock, Mock<INavigationService> navMock, Mock<IConfirmacionService> confirmMock)
-        Crear(IReadOnlyList<Producto>? productos = null)
+        Crear(IReadOnlyList<ProductoDto>? productos = null)
     {
         var svcMock = new Mock<IProductoService>();
         svcMock
             .Setup(s => s.BuscarAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
-            .ReturnsAsync(productos ?? new List<Producto>());
+            .ReturnsAsync(productos ?? new List<ProductoDto>());
         svcMock
             .Setup(s => s.BuscarPorTextoAsync(It.IsAny<string?>()))
-            .ReturnsAsync(productos ?? new List<Producto>());
+            .ReturnsAsync(productos ?? new List<ProductoDto>());
         svcMock
             .Setup(s => s.BajaLogicaAsync(It.IsAny<int>()))
             .Returns(Task.CompletedTask);
@@ -47,10 +56,10 @@ public class ProductoListViewModelTests
     [Fact]
     public async Task CargarAsync_LlamaServicioYPopulaItems()
     {
-        var productos = new List<Producto>
+        var productos = new List<ProductoDto>
         {
-            new() { Id = 1, Codigo = "P001", Nombre = "Producto Uno" },
-            new() { Id = 2, Codigo = "P002", Nombre = "Producto Dos" }
+            CrearProductoDto(1, "P001", "Producto Uno"),
+            CrearProductoDto(2, "P002", "Producto Dos")
         };
         var (vm, svcMock, _, _) = Crear(productos);
 
@@ -112,7 +121,7 @@ public class ProductoListViewModelTests
     [Fact]
     public async Task CargarAsync_SinProductos_ItemsVacio()
     {
-        var (vm, _, _, _) = Crear(new List<Producto>());
+        var (vm, _, _, _) = Crear(new List<ProductoDto>());
 
         await vm.CargarAsync();
 
@@ -124,10 +133,10 @@ public class ProductoListViewModelTests
     [Fact]
     public async Task ItemsView_EsOrdenable()
     {
-        var productos = new List<Producto>
+        var productos = new List<ProductoDto>
         {
-            new() { Id = 1, Codigo = "P001", Nombre = "Producto Uno" },
-            new() { Id = 2, Codigo = "P002", Nombre = "Producto Dos" }
+            CrearProductoDto(1, "P001", "Producto Uno"),
+            CrearProductoDto(2, "P002", "Producto Dos")
         };
         var (vm, _, _, _) = Crear(productos);
 
@@ -141,19 +150,19 @@ public class ProductoListViewModelTests
     [Fact]
     public async Task ItemsView_AlAplicarSortDescription_OrdenaLosItems()
     {
-        var desordenados = new List<Producto>
+        var desordenados = new List<ProductoDto>
         {
-            new() { Id = 1, Codigo = "P003", Nombre = "Zapallo" },
-            new() { Id = 2, Codigo = "P001", Nombre = "Aceite" },
-            new() { Id = 3, Codigo = "P002", Nombre = "Manteca" }
+            CrearProductoDto(1, "P003", "Zapallo"),
+            CrearProductoDto(2, "P001", "Aceite"),
+            CrearProductoDto(3, "P002", "Manteca")
         };
         var (vm, _, _, _) = Crear(desordenados);
         await vm.CargarAsync();
 
         vm.ItemsView.SortDescriptions.Add(
-            DataGridSortDescription.FromPath(nameof(Producto.Nombre), ListSortDirection.Ascending));
+            DataGridSortDescription.FromPath(nameof(ProductoDto.Nombre), ListSortDirection.Ascending));
 
-        var ordenados = vm.ItemsView.Cast<Producto>().ToList();
+        var ordenados = vm.ItemsView.Cast<ProductoDto>().ToList();
         Assert.Equal(3, ordenados.Count);
         Assert.Equal("Aceite", ordenados[0].Nombre);
         Assert.Equal("Manteca", ordenados[1].Nombre);
@@ -163,15 +172,15 @@ public class ProductoListViewModelTests
     [Fact]
     public async Task Items_TrasRecarga_SeReflejanEnItemsView()
     {
-        var (vm, svcMock, _, _) = Crear(new List<Producto> { new() { Id = 1, Codigo = "P001", Nombre = "Uno" } });
+        var (vm, svcMock, _, _) = Crear(new List<ProductoDto> { CrearProductoDto(1, "P001", "Uno") });
         await vm.CargarAsync();
-        Assert.Single(vm.ItemsView.Cast<Producto>());
+        Assert.Single(vm.ItemsView.Cast<ProductoDto>());
 
-        var nuevaLista = new List<Producto>
+        var nuevaLista = new List<ProductoDto>
         {
-            new() { Id = 10, Codigo = "P010", Nombre = "Diez" },
-            new() { Id = 11, Codigo = "P011", Nombre = "Once" },
-            new() { Id = 12, Codigo = "P012", Nombre = "Doce" }
+            CrearProductoDto(10, "P010", "Diez"),
+            CrearProductoDto(11, "P011", "Once"),
+            CrearProductoDto(12, "P012", "Doce")
         };
         svcMock
             .Setup(s => s.BuscarAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
@@ -180,7 +189,7 @@ public class ProductoListViewModelTests
         await vm.CargarAsync();
 
         Assert.Equal(3, vm.Items.Count);
-        Assert.Equal(3, vm.ItemsView.Cast<Producto>().Count());
+        Assert.Equal(3, vm.ItemsView.Cast<ProductoDto>().Count());
     }
 
     // ── BajaCommand: baja lógica con confirmación (mismo patrón que Categoria/Proveedor/UnidadMedida) ──
@@ -188,8 +197,8 @@ public class ProductoListViewModelTests
     [Fact]
     public async Task BajaCommand_ConItemSeleccionado_PideConfirmacionYLlamaServicio()
     {
-        var producto = new Producto { Id = 5, Codigo = "P005", Nombre = "Prueba", Activo = true };
-        var (vm, svcMock, _, confirmMock) = Crear(new List<Producto> { producto });
+        var producto = CrearProductoDto(5, "P005", "Prueba");
+        var (vm, svcMock, _, confirmMock) = Crear(new List<ProductoDto> { producto });
         await vm.CargarAsync();
         vm.ItemSeleccionado = producto;
 
@@ -202,8 +211,8 @@ public class ProductoListViewModelTests
     [Fact]
     public async Task BajaCommand_SiNoConfirma_NoLlamaServicio()
     {
-        var producto = new Producto { Id = 5, Codigo = "P005", Nombre = "Prueba", Activo = true };
-        var (vm, svcMock, _, confirmMock) = Crear(new List<Producto> { producto });
+        var producto = CrearProductoDto(5, "P005", "Prueba");
+        var (vm, svcMock, _, confirmMock) = Crear(new List<ProductoDto> { producto });
         await vm.CargarAsync();
         vm.ItemSeleccionado = producto;
         confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(false);
@@ -216,8 +225,8 @@ public class ProductoListViewModelTests
     [Fact]
     public async Task BajaCommand_ServicioLanzaInvalidOperationException_NoPropagaYInforma()
     {
-        var producto = new Producto { Id = 5, Codigo = "P005", Nombre = "Prueba", Activo = true };
-        var (vm, svcMock, _, confirmMock) = Crear(new List<Producto> { producto });
+        var producto = CrearProductoDto(5, "P005", "Prueba");
+        var (vm, svcMock, _, confirmMock) = Crear(new List<ProductoDto> { producto });
         await vm.CargarAsync();
         vm.ItemSeleccionado = producto;
 
@@ -233,8 +242,8 @@ public class ProductoListViewModelTests
     [Fact]
     public async Task BajaCommand_ServicioLanzaKeyNotFoundException_NoPropagaYInforma()
     {
-        var producto = new Producto { Id = 5, Codigo = "P005", Nombre = "Prueba", Activo = true };
-        var (vm, svcMock, _, confirmMock) = Crear(new List<Producto> { producto });
+        var producto = CrearProductoDto(5, "P005", "Prueba");
+        var (vm, svcMock, _, confirmMock) = Crear(new List<ProductoDto> { producto });
         await vm.CargarAsync();
         vm.ItemSeleccionado = producto;
 
@@ -257,8 +266,8 @@ public class ProductoListViewModelTests
     [Fact]
     public async Task BajaCommand_ItemInactivo_EstaDeshabilitado()
     {
-        var producto = new Producto { Id = 5, Codigo = "P005", Nombre = "Prueba", Activo = false };
-        var (vm, _, _, _) = Crear(new List<Producto> { producto });
+        var producto = CrearProductoDto(5, "P005", "Prueba", activo: false);
+        var (vm, _, _, _) = Crear(new List<ProductoDto> { producto });
         await vm.CargarAsync();
         vm.ItemSeleccionado = producto;
 
@@ -268,8 +277,8 @@ public class ProductoListViewModelTests
     [Fact]
     public async Task BajaCommand_ItemActivo_EstaHabilitado()
     {
-        var producto = new Producto { Id = 5, Codigo = "P005", Nombre = "Prueba", Activo = true };
-        var (vm, _, _, _) = Crear(new List<Producto> { producto });
+        var producto = CrearProductoDto(5, "P005", "Prueba");
+        var (vm, _, _, _) = Crear(new List<ProductoDto> { producto });
         await vm.CargarAsync();
         vm.ItemSeleccionado = producto;
 
@@ -289,8 +298,8 @@ public class ProductoListViewModelTests
     [Fact]
     public async Task EditarCommand_ConItemSeleccionado_EstaHabilitado()
     {
-        var producto = new Producto { Id = 5, Codigo = "P005", Nombre = "Prueba" };
-        var (vm, _, _, _) = Crear(new List<Producto> { producto });
+        var producto = CrearProductoDto(5, "P005", "Prueba");
+        var (vm, _, _, _) = Crear(new List<ProductoDto> { producto });
         await vm.CargarAsync();
         vm.ItemSeleccionado = producto;
 
@@ -302,8 +311,8 @@ public class ProductoListViewModelTests
     {
         // Regla de negocio: un producto dado de baja (Activo=false) no debe poder editarse,
         // igual que ya ocurre con BajaCommand.
-        var producto = new Producto { Id = 5, Codigo = "P005", Nombre = "Prueba", Activo = false };
-        var (vm, _, _, _) = Crear(new List<Producto> { producto });
+        var producto = CrearProductoDto(5, "P005", "Prueba", activo: false);
+        var (vm, _, _, _) = Crear(new List<ProductoDto> { producto });
         await vm.CargarAsync();
         vm.ItemSeleccionado = producto;
 
@@ -313,8 +322,8 @@ public class ProductoListViewModelTests
     [Fact]
     public async Task EditarCommand_ItemActivo_EstaHabilitado()
     {
-        var producto = new Producto { Id = 5, Codigo = "P005", Nombre = "Prueba", Activo = true };
-        var (vm, _, _, _) = Crear(new List<Producto> { producto });
+        var producto = CrearProductoDto(5, "P005", "Prueba");
+        var (vm, _, _, _) = Crear(new List<ProductoDto> { producto });
         await vm.CargarAsync();
         vm.ItemSeleccionado = producto;
 
@@ -324,8 +333,8 @@ public class ProductoListViewModelTests
     [Fact]
     public async Task EditarCommand_ConItemSeleccionado_NavegaAProductoFormViewModelConInicializador()
     {
-        var producto = new Producto { Id = 5, Codigo = "P005", Nombre = "Prueba" };
-        var (vm, _, navMock, _) = Crear(new List<Producto> { producto });
+        var producto = CrearProductoDto(5, "P005", "Prueba");
+        var (vm, _, navMock, _) = Crear(new List<ProductoDto> { producto });
         await vm.CargarAsync();
         vm.ItemSeleccionado = producto;
 
@@ -339,11 +348,8 @@ public class ProductoListViewModelTests
     [Fact]
     public async Task EditarCommand_ElInicializadorPrecargaElProductoSeleccionado()
     {
-        var producto = new Producto
-        {
-            Id = 5, Codigo = "P005", Nombre = "Prueba", UnidadMedidaId = 1, PrecioCosto = 10, PrecioVenta = 20
-        };
-        var (vm, _, navMock, _) = Crear(new List<Producto> { producto });
+        var producto = CrearProductoDto(5, "P005", "Prueba", unidadMedidaId: 1, precioCosto: 10, precioVenta: 20);
+        var (vm, _, navMock, _) = Crear(new List<ProductoDto> { producto });
         await vm.CargarAsync();
         vm.ItemSeleccionado = producto;
 
@@ -377,6 +383,19 @@ public class ProductoFormViewModelTests
     private static readonly UnidadMedida UnidadPorDefecto =
         new() { Id = 1, Nombre = "Unidad", Abreviatura = "u", Activo = true };
 
+    private static ProductoDto CrearProductoDto(
+        int id = 9, string codigo = "P009", string nombre = "Aceite",
+        string? codigoBarras = null, string? descripcion = null,
+        decimal precioCosto = 0m, decimal precioVenta = 0m,
+        int unidadMedidaId = 0, int? categoriaId = null, int? proveedorId = null,
+        decimal stockMinimo = 0m)
+        => new ProductoDto(
+            Id: id, Codigo: codigo, CodigoBarras: codigoBarras, Nombre: nombre, Descripcion: descripcion,
+            CategoriaId: categoriaId, CategoriaNombre: null, ProveedorId: proveedorId,
+            UnidadMedidaId: unidadMedidaId, UnidadMedidaNombre: "", PrecioCosto: precioCosto,
+            PrecioVenta: precioVenta, StockActual: 0m, StockMinimo: stockMinimo, Activo: true,
+            FechaAlta: default);
+
     private static (ProductoFormViewModel vm,
                     Mock<IProductoService> svcMock,
                     Mock<IUnidadMedidaService> umSvcMock,
@@ -393,7 +412,7 @@ public class ProductoFormViewModelTests
             .Returns(Task.CompletedTask);
         svcMock
             .Setup(s => s.BuscarAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
-            .ReturnsAsync(new List<Producto>());
+            .ReturnsAsync(new List<ProductoDto>());
 
         var umSvcMock = new Mock<IUnidadMedidaService>();
         umSvcMock
@@ -556,16 +575,9 @@ public class ProductoFormViewModelTests
     public void CargarParaEditar_SeteaEsEdicionYCamposDelProducto()
     {
         var (vm, _, _, _, _) = Crear();
-        var producto = new Producto
-        {
-            Id = 9,
-            Codigo = "P009",
-            Nombre = "Aceite",
-            CodigoBarras = "7791234567890",
-            Descripcion = "Aceite de girasol",
-            PrecioCosto = 100m,
-            PrecioVenta = 150m,
-        };
+        var producto = CrearProductoDto(
+            codigoBarras: "7791234567890", descripcion: "Aceite de girasol",
+            precioCosto: 100m, precioVenta: 150m);
 
         vm.CargarParaEditar(producto);
 
@@ -583,7 +595,7 @@ public class ProductoFormViewModelTests
     {
         var (vm, _, _, _, _) = Crear();
 
-        vm.CargarParaEditar(new Producto { Id = 9, Codigo = "P009", Nombre = "Aceite" });
+        vm.CargarParaEditar(CrearProductoDto());
 
         Assert.Equal("Editar producto", vm.Titulo);
     }
@@ -597,10 +609,7 @@ public class ProductoFormViewModelTests
             unidades: new List<UnidadMedida> { UnidadPorDefecto, kilogramo },
             categorias: new List<Categoria> { bebidas });
 
-        vm.CargarParaEditar(new Producto
-        {
-            Id = 9, Codigo = "P009", Nombre = "Aceite", UnidadMedidaId = kilogramo.Id, CategoriaId = bebidas.Id
-        });
+        vm.CargarParaEditar(CrearProductoDto(unidadMedidaId: kilogramo.Id, categoriaId: bebidas.Id));
 
         await vm.InicializarAsync();
 
@@ -613,10 +622,7 @@ public class ProductoFormViewModelTests
     {
         var (vm, _, _, _, _) = Crear();
 
-        vm.CargarParaEditar(new Producto
-        {
-            Id = 9, Codigo = "P009", Nombre = "Aceite", UnidadMedidaId = UnidadPorDefecto.Id, CategoriaId = null
-        });
+        vm.CargarParaEditar(CrearProductoDto(unidadMedidaId: UnidadPorDefecto.Id, categoriaId: null));
 
         await vm.InicializarAsync();
 
@@ -627,10 +633,7 @@ public class ProductoFormViewModelTests
     public async Task GuardarCommand_ModoEdicion_LlamaModificarAsyncNoAltaAsync()
     {
         var (vm, svcMock, _, _, _) = Crear();
-        vm.CargarParaEditar(new Producto
-        {
-            Id = 9, Codigo = "P009", Nombre = "Aceite", UnidadMedidaId = UnidadPorDefecto.Id
-        });
+        vm.CargarParaEditar(CrearProductoDto(unidadMedidaId: UnidadPorDefecto.Id));
         await vm.InicializarAsync();
 
         await vm.GuardarCommand.ExecuteAsync(null);
@@ -643,15 +646,7 @@ public class ProductoFormViewModelTests
     public async Task GuardarCommand_ModoEdicion_PreservaProveedorIdYStockMinimoOriginales()
     {
         var (vm, svcMock, _, _, _) = Crear();
-        vm.CargarParaEditar(new Producto
-        {
-            Id = 9,
-            Codigo = "P009",
-            Nombre = "Aceite",
-            UnidadMedidaId = UnidadPorDefecto.Id,
-            ProveedorId = 3,
-            StockMinimo = 12m,
-        });
+        vm.CargarParaEditar(CrearProductoDto(unidadMedidaId: UnidadPorDefecto.Id, proveedorId: 3, stockMinimo: 12m));
         await vm.InicializarAsync();
 
         await vm.GuardarCommand.ExecuteAsync(null);
@@ -664,10 +659,7 @@ public class ProductoFormViewModelTests
     public async Task GuardarCommand_ModoEdicion_Exitoso_NavegaAListado()
     {
         var (vm, _, _, _, navMock) = Crear();
-        vm.CargarParaEditar(new Producto
-        {
-            Id = 9, Codigo = "P009", Nombre = "Aceite", UnidadMedidaId = UnidadPorDefecto.Id
-        });
+        vm.CargarParaEditar(CrearProductoDto(unidadMedidaId: UnidadPorDefecto.Id));
         await vm.InicializarAsync();
 
         await vm.GuardarCommand.ExecuteAsync(null);
@@ -679,10 +671,7 @@ public class ProductoFormViewModelTests
     public async Task GuardarCommand_ModoEdicion_ServicioLanzaExcepcionDeDominio_MuestraMensajeErrorYNoCrashea()
     {
         var (vm, svcMock, _, _, _) = Crear();
-        vm.CargarParaEditar(new Producto
-        {
-            Id = 9, Codigo = "P009", Nombre = "Aceite", UnidadMedidaId = UnidadPorDefecto.Id
-        });
+        vm.CargarParaEditar(CrearProductoDto(unidadMedidaId: UnidadPorDefecto.Id));
         await vm.InicializarAsync();
 
         var mensaje = "Ya existe un producto con el código de barras '7791234567890'.";

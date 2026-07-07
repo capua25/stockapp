@@ -41,7 +41,7 @@ public class ValorizacionViewModelTests
 
         servicioMock
             .Setup(s => s.ObtenerValorizacionAsync())
-            .ReturnsAsync((
+            .ReturnsAsync(new ValorizacionReporteDto(
                 items ?? new List<ValorizacionItemDto>(),
                 totales ?? new ValorizacionTotalesDto(0m, 0m)));
 
