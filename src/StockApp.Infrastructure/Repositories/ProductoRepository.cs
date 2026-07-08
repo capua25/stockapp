@@ -19,13 +19,13 @@ public class ProductoRepository : IProductoRepository
     /// Cada parámetro no nulo/vacío agrega un Where encadenado.
     /// Sin filtros → devuelve todos, ordenados por Nombre.
     ///
-    /// Nombre usa EF.Functions.Like() en lugar de Contains() porque el operador
-    /// LIKE de SQLite es case-insensitive para ASCII por defecto, lo que permite
-    /// buscar "aceite" y encontrar "Aceite de Oliva".
+    /// Nombre usa EF.Functions.ILike() en lugar de Contains() porque necesitamos
+    /// case-insensitive: ILIKE es el operador nativo de Postgres/Npgsql para esto,
+    /// a diferencia de LIKE que en Postgres es case-sensitive.
     /// Limitación conocida: acentos (á/Á) siguen siendo case-sensitive — mejora futura.
     ///
     /// Wildcards % y _ en el término de búsqueda no se escapan actualmente:
-    /// un % literal en nombre actuaría como wildcard LIKE. Para MVP esto es aceptable
+    /// un % literal en nombre actuaría como wildcard ILIKE. Para MVP esto es aceptable
     /// (% y _ son raros en nombres de productos).
     /// </summary>
     public async Task<IReadOnlyList<Producto>> BuscarAsync(string? sku, string? codigoBarras, string? nombre)
@@ -42,7 +42,7 @@ public class ProductoRepository : IProductoRepository
             q = q.Where(p => p.CodigoBarras != null && p.CodigoBarras.Contains(codigoBarras));
 
         if (!string.IsNullOrWhiteSpace(nombre))
-            q = q.Where(p => EF.Functions.Like(p.Nombre, $"%{nombre}%"));
+            q = q.Where(p => EF.Functions.ILike(p.Nombre, $"%{nombre}%"));
 
         return await q.OrderBy(p => p.Nombre).ToListAsync();
     }
@@ -51,8 +51,9 @@ public class ProductoRepository : IProductoRepository
     /// Búsqueda por término único: matchea si el término aparece en Codigo (SKU), CodigoBarras
     /// o Nombre — lógica OR entre campos (design fix del buscador, que prometía buscar por
     /// "nombre, SKU o código de barras" pero solo filtraba por Nombre).
-    /// Usa EF.Functions.Like() en los tres campos para mantener la misma case-insensitividad
-    /// ASCII que ya tenía el filtro de Nombre en <see cref="BuscarAsync"/>.
+    /// Usa EF.Functions.ILike() en los tres campos para mantener la misma case-insensitividad
+    /// que ya tenía el filtro de Nombre en <see cref="BuscarAsync"/> (ILIKE es el operador
+    /// nativo case-insensitive de Postgres/Npgsql).
     /// Término vacío/null → sin filtro, devuelve todos ordenados por Nombre.
     /// </summary>
     public async Task<IReadOnlyList<Producto>> BuscarPorTextoAsync(string? texto)
@@ -66,9 +67,9 @@ public class ProductoRepository : IProductoRepository
         {
             var patron = $"%{texto}%";
             q = q.Where(p =>
-                EF.Functions.Like(p.Codigo, patron)
-                || (p.CodigoBarras != null && EF.Functions.Like(p.CodigoBarras, patron))
-                || EF.Functions.Like(p.Nombre, patron));
+                EF.Functions.ILike(p.Codigo, patron)
+                || (p.CodigoBarras != null && EF.Functions.ILike(p.CodigoBarras, patron))
+                || EF.Functions.ILike(p.Nombre, patron));
         }
 
         return await q.OrderBy(p => p.Nombre).ToListAsync();
