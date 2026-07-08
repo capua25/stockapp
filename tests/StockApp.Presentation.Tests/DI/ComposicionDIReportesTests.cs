@@ -25,8 +25,10 @@ public class ComposicionDIReportesTests
     {
         var services = new ServiceCollection();
 
+        // AppDbContext apuntado a Postgres — solo para que los repos resuelvan (DI wiring,
+        // no se ejecuta ninguna query real en este test, no requiere Docker).
         services.AddDbContext<AppDbContext>(options =>
-            options.UseSqlite("DataSource=:memory:"),
+            options.UseNpgsql("Host=localhost;Port=5432;Database=stockapp_di;Username=stockapp;Password=stockapp"),
             ServiceLifetime.Transient);
 
         services.AddSingleton<ICurrentSession, InMemorySession>();

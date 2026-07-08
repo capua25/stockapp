@@ -4,37 +4,33 @@ using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Infrastructure.Auth;
 using StockApp.Infrastructure.Persistence;
-using StockApp.Infrastructure.Platform;
 
 namespace StockApp.Seeder;
 
 /// <summary>
 /// Herramienta de consola para sembrar la base de datos de StockApp con datos de ejemplo
 /// en todas las tablas. Uso:
-///   dotnet run --project tools/StockApp.Seeder                 -> siembra la base real del usuario
-///   dotnet run --project tools/StockApp.Seeder -- --db ruta.db -> siembra una base alternativa
-///   dotnet run --project tools/StockApp.Seeder -- --reset      -> limpia todas las tablas antes de sembrar
+///   dotnet run --project tools/StockApp.Seeder                              -> siembra la base local por defecto
+///   dotnet run --project tools/StockApp.Seeder -- --connection "Host=..."   -> siembra una base alternativa
+///   dotnet run --project tools/StockApp.Seeder -- --reset                   -> limpia todas las tablas antes de sembrar
 /// Por defecto la siembra es aditiva e idempotente: no duplica catálogos/usuarios/productos
 /// ya existentes (se identifican por su campo único), y solo genera movimientos/logs para
 /// las entidades creadas en la corrida actual.
 /// </summary>
 public static class Program
 {
+    private const string ConnectionStringDefault =
+        "Host=localhost;Port=5432;Database=stockapp;Username=stockapp;Password=stockapp";
+
     public static async Task<int> Main(string[] args)
     {
         var reset = args.Contains("--reset");
-        var dbPath = ResolverDbPath(args);
+        var connectionString = ResolverConnectionString(args);
 
-        var dir = Path.GetDirectoryName(dbPath);
-        if (!string.IsNullOrEmpty(dir))
-        {
-            Directory.CreateDirectory(dir);
-        }
-
-        Console.WriteLine($"Base de datos: {dbPath}");
+        Console.WriteLine($"Base de datos: {connectionString}");
 
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlite($"Data Source={dbPath}")
+            .UseNpgsql(connectionString)
             .Options;
 
         await using var ctx = new AppDbContext(options);
@@ -75,18 +71,17 @@ public static class Program
         return 0;
     }
 
-    private static string ResolverDbPath(string[] args)
+    private static string ResolverConnectionString(string[] args)
     {
         for (var i = 0; i < args.Length; i++)
         {
-            if (args[i] == "--db" && i + 1 < args.Length)
+            if (args[i] == "--connection" && i + 1 < args.Length)
             {
                 return args[i + 1];
             }
         }
 
-        var provider = new UserDataPathProvider();
-        return provider.GetDatabasePath();
+        return ConnectionStringDefault;
     }
 
     private static async Task ResetearAsync(AppDbContext ctx)
