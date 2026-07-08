@@ -44,6 +44,13 @@ builder.Services.AddScoped<ICurrentSession, HttpCurrentSession>();
 builder.Services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
 builder.Services.AddSingleton<IAuthorizationService, AuthorizationService>();
 
+// ProblemDetails: shape uniforme para 400/401/403/500. Los 401/403 se escriben
+// explícitamente en los eventos de JwtBearerOptions (abajo) en vez de depender de la
+// conversión automática de status codes de AddProblemDetails() — así el shape no
+// depende de comportamiento implícito del framework. UseExceptionHandler() (más abajo,
+// post-Build) cubre el caso de excepción no manejada (500) con el mismo servicio.
+builder.Services.AddProblemDetails();
+
 builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
 builder.Services.AddScoped<IAuditLogger, AuditService>();
 
@@ -100,6 +107,50 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Secret)),
         };
+
+        // Eventos explícitos para 401/403 en vez de dejar que ASP.NET Core devuelva un
+        // body vacío sin Content-Type: el shape de ProblemDetails tiene que ser
+        // determinístico, no un efecto colateral de AddProblemDetails() + status code.
+        options.Events = new JwtBearerEvents
+        {
+            OnChallenge = async context =>
+            {
+                context.HandleResponse();
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                context.Response.ContentType = "application/problem+json";
+
+                var problemDetailsService = context.HttpContext.RequestServices
+                    .GetRequiredService<IProblemDetailsService>();
+                await problemDetailsService.WriteAsync(new ProblemDetailsContext
+                {
+                    HttpContext = context.HttpContext,
+                    ProblemDetails =
+                    {
+                        Status = StatusCodes.Status401Unauthorized,
+                        Title = "No autorizado.",
+                        Detail = "El token es inválido, venció o no fue provisto.",
+                    },
+                });
+            },
+            OnForbidden = async context =>
+            {
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                context.Response.ContentType = "application/problem+json";
+
+                var problemDetailsService = context.HttpContext.RequestServices
+                    .GetRequiredService<IProblemDetailsService>();
+                await problemDetailsService.WriteAsync(new ProblemDetailsContext
+                {
+                    HttpContext = context.HttpContext,
+                    ProblemDetails =
+                    {
+                        Status = StatusCodes.Status403Forbidden,
+                        Title = "Prohibido.",
+                        Detail = "El rol autenticado no tiene permiso para esta acción.",
+                    },
+                });
+            },
+        };
     });
 
 // Políticas nombradas igual que las constantes de Permisos: el nombre de la política
@@ -124,6 +175,11 @@ using (var scope = app.Services.CreateScope())
 {
     scope.ServiceProvider.GetRequiredService<AppDbContext>();
 }
+
+// Andamiaje base para excepciones no manejadas: 500 -> ProblemDetails via
+// AddProblemDetails() de arriba (mismo servicio que los eventos de JwtBearer usan
+// para el shape de 401/403).
+app.UseExceptionHandler();
 
 app.UseAuthentication();
 app.UseAuthorization();
