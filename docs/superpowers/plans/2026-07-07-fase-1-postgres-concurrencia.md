@@ -1143,9 +1143,9 @@ public class DatabaseInitializer
 
 - [ ] **Step 3: Ajustar el registro DI del initializer en App.axaml.cs**
 
-En `src/StockApp.Presentation/App.axaml.cs`, el registro `services.AddTransient<DatabaseInitializer>();` (línea 152) sigue siendo válido (el contenedor resuelve el nuevo ctor de un solo parámetro). No requiere cambio. Verificar que compila en el build de la Task 7.
+En `src/StockApp.Presentation/App.axaml.cs`, el registro `services.AddTransient<DatabaseInitializer>();` (línea 152) sigue siendo válido (el contenedor resuelve el nuevo ctor de un solo parámetro). No requiere cambio. Verificar que compila en el build de la Task 8.
 
-> RIESGO / DECISIÓN ABIERTA (fuera de alcance de esta tarea, flag para el implementador): `BackupService`/`BackupPeriodicoService` copian el archivo SQLite. Con Postgres ese concepto queda muerto y `BackupPeriodicoService.IniciarAsync()` (invocado en `App.axaml.cs:89`) podría fallar en runtime al no existir el `.db`. El design §7 difiere el respaldo a `pg_dump` server-side (Fase 4). No se toca en Fase 1 salvo que el arranque contra Postgres lo requiera; si el implementador confirma un crash de arranque, neutralizar el `BackupPeriodicoService` es un cambio menor a evaluar aparte.
+> NOTA: el riesgo de `BackupService`/`BackupPeriodicoService` (copian el archivo SQLite; con Postgres ese concepto queda peligroso/sin sentido) se resuelve de forma completa en la Task 7, contigua a esta. No queda como decisión abierta.
 
 - [ ] **Step 4: Correr los tests del initializer**
 
@@ -1162,7 +1162,130 @@ git commit -m "refactor(datos): DatabaseInitializer sin backup file-based (solo 
 
 ---
 
-### Task 7: Cierre — DI, limpieza SQLite y suite completa en verde
+### Task 7: Deshabilitar el backup file-based (BackupService/BackupPeriodicoService) del arranque
+
+Con el switch total a Postgres, `BackupPeriodicoService` (timer singleton que corre en `App.axaml.cs`) y `BackupService` (copia el archivo `.db` de SQLite) dejan de tener sentido: no hay `.db` que copiar. El respaldo real pasa a `pg_dump` server-side, DIFERIDO a la fase de hardening (design §7, Fase 4) — NO se implementa en Fase 1. Esta tarea remueve el mecanismo file-based por completo (clases, tests y wiring de DI/arranque) para que el arranque contra Postgres no dependa de un archivo SQLite inexistente.
+
+**Files:**
+- Delete: `src/StockApp.Infrastructure/Services/BackupService.cs`
+- Delete: `src/StockApp.Infrastructure/Services/BackupPeriodicoService.cs`
+- Delete: `tests/StockApp.Infrastructure.Tests/Services/BackupServiceTests.cs`
+- Modify: `src/StockApp.Presentation/App.axaml.cs:82-89,143-155`
+- Modify: `tests/StockApp.Infrastructure.Tests/DI/ComposicionDITests.cs`
+
+**Interfaces:**
+- Consumes: nada (elimina superficie, no agrega contrato nuevo).
+
+- [ ] **Step 1: Quitar los tests atados a BackupService (quedan huérfanos: el mecanismo se remueve en esta tarea)**
+
+```bash
+git rm tests/StockApp.Infrastructure.Tests/Services/BackupServiceTests.cs
+```
+
+> Estos tests validaban copia de archivo `.db`, retención por antigüedad y backup periódico — conceptos 100% SQLite. El reemplazo real (`pg_dump` server-side) es Fase 4 y tendrá su propia suite cuando se implemente.
+
+- [ ] **Step 2: Reescribir ComposicionDITests sin BackupService/BackupPeriodicoService**
+
+Reemplazar el contenido completo de `tests/StockApp.Infrastructure.Tests/DI/ComposicionDITests.cs` por:
+
+```csharp
+using Microsoft.Extensions.DependencyInjection;
+using StockApp.Infrastructure.Platform;
+using StockApp.Infrastructure.Services;
+using Xunit;
+
+namespace StockApp.Infrastructure.Tests.DI;
+
+/// <summary>
+/// Verifica que el contenedor DI resuelve los servicios de Infrastructure sin throw.
+/// Prueba la composición directamente (no depende de Avalonia). El backup file-based
+/// (BackupService/BackupPeriodicoService) se removió del arranque en la Task 7 de Fase 1:
+/// con Postgres no hay archivo .db que copiar (pg_dump server-side es Fase 4).
+/// </summary>
+public class ComposicionDITests
+{
+    private static IServiceProvider CrearContenedor()
+    {
+        var services = new ServiceCollection();
+
+        // Mismo cableado que App.axaml.cs
+        services.AddSingleton<IUserDataPathProvider, UserDataPathProvider>();
+
+        services.AddTransient<DatabaseInitializer>(sp =>
+        {
+            // En tests no instanciamos AppDbContext real; validamos sólo que el
+            // contenedor puede construir los servicios que no dependen de EF.
+            // DatabaseInitializer necesita AppDbContext — lo omitimos aquí y
+            // probamos su resolución en el test de integración de DatabaseInitializer.
+            throw new InvalidOperationException(
+                "DatabaseInitializer no se puede resolver sin AppDbContext en este test.");
+        });
+
+        return services.BuildServiceProvider();
+    }
+
+    [Fact]
+    public void Contenedor_Resuelve_IUserDataPathProvider()
+    {
+        var sp = CrearContenedor();
+        var provider = sp.GetRequiredService<IUserDataPathProvider>();
+        Assert.NotNull(provider);
+        Assert.IsType<UserDataPathProvider>(provider);
+    }
+}
+```
+
+- [ ] **Step 3: Borrar las clases de backup file-based**
+
+```bash
+git rm src/StockApp.Infrastructure/Services/BackupService.cs \
+       src/StockApp.Infrastructure/Services/BackupPeriodicoService.cs
+```
+
+- [ ] **Step 4: Quitar el registro DI y el arranque del backup en App.axaml.cs**
+
+En `src/StockApp.Presentation/App.axaml.cs`, reemplazar el comentario y las dos líneas de arranque (82-89):
+
+```csharp
+        // Inicializa la BD (migrate) al arrancar. El backup file-based (SQLite) se removió:
+        // con Postgres el respaldo real es pg_dump server-side, diferido a la Fase 4 (design §7).
+        // Se corre en el thread pool (Task.Run) para evitar el DEADLOCK que produce bloquear
+        // el UI thread de Avalonia sobre cadenas async que postean su continuación al contexto capturado.
+        var initializer = _serviceProvider.GetRequiredService<DatabaseInitializer>();
+        Task.Run(() => initializer.InicializarAsync()).GetAwaiter().GetResult();
+```
+
+(se elimina el bloque `var backupPeriodico = ...; Task.Run(() => backupPeriodico.IniciarAsync())...;` que seguía).
+
+Y en `ConfigurarServicios()`, quitar el registro de `BackupService` y de `BackupPeriodicoService` (líneas 143-155):
+
+```csharp
+        services.AddTransient<DatabaseInitializer>();
+```
+
+(se elimina el bloque `services.AddSingleton<BackupService>(sp => { ... });` y la línea `services.AddSingleton<BackupPeriodicoService>();` que rodeaban este registro; el comentario `// BackupService: singleton — solo rutas de archivos, sin estado de EF` se borra con el bloque).
+
+- [ ] **Step 5: Compilar Infrastructure y Presentation**
+
+Run: `dotnet build src/StockApp.Infrastructure src/StockApp.Presentation`
+Expected: build correcto, sin referencias colgantes a `BackupService`/`BackupPeriodicoService`.
+
+- [ ] **Step 6: Correr ComposicionDITests**
+
+Run: `dotnet test tests/StockApp.Infrastructure.Tests --filter FullyQualifiedName~ComposicionDITests`
+Expected: PASS (único test remanente: `IUserDataPathProvider`).
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/StockApp.Presentation/App.axaml.cs \
+        tests/StockApp.Infrastructure.Tests/DI/ComposicionDITests.cs
+git commit -m "refactor(datos): remover backup file-based del arranque; pg_dump diferido a Fase 4"
+```
+
+---
+
+### Task 8: Cierre — DI, limpieza SQLite y suite completa en verde
 
 Verifica/ajusta `ComposicionDITests`, elimina cualquier referencia SQLite remanente, compila la solución y corre la suite completa.
 
@@ -1171,7 +1294,7 @@ Verifica/ajusta `ComposicionDITests`, elimina cualquier referencia SQLite remane
 - Verify: toda la solución.
 
 **Interfaces:**
-- Consumes: todo lo producido en Tareas 1-6.
+- Consumes: todo lo producido en Tareas 1-7.
 
 - [ ] **Step 1: Buscar referencias SQLite remanentes en todo el repo**
 
@@ -1180,10 +1303,10 @@ Expected: sin resultados. Si aparece alguno, eliminarlo (era un uso no cubierto 
 
 - [ ] **Step 2: Verificar ComposicionDITests**
 
-Leer `tests/StockApp.Infrastructure.Tests/DI/ComposicionDITests.cs`. Su cableado (IUserDataPathProvider, BackupService, BackupPeriodicoService) no depende de SQLite ni del DbContext, y el stub de `DatabaseInitializer` lanza `InvalidOperationException` (no construye el ctor). Por lo tanto NO requiere cambios funcionales. Confirmar que compila y pasa:
+`tests/StockApp.Infrastructure.Tests/DI/ComposicionDITests.cs` ya quedó reescrito en la Task 7 (sin `BackupService`/`BackupPeriodicoService`). Confirmar que compila y pasa:
 
 Run: `dotnet test tests/StockApp.Infrastructure.Tests --filter FullyQualifiedName~ComposicionDITests`
-Expected: PASS (3 tests). Si por el cambio de firma de `DatabaseInitializer` el comentario del stub quedó desfasado, actualizar solo el texto del comentario; no cambiar la lógica.
+Expected: PASS (1 test: `IUserDataPathProvider`).
 
 - [ ] **Step 3: Build de la solución completa**
 
@@ -1207,18 +1330,17 @@ git commit -m "chore(datos): cierre Fase 1 — limpieza SQLite y suite verde sob
 ## Self-Review
 
 **1. Cobertura vs decisiones tomadas:**
-- Switch TOTAL a Postgres (decisión #1): Task 1 (paquetes + UseNpgsql en factory/App), Task 3 (tests), Task 7 Step 1 (barrido de remanentes). ✔
+- Switch TOTAL a Postgres (decisión #1): Task 1 (paquetes + UseNpgsql en factory/App), Task 3 (tests), Task 8 Step 1 (barrido de remanentes). ✔
 - Descartar 3 migraciones SQLite + una `InitialCreate` Postgres (decisión #2): Task 2. ✔
 - Transacción atómica con UPDATE condicional (decisión #3, design §5): Task 4 Step 3, patrón `ExecuteUpdateAsync` con `WHERE ... >= @cant`; `forzar=true` → rama else sin guard (permite negativo). ✔
 - Tests de concurrencia contra Postgres real (decisión #4): Task 5, `Task.WhenAll` de dos salidas, cada una con su contexto. ✔
 - Contrato: pasar delta/cantidad+tipo en vez de `StockNuevo` absoluto + resultado tipado (decisión #5): Task 4 Steps 2-4; `RegistroAtomicoArgs` con `Tipo`/`Cantidad`/`Forzar`, `ResultadoRegistro`/`ResultadoRegistroEstado`, traducción a `StockInsuficienteException` en el service. ✔
 - `DatabaseInitializer` reescrito sin backup file-based (design §7): Task 6. ✔
+- Backup file-based (`BackupService`/`BackupPeriodicoService`, copia de `.db`) deshabilitado/removido del arranque; `App.axaml.cs` no dispara ningún servicio que copie un archivo SQLite inexistente; `pg_dump` server-side diferido a Fase 4 (design §7, gap detectado en revisión post-planificación): Task 7. ✔
 - `AppDbContext` HasFilter a sintaxis Npgsql: Task 1 Step 3. ✔
 - `ConnectionStrings:Default` en appsettings + UseNpgsql desde config, Transient conservado: Task 1 Steps 5-6. ✔
-- Testcontainers en Infrastructure.Tests + `ComposicionDITests`: Tasks 3 y 7. ✔
+- Testcontainers en Infrastructure.Tests + `ComposicionDITests`: Tasks 3, 7 y 8. ✔
 
-**2. Scan de placeholders:** No hay "TODO", "similar a", "manejar errores" ni "etc." como acción. La migración de los 9 tests de repositorio (Task 3 Step 6) es un recipe mecánico con before/after concreto sobre la clase base compartida (no es un placeholder: el cuerpo de cada test es código existente que no cambia; solo se reemplaza el boilerplate de conexión). Las divergencias Postgres/SQLite en búsqueda/orden se marcan como verificación TDD explícita (ajustar aserción), no como trabajo indefinido. Decisiones abiertas marcadas: versión de `Npgsql.EntityFrameworkCore.PostgreSQL` (`10.*` a confirmar), versión de `Testcontainers.PostgreSql` (la que resuelva `dotnet add package`), nombres de tabla del TRUNCATE (verificar contra la migración generada), y el riesgo de `BackupPeriodicoService` en runtime.
+**2. Scan de placeholders:** No hay "TODO", "similar a", "manejar errores" ni "etc." como acción. La migración de los 9 tests de repositorio (Task 3 Step 6) es un recipe mecánico con before/after concreto sobre la clase base compartida (no es un placeholder: el cuerpo de cada test es código existente que no cambia; solo se reemplaza el boilerplate de conexión). Las divergencias Postgres/SQLite en búsqueda/orden se marcan como verificación TDD explícita (ajustar aserción), no como trabajo indefinido. Decisiones abiertas marcadas: versión de `Npgsql.EntityFrameworkCore.PostgreSQL` (`10.*` a confirmar), versión de `Testcontainers.PostgreSql` (la que resuelva `dotnet add package`) y nombres de tabla del TRUNCATE (verificar contra la migración generada). El riesgo de `BackupPeriodicoService` en runtime, antes marcado como decisión abierta, queda resuelto (removido) por la Task 7.
 
 **3. Consistencia de tipos/firmas:** `RegistroAtomicoArgs(MovimientoStock, int ProductoId, TipoMovimiento Tipo, decimal Cantidad, bool Forzar, int UsuarioId, string DetalleAuditoria)` se usa idéntico en: la definición (Task 4 Step 2), el repo (Task 4 Step 3, consume `args.Tipo`/`args.Cantidad`/`args.Forzar`/`args.ProductoId`/`args.UsuarioId`/`args.DetalleAuditoria`/`args.Movimiento`), el service (Task 4 Step 4), el arnés de MovimientoStockRepositoryTests (Task 3 Steps 8-9, Task 4 Step 1), el repo auxiliar C4 (Task 3 Step 8) y el test de concurrencia (Task 5). `ResultadoRegistro(ResultadoRegistroEstado Estado, int MovimientoId, decimal StockResultante)` y el enum `{ Ok, StockInsuficiente }` se usan consistentes en repo, service y todos los tests. La firma de interfaz `Task<ResultadoRegistro> RegistrarMovimientoAtomicoAsync(RegistroAtomicoArgs)` coincide con el `override` del repo auxiliar (Task 3 Step 8) y la implementación real (Task 4 Step 3). `RecalculoAtomicoArgs` queda intacto. `StockInsuficienteException(int, decimal, decimal)` se invoca con `(dto.ProductoId, resultado.StockResultante, dto.Cantidad)`, compatible con su ctor existente. `PostgresRepositoryTestBase(PostgresFixture)` con `Context`/`Fixture` protegidos coincide con todos los constructores de tests que hacen `: base(fixture)`.
-</content>
-</invoke>
