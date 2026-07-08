@@ -8,6 +8,8 @@ using StockApp.Api.Endpoints;
 using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Interfaces;
+using StockApp.Application.Movimientos;
+using StockApp.Application.Reportes;
 using StockApp.Domain.Enums;
 using StockApp.Infrastructure.Auth;
 using StockApp.Infrastructure.Persistence;
@@ -49,6 +51,12 @@ builder.Services.AddScoped<IAuditLogger, AuditService>();
 builder.Services.AddScoped<IProductoRepository, ProductoRepository>();
 builder.Services.AddScoped<IUnidadMedidaRepository, UnidadMedidaRepository>();
 builder.Services.AddScoped<IProductoService, ProductoService>();
+
+// Reportes (slice: GET /productos/reporte-valorizacion)
+builder.Services.AddScoped<IMovimientoStockRepository, MovimientoStockRepository>();
+builder.Services.AddScoped<IMovimientoStockService, MovimientoStockService>();
+builder.Services.AddScoped<IReporteStockRepository, ReporteStockRepository>();
+builder.Services.AddScoped<IReporteStockService, ReporteStockService>();
 
 // JwtOptions: misma razón que AppDbContext arriba — el secreto se lee de forma diferida
 // en el factory (resuelto post-Build), no en una `var` top-level. JwtOptions es un
@@ -102,6 +110,9 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy(Permisos.GestionarProductos, policy =>
         policy.RequireClaim(StockAppClaimTypes.Rol,
             RolUsuario.Admin.ToString(), RolUsuario.Operador.ToString()));
+
+    options.AddPolicy(Permisos.VerReportes, policy =>
+        policy.RequireClaim(StockAppClaimTypes.Rol, RolUsuario.Admin.ToString()));
 });
 
 var app = builder.Build();
