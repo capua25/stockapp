@@ -7,8 +7,16 @@
              x:Class="StockApp.Presentation.Views.InicioView"
              x:DataType="vm:InicioViewModel">
 
-    <ScrollViewer>
-        <StackPanel Margin="24" Spacing="20">
+    <Grid>
+
+        <Image Source="avares://StockApp.Presentation/Assets/carmelo-original.png"
+               Opacity="0.28"
+               Stretch="Uniform"
+               HorizontalAlignment="Center"
+               VerticalAlignment="Center" />
+
+        <ScrollViewer>
+            <StackPanel Margin="24" Spacing="20">
 
             <!-- Encabezado -->
             <Border Classes="card">
@@ -159,6 +167,8 @@
             </Border>
 
         </StackPanel>
-    </ScrollViewer>
+        </ScrollViewer>
+
+    </Grid>
 
 </UserControl>

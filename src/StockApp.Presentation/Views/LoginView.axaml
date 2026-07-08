@@ -8,57 +8,67 @@
              x:DataType="vm:LoginViewModel"
              Background="{DynamicResource FondoBrush}">
 
-    <Border Classes="card" Padding="40" HorizontalAlignment="Center" VerticalAlignment="Center" Width="360">
-        <StackPanel Spacing="16">
+    <Grid>
 
-            <TextBlock Text="StockApp"
-                       Classes="titulo-vista"
-                       HorizontalAlignment="Center"
-                       Margin="0,0,0,8" />
+        <Image Source="avares://StockApp.Presentation/Assets/carmelo-original.png"
+               Opacity="0.28"
+               Stretch="Uniform"
+               HorizontalAlignment="Center"
+               VerticalAlignment="Center" />
 
-            <TextBlock Text="Ingresá tus credenciales para continuar."
-                       HorizontalAlignment="Center"
-                       Opacity="0.7" />
+        <Border Classes="card" Padding="40" HorizontalAlignment="Center" VerticalAlignment="Center" Width="360">
+            <StackPanel Spacing="16">
 
-            <!-- Usuario -->
-            <StackPanel Spacing="4">
-                <TextBlock Text="Usuario" />
-                <TextBox Text="{Binding NombreUsuario}"
-                         PlaceholderText="Nombre de usuario"
-                         KeyDown="OnCampoKeyDown" />
+                <TextBlock Text="StockApp"
+                           Classes="titulo-vista"
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,8" />
+
+                <TextBlock Text="Ingresá tus credenciales para continuar."
+                           HorizontalAlignment="Center"
+                           Opacity="0.7" />
+
+                <!-- Usuario -->
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Usuario" />
+                    <TextBox Text="{Binding NombreUsuario}"
+                             PlaceholderText="Nombre de usuario"
+                             KeyDown="OnCampoKeyDown" />
+                </StackPanel>
+
+                <!-- Contraseña -->
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Contraseña" />
+                    <TextBox Text="{Binding Contrasena}"
+                             PasswordChar="●"
+                             PlaceholderText="Contraseña"
+                             KeyDown="OnCampoKeyDown" />
+                </StackPanel>
+
+                <!-- Mensaje de error -->
+                <TextBlock Text="{Binding MensajeError}"
+                           Foreground="{DynamicResource DangerBrush}"
+                           IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                           TextWrapping="Wrap" />
+
+                <!-- Botón -->
+                <Button Content="Entrar"
+                        Classes="primary"
+                        Command="{Binding EntrarCommand}"
+                        IsDefault="True"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Center" />
+
+                <!-- Versión de la app: discreta, al pie del formulario -->
+                <TextBlock Text="{Binding VersionTexto}"
+                           FontSize="11"
+                           Opacity="0.5"
+                           HorizontalAlignment="Center"
+                           Margin="0,16,0,0" />
+
             </StackPanel>
+        </Border>
 
-            <!-- Contraseña -->
-            <StackPanel Spacing="4">
-                <TextBlock Text="Contraseña" />
-                <TextBox Text="{Binding Contrasena}"
-                         PasswordChar="●"
-                         PlaceholderText="Contraseña"
-                         KeyDown="OnCampoKeyDown" />
-            </StackPanel>
-
-            <!-- Mensaje de error -->
-            <TextBlock Text="{Binding MensajeError}"
-                       Foreground="{DynamicResource DangerBrush}"
-                       IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                       TextWrapping="Wrap" />
-
-            <!-- Botón -->
-            <Button Content="Entrar"
-                    Classes="primary"
-                    Command="{Binding EntrarCommand}"
-                    IsDefault="True"
-                    HorizontalAlignment="Stretch"
-                    HorizontalContentAlignment="Center" />
-
-            <!-- Versión de la app: discreta, al pie del formulario -->
-            <TextBlock Text="{Binding VersionTexto}"
-                       FontSize="11"
-                       Opacity="0.5"
-                       HorizontalAlignment="Center"
-                       Margin="0,16,0,0" />
-
-        </StackPanel>
-    </Border>
+    </Grid>
 
 </UserControl>
