@@ -79,14 +79,12 @@ public partial class App : AvaloniaApp
             }
         };
 
-        // Inicializa la BD (backup pre-migración + migrate) y arranca el backup periódico.
+        // Inicializa la BD (migrate) al arrancar. El backup file-based (SQLite) se removió:
+        // con Postgres el respaldo real es pg_dump server-side, diferido a la Fase 4 (design §7).
         // Se corre en el thread pool (Task.Run) para evitar el DEADLOCK que produce bloquear
         // el UI thread de Avalonia sobre cadenas async que postean su continuación al contexto capturado.
         var initializer = _serviceProvider.GetRequiredService<DatabaseInitializer>();
         Task.Run(() => initializer.InicializarAsync()).GetAwaiter().GetResult();
-
-        var backupPeriodico = _serviceProvider.GetRequiredService<BackupPeriodicoService>();
-        Task.Run(() => backupPeriodico.IniciarAsync()).GetAwaiter().GetResult();
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
@@ -135,24 +133,14 @@ public partial class App : AvaloniaApp
         // (no hay scope de request; los servicios que lo consumen son transient también).
         services.AddDbContext<AppDbContext>((sp, options) =>
         {
-            var pathProvider = sp.GetRequiredService<IUserDataPathProvider>();
-            Directory.CreateDirectory(pathProvider.GetDataDirectory());
-            options.UseSqlite($"DataSource={pathProvider.GetDatabasePath()}");
+            var connectionString = configuration.GetConnectionString("Default")
+                ?? throw new InvalidOperationException(
+                    "Falta la cadena de conexión 'ConnectionStrings:Default' en appsettings.json. " +
+                    "Se requiere un PostgreSQL accesible (contenedor Docker local u on-premise).");
+            options.UseNpgsql(connectionString);
         }, ServiceLifetime.Transient);
 
-        // BackupService: singleton — solo rutas de archivos, sin estado de EF
-        services.AddSingleton<BackupService>(sp =>
-        {
-            var pathProvider = sp.GetRequiredService<IUserDataPathProvider>();
-            return new BackupService(
-                pathProvider.GetDatabasePath(),
-                pathProvider.GetBackupsDirectory());
-        });
-
         services.AddTransient<DatabaseInitializer>();
-
-        // BackupPeriodicoService: singleton — mantiene el timer vivo mientras corre la app
-        services.AddSingleton<BackupPeriodicoService>();
 
         // ── Inc 3: autenticación, autorización y sesión ───────────────────────
 

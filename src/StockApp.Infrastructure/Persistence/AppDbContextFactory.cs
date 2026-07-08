@@ -13,7 +13,7 @@ internal class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
     public AppDbContext CreateDbContext(string[] args)
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlite("DataSource=stockapp-design.db")
+            .UseNpgsql("Host=localhost;Port=5432;Database=stockapp_design;Username=stockapp;Password=stockapp")
             .Options;
 
         return new AppDbContext(options);

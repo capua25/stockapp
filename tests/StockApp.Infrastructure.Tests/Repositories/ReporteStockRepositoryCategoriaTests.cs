@@ -2,40 +2,21 @@ using Microsoft.EntityFrameworkCore;
 using StockApp.Domain.Entities;
 using StockApp.Infrastructure.Persistence;
 using StockApp.Infrastructure.Repositories;
+using StockApp.Infrastructure.Tests.Fixtures;
 using Xunit;
 
 namespace StockApp.Infrastructure.Tests.Repositories;
 
 /// <summary>
-/// Tests de integración para ReporteStockRepository.ObtenerStockPorCategoriaAsync sobre SQLite in-memory.
+/// Tests de integración para ReporteStockRepository.ObtenerStockPorCategoriaAsync contra PostgreSQL real.
 /// </summary>
-public class ReporteStockRepositoryCategoriaTests : IDisposable
+public class ReporteStockRepositoryCategoriaTests : PostgresRepositoryTestBase
 {
-    private readonly Microsoft.Data.Sqlite.SqliteConnection _connection;
-    private readonly AppDbContext _ctx;
     private readonly ReporteStockRepository _repo;
 
-    public ReporteStockRepositoryCategoriaTests()
+    public ReporteStockRepositoryCategoriaTests(PostgresFixture fixture) : base(fixture)
     {
-        _connection = new Microsoft.Data.Sqlite.SqliteConnection(
-            "DataSource=reporte_categoria_test;Mode=Memory;Cache=Shared");
-        _connection.Open();
-
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlite(_connection)
-            .Options;
-
-        _ctx = new AppDbContext(options);
-        _ctx.Database.EnsureCreated();
-
-        _repo = new ReporteStockRepository(_ctx);
-    }
-
-    public void Dispose()
-    {
-        _ctx.Dispose();
-        _connection.Close();
-        _connection.Dispose();
+        _repo = new ReporteStockRepository(Context);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
@@ -71,18 +52,18 @@ public class ReporteStockRepositoryCategoriaTests : IDisposable
         var um = NuevaUm();
         var bebidas  = new Categoria { Nombre = "Bebidas",  Activo = true };
         var limpieza = new Categoria { Nombre = "Limpieza", Activo = true };
-        _ctx.UnidadesMedida.Add(um);
-        _ctx.Categorias.AddRange(bebidas, limpieza);
-        await _ctx.SaveChangesAsync();
+        Context.UnidadesMedida.Add(um);
+        Context.Categorias.AddRange(bebidas, limpieza);
+        await Context.SaveChangesAsync();
 
         // Bebidas: 2 productos
         var b1 = NuevoProducto("B001", "Agua", um, stockActual: 10m, precioCosto: 2m, precioVenta: 5m, categoria: bebidas);
         var b2 = NuevoProducto("B002", "Jugo", um, stockActual: 4m,  precioCosto: 3m, precioVenta: 7m, categoria: bebidas);
         // Limpieza: 1 producto
         var l1 = NuevoProducto("L001", "Lavandina", um, stockActual: 6m, precioCosto: 1m, precioVenta: 3m, categoria: limpieza);
-        _ctx.Productos.AddRange(b1, b2, l1);
-        await _ctx.SaveChangesAsync();
-        _ctx.ChangeTracker.Clear();
+        Context.Productos.AddRange(b1, b2, l1);
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
 
         var resultado = await _repo.ObtenerStockPorCategoriaAsync();
 
@@ -105,15 +86,15 @@ public class ReporteStockRepositoryCategoriaTests : IDisposable
     public async Task ObtenerStockPorCategoriaAsync_GrupoSinCategoria_Presente()
     {
         var um = NuevaUm();
-        _ctx.UnidadesMedida.Add(um);
-        await _ctx.SaveChangesAsync();
+        Context.UnidadesMedida.Add(um);
+        await Context.SaveChangesAsync();
 
         // 2 productos sin categoría
         var s1 = NuevoProducto("S001", "Genérico A", um, stockActual: 3m, precioCosto: 2m, precioVenta: 4m, categoria: null);
         var s2 = NuevoProducto("S002", "Genérico B", um, stockActual: 5m, precioCosto: 1m, precioVenta: 2m, categoria: null);
-        _ctx.Productos.AddRange(s1, s2);
-        await _ctx.SaveChangesAsync();
-        _ctx.ChangeTracker.Clear();
+        Context.Productos.AddRange(s1, s2);
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
 
         var resultado = await _repo.ObtenerStockPorCategoriaAsync();
 
@@ -130,16 +111,16 @@ public class ReporteStockRepositoryCategoriaTests : IDisposable
         var um = NuevaUm();
         var conActivos = new Categoria { Nombre = "ConActivos", Activo = true };
         var soloInactivos = new Categoria { Nombre = "SoloInactivos", Activo = true };
-        _ctx.UnidadesMedida.Add(um);
-        _ctx.Categorias.AddRange(conActivos, soloInactivos);
-        await _ctx.SaveChangesAsync();
+        Context.UnidadesMedida.Add(um);
+        Context.Categorias.AddRange(conActivos, soloInactivos);
+        await Context.SaveChangesAsync();
 
         var activo = NuevoProducto("A001", "Producto Activo", um, stockActual: 5m, precioCosto: 2m, precioVenta: 4m, categoria: conActivos);
         // Todos los de soloInactivos están inactivos → la categoría NO debe aparecer
         var inactivo = NuevoProducto("I001", "Producto Inactivo", um, stockActual: 9m, precioCosto: 3m, precioVenta: 6m, activo: false, categoria: soloInactivos);
-        _ctx.Productos.AddRange(activo, inactivo);
-        await _ctx.SaveChangesAsync();
-        _ctx.ChangeTracker.Clear();
+        Context.Productos.AddRange(activo, inactivo);
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
 
         var resultado = await _repo.ObtenerStockPorCategoriaAsync();
 

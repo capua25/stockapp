@@ -2,27 +2,19 @@ using Microsoft.EntityFrameworkCore;
 using StockApp.Domain.Entities;
 using StockApp.Infrastructure.Persistence;
 using StockApp.Infrastructure.Repositories;
+using StockApp.Infrastructure.Tests.Fixtures;
 using Xunit;
 
 namespace StockApp.Infrastructure.Tests.Repositories;
 
-public class UnidadMedidaRepositoryTests : IDisposable
+public class UnidadMedidaRepositoryTests : PostgresRepositoryTestBase
 {
-    private readonly AppDbContext _ctx;
     private readonly UnidadMedidaRepository _repo;
 
-    public UnidadMedidaRepositoryTests()
+    public UnidadMedidaRepositoryTests(PostgresFixture fixture) : base(fixture)
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlite("DataSource=:memory:")
-            .Options;
-        _ctx = new AppDbContext(options);
-        _ctx.Database.OpenConnection();
-        _ctx.Database.EnsureCreated();
-        _repo = new UnidadMedidaRepository(_ctx);
+        _repo = new UnidadMedidaRepository(Context);
     }
-
-    public void Dispose() => _ctx.Dispose();
 
     private static UnidadMedida NuevaUm(string nombre, string abreviatura, bool activo = true) =>
         new() { Nombre = nombre, Abreviatura = abreviatura, Activo = activo };
@@ -34,7 +26,7 @@ public class UnidadMedidaRepositoryTests : IDisposable
     {
         var um = NuevaUm("Kilogramo", "kg");
         var id = await _repo.AgregarAsync(um);
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var found = await _repo.ObtenerPorIdAsync(id);
 
@@ -52,7 +44,7 @@ public class UnidadMedidaRepositoryTests : IDisposable
         await _repo.AgregarAsync(NuevaUm("Metro", "m"));
         await _repo.AgregarAsync(NuevaUm("Kilo", "kg"));
         await _repo.AgregarAsync(NuevaUm("Inactiva", "x", activo: false));
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var result = await _repo.ListarTodasAsync();
 
@@ -143,12 +135,12 @@ public class UnidadMedidaRepositoryTests : IDisposable
     {
         var um = NuevaUm("Litro", "l");
         var id = await _repo.AgregarAsync(um);
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var found = await _repo.ObtenerPorIdAsync(id);
         found!.Activo = false;
         await _repo.ActualizarAsync(found);
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var updated = await _repo.ObtenerPorIdAsync(id);
         Assert.False(updated!.Activo);
@@ -159,12 +151,12 @@ public class UnidadMedidaRepositoryTests : IDisposable
     {
         var um = NuevaUm("Kilogramo", "kg");
         var id = await _repo.AgregarAsync(um);
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var found = await _repo.ObtenerPorIdAsync(id);
         found!.Abreviatura = "KG";
         await _repo.ActualizarAsync(found);
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var updated = await _repo.ObtenerPorIdAsync(id);
         Assert.Equal("KG", updated!.Abreviatura);

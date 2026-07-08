@@ -27,9 +27,10 @@ public class ComposicionDICatalogoTests
     {
         var services = new ServiceCollection();
 
-        // AppDbContext en memoria (SQLite in-memory) — solo para que los repos resuelvan
+        // AppDbContext apuntado a Postgres — solo para que los repos resuelvan (DI wiring,
+        // no se ejecuta ninguna query real en este test, no requiere Docker).
         services.AddDbContext<AppDbContext>(options =>
-            options.UseSqlite("DataSource=:memory:"),
+            options.UseNpgsql("Host=localhost;Port=5432;Database=stockapp_di;Username=stockapp;Password=stockapp"),
             ServiceLifetime.Transient);
 
         // ── Infraestructura de sesión y auditoría ─────────────────────────────

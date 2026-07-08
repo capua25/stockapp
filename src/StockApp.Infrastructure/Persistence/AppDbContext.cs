@@ -34,7 +34,7 @@ public class AppDbContext : DbContext
         {
             e.HasIndex(p => p.Codigo).IsUnique();
             e.HasIndex(p => p.CodigoBarras).IsUnique()
-                .HasFilter("[CodigoBarras] IS NOT NULL");
+                .HasFilter("\"CodigoBarras\" IS NOT NULL");
             e.Property(p => p.Codigo).IsRequired().HasMaxLength(50);
             e.Property(p => p.Nombre).IsRequired();
             e.Property(p => p.PrecioCosto).HasPrecision(18, 4);

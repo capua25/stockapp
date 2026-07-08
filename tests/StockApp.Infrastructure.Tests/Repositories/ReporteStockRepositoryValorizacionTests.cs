@@ -3,41 +3,21 @@ using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Infrastructure.Persistence;
 using StockApp.Infrastructure.Repositories;
+using StockApp.Infrastructure.Tests.Fixtures;
 using Xunit;
 
 namespace StockApp.Infrastructure.Tests.Repositories;
 
 /// <summary>
-/// Tests de integración para ReporteStockRepository.ObtenerValorizacionAsync sobre SQLite in-memory.
-/// Patrón: conexión nombrada Mode=Memory;Cache=Shared + EnsureCreated (igual que MovimientoStockRepositoryTests).
+/// Tests de integración para ReporteStockRepository.ObtenerValorizacionAsync contra PostgreSQL real.
 /// </summary>
-public class ReporteStockRepositoryValorizacionTests : IDisposable
+public class ReporteStockRepositoryValorizacionTests : PostgresRepositoryTestBase
 {
-    private readonly Microsoft.Data.Sqlite.SqliteConnection _connection;
-    private readonly AppDbContext _ctx;
     private readonly ReporteStockRepository _repo;
 
-    public ReporteStockRepositoryValorizacionTests()
+    public ReporteStockRepositoryValorizacionTests(PostgresFixture fixture) : base(fixture)
     {
-        _connection = new Microsoft.Data.Sqlite.SqliteConnection(
-            "DataSource=reporte_valorizacion_test;Mode=Memory;Cache=Shared");
-        _connection.Open();
-
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlite(_connection)
-            .Options;
-
-        _ctx = new AppDbContext(options);
-        _ctx.Database.EnsureCreated();
-
-        _repo = new ReporteStockRepository(_ctx);
-    }
-
-    public void Dispose()
-    {
-        _ctx.Dispose();
-        _connection.Close();
-        _connection.Dispose();
+        _repo = new ReporteStockRepository(Context);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
@@ -72,9 +52,9 @@ public class ReporteStockRepositoryValorizacionTests : IDisposable
     {
         var um = NuevaUm();
         var cat = new Categoria { Nombre = "Bebidas", Activo = true };
-        _ctx.UnidadesMedida.Add(um);
-        _ctx.Categorias.Add(cat);
-        await _ctx.SaveChangesAsync();
+        Context.UnidadesMedida.Add(um);
+        Context.Categorias.Add(cat);
+        await Context.SaveChangesAsync();
 
         // Insertar en orden INVERSO al alfabético (Jugo primero, Agua después)
         // para que el Id de inserción sea distinto al orden esperado por Nombre.
@@ -82,9 +62,9 @@ public class ReporteStockRepositoryValorizacionTests : IDisposable
         var activo2   = NuevoProducto("ACT002", "Jugo",   um, stockActual: 4m,  precioCosto: 3m,  precioVenta: 7m,  categoria: cat);
         var activo1   = NuevoProducto("ACT001", "Agua",   um, stockActual: 10m, precioCosto: 2m,  precioVenta: 5m,  categoria: cat);
         var inactivo  = NuevoProducto("INA001", "Vino",   um, stockActual: 8m,  precioCosto: 10m, precioVenta: 20m, activo: false, categoria: cat);
-        _ctx.Productos.AddRange(activo2, activo1, inactivo);
-        await _ctx.SaveChangesAsync();
-        _ctx.ChangeTracker.Clear();
+        Context.Productos.AddRange(activo2, activo1, inactivo);
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
 
         var resultado = await _repo.ObtenerValorizacionAsync();
 
@@ -112,14 +92,14 @@ public class ReporteStockRepositoryValorizacionTests : IDisposable
     public async Task ObtenerValorizacionAsync_ProductoSinCategoria_GrupoSinCategoria()
     {
         var um = NuevaUm();
-        _ctx.UnidadesMedida.Add(um);
-        await _ctx.SaveChangesAsync();
+        Context.UnidadesMedida.Add(um);
+        await Context.SaveChangesAsync();
 
         // CategoriaId null → "Sin categoría"
         var sinCat = NuevoProducto("SC001", "Genérico", um, stockActual: 5m, precioCosto: 1m, precioVenta: 2m, categoria: null);
-        _ctx.Productos.Add(sinCat);
-        await _ctx.SaveChangesAsync();
-        _ctx.ChangeTracker.Clear();
+        Context.Productos.Add(sinCat);
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
 
         var resultado = await _repo.ObtenerValorizacionAsync();
 
@@ -132,15 +112,15 @@ public class ReporteStockRepositoryValorizacionTests : IDisposable
     {
         var um = NuevaUm();
         var cat = new Categoria { Nombre = "Limpieza", Activo = true };
-        _ctx.UnidadesMedida.Add(um);
-        _ctx.Categorias.Add(cat);
-        await _ctx.SaveChangesAsync();
+        Context.UnidadesMedida.Add(um);
+        Context.Categorias.Add(cat);
+        await Context.SaveChangesAsync();
 
         var p1 = NuevoProducto("T001", "Lavandina", um, stockActual: 3m, precioCosto: 4m, precioVenta: 9m,  categoria: cat);
         var p2 = NuevoProducto("T002", "Esponja",   um, stockActual: 6m, precioCosto: 1m, precioVenta: 3m,  categoria: cat);
-        _ctx.Productos.AddRange(p1, p2);
-        await _ctx.SaveChangesAsync();
-        _ctx.ChangeTracker.Clear();
+        Context.Productos.AddRange(p1, p2);
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
 
         var resultado = await _repo.ObtenerValorizacionAsync();
 

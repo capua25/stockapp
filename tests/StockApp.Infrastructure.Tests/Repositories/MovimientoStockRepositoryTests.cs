@@ -5,41 +5,22 @@ using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Infrastructure.Persistence;
 using StockApp.Infrastructure.Repositories;
+using StockApp.Infrastructure.Tests.Fixtures;
 using Xunit;
 
 namespace StockApp.Infrastructure.Tests.Repositories;
 
 /// <summary>
-/// Tests para MovimientoStockRepository usando SQLite in-memory.
-/// Patrón: conexión abierta explícita + EnsureCreated (igual que ProductoRepositoryTests).
+/// Tests de MovimientoStockRepository contra PostgreSQL real (Testcontainers).
+/// Cada test parte de tablas truncadas (PostgresRepositoryTestBase).
 /// </summary>
-public class MovimientoStockRepositoryTests : IDisposable
+public class MovimientoStockRepositoryTests : PostgresRepositoryTestBase
 {
-    private readonly Microsoft.Data.Sqlite.SqliteConnection _connection;
-    private readonly AppDbContext _ctx;
     private readonly MovimientoStockRepository _repo;
 
-    public MovimientoStockRepositoryTests()
+    public MovimientoStockRepositoryTests(PostgresFixture fixture) : base(fixture)
     {
-        // Conexión nombrada: permite abrir un segundo context sobre la MISMA BD in-memory (crítico para C4).
-        _connection = new Microsoft.Data.Sqlite.SqliteConnection("DataSource=movimientos_test;Mode=Memory;Cache=Shared");
-        _connection.Open();
-
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlite(_connection)
-            .Options;
-
-        _ctx = new AppDbContext(options);
-        _ctx.Database.EnsureCreated();
-
-        _repo = new MovimientoStockRepository(_ctx);
-    }
-
-    public void Dispose()
-    {
-        _ctx.Dispose();
-        _connection.Close();
-        _connection.Dispose();
+        _repo = new MovimientoStockRepository(Context);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
@@ -72,13 +53,13 @@ public class MovimientoStockRepositoryTests : IDisposable
     {
         var um      = NuevaUm();
         var usuario = NuevoUsuario();
-        _ctx.UnidadesMedida.Add(um);
-        _ctx.Usuarios.Add(usuario);
-        await _ctx.SaveChangesAsync();
+        Context.UnidadesMedida.Add(um);
+        Context.Usuarios.Add(usuario);
+        await Context.SaveChangesAsync();
 
         var producto = NuevoProducto("SKU001", um, stockInicial);
-        _ctx.Productos.Add(producto);
-        await _ctx.SaveChangesAsync();
+        Context.Productos.Add(producto);
+        await Context.SaveChangesAsync();
 
         return (um, usuario, producto);
     }
@@ -89,7 +70,7 @@ public class MovimientoStockRepositoryTests : IDisposable
     public async Task ObtenerProductoAsync_ProductoExistente_Devuelve()
     {
         var (_, _, producto) = await SeedBaseAsync();
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var resultado = await _repo.ObtenerProductoAsync(producto.Id);
 
@@ -115,13 +96,13 @@ public class MovimientoStockRepositoryTests : IDisposable
         var (_, usuario, producto) = await SeedBaseAsync();
 
         // 10 entrada + 5 entrada - 3 salida = neto 12, total 3
-        _ctx.MovimientosStock.AddRange(
+        Context.MovimientosStock.AddRange(
             new MovimientoStock { ProductoId = producto.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Cantidad = 10m, PrecioUnitario = 5m, Fecha = DateTime.UtcNow, Motivo = MotivoMovimiento.Compra },
             new MovimientoStock { ProductoId = producto.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Cantidad = 5m,  PrecioUnitario = 5m, Fecha = DateTime.UtcNow, Motivo = MotivoMovimiento.Compra },
             new MovimientoStock { ProductoId = producto.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Salida,  Cantidad = 3m,  PrecioUnitario = 5m, Fecha = DateTime.UtcNow, Motivo = MotivoMovimiento.Venta  }
         );
-        await _ctx.SaveChangesAsync();
-        _ctx.ChangeTracker.Clear();
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
 
         var (neto, total) = await _repo.SumarMovimientosAsync(producto.Id);
 
@@ -133,7 +114,7 @@ public class MovimientoStockRepositoryTests : IDisposable
     public async Task SumarMovimientosAsync_SinMovimientos_DevuelveCeroYTotal0()
     {
         var (_, _, producto) = await SeedBaseAsync();
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var (neto, total) = await _repo.SumarMovimientosAsync(producto.Id);
 
@@ -141,35 +122,18 @@ public class MovimientoStockRepositoryTests : IDisposable
         Assert.Equal(0,  total);
     }
 
-    // ── C4: Rollback atómico (MANDATORY) ─────────────────────────────────────
-    //
-    // Estrategia: provocar fallo real en SaveChangesAsync para verificar que EF
-    // revierte TODO el flush (movimiento + StockActual + log).
-    //
-    // Mecanismo elegido: Detalle=null sobre columna IsRequired (definida en OnModelCreating).
-    // Esta violación de constraint es detectada por EF antes del flush y lanza DbUpdateException.
-    // El constraint IsRequired sobre Detalle está configurado en AppDbContext.OnModelCreating.
-    //
-    // Nota: se intentó FK violation (UsuarioId=99999), pero EF Core con SQLite in-memory
-    // NO enforcea FKs por defecto incluso con PRAGMA foreign_keys=ON aplicado tras conexión
-    // (el PRAGMA debe aplicarse POR CONEXIÓN antes del primer uso; EF maneja la conexión
-    // internamente y no garantiza el orden). La alternativa IsRequired es determinista y
-    // no depende de configuración del driver.
+    // ── C4: Rollback atómico (MANDATORY) ──────────────────────────────────────
+    // Fuerza DbUpdateException con Detalle=null (columna NOT NULL) dentro de la
+    // transacción explícita; verifica que el UPDATE de stock también se revierte.
 
     [Fact]
     public async Task RegistrarMovimientoAtomicoAsync_DetalleNull_RollbackTotal()
     {
         var (_, usuario, producto) = await SeedBaseAsync(stockInicial: 50m);
-        int productoId   = producto.Id;
-        int usuarioId    = usuario.Id;
-        decimal stockOrig = 50m;
+        int productoId = producto.Id;
+        int usuarioId  = usuario.Id;
 
-        // ──────────────────────────────────────────────────────────────────────
-        // Repo auxiliar que permite inyectar un log con Detalle=null para forzar
-        // DbUpdateException en el SaveChangesAsync (Detalle es IsRequired).
-        // Se usa el MISMO context (_ctx) para que el rollback cubra los 3 cambios.
-        // ──────────────────────────────────────────────────────────────────────
-        var repoRoto = new MovimientoStockRepositoryConDetalleNulo(_ctx);
+        var repoRoto = new MovimientoStockRepositoryConDetalleNulo(Context);
 
         var movimiento = new MovimientoStock
         {
@@ -185,31 +149,23 @@ public class MovimientoStockRepositoryTests : IDisposable
         var args = new RegistroAtomicoArgs(
             Movimiento:       movimiento,
             ProductoId:       productoId,
-            StockNuevo:       70m,
+            Tipo:             TipoMovimiento.Entrada,
+            Cantidad:         20m,
+            Forzar:           false,
             UsuarioId:        usuarioId,
-            DetalleAuditoria: "no importa — se sobreescribe con null en el repo roto"
-        );
+            DetalleAuditoria: "se sobreescribe con null en el repo roto");
 
-        // Debe lanzar DbUpdateException (constraint NOT NULL sobre Detalle)
         await Assert.ThrowsAsync<DbUpdateException>(
             () => repoRoto.RegistrarMovimientoAtomicoAsync(args));
 
-        // Verificar estado con context FRESCO sobre la misma conexión
-        var opts2 = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlite(_connection)
-            .Options;
-        await using var ctx2 = new AppDbContext(opts2);
-
-        // 0 movimientos, stock sin cambios, 0 logs → rollback total
+        await using var ctx2 = Fixture.CrearContexto();
         Assert.Equal(0, await ctx2.MovimientosStock.CountAsync());
-
         var productoFresh = await ctx2.Productos.FindAsync(productoId);
-        Assert.Equal(stockOrig, productoFresh!.StockActual);
-
+        Assert.Equal(50m, productoFresh!.StockActual);   // stock intacto → rollback del UPDATE
         Assert.Equal(0, await ctx2.LogsAuditoria.CountAsync());
     }
 
-    // ── C3: RegistrarMovimientoAtomicoAsync (éxito — single SaveChanges) ──────
+    // ── C3: RegistrarMovimientoAtomicoAsync (éxito) ───────────────────────────
 
     [Fact]
     public async Task RegistrarMovimientoAtomicoAsync_DatosValidos_PersisteTresRegistros()
@@ -232,28 +188,24 @@ public class MovimientoStockRepositoryTests : IDisposable
         var args = new RegistroAtomicoArgs(
             Movimiento:       movimiento,
             ProductoId:       productoId,
-            StockNuevo:       70m,        // 50 + 20
+            Tipo:             TipoMovimiento.Entrada,
+            Cantidad:         20m,
+            Forzar:           false,
             UsuarioId:        usuarioId,
-            DetalleAuditoria: "ProductoId=1; Tipo=Entrada; Cantidad=20; StockAnterior=50; StockNuevo=70"
-        );
+            DetalleAuditoria: "ProductoId=1; Tipo=Entrada; Cantidad=20; StockAnterior=50; StockNuevo=70");
 
-        var movId = await _repo.RegistrarMovimientoAtomicoAsync(args);
+        var resultado = await _repo.RegistrarMovimientoAtomicoAsync(args);
 
-        // Verificar con context FRESCO sobre la misma conexión
-        var opts2 = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlite(_connection)
-            .Options;
-        await using var ctx2 = new AppDbContext(opts2);
+        await using var ctx2 = Fixture.CrearContexto();
 
-        Assert.True(movId > 0, "Debe retornar el Id generado del movimiento");
+        Assert.Equal(ResultadoRegistroEstado.Ok, resultado.Estado);
+        Assert.True(resultado.MovimientoId > 0, "Debe retornar el Id generado del movimiento");
+        Assert.Equal(70m, resultado.StockResultante);
         Assert.Equal(1, await ctx2.MovimientosStock.CountAsync());
-
         var productoFresh = await ctx2.Productos.FindAsync(productoId);
         Assert.Equal(70m, productoFresh!.StockActual);
-
         Assert.Equal(1, await ctx2.LogsAuditoria.CountAsync());
         var log = await ctx2.LogsAuditoria.FirstAsync();
-        Assert.Equal((int)AccionAuditada.RegistroMovimiento, (int)log.Accion);
         Assert.Equal(17, (int)log.Accion);
     }
 
@@ -270,16 +222,12 @@ public class MovimientoStockRepositoryTests : IDisposable
             ProductoId:       productoId,
             StockNuevo:       30m,   // recalculado por el service
             UsuarioId:        usuarioId,
-            DetalleAuditoria: "Recálculo; StockAnterior=50; StockNuevo=30; Total=3"
-        );
+            DetalleAuditoria: "Recálculo; StockAnterior=50; StockNuevo=30; Total=3");
 
         await _repo.RecalcularAtomicoAsync(args);
 
         // Verificar con context fresco
-        var opts2 = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlite(_connection)
-            .Options;
-        await using var ctx2 = new AppDbContext(opts2);
+        await using var ctx2 = Fixture.CrearContexto();
 
         var productoFresh = await ctx2.Productos.FindAsync(productoId);
         Assert.Equal(30m, productoFresh!.StockActual);
@@ -289,6 +237,59 @@ public class MovimientoStockRepositoryTests : IDisposable
         Assert.Equal(18, (int)log.Accion);   // AccionAuditada.RecalculoStock
     }
 
+    // ── Guard condicional atómico ─────────────────────────────────────────────
+
+    [Fact]
+    public async Task RegistrarMovimientoAtomicoAsync_SalidaSinStock_NoModificaNada()
+    {
+        var (_, usuario, producto) = await SeedBaseAsync(stockInicial: 5m);
+
+        var movimiento = new MovimientoStock
+        {
+            ProductoId = producto.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Salida,
+            Cantidad = 10m, PrecioUnitario = 5m, Fecha = DateTime.UtcNow, Motivo = MotivoMovimiento.Venta
+        };
+        var args = new RegistroAtomicoArgs(
+            Movimiento: movimiento, ProductoId: producto.Id, Tipo: TipoMovimiento.Salida,
+            Cantidad: 10m, Forzar: false, UsuarioId: usuario.Id, DetalleAuditoria: "salida sin stock");
+
+        var resultado = await _repo.RegistrarMovimientoAtomicoAsync(args);
+
+        Assert.Equal(ResultadoRegistroEstado.StockInsuficiente, resultado.Estado);
+        Assert.Equal(0, resultado.MovimientoId);
+        Assert.Equal(5m, resultado.StockResultante);   // stock actual sin tocar
+
+        await using var ctx2 = Fixture.CrearContexto();
+        Assert.Equal(0, await ctx2.MovimientosStock.CountAsync());
+        Assert.Equal(0, await ctx2.LogsAuditoria.CountAsync());
+        var p = await ctx2.Productos.FindAsync(producto.Id);
+        Assert.Equal(5m, p!.StockActual);
+    }
+
+    [Fact]
+    public async Task RegistrarMovimientoAtomicoAsync_SalidaForzada_PermiteNegativo()
+    {
+        var (_, usuario, producto) = await SeedBaseAsync(stockInicial: 5m);
+
+        var movimiento = new MovimientoStock
+        {
+            ProductoId = producto.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Salida,
+            Cantidad = 8m, PrecioUnitario = 5m, Fecha = DateTime.UtcNow, Motivo = MotivoMovimiento.Merma
+        };
+        var args = new RegistroAtomicoArgs(
+            Movimiento: movimiento, ProductoId: producto.Id, Tipo: TipoMovimiento.Salida,
+            Cantidad: 8m, Forzar: true, UsuarioId: usuario.Id, DetalleAuditoria: "salida forzada");
+
+        var resultado = await _repo.RegistrarMovimientoAtomicoAsync(args);
+
+        Assert.Equal(ResultadoRegistroEstado.Ok, resultado.Estado);
+        Assert.Equal(-3m, resultado.StockResultante);   // 5 - 8 = -3, permitido con Forzar
+
+        await using var ctx2 = Fixture.CrearContexto();
+        Assert.Equal(1, await ctx2.MovimientosStock.CountAsync());
+        Assert.Equal(1, await ctx2.LogsAuditoria.CountAsync());
+    }
+
     // ── C6: ObtenerHistorialAsync con filtros combinables ─────────────────────
 
     /// Helper para seed de movimientos múltiples con fechas configurables.
@@ -296,19 +297,19 @@ public class MovimientoStockRepositoryTests : IDisposable
     {
         var um = NuevaUm();
         var usuario = NuevoUsuario("hist_user");
-        _ctx.UnidadesMedida.Add(um);
-        _ctx.Usuarios.Add(usuario);
-        await _ctx.SaveChangesAsync();
+        Context.UnidadesMedida.Add(um);
+        Context.Usuarios.Add(usuario);
+        await Context.SaveChangesAsync();
 
         var p1 = NuevoProducto("HIST001", um, 100m);
         p1.Nombre = "Producto Alfa";
         var p2 = NuevoProducto("HIST002", um, 200m);
         p2.Nombre = "Producto Beta";
-        _ctx.Productos.AddRange(p1, p2);
-        await _ctx.SaveChangesAsync();
+        Context.Productos.AddRange(p1, p2);
+        await Context.SaveChangesAsync();
 
         var base1 = new DateTime(2026, 1, 10, 0, 0, 0, DateTimeKind.Utc);
-        _ctx.MovimientosStock.AddRange(
+        Context.MovimientosStock.AddRange(
             // p1: 2 entradas, 1 salida
             new MovimientoStock { ProductoId = p1.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Cantidad = 10m, PrecioUnitario = 5m, Fecha = base1,               Motivo = MotivoMovimiento.Compra },
             new MovimientoStock { ProductoId = p1.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Salida,  Cantidad = 3m,  PrecioUnitario = 8m, Fecha = base1.AddDays(1),    Motivo = MotivoMovimiento.Venta  },
@@ -316,8 +317,8 @@ public class MovimientoStockRepositoryTests : IDisposable
             // p2: 1 entrada
             new MovimientoStock { ProductoId = p2.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Cantidad = 20m, PrecioUnitario = 3m, Fecha = base1.AddDays(3),    Motivo = MotivoMovimiento.Compra }
         );
-        await _ctx.SaveChangesAsync();
-        _ctx.ChangeTracker.Clear();
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
 
         return (p1, p2, usuario);
     }
@@ -350,28 +351,28 @@ public class MovimientoStockRepositoryTests : IDisposable
     {
         var um = NuevaUm();
         var usuario = NuevoUsuario("orden_user");
-        _ctx.UnidadesMedida.Add(um);
-        _ctx.Usuarios.Add(usuario);
-        await _ctx.SaveChangesAsync();
+        Context.UnidadesMedida.Add(um);
+        Context.Usuarios.Add(usuario);
+        await Context.SaveChangesAsync();
 
         var p1 = NuevoProducto("ORD001", um, 0m); // ID bajo (creado primero)
         p1.Nombre = "Producto Reciente";
         var p2 = NuevoProducto("ORD002", um, 0m); // ID alto (creado después)
         p2.Nombre = "Producto Viejo";
-        _ctx.Productos.AddRange(p1, p2);
-        await _ctx.SaveChangesAsync();
+        Context.Productos.AddRange(p1, p2);
+        await Context.SaveChangesAsync();
 
         var fechaVieja     = DateTime.UtcNow.AddDays(-30);
         var fechaReciente  = DateTime.UtcNow;
 
-        _ctx.MovimientosStock.AddRange(
+        Context.MovimientosStock.AddRange(
             // p2 (ID alto): movimiento viejo
             new MovimientoStock { ProductoId = p2.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Cantidad = 10m, PrecioUnitario = 5m, Fecha = fechaVieja,    Motivo = MotivoMovimiento.Compra },
             // p1 (ID bajo): movimiento reciente
             new MovimientoStock { ProductoId = p1.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Cantidad = 5m,  PrecioUnitario = 5m, Fecha = fechaReciente, Motivo = MotivoMovimiento.Compra }
         );
-        await _ctx.SaveChangesAsync();
-        _ctx.ChangeTracker.Clear();
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
 
         var resultado = await _repo.ObtenerHistorialAsync(new HistorialMovimientoFiltro());
 
@@ -459,16 +460,16 @@ public class MovimientoStockRepositoryTests : IDisposable
         // Seed: producto con un movimiento a las 15:00 del 2026-06-10
         var um      = NuevaUm();
         var usuario = NuevoUsuario("hm04_user");
-        _ctx.UnidadesMedida.Add(um);
-        _ctx.Usuarios.Add(usuario);
-        await _ctx.SaveChangesAsync();
+        Context.UnidadesMedida.Add(um);
+        Context.Usuarios.Add(usuario);
+        await Context.SaveChangesAsync();
 
         var p = NuevoProducto("HM04", um, 0m);
-        _ctx.Productos.Add(p);
-        await _ctx.SaveChangesAsync();
+        Context.Productos.Add(p);
+        await Context.SaveChangesAsync();
 
         var fechaMovimiento = new DateTime(2026, 6, 10, 15, 0, 0, DateTimeKind.Utc);
-        _ctx.MovimientosStock.Add(new MovimientoStock
+        Context.MovimientosStock.Add(new MovimientoStock
         {
             ProductoId     = p.Id,
             UsuarioId      = usuario.Id,
@@ -478,8 +479,8 @@ public class MovimientoStockRepositoryTests : IDisposable
             Fecha          = fechaMovimiento,
             Motivo         = MotivoMovimiento.Compra
         });
-        await _ctx.SaveChangesAsync();
-        _ctx.ChangeTracker.Clear();
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
 
         // FechaHasta = mismo día pero a las 00:00:00 (medianoche) → debe tratarse como fin de día
         var fechaHasta = new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc);
@@ -498,21 +499,21 @@ public class MovimientoStockRepositoryTests : IDisposable
         // Seed de 1 producto con 2 entradas para verificar running balance
         var um      = NuevaUm();
         var usuario = NuevoUsuario("rb_user");
-        _ctx.UnidadesMedida.Add(um);
-        _ctx.Usuarios.Add(usuario);
-        await _ctx.SaveChangesAsync();
+        Context.UnidadesMedida.Add(um);
+        Context.Usuarios.Add(usuario);
+        await Context.SaveChangesAsync();
 
         var p = NuevoProducto("RB001", um, 0m);
-        _ctx.Productos.Add(p);
-        await _ctx.SaveChangesAsync();
+        Context.Productos.Add(p);
+        await Context.SaveChangesAsync();
 
         var t0 = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc);
-        _ctx.MovimientosStock.AddRange(
+        Context.MovimientosStock.AddRange(
             new MovimientoStock { ProductoId = p.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Cantidad = 10m, PrecioUnitario = 5m, Fecha = t0,            Motivo = MotivoMovimiento.Compra },
             new MovimientoStock { ProductoId = p.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Cantidad = 5m,  PrecioUnitario = 5m, Fecha = t0.AddHours(1), Motivo = MotivoMovimiento.Compra }
         );
-        await _ctx.SaveChangesAsync();
-        _ctx.ChangeTracker.Clear();
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
 
         var resultado = await _repo.ObtenerHistorialAsync(new HistorialMovimientoFiltro(ProductoId: p.Id));
 
@@ -536,15 +537,15 @@ public class MovimientoStockRepositoryTests : IDisposable
         var um = NuevaUm();
         var usuario = NuevoUsuario("jperez");
         usuario.NombreCompleto = "Juan Pérez";
-        _ctx.UnidadesMedida.Add(um);
-        _ctx.Usuarios.Add(usuario);
-        await _ctx.SaveChangesAsync();
+        Context.UnidadesMedida.Add(um);
+        Context.Usuarios.Add(usuario);
+        await Context.SaveChangesAsync();
 
         var p = NuevoProducto("USR001", um, 0m);
-        _ctx.Productos.Add(p);
-        await _ctx.SaveChangesAsync();
+        Context.Productos.Add(p);
+        await Context.SaveChangesAsync();
 
-        _ctx.MovimientosStock.Add(new MovimientoStock
+        Context.MovimientosStock.Add(new MovimientoStock
         {
             ProductoId     = p.Id,
             UsuarioId      = usuario.Id,
@@ -554,8 +555,8 @@ public class MovimientoStockRepositoryTests : IDisposable
             Fecha          = DateTime.UtcNow,
             Motivo         = MotivoMovimiento.Compra
         });
-        await _ctx.SaveChangesAsync();
-        _ctx.ChangeTracker.Clear();
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
 
         var resultado = await _repo.ObtenerHistorialAsync(new HistorialMovimientoFiltro(ProductoId: p.Id));
 
@@ -568,15 +569,15 @@ public class MovimientoStockRepositoryTests : IDisposable
     {
         var um = NuevaUm();
         var usuario = NuevoUsuario("mgomez"); // NombreCompleto queda null (default del helper)
-        _ctx.UnidadesMedida.Add(um);
-        _ctx.Usuarios.Add(usuario);
-        await _ctx.SaveChangesAsync();
+        Context.UnidadesMedida.Add(um);
+        Context.Usuarios.Add(usuario);
+        await Context.SaveChangesAsync();
 
         var p = NuevoProducto("USR002", um, 0m);
-        _ctx.Productos.Add(p);
-        await _ctx.SaveChangesAsync();
+        Context.Productos.Add(p);
+        await Context.SaveChangesAsync();
 
-        _ctx.MovimientosStock.Add(new MovimientoStock
+        Context.MovimientosStock.Add(new MovimientoStock
         {
             ProductoId     = p.Id,
             UsuarioId      = usuario.Id,
@@ -586,8 +587,8 @@ public class MovimientoStockRepositoryTests : IDisposable
             Fecha          = DateTime.UtcNow,
             Motivo         = MotivoMovimiento.Compra
         });
-        await _ctx.SaveChangesAsync();
-        _ctx.ChangeTracker.Clear();
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
 
         var resultado = await _repo.ObtenerHistorialAsync(new HistorialMovimientoFiltro(ProductoId: p.Id));
 
@@ -597,12 +598,10 @@ public class MovimientoStockRepositoryTests : IDisposable
 }
 
 /// <summary>
-/// Variante de MovimientoStockRepository que inyecta Detalle=null en el LogAuditoria.
-/// Usada EXCLUSIVAMENTE en el test de rollback (C4) para forzar DbUpdateException
-/// sin tocar la implementación real del repositorio.
-/// El método base es virtual → este override es verdadero (no method hiding).
-/// Así la verificación del rollback es válida aunque el objeto se tipifique
-/// por la clase base o por la interfaz IMovimientoStockRepository (WARNING-02 resuelto).
+/// Variante que inyecta Detalle=null para forzar DbUpdateException DENTRO de la
+/// transacción explícita. Replica la estructura del método real (BeginTransaction +
+/// ExecuteUpdateAsync + inserts) pero con Detalle inválido, para verificar el rollback
+/// completo (incluido el UPDATE de stock). Usada solo en el test C4.
 /// </summary>
 internal sealed class MovimientoStockRepositoryConDetalleNulo : MovimientoStockRepository
 {
@@ -611,15 +610,16 @@ internal sealed class MovimientoStockRepositoryConDetalleNulo : MovimientoStockR
     public MovimientoStockRepositoryConDetalleNulo(AppDbContext ctx) : base(ctx)
         => _ctx = ctx;
 
-    public override async Task<int> RegistrarMovimientoAtomicoAsync(RegistroAtomicoArgs args)
+    public override async Task<ResultadoRegistro> RegistrarMovimientoAtomicoAsync(RegistroAtomicoArgs args)
     {
-        var producto = await _ctx.Productos.FindAsync(args.ProductoId)
-            ?? throw new KeyNotFoundException();
+        await using var tx = await _ctx.Database.BeginTransactionAsync();
+
+        var delta = args.Tipo == TipoMovimiento.Entrada ? args.Cantidad : -args.Cantidad;
+        await _ctx.Productos
+            .Where(p => p.Id == args.ProductoId)
+            .ExecuteUpdateAsync(s => s.SetProperty(p => p.StockActual, p => p.StockActual + delta));
 
         _ctx.MovimientosStock.Add(args.Movimiento);
-        producto.StockActual = args.StockNuevo;
-
-        // Detalle = null! → viola IsRequired → SaveChangesAsync lanzará DbUpdateException
         _ctx.LogsAuditoria.Add(new LogAuditoria
         {
             UsuarioId = args.UsuarioId,
@@ -627,10 +627,11 @@ internal sealed class MovimientoStockRepositoryConDetalleNulo : MovimientoStockR
             Accion    = AccionAuditada.RegistroMovimiento,
             Entidad   = "MovimientoStock",
             EntidadId = args.ProductoId,
-            Detalle   = null!   // fuerza violación de constraint NOT NULL
+            Detalle   = null!   // viola NOT NULL → SaveChangesAsync lanza DbUpdateException
         });
 
         await _ctx.SaveChangesAsync();
-        return args.Movimiento.Id;
+        await tx.CommitAsync();
+        return new ResultadoRegistro(ResultadoRegistroEstado.Ok, args.Movimiento.Id, 0m);
     }
 }

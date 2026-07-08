@@ -55,13 +55,10 @@ public class MovimientoStockService : IMovimientoStockService
             throw new InvalidOperationException(
                 $"No se permiten movimientos sobre productos inactivos (ProductoId={dto.ProductoId}).");
 
-        // B6: cálculo de signo + guard StockInsuficienteException
+        // B6: cálculo de signo (el guard de stock lo hace el UPDATE condicional en el repo)
         var stockAnterior = producto.StockActual;
         var delta         = dto.Tipo == TipoMovimiento.Entrada ? dto.Cantidad : -dto.Cantidad;
         var stockNuevo    = stockAnterior + delta;
-
-        if (dto.Tipo == TipoMovimiento.Salida && stockNuevo < 0 && !forzar)
-            throw new StockInsuficienteException(dto.ProductoId, stockAnterior, dto.Cantidad);
 
         // B7: componer entidad + args + llamada atómica
         var movimiento = new MovimientoStock
@@ -82,21 +79,28 @@ public class MovimientoStockService : IMovimientoStockService
         var args = new RegistroAtomicoArgs(
             Movimiento:       movimiento,
             ProductoId:       dto.ProductoId,
-            StockNuevo:       stockNuevo,
+            Tipo:             dto.Tipo,
+            Cantidad:         dto.Cantidad,
+            Forzar:           forzar,
             UsuarioId:        _session.UsuarioActual!.Id,
             DetalleAuditoria: detalle);
 
-        var movimientoId = await _repo.RegistrarMovimientoAtomicoAsync(args);
+        var resultado = await _repo.RegistrarMovimientoAtomicoAsync(args);
+
+        // El guard "no negativo" lo hace la BD dentro de la transacción; acá se traduce
+        // el resultado tipado a la excepción de dominio (respetando forzar, que ya viajó en args).
+        if (resultado.Estado == ResultadoRegistroEstado.StockInsuficiente)
+            throw new StockInsuficienteException(dto.ProductoId, resultado.StockResultante, dto.Cantidad);
 
         return new MovimientoRegistradoDto(
-            MovimientoId:  movimientoId,
+            MovimientoId:  resultado.MovimientoId,
             ProductoId:    dto.ProductoId,
             Tipo:          dto.Tipo,
             Motivo:        dto.Motivo,
             Cantidad:      dto.Cantidad,
             PrecioUnitario: dto.PrecioUnitario ?? 0m,
-            StockAnterior: stockAnterior,
-            StockNuevo:    stockNuevo,
+            StockAnterior: resultado.StockResultante - delta,
+            StockNuevo:    resultado.StockResultante,
             Fecha:         movimiento.Fecha);
     }
 

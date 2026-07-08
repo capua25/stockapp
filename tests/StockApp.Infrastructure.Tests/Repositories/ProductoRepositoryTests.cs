@@ -2,27 +2,19 @@ using Microsoft.EntityFrameworkCore;
 using StockApp.Domain.Entities;
 using StockApp.Infrastructure.Persistence;
 using StockApp.Infrastructure.Repositories;
+using StockApp.Infrastructure.Tests.Fixtures;
 using Xunit;
 
 namespace StockApp.Infrastructure.Tests.Repositories;
 
-public class ProductoRepositoryTests : IDisposable
+public class ProductoRepositoryTests : PostgresRepositoryTestBase
 {
-    private readonly AppDbContext _ctx;
     private readonly ProductoRepository _repo;
 
-    public ProductoRepositoryTests()
+    public ProductoRepositoryTests(PostgresFixture fixture) : base(fixture)
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlite("DataSource=:memory:")
-            .Options;
-        _ctx = new AppDbContext(options);
-        _ctx.Database.OpenConnection();
-        _ctx.Database.EnsureCreated();
-        _repo = new ProductoRepository(_ctx);
+        _repo = new ProductoRepository(Context);
     }
-
-    public void Dispose() => _ctx.Dispose();
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
@@ -46,8 +38,8 @@ public class ProductoRepositoryTests : IDisposable
     private async Task<(ProductoRepository repo, UnidadMedida um)> SeedUmAsync()
     {
         var um = NuevaUm();
-        _ctx.UnidadesMedida.Add(um);
-        await _ctx.SaveChangesAsync();
+        Context.UnidadesMedida.Add(um);
+        await Context.SaveChangesAsync();
         return (_repo, um);
     }
 
@@ -60,7 +52,7 @@ public class ProductoRepositoryTests : IDisposable
         var p = NuevoProducto("SKU001", "Producto Test", um);
 
         var id = await repo.AgregarAsync(p);
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var found = await repo.ObtenerPorIdAsync(id);
 
@@ -79,7 +71,7 @@ public class ProductoRepositoryTests : IDisposable
         await repo.AgregarAsync(NuevoProducto("SKU001", "Alpha", um));
         await repo.AgregarAsync(NuevoProducto("SKU002", "Beta", um));
         await repo.AgregarAsync(NuevoProducto("ZZZ999", "Gamma", um));
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var result = await repo.BuscarAsync(sku: "SKU", codigoBarras: null, nombre: null);
 
@@ -96,7 +88,7 @@ public class ProductoRepositoryTests : IDisposable
         await repo.AgregarAsync(NuevoProducto("A001", "Alpha", um, codigoBarras: "7791234567890"));
         await repo.AgregarAsync(NuevoProducto("A002", "Beta", um,  codigoBarras: "7791234567891"));
         await repo.AgregarAsync(NuevoProducto("A003", "Gamma", um, codigoBarras: null));
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var result = await repo.BuscarAsync(sku: null, codigoBarras: "7791234", nombre: null);
 
@@ -112,7 +104,7 @@ public class ProductoRepositoryTests : IDisposable
         await repo.AgregarAsync(NuevoProducto("A001", "Aceite de Oliva", um));
         await repo.AgregarAsync(NuevoProducto("A002", "Aceite de Girasol", um));
         await repo.AgregarAsync(NuevoProducto("A003", "Vinagre", um));
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var result = await repo.BuscarAsync(sku: null, codigoBarras: null, nombre: "Aceite");
 
@@ -132,7 +124,7 @@ public class ProductoRepositoryTests : IDisposable
         var (repo, um) = await SeedUmAsync();
         await repo.AgregarAsync(NuevoProducto("A001", "Aceite de Oliva", um));
         await repo.AgregarAsync(NuevoProducto("A002", "Martillo", um));
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var resultLower   = await repo.BuscarAsync(sku: null, codigoBarras: null, nombre: "aceite");
         var resultUpper   = await repo.BuscarAsync(sku: null, codigoBarras: null, nombre: "MARTILLO");
@@ -156,7 +148,7 @@ public class ProductoRepositoryTests : IDisposable
         var (repo, um) = await SeedUmAsync();
         await repo.AgregarAsync(NuevoProducto("B001", "Zapato", um));
         await repo.AgregarAsync(NuevoProducto("A001", "Alfajor", um));
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var result = await repo.BuscarAsync(sku: null, codigoBarras: null, nombre: null);
 
@@ -173,7 +165,7 @@ public class ProductoRepositoryTests : IDisposable
         await repo.AgregarAsync(NuevoProducto("SKU001", "Aceite",  um, codigoBarras: "7791234567890"));
         await repo.AgregarAsync(NuevoProducto("SKU002", "Vinagre", um, codigoBarras: "7791234567891"));
         await repo.AgregarAsync(NuevoProducto("ZZZ001", "Aceite Extra", um, codigoBarras: null));
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         // SKU contiene "SKU" AND nombre contiene "Aceite"
         var result = await repo.BuscarAsync(sku: "SKU", codigoBarras: null, nombre: "Aceite");
@@ -190,7 +182,7 @@ public class ProductoRepositoryTests : IDisposable
         var (repo, um) = await SeedUmAsync();
         await repo.AgregarAsync(NuevoProducto("SKU-XYZ", "Producto Cualquiera", um));
         await repo.AgregarAsync(NuevoProducto("OTRO001", "Otro Producto", um));
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var result = await repo.BuscarPorTextoAsync("XYZ");
 
@@ -204,7 +196,7 @@ public class ProductoRepositoryTests : IDisposable
         var (repo, um) = await SeedUmAsync();
         await repo.AgregarAsync(NuevoProducto("A001", "Producto A", um, codigoBarras: "7791234567890"));
         await repo.AgregarAsync(NuevoProducto("A002", "Producto B", um, codigoBarras: "1112223334445"));
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var result = await repo.BuscarPorTextoAsync("7791234");
 
@@ -218,7 +210,7 @@ public class ProductoRepositoryTests : IDisposable
         var (repo, um) = await SeedUmAsync();
         await repo.AgregarAsync(NuevoProducto("A001", "Aceite de Oliva", um));
         await repo.AgregarAsync(NuevoProducto("A002", "Vinagre", um));
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var result = await repo.BuscarPorTextoAsync("Aceite");
 
@@ -232,7 +224,7 @@ public class ProductoRepositoryTests : IDisposable
         var (repo, um) = await SeedUmAsync();
         await repo.AgregarAsync(NuevoProducto("B001", "Zapato", um));
         await repo.AgregarAsync(NuevoProducto("A001", "Alfajor", um));
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var resultNulo  = await repo.BuscarPorTextoAsync(null);
         var resultVacio = await repo.BuscarPorTextoAsync("");
@@ -253,7 +245,7 @@ public class ProductoRepositoryTests : IDisposable
         await repo.AgregarAsync(NuevoProducto("ZZZ999", "Abcoleta", um));
         await repo.AgregarAsync(NuevoProducto("QQQ111", "Vinagre", um, codigoBarras: "7abc1234567890"));
         await repo.AgregarAsync(NuevoProducto("NOPE01", "Sin relacion", um, codigoBarras: "0000000000000"));
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var result = await repo.BuscarPorTextoAsync("abc");
 
@@ -269,13 +261,13 @@ public class ProductoRepositoryTests : IDisposable
     {
         var (repo, um) = await SeedUmAsync();
         var categoria = new Categoria { Nombre = "Bebidas" };
-        _ctx.Categorias.Add(categoria);
-        await _ctx.SaveChangesAsync();
+        Context.Categorias.Add(categoria);
+        await Context.SaveChangesAsync();
 
         var p = NuevoProducto("SKU001", "Producto Test", um);
         p.Categoria = categoria;
         await repo.AgregarAsync(p);
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var result = await repo.BuscarAsync(sku: null, codigoBarras: null, nombre: null);
 
@@ -291,13 +283,13 @@ public class ProductoRepositoryTests : IDisposable
     {
         var (repo, um) = await SeedUmAsync();
         var categoria = new Categoria { Nombre = "Limpieza" };
-        _ctx.Categorias.Add(categoria);
-        await _ctx.SaveChangesAsync();
+        Context.Categorias.Add(categoria);
+        await Context.SaveChangesAsync();
 
         var p = NuevoProducto("SKU001", "Producto Test", um);
         p.Categoria = categoria;
         await repo.AgregarAsync(p);
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var result = await repo.BuscarPorTextoAsync("Producto");
 
@@ -384,12 +376,12 @@ public class ProductoRepositoryTests : IDisposable
         var (repo, um) = await SeedUmAsync();
         var p = NuevoProducto("SKU001", "Nombre Original", um);
         var id = await repo.AgregarAsync(p);
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var found = await repo.ObtenerPorIdAsync(id);
         found!.Nombre = "Nombre Modificado";
         await repo.ActualizarAsync(found);
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var updated = await repo.ObtenerPorIdAsync(id);
         Assert.Equal("Nombre Modificado", updated!.Nombre);
@@ -401,12 +393,12 @@ public class ProductoRepositoryTests : IDisposable
         var (repo, um) = await SeedUmAsync();
         var p = NuevoProducto("SKU001", "Prod", um);
         var id = await repo.AgregarAsync(p);
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var found = await repo.ObtenerPorIdAsync(id);
         found!.Activo = false;
         await repo.ActualizarAsync(found);
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var updated = await repo.ObtenerPorIdAsync(id);
         Assert.False(updated!.Activo);

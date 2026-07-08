@@ -2,27 +2,19 @@ using Microsoft.EntityFrameworkCore;
 using StockApp.Domain.Entities;
 using StockApp.Infrastructure.Persistence;
 using StockApp.Infrastructure.Repositories;
+using StockApp.Infrastructure.Tests.Fixtures;
 using Xunit;
 
 namespace StockApp.Infrastructure.Tests.Repositories;
 
-public class ProveedorRepositoryTests : IDisposable
+public class ProveedorRepositoryTests : PostgresRepositoryTestBase
 {
-    private readonly AppDbContext _ctx;
     private readonly ProveedorRepository _repo;
 
-    public ProveedorRepositoryTests()
+    public ProveedorRepositoryTests(PostgresFixture fixture) : base(fixture)
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlite("DataSource=:memory:")
-            .Options;
-        _ctx = new AppDbContext(options);
-        _ctx.Database.OpenConnection();
-        _ctx.Database.EnsureCreated();
-        _repo = new ProveedorRepository(_ctx);
+        _repo = new ProveedorRepository(Context);
     }
-
-    public void Dispose() => _ctx.Dispose();
 
     private static Proveedor NuevoProveedor(string nombre, bool activo = true) =>
         new()
@@ -41,7 +33,7 @@ public class ProveedorRepositoryTests : IDisposable
     {
         var proveedor = NuevoProveedor("Distribuidora Norte");
         var id = await _repo.AgregarAsync(proveedor);
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var found = await _repo.ObtenerPorIdAsync(id);
 
@@ -59,7 +51,7 @@ public class ProveedorRepositoryTests : IDisposable
         await _repo.AgregarAsync(NuevoProveedor("Proveedor Z"));
         await _repo.AgregarAsync(NuevoProveedor("Proveedor A"));
         await _repo.AgregarAsync(NuevoProveedor("Inactivo", activo: false));
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var result = await _repo.ListarTodosAsync();
 
@@ -113,12 +105,12 @@ public class ProveedorRepositoryTests : IDisposable
     {
         var prov = NuevoProveedor("Distribuidora Norte");
         var id = await _repo.AgregarAsync(prov);
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var found = await _repo.ObtenerPorIdAsync(id);
         found!.Activo = false;
         await _repo.ActualizarAsync(found);
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var updated = await _repo.ObtenerPorIdAsync(id);
         Assert.False(updated!.Activo);
@@ -129,13 +121,13 @@ public class ProveedorRepositoryTests : IDisposable
     {
         var prov = NuevoProveedor("Distribuidora Norte");
         var id = await _repo.AgregarAsync(prov);
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var found = await _repo.ObtenerPorIdAsync(id);
         found!.Telefono = "099-9999-9999";
         found.Notas = "Proveedor preferido";
         await _repo.ActualizarAsync(found);
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var updated = await _repo.ObtenerPorIdAsync(id);
         Assert.Equal("099-9999-9999", updated!.Telefono);

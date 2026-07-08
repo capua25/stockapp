@@ -2,27 +2,19 @@ using Microsoft.EntityFrameworkCore;
 using StockApp.Domain.Entities;
 using StockApp.Infrastructure.Persistence;
 using StockApp.Infrastructure.Repositories;
+using StockApp.Infrastructure.Tests.Fixtures;
 using Xunit;
 
 namespace StockApp.Infrastructure.Tests.Repositories;
 
-public class CategoriaRepositoryTests : IDisposable
+public class CategoriaRepositoryTests : PostgresRepositoryTestBase
 {
-    private readonly AppDbContext _ctx;
     private readonly CategoriaRepository _repo;
 
-    public CategoriaRepositoryTests()
+    public CategoriaRepositoryTests(PostgresFixture fixture) : base(fixture)
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlite("DataSource=:memory:")
-            .Options;
-        _ctx = new AppDbContext(options);
-        _ctx.Database.OpenConnection();
-        _ctx.Database.EnsureCreated();
-        _repo = new CategoriaRepository(_ctx);
+        _repo = new CategoriaRepository(Context);
     }
-
-    public void Dispose() => _ctx.Dispose();
 
     private static Categoria NuevaCategoria(string nombre, bool activo = true) =>
         new() { Nombre = nombre, Activo = activo };
@@ -34,7 +26,7 @@ public class CategoriaRepositoryTests : IDisposable
     {
         var cat = NuevaCategoria("Bebidas");
         var id = await _repo.AgregarAsync(cat);
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var found = await _repo.ObtenerPorIdAsync(id);
 
@@ -51,7 +43,7 @@ public class CategoriaRepositoryTests : IDisposable
         await _repo.AgregarAsync(NuevaCategoria("Activa1", activo: true));
         await _repo.AgregarAsync(NuevaCategoria("Activa2", activo: true));
         await _repo.AgregarAsync(NuevaCategoria("Inactiva", activo: false));
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var result = await _repo.ListarTodasAsync();
 
@@ -64,7 +56,7 @@ public class CategoriaRepositoryTests : IDisposable
     {
         await _repo.AgregarAsync(NuevaCategoria("Zapatos"));
         await _repo.AgregarAsync(NuevaCategoria("Alimentos"));
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var result = await _repo.ListarTodasAsync();
 
@@ -117,12 +109,12 @@ public class CategoriaRepositoryTests : IDisposable
     {
         var cat = NuevaCategoria("Bebidas");
         var id = await _repo.AgregarAsync(cat);
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var found = await _repo.ObtenerPorIdAsync(id);
         found!.Activo = false;
         await _repo.ActualizarAsync(found);
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var updated = await _repo.ObtenerPorIdAsync(id);
         Assert.False(updated!.Activo);
@@ -133,12 +125,12 @@ public class CategoriaRepositoryTests : IDisposable
     {
         var cat = NuevaCategoria("Nombre Original");
         var id = await _repo.AgregarAsync(cat);
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var found = await _repo.ObtenerPorIdAsync(id);
         found!.Nombre = "Nombre Modificado";
         await _repo.ActualizarAsync(found);
-        _ctx.ChangeTracker.Clear();
+        Context.ChangeTracker.Clear();
 
         var updated = await _repo.ObtenerPorIdAsync(id);
         Assert.Equal("Nombre Modificado", updated!.Nombre);

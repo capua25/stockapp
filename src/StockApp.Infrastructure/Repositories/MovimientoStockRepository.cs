@@ -32,32 +32,71 @@ public class MovimientoStockRepository : IMovimientoStockRepository
     }
 
     /// <inheritdoc/>
-    /// ATÓMICO: los 3 cambios (insert movimiento + update StockActual + insert LogAuditoria)
-    /// se stagean sobre el MISMO change tracker y se persisten en UN solo SaveChangesAsync.
-    /// EF Core envuelve ese flush en una transacción implícita (BEGIN/COMMIT/ROLLBACK).
-    public virtual async Task<int> RegistrarMovimientoAtomicoAsync(RegistroAtomicoArgs args)
+    /// ATÓMICO: transacción explícita que envuelve un UPDATE CONDICIONAL de stock
+    /// (la base serializa la fila y hace cumplir "no negativo"), el insert del movimiento
+    /// y el insert del LogAuditoria. Para salidas sin forzar, 0 filas afectadas ⇒ StockInsuficiente
+    /// (rollback, no se inserta nada). Entradas y salidas forzadas aplican el delta sin guard.
+    public virtual async Task<ResultadoRegistro> RegistrarMovimientoAtomicoAsync(RegistroAtomicoArgs args)
     {
-        // 1) Producto trackeado por ESTE context (mismo change tracker que el flush)
-        var producto = await _ctx.Productos.FindAsync(args.ProductoId)
-            ?? throw new KeyNotFoundException($"Producto {args.ProductoId} no encontrado.");
+        await using var tx = await _ctx.Database.BeginTransactionAsync();
 
-        // 2) Stagear los 3 cambios sobre el mismo change tracker
-        _ctx.MovimientosStock.Add(args.Movimiento);          // insert movimiento
-        producto.StockActual = args.StockNuevo;              // update stock (entidad trackeada)
+        if (args.Tipo == TipoMovimiento.Salida && !args.Forzar)
+        {
+            // UPDATE condicional atómico: solo baja si hay stock suficiente
+            var filas = await _ctx.Productos
+                .Where(p => p.Id == args.ProductoId && p.StockActual >= args.Cantidad)
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.StockActual, p => p.StockActual - args.Cantidad));
+
+            if (filas == 0)
+            {
+                // 0 filas: stock insuficiente O producto inexistente. Distinguir (el producto
+                // usa baja lógica, así que la fila persiste; 0 filas normalmente = insuficiente).
+                var stockActual = await _ctx.Productos
+                    .Where(p => p.Id == args.ProductoId)
+                    .Select(p => (decimal?)p.StockActual)
+                    .FirstOrDefaultAsync();
+
+                if (stockActual is null)
+                    throw new KeyNotFoundException($"Producto {args.ProductoId} no encontrado.");
+
+                await tx.RollbackAsync();
+                return new ResultadoRegistro(ResultadoRegistroEstado.StockInsuficiente, 0, stockActual.Value);
+            }
+        }
+        else
+        {
+            // Entrada, o salida forzada (permite negativo): delta con signo, sin guard
+            var delta = args.Tipo == TipoMovimiento.Entrada ? args.Cantidad : -args.Cantidad;
+            var filas = await _ctx.Productos
+                .Where(p => p.Id == args.ProductoId)
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.StockActual, p => p.StockActual + delta));
+
+            if (filas == 0)
+                throw new KeyNotFoundException($"Producto {args.ProductoId} no encontrado.");
+        }
+
+        // Insert movimiento + log dentro de la MISMA transacción
+        _ctx.MovimientosStock.Add(args.Movimiento);
         _ctx.LogsAuditoria.Add(new LogAuditoria
         {
             UsuarioId = args.UsuarioId,
             Fecha     = DateTime.UtcNow,
             Accion    = AccionAuditada.RegistroMovimiento,   // 17
             Entidad   = "MovimientoStock",
-            EntidadId = args.ProductoId,                     // referencia al producto (MovimientoId aún no existe)
+            EntidadId = args.ProductoId,
             Detalle   = args.DetalleAuditoria
         });
-
-        // 3) UN solo flush → transacción implícita atómica
         await _ctx.SaveChangesAsync();
 
-        return args.Movimiento.Id;   // Id generado por la BD tras el flush
+        await tx.CommitAsync();
+
+        // Stock resultante autoritativo (proyección escalar → lee de la BD, no del change tracker)
+        var stockResultante = await _ctx.Productos
+            .Where(p => p.Id == args.ProductoId)
+            .Select(p => p.StockActual)
+            .FirstAsync();
+
+        return new ResultadoRegistro(ResultadoRegistroEstado.Ok, args.Movimiento.Id, stockResultante);
     }
 
     /// <inheritdoc/>

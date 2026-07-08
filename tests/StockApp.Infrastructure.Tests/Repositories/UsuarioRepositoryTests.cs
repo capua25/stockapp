@@ -3,27 +3,19 @@ using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Infrastructure.Persistence;
 using StockApp.Infrastructure.Repositories;
+using StockApp.Infrastructure.Tests.Fixtures;
 using Xunit;
 
 namespace StockApp.Infrastructure.Tests.Repositories;
 
-public class UsuarioRepositoryTests : IDisposable
+public class UsuarioRepositoryTests : PostgresRepositoryTestBase
 {
-    private readonly AppDbContext _ctx;
     private readonly UsuarioRepository _repo;
 
-    public UsuarioRepositoryTests()
+    public UsuarioRepositoryTests(PostgresFixture fixture) : base(fixture)
     {
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlite("DataSource=:memory:")
-            .Options;
-        _ctx = new AppDbContext(options);
-        _ctx.Database.OpenConnection();
-        _ctx.Database.EnsureCreated();
-        _repo = new UsuarioRepository(_ctx);
+        _repo = new UsuarioRepository(Context);
     }
-
-    public void Dispose() => _ctx.Dispose();
 
     private static Usuario NuevoUsuario(string nombre) => new()
     {
@@ -71,8 +63,8 @@ public class UsuarioRepositoryTests : IDisposable
 
         // Fix 4: limpiar el change tracker para que la lectura vaya a la BD real
         // (ExecuteUpdateAsync no usa el change tracker, así que FindAsync podría retornar caché stale)
-        _ctx.ChangeTracker.Clear();
-        var actualizado = await _ctx.Usuarios.FindAsync(usuario.Id);
+        Context.ChangeTracker.Clear();
+        var actualizado = await Context.Usuarios.FindAsync(usuario.Id);
         Assert.NotNull(actualizado!.UltimoAcceso);
         Assert.True(actualizado.UltimoAcceso >= ahora.AddSeconds(-1),
             $"UltimoAcceso ({actualizado.UltimoAcceso}) debería ser >= ahora-1s ({ahora.AddSeconds(-1)})");

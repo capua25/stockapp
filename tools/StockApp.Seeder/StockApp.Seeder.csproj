@@ -8,6 +8,16 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Fija la version de EF Core Design para evitar el conflicto de version flotante
+         (CS1705) entre Infrastructure (Npgsql arrastra 10.0.9) y la resolucion transitiva
+         por defecto (10.0.4) cuando el proyecto no tiene referencia directa a EF Core. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.*">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\StockApp.Infrastructure\StockApp.Infrastructure.csproj" />
   </ItemGroup>
 
