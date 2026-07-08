@@ -7,7 +7,9 @@ namespace StockApp.Infrastructure.Tests.DI;
 
 /// <summary>
 /// Verifica que el contenedor DI resuelve los servicios de Infrastructure sin throw.
-/// Prueba la composición directamente (no depende de Avalonia).
+/// Prueba la composición directamente (no depende de Avalonia). El backup file-based
+/// (BackupService/BackupPeriodicoService) se removió del arranque en la Task 7 de Fase 1:
+/// con Postgres no hay archivo .db que copiar (pg_dump server-side es Fase 4).
 /// </summary>
 public class ComposicionDITests
 {
@@ -18,15 +20,6 @@ public class ComposicionDITests
         // Mismo cableado que App.axaml.cs
         services.AddSingleton<IUserDataPathProvider, UserDataPathProvider>();
 
-        services.AddSingleton<BackupService>(sp =>
-        {
-            var pathProvider = sp.GetRequiredService<IUserDataPathProvider>();
-            return new BackupService(
-                pathProvider.GetDatabasePath(),
-                pathProvider.GetBackupsDirectory());
-        });
-
-        services.AddSingleton<BackupPeriodicoService>();
         services.AddTransient<DatabaseInitializer>(sp =>
         {
             // En tests no instanciamos AppDbContext real; validamos sólo que el
@@ -47,22 +40,5 @@ public class ComposicionDITests
         var provider = sp.GetRequiredService<IUserDataPathProvider>();
         Assert.NotNull(provider);
         Assert.IsType<UserDataPathProvider>(provider);
-    }
-
-    [Fact]
-    public void Contenedor_Resuelve_BackupService()
-    {
-        var sp = CrearContenedor();
-        var service = sp.GetRequiredService<BackupService>();
-        Assert.NotNull(service);
-    }
-
-    [Fact]
-    public void Contenedor_Resuelve_BackupPeriodicoService()
-    {
-        var sp = CrearContenedor();
-        var service = sp.GetRequiredService<BackupPeriodicoService>();
-        Assert.NotNull(service);
-        Assert.IsType<BackupPeriodicoService>(service);
     }
 }
