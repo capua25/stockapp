@@ -1,5 +1,6 @@
 ﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
@@ -15,9 +16,10 @@ namespace StockApp.Infrastructure.Migrations
                 name: "Categorias",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "INTEGER", nullable: false)
-                        .Annotation("Sqlite:Autoincrement", true),
-                    Nombre = table.Column<string>(type: "TEXT", nullable: false)
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    Nombre = table.Column<string>(type: "text", nullable: false),
+                    Activo = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true)
                 },
                 constraints: table =>
                 {
@@ -28,13 +30,14 @@ namespace StockApp.Infrastructure.Migrations
                 name: "Proveedores",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "INTEGER", nullable: false)
-                        .Annotation("Sqlite:Autoincrement", true),
-                    Nombre = table.Column<string>(type: "TEXT", nullable: false),
-                    Telefono = table.Column<string>(type: "TEXT", nullable: true),
-                    Email = table.Column<string>(type: "TEXT", nullable: true),
-                    Direccion = table.Column<string>(type: "TEXT", nullable: true),
-                    Notas = table.Column<string>(type: "TEXT", nullable: true)
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    Nombre = table.Column<string>(type: "text", nullable: false),
+                    Telefono = table.Column<string>(type: "text", nullable: true),
+                    Email = table.Column<string>(type: "text", nullable: true),
+                    Direccion = table.Column<string>(type: "text", nullable: true),
+                    Notas = table.Column<string>(type: "text", nullable: true),
+                    Activo = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true)
                 },
                 constraints: table =>
                 {
@@ -45,10 +48,11 @@ namespace StockApp.Infrastructure.Migrations
                 name: "UnidadesMedida",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "INTEGER", nullable: false)
-                        .Annotation("Sqlite:Autoincrement", true),
-                    Nombre = table.Column<string>(type: "TEXT", nullable: false),
-                    Abreviatura = table.Column<string>(type: "TEXT", maxLength: 10, nullable: false)
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    Nombre = table.Column<string>(type: "text", nullable: false),
+                    Abreviatura = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false),
+                    Activo = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true)
                 },
                 constraints: table =>
                 {
@@ -59,15 +63,15 @@ namespace StockApp.Infrastructure.Migrations
                 name: "Usuarios",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "INTEGER", nullable: false)
-                        .Annotation("Sqlite:Autoincrement", true),
-                    NombreUsuario = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false),
-                    NombreCompleto = table.Column<string>(type: "TEXT", nullable: true),
-                    HashContrasena = table.Column<string>(type: "TEXT", nullable: false),
-                    Rol = table.Column<int>(type: "INTEGER", nullable: false),
-                    Activo = table.Column<bool>(type: "INTEGER", nullable: false, defaultValue: true),
-                    FechaAlta = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    UltimoAcceso = table.Column<DateTime>(type: "TEXT", nullable: true)
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    NombreUsuario = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false),
+                    NombreCompleto = table.Column<string>(type: "text", nullable: true),
+                    HashContrasena = table.Column<string>(type: "text", nullable: false),
+                    Rol = table.Column<int>(type: "integer", nullable: false),
+                    Activo = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
+                    FechaAlta = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    UltimoAcceso = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -78,21 +82,21 @@ namespace StockApp.Infrastructure.Migrations
                 name: "Productos",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "INTEGER", nullable: false)
-                        .Annotation("Sqlite:Autoincrement", true),
-                    Codigo = table.Column<string>(type: "TEXT", maxLength: 50, nullable: false),
-                    CodigoBarras = table.Column<string>(type: "TEXT", nullable: true),
-                    Nombre = table.Column<string>(type: "TEXT", nullable: false),
-                    Descripcion = table.Column<string>(type: "TEXT", nullable: true),
-                    CategoriaId = table.Column<int>(type: "INTEGER", nullable: true),
-                    ProveedorId = table.Column<int>(type: "INTEGER", nullable: true),
-                    UnidadMedidaId = table.Column<int>(type: "INTEGER", nullable: false),
-                    PrecioCosto = table.Column<decimal>(type: "TEXT", precision: 18, scale: 4, nullable: false),
-                    PrecioVenta = table.Column<decimal>(type: "TEXT", precision: 18, scale: 4, nullable: false),
-                    StockActual = table.Column<decimal>(type: "TEXT", precision: 18, scale: 4, nullable: false),
-                    StockMinimo = table.Column<decimal>(type: "TEXT", precision: 18, scale: 4, nullable: false, defaultValue: 0m),
-                    Activo = table.Column<bool>(type: "INTEGER", nullable: false, defaultValue: true),
-                    FechaAlta = table.Column<DateTime>(type: "TEXT", nullable: false)
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    Codigo = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    CodigoBarras = table.Column<string>(type: "text", nullable: true),
+                    Nombre = table.Column<string>(type: "text", nullable: false),
+                    Descripcion = table.Column<string>(type: "text", nullable: true),
+                    CategoriaId = table.Column<int>(type: "integer", nullable: true),
+                    ProveedorId = table.Column<int>(type: "integer", nullable: true),
+                    UnidadMedidaId = table.Column<int>(type: "integer", nullable: false),
+                    PrecioCosto = table.Column<decimal>(type: "numeric(18,4)", precision: 18, scale: 4, nullable: false),
+                    PrecioVenta = table.Column<decimal>(type: "numeric(18,4)", precision: 18, scale: 4, nullable: false),
+                    StockActual = table.Column<decimal>(type: "numeric(18,4)", precision: 18, scale: 4, nullable: false),
+                    StockMinimo = table.Column<decimal>(type: "numeric(18,4)", precision: 18, scale: 4, nullable: false, defaultValue: 0m),
+                    Activo = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
+                    FechaAlta = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -121,14 +125,14 @@ namespace StockApp.Infrastructure.Migrations
                 name: "LogsAuditoria",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "INTEGER", nullable: false)
-                        .Annotation("Sqlite:Autoincrement", true),
-                    UsuarioId = table.Column<int>(type: "INTEGER", nullable: false),
-                    Fecha = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    Accion = table.Column<int>(type: "INTEGER", nullable: false),
-                    Entidad = table.Column<string>(type: "TEXT", nullable: false),
-                    EntidadId = table.Column<int>(type: "INTEGER", nullable: false),
-                    Detalle = table.Column<string>(type: "TEXT", nullable: false)
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    UsuarioId = table.Column<int>(type: "integer", nullable: false),
+                    Fecha = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    Accion = table.Column<int>(type: "integer", nullable: false),
+                    Entidad = table.Column<string>(type: "text", nullable: false),
+                    EntidadId = table.Column<int>(type: "integer", nullable: false),
+                    Detalle = table.Column<string>(type: "text", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -145,16 +149,16 @@ namespace StockApp.Infrastructure.Migrations
                 name: "MovimientosStock",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "INTEGER", nullable: false)
-                        .Annotation("Sqlite:Autoincrement", true),
-                    ProductoId = table.Column<int>(type: "INTEGER", nullable: false),
-                    UsuarioId = table.Column<int>(type: "INTEGER", nullable: false),
-                    Tipo = table.Column<int>(type: "INTEGER", nullable: false),
-                    Cantidad = table.Column<decimal>(type: "TEXT", precision: 18, scale: 4, nullable: false),
-                    PrecioUnitario = table.Column<decimal>(type: "TEXT", precision: 18, scale: 4, nullable: false),
-                    Fecha = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    Motivo = table.Column<int>(type: "INTEGER", nullable: false),
-                    Comentario = table.Column<string>(type: "TEXT", nullable: true)
+                    Id = table.Column<int>(type: "integer", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    ProductoId = table.Column<int>(type: "integer", nullable: false),
+                    UsuarioId = table.Column<int>(type: "integer", nullable: false),
+                    Tipo = table.Column<int>(type: "integer", nullable: false),
+                    Cantidad = table.Column<decimal>(type: "numeric(18,4)", precision: 18, scale: 4, nullable: false),
+                    PrecioUnitario = table.Column<decimal>(type: "numeric(18,4)", precision: 18, scale: 4, nullable: false),
+                    Fecha = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    Motivo = table.Column<int>(type: "integer", nullable: false),
+                    Comentario = table.Column<string>(type: "text", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -185,9 +189,9 @@ namespace StockApp.Infrastructure.Migrations
                 column: "UsuarioId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_MovimientosStock_ProductoId",
+                name: "IX_MovimientosStock_ProductoId_Fecha",
                 table: "MovimientosStock",
-                column: "ProductoId");
+                columns: new[] { "ProductoId", "Fecha" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_MovimientosStock_UsuarioId",
@@ -210,7 +214,7 @@ namespace StockApp.Infrastructure.Migrations
                 table: "Productos",
                 column: "CodigoBarras",
                 unique: true,
-                filter: "[CodigoBarras] IS NOT NULL");
+                filter: "\"CodigoBarras\" IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Productos_ProveedorId",
@@ -221,6 +225,24 @@ namespace StockApp.Infrastructure.Migrations
                 name: "IX_Productos_UnidadMedidaId",
                 table: "Productos",
                 column: "UnidadMedidaId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Proveedores_Nombre",
+                table: "Proveedores",
+                column: "Nombre",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_UnidadesMedida_Abreviatura",
+                table: "UnidadesMedida",
+                column: "Abreviatura",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_UnidadesMedida_Nombre",
+                table: "UnidadesMedida",
+                column: "Nombre",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_Usuarios_NombreUsuario",
