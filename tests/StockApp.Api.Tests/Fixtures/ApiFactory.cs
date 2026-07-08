@@ -17,6 +17,8 @@ namespace StockApp.Api.Tests.Fixtures;
 /// </summary>
 public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
+    public const string JwtSecretDePrueba = "clave-de-prueba-de-al-menos-32-caracteres-1234567890";
+
     private readonly PostgreSqlContainer _container = new PostgreSqlBuilder()
         .WithImage("postgres:16-alpine")
         .Build();
@@ -41,9 +43,17 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:Default"] = _container.GetConnectionString(),
+                ["Jwt:Secret"] = JwtSecretDePrueba,
             });
         });
     }
+
+    /// <summary>
+    /// Connection string real del contenedor Testcontainers (puerto aleatorio del host).
+    /// Expuesta para que los tests puedan probar que el AppDbContext resuelto por DI
+    /// dentro de la API (Program.cs) apunta acá y no al Postgres local de desarrollo.
+    /// </summary>
+    public string ConnectionStringDelContenedor => _container.GetConnectionString();
 
     /// <summary>Crea un AppDbContext nuevo apuntado al contenedor (para setup/seed de datos en tests).</summary>
     public AppDbContext CrearContexto()

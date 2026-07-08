@@ -1540,3 +1540,29 @@ Gap encontrado y corregido: el spec §6 solo lista 6 casos de test automatizados
 **2. Scan de placeholders:** no quedan `TODO`, "manejar apropiadamente" ni "similar a Task N" — cada Modify muestra el archivo completo o el bloque exacto a insertar, con código real.
 
 **3. Consistencia de tipos:** `LoginRequest`/`LoginResponse` (Task 3) se usan igual en Task 6. `IJwtTokenService.GenerarToken(int, RolUsuario): string` (Task 2) se usa igual en Task 3, 4 y 5. `StockAppClaimTypes.UsuarioId`/`Rol` (Task 2) se usan igual en `JwtTokenService`, `HttpCurrentSession` y las políticas de `Program.cs` (Task 4/5). `DatosDePrueba.SeedUsuarioAsync`/`SeedProductoAsync` (Task 3/4) se reusan sin cambios de firma en tasks posteriores. `ApiFactory.CrearContexto()` y `ApiTestBase` (Task 1) se reusan sin cambios en todas las clases de test.
+
+---
+
+## Nota post-Task 3: patrón de config eager roto por `WebApplicationFactory` — cambio de patrón obligatorio para Task 4 en adelante
+
+**Descubierto en Task 3, al agregar `Jwt:Secret` a `ApiFactory.ConfigureWebHost`.** El patrón de Task 1 Step 3 / Task 2 Step 6 lee la configuración en `var`s top-level de `Program.cs`, **antes** de `builder.Build()`:
+
+```csharp
+var connectionString = builder.Configuration.GetConnectionString("Default") ?? throw ...;
+var jwtSecret = builder.Configuration["Jwt:Secret"] ?? throw ...;
+```
+
+`WebApplicationFactory<Program>.ConfigureWebHost` (usado por `ApiFactory` para inyectar la connection string de Testcontainers y el secreto JWT de test) inyecta su override de configuración recién cuando intercepta el `Build()` real del host. Una lectura de `builder.Configuration` hecha en top-level statements ANTES de `Build()` nunca ve ese override — cae silenciosamente al fallback de `appsettings.json`.
+
+**Esto rompía el aislamiento de tests sin que ningún test lo detectara**: `ConnectionStrings:Default` en `appsettings.json` apunta a `Host=localhost;Port=5432;...`, y da la casualidad de que hay un Postgres real de desarrollo (`stockapp-pg`) corriendo en ese puerto en las máquinas de trabajo — los tests HTTP de `StockApp.Api.Tests` (Task 1 `HealthEndpointTests` incluido) estuvieron pegándole al Postgres local de desarrollo en vez de al contenedor Testcontainers efímero, desde el commit `0c3e043`. (El `TRUNCATE` de `ApiTestBase.LimpiarTablas()` nunca corrió contra la base local porque usa `Factory.CrearContexto()`, que arma el `AppDbContext` directo con la connection string del contenedor, sin pasar por `Program.cs` — no hubo pérdida de datos.) Con `Jwt:Secret` (sin fallback en `appsettings.json`) el mismo bug pasó de "silencioso" a excepción dura, lo que lo hizo visible.
+
+**Patrón corregido, en uso desde Task 3 (`Program.cs`):**
+
+- `AppDbContext`: se registra con el overload `(sp, options) => ...` de `AddDbContext`, leyendo `sp.GetRequiredService<IConfiguration>().GetConnectionString("Default")` DENTRO del callback (resuelto post-`Build()`, ya con el override de `ApiFactory` aplicado).
+- `JwtOptions`: se registra vía `AddSingleton<JwtOptions>(sp => ...)` (factory diferido, mismo motivo). **No se usó el `AddOptions<JwtOptions>().Bind(...).Validate(...).ValidateOnStart()` sugerido inicialmente** porque `JwtOptions` es un `record` posicional sin constructor sin parámetros (`record JwtOptions(string Secret, TimeSpan Expiracion)`) — el pipeline estándar de Options necesita poder instanciarlo con `Activator.CreateInstance<T>()` y mutar propiedades por reflexión, cosa que un record posicional sin ctor vacío no soporta. Además, bindear `Expiracion` desde `IConfiguration` habría requerido una clave `Jwt:Expiracion` inexistente — sin ella, el binder de constructor la dejaría en `TimeSpan.Zero` en vez de las 10 horas fijas del diseño. Se mantuvo `JwtOptions`/`JwtTokenService` de Task 2 sin cambios (siguen sin usar `IOptions<T>`).
+- Fail-fast al arrancar (mismo mensaje amigable que antes) se preserva forzando la resolución de `JwtOptions` y `AppDbContext` inmediatamente después de `var app = builder.Build();`, no antes.
+- `ApiFactory.ConfigureWebHost` no cambió de mecanismo (sigue usando `builder.ConfigureAppConfiguration(...)`) — el problema nunca fue el mecanismo de override, sino el momento en que `Program.cs` leía la config.
+
+**Impacto en Tasks 4/5/6:** el bloque de `Program.cs` de Task 4 Step 6 y Task 5 Step 4 en este documento todavía muestran `var jwtSecret = ...` top-level y lo referencian dentro de `AddJwtBearer(options => { ... IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)) ... })`. Al implementar Task 4, reemplazar esa referencia por `sp.GetRequiredService<IConfiguration>()["Jwt:Secret"]` (accesible porque `AddJwtBearer(Action<JwtBearerOptions>)` no tiene overload con `IServiceProvider`, así que corresponde resolver el secreto desde el mismo `AddSingleton<JwtOptions>` factory ya registrado — inyectar `IJwtTokenService`/`JwtOptions` no aplica acá porque el validador de JWT Bearer necesita la `SymmetricSecurityKey` directamente; usar `builder.Services.AddSingleton<IConfigureOptions<JwtBearerOptions>>(...)` o resolver `JwtOptions` con un `ServiceProvider` intermedio construido antes de `AddAuthentication` si hace falta el valor en ese punto). Evaluar caso a caso en Task 4; no repetir el patrón eager `var jwtSecret = builder.Configuration[...] ?? throw`.
+
+**Test agregado como evidencia permanente de aislamiento:** `tests/StockApp.Api.Tests/AislamientoTests.cs` — resuelve `AppDbContext` por DI desde `Factory.Services` y assert-ea que su connection string coincide EXACTAMENTE con `ApiFactory.ConnectionStringDelContenedor` (puerto aleatorio de Testcontainers) y no contiene `Port=5432`. Correr esta clase en cualquier task futura que toque `Program.cs`/`ApiFactory.cs` para detectar regresiones de este mismo bug.
