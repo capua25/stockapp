@@ -135,9 +135,11 @@ public partial class App : AvaloniaApp
         // (no hay scope de request; los servicios que lo consumen son transient también).
         services.AddDbContext<AppDbContext>((sp, options) =>
         {
-            var pathProvider = sp.GetRequiredService<IUserDataPathProvider>();
-            Directory.CreateDirectory(pathProvider.GetDataDirectory());
-            options.UseSqlite($"DataSource={pathProvider.GetDatabasePath()}");
+            var connectionString = configuration.GetConnectionString("Default")
+                ?? throw new InvalidOperationException(
+                    "Falta la cadena de conexión 'ConnectionStrings:Default' en appsettings.json. " +
+                    "Se requiere un PostgreSQL accesible (contenedor Docker local u on-premise).");
+            options.UseNpgsql(connectionString);
         }, ServiceLifetime.Transient);
 
         // BackupService: singleton — solo rutas de archivos, sin estado de EF
