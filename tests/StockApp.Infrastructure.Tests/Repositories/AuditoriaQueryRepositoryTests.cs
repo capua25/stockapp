@@ -3,40 +3,21 @@ using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Infrastructure.Persistence;
 using StockApp.Infrastructure.Repositories;
+using StockApp.Infrastructure.Tests.Fixtures;
 using Xunit;
 
 namespace StockApp.Infrastructure.Tests.Repositories;
 
 /// <summary>
-/// Tests de integración para AuditoriaQueryRepository.ObtenerLogAsync sobre SQLite in-memory.
+/// Tests de integración para AuditoriaQueryRepository.ObtenerLogAsync contra PostgreSQL real.
 /// </summary>
-public class AuditoriaQueryRepositoryTests : IDisposable
+public class AuditoriaQueryRepositoryTests : PostgresRepositoryTestBase
 {
-    private readonly Microsoft.Data.Sqlite.SqliteConnection _connection;
-    private readonly AppDbContext _ctx;
     private readonly AuditoriaQueryRepository _repo;
 
-    public AuditoriaQueryRepositoryTests()
+    public AuditoriaQueryRepositoryTests(PostgresFixture fixture) : base(fixture)
     {
-        _connection = new Microsoft.Data.Sqlite.SqliteConnection(
-            "DataSource=auditoria_query_test;Mode=Memory;Cache=Shared");
-        _connection.Open();
-
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlite(_connection)
-            .Options;
-
-        _ctx = new AppDbContext(options);
-        _ctx.Database.EnsureCreated();
-
-        _repo = new AuditoriaQueryRepository(_ctx);
-    }
-
-    public void Dispose()
-    {
-        _ctx.Dispose();
-        _connection.Close();
-        _connection.Dispose();
+        _repo = new AuditoriaQueryRepository(Context);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
@@ -68,17 +49,17 @@ public class AuditoriaQueryRepositoryTests : IDisposable
     {
         var ana  = NuevoUsuario("ana");
         var beto = NuevoUsuario("beto");
-        _ctx.Usuarios.AddRange(ana, beto);
-        await _ctx.SaveChangesAsync();
+        Context.Usuarios.AddRange(ana, beto);
+        await Context.SaveChangesAsync();
 
         var t = new DateTime(2026, 5, 1, 10, 0, 0, DateTimeKind.Utc);
-        _ctx.LogsAuditoria.AddRange(
+        Context.LogsAuditoria.AddRange(
             Log(ana.Id,  t),
             Log(ana.Id,  t.AddHours(1)),
             Log(beto.Id, t.AddHours(2))
         );
-        await _ctx.SaveChangesAsync();
-        _ctx.ChangeTracker.Clear();
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
 
         var resultado = await _repo.ObtenerLogAsync(ana.Id, null, null);
 
@@ -91,20 +72,20 @@ public class AuditoriaQueryRepositoryTests : IDisposable
     public async Task ObtenerLogAsync_FiltraPorFechas_FechaHastaFinDeDia()
     {
         var usuario = NuevoUsuario("user");
-        _ctx.Usuarios.Add(usuario);
-        await _ctx.SaveChangesAsync();
+        Context.Usuarios.Add(usuario);
+        await Context.SaveChangesAsync();
 
         // Log a las 18:00hs del 2026-06-10 (debe INCLUIRSE)
         var fechaDentro = new DateTime(2026, 6, 10, 18, 0, 0, DateTimeKind.Utc);
         // Log a las 00:00hs del 2026-06-11 (debe EXCLUIRSE - día siguiente)
         var fechaFuera = new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc);
 
-        _ctx.LogsAuditoria.AddRange(
+        Context.LogsAuditoria.AddRange(
             Log(usuario.Id, fechaDentro, detalle: "dentro"),
             Log(usuario.Id, fechaFuera,  detalle: "fuera")
         );
-        await _ctx.SaveChangesAsync();
-        _ctx.ChangeTracker.Clear();
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
 
         // FechaHasta = 2026-06-10 a medianoche → el ajuste a fin de día debe incluir
         // todos los logs del 10 (18:00hs) pero EXCLUIR el del 11 (00:00hs).
@@ -120,17 +101,17 @@ public class AuditoriaQueryRepositoryTests : IDisposable
     public async Task ObtenerLogAsync_SinFiltros_RetornaAll()
     {
         var usuario = NuevoUsuario("user");
-        _ctx.Usuarios.Add(usuario);
-        await _ctx.SaveChangesAsync();
+        Context.Usuarios.Add(usuario);
+        await Context.SaveChangesAsync();
 
         var t = new DateTime(2026, 5, 1, 10, 0, 0, DateTimeKind.Utc);
-        _ctx.LogsAuditoria.AddRange(
+        Context.LogsAuditoria.AddRange(
             Log(usuario.Id, t),
             Log(usuario.Id, t.AddHours(1)),
             Log(usuario.Id, t.AddHours(2))
         );
-        await _ctx.SaveChangesAsync();
-        _ctx.ChangeTracker.Clear();
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
 
         var resultado = await _repo.ObtenerLogAsync(null, null, null);
 
@@ -141,8 +122,8 @@ public class AuditoriaQueryRepositoryTests : IDisposable
     public async Task ObtenerLogAsync_OrdenadoPorFechaDesc()
     {
         var usuario = NuevoUsuario("user");
-        _ctx.Usuarios.Add(usuario);
-        await _ctx.SaveChangesAsync();
+        Context.Usuarios.Add(usuario);
+        await Context.SaveChangesAsync();
 
         var fechaVieja  = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var fechaMedia  = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -150,13 +131,13 @@ public class AuditoriaQueryRepositoryTests : IDisposable
 
         // Orden de inserción NO descendente (media, vieja, nueva) para que el test
         // falle si se quita el OrderByDescending.
-        _ctx.LogsAuditoria.AddRange(
+        Context.LogsAuditoria.AddRange(
             Log(usuario.Id, fechaMedia, detalle: "media"),
             Log(usuario.Id, fechaVieja, detalle: "vieja"),
             Log(usuario.Id, fechaNueva, detalle: "nueva")
         );
-        await _ctx.SaveChangesAsync();
-        _ctx.ChangeTracker.Clear();
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
 
         var resultado = await _repo.ObtenerLogAsync(null, null, null);
 

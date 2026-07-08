@@ -3,40 +3,21 @@ using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Infrastructure.Persistence;
 using StockApp.Infrastructure.Repositories;
+using StockApp.Infrastructure.Tests.Fixtures;
 using Xunit;
 
 namespace StockApp.Infrastructure.Tests.Repositories;
 
 /// <summary>
-/// Tests de integración para ReporteStockRepository.ObtenerMasMovidosAsync sobre SQLite in-memory.
+/// Tests de integración para ReporteStockRepository.ObtenerMasMovidosAsync contra PostgreSQL real.
 /// </summary>
-public class ReporteStockRepositoryMasMovidosTests : IDisposable
+public class ReporteStockRepositoryMasMovidosTests : PostgresRepositoryTestBase
 {
-    private readonly Microsoft.Data.Sqlite.SqliteConnection _connection;
-    private readonly AppDbContext _ctx;
     private readonly ReporteStockRepository _repo;
 
-    public ReporteStockRepositoryMasMovidosTests()
+    public ReporteStockRepositoryMasMovidosTests(PostgresFixture fixture) : base(fixture)
     {
-        _connection = new Microsoft.Data.Sqlite.SqliteConnection(
-            "DataSource=reporte_masmovidos_test;Mode=Memory;Cache=Shared");
-        _connection.Open();
-
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseSqlite(_connection)
-            .Options;
-
-        _ctx = new AppDbContext(options);
-        _ctx.Database.EnsureCreated();
-
-        _repo = new ReporteStockRepository(_ctx);
-    }
-
-    public void Dispose()
-    {
-        _ctx.Dispose();
-        _connection.Close();
-        _connection.Dispose();
+        _repo = new ReporteStockRepository(Context);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
@@ -82,21 +63,21 @@ public class ReporteStockRepositoryMasMovidosTests : IDisposable
     {
         var um = NuevaUm();
         var usuario = NuevoUsuario();
-        _ctx.UnidadesMedida.Add(um);
-        _ctx.Usuarios.Add(usuario);
-        await _ctx.SaveChangesAsync();
+        Context.UnidadesMedida.Add(um);
+        Context.Usuarios.Add(usuario);
+        await Context.SaveChangesAsync();
 
         var pA = NuevoProducto("PA", "Producto A", um);
         var pB = NuevoProducto("PB", "Producto B", um);
         var pC = NuevoProducto("PC", "Producto C", um);
-        _ctx.Productos.AddRange(pA, pB, pC);
-        await _ctx.SaveChangesAsync();
+        Context.Productos.AddRange(pA, pB, pC);
+        await Context.SaveChangesAsync();
 
         var t = new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc);
         // pA: 2 movs, volumen 10+5 = 15
         // pB: 3 movs, volumen 20+20+20 = 60  (mayor)
         // pC: 1 mov,  volumen 8
-        _ctx.MovimientosStock.AddRange(
+        Context.MovimientosStock.AddRange(
             Mov(pA.Id, usuario.Id, 10m, t),
             Mov(pA.Id, usuario.Id, 5m,  t.AddHours(1)),
             Mov(pB.Id, usuario.Id, 20m, t),
@@ -104,8 +85,8 @@ public class ReporteStockRepositoryMasMovidosTests : IDisposable
             Mov(pB.Id, usuario.Id, 20m, t.AddHours(2)),
             Mov(pC.Id, usuario.Id, 8m,  t)
         );
-        await _ctx.SaveChangesAsync();
-        _ctx.ChangeTracker.Clear();
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
 
         var resultado = await _repo.ObtenerMasMovidosAsync(null, null, topN: 10);
 
@@ -131,24 +112,24 @@ public class ReporteStockRepositoryMasMovidosTests : IDisposable
     {
         var um = NuevaUm();
         var usuario = NuevoUsuario();
-        _ctx.UnidadesMedida.Add(um);
-        _ctx.Usuarios.Add(usuario);
-        await _ctx.SaveChangesAsync();
+        Context.UnidadesMedida.Add(um);
+        Context.Usuarios.Add(usuario);
+        await Context.SaveChangesAsync();
 
         var p1 = NuevoProducto("P1", "Uno",    um);
         var p2 = NuevoProducto("P2", "Dos",    um);
         var p3 = NuevoProducto("P3", "Tres",   um);
-        _ctx.Productos.AddRange(p1, p2, p3);
-        await _ctx.SaveChangesAsync();
+        Context.Productos.AddRange(p1, p2, p3);
+        await Context.SaveChangesAsync();
 
         var t = new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc);
-        _ctx.MovimientosStock.AddRange(
+        Context.MovimientosStock.AddRange(
             Mov(p1.Id, usuario.Id, 30m, t),   // volumen 30
             Mov(p2.Id, usuario.Id, 20m, t),   // volumen 20
             Mov(p3.Id, usuario.Id, 10m, t)    // volumen 10
         );
-        await _ctx.SaveChangesAsync();
-        _ctx.ChangeTracker.Clear();
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
 
         var resultado = await _repo.ObtenerMasMovidosAsync(null, null, topN: 2);
 
@@ -164,25 +145,25 @@ public class ReporteStockRepositoryMasMovidosTests : IDisposable
     {
         var um = NuevaUm();
         var usuario = NuevoUsuario();
-        _ctx.UnidadesMedida.Add(um);
-        _ctx.Usuarios.Add(usuario);
-        await _ctx.SaveChangesAsync();
+        Context.UnidadesMedida.Add(um);
+        Context.Usuarios.Add(usuario);
+        await Context.SaveChangesAsync();
 
         var p = NuevoProducto("FH", "Fecha", um);
-        _ctx.Productos.Add(p);
-        await _ctx.SaveChangesAsync();
+        Context.Productos.Add(p);
+        await Context.SaveChangesAsync();
 
         // Movimiento a las 18:00hs del 2026-06-10 (debe INCLUIRSE)
         var fechaMovDentro = new DateTime(2026, 6, 10, 18, 0, 0, DateTimeKind.Utc);
         // Movimiento a las 00:00hs del 2026-06-11 (debe EXCLUIRSE - día siguiente)
         var fechaMovFuera = new DateTime(2026, 6, 11, 0, 0, 0, DateTimeKind.Utc);
 
-        _ctx.MovimientosStock.AddRange(
+        Context.MovimientosStock.AddRange(
             Mov(p.Id, usuario.Id, 7m, fechaMovDentro),
             Mov(p.Id, usuario.Id, 3m, fechaMovFuera)
         );
-        await _ctx.SaveChangesAsync();
-        _ctx.ChangeTracker.Clear();
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
 
         // FechaHasta = 2026-06-10 a medianoche (00:00) → el ajuste a fin de día debe
         // incluir todos los movimientos del 10 (18:00hs) pero EXCLUIR el del 11 (00:00hs).
@@ -202,19 +183,19 @@ public class ReporteStockRepositoryMasMovidosTests : IDisposable
     {
         var um = NuevaUm();
         var usuario = NuevoUsuario();
-        _ctx.UnidadesMedida.Add(um);
-        _ctx.Usuarios.Add(usuario);
-        await _ctx.SaveChangesAsync();
+        Context.UnidadesMedida.Add(um);
+        Context.Usuarios.Add(usuario);
+        await Context.SaveChangesAsync();
 
         var p = NuevoProducto("EMPTY", "Sin movs", um);
-        _ctx.Productos.Add(p);
-        await _ctx.SaveChangesAsync();
+        Context.Productos.Add(p);
+        await Context.SaveChangesAsync();
 
         // Movimiento fuera del rango consultado
         var t = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        _ctx.MovimientosStock.Add(Mov(p.Id, usuario.Id, 5m, t));
-        await _ctx.SaveChangesAsync();
-        _ctx.ChangeTracker.Clear();
+        Context.MovimientosStock.Add(Mov(p.Id, usuario.Id, 5m, t));
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
 
         // Rango sin movimientos
         var desde = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc);
