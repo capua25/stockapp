@@ -183,11 +183,13 @@ public class MovimientoStockServiceTests
         var (svc, repo, _, _) = Crear();
         var producto = ProductoActivo(stock: 3m);
         repo.Setup(r => r.ObtenerProductoAsync(1)).ReturnsAsync(producto);
+        repo.Setup(r => r.RegistrarMovimientoAtomicoAsync(It.IsAny<RegistroAtomicoArgs>()))
+            .ReturnsAsync(new ResultadoRegistro(ResultadoRegistroEstado.StockInsuficiente, 0, 3m));
 
         var dto = DtoSalida(cantidad: 10m); // 3 - 10 = -7 → insuficiente
 
         await Assert.ThrowsAsync<StockInsuficienteException>(() => svc.RegistrarAsync(dto));
-        repo.Verify(r => r.RegistrarMovimientoAtomicoAsync(It.IsAny<RegistroAtomicoArgs>()), Times.Never);
+        repo.Verify(r => r.RegistrarMovimientoAtomicoAsync(It.IsAny<RegistroAtomicoArgs>()), Times.Once);
     }
 
     [Fact]
@@ -197,7 +199,7 @@ public class MovimientoStockServiceTests
         var producto = ProductoActivo(stock: 3m);
         repo.Setup(r => r.ObtenerProductoAsync(1)).ReturnsAsync(producto);
         repo.Setup(r => r.RegistrarMovimientoAtomicoAsync(It.IsAny<RegistroAtomicoArgs>()))
-            .ReturnsAsync(42);
+            .ReturnsAsync(new ResultadoRegistro(ResultadoRegistroEstado.Ok, 42, -7m));
 
         var dto = DtoSalida(cantidad: 10m);
         var result = await svc.RegistrarAsync(dto, forzar: true);
@@ -214,7 +216,7 @@ public class MovimientoStockServiceTests
         var producto = ProductoActivo(stock: 10m);
         repo.Setup(r => r.ObtenerProductoAsync(1)).ReturnsAsync(producto);
         repo.Setup(r => r.RegistrarMovimientoAtomicoAsync(It.IsAny<RegistroAtomicoArgs>()))
-            .ReturnsAsync(7);
+            .ReturnsAsync(new ResultadoRegistro(ResultadoRegistroEstado.Ok, 7, 15m));
 
         var dto = DtoEntrada(cantidad: 5m);
         var result = await svc.RegistrarAsync(dto);
@@ -232,7 +234,7 @@ public class MovimientoStockServiceTests
         var producto = ProductoActivo(stock: 5m);
         repo.Setup(r => r.ObtenerProductoAsync(1)).ReturnsAsync(producto);
         repo.Setup(r => r.RegistrarMovimientoAtomicoAsync(It.IsAny<RegistroAtomicoArgs>()))
-            .ReturnsAsync(99);
+            .ReturnsAsync(new ResultadoRegistro(ResultadoRegistroEstado.Ok, 99, 15m));
 
         var dto = new RegistrarMovimientoDto(1, TipoMovimiento.Entrada, MotivoMovimiento.Compra,
                                              10m, 150m, "lote A");
@@ -256,7 +258,7 @@ public class MovimientoStockServiceTests
         var producto = ProductoActivo(stock: 20m);
         repo.Setup(r => r.ObtenerProductoAsync(1)).ReturnsAsync(producto);
         repo.Setup(r => r.RegistrarMovimientoAtomicoAsync(It.IsAny<RegistroAtomicoArgs>()))
-            .ReturnsAsync(100);
+            .ReturnsAsync(new ResultadoRegistro(ResultadoRegistroEstado.Ok, 100, 12m));
 
         var dto = DtoSalida(cantidad: 8m);
         var result = await svc.RegistrarAsync(dto);
@@ -272,7 +274,7 @@ public class MovimientoStockServiceTests
         var (svc, repo, _, _) = Crear();
         repo.Setup(r => r.ObtenerProductoAsync(1)).ReturnsAsync(ProductoActivo());
         repo.Setup(r => r.RegistrarMovimientoAtomicoAsync(It.IsAny<RegistroAtomicoArgs>()))
-            .ReturnsAsync(1);
+            .ReturnsAsync(new ResultadoRegistro(ResultadoRegistroEstado.Ok, 1, 25m));
 
         await svc.RegistrarAsync(DtoEntrada());
 

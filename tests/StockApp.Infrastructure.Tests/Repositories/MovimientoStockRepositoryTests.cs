@@ -237,6 +237,59 @@ public class MovimientoStockRepositoryTests : PostgresRepositoryTestBase
         Assert.Equal(18, (int)log.Accion);   // AccionAuditada.RecalculoStock
     }
 
+    // ── Guard condicional atómico ─────────────────────────────────────────────
+
+    [Fact]
+    public async Task RegistrarMovimientoAtomicoAsync_SalidaSinStock_NoModificaNada()
+    {
+        var (_, usuario, producto) = await SeedBaseAsync(stockInicial: 5m);
+
+        var movimiento = new MovimientoStock
+        {
+            ProductoId = producto.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Salida,
+            Cantidad = 10m, PrecioUnitario = 5m, Fecha = DateTime.UtcNow, Motivo = MotivoMovimiento.Venta
+        };
+        var args = new RegistroAtomicoArgs(
+            Movimiento: movimiento, ProductoId: producto.Id, Tipo: TipoMovimiento.Salida,
+            Cantidad: 10m, Forzar: false, UsuarioId: usuario.Id, DetalleAuditoria: "salida sin stock");
+
+        var resultado = await _repo.RegistrarMovimientoAtomicoAsync(args);
+
+        Assert.Equal(ResultadoRegistroEstado.StockInsuficiente, resultado.Estado);
+        Assert.Equal(0, resultado.MovimientoId);
+        Assert.Equal(5m, resultado.StockResultante);   // stock actual sin tocar
+
+        await using var ctx2 = Fixture.CrearContexto();
+        Assert.Equal(0, await ctx2.MovimientosStock.CountAsync());
+        Assert.Equal(0, await ctx2.LogsAuditoria.CountAsync());
+        var p = await ctx2.Productos.FindAsync(producto.Id);
+        Assert.Equal(5m, p!.StockActual);
+    }
+
+    [Fact]
+    public async Task RegistrarMovimientoAtomicoAsync_SalidaForzada_PermiteNegativo()
+    {
+        var (_, usuario, producto) = await SeedBaseAsync(stockInicial: 5m);
+
+        var movimiento = new MovimientoStock
+        {
+            ProductoId = producto.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Salida,
+            Cantidad = 8m, PrecioUnitario = 5m, Fecha = DateTime.UtcNow, Motivo = MotivoMovimiento.Merma
+        };
+        var args = new RegistroAtomicoArgs(
+            Movimiento: movimiento, ProductoId: producto.Id, Tipo: TipoMovimiento.Salida,
+            Cantidad: 8m, Forzar: true, UsuarioId: usuario.Id, DetalleAuditoria: "salida forzada");
+
+        var resultado = await _repo.RegistrarMovimientoAtomicoAsync(args);
+
+        Assert.Equal(ResultadoRegistroEstado.Ok, resultado.Estado);
+        Assert.Equal(-3m, resultado.StockResultante);   // 5 - 8 = -3, permitido con Forzar
+
+        await using var ctx2 = Fixture.CrearContexto();
+        Assert.Equal(1, await ctx2.MovimientosStock.CountAsync());
+        Assert.Equal(1, await ctx2.LogsAuditoria.CountAsync());
+    }
+
     // ── C6: ObtenerHistorialAsync con filtros combinables ─────────────────────
 
     /// Helper para seed de movimientos múltiples con fechas configurables.

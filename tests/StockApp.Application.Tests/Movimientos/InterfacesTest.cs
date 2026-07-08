@@ -26,7 +26,7 @@ public class InterfacesTest
             .ReturnsAsync((0m, 0));
 
         mock.Setup(r => r.RegistrarMovimientoAtomicoAsync(It.IsAny<RegistroAtomicoArgs>()))
-            .ReturnsAsync(1);
+            .ReturnsAsync(new ResultadoRegistro(ResultadoRegistroEstado.Ok, 1, 0m));
 
         mock.Setup(r => r.RecalcularAtomicoAsync(It.IsAny<RecalculoAtomicoArgs>()))
             .Returns(Task.CompletedTask);

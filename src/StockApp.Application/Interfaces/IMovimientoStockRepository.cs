@@ -1,5 +1,6 @@
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 
 namespace StockApp.Application.Interfaces;
 
@@ -10,9 +11,28 @@ namespace StockApp.Application.Interfaces;
 public record RegistroAtomicoArgs(
     MovimientoStock Movimiento,   // entidad ya construida (sin Id)
     int ProductoId,
-    decimal StockNuevo,           // valor ya calculado por el service (signo centralizado)
+    TipoMovimiento Tipo,          // define el signo del delta
+    decimal Cantidad,             // siempre positiva
+    bool Forzar,                  // true → permite stock negativo (bypass del guard condicional)
     int UsuarioId,
     string DetalleAuditoria);     // payload listo para LogAuditoria.Detalle
+
+/// <summary>Estado del intento de registro atómico.</summary>
+public enum ResultadoRegistroEstado
+{
+    Ok,
+    StockInsuficiente
+}
+
+/// <summary>
+/// Resultado tipado del registro atómico. Ok → movimiento persistido; StockInsuficiente →
+/// el UPDATE condicional afectó 0 filas (imposible lost-update, imposible negativo sin forzar).
+/// StockResultante = stock tras el update (Ok) o stock actual sin tocar (StockInsuficiente).
+/// </summary>
+public record ResultadoRegistro(
+    ResultadoRegistroEstado Estado,
+    int MovimientoId,
+    decimal StockResultante);
 
 /// <summary>
 /// Args para el recálculo atómico de stock.
@@ -44,7 +64,7 @@ public interface IMovimientoStockRepository
     /// ATÓMICO: insert MovimientoStock + update Producto.StockActual + insert LogAuditoria
     /// en UN solo SaveChangesAsync. Retorna el Id generado del movimiento.
     /// </summary>
-    Task<int> RegistrarMovimientoAtomicoAsync(RegistroAtomicoArgs args);
+    Task<ResultadoRegistro> RegistrarMovimientoAtomicoAsync(RegistroAtomicoArgs args);
 
     /// <summary>
     /// ATÓMICO: update Producto.StockActual + insert LogAuditoria (Accion=18)
