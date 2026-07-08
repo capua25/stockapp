@@ -26,4 +26,28 @@ public static class DatosDePrueba
         await ctx.SaveChangesAsync();
         return usuario;
     }
+
+    public static async Task<Producto> SeedProductoAsync(AppDbContext ctx, string codigo, string nombre)
+    {
+        var unidad = new UnidadMedida { Nombre = "Unidad", Abreviatura = "u", Activo = true };
+        ctx.UnidadesMedida.Add(unidad);
+        await ctx.SaveChangesAsync();
+
+        var producto = new Producto
+        {
+            Codigo = codigo,
+            Nombre = nombre,
+            UnidadMedidaId = unidad.Id,
+            PrecioCosto = 10m,
+            PrecioVenta = 20m,
+            StockActual = 5m,
+            StockMinimo = 0m,
+            Activo = true,
+            FechaAlta = DateTime.UtcNow,
+        };
+
+        ctx.Productos.Add(producto);
+        await ctx.SaveChangesAsync();
+        return producto;
+    }
 }
