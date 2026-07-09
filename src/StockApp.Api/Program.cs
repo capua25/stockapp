@@ -67,7 +67,7 @@ builder.Services.AddScoped<IProductoRepository, ProductoRepository>();
 builder.Services.AddScoped<IUnidadMedidaRepository, UnidadMedidaRepository>();
 builder.Services.AddScoped<IProductoService, ProductoService>();
 
-// Reportes (slice: GET /productos/reporte-valorizacion)
+// Reportes (slice: GET /reportes/*)
 builder.Services.AddScoped<IMovimientoStockRepository, MovimientoStockRepository>();
 builder.Services.AddScoped<IMovimientoStockService, MovimientoStockService>();
 builder.Services.AddScoped<IReporteStockRepository, ReporteStockRepository>();

@@ -16,8 +16,8 @@ public static class ReportesEndpoints
             Results.Ok(await reportes.ObtenerStockPorCategoriaAsync()));
 
         group.MapGet("/mas-movidos", async (
-            DateTime? fechaDesde, DateTime? fechaHasta, int topN, IReporteStockService reportes) =>
-            Results.Ok(await reportes.ObtenerMasMovidosAsync(fechaDesde, fechaHasta, topN == 0 ? 20 : topN)));
+            IReporteStockService reportes, DateTime? fechaDesde, DateTime? fechaHasta, int topN = 20) =>
+            Results.Ok(await reportes.ObtenerMasMovidosAsync(fechaDesde, fechaHasta, topN)));
 
         group.MapGet("/historial-producto/{productoId:int}", async (
             int productoId, DateTime? fechaDesde, DateTime? fechaHasta, IReporteStockService reportes) =>

@@ -113,6 +113,19 @@ public class ReportesEndpointTests : ApiTestBase
         Assert.NotNull(await response.Content.ReadFromJsonAsync<List<MasMovidoDto>>());
     }
 
+    [Fact]
+    public async Task GetMasMovidos_SinQueryParamTopN_Devuelve200ConDefaultTopN()
+    {
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var response = await client.GetAsync("/reportes/mas-movidos");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var resultado = await response.Content.ReadFromJsonAsync<List<MasMovidoDto>>();
+        Assert.NotNull(resultado);
+    }
+
     // ── GET /reportes/historial-producto/{productoId} ────────────────────────
 
     [Fact]
