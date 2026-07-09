@@ -1421,6 +1421,7 @@ using Microsoft.Extensions.DependencyInjection;
 using StockApp.Api.Auth;
 using StockApp.Api.Tests.Fixtures;
 using StockApp.Application.Auditoria;
+using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using Xunit;
 
@@ -1455,17 +1456,25 @@ public class AuditoriaEndpointTests : ApiTestBase
     }
 
     [Fact]
-    public async Task GetAuditoria_ConTokenAdmin_DevuelveLogGeneradoPorAltaUsuario()
+    public async Task GetAuditoria_ConTokenAdmin_Devuelve200ConLogSembrado()
     {
+        await using var ctx = Factory.CrearContexto();
+        ctx.LogsAuditoria.Add(new LogAuditoria
+        {
+            UsuarioId = 1,
+            Fecha = DateTime.UtcNow,
+            Accion = AccionAuditada.AltaUsuario,
+            Entidad = "Usuario",
+            EntidadId = 1,
+            Detalle = "Alta de usuario de prueba (seed directo por DB)",
+        });
+        await ctx.SaveChangesAsync();
+
         var jwt = Factory.Services.GetRequiredService<IJwtTokenService>();
         var tokenAdmin = jwt.GenerarToken(1, RolUsuario.Admin);
 
         var client = Factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenAdmin);
-
-        // Generar una entrada de auditoría real dando de alta un usuario (mismo cliente HTTP).
-        await client.PostAsJsonAsync("/usuarios",
-            new { NombreUsuario = "auditoria.test", NombreCompleto = (string?)null, ContrasenaPlan = "pwd12345", Rol = RolUsuario.Operador });
 
         var response = await client.GetAsync("/auditoria");
 
@@ -1479,7 +1488,7 @@ public class AuditoriaEndpointTests : ApiTestBase
 - [ ] **Step 2: Correr los tests y verificar que fallan**
 
 Run: `dotnet test tests/StockApp.Api.Tests/StockApp.Api.Tests.csproj --filter AuditoriaEndpointTests`
-Expected: FAIL — `404 Not Found` en `/auditoria` (no existe todavía). El tercer test también depende de `POST /usuarios` (Task 9, todavía no implementado) — se corre igual acá porque valida el flujo real, y quedará en verde recién al cerrar Task 9; documentar esto como dependencia cruzada explícita en el Step 8 de Task 9.
+Expected: FAIL — `404 Not Found` en `/auditoria` (no existe todavía) en los tres tests.
 
 - [ ] **Step 3: Implementar `AuditoriaEndpoints.cs`**
 
@@ -1511,10 +1520,10 @@ Agregar la línea, junto a las demás `app.MapXxxEndpoints()`:
 app.MapAuditoriaEndpoints();
 ```
 
-- [ ] **Step 5: Correr los tests de las dos primeras aserciones (401/403) y verificar que pasan**
+- [ ] **Step 5: Correr los tests de `AuditoriaEndpointTests` y verificar que pasan**
 
-Run: `dotnet test tests/StockApp.Api.Tests/StockApp.Api.Tests.csproj --filter "GetAuditoria_SinToken_Devuelve401|GetAuditoria_ConTokenOperador_Devuelve403"`
-Expected: PASS (2 tests). El tercer test (`GetAuditoria_ConTokenAdmin_DevuelveLogGeneradoPorAltaUsuario`) sigue en rojo hasta Task 9 — es esperado, se deja documentado.
+Run: `dotnet test tests/StockApp.Api.Tests/StockApp.Api.Tests.csproj --filter AuditoriaEndpointTests`
+Expected: PASS (3 tests).
 
 - [ ] **Step 6: Commit**
 
@@ -1776,10 +1785,34 @@ app.MapUsuariosEndpoints();
 Run: `dotnet test tests/StockApp.Api.Tests/StockApp.Api.Tests.csproj --filter UsuariosEndpointTests`
 Expected: PASS (9 tests)
 
-- [ ] **Step 6: Correr el test pendiente de Task 8 (`GetAuditoria_ConTokenAdmin_DevuelveLogGeneradoPorAltaUsuario`) y verificar que ahora pasa**
+- [ ] **Step 6: Agregar a `AuditoriaEndpointTests.cs` el test de integración cruzada (movido desde Task 8 — ver nota en Task 8 Step 1) y verificar que pasa**
+
+Agregar `using StockApp.Api.Endpoints;` a los usings de `AuditoriaEndpointTests.cs` (para `CrearUsuarioRequest`) y el siguiente test al final de la clase:
+
+```csharp
+    [Fact]
+    public async Task GetAuditoria_ConTokenAdmin_DevuelveLogGeneradoPorAltaUsuario()
+    {
+        var jwt = Factory.Services.GetRequiredService<IJwtTokenService>();
+        var tokenAdmin = jwt.GenerarToken(1, RolUsuario.Admin);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenAdmin);
+
+        // Generar una entrada de auditoría real dando de alta un usuario (mismo cliente HTTP, endpoint real de Task 9).
+        await client.PostAsJsonAsync("/usuarios",
+            new CrearUsuarioRequest("auditoria.test", null, "pwd12345", RolUsuario.Operador));
+
+        var response = await client.GetAsync("/auditoria");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var items = await response.Content.ReadFromJsonAsync<List<AuditoriaItemDto>>();
+        Assert.Contains(items!, i => i.Accion == AccionAuditada.AltaUsuario);
+    }
+```
 
 Run: `dotnet test tests/StockApp.Api.Tests/StockApp.Api.Tests.csproj --filter AuditoriaEndpointTests`
-Expected: PASS (3 tests — el tercero, que dependía de `POST /usuarios`, ahora pasa).
+Expected: PASS (4 tests). No hay ciclo rojo→verde acá: tanto `POST /usuarios` (Task 9, Steps 3-4) como `GET /auditoria` (Task 8) ya existen en este punto del plan — este test verifica la integración real entre ambos endpoints, no una funcionalidad nueva.
 
 - [ ] **Step 7: Correr toda la suite**
 
@@ -1789,7 +1822,7 @@ Expected: PASS (todas)
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/StockApp.Api/Endpoints/UsuariosEndpoints.cs src/StockApp.Api/Program.cs tests/StockApp.Api.Tests/UsuariosEndpointTests.cs
+git add src/StockApp.Api/Endpoints/UsuariosEndpoints.cs src/StockApp.Api/Program.cs tests/StockApp.Api.Tests/UsuariosEndpointTests.cs tests/StockApp.Api.Tests/AuditoriaEndpointTests.cs
 git commit -m "feat(api): endpoints de ABM de usuarios (listar, alta, baja, cambio de rol/contrasena)"
 ```
 
