@@ -225,6 +225,7 @@ app.MapAuditoriaEndpoints();
 app.MapUsuariosEndpoints();
 app.MapCategoriasEndpoints();
 app.MapProveedoresEndpoints();
+app.MapUnidadesMedidaEndpoints();
 
 app.Run();
 
