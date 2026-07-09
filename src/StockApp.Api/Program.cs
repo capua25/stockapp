@@ -219,6 +219,7 @@ app.MapGet("/", () => Results.Ok(new { status = "ok", service = "StockApp.Api" }
 
 app.MapAuthEndpoints();
 app.MapProductosEndpoints();
+app.MapMovimientosEndpoints();
 
 app.Run();
 
