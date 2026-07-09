@@ -222,6 +222,7 @@ app.MapProductosEndpoints();
 app.MapMovimientosEndpoints();
 app.MapReportesEndpoints();
 app.MapAuditoriaEndpoints();
+app.MapUsuariosEndpoints();
 
 app.Run();
 
