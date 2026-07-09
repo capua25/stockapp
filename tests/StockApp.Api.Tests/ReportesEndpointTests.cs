@@ -61,14 +61,17 @@ public class ReportesEndpointTests : ApiTestBase
     }
 
     [Fact]
-    public async Task GetProductosReporteValorizacion_RutaVieja_Devuelve404()
+    public async Task GetProductosReporteValorizacion_RutaVieja_Devuelve405()
     {
+        // Desde la Task 10, /productos/{id:int} tiene PUT y DELETE mapeados: ASP.NET Core
+        // considera esa forma de ruta como existente (aunque "reporte-valorizacion" no matchee
+        // la restricción :int) y responde 405 Method Not Allowed en vez de 404 para un GET.
         var client = Factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
 
         var response = await client.GetAsync("/productos/reporte-valorizacion");
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
     }
 
     // ── GET /reportes/stock-por-categoria ────────────────────────────────────

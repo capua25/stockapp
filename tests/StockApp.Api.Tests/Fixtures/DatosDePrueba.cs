@@ -29,7 +29,14 @@ public static class DatosDePrueba
 
     public static async Task<Producto> SeedProductoAsync(AppDbContext ctx, string codigo, string nombre)
     {
-        var unidad = new UnidadMedida { Nombre = "Unidad", Abreviatura = "u", Activo = true };
+        // Nombre y Abreviatura de UnidadMedida son únicos; se derivan del código para evitar
+        // colisiones cuando un mismo test siembra más de un producto.
+        var unidad = new UnidadMedida
+        {
+            Nombre = $"Unidad-{codigo}",
+            Abreviatura = codigo.Length > 10 ? codigo[..10] : codigo,
+            Activo = true,
+        };
         ctx.UnidadesMedida.Add(unidad);
         await ctx.SaveChangesAsync();
 
