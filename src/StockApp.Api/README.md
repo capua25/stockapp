@@ -61,6 +61,8 @@ políticas están derivadas de `AuthorizationService` (`Permisos.Todos` en
 
 Con la API corriendo, en otra terminal (puerto `5043`):
 
+**Nota de idempotencia:** Si ejecutás esta secuencia más de una vez, los POSTs de categorías/proveedores/unidades devolverán `409 Conflict` cuando ya existan con el mismo nombre — es el comportamiento esperado (restricción de duplicados). Para ejecutar nuevamente, cambiá los nombres (ej. `"Bebidas-2"`, `"SKU-CURL-2"`) o limpiá la BD.
+
 ```bash
 # 1) Login Admin
 curl -X POST http://localhost:5043/auth/login \
