@@ -275,4 +275,43 @@ public class UsuarioServiceTests
         await Assert.ThrowsAsync<ArgumentException>(
             () => svc.CambiarContrasenaAsync(4, "12345"));
     }
+
+    // ── ListarAsync (Fase 2b, D6) ───────────────────────────────────────────
+
+    [Fact]
+    public async Task ListarAsync_Admin_DevuelveDtosSinHashContrasena()
+    {
+        var (svc, repo, _, _, _, _) = Crear();
+        repo.Setup(r => r.ListarTodosAsync()).ReturnsAsync(new List<Usuario>
+        {
+            new()
+            {
+                Id = 1, NombreUsuario = "admin", NombreCompleto = "Admin Uno",
+                HashContrasena = "hash-secreto", Rol = RolUsuario.Admin,
+                Activo = true, FechaAlta = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            },
+            new()
+            {
+                Id = 2, NombreUsuario = "operador1", NombreCompleto = null,
+                HashContrasena = "otro-hash", Rol = RolUsuario.Operador,
+                Activo = false, FechaAlta = new DateTime(2026, 2, 1, 0, 0, 0, DateTimeKind.Utc),
+            },
+        });
+
+        var resultado = await svc.ListarAsync();
+
+        Assert.Equal(2, resultado.Count);
+        Assert.Contains(resultado, u => u.Id == 1 && u.NombreUsuario == "admin"
+            && u.NombreCompleto == "Admin Uno" && u.Rol == RolUsuario.Admin && u.Activo);
+        Assert.Contains(resultado, u => u.Id == 2 && u.NombreUsuario == "operador1"
+            && u.NombreCompleto == null && u.Rol == RolUsuario.Operador && !u.Activo);
+    }
+
+    [Fact]
+    public async Task ListarAsync_Operador_LanzaUnauthorized()
+    {
+        var (svc, _, _, _, _, _) = Crear(rolSesion: RolUsuario.Operador);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => svc.ListarAsync());
+    }
 }

@@ -1,3 +1,4 @@
+using System.Linq;
 using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
@@ -146,4 +147,20 @@ public class UsuarioService : IUsuarioService
             "Usuario", usuarioId,
             "Cambio de contraseña");
     }
+
+    public async Task<IReadOnlyList<UsuarioDto>> ListarAsync()
+    {
+        _auth.Verificar(_session.RolActual, Permisos.GestionarUsuarios);
+
+        var usuarios = await _repo.ListarTodosAsync();
+        return usuarios.Select(AUsuarioDto).ToList();
+    }
+
+    private static UsuarioDto AUsuarioDto(Usuario u) => new UsuarioDto(
+        Id:             u.Id,
+        NombreUsuario:  u.NombreUsuario,
+        NombreCompleto: u.NombreCompleto,
+        Rol:            u.Rol,
+        Activo:         u.Activo,
+        FechaAlta:      u.FechaAlta);
 }

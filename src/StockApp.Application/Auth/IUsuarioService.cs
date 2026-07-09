@@ -9,4 +9,7 @@ public interface IUsuarioService
     Task BajaLogicaAsync(int usuarioId);
     Task CambiarRolAsync(int usuarioId, RolUsuario nuevoRol);
     Task CambiarContrasenaAsync(int usuarioId, string nuevaContrasenaPlan, string? contrasenaActualPlan = null);
+
+    /// <summary>Lista todos los usuarios (activos e inactivos). Requiere GestionarUsuarios (Fase 2b).</summary>
+    Task<IReadOnlyList<UsuarioDto>> ListarAsync();
 }
