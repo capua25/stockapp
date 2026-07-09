@@ -1,6 +1,7 @@
 # StockApp.Api
 
-API de StockApp (Fase 2a): JWT + slice vertical de catálogo/reportes.
+API de StockApp: JWT + superficie HTTP completa (Fase 2a: login + slice vertical;
+Fase 2b: movimientos, reportes, auditoría, usuarios, catálogo completo).
 
 ## Requisitos
 
@@ -8,19 +9,14 @@ API de StockApp (Fase 2a): JWT + slice vertical de catálogo/reportes.
 - PostgreSQL accesible (local o contenedor Docker) con la base `stockapp` migrada
   (mismas migraciones que la app desktop, en `StockApp.Infrastructure/Migrations`).
   En desarrollo se usa el contenedor `stockapp-pg` (`postgres:16-alpine`), expuesto
-  en `localhost:5432`, con la connection string por defecto de `appsettings.json`
-  (`Host=localhost;Port=5432;Database=stockapp;Username=stockapp;Password=stockapp`).
-- Al menos un usuario existente en la tabla `Usuarios` (sembrado por `StockApp.Seeder`
-  o por `PrimerArranqueService` de la app desktop — el bootstrap de primer arranque
-  vía API queda para Fase 4, spec §7). En el entorno de desarrollo local ya están
-  sembrados `admin`/`admin123` (rol Admin) y `operador`/`operador123` (rol Operador).
+  en `localhost:5432`, con la connection string por defecto de `appsettings.json`.
+- Al menos un usuario Admin y un usuario Operador existentes en la tabla `Usuarios`
+  (sembrados por `StockApp.Seeder` o por `PrimerArranqueService` de la app desktop —
+  el bootstrap de primer arranque vía API queda para Fase 4).
 
 ## Configurar el secreto JWT (desarrollo)
 
-El secreto de firma NUNCA se hardcodea ni se committea. No está en `appsettings.json`.
-Dos formas de proveerlo en desarrollo:
-
-**Opción A — `dotnet user-secrets` (recomendada, persiste entre corridas):**
+El secreto de firma NUNCA se hardcodea ni se committea.
 
 ```bash
 cd src/StockApp.Api
@@ -28,69 +24,89 @@ dotnet user-secrets init
 dotnet user-secrets set "Jwt:Secret" "una-clave-de-desarrollo-de-al-menos-32-caracteres"
 ```
 
-**Opción B — variable de entorno (rápida, solo dura la sesión de shell):**
-
-```bash
-Jwt__Secret="una-clave-de-desarrollo-de-al-menos-32-caracteres" \
-  dotnet run --project src/StockApp.Api/StockApp.Api.csproj
-```
-
-(La doble raya baja `__` es el separador de jerarquía de configuración de
-ASP.NET Core para variables de entorno — equivale a `Jwt:Secret`.)
-
-Si falta el secreto, el host falla rápido al arrancar con un mensaje explícito
-("Falta 'Jwt:Secret' en la configuración...") en vez de arrancar en un estado
-inconsistente.
-
 ## Correr la API
 
 ```bash
 dotnet run --project src/StockApp.Api/StockApp.Api.csproj --launch-profile http
 ```
 
-Con el profile `http` de `launchSettings.json`, Kestrel expone la API en
-`http://localhost:5043` (sin fricción de certificado de desarrollo HTTPS). El
-profile `https` también existe (`https://localhost:7216`) — TLS con certificado
-real del municipio se resuelve en Fase 2c.
+Kestrel expone la API en `http://localhost:5043` con el profile `http`.
+
+## Superficie de endpoints
+
+Todos requieren `Authorization: Bearer <token>` salvo `POST /auth/login`. Las
+políticas están derivadas de `AuthorizationService` (`Permisos.Todos` en
+`Program.cs`) — Admin siempre tiene acceso; Operador solo a lo marcado "Admin+Op".
+
+| Recurso | Endpoint | Rol |
+|---|---|---|
+| Auth | `POST /auth/login` | público |
+| Movimientos | `POST /movimientos` | Admin+Op |
+| | `GET /movimientos/historial` | Admin+Op |
+| | `POST /productos/{id}/recalcular-stock` | Admin+Op |
+| Reportes | `GET /reportes/valorizacion` | Admin |
+| | `GET /reportes/stock-por-categoria` | Admin |
+| | `GET /reportes/mas-movidos` | Admin |
+| | `GET /reportes/historial-producto/{productoId}` | Admin |
+| Auditoría | `GET /auditoria` | Admin |
+| Usuarios | `GET /usuarios` · `POST /usuarios` · `DELETE /usuarios/{id}` · `PUT /usuarios/{id}/rol` · `PUT /usuarios/{id}/contrasena` | Admin |
+| Productos | `GET /productos?texto=` · `POST /productos` · `PUT /productos/{id}` · `DELETE /productos/{id}` · `PUT /productos/{id}/precio` | Admin+Op |
+| Categorías | `GET /categorias` · `POST` · `PUT /{id}` · `DELETE /{id}` | Admin |
+| | `GET /categorias/activas` | Admin+Op |
+| Proveedores | `GET /proveedores` · `POST` · `PUT /{id}` · `DELETE /{id}` | Admin |
+| Unidades | `GET /unidades-medida` · `POST` · `PUT /{id}` · `DELETE /{id}` | Admin |
+| | `GET /unidades-medida/activas` | Admin+Op |
 
 ## Verificación manual (curl)
 
-Con la API corriendo, en otra terminal (puerto `5043` del profile `http`):
+Con la API corriendo, en otra terminal (puerto `5043`):
 
 ```bash
-# 1) Login con un usuario existente en la base
+# 1) Login Admin
 curl -X POST http://localhost:5043/auth/login \
   -H "Content-Type: application/json" \
   -d '{"nombreUsuario":"admin","contrasena":"admin123"}'
+# Copiar "token" -> <TOKEN_ADMIN>
 
-# Copiar el valor de "token" de la respuesta y reemplazar <TOKEN> abajo.
-
-# 2) GET /productos sin token → 401 (ProblemDetails)
-curl -i http://localhost:5043/productos
-
-# 3) GET /productos con el token obtenido → 200 con los productos reales
-curl http://localhost:5043/productos \
-  -H "Authorization: Bearer <TOKEN>"
-
-# 4) GET /productos/reporte-valorizacion con token de Admin → 200 con la valorización
-curl http://localhost:5043/productos/reporte-valorizacion \
-  -H "Authorization: Bearer <TOKEN>"
-
-# 5) Login como operador y golpear el mismo endpoint de reportes → 403 (ProblemDetails)
+# 2) Login Operador
 curl -X POST http://localhost:5043/auth/login \
   -H "Content-Type: application/json" \
   -d '{"nombreUsuario":"operador","contrasena":"operador123"}'
+# Copiar "token" -> <TOKEN_OPERADOR>
 
-curl -i http://localhost:5043/productos/reporte-valorizacion \
-  -H "Authorization: Bearer <TOKEN-DE-OPERADOR>"
+# 3) Alta de categoría (Admin) -> 201
+curl -i -X POST http://localhost:5043/categorias \
+  -H "Content-Type: application/json" -H "Authorization: Bearer <TOKEN_ADMIN>" \
+  -d '{"nombre":"Bebidas"}'
+
+# 4) La misma acción con Operador -> 403 (sin GestionarTablasMaestras)
+curl -i -X POST http://localhost:5043/categorias \
+  -H "Content-Type: application/json" -H "Authorization: Bearer <TOKEN_OPERADOR>" \
+  -d '{"nombre":"Otra"}'
+
+# 5) Alta de producto (Operador, tiene GestionarProductos) -> 201
+curl -i -X POST http://localhost:5043/productos \
+  -H "Content-Type: application/json" -H "Authorization: Bearer <TOKEN_OPERADOR>" \
+  -d '{"codigo":"SKU-CURL-1","codigoBarras":null,"nombre":"Producto Curl","descripcion":null,"categoriaId":null,"proveedorId":null,"unidadMedidaId":1,"precioCosto":10,"precioVenta":20,"stockMinimo":0}'
+
+# 6) Registrar un movimiento de entrada (Operador) -> 201
+curl -i -X POST http://localhost:5043/movimientos \
+  -H "Content-Type: application/json" -H "Authorization: Bearer <TOKEN_OPERADOR>" \
+  -d '{"productoId":1,"tipo":"Entrada","motivo":"Compra","cantidad":5,"precioUnitario":10,"comentario":"Carga inicial"}'
+
+# 7) Reporte de valorización (Admin) -> 200; con Operador -> 403
+curl -i http://localhost:5043/reportes/valorizacion -H "Authorization: Bearer <TOKEN_ADMIN>"
+curl -i http://localhost:5043/reportes/valorizacion -H "Authorization: Bearer <TOKEN_OPERADOR>"
+
+# 8) Auditoría (Admin, D5: usa VerReportes) -> 200 con las entradas generadas arriba
+curl http://localhost:5043/auditoria -H "Authorization: Bearer <TOKEN_ADMIN>"
+
+# 9) Listado de usuarios (Admin) -> 200, sin HashContrasena en el body
+curl http://localhost:5043/usuarios -H "Authorization: Bearer <TOKEN_ADMIN>"
 ```
 
-Esta secuencia se corrió realmente contra Postgres de desarrollo (`stockapp-pg`,
-20 productos sembrados) el 2026-07-08: login de `admin`/`admin123` devolvió `200`
-+ JWT; credenciales incorrectas devolvieron `401` ProblemDetails; `GET /productos`
-sin token devolvió `401`; con token de Admin devolvió `200` con los 20 productos
-reales (Coca-Cola 1.5L, Cerveza Quilmes 1L, etc.); `GET /productos/reporte-valorizacion`
-devolvió `200` con la valorización para Admin y `403` ProblemDetails para el token
-de `operador`/`operador123` — confirmando el modelo de autorización server-side
-de punta a punta (spec §6, "no se da 2a por terminada solo con tests en verde,
-sino viendo el flujo real correr").
+Confirmar: cada `201`/`200` con Admin/Operador según la tabla de arriba; cada
+intento fuera de rol devuelve `403` en formato `application/problem+json`; los
+efectos (categoría creada, producto creado, stock incrementado) son visibles en
+consultas posteriores (`GET /categorias`, `GET /productos`, historial de
+movimientos) — no alcanza con mirar el status code.
