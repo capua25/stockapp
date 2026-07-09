@@ -90,9 +90,11 @@ curl -i -X POST http://localhost:5043/productos \
   -d '{"codigo":"SKU-CURL-1","codigoBarras":null,"nombre":"Producto Curl","descripcion":null,"categoriaId":null,"proveedorId":null,"unidadMedidaId":1,"precioCosto":10,"precioVenta":20,"stockMinimo":0}'
 
 # 6) Registrar un movimiento de entrada (Operador) -> 201
+#    Nota: los enums usan valores numéricos en JSON (TipoMovimiento: 0=Entrada/1=Salida;
+#    MotivoMovimiento: 0=Compra/1=Venta/2=Ajuste/3=Merma)
 curl -i -X POST http://localhost:5043/movimientos \
   -H "Content-Type: application/json" -H "Authorization: Bearer <TOKEN_OPERADOR>" \
-  -d '{"productoId":1,"tipo":"Entrada","motivo":"Compra","cantidad":5,"precioUnitario":10,"comentario":"Carga inicial"}'
+  -d '{"productoId":1,"tipo":0,"motivo":0,"cantidad":5,"precioUnitario":10,"comentario":"Carga inicial"}'
 
 # 7) Reporte de valorización (Admin) -> 200; con Operador -> 403
 curl -i http://localhost:5043/reportes/valorizacion -H "Authorization: Bearer <TOKEN_ADMIN>"
