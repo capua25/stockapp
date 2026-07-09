@@ -1,0 +1,91 @@
+using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using StockApp.Api.ErrorHandling;
+using StockApp.Domain.Exceptions;
+using System.Text.Json;
+using Xunit;
+
+namespace StockApp.Api.Tests.ErrorHandling;
+
+/// <summary>
+/// Test unitario del handler, sin WebApplicationFactory: arma un DefaultHttpContext
+/// con un IProblemDetailsService real (via ServiceCollection mínimo) e invoca
+/// TryHandleAsync directamente. Mismo espíritu que JwtTokenServiceTests (Fase 2a,
+/// Task 2): no hace falta un host HTTP completo para probar una unidad aislada.
+/// </summary>
+public class DomainExceptionHandlerTests
+{
+    private static async Task<(int Status, string ContentType, JsonDocument Body)> EjecutarAsync(Exception excepcion)
+    {
+        var services = new ServiceCollection();
+        services.AddProblemDetails();
+        services.AddLogging();
+        await using var provider = services.BuildServiceProvider();
+
+        var context = new DefaultHttpContext
+        {
+            RequestServices = provider,
+            Response = { Body = new MemoryStream() },
+        };
+
+        var handler = new DomainExceptionHandler();
+        var manejada = await handler.TryHandleAsync(context, excepcion, CancellationToken.None);
+
+        Assert.True(manejada);
+
+        context.Response.Body.Seek(0, SeekOrigin.Begin);
+        var texto = await new StreamReader(context.Response.Body).ReadToEndAsync();
+        return (context.Response.StatusCode, context.Response.ContentType!, JsonDocument.Parse(texto));
+    }
+
+    [Fact]
+    public async Task StockInsuficienteException_Mapea409()
+    {
+        var (status, contentType, body) = await EjecutarAsync(
+            new StockInsuficienteException(1, 5m, 10m));
+
+        Assert.Equal(StatusCodes.Status409Conflict, status);
+        Assert.StartsWith("application/problem+json", contentType);
+        Assert.Equal(409, body.RootElement.GetProperty("status").GetInt32());
+    }
+
+    [Fact]
+    public async Task InvalidOperationException_Mapea409()
+    {
+        var (status, _, _) = await EjecutarAsync(new InvalidOperationException("ya existe"));
+        Assert.Equal(StatusCodes.Status409Conflict, status);
+    }
+
+    [Fact]
+    public async Task KeyNotFoundException_Mapea404()
+    {
+        var (status, _, _) = await EjecutarAsync(new KeyNotFoundException("no existe"));
+        Assert.Equal(StatusCodes.Status404NotFound, status);
+    }
+
+    [Fact]
+    public async Task ArgumentException_Mapea400()
+    {
+        var (status, _, _) = await EjecutarAsync(new ArgumentException("dato invalido"));
+        Assert.Equal(StatusCodes.Status400BadRequest, status);
+    }
+
+    [Fact]
+    public async Task UnauthorizedAccessException_Mapea403()
+    {
+        var (status, _, _) = await EjecutarAsync(new UnauthorizedAccessException("sin permiso"));
+        Assert.Equal(StatusCodes.Status403Forbidden, status);
+    }
+
+    [Fact]
+    public async Task ExcepcionGenerica_Mapea500SinExponerElMensajeInterno()
+    {
+        var (status, _, body) = await EjecutarAsync(new Exception("detalle interno sensible"));
+
+        Assert.Equal(StatusCodes.Status500InternalServerError, status);
+        var tieneDetail = body.RootElement.TryGetProperty("detail", out var detalle);
+        if (tieneDetail)
+            Assert.DoesNotContain("detalle interno sensible", detalle.GetString());
+    }
+}

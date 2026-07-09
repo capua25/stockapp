@@ -5,6 +5,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using StockApp.Api.Auth;
 using StockApp.Api.Endpoints;
+using StockApp.Api.ErrorHandling;
 using StockApp.Application.Auditoria;
 using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
@@ -45,6 +46,11 @@ builder.Services.AddScoped<ICurrentSession, HttpCurrentSession>();
 
 builder.Services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
 builder.Services.AddSingleton<IAuthorizationService, AuthorizationService>();
+
+// DomainExceptionHandler: mapeo centralizado de excepciones de dominio/aplicación a
+// status HTTP (Fase 2b, sección "Manejo de errores" del spec). Los endpoints de
+// Bloque C no hacen try/catch — cualquier excepción no capturada llega acá.
+builder.Services.AddExceptionHandler<DomainExceptionHandler>();
 
 // ProblemDetails: shape uniforme para 400/401/403/500. Los 401/403 se escriben
 // explícitamente en los eventos de JwtBearerOptions (abajo) en vez de depender de la
