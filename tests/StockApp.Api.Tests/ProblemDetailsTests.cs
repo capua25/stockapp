@@ -39,7 +39,7 @@ public class ProblemDetailsTests : ApiTestBase
         var client = Factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var response = await client.GetAsync("/productos/reporte-valorizacion");
+        var response = await client.GetAsync("/reportes/valorizacion");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         Assert.StartsWith("application/problem+json", response.Content.Headers.ContentType!.ToString());
