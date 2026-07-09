@@ -32,4 +32,7 @@ public class AuthorizationService : IAuthorizationService
             throw new UnauthorizedAccessException(
                 $"El rol Operador no tiene permiso para ejecutar la acción '{accion}'.");
     }
+
+    public bool TienePermiso(RolUsuario rol, string accion) =>
+        rol == RolUsuario.Admin || AccionesOperador.Contains(accion);
 }

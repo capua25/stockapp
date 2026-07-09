@@ -13,4 +13,13 @@ public interface IAuthorizationService
     /// </summary>
     /// <exception cref="UnauthorizedAccessException">Si el rol no tiene permiso o no hay sesión.</exception>
     void Verificar(RolUsuario? rolActual, string accion);
+
+    /// <summary>
+    /// Igual que <see cref="Verificar"/> pero sin lanzar: devuelve si <paramref name="rol"/>
+    /// puede ejecutar <paramref name="accion"/>, consultando la misma tabla rol→permiso.
+    /// Usado por StockApp.Api/Program.cs (Fase 2b, D1) para derivar las políticas de
+    /// autorización HTTP a partir de esta única fuente de verdad, en vez de declararlas
+    /// a mano por recurso.
+    /// </summary>
+    bool TienePermiso(RolUsuario rol, string accion);
 }
