@@ -79,6 +79,17 @@ public class DomainExceptionHandlerTests
     }
 
     [Fact]
+    public async Task BadHttpRequestException_Mapea400ConStatusCodeDeLaExcepcion()
+    {
+        // Binding fallido de Minimal API (ej. enum inválido en query string) tira esta
+        // excepción con StatusCode 400 propio; el handler debe respetarlo, no caer al 500 genérico.
+        var (status, _, body) = await EjecutarAsync(new BadHttpRequestException("mensaje de binding"));
+
+        Assert.Equal(StatusCodes.Status400BadRequest, status);
+        Assert.Equal("mensaje de binding", body.RootElement.GetProperty("detail").GetString());
+    }
+
+    [Fact]
     public async Task ExcepcionGenerica_Mapea500SinExponerElMensajeInterno()
     {
         var (status, _, body) = await EjecutarAsync(new Exception("detalle interno sensible"));

@@ -191,18 +191,17 @@ public class MovimientosEndpointTests : ApiTestBase
     }
 
     [Fact]
-    public async Task GetHistorial_TipoInvalido_DocumentaBehavior()
+    public async Task GetHistorial_TipoInvalido_Devuelve400()
     {
         var client = Factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
 
-        // Intentar llamar con un tipo inválido (no es un valor del enum TipoMovimiento)
+        // Un tipo que no matchea el enum TipoMovimiento hace fallar el binding de Minimal API
+        // (BadHttpRequestException), que DomainExceptionHandler mapea a 400: input inválido del
+        // cliente, no un error del servidor.
         var response = await client.GetAsync("/movimientos/historial?tipo=Inexistente");
 
-        // COMPORTAMIENTO OBSERVADO: Minimal API devuelve 500 InternalServerError cuando no puede bindear
-        // un enum inválido desde query string. No es 400 porque el binding falla sin validación de
-        // ModelState explícita para nullable enums.
-        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     // ── POST /productos/{id}/recalcular-stock ────────────────────────────────

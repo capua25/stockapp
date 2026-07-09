@@ -21,6 +21,10 @@ public class DomainExceptionHandler : IExceptionHandler
             KeyNotFoundException        => (StatusCodes.Status404NotFound, "Recurso no encontrado."),
             ArgumentException           => (StatusCodes.Status400BadRequest, "Solicitud inválida."),
             UnauthorizedAccessException => (StatusCodes.Status403Forbidden, "Prohibido."),
+            // Binding fallido de Minimal API (ej. valor de query param que no matchea un enum):
+            // input inválido del cliente, nunca un 500. Se respeta el StatusCode propio de la
+            // excepción (normalmente 400, pero Kestrel puede usar variantes como 413/431).
+            BadHttpRequestException ex  => (ex.StatusCode, "Solicitud inválida."),
             _                           => (StatusCodes.Status500InternalServerError, "Error interno."),
         };
 
