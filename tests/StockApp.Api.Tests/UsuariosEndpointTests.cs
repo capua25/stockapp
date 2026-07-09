@@ -7,6 +7,7 @@ using StockApp.Api.Auth;
 using StockApp.Api.Endpoints;
 using StockApp.Api.Tests.Fixtures;
 using StockApp.Application.Auth;
+using StockApp.Application.Interfaces;
 using StockApp.Domain.Enums;
 using Xunit;
 
@@ -163,5 +164,20 @@ public class UsuariosEndpointTests : ApiTestBase
             $"/usuarios/{usuario.Id}/contrasena", new CambiarContrasenaRequest("nuevaClave123", null));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        // Verifica persistencia real del hash: lee desde DB con contexto fresco.
+        await using var verificacion = Factory.CrearContexto();
+        var usuarioActualizado = await verificacion.Usuarios.SingleAsync(u => u.Id == usuario.Id);
+
+        // Resuelve el hasher desde el DI del API.
+        var hasher = Factory.Services.GetRequiredService<IPasswordHasher>();
+
+        // La contraseña NUEVA debe verificar contra el hash persistido.
+        Assert.True(hasher.Verify("nuevaClave123", usuarioActualizado.HashContrasena),
+            "La contraseña nueva no verifica contra el hash persistido.");
+
+        // La contraseña VIEJA ya NO debe verificar.
+        Assert.False(hasher.Verify("Secreta123!", usuarioActualizado.HashContrasena),
+            "La contraseña vieja verifica contra el nuevo hash (bug: contraseña no se cambió).");
     }
 }
