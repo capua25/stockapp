@@ -5,6 +5,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using StockApp.Api.Auth;
 using StockApp.Api.Endpoints;
+using StockApp.Application.Auditoria;
+using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Interfaces;
@@ -64,6 +66,22 @@ builder.Services.AddScoped<IMovimientoStockRepository, MovimientoStockRepository
 builder.Services.AddScoped<IMovimientoStockService, MovimientoStockService>();
 builder.Services.AddScoped<IReporteStockRepository, ReporteStockRepository>();
 builder.Services.AddScoped<IReporteStockService, ReporteStockService>();
+
+// Catálogo — tablas maestras (Fase 2b)
+builder.Services.AddScoped<ICategoriaRepository, CategoriaRepository>();
+builder.Services.AddScoped<ICategoriaService, CategoriaService>();
+builder.Services.AddScoped<IProveedorRepository, ProveedorRepository>();
+builder.Services.AddScoped<IProveedorService, ProveedorService>();
+builder.Services.AddScoped<IUnidadMedidaService, UnidadMedidaService>();
+// IUnidadMedidaRepository ya está registrado desde Fase 2a (usado por ProductosEndpoints).
+
+// Auditoría (Fase 2b)
+builder.Services.AddScoped<IAuditoriaQueryRepository, AuditoriaQueryRepository>();
+builder.Services.AddScoped<IAuditoriaQueryService, AuditoriaQueryService>();
+
+// Usuarios — ABM completo vía API (Fase 2b). IUsuarioRepository y IPasswordHasher
+// ya están registrados desde Fase 2a (usados por AuthEndpoints).
+builder.Services.AddScoped<IUsuarioService, UsuarioService>();
 
 // JwtOptions: misma razón que AppDbContext arriba — el secreto se lee de forma diferida
 // en el factory (resuelto post-Build), no en una `var` top-level. JwtOptions es un
@@ -153,17 +171,24 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
         };
     });
 
-// Políticas nombradas igual que las constantes de Permisos: el nombre de la política
-// HTTP es literalmente el mismo string que ya usa AuthorizationService.Verificar
-// puertas adentro (spec §3).
+// Políticas derivadas de AuthorizationService (Fase 2b, D1): NO se declaran a mano.
+// Para cada permiso de Permisos.Todos, se arma la política con los roles que
+// AuthorizationService.TienePermiso autoriza — una sola fuente de verdad para la
+// tabla rol→permiso, compartida entre la API (primera barrera) y los servicios de
+// aplicación (segunda barrera, defensa en profundidad — D2).
+var authServiceParaPoliticas = new AuthorizationService();
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy(Permisos.GestionarProductos, policy =>
-        policy.RequireClaim(StockAppClaimTypes.Rol,
-            RolUsuario.Admin.ToString(), RolUsuario.Operador.ToString()));
+    foreach (var permiso in Permisos.Todos)
+    {
+        var rolesPermitidos = Enum.GetValues<RolUsuario>()
+            .Where(rol => authServiceParaPoliticas.TienePermiso(rol, permiso))
+            .Select(rol => rol.ToString())
+            .ToArray();
 
-    options.AddPolicy(Permisos.VerReportes, policy =>
-        policy.RequireClaim(StockAppClaimTypes.Rol, RolUsuario.Admin.ToString()));
+        options.AddPolicy(permiso, policy =>
+            policy.RequireClaim(StockAppClaimTypes.Rol, rolesPermitidos));
+    }
 });
 
 var app = builder.Build();
