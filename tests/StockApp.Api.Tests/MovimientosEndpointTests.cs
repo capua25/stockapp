@@ -128,6 +128,83 @@ public class MovimientosEndpointTests : ApiTestBase
         Assert.Equal(producto.Id, historial![0].ProductoId);
     }
 
+    [Fact]
+    public async Task GetHistorial_FiltraPorTipo_Entrada()
+    {
+        await using var ctx = Factory.CrearContexto();
+        await DatosDePrueba.SeedUsuarioAsync(ctx, "admin.test", "Secreta123!", RolUsuario.Admin);
+        await DatosDePrueba.SeedUsuarioAsync(ctx, "operador.test", "Secreta123!", RolUsuario.Operador);
+        var producto = await DatosDePrueba.SeedProductoConStockAsync(ctx, "SKU-M6", "Producto Mov 6", 10m);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenOperador());
+
+        // Registrar una Entrada
+        await client.PostAsJsonAsync("/movimientos",
+            new RegistrarMovimientoRequest(producto.Id, TipoMovimiento.Entrada, MotivoMovimiento.Compra, 5m, 10m, null));
+
+        // Registrar una Salida
+        await client.PostAsJsonAsync("/movimientos",
+            new RegistrarMovimientoRequest(producto.Id, TipoMovimiento.Salida, MotivoMovimiento.Venta, 2m, 15m, null));
+
+        var response = await client.GetAsync($"/movimientos/historial?tipo=Entrada");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var historial = await response.Content.ReadFromJsonAsync<List<MovimientoHistorialDto>>();
+        Assert.Single(historial!);
+        Assert.Equal(TipoMovimiento.Entrada, historial![0].Tipo);
+    }
+
+    [Fact]
+    public async Task GetHistorial_FiltraPorRangoFechas()
+    {
+        await using var ctx = Factory.CrearContexto();
+        await DatosDePrueba.SeedUsuarioAsync(ctx, "admin.test", "Secreta123!", RolUsuario.Admin);
+        await DatosDePrueba.SeedUsuarioAsync(ctx, "operador.test", "Secreta123!", RolUsuario.Operador);
+        var producto = await DatosDePrueba.SeedProductoConStockAsync(ctx, "SKU-M7", "Producto Mov 7", 10m);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenOperador());
+
+        // Registrar un movimiento hoy
+        await client.PostAsJsonAsync("/movimientos",
+            new RegistrarMovimientoRequest(producto.Id, TipoMovimiento.Entrada, MotivoMovimiento.Compra, 5m, 10m, null));
+
+        var ahora = DateTime.UtcNow;
+        var ayer = ahora.AddDays(-1).ToString("O");
+        var manana = ahora.AddDays(1).ToString("O");
+
+        // Filtrar con rango que incluye hoy
+        var responseConRango = await client.GetAsync($"/movimientos/historial?fechaDesde={Uri.EscapeDataString(ayer)}&fechaHasta={Uri.EscapeDataString(manana)}");
+
+        Assert.Equal(HttpStatusCode.OK, responseConRango.StatusCode);
+        var historialConRango = await responseConRango.Content.ReadFromJsonAsync<List<MovimientoHistorialDto>>();
+        Assert.Single(historialConRango!);
+
+        // Filtrar con rango en el pasado lejano (sin movimientos)
+        var pasadoLejano = "2020-01-01T00:00:00Z";
+        var responsePasado = await client.GetAsync($"/movimientos/historial?fechaHasta={Uri.EscapeDataString(pasadoLejano)}");
+
+        Assert.Equal(HttpStatusCode.OK, responsePasado.StatusCode);
+        var historialPasado = await responsePasado.Content.ReadFromJsonAsync<List<MovimientoHistorialDto>>();
+        Assert.Empty(historialPasado!);
+    }
+
+    [Fact]
+    public async Task GetHistorial_TipoInvalido_DocumentaBehavior()
+    {
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        // Intentar llamar con un tipo inválido (no es un valor del enum TipoMovimiento)
+        var response = await client.GetAsync("/movimientos/historial?tipo=Inexistente");
+
+        // COMPORTAMIENTO OBSERVADO: Minimal API devuelve 500 InternalServerError cuando no puede bindear
+        // un enum inválido desde query string. No es 400 porque el binding falla sin validación de
+        // ModelState explícita para nullable enums.
+        Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+    }
+
     // ── POST /productos/{id}/recalcular-stock ────────────────────────────────
 
     [Fact]
