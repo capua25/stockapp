@@ -12,7 +12,7 @@ public class LoginEndpointTests : ApiTestBase
     public LoginEndpointTests(ApiFactory factory) : base(factory) { }
 
     [Fact]
-    public async Task Login_ConCredencialesValidas_Devuelve200ConToken()
+    public async Task Login_ConCredencialesValidas_Devuelve200ConTokenYUsuario()
     {
         await using var ctx = Factory.CrearContexto();
         await DatosDePrueba.SeedUsuarioAsync(ctx, "admin.test", "Secreta123!", RolUsuario.Admin);
@@ -24,6 +24,8 @@ public class LoginEndpointTests : ApiTestBase
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<LoginResponse>();
         Assert.False(string.IsNullOrWhiteSpace(body!.Token));
+        Assert.Equal("admin.test", body.Usuario.NombreUsuario);
+        Assert.Equal(RolUsuario.Admin, body.Usuario.Rol);
     }
 
     [Fact]

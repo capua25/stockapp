@@ -1,11 +1,13 @@
 using StockApp.Api.Auth;
 using StockApp.Application.Auth;
 using StockApp.Application.Interfaces;
+using StockApp.Domain.Enums;
 
 namespace StockApp.Api.Endpoints;
 
 public record LoginRequest(string? NombreUsuario, string? Contrasena);
-public record LoginResponse(string Token);
+public record UsuarioLoginResponse(int Id, string NombreUsuario, string? NombreCompleto, RolUsuario Rol);
+public record LoginResponse(string Token, UsuarioLoginResponse Usuario);
 public record PrimerArranqueEstadoResponse(bool RequiereCrearAdmin);
 public record CrearAdminInicialRequest(string NombreUsuario, string Contrasena);
 
@@ -43,7 +45,9 @@ public static class AuthEndpoints
             }
 
             var token = jwtTokenService.GenerarToken(usuario.Id, usuario.Rol);
-            return Results.Ok(new LoginResponse(token));
+            var usuarioResponse = new UsuarioLoginResponse(
+                usuario.Id, usuario.NombreUsuario, usuario.NombreCompleto, usuario.Rol);
+            return Results.Ok(new LoginResponse(token, usuarioResponse));
         });
 
         group.MapGet("/primer-arranque", async (IPrimerArranqueService primerArranque) =>
