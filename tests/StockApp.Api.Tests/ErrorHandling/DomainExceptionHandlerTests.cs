@@ -99,4 +99,18 @@ public class DomainExceptionHandlerTests
         if (tieneDetail)
             Assert.DoesNotContain("detalle interno sensible", detalle.GetString());
     }
+
+    [Fact]
+    public async Task EntidadNoEncontradaException_Mapea404()
+    {
+        var (status, _, _) = await EjecutarAsync(new EntidadNoEncontradaException("Producto 5 no encontrado."));
+        Assert.Equal(StatusCodes.Status404NotFound, status);
+    }
+
+    [Fact]
+    public async Task ReglaDeNegocioException_Mapea409()
+    {
+        var (status, _, _) = await EjecutarAsync(new ReglaDeNegocioException("Ya existe una categoría con ese nombre."));
+        Assert.Equal(StatusCodes.Status409Conflict, status);
+    }
 }
