@@ -5,7 +5,7 @@ using StockApp.Domain.Entities;
 namespace StockApp.Api.Endpoints;
 
 public record CrearCategoriaRequest(string Nombre);
-public record ModificarCategoriaRequest(int Id, string Nombre);
+public record ModificarCategoriaRequest(string Nombre);
 
 public static class CategoriasEndpoints
 {

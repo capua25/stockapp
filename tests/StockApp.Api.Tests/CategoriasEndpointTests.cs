@@ -116,7 +116,7 @@ public class CategoriasEndpointTests : ApiTestBase
         var client = Factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
 
-        var response = await client.PutAsJsonAsync($"/categorias/{categoria.Id}", new ModificarCategoriaRequest(categoria.Id, "Modificada"));
+        var response = await client.PutAsJsonAsync($"/categorias/{categoria.Id}", new ModificarCategoriaRequest("Modificada"));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
