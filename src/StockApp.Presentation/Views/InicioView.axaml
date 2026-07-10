@@ -13,7 +13,8 @@
                Opacity="0.28"
                Stretch="Uniform"
                HorizontalAlignment="Center"
-               VerticalAlignment="Center" />
+               VerticalAlignment="Center"
+               RenderTransform="scale(0.85)" />
 
         <ScrollViewer>
             <StackPanel Margin="24" Spacing="20">
