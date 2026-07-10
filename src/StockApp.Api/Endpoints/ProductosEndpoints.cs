@@ -11,7 +11,7 @@ public record CrearProductoRequest(
     decimal PrecioCosto, decimal PrecioVenta, decimal StockMinimo);
 
 public record ModificarProductoRequest(
-    int Id, string Codigo, string? CodigoBarras, string Nombre, string? Descripcion,
+    string Codigo, string? CodigoBarras, string Nombre, string? Descripcion,
     int? CategoriaId, int? ProveedorId, int UnidadMedidaId,
     decimal PrecioCosto, decimal PrecioVenta, decimal StockMinimo);
 

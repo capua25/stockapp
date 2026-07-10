@@ -150,7 +150,7 @@ public class ProductosEndpointTests : ApiTestBase
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var response = await client.PutAsJsonAsync($"/productos/{producto.Id}", new ModificarProductoRequest(
-            producto.Id, producto.Codigo, null, "Nombre Modificado", null, null, null, producto.UnidadMedidaId, 10m, 20m, 0m));
+            producto.Codigo, null, "Nombre Modificado", null, null, null, producto.UnidadMedidaId, 10m, 20m, 0m));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
