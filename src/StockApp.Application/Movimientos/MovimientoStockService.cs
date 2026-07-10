@@ -49,10 +49,10 @@ public class MovimientoStockService : IMovimientoStockService
 
         // B5: existencia y estado del producto
         var producto = await _repo.ObtenerProductoAsync(dto.ProductoId)
-            ?? throw new KeyNotFoundException($"Producto {dto.ProductoId} no encontrado.");
+            ?? throw new EntidadNoEncontradaException($"Producto {dto.ProductoId} no encontrado.");
 
         if (!producto.Activo)
-            throw new InvalidOperationException(
+            throw new ReglaDeNegocioException(
                 $"No se permiten movimientos sobre productos inactivos (ProductoId={dto.ProductoId}).");
 
         // B6: cálculo de signo (el guard de stock lo hace el UPDATE condicional en el repo)
@@ -123,7 +123,7 @@ public class MovimientoStockService : IMovimientoStockService
         _auth.Verificar(_session.RolActual, Permisos.RecalcularStock);
 
         var producto = await _repo.ObtenerProductoAsync(productoId)
-            ?? throw new KeyNotFoundException($"Producto {productoId} no encontrado.");
+            ?? throw new EntidadNoEncontradaException($"Producto {productoId} no encontrado.");
 
         var (neto, total) = await _repo.SumarMovimientosAsync(productoId);
 

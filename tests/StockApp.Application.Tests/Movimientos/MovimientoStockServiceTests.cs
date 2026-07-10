@@ -147,24 +147,24 @@ public class MovimientoStockServiceTests
         // pero lo importante es que la validación de precio NO lo bloqueó.
         repo.Setup(r => r.ObtenerProductoAsync(1)).ReturnsAsync((Producto?)null);
 
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => svc.RegistrarAsync(dto));
+        await Assert.ThrowsAsync<EntidadNoEncontradaException>(() => svc.RegistrarAsync(dto));
         repo.Verify(r => r.ObtenerProductoAsync(1), Times.Once); // llegó al repo
     }
 
     // ── B5: Existencia y estado del producto ─────────────────────────────────
 
     [Fact]
-    public async Task RegistrarAsync_ProductoNoExiste_LanzaKeyNotFoundException()
+    public async Task RegistrarAsync_ProductoNoExiste_LanzaEntidadNoEncontradaException()
     {
         var (svc, repo, _, _) = Crear();
         repo.Setup(r => r.ObtenerProductoAsync(99)).ReturnsAsync((Producto?)null);
 
         var dto = DtoEntrada(productoId: 99);
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => svc.RegistrarAsync(dto));
+        await Assert.ThrowsAsync<EntidadNoEncontradaException>(() => svc.RegistrarAsync(dto));
     }
 
     [Fact]
-    public async Task RegistrarAsync_ProductoInactivo_LanzaInvalidOperationException()
+    public async Task RegistrarAsync_ProductoInactivo_LanzaReglaDeNegocioException()
     {
         var (svc, repo, _, _) = Crear();
         var producto = new Producto { Id = 1, Activo = false, Nombre = "X",
@@ -172,7 +172,7 @@ public class MovimientoStockServiceTests
         repo.Setup(r => r.ObtenerProductoAsync(1)).ReturnsAsync(producto);
 
         var dto = DtoEntrada();
-        await Assert.ThrowsAsync<InvalidOperationException>(() => svc.RegistrarAsync(dto));
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => svc.RegistrarAsync(dto));
     }
 
     // ── B6: Cálculo de signo + StockInsuficienteException ───────────────────
@@ -322,12 +322,12 @@ public class MovimientoStockServiceTests
     }
 
     [Fact]
-    public async Task RecalcularStockAsync_ProductoNoExiste_LanzaKeyNotFoundException()
+    public async Task RecalcularStockAsync_ProductoNoExiste_LanzaEntidadNoEncontradaException()
     {
         var (svc, repo, _, _) = Crear();
         repo.Setup(r => r.ObtenerProductoAsync(99)).ReturnsAsync((Producto?)null);
 
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => svc.RecalcularStockAsync(99));
+        await Assert.ThrowsAsync<EntidadNoEncontradaException>(() => svc.RecalcularStockAsync(99));
     }
 
     [Fact]

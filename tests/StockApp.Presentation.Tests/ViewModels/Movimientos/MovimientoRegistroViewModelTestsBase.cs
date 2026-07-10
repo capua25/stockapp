@@ -206,7 +206,7 @@ public abstract class MovimientoRegistroViewModelTestsBase
 
         svcMock
             .Setup(s => s.RegistrarAsync(It.IsAny<RegistrarMovimientoDto>(), false))
-            .ThrowsAsync(new InvalidOperationException("Producto inactivo, no se permiten movimientos."));
+            .ThrowsAsync(new ReglaDeNegocioException("Producto inactivo, no se permiten movimientos."));
 
         await vm.RegistrarCommand.ExecuteAsync(null);
 
