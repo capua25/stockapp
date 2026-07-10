@@ -110,6 +110,8 @@ public class ProductosEndpointTests : ApiTestBase
             "SKU-P1", null, "Producto Nuevo", null, null, null, unidad.Id, 5m, 10m, 0m));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        // No existe GET /productos/{id}: Location debe venir null, no una ruta rota.
+        Assert.Null(response.Headers.Location);
 
         await using var verificacion = Factory.CrearContexto();
         Assert.True(await verificacion.Productos.AnyAsync(p => p.Codigo == "SKU-P1"));

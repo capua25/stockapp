@@ -22,7 +22,9 @@ public static class UsuariosEndpoints
         {
             var id = await usuarios.AltaUsuarioAsync(
                 request.NombreUsuario, request.NombreCompleto, request.ContrasenaPlan, request.Rol);
-            return Results.Created($"/usuarios/{id}", new UsuarioCreadoResponse(id));
+            // Sin Location: no existe GET /usuarios/{id} (el único GET del recurso es la lista
+            // completa) — emitir una ruta que no resuelve es peor que omitirla.
+            return Results.Created((string?)null, new UsuarioCreadoResponse(id));
         });
 
         group.MapDelete("/{id:int}", async (int id, IUsuarioService usuarios) =>

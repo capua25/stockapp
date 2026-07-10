@@ -50,7 +50,9 @@ public static class ProductosEndpoints
             };
 
             var id = await productos.AltaAsync(producto);
-            return Results.Created($"/productos/{id}", new { id });
+            // Sin Location: no existe GET /productos/{id} (el único GET del recurso es la
+            // búsqueda por filtros) — emitir una ruta que no resuelve es peor que omitirla.
+            return Results.Created((string?)null, new { id });
         })
         .RequireAuthorization(Permisos.GestionarProductos);
 

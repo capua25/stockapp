@@ -25,7 +25,9 @@ public static class UnidadesMedidaEndpoints
         {
             var unidad = new UnidadMedida { Nombre = request.Nombre, Abreviatura = request.Abreviatura };
             var id = await unidades.AltaAsync(unidad);
-            return Results.Created($"/unidades-medida/{id}", new { id });
+            // Sin Location: no existe GET /unidades-medida/{id} (el GET del recurso es la lista
+            // completa o /activas) — emitir una ruta que no resuelve es peor que omitirla.
+            return Results.Created((string?)null, new { id });
         })
         .RequireAuthorization(Permisos.GestionarTablasMaestras);
 

@@ -73,6 +73,8 @@ public class ProveedoresEndpointTests : ApiTestBase
             new CrearProveedorRequest("Distribuidora XYZ", "011-1234", "xyz@mail.com", "Calle 123", null));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        // No existe GET /proveedores/{id}: Location debe venir null, no una ruta rota.
+        Assert.Null(response.Headers.Location);
 
         await using var verificacion = Factory.CrearContexto();
         Assert.True(await verificacion.Proveedores.AnyAsync(p => p.Nombre == "Distribuidora XYZ"));

@@ -77,6 +77,8 @@ public class UsuariosEndpointTests : ApiTestBase
             new CrearUsuarioRequest("nuevo.usuario", "Nuevo Usuario", "pwd12345", RolUsuario.Operador));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        // No existe GET /usuarios/{id}: Location debe venir null, no una ruta rota.
+        Assert.Null(response.Headers.Location);
         var body = await response.Content.ReadFromJsonAsync<UsuarioCreadoResponse>();
         Assert.True(body!.Id > 0);
 

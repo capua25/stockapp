@@ -28,7 +28,9 @@ public static class CategoriasEndpoints
         group.MapPost("/", async (CrearCategoriaRequest request, ICategoriaService categorias) =>
         {
             var id = await categorias.AltaAsync(new Categoria { Nombre = request.Nombre });
-            return Results.Created($"/categorias/{id}", new { id });
+            // Sin Location: no existe GET /categorias/{id} (el GET del recurso es la lista
+            // completa o /activas) — emitir una ruta que no resuelve es peor que omitirla.
+            return Results.Created((string?)null, new { id });
         })
         .RequireAuthorization(Permisos.GestionarTablasMaestras);
 

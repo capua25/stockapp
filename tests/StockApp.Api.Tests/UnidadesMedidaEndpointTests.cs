@@ -72,6 +72,8 @@ public class UnidadesMedidaEndpointTests : ApiTestBase
         var response = await client.PostAsJsonAsync("/unidades-medida", new CrearUnidadMedidaRequest("Metro", "m"));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        // No existe GET /unidades-medida/{id}: Location debe venir null, no una ruta rota.
+        Assert.Null(response.Headers.Location);
 
         await using var verificacion = Factory.CrearContexto();
         Assert.True(await verificacion.UnidadesMedida.AnyAsync(u => u.Nombre == "Metro"));

@@ -31,7 +31,9 @@ public static class ProveedoresEndpoints
                 Notas = request.Notas,
             };
             var id = await proveedores.AltaAsync(proveedor);
-            return Results.Created($"/proveedores/{id}", new { id });
+            // Sin Location: no existe GET /proveedores/{id} (el único GET del recurso es la
+            // lista completa) — emitir una ruta que no resuelve es peor que omitirla.
+            return Results.Created((string?)null, new { id });
         });
 
         group.MapPut("/{id:int}", async (int id, ModificarProveedorRequest request, IProveedorService proveedores) =>

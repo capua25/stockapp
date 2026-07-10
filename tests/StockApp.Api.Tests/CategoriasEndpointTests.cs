@@ -72,6 +72,8 @@ public class CategoriasEndpointTests : ApiTestBase
         var response = await client.PostAsJsonAsync("/categorias", new CrearCategoriaRequest("Lácteos"));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        // No existe GET /categorias/{id}: Location debe venir null, no una ruta rota.
+        Assert.Null(response.Headers.Location);
 
         await using var verificacion = Factory.CrearContexto();
         Assert.True(await verificacion.Categorias.AnyAsync(c => c.Nombre == "Lácteos"));
