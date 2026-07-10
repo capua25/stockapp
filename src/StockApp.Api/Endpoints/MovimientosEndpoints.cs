@@ -31,7 +31,10 @@ public static class MovimientosEndpoints
                 request.Cantidad, request.PrecioUnitario, request.Comentario);
 
             var registrado = await movimientos.RegistrarAsync(dto, request.Forzar);
-            return Results.Created($"/movimientos/{registrado.MovimientoId}", registrado);
+            // Sin Location: no existe GET /movimientos/{id} (el único GET del recurso es
+            // /movimientos/historial) — emitir una ruta que no resuelve es peor que omitirla
+            // (review final de Fase 2b).
+            return Results.Created((string?)null, registrado);
         })
         .RequireAuthorization(Permisos.RegistrarMovimientos);
 

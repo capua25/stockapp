@@ -249,4 +249,24 @@ public class MovimientosEndpointTests : ApiTestBase
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
+
+    // ── Limpieza Location (review final de Fase 2b) ──────────────────────────
+
+    [Fact]
+    public async Task PostMovimientos_Devuelve201SinLocationARutaInexistente()
+    {
+        await using var ctx = Factory.CrearContexto();
+        await DatosDePrueba.SeedUsuarioAsync(ctx, "admin.test", "Secreta123!", RolUsuario.Admin);
+        await DatosDePrueba.SeedUsuarioAsync(ctx, "operador.test", "Secreta123!", RolUsuario.Operador);
+        var producto = await DatosDePrueba.SeedProductoConStockAsync(ctx, "SKU-LOC1", "Producto Location", 10m);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenOperador());
+
+        var response = await client.PostAsJsonAsync("/movimientos",
+            new RegistrarMovimientoRequest(producto.Id, TipoMovimiento.Entrada, MotivoMovimiento.Compra, 5m, 10m, null));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+    }
 }
