@@ -3,6 +3,7 @@ using StockApp.Application.Interfaces;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 using StockApp.Infrastructure.Persistence;
 
 namespace StockApp.Infrastructure.Repositories;
@@ -57,7 +58,7 @@ public class MovimientoStockRepository : IMovimientoStockRepository
                     .FirstOrDefaultAsync();
 
                 if (stockActual is null)
-                    throw new KeyNotFoundException($"Producto {args.ProductoId} no encontrado.");
+                    throw new EntidadNoEncontradaException($"Producto {args.ProductoId} no encontrado.");
 
                 await tx.RollbackAsync();
                 return new ResultadoRegistro(ResultadoRegistroEstado.StockInsuficiente, 0, stockActual.Value);
@@ -72,7 +73,7 @@ public class MovimientoStockRepository : IMovimientoStockRepository
                 .ExecuteUpdateAsync(s => s.SetProperty(p => p.StockActual, p => p.StockActual + delta));
 
             if (filas == 0)
-                throw new KeyNotFoundException($"Producto {args.ProductoId} no encontrado.");
+                throw new EntidadNoEncontradaException($"Producto {args.ProductoId} no encontrado.");
         }
 
         // Insert movimiento + log dentro de la MISMA transacción
@@ -105,7 +106,7 @@ public class MovimientoStockRepository : IMovimientoStockRepository
     public async Task RecalcularAtomicoAsync(RecalculoAtomicoArgs args)
     {
         var producto = await _ctx.Productos.FindAsync(args.ProductoId)
-            ?? throw new KeyNotFoundException($"Producto {args.ProductoId} no encontrado.");
+            ?? throw new EntidadNoEncontradaException($"Producto {args.ProductoId} no encontrado.");
 
         producto.StockActual = args.StockNuevo;
 

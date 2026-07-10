@@ -3,6 +3,7 @@ using StockApp.Application.Interfaces;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 using StockApp.Infrastructure.Persistence;
 using StockApp.Infrastructure.Repositories;
 using StockApp.Infrastructure.Tests.Fixtures;
@@ -237,6 +238,27 @@ public class MovimientoStockRepositoryTests : PostgresRepositoryTestBase
         Assert.Equal(18, (int)log.Accion);   // AccionAuditada.RecalculoStock
     }
 
+    /// <summary>
+    /// Guard de carrera (Task 10 fix): si el producto fue borrado físicamente entre el
+    /// check del service y la escritura atómica, RecalcularAtomicoAsync debe lanzar
+    /// EntidadNoEncontradaException (no KeyNotFoundException del BCL) para que
+    /// DomainExceptionHandler lo mapee a 404 en vez de caer al arm genérico 500.
+    /// </summary>
+    [Fact]
+    public async Task RecalcularAtomicoAsync_ProductoInexistente_LanzaEntidadNoEncontrada()
+    {
+        var args = new RecalculoAtomicoArgs(
+            ProductoId:       99999,
+            StockNuevo:       30m,
+            UsuarioId:        1,
+            DetalleAuditoria: "producto borrado entre el check y la escritura");
+
+        var ex = await Assert.ThrowsAsync<EntidadNoEncontradaException>(
+            () => _repo.RecalcularAtomicoAsync(args));
+
+        Assert.Equal("Producto 99999 no encontrado.", ex.Message);
+    }
+
     // ── Guard condicional atómico ─────────────────────────────────────────────
 
     [Fact]
@@ -288,6 +310,52 @@ public class MovimientoStockRepositoryTests : PostgresRepositoryTestBase
         await using var ctx2 = Fixture.CrearContexto();
         Assert.Equal(1, await ctx2.MovimientosStock.CountAsync());
         Assert.Equal(1, await ctx2.LogsAuditoria.CountAsync());
+    }
+
+    /// <summary>
+    /// Guard de carrera (Task 10 fix): salida sin forzar sobre un producto inexistente
+    /// (0 filas del UPDATE condicional + StockActual no resoluble) debe lanzar
+    /// EntidadNoEncontradaException, no KeyNotFoundException del BCL.
+    /// </summary>
+    [Fact]
+    public async Task RegistrarMovimientoAtomicoAsync_SalidaProductoInexistente_LanzaEntidadNoEncontrada()
+    {
+        var movimiento = new MovimientoStock
+        {
+            ProductoId = 99999, UsuarioId = 1, Tipo = TipoMovimiento.Salida,
+            Cantidad = 10m, PrecioUnitario = 5m, Fecha = DateTime.UtcNow, Motivo = MotivoMovimiento.Venta
+        };
+        var args = new RegistroAtomicoArgs(
+            Movimiento: movimiento, ProductoId: 99999, Tipo: TipoMovimiento.Salida,
+            Cantidad: 10m, Forzar: false, UsuarioId: 1, DetalleAuditoria: "producto inexistente");
+
+        var ex = await Assert.ThrowsAsync<EntidadNoEncontradaException>(
+            () => _repo.RegistrarMovimientoAtomicoAsync(args));
+
+        Assert.Equal("Producto 99999 no encontrado.", ex.Message);
+    }
+
+    /// <summary>
+    /// Guard de carrera (Task 10 fix): entrada (o salida forzada) sobre un producto
+    /// inexistente (0 filas del UPDATE incondicional) debe lanzar
+    /// EntidadNoEncontradaException, no KeyNotFoundException del BCL.
+    /// </summary>
+    [Fact]
+    public async Task RegistrarMovimientoAtomicoAsync_EntradaProductoInexistente_LanzaEntidadNoEncontrada()
+    {
+        var movimiento = new MovimientoStock
+        {
+            ProductoId = 99999, UsuarioId = 1, Tipo = TipoMovimiento.Entrada,
+            Cantidad = 10m, PrecioUnitario = 5m, Fecha = DateTime.UtcNow, Motivo = MotivoMovimiento.Compra
+        };
+        var args = new RegistroAtomicoArgs(
+            Movimiento: movimiento, ProductoId: 99999, Tipo: TipoMovimiento.Entrada,
+            Cantidad: 10m, Forzar: false, UsuarioId: 1, DetalleAuditoria: "producto inexistente");
+
+        var ex = await Assert.ThrowsAsync<EntidadNoEncontradaException>(
+            () => _repo.RegistrarMovimientoAtomicoAsync(args));
+
+        Assert.Equal("Producto 99999 no encontrado.", ex.Message);
     }
 
     // ── C6: ObtenerHistorialAsync con filtros combinables ─────────────────────
