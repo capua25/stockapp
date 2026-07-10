@@ -23,9 +23,15 @@ public static class ProductosEndpoints
     {
         var group = app.MapGroup("/productos");
 
-        group.MapGet("/", async (string? texto, IProductoService productos) =>
-            Results.Ok(await productos.BuscarPorTextoAsync(texto)))
-            .RequireAuthorization(Permisos.GestionarProductos);
+        group.MapGet("/", async (
+            string? texto, string? sku, string? codigoBarras, string? nombre, IProductoService productos) =>
+        {
+            var resultado = texto is not null
+                ? await productos.BuscarPorTextoAsync(texto)
+                : await productos.BuscarAsync(sku, codigoBarras, nombre);
+            return Results.Ok(resultado);
+        })
+        .RequireAuthorization(Permisos.GestionarProductos);
 
         group.MapPost("/", async (CrearProductoRequest request, IProductoService productos) =>
         {

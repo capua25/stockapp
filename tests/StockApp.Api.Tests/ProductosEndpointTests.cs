@@ -211,4 +211,105 @@ public class ProductosEndpointTests : ApiTestBase
         Assert.Equal(15m, actualizado.PrecioCosto);
         Assert.Equal(30m, actualizado.PrecioVenta);
     }
+
+    // ── GET /productos con sku/codigoBarras/nombre (Fase 3a, D5) ────────────
+
+    [Fact]
+    public async Task GetProductos_ConSku_FiltraPorSku()
+    {
+        await using var ctx = Factory.CrearContexto();
+        await DatosDePrueba.SeedProductoAsync(ctx, "SKU-F1", "Producto Sku Uno");
+        await DatosDePrueba.SeedProductoAsync(ctx, "SKU-F2", "Producto Sku Dos");
+
+        var jwt = Factory.Services.GetRequiredService<IJwtTokenService>();
+        var token = jwt.GenerarToken(1, RolUsuario.Admin);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.GetAsync("/productos?sku=SKU-F1");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var productos = await response.Content.ReadFromJsonAsync<List<ProductoDto>>();
+        Assert.Single(productos!);
+        Assert.Equal("SKU-F1", productos![0].Codigo);
+    }
+
+    [Fact]
+    public async Task GetProductos_ConCodigoBarras_FiltraPorCodigoBarras()
+    {
+        await using var ctx = Factory.CrearContexto();
+        var unidad = new UnidadMedida { Nombre = "Unidad CB", Abreviatura = "ucb", Activo = true };
+        ctx.UnidadesMedida.Add(unidad);
+        await ctx.SaveChangesAsync();
+
+        ctx.Productos.Add(new Producto
+        {
+            Codigo = "SKU-CB1", CodigoBarras = "7791234500001", Nombre = "Producto Con Barras",
+            UnidadMedidaId = unidad.Id, PrecioCosto = 1m, PrecioVenta = 2m,
+            StockActual = 0m, StockMinimo = 0m, Activo = true, FechaAlta = DateTime.UtcNow,
+        });
+        ctx.Productos.Add(new Producto
+        {
+            Codigo = "SKU-CB2", CodigoBarras = "7791234500002", Nombre = "Otro Producto",
+            UnidadMedidaId = unidad.Id, PrecioCosto = 1m, PrecioVenta = 2m,
+            StockActual = 0m, StockMinimo = 0m, Activo = true, FechaAlta = DateTime.UtcNow,
+        });
+        await ctx.SaveChangesAsync();
+
+        var jwt = Factory.Services.GetRequiredService<IJwtTokenService>();
+        var token = jwt.GenerarToken(1, RolUsuario.Admin);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.GetAsync("/productos?codigoBarras=7791234500001");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var productos = await response.Content.ReadFromJsonAsync<List<ProductoDto>>();
+        Assert.Single(productos!);
+        Assert.Equal("SKU-CB1", productos![0].Codigo);
+    }
+
+    [Fact]
+    public async Task GetProductos_ConNombre_FiltraPorNombre()
+    {
+        await using var ctx = Factory.CrearContexto();
+        await DatosDePrueba.SeedProductoAsync(ctx, "SKU-N1", "Manzana Roja");
+        await DatosDePrueba.SeedProductoAsync(ctx, "SKU-N2", "Pera Verde");
+
+        var jwt = Factory.Services.GetRequiredService<IJwtTokenService>();
+        var token = jwt.GenerarToken(1, RolUsuario.Admin);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.GetAsync("/productos?nombre=Manzana");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var productos = await response.Content.ReadFromJsonAsync<List<ProductoDto>>();
+        Assert.Single(productos!);
+        Assert.Equal("SKU-N1", productos![0].Codigo);
+    }
+
+    [Fact]
+    public async Task GetProductos_SinFiltros_ListaTodosLosProductos()
+    {
+        await using var ctx = Factory.CrearContexto();
+        await DatosDePrueba.SeedProductoAsync(ctx, "SKU-T3", "Producto Sin Filtro Uno");
+        await DatosDePrueba.SeedProductoAsync(ctx, "SKU-T4", "Producto Sin Filtro Dos");
+
+        var jwt = Factory.Services.GetRequiredService<IJwtTokenService>();
+        var token = jwt.GenerarToken(1, RolUsuario.Admin);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.GetAsync("/productos");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var productos = await response.Content.ReadFromJsonAsync<List<ProductoDto>>();
+        Assert.Contains(productos!, p => p.Codigo == "SKU-T3");
+        Assert.Contains(productos!, p => p.Codigo == "SKU-T4");
+    }
 }
