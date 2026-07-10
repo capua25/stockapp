@@ -51,17 +51,29 @@ public class DomainExceptionHandlerTests
     }
 
     [Fact]
-    public async Task InvalidOperationException_Mapea409()
+    public async Task InvalidOperationException_Generica_Mapea500SinExponerElMensajeInterno()
     {
-        var (status, _, _) = await EjecutarAsync(new InvalidOperationException("ya existe"));
-        Assert.Equal(StatusCodes.Status409Conflict, status);
+        // Fase 3a, D4: ningún servicio de Application lanza esta excepción genérica del BCL —
+        // solo las de dominio propias (ReglaDeNegocioException/EntidadNoEncontradaException).
+        // Si algo la lanza igual (código nuevo que no siguió la convención), es un error no
+        // anticipado: cae al 500 fail-closed, no a un 409 que sugeriría una regla de negocio real.
+        var (status, _, body) = await EjecutarAsync(new InvalidOperationException("detalle interno"));
+
+        Assert.Equal(StatusCodes.Status500InternalServerError, status);
+        var tieneDetail = body.RootElement.TryGetProperty("detail", out var detalle);
+        if (tieneDetail)
+            Assert.DoesNotContain("detalle interno", detalle.GetString());
     }
 
     [Fact]
-    public async Task KeyNotFoundException_Mapea404()
+    public async Task KeyNotFoundException_Generica_Mapea500SinExponerElMensajeInterno()
     {
-        var (status, _, _) = await EjecutarAsync(new KeyNotFoundException("no existe"));
-        Assert.Equal(StatusCodes.Status404NotFound, status);
+        var (status, _, body) = await EjecutarAsync(new KeyNotFoundException("detalle interno"));
+
+        Assert.Equal(StatusCodes.Status500InternalServerError, status);
+        var tieneDetail = body.RootElement.TryGetProperty("detail", out var detalle);
+        if (tieneDetail)
+            Assert.DoesNotContain("detalle interno", detalle.GetString());
     }
 
     [Fact]

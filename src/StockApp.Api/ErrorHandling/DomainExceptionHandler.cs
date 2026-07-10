@@ -16,16 +16,14 @@ public class DomainExceptionHandler : IExceptionHandler
     {
         var (status, title) = exception switch
         {
-            // Fase 3a, D4: excepciones de dominio propias — sustituyen gradualmente a las
-            // genéricas del BCL de abajo. StockInsuficienteException hereda de
-            // ReglaDeNegocioException (Task 1) así que ya matchea acá sin caso propio.
+            // Fase 3a, D4: única fuente de 404/409 de negocio. StockInsuficienteException
+            // hereda de ReglaDeNegocioException (Task 1) así que ya matchea acá sin caso propio.
+            // InvalidOperationException/KeyNotFoundException genéricas del BCL YA NO las lanza
+            // ningún servicio de StockApp.Application — si aparecen, es un error no anticipado
+            // y caen al 500 fail-closed del caso '_' de abajo, no a un 409/404 que sugeriría
+            // una regla de negocio real.
             EntidadNoEncontradaException => (StatusCodes.Status404NotFound, "Recurso no encontrado."),
             ReglaDeNegocioException      => (StatusCodes.Status409Conflict, "Regla de negocio violada."),
-            // TODO(Fase 3a, Task 10): eliminar estos dos casos cuando el barrido de
-            // servicios de Application (Tasks 3-9) termine de reemplazarlos por los de arriba.
-            // Hasta entonces conviven para no romper la suite mientras se migra servicio a servicio.
-            InvalidOperationException    => (StatusCodes.Status409Conflict, "Regla de negocio violada."),
-            KeyNotFoundException         => (StatusCodes.Status404NotFound, "Recurso no encontrado."),
             ArgumentException            => (StatusCodes.Status400BadRequest, "Solicitud inválida."),
             UnauthorizedAccessException  => (StatusCodes.Status403Forbidden, "Prohibido."),
             // Binding fallido de Minimal API (ej. valor de query param que no matchea un enum):
