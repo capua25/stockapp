@@ -5,7 +5,7 @@ using StockApp.Domain.Entities;
 namespace StockApp.Api.Endpoints;
 
 public record CrearProveedorRequest(string Nombre, string? Telefono, string? Email, string? Direccion, string? Notas);
-public record ModificarProveedorRequest(int Id, string Nombre, string? Telefono, string? Email, string? Direccion, string? Notas);
+public record ModificarProveedorRequest(string Nombre, string? Telefono, string? Email, string? Direccion, string? Notas);
 
 public static class ProveedoresEndpoints
 {

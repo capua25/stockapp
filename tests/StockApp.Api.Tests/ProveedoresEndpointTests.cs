@@ -108,7 +108,7 @@ public class ProveedoresEndpointTests : ApiTestBase
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
 
         var response = await client.PutAsJsonAsync($"/proveedores/{proveedor.Id}",
-            new ModificarProveedorRequest(proveedor.Id, "Modificado", "011-9999", null, null, null));
+            new ModificarProveedorRequest("Modificado", "011-9999", null, null, null));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
