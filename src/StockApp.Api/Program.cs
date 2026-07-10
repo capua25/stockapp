@@ -92,21 +92,15 @@ builder.Services.AddScoped<IUsuarioService, UsuarioService>();
 // Bootstrap de primer arranque (Fase 3a, D7) — reusa IUsuarioRepository/IPasswordHasher.
 builder.Services.AddScoped<IPrimerArranqueService, PrimerArranqueService>();
 
-// JwtOptions: misma razón que AppDbContext arriba — el secreto se lee de forma diferida
-// en el factory (resuelto post-Build), no en una `var` top-level. JwtOptions es un
-// record posicional sin constructor sin parámetros, así que no es compatible con el
-// patrón AddOptions<T>().Bind(...).ValidateOnStart() estándar (ese patrón requiere poder
-// instanciar T con Activator.CreateInstance<T>() y mutar propiedades por reflexión).
-// Se preserva el fail-fast con mensaje amigable forzando la resolución del singleton
-// apenas arranca el host (justo después de builder.Build(), abajo).
-builder.Services.AddSingleton(sp =>
-{
-    var secret = sp.GetRequiredService<IConfiguration>()["Jwt:Secret"]
-        ?? throw new InvalidOperationException(
-            "Falta 'Jwt:Secret' en la configuración. En desarrollo: " +
-            "dotnet user-secrets set \"Jwt:Secret\" \"<clave-de-al-menos-32-caracteres>\".");
-    return new JwtOptions(secret, TimeSpan.FromHours(10));
-});
+// JwtOptions: misma razón que AppDbContext arriba — el secreto (y ahora la expiración,
+// Fase 3a D10) se leen de forma diferida en el factory (resuelto post-Build), no en una
+// `var` top-level. JwtOptions es un record posicional sin constructor sin parámetros, así
+// que no es compatible con el patrón AddOptions<T>().Bind(...).ValidateOnStart() estándar
+// (ese patrón requiere poder instanciar T con Activator.CreateInstance<T>() y mutar
+// propiedades por reflexión). Se preserva el fail-fast con mensaje amigable forzando la
+// resolución del singleton apenas arranca el host (justo después de builder.Build(), abajo).
+// La construcción en sí vive en JwtOptionsFactory.Crear (testeable sin host completo).
+builder.Services.AddSingleton(sp => JwtOptionsFactory.Crear(sp.GetRequiredService<IConfiguration>()));
 builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
 
 builder.Services
