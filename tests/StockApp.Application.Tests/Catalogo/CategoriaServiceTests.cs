@@ -4,6 +4,7 @@ using StockApp.Application.Catalogo;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 using Xunit;
 using IAuthSvc = StockApp.Application.Authorization.IAuthorizationService;
 
@@ -45,7 +46,7 @@ public class CategoriaServiceTests
         var (svc, repo, _, _, _) = Crear();
         repo.Setup(r => r.ExisteNombreAsync("Lácteos", null)).ReturnsAsync(true);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(
             () => svc.AltaAsync(new Categoria { Nombre = "Lácteos" }));
     }
 
@@ -106,7 +107,7 @@ public class CategoriaServiceTests
         var (svc, repo, _, _, _) = Crear();
         repo.Setup(r => r.ObtenerPorIdAsync(2)).ReturnsAsync(c);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => svc.BajaLogicaAsync(2));
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => svc.BajaLogicaAsync(2));
     }
 
     // ─── Autorización ────────────────────────────────────────────────────────
@@ -160,5 +161,26 @@ public class CategoriaServiceTests
         var ex = await Record.ExceptionAsync(() => svc.ListarActivasAsync());
 
         Assert.Null(ex);
+    }
+
+    // ─── EntidadNoEncontradaException (Fase 3a, D4) ─────────────────────────
+
+    [Fact]
+    public async Task ModificarAsync_CategoriaInexistente_LanzaEntidadNoEncontrada()
+    {
+        var (svc, repo, _, _, _) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(99)).ReturnsAsync((Categoria?)null);
+
+        await Assert.ThrowsAsync<EntidadNoEncontradaException>(
+            () => svc.ModificarAsync(new Categoria { Id = 99, Nombre = "X" }));
+    }
+
+    [Fact]
+    public async Task BajaLogicaAsync_CategoriaInexistente_LanzaEntidadNoEncontrada()
+    {
+        var (svc, repo, _, _, _) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(99)).ReturnsAsync((Categoria?)null);
+
+        await Assert.ThrowsAsync<EntidadNoEncontradaException>(() => svc.BajaLogicaAsync(99));
     }
 }

@@ -2,6 +2,7 @@ using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 
 namespace StockApp.Application.Catalogo;
 
@@ -35,7 +36,7 @@ public class CategoriaService : ICategoriaService
             throw new ArgumentException("El nombre de la categoría es obligatorio.");
 
         if (await _repo.ExisteNombreAsync(categoria.Nombre, null))
-            throw new InvalidOperationException($"Ya existe una categoría con el nombre '{categoria.Nombre}'.");
+            throw new ReglaDeNegocioException($"Ya existe una categoría con el nombre '{categoria.Nombre}'.");
 
         var id = await _repo.AgregarAsync(categoria);
 
@@ -53,11 +54,11 @@ public class CategoriaService : ICategoriaService
         _auth.Verificar(_session.RolActual, Permisos.GestionarTablasMaestras);
 
         var original = await _repo.ObtenerPorIdAsync(categoria.Id)
-            ?? throw new KeyNotFoundException($"Categoría {categoria.Id} no encontrada.");
+            ?? throw new EntidadNoEncontradaException($"Categoría {categoria.Id} no encontrada.");
 
         if (original.Nombre != categoria.Nombre
             && await _repo.ExisteNombreAsync(categoria.Nombre, categoria.Id))
-            throw new InvalidOperationException($"Ya existe una categoría con el nombre '{categoria.Nombre}'.");
+            throw new ReglaDeNegocioException($"Ya existe una categoría con el nombre '{categoria.Nombre}'.");
 
         var cambios = new List<string>();
         if (original.Nombre != categoria.Nombre)
@@ -81,10 +82,10 @@ public class CategoriaService : ICategoriaService
         _auth.Verificar(_session.RolActual, Permisos.GestionarTablasMaestras);
 
         var categoria = await _repo.ObtenerPorIdAsync(id)
-            ?? throw new KeyNotFoundException($"Categoría {id} no encontrada.");
+            ?? throw new EntidadNoEncontradaException($"Categoría {id} no encontrada.");
 
         if (!categoria.Activo)
-            throw new InvalidOperationException($"La categoría {id} ya está inactiva.");
+            throw new ReglaDeNegocioException($"La categoría {id} ya está inactiva.");
 
         categoria.Activo = false;
         await _repo.ActualizarAsync(categoria);
