@@ -45,12 +45,14 @@ public class UsuarioServiceTests
     }
 
     [Fact]
-    public async Task AltaUsuario_Admin_CreaConHashYEventoAuditoria()
+    public async Task AltaUsuario_Admin_CreaConHashYEventoAuditoria_DevuelveId()
     {
         var (svc, repo, hasher, session, _, audit) = Crear();
+        repo.Setup(r => r.AgregarAsync(It.IsAny<Usuario>())).ReturnsAsync(42);
 
-        await svc.AltaUsuarioAsync("operador2", "Nombre Completo", "pwd123", RolUsuario.Operador);
+        var id = await svc.AltaUsuarioAsync("operador2", "Nombre Completo", "pwd123", RolUsuario.Operador);
 
+        Assert.Equal(42, id);
         hasher.Verify(h => h.Hash("pwd123"), Times.Once);
         repo.Verify(r => r.AgregarAsync(It.Is<Usuario>(u =>
             u.NombreUsuario == "operador2" &&
@@ -60,7 +62,7 @@ public class UsuarioServiceTests
         )), Times.Once);
         audit.Verify(a => a.RegistrarAsync(
             It.IsAny<int>(), AccionAuditada.AltaUsuario,
-            "Usuario", It.IsAny<int>(), It.IsAny<string>()), Times.Once);
+            "Usuario", 42, It.IsAny<string>()), Times.Once);
     }
 
     [Fact]

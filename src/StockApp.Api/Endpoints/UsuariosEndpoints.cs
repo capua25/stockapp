@@ -7,6 +7,7 @@ namespace StockApp.Api.Endpoints;
 public record CrearUsuarioRequest(string NombreUsuario, string? NombreCompleto, string ContrasenaPlan, RolUsuario Rol);
 public record CambiarRolRequest(RolUsuario NuevoRol);
 public record CambiarContrasenaRequest(string NuevaContrasena, string? ContrasenaActual);
+public record UsuarioCreadoResponse(int Id);
 
 public static class UsuariosEndpoints
 {
@@ -19,9 +20,9 @@ public static class UsuariosEndpoints
 
         group.MapPost("/", async (CrearUsuarioRequest request, IUsuarioService usuarios) =>
         {
-            await usuarios.AltaUsuarioAsync(
+            var id = await usuarios.AltaUsuarioAsync(
                 request.NombreUsuario, request.NombreCompleto, request.ContrasenaPlan, request.Rol);
-            return Results.Created("/usuarios", (object?)null);
+            return Results.Created($"/usuarios/{id}", new UsuarioCreadoResponse(id));
         });
 
         group.MapDelete("/{id:int}", async (int id, IUsuarioService usuarios) =>

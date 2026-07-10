@@ -33,7 +33,7 @@ public class UsuarioService : IUsuarioService
         _audit   = audit;
     }
 
-    public async Task AltaUsuarioAsync(
+    public async Task<int> AltaUsuarioAsync(
         string nombreUsuario, string? nombreCompleto,
         string contrasenaPlan, RolUsuario rol)
     {
@@ -59,6 +59,8 @@ public class UsuarioService : IUsuarioService
             AccionAuditada.AltaUsuario,
             "Usuario", id,
             $"Alta de '{nombreUsuario}' con rol {rol}");
+
+        return id;
     }
 
     public async Task BajaLogicaAsync(int usuarioId)

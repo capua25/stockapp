@@ -68,7 +68,7 @@ public class UsuariosEndpointTests : ApiTestBase
     // ── POST /usuarios ────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task PostUsuarios_ConTokenAdmin_CreaUsuarioYDevuelve201()
+    public async Task PostUsuarios_ConTokenAdmin_CreaUsuarioYDevuelve201ConId()
     {
         var client = Factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
@@ -77,9 +77,12 @@ public class UsuariosEndpointTests : ApiTestBase
             new CrearUsuarioRequest("nuevo.usuario", "Nuevo Usuario", "pwd12345", RolUsuario.Operador));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<UsuarioCreadoResponse>();
+        Assert.True(body!.Id > 0);
 
         await using var ctx = Factory.CrearContexto();
-        Assert.True(await ctx.Usuarios.AnyAsync(u => u.NombreUsuario == "nuevo.usuario"));
+        var creado = await ctx.Usuarios.SingleAsync(u => u.NombreUsuario == "nuevo.usuario");
+        Assert.Equal(body.Id, creado.Id);
     }
 
     [Fact]
