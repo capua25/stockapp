@@ -205,9 +205,15 @@ var app = builder.Build();
 // Fail-fast de configuración al arrancar el host (post-Build, ya con la configuración
 // final —incluidos los overrides de test de ApiFactory—, no con la snapshot pre-Build).
 app.Services.GetRequiredService<JwtOptions>();
+
+// Migración automática al arranque (Fase 3a, D9): reemplaza al DatabaseInitializer del
+// desktop, que se elimina en Fase 3b. MigrateAsync es idempotente — no-op si no hay
+// migraciones pendientes, así que no colisiona con ApiFactory (que ya migra su contenedor
+// de Testcontainers en InitializeAsync, antes de que el host arranque).
 using (var scope = app.Services.CreateScope())
 {
-    scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.MigrateAsync();
 }
 
 // Andamiaje base para excepciones no manejadas: 500 -> ProblemDetails via
