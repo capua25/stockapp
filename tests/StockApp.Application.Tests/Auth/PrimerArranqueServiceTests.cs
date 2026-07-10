@@ -105,4 +105,28 @@ public class PrimerArranqueServiceTests
 
         repo.Verify(r => r.AgregarAsync(It.IsAny<Usuario>()), Times.Once);
     }
+
+    // ── Fix Fase 3a review: validación de nombreUsuario ──────────────────────
+
+    [Fact]
+    public async Task CrearAdminInicial_NombreUsuarioVacio_LanzaArgumentException()
+    {
+        var (svc, repo, _) = Crear(hayUsuarios: false);
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => svc.CrearAdminInicialAsync("", "contrasenaSegura"));
+
+        repo.Verify(r => r.AgregarAsync(It.IsAny<Usuario>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CrearAdminInicial_NombreUsuarioWhitespace_LanzaArgumentException()
+    {
+        var (svc, repo, _) = Crear(hayUsuarios: false);
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => svc.CrearAdminInicialAsync("   ", "contrasenaSegura"));
+
+        repo.Verify(r => r.AgregarAsync(It.IsAny<Usuario>()), Times.Never);
+    }
 }

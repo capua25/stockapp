@@ -34,6 +34,12 @@ public class PrimerArranqueService : IPrimerArranqueService
     /// </summary>
     public async Task CrearAdminInicialAsync(string nombreUsuario, string contrasenaPlana)
     {
+        // Fix review Fase 3a: sin esto, un nombreUsuario en blanco vía POST /auth/primer-admin
+        // crea el Admin génesis con username whitespace; el login lo rechaza con 400 y
+        // requiereCrearAdmin queda false para siempre (sistema irrecuperable sin tocar la BD).
+        if (string.IsNullOrWhiteSpace(nombreUsuario))
+            throw new ArgumentException("El nombre de usuario es obligatorio.");
+
         // Fix 6: validación mínima de contraseña
         ContrasenaValidator.Validar(contrasenaPlana);
 

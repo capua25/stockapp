@@ -83,4 +83,19 @@ public class PrimerArranqueEndpointTests : ApiTestBase
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
+
+    [Fact]
+    public async Task PostPrimerAdmin_NombreUsuarioEnBlanco_Devuelve400YNoCreaAdmin()
+    {
+        var client = Factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            "/auth/primer-admin", new CrearAdminInicialRequest("   ", "secreto123"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var despues = await client.GetAsync("/auth/primer-arranque");
+        var despuesBody = await despues.Content.ReadFromJsonAsync<PrimerArranqueEstadoResponse>();
+        Assert.True(despuesBody!.RequiereCrearAdmin);
+    }
 }
