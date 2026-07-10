@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Los tests ejercitan helpers internal (ApiErrores, ApiQuery, wire records). -->
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>StockApp.ApiClient.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- SOLO Application y Domain (spec 3b): interfaces IXxxService + DTOs + entidades
+         + excepciones de dominio. Sin PackageReferences: System.Net.Http.Json es parte
+         del shared framework. -->
+    <ProjectReference Include="..\StockApp.Application\StockApp.Application.csproj" />
+    <ProjectReference Include="..\StockApp.Domain\StockApp.Domain.csproj" />
+  </ItemGroup>
+
+</Project>
