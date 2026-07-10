@@ -56,7 +56,7 @@ public partial class UnidadMedidaListViewModel : ViewModelBase
     /// Da de baja la unidad seleccionada, previa confirmación del usuario. Las excepciones de
     /// dominio esperables (ej: ya está inactiva, o fue borrada por otra sesión) NO deben
     /// propagar y matar el proceso — regresión real reportada: BajaLogicaAsync lanza
-    /// InvalidOperationException/KeyNotFoundException y, al no estar atrapada acá, la
+    /// ReglaDeNegocioException/EntidadNoEncontradaException y, al no estar atrapada acá, la
     /// excepción llegaba sin manejar al dispatcher de Avalonia y crasheaba la app.
     /// </summary>
     [RelayCommand(CanExecute = nameof(PuedeDarBaja))]

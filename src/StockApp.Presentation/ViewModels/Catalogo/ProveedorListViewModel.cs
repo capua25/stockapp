@@ -56,7 +56,7 @@ public partial class ProveedorListViewModel : ViewModelBase
     /// Da de baja el proveedor seleccionado, previa confirmación del usuario. Las excepciones
     /// de dominio esperables (ej: ya está inactivo, o fue borrado por otra sesión) NO deben
     /// propagar y matar el proceso — regresión real reportada: BajaLogicaAsync lanza
-    /// InvalidOperationException/KeyNotFoundException y, al no estar atrapada acá, la
+    /// ReglaDeNegocioException/EntidadNoEncontradaException y, al no estar atrapada acá, la
     /// excepción llegaba sin manejar al dispatcher de Avalonia y crasheaba la app.
     /// </summary>
     [RelayCommand(CanExecute = nameof(PuedeDarBaja))]

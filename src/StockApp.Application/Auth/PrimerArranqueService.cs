@@ -29,7 +29,7 @@ public class PrimerArranqueService : IPrimerArranqueService
 
     /// <summary>
     /// Crea el primer usuario Admin con la contraseña provista (hasheada).
-    /// Lanza <see cref="InvalidOperationException"/> si ya existe al menos un usuario.
+    /// Lanza <see cref="ReglaDeNegocioException"/> si ya existe al menos un usuario.
     /// El semáforo garantiza que dos llamadas concurrentes no creen dos Admins.
     /// </summary>
     public async Task CrearAdminInicialAsync(string nombreUsuario, string contrasenaPlana)
