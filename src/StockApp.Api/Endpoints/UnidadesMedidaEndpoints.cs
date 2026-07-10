@@ -1,3 +1,4 @@
+using System.Linq;
 using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
 using StockApp.Domain.Entities;
@@ -7,6 +8,9 @@ namespace StockApp.Api.Endpoints;
 public record CrearUnidadMedidaRequest(string Nombre, string Abreviatura);
 public record ModificarUnidadMedidaRequest(string Nombre, string Abreviatura);
 
+/// <summary>DTO de lectura de UnidadMedida (Fase 3a, D3). Reemplaza la entidad de dominio cruda.</summary>
+public record UnidadMedidaDto(int Id, string Nombre, string Abreviatura, bool Activo);
+
 public static class UnidadesMedidaEndpoints
 {
     public static IEndpointRouteBuilder MapUnidadesMedidaEndpoints(this IEndpointRouteBuilder app)
@@ -14,7 +18,7 @@ public static class UnidadesMedidaEndpoints
         var group = app.MapGroup("/unidades-medida");
 
         group.MapGet("/", async (IUnidadMedidaService unidades) =>
-            Results.Ok(await unidades.ListarTodasAsync()))
+            Results.Ok((await unidades.ListarTodasAsync()).Select(AUnidadMedidaDto)))
             .RequireAuthorization(Permisos.GestionarTablasMaestras);
 
         group.MapPost("/", async (CrearUnidadMedidaRequest request, IUnidadMedidaService unidades) =>
@@ -41,9 +45,12 @@ public static class UnidadesMedidaEndpoints
         .RequireAuthorization(Permisos.GestionarTablasMaestras);
 
         group.MapGet("/activas", async (IUnidadMedidaService unidades) =>
-            Results.Ok(await unidades.ListarActivasAsync()))
+            Results.Ok((await unidades.ListarActivasAsync()).Select(AUnidadMedidaDto)))
             .RequireAuthorization(Permisos.GestionarProductos);
 
         return app;
     }
+
+    private static UnidadMedidaDto AUnidadMedidaDto(UnidadMedida u) =>
+        new(u.Id, u.Nombre, u.Abreviatura, u.Activo);
 }

@@ -56,7 +56,7 @@ public class UnidadesMedidaEndpointTests : ApiTestBase
         var response = await client.GetAsync("/unidades-medida");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var unidades = await response.Content.ReadFromJsonAsync<List<UnidadMedida>>();
+        var unidades = await response.Content.ReadFromJsonAsync<List<UnidadMedidaDto>>();
         Assert.Contains(unidades!, u => u.Nombre == "Kilo");
     }
 
@@ -146,7 +146,7 @@ public class UnidadesMedidaEndpointTests : ApiTestBase
         var response = await client.GetAsync("/unidades-medida/activas");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var unidades = await response.Content.ReadFromJsonAsync<List<UnidadMedida>>();
+        var unidades = await response.Content.ReadFromJsonAsync<List<UnidadMedidaDto>>();
         Assert.Contains(unidades!, u => u.Nombre == "Activa");
         Assert.DoesNotContain(unidades!, u => u.Nombre == "Inactiva");
     }
