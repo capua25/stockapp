@@ -7,6 +7,7 @@ using Avalonia.Collections;
 using Moq;
 using StockApp.Application.Catalogo;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Catalogo;
@@ -231,7 +232,7 @@ public class ProductoListViewModelTests
         vm.ItemSeleccionado = producto;
 
         var mensaje = "El producto 5 ya está inactivo.";
-        svcMock.Setup(s => s.BajaLogicaAsync(5)).ThrowsAsync(new InvalidOperationException(mensaje));
+        svcMock.Setup(s => s.BajaLogicaAsync(5)).ThrowsAsync(new ReglaDeNegocioException(mensaje));
 
         // No debe propagar la excepción (regresión real del crash en las otras entidades de catálogo).
         await vm.BajaCommand.ExecuteAsync(null);
@@ -248,7 +249,7 @@ public class ProductoListViewModelTests
         vm.ItemSeleccionado = producto;
 
         var mensaje = "Producto 5 no encontrado.";
-        svcMock.Setup(s => s.BajaLogicaAsync(5)).ThrowsAsync(new KeyNotFoundException(mensaje));
+        svcMock.Setup(s => s.BajaLogicaAsync(5)).ThrowsAsync(new EntidadNoEncontradaException(mensaje));
 
         await vm.BajaCommand.ExecuteAsync(null);
 
@@ -676,7 +677,7 @@ public class ProductoFormViewModelTests
 
         var mensaje = "Ya existe un producto con el código de barras '7791234567890'.";
         svcMock.Setup(s => s.ModificarAsync(It.IsAny<Producto>()))
-            .ThrowsAsync(new InvalidOperationException(mensaje));
+            .ThrowsAsync(new ReglaDeNegocioException(mensaje));
 
         // No debe propagar la excepción — se muestra amigable en MensajeError, igual que AltaAsync.
         await vm.GuardarCommand.ExecuteAsync(null);

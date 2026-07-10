@@ -4,6 +4,7 @@ using StockApp.Application.Catalogo;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 using Xunit;
 using IAuthSvc = StockApp.Application.Authorization.IAuthorizationService;
 
@@ -51,7 +52,7 @@ public class ProductoServiceTests
         repo.Setup(r => r.ExisteCodigoAsync("SKU-001", null)).ReturnsAsync(true);
 
         var p = new Producto { Codigo = "SKU-001", Nombre = "Fideos", UnidadMedidaId = 1 };
-        await Assert.ThrowsAsync<InvalidOperationException>(() => svc.AltaAsync(p));
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => svc.AltaAsync(p));
     }
 
     [Fact]
@@ -62,7 +63,7 @@ public class ProductoServiceTests
         repo.Setup(r => r.ExisteCodigoBarrasAsync("7891234567890", null)).ReturnsAsync(true);
 
         var p = new Producto { Codigo = "SKU-002", Nombre = "Fideos", UnidadMedidaId = 1, CodigoBarras = "7891234567890" };
-        await Assert.ThrowsAsync<InvalidOperationException>(() => svc.AltaAsync(p));
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => svc.AltaAsync(p));
     }
 
     [Fact]
@@ -193,7 +194,7 @@ public class ProductoServiceTests
             Id = 3, Codigo = "SKU-003", Nombre = "Arroz",
             UnidadMedidaId = 1, CodigoBarras = "222", Activo = true
         };
-        await Assert.ThrowsAsync<InvalidOperationException>(() => svc.ModificarAsync(mod));
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => svc.ModificarAsync(mod));
     }
 
     // ─── Baja lógica ─────────────────────────────────────────────────────────
@@ -220,7 +221,7 @@ public class ProductoServiceTests
         var (svc, repo, _, _, _, _) = Crear();
         repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(p);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => svc.BajaLogicaAsync(5));
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => svc.BajaLogicaAsync(5));
     }
 
     // ─── Cambio de precio ────────────────────────────────────────────────────
@@ -443,6 +444,27 @@ public class ProductoServiceTests
         var resultado = await svc.BuscarPorTextoAsync("fideos");
 
         Assert.Equal("SKU-004", Assert.Single(resultado).Codigo);
+    }
+
+    // ─── EntidadNoEncontradaException (Fase 3a, D4) ─────────────────────────
+
+    [Fact]
+    public async Task ModificarAsync_ProductoInexistente_LanzaEntidadNoEncontrada()
+    {
+        var (svc, repo, _, _, _, _) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(99)).ReturnsAsync((Producto?)null);
+
+        await Assert.ThrowsAsync<EntidadNoEncontradaException>(
+            () => svc.ModificarAsync(new Producto { Id = 99, Codigo = "X", Nombre = "X", UnidadMedidaId = 1 }));
+    }
+
+    [Fact]
+    public async Task BajaLogicaAsync_ProductoInexistente_LanzaEntidadNoEncontrada()
+    {
+        var (svc, repo, _, _, _, _) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(99)).ReturnsAsync((Producto?)null);
+
+        await Assert.ThrowsAsync<EntidadNoEncontradaException>(() => svc.BajaLogicaAsync(99));
     }
 }
 

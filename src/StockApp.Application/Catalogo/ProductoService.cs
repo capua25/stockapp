@@ -3,6 +3,7 @@ using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 
 namespace StockApp.Application.Catalogo;
 
@@ -51,11 +52,11 @@ public class ProductoService : IProductoService
             throw new ArgumentException("El precio de venta no puede ser negativo.");
 
         if (await _repo.ExisteCodigoAsync(producto.Codigo, null))
-            throw new InvalidOperationException($"Ya existe un producto con el código '{producto.Codigo}'.");
+            throw new ReglaDeNegocioException($"Ya existe un producto con el código '{producto.Codigo}'.");
 
         if (!string.IsNullOrWhiteSpace(producto.CodigoBarras)
             && await _repo.ExisteCodigoBarrasAsync(producto.CodigoBarras, null))
-            throw new InvalidOperationException($"Ya existe un producto con el código de barras '{producto.CodigoBarras}'.");
+            throw new ReglaDeNegocioException($"Ya existe un producto con el código de barras '{producto.CodigoBarras}'.");
 
         producto.FechaAlta = DateTime.UtcNow;
 
@@ -75,13 +76,13 @@ public class ProductoService : IProductoService
         _auth.Verificar(_session.RolActual, Permisos.GestionarProductos);
 
         var original = await _repo.ObtenerPorIdAsync(producto.Id)
-            ?? throw new KeyNotFoundException($"Producto {producto.Id} no encontrado.");
+            ?? throw new EntidadNoEncontradaException($"Producto {producto.Id} no encontrado.");
 
         // Validar unicidad de código de barras si cambió
         if (!string.IsNullOrWhiteSpace(producto.CodigoBarras)
             && producto.CodigoBarras != original.CodigoBarras
             && await _repo.ExisteCodigoBarrasAsync(producto.CodigoBarras, producto.Id))
-            throw new InvalidOperationException($"Ya existe un producto con el código de barras '{producto.CodigoBarras}'.");
+            throw new ReglaDeNegocioException($"Ya existe un producto con el código de barras '{producto.CodigoBarras}'.");
 
         // Validar que la UnidadMedida existe si cambió (evita DbUpdateException de FK)
         if (producto.UnidadMedidaId != original.UnidadMedidaId
@@ -155,10 +156,10 @@ public class ProductoService : IProductoService
         _auth.Verificar(_session.RolActual, Permisos.GestionarProductos);
 
         var producto = await _repo.ObtenerPorIdAsync(id)
-            ?? throw new KeyNotFoundException($"Producto {id} no encontrado.");
+            ?? throw new EntidadNoEncontradaException($"Producto {id} no encontrado.");
 
         if (!producto.Activo)
-            throw new InvalidOperationException($"El producto {id} ya está inactivo.");
+            throw new ReglaDeNegocioException($"El producto {id} ya está inactivo.");
 
         producto.Activo = false;
         await _repo.ActualizarAsync(producto);
@@ -180,7 +181,7 @@ public class ProductoService : IProductoService
             throw new ArgumentException("El precio de venta no puede ser negativo.");
 
         var producto = await _repo.ObtenerPorIdAsync(id)
-            ?? throw new KeyNotFoundException($"Producto {id} no encontrado.");
+            ?? throw new EntidadNoEncontradaException($"Producto {id} no encontrado.");
 
         var detalle = $"PrecioCosto: {producto.PrecioCosto} → {precioCosto}; PrecioVenta: {producto.PrecioVenta} → {precioVenta}";
 
