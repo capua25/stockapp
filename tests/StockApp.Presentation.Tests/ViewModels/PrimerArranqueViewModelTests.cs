@@ -3,6 +3,7 @@ using StockApp.Application.Actualizaciones;
 using StockApp.Application.Auth;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Actualizaciones;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
@@ -219,9 +220,9 @@ public class PrimerArranqueViewModelTests
     // ── tests: errores en la creación ────────────────────────────────────────
 
     [Fact]
-    public async Task CrearAdmin_InvalidOperationException_MuestraMensajeError()
+    public async Task CrearAdmin_ReglaDeNegocioException_MuestraMensajeError()
     {
-        var ctx = Crear(excepcionCreacion: new InvalidOperationException("Ya existe un usuario."));
+        var ctx = Crear(excepcionCreacion: new ReglaDeNegocioException("Ya existe un usuario."));
         ctx.Vm.NombreUsuario       = "admin";
         ctx.Vm.Contrasena          = "secreto123";
         ctx.Vm.ConfirmarContrasena = "secreto123";

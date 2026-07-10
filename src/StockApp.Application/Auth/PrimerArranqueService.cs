@@ -1,6 +1,7 @@
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 
 namespace StockApp.Application.Auth;
 
@@ -40,7 +41,7 @@ public class PrimerArranqueService : IPrimerArranqueService
         try
         {
             if (!await RequiereCrearAdminAsync())
-                throw new InvalidOperationException(
+                throw new ReglaDeNegocioException(
                     "No se puede crear el Admin inicial: ya existen usuarios en la base de datos.");
 
             var admin = new Usuario

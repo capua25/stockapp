@@ -3,6 +3,7 @@ using StockApp.Application.Auth;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 using Xunit;
 
 namespace StockApp.Application.Tests.Auth;
@@ -62,7 +63,7 @@ public class PrimerArranqueServiceTests
         var (svc, _, _) = Crear(hayUsuarios: true);
 
         // Fix 6: la contraseña debe cumplir el mínimo (≥6 chars) para llegar al check de usuarios
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(
             () => svc.CrearAdminInicialAsync("admin", "password123"));
     }
 

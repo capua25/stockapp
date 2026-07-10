@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Auth;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 
 namespace StockApp.Presentation.ViewModels;
 
@@ -129,7 +130,7 @@ public partial class PrimerArranqueViewModel : ViewModelBase
             // Mostrar recomendación de 2do Admin en lugar de navegar inmediatamente.
             MostrarRecomendacion2doAdmin = true;
         }
-        catch (InvalidOperationException ex)
+        catch (ReglaDeNegocioException ex)
         {
             MensajeError = ex.Message;
         }
