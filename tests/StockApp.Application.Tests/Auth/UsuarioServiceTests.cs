@@ -4,6 +4,7 @@ using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 using Xunit;
 using IAuthSvc = StockApp.Application.Authorization.IAuthorizationService;
 
@@ -94,7 +95,7 @@ public class UsuarioServiceTests
         var (svc, repo, _, _, _, _) = Crear(idSesion: 1);
         repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(usuario);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => svc.BajaLogicaAsync(1));
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => svc.BajaLogicaAsync(1));
     }
 
     [Fact]
@@ -109,7 +110,7 @@ public class UsuarioServiceTests
         repo.Setup(r => r.ObtenerPorIdAsync(2)).ReturnsAsync(usuario);
         repo.Setup(r => r.ContarAdminsActivosAsync()).ReturnsAsync(1); // único Admin activo
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => svc.BajaLogicaAsync(2));
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => svc.BajaLogicaAsync(2));
     }
 
     [Fact]
@@ -313,5 +314,36 @@ public class UsuarioServiceTests
         var (svc, _, _, _, _, _) = Crear(rolSesion: RolUsuario.Operador);
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => svc.ListarAsync());
+    }
+
+    // ─── EntidadNoEncontradaException (Fase 3a, D4) ─────────────────────────
+
+    [Fact]
+    public async Task BajaLogicaAsync_UsuarioInexistente_LanzaEntidadNoEncontrada()
+    {
+        var (svc, repo, _, _, _, _) = Crear(idSesion: 1);
+        repo.Setup(r => r.ObtenerPorIdAsync(99)).ReturnsAsync((Usuario?)null);
+
+        await Assert.ThrowsAsync<EntidadNoEncontradaException>(() => svc.BajaLogicaAsync(99));
+    }
+
+    [Fact]
+    public async Task CambiarRolAsync_UsuarioInexistente_LanzaEntidadNoEncontrada()
+    {
+        var (svc, repo, _, _, _, _) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(99)).ReturnsAsync((Usuario?)null);
+
+        await Assert.ThrowsAsync<EntidadNoEncontradaException>(
+            () => svc.CambiarRolAsync(99, RolUsuario.Admin));
+    }
+
+    [Fact]
+    public async Task CambiarContrasenaAsync_UsuarioInexistente_LanzaEntidadNoEncontrada()
+    {
+        var (svc, repo, _, _, _, _) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(99)).ReturnsAsync((Usuario?)null);
+
+        await Assert.ThrowsAsync<EntidadNoEncontradaException>(
+            () => svc.CambiarContrasenaAsync(99, "nuevaContrasena123"));
     }
 }

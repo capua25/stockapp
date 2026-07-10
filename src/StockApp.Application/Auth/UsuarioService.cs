@@ -3,6 +3,7 @@ using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 
 namespace StockApp.Application.Auth;
 
@@ -66,17 +67,17 @@ public class UsuarioService : IUsuarioService
 
         // Fix 2: no auto-baja
         if (usuarioId == _session.UsuarioActual!.Id)
-            throw new InvalidOperationException("Un usuario no puede darse de baja a sí mismo.");
+            throw new ReglaDeNegocioException("Un usuario no puede darse de baja a sí mismo.");
 
         var usuario = await _repo.ObtenerPorIdAsync(usuarioId)
-            ?? throw new KeyNotFoundException($"Usuario {usuarioId} no encontrado.");
+            ?? throw new EntidadNoEncontradaException($"Usuario {usuarioId} no encontrado.");
 
         // Fix 2: proteger último Admin activo
         if (usuario.Rol == RolUsuario.Admin && usuario.Activo)
         {
             var adminsActivos = await _repo.ContarAdminsActivosAsync();
             if (adminsActivos <= 1)
-                throw new InvalidOperationException(
+                throw new ReglaDeNegocioException(
                     "No se puede deshabilitar al último Admin activo del sistema.");
         }
 
@@ -95,7 +96,7 @@ public class UsuarioService : IUsuarioService
         _auth.Verificar(_session.RolActual, Permisos.GestionarUsuarios);
 
         var usuario = await _repo.ObtenerPorIdAsync(usuarioId)
-            ?? throw new KeyNotFoundException($"Usuario {usuarioId} no encontrado.");
+            ?? throw new EntidadNoEncontradaException($"Usuario {usuarioId} no encontrado.");
 
         var rolAnterior = usuario.Rol;
         usuario.Rol = nuevoRol;
@@ -124,7 +125,7 @@ public class UsuarioService : IUsuarioService
         ContrasenaValidator.Validar(nuevaContrasenaPlan);
 
         var usuario = await _repo.ObtenerPorIdAsync(usuarioId)
-            ?? throw new KeyNotFoundException($"Usuario {usuarioId} no encontrado.");
+            ?? throw new EntidadNoEncontradaException($"Usuario {usuarioId} no encontrado.");
 
         // Fix 7: auto-cambio requiere contraseña actual
         if (usuarioId == _session.UsuarioActual!.Id)
