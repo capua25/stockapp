@@ -4,6 +4,7 @@ using StockApp.Application.Catalogo;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 using Xunit;
 using IAuthSvc = StockApp.Application.Authorization.IAuthorizationService;
 
@@ -45,7 +46,7 @@ public class ProveedorServiceTests
         var (svc, repo, _, _, _) = Crear();
         repo.Setup(r => r.ExisteNombreAsync("DistribuidoraX", null)).ReturnsAsync(true);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(
             () => svc.AltaAsync(new Proveedor { Nombre = "DistribuidoraX" }));
     }
 
@@ -106,7 +107,7 @@ public class ProveedorServiceTests
         var (svc, repo, _, _, _) = Crear();
         repo.Setup(r => r.ObtenerPorIdAsync(3)).ReturnsAsync(p);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => svc.BajaLogicaAsync(3));
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => svc.BajaLogicaAsync(3));
     }
 
     // ─── Autorización ────────────────────────────────────────────────────────
@@ -118,5 +119,26 @@ public class ProveedorServiceTests
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(
             () => svc.AltaAsync(new Proveedor { Nombre = "X" }));
+    }
+
+    // ─── EntidadNoEncontradaException (Fase 3a, D4) ─────────────────────────
+
+    [Fact]
+    public async Task ModificarAsync_ProveedorInexistente_LanzaEntidadNoEncontrada()
+    {
+        var (svc, repo, _, _, _) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(99)).ReturnsAsync((Proveedor?)null);
+
+        await Assert.ThrowsAsync<EntidadNoEncontradaException>(
+            () => svc.ModificarAsync(new Proveedor { Id = 99, Nombre = "X" }));
+    }
+
+    [Fact]
+    public async Task BajaLogicaAsync_ProveedorInexistente_LanzaEntidadNoEncontrada()
+    {
+        var (svc, repo, _, _, _) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(99)).ReturnsAsync((Proveedor?)null);
+
+        await Assert.ThrowsAsync<EntidadNoEncontradaException>(() => svc.BajaLogicaAsync(99));
     }
 }

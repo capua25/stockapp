@@ -2,6 +2,7 @@ using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 
 namespace StockApp.Application.Catalogo;
 
@@ -36,7 +37,7 @@ public class ProveedorService : IProveedorService
             throw new ArgumentException("El nombre del proveedor es obligatorio.");
 
         if (await _repo.ExisteNombreAsync(proveedor.Nombre, null))
-            throw new InvalidOperationException($"Ya existe un proveedor con el nombre '{proveedor.Nombre}'.");
+            throw new ReglaDeNegocioException($"Ya existe un proveedor con el nombre '{proveedor.Nombre}'.");
 
         var id = await _repo.AgregarAsync(proveedor);
 
@@ -54,11 +55,11 @@ public class ProveedorService : IProveedorService
         _auth.Verificar(_session.RolActual, Permisos.GestionarTablasMaestras);
 
         var original = await _repo.ObtenerPorIdAsync(proveedor.Id)
-            ?? throw new KeyNotFoundException($"Proveedor {proveedor.Id} no encontrado.");
+            ?? throw new EntidadNoEncontradaException($"Proveedor {proveedor.Id} no encontrado.");
 
         if (original.Nombre != proveedor.Nombre
             && await _repo.ExisteNombreAsync(proveedor.Nombre, proveedor.Id))
-            throw new InvalidOperationException($"Ya existe un proveedor con el nombre '{proveedor.Nombre}'.");
+            throw new ReglaDeNegocioException($"Ya existe un proveedor con el nombre '{proveedor.Nombre}'.");
 
         var cambios = new List<string>();
         if (original.Nombre    != proveedor.Nombre)    cambios.Add($"Nombre: {original.Nombre} → {proveedor.Nombre}");
@@ -89,10 +90,10 @@ public class ProveedorService : IProveedorService
         _auth.Verificar(_session.RolActual, Permisos.GestionarTablasMaestras);
 
         var proveedor = await _repo.ObtenerPorIdAsync(id)
-            ?? throw new KeyNotFoundException($"Proveedor {id} no encontrado.");
+            ?? throw new EntidadNoEncontradaException($"Proveedor {id} no encontrado.");
 
         if (!proveedor.Activo)
-            throw new InvalidOperationException($"El proveedor {id} ya está inactivo.");
+            throw new ReglaDeNegocioException($"El proveedor {id} ya está inactivo.");
 
         proveedor.Activo = false;
         await _repo.ActualizarAsync(proveedor);

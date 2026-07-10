@@ -6,6 +6,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Catalogo;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 
@@ -72,7 +73,7 @@ public partial class ProveedorListViewModel : ViewModelBase
             await _service.BajaLogicaAsync(ItemSeleccionado.Id);
             await CargarAsync();
         }
-        catch (Exception ex) when (ex is InvalidOperationException or KeyNotFoundException)
+        catch (Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException)
         {
             await _confirmacion.InformarAsync(ex.Message);
         }
