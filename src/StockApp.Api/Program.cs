@@ -89,6 +89,9 @@ builder.Services.AddScoped<IAuditoriaQueryService, AuditoriaQueryService>();
 // ya están registrados desde Fase 2a (usados por AuthEndpoints).
 builder.Services.AddScoped<IUsuarioService, UsuarioService>();
 
+// Bootstrap de primer arranque (Fase 3a, D7) — reusa IUsuarioRepository/IPasswordHasher.
+builder.Services.AddScoped<IPrimerArranqueService, PrimerArranqueService>();
+
 // JwtOptions: misma razón que AppDbContext arriba — el secreto se lee de forma diferida
 // en el factory (resuelto post-Build), no en una `var` top-level. JwtOptions es un
 // record posicional sin constructor sin parámetros, así que no es compatible con el
