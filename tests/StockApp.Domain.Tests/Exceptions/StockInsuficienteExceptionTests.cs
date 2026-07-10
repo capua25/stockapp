@@ -16,4 +16,12 @@ public class StockInsuficienteExceptionTests
         Assert.Equal(-7, ex.StockResultante);
         Assert.False(string.IsNullOrWhiteSpace(ex.Message));
     }
+
+    [Fact]
+    public void EsReglaDeNegocioException()
+    {
+        var ex = new StockInsuficienteException(productoId: 5, stockActual: 3, cantidadSolicitada: 10);
+
+        Assert.IsAssignableFrom<ReglaDeNegocioException>(ex);
+    }
 }

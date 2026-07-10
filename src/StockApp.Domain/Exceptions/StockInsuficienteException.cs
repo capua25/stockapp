@@ -4,7 +4,7 @@ namespace StockApp.Domain.Exceptions;
 /// Se lanza cuando se intenta registrar una salida de stock y el stock disponible
 /// es menor a la cantidad solicitada (y no se forzó la operación).
 /// </summary>
-public class StockInsuficienteException : Exception
+public class StockInsuficienteException : ReglaDeNegocioException
 {
     public int ProductoId           { get; }
     public decimal StockActual      { get; }
