@@ -150,4 +150,63 @@ public class UnidadesMedidaEndpointTests : ApiTestBase
         Assert.Contains(unidades!, u => u.Nombre == "Activa");
         Assert.DoesNotContain(unidades!, u => u.Nombre == "Inactiva");
     }
+
+    // ── POST /unidades-medida/garantizar-por-defecto (Fase 3a, D6) ──────────
+
+    [Fact]
+    public async Task PostGarantizarPorDefecto_SinUnidadPrevia_CreaLaUnidadPorDefecto()
+    {
+        await using var ctx = Factory.CrearContexto();
+        await DatosDePrueba.SeedUsuarioAsync(ctx, "admin.test", "Secreta123!", RolUsuario.Admin);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var response = await client.PostAsync("/unidades-medida/garantizar-por-defecto", content: null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var dto = await response.Content.ReadFromJsonAsync<UnidadMedidaDto>();
+        Assert.Equal("Unidad", dto!.Nombre);
+
+        await using var verificacion = Factory.CrearContexto();
+        Assert.Equal(1, await verificacion.UnidadesMedida.CountAsync(u => u.Nombre == "Unidad"));
+    }
+
+    [Fact]
+    public async Task PostGarantizarPorDefecto_LlamadoDosVeces_NoDuplica()
+    {
+        await using var ctx = Factory.CrearContexto();
+        await DatosDePrueba.SeedUsuarioAsync(ctx, "admin.test", "Secreta123!", RolUsuario.Admin);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var r1 = await client.PostAsync("/unidades-medida/garantizar-por-defecto", content: null);
+        var r2 = await client.PostAsync("/unidades-medida/garantizar-por-defecto", content: null);
+
+        Assert.Equal(HttpStatusCode.OK, r1.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, r2.StatusCode);
+
+        var dto1 = await r1.Content.ReadFromJsonAsync<UnidadMedidaDto>();
+        var dto2 = await r2.Content.ReadFromJsonAsync<UnidadMedidaDto>();
+        Assert.Equal(dto1!.Id, dto2!.Id);
+
+        await using var verificacion = Factory.CrearContexto();
+        Assert.Equal(1, await verificacion.UnidadesMedida.CountAsync(u => u.Nombre == "Unidad"));
+    }
+
+    [Fact]
+    public async Task PostGarantizarPorDefecto_ConTokenOperador_Devuelve200()
+    {
+        await using var ctx = Factory.CrearContexto();
+        var operador = await DatosDePrueba.SeedUsuarioAsync(ctx, "operador.test", "Secreta123!", RolUsuario.Operador);
+
+        var client = Factory.CreateClient();
+        var tokenOperador = Factory.Services.GetRequiredService<IJwtTokenService>().GenerarToken(operador.Id, RolUsuario.Operador);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenOperador);
+
+        var response = await client.PostAsync("/unidades-medida/garantizar-por-defecto", content: null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
 }

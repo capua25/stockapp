@@ -48,6 +48,10 @@ public static class UnidadesMedidaEndpoints
             Results.Ok((await unidades.ListarActivasAsync()).Select(AUnidadMedidaDto)))
             .RequireAuthorization(Permisos.GestionarProductos);
 
+        group.MapPost("/garantizar-por-defecto", async (IUnidadMedidaService unidades) =>
+            Results.Ok(AUnidadMedidaDto(await unidades.GarantizarUnidadPorDefectoAsync())))
+            .RequireAuthorization(Permisos.GestionarProductos);
+
         return app;
     }
 
