@@ -56,7 +56,7 @@ public class ProveedoresEndpointTests : ApiTestBase
         var response = await client.GetAsync("/proveedores");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var proveedores = await response.Content.ReadFromJsonAsync<List<Proveedor>>();
+        var proveedores = await response.Content.ReadFromJsonAsync<List<ProveedorDto>>();
         Assert.Contains(proveedores!, p => p.Nombre == "Proveedor Uno");
     }
 

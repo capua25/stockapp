@@ -1,3 +1,4 @@
+using System.Linq;
 using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
 using StockApp.Domain.Entities;
@@ -6,6 +7,9 @@ namespace StockApp.Api.Endpoints;
 
 public record CrearProveedorRequest(string Nombre, string? Telefono, string? Email, string? Direccion, string? Notas);
 public record ModificarProveedorRequest(string Nombre, string? Telefono, string? Email, string? Direccion, string? Notas);
+/// <summary>DTO de lectura de Proveedor (Fase 3a, D3). Reemplaza la entidad de dominio cruda.</summary>
+public record ProveedorDto(
+    int Id, string Nombre, string? Telefono, string? Email, string? Direccion, string? Notas, bool Activo);
 
 public static class ProveedoresEndpoints
 {
@@ -14,7 +18,7 @@ public static class ProveedoresEndpoints
         var group = app.MapGroup("/proveedores").RequireAuthorization(Permisos.GestionarTablasMaestras);
 
         group.MapGet("/", async (IProveedorService proveedores) =>
-            Results.Ok(await proveedores.ListarTodosAsync()));
+            Results.Ok((await proveedores.ListarTodosAsync()).Select(AProveedorDto)));
 
         group.MapPost("/", async (CrearProveedorRequest request, IProveedorService proveedores) =>
         {
@@ -53,4 +57,7 @@ public static class ProveedoresEndpoints
 
         return app;
     }
+
+    private static ProveedorDto AProveedorDto(Proveedor p) =>
+        new(p.Id, p.Nombre, p.Telefono, p.Email, p.Direccion, p.Notas, p.Activo);
 }
