@@ -37,7 +37,8 @@ public class DomainExceptionHandler : IExceptionHandler
         httpContext.Response.ContentType = "application/problem+json";
 
         var problemDetailsService = httpContext.RequestServices.GetRequiredService<IProblemDetailsService>();
-        return await problemDetailsService.TryWriteAsync(new ProblemDetailsContext
+
+        var contexto = new ProblemDetailsContext
         {
             HttpContext = httpContext,
             Exception = exception,
@@ -48,6 +49,18 @@ public class DomainExceptionHandler : IExceptionHandler
                 // 500: nunca exponer exception.Message (fail-closed, spec "Manejo de errores").
                 Detail = status == StatusCodes.Status500InternalServerError ? null : exception.Message,
             },
-        });
+        };
+
+        // Fase 3b: datos estructurados para que el cliente HTTP del desktop reconstruya
+        // StockInsuficienteException tipada (el flujo "¿forzar salida?" del ViewModel usa
+        // StockResultante). Cambio aditivo: title/detail/status no cambian.
+        if (exception is StockInsuficienteException stock)
+        {
+            contexto.ProblemDetails.Extensions["productoId"]         = stock.ProductoId;
+            contexto.ProblemDetails.Extensions["stockActual"]        = stock.StockActual;
+            contexto.ProblemDetails.Extensions["cantidadSolicitada"] = stock.CantidadSolicitada;
+        }
+
+        return await problemDetailsService.TryWriteAsync(contexto);
     }
 }

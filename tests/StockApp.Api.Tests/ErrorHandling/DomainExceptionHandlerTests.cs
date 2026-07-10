@@ -125,4 +125,27 @@ public class DomainExceptionHandlerTests
         var (status, _, _) = await EjecutarAsync(new ReglaDeNegocioException("Ya existe una categoría con ese nombre."));
         Assert.Equal(StatusCodes.Status409Conflict, status);
     }
+
+    [Fact]
+    public async Task StockInsuficienteException_IncluyeLosDatosEstructuradosComoExtensiones()
+    {
+        // Fase 3b (Mina 2): el cliente HTTP del desktop reconstruye StockInsuficienteException
+        // desde estas extensiones para preservar el flujo "¿forzar salida?" del ViewModel
+        // (que usa ex.StockResultante). Sin ellas, el 409 solo permite un ReglaDeNegocio plano.
+        var (status, _, body) = await EjecutarAsync(new StockInsuficienteException(7, 5m, 8m));
+
+        Assert.Equal(StatusCodes.Status409Conflict, status);
+        Assert.Equal(7, body.RootElement.GetProperty("productoId").GetInt32());
+        Assert.Equal(5m, body.RootElement.GetProperty("stockActual").GetDecimal());
+        Assert.Equal(8m, body.RootElement.GetProperty("cantidadSolicitada").GetDecimal());
+    }
+
+    [Fact]
+    public async Task ReglaDeNegocioException_NoIncluyeLasExtensionesDeStock()
+    {
+        var (_, _, body) = await EjecutarAsync(new ReglaDeNegocioException("Ya existe."));
+
+        Assert.False(body.RootElement.TryGetProperty("productoId", out _));
+        Assert.False(body.RootElement.TryGetProperty("stockActual", out _));
+    }
 }
