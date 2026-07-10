@@ -2,6 +2,7 @@ using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 
 namespace StockApp.Application.Catalogo;
 
@@ -42,10 +43,10 @@ public class UnidadMedidaService : IUnidadMedidaService
             throw new ArgumentException("La abreviatura de la unidad de medida es obligatoria.");
 
         if (await _repo.ExisteNombreAsync(unidadMedida.Nombre, null))
-            throw new InvalidOperationException($"Ya existe una unidad de medida con el nombre '{unidadMedida.Nombre}'.");
+            throw new ReglaDeNegocioException($"Ya existe una unidad de medida con el nombre '{unidadMedida.Nombre}'.");
 
         if (await _repo.ExisteAbreviaturaAsync(unidadMedida.Abreviatura, null))
-            throw new InvalidOperationException($"Ya existe una unidad de medida con la abreviatura '{unidadMedida.Abreviatura}'.");
+            throw new ReglaDeNegocioException($"Ya existe una unidad de medida con la abreviatura '{unidadMedida.Abreviatura}'.");
 
         var id = await _repo.AgregarAsync(unidadMedida);
 
@@ -63,15 +64,15 @@ public class UnidadMedidaService : IUnidadMedidaService
         _auth.Verificar(_session.RolActual, Permisos.GestionarTablasMaestras);
 
         var original = await _repo.ObtenerPorIdAsync(unidadMedida.Id)
-            ?? throw new KeyNotFoundException($"UnidadMedida {unidadMedida.Id} no encontrada.");
+            ?? throw new EntidadNoEncontradaException($"UnidadMedida {unidadMedida.Id} no encontrada.");
 
         if (original.Nombre != unidadMedida.Nombre
             && await _repo.ExisteNombreAsync(unidadMedida.Nombre, unidadMedida.Id))
-            throw new InvalidOperationException($"Ya existe una unidad de medida con el nombre '{unidadMedida.Nombre}'.");
+            throw new ReglaDeNegocioException($"Ya existe una unidad de medida con el nombre '{unidadMedida.Nombre}'.");
 
         if (original.Abreviatura != unidadMedida.Abreviatura
             && await _repo.ExisteAbreviaturaAsync(unidadMedida.Abreviatura, unidadMedida.Id))
-            throw new InvalidOperationException($"Ya existe una unidad de medida con la abreviatura '{unidadMedida.Abreviatura}'.");
+            throw new ReglaDeNegocioException($"Ya existe una unidad de medida con la abreviatura '{unidadMedida.Abreviatura}'.");
 
         var cambios = new List<string>();
         if (original.Nombre       != unidadMedida.Nombre)       cambios.Add($"Nombre: {original.Nombre} → {unidadMedida.Nombre}");
@@ -96,10 +97,10 @@ public class UnidadMedidaService : IUnidadMedidaService
         _auth.Verificar(_session.RolActual, Permisos.GestionarTablasMaestras);
 
         var unidadMedida = await _repo.ObtenerPorIdAsync(id)
-            ?? throw new KeyNotFoundException($"UnidadMedida {id} no encontrada.");
+            ?? throw new EntidadNoEncontradaException($"UnidadMedida {id} no encontrada.");
 
         if (!unidadMedida.Activo)
-            throw new InvalidOperationException($"La unidad de medida {id} ya está inactiva.");
+            throw new ReglaDeNegocioException($"La unidad de medida {id} ya está inactiva.");
 
         unidadMedida.Activo = false;
         await _repo.ActualizarAsync(unidadMedida);

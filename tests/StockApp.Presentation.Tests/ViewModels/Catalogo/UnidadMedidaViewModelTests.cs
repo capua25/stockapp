@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Moq;
 using StockApp.Application.Catalogo;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Catalogo;
@@ -102,7 +103,7 @@ public class UnidadMedidaListViewModelTests
         vm.ItemSeleccionado = um;
 
         var mensaje = "La unidad de medida 3 ya está inactiva.";
-        svcMock.Setup(s => s.BajaLogicaAsync(3)).ThrowsAsync(new InvalidOperationException(mensaje));
+        svcMock.Setup(s => s.BajaLogicaAsync(3)).ThrowsAsync(new ReglaDeNegocioException(mensaje));
 
         // No debe propagar la excepción (regresión del crash real).
         await vm.BajaCommand.ExecuteAsync(null);
@@ -119,7 +120,7 @@ public class UnidadMedidaListViewModelTests
         vm.ItemSeleccionado = um;
 
         var mensaje = "UnidadMedida 3 no encontrada.";
-        svcMock.Setup(s => s.BajaLogicaAsync(3)).ThrowsAsync(new KeyNotFoundException(mensaje));
+        svcMock.Setup(s => s.BajaLogicaAsync(3)).ThrowsAsync(new EntidadNoEncontradaException(mensaje));
 
         await vm.BajaCommand.ExecuteAsync(null);
 

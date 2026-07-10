@@ -4,6 +4,7 @@ using StockApp.Application.Catalogo;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 using Xunit;
 using IAuthSvc = StockApp.Application.Authorization.IAuthorizationService;
 
@@ -45,7 +46,7 @@ public class UnidadMedidaServiceTests
         var (svc, repo, _, _, _) = Crear();
         repo.Setup(r => r.ExisteNombreAsync("Kilogramo", null)).ReturnsAsync(true);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(
             () => svc.AltaAsync(new UnidadMedida { Nombre = "Kilogramo", Abreviatura = "kg" }));
     }
 
@@ -56,7 +57,7 @@ public class UnidadMedidaServiceTests
         repo.Setup(r => r.ExisteNombreAsync("Kilogramo", null)).ReturnsAsync(false);
         repo.Setup(r => r.ExisteAbreviaturaAsync("kg", null)).ReturnsAsync(true);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(
             () => svc.AltaAsync(new UnidadMedida { Nombre = "Kilogramo", Abreviatura = "kg" }));
     }
 
@@ -121,7 +122,7 @@ public class UnidadMedidaServiceTests
         var (svc, repo, _, _, _) = Crear();
         repo.Setup(r => r.ObtenerPorIdAsync(4)).ReturnsAsync(u);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => svc.BajaLogicaAsync(4));
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => svc.BajaLogicaAsync(4));
     }
 
     // ─── Autorización ────────────────────────────────────────────────────────
@@ -209,5 +210,26 @@ public class UnidadMedidaServiceTests
         var ex = await Record.ExceptionAsync(() => svc.GarantizarUnidadPorDefectoAsync());
 
         Assert.Null(ex);
+    }
+
+    // ─── EntidadNoEncontradaException (Fase 3a, D4) ─────────────────────────
+
+    [Fact]
+    public async Task ModificarAsync_UnidadInexistente_LanzaEntidadNoEncontrada()
+    {
+        var (svc, repo, _, _, _) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(99)).ReturnsAsync((UnidadMedida?)null);
+
+        await Assert.ThrowsAsync<EntidadNoEncontradaException>(
+            () => svc.ModificarAsync(new UnidadMedida { Id = 99, Nombre = "X", Abreviatura = "x" }));
+    }
+
+    [Fact]
+    public async Task BajaLogicaAsync_UnidadInexistente_LanzaEntidadNoEncontrada()
+    {
+        var (svc, repo, _, _, _) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(99)).ReturnsAsync((UnidadMedida?)null);
+
+        await Assert.ThrowsAsync<EntidadNoEncontradaException>(() => svc.BajaLogicaAsync(99));
     }
 }
