@@ -1,3 +1,4 @@
+using System.Linq;
 using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
 using StockApp.Domain.Entities;
@@ -7,6 +8,13 @@ namespace StockApp.Api.Endpoints;
 public record CrearCategoriaRequest(string Nombre);
 public record ModificarCategoriaRequest(string Nombre);
 
+/// <summary>
+/// DTO de lectura de Categoria (Fase 3a, D3). Reemplaza la entidad de dominio cruda en las
+/// responses de GET: una nav property futura en Categoria ya no puede cambiar el contrato
+/// HTTP silenciosamente.
+/// </summary>
+public record CategoriaDto(int Id, string Nombre, bool Activo);
+
 public static class CategoriasEndpoints
 {
     public static IEndpointRouteBuilder MapCategoriasEndpoints(this IEndpointRouteBuilder app)
@@ -14,7 +22,7 @@ public static class CategoriasEndpoints
         var group = app.MapGroup("/categorias");
 
         group.MapGet("/", async (ICategoriaService categorias) =>
-            Results.Ok(await categorias.ListarTodasAsync()))
+            Results.Ok((await categorias.ListarTodasAsync()).Select(ACategoriaDto)))
             .RequireAuthorization(Permisos.GestionarTablasMaestras);
 
         group.MapPost("/", async (CrearCategoriaRequest request, ICategoriaService categorias) =>
@@ -39,9 +47,11 @@ public static class CategoriasEndpoints
         .RequireAuthorization(Permisos.GestionarTablasMaestras);
 
         group.MapGet("/activas", async (ICategoriaService categorias) =>
-            Results.Ok(await categorias.ListarActivasAsync()))
+            Results.Ok((await categorias.ListarActivasAsync()).Select(ACategoriaDto)))
             .RequireAuthorization(Permisos.GestionarProductos);
 
         return app;
     }
+
+    private static CategoriaDto ACategoriaDto(Categoria c) => new(c.Id, c.Nombre, c.Activo);
 }

@@ -56,7 +56,7 @@ public class CategoriasEndpointTests : ApiTestBase
         var response = await client.GetAsync("/categorias");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var categorias = await response.Content.ReadFromJsonAsync<List<Categoria>>();
+        var categorias = await response.Content.ReadFromJsonAsync<List<CategoriaDto>>();
         Assert.Contains(categorias!, c => c.Nombre == "Bebidas");
     }
 
@@ -156,7 +156,7 @@ public class CategoriasEndpointTests : ApiTestBase
         var response = await client.GetAsync("/categorias/activas");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var categorias = await response.Content.ReadFromJsonAsync<List<Categoria>>();
+        var categorias = await response.Content.ReadFromJsonAsync<List<CategoriaDto>>();
         Assert.Contains(categorias!, c => c.Nombre == "Activa");
         Assert.DoesNotContain(categorias!, c => c.Nombre == "Inactiva");
     }
