@@ -5,7 +5,7 @@ using StockApp.Domain.Entities;
 namespace StockApp.Api.Endpoints;
 
 public record CrearUnidadMedidaRequest(string Nombre, string Abreviatura);
-public record ModificarUnidadMedidaRequest(int Id, string Nombre, string Abreviatura);
+public record ModificarUnidadMedidaRequest(string Nombre, string Abreviatura);
 
 public static class UnidadesMedidaEndpoints
 {

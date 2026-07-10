@@ -106,7 +106,7 @@ public class UnidadesMedidaEndpointTests : ApiTestBase
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
 
         var response = await client.PutAsJsonAsync($"/unidades-medida/{unidad.Id}",
-            new ModificarUnidadMedidaRequest(unidad.Id, "Modificada", "mo"));
+            new ModificarUnidadMedidaRequest("Modificada", "mo"));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
