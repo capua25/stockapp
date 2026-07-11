@@ -3,27 +3,21 @@ using AvaloniaApp = Avalonia.Application;
 
 using Avalonia.Controls.ApplicationLifetimes;
 using System;
-using System.IO;
+using System.Net.Http;
 using System.Threading.Tasks;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using StockApp.ApiClient;
 using StockApp.Application.Actualizaciones;
 using StockApp.Application.Auditoria;
 using StockApp.Application.Auth;
-using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Interfaces;
 using StockApp.Application.Movimientos;
 using StockApp.Application.Reportes;
-using StockApp.Infrastructure.Auth;
-using StockApp.Infrastructure.Persistence;
-using StockApp.Infrastructure.Platform;
-using StockApp.Infrastructure.Repositories;
-using StockApp.Infrastructure.Services;
 using StockApp.Presentation.Actualizaciones;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
@@ -52,18 +46,12 @@ public partial class App : AvaloniaApp
         // handlers de eventos o bindings). Dispatcher.UIThread ya está inicializado en este
         // punto del ciclo de vida.
         //
-        // Antes NO se marcaba e.Handled = true a propósito ("para no alterar el comportamiento
-        // de crash existente"): la app moría igual ante cualquier excepción no atrapada, solo
-        // que con más visibilidad vía crash.log. Se revierte esa decisión: un crash real (dar
-        // de baja una unidad de medida ya inactiva — InvalidOperationException de una regla de
-        // negocio VÁLIDA, propagada sin manejar desde un [RelayCommand]) demostró que dejar
-        // morir el proceso ante una excepción de dominio esperable es un bug sistémico, no un
-        // comportamiento aceptable. Esta red es el ÚLTIMO recurso: el manejo fino (confirmación
-        // + try/catch de las excepciones de dominio esperables) va en los comandos que pueden
-        // fallar — ver BajaAsync en UnidadMedidaListViewModel/CategoriaListViewModel/
-        // ProveedorListViewModel. Si algo se escapa igual de esa capa fina (bug no previsto),
-        // acá se loguea a crash.log y se informa al usuario en vez de crashear, reusando el
-        // mismo mecanismo de aviso (IConfirmacionService.InformarAsync) que usan los comandos.
+        // Red de ÚLTIMO recurso (ver historia en el repo: un crash real por una excepción
+        // de dominio esperable demostró que dejar morir el proceso es un bug sistémico).
+        // El manejo fino va en los comandos; si algo escapa igual, acá se loguea a
+        // crash.log y se informa al usuario en vez de crashear. Fase 3b: si lo que escapó
+        // es ServidorNoDisponibleException (API caída en un flujo sin catch propio), se
+        // muestra su mensaje accionable en lugar del genérico.
         Dispatcher.UIThread.UnhandledException += (_, e) =>
         {
             Program.LogFatal("UIThread", e.Exception);
@@ -72,32 +60,38 @@ public partial class App : AvaloniaApp
             var confirmacion = _serviceProvider?.GetService<IConfirmacionService>();
             if (confirmacion is not null)
             {
-                _ = confirmacion.InformarAsync(
-                    "Ocurrió un error inesperado. Podés seguir usando la aplicación; " +
-                    "si el problema persiste, contactá a soporte.");
+                var mensaje = e.Exception is ServidorNoDisponibleException
+                    ? e.Exception.Message
+                    : "Ocurrió un error inesperado. Podés seguir usando la aplicación; " +
+                      "si el problema persiste, contactá a soporte.";
+                _ = confirmacion.InformarAsync(mensaje);
             }
         };
 
-        // Inicializa la BD (migrate) al arrancar. El backup file-based (SQLite) se removió:
-        // con Postgres el respaldo real es pg_dump server-side, diferido a la Fase 4 (design §7).
-        // Se corre en el thread pool (Task.Run) para evitar el DEADLOCK que produce bloquear
-        // el UI thread de Avalonia sobre cadenas async que postean su continuación al contexto capturado.
-        var initializer = _serviceProvider.GetRequiredService<DatabaseInitializer>();
-        Task.Run(() => initializer.InicializarAsync()).GetAwaiter().GetResult();
+        // Fase 3b: ya NO se inicializa ninguna base de datos acá — la API migra su BD al
+        // arrancar (Fase 3a, D9). El desktop solo necesita alcanzar la API por HTTP.
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var shell = _serviceProvider.GetRequiredService<ShellViewModel>();
 
-            // Inicializa el shell (decide login / primer arranque) ANTES de asignar el DataContext,
-            // y en el thread pool, para no deadlockear el UI thread ni disparar PropertyChanged
-            // desde un hilo no-UI con el binding ya activo.
+            // Sesión vencida (spec 3b, OQ-4): un 401 con token dispara el evento en
+            // ApiSession (via AuthTokenHandler); acá se marshalea al UI thread y se navega
+            // al login con aviso. UN solo lugar para toda la app.
+            var apiSession   = _serviceProvider.GetRequiredService<ApiSession>();
+            var uiDispatcher = _serviceProvider.GetRequiredService<IUiDispatcher>();
+            apiSession.SesionVencida += () => uiDispatcher.Post(
+                () => shell.MostrarLoginConAviso("Sesión vencida, ingresá de nuevo."));
+
+            // Inicializa el shell (decide login / primer arranque) ANTES de asignar el
+            // DataContext, y en el thread pool, para no deadlockear el UI thread ni disparar
+            // PropertyChanged desde un hilo no-UI con el binding ya activo. Si la API está
+            // caída, InicializarAsync cae al login (no lanza — ver ShellViewModel).
             Task.Run(() => shell.InicializarAsync()).GetAwaiter().GetResult();
 
             // Defensivo: por defecto ShutdownMode es OnLastWindowClose, lo que puede apagar
-            // la app si transitoriamente queda sin ventanas visibles (ej. un diálogo modal
-            // que se cierra antes de que la ventana principal termine de mostrarse). Fijamos
-            // explícitamente que el ciclo de vida dependa solo del cierre de MainWindow.
+            // la app si transitoriamente queda sin ventanas visibles. Fijamos explícitamente
+            // que el ciclo de vida dependa solo del cierre de MainWindow.
             desktop.ShutdownMode = Avalonia.Controls.ShutdownMode.OnMainWindowClose;
 
             var mainWindow = new MainWindow
@@ -116,66 +110,62 @@ public partial class App : AvaloniaApp
     {
         var services = new ServiceCollection();
 
-        // Configuración externa: appsettings.json es opcional (optional: true) para que su
-        // ausencia en el output no tire excepción — en ese caso se cae al fallback defensivo
-        // de UpdaterOptions.GitHubRepoUrlDefault más abajo.
+        // Configuración externa: appsettings.json es opcional (optional: true) — si falta,
+        // Api:BaseUrl cae al default http://localhost:5000 y el updater a sus defaults.
         var configuration = new ConfigurationBuilder()
             .SetBasePath(AppContext.BaseDirectory)
             .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
             .Build();
 
-        // ── Inc 2: infraestructura de datos y backup ──────────────────────────
+        // ── Fase 3b: sesión API + HttpClient (reemplazan a AppDbContext/repos/servicios) ──
 
-        services.AddSingleton<IUserDataPathProvider, UserDataPathProvider>();
+        // ApiSession: singleton — la sesión (snapshot + token JWT) es única en toda la app.
+        // Se registra también como ICurrentSession apuntando a la MISMA instancia.
+        services.AddSingleton<ApiSession>();
+        services.AddSingleton<ICurrentSession>(sp => sp.GetRequiredService<ApiSession>());
 
-        // AppDbContext: transient para evitar captive dependency en app desktop
-        // (no hay scope de request; los servicios que lo consumen son transient también).
-        services.AddDbContext<AppDbContext>((sp, options) =>
+        // HttpClient: singleton (correcto para desktop: reusa conexiones, un solo pool).
+        // AuthTokenHandler adjunta el Bearer y detecta la sesión vencida en un solo lugar.
+        services.AddSingleton(sp =>
         {
-            var connectionString = configuration.GetConnectionString("Default")
-                ?? throw new InvalidOperationException(
-                    "Falta la cadena de conexión 'ConnectionStrings:Default' en appsettings.json. " +
-                    "Se requiere un PostgreSQL accesible (contenedor Docker local u on-premise).");
-            options.UseNpgsql(connectionString);
-        }, ServiceLifetime.Transient);
+            var baseUrl = configuration["Api:BaseUrl"];
+            if (string.IsNullOrWhiteSpace(baseUrl))
+            {
+                baseUrl = "http://localhost:5000"; // default del spec 3b
+            }
 
-        services.AddTransient<DatabaseInitializer>();
+            var handler = new AuthTokenHandler(sp.GetRequiredService<ApiSession>())
+            {
+                InnerHandler = new SocketsHttpHandler(),
+            };
 
-        // ── Inc 3: autenticación, autorización y sesión ───────────────────────
+            return new HttpClient(handler)
+            {
+                // BaseAddress DEBE terminar en "/" para que los paths relativos ("auth/login")
+                // se resuelvan contra la base y no la pisen.
+                BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/"),
+                // 10 s (spec 3b, OQ-3): LAN local — cubre el reporte más pesado y acota la
+                // espera con el server caído (el default de 100 s colgaría la UI).
+                Timeout = TimeSpan.FromSeconds(10),
+            };
+        });
 
-        // Singleton: la sesión debe ser única en toda la app
-        services.AddSingleton<ICurrentSession, InMemorySession>();
+        // ── Fase 3b: ApiClients — implementan las MISMAS interfaces de Application que
+        //    consumen los ViewModels; los ~22 VMs no se tocan ─────────────────────────────
+        services.AddTransient<IAuthService, AuthApiClient>();
+        services.AddTransient<IPrimerArranqueService, PrimerArranqueApiClient>();
+        services.AddTransient<IUsuarioService, UsuarioApiClient>();
+        services.AddTransient<IProductoService, ProductoApiClient>();
+        services.AddTransient<ICategoriaService, CategoriaApiClient>();
+        services.AddTransient<IProveedorService, ProveedorApiClient>();
+        services.AddTransient<IUnidadMedidaService, UnidadMedidaApiClient>();
+        services.AddTransient<IMovimientoStockService, MovimientoStockApiClient>();
+        services.AddTransient<IReporteStockService, ReporteStockApiClient>();
+        services.AddTransient<IAuditoriaQueryService, AuditoriaQueryApiClient>();
 
-        services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
-
-        // Transient: dependen de AppDbContext (transient) — evita captive dependency
-        services.AddTransient<IUsuarioRepository, UsuarioRepository>();
-        services.AddTransient<IAuditLogger, AuditService>();
-
-        // AuthorizationService: sin estado, singleton es suficiente
-        services.AddSingleton<IAuthorizationService, AuthorizationService>();
-
-        // Servicios de Application: transient — sin estado propio
-        services.AddTransient<IAuthService, AuthService>();
-        services.AddTransient<IPrimerArranqueService, PrimerArranqueService>();
-        services.AddTransient<IUsuarioService, UsuarioService>();
-
-        // ── Inc 4: catálogo — repositorios y servicios ───────────────────────
-
-        services.AddTransient<IProductoRepository, ProductoRepository>();
-        services.AddTransient<ICategoriaRepository, CategoriaRepository>();
-        services.AddTransient<IProveedorRepository, ProveedorRepository>();
-        services.AddTransient<IUnidadMedidaRepository, UnidadMedidaRepository>();
-
-        services.AddTransient<IProductoService, ProductoService>();
-        services.AddTransient<ICategoriaService, CategoriaService>();
-        services.AddTransient<IProveedorService, ProveedorService>();
-        services.AddTransient<IUnidadMedidaService, UnidadMedidaService>();
-
-        // ── Inc 5: movimientos — repositorio y servicio ───────────────────────
-
-        services.AddTransient<IMovimientoStockRepository, MovimientoStockRepository>();
-        services.AddTransient<IMovimientoStockService, MovimientoStockService>();
+        // NOTA (spec 3b): NO se registran IAuthorizationService ni IPasswordHasher ni
+        // IAuditLogger ni repositorios — la autorización, el hashing y la auditoría son
+        // responsabilidad del servidor. Ninguna UI los consumía directo (verificado, OQ-1).
 
         // ── Inc 5: confirmación de stock insuficiente ─────────────────────────
         services.AddSingleton<IConfirmacionService, ConfirmacionService>();
@@ -187,15 +177,7 @@ public partial class App : AvaloniaApp
         // ── Info de la app (versión mostrada en login y shell) ────────────────
         services.AddSingleton<IInfoApp, InfoApp>();
 
-        // ── Inc 6: reportes y auditoría — repositorios y servicios ────────────
-
-        // Repositorios: transient — dependen de AppDbContext (Scoped), evita captive dependency.
-        services.AddTransient<IReporteStockRepository, ReporteStockRepository>();
-        services.AddTransient<IAuditoriaQueryRepository, AuditoriaQueryRepository>();
-
-        // Servicios de Application: transient — sin estado propio.
-        services.AddTransient<IReporteStockService, ReporteStockService>();
-        services.AddTransient<IAuditoriaQueryService, AuditoriaQueryService>();
+        // ── Inc 6: exportación CSV (vive en Application, sin dependencias de Infra — OQ-2)
         services.AddTransient<ICsvExporter, CsvExporter>();
 
         // ── Inc 6: guardado de archivos (file picker) ─────────────────────────
@@ -237,11 +219,12 @@ public partial class App : AvaloniaApp
         // ShellViewModel: singleton — vive toda la vida de la app
         services.AddSingleton<ShellViewModel>();
 
-        // ── Inc 7 Fase A: actualizador in-app ─────────────────────────────────
+        // ── Inc 7 Fase A: actualizador in-app (mudado a Presentation en Fase 3b) ──
 
-        // UpdaterOptions: configura fuentes. GitHub es primaria (real); feed propio es fallback opcional.
-        // La URL y el flag de prerelease vienen de appsettings.json (sección "Updater"); si la key
-        // falta o el archivo no existe, se cae al fallback defensivo de UpdaterOptions.
+        // UpdaterOptions: configura fuentes. GitHub es primaria (real); feed propio es
+        // fallback opcional. La URL y el flag de prerelease vienen de appsettings.json
+        // (sección "Updater"); si la key falta o el archivo no existe, se cae al fallback
+        // defensivo de UpdaterOptions.
         var repoUrl = configuration["Updater:GitHubRepoUrl"];
         if (string.IsNullOrWhiteSpace(repoUrl))
         {
@@ -272,8 +255,6 @@ public partial class App : AvaloniaApp
         services.AddSingleton<PoliticaUxActualizacion>();
 
         // CoordinadorActualizacion: singleton — orquesta chequeo→política en background al arranque.
-        // Los ViewModels de actualización (Banner/Modal/Bloqueo) se instancian directamente
-        // con la AccionUx resultante; no se registran en DI porque toman AccionUx en su constructor.
         services.AddSingleton<CoordinadorActualizacion>();
 
         return services.BuildServiceProvider();
