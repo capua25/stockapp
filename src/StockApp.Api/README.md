@@ -176,3 +176,47 @@ Confirmar:
 - GET `/categorias`, `/proveedores`, `/unidades-medida` devuelven DTOs con estructura fija (Fase 3a, D3)
 - Los efectos (categoría creada, producto creado, stock incrementado) son visibles en
   consultas posteriores (`GET /categorias`, `GET /productos`, historial de movimientos)
+
+## Clientes desktop (Fase 3b)
+
+El desktop Avalonia ya no accede a Postgres: consume esta API vía `StockApp.ApiClient`
+(clientes HTTP que implementan las mismas interfaces de `StockApp.Application`).
+Multi-puesto: N desktops → 1 API → 1 Postgres.
+
+### Apuntar un puesto al servidor
+
+Editar `appsettings.json` junto al ejecutable del desktop:
+
+```json
+{ "Api": { "BaseUrl": "http://<ip-del-servidor>:5043" } }
+```
+
+Si la clave falta, el default es `http://localhost:5000`. Sin `ConnectionStrings`: el
+desktop no conoce la base de datos.
+
+### Arranque del servidor en la LAN
+
+```bash
+# desarrollo (localhost:5043)
+dotnet run --project src/StockApp.Api/StockApp.Api.csproj --launch-profile http
+
+# publicado, escuchando en todas las interfaces de la LAN
+dotnet StockApp.Api.dll --urls http://0.0.0.0:5043
+```
+
+Requisitos: Postgres accesible (`ConnectionStrings:Default`) y `Jwt:Secret` configurado
+(user-secrets o variable de entorno). La API migra su base al arrancar (Fase 3a, D9).
+
+### Comportamiento del cliente
+
+- **Sesión**: token JWT de jornada (`Jwt:ExpiracionHoras`, default 12 h). Ante un 401 con
+  token (sesión vencida), el desktop vuelve al login con el aviso "Sesión vencida,
+  ingresá de nuevo.".
+- **Errores**: el cliente traduce el `problem+json` a las excepciones de dominio que los
+  ViewModels ya muestran (404/409/400/403). El 409 de stock insuficiente viaja con
+  extensiones estructuradas (`productoId`, `stockActual`, `cantidadSolicitada`) para
+  preservar el flujo "¿forzar salida?" del desktop.
+- **Servidor caído / timeout (10 s)**: mensaje accionable al usuario; el login permite
+  reintentar.
+- **Supuesto de red**: LAN interna sin TLS (HTTP plano) — fuera del alcance de 3b, igual
+  que el instalador/deploy remoto.
