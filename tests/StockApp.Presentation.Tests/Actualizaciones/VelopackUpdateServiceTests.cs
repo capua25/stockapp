@@ -1,9 +1,9 @@
 using Moq;
 using StockApp.Application.Actualizaciones;
-using StockApp.Infrastructure.Actualizaciones;
+using StockApp.Presentation.Actualizaciones;
 using Velopack;
 
-namespace StockApp.Infrastructure.Tests.Actualizaciones;
+namespace StockApp.Presentation.Tests.Actualizaciones;
 
 /// <summary>
 /// Tests de VelopackUpdateService con gateway mockeado.

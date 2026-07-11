@@ -1,7 +1,10 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 using StockApp.Application.Actualizaciones;
 using Velopack;
 
-namespace StockApp.Infrastructure.Actualizaciones;
+namespace StockApp.Presentation.Actualizaciones;
 
 /// <summary>
 /// Implementación de <see cref="IUpdateService"/> que orquesta el flujo de actualización

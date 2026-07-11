@@ -1,6 +1,9 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Velopack;
 
-namespace StockApp.Infrastructure.Actualizaciones;
+namespace StockApp.Presentation.Actualizaciones;
 
 /// <summary>
 /// Abstracción fina sobre <see cref="UpdateManager"/> de Velopack.

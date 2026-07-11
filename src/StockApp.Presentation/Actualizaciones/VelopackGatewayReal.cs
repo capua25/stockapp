@@ -1,8 +1,11 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Velopack;
 using Velopack.Exceptions;
 using Velopack.Sources;
 
-namespace StockApp.Infrastructure.Actualizaciones;
+namespace StockApp.Presentation.Actualizaciones;
 
 /// <summary>
 /// Adaptador delgado sobre <see cref="UpdateManager"/> real de Velopack.

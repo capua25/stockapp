@@ -1,8 +1,13 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Velopack;
 using Velopack.Logging;
 using Velopack.Sources;
 
-namespace StockApp.Infrastructure.Actualizaciones;
+namespace StockApp.Presentation.Actualizaciones;
 
 /// <summary>
 /// <see cref="IUpdateSource"/> encadenada: intenta cada fuente en orden.

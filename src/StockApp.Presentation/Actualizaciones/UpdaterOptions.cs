@@ -1,4 +1,4 @@
-namespace StockApp.Infrastructure.Actualizaciones;
+namespace StockApp.Presentation.Actualizaciones;
 
 /// <summary>
 /// Opciones de configuración del actualizador in-app.

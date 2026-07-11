@@ -19,7 +19,6 @@ using StockApp.Application.Exportacion;
 using StockApp.Application.Interfaces;
 using StockApp.Application.Movimientos;
 using StockApp.Application.Reportes;
-using StockApp.Infrastructure.Actualizaciones;
 using StockApp.Infrastructure.Auth;
 using StockApp.Infrastructure.Persistence;
 using StockApp.Infrastructure.Platform;

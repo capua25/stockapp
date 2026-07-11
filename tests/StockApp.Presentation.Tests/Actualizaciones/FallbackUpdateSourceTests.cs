@@ -1,10 +1,10 @@
 using Moq;
-using StockApp.Infrastructure.Actualizaciones;
+using StockApp.Presentation.Actualizaciones;
 using Velopack;
 using Velopack.Logging;
 using Velopack.Sources;
 
-namespace StockApp.Infrastructure.Tests.Actualizaciones;
+namespace StockApp.Presentation.Tests.Actualizaciones;
 
 /// <summary>
 /// Tests de FallbackUpdateSource: fuente encadenada [primaria → fallback].
