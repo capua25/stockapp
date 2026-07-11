@@ -11,13 +11,6 @@
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.0" />
-    <!-- Fija la version de EF Core Design para evitar el conflicto de version flotante
-         (CS1705) entre Infrastructure (Npgsql arrastra 10.0.9) y la resolucion transitiva
-         por defecto (10.0.4) cuando el proyecto no tiene referencia directa a EF Core. -->
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.*">
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.9" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
     <PackageReference Include="Moq" Version="4.20.72" />
@@ -33,7 +26,6 @@
     <!-- Solo referenciamos Application (interfaces de servicios) y Presentation (ViewModels) -->
     <ProjectReference Include="..\..\src\StockApp.Application\StockApp.Application.csproj" />
     <ProjectReference Include="..\..\src\StockApp.Presentation\StockApp.Presentation.csproj" />
-    <ProjectReference Include="..\..\src\StockApp.Infrastructure\StockApp.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
