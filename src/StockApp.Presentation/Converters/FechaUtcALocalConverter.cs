@@ -6,8 +6,8 @@ namespace StockApp.Presentation.Converters;
 
 /// <summary>
 /// Convierte una fecha persistida en UTC (<c>DateTime.UtcNow</c> al escribir, ver
-/// <see cref="StockApp.Application.Movimientos.MovimientoStockService"/> y
-/// <see cref="StockApp.Infrastructure.Repositories.MovimientoStockRepository"/>) a la hora
+/// <see cref="StockApp.Application.Movimientos.MovimientoStockService"/> y el
+/// repositorio de movimientos del lado del servidor) a la hora
 /// LOCAL de la máquina para mostrarla en la UI.
 ///
 /// Necesario por un gotcha de EF Core + SQLite: al releer la columna, el <c>DateTime</c>
