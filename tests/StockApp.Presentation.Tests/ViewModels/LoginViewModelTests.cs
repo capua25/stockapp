@@ -1,4 +1,5 @@
 using Moq;
+using StockApp.ApiClient;
 using StockApp.Application.Actualizaciones;
 using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
@@ -182,5 +183,25 @@ public class LoginViewModelTests
 
         tcs.SetResult(LoginResult.Ok());
         await tarea;
+    }
+
+    [Fact]
+    public async Task Entrar_ServidorCaido_MuestraElMensajeDeConexion()
+    {
+        // Spec 3b: "Login con servidor caído → el login muestra el error de conexión,
+        // permite reintentar" (el comando queda habilitado de nuevo al terminar).
+        var authMock = new Mock<IAuthService>();
+        authMock
+            .Setup(a => a.LoginAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ThrowsAsync(new ServidorNoDisponibleException());
+        var vm = new LoginViewModel(authMock.Object, CrearShellFake(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"));
+        vm.NombreUsuario = "admin";
+        vm.Contrasena    = "secreto123";
+
+        await vm.EntrarCommand.ExecuteAsync(null);
+
+        Assert.Equal(ServidorNoDisponibleException.MensajePorDefecto, vm.MensajeError);
+        Assert.False(vm.OperacionEnCurso);
+        Assert.True(vm.EntrarCommand.CanExecute(null)); // puede reintentar
     }
 }

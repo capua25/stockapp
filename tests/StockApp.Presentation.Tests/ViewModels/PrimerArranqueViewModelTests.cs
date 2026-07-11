@@ -1,4 +1,5 @@
 using Moq;
+using StockApp.ApiClient;
 using StockApp.Application.Actualizaciones;
 using StockApp.Application.Auth;
 using StockApp.Application.Interfaces;
@@ -247,5 +248,19 @@ public class PrimerArranqueViewModelTests
         ctx.Vm.ContinuarSin2doAdminCommand.Execute(null);
 
         Assert.IsType<LoginViewModel>(ctx.Shell.CurrentViewModel);
+    }
+
+    [Fact]
+    public async Task CrearAdmin_ServidorCaido_MuestraElMensajeDeConexion()
+    {
+        var ctx = Crear(excepcionCreacion: new ServidorNoDisponibleException());
+        ctx.Vm.NombreUsuario       = "admin";
+        ctx.Vm.Contrasena          = "secreto123";
+        ctx.Vm.ConfirmarContrasena = "secreto123";
+
+        await ctx.Vm.CrearAdminCommand.ExecuteAsync(null);
+
+        Assert.Equal(ServidorNoDisponibleException.MensajePorDefecto, ctx.Vm.MensajeError);
+        Assert.False(ctx.Vm.MostrarRecomendacion2doAdmin);
     }
 }

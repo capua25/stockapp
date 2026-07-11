@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using StockApp.ApiClient;
 using StockApp.Application.Auth;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
@@ -129,6 +130,10 @@ public partial class PrimerArranqueViewModel : ViewModelBase
 
             // Mostrar recomendación de 2do Admin en lugar de navegar inmediatamente.
             MostrarRecomendacion2doAdmin = true;
+        }
+        catch (ServidorNoDisponibleException ex)
+        {
+            MensajeError = ex.Message;
         }
         catch (ReglaDeNegocioException ex)
         {

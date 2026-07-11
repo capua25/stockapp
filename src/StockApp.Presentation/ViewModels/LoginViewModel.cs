@@ -1,6 +1,7 @@
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using StockApp.ApiClient;
 using StockApp.Application.Auth;
 using StockApp.Presentation.Services;
 
@@ -77,6 +78,11 @@ public partial class LoginViewModel : ViewModelBase
                 // FIX user-enumeration: siempre el mismo mensaje, sin importar el error interno.
                 MensajeError = "Usuario o contraseña incorrectos.";
             }
+        }
+        catch (ServidorNoDisponibleException ex)
+        {
+            // Spec 3b: el login muestra el error de conexión y permite reintentar.
+            MensajeError = ex.Message;
         }
         finally
         {

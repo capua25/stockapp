@@ -1,4 +1,5 @@
 using Moq;
+using StockApp.ApiClient;
 using StockApp.Application.Actualizaciones;
 using StockApp.Application.Auth;
 using StockApp.Application.Interfaces;
@@ -115,5 +116,31 @@ public class ShellViewModelTests
         shell.MostrarContenidoPrincipal();
 
         Assert.IsType<ShellMainViewModel>(shell.CurrentViewModel);
+    }
+
+    [Fact]
+    public async Task Inicializar_ServidorCaido_MuestraLoginIgual()
+    {
+        // Spec 3b, manejo de errores: si la API no responde en el arranque, la app no
+        // muere — muestra el login; el intento de login informará el error de conexión.
+        var (shell, primerArranqueMock) = Crear(requiereCrearAdmin: false);
+        primerArranqueMock
+            .Setup(p => p.RequiereCrearAdminAsync())
+            .ThrowsAsync(new ServidorNoDisponibleException());
+
+        await shell.InicializarAsync();
+
+        Assert.IsType<LoginViewModel>(shell.CurrentViewModel);
+    }
+
+    [Fact]
+    public void MostrarLoginConAviso_EstableceLoginConElMensaje()
+    {
+        var (shell, _) = Crear(requiereCrearAdmin: false);
+
+        shell.MostrarLoginConAviso("Sesión vencida, ingresá de nuevo.");
+
+        var login = Assert.IsType<LoginViewModel>(shell.CurrentViewModel);
+        Assert.Equal("Sesión vencida, ingresá de nuevo.", login.MensajeError);
     }
 }

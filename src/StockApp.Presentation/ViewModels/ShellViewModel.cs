@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using StockApp.ApiClient;
 using StockApp.Application.Auth;
 using StockApp.Presentation.Actualizaciones;
 using StockApp.Presentation.Navigation;
@@ -57,7 +58,19 @@ public partial class ShellViewModel : ViewModelBase
     /// </summary>
     public async Task InicializarAsync()
     {
-        if (await _primerArranqueService.RequiereCrearAdminAsync())
+        bool requiereCrearAdmin;
+        try
+        {
+            requiereCrearAdmin = await _primerArranqueService.RequiereCrearAdminAsync();
+        }
+        catch (ServidorNoDisponibleException)
+        {
+            // Servidor caído en el arranque (spec 3b): se muestra el login igual; el
+            // intento de login informa el error de conexión y permite reintentar.
+            requiereCrearAdmin = false;
+        }
+
+        if (requiereCrearAdmin)
             MostrarPrimerArranque();
         else
             MostrarLogin();
@@ -186,6 +199,17 @@ public partial class ShellViewModel : ViewModelBase
     public void MostrarLogin()
     {
         CurrentViewModel = new LoginViewModel(_authService, this, _infoApp);
+    }
+
+    /// <summary>
+    /// Navega al login mostrando un aviso (ej. "Sesión vencida, ingresá de nuevo.").
+    /// Lo cablea App.axaml.cs al evento ApiSession.SesionVencida (spec 3b, OQ-4).
+    /// </summary>
+    public void MostrarLoginConAviso(string aviso)
+    {
+        var login = new LoginViewModel(_authService, this, _infoApp);
+        login.MensajeError = aviso;
+        CurrentViewModel = login;
     }
 
     public void MostrarContenidoPrincipal()

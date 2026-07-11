@@ -66,6 +66,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\StockApp.ApiClient\StockApp.ApiClient.csproj" />
     <ProjectReference Include="..\StockApp.Application\StockApp.Application.csproj" />
     <ProjectReference Include="..\StockApp.Infrastructure\StockApp.Infrastructure.csproj" />
   </ItemGroup>
