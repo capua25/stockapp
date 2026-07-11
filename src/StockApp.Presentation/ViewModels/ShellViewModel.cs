@@ -1,7 +1,6 @@
 using System;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
-using StockApp.ApiClient;
 using StockApp.Application.Auth;
 using StockApp.Presentation.Actualizaciones;
 using StockApp.Presentation.Navigation;
@@ -63,10 +62,15 @@ public partial class ShellViewModel : ViewModelBase
         {
             requiereCrearAdmin = await _primerArranqueService.RequiereCrearAdminAsync();
         }
-        catch (ServidorNoDisponibleException)
+        catch (Exception)
         {
-            // Servidor caído en el arranque (spec 3b): se muestra el login igual; el
-            // intento de login informa el error de conexión y permite reintentar.
+            // Cualquier error del bootstrap (servidor caído -> ServidorNoDisponibleException,
+            // o API viva con Postgres caído -> 500 que ApiErrores mapea a
+            // InvalidOperationException, etc.) degrada a mostrar el login igual; el intento de
+            // login informa el problema real y permite reintentar. Fix review final 3b: antes
+            // solo se atrapaba ServidorNoDisponibleException, así que un 500 escapaba de acá y
+            // App.axaml.cs lo propagaba en OnFrameworkInitializationCompleted antes de crear
+            // MainWindow — la app moría sin ventana, solo crash.log.
             requiereCrearAdmin = false;
         }
 

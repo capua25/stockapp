@@ -134,6 +134,25 @@ public class ShellViewModelTests
     }
 
     [Fact]
+    public async Task Inicializar_ErrorInesperadoEnBootstrap_MuestraLoginIgual()
+    {
+        // Fix del review final 3b: si la API está viva pero Postgres caído, GET
+        // /auth/primer-arranque devuelve 500 y ApiErrores lo mapea a InvalidOperationException
+        // (no a ServidorNoDisponibleException). Antes solo se atrapaba esta última, así que el
+        // error escapaba de InicializarAsync y App.axaml.cs lo propagaba en
+        // OnFrameworkInitializationCompleted antes de crear MainWindow: la app moría sin
+        // ventana. Cualquier error del bootstrap debe degradar a login.
+        var (shell, primerArranqueMock) = Crear(requiereCrearAdmin: false);
+        primerArranqueMock
+            .Setup(p => p.RequiereCrearAdminAsync())
+            .ThrowsAsync(new InvalidOperationException("500 desde /auth/primer-arranque"));
+
+        await shell.InicializarAsync();
+
+        Assert.IsType<LoginViewModel>(shell.CurrentViewModel);
+    }
+
+    [Fact]
     public void MostrarLoginConAviso_EstableceLoginConElMensaje()
     {
         var (shell, _) = Crear(requiereCrearAdmin: false);
