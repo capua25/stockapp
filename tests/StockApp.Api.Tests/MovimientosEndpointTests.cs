@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using StockApp.Api.Auth;
@@ -73,6 +74,17 @@ public class MovimientosEndpointTests : ApiTestBase
             new RegistrarMovimientoRequest(producto.Id, TipoMovimiento.Salida, MotivoMovimiento.Venta, 10m, 20m, null));
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+
+        // Único contrato cross-proceso del flujo "forzar salida" (Fase 3b, Mina 2): el cliente
+        // HTTP del desktop reconstruye StockInsuficienteException tipada a partir de estas
+        // extensiones del ProblemDetails para preguntar "¿forzar?" con ex.StockResultante.
+        // Hoy solo lo cubre un unit test del handler (DomainExceptionHandlerTests); esto valida
+        // el round-trip real end-to-end.
+        var json = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+        Assert.Equal(producto.Id, doc.RootElement.GetProperty("productoId").GetInt32());
+        Assert.Equal(3m, doc.RootElement.GetProperty("stockActual").GetDecimal());
+        Assert.Equal(10m, doc.RootElement.GetProperty("cantidadSolicitada").GetDecimal());
     }
 
     [Fact]

@@ -25,6 +25,13 @@ namespace StockApp.Presentation.Tests.DI;
 /// </summary>
 public class ComposicionDIApiTests
 {
+    // Scope parcial deliberado (review final 3b): este espejo no incluye Shell/Inicio/el
+    // bloque Updater (CoordinadorActualizacion + IUpdateService + IUiDispatcher + IInfoApp)
+    // ni los 4 VMs de reportes (StockCategoriaViewModel, HistorialPorProductoViewModel,
+    // MasMovidosViewModel, AuditoriaLogViewModel). Es drift preexistente heredado de los tests
+    // viejos que este archivo reemplazó, no un gap nuevo introducido en 3b. Sus constructores
+    // se siguen validando indirectamente: se resuelven en el arranque real de la app
+    // (App.axaml.cs) y están cubiertos por sus propios tests de ViewModel unitarios.
     private static IServiceProvider CrearContenedor()
     {
         var services = new ServiceCollection();
