@@ -22,8 +22,11 @@
         <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml"/>
 
         <!-- StockApp UI Kit: capa aditiva, incluida DESPUÉS de FluentTheme para overridear.
-             Reversible quitando estos dos StyleInclude. -->
+             Reversible quitando estos StyleInclude. -->
         <StyleInclude Source="avares://StockApp.Presentation/Themes/Typography.axaml"/>
         <StyleInclude Source="avares://StockApp.Presentation/Themes/Controls.axaml"/>
+        <!-- DESPUÉS del StyleInclude del Fluent.xaml del DataGrid (arriba): overridea el
+             recuadro de foco de celda. Ver el comentario en DataGrid.axaml. -->
+        <StyleInclude Source="avares://StockApp.Presentation/Themes/DataGrid.axaml"/>
     </Application.Styles>
 </Application>

@@ -69,6 +69,23 @@ public class ValorizacionViewModelTests
     }
 
     [Fact]
+    public async Task CargarAsync_LlamaObtenerValorizacion_YPopulaItemsYTotales()
+    {
+        var items = new List<ValorizacionItemDto> { CrearItem(1), CrearItem(2) };
+        var totales = new ValorizacionTotalesDto(TotalValorCosto: 100m, TotalValorVenta: 160m);
+        var (vm, servicioMock, _, _) = Crear(items, totales);
+
+        await vm.CargarAsync();
+
+        servicioMock.Verify(s => s.ObtenerValorizacionAsync(), Times.Once);
+        Assert.Equal(2, vm.Items.Count);
+        Assert.Same(items, vm.Items);
+        Assert.NotNull(vm.Totales);
+        Assert.Equal(100m, vm.Totales!.TotalValorCosto);
+        Assert.Equal(160m, vm.Totales.TotalValorVenta);
+    }
+
+    [Fact]
     public async Task ExportarCommand_LlamaExportarConOrdenColumnasFijo()
     {
         var items = new List<ValorizacionItemDto> { CrearItem(1) };

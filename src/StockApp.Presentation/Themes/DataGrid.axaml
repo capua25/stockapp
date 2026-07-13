@@ -1,0 +1,39 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         StockApp UI Kit — Override del DataGrid: matar el recuadro de foco.
+         Problema: al clickear una celda, Avalonia.Controls.DataGrid 12.0.1 dibuja DOS
+         indicadores encima de la fila seleccionada (azul):
+           1. Rectangle#CurrencyVisual (visible cuando la celda es ":current", stroke =
+              recurso "DataGridCurrencyVisualPrimaryBrush" = SystemControlTransparentBrush,
+              o sea transparente hoy — no se ve, pero lo apagamos igual por completitud).
+           2. Grid#FocusVisual (visible cuando la celda tiene foco real, ":focus") — un doble
+              rectángulo "marching ants": Rectangle exterior stroke
+              "DataGridCellFocusVisualPrimaryBrush" = recurso "SystemBaseHighColor" (negro en
+              tema claro, 2px) + Rectangle interior con margen 2 stroke
+              "DataGridCellFocusVisualSecondaryBrush" = "SystemAltMediumColor" (1px). ESTE es
+              el recuadro negro feo que reporta el usuario.
+         Nombres de partes verificados decompilando Avalonia.Controls.DataGrid 12.0.1
+         (Build_55 del ControlTheme de DataGridCell en el .nupkg, método
+         "Populate_003A_002FThemes_002FFluent_002Examl" → selectores exactos:
+           DataGridCell:current /template/ Rectangle#CurrencyVisual
+           DataGridCell:focus /template/ Grid#FocusVisual
+         No hay loose .xaml en el paquete NuGet (el tema viene compilado a IL), por eso se
+         decompiló el ensamblado en vez de leer el XAML fuente.
+
+         Incluido en App.axaml DESPUÉS del StyleInclude del Fluent.xaml del DataGrid para
+         poder overridear (mismo criterio que Typography.axaml/Controls.axaml). NO toca la
+         selección de fila (la fila azul sigue siendo el único indicador de selección).
+         Reversible quitando el StyleInclude de App.axaml.
+         ════════════════════════════════════════════════════════════════════ -->
+
+    <Style Selector="DataGridCell:current /template/ Rectangle#CurrencyVisual">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+    <Style Selector="DataGridCell:focus /template/ Grid#FocusVisual">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+
+</Styles>

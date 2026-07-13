@@ -54,7 +54,15 @@ public partial class ValorizacionViewModel : ViewModelBase
 
     /// <summary>Obtiene la valorización del inventario y puebla <see cref="Items"/> y <see cref="Totales"/>.</summary>
     [RelayCommand]
-    private async Task BuscarAsync()
+    private async Task BuscarAsync() => await CargarAsync();
+
+    /// <summary>
+    /// Obtiene la valorización del inventario y puebla <see cref="Items"/> y
+    /// <see cref="Totales"/>. Público para poder engancharse desde el auto-load de la vista
+    /// (<c>DataContextChanged</c> en <c>ValorizacionView.axaml.cs</c>), además de desde
+    /// <see cref="BuscarCommand"/>.
+    /// </summary>
+    public async Task CargarAsync()
     {
         var resultado = await _servicio.ObtenerValorizacionAsync();
         Items = resultado.Items;
