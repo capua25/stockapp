@@ -90,6 +90,20 @@ public class AuditoriaLogViewModelTests
     }
 
     [Fact]
+    public async Task CargarAsync_LlamaObtenerLogAsync_YPopulaItems()
+    {
+        var items = new List<AuditoriaItemDto> { CrearItem(1), CrearItem(2) };
+        var (vm, servicioMock, _, _) = Crear(items);
+
+        await vm.CargarAsync();
+
+        servicioMock.Verify(s => s.ObtenerLogAsync(
+            It.IsAny<int?>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>()), Times.Once);
+        Assert.Equal(2, vm.Items.Count);
+        Assert.Same(items, vm.Items);
+    }
+
+    [Fact]
     public async Task ExportarCommand_LlamaExportarConItems()
     {
         var items = new List<AuditoriaItemDto> { CrearItem() };

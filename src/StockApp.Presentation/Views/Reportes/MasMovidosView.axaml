@@ -54,7 +54,8 @@
                           ItemsSource="{Binding Items}"
                           IsReadOnly="True"
                           CanUserResizeColumns="True"
-                          GridLinesVisibility="Horizontal">
+                          GridLinesVisibility="Horizontal"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto">
                     <DataGrid.Styles>
                         <Style Selector="DataGridCell.num">
                             <Setter Property="HorizontalContentAlignment" Value="Right" />
@@ -72,14 +73,14 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn Binding="{Binding CantidadMovimientos}" Width="Auto"
-                                            CellStyleClasses="num">
+                        <DataGridTextColumn Binding="{Binding CantidadMovimientos, Converter={x:Static conv:CantidadConverter.Instance}}"
+                                            Width="Auto" MinWidth="80" CellStyleClasses="num">
                             <DataGridTextColumn.Header>
                                 <TextBlock Text="Movimientos" HorizontalAlignment="Right" TextAlignment="Right" />
                             </DataGridTextColumn.Header>
                         </DataGridTextColumn>
-                        <DataGridTextColumn Binding="{Binding VolumenTotal}" Width="Auto"
-                                            CellStyleClasses="num">
+                        <DataGridTextColumn Binding="{Binding VolumenTotal, Converter={x:Static conv:CantidadConverter.Instance}}"
+                                            Width="Auto" MinWidth="100" CellStyleClasses="num">
                             <DataGridTextColumn.Header>
                                 <TextBlock Text="Volumen Total" HorizontalAlignment="Right" TextAlignment="Right" />
                             </DataGridTextColumn.Header>

@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Reportes"
              xmlns:dto="using:StockApp.Application.Reportes"
+             xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
@@ -29,7 +30,8 @@
                           ItemsSource="{Binding Items}"
                           IsReadOnly="True"
                           CanUserResizeColumns="True"
-                          GridLinesVisibility="Horizontal">
+                          GridLinesVisibility="Horizontal"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto">
                     <DataGrid.Styles>
                         <Style Selector="DataGridCell.num">
                             <Setter Property="HorizontalContentAlignment" Value="Right" />
@@ -46,14 +48,24 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="Productos" Binding="{Binding CantidadProductos}" Width="Auto"
-                                            CellStyleClasses="num" />
-                        <DataGridTextColumn Header="Stock Total" Binding="{Binding StockTotal}" Width="Auto"
-                                            CellStyleClasses="num" />
-                        <DataGridTextColumn Header="Valor Costo" Binding="{Binding ValorCosto}" Width="Auto"
-                                            CellStyleClasses="num" />
-                        <DataGridTextColumn Header="Valor Venta" Binding="{Binding ValorVenta}" Width="Auto"
-                                            CellStyleClasses="num" />
+                        <DataGridTextColumn Header="Productos"
+                                             Binding="{Binding CantidadProductos, Converter={x:Static conv:CantidadConverter.Instance}}"
+                                             Width="Auto" MinWidth="80" CellStyleClasses="num" />
+                        <DataGridTemplateColumn Header="Stock Total" Width="Auto" MinWidth="100" SortMemberPath="StockTotal">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:StockCategoriaDto">
+                                    <TextBlock Text="{Binding StockTotal, Converter={x:Static conv:CantidadConverter.Instance}}"
+                                               Foreground="{Binding StockTotal, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}"
+                                               VerticalAlignment="Center" HorizontalAlignment="Right" Margin="4,0" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="Valor Costo"
+                                             Binding="{Binding ValorCosto, Converter={x:Static conv:MonedaConverter.Instance}}"
+                                             Width="Auto" MinWidth="100" CellStyleClasses="num" />
+                        <DataGridTextColumn Header="Valor Venta"
+                                             Binding="{Binding ValorVenta, Converter={x:Static conv:MonedaConverter.Instance}}"
+                                             Width="Auto" MinWidth="100" CellStyleClasses="num" />
                     </DataGrid.Columns>
                 </DataGrid>
 

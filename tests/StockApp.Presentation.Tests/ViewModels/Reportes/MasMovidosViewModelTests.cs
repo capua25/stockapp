@@ -91,6 +91,20 @@ public class MasMovidosViewModelTests
     }
 
     [Fact]
+    public async Task CargarAsync_LlamaObtenerMasMovidosAsync_YPopulaItems()
+    {
+        var items = new List<MasMovidoDto> { CrearItem(1), CrearItem(2) };
+        var (vm, servicioMock, _, _) = Crear(items);
+
+        await vm.CargarAsync();
+
+        servicioMock.Verify(s => s.ObtenerMasMovidosAsync(
+            It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<int>()), Times.Once);
+        Assert.Equal(2, vm.Items.Count);
+        Assert.Same(items, vm.Items);
+    }
+
+    [Fact]
     public async Task ExportarCommand_LlamaExportarConItems()
     {
         var items = new List<MasMovidoDto> { CrearItem() };

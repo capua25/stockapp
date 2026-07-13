@@ -46,6 +46,22 @@ public class CantidadConverterTests
     }
 
     [Fact]
+    public void Convert_ConInt_FormateaIgualQueDecimal()
+    {
+        var resultado = Sut.Convert(22, typeof(string), null, CultureInfo.InvariantCulture);
+
+        Assert.Equal("22", resultado);
+    }
+
+    [Fact]
+    public void Convert_ConIntNegativo_AntepnoneSigno()
+    {
+        var resultado = Sut.Convert(-6, typeof(string), null, CultureInfo.InvariantCulture);
+
+        Assert.Equal("-6", resultado);
+    }
+
+    [Fact]
     public void Convert_DecimalNulo_DevuelveCadenaVacia()
     {
         var resultado = Sut.Convert((decimal?)null, typeof(string), null, CultureInfo.InvariantCulture);

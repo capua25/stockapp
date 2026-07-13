@@ -61,7 +61,14 @@ public partial class AuditoriaLogViewModel : ViewModelBase
 
     /// <summary>Consulta el log de auditoría filtrado y puebla <see cref="Items"/>.</summary>
     [RelayCommand]
-    private async Task BuscarAsync()
+    private async Task BuscarAsync() => await CargarAsync();
+
+    /// <summary>
+    /// Consulta el log de auditoría filtrado y puebla <see cref="Items"/>. Público para poder
+    /// engancharse desde el auto-load de la vista (<c>DataContextChanged</c> en
+    /// <c>AuditoriaLogView.axaml.cs</c>), además de desde <see cref="BuscarCommand"/>.
+    /// </summary>
+    public async Task CargarAsync()
     {
         if (FechaDesde is not null && FechaHasta is not null && FechaDesde > FechaHasta)
         {

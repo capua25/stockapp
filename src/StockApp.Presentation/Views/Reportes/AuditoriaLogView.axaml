@@ -54,7 +54,8 @@
                           ItemsSource="{Binding Items}"
                           IsReadOnly="True"
                           CanUserResizeColumns="True"
-                          GridLinesVisibility="Horizontal">
+                          GridLinesVisibility="Horizontal"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto">
                     <DataGrid.Styles>
                         <Style Selector="DataGridCell.num">
                             <Setter Property="HorizontalContentAlignment" Value="Right" />
@@ -66,7 +67,7 @@
                         <DataGridTextColumn Header="Acción" Binding="{Binding Accion}" Width="Auto" />
                         <DataGridTextColumn Header="Entidad" Binding="{Binding Entidad}" Width="Auto" />
                         <DataGridTextColumn Header="Entidad ID" Binding="{Binding EntidadId}" Width="Auto"
-                                            CellStyleClasses="num" />
+                                            MinWidth="80" CellStyleClasses="num" />
                         <DataGridTemplateColumn Header="Detalle" Width="*" SortMemberPath="Detalle">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:AuditoriaItemDto">

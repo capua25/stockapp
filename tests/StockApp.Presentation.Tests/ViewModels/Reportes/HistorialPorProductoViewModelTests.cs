@@ -101,6 +101,21 @@ public class HistorialPorProductoViewModelTests
     }
 
     [Fact]
+    public async Task CargarAsync_LlamaObtenerHistorialPorProductoAsync_YPopulaItems()
+    {
+        var items = new List<MovimientoHistorialDto> { CrearItem(1), CrearItem(2) };
+        var (vm, servicioMock, _, _) = Crear(items);
+        vm.ProductoId = 7;
+
+        await vm.CargarAsync();
+
+        servicioMock.Verify(s => s.ObtenerHistorialPorProductoAsync(
+            7, It.IsAny<DateTime?>(), It.IsAny<DateTime?>()), Times.Once);
+        Assert.Equal(2, vm.Items.Count);
+        Assert.Same(items, vm.Items);
+    }
+
+    [Fact]
     public async Task ExportarCommand_LlamaExportarConItems()
     {
         var items = new List<MovimientoHistorialDto> { CrearItem() };
