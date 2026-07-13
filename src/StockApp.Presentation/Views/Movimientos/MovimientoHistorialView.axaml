@@ -90,7 +90,14 @@
                           IsReadOnly="True"
                           CanUserSortColumns="True"
                           CanUserResizeColumns="True"
-                          GridLinesVisibility="Horizontal">
+                          GridLinesVisibility="Horizontal"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                    <DataGrid.Styles>
+                        <!-- Columnas numéricas (montos/cantidades) alineadas a la derecha. -->
+                        <Style Selector="DataGridCell.num">
+                            <Setter Property="HorizontalContentAlignment" Value="Right" />
+                        </Style>
+                    </DataGrid.Styles>
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha, Converter={x:Static conv:FechaUtcALocalConverter.Instance}, StringFormat='dd/MM/yyyy HH:mm', DataType={x:Type dto:MovimientoHistorialDto}}" Width="Auto" />
                         <DataGridTemplateColumn Header="Producto" Width="2*" SortMemberPath="ProductoNombre">
@@ -105,10 +112,30 @@
                         </DataGridTemplateColumn>
                         <DataGridTextColumn Header="Tipo" Binding="{Binding TipoNombre, DataType={x:Type dto:MovimientoHistorialDto}}" Width="Auto" />
                         <DataGridTextColumn Header="Motivo" Binding="{Binding MotivoNombre, DataType={x:Type dto:MovimientoHistorialDto}}" Width="Auto" />
-                        <DataGridTextColumn Header="Cantidad" Binding="{Binding Cantidad, DataType={x:Type dto:MovimientoHistorialDto}}" Width="Auto" />
-                        <DataGridTextColumn Header="Precio" Binding="{Binding PrecioUnitario, StringFormat='$ {0:F2}', DataType={x:Type dto:MovimientoHistorialDto}}" Width="Auto" />
-                        <DataGridTextColumn Header="Stock ant." Binding="{Binding StockAnterior, DataType={x:Type dto:MovimientoHistorialDto}}" Width="Auto" />
-                        <DataGridTextColumn Header="Stock nuevo" Binding="{Binding StockNuevo, DataType={x:Type dto:MovimientoHistorialDto}}" Width="Auto" />
+                        <DataGridTextColumn Header="Cantidad"
+                                             Binding="{Binding Cantidad, Converter={x:Static conv:CantidadConverter.Instance}, DataType={x:Type dto:MovimientoHistorialDto}}"
+                                             Width="Auto" MinWidth="100" CellStyleClasses="num" />
+                        <DataGridTextColumn Header="Precio"
+                                             Binding="{Binding PrecioUnitario, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type dto:MovimientoHistorialDto}}"
+                                             Width="Auto" MinWidth="100" CellStyleClasses="num" />
+                        <DataGridTemplateColumn Header="Stock ant." Width="Auto" MinWidth="100" SortMemberPath="StockAnterior">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:MovimientoHistorialDto">
+                                    <TextBlock Text="{Binding StockAnterior, Converter={x:Static conv:CantidadConverter.Instance}}"
+                                               Foreground="{Binding StockAnterior, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}"
+                                               VerticalAlignment="Center" HorizontalAlignment="Right" Margin="4,0" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="Stock nuevo" Width="Auto" MinWidth="100" SortMemberPath="StockNuevo">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:MovimientoHistorialDto">
+                                    <TextBlock Text="{Binding StockNuevo, Converter={x:Static conv:CantidadConverter.Instance}}"
+                                               Foreground="{Binding StockNuevo, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}"
+                                               VerticalAlignment="Center" HorizontalAlignment="Right" Margin="4,0" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                         <DataGridTextColumn Header="Usuario" Binding="{Binding UsuarioNombre, DataType={x:Type dto:MovimientoHistorialDto}}" Width="Auto" />
                         <DataGridTemplateColumn Header="Comentario" Width="3*" SortMemberPath="Comentario">
                             <DataGridTemplateColumn.CellTemplate>

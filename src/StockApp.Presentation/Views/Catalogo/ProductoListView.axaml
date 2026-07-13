@@ -58,7 +58,8 @@
                           IsReadOnly="True"
                           CanUserSortColumns="True"
                           CanUserResizeColumns="True"
-                          GridLinesVisibility="Horizontal">
+                          GridLinesVisibility="Horizontal"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto">
                     <DataGrid.Columns>
                         <DataGridTemplateColumn Header="Código" Width="Auto" SortMemberPath="Codigo">
                             <DataGridTemplateColumn.CellTemplate>
@@ -80,30 +81,31 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Costo" Width="Auto" SortMemberPath="PrecioCosto">
+                        <DataGridTemplateColumn Header="Costo" Width="Auto" MinWidth="100" SortMemberPath="PrecioCosto">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:ProductoDto">
-                                    <TextBlock Text="{Binding PrecioCosto, StringFormat='$ {0:F2}'}"
+                                    <TextBlock Text="{Binding PrecioCosto, Converter={x:Static conv:MonedaConverter.Instance}}"
                                                Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
-                                               VerticalAlignment="Center" Margin="4,0" />
+                                               HorizontalAlignment="Right" VerticalAlignment="Center" Margin="4,0" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Venta" Width="Auto" SortMemberPath="PrecioVenta">
+                        <DataGridTemplateColumn Header="Venta" Width="Auto" MinWidth="100" SortMemberPath="PrecioVenta">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:ProductoDto">
-                                    <TextBlock Text="{Binding PrecioVenta, StringFormat='$ {0:F2}'}"
+                                    <TextBlock Text="{Binding PrecioVenta, Converter={x:Static conv:MonedaConverter.Instance}}"
                                                Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
-                                               VerticalAlignment="Center" Margin="4,0" />
+                                               HorizontalAlignment="Right" VerticalAlignment="Center" Margin="4,0" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Stock" Width="Auto" SortMemberPath="StockActual">
+                        <DataGridTemplateColumn Header="Stock" Width="Auto" MinWidth="100" SortMemberPath="StockActual">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:ProductoDto">
-                                    <TextBlock Text="{Binding StockActual}"
+                                    <TextBlock Text="{Binding StockActual, Converter={x:Static conv:CantidadConverter.Instance}}"
+                                               Foreground="{Binding StockActual, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}"
                                                Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
-                                               VerticalAlignment="Center" Margin="4,0" />
+                                               HorizontalAlignment="Right" VerticalAlignment="Center" Margin="4,0" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
