@@ -1,6 +1,7 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using StockApp.Api.Auth;
@@ -17,6 +18,7 @@ using StockApp.Domain.Enums;
 using StockApp.Infrastructure.Auth;
 using StockApp.Infrastructure.Persistence;
 using StockApp.Infrastructure.Repositories;
+using StockApp.Infrastructure.Reportes;
 using StockApp.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -69,14 +71,21 @@ builder.Services.AddScoped<IProductoService, ProductoService>();
 
 // Reportes (slice: GET /reportes/*)
 // IVersionReportes: singleton (contador monotónico en memoria, compartido por todo el proceso).
-// El decorator de caché (ReporteStockServiceCacheado) se registra en la Task 4; por ahora esto
-// solo permite que ProductoService/CategoriaService/MovimientoStockService resuelvan la
-// dependencia — Invalidar() no tiene efecto observable todavía.
+// IMemoryCache + ReporteStockServiceCacheado (Task 4): decorator que cachea las 4 lecturas de
+// reporte y se invalida cuando ProductoService/CategoriaService/MovimientoStockService llaman
+// IVersionReportes.Invalidar() tras un commit exitoso. La auditoría (GET /auditoria) NO pasa
+// por este decorator — no la cachea.
+builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<IVersionReportes, VersionReportes>();
 builder.Services.AddScoped<IMovimientoStockRepository, MovimientoStockRepository>();
 builder.Services.AddScoped<IMovimientoStockService, MovimientoStockService>();
 builder.Services.AddScoped<IReporteStockRepository, ReporteStockRepository>();
-builder.Services.AddScoped<IReporteStockService, ReporteStockService>();
+builder.Services.AddScoped<ReporteStockService>();
+builder.Services.AddScoped<IReporteStockService>(sp =>
+    new ReporteStockServiceCacheado(
+        sp.GetRequiredService<ReporteStockService>(),
+        sp.GetRequiredService<IMemoryCache>(),
+        sp.GetRequiredService<IVersionReportes>()));
 
 // Catálogo — tablas maestras (Fase 2b)
 builder.Services.AddScoped<ICategoriaRepository, CategoriaRepository>();
