@@ -44,6 +44,8 @@ public class ApiStartupMigrationTests : IAsyncLifetime
                 {
                     ["ConnectionStrings:Default"] = _container.GetConnectionString(),
                     ["Jwt:Secret"] = "clave-de-prueba-de-al-menos-32-caracteres-arranque",
+                    ["Bootstrap:AdminUser"] = "admin-arranque-migracion",
+                    ["Bootstrap:Password"] = "arranque-secreta-123",
                 });
             });
         });

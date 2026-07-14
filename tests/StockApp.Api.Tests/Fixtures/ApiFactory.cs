@@ -18,6 +18,8 @@ namespace StockApp.Api.Tests.Fixtures;
 public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
     public const string JwtSecretDePrueba = "clave-de-prueba-de-al-menos-32-caracteres-1234567890";
+    public const string AdminUsuarioDePrueba = "admin-arranque";
+    public const string AdminPasswordDePrueba = "arranque-secreta-123";
 
     private readonly PostgreSqlContainer _container = new PostgreSqlBuilder()
         .WithImage("postgres:16-alpine")
@@ -44,6 +46,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
             {
                 ["ConnectionStrings:Default"] = _container.GetConnectionString(),
                 ["Jwt:Secret"] = JwtSecretDePrueba,
+                ["Bootstrap:AdminUser"] = AdminUsuarioDePrueba,
+                ["Bootstrap:Password"] = AdminPasswordDePrueba,
             });
         });
     }

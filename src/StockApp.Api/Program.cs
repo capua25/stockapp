@@ -208,6 +208,15 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     await db.Database.MigrateAsync();
+
+    // Seed del Admin inicial (D7): reemplaza el bootstrap HTTP anónimo. Idempotente
+    // (no-op si ya hay usuarios) y fail-fast (con la BD vacía y sin Bootstrap:AdminUser/
+    // Bootstrap:Password configurados, lanza y la API no arranca).
+    var seeder = new BootstrapAdminSeeder(
+        scope.ServiceProvider.GetRequiredService<IPrimerArranqueService>(),
+        app.Configuration["Bootstrap:AdminUser"],
+        app.Configuration["Bootstrap:Password"]);
+    await seeder.SembrarAsync();
 }
 
 // Andamiaje base para excepciones no manejadas: 500 -> ProblemDetails via
