@@ -8,8 +8,6 @@ namespace StockApp.Api.Endpoints;
 public record LoginRequest(string? NombreUsuario, string? Contrasena);
 public record UsuarioLoginResponse(int Id, string NombreUsuario, string? NombreCompleto, RolUsuario Rol);
 public record LoginResponse(string Token, UsuarioLoginResponse Usuario);
-public record PrimerArranqueEstadoResponse(bool RequiereCrearAdmin);
-public record CrearAdminInicialRequest(string NombreUsuario, string Contrasena);
 
 public static class AuthEndpoints
 {
@@ -48,19 +46,6 @@ public static class AuthEndpoints
             var usuarioResponse = new UsuarioLoginResponse(
                 usuario.Id, usuario.NombreUsuario, usuario.NombreCompleto, usuario.Rol);
             return Results.Ok(new LoginResponse(token, usuarioResponse));
-        });
-
-        group.MapGet("/primer-arranque", async (IPrimerArranqueService primerArranque) =>
-        {
-            var requiere = await primerArranque.RequiereCrearAdminAsync();
-            return Results.Ok(new PrimerArranqueEstadoResponse(requiere));
-        });
-
-        group.MapPost("/primer-admin", async (
-            CrearAdminInicialRequest request, IPrimerArranqueService primerArranque) =>
-        {
-            await primerArranque.CrearAdminInicialAsync(request.NombreUsuario, request.Contrasena);
-            return Results.Created("/auth/primer-arranque", (object?)null);
         });
 
         return app;

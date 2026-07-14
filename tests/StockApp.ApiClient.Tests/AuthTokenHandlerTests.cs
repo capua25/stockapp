@@ -34,7 +34,7 @@ public class AuthTokenHandlerTests
         var fake = new FakeHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
         var http = TestHttp.CrearCliente(fake);
 
-        await http.GetAsync("auth/primer-arranque");
+        await http.GetAsync("categorias");
 
         Assert.Null(fake.UltimaRequest!.Headers.Authorization);
     }

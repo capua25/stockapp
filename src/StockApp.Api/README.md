@@ -10,9 +10,11 @@ Fase 3a: bootstrap de primer arranque, migración automática, DTOs de lectura).
 - PostgreSQL accesible (local o contenedor Docker).
   En desarrollo se usa el contenedor `stockapp-pg` (`postgres:16-alpine`), expuesto
   en `localhost:5432`, con la connection string por defecto de `appsettings.json`.
-- Si la tabla `Usuarios` está vacía, el propio cliente puede crear el primer Admin vía
-  `GET /auth/primer-arranque` → `POST /auth/primer-admin` (Fase 3a, D7) — ya no depende
-  de `StockApp.Seeder` ni de la app desktop.
+- El primer Admin nace por seed al arrancar la API (`Bootstrap:AdminUser`/`Bootstrap:Password`,
+  vía user-secrets en dev o variables de entorno `Bootstrap__AdminUser`/`Bootstrap__Password`
+  en producción) — ya no depende de `StockApp.Seeder` ni de la app desktop. Los endpoints
+  HTTP anónimos de bootstrap (`GET /auth/primer-arranque`, `POST /auth/primer-admin`) fueron
+  eliminados por ser una superficie de ataque innecesaria (hardening, D7).
 - La API migra la base de datos automáticamente al arrancar (Fase 3a, D9) — no hace falta
   correr migraciones a mano ni depender de `DatabaseInitializer` del desktop.
 
@@ -43,16 +45,13 @@ Kestrel expone la API en `http://localhost:5043` con el profile `http`.
 
 ## Superficie de endpoints
 
-Todos requieren `Authorization: Bearer <token>` salvo `GET /auth/primer-arranque` y
-`POST /auth/primer-admin`. Las políticas están derivadas de `AuthorizationService`
-(`Permisos.Todos` en `Program.cs`) — Admin siempre tiene acceso; Operador solo a lo
-marcado "Admin+Op".
+Todos requieren `Authorization: Bearer <token>` salvo `POST /auth/login`. Las políticas
+están derivadas de `AuthorizationService` (`Permisos.Todos` en `Program.cs`) — Admin
+siempre tiene acceso; Operador solo a lo marcado "Admin+Op".
 
 | Recurso | Endpoint | Rol |
 |---|---|---|
-| Auth | `GET /auth/primer-arranque` | público |
-| | `POST /auth/primer-admin` | público (solo funciona una vez, con la BD sin usuarios) |
-| | `POST /auth/login` | público |
+| Auth | `POST /auth/login` | público |
 | Movimientos | `POST /movimientos` | Admin+Op |
 | | `GET /movimientos/historial` | Admin+Op |
 | | `POST /productos/{id}/recalcular-stock` | Admin+Op |
@@ -98,15 +97,8 @@ Con la API corriendo, en otra terminal (puerto `5043`):
 **Nota de idempotencia:** Si ejecutás esta secuencia más de una vez, los POSTs de categorías/proveedores/unidades devolverán `409 Conflict` cuando ya existan con el mismo nombre — es el comportamiento esperado (restricción de duplicados). Para ejecutar nuevamente, cambiá los nombres (ej. `"Bebidas-2"`, `"SKU-CURL-2"`) o limpiá la BD.
 
 ```bash
-# 0a) Verificar si se requiere crear el admin inicial (Fase 3a, D7)
-curl -i http://localhost:5043/auth/primer-arranque
-
-# 0b) Si requiereCrearAdmin es true, crear el primer Admin
-curl -i -X POST http://localhost:5043/auth/primer-admin \
-  -H "Content-Type: application/json" \
-  -d '{"nombreUsuario":"admin","contrasena":"admin123"}'
-
 # 1) Login Admin (respuesta enriquecida con datos del usuario — Fase 3a, D8)
+#    El Admin ya existe por seed al arrancar la API (Bootstrap:AdminUser/Bootstrap:Password).
 curl -X POST http://localhost:5043/auth/login \
   -H "Content-Type: application/json" \
   -d '{"nombreUsuario":"admin","contrasena":"admin123"}'
@@ -167,8 +159,6 @@ curl "http://localhost:5043/productos?nombre=Producto%20Curl" -H "Authorization:
 ```
 
 Confirmar:
-- `GET /auth/primer-arranque` devuelve `200` con `{"requiereCrearAdmin": true/false}`
-- `POST /auth/primer-admin` devuelve `201` (una sola vez si la BD está vacía, luego 409)
 - `POST /auth/login` devuelve `200` con `{"token":"...","usuario":{...}}` (Fase 3a, D8)
 - `POST /usuarios` devuelve `201` con `{"id": <id>}` (Fase 3a, D1)
 - Cada operación según rol devuelve el status esperado (201 para creación, 200 para lectura, etc.)
