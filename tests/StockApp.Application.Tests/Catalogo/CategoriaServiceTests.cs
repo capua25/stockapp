@@ -2,6 +2,7 @@ using Moq;
 using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Interfaces;
+using StockApp.Application.Reportes;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
@@ -34,7 +35,7 @@ public class CategoriaServiceTests
             auth.Setup(a => a.Verificar(RolUsuario.Operador, Permisos.GestionarTablasMaestras))
                 .Throws<UnauthorizedAccessException>();
 
-        var svc = new CategoriaService(repo.Object, session.Object, auth.Object, audit.Object);
+        var svc = new CategoriaService(repo.Object, session.Object, auth.Object, audit.Object, Mock.Of<IVersionReportes>());
         return (svc, repo, session, auth, audit);
     }
 

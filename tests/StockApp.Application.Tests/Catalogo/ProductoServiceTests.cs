@@ -2,6 +2,7 @@ using Moq;
 using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Interfaces;
+using StockApp.Application.Reportes;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
@@ -39,7 +40,7 @@ public class ProductoServiceTests
         umRepo.Setup(r => r.ObtenerPorIdAsync(It.IsAny<int>()))
               .ReturnsAsync(new UnidadMedida { Id = 1, Nombre = "Unidad", Abreviatura = "u" });
 
-        var svc = new ProductoService(repo.Object, session.Object, auth.Object, audit.Object, umRepo.Object);
+        var svc = new ProductoService(repo.Object, session.Object, auth.Object, audit.Object, umRepo.Object, Mock.Of<IVersionReportes>());
         return (svc, repo, session, auth, audit, umRepo);
     }
 

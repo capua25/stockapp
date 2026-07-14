@@ -68,6 +68,11 @@ builder.Services.AddScoped<IUnidadMedidaRepository, UnidadMedidaRepository>();
 builder.Services.AddScoped<IProductoService, ProductoService>();
 
 // Reportes (slice: GET /reportes/*)
+// IVersionReportes: singleton (contador monotónico en memoria, compartido por todo el proceso).
+// El decorator de caché (ReporteStockServiceCacheado) se registra en la Task 4; por ahora esto
+// solo permite que ProductoService/CategoriaService/MovimientoStockService resuelvan la
+// dependencia — Invalidar() no tiene efecto observable todavía.
+builder.Services.AddSingleton<IVersionReportes, VersionReportes>();
 builder.Services.AddScoped<IMovimientoStockRepository, MovimientoStockRepository>();
 builder.Services.AddScoped<IMovimientoStockService, MovimientoStockService>();
 builder.Services.AddScoped<IReporteStockRepository, ReporteStockRepository>();

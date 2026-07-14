@@ -1,6 +1,7 @@
 using System.Linq;
 using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
+using StockApp.Application.Reportes;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
@@ -18,19 +19,22 @@ public class ProductoService : IProductoService
     private readonly IAuthorizationService   _auth;
     private readonly IAuditLogger            _audit;
     private readonly IUnidadMedidaRepository _umRepo;
+    private readonly IVersionReportes        _version;
 
     public ProductoService(
         IProductoRepository     repo,
         ICurrentSession         session,
         IAuthorizationService   auth,
         IAuditLogger            audit,
-        IUnidadMedidaRepository umRepo)
+        IUnidadMedidaRepository umRepo,
+        IVersionReportes        version)
     {
         _repo   = repo;
         _session = session;
         _auth    = auth;
         _audit   = audit;
         _umRepo  = umRepo;
+        _version = version;
     }
 
     public async Task<int> AltaAsync(Producto producto)
@@ -61,6 +65,8 @@ public class ProductoService : IProductoService
         producto.FechaAlta = DateTime.UtcNow;
 
         var id = await _repo.AgregarAsync(producto);
+
+        _version.Invalidar();
 
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id,
@@ -135,6 +141,8 @@ public class ProductoService : IProductoService
 
         await _repo.ActualizarAsync(original);
 
+        _version.Invalidar();
+
         // Auditoría granular: precio en entrada separada, resto en ModificacionProducto
         if (cambiosPrecio.Count > 0)
             await _audit.RegistrarAsync(
@@ -164,6 +172,8 @@ public class ProductoService : IProductoService
         producto.Activo = false;
         await _repo.ActualizarAsync(producto);
 
+        _version.Invalidar();
+
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id,
             AccionAuditada.BajaProducto,
@@ -188,6 +198,8 @@ public class ProductoService : IProductoService
         producto.PrecioCosto = precioCosto;
         producto.PrecioVenta = precioVenta;
         await _repo.ActualizarAsync(producto);
+
+        _version.Invalidar();
 
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id,

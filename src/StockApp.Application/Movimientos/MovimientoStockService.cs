@@ -1,5 +1,6 @@
 using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
+using StockApp.Application.Reportes;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
@@ -16,15 +17,18 @@ public class MovimientoStockService : IMovimientoStockService
     private readonly IMovimientoStockRepository _repo;
     private readonly ICurrentSession            _session;
     private readonly IAuthorizationService      _auth;
+    private readonly IVersionReportes           _version;
 
     public MovimientoStockService(
         IMovimientoStockRepository repo,
         ICurrentSession            session,
-        IAuthorizationService      auth)
+        IAuthorizationService      auth,
+        IVersionReportes           version)
     {
         _repo    = repo;
         _session = session;
         _auth    = auth;
+        _version = version;
     }
 
     // ── Registro ──────────────────────────────────────────────────────────────
@@ -92,6 +96,8 @@ public class MovimientoStockService : IMovimientoStockService
         if (resultado.Estado == ResultadoRegistroEstado.StockInsuficiente)
             throw new StockInsuficienteException(dto.ProductoId, resultado.StockResultante, dto.Cantidad);
 
+        _version.Invalidar();
+
         return new MovimientoRegistradoDto(
             MovimientoId:  resultado.MovimientoId,
             ProductoId:    dto.ProductoId,
@@ -140,6 +146,8 @@ public class MovimientoStockService : IMovimientoStockService
             DetalleAuditoria: detalle);
 
         await _repo.RecalcularAtomicoAsync(args);
+
+        _version.Invalidar();
 
         return new RecalculoResultadoDto(
             ProductoId:       productoId,

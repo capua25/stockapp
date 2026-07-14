@@ -2,6 +2,7 @@ using Moq;
 using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
 using StockApp.Application.Movimientos;
+using StockApp.Application.Reportes;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
@@ -31,7 +32,7 @@ public class MovimientoStockServiceTests
         // Por defecto auth no lanza (permiso concedido)
         auth.Setup(a => a.Verificar(It.IsAny<RolUsuario?>(), It.IsAny<string>()));
 
-        var svc = new MovimientoStockService(repo.Object, session.Object, auth.Object);
+        var svc = new MovimientoStockService(repo.Object, session.Object, auth.Object, Mock.Of<IVersionReportes>());
         return (svc, repo, session, auth);
     }
 

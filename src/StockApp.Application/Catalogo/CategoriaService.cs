@@ -1,5 +1,6 @@
 using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
+using StockApp.Application.Reportes;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
@@ -15,17 +16,20 @@ public class CategoriaService : ICategoriaService
     private readonly ICurrentSession        _session;
     private readonly IAuthorizationService  _auth;
     private readonly IAuditLogger           _audit;
+    private readonly IVersionReportes       _version;
 
     public CategoriaService(
         ICategoriaRepository  repo,
         ICurrentSession       session,
         IAuthorizationService auth,
-        IAuditLogger          audit)
+        IAuditLogger          audit,
+        IVersionReportes      version)
     {
         _repo    = repo;
         _session = session;
         _auth    = auth;
         _audit   = audit;
+        _version = version;
     }
 
     public async Task<int> AltaAsync(Categoria categoria)
@@ -39,6 +43,8 @@ public class CategoriaService : ICategoriaService
             throw new ReglaDeNegocioException($"Ya existe una categoría con el nombre '{categoria.Nombre}'.");
 
         var id = await _repo.AgregarAsync(categoria);
+
+        _version.Invalidar();
 
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id,
@@ -70,6 +76,8 @@ public class CategoriaService : ICategoriaService
         original.Nombre = categoria.Nombre;
         await _repo.ActualizarAsync(original);
 
+        _version.Invalidar();
+
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id,
             AccionAuditada.ModificacionCategoria,
@@ -89,6 +97,8 @@ public class CategoriaService : ICategoriaService
 
         categoria.Activo = false;
         await _repo.ActualizarAsync(categoria);
+
+        _version.Invalidar();
 
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id,
