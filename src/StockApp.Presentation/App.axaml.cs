@@ -153,7 +153,6 @@ public partial class App : AvaloniaApp
         // ── Fase 3b: ApiClients — implementan las MISMAS interfaces de Application que
         //    consumen los ViewModels; los ~22 VMs no se tocan ─────────────────────────────
         services.AddTransient<IAuthService, AuthApiClient>();
-        services.AddTransient<IPrimerArranqueService, PrimerArranqueApiClient>();
         services.AddTransient<IUsuarioService, UsuarioApiClient>();
         services.AddTransient<IProductoService, ProductoApiClient>();
         services.AddTransient<ICategoriaService, CategoriaApiClient>();

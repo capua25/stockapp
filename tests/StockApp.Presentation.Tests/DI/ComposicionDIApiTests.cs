@@ -54,7 +54,6 @@ public class ComposicionDIApiTests
 
         // ── ApiClients: las mismas 10 interfaces de Application ───────────────
         services.AddTransient<IAuthService, AuthApiClient>();
-        services.AddTransient<IPrimerArranqueService, PrimerArranqueApiClient>();
         services.AddTransient<IUsuarioService, UsuarioApiClient>();
         services.AddTransient<IProductoService, ProductoApiClient>();
         services.AddTransient<ICategoriaService, CategoriaApiClient>();
@@ -94,7 +93,6 @@ public class ComposicionDIApiTests
 
     [Theory]
     [InlineData(typeof(IAuthService), typeof(AuthApiClient))]
-    [InlineData(typeof(IPrimerArranqueService), typeof(PrimerArranqueApiClient))]
     [InlineData(typeof(IUsuarioService), typeof(UsuarioApiClient))]
     [InlineData(typeof(IProductoService), typeof(ProductoApiClient))]
     [InlineData(typeof(ICategoriaService), typeof(CategoriaApiClient))]
