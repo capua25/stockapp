@@ -35,6 +35,36 @@ no se especifica):
 dotnet user-secrets set "Jwt:ExpiracionHoras" "8"
 ```
 
+## Bootstrap del administrador inicial
+
+En el primer arranque contra una base de datos vacía, la API crea el usuario Admin inicial
+leyendo dos claves de configuración (NO van en `appsettings.json`, mismo criterio que
+`Jwt:Secret`):
+
+- `Bootstrap:AdminUser` — nombre del administrador inicial.
+- `Bootstrap:Password` — su contraseña (mínimo 6 caracteres).
+
+En desarrollo (user-secrets):
+
+```bash
+dotnet user-secrets set "Bootstrap:AdminUser" "admin"
+dotnet user-secrets set "Bootstrap:Password" "<contraseña-segura>"
+```
+
+En el servidor (variables de entorno):
+
+```bash
+Bootstrap__AdminUser=admin
+Bootstrap__Password=<contraseña-segura>
+```
+
+Si la base está vacía y faltan estas claves, la API NO arranca (fail-fast) con un mensaje
+claro. Si ya existe algún usuario, la configuración se ignora. La rotación de contraseña y
+el alta de más administradores se hacen desde el desktop, logueado como admin.
+
+Ya NO existen endpoints HTTP de bootstrap (`/auth/primer-arranque` y `/auth/primer-admin`
+fueron eliminados): el bootstrap es un paso local del servidor, sin superficie de red.
+
 ## Correr la API
 
 ```bash
