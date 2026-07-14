@@ -46,7 +46,6 @@ public class LoginViewModelTests
         var coordinador = new CoordinadorActualizacion(updateStub.Object, new PoliticaUxActualizacion());
 
         return new ShellViewModel(
-            Mock.Of<IPrimerArranqueService>(),
             Mock.Of<IAuthService>(),
             Mock.Of<IUsuarioService>(),
             navSvc,

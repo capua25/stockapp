@@ -14,7 +14,6 @@ namespace StockApp.Presentation.ViewModels;
 /// </summary>
 public partial class ShellViewModel : ViewModelBase
 {
-    private readonly IPrimerArranqueService  _primerArranqueService;
     private readonly IAuthService            _authService;
     private readonly IUsuarioService         _usuarioService;
     private readonly INavigationService      _navigation;
@@ -34,7 +33,6 @@ public partial class ShellViewModel : ViewModelBase
     private ViewModelBase? _overlayActualizacion;
 
     public ShellViewModel(
-        IPrimerArranqueService  primerArranqueService,
         IAuthService            authService,
         IUsuarioService         usuarioService,
         INavigationService      navigation,
@@ -42,7 +40,6 @@ public partial class ShellViewModel : ViewModelBase
         IUiDispatcher           uiDispatcher,
         IInfoApp                infoApp)
     {
-        _primerArranqueService    = primerArranqueService;
         _authService              = authService;
         _usuarioService           = usuarioService;
         _navigation               = navigation;
@@ -55,35 +52,18 @@ public partial class ShellViewModel : ViewModelBase
     /// Debe llamarse una sola vez al arrancar la app. Decide el primer VM a mostrar.
     /// Dispara el chequeo de actualizaciones en background sin bloquear el arranque.
     /// </summary>
-    public async Task InicializarAsync()
+    public Task InicializarAsync()
     {
-        bool requiereCrearAdmin;
-        try
-        {
-            requiereCrearAdmin = await _primerArranqueService.RequiereCrearAdminAsync();
-        }
-        catch (Exception)
-        {
-            // Cualquier error del bootstrap (servidor caído -> ServidorNoDisponibleException,
-            // o API viva con Postgres caído -> 500 que ApiErrores mapea a
-            // InvalidOperationException, etc.) degrada a mostrar el login igual; el intento de
-            // login informa el problema real y permite reintentar. Fix review final 3b: antes
-            // solo se atrapaba ServidorNoDisponibleException, así que un 500 escapaba de acá y
-            // App.axaml.cs lo propagaba en OnFrameworkInitializationCompleted antes de crear
-            // MainWindow — la app moría sin ventana, solo crash.log.
-            requiereCrearAdmin = false;
-        }
-
-        if (requiereCrearAdmin)
-            MostrarPrimerArranque();
-        else
-            MostrarLogin();
+        // El primer admin ahora nace por seed en el arranque de la API (D7); el desktop
+        // ya no consulta "primer arranque" y va directo al login.
+        MostrarLogin();
 
         // Fire-and-forget controlado: el coordinador no debe tumbar el arranque si falla.
         // _tareaActualizacion se expone como internal para que los tests puedan awaitarla
         // y evitar condiciones de carrera con Task.Delay.
         _tareaActualizacion = EvaluarYAsignarOverlayAsync();
         _ = _tareaActualizacion;
+        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -189,15 +169,6 @@ public partial class ShellViewModel : ViewModelBase
             if (banner is not null && !exito)
                 _uiDispatcher.Post(() => banner.OperacionEnCurso = false);
         });
-    }
-
-    public void MostrarPrimerArranque()
-    {
-        CurrentViewModel = new PrimerArranqueViewModel(
-            _primerArranqueService,
-            _authService,
-            _usuarioService,
-            this);
     }
 
     public void MostrarLogin()

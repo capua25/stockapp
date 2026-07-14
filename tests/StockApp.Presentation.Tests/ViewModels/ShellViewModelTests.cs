@@ -28,14 +28,8 @@ public class ShellViewModelTests
         public void Post(Action accion) => accion();
     }
 
-    private static (ShellViewModel shell, Mock<IPrimerArranqueService> primerArranqueMock)
-        Crear(bool requiereCrearAdmin)
+    private static ShellViewModel Crear()
     {
-        var primerArranqueMock = new Mock<IPrimerArranqueService>();
-        primerArranqueMock
-            .Setup(p => p.RequiereCrearAdminAsync())
-            .ReturnsAsync(requiereCrearAdmin);
-
         // NavigationService real con un resolver que devuelve un ShellMainViewModel stub
         var sessionMock = new Mock<ICurrentSession>();
         sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
@@ -52,34 +46,21 @@ public class ShellViewModelTests
         updateStub.Setup(s => s.BuscarAsync(default)).ReturnsAsync(UpdateCheckResult.SinUpdate);
         var coordinador = new CoordinadorActualizacion(updateStub.Object, new PoliticaUxActualizacion());
 
-        var shell = new ShellViewModel(
-            primerArranqueMock.Object,
+        return new ShellViewModel(
             Mock.Of<IAuthService>(),
             Mock.Of<IUsuarioService>(),
             navSvc,
             coordinador,
             new FakeUiDispatcher(),
             InfoAppStub);
-
-        return (shell, primerArranqueMock);
     }
 
     // ── tests: navegación de arranque ────────────────────────────────────────
 
     [Fact]
-    public async Task Inicializar_RequiereCrearAdmin_MuestraPrimerArranque()
+    public async Task Inicializar_MuestraLogin()
     {
-        var (shell, _) = Crear(requiereCrearAdmin: true);
-
-        await shell.InicializarAsync();
-
-        Assert.IsType<PrimerArranqueViewModel>(shell.CurrentViewModel);
-    }
-
-    [Fact]
-    public async Task Inicializar_NoRequiereCrearAdmin_MuestraLogin()
-    {
-        var (shell, _) = Crear(requiereCrearAdmin: false);
+        var shell = Crear();
 
         await shell.InicializarAsync();
 
@@ -91,7 +72,7 @@ public class ShellViewModelTests
     [Fact]
     public void MostrarLogin_EstableceLoginViewModel()
     {
-        var (shell, _) = Crear(requiereCrearAdmin: false);
+        var shell = Crear();
 
         shell.MostrarLogin();
 
@@ -99,19 +80,9 @@ public class ShellViewModelTests
     }
 
     [Fact]
-    public void MostrarPrimerArranque_EstablecePrimerArranqueViewModel()
-    {
-        var (shell, _) = Crear(requiereCrearAdmin: false);
-
-        shell.MostrarPrimerArranque();
-
-        Assert.IsType<PrimerArranqueViewModel>(shell.CurrentViewModel);
-    }
-
-    [Fact]
     public void MostrarContenidoPrincipal_EstableceShellMainViewModel()
     {
-        var (shell, _) = Crear(requiereCrearAdmin: false);
+        var shell = Crear();
 
         shell.MostrarContenidoPrincipal();
 
@@ -119,43 +90,9 @@ public class ShellViewModelTests
     }
 
     [Fact]
-    public async Task Inicializar_ServidorCaido_MuestraLoginIgual()
-    {
-        // Spec 3b, manejo de errores: si la API no responde en el arranque, la app no
-        // muere — muestra el login; el intento de login informará el error de conexión.
-        var (shell, primerArranqueMock) = Crear(requiereCrearAdmin: false);
-        primerArranqueMock
-            .Setup(p => p.RequiereCrearAdminAsync())
-            .ThrowsAsync(new ServidorNoDisponibleException());
-
-        await shell.InicializarAsync();
-
-        Assert.IsType<LoginViewModel>(shell.CurrentViewModel);
-    }
-
-    [Fact]
-    public async Task Inicializar_ErrorInesperadoEnBootstrap_MuestraLoginIgual()
-    {
-        // Fix del review final 3b: si la API está viva pero Postgres caído, GET
-        // /auth/primer-arranque devuelve 500 y ApiErrores lo mapea a InvalidOperationException
-        // (no a ServidorNoDisponibleException). Antes solo se atrapaba esta última, así que el
-        // error escapaba de InicializarAsync y App.axaml.cs lo propagaba en
-        // OnFrameworkInitializationCompleted antes de crear MainWindow: la app moría sin
-        // ventana. Cualquier error del bootstrap debe degradar a login.
-        var (shell, primerArranqueMock) = Crear(requiereCrearAdmin: false);
-        primerArranqueMock
-            .Setup(p => p.RequiereCrearAdminAsync())
-            .ThrowsAsync(new InvalidOperationException("500 desde /auth/primer-arranque"));
-
-        await shell.InicializarAsync();
-
-        Assert.IsType<LoginViewModel>(shell.CurrentViewModel);
-    }
-
-    [Fact]
     public void MostrarLoginConAviso_EstableceLoginConElMensaje()
     {
-        var (shell, _) = Crear(requiereCrearAdmin: false);
+        var shell = Crear();
 
         shell.MostrarLoginConAviso("Sesión vencida, ingresá de nuevo.");
 

@@ -55,11 +55,6 @@ public class ShellViewModelActualizacionTests
             updateMock.Object,
             new PoliticaUxActualizacion());
 
-        var primerArranqueMock = new Mock<IPrimerArranqueService>();
-        primerArranqueMock
-            .Setup(p => p.RequiereCrearAdminAsync())
-            .ReturnsAsync(false);
-
         var sessionMock = new Mock<ICurrentSession>();
         sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
         var navSvc = new NavigationService(t =>
@@ -70,7 +65,6 @@ public class ShellViewModelActualizacionTests
         });
 
         var shell = new ShellViewModel(
-            primerArranqueMock.Object,
             Mock.Of<IAuthService>(),
             Mock.Of<IUsuarioService>(),
             navSvc,
@@ -101,11 +95,6 @@ public class ShellViewModelActualizacionTests
             updateMock.Object,
             new PoliticaUxActualizacion());
 
-        var primerArranqueMock = new Mock<IPrimerArranqueService>();
-        primerArranqueMock
-            .Setup(p => p.RequiereCrearAdminAsync())
-            .ReturnsAsync(false);
-
         var sessionMock = new Mock<ICurrentSession>();
         sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
         var navSvc = new NavigationService(t =>
@@ -116,7 +105,6 @@ public class ShellViewModelActualizacionTests
         });
 
         var shell = new ShellViewModel(
-            primerArranqueMock.Object,
             Mock.Of<IAuthService>(),
             Mock.Of<IUsuarioService>(),
             navSvc,
@@ -146,11 +134,6 @@ public class ShellViewModelActualizacionTests
             updateMock.Object,
             new PoliticaUxActualizacion());
 
-        var primerArranqueMock = new Mock<IPrimerArranqueService>();
-        primerArranqueMock
-            .Setup(p => p.RequiereCrearAdminAsync())
-            .ReturnsAsync(false);
-
         var sessionMock = new Mock<ICurrentSession>();
         sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
         var navSvc = new NavigationService(t =>
@@ -161,7 +144,6 @@ public class ShellViewModelActualizacionTests
         });
 
         var shell = new ShellViewModel(
-            primerArranqueMock.Object,
             Mock.Of<IAuthService>(),
             Mock.Of<IUsuarioService>(),
             navSvc,
@@ -192,11 +174,6 @@ public class ShellViewModelActualizacionTests
             updateMock.Object,
             new PoliticaUxActualizacion());
 
-        var primerArranqueMock = new Mock<IPrimerArranqueService>();
-        primerArranqueMock
-            .Setup(p => p.RequiereCrearAdminAsync())
-            .ReturnsAsync(false);
-
         var sessionMock = new Mock<ICurrentSession>();
         sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
         var navSvc = new NavigationService(t =>
@@ -207,7 +184,6 @@ public class ShellViewModelActualizacionTests
         });
 
         var shell = new ShellViewModel(
-            primerArranqueMock.Object,
             Mock.Of<IAuthService>(),
             Mock.Of<IUsuarioService>(),
             navSvc,
@@ -240,11 +216,6 @@ public class ShellViewModelActualizacionTests
             updateMock.Object,
             new PoliticaUxActualizacion());
 
-        var primerArranqueMock = new Mock<IPrimerArranqueService>();
-        primerArranqueMock
-            .Setup(p => p.RequiereCrearAdminAsync())
-            .ReturnsAsync(false);
-
         var sessionMock = new Mock<ICurrentSession>();
         sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
         var navSvc = new NavigationService(t =>
@@ -257,7 +228,6 @@ public class ShellViewModelActualizacionTests
         var fakeDispatcher = new FakeUiDispatcher { EjecutarInline = false };
 
         var shell = new ShellViewModel(
-            primerArranqueMock.Object,
             Mock.Of<IAuthService>(),
             Mock.Of<IUsuarioService>(),
             navSvc,
@@ -297,11 +267,6 @@ public class ShellViewModelActualizacionTests
             updateMock.Object,
             new PoliticaUxActualizacion());
 
-        var primerArranqueMock = new Mock<IPrimerArranqueService>();
-        primerArranqueMock
-            .Setup(p => p.RequiereCrearAdminAsync())
-            .ReturnsAsync(false);
-
         var sessionMock = new Mock<ICurrentSession>();
         sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
         var navSvc = new NavigationService(t =>
@@ -312,7 +277,6 @@ public class ShellViewModelActualizacionTests
         });
 
         var shell = new ShellViewModel(
-            primerArranqueMock.Object,
             Mock.Of<IAuthService>(),
             Mock.Of<IUsuarioService>(),
             navSvc,
@@ -352,11 +316,6 @@ public class ShellViewModelActualizacionTests
             updateMock.Object,
             new PoliticaUxActualizacion());
 
-        var primerArranqueMock = new Mock<IPrimerArranqueService>();
-        primerArranqueMock
-            .Setup(p => p.RequiereCrearAdminAsync())
-            .ReturnsAsync(false);
-
         var sessionMock = new Mock<ICurrentSession>();
         sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
         var navSvc = new NavigationService(t =>
@@ -367,7 +326,6 @@ public class ShellViewModelActualizacionTests
         });
 
         var shell = new ShellViewModel(
-            primerArranqueMock.Object,
             Mock.Of<IAuthService>(),
             Mock.Of<IUsuarioService>(),
             navSvc,
@@ -406,11 +364,6 @@ public class ShellViewModelActualizacionTests
             updateMock.Object,
             new PoliticaUxActualizacion());
 
-        var primerArranqueMock = new Mock<IPrimerArranqueService>();
-        primerArranqueMock
-            .Setup(p => p.RequiereCrearAdminAsync())
-            .ReturnsAsync(false);
-
         var sessionMock = new Mock<ICurrentSession>();
         sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
         var navSvc = new NavigationService(t =>
@@ -421,7 +374,6 @@ public class ShellViewModelActualizacionTests
         });
 
         var shell = new ShellViewModel(
-            primerArranqueMock.Object,
             Mock.Of<IAuthService>(),
             Mock.Of<IUsuarioService>(),
             navSvc,
