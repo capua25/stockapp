@@ -52,7 +52,7 @@ public class ComposicionDIApiTests
             };
         });
 
-        // ── ApiClients: las mismas 10 interfaces de Application ───────────────
+        // ── ApiClients: las mismas 9 interfaces de Application ────────────────
         services.AddTransient<IAuthService, AuthApiClient>();
         services.AddTransient<IUsuarioService, UsuarioApiClient>();
         services.AddTransient<IProductoService, ProductoApiClient>();

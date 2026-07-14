@@ -66,7 +66,6 @@ public class ShellViewModelActualizacionTests
 
         var shell = new ShellViewModel(
             Mock.Of<IAuthService>(),
-            Mock.Of<IUsuarioService>(),
             navSvc,
             coordinador,
             new FakeUiDispatcher(),
@@ -106,7 +105,6 @@ public class ShellViewModelActualizacionTests
 
         var shell = new ShellViewModel(
             Mock.Of<IAuthService>(),
-            Mock.Of<IUsuarioService>(),
             navSvc,
             coordinador,
             new FakeUiDispatcher(),
@@ -145,7 +143,6 @@ public class ShellViewModelActualizacionTests
 
         var shell = new ShellViewModel(
             Mock.Of<IAuthService>(),
-            Mock.Of<IUsuarioService>(),
             navSvc,
             coordinador,
             new FakeUiDispatcher(),
@@ -185,7 +182,6 @@ public class ShellViewModelActualizacionTests
 
         var shell = new ShellViewModel(
             Mock.Of<IAuthService>(),
-            Mock.Of<IUsuarioService>(),
             navSvc,
             coordinador,
             new FakeUiDispatcher(),
@@ -229,7 +225,6 @@ public class ShellViewModelActualizacionTests
 
         var shell = new ShellViewModel(
             Mock.Of<IAuthService>(),
-            Mock.Of<IUsuarioService>(),
             navSvc,
             coordinador,
             fakeDispatcher,
@@ -278,7 +273,6 @@ public class ShellViewModelActualizacionTests
 
         var shell = new ShellViewModel(
             Mock.Of<IAuthService>(),
-            Mock.Of<IUsuarioService>(),
             navSvc,
             coordinador,
             new FakeUiDispatcher(),
@@ -327,7 +321,6 @@ public class ShellViewModelActualizacionTests
 
         var shell = new ShellViewModel(
             Mock.Of<IAuthService>(),
-            Mock.Of<IUsuarioService>(),
             navSvc,
             coordinador,
             new FakeUiDispatcher(),
@@ -375,7 +368,6 @@ public class ShellViewModelActualizacionTests
 
         var shell = new ShellViewModel(
             Mock.Of<IAuthService>(),
-            Mock.Of<IUsuarioService>(),
             navSvc,
             coordinador,
             new FakeUiDispatcher(),

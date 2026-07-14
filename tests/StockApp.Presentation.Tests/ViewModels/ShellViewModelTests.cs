@@ -48,7 +48,6 @@ public class ShellViewModelTests
 
         return new ShellViewModel(
             Mock.Of<IAuthService>(),
-            Mock.Of<IUsuarioService>(),
             navSvc,
             coordinador,
             new FakeUiDispatcher(),

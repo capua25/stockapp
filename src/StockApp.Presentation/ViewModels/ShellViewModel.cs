@@ -15,7 +15,6 @@ namespace StockApp.Presentation.ViewModels;
 public partial class ShellViewModel : ViewModelBase
 {
     private readonly IAuthService            _authService;
-    private readonly IUsuarioService         _usuarioService;
     private readonly INavigationService      _navigation;
     private readonly CoordinadorActualizacion _coordinadorActualizacion;
     private readonly IUiDispatcher           _uiDispatcher;
@@ -34,14 +33,12 @@ public partial class ShellViewModel : ViewModelBase
 
     public ShellViewModel(
         IAuthService            authService,
-        IUsuarioService         usuarioService,
         INavigationService      navigation,
         CoordinadorActualizacion coordinadorActualizacion,
         IUiDispatcher           uiDispatcher,
         IInfoApp                infoApp)
     {
         _authService              = authService;
-        _usuarioService           = usuarioService;
         _navigation               = navigation;
         _coordinadorActualizacion = coordinadorActualizacion;
         _uiDispatcher             = uiDispatcher;
