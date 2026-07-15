@@ -215,4 +215,46 @@ public class ServicioResetAdminTests
 
         Assert.Equal(ResultadoValidacionReset.FirmaInvalido, resultado);
     }
+
+    [Fact]
+    public async Task Resetear_DesafioExpirado_DevuelveDesafioExpirado()
+    {
+        using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var validador = new ValidadorFirma(Convert.ToBase64String(ecdsa.ExportSubjectPublicKeyInfo()));
+        var privada = ecdsa.ExportPkcs8PrivateKeyPem();
+
+        var repo = new UsuarioRepoFake();
+        repo.Usuarios.Add(new Usuario
+        {
+            Id = 7, NombreUsuario = "admin", HashContrasena = "HASH:vieja",
+            Rol = RolUsuario.Admin, Activo = true, FechaAlta = DateTime.UtcNow,
+        });
+        var audit = new AuditFake();
+        var ahora = DateTime.UtcNow;
+        var desafios = new AlmacenDesafiosResetEnMemoria(TimeSpan.FromMinutes(5), () => ahora);
+        var servicio = new ServicioResetAdmin(
+            validador, new FingerprintFake(), desafios, repo, new HasherFake(), audit);
+
+        var desafio = desafios.GenerarNuevo();
+        ahora = ahora.AddMinutes(6); // más allá del TTL de 5 minutos
+
+        var resultado = await servicio.ResetearAsync(Token(privada, desafio), "nueva-clave-123");
+
+        Assert.Equal(ResultadoValidacionReset.DesafioExpirado, resultado);
+    }
+
+    [Fact]
+    public async Task Resetear_TokenInvalidoNoConsumeElNonce_TokenCorrectoPosteriorSigueSiendoValido()
+    {
+        var c = Armar(conAdmin: true);
+        var desafio = c.Desafios.GenerarNuevo();
+
+        var rechazo = await c.Servicio.ResetearAsync(
+            Token(c.PrivadaPem, desafio, maquina: "OTRA"), "nueva-clave-123");
+        Assert.Equal(ResultadoValidacionReset.MaquinaDistinta, rechazo);
+
+        var resultado = await c.Servicio.ResetearAsync(Token(c.PrivadaPem, desafio), "nueva-clave-123");
+
+        Assert.Equal(ResultadoValidacionReset.Valido, resultado);
+    }
 }
