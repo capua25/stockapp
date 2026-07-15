@@ -17,14 +17,9 @@ public class ResetAdminEndpointsTests : ApiTestBase
 
     private async Task SembrarAdminAsync(string usuario, string contrasena)
     {
-        // ApiTestBase.LimpiarTablas() trunca ANTES de que el host se construya; si esta
-        // corrida es la primera del proceso en tocar Factory.Services, el bootstrap seeder
-        // (Bootstrap:AdminUser="admin-arranque") recién crea su usuario en ese momento, después
-        // del truncate. Se re-trunca acá para no depender del orden de ejecución de los tests.
-        using var ctx = Factory.CrearContexto();
-        await ctx.Database.ExecuteSqlRawAsync(
-            "TRUNCATE TABLE \"Usuarios\" RESTART IDENTITY CASCADE;");
-
+        // ApiTestBase ya garantiza Usuarios vacío al terminar su ctor (fuerza el build del
+        // host, y por lo tanto el seed de "admin-arranque" si corresponde, ANTES de truncar) —
+        // no hace falta re-truncar acá.
         using var scope = Factory.Services.CreateScope();
         var primerArranque = scope.ServiceProvider.GetRequiredService<IPrimerArranqueService>();
         await primerArranque.CrearAdminInicialAsync(usuario, contrasena);

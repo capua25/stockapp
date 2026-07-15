@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using StockApp.Api.Tests.Fixtures;
 using StockApp.Application.Licenciamiento;
@@ -23,6 +24,16 @@ public class BloqueoLicenciaTests : ApiTestBase
         var response = await client.GetAsync("/productos");
 
         Assert.Equal((HttpStatusCode)423, response.StatusCode);
+        Assert.StartsWith("application/problem+json", response.Content.Headers.ContentType!.ToString());
+
+        var json = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+        Assert.Equal(423, doc.RootElement.GetProperty("status").GetInt32());
+        Assert.Equal("Licencia no activada.", doc.RootElement.GetProperty("title").GetString());
+        Assert.Equal(
+            "El servidor no tiene una licencia válida activada. "
+            + "Activá la licencia desde la pantalla de bloqueo del cliente.",
+            doc.RootElement.GetProperty("detail").GetString());
     }
 
     [Fact]

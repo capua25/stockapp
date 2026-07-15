@@ -56,9 +56,10 @@ public class ValidadorFirmaTests
         var licencia = FirmadorLicencias.EmitirLicencia(
             new LicenciaPayload(1, "X", "MAQ", "2026-07-15"), privada);
 
-        var resultado = new ValidadorFirma(otraPublica).Verificar(licencia, out _);
+        var resultado = new ValidadorFirma(otraPublica).Verificar(licencia, out var payloadJson);
 
         Assert.Equal(ResultadoVerificacion.FirmaInvalida, resultado);
+        Assert.Empty(payloadJson);
     }
 
     [Fact]
@@ -74,9 +75,10 @@ public class ValidadorFirmaTests
             System.Text.Encoding.UTF8.GetBytes("{\"ver\":1,\"cliente\":\"HACK\",\"maquina\":\"MAQ\",\"emitida\":\"2026-07-15\"}"));
         var adulterada = payloadFalso + "." + partes[1];
 
-        var resultado = new ValidadorFirma(publica).Verificar(adulterada, out _);
+        var resultado = new ValidadorFirma(publica).Verificar(adulterada, out var payloadJson);
 
         Assert.Equal(ResultadoVerificacion.FirmaInvalida, resultado);
+        Assert.Empty(payloadJson);
     }
 
     [Theory]
@@ -89,9 +91,10 @@ public class ValidadorFirmaTests
     {
         var (publica, _) = CrearPar();
 
-        var resultado = new ValidadorFirma(publica).Verificar(entrada, out _);
+        var resultado = new ValidadorFirma(publica).Verificar(entrada, out var payloadJson);
 
         Assert.Equal(ResultadoVerificacion.FormatoInvalido, resultado);
+        Assert.Empty(payloadJson);
     }
 
     [Fact]
@@ -102,8 +105,46 @@ public class ValidadorFirmaTests
             new LicenciaPayload(1, "X", "MAQ", "2026-07-15"), privada);
 
         // Clave pública inválida (no es SubjectPublicKeyInfo): fail-closed, sin excepción.
-        var resultado = new ValidadorFirma("no-es-una-clave").Verificar(licencia, out _);
+        var resultado = new ValidadorFirma("no-es-una-clave").Verificar(licencia, out var payloadJson);
 
         Assert.Equal(ResultadoVerificacion.FirmaInvalida, resultado);
+        Assert.Empty(payloadJson);
+    }
+
+    [Fact]
+    public void Verificar_FirmaBienFormateadaPeroBytesBasura_DevuelveFirmaInvalida()
+    {
+        var (publica, privada) = CrearPar();
+        var licencia = FirmadorLicencias.EmitirLicencia(
+            new LicenciaPayload(1, "X", "MAQ", "2026-07-15"), privada);
+
+        // La firma real ECDSA P-256 (formato IEEE P1363, r||s) mide 64 bytes. Reemplazamos
+        // por 10 bytes de basura, base64url válido pero con longitud incorrecta para la
+        // curva: ni siquiera llega a comparar matemáticamente, debe fallar cerrado igual.
+        var partes = licencia.Split('.');
+        var firmaBasura = CodificadorBase64Url.Codificar(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 });
+        var conFirmaBasura = partes[0] + "." + firmaBasura;
+
+        var resultado = new ValidadorFirma(publica).Verificar(conFirmaBasura, out var payloadJson);
+
+        Assert.Equal(ResultadoVerificacion.FirmaInvalida, resultado);
+        Assert.Empty(payloadJson);
+    }
+
+    [Fact]
+    public void Verificar_ConClavePublicaPlaceholderPorDefecto_DevuelveFirmaInvalida()
+    {
+        var (_, privada) = CrearPar();
+        var licencia = FirmadorLicencias.EmitirLicencia(
+            new LicenciaPayload(1, "X", "MAQ", "2026-07-15"), privada);
+
+        // Contrato fail-closed del placeholder embebido (OpcionesLicencia.ClavePublicaBase64Default):
+        // sin reemplazarlo por la clave real de producción, TODA licencia debe fallar la
+        // verificación — la API queda bloqueada hasta pegar la clave real.
+        var resultado = new ValidadorFirma(OpcionesLicencia.ClavePublicaBase64Default)
+            .Verificar(licencia, out var payloadJson);
+
+        Assert.Equal(ResultadoVerificacion.FirmaInvalida, resultado);
+        Assert.Empty(payloadJson);
     }
 }

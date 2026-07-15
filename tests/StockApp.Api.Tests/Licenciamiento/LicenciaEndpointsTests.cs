@@ -75,6 +75,40 @@ public class LicenciaEndpointsTests : ApiTestBase
         Assert.True(hayEvento);
     }
 
+    [Fact]
+    public async Task Activar_LicenciaInvalida_QuedaAuditadaComoIntentoFallido()
+    {
+        // Con admin sembrado: el intento fallido se puede atribuir y queda en LogsAuditoria.
+        await SembrarAdminAsync();
+        var client = Factory.CreateClient();
+
+        await client.PostAsJsonAsync("/licencia/activar",
+            new ActivarLicenciaRequest(ClavesDePrueba.EmitirLicencia(maquina: "OTRA-MAQUINA")));
+
+        using var ctx = Factory.CrearContexto();
+        var hayEvento = await ctx.LogsAuditoria
+            .AnyAsync(l => l.Accion == AccionAuditada.IntentoActivacionLicenciaFallido);
+        Assert.True(hayEvento);
+    }
+
+    [Fact]
+    public async Task Activar_LicenciaInvalida_SinNingunAdmin_NoCrasheaNiAudita()
+    {
+        // Sin admin sembrado: AuditarAsync no encuentra a quién atribuir el evento y no
+        // escribe fila (UsuarioId es FK requerida) — el endpoint debe responder igual, sin 500.
+        var client = Factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/licencia/activar",
+            new ActivarLicenciaRequest(ClavesDePrueba.EmitirLicencia(maquina: "OTRA-MAQUINA")));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        using var ctx = Factory.CrearContexto();
+        var hayEvento = await ctx.LogsAuditoria
+            .AnyAsync(l => l.Accion == AccionAuditada.IntentoActivacionLicenciaFallido);
+        Assert.False(hayEvento);
+    }
+
     private async Task SembrarAdminAsync()
     {
         using var scope = Factory.Services.CreateScope();
