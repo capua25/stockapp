@@ -86,4 +86,19 @@ public class AuthTokenHandlerTests
         Assert.False(disparado);
         Assert.True(session.EstaAutenticado);
     }
+
+    [Fact]
+    public async Task Respuesta423_DisparaLicenciaDesactivada()
+    {
+        var session = new ApiSession();
+        var disparado = false;
+        session.LicenciaDesactivada += () => disparado = true;
+
+        var fake = new FakeHttpHandler(_ => new HttpResponseMessage((System.Net.HttpStatusCode)423));
+        var client = TestHttp.CrearCliente(fake, session);
+
+        await client.GetAsync("productos");
+
+        Assert.True(disparado);
+    }
 }

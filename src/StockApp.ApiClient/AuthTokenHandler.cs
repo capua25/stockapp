@@ -34,6 +34,11 @@ public class AuthTokenHandler : DelegatingHandler
             _session.DispararSesionVencida();
         }
 
+        if (response.StatusCode == (HttpStatusCode)423)
+        {
+            _session.DispararLicenciaDesactivada();
+        }
+
         return response;
     }
 }

@@ -24,6 +24,12 @@ public class ApiSession : ICurrentSession
     /// </summary>
     public event Action? SesionVencida;
 
+    /// <summary>
+    /// El servidor respondió 423 Locked: la licencia se desactivó (ej. borraron licencia.lic
+    /// con la app abierta). La composition root lo cablea a la pantalla de bloqueo.
+    /// </summary>
+    public event Action? LicenciaDesactivada;
+
     public bool EstaAutenticado { get { lock (_lock) return _sesionActual != null; } }
 
     public UsuarioSesion? UsuarioActual { get { lock (_lock) return _sesionActual; } }
@@ -76,4 +82,7 @@ public class ApiSession : ICurrentSession
 
     /// <summary>Lo invoca AuthTokenHandler ante un 401 con token (internal + InternalsVisibleTo).</summary>
     internal void DispararSesionVencida() => SesionVencida?.Invoke();
+
+    /// <summary>Lo invoca AuthTokenHandler ante un 423 (internal + InternalsVisibleTo).</summary>
+    internal void DispararLicenciaDesactivada() => LicenciaDesactivada?.Invoke();
 }
