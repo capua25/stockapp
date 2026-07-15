@@ -10,4 +10,5 @@ public enum ResultadoValidacionReset
     AccionInvalida,
     DesafioInvalido,
     DesafioExpirado,
+    FingerprintIlegible,
 }

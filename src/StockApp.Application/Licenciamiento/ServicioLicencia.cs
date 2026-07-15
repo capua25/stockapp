@@ -52,7 +52,18 @@ public sealed class ServicioLicencia
         if (payload is null || string.IsNullOrWhiteSpace(payload.Maquina))
             return ResultadoValidacionLicencia.FormatoInvalido;
 
-        return payload.Maquina == _fingerprint.CodigoAgrupado
+        string codigoMaquina;
+        try
+        {
+            codigoMaquina = _fingerprint.CodigoAgrupado;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "No se pudo leer el fingerprint de la máquina al validar la licencia");
+            return ResultadoValidacionLicencia.FingerprintIlegible;
+        }
+
+        return payload.Maquina == codigoMaquina
             ? ResultadoValidacionLicencia.Valida
             : ResultadoValidacionLicencia.MaquinaDistinta;
     }

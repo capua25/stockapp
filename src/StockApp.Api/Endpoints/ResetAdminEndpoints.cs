@@ -42,6 +42,8 @@ public static class ResetAdminEndpoints
         ResultadoValidacionReset.AccionInvalida  => "El token no es un token de reset de Admin.",
         ResultadoValidacionReset.DesafioInvalido => "El desafío no es válido o ya fue usado. Pedí uno nuevo.",
         ResultadoValidacionReset.DesafioExpirado => "El desafío expiró. Pedí uno nuevo.",
+        ResultadoValidacionReset.FingerprintIlegible =>
+            "No se pudo leer la identificación de esta máquina. Contactá a soporte.",
         _ => "Token de reset inválido.",
     };
 }

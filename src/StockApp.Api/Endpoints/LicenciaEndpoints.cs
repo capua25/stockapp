@@ -56,6 +56,8 @@ public static class LicenciaEndpoints
         ResultadoValidacionLicencia.FormatoInvalido => "El texto de la licencia no tiene un formato válido.",
         ResultadoValidacionLicencia.FirmaInvalida   => "La firma de la licencia no es válida.",
         ResultadoValidacionLicencia.MaquinaDistinta => "La licencia fue emitida para otra máquina.",
+        ResultadoValidacionLicencia.FingerprintIlegible =>
+            "No se pudo leer la identificación de esta máquina. Contactá a soporte.",
         _ => "Licencia inválida.",
     };
 

@@ -7,4 +7,5 @@ public enum ResultadoValidacionLicencia
     FormatoInvalido,
     FirmaInvalida,
     MaquinaDistinta,
+    FingerprintIlegible,
 }

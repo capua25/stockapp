@@ -170,6 +170,38 @@ public class ServicioLicenciaTests
     }
 
     [Fact]
+    public void Validar_FingerprintIlegible_DevuelveFingerprintIlegibleSinLanzar()
+    {
+        var (validador, privada) = CrearCripto();
+        var fingerprintRoto = new FingerprintFake(() => throw new InvalidOperationException("registro ilegible"));
+        var logger = new LoggerFake();
+        var servicio = new ServicioLicencia(
+            validador, fingerprintRoto, new AlmacenFake(), new EstadoLicencia(), logger);
+
+        var resultado = servicio.Validar(EmitirLicencia(privada, Maquina));
+
+        Assert.Equal(ResultadoValidacionLicencia.FingerprintIlegible, resultado);
+        Assert.Equal(1, logger.ErroresLogueados);
+    }
+
+    [Fact]
+    public async Task ActivarAsync_FingerprintIlegible_DevuelveFingerprintIlegibleSinLanzar()
+    {
+        var (validador, privada) = CrearCripto();
+        var almacen = new AlmacenFake();
+        var estado = new EstadoLicencia();
+        var fingerprintRoto = new FingerprintFake(() => throw new InvalidOperationException("registro ilegible"));
+        var logger = new LoggerFake();
+        var servicio = new ServicioLicencia(validador, fingerprintRoto, almacen, estado, logger);
+
+        var resultado = await servicio.ActivarAsync(EmitirLicencia(privada, Maquina));
+
+        Assert.Equal(ResultadoValidacionLicencia.FingerprintIlegible, resultado);
+        Assert.False(estado.Activada);
+        Assert.Null(almacen.Guardado);
+    }
+
+    [Fact]
     public async Task CargarAlArranqueAsync_FingerprintIlegible_NoCrasheaYQuedaBloqueado()
     {
         var (validador, _) = CrearCripto();
