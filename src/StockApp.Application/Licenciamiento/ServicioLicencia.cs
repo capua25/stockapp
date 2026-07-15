@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 
 namespace StockApp.Application.Licenciamiento;
 
@@ -9,21 +10,24 @@ namespace StockApp.Application.Licenciamiento;
 /// </summary>
 public sealed class ServicioLicencia
 {
-    private readonly ValidadorFirma      _validador;
-    private readonly IFingerprintMaquina _fingerprint;
-    private readonly IAlmacenLicencia    _almacen;
-    private readonly EstadoLicencia      _estado;
+    private readonly ValidadorFirma            _validador;
+    private readonly IFingerprintMaquina       _fingerprint;
+    private readonly IAlmacenLicencia          _almacen;
+    private readonly EstadoLicencia            _estado;
+    private readonly ILogger<ServicioLicencia> _logger;
 
     public ServicioLicencia(
-        ValidadorFirma      validador,
-        IFingerprintMaquina fingerprint,
-        IAlmacenLicencia    almacen,
-        EstadoLicencia      estado)
+        ValidadorFirma            validador,
+        IFingerprintMaquina       fingerprint,
+        IAlmacenLicencia          almacen,
+        EstadoLicencia            estado,
+        ILogger<ServicioLicencia> logger)
     {
         _validador   = validador;
         _fingerprint = fingerprint;
         _almacen     = almacen;
         _estado      = estado;
+        _logger      = logger;
     }
 
     /// <summary>Valida una licencia contra esta máquina (puro, sin efectos).</summary>
@@ -78,8 +82,9 @@ public sealed class ServicioLicencia
         {
             codigo = _fingerprint.CodigoAgrupado;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "No se pudo leer el fingerprint de la máquina; la API queda en modo bloqueado");
             _estado.CodigoMaquina = "";
             _estado.Activada = false;
             return;

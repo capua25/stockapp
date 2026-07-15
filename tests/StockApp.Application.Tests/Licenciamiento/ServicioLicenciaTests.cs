@@ -1,4 +1,6 @@
 using System.Security.Cryptography;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using StockApp.Application.Licenciamiento;
 using Xunit;
 
@@ -7,6 +9,26 @@ namespace StockApp.Application.Tests.Licenciamiento;
 public class ServicioLicenciaTests
 {
     private const string Maquina = "AAAA-BBBB-CCCC";
+
+    private sealed class LoggerFake : ILogger<ServicioLicencia>
+    {
+        public int ErroresLogueados { get; private set; }
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == LogLevel.Error)
+                ErroresLogueados++;
+        }
+    }
 
     private sealed class FingerprintFake : IFingerprintMaquina
     {
@@ -40,7 +62,8 @@ public class ServicioLicenciaTests
     {
         var (validador, privada) = CrearCripto();
         var servicio = new ServicioLicencia(
-            validador, new FingerprintFake(Maquina), new AlmacenFake(), new EstadoLicencia());
+            validador, new FingerprintFake(Maquina), new AlmacenFake(), new EstadoLicencia(),
+            NullLogger<ServicioLicencia>.Instance);
 
         Assert.Equal(ResultadoValidacionLicencia.Valida,
             servicio.Validar(EmitirLicencia(privada, Maquina)));
@@ -51,7 +74,8 @@ public class ServicioLicenciaTests
     {
         var (validador, privada) = CrearCripto();
         var servicio = new ServicioLicencia(
-            validador, new FingerprintFake(Maquina), new AlmacenFake(), new EstadoLicencia());
+            validador, new FingerprintFake(Maquina), new AlmacenFake(), new EstadoLicencia(),
+            NullLogger<ServicioLicencia>.Instance);
 
         Assert.Equal(ResultadoValidacionLicencia.MaquinaDistinta,
             servicio.Validar(EmitirLicencia(privada, "OTRA-MAQUINA")));
@@ -63,7 +87,8 @@ public class ServicioLicenciaTests
         var (validador, _) = CrearCripto();
         var (_, otraPrivada) = CrearCripto();
         var servicio = new ServicioLicencia(
-            validador, new FingerprintFake(Maquina), new AlmacenFake(), new EstadoLicencia());
+            validador, new FingerprintFake(Maquina), new AlmacenFake(), new EstadoLicencia(),
+            NullLogger<ServicioLicencia>.Instance);
 
         Assert.Equal(ResultadoValidacionLicencia.FirmaInvalida,
             servicio.Validar(EmitirLicencia(otraPrivada, Maquina)));
@@ -74,7 +99,8 @@ public class ServicioLicenciaTests
     {
         var (validador, _) = CrearCripto();
         var servicio = new ServicioLicencia(
-            validador, new FingerprintFake(Maquina), new AlmacenFake(), new EstadoLicencia());
+            validador, new FingerprintFake(Maquina), new AlmacenFake(), new EstadoLicencia(),
+            NullLogger<ServicioLicencia>.Instance);
 
         Assert.Equal(ResultadoValidacionLicencia.FormatoInvalido, servicio.Validar("basura"));
     }
@@ -85,7 +111,8 @@ public class ServicioLicenciaTests
         var (validador, privada) = CrearCripto();
         var almacen = new AlmacenFake();
         var estado = new EstadoLicencia();
-        var servicio = new ServicioLicencia(validador, new FingerprintFake(Maquina), almacen, estado);
+        var servicio = new ServicioLicencia(validador, new FingerprintFake(Maquina), almacen, estado,
+            NullLogger<ServicioLicencia>.Instance);
 
         var licencia = EmitirLicencia(privada, Maquina);
         var resultado = await servicio.ActivarAsync(licencia);
@@ -102,7 +129,8 @@ public class ServicioLicenciaTests
         var (validador, privada) = CrearCripto();
         var almacen = new AlmacenFake();
         var estado = new EstadoLicencia();
-        var servicio = new ServicioLicencia(validador, new FingerprintFake(Maquina), almacen, estado);
+        var servicio = new ServicioLicencia(validador, new FingerprintFake(Maquina), almacen, estado,
+            NullLogger<ServicioLicencia>.Instance);
 
         var resultado = await servicio.ActivarAsync(EmitirLicencia(privada, "OTRA"));
 
@@ -117,7 +145,8 @@ public class ServicioLicenciaTests
         var (validador, privada) = CrearCripto();
         var estado = new EstadoLicencia();
         var servicio = new ServicioLicencia(
-            validador, new FingerprintFake(Maquina), new AlmacenFake(EmitirLicencia(privada, Maquina)), estado);
+            validador, new FingerprintFake(Maquina), new AlmacenFake(EmitirLicencia(privada, Maquina)), estado,
+            NullLogger<ServicioLicencia>.Instance);
 
         await servicio.CargarAlArranqueAsync();
 
@@ -131,7 +160,8 @@ public class ServicioLicenciaTests
         var (validador, _) = CrearCripto();
         var estado = new EstadoLicencia();
         var servicio = new ServicioLicencia(
-            validador, new FingerprintFake(Maquina), new AlmacenFake(), estado);
+            validador, new FingerprintFake(Maquina), new AlmacenFake(), estado,
+            NullLogger<ServicioLicencia>.Instance);
 
         await servicio.CargarAlArranqueAsync();
 
@@ -145,11 +175,13 @@ public class ServicioLicenciaTests
         var (validador, _) = CrearCripto();
         var estado = new EstadoLicencia();
         var fingerprintRoto = new FingerprintFake(() => throw new InvalidOperationException("registro ilegible"));
-        var servicio = new ServicioLicencia(validador, fingerprintRoto, new AlmacenFake(), estado);
+        var logger = new LoggerFake();
+        var servicio = new ServicioLicencia(validador, fingerprintRoto, new AlmacenFake(), estado, logger);
 
         await servicio.CargarAlArranqueAsync(); // no debe lanzar
 
         Assert.False(estado.Activada);
+        Assert.Equal(1, logger.ErroresLogueados);
         Assert.Equal("", estado.CodigoMaquina);
     }
 }
