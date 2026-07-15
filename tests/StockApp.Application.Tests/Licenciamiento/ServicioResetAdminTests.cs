@@ -1,4 +1,6 @@
 using System.Security.Cryptography;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using StockApp.Application.Auth;
 using StockApp.Application.Interfaces;
 using StockApp.Application.Licenciamiento;
@@ -16,6 +18,31 @@ public class ServicioResetAdminTests
     private sealed class FingerprintFake : IFingerprintMaquina
     {
         public string CodigoAgrupado => Maquina;
+    }
+
+    private sealed class FingerprintRotoFake : IFingerprintMaquina
+    {
+        public string CodigoAgrupado => throw new InvalidOperationException("registro ilegible");
+    }
+
+    private sealed class LoggerFake : ILogger<ServicioResetAdmin>
+    {
+        public int ErroresLogueados { get; private set; }
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == LogLevel.Error)
+                ErroresLogueados++;
+        }
     }
 
     private sealed class HasherFake : IPasswordHasher
@@ -85,7 +112,8 @@ public class ServicioResetAdminTests
         var desafios = new AlmacenDesafiosResetEnMemoria();
         var audit = new AuditFake();
         var servicio = new ServicioResetAdmin(
-            validador, new FingerprintFake(), desafios, repo, hasher, audit);
+            validador, new FingerprintFake(), desafios, repo, hasher, audit,
+            NullLogger<ServicioResetAdmin>.Instance);
 
         return new Contexto
         {
@@ -155,6 +183,26 @@ public class ServicioResetAdminTests
     }
 
     [Fact]
+    public async Task Resetear_SinAdminPeroConOperadorLlamadoAdmin_RecreaComoAdmin2()
+    {
+        var c = Armar(conAdmin: false);
+        c.Repo.Usuarios.Add(new Usuario
+        {
+            Id = 3, NombreUsuario = "admin", HashContrasena = "HASH:op",
+            Rol = RolUsuario.Operador, Activo = true, FechaAlta = DateTime.UtcNow,
+        });
+        var desafio = c.Desafios.GenerarNuevo();
+
+        var resultado = await c.Servicio.ResetearAsync(Token(c.PrivadaPem, desafio), "nueva-clave-123");
+
+        Assert.Equal(ResultadoValidacionReset.Valido, resultado);
+        var admin = c.Repo.Usuarios.Single(u => u.Rol == RolUsuario.Admin);
+        Assert.Equal("admin-2", admin.NombreUsuario);
+        Assert.Equal("HASH:nueva-clave-123", admin.HashContrasena);
+        Assert.Contains(c.Audit.Eventos, e => e.accion == AccionAuditada.ResetAdminFirmado);
+    }
+
+    [Fact]
     public async Task Resetear_TokenReusado_LaSegundaVezDaDesafioInvalido()
     {
         var c = Armar(conAdmin: true);
@@ -177,6 +225,30 @@ public class ServicioResetAdminTests
             Token(c.PrivadaPem, desafio, maquina: "OTRA"), "nueva-clave-123");
 
         Assert.Equal(ResultadoValidacionReset.MaquinaDistinta, resultado);
+    }
+
+    [Fact]
+    public async Task Resetear_FingerprintIlegible_DevuelveFingerprintIlegibleSinLanzar()
+    {
+        using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var validador = new ValidadorFirma(Convert.ToBase64String(ecdsa.ExportSubjectPublicKeyInfo()));
+        var privada = ecdsa.ExportPkcs8PrivateKeyPem();
+
+        var repo = new UsuarioRepoFake();
+        var desafios = new AlmacenDesafiosResetEnMemoria();
+        var audit = new AuditFake();
+        var logger = new LoggerFake();
+        var servicio = new ServicioResetAdmin(
+            validador, new FingerprintRotoFake(), desafios, repo, new HasherFake(), audit, logger);
+
+        var desafio = desafios.GenerarNuevo();
+        var token = FirmadorLicencias.EmitirTokenReset(
+            new TokenResetPayload(1, "reset-admin", Maquina, desafio), privada);
+
+        var resultado = await servicio.ResetearAsync(token, "nueva-clave-123");
+
+        Assert.Equal(ResultadoValidacionReset.FingerprintIlegible, resultado);
+        Assert.Equal(1, logger.ErroresLogueados);
     }
 
     [Fact]
@@ -233,7 +305,8 @@ public class ServicioResetAdminTests
         var ahora = DateTime.UtcNow;
         var desafios = new AlmacenDesafiosResetEnMemoria(TimeSpan.FromMinutes(5), () => ahora);
         var servicio = new ServicioResetAdmin(
-            validador, new FingerprintFake(), desafios, repo, new HasherFake(), audit);
+            validador, new FingerprintFake(), desafios, repo, new HasherFake(), audit,
+            NullLogger<ServicioResetAdmin>.Instance);
 
         var desafio = desafios.GenerarNuevo();
         ahora = ahora.AddMinutes(6); // más allá del TTL de 5 minutos

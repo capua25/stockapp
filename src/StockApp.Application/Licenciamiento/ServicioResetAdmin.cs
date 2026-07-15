@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using StockApp.Application.Auth;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
@@ -23,6 +24,7 @@ public sealed class ServicioResetAdmin
     private readonly IUsuarioRepository    _usuarios;
     private readonly IPasswordHasher       _hasher;
     private readonly IAuditLogger          _audit;
+    private readonly ILogger<ServicioResetAdmin> _logger;
 
     public ServicioResetAdmin(
         ValidadorFirma         validador,
@@ -30,7 +32,8 @@ public sealed class ServicioResetAdmin
         IAlmacenDesafiosReset  desafios,
         IUsuarioRepository     usuarios,
         IPasswordHasher        hasher,
-        IAuditLogger           audit)
+        IAuditLogger           audit,
+        ILogger<ServicioResetAdmin> logger)
     {
         _validador      = validador;
         _fingerprint    = fingerprint;
@@ -38,6 +41,7 @@ public sealed class ServicioResetAdmin
         _usuarios       = usuarios;
         _hasher         = hasher;
         _audit          = audit;
+        _logger         = logger;
     }
 
     public async Task<ResultadoValidacionReset> ResetearAsync(string token, string nuevaContrasena)
@@ -64,7 +68,18 @@ public sealed class ServicioResetAdmin
         if (payload.Accion != AccionEsperada)
             return ResultadoValidacionReset.AccionInvalida;
 
-        if (payload.Maquina != _fingerprint.CodigoAgrupado)
+        string codigoMaquina;
+        try
+        {
+            codigoMaquina = _fingerprint.CodigoAgrupado;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "No se pudo leer el fingerprint de la máquina al validar el reset de Admin");
+            return ResultadoValidacionReset.FingerprintIlegible;
+        }
+
+        if (payload.Maquina != codigoMaquina)
             return ResultadoValidacionReset.MaquinaDistinta;
 
         // La contraseña se valida ANTES de consumir el desafío: si es inválida, no quemamos
@@ -77,16 +92,16 @@ public sealed class ServicioResetAdmin
         if (consumo == ResultadoDesafio.Expirado)
             return ResultadoValidacionReset.DesafioExpirado;
 
-        var adminId = await AplicarResetAsync(nuevaContrasena);
+        var (adminId, nombreUsuario) = await AplicarResetAsync(nuevaContrasena);
 
         await _audit.RegistrarAsync(
             adminId, AccionAuditada.ResetAdminFirmado, "Usuario", adminId,
-            "Reset de contraseña de Admin vía token firmado.");
+            $"Reset de contraseña de Admin vía token firmado. Usuario: {nombreUsuario}.");
 
         return ResultadoValidacionReset.Valido;
     }
 
-    private async Task<int> AplicarResetAsync(string nuevaContrasena)
+    private async Task<(int Id, string NombreUsuario)> AplicarResetAsync(string nuevaContrasena)
     {
         var todos = await _usuarios.ListarTodosAsync();
         var admin = todos
@@ -99,7 +114,7 @@ public sealed class ServicioResetAdmin
             admin.HashContrasena = _hasher.Hash(nuevaContrasena);
             admin.Activo = true; // recuperación: si estaba deshabilitado, se reactiva
             await _usuarios.ActualizarAsync(admin);
-            return admin.Id;
+            return (admin.Id, admin.NombreUsuario);
         }
 
         // No queda ningún Admin. No se puede delegar en PrimerArranqueService.CrearAdminInicialAsync:
@@ -108,15 +123,31 @@ public sealed class ServicioResetAdmin
         // tiene que poder resolver. Se crea el Admin directo con el mismo mecanismo interno
         // (repositorio + hasher), sin pasar por esa precondición. La contraseña ya fue validada
         // en ResetearAsync antes de consumir el desafío.
+        var nombreUsuario = await NombreLibreAsync();
         var nuevoAdmin = new Usuario
         {
-            NombreUsuario  = "admin",
+            NombreUsuario  = nombreUsuario,
             HashContrasena = _hasher.Hash(nuevaContrasena),
             Rol            = RolUsuario.Admin,
             Activo         = true,
             FechaAlta      = DateTime.UtcNow,
         };
         var id = await _usuarios.AgregarAsync(nuevoAdmin);
-        return id;
+        return (id, nombreUsuario);
+    }
+
+    // "admin" es el nombre preferido, pero puede estar tomado por un usuario no-admin (el índice
+    // único de NombreUsuario lo impediría). En ese caso se busca el primer libre de la serie
+    // "admin-2", "admin-3", ... para no perder el nonce ya consumido con una excepción de EF.
+    private async Task<string> NombreLibreAsync()
+    {
+        if (await _usuarios.BuscarPorNombreAsync("admin") is null)
+            return "admin";
+
+        var sufijo = 2;
+        while (await _usuarios.BuscarPorNombreAsync($"admin-{sufijo}") is not null)
+            sufijo++;
+
+        return $"admin-{sufijo}";
     }
 }
