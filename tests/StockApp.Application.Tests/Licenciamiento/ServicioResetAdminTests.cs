@@ -61,6 +61,13 @@ public class ServicioResetAdminTests
         }
     }
 
+    private sealed class RevocadorFake : IRevocadorTokens
+    {
+        public List<int> Revocados { get; } = new();
+        public void Revocar(int usuarioId, DateTime ahora) => Revocados.Add(usuarioId);
+        public bool EsValido(int usuarioId, DateTime emitidoEn) => !Revocados.Contains(usuarioId);
+    }
+
     private sealed class UsuarioRepoFake : IUsuarioRepository
     {
         public List<Usuario> Usuarios { get; } = new();
@@ -91,6 +98,7 @@ public class ServicioResetAdminTests
         public required IAlmacenDesafiosReset Desafios { get; init; }
         public required UsuarioRepoFake Repo { get; init; }
         public required AuditFake Audit { get; init; }
+        public required RevocadorFake Revocador { get; init; }
         public required string PrivadaPem { get; init; }
     }
 
@@ -111,13 +119,15 @@ public class ServicioResetAdminTests
 
         var desafios = new AlmacenDesafiosResetEnMemoria();
         var audit = new AuditFake();
+        var revocador = new RevocadorFake();
         var servicio = new ServicioResetAdmin(
-            validador, new FingerprintFake(), desafios, repo, hasher, audit,
+            validador, new FingerprintFake(), desafios, repo, hasher, audit, revocador,
             NullLogger<ServicioResetAdmin>.Instance);
 
         return new Contexto
         {
-            Servicio = servicio, Desafios = desafios, Repo = repo, Audit = audit, PrivadaPem = privada,
+            Servicio = servicio, Desafios = desafios, Repo = repo, Audit = audit,
+            Revocador = revocador, PrivadaPem = privada,
         };
     }
 
@@ -136,6 +146,8 @@ public class ServicioResetAdminTests
         Assert.Equal(ResultadoValidacionReset.Valido, resultado);
         Assert.Equal("HASH:nueva-clave-123", c.Repo.Usuarios.Single().HashContrasena);
         Assert.Contains(c.Audit.Eventos, e => e.accion == AccionAuditada.ResetAdminFirmado && e.usuarioId == 7);
+        // Fase B hardening: los JWTs viejos del admin quedan revocados tras el reset firmado.
+        Assert.Contains(7, c.Revocador.Revocados);
     }
 
     [Fact]
@@ -239,7 +251,8 @@ public class ServicioResetAdminTests
         var audit = new AuditFake();
         var logger = new LoggerFake();
         var servicio = new ServicioResetAdmin(
-            validador, new FingerprintRotoFake(), desafios, repo, new HasherFake(), audit, logger);
+            validador, new FingerprintRotoFake(), desafios, repo, new HasherFake(), audit,
+            new RevocadorFake(), logger);
 
         var desafio = desafios.GenerarNuevo();
         var token = FirmadorLicencias.EmitirTokenReset(
@@ -306,7 +319,7 @@ public class ServicioResetAdminTests
         var desafios = new AlmacenDesafiosResetEnMemoria(TimeSpan.FromMinutes(5), () => ahora);
         var servicio = new ServicioResetAdmin(
             validador, new FingerprintFake(), desafios, repo, new HasherFake(), audit,
-            NullLogger<ServicioResetAdmin>.Instance);
+            new RevocadorFake(), NullLogger<ServicioResetAdmin>.Instance);
 
         var desafio = desafios.GenerarNuevo();
         ahora = ahora.AddMinutes(6); // más allá del TTL de 5 minutos

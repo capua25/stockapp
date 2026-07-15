@@ -24,6 +24,7 @@ public sealed class ServicioResetAdmin
     private readonly IUsuarioRepository    _usuarios;
     private readonly IPasswordHasher       _hasher;
     private readonly IAuditLogger          _audit;
+    private readonly IRevocadorTokens      _revocador;
     private readonly ILogger<ServicioResetAdmin> _logger;
 
     public ServicioResetAdmin(
@@ -33,6 +34,7 @@ public sealed class ServicioResetAdmin
         IUsuarioRepository     usuarios,
         IPasswordHasher        hasher,
         IAuditLogger           audit,
+        IRevocadorTokens       revocador,
         ILogger<ServicioResetAdmin> logger)
     {
         _validador      = validador;
@@ -41,6 +43,7 @@ public sealed class ServicioResetAdmin
         _usuarios       = usuarios;
         _hasher         = hasher;
         _audit          = audit;
+        _revocador      = revocador;
         _logger         = logger;
     }
 
@@ -97,6 +100,11 @@ public sealed class ServicioResetAdmin
         await _audit.RegistrarAsync(
             adminId, AccionAuditada.ResetAdminFirmado, "Usuario", adminId,
             $"Reset de contraseña de Admin vía token firmado. Usuario: {nombreUsuario}.");
+
+        // Fase B hardening: cualquier JWT del admin (viejo o recién recreado con el
+        // mismo id no puede pasar, siempre es un id nuevo) emitido antes de ahora queda
+        // inválido de inmediato.
+        _revocador.Revocar(adminId, DateTime.UtcNow);
 
         return ResultadoValidacionReset.Valido;
     }

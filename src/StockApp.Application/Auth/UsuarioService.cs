@@ -18,19 +18,22 @@ public class UsuarioService : IUsuarioService
     private readonly ICurrentSession       _session;
     private readonly IAuthorizationService _auth;
     private readonly IAuditLogger          _audit;
+    private readonly IRevocadorTokens      _revocador;
 
     public UsuarioService(
         IUsuarioRepository    repo,
         IPasswordHasher       hasher,
         ICurrentSession       session,
         IAuthorizationService auth,
-        IAuditLogger          audit)
+        IAuditLogger          audit,
+        IRevocadorTokens      revocador)
     {
-        _repo    = repo;
-        _hasher  = hasher;
-        _session = session;
-        _auth    = auth;
-        _audit   = audit;
+        _repo      = repo;
+        _hasher    = hasher;
+        _session   = session;
+        _auth      = auth;
+        _audit     = audit;
+        _revocador = revocador;
     }
 
     public async Task<int> AltaUsuarioAsync(
@@ -149,6 +152,11 @@ public class UsuarioService : IUsuarioService
             AccionAuditada.CambioContrasena,
             "Usuario", usuarioId,
             "Cambio de contraseña");
+
+        // Fase B hardening: cualquier JWT de este usuario emitido antes de ahora queda
+        // inválido de inmediato, sin esperar a su expiración natural. Aplica a ambos
+        // caminos (auto-cambio y reset administrativo de otro usuario).
+        _revocador.Revocar(usuarioId, DateTime.UtcNow);
     }
 
     public async Task<IReadOnlyList<UsuarioDto>> ListarAsync()
