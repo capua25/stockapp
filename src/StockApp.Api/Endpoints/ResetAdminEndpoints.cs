@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.RateLimiting;
 using StockApp.Application.Licenciamiento;
 
 namespace StockApp.Api.Endpoints;
@@ -13,7 +14,8 @@ public static class ResetAdminEndpoints
 
         // Anónimo (pre-login): la protección es criptográfica (token firmado + nonce en memoria).
         group.MapPost("/desafio", (IAlmacenDesafiosReset desafios, EstadoLicencia estado) =>
-            Results.Ok(new ResetDesafioResponse(desafios.GenerarNuevo(), estado.CodigoMaquina)));
+            Results.Ok(new ResetDesafioResponse(desafios.GenerarNuevo(), estado.CodigoMaquina)))
+            .RequireRateLimiting("licenciamiento");
 
         group.MapPost("", async (ResetAdminRequest request, ServicioResetAdmin servicio) =>
         {
@@ -29,7 +31,7 @@ public static class ResetAdminEndpoints
             return resultado == ResultadoValidacionReset.Valido
                 ? Results.Ok(new { ok = true })
                 : Results.Problem(title: MotivoDe(resultado), statusCode: StatusCodes.Status400BadRequest);
-        });
+        }).RequireRateLimiting("licenciamiento");
 
         return app;
     }

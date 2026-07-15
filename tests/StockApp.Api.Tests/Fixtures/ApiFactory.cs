@@ -53,6 +53,15 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
                 ["Bootstrap:AdminUser"] = AdminUsuarioDePrueba,
                 ["Bootstrap:Password"] = AdminPasswordDePrueba,
                 ["Licencia:ClavePublicaBase64"] = ClavesDePrueba.ClavePublicaBase64,
+
+                // Límite alto por defecto: la ApiFactory es compartida por toda la
+                // collection "Api" (ver ApiCollection abajo), así que el contador del
+                // rate limiter de /licencia y /auth/reset-admin se acumula entre TODOS
+                // los tests de la suite, no solo los de RateLimitingTests. Ese test
+                // arma su propio factory con límite bajo vía WithWebHostBuilder, que
+                // pisa este valor sin afectar al resto.
+                ["RateLimiting:Licenciamiento:PermitLimit"] = "1000",
+                ["RateLimiting:Licenciamiento:WindowSeconds"] = "60",
             });
         });
 

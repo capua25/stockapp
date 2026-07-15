@@ -1,5 +1,7 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
@@ -230,6 +232,54 @@ builder.Services.AddAuthorization(options =>
     }
 });
 
+// Rate limiting de los endpoints anónimos de licenciamiento (hardening post-Fase B):
+// POST /licencia/activar, POST /auth/reset-admin/desafio y POST /auth/reset-admin son
+// pre-login y de superficie de ataque (fuerza bruta de licencia / reset de Admin). Los
+// GET de estado quedan afuera a propósito (el desktop los consulta en cada arranque).
+// Los límites se leen de IConfiguration DENTRO del factory de la política (resuelto por
+// request, no en una `var` top-level) por la misma razón documentada arriba para
+// AppDbContext/JwtOptions: ApiFactory inyecta su override recién post-Build.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddPolicy("licenciamiento", httpContext =>
+    {
+        var config = httpContext.RequestServices.GetRequiredService<IConfiguration>();
+        var permitLimit = config.GetValue<int?>("RateLimiting:Licenciamiento:PermitLimit") ?? 10;
+        var windowSeconds = config.GetValue<int?>("RateLimiting:Licenciamiento:WindowSeconds") ?? 60;
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "desconocido",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = permitLimit,
+                Window = TimeSpan.FromSeconds(windowSeconds),
+                QueueLimit = 0,
+                AutoReplenishment = true,
+            });
+    });
+
+    // Mismo shape de ProblemDetails que el resto de la API (401/403/500) en vez de un
+    // body vacío por defecto.
+    options.OnRejected = async (context, _) =>
+    {
+        context.HttpContext.Response.ContentType = "application/problem+json";
+        var problemDetailsService = context.HttpContext.RequestServices
+            .GetRequiredService<IProblemDetailsService>();
+        await problemDetailsService.WriteAsync(new ProblemDetailsContext
+        {
+            HttpContext = context.HttpContext,
+            ProblemDetails =
+            {
+                Status = StatusCodes.Status429TooManyRequests,
+                Title = "Demasiadas solicitudes.",
+                Detail = "Se superó el límite de solicitudes permitido. Esperá antes de volver a intentar.",
+            },
+        });
+    };
+});
+
 var app = builder.Build();
 
 // Fail-fast de configuración al arrancar el host (post-Build, ya con la configuración
@@ -264,6 +314,13 @@ using (var scope = app.Services.CreateScope())
 // AddProblemDetails() de arriba (mismo servicio que los eventos de JwtBearer usan
 // para el shape de 401/403).
 app.UseExceptionHandler();
+
+// UseRateLimiter ANTES del bloqueo por licencia: aunque BloqueoLicenciaMiddleware siempre
+// deja pasar /licencia/* y /auth/reset-admin/* (están en su propia allowlist), el rate
+// limiter va primero en el pipeline para cortar un flood contra esos endpoints lo antes
+// posible, sin depender de esa allowlist como única defensa. Solo pesa sobre los 3
+// endpoints con .RequireRateLimiting("licenciamiento") — el resto pasa de largo sin costo.
+app.UseRateLimiter();
 
 // Bloqueo por licencia (Inc 7 Fase B): 423 Locked a todo salvo /licencia/* y /auth/reset-admin/*
 // cuando no hay licencia activa. Va antes de autenticación (bloquea incluso el login).

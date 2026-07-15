@@ -46,7 +46,7 @@ public static class LicenciaEndpoints
             return Results.Problem(
                 title: MotivoDe(resultado),
                 statusCode: StatusCodes.Status400BadRequest);
-        });
+        }).RequireRateLimiting("licenciamiento");
 
         return app;
     }
