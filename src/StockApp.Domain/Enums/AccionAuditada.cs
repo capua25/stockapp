@@ -30,4 +30,5 @@ public enum AccionAuditada
     // ── Licenciamiento / Reset — Incremento 7 Fase B (append-only a partir de 19) ──
     ActivacionLicencia               = 19,
     IntentoActivacionLicenciaFallido = 20,
+    ResetAdminFirmado                = 21,
 }

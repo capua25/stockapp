@@ -125,6 +125,8 @@ builder.Services.AddSingleton(sp =>
     return new ValidadorFirma(clavePublica);
 });
 builder.Services.AddScoped<ServicioLicencia>();
+builder.Services.AddSingleton<IAlmacenDesafiosReset, AlmacenDesafiosResetEnMemoria>();
+builder.Services.AddScoped<ServicioResetAdmin>();
 
 // JwtOptions: misma razón que AppDbContext arriba — el secreto (y ahora la expiración,
 // Fase 3a D10) se leen de forma diferida en el factory (resuelto post-Build), no en una
@@ -282,6 +284,7 @@ app.MapCategoriasEndpoints();
 app.MapProveedoresEndpoints();
 app.MapUnidadesMedidaEndpoints();
 app.MapLicenciaEndpoints();
+app.MapResetAdminEndpoints();
 
 app.Run();
 
