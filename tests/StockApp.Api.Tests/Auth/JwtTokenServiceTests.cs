@@ -35,4 +35,21 @@ public class JwtTokenServiceTests
         var vencimientoEsperado = antes.Add(Options.Expiracion);
         Assert.True(Math.Abs((jwt.ValidTo - vencimientoEsperado).TotalMinutes) < 1);
     }
+
+    // Fase B hardening: el claim "iat" es lo que permite a IRevocadorTokens invalidar
+    // tokens viejos tras un reset de contraseña — sin él, no hay forma de comparar el
+    // instante de emisión contra el mínimo aceptado.
+    [Fact]
+    public void GenerarToken_IncluyeClaimIatCercanoAAhora()
+    {
+        var service = new JwtTokenService(Options);
+        var antes = DateTime.UtcNow;
+
+        var token = service.GenerarToken(1, RolUsuario.Operador);
+
+        var jwt = new JwtSecurityTokenHandler().ReadJwtToken(token);
+        var iatClaim = jwt.Claims.Single(c => c.Type == "iat").Value;
+        var iat = DateTimeOffset.FromUnixTimeSeconds(long.Parse(iatClaim)).UtcDateTime;
+        Assert.True(Math.Abs((iat - antes).TotalSeconds) < 5);
+    }
 }
