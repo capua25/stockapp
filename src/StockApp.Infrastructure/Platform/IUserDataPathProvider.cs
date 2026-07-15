@@ -14,4 +14,7 @@ public interface IUserDataPathProvider
 
     /// <summary>Ruta completa al subdirectorio de backups.</summary>
     string GetBackupsDirectory();
+
+    /// <summary>Ruta del archivo de licencia (licencia.lic) en el directorio de datos.</summary>
+    string GetLicenciaPath();
 }
