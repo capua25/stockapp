@@ -49,7 +49,7 @@ public class JwtTokenServiceTests
 
         var jwt = new JwtSecurityTokenHandler().ReadJwtToken(token);
         var iatClaim = jwt.Claims.Single(c => c.Type == "iat").Value;
-        var iat = DateTimeOffset.FromUnixTimeSeconds(long.Parse(iatClaim)).UtcDateTime;
+        var iat = DateTimeOffset.FromUnixTimeMilliseconds(long.Parse(iatClaim)).UtcDateTime;
         Assert.True(Math.Abs((iat - antes).TotalSeconds) < 5);
     }
 }

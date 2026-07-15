@@ -48,22 +48,23 @@ public class RevocadorTokensEnMemoriaTests
         Assert.True(revocador.EsValido(2, emitidoEn));
     }
 
-    // El JWT solo tiene precisión de segundo entero (claim "iat"), pero Revocar recibe un
-    // DateTime.UtcNow con sub-segundo. Si no se trunca al comparar, un login legítimo
-    // emitido en el MISMO segundo (pero antes, en microsegundos) que la revocación
-    // quedaría rechazado por error. Ambos lados se truncan a segundo — este test fija
-    // ese comportamiento.
+    // El JWT solo tiene precisión de segundo entero (claim "iat", truncado en origen por
+    // JwtTokenService), pero Revocar recibe un DateTime.UtcNow con sub-segundo. Un token
+    // viejo emitido en el MISMO segundo de reloj, pero ANTES del instante exacto de
+    // revocación, tiene que quedar inválido igual — comparar el iat (ya truncado en
+    // origen) contra el instante preciso de revocación, sin truncar este último acá,
+    // es lo que garantiza esto sin abrir una ventana de token viejo válido.
     [Fact]
-    public void Revocar_TruncaASegundo_TokenDelMismoSegundoPeroPosteriorSigueValido()
+    public void Revocar_TokenDelMismoSegundoPeroEmitidoAntes_QuedaInvalido()
     {
         var revocador = new RevocadorTokensEnMemoria();
         var baseInstante = new DateTime(2026, 7, 15, 10, 0, 0, DateTimeKind.Utc);
-        var revocadoEn = baseInstante.AddMilliseconds(800);
-        var emitidoEnMismoSegundo = baseInstante.AddMilliseconds(50); // trunca al mismo segundo
+        var emitidoEnTruncado = baseInstante; // así llega el iat reconstruido: sin sub-segundo
+        var revocadoEn = baseInstante.AddMilliseconds(800); // mismo segundo, pero después
 
         revocador.Revocar(1, revocadoEn);
 
-        Assert.True(revocador.EsValido(1, emitidoEnMismoSegundo));
+        Assert.False(revocador.EsValido(1, emitidoEnTruncado));
     }
 
     [Fact]

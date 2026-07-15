@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -95,6 +96,44 @@ public class ResetAdminEndpointsTests : ApiTestBase
         var reset = await client.PostAsJsonAsync("/auth/reset-admin", new ResetAdminRequest(token, "clave-nueva-9"));
 
         Assert.Equal(HttpStatusCode.BadRequest, reset.StatusCode);
+    }
+
+    // Fase B hardening: el JWT emitido ANTES del reset deja de servir de inmediato en
+    // un endpoint protegido, sin esperar a su expiración natural; el login con la
+    // contraseña nueva sigue funcionando con normalidad.
+    [Fact]
+    public async Task Reset_TokenViejoQuedaRevocado_YLoginNuevoFunciona()
+    {
+        await SembrarAdminAsync("admin", "clave-vieja-1");
+        var client = Factory.CreateClient();
+
+        var loginViejo = await client.PostAsJsonAsync("/auth/login",
+            new { NombreUsuario = "admin", Contrasena = "clave-vieja-1" });
+        var tokenViejo = (await loginViejo.Content.ReadFromJsonAsync<LoginResponse>())!.Token;
+
+        var desafio = (await (await client.PostAsync("/auth/reset-admin/desafio", null))
+            .Content.ReadFromJsonAsync<ResetDesafioResponse>())!.Desafio;
+        var token = ClavesDePrueba.EmitirTokenReset(desafio);
+        var reset = await client.PostAsJsonAsync("/auth/reset-admin",
+            new ResetAdminRequest(token, "clave-nueva-9"));
+        Assert.Equal(HttpStatusCode.OK, reset.StatusCode);
+
+        var clienteConTokenViejo = Factory.CreateClient();
+        clienteConTokenViejo.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", tokenViejo);
+        var protegidoConTokenViejo = await clienteConTokenViejo.GetAsync("/usuarios");
+        Assert.Equal(HttpStatusCode.Unauthorized, protegidoConTokenViejo.StatusCode);
+
+        var loginNuevo = await client.PostAsJsonAsync("/auth/login",
+            new { NombreUsuario = "admin", Contrasena = "clave-nueva-9" });
+        Assert.Equal(HttpStatusCode.OK, loginNuevo.StatusCode);
+
+        var tokenNuevo = (await loginNuevo.Content.ReadFromJsonAsync<LoginResponse>())!.Token;
+        var clienteConTokenNuevo = Factory.CreateClient();
+        clienteConTokenNuevo.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", tokenNuevo);
+        var protegidoConTokenNuevo = await clienteConTokenNuevo.GetAsync("/usuarios");
+        Assert.Equal(HttpStatusCode.OK, protegidoConTokenNuevo.StatusCode);
     }
 
     [Fact]

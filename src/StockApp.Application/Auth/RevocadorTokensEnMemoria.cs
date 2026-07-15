@@ -18,22 +18,23 @@ public sealed class RevocadorTokensEnMemoria : IRevocadorTokens
 
     public void Revocar(int usuarioId, DateTime ahora)
     {
-        // El claim "iat" del JWT solo tiene precisión de segundo entero (Unix epoch).
-        // Truncar acá a segundo evita que un login legítimo, emitido en el MISMO
-        // segundo que la revocación pero en microsegundos posteriores, quede rechazado
-        // por error al comparar contra un "ahora" con sub-segundo (ver EsValido).
-        var minimo = TruncarASegundo(ahora);
-
+        // OJO con la precisión: "ahora" NO se trunca acá — se guarda tal cual, con
+        // sub-segundo. El claim "iat" del JWT sí se trunca a segundo entero (Unix epoch,
+        // ver JwtTokenService), pero eso ya pasó ANTES de llegar acá, del lado de quien
+        // emitió el token viejo. Si acá también truncáramos "ahora" a segundo, un token
+        // viejo emitido en el MISMO segundo de reloj (microsegundos antes de la
+        // revocación) pasaría la comparación como válido por error — exactamente el
+        // caso que este diseño tiene que cubrir. Con "ahora" sin truncar, un iat
+        // truncado siempre queda estrictamente antes de la revocación real si el login
+        // ocurrió antes (nunca pueden "empatar" salvo coincidencia exacta a nivel de
+        // tick, un caso no realista).
         _minimoAceptadoPorUsuario.AddOrUpdate(
             usuarioId,
-            minimo,
-            (_, actual) => minimo > actual ? minimo : actual);
+            ahora,
+            (_, actual) => ahora > actual ? ahora : actual);
     }
 
     public bool EsValido(int usuarioId, DateTime emitidoEn)
         => !_minimoAceptadoPorUsuario.TryGetValue(usuarioId, out var minimo)
         || emitidoEn >= minimo;
-
-    private static DateTime TruncarASegundo(DateTime valor)
-        => valor.AddTicks(-(valor.Ticks % TimeSpan.TicksPerSecond));
 }

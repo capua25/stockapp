@@ -1,3 +1,4 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -141,6 +142,11 @@ builder.Services.AddScoped<ServicioResetAdmin>();
 builder.Services.AddSingleton(sp => JwtOptionsFactory.Crear(sp.GetRequiredService<IConfiguration>()));
 builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
 
+// IRevocadorTokens: SINGLETON en memoria (Fase B hardening). Guarda por usuario el
+// mínimo iat aceptado; se pierde al reiniciar la API (LAN, expiración de JWT corta —
+// ver comentario de la limitación aceptada en RevocadorTokensEnMemoria).
+builder.Services.AddSingleton<IRevocadorTokens, RevocadorTokensEnMemoria>();
+
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer();
@@ -172,6 +178,32 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
         // determinístico, no un efecto colateral de AddProblemDetails() + status code.
         options.Events = new JwtBearerEvents
         {
+            // Fase B hardening: además de firma/expiración (ya validadas por el pipeline
+            // JwtBearer antes de llegar acá), se consulta IRevocadorTokens con el
+            // usuarioId + iat del token. Si el token fue revocado (reset de contraseña
+            // posterior a su emisión), context.Fail dispara OnChallenge → 401, con el
+            // mismo shape de ProblemDetails que cualquier otro token inválido.
+            OnTokenValidated = context =>
+            {
+                var revocador = context.HttpContext.RequestServices
+                    .GetRequiredService<IRevocadorTokens>();
+                var usuarioIdClaim = context.Principal?.FindFirst(StockAppClaimTypes.UsuarioId)?.Value;
+                var iatClaim = context.Principal?.FindFirst(JwtRegisteredClaimNames.Iat)?.Value;
+
+                if (usuarioIdClaim is null || iatClaim is null
+                    || !int.TryParse(usuarioIdClaim, out var usuarioId)
+                    || !long.TryParse(iatClaim, out var iatEpoch))
+                {
+                    context.Fail("El token no tiene los claims requeridos.");
+                    return Task.CompletedTask;
+                }
+
+                var emitidoEn = DateTimeOffset.FromUnixTimeMilliseconds(iatEpoch).UtcDateTime;
+                if (!revocador.EsValido(usuarioId, emitidoEn))
+                    context.Fail("El token fue revocado.");
+
+                return Task.CompletedTask;
+            },
             OnChallenge = async context =>
             {
                 context.HandleResponse();
