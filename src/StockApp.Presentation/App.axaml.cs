@@ -16,6 +16,7 @@ using StockApp.Application.Auth;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Interfaces;
+using StockApp.Application.Licenciamiento;
 using StockApp.Application.Movimientos;
 using StockApp.Application.Reportes;
 using StockApp.Presentation.Actualizaciones;
@@ -82,6 +83,14 @@ public partial class App : AvaloniaApp
             var uiDispatcher = _serviceProvider.GetRequiredService<IUiDispatcher>();
             apiSession.SesionVencida += () => uiDispatcher.Post(
                 () => shell.MostrarLoginConAviso("Sesión vencida, ingresá de nuevo."));
+
+            // Licencia desactivada (Inc 7 Fase B): cualquier request que reciba un 423
+            // (ej. borraron licencia.lic con la app abierta) dispara este evento; se marshalea
+            // al UI thread y se muestra la pantalla de bloqueo. Idempotente por diseño: el
+            // Shell simplemente reasigna CurrentViewModel, no importa si el evento se dispara
+            // varias veces (varios requests concurrentes con 423).
+            apiSession.LicenciaDesactivada += () => uiDispatcher.Post(
+                () => shell.MostrarBloqueoLicencia());
 
             // Inicializa el shell (decide login / primer arranque) ANTES de asignar el
             // DataContext, y en el thread pool, para no deadlockear el UI thread ni disparar
@@ -161,6 +170,10 @@ public partial class App : AvaloniaApp
         services.AddTransient<IMovimientoStockService, MovimientoStockApiClient>();
         services.AddTransient<IReporteStockService, ReporteStockApiClient>();
         services.AddTransient<IAuditoriaQueryService, AuditoriaQueryApiClient>();
+
+        // ── Inc 7 Fase B: licenciamiento (pantalla de bloqueo + reset de Admin) ──
+        services.AddTransient<ILicenciaService>(sp => new LicenciaApiClient(sp.GetRequiredService<HttpClient>()));
+        services.AddTransient<IResetAdminService>(sp => new ResetAdminApiClient(sp.GetRequiredService<HttpClient>()));
 
         // NOTA (spec 3b): NO se registran IAuthorizationService ni IPasswordHasher ni
         // IAuditLogger ni repositorios — la autorización, el hashing y la auditoría son

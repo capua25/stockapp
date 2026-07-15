@@ -1,0 +1,60 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="400"
+             x:Class="StockApp.Presentation.Views.BloqueoLicenciaView"
+             x:DataType="vm:BloqueoLicenciaViewModel"
+             Background="{DynamicResource FondoBrush}">
+
+    <Grid>
+
+        <Border Classes="card" Padding="40" HorizontalAlignment="Center" VerticalAlignment="Center" Width="420">
+            <StackPanel Spacing="16">
+
+                <TextBlock Text="Activación de licencia"
+                           Classes="titulo-vista"
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,8" />
+
+                <TextBlock Text="Este servidor no tiene una licencia activada. Pasale el código de máquina al proveedor y pegá la licencia que te devuelva."
+                           HorizontalAlignment="Center"
+                           TextWrapping="Wrap"
+                           Opacity="0.7" />
+
+                <!-- Código de máquina -->
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Código de máquina" />
+                    <SelectableTextBlock Text="{Binding CodigoMaquina}" FontFamily="Consolas,monospace" />
+                </StackPanel>
+
+                <!-- Licencia -->
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Licencia" />
+                    <TextBox Text="{Binding LicenciaPegada}"
+                             AcceptsReturn="True"
+                             Height="90"
+                             PlaceholderText="Pegá acá el texto de la licencia" />
+                </StackPanel>
+
+                <!-- Mensaje de error -->
+                <TextBlock Text="{Binding MensajeError}"
+                           Foreground="{DynamicResource DangerBrush}"
+                           IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                           TextWrapping="Wrap" />
+
+                <!-- Botón -->
+                <Button Content="Activar"
+                        Classes="primary"
+                        Command="{Binding ActivarCommand}"
+                        IsDefault="True"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Center" />
+
+            </StackPanel>
+        </Border>
+
+    </Grid>
+
+</UserControl>

@@ -3,6 +3,7 @@ using StockApp.ApiClient;
 using StockApp.Application.Actualizaciones;
 using StockApp.Application.Auth;
 using StockApp.Application.Interfaces;
+using StockApp.Application.Licenciamiento;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Actualizaciones;
 using StockApp.Presentation.Navigation;
@@ -46,8 +47,14 @@ public class ShellViewModelTests
         updateStub.Setup(s => s.BuscarAsync(default)).ReturnsAsync(UpdateCheckResult.SinUpdate);
         var coordinador = new CoordinadorActualizacion(updateStub.Object, new PoliticaUxActualizacion());
 
+        var licenciaMock = new Mock<ILicenciaService>();
+        licenciaMock.Setup(s => s.ObtenerEstadoAsync())
+                    .ReturnsAsync(new EstadoLicenciaDto(true, "MAQ")); // activada → va al login
+
         return new ShellViewModel(
             Mock.Of<IAuthService>(),
+            licenciaMock.Object,
+            Mock.Of<IResetAdminService>(),
             navSvc,
             coordinador,
             new FakeUiDispatcher(),
@@ -97,5 +104,61 @@ public class ShellViewModelTests
 
         var login = Assert.IsType<LoginViewModel>(shell.CurrentViewModel);
         Assert.Equal("Sesión vencida, ingresá de nuevo.", login.MensajeError);
+    }
+
+    // ── tests: licencia (Inc 7 Fase B) ───────────────────────────────────────
+
+    [Fact]
+    public async Task Inicializar_LicenciaNoActivada_MuestraBloqueo()
+    {
+        // helper inline con licencia NO activada
+        var licenciaMock = new Mock<ILicenciaService>();
+        licenciaMock.Setup(s => s.ObtenerEstadoAsync())
+                    .ReturnsAsync(new EstadoLicenciaDto(false, "MAQ-1"));
+        var navSvc = new NavigationService(_ => throw new InvalidOperationException());
+        var updateStub = new Mock<IUpdateService>();
+        updateStub.Setup(s => s.BuscarAsync(default)).ReturnsAsync(UpdateCheckResult.SinUpdate);
+        var coordinador = new CoordinadorActualizacion(updateStub.Object, new PoliticaUxActualizacion());
+        var shell = new ShellViewModel(
+            Mock.Of<IAuthService>(), licenciaMock.Object, Mock.Of<IResetAdminService>(),
+            navSvc, coordinador, new FakeUiDispatcher(), InfoAppStub);
+
+        await shell.InicializarAsync();
+
+        Assert.IsType<BloqueoLicenciaViewModel>(shell.CurrentViewModel);
+    }
+
+    [Fact]
+    public void MostrarBloqueoLicencia_EstableceBloqueoLicenciaViewModel()
+    {
+        var shell = Crear();
+
+        shell.MostrarBloqueoLicencia();
+
+        Assert.IsType<BloqueoLicenciaViewModel>(shell.CurrentViewModel);
+    }
+
+    [Fact]
+    public void MostrarReset_EstableceResetAdminViewModel()
+    {
+        var shell = Crear();
+
+        shell.MostrarReset();
+
+        Assert.IsType<ResetAdminViewModel>(shell.CurrentViewModel);
+    }
+
+    [Fact]
+    public void MostrarBloqueoLicencia_LlamadoDosVeces_NoRecreaElViewModel()
+    {
+        // Idempotencia: varios 423 concurrentes (ver ApiSession.LicenciaDesactivada) no
+        // deben re-navegar ni perder lo que el usuario ya pegó en el VM de bloqueo activo.
+        var shell = Crear();
+
+        shell.MostrarBloqueoLicencia();
+        var primerVm = shell.CurrentViewModel;
+        shell.MostrarBloqueoLicencia();
+
+        Assert.Same(primerVm, shell.CurrentViewModel);
     }
 }

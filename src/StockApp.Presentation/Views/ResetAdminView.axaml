@@ -1,0 +1,84 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="420" d:DesignHeight="560"
+             x:Class="StockApp.Presentation.Views.ResetAdminView"
+             x:DataType="vm:ResetAdminViewModel"
+             Background="{DynamicResource FondoBrush}">
+
+    <Grid>
+
+        <Border Classes="card" Padding="40" HorizontalAlignment="Center" VerticalAlignment="Center" Width="420">
+            <StackPanel Spacing="16">
+
+                <TextBlock Text="Recuperar acceso de Admin"
+                           Classes="titulo-vista"
+                           HorizontalAlignment="Center"
+                           Margin="0,0,0,8" />
+
+                <Button Content="1) Generar código de recuperación"
+                        Command="{Binding PedirDesafioCommand}"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Center" />
+
+                <!-- Código de máquina -->
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Código de máquina" />
+                    <SelectableTextBlock Text="{Binding CodigoMaquina}" FontFamily="Consolas,monospace" />
+                </StackPanel>
+
+                <!-- Desafío -->
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Desafío" />
+                    <SelectableTextBlock Text="{Binding Desafio}" FontFamily="Consolas,monospace" TextWrapping="Wrap" />
+                </StackPanel>
+
+                <!-- Token de reset -->
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Token de reset (del proveedor)" />
+                    <TextBox Text="{Binding TokenPegado}"
+                             AcceptsReturn="True"
+                             Height="90"
+                             PlaceholderText="Pegá el token firmado" />
+                </StackPanel>
+
+                <!-- Nueva contraseña -->
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Nueva contraseña de Admin" />
+                    <TextBox Text="{Binding NuevaContrasena}"
+                             PasswordChar="●"
+                             PlaceholderText="Nueva contraseña" />
+                </StackPanel>
+
+                <Button Content="2) Resetear Admin"
+                        Classes="primary"
+                        Command="{Binding ResetearCommand}"
+                        IsDefault="True"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Center" />
+
+                <!-- Mensaje de éxito -->
+                <TextBlock Text="Listo. Volvé al login e ingresá con la nueva contraseña."
+                           Foreground="{DynamicResource SuccessBrush}"
+                           IsVisible="{Binding Completado}"
+                           TextWrapping="Wrap" />
+
+                <!-- Mensaje de error -->
+                <TextBlock Text="{Binding MensajeError}"
+                           Foreground="{DynamicResource DangerBrush}"
+                           IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                           TextWrapping="Wrap" />
+
+                <Button Content="Volver al login"
+                        Command="{Binding VolverCommand}"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Center" />
+
+            </StackPanel>
+        </Border>
+
+    </Grid>
+
+</UserControl>

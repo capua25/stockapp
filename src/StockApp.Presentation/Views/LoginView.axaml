@@ -60,6 +60,11 @@
                         HorizontalAlignment="Stretch"
                         HorizontalContentAlignment="Center" />
 
+                <!-- Reset de Admin (Inc 7 Fase B): link discreto para el flujo de recuperación -->
+                <Button Content="No puedo entrar / resetear Admin"
+                        Command="{Binding ResetearAdminCommand}"
+                        HorizontalAlignment="Center" />
+
                 <!-- Versión de la app: discreta, al pie del formulario -->
                 <TextBlock Text="{Binding VersionTexto}"
                            FontSize="11"

@@ -4,6 +4,7 @@ using StockApp.Application.Actualizaciones;
 using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
+using StockApp.Application.Licenciamiento;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Actualizaciones;
 using StockApp.Presentation.Navigation;
@@ -47,6 +48,8 @@ public class LoginViewModelTests
 
         return new ShellViewModel(
             Mock.Of<IAuthService>(),
+            Mock.Of<ILicenciaService>(),
+            Mock.Of<IResetAdminService>(),
             navSvc,
             coordinador,
             new FakeUiDispatcher(),
@@ -201,5 +204,18 @@ public class LoginViewModelTests
         Assert.Equal(ServidorNoDisponibleException.MensajePorDefecto, vm.MensajeError);
         Assert.False(vm.OperacionEnCurso);
         Assert.True(vm.EntrarCommand.CanExecute(null)); // puede reintentar
+    }
+
+    // ── tests: reset de Admin (Inc 7 Fase B) ─────────────────────────────────
+
+    [Fact]
+    public void ResetearAdmin_MuestraElResetEnElShell()
+    {
+        var shell = CrearShellFake();
+        var vm    = new LoginViewModel(Mock.Of<IAuthService>(), shell, Mock.Of<IInfoApp>(x => x.Version == "0.0.0"));
+
+        vm.ResetearAdminCommand.Execute(null);
+
+        Assert.IsType<ResetAdminViewModel>(shell.CurrentViewModel);
     }
 }

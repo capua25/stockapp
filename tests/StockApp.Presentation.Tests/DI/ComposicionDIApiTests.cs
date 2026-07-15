@@ -5,6 +5,7 @@ using StockApp.Application.Auth;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Interfaces;
+using StockApp.Application.Licenciamiento;
 using StockApp.Application.Movimientos;
 using StockApp.Application.Reportes;
 using StockApp.Presentation.Navigation;
@@ -62,6 +63,8 @@ public class ComposicionDIApiTests
         services.AddTransient<IMovimientoStockService, MovimientoStockApiClient>();
         services.AddTransient<IReporteStockService, ReporteStockApiClient>();
         services.AddTransient<IAuditoriaQueryService, AuditoriaQueryApiClient>();
+        services.AddTransient<ILicenciaService>(sp => new LicenciaApiClient(sp.GetRequiredService<HttpClient>()));
+        services.AddTransient<IResetAdminService>(sp => new ResetAdminApiClient(sp.GetRequiredService<HttpClient>()));
 
         // ── Servicios de Presentation (igual que App.axaml.cs) ────────────────
         services.AddSingleton<INavigationService>(sp =>
@@ -101,6 +104,8 @@ public class ComposicionDIApiTests
     [InlineData(typeof(IMovimientoStockService), typeof(MovimientoStockApiClient))]
     [InlineData(typeof(IReporteStockService), typeof(ReporteStockApiClient))]
     [InlineData(typeof(IAuditoriaQueryService), typeof(AuditoriaQueryApiClient))]
+    [InlineData(typeof(ILicenciaService), typeof(LicenciaApiClient))]
+    [InlineData(typeof(IResetAdminService), typeof(ResetAdminApiClient))]
     public void Contenedor_Resuelve_CadaInterfazConSuApiClient(Type interfaz, Type implementacion)
     {
         var sp = CrearContenedor();

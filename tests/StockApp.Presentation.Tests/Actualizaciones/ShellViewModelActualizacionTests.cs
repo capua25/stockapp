@@ -4,6 +4,7 @@ using Moq;
 using StockApp.Application.Actualizaciones;
 using StockApp.Application.Auth;
 using StockApp.Application.Interfaces;
+using StockApp.Application.Licenciamiento;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Actualizaciones;
 using StockApp.Presentation.Navigation;
@@ -66,6 +67,8 @@ public class ShellViewModelActualizacionTests
 
         var shell = new ShellViewModel(
             Mock.Of<IAuthService>(),
+            Mock.Of<ILicenciaService>(x => x.ObtenerEstadoAsync() == Task.FromResult(new EstadoLicenciaDto(true, "MAQ"))),
+            Mock.Of<IResetAdminService>(),
             navSvc,
             coordinador,
             new FakeUiDispatcher(),
@@ -105,6 +108,8 @@ public class ShellViewModelActualizacionTests
 
         var shell = new ShellViewModel(
             Mock.Of<IAuthService>(),
+            Mock.Of<ILicenciaService>(x => x.ObtenerEstadoAsync() == Task.FromResult(new EstadoLicenciaDto(true, "MAQ"))),
+            Mock.Of<IResetAdminService>(),
             navSvc,
             coordinador,
             new FakeUiDispatcher(),
@@ -143,6 +148,8 @@ public class ShellViewModelActualizacionTests
 
         var shell = new ShellViewModel(
             Mock.Of<IAuthService>(),
+            Mock.Of<ILicenciaService>(x => x.ObtenerEstadoAsync() == Task.FromResult(new EstadoLicenciaDto(true, "MAQ"))),
+            Mock.Of<IResetAdminService>(),
             navSvc,
             coordinador,
             new FakeUiDispatcher(),
@@ -182,6 +189,8 @@ public class ShellViewModelActualizacionTests
 
         var shell = new ShellViewModel(
             Mock.Of<IAuthService>(),
+            Mock.Of<ILicenciaService>(x => x.ObtenerEstadoAsync() == Task.FromResult(new EstadoLicenciaDto(true, "MAQ"))),
+            Mock.Of<IResetAdminService>(),
             navSvc,
             coordinador,
             new FakeUiDispatcher(),
@@ -225,6 +234,8 @@ public class ShellViewModelActualizacionTests
 
         var shell = new ShellViewModel(
             Mock.Of<IAuthService>(),
+            Mock.Of<ILicenciaService>(x => x.ObtenerEstadoAsync() == Task.FromResult(new EstadoLicenciaDto(true, "MAQ"))),
+            Mock.Of<IResetAdminService>(),
             navSvc,
             coordinador,
             fakeDispatcher,
@@ -273,6 +284,8 @@ public class ShellViewModelActualizacionTests
 
         var shell = new ShellViewModel(
             Mock.Of<IAuthService>(),
+            Mock.Of<ILicenciaService>(x => x.ObtenerEstadoAsync() == Task.FromResult(new EstadoLicenciaDto(true, "MAQ"))),
+            Mock.Of<IResetAdminService>(),
             navSvc,
             coordinador,
             new FakeUiDispatcher(),
@@ -321,6 +334,8 @@ public class ShellViewModelActualizacionTests
 
         var shell = new ShellViewModel(
             Mock.Of<IAuthService>(),
+            Mock.Of<ILicenciaService>(x => x.ObtenerEstadoAsync() == Task.FromResult(new EstadoLicenciaDto(true, "MAQ"))),
+            Mock.Of<IResetAdminService>(),
             navSvc,
             coordinador,
             new FakeUiDispatcher(),
@@ -368,6 +383,8 @@ public class ShellViewModelActualizacionTests
 
         var shell = new ShellViewModel(
             Mock.Of<IAuthService>(),
+            Mock.Of<ILicenciaService>(x => x.ObtenerEstadoAsync() == Task.FromResult(new EstadoLicenciaDto(true, "MAQ"))),
+            Mock.Of<IResetAdminService>(),
             navSvc,
             coordinador,
             new FakeUiDispatcher(),

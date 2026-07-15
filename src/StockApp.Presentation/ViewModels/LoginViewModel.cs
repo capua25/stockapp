@@ -89,4 +89,8 @@ public partial class LoginViewModel : ViewModelBase
             OperacionEnCurso = false;
         }
     }
+
+    /// <summary>Abre el flujo de recuperación de Admin ("No puedo entrar / resetear Admin").</summary>
+    [RelayCommand]
+    private void ResetearAdmin() => _shell.MostrarReset();
 }
