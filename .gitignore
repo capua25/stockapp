@@ -486,3 +486,7 @@ $RECYCLE.BIN/
 # Andamiaje SDD local — no versionar
 .atl/
 openspec/
+
+# Inc 7 Fase B — claves privadas de licenciamiento (jamás en el repo)
+*.pem
+clave-privada*
