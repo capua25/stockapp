@@ -201,6 +201,31 @@ esa linea en `pack-win.ps1` y configurar la variable de entorno `CERT_PWD`.
 
 ---
 
+## Licenciamiento (Fase B)
+
+Prerequisito **obligatorio** antes de la primera release con licenciamiento: la API arranca en
+modo bloqueado (fail-closed por diseno) si no tiene una clave publica configurada, y ninguna
+licencia puede activarse sin ella.
+
+1. **Generar el par de claves — UNA sola vez**, fuera del repositorio:
+
+   ```bash
+   dotnet run --project tools/StockApp.Licencias.Cli -- generar-claves --salida <dir-privado-fuera-del-repo>
+   ```
+
+   Esto produce una clave privada (queda en poder de quien firma licencias, nunca se commitea
+   ni se distribuye) y una clave publica en Base64.
+
+2. **Configurar la clave publica en la API**, via `Licencia:ClavePublicaBase64` en
+   `appsettings.json` o variable de entorno equivalente. Sin esto, la API arranca en modo
+   bloqueado y no hay forma de activar ninguna licencia (fail-closed intencional, no es un bug).
+
+3. **La CLI (`StockApp.Licencias.Cli`) jamas se distribuye** al cliente ni se empaqueta junto a
+   la app de escritorio. Es una herramienta interna del proveedor para generar claves, licencias
+   y tokens de reset — vive y se ejecuta solo en el entorno de quien administra las licencias.
+
+---
+
 ## Checklist de validacion manual
 
 Estas verificaciones NO son automatizables con xUnit. Deben hacerse en un entorno real por OS.
