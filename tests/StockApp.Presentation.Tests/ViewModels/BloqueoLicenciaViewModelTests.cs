@@ -1,5 +1,6 @@
 using Moq;
 using StockApp.Application.Licenciamiento;
+using StockApp.Domain.Exceptions;
 using StockApp.Presentation.ViewModels;
 using Xunit;
 
@@ -49,6 +50,24 @@ public class BloqueoLicenciaViewModelTests
 
         Assert.False(activada);
         Assert.Equal("La licencia fue emitida para otra máquina.", vm.MensajeError);
+    }
+
+    [Fact]
+    public async Task Activar_RateLimit429_MuestraMensajeYNoPropagaExcepcion()
+    {
+        // Fix (Important): el 11º intento en un minuto lanza ReglaDeNegocioException
+        // (mapeada desde el 429 en ApiErrores) — no debe escapar al handler global.
+        var svc = new Mock<ILicenciaService>();
+        svc.Setup(s => s.ActivarAsync("lic"))
+           .ThrowsAsync(new ReglaDeNegocioException("Demasiados intentos, esperá un minuto y volvé a probar."));
+        var vm = new BloqueoLicenciaViewModel(svc.Object) { LicenciaPegada = "lic" };
+        var activada = false;
+        vm.LicenciaActivada += () => activada = true;
+
+        await vm.ActivarCommand.ExecuteAsync(null);
+
+        Assert.False(activada);
+        Assert.Equal("Demasiados intentos, esperá un minuto y volvé a probar.", vm.MensajeError);
     }
 
     [Fact]

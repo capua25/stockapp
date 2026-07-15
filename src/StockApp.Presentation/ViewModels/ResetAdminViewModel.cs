@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.ApiClient;
 using StockApp.Application.Licenciamiento;
+using StockApp.Domain.Exceptions;
 
 namespace StockApp.Presentation.ViewModels;
 
@@ -70,6 +71,11 @@ public partial class ResetAdminViewModel : ViewModelBase
         {
             MensajeError = ex.Message;
         }
+        catch (ReglaDeNegocioException ex)
+        {
+            // Incluye el 429 del rate limiter de intentos de reset.
+            MensajeError = ex.Message;
+        }
     }
 
     private bool PuedeResetear()
@@ -92,6 +98,11 @@ public partial class ResetAdminViewModel : ViewModelBase
         }
         catch (ServidorNoDisponibleException ex)
         {
+            MensajeError = ex.Message;
+        }
+        catch (ReglaDeNegocioException ex)
+        {
+            // Incluye el 429 del rate limiter de intentos de reset.
             MensajeError = ex.Message;
         }
         finally

@@ -106,6 +106,31 @@ public class ApiErroresTests
     }
 
     [Fact]
+    public async Task TooManyRequests_LanzaReglaDeNegocioConElDetail()
+    {
+        var response = Problema(HttpStatusCode.TooManyRequests, "Demasiados intentos fallidos. Esperá 60 segundos.");
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => ApiErrores.AsegurarExitoAsync(response));
+
+        Assert.Equal("Demasiados intentos fallidos. Esperá 60 segundos.", ex.Message);
+    }
+
+    [Fact]
+    public async Task TooManyRequests_SinDetailNiTitle_UsaMensajeGenericoDeReintento()
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.TooManyRequests)
+        {
+            Content = new StringContent("<html>proxy error</html>"),
+        };
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => ApiErrores.AsegurarExitoAsync(response));
+
+        Assert.Equal("Demasiados intentos, esperá un minuto y volvé a probar.", ex.Message);
+    }
+
+    [Fact]
     public async Task Error500_SinDetail_LanzaInvalidOperationConTitleYStatus()
     {
         // La API nunca expone detail en 500 (fail-closed).

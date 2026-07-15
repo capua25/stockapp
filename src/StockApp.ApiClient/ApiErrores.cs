@@ -66,11 +66,14 @@ internal static class ApiErrores
 
         throw response.StatusCode switch
         {
-            HttpStatusCode.NotFound     => new EntidadNoEncontradaException(mensaje),
-            HttpStatusCode.Conflict     => CrearConflicto(problema, mensaje),
-            HttpStatusCode.BadRequest   => new ArgumentException(mensaje),
-            HttpStatusCode.Forbidden    => new UnauthorizedAccessException(mensaje),
-            HttpStatusCode.Unauthorized => new UnauthorizedAccessException(mensaje),
+            HttpStatusCode.NotFound        => new EntidadNoEncontradaException(mensaje),
+            HttpStatusCode.Conflict        => CrearConflicto(problema, mensaje),
+            HttpStatusCode.BadRequest      => new ArgumentException(mensaje),
+            HttpStatusCode.Forbidden       => new UnauthorizedAccessException(mensaje),
+            HttpStatusCode.Unauthorized    => new UnauthorizedAccessException(mensaje),
+            HttpStatusCode.TooManyRequests => new ReglaDeNegocioException(
+                problema?.Detail ?? problema?.Title
+                    ?? "Demasiados intentos, esperá un minuto y volvé a probar."),
             _ => new InvalidOperationException(
                 $"Error inesperado del servidor ({(int)response.StatusCode}): {mensaje}"),
         };

@@ -1,5 +1,6 @@
 using Moq;
 using StockApp.Application.Licenciamiento;
+using StockApp.Domain.Exceptions;
 using StockApp.Presentation.ViewModels;
 using Xunit;
 
@@ -55,6 +56,39 @@ public class ResetAdminViewModelTests
 
         Assert.False(vm.Completado);
         Assert.Equal("El desafío expiró. Pedí uno nuevo.", vm.MensajeError);
+    }
+
+    [Fact]
+    public async Task PedirDesafio_RateLimit429_MuestraMensajeYNoPropagaExcepcion()
+    {
+        var svc = new Mock<IResetAdminService>();
+        svc.Setup(s => s.SolicitarDesafioAsync())
+           .ThrowsAsync(new ReglaDeNegocioException("Demasiados intentos, esperá un minuto y volvé a probar."));
+        var vm = new ResetAdminViewModel(svc.Object);
+
+        await vm.PedirDesafioCommand.ExecuteAsync(null);
+
+        Assert.Equal("Demasiados intentos, esperá un minuto y volvé a probar.", vm.MensajeError);
+    }
+
+    [Fact]
+    public async Task Resetear_RateLimit429_MuestraMensajeYNoPropagaExcepcion()
+    {
+        // Fix (Important): el 11º intento en un minuto lanza ReglaDeNegocioException
+        // (mapeada desde el 429 en ApiErrores) — no debe escapar al handler global.
+        var svc = new Mock<IResetAdminService>();
+        svc.Setup(s => s.ResetearAsync("tok", "clave-nueva-9"))
+           .ThrowsAsync(new ReglaDeNegocioException("Demasiados intentos, esperá un minuto y volvé a probar."));
+        var vm = new ResetAdminViewModel(svc.Object)
+        {
+            TokenPegado = "tok",
+            NuevaContrasena = "clave-nueva-9",
+        };
+
+        await vm.ResetearCommand.ExecuteAsync(null);
+
+        Assert.False(vm.Completado);
+        Assert.Equal("Demasiados intentos, esperá un minuto y volvé a probar.", vm.MensajeError);
     }
 
     [Fact]
