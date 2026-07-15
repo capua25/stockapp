@@ -2,6 +2,7 @@ using System.Linq;
 using System.Text.Json;
 using StockApp.Application.Auth;
 using StockApp.Application.Interfaces;
+using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 
 namespace StockApp.Application.Licenciamiento;
@@ -21,7 +22,6 @@ public sealed class ServicioResetAdmin
     private readonly IAlmacenDesafiosReset _desafios;
     private readonly IUsuarioRepository    _usuarios;
     private readonly IPasswordHasher       _hasher;
-    private readonly IPrimerArranqueService _primerArranque;
     private readonly IAuditLogger          _audit;
 
     public ServicioResetAdmin(
@@ -30,7 +30,6 @@ public sealed class ServicioResetAdmin
         IAlmacenDesafiosReset  desafios,
         IUsuarioRepository     usuarios,
         IPasswordHasher        hasher,
-        IPrimerArranqueService primerArranque,
         IAuditLogger           audit)
     {
         _validador      = validador;
@@ -38,7 +37,6 @@ public sealed class ServicioResetAdmin
         _desafios       = desafios;
         _usuarios       = usuarios;
         _hasher         = hasher;
-        _primerArranque = primerArranque;
         _audit          = audit;
     }
 
@@ -104,9 +102,21 @@ public sealed class ServicioResetAdmin
             return admin.Id;
         }
 
-        // No queda ningún Admin: recrear vía PrimerArranqueService (username fijo "admin").
-        await _primerArranque.CrearAdminInicialAsync("admin", nuevaContrasena);
-        var recreado = await _usuarios.BuscarPorNombreAsync("admin");
-        return recreado!.Id;
+        // No queda ningún Admin. No se puede delegar en PrimerArranqueService.CrearAdminInicialAsync:
+        // esa ruta chequea "no existe NINGÚN usuario" (RequiereCrearAdminAsync), y falla si quedan
+        // Operadores sin Admins — justamente el caso de borde que este endpoint de último recurso
+        // tiene que poder resolver. Se crea el Admin directo con el mismo mecanismo interno
+        // (repositorio + hasher), sin pasar por esa precondición. La contraseña ya fue validada
+        // en ResetearAsync antes de consumir el desafío.
+        var nuevoAdmin = new Usuario
+        {
+            NombreUsuario  = "admin",
+            HashContrasena = _hasher.Hash(nuevaContrasena),
+            Rol            = RolUsuario.Admin,
+            Activo         = true,
+            FechaAlta      = DateTime.UtcNow,
+        };
+        var id = await _usuarios.AgregarAsync(nuevoAdmin);
+        return id;
     }
 }

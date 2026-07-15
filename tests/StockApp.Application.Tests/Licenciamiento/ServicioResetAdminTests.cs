@@ -84,9 +84,8 @@ public class ServicioResetAdminTests
 
         var desafios = new AlmacenDesafiosResetEnMemoria();
         var audit = new AuditFake();
-        var primerArranque = new PrimerArranqueService(repo, hasher);
         var servicio = new ServicioResetAdmin(
-            validador, new FingerprintFake(), desafios, repo, hasher, primerArranque, audit);
+            validador, new FingerprintFake(), desafios, repo, hasher, audit);
 
         return new Contexto
         {
@@ -134,6 +133,25 @@ public class ServicioResetAdminTests
         Assert.Equal(ResultadoValidacionReset.Valido, resultado);
         var admin = c.Repo.Usuarios.Single(u => u.Rol == RolUsuario.Admin);
         Assert.Equal("HASH:nueva-clave-123", admin.HashContrasena);
+    }
+
+    [Fact]
+    public async Task Resetear_SinAdminPeroConOperador_RecreaAdmin()
+    {
+        var c = Armar(conAdmin: false);
+        c.Repo.Usuarios.Add(new Usuario
+        {
+            Id = 3, NombreUsuario = "operador1", HashContrasena = "HASH:op",
+            Rol = RolUsuario.Operador, Activo = true, FechaAlta = DateTime.UtcNow,
+        });
+        var desafio = c.Desafios.GenerarNuevo();
+
+        var resultado = await c.Servicio.ResetearAsync(Token(c.PrivadaPem, desafio), "nueva-clave-123");
+
+        Assert.Equal(ResultadoValidacionReset.Valido, resultado);
+        var admin = c.Repo.Usuarios.Single(u => u.Rol == RolUsuario.Admin);
+        Assert.Equal("HASH:nueva-clave-123", admin.HashContrasena);
+        Assert.Contains(c.Audit.Eventos, e => e.accion == AccionAuditada.ResetAdminFirmado);
     }
 
     [Fact]
