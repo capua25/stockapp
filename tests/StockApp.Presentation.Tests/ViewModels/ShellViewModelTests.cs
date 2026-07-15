@@ -139,6 +139,27 @@ public class ShellViewModelTests
     }
 
     [Fact]
+    public async Task Inicializar_ApiCaidaAlConsultarLicencia_MuestraLogin()
+    {
+        // API inalcanzable al arrancar: no debe tumbar el arranque, cae a login
+        // (el login es quien muestra el error de conexión al usuario).
+        var licenciaMock = new Mock<ILicenciaService>();
+        licenciaMock.Setup(s => s.ObtenerEstadoAsync())
+                    .ThrowsAsync(new ServidorNoDisponibleException());
+        var navSvc = new NavigationService(_ => throw new InvalidOperationException());
+        var updateStub = new Mock<IUpdateService>();
+        updateStub.Setup(s => s.BuscarAsync(default)).ReturnsAsync(UpdateCheckResult.SinUpdate);
+        var coordinador = new CoordinadorActualizacion(updateStub.Object, new PoliticaUxActualizacion());
+        var shell = new ShellViewModel(
+            Mock.Of<IAuthService>(), licenciaMock.Object, Mock.Of<IResetAdminService>(),
+            navSvc, coordinador, new FakeUiDispatcher(), InfoAppStub);
+
+        await shell.InicializarAsync();
+
+        Assert.IsType<LoginViewModel>(shell.CurrentViewModel);
+    }
+
+    [Fact]
     public void MostrarReset_EstableceResetAdminViewModel()
     {
         var shell = Crear();
