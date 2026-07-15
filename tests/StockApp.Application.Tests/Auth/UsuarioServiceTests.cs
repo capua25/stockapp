@@ -136,6 +136,25 @@ public class UsuarioServiceTests
     }
 
     [Fact]
+    public async Task BajaLogica_Admin_RevocaLosTokensDelUsuarioDeshabilitado()
+    {
+        // Deuda M3 (hardening Fase B): un usuario deshabilitado no debe poder seguir
+        // usando su JWT viejo hasta que expire naturalmente.
+        var usuario = new Usuario
+        {
+            Id = 5, NombreUsuario = "operador1", HashContrasena = "h",
+            Rol = RolUsuario.Operador, Activo = true, FechaAlta = DateTime.UtcNow
+        };
+        var (svc, repo, _, _, _, _, revocador) = Crear(idSesion: 1);
+        repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(usuario);
+        repo.Setup(r => r.ContarAdminsActivosAsync()).ReturnsAsync(1);
+
+        await svc.BajaLogicaAsync(5);
+
+        revocador.Verify(r => r.Revocar(5, It.IsAny<DateTime>()), Times.Once);
+    }
+
+    [Fact]
     public async Task AltaUsuario_Operador_LanzaUnauthorized()
     {
         var (svc, _, _, _, _, _, _) = Crear(rolSesion: RolUsuario.Operador);
@@ -161,6 +180,25 @@ public class UsuarioServiceTests
         audit.Verify(a => a.RegistrarAsync(
             It.IsAny<int>(), AccionAuditada.CambioRol, "Usuario", 3, It.IsAny<string>()), Times.Once);
     }
+
+    [Fact]
+    public async Task CambioRol_Admin_RevocaLosTokensDelUsuarioAfectado()
+    {
+        // Deuda M3 (hardening Fase B): un cambio de rol (p.ej. degradar de Admin a
+        // Operador) no debe convivir con un JWT viejo que todavía lleve el rol anterior.
+        var usuario = new Usuario
+        {
+            Id = 3, NombreUsuario = "alguien", HashContrasena = "h",
+            Rol = RolUsuario.Operador, Activo = true, FechaAlta = DateTime.UtcNow
+        };
+        var (svc, repo, _, _, _, _, revocador) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(3)).ReturnsAsync(usuario);
+
+        await svc.CambiarRolAsync(3, RolUsuario.Admin);
+
+        revocador.Verify(r => r.Revocar(3, It.IsAny<DateTime>()), Times.Once);
+    }
+
 
     // ── CambiarContrasenaAsync (Fix 7) ──────────────────────────────────────
 

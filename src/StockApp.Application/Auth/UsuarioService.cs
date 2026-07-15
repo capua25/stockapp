@@ -94,6 +94,10 @@ public class UsuarioService : IUsuarioService
             AccionAuditada.BajaUsuario,
             "Usuario", usuarioId,
             $"Baja lógica de '{usuario.NombreUsuario}'");
+
+        // Fase B hardening (deuda M3): un usuario deshabilitado no debe poder seguir
+        // usando su JWT viejo hasta que expire naturalmente.
+        _revocador.Revocar(usuarioId, DateTime.UtcNow);
     }
 
     public async Task CambiarRolAsync(int usuarioId, RolUsuario nuevoRol)
@@ -112,6 +116,10 @@ public class UsuarioService : IUsuarioService
             AccionAuditada.CambioRol,
             "Usuario", usuarioId,
             $"Rol: {rolAnterior} → {nuevoRol}");
+
+        // Fase B hardening (deuda M3): un JWT viejo con el rol anterior no debe seguir
+        // siendo válido tras el cambio.
+        _revocador.Revocar(usuarioId, DateTime.UtcNow);
     }
 
     /// <summary>

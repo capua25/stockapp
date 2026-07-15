@@ -122,6 +122,31 @@ public class UsuariosEndpointTests : ApiTestBase
     }
 
     [Fact]
+    public async Task DeleteUsuario_ConTokenAdmin_RevocaElTokenViejoDelUsuarioDeshabilitado()
+    {
+        // Deuda M3 (hardening Fase B): el usuario deshabilitado no debe poder seguir
+        // usando su JWT viejo hasta que expire naturalmente.
+        var jwt = Factory.Services.GetRequiredService<IJwtTokenService>();
+
+        await using var ctx = Factory.CrearContexto();
+        await DatosDePrueba.SeedUsuarioAsync(ctx, "admin.test", "Secreta123!", RolUsuario.Admin);
+        var usuario = await DatosDePrueba.SeedUsuarioAsync(ctx, "usuario.baja.revoca", "Secreta123!", RolUsuario.Operador);
+
+        var tokenViejoDelUsuario = jwt.GenerarToken(usuario.Id, RolUsuario.Operador);
+
+        var clienteAdmin = Factory.CreateClient();
+        clienteAdmin.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+        var bajaResponse = await clienteAdmin.DeleteAsync($"/usuarios/{usuario.Id}");
+        Assert.Equal(HttpStatusCode.OK, bajaResponse.StatusCode);
+
+        var clienteUsuarioBaja = Factory.CreateClient();
+        clienteUsuarioBaja.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenViejoDelUsuario);
+        var response = await clienteUsuarioBaja.GetAsync("/usuarios");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
     public async Task DeleteUsuario_AutoBaja_Devuelve409()
     {
         var client = Factory.CreateClient();
