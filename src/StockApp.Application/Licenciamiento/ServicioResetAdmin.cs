@@ -101,9 +101,9 @@ public sealed class ServicioResetAdmin
             adminId, AccionAuditada.ResetAdminFirmado, "Usuario", adminId,
             $"Reset de contraseña de Admin vía token firmado. Usuario: {nombreUsuario}.");
 
-        // Fase B hardening: cualquier JWT del admin (viejo o recién recreado con el
-        // mismo id no puede pasar, siempre es un id nuevo) emitido antes de ahora queda
-        // inválido de inmediato.
+        // Fase B hardening: cualquier JWT del admin emitido antes de ahora queda inválido
+        // de inmediato (el admin recreado siempre tiene un id nuevo, así que esto no
+        // afecta a la sesión recién creada por el reset).
         _revocador.Revocar(adminId, DateTime.UtcNow);
 
         return ResultadoValidacionReset.Valido;
