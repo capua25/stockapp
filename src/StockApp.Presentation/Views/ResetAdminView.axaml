@@ -26,13 +26,41 @@
                 <!-- Código de máquina -->
                 <StackPanel Spacing="4">
                     <TextBlock Text="Código de máquina" />
-                    <SelectableTextBlock Text="{Binding CodigoMaquina}" FontFamily="Consolas,monospace" />
+                    <Grid ColumnDefinitions="*,Auto">
+                        <SelectableTextBlock Grid.Column="0"
+                                              Text="{Binding CodigoMaquina}"
+                                              FontFamily="Consolas,monospace"
+                                              VerticalAlignment="Center"
+                                              TextWrapping="Wrap" />
+                        <Button Grid.Column="1"
+                                Content="Copiar"
+                                Classes="secondary"
+                                Padding="10,4"
+                                FontSize="12"
+                                Margin="8,0,0,0"
+                                VerticalAlignment="Center"
+                                Click="CopiarCodigoMaquina_Click" />
+                    </Grid>
                 </StackPanel>
 
                 <!-- Desafío -->
                 <StackPanel Spacing="4">
                     <TextBlock Text="Desafío" />
-                    <SelectableTextBlock Text="{Binding Desafio}" FontFamily="Consolas,monospace" TextWrapping="Wrap" />
+                    <Grid ColumnDefinitions="*,Auto">
+                        <SelectableTextBlock Grid.Column="0"
+                                              Text="{Binding Desafio}"
+                                              FontFamily="Consolas,monospace"
+                                              VerticalAlignment="Center"
+                                              TextWrapping="Wrap" />
+                        <Button Grid.Column="1"
+                                Content="Copiar"
+                                Classes="secondary"
+                                Padding="10,4"
+                                FontSize="12"
+                                Margin="8,0,0,0"
+                                VerticalAlignment="Center"
+                                Click="CopiarDesafio_Click" />
+                    </Grid>
                 </StackPanel>
 
                 <!-- Token de reset -->
