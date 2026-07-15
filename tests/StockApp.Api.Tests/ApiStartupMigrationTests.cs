@@ -2,8 +2,13 @@ using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using StockApp.Api.Endpoints;
+using StockApp.Api.Tests.Fixtures;
+using StockApp.Application.Licenciamiento;
 using Testcontainers.PostgreSql;
 using Xunit;
 
@@ -46,7 +51,18 @@ public class ApiStartupMigrationTests : IAsyncLifetime
                     ["Jwt:Secret"] = "clave-de-prueba-de-al-menos-32-caracteres-arranque",
                     ["Bootstrap:AdminUser"] = "admin-arranque-migracion",
                     ["Bootstrap:Password"] = "arranque-secreta-123",
+                    ["Licencia:ClavePublicaBase64"] = ClavesDePrueba.ClavePublicaBase64,
                 });
+            });
+
+            // Sin este override, ServicioLicencia.CargarAlArranqueAsync usa el fingerprint
+            // real del OS y el almacén de archivo real (sin licencia.lic) — la API arranca
+            // bloqueada (423) y el login de este test nunca llega a evaluar credenciales.
+            builder.ConfigureTestServices(services =>
+            {
+                services.Replace(ServiceDescriptor.Singleton<IFingerprintMaquina, FingerprintMaquinaFake>());
+                services.Replace(ServiceDescriptor.Singleton<IAlmacenLicencia>(
+                    _ => new AlmacenLicenciaEnMemoria(ClavesDePrueba.EmitirLicencia())));
             });
         });
 

@@ -26,4 +26,8 @@ public enum AccionAuditada
     // ── Movimientos de Stock — Incremento 5 (append-only a partir de 17) ──────
     RegistroMovimiento     = 17,
     RecalculoStock         = 18,
+
+    // ── Licenciamiento / Reset — Incremento 7 Fase B (append-only a partir de 19) ──
+    ActivacionLicencia               = 19,
+    IntentoActivacionLicenciaFallido = 20,
 }

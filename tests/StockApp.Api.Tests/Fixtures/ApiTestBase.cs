@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using StockApp.Application.Licenciamiento;
 using Xunit;
 
 namespace StockApp.Api.Tests.Fixtures;
@@ -17,6 +19,11 @@ public abstract class ApiTestBase
     {
         Factory = factory;
         LimpiarTablas();
+
+        // Cada test arranca con la licencia ACTIVA (algunos la bloquean explícitamente).
+        // El EstadoLicencia es singleton y se comparte en la collection: restaurarlo evita
+        // que un test de modo-bloqueado filtre estado a los demás.
+        Factory.Services.GetRequiredService<EstadoLicencia>().Activada = true;
     }
 
     private void LimpiarTablas()

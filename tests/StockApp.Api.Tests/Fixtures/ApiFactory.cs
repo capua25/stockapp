@@ -1,7 +1,11 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using StockApp.Application.Licenciamiento;
 using StockApp.Infrastructure.Persistence;
 using Testcontainers.PostgreSql;
 using Xunit;
@@ -48,7 +52,15 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
                 ["Jwt:Secret"] = JwtSecretDePrueba,
                 ["Bootstrap:AdminUser"] = AdminUsuarioDePrueba,
                 ["Bootstrap:Password"] = AdminPasswordDePrueba,
+                ["Licencia:ClavePublicaBase64"] = ClavesDePrueba.ClavePublicaBase64,
             });
+        });
+
+        builder.ConfigureTestServices(services =>
+        {
+            services.Replace(ServiceDescriptor.Singleton<IFingerprintMaquina, FingerprintMaquinaFake>());
+            services.Replace(ServiceDescriptor.Singleton<IAlmacenLicencia>(
+                _ => new AlmacenLicenciaEnMemoria(ClavesDePrueba.EmitirLicencia())));
         });
     }
 

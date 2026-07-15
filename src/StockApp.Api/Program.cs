@@ -7,16 +7,20 @@ using Microsoft.IdentityModel.Tokens;
 using StockApp.Api.Auth;
 using StockApp.Api.Endpoints;
 using StockApp.Api.ErrorHandling;
+using StockApp.Api.Licenciamiento;
 using StockApp.Application.Auditoria;
 using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Interfaces;
+using StockApp.Application.Licenciamiento;
 using StockApp.Application.Movimientos;
 using StockApp.Application.Reportes;
 using StockApp.Domain.Enums;
 using StockApp.Infrastructure.Auth;
+using StockApp.Infrastructure.Licenciamiento;
 using StockApp.Infrastructure.Persistence;
+using StockApp.Infrastructure.Platform;
 using StockApp.Infrastructure.Repositories;
 using StockApp.Infrastructure.Reportes;
 using StockApp.Infrastructure.Services;
@@ -105,6 +109,22 @@ builder.Services.AddScoped<IUsuarioService, UsuarioService>();
 
 // Bootstrap de primer arranque (Fase 3a, D7) — reusa IUsuarioRepository/IPasswordHasher.
 builder.Services.AddScoped<IPrimerArranqueService, PrimerArranqueService>();
+
+// Licenciamiento (Inc 7 Fase B). La clave pública se lee de config (Licencia:ClavePublicaBase64)
+// con la constante embebida como fallback. EstadoLicencia/fingerprint/almacén/validador son
+// SINGLETON (estables por proceso); ServicioLicencia es SCOPED. IUserDataPathProvider lo usa
+// AlmacenLicenciaArchivo para persistir licencia.lic en el directorio de datos del server.
+builder.Services.AddSingleton<IUserDataPathProvider, UserDataPathProvider>();
+builder.Services.AddSingleton<IFingerprintMaquina>(_ => FingerprintMaquinaFactory.Crear());
+builder.Services.AddSingleton<IAlmacenLicencia, AlmacenLicenciaArchivo>();
+builder.Services.AddSingleton<EstadoLicencia>();
+builder.Services.AddSingleton(sp =>
+{
+    var clavePublica = sp.GetRequiredService<IConfiguration>()["Licencia:ClavePublicaBase64"]
+        ?? OpcionesLicencia.ClavePublicaBase64Default;
+    return new ValidadorFirma(clavePublica);
+});
+builder.Services.AddScoped<ServicioLicencia>();
 
 // JwtOptions: misma razón que AppDbContext arriba — el secreto (y ahora la expiración,
 // Fase 3a D10) se leen de forma diferida en el factory (resuelto post-Build), no en una
@@ -231,12 +251,21 @@ using (var scope = app.Services.CreateScope())
         app.Configuration["Bootstrap:AdminUser"],
         app.Configuration["Bootstrap:Password"]);
     await seeder.SembrarAsync();
+
+    // Cargar el estado de licencia al arranque (Inc 7 Fase B): resuelve el código de máquina
+    // y valida licencia.lic. Nunca lanza — si no hay licencia válida, la API arranca bloqueada.
+    var servicioLicencia = scope.ServiceProvider.GetRequiredService<ServicioLicencia>();
+    await servicioLicencia.CargarAlArranqueAsync();
 }
 
 // Andamiaje base para excepciones no manejadas: 500 -> ProblemDetails via
 // AddProblemDetails() de arriba (mismo servicio que los eventos de JwtBearer usan
 // para el shape de 401/403).
 app.UseExceptionHandler();
+
+// Bloqueo por licencia (Inc 7 Fase B): 423 Locked a todo salvo /licencia/* y /auth/reset-admin/*
+// cuando no hay licencia activa. Va antes de autenticación (bloquea incluso el login).
+app.UseMiddleware<BloqueoLicenciaMiddleware>();
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -252,6 +281,7 @@ app.MapUsuariosEndpoints();
 app.MapCategoriasEndpoints();
 app.MapProveedoresEndpoints();
 app.MapUnidadesMedidaEndpoints();
+app.MapLicenciaEndpoints();
 
 app.Run();
 
