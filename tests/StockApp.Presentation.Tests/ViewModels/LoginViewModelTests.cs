@@ -36,7 +36,9 @@ public class LoginViewModelTests
         var navSvc = new NavigationService(t =>
         {
             if (t == typeof(ShellMainViewModel))
-                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"));
+                return new ShellMainViewModel(
+                    sessionMock.Object, Mock.Of<INavigationService>(),
+                    Mock.Of<IInfoApp>(x => x.Version == "0.0.0"), Mock.Of<IConfirmacionService>());
             if (t == typeof(InicioViewModel))
                 return new InicioViewModel(sessionMock.Object, Mock.Of<INavigationService>());
             throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");

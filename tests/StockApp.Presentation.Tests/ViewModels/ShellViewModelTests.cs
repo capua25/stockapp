@@ -37,7 +37,8 @@ public class ShellViewModelTests
         var navSvc = new NavigationService(t =>
         {
             if (t == typeof(ShellMainViewModel))
-                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>(), InfoAppStub);
+                return new ShellMainViewModel(
+                    sessionMock.Object, Mock.Of<INavigationService>(), InfoAppStub, Mock.Of<IConfirmacionService>());
             if (t == typeof(InicioViewModel))
                 return new InicioViewModel(sessionMock.Object, Mock.Of<INavigationService>());
             throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");

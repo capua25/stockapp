@@ -61,7 +61,8 @@ public class ShellViewModelActualizacionTests
         var navSvc = new NavigationService(t =>
         {
             if (t == typeof(ShellMainViewModel))
-                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>(), InfoAppStub);
+                return new ShellMainViewModel(
+                    sessionMock.Object, Mock.Of<INavigationService>(), InfoAppStub, Mock.Of<IConfirmacionService>());
             throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
         });
 
@@ -102,7 +103,8 @@ public class ShellViewModelActualizacionTests
         var navSvc = new NavigationService(t =>
         {
             if (t == typeof(ShellMainViewModel))
-                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>(), InfoAppStub);
+                return new ShellMainViewModel(
+                    sessionMock.Object, Mock.Of<INavigationService>(), InfoAppStub, Mock.Of<IConfirmacionService>());
             throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
         });
 
@@ -142,7 +144,8 @@ public class ShellViewModelActualizacionTests
         var navSvc = new NavigationService(t =>
         {
             if (t == typeof(ShellMainViewModel))
-                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>(), InfoAppStub);
+                return new ShellMainViewModel(
+                    sessionMock.Object, Mock.Of<INavigationService>(), InfoAppStub, Mock.Of<IConfirmacionService>());
             throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
         });
 
@@ -183,7 +186,8 @@ public class ShellViewModelActualizacionTests
         var navSvc = new NavigationService(t =>
         {
             if (t == typeof(ShellMainViewModel))
-                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>(), InfoAppStub);
+                return new ShellMainViewModel(
+                    sessionMock.Object, Mock.Of<INavigationService>(), InfoAppStub, Mock.Of<IConfirmacionService>());
             throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
         });
 
@@ -226,7 +230,8 @@ public class ShellViewModelActualizacionTests
         var navSvc = new NavigationService(t =>
         {
             if (t == typeof(ShellMainViewModel))
-                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>(), InfoAppStub);
+                return new ShellMainViewModel(
+                    sessionMock.Object, Mock.Of<INavigationService>(), InfoAppStub, Mock.Of<IConfirmacionService>());
             throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
         });
 
@@ -278,7 +283,8 @@ public class ShellViewModelActualizacionTests
         var navSvc = new NavigationService(t =>
         {
             if (t == typeof(ShellMainViewModel))
-                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>(), InfoAppStub);
+                return new ShellMainViewModel(
+                    sessionMock.Object, Mock.Of<INavigationService>(), InfoAppStub, Mock.Of<IConfirmacionService>());
             throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
         });
 
@@ -328,7 +334,8 @@ public class ShellViewModelActualizacionTests
         var navSvc = new NavigationService(t =>
         {
             if (t == typeof(ShellMainViewModel))
-                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>(), InfoAppStub);
+                return new ShellMainViewModel(
+                    sessionMock.Object, Mock.Of<INavigationService>(), InfoAppStub, Mock.Of<IConfirmacionService>());
             throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
         });
 
@@ -377,7 +384,8 @@ public class ShellViewModelActualizacionTests
         var navSvc = new NavigationService(t =>
         {
             if (t == typeof(ShellMainViewModel))
-                return new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>(), InfoAppStub);
+                return new ShellMainViewModel(
+                    sessionMock.Object, Mock.Of<INavigationService>(), InfoAppStub, Mock.Of<IConfirmacionService>());
             throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
         });
 

@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using Moq;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Enums;
@@ -14,7 +15,7 @@ public class ShellMainViewModelTests
 {
     // ── helpers ──────────────────────────────────────────────────────────────
 
-    private static (ShellMainViewModel vm, Mock<ICurrentSession> sessionMock, Mock<INavigationService> navMock)
+    private static (ShellMainViewModel vm, Mock<ICurrentSession> sessionMock, Mock<INavigationService> navMock, Mock<IConfirmacionService> confirmMock)
         Crear(RolUsuario rol)
     {
         var sessionMock = new Mock<ICurrentSession>();
@@ -22,8 +23,12 @@ public class ShellMainViewModelTests
 
         var navMock = new Mock<INavigationService>();
 
-        var vm = new ShellMainViewModel(sessionMock.Object, navMock.Object, Mock.Of<IInfoApp>(x => x.Version == "0.0.0"));
-        return (vm, sessionMock, navMock);
+        var confirmMock = new Mock<IConfirmacionService>();
+        confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(true);
+
+        var vm = new ShellMainViewModel(
+            sessionMock.Object, navMock.Object, Mock.Of<IInfoApp>(x => x.Version == "0.0.0"), confirmMock.Object);
+        return (vm, sessionMock, navMock, confirmMock);
     }
 
     // ── Inicio ───────────────────────────────────────────────────────────────
@@ -31,7 +36,7 @@ public class ShellMainViewModelTests
     [Fact]
     public void NavInicio_LlamaNavegar_AInicioViewModel()
     {
-        var (vm, _, navMock) = Crear(RolUsuario.Operador);
+        var (vm, _, navMock, _) = Crear(RolUsuario.Operador);
 
         vm.NavInicioCommand.Execute(null);
 
@@ -41,7 +46,7 @@ public class ShellMainViewModelTests
     [Fact]
     public void NavInicio_EstableceSeccionActiva_Inicio()
     {
-        var (vm, _, _) = Crear(RolUsuario.Operador);
+        var (vm, _, _, _) = Crear(RolUsuario.Operador);
 
         vm.NavInicioCommand.Execute(null);
 
@@ -53,7 +58,7 @@ public class ShellMainViewModelTests
     [Fact]
     public void Admin_EsAdmin_True()
     {
-        var (vm, _, _) = Crear(RolUsuario.Admin);
+        var (vm, _, _, _) = Crear(RolUsuario.Admin);
 
         Assert.True(vm.EsAdmin);
     }
@@ -61,7 +66,7 @@ public class ShellMainViewModelTests
     [Fact]
     public void Operador_EsAdmin_False()
     {
-        var (vm, _, _) = Crear(RolUsuario.Operador);
+        var (vm, _, _, _) = Crear(RolUsuario.Operador);
 
         Assert.False(vm.EsAdmin);
     }
@@ -75,7 +80,8 @@ public class ShellMainViewModelTests
         sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
         var infoApp = Mock.Of<IInfoApp>(x => x.Version == "9.9.9");
 
-        var vm = new ShellMainViewModel(sessionMock.Object, Mock.Of<INavigationService>(), infoApp);
+        var vm = new ShellMainViewModel(
+            sessionMock.Object, Mock.Of<INavigationService>(), infoApp, Mock.Of<IConfirmacionService>());
 
         Assert.Equal("v9.9.9", vm.VersionTexto);
     }
@@ -83,7 +89,7 @@ public class ShellMainViewModelTests
     [Fact]
     public void NavProductos_LlamaNavegar_AProductoListViewModel()
     {
-        var (vm, _, navMock) = Crear(RolUsuario.Operador);
+        var (vm, _, navMock, _) = Crear(RolUsuario.Operador);
 
         vm.NavProductosCommand.Execute(null);
 
@@ -93,7 +99,7 @@ public class ShellMainViewModelTests
     [Fact]
     public void NavCategoria_Admin_LlamaNavegar_ACategoriaListViewModel()
     {
-        var (vm, _, navMock) = Crear(RolUsuario.Admin);
+        var (vm, _, navMock, _) = Crear(RolUsuario.Admin);
 
         vm.NavCategoriasCommand.Execute(null);
 
@@ -103,7 +109,7 @@ public class ShellMainViewModelTests
     [Fact]
     public void NavProveedores_Admin_LlamaNavegar_AProveedorListViewModel()
     {
-        var (vm, _, navMock) = Crear(RolUsuario.Admin);
+        var (vm, _, navMock, _) = Crear(RolUsuario.Admin);
 
         vm.NavProveedoresCommand.Execute(null);
 
@@ -113,7 +119,7 @@ public class ShellMainViewModelTests
     [Fact]
     public void NavUnidadesMedida_Admin_LlamaNavegar_AUnidadMedidaListViewModel()
     {
-        var (vm, _, navMock) = Crear(RolUsuario.Admin);
+        var (vm, _, navMock, _) = Crear(RolUsuario.Admin);
 
         vm.NavUnidadesMedidaCommand.Execute(null);
 
@@ -125,7 +131,7 @@ public class ShellMainViewModelTests
     [Fact]
     public void NavRegistrarEntrada_LlamaNavegar_AEntradaRegistroViewModel()
     {
-        var (vm, _, navMock) = Crear(RolUsuario.Operador);
+        var (vm, _, navMock, _) = Crear(RolUsuario.Operador);
 
         vm.NavRegistrarEntradaCommand.Execute(null);
 
@@ -135,7 +141,7 @@ public class ShellMainViewModelTests
     [Fact]
     public void NavRegistrarSalida_LlamaNavegar_ASalidaRegistroViewModel()
     {
-        var (vm, _, navMock) = Crear(RolUsuario.Operador);
+        var (vm, _, navMock, _) = Crear(RolUsuario.Operador);
 
         vm.NavRegistrarSalidaCommand.Execute(null);
 
@@ -145,7 +151,7 @@ public class ShellMainViewModelTests
     [Fact]
     public void NavHistorialMovimientos_LlamaNavegar_AMovimientoHistorialViewModel()
     {
-        var (vm, _, navMock) = Crear(RolUsuario.Operador);
+        var (vm, _, navMock, _) = Crear(RolUsuario.Operador);
 
         vm.NavHistorialMovimientosCommand.Execute(null);
 
@@ -155,7 +161,7 @@ public class ShellMainViewModelTests
     [Fact]
     public void NavRegistrarEntrada_Admin_LlamaNavegar_AEntradaRegistroViewModel()
     {
-        var (vm, _, navMock) = Crear(RolUsuario.Admin);
+        var (vm, _, navMock, _) = Crear(RolUsuario.Admin);
 
         vm.NavRegistrarEntradaCommand.Execute(null);
 
@@ -165,7 +171,7 @@ public class ShellMainViewModelTests
     [Fact]
     public void NavRegistrarSalida_Admin_LlamaNavegar_ASalidaRegistroViewModel()
     {
-        var (vm, _, navMock) = Crear(RolUsuario.Admin);
+        var (vm, _, navMock, _) = Crear(RolUsuario.Admin);
 
         vm.NavRegistrarSalidaCommand.Execute(null);
 
@@ -177,7 +183,7 @@ public class ShellMainViewModelTests
     [Fact]
     public void NavProductos_EstableceSeccionActiva_Productos()
     {
-        var (vm, _, _) = Crear(RolUsuario.Operador);
+        var (vm, _, _, _) = Crear(RolUsuario.Operador);
 
         vm.NavProductosCommand.Execute(null);
 
@@ -187,7 +193,7 @@ public class ShellMainViewModelTests
     [Fact]
     public void NavCategorias_EstableceSeccionActiva_Categorias()
     {
-        var (vm, _, _) = Crear(RolUsuario.Admin);
+        var (vm, _, _, _) = Crear(RolUsuario.Admin);
 
         vm.NavCategoriasCommand.Execute(null);
 
@@ -197,7 +203,7 @@ public class ShellMainViewModelTests
     [Fact]
     public void NavProveedores_EstableceSeccionActiva_Proveedores()
     {
-        var (vm, _, _) = Crear(RolUsuario.Admin);
+        var (vm, _, _, _) = Crear(RolUsuario.Admin);
 
         vm.NavProveedoresCommand.Execute(null);
 
@@ -207,7 +213,7 @@ public class ShellMainViewModelTests
     [Fact]
     public void NavUnidadesMedida_EstableceSeccionActiva_UnidadesMedida()
     {
-        var (vm, _, _) = Crear(RolUsuario.Admin);
+        var (vm, _, _, _) = Crear(RolUsuario.Admin);
 
         vm.NavUnidadesMedidaCommand.Execute(null);
 
@@ -217,7 +223,7 @@ public class ShellMainViewModelTests
     [Fact]
     public void NavRegistrarEntrada_EstableceSeccionActiva_RegistrarEntrada()
     {
-        var (vm, _, _) = Crear(RolUsuario.Operador);
+        var (vm, _, _, _) = Crear(RolUsuario.Operador);
 
         vm.NavRegistrarEntradaCommand.Execute(null);
 
@@ -227,7 +233,7 @@ public class ShellMainViewModelTests
     [Fact]
     public void NavRegistrarSalida_EstableceSeccionActiva_RegistrarSalida()
     {
-        var (vm, _, _) = Crear(RolUsuario.Operador);
+        var (vm, _, _, _) = Crear(RolUsuario.Operador);
 
         vm.NavRegistrarSalidaCommand.Execute(null);
 
@@ -237,7 +243,7 @@ public class ShellMainViewModelTests
     [Fact]
     public void NavHistorialMovimientos_EstableceSeccionActiva_HistorialMovimientos()
     {
-        var (vm, _, _) = Crear(RolUsuario.Operador);
+        var (vm, _, _, _) = Crear(RolUsuario.Operador);
 
         vm.NavHistorialMovimientosCommand.Execute(null);
 
@@ -247,7 +253,7 @@ public class ShellMainViewModelTests
     [Fact]
     public void NavValorizacion_EstableceSeccionActiva_Valorizacion()
     {
-        var (vm, _, _) = Crear(RolUsuario.Admin);
+        var (vm, _, _, _) = Crear(RolUsuario.Admin);
 
         vm.NavValorizacionCommand.Execute(null);
 
@@ -257,7 +263,7 @@ public class ShellMainViewModelTests
     [Fact]
     public void NavStockCategoria_EstableceSeccionActiva_StockCategoria()
     {
-        var (vm, _, _) = Crear(RolUsuario.Admin);
+        var (vm, _, _, _) = Crear(RolUsuario.Admin);
 
         vm.NavStockCategoriaCommand.Execute(null);
 
@@ -267,7 +273,7 @@ public class ShellMainViewModelTests
     [Fact]
     public void NavHistorialPorProducto_EstableceSeccionActiva_HistorialPorProducto()
     {
-        var (vm, _, _) = Crear(RolUsuario.Admin);
+        var (vm, _, _, _) = Crear(RolUsuario.Admin);
 
         vm.NavHistorialPorProductoCommand.Execute(null);
 
@@ -277,7 +283,7 @@ public class ShellMainViewModelTests
     [Fact]
     public void NavMasMovidos_EstableceSeccionActiva_MasMovidos()
     {
-        var (vm, _, _) = Crear(RolUsuario.Admin);
+        var (vm, _, _, _) = Crear(RolUsuario.Admin);
 
         vm.NavMasMovidosCommand.Execute(null);
 
@@ -287,10 +293,43 @@ public class ShellMainViewModelTests
     [Fact]
     public void NavAuditoriaLog_EstableceSeccionActiva_AuditoriaLog()
     {
-        var (vm, _, _) = Crear(RolUsuario.Admin);
+        var (vm, _, _, _) = Crear(RolUsuario.Admin);
 
         vm.NavAuditoriaLogCommand.Execute(null);
 
         Assert.Equal("AuditoriaLog", vm.SeccionActiva);
+    }
+
+    // ── Cerrar sesión ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task CerrarSesionCommand_Confirmado_LimpiaLaSesionYDisparaElEvento()
+    {
+        var (vm, sessionMock, _, confirmMock) = Crear(RolUsuario.Admin);
+        confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(true);
+
+        var disparado = false;
+        vm.CerrarSesionSolicitado += () => disparado = true;
+
+        await vm.CerrarSesionCommand.ExecuteAsync(null);
+
+        confirmMock.Verify(c => c.PreguntarAsync("¿Cerrar la sesión?"), Times.Once);
+        sessionMock.Verify(s => s.CerrarSesion(), Times.Once);
+        Assert.True(disparado);
+    }
+
+    [Fact]
+    public async Task CerrarSesionCommand_Cancelado_NoLimpiaNiDisparaElEvento()
+    {
+        var (vm, sessionMock, _, confirmMock) = Crear(RolUsuario.Admin);
+        confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(false);
+
+        var disparado = false;
+        vm.CerrarSesionSolicitado += () => disparado = true;
+
+        await vm.CerrarSesionCommand.ExecuteAsync(null);
+
+        sessionMock.Verify(s => s.CerrarSesion(), Times.Never);
+        Assert.False(disparado);
     }
 }

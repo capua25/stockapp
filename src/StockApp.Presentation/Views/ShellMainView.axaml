@@ -25,6 +25,19 @@
                            HorizontalAlignment="Center"
                            Margin="0,8,0,4" />
 
+                <!-- Cerrar sesión: al pie del menú lateral, arriba de la versión -->
+                <Button Command="{Binding CerrarSesionCommand}"
+                        Classes="ghost"
+                        DockPanel.Dock="Bottom"
+                        HorizontalAlignment="Stretch"
+                        Margin="0,0,0,4">
+                    <Grid ColumnDefinitions="Auto,*">
+                        <i:Icon Grid.Column="0" Value="mdi-logout" Foreground="{DynamicResource SidebarTextoBrush}" />
+                        <TextBlock Grid.Column="1" Text="Cerrar sesión" VerticalAlignment="Center"
+                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                </Button>
+
                 <StackPanel Spacing="4">
 
                 <TextBlock Text="StockApp"

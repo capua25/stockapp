@@ -238,6 +238,14 @@ public partial class ShellViewModel : ViewModelBase
         _navigation.Navegar<ShellMainViewModel>();
         CurrentViewModel = _navigation.Actual;
 
+        // Cerrar sesión (botón del sidebar): ShellMainViewModel ya limpió la sesión
+        // (ICurrentSession.CerrarSesion()) antes de disparar el evento; acá solo navegamos
+        // de vuelta al login, mismo patrón que BloqueoLicenciaViewModel.LicenciaActivada y
+        // ResetAdminViewModel.Volver. Se suscribe una sola vez por instancia de
+        // ShellMainViewModel (una por login, ya que el VM es transient).
+        if (_navigation.Actual is ShellMainViewModel shellMain)
+            shellMain.CerrarSesionSolicitado += () => _uiDispatcher.Post(MostrarLogin);
+
         // Navega a la pantalla de bienvenida como contenido inicial de la región central.
         // Orden crítico: Navegar<ShellMainViewModel>() dispara el evento Cambiado del
         // INavigationService, pero el handler en ShellMainViewModel descarta la asignación

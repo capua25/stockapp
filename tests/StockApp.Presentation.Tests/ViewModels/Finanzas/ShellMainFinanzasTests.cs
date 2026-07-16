@@ -17,7 +17,8 @@ public class ShellMainFinanzasTests
         var vm = new ShellMainViewModel(
             new Mock<ICurrentSession>().Object,
             navMock.Object,
-            Mock.Of<IInfoApp>(i => i.Version == "0.0.0"));
+            Mock.Of<IInfoApp>(i => i.Version == "0.0.0"),
+            Mock.Of<IConfirmacionService>());
 
         vm.NavMaestrosFinanzasCommand.Execute(null);
 

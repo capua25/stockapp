@@ -1,3 +1,5 @@
+using System;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Interfaces;
@@ -21,6 +23,15 @@ public partial class ShellMainViewModel : ViewModelBase
     private readonly ICurrentSession    _session;
     private readonly INavigationService _navigation;
     private readonly IInfoApp           _infoApp;
+    private readonly IConfirmacionService _confirmacion;
+
+    /// <summary>
+    /// Se dispara cuando el usuario confirma "Cerrar sesión" y la sesión ya fue limpiada
+    /// (ICurrentSession.CerrarSesion()). La composition root (ShellViewModel) lo cablea a
+    /// la navegación de vuelta al login, igual que BloqueoLicenciaViewModel.LicenciaActivada
+    /// o ResetAdminViewModel.Volver.
+    /// </summary>
+    public event Action? CerrarSesionSolicitado;
 
     public bool EsAdmin => _session.RolActual == RolUsuario.Admin;
 
@@ -36,11 +47,16 @@ public partial class ShellMainViewModel : ViewModelBase
     [ObservableProperty]
     private ViewModelBase? _currentContent;
 
-    public ShellMainViewModel(ICurrentSession session, INavigationService navigation, IInfoApp infoApp)
+    public ShellMainViewModel(
+        ICurrentSession session,
+        INavigationService navigation,
+        IInfoApp infoApp,
+        IConfirmacionService confirmacion)
     {
-        _session    = session;
-        _navigation = navigation;
-        _infoApp    = infoApp;
+        _session      = session;
+        _navigation   = navigation;
+        _infoApp      = infoApp;
+        _confirmacion = confirmacion;
 
         // Suscribirse al evento del servicio para actualizar la región de contenido
         _navigation.Cambiado += () =>
@@ -168,5 +184,22 @@ public partial class ShellMainViewModel : ViewModelBase
     {
         SeccionActiva = "MaestrosFinanzas";
         _navigation.Navegar<MaestrosFinanzasViewModel>();
+    }
+
+    // ── Cerrar sesión ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Pide confirmación y, si el usuario acepta, limpia la sesión actual (token JWT +
+    /// snapshot de identidad, vía ICurrentSession.CerrarSesion()) y dispara
+    /// <see cref="CerrarSesionSolicitado"/> para que la composition root navegue al login.
+    /// </summary>
+    [RelayCommand]
+    private async Task CerrarSesionAsync()
+    {
+        var confirmar = await _confirmacion.PreguntarAsync("¿Cerrar la sesión?");
+        if (!confirmar) return;
+
+        _session.CerrarSesion();
+        CerrarSesionSolicitado?.Invoke();
     }
 }

@@ -24,7 +24,8 @@ public class ShellMainViewModelReportesTests
 
         var navMock = new Mock<INavigationService>();
 
-        var vm = new ShellMainViewModel(sessionMock.Object, navMock.Object, Mock.Of<IInfoApp>(x => x.Version == "0.0.0"));
+        var vm = new ShellMainViewModel(
+            sessionMock.Object, navMock.Object, Mock.Of<IInfoApp>(x => x.Version == "0.0.0"), Mock.Of<IConfirmacionService>());
         return (vm, sessionMock, navMock);
     }
 
