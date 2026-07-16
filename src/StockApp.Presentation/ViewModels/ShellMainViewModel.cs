@@ -5,6 +5,7 @@ using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Catalogo;
+using StockApp.Presentation.ViewModels.Finanzas;
 using StockApp.Presentation.ViewModels.Movimientos;
 using StockApp.Presentation.ViewModels.Reportes;
 
@@ -158,5 +159,14 @@ public partial class ShellMainViewModel : ViewModelBase
     {
         SeccionActiva = "AuditoriaLog";
         _navigation.Navegar<AuditoriaLogViewModel>();
+    }
+
+    // ── Finanzas — Fase 1: Admin y Operador ───────────────────────────────────
+
+    [RelayCommand]
+    private void NavMaestrosFinanzas()
+    {
+        SeccionActiva = "MaestrosFinanzas";
+        _navigation.Navegar<MaestrosFinanzasViewModel>();
     }
 }

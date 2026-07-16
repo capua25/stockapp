@@ -91,6 +91,25 @@
                     </Grid>
                 </Button>
 
+                <!-- Finanzas: visible para Admin y Operador (spec Finanzas §9) -->
+                <TextBlock Text="Finanzas"
+                           Classes="caption"
+                           Foreground="{DynamicResource SidebarTextoBrush}"
+                           FontWeight="SemiBold"
+                           Margin="8,8,0,4"
+                           Opacity="0.6" />
+
+                <Button Command="{Binding NavMaestrosFinanzasCommand}"
+                        Classes="ghost"
+                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=MaestrosFinanzas}"
+                        HorizontalAlignment="Stretch">
+                    <Grid ColumnDefinitions="Auto,*">
+                        <i:Icon Grid.Column="0" Value="mdi-cash-multiple" Foreground="{DynamicResource SidebarTextoBrush}" />
+                        <TextBlock Grid.Column="1" Text="Maestros de finanzas" VerticalAlignment="Center"
+                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                </Button>
+
                 <!-- Tablas maestras: solo Admin -->
                 <TextBlock Text="Tablas maestras"
                            Classes="caption"

@@ -1,0 +1,44 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
+             xmlns:conv="using:StockApp.Presentation.Converters"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="600" d:DesignHeight="400"
+             x:Class="StockApp.Presentation.Views.Finanzas.FuenteFinanciamientoListView"
+             x:DataType="vm:FuenteFinanciamientoListViewModel">
+
+    <Border Classes="card" Margin="0,12,0,0">
+        <DockPanel>
+
+            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,12">
+                <Button Classes="primary"
+                        Content="Nueva fuente"
+                        Command="{Binding NuevoCommand}" />
+                <Button Classes="secondary"
+                        Content="Editar"
+                        Command="{Binding EditarCommand}" />
+                <Button Classes="secondary"
+                        Content="Dar de baja"
+                        Command="{Binding BajaCommand}" />
+            </StackPanel>
+
+            <ListBox ItemsSource="{Binding Items}"
+                     SelectedItem="{Binding ItemSeleccionado}">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="16" Margin="4">
+                            <TextBlock Text="{Binding Nombre}"
+                                       Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}" />
+                            <Border Classes="badge-inactiva" IsVisible="{Binding !Activo}">
+                                <TextBlock Text="Inactiva" Classes="badge-inactiva-texto" />
+                            </Border>
+                        </StackPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+
+        </DockPanel>
+    </Border>
+
+</UserControl>

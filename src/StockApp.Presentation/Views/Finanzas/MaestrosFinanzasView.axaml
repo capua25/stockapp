@@ -1,0 +1,32 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
+             xmlns:views="using:StockApp.Presentation.Views.Finanzas"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+             x:Class="StockApp.Presentation.Views.Finanzas.MaestrosFinanzasView"
+             x:DataType="vm:MaestrosFinanzasViewModel">
+
+    <DockPanel Margin="24">
+
+        <TextBlock DockPanel.Dock="Top"
+                   Text="Maestros de finanzas"
+                   Classes="titulo-vista"
+                   Margin="0,0,0,16" />
+
+        <TabControl>
+            <TabItem Header="Fuentes de financiamiento">
+                <views:FuenteFinanciamientoListView DataContext="{Binding FuentesVm}" />
+            </TabItem>
+            <TabItem Header="Rubros de gasto">
+                <views:RubroGastoListView DataContext="{Binding RubrosVm}" />
+            </TabItem>
+            <TabItem Header="Líneas POA">
+                <views:LineaPoaListView DataContext="{Binding LineasPoaVm}" />
+            </TabItem>
+        </TabControl>
+
+    </DockPanel>
+
+</UserControl>

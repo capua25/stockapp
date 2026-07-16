@@ -1,0 +1,84 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
+             xmlns:i="https://github.com/projektanker/icons.avalonia"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="700" d:DesignHeight="600"
+             x:Class="StockApp.Presentation.Views.Finanzas.LineaPoaFormView"
+             x:DataType="vm:LineaPoaFormViewModel">
+
+    <DockPanel Margin="24">
+
+        <TextBlock DockPanel.Dock="Top"
+                   Text="{Binding Titulo}"
+                   Classes="titulo-vista"
+                   Margin="0,0,0,16" />
+
+        <Border Classes="card" VerticalAlignment="Top">
+            <StackPanel Spacing="12" MaxWidth="560" HorizontalAlignment="Left">
+
+                <TextBlock Text="Nombre" />
+                <TextBox Text="{Binding Nombre}" Watermark="Ej.: COMPOSTERAS" />
+
+                <TextBlock Text="Programa" />
+                <TextBox Text="{Binding Programa}" Watermark="Ej.: Ambiente" />
+
+                <TextBlock Text="Ejercicio" />
+                <TextBox Text="{Binding EjercicioTexto}" Watermark="Ej.: 2026" MaxWidth="120" HorizontalAlignment="Left" />
+
+                <!-- Grilla de asignaciones presupuestales por fuente (mixto B+C) -->
+                <TextBlock Text="Asignaciones presupuestales" FontWeight="SemiBold" Margin="0,8,0,0" />
+
+                <ItemsControl ItemsSource="{Binding Asignaciones}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:AsignacionItemViewModel">
+                            <Grid ColumnDefinitions="*,140,Auto" Margin="0,0,0,8">
+                                <ComboBox Grid.Column="0"
+                                          ItemsSource="{Binding $parent[UserControl].((vm:LineaPoaFormViewModel)DataContext).FuentesDisponibles}"
+                                          SelectedItem="{Binding FuenteSeleccionada}"
+                                          PlaceholderText="Fuente de financiamiento"
+                                          HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Nombre}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                                <TextBox Grid.Column="1"
+                                         Text="{Binding MontoTexto}"
+                                         Watermark="Monto"
+                                         Margin="8,0,0,0" />
+                                <Button Grid.Column="2"
+                                        Classes="secondary"
+                                        Margin="8,0,0,0"
+                                        Command="{Binding $parent[UserControl].((vm:LineaPoaFormViewModel)DataContext).QuitarAsignacionCommand}"
+                                        CommandParameter="{Binding}">
+                                    <i:Icon Value="mdi-delete" />
+                                </Button>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <Button Classes="secondary"
+                        Content="Agregar asignación"
+                        Command="{Binding AgregarAsignacionCommand}"
+                        HorizontalAlignment="Left" />
+
+                <TextBlock Text="{Binding MensajeError}"
+                           Foreground="Red"
+                           TextWrapping="Wrap"
+                           IsVisible="{Binding MensajeError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Classes="primary" Content="Guardar" Command="{Binding GuardarCommand}" />
+                    <Button Classes="secondary" Content="Cancelar" Command="{Binding CancelarCommand}" />
+                </StackPanel>
+
+            </StackPanel>
+        </Border>
+
+    </DockPanel>
+
+</UserControl>

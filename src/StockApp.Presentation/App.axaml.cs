@@ -15,6 +15,7 @@ using StockApp.Application.Auditoria;
 using StockApp.Application.Auth;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Exportacion;
+using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
 using StockApp.Application.Licenciamiento;
 using StockApp.Application.Movimientos;
@@ -24,6 +25,7 @@ using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels;
 using StockApp.Presentation.ViewModels.Catalogo;
+using StockApp.Presentation.ViewModels.Finanzas;
 using StockApp.Presentation.ViewModels.Movimientos;
 using StockApp.Presentation.ViewModels.Reportes;
 using StockApp.Presentation.Views;
@@ -171,6 +173,11 @@ public partial class App : AvaloniaApp
         services.AddTransient<IReporteStockService, ReporteStockApiClient>();
         services.AddTransient<IAuditoriaQueryService, AuditoriaQueryApiClient>();
 
+        // ── Módulo Finanzas — Fase 1: maestros ────────────────────────────────
+        services.AddTransient<IFuenteFinanciamientoService, FuenteFinanciamientoApiClient>();
+        services.AddTransient<IRubroGastoService, RubroGastoApiClient>();
+        services.AddTransient<ILineaPoaService, LineaPoaApiClient>();
+
         // ── Inc 7 Fase B: licenciamiento (pantalla de bloqueo + reset de Admin) ──
         services.AddTransient<ILicenciaService>(sp => new LicenciaApiClient(sp.GetRequiredService<HttpClient>()));
         services.AddTransient<IResetAdminService>(sp => new ResetAdminApiClient(sp.GetRequiredService<HttpClient>()));
@@ -225,6 +232,15 @@ public partial class App : AvaloniaApp
         services.AddTransient<ProveedorFormViewModel>();
         services.AddTransient<UnidadMedidaListViewModel>();
         services.AddTransient<UnidadMedidaFormViewModel>();
+
+        // ── Módulo Finanzas — Fase 1: VMs de maestros ─────────────────────────
+        services.AddTransient<MaestrosFinanzasViewModel>();
+        services.AddTransient<FuenteFinanciamientoListViewModel>();
+        services.AddTransient<FuenteFinanciamientoFormViewModel>();
+        services.AddTransient<RubroGastoListViewModel>();
+        services.AddTransient<RubroGastoFormViewModel>();
+        services.AddTransient<LineaPoaListViewModel>();
+        services.AddTransient<LineaPoaFormViewModel>();
 
         // ── Presentation: ViewModels del shell ───────────────────────────────
 
