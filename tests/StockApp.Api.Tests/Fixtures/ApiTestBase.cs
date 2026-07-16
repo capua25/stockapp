@@ -43,6 +43,8 @@ public abstract class ApiTestBase
         using var ctx = Factory.CrearContexto();
         ctx.Database.ExecuteSqlRaw(
             "TRUNCATE TABLE \"LogsAuditoria\", \"MovimientosStock\", \"Productos\", " +
-            "\"Categorias\", \"Proveedores\", \"UnidadesMedida\", \"Usuarios\" RESTART IDENTITY CASCADE;");
+            "\"Categorias\", \"Proveedores\", \"UnidadesMedida\", " +
+            "\"AsignacionesPresupuestales\", \"LineasPoa\", \"RubrosGasto\", \"FuentesFinanciamiento\", " +
+            "\"Usuarios\" RESTART IDENTITY CASCADE;");
     }
 }

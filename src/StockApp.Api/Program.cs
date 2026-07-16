@@ -15,6 +15,7 @@ using StockApp.Application.Auditoria;
 using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
+using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
 using StockApp.Application.Licenciamiento;
 using StockApp.Application.Movimientos;
@@ -101,6 +102,14 @@ builder.Services.AddScoped<IProveedorRepository, ProveedorRepository>();
 builder.Services.AddScoped<IProveedorService, ProveedorService>();
 builder.Services.AddScoped<IUnidadMedidaService, UnidadMedidaService>();
 // IUnidadMedidaRepository ya está registrado desde Fase 2a (usado por ProductosEndpoints).
+
+// Finanzas — Fase 1: maestros (fuentes, rubros, líneas POA + asignaciones)
+builder.Services.AddScoped<IFuenteFinanciamientoRepository, FuenteFinanciamientoRepository>();
+builder.Services.AddScoped<IFuenteFinanciamientoService, FuenteFinanciamientoService>();
+builder.Services.AddScoped<IRubroGastoRepository, RubroGastoRepository>();
+builder.Services.AddScoped<IRubroGastoService, RubroGastoService>();
+builder.Services.AddScoped<ILineaPoaRepository, LineaPoaRepository>();
+builder.Services.AddScoped<ILineaPoaService, LineaPoaService>();
 
 // Auditoría (Fase 2b)
 builder.Services.AddScoped<IAuditoriaQueryRepository, AuditoriaQueryRepository>();
@@ -372,6 +381,9 @@ app.MapUsuariosEndpoints();
 app.MapCategoriasEndpoints();
 app.MapProveedoresEndpoints();
 app.MapUnidadesMedidaEndpoints();
+app.MapFuentesFinanciamientoEndpoints();
+app.MapRubrosGastoEndpoints();
+app.MapLineasPoaEndpoints();
 app.MapLicenciaEndpoints();
 app.MapResetAdminEndpoints();
 
