@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Catalogo;
@@ -79,6 +80,16 @@ public partial class GastosViewModel : ViewModelBase
     private GastoFila? _filaSeleccionada;
 
     public ObservableCollection<GastoFila> Filas { get; } = new();
+
+    /// <summary>
+    /// Vista sobre <see cref="Filas"/> que habilita el ordenamiento por click en encabezados
+    /// del DataGrid. Necesaria por una regresión de Avalonia 12 (AvaloniaUI/Avalonia#21129):
+    /// bindear el DataGrid directo a una ObservableCollection con CanUserSortColumns="True"
+    /// ya no ordena. Se crea una única vez envolviendo Filas, así los Clear/Add de
+    /// CargarAsync/FiltrarAsync se reflejan automáticamente vía INotifyCollectionChanged.
+    /// </summary>
+    public DataGridCollectionView FilasView { get; }
+
     public ObservableCollection<Proveedor> ProveedoresDisponibles { get; } = new();
     public ObservableCollection<FuenteFinanciamiento> FuentesDisponibles { get; } = new();
     public ObservableCollection<RubroGasto> RubrosDisponibles { get; } = new();
@@ -107,6 +118,8 @@ public partial class GastosViewModel : ViewModelBase
         _confirmacion       = confirmacion;
         _csvExporter        = csvExporter;
         _guardado           = guardado;
+
+        FilasView = new DataGridCollectionView(Filas);
     }
 
     /// <summary>Carga combos de filtros + primer listado. La dispara la View (DataContextChanged).</summary>

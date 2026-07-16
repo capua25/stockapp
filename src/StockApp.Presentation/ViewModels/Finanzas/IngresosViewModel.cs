@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
+using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Finanzas;
@@ -28,6 +29,15 @@ public partial class IngresosViewModel : ViewModelBase
 
     public ObservableCollection<IngresoCaja> Items { get; } = new();
 
+    /// <summary>
+    /// Vista sobre <see cref="Items"/> que habilita el ordenamiento por click en encabezados
+    /// del DataGrid. Necesaria por una regresión de Avalonia 12 (AvaloniaUI/Avalonia#21129):
+    /// bindear el DataGrid directo a una ObservableCollection con CanUserSortColumns="True"
+    /// ya no ordena. Se crea una única vez envolviendo Items, así los Clear/Add de
+    /// CargarAsync se reflejan automáticamente vía INotifyCollectionChanged.
+    /// </summary>
+    public DataGridCollectionView ItemsView { get; }
+
     public IngresosViewModel(
         IIngresoCajaService service,
         INavigationService navigation,
@@ -36,6 +46,8 @@ public partial class IngresosViewModel : ViewModelBase
         _service      = service;
         _navigation   = navigation;
         _confirmacion = confirmacion;
+
+        ItemsView = new DataGridCollectionView(Items);
     }
 
     public async Task CargarAsync()

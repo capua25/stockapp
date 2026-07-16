@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Collections;
 using Moq;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Finanzas;
@@ -92,6 +94,38 @@ public class GastosViewModelTests
         Assert.Equal("Pendiente", vm.Filas[0].Estado);
         Assert.Equal("Pagada", vm.Filas[1].Estado);
         Assert.Equal("Barraca X", vm.Filas[0].ProveedorNombre);
+    }
+
+    // ── FilasView: fix de ordenamiento por click en encabezados (Avalonia 12, regresión #21129) ──
+
+    [Fact]
+    public async Task FilasView_EsOrdenable()
+    {
+        var (vm, _, _, _) = Crear(new List<Gasto>
+        {
+            GastoDe(1, "Pendiente de pago"),
+            GastoDe(2, "Ya pagado", pagado: true),
+        });
+
+        await vm.CargarAsync();
+
+        Assert.NotNull(vm.FilasView);
+        Assert.IsType<DataGridCollectionView>(vm.FilasView);
+        Assert.True(vm.FilasView.CanSort);
+    }
+
+    [Fact]
+    public async Task FilasView_TrasCargarAsync_ReflejaLosItemsDeFilas()
+    {
+        var (vm, _, _, _) = Crear(new List<Gasto>
+        {
+            GastoDe(1, "Pendiente de pago"),
+            GastoDe(2, "Ya pagado", pagado: true),
+        });
+
+        await vm.CargarAsync();
+
+        Assert.Equal(vm.Filas.Count, vm.FilasView.Cast<GastoFila>().Count());
     }
 
     [Fact]

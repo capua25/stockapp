@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Collections;
 using Moq;
 using StockApp.Application.Finanzas;
 using StockApp.Domain.Entities;
@@ -53,6 +55,36 @@ public class IngresosViewModelTests
 
         Assert.Equal(2, vm.Items.Count);
         Assert.Equal("Partida FIGM", vm.Items[0].Concepto);
+    }
+
+    // ── ItemsView: fix de ordenamiento por click en encabezados (Avalonia 12, regresión #21129) ──
+
+    [Fact]
+    public async Task ItemsView_EsOrdenable()
+    {
+        var (vm, _, _, _) = Crear(new List<IngresoCaja>
+        {
+            Ingreso(1, "Partida FIGM"), Ingreso(2, "Multas"),
+        });
+
+        await vm.CargarAsync();
+
+        Assert.NotNull(vm.ItemsView);
+        Assert.IsType<DataGridCollectionView>(vm.ItemsView);
+        Assert.True(vm.ItemsView.CanSort);
+    }
+
+    [Fact]
+    public async Task ItemsView_TrasCargarAsync_ReflejaLosItems()
+    {
+        var (vm, _, _, _) = Crear(new List<IngresoCaja>
+        {
+            Ingreso(1, "Partida FIGM"), Ingreso(2, "Multas"),
+        });
+
+        await vm.CargarAsync();
+
+        Assert.Equal(vm.Items.Count, vm.ItemsView.Cast<IngresoCaja>().Count());
     }
 
     [Fact]

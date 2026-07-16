@@ -109,7 +109,7 @@
         </StackPanel>
 
         <!-- Grilla -->
-        <DataGrid ItemsSource="{Binding Filas}"
+        <DataGrid ItemsSource="{Binding FilasView}"
                   SelectedItem="{Binding FilaSeleccionada}"
                   IsReadOnly="True"
                   CanUserSortColumns="True"

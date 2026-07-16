@@ -23,7 +23,7 @@
         </StackPanel>
 
         <Border Classes="card">
-            <DataGrid ItemsSource="{Binding Items}"
+            <DataGrid ItemsSource="{Binding ItemsView}"
                       SelectedItem="{Binding ItemSeleccionado}"
                       IsReadOnly="True"
                       CanUserSortColumns="True"
