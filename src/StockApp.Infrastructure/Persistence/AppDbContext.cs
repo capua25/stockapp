@@ -18,6 +18,9 @@ public class AppDbContext : DbContext
     public DbSet<RubroGasto> RubrosGasto => Set<RubroGasto>();
     public DbSet<LineaPoa> LineasPoa => Set<LineaPoa>();
     public DbSet<AsignacionPresupuestal> AsignacionesPresupuestales => Set<AsignacionPresupuestal>();
+    public DbSet<Gasto> Gastos => Set<Gasto>();
+    public DbSet<PagoGasto> PagosGasto => Set<PagoGasto>();
+    public DbSet<IngresoCaja> IngresosCaja => Set<IngresoCaja>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -139,6 +142,55 @@ public class AppDbContext : DbContext
                 .HasForeignKey(a => a.LineaPoaId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(a => a.FuenteFinanciamiento).WithMany()
                 .HasForeignKey(a => a.FuenteFinanciamientoId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── Finanzas: documentos (Fase 2 módulo Finanzas) ─────────────────────
+        // FKs Restrict en todos lados: los maestros y los gastos usan baja lógica,
+        // nunca DELETE físico — no hay cascadas que propagar.
+        modelBuilder.Entity<Gasto>(e =>
+        {
+            e.Property(g => g.Detalle).IsRequired();
+            e.Property(g => g.MontoTotal).HasPrecision(18, 4);
+            e.Property(g => g.Activo).HasDefaultValue(true);
+            e.HasIndex(g => g.Fecha);
+            // No único: la unicidad proveedor+factura es regla de negocio SOLO entre
+            // gastos activos (un gasto anulado libera su número de factura).
+            e.HasIndex(g => new { g.ProveedorId, g.NumeroFactura });
+            e.HasOne(g => g.Proveedor).WithMany()
+                .HasForeignKey(g => g.ProveedorId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(g => g.FuenteFinanciamiento).WithMany()
+                .HasForeignKey(g => g.FuenteFinanciamientoId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(g => g.RubroGasto).WithMany()
+                .HasForeignKey(g => g.RubroGastoId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(g => g.LineaPoa).WithMany()
+                .HasForeignKey(g => g.LineaPoaId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<PagoGasto>(e =>
+        {
+            e.Property(p => p.Monto).HasPrecision(18, 4);
+            e.Property(p => p.Activo).HasDefaultValue(true);
+            e.HasIndex(p => p.GastoId);
+            e.HasOne<Gasto>().WithMany(g => g.Pagos)
+                .HasForeignKey(p => p.GastoId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<IngresoCaja>(e =>
+        {
+            e.Property(i => i.Concepto).IsRequired();
+            e.Property(i => i.Monto).HasPrecision(18, 4);
+            e.Property(i => i.Activo).HasDefaultValue(true);
+            e.HasIndex(i => i.Fecha);
+            e.HasOne(i => i.FuenteFinanciamiento).WithMany()
+                .HasForeignKey(i => i.FuenteFinanciamientoId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── Vínculo stock ↔ finanzas: FK opcional en MovimientoStock ─────────
+        modelBuilder.Entity<MovimientoStock>(e =>
+        {
+            e.HasIndex(m => m.GastoId);
+            e.HasOne(m => m.Gasto).WithMany()
+                .HasForeignKey(m => m.GastoId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

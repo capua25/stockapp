@@ -42,4 +42,15 @@ public enum AccionAuditada
     AltaLineaPoa                     = 28,
     ModificacionLineaPoa             = 29,
     BajaLineaPoa                     = 30,
+
+    // ── Finanzas — Fase 2: gastos, pagos e ingresos (append-only a partir de 31) ──
+    AltaGasto                   = 31,
+    ModificacionGasto           = 32,
+    AnulacionGasto              = 33,
+    AltaPagoGasto               = 34,
+    AnulacionPagoGasto          = 35,
+    AltaIngresoCaja             = 36,
+    ModificacionIngresoCaja     = 37,
+    BajaIngresoCaja             = 38,
+    AsociacionMovimientosAGasto = 39,
 }
