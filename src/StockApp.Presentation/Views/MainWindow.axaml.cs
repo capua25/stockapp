@@ -10,9 +10,13 @@ public partial class MainWindow : Window
 {
     private readonly IServicioEstadoVentana? _servicioEstadoVentana;
 
-    // Último tamaño/posición "normal" (no maximizada) conocidos. Se actualizan cada vez que
-    // la ventana vuelve a WindowState.Normal, para poder guardar coordenadas coherentes aun
-    // si se cierra estando maximizada (ver OnClosing).
+    // Último tamaño/posición "normal" (no maximizada) conocidos. Se actualizan en cada
+    // Resized/PositionChanged mientras la ventana está efectivamente en WindowState.Normal,
+    // para poder guardar coordenadas coherentes si se cierra estando maximizada (ver
+    // OnClosing). No se capturan en la transición de WindowState: al restaurar desde
+    // maximizada, Position/Bounds pueden todavía reflejar momentáneamente los valores
+    // maximizados (ver Avalonia issue #5285 / discussion #7836), así que la fuente de verdad
+    // para el caso maximizado son estos eventos, no el handler de WindowStateProperty.
     private PixelPoint _ultimaPosicionNormal;
     private Size _ultimoTamanioNormal;
 
@@ -30,7 +34,8 @@ public partial class MainWindow : Window
 
         AplicarEstadoGuardado();
 
-        PropertyChanged += OnPropertyChanged;
+        Resized += OnResizedOrPositionChanged;
+        PositionChanged += OnResizedOrPositionChanged;
         Closing += OnClosing;
     }
 
@@ -72,13 +77,18 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    // Solo alimenta el tracker _ultimaPosicionNormal/_ultimoTamanioNormal, que es la fuente
+    // usada por OnClosing exclusivamente para el caso "se cierra maximizada" (ver ahí). Se
+    // ignora cualquier evento que no ocurra con la ventana efectivamente en Normal: en la
+    // transición de estado (restaurar desde maximizada), Position/Bounds puede todavía
+    // reflejar momentáneamente los valores maximizados.
+    private void OnResizedOrPositionChanged(object? sender, EventArgs e)
     {
-        if (e.Property == WindowStateProperty && WindowState == WindowState.Normal)
-        {
-            _ultimaPosicionNormal = Position;
-            _ultimoTamanioNormal = new Size(Width, Height);
-        }
+        if (WindowState != WindowState.Normal)
+            return;
+
+        _ultimaPosicionNormal = Position;
+        _ultimoTamanioNormal = new Size(Width, Height);
     }
 
     private void OnClosing(object? sender, WindowClosingEventArgs e)
@@ -86,15 +96,34 @@ public partial class MainWindow : Window
         if (_servicioEstadoVentana is null)
             return;
 
-        // Si se cierra maximizada, se guarda el último tamaño/posición "normal" conocido
-        // (no el de maximizada) junto con Maximizada=true, para poder des-maximizar
-        // coherentemente la próxima vez.
+        // Si se cierra maximizada, no hay tamaño/posición "normal" actual que leer (Width/
+        // Height/Position reflejan la maximizada), así que se usa el último conocido vía
+        // el tracker. Si NO está maximizada, se usan los valores actuales directamente: el
+        // tracker puede haber quedado desactualizado si la ventana se movió/redimensionó
+        // sin pasar por una transición de WindowState intermedia detectable a tiempo.
+        double ancho;
+        double alto;
+        PixelPoint posicion;
+
+        if (WindowState == WindowState.Maximized)
+        {
+            ancho = _ultimoTamanioNormal.Width;
+            alto = _ultimoTamanioNormal.Height;
+            posicion = _ultimaPosicionNormal;
+        }
+        else
+        {
+            ancho = Width;
+            alto = Height;
+            posicion = Position;
+        }
+
         var estado = new EstadoVentana
         {
-            Ancho = _ultimoTamanioNormal.Width,
-            Alto = _ultimoTamanioNormal.Height,
-            X = _ultimaPosicionNormal.X,
-            Y = _ultimaPosicionNormal.Y,
+            Ancho = ancho,
+            Alto = alto,
+            X = posicion.X,
+            Y = posicion.Y,
             Maximizada = WindowState == WindowState.Maximized,
         };
 
