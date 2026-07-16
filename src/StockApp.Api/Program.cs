@@ -111,6 +111,12 @@ builder.Services.AddScoped<IRubroGastoService, RubroGastoService>();
 builder.Services.AddScoped<ILineaPoaRepository, LineaPoaRepository>();
 builder.Services.AddScoped<ILineaPoaService, LineaPoaService>();
 
+// Finanzas — Fase 2: gastos, pagos e ingresos de caja
+builder.Services.AddScoped<IGastoRepository, GastoRepository>();
+builder.Services.AddScoped<IGastoService, GastoService>();
+builder.Services.AddScoped<IIngresoCajaRepository, IngresoCajaRepository>();
+builder.Services.AddScoped<IIngresoCajaService, IngresoCajaService>();
+
 // Auditoría (Fase 2b)
 builder.Services.AddScoped<IAuditoriaQueryRepository, AuditoriaQueryRepository>();
 builder.Services.AddScoped<IAuditoriaQueryService, AuditoriaQueryService>();
@@ -384,6 +390,7 @@ app.MapUnidadesMedidaEndpoints();
 app.MapFuentesFinanciamientoEndpoints();
 app.MapRubrosGastoEndpoints();
 app.MapLineasPoaEndpoints();
+app.MapGastosEndpoints();
 app.MapLicenciaEndpoints();
 app.MapResetAdminEndpoints();
 
