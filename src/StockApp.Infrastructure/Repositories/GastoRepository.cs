@@ -94,13 +94,6 @@ public class GastoRepository : IGastoRepository
         => ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } pg
            && pg.ConstraintName == "IX_Gastos_ProveedorId_NumeroFactura";
 
-    public async Task<int> AgregarPagoAsync(PagoGasto pago)
-    {
-        _ctx.PagosGasto.Add(pago);
-        await _ctx.SaveChangesAsync();
-        return pago.Id;
-    }
-
     public Task ActualizarPagoAsync(PagoGasto pago)
     {
         _ctx.PagosGasto.Update(pago);

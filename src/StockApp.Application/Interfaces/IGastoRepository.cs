@@ -20,8 +20,6 @@ public interface IGastoRepository
     /// <summary>Actualiza la cabecera. <paramref name="gasto"/> debe ser la instancia tracked de ObtenerPorIdAsync.</summary>
     Task ActualizarAsync(Gasto gasto);
 
-    Task<int> AgregarPagoAsync(PagoGasto pago);
-
     /// <summary>
     /// Registra el pago dentro de una transacción que bloquea (FOR UPDATE) la fila del
     /// gasto y re-verifica el saldo pendiente contra los pagos activos YA committeados

@@ -167,10 +167,13 @@ public class GastoRepositoryTests : PostgresRepositoryTestBase
         var id = await _repo.AgregarAsync(NuevoGasto(proveedorId, fuenteId, rubroId, DateTime.UtcNow));
         Context.ChangeTracker.Clear();
 
-        var pagoId = await _repo.AgregarPagoAsync(new PagoGasto
+        var nuevoPago = new PagoGasto
         {
             GastoId = id, Fecha = DateTime.UtcNow, Monto = 300m, Nota = "primer pago",
-        });
+        };
+        Context.Add(nuevoPago);
+        await Context.SaveChangesAsync();
+        var pagoId = nuevoPago.Id;
         Context.ChangeTracker.Clear();
 
         var gasto = await _repo.ObtenerPorIdAsync(id);

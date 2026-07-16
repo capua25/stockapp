@@ -158,7 +158,7 @@ public class AppDbContext : DbContext
             // los gastos sin factura —compromisos, expedientes— no cuentan). Cierra en BD
             // la carrera que ValidarFacturaUnicaAsync (check-then-act en memoria) no puede
             // cerrar sola: dos altas concurrentes con la misma factura ya no pueden
-            // committear ambas. GastoService mapea la violación (Npgsql 23505) a
+            // committear ambas. GastoRepository mapea la violación (Npgsql 23505) a
             // ReglaDeNegocioException con el mismo mensaje que la validación de aplicación.
             e.HasIndex(g => new { g.ProveedorId, g.NumeroFactura })
                 .IsUnique()
