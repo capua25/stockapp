@@ -160,6 +160,29 @@ public class GastoRepositoryTests : PostgresRepositoryTestBase
         Assert.Equal(2000m, await _repo.TotalGastadoLineaFuenteAsync(lineaId, fuenteId, excluyendoGastoId: id1));
     }
 
+    // ── Bug real (verificación orgánica): el mensaje de sobrepago mostraba el decimal
+    // crudo, ej. "(799.5000)", en vez del formato moneda es-UY de las grillas ("$ 799,50").
+
+    [Fact]
+    public async Task RegistrarPagoAtomico_Sobrepago_MensajeConMontoFormateadoEsUy()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var id = await _repo.AgregarAsync(
+            NuevoGasto(proveedorId, fuenteId, rubroId, DateTime.UtcNow, monto: 500m));
+        Context.ChangeTracker.Clear();
+
+        var pagoQueSobrepasa = new PagoGasto
+        {
+            GastoId = id, Fecha = DateTime.UtcNow, Monto = 799.5000m,
+        };
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => _repo.RegistrarPagoAtomicoAsync(pagoQueSobrepasa));
+
+        Assert.Contains("$ 799,50", ex.Message);
+        Assert.DoesNotContain("799.5000", ex.Message);
+    }
+
     [Fact]
     public async Task AgregarPago_Y_AnularPago_Roundtrip()
     {

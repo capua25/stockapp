@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Finanzas;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Exceptions;
+using StockApp.Presentation.Converters;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 
@@ -87,7 +88,8 @@ public partial class IngresosViewModel : ViewModelBase
         if (ItemSeleccionado is null) return;
 
         var confirmar = await _confirmacion.PreguntarAsync(
-            $"¿Confirma dar de baja el ingreso \"{ItemSeleccionado.Concepto}\" ({ItemSeleccionado.Monto})?");
+            $"¿Confirma dar de baja el ingreso \"{ItemSeleccionado.Concepto}\" " +
+            $"({MonedaConverter.Formatear(ItemSeleccionado.Monto)})?");
         if (!confirmar) return;
 
         try

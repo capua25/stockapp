@@ -30,13 +30,20 @@ public sealed class MonedaConverter : IValueConverter
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         => value switch
         {
-            decimal d => d.ToString("C2", FormatoMoneda),
+            decimal d => Formatear(d),
             null => string.Empty,
             _ => string.Empty,
         };
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         => throw new NotSupportedException();
+
+    /// <summary>
+    /// Formatea un monto con el mismo criterio que las grillas (ej. 850.5000m → "$ 850,50"),
+    /// para reutilizar en mensajes de confirmación/error de los ViewModels sin duplicar el
+    /// formato es-UY (bug real: esos mensajes mostraban el decimal crudo, ej. "(799.5000)").
+    /// </summary>
+    public static string Formatear(decimal monto) => monto.ToString("C2", FormatoMoneda);
 
     private static IFormatProvider CrearFormatoMoneda()
     {

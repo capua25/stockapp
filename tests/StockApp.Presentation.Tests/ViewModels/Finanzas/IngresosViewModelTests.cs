@@ -112,6 +112,23 @@ public class IngresosViewModelTests
     }
 
     [Fact]
+    public async Task BajaCommand_PideConfirmacionConMontoFormateado()
+    {
+        // Bug real (verificación orgánica): el mensaje mostraba el decimal crudo
+        // ("2000.7500") en vez del formato moneda es-UY que usan las grillas ("$ 2.000,75").
+        var ingreso = Ingreso(1, "Para baja");
+        ingreso.Monto = 2000.7500m;
+        var (vm, _, _, confirm) = Crear(new List<IngresoCaja> { ingreso });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = vm.Items[0];
+
+        await vm.BajaCommand.ExecuteAsync(null);
+
+        confirm.Verify(c => c.PreguntarAsync(It.Is<string>(
+            s => s.Contains("$ 2.000,75") && !s.Contains("2000.7500"))), Times.Once);
+    }
+
+    [Fact]
     public async Task BajaCommand_ConConfirmacion_DaDeBajaYRecarga()
     {
         var (vm, svc, _, _) = Crear(new List<IngresoCaja> { Ingreso(1, "Para baja") });

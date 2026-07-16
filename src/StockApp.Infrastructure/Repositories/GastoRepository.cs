@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using StockApp.Application.Finanzas;
@@ -11,6 +12,34 @@ namespace StockApp.Infrastructure.Repositories;
 public class GastoRepository : IGastoRepository
 {
     private readonly AppDbContext _ctx;
+
+    /// <summary>
+    /// Cultura FIJA es-UY para formatear montos en mensajes de excepción (bug real:
+    /// "El pago (799.5000) supera..." mostraba el decimal crudo). Infrastructure no puede
+    /// referenciar Presentation.Converters.MonedaConverter, así que se duplica el mismo
+    /// criterio (patrón ya usado en PagosGastoViewModel.CulturaMonto y MonedaConverter).
+    /// </summary>
+    private static readonly IFormatProvider CulturaMonto = CrearCulturaMonto();
+
+    private static IFormatProvider CrearCulturaMonto()
+    {
+        try
+        {
+            return CultureInfo.GetCultureInfo("es-UY");
+        }
+        catch (CultureNotFoundException)
+        {
+            return new NumberFormatInfo
+            {
+                CurrencySymbol = "$",
+                CurrencyDecimalDigits = 2,
+                CurrencyDecimalSeparator = ",",
+                CurrencyGroupSeparator = ".",
+                CurrencyPositivePattern = 2,
+                CurrencyNegativePattern = 9,
+            };
+        }
+    }
 
     public GastoRepository(AppDbContext ctx) => _ctx = ctx;
 
@@ -134,7 +163,8 @@ public class GastoRepository : IGastoRepository
         {
             await tx.RollbackAsync();
             throw new ReglaDeNegocioException(
-                $"El pago ({pago.Monto}) supera el saldo pendiente de la factura ({saldoPendiente}).");
+                $"El pago ({pago.Monto.ToString("C2", CulturaMonto)}) supera el saldo pendiente " +
+                $"de la factura ({saldoPendiente.ToString("C2", CulturaMonto)}).");
         }
 
         _ctx.PagosGasto.Add(pago);
