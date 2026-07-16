@@ -67,4 +67,54 @@ public class ValidadorEstadoVentanaTests
 
         Assert.True(resultado);
     }
+
+    [Fact]
+    public void EsVisibleEn_AnchoNaN_DevuelveFalse()
+    {
+        var estado = new EstadoVentana { Ancho = double.NaN, Alto = 600, X = 100, Y = 100 };
+
+        var resultado = ValidadorEstadoVentana.EsVisibleEn(estado, new[] { PantallaPrincipal });
+
+        Assert.False(resultado);
+    }
+
+    [Fact]
+    public void EsVisibleEn_AltoNaN_DevuelveFalse()
+    {
+        var estado = new EstadoVentana { Ancho = 800, Alto = double.NaN, X = 100, Y = 100 };
+
+        var resultado = ValidadorEstadoVentana.EsVisibleEn(estado, new[] { PantallaPrincipal });
+
+        Assert.False(resultado);
+    }
+
+    [Fact]
+    public void EsVisibleEn_AnchoNegativo_DevuelveFalse()
+    {
+        var estado = new EstadoVentana { Ancho = -800, Alto = 600, X = 100, Y = 100 };
+
+        var resultado = ValidadorEstadoVentana.EsVisibleEn(estado, new[] { PantallaPrincipal });
+
+        Assert.False(resultado);
+    }
+
+    [Fact]
+    public void EsVisibleEn_AltoCero_DevuelveFalse()
+    {
+        var estado = new EstadoVentana { Ancho = 800, Alto = 0, X = 100, Y = 100 };
+
+        var resultado = ValidadorEstadoVentana.EsVisibleEn(estado, new[] { PantallaPrincipal });
+
+        Assert.False(resultado);
+    }
+
+    [Fact]
+    public void EsVisibleEn_AnchoInfinito_DevuelveFalse()
+    {
+        var estado = new EstadoVentana { Ancho = double.PositiveInfinity, Alto = 600, X = 100, Y = 100 };
+
+        var resultado = ValidadorEstadoVentana.EsVisibleEn(estado, new[] { PantallaPrincipal });
+
+        Assert.False(resultado);
+    }
 }

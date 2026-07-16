@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Avalonia;
 
@@ -19,6 +20,14 @@ public static class ValidadorEstadoVentana
     /// </summary>
     public static bool EsVisibleEn(EstadoVentana estado, IEnumerable<PixelRect> pantallas)
     {
+        // Guard defensivo: dimensiones no finitas (NaN/Infinity) o no positivas no pueden
+        // formar un rectángulo válido y jamás deben considerarse visibles.
+        if (!double.IsFinite(estado.Ancho) || !double.IsFinite(estado.Alto)
+            || estado.Ancho <= 0 || estado.Alto <= 0)
+        {
+            return false;
+        }
+
         var rectanguloVentana = new PixelRect(estado.X, estado.Y, (int)estado.Ancho, (int)estado.Alto);
 
         foreach (var pantalla in pantallas)
