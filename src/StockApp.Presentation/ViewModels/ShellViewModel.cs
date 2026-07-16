@@ -205,6 +205,8 @@ public partial class ShellViewModel : ViewModelBase
         if (CurrentViewModel is BloqueoLicenciaViewModel)
             return;
 
+        DesconectarShellMainSiActivo();
+
         var bloqueo = new BloqueoLicenciaViewModel(_licenciaService);
         bloqueo.LicenciaActivada += () => _uiDispatcher.Post(MostrarLogin);
         CurrentViewModel = bloqueo;
@@ -226,9 +228,26 @@ public partial class ShellViewModel : ViewModelBase
     /// </summary>
     public void MostrarLoginConAviso(string aviso)
     {
+        DesconectarShellMainSiActivo();
+
         var login = new LoginViewModel(_authService, this, _infoApp);
         login.MensajeError = aviso;
         CurrentViewModel = login;
+    }
+
+    /// <summary>
+    /// Desconecta el ShellMainViewModel activo (si lo hay) de INavigationService.Cambiado
+    /// antes de reemplazar CurrentViewModel. Se invoca en los tres caminos que pueden sacar
+    /// al usuario del shell principal: cierre de sesión manual (CerrarSesionSolicitado),
+    /// sesión vencida (ApiSession.SesionVencida → MostrarLoginConAviso) y bloqueo de
+    /// licencia (423 a mitad de sesión → MostrarBloqueoLicencia). Sin esto, el Singleton
+    /// INavigationService retiene la instancia vieja para siempre vía su delegate de
+    /// Cambiado (leak lineal + notificaciones redundantes en cada Navegar&lt;T&gt;()).
+    /// </summary>
+    private void DesconectarShellMainSiActivo()
+    {
+        if (CurrentViewModel is ShellMainViewModel shellMain)
+            shellMain.Desconectar();
     }
 
     public void MostrarContenidoPrincipal()
@@ -250,7 +269,7 @@ public partial class ShellViewModel : ViewModelBase
         if (_navigation.Actual is ShellMainViewModel shellMain)
             shellMain.CerrarSesionSolicitado += () => _uiDispatcher.Post(() =>
             {
-                shellMain.Desconectar();
+                DesconectarShellMainSiActivo();
                 MostrarLogin();
             });
 
