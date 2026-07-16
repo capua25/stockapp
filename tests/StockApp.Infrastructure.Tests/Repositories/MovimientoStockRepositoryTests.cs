@@ -597,6 +597,51 @@ public class MovimientoStockRepositoryTests : PostgresRepositoryTestBase
         Assert.Equal(10m, resultado[1].StockNuevo);
     }
 
+    /// <summary>
+    /// BUG real reportado por verificación orgánica: con filtro Tipo=Entrada, un movimiento
+    /// cuyo stock real (secuencia completa) era "-6 → 4" se mostraba "10 → 20". Causa: el
+    /// running balance se calculaba SOBRE el subconjunto ya filtrado por Tipo (que arranca
+    /// en 0), en vez de sobre la secuencia COMPLETA del producto con los filtros aplicados
+    /// DESPUÉS. Repro: secuencia entrada(10)/salida(3)/entrada(5) → StockAnterior/StockNuevo
+    /// reales de las entradas son 0→10 y 7→12; filtrar por Tipo=Entrada NO debe alterarlos.
+    /// </summary>
+    [Fact]
+    public async Task ObtenerHistorialAsync_FiltroPorTipo_StockAnteriorYNuevoSonLosDeLaSecuenciaCompleta()
+    {
+        var um      = NuevaUm();
+        var usuario = NuevoUsuario("bug02_user");
+        Context.UnidadesMedida.Add(um);
+        Context.Usuarios.Add(usuario);
+        await Context.SaveChangesAsync();
+
+        var p = NuevoProducto("BUG02", um, 0m);
+        Context.Productos.Add(p);
+        await Context.SaveChangesAsync();
+
+        var t0 = new DateTime(2026, 4, 1, 0, 0, 0, DateTimeKind.Utc);
+        Context.MovimientosStock.AddRange(
+            // entrada 10: 0 -> 10
+            new MovimientoStock { ProductoId = p.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Cantidad = 10m, PrecioUnitario = 5m, Fecha = t0,               Motivo = MotivoMovimiento.Compra },
+            // salida 3: 10 -> 7
+            new MovimientoStock { ProductoId = p.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Salida,  Cantidad = 3m,  PrecioUnitario = 5m, Fecha = t0.AddDays(1),    Motivo = MotivoMovimiento.Venta  },
+            // entrada 5: 7 -> 12
+            new MovimientoStock { ProductoId = p.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Cantidad = 5m,  PrecioUnitario = 5m, Fecha = t0.AddDays(2),    Motivo = MotivoMovimiento.Compra }
+        );
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        var resultado = await _repo.ObtenerHistorialAsync(new HistorialMovimientoFiltro(Tipo: TipoMovimiento.Entrada));
+
+        Assert.Equal(2, resultado.Count);
+        Assert.All(resultado, m => Assert.Equal(TipoMovimiento.Entrada, m.Tipo));
+
+        // Ordenado DESC: la entrada del día 2 (7->12) primero, la del día 0 (0->10) después.
+        Assert.Equal(7m,  resultado[0].StockAnterior);
+        Assert.Equal(12m, resultado[0].StockNuevo);
+        Assert.Equal(0m,  resultado[1].StockAnterior);
+        Assert.Equal(10m, resultado[1].StockNuevo);
+    }
+
     // ── UsuarioNombre en el historial ─────────────────────────────────────────
 
     [Fact]

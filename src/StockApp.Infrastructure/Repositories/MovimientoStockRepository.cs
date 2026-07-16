@@ -126,7 +126,17 @@ public class MovimientoStockRepository : IMovimientoStockRepository
     /// <inheritdoc/>
     /// Filtros combinables con AND; OrderByDescending(Fecha).
     /// Running balance calculado en memoria (StockAnterior/StockNuevo) por producto,
-    /// acumulando en orden ASC y luego invirtiendo para la vista DESC.
+    /// acumulando en orden ASC sobre la secuencia COMPLETA del producto.
+    ///
+    /// BUG-03: Tipo/FechaDesde/FechaHasta ya NO se aplican en la query (a nivel BD): el
+    /// running balance necesita la secuencia completa de cada producto para ser correcto,
+    /// filtrar antes hacia que arrancara en 0 sobre el subconjunto filtrado (repro real:
+    /// filtro Tipo=Entrada mostraba stock "10 -> 20" en vez del real "-6 -> 4"). Solo
+    /// ProductoId se aplica ANTES, porque el balance es independiente por producto.
+    /// Trade-off de performance: sin ProductoId, trae TODOS los movimientos de la tabla en
+    /// vez de un subconjunto ya filtrado por Tipo/fecha. Se prioriza correccion; si el
+    /// volumen crece, evaluar precalcular el balance en la BD (ventana SUM) en vez de en
+    /// memoria.
     public async Task<IReadOnlyList<MovimientoHistorialDto>> ObtenerHistorialAsync(HistorialMovimientoFiltro filtro)
     {
         // Construir query con filtros condicionales encadenados (patrón ProductoRepository.BuscarAsync)
@@ -138,22 +148,8 @@ public class MovimientoStockRepository : IMovimientoStockRepository
         if (filtro.ProductoId.HasValue)
             q = q.Where(m => m.ProductoId == filtro.ProductoId.Value);
 
-        if (filtro.Tipo.HasValue)
-            q = q.Where(m => m.Tipo == filtro.Tipo.Value);
-
-        if (filtro.FechaDesde.HasValue)
-            q = q.Where(m => m.Fecha >= filtro.FechaDesde.Value);
-
-        if (filtro.FechaHasta.HasValue)
-        {
-            // HM-04: FechaHasta sin hora se normaliza a fin del día (23:59:59.9999999).
-            // Usamos .Date.AddDays(1).AddTicks(-1) para cubrir el día completo,
-            // independientemente de si el usuario pasó medianoche u otra hora.
-            var fechaHastaFinDia = filtro.FechaHasta.Value.Date.AddDays(1).AddTicks(-1);
-            q = q.Where(m => m.Fecha <= fechaHastaFinDia);
-        }
-
-        // Traer ordenado ASC para calcular running balance correctamente
+        // Traer ordenado ASC para calcular running balance correctamente, sobre la secuencia
+        // completa (Tipo/fechas se aplican DESPUES del calculo, ver comentario abajo).
         var movimientos = await q
             .OrderBy(m => m.ProductoId)
             .ThenBy(m => m.Fecha)
@@ -194,13 +190,27 @@ public class MovimientoStockRepository : IMovimientoStockRepository
             ));
         }
 
+        // Filtros de Tipo/fechas AHORA, sobre el resultado YA anotado con el balance real
+        // (BUG-03: aplicarlos antes hacia que el balance arrancara en 0 sobre el subconjunto).
+        IEnumerable<MovimientoHistorialDto> filtrados = items;
+
+        if (filtro.Tipo.HasValue)
+            filtrados = filtrados.Where(i => i.Tipo == filtro.Tipo.Value);
+
+        if (filtro.FechaDesde.HasValue)
+            filtrados = filtrados.Where(i => i.Fecha >= filtro.FechaDesde.Value);
+
+        if (filtro.FechaHasta.HasValue)
+        {
+            // HM-04: FechaHasta sin hora se normaliza a fin del dia (23:59:59.9999999).
+            var fechaHastaFinDia = filtro.FechaHasta.Value.Date.AddDays(1).AddTicks(-1);
+            filtrados = filtrados.Where(i => i.Fecha <= fechaHastaFinDia);
+        }
+
         // Orden final DESC por Fecha GLOBAL (HM-S07), no por ProductoId.
-        // items.Reverse() invertía la lista ASC por ProductoId+Fecha, lo que dejaba
-        // el resultado ordenado por ProductoId DESC como clave primaria (BUG-02).
-        items = items
+        return filtrados
             .OrderByDescending(i => i.Fecha)
             .ThenByDescending(i => i.MovimientoId)
             .ToList();
-        return items;
     }
 }
