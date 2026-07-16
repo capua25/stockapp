@@ -82,7 +82,7 @@
                     <DataTemplate x:DataType="e:PagoGasto">
                         <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" Margin="4">
                             <TextBlock Grid.Column="0"
-                                       Text="{Binding Fecha, Converter={x:Static conv:FechaUtcALocalConverter.Instance}, StringFormat='dd/MM/yyyy'}"
+                                       Text="{Binding Fecha, StringFormat='dd/MM/yyyy'}"
                                        Margin="0,0,16,0" />
                             <TextBlock Grid.Column="1"
                                        Text="{Binding Monto, Converter={x:Static conv:MonedaConverter.Instance}}"

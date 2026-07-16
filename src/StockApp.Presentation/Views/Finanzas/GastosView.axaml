@@ -116,7 +116,7 @@
                   AutoGenerateColumns="False">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Fecha"
-                                    Binding="{Binding Fecha, Converter={x:Static conv:FechaUtcALocalConverter.Instance}, StringFormat='dd/MM/yyyy', DataType={x:Type vm:GastoFila}}"
+                                    Binding="{Binding Fecha, StringFormat='dd/MM/yyyy', DataType={x:Type vm:GastoFila}}"
                                     Width="Auto" />
                 <DataGridTextColumn Header="Proveedor"
                                     Binding="{Binding ProveedorNombre, DataType={x:Type vm:GastoFila}}"
