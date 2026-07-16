@@ -67,6 +67,39 @@ public class ProveedorListViewModelTests
     }
 
     [Fact]
+    public async Task EditarCommand_ConSeleccion_NavegaAlFormularioEnModoEdicion()
+    {
+        var prov = new Proveedor { Id = 7, Nombre = "Prov Prueba", Activo = true };
+        var (vm, _, navMock, _) = Crear(new List<Proveedor> { prov });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = prov;
+
+        await vm.EditarCommand.ExecuteAsync(null);
+
+        navMock.Verify(n => n.Navegar<ProveedorFormViewModel>(
+            It.IsAny<System.Action<ProveedorFormViewModel>>()), Times.Once);
+    }
+
+    [Fact]
+    public void EditarCommand_SinSeleccion_EstaDeshabilitado()
+    {
+        var (vm, _, _, _) = Crear();
+
+        Assert.False(vm.EditarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task EditarCommand_ItemInactivo_EstaDeshabilitado()
+    {
+        var prov = new Proveedor { Id = 7, Nombre = "Prov Prueba", Activo = false };
+        var (vm, _, _, _) = Crear(new List<Proveedor> { prov });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = prov;
+
+        Assert.False(vm.EditarCommand.CanExecute(null));
+    }
+
+    [Fact]
     public async Task BajaCommand_ConItemSeleccionado_PideConfirmacionYLlamaServicio()
     {
         var prov = new Proveedor { Id = 7, Nombre = "Prov Prueba", Activo = true };
@@ -169,6 +202,9 @@ public class ProveedorFormViewModelTests
         svcMock
             .Setup(s => s.AltaAsync(It.IsAny<Proveedor>()))
             .ReturnsAsync(1);
+        svcMock
+            .Setup(s => s.ModificarAsync(It.IsAny<Proveedor>()))
+            .Returns(Task.CompletedTask);
 
         var navMock = new Mock<INavigationService>();
         var vm = new ProveedorFormViewModel(svcMock.Object, navMock.Object);
@@ -203,5 +239,40 @@ public class ProveedorFormViewModelTests
         var (vm, _, _) = Crear();
 
         Assert.False(vm.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task GuardarCommand_EnEdicion_LlamaModificarConElIdYTodosLosCampos()
+    {
+        var (vm, svcMock, _) = Crear();
+        vm.CargarParaEditar(new Proveedor
+        {
+            Id = 3, Nombre = "Distribuidor ABC", Telefono = "111", Email = "a@a.com",
+            Direccion = "Calle 1", Notas = "Notas", Activo = true,
+        });
+        vm.Nombre   = "Distribuidor ABC (renombrado)";
+        vm.Telefono = "222";
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        Assert.True(vm.EsEdicion);
+        svcMock.Verify(s => s.ModificarAsync(It.Is<Proveedor>(p =>
+            p.Id == 3 && p.Nombre == "Distribuidor ABC (renombrado)" && p.Telefono == "222"
+            && p.Email == "a@a.com" && p.Direccion == "Calle 1" && p.Notas == "Notas")), Times.Once);
+    }
+
+    [Fact]
+    public async Task GuardarCommand_EnEdicion_ReglaDeNegocio_MuestraMensajeSinNavegar()
+    {
+        var (vm, svcMock, navMock) = Crear();
+        svcMock.Setup(s => s.ModificarAsync(It.IsAny<Proveedor>()))
+            .ThrowsAsync(new ReglaDeNegocioException("Ya existe un proveedor con el nombre 'Distribuidor ABC'."));
+        vm.CargarParaEditar(new Proveedor { Id = 3, Nombre = "Distribuidor ABC", Activo = true });
+        vm.Nombre = "Distribuidor ABC";
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        Assert.Equal("Ya existe un proveedor con el nombre 'Distribuidor ABC'.", vm.MensajeError);
+        navMock.Verify(n => n.Navegar<ProveedorListViewModel>(), Times.Never);
     }
 }

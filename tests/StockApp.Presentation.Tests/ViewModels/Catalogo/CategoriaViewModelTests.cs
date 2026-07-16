@@ -67,6 +67,39 @@ public class CategoriaListViewModelTests
     }
 
     [Fact]
+    public async Task EditarCommand_ConSeleccion_NavegaAlFormularioEnModoEdicion()
+    {
+        var cat = new Categoria { Id = 5, Nombre = "Prueba", Activo = true };
+        var (vm, _, navMock, _) = Crear(new List<Categoria> { cat });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = cat;
+
+        await vm.EditarCommand.ExecuteAsync(null);
+
+        navMock.Verify(n => n.Navegar<CategoriaFormViewModel>(
+            It.IsAny<System.Action<CategoriaFormViewModel>>()), Times.Once);
+    }
+
+    [Fact]
+    public void EditarCommand_SinSeleccion_EstaDeshabilitado()
+    {
+        var (vm, _, _, _) = Crear();
+
+        Assert.False(vm.EditarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task EditarCommand_ItemInactivo_EstaDeshabilitado()
+    {
+        var cat = new Categoria { Id = 5, Nombre = "Prueba", Activo = false };
+        var (vm, _, _, _) = Crear(new List<Categoria> { cat });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = cat;
+
+        Assert.False(vm.EditarCommand.CanExecute(null));
+    }
+
+    [Fact]
     public async Task BajaCommand_ConItemSeleccionado_PideConfirmacionYLlamaServicio()
     {
         var cat = new Categoria { Id = 5, Nombre = "Prueba", Activo = true };
@@ -169,6 +202,9 @@ public class CategoriaFormViewModelTests
         svcMock
             .Setup(s => s.AltaAsync(It.IsAny<Categoria>()))
             .ReturnsAsync(1);
+        svcMock
+            .Setup(s => s.ModificarAsync(It.IsAny<Categoria>()))
+            .Returns(Task.CompletedTask);
 
         var navMock = new Mock<INavigationService>();
         var vm = new CategoriaFormViewModel(svcMock.Object, navMock.Object);
@@ -203,5 +239,34 @@ public class CategoriaFormViewModelTests
         var (vm, _, _) = Crear();
 
         Assert.False(vm.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task GuardarCommand_EnEdicion_LlamaModificarConElId()
+    {
+        var (vm, svcMock, _) = Crear();
+        vm.CargarParaEditar(new Categoria { Id = 3, Nombre = "Ferretería", Activo = true });
+        vm.Nombre = "Ferretería (renombrada)";
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        Assert.True(vm.EsEdicion);
+        svcMock.Verify(s => s.ModificarAsync(
+            It.Is<Categoria>(c => c.Id == 3 && c.Nombre == "Ferretería (renombrada)")), Times.Once);
+    }
+
+    [Fact]
+    public async Task GuardarCommand_EnEdicion_ReglaDeNegocio_MuestraMensajeSinNavegar()
+    {
+        var (vm, svcMock, navMock) = Crear();
+        svcMock.Setup(s => s.ModificarAsync(It.IsAny<Categoria>()))
+            .ThrowsAsync(new ReglaDeNegocioException("Ya existe una categoría con el nombre 'Ferretería'."));
+        vm.CargarParaEditar(new Categoria { Id = 3, Nombre = "Ferretería", Activo = true });
+        vm.Nombre = "Ferretería";
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        Assert.Equal("Ya existe una categoría con el nombre 'Ferretería'.", vm.MensajeError);
+        navMock.Verify(n => n.Navegar<CategoriaListViewModel>(), Times.Never);
     }
 }

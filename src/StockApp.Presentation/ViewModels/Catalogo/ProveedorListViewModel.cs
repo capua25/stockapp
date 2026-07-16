@@ -22,6 +22,7 @@ public partial class ProveedorListViewModel : ViewModelBase
     private readonly IConfirmacionService _confirmacion;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(EditarCommand))]
     [NotifyCanExecuteChangedFor(nameof(BajaCommand))]
     private Proveedor? _itemSeleccionado;
 
@@ -51,6 +52,18 @@ public partial class ProveedorListViewModel : ViewModelBase
 
     private bool PuedeDarBaja()
         => ItemSeleccionado is not null && ItemSeleccionado.Activo;
+
+    // Misma condición que PuedeDarBaja: solo se edita un proveedor seleccionado y activo.
+    private bool PuedeEditar() => PuedeDarBaja();
+
+    [RelayCommand(CanExecute = nameof(PuedeEditar))]
+    private async Task EditarAsync()
+    {
+        if (ItemSeleccionado is null) return;
+        var seleccionado = ItemSeleccionado;
+        await Task.Run(() =>
+            _navigation.Navegar<ProveedorFormViewModel>(vm => vm.CargarParaEditar(seleccionado)));
+    }
 
     /// <summary>
     /// Da de baja el proveedor seleccionado, previa confirmación del usuario. Las excepciones

@@ -15,6 +15,8 @@ public partial class UnidadMedidaFormViewModel : ViewModelBase
     private readonly IUnidadMedidaService _service;
     private readonly INavigationService   _navigation;
 
+    private int _idEdicion;
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
     private string _nombre = string.Empty;
@@ -26,10 +28,25 @@ public partial class UnidadMedidaFormViewModel : ViewModelBase
     [ObservableProperty]
     private string? _mensajeError;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Titulo))]
+    private bool _esEdicion;
+
+    public string Titulo => EsEdicion ? "Editar unidad de medida" : "Nueva unidad de medida";
+
     public UnidadMedidaFormViewModel(IUnidadMedidaService service, INavigationService navigation)
     {
         _service    = service;
         _navigation = navigation;
+    }
+
+    /// <summary>Precarga el formulario en modo edición (llamado por el overload de Navegar).</summary>
+    public void CargarParaEditar(UnidadMedida unidadMedida)
+    {
+        _idEdicion  = unidadMedida.Id;
+        Nombre      = unidadMedida.Nombre;
+        Abreviatura = unidadMedida.Abreviatura;
+        EsEdicion   = true;
     }
 
     private bool PuedeGuardar()
@@ -42,11 +59,20 @@ public partial class UnidadMedidaFormViewModel : ViewModelBase
         MensajeError = null;
         try
         {
-            await _service.AltaAsync(new UnidadMedida
-            {
-                Nombre      = Nombre,
-                Abreviatura = Abreviatura,
-            });
+            if (EsEdicion)
+                await _service.ModificarAsync(new UnidadMedida
+                {
+                    Id          = _idEdicion,
+                    Nombre      = Nombre,
+                    Abreviatura = Abreviatura,
+                });
+            else
+                await _service.AltaAsync(new UnidadMedida
+                {
+                    Nombre      = Nombre,
+                    Abreviatura = Abreviatura,
+                });
+
             _navigation.Navegar<UnidadMedidaListViewModel>();
         }
         catch (System.Exception ex)

@@ -23,6 +23,9 @@
                             Content="Nueva categoría"
                             Command="{Binding NuevoCommand}" />
                     <Button Classes="secondary"
+                            Content="Editar"
+                            Command="{Binding EditarCommand}" />
+                    <Button Classes="secondary"
                             Content="Dar de baja"
                             Command="{Binding BajaCommand}" />
                 </StackPanel>

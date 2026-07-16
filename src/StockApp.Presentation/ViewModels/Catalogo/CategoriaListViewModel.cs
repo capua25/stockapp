@@ -23,6 +23,7 @@ public partial class CategoriaListViewModel : ViewModelBase
     private readonly IConfirmacionService _confirmacion;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(EditarCommand))]
     [NotifyCanExecuteChangedFor(nameof(BajaCommand))]
     private Categoria? _itemSeleccionado;
 
@@ -52,6 +53,18 @@ public partial class CategoriaListViewModel : ViewModelBase
 
     private bool PuedeDarBaja()
         => ItemSeleccionado is not null && ItemSeleccionado.Activo;
+
+    // Misma condición que PuedeDarBaja: solo se edita una categoría seleccionada y activa.
+    private bool PuedeEditar() => PuedeDarBaja();
+
+    [RelayCommand(CanExecute = nameof(PuedeEditar))]
+    private async Task EditarAsync()
+    {
+        if (ItemSeleccionado is null) return;
+        var seleccionada = ItemSeleccionado;
+        await Task.Run(() =>
+            _navigation.Navegar<CategoriaFormViewModel>(vm => vm.CargarParaEditar(seleccionada)));
+    }
 
     /// <summary>
     /// Da de baja la categoría seleccionada, previa confirmación del usuario. Las excepciones

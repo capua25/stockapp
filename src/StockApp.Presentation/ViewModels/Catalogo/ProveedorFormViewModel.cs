@@ -15,6 +15,8 @@ public partial class ProveedorFormViewModel : ViewModelBase
     private readonly IProveedorService  _service;
     private readonly INavigationService _navigation;
 
+    private int _idEdicion;
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
     private string _nombre = string.Empty;
@@ -34,10 +36,28 @@ public partial class ProveedorFormViewModel : ViewModelBase
     [ObservableProperty]
     private string? _mensajeError;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Titulo))]
+    private bool _esEdicion;
+
+    public string Titulo => EsEdicion ? "Editar proveedor" : "Nuevo proveedor";
+
     public ProveedorFormViewModel(IProveedorService service, INavigationService navigation)
     {
         _service    = service;
         _navigation = navigation;
+    }
+
+    /// <summary>Precarga el formulario en modo edición (llamado por el overload de Navegar).</summary>
+    public void CargarParaEditar(Proveedor proveedor)
+    {
+        _idEdicion = proveedor.Id;
+        Nombre     = proveedor.Nombre;
+        Telefono   = proveedor.Telefono;
+        Email      = proveedor.Email;
+        Direccion  = proveedor.Direccion;
+        Notas      = proveedor.Notas;
+        EsEdicion  = true;
     }
 
     private bool PuedeGuardar() => !string.IsNullOrWhiteSpace(Nombre);
@@ -48,14 +68,26 @@ public partial class ProveedorFormViewModel : ViewModelBase
         MensajeError = null;
         try
         {
-            await _service.AltaAsync(new Proveedor
-            {
-                Nombre    = Nombre,
-                Telefono  = Telefono,
-                Email     = Email,
-                Direccion = Direccion,
-                Notas     = Notas,
-            });
+            if (EsEdicion)
+                await _service.ModificarAsync(new Proveedor
+                {
+                    Id        = _idEdicion,
+                    Nombre    = Nombre,
+                    Telefono  = Telefono,
+                    Email     = Email,
+                    Direccion = Direccion,
+                    Notas     = Notas,
+                });
+            else
+                await _service.AltaAsync(new Proveedor
+                {
+                    Nombre    = Nombre,
+                    Telefono  = Telefono,
+                    Email     = Email,
+                    Direccion = Direccion,
+                    Notas     = Notas,
+                });
+
             _navigation.Navegar<ProveedorListViewModel>();
         }
         catch (System.Exception ex)

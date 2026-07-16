@@ -15,6 +15,8 @@ public partial class CategoriaFormViewModel : ViewModelBase
     private readonly ICategoriaService  _service;
     private readonly INavigationService _navigation;
 
+    private int _idEdicion;
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
     private string _nombre = string.Empty;
@@ -22,10 +24,24 @@ public partial class CategoriaFormViewModel : ViewModelBase
     [ObservableProperty]
     private string? _mensajeError;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Titulo))]
+    private bool _esEdicion;
+
+    public string Titulo => EsEdicion ? "Editar categoría" : "Nueva categoría";
+
     public CategoriaFormViewModel(ICategoriaService service, INavigationService navigation)
     {
         _service    = service;
         _navigation = navigation;
+    }
+
+    /// <summary>Precarga el formulario en modo edición (llamado por el overload de Navegar).</summary>
+    public void CargarParaEditar(Categoria categoria)
+    {
+        _idEdicion = categoria.Id;
+        Nombre     = categoria.Nombre;
+        EsEdicion  = true;
     }
 
     private bool PuedeGuardar() => !string.IsNullOrWhiteSpace(Nombre);
@@ -36,7 +52,11 @@ public partial class CategoriaFormViewModel : ViewModelBase
         MensajeError = null;
         try
         {
-            await _service.AltaAsync(new Categoria { Nombre = Nombre });
+            if (EsEdicion)
+                await _service.ModificarAsync(new Categoria { Id = _idEdicion, Nombre = Nombre });
+            else
+                await _service.AltaAsync(new Categoria { Nombre = Nombre });
+
             _navigation.Navegar<CategoriaListViewModel>();
         }
         catch (System.Exception ex)

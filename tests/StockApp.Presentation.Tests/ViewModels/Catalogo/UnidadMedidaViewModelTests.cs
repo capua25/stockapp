@@ -67,6 +67,39 @@ public class UnidadMedidaListViewModelTests
     }
 
     [Fact]
+    public async Task EditarCommand_ConSeleccion_NavegaAlFormularioEnModoEdicion()
+    {
+        var um = new UnidadMedida { Id = 3, Nombre = "Metro", Abreviatura = "m", Activo = true };
+        var (vm, _, navMock, _) = Crear(new List<UnidadMedida> { um });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = um;
+
+        await vm.EditarCommand.ExecuteAsync(null);
+
+        navMock.Verify(n => n.Navegar<UnidadMedidaFormViewModel>(
+            It.IsAny<System.Action<UnidadMedidaFormViewModel>>()), Times.Once);
+    }
+
+    [Fact]
+    public void EditarCommand_SinSeleccion_EstaDeshabilitado()
+    {
+        var (vm, _, _, _) = Crear();
+
+        Assert.False(vm.EditarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task EditarCommand_ItemInactivo_EstaDeshabilitado()
+    {
+        var um = new UnidadMedida { Id = 3, Nombre = "Metro", Abreviatura = "m", Activo = false };
+        var (vm, _, _, _) = Crear(new List<UnidadMedida> { um });
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = um;
+
+        Assert.False(vm.EditarCommand.CanExecute(null));
+    }
+
+    [Fact]
     public async Task BajaCommand_ConItemSeleccionado_PideConfirmacionYLlamaServicio()
     {
         var um = new UnidadMedida { Id = 3, Nombre = "Metro", Abreviatura = "m", Activo = true };
@@ -169,6 +202,9 @@ public class UnidadMedidaFormViewModelTests
         svcMock
             .Setup(s => s.AltaAsync(It.IsAny<UnidadMedida>()))
             .ReturnsAsync(1);
+        svcMock
+            .Setup(s => s.ModificarAsync(It.IsAny<UnidadMedida>()))
+            .Returns(Task.CompletedTask);
 
         var navMock = new Mock<INavigationService>();
         var vm = new UnidadMedidaFormViewModel(svcMock.Object, navMock.Object);
@@ -216,5 +252,34 @@ public class UnidadMedidaFormViewModelTests
         vm.Nombre = "Litro";
 
         Assert.False(vm.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task GuardarCommand_EnEdicion_LlamaModificarConElId()
+    {
+        var (vm, svcMock, _) = Crear();
+        vm.CargarParaEditar(new UnidadMedida { Id = 3, Nombre = "Metro", Abreviatura = "m", Activo = true });
+        vm.Nombre = "Metro (renombrado)";
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        Assert.True(vm.EsEdicion);
+        svcMock.Verify(s => s.ModificarAsync(It.Is<UnidadMedida>(u =>
+            u.Id == 3 && u.Nombre == "Metro (renombrado)" && u.Abreviatura == "m")), Times.Once);
+    }
+
+    [Fact]
+    public async Task GuardarCommand_EnEdicion_ReglaDeNegocio_MuestraMensajeSinNavegar()
+    {
+        var (vm, svcMock, navMock) = Crear();
+        svcMock.Setup(s => s.ModificarAsync(It.IsAny<UnidadMedida>()))
+            .ThrowsAsync(new ReglaDeNegocioException("Ya existe una unidad de medida con el nombre 'Metro'."));
+        vm.CargarParaEditar(new UnidadMedida { Id = 3, Nombre = "Metro", Abreviatura = "m", Activo = true });
+        vm.Nombre = "Metro";
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        Assert.Equal("Ya existe una unidad de medida con el nombre 'Metro'.", vm.MensajeError);
+        navMock.Verify(n => n.Navegar<UnidadMedidaListViewModel>(), Times.Never);
     }
 }

@@ -22,6 +22,7 @@ public partial class UnidadMedidaListViewModel : ViewModelBase
     private readonly IConfirmacionService _confirmacion;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(EditarCommand))]
     [NotifyCanExecuteChangedFor(nameof(BajaCommand))]
     private UnidadMedida? _itemSeleccionado;
 
@@ -51,6 +52,18 @@ public partial class UnidadMedidaListViewModel : ViewModelBase
 
     private bool PuedeDarBaja()
         => ItemSeleccionado is not null && ItemSeleccionado.Activo;
+
+    // Misma condición que PuedeDarBaja: solo se edita una unidad seleccionada y activa.
+    private bool PuedeEditar() => PuedeDarBaja();
+
+    [RelayCommand(CanExecute = nameof(PuedeEditar))]
+    private async Task EditarAsync()
+    {
+        if (ItemSeleccionado is null) return;
+        var seleccionada = ItemSeleccionado;
+        await Task.Run(() =>
+            _navigation.Navegar<UnidadMedidaFormViewModel>(vm => vm.CargarParaEditar(seleccionada)));
+    }
 
     /// <summary>
     /// Da de baja la unidad seleccionada, previa confirmación del usuario. Las excepciones de
