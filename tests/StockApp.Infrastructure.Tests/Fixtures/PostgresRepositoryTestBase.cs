@@ -28,6 +28,8 @@ public abstract class PostgresRepositoryTestBase : IDisposable
         using var ctx = Fixture.CrearContexto();
         ctx.Database.ExecuteSqlRaw(
             "TRUNCATE TABLE \"LogsAuditoria\", \"MovimientosStock\", \"Productos\", " +
-            "\"Categorias\", \"Proveedores\", \"UnidadesMedida\", \"Usuarios\" RESTART IDENTITY CASCADE;");
+            "\"Categorias\", \"Proveedores\", \"UnidadesMedida\", \"Usuarios\", " +
+            "\"AsignacionesPresupuestales\", \"LineasPoa\", \"RubrosGasto\", \"FuentesFinanciamiento\" " +
+            "RESTART IDENTITY CASCADE;");
     }
 }
