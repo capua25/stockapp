@@ -164,8 +164,12 @@ public abstract class MovimientoRegistroViewModelTestsBase
             .Setup(s => s.RegistrarAsync(It.IsAny<RegistrarMovimientoDto>(), true))
             .ReturnsAsync(dtoForzado);
 
+        // Solo confirma la pregunta de "¿confirmar la salida igual?" — el motivo por defecto
+        // de EntradaRegistroViewModel es Compra, que tras el registro forzado dispara además
+        // la pregunta (distinta) de "¿asociar factura?"; este test cubre solo el flujo de
+        // stock insuficiente, no el vínculo con Finanzas (ver EntradaRegistroFacturaTests).
         confirmMock
-            .Setup(c => c.PreguntarAsync(It.IsAny<string>()))
+            .Setup(c => c.PreguntarAsync(It.Is<string>(m => m.Contains("Confirmar la salida"))))
             .ReturnsAsync(true);
 
         await vm.RegistrarCommand.ExecuteAsync(null);

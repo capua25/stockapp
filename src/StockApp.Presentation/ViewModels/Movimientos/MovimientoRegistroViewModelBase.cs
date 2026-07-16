@@ -24,8 +24,10 @@ public abstract partial class MovimientoRegistroViewModelBase : ViewModelBase
 {
     private readonly IMovimientoStockService _service;
     private readonly IProductoService        _productoService;
-    private readonly INavigationService      _navigation;
-    private readonly IConfirmacionService    _confirmacion;
+
+    /// <summary>Expuestos a las subclases para el hook post-registro (vínculo factura de Entrada).</summary>
+    protected INavigationService   Navigation   { get; }
+    protected IConfirmacionService Confirmacion { get; }
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(RegistrarCommand))]
@@ -66,8 +68,8 @@ public abstract partial class MovimientoRegistroViewModelBase : ViewModelBase
     {
         _service         = service;
         _productoService = productoService;
-        _navigation      = navigation;
-        _confirmacion    = confirmacion;
+        Navigation       = navigation;
+        Confirmacion     = confirmacion;
     }
 
     /// <summary>
@@ -102,18 +104,18 @@ public abstract partial class MovimientoRegistroViewModelBase : ViewModelBase
 
         try
         {
-            await _service.RegistrarAsync(dto, forzar: false);
-            _navigation.Navegar<MovimientoHistorialViewModel>();
+            var registrado = await _service.RegistrarAsync(dto, forzar: false);
+            await AlRegistradoAsync(registrado);
         }
         catch (StockInsuficienteException ex)
         {
             var mensaje = $"El stock quedará en {ex.StockResultante}. ¿Confirmar la salida igual?";
-            var confirmar = await _confirmacion.PreguntarAsync(mensaje);
+            var confirmar = await Confirmacion.PreguntarAsync(mensaje);
 
             if (confirmar)
             {
-                await _service.RegistrarAsync(dto, forzar: true);
-                _navigation.Navegar<MovimientoHistorialViewModel>();
+                var registrado = await _service.RegistrarAsync(dto, forzar: true);
+                await AlRegistradoAsync(registrado);
             }
             // Si rechaza, no hace nada — el usuario puede corregir la cantidad
         }
@@ -121,5 +123,16 @@ public abstract partial class MovimientoRegistroViewModelBase : ViewModelBase
         {
             MensajeError = ex.Message;
         }
+    }
+
+    /// <summary>
+    /// Hook post-registro: por defecto navega al historial (comportamiento histórico).
+    /// EntradaRegistroViewModel lo sobreescribe para ofrecer el paso opcional
+    /// "Asociar factura" (spec Finanzas §5.1).
+    /// </summary>
+    protected virtual Task AlRegistradoAsync(MovimientoRegistradoDto registrado)
+    {
+        Navigation.Navegar<MovimientoHistorialViewModel>();
+        return Task.CompletedTask;
     }
 }
