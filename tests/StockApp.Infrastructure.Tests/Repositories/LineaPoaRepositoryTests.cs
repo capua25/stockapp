@@ -102,6 +102,31 @@ public class LineaPoaRepositoryTests : PostgresRepositoryTestBase
     }
 
     [Fact]
+    public async Task ActualizarSinAsignacionesAsync_NoCambiaLosIdsDeLasAsignacionesExistentes()
+    {
+        var fuente = await SeedFuenteAsync("Literal B");
+        var id = await _repo.AgregarAsync(new LineaPoa
+        {
+            Nombre = "PRENSA", Programa = "Comunicación", Ejercicio = 2026,
+            Asignaciones = { new AsignacionPresupuestal { FuenteFinanciamientoId = fuente, Monto = 80000m } },
+        });
+        Context.ChangeTracker.Clear();
+
+        var original = await _repo.ObtenerPorIdAsync(id);
+        var idAsignacionOriginal = original!.Asignaciones.Single().Id;
+        original.Activo = false;
+        await _repo.ActualizarSinAsignacionesAsync(original);
+        Context.ChangeTracker.Clear();
+
+        var actualizada = await _repo.ObtenerPorIdAsync(id);
+        Assert.False(actualizada!.Activo);
+        var asignacion = Assert.Single(actualizada.Asignaciones);
+        // Si se hubiera hecho delete+insert (como ActualizarAsync), el Id cambiaría: la
+        // baja lógica NO debe reinsertar físicamente las asignaciones.
+        Assert.Equal(idAsignacionOriginal, asignacion.Id);
+    }
+
+    [Fact]
     public async Task ExisteNombreEjercicioAsync_DistingueEjercicios()
     {
         var fuente = await SeedFuenteAsync("Literal B");

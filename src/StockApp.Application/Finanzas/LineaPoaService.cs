@@ -142,15 +142,9 @@ public class LineaPoaService : ILineaPoaService
             throw new ReglaDeNegocioException($"La línea POA {id} ya está inactiva.");
 
         linea.Activo = false;
-        // La baja lógica NO toca las asignaciones: se re-pasan las existentes tal cual.
-        var asignacionesActuales = linea.Asignaciones
-            .Select(a => new AsignacionPresupuestal
-            {
-                FuenteFinanciamientoId = a.FuenteFinanciamientoId,
-                Monto = a.Monto,
-            })
-            .ToList();
-        await _repo.ActualizarAsync(linea, asignacionesActuales);
+        // La baja lógica NO toca las asignaciones: usa el método que solo actualiza la
+        // fila de la línea, sin reinsertarlas físicamente.
+        await _repo.ActualizarSinAsignacionesAsync(linea);
 
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id,

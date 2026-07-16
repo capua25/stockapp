@@ -210,15 +210,22 @@ public class LineaPoaServiceTests
     [Fact]
     public async Task BajaLogicaAsync_ActivoFalse_RegistraBajaLineaPoa()
     {
-        var linea = new LineaPoa { Id = 3, Nombre = "PRENSA", Programa = "Comunicación", Ejercicio = 2026, Activo = true };
+        var linea = new LineaPoa
+        {
+            Id = 3, Nombre = "PRENSA", Programa = "Comunicación", Ejercicio = 2026, Activo = true,
+            Asignaciones = { new AsignacionPresupuestal { Id = 7, LineaPoaId = 3, FuenteFinanciamientoId = 1, Monto = 5000m } },
+        };
         var (svc, repo, _, audit) = Crear();
         repo.Setup(r => r.ObtenerPorIdAsync(3)).ReturnsAsync(linea);
 
         await svc.BajaLogicaAsync(3);
 
-        repo.Verify(r => r.ActualizarAsync(
-            It.Is<LineaPoa>(l => l.Activo == false),
-            It.Is<IReadOnlyList<AsignacionPresupuestal>>(a => a.Count == 0)), Times.Once);
+        // La baja lógica NO debe reinsertar físicamente las asignaciones (ActualizarAsync
+        // hace delete+insert de las hijas): debe usar el método que solo toca la línea.
+        repo.Verify(r => r.ActualizarSinAsignacionesAsync(
+            It.Is<LineaPoa>(l => l.Id == 3 && l.Activo == false && l.Asignaciones.Count == 1
+                && l.Asignaciones[0].Id == 7)), Times.Once);
+        repo.Verify(r => r.ActualizarAsync(It.IsAny<LineaPoa>(), It.IsAny<IReadOnlyList<AsignacionPresupuestal>>()), Times.Never);
         audit.Verify(a => a.RegistrarAsync(
             It.IsAny<int>(), AccionAuditada.BajaLineaPoa,
             "LineaPoa", 3, It.IsAny<string>()), Times.Once);

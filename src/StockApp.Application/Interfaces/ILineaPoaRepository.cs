@@ -22,4 +22,11 @@ public interface ILineaPoaRepository
     /// tracked obtenida vía <see cref="ObtenerPorIdAsync"/>.
     /// </summary>
     Task ActualizarAsync(LineaPoa linea, IReadOnlyList<AsignacionPresupuestal> nuevasAsignaciones);
+
+    /// <summary>
+    /// Actualiza SOLO los campos propios de la línea (ej. Activo en la baja lógica), sin
+    /// tocar sus asignaciones. <paramref name="linea"/> debe ser la instancia tracked
+    /// obtenida vía <see cref="ObtenerPorIdAsync"/>, con los campos ya modificados.
+    /// </summary>
+    Task ActualizarSinAsignacionesAsync(LineaPoa linea);
 }

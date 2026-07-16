@@ -56,4 +56,13 @@ public class LineaPoaRepository : ILineaPoaRepository
         _ctx.LineasPoa.Update(linea);
         await _ctx.SaveChangesAsync();
     }
+
+    public async Task ActualizarSinAsignacionesAsync(LineaPoa linea)
+    {
+        // La línea llega tracked (vía ObtenerPorIdAsync) con sus campos propios ya
+        // modificados por el caller (ej. Activo = false). No se toca la colección
+        // Asignaciones: un simple SaveChanges persiste solo lo que cambió en la fila
+        // padre, sin el delete+insert físico de las hijas que hace ActualizarAsync.
+        await _ctx.SaveChangesAsync();
+    }
 }
