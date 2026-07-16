@@ -13,10 +13,13 @@ public static class Permisos
     public const string RegistrarMovimientos    = "movimientos.registrar";
     public const string RecalcularStock         = "stock.recalcular";
 
-    // Finanzas — Fase 1: por ahora Admin Y Operador tienen ambos (spec Finanzas §9);
+    // Finanzas — Fases 1 y 2: por ahora Admin Y Operador tienen todos (spec Finanzas §9);
     // el futuro sistema de permisos por usuario solo cambia el mapeo rol→permiso.
     public const string VerFinanzas              = "finanzas.ver";
     public const string GestionarMaestrosFinanzas = "finanzas.maestros";
+    public const string RegistrarGastos           = "finanzas.gastos";
+    public const string RegistrarPagos            = "finanzas.pagos";
+    public const string RegistrarIngresos         = "finanzas.ingresos";
 
     /// <summary>
     /// Lista explícita de todos los permisos del sistema (sin reflection). Consumida por
@@ -33,5 +36,8 @@ public static class Permisos
         RecalcularStock,
         VerFinanzas,
         GestionarMaestrosFinanzas,
+        RegistrarGastos,
+        RegistrarPagos,
+        RegistrarIngresos,
     ];
 }

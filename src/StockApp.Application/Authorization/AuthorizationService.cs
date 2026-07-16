@@ -20,6 +20,9 @@ public class AuthorizationService : IAuthorizationService
         Permisos.RecalcularStock,
         Permisos.VerFinanzas,
         Permisos.GestionarMaestrosFinanzas,
+        Permisos.RegistrarGastos,
+        Permisos.RegistrarPagos,
+        Permisos.RegistrarIngresos,
     ];
 
     public void Verificar(RolUsuario? rolActual, string accion)
