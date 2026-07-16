@@ -105,7 +105,7 @@ public partial class App : AvaloniaApp
             // que el ciclo de vida dependa solo del cierre de MainWindow.
             desktop.ShutdownMode = Avalonia.Controls.ShutdownMode.OnMainWindowClose;
 
-            var mainWindow = new MainWindow
+            var mainWindow = new MainWindow(_serviceProvider.GetRequiredService<IServicioEstadoVentana>())
             {
                 DataContext = shell,
             };
@@ -202,6 +202,11 @@ public partial class App : AvaloniaApp
         // ── Inc 6: guardado de archivos (file picker) ─────────────────────────
         // Singleton — sin estado, accede a la ventana principal vía IStorageProvider.
         services.AddSingleton<IServicioGuardadoArchivo, ServicioGuardadoArchivo>();
+
+        // ── Persistencia de estado de ventana (tamaño/posición/maximizada) ────
+        // Singleton — preferencia LOCAL por PC (JSON en ApplicationData), no por usuario
+        // logueado ni en BD/API. Sin estado interno propio más allá de la ruta del archivo.
+        services.AddSingleton<IServicioEstadoVentana, ServicioEstadoVentana>();
 
         // ── Inc 5: VMs de movimientos ─────────────────────────────────────────
         services.AddTransient<EntradaRegistroViewModel>();

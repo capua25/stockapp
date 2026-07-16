@@ -72,6 +72,7 @@ public class ComposicionDIApiTests
         services.AddSingleton<IInfoApp, InfoApp>();
         services.AddSingleton<IConfirmacionService, ConfirmacionService>();
         services.AddSingleton<IServicioGuardadoArchivo, ServicioGuardadoArchivo>();
+        services.AddSingleton<IServicioEstadoVentana, ServicioEstadoVentana>();
         services.AddTransient<ICsvExporter, CsvExporter>();
 
         // ── ViewModels (los mismos que cubrían los 3 tests reemplazados) ──────
@@ -172,5 +173,13 @@ public class ComposicionDIApiTests
 
         Assert.NotNull(sp.GetRequiredService<INavigationService>());
         Assert.NotNull(sp.GetRequiredService<IServicioGuardadoArchivo>());
+    }
+
+    [Fact]
+    public void Contenedor_Resuelve_IServicioEstadoVentana()
+    {
+        var sp = CrearContenedor();
+
+        Assert.NotNull(sp.GetRequiredService<IServicioEstadoVentana>());
     }
 }
