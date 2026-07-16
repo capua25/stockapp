@@ -29,7 +29,8 @@ public abstract class PostgresRepositoryTestBase : IDisposable
         ctx.Database.ExecuteSqlRaw(
             "TRUNCATE TABLE \"LogsAuditoria\", \"MovimientosStock\", \"Productos\", " +
             "\"Categorias\", \"Proveedores\", \"UnidadesMedida\", \"Usuarios\", " +
-            "\"AsignacionesPresupuestales\", \"LineasPoa\", \"RubrosGasto\", \"FuentesFinanciamiento\" " +
+            "\"AsignacionesPresupuestales\", \"LineasPoa\", \"RubrosGasto\", \"FuentesFinanciamiento\", " +
+            "\"PagosGasto\", \"Gastos\", \"IngresosCaja\" " +
             "RESTART IDENTITY CASCADE;");
     }
 }
