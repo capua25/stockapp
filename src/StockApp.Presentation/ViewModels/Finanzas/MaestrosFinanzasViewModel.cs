@@ -1,4 +1,3 @@
-using System.Threading.Tasks;
 using StockApp.Presentation.ViewModels;
 
 namespace StockApp.Presentation.ViewModels.Finanzas;
@@ -22,12 +21,5 @@ public partial class MaestrosFinanzasViewModel : ViewModelBase
         FuentesVm   = fuentesVm;
         RubrosVm    = rubrosVm;
         LineasPoaVm = lineasPoaVm;
-    }
-
-    public async Task CargarAsync()
-    {
-        await FuentesVm.CargarAsync();
-        await RubrosVm.CargarAsync();
-        await LineasPoaVm.CargarAsync();
     }
 }
