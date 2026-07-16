@@ -332,4 +332,40 @@ public class ShellMainViewModelTests
         sessionMock.Verify(s => s.CerrarSesion(), Times.Never);
         Assert.False(disparado);
     }
+
+    // ── Desconectar (fix leak de suscripción a INavigationService.Cambiado) ────
+
+    [Fact]
+    public void Desconectar_DesuscribeDeNavegacionCambiada_YaNoActualizaCurrentContent()
+    {
+        var (vm, _, navMock, _) = Crear(RolUsuario.Admin);
+
+        var otroVm = Mock.Of<ViewModelBase>();
+        navMock.Setup(n => n.Actual).Returns(otroVm);
+        navMock.Raise(n => n.Cambiado += null);
+        Assert.Same(otroVm, vm.CurrentContent);
+
+        vm.Desconectar();
+
+        var otroVm2 = Mock.Of<ViewModelBase>();
+        navMock.Setup(n => n.Actual).Returns(otroVm2);
+        navMock.Raise(n => n.Cambiado += null);
+
+        // Tras Desconectar(), el handler ya no está enganchado: CurrentContent no debe
+        // actualizarse con la nueva notificación del singleton (INavigationService), que
+        // es justamente lo que evita que esta instancia "muerta" quede reaccionando
+        // indefinidamente a navegaciones de la sesión siguiente.
+        Assert.Same(otroVm, vm.CurrentContent);
+    }
+
+    [Fact]
+    public void Desconectar_LlamadoDosVeces_NoLanzaExcepcion()
+    {
+        var (vm, _, _, _) = Crear(RolUsuario.Admin);
+
+        vm.Desconectar();
+        var ex = Record.Exception(() => vm.Desconectar());
+
+        Assert.Null(ex);
+    }
 }

@@ -183,4 +183,64 @@ public class ShellViewModelTests
 
         Assert.Same(primerVm, shell.CurrentViewModel);
     }
+
+    // ── fix leak de suscripción: ShellMainViewModel.Desconectar() ───────────────
+
+    [Fact]
+    public async Task Login_Logout_Login_Logout_NoDuplicaMostrarLogin()
+    {
+        // Cada ciclo login→logout crea una instancia nueva de ShellMainViewModel (Transient).
+        // Este test cubre dos cosas a la vez: (1) que ShellViewModel desconecta la instancia
+        // vieja antes de volver al login (fix del leak sobre INavigationService.Cambiado), y
+        // (2) el chequeo simétrico que pidió el reviewer: como ShellMainViewModel.
+        // CerrarSesionSolicitado se suscribe una sola vez por instancia nueva, un segundo
+        // ciclo no debe duplicar el MostrarLogin (un solo handler disparando por evento).
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
+        var confirmMock = new Mock<IConfirmacionService>();
+        confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(true);
+
+        var navSvc = new NavigationService(t =>
+        {
+            if (t == typeof(ShellMainViewModel))
+                return new ShellMainViewModel(
+                    sessionMock.Object, Mock.Of<INavigationService>(), InfoAppStub, confirmMock.Object);
+            if (t == typeof(InicioViewModel))
+                return new InicioViewModel(sessionMock.Object, Mock.Of<INavigationService>());
+            throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
+        });
+
+        var updateStub = new Mock<IUpdateService>();
+        updateStub.Setup(s => s.BuscarAsync(default)).ReturnsAsync(UpdateCheckResult.SinUpdate);
+        var coordinador = new CoordinadorActualizacion(updateStub.Object, new PoliticaUxActualizacion());
+        var licenciaMock = new Mock<ILicenciaService>();
+        licenciaMock.Setup(s => s.ObtenerEstadoAsync())
+                    .ReturnsAsync(new EstadoLicenciaDto(true, "MAQ"));
+
+        var shell = new ShellViewModel(
+            Mock.Of<IAuthService>(), licenciaMock.Object, Mock.Of<IResetAdminService>(),
+            navSvc, coordinador, new FakeUiDispatcher(), InfoAppStub);
+
+        var vecesQueMostroLogin = 0;
+        shell.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ShellViewModel.CurrentViewModel) &&
+                shell.CurrentViewModel is LoginViewModel)
+                vecesQueMostroLogin++;
+        };
+
+        shell.MostrarContenidoPrincipal();
+        var shellMain1 = Assert.IsType<ShellMainViewModel>(shell.CurrentViewModel);
+        await shellMain1.CerrarSesionCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, vecesQueMostroLogin);
+        Assert.IsType<LoginViewModel>(shell.CurrentViewModel);
+
+        shell.MostrarContenidoPrincipal();
+        var shellMain2 = Assert.IsType<ShellMainViewModel>(shell.CurrentViewModel);
+        Assert.NotSame(shellMain1, shellMain2);
+        await shellMain2.CerrarSesionCommand.ExecuteAsync(null);
+
+        Assert.Equal(2, vecesQueMostroLogin);
+    }
 }

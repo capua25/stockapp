@@ -59,17 +59,40 @@ public partial class ShellMainViewModel : ViewModelBase
         _confirmacion = confirmacion;
 
         // Suscribirse al evento del servicio para actualizar la región de contenido
-        _navigation.Cambiado += () =>
-        {
-            // El contenido del shell nunca puede ser el propio shell: evita la recursión
-            // ShellMainView dentro de ShellMainView (StackOverflow al renderizar).
-            // Se compara por referencia contra 'this' (no con el tipo) porque es la guardia
-            // más estricta posible: excluye exactamente la instancia que causaría el ciclo,
-            // sin descartar por error una futura subclase de ShellMainViewModel que sí
-            // debiera poder navegarse como contenido válido.
-            if (!ReferenceEquals(_navigation.Actual, this))
-                CurrentContent = _navigation.Actual;
-        };
+        _navigation.Cambiado += OnNavegacionCambiada;
+    }
+
+    /// <summary>
+    /// Handler de <see cref="INavigationService.Cambiado"/>. Se guarda como método (y no como
+    /// lambda inline) para poder desuscribirlo en <see cref="Desconectar"/>: INavigationService
+    /// es Singleton y ShellMainViewModel es Transient, así que cada ciclo login→logout→login
+    /// crea una instancia nueva; sin desuscripción, el delegate del singleton retiene para
+    /// siempre cada instancia vieja (leak lineal) y dispara notificaciones redundantes en
+    /// cada Navegar&lt;T&gt;() sobre VMs que ya no están en pantalla.
+    /// </summary>
+    private void OnNavegacionCambiada()
+    {
+        // El contenido del shell nunca puede ser el propio shell: evita la recursión
+        // ShellMainView dentro de ShellMainView (StackOverflow al renderizar).
+        // Se compara por referencia contra 'this' (no con el tipo) porque es la guardia
+        // más estricta posible: excluye exactamente la instancia que causaría el ciclo,
+        // sin descartar por error una futura subclase de ShellMainViewModel que sí
+        // debiera poder navegarse como contenido válido.
+        if (!ReferenceEquals(_navigation.Actual, this))
+            CurrentContent = _navigation.Actual;
+    }
+
+    /// <summary>
+    /// Desconecta esta instancia de los eventos externos (singletons) a los que se suscribió
+    /// en el constructor. Debe invocarse desde la composition root (ShellViewModel) antes de
+    /// reemplazar el VM actual al cerrar sesión, para que el <see cref="INavigationService"/>
+    /// (Singleton) no retenga esta instancia indefinidamente vía su delegate de
+    /// <see cref="INavigationService.Cambiado"/>. Idempotente: desuscribir dos veces el mismo
+    /// handler no falla ni tiene efecto extra.
+    /// </summary>
+    public void Desconectar()
+    {
+        _navigation.Cambiado -= OnNavegacionCambiada;
     }
 
     /// <summary>

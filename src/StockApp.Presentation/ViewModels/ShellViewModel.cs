@@ -239,12 +239,20 @@ public partial class ShellViewModel : ViewModelBase
         CurrentViewModel = _navigation.Actual;
 
         // Cerrar sesión (botón del sidebar): ShellMainViewModel ya limpió la sesión
-        // (ICurrentSession.CerrarSesion()) antes de disparar el evento; acá solo navegamos
-        // de vuelta al login, mismo patrón que BloqueoLicenciaViewModel.LicenciaActivada y
-        // ResetAdminViewModel.Volver. Se suscribe una sola vez por instancia de
-        // ShellMainViewModel (una por login, ya que el VM es transient).
+        // (ICurrentSession.CerrarSesion()) antes de disparar el evento; acá desconectamos el
+        // VM viejo de INavigationService.Cambiado (Singleton) ANTES de navegar de vuelta al
+        // login — si no, cada ciclo login→logout→login deja la instancia anterior retenida
+        // para siempre por el delegate del singleton (leak lineal + notificaciones redundantes
+        // en cada Navegar<T>()). Mismo patrón de navegación que BloqueoLicenciaViewModel.
+        // LicenciaActivada y ResetAdminViewModel.Volver. Se suscribe una sola vez por
+        // instancia de ShellMainViewModel (una por login, ya que el VM es transient: no hay
+        // riesgo de acumular handlers duplicados en CerrarSesionSolicitado).
         if (_navigation.Actual is ShellMainViewModel shellMain)
-            shellMain.CerrarSesionSolicitado += () => _uiDispatcher.Post(MostrarLogin);
+            shellMain.CerrarSesionSolicitado += () => _uiDispatcher.Post(() =>
+            {
+                shellMain.Desconectar();
+                MostrarLogin();
+            });
 
         // Navega a la pantalla de bienvenida como contenido inicial de la región central.
         // Orden crítico: Navegar<ShellMainViewModel>() dispara el evento Cambiado del
