@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
@@ -53,16 +54,45 @@ public class GastoRepository : IGastoRepository
 
     public async Task<int> AgregarAsync(Gasto gasto)
     {
-        _ctx.Gastos.Add(gasto);  // inserta el grafo completo (gasto + pagos)
-        await _ctx.SaveChangesAsync();
-        return gasto.Id;
+        try
+        {
+            _ctx.Gastos.Add(gasto);  // inserta el grafo completo (gasto + pagos)
+            await _ctx.SaveChangesAsync();
+            return gasto.Id;
+        }
+        catch (DbUpdateException ex) when (EsViolacionFacturaUnica(ex))
+        {
+            throw new ReglaDeNegocioException(
+                $"Ya existe la factura '{gasto.NumeroFactura}' para ese proveedor.");
+        }
     }
 
-    public Task ActualizarAsync(Gasto gasto)
+    public async Task ActualizarAsync(Gasto gasto)
     {
-        _ctx.Gastos.Update(gasto);
-        return _ctx.SaveChangesAsync();
+        try
+        {
+            _ctx.Gastos.Update(gasto);
+            await _ctx.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (EsViolacionFacturaUnica(ex))
+        {
+            throw new ReglaDeNegocioException(
+                $"Ya existe la factura '{gasto.NumeroFactura}' para ese proveedor.");
+        }
     }
+
+    /// <summary>
+    /// I2 (review final f2-gastos): <c>GastoService.ValidarFacturaUnicaAsync</c> (check-then-act
+    /// en memoria) da el 409 con mensaje lindo en el camino feliz; el índice único PARCIAL en BD
+    /// (migración UniqueFacturaProveedorGastosActivos, Activo=TRUE AND NumeroFactura NOT NULL)
+    /// cierra la carrera real de dos altas concurrentes con la misma factura. Sin este catch acá
+    /// (en el repo, que es quien referencia Npgsql — Application NO referencia EF/Npgsql para
+    /// mantener la capa desacoplada) la violación llegaría como DbUpdateException cruda y el
+    /// endpoint respondería 500 en vez de 409.
+    /// </summary>
+    private static bool EsViolacionFacturaUnica(DbUpdateException ex)
+        => ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } pg
+           && pg.ConstraintName == "IX_Gastos_ProveedorId_NumeroFactura";
 
     public async Task<int> AgregarPagoAsync(PagoGasto pago)
     {

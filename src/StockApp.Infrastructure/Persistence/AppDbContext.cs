@@ -153,9 +153,16 @@ public class AppDbContext : DbContext
             e.Property(g => g.MontoTotal).HasPrecision(18, 4);
             e.Property(g => g.Activo).HasDefaultValue(true);
             e.HasIndex(g => g.Fecha);
-            // No único: la unicidad proveedor+factura es regla de negocio SOLO entre
-            // gastos activos (un gasto anulado libera su número de factura).
-            e.HasIndex(g => new { g.ProveedorId, g.NumeroFactura });
+            // Único PARCIAL: la unicidad proveedor+factura es regla de negocio SOLO entre
+            // gastos activos con factura (un gasto anulado libera su número de factura, y
+            // los gastos sin factura —compromisos, expedientes— no cuentan). Cierra en BD
+            // la carrera que ValidarFacturaUnicaAsync (check-then-act en memoria) no puede
+            // cerrar sola: dos altas concurrentes con la misma factura ya no pueden
+            // committear ambas. GastoService mapea la violación (Npgsql 23505) a
+            // ReglaDeNegocioException con el mismo mensaje que la validación de aplicación.
+            e.HasIndex(g => new { g.ProveedorId, g.NumeroFactura })
+                .IsUnique()
+                .HasFilter("\"Activo\" = TRUE AND \"NumeroFactura\" IS NOT NULL");
             e.HasOne(g => g.Proveedor).WithMany()
                 .HasForeignKey(g => g.ProveedorId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(g => g.FuenteFinanciamiento).WithMany()

@@ -1,6 +1,7 @@
 using StockApp.Application.Finanzas;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 using StockApp.Infrastructure.Repositories;
 using StockApp.Infrastructure.Tests.Fixtures;
 using Xunit;
@@ -183,6 +184,38 @@ public class GastoRepositoryTests : PostgresRepositoryTestBase
 
         var releido = await _repo.ObtenerPorIdAsync(id);
         Assert.Equal(0m, releido!.TotalPagado);
+    }
+
+    // ── I2: índice único parcial proveedor+factura (gastos activos) ─────────
+
+    [Fact]
+    public async Task AgregarAsync_FacturaDuplicadaProveedorActivo_MapeaAReglaDeNegocio()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var hoy = DateTime.UtcNow;
+        await _repo.AgregarAsync(NuevoGasto(proveedorId, fuenteId, rubroId, hoy, factura: "C-0001"));
+        Context.ChangeTracker.Clear();
+
+        // El índice único parcial (Activo=TRUE) es quien realmente bloquea esto en BD;
+        // el catch de GastoRepository lo mapea a 409 en vez de dejar pasar el 500 crudo.
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() =>
+            _repo.AgregarAsync(NuevoGasto(proveedorId, fuenteId, rubroId, hoy, factura: "C-0001")));
+    }
+
+    [Fact]
+    public async Task AgregarAsync_FacturaDuplicadaPeroGastoOriginalAnulado_PermiteReusarFactura()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var hoy = DateTime.UtcNow;
+        var anulado = NuevoGasto(proveedorId, fuenteId, rubroId, hoy, factura: "C-0002");
+        anulado.Activo = false;
+        await _repo.AgregarAsync(anulado);
+        Context.ChangeTracker.Clear();
+
+        // El índice es PARCIAL (solo Activo=TRUE): un gasto anulado libera su factura.
+        var id = await _repo.AgregarAsync(NuevoGasto(proveedorId, fuenteId, rubroId, hoy, factura: "C-0002"));
+
+        Assert.True(id > 0);
     }
 
     [Fact]
