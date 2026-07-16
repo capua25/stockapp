@@ -22,6 +22,17 @@ public interface IGastoRepository
 
     Task<int> AgregarPagoAsync(PagoGasto pago);
 
+    /// <summary>
+    /// Registra el pago dentro de una transacción que bloquea (FOR UPDATE) la fila del
+    /// gasto y re-verifica el saldo pendiente contra los pagos activos YA committeados
+    /// antes de insertar — cierra la ventana de sobrepago por pagos concurrentes que el
+    /// check-then-insert en memoria (validar en el service y recién ahí insertar) dejaba
+    /// abierta. Lanza <see cref="StockApp.Domain.Exceptions.EntidadNoEncontradaException"/>
+    /// si el gasto no existe y <see cref="StockApp.Domain.Exceptions.ReglaDeNegocioException"/>
+    /// si está anulado o si el pago supera el saldo pendiente re-verificado.
+    /// </summary>
+    Task<int> RegistrarPagoAtomicoAsync(PagoGasto pago);
+
     /// <summary><paramref name="pago"/> debe ser una instancia tracked (hija de ObtenerPorIdAsync).</summary>
     Task ActualizarPagoAsync(PagoGasto pago);
 

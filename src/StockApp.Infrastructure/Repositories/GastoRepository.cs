@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Exceptions;
 using StockApp.Infrastructure.Persistence;
 
 namespace StockApp.Infrastructure.Repositories;
@@ -74,6 +75,50 @@ public class GastoRepository : IGastoRepository
     {
         _ctx.PagosGasto.Update(pago);
         return _ctx.SaveChangesAsync();
+    }
+
+    /// <inheritdoc/>
+    /// FOR UPDATE serializa: dos pagos concurrentes sobre el mismo gasto se ejecutan uno
+    /// detrás del otro (el segundo espera a que el primero haga commit/rollback), así que
+    /// el SumAsync de pagos activos que lee el segundo YA ve el pago insertado por el
+    /// primero. Mismo principio que MovimientoStockRepository.RegistrarMovimientoAtomicoAsync
+    /// (guard atómico dentro de la transacción, no check-then-insert en memoria).
+    public async Task<int> RegistrarPagoAtomicoAsync(PagoGasto pago)
+    {
+        await using var tx = await _ctx.Database.BeginTransactionAsync();
+
+        var gasto = await _ctx.Gastos
+            .FromSqlInterpolated($"SELECT * FROM \"Gastos\" WHERE \"Id\" = {pago.GastoId} FOR UPDATE")
+            .FirstOrDefaultAsync();
+
+        if (gasto is null)
+        {
+            await tx.RollbackAsync();
+            throw new EntidadNoEncontradaException($"Gasto {pago.GastoId} no encontrado.");
+        }
+        if (!gasto.Activo)
+        {
+            await tx.RollbackAsync();
+            throw new ReglaDeNegocioException("No se pueden registrar pagos sobre un gasto anulado.");
+        }
+
+        var totalPagado = await _ctx.PagosGasto
+            .Where(p => p.GastoId == pago.GastoId && p.Activo)
+            .SumAsync(p => (decimal?)p.Monto) ?? 0m;
+        var saldoPendiente = gasto.MontoTotal - totalPagado;
+
+        if (pago.Monto > saldoPendiente)
+        {
+            await tx.RollbackAsync();
+            throw new ReglaDeNegocioException(
+                $"El pago ({pago.Monto}) supera el saldo pendiente de la factura ({saldoPendiente}).");
+        }
+
+        _ctx.PagosGasto.Add(pago);
+        await _ctx.SaveChangesAsync();
+        await tx.CommitAsync();
+
+        return pago.Id;
     }
 
     public async Task<decimal> TotalGastadoLineaFuenteAsync(

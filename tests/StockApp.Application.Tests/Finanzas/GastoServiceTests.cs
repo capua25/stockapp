@@ -313,27 +313,30 @@ public class GastoServiceTests
 
     // ── Pagos ────────────────────────────────────────────────────────────────
 
+    // La re-verificación de saldo/anulado ahora vive DENTRO de la transacción atómica del
+    // repo (GastoRepository.RegistrarPagoAtomicoAsync, FOR UPDATE) — cierra la ventana de
+    // sobrepago concurrente que el check-then-insert en memoria dejaba abierta. Estos tests
+    // unitarios verifican que el service delega y propaga; la regla de negocio en sí (saldo,
+    // anulado, carrera real) se cubre con Postgres real en
+    // GastoRepositoryConcurrenciaTests.DosPagosSimultaneos_SuperanElSaldo_UnoSoloTieneExito.
+
     [Fact]
-    public async Task RegistrarPagoAsync_SuperaElSaldo_LanzaReglaDeNegocio()
+    public async Task RegistrarPagoAsync_RepoRechazaPorSaldo_PropagaReglaDeNegocio()
     {
         var m = Crear();
-        var gasto = GastoValido();
-        gasto.Id = 1;
-        gasto.Pagos.Add(new PagoGasto { GastoId = 1, Fecha = Hoy, Monto = 800m });
-        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(gasto);
+        m.Repo.Setup(r => r.RegistrarPagoAtomicoAsync(It.IsAny<PagoGasto>()))
+            .ThrowsAsync(new ReglaDeNegocioException("El pago (300) supera el saldo pendiente de la factura (200)."));
 
         await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.RegistrarPagoAsync(
-            new PagoGasto { GastoId = 1, Fecha = Hoy, Monto = 300m }));  // saldo = 200
+            new PagoGasto { GastoId = 1, Fecha = Hoy, Monto = 300m }));
     }
 
     [Fact]
-    public async Task RegistrarPagoAsync_GastoAnulado_LanzaReglaDeNegocio()
+    public async Task RegistrarPagoAsync_RepoRechazaPorAnulado_PropagaReglaDeNegocio()
     {
         var m = Crear();
-        var gasto = GastoValido();
-        gasto.Id = 1;
-        gasto.Activo = false;
-        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(gasto);
+        m.Repo.Setup(r => r.RegistrarPagoAtomicoAsync(It.IsAny<PagoGasto>()))
+            .ThrowsAsync(new ReglaDeNegocioException("No se pueden registrar pagos sobre un gasto anulado."));
 
         await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.RegistrarPagoAsync(
             new PagoGasto { GastoId = 1, Fecha = Hoy, Monto = 100m }));
@@ -343,10 +346,7 @@ public class GastoServiceTests
     public async Task RegistrarPagoAsync_Valido_PersisteYAudita()
     {
         var m = Crear();
-        var gasto = GastoValido();
-        gasto.Id = 1;
-        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(gasto);
-        m.Repo.Setup(r => r.AgregarPagoAsync(It.IsAny<PagoGasto>())).ReturnsAsync(21);
+        m.Repo.Setup(r => r.RegistrarPagoAtomicoAsync(It.IsAny<PagoGasto>())).ReturnsAsync(21);
 
         var pagoId = await m.Svc.RegistrarPagoAsync(
             new PagoGasto { GastoId = 1, Fecha = Hoy, Monto = 1000m, Nota = "pago total" });
@@ -355,6 +355,17 @@ public class GastoServiceTests
         m.Audit.Verify(a => a.RegistrarAsync(
             It.IsAny<int>(), AccionAuditada.AltaPagoGasto, "PagoGasto", 21,
             It.Is<string>(d => d.Contains("1000"))), Times.Once);
+    }
+
+    [Fact]
+    public async Task RegistrarPagoAsync_MontoInvalido_NoLlamaAlRepo()
+    {
+        var m = Crear();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => m.Svc.RegistrarPagoAsync(
+            new PagoGasto { GastoId = 1, Fecha = Hoy, Monto = 0m }));
+
+        m.Repo.Verify(r => r.RegistrarPagoAtomicoAsync(It.IsAny<PagoGasto>()), Times.Never);
     }
 
     [Fact]

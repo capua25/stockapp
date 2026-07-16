@@ -180,16 +180,10 @@ public class GastoService : IGastoService
         if (pago.Fecha == default)
             throw new ArgumentException("La fecha del pago es obligatoria.");
 
-        var gasto = await _repo.ObtenerPorIdAsync(pago.GastoId)
-            ?? throw new EntidadNoEncontradaException($"Gasto {pago.GastoId} no encontrado.");
-
-        if (!gasto.Activo)
-            throw new ReglaDeNegocioException("No se pueden registrar pagos sobre un gasto anulado.");
-        if (pago.Monto > gasto.SaldoPendiente)
-            throw new ReglaDeNegocioException(
-                $"El pago ({pago.Monto}) supera el saldo pendiente de la factura ({gasto.SaldoPendiente}).");
-
-        var pagoId = await _repo.AgregarPagoAsync(pago);
+        // La existencia del gasto, el estado (anulado) y el saldo pendiente se re-verifican
+        // DENTRO de la transacción atómica del repo (FOR UPDATE) — evita el check-then-insert
+        // que permitía sobrepago con dos pagos concurrentes sobre el mismo gasto.
+        var pagoId = await _repo.RegistrarPagoAtomicoAsync(pago);
 
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id, AccionAuditada.AltaPagoGasto, "PagoGasto", pagoId,
