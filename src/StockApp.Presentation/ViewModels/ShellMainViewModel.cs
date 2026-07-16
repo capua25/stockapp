@@ -203,6 +203,20 @@ public partial class ShellMainViewModel : ViewModelBase
     // ── Finanzas — Fase 1: Admin y Operador ───────────────────────────────────
 
     [RelayCommand]
+    private void NavGastos()
+    {
+        SeccionActiva = "Gastos";
+        _navigation.Navegar<GastosViewModel>();
+    }
+
+    [RelayCommand]
+    private void NavIngresos()
+    {
+        SeccionActiva = "Ingresos";
+        _navigation.Navegar<IngresosViewModel>();
+    }
+
+    [RelayCommand]
     private void NavMaestrosFinanzas()
     {
         SeccionActiva = "MaestrosFinanzas";

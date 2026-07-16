@@ -251,6 +251,13 @@ public partial class App : AvaloniaApp
         services.AddTransient<LineaPoaListViewModel>();
         services.AddTransient<LineaPoaFormViewModel>();
 
+        // ── Módulo Finanzas — Fase 2: VMs de gastos e ingresos ────────────────
+        services.AddTransient<GastosViewModel>();
+        services.AddTransient<GastoFormViewModel>();
+        services.AddTransient<PagosGastoViewModel>();
+        services.AddTransient<IngresosViewModel>();
+        services.AddTransient<IngresoFormViewModel>();
+
         // ── Presentation: ViewModels del shell ───────────────────────────────
 
         // ShellViewModel: singleton — vive toda la vida de la app

@@ -112,6 +112,28 @@
                            Margin="8,8,0,4"
                            Opacity="0.6" />
 
+                <Button Command="{Binding NavGastosCommand}"
+                        Classes="ghost"
+                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Gastos}"
+                        HorizontalAlignment="Stretch">
+                    <Grid ColumnDefinitions="Auto,*">
+                        <i:Icon Grid.Column="0" Value="mdi-receipt-text" Foreground="{DynamicResource SidebarTextoBrush}" />
+                        <TextBlock Grid.Column="1" Text="Gastos y facturas" VerticalAlignment="Center"
+                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                </Button>
+
+                <Button Command="{Binding NavIngresosCommand}"
+                        Classes="ghost"
+                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Ingresos}"
+                        HorizontalAlignment="Stretch">
+                    <Grid ColumnDefinitions="Auto,*">
+                        <i:Icon Grid.Column="0" Value="mdi-cash-plus" Foreground="{DynamicResource SidebarTextoBrush}" />
+                        <TextBlock Grid.Column="1" Text="Ingresos de caja" VerticalAlignment="Center"
+                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                </Button>
+
                 <Button Command="{Binding NavMaestrosFinanzasCommand}"
                         Classes="ghost"
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=MaestrosFinanzas}"

@@ -1,0 +1,119 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="760" d:DesignHeight="760"
+             x:Class="StockApp.Presentation.Views.Finanzas.GastoFormView"
+             x:DataType="vm:GastoFormViewModel">
+
+    <ScrollViewer>
+        <DockPanel Margin="24">
+
+            <TextBlock DockPanel.Dock="Top"
+                       Text="{Binding Titulo}"
+                       Classes="titulo-vista"
+                       Margin="0,0,0,16" />
+
+            <Border Classes="card" VerticalAlignment="Top">
+                <StackPanel Spacing="12" MaxWidth="620" HorizontalAlignment="Left">
+
+                    <TextBlock Text="Proveedor" />
+                    <ComboBox ItemsSource="{Binding ProveedoresDisponibles}"
+                              SelectedItem="{Binding ProveedorSeleccionado}"
+                              PlaceholderText="Elegí el proveedor"
+                              HorizontalAlignment="Stretch">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Nombre}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+
+                    <Grid ColumnDefinitions="*,12,*">
+                        <StackPanel Grid.Column="0" Spacing="4">
+                            <TextBlock Text="Número de factura (opcional)" />
+                            <TextBox Text="{Binding NumeroFactura}" Watermark="Ej.: A-0001234" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Spacing="4">
+                            <TextBlock Text="Orden de compra (opcional)" />
+                            <TextBox Text="{Binding NumeroOrden}" Watermark="Ej.: OC-77" />
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Text="Detalle" />
+                    <TextBox Text="{Binding Detalle}" Watermark="Ej.: Materiales para la rambla" />
+
+                    <TextBlock Text="Destino (opcional)" />
+                    <TextBox Text="{Binding Destino}" Watermark="Ej.: Corralón municipal" />
+
+                    <Grid ColumnDefinitions="*,12,*">
+                        <StackPanel Grid.Column="0" Spacing="4">
+                            <TextBlock Text="Fecha" />
+                            <DatePicker SelectedDate="{Binding FechaSeleccionada}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Spacing="4">
+                            <TextBlock Text="Monto total" />
+                            <TextBox Text="{Binding MontoTexto}" Watermark="Ej.: 1.500,50" />
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Text="Fuente de financiamiento" />
+                    <ComboBox ItemsSource="{Binding FuentesDisponibles}"
+                              SelectedItem="{Binding FuenteSeleccionada}"
+                              PlaceholderText="Elegí la fuente"
+                              HorizontalAlignment="Stretch">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Nombre}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+
+                    <TextBlock Text="Rubro" />
+                    <ComboBox ItemsSource="{Binding RubrosDisponibles}"
+                              SelectedItem="{Binding RubroSeleccionado}"
+                              PlaceholderText="Elegí el rubro"
+                              HorizontalAlignment="Stretch">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Nombre}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+
+                    <TextBlock Text="Línea POA (opcional)" />
+                    <ComboBox ItemsSource="{Binding LineasPoaDisponibles}"
+                              SelectedItem="{Binding LineaPoaSeleccionada}"
+                              PlaceholderText="Sin línea POA"
+                              HorizontalAlignment="Stretch">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding Nombre}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+
+                    <CheckBox IsChecked="{Binding EsCredito}" Content="Compra a crédito" />
+                    <StackPanel Spacing="4" IsVisible="{Binding EsCredito}">
+                        <TextBlock Text="Fecha de vencimiento" />
+                        <DatePicker SelectedDate="{Binding FechaVencimientoSeleccionada}" />
+                    </StackPanel>
+
+                    <TextBlock Text="{Binding MensajeError}"
+                               Foreground="Red"
+                               TextWrapping="Wrap"
+                               IsVisible="{Binding MensajeError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Classes="primary" Content="Guardar" Command="{Binding GuardarCommand}" />
+                        <Button Classes="secondary" Content="Cancelar" Command="{Binding CancelarCommand}" />
+                    </StackPanel>
+
+                </StackPanel>
+            </Border>
+
+        </DockPanel>
+    </ScrollViewer>
+
+</UserControl>

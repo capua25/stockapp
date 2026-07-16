@@ -1,0 +1,114 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
+             xmlns:e="using:StockApp.Domain.Entities"
+             xmlns:conv="using:StockApp.Presentation.Converters"
+             xmlns:i="https://github.com/projektanker/icons.avalonia"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="820" d:DesignHeight="640"
+             x:Class="StockApp.Presentation.Views.Finanzas.PagosGastoView"
+             x:DataType="vm:PagosGastoViewModel">
+
+    <DockPanel Margin="24">
+
+        <TextBlock DockPanel.Dock="Top"
+                   Text="Pagos de la factura"
+                   Classes="titulo-vista"
+                   Margin="0,0,0,8" />
+        <TextBlock DockPanel.Dock="Top"
+                   Text="{Binding TituloGasto}"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,16" />
+
+        <!-- Resumen -->
+        <Border DockPanel.Dock="Top" Classes="card" Margin="0,0,0,12">
+            <StackPanel Orientation="Horizontal" Spacing="32">
+                <StackPanel>
+                    <TextBlock Text="Monto total" Opacity="0.7" />
+                    <TextBlock Text="{Binding MontoTotal, Converter={x:Static conv:MonedaConverter.Instance}}"
+                               FontWeight="SemiBold" />
+                </StackPanel>
+                <StackPanel>
+                    <TextBlock Text="Pagado" Opacity="0.7" />
+                    <TextBlock Text="{Binding TotalPagado, Converter={x:Static conv:MonedaConverter.Instance}}"
+                               FontWeight="SemiBold" />
+                </StackPanel>
+                <StackPanel>
+                    <TextBlock Text="Saldo" Opacity="0.7" />
+                    <TextBlock Text="{Binding SaldoPendiente, Converter={x:Static conv:MonedaConverter.Instance}}"
+                               FontWeight="SemiBold" />
+                </StackPanel>
+                <StackPanel>
+                    <TextBlock Text="Estado" Opacity="0.7" />
+                    <TextBlock Text="{Binding Estado}" FontWeight="SemiBold" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Registrar pago -->
+        <Border DockPanel.Dock="Top" Classes="card" Margin="0,0,0,12">
+            <StackPanel Spacing="8">
+                <TextBlock Text="Registrar pago" FontWeight="SemiBold" />
+                <WrapPanel>
+                    <StackPanel Margin="0,0,12,8">
+                        <TextBlock Text="Fecha" />
+                        <DatePicker SelectedDate="{Binding FechaSeleccionada}" />
+                    </StackPanel>
+                    <StackPanel Margin="0,0,12,8" MinWidth="140">
+                        <TextBlock Text="Monto" />
+                        <TextBox Text="{Binding MontoTexto}" Watermark="Ej.: 500,00" />
+                    </StackPanel>
+                    <StackPanel Margin="0,0,12,8" MinWidth="220">
+                        <TextBlock Text="Nota (opcional)" />
+                        <TextBox Text="{Binding Nota}" Watermark="Ej.: recibo 123" />
+                    </StackPanel>
+                </WrapPanel>
+                <TextBlock Text="{Binding MensajeError}"
+                           Foreground="Red"
+                           TextWrapping="Wrap"
+                           IsVisible="{Binding MensajeError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Classes="primary" Content="Registrar pago" Command="{Binding RegistrarPagoCommand}" />
+                    <Button Classes="secondary" Content="Volver" Command="{Binding VolverCommand}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Lista de pagos -->
+        <Border Classes="card">
+            <ListBox ItemsSource="{Binding Pagos}">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="e:PagoGasto">
+                        <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" Margin="4">
+                            <TextBlock Grid.Column="0"
+                                       Text="{Binding Fecha, Converter={x:Static conv:FechaUtcALocalConverter.Instance}, StringFormat='dd/MM/yyyy'}"
+                                       Margin="0,0,16,0" />
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding Monto, Converter={x:Static conv:MonedaConverter.Instance}}"
+                                       FontWeight="SemiBold"
+                                       Margin="0,0,16,0" />
+                            <TextBlock Grid.Column="2"
+                                       Text="{Binding Nota}"
+                                       Opacity="0.8"
+                                       TextTrimming="CharacterEllipsis" />
+                            <Border Grid.Column="3" Classes="badge-inactiva" IsVisible="{Binding !Activo}"
+                                    Margin="0,0,8,0">
+                                <TextBlock Text="Anulado" Classes="badge-inactiva-texto" />
+                            </Border>
+                            <Button Grid.Column="4"
+                                    Classes="secondary"
+                                    IsVisible="{Binding Activo}"
+                                    Command="{Binding $parent[UserControl].((vm:PagosGastoViewModel)DataContext).AnularPagoCommand}"
+                                    CommandParameter="{Binding}">
+                                <i:Icon Value="mdi-cancel" />
+                            </Button>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Border>
+
+    </DockPanel>
+
+</UserControl>

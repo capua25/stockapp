@@ -1,0 +1,156 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
+             xmlns:conv="using:StockApp.Presentation.Converters"
+             xmlns:i="https://github.com/projektanker/icons.avalonia"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
+             x:Class="StockApp.Presentation.Views.Finanzas.GastosView"
+             x:DataType="vm:GastosViewModel">
+
+    <DockPanel Margin="24">
+
+        <TextBlock DockPanel.Dock="Top"
+                   Text="Gastos y facturas"
+                   Classes="titulo-vista"
+                   Margin="0,0,0,16" />
+
+        <!-- Filtros -->
+        <Border DockPanel.Dock="Top" Classes="card" Margin="0,0,0,12">
+            <StackPanel Spacing="8">
+                <WrapPanel>
+                    <StackPanel Margin="0,0,12,8">
+                        <TextBlock Text="Desde" />
+                        <DatePicker SelectedDate="{Binding FechaDesde}" />
+                    </StackPanel>
+                    <StackPanel Margin="0,0,12,8">
+                        <TextBlock Text="Hasta" />
+                        <DatePicker SelectedDate="{Binding FechaHasta}" />
+                    </StackPanel>
+                    <StackPanel Margin="0,0,12,8" MinWidth="180">
+                        <TextBlock Text="Proveedor" />
+                        <ComboBox ItemsSource="{Binding ProveedoresDisponibles}"
+                                  SelectedItem="{Binding ProveedorSeleccionado}"
+                                  PlaceholderText="Todos"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Nombre}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
+                    <StackPanel Margin="0,0,12,8" MinWidth="160">
+                        <TextBlock Text="Fuente" />
+                        <ComboBox ItemsSource="{Binding FuentesDisponibles}"
+                                  SelectedItem="{Binding FuenteSeleccionada}"
+                                  PlaceholderText="Todas"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Nombre}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
+                    <StackPanel Margin="0,0,12,8" MinWidth="160">
+                        <TextBlock Text="Rubro" />
+                        <ComboBox ItemsSource="{Binding RubrosDisponibles}"
+                                  SelectedItem="{Binding RubroSeleccionado}"
+                                  PlaceholderText="Todos"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Nombre}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
+                    <StackPanel Margin="0,0,12,8" MinWidth="160">
+                        <TextBlock Text="Línea POA" />
+                        <ComboBox ItemsSource="{Binding LineasPoaDisponibles}"
+                                  SelectedItem="{Binding LineaPoaSeleccionada}"
+                                  PlaceholderText="Todas"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Nombre}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </StackPanel>
+                    <StackPanel Margin="0,0,12,8" MinWidth="130">
+                        <TextBlock Text="Estado" />
+                        <ComboBox ItemsSource="{Binding EstadosDisponibles}"
+                                  SelectedItem="{Binding EstadoSeleccionado}"
+                                  HorizontalAlignment="Stretch" />
+                    </StackPanel>
+                </WrapPanel>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Classes="primary" Content="Filtrar" Command="{Binding FiltrarCommand}" />
+                    <Button Classes="secondary" Content="Limpiar" Command="{Binding LimpiarFiltrosCommand}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Acciones -->
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,12">
+            <Button Classes="primary" Content="Nuevo gasto" Command="{Binding NuevoCommand}" />
+            <Button Classes="secondary" Content="Editar" Command="{Binding EditarCommand}" />
+            <Button Classes="secondary" Content="Pagos" Command="{Binding PagosCommand}" />
+            <Button Classes="secondary" Content="Anular" Command="{Binding AnularCommand}" />
+            <Button Classes="secondary" Command="{Binding ExportarCsvCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <i:Icon Value="mdi-file-export" />
+                    <TextBlock Text="Exportar CSV" VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
+        </StackPanel>
+
+        <!-- Grilla -->
+        <DataGrid ItemsSource="{Binding Filas}"
+                  SelectedItem="{Binding FilaSeleccionada}"
+                  IsReadOnly="True"
+                  CanUserSortColumns="True"
+                  AutoGenerateColumns="False">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Fecha"
+                                    Binding="{Binding Fecha, Converter={x:Static conv:FechaUtcALocalConverter.Instance}, StringFormat='dd/MM/yyyy', DataType={x:Type vm:GastoFila}}"
+                                    Width="Auto" />
+                <DataGridTextColumn Header="Proveedor"
+                                    Binding="{Binding ProveedorNombre, DataType={x:Type vm:GastoFila}}"
+                                    Width="*" />
+                <DataGridTextColumn Header="Factura"
+                                    Binding="{Binding NumeroFactura, DataType={x:Type vm:GastoFila}}"
+                                    Width="Auto" />
+                <DataGridTextColumn Header="Detalle"
+                                    Binding="{Binding Detalle, DataType={x:Type vm:GastoFila}}"
+                                    Width="2*" />
+                <DataGridTextColumn Header="Fuente"
+                                    Binding="{Binding FuenteNombre, DataType={x:Type vm:GastoFila}}"
+                                    Width="Auto" />
+                <DataGridTextColumn Header="Rubro"
+                                    Binding="{Binding RubroNombre, DataType={x:Type vm:GastoFila}}"
+                                    Width="Auto" />
+                <DataGridTextColumn Header="Línea POA"
+                                    Binding="{Binding LineaPoaNombre, DataType={x:Type vm:GastoFila}}"
+                                    Width="Auto" />
+                <DataGridTextColumn Header="Monto"
+                                    Binding="{Binding MontoTotal, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type vm:GastoFila}}"
+                                    Width="Auto" />
+                <DataGridTextColumn Header="Pagado"
+                                    Binding="{Binding TotalPagado, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type vm:GastoFila}}"
+                                    Width="Auto" />
+                <DataGridTextColumn Header="Saldo"
+                                    Binding="{Binding Saldo, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type vm:GastoFila}}"
+                                    Width="Auto" />
+                <DataGridTextColumn Header="Estado"
+                                    Binding="{Binding Estado, DataType={x:Type vm:GastoFila}}"
+                                    Width="Auto" />
+            </DataGrid.Columns>
+        </DataGrid>
+
+    </DockPanel>
+
+</UserControl>
