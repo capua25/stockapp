@@ -51,14 +51,21 @@ public sealed class CsvExporter : ICsvExporter
         return sb.ToString();
     }
 
+    private const string FormatoFechaSolo = "dd/MM/yyyy";
+
     /// <summary>
-    /// Formatea el valor de una celda. Caso especial: <see cref="DateTime"/> — se persiste
-    /// en UTC (ver <c>DateTime.UtcNow</c> en MovimientoStockService/
-    /// MovimientoStockRepository) pero <c>valor.ToString()</c> la emitía cruda, sin
-    /// convertir a hora local (bug de huso horario, mismo síntoma que la grilla). Se fuerza
-    /// <c>SpecifyKind(Utc)</c> antes de <c>.ToLocalTime()</c> porque, al releer de SQLite vía
-    /// EF Core, el <see cref="DateTimeKind"/> vuelve <c>Unspecified</c> aunque el valor sea un
-    /// instante UTC real.
+    /// Formatea el valor de una celda. Casos especiales:
+    /// - <see cref="DateTime"/>: se persiste en UTC (ver <c>DateTime.UtcNow</c> en
+    ///   MovimientoStockService/MovimientoStockRepository) pero <c>valor.ToString()</c> la
+    ///   emitía cruda, sin convertir a hora local (bug de huso horario, mismo síntoma que la
+    ///   grilla). Se fuerza <c>SpecifyKind(Utc)</c> antes de <c>.ToLocalTime()</c> porque, al
+    ///   releer de SQLite vía EF Core, el <see cref="DateTimeKind"/> vuelve
+    ///   <c>Unspecified</c> aunque el valor sea un instante UTC real.
+    /// - <see cref="DateOnly"/>: representa una fecha SIN componente horario (ej. fecha de un
+    ///   gasto). A diferencia de <see cref="DateTime"/> NO se convierte a hora local — no hay
+    ///   instante que convertir, y hacerlo (vía un <see cref="DateTime"/> intermedio) corría el
+    ///   día un día para atrás en husos negativos (mismo bug que motivó sacar
+    ///   FechaUtcALocalConverter de las grillas de Finanzas).
     /// </summary>
     private static string FormatearValor(object? valor)
         => valor switch
@@ -67,6 +74,7 @@ public sealed class CsvExporter : ICsvExporter
             DateTime fecha => DateTime.SpecifyKind(fecha, DateTimeKind.Utc)
                 .ToLocalTime()
                 .ToString(FormatoFecha, CultureInfo.InvariantCulture),
+            DateOnly fecha => fecha.ToString(FormatoFechaSolo, CultureInfo.InvariantCulture),
             _ => valor.ToString() ?? "",
         };
 

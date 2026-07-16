@@ -171,4 +171,23 @@ public class CsvExporterTests
             .ToString("dd/MM/yyyy HH:mm:ss", CultureInfo.InvariantCulture);
         Assert.Contains($"Harina,{esperado}\r\n", resultado);
     }
+
+    // ── Bug real (verificación orgánica Fase 2 Finanzas): export CSV de Gastos corría la
+    // fecha un día para atrás (grilla 16/07/2026 → CSV "15/07/2026 21:00:00"). Causa: la
+    // columna Fecha es un valor date-only (medianoche UTC) pero pasaba por el mismo camino
+    // que un DateTime real, que SIEMPRE convierte a hora local. DateOnly es un tipo distinto
+    // a propósito: no representa un instante, así que no debe convertirse.
+
+    private sealed record FilaConFechaSola(string Nombre, DateOnly Fecha);
+
+    [Fact]
+    public void Exportar_ColumnaDateOnly_SinConversionDeHusoNiHora()
+    {
+        var fecha = new DateOnly(2026, 7, 16);
+        var items = new[] { new FilaConFechaSola("Gasto", fecha) };
+
+        var resultado = _exporter.Exportar(items, new[] { "Nombre", "Fecha" });
+
+        Assert.Contains("Gasto,16/07/2026\r\n", resultado);
+    }
 }

@@ -11,6 +11,7 @@ using StockApp.Application.Exportacion;
 using StockApp.Application.Finanzas;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Exceptions;
+using StockApp.Presentation.Converters;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 
@@ -32,7 +33,16 @@ public sealed class GastoFila
     }
 
     public int Id => Gasto.Id;
-    public DateTime Fecha => Gasto.Fecha;
+
+    /// <summary>
+    /// <see cref="Gasto.Fecha"/> es un valor date-only (medianoche UTC), NO un instante real.
+    /// Se expone como <see cref="DateOnly"/> (no <see cref="DateTime"/>) a propósito: así el
+    /// export CSV (<see cref="CsvExporter"/>) no lo confunde con un timestamp real y lo
+    /// convierte a hora local, corriendo el día para atrás en husos negativos (bug real:
+    /// grilla 16/07/2026 → CSV "15/07/2026 21:00:00"). Mismo criterio que sacó
+    /// FechaUtcALocalConverter del binding de esta columna en GastosView.axaml.
+    /// </summary>
+    public DateOnly Fecha => DateOnly.FromDateTime(Gasto.Fecha);
     public string ProveedorNombre => Gasto.Proveedor?.Nombre ?? string.Empty;
     public string NumeroFactura => Gasto.NumeroFactura ?? string.Empty;
     public string Detalle => Gasto.Detalle;
@@ -233,7 +243,7 @@ public partial class GastosViewModel : ViewModelBase
 
         var confirmar = await _confirmacion.PreguntarAsync(
             $"¿Confirma anular el gasto \"{FilaSeleccionada.Detalle}\" " +
-            $"(factura {FilaSeleccionada.NumeroFactura} — {FilaSeleccionada.MontoTotal})?");
+            $"(factura {FilaSeleccionada.NumeroFactura} — {MonedaConverter.Formatear(FilaSeleccionada.MontoTotal)})?");
         if (!confirmar) return;
 
         try

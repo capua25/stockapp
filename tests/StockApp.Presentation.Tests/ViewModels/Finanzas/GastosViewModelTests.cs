@@ -20,7 +20,8 @@ public class GastosViewModelTests
 {
     private static readonly DateTime Hoy = DateTime.UtcNow;
 
-    private static Gasto GastoDe(int id, string detalle, bool pagado = false, bool activo = true)
+    private static Gasto GastoDe(
+        int id, string detalle, bool pagado = false, bool activo = true, DateTime? fechaUtc = null)
     {
         var gasto = new Gasto
         {
@@ -28,7 +29,7 @@ public class GastosViewModelTests
             ProveedorId = 1,
             Proveedor = new Proveedor { Id = 1, Nombre = "Barraca X" },
             Detalle = detalle,
-            Fecha = Hoy,
+            Fecha = fechaUtc ?? Hoy,
             MontoTotal = 1000m,
             FuenteFinanciamientoId = 2,
             RubroGastoId = 3,
@@ -160,6 +161,23 @@ public class GastosViewModelTests
     }
 
     [Fact]
+    public async Task AnularCommand_PideConfirmacionConMontoFormateado()
+    {
+        // Bug real (verificación orgánica): el mensaje mostraba el decimal crudo
+        // ("850.5000") en vez del formato moneda es-UY que usan las grillas ("$ 850,50").
+        var gasto = GastoDe(1, "Para anular");
+        gasto.MontoTotal = 850.5000m;
+        var (vm, _, _, confirm) = Crear(new List<Gasto> { gasto });
+        await vm.CargarAsync();
+        vm.FilaSeleccionada = vm.Filas[0];
+
+        await vm.AnularCommand.ExecuteAsync(null);
+
+        confirm.Verify(c => c.PreguntarAsync(It.Is<string>(
+            s => s.Contains("$ 850,50") && !s.Contains("850.5000"))), Times.Once);
+    }
+
+    [Fact]
     public async Task AnularCommand_ConConfirmacion_AnulaYRecarga()
     {
         var (vm, svc, _, _) = Crear(new List<Gasto> { GastoDe(1, "Para anular") });
@@ -210,6 +228,20 @@ public class GastosViewModelTests
             It.IsAny<Action<GastoFormViewModel>>()), Times.Once);
         nav.Verify(n => n.Navegar<PagosGastoViewModel>(
             It.IsAny<Action<PagosGastoViewModel>>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GastoFila_Fecha_EsDateOnly_SinConversionDeHusoHorario()
+    {
+        // Bug real (verificación orgánica Fase 2): el export CSV mostraba la fecha corrida
+        // un día para atrás porque GastoFila.Fecha era DateTime y CsvExporter convierte TODO
+        // DateTime a hora local. Fecha debe ser DateOnly: no hay instante que convertir.
+        var fechaUtc = new DateTime(2026, 7, 16, 0, 0, 0, DateTimeKind.Utc);
+        var (vm, _, _, _) = Crear(new List<Gasto> { GastoDe(1, "Con fecha límite", fechaUtc: fechaUtc) });
+
+        await vm.CargarAsync();
+
+        Assert.Equal(new DateOnly(2026, 7, 16), vm.Filas[0].Fecha);
     }
 
     [Fact]
