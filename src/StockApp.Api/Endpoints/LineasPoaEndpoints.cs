@@ -56,7 +56,7 @@ public static class LineasPoaEndpoints
         Nombre = nombre,
         Programa = programa,
         Ejercicio = ejercicio,
-        Asignaciones = asignaciones
+        Asignaciones = (asignaciones ?? [])
             .Select(a => new AsignacionPresupuestal
             {
                 FuenteFinanciamientoId = a.FuenteFinanciamientoId,

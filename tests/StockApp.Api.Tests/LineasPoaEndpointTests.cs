@@ -81,6 +81,26 @@ public class LineasPoaEndpointTests : ApiTestBase
     }
 
     [Fact]
+    public async Task PostLineasPoa_SinCampoAsignaciones_Devuelve409YNo500()
+    {
+        // El body JSON omite "asignaciones" por completo (no es solo una lista vacía):
+        // el binder deserializa null, y el mapeo AEntidad debe tolerarlo con ?? [] en vez
+        // de tirar NRE en el .Select — el servicio ya devuelve 409 por lista vacía.
+        await using var ctx = Factory.CrearContexto();
+        await DatosDePrueba.SeedUsuarioAsync(ctx, "admin.test", "Secreta123!", RolUsuario.Admin);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var content = new StringContent(
+            "{\"nombre\":\"PRENSA SIN ASIGNACIONES\",\"programa\":\"Comunicación\",\"ejercicio\":2026}",
+            System.Text.Encoding.UTF8, "application/json");
+        var response = await client.PostAsync("/finanzas/lineas-poa", content);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
     public async Task PostLineasPoa_NombreYEjercicioDuplicados_Devuelve409()
     {
         await using var ctx = Factory.CrearContexto();
