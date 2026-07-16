@@ -391,6 +391,7 @@ app.MapFuentesFinanciamientoEndpoints();
 app.MapRubrosGastoEndpoints();
 app.MapLineasPoaEndpoints();
 app.MapGastosEndpoints();
+app.MapIngresosCajaEndpoints();
 app.MapLicenciaEndpoints();
 app.MapResetAdminEndpoints();
 
