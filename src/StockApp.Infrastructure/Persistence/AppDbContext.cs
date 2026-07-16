@@ -14,6 +14,10 @@ public class AppDbContext : DbContext
     public DbSet<UnidadMedida> UnidadesMedida => Set<UnidadMedida>();
     public DbSet<MovimientoStock> MovimientosStock => Set<MovimientoStock>();
     public DbSet<LogAuditoria> LogsAuditoria => Set<LogAuditoria>();
+    public DbSet<FuenteFinanciamiento> FuentesFinanciamiento => Set<FuenteFinanciamiento>();
+    public DbSet<RubroGasto> RubrosGasto => Set<RubroGasto>();
+    public DbSet<LineaPoa> LineasPoa => Set<LineaPoa>();
+    public DbSet<AsignacionPresupuestal> AsignacionesPresupuestales => Set<AsignacionPresupuestal>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -98,6 +102,43 @@ public class AppDbContext : DbContext
             e.Property(l => l.Detalle).IsRequired();
             e.HasOne(l => l.Usuario).WithMany()
                 .HasForeignKey(l => l.UsuarioId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── Finanzas: maestros (Fase 1 módulo Finanzas) ───────────────────────
+        modelBuilder.Entity<FuenteFinanciamiento>(e =>
+        {
+            e.Property(f => f.Nombre).IsRequired();
+            e.HasIndex(f => f.Nombre).IsUnique();
+            e.Property(f => f.Activo).HasDefaultValue(true);
+        });
+
+        modelBuilder.Entity<RubroGasto>(e =>
+        {
+            e.HasIndex(r => r.Codigo).IsUnique();
+            e.Property(r => r.Nombre).IsRequired();
+            e.Property(r => r.Activo).HasDefaultValue(true);
+        });
+
+        modelBuilder.Entity<LineaPoa>(e =>
+        {
+            e.Property(l => l.Nombre).IsRequired();
+            e.Property(l => l.Programa).IsRequired();
+            e.HasIndex(l => new { l.Nombre, l.Ejercicio }).IsUnique();
+            e.Property(l => l.Activo).HasDefaultValue(true);
+        });
+
+        // AsignacionPresupuestal: hija del agregado LineaPoa. FKs Restrict porque los
+        // maestros usan baja lógica (nunca se borra una LineaPoa o Fuente físicamente);
+        // el reemplazo de asignaciones es un delete explícito en el repo, que Restrict
+        // NO impide (Restrict solo bloquea cascadas desde el padre).
+        modelBuilder.Entity<AsignacionPresupuestal>(e =>
+        {
+            e.Property(a => a.Monto).HasPrecision(18, 4);
+            e.HasIndex(a => new { a.LineaPoaId, a.FuenteFinanciamientoId }).IsUnique();
+            e.HasOne<LineaPoa>().WithMany(l => l.Asignaciones)
+                .HasForeignKey(a => a.LineaPoaId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(a => a.FuenteFinanciamiento).WithMany()
+                .HasForeignKey(a => a.FuenteFinanciamientoId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

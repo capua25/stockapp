@@ -31,4 +31,15 @@ public enum AccionAuditada
     ActivacionLicencia               = 19,
     IntentoActivacionLicenciaFallido = 20,
     ResetAdminFirmado                = 21,
+
+    // ── Finanzas — Fase 1: maestros (append-only a partir de 22) ─────────────
+    AltaFuenteFinanciamiento         = 22,
+    ModificacionFuenteFinanciamiento = 23,
+    BajaFuenteFinanciamiento         = 24,
+    AltaRubroGasto                   = 25,
+    ModificacionRubroGasto           = 26,
+    BajaRubroGasto                   = 27,
+    AltaLineaPoa                     = 28,
+    ModificacionLineaPoa             = 29,
+    BajaLineaPoa                     = 30,
 }
