@@ -158,4 +158,67 @@ public class LineaPoaFormViewModelTests
 
         Assert.False(vm.GuardarCommand.CanExecute(null));
     }
+
+    [Fact]
+    public async Task GuardarCommand_MontoConSeparadorIncorrectoParaLaCultura_MuestraErrorSinGuardar()
+    {
+        // "1500.50" con cultura es-UY (coma decimal) NO debe parsear como 150050: el "."
+        // no es un separador reconocido bajo AllowDecimalPoint con esta cultura, así que
+        // debe fallar el TryParse y mostrar el MensajeError existente, no corromper el monto.
+        var (vm, svcMock, _, _) = Crear();
+        await vm.InicializarAsync();
+        vm.Nombre = "COMPOSTERAS";
+        vm.Programa = "Ambiente";
+        vm.EjercicioTexto = "2026";
+        vm.Asignaciones[0].FuenteSeleccionada = vm.FuentesDisponibles[0];
+        vm.Asignaciones[0].MontoTexto = "1500.50";
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        Assert.NotNull(vm.MensajeError);
+        svcMock.Verify(s => s.AltaAsync(It.IsAny<LineaPoa>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GuardarCommand_MontoConComaDecimal_GuardaElValorCorrecto()
+    {
+        var (vm, svcMock, _, _) = Crear();
+        await vm.InicializarAsync();
+        vm.Nombre = "COMPOSTERAS";
+        vm.Programa = "Ambiente";
+        vm.EjercicioTexto = "2026";
+        vm.Asignaciones[0].FuenteSeleccionada = vm.FuentesDisponibles[0];
+        vm.Asignaciones[0].MontoTexto = "1500,50";
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svcMock.Verify(s => s.AltaAsync(It.Is<LineaPoa>(l =>
+            l.Asignaciones.Count == 1 && l.Asignaciones[0].Monto == 1500.50m)), Times.Once);
+    }
+
+    [Fact]
+    public async Task CargarParaEditar_RoundTripDeEdicion_ConservaElMonto()
+    {
+        // El monto formateado por InicializarAsync (con la misma cultura fija) debe poder
+        // volver a parsearse tal cual al guardar, sin perder precisión ni corromperse.
+        var (vm, svcMock, _, _) = Crear();
+        vm.CargarParaEditar(new LineaPoa
+        {
+            Id = 4, Nombre = "COMPOSTERAS", Programa = "Ambiente", Ejercicio = 2026, Activo = true,
+            Asignaciones =
+            {
+                new AsignacionPresupuestal
+                {
+                    Id = 10, LineaPoaId = 4, FuenteFinanciamientoId = 2, Monto = 1500.50m,
+                    FuenteFinanciamiento = new FuenteFinanciamiento { Id = 2, Nombre = "Literal C" },
+                },
+            },
+        });
+        await vm.InicializarAsync();
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svcMock.Verify(s => s.ModificarAsync(It.Is<LineaPoa>(l =>
+            l.Asignaciones.Count == 1 && l.Asignaciones[0].Monto == 1500.50m)), Times.Once);
+    }
 }

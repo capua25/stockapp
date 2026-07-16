@@ -1,5 +1,7 @@
+using System;
 using System.Collections.ObjectModel;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -35,6 +37,31 @@ public partial class LineaPoaFormViewModel : ViewModelBase
 
     private int _idEdicion;
     private LineaPoa? _lineaParaEditar;
+
+    /// <summary>
+    /// Cultura FIJA es-UY para parsear/formatear MontoTexto (misma razón que
+    /// <see cref="Converters.MonedaConverter"/>: la app no fija ninguna cultura global,
+    /// así que depender de la cultura ambiente haría que "1500.50" se interprete distinto
+    /// según la máquina — o, peor, parsee silenciosamente como 150050). Mismo fallback
+    /// manual si "es-UY" no está disponible en el runtime.
+    /// </summary>
+    private static readonly IFormatProvider CulturaMonto = CrearCulturaMonto();
+
+    private static IFormatProvider CrearCulturaMonto()
+    {
+        try
+        {
+            return CultureInfo.GetCultureInfo("es-UY");
+        }
+        catch (CultureNotFoundException)
+        {
+            return new NumberFormatInfo
+            {
+                NumberDecimalSeparator = ",",
+                NumberGroupSeparator = ".",
+            };
+        }
+    }
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
@@ -110,7 +137,7 @@ public partial class LineaPoaFormViewModel : ViewModelBase
                 Asignaciones.Add(new AsignacionItemViewModel
                 {
                     FuenteSeleccionada = fuente,
-                    MontoTexto = a.Monto.ToString("0.####"),
+                    MontoTexto = a.Monto.ToString("0.####", CulturaMonto),
                 });
             }
         }
@@ -140,7 +167,11 @@ public partial class LineaPoaFormViewModel : ViewModelBase
         foreach (var fila in Asignaciones)
         {
             if (fila.FuenteSeleccionada is null
-                || !decimal.TryParse(fila.MontoTexto, out var monto))
+                || !decimal.TryParse(
+                    fila.MontoTexto,
+                    NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign,
+                    CulturaMonto,
+                    out var monto))
             {
                 MensajeError = "Cada asignación necesita una fuente de financiamiento y un monto válido.";
                 return;
