@@ -18,6 +18,8 @@ public class AuthorizationService : IAuthorizationService
         Permisos.GestionarProductos,
         Permisos.RegistrarMovimientos,
         Permisos.RecalcularStock,
+        Permisos.VerFinanzas,
+        Permisos.GestionarMaestrosFinanzas,
     ];
 
     public void Verificar(RolUsuario? rolActual, string accion)

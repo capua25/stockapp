@@ -13,6 +13,11 @@ public static class Permisos
     public const string RegistrarMovimientos    = "movimientos.registrar";
     public const string RecalcularStock         = "stock.recalcular";
 
+    // Finanzas — Fase 1: por ahora Admin Y Operador tienen ambos (spec Finanzas §9);
+    // el futuro sistema de permisos por usuario solo cambia el mapeo rol→permiso.
+    public const string VerFinanzas              = "finanzas.ver";
+    public const string GestionarMaestrosFinanzas = "finanzas.maestros";
+
     /// <summary>
     /// Lista explícita de todos los permisos del sistema (sin reflection). Consumida por
     /// StockApp.Api/Program.cs (Fase 2b, D1) para derivar las políticas de autorización
@@ -26,5 +31,7 @@ public static class Permisos
         GestionarTablasMaestras,
         RegistrarMovimientos,
         RecalcularStock,
+        VerFinanzas,
+        GestionarMaestrosFinanzas,
     ];
 }
