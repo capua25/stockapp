@@ -1,5 +1,7 @@
 using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
+using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 
 namespace StockApp.Application.Finanzas;
 
@@ -87,9 +89,97 @@ public class FinanzasVistasService : IFinanzasVistasService
             anio, mes, saldoInicial, corrido, movimientos, totalesPorRubro, totalesPorFuente);
     }
 
-    public Task<LibroCajaAnualDto> ObtenerLibroCajaAnualAsync(int anio) => throw new NotImplementedException();
+    public async Task<LibroCajaAnualDto> ObtenerLibroCajaAnualAsync(int anio)
+    {
+        _auth.Verificar(_session.RolActual, Permisos.VerFinanzas);
 
-    public Task<IReadOnlyList<ControlPoaLineaDto>> ObtenerControlPoaAsync(int ejercicio) => throw new NotImplementedException();
+        var desde = new DateTime(anio, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var hasta = desde.AddYears(1).AddTicks(-1);
 
-    public Task<CalendarioPagosDto> ObtenerCalendarioPagosAsync(DateTime? fechaReferencia = null) => throw new NotImplementedException();
+        var ingresos = await _ingresos.ListarPorRangoAsync(desde, hasta);
+        var pagos = await _gastos.ListarPagosActivosPorRangoAsync(desde, hasta);
+
+        var totalesPorMes = Enumerable.Range(1, 12)
+            .Select(mes =>
+            {
+                var ingresosMes = ingresos.Where(i => i.Fecha.Month == mes).Sum(i => i.Monto);
+                var egresosMes = pagos.Where(p => p.Fecha.Month == mes).Sum(p => p.Monto);
+                return new TotalMensualDto(mes, ingresosMes, egresosMes, ingresosMes - egresosMes);
+            })
+            .ToList();
+
+        var totalesPorRubro = pagos
+            .GroupBy(p => p.Gasto?.RubroGasto?.Nombre ?? "(sin rubro)")
+            .Select(g => new TotalPorClaveDto(g.Key, g.Sum(p => p.Monto)))
+            .OrderByDescending(t => t.Total)
+            .ToList();
+
+        return new LibroCajaAnualDto(anio, totalesPorMes, totalesPorRubro);
+    }
+
+    public async Task<IReadOnlyList<ControlPoaLineaDto>> ObtenerControlPoaAsync(int ejercicio)
+    {
+        _auth.Verificar(_session.RolActual, Permisos.VerFinanzas);
+
+        var lineas = (await _lineasPoa.ListarTodasAsync()).Where(l => l.Ejercicio == ejercicio).ToList();
+        var gastadoPorLinea = await _gastos.TotalGastadoPorLineaAsync(ejercicio);
+
+        return lineas
+            .Select(l =>
+            {
+                var presupuesto = l.Asignaciones.Sum(a => a.Monto);
+                var gastado = gastadoPorLinea.TryGetValue(l.Id, out var g) ? g : 0m;
+                var saldo = presupuesto - gastado;
+                var porcentaje = presupuesto == 0m ? 0m : Math.Round(gastado / presupuesto * 100m, 2);
+                return new ControlPoaLineaDto(
+                    l.Id, l.Nombre, l.Programa, l.Ejercicio, presupuesto, gastado, saldo, porcentaje, saldo < 0m);
+            })
+            .OrderBy(d => d.Nombre)
+            .ToList();
+    }
+
+    public async Task<CalendarioPagosDto> ObtenerCalendarioPagosAsync(DateTime? fechaReferencia = null)
+    {
+        _auth.Verificar(_session.RolActual, Permisos.VerFinanzas);
+
+        var hoy = (fechaReferencia ?? DateTime.UtcNow).Date;
+        var gastos = await _gastos.ListarActivosConSaldoAsync();
+
+        var pendientesConVencimiento = gastos
+            .Where(g => g.CondicionPago == CondicionPago.Credito
+                        && g.FechaVencimiento is not null
+                        && g.CalcularEstado(hoy) is EstadoGasto.Pendiente or EstadoGasto.Parcial or EstadoGasto.Vencida)
+            .ToList();
+
+        var vencidas = pendientesConVencimiento
+            .Where(g => g.FechaVencimiento!.Value.Date < hoy)
+            .Select(g => AFacturaDto(g, hoy))
+            .OrderBy(f => f.FechaVencimiento)
+            .ToList();
+        var aVencer7 = pendientesConVencimiento
+            .Where(g => g.FechaVencimiento!.Value.Date >= hoy && g.FechaVencimiento.Value.Date <= hoy.AddDays(7))
+            .Select(g => AFacturaDto(g, hoy))
+            .OrderBy(f => f.FechaVencimiento)
+            .ToList();
+        var aVencer30 = pendientesConVencimiento
+            .Where(g => g.FechaVencimiento!.Value.Date > hoy.AddDays(7) && g.FechaVencimiento.Value.Date <= hoy.AddDays(30))
+            .Select(g => AFacturaDto(g, hoy))
+            .OrderBy(f => f.FechaVencimiento)
+            .ToList();
+
+        var pagosRecientes = gastos
+            .SelectMany(g => g.Pagos
+                .Where(p => p.Activo && p.Fecha.Date <= hoy && p.Fecha.Date >= hoy.AddDays(-7))
+                .Select(p => new PagoRecienteDto(
+                    g.Id, g.Proveedor?.Nombre ?? string.Empty, g.NumeroFactura,
+                    DateOnly.FromDateTime(p.Fecha), p.Monto)))
+            .OrderByDescending(p => p.FechaPago)
+            .ToList();
+
+        return new CalendarioPagosDto(vencidas, aVencer7, aVencer30, pagosRecientes);
+    }
+
+    private static FacturaCalendarioDto AFacturaDto(Gasto g, DateTime hoy) => new(
+        g.Id, g.Proveedor?.Nombre ?? string.Empty, g.NumeroFactura,
+        g.SaldoPendiente, DateOnly.FromDateTime(g.FechaVencimiento!.Value), g.CalcularEstado(hoy).ToString());
 }
