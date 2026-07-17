@@ -145,6 +145,17 @@
                     </Grid>
                 </Button>
 
+                <Button Command="{Binding NavLibroCajaCommand}"
+                        Classes="ghost"
+                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=LibroCaja}"
+                        HorizontalAlignment="Stretch">
+                    <Grid ColumnDefinitions="Auto,*">
+                        <i:Icon Grid.Column="0" Value="mdi-book-open-variant" Foreground="{DynamicResource SidebarTextoBrush}" />
+                        <TextBlock Grid.Column="1" Text="Libro caja" VerticalAlignment="Center"
+                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                </Button>
+
                 <!-- Tablas maestras: solo Admin -->
                 <TextBlock Text="Tablas maestras"
                            Classes="caption"

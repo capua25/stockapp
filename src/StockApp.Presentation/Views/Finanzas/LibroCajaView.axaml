@@ -1,0 +1,86 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
+             xmlns:conv="using:StockApp.Presentation.Converters"
+             xmlns:dto="using:StockApp.Application.Finanzas"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
+             x:Class="StockApp.Presentation.Views.Finanzas.LibroCajaView"
+             x:DataType="vm:LibroCajaViewModel">
+
+    <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="16">
+
+        <TextBlock Grid.Row="0" Text="Libro caja" Classes="titulo-vista" />
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="12" Margin="0,12">
+            <NumericUpDown Value="{Binding Anio}" Minimum="2020" Maximum="2100" Width="120" />
+            <NumericUpDown Value="{Binding Mes}" Minimum="1" Maximum="12"
+                           Width="100" IsEnabled="{Binding !VerAnioCompleto}" />
+            <CheckBox Content="Año completo" IsChecked="{Binding VerAnioCompleto}" />
+            <Button Content="Actualizar" Command="{Binding RecargarCommand}" />
+            <Button Content="Exportar CSV" Command="{Binding ExportarCsvCommand}" IsVisible="{Binding !VerAnioCompleto}" />
+            <TextBlock Text="Saldo inicial:" IsVisible="{Binding !VerAnioCompleto}" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding SaldoInicial, Converter={x:Static conv:MonedaConverter.Instance}}"
+                       IsVisible="{Binding !VerAnioCompleto}" VerticalAlignment="Center" FontWeight="SemiBold" />
+            <TextBlock Text="Saldo final:" IsVisible="{Binding !VerAnioCompleto}" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding SaldoFinal, Converter={x:Static conv:MonedaConverter.Instance}}"
+                       IsVisible="{Binding !VerAnioCompleto}" VerticalAlignment="Center" FontWeight="SemiBold"
+                       Foreground="{Binding SaldoFinal, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}" />
+        </StackPanel>
+
+        <DataGrid Grid.Row="2" ItemsSource="{Binding MovimientosView}"
+                  IsVisible="{Binding !VerAnioCompleto}"
+                  AutoGenerateColumns="False" CanUserSortColumns="True" IsReadOnly="True">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha, DataType={x:Type dto:MovimientoCajaDto}}" />
+                <DataGridTextColumn Header="Tipo" Binding="{Binding Tipo, DataType={x:Type dto:MovimientoCajaDto}}" />
+                <DataGridTextColumn Header="Concepto" Binding="{Binding Concepto, DataType={x:Type dto:MovimientoCajaDto}}" Width="*" />
+                <DataGridTextColumn Header="Proveedor" Binding="{Binding ProveedorNombre, DataType={x:Type dto:MovimientoCajaDto}}" />
+                <DataGridTextColumn Header="Factura" Binding="{Binding NumeroFactura, DataType={x:Type dto:MovimientoCajaDto}}" />
+                <DataGridTextColumn Header="Fuente" Binding="{Binding FuenteNombre, DataType={x:Type dto:MovimientoCajaDto}}" />
+                <DataGridTextColumn Header="Rubro" Binding="{Binding RubroNombre, DataType={x:Type dto:MovimientoCajaDto}}" />
+                <DataGridTextColumn Header="Ingreso"
+                                     Binding="{Binding Ingreso, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type dto:MovimientoCajaDto}}" />
+                <DataGridTextColumn Header="Egreso"
+                                     Binding="{Binding Egreso, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type dto:MovimientoCajaDto}}" />
+                <DataGridTextColumn Header="Saldo corrido"
+                                     Binding="{Binding SaldoCorrido, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type dto:MovimientoCajaDto}}" />
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <ItemsControl Grid.Row="2" IsVisible="{Binding VerAnioCompleto}"
+                      ItemsSource="{Binding LibroAnual.TotalesPorMes}">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <TextBlock Text="{Binding}" Margin="0,2" />
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="24" Margin="0,12,0,0"
+                    IsVisible="{Binding !VerAnioCompleto}">
+            <StackPanel>
+                <TextBlock Text="Totales por rubro" Classes="seccion" />
+                <ItemsControl ItemsSource="{Binding TotalesPorRubro}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+            <StackPanel>
+                <TextBlock Text="Totales por fuente" Classes="seccion" />
+                <ItemsControl ItemsSource="{Binding TotalesPorFuente}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </StackPanel>
+
+    </Grid>
+</UserControl>

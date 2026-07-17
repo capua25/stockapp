@@ -223,6 +223,13 @@ public partial class ShellMainViewModel : ViewModelBase
         _navigation.Navegar<MaestrosFinanzasViewModel>();
     }
 
+    [RelayCommand]
+    private void NavLibroCaja()
+    {
+        SeccionActiva = "LibroCaja";
+        _navigation.Navegar<LibroCajaViewModel>();
+    }
+
     // ── Cerrar sesión ──────────────────────────────────────────────────────────
 
     /// <summary>
