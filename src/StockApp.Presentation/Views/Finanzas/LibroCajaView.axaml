@@ -86,9 +86,9 @@
             </StackPanel>
         </StackPanel>
 
-        <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="24" Margin="0,12,0,0"
-                    IsVisible="{Binding !VerAnioCompleto}">
-            <StackPanel>
+        <Grid Grid.Row="3" ColumnDefinitions="*,16,*" Margin="0,12,0,0"
+              IsVisible="{Binding !VerAnioCompleto}">
+            <StackPanel Grid.Column="0">
                 <TextBlock Text="Totales por rubro" Classes="seccion" />
                 <DataGrid ItemsSource="{Binding TotalesPorRubro}"
                           AutoGenerateColumns="False" CanUserSortColumns="True" IsReadOnly="True">
@@ -99,7 +99,7 @@
                     </DataGrid.Columns>
                 </DataGrid>
             </StackPanel>
-            <StackPanel>
+            <StackPanel Grid.Column="2">
                 <TextBlock Text="Totales por fuente" Classes="seccion" />
                 <DataGrid ItemsSource="{Binding TotalesPorFuente}"
                           AutoGenerateColumns="False" CanUserSortColumns="True" IsReadOnly="True">
@@ -110,7 +110,7 @@
                     </DataGrid.Columns>
                 </DataGrid>
             </StackPanel>
-        </StackPanel>
+        </Grid>
 
     </Grid>
 </UserControl>
