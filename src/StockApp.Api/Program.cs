@@ -117,6 +117,9 @@ builder.Services.AddScoped<IGastoService, GastoService>();
 builder.Services.AddScoped<IIngresoCajaRepository, IngresoCajaRepository>();
 builder.Services.AddScoped<IIngresoCajaService, IngresoCajaService>();
 
+// Finanzas — Fase 4: vistas calculadas (libro caja, control POA, calendario de pagos)
+builder.Services.AddScoped<IFinanzasVistasService, FinanzasVistasService>();
+
 // Auditoría (Fase 2b)
 builder.Services.AddScoped<IAuditoriaQueryRepository, AuditoriaQueryRepository>();
 builder.Services.AddScoped<IAuditoriaQueryService, AuditoriaQueryService>();
@@ -392,6 +395,7 @@ app.MapRubrosGastoEndpoints();
 app.MapLineasPoaEndpoints();
 app.MapGastosEndpoints();
 app.MapIngresosCajaEndpoints();
+app.MapFinanzasVistasEndpoints();
 app.MapLicenciaEndpoints();
 app.MapResetAdminEndpoints();
 
