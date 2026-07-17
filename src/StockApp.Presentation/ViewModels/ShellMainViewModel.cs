@@ -230,6 +230,13 @@ public partial class ShellMainViewModel : ViewModelBase
         _navigation.Navegar<LibroCajaViewModel>();
     }
 
+    [RelayCommand]
+    private void NavControlPoa()
+    {
+        SeccionActiva = "ControlPoa";
+        _navigation.Navegar<ControlPoaViewModel>();
+    }
+
     // ── Cerrar sesión ──────────────────────────────────────────────────────────
 
     /// <summary>

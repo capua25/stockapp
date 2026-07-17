@@ -1,0 +1,46 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
+             xmlns:conv="using:StockApp.Presentation.Converters"
+             xmlns:dto="using:StockApp.Application.Finanzas"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
+             x:Class="StockApp.Presentation.Views.Finanzas.ControlPoaView"
+             x:DataType="vm:ControlPoaViewModel">
+
+    <Grid RowDefinitions="Auto,Auto,*" Margin="16">
+
+        <TextBlock Grid.Row="0" Text="Control POA" Classes="titulo-vista" />
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="12" Margin="0,12">
+            <NumericUpDown Value="{Binding Ejercicio}" Minimum="2020" Maximum="2100" Width="120" />
+            <Button Content="Actualizar" Command="{Binding RecargarCommand}" />
+            <Button Content="Exportar CSV" Command="{Binding ExportarCsvCommand}" />
+        </StackPanel>
+
+        <DataGrid Grid.Row="2" ItemsSource="{Binding FilasView}"
+                  SelectedItem="{Binding FilaSeleccionada}"
+                  DoubleTapped="OnFilaDobleClick"
+                  AutoGenerateColumns="False" CanUserSortColumns="True" IsReadOnly="True">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Línea" Binding="{Binding Nombre, DataType={x:Type dto:ControlPoaLineaDto}}" Width="*" />
+                <DataGridTextColumn Header="Programa" Binding="{Binding Programa, DataType={x:Type dto:ControlPoaLineaDto}}" />
+                <DataGridTextColumn Header="Presupuesto"
+                                     Binding="{Binding Presupuesto, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type dto:ControlPoaLineaDto}}" />
+                <DataGridTextColumn Header="Gastado"
+                                     Binding="{Binding Gastado, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type dto:ControlPoaLineaDto}}" />
+                <DataGridTemplateColumn Header="Saldo">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate DataType="dto:ControlPoaLineaDto">
+                            <TextBlock Text="{Binding Saldo, Converter={x:Static conv:MonedaConverter.Instance}}"
+                                       Foreground="{Binding Saldo, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTextColumn Header="% Ejecución" Binding="{Binding PorcentajeEjecucion, DataType={x:Type dto:ControlPoaLineaDto}}" />
+            </DataGrid.Columns>
+        </DataGrid>
+
+    </Grid>
+</UserControl>

@@ -132,6 +132,13 @@ public partial class GastosViewModel : ViewModelBase
         FilasView = new DataGridCollectionView(Filas);
     }
 
+    /// <summary>
+    /// Precarga el filtro por línea POA (spec §7.4: doble click en Control POA abre las
+    /// facturas de esa línea). Se llama ANTES de que la View dispare CargarAsync — ArmarFiltro()
+    /// lee LineaPoaSeleccionada.Id sin depender de que ya esté en LineasPoaDisponibles.
+    /// </summary>
+    public void FiltrarPorLineaPoa(LineaPoa linea) => LineaPoaSeleccionada = linea;
+
     /// <summary>Carga combos de filtros + primer listado. La dispara la View (DataContextChanged).</summary>
     public async Task CargarAsync()
     {

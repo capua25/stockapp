@@ -253,4 +253,15 @@ public class GastosViewModelTests
         Assert.False(vm.PagosCommand.CanExecute(null));
         Assert.False(vm.AnularCommand.CanExecute(null));
     }
+
+    [Fact]
+    public void FiltrarPorLineaPoa_SeteaLineaPoaSeleccionada()
+    {
+        var (vm, _, _, _) = Crear();
+        var linea = new LineaPoa { Id = 5, Nombre = "Rambla", Programa = "Obras", Ejercicio = 2026 };
+
+        vm.FiltrarPorLineaPoa(linea);
+
+        Assert.Equal(5, vm.LineaPoaSeleccionada?.Id);
+    }
 }
