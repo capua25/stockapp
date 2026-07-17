@@ -90,23 +90,25 @@
                     IsVisible="{Binding !VerAnioCompleto}">
             <StackPanel>
                 <TextBlock Text="Totales por rubro" Classes="seccion" />
-                <ItemsControl ItemsSource="{Binding TotalesPorRubro}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding}" />
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                <DataGrid ItemsSource="{Binding TotalesPorRubro}"
+                          AutoGenerateColumns="False" CanUserSortColumns="True" IsReadOnly="True">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Rubro" Binding="{Binding Clave, DataType={x:Type dto:TotalPorClaveDto}}" Width="*" />
+                        <DataGridTextColumn Header="Total"
+                                             Binding="{Binding Total, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type dto:TotalPorClaveDto}}" />
+                    </DataGrid.Columns>
+                </DataGrid>
             </StackPanel>
             <StackPanel>
                 <TextBlock Text="Totales por fuente" Classes="seccion" />
-                <ItemsControl ItemsSource="{Binding TotalesPorFuente}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding}" />
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                <DataGrid ItemsSource="{Binding TotalesPorFuente}"
+                          AutoGenerateColumns="False" CanUserSortColumns="True" IsReadOnly="True">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Fuente" Binding="{Binding Clave, DataType={x:Type dto:TotalPorClaveDto}}" Width="*" />
+                        <DataGridTextColumn Header="Total"
+                                             Binding="{Binding Total, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type dto:TotalPorClaveDto}}" />
+                    </DataGrid.Columns>
+                </DataGrid>
             </StackPanel>
         </StackPanel>
 
