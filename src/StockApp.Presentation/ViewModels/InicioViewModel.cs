@@ -35,8 +35,22 @@ public partial class InicioViewModel : ViewModelBase
     public string RolTexto => EsAdmin ? "Administrador" : "Operador";
 
     [ObservableProperty] private bool _mostrarAvisoVencimientos;
-    [ObservableProperty] private int _cantidadVencidas;
-    [ObservableProperty] private int _cantidadAVencer7Dias;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TextoVencidas))]
+    private int _cantidadVencidas;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TextoAVencer7Dias))]
+    private int _cantidadAVencer7Dias;
+
+    public string TextoVencidas =>
+        CantidadVencidas == 1 ? "1 factura vencida" : $"{CantidadVencidas} facturas vencidas";
+
+    public string TextoAVencer7Dias =>
+        CantidadAVencer7Dias == 1
+            ? "1 factura por vencer esta semana"
+            : $"{CantidadAVencer7Dias} facturas por vencer esta semana";
 
     public InicioViewModel(
         ICurrentSession session, INavigationService navigation, IFinanzasVistasService finanzasVistas)

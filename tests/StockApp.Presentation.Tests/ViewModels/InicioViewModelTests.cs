@@ -180,6 +180,22 @@ public class InicioViewModelTests
     }
 
     [Fact]
+    public async Task CargarAsync_ConAVencerEn7DiasSinVencidas_MuestraElAviso()
+    {
+        var usuario = new UsuarioSesion(1, "jperez", RolUsuario.Operador, "Juan Pérez");
+        var (vm, _, _, _) = Crear(usuario, new CalendarioPagosDto(
+            new List<FacturaCalendarioDto>(),
+            new List<FacturaCalendarioDto> { new(1, "Barraca X", "A-1", 500m, new DateOnly(2026, 7, 20), "PorVencer") },
+            new List<FacturaCalendarioDto>(), new List<PagoRecienteDto>()));
+
+        await vm.CargarAsync();
+
+        Assert.True(vm.MostrarAvisoVencimientos);
+        Assert.Equal(0, vm.CantidadVencidas);
+        Assert.Equal(1, vm.CantidadAVencer7Dias);
+    }
+
+    [Fact]
     public async Task CargarAsync_SinVencidasNiAVencer_NoMuestraElAviso()
     {
         var usuario = new UsuarioSesion(1, "jperez", RolUsuario.Operador, "Juan Pérez");
@@ -212,5 +228,68 @@ public class InicioViewModelTests
         vm.IrACalendarioPagosCommand.Execute(null);
 
         nav.Verify(n => n.Navegar<CalendarioPagosViewModel>(), Times.Once);
+    }
+
+    [Fact]
+    public async Task TextoVencidas_Singular_ConUnaFacturaVencida()
+    {
+        var usuario = new UsuarioSesion(1, "jperez", RolUsuario.Operador, "Juan Pérez");
+        var (vm, _, _, _) = Crear(usuario, new CalendarioPagosDto(
+            new List<FacturaCalendarioDto> { new(1, "Barraca X", "A-1", 500m, new DateOnly(2026, 7, 1), "Vencida") },
+            new List<FacturaCalendarioDto>(), new List<FacturaCalendarioDto>(), new List<PagoRecienteDto>()));
+
+        await vm.CargarAsync();
+
+        Assert.Equal("1 factura vencida", vm.TextoVencidas);
+    }
+
+    [Fact]
+    public async Task TextoVencidas_Plural_ConVariasFacturasVencidas()
+    {
+        var usuario = new UsuarioSesion(1, "jperez", RolUsuario.Operador, "Juan Pérez");
+        var (vm, _, _, _) = Crear(usuario, new CalendarioPagosDto(
+            new List<FacturaCalendarioDto>
+            {
+                new(1, "Barraca X", "A-1", 500m, new DateOnly(2026, 7, 1), "Vencida"),
+                new(2, "Barraca Y", "A-2", 300m, new DateOnly(2026, 7, 2), "Vencida"),
+            },
+            new List<FacturaCalendarioDto>(), new List<FacturaCalendarioDto>(), new List<PagoRecienteDto>()));
+
+        await vm.CargarAsync();
+
+        Assert.Equal("2 facturas vencidas", vm.TextoVencidas);
+    }
+
+    [Fact]
+    public async Task TextoAVencer7Dias_Singular_ConUnaFacturaPorVencer()
+    {
+        var usuario = new UsuarioSesion(1, "jperez", RolUsuario.Operador, "Juan Pérez");
+        var (vm, _, _, _) = Crear(usuario, new CalendarioPagosDto(
+            new List<FacturaCalendarioDto>(),
+            new List<FacturaCalendarioDto> { new(1, "Barraca X", "A-1", 500m, new DateOnly(2026, 7, 20), "PorVencer") },
+            new List<FacturaCalendarioDto>(), new List<PagoRecienteDto>()));
+
+        await vm.CargarAsync();
+
+        Assert.Equal("1 factura por vencer esta semana", vm.TextoAVencer7Dias);
+    }
+
+    [Fact]
+    public async Task TextoAVencer7Dias_Plural_ConVariasFacturasPorVencer()
+    {
+        var usuario = new UsuarioSesion(1, "jperez", RolUsuario.Operador, "Juan Pérez");
+        var (vm, _, _, _) = Crear(usuario, new CalendarioPagosDto(
+            new List<FacturaCalendarioDto>(),
+            new List<FacturaCalendarioDto>
+            {
+                new(1, "Barraca X", "A-1", 500m, new DateOnly(2026, 7, 20), "PorVencer"),
+                new(2, "Barraca Y", "A-2", 300m, new DateOnly(2026, 7, 21), "PorVencer"),
+                new(3, "Barraca Z", "A-3", 200m, new DateOnly(2026, 7, 22), "PorVencer"),
+            },
+            new List<FacturaCalendarioDto>(), new List<PagoRecienteDto>()));
+
+        await vm.CargarAsync();
+
+        Assert.Equal("3 facturas por vencer esta semana", vm.TextoAVencer7Dias);
     }
 }
