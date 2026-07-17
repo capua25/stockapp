@@ -1,0 +1,101 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
+             xmlns:conv="using:StockApp.Presentation.Converters"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="800"
+             x:Class="StockApp.Presentation.Views.Finanzas.CalendarioPagosView"
+             x:DataType="vm:CalendarioPagosViewModel">
+
+    <ScrollViewer>
+        <StackPanel Margin="16" Spacing="20">
+
+            <TextBlock Text="Calendario de pagos" Classes="titulo-vista" />
+            <Button Content="Actualizar" Command="{Binding RecargarCommand}" HorizontalAlignment="Left" />
+
+            <Border Classes="card">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Vencidas" Classes="seccion" Foreground="{DynamicResource DangerBrush}" />
+                    <ItemsControl ItemsSource="{Binding Vencidas}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,4">
+                                    <TextBlock Grid.Column="0"
+                                               Text="{Binding ProveedorNombre}" />
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding SaldoPendiente, Converter={x:Static conv:MonedaConverter.Instance}}"
+                                               Margin="0,0,12,0" />
+                                    <Button Grid.Column="2" Content="Registrar pago"
+                                            Command="{Binding $parent[UserControl].((vm:CalendarioPagosViewModel)DataContext).RegistrarPagoCommand}"
+                                            CommandParameter="{Binding}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <Border Classes="card">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="A vencer en 7 días" Classes="seccion" />
+                    <ItemsControl ItemsSource="{Binding AVencer7Dias}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,4">
+                                    <TextBlock Grid.Column="0" Text="{Binding ProveedorNombre}" />
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding SaldoPendiente, Converter={x:Static conv:MonedaConverter.Instance}}"
+                                               Margin="0,0,12,0" />
+                                    <Button Grid.Column="2" Content="Registrar pago"
+                                            Command="{Binding $parent[UserControl].((vm:CalendarioPagosViewModel)DataContext).RegistrarPagoCommand}"
+                                            CommandParameter="{Binding}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <Border Classes="card">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="A vencer en 30 días" Classes="seccion" />
+                    <ItemsControl ItemsSource="{Binding AVencer30Dias}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,4">
+                                    <TextBlock Grid.Column="0" Text="{Binding ProveedorNombre}" />
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding SaldoPendiente, Converter={x:Static conv:MonedaConverter.Instance}}"
+                                               Margin="0,0,12,0" />
+                                    <Button Grid.Column="2" Content="Registrar pago"
+                                            Command="{Binding $parent[UserControl].((vm:CalendarioPagosViewModel)DataContext).RegistrarPagoCommand}"
+                                            CommandParameter="{Binding}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+            <Border Classes="card">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Pagos recientes" Classes="seccion" />
+                    <ItemsControl ItemsSource="{Binding PagosRecientes}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,4">
+                                    <TextBlock Grid.Column="0" Text="{Binding ProveedorNombre}" />
+                                    <TextBlock Grid.Column="1" Text="{Binding FechaPago}" Margin="0,0,12,0" />
+                                    <TextBlock Grid.Column="2"
+                                               Text="{Binding Monto, Converter={x:Static conv:MonedaConverter.Instance}}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

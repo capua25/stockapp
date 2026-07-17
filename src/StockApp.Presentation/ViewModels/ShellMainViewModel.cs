@@ -237,6 +237,13 @@ public partial class ShellMainViewModel : ViewModelBase
         _navigation.Navegar<ControlPoaViewModel>();
     }
 
+    [RelayCommand]
+    private void NavCalendarioPagos()
+    {
+        SeccionActiva = "CalendarioPagos";
+        _navigation.Navegar<CalendarioPagosViewModel>();
+    }
+
     // ── Cerrar sesión ──────────────────────────────────────────────────────────
 
     /// <summary>

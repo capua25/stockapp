@@ -167,6 +167,17 @@
                     </Grid>
                 </Button>
 
+                <Button Command="{Binding NavCalendarioPagosCommand}"
+                        Classes="ghost"
+                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=CalendarioPagos}"
+                        HorizontalAlignment="Stretch">
+                    <Grid ColumnDefinitions="Auto,*">
+                        <i:Icon Grid.Column="0" Value="mdi-calendar-clock" Foreground="{DynamicResource SidebarTextoBrush}" />
+                        <TextBlock Grid.Column="1" Text="Calendario de pagos" VerticalAlignment="Center"
+                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                </Button>
+
                 <!-- Tablas maestras: solo Admin -->
                 <TextBlock Text="Tablas maestras"
                            Classes="caption"
