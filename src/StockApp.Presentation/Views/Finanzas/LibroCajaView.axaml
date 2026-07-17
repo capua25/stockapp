@@ -33,7 +33,8 @@
                   IsVisible="{Binding !VerAnioCompleto}"
                   AutoGenerateColumns="False" CanUserSortColumns="True" IsReadOnly="True">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha, DataType={x:Type dto:MovimientoCajaDto}}" />
+                <DataGridTextColumn Header="Fecha"
+                                     Binding="{Binding Fecha, StringFormat='dd/MM/yyyy', DataType={x:Type dto:MovimientoCajaDto}}" />
                 <DataGridTextColumn Header="Tipo" Binding="{Binding Tipo, DataType={x:Type dto:MovimientoCajaDto}}" />
                 <DataGridTextColumn Header="Concepto" Binding="{Binding Concepto, DataType={x:Type dto:MovimientoCajaDto}}" Width="*" />
                 <DataGridTextColumn Header="Proveedor" Binding="{Binding ProveedorNombre, DataType={x:Type dto:MovimientoCajaDto}}" />
@@ -49,14 +50,26 @@
             </DataGrid.Columns>
         </DataGrid>
 
-        <ItemsControl Grid.Row="2" IsVisible="{Binding VerAnioCompleto}"
-                      ItemsSource="{Binding LibroAnual.TotalesPorMes}">
-            <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                    <TextBlock Text="{Binding}" Margin="0,2" />
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
+        <StackPanel Grid.Row="2" IsVisible="{Binding VerAnioCompleto}" Spacing="16">
+            <ItemsControl ItemsSource="{Binding LibroAnual.TotalesPorMes}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" Margin="0,2" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <StackPanel>
+                <TextBlock Text="Totales por rubro" Classes="seccion" />
+                <ItemsControl ItemsSource="{Binding LibroAnual.TotalesPorRubro}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </StackPanel>
 
         <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="24" Margin="0,12,0,0"
                     IsVisible="{Binding !VerAnioCompleto}">

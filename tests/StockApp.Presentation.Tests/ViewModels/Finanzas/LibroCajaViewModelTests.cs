@@ -76,6 +76,25 @@ public class LibroCajaViewModelTests
     }
 
     [Fact]
+    public async Task VerAnioCompleto_ExponeTotalesPorRubroDelAnio()
+    {
+        // spec §7.3: el toggle "Año completo" muestra "totales por mes y por rubro, sin gráficos".
+        var (vm, svc) = Crear();
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(It.IsAny<int>()))
+            .ReturnsAsync(new LibroCajaAnualDto(
+                2026,
+                new List<TotalMensualDto> { new(7, 1000m, 400m, 600m) },
+                new List<TotalPorClaveDto> { new("Combustibles", 250m) }));
+
+        vm.VerAnioCompleto = true;
+        await vm.CargarAsync();
+
+        var rubro = Assert.Single(vm.LibroAnual!.TotalesPorRubro);
+        Assert.Equal("Combustibles", rubro.Clave);
+        Assert.Equal(250m, rubro.Total);
+    }
+
+    [Fact]
     public async Task FilasView_EsOrdenable()
     {
         var (vm, svc) = Crear();
