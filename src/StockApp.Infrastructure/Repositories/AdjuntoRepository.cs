@@ -26,15 +26,20 @@ public class AdjuntoRepository : IAdjuntoRepository
             .Where(a => a.Activo)
             .Where(filtro)
             .OrderByDescending(a => a.FechaAltaUtc)
+            .ThenByDescending(a => a.Id)
             .ToListAsync();
 
     public async Task<int> AgregarAsync(Adjunto adjunto, byte[] contenido)
     {
+        await using var tx = await _ctx.Database.BeginTransactionAsync();
+
         _ctx.Adjuntos.Add(adjunto);
         await _ctx.SaveChangesAsync();
 
         _ctx.AdjuntosContenido.Add(new AdjuntoContenido { Id = adjunto.Id, Contenido = contenido });
         await _ctx.SaveChangesAsync();
+
+        await tx.CommitAsync();
 
         return adjunto.Id;
     }

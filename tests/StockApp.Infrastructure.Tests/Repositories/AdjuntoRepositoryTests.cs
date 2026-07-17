@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Infrastructure.Repositories;
@@ -57,6 +58,35 @@ public class AdjuntoRepositoryTests : PostgresRepositoryTestBase
 
         var contenido = await _repo.ObtenerContenidoAsync(id);
         Assert.Equal(bytes, contenido);
+    }
+
+    [Fact]
+    public async Task AgregarAsync_EsAtomica_AdjuntoYContenidoQuedanConsistentes()
+    {
+        var gastoId = await CrearGastoAsync();
+        var bytes = new byte[] { 0x25, 0x50, 0x44, 0x46, 0x01, 0x02 };
+
+        var adjunto = new Adjunto
+        {
+            NombreArchivo = "factura.pdf", ContentType = "application/pdf",
+            TamanoBytes = bytes.Length, GastoId = gastoId, FechaAltaUtc = DateTime.UtcNow,
+        };
+
+        var id = await _repo.AgregarAsync(adjunto, bytes);
+
+        var existeAdjunto = await Context.Adjuntos.AnyAsync(a => a.Id == id);
+        var existeContenido = await Context.AdjuntosContenido.AnyAsync(c => c.Id == id);
+        Assert.True(existeAdjunto, "El Adjunto debe existir tras AgregarAsync.");
+        Assert.True(existeContenido, "El AdjuntoContenido debe existir junto al Adjunto (misma transacción).");
+
+        // Segunda llamada, para confirmar que la transacción de la primera no deja
+        // el contexto en un estado que rompa operaciones subsiguientes.
+        var id2 = await _repo.AgregarAsync(new Adjunto
+        {
+            NombreArchivo = "b.pdf", ContentType = "application/pdf",
+            TamanoBytes = bytes.Length, GastoId = gastoId, FechaAltaUtc = DateTime.UtcNow,
+        }, bytes);
+        Assert.True(await Context.AdjuntosContenido.AnyAsync(c => c.Id == id2));
     }
 
     [Fact]
