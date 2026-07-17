@@ -84,6 +84,21 @@ public class AdjuntoServiceTests
     }
 
     [Fact]
+    public async Task AgregarAGastoAsync_SinPermiso_NoPersisteNiAuditaYPropagaExcepcion()
+    {
+        _auth.Setup(a => a.Verificar(RolUsuario.Admin, Permisos.RegistrarGastos))
+            .Throws<UnauthorizedAccessException>();
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => _service.AgregarAGastoAsync(1, "factura.pdf", BytesPdf));
+
+        _adjuntos.Verify(r => r.AgregarAsync(It.IsAny<Adjunto>(), It.IsAny<byte[]>()), Times.Never);
+        _audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), It.IsAny<AccionAuditada>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>()),
+            Times.Never);
+    }
+
+    [Fact]
     public async Task AgregarAPagoAsync_VerificaPermisoRegistrarPagos()
     {
         _adjuntos.Setup(r => r.AgregarAsync(It.IsAny<Adjunto>(), It.IsAny<byte[]>())).ReturnsAsync(11);
@@ -134,5 +149,22 @@ public class AdjuntoServiceTests
         await _service.QuitarAsync(8);
 
         _auth.Verify(a => a.Verificar(RolUsuario.Admin, Permisos.RegistrarPagos), Times.Once);
+    }
+
+    [Fact]
+    public async Task QuitarAsync_DeUnPago_SinPermisoRegistrarPagos_NoDaDeBajaNiAudita()
+    {
+        var adjunto = new Adjunto { Id = 9, PagoGastoId = 5, Activo = true, NombreArchivo = "r2.pdf" };
+        _adjuntos.Setup(r => r.ObtenerPorIdAsync(9)).ReturnsAsync(adjunto);
+        _auth.Setup(a => a.Verificar(RolUsuario.Admin, Permisos.RegistrarPagos))
+            .Throws<UnauthorizedAccessException>();
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => _service.QuitarAsync(9));
+
+        Assert.True(adjunto.Activo);
+        _adjuntos.Verify(r => r.ActualizarAsync(It.IsAny<Adjunto>()), Times.Never);
+        _audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), It.IsAny<AccionAuditada>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>()),
+            Times.Never);
     }
 }
