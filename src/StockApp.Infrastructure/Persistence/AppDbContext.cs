@@ -178,7 +178,7 @@ public class AppDbContext : DbContext
             e.Property(p => p.Monto).HasPrecision(18, 4);
             e.Property(p => p.Activo).HasDefaultValue(true);
             e.HasIndex(p => p.GastoId);
-            e.HasOne<Gasto>().WithMany(g => g.Pagos)
+            e.HasOne(p => p.Gasto).WithMany(g => g.Pagos)
                 .HasForeignKey(p => p.GastoId).OnDelete(DeleteBehavior.Restrict);
         });
 

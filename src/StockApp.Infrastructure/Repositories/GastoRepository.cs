@@ -203,4 +203,36 @@ public class GastoRepository : IGastoRepository
             movimiento.GastoId = null;
         await _ctx.SaveChangesAsync();
     }
+
+    public async Task<IReadOnlyList<PagoGasto>> ListarPagosActivosPorRangoAsync(DateTime desdeUtc, DateTime hastaUtc)
+        => await _ctx.PagosGasto
+            .Include(p => p.Gasto!).ThenInclude(g => g!.Proveedor)
+            .Include(p => p.Gasto!).ThenInclude(g => g!.RubroGasto)
+            .Include(p => p.Gasto!).ThenInclude(g => g!.FuenteFinanciamiento)
+            .Where(p => p.Activo && p.Gasto!.Activo && p.Fecha >= desdeUtc && p.Fecha <= hastaUtc)
+            .OrderBy(p => p.Fecha)
+            .ThenBy(p => p.Id)
+            .ToListAsync();
+
+    public async Task<decimal> TotalPagosActivosAntesDeAsync(DateTime fechaUtc)
+        => await _ctx.PagosGasto
+            .Where(p => p.Activo && p.Gasto!.Activo && p.Fecha < fechaUtc)
+            .SumAsync(p => (decimal?)p.Monto) ?? 0m;
+
+    public async Task<IReadOnlyList<Gasto>> ListarActivosConSaldoAsync()
+        => await ConIncludes()
+            .Where(g => g.Activo)
+            .OrderBy(g => g.FechaVencimiento ?? g.Fecha)
+            .ToListAsync();
+
+    public async Task<IReadOnlyDictionary<int, decimal>> TotalGastadoPorLineaAsync(int ejercicio)
+    {
+        var filas = await _ctx.Gastos
+            .Where(g => g.Activo && g.LineaPoaId != null && g.LineaPoa!.Ejercicio == ejercicio)
+            .GroupBy(g => g.LineaPoaId!.Value)
+            .Select(gr => new { LineaPoaId = gr.Key, Total = gr.Sum(g => g.MontoTotal) })
+            .ToListAsync();
+
+        return filas.ToDictionary(f => f.LineaPoaId, f => f.Total);
+    }
 }
