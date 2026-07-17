@@ -181,6 +181,7 @@ public partial class App : AvaloniaApp
         // ── Módulo Finanzas — Fase 2: gastos e ingresos de caja ───────────────
         services.AddTransient<IGastoService, GastoApiClient>();
         services.AddTransient<IIngresoCajaService, IngresoCajaApiClient>();
+        services.AddTransient<IFinanzasVistasService, FinanzasVistasApiClient>();
 
         // ── Inc 7 Fase B: licenciamiento (pantalla de bloqueo + reset de Admin) ──
         services.AddTransient<ILicenciaService>(sp => new LicenciaApiClient(sp.GetRequiredService<HttpClient>()));
