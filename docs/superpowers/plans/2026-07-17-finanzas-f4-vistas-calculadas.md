@@ -3026,13 +3026,13 @@ public partial class InicioView : UserControl
 
 ### Steps
 
-- [ ] Correr la suite completa de la solución:
+- [x] Correr la suite completa de la solución:
   `dotnet test`
   Resultado esperado: `Passed! - Failed: 0` con un total ≥ 1340 + los tests nuevos de F4 (aprox. 1340 + 6 (Task1) + 6 (Task2) + 5 (Task3) + 8 (Task4) + 10 (Task5) + 4 (Task6) + 5+1 (Task7) + 3+1 (Task8) + 2 (Task9) + 4 (Task10) ≈ 1395+).
 
-- [ ] Si algo falla, arreglar el mínimo necesario y volver a correr `dotnet test` hasta verde. No commitear hasta estar verde.
+- [x] Si algo falla, arreglar el mínimo necesario y volver a correr `dotnet test` hasta verde. No commitear hasta estar verde.
 
-- [ ] Commit: `test(finanzas): cierre F4 vistas calculadas — suite completa verde`
+- [x] Commit: `test(finanzas): cierre F4 vistas calculadas — suite completa verde`
 
 - [ ] Nota para el orquestador (NO ejecutar acá): la verificación orgánica (app real vía XTEST/WSLg + Postgres `stockapp-pg`) queda fuera de este plan — la corre el orquestador después de que el ejecutor complete estas 11 tasks.
 
