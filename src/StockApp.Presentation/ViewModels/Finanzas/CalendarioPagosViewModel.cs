@@ -52,6 +52,10 @@ public partial class CalendarioPagosViewModel : ViewModelBase
     {
         if (fila is null) return;
         var gasto = await _gastoService.ObtenerPorIdAsync(fila.GastoId);
-        _navigation.Navegar<PagosGastoViewModel>(vm => vm.CargarParaGasto(gasto));
+        _navigation.Navegar<PagosGastoViewModel>(vm =>
+        {
+            vm.CargarParaGasto(gasto);
+            vm.ConfigurarVolver(() => _navigation.Navegar<CalendarioPagosViewModel>());
+        });
     }
 }

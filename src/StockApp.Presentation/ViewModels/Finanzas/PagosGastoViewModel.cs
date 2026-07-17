@@ -25,6 +25,7 @@ public partial class PagosGastoViewModel : ViewModelBase
     private readonly IConfirmacionService _confirmacion;
 
     private int _gastoId;
+    private Action _volver;
 
     /// <summary>Cultura FIJA es-UY (patrón MonedaConverter).</summary>
     private static readonly IFormatProvider CulturaMonto = CrearCulturaMonto();
@@ -70,10 +71,17 @@ public partial class PagosGastoViewModel : ViewModelBase
         _service      = service;
         _navigation   = navigation;
         _confirmacion = confirmacion;
+        _volver       = () => _navigation.Navegar<GastosViewModel>();
     }
 
     /// <summary>Recibe el gasto de la grilla. Corre ANTES de InicializarAsync.</summary>
     public void CargarParaGasto(Gasto gasto) => _gastoId = gasto.Id;
+
+    /// <summary>
+    /// Permite que el ORIGEN de la navegación configure a dónde vuelve <see cref="Volver"/>.
+    /// Por defecto (si no se llama) vuelve a <see cref="GastosViewModel"/>.
+    /// </summary>
+    public void ConfigurarVolver(Action volver) => _volver = volver;
 
     /// <summary>Trae el gasto fresco del servidor. La dispara la View (DataContextChanged).</summary>
     public async Task InicializarAsync()
@@ -162,5 +170,5 @@ public partial class PagosGastoViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void Volver() => _navigation.Navegar<GastosViewModel>();
+    private void Volver() => _volver();
 }

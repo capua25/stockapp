@@ -2,6 +2,7 @@ using Moq;
 using StockApp.Application.Finanzas;
 using StockApp.Domain.Entities;
 using StockApp.Presentation.Navigation;
+using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Finanzas;
 using Xunit;
 
@@ -55,5 +56,37 @@ public class CalendarioPagosViewModelTests
 
         gastoSvc.Verify(g => g.ObtenerPorIdAsync(1), Times.Once);
         nav.Verify(n => n.Navegar(It.IsAny<Action<PagosGastoViewModel>>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task RegistrarPago_ConfiguraVolverAlCalendario()
+    {
+        var (vm, _, gastoSvc, nav) = Crear(new CalendarioPagosDto(
+            new List<FacturaCalendarioDto> { new(1, "Barraca X", "A-1", 500m, new DateOnly(2026, 7, 1), "Vencida") },
+            new List<FacturaCalendarioDto>(), new List<FacturaCalendarioDto>(), new List<PagoRecienteDto>()));
+        await vm.CargarAsync();
+        gastoSvc.Setup(g => g.ObtenerPorIdAsync(1)).ReturnsAsync(new Gasto { Id = 1 });
+
+        var pagosNav = new Mock<INavigationService>();
+        var pagosSvc = new Mock<IGastoService>();
+        var pagosConfirm = new Mock<IConfirmacionService>();
+        PagosGastoViewModel? pagosVm = null;
+
+        nav.Setup(n => n.Navegar(It.IsAny<Action<PagosGastoViewModel>>()))
+            .Callback<Action<PagosGastoViewModel>>(cb =>
+            {
+                pagosVm = new PagosGastoViewModel(pagosSvc.Object, pagosNav.Object, pagosConfirm.Object);
+                cb(pagosVm);
+            });
+
+        await vm.RegistrarPagoCommand.ExecuteAsync(vm.Vencidas[0]);
+
+        Assert.NotNull(pagosVm);
+        pagosVm!.VolverCommand.Execute(null);
+
+        // ConfigurarVolver captura la INavigationService del CalendarioPagosViewModel (origen),
+        // no la del propio PagosGastoViewModel — por eso se verifica en "nav", no en "pagosNav".
+        nav.Verify(n => n.Navegar<CalendarioPagosViewModel>(), Times.Once);
+        pagosNav.Verify(n => n.Navegar<GastosViewModel>(), Times.Never);
     }
 }
