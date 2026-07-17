@@ -35,4 +35,17 @@ public class IngresoCajaRepository : IIngresoCajaRepository
         _ctx.IngresosCaja.Update(ingreso);
         return _ctx.SaveChangesAsync();
     }
+
+    public async Task<IReadOnlyList<IngresoCaja>> ListarPorRangoAsync(DateTime desdeUtc, DateTime hastaUtc)
+        => await _ctx.IngresosCaja
+            .Include(i => i.FuenteFinanciamiento)
+            .Where(i => i.Activo && i.Fecha >= desdeUtc && i.Fecha <= hastaUtc)
+            .OrderBy(i => i.Fecha)
+            .ThenBy(i => i.Id)
+            .ToListAsync();
+
+    public async Task<decimal> TotalActivosAntesDeAsync(DateTime fechaUtc)
+        => await _ctx.IngresosCaja
+            .Where(i => i.Activo && i.Fecha < fechaUtc)
+            .SumAsync(i => (decimal?)i.Monto) ?? 0m;
 }
