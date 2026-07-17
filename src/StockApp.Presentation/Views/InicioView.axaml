@@ -37,6 +37,18 @@
                 </StackPanel>
             </Border>
 
+            <!-- Aviso de vencimientos -->
+            <Border Classes="card" IsVisible="{Binding MostrarAvisoVencimientos}">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Vencimientos de facturas" Classes="seccion" Foreground="{DynamicResource DangerBrush}" />
+                    <TextBlock Text="{Binding CantidadVencidas, StringFormat='{}{0} factura(s) vencida(s)'}"
+                               IsVisible="{Binding CantidadVencidas}" />
+                    <TextBlock Text="{Binding CantidadAVencer7Dias, StringFormat='{}{0} factura(s) a vencer esta semana'}"
+                               IsVisible="{Binding CantidadAVencer7Dias}" />
+                    <Button Content="Ver calendario de pagos" Command="{Binding IrACalendarioPagosCommand}" />
+                </StackPanel>
+            </Border>
+
             <!-- Accesos rápidos -->
             <Border Classes="card">
                 <StackPanel Spacing="12">

@@ -2,6 +2,7 @@ using Moq;
 using StockApp.ApiClient;
 using StockApp.Application.Actualizaciones;
 using StockApp.Application.Auth;
+using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
 using StockApp.Application.Licenciamiento;
 using StockApp.Domain.Enums;
@@ -56,7 +57,8 @@ public class ShellViewModelTests
                 return new ShellMainViewModel(
                     sessionMock.Object, navSvcRef!, InfoAppStub, confirmMock.Object);
             if (t == typeof(InicioViewModel))
-                return new InicioViewModel(sessionMock.Object, Mock.Of<INavigationService>());
+                return new InicioViewModel(
+                    sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IFinanzasVistasService>());
             throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
         });
         navSvcRef = navSvc;
