@@ -117,6 +117,10 @@ builder.Services.AddScoped<IGastoService, GastoService>();
 builder.Services.AddScoped<IIngresoCajaRepository, IngresoCajaRepository>();
 builder.Services.AddScoped<IIngresoCajaService, IngresoCajaService>();
 
+// Finanzas — Fase 3: adjuntos de gastos/pagos
+builder.Services.AddScoped<IAdjuntoRepository, AdjuntoRepository>();
+builder.Services.AddScoped<IAdjuntoService, AdjuntoService>();
+
 // Finanzas — Fase 4: vistas calculadas (libro caja, control POA, calendario de pagos)
 builder.Services.AddScoped<IFinanzasVistasService, FinanzasVistasService>();
 
@@ -330,6 +334,14 @@ builder.Services.AddRateLimiter(options =>
     };
 });
 
+// Limite de multipart para /finanzas/.../adjuntos (spec F3): 10MB + margen para headers,
+// devuelve 400 en vez de la excepcion cruda de Kestrel si se supera. El tope de negocio
+// real (10MB exactos, con mensaje claro) lo valida AdjuntoValidador en el service.
+builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 11 * 1024 * 1024;
+});
+
 var app = builder.Build();
 
 // Fail-fast de configuración al arrancar el host (post-Build, ya con la configuración
@@ -394,6 +406,7 @@ app.MapFuentesFinanciamientoEndpoints();
 app.MapRubrosGastoEndpoints();
 app.MapLineasPoaEndpoints();
 app.MapGastosEndpoints();
+app.MapAdjuntosEndpoints();
 app.MapIngresosCajaEndpoints();
 app.MapFinanzasVistasEndpoints();
 app.MapLicenciaEndpoints();

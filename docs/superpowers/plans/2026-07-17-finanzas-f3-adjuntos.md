@@ -1053,7 +1053,7 @@ public class AdjuntoService : IAdjuntoService
 
 **Steps:**
 
-- [ ] 7.1 Escribir los tests que fallan en `tests/StockApp.Api.Tests/AdjuntosEndpointTests.cs`. Sigue el patrón de `GastosEndpointTests` (hereda `ApiTestBase`, JWT por rol, seed vía `Factory.CrearContexto()`):
+- [x] 7.1 Escribir los tests que fallan en `tests/StockApp.Api.Tests/AdjuntosEndpointTests.cs`. Sigue el patrón de `GastosEndpointTests` (hereda `ApiTestBase`, JWT por rol, seed vía `Factory.CrearContexto()`):
 ```csharp
 using System.Net;
 using System.Net.Http.Headers;
@@ -1190,7 +1190,7 @@ public class AdjuntosEndpointTests : ApiTestBase
 }
 ```
   Nota: `Factory.CreateClientAutenticado(RolUsuario)` es el helper existente usado en `GastosEndpointTests` — si el nombre real difiere, ajustar al helper real de `ApiFactory` (verificar en `tests/StockApp.Api.Tests/Fixtures/ApiFactory.cs` antes de escribir el test, sin inventar un nombre nuevo).
-- [ ] 7.2 Actualizar `tests/StockApp.Api.Tests/Fixtures/ApiTestBase.cs` — agregar `"AdjuntosContenido", "Adjuntos"` al `TRUNCATE` (mismo gap que Task 5.5, ahora en la lista de `ApiTestBase`):
+- [x] 7.2 Actualizar `tests/StockApp.Api.Tests/Fixtures/ApiTestBase.cs` — agregar `"AdjuntosContenido", "Adjuntos"` al `TRUNCATE` (mismo gap que Task 5.5, ahora en la lista de `ApiTestBase`):
 ```csharp
         ctx.Database.ExecuteSqlRaw(
             "TRUNCATE TABLE \"LogsAuditoria\", \"MovimientosStock\", \"Productos\", " +
@@ -1199,10 +1199,10 @@ public class AdjuntosEndpointTests : ApiTestBase
             "\"AdjuntosContenido\", \"Adjuntos\", \"PagosGasto\", \"Gastos\", " +
             "\"Usuarios\" RESTART IDENTITY CASCADE;");
 ```
-- [ ] 7.3 Correr y ver que falla (falta `AdjuntosEndpoints`/DI):
+- [x] 7.3 Correr y ver que falla (falta `AdjuntosEndpoints`/DI):
   `dotnet test tests/StockApp.Api.Tests/StockApp.Api.Tests.csproj --filter AdjuntosEndpointTests`
   Salida esperada: fallos de conexión/404 o error de compilación (según cuánto exista aún).
-- [ ] 7.4 Implementación. Crear `src/StockApp.Api/Endpoints/AdjuntosEndpoints.cs`:
+- [x] 7.4 Implementación. Crear `src/StockApp.Api/Endpoints/AdjuntosEndpoints.cs`:
 ```csharp
 using StockApp.Application.Authorization;
 using StockApp.Application.Finanzas;
@@ -1268,7 +1268,7 @@ public static class AdjuntosEndpoints
         })
         .RequireAuthorization();
 ```
-- [ ] 7.5 Modificar `src/StockApp.Api/Program.cs`:
+- [x] 7.5 Modificar `src/StockApp.Api/Program.cs`:
   - Agregar el using de `IFormFile`/multipart (ya cubierto por `Microsoft.AspNetCore.Http`, implícito en Minimal APIs — no requiere using extra).
   - Tras la línea `builder.Services.AddScoped<IGastoService, GastoService>();` (línea 116), agregar:
 ```csharp
@@ -1289,10 +1289,10 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(optio
 ```csharp
 app.MapAdjuntosEndpoints();
 ```
-- [ ] 7.6 Correr y ver que pasa:
+- [x] 7.6 Correr y ver que pasa:
   `dotnet test tests/StockApp.Api.Tests/StockApp.Api.Tests.csproj --filter AdjuntosEndpointTests`
   Salida esperada: `Passed! - Failed: 0, Passed: 6`.
-- [ ] 7.7 Commit:
+- [x] 7.7 Commit:
   `git commit -m "feat(finanzas): endpoints multipart de adjuntos en la API"`
 
 ---
