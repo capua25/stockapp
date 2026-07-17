@@ -51,23 +51,38 @@
         </DataGrid>
 
         <StackPanel Grid.Row="2" IsVisible="{Binding VerAnioCompleto}" Spacing="16">
-            <ItemsControl ItemsSource="{Binding LibroAnual.TotalesPorMes}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding}" Margin="0,2" />
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+            <StackPanel>
+                <TextBlock Text="Totales por mes" Classes="seccion" />
+                <DataGrid ItemsSource="{Binding LibroAnual.TotalesPorMes}"
+                          AutoGenerateColumns="False" CanUserSortColumns="True" IsReadOnly="True">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Mes" Binding="{Binding Mes, DataType={x:Type dto:TotalMensualDto}}" />
+                        <DataGridTextColumn Header="Ingresos"
+                                             Binding="{Binding Ingresos, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type dto:TotalMensualDto}}" />
+                        <DataGridTextColumn Header="Egresos"
+                                             Binding="{Binding Egresos, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type dto:TotalMensualDto}}" />
+                        <DataGridTemplateColumn Header="Neto">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate DataType="dto:TotalMensualDto">
+                                    <TextBlock Text="{Binding Neto, Converter={x:Static conv:MonedaConverter.Instance}}"
+                                               Foreground="{Binding Neto, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </StackPanel>
 
             <StackPanel>
                 <TextBlock Text="Totales por rubro" Classes="seccion" />
-                <ItemsControl ItemsSource="{Binding LibroAnual.TotalesPorRubro}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Text="{Binding}" />
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                <DataGrid ItemsSource="{Binding LibroAnual.TotalesPorRubro}"
+                          AutoGenerateColumns="False" CanUserSortColumns="True" IsReadOnly="True">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Rubro" Binding="{Binding Clave, DataType={x:Type dto:TotalPorClaveDto}}" Width="*" />
+                        <DataGridTextColumn Header="Total"
+                                             Binding="{Binding Total, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type dto:TotalPorClaveDto}}" />
+                    </DataGrid.Columns>
+                </DataGrid>
             </StackPanel>
         </StackPanel>
 

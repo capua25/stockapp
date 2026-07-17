@@ -90,6 +90,40 @@ public class FinanzasVistasServiceCalendarioTests
     }
 
     [Fact]
+    public async Task ObtenerCalendarioPagosAsync_VenceExactamenteA7Dias_SoloEnAVencer7Dias()
+    {
+        var svc = Crear(out var gastos);
+        gastos.Setup(g => g.ListarActivosConSaldoAsync()).ReturnsAsync(new List<Gasto>
+        {
+            GastoCredito(1, Hoy.AddDays(7), "Exacto7"),
+        });
+
+        var resultado = await svc.ObtenerCalendarioPagosAsync(Hoy);
+
+        Assert.Empty(resultado.Vencidas);
+        Assert.Single(resultado.AVencer7Dias);
+        Assert.Equal("Exacto7", resultado.AVencer7Dias[0].ProveedorNombre);
+        Assert.Empty(resultado.AVencer30Dias);
+    }
+
+    [Fact]
+    public async Task ObtenerCalendarioPagosAsync_VenceExactamenteA30Dias_SoloEnAVencer30Dias()
+    {
+        var svc = Crear(out var gastos);
+        gastos.Setup(g => g.ListarActivosConSaldoAsync()).ReturnsAsync(new List<Gasto>
+        {
+            GastoCredito(1, Hoy.AddDays(30), "Exacto30"),
+        });
+
+        var resultado = await svc.ObtenerCalendarioPagosAsync(Hoy);
+
+        Assert.Empty(resultado.Vencidas);
+        Assert.Empty(resultado.AVencer7Dias);
+        Assert.Single(resultado.AVencer30Dias);
+        Assert.Equal("Exacto30", resultado.AVencer30Dias[0].ProveedorNombre);
+    }
+
+    [Fact]
     public async Task ObtenerCalendarioPagosAsync_SinFechaReferencia_UsaUtcNow()
     {
         var svc = Crear(out var gastos);
