@@ -20,6 +20,8 @@ public class AppDbContext : DbContext
     public DbSet<AsignacionPresupuestal> AsignacionesPresupuestales => Set<AsignacionPresupuestal>();
     public DbSet<Gasto> Gastos => Set<Gasto>();
     public DbSet<PagoGasto> PagosGasto => Set<PagoGasto>();
+    public DbSet<Adjunto> Adjuntos => Set<Adjunto>();
+    public DbSet<AdjuntoContenido> AdjuntosContenido => Set<AdjuntoContenido>();
     public DbSet<IngresoCaja> IngresosCaja => Set<IngresoCaja>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -190,6 +192,35 @@ public class AppDbContext : DbContext
             e.HasIndex(i => i.Fecha);
             e.HasOne(i => i.FuenteFinanciamiento).WithMany()
                 .HasForeignKey(i => i.FuenteFinanciamientoId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── Finanzas: adjuntos (Fase 3 módulo Finanzas) ───────────────────────
+        // Contenido separado en tabla propia (bytea) para que ListarPorGasto/Pago nunca
+        // traigan bytes. CHECK XOR en BD como defensa en profundidad (AdjuntoService ya
+        // valida la invariante en memoria antes de llegar acá).
+        modelBuilder.Entity<Adjunto>(e =>
+        {
+            e.Property(a => a.NombreArchivo).IsRequired();
+            e.Property(a => a.ContentType).IsRequired();
+            e.Property(a => a.Activo).HasDefaultValue(true);
+            e.HasIndex(a => a.GastoId);
+            e.HasIndex(a => a.PagoGastoId);
+            e.HasCheckConstraint(
+                "CK_Adjuntos_GastoOPago",
+                "(\"GastoId\" IS NOT NULL AND \"PagoGastoId\" IS NULL) OR " +
+                "(\"GastoId\" IS NULL AND \"PagoGastoId\" IS NOT NULL)");
+            e.HasOne(a => a.Gasto).WithMany()
+                .HasForeignKey(a => a.GastoId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(a => a.PagoGasto).WithMany()
+                .HasForeignKey(a => a.PagoGastoId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<AdjuntoContenido>().WithOne()
+                .HasForeignKey<AdjuntoContenido>(c => c.Id)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AdjuntoContenido>(e =>
+        {
+            e.Property(c => c.Contenido).IsRequired();
         });
 
         // ── Vínculo stock ↔ finanzas: FK opcional en MovimientoStock ─────────
