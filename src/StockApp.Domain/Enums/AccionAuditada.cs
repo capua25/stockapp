@@ -53,4 +53,8 @@ public enum AccionAuditada
     ModificacionIngresoCaja     = 37,
     BajaIngresoCaja             = 38,
     AsociacionMovimientosAGasto = 39,
+
+    // ── Finanzas — Fase 3: adjuntos (append-only a partir de 40) ─────────────
+    AltaAdjunto = 40,
+    BajaAdjunto = 41,
 }
