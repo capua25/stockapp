@@ -164,6 +164,16 @@ public partial class GastosViewModel : ViewModelBase
             foreach (var l in lineas)
                 LineasPoaDisponibles.Add(l);
 
+            // Bug real (verificación orgánica F4): si ya había una línea POA preseleccionada
+            // (FiltrarPorLineaPoa, navegación desde Control POA), la instancia viene de otra
+            // consulta y el ComboBox matchea SelectedItem por referencia, no por Id — sin este
+            // remap el filtro de datos queda correcto pero el combo se muestra en "Todas".
+            if (LineaPoaSeleccionada is not null)
+            {
+                LineaPoaSeleccionada = LineasPoaDisponibles
+                    .FirstOrDefault(l => l.Id == LineaPoaSeleccionada.Id) ?? LineaPoaSeleccionada;
+            }
+
             await FiltrarAsync();
         }
         catch (Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException)

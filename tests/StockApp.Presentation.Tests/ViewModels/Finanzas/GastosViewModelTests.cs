@@ -46,7 +46,7 @@ public class GastosViewModelTests
                     Mock<IGastoService> svcMock,
                     Mock<INavigationService> navMock,
                     Mock<IConfirmacionService> confirmMock)
-        Crear(IReadOnlyList<Gasto>? gastos = null)
+        Crear(IReadOnlyList<Gasto>? gastos = null, IReadOnlyList<LineaPoa>? lineasPoa = null)
     {
         var svc = new Mock<IGastoService>();
         svc.Setup(s => s.ListarAsync(It.IsAny<GastoFiltro>()))
@@ -62,7 +62,7 @@ public class GastosViewModelTests
         var rubros = new Mock<IRubroGastoService>();
         rubros.Setup(r => r.ListarActivosAsync()).ReturnsAsync(new List<RubroGasto>());
         var lineas = new Mock<ILineaPoaService>();
-        lineas.Setup(l => l.ListarActivasAsync()).ReturnsAsync(new List<LineaPoa>());
+        lineas.Setup(l => l.ListarActivasAsync()).ReturnsAsync(lineasPoa ?? new List<LineaPoa>());
 
         var nav = new Mock<INavigationService>();
         var confirm = new Mock<IConfirmacionService>();
@@ -263,5 +263,38 @@ public class GastosViewModelTests
         vm.FiltrarPorLineaPoa(linea);
 
         Assert.Equal(5, vm.LineaPoaSeleccionada?.Id);
+    }
+
+    [Fact]
+    public async Task FiltrarPorLineaPoa_TrasCargarAsync_ComboQuedaMatcheadoPorId()
+    {
+        // Bug real (verificación orgánica F4): al navegar desde Control POA con doble click,
+        // la LineaPoa que llega es una instancia distinta (otra consulta) a la que puebla
+        // LineasPoaDisponibles en CargarAsync. El filtro de datos quedaba correcto, pero el
+        // combo de la View (bindeado por referencia) se mostraba en "Todas".
+        var lineaDeOtraConsulta = new LineaPoa { Id = 5, Nombre = "Rambla", Programa = "Obras", Ejercicio = 2026 };
+        var lineaDelCombo = new LineaPoa { Id = 5, Nombre = "Rambla", Programa = "Obras", Ejercicio = 2026 };
+        var (vm, _, _, _) = Crear(lineasPoa: new List<LineaPoa> { lineaDelCombo });
+
+        vm.FiltrarPorLineaPoa(lineaDeOtraConsulta);
+        await vm.CargarAsync();
+
+        Assert.Equal(5, vm.LineaPoaSeleccionada?.Id);
+        Assert.Same(lineaDelCombo, vm.LineaPoaSeleccionada);
+        Assert.Contains(vm.LineaPoaSeleccionada!, vm.LineasPoaDisponibles);
+    }
+
+    [Fact]
+    public async Task CargarAsync_SinFiltroPrevio_LineaPoaSeleccionadaQuedaNull()
+    {
+        // Flujo normal: abrir Gastos sin venir de Control POA debe seguir mostrando "Todas".
+        var (vm, _, _, _) = Crear(lineasPoa: new List<LineaPoa>
+        {
+            new() { Id = 1, Nombre = "Rambla", Programa = "Obras", Ejercicio = 2026 },
+        });
+
+        await vm.CargarAsync();
+
+        Assert.Null(vm.LineaPoaSeleccionada);
     }
 }
