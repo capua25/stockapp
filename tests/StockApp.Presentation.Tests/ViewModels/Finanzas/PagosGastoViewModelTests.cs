@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Moq;
+using StockApp.Application.Authorization;
 using StockApp.Application.Finanzas;
+using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
@@ -28,7 +30,8 @@ public class PagosGastoViewModelTests
     private static (PagosGastoViewModel vm,
                     Mock<IGastoService> svcMock,
                     Mock<INavigationService> navMock,
-                    Mock<IConfirmacionService> confirmMock)
+                    Mock<IConfirmacionService> confirmMock,
+                    Mock<IAdjuntoService> adjuntosSvcMock)
         Crear()
     {
         var svc = new Mock<IGastoService>();
@@ -40,14 +43,23 @@ public class PagosGastoViewModelTests
         confirm.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(true);
         confirm.Setup(c => c.InformarAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
 
-        var vm = new PagosGastoViewModel(svc.Object, nav.Object, confirm.Object);
-        return (vm, svc, nav, confirm);
+        var adjuntosSvc = new Mock<IAdjuntoService>();
+        var adjuntosPanel = new AdjuntosPanelViewModel(
+            adjuntosSvc.Object,
+            new Mock<IServicioSeleccionArchivo>().Object,
+            new Mock<IServicioAperturaArchivo>().Object,
+            confirm.Object,
+            new Mock<IAuthorizationService>().Object,
+            new Mock<ICurrentSession>().Object);
+
+        var vm = new PagosGastoViewModel(svc.Object, nav.Object, confirm.Object, adjuntosPanel);
+        return (vm, svc, nav, confirm, adjuntosSvc);
     }
 
     [Fact]
     public async Task Inicializar_MuestraPagosYSaldo()
     {
-        var (vm, _, _, _) = Crear();
+        var (vm, _, _, _, _) = Crear();
         vm.CargarParaGasto(GastoConPago());
 
         await vm.InicializarAsync();
@@ -60,7 +72,7 @@ public class PagosGastoViewModelTests
     [Fact]
     public async Task RegistrarPago_ParseaEsUY_RegistraYRefresca()
     {
-        var (vm, svc, _, _) = Crear();
+        var (vm, svc, _, _, _) = Crear();
         vm.CargarParaGasto(GastoConPago());
         await vm.InicializarAsync();
         vm.MontoTexto = "600,00";
@@ -76,7 +88,7 @@ public class PagosGastoViewModelTests
     [Fact]
     public async Task RegistrarPago_MontoIlegible_MuestraError()
     {
-        var (vm, svc, _, _) = Crear();
+        var (vm, svc, _, _, _) = Crear();
         vm.CargarParaGasto(GastoConPago());
         await vm.InicializarAsync();
         vm.MontoTexto = "no-es-numero";
@@ -90,7 +102,7 @@ public class PagosGastoViewModelTests
     [Fact]
     public async Task RegistrarPago_ReglaDeNegocio_MuestraMensaje()
     {
-        var (vm, svc, _, _) = Crear();
+        var (vm, svc, _, _, _) = Crear();
         svc.Setup(s => s.RegistrarPagoAsync(It.IsAny<PagoGasto>()))
             .ThrowsAsync(new ReglaDeNegocioException("El pago supera el saldo pendiente."));
         vm.CargarParaGasto(GastoConPago());
@@ -105,7 +117,7 @@ public class PagosGastoViewModelTests
     [Fact]
     public async Task AnularPago_ConConfirmacion_AnulaYRefresca()
     {
-        var (vm, svc, _, _) = Crear();
+        var (vm, svc, _, _, _) = Crear();
         vm.CargarParaGasto(GastoConPago());
         await vm.InicializarAsync();
 
@@ -118,12 +130,26 @@ public class PagosGastoViewModelTests
     [Fact]
     public async Task Volver_NavegaALaGrilla()
     {
-        var (vm, _, nav, _) = Crear();
+        var (vm, _, nav, _, _) = Crear();
         vm.CargarParaGasto(GastoConPago());
 
         vm.VolverCommand.Execute(null);
 
         nav.Verify(n => n.Navegar<GastosViewModel>(), Times.Once);
         await Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task SeleccionarPago_InicializaElPanelDeAdjuntosConElPagoId()
+    {
+        var (vm, _, _, _, adjuntosSvc) = Crear();
+        vm.CargarParaGasto(GastoConPago());
+        await vm.InicializarAsync();
+
+        vm.PagoSeleccionado = vm.Pagos[0];
+        await Task.Delay(1); // deja correr el fire-and-forget de OnPagoSeleccionadoChanged
+
+        Assert.NotNull(vm.AdjuntosPanel);
+        adjuntosSvc.Verify(a => a.ListarPorPagoAsync(21), Times.Once);
     }
 }

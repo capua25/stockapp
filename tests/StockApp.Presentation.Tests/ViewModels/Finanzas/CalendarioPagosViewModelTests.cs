@@ -1,5 +1,7 @@
 using Moq;
+using StockApp.Application.Authorization;
 using StockApp.Application.Finanzas;
+using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
@@ -75,7 +77,14 @@ public class CalendarioPagosViewModelTests
         nav.Setup(n => n.Navegar(It.IsAny<Action<PagosGastoViewModel>>()))
             .Callback<Action<PagosGastoViewModel>>(cb =>
             {
-                pagosVm = new PagosGastoViewModel(pagosSvc.Object, pagosNav.Object, pagosConfirm.Object);
+                var pagosAdjuntosPanel = new AdjuntosPanelViewModel(
+                    new Mock<IAdjuntoService>().Object,
+                    new Mock<IServicioSeleccionArchivo>().Object,
+                    new Mock<IServicioAperturaArchivo>().Object,
+                    pagosConfirm.Object,
+                    new Mock<IAuthorizationService>().Object,
+                    new Mock<ICurrentSession>().Object);
+                pagosVm = new PagosGastoViewModel(pagosSvc.Object, pagosNav.Object, pagosConfirm.Object, pagosAdjuntosPanel);
                 cb(pagosVm);
             });
 

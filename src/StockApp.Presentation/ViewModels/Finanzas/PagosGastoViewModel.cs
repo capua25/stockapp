@@ -23,6 +23,9 @@ public partial class PagosGastoViewModel : ViewModelBase
     private readonly IGastoService        _service;
     private readonly INavigationService   _navigation;
     private readonly IConfirmacionService _confirmacion;
+    private readonly AdjuntosPanelViewModel _adjuntosPanel;
+
+    public AdjuntosPanelViewModel AdjuntosPanel => _adjuntosPanel;
 
     private int _gastoId;
     private Action _volver;
@@ -61,17 +64,29 @@ public partial class PagosGastoViewModel : ViewModelBase
     [ObservableProperty] private string? _nota;
     [ObservableProperty] private string? _mensajeError;
 
+    [ObservableProperty] private PagoGasto? _pagoSeleccionado;
+
     public ObservableCollection<PagoGasto> Pagos { get; } = new();
 
     public PagosGastoViewModel(
         IGastoService service,
         INavigationService navigation,
-        IConfirmacionService confirmacion)
+        IConfirmacionService confirmacion,
+        AdjuntosPanelViewModel adjuntosPanel)
     {
-        _service      = service;
-        _navigation   = navigation;
-        _confirmacion = confirmacion;
-        _volver       = () => _navigation.Navegar<GastosViewModel>();
+        _service       = service;
+        _navigation    = navigation;
+        _confirmacion  = confirmacion;
+        _adjuntosPanel = adjuntosPanel;
+        _volver        = () => _navigation.Navegar<GastosViewModel>();
+    }
+
+    // Fire-and-forget consciente: el panel de adjuntos se carga async sin bloquear
+    // la selección del pago en la lista (mismo patrón que GastoFormViewModel).
+    partial void OnPagoSeleccionadoChanged(PagoGasto? value)
+    {
+        if (value is not null)
+            _ = _adjuntosPanel.InicializarAsync(null, value.Id);
     }
 
     /// <summary>Recibe el gasto de la grilla. Corre ANTES de InicializarAsync.</summary>

@@ -75,9 +75,16 @@
             </StackPanel>
         </Border>
 
+        <!-- Panel de adjuntos del pago seleccionado -->
+        <ContentControl DockPanel.Dock="Top"
+                         Content="{Binding AdjuntosPanel}"
+                         IsVisible="{Binding PagoSeleccionado, Converter={x:Static ObjectConverters.IsNotNull}}"
+                         Margin="0,0,0,12" />
+
         <!-- Lista de pagos -->
         <Border Classes="card">
-            <ListBox ItemsSource="{Binding Pagos}">
+            <ListBox ItemsSource="{Binding Pagos}"
+                     SelectedItem="{Binding PagoSeleccionado}">
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="e:PagoGasto">
                         <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" Margin="4">
