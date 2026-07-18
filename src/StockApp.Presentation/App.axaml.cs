@@ -263,6 +263,7 @@ public partial class App : AvaloniaApp
         services.AddTransient<IngresoFormViewModel>();
         services.AddTransient<LibroCajaViewModel>();
         services.AddTransient<ControlPoaViewModel>();
+        services.AddTransient<AdjuntosPanelViewModel>();
         services.AddTransient<CalendarioPagosViewModel>();
 
         // ── Presentation: ViewModels del shell ───────────────────────────────
