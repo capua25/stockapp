@@ -208,6 +208,8 @@ public partial class App : AvaloniaApp
         // ── Inc 6: guardado de archivos (file picker) ─────────────────────────
         // Singleton — sin estado, accede a la ventana principal vía IStorageProvider.
         services.AddSingleton<IServicioGuardadoArchivo, ServicioGuardadoArchivo>();
+        services.AddSingleton<IServicioSeleccionArchivo, ServicioSeleccionArchivo>();
+        services.AddSingleton<IServicioAperturaArchivo, ServicioAperturaArchivo>();
 
         // ── Persistencia de estado de ventana (tamaño/posición/maximizada) ────
         // Singleton — preferencia LOCAL por PC (JSON en ApplicationData), no por usuario
