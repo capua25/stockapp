@@ -52,7 +52,14 @@ public sealed class AdjuntoApiClient : IAdjuntoService
         await ApiErrores.AsegurarExitoAsync(response);
 
         var bytes = await response.Content.ReadAsByteArrayAsync();
-        var nombreArchivo = response.Content.Headers.ContentDisposition?.FileName?.Trim('"') ?? "adjunto";
+        var contentDisposition = response.Content.Headers.ContentDisposition;
+        // FileNameStar (RFC 5987) trae el nombre completo en UTF-8 (con tildes/ñ) cuando
+        // el servidor lo emite; FileName es el fallback ASCII que Results.File genera para
+        // nombres no-ASCII (ej. "recepción.pdf" -> "recepci_n.pdf"). Se prefiere FileNameStar
+        // para no perder los acentos en el nombre mostrado al usuario.
+        var nombreArchivo = contentDisposition?.FileNameStar?.Trim('"')
+            ?? contentDisposition?.FileName?.Trim('"')
+            ?? "adjunto";
         var contentType = response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream";
 
         return new AdjuntoContenidoDto(nombreArchivo, contentType, bytes);

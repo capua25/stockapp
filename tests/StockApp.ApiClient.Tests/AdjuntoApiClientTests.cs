@@ -116,6 +116,32 @@ public class AdjuntoApiClientTests
     }
 
     [Fact]
+    public async Task ObtenerContenidoAsync_NombreConTildes_PrefiereFileNameStarSobreFallbackAscii()
+    {
+        // Replica lo que emite Results.File del servidor para nombres no-ASCII: filename
+        // trae el fallback ASCII ("recepci_n.pdf", generado por ContentDispositionHeaderValue
+        // .SetHttpFileName) y filename* trae el nombre completo en UTF-8 (RFC 5987).
+        var bytes = new byte[] { 0x25, 0x50, 0x44, 0x46 };
+        var fake = new FakeHttpHandler(request =>
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(bytes),
+            };
+            response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
+            response.Content.Headers.ContentDisposition =
+                System.Net.Http.Headers.ContentDispositionHeaderValue.Parse(
+                    "attachment; filename=recepci_n.pdf; filename*=UTF-8''recepci%C3%B3n.pdf");
+            return response;
+        });
+        var client = new AdjuntoApiClient(TestHttp.CrearCliente(fake));
+
+        var resultado = await client.ObtenerContenidoAsync(1);
+
+        Assert.Equal("recepción.pdf", resultado.NombreArchivo);
+    }
+
+    [Fact]
     public async Task QuitarAsync_EnviaDelete()
     {
         var fake = new FakeHttpHandler(request =>
