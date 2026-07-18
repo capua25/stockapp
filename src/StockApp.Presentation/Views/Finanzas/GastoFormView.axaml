@@ -100,6 +100,10 @@
                         <DatePicker SelectedDate="{Binding FechaVencimientoSeleccionada}" />
                     </StackPanel>
 
+                    <ContentControl Content="{Binding AdjuntosPanel}"
+                                     IsVisible="{Binding EsEdicion}"
+                                     Margin="0,16,0,0" />
+
                     <TextBlock Text="{Binding MensajeError}"
                                Foreground="Red"
                                TextWrapping="Wrap"

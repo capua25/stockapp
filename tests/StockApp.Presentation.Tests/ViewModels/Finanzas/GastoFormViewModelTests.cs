@@ -55,9 +55,15 @@ public class GastoFormViewModelTests
         confirm.Setup(c => c.InformarAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
         confirm.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(true);
 
+        var adjuntosPanel = new AdjuntosPanelViewModel(
+            new Mock<IAdjuntoService>().Object,
+            new Mock<IServicioSeleccionArchivo>().Object,
+            new Mock<IServicioAperturaArchivo>().Object,
+            confirm.Object);
+
         var vm = new GastoFormViewModel(
             svc.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
-            nav.Object, confirm.Object);
+            nav.Object, confirm.Object, adjuntosPanel);
         return (vm, svc, nav, confirm);
     }
 
@@ -215,5 +221,50 @@ public class GastoFormViewModelTests
         svc.Verify(s => s.AsociarMovimientosAsync(55,
             It.Is<IReadOnlyList<int>>(ids => ids[0] == 40)), Times.Once);
         nav.Verify(n => n.Navegar<GastosViewModel>(), Times.Once);
+    }
+
+    [Fact]
+    public async Task CargarParaEditar_InicializaElPanelDeAdjuntosConElGastoId()
+    {
+        var svc = new Mock<IGastoService>();
+        var proveedores = new Mock<ICategoriaProveedorService>();
+        proveedores.Setup(p => p.ListarTodosAsync()).ReturnsAsync(new List<Proveedor>());
+        var fuentes = new Mock<IFuenteFinanciamientoService>();
+        fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>());
+        var rubros = new Mock<IRubroGastoService>();
+        rubros.Setup(r => r.ListarActivosAsync()).ReturnsAsync(new List<RubroGasto>());
+        var lineas = new Mock<ILineaPoaService>();
+        lineas.Setup(l => l.ListarActivasAsync()).ReturnsAsync(new List<LineaPoa>());
+        var nav = new Mock<INavigationService>();
+        var confirm = new Mock<IConfirmacionService>();
+        var adjuntosService = new Mock<IAdjuntoService>();
+        adjuntosService.Setup(a => a.ListarPorGastoAsync(42))
+            .ReturnsAsync(new List<AdjuntoDto>
+            {
+                new(1, "a.pdf", "application/pdf", 10, 42, null, DateTime.UtcNow),
+            });
+        var adjuntosPanel = new AdjuntosPanelViewModel(
+            adjuntosService.Object,
+            new Mock<IServicioSeleccionArchivo>().Object,
+            new Mock<IServicioAperturaArchivo>().Object,
+            confirm.Object);
+
+        var vm = new GastoFormViewModel(
+            svc.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
+            nav.Object, confirm.Object, adjuntosPanel);
+
+        var gasto = new Gasto
+        {
+            Id = 42, ProveedorId = 1, Detalle = "Con adjuntos", Fecha = DateTime.UtcNow,
+            MontoTotal = 100m, FuenteFinanciamientoId = 1, RubroGastoId = 1,
+        };
+
+        vm.CargarParaEditar(gasto);
+        await Task.Delay(1); // deja correr el fire-and-forget de InicializarAsync del panel
+
+        Assert.NotNull(vm.AdjuntosPanel);
+        Assert.Same(adjuntosPanel, vm.AdjuntosPanel);
+        adjuntosService.Verify(a => a.ListarPorGastoAsync(42), Times.Once);
+        Assert.Single(vm.AdjuntosPanel.Items);
     }
 }

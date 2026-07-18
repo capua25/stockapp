@@ -32,6 +32,9 @@ public partial class GastoFormViewModel : ViewModelBase
     private readonly ILineaPoaService             _lineasService;
     private readonly INavigationService           _navigation;
     private readonly IConfirmacionService         _confirmacion;
+    private readonly AdjuntosPanelViewModel       _adjuntosPanel;
+
+    public AdjuntosPanelViewModel AdjuntosPanel => _adjuntosPanel;
 
     private int _idEdicion;
     private Gasto? _gastoParaEditar;
@@ -110,7 +113,8 @@ public partial class GastoFormViewModel : ViewModelBase
         IRubroGastoService rubrosService,
         ILineaPoaService lineasService,
         INavigationService navigation,
-        IConfirmacionService confirmacion)
+        IConfirmacionService confirmacion,
+        AdjuntosPanelViewModel adjuntosPanel)
     {
         _service            = service;
         _proveedoresService = proveedoresService;
@@ -119,6 +123,7 @@ public partial class GastoFormViewModel : ViewModelBase
         _lineasService      = lineasService;
         _navigation         = navigation;
         _confirmacion       = confirmacion;
+        _adjuntosPanel      = adjuntosPanel;
     }
 
     /// <summary>Modo edición. Corre ANTES de InicializarAsync (contrato de LineaPoaFormViewModel).</summary>
@@ -136,6 +141,10 @@ public partial class GastoFormViewModel : ViewModelBase
         FechaVencimientoSeleccionada = gasto.FechaVencimiento is null
             ? null : new DateTimeOffset(DateTime.SpecifyKind(gasto.FechaVencimiento.Value, DateTimeKind.Utc));
         EsEdicion        = true;
+
+        // Fire-and-forget consciente: el panel de adjuntos se carga async sin bloquear
+        // la apertura del formulario (CargarParaEditar es sincrónico).
+        _ = _adjuntosPanel.InicializarAsync(gasto.Id, null);
     }
 
     /// <summary>
