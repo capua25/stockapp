@@ -98,6 +98,12 @@ public class AdjuntoService : IAdjuntoService
         var adjunto = await _repo.ObtenerPorIdAsync(adjuntoId)
             ?? throw new EntidadNoEncontradaException($"No existe el adjunto {adjuntoId}.");
 
+        // Baja lógica: un adjunto inactivo no debe seguir siendo descargable por id, aunque
+        // ObtenerPorIdAsync (usado también por QuitarAsync para re-bajas idempotentes) no
+        // filtre Activo. El filtro va acá, en la ruta de descarga, no en el repo.
+        if (!adjunto.Activo)
+            throw new EntidadNoEncontradaException($"No existe el adjunto {adjuntoId}.");
+
         var contenido = await _repo.ObtenerContenidoAsync(adjuntoId)
             ?? throw new EntidadNoEncontradaException($"No existe el contenido del adjunto {adjuntoId}.");
 

@@ -128,6 +128,32 @@ public class AdjuntoServiceTests
     }
 
     [Fact]
+    public async Task ObtenerContenidoAsync_AdjuntoDadoDeBaja_LanzaEntidadNoEncontrada()
+    {
+        var adjunto = new Adjunto { Id = 7, GastoId = 1, Activo = false, NombreArchivo = "a.pdf" };
+        _adjuntos.Setup(r => r.ObtenerPorIdAsync(7)).ReturnsAsync(adjunto);
+
+        await Assert.ThrowsAsync<EntidadNoEncontradaException>(
+            () => _service.ObtenerContenidoAsync(7));
+
+        _adjuntos.Verify(r => r.ObtenerContenidoAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ObtenerContenidoAsync_AdjuntoActivo_DevuelveContenido()
+    {
+        var adjunto = new Adjunto { Id = 7, GastoId = 1, Activo = true, NombreArchivo = "a.pdf", ContentType = "application/pdf" };
+        var bytes = new byte[] { 0x25, 0x50, 0x44, 0x46 };
+        _adjuntos.Setup(r => r.ObtenerPorIdAsync(7)).ReturnsAsync(adjunto);
+        _adjuntos.Setup(r => r.ObtenerContenidoAsync(7)).ReturnsAsync(bytes);
+
+        var resultado = await _service.ObtenerContenidoAsync(7);
+
+        Assert.Equal(bytes, resultado.Contenido);
+        Assert.Equal("a.pdf", resultado.NombreArchivo);
+    }
+
+    [Fact]
     public async Task QuitarAsync_HaceBajaLogicaYAuditoria()
     {
         var adjunto = new Adjunto { Id = 7, GastoId = 1, Activo = true, NombreArchivo = "a.pdf" };
