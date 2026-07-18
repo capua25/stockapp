@@ -1,5 +1,8 @@
 using Moq;
+using StockApp.Application.Authorization;
 using StockApp.Application.Finanzas;
+using StockApp.Application.Interfaces;
+using StockApp.Domain.Enums;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Finanzas;
 using Xunit;
@@ -12,11 +15,15 @@ public class AdjuntosPanelViewModelTests
     private readonly Mock<IServicioSeleccionArchivo> _seleccion = new();
     private readonly Mock<IServicioAperturaArchivo> _apertura = new();
     private readonly Mock<IConfirmacionService> _confirmacion = new();
+    private readonly Mock<IAuthorizationService> _authorization = new();
+    private readonly Mock<ICurrentSession> _session = new();
     private readonly AdjuntosPanelViewModel _vm;
 
     public AdjuntosPanelViewModelTests()
     {
-        _vm = new AdjuntosPanelViewModel(_adjuntos.Object, _seleccion.Object, _apertura.Object, _confirmacion.Object);
+        _vm = new AdjuntosPanelViewModel(
+            _adjuntos.Object, _seleccion.Object, _apertura.Object, _confirmacion.Object,
+            _authorization.Object, _session.Object);
     }
 
     [Fact]
@@ -95,5 +102,54 @@ public class AdjuntosPanelViewModelTests
         await _vm.VerCommand.ExecuteAsync(item);
 
         _apertura.Verify(x => x.AbrirAsync("a.pdf", It.IsAny<byte[]>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task InicializarAsync_PanelDeGasto_ConPermisoRegistrarGastos_HabilitaPuedeModificar()
+    {
+        _session.Setup(s => s.RolActual).Returns(RolUsuario.Operador);
+        _authorization.Setup(a => a.TienePermiso(RolUsuario.Operador, Permisos.RegistrarGastos)).Returns(true);
+        _adjuntos.Setup(a => a.ListarPorGastoAsync(5)).ReturnsAsync(new List<AdjuntoDto>());
+
+        await _vm.InicializarAsync(gastoId: 5, pagoGastoId: null);
+
+        Assert.True(_vm.PuedeModificar);
+        _authorization.Verify(a => a.TienePermiso(RolUsuario.Operador, Permisos.RegistrarGastos), Times.Once);
+    }
+
+    [Fact]
+    public async Task InicializarAsync_PanelDeGasto_SinPermisoRegistrarGastos_DeshabilitaPuedeModificar()
+    {
+        _session.Setup(s => s.RolActual).Returns(RolUsuario.Operador);
+        _authorization.Setup(a => a.TienePermiso(RolUsuario.Operador, Permisos.RegistrarGastos)).Returns(false);
+        _adjuntos.Setup(a => a.ListarPorGastoAsync(5)).ReturnsAsync(new List<AdjuntoDto>());
+
+        await _vm.InicializarAsync(gastoId: 5, pagoGastoId: null);
+
+        Assert.False(_vm.PuedeModificar);
+    }
+
+    [Fact]
+    public async Task InicializarAsync_PanelDePago_ConPermisoRegistrarPagos_HabilitaPuedeModificar()
+    {
+        _session.Setup(s => s.RolActual).Returns(RolUsuario.Operador);
+        _authorization.Setup(a => a.TienePermiso(RolUsuario.Operador, Permisos.RegistrarPagos)).Returns(true);
+        _adjuntos.Setup(a => a.ListarPorPagoAsync(8)).ReturnsAsync(new List<AdjuntoDto>());
+
+        await _vm.InicializarAsync(gastoId: null, pagoGastoId: 8);
+
+        Assert.True(_vm.PuedeModificar);
+        _authorization.Verify(a => a.TienePermiso(RolUsuario.Operador, Permisos.RegistrarPagos), Times.Once);
+    }
+
+    [Fact]
+    public async Task InicializarAsync_ListarPorGastoAsyncLanzaExcepcion_InformaYNoCrashea()
+    {
+        _adjuntos.Setup(a => a.ListarPorGastoAsync(5)).ThrowsAsync(new InvalidOperationException("error de red"));
+
+        await _vm.InicializarAsync(gastoId: 5, pagoGastoId: null);
+
+        _confirmacion.Verify(c => c.InformarAsync("error de red"), Times.Once);
+        Assert.Empty(_vm.Items);
     }
 }

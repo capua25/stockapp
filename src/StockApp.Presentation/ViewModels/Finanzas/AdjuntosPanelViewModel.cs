@@ -4,7 +4,10 @@ using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using StockApp.Application.Authorization;
 using StockApp.Application.Finanzas;
+using StockApp.Application.Interfaces;
+using StockApp.Domain.Enums;
 using StockApp.Presentation.Services;
 
 namespace StockApp.Presentation.ViewModels.Finanzas;
@@ -20,6 +23,8 @@ public partial class AdjuntosPanelViewModel : ViewModelBase
     private readonly IServicioSeleccionArchivo _seleccion;
     private readonly IServicioAperturaArchivo _apertura;
     private readonly IConfirmacionService _confirmacion;
+    private readonly IAuthorizationService _authorization;
+    private readonly ICurrentSession _session;
 
     private int? _gastoId;
     private int? _pagoGastoId;
@@ -33,32 +38,47 @@ public partial class AdjuntosPanelViewModel : ViewModelBase
         IAdjuntoService adjuntos,
         IServicioSeleccionArchivo seleccion,
         IServicioAperturaArchivo apertura,
-        IConfirmacionService confirmacion)
+        IConfirmacionService confirmacion,
+        IAuthorizationService authorization,
+        ICurrentSession session)
     {
         _adjuntos = adjuntos;
         _seleccion = seleccion;
         _apertura = apertura;
         _confirmacion = confirmacion;
+        _authorization = authorization;
+        _session = session;
     }
 
     public async Task InicializarAsync(int? gastoId, int? pagoGastoId)
     {
         _gastoId = gastoId;
         _pagoGastoId = pagoGastoId;
+
+        var accion = gastoId is int ? Permisos.RegistrarGastos : Permisos.RegistrarPagos;
+        PuedeModificar = _session.RolActual is RolUsuario rol && _authorization.TienePermiso(rol, accion);
+
         await RecargarAsync();
     }
 
     private async Task RecargarAsync()
     {
-        Items.Clear();
-        IReadOnlyList<AdjuntoDto>? lista = _gastoId is int gastoId
-            ? await _adjuntos.ListarPorGastoAsync(gastoId)
-            : _pagoGastoId is int pagoGastoId
-                ? await _adjuntos.ListarPorPagoAsync(pagoGastoId)
-                : Array.Empty<AdjuntoDto>();
+        try
+        {
+            Items.Clear();
+            IReadOnlyList<AdjuntoDto>? lista = _gastoId is int gastoId
+                ? await _adjuntos.ListarPorGastoAsync(gastoId)
+                : _pagoGastoId is int pagoGastoId
+                    ? await _adjuntos.ListarPorPagoAsync(pagoGastoId)
+                    : Array.Empty<AdjuntoDto>();
 
-        foreach (var item in lista ?? Array.Empty<AdjuntoDto>())
-            Items.Add(item);
+            foreach (var item in lista ?? Array.Empty<AdjuntoDto>())
+                Items.Add(item);
+        }
+        catch (Exception ex)
+        {
+            await _confirmacion.InformarAsync(ex.Message);
+        }
     }
 
     [RelayCommand]

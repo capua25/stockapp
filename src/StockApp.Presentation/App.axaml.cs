@@ -13,6 +13,7 @@ using StockApp.ApiClient;
 using StockApp.Application.Actualizaciones;
 using StockApp.Application.Auditoria;
 using StockApp.Application.Auth;
+using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Finanzas;
@@ -188,9 +189,15 @@ public partial class App : AvaloniaApp
         services.AddTransient<ILicenciaService>(sp => new LicenciaApiClient(sp.GetRequiredService<HttpClient>()));
         services.AddTransient<IResetAdminService>(sp => new ResetAdminApiClient(sp.GetRequiredService<HttpClient>()));
 
-        // NOTA (spec 3b): NO se registran IAuthorizationService ni IPasswordHasher ni
-        // IAuditLogger ni repositorios — la autorización, el hashing y la auditoría son
-        // responsabilidad del servidor. Ninguna UI los consumía directo (verificado, OQ-1).
+        // NOTA (spec 3b): NO se registran IPasswordHasher ni IAuditLogger ni repositorios —
+        // el hashing y la auditoría son responsabilidad exclusiva del servidor.
+        //
+        // IAuthorizationService SÍ se registra (excepción a la nota original de 3b): es
+        // lógica pura (tabla de acciones por rol, sin infraestructura) y se usa acá SOLO
+        // para gating de UI (ej. habilitar/deshabilitar botones según permiso). El servidor
+        // sigue siendo la única fuente de verdad de autorización — cada ApiClient reintenta
+        // la operación contra la API, que valida con su propia instancia del mismo servicio.
+        services.AddTransient<IAuthorizationService, AuthorizationService>();
 
         // ── Inc 5: confirmación de stock insuficiente ─────────────────────────
         services.AddSingleton<IConfirmacionService, ConfirmacionService>();

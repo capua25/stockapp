@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Moq;
+using StockApp.Application.Authorization;
 using StockApp.Application.Finanzas;
+using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
@@ -59,7 +61,9 @@ public class GastoFormViewModelTests
             new Mock<IAdjuntoService>().Object,
             new Mock<IServicioSeleccionArchivo>().Object,
             new Mock<IServicioAperturaArchivo>().Object,
-            confirm.Object);
+            confirm.Object,
+            new Mock<IAuthorizationService>().Object,
+            new Mock<ICurrentSession>().Object);
 
         var vm = new GastoFormViewModel(
             svc.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
@@ -247,7 +251,9 @@ public class GastoFormViewModelTests
             adjuntosService.Object,
             new Mock<IServicioSeleccionArchivo>().Object,
             new Mock<IServicioAperturaArchivo>().Object,
-            confirm.Object);
+            confirm.Object,
+            new Mock<IAuthorizationService>().Object,
+            new Mock<ICurrentSession>().Object);
 
         var vm = new GastoFormViewModel(
             svc.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
