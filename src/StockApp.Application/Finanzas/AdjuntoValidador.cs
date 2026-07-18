@@ -15,6 +15,15 @@ public static class AdjuntoValidador
     public static readonly IReadOnlyList<string> ContentTypesPermitidos =
         new[] { "application/pdf", "image/jpeg", "image/png" };
 
+    /// <summary>
+    /// Extensiones de archivo permitidas (fuente única). El content-type real se valida
+    /// por magic bytes (<see cref="DetectarContentType"/>); esta lista existe para los
+    /// puntos donde hace falta razonar sobre la extensión en sí (selector de archivos del
+    /// desktop, apertura de adjuntos) sin duplicar el hardcode.
+    /// </summary>
+    public static readonly IReadOnlyList<string> ExtensionesPermitidas =
+        new[] { ".pdf", ".jpg", ".jpeg", ".png" };
+
     private static readonly byte[] MagicPdf = { 0x25, 0x50, 0x44, 0x46 };             // %PDF
     private static readonly byte[] MagicJpg = { 0xFF, 0xD8, 0xFF };
     private static readonly byte[] MagicPng = { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
