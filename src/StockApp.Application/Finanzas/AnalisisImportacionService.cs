@@ -359,7 +359,7 @@ public class AnalisisImportacionService : IAnalisisImportacionService
         {
             return _parser.ParsearPoa(planillaPoa);
         }
-        catch (InvalidOperationException ex)
+        catch (Exception ex) when (ex is InvalidOperationException or InvalidDataException)
         {
             throw new ArgumentException($"La planilla POA no se pudo leer: {ex.Message}", ex);
         }
@@ -367,8 +367,11 @@ public class AnalisisImportacionService : IAnalisisImportacionService
 
     /// <summary>
     /// Resolución pre-flight #10: un .ods inválido o con hoja faltante hace que F5a lance
-    /// <see cref="InvalidOperationException"/>; acá se re-lanza como <see cref="ArgumentException"/>
-    /// para que el <c>DomainExceptionHandler</c> existente lo traduzca a 400 sin tocarlo.
+    /// <see cref="InvalidOperationException"/>; un archivo que ni siquiera es un zip válido hace
+    /// que <see cref="System.IO.Compression.ZipArchive"/> lance <see cref="InvalidDataException"/>
+    /// ANTES de que F5a pueda lanzar la suya. Ambos casos se re-lanzan acá como
+    /// <see cref="ArgumentException"/> para que el <c>DomainExceptionHandler</c> existente los
+    /// traduzca a 400 sin tocarlo.
     /// </summary>
     private PlanillaGastosOds ParsearGastosSeguro(Stream planillaGastos)
     {
@@ -376,7 +379,7 @@ public class AnalisisImportacionService : IAnalisisImportacionService
         {
             return _parser.ParsearGastos(planillaGastos);
         }
-        catch (InvalidOperationException ex)
+        catch (Exception ex) when (ex is InvalidOperationException or InvalidDataException)
         {
             throw new ArgumentException($"La planilla de Gastos no se pudo leer: {ex.Message}", ex);
         }

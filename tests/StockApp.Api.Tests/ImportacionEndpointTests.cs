@@ -227,4 +227,30 @@ public class ImportacionEndpointTests : ApiTestBase
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    /// <summary>
+    /// Hardening (gap detectado en Task 6): bytes crudos que NO son un zip hacen que
+    /// <see cref="ZipArchive"/> lance <see cref="System.IO.InvalidDataException"/> ("End of
+    /// Central Directory record could not be found") en vez de <see cref="InvalidOperationException"/>
+    /// — antes del fix, ese caso no estaba capturado por ParsearGastosSeguro/ParsearPoaSeguro y el
+    /// endpoint devolvía 500 en vez de 400 (resolución pre-flight #10: TODO .ods inválido → 400).
+    /// El payload tiene que tener longitud suficiente: con muy pocos bytes (ej. 5) el stream
+    /// envuelto por IFormFile.OpenReadStream() dispara un ArgumentOutOfRangeException distinto en
+    /// vez de InvalidDataException, que por herencia de ArgumentException ya mapeaba a 400 sin
+    /// necesitar este fix — no cubre el gap real.
+    /// </summary>
+    [Fact]
+    public async Task PostAnalizar_ArchivoBasuraCruda_Devuelve400()
+    {
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var basuraCruda = System.Text.Encoding.UTF8.GetBytes(
+            "esto no es un archivo .ods para nada, es texto plano de prueba con longitud suficiente");
+
+        var response = await client.PostAsync(
+            "/finanzas/importar/analizar",
+            ArmarMultipart(basuraCruda, CrearOdsPoaMinimo(), 2026));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
 }
