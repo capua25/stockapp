@@ -150,19 +150,43 @@ public class AnalisisImportacionService : IAnalisisImportacionService
             }
         }
 
-        // POA + reconciliación: stub (Task 4 y 5 los completan). El análisis de Gastos de arriba
-        // es completo e independiente de esto.
+        // Reconciliación real Gastos↔POA: stub (Task 5 la completa). El mapeo de líneas POA de
+        // abajo es completo, pero la clasificación de movimientos-con-factura es PROVISIONAL.
+        var poaOds = ParsearPoaSeguro(planillaPoa);
         var lineasPoa = new List<LineaPoaAnalizadaDto>();
+
+        foreach (var lineaOds in poaOds.Lineas)
+        {
+            var motivosLinea = new List<MotivoEstado>();
+
+            var (literal, fuenteDesconocida) = ClasificarFuente(lineaOds.Literal, fuentesActivas, motivosLinea);
+            if (fuenteDesconocida)
+                RegistrarNuevo(fuentesNuevasVistas, fuentesNuevas, lineaOds.Literal!);
+
+            var movimientos = lineaOds.Movimientos
+                .Select(MapearMovimientoPoaProvisional)
+                .ToList();
+
+            lineasPoa.Add(new LineaPoaAnalizadaDto(
+                Hoja: lineaOds.Hoja, Ejercicio: ejercicio,
+                Estado: EstadoMasSevero(motivosLinea), Motivos: motivosLinea,
+                Literal: literal, FuenteDesconocida: fuenteDesconocida,
+                Presupuesto: lineaOds.Presupuesto, SaldoPlanilla: lineaOds.Saldo,
+                Movimientos: movimientos));
+        }
 
         var maestrosNuevos = new MaestrosNuevosDto(proveedoresNuevos, fuentesNuevas, rubrosNuevos);
 
+        var todosLosMovimientos = lineasPoa.SelectMany(l => l.Movimientos).ToList();
         var resumen = new ResumenAnalisisDto(
             TotalFilas: ingresos.Count + gastos.Count,
             Ok: ingresos.Count(i => i.Estado == EstadoFila.Ok) + gastos.Count(g => g.Estado == EstadoFila.Ok),
             Advertencias: ingresos.Count(i => i.Estado == EstadoFila.Advertencia)
                 + gastos.Count(g => g.Estado == EstadoFila.Advertencia),
             Errores: ingresos.Count(i => i.Estado == EstadoFila.Error) + gastos.Count(g => g.Estado == EstadoFila.Error),
-            PoaConciliados: 0, PoaDudosos: 0, PoaCompromisos: 0);
+            PoaConciliados: todosLosMovimientos.Count(mv => mv.Clasificacion == ClasificacionReconciliacion.Conciliado),
+            PoaDudosos: todosLosMovimientos.Count(mv => mv.Clasificacion == ClasificacionReconciliacion.Dudoso),
+            PoaCompromisos: todosLosMovimientos.Count(mv => mv.Clasificacion == ClasificacionReconciliacion.CompromisoSoloPoa));
 
         return new ResultadoAnalisisDto(ingresos, gastos, lineasPoa, maestrosNuevos, resumen);
     }
@@ -244,6 +268,61 @@ public class AnalisisImportacionService : IAnalisisImportacionService
     };
 
     private static string Normalizar(string texto) => texto.Trim().ToUpperInvariant();
+
+    /// <summary>
+    /// Task 4: mapeo PROVISIONAL de un movimiento POA, sin cruzarlo aún contra los Gastos
+    /// (eso es la reconciliación real de Task 5). Pre-flight #7: sin Factura no hay clave de
+    /// match posible → es un compromiso, no una ambigüedad, así que va directo a
+    /// <see cref="ClasificacionReconciliacion.CompromisoSoloPoa"/> con <see cref="EstadoFila.Ok"/>.
+    /// Con Factura, Task 4 todavía no sabe si conciliará contra algún gasto real, así que lo
+    /// deja marcado <see cref="ClasificacionReconciliacion.Dudoso"/> (Advertencia +
+    /// <see cref="TipoMotivo.ReconciliacionDudosa"/>) como placeholder explícito; Task 5
+    /// reemplaza esta clasificación por la real (Conciliado / Dudoso definitivo) cruzando
+    /// contra los Gastos parseados arriba.
+    /// </summary>
+    private static MovimientoPoaAnalizadoDto MapearMovimientoPoaProvisional(FilaPoaOds movimiento)
+    {
+        if (string.IsNullOrWhiteSpace(movimiento.Factura))
+        {
+            return new MovimientoPoaAnalizadoDto(
+                NumeroFila: movimiento.NumeroFila,
+                Factura: movimiento.Factura, Orden: movimiento.Orden, Proveedor: movimiento.Proveedor,
+                Detalle: movimiento.Gasto, Importe: movimiento.Importe,
+                Clasificacion: ClasificacionReconciliacion.CompromisoSoloPoa,
+                IndiceGastoConciliado: null,
+                Estado: EstadoFila.Ok, Motivos: new List<MotivoEstado>());
+        }
+
+        var motivos = new List<MotivoEstado>
+        {
+            new(TipoMotivo.ReconciliacionDudosa,
+                "Reconciliación provisional: la referencia contra los Gastos aún no se calculó."),
+        };
+
+        return new MovimientoPoaAnalizadoDto(
+            NumeroFila: movimiento.NumeroFila,
+            Factura: movimiento.Factura, Orden: movimiento.Orden, Proveedor: movimiento.Proveedor,
+            Detalle: movimiento.Gasto, Importe: movimiento.Importe,
+            Clasificacion: ClasificacionReconciliacion.Dudoso,
+            IndiceGastoConciliado: null,
+            Estado: EstadoFila.Advertencia, Motivos: motivos);
+    }
+
+    /// <summary>
+    /// Resolución pre-flight #10, análoga a <see cref="ParsearGastosSeguro"/> pero para la
+    /// planilla POA.
+    /// </summary>
+    private PlanillaPoaOds ParsearPoaSeguro(Stream planillaPoa)
+    {
+        try
+        {
+            return _parser.ParsearPoa(planillaPoa);
+        }
+        catch (InvalidOperationException ex)
+        {
+            throw new ArgumentException($"La planilla POA no se pudo leer: {ex.Message}", ex);
+        }
+    }
 
     /// <summary>
     /// Resolución pre-flight #10: un .ods inválido o con hoja faltante hace que F5a lance
