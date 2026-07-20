@@ -62,6 +62,15 @@ public sealed class PlanillaOdsParser : IPlanillaParser
         var movimientos = new List<FilaPoaOds>();
         for (var f = filaEncabezadoDatos + 1; f < hoja.CantidadFilas; f++)
         {
+            // Cada hoja de línea termina con un HUECO (fila totalmente vacía) seguido de una
+            // fila de TOTAL (solo columna IMPORTE, con la suma de la línea). Esa fila de total
+            // NO es un movimiento — cortamos la lectura apenas aparece la primera fila sin
+            // NINGÚN contenido (ni siquiera fuera de las columnas trackeadas), antes de llegar
+            // a ella. Un movimiento legítimo con solo IMPORTE (sin factura) queda ARRIBA del
+            // hueco y por lo tanto no se pierde (bug real verificado: CARPETA ASFÁLTICA).
+            if (!hoja.CeldasDeFila(f).Any())
+                break;
+
             var factura = hoja.Celda(f, colFactura).ComoTexto();
             var orden = hoja.Celda(f, colOrden).ComoTexto();
             var proveedor = hoja.Celda(f, colProveedor).Texto;

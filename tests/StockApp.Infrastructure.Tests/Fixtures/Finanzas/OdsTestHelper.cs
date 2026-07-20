@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Compression;
 
 namespace StockApp.Infrastructure.Tests.Fixtures.Finanzas;
@@ -10,6 +11,47 @@ namespace StockApp.Infrastructure.Tests.Fixtures.Finanzas;
 /// </summary>
 internal static class OdsTestHelper
 {
+    /// <summary>
+    /// Fila de datos POA genérica: FACTURA(colspan 2) ORDEN(2) PROVEEDOR(2) GASTO(4) IMPORTE(2),
+    /// igual layout que <c>EncabezadoDatosPoa</c> en PlanillaOdsParserPoaTests. Cualquier
+    /// parámetro null se emite como celda vacía. Sirve tanto para movimientos reales como para
+    /// simular la fila de TOTAL fantasma (solo <paramref name="importe"/>) que aparece al fondo
+    /// de cada hoja de línea, tras un hueco.
+    /// </summary>
+    public static string FilaPoa(
+        string? factura = null, string? orden = null, string? proveedor = null,
+        string? gasto = null, decimal? importe = null) => $"""
+        <table:table-row>
+          {CeldaTexto(factura, 2)}
+          {CeldaTexto(orden, 2)}
+          {CeldaTexto(proveedor, 2)}
+          {CeldaTexto(gasto, 4)}
+          {CeldaNumero(importe, 2)}
+        </table:table-row>
+        """;
+
+    /// <summary>
+    /// El HUECO entre los movimientos reales y la fila de TOTAL: una fila totalmente vacía (sin
+    /// ninguna celda con valor), como aparece en la planilla real entre el último movimiento y
+    /// el total de cada línea.
+    /// </summary>
+    public static string FilaPoaVacia() =>
+        """<table:table-row><table:table-cell table:number-columns-repeated="14"/></table:table-row>""";
+
+    private static string CeldaTexto(string? valor, int colspan) =>
+        valor is null
+            ? $"""<table:table-cell table:number-columns-spanned="{colspan}"/>{CeldasCubiertas(colspan - 1)}"""
+            : $"""<table:table-cell office:value-type="string" table:number-columns-spanned="{colspan}"><text:p>{valor}</text:p></table:table-cell>{CeldasCubiertas(colspan - 1)}""";
+
+    private static string CeldaNumero(decimal? valor, int colspan) =>
+        valor is null
+            ? $"""<table:table-cell table:number-columns-spanned="{colspan}"/>{CeldasCubiertas(colspan - 1)}"""
+            : $"""<table:table-cell office:value-type="float" office:value="{valor.Value.ToString(CultureInfo.InvariantCulture)}" table:number-columns-spanned="{colspan}"><text:p>{valor.Value}</text:p></table:table-cell>{CeldasCubiertas(colspan - 1)}""";
+
+    private static string CeldasCubiertas(int cantidad) =>
+        cantidad <= 0 ? "" : $"""<table:covered-table-cell table:number-columns-repeated="{cantidad}"/>""";
+
+
     public static MemoryStream CrearOdsFalso(params (string Nombre, string FilasXml)[] hojas)
     {
         var tablas = string.Join("\n", hojas.Select(h => $"""
