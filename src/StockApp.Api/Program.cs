@@ -22,6 +22,7 @@ using StockApp.Application.Movimientos;
 using StockApp.Application.Reportes;
 using StockApp.Domain.Enums;
 using StockApp.Infrastructure.Auth;
+using StockApp.Infrastructure.Finanzas;
 using StockApp.Infrastructure.Licenciamiento;
 using StockApp.Infrastructure.Persistence;
 using StockApp.Infrastructure.Platform;
@@ -123,6 +124,12 @@ builder.Services.AddScoped<IAdjuntoService, AdjuntoService>();
 
 // Finanzas — Fase 4: vistas calculadas (libro caja, control POA, calendario de pagos)
 builder.Services.AddScoped<IFinanzasVistasService, FinanzasVistasService>();
+
+// Finanzas — F5b: análisis (read-only) del importador de planillas .ods. IPlanillaParser
+// (interfaz de Application, F5a) se registra acá por primera vez, detrás de la impl de
+// Infrastructure PlanillaOdsParser.
+builder.Services.AddScoped<IPlanillaParser, PlanillaOdsParser>();
+builder.Services.AddScoped<IAnalisisImportacionService, AnalisisImportacionService>();
 
 // Auditoría (Fase 2b)
 builder.Services.AddScoped<IAuditoriaQueryRepository, AuditoriaQueryRepository>();
@@ -409,6 +416,7 @@ app.MapGastosEndpoints();
 app.MapAdjuntosEndpoints();
 app.MapIngresosCajaEndpoints();
 app.MapFinanzasVistasEndpoints();
+app.MapImportacionEndpoints();
 app.MapLicenciaEndpoints();
 app.MapResetAdminEndpoints();
 
