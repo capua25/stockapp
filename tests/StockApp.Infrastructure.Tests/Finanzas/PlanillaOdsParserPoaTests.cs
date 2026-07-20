@@ -93,7 +93,10 @@ public class PlanillaOdsParserPoaTests
     [Fact]
     public void ParsearPoa_UnaLineaConPresupuestoYUnMovimiento_MapeaCorrectamente()
     {
-        var filasLinea = BloquePresupuestoLiteralB + EncabezadoDatosPoa + FilaMovimientoCepillo;
+        // Geometría real: entre el encabezado de datos y el primer movimiento hay una FILA
+        // SEPARADORA vacía (fila ~12 en la planilla real). El parser la absorbe.
+        var filasLinea = BloquePresupuestoLiteralB + EncabezadoDatosPoa
+            + FilaSeparadora() + FilaMovimientoCepillo;
 
         using var stream = CrearOdsFalso(
             ("LINEA1", filasLinea),
@@ -144,6 +147,7 @@ public class PlanillaOdsParserPoaTests
     public void ParsearPoa_MovimientosRealesConHuecoYFilaTotalAlFondo_ExcluyeLaFilaTotal()
     {
         var filasLinea = BloquePresupuestoLiteralB + EncabezadoDatosPoa
+            + FilaSeparadora() // separadora header/datos
             + FilaPoa(gasto: "cepillo", importe: 140000m)
             + FilaPoa(gasto: "pintura", importe: 20000m)
             + FilaPoaVacia() // hueco
@@ -168,6 +172,7 @@ public class PlanillaOdsParserPoaTests
     public void ParsearPoa_HojaSinMovimientosConFilaTotalCeroAlFondo_NoAgregaMovimientoFantasma()
     {
         var filasLinea = BloquePresupuestoLiteralB + EncabezadoDatosPoa
+            + FilaSeparadora() // separadora header/datos
             + FilaPoaVacia() // hueco: la línea nunca tuvo movimientos
             + FilaPoa(importe: 0m); // fila TOTAL fantasma (suma de una línea vacía = 0)
 
@@ -187,6 +192,7 @@ public class PlanillaOdsParserPoaTests
         // Caso real verificado: CARPETA ASFÁLTICA tiene un movimiento legítimo con importe
         // pero SIN factura, ARRIBA del hueco. NO hay que confundirlo con la fila total de abajo.
         var filasLinea = BloquePresupuestoLiteralB + EncabezadoDatosPoa
+            + FilaSeparadora() // separadora header/datos
             + FilaPoa(importe: 5500000m) // movimiento real, sin factura
             + FilaPoaVacia() // hueco
             + FilaPoa(importe: 5500000m); // fila TOTAL fantasma (= suma de un único movimiento)
@@ -207,11 +213,13 @@ public class PlanillaOdsParserPoaTests
     public void ParsearPoa_MultiplesHojasDeLineaConLiteralC_ParseaCadaUnaExcluyendoSuFilaTotal()
     {
         var filasLinea1 = BloquePresupuestoLiteralB + EncabezadoDatosPoa
+            + FilaSeparadora()
             + FilaPoa(gasto: "cepillo", importe: 140000m)
             + FilaPoaVacia()
             + FilaPoa(importe: 140000m);
 
         var filasLinea2 = BloquePresupuestoLiteral("C", 300000m, 250000m) + EncabezadoDatosPoa
+            + FilaSeparadora()
             + FilaPoa(gasto: "pintura", importe: 20000m)
             + FilaPoa(gasto: "cal", importe: 30000m)
             + FilaPoaVacia()

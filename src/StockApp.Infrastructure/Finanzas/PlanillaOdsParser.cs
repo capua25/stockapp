@@ -59,17 +59,37 @@ public sealed class PlanillaOdsParser : IPlanillaParser
         var colGasto = colFactura + 6;
         var colImporte = colFactura + 10;
 
+        // Geometría real de cada hoja de línea (verificada contra PlanillaPoa2026.ods):
+        //   header FACTURA/... (fila ~11)
+        //   fila SEPARADORA totalmente vacía (fila ~12)   <- hay que SALTARLA, no cortar
+        //   movimientos reales (fila ~13..M)              <- algunos con solo IMPORTE, sin factura
+        //   HUECO de una o más filas vacías               <- acá CORTAMOS
+        //   fila de TOTAL (solo IMPORTE = suma de la línea) <- NO es un movimiento
+        //
+        // La fila de TOTAL es indistinguible de un movimiento "solo IMPORTE" por sus columnas
+        // (ej. CARPETA ASFÁLTICA tiene un movimiento legítimo sin factura); lo único que la
+        // separa es su POSICIÓN: siempre está debajo del hueco. Por eso el corte es posicional:
+        //   - Antes de que empiece la data absorbemos EXACTAMENTE la fila separadora (una fila
+        //     vacía). Cualquier fila vacía POSTERIOR corta la lectura — así una línea SIN
+        //     movimientos (header, separadora, hueco, total) no captura su total fantasma.
+        //   - Una vez agregado al menos un movimiento, la primera fila vacía (el hueco) corta.
         var movimientos = new List<FilaPoaOds>();
+        var datosIniciados = false;
+        var separadoraSalteada = false;
         for (var f = filaEncabezadoDatos + 1; f < hoja.CantidadFilas; f++)
         {
-            // Cada hoja de línea termina con un HUECO (fila totalmente vacía) seguido de una
-            // fila de TOTAL (solo columna IMPORTE, con la suma de la línea). Esa fila de total
-            // NO es un movimiento — cortamos la lectura apenas aparece la primera fila sin
-            // NINGÚN contenido (ni siquiera fuera de las columnas trackeadas), antes de llegar
-            // a ella. Un movimiento legítimo con solo IMPORTE (sin factura) queda ARRIBA del
-            // hueco y por lo tanto no se pierde (bug real verificado: CARPETA ASFÁLTICA).
             if (!hoja.CeldasDeFila(f).Any())
+            {
+                // La única fila vacía que NO corta es la separadora header/datos: la absorbemos
+                // una sola vez, mientras la data todavía no empezó. Todo el resto (hueco + fila
+                // de total) queda fuera.
+                if (!datosIniciados && !separadoraSalteada)
+                {
+                    separadoraSalteada = true;
+                    continue;
+                }
                 break;
+            }
 
             var factura = hoja.Celda(f, colFactura).ComoTexto();
             var orden = hoja.Celda(f, colOrden).ComoTexto();
@@ -80,6 +100,7 @@ public sealed class PlanillaOdsParser : IPlanillaParser
             if (factura is null && orden is null && proveedor is null && gasto is null && importe is null)
                 continue;
 
+            datosIniciados = true;
             movimientos.Add(new FilaPoaOds(nombreHoja, f + 1, factura, orden, proveedor, gasto, importe));
         }
 

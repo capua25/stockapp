@@ -35,7 +35,18 @@ internal static class OdsTestHelper
     /// ninguna celda con valor), como aparece en la planilla real entre el último movimiento y
     /// el total de cada línea.
     /// </summary>
-    public static string FilaPoaVacia() =>
+    public static string FilaPoaVacia() => FilaVaciaXml;
+
+    /// <summary>
+    /// La fila SEPARADORA entre el encabezado de datos (FACTURA/ORDEN/...) y el primer
+    /// movimiento: una fila totalmente vacía, idéntica en forma al hueco pero con rol distinto.
+    /// En la planilla real es la fila ~12, justo debajo del header y arriba del primer
+    /// movimiento (fila ~13). El parser la ABSORBE (no corta ahí); recién la SIGUIENTE fila
+    /// vacía —el hueco que precede a la fila de TOTAL— corta la lectura de la hoja.
+    /// </summary>
+    public static string FilaSeparadora() => FilaVaciaXml;
+
+    private const string FilaVaciaXml =
         """<table:table-row><table:table-cell table:number-columns-repeated="14"/></table:table-row>""";
 
     private static string CeldaTexto(string? valor, int colspan) =>
