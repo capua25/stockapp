@@ -31,4 +31,10 @@
     <ProjectReference Include="..\..\src\StockApp.Infrastructure\StockApp.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="Fixtures\Finanzas\*.ods">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
