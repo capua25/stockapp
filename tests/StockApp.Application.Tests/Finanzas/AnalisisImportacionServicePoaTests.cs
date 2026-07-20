@@ -11,10 +11,10 @@ using IAuthSvc = StockApp.Application.Authorization.IAuthorizationService;
 namespace StockApp.Application.Tests.Finanzas;
 
 /// <summary>
-/// F5b Task 4: mapeo de la planilla POA (líneas + movimientos) con sus estados. La
-/// reconciliación real Gastos↔POA (Conciliado/Dudoso/CompromisoSoloPoa definitivo) es Task 5;
-/// acá los movimientos con Factura reciben una clasificación PROVISIONAL (ver comentario en
-/// <see cref="AnalisisImportacionService"/>).
+/// F5b Task 4: mapeo de la planilla POA (líneas + movimientos) con sus estados. La reconciliación
+/// real Gastos↔POA (Conciliado/Dudoso/CompromisoSoloPoa) vive en
+/// <see cref="AnalisisImportacionServiceReconciliacionTests"/>; acá solo se cubren los casos que
+/// no dependen de cruzar contra Gastos reales (sin factura, o factura sin ningún candidato).
 /// </summary>
 public class AnalisisImportacionServicePoaTests
 {
@@ -122,11 +122,13 @@ public class AnalisisImportacionServicePoaTests
     }
 
     [Fact]
-    public async Task AnalizarAsync_MovimientoPoaConFactura_EsProvisionalDudosoHastaTask5()
+    public async Task AnalizarAsync_MovimientoPoaConFacturaSinGastoQueMatchee_EsCompromisoSoloPoa()
     {
-        // Decisión Task 4: sin la reconciliación real (Task 5), un movimiento CON factura no
-        // puede saberse Conciliado todavía — se deja Dudoso (Advertencia + ReconciliacionDudosa)
-        // como marca provisional; Task 5 lo reclasifica a Conciliado si matchea un gasto real.
+        // Task 5 invalida el comportamiento provisional de Task 4: con la reconciliación real,
+        // un movimiento con factura pero SIN ningún gasto que la matchee (acá la planilla de
+        // Gastos está vacía) es un compromiso, no una ambigüedad — no hay candidato con el cual
+        // dudar. La reconciliación completa (Conciliado/Dudoso con gastos reales) se testea en
+        // AnalisisImportacionServiceReconciliacionTests.
         var movimiento = Movimiento(factura: "F-1", orden: "O-1");
         var linea = new LineaPoaResumenOds(
             Hoja: "B", Presupuesto: 1000m, Saldo: 500m, Literal: "B",
@@ -138,9 +140,9 @@ public class AnalisisImportacionServicePoaTests
 
         var lineaPoa = Assert.Single(resultado.LineasPoa);
         var mov = Assert.Single(lineaPoa.Movimientos);
-        Assert.Equal(ClasificacionReconciliacion.Dudoso, mov.Clasificacion);
-        Assert.Equal(EstadoFila.Advertencia, mov.Estado);
-        Assert.Contains(mov.Motivos, mot => mot.Tipo == TipoMotivo.ReconciliacionDudosa);
+        Assert.Equal(ClasificacionReconciliacion.CompromisoSoloPoa, mov.Clasificacion);
+        Assert.Equal(EstadoFila.Ok, mov.Estado);
+        Assert.Empty(mov.Motivos);
         Assert.Null(mov.IndiceGastoConciliado);
         Assert.Equal("Compra de insumos", mov.Detalle);
         Assert.Equal(500m, mov.Importe);

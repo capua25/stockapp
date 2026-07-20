@@ -150,8 +150,9 @@ public class AnalisisImportacionService : IAnalisisImportacionService
             }
         }
 
-        // Reconciliación real Gastos↔POA: stub (Task 5 la completa). El mapeo de líneas POA de
-        // abajo es completo, pero la clasificación de movimientos-con-factura es PROVISIONAL.
+        // Reconciliación real Gastos↔POA (Task 5): cruza cada movimiento contra la lista de
+        // Gastos YA materializada arriba. Se hace DESPUÉS de tener `gastos` completa porque los
+        // índices que anota cada movimiento (IndiceGastoConciliado) son posiciones en esa lista.
         var poaOds = ParsearPoaSeguro(planillaPoa);
         var lineasPoa = new List<LineaPoaAnalizadaDto>();
 
@@ -164,7 +165,7 @@ public class AnalisisImportacionService : IAnalisisImportacionService
                 RegistrarNuevo(fuentesNuevasVistas, fuentesNuevas, lineaOds.Literal!);
 
             var movimientos = lineaOds.Movimientos
-                .Select(MapearMovimientoPoaProvisional)
+                .Select(mov => ReconciliarMovimiento(lineaOds.Hoja, mov, gastos))
                 .ToList();
 
             lineasPoa.Add(new LineaPoaAnalizadaDto(
@@ -270,43 +271,83 @@ public class AnalisisImportacionService : IAnalisisImportacionService
     private static string Normalizar(string texto) => texto.Trim().ToUpperInvariant();
 
     /// <summary>
-    /// Task 4: mapeo PROVISIONAL de un movimiento POA, sin cruzarlo aún contra los Gastos
-    /// (eso es la reconciliación real de Task 5). Pre-flight #7: sin Factura no hay clave de
-    /// match posible → es un compromiso, no una ambigüedad, así que va directo a
-    /// <see cref="ClasificacionReconciliacion.CompromisoSoloPoa"/> con <see cref="EstadoFila.Ok"/>.
-    /// Con Factura, Task 4 todavía no sabe si conciliará contra algún gasto real, así que lo
-    /// deja marcado <see cref="ClasificacionReconciliacion.Dudoso"/> (Advertencia +
-    /// <see cref="TipoMotivo.ReconciliacionDudosa"/>) como placeholder explícito; Task 5
-    /// reemplaza esta clasificación por la real (Conciliado / Dudoso definitivo) cruzando
-    /// contra los Gastos parseados arriba.
+    /// Task 5: reconciliación real de un movimiento POA contra la lista de Gastos (filas EGRESO)
+    /// ya materializada. Clave de match: (NumeroFactura, NumeroOrden) normalizados (trim +
+    /// case-insensitive, F5a los deja como texto libre). Pre-flight #7: sin Factura no hay clave
+    /// de match posible → <see cref="ClasificacionReconciliacion.CompromisoSoloPoa"/> directo.
+    /// Con Factura: si NINGÚN gasto tiene esa factura, también es compromiso (no ambigüedad,
+    /// spec regla 3). Si hay exactamente un candidato por factura Y su Orden matchea exacto,
+    /// es <see cref="ClasificacionReconciliacion.Conciliado"/> — y ESE gasto (mutado con `with`
+    /// sobre la lista, índice estable porque `gastos` ya está completa) recibe
+    /// <c>LineaPoaAsignada</c>. Cualquier otro caso (Orden difiere/falta, o más de un candidato
+    /// por factura) es <see cref="ClasificacionReconciliacion.Dudoso"/> (spec regla 2).
     /// </summary>
-    private static MovimientoPoaAnalizadoDto MapearMovimientoPoaProvisional(FilaPoaOds movimiento)
+    private static MovimientoPoaAnalizadoDto ReconciliarMovimiento(
+        string hojaPoa, FilaPoaOds movimiento, List<GastoAnalizadoDto> gastos)
     {
         if (string.IsNullOrWhiteSpace(movimiento.Factura))
         {
-            return new MovimientoPoaAnalizadoDto(
-                NumeroFila: movimiento.NumeroFila,
-                Factura: movimiento.Factura, Orden: movimiento.Orden, Proveedor: movimiento.Proveedor,
-                Detalle: movimiento.Gasto, Importe: movimiento.Importe,
-                Clasificacion: ClasificacionReconciliacion.CompromisoSoloPoa,
-                IndiceGastoConciliado: null,
-                Estado: EstadoFila.Ok, Motivos: new List<MotivoEstado>());
+            return CrearMovimientoReconciliado(
+                movimiento, ClasificacionReconciliacion.CompromisoSoloPoa, null,
+                EstadoFila.Ok, new List<MotivoEstado>());
         }
 
-        var motivos = new List<MotivoEstado>
+        var facturaNormalizada = Normalizar(movimiento.Factura);
+        var candidatosPorFactura = new List<int>();
+        for (var i = 0; i < gastos.Count; i++)
+        {
+            if (!string.IsNullOrWhiteSpace(gastos[i].NumeroFactura)
+                && Normalizar(gastos[i].NumeroFactura!) == facturaNormalizada)
+            {
+                candidatosPorFactura.Add(i);
+            }
+        }
+
+        if (candidatosPorFactura.Count == 0)
+        {
+            // La factura no matchea ninguna fila de Gastos: compromiso, no ambigüedad (regla 3).
+            return CrearMovimientoReconciliado(
+                movimiento, ClasificacionReconciliacion.CompromisoSoloPoa, null,
+                EstadoFila.Ok, new List<MotivoEstado>());
+        }
+
+        if (candidatosPorFactura.Count == 1)
+        {
+            var indice = candidatosPorFactura[0];
+            var gasto = gastos[indice];
+
+            if (!string.IsNullOrWhiteSpace(movimiento.Orden)
+                && !string.IsNullOrWhiteSpace(gasto.NumeroOrden)
+                && Normalizar(movimiento.Orden) == Normalizar(gasto.NumeroOrden))
+            {
+                gastos[indice] = gasto with { LineaPoaAsignada = hojaPoa };
+                return CrearMovimientoReconciliado(
+                    movimiento, ClasificacionReconciliacion.Conciliado, indice,
+                    EstadoFila.Ok, new List<MotivoEstado>());
+            }
+        }
+
+        // Orden difiere/falta, o >1 candidato con esa factura: decisión manual en F5c (regla 2).
+        var motivosDudoso = new List<MotivoEstado>
         {
             new(TipoMotivo.ReconciliacionDudosa,
-                "Reconciliación provisional: la referencia contra los Gastos aún no se calculó."),
+                $"La factura '{movimiento.Factura}' matchea de forma parcial o ambigua contra los Gastos: revisar manualmente."),
         };
+        return CrearMovimientoReconciliado(
+            movimiento, ClasificacionReconciliacion.Dudoso, null,
+            EstadoFila.Advertencia, motivosDudoso);
+    }
 
-        return new MovimientoPoaAnalizadoDto(
+    private static MovimientoPoaAnalizadoDto CrearMovimientoReconciliado(
+        FilaPoaOds movimiento, ClasificacionReconciliacion clasificacion, int? indiceGastoConciliado,
+        EstadoFila estado, List<MotivoEstado> motivos) =>
+        new(
             NumeroFila: movimiento.NumeroFila,
             Factura: movimiento.Factura, Orden: movimiento.Orden, Proveedor: movimiento.Proveedor,
             Detalle: movimiento.Gasto, Importe: movimiento.Importe,
-            Clasificacion: ClasificacionReconciliacion.Dudoso,
-            IndiceGastoConciliado: null,
-            Estado: EstadoFila.Advertencia, Motivos: motivos);
-    }
+            Clasificacion: clasificacion,
+            IndiceGastoConciliado: indiceGastoConciliado,
+            Estado: estado, Motivos: motivos);
 
     /// <summary>
     /// Resolución pre-flight #10, análoga a <see cref="ParsearGastosSeguro"/> pero para la
