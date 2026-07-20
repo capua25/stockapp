@@ -63,17 +63,31 @@ internal sealed class OdsHoja
 /// <summary>
 /// Lector de bajo nivel de una hoja dentro del content.xml de un .ods (F5a). Expande
 /// table:number-columns-repeated, table:number-columns-spanned (colspan) y
-/// table:covered-table-cell, y corta la lectura en la primera fila con
-/// table:number-rows-repeated (gotcha: LibreOffice declara hasta 1.048.576 filas por hoja,
-/// pero solo unas pocas tienen datos; el resto es UNA fila con number-rows-repeated masivo).
-/// Nunca evalúa fórmulas: siempre lee el valor cacheado (office:value / office:date-value /
-/// office:string-value).
+/// table:covered-table-cell, y corta la lectura al llegar a una fila con
+/// table:number-rows-repeated GRANDE (ver <see cref="UmbralFilasRellenoFinal"/>): el relleno
+/// final real de LibreOffice declara hasta 1.048.576 filas por hoja como UNA sola fila con
+/// number-rows-repeated masivo. Bloques number-rows-repeated CHICOS (filas vacías intermedias
+/// o al inicio de la hoja, ej. "3") NO cortan la lectura — solo avanzan el índice de fila,
+/// preservando los datos reales que vengan después (bug real: PlanillaGastos2026.ods hojas
+/// ANUAL/GRAFICAS traen 3 filas vacías al inicio seguidas de la tabla "TOTALES POR RUBRO";
+/// cortar ahí perdía toda la tabla). Nunca evalúa fórmulas: siempre lee el valor cacheado
+/// (office:value / office:date-value / office:string-value).
 /// </summary>
 internal static class OdsContentXmlReader
 {
     private static readonly XNamespace Office = "urn:oasis:names:tc:opendocument:xmlns:office:1.0";
     private static readonly XNamespace Table = "urn:oasis:names:tc:opendocument:xmlns:table:1.0";
     private static readonly XNamespace Text = "urn:oasis:names:tc:opendocument:xmlns:text:1.0";
+
+    /// <summary>
+    /// Umbral a partir del cual un table:number-rows-repeated se interpreta como el relleno
+    /// final de la hoja y corta la lectura. LibreOffice Calc rellena cada hoja hasta el límite
+    /// de ~1.048.576 filas (valores reales observados: 1048375, 1048521); ninguna de las
+    /// planillas reales soportadas tiene 1000+ filas vacías/repetidas LEGÍTIMAS dentro de la
+    /// zona de datos, así que cualquier repetición por debajo de este umbral es contenido real
+    /// (o relleno intermedio chico) y NO debe cortar la lectura.
+    /// </summary>
+    private const int UmbralFilasRellenoFinal = 1000;
 
     public static IReadOnlyList<string> ListarHojas(XDocument contentXml) =>
         contentXml.Descendants(Table + "table")
@@ -92,8 +106,8 @@ internal static class OdsContentXmlReader
         foreach (var filaXml in tablaXml.Elements(Table + "table-row"))
         {
             var filasRepetidas = (int?)filaXml.Attribute(Table + "number-rows-repeated") ?? 1;
-            if (filasRepetidas > 1)
-                break; // fila de relleno vacía hasta el límite de la hoja — acá termina la data real.
+            if (filasRepetidas >= UmbralFilasRellenoFinal)
+                break; // relleno final real de la hoja — acá SÍ termina la data (no materializar ~1M filas).
 
             var columna = 0;
             foreach (var celdaXml in filaXml.Elements())
@@ -111,13 +125,19 @@ internal static class OdsContentXmlReader
                 {
                     var valor = LeerValor(celdaXml);
                     if (!valor.EsVacia)
-                        celdas[(fila, columna)] = valor;
+                    {
+                        // Bloque chico repetido (filasRepetidas < umbral): si trae contenido,
+                        // se replica en cada una de las filas que representa para no perder
+                        // datos ni desalinear el índice de fila de lo que viene después.
+                        for (var i = 0; i < filasRepetidas; i++)
+                            celdas[(fila + i, columna)] = valor;
+                    }
                 }
 
                 columna += avance;
             }
 
-            fila++;
+            fila += filasRepetidas;
         }
 
         return new OdsHoja(celdas, fila);

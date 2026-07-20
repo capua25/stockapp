@@ -94,10 +94,12 @@ public class OdsContentXmlReaderTests
     }
 
     [Fact]
-    public void LeerHoja_FilaConNumberRowsRepeated_CortaLaLecturaAhi()
+    public void LeerHoja_FilaConNumberRowsRepeatedGrande_CortaLaLecturaSinMaterializar()
     {
         // Gotcha: LibreOffice declara hasta 1.048.576 filas por hoja; solo unas pocas tienen
-        // datos, el resto es UNA fila con number-rows-repeated masivo.
+        // datos, el resto es UNA fila con number-rows-repeated masivo (valores reales vistos:
+        // 1048375, 1048521). Eso SÍ hay que cortarlo — es el único caso que justifica el break,
+        // no cualquier number-rows-repeated>1 (ver test de bloque chico más abajo).
         var doc = Documento("""
             <table:table-row>
               <table:table-cell office:value-type="string"><text:p>FILA REAL</text:p></table:table-cell>
@@ -112,6 +114,54 @@ public class OdsContentXmlReaderTests
         Assert.Equal(1, hoja.CantidadFilas);
         Assert.Equal("FILA REAL", hoja.Celda(0, 0).Texto);
         Assert.True(hoja.Celda(1, 0).EsVacia);
+    }
+
+    [Fact]
+    public void LeerHoja_FilaConNumberRowsRepeatedChicoAlInicio_NoCortaYSigueLeyendoDatosReales()
+    {
+        // Bug real detectado en PlanillaGastos2026.ods (hojas ANUAL y GRAFICAS): el patrón es
+        // [number-rows-repeated="3" de filas vacías AL INICIO][~44 filas de datos reales: tabla
+        // "TOTALES POR RUBRO"][relleno final con number-rows-repeated≈1048521]. Con el break
+        // viejo (cualquier number-rows-repeated>1 corta) se perdía TODA la tabla de totales.
+        var doc = Documento("""
+            <table:table-row table:number-rows-repeated="3">
+              <table:table-cell/>
+            </table:table-row>
+            <table:table-row>
+              <table:table-cell office:value-type="string"><text:p>TOTALES POR RUBRO</text:p></table:table-cell>
+            </table:table-row>
+            """);
+
+        var hoja = OdsContentXmlReader.LeerHoja(doc, "Hoja1");
+
+        Assert.Equal(4, hoja.CantidadFilas);
+        Assert.True(hoja.Celda(0, 0).EsVacia);
+        Assert.True(hoja.Celda(1, 0).EsVacia);
+        Assert.True(hoja.Celda(2, 0).EsVacia);
+        Assert.Equal("TOTALES POR RUBRO", hoja.Celda(3, 0).Texto);
+    }
+
+    [Fact]
+    public void LeerHoja_FilaConNumberRowsRepeatedChicoConContenido_ReplicaElContenidoYAlineaLasFilasSiguientes()
+    {
+        // Caso improbable pero cubierto: si una fila con number-rows-repeated CHICO trajera
+        // contenido, ese contenido debe replicarse en cada una de las filas que representa
+        // (no solo en la primera), y el índice de fila debe seguir alineado para lo que sigue.
+        var doc = Documento("""
+            <table:table-row table:number-rows-repeated="2">
+              <table:table-cell office:value-type="string"><text:p>REPETIDA</text:p></table:table-cell>
+            </table:table-row>
+            <table:table-row>
+              <table:table-cell office:value-type="string"><text:p>SIGUIENTE</text:p></table:table-cell>
+            </table:table-row>
+            """);
+
+        var hoja = OdsContentXmlReader.LeerHoja(doc, "Hoja1");
+
+        Assert.Equal(3, hoja.CantidadFilas);
+        Assert.Equal("REPETIDA", hoja.Celda(0, 0).Texto);
+        Assert.Equal("REPETIDA", hoja.Celda(1, 0).Texto);
+        Assert.Equal("SIGUIENTE", hoja.Celda(2, 0).Texto);
     }
 
     [Fact]
@@ -218,6 +268,51 @@ public class OdsContentXmlReaderTests
         var hoja = OdsContentXmlReader.LeerHoja(doc, "Hoja1");
 
         Assert.Equal("A45735", hoja.Celda(0, 0).ComoTexto());
+    }
+
+    [Fact]
+    public void CeldasDeFila_DevuelveSoloLasCeldasConContenidoOrdenadasPorColumna()
+    {
+        var doc = Documento("""
+            <table:table-row>
+              <table:table-cell office:value-type="string"><text:p>COL0</text:p></table:table-cell>
+              <table:table-cell/>
+              <table:table-cell office:value-type="string"><text:p>COL2</text:p></table:table-cell>
+            </table:table-row>
+            """);
+
+        var hoja = OdsContentXmlReader.LeerHoja(doc, "Hoja1");
+
+        var celdas = hoja.CeldasDeFila(0).ToList();
+
+        Assert.Equal(2, celdas.Count);
+        Assert.Equal(0, celdas[0].Columna);
+        Assert.Equal("COL0", celdas[0].Celda.Texto);
+        Assert.Equal(2, celdas[1].Columna);
+        Assert.Equal("COL2", celdas[1].Celda.Texto);
+    }
+
+    [Fact]
+    public void LeerHoja_ColumnasRepetidasConContenido_SoloGuardaElValorEnLaPrimeraColumnaDelRango()
+    {
+        // Decisión (minor, no observado en las planillas reales soportadas): si una celda con
+        // number-columns-repeated>1 trae contenido, ese valor queda SOLO en la primera columna
+        // del rango — las columnas cubiertas por la repetición avanzan el índice pero no se
+        // materializan. Se fija este comportamiento con un test en vez de cambiarlo porque no
+        // rompe la alineación de las columnas siguientes (ver DESPUES en columna 3).
+        var doc = Documento("""
+            <table:table-row>
+              <table:table-cell office:value-type="string" table:number-columns-repeated="3"><text:p>REPETIDA</text:p></table:table-cell>
+              <table:table-cell office:value-type="string"><text:p>DESPUES</text:p></table:table-cell>
+            </table:table-row>
+            """);
+
+        var hoja = OdsContentXmlReader.LeerHoja(doc, "Hoja1");
+
+        Assert.Equal("REPETIDA", hoja.Celda(0, 0).Texto);
+        Assert.True(hoja.Celda(0, 1).EsVacia);
+        Assert.True(hoja.Celda(0, 2).EsVacia);
+        Assert.Equal("DESPUES", hoja.Celda(0, 3).Texto);
     }
 
     [Fact]
