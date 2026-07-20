@@ -151,4 +151,108 @@ public class PlanillaOdsParserGastosTests
         Assert.Equal(300000m, fila.Ingreso);
         Assert.Equal(305789m, fila.Saldo);
     }
+
+    [Fact]
+    public void ParsearGastos_HojaSinColumnaFecha_LanzaInvalidOperationException()
+    {
+        // Red de seguridad del mapeo posicional: si el encabezado no tiene "FECHA",
+        // BuscarTexto devuelve null y el parser debe fallar con un mensaje claro
+        // en vez de mapear las columnas incorrectamente.
+        var encabezadoSinFecha = FilaEncabezadoGastos.Replace("<text:p>FECHA</text:p>", "<text:p>XXXX</text:p>");
+
+        using var stream = CrearOdsFalso(
+            ("ENERO", encabezadoSinFecha), MesVacio("FEBRERO"), MesVacio("MARZO"), MesVacio("ABRIL"), MesVacio("MAYO"),
+            MesVacio("JUNIO"), MesVacio("JULIO"), MesVacio("AGOSTO"), MesVacio("SEPTIEMBRE"), MesVacio("OCTUBRE"),
+            MesVacio("NOVIEMBRE"), MesVacio("DICIEMBRE"),
+            ("Variables", FilaEncabezadoVariables));
+
+        var ex = Assert.Throws<InvalidOperationException>(() => new PlanillaOdsParser().ParsearGastos(stream));
+        Assert.Equal("La hoja 'ENERO' no tiene columna FECHA.", ex.Message);
+    }
+
+    [Fact]
+    public void ParsearGastos_EgresoConCentavos_MantienePrecisionDecimalExacta()
+    {
+        // Blinda la precisión decimal (crítica para reproducir saldos): un importe con
+        // centavos != 00 (display es-AR "1.234,56") debe llegar exacto, sin redondeo
+        // ni pérdida por conversión a double en el camino.
+        var filaConCentavos = """
+            <table:table-row>
+              <table:table-cell office:value-type="date" office:date-value="2026-03-01"><text:p>01/03/26</text:p></table:table-cell>
+              <table:table-cell/><table:table-cell/><table:table-cell/><table:table-cell/><table:table-cell/>
+              <table:table-cell/>
+              <table:table-cell office:value-type="float" office:value="1234.56"><text:p>1.234,56</text:p></table:table-cell>
+              <table:table-cell/><table:table-cell/><table:table-cell/><table:table-cell/>
+            </table:table-row>
+            """;
+
+        using var stream = CrearOdsFalso(
+            MesVacio("ENERO"), MesVacio("FEBRERO"),
+            ("MARZO", FilaEncabezadoGastos + filaConCentavos),
+            MesVacio("ABRIL"), MesVacio("MAYO"), MesVacio("JUNIO"), MesVacio("JULIO"), MesVacio("AGOSTO"),
+            MesVacio("SEPTIEMBRE"), MesVacio("OCTUBRE"), MesVacio("NOVIEMBRE"), MesVacio("DICIEMBRE"),
+            ("Variables", FilaEncabezadoVariables));
+
+        var resultado = new PlanillaOdsParser().ParsearGastos(stream);
+
+        var fila = Assert.Single(resultado.FilasPorMes["MARZO"]);
+        Assert.Equal(1234.56m, fila.Egreso);
+    }
+
+    [Fact]
+    public void ParsearGastos_EgresoNegativo_SeParseaSinExcepcion()
+    {
+        // Ajustes/reversiones en la planilla real pueden traer signo negativo;
+        // decimal.Parse con NumberStyles.Float acepta el signo, no debe explotar.
+        var filaNegativa = """
+            <table:table-row>
+              <table:table-cell office:value-type="date" office:date-value="2026-04-01"><text:p>01/04/26</text:p></table:table-cell>
+              <table:table-cell/><table:table-cell/><table:table-cell/><table:table-cell/><table:table-cell/>
+              <table:table-cell/>
+              <table:table-cell office:value-type="float" office:value="-500.00"><text:p>-500,00</text:p></table:table-cell>
+              <table:table-cell/><table:table-cell/><table:table-cell/><table:table-cell/>
+            </table:table-row>
+            """;
+
+        using var stream = CrearOdsFalso(
+            MesVacio("ENERO"), MesVacio("FEBRERO"), MesVacio("MARZO"),
+            ("ABRIL", FilaEncabezadoGastos + filaNegativa),
+            MesVacio("MAYO"), MesVacio("JUNIO"), MesVacio("JULIO"), MesVacio("AGOSTO"),
+            MesVacio("SEPTIEMBRE"), MesVacio("OCTUBRE"), MesVacio("NOVIEMBRE"), MesVacio("DICIEMBRE"),
+            ("Variables", FilaEncabezadoVariables));
+
+        var resultado = new PlanillaOdsParser().ParsearGastos(stream);
+
+        var fila = Assert.Single(resultado.FilasPorMes["ABRIL"]);
+        Assert.Equal(-500m, fila.Egreso);
+    }
+
+    [Fact]
+    public void ParsearGastos_CodigoConValorDecimal_SeTruncaAlEnteroSinRedondear()
+    {
+        // Fija (no cambia) el comportamiento actual: Codigo hace (int)cod, que trunca
+        // hacia cero en vez de redondear. Si la planilla real algún día trae un
+        // Código no entero, esto documenta qué va a pasar (14.9 -> 14, no 15).
+        var filaConCodigoDecimal = """
+            <table:table-row>
+              <table:table-cell office:value-type="date" office:date-value="2026-05-01"><text:p>01/05/26</text:p></table:table-cell>
+              <table:table-cell/><table:table-cell/><table:table-cell/><table:table-cell/><table:table-cell/>
+              <table:table-cell/><table:table-cell/><table:table-cell/><table:table-cell/>
+              <table:table-cell office:value-type="float" office:value="14.9"><text:p>14,9</text:p></table:table-cell>
+              <table:table-cell/>
+            </table:table-row>
+            """;
+
+        using var stream = CrearOdsFalso(
+            MesVacio("ENERO"), MesVacio("FEBRERO"), MesVacio("MARZO"), MesVacio("ABRIL"),
+            ("MAYO", FilaEncabezadoGastos + filaConCodigoDecimal),
+            MesVacio("JUNIO"), MesVacio("JULIO"), MesVacio("AGOSTO"), MesVacio("SEPTIEMBRE"), MesVacio("OCTUBRE"),
+            MesVacio("NOVIEMBRE"), MesVacio("DICIEMBRE"),
+            ("Variables", FilaEncabezadoVariables));
+
+        var resultado = new PlanillaOdsParser().ParsearGastos(stream);
+
+        var fila = Assert.Single(resultado.FilasPorMes["MAYO"]);
+        Assert.Equal(14, fila.Codigo);
+    }
 }
