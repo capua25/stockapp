@@ -490,3 +490,8 @@ openspec/
 # Inc 7 Fase B — claves privadas de licenciamiento (jamás en el repo)
 *.pem
 clave-privada*
+
+# Fixtures reales de planillas del municipio (datos financieros)
+# Presentes solo en la PC de trabajo, no se commitean
+# NOTA: Los archivos deben existir en disco para que los tests pasen
+tests/StockApp.Infrastructure.Tests/Fixtures/Finanzas/*.ods
