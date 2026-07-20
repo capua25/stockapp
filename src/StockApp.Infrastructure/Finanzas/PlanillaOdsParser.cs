@@ -59,38 +59,37 @@ public sealed class PlanillaOdsParser : IPlanillaParser
         var colGasto = colFactura + 6;
         var colImporte = colFactura + 10;
 
-        // Geometría real de cada hoja de línea (verificada contra PlanillaPoa2026.ods):
-        //   header FACTURA/... (fila ~11)
-        //   fila SEPARADORA totalmente vacía (fila ~12)   <- hay que SALTARLA, no cortar
-        //   movimientos reales (fila ~13..M)              <- algunos con solo IMPORTE, sin factura
-        //   HUECO de una o más filas vacías               <- acá CORTAMOS
-        //   fila de TOTAL (solo IMPORTE = suma de la línea) <- NO es un movimiento
+        // Geometría real de cada hoja de línea (verificada contra las 15 hojas de
+        // PlanillaPoa2026.ods):
+        //   header FACTURA/ORDEN/... (fila ~11)
+        //   0..N filas: movimientos reales, filas totalmente vacías, o filas con texto en
+        //               columnas ajenas a los 5 campos tipados (ej. COMPOSTERAS)
+        //   fila de TOTAL: SIEMPRE la última fila con contenido de la hoja
         //
-        // La fila de TOTAL es indistinguible de un movimiento "solo IMPORTE" por sus columnas
-        // (ej. CARPETA ASFÁLTICA tiene un movimiento legítimo sin factura); lo único que la
-        // separa es su POSICIÓN: siempre está debajo del hueco. Por eso el corte es posicional:
-        //   - Antes de que empiece la data absorbemos EXACTAMENTE la fila separadora (una fila
-        //     vacía). Cualquier fila vacía POSTERIOR corta la lectura — así una línea SIN
-        //     movimientos (header, separadora, hueco, total) no captura su total fantasma.
-        //   - Una vez agregado al menos un movimiento, la primera fila vacía (el hueco) corta.
-        var movimientos = new List<FilaPoaOds>();
-        var datosIniciados = false;
-        var separadoraSalteada = false;
+        // Parte 1 — La fila de TOTAL se ubica por POSICIÓN, no por contenido: es la fila con
+        // MAYOR índice que tenga alguna celda no vacía. Es indistinguible de un movimiento por
+        // sus columnas (ej. CARPETA ASFÁLTICA tiene un movimiento legítimo con SOLO importe,
+        // igual que el total), así que lo único que la separa es que está al fondo. Si tras el
+        // header no hay ninguna fila con contenido, la hoja no tiene movimientos ni total.
+        var filaTotal = -1;
         for (var f = filaEncabezadoDatos + 1; f < hoja.CantidadFilas; f++)
         {
-            if (!hoja.CeldasDeFila(f).Any())
-            {
-                // La única fila vacía que NO corta es la separadora header/datos: la absorbemos
-                // una sola vez, mientras la data todavía no empezó. Todo el resto (hueco + fila
-                // de total) queda fuera.
-                if (!datosIniciados && !separadoraSalteada)
-                {
-                    separadoraSalteada = true;
-                    continue;
-                }
-                break;
-            }
+            if (hoja.CeldasDeFila(f).Any())
+                filaTotal = f;
+        }
 
+        if (filaTotal < 0)
+            return new LineaPoaResumenOds(nombreHoja, presupuesto, saldo, literal, new List<FilaPoaOds>());
+
+        // Parte 2 — Los movimientos son las filas ENTRE el header y la fila de TOTAL (excluida)
+        // que aportan contenido en al menos uno de los 5 campos tipados. Una fila vacía
+        // intermedia (ej. las 2 de PRENSA antes de su dato) o con texto en columnas ajenas (la
+        // "literal C"/"literal B" de COMPOSTERAS) se SALTA con continue — NUNCA corta la lectura
+        // ni cuenta como movimiento. El loop sólo termina al llegar a filaTotal (ya excluida por
+        // el rango): jamás hay un break sobre fila vacía.
+        var movimientos = new List<FilaPoaOds>();
+        for (var f = filaEncabezadoDatos + 1; f < filaTotal; f++)
+        {
             var factura = hoja.Celda(f, colFactura).ComoTexto();
             var orden = hoja.Celda(f, colOrden).ComoTexto();
             var proveedor = hoja.Celda(f, colProveedor).Texto;
@@ -100,7 +99,6 @@ public sealed class PlanillaOdsParser : IPlanillaParser
             if (factura is null && orden is null && proveedor is null && gasto is null && importe is null)
                 continue;
 
-            datosIniciados = true;
             movimientos.Add(new FilaPoaOds(nombreHoja, f + 1, factura, orden, proveedor, gasto, importe));
         }
 

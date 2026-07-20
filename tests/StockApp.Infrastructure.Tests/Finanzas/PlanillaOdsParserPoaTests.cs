@@ -59,6 +59,17 @@ public class PlanillaOdsParserPoaTests
         </table:table-row>
         """;
 
+    // Fila con contenido SÓLO en una columna ajena a los 5 campos tipados (columna 12, más allá
+    // de IMPORTE que ocupa 10-11): reproduce la fila "literal C"/"literal B" de la hoja
+    // COMPOSTERAS. Tiene contenido (no es una fila vacía) pero NO aporta ninguno de FACTURA /
+    // ORDEN / PROVEEDOR / GASTO / IMPORTE, así que el parser la salta (no es movimiento).
+    private const string FilaTextoNoTipado = """
+        <table:table-row>
+          <table:table-cell table:number-columns-repeated="12"/>
+          <table:table-cell office:value-type="string"><text:p>literal C</text:p></table:table-cell>
+        </table:table-row>
+        """;
+
     private const string FilaMovimientoCepillo = """
         <table:table-row>
           <table:table-cell table:number-columns-spanned="2"/><table:covered-table-cell/>
@@ -94,9 +105,11 @@ public class PlanillaOdsParserPoaTests
     public void ParsearPoa_UnaLineaConPresupuestoYUnMovimiento_MapeaCorrectamente()
     {
         // Geometría real: entre el encabezado de datos y el primer movimiento hay una FILA
-        // SEPARADORA vacía (fila ~12 en la planilla real). El parser la absorbe.
+        // SEPARADORA vacía (fila ~12 en la planilla real), el movimiento, un HUECO y la fila de
+        // TOTAL al fondo (la última fila con contenido, que el parser excluye por posición).
         var filasLinea = BloquePresupuestoLiteralB + EncabezadoDatosPoa
-            + FilaSeparadora() + FilaMovimientoCepillo;
+            + FilaSeparadora() + FilaMovimientoCepillo
+            + FilaPoaVacia() + FilaPoa(importe: 140000m); // hueco + fila TOTAL al fondo
 
         using var stream = CrearOdsFalso(
             ("LINEA1", filasLinea),
@@ -245,5 +258,50 @@ public class PlanillaOdsParserPoaTests
         Assert.Equal(250000m, linea2.Saldo);
         Assert.Equal(2, linea2.Movimientos.Count);
         Assert.DoesNotContain(linea2.Movimientos, m => m.Importe == 50000m);
+    }
+
+    [Fact]
+    public void ParsearPoa_DosFilasVaciasAntesDelDato_NoCortanLaLectura()
+    {
+        // Patrón PRENSA: hay DOS filas vacías entre el header y el único movimiento. El corte
+        // por POSICIÓN (la fila de TOTAL es la última con contenido) hace que esas vacías se
+        // salten sin cortar; el movimiento queda más abajo y debe contarse.
+        var filasLinea = BloquePresupuestoLiteralB + EncabezadoDatosPoa
+            + FilaPoaVacia() + FilaPoaVacia() // 2 filas vacías previas al dato
+            + FilaPoa(importe: 360000m) // el movimiento
+            + FilaPoaVacia() // hueco
+            + FilaPoa(importe: 360000m); // fila TOTAL al fondo
+
+        using var stream = CrearOdsFalso(
+            ("LINEA1", filasLinea),
+            ("SALDO TOTALES", HojaSaldoTotales(1, 1)));
+
+        var resultado = new PlanillaOdsParser().ParsearPoa(stream);
+
+        var linea = Assert.Single(resultado.Lineas);
+        var movimiento = Assert.Single(linea.Movimientos);
+        Assert.Equal(360000m, movimiento.Importe);
+    }
+
+    [Fact]
+    public void ParsearPoa_FilaConTextoEnColumnaAjenaAntesDelTotal_NoCuentaComoMovimiento()
+    {
+        // Patrón COMPOSTERAS: hay una fila con texto ("literal C"/"literal B") en una columna
+        // que NO es ninguno de los 5 campos tipados. Tiene contenido pero no aporta FACTURA /
+        // ORDEN / PROVEEDOR / GASTO / IMPORTE, así que se salta: 0 movimientos.
+        var filasLinea = BloquePresupuestoLiteralB + EncabezadoDatosPoa
+            + FilaSeparadora()
+            + FilaTextoNoTipado // texto en columna ajena — no es movimiento
+            + FilaPoaVacia() // hueco
+            + FilaPoa(importe: 0m); // fila TOTAL al fondo
+
+        using var stream = CrearOdsFalso(
+            ("LINEA1", filasLinea),
+            ("SALDO TOTALES", HojaSaldoTotales(1, 1)));
+
+        var resultado = new PlanillaOdsParser().ParsearPoa(stream);
+
+        var linea = Assert.Single(resultado.Lineas);
+        Assert.Empty(linea.Movimientos);
     }
 }
