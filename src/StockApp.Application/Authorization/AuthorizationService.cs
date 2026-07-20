@@ -13,6 +13,9 @@ public class AuthorizationService : IAuthorizationService
     // GestionarTablasMaestras están deliberadamente AUSENTES: son exclusivas de
     // Admin (fail-closed por diseño). Operador puede gestionar productos pero
     // NO tablas maestras (Categoria/Proveedor/UnidadMedida).
+    // Permisos.ImportarPlanillas también está deliberadamente AUSENTE (F5b): importar
+    // planillas reemplaza datos históricos de todo el ejercicio, es solo-Admin desde
+    // el vamos y no sigue la regla "Admin y Operador tienen todo" del resto de Finanzas.
     private static readonly HashSet<string> AccionesOperador =
     [
         Permisos.GestionarProductos,

@@ -21,6 +21,11 @@ public static class Permisos
     public const string RegistrarPagos            = "finanzas.pagos";
     public const string RegistrarIngresos         = "finanzas.ingresos";
 
+    // Finanzas — F5b: a diferencia de los permisos de arriba, este es Admin-only desde
+    // el vamos (no espera el futuro sistema de permisos por usuario). Importar planillas
+    // reemplaza datos históricos de todo el ejercicio; Operador queda afuera por diseño.
+    public const string ImportarPlanillas         = "finanzas.importar";
+
     /// <summary>
     /// Lista explícita de todos los permisos del sistema (sin reflection). Consumida por
     /// StockApp.Api/Program.cs (Fase 2b, D1) para derivar las políticas de autorización
@@ -39,5 +44,6 @@ public static class Permisos
         RegistrarGastos,
         RegistrarPagos,
         RegistrarIngresos,
+        ImportarPlanillas,
     ];
 }
