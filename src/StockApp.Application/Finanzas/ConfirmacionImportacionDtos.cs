@@ -56,13 +56,19 @@ public sealed record LineaPoaConfirmarDto(
 public sealed record AsignacionConfirmarDto(string Fuente, decimal Monto);
 
 /// <summary>Respuesta feliz de /confirmar. IdImportacion es el Guid del lote — necesario para
-/// poder revertirlo después con /revertir/{id}.</summary>
+/// poder revertirlo después con /revertir/{id}. Los campos *Reactivados/*Reactivadas (agregados
+/// al FINAL, sin reordenar los existentes: hay construcciones posicionales en tasks posteriores
+/// que dependen del orden actual) cuentan maestros/líneas que existían dados de baja (Activo =
+/// false) y se reactivaron al ser declarados de nuevo — NO se suman a los contadores de
+/// *Creados: un maestro reactivado no es un maestro creado.</summary>
 public sealed record ResultadoConfirmacionDto(
     Guid IdImportacion,
     int ProveedoresCreados, int FuentesCreadas, int RubrosCreados,
     int LineasPoaCreadas, int AsignacionesCreadas,
     int IngresosCreados, int IngresosOmitidos,
-    int GastosCreados, int GastosOmitidos, int PagosCreados);
+    int GastosCreados, int GastosOmitidos, int PagosCreados,
+    int ProveedoresReactivados, int FuentesReactivadas,
+    int RubrosReactivados, int LineasPoaReactivadas);
 
 /// <summary>Respuesta feliz de /revertir/{id}: contadores de registros dados de baja por tipo.</summary>
 public sealed record ResultadoReversionDto(

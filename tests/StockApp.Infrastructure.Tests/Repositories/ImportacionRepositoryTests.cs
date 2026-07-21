@@ -210,4 +210,91 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         await using var verificacion = Fixture.CrearContexto();
         Assert.Equal(1, await verificacion.RubrosGasto.CountAsync(r => r.Codigo == 5));
     }
+
+    [Fact]
+    public async Task ConfirmarAsync_ProveedorInactivo_LoReactivaYNoLoCuentaComoCreado()
+    {
+        Context.Proveedores.Add(new Proveedor { Nombre = "Ferretería Lopez", Activo = false });
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        var payload = PayloadSoloMaestrosYPoa(
+            proveedoresNuevos: new List<string> { "Ferretería Lopez" });
+
+        var resultado = await _repo.ConfirmarAsync(payload, usuarioId: 1);
+
+        Assert.Equal(0, resultado.ProveedoresCreados);
+        Assert.Equal(1, resultado.ProveedoresReactivados);
+        await using var verificacion = Fixture.CrearContexto();
+        var proveedor = await verificacion.Proveedores.SingleAsync(p => p.Nombre == "Ferretería Lopez");
+        Assert.True(proveedor.Activo);
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_FuenteInactiva_LaReactivaYNoLaCuentaComoCreada()
+    {
+        Context.FuentesFinanciamiento.Add(new FuenteFinanciamiento { Nombre = "Literal B", Activo = false });
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        var resultado = await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: 1);
+
+        Assert.Equal(1, resultado.FuentesCreadas); // solo "Literal C" es genuinamente nueva
+        Assert.Equal(1, resultado.FuentesReactivadas); // "Literal B" estaba inactiva
+        await using var verificacion = Fixture.CrearContexto();
+        var fuente = await verificacion.FuentesFinanciamiento.SingleAsync(f => f.Nombre == "Literal B");
+        Assert.True(fuente.Activo);
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_RubroInactivo_LoReactivaYNoLoCuentaComoCreado()
+    {
+        Context.RubrosGasto.Add(new RubroGasto { Codigo = 5, Nombre = "Combustibles", Activo = false });
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        var payload = PayloadSoloMaestrosYPoa(
+            rubrosNuevos: new List<RubroNuevoConfirmarDto> { new(5, "Combustibles") });
+
+        var resultado = await _repo.ConfirmarAsync(payload, usuarioId: 1);
+
+        Assert.Equal(0, resultado.RubrosCreados);
+        Assert.Equal(1, resultado.RubrosReactivados);
+        await using var verificacion = Fixture.CrearContexto();
+        var rubro = await verificacion.RubrosGasto.SingleAsync(r => r.Codigo == 5);
+        Assert.True(rubro.Activo);
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_LineaPoaInactivaPorReversionAnterior_LaReactivaYReestampaIdImportacion()
+    {
+        // Important #3 (review): ciclo confirmar → revertir → confirmar dado como escenario de
+        // aceptación explícito en el spec. RevertirAsync todavía no existe (Task 8), así que la
+        // reversa se simula a mano: baja lógica directa de la línea, tal como haría /revertir.
+        var primero = await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: 1);
+
+        await using (var ctxRevertir = Fixture.CrearContexto())
+        {
+            var linea = await ctxRevertir.LineasPoa.SingleAsync(l => l.Nombre == "COMPOSTERAS");
+            linea.Activo = false;
+            await ctxRevertir.SaveChangesAsync();
+        }
+
+        // El Context del repo todavía tiene la línea trackeada (Activo = true, desactualizado
+        // porque la baja de arriba pasó por OTRO DbContext) — sin este Clear, el identity map de
+        // EF Core devolvería la instancia vieja en la próxima query y el bug reaparecería en
+        // silencio.
+        Context.ChangeTracker.Clear();
+
+        var segundo = await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: 1);
+
+        Assert.Equal(0, segundo.LineasPoaCreadas);
+        Assert.Equal(1, segundo.LineasPoaReactivadas);
+        Assert.NotEqual(primero.IdImportacion, segundo.IdImportacion);
+
+        await using var verificacion = Fixture.CrearContexto();
+        var lineaFinal = await verificacion.LineasPoa.SingleAsync(l => l.Nombre == "COMPOSTERAS");
+        Assert.True(lineaFinal.Activo);
+        Assert.Equal(segundo.IdImportacion, lineaFinal.IdImportacion);
+    }
 }

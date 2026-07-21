@@ -25,10 +25,11 @@ public class ImportacionRepository : IImportacionRepository
         await _ctx.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock({dto.Ejercicio})");
 
         var (proveedorPorNombre, fuentePorNombre, rubroPorCodigo,
-                proveedoresCreados, fuentesCreadas, rubrosCreados) =
+                proveedoresCreados, fuentesCreadas, rubrosCreados,
+                proveedoresReactivados, fuentesReactivadas, rubrosReactivados) =
             await GetOrCrearMaestrosAsync(dto);
 
-        var (lineaPorNombre, lineasPoaCreadas, asignacionesCreadas) =
+        var (lineaPorNombre, lineasPoaCreadas, lineasPoaReactivadas, asignacionesCreadas) =
             await GetOrCrearLineasPoaAsync(dto, fuentePorNombre, idImportacion);
 
         await _ctx.SaveChangesAsync();
@@ -39,7 +40,11 @@ public class ImportacionRepository : IImportacionRepository
             proveedoresCreados, fuentesCreadas, rubrosCreados,
             lineasPoaCreadas, asignacionesCreadas,
             IngresosCreados: 0, IngresosOmitidos: 0,
-            GastosCreados: 0, GastosOmitidos: 0, PagosCreados: 0);
+            GastosCreados: 0, GastosOmitidos: 0, PagosCreados: 0,
+            ProveedoresReactivados: proveedoresReactivados,
+            FuentesReactivadas: fuentesReactivadas,
+            RubrosReactivados: rubrosReactivados,
+            LineasPoaReactivadas: lineasPoaReactivadas);
     }
 
     public Task<ResultadoReversionDto> RevertirAsync(Guid idImportacion, int usuarioId) =>
@@ -56,12 +61,16 @@ public class ImportacionRepository : IImportacionRepository
     /// (comparan con <c>==</c>, no normalizado). Por eso el armado de los diccionarios usa
     /// GroupBy + First en vez de ToDictionary directo — con dos filas así ya en la base,
     /// ToDictionary lanzaría ArgumentException por clave duplicada antes de tocar el payload.
+    /// Si existe un maestro declarado como nuevo pero está inactivo (baja lógica), se REACTIVA
+    /// (Activo = true) en vez de crearse de nuevo, y se cuenta aparte como reactivado — no como
+    /// creado.
     /// </summary>
     private async Task<(
         Dictionary<string, Proveedor> ProveedorPorNombre,
         Dictionary<string, FuenteFinanciamiento> FuentePorNombre,
         Dictionary<int, RubroGasto> RubroPorCodigo,
-        int ProveedoresCreados, int FuentesCreadas, int RubrosCreados)>
+        int ProveedoresCreados, int FuentesCreadas, int RubrosCreados,
+        int ProveedoresReactivados, int FuentesReactivadas, int RubrosReactivados)>
         GetOrCrearMaestrosAsync(ConfirmarImportacionDto dto)
     {
         var proveedorPorNombre = (await _ctx.Proveedores.ToListAsync())
@@ -74,11 +83,19 @@ public class ImportacionRepository : IImportacionRepository
             .ToDictionary(r => r.Codigo);
 
         var proveedoresCreados = 0;
+        var proveedoresReactivados = 0;
         foreach (var nombre in dto.MaestrosNuevos.Proveedores)
         {
             var clave = Normalizar(nombre);
-            if (proveedorPorNombre.ContainsKey(clave))
+            if (proveedorPorNombre.TryGetValue(clave, out var existente))
+            {
+                if (!existente.Activo)
+                {
+                    existente.Activo = true;
+                    proveedoresReactivados++;
+                }
                 continue;
+            }
 
             var proveedor = new Proveedor { Nombre = nombre.Trim() };
             _ctx.Proveedores.Add(proveedor);
@@ -87,11 +104,19 @@ public class ImportacionRepository : IImportacionRepository
         }
 
         var fuentesCreadas = 0;
+        var fuentesReactivadas = 0;
         foreach (var nombre in dto.MaestrosNuevos.Fuentes)
         {
             var clave = Normalizar(nombre);
-            if (fuentePorNombre.ContainsKey(clave))
+            if (fuentePorNombre.TryGetValue(clave, out var existente))
+            {
+                if (!existente.Activo)
+                {
+                    existente.Activo = true;
+                    fuentesReactivadas++;
+                }
                 continue;
+            }
 
             var fuente = new FuenteFinanciamiento { Nombre = nombre.Trim() };
             _ctx.FuentesFinanciamiento.Add(fuente);
@@ -100,10 +125,18 @@ public class ImportacionRepository : IImportacionRepository
         }
 
         var rubrosCreados = 0;
+        var rubrosReactivados = 0;
         foreach (var rubroNuevo in dto.MaestrosNuevos.Rubros)
         {
-            if (rubroPorCodigo.ContainsKey(rubroNuevo.Codigo))
+            if (rubroPorCodigo.TryGetValue(rubroNuevo.Codigo, out var existente))
+            {
+                if (!existente.Activo)
+                {
+                    existente.Activo = true;
+                    rubrosReactivados++;
+                }
                 continue;
+            }
 
             var rubro = new RubroGasto { Codigo = rubroNuevo.Codigo, Nombre = rubroNuevo.Nombre.Trim() };
             _ctx.RubrosGasto.Add(rubro);
@@ -112,17 +145,25 @@ public class ImportacionRepository : IImportacionRepository
         }
 
         return (proveedorPorNombre, fuentePorNombre, rubroPorCodigo,
-            proveedoresCreados, fuentesCreadas, rubrosCreados);
+            proveedoresCreados, fuentesCreadas, rubrosCreados,
+            proveedoresReactivados, fuentesReactivadas, rubrosReactivados);
     }
 
     /// <summary>
     /// Get-or-create de LineaPoa (clave natural Nombre+Ejercicio) y sus AsignacionPresupuestal
-    /// (clave natural LineaPoaId+FuenteFinanciamientoId, único en BD — AppDbContext.cs:142).
-    /// IdImportacion se estampa SOLO en las líneas NUEVAS: una línea ya existente a la que esta
-    /// corrida solo le agrega una asignación (financiamiento mixto declarado en dos corridas
-    /// separadas) sigue siendo, a todos los efectos, "de antes" — no la creó esta importación.
+    /// (clave natural LineaPoaId+FuenteFinanciamientoId, único en BD — AppDbContext.cs:142). La
+    /// query de existentes NO filtra Activo a propósito: una línea inactiva (baja lógica de un
+    /// /revertir anterior) tiene que ser visible acá para poder reactivarse en vez de quedar
+    /// duplicada o invisible. IdImportacion se estampa en las líneas NUEVAS y en las que se
+    /// REACTIVAN (así la reversa del lote nuevo las puede volver a revertir de forma coherente);
+    /// una línea ya existente y ACTIVA a la que esta corrida solo le agrega una asignación
+    /// (financiamiento mixto declarado en dos corridas separadas) conserva su IdImportacion
+    /// original — sigue siendo, a todos los efectos, "de antes", no la creó ni la reactivó esta
+    /// importación. Ambos casos (nueva/reactivada) se cuentan por separado.
     /// </summary>
-    private async Task<(Dictionary<string, LineaPoa> LineaPorNombre, int LineasCreadas, int AsignacionesCreadas)>
+    private async Task<(
+        Dictionary<string, LineaPoa> LineaPorNombre,
+        int LineasCreadas, int LineasReactivadas, int AsignacionesCreadas)>
         GetOrCrearLineasPoaAsync(
             ConfirmarImportacionDto dto,
             Dictionary<string, FuenteFinanciamiento> fuentePorNombre,
@@ -137,6 +178,7 @@ public class ImportacionRepository : IImportacionRepository
             .ToDictionary(g => g.Key, g => g.First());
 
         var lineasCreadas = 0;
+        var lineasReactivadas = 0;
         var asignacionesCreadas = 0;
 
         foreach (var lineaDto in dto.LineasPoa)
@@ -154,6 +196,12 @@ public class ImportacionRepository : IImportacionRepository
                 _ctx.LineasPoa.Add(linea);
                 lineaPorNombre[clave] = linea;
                 lineasCreadas++;
+            }
+            else if (!linea.Activo)
+            {
+                linea.Activo = true;
+                linea.IdImportacion = idImportacion;
+                lineasReactivadas++;
             }
 
             foreach (var asignacionDto in lineaDto.Asignaciones)
@@ -181,7 +229,7 @@ public class ImportacionRepository : IImportacionRepository
             }
         }
 
-        return (lineaPorNombre, lineasCreadas, asignacionesCreadas);
+        return (lineaPorNombre, lineasCreadas, lineasReactivadas, asignacionesCreadas);
     }
 
     private static string Normalizar(string texto) => texto.Trim().ToUpperInvariant();
