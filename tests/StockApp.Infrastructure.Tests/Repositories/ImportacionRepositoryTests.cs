@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using StockApp.Application.Finanzas;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
+using StockApp.Infrastructure.Persistence;
 using StockApp.Infrastructure.Repositories;
 using StockApp.Infrastructure.Tests.Fixtures;
 using Xunit;
@@ -123,14 +125,19 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
     }
 
     [Fact]
-    public async Task ConfirmarAsync_TransaccionFallaAMitadDeCamino_NoPersisteNadaDeLaCorrida()
+    public async Task ConfirmarAsync_AsignacionConFuenteQueNoResuelve_FallaAntesDeCualquierSaveChanges()
     {
-        // Atomicidad real (review Minor #6): TodoElGrafoSeCommiteaJuntoEnUnaSolaTransaccion (arriba)
-        // solo comprueba que el commit ocurrió, sin inyectar ningún fallo. Este test fuerza un
-        // fallo DESPUÉS de haber agregado al change tracker una fuente nueva válida ("Literal B")
-        // pero ANTES del SaveChangesAsync único del final: una asignación referencia una fuente
-        // que ni existe en la base ni fue declarada en MaestrosNuevos.Fuentes. Si la transacción es
-        // atómica de verdad, ni "Literal B" ni la línea POA quedan persistidas.
+        // Renombrado (review Important B): este test NO prueba atomicidad/rollback — la excepción
+        // se lanza DENTRO de GetOrCrearLineasPoaAsync, que corre completo en memoria ANTES del
+        // único SaveChangesAsync del final. En este punto no hubo todavía ni un solo round-trip de
+        // escritura a Postgres, así que "no queda nada persistido" es trivialmente cierto (pasaría
+        // igual sin transacción, sin tx y sin advisory lock). Es un test de "falla temprana /
+        // validación defensiva": prueba que una asignación cuya fuente no resuelve ni contra la
+        // base ni contra MaestrosNuevos.Fuentes corta el procesamiento antes de tocar la BD, y que
+        // lo hace con el tipo de excepción correcto (ValidacionImportacionException → 400
+        // estructurado, mismo contrato que ConfirmacionImportacionService.ValidarAsync — review
+        // Important A). El test de rollback real con DbUpdateException de Postgres está abajo:
+        // ConfirmarAsync_SaveChangesFallaPorConstraintReal_RevierteTodoElGrafoDeLaCorrida.
         var payload = PayloadSoloMaestrosYPoa(
             fuentesNuevas: new List<string> { "Literal B" }, // "Literal Fantasma" NO se declara
             lineasPoa: new List<LineaPoaConfirmarDto>
@@ -142,13 +149,63 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
                 }),
             });
 
-        await Assert.ThrowsAsync<EntidadNoEncontradaException>(
+        var ex = await Assert.ThrowsAsync<ValidacionImportacionException>(
             () => _repo.ConfirmarAsync(payload, usuarioId: 1));
+
+        Assert.True(ex.Errores.ContainsKey("LineasPoa[0].Asignaciones[1].Fuente"));
 
         await using var verificacion = Fixture.CrearContexto();
         Assert.Equal(0, await verificacion.FuentesFinanciamiento.CountAsync());
         Assert.Equal(0, await verificacion.LineasPoa.CountAsync());
         Assert.Equal(0, await verificacion.AsignacionesPresupuestales.CountAsync());
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_SaveChangesFallaPorConstraintReal_RevierteTodoElGrafoDeLaCorrida()
+    {
+        // C4-style (review Important B): mismo patrón que
+        // MovimientoStockRepositoryTests."C4: Rollback atómico" — una subclase sobrescribe un seam
+        // (ImportacionRepository.AntesDeGuardarAsync) para agregar al ChangeTracker una fila
+        // inválida (LogAuditoria.Detalle = null, viola NOT NULL) justo antes del único
+        // SaveChangesAsync. En ese punto el grafo completo de la corrida (fuente nueva + línea POA
+        // + asignación) YA está en el ChangeTracker, así que el DbUpdateException que dispara
+        // Postgres fuerza un rollback real: si la transacción es atómica de verdad, nada de eso
+        // queda persistido, y un maestro que ya existía ANTES de la corrida no se ve afectado.
+        var usuario = new Usuario
+        {
+            NombreUsuario  = "admin",
+            HashContrasena = "hash",
+            Rol            = RolUsuario.Admin,
+            Activo         = true,
+            FechaAlta      = DateTime.UtcNow,
+        };
+        Context.Usuarios.Add(usuario);
+        Context.Proveedores.Add(new Proveedor { Nombre = "Ferretería Lopez" });
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        var repoRoto = new ImportacionRepositoryConFalloInyectado(Context, usuario.Id);
+
+        var payload = PayloadSoloMaestrosYPoa(
+            fuentesNuevas: new List<string> { "Literal B" },
+            lineasPoa: new List<LineaPoaConfirmarDto>
+            {
+                new("COMPOSTERAS", "Ambiente", new List<AsignacionConfirmarDto>
+                {
+                    new("Literal B", 92748m),
+                }),
+            });
+
+        await Assert.ThrowsAsync<DbUpdateException>(
+            () => repoRoto.ConfirmarAsync(payload, usuarioId: usuario.Id));
+
+        await using var verificacion = Fixture.CrearContexto();
+        Assert.Equal(0, await verificacion.FuentesFinanciamiento.CountAsync());
+        Assert.Equal(0, await verificacion.LineasPoa.CountAsync());
+        Assert.Equal(0, await verificacion.AsignacionesPresupuestales.CountAsync());
+        Assert.Equal(0, await verificacion.LogsAuditoria.CountAsync());
+        var proveedor = await verificacion.Proveedores.SingleAsync(p => p.Nombre == "Ferretería Lopez");
+        Assert.True(proveedor.Activo); // maestro preexistente intacto, no tocado por el rollback
     }
 
     [Fact]
@@ -364,5 +421,38 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         await using var verificacion = Fixture.CrearContexto();
         var linea = await verificacion.LineasPoa.SingleAsync(l => l.Nombre == "COMPOSTERAS");
         Assert.Equal(primero.IdImportacion, linea.IdImportacion); // NO re-estampado: la línea seguía activa
+    }
+}
+
+/// <summary>
+/// Variante que inyecta una fila inválida (LogAuditoria.Detalle = null, viola NOT NULL) mediante
+/// el seam ImportacionRepository.AntesDeGuardarAsync, para forzar un DbUpdateException REAL de
+/// Postgres DENTRO de la transacción explícita de ConfirmarAsync. Mismo patrón que
+/// MovimientoStockRepositoryConDetalleNulo en MovimientoStockRepositoryTests.cs (test "C4"). Usada
+/// solo en ConfirmarAsync_SaveChangesFallaPorConstraintReal_RevierteTodoElGrafoDeLaCorrida.
+/// </summary>
+internal sealed class ImportacionRepositoryConFalloInyectado : ImportacionRepository
+{
+    private readonly AppDbContext _ctx;
+    private readonly int _usuarioId;
+
+    public ImportacionRepositoryConFalloInyectado(AppDbContext ctx, int usuarioId) : base(ctx)
+    {
+        _ctx = ctx;
+        _usuarioId = usuarioId;
+    }
+
+    protected override Task AntesDeGuardarAsync()
+    {
+        _ctx.LogsAuditoria.Add(new LogAuditoria
+        {
+            UsuarioId = _usuarioId,
+            Fecha     = DateTime.UtcNow,
+            Accion    = AccionAuditada.AltaProveedor,
+            Entidad   = "Importacion",
+            EntidadId = 0,
+            Detalle   = null!   // viola NOT NULL → SaveChangesAsync lanza DbUpdateException real
+        });
+        return Task.CompletedTask;
     }
 }

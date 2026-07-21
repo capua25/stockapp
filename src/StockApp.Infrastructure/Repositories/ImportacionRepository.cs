@@ -33,6 +33,7 @@ public class ImportacionRepository : IImportacionRepository
         var (lineaPorNombre, lineasPoaCreadas, lineasPoaReactivadas, asignacionesCreadas) =
             await GetOrCrearLineasPoaAsync(dto, fuentePorNombre, idImportacion);
 
+        await AntesDeGuardarAsync();
         await _ctx.SaveChangesAsync();
         await tx.CommitAsync();
 
@@ -50,6 +51,17 @@ public class ImportacionRepository : IImportacionRepository
 
     public Task<ResultadoReversionDto> RevertirAsync(Guid idImportacion, int usuarioId) =>
         throw new NotImplementedException("Se implementa en Task 8.");
+
+    /// <summary>
+    /// Seam de test (review Important B): no-op en producción. Se invoca justo antes del único
+    /// SaveChangesAsync de ConfirmarAsync — todo el grafo de get-or-create (maestros + líneas POA
+    /// + asignaciones) ya está en el ChangeTracker en ese punto pero SIN un solo round-trip de
+    /// escritura a Postgres todavía. Una subclase de test puede sobrescribirlo para agregar una
+    /// entidad inválida y forzar un DbUpdateException REAL (violación de constraint) dentro de la
+    /// transacción, y así verificar que el rollback revierte TODO lo que esta corrida acumuló —
+    /// no solo "no hay nada que revertir porque fallamos antes de guardar".
+    /// </summary>
+    protected virtual Task AntesDeGuardarAsync() => Task.CompletedTask;
 
     /// <summary>
     /// Get-or-create de Proveedor/FuenteFinanciamiento/RubroGasto declarados en
@@ -182,8 +194,9 @@ public class ImportacionRepository : IImportacionRepository
         var lineasReactivadas = 0;
         var asignacionesCreadas = 0;
 
-        foreach (var lineaDto in dto.LineasPoa)
+        for (var i = 0; i < dto.LineasPoa.Count; i++)
         {
+            var lineaDto = dto.LineasPoa[i];
             var clave = Normalizar(lineaDto.Nombre);
             if (!lineaPorNombre.TryGetValue(clave, out var linea))
             {
@@ -205,13 +218,23 @@ public class ImportacionRepository : IImportacionRepository
                 lineasReactivadas++;
             }
 
-            foreach (var asignacionDto in lineaDto.Asignaciones)
+            for (var j = 0; j < lineaDto.Asignaciones.Count; j++)
             {
+                var asignacionDto = lineaDto.Asignaciones[j];
                 var claveFuente = Normalizar(asignacionDto.Fuente);
                 if (!fuentePorNombre.TryGetValue(claveFuente, out var fuente))
-                    throw new EntidadNoEncontradaException(
-                        $"La fuente de financiamiento '{asignacionDto.Fuente}' referenciada en la línea POA " +
-                        $"'{lineaDto.Nombre}' no existe ni fue declarada nueva en MaestrosNuevos.Fuentes.");
+                    // Defensivo: ConfirmacionImportacionService.ValidarAsync (F5c) ya filtra esta
+                    // MISMA condición antes de llegar al repo con la clave estructurada
+                    // "LineasPoa[i].Asignaciones[j].Fuente" (mismo mensaje). Si algún día se
+                    // invoca el repositorio sin pasar por el Service, el cliente tiene que
+                    // recibir el mismo 400 estructurado — no un 404 genérico sin metadata de
+                    // campo (review Important A).
+                    throw new ValidacionImportacionException(
+                        new Dictionary<string, string[]>
+                        {
+                            [$"LineasPoa[{i}].Asignaciones[{j}].Fuente"] =
+                                new[] { $"La fuente '{asignacionDto.Fuente}' no existe ni fue declarada nueva" },
+                        });
 
                 // Comparación por NOMBRE NORMALIZADO, no por FuenteFinanciamientoId ni por
                 // referencia de objeto. Por Id: dos fuentes nuevas en la MISMA corrida todavía
