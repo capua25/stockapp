@@ -213,16 +213,21 @@ public class ImportacionRepository : IImportacionRepository
                         $"La fuente de financiamiento '{asignacionDto.Fuente}' referenciada en la línea POA " +
                         $"'{lineaDto.Nombre}' no existe ni fue declarada nueva en MaestrosNuevos.Fuentes.");
 
-                // Comparación por REFERENCIA, no por FuenteFinanciamientoId: dos fuentes nuevas
-                // en la MISMA corrida todavía no tienen Id real (recién se asigna en el
-                // SaveChangesAsync único del final) ni el FK escalar de una AsignacionPresupuestal
-                // recién agregada a la lista se sincroniza hasta que corre DetectChanges — comparar
-                // por Id producía falsos positivos (0 == 0) entre dos asignaciones nuevas distintas.
-                // fuentePorNombre devuelve SIEMPRE la misma instancia por nombre normalizado, y el
-                // ThenInclude(FuenteFinanciamiento) de arriba resuelve las asignaciones YA
-                // existentes contra esas mismas instancias trackeadas (identity map de EF Core)
-                // — la igualdad por referencia es válida en ambos casos.
-                if (linea.Asignaciones.Any(a => ReferenceEquals(a.FuenteFinanciamiento, fuente)))
+                // Comparación por NOMBRE NORMALIZADO, no por FuenteFinanciamientoId ni por
+                // referencia de objeto. Por Id: dos fuentes nuevas en la MISMA corrida todavía
+                // no tienen Id real (recién se asigna en el SaveChangesAsync único del final) ni
+                // el FK escalar de una AsignacionPresupuestal recién agregada a la lista se
+                // sincroniza hasta que corre DetectChanges — comparar por Id producía falsos
+                // positivos (0 == 0) entre dos asignaciones nuevas distintas. Por referencia (fix
+                // anterior, Minor #8 del review): dependía de que fuentePorNombre devolviera
+                // SIEMPRE la misma instancia por nombre normalizado y de que el identity map de
+                // EF Core resolviera las asignaciones YA existentes contra esas mismas instancias
+                // trackeadas — un AsNoTracking() futuro en cualquiera de las dos queries (esta o
+                // los .ToListAsync() de maestros) rompería esa garantía EN SILENCIO y resucitaría
+                // el bug de la asignación mixta perdida. Comparar por nombre normalizado no
+                // depende de tracking ni de identidad de objetos: es válida sea cual sea el
+                // estado de tracking de las entidades.
+                if (linea.Asignaciones.Any(a => Normalizar(a.FuenteFinanciamiento!.Nombre) == claveFuente))
                     continue;
 
                 linea.Asignaciones.Add(new AsignacionPresupuestal
