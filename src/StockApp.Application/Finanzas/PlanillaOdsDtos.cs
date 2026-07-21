@@ -46,14 +46,20 @@ public sealed record FilaPoaOds(
     decimal? Importe);
 
 /// <summary>
-/// Resumen de una línea POA (una hoja de la planilla): presupuesto asignado, saldo restante,
-/// literal de financiamiento (B o C) y sus movimientos.
+/// Una asignación presupuestal dentro de una línea POA: presupuesto asignado, saldo restante y
+/// literal de financiamiento (B o C). Modela el financiamiento mixto (F5b, caso real
+/// COMPOSTERAS): una hoja de línea puede repartirse en más de una asignación, cada una con su
+/// propio literal, presupuesto y saldo — alineado con <c>AsignacionPresupuestal</c> del dominio.
+/// </summary>
+public sealed record AsignacionPoaOds(string Literal, decimal Presupuesto, decimal Saldo);
+
+/// <summary>
+/// Resumen de una línea POA (una hoja de la planilla): sus asignaciones presupuestales (una o
+/// más, financiamiento mixto) y los movimientos (facturas imputadas) de la hoja.
 /// </summary>
 public sealed record LineaPoaResumenOds(
     string Hoja,
-    decimal Presupuesto,
-    decimal Saldo,
-    string Literal,
+    IReadOnlyList<AsignacionPoaOds> Asignaciones,
     IReadOnlyList<FilaPoaOds> Movimientos);
 
 /// <summary>Saldos consolidados de la hoja "SALDO TOTALES" de la planilla POA.</summary>

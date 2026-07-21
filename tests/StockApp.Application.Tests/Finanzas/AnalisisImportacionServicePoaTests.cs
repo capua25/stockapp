@@ -65,7 +65,7 @@ public class AnalisisImportacionServicePoaTests
     public async Task AnalizarAsync_LineaPoaConLiteralExistente_MapeaOk()
     {
         var linea = new LineaPoaResumenOds(
-            Hoja: "B", Presupuesto: 1000m, Saldo: 500m, Literal: "B",
+            Hoja: "B", Asignaciones: new List<AsignacionPoaOds> { new("B", 1000m, 500m) },
             Movimientos: new List<FilaPoaOds>());
         var poa = new PlanillaPoaOds(new List<LineaPoaResumenOds> { linea }, new SaldosTotalesPoaOds(500m, 0m));
         var m = Crear(poa, fuentes: new List<FuenteFinanciamiento> { new() { Id = 1, Nombre = "B", Activo = true } });
@@ -87,7 +87,7 @@ public class AnalisisImportacionServicePoaTests
     public async Task AnalizarAsync_LineaPoaConLiteralDesconocido_EsAdvertenciaYApareceEnMaestrosNuevosFuentes()
     {
         var linea = new LineaPoaResumenOds(
-            Hoja: "Z", Presupuesto: 100m, Saldo: 50m, Literal: "Z",
+            Hoja: "Z", Asignaciones: new List<AsignacionPoaOds> { new("Z", 100m, 50m) },
             Movimientos: new List<FilaPoaOds>());
         var poa = new PlanillaPoaOds(new List<LineaPoaResumenOds> { linea }, new SaldosTotalesPoaOds(0m, 0m));
         var m = Crear(poa, fuentes: new List<FuenteFinanciamiento> { new() { Id = 1, Nombre = "B", Activo = true } });
@@ -107,7 +107,7 @@ public class AnalisisImportacionServicePoaTests
     {
         var movimiento = Movimiento(factura: null, orden: null);
         var linea = new LineaPoaResumenOds(
-            Hoja: "B", Presupuesto: 1000m, Saldo: 500m, Literal: "B",
+            Hoja: "B", Asignaciones: new List<AsignacionPoaOds> { new("B", 1000m, 500m) },
             Movimientos: new List<FilaPoaOds> { movimiento });
         var poa = new PlanillaPoaOds(new List<LineaPoaResumenOds> { linea }, new SaldosTotalesPoaOds(500m, 0m));
         var m = Crear(poa, fuentes: new List<FuenteFinanciamiento> { new() { Id = 1, Nombre = "B", Activo = true } });
@@ -131,7 +131,7 @@ public class AnalisisImportacionServicePoaTests
         // AnalisisImportacionServiceReconciliacionTests.
         var movimiento = Movimiento(factura: "F-1", orden: "O-1");
         var linea = new LineaPoaResumenOds(
-            Hoja: "B", Presupuesto: 1000m, Saldo: 500m, Literal: "B",
+            Hoja: "B", Asignaciones: new List<AsignacionPoaOds> { new("B", 1000m, 500m) },
             Movimientos: new List<FilaPoaOds> { movimiento });
         var poa = new PlanillaPoaOds(new List<LineaPoaResumenOds> { linea }, new SaldosTotalesPoaOds(500m, 0m));
         var m = Crear(poa, fuentes: new List<FuenteFinanciamiento> { new() { Id = 1, Nombre = "B", Activo = true } });

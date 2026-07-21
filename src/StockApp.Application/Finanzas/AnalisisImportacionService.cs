@@ -158,11 +158,15 @@ public class AnalisisImportacionService : IAnalisisImportacionService
 
         foreach (var lineaOds in poaOds.Lineas)
         {
+            // Mecánico (Task 1 F5b, prep financiamiento mixto): por ahora cada hoja trae UNA
+            // sola asignación (el parser todavía no lee financiamiento mixto — eso es Task 2/4).
+            var asignacion = lineaOds.Asignaciones[0];
+
             var motivosLinea = new List<MotivoEstado>();
 
-            var (literal, fuenteDesconocida) = ClasificarFuente(lineaOds.Literal, fuentesActivas, motivosLinea);
+            var (literal, fuenteDesconocida) = ClasificarFuente(asignacion.Literal, fuentesActivas, motivosLinea);
             if (fuenteDesconocida)
-                RegistrarNuevo(fuentesNuevasVistas, fuentesNuevas, lineaOds.Literal!);
+                RegistrarNuevo(fuentesNuevasVistas, fuentesNuevas, asignacion.Literal!);
 
             var movimientos = lineaOds.Movimientos
                 .Select(mov => ReconciliarMovimiento(lineaOds.Hoja, mov, gastos))
@@ -172,7 +176,7 @@ public class AnalisisImportacionService : IAnalisisImportacionService
                 Hoja: lineaOds.Hoja, Ejercicio: ejercicio,
                 Estado: EstadoMasSevero(motivosLinea), Motivos: motivosLinea,
                 Literal: literal, FuenteDesconocida: fuenteDesconocida,
-                Presupuesto: lineaOds.Presupuesto, SaldoPlanilla: lineaOds.Saldo,
+                Presupuesto: asignacion.Presupuesto, SaldoPlanilla: asignacion.Saldo,
                 Movimientos: movimientos));
         }
 
@@ -189,7 +193,7 @@ public class AnalisisImportacionService : IAnalisisImportacionService
             PoaDudosos: todosLosMovimientos.Count(mv => mv.Clasificacion == ClasificacionReconciliacion.Dudoso),
             PoaCompromisos: todosLosMovimientos.Count(mv => mv.Clasificacion == ClasificacionReconciliacion.CompromisoSoloPoa));
 
-        return new ResultadoAnalisisDto(ingresos, gastos, lineasPoa, maestrosNuevos, resumen);
+        return new ResultadoAnalisisDto(ingresos, gastos, lineasPoa, maestrosNuevos, resumen, poaOds.SaldosTotales);
     }
 
     /// <summary>

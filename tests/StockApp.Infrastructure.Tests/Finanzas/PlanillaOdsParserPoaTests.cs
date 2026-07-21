@@ -119,9 +119,10 @@ public class PlanillaOdsParserPoaTests
 
         var linea = Assert.Single(resultado.Lineas);
         Assert.Equal("LINEA1", linea.Hoja);
-        Assert.Equal(500000m, linea.Presupuesto);
-        Assert.Equal(360000m, linea.Saldo);
-        Assert.Equal("B", linea.Literal);
+        var asignacion = Assert.Single(linea.Asignaciones);
+        Assert.Equal(500000m, asignacion.Presupuesto);
+        Assert.Equal(360000m, asignacion.Saldo);
+        Assert.Equal("B", asignacion.Literal);
 
         var movimiento = Assert.Single(linea.Movimientos);
         Assert.Null(movimiento.Factura);
@@ -248,14 +249,15 @@ public class PlanillaOdsParserPoaTests
         Assert.Equal(2, resultado.Lineas.Count);
 
         var linea1 = resultado.Lineas.Single(l => l.Hoja == "LINEA1");
-        Assert.Equal("B", linea1.Literal);
+        Assert.Equal("B", Assert.Single(linea1.Asignaciones).Literal);
         var movimiento1 = Assert.Single(linea1.Movimientos);
         Assert.Equal(140000m, movimiento1.Importe);
 
         var linea2 = resultado.Lineas.Single(l => l.Hoja == "LINEA2");
-        Assert.Equal("C", linea2.Literal);
-        Assert.Equal(300000m, linea2.Presupuesto);
-        Assert.Equal(250000m, linea2.Saldo);
+        var asignacion2 = Assert.Single(linea2.Asignaciones);
+        Assert.Equal("C", asignacion2.Literal);
+        Assert.Equal(300000m, asignacion2.Presupuesto);
+        Assert.Equal(250000m, asignacion2.Saldo);
         Assert.Equal(2, linea2.Movimientos.Count);
         Assert.DoesNotContain(linea2.Movimientos, m => m.Importe == 50000m);
     }

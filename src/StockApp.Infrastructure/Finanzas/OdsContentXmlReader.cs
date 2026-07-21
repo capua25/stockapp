@@ -58,6 +58,18 @@ internal sealed class OdsHoja
                .OrderBy(kv => kv.Key.Fila).ThenBy(kv => kv.Key.Columna)
                .Select(kv => ((int, int)?)(kv.Key.Fila, kv.Key.Columna))
                .FirstOrDefault();
+
+    /// <summary>
+    /// Todas las posiciones (fila, columna) cuyo texto coincide EXACTO, ordenadas por fila y
+    /// luego columna. A diferencia de <see cref="BuscarTexto"/> (que asume una sola ocurrencia
+    /// en la zona relevante), sirve para headers que se repiten en la misma hoja — ej. varios
+    /// bloques PRESUPUESTO/SALDO cuando una línea POA tiene financiamiento mixto (F5b).
+    /// </summary>
+    public IReadOnlyList<(int Fila, int Columna)> BuscarTodos(string texto) =>
+        _celdas.Where(kv => kv.Value.Texto == texto)
+               .OrderBy(kv => kv.Key.Fila).ThenBy(kv => kv.Key.Columna)
+               .Select(kv => (kv.Key.Fila, kv.Key.Columna))
+               .ToList();
 }
 
 /// <summary>

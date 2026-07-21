@@ -79,7 +79,12 @@ public sealed class PlanillaOdsParser : IPlanillaParser
         }
 
         if (filaTotal < 0)
-            return new LineaPoaResumenOds(nombreHoja, presupuesto, saldo, literal, new List<FilaPoaOds>());
+        {
+            return new LineaPoaResumenOds(
+                nombreHoja,
+                new List<AsignacionPoaOds> { new(literal, presupuesto, saldo) },
+                new List<FilaPoaOds>());
+        }
 
         // Parte 2 — Los movimientos son las filas ENTRE el header y la fila de TOTAL (excluida)
         // que aportan contenido en al menos uno de los 5 campos tipados. Una fila vacía
@@ -102,7 +107,10 @@ public sealed class PlanillaOdsParser : IPlanillaParser
             movimientos.Add(new FilaPoaOds(nombreHoja, f + 1, factura, orden, proveedor, gasto, importe));
         }
 
-        return new LineaPoaResumenOds(nombreHoja, presupuesto, saldo, literal, movimientos);
+        return new LineaPoaResumenOds(
+            nombreHoja,
+            new List<AsignacionPoaOds> { new(literal, presupuesto, saldo) },
+            movimientos);
     }
 
     private static string? BuscarLiteralEnFila(OdsHoja hoja, int fila) =>

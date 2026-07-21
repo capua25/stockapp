@@ -49,7 +49,7 @@ public class AnalisisImportacionServiceReconciliacionTests
             Proveedor: "ACME SA", Gasto: "Compra de insumos", Importe: importe);
 
     private static LineaPoaResumenOds Linea(string hoja, params FilaPoaOds[] movimientos) =>
-        new(Hoja: hoja, Presupuesto: 1000m, Saldo: 500m, Literal: "B", Movimientos: movimientos.ToList());
+        new(Hoja: hoja, Asignaciones: new List<AsignacionPoaOds> { new("B", 1000m, 500m) }, Movimientos: movimientos.ToList());
 
     private sealed record Mocks(AnalisisImportacionService Svc);
 

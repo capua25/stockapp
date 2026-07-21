@@ -85,4 +85,9 @@ public sealed record ResultadoAnalisisDto(
     IReadOnlyList<GastoAnalizadoDto> Gastos,
     IReadOnlyList<LineaPoaAnalizadaDto> LineasPoa,
     MaestrosNuevosDto MaestrosNuevos,
-    ResumenAnalisisDto Resumen);
+    ResumenAnalisisDto Resumen,
+    // Saldos consolidados de la hoja "SALDO TOTALES" de la planilla POA (F5b, decisión del
+    // usuario): fuente de verdad para el criterio de aceptación §11, en vez de sumar
+    // SaldoPlanilla por Literal a través de LineasPoa (esa suma puede no cuadrar contra la
+    // planilla real — ver docs/finanzas-discrepancias-planilla-poa-2026.md).
+    SaldosTotalesPoaOds SaldosPoa);
