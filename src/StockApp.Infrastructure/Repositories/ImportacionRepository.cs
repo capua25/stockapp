@@ -55,8 +55,10 @@ public class ImportacionRepository : IImportacionRepository
         }
         catch (DbUpdateException ex) when (ObtenerRestriccionUnicaViolada(ex) is { } restriccion)
         {
+            // Encadena ex como InnerException (review Minor): sin esto se perdía el stack de
+            // Npgsql (PostgresException con el detalle real de la violación) para diagnóstico.
             throw new ReglaDeNegocioException(
-                $"Violación de la restricción única '{restriccion}' al confirmar la importación.");
+                $"Violación de la restricción única '{restriccion}' al confirmar la importación.", ex);
         }
 
         await tx.CommitAsync();
