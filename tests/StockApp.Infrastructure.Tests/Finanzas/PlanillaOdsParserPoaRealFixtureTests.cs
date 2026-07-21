@@ -168,4 +168,26 @@ public class PlanillaOdsParserPoaRealFixtureTests
         var composteras = resultado.Lineas.Single(l => l.Hoja == "COMPOSTERAS Y COMPACTADORAS");
         Assert.Empty(composteras.Movimientos);
     }
+
+    [Fact]
+    public void ParsearPoa_PlanillaReal_ComposterasTieneLasDosAsignacionesDeFinanciamientoMixto()
+    {
+        using var stream = AbrirPlanillaReal();
+
+        var resultado = Parser.ParsearPoa(stream);
+
+        // F5b: COMPOSTERAS Y COMPACTADORAS es la ÚNICA hoja de financiamiento mixto de la
+        // planilla real — se reparte en DOS asignaciones (LITERAL C y LITERAL B) en vez de la
+        // fila agregada (1.500.000 = 1.407.252 + 92.748) que el parser F5a leía por error.
+        var composteras = resultado.Lineas.Single(l => l.Hoja == "COMPOSTERAS Y COMPACTADORAS");
+        Assert.Equal(2, composteras.Asignaciones.Count);
+
+        var asignacionC = composteras.Asignaciones.Single(a => a.Literal == "C");
+        Assert.Equal(1407252m, asignacionC.Presupuesto);
+        Assert.Equal(1407252m, asignacionC.Saldo);
+
+        var asignacionB = composteras.Asignaciones.Single(a => a.Literal == "B");
+        Assert.Equal(92748m, asignacionB.Presupuesto);
+        Assert.Equal(92748m, asignacionB.Saldo);
+    }
 }
