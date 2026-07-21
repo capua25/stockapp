@@ -44,8 +44,12 @@ Gaps concretos que este contrato cubre (campos que el análisis de F5b no puede 
 - `Gasto.RubroGastoId` — obligatorio en el dominio, pero `GastoAnalizadoDto.CodigoRubro` es `int?` en el análisis.
 - `Gasto.Detalle` — obligatorio en el dominio (`AppDbContext.cs:154`, `IsRequired()`), pero `GastoAnalizadoDto.Detalle` es `string?` en el análisis.
 - `IngresoCaja.FuenteFinanciamientoId` — obligatorio en el dominio, pero el saldo inicial sintético de enero viene con `Fuente = null` en `IngresoAnalizadoDto` (F5b, mapeo "Saldo inicial de enero").
+- `Gasto.RubroGastoId` y `Gasto.Fecha` para los compromisos POA (`ClasificacionReconciliacion.CompromisoSoloPoa`, §2.3) — acá el gap es más profundo que en los casos anteriores: `MovimientoPoaAnalizadoDto` (F5b) directamente NO TIENE ninguno de los dos campos, porque la planilla POA no los registra (el rubro es una dimensión de la planilla de Gastos, no de la POA; una hoja de línea POA no tiene columna de fecha por movimiento). No es un `null` opcional que el análisis podría haber completado — es información que no existe en ningún lado de los datos de origen.
+- `Gasto.FechaVencimiento` para los mismos compromisos POA, cuando `Condicion == CondicionPago.Credito` — ver el desarrollo completo más abajo, después del contrato.
 
 El saldo inicial viaja como un ingreso más dentro de `Ingresos`, con su `Fuente` obligatoria igual que cualquier otro — no tiene tratamiento especial en el contrato de confirmación.
+
+**Resolución para `RubroGastoId` y `Fecha` de los compromisos POA: el humano los completa en la grilla de F5d**, igual que cualquier otro campo faltante de esta lista. Se descarta explícitamente crear un rubro sentinel tipo "COMPROMISO POA" — sería exactamente el patrón que esta misma decisión rechaza para el resto de los gaps (el sentinel "SIN CLASIFICAR" de más arriba). Consecuencia operativa, anotada también en §9: en F5d el admin va a tener que elegir rubro y fecha a mano para cada movimiento POA clasificado `CompromisoSoloPoa` — el trabajo es proporcional a cuántos haya.
 
 ### 2.5 Contrato stateless
 
@@ -112,13 +116,18 @@ IngresoConfirmarDto(DateOnly Fecha, string Concepto, decimal Monto, string Fuent
 
 GastoConfirmarDto(string Proveedor, string? NumeroFactura, string? NumeroOrden,
                   string Detalle, string? Destino, DateOnly Fecha, decimal MontoTotal,
-                  string Fuente, int CodigoRubro, string? LineaPoa, CondicionPago Condicion)
+                  string Fuente, int CodigoRubro, string? LineaPoa, CondicionPago Condicion,
+                  DateOnly? FechaVencimiento)
 
 LineaPoaConfirmarDto(string Nombre, string Programa,
                      IReadOnlyList<AsignacionConfirmarDto> Asignaciones)
 
 AsignacionConfirmarDto(string Fuente, decimal Monto)
 ```
+
+**`FechaVencimiento` — nullable en el tipo, obligatoria por regla de negocio para `Credito`**: `GastoService.AltaAsync` ya exige `FechaVencimiento` para todo gasto con `CondicionPago.Credito` y prohíbe que la lleve un gasto `Contado` (`GastoService.cs:272-275`, `ValidarAsync`, lanza `ReglaDeNegocioException` en ambos sentidos). Los compromisos POA que F5c crea son exactamente gastos `Credito` (§2.3). `ConfirmacionImportacionService` aplica la misma regla sobre el payload: si `Condicion == CondicionPago.Credito` y `FechaVencimiento` viene `null` → `400` con la clave `Gastos[i].FechaVencimiento`. Razón: sin vencimiento, un gasto a crédito nunca aparece en el Calendario de Pagos (F4) — quedaría un compromiso invisible, exactamente el tipo de dato "perdido en la migración" que §2.7 (reversa) existe para poder corregir, pero es mejor no dejarlo entrar en primer lugar.
+
+Nota técnica: `ImportacionRepository` (§5) escribe las entidades directo contra el `DbContext`, sin pasar por `GastoService` — mismo patrón que el resto del repositorio de importación. No hay ningún bloqueo técnico que fuerce esta regla en ese camino de escritura. Se aplica igual, en `ConfirmacionImportacionService` antes de delegar al repositorio, por coherencia del dominio (un gasto a crédito sin vencimiento sería un estado que el alta manual nunca permite crear), no porque algo la fuerce automáticamente.
 
 **Regla de cierre**: toda referencia nominal (proveedor, fuente, rubro por código, línea POA) tiene que resolver contra un maestro ya existente en la base o contra uno declarado en `MaestrosNuevos`. Si no resuelve → `400`. Nada se crea por accidente fuera de lo que el usuario declaró explícitamente.
 
@@ -233,10 +242,14 @@ Tres capas, mismo patrón que F5a/F5b:
 End-to-end con las planillas reales (gitignored, en `tests/StockApp.Api.Tests/Fixtures/Finanzas/`): `/analizar` → completar los obligatorios → `/confirmar` → consultar la base vía `Factory.CrearContexto()` y aseverar:
 
 - Caja de junio 2026 = **43.705**
-- Saldo POA Literal B = **6.643.349**
-- Saldo POA Literal C = **4.654.206**
+- Saldo POA Literal B = **6.341.849**
+- Saldo POA Literal C = **4.174.206**
 
-Son los mismos números de §11 que F5b validó en memoria (sobre el resultado del análisis); acá quedan persistidos en la base real.
+**Por qué el oráculo POA cambió respecto de F5b (§11 decía 6.643.349 / 4.654.206) — no es un error de este documento, es una consecuencia de que cambió qué se está probando**: F5b probaba el PARSER, así que el oráculo correcto era el valor cacheado en la hoja "SALDO TOTALES" del `.ods` (`ResultadoAnalisisDto.SaldosPoa`) — un número único y estable, perfecto para verificar que F5a/F5b leen la planilla sin corromper nada. F5c prueba lo que se PERSISTIÓ en la base, y F5c (§10) escribe las `AsignacionPresupuestal` derivadas de las hojas de LÍNEA, no del resumen. `docs/finanzas-discrepancias-planilla-poa-2026.md` documenta que esas dos fuentes están desincronizadas en la planilla real: la suma de las hojas de línea da **6.341.849 / 4.174.206** (Literal B / C), **301.500 y 480.000 menos** que "SALDO TOTALES" respectivamente. El número correcto para un test que consulta la base después de `/confirmar` es la suma de las hojas de línea — es literalmente lo que quedó escrito. Usar 6.643.349/4.654.206 acá produciría un test que falla siempre, incluso contra una implementación correcta.
+
+Si el análisis de F5b reporta movimientos POA clasificados `Dudoso` (`Resumen.PoaDudosos > 0`), el saldo persistido puede quedar por encima del esperado en la magnitud exacta del `Importe` de esos movimientos — un movimiento `Dudoso` nunca se convierte en `Gasto` automáticamente, es por diseño una decisión manual de F5d. Hay que revisar `PoaDudosos` antes de fijar el assert.
+
+La caja de junio 2026 (**43.705**) NO cambia y sigue siendo el mismo número de §11 que F5b validó en memoria: sale enteramente de las hojas de la planilla de Gastos (Ingresos/Egresos), un dato independiente de la reconciliación POA y ajeno a la discrepancia de "SALDO TOTALES".
 
 ### Tests nuevos específicos de esta fase
 
@@ -259,6 +272,7 @@ No hay cambios pendientes en `ApiFactory.cs`: al no existir un flag de configura
 - La primera grilla editable del repo: las 15 grillas `DataGrid` actuales del desktop son todas `IsReadOnly="True"`.
 - La pantalla con pestañas por tipo — molde: `MaestrosFinanzasViewModel` (`src/StockApp.Presentation/ViewModels/Finanzas/MaestrosFinanzasViewModel.cs`).
 - El ítem admin-only en el sidebar, incluida cualquier UI para listar corridas previas y disparar su reversa con un botón.
+- **Completar rubro y fecha de los compromisos POA (§2.4)**: para cada movimiento clasificado `CompromisoSoloPoa` que el análisis de F5b devuelva, F5d tiene que ofrecerle al admin un combo de rubro y un selector de fecha en la grilla, sin default automático. Es trabajo manual proporcional a la cantidad de compromisos que haya en la planilla real — no se puede estimar sin correr `/analizar` contra los datos reales primero.
 
 ## 10. Advertencia operativa
 
