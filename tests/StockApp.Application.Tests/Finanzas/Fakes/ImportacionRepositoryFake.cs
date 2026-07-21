@@ -25,7 +25,8 @@ public sealed class ImportacionRepositoryFake : IImportacionRepository
         ResultadoReversionDto? resultadoRevertir = null)
     {
         _resultadoConfirmar = resultadoConfirmar
-            ?? new ResultadoConfirmacionDto(Guid.NewGuid(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+            ?? new ResultadoConfirmacionDto(
+                Guid.NewGuid(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, new List<ConflictoGastoDto>());
         _resultadoRevertir = resultadoRevertir
             ?? new ResultadoReversionDto(Guid.NewGuid(), 0, 0, 0, 0, 0);
     }

@@ -60,7 +60,14 @@ public sealed record AsignacionConfirmarDto(string Fuente, decimal Monto);
 /// al FINAL, sin reordenar los existentes: hay construcciones posicionales en tasks posteriores
 /// que dependen del orden actual) cuentan maestros/líneas que existían dados de baja (Activo =
 /// false) y se reactivaron al ser declarados de nuevo — NO se suman a los contadores de
-/// *Creados: un maestro reactivado no es un maestro creado.</summary>
+/// *Creados: un maestro reactivado no es un maestro creado.
+///
+/// Conflictos (review Important A, agregado AL FINAL — misma regla de no reordenar): gastos CON
+/// NumeroFactura cuya clave natural (ProveedorId, NumeroFactura) matchea contra un gasto activo
+/// ya existente, pero cuyos demás datos (Fecha/MontoTotal/NumeroOrden) difieren. NO son
+/// "omitidos" (esos son duplicados idénticos) ni "creados" — no se escriben, y quedan acá para
+/// que un humano decida. Solo aplica al camino CON factura: ese es el único que colisiona contra
+/// el índice único parcial IX_Gastos_ProveedorId_NumeroFactura (AppDbContext.cs).</summary>
 public sealed record ResultadoConfirmacionDto(
     Guid IdImportacion,
     int ProveedoresCreados, int FuentesCreadas, int RubrosCreados,
@@ -68,7 +75,20 @@ public sealed record ResultadoConfirmacionDto(
     int IngresosCreados, int IngresosOmitidos,
     int GastosCreados, int GastosOmitidos, int PagosCreados,
     int ProveedoresReactivados, int FuentesReactivadas,
-    int RubrosReactivados, int LineasPoaReactivadas);
+    int RubrosReactivados, int LineasPoaReactivadas,
+    IReadOnlyList<ConflictoGastoDto> Conflictos);
+
+/// <summary>Un campo de un gasto existente cuyo valor difiere del que trae el payload para la
+/// MISMA clave natural (ProveedorId, NumeroFactura). ValorAnterior/ValorNuevo van como string ya
+/// formateados — es solo para que un humano lea el reporte, no para reprocesar nada.</summary>
+public sealed record CampoDivergenteDto(string Campo, string ValorAnterior, string ValorNuevo);
+
+/// <summary>Un gasto CON NumeroFactura que matchea por (Proveedor, NumeroFactura) contra uno ya
+/// activo en la base, pero con datos distintos (spec review Important A.2) — "ya importado con
+/// datos distintos", no un duplicado silencioso. NumeroFactura va sin normalizar (tal cual lo
+/// declaró el usuario en el payload) para que el reporte sea legible.</summary>
+public sealed record ConflictoGastoDto(
+    string Proveedor, string NumeroFactura, IReadOnlyList<CampoDivergenteDto> CamposDivergentes);
 
 /// <summary>Respuesta feliz de /revertir/{id}: contadores de registros dados de baja por tipo.</summary>
 public sealed record ResultadoReversionDto(

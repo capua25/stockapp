@@ -1,4 +1,6 @@
+using System.Globalization;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
@@ -37,11 +39,26 @@ public class ImportacionRepository : IImportacionRepository
         var (ingresosCreados, ingresosOmitidos) =
             await ProcesarIngresosAsync(dto, fuentePorNombre, idImportacion);
 
-        var (gastosCreados, gastosOmitidos, pagosCreados) =
+        var (gastosCreados, gastosOmitidos, pagosCreados, conflictos) =
             await ProcesarGastosAsync(dto, proveedorPorNombre, fuentePorNombre, rubroPorCodigo, lineaPorNombre, idImportacion);
 
         await AntesDeGuardarAsync();
-        await _ctx.SaveChangesAsync();
+
+        // A.5 (review Important A): red de seguridad. A.1 (clave natural = índice) y A.4
+        // (validación intra-payload en el Service) deberían evitar cualquier 23505 acá, pero si
+        // igual llega uno se traduce a una excepción de dominio con el nombre de la restricción,
+        // mismo patrón que GastoRepository.EsViolacionFacturaUnica (GastoRepository.cs:122-124).
+        // Nunca un 500 pelado.
+        try
+        {
+            await _ctx.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (ObtenerRestriccionUnicaViolada(ex) is { } restriccion)
+        {
+            throw new ReglaDeNegocioException(
+                $"Violación de la restricción única '{restriccion}' al confirmar la importación.");
+        }
+
         await tx.CommitAsync();
 
         return new ResultadoConfirmacionDto(
@@ -53,8 +70,14 @@ public class ImportacionRepository : IImportacionRepository
             ProveedoresReactivados: proveedoresReactivados,
             FuentesReactivadas: fuentesReactivadas,
             RubrosReactivados: rubrosReactivados,
-            LineasPoaReactivadas: lineasPoaReactivadas);
+            LineasPoaReactivadas: lineasPoaReactivadas,
+            Conflictos: conflictos);
     }
+
+    private static string? ObtenerRestriccionUnicaViolada(DbUpdateException ex) =>
+        ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } pg
+            ? pg.ConstraintName
+            : null;
 
     public Task<ResultadoReversionDto> RevertirAsync(Guid idImportacion, int usuarioId) =>
         throw new NotImplementedException("Se implementa en Task 8.");
@@ -272,40 +295,72 @@ public class ImportacionRepository : IImportacionRepository
         return (lineaPorNombre, lineasCreadas, lineasReactivadas, asignacionesCreadas);
     }
 
+    /// <summary>
+    /// Única función de normalización de claves de todo el archivo (Minor del review: existía un
+    /// duplicado byte a byte de esta misma función con otro nombre — unificado acá).
+    /// </summary>
     private static string Normalizar(string texto) => texto.Trim().ToUpperInvariant();
+
+    private static string? NormalizarOpcional(string? texto) =>
+        string.IsNullOrWhiteSpace(texto) ? null : Normalizar(texto);
 
     // ── Dedupe por clave natural (spec §4) ──────────────────────────────────────────────────
     //
-    // Una sola función de proyección por entidad, compartida entre la carga del set existente
+    // Una sola función de proyección por caso, compartida entre la carga del set existente
     // (desde la BD) y la comparación de cada fila nueva del payload — evita que ambos lados se
     // desincronicen silenciosamente (spec §4, "Riesgo asumido").
+    //
+    // Gasto CON NumeroFactura (review Important A.1): la clave es (ProveedorId, NumeroFactura),
+    // EXACTAMENTE la del índice único parcial IX_Gastos_ProveedorId_NumeroFactura
+    // (AppDbContext.cs, filtro "Activo" = TRUE AND "NumeroFactura" IS NOT NULL). La clave
+    // natural del importador nunca puede ser más fina que esa restricción — si lo fuera (como
+    // antes, que incluía Fecha/MontoTotal), dos corridas con el mismo proveedor+factura pero un
+    // dato distinto (el usuario corrigió el monto y reimportó) generaban un 23505 de Postgres
+    // que tiraba abajo TODA la importación. Gasto SIN NumeroFactura: no hay índice único que lo
+    // limite, así que sigue con la clave ancha (ProveedorId, NumeroOrden, Fecha, MontoTotal).
 
     private readonly record struct ClaveIngreso(DateTime Fecha, string Concepto, decimal Monto, int FuenteId);
-    private readonly record struct ClaveGasto(
-        int ProveedorId, string? NumeroFactura, string? NumeroOrden, DateTime Fecha, decimal MontoTotal);
+    private readonly record struct ClaveGastoConFactura(int ProveedorId, string NumeroFactura);
+    private readonly record struct ClaveGastoSinFactura(
+        int ProveedorId, string? NumeroOrden, DateTime Fecha, decimal MontoTotal);
+
+    /// <summary>Datos comparables de un gasto CON factura ya activo en la base — lo necesario
+    /// para distinguir "mismo gasto ya importado" (A.2: omitido) de "misma factura con datos
+    /// distintos" (A.2: conflicto), sin traer la entidad completa.</summary>
+    private readonly record struct DatosGastoConFactura(DateTime Fecha, decimal MontoTotal, string? NumeroOrden);
 
     private static ClaveIngreso ProyectarClaveIngreso(DateTime fecha, string concepto, decimal monto, int fuenteId) =>
-        new(fecha, NormalizarClave(concepto), monto, fuenteId);
+        new(fecha, Normalizar(concepto), monto, fuenteId);
 
-    private static ClaveGasto ProyectarClaveGasto(
-        int proveedorId, string? numeroFactura, string? numeroOrden, DateTime fecha, decimal montoTotal) =>
-        new(proveedorId, NormalizarClaveOpcional(numeroFactura), NormalizarClaveOpcional(numeroOrden), fecha, montoTotal);
+    private static ClaveGastoConFactura ProyectarClaveGastoConFactura(int proveedorId, string numeroFactura) =>
+        new(proveedorId, Normalizar(numeroFactura));
 
-    private static string NormalizarClave(string texto) => texto.Trim().ToUpperInvariant();
-
-    private static string? NormalizarClaveOpcional(string? texto) =>
-        string.IsNullOrWhiteSpace(texto) ? null : texto.Trim().ToUpperInvariant();
+    private static ClaveGastoSinFactura ProyectarClaveGastoSinFactura(
+        int proveedorId, string? numeroOrden, DateTime fecha, decimal montoTotal) =>
+        new(proveedorId, NormalizarOpcional(numeroOrden), fecha, montoTotal);
 
     private static DateTime AFechaUtc(DateOnly fecha) =>
         new(fecha.Year, fecha.Month, fecha.Day, 0, 0, 0, DateTimeKind.Utc);
+
+    private static DateTime? AFechaUtc(DateOnly? fecha) => fecha is { } valor ? AFechaUtc(valor) : null;
+
+    /// <summary>Rango [inicio, fin) de un ejercicio en UTC — acota el set de ingresos/gastos
+    /// activos que se carga para el dedupe (review Minor: antes traía TODO el histórico) sin
+    /// depender de EXTRACT/`.Year` en la query: es una comparación de rango simple sobre
+    /// `Fecha`, traducible tal cual a SQL.</summary>
+    private static (DateTime Inicio, DateTime Fin) RangoEjercicio(int ejercicio) => (
+        new DateTime(ejercicio, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+        new DateTime(ejercicio + 1, 1, 1, 0, 0, 0, DateTimeKind.Utc));
 
     private async Task<(int Creados, int Omitidos)> ProcesarIngresosAsync(
         ConfirmarImportacionDto dto,
         Dictionary<string, FuenteFinanciamiento> fuentePorNombre,
         Guid idImportacion)
     {
+        var (inicioEjercicio, finEjercicio) = RangoEjercicio(dto.Ejercicio);
+
         var clavesExistentes = (await _ctx.IngresosCaja
-                .Where(i => i.Activo)
+                .Where(i => i.Activo && i.Fecha >= inicioEjercicio && i.Fecha < finEjercicio)
                 .Select(i => new { i.Fecha, i.Concepto, i.Monto, i.FuenteFinanciamientoId })
                 .ToListAsync())
             .Select(i => ProyectarClaveIngreso(i.Fecha, i.Concepto, i.Monto, i.FuenteFinanciamientoId))
@@ -346,25 +401,50 @@ public class ImportacionRepository : IImportacionRepository
     /// §2.3) van Credito SIN pago: SaldoPendiente == MontoTotal refleja que es un compromiso
     /// pendiente, no una factura pagada — el Control POA (F4) ya calcula el saldo de la línea a
     /// partir de gastos activos con su LineaPoaId, sin cambios.
+    ///
+    /// Dedupe partido en dos casos (review Important A.1/A.2): CON NumeroFactura, matchea contra
+    /// la clave del índice único de la base y compara los demás datos — todo igual es "omitido",
+    /// algo distinto es "conflicto" (no se escribe nada, se reporta aparte en
+    /// ResultadoConfirmacionDto.Conflictos). SIN NumeroFactura, sigue el dedupe amplio de
+    /// siempre (ahí no hay índice único que lo restrinja).
     /// </summary>
-    private async Task<(int Creados, int Omitidos, int PagosCreados)> ProcesarGastosAsync(
-        ConfirmarImportacionDto dto,
-        Dictionary<string, Proveedor> proveedorPorNombre,
-        Dictionary<string, FuenteFinanciamiento> fuentePorNombre,
-        Dictionary<int, RubroGasto> rubroPorCodigo,
-        Dictionary<string, LineaPoa> lineaPorNombre,
-        Guid idImportacion)
+    private async Task<(int Creados, int Omitidos, int PagosCreados, IReadOnlyList<ConflictoGastoDto> Conflictos)>
+        ProcesarGastosAsync(
+            ConfirmarImportacionDto dto,
+            Dictionary<string, Proveedor> proveedorPorNombre,
+            Dictionary<string, FuenteFinanciamiento> fuentePorNombre,
+            Dictionary<int, RubroGasto> rubroPorCodigo,
+            Dictionary<string, LineaPoa> lineaPorNombre,
+            Guid idImportacion)
     {
-        var clavesExistentes = (await _ctx.Gastos
-                .Where(g => g.Activo)
-                .Select(g => new { g.ProveedorId, g.NumeroFactura, g.NumeroOrden, g.Fecha, g.MontoTotal })
-                .ToListAsync())
-            .Select(g => ProyectarClaveGasto(g.ProveedorId, g.NumeroFactura, g.NumeroOrden, g.Fecha, g.MontoTotal))
+        var (inicioEjercicio, finEjercicio) = RangoEjercicio(dto.Ejercicio);
+
+        var gastosActivos = await _ctx.Gastos
+            .Where(g => g.Activo && g.Fecha >= inicioEjercicio && g.Fecha < finEjercicio)
+            .Select(g => new { g.ProveedorId, g.NumeroFactura, g.NumeroOrden, g.Fecha, g.MontoTotal })
+            .ToListAsync();
+
+        // GroupBy + First (no ToDictionary directo): mismo criterio que proveedorPorNombre/
+        // fuentePorNombre en GetOrCrearMaestrosAsync — el índice único de la base es sobre
+        // NumeroFactura CRUDO (Postgres case-sensitive), así que en teoría podrían coexistir dos
+        // gastos activos que normalizados colisionan (p.ej. "F-1" y "f-1"). Caso de borde ya
+        // aceptado en el resto del archivo para el mismo tipo de colisión.
+        var datosPorClaveConFactura = gastosActivos
+            .Where(g => g.NumeroFactura is not null)
+            .GroupBy(g => ProyectarClaveGastoConFactura(g.ProveedorId, g.NumeroFactura!))
+            .ToDictionary(
+                gr => gr.Key,
+                gr => new DatosGastoConFactura(gr.First().Fecha, gr.First().MontoTotal, gr.First().NumeroOrden));
+
+        var clavesSinFactura = gastosActivos
+            .Where(g => g.NumeroFactura is null)
+            .Select(g => ProyectarClaveGastoSinFactura(g.ProveedorId, g.NumeroOrden, g.Fecha, g.MontoTotal))
             .ToHashSet();
 
         var creados = 0;
         var omitidos = 0;
         var pagosCreados = 0;
+        var conflictos = new List<ConflictoGastoDto>();
 
         foreach (var gastoDto in dto.Gastos)
         {
@@ -372,22 +452,40 @@ public class ImportacionRepository : IImportacionRepository
             var fuente = fuentePorNombre[Normalizar(gastoDto.Fuente)];
             var rubro = rubroPorCodigo[gastoDto.CodigoRubro];
             var fechaUtc = AFechaUtc(gastoDto.Fecha);
+            var tieneFactura = !string.IsNullOrWhiteSpace(gastoDto.NumeroFactura);
 
-            var clave = ProyectarClaveGasto(
-                proveedor.Id, gastoDto.NumeroFactura, gastoDto.NumeroOrden, fechaUtc, gastoDto.MontoTotal);
-            if (clavesExistentes.Contains(clave))
+            if (tieneFactura)
             {
-                omitidos++;
-                continue;
+                var claveFactura = ProyectarClaveGastoConFactura(proveedor.Id, gastoDto.NumeroFactura!);
+                if (datosPorClaveConFactura.TryGetValue(claveFactura, out var datosExistentes))
+                {
+                    var camposDivergentes = CamposDivergentes(datosExistentes, gastoDto, fechaUtc);
+                    if (camposDivergentes.Count > 0)
+                        conflictos.Add(new ConflictoGastoDto(
+                            gastoDto.Proveedor, gastoDto.NumeroFactura!.Trim(), camposDivergentes));
+                    else
+                        omitidos++;
+                    continue;
+                }
+            }
+            else
+            {
+                var claveSinFactura = ProyectarClaveGastoSinFactura(
+                    proveedor.Id, gastoDto.NumeroOrden, fechaUtc, gastoDto.MontoTotal);
+                if (clavesSinFactura.Contains(claveSinFactura))
+                {
+                    omitidos++;
+                    continue;
+                }
             }
 
             var gasto = new Gasto
             {
                 Proveedor = proveedor,
-                NumeroFactura = gastoDto.NumeroFactura,
-                NumeroOrden = gastoDto.NumeroOrden,
+                NumeroFactura = gastoDto.NumeroFactura?.Trim(),
+                NumeroOrden = gastoDto.NumeroOrden?.Trim(),
                 Detalle = gastoDto.Detalle.Trim(),
-                Destino = gastoDto.Destino,
+                Destino = gastoDto.Destino?.Trim(),
                 Fecha = fechaUtc,
                 MontoTotal = gastoDto.MontoTotal,
                 FuenteFinanciamiento = fuente,
@@ -395,12 +493,7 @@ public class ImportacionRepository : IImportacionRepository
                 LineaPoa = string.IsNullOrWhiteSpace(gastoDto.LineaPoa)
                     ? null : lineaPorNombre[Normalizar(gastoDto.LineaPoa)],
                 CondicionPago = gastoDto.Condicion,
-                // Null-safe aunque Task 3 ya garantiza que viene con valor para Credito: Contado
-                // sí llega legítimamente en null (AFechaUtc no acepta DateOnly?, por eso no se
-                // reutiliza directo acá).
-                FechaVencimiento = gastoDto.FechaVencimiento is { } vencimiento
-                    ? new DateTime(vencimiento.Year, vencimiento.Month, vencimiento.Day, 0, 0, 0, DateTimeKind.Utc)
-                    : null,
+                FechaVencimiento = AFechaUtc(gastoDto.FechaVencimiento),
                 IdImportacion = idImportacion,
             };
 
@@ -417,6 +510,37 @@ public class ImportacionRepository : IImportacionRepository
             creados++;
         }
 
-        return (creados, omitidos, pagosCreados);
+        return (creados, omitidos, pagosCreados, conflictos);
     }
+
+    /// <summary>Compara un gasto CON factura ya activo en la base contra la fila nueva del
+    /// payload que matcheó por (ProveedorId, NumeroFactura) y arma la lista de campos que
+    /// difieren (review Important A.2/A.3). Vacía ⇒ es el mismo gasto (omitido, no conflicto).
+    /// NumeroOrden se compara normalizado, como el resto de las claves del archivo — no
+    /// queremos un falso conflicto por un espacio o un casing de más.</summary>
+    private static List<CampoDivergenteDto> CamposDivergentes(
+        DatosGastoConFactura existente, GastoConfirmarDto nuevo, DateTime fechaNuevaUtc)
+    {
+        var campos = new List<CampoDivergenteDto>();
+
+        if (existente.Fecha != fechaNuevaUtc)
+            campos.Add(new CampoDivergenteDto(
+                "Fecha", existente.Fecha.ToString("yyyy-MM-dd"), fechaNuevaUtc.ToString("yyyy-MM-dd")));
+
+        if (existente.MontoTotal != nuevo.MontoTotal)
+            campos.Add(new CampoDivergenteDto(
+                "MontoTotal", FormatearMonto(existente.MontoTotal), FormatearMonto(nuevo.MontoTotal)));
+
+        if (NormalizarOpcional(existente.NumeroOrden) != NormalizarOpcional(nuevo.NumeroOrden))
+            campos.Add(new CampoDivergenteDto(
+                "NumeroOrden", existente.NumeroOrden ?? "(vacío)", nuevo.NumeroOrden ?? "(vacío)"));
+
+        return campos;
+    }
+
+    /// <summary>Formatea un monto para el reporte de conflictos sin arrastrar la escala interna
+    /// del decimal (Postgres/EF devuelven MontoTotal con la escala fija de la columna, 18,4:
+    /// 500m llega como 500.0000m) — sin este formateo, "500.0000" vs "550" se leería como un
+    /// campo distinto todavía más confuso de lo que ya es.</summary>
+    private static string FormatearMonto(decimal monto) => monto.ToString("0.####", CultureInfo.InvariantCulture);
 }

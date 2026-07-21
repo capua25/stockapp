@@ -509,8 +509,266 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         await using var verificacion = Fixture.CrearContexto();
         var gasto = verificacion.Gastos.Include(g => g.Pagos).Single();
         Assert.Empty(gasto.Pagos);
-        Assert.Equal(gasto.MontoTotal, gasto.MontoTotal - 0m); // SaldoPendiente == MontoTotal
+        Assert.Equal(gasto.MontoTotal, gasto.SaldoPendiente); // SaldoPendiente == MontoTotal: sin pagos
         Assert.Equal(new DateTime(Ejercicio, 12, 31, 0, 0, 0, DateTimeKind.Utc), gasto.FechaVencimiento);
+    }
+
+    // ── Important A.1/A.2: clave natural del gasto partida por presencia de NumeroFactura ──────
+
+    private static ConfirmarImportacionDto PayloadUnGastoConFactura(
+        string proveedor = "ACME SA", string? numeroFactura = "F-1", string? numeroOrden = "O-1",
+        DateOnly? fecha = null, decimal monto = 500m, bool forzar = false,
+        IReadOnlyList<string>? proveedoresNuevos = null) => new(
+        Ejercicio: Ejercicio,
+        Forzar: forzar,
+        MaestrosNuevos: new MaestrosNuevosConfirmarDto(
+            proveedoresNuevos ?? new List<string> { proveedor },
+            new List<string> { "Literal A" },
+            new List<RubroNuevoConfirmarDto> { new(1, "Paseos Públicos") }),
+        Ingresos: new List<IngresoConfirmarDto>(),
+        Gastos: new List<GastoConfirmarDto>
+        {
+            new(proveedor, numeroFactura, numeroOrden, "Compra de insumos", null,
+                fecha ?? new DateOnly(Ejercicio, 1, 15), monto, "Literal A", 1, null, CondicionPago.Contado, null),
+        },
+        LineasPoa: new List<LineaPoaConfirmarDto>());
+
+    [Fact]
+    public async Task ConfirmarAsync_GastoConMismaFacturaYMontoDistinto_NoLoEscribeYLoReportaComoConflicto()
+    {
+        // Escenario del bug real (review Important A): corrida 1 importa F-1 en 500; el usuario
+        // corrige el .ods a 550 y reimporta con Forzar. Antes del fix, la clave natural incluía
+        // MontoTotal, así que la fila "nueva" no matcheaba contra la existente y el segundo
+        // SaveChangesAsync explotaba con un 23505 (mismo ProveedorId+NumeroFactura, índice único
+        // parcial de la base) que tiraba abajo TODA la importación. Con la clave partida
+        // (ProveedorId, NumeroFactura), la segunda corrida SÍ matchea, detecta que MontoTotal
+        // difiere, y lo reporta como conflicto sin escribir nada ni romper la transacción.
+        await _repo.ConfirmarAsync(PayloadUnGastoConFactura(monto: 500m), usuarioId: 1);
+
+        var resultado = await _repo.ConfirmarAsync(
+            PayloadUnGastoConFactura(monto: 550m, forzar: true, proveedoresNuevos: new List<string>()),
+            usuarioId: 1);
+
+        Assert.Equal(0, resultado.GastosCreados);
+        Assert.Equal(0, resultado.GastosOmitidos);
+        Assert.Single(resultado.Conflictos);
+        var conflicto = resultado.Conflictos[0];
+        Assert.Equal("ACME SA", conflicto.Proveedor);
+        Assert.Equal("F-1", conflicto.NumeroFactura);
+        Assert.Contains(conflicto.CamposDivergentes, c => c.Campo == "MontoTotal" && c.ValorAnterior == "500" && c.ValorNuevo == "550");
+
+        await using var verificacion = Fixture.CrearContexto();
+        Assert.Equal(1, await verificacion.Gastos.CountAsync());
+        var gasto = await verificacion.Gastos.SingleAsync();
+        Assert.Equal(500m, gasto.MontoTotal); // el original NO se pisó
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_GastoConNumeroFacturaEnDistintoCasingYConEspacios_SeOmiteComoDuplicadoIdentico()
+    {
+        // Minor del review: ProyectarClaveGastoConFactura existe para que "F-1" y " f-1 " sean
+        // la MISMA clave — sin Trim/ToUpperInvariant este test fallaría (crearía una fila nueva
+        // en vez de omitir).
+        await _repo.ConfirmarAsync(PayloadUnGastoConFactura(numeroFactura: "F-1"), usuarioId: 1);
+
+        var resultado = await _repo.ConfirmarAsync(
+            PayloadUnGastoConFactura(numeroFactura: " f-1 ", forzar: true, proveedoresNuevos: new List<string>()),
+            usuarioId: 1);
+
+        Assert.Equal(0, resultado.GastosCreados);
+        Assert.Equal(1, resultado.GastosOmitidos);
+        Assert.Empty(resultado.Conflictos);
+        await using var verificacion = Fixture.CrearContexto();
+        Assert.Equal(1, await verificacion.Gastos.CountAsync());
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_GastoSinFacturaNullYLuegoFacturaVacia_SeConsideranLaMismaClave_SeOmite()
+    {
+        // Minor del review (null vs ""): ambos casos van por la clave SIN factura — si no fueran
+        // la misma clave, la segunda corrida crearía una fila nueva en vez de omitir.
+        await _repo.ConfirmarAsync(
+            PayloadUnGastoConFactura(numeroFactura: null, numeroOrden: "O-1"), usuarioId: 1);
+
+        var resultado = await _repo.ConfirmarAsync(
+            PayloadUnGastoConFactura(numeroFactura: "", numeroOrden: "O-1", forzar: true, proveedoresNuevos: new List<string>()),
+            usuarioId: 1);
+
+        Assert.Equal(0, resultado.GastosCreados);
+        Assert.Equal(1, resultado.GastosOmitidos);
+        await using var verificacion = Fixture.CrearContexto();
+        Assert.Equal(1, await verificacion.Gastos.CountAsync());
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_IngresoConConceptoEnDistintoCasingYEspacios_SeOmiteComoDuplicado()
+    {
+        var payload = new ConfirmarImportacionDto(
+            Ejercicio: Ejercicio,
+            Forzar: false,
+            MaestrosNuevos: new MaestrosNuevosConfirmarDto(
+                new List<string>(), new List<string> { "Literal A" }, new List<RubroNuevoConfirmarDto>()),
+            Ingresos: new List<IngresoConfirmarDto>
+            {
+                new(new DateOnly(Ejercicio, 1, 1), "Saldo inicial", 1000m, "Literal A"),
+            },
+            Gastos: new List<GastoConfirmarDto>(),
+            LineasPoa: new List<LineaPoaConfirmarDto>());
+        await _repo.ConfirmarAsync(payload, usuarioId: 1);
+
+        var payloadRepetido = payload with
+        {
+            Forzar = true,
+            MaestrosNuevos = new MaestrosNuevosConfirmarDto(
+                new List<string>(), new List<string>(), new List<RubroNuevoConfirmarDto>()),
+            Ingresos = new List<IngresoConfirmarDto>
+            {
+                new(new DateOnly(Ejercicio, 1, 1), "  SALDO INICIAL  ", 1000m, "Literal A"),
+            },
+        };
+
+        var resultado = await _repo.ConfirmarAsync(payloadRepetido, usuarioId: 1);
+
+        Assert.Equal(0, resultado.IngresosCreados);
+        Assert.Equal(1, resultado.IngresosOmitidos);
+        await using var verificacion = Fixture.CrearContexto();
+        Assert.Equal(1, await verificacion.IngresosCaja.CountAsync());
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_IngresoConMontoDeDistintaEscalaDecimal_SeConsideraElMismoIngreso_SeOmite()
+    {
+        var payload = new ConfirmarImportacionDto(
+            Ejercicio: Ejercicio,
+            Forzar: false,
+            MaestrosNuevos: new MaestrosNuevosConfirmarDto(
+                new List<string>(), new List<string> { "Literal A" }, new List<RubroNuevoConfirmarDto>()),
+            Ingresos: new List<IngresoConfirmarDto>
+            {
+                new(new DateOnly(Ejercicio, 1, 1), "Saldo inicial", 1000m, "Literal A"),
+            },
+            Gastos: new List<GastoConfirmarDto>(),
+            LineasPoa: new List<LineaPoaConfirmarDto>());
+        await _repo.ConfirmarAsync(payload, usuarioId: 1);
+
+        var payloadRepetido = payload with
+        {
+            Forzar = true,
+            MaestrosNuevos = new MaestrosNuevosConfirmarDto(
+                new List<string>(), new List<string>(), new List<RubroNuevoConfirmarDto>()),
+            Ingresos = new List<IngresoConfirmarDto>
+            {
+                new(new DateOnly(Ejercicio, 1, 1), "Saldo inicial", 1000.0000m, "Literal A"),
+            },
+        };
+
+        var resultado = await _repo.ConfirmarAsync(payloadRepetido, usuarioId: 1);
+
+        Assert.Equal(0, resultado.IngresosCreados);
+        Assert.Equal(1, resultado.IngresosOmitidos);
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_IngresoConMontoDistinto_NoEsDuplicado_CreaFilaNueva()
+    {
+        // Negativo (Minor del review): cambiar un campo de la CLAVE (Monto es parte de
+        // ClaveIngreso) tiene que crear una fila nueva, no omitir.
+        var payload = new ConfirmarImportacionDto(
+            Ejercicio: Ejercicio,
+            Forzar: false,
+            MaestrosNuevos: new MaestrosNuevosConfirmarDto(
+                new List<string>(), new List<string> { "Literal A" }, new List<RubroNuevoConfirmarDto>()),
+            Ingresos: new List<IngresoConfirmarDto>
+            {
+                new(new DateOnly(Ejercicio, 1, 1), "Saldo inicial", 1000m, "Literal A"),
+            },
+            Gastos: new List<GastoConfirmarDto>(),
+            LineasPoa: new List<LineaPoaConfirmarDto>());
+        await _repo.ConfirmarAsync(payload, usuarioId: 1);
+
+        var payloadDistinto = payload with
+        {
+            Forzar = true,
+            MaestrosNuevos = new MaestrosNuevosConfirmarDto(
+                new List<string>(), new List<string>(), new List<RubroNuevoConfirmarDto>()),
+            Ingresos = new List<IngresoConfirmarDto>
+            {
+                new(new DateOnly(Ejercicio, 1, 1), "Saldo inicial", 2000m, "Literal A"),
+            },
+        };
+
+        var resultado = await _repo.ConfirmarAsync(payloadDistinto, usuarioId: 1);
+
+        Assert.Equal(1, resultado.IngresosCreados);
+        Assert.Equal(0, resultado.IngresosOmitidos);
+        await using var verificacion = Fixture.CrearContexto();
+        Assert.Equal(2, await verificacion.IngresosCaja.CountAsync());
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_GastoConNumeroFacturaYOrdenYDestinoConEspacios_LosGuardaTrimeados()
+    {
+        // Minor del review: Detalle/Concepto ya se trimeaban; NumeroFactura/NumeroOrden/Destino
+        // no. El índice único SÍ distingue " F-1" de "F-1" aunque la clave natural los vea
+        // iguales (Trim+ToUpperInvariant) — sin este fix quedaría data sucia en la base.
+        var payload = new ConfirmarImportacionDto(
+            Ejercicio: Ejercicio,
+            Forzar: false,
+            MaestrosNuevos: new MaestrosNuevosConfirmarDto(
+                new List<string> { "ACME SA" }, new List<string> { "Literal A" },
+                new List<RubroNuevoConfirmarDto> { new(1, "Paseos Públicos") }),
+            Ingresos: new List<IngresoConfirmarDto>(),
+            Gastos: new List<GastoConfirmarDto>
+            {
+                new("ACME SA", " F-1 ", " O-1 ", "Compra de insumos", " Playa ",
+                    new DateOnly(Ejercicio, 1, 15), 500m, "Literal A", 1, null, CondicionPago.Contado, null),
+            },
+            LineasPoa: new List<LineaPoaConfirmarDto>());
+
+        await _repo.ConfirmarAsync(payload, usuarioId: 1);
+
+        await using var verificacion = Fixture.CrearContexto();
+        var gasto = await verificacion.Gastos.SingleAsync();
+        Assert.Equal("F-1", gasto.NumeroFactura);
+        Assert.Equal("O-1", gasto.NumeroOrden);
+        Assert.Equal("Playa", gasto.Destino);
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_ViolacionDeIndiceUnicoRealForzada_LaMapeaAReglaDeNegocioException()
+    {
+        // A.5 (review Important A): red de seguridad. A.1 (clave = índice) y A.4 (validación
+        // intra-payload en el Service) deberían evitar esto SIEMPRE, pero si algo bypassea esas
+        // dos defensas y dos gastos activos terminan con la misma (ProveedorId, NumeroFactura)
+        // en el mismo SaveChangesAsync, Postgres tira 23505 y el repo tiene que traducirlo a una
+        // excepción de dominio con el nombre de la restricción — nunca dejarlo pasar crudo (eso
+        // sería un 500). Se fuerza el bypass con el mismo seam que el test C4
+        // (AntesDeGuardarAsync), agregando el segundo gasto directo al ChangeTracker, evitando
+        // por completo el dedupe en memoria de ProcesarGastosAsync.
+        await _repo.ConfirmarAsync(PayloadUnGastoConFactura(numeroFactura: "F-1"), usuarioId: 1);
+
+        var proveedor = await Context.Proveedores.SingleAsync(p => p.Nombre == "ACME SA");
+        var fuente = await Context.FuentesFinanciamiento.SingleAsync(f => f.Nombre == "Literal A");
+        var rubro = await Context.RubrosGasto.SingleAsync(r => r.Codigo == 1);
+        Context.ChangeTracker.Clear();
+
+        var repoRoto = new ImportacionRepositoryConFacturaDuplicadaInyectada(Context, proveedor.Id, fuente.Id, rubro.Id);
+        var payloadSinNadaNuevo = new ConfirmarImportacionDto(
+            Ejercicio: Ejercicio,
+            Forzar: false,
+            MaestrosNuevos: new MaestrosNuevosConfirmarDto(
+                new List<string>(), new List<string>(), new List<RubroNuevoConfirmarDto>()),
+            Ingresos: new List<IngresoConfirmarDto>(),
+            Gastos: new List<GastoConfirmarDto>(),
+            LineasPoa: new List<LineaPoaConfirmarDto>());
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => repoRoto.ConfirmarAsync(payloadSinNadaNuevo, usuarioId: 1));
+
+        Assert.Contains("IX_Gastos_ProveedorId_NumeroFactura", ex.Message);
+
+        await using var verificacion = Fixture.CrearContexto();
+        Assert.Equal(1, await verificacion.Gastos.CountAsync()); // el inyectado NO quedó persistido (rollback)
     }
 }
 
@@ -542,6 +800,48 @@ internal sealed class ImportacionRepositoryConFalloInyectado : ImportacionReposi
             Entidad   = "Importacion",
             EntidadId = 0,
             Detalle   = null!   // viola NOT NULL → SaveChangesAsync lanza DbUpdateException real
+        });
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>
+/// Variante que bypassea POR COMPLETO el dedupe en memoria de ProcesarGastosAsync, agregando
+/// directo al ChangeTracker un segundo Gasto con la MISMA (ProveedorId, NumeroFactura) que uno ya
+/// activo en la base — vía el mismo seam AntesDeGuardarAsync que ImportacionRepositoryConFalloInyectado.
+/// Fuerza que sea Postgres (índice único parcial IX_Gastos_ProveedorId_NumeroFactura), no la
+/// lógica de la aplicación, quien rechace la fila — así se prueba de forma REAL (no simulada) que
+/// la red de seguridad de A.5 traduce el 23505 a ReglaDeNegocioException. Usada solo en
+/// ConfirmarAsync_ViolacionDeIndiceUnicoRealForzada_LaMapeaAReglaDeNegocioException.
+/// </summary>
+internal sealed class ImportacionRepositoryConFacturaDuplicadaInyectada : ImportacionRepository
+{
+    private readonly AppDbContext _ctx;
+    private readonly int _proveedorId;
+    private readonly int _fuenteId;
+    private readonly int _rubroId;
+
+    public ImportacionRepositoryConFacturaDuplicadaInyectada(
+        AppDbContext ctx, int proveedorId, int fuenteId, int rubroId) : base(ctx)
+    {
+        _ctx = ctx;
+        _proveedorId = proveedorId;
+        _fuenteId = fuenteId;
+        _rubroId = rubroId;
+    }
+
+    protected override Task AntesDeGuardarAsync()
+    {
+        _ctx.Gastos.Add(new Gasto
+        {
+            ProveedorId = _proveedorId,
+            NumeroFactura = "F-1",
+            Detalle = "Inyectado para forzar 23505 (test A.5)",
+            Fecha = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+            MontoTotal = 999m,
+            FuenteFinanciamientoId = _fuenteId,
+            RubroGastoId = _rubroId,
+            CondicionPago = CondicionPago.Contado,
         });
         return Task.CompletedTask;
     }
