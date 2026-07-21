@@ -285,6 +285,71 @@ public class PlanillaOdsParserPoaTests
         Assert.Equal(360000m, movimiento.Importe);
     }
 
+    // Geometría real de COMPOSTERAS Y COMPACTADORAS (única hoja de financiamiento mixto de
+    // PlanillaPoa2026.ods, verificada abriendo el .ods): fila de header con DOS bloques
+    // PRESUPUESTO/SALDO — un bloque AGREGADO (colspan=2, col8/col10, sin LITERAL asociado: es la
+    // suma de los otros dos) y un bloque COMPARTIDO (colspan=1, col14/col15) usado por DOS filas
+    // de valores apiladas, cada una con su propio LITERAL en col12: fila5=LITERAL C (1.407.252),
+    // fila7=LITERAL B (92.748). 1.407.252 + 92.748 = 1.500.000 = el agregado.
+    private const string HojaComposterasMixta = """
+        <table:table-row>
+          <table:table-cell table:number-columns-repeated="8"/>
+          <table:table-cell office:value-type="string" table:number-columns-spanned="2"><text:p>PRESUPUESTO</text:p></table:table-cell>
+          <table:covered-table-cell/>
+          <table:table-cell office:value-type="string" table:number-columns-spanned="2"><text:p>SALDO</text:p></table:table-cell>
+          <table:covered-table-cell/>
+          <table:table-cell table:number-columns-repeated="2"/>
+          <table:table-cell office:value-type="string"><text:p>PRESUPUESTO</text:p></table:table-cell>
+          <table:table-cell office:value-type="string"><text:p>SALDO</text:p></table:table-cell>
+        </table:table-row>
+        <table:table-row>
+          <table:table-cell table:number-columns-repeated="8"/>
+          <table:table-cell office:value-type="float" office:value="1500000" table:number-columns-spanned="2"><text:p>1.500.000,00</text:p></table:table-cell>
+          <table:covered-table-cell/>
+          <table:table-cell office:value-type="float" office:value="1500000" table:number-columns-spanned="2"><text:p>1.500.000,00</text:p></table:table-cell>
+          <table:covered-table-cell/>
+          <table:table-cell office:value-type="string" table:number-columns-spanned="2"><text:p>LITERAL C</text:p></table:table-cell>
+          <table:covered-table-cell/>
+          <table:table-cell office:value-type="float" office:value="1407252"><text:p>1.407.252,00</text:p></table:table-cell>
+          <table:table-cell office:value-type="float" office:value="1407252"><text:p>1.407.252,00</text:p></table:table-cell>
+        </table:table-row>
+        <table:table-row>
+          <table:table-cell table:number-columns-repeated="16"/>
+        </table:table-row>
+        <table:table-row>
+          <table:table-cell table:number-columns-repeated="12"/>
+          <table:table-cell office:value-type="string" table:number-columns-spanned="2"><text:p>LITERAL B</text:p></table:table-cell>
+          <table:covered-table-cell/>
+          <table:table-cell office:value-type="float" office:value="92748"><text:p>92.748,00</text:p></table:table-cell>
+          <table:table-cell office:value-type="float" office:value="92748"><text:p>92.748,00</text:p></table:table-cell>
+        </table:table-row>
+        """
+        + EncabezadoDatosPoa;
+
+    [Fact]
+    public void ParsearPoa_HojaConFinanciamientoMixto_LeeDosAsignacionesIgnorandoElBloqueAgregado()
+    {
+        using var stream = CrearOdsFalso(
+            ("COMPOSTERAS Y COMPACTADORAS", HojaComposterasMixta),
+            ("SALDO TOTALES", HojaSaldoTotales(6643349, 4654206)));
+
+        var resultado = new PlanillaOdsParser().ParsearPoa(stream);
+
+        var linea = Assert.Single(resultado.Lineas);
+        Assert.Equal("COMPOSTERAS Y COMPACTADORAS", linea.Hoja);
+        Assert.Empty(linea.Movimientos);
+
+        Assert.Equal(2, linea.Asignaciones.Count);
+
+        var asignacionC = linea.Asignaciones.Single(a => a.Literal == "C");
+        Assert.Equal(1407252m, asignacionC.Presupuesto);
+        Assert.Equal(1407252m, asignacionC.Saldo);
+
+        var asignacionB = linea.Asignaciones.Single(a => a.Literal == "B");
+        Assert.Equal(92748m, asignacionB.Presupuesto);
+        Assert.Equal(92748m, asignacionB.Saldo);
+    }
+
     [Fact]
     public void ParsearPoa_FilaConTextoEnColumnaAjenaAntesDelTotal_NoCuentaComoMovimiento()
     {

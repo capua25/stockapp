@@ -39,25 +39,14 @@ public sealed class PlanillaOdsParser : IPlanillaParser
     {
         var hoja = OdsContentXmlReader.LeerHoja(contentXml, nombreHoja);
 
-        var (filaPresupuesto, colPresupuesto) = hoja.BuscarTexto("PRESUPUESTO")
-            ?? throw new InvalidOperationException($"La hoja '{nombreHoja}' no tiene celda PRESUPUESTO.");
-        var (_, colSaldoResumen) = hoja.BuscarTexto("SALDO")
-            ?? throw new InvalidOperationException($"La hoja '{nombreHoja}' no tiene celda SALDO.");
-
-        var filaValores = filaPresupuesto + 1;
-        var presupuesto = hoja.Celda(filaValores, colPresupuesto).Numero
-            ?? throw new InvalidOperationException($"La hoja '{nombreHoja}' no tiene valor de PRESUPUESTO.");
-        var saldo = hoja.Celda(filaValores, colSaldoResumen).Numero
-            ?? throw new InvalidOperationException($"La hoja '{nombreHoja}' no tiene valor de SALDO.");
-        var literal = BuscarLiteralEnFila(hoja, filaValores)
-            ?? throw new InvalidOperationException($"La hoja '{nombreHoja}' no tiene celda LITERAL.");
-
         var (filaEncabezadoDatos, colFactura) = hoja.BuscarTexto("FACTURA")
             ?? throw new InvalidOperationException($"La hoja '{nombreHoja}' no tiene columna FACTURA.");
         var colOrden = colFactura + 2;
         var colProveedor = colFactura + 4;
         var colGasto = colFactura + 6;
         var colImporte = colFactura + 10;
+
+        var asignaciones = ParsearAsignaciones(hoja, nombreHoja, filaEncabezadoDatos);
 
         // Geometría real de cada hoja de línea (verificada contra las 15 hojas de
         // PlanillaPoa2026.ods):
@@ -79,12 +68,7 @@ public sealed class PlanillaOdsParser : IPlanillaParser
         }
 
         if (filaTotal < 0)
-        {
-            return new LineaPoaResumenOds(
-                nombreHoja,
-                new List<AsignacionPoaOds> { new(literal, presupuesto, saldo) },
-                new List<FilaPoaOds>());
-        }
+            return new LineaPoaResumenOds(nombreHoja, asignaciones, new List<FilaPoaOds>());
 
         // Parte 2 — Los movimientos son las filas ENTRE el header y la fila de TOTAL (excluida)
         // que aportan contenido en al menos uno de los 5 campos tipados. Una fila vacía
@@ -107,17 +91,91 @@ public sealed class PlanillaOdsParser : IPlanillaParser
             movimientos.Add(new FilaPoaOds(nombreHoja, f + 1, factura, orden, proveedor, gasto, importe));
         }
 
-        return new LineaPoaResumenOds(
-            nombreHoja,
-            new List<AsignacionPoaOds> { new(literal, presupuesto, saldo) },
-            movimientos);
+        return new LineaPoaResumenOds(nombreHoja, asignaciones, movimientos);
     }
 
-    private static string? BuscarLiteralEnFila(OdsHoja hoja, int fila) =>
+    /// <summary>
+    /// Financiamiento mixto (F5b, caso real COMPOSTERAS): las asignaciones se derivan de las
+    /// celdas "LITERAL X" (mayúscula, Ordinal — <see cref="BuscarLiteralEnFila"/> ya ignora las
+    /// "literal C"/"literal B" en minúscula de la tabla de movimientos) que aparecen en la ZONA
+    /// DE ENCABEZADO, es decir ANTES de la fila del header de movimientos ("FACTURA"). Cada fila
+    /// con una celda LITERAL es una asignación; su presupuesto y saldo son las celdas numéricas
+    /// de ESA MISMA fila bajo los headers PRESUPUESTO/SALDO más cercanos en columna a la celda
+    /// LITERAL.
+    ///
+    /// Esto resuelve el financiamiento mixto sin necesidad de detectar el bloque AGREGADO como
+    /// caso especial: en COMPOSTERAS el header trae DOS pares PRESUPUESTO/SALDO — uno agregado
+    /// (col8/col10, la suma de los otros dos, SIN literal propio) y uno compartido por las dos
+    /// filas de asignación real (col14/col15). Elegir siempre el par MÁS CERCANO en columna a la
+    /// celda LITERAL de la fila descarta naturalmente el agregado (col8 queda a distancia 4 de
+    /// LITERAL en col12, mientras que col14 queda a distancia 2) sin tener que reconocerlo por
+    /// colspan ni por ausencia de literal.
+    /// </summary>
+    private static IReadOnlyList<AsignacionPoaOds> ParsearAsignaciones(
+        OdsHoja hoja, string nombreHoja, int filaEncabezadoDatos)
+    {
+        var (filaPrimerPresupuesto, _) = hoja.BuscarTexto("PRESUPUESTO")
+            ?? throw new InvalidOperationException($"La hoja '{nombreHoja}' no tiene celda PRESUPUESTO.");
+
+        // Pares PRESUPUESTO/SALDO de la zona de encabezado, emparejados por proximidad: cada
+        // columna PRESUPUESTO (ordenadas ascendente) se empareja con la columna SALDO en la
+        // misma posición de la lista de SALDO (también ordenada ascendente) — válido porque cada
+        // bloque PRESUPUESTO/SALDO aparece consecutivo y no se entrelaza con el siguiente bloque
+        // (verificado contra las 15 hojas de PlanillaPoa2026.ods).
+        var columnasPresupuesto = hoja.BuscarTodos("PRESUPUESTO")
+            .Where(p => p.Fila < filaEncabezadoDatos)
+            .Select(p => p.Columna)
+            .OrderBy(c => c)
+            .ToList();
+        var columnasSaldo = hoja.BuscarTodos("SALDO")
+            .Where(p => p.Fila < filaEncabezadoDatos)
+            .Select(p => p.Columna)
+            .OrderBy(c => c)
+            .ToList();
+
+        if (columnasPresupuesto.Count == 0 || columnasSaldo.Count != columnasPresupuesto.Count)
+        {
+            throw new InvalidOperationException(
+                $"La hoja '{nombreHoja}' no tiene pares PRESUPUESTO/SALDO consistentes en el encabezado.");
+        }
+
+        var paresPresupuestoSaldo = columnasPresupuesto
+            .Zip(columnasSaldo, (colPresupuesto, colSaldo) => (ColPresupuesto: colPresupuesto, ColSaldo: colSaldo))
+            .ToList();
+
+        var asignaciones = new List<AsignacionPoaOds>();
+        for (var f = filaPrimerPresupuesto; f < filaEncabezadoDatos; f++)
+        {
+            var literalEnFila = BuscarLiteralEnFila(hoja, f);
+            if (literalEnFila is null)
+                continue;
+
+            var (colLiteral, literal) = literalEnFila.Value;
+            var par = paresPresupuestoSaldo
+                .OrderBy(p => Math.Abs(p.ColPresupuesto - colLiteral))
+                .First();
+
+            var presupuesto = hoja.Celda(f, par.ColPresupuesto).Numero
+                ?? throw new InvalidOperationException(
+                    $"La hoja '{nombreHoja}' no tiene valor de PRESUPUESTO para LITERAL {literal}.");
+            var saldo = hoja.Celda(f, par.ColSaldo).Numero
+                ?? throw new InvalidOperationException(
+                    $"La hoja '{nombreHoja}' no tiene valor de SALDO para LITERAL {literal}.");
+
+            asignaciones.Add(new AsignacionPoaOds(literal, presupuesto, saldo));
+        }
+
+        if (asignaciones.Count == 0)
+            throw new InvalidOperationException($"La hoja '{nombreHoja}' no tiene ninguna celda LITERAL.");
+
+        return asignaciones;
+    }
+
+    private static (int Columna, string Literal)? BuscarLiteralEnFila(OdsHoja hoja, int fila) =>
         hoja.CeldasDeFila(fila)
-            .Select(c => c.Celda.Texto)
-            .FirstOrDefault(t => t is not null && t.StartsWith("LITERAL ", StringComparison.Ordinal))
-            ?[8..].Trim();
+            .Where(c => c.Celda.Texto is not null && c.Celda.Texto.StartsWith("LITERAL ", StringComparison.Ordinal))
+            .Select(c => ((int Columna, string Literal)?)(c.Columna, c.Celda.Texto![8..].Trim()))
+            .FirstOrDefault();
 
     private static SaldosTotalesPoaOds ParsearSaldosTotales(XDocument contentXml)
     {
