@@ -168,6 +168,72 @@ public class ConfirmacionImportacionServiceTests
     }
 
     [Fact]
+    public async Task ConfirmarAsync_GastoCreditoSinFechaVencimiento_LanzaValidacionConMensajeRequerido()
+    {
+        var m = Crear();
+        var payload = PayloadValido() with
+        {
+            Gastos = new List<GastoConfirmarDto>
+            {
+                new("ACME SA", "F-9", null, "Compromiso POA", null,
+                    new DateOnly(Ejercicio, 1, 15), 500m, "Literal A", 1, null,
+                    CondicionPago.Credito, FechaVencimiento: null),
+            },
+        };
+
+        var ex = await Assert.ThrowsAsync<ValidacionImportacionException>(() => m.Svc.ConfirmarAsync(payload));
+
+        Assert.Equal("Requerido", ex.Errores["Gastos[0].FechaVencimiento"][0]);
+        Assert.Equal(0, m.Repo.VecesConfirmarLlamado);
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_GastoCreditoConFechaVencimiento_NoErrorDeValidacion()
+    {
+        var m = Crear();
+        var payload = PayloadValido() with
+        {
+            Gastos = new List<GastoConfirmarDto>
+            {
+                new("ACME SA", "F-9", null, "Compromiso POA", null,
+                    new DateOnly(Ejercicio, 1, 15), 500m, "Literal A", 1, null,
+                    CondicionPago.Credito, FechaVencimiento: new DateOnly(Ejercicio, 12, 31)),
+            },
+        };
+
+        var resultado = await m.Svc.ConfirmarAsync(payload);
+
+        Assert.Equal(1, m.Repo.VecesConfirmarLlamado);
+        Assert.NotEqual(Guid.Empty, resultado.IdImportacion);
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_GastoContadoConFechaVencimiento_LanzaValidacionConMensajeNoCorresponde()
+    {
+        // Regla simétrica de GastoService.cs:274-275 (ValidarAsync): un gasto de Contado NO
+        // puede llevar FechaVencimiento — mismo estado que el alta manual rechaza.
+        // ImportacionRepository no pasa por GastoService, así que sin este chequeo acá el
+        // importador podría persistir un estado que el dominio prohíbe por la vía normal.
+        var m = Crear();
+        var payload = PayloadValido() with
+        {
+            Gastos = new List<GastoConfirmarDto>
+            {
+                new("ACME SA", "F-1", "O-1", "Compra de insumos", null,
+                    new DateOnly(Ejercicio, 1, 15), 500m, "Literal A", 1, null,
+                    CondicionPago.Contado, FechaVencimiento: new DateOnly(Ejercicio, 12, 31)),
+            },
+        };
+
+        var ex = await Assert.ThrowsAsync<ValidacionImportacionException>(() => m.Svc.ConfirmarAsync(payload));
+
+        Assert.Equal(
+            "No corresponde para gastos de contado",
+            ex.Errores["Gastos[0].FechaVencimiento"][0]);
+        Assert.Equal(0, m.Repo.VecesConfirmarLlamado);
+    }
+
+    [Fact]
     public async Task RevertirAsync_Operador_LanzaUnauthorized()
     {
         var m = Crear(rol: RolUsuario.Operador);

@@ -1,5 +1,6 @@
 using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
+using StockApp.Domain.Enums;
 
 namespace StockApp.Application.Finanzas;
 
@@ -115,6 +116,13 @@ public class ConfirmacionImportacionService : IConfirmacionImportacionService
                 && !lineasPoaDeclaradas.Contains(Normalizar(gasto.LineaPoa)))
                 AgregarError(errores, $"Gastos[{i}].LineaPoa",
                     $"La línea POA '{gasto.LineaPoa}' no existe ni fue declarada en LineasPoa");
+            // Regla SIMÉTRICA de GastoService.cs:272-275 (ValidarAsync). ImportacionRepository no
+            // pasa por GastoService, así que este es el único lugar del camino de escritura del
+            // importador donde se puede hacer cumplir: Credito la exige, Contado la prohíbe.
+            if (gasto.Condicion == CondicionPago.Credito && gasto.FechaVencimiento is null)
+                AgregarError(errores, $"Gastos[{i}].FechaVencimiento", "Requerido");
+            if (gasto.Condicion == CondicionPago.Contado && gasto.FechaVencimiento is not null)
+                AgregarError(errores, $"Gastos[{i}].FechaVencimiento", "No corresponde para gastos de contado");
         }
 
         for (var i = 0; i < dto.LineasPoa.Count; i++)
