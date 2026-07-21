@@ -51,12 +51,30 @@ Descartado:
 - **Stateful** (2-3 tablas nuevas para persistir el resultado del análisis entre pasos): sobredimensionado para una herramienta que corre un puñado de veces en la vida del sistema.
 - **Re-parseo** (el confirm vuelve a abrir los `.ods` y aplica las correcciones sobre las filas parseadas): ata las correcciones del usuario a coordenadas posicionales del parseo — frágil ante cualquier reordenamiento de filas entre el análisis y la confirmación.
 
+### 2.6 Los endpoints del importador se apagan por configuración, default APAGADO
+
+Motivación: el dedupe de F5c vive en el código, no en el esquema (decisión §4, "NO se agregan índices únicos nuevos"), así que la protección contra duplicados solo cubre el camino que pasa por el importador. Y la idempotencia cubre "correr dos veces la MISMA planilla", pero NO cubre "correr una planilla equivocada" — eso inserta datos legítimamente nuevos y **no existe endpoint de reversa**. Reducir la ventana en la que el endpoint está vivo es la mitigación más barata que hay. Además `/analizar` acepta uploads arbitrarios y los descomprime con `ZipArchive` (F5a): es superficie de zip bomb que no tiene por qué estar expuesta de forma permanente, aunque el acceso sea Admin-only.
+
+**Mecanismo**:
+- Clave de configuración `Importacion:Habilitada` (bool), **default `false`**, declarada en `src/StockApp.Api/appsettings.json`. Se prende por variable de entorno (`Importacion__Habilitada=true`) durante la ventana de migración y se vuelve a apagar al terminar.
+- En `src/StockApp.Api/Program.cs`, el registro `app.MapImportacionEndpoints()` (hoy en la línea 419) queda condicionado al flag. Si está apagado, los endpoints **no se registran** → `404`, no `403`. Aplica a AMBOS endpoints: `/finanzas/importar/analizar` y `/finanzas/importar/confirmar` (F5b y F5c comparten el mismo `MapImportacionEndpoints()`, así que el flag apaga el importador completo, no solo la confirmación).
+- Cuando el flag está en `true`, se emite un **warning al arranque** vía `ILogger` (algo como "IMPORTADOR DE PLANILLAS HABILITADO — recordá apagarlo al terminar la migración"). No es un mecanismo de control, es visibilidad.
+
+**Alternativas descartadas**:
+- **Guard por auditoría** (exigir `Forzar = true` en el payload si el ejercicio ya tiene un `LogAuditoria` de `ImportacionPlanillas`): descartado porque agrega un segundo concepto al contrato del payload. El usuario prefirió un solo interruptor, más simple de operar.
+- **Símbolo de compilación / no desplegar en release**: obliga a un build especial para migrar y ata cualquier re-importación futura a un ciclo de deploy completo.
+
+**Riesgo residual**: si el flag queda prendido después de la migración, se vuelve a la exposición permanente — el flag por sí solo no lo impide. Mitigado (no eliminado) por el warning de arranque y por el `LogAuditoria` de cada corrida, que hacen observable tanto el estado del flag como cualquier ejecución del importador.
+
+**Revisa una decisión previa**: esto ajusta la decisión §12 ("Decisiones registradas"), ítem 2, de `docs/superpowers/specs/2026-07-15-modulo-finanzas-design.md` — "Importar ya los datos 2026 + herramienta de importación permanente (pero escondida en Administración)". Sigue siendo permanente en el código y escondida en Administración; ahora además está **apagada por defecto** a nivel configuración, y hay que prenderla explícitamente para usarla.
+
 ## 3. Contrato del endpoint
 
 `POST /finanzas/importar/confirmar`
 
 - Body: JSON (no multipart — a diferencia de `/analizar`, que recibe los `.ods`).
 - `.RequireAuthorization(Permisos.ImportarPlanillas)` — Admin-only, permiso ya existe (`Permisos.cs:27`, `"finanzas.importar"`).
+- Registrado solo si `Importacion:Habilitada = true` (§2.6). Con el flag apagado (default) el endpoint no existe: `404`, no `403` — la policy de autorización ni siquiera llega a evaluarse porque la ruta no está mapeada.
 
 ### DTOs nuevos (`StockApp.Application/Finanzas`)
 
@@ -165,7 +183,7 @@ Tres capas, mismo patrón que F5a/F5b:
 - **`Application.Tests`**: validación pura con fakes.
   **Gotcha**: los fakes de maestros en `tests/StockApp.Application.Tests/Finanzas/Fakes/RepositorioMaestrosFake.cs` tiran `NotSupportedException` en los métodos de escritura porque F5b es read-only — hay que extenderlos para que F5c pueda ejercitar el get-or-create.
 - **`Infrastructure.Tests`**: transacción contra Postgres real (`Fixtures/PostgresFixture.cs` + `PostgresRepositoryTestBase`). Cubre atomicidad (un fallo en el paso 4 deja la base intacta) e idempotencia (segunda corrida = 0 creados, todo omitido).
-- **`Api.Tests`**: matriz 401/403, `400` estructurado, `200` feliz. Infra ya lista (`Fixtures/ApiFactory.cs` con Testcontainers `postgres:16-alpine` + `ApiTestBase`).
+- **`Api.Tests`**: matriz 401/403, `400` estructurado, `200` feliz, más el `404` con el flag apagado (§2.6). Infra ya lista (`Fixtures/ApiFactory.cs` con Testcontainers `postgres:16-alpine` + `ApiTestBase`).
 
 ### Criterio de aceptación duro de la fase
 
@@ -177,9 +195,11 @@ End-to-end con las planillas reales (gitignored, en `tests/StockApp.Api.Tests/Fi
 
 Son los mismos números de §11 que F5b validó en memoria (sobre el resultado del análisis); acá quedan persistidos en la base real.
 
-### Gotcha de test a arreglar
+### Gotchas de test a arreglar
 
-`tests/StockApp.Api.Tests/Fixtures/ApiTestBase.cs`, método `LimpiarTablas()` (líneas 41-50), NO trunca `"IngresosCaja"`. Hoy no molesta porque ningún test escribe ingresos vía la API; en cuanto F5c lo haga, los tests de la collection se filtran estado entre sí. Hay que agregar `"IngresosCaja"` al `TRUNCATE`.
+- `tests/StockApp.Api.Tests/Fixtures/ApiTestBase.cs`, método `LimpiarTablas()` (líneas 41-50), NO trunca `"IngresosCaja"`. Hoy no molesta porque ningún test escribe ingresos vía la API; en cuanto F5c lo haga, los tests de la collection se filtran estado entre sí. Hay que agregar `"IngresosCaja"` al `TRUNCATE`.
+- `tests/StockApp.Api.Tests/Fixtures/ApiFactory.cs` sobrescribe configuración vía `AddInMemoryCollection` (líneas 49-65) para apuntar al Postgres del contenedor y otros valores de test. Con el flag de §2.6 en default `false`, TODOS los tests de importación existentes de F5b (`ImportacionEndpointTests.cs`, `ImportacionAceptacionTests.cs`) empezarían a dar `404` en lugar de `401`/`403`/`200`. Hay que agregar `["Importacion:Habilitada"] = "true"` a esa colección para que la `ApiFactory` compartida siga probando el importador habilitado.
+- Test nuevo requerido: con `Importacion:Habilitada = false` (factory propia vía `WithWebHostBuilder`, mismo patrón que `RateLimitingTests` usa para pisar configuración puntual), `POST /finanzas/importar/analizar` y `POST /finanzas/importar/confirmar` devuelven `404` aunque el token sea de Admin.
 
 ## 9. Fuera de alcance (es F5d)
 
@@ -191,3 +211,5 @@ Son los mismos números de §11 que F5b validó en memoria (sobre el resultado d
 ## 10. Advertencia operativa
 
 Antes de correr la importación REAL hay que reconciliar la planilla POA: `docs/finanzas-discrepancias-planilla-poa-2026.md` documenta que la hoja "SALDO TOTALES" está desincronizada de las hojas de línea (Literal B −301.500, Literal C −480.000 sin explicar). F5c escribe lo que dicen las hojas de LÍNEA, no el resumen de "SALDO TOTALES".
+
+Recordatorio operativo ligado a §2.6: el importador está apagado por defecto. La ventana real de migración empieza con `Importacion__Habilitada=true` en el entorno, y termina apagándolo de nuevo — no alcanza con reconciliar la planilla, también hay que abrir y cerrar la ventana de exposición del endpoint.
