@@ -234,6 +234,221 @@ public class ConfirmacionImportacionServiceTests
     }
 
     [Fact]
+    public async Task ConfirmarAsync_IngresoConFuenteNoExisteNiDeclarada_LanzaValidacionConLaClaveDelIndice()
+    {
+        var m = Crear();
+        var payload = PayloadValido() with
+        {
+            Ingresos = new List<IngresoConfirmarDto>
+            {
+                new(new DateOnly(Ejercicio, 1, 1), "Saldo inicial", 1000m, "Literal Fantasma"),
+            },
+        };
+
+        var ex = await Assert.ThrowsAsync<ValidacionImportacionException>(() => m.Svc.ConfirmarAsync(payload));
+
+        Assert.Equal(
+            "La fuente 'Literal Fantasma' no existe ni fue declarada nueva",
+            ex.Errores["Ingresos[0].Fuente"][0]);
+        Assert.Equal(0, m.Repo.VecesConfirmarLlamado);
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_GastoConFuenteNoExisteNiDeclarada_LanzaValidacionConLaClaveDelIndice()
+    {
+        var m = Crear();
+        var payload = PayloadValido() with
+        {
+            Gastos = new List<GastoConfirmarDto>
+            {
+                new("ACME SA", "F-1", "O-1", "Compra de insumos", null,
+                    new DateOnly(Ejercicio, 1, 15), 500m, "Literal Fantasma", 1, null,
+                    CondicionPago.Contado, null),
+            },
+        };
+
+        var ex = await Assert.ThrowsAsync<ValidacionImportacionException>(() => m.Svc.ConfirmarAsync(payload));
+
+        Assert.Equal(
+            "La fuente 'Literal Fantasma' no existe ni fue declarada nueva",
+            ex.Errores["Gastos[0].Fuente"][0]);
+        Assert.Equal(0, m.Repo.VecesConfirmarLlamado);
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_IngresoConConceptoVacio_LanzaValidacionConMensajeRequerido()
+    {
+        var m = Crear();
+        var payload = PayloadValido() with
+        {
+            Ingresos = new List<IngresoConfirmarDto>
+            {
+                new(new DateOnly(Ejercicio, 1, 1), "   ", 1000m, "Literal A"),
+            },
+        };
+
+        var ex = await Assert.ThrowsAsync<ValidacionImportacionException>(() => m.Svc.ConfirmarAsync(payload));
+
+        Assert.Equal("Requerido", ex.Errores["Ingresos[0].Concepto"][0]);
+        Assert.Equal(0, m.Repo.VecesConfirmarLlamado);
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_GastoConDetalleVacio_LanzaValidacionConMensajeRequerido()
+    {
+        var m = Crear();
+        var payload = PayloadValido() with
+        {
+            Gastos = new List<GastoConfirmarDto>
+            {
+                new("ACME SA", "F-1", "O-1", "  ", null,
+                    new DateOnly(Ejercicio, 1, 15), 500m, "Literal A", 1, null,
+                    CondicionPago.Contado, null),
+            },
+        };
+
+        var ex = await Assert.ThrowsAsync<ValidacionImportacionException>(() => m.Svc.ConfirmarAsync(payload));
+
+        Assert.Equal("Requerido", ex.Errores["Gastos[0].Detalle"][0]);
+        Assert.Equal(0, m.Repo.VecesConfirmarLlamado);
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_GastoConLineaPoaQueNoResuelve_LanzaValidacionConLaClaveDelIndice()
+    {
+        var m = Crear();
+        var payload = PayloadValido() with
+        {
+            Gastos = new List<GastoConfirmarDto>
+            {
+                new("ACME SA", "F-1", "O-1", "Compra de insumos", null,
+                    new DateOnly(Ejercicio, 1, 15), 500m, "Literal A", 1, "LINEA FANTASMA",
+                    CondicionPago.Contado, null),
+            },
+        };
+
+        var ex = await Assert.ThrowsAsync<ValidacionImportacionException>(() => m.Svc.ConfirmarAsync(payload));
+
+        Assert.Equal(
+            "La línea POA 'LINEA FANTASMA' no existe ni fue declarada en LineasPoa",
+            ex.Errores["Gastos[0].LineaPoa"][0]);
+        Assert.Equal(0, m.Repo.VecesConfirmarLlamado);
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_LineaPoaConNombreVacio_LanzaValidacionConMensajeRequerido()
+    {
+        var m = Crear();
+        var payload = PayloadValido() with
+        {
+            LineasPoa = new List<LineaPoaConfirmarDto>
+            {
+                new("", "Ambiente", new List<AsignacionConfirmarDto> { new("Literal A", 1000m) }),
+            },
+        };
+
+        var ex = await Assert.ThrowsAsync<ValidacionImportacionException>(() => m.Svc.ConfirmarAsync(payload));
+
+        Assert.Equal("Requerido", ex.Errores["LineasPoa[0].Nombre"][0]);
+        Assert.Equal(0, m.Repo.VecesConfirmarLlamado);
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_AsignacionDeLineaPoaConFuenteQueNoResuelve_LanzaValidacionConLaClaveDelIndice()
+    {
+        var m = Crear();
+        var payload = PayloadValido() with
+        {
+            LineasPoa = new List<LineaPoaConfirmarDto>
+            {
+                new("COMPOSTERAS", "Ambiente", new List<AsignacionConfirmarDto>
+                {
+                    new("Literal Fantasma", 1000m),
+                }),
+            },
+        };
+
+        var ex = await Assert.ThrowsAsync<ValidacionImportacionException>(() => m.Svc.ConfirmarAsync(payload));
+
+        Assert.Equal(
+            "La fuente 'Literal Fantasma' no existe ni fue declarada nueva",
+            ex.Errores["LineasPoa[0].Asignaciones[0].Fuente"][0]);
+        Assert.Equal(0, m.Repo.VecesConfirmarLlamado);
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_RubroNuevoConNombreVacio_LanzaValidacionConMensajeRequerido()
+    {
+        var m = Crear();
+        var payload = PayloadValido() with
+        {
+            MaestrosNuevos = new MaestrosNuevosConfirmarDto(
+                new List<string> { "ACME SA" }, new List<string> { "Literal A" },
+                new List<RubroNuevoConfirmarDto> { new(1, "  ") }),
+        };
+
+        var ex = await Assert.ThrowsAsync<ValidacionImportacionException>(() => m.Svc.ConfirmarAsync(payload));
+
+        Assert.Equal("Requerido", ex.Errores["MaestrosNuevos.Rubros[0].Nombre"][0]);
+        Assert.Equal(0, m.Repo.VecesConfirmarLlamado);
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_GastoConVariasViolacionesEnLaMismaFila_AcumulaTodosLosErroresBajoSusClaves()
+    {
+        var m = Crear();
+        var payload = PayloadValido() with
+        {
+            Gastos = new List<GastoConfirmarDto>
+            {
+                // Mismo Gasto[0] viola Detalle (vacío), Proveedor (no resuelve) Y Fuente (no
+                // resuelve) simultáneamente: el diccionario tiene que juntar los 3 errores bajo
+                // sus 3 claves distintas para esta fila, no cortar en la primera violación.
+                new("Proveedor Fantasma", "F-1", "O-1", "   ", null,
+                    new DateOnly(Ejercicio, 1, 15), 500m, "Literal Fantasma", 1, null,
+                    CondicionPago.Contado, null),
+            },
+        };
+
+        var ex = await Assert.ThrowsAsync<ValidacionImportacionException>(() => m.Svc.ConfirmarAsync(payload));
+
+        Assert.Equal("Requerido", ex.Errores["Gastos[0].Detalle"][0]);
+        Assert.Equal(
+            "El proveedor 'Proveedor Fantasma' no existe ni fue declarado nuevo",
+            ex.Errores["Gastos[0].Proveedor"][0]);
+        Assert.Equal(
+            "La fuente 'Literal Fantasma' no existe ni fue declarada nueva",
+            ex.Errores["Gastos[0].Fuente"][0]);
+        Assert.Equal(0, m.Repo.VecesConfirmarLlamado);
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_ListasVacias_NoErrorDeValidacionYDelegaEnElRepositorio()
+    {
+        // Decisión (sin regla explícita en el spec §3 para este caso): un payload sin Ingresos,
+        // Gastos ni LineasPoa no tiene ninguna fila que validar, así que ninguno de los loops de
+        // ValidarAsync agrega error alguno — el comportamiento sensato es aceptar el payload
+        // (una re-importación que no trae absolutamente nada no es un error de FORMA; a lo sumo
+        // es una corrida sin efecto, cuyo control de negocio, si hiciera falta, sería otra regla
+        // explícita — no la responsabilidad de este validador de referencias nominales).
+        var m = Crear();
+        var payload = new ConfirmarImportacionDto(
+            Ejercicio: Ejercicio,
+            Forzar: false,
+            MaestrosNuevos: new MaestrosNuevosConfirmarDto(
+                new List<string>(), new List<string>(), new List<RubroNuevoConfirmarDto>()),
+            Ingresos: new List<IngresoConfirmarDto>(),
+            Gastos: new List<GastoConfirmarDto>(),
+            LineasPoa: new List<LineaPoaConfirmarDto>());
+
+        var resultado = await m.Svc.ConfirmarAsync(payload);
+
+        Assert.Equal(1, m.Repo.VecesConfirmarLlamado);
+        Assert.Same(payload, m.Repo.DtoRecibido);
+        Assert.NotEqual(Guid.Empty, resultado.IdImportacion);
+    }
+
+    [Fact]
     public async Task RevertirAsync_Operador_LanzaUnauthorized()
     {
         var m = Crear(rol: RolUsuario.Operador);

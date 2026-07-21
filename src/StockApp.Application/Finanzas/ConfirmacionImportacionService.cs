@@ -146,8 +146,11 @@ public class ConfirmacionImportacionService : IConfirmacionImportacionService
                 errores.ToDictionary(kv => kv.Key, kv => kv.Value.ToArray()));
     }
 
-    private static bool Resuelve(string nombre, HashSet<string> existentes, HashSet<string> nuevos) =>
-        existentes.Contains(Normalizar(nombre)) || nuevos.Contains(Normalizar(nombre));
+    private static bool Resuelve(string nombre, HashSet<string> existentes, HashSet<string> nuevos)
+    {
+        var normalizado = Normalizar(nombre);
+        return existentes.Contains(normalizado) || nuevos.Contains(normalizado);
+    }
 
     private static void AgregarError(Dictionary<string, List<string>> errores, string clave, string mensaje)
     {
