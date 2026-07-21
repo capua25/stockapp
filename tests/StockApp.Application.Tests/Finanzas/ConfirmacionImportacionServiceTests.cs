@@ -5,6 +5,7 @@ using StockApp.Application.Interfaces;
 using StockApp.Application.Tests.Finanzas.Fakes;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 using Xunit;
 using IAuthSvc = StockApp.Application.Authorization.IAuthorizationService;
 
@@ -82,6 +83,87 @@ public class ConfirmacionImportacionServiceTests
         Assert.Equal(1, m.Repo.VecesConfirmarLlamado);
         Assert.Same(payload, m.Repo.DtoRecibido);
         Assert.Equal(1, m.Repo.UsuarioIdRecibido);
+        Assert.NotEqual(Guid.Empty, resultado.IdImportacion);
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_ProveedorNoExisteNiDeclarado_LanzaValidacionConLaClaveDelIndice()
+    {
+        var m = Crear();
+        var payload = PayloadValido() with
+        {
+            MaestrosNuevos = new MaestrosNuevosConfirmarDto(new List<string>(), new List<string> { "Literal A" },
+                new List<RubroNuevoConfirmarDto> { new(1, "Paseos Públicos") }),
+        };
+
+        var ex = await Assert.ThrowsAsync<ValidacionImportacionException>(() => m.Svc.ConfirmarAsync(payload));
+
+        Assert.True(ex.Errores.ContainsKey("Gastos[0].Proveedor"));
+        Assert.Equal(0, m.Repo.VecesConfirmarLlamado);
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_CodigoRubroNoExisteNiDeclarado_LanzaValidacionConElMensajeDelSpec()
+    {
+        var m = Crear();
+        var payload = PayloadValido() with
+        {
+            MaestrosNuevos = new MaestrosNuevosConfirmarDto(new List<string> { "ACME SA" },
+                new List<string> { "Literal A" }, new List<RubroNuevoConfirmarDto>()),
+            Gastos = new List<GastoConfirmarDto>
+            {
+                new("ACME SA", "F-1", "O-1", "Compra de insumos", null,
+                    new DateOnly(Ejercicio, 1, 15), 500m, "Literal A", 340, null, CondicionPago.Contado, null),
+            },
+        };
+
+        var ex = await Assert.ThrowsAsync<ValidacionImportacionException>(() => m.Svc.ConfirmarAsync(payload));
+
+        Assert.Equal(
+            "El rubro 340 no existe ni fue declarado nuevo",
+            ex.Errores["Gastos[0].CodigoRubro"][0]);
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_ProgramaVacioEnLineaPoa_LanzaValidacionConMensajeRequerido()
+    {
+        var m = Crear();
+        var payload = PayloadValido() with
+        {
+            LineasPoa = new List<LineaPoaConfirmarDto>
+            {
+                new("COMPOSTERAS", "", new List<AsignacionConfirmarDto>
+                {
+                    new("Literal A", 1000m),
+                }),
+            },
+        };
+
+        var ex = await Assert.ThrowsAsync<ValidacionImportacionException>(() => m.Svc.ConfirmarAsync(payload));
+
+        Assert.Equal("Requerido", ex.Errores["LineasPoa[0].Programa"][0]);
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_GastoConLineaPoaDeclaradaEnElMismoPayload_NoErrorDeValidacion()
+    {
+        var m = Crear();
+        var payload = PayloadValido() with
+        {
+            Gastos = new List<GastoConfirmarDto>
+            {
+                new("ACME SA", "F-1", "O-1", "Compra de insumos", null,
+                    new DateOnly(Ejercicio, 1, 15), 500m, "Literal A", 1, "COMPOSTERAS", CondicionPago.Contado, null),
+            },
+            LineasPoa = new List<LineaPoaConfirmarDto>
+            {
+                new("COMPOSTERAS", "Ambiente", new List<AsignacionConfirmarDto> { new("Literal A", 1000m) }),
+            },
+        };
+
+        var resultado = await m.Svc.ConfirmarAsync(payload);
+
+        Assert.Equal(1, m.Repo.VecesConfirmarLlamado);
         Assert.NotEqual(Guid.Empty, resultado.IdImportacion);
     }
 
