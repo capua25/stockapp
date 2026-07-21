@@ -51,6 +51,11 @@ public class ImportacionRepository : IImportacionRepository
     /// criterio que AnalisisImportacionService.Normalizar de F5b) con el OBJETO de la entidad
     /// (no su Id): las entidades nuevas todavía no tienen Id real hasta el SaveChangesAsync
     /// único del final — el resto del método las referencia por navegación, no por FK manual.
+    /// Los índices únicos son sobre el nombre crudo (case-sensitive en Postgres): los ABM de
+    /// Proveedor/Fuente permiten que coexistan dos filas que difieren solo en mayúsculas
+    /// (comparan con <c>==</c>, no normalizado). Por eso el armado de los diccionarios usa
+    /// GroupBy + First en vez de ToDictionary directo — con dos filas así ya en la base,
+    /// ToDictionary lanzaría ArgumentException por clave duplicada antes de tocar el payload.
     /// </summary>
     private async Task<(
         Dictionary<string, Proveedor> ProveedorPorNombre,
@@ -60,9 +65,11 @@ public class ImportacionRepository : IImportacionRepository
         GetOrCrearMaestrosAsync(ConfirmarImportacionDto dto)
     {
         var proveedorPorNombre = (await _ctx.Proveedores.ToListAsync())
-            .ToDictionary(p => Normalizar(p.Nombre));
+            .GroupBy(p => Normalizar(p.Nombre))
+            .ToDictionary(g => g.Key, g => g.First());
         var fuentePorNombre = (await _ctx.FuentesFinanciamiento.ToListAsync())
-            .ToDictionary(f => Normalizar(f.Nombre));
+            .GroupBy(f => Normalizar(f.Nombre))
+            .ToDictionary(g => g.Key, g => g.First());
         var rubroPorCodigo = (await _ctx.RubrosGasto.ToListAsync())
             .ToDictionary(r => r.Codigo);
 
@@ -125,7 +132,9 @@ public class ImportacionRepository : IImportacionRepository
             .Where(l => l.Ejercicio == dto.Ejercicio)
             .Include(l => l.Asignaciones).ThenInclude(a => a.FuenteFinanciamiento)
             .ToListAsync();
-        var lineaPorNombre = lineasExistentes.ToDictionary(l => Normalizar(l.Nombre));
+        var lineaPorNombre = lineasExistentes
+            .GroupBy(l => Normalizar(l.Nombre))
+            .ToDictionary(g => g.Key, g => g.First());
 
         var lineasCreadas = 0;
         var asignacionesCreadas = 0;

@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using StockApp.Application.Finanzas;
-using StockApp.Domain.Enums;
+using StockApp.Domain.Entities;
 using StockApp.Infrastructure.Repositories;
 using StockApp.Infrastructure.Tests.Fixtures;
 using Xunit;
@@ -50,7 +50,8 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         var resultado = await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: 1);
 
         Assert.Equal(2, resultado.FuentesCreadas);
-        var fuentesEnBase = await Fixture.CrearContexto().FuentesFinanciamiento.ToListAsync();
+        await using var verificacion = Fixture.CrearContexto();
+        var fuentesEnBase = await verificacion.FuentesFinanciamiento.ToListAsync();
         Assert.Contains(fuentesEnBase, f => f.Nombre == "Literal B");
         Assert.Contains(fuentesEnBase, f => f.Nombre == "Literal C");
     }
@@ -58,7 +59,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
     [Fact]
     public async Task ConfirmarAsync_FuenteYaExistente_NoLaDuplicaYNoLaCuentaComoCreada()
     {
-        Context.FuentesFinanciamiento.Add(new StockApp.Domain.Entities.FuenteFinanciamiento { Nombre = "Literal B" });
+        Context.FuentesFinanciamiento.Add(new FuenteFinanciamiento { Nombre = "Literal B" });
         await Context.SaveChangesAsync();
         Context.ChangeTracker.Clear();
 
@@ -94,7 +95,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
     [Fact]
     public async Task ConfirmarAsync_LineaPoaYaExistenteConLaMismaAsignacion_NoLaDuplicaNiCuentaComoNueva()
     {
-        var primero = await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: 1);
+        await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: 1);
 
         var segundo = await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: 1);
 
@@ -118,5 +119,31 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         Assert.Equal(2, await verificacion.FuentesFinanciamiento.CountAsync());
         Assert.Equal(1, await verificacion.LineasPoa.CountAsync());
         Assert.Equal(2, await verificacion.AsignacionesPresupuestales.CountAsync());
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_MaestrosConNombresQueDifierenSoloEnMayusculas_NoRevientaElToDictionary()
+    {
+        // Important #1 (review): los índices únicos son sobre el nombre crudo (Postgres
+        // case-sensitive) y los ABM (FuenteFinanciamientoRepository/ProveedorRepository/
+        // LineaPoaRepository) comparan con "==", no normalizado — dos filas que difieren solo en
+        // mayúsculas pueden coexistir en la base. Antes del fix, el ToDictionary de
+        // proveedorPorNombre/fuentePorNombre/lineaPorNombre lanzaba ArgumentException por clave
+        // duplicada ANTES de tocar el payload.
+        Context.Proveedores.AddRange(
+            new Proveedor { Nombre = "Ferretería Lopez" },
+            new Proveedor { Nombre = "FERRETERÍA LOPEZ" });
+        Context.FuentesFinanciamiento.AddRange(
+            new FuenteFinanciamiento { Nombre = "Literal B" },
+            new FuenteFinanciamiento { Nombre = "literal b" });
+        Context.LineasPoa.AddRange(
+            new LineaPoa { Nombre = "Duplicado X", Programa = "Ambiente", Ejercicio = Ejercicio },
+            new LineaPoa { Nombre = "DUPLICADO X", Programa = "Ambiente", Ejercicio = Ejercicio });
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        var resultado = await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: 1);
+
+        Assert.Equal(1, resultado.FuentesCreadas); // "Literal B" ya existe (2 filas); solo "Literal C" es nueva
     }
 }
