@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Exceptions;
 using StockApp.Infrastructure.Persistence;
 
 namespace StockApp.Infrastructure.Repositories;
@@ -206,7 +207,11 @@ public class ImportacionRepository : IImportacionRepository
 
             foreach (var asignacionDto in lineaDto.Asignaciones)
             {
-                var fuente = fuentePorNombre[Normalizar(asignacionDto.Fuente)];
+                var claveFuente = Normalizar(asignacionDto.Fuente);
+                if (!fuentePorNombre.TryGetValue(claveFuente, out var fuente))
+                    throw new EntidadNoEncontradaException(
+                        $"La fuente de financiamiento '{asignacionDto.Fuente}' referenciada en la línea POA " +
+                        $"'{lineaDto.Nombre}' no existe ni fue declarada nueva en MaestrosNuevos.Fuentes.");
 
                 // Comparación por REFERENCIA, no por FuenteFinanciamientoId: dos fuentes nuevas
                 // en la MISMA corrida todavía no tienen Id real (recién se asigna en el
