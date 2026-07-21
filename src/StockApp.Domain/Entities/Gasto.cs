@@ -29,6 +29,14 @@ public class Gasto
     public CondicionPago CondicionPago { get; set; }
     public DateTime? FechaVencimiento { get; set; }       // obligatoria si crédito
     public bool Activo { get; set; } = true;              // false = anulado
+
+    /// <summary>
+    /// Guid del lote de /confirmar que creó este gasto (F5c). Null para TODO lo cargado por
+    /// las vías normales (ABM manual) — que es, hoy y a futuro, la inmensa mayoría de los
+    /// datos. Permite a /revertir/{id} encontrar y dar de baja un lote completo.
+    /// </summary>
+    public Guid? IdImportacion { get; set; }
+
     public List<PagoGasto> Pagos { get; set; } = new();
 
     /// <summary>Suma de los pagos ACTIVOS (los anulados no cuentan).</summary>

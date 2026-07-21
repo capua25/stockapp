@@ -13,4 +13,7 @@ public class IngresoCaja
     public FuenteFinanciamiento? FuenteFinanciamiento { get; set; }
     public decimal Monto { get; set; }                     // precisión 18,4
     public bool Activo { get; set; } = true;               // baja lógica
+
+    /// <summary>Guid del lote de /confirmar que creó este ingreso (F5c). Null si es manual.</summary>
+    public Guid? IdImportacion { get; set; }
 }

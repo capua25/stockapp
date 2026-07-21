@@ -45,7 +45,7 @@ public abstract class ApiTestBase
             "TRUNCATE TABLE \"LogsAuditoria\", \"MovimientosStock\", \"Productos\", " +
             "\"Categorias\", \"Proveedores\", \"UnidadesMedida\", " +
             "\"AsignacionesPresupuestales\", \"LineasPoa\", \"RubrosGasto\", \"FuentesFinanciamiento\", " +
-            "\"AdjuntosContenido\", \"Adjuntos\", \"PagosGasto\", \"Gastos\", " +
+            "\"AdjuntosContenido\", \"Adjuntos\", \"PagosGasto\", \"Gastos\", \"IngresosCaja\", " +
             "\"Usuarios\" RESTART IDENTITY CASCADE;");
     }
 }

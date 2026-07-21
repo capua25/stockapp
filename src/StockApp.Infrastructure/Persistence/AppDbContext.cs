@@ -130,6 +130,7 @@ public class AppDbContext : DbContext
             e.Property(l => l.Programa).IsRequired();
             e.HasIndex(l => new { l.Nombre, l.Ejercicio }).IsUnique();
             e.Property(l => l.Activo).HasDefaultValue(true);
+            e.HasIndex(l => l.IdImportacion);
         });
 
         // AsignacionPresupuestal: hija del agregado LineaPoa. FKs Restrict porque los
@@ -173,6 +174,7 @@ public class AppDbContext : DbContext
                 .HasForeignKey(g => g.RubroGastoId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(g => g.LineaPoa).WithMany()
                 .HasForeignKey(g => g.LineaPoaId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(g => g.IdImportacion);
         });
 
         modelBuilder.Entity<PagoGasto>(e =>
@@ -192,6 +194,7 @@ public class AppDbContext : DbContext
             e.HasIndex(i => i.Fecha);
             e.HasOne(i => i.FuenteFinanciamiento).WithMany()
                 .HasForeignKey(i => i.FuenteFinanciamientoId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(i => i.IdImportacion);
         });
 
         // ── Finanzas: adjuntos (Fase 3 módulo Finanzas) ───────────────────────

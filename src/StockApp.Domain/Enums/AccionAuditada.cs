@@ -57,4 +57,8 @@ public enum AccionAuditada
     // ── Finanzas — Fase 3: adjuntos (append-only a partir de 40) ─────────────
     AltaAdjunto = 40,
     BajaAdjunto = 41,
+
+    // ── Finanzas — F5c: importador de planillas, confirmación y reversa (append-only a partir de 42) ──
+    ImportacionPlanillas   = 42,
+    ReversionImportacion   = 43,
 }
