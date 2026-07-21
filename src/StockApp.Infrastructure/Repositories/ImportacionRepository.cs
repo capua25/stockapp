@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
 using StockApp.Infrastructure.Persistence;
 
@@ -33,6 +34,12 @@ public class ImportacionRepository : IImportacionRepository
         var (lineaPorNombre, lineasPoaCreadas, lineasPoaReactivadas, asignacionesCreadas) =
             await GetOrCrearLineasPoaAsync(dto, fuentePorNombre, idImportacion);
 
+        var (ingresosCreados, ingresosOmitidos) =
+            await ProcesarIngresosAsync(dto, fuentePorNombre, idImportacion);
+
+        var (gastosCreados, gastosOmitidos, pagosCreados) =
+            await ProcesarGastosAsync(dto, proveedorPorNombre, fuentePorNombre, rubroPorCodigo, lineaPorNombre, idImportacion);
+
         await AntesDeGuardarAsync();
         await _ctx.SaveChangesAsync();
         await tx.CommitAsync();
@@ -41,8 +48,8 @@ public class ImportacionRepository : IImportacionRepository
             idImportacion,
             proveedoresCreados, fuentesCreadas, rubrosCreados,
             lineasPoaCreadas, asignacionesCreadas,
-            IngresosCreados: 0, IngresosOmitidos: 0,
-            GastosCreados: 0, GastosOmitidos: 0, PagosCreados: 0,
+            ingresosCreados, ingresosOmitidos,
+            gastosCreados, gastosOmitidos, pagosCreados,
             ProveedoresReactivados: proveedoresReactivados,
             FuentesReactivadas: fuentesReactivadas,
             RubrosReactivados: rubrosReactivados,
@@ -266,4 +273,150 @@ public class ImportacionRepository : IImportacionRepository
     }
 
     private static string Normalizar(string texto) => texto.Trim().ToUpperInvariant();
+
+    // ── Dedupe por clave natural (spec §4) ──────────────────────────────────────────────────
+    //
+    // Una sola función de proyección por entidad, compartida entre la carga del set existente
+    // (desde la BD) y la comparación de cada fila nueva del payload — evita que ambos lados se
+    // desincronicen silenciosamente (spec §4, "Riesgo asumido").
+
+    private readonly record struct ClaveIngreso(DateTime Fecha, string Concepto, decimal Monto, int FuenteId);
+    private readonly record struct ClaveGasto(
+        int ProveedorId, string? NumeroFactura, string? NumeroOrden, DateTime Fecha, decimal MontoTotal);
+
+    private static ClaveIngreso ProyectarClaveIngreso(DateTime fecha, string concepto, decimal monto, int fuenteId) =>
+        new(fecha, NormalizarClave(concepto), monto, fuenteId);
+
+    private static ClaveGasto ProyectarClaveGasto(
+        int proveedorId, string? numeroFactura, string? numeroOrden, DateTime fecha, decimal montoTotal) =>
+        new(proveedorId, NormalizarClaveOpcional(numeroFactura), NormalizarClaveOpcional(numeroOrden), fecha, montoTotal);
+
+    private static string NormalizarClave(string texto) => texto.Trim().ToUpperInvariant();
+
+    private static string? NormalizarClaveOpcional(string? texto) =>
+        string.IsNullOrWhiteSpace(texto) ? null : texto.Trim().ToUpperInvariant();
+
+    private static DateTime AFechaUtc(DateOnly fecha) =>
+        new(fecha.Year, fecha.Month, fecha.Day, 0, 0, 0, DateTimeKind.Utc);
+
+    private async Task<(int Creados, int Omitidos)> ProcesarIngresosAsync(
+        ConfirmarImportacionDto dto,
+        Dictionary<string, FuenteFinanciamiento> fuentePorNombre,
+        Guid idImportacion)
+    {
+        var clavesExistentes = (await _ctx.IngresosCaja
+                .Where(i => i.Activo)
+                .Select(i => new { i.Fecha, i.Concepto, i.Monto, i.FuenteFinanciamientoId })
+                .ToListAsync())
+            .Select(i => ProyectarClaveIngreso(i.Fecha, i.Concepto, i.Monto, i.FuenteFinanciamientoId))
+            .ToHashSet();
+
+        var creados = 0;
+        var omitidos = 0;
+
+        foreach (var ingresoDto in dto.Ingresos)
+        {
+            var fuente = fuentePorNombre[Normalizar(ingresoDto.Fuente)];
+            var fechaUtc = AFechaUtc(ingresoDto.Fecha);
+            var clave = ProyectarClaveIngreso(fechaUtc, ingresoDto.Concepto, ingresoDto.Monto, fuente.Id);
+
+            if (clavesExistentes.Contains(clave))
+            {
+                omitidos++;
+                continue;
+            }
+
+            _ctx.IngresosCaja.Add(new IngresoCaja
+            {
+                Fecha = fechaUtc,
+                Concepto = ingresoDto.Concepto.Trim(),
+                Monto = ingresoDto.Monto,
+                FuenteFinanciamiento = fuente,
+                IdImportacion = idImportacion,
+            });
+            creados++;
+        }
+
+        return (creados, omitidos);
+    }
+
+    /// <summary>
+    /// Contado ⇒ pago automático por el total en la fecha del gasto (mismo criterio que
+    /// GastoService.AltaAsync, GastoService.cs:50-55). Los compromisos POA importados (spec
+    /// §2.3) van Credito SIN pago: SaldoPendiente == MontoTotal refleja que es un compromiso
+    /// pendiente, no una factura pagada — el Control POA (F4) ya calcula el saldo de la línea a
+    /// partir de gastos activos con su LineaPoaId, sin cambios.
+    /// </summary>
+    private async Task<(int Creados, int Omitidos, int PagosCreados)> ProcesarGastosAsync(
+        ConfirmarImportacionDto dto,
+        Dictionary<string, Proveedor> proveedorPorNombre,
+        Dictionary<string, FuenteFinanciamiento> fuentePorNombre,
+        Dictionary<int, RubroGasto> rubroPorCodigo,
+        Dictionary<string, LineaPoa> lineaPorNombre,
+        Guid idImportacion)
+    {
+        var clavesExistentes = (await _ctx.Gastos
+                .Where(g => g.Activo)
+                .Select(g => new { g.ProveedorId, g.NumeroFactura, g.NumeroOrden, g.Fecha, g.MontoTotal })
+                .ToListAsync())
+            .Select(g => ProyectarClaveGasto(g.ProveedorId, g.NumeroFactura, g.NumeroOrden, g.Fecha, g.MontoTotal))
+            .ToHashSet();
+
+        var creados = 0;
+        var omitidos = 0;
+        var pagosCreados = 0;
+
+        foreach (var gastoDto in dto.Gastos)
+        {
+            var proveedor = proveedorPorNombre[Normalizar(gastoDto.Proveedor)];
+            var fuente = fuentePorNombre[Normalizar(gastoDto.Fuente)];
+            var rubro = rubroPorCodigo[gastoDto.CodigoRubro];
+            var fechaUtc = AFechaUtc(gastoDto.Fecha);
+
+            var clave = ProyectarClaveGasto(
+                proveedor.Id, gastoDto.NumeroFactura, gastoDto.NumeroOrden, fechaUtc, gastoDto.MontoTotal);
+            if (clavesExistentes.Contains(clave))
+            {
+                omitidos++;
+                continue;
+            }
+
+            var gasto = new Gasto
+            {
+                Proveedor = proveedor,
+                NumeroFactura = gastoDto.NumeroFactura,
+                NumeroOrden = gastoDto.NumeroOrden,
+                Detalle = gastoDto.Detalle.Trim(),
+                Destino = gastoDto.Destino,
+                Fecha = fechaUtc,
+                MontoTotal = gastoDto.MontoTotal,
+                FuenteFinanciamiento = fuente,
+                RubroGasto = rubro,
+                LineaPoa = string.IsNullOrWhiteSpace(gastoDto.LineaPoa)
+                    ? null : lineaPorNombre[Normalizar(gastoDto.LineaPoa)],
+                CondicionPago = gastoDto.Condicion,
+                // Null-safe aunque Task 3 ya garantiza que viene con valor para Credito: Contado
+                // sí llega legítimamente en null (AFechaUtc no acepta DateOnly?, por eso no se
+                // reutiliza directo acá).
+                FechaVencimiento = gastoDto.FechaVencimiento is { } vencimiento
+                    ? new DateTime(vencimiento.Year, vencimiento.Month, vencimiento.Day, 0, 0, 0, DateTimeKind.Utc)
+                    : null,
+                IdImportacion = idImportacion,
+            };
+
+            if (gastoDto.Condicion == CondicionPago.Contado)
+            {
+                gasto.Pagos = new List<PagoGasto>
+                {
+                    new() { Fecha = fechaUtc, Monto = gastoDto.MontoTotal, Nota = "Pago contado (importación)" },
+                };
+                pagosCreados++;
+            }
+
+            _ctx.Gastos.Add(gasto);
+            creados++;
+        }
+
+        return (creados, omitidos, pagosCreados);
+    }
 }

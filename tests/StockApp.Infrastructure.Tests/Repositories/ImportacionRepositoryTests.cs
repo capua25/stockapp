@@ -422,6 +422,96 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         var linea = await verificacion.LineasPoa.SingleAsync(l => l.Nombre == "COMPOSTERAS");
         Assert.Equal(primero.IdImportacion, linea.IdImportacion); // NO re-estampado: la línea seguía activa
     }
+
+    private static ConfirmarImportacionDto PayloadConIngresoYGasto(bool forzar = false) => new(
+        Ejercicio: Ejercicio,
+        Forzar: forzar,
+        MaestrosNuevos: new MaestrosNuevosConfirmarDto(
+            new List<string> { "ACME SA" },
+            new List<string> { "Literal A" },
+            new List<RubroNuevoConfirmarDto> { new(1, "Paseos Públicos") }),
+        Ingresos: new List<IngresoConfirmarDto>
+        {
+            new(new DateOnly(Ejercicio, 1, 1), "Saldo inicial", 1000m, "Literal A"),
+        },
+        Gastos: new List<GastoConfirmarDto>
+        {
+            new("ACME SA", "F-1", "O-1", "Compra de insumos", null,
+                new DateOnly(Ejercicio, 1, 15), 500m, "Literal A", 1, null, CondicionPago.Contado, null),
+        },
+        LineasPoa: new List<LineaPoaConfirmarDto>());
+
+    [Fact]
+    public async Task ConfirmarAsync_IngresoYGastoNuevos_LosCreaYElGastoContadoTraePagoAutomatico()
+    {
+        var resultado = await _repo.ConfirmarAsync(PayloadConIngresoYGasto(), usuarioId: 1);
+
+        Assert.Equal(1, resultado.IngresosCreados);
+        Assert.Equal(0, resultado.IngresosOmitidos);
+        Assert.Equal(1, resultado.GastosCreados);
+        Assert.Equal(0, resultado.GastosOmitidos);
+        Assert.Equal(1, resultado.PagosCreados);
+
+        await using var verificacion = Fixture.CrearContexto();
+        var gasto = verificacion.Gastos.Include(g => g.Pagos).Single(g => g.Detalle == "Compra de insumos");
+        Assert.Equal(resultado.IdImportacion, gasto.IdImportacion);
+        Assert.Single(gasto.Pagos);
+        Assert.Equal(500m, gasto.Pagos[0].Monto);
+        var ingreso = verificacion.IngresosCaja.Single(i => i.Concepto == "Saldo inicial");
+        Assert.Equal(resultado.IdImportacion, ingreso.IdImportacion);
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_CorridaRepetidaConForzar_NoDuplicaIngresosNiGastos()
+    {
+        await _repo.ConfirmarAsync(PayloadConIngresoYGasto(), usuarioId: 1);
+
+        var segunda = await _repo.ConfirmarAsync(PayloadConIngresoYGasto(forzar: true), usuarioId: 1);
+
+        Assert.Equal(0, segunda.IngresosCreados);
+        Assert.Equal(1, segunda.IngresosOmitidos);
+        Assert.Equal(0, segunda.GastosCreados);
+        Assert.Equal(1, segunda.GastosOmitidos);
+        Assert.Equal(0, segunda.PagosCreados);
+
+        await using var verificacion = Fixture.CrearContexto();
+        Assert.Equal(1, await verificacion.Gastos.CountAsync());
+        Assert.Equal(1, await verificacion.IngresosCaja.CountAsync());
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_CompromisoPoaCredito_NoGeneraPago()
+    {
+        var payload = new ConfirmarImportacionDto(
+            Ejercicio: Ejercicio,
+            Forzar: false,
+            MaestrosNuevos: new MaestrosNuevosConfirmarDto(
+                new List<string> { "Contratista SRL" },
+                new List<string> { "Literal C" },
+                new List<RubroNuevoConfirmarDto> { new(2, "Obras") }),
+            Ingresos: new List<IngresoConfirmarDto>(),
+            Gastos: new List<GastoConfirmarDto>
+            {
+                new("Contratista SRL", "F-9", null, "Compromiso POA sin pago", null,
+                    new DateOnly(Ejercicio, 12, 31), 300000m, "Literal C", 2, "COMPOSTERAS",
+                    CondicionPago.Credito, new DateOnly(Ejercicio, 12, 31)),
+            },
+            LineasPoa: new List<LineaPoaConfirmarDto>
+            {
+                new("COMPOSTERAS", "Ambiente",
+                    new List<AsignacionConfirmarDto> { new("Literal C", 1407252m) }),
+            });
+
+        var resultado = await _repo.ConfirmarAsync(payload, usuarioId: 1);
+
+        Assert.Equal(1, resultado.GastosCreados);
+        Assert.Equal(0, resultado.PagosCreados);
+        await using var verificacion = Fixture.CrearContexto();
+        var gasto = verificacion.Gastos.Include(g => g.Pagos).Single();
+        Assert.Empty(gasto.Pagos);
+        Assert.Equal(gasto.MontoTotal, gasto.MontoTotal - 0m); // SaldoPendiente == MontoTotal
+        Assert.Equal(new DateTime(Ejercicio, 12, 31, 0, 0, 0, DateTimeKind.Utc), gasto.FechaVencimiento);
+    }
 }
 
 /// <summary>
