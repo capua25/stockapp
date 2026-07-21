@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using StockApp.Application.Finanzas;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Exceptions;
 using StockApp.Infrastructure.Repositories;
 using StockApp.Infrastructure.Tests.Fixtures;
 using Xunit;
@@ -119,6 +120,35 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         Assert.Equal(2, await verificacion.FuentesFinanciamiento.CountAsync());
         Assert.Equal(1, await verificacion.LineasPoa.CountAsync());
         Assert.Equal(2, await verificacion.AsignacionesPresupuestales.CountAsync());
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_TransaccionFallaAMitadDeCamino_NoPersisteNadaDeLaCorrida()
+    {
+        // Atomicidad real (review Minor #6): TodoElGrafoSeCommiteaJuntoEnUnaSolaTransaccion (arriba)
+        // solo comprueba que el commit ocurrió, sin inyectar ningún fallo. Este test fuerza un
+        // fallo DESPUÉS de haber agregado al change tracker una fuente nueva válida ("Literal B")
+        // pero ANTES del SaveChangesAsync único del final: una asignación referencia una fuente
+        // que ni existe en la base ni fue declarada en MaestrosNuevos.Fuentes. Si la transacción es
+        // atómica de verdad, ni "Literal B" ni la línea POA quedan persistidas.
+        var payload = PayloadSoloMaestrosYPoa(
+            fuentesNuevas: new List<string> { "Literal B" }, // "Literal Fantasma" NO se declara
+            lineasPoa: new List<LineaPoaConfirmarDto>
+            {
+                new("COMPOSTERAS", "Ambiente", new List<AsignacionConfirmarDto>
+                {
+                    new("Literal B", 92748m),
+                    new("Literal Fantasma", 1407252m),
+                }),
+            });
+
+        await Assert.ThrowsAsync<EntidadNoEncontradaException>(
+            () => _repo.ConfirmarAsync(payload, usuarioId: 1));
+
+        await using var verificacion = Fixture.CrearContexto();
+        Assert.Equal(0, await verificacion.FuentesFinanciamiento.CountAsync());
+        Assert.Equal(0, await verificacion.LineasPoa.CountAsync());
+        Assert.Equal(0, await verificacion.AsignacionesPresupuestales.CountAsync());
     }
 
     [Fact]
