@@ -12,16 +12,36 @@ namespace StockApp.Infrastructure.Tests.Repositories;
 
 /// <summary>
 /// F5c Task 4: get-or-create de maestros + LineaPoa/AsignacionPresupuestal dentro de la
-/// transacción real. Ingresos/Gastos (Task 5) y guard/auditoría (Task 6) se agregan en tasks
-/// posteriores sobre el MISMO ConfirmarAsync — acá los contadores respectivos quedan en 0.
+/// transacción real. Ingresos/Gastos (Task 5) y guard/auditoría (Task 6) se agregaron sobre el
+/// MISMO ConfirmarAsync en tasks posteriores (ver región "Task 6" al final de la clase).
 /// </summary>
 public class ImportacionRepositoryTests : PostgresRepositoryTestBase
 {
     private const int Ejercicio = 2026;
     private readonly ImportacionRepository _repo;
+    private readonly int _usuarioId;
 
     public ImportacionRepositoryTests(PostgresFixture fixture) : base(fixture)
     {
+        // Task 6: ConfirmarAsync ahora escribe SIEMPRE un LogAuditoria, y LogAuditoria.UsuarioId
+        // tiene FK real hacia Usuarios (AppDbContext.cs, FK_LogsAuditoria_Usuarios_UsuarioId,
+        // DeleteBehavior.Restrict). Antes de esta task ningún test necesitaba un Usuario real
+        // porque ConfirmarAsync nunca tocaba LogsAuditoria. Sembramos UNO acá y lo exponemos por
+        // Id real (no asumimos que RESTART IDENTITY lo deja en 1 — esa suposición es un
+        // acoplamiento oculto que rompe en silencio el día que alguien agregue otro seed antes).
+        var usuarioSemilla = new Usuario
+        {
+            NombreUsuario = "importador-tests",
+            HashContrasena = "hash",
+            Rol = RolUsuario.Admin,
+            Activo = true,
+            FechaAlta = DateTime.UtcNow,
+        };
+        Context.Usuarios.Add(usuarioSemilla);
+        Context.SaveChanges();
+        _usuarioId = usuarioSemilla.Id;
+        Context.ChangeTracker.Clear();
+
         _repo = new ImportacionRepository(Context);
     }
 
@@ -29,9 +49,10 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         IReadOnlyList<string>? proveedoresNuevos = null,
         IReadOnlyList<string>? fuentesNuevas = null,
         IReadOnlyList<RubroNuevoConfirmarDto>? rubrosNuevos = null,
-        IReadOnlyList<LineaPoaConfirmarDto>? lineasPoa = null) => new(
+        IReadOnlyList<LineaPoaConfirmarDto>? lineasPoa = null,
+        bool forzar = false) => new(
         Ejercicio: Ejercicio,
-        Forzar: false,
+        Forzar: forzar,
         MaestrosNuevos: new MaestrosNuevosConfirmarDto(
             proveedoresNuevos ?? new List<string>(),
             fuentesNuevas ?? new List<string> { "Literal B", "Literal C" },
@@ -50,7 +71,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
     [Fact]
     public async Task ConfirmarAsync_FuentesNuevas_LasCreaYDevuelveElContador()
     {
-        var resultado = await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: 1);
+        var resultado = await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: _usuarioId);
 
         Assert.Equal(2, resultado.FuentesCreadas);
         await using var verificacion = Fixture.CrearContexto();
@@ -66,7 +87,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         await Context.SaveChangesAsync();
         Context.ChangeTracker.Clear();
 
-        var resultado = await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: 1);
+        var resultado = await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: _usuarioId);
 
         Assert.Equal(1, resultado.FuentesCreadas); // solo "Literal C" es nueva
         await using var verificacion = Fixture.CrearContexto();
@@ -77,7 +98,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
     [Fact]
     public async Task ConfirmarAsync_LineaPoaConFinanciamientoMixto_CreaLaLineaConDosAsignaciones()
     {
-        var resultado = await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: 1);
+        var resultado = await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: _usuarioId);
 
         Assert.Equal(1, resultado.LineasPoaCreadas);
         Assert.Equal(2, resultado.AsignacionesCreadas);
@@ -98,9 +119,13 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
     [Fact]
     public async Task ConfirmarAsync_LineaPoaYaExistenteConLaMismaAsignacion_NoLaDuplicaNiCuentaComoNueva()
     {
-        await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: 1);
+        await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: _usuarioId);
 
-        var segundo = await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: 1);
+        // Task 6: sin el guard de re-importación, este test predata el guard y corría dos veces
+        // con Forzar=false por defecto — ahora eso es exactamente lo que el guard bloquea.
+        // Forzar=true reproduce el escenario real ("reimportar a propósito") que el test
+        // original quería ejercitar: dedupe/idempotencia de LineaPoa+Asignaciones, no el guard.
+        var segundo = await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(forzar: true), usuarioId: _usuarioId);
 
         Assert.Equal(0, segundo.LineasPoaCreadas);
         Assert.Equal(0, segundo.AsignacionesCreadas);
@@ -116,7 +141,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         // Atomicidad: si la corrida completa, TODO lo que creó (fuentes + línea + 2
         // asignaciones) tiene que estar visible desde un contexto NUEVO (no el mismo Context,
         // que podría mostrar el change tracker en vez del estado real de la BD).
-        await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: 1);
+        await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: _usuarioId);
 
         await using var verificacion = Fixture.CrearContexto();
         Assert.Equal(2, await verificacion.FuentesFinanciamiento.CountAsync());
@@ -150,7 +175,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
             });
 
         var ex = await Assert.ThrowsAsync<ValidacionImportacionException>(
-            () => _repo.ConfirmarAsync(payload, usuarioId: 1));
+            () => _repo.ConfirmarAsync(payload, usuarioId: _usuarioId));
 
         Assert.True(ex.Errores.ContainsKey("LineasPoa[0].Asignaciones[1].Fuente"));
 
@@ -229,7 +254,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         await Context.SaveChangesAsync();
         Context.ChangeTracker.Clear();
 
-        var resultado = await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: 1);
+        var resultado = await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: _usuarioId);
 
         Assert.Equal(1, resultado.FuentesCreadas); // "Literal B" ya existe (2 filas); solo "Literal C" es nueva
     }
@@ -240,7 +265,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         var payload = PayloadSoloMaestrosYPoa(
             proveedoresNuevos: new List<string> { "Ferretería Lopez", "Corralón Pérez" });
 
-        var resultado = await _repo.ConfirmarAsync(payload, usuarioId: 1);
+        var resultado = await _repo.ConfirmarAsync(payload, usuarioId: _usuarioId);
 
         Assert.Equal(2, resultado.ProveedoresCreados);
         await using var verificacion = Fixture.CrearContexto();
@@ -259,7 +284,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         var payload = PayloadSoloMaestrosYPoa(
             proveedoresNuevos: new List<string> { "Ferretería Lopez" });
 
-        var resultado = await _repo.ConfirmarAsync(payload, usuarioId: 1);
+        var resultado = await _repo.ConfirmarAsync(payload, usuarioId: _usuarioId);
 
         Assert.Equal(0, resultado.ProveedoresCreados);
         await using var verificacion = Fixture.CrearContexto();
@@ -272,7 +297,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         var payload = PayloadSoloMaestrosYPoa(
             rubrosNuevos: new List<RubroNuevoConfirmarDto> { new(5, "Combustibles"), new(9, "Viáticos") });
 
-        var resultado = await _repo.ConfirmarAsync(payload, usuarioId: 1);
+        var resultado = await _repo.ConfirmarAsync(payload, usuarioId: _usuarioId);
 
         Assert.Equal(2, resultado.RubrosCreados);
         await using var verificacion = Fixture.CrearContexto();
@@ -291,7 +316,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         var payload = PayloadSoloMaestrosYPoa(
             rubrosNuevos: new List<RubroNuevoConfirmarDto> { new(5, "Combustibles") });
 
-        var resultado = await _repo.ConfirmarAsync(payload, usuarioId: 1);
+        var resultado = await _repo.ConfirmarAsync(payload, usuarioId: _usuarioId);
 
         Assert.Equal(0, resultado.RubrosCreados);
         await using var verificacion = Fixture.CrearContexto();
@@ -308,7 +333,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         var payload = PayloadSoloMaestrosYPoa(
             proveedoresNuevos: new List<string> { "Ferretería Lopez" });
 
-        var resultado = await _repo.ConfirmarAsync(payload, usuarioId: 1);
+        var resultado = await _repo.ConfirmarAsync(payload, usuarioId: _usuarioId);
 
         Assert.Equal(0, resultado.ProveedoresCreados);
         Assert.Equal(1, resultado.ProveedoresReactivados);
@@ -324,7 +349,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         await Context.SaveChangesAsync();
         Context.ChangeTracker.Clear();
 
-        var resultado = await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: 1);
+        var resultado = await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: _usuarioId);
 
         Assert.Equal(1, resultado.FuentesCreadas); // solo "Literal C" es genuinamente nueva
         Assert.Equal(1, resultado.FuentesReactivadas); // "Literal B" estaba inactiva
@@ -343,7 +368,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         var payload = PayloadSoloMaestrosYPoa(
             rubrosNuevos: new List<RubroNuevoConfirmarDto> { new(5, "Combustibles") });
 
-        var resultado = await _repo.ConfirmarAsync(payload, usuarioId: 1);
+        var resultado = await _repo.ConfirmarAsync(payload, usuarioId: _usuarioId);
 
         Assert.Equal(0, resultado.RubrosCreados);
         Assert.Equal(1, resultado.RubrosReactivados);
@@ -358,7 +383,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         // Important #3 (review): ciclo confirmar → revertir → confirmar dado como escenario de
         // aceptación explícito en el spec. RevertirAsync todavía no existe (Task 8), así que la
         // reversa se simula a mano: baja lógica directa de la línea, tal como haría /revertir.
-        var primero = await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: 1);
+        var primero = await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: _usuarioId);
 
         await using (var ctxRevertir = Fixture.CrearContexto())
         {
@@ -373,7 +398,14 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         // silencio.
         Context.ChangeTracker.Clear();
 
-        var segundo = await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: 1);
+        // Task 6: la "reversa a mano" de arriba NO escribe un LogAuditoria de
+        // ReversionImportacion, así que el guard de re-importación no puede reconocerla como
+        // revertida (necesita el log real, que recién existe con RevertirAsync de Task 8) — sin
+        // Forzar=true acá, esta segunda corrida quedaría bloqueada por el guard antes de llegar
+        // a la lógica de reactivación que el test quiere probar. El ciclo completo "confirmar →
+        // revertir real → confirmar SIN Forzar → 200" (criterio de aceptación del spec) recién
+        // se puede probar de punta a punta cuando Task 8 exista.
+        var segundo = await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(forzar: true), usuarioId: _usuarioId);
 
         Assert.Equal(0, segundo.LineasPoaCreadas);
         Assert.Equal(1, segundo.LineasPoaReactivadas);
@@ -400,8 +432,12 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
                     new("Literal B", 92748m),
                 }),
             });
-        var primero = await _repo.ConfirmarAsync(payloadInicial, usuarioId: 1);
+        var primero = await _repo.ConfirmarAsync(payloadInicial, usuarioId: _usuarioId);
 
+        // forzar: true (Task 6): sin el guard esta segunda corrida sobre el mismo ejercicio
+        // corría sin más — ahora es exactamente lo que el guard bloquea por defecto. El test
+        // quiere ejercitar la lógica de "asignación mixta agregada en una corrida separada", no
+        // el guard, así que Forzar=true reproduce el reimport intencional.
         var payloadSegundo = PayloadSoloMaestrosYPoa(
             fuentesNuevas: new List<string> { "Literal C" },
             lineasPoa: new List<LineaPoaConfirmarDto>
@@ -411,8 +447,9 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
                     new("Literal B", 92748m),
                     new("Literal C", 1407252m),
                 }),
-            });
-        var segundo = await _repo.ConfirmarAsync(payloadSegundo, usuarioId: 1);
+            },
+            forzar: true);
+        var segundo = await _repo.ConfirmarAsync(payloadSegundo, usuarioId: _usuarioId);
 
         Assert.Equal(0, segundo.LineasPoaCreadas);
         Assert.Equal(0, segundo.LineasPoaReactivadas);
@@ -444,7 +481,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
     [Fact]
     public async Task ConfirmarAsync_IngresoYGastoNuevos_LosCreaYElGastoContadoTraePagoAutomatico()
     {
-        var resultado = await _repo.ConfirmarAsync(PayloadConIngresoYGasto(), usuarioId: 1);
+        var resultado = await _repo.ConfirmarAsync(PayloadConIngresoYGasto(), usuarioId: _usuarioId);
 
         Assert.Equal(1, resultado.IngresosCreados);
         Assert.Equal(0, resultado.IngresosOmitidos);
@@ -464,9 +501,9 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
     [Fact]
     public async Task ConfirmarAsync_CorridaRepetidaConForzar_NoDuplicaIngresosNiGastos()
     {
-        await _repo.ConfirmarAsync(PayloadConIngresoYGasto(), usuarioId: 1);
+        await _repo.ConfirmarAsync(PayloadConIngresoYGasto(), usuarioId: _usuarioId);
 
-        var segunda = await _repo.ConfirmarAsync(PayloadConIngresoYGasto(forzar: true), usuarioId: 1);
+        var segunda = await _repo.ConfirmarAsync(PayloadConIngresoYGasto(forzar: true), usuarioId: _usuarioId);
 
         Assert.Equal(0, segunda.IngresosCreados);
         Assert.Equal(1, segunda.IngresosOmitidos);
@@ -502,7 +539,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
                     new List<AsignacionConfirmarDto> { new("Literal C", 1407252m) }),
             });
 
-        var resultado = await _repo.ConfirmarAsync(payload, usuarioId: 1);
+        var resultado = await _repo.ConfirmarAsync(payload, usuarioId: _usuarioId);
 
         Assert.Equal(1, resultado.GastosCreados);
         Assert.Equal(0, resultado.PagosCreados);
@@ -543,11 +580,11 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         // parcial de la base) que tiraba abajo TODA la importación. Con la clave partida
         // (ProveedorId, NumeroFactura), la segunda corrida SÍ matchea, detecta que MontoTotal
         // difiere, y lo reporta como conflicto sin escribir nada ni romper la transacción.
-        await _repo.ConfirmarAsync(PayloadUnGastoConFactura(monto: 500m), usuarioId: 1);
+        await _repo.ConfirmarAsync(PayloadUnGastoConFactura(monto: 500m), usuarioId: _usuarioId);
 
         var resultado = await _repo.ConfirmarAsync(
             PayloadUnGastoConFactura(monto: 550m, forzar: true, proveedoresNuevos: new List<string>()),
-            usuarioId: 1);
+            usuarioId: _usuarioId);
 
         Assert.Equal(0, resultado.GastosCreados);
         Assert.Equal(0, resultado.GastosOmitidos);
@@ -569,11 +606,11 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         // Minor del review: ProyectarClaveGastoConFactura existe para que "F-1" y " f-1 " sean
         // la MISMA clave — sin Trim/ToUpperInvariant este test fallaría (crearía una fila nueva
         // en vez de omitir).
-        await _repo.ConfirmarAsync(PayloadUnGastoConFactura(numeroFactura: "F-1"), usuarioId: 1);
+        await _repo.ConfirmarAsync(PayloadUnGastoConFactura(numeroFactura: "F-1"), usuarioId: _usuarioId);
 
         var resultado = await _repo.ConfirmarAsync(
             PayloadUnGastoConFactura(numeroFactura: " f-1 ", forzar: true, proveedoresNuevos: new List<string>()),
-            usuarioId: 1);
+            usuarioId: _usuarioId);
 
         Assert.Equal(0, resultado.GastosCreados);
         Assert.Equal(1, resultado.GastosOmitidos);
@@ -588,11 +625,11 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         // Minor del review (null vs ""): ambos casos van por la clave SIN factura — si no fueran
         // la misma clave, la segunda corrida crearía una fila nueva en vez de omitir.
         await _repo.ConfirmarAsync(
-            PayloadUnGastoConFactura(numeroFactura: null, numeroOrden: "O-1"), usuarioId: 1);
+            PayloadUnGastoConFactura(numeroFactura: null, numeroOrden: "O-1"), usuarioId: _usuarioId);
 
         var resultado = await _repo.ConfirmarAsync(
             PayloadUnGastoConFactura(numeroFactura: "", numeroOrden: "O-1", forzar: true, proveedoresNuevos: new List<string>()),
-            usuarioId: 1);
+            usuarioId: _usuarioId);
 
         Assert.Equal(0, resultado.GastosCreados);
         Assert.Equal(1, resultado.GastosOmitidos);
@@ -614,7 +651,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
             },
             Gastos: new List<GastoConfirmarDto>(),
             LineasPoa: new List<LineaPoaConfirmarDto>());
-        await _repo.ConfirmarAsync(payload, usuarioId: 1);
+        await _repo.ConfirmarAsync(payload, usuarioId: _usuarioId);
 
         var payloadRepetido = payload with
         {
@@ -627,7 +664,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
             },
         };
 
-        var resultado = await _repo.ConfirmarAsync(payloadRepetido, usuarioId: 1);
+        var resultado = await _repo.ConfirmarAsync(payloadRepetido, usuarioId: _usuarioId);
 
         Assert.Equal(0, resultado.IngresosCreados);
         Assert.Equal(1, resultado.IngresosOmitidos);
@@ -649,7 +686,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
             },
             Gastos: new List<GastoConfirmarDto>(),
             LineasPoa: new List<LineaPoaConfirmarDto>());
-        await _repo.ConfirmarAsync(payload, usuarioId: 1);
+        await _repo.ConfirmarAsync(payload, usuarioId: _usuarioId);
 
         var payloadRepetido = payload with
         {
@@ -662,7 +699,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
             },
         };
 
-        var resultado = await _repo.ConfirmarAsync(payloadRepetido, usuarioId: 1);
+        var resultado = await _repo.ConfirmarAsync(payloadRepetido, usuarioId: _usuarioId);
 
         Assert.Equal(0, resultado.IngresosCreados);
         Assert.Equal(1, resultado.IngresosOmitidos);
@@ -684,7 +721,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
             },
             Gastos: new List<GastoConfirmarDto>(),
             LineasPoa: new List<LineaPoaConfirmarDto>());
-        await _repo.ConfirmarAsync(payload, usuarioId: 1);
+        await _repo.ConfirmarAsync(payload, usuarioId: _usuarioId);
 
         var payloadDistinto = payload with
         {
@@ -697,7 +734,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
             },
         };
 
-        var resultado = await _repo.ConfirmarAsync(payloadDistinto, usuarioId: 1);
+        var resultado = await _repo.ConfirmarAsync(payloadDistinto, usuarioId: _usuarioId);
 
         Assert.Equal(1, resultado.IngresosCreados);
         Assert.Equal(0, resultado.IngresosOmitidos);
@@ -725,7 +762,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
             },
             LineasPoa: new List<LineaPoaConfirmarDto>());
 
-        await _repo.ConfirmarAsync(payload, usuarioId: 1);
+        await _repo.ConfirmarAsync(payload, usuarioId: _usuarioId);
 
         await using var verificacion = Fixture.CrearContexto();
         var gasto = await verificacion.Gastos.SingleAsync();
@@ -745,7 +782,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         // sería un 500). Se fuerza el bypass con el mismo seam que el test C4
         // (AntesDeGuardarAsync), agregando el segundo gasto directo al ChangeTracker, evitando
         // por completo el dedupe en memoria de ProcesarGastosAsync.
-        await _repo.ConfirmarAsync(PayloadUnGastoConFactura(numeroFactura: "F-1"), usuarioId: 1);
+        await _repo.ConfirmarAsync(PayloadUnGastoConFactura(numeroFactura: "F-1"), usuarioId: _usuarioId);
 
         var proveedor = await Context.Proveedores.SingleAsync(p => p.Nombre == "ACME SA");
         var fuente = await Context.FuentesFinanciamiento.SingleAsync(f => f.Nombre == "Literal A");
@@ -753,9 +790,13 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         Context.ChangeTracker.Clear();
 
         var repoRoto = new ImportacionRepositoryConFacturaDuplicadaInyectada(Context, proveedor.Id, fuente.Id, rubro.Id);
+        // Forzar: true (Task 6): esta corrida ya tiene una importación previa sin revertir para
+        // el mismo ejercicio (la de la línea 785) — sin esto, el guard la bloquearía ANTES de
+        // llegar al seam que inyecta el gasto duplicado, y el test dejaría de probar lo que
+        // quiere probar (la red de seguridad A.5 contra un 23505 real).
         var payloadSinNadaNuevo = new ConfirmarImportacionDto(
             Ejercicio: Ejercicio,
-            Forzar: false,
+            Forzar: true,
             MaestrosNuevos: new MaestrosNuevosConfirmarDto(
                 new List<string>(), new List<string>(), new List<RubroNuevoConfirmarDto>()),
             Ingresos: new List<IngresoConfirmarDto>(),
@@ -763,7 +804,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
             LineasPoa: new List<LineaPoaConfirmarDto>());
 
         var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
-            () => repoRoto.ConfirmarAsync(payloadSinNadaNuevo, usuarioId: 1));
+            () => repoRoto.ConfirmarAsync(payloadSinNadaNuevo, usuarioId: _usuarioId));
 
         Assert.Contains("IX_Gastos_ProveedorId_NumeroFactura", ex.Message);
 
@@ -795,7 +836,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
             },
             Gastos: new List<GastoConfirmarDto>(),
             LineasPoa: new List<LineaPoaConfirmarDto>());
-        await _repo.ConfirmarAsync(payload, usuarioId: 1);
+        await _repo.ConfirmarAsync(payload, usuarioId: _usuarioId);
 
         var payloadRepetido = payload with
         {
@@ -804,7 +845,7 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
                 new List<string>(), new List<string>(), new List<RubroNuevoConfirmarDto>()),
         };
 
-        var resultado = await _repo.ConfirmarAsync(payloadRepetido, usuarioId: 1);
+        var resultado = await _repo.ConfirmarAsync(payloadRepetido, usuarioId: _usuarioId);
 
         Assert.Equal(0, resultado.IngresosCreados);
         Assert.Equal(1, resultado.IngresosOmitidos);
@@ -828,13 +869,13 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         // sea.
         await _repo.ConfirmarAsync(
             PayloadUnGastoConFactura(fecha: new DateOnly(Ejercicio - 1, 12, 20), numeroFactura: "F-1", monto: 500m),
-            usuarioId: 1);
+            usuarioId: _usuarioId);
 
         var resultado = await _repo.ConfirmarAsync(
             PayloadUnGastoConFactura(
                 fecha: new DateOnly(Ejercicio, 1, 15), numeroFactura: "F-1", monto: 500m,
                 forzar: true, proveedoresNuevos: new List<string>()),
-            usuarioId: 1);
+            usuarioId: _usuarioId);
 
         Assert.Equal(0, resultado.GastosCreados);
         Assert.Equal(0, resultado.GastosOmitidos);
@@ -858,12 +899,12 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         // null-vs-"" no cubre este caso porque arranca con null en la primera corrida, no con
         // blanco.
         await _repo.ConfirmarAsync(
-            PayloadUnGastoConFactura(numeroFactura: " ", numeroOrden: "O-1"), usuarioId: 1);
+            PayloadUnGastoConFactura(numeroFactura: " ", numeroOrden: "O-1"), usuarioId: _usuarioId);
 
         var resultado = await _repo.ConfirmarAsync(
             PayloadUnGastoConFactura(
                 numeroFactura: " ", numeroOrden: "O-1", forzar: true, proveedoresNuevos: new List<string>()),
-            usuarioId: 1);
+            usuarioId: _usuarioId);
 
         Assert.Equal(0, resultado.GastosCreados);
         Assert.Equal(1, resultado.GastosOmitidos);
@@ -871,6 +912,68 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         Assert.Equal(1, await verificacion.Gastos.CountAsync());
         var gasto = await verificacion.Gastos.SingleAsync();
         Assert.Null(gasto.NumeroFactura);
+    }
+
+    // ── Task 6: guard de re-importación + auditoría de la corrida ──────────────────────────────
+
+    [Fact]
+    public async Task ConfirmarAsync_SegundaCorridaSinForzar_LanzaReglaDeNegocio()
+    {
+        await _repo.ConfirmarAsync(PayloadConIngresoYGasto(), usuarioId: _usuarioId);
+
+        await Assert.ThrowsAsync<StockApp.Domain.Exceptions.ReglaDeNegocioException>(
+            () => _repo.ConfirmarAsync(PayloadConIngresoYGasto(forzar: false), usuarioId: _usuarioId));
+
+        // El rollback del guard no debe dejar un segundo LogAuditoria ni datos a medio escribir.
+        await using var verificacion = Fixture.CrearContexto();
+        Assert.Equal(1, await verificacion.Gastos.CountAsync());
+        Assert.Equal(1, verificacion.LogsAuditoria.Count(
+            l => l.Accion == StockApp.Domain.Enums.AccionAuditada.ImportacionPlanillas));
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_SegundaCorridaConForzar_NoLanzaYAuditaLasDosCorridas()
+    {
+        await _repo.ConfirmarAsync(PayloadConIngresoYGasto(), usuarioId: _usuarioId);
+
+        var segunda = await _repo.ConfirmarAsync(PayloadConIngresoYGasto(forzar: true), usuarioId: _usuarioId);
+
+        Assert.NotEqual(Guid.Empty, segunda.IdImportacion);
+        await using var verificacion = Fixture.CrearContexto();
+        Assert.Equal(2, verificacion.LogsAuditoria.Count(
+            l => l.Accion == StockApp.Domain.Enums.AccionAuditada.ImportacionPlanillas));
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_PrimeraCorrida_AuditaConElResumenDeContadores()
+    {
+        // El "7" del brief original era solo un vehículo para decir "un usuario distinto del
+        // usado en el resto de la clase" — no tiene significado propio, y con la FK real de
+        // LogAuditoria.UsuarioId (ver constructor) un literal inventado rompería con 23503.
+        // Sembramos un segundo Usuario real y verificamos contra SU Id, preservando la intención
+        // original del test: que la auditoría registra el usuario que efectivamente confirmó,
+        // no un valor fijo.
+        var otroUsuario = new Usuario
+        {
+            NombreUsuario = "importador-tests-otro",
+            HashContrasena = "hash",
+            Rol = RolUsuario.Admin,
+            Activo = true,
+            FechaAlta = DateTime.UtcNow,
+        };
+        Context.Usuarios.Add(otroUsuario);
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        var resultado = await _repo.ConfirmarAsync(PayloadConIngresoYGasto(), usuarioId: otroUsuario.Id);
+
+        await using var verificacion = Fixture.CrearContexto();
+        var log = verificacion.LogsAuditoria
+            .Single(l => l.Accion == StockApp.Domain.Enums.AccionAuditada.ImportacionPlanillas);
+        Assert.Equal(otroUsuario.Id, log.UsuarioId);
+        Assert.Equal(Ejercicio, log.EntidadId);
+        Assert.StartsWith($"IdImportacion={resultado.IdImportacion}", log.Detalle);
+        Assert.Contains("Gastos creados: 1", log.Detalle);
     }
 }
 

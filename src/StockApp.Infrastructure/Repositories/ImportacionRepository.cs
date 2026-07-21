@@ -17,6 +17,17 @@ namespace StockApp.Infrastructure.Repositories;
 /// </summary>
 public class ImportacionRepository : IImportacionRepository
 {
+    /// <summary>
+    /// LogAuditoria no tiene columna propia para el Guid del lote (spec §2.7 solo la pide en
+    /// Gasto/IngresoCaja/LineaPoa) — se codifica como el primer token de Detalle con este
+    /// prefijo fijo. Task 8 (RevertirAsync) reutiliza esta constante con su propia query inline
+    /// para ubicar el LogAuditoria del lote a revertir; no llama a
+    /// BuscarImportacionNoRevertidaAsync ni a ExtraerIdImportacion (esos dos son específicos del
+    /// guard de /confirmar, que resuelve el Guid a partir del Ejercicio — /revertir/{id} ya lo
+    /// recibe directo como parámetro de ruta).
+    /// </summary>
+    private const string PrefijoIdImportacion = "IdImportacion=";
+
     private readonly AppDbContext _ctx;
 
     public ImportacionRepository(AppDbContext ctx) => _ctx = ctx;
@@ -27,6 +38,17 @@ public class ImportacionRepository : IImportacionRepository
 
         await using var tx = await _ctx.Database.BeginTransactionAsync();
         await _ctx.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock({dto.Ejercicio})");
+
+        // Guard de re-importación (spec §2.6): mismo patrón de "falla temprana antes de tocar la
+        // BD" que el resto del método (ValidacionImportacionException más abajo) — sin
+        // tx.RollbackAsync() explícito, el `await using var tx` de arriba hace rollback al
+        // disponerse cuando la excepción se propaga.
+        var idNoRevertida = await BuscarImportacionNoRevertidaAsync(dto.Ejercicio);
+        if (idNoRevertida is not null && !dto.Forzar)
+            throw new ReglaDeNegocioException(
+                $"El ejercicio {dto.Ejercicio} ya tiene una importación previa (IdImportacion " +
+                $"{idNoRevertida}) sin revertir. Usá Forzar=true para reimportar de todas formas, " +
+                "o revertí esa corrida primero con /finanzas/importar/revertir/{id}.");
 
         var (proveedorPorNombre, fuentePorNombre, rubroPorCodigo,
                 proveedoresCreados, fuentesCreadas, rubrosCreados,
@@ -41,6 +63,25 @@ public class ImportacionRepository : IImportacionRepository
 
         var (gastosCreados, gastosOmitidos, pagosCreados, conflictos) =
             await ProcesarGastosAsync(dto, proveedorPorNombre, fuentePorNombre, rubroPorCodigo, lineaPorNombre, idImportacion);
+
+        // Auditoría de la corrida (spec §2.6/§2.7): DENTRO de la transacción y ANTES del único
+        // SaveChangesAsync — si algo de arriba o de este mismo save rollbackea, no puede quedar
+        // rastro de auditoría de una corrida que no se confirmó.
+        _ctx.LogsAuditoria.Add(new LogAuditoria
+        {
+            UsuarioId = usuarioId,
+            Fecha = DateTime.UtcNow,
+            Accion = AccionAuditada.ImportacionPlanillas,
+            Entidad = "Importacion",
+            EntidadId = dto.Ejercicio,
+            Detalle = $"{PrefijoIdImportacion}{idImportacion}; Ejercicio: {dto.Ejercicio}; " +
+                $"Proveedores creados: {proveedoresCreados}; Fuentes creadas: {fuentesCreadas}; " +
+                $"Rubros creados: {rubrosCreados}; LineasPoa creadas: {lineasPoaCreadas}; " +
+                $"Asignaciones creadas: {asignacionesCreadas}; " +
+                $"Ingresos creados: {ingresosCreados}; Ingresos omitidos: {ingresosOmitidos}; " +
+                $"Gastos creados: {gastosCreados}; Gastos omitidos: {gastosOmitidos}; " +
+                $"Pagos creados: {pagosCreados}",
+        });
 
         await AntesDeGuardarAsync();
 
@@ -94,6 +135,40 @@ public class ImportacionRepository : IImportacionRepository
     /// no solo "no hay nada que revertir porque fallamos antes de guardar".
     /// </summary>
     protected virtual Task AntesDeGuardarAsync() => Task.CompletedTask;
+
+    /// <summary>
+    /// Guard de re-importación (spec §2.6). LogAuditoria no tiene columna propia para el Guid
+    /// del lote — se codifica como el primer token de Detalle y EntidadId guarda el Ejercicio
+    /// para filtrar en SQL sin traer todo el historial de auditoría del sistema a memoria.
+    /// "No revertida" = no existe ningún LogAuditoria de AccionAuditada.ReversionImportacion
+    /// (Task 8) cuyo Detalle referencie ese mismo IdImportacion con el mismo prefijo. Hasta que
+    /// Task 8 exista, ninguna corrida puede estar revertida — esta consulta ya queda lista para
+    /// cuando RevertirAsync empiece a escribir esos logs.
+    /// </summary>
+    private async Task<Guid?> BuscarImportacionNoRevertidaAsync(int ejercicio)
+    {
+        var confirmaciones = await _ctx.LogsAuditoria
+            .Where(l => l.Accion == AccionAuditada.ImportacionPlanillas && l.EntidadId == ejercicio)
+            .Select(l => l.Detalle)
+            .ToListAsync();
+
+        foreach (var detalle in confirmaciones)
+        {
+            var id = ExtraerIdImportacion(detalle);
+            var patronReversion = $"{PrefijoIdImportacion}{id}%";
+            var fueRevertida = await _ctx.LogsAuditoria.AnyAsync(l =>
+                l.Accion == AccionAuditada.ReversionImportacion
+                && EF.Functions.Like(l.Detalle, patronReversion));
+
+            if (!fueRevertida)
+                return id;
+        }
+
+        return null;
+    }
+
+    private static Guid ExtraerIdImportacion(string detalle) =>
+        Guid.Parse(detalle.Substring(PrefijoIdImportacion.Length, 36));
 
     /// <summary>
     /// Get-or-create de Proveedor/FuenteFinanciamiento/RubroGasto declarados en
