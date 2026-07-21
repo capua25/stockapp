@@ -190,4 +190,26 @@ public class PlanillaOdsParserPoaRealFixtureTests
         Assert.Equal(92748m, asignacionB.Presupuesto);
         Assert.Equal(92748m, asignacionB.Saldo);
     }
+
+    [Fact]
+    public void ParsearPoa_PlanillaReal_CadaHojaSimpleTieneExactamenteUnaAsignacion_SalvoComposterasQueTieneDos()
+    {
+        using var stream = AbrirPlanillaReal();
+
+        var resultado = Parser.ParsearPoa(stream);
+
+        // Guard anti-regresión: hoy solo COMPOSTERAS Y COMPACTADORAS es de financiamiento mixto
+        // (2 asignaciones). Todas las demás hojas de línea son simples y deben quedar en EXACTAMENTE
+        // 1 asignación. Sin este test, un bug futuro que hiciera emitir 2 asignaciones en una hoja
+        // simple no se detectaría (los tests existentes solo cubren ≥1 / conteo de movimientos).
+        const string hojaDeFinanciamientoMixto = "COMPOSTERAS Y COMPACTADORAS";
+
+        foreach (var linea in resultado.Lineas)
+        {
+            var esperado = linea.Hoja == hojaDeFinanciamientoMixto ? 2 : 1;
+            Assert.True(
+                linea.Asignaciones.Count == esperado,
+                $"La hoja '{linea.Hoja}' tiene {linea.Asignaciones.Count} asignación(es), se esperaba {esperado}.");
+        }
+    }
 }
