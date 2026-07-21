@@ -97,11 +97,26 @@ public class ConfirmacionImportacionService : IConfirmacionImportacionService
                     $"La fuente '{ingreso.Fuente}' no existe ni fue declarada nueva");
         }
 
+        // A.4 (review Important A): dos filas del MISMO payload con el mismo (Proveedor,
+        // NumeroFactura) tienen que dar un 400 estructurado acá, no un 500 de Postgres cuando el
+        // repositorio intente insertar las dos. El dedupe del repositorio (Important A.1/A.2)
+        // resuelve "esta factura ya está en la base"; esto resuelve "esta factura se repite dos
+        // veces DENTRO del mismo archivo que se está importando", un caso que el repositorio no
+        // puede distinguir sin este chequeo previo (ambas filas son "nuevas" para él).
+        var facturasVistas = new Dictionary<(string Proveedor, string NumeroFactura), int>();
+
         for (var i = 0; i < dto.Gastos.Count; i++)
         {
             var gasto = dto.Gastos[i];
             if (string.IsNullOrWhiteSpace(gasto.Detalle))
                 AgregarError(errores, $"Gastos[{i}].Detalle", "Requerido");
+            if (!string.IsNullOrWhiteSpace(gasto.NumeroFactura))
+            {
+                var claveFactura = (Normalizar(gasto.Proveedor), Normalizar(gasto.NumeroFactura));
+                if (!facturasVistas.TryAdd(claveFactura, i))
+                    AgregarError(errores, $"Gastos[{i}].NumeroFactura",
+                        $"La factura '{gasto.NumeroFactura}' del proveedor '{gasto.Proveedor}' está duplicada dentro del payload");
+            }
             if (!Resuelve(gasto.Proveedor, proveedoresExistentes, proveedoresNuevos))
                 AgregarError(errores, $"Gastos[{i}].Proveedor",
                     $"El proveedor '{gasto.Proveedor}' no existe ni fue declarado nuevo");

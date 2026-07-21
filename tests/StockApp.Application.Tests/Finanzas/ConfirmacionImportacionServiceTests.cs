@@ -394,6 +394,58 @@ public class ConfirmacionImportacionServiceTests
     }
 
     [Fact]
+    public async Task ConfirmarAsync_DosGastosConMismoProveedorYFacturaEnElMismoPayload_LanzaValidacionEstructurada()
+    {
+        // A.4 (review Important A): dos filas del MISMO payload con la misma (Proveedor,
+        // NumeroFactura) tienen que dar un 400 estructurado acá — si llegaran las dos al
+        // repositorio, ninguna está "ya en la base" (el dedupe de Important A.1/A.2 no las
+        // distingue entre sí), y Postgres terminaría rechazando la segunda con un 23505 crudo.
+        var m = Crear();
+        var payload = PayloadValido() with
+        {
+            Gastos = new List<GastoConfirmarDto>
+            {
+                new("ACME SA", "F-1", "O-1", "Compra de insumos", null,
+                    new DateOnly(Ejercicio, 1, 15), 500m, "Literal A", 1, null, CondicionPago.Contado, null),
+                new("ACME SA", "f-1", "O-2", "Compra de insumos (otra fila)", null,
+                    new DateOnly(Ejercicio, 2, 1), 800m, "Literal A", 1, null, CondicionPago.Contado, null),
+            },
+        };
+
+        var ex = await Assert.ThrowsAsync<ValidacionImportacionException>(() => m.Svc.ConfirmarAsync(payload));
+
+        Assert.True(ex.Errores.ContainsKey("Gastos[1].NumeroFactura"));
+        Assert.Equal(0, m.Repo.VecesConfirmarLlamado);
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_DosGastosConMismaFacturaPeroDistintoProveedor_NoErrorDeValidacion()
+    {
+        // Negativo: la clave es (Proveedor, NumeroFactura) — la misma factura de DOS proveedores
+        // distintos es perfectamente válida (cada proveedor numera sus propias facturas) y no
+        // tiene que disparar el chequeo de A.4.
+        var m = Crear(proveedores: new List<Proveedor> { new() { Id = 2, Nombre = "Otro Proveedor SA" } });
+        var payload = PayloadValido() with
+        {
+            MaestrosNuevos = new MaestrosNuevosConfirmarDto(
+                new List<string> { "ACME SA" }, new List<string> { "Literal A" },
+                new List<RubroNuevoConfirmarDto> { new(1, "Paseos Públicos") }),
+            Gastos = new List<GastoConfirmarDto>
+            {
+                new("ACME SA", "F-1", "O-1", "Compra de insumos", null,
+                    new DateOnly(Ejercicio, 1, 15), 500m, "Literal A", 1, null, CondicionPago.Contado, null),
+                new("Otro Proveedor SA", "F-1", "O-2", "Compra de insumos (otro proveedor)", null,
+                    new DateOnly(Ejercicio, 2, 1), 800m, "Literal A", 1, null, CondicionPago.Contado, null),
+            },
+        };
+
+        var resultado = await m.Svc.ConfirmarAsync(payload);
+
+        Assert.Equal(1, m.Repo.VecesConfirmarLlamado);
+        Assert.NotEqual(Guid.Empty, resultado.IdImportacion);
+    }
+
+    [Fact]
     public async Task ConfirmarAsync_GastoConVariasViolacionesEnLaMismaFila_AcumulaTodosLosErroresBajoSusClaves()
     {
         var m = Crear();
