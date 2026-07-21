@@ -297,4 +297,42 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         Assert.True(lineaFinal.Activo);
         Assert.Equal(segundo.IdImportacion, lineaFinal.IdImportacion);
     }
+
+    [Fact]
+    public async Task ConfirmarAsync_LineaPoaActivaExistente_AsignacionNueva_NoLaCreaPeroSumaLaAsignacion()
+    {
+        // Minor #5 (review): el XML doc declara como intencional que IdImportacion NO se
+        // re-estampa sobre una línea vieja ACTIVA (a diferencia de una inactiva que se reactiva,
+        // cubierto arriba), pero no había ningún test que lo probara.
+        var payloadInicial = PayloadSoloMaestrosYPoa(
+            fuentesNuevas: new List<string> { "Literal B" },
+            lineasPoa: new List<LineaPoaConfirmarDto>
+            {
+                new("COMPOSTERAS", "Ambiente", new List<AsignacionConfirmarDto>
+                {
+                    new("Literal B", 92748m),
+                }),
+            });
+        var primero = await _repo.ConfirmarAsync(payloadInicial, usuarioId: 1);
+
+        var payloadSegundo = PayloadSoloMaestrosYPoa(
+            fuentesNuevas: new List<string> { "Literal C" },
+            lineasPoa: new List<LineaPoaConfirmarDto>
+            {
+                new("COMPOSTERAS", "Ambiente", new List<AsignacionConfirmarDto>
+                {
+                    new("Literal B", 92748m),
+                    new("Literal C", 1407252m),
+                }),
+            });
+        var segundo = await _repo.ConfirmarAsync(payloadSegundo, usuarioId: 1);
+
+        Assert.Equal(0, segundo.LineasPoaCreadas);
+        Assert.Equal(0, segundo.LineasPoaReactivadas);
+        Assert.Equal(1, segundo.AsignacionesCreadas);
+
+        await using var verificacion = Fixture.CrearContexto();
+        var linea = await verificacion.LineasPoa.SingleAsync(l => l.Nombre == "COMPOSTERAS");
+        Assert.Equal(primero.IdImportacion, linea.IdImportacion); // NO re-estampado: la línea seguía activa
+    }
 }
