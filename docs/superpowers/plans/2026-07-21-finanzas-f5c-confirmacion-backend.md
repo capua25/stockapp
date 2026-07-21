@@ -570,7 +570,7 @@ Una aclaración de arquitectura importante, porque el spec (§5) dice que el SER
 
 **Regla de cierre (spec §3)** que esta task implementa: toda referencia nominal —`GastoConfirmarDto.Proveedor`, `.Fuente`, `.CodigoRubro`, `.LineaPoa`; `IngresoConfirmarDto.Fuente`; `AsignacionConfirmarDto.Fuente`— tiene que resolver contra un maestro YA existente en la base o contra uno declarado en `MaestrosNuevos` (o, para `LineaPoa`, contra una `LineaPoaConfirmarDto.Nombre` del propio payload). Si no resuelve, error con la clave `Tipo[índice].Campo` y un mensaje. Se valida además que `GastoConfirmarDto.Detalle`, `LineaPoaConfirmarDto.Nombre` y `LineaPoaConfirmarDto.Programa` no estén vacíos — aunque el tipo del DTO ya los declara `string` no-nullable, el deserializador JSON de ASP.NET Core NO rechaza un `null` entrante para un `string` no-nullable en tiempo de ejecución (la anotación de nulabilidad es solo un chequeo de compilador); sin este chequeo explícito, un payload malformado llegaría con `Detalle == null` hasta el repositorio y reventaría con un `NullReferenceException` no controlado (500) en vez de un 400 claro.
 
-**Regla nueva (revisión del usuario sobre este plan, no estaba en la versión anterior)**: `GastoConfirmarDto.FechaVencimiento` es OBLIGATORIA cuando `Condicion == CondicionPago.Credito` — si falta, error `Gastos[i].FechaVencimiento` = "Requerido". Para `Contado` no se valida (queda `null`, ninguna factura de contado tiene vencimiento). Es la misma regla que `GastoService.AltaAsync` ya aplica en el alta manual (`GastoService.cs:272-273`) — acá se reimplementa porque `ImportacionRepository` (Task 4-6) escribe directo contra `AppDbContext` sin pasar por `GastoService`.
+**Regla nueva (revisión del usuario sobre este plan, no estaba en la versión anterior) — es SIMÉTRICA, no solo el sentido "falta"**: `GastoService.cs:272-275` (`ValidarAsync`) prueba las dos direcciones: `if (gasto.CondicionPago == CondicionPago.Credito && gasto.FechaVencimiento is null) throw new ReglaDeNegocioException("Un gasto a crédito exige fecha de vencimiento.");` Y `if (gasto.CondicionPago == CondicionPago.Contado && gasto.FechaVencimiento is not null) throw new ReglaDeNegocioException("Un gasto de contado no lleva fecha de vencimiento.");`. Acá se reimplementan las dos: `GastoConfirmarDto.FechaVencimiento` es OBLIGATORIA cuando `Condicion == Credito` (si falta, error `Gastos[i].FechaVencimiento` = "Requerido") y PROHIBIDA cuando `Condicion == Contado` (si viene con valor, error `Gastos[i].FechaVencimiento` = "No corresponde para gastos de contado"). `ImportacionRepository` (Task 4-6) escribe directo contra `AppDbContext` sin pasar por `GastoService` — esta validación es el ÚNICO lugar del camino de escritura del importador donde la regla del dominio se puede hacer cumplir.
 
 Las comparaciones de nombre son normalizadas (`Trim().ToUpperInvariant()`), mismo criterio que `AnalisisImportacionService.Normalizar` (F5b). Proveedores y Rubros se comparan contra TODOS los existentes (sin filtro de `Activo`); Fuentes SOLO contra las ACTIVAS — mismo criterio ya establecido por F5b (`AnalisisImportacionService.cs:42-53`), no una decisión nueva de esta task.
 
@@ -975,6 +975,32 @@ public class ConfirmacionImportacionServiceTests
     }
 
     [Fact]
+    public async Task ConfirmarAsync_GastoContadoConFechaVencimiento_LanzaValidacionConMensajeNoCorresponde()
+    {
+        // Regla simétrica de GastoService.cs:274-275 (ValidarAsync): un gasto de Contado NO
+        // puede llevar FechaVencimiento — mismo estado que el alta manual rechaza.
+        // ImportacionRepository no pasa por GastoService, así que sin este chequeo acá el
+        // importador podría persistir un estado que el dominio prohíbe por la vía normal.
+        var m = Crear();
+        var payload = PayloadValido() with
+        {
+            Gastos = new List<GastoConfirmarDto>
+            {
+                new("ACME SA", "F-1", "O-1", "Compra de insumos", null,
+                    new DateOnly(Ejercicio, 1, 15), 500m, "Literal A", 1, null,
+                    CondicionPago.Contado, FechaVencimiento: new DateOnly(Ejercicio, 12, 31)),
+            },
+        };
+
+        var ex = await Assert.ThrowsAsync<ValidacionImportacionException>(() => m.Svc.ConfirmarAsync(payload));
+
+        Assert.Equal(
+            "No corresponde para gastos de contado",
+            ex.Errores["Gastos[0].FechaVencimiento"][0]);
+        Assert.Equal(0, m.Repo.VecesConfirmarLlamado);
+    }
+
+    [Fact]
     public async Task RevertirAsync_Operador_LanzaUnauthorized()
     {
         var m = Crear(rol: RolUsuario.Operador);
@@ -1180,11 +1206,13 @@ public class ConfirmacionImportacionService : IConfirmacionImportacionService
                 && !lineasPoaDeclaradas.Contains(Normalizar(gasto.LineaPoa)))
                 AgregarError(errores, $"Gastos[{i}].LineaPoa",
                     $"La línea POA '{gasto.LineaPoa}' no existe ni fue declarada en LineasPoa");
-            // Regla agregada tras revisión del usuario: mismo requisito que GastoService.AltaAsync
-            // aplica en el alta manual (GastoService.cs:272-273) para Credito. ImportacionRepository
-            // no pasa por GastoService, así que hay que revalidarlo acá.
+            // Regla SIMÉTRICA de GastoService.cs:272-275 (ValidarAsync). ImportacionRepository no
+            // pasa por GastoService, así que este es el único lugar del camino de escritura del
+            // importador donde se puede hacer cumplir: Credito la exige, Contado la prohíbe.
             if (gasto.Condicion == CondicionPago.Credito && gasto.FechaVencimiento is null)
                 AgregarError(errores, $"Gastos[{i}].FechaVencimiento", "Requerido");
+            if (gasto.Condicion == CondicionPago.Contado && gasto.FechaVencimiento is not null)
+                AgregarError(errores, $"Gastos[{i}].FechaVencimiento", "No corresponde para gastos de contado");
         }
 
         for (var i = 0; i < dto.LineasPoa.Count; i++)
@@ -1228,7 +1256,7 @@ public class ConfirmacionImportacionService : IConfirmacionImportacionService
 - [ ] **Paso 4: Correr el test y verificar que pasa**
 
 Comando: `dotnet test tests/StockApp.Application.Tests --filter "FullyQualifiedName~ConfirmacionImportacionServiceTests"`
-Esperado: `Passed! - Failed: 0, Passed: 10`.
+Esperado: `Passed! - Failed: 0, Passed: 11`.
 
 - [ ] **Paso 5: Commit**
 
