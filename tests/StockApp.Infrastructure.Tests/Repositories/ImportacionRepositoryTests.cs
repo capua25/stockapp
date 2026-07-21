@@ -146,4 +146,68 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
 
         Assert.Equal(1, resultado.FuentesCreadas); // "Literal B" ya existe (2 filas); solo "Literal C" es nueva
     }
+
+    [Fact]
+    public async Task ConfirmarAsync_ProveedoresNuevos_LosCreaYDevuelveElContador()
+    {
+        var payload = PayloadSoloMaestrosYPoa(
+            proveedoresNuevos: new List<string> { "Ferretería Lopez", "Corralón Pérez" });
+
+        var resultado = await _repo.ConfirmarAsync(payload, usuarioId: 1);
+
+        Assert.Equal(2, resultado.ProveedoresCreados);
+        await using var verificacion = Fixture.CrearContexto();
+        var proveedores = await verificacion.Proveedores.ToListAsync();
+        Assert.Contains(proveedores, p => p.Nombre == "Ferretería Lopez");
+        Assert.Contains(proveedores, p => p.Nombre == "Corralón Pérez");
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_ProveedorYaExistente_NoLoDuplicaYNoLoCuentaComoCreado()
+    {
+        Context.Proveedores.Add(new Proveedor { Nombre = "Ferretería Lopez" });
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        var payload = PayloadSoloMaestrosYPoa(
+            proveedoresNuevos: new List<string> { "Ferretería Lopez" });
+
+        var resultado = await _repo.ConfirmarAsync(payload, usuarioId: 1);
+
+        Assert.Equal(0, resultado.ProveedoresCreados);
+        await using var verificacion = Fixture.CrearContexto();
+        Assert.Equal(1, await verificacion.Proveedores.CountAsync(p => p.Nombre == "Ferretería Lopez"));
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_RubrosNuevos_LosCreaYDevuelveElContador()
+    {
+        var payload = PayloadSoloMaestrosYPoa(
+            rubrosNuevos: new List<RubroNuevoConfirmarDto> { new(5, "Combustibles"), new(9, "Viáticos") });
+
+        var resultado = await _repo.ConfirmarAsync(payload, usuarioId: 1);
+
+        Assert.Equal(2, resultado.RubrosCreados);
+        await using var verificacion = Fixture.CrearContexto();
+        var rubros = await verificacion.RubrosGasto.ToListAsync();
+        Assert.Contains(rubros, r => r.Codigo == 5 && r.Nombre == "Combustibles");
+        Assert.Contains(rubros, r => r.Codigo == 9 && r.Nombre == "Viáticos");
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_RubroYaExistente_NoLoDuplicaYNoLoCuentaComoCreado()
+    {
+        Context.RubrosGasto.Add(new RubroGasto { Codigo = 5, Nombre = "Combustibles" });
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        var payload = PayloadSoloMaestrosYPoa(
+            rubrosNuevos: new List<RubroNuevoConfirmarDto> { new(5, "Combustibles") });
+
+        var resultado = await _repo.ConfirmarAsync(payload, usuarioId: 1);
+
+        Assert.Equal(0, resultado.RubrosCreados);
+        await using var verificacion = Fixture.CrearContexto();
+        Assert.Equal(1, await verificacion.RubrosGasto.CountAsync(r => r.Codigo == 5));
+    }
 }
