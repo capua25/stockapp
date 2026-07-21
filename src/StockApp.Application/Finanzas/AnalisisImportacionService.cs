@@ -158,26 +158,31 @@ public class AnalisisImportacionService : IAnalisisImportacionService
 
         foreach (var lineaOds in poaOds.Lineas)
         {
-            // Mecánico (Task 1 F5b, prep financiamiento mixto): por ahora cada hoja trae UNA
-            // sola asignación (el parser todavía no lee financiamiento mixto — eso es Task 2/4).
-            var asignacion = lineaOds.Asignaciones[0];
-
-            var motivosLinea = new List<MotivoEstado>();
-
-            var (literal, fuenteDesconocida) = ClasificarFuente(asignacion.Literal, fuentesActivas, motivosLinea);
-            if (fuenteDesconocida)
-                RegistrarNuevo(fuentesNuevasVistas, fuentesNuevas, asignacion.Literal!);
-
-            var movimientos = lineaOds.Movimientos
+            // F5b Task 4: financiamiento mixto (caso real COMPOSTERAS) — una hoja con N
+            // asignaciones se APLANA en N LineaPoaAnalizadaDto (mismo Hoja/Ejercicio). Los
+            // movimientos de la hoja se reconcilian UNA sola vez y viajan SOLO en la asignación
+            // i==0: repetirlos en cada asignación duplicaría el conteo del Resumen y la
+            // reconciliación Gastos↔POA.
+            var movimientosReconciliados = lineaOds.Movimientos
                 .Select(mov => ReconciliarMovimiento(lineaOds.Hoja, mov, gastos))
                 .ToList();
 
-            lineasPoa.Add(new LineaPoaAnalizadaDto(
-                Hoja: lineaOds.Hoja, Ejercicio: ejercicio,
-                Estado: EstadoMasSevero(motivosLinea), Motivos: motivosLinea,
-                Literal: literal, FuenteDesconocida: fuenteDesconocida,
-                Presupuesto: asignacion.Presupuesto, SaldoPlanilla: asignacion.Saldo,
-                Movimientos: movimientos));
+            for (var i = 0; i < lineaOds.Asignaciones.Count; i++)
+            {
+                var asignacion = lineaOds.Asignaciones[i];
+                var motivosLinea = new List<MotivoEstado>();
+
+                var (literal, fuenteDesconocida) = ClasificarFuente(asignacion.Literal, fuentesActivas, motivosLinea);
+                if (fuenteDesconocida)
+                    RegistrarNuevo(fuentesNuevasVistas, fuentesNuevas, asignacion.Literal!);
+
+                lineasPoa.Add(new LineaPoaAnalizadaDto(
+                    Hoja: lineaOds.Hoja, Ejercicio: ejercicio,
+                    Estado: EstadoMasSevero(motivosLinea), Motivos: motivosLinea,
+                    Literal: literal, FuenteDesconocida: fuenteDesconocida,
+                    Presupuesto: asignacion.Presupuesto, SaldoPlanilla: asignacion.Saldo,
+                    Movimientos: i == 0 ? movimientosReconciliados : new List<MovimientoPoaAnalizadoDto>()));
+            }
         }
 
         var maestrosNuevos = new MaestrosNuevosDto(proveedoresNuevos, fuentesNuevas, rubrosNuevos);

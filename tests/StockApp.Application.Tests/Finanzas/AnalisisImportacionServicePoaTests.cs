@@ -147,4 +147,43 @@ public class AnalisisImportacionServicePoaTests
         Assert.Equal("Compra de insumos", mov.Detalle);
         Assert.Equal(500m, mov.Importe);
     }
+
+    [Fact]
+    public async Task AnalizarAsync_LineaConDosAsignaciones_EmiteDosLineaPoaAnalizadaConMovimientosSoloEnLaPrimera()
+    {
+        // F5b Task 4: financiamiento mixto (caso real COMPOSTERAS) — una hoja con N asignaciones
+        // se aplana en N LineaPoaAnalizadaDto, mismo Hoja/Ejercicio, cada uno con su propio
+        // Literal/Presupuesto/SaldoPlanilla. Los movimientos de la hoja van SOLO en la asignación
+        // i==0 para no duplicar el conteo del Resumen ni la reconciliación.
+        var movimiento = Movimiento();
+        var linea = new LineaPoaResumenOds(
+            Hoja: "COMPOSTERAS Y COMPACTADORAS",
+            Asignaciones: new List<AsignacionPoaOds> { new("C", 1407252m, 1407252m), new("B", 92748m, 92748m) },
+            Movimientos: new List<FilaPoaOds> { movimiento });
+        var poa = new PlanillaPoaOds(new List<LineaPoaResumenOds> { linea }, new SaldosTotalesPoaOds(92748m, 1407252m));
+        var m = Crear(poa, fuentes: new List<FuenteFinanciamiento>
+        {
+            new() { Id = 1, Nombre = "B", Activo = true },
+            new() { Id = 2, Nombre = "C", Activo = true },
+        });
+
+        var resultado = await m.Svc.AnalizarAsync(Stream.Null, Stream.Null, Ejercicio);
+
+        Assert.Equal(2, resultado.LineasPoa.Count);
+        Assert.All(resultado.LineasPoa, l => Assert.Equal("COMPOSTERAS Y COMPACTADORAS", l.Hoja));
+        Assert.All(resultado.LineasPoa, l => Assert.Equal(Ejercicio, l.Ejercicio));
+
+        var lineaC = resultado.LineasPoa[0];
+        Assert.Equal("C", lineaC.Literal);
+        Assert.Equal(1407252m, lineaC.Presupuesto);
+        Assert.Equal(1407252m, lineaC.SaldoPlanilla);
+        var movC = Assert.Single(lineaC.Movimientos);
+        Assert.Equal(movimiento.Importe, movC.Importe);
+
+        var lineaB = resultado.LineasPoa[1];
+        Assert.Equal("B", lineaB.Literal);
+        Assert.Equal(92748m, lineaB.Presupuesto);
+        Assert.Equal(92748m, lineaB.SaldoPlanilla);
+        Assert.Empty(lineaB.Movimientos);
+    }
 }
