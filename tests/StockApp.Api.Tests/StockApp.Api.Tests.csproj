@@ -30,4 +30,13 @@
     <ProjectReference Include="..\..\src\StockApp.Api\StockApp.Api.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Task 7 F5b: mismos 2 fixtures físicos (gitignored) que usa el test de aceptación de F5a
+         en StockApp.Infrastructure.Tests — no se duplican, se referencian con Link. -->
+    <None Include="..\StockApp.Infrastructure.Tests\Fixtures\Finanzas\*.ods">
+      <Link>Fixtures\Finanzas\%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
