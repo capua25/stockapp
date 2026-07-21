@@ -7,11 +7,15 @@
 
 F5a (parser `.ods`, `IPlanillaParser`/`PlanillaOdsParser`) y F5b (análisis backend read-only, `POST /finanzas/importar/analizar`, `AnalisisImportacionService`) están mergeadas a main. F5c es **SOLO BACKEND**: el endpoint de confirmación y la escritura transaccional. La UI (`ApiClient`, grilla editable, pantalla) es F5d — explícitamente fuera de alcance de esta fase.
 
+### Restricción operativa (condiciona todo el diseño)
+
+Una vez instalado el sistema, el usuario **no va a tener acceso al servidor por mucho tiempo**. De acá se deriva una regla dura para F5c: **todo control operativo tiene que viajar desde el cliente o vivir en la base de datos — nada que dependa de editar configuración o entrar al servidor.** Cualquier mecanismo de control (decidir si se puede re-importar, revertir una corrida mala) tiene que ser accionable con una request HTTP desde el desktop del admin, nunca con un cambio de `appsettings`/variables de entorno/redeploy.
+
 ## 2. Decisiones tomadas
 
 ### 2.1 Corte de fases
 
-F5c = backend (confirmar + escritura + idempotencia + auditoría). F5d = `ApiClient` + grilla editable + pantalla + ítem admin-only en el sidebar. Mismo corte que F5a/F5b: primero el contrato y la lógica de servidor, testeados end-to-end sin UI; después el consumo desde el desktop.
+F5c = backend (confirmar + escritura + idempotencia + auditoría + reversa). F5d = `ApiClient` + grilla editable + pantalla + ítem admin-only en el sidebar. Mismo corte que F5a/F5b: primero el contrato y la lógica de servidor, testeados end-to-end sin UI; después el consumo desde el desktop.
 
 ### 2.2 Idempotencia = re-ejecutable
 
@@ -45,36 +49,44 @@ El saldo inicial viaja como un ingreso más dentro de `Ingresos`, con su `Fuente
 
 ### 2.5 Contrato stateless
 
-F5d manda el payload completo ya corregido en un solo JSON. Sin tablas de staging, sin id de lote, sin re-parseo de los `.ods` en el confirm.
+F5d manda el payload completo ya corregido en un solo JSON. Sin tablas de staging, sin id de lote pre-generado por el cliente, sin re-parseo de los `.ods` en el confirm.
 
 Descartado:
 - **Stateful** (2-3 tablas nuevas para persistir el resultado del análisis entre pasos): sobredimensionado para una herramienta que corre un puñado de veces en la vida del sistema.
 - **Re-parseo** (el confirm vuelve a abrir los `.ods` y aplica las correcciones sobre las filas parseadas): ata las correcciones del usuario a coordenadas posicionales del parseo — frágil ante cualquier reordenamiento de filas entre el análisis y la confirmación.
 
-### 2.6 Los endpoints del importador se apagan por configuración, default APAGADO
+### 2.6 Control de re-importación: guard derivado de la auditoría, NO un flag de configuración
 
-Motivación: el dedupe de F5c vive en el código, no en el esquema (decisión §4, "NO se agregan índices únicos nuevos"), así que la protección contra duplicados solo cubre el camino que pasa por el importador. Y la idempotencia cubre "correr dos veces la MISMA planilla", pero NO cubre "correr una planilla equivocada" — eso inserta datos legítimamente nuevos y **no existe endpoint de reversa**. Reducir la ventana en la que el endpoint está vivo es la mitigación más barata que hay. Además `/analizar` acepta uploads arbitrarios y los descomprime con `ZipArchive` (F5a): es superficie de zip bomb que no tiene por qué estar expuesta de forma permanente, aunque el acceso sea Admin-only.
+**Se descarta por completo la idea de un flag de configuración `Importacion:Habilitada`** (`appsettings.json` + condicional en `Program.cs`) que una versión anterior de este diseño proponía. Razón, derivada directamente de la restricción operativa de §1: un flag de configuración vive en el servidor; sin acceso al servidor queda congelado en el estado del día de la instalación. Si queda apagado, nunca más se puede re-importar. Si queda prendido, nunca se apaga. Es exactamente lo contrario de un interruptor: es una decisión de un solo uso disfrazada de toggle.
+
+**Reemplazo — guard derivado de la auditoría**:
+- `/confirmar` consulta si el ejercicio ya tiene un `LogAuditoria` de `AccionAuditada.ImportacionPlanillas` que no esté revertido (ver §2.7 — "no revertido" se resuelve contra las corridas dadas de baja). Si lo tiene → `409`, salvo que el payload traiga `Forzar = true`.
+- `ConfirmarImportacionDto` suma un campo `bool Forzar = false`.
+- El control de "se puede volver a importar o no" pasa a ser **estado derivado de datos en la base** (hay o no hay una corrida previa no revertida), no configuración del servidor. El permiso para re-correr viaja en el payload — es decir, se decide desde el desktop del admin. Cero necesidad de acceso al servidor, en cualquier escenario.
+- La superficie de zip bomb de `/analizar` (descomprime `.ods` con `ZipArchive`, F5a) se mitiga con un **límite de tamaño de archivo** en el upload multipart, no apagando el endpoint. Es una mitigación real, no depende de que nadie toque nada, y no choca con la restricción de §1. `/confirmar` recibe JSON plano (sin `ZipArchive`, sin descompresión), así que no tiene la misma superficie de zip bomb; igual conviene un límite de tamaño de body como defensa en profundidad contra un payload de abuso, pero es una mitigación distinta y con un motivo distinto (recursos, no zip bomb).
+
+### 2.7 Reversa por lote
+
+Motivación: re-importar SUMA, no CORRIGE. Ejemplo concreto: si un gasto entró con el monto equivocado, el monto es parte de la clave natural (§4), así que el dedupe no lo reconoce como el mismo gasto y crea uno nuevo — quedan los dos, uno bueno y uno con el monto malo. Sumado a que la planilla POA ya se sabe inconsistente (`docs/finanzas-discrepancias-planilla-poa-2026.md`) y a que, por la restricción de §1, no hay acceso al servidor para corregir a mano, un error de migración sin mecanismo de reversa es **permanente**.
 
 **Mecanismo**:
-- Clave de configuración `Importacion:Habilitada` (bool), **default `false`**, declarada en `src/StockApp.Api/appsettings.json`. Se prende por variable de entorno (`Importacion__Habilitada=true`) durante la ventana de migración y se vuelve a apagar al terminar.
-- En `src/StockApp.Api/Program.cs`, el registro `app.MapImportacionEndpoints()` (hoy en la línea 419) queda condicionado al flag. Si está apagado, los endpoints **no se registran** → `404`, no `403`. Aplica a AMBOS endpoints: `/finanzas/importar/analizar` y `/finanzas/importar/confirmar` (F5b y F5c comparten el mismo `MapImportacionEndpoints()`, así que el flag apaga el importador completo, no solo la confirmación).
-- Cuando el flag está en `true`, se emite un **warning al arranque** vía `ILogger` (algo como "IMPORTADOR DE PLANILLAS HABILITADO — recordá apagarlo al terminar la migración"). No es un mecanismo de control, es visibilidad.
+- Cada corrida de `/confirmar` genera un `IdImportacion` (`Guid`) que se estampa en el `LogAuditoria` de la corrida y en cada registro que esa corrida crea.
+- Columna nueva `IdImportacion` (`Guid?`, nullable, índice no-único) en `Gasto`, `IngresoCaja` y `LineaPoa`. Nullable porque todo lo cargado a mano (la inmensa mayoría de los datos, hoy y a futuro) la tiene en `null`.
+- `PagoGasto` **no lleva columna propia**: se revierte por cascada siguiendo `GastoId` (los pagos automáticos que `/confirmar` crea para los gastos `CondicionPago.Contado` son hijos de un `Gasto` con `IdImportacion` seteado).
+- `AsignacionPresupuestal` **no lleva columna propia**: es hija del agregado `LineaPoa` y no tiene un `Activo` propio en el dominio (`AsignacionPresupuestal.cs` — solo `Id`, `LineaPoaId`, `FuenteFinanciamientoId`, `Monto`); al revertir queda colgando de una `LineaPoa` inactiva, que es el estado correcto (no se muestra en ningún lado que filtre por `LineaPoa.Activo`).
+- **Los maestros (`Proveedor`, `FuenteFinanciamiento`, `RubroGasto`) NO se revierten**, aunque la corrida los haya creado. Razón: para cuando se ejecuta la reversa, esos maestros pueden estar ya referenciados por gastos cargados a mano (el sistema sigue operando en paralelo a la migración). Darlos de baja rompería datos que nunca fueron parte del lote. Un maestro de más es inocuo (aparece en un combo, nadie lo usa); un gasto huérfano por una FK a un maestro inactivo es un bug.
+- `POST /finanzas/importar/revertir/{id}` — baja lógica (`Activo = false`) de todo el lote (`Gasto`, `IngresoCaja`, `LineaPoa` con ese `IdImportacion`, más sus `PagoGasto`/`AsignacionPresupuestal` hijos) en UNA transacción, mismo patrón que `/confirmar`. Permiso: reusa `Permisos.ImportarPlanillas` — no hace falta un permiso nuevo, es la misma operación de migración.
+- La reversa se audita: `AccionAuditada.ReversionImportacion = 43` (append-only, siguiente valor después de `ImportacionPlanillas = 42`, ver §7).
+- El guard del `409` de §2.6 mira específicamente importaciones **no revertidas**: si se revirtió una corrida, se puede volver a importar limpio sobre el mismo ejercicio sin necesidad de `Forzar`.
+- Respuesta: `ResultadoReversionDto` con contadores de registros dados de baja por tipo (gastos, pagos, ingresos, líneas POA, asignaciones).
 
-**Alternativas descartadas**:
-- **Guard por auditoría** (exigir `Forzar = true` en el payload si el ejercicio ya tiene un `LogAuditoria` de `ImportacionPlanillas`): descartado porque agrega un segundo concepto al contrato del payload. El usuario prefirió un solo interruptor, más simple de operar.
-- **Símbolo de compilación / no desplegar en release**: obliga a un build especial para migrar y ata cualquier re-importación futura a un ciclo de deploy completo.
+## 3. Contrato de los endpoints
 
-**Riesgo residual**: si el flag queda prendido después de la migración, se vuelve a la exposición permanente — el flag por sí solo no lo impide. Mitigado (no eliminado) por el warning de arranque y por el `LogAuditoria` de cada corrida, que hacen observable tanto el estado del flag como cualquier ejecución del importador.
-
-**Revisa una decisión previa**: esto ajusta la decisión §12 ("Decisiones registradas"), ítem 2, de `docs/superpowers/specs/2026-07-15-modulo-finanzas-design.md` — "Importar ya los datos 2026 + herramienta de importación permanente (pero escondida en Administración)". Sigue siendo permanente en el código y escondida en Administración; ahora además está **apagada por defecto** a nivel configuración, y hay que prenderla explícitamente para usarla.
-
-## 3. Contrato del endpoint
-
-`POST /finanzas/importar/confirmar`
+### `POST /finanzas/importar/confirmar`
 
 - Body: JSON (no multipart — a diferencia de `/analizar`, que recibe los `.ods`).
 - `.RequireAuthorization(Permisos.ImportarPlanillas)` — Admin-only, permiso ya existe (`Permisos.cs:27`, `"finanzas.importar"`).
-- Registrado solo si `Importacion:Habilitada = true` (§2.6). Con el flag apagado (default) el endpoint no existe: `404`, no `403` — la policy de autorización ni siquiera llega a evaluarse porque la ruta no está mapeada.
+- Guard de re-importación (§2.6): si el `Ejercicio` ya tiene una importación previa no revertida y `Forzar == false` → `409`. Con `Forzar == true`, se ignora el guard y se corre igual (la idempotencia por clave natural de §4 sigue aplicando dentro de esa corrida).
 
 ### DTOs nuevos (`StockApp.Application/Finanzas`)
 
@@ -83,6 +95,7 @@ Los maestros se referencian por **NOMBRE**, no por `Id`, porque la mayoría no e
 ```csharp
 ConfirmarImportacionDto(
     int Ejercicio,
+    bool Forzar,   // default false — permite re-confirmar sobre una corrida previa no revertida
     MaestrosNuevosConfirmarDto MaestrosNuevos,
     IReadOnlyList<IngresoConfirmarDto> Ingresos,
     IReadOnlyList<GastoConfirmarDto> Gastos,
@@ -109,9 +122,20 @@ AsignacionConfirmarDto(string Fuente, decimal Monto)
 
 **Regla de cierre**: toda referencia nominal (proveedor, fuente, rubro por código, línea POA) tiene que resolver contra un maestro ya existente en la base o contra uno declarado en `MaestrosNuevos`. Si no resuelve → `400`. Nada se crea por accidente fuera de lo que el usuario declaró explícitamente.
 
-Respuesta feliz: `ResultadoConfirmacionDto` con contadores de creados y omitidos por tipo (proveedores, fuentes, rubros, líneas POA, asignaciones, ingresos, gastos, pagos).
+Respuesta feliz: `ResultadoConfirmacionDto` con `IdImportacion` (el `Guid` del lote, necesario para poder revertirlo después) y contadores de creados y omitidos por tipo (proveedores, fuentes, rubros, líneas POA, asignaciones, ingresos, gastos, pagos).
 
-## 4. Idempotencia — claves naturales
+### `POST /finanzas/importar/revertir/{id}`
+
+- `{id}` es el `IdImportacion` (`Guid`) devuelto por `/confirmar`.
+- `.RequireAuthorization(Permisos.ImportarPlanillas)` — mismo permiso, sin uno nuevo.
+- `404` si no existe ningún `LogAuditoria` de `ImportacionPlanillas` con ese `IdImportacion`. `409` si ya fue revertido antes (la reversa no es idempotente por diseño: revertir dos veces la misma corrida no tiene un significado adicional).
+- Respuesta feliz: `ResultadoReversionDto` con contadores de dados de baja por tipo.
+
+### Límite de tamaño de upload
+
+`/analizar` (multipart, recibe los `.ods`) lleva un límite de tamaño de archivo — la mitigación real contra zip bomb, porque acota el input comprimido antes de que `ZipArchive` lo descomprima. `/confirmar` y `/revertir/{id}` (JSON) llevan un límite de tamaño de body más generoso, como defensa en profundidad contra un payload de abuso — no mitigan zip bomb porque no descomprimen nada, así que ahí el límite es solo un techo razonable, no una mitigación de la misma clase de riesgo.
+
+## 4. Idempotencia — claves naturales y migración de trazabilidad
 
 | Entidad | Clave natural | Índice único en la DB |
 |---|---|---|
@@ -125,33 +149,48 @@ Respuesta feliz: `ResultadoConfirmacionDto` con contadores de creados y omitidos
 
 Maestros y líneas POA: get-or-create (si la clave existe, se reutiliza el `Id`; si no, se crea). Ingresos y gastos: si la clave natural ya está presente en la base → se saltea y se cuenta como omitido.
 
-**Decisión explícita: NO se agregan índices únicos nuevos; F5c no trae migración de esquema.**
+**Matiz importante — corrección respecto de una versión anterior de este documento**: F5c **sí trae una migración EF** (las columnas `IdImportacion` en `Gasto`, `IngresoCaja` y `LineaPoa` de §2.7, más sus índices no-únicos, necesarias para poder ubicar y revertir un lote). Lo que se sostiene sin cambios es que **NO se agregan índices ÚNICOS nuevos** — ese seguía siendo el argumento original: un índice único sobre `Gasto (ProveedorId, Factura, Orden, Fecha, Monto)` rompería la carga manual legítima (mismo proveedor, sin factura, misma fecha, mismo monto, `Detalle` distinto son dos gastos válidos que hoy se pueden cargar sin problema). El índice parcial `(ProveedorId, NumeroFactura)` sobre activos que ya existe (`AppDbContext.cs:165-167`, migración `20260716181915_UniqueFacturaProveedorGastosActivos`) cubre el caso que sí importa proteger (factura duplicada del mismo proveedor). Una columna de trazabilidad con índice no-único no le impone ninguna regla nueva a nadie que no pase por el importador; un índice único sí. Son decisiones distintas y no se contradicen entre sí.
 
-Razón: un índice único sobre `Gasto (ProveedorId, Factura, Orden, Fecha, Monto)` rompería la carga manual legítima — mismo proveedor, sin factura, misma fecha, mismo monto, `Detalle` distinto, son dos gastos válidos que hoy se pueden cargar sin problema. El índice parcial `(ProveedorId, NumeroFactura)` sobre activos que ya existe (`AppDbContext.cs:165-167`, migración `20260716181915_UniqueFacturaProveedorGastosActivos`) cubre el caso que sí importa proteger (factura duplicada del mismo proveedor). El importador no le impone sus reglas de idempotencia al resto de la app.
-
-El dedupe vive dentro del importador: al abrir la transacción se cargan en memoria las claves naturales del ejercicio ya presentes en la base y se filtra el payload contra ese set.
+El dedupe por clave natural vive dentro del importador: al abrir la transacción se cargan en memoria las claves naturales del ejercicio ya presentes en la base y se filtra el payload contra ese set.
 
 ### Riesgo asumido y su mitigación
 
-Check-then-act (cargar claves en memoria, filtrar, insertar) tiene una carrera si dos confirmaciones corren concurrentes sobre el mismo ejercicio. Se mitiga con `pg_advisory_xact_lock` sobre el ejercicio al abrir la transacción — se libera solo, automáticamente, en commit o rollback.
+Check-then-act (cargar claves en memoria, filtrar, insertar) tiene una carrera si dos confirmaciones corren concurrentes sobre el mismo ejercicio. Se mitiga con `pg_advisory_xact_lock` sobre el ejercicio al abrir la transacción — se libera solo, automáticamente, en commit o rollback. El mismo lock protege también el guard de `409` de §2.6 (la lectura de "¿hay una corrida previa no revertida?" y la escritura del nuevo `LogAuditoria` quedan serializadas entre confirmaciones concurrentes del mismo ejercicio).
 
 Hay precedente de SQL crudo dentro de un repositorio en `GastoRepository.RegistrarPagoAtomicoAsync` (`GastoRepository.cs:138-175`), que usa `FromSqlInterpolated` con `FOR UPDATE` para serializar pagos concurrentes sobre el mismo gasto — mismo principio: guard atómico dentro de la transacción, no check-then-insert desnudo en memoria.
 
 ## 5. Arquitectura y transacción
 
-- **`IConfirmacionImportacionService` / `ConfirmacionImportacionService`** (`StockApp.Application/Finanzas`): verifica `Permisos.ImportarPlanillas` vía `ICurrentSession` + `IAuthorizationService` — mismo arranque que `AnalisisImportacionService.AnalizarAsync` (`_auth.Verificar(_session.RolActual, Permisos.ImportarPlanillas)`) — valida el payload COMPLETO, y recién ahí delega la escritura.
-- **`IImportacionRepository`** (`StockApp.Application/Interfaces`) / **`ImportacionRepository`** (`StockApp.Infrastructure/Repositories`): abre la transacción. Es el único lugar donde puede vivir sin que Application referencie EF/Npgsql — mismo criterio documentado en el comentario de `GastoRepository.cs:113-121` ("en el repo, que es quien referencia Npgsql — Application NO referencia EF/Npgsql para mantener la capa desacoplada").
+- **`IConfirmacionImportacionService` / `ConfirmacionImportacionService`** (`StockApp.Application/Finanzas`): verifica `Permisos.ImportarPlanillas` vía `ICurrentSession` + `IAuthorizationService` — mismo arranque que `AnalisisImportacionService.AnalizarAsync` (`_auth.Verificar(_session.RolActual, Permisos.ImportarPlanillas)`) — valida el payload COMPLETO, resuelve el guard de `409`/`Forzar`, y recién ahí delega la escritura. El mismo servicio (o uno hermano, a definir en tasks) expone la reversa.
+- **`IImportacionRepository`** (`StockApp.Application/Interfaces`) / **`ImportacionRepository`** (`StockApp.Infrastructure/Repositories`): abre la transacción tanto para confirmar como para revertir. Es el único lugar donde puede vivir sin que Application referencie EF/Npgsql — mismo criterio documentado en el comentario de `GastoRepository.cs:113-121` ("en el repo, que es quien referencia Npgsql — Application NO referencia EF/Npgsql para mantener la capa desacoplada").
 - **Patrón a imitar**: `MovimientoStockRepository.RegistrarMovimientoAtomicoAsync` (`MovimientoStockRepository.cs:40-101`) — `await using var tx = await _ctx.Database.BeginTransactionAsync()`, todo el trabajo dentro, UN solo `SaveChangesAsync()`, `tx.CommitAsync()` al final, rollback explícito en cada rama de fallo.
+- **Migración EF nueva** (§4): columnas `IdImportacion` (`Guid?`) + índices no-únicos en `Gasto`, `IngresoCaja`, `LineaPoa`.
 
-### Orden dentro de la transacción
+### Orden dentro de la transacción de `/confirmar`
 
 ```
 BeginTransaction → pg_advisory_xact_lock(ejercicio)
+  0. Guard: ¿hay LogAuditoria de ImportacionPlanillas no revertido para este ejercicio?
+     → sí y Forzar == false: Rollback + 409
   1. Fuentes, Rubros, Proveedores nuevos (get-or-create)
-  2. LineasPoa + AsignacionPresupuestal (get-or-create)
-  3. IngresosCaja (dedupe por clave natural, insertar los nuevos)
-  4. Gastos (dedupe por clave natural) + PagoGasto por el total para los de CondicionPago.Contado
-  5. LogAuditoria (resumen de la corrida)
+  2. LineasPoa + AsignacionPresupuestal (get-or-create), IdImportacion en las LineasPoa nuevas
+  3. IngresosCaja (dedupe por clave natural, insertar los nuevos con IdImportacion)
+  4. Gastos (dedupe por clave natural) + PagoGasto por el total para los de CondicionPago.Contado,
+     IdImportacion en los Gastos nuevos
+  5. LogAuditoria (IdImportacion del lote, resumen de la corrida)
+→ un solo SaveChangesAsync → Commit
+```
+
+### Orden dentro de la transacción de `/revertir/{id}`
+
+```
+BeginTransaction
+  1. Ubicar LogAuditoria de ImportacionPlanillas con ese IdImportacion → 404 si no existe, 409 si ya revertido
+  2. Baja lógica (Activo = false) de Gasto, IngresoCaja, LineaPoa con ese IdImportacion
+  3. Baja lógica en cascada de PagoGasto (por GastoId) y AsignacionPresupuestal (por LineaPoaId)
+     de los registros dados de baja en el paso 2
+  4. Maestros (Proveedor, FuenteFinanciamiento, RubroGasto): SIN TOCAR
+  5. LogAuditoria (ReversionImportacion, referenciando el IdImportacion revertido)
 → un solo SaveChangesAsync → Commit
 ```
 
@@ -170,11 +209,15 @@ Ejemplo de respuesta:
 
 Todo sigue saliendo del handler global, como el resto del repo — sin un camino de error paralelo para este endpoint. F5d ancla cada error a su celda en la grilla usando la clave `Tipo[índice].Campo`.
 
+El guard de `409` de §2.6 y el `409`/`404` de `/revertir/{id}` (§3) NO son errores de validación estructurada: son `ReglaDeNegocioException`/`EntidadNoEncontradaException` comunes, mapeadas por el mismo `DomainExceptionHandler` que ya traduce `ReglaDeNegocioException → 409` y `EntidadNoEncontradaException → 404` (`DomainExceptionHandler.cs:25-26`) para el resto de la app — sin caso especial nuevo en el handler para esto.
+
 ## 7. Auditoría
 
-`AccionAuditada` es append-only y hoy llega a `BajaAdjunto = 41` (`AccionAuditada.cs:59`) → se agrega `ImportacionPlanillas = 42`.
+`AccionAuditada` es append-only y hoy llega a `BajaAdjunto = 41` (`AccionAuditada.cs:59`) → se agregan dos valores nuevos:
+- `ImportacionPlanillas = 42` — una corrida de `/confirmar`.
+- `ReversionImportacion = 43` — una corrida de `/revertir/{id}`.
 
-Un solo `LogAuditoria` por corrida, con el resumen de creados/omitidos en el detalle, insertado DENTRO de la transacción: si la transacción rollbackea, no queda rastro de una importación que no llegó a pasar.
+Un `LogAuditoria` por corrida de `/confirmar`, con el `IdImportacion` del lote y el resumen de creados/omitidos en el detalle, insertado DENTRO de la transacción: si la transacción rollbackea (incluido el rollback del guard de `409`), no queda rastro de una importación que no llegó a pasar. Un `LogAuditoria` por corrida de `/revertir/{id}`, referenciando el `IdImportacion` revertido.
 
 ## 8. Testing
 
@@ -182,8 +225,8 @@ Tres capas, mismo patrón que F5a/F5b:
 
 - **`Application.Tests`**: validación pura con fakes.
   **Gotcha**: los fakes de maestros en `tests/StockApp.Application.Tests/Finanzas/Fakes/RepositorioMaestrosFake.cs` tiran `NotSupportedException` en los métodos de escritura porque F5b es read-only — hay que extenderlos para que F5c pueda ejercitar el get-or-create.
-- **`Infrastructure.Tests`**: transacción contra Postgres real (`Fixtures/PostgresFixture.cs` + `PostgresRepositoryTestBase`). Cubre atomicidad (un fallo en el paso 4 deja la base intacta) e idempotencia (segunda corrida = 0 creados, todo omitido).
-- **`Api.Tests`**: matriz 401/403, `400` estructurado, `200` feliz, más el `404` con el flag apagado (§2.6). Infra ya lista (`Fixtures/ApiFactory.cs` con Testcontainers `postgres:16-alpine` + `ApiTestBase`).
+- **`Infrastructure.Tests`**: transacción contra Postgres real (`Fixtures/PostgresFixture.cs` + `PostgresRepositoryTestBase`). Cubre atomicidad (un fallo en el paso 4 deja la base intacta), idempotencia (segunda corrida = 0 creados, todo omitido) y reversa.
+- **`Api.Tests`**: matriz 401/403, `400` estructurado, `409` (guard y `Forzar`), `404` (revertir un id inexistente), `200` feliz. Infra ya lista (`Fixtures/ApiFactory.cs` con Testcontainers `postgres:16-alpine` + `ApiTestBase`).
 
 ### Criterio de aceptación duro de la fase
 
@@ -195,21 +238,30 @@ End-to-end con las planillas reales (gitignored, en `tests/StockApp.Api.Tests/Fi
 
 Son los mismos números de §11 que F5b validó en memoria (sobre el resultado del análisis); acá quedan persistidos en la base real.
 
-### Gotchas de test a arreglar
+### Tests nuevos específicos de esta fase
 
-- `tests/StockApp.Api.Tests/Fixtures/ApiTestBase.cs`, método `LimpiarTablas()` (líneas 41-50), NO trunca `"IngresosCaja"`. Hoy no molesta porque ningún test escribe ingresos vía la API; en cuanto F5c lo haga, los tests de la collection se filtran estado entre sí. Hay que agregar `"IngresosCaja"` al `TRUNCATE`.
-- `tests/StockApp.Api.Tests/Fixtures/ApiFactory.cs` sobrescribe configuración vía `AddInMemoryCollection` (líneas 49-65) para apuntar al Postgres del contenedor y otros valores de test. Con el flag de §2.6 en default `false`, TODOS los tests de importación existentes de F5b (`ImportacionEndpointTests.cs`, `ImportacionAceptacionTests.cs`) empezarían a dar `404` en lugar de `401`/`403`/`200`. Hay que agregar `["Importacion:Habilitada"] = "true"` a esa colección para que la `ApiFactory` compartida siga probando el importador habilitado.
-- Test nuevo requerido: con `Importacion:Habilitada = false` (factory propia vía `WithWebHostBuilder`, mismo patrón que `RateLimitingTests` usa para pisar configuración puntual), `POST /finanzas/importar/analizar` y `POST /finanzas/importar/confirmar` devuelven `404` aunque el token sea de Admin.
+- **Trazabilidad**: los registros creados por `/confirmar` traen `IdImportacion` seteado; los cargados por las vías normales (ABM manual) lo traen `null`.
+- **Guard de re-importación**: segunda confirmación del mismo ejercicio sin `Forzar` → `409`; con `Forzar = true` → `200`.
+- **Reversa**: `/confirmar` → `/revertir/{id}` → todo el lote (`Gasto`, `IngresoCaja`, `LineaPoa`) queda `Activo = false`; los maestros creados por la corrida SIGUEN `Activo = true`; los `PagoGasto` del lote quedan inactivos por cascada vía `GastoId`.
+- **Ciclo completo**: `/confirmar` → `/revertir/{id}` → `/confirmar` de nuevo SIN `Forzar` → `200` (el guard de §2.6 no cuenta las corridas ya revertidas).
+- **Revertir dos veces**: `/revertir/{id}` sobre un lote ya revertido → `409`. `/revertir/{id}` con un `id` que no existe → `404`.
+- **Límite de tamaño de upload**: archivo `.ods` que excede el límite en `/analizar` → rechazado (no llega a `ZipArchive`).
+
+### Gotcha de test a arreglar
+
+`tests/StockApp.Api.Tests/Fixtures/ApiTestBase.cs`, método `LimpiarTablas()` (líneas 41-50), NO trunca `"IngresosCaja"`. Hoy no molesta porque ningún test escribe ingresos vía la API; en cuanto F5c lo haga, los tests de la collection se filtran estado entre sí. Hay que agregar `"IngresosCaja"` al `TRUNCATE`.
+
+No hay cambios pendientes en `ApiFactory.cs`: al no existir un flag de configuración (§2.6), no hace falta tocar la `AddInMemoryCollection` de esa fixture para este diseño.
 
 ## 9. Fuera de alcance (es F5d)
 
-- `ImportacionApiClient` — molde: `AdjuntoApiClient.cs:22-33` (`SubirAsync`, `PostAsync` + `ApiErrores.EnviarAsync`/`AsegurarExitoAsync`).
+- `ImportacionApiClient` — molde: `AdjuntoApiClient.cs:22-33` (`SubirAsync`, `PostAsync` + `ApiErrores.EnviarAsync`/`AsegurarExitoAsync`). Cubre tanto `/confirmar` como `/revertir/{id}`.
 - La primera grilla editable del repo: las 15 grillas `DataGrid` actuales del desktop son todas `IsReadOnly="True"`.
 - La pantalla con pestañas por tipo — molde: `MaestrosFinanzasViewModel` (`src/StockApp.Presentation/ViewModels/Finanzas/MaestrosFinanzasViewModel.cs`).
-- El ítem admin-only en el sidebar.
+- El ítem admin-only en el sidebar, incluida cualquier UI para listar corridas previas y disparar su reversa con un botón.
 
 ## 10. Advertencia operativa
 
 Antes de correr la importación REAL hay que reconciliar la planilla POA: `docs/finanzas-discrepancias-planilla-poa-2026.md` documenta que la hoja "SALDO TOTALES" está desincronizada de las hojas de línea (Literal B −301.500, Literal C −480.000 sin explicar). F5c escribe lo que dicen las hojas de LÍNEA, no el resumen de "SALDO TOTALES".
 
-Recordatorio operativo ligado a §2.6: el importador está apagado por defecto. La ventana real de migración empieza con `Importacion__Habilitada=true` en el entorno, y termina apagándolo de nuevo — no alcanza con reconciliar la planilla, también hay que abrir y cerrar la ventana de exposición del endpoint.
+Dado que no hay flag de servidor que apagar (§2.6), el control real de la ventana de migración es operativo, no técnico: los endpoints están siempre disponibles para quien tenga rol Admin. Si algo sale mal, la respuesta correcta es `/revertir/{id}` (§2.7) sobre el `IdImportacion` de la corrida, no depender de que el importador "esté apagado".
