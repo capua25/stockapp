@@ -304,6 +304,19 @@ public class ImportacionRepository : IImportacionRepository
     private static string? NormalizarOpcional(string? texto) =>
         string.IsNullOrWhiteSpace(texto) ? null : Normalizar(texto);
 
+    /// <summary>Colapsa blanco ("" o " ") a null antes de persistir (review Important 3): sin
+    /// esto, un valor en blanco se guardaba tal cual (`?.Trim()` da "", no null). Para
+    /// NumeroFactura eso es un bug real — el payload decide la rama SIN factura con
+    /// `!string.IsNullOrWhiteSpace(...)`, pero "" persistida NO es null, así que el índice único
+    /// parcial (WHERE "NumeroFactura" IS NOT NULL) SÍ le aplica, y en la relectura
+    /// (Where(g => g.NumeroFactura is null)) esa fila queda del lado CON factura mientras el
+    /// payload la sigue tratando SIN factura — dos predicados partiendo el mismo universo de
+    /// forma distinta. Con este colapso, ambos lados usan el mismo criterio: blanco == ausente,
+    /// siempre. Se aplica también a NumeroOrden/Destino por consistencia, aunque ninguno de los
+    /// dos tiene un índice único de por medio.</summary>
+    private static string? TrimoNulo(string? texto) =>
+        string.IsNullOrWhiteSpace(texto) ? null : texto.Trim();
+
     // ── Dedupe por clave natural (spec §4) ──────────────────────────────────────────────────
     //
     // Una sola función de proyección por caso, compartida entre la carga del set existente
@@ -318,6 +331,22 @@ public class ImportacionRepository : IImportacionRepository
     // dato distinto (el usuario corrigió el monto y reimportó) generaban un 23505 de Postgres
     // que tiraba abajo TODA la importación. Gasto SIN NumeroFactura: no hay índice único que lo
     // limite, así que sigue con la clave ancha (ProveedorId, NumeroOrden, Fecha, MontoTotal).
+    //
+    // INVARIANTE GENERAL (re-review, CRITICAL 1 / IMPORTANT 2): el set de dedupe que se carga
+    // desde la base tiene que cubrir AL MENOS el mismo universo que la restricción única que lo
+    // respalda — nunca menos. Hubo una regresión real acá: un acotado "por ejercicio"
+    // (Where(... && Fecha >= inicioEjercicio && Fecha < finEjercicio)) se aprobó como Minor de
+    // performance y en realidad rompía la invariante en los dos sentidos. (1)
+    // IX_Gastos_ProveedorId_NumeroFactura NO tiene ninguna restricción de fecha — un proveedor
+    // puede reusar el mismo número de factura en dos ejercicios distintos, y acotar el set por
+    // ejercicio dejaba esa colisión invisible para el dedupe en memoria, con un 23505 real
+    // esperando en Postgres. (2) El camino SIN factura y los ingresos NO tienen ningún índice
+    // único que los frene — asumir que toda Fecha del payload cae dentro del Ejercicio declarado
+    // (nadie lo valida: ni ValidarAsync, ni el parser de .ods, ni los compromisos POA tipeados a
+    // mano en F5d) dejaba pasar duplicados SILENCIOSOS de filas arrastradas de otro ejercicio,
+    // sin error ni warning. Por eso las queries de abajo cargan SIEMPRE el histórico completo de
+    // activos, sin acotar por fecha/ejercicio — no volver a "optimizar" esto sin releer este
+    // comentario.
 
     private readonly record struct ClaveIngreso(DateTime Fecha, string Concepto, decimal Monto, int FuenteId);
     private readonly record struct ClaveGastoConFactura(int ProveedorId, string NumeroFactura);
@@ -344,23 +373,13 @@ public class ImportacionRepository : IImportacionRepository
 
     private static DateTime? AFechaUtc(DateOnly? fecha) => fecha is { } valor ? AFechaUtc(valor) : null;
 
-    /// <summary>Rango [inicio, fin) de un ejercicio en UTC — acota el set de ingresos/gastos
-    /// activos que se carga para el dedupe (review Minor: antes traía TODO el histórico) sin
-    /// depender de EXTRACT/`.Year` en la query: es una comparación de rango simple sobre
-    /// `Fecha`, traducible tal cual a SQL.</summary>
-    private static (DateTime Inicio, DateTime Fin) RangoEjercicio(int ejercicio) => (
-        new DateTime(ejercicio, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-        new DateTime(ejercicio + 1, 1, 1, 0, 0, 0, DateTimeKind.Utc));
-
     private async Task<(int Creados, int Omitidos)> ProcesarIngresosAsync(
         ConfirmarImportacionDto dto,
         Dictionary<string, FuenteFinanciamiento> fuentePorNombre,
         Guid idImportacion)
     {
-        var (inicioEjercicio, finEjercicio) = RangoEjercicio(dto.Ejercicio);
-
         var clavesExistentes = (await _ctx.IngresosCaja
-                .Where(i => i.Activo && i.Fecha >= inicioEjercicio && i.Fecha < finEjercicio)
+                .Where(i => i.Activo)
                 .Select(i => new { i.Fecha, i.Concepto, i.Monto, i.FuenteFinanciamientoId })
                 .ToListAsync())
             .Select(i => ProyectarClaveIngreso(i.Fecha, i.Concepto, i.Monto, i.FuenteFinanciamientoId))
@@ -417,20 +436,23 @@ public class ImportacionRepository : IImportacionRepository
             Dictionary<string, LineaPoa> lineaPorNombre,
             Guid idImportacion)
     {
-        var (inicioEjercicio, finEjercicio) = RangoEjercicio(dto.Ejercicio);
-
         var gastosActivos = await _ctx.Gastos
-            .Where(g => g.Activo && g.Fecha >= inicioEjercicio && g.Fecha < finEjercicio)
-            .Select(g => new { g.ProveedorId, g.NumeroFactura, g.NumeroOrden, g.Fecha, g.MontoTotal })
+            .Where(g => g.Activo)
+            .Select(g => new { g.Id, g.ProveedorId, g.NumeroFactura, g.NumeroOrden, g.Fecha, g.MontoTotal })
             .ToListAsync();
 
         // GroupBy + First (no ToDictionary directo): mismo criterio que proveedorPorNombre/
         // fuentePorNombre en GetOrCrearMaestrosAsync — el índice único de la base es sobre
         // NumeroFactura CRUDO (Postgres case-sensitive), así que en teoría podrían coexistir dos
         // gastos activos que normalizados colisionan (p.ej. "F-1" y "f-1"). Caso de borde ya
-        // aceptado en el resto del archivo para el mismo tipo de colisión.
+        // aceptado en el resto del archivo para el mismo tipo de colisión. OrderBy(g => g.Id)
+        // ANTES del GroupBy (review Minor): sin esto, gr.First() no es determinístico entre dos
+        // gastos que colisionan al normalizar — dependía del orden que devolviera Postgres, que
+        // no está garantizado sin ORDER BY explícito. Con el OrderBy, el "ganador" es siempre el
+        // gasto con Id más chico (el más antiguo).
         var datosPorClaveConFactura = gastosActivos
             .Where(g => g.NumeroFactura is not null)
+            .OrderBy(g => g.Id)
             .GroupBy(g => ProyectarClaveGastoConFactura(g.ProveedorId, g.NumeroFactura!))
             .ToDictionary(
                 gr => gr.Key,
@@ -446,8 +468,9 @@ public class ImportacionRepository : IImportacionRepository
         var pagosCreados = 0;
         var conflictos = new List<ConflictoGastoDto>();
 
-        foreach (var gastoDto in dto.Gastos)
+        for (var i = 0; i < dto.Gastos.Count; i++)
         {
+            var gastoDto = dto.Gastos[i];
             var proveedor = proveedorPorNombre[Normalizar(gastoDto.Proveedor)];
             var fuente = fuentePorNombre[Normalizar(gastoDto.Fuente)];
             var rubro = rubroPorCodigo[gastoDto.CodigoRubro];
@@ -462,7 +485,7 @@ public class ImportacionRepository : IImportacionRepository
                     var camposDivergentes = CamposDivergentes(datosExistentes, gastoDto, fechaUtc);
                     if (camposDivergentes.Count > 0)
                         conflictos.Add(new ConflictoGastoDto(
-                            gastoDto.Proveedor, gastoDto.NumeroFactura!.Trim(), camposDivergentes));
+                            gastoDto.Proveedor, gastoDto.NumeroFactura!.Trim(), camposDivergentes, i));
                     else
                         omitidos++;
                     continue;
@@ -482,10 +505,10 @@ public class ImportacionRepository : IImportacionRepository
             var gasto = new Gasto
             {
                 Proveedor = proveedor,
-                NumeroFactura = gastoDto.NumeroFactura?.Trim(),
-                NumeroOrden = gastoDto.NumeroOrden?.Trim(),
+                NumeroFactura = TrimoNulo(gastoDto.NumeroFactura),
+                NumeroOrden = TrimoNulo(gastoDto.NumeroOrden),
                 Detalle = gastoDto.Detalle.Trim(),
-                Destino = gastoDto.Destino?.Trim(),
+                Destino = TrimoNulo(gastoDto.Destino),
                 Fecha = fechaUtc,
                 MontoTotal = gastoDto.MontoTotal,
                 FuenteFinanciamiento = fuente,

@@ -770,6 +770,108 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         await using var verificacion = Fixture.CrearContexto();
         Assert.Equal(1, await verificacion.Gastos.CountAsync()); // el inyectado NO quedó persistido (rollback)
     }
+
+    // ── Regresiones del re-review (CRITICAL 1 / IMPORTANT 2 / IMPORTANT 3) ──────────────────────
+
+    [Fact]
+    public async Task ConfirmarAsync_IngresoFechadoFueraDelEjercicio_SegundaCorridaLoOmiteNoLoDuplica()
+    {
+        // CRITICAL 1 (re-review): el acotado por ejercicio que filtraba el set de dedupe
+        // (Where(i => i.Activo && i.Fecha >= inicioEjercicio && i.Fecha < finEjercicio)) asumía
+        // que TODA Fecha del payload cae dentro del Ejercicio declarado — supuesto que nadie
+        // valida (ValidarAsync no compara Fecha contra Ejercicio). Escenario real: planilla del
+        // ejercicio 2026 con una fila de diciembre arrastrada (Fecha = 2025-12-30). Con el filtro
+        // puesto, la segunda corrida (Forzar) no encuentra esa fila en el set acotado a 2026 →
+        // Add → duplicado SILENCIOSO (IngresoCaja no tiene índice único que lo frene, no hay
+        // 23505, no hay error).
+        var payload = new ConfirmarImportacionDto(
+            Ejercicio: Ejercicio,
+            Forzar: false,
+            MaestrosNuevos: new MaestrosNuevosConfirmarDto(
+                new List<string>(), new List<string> { "Literal A" }, new List<RubroNuevoConfirmarDto>()),
+            Ingresos: new List<IngresoConfirmarDto>
+            {
+                new(new DateOnly(Ejercicio - 1, 12, 30), "Transferencia MTOP", 40000m, "Literal A"),
+            },
+            Gastos: new List<GastoConfirmarDto>(),
+            LineasPoa: new List<LineaPoaConfirmarDto>());
+        await _repo.ConfirmarAsync(payload, usuarioId: 1);
+
+        var payloadRepetido = payload with
+        {
+            Forzar = true,
+            MaestrosNuevos = new MaestrosNuevosConfirmarDto(
+                new List<string>(), new List<string>(), new List<RubroNuevoConfirmarDto>()),
+        };
+
+        var resultado = await _repo.ConfirmarAsync(payloadRepetido, usuarioId: 1);
+
+        Assert.Equal(0, resultado.IngresosCreados);
+        Assert.Equal(1, resultado.IngresosOmitidos);
+        await using var verificacion = Fixture.CrearContexto();
+        Assert.Equal(1, await verificacion.IngresosCaja.CountAsync());
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_MismaFacturaEnDistintasFechasDeEjercicio_SeDetectaNoRevientaCon23505()
+    {
+        // IMPORTANT 2 (re-review): IX_Gastos_ProveedorId_NumeroFactura no tiene NINGUNA
+        // restricción de fecha ni de ejercicio — la numeración de facturas de un proveedor puede
+        // reiniciarse cada año. datosPorClaveConFactura tiene que cubrir el universo COMPLETO de
+        // gastos activos con factura, sin acotar por fecha, o esta segunda corrida no ve el gasto
+        // de diciembre del ejercicio anterior, intenta un Add con la misma (ProveedorId,
+        // NumeroFactura), y Postgres tira 23505 (que la red de seguridad A.5 traduce a
+        // ReglaDeNegocioException, tumbando igual la fila en vez de detectar la colisión). La
+        // Fecha difiere entre las dos corridas a propósito (Dic del ejercicio anterior vs. Ene
+        // del actual) — eso hace que se detecte como CONFLICTO (A.2), no como omitido; lo que
+        // importa acá es que se DETECTE sin romper la transacción, no cuál de los dos resultados
+        // sea.
+        await _repo.ConfirmarAsync(
+            PayloadUnGastoConFactura(fecha: new DateOnly(Ejercicio - 1, 12, 20), numeroFactura: "F-1", monto: 500m),
+            usuarioId: 1);
+
+        var resultado = await _repo.ConfirmarAsync(
+            PayloadUnGastoConFactura(
+                fecha: new DateOnly(Ejercicio, 1, 15), numeroFactura: "F-1", monto: 500m,
+                forzar: true, proveedoresNuevos: new List<string>()),
+            usuarioId: 1);
+
+        Assert.Equal(0, resultado.GastosCreados);
+        Assert.Equal(0, resultado.GastosOmitidos);
+        Assert.Single(resultado.Conflictos); // Fecha divergente ⇒ conflicto, no duplicado idéntico
+        Assert.Equal("F-1", resultado.Conflictos[0].NumeroFactura);
+        await using var verificacion = Fixture.CrearContexto();
+        Assert.Equal(1, await verificacion.Gastos.CountAsync());
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_GastoConFacturaEnBlanco_SegundaCorridaLoOmiteNoRevienta()
+    {
+        // IMPORTANT 3 (re-review): con NumeroFactura = " " (un espacio, alcanzable vía
+        // OdsContentXmlReader.NuloSiVacio que usa IsNullOrEmpty, no IsNullOrWhiteSpace, o vía un
+        // input vacío de F5d por JSON), el lado del payload (tieneFactura =
+        // !IsNullOrWhiteSpace(...)) lo trata SIN factura, pero si se persiste tal cual
+        // (?.Trim() da "", no null), la columna queda "" — que NO es null, así que el índice
+        // único parcial (WHERE NumeroFactura IS NOT NULL) SÍ le aplica, y en la relectura
+        // (Where(g => g.NumeroFactura is null)) esa fila queda AFUERA del set SIN factura. La
+        // segunda corrida no la encuentra, hace Add, y Postgres tira 23505. El test existente de
+        // null-vs-"" no cubre este caso porque arranca con null en la primera corrida, no con
+        // blanco.
+        await _repo.ConfirmarAsync(
+            PayloadUnGastoConFactura(numeroFactura: " ", numeroOrden: "O-1"), usuarioId: 1);
+
+        var resultado = await _repo.ConfirmarAsync(
+            PayloadUnGastoConFactura(
+                numeroFactura: " ", numeroOrden: "O-1", forzar: true, proveedoresNuevos: new List<string>()),
+            usuarioId: 1);
+
+        Assert.Equal(0, resultado.GastosCreados);
+        Assert.Equal(1, resultado.GastosOmitidos);
+        await using var verificacion = Fixture.CrearContexto();
+        Assert.Equal(1, await verificacion.Gastos.CountAsync());
+        var gasto = await verificacion.Gastos.SingleAsync();
+        Assert.Null(gasto.NumeroFactura);
+    }
 }
 
 /// <summary>

@@ -86,9 +86,12 @@ public sealed record CampoDivergenteDto(string Campo, string ValorAnterior, stri
 /// <summary>Un gasto CON NumeroFactura que matchea por (Proveedor, NumeroFactura) contra uno ya
 /// activo en la base, pero con datos distintos (spec review Important A.2) — "ya importado con
 /// datos distintos", no un duplicado silencioso. NumeroFactura va sin normalizar (tal cual lo
-/// declaró el usuario en el payload) para que el reporte sea legible.</summary>
+/// declaró el usuario en el payload) para que el reporte sea legible. Indice (agregado AL FINAL,
+/// re-review Minor) es la posición de la fila dentro de dto.Gastos — la misma clave estructurada
+/// "Gastos[i]" que ya usa ConfirmacionImportacionService.ValidarAsync (A.4) — para que F5d pueda
+/// resaltar la fila exacta en la grilla sin tener que buscarla por proveedor+factura.</summary>
 public sealed record ConflictoGastoDto(
-    string Proveedor, string NumeroFactura, IReadOnlyList<CampoDivergenteDto> CamposDivergentes);
+    string Proveedor, string NumeroFactura, IReadOnlyList<CampoDivergenteDto> CamposDivergentes, int Indice);
 
 /// <summary>Respuesta feliz de /revertir/{id}: contadores de registros dados de baja por tipo.</summary>
 public sealed record ResultadoReversionDto(
