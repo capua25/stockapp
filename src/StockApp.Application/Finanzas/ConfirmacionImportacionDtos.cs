@@ -1,0 +1,71 @@
+using StockApp.Domain.Enums;
+
+namespace StockApp.Application.Finanzas;
+
+/// <summary>
+/// Payload de POST /finanzas/importar/confirmar (F5c, spec §3). Los maestros se referencian
+/// por NOMBRE (Proveedor/Fuente) o CÓDIGO (Rubro), no por Id — la mayoría no existe todavía en
+/// la base; el servidor resuelve nombre/código → Id con get-or-create dentro de la transacción.
+/// Contrato PROPIO, no reutiliza los DTOs de análisis de F5b (ResultadoAnalisisDto y afines):
+/// los campos obligatorios del dominio van NO nullable acá aunque el análisis los deje vacíos.
+/// </summary>
+public sealed record ConfirmarImportacionDto(
+    int Ejercicio,
+    bool Forzar,
+    MaestrosNuevosConfirmarDto MaestrosNuevos,
+    IReadOnlyList<IngresoConfirmarDto> Ingresos,
+    IReadOnlyList<GastoConfirmarDto> Gastos,
+    IReadOnlyList<LineaPoaConfirmarDto> LineasPoa);
+
+/// <summary>Conjuntos de maestros a crear, declarados EXPLÍCITAMENTE por el usuario (F5d). Nada
+/// se crea por fuera de lo que aparece acá — es la "regla de cierre" del spec §3.</summary>
+public sealed record MaestrosNuevosConfirmarDto(
+    IReadOnlyList<string> Proveedores,
+    IReadOnlyList<string> Fuentes,
+    IReadOnlyList<RubroNuevoConfirmarDto> Rubros);
+
+public sealed record RubroNuevoConfirmarDto(int Codigo, string Nombre);
+
+public sealed record IngresoConfirmarDto(DateOnly Fecha, string Concepto, decimal Monto, string Fuente);
+
+/// <summary>
+/// LineaPoa es null cuando el gasto NO está vinculado a ningún proyecto POA (la mayoría de los
+/// gastos del libro caja). Cuando no es null, tiene que resolver contra una LineaPoa YA
+/// existente en la base para este Ejercicio o contra una declarada en el propio payload
+/// (LineasPoa) — NO existe un "MaestrosNuevos.LineasPoa" separado: la lista LineasPoa del
+/// payload ES la declaración.
+///
+/// FechaVencimiento (agregado tras revisión del usuario): obligatoria cuando Condicion ==
+/// Credito, valida en Task 3. Sin ella, GastoService.AltaAsync (alta manual) rechaza el gasto
+/// (GastoService.cs:272-273) — ImportacionRepository escribe directo contra AppDbContext, sin
+/// pasar por GastoService, así que no hay bloqueo técnico, pero un Credito sin vencimiento
+/// nunca aparecería en el Calendario de Pagos (F4): sería un compromiso invisible. Va AL FINAL
+/// de la lista de parámetros (no en medio) para no reordenar ninguna construcción posicional
+/// ya escrita en este plan.
+/// </summary>
+public sealed record GastoConfirmarDto(
+    string Proveedor, string? NumeroFactura, string? NumeroOrden,
+    string Detalle, string? Destino, DateOnly Fecha, decimal MontoTotal,
+    string Fuente, int CodigoRubro, string? LineaPoa, CondicionPago Condicion,
+    DateOnly? FechaVencimiento);
+
+public sealed record LineaPoaConfirmarDto(
+    string Nombre, string Programa,
+    IReadOnlyList<AsignacionConfirmarDto> Asignaciones);
+
+public sealed record AsignacionConfirmarDto(string Fuente, decimal Monto);
+
+/// <summary>Respuesta feliz de /confirmar. IdImportacion es el Guid del lote — necesario para
+/// poder revertirlo después con /revertir/{id}.</summary>
+public sealed record ResultadoConfirmacionDto(
+    Guid IdImportacion,
+    int ProveedoresCreados, int FuentesCreadas, int RubrosCreados,
+    int LineasPoaCreadas, int AsignacionesCreadas,
+    int IngresosCreados, int IngresosOmitidos,
+    int GastosCreados, int GastosOmitidos, int PagosCreados);
+
+/// <summary>Respuesta feliz de /revertir/{id}: contadores de registros dados de baja por tipo.</summary>
+public sealed record ResultadoReversionDto(
+    Guid IdImportacion,
+    int GastosRevertidos, int PagosRevertidos, int IngresosRevertidos,
+    int LineasPoaRevertidas, int AsignacionesRevertidas);

@@ -24,6 +24,10 @@ public class DomainExceptionHandler : IExceptionHandler
             // una regla de negocio real.
             EntidadNoEncontradaException => (StatusCodes.Status404NotFound, "Recurso no encontrado."),
             ReglaDeNegocioException      => (StatusCodes.Status409Conflict, "Regla de negocio violada."),
+            // F5c: errores de validación estructurada del payload de /confirmar (referencias
+            // nominales que no resuelven, campos obligatorios ausentes). Mismo 400 que
+            // ArgumentException, pero con el diccionario Errores agregado más abajo.
+            ValidacionImportacionException => (StatusCodes.Status400BadRequest, "Solicitud inválida."),
             ArgumentException            => (StatusCodes.Status400BadRequest, "Solicitud inválida."),
             UnauthorizedAccessException  => (StatusCodes.Status403Forbidden, "Prohibido."),
             // Binding fallido de Minimal API (ej. valor de query param que no matchea un enum):
@@ -59,6 +63,14 @@ public class DomainExceptionHandler : IExceptionHandler
             contexto.ProblemDetails.Extensions["productoId"]         = stock.ProductoId;
             contexto.ProblemDetails.Extensions["stockActual"]        = stock.StockActual;
             contexto.ProblemDetails.Extensions["cantidadSolicitada"] = stock.CantidadSolicitada;
+        }
+
+        // F5c: mismo shape que Microsoft.AspNetCore.Http.Results.ValidationProblem produciría
+        // (un objeto "errors" con clave "Tipo[índice].Campo" → array de mensajes), sin poder
+        // usar ese helper acá porque IExceptionHandler no devuelve un IResult.
+        if (exception is ValidacionImportacionException validacion)
+        {
+            contexto.ProblemDetails.Extensions["errors"] = validacion.Errores;
         }
 
         return await problemDetailsService.TryWriteAsync(contexto);
