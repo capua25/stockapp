@@ -55,7 +55,33 @@ línea de esa fuente (LUCES DE NAVIDAD, ROPA PARA FUNCIONARIOS, EVENTOS, PRENSA,
 CONTENEDORES, COMPOSTERAS-C), ni hay ninguna anotación manual equivalente en "SALDO TOTALES" que
 la explique. Queda abierta.
 
-## 3. Recomendación
+## 3. La hoja EVENTOS está descuadrada contra sus propios movimientos
+
+Este caso es distinto a los dos anteriores: no es el resumen ("SALDO TOTALES") contra las hojas,
+sino una hoja de línea descuadrada contra sus propios movimientos.
+
+La hoja "EVENTOS" (Literal C) declara presupuesto=2.505.700 y saldo=2.205.700, es decir que según
+la hoja se consumieron **300.000**. Pero la hoja tiene un solo movimiento cargado: fila 14, orden
+"SUMINISTRO 068555", importe **150.000**, sin proveedor y sin número de factura (es un
+compromiso, no un gasto facturado).
+
+Faltan 150.000 en movimientos: el saldo de la hoja dice que se gastó el doble de lo que está
+detallado en sus propias filas.
+
+Esto no es un dato mal tipeado que se pueda corregir a ojo: el movimiento faltante **no existe en
+la planilla**. No hay fila, no hay importe, no hay fecha a la que atribuirlo. Sin el comprobante o
+el registro original de ese gasto, nadie puede reconstruir de dónde salen esos 150.000.
+
+**Consecuencia para la migración:** F5c migra los movimientos reales de cada hoja, no el saldo
+cacheado. Como el único movimiento migrable de EVENTOS es el de 150.000, la línea POA de EVENTOS
+va a quedar en la base con 150.000 más de disponible que lo que dice la planilla. Dos escenarios:
+
+- Si ese gasto de 150.000 existió de verdad, hay que agregar el movimiento faltante al .ods
+  ANTES de migrar.
+- Si no existió y el saldo de la hoja estaba mal calculado, no hay nada que corregir: el número
+  que va a quedar en la base es el correcto.
+
+## 4. Recomendación
 
 Reconciliar la planilla ANTES de correr la migración one-shot real (F5c):
 
@@ -64,6 +90,9 @@ Reconciliar la planilla ANTES de correr la migración one-shot real (F5c):
    correcto va del otro lado.
 2. Investigar el origen de los 480.000 de diferencia en Literal C — no atribuible a ningún gasto
    individual visible en las hojas de línea actuales.
+3. Resolver el descuadre interno de la hoja EVENTOS (150.000 sin movimiento que los explique):
+   confirmar si el gasto existió y cargar el movimiento faltante al .ods, o dejar constancia de
+   que el saldo de la hoja estaba mal calculado.
 
 Mientras esto no se resuelva, el criterio de aceptación §11 (`SaldosPoa`) sigue siendo la fuente
 de verdad para F5b porque es un valor cacheado único y estable de la planilla, pero **F5c va a
