@@ -22,6 +22,19 @@ public static class ImportacionEndpoints
     /// </summary>
     private const long LimiteBytesBodyConfirmacion = 5 * 1024 * 1024;
 
+    /// <summary>
+    /// Filtro compartido de límite de tamaño de BODY (F5c §3), usado por /confirmar y /revertir
+    /// — antes duplicado idéntico entre los dos endpoints.
+    /// </summary>
+    private static async ValueTask<object?> LimitarTamañoBody(
+        EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    {
+        var limite = context.HttpContext.Features.Get<IHttpMaxRequestBodySizeFeature>();
+        if (limite is not null && !limite.IsReadOnly)
+            limite.MaxRequestBodySize = LimiteBytesBodyConfirmacion;
+        return await next(context);
+    }
+
     public static IEndpointRouteBuilder MapImportacionEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapPost("/finanzas/importar/analizar", async (
@@ -47,13 +60,7 @@ public static class ImportacionEndpoints
             var resultado = await confirmacion.ConfirmarAsync(dto);
             return Results.Ok(resultado);
         })
-        .AddEndpointFilter(async (context, next) =>
-        {
-            var limite = context.HttpContext.Features.Get<IHttpMaxRequestBodySizeFeature>();
-            if (limite is not null && !limite.IsReadOnly)
-                limite.MaxRequestBodySize = LimiteBytesBodyConfirmacion;
-            return await next(context);
-        })
+        .AddEndpointFilter(LimitarTamañoBody)
         .RequireAuthorization(Permisos.ImportarPlanillas);
 
         app.MapPost("/finanzas/importar/revertir/{id:guid}", async (
@@ -62,13 +69,7 @@ public static class ImportacionEndpoints
             var resultado = await confirmacion.RevertirAsync(id);
             return Results.Ok(resultado);
         })
-        .AddEndpointFilter(async (context, next) =>
-        {
-            var limite = context.HttpContext.Features.Get<IHttpMaxRequestBodySizeFeature>();
-            if (limite is not null && !limite.IsReadOnly)
-                limite.MaxRequestBodySize = LimiteBytesBodyConfirmacion;
-            return await next(context);
-        })
+        .AddEndpointFilter(LimitarTamañoBody)
         .RequireAuthorization(Permisos.ImportarPlanillas);
 
         return app;
