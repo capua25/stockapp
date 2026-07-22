@@ -131,6 +131,12 @@ builder.Services.AddScoped<IFinanzasVistasService, FinanzasVistasService>();
 builder.Services.AddScoped<IPlanillaParser, PlanillaOdsParser>();
 builder.Services.AddScoped<IAnalisisImportacionService, AnalisisImportacionService>();
 
+// Finanzas — F5c: confirmación transaccional del importador (escritura + idempotencia +
+// guard de re-importación + reversa). IImportacionRepository es la única pieza de todo el
+// flujo de importación que toca EF/Npgsql directamente.
+builder.Services.AddScoped<IImportacionRepository, ImportacionRepository>();
+builder.Services.AddScoped<IConfirmacionImportacionService, ConfirmacionImportacionService>();
+
 // Auditoría (Fase 2b)
 builder.Services.AddScoped<IAuditoriaQueryRepository, AuditoriaQueryRepository>();
 builder.Services.AddScoped<IAuditoriaQueryService, AuditoriaQueryService>();

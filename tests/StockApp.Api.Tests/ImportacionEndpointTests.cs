@@ -253,4 +253,40 @@ public class ImportacionEndpointTests : ApiTestBase
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    /// <summary>
+    /// .ods "de más de 10MB" construido a mano (NO reutiliza EmpaquetarOds): pide
+    /// CompressionLevel.NoCompression explícitamente para que el tamaño del ARCHIVO final en
+    /// bytes sea determinístico (con compresión por defecto, datos repetidos o predecibles
+    /// pueden comprimir a un archivo final de apenas unos bytes — justo el problema de fondo
+    /// que hace peligroso un zip bomb, e inútil para probar el límite del archivo TRANSMITIDO).
+    /// content.xml es basura aleatoria, no XML válido — no importa: el chequeo de tamaño tiene
+    /// que cortar ANTES de que nadie intente parsearlo como .ods.
+    /// </summary>
+    private static byte[] CrearOdsDeMasDe10MbSinComprimir()
+    {
+        var relleno = new byte[10 * 1024 * 1024 + 1];
+        System.Security.Cryptography.RandomNumberGenerator.Fill(relleno);
+
+        using var stream = new MemoryStream();
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var entrada = zip.CreateEntry("content.xml", CompressionLevel.NoCompression);
+            using var escritura = entrada.Open();
+            escritura.Write(relleno, 0, relleno.Length);
+        }
+        return stream.ToArray();
+    }
+
+    [Fact]
+    public async Task PostAnalizar_ArchivoGastosSuperaElLimiteDeTamano_Devuelve400()
+    {
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var response = await client.PostAsync(
+            "/finanzas/importar/analizar",
+            ArmarMultipart(CrearOdsDeMasDe10MbSinComprimir(), CrearOdsPoaMinimo(), 2026));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
 }
