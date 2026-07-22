@@ -76,13 +76,21 @@ Motivación: re-importar SUMA, no CORRIGE. Ejemplo concreto: si un gasto entró 
 **Mecanismo**:
 - Cada corrida de `/confirmar` genera un `IdImportacion` (`Guid`) que se estampa en el `LogAuditoria` de la corrida y en cada registro que esa corrida crea.
 - Columna nueva `IdImportacion` (`Guid?`, nullable, índice no-único) en `Gasto`, `IngresoCaja` y `LineaPoa`. Nullable porque todo lo cargado a mano (la inmensa mayoría de los datos, hoy y a futuro) la tiene en `null`.
-- `PagoGasto` **no lleva columna propia**: se revierte por cascada siguiendo `GastoId` (los pagos automáticos que `/confirmar` crea para los gastos `CondicionPago.Contado` son hijos de un `Gasto` con `IdImportacion` seteado).
-- `AsignacionPresupuestal` **no lleva columna propia**: es hija del agregado `LineaPoa` y no tiene un `Activo` propio en el dominio (`AsignacionPresupuestal.cs` — solo `Id`, `LineaPoaId`, `FuenteFinanciamientoId`, `Monto`); al revertir queda colgando de una `LineaPoa` inactiva, que es el estado correcto (no se muestra en ningún lado que filtre por `LineaPoa.Activo`).
+- `PagoGasto` **también lleva columna propia `IdImportacion`** (`Guid?`, nullable, índice no-único). El importador la estampa en el pago automático de contado que crea (§2.3); todo pago cargado a mano queda en `null`. Ver más abajo por qué esto reemplaza la idea original de "se revierte por cascada siguiendo `GastoId`, sin distinguir origen".
+- `AsignacionPresupuestal` **no lleva columna propia**: es hija del agregado `LineaPoa` y no tiene un `Activo` propio en el dominio (`AsignacionPresupuestal.cs` — solo `Id`, `LineaPoaId`, `FuenteFinanciamientoId`, `Monto`); al revertir queda colgando de una `LineaPoa` inactiva, que es el estado correcto (no se muestra en ningún lado que filtre por `LineaPoa.Activo`). **`AsignacionPresupuestal` NUNCA se toca explícitamente en `/revertir/{id}`** — no hay baja lógica, no hay cascada, nada: dar de baja la `LineaPoa` alcanza.
 - **Los maestros (`Proveedor`, `FuenteFinanciamiento`, `RubroGasto`) NO se revierten**, aunque la corrida los haya creado. Razón: para cuando se ejecuta la reversa, esos maestros pueden estar ya referenciados por gastos cargados a mano (el sistema sigue operando en paralelo a la migración). Darlos de baja rompería datos que nunca fueron parte del lote. Un maestro de más es inocuo (aparece en un combo, nadie lo usa); un gasto huérfano por una FK a un maestro inactivo es un bug.
-- `POST /finanzas/importar/revertir/{id}` — baja lógica (`Activo = false`) de todo el lote (`Gasto`, `IngresoCaja`, `LineaPoa` con ese `IdImportacion`, más sus `PagoGasto`/`AsignacionPresupuestal` hijos) en UNA transacción, mismo patrón que `/confirmar`. Permiso: reusa `Permisos.ImportarPlanillas` — no hace falta un permiso nuevo, es la misma operación de migración.
+- `POST /finanzas/importar/revertir/{id}` — baja lógica (`Activo = false`) del lote en UNA transacción, mismo patrón que `/confirmar`. Permiso: reusa `Permisos.ImportarPlanillas` — no hace falta un permiso nuevo, es la misma operación de migración. Ver el detalle exacto de qué se toca y qué no en §5.
 - La reversa se audita: `AccionAuditada.ReversionImportacion = 43` (append-only, siguiente valor después de `ImportacionPlanillas = 42`, ver §7).
 - El guard del `409` de §2.6 mira específicamente importaciones **no revertidas**: si se revirtió una corrida, se puede volver a importar limpio sobre el mismo ejercicio sin necesidad de `Forzar`.
 - Respuesta: `ResultadoReversionDto` con contadores de registros dados de baja por tipo (gastos, pagos, ingresos, líneas POA, asignaciones).
+
+**Decisiones tomadas durante la implementación (no estaban en la versión original de este documento):**
+
+**a) La reversa se bloquea si hay pagos manuales sobre un gasto del lote.** No basta con distinguir `PagoGasto` por columna: si un gasto del lote tiene, además del pago automático de contado, un pago **activo que el importador no creó** (`PagoGasto.IdImportacion` distinto del lote — típicamente `null`, cargado a mano), `/revertir/{id}` devuelve `409` y no modifica NADA, en vez de arrastrar ese pago en la baja lógica. El mensaje enumera los gastos afectados por proveedor y número de factura. El humano anula esos pagos a mano desde el desktop (operación normal, ya soportada) y recién ahí puede reintentar la reversa. Razón: espeja la regla que el dominio ya aplica en `GastoService.AnularAsync` ("No se puede anular un gasto con pagos activos: primero anulá los pagos", `GastoService.cs:158-160`), y evita que la reversa destruya en silencio un registro de plata real — por ejemplo un pago parcial que el operador registró semanas después de la importación, sobre una factura que resultó ser un compromiso mal migrado. Decisión del usuario.
+
+**b) La reversa libera los movimientos de stock.** `RevertirAsync` pone en `null` el `GastoId` de todo `MovimientoStock` asociado a un gasto que se está revirtiendo, dentro de la misma transacción. Sin esto, esos movimientos quedaban atrapados para siempre: no se pueden re-facturar contra otro gasto (ya tienen `GastoId` asignado) ni se liberan anulando el gasto (un gasto inactivo no deja de estar referenciado por la FK). Es comportamiento de la reversa, no de la anulación manual de un gasto — un gasto anulado a mano vía `GastoService` NO desvincula sus movimientos de stock; F5c sí, porque acá la corrección típica después de una reversa es reimportar distinto, y el movimiento de stock necesita quedar libre para asociarse al gasto correcto.
+
+**c) `RevertirAsync` toma el mismo `pg_advisory_xact_lock` que `ConfirmarAsync`**, con la clave del ejercicio (el mismo recurso — `LogAuditoria.EntidadId`, que `ConfirmarAsync` estampa con el `Ejercicio`), para que las dos operaciones se serialicen entre sí. Sin esto: una reversa concurrente con una confirmación del mismo ejercicio podía dejar un gasto ACTIVO de la corrida nueva colgando de una `LineaPoa` que la reversa de la corrida vieja dejó INACTIVA — un estado que nadie revertiría nunca porque ninguna corrida sabe que el otro proceso existió.
 
 ## 3. Contrato de los endpoints
 
@@ -137,14 +145,14 @@ Respuesta feliz: `ResultadoConfirmacionDto` con `IdImportacion` (el `Guid` del l
 
 - `{id}` es el `IdImportacion` (`Guid`) devuelto por `/confirmar`.
 - `.RequireAuthorization(Permisos.ImportarPlanillas)` — mismo permiso, sin uno nuevo.
-- `404` si no existe ningún `LogAuditoria` de `ImportacionPlanillas` con ese `IdImportacion`. `409` si ya fue revertido antes (la reversa no es idempotente por diseño: revertir dos veces la misma corrida no tiene un significado adicional).
+- `404` si no existe ningún `LogAuditoria` de `ImportacionPlanillas` con ese `IdImportacion`. `409` si ya fue revertido antes (la reversa no es idempotente por diseño: revertir dos veces la misma corrida no tiene un significado adicional). `409` también si algún gasto del lote tiene pagos activos que el importador no creó (§2.7.a) — el mensaje enumera esos gastos por proveedor y número de factura; nada se modifica hasta que el humano anule esos pagos y reintente.
 - Respuesta feliz: `ResultadoReversionDto` con contadores de dados de baja por tipo.
 
 ### Límite de tamaño de upload
 
 `/analizar` (multipart, recibe los `.ods`) lleva un límite de tamaño de archivo — la mitigación real contra zip bomb, porque acota el input comprimido antes de que `ZipArchive` lo descomprima. `/confirmar` y `/revertir/{id}` (JSON) llevan un límite de tamaño de body más generoso, como defensa en profundidad contra un payload de abuso — no mitigan zip bomb porque no descomprimen nada, así que ahí el límite es solo un techo razonable, no una mitigación de la misma clase de riesgo.
 
-## 4. Idempotencia — claves naturales y migración de trazabilidad
+## 4. Idempotencia — claves naturales y migraciones de trazabilidad
 
 | Entidad | Clave natural | Índice único en la DB |
 |---|---|---|
@@ -158,7 +166,12 @@ Respuesta feliz: `ResultadoConfirmacionDto` con `IdImportacion` (el `Guid` del l
 
 Maestros y líneas POA: get-or-create (si la clave existe, se reutiliza el `Id`; si no, se crea). Ingresos y gastos: si la clave natural ya está presente en la base → se saltea y se cuenta como omitido.
 
-**Matiz importante — corrección respecto de una versión anterior de este documento**: F5c **sí trae una migración EF** (las columnas `IdImportacion` en `Gasto`, `IngresoCaja` y `LineaPoa` de §2.7, más sus índices no-únicos, necesarias para poder ubicar y revertir un lote). Lo que se sostiene sin cambios es que **NO se agregan índices ÚNICOS nuevos** — ese seguía siendo el argumento original: un índice único sobre `Gasto (ProveedorId, Factura, Orden, Fecha, Monto)` rompería la carga manual legítima (mismo proveedor, sin factura, misma fecha, mismo monto, `Detalle` distinto son dos gastos válidos que hoy se pueden cargar sin problema). El índice parcial `(ProveedorId, NumeroFactura)` sobre activos que ya existe (`AppDbContext.cs:165-167`, migración `20260716181915_UniqueFacturaProveedorGastosActivos`) cubre el caso que sí importa proteger (factura duplicada del mismo proveedor). Una columna de trazabilidad con índice no-único no le impone ninguna regla nueva a nadie que no pase por el importador; un índice único sí. Son decisiones distintas y no se contradicen entre sí.
+**Matiz importante — corrección respecto de una versión anterior de este documento**: F5c **sí trae migraciones EF** — la fase terminó con TRES, no con una sola:
+- `20260721153410_IdImportacionTrazabilidad` — columna `IdImportacion` (`Guid?`) en `Gasto`, `IngresoCaja` y `LineaPoa` (§2.7), necesaria para poder ubicar y revertir un lote.
+- `20260722023517_LogAuditoriaIdLote` — columna tipada `IdLote` (`Guid?`) en `LogAuditoria`, en reemplazo de parsear un `Guid` embebido como texto dentro de `Detalle` (decisión tomada durante la implementación: una columna tipada e indexada es más robusta y permite filtrar en SQL en vez de traer filas y parsear en memoria).
+- `20260722105950_PagoGastoIdImportacion` — columna `IdImportacion` (`Guid?`) en `PagoGasto` (§2.7.a), necesaria para el guard de pagos manuales.
+
+Las tres tienen columnas nullable e índices **NO-únicos**. Lo que se sostiene sin cambios es que **NO se agregan índices ÚNICOS nuevos** — ese seguía siendo el argumento original: un índice único sobre `Gasto (ProveedorId, Factura, Orden, Fecha, Monto)` rompería la carga manual legítima (mismo proveedor, sin factura, misma fecha, mismo monto, `Detalle` distinto son dos gastos válidos que hoy se pueden cargar sin problema). El índice parcial `(ProveedorId, NumeroFactura)` sobre activos que ya existe (`AppDbContext.cs:165-167`, migración `20260716181915_UniqueFacturaProveedorGastosActivos`) cubre el caso que sí importa proteger (factura duplicada del mismo proveedor). Una columna de trazabilidad con índice no-único no le impone ninguna regla nueva a nadie que no pase por el importador; un índice único sí. Son decisiones distintas y no se contradicen entre sí.
 
 El dedupe por clave natural vive dentro del importador: al abrir la transacción se cargan en memoria las claves naturales del ejercicio ya presentes en la base y se filtra el payload contra ese set.
 
@@ -173,7 +186,7 @@ Hay precedente de SQL crudo dentro de un repositorio en `GastoRepository.Registr
 - **`IConfirmacionImportacionService` / `ConfirmacionImportacionService`** (`StockApp.Application/Finanzas`): verifica `Permisos.ImportarPlanillas` vía `ICurrentSession` + `IAuthorizationService` — mismo arranque que `AnalisisImportacionService.AnalizarAsync` (`_auth.Verificar(_session.RolActual, Permisos.ImportarPlanillas)`) — valida el payload COMPLETO, resuelve el guard de `409`/`Forzar`, y recién ahí delega la escritura. El mismo servicio (o uno hermano, a definir en tasks) expone la reversa.
 - **`IImportacionRepository`** (`StockApp.Application/Interfaces`) / **`ImportacionRepository`** (`StockApp.Infrastructure/Repositories`): abre la transacción tanto para confirmar como para revertir. Es el único lugar donde puede vivir sin que Application referencie EF/Npgsql — mismo criterio documentado en el comentario de `GastoRepository.cs:113-121` ("en el repo, que es quien referencia Npgsql — Application NO referencia EF/Npgsql para mantener la capa desacoplada").
 - **Patrón a imitar**: `MovimientoStockRepository.RegistrarMovimientoAtomicoAsync` (`MovimientoStockRepository.cs:40-101`) — `await using var tx = await _ctx.Database.BeginTransactionAsync()`, todo el trabajo dentro, UN solo `SaveChangesAsync()`, `tx.CommitAsync()` al final, rollback explícito en cada rama de fallo.
-- **Migración EF nueva** (§4): columnas `IdImportacion` (`Guid?`) + índices no-únicos en `Gasto`, `IngresoCaja`, `LineaPoa`.
+- **Migraciones EF nuevas** (§4, detalle completo ahí): tres migraciones de trazabilidad — `IdImportacion` en `Gasto`/`IngresoCaja`/`LineaPoa`, `IdLote` tipado en `LogAuditoria`, `IdImportacion` en `PagoGasto`. Todas con columnas nullable e índices no-únicos.
 
 ### Orden dentro de la transacción de `/confirmar`
 
@@ -192,14 +205,23 @@ BeginTransaction → pg_advisory_xact_lock(ejercicio)
 
 ### Orden dentro de la transacción de `/revertir/{id}`
 
+**Corrección respecto de una versión anterior de este documento**: acá decía que la reversa hacía "baja lógica en cascada de `PagoGasto` y `AsignacionPresupuestal`". Eso es INCORRECTO y contradice §2.7: `AsignacionPresupuestal` nunca se toca (no tiene columna propia, ni `Activo` propio — queda colgando de la `LineaPoa` inactiva, sin ninguna baja explícita), y `PagoGasto` no se da de baja "por cascada sin distinguir origen" — se da de baja SOLO si pertenece al lote, y si el gasto tiene además un pago activo que NO pertenece al lote, la reversa entera se bloquea (§2.7.a) antes de tocar nada. El orden real, verificado contra `ImportacionRepository.RevertirAsync`:
+
 ```
-BeginTransaction
-  1. Ubicar LogAuditoria de ImportacionPlanillas con ese IdImportacion → 404 si no existe, 409 si ya revertido
-  2. Baja lógica (Activo = false) de Gasto, IngresoCaja, LineaPoa con ese IdImportacion
-  3. Baja lógica en cascada de PagoGasto (por GastoId) y AsignacionPresupuestal (por LineaPoaId)
-     de los registros dados de baja en el paso 2
-  4. Maestros (Proveedor, FuenteFinanciamiento, RubroGasto): SIN TOCAR
-  5. LogAuditoria (ReversionImportacion, referenciando el IdImportacion revertido)
+Pre-transacción: ubicar LogAuditoria de ImportacionPlanillas con ese IdLote → 404 si no existe
+                 (chequeo AFUERA de la transacción: evita pagar conexión + BEGIN + ROLLBACK
+                 cuando el id ni siquiera existe)
+BeginTransaction → pg_advisory_xact_lock(ejercicio) — MISMO recurso que toma ConfirmarAsync (§2.7.c)
+  1. ¿Ya hay un LogAuditoria de ReversionImportacion con este IdLote? → sí: Rollback + 409
+  2. Cargar los Gasto activos del lote (con sus Pagos)
+  3. Guard (§2.7.a): ¿algún gasto tiene un PagoGasto activo con IdImportacion distinto de este
+     lote (incluye null = cargado a mano)? → sí: Rollback + 409, enumerando proveedor + factura
+  4. Baja lógica (Activo = false): los Gasto del lote, sus PagoGasto activos QUE SÍ pertenecen
+     al lote, los IngresoCaja del lote, las LineaPoa del lote
+  5. Liberar los MovimientoStock de los gastos revertidos (§2.7.b): GastoId = null
+  6. AsignacionPresupuestal: SIN TOCAR (queda colgando de la LineaPoa inactiva)
+  7. Maestros (Proveedor, FuenteFinanciamiento, RubroGasto): SIN TOCAR
+  8. LogAuditoria (ReversionImportacion, IdLote = el Guid revertido)
 → un solo SaveChangesAsync → Commit
 ```
 
@@ -226,7 +248,9 @@ El guard de `409` de §2.6 y el `409`/`404` de `/revertir/{id}` (§3) NO son err
 - `ImportacionPlanillas = 42` — una corrida de `/confirmar`.
 - `ReversionImportacion = 43` — una corrida de `/revertir/{id}`.
 
-Un `LogAuditoria` por corrida de `/confirmar`, con el `IdImportacion` del lote y el resumen de creados/omitidos en el detalle, insertado DENTRO de la transacción: si la transacción rollbackea (incluido el rollback del guard de `409`), no queda rastro de una importación que no llegó a pasar. Un `LogAuditoria` por corrida de `/revertir/{id}`, referenciando el `IdImportacion` revertido.
+Un `LogAuditoria` por corrida de `/confirmar`, con el resumen de creados/omitidos en el detalle, insertado DENTRO de la transacción: si la transacción rollbackea (incluido el rollback del guard de `409`), no queda rastro de una importación que no llegó a pasar. Un `LogAuditoria` por corrida de `/revertir/{id}`, referenciando el lote revertido.
+
+El Guid del lote viaja en una columna tipada `LogAuditoria.IdLote` (`Guid?`, migración `20260722023517_LogAuditoriaIdLote`, §4) — no embebido como texto dentro de `Detalle`. Se puede filtrar e indexar en SQL directamente (el guard de re-importación de §2.6 y la búsqueda de `/revertir/{id}` consultan por `IdLote` en la base), en vez de traer filas y parsear un `Guid` desde un string.
 
 ## 8. Testing
 
@@ -253,9 +277,11 @@ La caja de junio 2026 (**43.705**) NO cambia y sigue siendo el mismo número de 
 
 ### Tests nuevos específicos de esta fase
 
-- **Trazabilidad**: los registros creados por `/confirmar` traen `IdImportacion` seteado; los cargados por las vías normales (ABM manual) lo traen `null`.
+- **Trazabilidad**: los registros creados por `/confirmar` traen `IdImportacion` seteado (`Gasto`, `IngresoCaja`, `LineaPoa`, `PagoGasto`); los cargados por las vías normales (ABM manual) lo traen `null`.
 - **Guard de re-importación**: segunda confirmación del mismo ejercicio sin `Forzar` → `409`; con `Forzar = true` → `200`.
-- **Reversa**: `/confirmar` → `/revertir/{id}` → todo el lote (`Gasto`, `IngresoCaja`, `LineaPoa`) queda `Activo = false`; los maestros creados por la corrida SIGUEN `Activo = true`; los `PagoGasto` del lote quedan inactivos por cascada vía `GastoId`.
+- **Reversa (caso simple)**: `/confirmar` → `/revertir/{id}` → todo el lote (`Gasto`, `IngresoCaja`, `LineaPoa`) queda `Activo = false`; los maestros creados por la corrida SIGUEN `Activo = true`; `AsignacionPresupuestal` sigue existiendo tal cual (sin baja propia), colgando de la `LineaPoa` inactiva; los `PagoGasto` que pertenecen al lote (`IdImportacion == idImportacion`) quedan `Activo = false` junto con su gasto.
+- **Reversa bloqueada por pago manual**: un gasto del lote con un `PagoGasto` activo cargado a mano (`IdImportacion == null`) → `/revertir/{id}` devuelve `409`, el mensaje enumera proveedor y número de factura, y NADA se modifica (ni el gasto, ni ningún otro registro del lote). Anulando ese pago a mano y reintentando, la reversa pasa.
+- **Reversa libera stock**: un `MovimientoStock` con `GastoId` apuntando a un gasto del lote → después de `/revertir/{id}`, ese `MovimientoStock.GastoId` es `null`.
 - **Ciclo completo**: `/confirmar` → `/revertir/{id}` → `/confirmar` de nuevo SIN `Forzar` → `200` (el guard de §2.6 no cuenta las corridas ya revertidas).
 - **Revertir dos veces**: `/revertir/{id}` sobre un lote ya revertido → `409`. `/revertir/{id}` con un `id` que no existe → `404`.
 - **Límite de tamaño de upload**: archivo `.ods` que excede el límite en `/analizar` → rechazado (no llega a `ZipArchive`).
