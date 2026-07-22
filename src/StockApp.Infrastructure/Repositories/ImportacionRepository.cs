@@ -122,11 +122,26 @@ public class ImportacionRepository : IImportacionRepository
     /// ConfirmarAsync. Busca y marca "revertida" por <see cref="LogAuditoria.IdLote"/> (columna
     /// tipada, post-review de Task 6) — NO hay ningún parseo de texto embebido en Detalle.
     ///
-    /// Gasto/IngresoCaja/LineaPoa del lote → Activo = false. PagoGasto cae por CASCADA vía
-    /// GastoId (no tiene columna IdImportacion propia — spec §2.7, es hija del agregado Gasto).
-    /// AsignacionPresupuestal NO tiene un Activo propio en el dominio: queda colgando de su
-    /// LineaPoa inactiva, que es el estado correcto — nada en el sistema la filtra por separado
-    /// de LineaPoa.Activo, así que no hay nada que tocar ahí salvo contarlas.
+    /// Gasto/IngresoCaja/LineaPoa del lote → Activo = false. PagoGasto del lote (el pago
+    /// automático de contado que el propio importador creó, identificado por
+    /// PagoGasto.IdImportacion — re-review IMPORTANT 2) → Activo = false también. Un pago MANUAL
+    /// sobre un gasto importado (IdImportacion == null o de otro lote) NUNCA se toca: la reversa
+    /// se BLOQUEA si encuentra uno (ver <see cref="ValidarSinPagosManuales"/>), mismo
+    /// criterio que <see cref="StockApp.Application.Finanzas.GastoService.AnularAsync"/> aplica a
+    /// la anulación individual (GastoService.cs:158-160). AsignacionPresupuestal NO tiene un
+    /// Activo propio en el dominio: queda colgando de su LineaPoa inactiva, que es el estado
+    /// correcto — nada en el sistema la filtra por separado de LineaPoa.Activo, así que no hay
+    /// nada que tocar ahí salvo contarlas.
+    ///
+    /// MovimientoStock vinculado a un gasto revertido (re-review CRITICAL 1) → GastoId = null,
+    /// mutando entidades trackeadas DENTRO de esta misma transacción (nunca
+    /// GastoRepository.DesvincularMovimientosAsync: ese método hace su propio SaveChangesAsync,
+    /// lo que rompería la regla de "un solo SaveChangesAsync" de este método). Sin esto, un
+    /// movimiento asociado a un gasto importado (GastoService.AsociarMovimientosAsync no
+    /// distingue el origen del gasto) quedaba atado para siempre a un GastoId inactivo: no se
+    /// podía refacturar (el gasto ya "tiene" el movimiento) ni liberar (el gasto ya está
+    /// anulado, y AnularAsync rechaza anular dos veces) — exactamente el estado sin salida que
+    /// esta reversa existe para eliminar.
     ///
     /// Los maestros (Proveedor/FuenteFinanciamiento/RubroGasto) NUNCA se tocan: para cuando se
     /// ejecuta una reversa, esos maestros pueden estar ya referenciados por gastos cargados a
@@ -134,19 +149,37 @@ public class ImportacionRepository : IImportacionRepository
     /// </summary>
     public async Task<ResultadoReversionDto> RevertirAsync(Guid idImportacion, int usuarioId)
     {
-        await using var tx = await _ctx.Database.BeginTransactionAsync();
-
+        // Existencia del lote (re-review Minor): se resuelve ANTES de abrir la transacción — el
+        // camino 404 no paga el costo de una conexión + BEGIN + ROLLBACK al pedo. OrderByDescending
+        // + FirstOrDefaultAsync (re-review Minor) da un resultado determinístico aunque, en la
+        // práctica, cada corrida de ConfirmarAsync escribe un IdLote nuevo (Guid.NewGuid()), así
+        // que nunca hay más de UN LogAuditoria de ImportacionPlanillas con el mismo IdLote.
         var logConfirmacion = await _ctx.LogsAuditoria
             .Where(l => l.Accion == AccionAuditada.ImportacionPlanillas && l.IdLote == idImportacion)
+            .OrderByDescending(l => l.Id)
             .FirstOrDefaultAsync();
 
-        // Sin tx.RollbackAsync() explícito (mismo criterio que el guard de re-importación de
-        // ConfirmarAsync): el `await using var tx` de arriba hace rollback al disponerse cuando
-        // la excepción se propaga.
         if (logConfirmacion is null)
             throw new EntidadNoEncontradaException(
                 $"No existe ninguna importación con IdImportacion {idImportacion}.");
 
+        await using var tx = await _ctx.Database.BeginTransactionAsync();
+
+        // Advisory lock por EJERCICIO (re-review IMPORTANT 1), tomado con el MISMO recurso
+        // (logConfirmacion.EntidadId, que ConfirmarAsync estampa con dto.Ejercicio) que
+        // ConfirmarAsync toma en su propio pg_advisory_xact_lock — así ambos métodos se
+        // serializan entre sí para el mismo ejercicio, no solo entre sí mismos. Sin esto: (1) dos
+        // /revertir concurrentes sobre el mismo lote pasaban ambos el guard yaRevertida bajo READ
+        // COMMITTED (ninguno ve el LogAuditoria no committeado del otro) y escribían DOS logs de
+        // ReversionImportacion; (2) un /revertir concurrente con un /confirmar del mismo ejercicio
+        // corría en paralelo sin ningún orden garantizado, dejando estados imposibles de
+        // reconciliar (un gasto ACTIVO de una corrida nueva colgado de una LineaPoa que la reversa
+        // de la corrida vieja dejó INACTIVA).
+        await _ctx.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock({logConfirmacion.EntidadId})");
+
+        // Sin tx.RollbackAsync() explícito (mismo criterio que el guard de re-importación de
+        // ConfirmarAsync): el `await using var tx` de arriba hace rollback al disponerse cuando
+        // la excepción se propaga.
         var yaRevertida = await _ctx.LogsAuditoria.AnyAsync(l =>
             l.Accion == AccionAuditada.ReversionImportacion && l.IdLote == idImportacion);
 
@@ -154,12 +187,22 @@ public class ImportacionRepository : IImportacionRepository
             throw new ReglaDeNegocioException(
                 $"La importación {idImportacion} ya fue revertida anteriormente.");
 
-        var gastos = await _ctx.Gastos.Include(g => g.Pagos)
+        var gastos = await _ctx.Gastos.Include(g => g.Proveedor).Include(g => g.Pagos)
             .Where(g => g.IdImportacion == idImportacion && g.Activo).ToListAsync();
+
+        ValidarSinPagosManuales(gastos, idImportacion);
+
         var ingresos = await _ctx.IngresosCaja
             .Where(i => i.IdImportacion == idImportacion && i.Activo).ToListAsync();
         var lineasPoa = await _ctx.LineasPoa.Include(l => l.Asignaciones)
             .Where(l => l.IdImportacion == idImportacion && l.Activo).ToListAsync();
+
+        var gastoIds = gastos.Select(g => g.Id).ToList();
+        var movimientos = gastoIds.Count == 0
+            ? new List<MovimientoStock>()
+            : await _ctx.MovimientosStock
+                .Where(m => m.GastoId != null && gastoIds.Contains(m.GastoId!.Value))
+                .ToListAsync();
 
         var pagosRevertidos = 0;
         foreach (var gasto in gastos)
@@ -172,6 +215,13 @@ public class ImportacionRepository : IImportacionRepository
             }
         }
 
+        // CRITICAL 1 (re-review): desvincula los movimientos de stock de los gastos revertidos,
+        // mutando entidades YA trackeadas por el _ctx.MovimientosStock.Where(...).ToListAsync() de
+        // arriba — nada de esto dispara un SaveChangesAsync propio, se acumula en el mismo
+        // ChangeTracker que todo lo demás y sale en el único SaveChangesAsync del final.
+        foreach (var movimiento in movimientos)
+            movimiento.GastoId = null;
+
         foreach (var ingreso in ingresos)
             ingreso.Activo = false;
 
@@ -181,6 +231,15 @@ public class ImportacionRepository : IImportacionRepository
             linea.Activo = false;
             // AsignacionPresupuestal no tiene Activo propio (spec §2.7): queda colgando de una
             // LineaPoa inactiva, que es el estado correcto — nada que tocar acá salvo contarlas.
+            //
+            // Imprecisión de reporte conocida (re-review Minor, sin fix posible con el modelo
+            // actual): si otra corrida agregó una asignación a esta MISMA LineaPoa mientras
+            // seguía activa (el camino "línea activa + asignación nueva" de
+            // GetOrCrearLineasPoaAsync, que a propósito NO re-estampa IdImportacion sobre una
+            // línea que ya estaba activa), esa asignación se cuenta acá como "revertida" aunque
+            // no la haya creado ESTE lote. AsignacionPresupuestal no tiene columna IdImportacion
+            // propia (decisión de diseño: es hija de LineaPoa, no un agregado propio con
+            // trazabilidad de lote) — no hay forma de distinguir su origen sin agregar una.
             asignacionesRevertidas += linea.Asignaciones.Count;
         }
 
@@ -202,6 +261,37 @@ public class ImportacionRepository : IImportacionRepository
 
         return new ResultadoReversionDto(
             idImportacion, gastos.Count, pagosRevertidos, ingresos.Count, lineasPoa.Count, asignacionesRevertidas);
+    }
+
+    /// <summary>
+    /// Bloquea la reversa si algún gasto activo del lote tiene un pago ACTIVO que el importador
+    /// NO creó (re-review IMPORTANT 2, decisión del usuario). "No creado por este lote" =
+    /// PagoGasto.IdImportacion distinto de <paramref name="idImportacion"/> — cubre tanto un pago
+    /// cargado a mano (IdImportacion == null) como, en teoría, uno de otro lote. Espeja
+    /// GastoService.AnularAsync (GastoService.cs:158-160, "No se puede anular un gasto con pagos
+    /// activos: primero anulá los pagos"): nunca destruye en silencio un registro de plata que
+    /// efectivamente salió. El mensaje enumera proveedor + número de factura de cada gasto
+    /// afectado para que un humano los ubique en el desktop, anule esos pagos ahí (operación
+    /// normal, ya soportada) y reintente la reversa.
+    /// </summary>
+    private static void ValidarSinPagosManuales(IReadOnlyList<Gasto> gastos, Guid idImportacion)
+    {
+        var gastosConPagoManual = gastos
+            .Where(g => g.Pagos.Any(p => p.Activo && p.IdImportacion != idImportacion))
+            .ToList();
+
+        if (gastosConPagoManual.Count == 0)
+            return;
+
+        var detalle = string.Join(", ", gastosConPagoManual.Select(g =>
+        {
+            var nombreProveedor = g.Proveedor?.Nombre ?? $"Proveedor {g.ProveedorId}";
+            return $"{nombreProveedor} (factura {g.NumeroFactura ?? "s/n"})";
+        }));
+
+        throw new ReglaDeNegocioException(
+            "No se puede revertir: los siguientes gastos tienen pagos que no fueron creados por " +
+            "esta importación. Anulá esos pagos desde el desktop y reintentá la reversa: " + detalle);
     }
 
     /// <summary>

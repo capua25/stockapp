@@ -380,32 +380,16 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
     [Fact]
     public async Task ConfirmarAsync_LineaPoaInactivaPorReversionAnterior_LaReactivaYReestampaIdImportacion()
     {
-        // Important #3 (review): ciclo confirmar → revertir → confirmar dado como escenario de
-        // aceptación explícito en el spec. RevertirAsync todavía no existe (Task 8), así que la
-        // reversa se simula a mano: baja lógica directa de la línea, tal como haría /revertir.
+        // Important #3 (review, cerrado en el re-review de Task 8): ciclo confirmar → revertir →
+        // confirmar dado como escenario de aceptación explícito en el spec. RevertirAsync ya
+        // existe (Task 8) — la reversa se ejercita REAL de punta a punta, sin Forzar en la
+        // segunda corrida (antes se simulaba a mano con Forzar=true porque RevertirAsync no
+        // existía todavía).
         var primero = await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: _usuarioId);
 
-        await using (var ctxRevertir = Fixture.CrearContexto())
-        {
-            var linea = await ctxRevertir.LineasPoa.SingleAsync(l => l.Nombre == "COMPOSTERAS");
-            linea.Activo = false;
-            await ctxRevertir.SaveChangesAsync();
-        }
+        await _repo.RevertirAsync(primero.IdImportacion, usuarioId: _usuarioId);
 
-        // El Context del repo todavía tiene la línea trackeada (Activo = true, desactualizado
-        // porque la baja de arriba pasó por OTRO DbContext) — sin este Clear, el identity map de
-        // EF Core devolvería la instancia vieja en la próxima query y el bug reaparecería en
-        // silencio.
-        Context.ChangeTracker.Clear();
-
-        // Task 6: la "reversa a mano" de arriba NO escribe un LogAuditoria de
-        // ReversionImportacion, así que el guard de re-importación no puede reconocerla como
-        // revertida (necesita el log real, que recién existe con RevertirAsync de Task 8) — sin
-        // Forzar=true acá, esta segunda corrida quedaría bloqueada por el guard antes de llegar
-        // a la lógica de reactivación que el test quiere probar. El ciclo completo "confirmar →
-        // revertir real → confirmar SIN Forzar → 200" (criterio de aceptación del spec) recién
-        // se puede probar de punta a punta cuando Task 8 exista.
-        var segundo = await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(forzar: true), usuarioId: _usuarioId);
+        var segundo = await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: _usuarioId);
 
         Assert.Equal(0, segundo.LineasPoaCreadas);
         Assert.Equal(1, segundo.LineasPoaReactivadas);
@@ -1040,24 +1024,68 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
     [Fact]
     public async Task RevertirAsync_LoteExistente_DaDeBajaGastosIngresosYLineasPoaPeroNoLosMaestros()
     {
-        var confirmacion = await _repo.ConfirmarAsync(PayloadConIngresoYGasto(), usuarioId: _usuarioId);
+        // Minor (re-review): cantidades DISTINTAS a propósito — 2 gastos (uno Contado con pago,
+        // otro Crédito sin pago), 1 pago, 3 ingresos. Con los tres contadores en 1 (como antes),
+        // un swap posicional en el constructor de ResultadoReversionDto pasaba este test en
+        // verde igual.
+        var payload = new ConfirmarImportacionDto(
+            Ejercicio: Ejercicio,
+            Forzar: false,
+            MaestrosNuevos: new MaestrosNuevosConfirmarDto(
+                new List<string> { "ACME SA" }, new List<string> { "Literal A" },
+                new List<RubroNuevoConfirmarDto> { new(1, "Paseos Públicos") }),
+            Ingresos: new List<IngresoConfirmarDto>
+            {
+                new(new DateOnly(Ejercicio, 1, 1), "Saldo inicial", 1000m, "Literal A"),
+                new(new DateOnly(Ejercicio, 2, 1), "Transferencia MTOP", 2000m, "Literal A"),
+                new(new DateOnly(Ejercicio, 3, 1), "Otra transferencia", 3000m, "Literal A"),
+            },
+            Gastos: new List<GastoConfirmarDto>
+            {
+                new("ACME SA", "F-1", null, "Compra contado", null,
+                    new DateOnly(Ejercicio, 1, 15), 500m, "Literal A", 1, null, CondicionPago.Contado, null),
+                new("ACME SA", "F-2", null, "Compra crédito", null,
+                    new DateOnly(Ejercicio, 1, 20), 700m, "Literal A", 1, null,
+                    CondicionPago.Credito, new DateOnly(Ejercicio, 6, 30)),
+            },
+            LineasPoa: new List<LineaPoaConfirmarDto>());
+
+        var confirmacion = await _repo.ConfirmarAsync(payload, usuarioId: _usuarioId);
 
         var reversion = await _repo.RevertirAsync(confirmacion.IdImportacion, usuarioId: _usuarioId);
 
         Assert.Equal(confirmacion.IdImportacion, reversion.IdImportacion);
-        Assert.Equal(1, reversion.GastosRevertidos);
+        Assert.Equal(2, reversion.GastosRevertidos);
         Assert.Equal(1, reversion.PagosRevertidos);
-        Assert.Equal(1, reversion.IngresosRevertidos);
+        Assert.Equal(3, reversion.IngresosRevertidos);
 
         await using var verificacion = Fixture.CrearContexto();
-        var gasto = verificacion.Gastos.Include(g => g.Pagos).Single();
-        Assert.False(gasto.Activo);
-        Assert.All(gasto.Pagos, p => Assert.False(p.Activo));
-        Assert.False(verificacion.IngresosCaja.Single().Activo);
+        Assert.All(await verificacion.Gastos.ToListAsync(), g => Assert.False(g.Activo));
+        Assert.All(await verificacion.IngresosCaja.ToListAsync(), i => Assert.False(i.Activo));
+        var gastoContado = await verificacion.Gastos.Include(g => g.Pagos).SingleAsync(g => g.NumeroFactura == "F-1");
+        Assert.All(gastoContado.Pagos, p => Assert.False(p.Activo));
         // Los maestros (Proveedor/FuenteFinanciamiento/RubroGasto) SIGUEN activos.
         Assert.True(verificacion.Proveedores.Single().Activo);
         Assert.True(verificacion.FuentesFinanciamiento.Single().Activo);
         Assert.True(verificacion.RubrosGasto.Single().Activo);
+    }
+
+    [Fact]
+    public async Task RevertirAsync_EscribeElLogDeAuditoriaConLosCamposCorrectos()
+    {
+        // Minor (re-review): sin aserciones directas sobre el LogAuditoria de reversión — solo
+        // se verificaba el Detalle (texto libre) indirectamente en otros tests.
+        var confirmacion = await _repo.ConfirmarAsync(PayloadConIngresoYGasto(), usuarioId: _usuarioId);
+
+        await _repo.RevertirAsync(confirmacion.IdImportacion, usuarioId: _usuarioId);
+
+        await using var verificacion = Fixture.CrearContexto();
+        var log = await verificacion.LogsAuditoria
+            .SingleAsync(l => l.Accion == AccionAuditada.ReversionImportacion);
+        Assert.Equal(AccionAuditada.ReversionImportacion, log.Accion);
+        Assert.Equal(confirmacion.IdImportacion, log.IdLote);
+        Assert.Equal(Ejercicio, log.EntidadId);
+        Assert.Equal(_usuarioId, log.UsuarioId);
     }
 
     [Fact]
@@ -1105,6 +1133,246 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         await using var verificacion = Fixture.CrearContexto();
         Assert.Equal(2, await verificacion.Gastos.CountAsync()); // el revertido + el nuevo
         Assert.Equal(1, await verificacion.Gastos.CountAsync(g => g.Activo));
+    }
+
+    [Fact]
+    public async Task CicloCompleto_ConLineaPoa_ConfirmarRevertirConfirmarRevertir_LaLineaSigueElEstadoDelUltimoLote()
+    {
+        // IMPORTANT 3 (re-review): los dos tests de ciclo de arriba usan PayloadConIngresoYGasto,
+        // cuyo LineasPoa es SIEMPRE una lista vacía — el ciclo completo con LineaPoa (gasto
+        // vinculado a una línea POA que se reactiva/desactiva en cada vuelta) no tenía NINGÚN
+        // test de punta a punta. Ejercita: confirmar A (crea la línea) → revertir A (la
+        // desactiva) → confirmar B SIN Forzar (la reactiva y re-estampa IdImportacion = B) →
+        // revertir B (la vuelve a desactivar).
+        var payloadA = new ConfirmarImportacionDto(
+            Ejercicio: Ejercicio,
+            Forzar: false,
+            MaestrosNuevos: new MaestrosNuevosConfirmarDto(
+                new List<string> { "ACME SA" }, new List<string> { "Literal A" },
+                new List<RubroNuevoConfirmarDto> { new(1, "Paseos Públicos") }),
+            Ingresos: new List<IngresoConfirmarDto>(),
+            Gastos: new List<GastoConfirmarDto>
+            {
+                new("ACME SA", "F-1", null, "Compra de insumos", null,
+                    new DateOnly(Ejercicio, 1, 15), 500m, "Literal A", 1, "COMPOSTERAS",
+                    CondicionPago.Contado, null),
+            },
+            LineasPoa: new List<LineaPoaConfirmarDto>
+            {
+                new("COMPOSTERAS", "Ambiente", new List<AsignacionConfirmarDto> { new("Literal A", 1000m) }),
+            });
+
+        var confirmacionA = await _repo.ConfirmarAsync(payloadA, usuarioId: _usuarioId);
+        Assert.Equal(1, confirmacionA.LineasPoaCreadas);
+
+        await _repo.RevertirAsync(confirmacionA.IdImportacion, usuarioId: _usuarioId);
+
+        await using (var ctxTrasRevertirA = Fixture.CrearContexto())
+        {
+            var lineaTrasA = await ctxTrasRevertirA.LineasPoa.SingleAsync(l => l.Nombre == "COMPOSTERAS");
+            Assert.False(lineaTrasA.Activo);
+        }
+
+        // B: mismos maestros (ya existen, no hace falta declararlos de nuevo), gasto distinto
+        // (otra factura) vinculado a la MISMA línea POA. Sin Forzar: el guard no bloquea porque
+        // A ya está revertida.
+        var payloadB = payloadA with
+        {
+            MaestrosNuevos = new MaestrosNuevosConfirmarDto(
+                new List<string>(), new List<string>(), new List<RubroNuevoConfirmarDto>()),
+            Gastos = new List<GastoConfirmarDto>
+            {
+                new("ACME SA", "F-2", null, "Compra de insumos 2", null,
+                    new DateOnly(Ejercicio, 2, 15), 300m, "Literal A", 1, "COMPOSTERAS",
+                    CondicionPago.Contado, null),
+            },
+        };
+
+        var confirmacionB = await _repo.ConfirmarAsync(payloadB, usuarioId: _usuarioId);
+
+        Assert.Equal(0, confirmacionB.LineasPoaCreadas);
+        Assert.Equal(1, confirmacionB.LineasPoaReactivadas);
+
+        await using (var ctxTrasConfirmarB = Fixture.CrearContexto())
+        {
+            var lineaTrasB = await ctxTrasConfirmarB.LineasPoa.SingleAsync(l => l.Nombre == "COMPOSTERAS");
+            Assert.True(lineaTrasB.Activo);
+            Assert.Equal(confirmacionB.IdImportacion, lineaTrasB.IdImportacion);
+        }
+
+        await _repo.RevertirAsync(confirmacionB.IdImportacion, usuarioId: _usuarioId);
+
+        await using var verificacionFinal = Fixture.CrearContexto();
+        var lineaFinal = await verificacionFinal.LineasPoa.SingleAsync(l => l.Nombre == "COMPOSTERAS");
+        Assert.False(lineaFinal.Activo);
+    }
+
+    // ── Re-review de Task 8: CRITICAL 1 (movimientos atrapados) ─────────────────────────────────
+
+    [Fact]
+    public async Task RevertirAsync_MovimientoAsociadoAlGastoRevertido_QuedaLibreYSePuedeReasociar()
+    {
+        // CRITICAL 1 (re-review): GastoService.AsociarMovimientosAsync acepta cualquier gasto
+        // ACTIVO, incluidos los importados — no distingue el origen. Antes del fix, RevertirAsync
+        // desactivaba el gasto pero dejaba MovimientoStock.GastoId apuntando al gasto ahora
+        // inactivo: ni se podía refacturar (ValidarMovimientosAsync rechaza un movimiento con
+        // GastoId no nulo) ni liberar (el gasto ya está anulado, GastoService.AnularAsync
+        // rechaza anular dos veces). Sin acceso al servidor, ese estado era permanente — la clase
+        // de bug que esta reversa existe para eliminar.
+        var confirmacion = await _repo.ConfirmarAsync(PayloadConIngresoYGasto(), usuarioId: _usuarioId);
+        var gasto = await Context.Gastos.SingleAsync(g => g.Detalle == "Compra de insumos");
+
+        var unidad = new UnidadMedida { Nombre = "Unidad", Abreviatura = "u" };
+        var usuarioStock = new Usuario
+        {
+            NombreUsuario = "operador-stock", HashContrasena = "hash", Rol = RolUsuario.Operador,
+            Activo = true, FechaAlta = DateTime.UtcNow,
+        };
+        Context.AddRange(unidad, usuarioStock);
+        await Context.SaveChangesAsync();
+        var producto = new Producto
+        {
+            Codigo = "PROD-1", Nombre = "Prod test", UnidadMedidaId = unidad.Id,
+        };
+        Context.Productos.Add(producto);
+        await Context.SaveChangesAsync();
+        var movimiento = new MovimientoStock
+        {
+            ProductoId = producto.Id, UsuarioId = usuarioStock.Id,
+            Tipo = TipoMovimiento.Entrada, Motivo = MotivoMovimiento.Compra,
+            Cantidad = 5m, PrecioUnitario = 100m, Fecha = DateTime.UtcNow,
+            // Simula GastoService.AsociarMovimientosAsync sobre el gasto importado — el service
+            // no distingue el origen del gasto, cualquier gasto Activo es un destino válido.
+            GastoId = gasto.Id,
+        };
+        Context.MovimientosStock.Add(movimiento);
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        await _repo.RevertirAsync(confirmacion.IdImportacion, usuarioId: _usuarioId);
+
+        await using var verificacion = Fixture.CrearContexto();
+        var movimientoRevertido = await verificacion.MovimientosStock.SingleAsync(m => m.Id == movimiento.Id);
+        Assert.Null(movimientoRevertido.GastoId);
+
+        // No alcanza con ver el campo en null en esta lectura: hay que probar que realmente
+        // quedó libre, re-asociándolo a un gasto NUEVO sin ningún conflicto.
+        var otroProveedor = new Proveedor { Nombre = "Otro Proveedor" };
+        var otraFuente = new FuenteFinanciamiento { Nombre = "Otra Fuente" };
+        var otroRubro = new RubroGasto { Codigo = 99, Nombre = "Otro Rubro" };
+        verificacion.AddRange(otroProveedor, otraFuente, otroRubro);
+        await verificacion.SaveChangesAsync();
+        var gastoNuevo = new Gasto
+        {
+            Proveedor = otroProveedor, FuenteFinanciamiento = otraFuente, RubroGasto = otroRubro,
+            Detalle = "Refacturación", Fecha = DateTime.UtcNow, MontoTotal = 500m,
+            CondicionPago = CondicionPago.Contado,
+        };
+        verificacion.Gastos.Add(gastoNuevo);
+        await verificacion.SaveChangesAsync();
+
+        movimientoRevertido.GastoId = gastoNuevo.Id;
+        await verificacion.SaveChangesAsync();
+
+        await using var verificacionFinal = Fixture.CrearContexto();
+        var movimientoFinal = await verificacionFinal.MovimientosStock.SingleAsync(m => m.Id == movimiento.Id);
+        Assert.Equal(gastoNuevo.Id, movimientoFinal.GastoId);
+    }
+
+    // ── Re-review de Task 8: IMPORTANT 2 (pagos manuales bloquean la reversa) ───────────────────
+
+    private static ConfirmarImportacionDto PayloadUnGastoCredito(
+        string proveedor = "ACME SA", string numeroFactura = "F-1", decimal monto = 500m) => new(
+        Ejercicio: Ejercicio,
+        Forzar: false,
+        MaestrosNuevos: new MaestrosNuevosConfirmarDto(
+            new List<string> { proveedor }, new List<string> { "Literal A" },
+            new List<RubroNuevoConfirmarDto> { new(1, "Paseos Públicos") }),
+        Ingresos: new List<IngresoConfirmarDto>(),
+        Gastos: new List<GastoConfirmarDto>
+        {
+            new(proveedor, numeroFactura, null, "Compra a crédito", null,
+                new DateOnly(Ejercicio, 1, 15), monto, "Literal A", 1, null,
+                CondicionPago.Credito, new DateOnly(Ejercicio, 6, 30)),
+        },
+        LineasPoa: new List<LineaPoaConfirmarDto>());
+
+    [Fact]
+    public async Task RevertirAsync_GastoConPagoManualNoCreadoPorElLote_LanzaReglaDeNegocioYNombraElGasto()
+    {
+        // IMPORTANT 2 (re-review, decisión del usuario): un gasto a crédito sin pago se importa;
+        // semanas después un operador registra un pago PARCIAL real (plata que efectivamente
+        // salió) — ese PagoGasto NO tiene IdImportacion (no lo creó el importador). La reversa
+        // tiene que BLOQUEARSE (409) en vez de dar de baja en silencio un pago real, mismo
+        // criterio que GastoService.AnularAsync aplica a la anulación individual.
+        var confirmacion = await _repo.ConfirmarAsync(PayloadUnGastoCredito(), usuarioId: _usuarioId);
+        var gasto = await Context.Gastos.SingleAsync(g => g.Detalle == "Compra a crédito");
+        Context.PagosGasto.Add(new PagoGasto
+        {
+            GastoId = gasto.Id, Fecha = DateTime.UtcNow, Monto = 200m,
+            Nota = "Pago parcial real", IdImportacion = null,
+        });
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => _repo.RevertirAsync(confirmacion.IdImportacion, usuarioId: _usuarioId));
+
+        Assert.Contains("ACME SA", ex.Message);
+        Assert.Contains("F-1", ex.Message);
+
+        // Nada se escribió: el gasto sigue activo y el pago manual intacto.
+        await using var verificacion = Fixture.CrearContexto();
+        Assert.True(verificacion.Gastos.Single().Activo);
+        Assert.True(verificacion.PagosGasto.Single(p => p.Nota == "Pago parcial real").Activo);
+    }
+
+    [Fact]
+    public async Task RevertirAsync_TodosLosPagosDelPropioLote_RevierteSinBloquear()
+    {
+        // El pago automático de contado que ProcesarGastosAsync crea ya viene estampado con
+        // IdImportacion = el lote (fix de este mismo re-review) — este test confirma que ESO no
+        // bloquea la reversa: solo un pago con IdImportacion DISTINTO la bloquea.
+        var confirmacion = await _repo.ConfirmarAsync(PayloadConIngresoYGasto(), usuarioId: _usuarioId);
+
+        var reversion = await _repo.RevertirAsync(confirmacion.IdImportacion, usuarioId: _usuarioId);
+
+        Assert.Equal(1, reversion.PagosRevertidos);
+        await using var verificacion = Fixture.CrearContexto();
+        Assert.False(verificacion.PagosGasto.Single().Activo);
+    }
+
+    [Fact]
+    public async Task RevertirAsync_DespuesDeAnularElPagoManual_LaReversaProcede()
+    {
+        var confirmacion = await _repo.ConfirmarAsync(PayloadUnGastoCredito(), usuarioId: _usuarioId);
+        var gasto = await Context.Gastos.SingleAsync(g => g.Detalle == "Compra a crédito");
+        Context.PagosGasto.Add(new PagoGasto
+        {
+            GastoId = gasto.Id, Fecha = DateTime.UtcNow, Monto = 200m,
+            Nota = "Pago parcial real", IdImportacion = null,
+        });
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => _repo.RevertirAsync(confirmacion.IdImportacion, usuarioId: _usuarioId));
+
+        // El humano anula el pago manual desde el desktop (GastoService.AnularPagoAsync) — acá
+        // se simula directamente la baja lógica, que es lo único que ese flujo hace.
+        await using (var ctxAnular = Fixture.CrearContexto())
+        {
+            var pago = await ctxAnular.PagosGasto.SingleAsync(p => p.Nota == "Pago parcial real");
+            pago.Activo = false;
+            await ctxAnular.SaveChangesAsync();
+        }
+        Context.ChangeTracker.Clear();
+
+        var reversion = await _repo.RevertirAsync(confirmacion.IdImportacion, usuarioId: _usuarioId);
+
+        Assert.Equal(confirmacion.IdImportacion, reversion.IdImportacion);
+        await using var verificacion = Fixture.CrearContexto();
+        Assert.False(verificacion.Gastos.Single().Activo);
     }
 }
 
