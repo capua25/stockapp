@@ -138,20 +138,38 @@ public class ImportacionRepository : IImportacionRepository
     /// que Task 8 exista, ninguna corrida puede estar revertida — esta consulta ya queda lista
     /// para cuando RevertirAsync empiece a escribir esos logs con Accion =
     /// AccionAuditada.ReversionImportacion e IdLote = el mismo Guid de la corrida que revierte.
+    /// Ordenada por Id descendente: si hay más de una corrida sin revertir para el mismo
+    /// ejercicio, se reporta la MÁS RECIENTE — es la que le sirve al humano que lee el 409 para
+    /// saber qué lote revertir (re-review, Minor 3).
     /// </summary>
     private async Task<Guid?> BuscarImportacionNoRevertidaAsync(int ejercicio)
     {
         var confirmaciones = await _ctx.LogsAuditoria
-            .Where(l => l.Accion == AccionAuditada.ImportacionPlanillas && l.EntidadId == ejercicio)
-            .Select(l => l.IdLote)
+            .Where(l => l.Accion == AccionAuditada.ImportacionPlanillas && l.EntidadId == ejercicio
+                // IdLote != null (re-review, Important 1): el flujo real siempre lo estampa, pero
+                // si alguna fila legacy o una escritura futura fuera de este flujo lo dejara en
+                // null, "l.IdLote == idLote" con idLote = null se traduce a "IS NULL" en SQL — el
+                // guard terminaría matcheando esa fila como "revertida" contra cualquier búsqueda
+                // sin lote real, dejando pasar una re-importación que en realidad no lo fue.
+                && l.IdLote != null)
+            .OrderByDescending(l => l.Id)
+            .Select(l => l.IdLote!.Value)
             .ToListAsync();
+
+        if (confirmaciones.Count == 0)
+            return null;
+
+        // Colapsado a 2 queries (re-review, Minor 2): antes había un AnyAsync por confirmación,
+        // corriendo con el advisory lock tomado. Acá se trae de una el set de IdLote revertidos
+        // (mismo filtro IdLote != null, mismo motivo) y se compara en memoria.
+        var revertidos = await _ctx.LogsAuditoria
+            .Where(l => l.Accion == AccionAuditada.ReversionImportacion && l.IdLote != null)
+            .Select(l => l.IdLote!.Value)
+            .ToHashSetAsync();
 
         foreach (var idLote in confirmaciones)
         {
-            var fueRevertida = await _ctx.LogsAuditoria.AnyAsync(l =>
-                l.Accion == AccionAuditada.ReversionImportacion && l.IdLote == idLote);
-
-            if (!fueRevertida)
+            if (!revertidos.Contains(idLote))
                 return idLote;
         }
 

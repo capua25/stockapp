@@ -985,6 +985,55 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         Assert.DoesNotContain("IdImportacion=", log.Detalle);
         Assert.Contains("Gastos creados: 1", log.Detalle);
     }
+
+    // ── Re-review de Task 6: guard con IdLote nulo + orden determinístico ──────────────────────
+
+    [Fact]
+    public async Task ConfirmarAsync_ConfirmacionLegacySinIdLote_NoBypaseaElGuardParaUnaImportacionRealSinRevertir()
+    {
+        // Important (re-review): una fila de confirmación con IdLote == null (dato legacy, o una
+        // escritura futura fuera de este flujo) hacía que "l.IdLote == idLote" con idLote = null
+        // se tradujera a SQL "IS NULL". Si esa fila se procesaba antes que una corrida real sin
+        // revertir (sin ORDER BY, el orden no estaba garantizado), BuscarImportacionNoRevertidaAsync
+        // devolvía null — el propio IdLote de la fila legacy —, y el caller lee null como "nada
+        // bloqueado" en vez de "encontré un bloqueo sin Guid identificable". Resultado: el guard
+        // bypaseaba una re-importación real que sí debía bloquearse.
+        Context.LogsAuditoria.Add(new LogAuditoria
+        {
+            UsuarioId = _usuarioId,
+            Fecha = DateTime.UtcNow,
+            Accion = AccionAuditada.ImportacionPlanillas,
+            Entidad = "Importacion",
+            EntidadId = Ejercicio,
+            IdLote = null, // dato legacy: confirmación sin lote tipado
+            Detalle = "Confirmación legacy sin IdLote",
+        });
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        // Corrida real, con IdLote real, genuinamente sin revertir.
+        await _repo.ConfirmarAsync(PayloadConIngresoYGasto(), usuarioId: _usuarioId);
+
+        await Assert.ThrowsAsync<StockApp.Domain.Exceptions.ReglaDeNegocioException>(
+            () => _repo.ConfirmarAsync(PayloadConIngresoYGasto(forzar: false), usuarioId: _usuarioId));
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_DosConfirmacionesSinRevertir_ElGuardReportaLaMasReciente()
+    {
+        // Minor 3 (re-review): con más de una confirmación sin revertir para el mismo ejercicio,
+        // cuál se reportaba en el 409 no estaba garantizado (sin ORDER BY). Ahora se ordena por Id
+        // descendente y se reporta la MÁS RECIENTE — la que le sirve al humano que lee el error
+        // para saber qué lote revertir.
+        var primera = await _repo.ConfirmarAsync(PayloadConIngresoYGasto(), usuarioId: _usuarioId);
+        var segunda = await _repo.ConfirmarAsync(PayloadConIngresoYGasto(forzar: true), usuarioId: _usuarioId);
+
+        var ex = await Assert.ThrowsAsync<StockApp.Domain.Exceptions.ReglaDeNegocioException>(
+            () => _repo.ConfirmarAsync(PayloadConIngresoYGasto(forzar: false), usuarioId: _usuarioId));
+
+        Assert.Contains(segunda.IdImportacion.ToString(), ex.Message);
+        Assert.DoesNotContain(primera.IdImportacion.ToString(), ex.Message);
+    }
 }
 
 /// <summary>
