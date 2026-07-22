@@ -394,12 +394,13 @@ public class ConfirmacionImportacionServiceTests
     }
 
     [Fact]
-    public async Task ConfirmarAsync_DosGastosConMismoProveedorYFacturaEnElMismoPayload_LanzaValidacionEstructurada()
+    public async Task ConfirmarAsync_DosGastosConMismoProveedorFacturaYOrdenEnElMismoPayload_LanzaValidacionEstructurada()
     {
-        // A.4 (review Important A): dos filas del MISMO payload con la misma (Proveedor,
-        // NumeroFactura) tienen que dar un 400 estructurado acá — si llegaran las dos al
-        // repositorio, ninguna está "ya en la base" (el dedupe de Important A.1/A.2 no las
-        // distingue entre sí), y Postgres terminaría rechazando la segunda con un 23505 crudo.
+        // A.4 (review Important A; F5c amplió la clave con NumeroOrden): dos filas del MISMO
+        // payload con la misma (Proveedor, NumeroFactura, NumeroOrden) tienen que dar un 400
+        // estructurado acá — si llegaran las dos al repositorio, ninguna está "ya en la base" (el
+        // dedupe de Important A.1/A.2 no las distingue entre sí), y Postgres terminaría
+        // rechazando la segunda con un 23505 crudo.
         var m = Crear();
         var payload = PayloadValido() with
         {
@@ -407,7 +408,7 @@ public class ConfirmacionImportacionServiceTests
             {
                 new("ACME SA", "F-1", "O-1", "Compra de insumos", null,
                     new DateOnly(Ejercicio, 1, 15), 500m, "Literal A", 1, null, CondicionPago.Contado, null),
-                new("ACME SA", "f-1", "O-2", "Compra de insumos (otra fila)", null,
+                new("ACME SA", "f-1", "o-1", "Compra de insumos (otra fila)", null,
                     new DateOnly(Ejercicio, 2, 1), 800m, "Literal A", 1, null, CondicionPago.Contado, null),
             },
         };
@@ -416,6 +417,32 @@ public class ConfirmacionImportacionServiceTests
 
         Assert.True(ex.Errores.ContainsKey("Gastos[1].NumeroFactura"));
         Assert.Equal(0, m.Repo.VecesConfirmarLlamado);
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_DosGastosConMismaFacturaDistintoNumeroOrdenEnElMismoPayload_NoErrorDeValidacion()
+    {
+        // Caso real (docs/finanzas-facturas-duplicadas-planilla-2026.md): GARAY POZO HERNÁN,
+        // factura 82446, dos renglones de la MISMA hoja con distinto número de orden. F5c amplió
+        // la clave del chequeo A.4 (Proveedor, NumeroFactura, NumeroOrden) para que matchee el
+        // índice único de la base — antes de este fix, este caso REAL de la planilla 2026
+        // disparaba este 400 por error (el chequeo viejo solo miraba Proveedor+NumeroFactura).
+        var m = Crear();
+        var payload = PayloadValido() with
+        {
+            Gastos = new List<GastoConfirmarDto>
+            {
+                new("ACME SA", "82446", "865813", "Papel higiénico", null,
+                    new DateOnly(Ejercicio, 1, 23), 263m, "Literal A", 1, null, CondicionPago.Contado, null),
+                new("ACME SA", "82446", "865901", "Bolsas para residuos", null,
+                    new DateOnly(Ejercicio, 1, 23), 6407m, "Literal A", 1, null, CondicionPago.Contado, null),
+            },
+        };
+
+        var resultado = await m.Svc.ConfirmarAsync(payload);
+
+        Assert.Equal(1, m.Repo.VecesConfirmarLlamado);
+        Assert.NotEqual(Guid.Empty, resultado.IdImportacion);
     }
 
     [Fact]

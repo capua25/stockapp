@@ -870,6 +870,81 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
     }
 
     [Fact]
+    public async Task ConfirmarAsync_MismaFacturaDistintoNumeroOrden_CreaAmbosGastosSinConflicto()
+    {
+        // Caso real (docs/finanzas-facturas-duplicadas-planilla-2026.md): GARAY POZO HERNÁN,
+        // factura 82446, dos renglones de la MISMA hoja/corrida con distinto número de orden.
+        // F5c amplió la clave natural del importador (ProveedorId, NumeroFactura, NumeroOrden)
+        // para que matchee el índice único ampliado — antes de este fix, la segunda fila NO
+        // colisionaba en memoria (misma clave "angosta" que la primera) pero SÍ colisionaba en
+        // Postgres, tirando 23505 y abortando TODA la importación.
+        var payload = new ConfirmarImportacionDto(
+            Ejercicio: Ejercicio,
+            Forzar: false,
+            MaestrosNuevos: new MaestrosNuevosConfirmarDto(
+                new List<string> { "GARAY POZO HERNAN" },
+                new List<string> { "Literal A" },
+                new List<RubroNuevoConfirmarDto> { new(1, "Paseos Públicos") }),
+            Ingresos: new List<IngresoConfirmarDto>(),
+            Gastos: new List<GastoConfirmarDto>
+            {
+                new("GARAY POZO HERNAN", "82446", "865813", "PAPEL HIGIENICO", "MANT OPERATIVO",
+                    new DateOnly(Ejercicio, 1, 23), 263m, "Literal A", 1, null, CondicionPago.Contado, null),
+                new("GARAY POZO HERNAN", "82446", "865901", "BOLSAS PARA RESIDUOS", "MANT OPERATIVO",
+                    new DateOnly(Ejercicio, 1, 23), 6407m, "Literal A", 1, null, CondicionPago.Contado, null),
+            },
+            LineasPoa: new List<LineaPoaConfirmarDto>());
+
+        var resultado = await _repo.ConfirmarAsync(payload, usuarioId: _usuarioId);
+
+        Assert.Equal(2, resultado.GastosCreados);
+        Assert.Equal(0, resultado.GastosOmitidos);
+        Assert.Empty(resultado.Conflictos);
+        await using var verificacion = Fixture.CrearContexto();
+        Assert.Equal(2, await verificacion.Gastos.CountAsync(g => g.NumeroFactura == "82446"));
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_ReimportacionConNuevoNumeroOrdenParaFacturaExistente_LoCreaNoLoConfunde()
+    {
+        // La clave natural del dedupe en memoria (ClaveGastoConFactura) tiene que incluir
+        // NumeroOrden, igual que el índice único de la base (invariante del archivo: la clave
+        // nunca puede ser más fina que la restricción que respalda). Antes de este fix, la clave
+        // era solo (ProveedorId, NumeroFactura): en una REIMPORTACIÓN (Forzar) que agrega un
+        // renglón con un NumeroOrden nuevo para una factura ya existente, ese renglón matcheaba
+        // por error contra el gasto viejo de OTRO orden, y como el monto difiere se reportaba
+        // como CONFLICTO en vez de crearse como el gasto nuevo y distinto que realmente es.
+        await _repo.ConfirmarAsync(
+            PayloadUnGastoConFactura(numeroFactura: "82446", numeroOrden: "865813", monto: 263m),
+            usuarioId: _usuarioId);
+
+        var payloadReimportacion = new ConfirmarImportacionDto(
+            Ejercicio: Ejercicio,
+            Forzar: true,
+            MaestrosNuevos: new MaestrosNuevosConfirmarDto(
+                new List<string>(), new List<string>(), new List<RubroNuevoConfirmarDto>()),
+            Ingresos: new List<IngresoConfirmarDto>(),
+            Gastos: new List<GastoConfirmarDto>
+            {
+                // Idéntico al ya importado (mismo orden, misma fecha, mismo monto) ⇒ omitido.
+                new("ACME SA", "82446", "865813", "Compra de insumos", null,
+                    new DateOnly(Ejercicio, 1, 15), 263m, "Literal A", 1, null, CondicionPago.Contado, null),
+                // Misma factura, orden NUEVO ⇒ tiene que crearse, no confundirse con el de arriba.
+                new("ACME SA", "82446", "865901", "Compra de insumos", null,
+                    new DateOnly(Ejercicio, 1, 15), 6407m, "Literal A", 1, null, CondicionPago.Contado, null),
+            },
+            LineasPoa: new List<LineaPoaConfirmarDto>());
+
+        var resultado = await _repo.ConfirmarAsync(payloadReimportacion, usuarioId: _usuarioId);
+
+        Assert.Equal(1, resultado.GastosCreados);
+        Assert.Equal(1, resultado.GastosOmitidos);
+        Assert.Empty(resultado.Conflictos);
+        await using var verificacion = Fixture.CrearContexto();
+        Assert.Equal(2, await verificacion.Gastos.CountAsync(g => g.NumeroFactura == "82446"));
+    }
+
+    [Fact]
     public async Task ConfirmarAsync_GastoConFacturaEnBlanco_SegundaCorridaLoOmiteNoRevienta()
     {
         // IMPORTANT 3 (re-review): con NumeroFactura = " " (un espacio, alcanzable vía
@@ -1411,11 +1486,12 @@ internal sealed class ImportacionRepositoryConFalloInyectado : ImportacionReposi
 
 /// <summary>
 /// Variante que bypassea POR COMPLETO el dedupe en memoria de ProcesarGastosAsync, agregando
-/// directo al ChangeTracker un segundo Gasto con la MISMA (ProveedorId, NumeroFactura) que uno ya
-/// activo en la base — vía el mismo seam AntesDeGuardarAsync que ImportacionRepositoryConFalloInyectado.
-/// Fuerza que sea Postgres (índice único parcial IX_Gastos_ProveedorId_NumeroFactura), no la
-/// lógica de la aplicación, quien rechace la fila — así se prueba de forma REAL (no simulada) que
-/// la red de seguridad de A.5 traduce el 23505 a ReglaDeNegocioException. Usada solo en
+/// directo al ChangeTracker un segundo Gasto con la MISMA (ProveedorId, NumeroFactura,
+/// NumeroOrden) que uno ya activo en la base — vía el mismo seam AntesDeGuardarAsync que
+/// ImportacionRepositoryConFalloInyectado. Fuerza que sea Postgres (índice único parcial
+/// IX_Gastos_ProveedorId_NumeroFactura_NumeroOrden, F5c), no la lógica de la aplicación, quien
+/// rechace la fila — así se prueba de forma REAL (no simulada) que la red de seguridad de A.5
+/// traduce el 23505 a ReglaDeNegocioException. Usada solo en
 /// ConfirmarAsync_ViolacionDeIndiceUnicoRealForzada_LaMapeaAReglaDeNegocioException.
 /// </summary>
 internal sealed class ImportacionRepositoryConFacturaDuplicadaInyectada : ImportacionRepository
@@ -1440,6 +1516,11 @@ internal sealed class ImportacionRepositoryConFacturaDuplicadaInyectada : Import
         {
             ProveedorId = _proveedorId,
             NumeroFactura = "F-1",
+            // F5c: el índice ahora es (ProveedorId, NumeroFactura, NumeroOrden). El gasto
+            // original de PayloadUnGastoConFactura("F-1") usa el NumeroOrden por defecto
+            // "O-1" — sin repetirlo acá, este inyectado ya NO colisionaría con el índice
+            // ampliado y el 23505 real que este test necesita forzar no ocurriría.
+            NumeroOrden = "O-1",
             Detalle = "Inyectado para forzar 23505 (test A.5)",
             Fecha = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
             MontoTotal = 999m,

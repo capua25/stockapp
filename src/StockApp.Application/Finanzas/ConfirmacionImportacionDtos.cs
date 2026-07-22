@@ -62,12 +62,13 @@ public sealed record AsignacionConfirmarDto(string Fuente, decimal Monto);
 /// false) y se reactivaron al ser declarados de nuevo — NO se suman a los contadores de
 /// *Creados: un maestro reactivado no es un maestro creado.
 ///
-/// Conflictos (review Important A, agregado AL FINAL — misma regla de no reordenar): gastos CON
-/// NumeroFactura cuya clave natural (ProveedorId, NumeroFactura) matchea contra un gasto activo
-/// ya existente, pero cuyos demás datos (Fecha/MontoTotal/NumeroOrden) difieren. NO son
-/// "omitidos" (esos son duplicados idénticos) ni "creados" — no se escriben, y quedan acá para
-/// que un humano decida. Solo aplica al camino CON factura: ese es el único que colisiona contra
-/// el índice único parcial IX_Gastos_ProveedorId_NumeroFactura (AppDbContext.cs).</summary>
+/// Conflictos (review Important A, agregado AL FINAL — misma regla de no reordenar; F5c amplió
+/// la clave con NumeroOrden): gastos CON NumeroFactura cuya clave natural (ProveedorId,
+/// NumeroFactura, NumeroOrden) matchea contra un gasto activo ya existente, pero cuyos demás
+/// datos (Fecha/MontoTotal) difieren. NO son "omitidos" (esos son duplicados idénticos) ni
+/// "creados" — no se escriben, y quedan acá para que un humano decida. Solo aplica al camino CON
+/// factura: ese es el único que colisiona contra el índice único parcial
+/// IX_Gastos_ProveedorId_NumeroFactura_NumeroOrden (AppDbContext.cs).</summary>
 public sealed record ResultadoConfirmacionDto(
     Guid IdImportacion,
     int ProveedoresCreados, int FuentesCreadas, int RubrosCreados,

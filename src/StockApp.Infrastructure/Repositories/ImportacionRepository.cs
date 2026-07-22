@@ -582,21 +582,26 @@ public class ImportacionRepository : IImportacionRepository
     // (desde la BD) y la comparación de cada fila nueva del payload — evita que ambos lados se
     // desincronicen silenciosamente (spec §4, "Riesgo asumido").
     //
-    // Gasto CON NumeroFactura (review Important A.1): la clave es (ProveedorId, NumeroFactura),
-    // EXACTAMENTE la del índice único parcial IX_Gastos_ProveedorId_NumeroFactura
-    // (AppDbContext.cs, filtro "Activo" = TRUE AND "NumeroFactura" IS NOT NULL). La clave
-    // natural del importador nunca puede ser más fina que esa restricción — si lo fuera (como
-    // antes, que incluía Fecha/MontoTotal), dos corridas con el mismo proveedor+factura pero un
-    // dato distinto (el usuario corrigió el monto y reimportó) generaban un 23505 de Postgres
-    // que tiraba abajo TODA la importación. Gasto SIN NumeroFactura: no hay índice único que lo
-    // limite, así que sigue con la clave ancha (ProveedorId, NumeroOrden, Fecha, MontoTotal).
+    // Gasto CON NumeroFactura (review Important A.1; F5c amplió la clave con NumeroOrden): la
+    // clave es (ProveedorId, NumeroFactura, NumeroOrden), EXACTAMENTE la del índice único
+    // parcial IX_Gastos_ProveedorId_NumeroFactura_NumeroOrden (AppDbContext.cs, filtro
+    // "Activo" = TRUE AND "NumeroFactura" IS NOT NULL, NULLS NOT DISTINCT). La clave natural
+    // del importador nunca puede ser más fina que esa restricción — si lo fuera (como antes de
+    // F5c, que era solo ProveedorId+NumeroFactura sin NumeroOrden), dos gastos reales con el
+    // mismo proveedor+factura pero distinto NumeroOrden (caso real de la planilla 2026: GARAY
+    // POZO HERNÁN, factura 82446, dos renglones — ver
+    // docs/finanzas-facturas-duplicadas-planilla-2026.md) matcheaban por error contra la misma
+    // clave y, si además difería algún otro dato, se reportaban como CONFLICTO en vez de
+    // crearse como los dos gastos distintos que son. Gasto SIN NumeroFactura: no hay índice
+    // único que lo limite, así que sigue con la clave ancha (ProveedorId, NumeroOrden, Fecha,
+    // MontoTotal).
     //
     // INVARIANTE GENERAL (re-review, CRITICAL 1 / IMPORTANT 2): el set de dedupe que se carga
     // desde la base tiene que cubrir AL MENOS el mismo universo que la restricción única que lo
     // respalda — nunca menos. Hubo una regresión real acá: un acotado "por ejercicio"
     // (Where(... && Fecha >= inicioEjercicio && Fecha < finEjercicio)) se aprobó como Minor de
     // performance y en realidad rompía la invariante en los dos sentidos. (1)
-    // IX_Gastos_ProveedorId_NumeroFactura NO tiene ninguna restricción de fecha — un proveedor
+    // IX_Gastos_ProveedorId_NumeroFactura_NumeroOrden NO tiene ninguna restricción de fecha — un proveedor
     // puede reusar el mismo número de factura en dos ejercicios distintos, y acotar el set por
     // ejercicio dejaba esa colisión invisible para el dedupe en memoria, con un 23505 real
     // esperando en Postgres. (2) El camino SIN factura y los ingresos NO tienen ningún índice
@@ -608,20 +613,23 @@ public class ImportacionRepository : IImportacionRepository
     // comentario.
 
     private readonly record struct ClaveIngreso(DateTime Fecha, string Concepto, decimal Monto, int FuenteId);
-    private readonly record struct ClaveGastoConFactura(int ProveedorId, string NumeroFactura);
+    private readonly record struct ClaveGastoConFactura(int ProveedorId, string NumeroFactura, string? NumeroOrden);
     private readonly record struct ClaveGastoSinFactura(
         int ProveedorId, string? NumeroOrden, DateTime Fecha, decimal MontoTotal);
 
     /// <summary>Datos comparables de un gasto CON factura ya activo en la base — lo necesario
-    /// para distinguir "mismo gasto ya importado" (A.2: omitido) de "misma factura con datos
-    /// distintos" (A.2: conflicto), sin traer la entidad completa.</summary>
-    private readonly record struct DatosGastoConFactura(DateTime Fecha, decimal MontoTotal, string? NumeroOrden);
+    /// para distinguir "mismo gasto ya importado" (A.2: omitido) de "misma factura+orden con
+    /// datos distintos" (A.2: conflicto), sin traer la entidad completa. NumeroOrden NO va acá:
+    /// desde F5c es parte de la CLAVE (ClaveGastoConFactura), no un campo a comparar — si el
+    /// orden difiere, es directamente un gasto distinto, no un conflicto.</summary>
+    private readonly record struct DatosGastoConFactura(DateTime Fecha, decimal MontoTotal);
 
     private static ClaveIngreso ProyectarClaveIngreso(DateTime fecha, string concepto, decimal monto, int fuenteId) =>
         new(fecha, Normalizar(concepto), monto, fuenteId);
 
-    private static ClaveGastoConFactura ProyectarClaveGastoConFactura(int proveedorId, string numeroFactura) =>
-        new(proveedorId, Normalizar(numeroFactura));
+    private static ClaveGastoConFactura ProyectarClaveGastoConFactura(
+        int proveedorId, string numeroFactura, string? numeroOrden) =>
+        new(proveedorId, Normalizar(numeroFactura), NormalizarOpcional(numeroOrden));
 
     private static ClaveGastoSinFactura ProyectarClaveGastoSinFactura(
         int proveedorId, string? numeroOrden, DateTime fecha, decimal montoTotal) =>
@@ -712,10 +720,10 @@ public class ImportacionRepository : IImportacionRepository
         var datosPorClaveConFactura = gastosActivos
             .Where(g => g.NumeroFactura is not null)
             .OrderBy(g => g.Id)
-            .GroupBy(g => ProyectarClaveGastoConFactura(g.ProveedorId, g.NumeroFactura!))
+            .GroupBy(g => ProyectarClaveGastoConFactura(g.ProveedorId, g.NumeroFactura!, g.NumeroOrden))
             .ToDictionary(
                 gr => gr.Key,
-                gr => new DatosGastoConFactura(gr.First().Fecha, gr.First().MontoTotal, gr.First().NumeroOrden));
+                gr => new DatosGastoConFactura(gr.First().Fecha, gr.First().MontoTotal));
 
         var clavesSinFactura = gastosActivos
             .Where(g => g.NumeroFactura is null)
@@ -738,7 +746,8 @@ public class ImportacionRepository : IImportacionRepository
 
             if (tieneFactura)
             {
-                var claveFactura = ProyectarClaveGastoConFactura(proveedor.Id, gastoDto.NumeroFactura!);
+                var claveFactura = ProyectarClaveGastoConFactura(
+                    proveedor.Id, gastoDto.NumeroFactura!, gastoDto.NumeroOrden);
                 if (datosPorClaveConFactura.TryGetValue(claveFactura, out var datosExistentes))
                 {
                     var camposDivergentes = CamposDivergentes(datosExistentes, gastoDto, fechaUtc);
@@ -804,10 +813,12 @@ public class ImportacionRepository : IImportacionRepository
     }
 
     /// <summary>Compara un gasto CON factura ya activo en la base contra la fila nueva del
-    /// payload que matcheó por (ProveedorId, NumeroFactura) y arma la lista de campos que
-    /// difieren (review Important A.2/A.3). Vacía ⇒ es el mismo gasto (omitido, no conflicto).
-    /// NumeroOrden se compara normalizado, como el resto de las claves del archivo — no
-    /// queremos un falso conflicto por un espacio o un casing de más.</summary>
+    /// payload que matcheó por (ProveedorId, NumeroFactura, NumeroOrden) y arma la lista de
+    /// campos que difieren (review Important A.2/A.3). Vacía ⇒ es el mismo gasto (omitido, no
+    /// conflicto). NumeroOrden YA NO se compara acá (F5c): es parte de la CLAVE que llevó a este
+    /// match, así que si divergiera no habría matcheado en primer lugar — comparalo de nuevo acá
+    /// sería, en el mejor caso, muerto código y, en el peor, una fuente de falsos negativos si
+    /// algún día alguien lo reintroduce sin entender por qué ya no hace falta.</summary>
     private static List<CampoDivergenteDto> CamposDivergentes(
         DatosGastoConFactura existente, GastoConfirmarDto nuevo, DateTime fechaNuevaUtc)
     {
@@ -820,10 +831,6 @@ public class ImportacionRepository : IImportacionRepository
         if (existente.MontoTotal != nuevo.MontoTotal)
             campos.Add(new CampoDivergenteDto(
                 "MontoTotal", FormatearMonto(existente.MontoTotal), FormatearMonto(nuevo.MontoTotal)));
-
-        if (NormalizarOpcional(existente.NumeroOrden) != NormalizarOpcional(nuevo.NumeroOrden))
-            campos.Add(new CampoDivergenteDto(
-                "NumeroOrden", existente.NumeroOrden ?? "(vacío)", nuevo.NumeroOrden ?? "(vacío)"));
 
         return campos;
     }

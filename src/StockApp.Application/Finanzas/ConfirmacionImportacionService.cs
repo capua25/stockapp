@@ -97,13 +97,19 @@ public class ConfirmacionImportacionService : IConfirmacionImportacionService
                     $"La fuente '{ingreso.Fuente}' no existe ni fue declarada nueva");
         }
 
-        // A.4 (review Important A): dos filas del MISMO payload con el mismo (Proveedor,
-        // NumeroFactura) tienen que dar un 400 estructurado acá, no un 500 de Postgres cuando el
-        // repositorio intente insertar las dos. El dedupe del repositorio (Important A.1/A.2)
-        // resuelve "esta factura ya está en la base"; esto resuelve "esta factura se repite dos
-        // veces DENTRO del mismo archivo que se está importando", un caso que el repositorio no
-        // puede distinguir sin este chequeo previo (ambas filas son "nuevas" para él).
-        var facturasVistas = new Dictionary<(string Proveedor, string NumeroFactura), int>();
+        // A.4 (review Important A; F5c amplió la clave con NumeroOrden): dos filas del MISMO
+        // payload con la misma (Proveedor, NumeroFactura, NumeroOrden) tienen que dar un 400
+        // estructurado acá, no un 500 de Postgres cuando el repositorio intente insertar las dos.
+        // El dedupe del repositorio (Important A.1/A.2) resuelve "esta factura+orden ya está en
+        // la base"; esto resuelve "esta factura+orden se repite dos veces DENTRO del mismo
+        // archivo que se está importando", un caso que el repositorio no puede distinguir sin
+        // este chequeo previo (ambas filas son "nuevas" para él). La clave tiene que espejar
+        // EXACTAMENTE la del índice único de la base (ImportacionRepository.ProyectarClaveGastoConFactura)
+        // — sin NumeroOrden acá, dos renglones reales con la misma factura pero distinto orden
+        // (caso real de la planilla 2026: GARAY POZO HERNÁN, factura 82446 — ver
+        // docs/finanzas-facturas-duplicadas-planilla-2026.md) se rechazaban por error como
+        // "duplicados" cuando en realidad son dos gastos legítimos y distintos.
+        var facturasVistas = new Dictionary<(string Proveedor, string NumeroFactura, string? NumeroOrden), int>();
 
         for (var i = 0; i < dto.Gastos.Count; i++)
         {
@@ -112,7 +118,7 @@ public class ConfirmacionImportacionService : IConfirmacionImportacionService
                 AgregarError(errores, $"Gastos[{i}].Detalle", "Requerido");
             if (!string.IsNullOrWhiteSpace(gasto.NumeroFactura))
             {
-                var claveFactura = (Normalizar(gasto.Proveedor), Normalizar(gasto.NumeroFactura));
+                var claveFactura = (Normalizar(gasto.Proveedor), Normalizar(gasto.NumeroFactura), NormalizarOpcional(gasto.NumeroOrden));
                 if (!facturasVistas.TryAdd(claveFactura, i))
                     AgregarError(errores, $"Gastos[{i}].NumeroFactura",
                         $"La factura '{gasto.NumeroFactura}' del proveedor '{gasto.Proveedor}' está duplicada dentro del payload");
@@ -178,4 +184,11 @@ public class ConfirmacionImportacionService : IConfirmacionImportacionService
     }
 
     private static string Normalizar(string texto) => texto.Trim().ToUpperInvariant();
+
+    /// <summary>Mismo criterio que <see cref="Normalizar"/>, pero para NumeroOrden (opcional):
+    /// blanco/null colapsa a null, igual que ImportacionRepository.NormalizarOpcional — dos
+    /// filas sin orden tienen que matchear entre sí en este chequeo, igual que en el índice de
+    /// base (NULLS NOT DISTINCT).</summary>
+    private static string? NormalizarOpcional(string? texto) =>
+        string.IsNullOrWhiteSpace(texto) ? null : Normalizar(texto);
 }
