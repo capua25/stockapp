@@ -23,4 +23,14 @@ public class PagoGasto
     public decimal Monto { get; set; }         // precisión 18,4
     public string? Nota { get; set; }
     public bool Activo { get; set; } = true;   // false = pago anulado
+
+    /// <summary>
+    /// Guid del lote de /confirmar que creó este pago (F5c Task 8, re-review CRITICAL/IMPORTANT
+    /// 2). Null para todo pago cargado a mano (ABM manual, incluidos los que un operador registra
+    /// después sobre un gasto importado) — mismo patrón que Gasto.IdImportacion/
+    /// IngresoCaja.IdImportacion/LineaPoa.IdImportacion. Permite a /revertir/{id} distinguir el
+    /// pago automático de contado que el propio importador creó (que SÍ se da de baja en la
+    /// reversa) de un pago manual real (que NUNCA se toca: la reversa se bloquea si lo encuentra).
+    /// </summary>
+    public Guid? IdImportacion { get; set; }
 }

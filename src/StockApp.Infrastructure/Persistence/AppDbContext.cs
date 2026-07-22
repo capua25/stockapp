@@ -185,6 +185,7 @@ public class AppDbContext : DbContext
             e.HasIndex(p => p.GastoId);
             e.HasOne(p => p.Gasto).WithMany(g => g.Pagos)
                 .HasForeignKey(p => p.GastoId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(p => p.IdImportacion);
         });
 
         modelBuilder.Entity<IngresoCaja>(e =>

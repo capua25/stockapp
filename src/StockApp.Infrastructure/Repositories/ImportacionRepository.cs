@@ -693,7 +693,15 @@ public class ImportacionRepository : IImportacionRepository
             {
                 gasto.Pagos = new List<PagoGasto>
                 {
-                    new() { Fecha = fechaUtc, Monto = gastoDto.MontoTotal, Nota = "Pago contado (importación)" },
+                    new()
+                    {
+                        Fecha = fechaUtc, Monto = gastoDto.MontoTotal, Nota = "Pago contado (importación)",
+                        // IdImportacion (re-review IMPORTANT 2): estampa el pago automático de
+                        // contado como "del lote" — es lo que distingue este pago de uno manual a
+                        // la hora de revertir (RevertirAsync bloquea si encuentra un pago activo
+                        // con IdImportacion distinto del lote que se está revirtiendo).
+                        IdImportacion = idImportacion,
+                    },
                 };
                 pagosCreados++;
             }
