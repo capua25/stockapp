@@ -167,6 +167,22 @@ public class AnalisisImportacionService : IAnalisisImportacionService
                 .Select(mov => ReconciliarMovimiento(lineaOds.Hoja, mov, gastos))
                 .ToList();
 
+            // Bugfix post-F5b: los proveedores que aparecen ÚNICA Y EXCLUSIVAMENTE en movimientos
+            // POA (típicamente CompromisoSoloPoa, sin Factura) nunca pasaban por el escaneo de
+            // Gastos y quedaban afuera de MaestrosNuevosDto.Proveedores. Se detectan acá, UNA vez
+            // por hoja (no por asignación, para no duplicar en financiamiento mixto) — mismo
+            // criterio de normalización y mismo mecanismo RegistrarNuevo que la hoja de Gastos, así
+            // que un proveedor ya visto (por Gastos o por otro movimiento POA) no se duplica, y uno
+            // ya existente en la base no se agrega.
+            foreach (var mov in lineaOds.Movimientos)
+            {
+                if (!string.IsNullOrWhiteSpace(mov.Proveedor)
+                    && !proveedoresExistentes.Contains(Normalizar(mov.Proveedor)))
+                {
+                    RegistrarNuevo(proveedoresNuevosVistos, proveedoresNuevos, mov.Proveedor);
+                }
+            }
+
             for (var i = 0; i < lineaOds.Asignaciones.Count; i++)
             {
                 var asignacion = lineaOds.Asignaciones[i];
