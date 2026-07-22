@@ -176,10 +176,22 @@ public class GastoApiClientTests
             HttpStatusCode.NotFound, "No existe."));
         var client = new GastoApiClient(TestHttp.CrearCliente(fake));
 
-        var gasto = await client.ObtenerPorProveedorYFacturaAsync(3, "NO-EXISTE");
+        var gasto = await client.ObtenerPorProveedorYFacturaAsync(3, "NO-EXISTE", null);
 
         Assert.Null(gasto);
         Assert.Contains("/finanzas/gastos/por-factura", fake.UltimaRequest!.RequestUri!.AbsolutePath);
+    }
+
+    [Fact]
+    public async Task ObtenerPorProveedorYFactura_IncluyeNumeroOrdenEnLaQuery()
+    {
+        var fake = new FakeHttpHandler(_ => TestHttp.Problema(
+            HttpStatusCode.NotFound, "No existe."));
+        var client = new GastoApiClient(TestHttp.CrearCliente(fake));
+
+        await client.ObtenerPorProveedorYFacturaAsync(3, "F-1", "OC-9");
+
+        Assert.Contains("numeroOrden=OC-9", fake.UltimaRequest!.RequestUri!.Query);
     }
 
     [Fact]

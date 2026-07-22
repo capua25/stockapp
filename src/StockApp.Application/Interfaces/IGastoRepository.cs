@@ -8,8 +8,16 @@ public interface IGastoRepository
     /// <summary>Incluye Proveedor, Fuente, Rubro, LineaPoa y TODOS los pagos (activos y anulados).</summary>
     Task<Gasto?> ObtenerPorIdAsync(int id);
 
-    /// <summary>Busca un gasto ACTIVO por proveedor + número de factura (conciliación del vínculo stock).</summary>
-    Task<Gasto?> ObtenerPorProveedorYFacturaAsync(int proveedorId, string numeroFactura);
+    /// <summary>
+    /// Busca un gasto ACTIVO por proveedor + número de factura + número de orden. Espeja
+    /// EXACTAMENTE la clave del índice único parcial de la base (AppDbContext.cs, migración
+    /// AmpliaIndiceFacturaConNumeroOrden — F5c): dos usos comparten este método, la validación de
+    /// unicidad de <c>GastoService.ValidarFacturaUnicaAsync</c> (necesita el match exacto que
+    /// dispara el índice) y la conciliación del vínculo stock (spec §5.1, "¿ya existe esta
+    /// factura+orden para este proveedor?"). <paramref name="numeroOrden"/> puede ser null —
+    /// el índice usa NULLS NOT DISTINCT, así que dos gastos sin orden SÍ colisionan entre sí.
+    /// </summary>
+    Task<Gasto?> ObtenerPorProveedorYFacturaAsync(int proveedorId, string numeroFactura, string? numeroOrden);
 
     /// <summary>Con includes. Ordena por Fecha desc, luego Id desc. Los filtros nulos no aplican.</summary>
     Task<IReadOnlyList<Gasto>> ListarAsync(GastoFiltro filtro);

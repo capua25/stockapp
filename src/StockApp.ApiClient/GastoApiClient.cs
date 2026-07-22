@@ -82,11 +82,12 @@ public sealed class GastoApiClient : IGastoService
         return AEntidad(dto);
     }
 
-    public async Task<Gasto?> ObtenerPorProveedorYFacturaAsync(int proveedorId, string numeroFactura)
+    public async Task<Gasto?> ObtenerPorProveedorYFacturaAsync(int proveedorId, string numeroFactura, string? numeroOrden)
     {
         var query = ApiQuery.Construir(
             ("proveedorId", proveedorId.ToString(CultureInfo.InvariantCulture)),
-            ("numeroFactura", numeroFactura));
+            ("numeroFactura", numeroFactura),
+            ("numeroOrden", numeroOrden));
         try
         {
             var response = await ApiErrores.EnviarAsync(() =>

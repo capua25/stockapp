@@ -92,8 +92,14 @@ public class GastoService : IGastoService
             throw new ReglaDeNegocioException(
                 $"El monto total no puede quedar por debajo de lo ya pagado ({original.TotalPagado}).");
 
+        // F5c: NumeroOrden es parte de la clave de unicidad (Proveedor, Factura, Orden), así que
+        // un cambio de SOLO el orden (factura y proveedor iguales) también puede generar una
+        // colisión nueva contra otro gasto activo — re-validar en los tres casos, no solo en los
+        // dos de antes.
         if (!string.IsNullOrWhiteSpace(gasto.NumeroFactura)
-            && (gasto.NumeroFactura != original.NumeroFactura || gasto.ProveedorId != original.ProveedorId))
+            && (gasto.NumeroFactura != original.NumeroFactura
+                || gasto.ProveedorId != original.ProveedorId
+                || gasto.NumeroOrden != original.NumeroOrden))
             await ValidarFacturaUnicaAsync(gasto);
 
         var advertencia = await AdvertirSobregiroAsync(gasto, linea, excluyendoGastoId: gasto.Id);
@@ -240,10 +246,10 @@ public class GastoService : IGastoService
             ?? throw new EntidadNoEncontradaException($"Gasto {id} no encontrado.");
     }
 
-    public async Task<Gasto?> ObtenerPorProveedorYFacturaAsync(int proveedorId, string numeroFactura)
+    public async Task<Gasto?> ObtenerPorProveedorYFacturaAsync(int proveedorId, string numeroFactura, string? numeroOrden)
     {
         _auth.Verificar(_session.RolActual, Permisos.VerFinanzas);
-        return await _repo.ObtenerPorProveedorYFacturaAsync(proveedorId, numeroFactura);
+        return await _repo.ObtenerPorProveedorYFacturaAsync(proveedorId, numeroFactura, numeroOrden);
     }
 
     public async Task<IReadOnlyList<Gasto>> ListarAsync(GastoFiltro filtro)
@@ -301,12 +307,21 @@ public class GastoService : IGastoService
         return linea;
     }
 
+    /// <summary>
+    /// Espeja el índice único parcial (Proveedor, Factura, Orden) de la base (migración
+    /// AmpliaIndiceFacturaConNumeroOrden — F5c): dos gastos activos del mismo proveedor pueden
+    /// compartir número de factura si el número de orden difiere (caso real de la planilla 2026,
+    /// una factura imputada en varias partes — docs/finanzas-facturas-duplicadas-planilla-2026.md).
+    /// Mismo criterio de normalización que antes: ninguno — el match es por igualdad cruda,
+    /// como el índice de base (Postgres case-sensitive, sin Trim ni ToUpper).
+    /// </summary>
     private async Task ValidarFacturaUnicaAsync(Gasto gasto)
     {
         if (string.IsNullOrWhiteSpace(gasto.NumeroFactura))
             return;
 
-        var existente = await _repo.ObtenerPorProveedorYFacturaAsync(gasto.ProveedorId, gasto.NumeroFactura!);
+        var existente = await _repo.ObtenerPorProveedorYFacturaAsync(
+            gasto.ProveedorId, gasto.NumeroFactura!, gasto.NumeroOrden);
         if (existente is not null && existente.Id != gasto.Id)
             throw new ReglaDeNegocioException(
                 $"Ya existe la factura '{gasto.NumeroFactura}' para ese proveedor.");

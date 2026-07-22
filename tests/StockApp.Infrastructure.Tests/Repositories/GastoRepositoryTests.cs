@@ -42,10 +42,11 @@ public class GastoRepositoryTests : PostgresRepositoryTestBase
     }
 
     private static Gasto NuevoGasto(int proveedorId, int fuenteId, int rubroId, DateTime fecha,
-        decimal monto = 1000m, string? factura = null, int? lineaPoaId = null) => new()
+        decimal monto = 1000m, string? factura = null, int? lineaPoaId = null, string? numeroOrden = null) => new()
     {
         ProveedorId = proveedorId,
         NumeroFactura = factura,
+        NumeroOrden = numeroOrden,
         Detalle = "Gasto de prueba",
         Fecha = fecha,
         MontoTotal = monto,
@@ -130,14 +131,35 @@ public class GastoRepositoryTests : PostgresRepositoryTestBase
         await _repo.AgregarAsync(anulado);
         Context.ChangeTracker.Clear();
 
-        Assert.Null(await _repo.ObtenerPorProveedorYFacturaAsync(proveedorId, "B-0100"));
+        Assert.Null(await _repo.ObtenerPorProveedorYFacturaAsync(proveedorId, "B-0100", null));
 
         await _repo.AgregarAsync(NuevoGasto(proveedorId, fuenteId, rubroId, hoy, factura: "B-0100"));
         Context.ChangeTracker.Clear();
 
-        var found = await _repo.ObtenerPorProveedorYFacturaAsync(proveedorId, "B-0100");
+        var found = await _repo.ObtenerPorProveedorYFacturaAsync(proveedorId, "B-0100", null);
         Assert.NotNull(found);
         Assert.True(found!.Activo);
+    }
+
+    [Fact]
+    public async Task ObtenerPorProveedorYFactura_FiltraPorNumeroOrden()
+    {
+        // F5c: dos gastos activos del mismo proveedor+factura pueden coexistir con distinto
+        // NumeroOrden (índice ampliado) — la búsqueda tiene que devolver el que matchea el
+        // orden pedido, no cualquiera de los dos.
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var hoy = DateTime.UtcNow;
+        await _repo.AgregarAsync(
+            NuevoGasto(proveedorId, fuenteId, rubroId, hoy, factura: "B-0200", numeroOrden: "OC-1"));
+        await _repo.AgregarAsync(
+            NuevoGasto(proveedorId, fuenteId, rubroId, hoy, factura: "B-0200", numeroOrden: "OC-2"));
+        Context.ChangeTracker.Clear();
+
+        var encontradoOc1 = await _repo.ObtenerPorProveedorYFacturaAsync(proveedorId, "B-0200", "OC-1");
+        Assert.NotNull(encontradoOc1);
+        Assert.Equal("OC-1", encontradoOc1!.NumeroOrden);
+
+        Assert.Null(await _repo.ObtenerPorProveedorYFacturaAsync(proveedorId, "B-0200", "OC-9"));
     }
 
     [Fact]
@@ -212,13 +234,21 @@ public class GastoRepositoryTests : PostgresRepositoryTestBase
         Assert.Equal(0m, releido!.TotalPagado);
     }
 
-    // ── I2: índice único parcial proveedor+factura (gastos activos) ─────────
+    // ── I2: índice único parcial proveedor+factura+orden (gastos activos) ────
+    // F5c (índice ampliado): la planilla real 2026 tiene proveedores que repiten la misma
+    // factura en dos renglones con distinto número de orden (una factura imputada en varias
+    // partes) — ver docs/finanzas-facturas-duplicadas-planilla-2026.md. El índice viejo
+    // (solo ProveedorId+NumeroFactura) rechazaba ese caso real; el ampliado
+    // (ProveedorId+NumeroFactura+NumeroOrden, NULLS NOT DISTINCT) lo admite sin debilitar
+    // el bloqueo del duplicado exacto.
 
     [Fact]
     public async Task AgregarAsync_FacturaDuplicadaProveedorActivo_MapeaAReglaDeNegocio()
     {
         var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
         var hoy = DateTime.UtcNow;
+        // Ambos SIN NumeroOrden (null): prueba también NULLS NOT DISTINCT — sin ese flag,
+        // Postgres trata NULL como distinto de NULL y este segundo alta NO chocaría.
         await _repo.AgregarAsync(NuevoGasto(proveedorId, fuenteId, rubroId, hoy, factura: "C-0001"));
         Context.ChangeTracker.Clear();
 
@@ -226,6 +256,37 @@ public class GastoRepositoryTests : PostgresRepositoryTestBase
         // el catch de GastoRepository lo mapea a 409 en vez de dejar pasar el 500 crudo.
         await Assert.ThrowsAsync<ReglaDeNegocioException>(() =>
             _repo.AgregarAsync(NuevoGasto(proveedorId, fuenteId, rubroId, hoy, factura: "C-0001")));
+    }
+
+    [Fact]
+    public async Task AgregarAsync_MismaFacturaMismoNumeroOrden_MapeaAReglaDeNegocio()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var hoy = DateTime.UtcNow;
+        await _repo.AgregarAsync(
+            NuevoGasto(proveedorId, fuenteId, rubroId, hoy, factura: "C-0003", numeroOrden: "OC-9"));
+        Context.ChangeTracker.Clear();
+
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() =>
+            _repo.AgregarAsync(
+                NuevoGasto(proveedorId, fuenteId, rubroId, hoy, factura: "C-0003", numeroOrden: "OC-9")));
+    }
+
+    [Fact]
+    public async Task AgregarAsync_MismaFacturaDistintoNumeroOrden_PermiteAmbos()
+    {
+        // Caso real GARAY POZO HERNÁN, factura 82446 (docs/finanzas-facturas-duplicadas-
+        // planilla-2026.md): mismo proveedor+factura, dos renglones con distinto orden.
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var hoy = DateTime.UtcNow;
+        await _repo.AgregarAsync(
+            NuevoGasto(proveedorId, fuenteId, rubroId, hoy, monto: 263m, factura: "C-0004", numeroOrden: "865813"));
+        Context.ChangeTracker.Clear();
+
+        var id = await _repo.AgregarAsync(
+            NuevoGasto(proveedorId, fuenteId, rubroId, hoy, monto: 6407m, factura: "C-0004", numeroOrden: "865901"));
+
+        Assert.True(id > 0);
     }
 
     [Fact]

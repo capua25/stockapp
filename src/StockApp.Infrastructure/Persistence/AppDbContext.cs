@@ -157,15 +157,26 @@ public class AppDbContext : DbContext
             e.Property(g => g.MontoTotal).HasPrecision(18, 4);
             e.Property(g => g.Activo).HasDefaultValue(true);
             e.HasIndex(g => g.Fecha);
-            // Único PARCIAL: la unicidad proveedor+factura es regla de negocio SOLO entre
-            // gastos activos con factura (un gasto anulado libera su número de factura, y
-            // los gastos sin factura —compromisos, expedientes— no cuentan). Cierra en BD
-            // la carrera que ValidarFacturaUnicaAsync (check-then-act en memoria) no puede
-            // cerrar sola: dos altas concurrentes con la misma factura ya no pueden
-            // committear ambas. GastoRepository mapea la violación (Npgsql 23505) a
-            // ReglaDeNegocioException con el mismo mensaje que la validación de aplicación.
-            e.HasIndex(g => new { g.ProveedorId, g.NumeroFactura })
+            // Único PARCIAL: la unicidad proveedor+factura+orden es regla de negocio SOLO
+            // entre gastos activos con factura (un gasto anulado libera su número de
+            // factura, y los gastos sin factura —compromisos, expedientes— no cuentan).
+            // Cierra en BD la carrera que ValidarFacturaUnicaAsync (check-then-act en
+            // memoria) no puede cerrar sola: dos altas concurrentes con la misma
+            // factura+orden ya no pueden committear ambas. GastoRepository mapea la
+            // violación (Npgsql 23505) a ReglaDeNegocioException con el mismo mensaje que
+            // la validación de aplicación.
+            //
+            // NumeroOrden se sumó a la clave (migración AmpliaIndiceFacturaConNumeroOrden,
+            // F5c) porque la planilla real 2026 tiene proveedores que reutilizan el mismo
+            // número de factura en dos renglones con distinto número de orden (una factura
+            // imputada en varias partes) — ver docs/finanzas-facturas-duplicadas-planilla-2026.md.
+            // AreNullsDistinct(false) ⇒ NULLS NOT DISTINCT: dos gastos activos del mismo
+            // proveedor+factura SIN NumeroOrden siguen colisionando entre sí (Postgres trata
+            // NULL como distinto de NULL por defecto; sin este flag, dos gastos así se
+            // colarían y el índice quedaría MÁS débil que el viejo, no más preciso).
+            e.HasIndex(g => new { g.ProveedorId, g.NumeroFactura, g.NumeroOrden })
                 .IsUnique()
+                .AreNullsDistinct(false)
                 .HasFilter("\"Activo\" = TRUE AND \"NumeroFactura\" IS NOT NULL");
             e.HasOne(g => g.Proveedor).WithMany()
                 .HasForeignKey(g => g.ProveedorId).OnDelete(DeleteBehavior.Restrict);

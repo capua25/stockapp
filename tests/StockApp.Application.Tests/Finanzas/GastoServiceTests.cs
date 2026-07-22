@@ -144,10 +144,31 @@ public class GastoServiceTests
     public async Task AltaAsync_FacturaDuplicadaDeProveedorActiva_LanzaReglaDeNegocio()
     {
         var m = Crear();
-        m.Repo.Setup(r => r.ObtenerPorProveedorYFacturaAsync(1, "A-0001"))
+        m.Repo.Setup(r => r.ObtenerPorProveedorYFacturaAsync(1, "A-0001", null))
             .ReturnsAsync(new Gasto { Id = 99, ProveedorId = 1, NumeroFactura = "A-0001" });
 
         await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.AltaAsync(GastoValido()));
+    }
+
+    [Fact]
+    public async Task AltaAsync_MismaFacturaDistintoNumeroOrden_NoLanza()
+    {
+        // F5c: el chequeo de unicidad en memoria (ValidarFacturaUnicaAsync) tiene que espejar el
+        // índice ampliado (Proveedor, Factura, Orden) — pasa el NumeroOrden del gasto al repo, no
+        // solo Proveedor+Factura. El repo mockeado solo "encuentra" algo para un orden distinto
+        // ("OTRO-ORDEN"), así que para el orden real del gasto ("MI-ORDEN") debe dar null y el
+        // alta debe pasar.
+        var m = Crear();
+        m.Repo.Setup(r => r.ObtenerPorProveedorYFacturaAsync(1, "A-0001", "OTRO-ORDEN"))
+            .ReturnsAsync(new Gasto { Id = 99, ProveedorId = 1, NumeroFactura = "A-0001", NumeroOrden = "OTRO-ORDEN" });
+        m.Repo.Setup(r => r.AgregarAsync(It.IsAny<Gasto>())).ReturnsAsync(12);
+        var gasto = GastoValido();
+        gasto.NumeroOrden = "MI-ORDEN";
+
+        var resultado = await m.Svc.AltaAsync(gasto);
+
+        Assert.Equal(12, resultado.Id);
+        m.Repo.Verify(r => r.ObtenerPorProveedorYFacturaAsync(1, "A-0001", "MI-ORDEN"), Times.Once);
     }
 
     [Fact]

@@ -62,10 +62,13 @@ public static class GastosEndpoints
             Results.Ok(ADto(await gastos.ObtenerPorIdAsync(id))))
             .RequireAuthorization(Permisos.VerFinanzas);
 
-        // Conciliación del vínculo stock: ¿ya existe la factura de este proveedor?
-        group.MapGet("/por-factura", async (int proveedorId, string numeroFactura, IGastoService gastos) =>
+        // Conciliación del vínculo stock: ¿ya existe la factura+orden de este proveedor?
+        // numeroOrden es opcional (F5c: dos gastos activos pueden compartir factura con
+        // distinto orden — sin especificarlo, se busca la variante SIN orden, no "cualquiera").
+        group.MapGet("/por-factura", async (
+            int proveedorId, string numeroFactura, string? numeroOrden, IGastoService gastos) =>
         {
-            var gasto = await gastos.ObtenerPorProveedorYFacturaAsync(proveedorId, numeroFactura);
+            var gasto = await gastos.ObtenerPorProveedorYFacturaAsync(proveedorId, numeroFactura, numeroOrden);
             return gasto is null ? Results.NotFound() : Results.Ok(ADto(gasto));
         })
         .RequireAuthorization(Permisos.VerFinanzas);

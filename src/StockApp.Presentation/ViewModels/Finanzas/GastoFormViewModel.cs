@@ -277,7 +277,7 @@ public partial class GastoFormViewModel : ViewModelBase
             // La factura ya existe (cargada antes desde Finanzas): ofrecer asociar los
             // movimientos a la existente en vez de duplicarla (spec §5.1).
             var existente = await _service.ObtenerPorProveedorYFacturaAsync(
-                gasto.ProveedorId, gasto.NumeroFactura);
+                gasto.ProveedorId, gasto.NumeroFactura, gasto.NumeroOrden);
             if (existente is null)
             {
                 MensajeError = ex.Message;

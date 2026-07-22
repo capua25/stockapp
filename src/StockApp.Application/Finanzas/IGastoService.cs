@@ -24,8 +24,12 @@ public interface IGastoService
     /// <summary>Lanza EntidadNoEncontradaException si no existe.</summary>
     Task<Gasto> ObtenerPorIdAsync(int id);
 
-    /// <summary>Busca la factura ACTIVA de un proveedor (flujo "asociar a factura existente"). Null si no hay.</summary>
-    Task<Gasto?> ObtenerPorProveedorYFacturaAsync(int proveedorId, string numeroFactura);
+    /// <summary>
+    /// Busca la factura ACTIVA de un proveedor por (Proveedor, Factura, Orden) — flujo "asociar
+    /// a factura existente" (spec §5.1). Null si no hay. <paramref name="numeroOrden"/> puede ser
+    /// null (dos gastos sin orden colisionan igual, NULLS NOT DISTINCT en el índice de base).
+    /// </summary>
+    Task<Gasto?> ObtenerPorProveedorYFacturaAsync(int proveedorId, string numeroFactura, string? numeroOrden);
 
     Task<IReadOnlyList<Gasto>> ListarAsync(GastoFiltro filtro);
 

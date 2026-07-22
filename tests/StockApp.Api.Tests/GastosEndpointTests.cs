@@ -223,6 +223,30 @@ public class GastosEndpointTests : ApiTestBase
     }
 
     [Fact]
+    public async Task GetGastoPorFactura_FiltraPorNumeroOrden()
+    {
+        // F5c: dos gastos activos del mismo proveedor pueden compartir número de factura con
+        // distinto NumeroOrden (índice ampliado) — /por-factura tiene que devolver el que
+        // matchea el orden pedido, no cualquiera de los dos.
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+        await client.PostAsJsonAsync("/finanzas/gastos",
+            RequestValido(proveedorId, fuenteId, rubroId, factura: "BUSCA-02") with { NumeroOrden = "OC-1" });
+        await client.PostAsJsonAsync("/finanzas/gastos",
+            RequestValido(proveedorId, fuenteId, rubroId, factura: "BUSCA-02") with { NumeroOrden = "OC-2" });
+
+        var ok = await client.GetAsync(
+            $"/finanzas/gastos/por-factura?proveedorId={proveedorId}&numeroFactura=BUSCA-02&numeroOrden=OC-1");
+        Assert.Equal(HttpStatusCode.OK, ok.StatusCode);
+        var dto = await ok.Content.ReadFromJsonAsync<GastoDto>();
+        Assert.Equal("OC-1", dto!.NumeroOrden);
+
+        var notFound = await client.GetAsync(
+            $"/finanzas/gastos/por-factura?proveedorId={proveedorId}&numeroFactura=BUSCA-02&numeroOrden=OC-9");
+        Assert.Equal(HttpStatusCode.NotFound, notFound.StatusCode);
+    }
+
+    [Fact]
     public async Task PostPagos_RegistraYRespetaSaldo()
     {
         var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();

@@ -54,9 +54,10 @@ public class GastoRepository : IGastoRepository
     public Task<Gasto?> ObtenerPorIdAsync(int id)
         => ConIncludes().FirstOrDefaultAsync(g => g.Id == id);
 
-    public Task<Gasto?> ObtenerPorProveedorYFacturaAsync(int proveedorId, string numeroFactura)
+    public Task<Gasto?> ObtenerPorProveedorYFacturaAsync(int proveedorId, string numeroFactura, string? numeroOrden)
         => ConIncludes().FirstOrDefaultAsync(g =>
-            g.Activo && g.ProveedorId == proveedorId && g.NumeroFactura == numeroFactura);
+            g.Activo && g.ProveedorId == proveedorId && g.NumeroFactura == numeroFactura
+            && g.NumeroOrden == numeroOrden);
 
     public async Task<IReadOnlyList<Gasto>> ListarAsync(GastoFiltro filtro)
     {
@@ -113,15 +114,18 @@ public class GastoRepository : IGastoRepository
     /// <summary>
     /// I2 (review final f2-gastos): <c>GastoService.ValidarFacturaUnicaAsync</c> (check-then-act
     /// en memoria) da el 409 con mensaje lindo en el camino feliz; el índice único PARCIAL en BD
-    /// (migración UniqueFacturaProveedorGastosActivos, Activo=TRUE AND NumeroFactura NOT NULL)
-    /// cierra la carrera real de dos altas concurrentes con la misma factura. Sin este catch acá
-    /// (en el repo, que es quien referencia Npgsql — Application NO referencia EF/Npgsql para
-    /// mantener la capa desacoplada) la violación llegaría como DbUpdateException cruda y el
-    /// endpoint respondería 500 en vez de 409.
+    /// (migración AmpliaIndiceFacturaConNumeroOrden, sobre ProveedorId+NumeroFactura+NumeroOrden,
+    /// Activo=TRUE AND NumeroFactura NOT NULL, NULLS NOT DISTINCT — F5c, amplió el índice
+    /// original de UniqueFacturaProveedorGastosActivos para admitir una misma factura repetida
+    /// con distinto número de orden, caso real de la planilla 2026) cierra la carrera real de dos
+    /// altas concurrentes con la misma factura+orden. Sin este catch acá (en el repo, que es
+    /// quien referencia Npgsql — Application NO referencia EF/Npgsql para mantener la capa
+    /// desacoplada) la violación llegaría como DbUpdateException cruda y el endpoint respondería
+    /// 500 en vez de 409.
     /// </summary>
     private static bool EsViolacionFacturaUnica(DbUpdateException ex)
         => ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } pg
-           && pg.ConstraintName == "IX_Gastos_ProveedorId_NumeroFactura";
+           && pg.ConstraintName == "IX_Gastos_ProveedorId_NumeroFactura_NumeroOrden";
 
     public Task ActualizarPagoAsync(PagoGasto pago)
     {

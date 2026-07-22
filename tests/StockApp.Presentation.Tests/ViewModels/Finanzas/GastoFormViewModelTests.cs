@@ -209,7 +209,7 @@ public class GastoFormViewModelTests
         var (vm, svc, nav, confirm) = Crear();
         svc.Setup(s => s.AltaAsync(It.IsAny<Gasto>(), It.IsAny<IReadOnlyList<int>>()))
             .ThrowsAsync(new ReglaDeNegocioException("Ya existe la factura 'A-1' para ese proveedor."));
-        svc.Setup(s => s.ObtenerPorProveedorYFacturaAsync(1, "A-1"))
+        svc.Setup(s => s.ObtenerPorProveedorYFacturaAsync(1, "A-1", null))
             .ReturnsAsync(new Gasto { Id = 55, ProveedorId = 1, NumeroFactura = "A-1", Detalle = "Existente" });
         vm.CargarDesdeEntrada(movimientoId: 40, montoSugerido: 100m);
         await vm.InicializarAsync();
