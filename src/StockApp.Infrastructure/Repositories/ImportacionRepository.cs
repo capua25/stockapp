@@ -115,8 +115,94 @@ public class ImportacionRepository : IImportacionRepository
             ? pg.ConstraintName
             : null;
 
-    public Task<ResultadoReversionDto> RevertirAsync(Guid idImportacion, int usuarioId) =>
-        throw new NotImplementedException("Se implementa en Task 8.");
+    /// <summary>
+    /// Reversa por lote (spec §2.7, Task 8): baja lógica de TODO lo que
+    /// <see cref="ConfirmarAsync"/> creó o reactivó con este <paramref name="idImportacion"/>,
+    /// en UNA transacción — mismo patrón (una tx, un solo SaveChangesAsync, commit al final) que
+    /// ConfirmarAsync. Busca y marca "revertida" por <see cref="LogAuditoria.IdLote"/> (columna
+    /// tipada, post-review de Task 6) — NO hay ningún parseo de texto embebido en Detalle.
+    ///
+    /// Gasto/IngresoCaja/LineaPoa del lote → Activo = false. PagoGasto cae por CASCADA vía
+    /// GastoId (no tiene columna IdImportacion propia — spec §2.7, es hija del agregado Gasto).
+    /// AsignacionPresupuestal NO tiene un Activo propio en el dominio: queda colgando de su
+    /// LineaPoa inactiva, que es el estado correcto — nada en el sistema la filtra por separado
+    /// de LineaPoa.Activo, así que no hay nada que tocar ahí salvo contarlas.
+    ///
+    /// Los maestros (Proveedor/FuenteFinanciamiento/RubroGasto) NUNCA se tocan: para cuando se
+    /// ejecuta una reversa, esos maestros pueden estar ya referenciados por gastos cargados a
+    /// mano en paralelo a la migración — un maestro de más es inocuo, un gasto huérfano no.
+    /// </summary>
+    public async Task<ResultadoReversionDto> RevertirAsync(Guid idImportacion, int usuarioId)
+    {
+        await using var tx = await _ctx.Database.BeginTransactionAsync();
+
+        var logConfirmacion = await _ctx.LogsAuditoria
+            .Where(l => l.Accion == AccionAuditada.ImportacionPlanillas && l.IdLote == idImportacion)
+            .FirstOrDefaultAsync();
+
+        // Sin tx.RollbackAsync() explícito (mismo criterio que el guard de re-importación de
+        // ConfirmarAsync): el `await using var tx` de arriba hace rollback al disponerse cuando
+        // la excepción se propaga.
+        if (logConfirmacion is null)
+            throw new EntidadNoEncontradaException(
+                $"No existe ninguna importación con IdImportacion {idImportacion}.");
+
+        var yaRevertida = await _ctx.LogsAuditoria.AnyAsync(l =>
+            l.Accion == AccionAuditada.ReversionImportacion && l.IdLote == idImportacion);
+
+        if (yaRevertida)
+            throw new ReglaDeNegocioException(
+                $"La importación {idImportacion} ya fue revertida anteriormente.");
+
+        var gastos = await _ctx.Gastos.Include(g => g.Pagos)
+            .Where(g => g.IdImportacion == idImportacion && g.Activo).ToListAsync();
+        var ingresos = await _ctx.IngresosCaja
+            .Where(i => i.IdImportacion == idImportacion && i.Activo).ToListAsync();
+        var lineasPoa = await _ctx.LineasPoa.Include(l => l.Asignaciones)
+            .Where(l => l.IdImportacion == idImportacion && l.Activo).ToListAsync();
+
+        var pagosRevertidos = 0;
+        foreach (var gasto in gastos)
+        {
+            gasto.Activo = false;
+            foreach (var pago in gasto.Pagos.Where(p => p.Activo))
+            {
+                pago.Activo = false;
+                pagosRevertidos++;
+            }
+        }
+
+        foreach (var ingreso in ingresos)
+            ingreso.Activo = false;
+
+        var asignacionesRevertidas = 0;
+        foreach (var linea in lineasPoa)
+        {
+            linea.Activo = false;
+            // AsignacionPresupuestal no tiene Activo propio (spec §2.7): queda colgando de una
+            // LineaPoa inactiva, que es el estado correcto — nada que tocar acá salvo contarlas.
+            asignacionesRevertidas += linea.Asignaciones.Count;
+        }
+
+        _ctx.LogsAuditoria.Add(new LogAuditoria
+        {
+            UsuarioId = usuarioId,
+            Fecha = DateTime.UtcNow,
+            Accion = AccionAuditada.ReversionImportacion,
+            Entidad = "Importacion",
+            EntidadId = logConfirmacion.EntidadId,
+            IdLote = idImportacion,
+            Detalle = $"Gastos revertidos: {gastos.Count}; Pagos revertidos: {pagosRevertidos}; " +
+                $"Ingresos revertidos: {ingresos.Count}; LineasPoa revertidas: {lineasPoa.Count}; " +
+                $"Asignaciones revertidas: {asignacionesRevertidas}",
+        });
+
+        await _ctx.SaveChangesAsync();
+        await tx.CommitAsync();
+
+        return new ResultadoReversionDto(
+            idImportacion, gastos.Count, pagosRevertidos, ingresos.Count, lineasPoa.Count, asignacionesRevertidas);
+    }
 
     /// <summary>
     /// Seam de test (review Important B): no-op en producción. Se invoca justo antes del único

@@ -1034,6 +1034,78 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         Assert.Contains(segunda.IdImportacion.ToString(), ex.Message);
         Assert.DoesNotContain(primera.IdImportacion.ToString(), ex.Message);
     }
+
+    // ── Task 8: reversa por lote ─────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task RevertirAsync_LoteExistente_DaDeBajaGastosIngresosYLineasPoaPeroNoLosMaestros()
+    {
+        var confirmacion = await _repo.ConfirmarAsync(PayloadConIngresoYGasto(), usuarioId: _usuarioId);
+
+        var reversion = await _repo.RevertirAsync(confirmacion.IdImportacion, usuarioId: _usuarioId);
+
+        Assert.Equal(confirmacion.IdImportacion, reversion.IdImportacion);
+        Assert.Equal(1, reversion.GastosRevertidos);
+        Assert.Equal(1, reversion.PagosRevertidos);
+        Assert.Equal(1, reversion.IngresosRevertidos);
+
+        await using var verificacion = Fixture.CrearContexto();
+        var gasto = verificacion.Gastos.Include(g => g.Pagos).Single();
+        Assert.False(gasto.Activo);
+        Assert.All(gasto.Pagos, p => Assert.False(p.Activo));
+        Assert.False(verificacion.IngresosCaja.Single().Activo);
+        // Los maestros (Proveedor/FuenteFinanciamiento/RubroGasto) SIGUEN activos.
+        Assert.True(verificacion.Proveedores.Single().Activo);
+        Assert.True(verificacion.FuentesFinanciamiento.Single().Activo);
+        Assert.True(verificacion.RubrosGasto.Single().Activo);
+    }
+
+    [Fact]
+    public async Task RevertirAsync_LineaPoaDelLote_QuedaInactivaConSusAsignacionesColgando()
+    {
+        var confirmacion = await _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: _usuarioId);
+
+        var reversion = await _repo.RevertirAsync(confirmacion.IdImportacion, usuarioId: _usuarioId);
+
+        Assert.Equal(1, reversion.LineasPoaRevertidas);
+        Assert.Equal(2, reversion.AsignacionesRevertidas);
+        await using var verificacion = Fixture.CrearContexto();
+        var linea = verificacion.LineasPoa.Include(l => l.Asignaciones).Single();
+        Assert.False(linea.Activo);
+        Assert.Equal(2, linea.Asignaciones.Count); // siguen ahí, colgando de la línea inactiva
+    }
+
+    [Fact]
+    public async Task RevertirAsync_IdInexistente_LanzaEntidadNoEncontrada()
+    {
+        await Assert.ThrowsAsync<StockApp.Domain.Exceptions.EntidadNoEncontradaException>(
+            () => _repo.RevertirAsync(Guid.NewGuid(), usuarioId: _usuarioId));
+    }
+
+    [Fact]
+    public async Task RevertirAsync_LoteYaRevertido_LanzaReglaDeNegocio()
+    {
+        var confirmacion = await _repo.ConfirmarAsync(PayloadConIngresoYGasto(), usuarioId: _usuarioId);
+        await _repo.RevertirAsync(confirmacion.IdImportacion, usuarioId: _usuarioId);
+
+        await Assert.ThrowsAsync<StockApp.Domain.Exceptions.ReglaDeNegocioException>(
+            () => _repo.RevertirAsync(confirmacion.IdImportacion, usuarioId: _usuarioId));
+    }
+
+    [Fact]
+    public async Task CicloCompleto_ConfirmarRevertirConfirmarSinForzar_SegundaConfirmacionEs200()
+    {
+        var primera = await _repo.ConfirmarAsync(PayloadConIngresoYGasto(), usuarioId: _usuarioId);
+        await _repo.RevertirAsync(primera.IdImportacion, usuarioId: _usuarioId);
+
+        // El guard de Task 6 no cuenta las corridas YA revertidas — sin Forzar tiene que andar.
+        var segunda = await _repo.ConfirmarAsync(PayloadConIngresoYGasto(forzar: false), usuarioId: _usuarioId);
+
+        Assert.Equal(1, segunda.GastosCreados); // la clave natural del gasto revertido está Activo=false, no bloquea
+        await using var verificacion = Fixture.CrearContexto();
+        Assert.Equal(2, await verificacion.Gastos.CountAsync()); // el revertido + el nuevo
+        Assert.Equal(1, await verificacion.Gastos.CountAsync(g => g.Activo));
+    }
 }
 
 /// <summary>
