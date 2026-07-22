@@ -932,16 +932,22 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
     }
 
     [Fact]
-    public async Task ConfirmarAsync_SegundaCorridaConForzar_NoLanzaYAuditaLasDosCorridas()
+    public async Task ConfirmarAsync_SegundaCorridaConForzar_NoLanzaYAuditaLasDosCorridasConSuPropioIdLote()
     {
-        await _repo.ConfirmarAsync(PayloadConIngresoYGasto(), usuarioId: _usuarioId);
+        var primera = await _repo.ConfirmarAsync(PayloadConIngresoYGasto(), usuarioId: _usuarioId);
 
         var segunda = await _repo.ConfirmarAsync(PayloadConIngresoYGasto(forzar: true), usuarioId: _usuarioId);
 
         Assert.NotEqual(Guid.Empty, segunda.IdImportacion);
         await using var verificacion = Fixture.CrearContexto();
-        Assert.Equal(2, verificacion.LogsAuditoria.Count(
-            l => l.Accion == StockApp.Domain.Enums.AccionAuditada.ImportacionPlanillas));
+        var logs = verificacion.LogsAuditoria
+            .Where(l => l.Accion == StockApp.Domain.Enums.AccionAuditada.ImportacionPlanillas)
+            .ToList();
+        Assert.Equal(2, logs.Count);
+        // Post-review: cada corrida estampa su propio IdLote tipado — ya no hace falta parsear
+        // Detalle para saber a qué corrida pertenece cada LogAuditoria.
+        Assert.Contains(logs, l => l.IdLote == primera.IdImportacion);
+        Assert.Contains(logs, l => l.IdLote == segunda.IdImportacion);
     }
 
     [Fact]
@@ -972,7 +978,11 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
             .Single(l => l.Accion == StockApp.Domain.Enums.AccionAuditada.ImportacionPlanillas);
         Assert.Equal(otroUsuario.Id, log.UsuarioId);
         Assert.Equal(Ejercicio, log.EntidadId);
-        Assert.StartsWith($"IdImportacion={resultado.IdImportacion}", log.Detalle);
+        // Post-review: el vínculo con el lote ya no viaja como texto embebido en Detalle — es la
+        // columna tipada LogAuditoria.IdLote (Guid?, con índice no único). Detalle sigue existiendo
+        // solo como resumen legible para un humano, sin el token "IdImportacion=" al principio.
+        Assert.Equal(resultado.IdImportacion, log.IdLote);
+        Assert.DoesNotContain("IdImportacion=", log.Detalle);
         Assert.Contains("Gastos creados: 1", log.Detalle);
     }
 }

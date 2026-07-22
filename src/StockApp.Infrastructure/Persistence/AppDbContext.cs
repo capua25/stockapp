@@ -107,6 +107,7 @@ public class AppDbContext : DbContext
             e.Property(l => l.Detalle).IsRequired();
             e.HasOne(l => l.Usuario).WithMany()
                 .HasForeignKey(l => l.UsuarioId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(l => l.IdLote);
         });
 
         // ── Finanzas: maestros (Fase 1 módulo Finanzas) ───────────────────────

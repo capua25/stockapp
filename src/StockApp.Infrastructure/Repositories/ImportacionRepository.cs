@@ -17,17 +17,6 @@ namespace StockApp.Infrastructure.Repositories;
 /// </summary>
 public class ImportacionRepository : IImportacionRepository
 {
-    /// <summary>
-    /// LogAuditoria no tiene columna propia para el Guid del lote (spec §2.7 solo la pide en
-    /// Gasto/IngresoCaja/LineaPoa) — se codifica como el primer token de Detalle con este
-    /// prefijo fijo. Task 8 (RevertirAsync) reutiliza esta constante con su propia query inline
-    /// para ubicar el LogAuditoria del lote a revertir; no llama a
-    /// BuscarImportacionNoRevertidaAsync ni a ExtraerIdImportacion (esos dos son específicos del
-    /// guard de /confirmar, que resuelve el Guid a partir del Ejercicio — /revertir/{id} ya lo
-    /// recibe directo como parámetro de ruta).
-    /// </summary>
-    private const string PrefijoIdImportacion = "IdImportacion=";
-
     private readonly AppDbContext _ctx;
 
     public ImportacionRepository(AppDbContext ctx) => _ctx = ctx;
@@ -66,7 +55,10 @@ public class ImportacionRepository : IImportacionRepository
 
         // Auditoría de la corrida (spec §2.6/§2.7): DENTRO de la transacción y ANTES del único
         // SaveChangesAsync — si algo de arriba o de este mismo save rollbackea, no puede quedar
-        // rastro de auditoría de una corrida que no se confirmó.
+        // rastro de auditoría de una corrida que no se confirmó. IdLote es la fuente de verdad
+        // del vínculo con el lote (post-review de Task 6: columna tipada + índice no único en
+        // LogAuditoria, AppDbContext.cs); Detalle queda solo como resumen legible para un humano,
+        // sin ningún dato que otro código necesite parsear.
         _ctx.LogsAuditoria.Add(new LogAuditoria
         {
             UsuarioId = usuarioId,
@@ -74,7 +66,8 @@ public class ImportacionRepository : IImportacionRepository
             Accion = AccionAuditada.ImportacionPlanillas,
             Entidad = "Importacion",
             EntidadId = dto.Ejercicio,
-            Detalle = $"{PrefijoIdImportacion}{idImportacion}; Ejercicio: {dto.Ejercicio}; " +
+            IdLote = idImportacion,
+            Detalle = $"Ejercicio: {dto.Ejercicio}; " +
                 $"Proveedores creados: {proveedoresCreados}; Fuentes creadas: {fuentesCreadas}; " +
                 $"Rubros creados: {rubrosCreados}; LineasPoa creadas: {lineasPoaCreadas}; " +
                 $"Asignaciones creadas: {asignacionesCreadas}; " +
@@ -137,38 +130,33 @@ public class ImportacionRepository : IImportacionRepository
     protected virtual Task AntesDeGuardarAsync() => Task.CompletedTask;
 
     /// <summary>
-    /// Guard de re-importación (spec §2.6). LogAuditoria no tiene columna propia para el Guid
-    /// del lote — se codifica como el primer token de Detalle y EntidadId guarda el Ejercicio
-    /// para filtrar en SQL sin traer todo el historial de auditoría del sistema a memoria.
-    /// "No revertida" = no existe ningún LogAuditoria de AccionAuditada.ReversionImportacion
-    /// (Task 8) cuyo Detalle referencie ese mismo IdImportacion con el mismo prefijo. Hasta que
-    /// Task 8 exista, ninguna corrida puede estar revertida — esta consulta ya queda lista para
-    /// cuando RevertirAsync empiece a escribir esos logs.
+    /// Guard de re-importación (spec §2.6). Filtra en SQL por Accion + EntidadId (el Ejercicio,
+    /// para no traer todo el historial de auditoría del sistema a memoria) y compara por
+    /// LogAuditoria.IdLote — columna tipada con índice no único (post-review de Task 6), sin
+    /// parseo de string ni EF.Functions.Like sobre Detalle. "No revertida" = no existe ningún
+    /// LogAuditoria de AccionAuditada.ReversionImportacion (Task 8) con el mismo IdLote. Hasta
+    /// que Task 8 exista, ninguna corrida puede estar revertida — esta consulta ya queda lista
+    /// para cuando RevertirAsync empiece a escribir esos logs con Accion =
+    /// AccionAuditada.ReversionImportacion e IdLote = el mismo Guid de la corrida que revierte.
     /// </summary>
     private async Task<Guid?> BuscarImportacionNoRevertidaAsync(int ejercicio)
     {
         var confirmaciones = await _ctx.LogsAuditoria
             .Where(l => l.Accion == AccionAuditada.ImportacionPlanillas && l.EntidadId == ejercicio)
-            .Select(l => l.Detalle)
+            .Select(l => l.IdLote)
             .ToListAsync();
 
-        foreach (var detalle in confirmaciones)
+        foreach (var idLote in confirmaciones)
         {
-            var id = ExtraerIdImportacion(detalle);
-            var patronReversion = $"{PrefijoIdImportacion}{id}%";
             var fueRevertida = await _ctx.LogsAuditoria.AnyAsync(l =>
-                l.Accion == AccionAuditada.ReversionImportacion
-                && EF.Functions.Like(l.Detalle, patronReversion));
+                l.Accion == AccionAuditada.ReversionImportacion && l.IdLote == idLote);
 
             if (!fueRevertida)
-                return id;
+                return idLote;
         }
 
         return null;
     }
-
-    private static Guid ExtraerIdImportacion(string detalle) =>
-        Guid.Parse(detalle.Substring(PrefijoIdImportacion.Length, 36));
 
     /// <summary>
     /// Get-or-create de Proveedor/FuenteFinanciamiento/RubroGasto declarados en
