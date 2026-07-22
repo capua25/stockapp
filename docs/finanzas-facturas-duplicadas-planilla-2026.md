@@ -100,3 +100,35 @@ estos 4 renglones no se puede correr — ni por el importador ni cargándolos a 
 la fase F5c (análisis, confirmación, dedupe, reversa, auditoría — Tasks 1 a 8) está terminado y
 probado; el test de aceptación final (Task 9) queda a la espera de esta decisión antes de poder
 cerrar limpio contra la planilla completa.
+
+## 7. Decisión tomada (sin acceso a los comprobantes)
+
+Se decidió **ampliar el índice único de la base** para que la clave de unicidad de un gasto pase
+de (Proveedor, Factura) a (Proveedor, Factura, N° de Orden) — migración
+`AmpliaIndiceFacturaConNumeroOrden`, índice `IX_Gastos_ProveedorId_NumeroFactura_NumeroOrden`. Con
+esto, los 4 renglones de los dos conflictos se migran sin tocar ningún dato de la planilla: en
+ambos pares el número de orden ya es distinto, así que quedan como dos gastos separados, cada uno
+con su propio número de orden — exactamente como están tipeados hoy en el archivo.
+
+**Por qué se pudo decidir esto sin mirar los comprobantes de papel** (pregunta 2 de la sección 5,
+no la 1): el dato entra correctamente bajo las DOS lecturas posibles que planteaba la sección 5.
+
+- Si es una sola factura real pagada/imputada en varias partes (lectura 2), el sistema ahora la
+  representa tal cual: dos gastos, mismo número de factura, cada uno con su propio número de
+  orden — que es justamente el caso para el que se amplió el índice.
+- Si en cambio alguno de los dos números de factura fuera un tipeo de la planilla (lectura 1), el
+  sistema igual los acepta sin error — no hay ninguna validación que dependa de que la factura sea
+  "correcta", y el número de factura **no participa de ningún total ni de ningún cálculo**: ni el
+  saldo de caja, ni el control POA, ni la valorización de stock usan NumeroFactura para sumar o
+  filtrar nada (es un dato identificatorio, no operativo). Migrar con el número tal como está en
+  la planilla, sea correcto o no, no distorsiona ningún saldo.
+
+En ambos casos el dato migrado es correcto o, en el peor caso, inocuo — por eso no hacía falta
+esperar a los papeles para decidir el cambio de esquema.
+
+**Pendiente**: si alguna vez aparece el comprobante de la factura **82447** (el segundo conflicto,
+GARAY POZO HERNÁN), vale la pena revisarlo — sus dos renglones están separados por 6 días (23 y 29
+de enero), un desfasaje menos típico de "una sola factura con varias líneas" que el del conflicto
+82446 (mismo día para las dos filas). Si resulta ser un tipeo, se corrige editando el gasto
+correspondiente desde el desktop (Finanzas → Gastos → Editar): es un cambio de dato puntual, sin
+impacto en ningún saldo ya calculado, porque NumeroFactura no interviene en ningún total.
