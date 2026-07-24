@@ -1,0 +1,40 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
+             xmlns:dto="using:StockApp.Application.Finanzas"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
+             x:Class="StockApp.Presentation.Views.Finanzas.NuevaImportacionView"
+             x:DataType="vm:NuevaImportacionViewModel">
+
+    <Grid Margin="24">
+
+        <!-- Paso 1: Cargar -->
+        <StackPanel Spacing="12"
+                    IsVisible="{Binding PasoActual, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:PasoWizardImportacion.Cargar}}">
+            <TextBlock Text="Paso 1 · Cargar planillas" Classes="titulo-vista" />
+
+            <Border Classes="card">
+                <StackPanel Spacing="12">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Classes="secondary" Content="Elegir planilla de Gastos..." Command="{Binding SeleccionarGastosCommand}" />
+                        <TextBlock Text="{Binding GastosNombreArchivo}" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Classes="secondary" Content="Elegir planilla POA..." Command="{Binding SeleccionarPoaCommand}" />
+                        <TextBlock Text="{Binding PoaNombreArchivo}" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="Ejercicio" VerticalAlignment="Center" />
+                        <NumericUpDown Value="{Binding Ejercicio}" Minimum="2000" Maximum="2100" FormatString="0" Width="140" />
+                    </StackPanel>
+                    <CheckBox Content="Forzar (re-importar un ejercicio ya importado)" IsChecked="{Binding Forzar}" />
+                    <Button Classes="primary" Content="Analizar" Command="{Binding AnalizarCommand}" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+
+    </Grid>
+
+</UserControl>

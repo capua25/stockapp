@@ -278,6 +278,7 @@ public partial class App : AvaloniaApp
 
         // ── Módulo Finanzas — F5d: importador de planillas ────────────────────
         services.AddTransient<HistorialImportacionesViewModel>();
+        services.AddTransient<NuevaImportacionViewModel>();
 
         // ── Presentation: ViewModels del shell ───────────────────────────────
 
