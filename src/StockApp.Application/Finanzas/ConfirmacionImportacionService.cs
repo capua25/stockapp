@@ -52,6 +52,13 @@ public class ConfirmacionImportacionService : IConfirmacionImportacionService
         return await _importacionRepo.RevertirAsync(idImportacion, _session.UsuarioActual!.Id);
     }
 
+    public async Task<IReadOnlyList<ImportacionHistorialDto>> ListarHistorialAsync()
+    {
+        _auth.Verificar(_session.RolActual, Permisos.ImportarPlanillas);
+
+        return await _importacionRepo.ListarHistorialAsync();
+    }
+
     /// <summary>
     /// Regla de cierre (spec §3): toda referencia nominal (Proveedor/Fuente/CodigoRubro/
     /// LineaPoa) tiene que resolver contra un maestro YA existente en la base o contra uno

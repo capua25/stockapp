@@ -9,4 +9,7 @@ public interface IConfirmacionImportacionService
 {
     Task<ResultadoConfirmacionDto> ConfirmarAsync(ConfirmarImportacionDto dto);
     Task<ResultadoReversionDto> RevertirAsync(Guid idImportacion);
+
+    /// <summary>F5d §3: historial admin-only, mismo permiso que confirmar/revertir.</summary>
+    Task<IReadOnlyList<ImportacionHistorialDto>> ListarHistorialAsync();
 }

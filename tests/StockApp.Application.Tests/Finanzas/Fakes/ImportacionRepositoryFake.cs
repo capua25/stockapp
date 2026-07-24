@@ -13,22 +13,26 @@ public sealed class ImportacionRepositoryFake : IImportacionRepository
 {
     private readonly ResultadoConfirmacionDto _resultadoConfirmar;
     private readonly ResultadoReversionDto _resultadoRevertir;
+    private readonly IReadOnlyList<ImportacionHistorialDto> _historial;
 
     public ConfirmarImportacionDto? DtoRecibido { get; private set; }
     public int? UsuarioIdRecibido { get; private set; }
     public Guid? IdImportacionRevertidaRecibida { get; private set; }
     public int VecesConfirmarLlamado { get; private set; }
     public int VecesRevertirLlamado { get; private set; }
+    public int VecesListarHistorialLlamado { get; private set; }
 
     public ImportacionRepositoryFake(
         ResultadoConfirmacionDto? resultadoConfirmar = null,
-        ResultadoReversionDto? resultadoRevertir = null)
+        ResultadoReversionDto? resultadoRevertir = null,
+        IReadOnlyList<ImportacionHistorialDto>? historial = null)
     {
         _resultadoConfirmar = resultadoConfirmar
             ?? new ResultadoConfirmacionDto(
                 Guid.NewGuid(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, new List<ConflictoGastoDto>());
         _resultadoRevertir = resultadoRevertir
             ?? new ResultadoReversionDto(Guid.NewGuid(), 0, 0, 0, 0, 0);
+        _historial = historial ?? new List<ImportacionHistorialDto>();
     }
 
     public Task<ResultadoConfirmacionDto> ConfirmarAsync(ConfirmarImportacionDto dto, int usuarioId)
@@ -45,5 +49,11 @@ public sealed class ImportacionRepositoryFake : IImportacionRepository
         UsuarioIdRecibido = usuarioId;
         VecesRevertirLlamado++;
         return Task.FromResult(_resultadoRevertir);
+    }
+
+    public Task<IReadOnlyList<ImportacionHistorialDto>> ListarHistorialAsync()
+    {
+        VecesListarHistorialLlamado++;
+        return Task.FromResult(_historial);
     }
 }
