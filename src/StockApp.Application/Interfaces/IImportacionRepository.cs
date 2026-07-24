@@ -12,4 +12,7 @@ public interface IImportacionRepository
 {
     Task<ResultadoConfirmacionDto> ConfirmarAsync(ConfirmarImportacionDto dto, int usuarioId);
     Task<ResultadoReversionDto> RevertirAsync(Guid idImportacion, int usuarioId);
+
+    /// <summary>F5d §3: historial derivado de LogsAuditoria, sin entidad cabecera ni migración.</summary>
+    Task<IReadOnlyList<ImportacionHistorialDto>> ListarHistorialAsync();
 }

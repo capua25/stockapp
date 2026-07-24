@@ -264,6 +264,39 @@ public class ImportacionRepository : IImportacionRepository
     }
 
     /// <summary>
+    /// F5d §3: historial de importaciones derivado ENTERAMENTE de LogsAuditoria — sin entidad
+    /// cabecera ni migración. Dos queries (mismo criterio que BuscarImportacionNoRevertidaAsync):
+    /// el set de IdLote revertidos se trae una sola vez y se compara en memoria contra cada
+    /// confirmación, evitando un N+1 de AnyAsync por fila. l.Usuario!.NombreUsuario genera el
+    /// JOIN a Usuarios en SQL (mismo patrón que AuditoriaQueryRepository.ObtenerLogAsync) — sin
+    /// Include explícito.
+    /// </summary>
+    public async Task<IReadOnlyList<ImportacionHistorialDto>> ListarHistorialAsync()
+    {
+        var revertidos = await _ctx.LogsAuditoria
+            .Where(l => l.Accion == AccionAuditada.ReversionImportacion && l.IdLote != null)
+            .Select(l => l.IdLote!.Value)
+            .ToHashSetAsync();
+
+        var confirmaciones = await _ctx.LogsAuditoria
+            .Where(l => l.Accion == AccionAuditada.ImportacionPlanillas && l.IdLote != null)
+            .OrderByDescending(l => l.Fecha)
+            .Select(l => new
+            {
+                IdImportacion = l.IdLote!.Value,
+                l.Fecha,
+                Ejercicio = l.EntidadId,
+                Usuario = l.Usuario!.NombreUsuario,
+            })
+            .ToListAsync();
+
+        return confirmaciones
+            .Select(c => new ImportacionHistorialDto(
+                c.IdImportacion, c.Fecha, c.Ejercicio, c.Usuario, revertidos.Contains(c.IdImportacion)))
+            .ToList();
+    }
+
+    /// <summary>
     /// Bloquea la reversa si algún gasto activo del lote tiene un pago ACTIVO que el importador
     /// NO creó (re-review IMPORTANT 2, decisión del usuario). "No creado por este lote" =
     /// PagoGasto.IdImportacion distinto de <paramref name="idImportacion"/> — cubre tanto un pago
