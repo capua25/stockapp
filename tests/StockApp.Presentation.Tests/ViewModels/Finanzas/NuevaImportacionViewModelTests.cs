@@ -1,6 +1,7 @@
 using Moq;
 using StockApp.Application.Finanzas;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Finanzas;
 using Xunit;
@@ -257,5 +258,38 @@ public class NuevaImportacionViewModelTests
 
         Assert.Equal(PasoWizardImportacion.Revisar, vm.PasoActual);
         confirm.Verify(c => c.InformarAsync("MaestrosNuevos.Rubros[0].Nombre: Requerido"), Times.Once);
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_ElServidorRechazaValidacionEstructurada_InformaElDetallePorCampo()
+    {
+        var svc = new Mock<IImportacionService>();
+        var seleccion = new Mock<IServicioSeleccionArchivo>();
+        var confirm = new Mock<IConfirmacionService>();
+        var analisis = ResultadoAnalisisVacio() with
+        {
+            Resumen = new ResumenAnalisisDto(0, 0, 0, 0, 0, 0, 0),
+        };
+        var vm = await CrearEnPasoRevisarAsync(svc, seleccion, confirm, analisis);
+        var errores = new Dictionary<string, string[]>
+        {
+            ["Gastos[3].Fuente"] = new[] { "La fuente 'X' no existe ni fue declarada nueva" },
+            ["Gastos[3].FechaVencimiento"] = new[] { "Requerido" },
+        };
+        svc.Setup(s => s.ConfirmarAsync(It.IsAny<ConfirmarImportacionDto>()))
+            .ThrowsAsync(new ValidacionImportacionException(errores));
+        string? mensajeInformado = null;
+        confirm.Setup(c => c.InformarAsync(It.IsAny<string>()))
+            .Callback<string>(m => mensajeInformado = m)
+            .Returns(Task.CompletedTask);
+
+        await vm.ConfirmarCommand.ExecuteAsync(null);
+
+        Assert.Equal(PasoWizardImportacion.Revisar, vm.PasoActual);
+        Assert.NotNull(mensajeInformado);
+        Assert.Contains("Gastos[3].Fuente", mensajeInformado);
+        Assert.Contains("La fuente 'X' no existe ni fue declarada nueva", mensajeInformado);
+        Assert.Contains("Gastos[3].FechaVencimiento", mensajeInformado);
+        Assert.Contains("Requerido", mensajeInformado);
     }
 }

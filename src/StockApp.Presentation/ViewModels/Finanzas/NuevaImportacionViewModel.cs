@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Finanzas;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Services;
 
 namespace StockApp.Presentation.ViewModels.Finanzas;
@@ -146,11 +147,25 @@ public partial class NuevaImportacionViewModel : ViewModelBase
             ResultadoConfirmacion = await _service.ConfirmarAsync(dto);
             PasoActual = PasoWizardImportacion.Resultado;
         }
+        catch (ValidacionImportacionException vex)
+        {
+            await _confirmacion.InformarAsync(FormatearErroresValidacion(vex));
+        }
         catch (Exception ex)
         {
             await _confirmacion.InformarAsync(ex.Message);
         }
     }
+
+    /// <summary>
+    /// Formatea ValidacionImportacionException.Errores (F5c/F5d Task 4: diccionario "Tipo[i].Campo"
+    /// → mensajes, reconstruido por el ApiClient desde el 400 estructurado) como texto legible —
+    /// una línea por campo. Entrega 1 es SOLO texto: resaltar la celda/pestaña exacta es Entrega 2.
+    /// </summary>
+    private static string FormatearErroresValidacion(ValidacionImportacionException vex)
+        => string.Join(
+            Environment.NewLine,
+            vex.Errores.Select(par => $"{par.Key}: {string.Join("; ", par.Value)}"));
 
     /// <summary>
     /// Mapeo directo (sin edición) análisis→confirmación, válido SOLO cuando Resumen.Errores == 0
