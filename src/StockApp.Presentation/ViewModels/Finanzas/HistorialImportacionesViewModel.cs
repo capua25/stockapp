@@ -76,15 +76,3 @@ public partial class HistorialImportacionesViewModel : ViewModelBase
         }
     }
 }
-
-/// <summary>Texto de la columna Estado del historial: "Activa"/"Revertida".</summary>
-public sealed class EstadoRevertidaConverter : Avalonia.Data.Converters.IValueConverter
-{
-    public static readonly EstadoRevertidaConverter Instance = new();
-
-    public object? Convert(object? value, Type targetType, object? parameter, System.Globalization.CultureInfo culture)
-        => value is true ? "Revertida" : "Activa";
-
-    public object? ConvertBack(object? value, Type targetType, object? parameter, System.Globalization.CultureInfo culture)
-        => throw new NotSupportedException();
-}
