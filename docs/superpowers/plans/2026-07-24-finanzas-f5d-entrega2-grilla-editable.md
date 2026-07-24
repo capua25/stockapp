@@ -6,11 +6,11 @@
 
 **Architecture:** Capas de abajo hacia arriba: (1) `AnalisisImportacionService` gana un flag `EsNueva` por línea POA (comparando Hoja contra `ILineaPoaRepository`); (2) tres VMs de fila nuevas (`FilaGastoEditableVm`/`FilaIngresoEditableVm`/`FilaLineaPoaEditableVm`), heredando de `ObservableValidator` (CommunityToolkit.Mvvm), reemplazan el binding directo de los DTOs de análisis; (3) `NuevaImportacionViewModel` proyecta `ResultadoAnalisisDto` → colecciones de filas VM, agrega `HasErrors` de todas las filas para el gating de Confirmar, y mapea filas VM → `ConfirmarImportacionDto` (reemplazando el `MapearAConfirmacion` estático de Entrega 1); (4) `NuevaImportacionView.axaml` gana `DataGridTemplateColumn` con `CellTemplate`/`CellEditingTemplate` por celda editable, combos `IsEditable`, date-pickers con converter nuevo, y candado visual con desbloqueo por fila; (5) el catch de `ValidacionImportacionException` se descompone celda por celda en vez de mostrarse como texto plano.
 
-**Tech Stack:** .NET 10, Avalonia 12.0.4/12.0.1 (`Avalonia.Controls.DataGrid` 12.0.1), CommunityToolkit.Mvvm 8.4.1 (`ObservableValidator`, `[ObservableProperty]`, `[NotifyDataErrorInfo]`, `[RelayCommand]`), `System.ComponentModel.DataAnnotations`, xUnit + Moq (Application/Presentation).
+**Tech Stack:** .NET 10, Avalonia 12.0.5/12.0.1 (`Avalonia.Controls.DataGrid` 12.0.1), CommunityToolkit.Mvvm 8.4.1 (`ObservableValidator`, `[ObservableProperty]`, `[NotifyDataErrorInfo]`, `[RelayCommand]`), `System.ComponentModel.DataAnnotations`, xUnit + Moq (Application/Presentation).
 
 ## Global Constraints
 
-- Stack: .NET 10, Avalonia 12.0.4 (core) / `Avalonia.Controls.DataGrid` 12.0.1. `CommunityToolkit.Mvvm` 8.4.1 ya referenciado en `StockApp.Presentation.csproj:48` — soporta `ObservableValidator`.
+- Stack: .NET 10, Avalonia 12.0.5 (core) / `Avalonia.Controls.DataGrid` 12.0.1. `CommunityToolkit.Mvvm` 8.4.1 ya referenciado en `StockApp.Presentation.csproj:48` — soporta `ObservableValidator`.
 - **`Avalonia.AppBuilder.WithDataAnnotationsValidation()` es OBLIGATORIO** (verificado: existe en `Avalonia.Controls.dll` 12.0.1, extension method sobre `AppBuilder`) — Avalonia 12 NO valida `DataAnnotations` por defecto. Sin esto, todos los `[Required]`/atributos custom de los VMs de fila quedan mudos (no error, simplemente nunca se llaman). Se agrega en `Program.cs:54-60`, en el chain de `BuildAvaloniaApp()`.
 - `DataGrid.IsReadOnly="False"` explícito en el `<DataGrid>` Y en cada `DataGridTemplateColumn` editable — NO confiar en cascada (gotcha Avalonia 12, `DataGridCollectionView`).
 - Date-pickers (`CalendarDatePicker`) bindean `DateTimeOffset?`, no `DateOnly?` (tipo real de `Fecha`/`FechaVencimiento` en los DTOs) → usar el converter `DateOnlyOffsetConverter` (Task 2), TwoWay explícito, manejo defensivo de null.
@@ -21,8 +21,8 @@
 - TDD estricto en TODAS las tasks: test que falla → correr y verificar el mensaje/tipo de fallo esperado → implementación mínima → correr y verificar que pasa → commit. Nunca escribir implementación antes que su test. Comando: `dotnet test tests/<Proyecto> --filter "FullyQualifiedName~NombreDeLaClase"`.
 - Conventional commits en español, SIN `Co-Authored-By` ni atribución de IA.
 - No usar `cat`/`grep`/`find`/`sed` para explorar durante la implementación — usar las herramientas dedicadas del entorno de ejecución.
-- Este repo NO tiene infraestructura Avalonia Headless en `StockApp.Presentation.Tests` (confirmado por comentario en `EstadoFilaBrushConverter.cs:16-17` y ausencia de paquete `Avalonia.Headless.XUnit` referenciado en ese proyecto salvo para casos puntuales ya existentes). Las tasks de XAML puro (7, 8, parte de 9) no llevan test automatizado de UI — se verifican con `dotnet build` (compila) + verificación orgánica manual en la app real (WSLg), seg��n la convención ya establecida del proyecto. La lógica de negocio detrás de cada celda (validación, gating, mapeo) SÍ está 100% cubierta por tests de VM en Tasks 3-6, 9, 10, 11.
-- **Gap de nombres a verificar en la app real antes de dar Task 7-8 por cerradas**: edición inline con `DataGridCollectionView` tuvo el bug AvaloniaUI/Avalonia.Controls.DataGrid#232 (mencionado en `StockApp.Presentation.csproj:33`, fixeado en 12.0.1) — doble-click para editar una celda y confirmar que commitea sin saltos de fila.
+- `StockApp.Presentation.Tests` NO tiene infraestructura Avalonia Headless (confirmado por comentario en `EstadoFilaBrushConverter.cs:16-17` y ausencia de paquete `Avalonia.Headless.XUnit` referenciado en ese proyecto). PERO el repo SÍ tiene un proyecto headless activo y con precedente real: `tests/StockApp.Presentation.UiTests` (`Avalonia.Headless.XUnit` + `Avalonia.Controls.DataGrid` 12.0.1 + xunit.v3, patrón `[AvaloniaFact]`), con dos precedentes exactos a calcar: `DataGridSortClickTests.cs` (click real de puntero sobre un `DataGrid` con `DataGridCollectionView`, reproduce/verifica el bug AvaloniaUI/Avalonia.Controls.DataGrid#232) y `MovimientoFormControlValidacionTests.cs` (monta la View real con un VM real + fakes hechos a mano — este proyecto NO referencia Moq, a diferencia de `StockApp.Presentation.Tests` — y valida bindings TwoWay reales). Por eso los puntos riesgosos de XAML puro de Tasks 7/8 (candado por celda, `ComboBox IsEditable`, regresión del bug #232 con edición inline sobre `DataGridCollectionView`) llevan un Step de test headless en `StockApp.Presentation.UiTests`, calcado de esos dos precedentes (detalle en el Step correspondiente de cada Task) — reemplaza lo que en una primera pasada de este plan había quedado sólo como verificación orgánica manual. Queda como verificación orgánica manual SOLO lo que genuinamente no es automatizable headless (layout/estética fina, flujo end-to-end contra las planillas reales del municipio). La lógica de negocio detrás de cada celda (validación, gating, mapeo) SÍ está 100% cubierta por tests de VM en Tasks 3-6, 9, 10, 11. Task 9 no suma un Step headless propio: su UI es `ItemsControl` (Nombre editable vía `TextBox` simple), no `DataGridTemplateColumn`, así que no atraviesa el mecanismo de `DataGridCollectionView`/candado-por-celda que motiva estos tests — su cobertura ya es 100% de VM (Steps 1-8 del propio Task).
+- **Regresión del bug AvaloniaUI/Avalonia.Controls.DataGrid#232** (mencionado en `StockApp.Presentation.csproj:33`, fixeado en 12.0.1): editar una celda vía `DataGridCollectionView` y confirmar que commitea sin perder ni duplicar la fila. Cubierto por el Step de test headless de Task 7 (grilla de Gastos) y Task 8 (grilla de Líneas POA) en `StockApp.Presentation.UiTests` — la verificación orgánica manual en la app real (WSLg) queda como chequeo final de UX, no como el único gate.
 
 ## File Structure
 
@@ -348,7 +348,7 @@ Expected: PASS (8/8 — los 4 tests originales sin ripple de comportamiento + lo
 - [ ] **Step 9: Correr la suite completa de Application.Tests — el `EsNueva` posicional puede haber roto otros archivos que instancien `LineaPoaAnalizadaDto` o `AnalisisImportacionService`**
 
 Run: `dotnet test tests/StockApp.Application.Tests`
-Expected: PASS. Si falla por otro archivo (`AnalisisImportacionServiceGastosTests.cs`, `AnalisisImportacionServiceReconciliacionTests.cs`, `AnalisisImportacionServiceMaestrosNuevosPoaTests.cs` también usan `Crear()`/construyen el servicio con los mismos 6 argumentos antiguos), aplicar el MISMO cambio de Step 3 a esos archivos antes de continuar — no es opcional, son ripples obligatorios del cambio de firma del constructor.
+Expected: PASS. Si falla por otro archivo (`AnalisisImportacionServiceGastosTests.cs`, `AnalisisImportacionServiceReconciliacionTests.cs`, `AnalisisImportacionServiceMaestrosNuevosPoaTests.cs` también usan `Crear()`/construyen el servicio con los mismos 6 argumentos antiguos), aplicar el MISMO cambio de Step 3 a esos archivos antes de continuar — no es opcional, son ripples obligatorios del cambio de firma del constructor. **`AnalisisImportacionServiceMaestrosNuevosPoaTests.cs` en particular tiene DOS call-sites** (mismo criterio que Task 7 Step 2 documenta para los "DOS call-sites" de `NuevaImportacionViewModelTests.cs`): el helper `Crear()` (~línea 79) Y una construcción INLINE dentro de un `[Fact]` (~línea 170) que NO pasa por el helper — actualizar AMBOS, no sólo el helper.
 
 - [ ] **Step 10: Commit**
 
@@ -1618,6 +1618,8 @@ git commit -m "feat(finanzas): proyecta el analisis a filas VM editables y relaj
 - Modify: `src/StockApp.Presentation/Views/Finanzas/NuevaImportacionView.axaml`
 - Modify: `src/StockApp.Presentation/Views/Finanzas/NuevaImportacionView.axaml.cs`
 - Modify: `tests/StockApp.Presentation.Tests/ViewModels/Finanzas/NuevaImportacionViewModelTests.cs`
+- Create: `tests/StockApp.Presentation.UiTests/NuevaImportacionFakes.cs` — fakes hechos a mano (sin Moq) de las dependencias de `NuevaImportacionViewModel`, mismo criterio que `MovimientoRegistroFakes.cs`.
+- Create: `tests/StockApp.Presentation.UiTests/NuevaImportacionGastosGridTests.cs` — tests headless de la grilla de Gastos (candado por celda, `ComboBox IsEditable`, regresión del bug #232).
 
 **Interfaces:**
 - Consumes: `IFuenteFinanciamientoService.ListarActivasAsync()`, `IRubroGastoService.ListarActivosAsync()`, `IProveedorService.ListarTodosAsync()` (filtrado `.Where(p => p.Activo)` — `IProveedorService` NO tiene `ListarActivosAsync`, mismo patrón que `GastoFormViewModel.InicializarAsync`, `src/StockApp.Presentation/ViewModels/Finanzas/GastoFormViewModel.cs:163-176`). `DateOnlyOffsetConverter.Instance` (Task 2), `DecimalOpcionalConverter.Instance` (ya existe).
@@ -1778,6 +1780,7 @@ public partial class NuevaImportacionView : UserControl
              xmlns:dto="using:StockApp.Application.Finanzas"
              xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:sys="using:System"
+             xmlns:enums="using:StockApp.Domain.Enums"
              xmlns:i="https://github.com/projektanker/icons.avalonia"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -1791,7 +1794,7 @@ public partial class NuevaImportacionView : UserControl
 
 ```xml
 <TabItem Header="Gastos">
-    <DataGrid ItemsSource="{Binding FilasGastoView}" IsReadOnly="False"
+    <DataGrid x:Name="GridGastos" ItemsSource="{Binding FilasGastoView}" IsReadOnly="False"
               CanUserSortColumns="True" AutoGenerateColumns="False">
         <DataGrid.Columns>
 
@@ -1968,9 +1971,14 @@ public partial class NuevaImportacionView : UserControl
                 </DataGridTemplateColumn.CellTemplate>
                 <DataGridTemplateColumn.CellEditingTemplate>
                     <DataTemplate x:DataType="vm:FilaGastoEditableVm">
+                        <!-- IsEnabled sólo si Condicion == CondicionPago.Credito. x:Static NO invoca
+                             métodos (Enum.Parse no es sintaxis válida acá) — se referencia el valor
+                             de enum directo, mismo patrón que ya usa este archivo para
+                             PasoWizardImportacion (NuevaImportacionView.axaml:25). Requiere
+                             xmlns:enums="using:StockApp.Domain.Enums" en el encabezado (Step 5). -->
                         <CalendarDatePicker
                             SelectedDate="{Binding FechaVencimiento, Converter={x:Static conv:DateOnlyOffsetConverter.Instance}, Mode=TwoWay}"
-                            IsEnabled="{Binding Condicion, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static sys:Enum.Parse(sys:Type, 'Credito')}}" />
+                            IsEnabled="{Binding Condicion, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static enums:CondicionPago.Credito}}" />
                     </DataTemplate>
                 </DataGridTemplateColumn.CellEditingTemplate>
             </DataGridTemplateColumn>
@@ -1992,16 +2000,6 @@ public partial class NuevaImportacionView : UserControl
     </DataGrid>
 </TabItem>
 ```
-
-**Nota — corrección aplicada durante la escritura de este plan:** la columna "Vencimiento" de arriba usa `{x:Static sys:Enum.Parse(...)}` como intento de comparar `Condicion == CondicionPago.Credito` directo en XAML; esa sintaxis NO es válida en Avalonia (`x:Static` sólo referencia miembros estáticos existentes, no invoca métodos). La forma correcta, real y verificada contra el patrón que YA usa este mismo archivo para `PasoWizardImportacion` (`NuevaImportacionView.axaml:25`, `Converter={x:Static ObjectConverters.Equal} ConverterParameter={x:Static vm:PasoWizardImportacion.Cargar}`), es referenciar el valor de enum directo:
-
-```xml
-<CalendarDatePicker
-    SelectedDate="{Binding FechaVencimiento, Converter={x:Static conv:DateOnlyOffsetConverter.Instance}, Mode=TwoWay}"
-    IsEnabled="{Binding Condicion, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static enums:CondicionPago.Credito}}" />
-```
-
-Agregar `xmlns:enums="using:StockApp.Domain.Enums"` al encabezado del archivo (Step 4) para que `enums:CondicionPago.Credito` resuelva.
 
 - [ ] **Step 7: Agregar `CondicionesDisponibles` a `FilaGastoEditableVm` (falta del Task 3 — se detecta acá al escribir el binding del combo; agregarlo ahí, no como parche suelto)**
 
@@ -2040,16 +2038,263 @@ private void RubroComboBox_SelectionChanged(object? sender, SelectionChangedEven
 Run: `dotnet build src/StockApp.Presentation`
 Expected: `Build succeeded.`
 
-- [ ] **Step 10: Verificación orgánica (no hay test automatizado de XAML en este repo)** — levantar la app real (WSLg, patrón ya establecido en el proyecto), ir a Finanzas → Importar → cargar `PlanillaGastos2026.ods`/`PlanillaPoa2026.ods` (fixtures en `tests/StockApp.Infrastructure.Tests/Fixtures/Finanzas/`), y en el Paso 2 confirmar: (a) las celdas con valor ya cargado se ven con candado y NO editan al doble-click; (b) las celdas null (p. ej. Proveedor vacío) editan directo; (c) el botón ✎ desbloquea una fila completa; (d) el combo de Proveedor/Fuente/Rubro muestra los maestros existentes y acepta texto libre; (e) **el gotcha del bug #232 de `Avalonia.Controls.DataGrid`**: doble-click, escribir, Enter — la fila NO debe saltar ni perder el commit (csproj ya fija 12.0.1, que lo fixea, pero el diseño pide verificarlo en la app real igual).
+- [ ] **Step 10: Test headless — candado por celda, `ComboBox IsEditable` y regresión del bug #232, en `StockApp.Presentation.UiTests`** (calcado de `MovimientoFormControlValidacionTests.cs`: monta la View real — `NuevaImportacionView` — con un `NuevaImportacionViewModel` real y fakes hechos a mano, ya que este proyecto no referencia Moq. A diferencia de `DataGridSortClickTests.cs`, que necesitaba un click de puntero real porque el bug de sort era de ruteo de evento en el header, acá el mecanismo bajo prueba — begin/commit de edición contra un `ItemsSource` respaldado por `DataGridCollectionView`, que es exactamente donde vivió el bug #232 — se dirige con la API pública de `DataGrid` (`SelectedItem`/`CurrentColumn`/`BeginEdit()`/`CommitEdit()`/`CancelEdit()`; `DataGridCell`/`DataGridRow` no exponen `Column`/`Index`/etc. como público, confirmado contra `Avalonia.Controls.DataGrid.dll` 12.0.1, así que no son usables desde un proyecto de test externo). El control de edición vivo (`ComboBox`/`TextBox`) se ubica luego con `GetVisualDescendants()`, igual que los dos precedentes.)
 
-- [ ] **Step 11: Commit**
+```csharp
+// tests/StockApp.Presentation.UiTests/NuevaImportacionFakes.cs
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using StockApp.Application.Catalogo;
+using StockApp.Application.Finanzas;
+using StockApp.Domain.Entities;
+using StockApp.Presentation.Services;
+
+namespace StockApp.Presentation.UiTests;
+
+/// <summary>
+/// Fakes minimos de las dependencias de NuevaImportacionViewModel (F5d Entrega 2), mismo criterio
+/// que MovimientoRegistroFakes.cs: este proyecto no referencia Moq, asi que se escriben a mano y
+/// lanzan NotSupportedException en los miembros no ejercitados por los tests headless de la
+/// grilla. Reutiliza ConfirmacionServiceFake (ya existe en MovimientoRegistroFakes.cs, mismo
+/// namespace, misma interfaz IConfirmacionService).
+/// </summary>
+internal sealed class ImportacionServiceFake : IImportacionService
+{
+    private readonly ResultadoAnalisisDto _resultado;
+
+    public ImportacionServiceFake(ResultadoAnalisisDto resultado) => _resultado = resultado;
+
+    public Task<ResultadoAnalisisDto> AnalizarAsync(
+        string nombreArchivoGastos, byte[] gastosOds, string nombreArchivoPoa, byte[] poaOds, int ejercicio)
+        => Task.FromResult(_resultado);
+
+    public Task<ResultadoConfirmacionDto> ConfirmarAsync(ConfirmarImportacionDto dto)
+        => throw new NotSupportedException("No usado en este banco de pruebas.");
+
+    public Task<ResultadoReversionDto> RevertirAsync(Guid idImportacion)
+        => throw new NotSupportedException("No usado en este banco de pruebas.");
+
+    public Task<IReadOnlyList<ImportacionHistorialDto>> ListarHistorialAsync()
+        => throw new NotSupportedException("No usado en este banco de pruebas.");
+}
+
+internal sealed class ServicioSeleccionArchivoFake : IServicioSeleccionArchivo
+{
+    public Task<(string NombreArchivo, byte[] Contenido)?> SeleccionarArchivoAsync()
+        => throw new NotSupportedException("No usado en este banco de pruebas.");
+
+    public Task<(string NombreArchivo, byte[] Contenido)?> SeleccionarArchivoOdsAsync()
+        => Task.FromResult<(string NombreArchivo, byte[] Contenido)?>(("archivo.ods", new byte[] { 1 }));
+}
+
+internal sealed class FuenteFinanciamientoServiceFake : IFuenteFinanciamientoService
+{
+    private readonly IReadOnlyList<FuenteFinanciamiento> _fuentes;
+
+    public FuenteFinanciamientoServiceFake(IReadOnlyList<FuenteFinanciamiento> fuentes) => _fuentes = fuentes;
+
+    public Task<int> AltaAsync(FuenteFinanciamiento fuente) => throw new NotSupportedException("No usado en este banco de pruebas.");
+    public Task ModificarAsync(FuenteFinanciamiento fuente) => throw new NotSupportedException("No usado en este banco de pruebas.");
+    public Task BajaLogicaAsync(int id) => throw new NotSupportedException("No usado en este banco de pruebas.");
+    public Task<IReadOnlyList<FuenteFinanciamiento>> ListarTodasAsync() => Task.FromResult(_fuentes);
+    public Task<IReadOnlyList<FuenteFinanciamiento>> ListarActivasAsync() => Task.FromResult(_fuentes);
+}
+
+internal sealed class RubroGastoServiceFake : IRubroGastoService
+{
+    private readonly IReadOnlyList<RubroGasto> _rubros;
+
+    public RubroGastoServiceFake(IReadOnlyList<RubroGasto> rubros) => _rubros = rubros;
+
+    public Task<int> AltaAsync(RubroGasto rubro) => throw new NotSupportedException("No usado en este banco de pruebas.");
+    public Task ModificarAsync(RubroGasto rubro) => throw new NotSupportedException("No usado en este banco de pruebas.");
+    public Task BajaLogicaAsync(int id) => throw new NotSupportedException("No usado en este banco de pruebas.");
+    public Task<IReadOnlyList<RubroGasto>> ListarTodosAsync() => Task.FromResult(_rubros);
+    public Task<IReadOnlyList<RubroGasto>> ListarActivosAsync() => Task.FromResult(_rubros);
+}
+
+internal sealed class ProveedorServiceFake : IProveedorService
+{
+    private readonly IReadOnlyList<Proveedor> _proveedores;
+
+    public ProveedorServiceFake(IReadOnlyList<Proveedor> proveedores) => _proveedores = proveedores;
+
+    public Task<int> AltaAsync(Proveedor proveedor) => throw new NotSupportedException("No usado en este banco de pruebas.");
+    public Task ModificarAsync(Proveedor proveedor) => throw new NotSupportedException("No usado en este banco de pruebas.");
+    public Task BajaLogicaAsync(int id) => throw new NotSupportedException("No usado en este banco de pruebas.");
+    public Task<IReadOnlyList<Proveedor>> ListarTodosAsync() => Task.FromResult(_proveedores);
+}
+```
+
+```csharp
+// tests/StockApp.Presentation.UiTests/NuevaImportacionGastosGridTests.cs
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Headless.XUnit;
+using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
+using StockApp.Application.Finanzas;
+using StockApp.Domain.Entities;
+using StockApp.Presentation.ViewModels.Finanzas;
+using Xunit;
+
+namespace StockApp.Presentation.UiTests;
+
+/// <summary>
+/// Tests headless de la grilla editable de Gastos (F5d Entrega 2 Task 7), calcados de
+/// DataGridSortClickTests.cs y MovimientoFormControlValidacionTests.cs. Cubren automatizado lo
+/// que una primera pasada de este plan dejaba solo como verificación orgánica manual: candado
+/// por celda, ComboBox IsEditable con texto libre, y la regresión del bug
+/// AvaloniaUI/Avalonia.Controls.DataGrid#232 (edición inline con DataGridCollectionView).
+/// </summary>
+public class NuevaImportacionGastosGridTests
+{
+    private const string Xaml = """
+        <Window xmlns="https://github.com/avaloniaui"
+                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                xmlns:fin="clr-namespace:StockApp.Presentation.Views.Finanzas;assembly=StockApp.Presentation"
+                Width="1000" Height="700">
+            <fin:NuevaImportacionView />
+        </Window>
+        """;
+
+    private static async Task<(Window Window, DataGrid Grid, NuevaImportacionViewModel Vm)> MontarEnPasoRevisarAsync(GastoAnalizadoDto gasto)
+    {
+        var service = new ImportacionServiceFake(new ResultadoAnalisisDto(
+            new List<IngresoAnalizadoDto>(), new List<GastoAnalizadoDto> { gasto },
+            new List<LineaPoaAnalizadaDto>(),
+            new MaestrosNuevosDto(new List<string>(), new List<string>(), new List<CodigoRubroNuevoDto>()),
+            new ResumenAnalisisDto(1, 1, 0, 0, 0, 0, 0),
+            new SaldosTotalesPoaOds(0m, 0m)));
+        var seleccion = new ServicioSeleccionArchivoFake();
+        var fuentes = new FuenteFinanciamientoServiceFake(new List<FuenteFinanciamiento>());
+        var rubros = new RubroGastoServiceFake(new List<RubroGasto>());
+        var proveedores = new ProveedorServiceFake(new List<Proveedor>());
+
+        var vm = new NuevaImportacionViewModel(
+            service, seleccion, new ConfirmacionServiceFake(), fuentes, rubros, proveedores);
+
+        var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
+        window.DataContext = vm;
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        await vm.SeleccionarGastosCommand.ExecuteAsync(null);
+        await vm.SeleccionarPoaCommand.ExecuteAsync(null);
+        await vm.AnalizarCommand.ExecuteAsync(null);
+        Dispatcher.UIThread.RunJobs();
+
+        var grid = window.GetVisualDescendants().OfType<DataGrid>().First(g => g.Name == "GridGastos");
+        return (window, grid, vm);
+    }
+
+    private static GastoAnalizadoDto GastoBase(string? proveedor, string? numeroFactura, string? fuente) => new(
+        HojaOrigen: "MARZO", NumeroFila: 1,
+        Estado: EstadoFila.Ok, Motivos: new List<MotivoEstado>(),
+        Fecha: new DateOnly(2026, 3, 1), Monto: 1000m,
+        Proveedor: proveedor, ProveedorNuevo: false,
+        NumeroFactura: numeroFactura, NumeroOrden: null,
+        Detalle: "Compra", Destino: null,
+        Fuente: fuente, FuenteDesconocida: fuente is null,
+        CodigoRubro: 10, Rubro: "Materiales", RubroDesconocido: false,
+        LineaPoaAsignada: null);
+
+    [AvaloniaFact]
+    public async Task CeldaProveedorConValorCargado_QuedaBloqueada_CeldaFuenteFaltante_EsEditable()
+    {
+        var gasto = GastoBase(proveedor: "ACME SA", numeroFactura: "F-1", fuente: null);
+        var (window, grid, vm) = await MontarEnPasoRevisarAsync(gasto);
+        var fila = vm.FilasGasto[0];
+
+        grid.SelectedItem = fila;
+        grid.CurrentColumn = grid.Columns.First(c => Equals(c.Header, "Proveedor"));
+        Dispatcher.UIThread.RunJobs();
+        grid.BeginEdit();
+        Dispatcher.UIThread.RunJobs();
+        var comboProveedor = window.GetVisualDescendants().OfType<ComboBox>().First();
+        Assert.False(comboProveedor.IsEnabled);
+        grid.CancelEdit();
+        Dispatcher.UIThread.RunJobs();
+
+        grid.CurrentColumn = grid.Columns.First(c => Equals(c.Header, "Fuente"));
+        Dispatcher.UIThread.RunJobs();
+        grid.BeginEdit();
+        Dispatcher.UIThread.RunJobs();
+        var comboFuente = window.GetVisualDescendants().OfType<ComboBox>().First();
+        Assert.True(comboFuente.IsEnabled);
+    }
+
+    [AvaloniaFact]
+    public async Task ComboBoxDeFuente_EsEditable_AceptaTextoLibre()
+    {
+        var gasto = GastoBase(proveedor: "ACME SA", numeroFactura: "F-1", fuente: null);
+        var (window, grid, vm) = await MontarEnPasoRevisarAsync(gasto);
+        var fila = vm.FilasGasto[0];
+
+        grid.SelectedItem = fila;
+        grid.CurrentColumn = grid.Columns.First(c => Equals(c.Header, "Fuente"));
+        Dispatcher.UIThread.RunJobs();
+        grid.BeginEdit();
+        Dispatcher.UIThread.RunJobs();
+
+        var combo = window.GetVisualDescendants().OfType<ComboBox>().First();
+        combo.Text = "Fuente Municipal Nueva";
+        Dispatcher.UIThread.RunJobs();
+        grid.CommitEdit();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal("Fuente Municipal Nueva", fila.Fuente);
+    }
+
+    [AvaloniaFact]
+    public async Task EditarFactura_Commitea_SinPerderNiDuplicarLaFila()
+    {
+        var gasto = GastoBase(proveedor: "ACME SA", numeroFactura: null, fuente: "Rentas Generales");
+        var (window, grid, vm) = await MontarEnPasoRevisarAsync(gasto);
+        Assert.Single(vm.FilasGasto);
+        var fila = vm.FilasGasto[0];
+
+        grid.SelectedItem = fila;
+        grid.CurrentColumn = grid.Columns.First(c => Equals(c.Header, "Factura"));
+        Dispatcher.UIThread.RunJobs();
+        grid.BeginEdit();
+        Dispatcher.UIThread.RunJobs();
+
+        var texto = window.GetVisualDescendants().OfType<TextBox>().First();
+        texto.Text = "F-2026-001";
+        Dispatcher.UIThread.RunJobs();
+        grid.CommitEdit();
+        Dispatcher.UIThread.RunJobs();
+
+        // Regresión AvaloniaUI/Avalonia.Controls.DataGrid#232: el commit vía DataGridCollectionView
+        // no debe perder ni duplicar la fila.
+        Assert.Single(vm.FilasGasto);
+        Assert.Same(fila, vm.FilasGasto[0]);
+        Assert.Equal("F-2026-001", vm.FilasGasto[0].NumeroFactura);
+    }
+}
+```
+
+Run: `dotnet test tests/StockApp.Presentation.UiTests --filter "FullyQualifiedName~NuevaImportacionGastosGridTests"`
+Expected: PASS (3/3).
+
+- [ ] **Step 11: Verificación orgánica (chequeo final de UX, no el único gate — lo automatizable ya lo cubre el Step 10)** — levantar la app real (WSLg, patrón ya establecido en el proyecto), ir a Finanzas → Importar → cargar `PlanillaGastos2026.ods`/`PlanillaPoa2026.ods` (fixtures en `tests/StockApp.Infrastructure.Tests/Fixtures/Finanzas/`), y en el Paso 2 confirmar visualmente: (a) el ícono `mdi-lock` aparece en las celdas ya cargadas; (b) el botón ✎ desbloquea una fila completa; (c) el combo de Proveedor/Fuente/Rubro muestra los maestros existentes junto con la opción de texto libre.
+
+- [ ] **Step 12: Commit**
 
 ```bash
 git add src/StockApp.Presentation/ViewModels/Finanzas/NuevaImportacionViewModel.cs \
         src/StockApp.Presentation/ViewModels/Finanzas/FilaGastoEditableVm.cs \
         src/StockApp.Presentation/Views/Finanzas/NuevaImportacionView.axaml \
         src/StockApp.Presentation/Views/Finanzas/NuevaImportacionView.axaml.cs \
-        tests/StockApp.Presentation.Tests/ViewModels/Finanzas/NuevaImportacionViewModelTests.cs
+        tests/StockApp.Presentation.Tests/ViewModels/Finanzas/NuevaImportacionViewModelTests.cs \
+        tests/StockApp.Presentation.UiTests/NuevaImportacionFakes.cs \
+        tests/StockApp.Presentation.UiTests/NuevaImportacionGastosGridTests.cs
 git commit -m "feat(finanzas): grilla de Gastos editable con combos, date-pickers y candado por celda (F5d Entrega 2)"
 ```
 
@@ -2059,6 +2304,8 @@ git commit -m "feat(finanzas): grilla de Gastos editable con combos, date-picker
 
 **Files:**
 - Modify: `src/StockApp.Presentation/Views/Finanzas/NuevaImportacionView.axaml`
+- Modify: `tests/StockApp.Presentation.UiTests/NuevaImportacionFakes.cs` — agrega el fake de `ILineaPoaService` (ripple del Step 3 de este Task) y actualiza `MontarEnPasoRevisarAsync` de Task 7 para pasar el 7mo argumento del constructor.
+- Create: `tests/StockApp.Presentation.UiTests/NuevaImportacionLineasPoaGridTests.cs` — test headless de la grilla de Líneas POA (`ComboBox IsEditable` de Programa gateado por `EsNueva`, regresión del bug #232).
 
 **Interfaces:**
 - Consumes: `FuentesDisponibles` (Task 7, reusado para el combo de Fuente de Ingresos). `FilaLineaPoaEditableVm.Asignaciones`/`EsNueva`/`Programa` (Task 5).
@@ -2172,7 +2419,7 @@ git commit -m "feat(finanzas): grilla de Gastos editable con combos, date-picker
 
 ```xml
 <TabItem Header="Líneas POA">
-    <DataGrid ItemsSource="{Binding FilasLineaPoaView}" IsReadOnly="False"
+    <DataGrid x:Name="GridLineasPoa" ItemsSource="{Binding FilasLineaPoaView}" IsReadOnly="False"
               CanUserSortColumns="True" AutoGenerateColumns="False">
         <DataGrid.Columns>
 
@@ -2184,7 +2431,14 @@ git commit -m "feat(finanzas): grilla de Gastos editable con combos, date-picker
                         <ItemsControl ItemsSource="{Binding Asignaciones}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="vm:AsignacionLineaPoaVm">
-                                    <TextBlock Text="{Binding Fuente, StringFormat='{}{0}: '}" />
+                                    <!-- Fuente Y Monto (Presupuesto) — no sólo la fuente: el resultado en
+                                         pantalla debe leerse "Rentas Generales: $ 6.341.849", no
+                                         "Rentas Generales:" a secas. MonedaConverter porque Presupuesto
+                                         es decimal NO nullable (DecimalOpcionalConverter es para decimal?). -->
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <TextBlock Text="{Binding Fuente, StringFormat='{}{0}: '}" />
+                                        <TextBlock Text="{Binding Presupuesto, Converter={x:Static conv:MonedaConverter.Instance}}" />
+                                    </StackPanel>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
@@ -2267,19 +2521,170 @@ lineasPoaService.Setup(s => s.ListarTodasAsync()).ReturnsAsync(new List<LineaPoa
 // ... pasar lineasPoaService.Object como último argumento del constructor del VM.
 ```
 
+**Ripple adicional — `tests/StockApp.Presentation.UiTests/NuevaImportacionFakes.cs` (Task 7 Step 10) también construye `NuevaImportacionViewModel` con el constructor viejo de 6 argumentos y deja de compilar con el cambio de Step 3.** Ese proyecto no referencia Moq, así que el fake se agrega a mano, mismo criterio que los demás:
+
+```csharp
+// tests/StockApp.Presentation.UiTests/NuevaImportacionFakes.cs — agregar:
+using StockApp.Application.Finanzas;
+
+internal sealed class LineaPoaServiceFake : ILineaPoaService
+{
+    private readonly IReadOnlyList<LineaPoa> _lineas;
+
+    public LineaPoaServiceFake(IReadOnlyList<LineaPoa> lineas) => _lineas = lineas;
+
+    public Task<int> AltaAsync(LineaPoa linea) => throw new NotSupportedException("No usado en este banco de pruebas.");
+    public Task ModificarAsync(LineaPoa linea) => throw new NotSupportedException("No usado en este banco de pruebas.");
+    public Task BajaLogicaAsync(int id) => throw new NotSupportedException("No usado en este banco de pruebas.");
+    public Task<IReadOnlyList<LineaPoa>> ListarTodasAsync() => Task.FromResult(_lineas);
+    public Task<IReadOnlyList<LineaPoa>> ListarActivasAsync() => Task.FromResult(_lineas);
+}
+```
+
+```csharp
+// tests/StockApp.Presentation.UiTests/NuevaImportacionGastosGridTests.cs (Task 7 Step 10)
+// MontarEnPasoRevisarAsync — agregar el 7mo argumento:
+var lineasPoa = new LineaPoaServiceFake(new List<LineaPoa>());
+var vm = new NuevaImportacionViewModel(
+    service, seleccion, new ConfirmacionServiceFake(), fuentes, rubros, proveedores, lineasPoa);
+```
+
 - [ ] **Step 5: Compilar**
 
 Run: `dotnet build src/StockApp.Presentation && dotnet test tests/StockApp.Presentation.Tests --filter "FullyQualifiedName~NuevaImportacionViewModelTests"`
 Expected: `Build succeeded.` y PASS de toda la suite del archivo.
 
-- [ ] **Step 6: Verificación orgánica** — Paso 2, pestañas Ingresos y Líneas POA: confirmar candado/edición igual que Task 7 Step 10; confirmar que una línea con `EsNueva` muestra el campo Programa editable con autocompletar, y una línea existente NO lo muestra.
+- [ ] **Step 6: Test headless — `ComboBox IsEditable` de Programa gateado por `EsNueva`, en `StockApp.Presentation.UiTests`** (mismo criterio que Task 7 Step 10: monta `NuevaImportacionView` real con `NuevaImportacionViewModel` real y los fakes hechos a mano; el `ItemsSource` de esta grilla también es `DataGridCollectionView`, así que el commit vía `BeginEdit`/`CommitEdit` ejercita la misma superficie del bug #232)
 
-- [ ] **Step 7: Commit**
+```csharp
+// tests/StockApp.Presentation.UiTests/NuevaImportacionLineasPoaGridTests.cs
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Headless.XUnit;
+using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
+using StockApp.Application.Finanzas;
+using StockApp.Domain.Entities;
+using StockApp.Presentation.ViewModels.Finanzas;
+using Xunit;
+
+namespace StockApp.Presentation.UiTests;
+
+/// <summary>
+/// Tests headless de la grilla editable de Líneas POA (F5d Entrega 2 Task 8), mismo criterio que
+/// NuevaImportacionGastosGridTests.cs (Task 7): cubren automatizado el combo de Programa gateado
+/// por EsNueva y la regresión del bug AvaloniaUI/Avalonia.Controls.DataGrid#232 sobre esta grilla.
+/// </summary>
+public class NuevaImportacionLineasPoaGridTests
+{
+    private const string Xaml = """
+        <Window xmlns="https://github.com/avaloniaui"
+                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                xmlns:fin="clr-namespace:StockApp.Presentation.Views.Finanzas;assembly=StockApp.Presentation"
+                Width="1000" Height="700">
+            <fin:NuevaImportacionView />
+        </Window>
+        """;
+
+    private static async Task<(Window Window, DataGrid Grid, NuevaImportacionViewModel Vm)> MontarEnPasoRevisarAsync(LineaPoaAnalizadaDto linea)
+    {
+        var service = new ImportacionServiceFake(new ResultadoAnalisisDto(
+            new List<IngresoAnalizadoDto>(), new List<GastoAnalizadoDto>(),
+            new List<LineaPoaAnalizadaDto> { linea },
+            new MaestrosNuevosDto(new List<string>(), new List<string>(), new List<CodigoRubroNuevoDto>()),
+            new ResumenAnalisisDto(0, 0, 0, 0, 0, 0, 0),
+            new SaldosTotalesPoaOds(0m, 0m)));
+        var seleccion = new ServicioSeleccionArchivoFake();
+        var fuentes = new FuenteFinanciamientoServiceFake(new List<FuenteFinanciamiento>());
+        var rubros = new RubroGastoServiceFake(new List<RubroGasto>());
+        var proveedores = new ProveedorServiceFake(new List<Proveedor>());
+        var lineasPoa = new LineaPoaServiceFake(new List<LineaPoa>());
+
+        var vm = new NuevaImportacionViewModel(
+            service, seleccion, new ConfirmacionServiceFake(), fuentes, rubros, proveedores, lineasPoa);
+
+        var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
+        window.DataContext = vm;
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        await vm.SeleccionarGastosCommand.ExecuteAsync(null);
+        await vm.SeleccionarPoaCommand.ExecuteAsync(null);
+        await vm.AnalizarCommand.ExecuteAsync(null);
+        Dispatcher.UIThread.RunJobs();
+
+        var grid = window.GetVisualDescendants().OfType<DataGrid>().First(g => g.Name == "GridLineasPoa");
+        return (window, grid, vm);
+    }
+
+    private static LineaPoaAnalizadaDto LineaBase(bool esNueva) => new(
+        Hoja: "COMPOSTERAS", Ejercicio: 2026, EsNueva: esNueva,
+        Estado: EstadoFila.Ok, Motivos: new List<MotivoEstado>(),
+        Literal: "C", FuenteDesconocida: false, Presupuesto: 1000m, SaldoPlanilla: 1000m,
+        Movimientos: new List<MovimientoPoaAnalizadoDto>());
+
+    [AvaloniaFact]
+    public async Task LineaExistente_ProgramaNoEsVisible_LineaNueva_ProgramaEsEditable()
+    {
+        var (window, grid, vm) = await MontarEnPasoRevisarAsync(LineaBase(esNueva: false));
+        var fila = vm.FilasLineaPoa[0];
+
+        grid.SelectedItem = fila;
+        grid.CurrentColumn = grid.Columns.First(c => Equals(c.Header, "Programa"));
+        Dispatcher.UIThread.RunJobs();
+        grid.BeginEdit();
+        Dispatcher.UIThread.RunJobs();
+
+        // Línea existente: EsNueva=false, el combo de Programa no debe quedar visible/editable.
+        Assert.Empty(window.GetVisualDescendants().OfType<ComboBox>());
+    }
+
+    [AvaloniaFact]
+    public async Task LineaNueva_ProgramaEsEditable_CommiteaSinPerderLaFila()
+    {
+        var (window, grid, vm) = await MontarEnPasoRevisarAsync(LineaBase(esNueva: true));
+        Assert.Single(vm.FilasLineaPoa);
+        var fila = vm.FilasLineaPoa[0];
+
+        grid.SelectedItem = fila;
+        grid.CurrentColumn = grid.Columns.First(c => Equals(c.Header, "Programa"));
+        Dispatcher.UIThread.RunJobs();
+        grid.BeginEdit();
+        Dispatcher.UIThread.RunJobs();
+
+        var combo = window.GetVisualDescendants().OfType<ComboBox>().First();
+        Assert.True(combo.IsEnabled);
+        combo.Text = "Compostaje comunitario";
+        Dispatcher.UIThread.RunJobs();
+        grid.CommitEdit();
+        Dispatcher.UIThread.RunJobs();
+
+        // Regresión AvaloniaUI/Avalonia.Controls.DataGrid#232: el commit vía DataGridCollectionView
+        // no debe perder ni duplicar la fila.
+        Assert.Single(vm.FilasLineaPoa);
+        Assert.Equal("Compostaje comunitario", vm.FilasLineaPoa[0].Programa);
+    }
+}
+```
+
+Run: `dotnet test tests/StockApp.Presentation.UiTests --filter "FullyQualifiedName~NuevaImportacionLineasPoaGridTests"`
+Expected: PASS (2/2).
+
+- [ ] **Step 7: Verificación orgánica (chequeo final de UX, no el único gate)** — Paso 2, pestañas Ingresos y Líneas POA: confirmar candado/edición igual que Task 7 Step 11; confirmar visualmente que una línea con `EsNueva` muestra el campo Programa con el ícono de autocompletar, y una línea existente NO lo muestra.
+
+- [ ] **Step 8: Commit**
 
 ```bash
 git add src/StockApp.Presentation/Views/Finanzas/NuevaImportacionView.axaml \
         src/StockApp.Presentation/ViewModels/Finanzas/NuevaImportacionViewModel.cs \
-        tests/StockApp.Presentation.Tests/ViewModels/Finanzas/NuevaImportacionViewModelTests.cs
+        tests/StockApp.Presentation.Tests/ViewModels/Finanzas/NuevaImportacionViewModelTests.cs \
+        tests/StockApp.Presentation.UiTests/NuevaImportacionFakes.cs \
+        tests/StockApp.Presentation.UiTests/NuevaImportacionGastosGridTests.cs \
+        tests/StockApp.Presentation.UiTests/NuevaImportacionLineasPoaGridTests.cs
 git commit -m "feat(finanzas): grillas de Ingresos y Lineas POA editables + Programa para lineas nuevas (F5d Entrega 2)"
 ```
 
@@ -2299,6 +2704,8 @@ git commit -m "feat(finanzas): grillas de Ingresos y Lineas POA editables + Prog
 - Produces: `FilaRubroNuevoVm : ObservableValidator` con `Codigo` read-only + `Nombre` editable (`[Required]`), factory `Desde(CodigoRubroNuevoDto)`. `NuevaImportacionViewModel.RubrosNuevos` cambia de tipo (`ObservableCollection<CodigoRubroNuevoDto>` → `ObservableCollection<FilaRubroNuevoVm>`) — ripple hacia Task 10 (mapeo) y hacia el binding XAML de la pestaña Maestros nuevos.
 
 **Decisión de diseño — alcance de "auto-declaración":** el diseño (§5) menciona "Proveedores / Fuentes / Rubros" juntos, pero SÓLO Proveedor y Fuente son nombres puros sin código — auto-declarar "escribí texto que no matchea nada → se agrega a la lista de nuevos" tiene sentido ahí. Rubro es distinto (Task 7 ya lo estableció): `RubroGasto` tiene `Código` numérico + `Nombre`, y un rubro nuevo SIEMPRE se origina en un código que YA viene de la planilla (`RubroDesconocido`/`CodigoRubroNuevoDto`, calculado por el backend en `AnalisisImportacionService`) — no hay forma de que el combo de una fila "invente" un código nuevo. Por eso la auto-declaración de este Task aplica sólo a Proveedor/Fuente; Rubro se resuelve completando `Nombre` en la pestaña Maestros nuevos (el tablero de este Task).
+
+**Por qué este Task NO suma un Step de test headless (a diferencia de Tasks 7/8):** el tablero "Maestros nuevos" se arma con `ItemsControl` (`Nombre` de `FilaRubroNuevoVm` editado con un `TextBox` simple dentro del `ItemTemplate`), no con `DataGridTemplateColumn`. No hay candado por celda, no hay `ComboBox IsEditable`, y el `ItemsSource` no es un `DataGridCollectionView` — así que no atraviesa el mecanismo del bug AvaloniaUI/Avalonia.Controls.DataGrid#232 que motiva los tests headless de Tasks 7/8. La cobertura de este Task ya es 100% de VM (Steps 1-8, `FilaRubroNuevoVmTests` + los tests de auto-declaración agregados a `NuevaImportacionViewModelTests`).
 
 - [ ] **Step 1: Escribir el test que falla — `FilaRubroNuevoVm`**
 
@@ -3154,6 +3561,60 @@ public async Task ConfirmarAsync_ReintentoDespuesDeCorregir_LimpiaElErrorDeServi
 
     Assert.False(vm.FilasGasto[0].TieneErrorServidor);
 }
+
+/// <summary>
+/// El orden de enumeración de IReadOnlyDictionary (Dictionary por debajo) NO está garantizado por
+/// .NET — no se puede usar "la primera clave del diccionario" para decidir la pestaña. Este test
+/// inserta la clave de LineasPoa ANTES que la de Gastos en el diccionario literal (a propósito,
+/// para que una implementación ingenua basada en orden de enumeración falle) y verifica que la
+/// pestaña resultante es igual siempre: Gastos (orden fijo Gastos→Ingresos→LineasPoa, índice menor
+/// dentro del mismo tipo), sin importar el orden de inserción.
+/// </summary>
+[Fact]
+public async Task ConfirmarAsync_Error400ConClavesDeVariasPestanas_SaltaALaPestanaDeMenorOrden()
+{
+    var (vm, service, _, _) = Crear();
+    var gasto = new GastoAnalizadoDto(
+        HojaOrigen: "MARZO", NumeroFila: 1,
+        Estado: EstadoFila.Ok, Motivos: new List<MotivoEstado>(),
+        Fecha: new DateOnly(2026, 3, 1), Monto: 1000m,
+        Proveedor: "ACME SA", ProveedorNuevo: false,
+        NumeroFactura: "F-1", NumeroOrden: null,
+        Detalle: "Compra", Destino: null,
+        Fuente: "Rentas Generales", FuenteDesconocida: false,
+        CodigoRubro: 10, Rubro: "Materiales", RubroDesconocido: false,
+        LineaPoaAsignada: null);
+    var linea = new LineaPoaAnalizadaDto(
+        Hoja: "COMPOSTERAS", Ejercicio: 2026, EsNueva: true,
+        Estado: EstadoFila.Ok, Motivos: new List<MotivoEstado>(),
+        Literal: "C", FuenteDesconocida: false, Presupuesto: 1000m, SaldoPlanilla: 1000m,
+        Movimientos: new List<MovimientoPoaAnalizadoDto>());
+    service.Setup(s => s.AnalizarAsync(
+            It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<int>()))
+        .ReturnsAsync(new ResultadoAnalisisDto(
+            new List<IngresoAnalizadoDto>(), new List<GastoAnalizadoDto> { gasto },
+            new List<LineaPoaAnalizadaDto> { linea },
+            new MaestrosNuevosDto(new List<string>(), new List<string>(), new List<CodigoRubroNuevoDto>()),
+            new ResumenAnalisisDto(1, 1, 0, 0, 0, 0, 0),
+            new SaldosTotalesPoaOds(0m, 0m)));
+    service.Setup(s => s.ConfirmarAsync(It.IsAny<ConfirmarImportacionDto>()))
+        .ThrowsAsync(new ValidacionImportacionException(new Dictionary<string, string[]>
+        {
+            // A propósito en este orden: LineasPoa insertada ANTES que Gastos.
+            ["LineasPoa[0].Programa"] = new[] { "El programa es obligatorio." },
+            ["Gastos[0].Fuente"] = new[] { "La fuente no existe en el catálogo." },
+        }));
+    vm.GastosNombreArchivo = "gastos.ods";
+    vm.PoaNombreArchivo = "poa.ods";
+    await vm.AnalizarCommand.ExecuteAsync(null);
+    vm.FilasLineaPoa[0].Programa = "Obras"; // pasa la validación cliente
+
+    await vm.ConfirmarCommand.ExecuteAsync(null);
+
+    Assert.True(vm.FilasGasto[0].TieneErrorServidor);
+    Assert.True(vm.FilasLineaPoa[0].TieneErrorServidor);
+    Assert.Equal(0, vm.PestanaSeleccionada); // Gastos (orden fijo), NO LineasPoa (que apareció primero en el diccionario)
+}
 ```
 
 - [ ] **Step 8: Correr — deben fallar en compilación** (`PestanaSeleccionada` no existe todavía en el VM)
@@ -3209,15 +3670,26 @@ private async Task ConfirmarAsync()
 // Nuevos métodos privados, junto a FormatearErroresValidacion (que queda SIN uso — Step 10 lo elimina):
 private static readonly Regex PatronErrorCampo = new(@"^(Gastos|Ingresos|LineasPoa)\[(\d+)\]\.(.+)$");
 
+// Orden fijo de pestañas — usado para decidir determinísticamente a cuál saltar cuando el 400
+// trae errores de varios tipos a la vez (ver nota abajo, IReadOnlyDictionary no garantiza orden).
+private static readonly Dictionary<string, int> OrdenPestana = new()
+{
+    ["Gastos"] = 0,
+    ["Ingresos"] = 1,
+    ["LineasPoa"] = 2,
+};
+
 /// <summary>Descompone ValidacionImportacionException.Errores ("Tipo[i].Campo" -> mensajes) en
-/// errores por fila (F5d Entrega 2 Task 11) y salta a la pestaña del PRIMER error del
-/// diccionario (orden de inserción — coincide con el orden en que el servidor los detectó).</summary>
+/// errores por fila (F5d Entrega 2 Task 11) y salta a la pestaña de la clave "menor". IMPORTANTE:
+/// IReadOnlyDictionary (Dictionary por debajo) NO garantiza orden de enumeración en .NET — "la
+/// primera clave del diccionario" NO es determinístico, así que en vez de usar el orden de
+/// enumeración se ordenan las claves válidas por tipo (Gastos→Ingresos→LineasPoa, vía
+/// OrdenPestana) y, dentro del mismo tipo, por índice ascendente; se salta a la pestaña de la
+/// clave resultante más chica.</summary>
 private void DecomponerErroresServidor(ValidacionImportacionException vex)
 {
-    string? primeraClave = null;
     foreach (var (clave, mensajes) in vex.Errores)
     {
-        primeraClave ??= clave;
         var match = PatronErrorCampo.Match(clave);
         if (!match.Success) continue;
 
@@ -3238,16 +3710,16 @@ private void DecomponerErroresServidor(ValidacionImportacionException vex)
         }
     }
 
-    var primerMatch = primeraClave is null ? null : PatronErrorCampo.Match(primeraClave);
-    if (primerMatch is { Success: true })
+    var claveMenor = vex.Errores.Keys
+        .Select(clave => PatronErrorCampo.Match(clave))
+        .Where(match => match.Success && OrdenPestana.ContainsKey(match.Groups[1].Value))
+        .OrderBy(match => OrdenPestana[match.Groups[1].Value])
+        .ThenBy(match => int.Parse(match.Groups[2].Value))
+        .FirstOrDefault();
+
+    if (claveMenor is not null)
     {
-        PestanaSeleccionada = primerMatch.Groups[1].Value switch
-        {
-            "Gastos" => 0,
-            "Ingresos" => 1,
-            "LineasPoa" => 2,
-            _ => PestanaSeleccionada,
-        };
+        PestanaSeleccionada = OrdenPestana[claveMenor.Groups[1].Value];
     }
 }
 
@@ -3321,7 +3793,7 @@ git commit -m "feat(finanzas): descompone el error 400 por fila y salta a la pes
 - §6 Líneas POA nuevas (backend + frontend) → Task 1 + Task 5/6/8/10, con el gap real detectado durante la investigación (`ILineaPoaRepository` sin filtro por ejercicio, resuelto con `.Where(l => l.Ejercicio == ejercicio)` client-side, mismo criterio que fuentes/proveedores/rubros).
 - §7 Validación por celda, `WithDataAnnotationsValidation` obligatorio, gating relajado → Task 2 (activación) + Tasks 3-5 (DataAnnotations por fila) + Task 6 (gating: `!HayFilasConErrores()`) + Task 9 (extiende el gating a `RubrosNuevos`).
 - §8 Error 400 — descomposición visual → Task 11, con alcance reducido CONSCIENTE (fila, no celda individual — documentado como decisión de diseño en el propio Task, motivo técnico real: `ObservableValidator` no expone API pública para inyectar errores externos).
-- §9 Gotchas Avalonia 12: `WithDataAnnotationsValidation` (Task 2), `IsReadOnly` explícito por columna (Task 7/8, en el `<DataGrid>` Y en cada columna), converter `DateOnly?↔DateTimeOffset?` (Task 2), verificación del bug #232 en la app real (Task 7 Step 10). **GAP no cubierto**: "congelar el sort durante la edición" (mencionado como "considerar", no como requisito duro) — NO se agregó ninguna task para esto; si la verificación orgánica de Task 7/8 revela que el salto de fila al ordenar durante edición molesta en la práctica, es la única deuda pendiente de §9 y amerita un plan chico aparte.
+- §9 Gotchas Avalonia 12: `WithDataAnnotationsValidation` (Task 2), `IsReadOnly` explícito por columna (Task 7/8, en el `<DataGrid>` Y en cada columna), converter `DateOnly?↔DateTimeOffset?` (Task 2), regresión del bug #232 cubierta por test headless en `StockApp.Presentation.UiTests` (Task 7 Step 10, Task 8 Step 6) — la verificación orgánica en la app real queda como chequeo final de UX (Task 7 Step 11, Task 8 Step 7), no como el único gate. **GAP no cubierto**: "congelar el sort durante la edición" (mencionado como "considerar", no como requisito duro) — NO se agregó ninguna task para esto; si la verificación orgánica de Task 7/8 revela que el salto de fila al ordenar durante edición molesta en la práctica, es la única deuda pendiente de §9 y amerita un plan chico aparte.
 - §10 Contrato relevante → verificado contra el código real en cada Task (DTOs con nombres/orden de campos exactos, ver punto 3 abajo).
 - §11 Fuera de alcance → respetado: ningún Task edita movimientos POA a nivel submovimiento, ningún Task toca conflictos/contadores de historial/backup.
 
