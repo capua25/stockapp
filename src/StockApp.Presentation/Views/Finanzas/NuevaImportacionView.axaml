@@ -121,6 +121,32 @@
             </TabControl>
         </DockPanel>
 
+        <!-- Paso 3: Resultado -->
+        <StackPanel Spacing="12"
+                    IsVisible="{Binding PasoActual, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:PasoWizardImportacion.Resultado}}">
+            <TextBlock Text="Paso 3 · Resultado" Classes="titulo-vista" />
+
+            <Border Classes="card">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="{Binding ResultadoConfirmacion.GastosCreados, StringFormat='Gastos creados: {0}'}" />
+                    <TextBlock Text="{Binding ResultadoConfirmacion.IngresosCreados, StringFormat='Ingresos creados: {0}'}" />
+                    <TextBlock Text="{Binding ResultadoConfirmacion.ProveedoresCreados, StringFormat='Proveedores creados: {0}'}" />
+                    <TextBlock Text="{Binding ResultadoConfirmacion.FuentesCreadas, StringFormat='Fuentes creadas: {0}'}" />
+                    <TextBlock Text="{Binding ResultadoConfirmacion.RubrosCreados, StringFormat='Rubros creados: {0}'}" />
+                    <Button Classes="secondary" Content="Revertir esta importación" Command="{Binding RevertirCommand}" />
+                </StackPanel>
+            </Border>
+
+            <TextBlock Text="Conflictos (no se escribieron — resolvé a mano)" FontWeight="SemiBold" />
+            <DataGrid ItemsSource="{Binding Conflictos}" IsReadOnly="True" AutoGenerateColumns="False">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Proveedor" Binding="{Binding Proveedor, DataType={x:Type vm:ConflictoGastoFila}}" Width="Auto" />
+                    <DataGridTextColumn Header="Factura" Binding="{Binding NumeroFactura, DataType={x:Type vm:ConflictoGastoFila}}" Width="Auto" />
+                    <DataGridTextColumn Header="Campos divergentes" Binding="{Binding CamposTexto, DataType={x:Type vm:ConflictoGastoFila}}" Width="*" />
+                </DataGrid.Columns>
+            </DataGrid>
+        </StackPanel>
+
     </Grid>
 
 </UserControl>

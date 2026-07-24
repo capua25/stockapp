@@ -292,4 +292,76 @@ public class NuevaImportacionViewModelTests
         Assert.Contains("Gastos[3].FechaVencimiento", mensajeInformado);
         Assert.Contains("Requerido", mensajeInformado);
     }
+
+    private static async Task<(NuevaImportacionViewModel vm, ResultadoConfirmacionDto resultado)>
+        CrearEnPasoResultadoAsync(
+            Mock<IImportacionService> svc, Mock<IServicioSeleccionArchivo> seleccion, Mock<IConfirmacionService> confirm,
+            ResultadoConfirmacionDto resultado)
+    {
+        var analisis = ResultadoAnalisisVacio() with { Resumen = new ResumenAnalisisDto(0, 0, 0, 0, 0, 0, 0) };
+        var vm = await CrearEnPasoRevisarAsync(svc, seleccion, confirm, analisis);
+        svc.Setup(s => s.ConfirmarAsync(It.IsAny<ConfirmarImportacionDto>())).ReturnsAsync(resultado);
+
+        await vm.ConfirmarCommand.ExecuteAsync(null);
+        return (vm, resultado);
+    }
+
+    [Fact]
+    public async Task Confirmar_ConConflictos_PopulaLaGrillaDeConflictos()
+    {
+        var svc = new Mock<IImportacionService>();
+        var seleccion = new Mock<IServicioSeleccionArchivo>();
+        var confirm = new Mock<IConfirmacionService>();
+        var resultado = new ResultadoConfirmacionDto(
+            Guid.NewGuid(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            new List<ConflictoGastoDto>
+            {
+                new("ACME SA", "F-1",
+                    new List<CampoDivergenteDto> { new("MontoTotal", "500", "550") }, 0),
+            });
+
+        var (vm, _) = await CrearEnPasoResultadoAsync(svc, seleccion, confirm, resultado);
+
+        var conflicto = Assert.Single(vm.Conflictos);
+        Assert.Equal("ACME SA", conflicto.Proveedor);
+        Assert.Equal("MontoTotal: 500 → 550", conflicto.CamposTexto);
+    }
+
+    [Fact]
+    public async Task RevertirAsync_ConfirmaYLlamaAlServicio_ReiniciaElWizard()
+    {
+        var svc = new Mock<IImportacionService>();
+        var seleccion = new Mock<IServicioSeleccionArchivo>();
+        var confirm = new Mock<IConfirmacionService>();
+        confirm.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(true);
+        var idImportacion = Guid.NewGuid();
+        var resultado = new ResultadoConfirmacionDto(
+            idImportacion, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, new List<ConflictoGastoDto>());
+        var (vm, _) = await CrearEnPasoResultadoAsync(svc, seleccion, confirm, resultado);
+        svc.Setup(s => s.RevertirAsync(idImportacion))
+            .ReturnsAsync(new ResultadoReversionDto(idImportacion, 0, 0, 0, 0, 0));
+
+        await vm.RevertirCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.RevertirAsync(idImportacion), Times.Once);
+        Assert.Equal(PasoWizardImportacion.Cargar, vm.PasoActual);
+        Assert.Null(vm.ResultadoConfirmacion);
+    }
+
+    [Fact]
+    public async Task RevertirAsync_UsuarioCancelaConfirmacion_NoLlamaAlServicio()
+    {
+        var svc = new Mock<IImportacionService>();
+        var seleccion = new Mock<IServicioSeleccionArchivo>();
+        var confirm = new Mock<IConfirmacionService>();
+        confirm.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(false);
+        var resultado = new ResultadoConfirmacionDto(
+            Guid.NewGuid(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, new List<ConflictoGastoDto>());
+        var (vm, _) = await CrearEnPasoResultadoAsync(svc, seleccion, confirm, resultado);
+
+        await vm.RevertirCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.RevertirAsync(It.IsAny<Guid>()), Times.Never);
+        Assert.Equal(PasoWizardImportacion.Resultado, vm.PasoActual);
+    }
 }

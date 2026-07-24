@@ -16,6 +16,15 @@ namespace StockApp.Presentation.ViewModels.Finanzas;
 /// <summary>Paso actual del wizard de importación (F5d §5).</summary>
 public enum PasoWizardImportacion { Cargar, Revisar, Resultado }
 
+/// <summary>Fila de solo lectura de la grilla de conflictos del Paso 3 (F5d §5): aplana
+/// ConflictoGastoDto.CamposDivergentes a una sola línea legible.</summary>
+public sealed record ConflictoGastoFila(string Proveedor, string NumeroFactura, string CamposTexto)
+{
+    public static ConflictoGastoFila Desde(ConflictoGastoDto dto) => new(
+        dto.Proveedor, dto.NumeroFactura,
+        string.Join("; ", dto.CamposDivergentes.Select(c => $"{c.Campo}: {c.ValorAnterior} → {c.ValorNuevo}")));
+}
+
 /// <summary>
 /// Tab "Nueva importación" (F5d §5): wizard de 3 pasos como UNA sola VM con estado PasoActual.
 /// Paso 2 (Revisar) es SOLO LECTURA en esta entrega — Entrega 2 agrega la edición de celda.
@@ -71,7 +80,10 @@ public partial class NuevaImportacionViewModel : ViewModelBase
 
     // ── Paso 3: Resultado ────────────────────────────────────────────────────
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RevertirCommand))]
     private ResultadoConfirmacionDto? _resultadoConfirmacion;
+
+    public ObservableCollection<ConflictoGastoFila> Conflictos { get; } = new();
 
     public NuevaImportacionViewModel(
         IImportacionService service, IServicioSeleccionArchivo seleccion, IConfirmacionService confirmacion)
@@ -145,6 +157,9 @@ public partial class NuevaImportacionViewModel : ViewModelBase
         try
         {
             ResultadoConfirmacion = await _service.ConfirmarAsync(dto);
+            Conflictos.Clear();
+            foreach (var c in ResultadoConfirmacion.Conflictos)
+                Conflictos.Add(ConflictoGastoFila.Desde(c));
             PasoActual = PasoWizardImportacion.Resultado;
         }
         catch (ValidacionImportacionException vex)
@@ -223,5 +238,50 @@ public partial class NuevaImportacionViewModel : ViewModelBase
 
         return new ConfirmarImportacionDto(
             ejercicio, forzar, maestrosNuevos, ingresos, gastos, new List<LineaPoaConfirmarDto>());
+    }
+
+    private bool PuedeRevertir() => ResultadoConfirmacion is not null;
+
+    [RelayCommand(CanExecute = nameof(PuedeRevertir))]
+    private async Task RevertirAsync()
+    {
+        if (ResultadoConfirmacion is null) return;
+
+        var confirmar = await _confirmacion.PreguntarAsync(
+            $"¿Confirma revertir la importación {ResultadoConfirmacion.IdImportacion}? " +
+            "Se darán de baja todos los gastos, ingresos y líneas POA que creó.");
+        if (!confirmar) return;
+
+        try
+        {
+            await _service.RevertirAsync(ResultadoConfirmacion.IdImportacion);
+            await _confirmacion.InformarAsync("Importación revertida correctamente.");
+            ReiniciarWizard();
+        }
+        catch (Exception ex)
+        {
+            await _confirmacion.InformarAsync(ex.Message);
+        }
+    }
+
+    private void ReiniciarWizard()
+    {
+        PasoActual = PasoWizardImportacion.Cargar;
+        GastosNombreArchivo = null;
+        _gastosContenido = null;
+        PoaNombreArchivo = null;
+        _poaContenido = null;
+        Forzar = false;
+        GastosAnalizados.Clear();
+        IngresosAnalizados.Clear();
+        LineasPoaAnalizadas.Clear();
+        ProveedoresNuevos.Clear();
+        FuentesNuevas.Clear();
+        RubrosNuevos.Clear();
+        Conflictos.Clear();
+        Resumen = null;
+        ResultadoConfirmacion = null;
+        _analisis = null;
+        AnalizarCommand.NotifyCanExecuteChanged();
     }
 }
