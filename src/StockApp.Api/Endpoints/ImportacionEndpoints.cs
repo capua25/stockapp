@@ -72,6 +72,13 @@ public static class ImportacionEndpoints
         .AddEndpointFilter(LimitarTamañoBody)
         .RequireAuthorization(Permisos.ImportarPlanillas);
 
+        app.MapGet("/finanzas/importar/historial", async (IConfirmacionImportacionService confirmacion) =>
+        {
+            var resultado = await confirmacion.ListarHistorialAsync();
+            return Results.Ok(resultado);
+        })
+        .RequireAuthorization(Permisos.ImportarPlanillas);
+
         return app;
     }
 }
