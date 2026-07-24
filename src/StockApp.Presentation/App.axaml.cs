@@ -276,6 +276,9 @@ public partial class App : AvaloniaApp
         services.AddTransient<AdjuntosPanelViewModel>();
         services.AddTransient<CalendarioPagosViewModel>();
 
+        // ── Módulo Finanzas — F5d: importador de planillas ────────────────────
+        services.AddTransient<HistorialImportacionesViewModel>();
+
         // ── Presentation: ViewModels del shell ───────────────────────────────
 
         // ShellViewModel: singleton — vive toda la vida de la app

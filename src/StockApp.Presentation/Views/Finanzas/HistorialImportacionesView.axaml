@@ -1,0 +1,45 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
+             xmlns:dto="using:StockApp.Application.Finanzas"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
+             x:Class="StockApp.Presentation.Views.Finanzas.HistorialImportacionesView"
+             x:DataType="vm:HistorialImportacionesViewModel">
+
+    <DockPanel Margin="24">
+
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,12">
+            <Button Classes="secondary" Content="Revertir" Command="{Binding RevertirCommand}" />
+        </StackPanel>
+
+        <DataGrid ItemsSource="{Binding FilasView}"
+                  SelectedItem="{Binding FilaSeleccionada}"
+                  IsReadOnly="True"
+                  CanUserSortColumns="True"
+                  AutoGenerateColumns="False">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Fecha"
+                                    Binding="{Binding Fecha, StringFormat='dd/MM/yyyy HH:mm', DataType={x:Type dto:ImportacionHistorialDto}}"
+                                    Width="Auto" />
+                <DataGridTextColumn Header="Ejercicio"
+                                    Binding="{Binding Ejercicio, DataType={x:Type dto:ImportacionHistorialDto}}"
+                                    Width="Auto" />
+                <DataGridTextColumn Header="Usuario"
+                                    Binding="{Binding Usuario, DataType={x:Type dto:ImportacionHistorialDto}}"
+                                    Width="Auto" />
+                <DataGridTemplateColumn Header="Estado" Width="Auto">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate x:DataType="dto:ImportacionHistorialDto">
+                            <TextBlock Text="{Binding Revertida, Converter={x:Static vm:EstadoRevertidaConverter.Instance}}"
+                                       VerticalAlignment="Center" Margin="4,0" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+            </DataGrid.Columns>
+        </DataGrid>
+
+    </DockPanel>
+
+</UserControl>
