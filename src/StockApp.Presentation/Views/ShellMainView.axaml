@@ -38,6 +38,7 @@
                     </Grid>
                 </Button>
 
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Spacing="4">
 
                 <TextBlock Text="StockApp"
@@ -314,6 +315,7 @@
                 </Button>
 
                 </StackPanel>
+                </ScrollViewer>
             </DockPanel>
         </Border>
 
