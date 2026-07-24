@@ -600,7 +600,7 @@ git commit -m "feat(finanzas): endpoint GET /finanzas/importar/historial"
 
 **Interfaces:**
 - Consumes: endpoints de Tasks 3 (F5c: `POST /finanzas/importar/analizar|confirmar|revertir/{id}`, F5d: `GET /finanzas/importar/historial`); `ApiErrores.EnviarAsync`/`AsegurarExitoAsync`; `ResultadoAnalisisDto`/`ConfirmarImportacionDto`/`ResultadoConfirmacionDto`/`ResultadoReversionDto`/`ImportacionHistorialDto`.
-- Produces: `IImportacionService` con `AnalizarAsync`, `ConfirmarAsync`, `RevertirAsync`, `ListarHistorialAsync` — usado por Tasks 5-9 (VMs del wizard/historial).
+- Produces: `IImportacionService` con `AnalizarAsync`, `ConfirmarAsync`, `RevertirAsync`, `ListarHistorialAsync` — usado por Tasks 6-9 (VMs del wizard/historial).
 
 Este task hace 4 ciclos TDD cortos (uno por método), en orden de complejidad creciente, cada uno con su propio commit. La interfaz completa se declara una sola vez al principio (Step 1 — un contrato no es testeable por sí mismo) y la clase queda SIEMPRE compilando: los métodos que todavía no llegaron a su ciclo usan `throw new NotImplementedException()` temporalmente, reemplazado en el ciclo correspondiente — al final del Task no queda ningún `NotImplementedException`.
 
@@ -1075,184 +1075,7 @@ git commit -m "feat(finanzas): selector de archivo .ods para el importador de pl
 
 ---
 
-### Task 6: Sidebar + pantalla contenedora con 2 tabs
-
-**Files:**
-- Modify: `src/StockApp.Presentation/ViewModels/ShellMainViewModel.cs`
-- Modify: `src/StockApp.Presentation/Views/ShellMainView.axaml`
-- Create: `src/StockApp.Presentation/ViewModels/Finanzas/ImportacionViewModel.cs`
-- Create: `src/StockApp.Presentation/Views/Finanzas/ImportacionView.axaml`
-- Create: `src/StockApp.Presentation/Views/Finanzas/ImportacionView.axaml.cs`
-- Modify: `src/StockApp.Presentation/App.axaml.cs`
-- Test: `tests/StockApp.Presentation.Tests/ViewModels/Finanzas/ImportacionViewModelTests.cs`
-- Test: Modify `tests/StockApp.Presentation.Tests/ViewModels/ShellMainViewModelTests.cs`
-
-**Interfaces:**
-- Consumes: `INavigationService.Navegar<TVm>()`; `HistorialImportacionesViewModel`/`NuevaImportacionViewModel` (Tasks 7-9, se resuelven por DI — este task solo referencia los TIPOS, ambos VMs se registran en Tasks 7/8/9).
-- Produces: `ImportacionViewModel(HistorialVm, NuevaVm)` con propiedades `HistorialVm`/`NuevaVm` — consumido por `ImportacionView.axaml` (tabs).
-
-- [ ] **Step 1: Escribir el test que falla para la navegación admin (`ShellMainViewModel`)**
-
-Agregar a `tests/StockApp.Presentation.Tests/ViewModels/ShellMainViewModelTests.cs`, junto a los tests de `NavMaestrosFinanzasCommand`:
-
-```csharp
-    [Fact]
-    public void NavImportacion_LlamaNavegar_AImportacionViewModel()
-    {
-        var (vm, _, navMock, _) = Crear(RolUsuario.Admin);
-
-        vm.NavImportacionCommand.Execute(null);
-
-        navMock.Verify(n => n.Navegar<StockApp.Presentation.ViewModels.Finanzas.ImportacionViewModel>(), Times.Once);
-    }
-
-    [Fact]
-    public void NavImportacion_EstableceSeccionActiva_Importacion()
-    {
-        var (vm, _, _, _) = Crear(RolUsuario.Admin);
-
-        vm.NavImportacionCommand.Execute(null);
-
-        Assert.Equal("Importacion", vm.SeccionActiva);
-    }
-```
-
-- [ ] **Step 2: Correr y verificar que falla**
-
-Run: `dotnet test tests/StockApp.Presentation.Tests --filter "FullyQualifiedName~NavImportacion"`
-Expected: FAIL — `'ShellMainViewModel' does not contain a definition for 'NavImportacionCommand'` (error de compilación).
-
-- [ ] **Step 3: Agregar el comando de navegación**
-
-Agregar en `src/StockApp.Presentation/ViewModels/ShellMainViewModel.cs`, después de `NavCalendarioPagos` (antes de la región "Cerrar sesión"):
-
-```csharp
-    [RelayCommand]
-    private void NavImportacion()
-    {
-        SeccionActiva = "Importacion";
-        _navigation.Navegar<StockApp.Presentation.ViewModels.Finanzas.ImportacionViewModel>();
-    }
-```
-
-- [ ] **Step 4: Escribir el ViewModel contenedor**
-
-```csharp
-// src/StockApp.Presentation/ViewModels/Finanzas/ImportacionViewModel.cs
-namespace StockApp.Presentation.ViewModels.Finanzas;
-
-/// <summary>
-/// Pantalla "Importar planillas" (F5d): hostea las 2 sub-listas (Nueva importación, Historial)
-/// en tabs, mismo patrón que MaestrosFinanzasViewModel.
-/// </summary>
-public partial class ImportacionViewModel : ViewModelBase
-{
-    public NuevaImportacionViewModel NuevaVm { get; }
-    public HistorialImportacionesViewModel HistorialVm { get; }
-
-    public ImportacionViewModel(NuevaImportacionViewModel nuevaVm, HistorialImportacionesViewModel historialVm)
-    {
-        NuevaVm = nuevaVm;
-        HistorialVm = historialVm;
-    }
-}
-```
-
-- [ ] **Step 5: Escribir el test del contenedor**
-
-```csharp
-// tests/StockApp.Presentation.Tests/ViewModels/Finanzas/ImportacionViewModelTests.cs
-using Moq;
-using StockApp.Application.Finanzas;
-using StockApp.Presentation.Services;
-using StockApp.Presentation.ViewModels.Finanzas;
-using Xunit;
-
-namespace StockApp.Presentation.Tests.ViewModels.Finanzas;
-
-public class ImportacionViewModelTests
-{
-    [Fact]
-    public void Constructor_ExponeAmbosSubVms()
-    {
-        var servicio = Mock.Of<IImportacionService>();
-        var seleccion = Mock.Of<IServicioSeleccionArchivo>();
-        var confirmacion = Mock.Of<IConfirmacionService>();
-
-        var nuevaVm = new NuevaImportacionViewModel(servicio, seleccion, confirmacion);
-        var historialVm = new HistorialImportacionesViewModel(servicio, confirmacion);
-
-        var vm = new ImportacionViewModel(nuevaVm, historialVm);
-
-        Assert.Same(nuevaVm, vm.NuevaVm);
-        Assert.IsType<NuevaImportacionViewModel>(vm.NuevaVm);
-        Assert.Same(historialVm, vm.HistorialVm);
-        Assert.IsType<HistorialImportacionesViewModel>(vm.HistorialVm);
-    }
-}
-```
-
-Nota: este test compila recién cuando `NuevaImportacionViewModel` (Task 7) y `HistorialImportacionesViewModel` (Task 8... revisar: en este plan `HistorialImportacionesViewModel` es Task 7 y el wizard es Tasks 8/9/10 — ver numeración real de tasks más abajo) existan con esos constructores. Este Step queda escrito ahora como parte de la interfaz consumida por Task 6, pero el archivo de test se completa recién al final de Task 8 (cuando ambos VMs referenciados ya compilan). Ver Step 6.
-
-- [ ] **Step 6: Diferir la corrida de este test hasta que compile**
-
-No correr `ImportacionViewModelTests` todavía — `NuevaImportacionViewModel`/`HistorialImportacionesViewModel` (Tasks 7/8) no existen aún. Verificar en cambio que el resto del proyecto Presentation compila con el `ImportacionViewModel` recién creado usando una compilación aislada:
-
-Run: `dotnet build src/StockApp.Presentation/StockApp.Presentation.csproj`
-Expected: Build succeeded (compilación termina sin errores).
-
-- [ ] **Step 7: Commit del contenedor + sidebar + test de ShellMainViewModel (que SÍ compila y pasa ya)**
-
-XAML del sidebar — agregar en `src/StockApp.Presentation/Views/ShellMainView.axaml`, después del botón `NavCalendarioPagosCommand` y antes de la sección "Tablas maestras: solo Admin":
-
-```xml
-                <!-- Importación: solo Admin -->
-                <TextBlock Text="Importación"
-                           Classes="caption"
-                           Foreground="{DynamicResource SidebarTextoBrush}"
-                           FontWeight="SemiBold"
-                           Margin="8,8,0,4"
-                           IsVisible="{Binding EsAdmin}"
-                           Opacity="0.6" />
-
-                <Button Command="{Binding NavImportacionCommand}"
-                        Classes="ghost"
-                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Importacion}"
-                        HorizontalAlignment="Stretch"
-                        IsVisible="{Binding EsAdmin}">
-                    <Grid ColumnDefinitions="Auto,*">
-                        <i:Icon Grid.Column="0" Value="mdi-file-upload" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Grid.Column="1" Text="Importar planillas" VerticalAlignment="Center"
-                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
-                    </Grid>
-                </Button>
-
-```
-
-Registrar en DI (`src/StockApp.Presentation/App.axaml.cs`), junto a `services.AddTransient<CalendarioPagosViewModel>();`:
-
-```csharp
-        services.AddTransient<StockApp.Presentation.ViewModels.Finanzas.ImportacionViewModel>();
-```
-
-Run: `dotnet test tests/StockApp.Presentation.Tests --filter "FullyQualifiedName~NavImportacion"`
-Expected: PASS (2/2) — estos SÍ compilan porque no dependen de `ImportacionViewModelTests.cs` (archivo distinto).
-
-```bash
-git add src/StockApp.Presentation/ViewModels/ShellMainViewModel.cs \
-        src/StockApp.Presentation/Views/ShellMainView.axaml \
-        src/StockApp.Presentation/ViewModels/Finanzas/ImportacionViewModel.cs \
-        src/StockApp.Presentation/App.axaml.cs \
-        tests/StockApp.Presentation.Tests/ViewModels/ShellMainViewModelTests.cs \
-        tests/StockApp.Presentation.Tests/ViewModels/Finanzas/ImportacionViewModelTests.cs
-git commit -m "feat(finanzas): sidebar + pantalla contenedora de Importar planillas (2 tabs)"
-```
-
-(`ImportacionView.axaml`/`.axaml.cs` se escriben en Task 9, cuando las 2 sub-vistas ya existen y hay algo real que hostear en el `TabControl`.)
-
----
-
-### Task 7: Tab Historial — `HistorialImportacionesViewModel`
+### Task 6: Tab Historial — `HistorialImportacionesViewModel`
 
 **Files:**
 - Create: `src/StockApp.Presentation/ViewModels/Finanzas/HistorialImportacionesViewModel.cs`
@@ -1263,7 +1086,7 @@ git commit -m "feat(finanzas): sidebar + pantalla contenedora de Importar planil
 
 **Interfaces:**
 - Consumes: `IImportacionService.ListarHistorialAsync()`/`RevertirAsync(Guid)` (Task 4); `IConfirmacionService.PreguntarAsync`/`InformarAsync`.
-- Produces: `HistorialImportacionesViewModel(IImportacionService, IConfirmacionService)` con `Filas`/`FilasView`/`CargarAsync()`/`RevertirCommand` — consumido por Task 6's `ImportacionViewModel` y por `HistorialImportacionesView.axaml.cs` (`DataContextChanged`).
+- Produces: `HistorialImportacionesViewModel(IImportacionService, IConfirmacionService)` con `Filas`/`FilasView`/`CargarAsync()`/`RevertirCommand` — consumido por Task 10's `ImportacionViewModel` y por `HistorialImportacionesView.axaml.cs` (`DataContextChanged`).
 
 - [ ] **Step 1: Escribir el test que falla (carga + Revertir habilitado solo en Activas)**
 
@@ -1529,7 +1352,7 @@ public partial class HistorialImportacionesView : UserControl
 
 - [ ] **Step 6: Registrar en DI**
 
-Agregar en `src/StockApp.Presentation/App.axaml.cs`, junto al registro de `ImportacionViewModel` (Task 6):
+Agregar en `src/StockApp.Presentation/App.axaml.cs`, junto al registro de `IImportacionService` (Task 4):
 
 ```csharp
         services.AddTransient<HistorialImportacionesViewModel>();
@@ -1548,20 +1371,18 @@ git commit -m "feat(finanzas): tab Historial del importador (grilla + Revertir p
 
 ---
 
-### Task 8: Wizard — Paso 1 (Cargar) + esqueleto del wizard
+### Task 7: Wizard — Paso 1 (Cargar) + esqueleto del wizard
 
 **Files:**
 - Create: `src/StockApp.Presentation/ViewModels/Finanzas/NuevaImportacionViewModel.cs`
 - Create: `src/StockApp.Presentation/Views/Finanzas/NuevaImportacionView.axaml`
 - Create: `src/StockApp.Presentation/Views/Finanzas/NuevaImportacionView.axaml.cs`
-- Create: `src/StockApp.Presentation/Views/Finanzas/ImportacionView.axaml.cs` (code-behind faltante de Task 6)
-- Modify: `src/StockApp.Presentation/Views/Finanzas/ImportacionView.axaml` (crear el XAML real, Task 6 solo dejó el VM)
 - Modify: `src/StockApp.Presentation/App.axaml.cs`
 - Test: `tests/StockApp.Presentation.Tests/ViewModels/Finanzas/NuevaImportacionViewModelTests.cs`
 
 **Interfaces:**
 - Consumes: `IImportacionService.AnalizarAsync(...)` (Task 4); `IServicioSeleccionArchivo.SeleccionarArchivoOdsAsync()` (Task 5); `IConfirmacionService.InformarAsync`.
-- Produces: `NuevaImportacionViewModel` con `PasoActual` (`PasoWizardImportacion`), `GastosNombreArchivo`/`PoaNombreArchivo`/`Ejercicio`/`Forzar`, `SeleccionarGastosCommand`/`SeleccionarPoaCommand`/`AnalizarCommand` — consumido por Task 9 (Paso 2) y Task 10 (Paso 3), que agregan miembros a esta MISMA clase.
+- Produces: `NuevaImportacionViewModel` con `PasoActual` (`PasoWizardImportacion`), `GastosNombreArchivo`/`PoaNombreArchivo`/`Ejercicio`/`Forzar`, `SeleccionarGastosCommand`/`SeleccionarPoaCommand`/`AnalizarCommand` — consumido por Task 8 (Paso 2) y Task 9 (Paso 3), que agregan miembros a esta MISMA clase.
 
 - [ ] **Step 1: Escribir el test que falla (selección de archivos habilita Analizar)**
 
@@ -1692,7 +1513,7 @@ public enum PasoWizardImportacion { Cargar, Revisar, Resultado }
 /// <summary>
 /// Tab "Nueva importación" (F5d §5): wizard de 3 pasos como UNA sola VM con estado PasoActual —
 /// las 3 vistas de paso comparten DataContext con esta VM y alternan visibilidad por PasoActual.
-/// Este task cubre el esqueleto + Paso 1 (Cargar); Paso 2/3 se agregan en Tasks 9/10 sobre esta
+/// Este task cubre el esqueleto + Paso 1 (Cargar); Paso 2/3 se agregan en Tasks 8/9 sobre esta
 /// MISMA clase (misma convención que GastoFila embebido en GastosViewModel.cs).
 /// </summary>
 public partial class NuevaImportacionViewModel : ViewModelBase
@@ -1766,8 +1587,8 @@ public partial class NuevaImportacionViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Placeholder de Task 9: puebla las colecciones del Paso 2. Se reemplaza por la
-    /// implementación real en Task 9 — DEBE quedar reemplazado antes de cerrar ese task, no es
+    /// <summary>Placeholder de Task 8: puebla las colecciones del Paso 2. Se reemplaza por la
+    /// implementación real en Task 8 — DEBE quedar reemplazado antes de cerrar ese task, no es
     /// un placeholder permanente de este plan.</summary>
     partial void CargarAnalisisPaso2(ResultadoAnalisisDto analisis);
 
@@ -1775,14 +1596,14 @@ public partial class NuevaImportacionViewModel : ViewModelBase
 }
 ```
 
-Nota de diseño: `CargarAnalisisPaso2` se declara como `partial void` sin cuerpo (válido en C#: una `partial void` sin implementación se compila como no-op) ÚNICAMENTE para que este Step 3 compile de forma autocontenida sin adelantar código del Paso 2. Task 9 la reemplaza por un método completo con cuerpo real (a partir de ahí deja de ser `partial`) — al cierre de Task 9 no queda ningún `partial void` vacío en el archivo.
+Nota de diseño: `CargarAnalisisPaso2` se declara como `partial void` sin cuerpo (válido en C#: una `partial void` sin implementación se compila como no-op) ÚNICAMENTE para que este Step 3 compile de forma autocontenida sin adelantar código del Paso 2. Task 8 la reemplaza por un método completo con cuerpo real (a partir de ahí deja de ser `partial`) — al cierre de Task 8 no queda ningún `partial void` vacío en el archivo.
 
 - [ ] **Step 4: Correr y verificar que pasa**
 
 Run: `dotnet test tests/StockApp.Presentation.Tests --filter "FullyQualifiedName~NuevaImportacionViewModelTests"`
 Expected: PASS (5/5).
 
-- [ ] **Step 5: Vista del wizard (Paso 1 visible, Pasos 2/3 se agregan en Tasks 9/10 al mismo archivo)**
+- [ ] **Step 5: Vista del wizard (Paso 1 visible, Pasos 2/3 se agregan en Tasks 8/9 al mismo archivo)**
 
 ```xml
 <!-- src/StockApp.Presentation/Views/Finanzas/NuevaImportacionView.axaml -->
@@ -1842,74 +1663,20 @@ public partial class NuevaImportacionView : UserControl
 
 Nota: `NuevaImportacionView` NO necesita `DataContextChanged` (a diferencia de `GastosView`/`HistorialImportacionesView`) porque el Paso 1 no carga datos del servidor al entrar — la primera llamada real (`AnalizarAsync`) la dispara el usuario con el botón "Analizar".
 
-- [ ] **Step 6: Completar `ImportacionView.axaml`/`.axaml.cs` (Task 6 dejó solo el VM contenedor)**
+- [ ] **Step 6: Registrar en DI**
 
-```xml
-<!-- src/StockApp.Presentation/Views/Finanzas/ImportacionView.axaml -->
-<UserControl xmlns="https://github.com/avaloniaui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
-             xmlns:views="using:StockApp.Presentation.Views.Finanzas"
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
-             x:Class="StockApp.Presentation.Views.Finanzas.ImportacionView"
-             x:DataType="vm:ImportacionViewModel">
-
-    <DockPanel Margin="24">
-
-        <TextBlock DockPanel.Dock="Top"
-                   Text="Importar planillas"
-                   Classes="titulo-vista"
-                   Margin="0,0,0,16" />
-
-        <TabControl>
-            <TabItem Header="Nueva importación">
-                <views:NuevaImportacionView DataContext="{Binding NuevaVm}" />
-            </TabItem>
-            <TabItem Header="Historial">
-                <views:HistorialImportacionesView DataContext="{Binding HistorialVm}" />
-            </TabItem>
-        </TabControl>
-
-    </DockPanel>
-
-</UserControl>
-```
-
-```csharp
-// src/StockApp.Presentation/Views/Finanzas/ImportacionView.axaml.cs
-using Avalonia.Controls;
-
-namespace StockApp.Presentation.Views.Finanzas;
-
-public partial class ImportacionView : UserControl
-{
-    public ImportacionView() => InitializeComponent();
-}
-```
-
-- [ ] **Step 7: Registrar en DI**
-
-Agregar en `src/StockApp.Presentation/App.axaml.cs`, junto al registro de `HistorialImportacionesViewModel` (Task 7):
+Agregar en `src/StockApp.Presentation/App.axaml.cs`, junto al registro de `HistorialImportacionesViewModel` (Task 6):
 
 ```csharp
         services.AddTransient<NuevaImportacionViewModel>();
 ```
 
-- [ ] **Step 8: Correr el test diferido de Task 6 (ahora SÍ compila: ambos sub-VMs existen)**
-
-Run: `dotnet test tests/StockApp.Presentation.Tests --filter "FullyQualifiedName~ImportacionViewModelTests"`
-Expected: PASS (1/1).
-
-- [ ] **Step 9: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add src/StockApp.Presentation/ViewModels/Finanzas/NuevaImportacionViewModel.cs \
         src/StockApp.Presentation/Views/Finanzas/NuevaImportacionView.axaml \
         src/StockApp.Presentation/Views/Finanzas/NuevaImportacionView.axaml.cs \
-        src/StockApp.Presentation/Views/Finanzas/ImportacionView.axaml \
-        src/StockApp.Presentation/Views/Finanzas/ImportacionView.axaml.cs \
         src/StockApp.Presentation/App.axaml.cs \
         tests/StockApp.Presentation.Tests/ViewModels/Finanzas/NuevaImportacionViewModelTests.cs
 git commit -m "feat(finanzas): wizard de importación — esqueleto + Paso 1 (Cargar)"
@@ -1917,7 +1684,7 @@ git commit -m "feat(finanzas): wizard de importación — esqueleto + Paso 1 (Ca
 
 ---
 
-### Task 9: Wizard — Paso 2 (Revisar, solo lectura con color) + Confirmar
+### Task 8: Wizard — Paso 2 (Revisar, solo lectura con color) + Confirmar
 
 **Files:**
 - Modify: `src/StockApp.Presentation/ViewModels/Finanzas/NuevaImportacionViewModel.cs`
@@ -1927,7 +1694,7 @@ git commit -m "feat(finanzas): wizard de importación — esqueleto + Paso 1 (Ca
 
 **Interfaces:**
 - Consumes: `ResultadoAnalisisDto` (Gastos/Ingresos/LineasPoa/MaestrosNuevos/Resumen, Task 4); `IImportacionService.ConfirmarAsync(ConfirmarImportacionDto)`.
-- Produces: `NuevaImportacionViewModel.GastosAnalizados`/`IngresosAnalizados`/`LineasPoaAnalizadas`/`ProveedoresNuevos`/`FuentesNuevas`/`RubrosNuevos`/`Resumen`/`PuedeConfirmar`/`ConfirmarCommand` — consumido por Task 10 (Paso 3, que lee `ResultadoConfirmacion` producido por `ConfirmarAsync`).
+- Produces: `NuevaImportacionViewModel.GastosAnalizados`/`IngresosAnalizados`/`LineasPoaAnalizadas`/`ProveedoresNuevos`/`FuentesNuevas`/`RubrosNuevos`/`Resumen`/`PuedeConfirmar`/`ConfirmarCommand` — consumido por Task 9 (Paso 3, que lee `ResultadoConfirmacion` producido por `ConfirmarAsync`).
 
 - [ ] **Step 1: Escribir el converter de color de fila (sin test unitario — mismo criterio documentado que SignoNegativoBrushConverter: sin Application.Current disponible en Presentation.Tests, se prueba indirectamente por el fallback)**
 
@@ -2144,7 +1911,7 @@ Agregar a `tests/StockApp.Presentation.Tests/ViewModels/Finanzas/NuevaImportacio
     }
 ```
 
-Y agregar el helper `ResultadoAnalisisVacio()` como método de instancia de la clase de test (si `Task 8` ya lo dejó como `private static`, reusarlo tal cual — está declarado una sola vez en el archivo).
+Y agregar el helper `ResultadoAnalisisVacio()` como método de instancia de la clase de test (si `Task 7` ya lo dejó como `private static`, reusarlo tal cual — está declarado una sola vez en el archivo).
 
 - [ ] **Step 3: Correr y verificar que falla**
 
@@ -2153,7 +1920,7 @@ Expected: FAIL — `'NuevaImportacionViewModel' does not contain a definition fo
 
 - [ ] **Step 4: Reemplazar el placeholder `CargarAnalisisPaso2` por la implementación real + agregar `ConfirmarCommand`**
 
-Reemplazar TODO el archivo `src/StockApp.Presentation/ViewModels/Finanzas/NuevaImportacionViewModel.cs` por (agrega Paso 2 sobre el Paso 1 de Task 8; el método `partial void CargarAnalisisPaso2` y su llamado indirecto se eliminan — `CargarAnalisis` ahora hace el trabajo directo):
+Reemplazar TODO el archivo `src/StockApp.Presentation/ViewModels/Finanzas/NuevaImportacionViewModel.cs` por (agrega Paso 2 sobre el Paso 1 de Task 7; el método `partial void CargarAnalisisPaso2` y su llamado indirecto se eliminan — `CargarAnalisis` ahora hace el trabajo directo):
 
 ```csharp
 // src/StockApp.Presentation/ViewModels/Finanzas/NuevaImportacionViewModel.cs
@@ -2371,13 +2138,13 @@ public partial class NuevaImportacionViewModel : ViewModelBase
 - [ ] **Step 5: Correr y verificar que pasa**
 
 Run: `dotnet test tests/StockApp.Presentation.Tests --filter "FullyQualifiedName~NuevaImportacionViewModelTests"`
-Expected: PASS (todos los tests de Task 8 + los 6 nuevos de este task, 11/11).
+Expected: PASS (todos los tests de Task 7 + los 6 nuevos de este task, 11/11).
 
 - [ ] **Step 6: Agregar la grilla del Paso 2 a la vista**
 
-Agregar a `src/StockApp.Presentation/Views/Finanzas/NuevaImportacionView.axaml`, dentro del `Grid` raíz, después del bloque "Paso 1" (agregar `xmlns:conv="using:StockApp.Presentation.Converters"` al `UserControl` de arriba; `xmlns:dto="using:StockApp.Application.Finanzas"` ya quedó declarado en Task 8 Step 5 — los `DataType={x:Type dto:...}` de esta grilla lo consumen).
+Agregar a `src/StockApp.Presentation/Views/Finanzas/NuevaImportacionView.axaml`, dentro del `Grid` raíz, después del bloque "Paso 1" (agregar `xmlns:conv="using:StockApp.Presentation.Converters"` al `UserControl` de arriba; `xmlns:dto="using:StockApp.Application.Finanzas"` ya quedó declarado en Task 7 Step 5 — los `DataType={x:Type dto:...}` de esta grilla lo consumen).
 
-El `Style` de color de fila por `EstadoFila` se define UNA sola vez como recurso compartido del `UserControl` (no repetido en cada `DataGrid.Styles`) — agregar `<UserControl.Styles>` inmediatamente después de la etiqueta de apertura `<UserControl ...>` declarada en Task 8 Step 5:
+El `Style` de color de fila por `EstadoFila` se define UNA sola vez como recurso compartido del `UserControl` (no repetido en cada `DataGrid.Styles`) — agregar `<UserControl.Styles>` inmediatamente después de la etiqueta de apertura `<UserControl ...>` declarada en Task 7 Step 5:
 
 ```xml
     <UserControl.Styles>
@@ -2477,7 +2244,7 @@ git commit -m "feat(finanzas): wizard Paso 2 (Revisar solo lectura, color por Es
 
 ---
 
-### Task 10: Wizard — Paso 3 (Resultado) + Revertir
+### Task 9: Wizard — Paso 3 (Resultado) + Revertir
 
 **Files:**
 - Modify: `src/StockApp.Presentation/ViewModels/Finanzas/NuevaImportacionViewModel.cs`
@@ -2679,7 +2446,7 @@ public sealed record ConflictoGastoFila(string Proveedor, string NumeroFactura, 
 - [ ] **Step 4: Correr y verificar que pasa**
 
 Run: `dotnet test tests/StockApp.Presentation.Tests --filter "FullyQualifiedName~NuevaImportacionViewModelTests"`
-Expected: PASS (todos los tests acumulados de Tasks 8+9+10, 14/14).
+Expected: PASS (todos los tests acumulados de Tasks 7+8+9, 14/14).
 
 - [ ] **Step 5: Agregar el Paso 3 a la vista**
 
@@ -2724,31 +2491,260 @@ git commit -m "feat(finanzas): wizard Paso 3 (Resultado + conflictos + Revertir)
 
 ---
 
+### Task 10: Contenedor + Sidebar (2 tabs) — cierra la capa de UI
+
+**Files:**
+- Modify: `src/StockApp.Presentation/ViewModels/ShellMainViewModel.cs`
+- Modify: `src/StockApp.Presentation/Views/ShellMainView.axaml`
+- Create: `src/StockApp.Presentation/ViewModels/Finanzas/ImportacionViewModel.cs`
+- Create: `src/StockApp.Presentation/Views/Finanzas/ImportacionView.axaml`
+- Create: `src/StockApp.Presentation/Views/Finanzas/ImportacionView.axaml.cs`
+- Modify: `src/StockApp.Presentation/App.axaml.cs`
+- Test: `tests/StockApp.Presentation.Tests/ViewModels/Finanzas/ImportacionViewModelTests.cs`
+- Test: Modify `tests/StockApp.Presentation.Tests/ViewModels/ShellMainViewModelTests.cs`
+
+**Interfaces:**
+- Consumes: `INavigationService.Navegar<TVm>()`; `HistorialImportacionesViewModel` (Task 6) y `NuevaImportacionViewModel` (Task 7) — AMBOS ya existen en este punto del plan (última task de la capa de UI), sin forward-reference.
+- Produces: `ImportacionViewModel(HistorialVm, NuevaVm)` con propiedades `HistorialVm`/`NuevaVm` — consumido por `ImportacionView.axaml` (tabs). Cierra el plan: nada más lo consume.
+
+- [ ] **Step 1: Escribir el test que falla para la navegación admin (`ShellMainViewModel`)**
+
+Agregar a `tests/StockApp.Presentation.Tests/ViewModels/ShellMainViewModelTests.cs`, junto a los tests de `NavMaestrosFinanzasCommand`:
+
+```csharp
+    [Fact]
+    public void NavImportacion_LlamaNavegar_AImportacionViewModel()
+    {
+        var (vm, _, navMock, _) = Crear(RolUsuario.Admin);
+
+        vm.NavImportacionCommand.Execute(null);
+
+        navMock.Verify(n => n.Navegar<StockApp.Presentation.ViewModels.Finanzas.ImportacionViewModel>(), Times.Once);
+    }
+
+    [Fact]
+    public void NavImportacion_EstableceSeccionActiva_Importacion()
+    {
+        var (vm, _, _, _) = Crear(RolUsuario.Admin);
+
+        vm.NavImportacionCommand.Execute(null);
+
+        Assert.Equal("Importacion", vm.SeccionActiva);
+    }
+```
+
+- [ ] **Step 2: Correr y verificar que falla**
+
+Run: `dotnet test tests/StockApp.Presentation.Tests --filter "FullyQualifiedName~NavImportacion"`
+Expected: FAIL — `'ShellMainViewModel' does not contain a definition for 'NavImportacionCommand'` (error de compilación).
+
+- [ ] **Step 3: Agregar el comando de navegación**
+
+Agregar en `src/StockApp.Presentation/ViewModels/ShellMainViewModel.cs`, después de `NavCalendarioPagos` (antes de la región "Cerrar sesión"):
+
+```csharp
+    [RelayCommand]
+    private void NavImportacion()
+    {
+        SeccionActiva = "Importacion";
+        _navigation.Navegar<StockApp.Presentation.ViewModels.Finanzas.ImportacionViewModel>();
+    }
+```
+
+- [ ] **Step 4: Escribir el ViewModel contenedor**
+
+```csharp
+// src/StockApp.Presentation/ViewModels/Finanzas/ImportacionViewModel.cs
+namespace StockApp.Presentation.ViewModels.Finanzas;
+
+/// <summary>
+/// Pantalla "Importar planillas" (F5d): hostea las 2 sub-listas (Nueva importación, Historial)
+/// en tabs, mismo patrón que MaestrosFinanzasViewModel.
+/// </summary>
+public partial class ImportacionViewModel : ViewModelBase
+{
+    public NuevaImportacionViewModel NuevaVm { get; }
+    public HistorialImportacionesViewModel HistorialVm { get; }
+
+    public ImportacionViewModel(NuevaImportacionViewModel nuevaVm, HistorialImportacionesViewModel historialVm)
+    {
+        NuevaVm = nuevaVm;
+        HistorialVm = historialVm;
+    }
+}
+```
+
+- [ ] **Step 5: Escribir el test del contenedor**
+
+```csharp
+// tests/StockApp.Presentation.Tests/ViewModels/Finanzas/ImportacionViewModelTests.cs
+using Moq;
+using StockApp.Application.Finanzas;
+using StockApp.Presentation.Services;
+using StockApp.Presentation.ViewModels.Finanzas;
+using Xunit;
+
+namespace StockApp.Presentation.Tests.ViewModels.Finanzas;
+
+public class ImportacionViewModelTests
+{
+    [Fact]
+    public void Constructor_ExponeAmbosSubVms()
+    {
+        var servicio = Mock.Of<IImportacionService>();
+        var seleccion = Mock.Of<IServicioSeleccionArchivo>();
+        var confirmacion = Mock.Of<IConfirmacionService>();
+
+        var nuevaVm = new NuevaImportacionViewModel(servicio, seleccion, confirmacion);
+        var historialVm = new HistorialImportacionesViewModel(servicio, confirmacion);
+
+        var vm = new ImportacionViewModel(nuevaVm, historialVm);
+
+        Assert.Same(nuevaVm, vm.NuevaVm);
+        Assert.IsType<NuevaImportacionViewModel>(vm.NuevaVm);
+        Assert.Same(historialVm, vm.HistorialVm);
+        Assert.IsType<HistorialImportacionesViewModel>(vm.HistorialVm);
+    }
+}
+```
+
+- [ ] **Step 6: Correr y verificar que pasan**
+
+Run: `dotnet test tests/StockApp.Presentation.Tests --filter "FullyQualifiedName~NavImportacion"`
+Expected: PASS (2/2).
+
+Run: `dotnet test tests/StockApp.Presentation.Tests --filter "FullyQualifiedName~ImportacionViewModelTests"`
+Expected: PASS (1/1) — compila y pasa directo, sin diferir nada: `NuevaImportacionViewModel` (Task 7) y `HistorialImportacionesViewModel` (Task 6) ya existen en este punto del plan.
+
+- [ ] **Step 7: Sidebar + registro DI del contenedor**
+
+XAML del sidebar — agregar en `src/StockApp.Presentation/Views/ShellMainView.axaml`, después del botón `NavCalendarioPagosCommand` y antes de la sección "Tablas maestras: solo Admin":
+
+```xml
+                <!-- Importación: solo Admin -->
+                <TextBlock Text="Importación"
+                           Classes="caption"
+                           Foreground="{DynamicResource SidebarTextoBrush}"
+                           FontWeight="SemiBold"
+                           Margin="8,8,0,4"
+                           IsVisible="{Binding EsAdmin}"
+                           Opacity="0.6" />
+
+                <Button Command="{Binding NavImportacionCommand}"
+                        Classes="ghost"
+                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Importacion}"
+                        HorizontalAlignment="Stretch"
+                        IsVisible="{Binding EsAdmin}">
+                    <Grid ColumnDefinitions="Auto,*">
+                        <i:Icon Grid.Column="0" Value="mdi-file-upload" Foreground="{DynamicResource SidebarTextoBrush}" />
+                        <TextBlock Grid.Column="1" Text="Importar planillas" VerticalAlignment="Center"
+                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                </Button>
+
+```
+
+Registrar en DI (`src/StockApp.Presentation/App.axaml.cs`), junto a `services.AddTransient<CalendarioPagosViewModel>();`:
+
+```csharp
+        services.AddTransient<StockApp.Presentation.ViewModels.Finanzas.ImportacionViewModel>();
+```
+
+- [ ] **Step 8: Crear `ImportacionView.axaml`/`.axaml.cs` (TabControl con las 2 sub-vistas)**
+
+```xml
+<!-- src/StockApp.Presentation/Views/Finanzas/ImportacionView.axaml -->
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
+             xmlns:views="using:StockApp.Presentation.Views.Finanzas"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
+             x:Class="StockApp.Presentation.Views.Finanzas.ImportacionView"
+             x:DataType="vm:ImportacionViewModel">
+
+    <DockPanel Margin="24">
+
+        <TextBlock DockPanel.Dock="Top"
+                   Text="Importar planillas"
+                   Classes="titulo-vista"
+                   Margin="0,0,0,16" />
+
+        <TabControl>
+            <TabItem Header="Nueva importación">
+                <views:NuevaImportacionView DataContext="{Binding NuevaVm}" />
+            </TabItem>
+            <TabItem Header="Historial">
+                <views:HistorialImportacionesView DataContext="{Binding HistorialVm}" />
+            </TabItem>
+        </TabControl>
+
+    </DockPanel>
+
+</UserControl>
+```
+
+```csharp
+// src/StockApp.Presentation/Views/Finanzas/ImportacionView.axaml.cs
+using Avalonia.Controls;
+
+namespace StockApp.Presentation.Views.Finanzas;
+
+public partial class ImportacionView : UserControl
+{
+    public ImportacionView() => InitializeComponent();
+}
+```
+
+- [ ] **Step 9: Verificar que el proyecto completo compila limpio**
+
+Run: `dotnet build src/StockApp.Presentation/StockApp.Presentation.csproj`
+Expected: Build succeeded (compilación termina sin errores) — `ImportacionViewModel` referencia `NuevaImportacionViewModel` (Task 7) y `HistorialImportacionesViewModel` (Task 6), ambos ya existentes desde tasks anteriores; sin forward-deps, sin necesidad de filtrar el output.
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add src/StockApp.Presentation/ViewModels/ShellMainViewModel.cs \
+        src/StockApp.Presentation/Views/ShellMainView.axaml \
+        src/StockApp.Presentation/ViewModels/Finanzas/ImportacionViewModel.cs \
+        src/StockApp.Presentation/Views/Finanzas/ImportacionView.axaml \
+        src/StockApp.Presentation/Views/Finanzas/ImportacionView.axaml.cs \
+        src/StockApp.Presentation/App.axaml.cs \
+        tests/StockApp.Presentation.Tests/ViewModels/ShellMainViewModelTests.cs \
+        tests/StockApp.Presentation.Tests/ViewModels/Finanzas/ImportacionViewModelTests.cs
+git commit -m "feat(finanzas): contenedor Importar planillas (2 tabs) + sidebar + navegación"
+```
+
+---
+
 ## Self-Review
 
 **1. Cobertura del spec §8 (Entrega 1):**
 - Backend `GET /finanzas/importar/historial` + `ImportacionHistorialDto` + query sobre `LogsAuditoria`, sin migración → Tasks 1-3. ✅
 - ApiClient `IImportacionService`/`ImportacionApiClient` (4 métodos) + DI → Task 4. ✅
-- Sidebar admin-only + navegación → Task 6. ✅
-- Pantalla contenedora con 2 tabs → Tasks 6 (VM) + 8 (View real). ✅
-- Tab Historial completo (grilla read-only + Revertir por fila, solo Activas) → Task 7. ✅
-- Wizard Paso 1 (Cargar: 2 archivos + ejercicio + Forzar → Analizar) → Task 8. ✅
-- Wizard Paso 2 solo lectura con color por `EstadoFila`, Confirmar deshabilitado con Errores → Task 9. ✅
-- Wizard Paso 3 (contadores + conflictos + Revertir) → Task 10. ✅
 - Selector de archivo `.ods` (no existía, la interfaz vieja solo filtraba PDF/JPG/PNG) → Task 5, agregado como método nuevo sin romper el uso existente en `AdjuntosPanelViewModel`.
+- Tab Historial completo (grilla read-only + Revertir por fila, solo Activas) → Task 6. ✅
+- Wizard Paso 1 (Cargar: 2 archivos + ejercicio + Forzar → Analizar) → Task 7. ✅
+- Wizard Paso 2 solo lectura con color por `EstadoFila`, Confirmar deshabilitado con Errores → Task 8. ✅
+- Wizard Paso 3 (contadores + conflictos + Revertir) → Task 9. ✅
+- Sidebar admin-only + navegación → Task 10. ✅
+- Pantalla contenedora con 2 tabs (VM + View, ambos completos en la misma task) → Task 10. ✅
 
 **2. Gaps reales encontrados contra el diseño (documentados, no inventados):**
 - `GastoAnalizadoDto` (F5b/F5c) NO tiene campo `CondicionPago`/`FechaVencimiento`, pero `GastoConfirmarDto` los exige (uno obligatorio, el otro condicional). El diseño F5d dice "confirmar si el análisis vino limpio" sin mencionar este vacío. Resuelto con una heurística grounded en el propio backend (los compromisos POA ya van `Credito` por convención de `ImportacionRepository`): `LineaPoaAsignada != null ⇒ Credito` con `FechaVencimiento = Fecha`; si no, `Contado` sin vencimiento. Documentado en el XML comment de `MapearAConfirmacion` y cubierto por 2 tests (`ConfirmarAsync_AnalisisLimpio_MapeaGastoContadoYAvanzaAResultado`, `ConfirmarAsync_GastoConLineaPoaAsignada_MapeaCredito`). Riesgo real: si esta heurística no cubre el caso de negocio, Entrega 2 necesita exponer `Condicion`/`FechaVencimiento` como celda editable (no está en la lista del §6 del diseño).
 - `LineaPoaAnalizadaDto` NO tiene `Nombre` ni `Programa` (solo `Hoja`/`Literal`/`Presupuesto`/`SaldoPlanilla`), pero `LineaPoaConfirmarDto` los exige. Declarar una LineaPoa nueva es, en los hechos, una operación de edición inalcanzable sin UI de edición. Resuelto enviando SIEMPRE `LineasPoa: []` en Entrega 1 — un Gasto que referencia una LineaPoa nueva recibe el 400 estructurado del servidor tal cual, sin inventar datos. Cubierto por el assert `Assert.Empty(dtoCapturado.LineasPoa)` en el test de mapeo Credito.
 - Ambos gaps recortan el alcance real de "confirmar si vino limpio": solo es 100% mecánico cuando la planilla no declara LineasPoa nuevas. Para el caso más común (gastos del libro caja sin proyecto POA nuevo) el flujo cierra igual.
 
-**3. Scan de placeholders:** sin `TODO`/`"implementar después"`/`"similar a Task N"` en ningún step. El único artefacto temporal es el `partial void CargarAnalisisPaso2` de Task 8 (Step 3) y los `throw new NotImplementedException()` de Task 4 (Step 4) — ambos EXPLÍCITAMENTE reemplazados dentro del mismo plan (Task 9 Step 4 y Task 4 Steps 9/14/19 respectivamente) antes de que el plan termine; no queda ninguno en el estado final. Se dejó una nota inline en cada uno aclarando que es temporal.
+**3. Scan de placeholders:** sin `TODO`/`"implementar después"`/`"similar a Task N"` en ningún step. El único artefacto temporal es el `partial void CargarAnalisisPaso2` de Task 7 (Step 3) y los `throw new NotImplementedException()` de Task 4 (Step 4) — ambos EXPLÍCITAMENTE reemplazados dentro del mismo plan (Task 8 Step 4 y Task 4 Steps 9/14/19 respectivamente) antes de que el plan termine; no queda ninguno en el estado final. Se dejó una nota inline en cada uno aclarando que es temporal.
 
 **4. Consistencia de tipos entre tasks:**
-- `IImportacionRepository.ListarHistorialAsync()` (Task 1) ↔ `ImportacionRepositoryFake.ListarHistorialAsync()` (Task 2) ↔ `IConfirmacionImportacionService.ListarHistorialAsync()` (Task 2) ↔ endpoint (Task 3) ↔ `IImportacionService.ListarHistorialAsync()`/`ImportacionApiClient` (Task 4) ↔ `HistorialImportacionesViewModel` (Task 7): mismo tipo `Task<IReadOnlyList<ImportacionHistorialDto>>` en las 6 capas.
-- `PasoWizardImportacion` se declara una sola vez (Task 8) y se referencia igual en Tasks 9/10 y en el XAML (`{x:Static vm:PasoWizardImportacion.Revisar}` / `.Resultado`).
-- `GastosAnalizados`/`IngresosAnalizados`/`LineasPoaAnalizadas` y sus `*View` (Task 9) se nombran igual en el ViewModel y en `NuevaImportacionView.axaml`.
-- `ConflictoGastoFila.CamposTexto` (Task 10) es el único nombre usado tanto en el test como en el XAML de la grilla de conflictos.
-- Corregido inline durante esta revisión: la primera versión de Task 8 dejaba `CargarAnalisisPaso2` como método privado normal (rompía la regla de "sin placeholders no reemplazados") — se ajustó a `partial void` con nota explícita de que Task 9 la reemplaza por completo, dejando claro que no es una implementación final.
+- `IImportacionRepository.ListarHistorialAsync()` (Task 1) ↔ `ImportacionRepositoryFake.ListarHistorialAsync()` (Task 2) ↔ `IConfirmacionImportacionService.ListarHistorialAsync()` (Task 2) ↔ endpoint (Task 3) ↔ `IImportacionService.ListarHistorialAsync()`/`ImportacionApiClient` (Task 4) ↔ `HistorialImportacionesViewModel` (Task 6): mismo tipo `Task<IReadOnlyList<ImportacionHistorialDto>>` en las 6 capas.
+- `PasoWizardImportacion` se declara una sola vez (Task 7) y se referencia igual en Tasks 8/9 y en el XAML (`{x:Static vm:PasoWizardImportacion.Revisar}` / `.Resultado`).
+- `GastosAnalizados`/`IngresosAnalizados`/`LineasPoaAnalizadas` y sus `*View` (Task 8) se nombran igual en el ViewModel y en `NuevaImportacionView.axaml`.
+- `ConflictoGastoFila.CamposTexto` (Task 9) es el único nombre usado tanto en el test como en el XAML de la grilla de conflictos.
+- Corregido inline durante esta revisión: la primera versión de Task 7 dejaba `CargarAnalisisPaso2` como método privado normal (rompía la regla de "sin placeholders no reemplazados") — se ajustó a `partial void` con nota explícita de que Task 8 la reemplaza por completo, dejando claro que no es una implementación final.
 
-**5. `SaldosTotalesPoaOds` verificado contra el código real:** `src/StockApp.Application/Finanzas/PlanillaOdsDtos.cs:66` define `SaldosTotalesPoaOds(decimal SaldoLiteralB, decimal SaldoLiteralC)` — coincide exactamente con `new SaldosTotalesPoaOds(0m, 0m)` usado en los tests de Tasks 4/8, sin necesidad de ajuste.
+**5. `SaldosTotalesPoaOds` verificado contra el código real:** `src/StockApp.Application/Finanzas/PlanillaOdsDtos.cs:66` define `SaldosTotalesPoaOds(decimal SaldoLiteralB, decimal SaldoLiteralC)` — coincide exactamente con `new SaldosTotalesPoaOds(0m, 0m)` usado en los tests de Tasks 4/7, sin necesidad de ajuste.
+
+**6. Reorden bottom-up (sin forward-deps):** el contenedor `ImportacionViewModel` + sidebar + navegación + DI, que originalmente era Task 6, pasó a ser la ÚLTIMA task de la capa de UI (Task 10) porque su constructor referencia `NuevaImportacionViewModel` (Task 7) y `HistorialImportacionesViewModel` (Task 6) — con el contenedor primero, esos tipos no existían todavía y el paso de verificación tenía que ocultar el error de compilación filtrando el output con `grep` (defecto bloqueante detectado en el pre-flight review). Con el reorden, cada task de la capa de UI (6 Historial → 7 Wizard Paso 1 → 8 Wizard Paso 2 → 9 Wizard Paso 3 → 10 Contenedor) consume ÚNICAMENTE tipos definidos en tasks anteriores; el `dotnet build` de Task 10 Step 9 espera "Build succeeded" de verdad, sin tensión con ningún step previo del mismo task.
