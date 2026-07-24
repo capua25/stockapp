@@ -2,11 +2,21 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
              xmlns:dto="using:StockApp.Application.Finanzas"
+             xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
              x:Class="StockApp.Presentation.Views.Finanzas.NuevaImportacionView"
              x:DataType="vm:NuevaImportacionViewModel">
+
+    <UserControl.Styles>
+        <!-- Sin compiled bindings: esta fila es compartida por 3 DataGrids con item type distinto
+             (GastoAnalizadoDto/IngresoAnalizadoDto/LineaPoaAnalizadaDto) que solo comparten el
+             nombre de propiedad "Estado" — no hay un x:DataType único que tipe-chequee para los 3. -->
+        <Style Selector="DataGridRow" x:CompileBindings="False">
+            <Setter Property="Background" Value="{Binding Estado, Converter={x:Static conv:EstadoFilaBrushConverter.Instance}}" />
+        </Style>
+    </UserControl.Styles>
 
     <Grid Margin="24">
 
@@ -34,6 +44,82 @@
                 </StackPanel>
             </Border>
         </StackPanel>
+
+        <!-- Paso 2: Revisar (solo lectura, con color por EstadoFila) -->
+        <DockPanel IsVisible="{Binding PasoActual, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:PasoWizardImportacion.Revisar}}">
+            <TextBlock DockPanel.Dock="Top" Text="Paso 2 · Revisar" Classes="titulo-vista" Margin="0,0,0,8" />
+
+            <Border DockPanel.Dock="Top" Classes="card" Margin="0,0,0,12">
+                <StackPanel Orientation="Horizontal" Spacing="16">
+                    <TextBlock Text="{Binding Resumen.Ok, StringFormat='Ok: {0}'}" />
+                    <TextBlock Text="{Binding Resumen.Advertencias, StringFormat='Advertencias: {0}'}" />
+                    <TextBlock Text="{Binding Resumen.Errores, StringFormat='Errores: {0}'}" />
+                    <Button Classes="primary" Content="Confirmar" Command="{Binding ConfirmarCommand}" />
+                </StackPanel>
+            </Border>
+
+            <TabControl>
+                <TabItem Header="Gastos">
+                    <DataGrid ItemsSource="{Binding GastosAnalizadosView}" IsReadOnly="True"
+                              CanUserSortColumns="True" AutoGenerateColumns="False">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Proveedor" Binding="{Binding Proveedor, DataType={x:Type dto:GastoAnalizadoDto}}" Width="*" />
+                            <DataGridTextColumn Header="Factura" Binding="{Binding NumeroFactura, DataType={x:Type dto:GastoAnalizadoDto}}" Width="Auto" />
+                            <DataGridTextColumn Header="Detalle" Binding="{Binding Detalle, DataType={x:Type dto:GastoAnalizadoDto}}" Width="2*" />
+                            <DataGridTextColumn Header="Monto" Binding="{Binding Monto, DataType={x:Type dto:GastoAnalizadoDto}}" Width="Auto" />
+                            <DataGridTextColumn Header="Fuente" Binding="{Binding Fuente, DataType={x:Type dto:GastoAnalizadoDto}}" Width="Auto" />
+                            <DataGridTextColumn Header="Rubro" Binding="{Binding Rubro, DataType={x:Type dto:GastoAnalizadoDto}}" Width="Auto" />
+                            <DataGridTextColumn Header="Estado" Binding="{Binding Estado, DataType={x:Type dto:GastoAnalizadoDto}}" Width="Auto" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+                <TabItem Header="Ingresos">
+                    <DataGrid ItemsSource="{Binding IngresosAnalizadosView}" IsReadOnly="True"
+                              CanUserSortColumns="True" AutoGenerateColumns="False">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Concepto" Binding="{Binding Concepto, DataType={x:Type dto:IngresoAnalizadoDto}}" Width="*" />
+                            <DataGridTextColumn Header="Monto" Binding="{Binding Monto, DataType={x:Type dto:IngresoAnalizadoDto}}" Width="Auto" />
+                            <DataGridTextColumn Header="Fuente" Binding="{Binding Fuente, DataType={x:Type dto:IngresoAnalizadoDto}}" Width="Auto" />
+                            <DataGridTextColumn Header="Estado" Binding="{Binding Estado, DataType={x:Type dto:IngresoAnalizadoDto}}" Width="Auto" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+                <TabItem Header="Líneas POA">
+                    <DataGrid ItemsSource="{Binding LineasPoaAnalizadasView}" IsReadOnly="True"
+                              CanUserSortColumns="True" AutoGenerateColumns="False">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Hoja" Binding="{Binding Hoja, DataType={x:Type dto:LineaPoaAnalizadaDto}}" Width="*" />
+                            <DataGridTextColumn Header="Literal" Binding="{Binding Literal, DataType={x:Type dto:LineaPoaAnalizadaDto}}" Width="Auto" />
+                            <DataGridTextColumn Header="Presupuesto" Binding="{Binding Presupuesto, DataType={x:Type dto:LineaPoaAnalizadaDto}}" Width="Auto" />
+                            <DataGridTextColumn Header="Saldo" Binding="{Binding SaldoPlanilla, DataType={x:Type dto:LineaPoaAnalizadaDto}}" Width="Auto" />
+                            <DataGridTextColumn Header="Estado" Binding="{Binding Estado, DataType={x:Type dto:LineaPoaAnalizadaDto}}" Width="Auto" />
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </TabItem>
+                <TabItem Header="Maestros nuevos">
+                    <StackPanel Orientation="Horizontal" Spacing="24" Margin="12">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Proveedores nuevos" FontWeight="SemiBold" />
+                            <ItemsControl ItemsSource="{Binding ProveedoresNuevos}" />
+                        </StackPanel>
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Fuentes nuevas" FontWeight="SemiBold" />
+                            <ItemsControl ItemsSource="{Binding FuentesNuevas}" />
+                        </StackPanel>
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Rubros nuevos" FontWeight="SemiBold" />
+                            <ItemsControl ItemsSource="{Binding RubrosNuevos}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="dto:CodigoRubroNuevoDto">
+                                        <TextBlock Text="{Binding Codigo, StringFormat='Código {0}'}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </StackPanel>
+                </TabItem>
+            </TabControl>
+        </DockPanel>
 
     </Grid>
 
