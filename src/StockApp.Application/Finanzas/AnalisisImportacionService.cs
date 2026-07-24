@@ -16,6 +16,7 @@ public class AnalisisImportacionService : IAnalisisImportacionService
     private readonly IProveedorRepository _proveedores;
     private readonly IRubroGastoRepository _rubros;
     private readonly IFuenteFinanciamientoRepository _fuentes;
+    private readonly ILineaPoaRepository _lineasPoa;
     private readonly ICurrentSession _session;
     private readonly IAuthorizationService _auth;
 
@@ -24,6 +25,7 @@ public class AnalisisImportacionService : IAnalisisImportacionService
         IProveedorRepository proveedores,
         IRubroGastoRepository rubros,
         IFuenteFinanciamientoRepository fuentes,
+        ILineaPoaRepository lineasPoa,
         ICurrentSession session,
         IAuthorizationService auth)
     {
@@ -31,6 +33,7 @@ public class AnalisisImportacionService : IAnalisisImportacionService
         _proveedores = proveedores;
         _rubros = rubros;
         _fuentes = fuentes;
+        _lineasPoa = lineasPoa;
         _session = session;
         _auth = auth;
     }
@@ -50,6 +53,13 @@ public class AnalisisImportacionService : IAnalisisImportacionService
         var fuentesActivas = (await _fuentes.ListarTodasAsync())
             .Where(f => f.Activo)
             .Select(f => Normalizar(f.Nombre))
+            .ToHashSet();
+
+        // EsNueva (F5d Entrega 2 Task 1): mismo criterio de normalización que proveedores/fuentes,
+        // filtrado por Ejercicio porque ListarTodasAsync trae TODOS los ejercicios.
+        var lineasPoaExistentes = (await _lineasPoa.ListarTodasAsync())
+            .Where(l => l.Ejercicio == ejercicio)
+            .Select(l => Normalizar(l.Nombre))
             .ToHashSet();
 
         var gastosOds = ParsearGastosSeguro(planillaGastos);
@@ -183,6 +193,8 @@ public class AnalisisImportacionService : IAnalisisImportacionService
                 }
             }
 
+            var esNueva = !lineasPoaExistentes.Contains(Normalizar(lineaOds.Hoja));
+
             for (var i = 0; i < lineaOds.Asignaciones.Count; i++)
             {
                 var asignacion = lineaOds.Asignaciones[i];
@@ -193,7 +205,7 @@ public class AnalisisImportacionService : IAnalisisImportacionService
                     RegistrarNuevo(fuentesNuevasVistas, fuentesNuevas, asignacion.Literal!);
 
                 lineasPoa.Add(new LineaPoaAnalizadaDto(
-                    Hoja: lineaOds.Hoja, Ejercicio: ejercicio,
+                    Hoja: lineaOds.Hoja, Ejercicio: ejercicio, EsNueva: esNueva,
                     Estado: EstadoMasSevero(motivosLinea), Motivos: motivosLinea,
                     Literal: literal, FuenteDesconocida: fuenteDesconocida,
                     Presupuesto: asignacion.Presupuesto, SaldoPlanilla: asignacion.Saldo,

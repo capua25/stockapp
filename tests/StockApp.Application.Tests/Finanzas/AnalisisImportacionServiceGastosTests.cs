@@ -67,6 +67,7 @@ public class AnalisisImportacionServiceGastosTests
         var proveedoresRepo = new ProveedorRepositoryFake(proveedores ?? new List<Proveedor>());
         var rubrosRepo = new RubroGastoRepositoryFake(rubros ?? new List<RubroGasto>());
         var fuentesRepo = new FuenteFinanciamientoRepositoryFake(fuentes ?? new List<FuenteFinanciamiento>());
+        var lineasPoaRepo = new LineaPoaRepositoryFake(new List<LineaPoa>());
 
         var session = new Mock<ICurrentSession>();
         session.Setup(s => s.RolActual).Returns(rol);
@@ -76,7 +77,7 @@ public class AnalisisImportacionServiceGastosTests
             .Throws<UnauthorizedAccessException>();
 
         var svc = new AnalisisImportacionService(
-            parser, proveedoresRepo, rubrosRepo, fuentesRepo, session.Object, auth.Object);
+            parser, proveedoresRepo, rubrosRepo, fuentesRepo, lineasPoaRepo, session.Object, auth.Object);
 
         return new Mocks(svc, auth);
     }

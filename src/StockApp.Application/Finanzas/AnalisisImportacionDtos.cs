@@ -58,9 +58,15 @@ public sealed record MovimientoPoaAnalizadoDto(
     int? IndiceGastoConciliado,
     EstadoFila Estado, IReadOnlyList<MotivoEstado> Motivos);
 
-/// <summary>Línea POA candidata (una hoja de la planilla POA) + su asignación presupuestal.</summary>
+/// <summary>
+/// Línea POA candidata (una hoja de la planilla POA) + su asignación presupuestal. EsNueva
+/// (F5d Entrega 2 Task 1) indica que Hoja no matchea ninguna LineaPoa existente del Ejercicio —
+/// puramente informativo para la UI (NO genera MotivoEstado ni afecta Estado): a diferencia de
+/// ProveedorNuevo/FuenteDesconocida/RubroDesconocido, una línea POA nueva no es una anomalía a
+/// resaltar en rojo/amarillo, es el flujo normal cuando el municipio agrega un proyecto.
+/// </summary>
 public sealed record LineaPoaAnalizadaDto(
-    string Hoja, int Ejercicio,
+    string Hoja, int Ejercicio, bool EsNueva,
     EstadoFila Estado, IReadOnlyList<MotivoEstado> Motivos,
     string? Literal, bool FuenteDesconocida,
     decimal Presupuesto, decimal SaldoPlanilla,

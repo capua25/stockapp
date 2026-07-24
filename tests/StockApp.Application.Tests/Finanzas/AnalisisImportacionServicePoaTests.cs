@@ -43,12 +43,14 @@ public class AnalisisImportacionServicePoaTests
 
     private static Mocks Crear(
         PlanillaPoaOds poa,
-        IReadOnlyList<FuenteFinanciamiento>? fuentes = null)
+        IReadOnlyList<FuenteFinanciamiento>? fuentes = null,
+        IReadOnlyList<LineaPoa>? lineasPoaExistentes = null)
     {
         var parser = new PlanillaParserFake(PlanillaGastosVacia(), poa);
         var proveedoresRepo = new ProveedorRepositoryFake(new List<Proveedor>());
         var rubrosRepo = new RubroGastoRepositoryFake(new List<RubroGasto>());
         var fuentesRepo = new FuenteFinanciamientoRepositoryFake(fuentes ?? new List<FuenteFinanciamiento>());
+        var lineasPoaRepo = new LineaPoaRepositoryFake(lineasPoaExistentes ?? new List<LineaPoa>());
 
         var session = new Mock<ICurrentSession>();
         session.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
@@ -56,7 +58,7 @@ public class AnalisisImportacionServicePoaTests
         var auth = new Mock<IAuthSvc>();
 
         var svc = new AnalisisImportacionService(
-            parser, proveedoresRepo, rubrosRepo, fuentesRepo, session.Object, auth.Object);
+            parser, proveedoresRepo, rubrosRepo, fuentesRepo, lineasPoaRepo, session.Object, auth.Object);
 
         return new Mocks(svc);
     }
@@ -185,5 +187,82 @@ public class AnalisisImportacionServicePoaTests
         Assert.Equal(92748m, lineaB.Presupuesto);
         Assert.Equal(92748m, lineaB.SaldoPlanilla);
         Assert.Empty(lineaB.Movimientos);
+    }
+
+    [Fact]
+    public async Task AnalizarAsync_HojaNoExisteEnLineasPoaDelEjercicio_EsNuevaTrue()
+    {
+        var linea = new LineaPoaResumenOds(
+            Hoja: "PROYECTO NUEVO", Asignaciones: new List<AsignacionPoaOds> { new("B", 1000m, 500m) },
+            Movimientos: new List<FilaPoaOds>());
+        var poa = new PlanillaPoaOds(new List<LineaPoaResumenOds> { linea }, new SaldosTotalesPoaOds(500m, 0m));
+        var m = Crear(poa,
+            fuentes: new List<FuenteFinanciamiento> { new() { Id = 1, Nombre = "B", Activo = true } },
+            lineasPoaExistentes: new List<LineaPoa>());
+
+        var resultado = await m.Svc.AnalizarAsync(Stream.Null, Stream.Null, Ejercicio);
+
+        var lineaPoa = Assert.Single(resultado.LineasPoa);
+        Assert.True(lineaPoa.EsNueva);
+        Assert.Equal(EstadoFila.Ok, lineaPoa.Estado);
+        Assert.Empty(lineaPoa.Motivos);
+    }
+
+    [Fact]
+    public async Task AnalizarAsync_HojaYaExisteEnElMismoEjercicio_EsNuevaFalse()
+    {
+        var linea = new LineaPoaResumenOds(
+            Hoja: "RAMBLA", Asignaciones: new List<AsignacionPoaOds> { new("B", 1000m, 500m) },
+            Movimientos: new List<FilaPoaOds>());
+        var poa = new PlanillaPoaOds(new List<LineaPoaResumenOds> { linea }, new SaldosTotalesPoaOds(500m, 0m));
+        var lineaExistente = new LineaPoa { Id = 1, Nombre = "RAMBLA", Programa = "Obras", Ejercicio = Ejercicio, Activo = true };
+        var m = Crear(poa,
+            fuentes: new List<FuenteFinanciamiento> { new() { Id = 1, Nombre = "B", Activo = true } },
+            lineasPoaExistentes: new List<LineaPoa> { lineaExistente });
+
+        var resultado = await m.Svc.AnalizarAsync(Stream.Null, Stream.Null, Ejercicio);
+
+        Assert.False(Assert.Single(resultado.LineasPoa).EsNueva);
+    }
+
+    [Fact]
+    public async Task AnalizarAsync_HojaExisteEnOtroEjercicio_EsNuevaTrue()
+    {
+        // Unicidad de LineaPoa es Nombre+Ejercicio (ExisteNombreEjercicioAsync) — una hoja con el
+        // mismo nombre en OTRO ejercicio no cuenta como "ya existe" para este ejercicio.
+        var linea = new LineaPoaResumenOds(
+            Hoja: "RAMBLA", Asignaciones: new List<AsignacionPoaOds> { new("B", 1000m, 500m) },
+            Movimientos: new List<FilaPoaOds>());
+        var poa = new PlanillaPoaOds(new List<LineaPoaResumenOds> { linea }, new SaldosTotalesPoaOds(500m, 0m));
+        var lineaOtroEjercicio = new LineaPoa { Id = 1, Nombre = "RAMBLA", Programa = "Obras", Ejercicio = Ejercicio - 1, Activo = true };
+        var m = Crear(poa,
+            fuentes: new List<FuenteFinanciamiento> { new() { Id = 1, Nombre = "B", Activo = true } },
+            lineasPoaExistentes: new List<LineaPoa> { lineaOtroEjercicio });
+
+        var resultado = await m.Svc.AnalizarAsync(Stream.Null, Stream.Null, Ejercicio);
+
+        Assert.True(Assert.Single(resultado.LineasPoa).EsNueva);
+    }
+
+    [Fact]
+    public async Task AnalizarAsync_HojaConDosAsignaciones_EsNuevaConstanteEnAmbasFilas()
+    {
+        // Financiamiento mixto: EsNueva se computa UNA vez por Hoja (antes del for de Asignaciones,
+        // igual que movimientosReconciliados) — debe ser el mismo valor en las N filas aplanadas.
+        var linea = new LineaPoaResumenOds(
+            Hoja: "COMPOSTERAS Y COMPACTADORAS",
+            Asignaciones: new List<AsignacionPoaOds> { new("C", 1407252m, 1407252m), new("B", 92748m, 92748m) },
+            Movimientos: new List<FilaPoaOds>());
+        var poa = new PlanillaPoaOds(new List<LineaPoaResumenOds> { linea }, new SaldosTotalesPoaOds(92748m, 1407252m));
+        var m = Crear(poa, fuentes: new List<FuenteFinanciamiento>
+        {
+            new() { Id = 1, Nombre = "B", Activo = true },
+            new() { Id = 2, Nombre = "C", Activo = true },
+        });
+
+        var resultado = await m.Svc.AnalizarAsync(Stream.Null, Stream.Null, Ejercicio);
+
+        Assert.Equal(2, resultado.LineasPoa.Count);
+        Assert.All(resultado.LineasPoa, l => Assert.True(l.EsNueva));
     }
 }

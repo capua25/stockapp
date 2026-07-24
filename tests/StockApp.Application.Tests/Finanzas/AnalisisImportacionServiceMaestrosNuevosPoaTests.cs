@@ -70,6 +70,7 @@ public class AnalisisImportacionServiceMaestrosNuevosPoaTests
         var rubrosRepo = new RubroGastoRepositoryFake(new List<RubroGasto>());
         var fuentesRepo = new FuenteFinanciamientoRepositoryFake(
             new List<FuenteFinanciamiento> { new() { Id = 1, Nombre = "B", Activo = true } });
+        var lineasPoaRepo = new LineaPoaRepositoryFake(new List<LineaPoa>());
 
         var session = new Mock<ICurrentSession>();
         session.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
@@ -77,7 +78,7 @@ public class AnalisisImportacionServiceMaestrosNuevosPoaTests
         var auth = new Mock<IAuthSvc>();
 
         var svc = new AnalisisImportacionService(
-            parser, proveedoresRepo, rubrosRepo, fuentesRepo, session.Object, auth.Object);
+            parser, proveedoresRepo, rubrosRepo, fuentesRepo, lineasPoaRepo, session.Object, auth.Object);
 
         return new Mocks(svc);
     }
@@ -164,11 +165,12 @@ public class AnalisisImportacionServiceMaestrosNuevosPoaTests
             new() { Id = 2, Nombre = "C", Activo = true },
         });
         var rubrosRepo = new RubroGastoRepositoryFake(new List<RubroGasto>());
+        var lineasPoaRepo = new LineaPoaRepositoryFake(new List<LineaPoa>());
         var session = new Mock<ICurrentSession>();
         session.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
         var auth = new Mock<IAuthSvc>();
         var svc = new AnalisisImportacionService(
-            parser, new ProveedorRepositoryFake(proveedoresRepo), rubrosRepo, fuentesRepo, session.Object, auth.Object);
+            parser, new ProveedorRepositoryFake(proveedoresRepo), rubrosRepo, fuentesRepo, lineasPoaRepo, session.Object, auth.Object);
 
         var resultado = await svc.AnalizarAsync(Stream.Null, Stream.Null, Ejercicio);
 
