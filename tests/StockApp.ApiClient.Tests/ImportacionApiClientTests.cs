@@ -76,4 +76,30 @@ public class ImportacionApiClientTests
         Assert.Equal(idImportacion, resultado.IdImportacion);
         Assert.Equal(1, resultado.ProveedoresCreados);
     }
+
+    [Fact]
+    public async Task AnalizarAsync_EnviaMultipartConDosArchivosYEjercicio_ParseaResultado()
+    {
+        var dto = new ResultadoAnalisisDto(
+            Ingresos: new List<IngresoAnalizadoDto>(),
+            Gastos: new List<GastoAnalizadoDto>(),
+            LineasPoa: new List<LineaPoaAnalizadaDto>(),
+            MaestrosNuevos: new MaestrosNuevosDto(
+                new List<string>(), new List<string>(), new List<CodigoRubroNuevoDto>()),
+            Resumen: new ResumenAnalisisDto(0, 0, 0, 0, 0, 0, 0),
+            SaldosPoa: new SaldosTotalesPoaOds(0m, 0m));
+        var fake = new FakeHttpHandler(request =>
+        {
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal("finanzas/importar/analizar", request.RequestUri!.PathAndQuery.TrimStart('/'));
+            Assert.IsType<MultipartFormDataContent>(request.Content);
+            return TestHttp.Json(dto);
+        });
+        var client = new ImportacionApiClient(TestHttp.CrearCliente(fake));
+
+        var resultado = await client.AnalizarAsync(
+            "gastos.ods", new byte[] { 1, 2, 3 }, "poa.ods", new byte[] { 4, 5, 6 }, 2026);
+
+        Assert.Equal(0, resultado.Resumen.TotalFilas);
+    }
 }

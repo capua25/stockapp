@@ -185,6 +185,9 @@ public partial class App : AvaloniaApp
         services.AddTransient<IFinanzasVistasService, FinanzasVistasApiClient>();
         services.AddTransient<IAdjuntoService, AdjuntoApiClient>();
 
+        // ── Módulo Finanzas — F5d: importador de planillas (historial + análisis/confirmación/reversa) ──
+        services.AddTransient<IImportacionService, ImportacionApiClient>();
+
         // ── Inc 7 Fase B: licenciamiento (pantalla de bloqueo + reset de Admin) ──
         services.AddTransient<ILicenciaService>(sp => new LicenciaApiClient(sp.GetRequiredService<HttpClient>()));
         services.AddTransient<IResetAdminService>(sp => new ResetAdminApiClient(sp.GetRequiredService<HttpClient>()));

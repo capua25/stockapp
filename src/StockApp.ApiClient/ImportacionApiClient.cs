@@ -16,10 +16,33 @@ public sealed class ImportacionApiClient : IImportacionService
 
     public ImportacionApiClient(HttpClient http) => _http = http;
 
-    public Task<ResultadoAnalisisDto> AnalizarAsync(
+    public async Task<ResultadoAnalisisDto> AnalizarAsync(
         string nombreArchivoGastos, byte[] gastosOds,
         string nombreArchivoPoa, byte[] poaOds,
-        int ejercicio) => throw new NotImplementedException();
+        int ejercicio)
+    {
+        using var multipart = new MultipartFormDataContent();
+
+        using var archivoGastos = new ByteArrayContent(gastosOds);
+        archivoGastos.Headers.ContentType =
+            new MediaTypeHeaderValue("application/vnd.oasis.opendocument.spreadsheet");
+        multipart.Add(archivoGastos, "gastos", nombreArchivoGastos);
+
+        using var archivoPoa = new ByteArrayContent(poaOds);
+        archivoPoa.Headers.ContentType =
+            new MediaTypeHeaderValue("application/vnd.oasis.opendocument.spreadsheet");
+        multipart.Add(archivoPoa, "poa", nombreArchivoPoa);
+
+        multipart.Add(
+            new StringContent(ejercicio.ToString(CultureInfo.InvariantCulture)), "ejercicio");
+
+        var response = await ApiErrores.EnviarAsync(() =>
+            _http.PostAsync("finanzas/importar/analizar", multipart));
+        await ApiErrores.AsegurarExitoAsync(response);
+
+        return await response.Content.ReadFromJsonAsync<ResultadoAnalisisDto>()
+            ?? throw new InvalidOperationException("Respuesta vacía del servidor al analizar la importación.");
+    }
 
     public async Task<ResultadoConfirmacionDto> ConfirmarAsync(ConfirmarImportacionDto dto)
     {
