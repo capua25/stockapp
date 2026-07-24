@@ -3,6 +3,7 @@ using StockApp.ApiClient;
 using StockApp.ApiClient.Tests.TestInfra;
 using StockApp.Application.Finanzas;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 using Xunit;
 
 namespace StockApp.ApiClient.Tests;
@@ -75,6 +76,28 @@ public class ImportacionApiClientTests
 
         Assert.Equal(idImportacion, resultado.IdImportacion);
         Assert.Equal(1, resultado.ProveedoresCreados);
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_400ConErroresEstructurados_LanzaValidacionImportacionException()
+    {
+        var errores = new Dictionary<string, string[]>
+        {
+            ["Gastos[3].Fuente"] = new[] { "La fuente 'X' no existe ni fue declarada nueva" },
+            ["Gastos[3].FechaVencimiento"] = new[] { "Requerido" },
+        };
+        var fake = new FakeHttpHandler(request => TestHttp.Json(
+            new { title = "Error.", detail = "El payload tiene errores de validación.", status = 400, errors = errores },
+            HttpStatusCode.BadRequest));
+        var client = new ImportacionApiClient(TestHttp.CrearCliente(fake));
+
+        var ex = await Assert.ThrowsAsync<ValidacionImportacionException>(
+            () => client.ConfirmarAsync(PayloadMinimo()));
+
+        Assert.Equal(
+            "La fuente 'X' no existe ni fue declarada nueva",
+            ex.Errores["Gastos[3].Fuente"][0]);
+        Assert.Equal("Requerido", ex.Errores["Gastos[3].FechaVencimiento"][0]);
     }
 
     [Fact]

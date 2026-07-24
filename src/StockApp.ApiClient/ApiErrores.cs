@@ -1,6 +1,7 @@
 // src/StockApp.ApiClient/ApiErrores.cs
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json.Serialization;
 using StockApp.Domain.Exceptions;
 
 namespace StockApp.ApiClient;
@@ -11,7 +12,9 @@ internal sealed record IdCreado(int Id);
 /// <summary>
 /// Proyección del problem+json (RFC 7807) de la API. Además de title/detail/status,
 /// DomainExceptionHandler agrega extensiones estructuradas para StockInsuficienteException
-/// (productoId/stockActual/cantidadSolicitada — Task 5 de este plan).
+/// (productoId/stockActual/cantidadSolicitada — Task 5 de este plan) y para
+/// ValidacionImportacionException (errors: diccionario "Tipo[i].Campo" → mensajes — F5d Task 4,
+/// fix de review: sin esto la UI no puede resaltar la celda exacta del error de confirmación).
 /// ReadFromJsonAsync usa defaults Web: camelCase + case-insensitive.
 /// </summary>
 internal sealed record ProblemaJson(
@@ -20,7 +23,8 @@ internal sealed record ProblemaJson(
     int? Status,
     int? ProductoId,
     decimal? StockActual,
-    decimal? CantidadSolicitada);
+    decimal? CantidadSolicitada,
+    [property: JsonPropertyName("errors")] IReadOnlyDictionary<string, string[]>? Errores);
 
 /// <summary>
 /// Traducción centralizada HTTP → excepciones de dominio (spec 3b): UN solo lugar, los
@@ -68,7 +72,7 @@ internal static class ApiErrores
         {
             HttpStatusCode.NotFound        => new EntidadNoEncontradaException(mensaje),
             HttpStatusCode.Conflict        => CrearConflicto(problema, mensaje),
-            HttpStatusCode.BadRequest      => new ArgumentException(mensaje),
+            HttpStatusCode.BadRequest      => CrearBadRequest(problema, mensaje),
             HttpStatusCode.Forbidden       => new UnauthorizedAccessException(mensaje),
             HttpStatusCode.Unauthorized    => new UnauthorizedAccessException(mensaje),
             HttpStatusCode.TooManyRequests => new ReglaDeNegocioException(
@@ -91,6 +95,21 @@ internal static class ApiErrores
             return new StockInsuficienteException(productoId, stockActual, cantidadSolicitada);
 
         return new ReglaDeNegocioException(mensaje);
+    }
+
+    /// <summary>
+    /// 400 con extensión "errors" (diccionario "Tipo[i].Campo" → mensajes, F5d) →
+    /// ValidacionImportacionException reconstruida con el MISMO diccionario que armó
+    /// DomainExceptionHandler — preserva el detalle por campo para que la UI del importador
+    /// resalte la celda exacta. Cualquier otro 400 (validaciones simples de los demás
+    /// endpoints) → ArgumentException plano con el detail, como siempre.
+    /// </summary>
+    private static Exception CrearBadRequest(ProblemaJson? problema, string mensaje)
+    {
+        if (problema is { Errores: { Count: > 0 } errores })
+            return new ValidacionImportacionException(errores);
+
+        return new ArgumentException(mensaje);
     }
 
     private static async Task<ProblemaJson?> LeerProblemaAsync(HttpResponseMessage response)
