@@ -704,7 +704,7 @@ public sealed class ImportacionApiClient : IImportacionService
     public Task<ResultadoConfirmacionDto> ConfirmarAsync(ConfirmarImportacionDto dto)
         => throw new NotImplementedException();
 
-    public async Task<ResultadoReversionDto> RevertirAsync(Guid idImportacion)
+    public Task<ResultadoReversionDto> RevertirAsync(Guid idImportacion)
         => throw new NotImplementedException();
 
     public async Task<IReadOnlyList<ImportacionHistorialDto>> ListarHistorialAsync()
@@ -1135,7 +1135,7 @@ Agregar en `src/StockApp.Presentation/ViewModels/ShellMainViewModel.cs`, despué
     }
 ```
 
-- [ ] **Step 4: Escribir el ViewModel contenedor (sin test unitario propio — solo expone 2 propiedades resueltas por constructor, cubierto por Task 5's DI wiring y la aserción de tipo del Step 1)**
+- [ ] **Step 4: Escribir el ViewModel contenedor**
 
 ```csharp
 // src/StockApp.Presentation/ViewModels/Finanzas/ImportacionViewModel.cs
@@ -1185,7 +1185,9 @@ public class ImportacionViewModelTests
         var vm = new ImportacionViewModel(nuevaVm, historialVm);
 
         Assert.Same(nuevaVm, vm.NuevaVm);
+        Assert.IsType<NuevaImportacionViewModel>(vm.NuevaVm);
         Assert.Same(historialVm, vm.HistorialVm);
+        Assert.IsType<HistorialImportacionesViewModel>(vm.HistorialVm);
     }
 }
 ```
@@ -1196,8 +1198,8 @@ Nota: este test compila recién cuando `NuevaImportacionViewModel` (Task 7) y `H
 
 No correr `ImportacionViewModelTests` todavía — `NuevaImportacionViewModel`/`HistorialImportacionesViewModel` (Tasks 7/8) no existen aún. Verificar en cambio que el resto del proyecto Presentation compila con el `ImportacionViewModel` recién creado usando una compilación aislada:
 
-Run: `dotnet build src/StockApp.Presentation/StockApp.Presentation.csproj 2>&1 | grep -i "ImportacionViewModel"`
-Expected: error esperado y ACEPTADO en este punto — `CS0246: The type or namespace name 'NuevaImportacionViewModel' could not be found` / `'HistorialImportacionesViewModel' could not be found`. Este es el "red" intencional que Task 7 resuelve.
+Run: `dotnet build src/StockApp.Presentation/StockApp.Presentation.csproj`
+Expected: Build succeeded (compilación termina sin errores).
 
 - [ ] **Step 7: Commit del contenedor + sidebar + test de ShellMainViewModel (que SÍ compila y pasa ya)**
 
@@ -1433,6 +1435,7 @@ Expected: PASS (4/4).
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
+             xmlns:dto="using:StockApp.Application.Finanzas"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
@@ -1452,16 +1455,16 @@ Expected: PASS (4/4).
                   AutoGenerateColumns="False">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Fecha"
-                                    Binding="{Binding Fecha, StringFormat='dd/MM/yyyy HH:mm', DataType={x:Type vm:ImportacionHistorialDto}}"
+                                    Binding="{Binding Fecha, StringFormat='dd/MM/yyyy HH:mm', DataType={x:Type dto:ImportacionHistorialDto}}"
                                     Width="Auto" />
                 <DataGridTextColumn Header="Ejercicio"
-                                    Binding="{Binding Ejercicio, DataType={x:Type vm:ImportacionHistorialDto}}"
+                                    Binding="{Binding Ejercicio, DataType={x:Type dto:ImportacionHistorialDto}}"
                                     Width="Auto" />
                 <DataGridTextColumn Header="Usuario"
-                                    Binding="{Binding Usuario, DataType={x:Type vm:ImportacionHistorialDto}}"
+                                    Binding="{Binding Usuario, DataType={x:Type dto:ImportacionHistorialDto}}"
                                     Width="Auto" />
                 <DataGridTextColumn Header="Estado"
-                                    Binding="{Binding Revertida, Converter={x:Static BoolConverters.Not}, DataType={x:Type vm:ImportacionHistorialDto}}"
+                                    Binding="{Binding Revertida, Converter={x:Static BoolConverters.Not}, DataType={x:Type dto:ImportacionHistorialDto}}"
                                     Width="Auto" />
             </DataGrid.Columns>
         </DataGrid>
@@ -1476,7 +1479,7 @@ Nota sobre la columna "Estado": `BoolConverters.Not` invierte `Revertida` (True�
 ```xml
                 <DataGridTemplateColumn Header="Estado" Width="Auto">
                     <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate x:DataType="vm:ImportacionHistorialDto">
+                        <DataTemplate x:DataType="dto:ImportacionHistorialDto">
                             <TextBlock Text="{Binding Revertida, Converter={x:Static vm:EstadoRevertidaConverter.Instance}}"
                                        VerticalAlignment="Center" Margin="4,0" />
                         </DataTemplate>
@@ -1786,6 +1789,7 @@ Expected: PASS (5/5).
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
+             xmlns:dto="using:StockApp.Application.Finanzas"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
@@ -2371,7 +2375,17 @@ Expected: PASS (todos los tests de Task 8 + los 6 nuevos de este task, 11/11).
 
 - [ ] **Step 6: Agregar la grilla del Paso 2 a la vista**
 
-Agregar a `src/StockApp.Presentation/Views/Finanzas/NuevaImportacionView.axaml`, dentro del `Grid` raíz, después del bloque "Paso 1" (agregar `xmlns:conv="using:StockApp.Presentation.Converters"` al `UserControl` de arriba):
+Agregar a `src/StockApp.Presentation/Views/Finanzas/NuevaImportacionView.axaml`, dentro del `Grid` raíz, después del bloque "Paso 1" (agregar `xmlns:conv="using:StockApp.Presentation.Converters"` al `UserControl` de arriba; `xmlns:dto="using:StockApp.Application.Finanzas"` ya quedó declarado en Task 8 Step 5 — los `DataType={x:Type dto:...}` de esta grilla lo consumen).
+
+El `Style` de color de fila por `EstadoFila` se define UNA sola vez como recurso compartido del `UserControl` (no repetido en cada `DataGrid.Styles`) — agregar `<UserControl.Styles>` inmediatamente después de la etiqueta de apertura `<UserControl ...>` declarada en Task 8 Step 5:
+
+```xml
+    <UserControl.Styles>
+        <Style Selector="DataGridRow">
+            <Setter Property="Background" Value="{Binding Estado, Converter={x:Static conv:EstadoFilaBrushConverter.Instance}}" />
+        </Style>
+    </UserControl.Styles>
+```
 
 ```xml
         <!-- Paso 2: Revisar (solo lectura, con color por EstadoFila) -->
@@ -2391,52 +2405,37 @@ Agregar a `src/StockApp.Presentation/Views/Finanzas/NuevaImportacionView.axaml`,
                 <TabItem Header="Gastos">
                     <DataGrid ItemsSource="{Binding GastosAnalizadosView}" IsReadOnly="True"
                               CanUserSortColumns="True" AutoGenerateColumns="False">
-                        <DataGrid.Styles>
-                            <Style Selector="DataGridRow">
-                                <Setter Property="Background" Value="{Binding Estado, Converter={x:Static conv:EstadoFilaBrushConverter.Instance}}" />
-                            </Style>
-                        </DataGrid.Styles>
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Proveedor" Binding="{Binding Proveedor, DataType={x:Type vm:GastoAnalizadoDto}}" Width="*" />
-                            <DataGridTextColumn Header="Factura" Binding="{Binding NumeroFactura, DataType={x:Type vm:GastoAnalizadoDto}}" Width="Auto" />
-                            <DataGridTextColumn Header="Detalle" Binding="{Binding Detalle, DataType={x:Type vm:GastoAnalizadoDto}}" Width="2*" />
-                            <DataGridTextColumn Header="Monto" Binding="{Binding Monto, DataType={x:Type vm:GastoAnalizadoDto}}" Width="Auto" />
-                            <DataGridTextColumn Header="Fuente" Binding="{Binding Fuente, DataType={x:Type vm:GastoAnalizadoDto}}" Width="Auto" />
-                            <DataGridTextColumn Header="Rubro" Binding="{Binding Rubro, DataType={x:Type vm:GastoAnalizadoDto}}" Width="Auto" />
-                            <DataGridTextColumn Header="Estado" Binding="{Binding Estado, DataType={x:Type vm:GastoAnalizadoDto}}" Width="Auto" />
+                            <DataGridTextColumn Header="Proveedor" Binding="{Binding Proveedor, DataType={x:Type dto:GastoAnalizadoDto}}" Width="*" />
+                            <DataGridTextColumn Header="Factura" Binding="{Binding NumeroFactura, DataType={x:Type dto:GastoAnalizadoDto}}" Width="Auto" />
+                            <DataGridTextColumn Header="Detalle" Binding="{Binding Detalle, DataType={x:Type dto:GastoAnalizadoDto}}" Width="2*" />
+                            <DataGridTextColumn Header="Monto" Binding="{Binding Monto, DataType={x:Type dto:GastoAnalizadoDto}}" Width="Auto" />
+                            <DataGridTextColumn Header="Fuente" Binding="{Binding Fuente, DataType={x:Type dto:GastoAnalizadoDto}}" Width="Auto" />
+                            <DataGridTextColumn Header="Rubro" Binding="{Binding Rubro, DataType={x:Type dto:GastoAnalizadoDto}}" Width="Auto" />
+                            <DataGridTextColumn Header="Estado" Binding="{Binding Estado, DataType={x:Type dto:GastoAnalizadoDto}}" Width="Auto" />
                         </DataGrid.Columns>
                     </DataGrid>
                 </TabItem>
                 <TabItem Header="Ingresos">
                     <DataGrid ItemsSource="{Binding IngresosAnalizadosView}" IsReadOnly="True"
                               CanUserSortColumns="True" AutoGenerateColumns="False">
-                        <DataGrid.Styles>
-                            <Style Selector="DataGridRow">
-                                <Setter Property="Background" Value="{Binding Estado, Converter={x:Static conv:EstadoFilaBrushConverter.Instance}}" />
-                            </Style>
-                        </DataGrid.Styles>
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Concepto" Binding="{Binding Concepto, DataType={x:Type vm:IngresoAnalizadoDto}}" Width="*" />
-                            <DataGridTextColumn Header="Monto" Binding="{Binding Monto, DataType={x:Type vm:IngresoAnalizadoDto}}" Width="Auto" />
-                            <DataGridTextColumn Header="Fuente" Binding="{Binding Fuente, DataType={x:Type vm:IngresoAnalizadoDto}}" Width="Auto" />
-                            <DataGridTextColumn Header="Estado" Binding="{Binding Estado, DataType={x:Type vm:IngresoAnalizadoDto}}" Width="Auto" />
+                            <DataGridTextColumn Header="Concepto" Binding="{Binding Concepto, DataType={x:Type dto:IngresoAnalizadoDto}}" Width="*" />
+                            <DataGridTextColumn Header="Monto" Binding="{Binding Monto, DataType={x:Type dto:IngresoAnalizadoDto}}" Width="Auto" />
+                            <DataGridTextColumn Header="Fuente" Binding="{Binding Fuente, DataType={x:Type dto:IngresoAnalizadoDto}}" Width="Auto" />
+                            <DataGridTextColumn Header="Estado" Binding="{Binding Estado, DataType={x:Type dto:IngresoAnalizadoDto}}" Width="Auto" />
                         </DataGrid.Columns>
                     </DataGrid>
                 </TabItem>
                 <TabItem Header="Líneas POA">
                     <DataGrid ItemsSource="{Binding LineasPoaAnalizadasView}" IsReadOnly="True"
                               CanUserSortColumns="True" AutoGenerateColumns="False">
-                        <DataGrid.Styles>
-                            <Style Selector="DataGridRow">
-                                <Setter Property="Background" Value="{Binding Estado, Converter={x:Static conv:EstadoFilaBrushConverter.Instance}}" />
-                            </Style>
-                        </DataGrid.Styles>
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Hoja" Binding="{Binding Hoja, DataType={x:Type vm:LineaPoaAnalizadaDto}}" Width="*" />
-                            <DataGridTextColumn Header="Literal" Binding="{Binding Literal, DataType={x:Type vm:LineaPoaAnalizadaDto}}" Width="Auto" />
-                            <DataGridTextColumn Header="Presupuesto" Binding="{Binding Presupuesto, DataType={x:Type vm:LineaPoaAnalizadaDto}}" Width="Auto" />
-                            <DataGridTextColumn Header="Saldo" Binding="{Binding SaldoPlanilla, DataType={x:Type vm:LineaPoaAnalizadaDto}}" Width="Auto" />
-                            <DataGridTextColumn Header="Estado" Binding="{Binding Estado, DataType={x:Type vm:LineaPoaAnalizadaDto}}" Width="Auto" />
+                            <DataGridTextColumn Header="Hoja" Binding="{Binding Hoja, DataType={x:Type dto:LineaPoaAnalizadaDto}}" Width="*" />
+                            <DataGridTextColumn Header="Literal" Binding="{Binding Literal, DataType={x:Type dto:LineaPoaAnalizadaDto}}" Width="Auto" />
+                            <DataGridTextColumn Header="Presupuesto" Binding="{Binding Presupuesto, DataType={x:Type dto:LineaPoaAnalizadaDto}}" Width="Auto" />
+                            <DataGridTextColumn Header="Saldo" Binding="{Binding SaldoPlanilla, DataType={x:Type dto:LineaPoaAnalizadaDto}}" Width="Auto" />
+                            <DataGridTextColumn Header="Estado" Binding="{Binding Estado, DataType={x:Type dto:LineaPoaAnalizadaDto}}" Width="Auto" />
                         </DataGrid.Columns>
                     </DataGrid>
                 </TabItem>
@@ -2454,7 +2453,7 @@ Agregar a `src/StockApp.Presentation/Views/Finanzas/NuevaImportacionView.axaml`,
                             <TextBlock Text="Rubros nuevos" FontWeight="SemiBold" />
                             <ItemsControl ItemsSource="{Binding RubrosNuevos}">
                                 <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="vm:CodigoRubroNuevoDto">
+                                    <DataTemplate x:DataType="dto:CodigoRubroNuevoDto">
                                         <TextBlock Text="{Binding Codigo, StringFormat='Código {0}'}" />
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
