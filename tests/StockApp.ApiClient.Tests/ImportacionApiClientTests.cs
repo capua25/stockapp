@@ -47,4 +47,33 @@ public class ImportacionApiClientTests
 
         Assert.Equal(2, resultado.GastosRevertidos);
     }
+
+    private static ConfirmarImportacionDto PayloadMinimo() => new(
+        Ejercicio: 2026,
+        Forzar: false,
+        MaestrosNuevos: new MaestrosNuevosConfirmarDto(
+            new List<string>(), new List<string>(), new List<RubroNuevoConfirmarDto>()),
+        Ingresos: new List<IngresoConfirmarDto>(),
+        Gastos: new List<GastoConfirmarDto>(),
+        LineasPoa: new List<LineaPoaConfirmarDto>());
+
+    [Fact]
+    public async Task ConfirmarAsync_POSTConJson_ParseaResultado()
+    {
+        var idImportacion = Guid.NewGuid();
+        var dto = new ResultadoConfirmacionDto(
+            idImportacion, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, new List<ConflictoGastoDto>());
+        var fake = new FakeHttpHandler(request =>
+        {
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal("finanzas/importar/confirmar", request.RequestUri!.PathAndQuery.TrimStart('/'));
+            return TestHttp.Json(dto);
+        });
+        var client = new ImportacionApiClient(TestHttp.CrearCliente(fake));
+
+        var resultado = await client.ConfirmarAsync(PayloadMinimo());
+
+        Assert.Equal(idImportacion, resultado.IdImportacion);
+        Assert.Equal(1, resultado.ProveedoresCreados);
+    }
 }

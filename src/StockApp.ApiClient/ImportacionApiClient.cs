@@ -21,8 +21,15 @@ public sealed class ImportacionApiClient : IImportacionService
         string nombreArchivoPoa, byte[] poaOds,
         int ejercicio) => throw new NotImplementedException();
 
-    public Task<ResultadoConfirmacionDto> ConfirmarAsync(ConfirmarImportacionDto dto)
-        => throw new NotImplementedException();
+    public async Task<ResultadoConfirmacionDto> ConfirmarAsync(ConfirmarImportacionDto dto)
+    {
+        var response = await ApiErrores.EnviarAsync(() =>
+            _http.PostAsJsonAsync("finanzas/importar/confirmar", dto));
+        await ApiErrores.AsegurarExitoAsync(response);
+
+        return await response.Content.ReadFromJsonAsync<ResultadoConfirmacionDto>()
+            ?? throw new InvalidOperationException("Respuesta vacía del servidor al confirmar la importación.");
+    }
 
     public async Task<ResultadoReversionDto> RevertirAsync(Guid idImportacion)
     {
