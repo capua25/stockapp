@@ -138,18 +138,30 @@ public class NuevaImportacionViewModelTests
 
         var vm = await CrearEnPasoRevisarAsync(svc, seleccion, confirm, analisis);
 
-        Assert.Single(vm.GastosAnalizados);
-        Assert.Equal("ACME SA", vm.GastosAnalizados[0].Proveedor);
+        var fila = Assert.Single(vm.FilasGasto);
+        Assert.Equal("ACME SA", fila.Proveedor);
     }
 
     [Fact]
     public async Task Resumen_ConErrores_ConfirmarQuedaDeshabilitado()
     {
+        // Ripple F5d Entrega 2 (Task 6): el gate ya no lee Resumen.Errores directamente — un
+        // Resumen con Errores>0 sin ninguna fila real ya no bloquea (PuedeConfirmar depende de
+        // HasErrors de las filas VM, ver docstring). Se reproduce acá la causa REAL de
+        // EstadoFila.Error (FechaIlegible deja Fecha en null en el DTO), que el [Required] de
+        // FilaGastoEditableVm.Fecha captura vía HasErrors.
         var svc = new Mock<IImportacionService>();
         var seleccion = new Mock<IServicioSeleccionArchivo>();
         var confirm = new Mock<IConfirmacionService>();
         var analisis = ResultadoAnalisisVacio() with
         {
+            Gastos = new List<GastoAnalizadoDto>
+            {
+                new("ENERO", 3, EstadoFila.Error,
+                    new List<MotivoEstado> { new(TipoMotivo.FechaIlegible, "Fecha ilegible") },
+                    null, 500m, "ACME SA", false, "F-1", "O-1",
+                    "Compra de insumos", null, "Literal A", false, 1, "Materiales", false, null),
+            },
             Resumen = new ResumenAnalisisDto(1, 0, 0, 1, 0, 0, 0),
         };
 
@@ -180,8 +192,9 @@ public class NuevaImportacionViewModelTests
     public async Task Resumen_SinErroresPeroGastoSinFuente_ConfirmarQuedaDeshabilitadoYExplicaPorQue()
     {
         // Caso real (backend): una fuente vacía (LiteralVacio) es Advertencia, no Error — el gasto
-        // puede quedar con Errores == 0 pero Fuente == null. MapearAConfirmacion usa g.Fuente! y
-        // eso hoy produce NRE al confirmar. El gating debe bloquear esto ANTES de llegar al mapeo.
+        // puede quedar con Errores == 0 pero Fuente == null. Bajo el gating de Entrega 2, la fila VM
+        // con Fuente == null cae en HasErrors == true por [Required] — el bloqueo ahora es directo,
+        // no por un gate aparte para "errores" vs "incompletas".
         var svc = new Mock<IImportacionService>();
         var seleccion = new Mock<IServicioSeleccionArchivo>();
         var confirm = new Mock<IConfirmacionService>();
@@ -438,8 +451,132 @@ public class NuevaImportacionViewModelTests
         Assert.Equal(PasoWizardImportacion.Cargar, vm.PasoActual);
         Assert.Null(vm.ResultadoConfirmacion);
         Assert.Empty(vm.Conflictos);
-        Assert.Empty(vm.GastosAnalizados);
+        Assert.Empty(vm.FilasGasto);
         svc.Verify(s => s.RevertirAsync(It.IsAny<Guid>()), Times.Never);
         confirm.Verify(c => c.PreguntarAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AnalizarAsync_PopulaFilasGastoComoVmEditables()
+    {
+        var (vm, service, _, _) = Crear();
+        var gastoDto = new GastoAnalizadoDto(
+            HojaOrigen: "MARZO", NumeroFila: 1,
+            Estado: EstadoFila.Advertencia, Motivos: new List<MotivoEstado>(),
+            Fecha: null, Monto: 1000m,
+            Proveedor: null, ProveedorNuevo: false,
+            NumeroFactura: "F-1", NumeroOrden: null,
+            Detalle: "Compra", Destino: null,
+            Fuente: "Rentas Generales", FuenteDesconocida: false,
+            CodigoRubro: 10, Rubro: "Materiales", RubroDesconocido: false,
+            LineaPoaAsignada: null);
+        service.Setup(s => s.AnalizarAsync(
+                It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<int>()))
+            .ReturnsAsync(new ResultadoAnalisisDto(
+                new List<IngresoAnalizadoDto>(), new List<GastoAnalizadoDto> { gastoDto },
+                new List<LineaPoaAnalizadaDto>(),
+                new MaestrosNuevosDto(new List<string>(), new List<string>(), new List<CodigoRubroNuevoDto>()),
+                new ResumenAnalisisDto(1, 0, 1, 0, 0, 0, 0),
+                new SaldosTotalesPoaOds(0m, 0m)));
+        vm.GastosNombreArchivo = "gastos.ods";
+        vm.PoaNombreArchivo = "poa.ods";
+
+        await vm.AnalizarCommand.ExecuteAsync(null);
+
+        var fila = Assert.Single(vm.FilasGasto);
+        Assert.IsType<FilaGastoEditableVm>(fila);
+        Assert.Equal("MARZO", fila.HojaOrigen);
+        Assert.True(fila.HasErrors); // Proveedor null => [Required] falla
+    }
+
+    [Fact]
+    public async Task AnalizarAsync_PopulaFilasLineaPoaAgrupadasPorHoja()
+    {
+        var (vm, service, _, _) = Crear();
+        var lineaC = new LineaPoaAnalizadaDto(
+            Hoja: "COMPOSTERAS", Ejercicio: 2026, EsNueva: true,
+            Estado: EstadoFila.Ok, Motivos: new List<MotivoEstado>(),
+            Literal: "C", FuenteDesconocida: false, Presupuesto: 100m, SaldoPlanilla: 100m,
+            Movimientos: new List<MovimientoPoaAnalizadoDto>());
+        var lineaB = lineaC with { Literal = "B", Presupuesto = 50m, SaldoPlanilla = 50m };
+        service.Setup(s => s.AnalizarAsync(
+                It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<int>()))
+            .ReturnsAsync(new ResultadoAnalisisDto(
+                new List<IngresoAnalizadoDto>(), new List<GastoAnalizadoDto>(),
+                new List<LineaPoaAnalizadaDto> { lineaC, lineaB },
+                new MaestrosNuevosDto(new List<string>(), new List<string>(), new List<CodigoRubroNuevoDto>()),
+                new ResumenAnalisisDto(0, 0, 0, 0, 0, 0, 0),
+                new SaldosTotalesPoaOds(0m, 0m)));
+        vm.GastosNombreArchivo = "gastos.ods";
+        vm.PoaNombreArchivo = "poa.ods";
+
+        await vm.AnalizarCommand.ExecuteAsync(null);
+
+        var fila = Assert.Single(vm.FilasLineaPoa);
+        Assert.Equal("COMPOSTERAS", fila.Hoja);
+        Assert.Equal(2, fila.Asignaciones.Count);
+    }
+
+    [Fact]
+    public async Task PuedeConfirmar_FilaConErrorDeValidacion_EsFalse()
+    {
+        var (vm, service, _, _) = Crear();
+        var gastoIncompleto = new GastoAnalizadoDto(
+            HojaOrigen: "MARZO", NumeroFila: 1,
+            Estado: EstadoFila.Ok, Motivos: new List<MotivoEstado>(),
+            Fecha: new DateOnly(2026, 3, 1), Monto: 1000m,
+            Proveedor: null, ProveedorNuevo: false,
+            NumeroFactura: null, NumeroOrden: null,
+            Detalle: "Compra", Destino: null,
+            Fuente: "Rentas Generales", FuenteDesconocida: false,
+            CodigoRubro: 10, Rubro: "Materiales", RubroDesconocido: false,
+            LineaPoaAsignada: null);
+        service.Setup(s => s.AnalizarAsync(
+                It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<int>()))
+            .ReturnsAsync(new ResultadoAnalisisDto(
+                new List<IngresoAnalizadoDto>(), new List<GastoAnalizadoDto> { gastoIncompleto },
+                new List<LineaPoaAnalizadaDto>(),
+                new MaestrosNuevosDto(new List<string>(), new List<string>(), new List<CodigoRubroNuevoDto>()),
+                new ResumenAnalisisDto(1, 1, 0, 0, 0, 0, 0),
+                new SaldosTotalesPoaOds(0m, 0m)));
+        vm.GastosNombreArchivo = "gastos.ods";
+        vm.PoaNombreArchivo = "poa.ods";
+
+        await vm.AnalizarCommand.ExecuteAsync(null);
+
+        Assert.False(vm.PuedeConfirmar);
+        Assert.NotNull(vm.MensajeConfirmarBloqueado);
+        Assert.Contains("1", vm.MensajeConfirmarBloqueado);
+    }
+
+    [Fact]
+    public async Task PuedeConfirmar_TodasLasFilasCompletas_EsTrue()
+    {
+        var (vm, service, _, _) = Crear();
+        var gastoCompleto = new GastoAnalizadoDto(
+            HojaOrigen: "MARZO", NumeroFila: 1,
+            Estado: EstadoFila.Ok, Motivos: new List<MotivoEstado>(),
+            Fecha: new DateOnly(2026, 3, 1), Monto: 1000m,
+            Proveedor: "ACME SA", ProveedorNuevo: false,
+            NumeroFactura: "F-1", NumeroOrden: null,
+            Detalle: "Compra", Destino: null,
+            Fuente: "Rentas Generales", FuenteDesconocida: false,
+            CodigoRubro: 10, Rubro: "Materiales", RubroDesconocido: false,
+            LineaPoaAsignada: null);
+        service.Setup(s => s.AnalizarAsync(
+                It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<int>()))
+            .ReturnsAsync(new ResultadoAnalisisDto(
+                new List<IngresoAnalizadoDto>(), new List<GastoAnalizadoDto> { gastoCompleto },
+                new List<LineaPoaAnalizadaDto>(),
+                new MaestrosNuevosDto(new List<string>(), new List<string>(), new List<CodigoRubroNuevoDto>()),
+                new ResumenAnalisisDto(1, 1, 0, 0, 0, 0, 0),
+                new SaldosTotalesPoaOds(0m, 0m)));
+        vm.GastosNombreArchivo = "gastos.ods";
+        vm.PoaNombreArchivo = "poa.ods";
+
+        await vm.AnalizarCommand.ExecuteAsync(null);
+
+        Assert.True(vm.PuedeConfirmar);
+        Assert.Null(vm.MensajeConfirmarBloqueado);
     }
 }

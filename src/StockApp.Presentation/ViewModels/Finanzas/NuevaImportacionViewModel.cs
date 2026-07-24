@@ -27,7 +27,8 @@ public sealed record ConflictoGastoFila(string Proveedor, string NumeroFactura, 
 
 /// <summary>
 /// Tab "Nueva importación" (F5d §5): wizard de 3 pasos como UNA sola VM con estado PasoActual.
-/// Paso 2 (Revisar) es SOLO LECTURA en esta entrega — Entrega 2 agrega la edición de celda.
+/// Paso 2 (Revisar) es editable desde Entrega 2: cada DTO de análisis se proyecta a una fila VM
+/// (FilaGastoEditableVm/FilaIngresoEditableVm/FilaLineaPoaEditableVm) que valida por campo.
 /// </summary>
 public partial class NuevaImportacionViewModel : ViewModelBase
 {
@@ -55,17 +56,17 @@ public partial class NuevaImportacionViewModel : ViewModelBase
     [ObservableProperty]
     private bool _forzar;
 
-    // ── Paso 2: Revisar (solo lectura, Entrega 1) ───────────────────────────
+    // ── Paso 2: Revisar (editable, Entrega 2) ───────────────────────────────
     private ResultadoAnalisisDto? _analisis;
 
-    public ObservableCollection<GastoAnalizadoDto> GastosAnalizados { get; } = new();
-    public DataGridCollectionView GastosAnalizadosView { get; }
+    public ObservableCollection<FilaGastoEditableVm> FilasGasto { get; } = new();
+    public DataGridCollectionView FilasGastoView { get; }
 
-    public ObservableCollection<IngresoAnalizadoDto> IngresosAnalizados { get; } = new();
-    public DataGridCollectionView IngresosAnalizadosView { get; }
+    public ObservableCollection<FilaIngresoEditableVm> FilasIngreso { get; } = new();
+    public DataGridCollectionView FilasIngresoView { get; }
 
-    public ObservableCollection<LineaPoaAnalizadaDto> LineasPoaAnalizadas { get; } = new();
-    public DataGridCollectionView LineasPoaAnalizadasView { get; }
+    public ObservableCollection<FilaLineaPoaEditableVm> FilasLineaPoa { get; } = new();
+    public DataGridCollectionView FilasLineaPoaView { get; }
 
     public ObservableCollection<string> ProveedoresNuevos { get; } = new();
     public ObservableCollection<string> FuentesNuevas { get; } = new();
@@ -77,36 +78,30 @@ public partial class NuevaImportacionViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(ConfirmarCommand))]
     private ResumenAnalisisDto? _resumen;
 
-    /// <summary>
-    /// Confirmar sólo puede ejecutarse si Errores == 0 Y ninguna fila a importar tiene un campo
-    /// requerido por MapearAConfirmacion en null. Errores == 0 NO alcanza: el backend clasifica una
-    /// fuente vacía (LiteralVacio) como Advertencia, y un gasto EGRESO sin CodigoRubro/Proveedor
-    /// puede quedar en Ok — ambos casos dejarían pasar un null que MapearAConfirmacion desreferencia.
-    /// </summary>
-    public bool PuedeConfirmar => Resumen is { Errores: 0 } && ContarFilasIncompletas() == 0;
+    /// <summary>Confirmar sólo puede ejecutarse si NINGUNA fila (Gasto/Ingreso/LineaPoa) tiene
+    /// errores de validación pendientes (F5d Entrega 2 §7) — reemplaza el gate de Entrega 1
+    /// (Resumen.Errores==0 && ContarFilasIncompletas()==0), ahora redundante: los campos que antes
+    /// dejaban a una fila "incompleta" o en EstadoFila.Error son exactamente los que [Required]
+    /// valida en las filas VM.</summary>
+    public bool PuedeConfirmar => !HayFilasConErrores();
 
-    /// <summary>
-    /// Explica por qué Confirmar está deshabilitado cuando la causa NO es Resumen.Errores (ese caso
-    /// ya tiene su propio feedback por color/resumen) sino campos requeridos faltantes que sólo se
-    /// resuelven editando la fila (Entrega 2). Null/vacío cuando Confirmar está habilitado o cuando
-    /// el bloqueo es por Errores.
-    /// </summary>
+    private bool HayFilasConErrores() =>
+        FilasGasto.Any(f => f.HasErrors) || FilasIngreso.Any(f => f.HasErrors) || FilasLineaPoa.Any(f => f.HasErrors);
+
+    /// <summary>Cuenta de filas con errores de validación pendientes — null/vacío si Confirmar está
+    /// habilitado.</summary>
     public string? MensajeConfirmarBloqueado
     {
         get
         {
-            if (Resumen is not { Errores: 0 }) return null;
-            var incompletas = ContarFilasIncompletas();
-            return incompletas == 0
+            var conErrores = FilasGasto.Count(f => f.HasErrors)
+                + FilasIngreso.Count(f => f.HasErrors)
+                + FilasLineaPoa.Count(f => f.HasErrors);
+            return conErrores == 0
                 ? null
-                : $"Hay {incompletas} fila(s) con datos incompletos (fuente/rubro/proveedor) " +
-                  "que se completan con la edición (Entrega 2).";
+                : $"Hay {conErrores} fila(s) con errores de validación pendientes.";
         }
     }
-
-    private int ContarFilasIncompletas() =>
-        GastosAnalizados.Count(g => g.Fuente is null || g.CodigoRubro is null || g.Proveedor is null) +
-        IngresosAnalizados.Count(i => i.Fuente is null || i.Concepto is null);
 
     // ── Paso 3: Resultado ────────────────────────────────────────────────────
     [ObservableProperty]
@@ -122,9 +117,9 @@ public partial class NuevaImportacionViewModel : ViewModelBase
         _seleccion = seleccion;
         _confirmacion = confirmacion;
 
-        GastosAnalizadosView = new DataGridCollectionView(GastosAnalizados);
-        IngresosAnalizadosView = new DataGridCollectionView(IngresosAnalizados);
-        LineasPoaAnalizadasView = new DataGridCollectionView(LineasPoaAnalizadas);
+        FilasGastoView = new DataGridCollectionView(FilasGasto);
+        FilasIngresoView = new DataGridCollectionView(FilasIngreso);
+        FilasLineaPoaView = new DataGridCollectionView(FilasLineaPoa);
     }
 
     [RelayCommand]
@@ -155,12 +150,30 @@ public partial class NuevaImportacionViewModel : ViewModelBase
             _analisis = await _service.AnalizarAsync(
                 GastosNombreArchivo!, _gastosContenido!, PoaNombreArchivo!, _poaContenido!, Ejercicio);
 
-            GastosAnalizados.Clear();
-            foreach (var g in _analisis.Gastos) GastosAnalizados.Add(g);
-            IngresosAnalizados.Clear();
-            foreach (var i in _analisis.Ingresos) IngresosAnalizados.Add(i);
-            LineasPoaAnalizadas.Clear();
-            foreach (var l in _analisis.LineasPoa) LineasPoaAnalizadas.Add(l);
+            FilasGasto.Clear();
+            foreach (var g in _analisis.Gastos)
+            {
+                var fila = FilaGastoEditableVm.Desde(g);
+                fila.ErrorsChanged += (_, _) => NotificarGatingCambio();
+                FilasGasto.Add(fila);
+            }
+
+            FilasIngreso.Clear();
+            foreach (var i in _analisis.Ingresos)
+            {
+                var fila = FilaIngresoEditableVm.Desde(i);
+                fila.ErrorsChanged += (_, _) => NotificarGatingCambio();
+                FilasIngreso.Add(fila);
+            }
+
+            FilasLineaPoa.Clear();
+            foreach (var grupo in _analisis.LineasPoa.GroupBy(l => l.Hoja))
+            {
+                var fila = FilaLineaPoaEditableVm.DesdeGrupo(grupo);
+                fila.ErrorsChanged += (_, _) => NotificarGatingCambio();
+                FilasLineaPoa.Add(fila);
+            }
+
             ProveedoresNuevos.Clear();
             foreach (var p in _analisis.MaestrosNuevos.Proveedores) ProveedoresNuevos.Add(p);
             FuentesNuevas.Clear();
@@ -175,6 +188,16 @@ public partial class NuevaImportacionViewModel : ViewModelBase
         {
             await _confirmacion.InformarAsync(ex.Message);
         }
+    }
+
+    /// <summary>Se dispara cuando cualquier fila (Gasto/Ingreso/LineaPoa) cambia su estado de
+    /// validación — el gating de Confirmar depende de HasErrors de TODAS las filas, no sólo de la
+    /// que cambió, así que se recalculan las dos propiedades computadas completas.</summary>
+    private void NotificarGatingCambio()
+    {
+        OnPropertyChanged(nameof(PuedeConfirmar));
+        OnPropertyChanged(nameof(MensajeConfirmarBloqueado));
+        ConfirmarCommand.NotifyCanExecuteChanged();
     }
 
     [RelayCommand(CanExecute = nameof(PuedeConfirmar))]
@@ -327,9 +350,9 @@ public partial class NuevaImportacionViewModel : ViewModelBase
         PoaNombreArchivo = null;
         _poaContenido = null;
         Forzar = false;
-        GastosAnalizados.Clear();
-        IngresosAnalizados.Clear();
-        LineasPoaAnalizadas.Clear();
+        FilasGasto.Clear();
+        FilasIngreso.Clear();
+        FilasLineaPoa.Clear();
         ProveedoresNuevos.Clear();
         FuentesNuevas.Clear();
         RubrosNuevos.Clear();
