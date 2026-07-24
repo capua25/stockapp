@@ -368,4 +368,26 @@ public class ShellMainViewModelTests
 
         Assert.Null(ex);
     }
+
+    // ── F5d Task 10 — Navegación a Importar planillas ────────────────────────
+
+    [Fact]
+    public void NavImportacion_LlamaNavegar_AImportacionViewModel()
+    {
+        var (vm, _, navMock, _) = Crear(RolUsuario.Admin);
+
+        vm.NavImportacionCommand.Execute(null);
+
+        navMock.Verify(n => n.Navegar<StockApp.Presentation.ViewModels.Finanzas.ImportacionViewModel>(), Times.Once);
+    }
+
+    [Fact]
+    public void NavImportacion_EstableceSeccionActiva_Importacion()
+    {
+        var (vm, _, _, _) = Crear(RolUsuario.Admin);
+
+        vm.NavImportacionCommand.Execute(null);
+
+        Assert.Equal("Importacion", vm.SeccionActiva);
+    }
 }

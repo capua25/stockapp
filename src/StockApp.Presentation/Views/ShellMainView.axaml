@@ -178,6 +178,27 @@
                     </Grid>
                 </Button>
 
+                <!-- Importación: solo Admin -->
+                <TextBlock Text="Importación"
+                           Classes="caption"
+                           Foreground="{DynamicResource SidebarTextoBrush}"
+                           FontWeight="SemiBold"
+                           Margin="8,8,0,4"
+                           IsVisible="{Binding EsAdmin}"
+                           Opacity="0.6" />
+
+                <Button Command="{Binding NavImportacionCommand}"
+                        Classes="ghost"
+                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Importacion}"
+                        HorizontalAlignment="Stretch"
+                        IsVisible="{Binding EsAdmin}">
+                    <Grid ColumnDefinitions="Auto,*">
+                        <i:Icon Grid.Column="0" Value="mdi-file-upload" Foreground="{DynamicResource SidebarTextoBrush}" />
+                        <TextBlock Grid.Column="1" Text="Importar planillas" VerticalAlignment="Center"
+                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                </Button>
+
                 <!-- Tablas maestras: solo Admin -->
                 <TextBlock Text="Tablas maestras"
                            Classes="caption"

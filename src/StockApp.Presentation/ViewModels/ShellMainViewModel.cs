@@ -244,6 +244,13 @@ public partial class ShellMainViewModel : ViewModelBase
         _navigation.Navegar<CalendarioPagosViewModel>();
     }
 
+    [RelayCommand]
+    private void NavImportacion()
+    {
+        SeccionActiva = "Importacion";
+        _navigation.Navegar<StockApp.Presentation.ViewModels.Finanzas.ImportacionViewModel>();
+    }
+
     // ── Cerrar sesión ──────────────────────────────────────────────────────────
 
     /// <summary>
