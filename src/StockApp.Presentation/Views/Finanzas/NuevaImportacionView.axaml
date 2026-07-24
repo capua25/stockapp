@@ -50,11 +50,16 @@
             <TextBlock DockPanel.Dock="Top" Text="Paso 2 · Revisar" Classes="titulo-vista" Margin="0,0,0,8" />
 
             <Border DockPanel.Dock="Top" Classes="card" Margin="0,0,0,12">
-                <StackPanel Orientation="Horizontal" Spacing="16">
-                    <TextBlock Text="{Binding Resumen.Ok, StringFormat='Ok: {0}'}" />
-                    <TextBlock Text="{Binding Resumen.Advertencias, StringFormat='Advertencias: {0}'}" />
-                    <TextBlock Text="{Binding Resumen.Errores, StringFormat='Errores: {0}'}" />
-                    <Button Classes="primary" Content="Confirmar" Command="{Binding ConfirmarCommand}" />
+                <StackPanel Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="16">
+                        <TextBlock Text="{Binding Resumen.Ok, StringFormat='Ok: {0}'}" />
+                        <TextBlock Text="{Binding Resumen.Advertencias, StringFormat='Advertencias: {0}'}" />
+                        <TextBlock Text="{Binding Resumen.Errores, StringFormat='Errores: {0}'}" />
+                        <Button Classes="primary" Content="Confirmar" Command="{Binding ConfirmarCommand}" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding MensajeConfirmarBloqueado}"
+                               Foreground="{DynamicResource WarningBrush}" TextWrapping="Wrap"
+                               IsVisible="{Binding MensajeConfirmarBloqueado, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                 </StackPanel>
             </Border>
 
@@ -133,7 +138,10 @@
                     <TextBlock Text="{Binding ResultadoConfirmacion.ProveedoresCreados, StringFormat='Proveedores creados: {0}'}" />
                     <TextBlock Text="{Binding ResultadoConfirmacion.FuentesCreadas, StringFormat='Fuentes creadas: {0}'}" />
                     <TextBlock Text="{Binding ResultadoConfirmacion.RubrosCreados, StringFormat='Rubros creados: {0}'}" />
-                    <Button Classes="secondary" Content="Revertir esta importación" Command="{Binding RevertirCommand}" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Classes="secondary" Content="Revertir esta importación" Command="{Binding RevertirCommand}" />
+                        <Button Classes="primary" Content="Nueva importación" Command="{Binding NuevaImportacionCommand}" />
+                    </StackPanel>
                 </StackPanel>
             </Border>
 

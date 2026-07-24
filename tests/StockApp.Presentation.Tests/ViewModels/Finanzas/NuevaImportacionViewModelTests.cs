@@ -177,6 +177,58 @@ public class NuevaImportacionViewModelTests
     }
 
     [Fact]
+    public async Task Resumen_SinErroresPeroGastoSinFuente_ConfirmarQuedaDeshabilitadoYExplicaPorQue()
+    {
+        // Caso real (backend): una fuente vacía (LiteralVacio) es Advertencia, no Error — el gasto
+        // puede quedar con Errores == 0 pero Fuente == null. MapearAConfirmacion usa g.Fuente! y
+        // eso hoy produce NRE al confirmar. El gating debe bloquear esto ANTES de llegar al mapeo.
+        var svc = new Mock<IImportacionService>();
+        var seleccion = new Mock<IServicioSeleccionArchivo>();
+        var confirm = new Mock<IConfirmacionService>();
+        var analisis = ResultadoAnalisisVacio() with
+        {
+            Gastos = new List<GastoAnalizadoDto>
+            {
+                new("ENERO", 3, EstadoFila.Advertencia,
+                    new List<MotivoEstado> { new(TipoMotivo.LiteralVacio, "Fuente sin identificar") },
+                    new DateOnly(2026, 1, 15), 500m, "ACME SA", false, "F-1", "O-1",
+                    "Compra de insumos", null, null, true, 1, "Materiales", false, null),
+            },
+            Resumen = new ResumenAnalisisDto(1, 0, 1, 0, 0, 0, 0),
+        };
+
+        var vm = await CrearEnPasoRevisarAsync(svc, seleccion, confirm, analisis);
+
+        Assert.False(vm.PuedeConfirmar);
+        Assert.False(vm.ConfirmarCommand.CanExecute(null));
+        Assert.False(string.IsNullOrWhiteSpace(vm.MensajeConfirmarBloqueado));
+    }
+
+    [Fact]
+    public async Task Resumen_SinErroresYSinCamposFaltantes_ConfirmarQuedaHabilitadoYSinMensaje()
+    {
+        var svc = new Mock<IImportacionService>();
+        var seleccion = new Mock<IServicioSeleccionArchivo>();
+        var confirm = new Mock<IConfirmacionService>();
+        var analisis = ResultadoAnalisisVacio() with
+        {
+            Gastos = new List<GastoAnalizadoDto>
+            {
+                new("ENERO", 3, EstadoFila.Ok, new List<MotivoEstado>(),
+                    new DateOnly(2026, 1, 15), 500m, "ACME SA", false, "F-1", "O-1",
+                    "Compra de insumos", null, "Literal A", false, 1, "Materiales", false, null),
+            },
+            Resumen = new ResumenAnalisisDto(1, 1, 0, 0, 0, 0, 0),
+        };
+
+        var vm = await CrearEnPasoRevisarAsync(svc, seleccion, confirm, analisis);
+
+        Assert.True(vm.PuedeConfirmar);
+        Assert.True(vm.ConfirmarCommand.CanExecute(null));
+        Assert.True(string.IsNullOrEmpty(vm.MensajeConfirmarBloqueado));
+    }
+
+    [Fact]
     public async Task ConfirmarAsync_AnalisisLimpio_MapeaGastoContadoYAvanzaAResultado()
     {
         var svc = new Mock<IImportacionService>();
@@ -363,5 +415,31 @@ public class NuevaImportacionViewModelTests
 
         svc.Verify(s => s.RevertirAsync(It.IsAny<Guid>()), Times.Never);
         Assert.Equal(PasoWizardImportacion.Resultado, vm.PasoActual);
+    }
+
+    [Fact]
+    public async Task NuevaImportacionCommand_DesdePasoResultado_ReiniciaElWizardSinRevertir()
+    {
+        var svc = new Mock<IImportacionService>();
+        var seleccion = new Mock<IServicioSeleccionArchivo>();
+        var confirm = new Mock<IConfirmacionService>();
+        var resultado = new ResultadoConfirmacionDto(
+            Guid.NewGuid(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            new List<ConflictoGastoDto>
+            {
+                new("ACME SA", "F-1",
+                    new List<CampoDivergenteDto> { new("MontoTotal", "500", "550") }, 0),
+            });
+        var (vm, _) = await CrearEnPasoResultadoAsync(svc, seleccion, confirm, resultado);
+        Assert.Equal(PasoWizardImportacion.Resultado, vm.PasoActual); // precondición del test
+
+        vm.NuevaImportacionCommand.Execute(null);
+
+        Assert.Equal(PasoWizardImportacion.Cargar, vm.PasoActual);
+        Assert.Null(vm.ResultadoConfirmacion);
+        Assert.Empty(vm.Conflictos);
+        Assert.Empty(vm.GastosAnalizados);
+        svc.Verify(s => s.RevertirAsync(It.IsAny<Guid>()), Times.Never);
+        confirm.Verify(c => c.PreguntarAsync(It.IsAny<string>()), Times.Never);
     }
 }

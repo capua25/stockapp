@@ -73,10 +73,40 @@ public partial class NuevaImportacionViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PuedeConfirmar))]
+    [NotifyPropertyChangedFor(nameof(MensajeConfirmarBloqueado))]
     [NotifyCanExecuteChangedFor(nameof(ConfirmarCommand))]
     private ResumenAnalisisDto? _resumen;
 
-    public bool PuedeConfirmar => Resumen is { Errores: 0 };
+    /// <summary>
+    /// Confirmar sólo puede ejecutarse si Errores == 0 Y ninguna fila a importar tiene un campo
+    /// requerido por MapearAConfirmacion en null. Errores == 0 NO alcanza: el backend clasifica una
+    /// fuente vacía (LiteralVacio) como Advertencia, y un gasto EGRESO sin CodigoRubro/Proveedor
+    /// puede quedar en Ok — ambos casos dejarían pasar un null que MapearAConfirmacion desreferencia.
+    /// </summary>
+    public bool PuedeConfirmar => Resumen is { Errores: 0 } && ContarFilasIncompletas() == 0;
+
+    /// <summary>
+    /// Explica por qué Confirmar está deshabilitado cuando la causa NO es Resumen.Errores (ese caso
+    /// ya tiene su propio feedback por color/resumen) sino campos requeridos faltantes que sólo se
+    /// resuelven editando la fila (Entrega 2). Null/vacío cuando Confirmar está habilitado o cuando
+    /// el bloqueo es por Errores.
+    /// </summary>
+    public string? MensajeConfirmarBloqueado
+    {
+        get
+        {
+            if (Resumen is not { Errores: 0 }) return null;
+            var incompletas = ContarFilasIncompletas();
+            return incompletas == 0
+                ? null
+                : $"Hay {incompletas} fila(s) con datos incompletos (fuente/rubro/proveedor) " +
+                  "que se completan con la edición (Entrega 2).";
+        }
+    }
+
+    private int ContarFilasIncompletas() =>
+        GastosAnalizados.Count(g => g.Fuente is null || g.CodigoRubro is null || g.Proveedor is null) +
+        IngresosAnalizados.Count(i => i.Fuente is null || i.Concepto is null);
 
     // ── Paso 3: Resultado ────────────────────────────────────────────────────
     [ObservableProperty]
@@ -183,9 +213,13 @@ public partial class NuevaImportacionViewModel : ViewModelBase
             vex.Errores.Select(par => $"{par.Key}: {string.Join("; ", par.Value)}"));
 
     /// <summary>
-    /// Mapeo directo (sin edición) análisis→confirmación, válido SOLO cuando Resumen.Errores == 0
-    /// (único caso en que ConfirmarCommand se puede ejecutar) — todo campo requerido de las filas
-    /// mapeadas ya viene no-nulo del análisis en ese caso.
+    /// Mapeo directo (sin edición) análisis→confirmación. Precondición real (garantizada por
+    /// PuedeConfirmar, no por Resumen.Errores == 0 solo): ninguna fila a importar tiene Fuente,
+    /// CodigoRubro, Proveedor (Gastos) ni Fuente, Concepto (Ingresos) en null — PuedeConfirmar
+    /// verifica esto explícitamente porque Errores == 0 NO lo garantiza (una fuente vacía es
+    /// Advertencia, no Error). RequeridoNoNulo debajo es un segundo cinturón de seguridad: si esta
+    /// precondición se violara igual (p.ej. un futuro cambio que llame a este método sin pasar por
+    /// el gating), falla con un mensaje explícito en vez de una NullReferenceException muda.
     ///
     /// Gap documentado (Entrega 1, contradice el diseño F5d §8 en la letra chica): GastoConfirmarDto
     /// exige CondicionPago no-nullable, pero GastoAnalizadoDto NO expone ese campo — el análisis
@@ -208,25 +242,30 @@ public partial class NuevaImportacionViewModel : ViewModelBase
         ResultadoAnalisisDto analisis, int ejercicio, bool forzar)
     {
         var ingresos = analisis.Ingresos
-            .Select(i => new IngresoConfirmarDto(i.Fecha!.Value, i.Concepto ?? string.Empty, i.Monto!.Value, i.Fuente!))
+            .Select(i => new IngresoConfirmarDto(
+                RequeridoNoNulo(i.Fecha, "Ingreso.Fecha"),
+                i.Concepto ?? string.Empty,
+                RequeridoNoNulo(i.Monto, "Ingreso.Monto"),
+                RequeridoNoNulo(i.Fuente, "Ingreso.Fuente")))
             .ToList();
 
         var gastos = analisis.Gastos.Select(g =>
         {
             var esCompromisoPoa = g.LineaPoaAsignada is not null;
+            var fecha = RequeridoNoNulo(g.Fecha, "Gasto.Fecha");
             return new GastoConfirmarDto(
-                Proveedor: g.Proveedor!,
+                Proveedor: RequeridoNoNulo(g.Proveedor, "Gasto.Proveedor"),
                 NumeroFactura: g.NumeroFactura,
                 NumeroOrden: g.NumeroOrden,
                 Detalle: g.Detalle ?? string.Empty,
                 Destino: g.Destino,
-                Fecha: g.Fecha!.Value,
-                MontoTotal: g.Monto!.Value,
-                Fuente: g.Fuente!,
-                CodigoRubro: g.CodigoRubro!.Value,
+                Fecha: fecha,
+                MontoTotal: RequeridoNoNulo(g.Monto, "Gasto.MontoTotal"),
+                Fuente: RequeridoNoNulo(g.Fuente, "Gasto.Fuente"),
+                CodigoRubro: RequeridoNoNulo(g.CodigoRubro, "Gasto.CodigoRubro"),
                 LineaPoa: g.LineaPoaAsignada,
                 Condicion: esCompromisoPoa ? CondicionPago.Credito : CondicionPago.Contado,
-                FechaVencimiento: esCompromisoPoa ? g.Fecha!.Value : null);
+                FechaVencimiento: esCompromisoPoa ? fecha : null);
         }).ToList();
 
         var maestrosNuevos = new MaestrosNuevosConfirmarDto(
@@ -239,6 +278,16 @@ public partial class NuevaImportacionViewModel : ViewModelBase
         return new ConfirmarImportacionDto(
             ejercicio, forzar, maestrosNuevos, ingresos, gastos, new List<LineaPoaConfirmarDto>());
     }
+
+    /// <summary>Cinturón de seguridad de MapearAConfirmacion: falla con mensaje explícito (en vez de
+    /// NRE muda) si la precondición garantizada por PuedeConfirmar se violara igual.</summary>
+    private static T RequeridoNoNulo<T>(T? valor, string campo) where T : struct
+        => valor ?? throw new InvalidOperationException(
+            $"{campo} nulo al mapear a confirmación — violación de la precondición de PuedeConfirmar.");
+
+    private static string RequeridoNoNulo(string? valor, string campo)
+        => valor ?? throw new InvalidOperationException(
+            $"{campo} nulo al mapear a confirmación — violación de la precondición de PuedeConfirmar.");
 
     private bool PuedeRevertir() => ResultadoConfirmacion is not null;
 
@@ -263,6 +312,12 @@ public partial class NuevaImportacionViewModel : ViewModelBase
             await _confirmacion.InformarAsync(ex.Message);
         }
     }
+
+    /// <summary>Salida limpia del Paso 3 (F5d, hallazgo de review Entrega 1): reinicia el wizard al
+    /// Paso 1 SIN revertir la importación — a diferencia de RevertirCommand, no pregunta confirmación
+    /// ni llama al servicio.</summary>
+    [RelayCommand]
+    private void NuevaImportacion() => ReiniciarWizard();
 
     private void ReiniciarWizard()
     {
