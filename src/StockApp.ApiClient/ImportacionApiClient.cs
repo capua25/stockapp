@@ -24,8 +24,15 @@ public sealed class ImportacionApiClient : IImportacionService
     public Task<ResultadoConfirmacionDto> ConfirmarAsync(ConfirmarImportacionDto dto)
         => throw new NotImplementedException();
 
-    public Task<ResultadoReversionDto> RevertirAsync(Guid idImportacion)
-        => throw new NotImplementedException();
+    public async Task<ResultadoReversionDto> RevertirAsync(Guid idImportacion)
+    {
+        var response = await ApiErrores.EnviarAsync(() =>
+            _http.PostAsync($"finanzas/importar/revertir/{idImportacion}", null));
+        await ApiErrores.AsegurarExitoAsync(response);
+
+        return await response.Content.ReadFromJsonAsync<ResultadoReversionDto>()
+            ?? throw new InvalidOperationException("Respuesta vacía del servidor al revertir la importación.");
+    }
 
     public async Task<IReadOnlyList<ImportacionHistorialDto>> ListarHistorialAsync()
     {

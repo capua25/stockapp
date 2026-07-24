@@ -29,4 +29,22 @@ public class ImportacionApiClientTests
         Assert.Single(resultado);
         Assert.Equal("admin", resultado[0].Usuario);
     }
+
+    [Fact]
+    public async Task RevertirAsync_POSTConIdEnLaRuta_ParseaResultado()
+    {
+        var id = Guid.NewGuid();
+        var dto = new ResultadoReversionDto(id, 2, 1, 1, 0, 0);
+        var fake = new FakeHttpHandler(request =>
+        {
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Equal($"finanzas/importar/revertir/{id}", request.RequestUri!.PathAndQuery.TrimStart('/'));
+            return TestHttp.Json(dto);
+        });
+        var client = new ImportacionApiClient(TestHttp.CrearCliente(fake));
+
+        var resultado = await client.RevertirAsync(id);
+
+        Assert.Equal(2, resultado.GastosRevertidos);
+    }
 }
