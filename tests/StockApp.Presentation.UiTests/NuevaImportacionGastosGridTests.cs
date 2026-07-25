@@ -73,7 +73,7 @@ public class NuevaImportacionGastosGridTests
         CodigoRubro: 10, Rubro: "Materiales", RubroDesconocido: false,
         LineaPoaAsignada: null);
 
-    [Fact(Skip = "Headless Avalonia cuelga con ComboBox editable en celda de DataGrid — verificación manual, ver deuda")]
+    [AvaloniaFact]
     public async Task CeldaProveedorConValorCargado_QuedaBloqueada_CeldaFuenteFaltante_EsEditable()
     {
         var gasto = GastoBase(proveedor: "ACME SA", numeroFactura: "F-1", fuente: null);
@@ -100,7 +100,7 @@ public class NuevaImportacionGastosGridTests
         Dispatcher.UIThread.RunJobs();
     }
 
-    [Fact(Skip = "Headless Avalonia cuelga con ComboBox editable en celda de DataGrid — verificación manual, ver deuda")]
+    [AvaloniaFact]
     public async Task ComboBoxDeFuente_EsEditable_AceptaTextoLibre()
     {
         var gasto = GastoBase(proveedor: "ACME SA", numeroFactura: "F-1", fuente: null);
