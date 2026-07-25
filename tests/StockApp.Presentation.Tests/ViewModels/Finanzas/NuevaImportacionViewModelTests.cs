@@ -1028,4 +1028,45 @@ public class NuevaImportacionViewModelTests
         Assert.True(vm.FilasLineaPoa[0].TieneErrorServidor);
         Assert.Equal(0, vm.PestanaSeleccionada); // Gastos (orden fijo), NO LineasPoa (que apareció primero en el diccionario)
     }
+
+    /// <summary>
+    /// Review Task 11 (Minor): el cálculo de PestanaSeleccionada debe aplicar el MISMO bounds-check
+    /// (indice &lt; FilasX.Count) que ya aplica el marcado de filas — si no, un desync cliente/servidor
+    /// (clave con índice fuera de rango) puede saltar a una pestaña donde NINGUNA fila quedó marcada,
+    /// aunque otra pestaña sí tenga una fila real marcada.
+    /// </summary>
+    [Fact]
+    public async Task ConfirmarAsync_Error400ConIndiceFueraDeRango_IgnoraEsaClaveYSaltaALaPestanaConFilaRealmenteMarcada()
+    {
+        var (vm, service, _, _, _, _, _) = Crear();
+        var linea = new LineaPoaAnalizadaDto(
+            Hoja: "COMPOSTERAS", Ejercicio: 2026, EsNueva: true,
+            Estado: EstadoFila.Ok, Motivos: new List<MotivoEstado>(),
+            Literal: "C", FuenteDesconocida: false, Presupuesto: 1000m, SaldoPlanilla: 1000m,
+            Movimientos: new List<MovimientoPoaAnalizadoDto>());
+        service.Setup(s => s.AnalizarAsync(
+                It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<int>()))
+            .ReturnsAsync(new ResultadoAnalisisDto(
+                new List<IngresoAnalizadoDto>(), new List<GastoAnalizadoDto>(),
+                new List<LineaPoaAnalizadaDto> { linea },
+                new MaestrosNuevosDto(new List<string>(), new List<string>(), new List<CodigoRubroNuevoDto>()),
+                new ResumenAnalisisDto(0, 0, 0, 0, 0, 0, 0),
+                new SaldosTotalesPoaOds(0m, 0m)));
+        service.Setup(s => s.ConfirmarAsync(It.IsAny<ConfirmarImportacionDto>()))
+            .ThrowsAsync(new ValidacionImportacionException(new Dictionary<string, string[]>
+            {
+                // FilasGasto está vacía: índice 99 queda fuera de rango, no marca ninguna fila.
+                ["Gastos[99].Fuente"] = new[] { "La fuente no existe en el catálogo." },
+                ["LineasPoa[0].Programa"] = new[] { "El programa es obligatorio." },
+            }));
+        vm.GastosNombreArchivo = "gastos.ods";
+        vm.PoaNombreArchivo = "poa.ods";
+        await vm.AnalizarCommand.ExecuteAsync(null);
+        vm.FilasLineaPoa[0].Programa = "Obras"; // pasa la validación cliente
+
+        await vm.ConfirmarCommand.ExecuteAsync(null);
+
+        Assert.True(vm.FilasLineaPoa[0].TieneErrorServidor);
+        Assert.Equal(2, vm.PestanaSeleccionada); // LineasPoa, la única pestaña con una fila realmente marcada
+    }
 }

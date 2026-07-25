@@ -343,7 +343,7 @@ public partial class NuevaImportacionViewModel : ViewModelBase
 
         var claveMenor = vex.Errores.Keys
             .Select(clave => PatronErrorCampo.Match(clave))
-            .Where(match => match.Success && OrdenPestana.ContainsKey(match.Groups[1].Value))
+            .Where(match => match.Success && OrdenPestana.ContainsKey(match.Groups[1].Value) && IndiceEnRango(match))
             .OrderBy(match => OrdenPestana[match.Groups[1].Value])
             .ThenBy(match => int.Parse(match.Groups[2].Value))
             .FirstOrDefault();
@@ -352,6 +352,22 @@ public partial class NuevaImportacionViewModel : ViewModelBase
         {
             PestanaSeleccionada = OrdenPestana[claveMenor.Groups[1].Value];
         }
+    }
+
+    /// <summary>Mismo bounds-check que el marcado de filas (switch de arriba): una clave con índice
+    /// fuera de rango (desync cliente/servidor) no marcó ninguna fila, así que tampoco debe poder
+    /// ganar el salto de pestaña — si no, el salto podría apuntar a una pestaña sin ninguna fila
+    /// resaltada mientras otra pestaña sí tiene una fila real marcada (review Task 11, Minor).</summary>
+    private bool IndiceEnRango(Match match)
+    {
+        var indice = int.Parse(match.Groups[2].Value);
+        return match.Groups[1].Value switch
+        {
+            "Gastos" => indice < FilasGasto.Count,
+            "Ingresos" => indice < FilasIngreso.Count,
+            "LineasPoa" => indice < FilasLineaPoa.Count,
+            _ => false,
+        };
     }
 
     private void LimpiarErroresServidor()
