@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -44,6 +45,8 @@ public partial class NuevaImportacionViewModel : ViewModelBase
 
     [ObservableProperty]
     private PasoWizardImportacion _pasoActual = PasoWizardImportacion.Cargar;
+
+    [ObservableProperty] private int _pestanaSeleccionada;
 
     // ── Paso 1: Cargar ───────────────────────────────────────────────────────
     [ObservableProperty]
@@ -274,6 +277,7 @@ public partial class NuevaImportacionViewModel : ViewModelBase
     {
         if (_analisis is null) return;
 
+        LimpiarErroresServidor();
         var dto = MapearAConfirmacion(FilasGasto, FilasIngreso, FilasLineaPoa, ProveedoresNuevos, FuentesNuevas, RubrosNuevos, Ejercicio, Forzar);
 
         try
@@ -286,7 +290,8 @@ public partial class NuevaImportacionViewModel : ViewModelBase
         }
         catch (ValidacionImportacionException vex)
         {
-            await _confirmacion.InformarAsync(FormatearErroresValidacion(vex));
+            DecomponerErroresServidor(vex);
+            await _confirmacion.InformarAsync("El servidor encontró errores de validación — revisá las celdas resaltadas.");
         }
         catch (Exception ex)
         {
@@ -294,15 +299,67 @@ public partial class NuevaImportacionViewModel : ViewModelBase
         }
     }
 
-    /// <summary>
-    /// Formatea ValidacionImportacionException.Errores (F5c/F5d Task 4: diccionario "Tipo[i].Campo"
-    /// → mensajes, reconstruido por el ApiClient desde el 400 estructurado) como texto legible —
-    /// una línea por campo. Entrega 1 es SOLO texto: resaltar la celda/pestaña exacta es Entrega 2.
-    /// </summary>
-    private static string FormatearErroresValidacion(ValidacionImportacionException vex)
-        => string.Join(
-            Environment.NewLine,
-            vex.Errores.Select(par => $"{par.Key}: {string.Join("; ", par.Value)}"));
+    private static readonly Regex PatronErrorCampo = new(@"^(Gastos|Ingresos|LineasPoa)\[(\d+)\]\.(.+)$");
+
+    // Orden fijo de pestañas — usado para decidir determinísticamente a cuál saltar cuando el 400
+    // trae errores de varios tipos a la vez (ver nota abajo, IReadOnlyDictionary no garantiza orden).
+    private static readonly Dictionary<string, int> OrdenPestana = new()
+    {
+        ["Gastos"] = 0,
+        ["Ingresos"] = 1,
+        ["LineasPoa"] = 2,
+    };
+
+    /// <summary>Descompone ValidacionImportacionException.Errores ("Tipo[i].Campo" -> mensajes) en
+    /// errores por fila (F5d Entrega 2 Task 11) y salta a la pestaña de la clave "menor". IMPORTANTE:
+    /// IReadOnlyDictionary (Dictionary por debajo) NO garantiza orden de enumeración en .NET — "la
+    /// primera clave del diccionario" NO es determinístico, así que en vez de usar el orden de
+    /// enumeración se ordenan las claves válidas por tipo (Gastos→Ingresos→LineasPoa, vía
+    /// OrdenPestana) y, dentro del mismo tipo, por índice ascendente; se salta a la pestaña de la
+    /// clave resultante más chica.</summary>
+    private void DecomponerErroresServidor(ValidacionImportacionException vex)
+    {
+        foreach (var (clave, mensajes) in vex.Errores)
+        {
+            var match = PatronErrorCampo.Match(clave);
+            if (!match.Success) continue;
+
+            var indice = int.Parse(match.Groups[2].Value);
+            var mensaje = $"{match.Groups[3].Value}: {string.Join("; ", mensajes)}";
+
+            switch (match.Groups[1].Value)
+            {
+                case "Gastos" when indice < FilasGasto.Count:
+                    FilasGasto[indice].AgregarErrorServidor(mensaje);
+                    break;
+                case "Ingresos" when indice < FilasIngreso.Count:
+                    FilasIngreso[indice].AgregarErrorServidor(mensaje);
+                    break;
+                case "LineasPoa" when indice < FilasLineaPoa.Count:
+                    FilasLineaPoa[indice].AgregarErrorServidor(mensaje);
+                    break;
+            }
+        }
+
+        var claveMenor = vex.Errores.Keys
+            .Select(clave => PatronErrorCampo.Match(clave))
+            .Where(match => match.Success && OrdenPestana.ContainsKey(match.Groups[1].Value))
+            .OrderBy(match => OrdenPestana[match.Groups[1].Value])
+            .ThenBy(match => int.Parse(match.Groups[2].Value))
+            .FirstOrDefault();
+
+        if (claveMenor is not null)
+        {
+            PestanaSeleccionada = OrdenPestana[claveMenor.Groups[1].Value];
+        }
+    }
+
+    private void LimpiarErroresServidor()
+    {
+        foreach (var f in FilasGasto) f.LimpiarErrorServidor();
+        foreach (var f in FilasIngreso) f.LimpiarErrorServidor();
+        foreach (var f in FilasLineaPoa) f.LimpiarErrorServidor();
+    }
 
     /// <summary>
     /// Mapeo filas VM editables → confirmación (F5d Entrega 2, reemplaza el mapeo directo

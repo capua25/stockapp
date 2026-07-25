@@ -391,8 +391,12 @@ public class NuevaImportacionViewModelTests
     }
 
     [Fact]
-    public async Task ConfirmarAsync_ElServidorRechazaValidacionEstructurada_InformaElDetallePorCampo()
+    public async Task ConfirmarAsync_ElServidorRechazaValidacionEstructurada_InformaMensajeGenericoYNoAvanzaDePaso()
     {
+        // F5d Entrega 2 Task 11: el detalle por campo ya NO se informa como texto plano en el
+        // diálogo — se descompone visualmente por fila (TieneErrorServidor/MensajeErrorServidor,
+        // ver ConfirmarAsync_Error400EnGastos_MarcaLaFilaYSaltaALaPestanaDeGastos). El diálogo ahora
+        // muestra un mensaje genérico fijo.
         var svc = new Mock<IImportacionService>();
         var seleccion = new Mock<IServicioSeleccionArchivo>();
         var confirm = new Mock<IConfirmacionService>();
@@ -422,11 +426,7 @@ public class NuevaImportacionViewModelTests
         await vm.ConfirmarCommand.ExecuteAsync(null);
 
         Assert.Equal(PasoWizardImportacion.Revisar, vm.PasoActual);
-        Assert.NotNull(mensajeInformado);
-        Assert.Contains("Gastos[3].Fuente", mensajeInformado);
-        Assert.Contains("La fuente 'X' no existe ni fue declarada nueva", mensajeInformado);
-        Assert.Contains("Gastos[3].FechaVencimiento", mensajeInformado);
-        Assert.Contains("Requerido", mensajeInformado);
+        Assert.Equal("El servidor encontró errores de validación — revisá las celdas resaltadas.", mensajeInformado);
     }
 
     private static async Task<(NuevaImportacionViewModel vm, ResultadoConfirmacionDto resultado)>
@@ -862,5 +862,170 @@ public class NuevaImportacionViewModelTests
             dto.MaestrosNuevos.Rubros.Count == 1
             && dto.MaestrosNuevos.Rubros[0].Codigo == 42
             && dto.MaestrosNuevos.Rubros[0].Nombre == "Materiales de obra")));
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_Error400EnGastos_MarcaLaFilaYSaltaALaPestanaDeGastos()
+    {
+        var (vm, service, _, _, _, _, _) = Crear();
+        var gasto = new GastoAnalizadoDto(
+            HojaOrigen: "MARZO", NumeroFila: 1,
+            Estado: EstadoFila.Ok, Motivos: new List<MotivoEstado>(),
+            Fecha: new DateOnly(2026, 3, 1), Monto: 1000m,
+            Proveedor: "ACME SA", ProveedorNuevo: false,
+            NumeroFactura: "F-1", NumeroOrden: null,
+            Detalle: "Compra", Destino: null,
+            Fuente: "Rentas Generales", FuenteDesconocida: false,
+            CodigoRubro: 10, Rubro: "Materiales", RubroDesconocido: false,
+            LineaPoaAsignada: null);
+        service.Setup(s => s.AnalizarAsync(
+                It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<int>()))
+            .ReturnsAsync(new ResultadoAnalisisDto(
+                new List<IngresoAnalizadoDto>(), new List<GastoAnalizadoDto> { gasto },
+                new List<LineaPoaAnalizadaDto>(),
+                new MaestrosNuevosDto(new List<string>(), new List<string>(), new List<CodigoRubroNuevoDto>()),
+                new ResumenAnalisisDto(1, 1, 0, 0, 0, 0, 0),
+                new SaldosTotalesPoaOds(0m, 0m)));
+        service.Setup(s => s.ConfirmarAsync(It.IsAny<ConfirmarImportacionDto>()))
+            .ThrowsAsync(new ValidacionImportacionException(new Dictionary<string, string[]>
+            {
+                ["Gastos[0].Fuente"] = new[] { "La fuente no existe en el catálogo." },
+            }));
+        vm.GastosNombreArchivo = "gastos.ods";
+        vm.PoaNombreArchivo = "poa.ods";
+        await vm.AnalizarCommand.ExecuteAsync(null);
+
+        await vm.ConfirmarCommand.ExecuteAsync(null);
+
+        Assert.True(vm.FilasGasto[0].TieneErrorServidor);
+        Assert.Contains("Fuente", vm.FilasGasto[0].MensajeErrorServidor);
+        Assert.Equal(0, vm.PestanaSeleccionada);
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_Error400EnLineasPoa_SaltaALaPestanaDeLineasPoa()
+    {
+        var (vm, service, _, _, _, _, _) = Crear();
+        var linea = new LineaPoaAnalizadaDto(
+            Hoja: "COMPOSTERAS", Ejercicio: 2026, EsNueva: true,
+            Estado: EstadoFila.Ok, Motivos: new List<MotivoEstado>(),
+            Literal: "C", FuenteDesconocida: false, Presupuesto: 1000m, SaldoPlanilla: 1000m,
+            Movimientos: new List<MovimientoPoaAnalizadoDto>());
+        service.Setup(s => s.AnalizarAsync(
+                It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<int>()))
+            .ReturnsAsync(new ResultadoAnalisisDto(
+                new List<IngresoAnalizadoDto>(), new List<GastoAnalizadoDto>(),
+                new List<LineaPoaAnalizadaDto> { linea },
+                new MaestrosNuevosDto(new List<string>(), new List<string>(), new List<CodigoRubroNuevoDto>()),
+                new ResumenAnalisisDto(0, 0, 0, 0, 0, 0, 0),
+                new SaldosTotalesPoaOds(0m, 0m)));
+        service.Setup(s => s.ConfirmarAsync(It.IsAny<ConfirmarImportacionDto>()))
+            .ThrowsAsync(new ValidacionImportacionException(new Dictionary<string, string[]>
+            {
+                ["LineasPoa[0].Programa"] = new[] { "El programa es obligatorio." },
+            }));
+        vm.GastosNombreArchivo = "gastos.ods";
+        vm.PoaNombreArchivo = "poa.ods";
+        await vm.AnalizarCommand.ExecuteAsync(null);
+        vm.FilasLineaPoa[0].Programa = "Obras"; // pasa la validación CLIENTE, el 400 simula un error de SERVIDOR (p.ej. carrera con otro import)
+
+        await vm.ConfirmarCommand.ExecuteAsync(null);
+
+        Assert.True(vm.FilasLineaPoa[0].TieneErrorServidor);
+        Assert.Equal(2, vm.PestanaSeleccionada);
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_ReintentoDespuesDeCorregir_LimpiaElErrorDeServidorAnterior()
+    {
+        var (vm, service, _, _, _, _, _) = Crear();
+        var gasto = new GastoAnalizadoDto(
+            HojaOrigen: "MARZO", NumeroFila: 1,
+            Estado: EstadoFila.Ok, Motivos: new List<MotivoEstado>(),
+            Fecha: new DateOnly(2026, 3, 1), Monto: 1000m,
+            Proveedor: "ACME SA", ProveedorNuevo: false,
+            NumeroFactura: "F-1", NumeroOrden: null,
+            Detalle: "Compra", Destino: null,
+            Fuente: "Rentas Generales", FuenteDesconocida: false,
+            CodigoRubro: 10, Rubro: "Materiales", RubroDesconocido: false,
+            LineaPoaAsignada: null);
+        service.Setup(s => s.AnalizarAsync(
+                It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<int>()))
+            .ReturnsAsync(new ResultadoAnalisisDto(
+                new List<IngresoAnalizadoDto>(), new List<GastoAnalizadoDto> { gasto },
+                new List<LineaPoaAnalizadaDto>(),
+                new MaestrosNuevosDto(new List<string>(), new List<string>(), new List<CodigoRubroNuevoDto>()),
+                new ResumenAnalisisDto(1, 1, 0, 0, 0, 0, 0),
+                new SaldosTotalesPoaOds(0m, 0m)));
+        service.SetupSequence(s => s.ConfirmarAsync(It.IsAny<ConfirmarImportacionDto>()))
+            .ThrowsAsync(new ValidacionImportacionException(new Dictionary<string, string[]>
+            {
+                ["Gastos[0].Fuente"] = new[] { "La fuente no existe en el catálogo." },
+            }))
+            .ReturnsAsync(new ResultadoConfirmacionDto(
+                Guid.NewGuid(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, new List<ConflictoGastoDto>()));
+        vm.GastosNombreArchivo = "gastos.ods";
+        vm.PoaNombreArchivo = "poa.ods";
+        await vm.AnalizarCommand.ExecuteAsync(null);
+        await vm.ConfirmarCommand.ExecuteAsync(null);
+        Assert.True(vm.FilasGasto[0].TieneErrorServidor);
+
+        await vm.ConfirmarCommand.ExecuteAsync(null);
+
+        Assert.False(vm.FilasGasto[0].TieneErrorServidor);
+    }
+
+    /// <summary>
+    /// El orden de enumeración de IReadOnlyDictionary (Dictionary por debajo) NO está garantizado por
+    /// .NET — no se puede usar "la primera clave del diccionario" para decidir la pestaña. Este test
+    /// inserta la clave de LineasPoa ANTES que la de Gastos en el diccionario literal (a propósito,
+    /// para que una implementación ingenua basada en orden de enumeración falle) y verifica que la
+    /// pestaña resultante es igual siempre: Gastos (orden fijo Gastos→Ingresos→LineasPoa, índice menor
+    /// dentro del mismo tipo), sin importar el orden de inserción.
+    /// </summary>
+    [Fact]
+    public async Task ConfirmarAsync_Error400ConClavesDeVariasPestanas_SaltaALaPestanaDeMenorOrden()
+    {
+        var (vm, service, _, _, _, _, _) = Crear();
+        var gasto = new GastoAnalizadoDto(
+            HojaOrigen: "MARZO", NumeroFila: 1,
+            Estado: EstadoFila.Ok, Motivos: new List<MotivoEstado>(),
+            Fecha: new DateOnly(2026, 3, 1), Monto: 1000m,
+            Proveedor: "ACME SA", ProveedorNuevo: false,
+            NumeroFactura: "F-1", NumeroOrden: null,
+            Detalle: "Compra", Destino: null,
+            Fuente: "Rentas Generales", FuenteDesconocida: false,
+            CodigoRubro: 10, Rubro: "Materiales", RubroDesconocido: false,
+            LineaPoaAsignada: null);
+        var linea = new LineaPoaAnalizadaDto(
+            Hoja: "COMPOSTERAS", Ejercicio: 2026, EsNueva: true,
+            Estado: EstadoFila.Ok, Motivos: new List<MotivoEstado>(),
+            Literal: "C", FuenteDesconocida: false, Presupuesto: 1000m, SaldoPlanilla: 1000m,
+            Movimientos: new List<MovimientoPoaAnalizadoDto>());
+        service.Setup(s => s.AnalizarAsync(
+                It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<int>()))
+            .ReturnsAsync(new ResultadoAnalisisDto(
+                new List<IngresoAnalizadoDto>(), new List<GastoAnalizadoDto> { gasto },
+                new List<LineaPoaAnalizadaDto> { linea },
+                new MaestrosNuevosDto(new List<string>(), new List<string>(), new List<CodigoRubroNuevoDto>()),
+                new ResumenAnalisisDto(1, 1, 0, 0, 0, 0, 0),
+                new SaldosTotalesPoaOds(0m, 0m)));
+        service.Setup(s => s.ConfirmarAsync(It.IsAny<ConfirmarImportacionDto>()))
+            .ThrowsAsync(new ValidacionImportacionException(new Dictionary<string, string[]>
+            {
+                // A propósito en este orden: LineasPoa insertada ANTES que Gastos.
+                ["LineasPoa[0].Programa"] = new[] { "El programa es obligatorio." },
+                ["Gastos[0].Fuente"] = new[] { "La fuente no existe en el catálogo." },
+            }));
+        vm.GastosNombreArchivo = "gastos.ods";
+        vm.PoaNombreArchivo = "poa.ods";
+        await vm.AnalizarCommand.ExecuteAsync(null);
+        vm.FilasLineaPoa[0].Programa = "Obras"; // pasa la validación cliente
+
+        await vm.ConfirmarCommand.ExecuteAsync(null);
+
+        Assert.True(vm.FilasGasto[0].TieneErrorServidor);
+        Assert.True(vm.FilasLineaPoa[0].TieneErrorServidor);
+        Assert.Equal(0, vm.PestanaSeleccionada); // Gastos (orden fijo), NO LineasPoa (que apareció primero en el diccionario)
     }
 }

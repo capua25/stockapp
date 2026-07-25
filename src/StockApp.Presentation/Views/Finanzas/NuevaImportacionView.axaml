@@ -19,6 +19,7 @@
              nombre de propiedad "Estado" — no hay un x:DataType único que tipe-chequee para los 3. -->
         <Style Selector="DataGridRow" x:CompileBindings="False">
             <Setter Property="Background" Value="{Binding Estado, Converter={x:Static conv:EstadoFilaBrushConverter.Instance}}" />
+            <Setter Property="ToolTip.Tip" Value="{Binding MensajeErrorServidor}" />
         </Style>
     </UserControl.Styles>
 
@@ -67,7 +68,7 @@
                 </StackPanel>
             </Border>
 
-            <TabControl>
+            <TabControl SelectedIndex="{Binding PestanaSeleccionada, Mode=TwoWay}">
                 <TabItem Header="Gastos">
                     <DataGrid x:Name="GridGastos" ItemsSource="{Binding FilasGastoView}" IsReadOnly="False"
                               CanUserSortColumns="True" AutoGenerateColumns="False">
