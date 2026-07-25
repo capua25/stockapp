@@ -675,4 +675,90 @@ public class NuevaImportacionViewModelTests
         Assert.True(vm.PuedeConfirmar);
         Assert.Null(vm.MensajeConfirmarBloqueado);
     }
+
+    [Fact]
+    public async Task EditarProveedorDeUnaFilaGasto_ConTextoQueNoMatcheaNingunProveedorExistente_LoAgregaAProveedoresNuevos()
+    {
+        var (vm, service, _, _, _, _, _) = Crear();
+        var gastoDto = new GastoAnalizadoDto(
+            HojaOrigen: "MARZO", NumeroFila: 1,
+            Estado: EstadoFila.Ok, Motivos: new List<MotivoEstado>(),
+            Fecha: new DateOnly(2026, 3, 1), Monto: 1000m,
+            Proveedor: null, ProveedorNuevo: false,
+            NumeroFactura: null, NumeroOrden: null,
+            Detalle: "Compra", Destino: null,
+            Fuente: "Rentas Generales", FuenteDesconocida: false,
+            CodigoRubro: 10, Rubro: "Materiales", RubroDesconocido: false,
+            LineaPoaAsignada: null);
+        service.Setup(s => s.AnalizarAsync(
+                It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<int>()))
+            .ReturnsAsync(new ResultadoAnalisisDto(
+                new List<IngresoAnalizadoDto>(), new List<GastoAnalizadoDto> { gastoDto },
+                new List<LineaPoaAnalizadaDto>(),
+                new MaestrosNuevosDto(new List<string>(), new List<string>(), new List<CodigoRubroNuevoDto>()),
+                new ResumenAnalisisDto(1, 0, 1, 0, 0, 0, 0),
+                new SaldosTotalesPoaOds(0m, 0m)));
+        vm.GastosNombreArchivo = "gastos.ods";
+        vm.PoaNombreArchivo = "poa.ods";
+        await vm.AnalizarCommand.ExecuteAsync(null);
+
+        vm.FilasGasto[0].Proveedor = "Nuevo Proveedor SRL";
+
+        Assert.Contains("Nuevo Proveedor SRL", vm.ProveedoresNuevos);
+    }
+
+    [Fact]
+    public async Task EditarProveedorDeUnaFilaGasto_ConTextoQueYaExisteEnProveedoresDisponibles_NoLoAgrega()
+    {
+        var (vm, service, _, _, _, _, _) = Crear();
+        var gastoDto = new GastoAnalizadoDto(
+            HojaOrigen: "MARZO", NumeroFila: 1,
+            Estado: EstadoFila.Ok, Motivos: new List<MotivoEstado>(),
+            Fecha: new DateOnly(2026, 3, 1), Monto: 1000m,
+            Proveedor: null, ProveedorNuevo: false,
+            NumeroFactura: null, NumeroOrden: null,
+            Detalle: "Compra", Destino: null,
+            Fuente: "Rentas Generales", FuenteDesconocida: false,
+            CodigoRubro: 10, Rubro: "Materiales", RubroDesconocido: false,
+            LineaPoaAsignada: null);
+        service.Setup(s => s.AnalizarAsync(
+                It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<int>()))
+            .ReturnsAsync(new ResultadoAnalisisDto(
+                new List<IngresoAnalizadoDto>(), new List<GastoAnalizadoDto> { gastoDto },
+                new List<LineaPoaAnalizadaDto>(),
+                new MaestrosNuevosDto(new List<string>(), new List<string>(), new List<CodigoRubroNuevoDto>()),
+                new ResumenAnalisisDto(1, 0, 1, 0, 0, 0, 0),
+                new SaldosTotalesPoaOds(0m, 0m)));
+        vm.GastosNombreArchivo = "gastos.ods";
+        vm.PoaNombreArchivo = "poa.ods";
+        await vm.AnalizarCommand.ExecuteAsync(null);
+        vm.ProveedoresDisponibles.Add(new Proveedor { Id = 1, Nombre = "ACME SA", Activo = true });
+
+        vm.FilasGasto[0].Proveedor = "ACME SA";
+
+        Assert.DoesNotContain("ACME SA", vm.ProveedoresNuevos);
+    }
+
+    [Fact]
+    public async Task AnalizarAsync_PopulaRubrosNuevosComoFilasEditables()
+    {
+        var (vm, service, _, _, _, _, _) = Crear();
+        service.Setup(s => s.AnalizarAsync(
+                It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<int>()))
+            .ReturnsAsync(new ResultadoAnalisisDto(
+                new List<IngresoAnalizadoDto>(), new List<GastoAnalizadoDto>(),
+                new List<LineaPoaAnalizadaDto>(),
+                new MaestrosNuevosDto(new List<string>(), new List<string>(), new List<CodigoRubroNuevoDto> { new(42, null) }),
+                new ResumenAnalisisDto(0, 0, 0, 0, 0, 0, 0),
+                new SaldosTotalesPoaOds(0m, 0m)));
+        vm.GastosNombreArchivo = "gastos.ods";
+        vm.PoaNombreArchivo = "poa.ods";
+
+        await vm.AnalizarCommand.ExecuteAsync(null);
+
+        var rubro = Assert.Single(vm.RubrosNuevos);
+        Assert.Equal(42, rubro.Codigo);
+        Assert.True(rubro.HasErrors); // NombreSugerido null => [Required] falla
+        Assert.False(vm.PuedeConfirmar); // el gating agregado incluye RubrosNuevos
+    }
 }

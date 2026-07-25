@@ -439,8 +439,11 @@
                             <TextBlock Text="Rubros nuevos" FontWeight="SemiBold" />
                             <ItemsControl ItemsSource="{Binding RubrosNuevos}">
                                 <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="dto:CodigoRubroNuevoDto">
-                                        <TextBlock Text="{Binding Codigo, StringFormat='Código {0}'}" />
+                                    <DataTemplate x:DataType="vm:FilaRubroNuevoVm">
+                                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4">
+                                            <TextBlock Text="{Binding Codigo, StringFormat='Código {0}'}" VerticalAlignment="Center" Width="90" />
+                                            <TextBox Text="{Binding Nombre, Mode=TwoWay}" Watermark="Nombre del rubro (obligatorio)" Width="220" />
+                                        </StackPanel>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>

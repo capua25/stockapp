@@ -76,7 +76,7 @@ public partial class NuevaImportacionViewModel : ViewModelBase
 
     public ObservableCollection<string> ProveedoresNuevos { get; } = new();
     public ObservableCollection<string> FuentesNuevas { get; } = new();
-    public ObservableCollection<CodigoRubroNuevoDto> RubrosNuevos { get; } = new();
+    public ObservableCollection<FilaRubroNuevoVm> RubrosNuevos { get; } = new();
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PuedeConfirmar))]
@@ -92,7 +92,8 @@ public partial class NuevaImportacionViewModel : ViewModelBase
     public bool PuedeConfirmar => !HayFilasConErrores();
 
     private bool HayFilasConErrores() =>
-        FilasGasto.Any(f => f.HasErrors) || FilasIngreso.Any(f => f.HasErrors) || FilasLineaPoa.Any(f => f.HasErrors);
+        FilasGasto.Any(f => f.HasErrors) || FilasIngreso.Any(f => f.HasErrors) || FilasLineaPoa.Any(f => f.HasErrors)
+        || RubrosNuevos.Any(r => r.HasErrors);
 
     /// <summary>Cuenta de filas con errores de validación pendientes — null/vacío si Confirmar está
     /// habilitado.</summary>
@@ -102,7 +103,8 @@ public partial class NuevaImportacionViewModel : ViewModelBase
         {
             var conErrores = FilasGasto.Count(f => f.HasErrors)
                 + FilasIngreso.Count(f => f.HasErrors)
-                + FilasLineaPoa.Count(f => f.HasErrors);
+                + FilasLineaPoa.Count(f => f.HasErrors)
+                + RubrosNuevos.Count(r => r.HasErrors);
             return conErrores == 0
                 ? null
                 : $"Hay {conErrores} fila(s) con errores de validación pendientes.";
@@ -194,6 +196,11 @@ public partial class NuevaImportacionViewModel : ViewModelBase
             {
                 var fila = FilaGastoEditableVm.Desde(g);
                 fila.ErrorsChanged += (_, _) => NotificarGatingCambio();
+                fila.PropertyChanged += (_, e) =>
+                {
+                    if (e.PropertyName == nameof(fila.Proveedor)) RegistrarSiEsNuevo(ProveedoresDisponibles.Select(p => p.Nombre), ProveedoresNuevos, fila.Proveedor);
+                    if (e.PropertyName == nameof(fila.Fuente)) RegistrarSiEsNuevo(FuentesDisponibles.Select(f => f.Nombre), FuentesNuevas, fila.Fuente);
+                };
                 FilasGasto.Add(fila);
             }
 
@@ -202,6 +209,10 @@ public partial class NuevaImportacionViewModel : ViewModelBase
             {
                 var fila = FilaIngresoEditableVm.Desde(i);
                 fila.ErrorsChanged += (_, _) => NotificarGatingCambio();
+                fila.PropertyChanged += (_, e) =>
+                {
+                    if (e.PropertyName == nameof(fila.Fuente)) RegistrarSiEsNuevo(FuentesDisponibles.Select(f => f.Nombre), FuentesNuevas, fila.Fuente);
+                };
                 FilasIngreso.Add(fila);
             }
 
@@ -218,7 +229,12 @@ public partial class NuevaImportacionViewModel : ViewModelBase
             FuentesNuevas.Clear();
             foreach (var f in _analisis.MaestrosNuevos.Fuentes) FuentesNuevas.Add(f);
             RubrosNuevos.Clear();
-            foreach (var r in _analisis.MaestrosNuevos.Rubros) RubrosNuevos.Add(r);
+            foreach (var r in _analisis.MaestrosNuevos.Rubros)
+            {
+                var fila = FilaRubroNuevoVm.Desde(r);
+                fila.ErrorsChanged += (_, _) => NotificarGatingCambio();
+                RubrosNuevos.Add(fila);
+            }
 
             Resumen = _analisis.Resumen;
             PasoActual = PasoWizardImportacion.Revisar;
@@ -237,6 +253,20 @@ public partial class NuevaImportacionViewModel : ViewModelBase
         OnPropertyChanged(nameof(PuedeConfirmar));
         OnPropertyChanged(nameof(MensajeConfirmarBloqueado));
         ConfirmarCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>Auto-declaración de maestro nuevo (F5d Entrega 2 Task 9): si el texto no matchea
+    /// (case-insensitive) ningún nombre existente Y todavía no está declarado, se agrega a la lista
+    /// de nuevos. Sin remoción: si el usuario corrige el typo después, el nombre viejo queda
+    /// declarado (aceptable para Entrega 2 — el usuario revisa la pestaña Maestros nuevos antes de
+    /// Confirmar).</summary>
+    private static void RegistrarSiEsNuevo(IEnumerable<string> existentes, ObservableCollection<string> nuevos, string? texto)
+    {
+        if (string.IsNullOrWhiteSpace(texto)) return;
+        var normalizado = texto.Trim();
+        if (existentes.Any(e => string.Equals(e, normalizado, StringComparison.OrdinalIgnoreCase))) return;
+        if (!nuevos.Any(n => string.Equals(n, normalizado, StringComparison.OrdinalIgnoreCase)))
+            nuevos.Add(normalizado);
     }
 
     [RelayCommand(CanExecute = nameof(PuedeConfirmar))]
