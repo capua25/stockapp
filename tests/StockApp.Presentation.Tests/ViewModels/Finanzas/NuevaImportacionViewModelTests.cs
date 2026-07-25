@@ -761,4 +761,106 @@ public class NuevaImportacionViewModelTests
         Assert.True(rubro.HasErrors); // NombreSugerido null => [Required] falla
         Assert.False(vm.PuedeConfirmar); // el gating agregado incluye RubrosNuevos
     }
+
+    [Fact]
+    public async Task ConfirmarAsync_UsuarioCorrigioCondicionYVencimiento_MapeaLosValoresDeLaFilaNoLaHeuristica()
+    {
+        var (vm, service, _, _, _, _, _) = Crear();
+        var gastoConPoa = new GastoAnalizadoDto(
+            HojaOrigen: "MARZO", NumeroFila: 1,
+            Estado: EstadoFila.Ok, Motivos: new List<MotivoEstado>(),
+            Fecha: new DateOnly(2026, 3, 1), Monto: 1000m,
+            Proveedor: "ACME SA", ProveedorNuevo: false,
+            NumeroFactura: "F-1", NumeroOrden: null,
+            Detalle: "Compra", Destino: null,
+            Fuente: "Rentas Generales", FuenteDesconocida: false,
+            CodigoRubro: 10, Rubro: "Materiales", RubroDesconocido: false,
+            LineaPoaAsignada: "RAMBLA"); // heurística de Entrega 1 lo sugeriría Credito, vto=Fecha
+        service.Setup(s => s.AnalizarAsync(
+                It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<int>()))
+            .ReturnsAsync(new ResultadoAnalisisDto(
+                new List<IngresoAnalizadoDto>(), new List<GastoAnalizadoDto> { gastoConPoa },
+                new List<LineaPoaAnalizadaDto>(),
+                new MaestrosNuevosDto(new List<string>(), new List<string>(), new List<CodigoRubroNuevoDto>()),
+                new ResumenAnalisisDto(1, 1, 0, 0, 0, 0, 0),
+                new SaldosTotalesPoaOds(0m, 0m)));
+        service.Setup(s => s.ConfirmarAsync(It.IsAny<ConfirmarImportacionDto>()))
+            .ReturnsAsync(new ResultadoConfirmacionDto(
+                Guid.NewGuid(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, new List<ConflictoGastoDto>()));
+        vm.GastosNombreArchivo = "gastos.ods";
+        vm.PoaNombreArchivo = "poa.ods";
+        await vm.AnalizarCommand.ExecuteAsync(null);
+
+        // El usuario corrige: es Contado, no Crédito (el reconciliador se equivocó de heurística).
+        vm.FilasGasto[0].Condicion = CondicionPago.Contado;
+        vm.FilasGasto[0].FechaVencimiento = null;
+
+        await vm.ConfirmarCommand.ExecuteAsync(null);
+
+        service.Verify(s => s.ConfirmarAsync(It.Is<ConfirmarImportacionDto>(dto =>
+            dto.Gastos[0].Condicion == CondicionPago.Contado && dto.Gastos[0].FechaVencimiento == null)));
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_LineaPoaNueva_MandaNombreProgramaYAsignacionesAgrupadas()
+    {
+        var (vm, service, _, _, _, _, _) = Crear();
+        var lineaC = new LineaPoaAnalizadaDto(
+            Hoja: "COMPOSTERAS", Ejercicio: 2026, EsNueva: true,
+            Estado: EstadoFila.Ok, Motivos: new List<MotivoEstado>(),
+            Literal: "C", FuenteDesconocida: false, Presupuesto: 1000m, SaldoPlanilla: 1000m,
+            Movimientos: new List<MovimientoPoaAnalizadoDto>());
+        var lineaB = lineaC with { Literal = "B", Presupuesto = 500m, SaldoPlanilla = 500m };
+        service.Setup(s => s.AnalizarAsync(
+                It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<int>()))
+            .ReturnsAsync(new ResultadoAnalisisDto(
+                new List<IngresoAnalizadoDto>(), new List<GastoAnalizadoDto>(),
+                new List<LineaPoaAnalizadaDto> { lineaC, lineaB },
+                new MaestrosNuevosDto(new List<string>(), new List<string>(), new List<CodigoRubroNuevoDto>()),
+                new ResumenAnalisisDto(0, 0, 0, 0, 0, 0, 0),
+                new SaldosTotalesPoaOds(0m, 0m)));
+        service.Setup(s => s.ConfirmarAsync(It.IsAny<ConfirmarImportacionDto>()))
+            .ReturnsAsync(new ResultadoConfirmacionDto(
+                Guid.NewGuid(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, new List<ConflictoGastoDto>()));
+        vm.GastosNombreArchivo = "gastos.ods";
+        vm.PoaNombreArchivo = "poa.ods";
+        await vm.AnalizarCommand.ExecuteAsync(null);
+        vm.FilasLineaPoa[0].Programa = "Obras públicas";
+
+        await vm.ConfirmarCommand.ExecuteAsync(null);
+
+        service.Verify(s => s.ConfirmarAsync(It.Is<ConfirmarImportacionDto>(dto =>
+            dto.LineasPoa.Count == 1
+            && dto.LineasPoa[0].Nombre == "COMPOSTERAS"
+            && dto.LineasPoa[0].Programa == "Obras públicas"
+            && dto.LineasPoa[0].Asignaciones.Count == 2)));
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_RubroNuevoConNombreCompletado_LoMandaEnMaestrosNuevos()
+    {
+        var (vm, service, _, _, _, _, _) = Crear();
+        service.Setup(s => s.AnalizarAsync(
+                It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<int>()))
+            .ReturnsAsync(new ResultadoAnalisisDto(
+                new List<IngresoAnalizadoDto>(), new List<GastoAnalizadoDto>(),
+                new List<LineaPoaAnalizadaDto>(),
+                new MaestrosNuevosDto(new List<string>(), new List<string>(), new List<CodigoRubroNuevoDto> { new(42, null) }),
+                new ResumenAnalisisDto(0, 0, 0, 0, 0, 0, 0),
+                new SaldosTotalesPoaOds(0m, 0m)));
+        service.Setup(s => s.ConfirmarAsync(It.IsAny<ConfirmarImportacionDto>()))
+            .ReturnsAsync(new ResultadoConfirmacionDto(
+                Guid.NewGuid(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, new List<ConflictoGastoDto>()));
+        vm.GastosNombreArchivo = "gastos.ods";
+        vm.PoaNombreArchivo = "poa.ods";
+        await vm.AnalizarCommand.ExecuteAsync(null);
+        vm.RubrosNuevos[0].Nombre = "Materiales de obra";
+
+        await vm.ConfirmarCommand.ExecuteAsync(null);
+
+        service.Verify(s => s.ConfirmarAsync(It.Is<ConfirmarImportacionDto>(dto =>
+            dto.MaestrosNuevos.Rubros.Count == 1
+            && dto.MaestrosNuevos.Rubros[0].Codigo == 42
+            && dto.MaestrosNuevos.Rubros[0].Nombre == "Materiales de obra")));
+    }
 }

@@ -274,7 +274,7 @@ public partial class NuevaImportacionViewModel : ViewModelBase
     {
         if (_analisis is null) return;
 
-        var dto = MapearAConfirmacion(_analisis, Ejercicio, Forzar);
+        var dto = MapearAConfirmacion(FilasGasto, FilasIngreso, FilasLineaPoa, ProveedoresNuevos, FuentesNuevas, RubrosNuevos, Ejercicio, Forzar);
 
         try
         {
@@ -305,35 +305,25 @@ public partial class NuevaImportacionViewModel : ViewModelBase
             vex.Errores.Select(par => $"{par.Key}: {string.Join("; ", par.Value)}"));
 
     /// <summary>
-    /// Mapeo directo (sin edición) análisis→confirmación. Precondición real (garantizada por
-    /// PuedeConfirmar, no por Resumen.Errores == 0 solo): ninguna fila a importar tiene Fuente,
-    /// CodigoRubro, Proveedor (Gastos) ni Fuente, Concepto (Ingresos) en null — PuedeConfirmar
-    /// verifica esto explícitamente porque Errores == 0 NO lo garantiza (una fuente vacía es
-    /// Advertencia, no Error). RequeridoNoNulo debajo es un segundo cinturón de seguridad: si esta
-    /// precondición se violara igual (p.ej. un futuro cambio que llame a este método sin pasar por
-    /// el gating), falla con un mensaje explícito en vez de una NullReferenceException muda.
-    ///
-    /// Gap documentado (Entrega 1, contradice el diseño F5d §8 en la letra chica): GastoConfirmarDto
-    /// exige CondicionPago no-nullable, pero GastoAnalizadoDto NO expone ese campo — el análisis
-    /// (F5b/F5c) nunca lo calculó. Se infiere con el mismo criterio que ya usa el backend para los
-    /// compromisos POA (ImportacionRepository, "Los compromisos POA importados van Credito SIN
-    /// pago"): LineaPoaAsignada != null ⇒ Credito con FechaVencimiento = la misma Fecha del gasto
-    /// (no hay otra fecha disponible sin editar); si no, Contado sin vencimiento. Es una heurística,
-    /// no una elección del usuario — Entrega 2 debería exponer Condicion/FechaVencimiento como
-    /// celda editable si este supuesto no alcanza en la práctica.
-    ///
-    /// Segundo gap documentado: LineaPoaConfirmarDto exige Nombre+Programa, que
-    /// LineaPoaAnalizadaDto NO expone (solo Hoja/Literal/Presupuesto/SaldoPlanilla — Literal es
-    /// el nombre de la FUENTE de esa línea, no el nombre de la línea). Declarar una LineaPoa
-    /// NUEVA es, en los hechos, una operación de edición — se difiere a Entrega 2. Acá SIEMPRE se
-    /// manda vacía: si algún Gasto referencia una LineaPoa que todavía no existe en la base para
-    /// este Ejercicio, el 400 estructurado del servidor se muestra tal cual (catch de
-    /// ConfirmarAsync), nunca se inventa un Nombre/Programa.
+    /// Mapeo filas VM editables → confirmación (F5d Entrega 2, reemplaza el mapeo directo
+    /// análisis→confirmación de Entrega 1). Precondición garantizada por PuedeConfirmar: ninguna
+    /// fila tiene HasErrors (los [Required]/atributos custom de los VMs de fila ya cubren exactamente
+    /// los mismos campos que RequeridoNoNulo defiende acá como cinturón de seguridad extra). A
+    /// diferencia de Entrega 1, Condicion/FechaVencimiento vienen DIRECTO de la fila (el usuario
+    /// pudo haber corregido la heurística inicial, ver FilaGastoEditableVm.Desde) y LineasPoa ya NO
+    /// se manda vacía: las filas con EsNueva==true se mapean con Nombre=Hoja, Programa editado por
+    /// el usuario y Asignaciones agrupadas (FilaLineaPoaEditableVm.DesdeGrupo, Task 5/6).
     /// </summary>
     private static ConfirmarImportacionDto MapearAConfirmacion(
-        ResultadoAnalisisDto analisis, int ejercicio, bool forzar)
+        IReadOnlyList<FilaGastoEditableVm> filasGasto,
+        IReadOnlyList<FilaIngresoEditableVm> filasIngreso,
+        IReadOnlyList<FilaLineaPoaEditableVm> filasLineaPoa,
+        IReadOnlyList<string> proveedoresNuevos,
+        IReadOnlyList<string> fuentesNuevas,
+        IReadOnlyList<FilaRubroNuevoVm> rubrosNuevos,
+        int ejercicio, bool forzar)
     {
-        var ingresos = analisis.Ingresos
+        var ingresos = filasIngreso
             .Select(i => new IngresoConfirmarDto(
                 RequeridoNoNulo(i.Fecha, "Ingreso.Fecha"),
                 i.Concepto ?? string.Empty,
@@ -341,34 +331,41 @@ public partial class NuevaImportacionViewModel : ViewModelBase
                 RequeridoNoNulo(i.Fuente, "Ingreso.Fuente")))
             .ToList();
 
-        var gastos = analisis.Gastos.Select(g =>
-        {
-            var esCompromisoPoa = g.LineaPoaAsignada is not null;
-            var fecha = RequeridoNoNulo(g.Fecha, "Gasto.Fecha");
-            return new GastoConfirmarDto(
+        var gastos = filasGasto
+            .Select(g => new GastoConfirmarDto(
                 Proveedor: RequeridoNoNulo(g.Proveedor, "Gasto.Proveedor"),
                 NumeroFactura: g.NumeroFactura,
                 NumeroOrden: g.NumeroOrden,
                 Detalle: g.Detalle ?? string.Empty,
                 Destino: g.Destino,
-                Fecha: fecha,
+                Fecha: RequeridoNoNulo(g.Fecha, "Gasto.Fecha"),
                 MontoTotal: RequeridoNoNulo(g.Monto, "Gasto.MontoTotal"),
                 Fuente: RequeridoNoNulo(g.Fuente, "Gasto.Fuente"),
                 CodigoRubro: RequeridoNoNulo(g.CodigoRubro, "Gasto.CodigoRubro"),
                 LineaPoa: g.LineaPoaAsignada,
-                Condicion: esCompromisoPoa ? CondicionPago.Credito : CondicionPago.Contado,
-                FechaVencimiento: esCompromisoPoa ? fecha : null);
-        }).ToList();
+                Condicion: g.Condicion,
+                FechaVencimiento: g.FechaVencimiento))
+            .ToList();
+
+        var lineasPoaNuevas = filasLineaPoa
+            .Where(f => f.EsNueva)
+            .Select(f => new LineaPoaConfirmarDto(
+                Nombre: f.Hoja,
+                Programa: RequeridoNoNulo(f.Programa, "LineaPoa.Programa"),
+                Asignaciones: f.Asignaciones
+                    .Select(a => new AsignacionConfirmarDto(
+                        RequeridoNoNulo(a.Fuente, "LineaPoa.Asignacion.Fuente"), a.Presupuesto))
+                    .ToList()))
+            .ToList();
 
         var maestrosNuevos = new MaestrosNuevosConfirmarDto(
-            analisis.MaestrosNuevos.Proveedores,
-            analisis.MaestrosNuevos.Fuentes,
-            analisis.MaestrosNuevos.Rubros
-                .Select(r => new RubroNuevoConfirmarDto(r.Codigo, r.NombreSugerido ?? string.Empty))
+            proveedoresNuevos.ToList(),
+            fuentesNuevas.ToList(),
+            rubrosNuevos
+                .Select(r => new RubroNuevoConfirmarDto(r.Codigo, RequeridoNoNulo(r.Nombre, "RubroNuevo.Nombre")))
                 .ToList());
 
-        return new ConfirmarImportacionDto(
-            ejercicio, forzar, maestrosNuevos, ingresos, gastos, new List<LineaPoaConfirmarDto>());
+        return new ConfirmarImportacionDto(ejercicio, forzar, maestrosNuevos, ingresos, gastos, lineasPoaNuevas);
     }
 
     /// <summary>Cinturón de seguridad de MapearAConfirmacion: falla con mensaje explícito (en vez de
