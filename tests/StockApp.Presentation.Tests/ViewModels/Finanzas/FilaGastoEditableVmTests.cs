@@ -157,4 +157,22 @@ public class FilaGastoEditableVmTests
 
         Assert.Empty(fila.GetErrors(nameof(fila.FechaVencimiento)).Cast<object>());
     }
+
+    [Fact]
+    public void OnCondicionChanged_DeCreditoAContado_LimpiaFechaVencimientoYNoQuedaConError()
+    {
+        // Review final F5d E2 (Important I1): el date-picker de Vencimiento está deshabilitado en
+        // Contado (axaml), así que si el usuario pasa Crédito→Contado con un vencimiento ya
+        // seteado, antes de este fix la fila quedaba con un error de validación imborrable por UI.
+        var dto = DtoCompleto() with { LineaPoaAsignada = "RAMBLA" }; // Desde() lo deja en Credito con vencimiento
+        var fila = FilaGastoEditableVm.Desde(dto);
+        Assert.Equal(CondicionPago.Credito, fila.Condicion);
+        Assert.NotNull(fila.FechaVencimiento);
+
+        fila.Condicion = CondicionPago.Contado;
+
+        Assert.Null(fila.FechaVencimiento);
+        Assert.Empty(fila.GetErrors(nameof(fila.FechaVencimiento)).Cast<object>());
+        Assert.False(fila.HasErrors);
+    }
 }

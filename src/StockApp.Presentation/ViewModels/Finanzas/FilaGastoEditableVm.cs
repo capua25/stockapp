@@ -110,8 +110,16 @@ public partial class FilaGastoEditableVm : FilaImportacionEditableVmBase
 
     /// <summary>Re-valida FechaVencimiento cuando cambia Condicion (VencimientoCondicional lee
     /// Condicion desde ValidationContext.ObjectInstance, pero sólo se dispara al setear
-    /// FechaVencimiento — este hook cubre el caso de cambiar Condicion primero).</summary>
-    partial void OnCondicionChanged(CondicionPago value) => ValidateProperty(FechaVencimiento, nameof(FechaVencimiento));
+    /// FechaVencimiento — este hook cubre el caso de cambiar Condicion primero). Además, si la
+    /// nueva Condicion es Contado, limpia FechaVencimiento: el date-picker de Vencimiento queda
+    /// deshabilitado en Contado (ver axaml), así que un vencimiento seteado antes de pasar de
+    /// Crédito a Contado quedaría con un error de validación imposible de borrar por UI (review
+    /// final F5d E2, Important I1).</summary>
+    partial void OnCondicionChanged(CondicionPago value)
+    {
+        if (value == CondicionPago.Contado) FechaVencimiento = null;
+        ValidateProperty(FechaVencimiento, nameof(FechaVencimiento));
+    }
 
     public IReadOnlyList<CondicionPago> CondicionesDisponibles { get; } = Enum.GetValues<CondicionPago>();
 
