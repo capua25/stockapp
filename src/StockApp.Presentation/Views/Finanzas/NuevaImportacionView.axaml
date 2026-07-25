@@ -21,6 +21,17 @@
             <Setter Property="Background" Value="{Binding Estado, Converter={x:Static conv:EstadoFilaBrushConverter.Instance}}" />
             <Setter Property="ToolTip.Tip" Value="{Binding MensajeErrorServidor}" />
         </Style>
+        <!-- Resaltado visual del error de servidor (review final F5d E2, Important I3): antes de
+             esto TieneErrorServidor sólo se veía en el tooltip de arriba — el diálogo de
+             ConfirmarAsync dice "revisá las filas resaltadas" pero no había ningún resaltado. Va
+             en un Style SEPARADO (no un segundo Setter de Background en el de arriba) para no
+             pisar el color por EstadoFila: ErrorServidorBrushConverter devuelve Transparent (no
+             UnsetValue) cuando TieneErrorServidor es false, así que el borde desaparece pero el
+             Background de EstadoFila del Style anterior se mantiene intacto. -->
+        <Style Selector="DataGridRow" x:CompileBindings="False">
+            <Setter Property="BorderBrush" Value="{Binding TieneErrorServidor, Converter={x:Static conv:ErrorServidorBrushConverter.Instance}}" />
+            <Setter Property="BorderThickness" Value="2" />
+        </Style>
     </UserControl.Styles>
 
     <Grid Margin="24">
@@ -103,10 +114,16 @@
                                 </DataGridTemplateColumn.CellTemplate>
                                 <DataGridTemplateColumn.CellEditingTemplate>
                                     <DataTemplate>
+                                        <!-- TextSearch.TextBinding="{Binding Nombre}": sin esto, Avalonia 12
+                                             escribe item.ToString() en Text al SELECCIONAR un item existente
+                                             (los entities no overridean ToString) — ComboBox.GetItemTextValue
+                                             usa TextSearch.GetEffectiveText, que evalúa este binding contra el
+                                             item elegido en vez de caer a ToString(). -->
                                         <ComboBox IsEditable="True"
                                                   Text="{Binding Proveedor, Mode=TwoWay}"
                                                   ItemsSource="{Binding #Root.DataContext.ProveedoresDisponibles}"
                                                   IsEnabled="{Binding EsEditableProveedor}"
+                                                  TextSearch.TextBinding="{Binding Nombre}"
                                                   HorizontalAlignment="Stretch">
                                             <ComboBox.ItemTemplate>
                                                 <DataTemplate>
@@ -175,10 +192,12 @@
                                 </DataGridTemplateColumn.CellTemplate>
                                 <DataGridTemplateColumn.CellEditingTemplate>
                                     <DataTemplate>
+                                        <!-- TextSearch.TextBinding: ver nota en el combo de Proveedor más arriba. -->
                                         <ComboBox IsEditable="True"
                                                   Text="{Binding Fuente, Mode=TwoWay}"
                                                   ItemsSource="{Binding #Root.DataContext.FuentesDisponibles}"
                                                   IsEnabled="{Binding EsEditableFuente}"
+                                                  TextSearch.TextBinding="{Binding Nombre}"
                                                   HorizontalAlignment="Stretch">
                                             <ComboBox.ItemTemplate>
                                                 <DataTemplate>
@@ -342,10 +361,12 @@
                                 </DataGridTemplateColumn.CellTemplate>
                                 <DataGridTemplateColumn.CellEditingTemplate>
                                     <DataTemplate>
+                                        <!-- TextSearch.TextBinding: ver nota en el combo de Proveedor (grilla de Gastos). -->
                                         <ComboBox IsEditable="True"
                                                   Text="{Binding Fuente, Mode=TwoWay}"
                                                   ItemsSource="{Binding #Root.DataContext.FuentesDisponibles}"
                                                   IsEnabled="{Binding EsEditableFuente}"
+                                                  TextSearch.TextBinding="{Binding Nombre}"
                                                   HorizontalAlignment="Stretch">
                                             <ComboBox.ItemTemplate>
                                                 <DataTemplate>

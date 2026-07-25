@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using StockApp.Application.Finanzas;
@@ -32,7 +33,8 @@ public class NuevaImportacionGastosGridTests
         </Window>
         """;
 
-    private static async Task<(Window Window, DataGrid Grid, NuevaImportacionViewModel Vm)> MontarEnPasoRevisarAsync(GastoAnalizadoDto gasto)
+    private static async Task<(Window Window, DataGrid Grid, NuevaImportacionViewModel Vm)> MontarEnPasoRevisarAsync(
+        GastoAnalizadoDto gasto, IReadOnlyList<FuenteFinanciamiento>? fuentesExistentes = null)
     {
         var service = new ImportacionServiceFake(new ResultadoAnalisisDto(
             new List<IngresoAnalizadoDto>(), new List<GastoAnalizadoDto> { gasto },
@@ -41,7 +43,7 @@ public class NuevaImportacionGastosGridTests
             new ResumenAnalisisDto(1, 1, 0, 0, 0, 0, 0),
             new SaldosTotalesPoaOds(0m, 0m)));
         var seleccion = new ServicioSeleccionArchivoFake();
-        var fuentes = new FuenteFinanciamientoServiceFake(new List<FuenteFinanciamiento>());
+        var fuentes = new FuenteFinanciamientoServiceFake(fuentesExistentes ?? new List<FuenteFinanciamiento>());
         var rubros = new RubroGastoServiceFake(new List<RubroGasto>());
         var proveedores = new ProveedorServiceFake(new List<Proveedor>());
         var lineasPoa = new LineaPoaServiceFake(new List<LineaPoa>());
@@ -150,5 +152,63 @@ public class NuevaImportacionGastosGridTests
         Assert.Single(vm.FilasGasto);
         Assert.Same(fila, vm.FilasGasto[0]);
         Assert.Equal("F-2026-001", vm.FilasGasto[0].NumeroFactura);
+    }
+
+    [AvaloniaFact]
+    public async Task ComboBoxDeFuente_SeleccionaUnaFuenteExistente_LaFilaQuedaConElNombreNoConElToString()
+    {
+        // Review final F5d E2 (Critical C1): sin TextSearch.TextBinding, Avalonia 12 escribía
+        // item.ToString() en el Text del ComboBox editable al SELECCIONAR un item existente (los
+        // entities no overridean ToString) — la fila quedaba con "StockApp.Domain.Entities.
+        // FuenteFinanciamiento" en vez del nombre real.
+        var fuenteExistente = new FuenteFinanciamiento { Id = 1, Nombre = "Rentas Generales", Activo = true };
+        var gasto = GastoBase(proveedor: "ACME SA", numeroFactura: "F-1", fuente: null);
+        var (window, grid, vm) = await MontarEnPasoRevisarAsync(gasto, fuentesExistentes: new[] { fuenteExistente });
+        var fila = vm.FilasGasto[0];
+
+        grid.SelectedItem = fila;
+        grid.CurrentColumn = grid.Columns.First(c => Equals(c.Header, "Fuente"));
+        Dispatcher.UIThread.RunJobs();
+        grid.BeginEdit();
+        Dispatcher.UIThread.RunJobs();
+
+        var combo = window.GetVisualDescendants().OfType<ComboBox>().First();
+        combo.SelectedItem = fuenteExistente;
+        Dispatcher.UIThread.RunJobs();
+        grid.CommitEdit();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal("Rentas Generales", fila.Fuente);
+        Assert.DoesNotContain("StockApp.Domain.Entities", fila.Fuente);
+        window.Close();
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    [AvaloniaFact]
+    public async Task FilaConErrorDeServidor_QuedaConBordeVisibleResaltado()
+    {
+        // Review final F5d E2 (Important I3): TieneErrorServidor no estaba bindeado a ningún
+        // brush/borde — el mensaje del 400 decía "revisá las filas resaltadas" pero sólo había un
+        // tooltip. Compara el BorderBrush ANTES vs DESPUÉS de marcar el error (no sólo el valor
+        // final) para que el test detecte de verdad si el binding reacciona a TieneErrorServidor —
+        // comparar sólo contra Brushes.Transparent al final sería un falso positivo si
+        // BorderBrush nunca se hubiera bindeado (su default sin ningún Setter es null, que
+        // también es "!= Transparent").
+        var gasto = GastoBase(proveedor: "ACME SA", numeroFactura: "F-1", fuente: "Rentas Generales");
+        var (window, grid, vm) = await MontarEnPasoRevisarAsync(gasto);
+        var fila = vm.FilasGasto[0];
+
+        var row = window.GetVisualDescendants().OfType<DataGridRow>().First(r => ReferenceEquals(r.DataContext, fila));
+        var colorSinError = Assert.IsAssignableFrom<ISolidColorBrush>(row.BorderBrush).Color;
+
+        fila.AgregarErrorServidor("La fuente no existe en el catálogo.");
+        Dispatcher.UIThread.RunJobs();
+
+        var colorConError = Assert.IsAssignableFrom<ISolidColorBrush>(row.BorderBrush).Color;
+        Assert.Equal(Colors.Transparent, colorSinError);
+        Assert.NotEqual(Colors.Transparent, colorConError);
+
+        window.Close();
+        Dispatcher.UIThread.RunJobs();
     }
 }
