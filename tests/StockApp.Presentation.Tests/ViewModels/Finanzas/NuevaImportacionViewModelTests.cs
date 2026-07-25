@@ -426,7 +426,43 @@ public class NuevaImportacionViewModelTests
         await vm.ConfirmarCommand.ExecuteAsync(null);
 
         Assert.Equal(PasoWizardImportacion.Revisar, vm.PasoActual);
-        Assert.Equal("El servidor encontró errores de validación — revisá las celdas resaltadas.", mensajeInformado);
+        Assert.Equal("El servidor encontró errores de validación — revisá las filas resaltadas.", mensajeInformado);
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_LineaPoaNuevaConAsignacionSinFuente_InformaErrorYNoCrasheaEnSilencio()
+    {
+        // Review final F5d E2 (Important I2): MapearAConfirmacion (RequeridoNoNulo) puede lanzar
+        // InvalidOperationException si una asignación de línea POA nueva no tiene fuente
+        // (AsignacionLineaPoaVm.Fuente viene de Literal, nullable, y ninguna fila lo valida).
+        // Antes de este fix esa excepción escapaba del try/catch de ConfirmarAsync (el mapeo
+        // estaba FUERA) — el AsyncRelayCommand quedaba con la Task fallada sin observar y
+        // Confirmar no hacía nada, en silencio.
+        var (vm, service, _, confirm, _, _, _) = Crear();
+        var linea = new LineaPoaAnalizadaDto(
+            Hoja: "COMPOSTERAS", Ejercicio: 2026, EsNueva: true,
+            Estado: EstadoFila.Advertencia,
+            Motivos: new List<MotivoEstado> { new(TipoMotivo.LiteralVacio, "Fuente sin identificar") },
+            Literal: null, FuenteDesconocida: true, Presupuesto: 1000m, SaldoPlanilla: 1000m,
+            Movimientos: new List<MovimientoPoaAnalizadoDto>());
+        service.Setup(s => s.AnalizarAsync(
+                It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<int>()))
+            .ReturnsAsync(new ResultadoAnalisisDto(
+                new List<IngresoAnalizadoDto>(), new List<GastoAnalizadoDto>(),
+                new List<LineaPoaAnalizadaDto> { linea },
+                new MaestrosNuevosDto(new List<string>(), new List<string>(), new List<CodigoRubroNuevoDto>()),
+                new ResumenAnalisisDto(0, 0, 1, 0, 0, 0, 0),
+                new SaldosTotalesPoaOds(0m, 0m)));
+        vm.GastosNombreArchivo = "gastos.ods";
+        vm.PoaNombreArchivo = "poa.ods";
+        await vm.AnalizarCommand.ExecuteAsync(null);
+        vm.FilasLineaPoa[0].Programa = "Obras"; // única validación cliente de una línea EsNueva
+        Assert.True(vm.PuedeConfirmar); // precondición: nada bloquea del lado cliente
+
+        await vm.ConfirmarCommand.ExecuteAsync(null);
+
+        confirm.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Once);
+        service.Verify(s => s.ConfirmarAsync(It.IsAny<ConfirmarImportacionDto>()), Times.Never);
     }
 
     private static async Task<(NuevaImportacionViewModel vm, ResultadoConfirmacionDto resultado)>
@@ -862,6 +898,37 @@ public class NuevaImportacionViewModelTests
             dto.MaestrosNuevos.Rubros.Count == 1
             && dto.MaestrosNuevos.Rubros[0].Codigo == 42
             && dto.MaestrosNuevos.Rubros[0].Nombre == "Materiales de obra")));
+    }
+
+    [Fact]
+    public async Task ConfirmarAsync_Error400EnRubroNuevo_SaltaALaPestanaDeMaestros()
+    {
+        // Review final F5d E2 (Minor M1): "MaestrosNuevos.Rubros[i].Nombre" tiene una forma
+        // distinta de "Tipo[i].Campo" (Padre.Hijo[i], no Tipo[i] a secas) y "Maestros nuevos" (la
+        // 4ta pestaña, índice 3) no estaba en OrdenPestana — antes de este fix el 400 de un rubro
+        // nuevo no saltaba a ninguna pestaña.
+        var (vm, service, _, _, _, _, _) = Crear();
+        service.Setup(s => s.AnalizarAsync(
+                It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<int>()))
+            .ReturnsAsync(new ResultadoAnalisisDto(
+                new List<IngresoAnalizadoDto>(), new List<GastoAnalizadoDto>(),
+                new List<LineaPoaAnalizadaDto>(),
+                new MaestrosNuevosDto(new List<string>(), new List<string>(), new List<CodigoRubroNuevoDto> { new(42, null) }),
+                new ResumenAnalisisDto(0, 0, 0, 0, 0, 0, 0),
+                new SaldosTotalesPoaOds(0m, 0m)));
+        vm.GastosNombreArchivo = "gastos.ods";
+        vm.PoaNombreArchivo = "poa.ods";
+        await vm.AnalizarCommand.ExecuteAsync(null);
+        vm.RubrosNuevos[0].Nombre = "Materiales de obra"; // pasa la validación cliente
+        service.Setup(s => s.ConfirmarAsync(It.IsAny<ConfirmarImportacionDto>()))
+            .ThrowsAsync(new ValidacionImportacionException(new Dictionary<string, string[]>
+            {
+                ["MaestrosNuevos.Rubros[0].Nombre"] = new[] { "Ya existe un rubro con ese nombre." },
+            }));
+
+        await vm.ConfirmarCommand.ExecuteAsync(null);
+
+        Assert.Equal(3, vm.PestanaSeleccionada);
     }
 
     [Fact]

@@ -278,10 +278,15 @@ public partial class NuevaImportacionViewModel : ViewModelBase
         if (_analisis is null) return;
 
         LimpiarErroresServidor();
-        var dto = MapearAConfirmacion(FilasGasto, FilasIngreso, FilasLineaPoa, ProveedoresNuevos, FuentesNuevas, RubrosNuevos, Ejercicio, Forzar);
 
         try
         {
+            // MapearAConfirmacion DENTRO del try (review final F5d E2, Important I2): el mapeo
+            // puede lanzar InvalidOperationException (RequeridoNoNulo) si una asignación de línea
+            // POA nueva no tiene fuente (AsignacionLineaPoaVm.Fuente viene de Literal, nullable, y
+            // ninguna fila lo valida) — si esa excepción escapa del try, el AsyncRelayCommand queda
+            // con la Task fallada sin observar y Confirmar no hace nada, en silencio.
+            var dto = MapearAConfirmacion(FilasGasto, FilasIngreso, FilasLineaPoa, ProveedoresNuevos, FuentesNuevas, RubrosNuevos, Ejercicio, Forzar);
             ResultadoConfirmacion = await _service.ConfirmarAsync(dto);
             Conflictos.Clear();
             foreach (var c in ResultadoConfirmacion.Conflictos)
@@ -291,7 +296,7 @@ public partial class NuevaImportacionViewModel : ViewModelBase
         catch (ValidacionImportacionException vex)
         {
             DecomponerErroresServidor(vex);
-            await _confirmacion.InformarAsync("El servidor encontró errores de validación — revisá las celdas resaltadas.");
+            await _confirmacion.InformarAsync("El servidor encontró errores de validación — revisá las filas resaltadas.");
         }
         catch (Exception ex)
         {
@@ -301,6 +306,14 @@ public partial class NuevaImportacionViewModel : ViewModelBase
 
     private static readonly Regex PatronErrorCampo = new(@"^(Gastos|Ingresos|LineasPoa)\[(\d+)\]\.(.+)$");
 
+    // "MaestrosNuevos.Rubros[i].Campo" tiene una forma distinta de "Tipo[i].Campo" (Padre.Hijo[i]
+    // en vez de Tipo[i] a secas) — MaestrosNuevosConfirmarDto.Rubros es el único array anidado
+    // dentro de un objeto que no es en sí un array (review final F5d E2, Minor M1). FilaRubroNuevoVm
+    // NO hereda de FilaImportacionEditableVmBase (no tiene TieneErrorServidor/AgregarErrorServidor),
+    // así que acá sólo se resuelve el SALTO de pestaña — no hay marcado visual por fila para este
+    // tipo (deuda documentada, ver nota en ParsearClaveParaPestana).
+    private static readonly Regex PatronErrorCampoMaestrosRubros = new(@"^MaestrosNuevos\.Rubros\[(\d+)\]\.(.+)$");
+
     // Orden fijo de pestañas — usado para decidir determinísticamente a cuál saltar cuando el 400
     // trae errores de varios tipos a la vez (ver nota abajo, IReadOnlyDictionary no garantiza orden).
     private static readonly Dictionary<string, int> OrdenPestana = new()
@@ -308,6 +321,7 @@ public partial class NuevaImportacionViewModel : ViewModelBase
         ["Gastos"] = 0,
         ["Ingresos"] = 1,
         ["LineasPoa"] = 2,
+        ["MaestrosNuevos"] = 3,
     };
 
     /// <summary>Descompone ValidacionImportacionException.Errores ("Tipo[i].Campo" -> mensajes) en
@@ -342,33 +356,45 @@ public partial class NuevaImportacionViewModel : ViewModelBase
         }
 
         var claveMenor = vex.Errores.Keys
-            .Select(clave => PatronErrorCampo.Match(clave))
-            .Where(match => match.Success && OrdenPestana.ContainsKey(match.Groups[1].Value) && IndiceEnRango(match))
-            .OrderBy(match => OrdenPestana[match.Groups[1].Value])
-            .ThenBy(match => int.Parse(match.Groups[2].Value))
+            .Select(ParsearClaveParaPestana)
+            .Where(c => c is not null && OrdenPestana.ContainsKey(c.Value.Tipo) && IndiceEnRango(c.Value.Tipo, c.Value.Indice))
+            .OrderBy(c => OrdenPestana[c!.Value.Tipo])
+            .ThenBy(c => c!.Value.Indice)
             .FirstOrDefault();
 
         if (claveMenor is not null)
         {
-            PestanaSeleccionada = OrdenPestana[claveMenor.Groups[1].Value];
+            PestanaSeleccionada = OrdenPestana[claveMenor.Value.Tipo];
         }
+    }
+
+    /// <summary>Normaliza una clave de error ("Tipo[i].Campo" o "MaestrosNuevos.Rubros[i].Campo") a
+    /// (Tipo, Indice) para el cálculo de la pestaña destino — unifica las dos formas de clave que
+    /// puede traer el 400 (ver PatronErrorCampoMaestrosRubros). Null si la clave no matchea
+    /// ninguna de las dos formas conocidas.</summary>
+    private static (string Tipo, int Indice)? ParsearClaveParaPestana(string clave)
+    {
+        var match = PatronErrorCampo.Match(clave);
+        if (match.Success) return (match.Groups[1].Value, int.Parse(match.Groups[2].Value));
+
+        var matchMaestros = PatronErrorCampoMaestrosRubros.Match(clave);
+        if (matchMaestros.Success) return ("MaestrosNuevos", int.Parse(matchMaestros.Groups[1].Value));
+
+        return null;
     }
 
     /// <summary>Mismo bounds-check que el marcado de filas (switch de arriba): una clave con índice
     /// fuera de rango (desync cliente/servidor) no marcó ninguna fila, así que tampoco debe poder
     /// ganar el salto de pestaña — si no, el salto podría apuntar a una pestaña sin ninguna fila
     /// resaltada mientras otra pestaña sí tiene una fila real marcada (review Task 11, Minor).</summary>
-    private bool IndiceEnRango(Match match)
+    private bool IndiceEnRango(string tipo, int indice) => tipo switch
     {
-        var indice = int.Parse(match.Groups[2].Value);
-        return match.Groups[1].Value switch
-        {
-            "Gastos" => indice < FilasGasto.Count,
-            "Ingresos" => indice < FilasIngreso.Count,
-            "LineasPoa" => indice < FilasLineaPoa.Count,
-            _ => false,
-        };
-    }
+        "Gastos" => indice < FilasGasto.Count,
+        "Ingresos" => indice < FilasIngreso.Count,
+        "LineasPoa" => indice < FilasLineaPoa.Count,
+        "MaestrosNuevos" => indice < RubrosNuevos.Count,
+        _ => false,
+    };
 
     private void LimpiarErroresServidor()
     {
