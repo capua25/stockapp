@@ -11,7 +11,7 @@ namespace StockApp.Presentation.ViewModels.Finanzas;
 /// <summary>VM de fila editable para la grilla de Ingresos del Paso 2 (F5d Entrega 2). Mismo
 /// patrón que FilaGastoEditableVm, con menos campos (IngresoAnalizadoDto es más chico que
 /// GastoAnalizadoDto — sin condición de pago, sin rubro, sin reconciliación POA).</summary>
-public partial class FilaIngresoEditableVm : ObservableValidator
+public partial class FilaIngresoEditableVm : FilaImportacionEditableVmBase
 {
     [ObservableProperty] private string _hojaOrigen = string.Empty;
     [ObservableProperty] private int _numeroFila;

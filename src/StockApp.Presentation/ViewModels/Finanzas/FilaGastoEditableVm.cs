@@ -16,7 +16,7 @@ namespace StockApp.Presentation.ViewModels.Finanzas;
 /// Crédito con vencimiento = Fecha) como valor SUGERIDO, siempre editable — a diferencia de las
 /// demás celdas, que se bloquean si ya tienen valor (ver EsEditable* más abajo).
 /// </summary>
-public partial class FilaGastoEditableVm : ObservableValidator
+public partial class FilaGastoEditableVm : FilaImportacionEditableVmBase
 {
     [ObservableProperty] private string _hojaOrigen = string.Empty;
     [ObservableProperty] private int _numeroFila;

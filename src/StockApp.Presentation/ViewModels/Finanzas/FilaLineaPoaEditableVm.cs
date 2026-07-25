@@ -21,7 +21,7 @@ public sealed record AsignacionLineaPoaVm(string? Fuente, bool FuenteDesconocida
 /// el ÚNICO campo editable, y sólo aplica/es obligatorio si EsNueva (si la línea ya existe en la
 /// base, Programa ni se manda a confirmar — ver Task 10).
 /// </summary>
-public partial class FilaLineaPoaEditableVm : ObservableValidator
+public partial class FilaLineaPoaEditableVm : FilaImportacionEditableVmBase
 {
     [ObservableProperty] private string _hoja = string.Empty;
     [ObservableProperty] private int _ejercicio;
