@@ -37,9 +37,11 @@ public class NuevaImportacionViewModelTests
         rubros.Setup(r => r.ListarActivosAsync()).ReturnsAsync(new List<RubroGasto>());
         var proveedores = new Mock<IProveedorService>();
         proveedores.Setup(p => p.ListarTodosAsync()).ReturnsAsync(new List<Proveedor>());
+        var lineasPoa = new Mock<ILineaPoaService>();
+        lineasPoa.Setup(l => l.ListarTodasAsync()).ReturnsAsync(new List<LineaPoa>());
 
         var vm = new NuevaImportacionViewModel(
-            svc.Object, seleccion.Object, confirm.Object, fuentes.Object, rubros.Object, proveedores.Object);
+            svc.Object, seleccion.Object, confirm.Object, fuentes.Object, rubros.Object, proveedores.Object, lineasPoa.Object);
         return (vm, svc, seleccion, confirm, fuentes, rubros, proveedores);
     }
 
@@ -123,9 +125,11 @@ public class NuevaImportacionViewModelTests
         svc.Setup(s => s.AnalizarAsync(
                 It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<int>()))
             .ReturnsAsync(analisis);
+        var lineasPoa = new Mock<ILineaPoaService>();
+        lineasPoa.Setup(l => l.ListarTodasAsync()).ReturnsAsync(new List<LineaPoa>());
 
         var vm = new NuevaImportacionViewModel(
-            svc.Object, seleccion.Object, confirm.Object, fuentes.Object, rubros.Object, proveedores.Object);
+            svc.Object, seleccion.Object, confirm.Object, fuentes.Object, rubros.Object, proveedores.Object, lineasPoa.Object);
         await vm.SeleccionarGastosCommand.ExecuteAsync(null);
         await vm.SeleccionarPoaCommand.ExecuteAsync(null);
         await vm.AnalizarCommand.ExecuteAsync(null);

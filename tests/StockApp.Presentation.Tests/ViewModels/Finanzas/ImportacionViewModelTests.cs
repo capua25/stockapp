@@ -18,8 +18,9 @@ public class ImportacionViewModelTests
         var fuentes = Mock.Of<IFuenteFinanciamientoService>();
         var rubros = Mock.Of<IRubroGastoService>();
         var proveedores = Mock.Of<IProveedorService>();
+        var lineasPoa = Mock.Of<ILineaPoaService>();
 
-        var nuevaVm = new NuevaImportacionViewModel(servicio, seleccion, confirmacion, fuentes, rubros, proveedores);
+        var nuevaVm = new NuevaImportacionViewModel(servicio, seleccion, confirmacion, fuentes, rubros, proveedores, lineasPoa);
         var historialVm = new HistorialImportacionesViewModel(servicio, confirmacion);
 
         var vm = new ImportacionViewModel(nuevaVm, historialVm);

@@ -44,9 +44,10 @@ public class NuevaImportacionGastosGridTests
         var fuentes = new FuenteFinanciamientoServiceFake(new List<FuenteFinanciamiento>());
         var rubros = new RubroGastoServiceFake(new List<RubroGasto>());
         var proveedores = new ProveedorServiceFake(new List<Proveedor>());
+        var lineasPoa = new LineaPoaServiceFake(new List<LineaPoa>());
 
         var vm = new NuevaImportacionViewModel(
-            service, seleccion, new ConfirmacionServiceFake(), fuentes, rubros, proveedores);
+            service, seleccion, new ConfirmacionServiceFake(), fuentes, rubros, proveedores, lineasPoa);
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
         window.DataContext = vm;

@@ -81,3 +81,16 @@ internal sealed class ProveedorServiceFake : IProveedorService
     public Task BajaLogicaAsync(int id) => throw new NotSupportedException("No usado en este banco de pruebas.");
     public Task<IReadOnlyList<Proveedor>> ListarTodosAsync() => Task.FromResult(_proveedores);
 }
+
+internal sealed class LineaPoaServiceFake : ILineaPoaService
+{
+    private readonly IReadOnlyList<LineaPoa> _lineas;
+
+    public LineaPoaServiceFake(IReadOnlyList<LineaPoa> lineas) => _lineas = lineas;
+
+    public Task<int> AltaAsync(LineaPoa linea) => throw new NotSupportedException("No usado en este banco de pruebas.");
+    public Task ModificarAsync(LineaPoa linea) => throw new NotSupportedException("No usado en este banco de pruebas.");
+    public Task BajaLogicaAsync(int id) => throw new NotSupportedException("No usado en este banco de pruebas.");
+    public Task<IReadOnlyList<LineaPoa>> ListarTodasAsync() => Task.FromResult(_lineas);
+    public Task<IReadOnlyList<LineaPoa>> ListarActivasAsync() => Task.FromResult(_lineas);
+}

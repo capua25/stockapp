@@ -40,6 +40,7 @@ public partial class NuevaImportacionViewModel : ViewModelBase
     private readonly IFuenteFinanciamientoService _fuentesService;
     private readonly IRubroGastoService _rubrosService;
     private readonly IProveedorService _proveedoresService;
+    private readonly ILineaPoaService _lineasPoaService;
 
     [ObservableProperty]
     private PasoWizardImportacion _pasoActual = PasoWizardImportacion.Cargar;
@@ -118,10 +119,12 @@ public partial class NuevaImportacionViewModel : ViewModelBase
     public ObservableCollection<FuenteFinanciamiento> FuentesDisponibles { get; } = new();
     public ObservableCollection<RubroGasto> RubrosDisponibles { get; } = new();
     public ObservableCollection<Proveedor> ProveedoresDisponibles { get; } = new();
+    public ObservableCollection<string> ProgramasExistentes { get; } = new();
 
     public NuevaImportacionViewModel(
         IImportacionService service, IServicioSeleccionArchivo seleccion, IConfirmacionService confirmacion,
-        IFuenteFinanciamientoService fuentesService, IRubroGastoService rubrosService, IProveedorService proveedoresService)
+        IFuenteFinanciamientoService fuentesService, IRubroGastoService rubrosService, IProveedorService proveedoresService,
+        ILineaPoaService lineasPoaService)
     {
         _service = service;
         _seleccion = seleccion;
@@ -129,6 +132,7 @@ public partial class NuevaImportacionViewModel : ViewModelBase
         _fuentesService = fuentesService;
         _rubrosService = rubrosService;
         _proveedoresService = proveedoresService;
+        _lineasPoaService = lineasPoaService;
 
         FilasGastoView = new DataGridCollectionView(FilasGasto);
         FilasIngresoView = new DataGridCollectionView(FilasIngreso);
@@ -150,6 +154,11 @@ public partial class NuevaImportacionViewModel : ViewModelBase
         var proveedores = await _proveedoresService.ListarTodosAsync();
         ProveedoresDisponibles.Clear();
         foreach (var p in proveedores.Where(p => p.Activo)) ProveedoresDisponibles.Add(p);
+
+        var lineas = await _lineasPoaService.ListarTodasAsync();
+        ProgramasExistentes.Clear();
+        foreach (var programa in lineas.Select(l => l.Programa).Distinct().OrderBy(p => p))
+            ProgramasExistentes.Add(programa);
     }
 
     [RelayCommand]

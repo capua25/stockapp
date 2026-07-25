@@ -275,35 +275,153 @@
                     </DataGrid>
                 </TabItem>
                 <TabItem Header="Ingresos">
-                    <!-- read-only provisional — edición en Task 8. Esta pestaña bindeaba contra
-                         IngresosAnalizadosView, propiedad que ya no existe en el VM tras el refactor de
-                         Task 6 (ahora FilasIngresoView) y no compilaba (AVLN2000). Se repara al mínimo
-                         (mismo shape de columnas, ahora contra FilaIngresoEditableVm) para que la vista
-                         entera compile y los tests headless de Task 7 puedan correr. Task 8 reemplaza esto
-                         por la grilla editable real. -->
-                    <DataGrid ItemsSource="{Binding FilasIngresoView}" IsReadOnly="True"
+                    <DataGrid ItemsSource="{Binding FilasIngresoView}" IsReadOnly="False"
                               CanUserSortColumns="True" AutoGenerateColumns="False">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Concepto" Binding="{Binding Concepto, DataType={x:Type vm:FilaIngresoEditableVm}}" Width="*" />
-                            <DataGridTextColumn Header="Monto" Binding="{Binding Monto, DataType={x:Type vm:FilaIngresoEditableVm}}" Width="Auto" />
-                            <DataGridTextColumn Header="Fuente" Binding="{Binding Fuente, DataType={x:Type vm:FilaIngresoEditableVm}}" Width="Auto" />
-                            <DataGridTextColumn Header="Estado" Binding="{Binding Estado, DataType={x:Type vm:FilaIngresoEditableVm}}" Width="Auto" />
+
+                            <DataGridTemplateColumn Header="Fecha" Width="Auto" IsReadOnly="False">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate x:DataType="vm:FilaIngresoEditableVm">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="{Binding Fecha, StringFormat='{}{0:dd/MM/yyyy}'}" VerticalAlignment="Center" />
+                                            <i:Icon Value="mdi-lock" IsVisible="{Binding !EsEditableFecha}" FontSize="12" Opacity="0.5" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                                <DataGridTemplateColumn.CellEditingTemplate>
+                                    <DataTemplate x:DataType="vm:FilaIngresoEditableVm">
+                                        <CalendarDatePicker
+                                            SelectedDate="{Binding Fecha, Converter={x:Static conv:DateOnlyOffsetConverter.Instance}, Mode=TwoWay}"
+                                            IsEnabled="{Binding EsEditableFecha}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellEditingTemplate>
+                            </DataGridTemplateColumn>
+
+                            <DataGridTemplateColumn Header="Concepto" Width="*" IsReadOnly="False">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate x:DataType="vm:FilaIngresoEditableVm">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="{Binding Concepto}" VerticalAlignment="Center" />
+                                            <i:Icon Value="mdi-lock" IsVisible="{Binding !EsEditableConcepto}" FontSize="12" Opacity="0.5" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                                <DataGridTemplateColumn.CellEditingTemplate>
+                                    <DataTemplate x:DataType="vm:FilaIngresoEditableVm">
+                                        <TextBox Text="{Binding Concepto, Mode=TwoWay}" IsEnabled="{Binding EsEditableConcepto}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellEditingTemplate>
+                            </DataGridTemplateColumn>
+
+                            <DataGridTemplateColumn Header="Monto" Width="Auto" IsReadOnly="False">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate x:DataType="vm:FilaIngresoEditableVm">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="{Binding Monto}" VerticalAlignment="Center" />
+                                            <i:Icon Value="mdi-lock" IsVisible="{Binding !EsEditableMonto}" FontSize="12" Opacity="0.5" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                                <DataGridTemplateColumn.CellEditingTemplate>
+                                    <DataTemplate x:DataType="vm:FilaIngresoEditableVm">
+                                        <TextBox Text="{Binding Monto, Converter={x:Static conv:DecimalOpcionalConverter.Instance}, Mode=TwoWay}"
+                                                  IsEnabled="{Binding EsEditableMonto}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellEditingTemplate>
+                            </DataGridTemplateColumn>
+
+                            <DataGridTemplateColumn Header="Fuente" Width="Auto" IsReadOnly="False" x:CompileBindings="False">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="{Binding Fuente}" VerticalAlignment="Center" />
+                                            <i:Icon Value="mdi-lock" IsVisible="{Binding !EsEditableFuente}" FontSize="12" Opacity="0.5" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                                <DataGridTemplateColumn.CellEditingTemplate>
+                                    <DataTemplate>
+                                        <ComboBox IsEditable="True"
+                                                  Text="{Binding Fuente, Mode=TwoWay}"
+                                                  ItemsSource="{Binding #Root.DataContext.FuentesDisponibles}"
+                                                  IsEnabled="{Binding EsEditableFuente}"
+                                                  HorizontalAlignment="Stretch">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Nombre}" />
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellEditingTemplate>
+                            </DataGridTemplateColumn>
+
+                            <DataGridTextColumn Header="Estado" Binding="{Binding Estado, DataType={x:Type vm:FilaIngresoEditableVm}}" Width="Auto" IsReadOnly="True" />
+
+                            <DataGridTemplateColumn Header="" Width="40" IsReadOnly="True">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate x:DataType="vm:FilaIngresoEditableVm">
+                                        <Button Classes="ghost" Command="{Binding DesbloquearCommand}"
+                                                IsVisible="{Binding !Desbloqueada}" ToolTip.Tip="Desbloquear fila para corregir">
+                                            <i:Icon Value="mdi-pencil" />
+                                        </Button>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
                         </DataGrid.Columns>
                     </DataGrid>
                 </TabItem>
                 <TabItem Header="Líneas POA">
-                    <!-- read-only provisional — edición en Task 8. Mismo problema que Ingresos: bindeaba
-                         contra LineasPoaAnalizadasView (ya no existe) y columnas Literal/Presupuesto/Saldo
-                         que FilaLineaPoaEditableVm (agrupado por Hoja, con Asignaciones) ya no expone como
-                         escalares. Se repara al mínimo con las columnas que SÍ existen hoy en el VM para que
-                         la vista compile. Task 8 diseña la grilla real (probablemente con Asignaciones
-                         anidado). -->
-                    <DataGrid ItemsSource="{Binding FilasLineaPoaView}" IsReadOnly="True"
+                    <DataGrid x:Name="GridLineasPoa" ItemsSource="{Binding FilasLineaPoaView}" IsReadOnly="False"
                               CanUserSortColumns="True" AutoGenerateColumns="False">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Hoja" Binding="{Binding Hoja, DataType={x:Type vm:FilaLineaPoaEditableVm}}" Width="*" />
-                            <DataGridTextColumn Header="Programa" Binding="{Binding Programa, DataType={x:Type vm:FilaLineaPoaEditableVm}}" Width="Auto" />
-                            <DataGridTextColumn Header="Estado" Binding="{Binding Estado, DataType={x:Type vm:FilaLineaPoaEditableVm}}" Width="Auto" />
+
+                            <DataGridTextColumn Header="Hoja" Binding="{Binding Hoja, DataType={x:Type vm:FilaLineaPoaEditableVm}}" Width="*" IsReadOnly="True" />
+
+                            <DataGridTemplateColumn Header="Asignaciones" Width="2*" IsReadOnly="True">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate x:DataType="vm:FilaLineaPoaEditableVm">
+                                        <ItemsControl ItemsSource="{Binding Asignaciones}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:AsignacionLineaPoaVm">
+                                                    <!-- Fuente Y Monto (Presupuesto) — no sólo la fuente: el resultado en
+                                                         pantalla debe leerse "Rentas Generales: $ 6.341.849", no
+                                                         "Rentas Generales:" a secas. MonedaConverter porque Presupuesto
+                                                         es decimal NO nullable (DecimalOpcionalConverter es para decimal?). -->
+                                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                                        <TextBlock Text="{Binding Fuente, StringFormat='{}{0}: '}" />
+                                                        <TextBlock Text="{Binding Presupuesto, Converter={x:Static conv:MonedaConverter.Instance}}" />
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
+                            <DataGridTemplateColumn Header="Programa" Width="*" IsReadOnly="False">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate x:DataType="vm:FilaLineaPoaEditableVm">
+                                        <TextBlock Text="{Binding Programa}" VerticalAlignment="Center" IsVisible="{Binding EsNueva}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                                <DataGridTemplateColumn.CellEditingTemplate>
+                                    <DataTemplate x:DataType="vm:FilaLineaPoaEditableVm">
+                                        <ComboBox IsEditable="True"
+                                                  Text="{Binding Programa, Mode=TwoWay}"
+                                                  ItemsSource="{Binding #Root.DataContext.ProgramasExistentes}"
+                                                  IsEnabled="{Binding EsNueva}"
+                                                  IsVisible="{Binding EsNueva}"
+                                                  HorizontalAlignment="Stretch" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellEditingTemplate>
+                            </DataGridTemplateColumn>
+
+                            <DataGridTextColumn Header="Nueva" Binding="{Binding EsNueva, DataType={x:Type vm:FilaLineaPoaEditableVm}}" Width="Auto" IsReadOnly="True" />
+
+                            <DataGridTextColumn Header="Estado" Binding="{Binding Estado, DataType={x:Type vm:FilaLineaPoaEditableVm}}" Width="Auto" IsReadOnly="True" />
+
                         </DataGrid.Columns>
                     </DataGrid>
                 </TabItem>
