@@ -6,7 +6,9 @@ using System.Threading.Tasks;
 using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using StockApp.Application.Catalogo;
 using StockApp.Application.Finanzas;
+using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Services;
@@ -35,6 +37,9 @@ public partial class NuevaImportacionViewModel : ViewModelBase
     private readonly IImportacionService _service;
     private readonly IServicioSeleccionArchivo _seleccion;
     private readonly IConfirmacionService _confirmacion;
+    private readonly IFuenteFinanciamientoService _fuentesService;
+    private readonly IRubroGastoService _rubrosService;
+    private readonly IProveedorService _proveedoresService;
 
     [ObservableProperty]
     private PasoWizardImportacion _pasoActual = PasoWizardImportacion.Cargar;
@@ -110,16 +115,41 @@ public partial class NuevaImportacionViewModel : ViewModelBase
 
     public ObservableCollection<ConflictoGastoFila> Conflictos { get; } = new();
 
+    public ObservableCollection<FuenteFinanciamiento> FuentesDisponibles { get; } = new();
+    public ObservableCollection<RubroGasto> RubrosDisponibles { get; } = new();
+    public ObservableCollection<Proveedor> ProveedoresDisponibles { get; } = new();
+
     public NuevaImportacionViewModel(
-        IImportacionService service, IServicioSeleccionArchivo seleccion, IConfirmacionService confirmacion)
+        IImportacionService service, IServicioSeleccionArchivo seleccion, IConfirmacionService confirmacion,
+        IFuenteFinanciamientoService fuentesService, IRubroGastoService rubrosService, IProveedorService proveedoresService)
     {
         _service = service;
         _seleccion = seleccion;
         _confirmacion = confirmacion;
+        _fuentesService = fuentesService;
+        _rubrosService = rubrosService;
+        _proveedoresService = proveedoresService;
 
         FilasGastoView = new DataGridCollectionView(FilasGasto);
         FilasIngresoView = new DataGridCollectionView(FilasIngreso);
         FilasLineaPoaView = new DataGridCollectionView(FilasLineaPoa);
+    }
+
+    /// <summary>Carga los combos de maestros existentes. La dispara la View (DataContextChanged),
+    /// mismo contrato que GastoFormViewModel.InicializarAsync.</summary>
+    public async Task InicializarMaestrosAsync()
+    {
+        var fuentes = await _fuentesService.ListarActivasAsync();
+        FuentesDisponibles.Clear();
+        foreach (var f in fuentes) FuentesDisponibles.Add(f);
+
+        var rubros = await _rubrosService.ListarActivosAsync();
+        RubrosDisponibles.Clear();
+        foreach (var r in rubros) RubrosDisponibles.Add(r);
+
+        var proveedores = await _proveedoresService.ListarTodosAsync();
+        ProveedoresDisponibles.Clear();
+        foreach (var p in proveedores.Where(p => p.Activo)) ProveedoresDisponibles.Add(p);
     }
 
     [RelayCommand]

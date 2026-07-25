@@ -1,4 +1,5 @@
 using Moq;
+using StockApp.Application.Catalogo;
 using StockApp.Application.Finanzas;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Finanzas;
@@ -14,8 +15,11 @@ public class ImportacionViewModelTests
         var servicio = Mock.Of<IImportacionService>();
         var seleccion = Mock.Of<IServicioSeleccionArchivo>();
         var confirmacion = Mock.Of<IConfirmacionService>();
+        var fuentes = Mock.Of<IFuenteFinanciamientoService>();
+        var rubros = Mock.Of<IRubroGastoService>();
+        var proveedores = Mock.Of<IProveedorService>();
 
-        var nuevaVm = new NuevaImportacionViewModel(servicio, seleccion, confirmacion);
+        var nuevaVm = new NuevaImportacionViewModel(servicio, seleccion, confirmacion, fuentes, rubros, proveedores);
         var historialVm = new HistorialImportacionesViewModel(servicio, confirmacion);
 
         var vm = new ImportacionViewModel(nuevaVm, historialVm);

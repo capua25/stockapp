@@ -5,6 +5,8 @@ using Avalonia.Markup.Xaml.Styling;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
+using Optris.Icons.Avalonia;
+using Optris.Icons.Avalonia.MaterialDesign;
 
 [assembly: AvaloniaTestApplication(typeof(StockApp.Presentation.UiTests.TestApp))]
 
@@ -21,9 +23,30 @@ namespace StockApp.Presentation.UiTests;
 /// </summary>
 public class TestApp : Avalonia.Application
 {
+    // IconProvider.Current es un singleton ESTATICO de proceso (Optris.Icons.Avalonia.IconProvider),
+    // pero Avalonia.Headless.XUnit reconstruye un TestApp NUEVO por cada [AvaloniaFact] (aislamiento
+    // por test). Registrar sin guardia hacia que el SEGUNDO test de cualquier clase intentara
+    // registrar el prefijo "mdi" de nuevo -> IconProvider.Register lanza ArgumentException interna
+    // ("Prefix... conflicts with existing...") durante la construccion de la Application, que
+    // Avalonia.Headless.XUnit no propaga como fallo de test sino que cuelga el dispatcher del host
+    // headless para SIEMPRE (confirmado con ilspycmd contra Optris.Icons.Avalonia.dll: Register no
+    // es idempotente). Guardia estatica para registrar una sola vez por proceso, igual que Program.cs
+    // en produccion (que solo construye la Application una vez).
+    private static bool _iconProviderRegistrado;
+
     public TestApp()
     {
         RequestedThemeVariant = ThemeVariant.Light;
+
+        // Registro del proveedor de íconos (mismo que Program.cs en producción): sin esto,
+        // cualquier <i:Icon Value="mdi-..."/> (usado por ej. en NuevaImportacionView.axaml para el
+        // candado de celda bloqueada) tira KeyNotFoundException "No IIconProvider with prefix
+        // matching..." al construir el layout de la celda — Task 7 F5d E2.
+        if (!_iconProviderRegistrado)
+        {
+            IconProvider.Current.Register<MaterialDesignIconProvider>();
+            _iconProviderRegistrado = true;
+        }
 
         // Workaround puntual del banco de pruebas: el tema Fluent del DataGrid resuelve
         // DataGridRowBackgroundBrush/DataGridCellBackgroundBrush/DataGridCurrencyVisualPrimaryBrush/

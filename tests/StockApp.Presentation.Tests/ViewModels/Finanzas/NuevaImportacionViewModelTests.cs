@@ -1,5 +1,7 @@
 using Moq;
+using StockApp.Application.Catalogo;
 using StockApp.Application.Finanzas;
+using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Services;
@@ -20,22 +22,31 @@ public class NuevaImportacionViewModelTests
         SaldosPoa: new SaldosTotalesPoaOds(0m, 0m));
 
     private static (NuevaImportacionViewModel vm, Mock<IImportacionService> svc,
-                    Mock<IServicioSeleccionArchivo> seleccion, Mock<IConfirmacionService> confirm)
+                    Mock<IServicioSeleccionArchivo> seleccion, Mock<IConfirmacionService> confirm,
+                    Mock<IFuenteFinanciamientoService> fuentes, Mock<IRubroGastoService> rubros,
+                    Mock<IProveedorService> proveedores)
         Crear()
     {
         var svc = new Mock<IImportacionService>();
         var seleccion = new Mock<IServicioSeleccionArchivo>();
         var confirm = new Mock<IConfirmacionService>();
         confirm.Setup(c => c.InformarAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
+        var fuentes = new Mock<IFuenteFinanciamientoService>();
+        fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>());
+        var rubros = new Mock<IRubroGastoService>();
+        rubros.Setup(r => r.ListarActivosAsync()).ReturnsAsync(new List<RubroGasto>());
+        var proveedores = new Mock<IProveedorService>();
+        proveedores.Setup(p => p.ListarTodosAsync()).ReturnsAsync(new List<Proveedor>());
 
-        var vm = new NuevaImportacionViewModel(svc.Object, seleccion.Object, confirm.Object);
-        return (vm, svc, seleccion, confirm);
+        var vm = new NuevaImportacionViewModel(
+            svc.Object, seleccion.Object, confirm.Object, fuentes.Object, rubros.Object, proveedores.Object);
+        return (vm, svc, seleccion, confirm, fuentes, rubros, proveedores);
     }
 
     [Fact]
     public void EstadoInicial_PasoActualEsCargar()
     {
-        var (vm, _, _, _) = Crear();
+        var (vm, _, _, _, _, _, _) = Crear();
 
         Assert.Equal(PasoWizardImportacion.Cargar, vm.PasoActual);
     }
@@ -43,7 +54,7 @@ public class NuevaImportacionViewModelTests
     [Fact]
     public void AnalizarCommand_SinArchivosSeleccionados_NoPuedeEjecutar()
     {
-        var (vm, _, _, _) = Crear();
+        var (vm, _, _, _, _, _, _) = Crear();
 
         Assert.False(vm.AnalizarCommand.CanExecute(null));
     }
@@ -51,7 +62,7 @@ public class NuevaImportacionViewModelTests
     [Fact]
     public async Task SeleccionarGastosYPoa_HabilitaAnalizar()
     {
-        var (vm, _, seleccion, _) = Crear();
+        var (vm, _, seleccion, _, _, _, _) = Crear();
         seleccion.SetupSequence(s => s.SeleccionarArchivoOdsAsync())
             .ReturnsAsync(("gastos.ods", new byte[] { 1 }))
             .ReturnsAsync(("poa.ods", new byte[] { 2 }));
@@ -67,7 +78,7 @@ public class NuevaImportacionViewModelTests
     [Fact]
     public async Task AnalizarAsync_ConExito_AvanzaAPasoRevisar()
     {
-        var (vm, svc, seleccion, _) = Crear();
+        var (vm, svc, seleccion, _, _, _, _) = Crear();
         seleccion.SetupSequence(s => s.SeleccionarArchivoOdsAsync())
             .ReturnsAsync(("gastos.ods", new byte[] { 1 }))
             .ReturnsAsync(("poa.ods", new byte[] { 2 }));
@@ -85,7 +96,7 @@ public class NuevaImportacionViewModelTests
     [Fact]
     public async Task AnalizarAsync_ElServidorFalla_InformaYNoAvanzaDePaso()
     {
-        var (vm, svc, seleccion, confirm) = Crear();
+        var (vm, svc, seleccion, confirm, _, _, _) = Crear();
         seleccion.SetupSequence(s => s.SeleccionarArchivoOdsAsync())
             .ReturnsAsync(("gastos.ods", new byte[] { 1 }))
             .ReturnsAsync(("poa.ods", new byte[] { 2 }));
@@ -103,6 +114,7 @@ public class NuevaImportacionViewModelTests
 
     private static async Task<NuevaImportacionViewModel> CrearEnPasoRevisarAsync(
         Mock<IImportacionService> svc, Mock<IServicioSeleccionArchivo> seleccion, Mock<IConfirmacionService> confirm,
+        Mock<IFuenteFinanciamientoService> fuentes, Mock<IRubroGastoService> rubros, Mock<IProveedorService> proveedores,
         ResultadoAnalisisDto analisis)
     {
         seleccion.SetupSequence(s => s.SeleccionarArchivoOdsAsync())
@@ -112,7 +124,8 @@ public class NuevaImportacionViewModelTests
                 It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<int>()))
             .ReturnsAsync(analisis);
 
-        var vm = new NuevaImportacionViewModel(svc.Object, seleccion.Object, confirm.Object);
+        var vm = new NuevaImportacionViewModel(
+            svc.Object, seleccion.Object, confirm.Object, fuentes.Object, rubros.Object, proveedores.Object);
         await vm.SeleccionarGastosCommand.ExecuteAsync(null);
         await vm.SeleccionarPoaCommand.ExecuteAsync(null);
         await vm.AnalizarCommand.ExecuteAsync(null);
@@ -125,6 +138,12 @@ public class NuevaImportacionViewModelTests
         var svc = new Mock<IImportacionService>();
         var seleccion = new Mock<IServicioSeleccionArchivo>();
         var confirm = new Mock<IConfirmacionService>();
+        var fuentes = new Mock<IFuenteFinanciamientoService>();
+        fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>());
+        var rubros = new Mock<IRubroGastoService>();
+        rubros.Setup(r => r.ListarActivosAsync()).ReturnsAsync(new List<RubroGasto>());
+        var proveedores = new Mock<IProveedorService>();
+        proveedores.Setup(p => p.ListarTodosAsync()).ReturnsAsync(new List<Proveedor>());
         var analisis = ResultadoAnalisisVacio() with
         {
             Gastos = new List<GastoAnalizadoDto>
@@ -136,7 +155,7 @@ public class NuevaImportacionViewModelTests
             Resumen = new ResumenAnalisisDto(1, 1, 0, 0, 0, 0, 0),
         };
 
-        var vm = await CrearEnPasoRevisarAsync(svc, seleccion, confirm, analisis);
+        var vm = await CrearEnPasoRevisarAsync(svc, seleccion, confirm, fuentes, rubros, proveedores, analisis);
 
         var fila = Assert.Single(vm.FilasGasto);
         Assert.Equal("ACME SA", fila.Proveedor);
@@ -153,6 +172,12 @@ public class NuevaImportacionViewModelTests
         var svc = new Mock<IImportacionService>();
         var seleccion = new Mock<IServicioSeleccionArchivo>();
         var confirm = new Mock<IConfirmacionService>();
+        var fuentes = new Mock<IFuenteFinanciamientoService>();
+        fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>());
+        var rubros = new Mock<IRubroGastoService>();
+        rubros.Setup(r => r.ListarActivosAsync()).ReturnsAsync(new List<RubroGasto>());
+        var proveedores = new Mock<IProveedorService>();
+        proveedores.Setup(p => p.ListarTodosAsync()).ReturnsAsync(new List<Proveedor>());
         var analisis = ResultadoAnalisisVacio() with
         {
             Gastos = new List<GastoAnalizadoDto>
@@ -165,7 +190,7 @@ public class NuevaImportacionViewModelTests
             Resumen = new ResumenAnalisisDto(1, 0, 0, 1, 0, 0, 0),
         };
 
-        var vm = await CrearEnPasoRevisarAsync(svc, seleccion, confirm, analisis);
+        var vm = await CrearEnPasoRevisarAsync(svc, seleccion, confirm, fuentes, rubros, proveedores, analisis);
 
         Assert.False(vm.PuedeConfirmar);
         Assert.False(vm.ConfirmarCommand.CanExecute(null));
@@ -177,12 +202,18 @@ public class NuevaImportacionViewModelTests
         var svc = new Mock<IImportacionService>();
         var seleccion = new Mock<IServicioSeleccionArchivo>();
         var confirm = new Mock<IConfirmacionService>();
+        var fuentes = new Mock<IFuenteFinanciamientoService>();
+        fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>());
+        var rubros = new Mock<IRubroGastoService>();
+        rubros.Setup(r => r.ListarActivosAsync()).ReturnsAsync(new List<RubroGasto>());
+        var proveedores = new Mock<IProveedorService>();
+        proveedores.Setup(p => p.ListarTodosAsync()).ReturnsAsync(new List<Proveedor>());
         var analisis = ResultadoAnalisisVacio() with
         {
             Resumen = new ResumenAnalisisDto(1, 0, 1, 0, 0, 0, 0),
         };
 
-        var vm = await CrearEnPasoRevisarAsync(svc, seleccion, confirm, analisis);
+        var vm = await CrearEnPasoRevisarAsync(svc, seleccion, confirm, fuentes, rubros, proveedores, analisis);
 
         Assert.True(vm.PuedeConfirmar);
         Assert.True(vm.ConfirmarCommand.CanExecute(null));
@@ -198,6 +229,12 @@ public class NuevaImportacionViewModelTests
         var svc = new Mock<IImportacionService>();
         var seleccion = new Mock<IServicioSeleccionArchivo>();
         var confirm = new Mock<IConfirmacionService>();
+        var fuentes = new Mock<IFuenteFinanciamientoService>();
+        fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>());
+        var rubros = new Mock<IRubroGastoService>();
+        rubros.Setup(r => r.ListarActivosAsync()).ReturnsAsync(new List<RubroGasto>());
+        var proveedores = new Mock<IProveedorService>();
+        proveedores.Setup(p => p.ListarTodosAsync()).ReturnsAsync(new List<Proveedor>());
         var analisis = ResultadoAnalisisVacio() with
         {
             Gastos = new List<GastoAnalizadoDto>
@@ -210,7 +247,7 @@ public class NuevaImportacionViewModelTests
             Resumen = new ResumenAnalisisDto(1, 0, 1, 0, 0, 0, 0),
         };
 
-        var vm = await CrearEnPasoRevisarAsync(svc, seleccion, confirm, analisis);
+        var vm = await CrearEnPasoRevisarAsync(svc, seleccion, confirm, fuentes, rubros, proveedores, analisis);
 
         Assert.False(vm.PuedeConfirmar);
         Assert.False(vm.ConfirmarCommand.CanExecute(null));
@@ -223,6 +260,12 @@ public class NuevaImportacionViewModelTests
         var svc = new Mock<IImportacionService>();
         var seleccion = new Mock<IServicioSeleccionArchivo>();
         var confirm = new Mock<IConfirmacionService>();
+        var fuentes = new Mock<IFuenteFinanciamientoService>();
+        fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>());
+        var rubros = new Mock<IRubroGastoService>();
+        rubros.Setup(r => r.ListarActivosAsync()).ReturnsAsync(new List<RubroGasto>());
+        var proveedores = new Mock<IProveedorService>();
+        proveedores.Setup(p => p.ListarTodosAsync()).ReturnsAsync(new List<Proveedor>());
         var analisis = ResultadoAnalisisVacio() with
         {
             Gastos = new List<GastoAnalizadoDto>
@@ -234,7 +277,7 @@ public class NuevaImportacionViewModelTests
             Resumen = new ResumenAnalisisDto(1, 1, 0, 0, 0, 0, 0),
         };
 
-        var vm = await CrearEnPasoRevisarAsync(svc, seleccion, confirm, analisis);
+        var vm = await CrearEnPasoRevisarAsync(svc, seleccion, confirm, fuentes, rubros, proveedores, analisis);
 
         Assert.True(vm.PuedeConfirmar);
         Assert.True(vm.ConfirmarCommand.CanExecute(null));
@@ -247,6 +290,12 @@ public class NuevaImportacionViewModelTests
         var svc = new Mock<IImportacionService>();
         var seleccion = new Mock<IServicioSeleccionArchivo>();
         var confirm = new Mock<IConfirmacionService>();
+        var fuentes = new Mock<IFuenteFinanciamientoService>();
+        fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>());
+        var rubros = new Mock<IRubroGastoService>();
+        rubros.Setup(r => r.ListarActivosAsync()).ReturnsAsync(new List<RubroGasto>());
+        var proveedores = new Mock<IProveedorService>();
+        proveedores.Setup(p => p.ListarTodosAsync()).ReturnsAsync(new List<Proveedor>());
         var analisis = ResultadoAnalisisVacio() with
         {
             Gastos = new List<GastoAnalizadoDto>
@@ -257,7 +306,7 @@ public class NuevaImportacionViewModelTests
             },
             Resumen = new ResumenAnalisisDto(1, 1, 0, 0, 0, 0, 0),
         };
-        var vm = await CrearEnPasoRevisarAsync(svc, seleccion, confirm, analisis);
+        var vm = await CrearEnPasoRevisarAsync(svc, seleccion, confirm, fuentes, rubros, proveedores, analisis);
         var resultadoConfirmacion = new ResultadoConfirmacionDto(
             Guid.NewGuid(), 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, new List<ConflictoGastoDto>());
         ConfirmarImportacionDto? dtoCapturado = null;
@@ -280,6 +329,12 @@ public class NuevaImportacionViewModelTests
         var svc = new Mock<IImportacionService>();
         var seleccion = new Mock<IServicioSeleccionArchivo>();
         var confirm = new Mock<IConfirmacionService>();
+        var fuentes = new Mock<IFuenteFinanciamientoService>();
+        fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>());
+        var rubros = new Mock<IRubroGastoService>();
+        rubros.Setup(r => r.ListarActivosAsync()).ReturnsAsync(new List<RubroGasto>());
+        var proveedores = new Mock<IProveedorService>();
+        proveedores.Setup(p => p.ListarTodosAsync()).ReturnsAsync(new List<Proveedor>());
         var analisis = ResultadoAnalisisVacio() with
         {
             Gastos = new List<GastoAnalizadoDto>
@@ -290,7 +345,7 @@ public class NuevaImportacionViewModelTests
             },
             Resumen = new ResumenAnalisisDto(1, 1, 0, 0, 0, 0, 0),
         };
-        var vm = await CrearEnPasoRevisarAsync(svc, seleccion, confirm, analisis);
+        var vm = await CrearEnPasoRevisarAsync(svc, seleccion, confirm, fuentes, rubros, proveedores, analisis);
         ConfirmarImportacionDto? dtoCapturado = null;
         svc.Setup(s => s.ConfirmarAsync(It.IsAny<ConfirmarImportacionDto>()))
             .Callback<ConfirmarImportacionDto>(dto => dtoCapturado = dto)
@@ -311,11 +366,17 @@ public class NuevaImportacionViewModelTests
         var svc = new Mock<IImportacionService>();
         var seleccion = new Mock<IServicioSeleccionArchivo>();
         var confirm = new Mock<IConfirmacionService>();
+        var fuentes = new Mock<IFuenteFinanciamientoService>();
+        fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>());
+        var rubros = new Mock<IRubroGastoService>();
+        rubros.Setup(r => r.ListarActivosAsync()).ReturnsAsync(new List<RubroGasto>());
+        var proveedores = new Mock<IProveedorService>();
+        proveedores.Setup(p => p.ListarTodosAsync()).ReturnsAsync(new List<Proveedor>());
         var analisis = ResultadoAnalisisVacio() with
         {
             Resumen = new ResumenAnalisisDto(0, 0, 0, 0, 0, 0, 0),
         };
-        var vm = await CrearEnPasoRevisarAsync(svc, seleccion, confirm, analisis);
+        var vm = await CrearEnPasoRevisarAsync(svc, seleccion, confirm, fuentes, rubros, proveedores, analisis);
         svc.Setup(s => s.ConfirmarAsync(It.IsAny<ConfirmarImportacionDto>()))
             .ThrowsAsync(new ArgumentException("MaestrosNuevos.Rubros[0].Nombre: Requerido"));
 
@@ -331,11 +392,17 @@ public class NuevaImportacionViewModelTests
         var svc = new Mock<IImportacionService>();
         var seleccion = new Mock<IServicioSeleccionArchivo>();
         var confirm = new Mock<IConfirmacionService>();
+        var fuentes = new Mock<IFuenteFinanciamientoService>();
+        fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>());
+        var rubros = new Mock<IRubroGastoService>();
+        rubros.Setup(r => r.ListarActivosAsync()).ReturnsAsync(new List<RubroGasto>());
+        var proveedores = new Mock<IProveedorService>();
+        proveedores.Setup(p => p.ListarTodosAsync()).ReturnsAsync(new List<Proveedor>());
         var analisis = ResultadoAnalisisVacio() with
         {
             Resumen = new ResumenAnalisisDto(0, 0, 0, 0, 0, 0, 0),
         };
-        var vm = await CrearEnPasoRevisarAsync(svc, seleccion, confirm, analisis);
+        var vm = await CrearEnPasoRevisarAsync(svc, seleccion, confirm, fuentes, rubros, proveedores, analisis);
         var errores = new Dictionary<string, string[]>
         {
             ["Gastos[3].Fuente"] = new[] { "La fuente 'X' no existe ni fue declarada nueva" },
@@ -361,10 +428,11 @@ public class NuevaImportacionViewModelTests
     private static async Task<(NuevaImportacionViewModel vm, ResultadoConfirmacionDto resultado)>
         CrearEnPasoResultadoAsync(
             Mock<IImportacionService> svc, Mock<IServicioSeleccionArchivo> seleccion, Mock<IConfirmacionService> confirm,
+            Mock<IFuenteFinanciamientoService> fuentes, Mock<IRubroGastoService> rubros, Mock<IProveedorService> proveedores,
             ResultadoConfirmacionDto resultado)
     {
         var analisis = ResultadoAnalisisVacio() with { Resumen = new ResumenAnalisisDto(0, 0, 0, 0, 0, 0, 0) };
-        var vm = await CrearEnPasoRevisarAsync(svc, seleccion, confirm, analisis);
+        var vm = await CrearEnPasoRevisarAsync(svc, seleccion, confirm, fuentes, rubros, proveedores, analisis);
         svc.Setup(s => s.ConfirmarAsync(It.IsAny<ConfirmarImportacionDto>())).ReturnsAsync(resultado);
 
         await vm.ConfirmarCommand.ExecuteAsync(null);
@@ -377,6 +445,12 @@ public class NuevaImportacionViewModelTests
         var svc = new Mock<IImportacionService>();
         var seleccion = new Mock<IServicioSeleccionArchivo>();
         var confirm = new Mock<IConfirmacionService>();
+        var fuentes = new Mock<IFuenteFinanciamientoService>();
+        fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>());
+        var rubros = new Mock<IRubroGastoService>();
+        rubros.Setup(r => r.ListarActivosAsync()).ReturnsAsync(new List<RubroGasto>());
+        var proveedores = new Mock<IProveedorService>();
+        proveedores.Setup(p => p.ListarTodosAsync()).ReturnsAsync(new List<Proveedor>());
         var resultado = new ResultadoConfirmacionDto(
             Guid.NewGuid(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             new List<ConflictoGastoDto>
@@ -385,7 +459,7 @@ public class NuevaImportacionViewModelTests
                     new List<CampoDivergenteDto> { new("MontoTotal", "500", "550") }, 0),
             });
 
-        var (vm, _) = await CrearEnPasoResultadoAsync(svc, seleccion, confirm, resultado);
+        var (vm, _) = await CrearEnPasoResultadoAsync(svc, seleccion, confirm, fuentes, rubros, proveedores, resultado);
 
         var conflicto = Assert.Single(vm.Conflictos);
         Assert.Equal("ACME SA", conflicto.Proveedor);
@@ -398,11 +472,17 @@ public class NuevaImportacionViewModelTests
         var svc = new Mock<IImportacionService>();
         var seleccion = new Mock<IServicioSeleccionArchivo>();
         var confirm = new Mock<IConfirmacionService>();
+        var fuentes = new Mock<IFuenteFinanciamientoService>();
+        fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>());
+        var rubros = new Mock<IRubroGastoService>();
+        rubros.Setup(r => r.ListarActivosAsync()).ReturnsAsync(new List<RubroGasto>());
+        var proveedores = new Mock<IProveedorService>();
+        proveedores.Setup(p => p.ListarTodosAsync()).ReturnsAsync(new List<Proveedor>());
         confirm.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(true);
         var idImportacion = Guid.NewGuid();
         var resultado = new ResultadoConfirmacionDto(
             idImportacion, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, new List<ConflictoGastoDto>());
-        var (vm, _) = await CrearEnPasoResultadoAsync(svc, seleccion, confirm, resultado);
+        var (vm, _) = await CrearEnPasoResultadoAsync(svc, seleccion, confirm, fuentes, rubros, proveedores, resultado);
         svc.Setup(s => s.RevertirAsync(idImportacion))
             .ReturnsAsync(new ResultadoReversionDto(idImportacion, 0, 0, 0, 0, 0));
 
@@ -419,10 +499,16 @@ public class NuevaImportacionViewModelTests
         var svc = new Mock<IImportacionService>();
         var seleccion = new Mock<IServicioSeleccionArchivo>();
         var confirm = new Mock<IConfirmacionService>();
+        var fuentes = new Mock<IFuenteFinanciamientoService>();
+        fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>());
+        var rubros = new Mock<IRubroGastoService>();
+        rubros.Setup(r => r.ListarActivosAsync()).ReturnsAsync(new List<RubroGasto>());
+        var proveedores = new Mock<IProveedorService>();
+        proveedores.Setup(p => p.ListarTodosAsync()).ReturnsAsync(new List<Proveedor>());
         confirm.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(false);
         var resultado = new ResultadoConfirmacionDto(
             Guid.NewGuid(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, new List<ConflictoGastoDto>());
-        var (vm, _) = await CrearEnPasoResultadoAsync(svc, seleccion, confirm, resultado);
+        var (vm, _) = await CrearEnPasoResultadoAsync(svc, seleccion, confirm, fuentes, rubros, proveedores, resultado);
 
         await vm.RevertirCommand.ExecuteAsync(null);
 
@@ -436,6 +522,12 @@ public class NuevaImportacionViewModelTests
         var svc = new Mock<IImportacionService>();
         var seleccion = new Mock<IServicioSeleccionArchivo>();
         var confirm = new Mock<IConfirmacionService>();
+        var fuentes = new Mock<IFuenteFinanciamientoService>();
+        fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>());
+        var rubros = new Mock<IRubroGastoService>();
+        rubros.Setup(r => r.ListarActivosAsync()).ReturnsAsync(new List<RubroGasto>());
+        var proveedores = new Mock<IProveedorService>();
+        proveedores.Setup(p => p.ListarTodosAsync()).ReturnsAsync(new List<Proveedor>());
         var resultado = new ResultadoConfirmacionDto(
             Guid.NewGuid(), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             new List<ConflictoGastoDto>
@@ -443,7 +535,7 @@ public class NuevaImportacionViewModelTests
                 new("ACME SA", "F-1",
                     new List<CampoDivergenteDto> { new("MontoTotal", "500", "550") }, 0),
             });
-        var (vm, _) = await CrearEnPasoResultadoAsync(svc, seleccion, confirm, resultado);
+        var (vm, _) = await CrearEnPasoResultadoAsync(svc, seleccion, confirm, fuentes, rubros, proveedores, resultado);
         Assert.Equal(PasoWizardImportacion.Resultado, vm.PasoActual); // precondición del test
 
         vm.NuevaImportacionCommand.Execute(null);
@@ -459,7 +551,7 @@ public class NuevaImportacionViewModelTests
     [Fact]
     public async Task AnalizarAsync_PopulaFilasGastoComoVmEditables()
     {
-        var (vm, service, _, _) = Crear();
+        var (vm, service, _, _, _, _, _) = Crear();
         var gastoDto = new GastoAnalizadoDto(
             HojaOrigen: "MARZO", NumeroFila: 1,
             Estado: EstadoFila.Advertencia, Motivos: new List<MotivoEstado>(),
@@ -492,7 +584,7 @@ public class NuevaImportacionViewModelTests
     [Fact]
     public async Task AnalizarAsync_PopulaFilasLineaPoaAgrupadasPorHoja()
     {
-        var (vm, service, _, _) = Crear();
+        var (vm, service, _, _, _, _, _) = Crear();
         var lineaC = new LineaPoaAnalizadaDto(
             Hoja: "COMPOSTERAS", Ejercicio: 2026, EsNueva: true,
             Estado: EstadoFila.Ok, Motivos: new List<MotivoEstado>(),
@@ -520,7 +612,7 @@ public class NuevaImportacionViewModelTests
     [Fact]
     public async Task PuedeConfirmar_FilaConErrorDeValidacion_EsFalse()
     {
-        var (vm, service, _, _) = Crear();
+        var (vm, service, _, _, _, _, _) = Crear();
         var gastoIncompleto = new GastoAnalizadoDto(
             HojaOrigen: "MARZO", NumeroFila: 1,
             Estado: EstadoFila.Ok, Motivos: new List<MotivoEstado>(),
@@ -552,7 +644,7 @@ public class NuevaImportacionViewModelTests
     [Fact]
     public async Task PuedeConfirmar_TodasLasFilasCompletas_EsTrue()
     {
-        var (vm, service, _, _) = Crear();
+        var (vm, service, _, _, _, _, _) = Crear();
         var gastoCompleto = new GastoAnalizadoDto(
             HojaOrigen: "MARZO", NumeroFila: 1,
             Estado: EstadoFila.Ok, Motivos: new List<MotivoEstado>(),

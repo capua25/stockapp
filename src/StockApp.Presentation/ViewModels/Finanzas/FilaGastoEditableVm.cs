@@ -113,6 +113,8 @@ public partial class FilaGastoEditableVm : ObservableValidator
     /// FechaVencimiento — este hook cubre el caso de cambiar Condicion primero).</summary>
     partial void OnCondicionChanged(CondicionPago value) => ValidateProperty(FechaVencimiento, nameof(FechaVencimiento));
 
+    public IReadOnlyList<CondicionPago> CondicionesDisponibles { get; } = Enum.GetValues<CondicionPago>();
+
     [RelayCommand]
     private void Desbloquear() => Desbloqueada = true;
 

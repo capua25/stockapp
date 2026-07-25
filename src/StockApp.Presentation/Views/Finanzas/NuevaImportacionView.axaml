@@ -3,10 +3,14 @@
              xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
              xmlns:dto="using:StockApp.Application.Finanzas"
              xmlns:conv="using:StockApp.Presentation.Converters"
+             xmlns:sys="using:System"
+             xmlns:enums="using:StockApp.Domain.Enums"
+             xmlns:i="https://github.com/projektanker/icons.avalonia"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
              x:Class="StockApp.Presentation.Views.Finanzas.NuevaImportacionView"
+             x:Name="Root"
              x:DataType="vm:NuevaImportacionViewModel">
 
     <UserControl.Styles>
@@ -65,39 +69,241 @@
 
             <TabControl>
                 <TabItem Header="Gastos">
-                    <DataGrid ItemsSource="{Binding GastosAnalizadosView}" IsReadOnly="True"
+                    <DataGrid x:Name="GridGastos" ItemsSource="{Binding FilasGastoView}" IsReadOnly="False"
                               CanUserSortColumns="True" AutoGenerateColumns="False">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Proveedor" Binding="{Binding Proveedor, DataType={x:Type dto:GastoAnalizadoDto}}" Width="*" />
-                            <DataGridTextColumn Header="Factura" Binding="{Binding NumeroFactura, DataType={x:Type dto:GastoAnalizadoDto}}" Width="Auto" />
-                            <DataGridTextColumn Header="Detalle" Binding="{Binding Detalle, DataType={x:Type dto:GastoAnalizadoDto}}" Width="2*" />
-                            <DataGridTextColumn Header="Monto" Binding="{Binding Monto, DataType={x:Type dto:GastoAnalizadoDto}}" Width="Auto" />
-                            <DataGridTextColumn Header="Fuente" Binding="{Binding Fuente, DataType={x:Type dto:GastoAnalizadoDto}}" Width="Auto" />
-                            <DataGridTextColumn Header="Rubro" Binding="{Binding Rubro, DataType={x:Type dto:GastoAnalizadoDto}}" Width="Auto" />
-                            <DataGridTextColumn Header="Estado" Binding="{Binding Estado, DataType={x:Type dto:GastoAnalizadoDto}}" Width="Auto" />
+
+                            <DataGridTemplateColumn Header="Fecha" Width="Auto" IsReadOnly="False">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate x:DataType="vm:FilaGastoEditableVm">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="{Binding Fecha, StringFormat='{}{0:dd/MM/yyyy}'}" VerticalAlignment="Center" />
+                                            <i:Icon Value="mdi-lock" IsVisible="{Binding !EsEditableFecha}" FontSize="12" Opacity="0.5" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                                <DataGridTemplateColumn.CellEditingTemplate>
+                                    <DataTemplate x:DataType="vm:FilaGastoEditableVm">
+                                        <CalendarDatePicker
+                                            SelectedDate="{Binding Fecha, Converter={x:Static conv:DateOnlyOffsetConverter.Instance}, Mode=TwoWay}"
+                                            IsEnabled="{Binding EsEditableFecha}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellEditingTemplate>
+                            </DataGridTemplateColumn>
+
+                            <DataGridTemplateColumn Header="Proveedor" Width="*" IsReadOnly="False" x:CompileBindings="False">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="{Binding Proveedor}" VerticalAlignment="Center" />
+                                            <i:Icon Value="mdi-lock" IsVisible="{Binding !EsEditableProveedor}" FontSize="12" Opacity="0.5" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                                <DataGridTemplateColumn.CellEditingTemplate>
+                                    <DataTemplate>
+                                        <ComboBox IsEditable="True"
+                                                  Text="{Binding Proveedor, Mode=TwoWay}"
+                                                  ItemsSource="{Binding #Root.DataContext.ProveedoresDisponibles}"
+                                                  IsEnabled="{Binding EsEditableProveedor}"
+                                                  HorizontalAlignment="Stretch">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Nombre}" />
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellEditingTemplate>
+                            </DataGridTemplateColumn>
+
+                            <DataGridTemplateColumn Header="Factura" Width="Auto" IsReadOnly="False">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate x:DataType="vm:FilaGastoEditableVm">
+                                        <TextBlock Text="{Binding NumeroFactura}" VerticalAlignment="Center" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                                <DataGridTemplateColumn.CellEditingTemplate>
+                                    <DataTemplate x:DataType="vm:FilaGastoEditableVm">
+                                        <TextBox Text="{Binding NumeroFactura, Mode=TwoWay}" IsEnabled="{Binding EsEditableNumeroFactura}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellEditingTemplate>
+                            </DataGridTemplateColumn>
+
+                            <DataGridTemplateColumn Header="Detalle" Width="2*" IsReadOnly="False">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate x:DataType="vm:FilaGastoEditableVm">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="{Binding Detalle}" VerticalAlignment="Center" />
+                                            <i:Icon Value="mdi-lock" IsVisible="{Binding !EsEditableDetalle}" FontSize="12" Opacity="0.5" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                                <DataGridTemplateColumn.CellEditingTemplate>
+                                    <DataTemplate x:DataType="vm:FilaGastoEditableVm">
+                                        <TextBox Text="{Binding Detalle, Mode=TwoWay}" IsEnabled="{Binding EsEditableDetalle}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellEditingTemplate>
+                            </DataGridTemplateColumn>
+
+                            <DataGridTemplateColumn Header="Monto" Width="Auto" IsReadOnly="False">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate x:DataType="vm:FilaGastoEditableVm">
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="{Binding Monto}" VerticalAlignment="Center" />
+                                            <i:Icon Value="mdi-lock" IsVisible="{Binding !EsEditableMonto}" FontSize="12" Opacity="0.5" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                                <DataGridTemplateColumn.CellEditingTemplate>
+                                    <DataTemplate x:DataType="vm:FilaGastoEditableVm">
+                                        <TextBox Text="{Binding Monto, Converter={x:Static conv:DecimalOpcionalConverter.Instance}, Mode=TwoWay}"
+                                                  IsEnabled="{Binding EsEditableMonto}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellEditingTemplate>
+                            </DataGridTemplateColumn>
+
+                            <DataGridTemplateColumn Header="Fuente" Width="Auto" IsReadOnly="False" x:CompileBindings="False">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="{Binding Fuente}" VerticalAlignment="Center" />
+                                            <i:Icon Value="mdi-lock" IsVisible="{Binding !EsEditableFuente}" FontSize="12" Opacity="0.5" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                                <DataGridTemplateColumn.CellEditingTemplate>
+                                    <DataTemplate>
+                                        <ComboBox IsEditable="True"
+                                                  Text="{Binding Fuente, Mode=TwoWay}"
+                                                  ItemsSource="{Binding #Root.DataContext.FuentesDisponibles}"
+                                                  IsEnabled="{Binding EsEditableFuente}"
+                                                  HorizontalAlignment="Stretch">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Nombre}" />
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellEditingTemplate>
+                            </DataGridTemplateColumn>
+
+                            <DataGridTemplateColumn Header="Rubro" Width="Auto" IsReadOnly="False" x:CompileBindings="False">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" Spacing="4">
+                                            <TextBlock Text="{Binding Rubro}" VerticalAlignment="Center" />
+                                            <i:Icon Value="mdi-lock" IsVisible="{Binding !EsEditableRubro}" FontSize="12" Opacity="0.5" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                                <DataGridTemplateColumn.CellEditingTemplate>
+                                    <DataTemplate>
+                                        <!-- A diferencia de Proveedor/Fuente (sólo Nombre), RubroGasto tiene
+                                             Codigo+Nombre separados: elegir un item existente setea AMBAS
+                                             propiedades de la fila (Rubro=Nombre, CodigoRubro=Codigo) — escribir
+                                             texto libre que no matchea ningún RubroGasto existente deja
+                                             CodigoRubro sin resolver (la fila queda con error de validación,
+                                             [Required] en CodigoRubro la marca como Advertencia: los rubros
+                                             nuevos SÓLO se declaran vía la pestaña Maestros nuevos — Task 9 — con
+                                             el Código que ya viene del análisis, un combo de fila no puede
+                                             inventar un Código nuevo). -->
+                                        <ComboBox IsEditable="True"
+                                                  Text="{Binding Rubro, Mode=TwoWay}"
+                                                  ItemsSource="{Binding #Root.DataContext.RubrosDisponibles}"
+                                                  SelectionChanged="RubroComboBox_SelectionChanged"
+                                                  IsEnabled="{Binding EsEditableRubro}"
+                                                  HorizontalAlignment="Stretch">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <TextBlock Text="{Binding Nombre}" />
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellEditingTemplate>
+                            </DataGridTemplateColumn>
+
+                            <DataGridTemplateColumn Header="Condición" Width="Auto" IsReadOnly="False">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate x:DataType="vm:FilaGastoEditableVm">
+                                        <TextBlock Text="{Binding Condicion}" VerticalAlignment="Center" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                                <DataGridTemplateColumn.CellEditingTemplate>
+                                    <DataTemplate x:DataType="vm:FilaGastoEditableVm">
+                                        <ComboBox ItemsSource="{Binding CondicionesDisponibles}" SelectedItem="{Binding Condicion, Mode=TwoWay}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellEditingTemplate>
+                            </DataGridTemplateColumn>
+
+                            <DataGridTemplateColumn Header="Vencimiento" Width="Auto" IsReadOnly="False">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate x:DataType="vm:FilaGastoEditableVm">
+                                        <TextBlock Text="{Binding FechaVencimiento, StringFormat='{}{0:dd/MM/yyyy}'}" VerticalAlignment="Center" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                                <DataGridTemplateColumn.CellEditingTemplate>
+                                    <DataTemplate x:DataType="vm:FilaGastoEditableVm">
+                                        <!-- IsEnabled sólo si Condicion == CondicionPago.Credito. x:Static NO invoca
+                                             métodos (Enum.Parse no es sintaxis válida acá) — se referencia el valor
+                                             de enum directo, mismo patrón que ya usa este archivo para
+                                             PasoWizardImportacion. Requiere xmlns:enums="using:StockApp.Domain.Enums"
+                                             en el encabezado. -->
+                                        <CalendarDatePicker
+                                            SelectedDate="{Binding FechaVencimiento, Converter={x:Static conv:DateOnlyOffsetConverter.Instance}, Mode=TwoWay}"
+                                            IsEnabled="{Binding Condicion, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static enums:CondicionPago.Credito}}" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellEditingTemplate>
+                            </DataGridTemplateColumn>
+
+                            <DataGridTextColumn Header="Estado" Binding="{Binding Estado, DataType={x:Type vm:FilaGastoEditableVm}}" Width="Auto" IsReadOnly="True" />
+
+                            <DataGridTemplateColumn Header="" Width="40" IsReadOnly="True">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate x:DataType="vm:FilaGastoEditableVm">
+                                        <Button Classes="ghost" Command="{Binding DesbloquearCommand}"
+                                                IsVisible="{Binding !Desbloqueada}" ToolTip.Tip="Desbloquear fila para corregir">
+                                            <i:Icon Value="mdi-pencil" />
+                                        </Button>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+
                         </DataGrid.Columns>
                     </DataGrid>
                 </TabItem>
                 <TabItem Header="Ingresos">
-                    <DataGrid ItemsSource="{Binding IngresosAnalizadosView}" IsReadOnly="True"
+                    <!-- read-only provisional — edición en Task 8. Esta pestaña bindeaba contra
+                         IngresosAnalizadosView, propiedad que ya no existe en el VM tras el refactor de
+                         Task 6 (ahora FilasIngresoView) y no compilaba (AVLN2000). Se repara al mínimo
+                         (mismo shape de columnas, ahora contra FilaIngresoEditableVm) para que la vista
+                         entera compile y los tests headless de Task 7 puedan correr. Task 8 reemplaza esto
+                         por la grilla editable real. -->
+                    <DataGrid ItemsSource="{Binding FilasIngresoView}" IsReadOnly="True"
                               CanUserSortColumns="True" AutoGenerateColumns="False">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Concepto" Binding="{Binding Concepto, DataType={x:Type dto:IngresoAnalizadoDto}}" Width="*" />
-                            <DataGridTextColumn Header="Monto" Binding="{Binding Monto, DataType={x:Type dto:IngresoAnalizadoDto}}" Width="Auto" />
-                            <DataGridTextColumn Header="Fuente" Binding="{Binding Fuente, DataType={x:Type dto:IngresoAnalizadoDto}}" Width="Auto" />
-                            <DataGridTextColumn Header="Estado" Binding="{Binding Estado, DataType={x:Type dto:IngresoAnalizadoDto}}" Width="Auto" />
+                            <DataGridTextColumn Header="Concepto" Binding="{Binding Concepto, DataType={x:Type vm:FilaIngresoEditableVm}}" Width="*" />
+                            <DataGridTextColumn Header="Monto" Binding="{Binding Monto, DataType={x:Type vm:FilaIngresoEditableVm}}" Width="Auto" />
+                            <DataGridTextColumn Header="Fuente" Binding="{Binding Fuente, DataType={x:Type vm:FilaIngresoEditableVm}}" Width="Auto" />
+                            <DataGridTextColumn Header="Estado" Binding="{Binding Estado, DataType={x:Type vm:FilaIngresoEditableVm}}" Width="Auto" />
                         </DataGrid.Columns>
                     </DataGrid>
                 </TabItem>
                 <TabItem Header="Líneas POA">
-                    <DataGrid ItemsSource="{Binding LineasPoaAnalizadasView}" IsReadOnly="True"
+                    <!-- read-only provisional — edición en Task 8. Mismo problema que Ingresos: bindeaba
+                         contra LineasPoaAnalizadasView (ya no existe) y columnas Literal/Presupuesto/Saldo
+                         que FilaLineaPoaEditableVm (agrupado por Hoja, con Asignaciones) ya no expone como
+                         escalares. Se repara al mínimo con las columnas que SÍ existen hoy en el VM para que
+                         la vista compile. Task 8 diseña la grilla real (probablemente con Asignaciones
+                         anidado). -->
+                    <DataGrid ItemsSource="{Binding FilasLineaPoaView}" IsReadOnly="True"
                               CanUserSortColumns="True" AutoGenerateColumns="False">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Hoja" Binding="{Binding Hoja, DataType={x:Type dto:LineaPoaAnalizadaDto}}" Width="*" />
-                            <DataGridTextColumn Header="Literal" Binding="{Binding Literal, DataType={x:Type dto:LineaPoaAnalizadaDto}}" Width="Auto" />
-                            <DataGridTextColumn Header="Presupuesto" Binding="{Binding Presupuesto, DataType={x:Type dto:LineaPoaAnalizadaDto}}" Width="Auto" />
-                            <DataGridTextColumn Header="Saldo" Binding="{Binding SaldoPlanilla, DataType={x:Type dto:LineaPoaAnalizadaDto}}" Width="Auto" />
-                            <DataGridTextColumn Header="Estado" Binding="{Binding Estado, DataType={x:Type dto:LineaPoaAnalizadaDto}}" Width="Auto" />
+                            <DataGridTextColumn Header="Hoja" Binding="{Binding Hoja, DataType={x:Type vm:FilaLineaPoaEditableVm}}" Width="*" />
+                            <DataGridTextColumn Header="Programa" Binding="{Binding Programa, DataType={x:Type vm:FilaLineaPoaEditableVm}}" Width="Auto" />
+                            <DataGridTextColumn Header="Estado" Binding="{Binding Estado, DataType={x:Type vm:FilaLineaPoaEditableVm}}" Width="Auto" />
                         </DataGrid.Columns>
                     </DataGrid>
                 </TabItem>
