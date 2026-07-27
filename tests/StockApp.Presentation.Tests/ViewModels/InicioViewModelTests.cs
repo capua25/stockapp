@@ -250,6 +250,18 @@ public class InicioViewModelTests
     }
 
     [Fact]
+    public async Task CargarAsync_AdminSinBackupsExitosos_MuestraTextoDeInstalacionNueva()
+    {
+        var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
+        var (vm, _, _, _, _) = Crear(usuario, salud: new SaludBackupDto(null, true, 26));
+
+        await vm.CargarAsync();
+
+        Assert.True(vm.MostrarAvisoBackup);
+        Assert.Equal("Todavía no se registró ningún backup exitoso.", vm.TextoAvisoBackup);
+    }
+
+    [Fact]
     public async Task CargarAsync_Operador_NuncaConsultaSaludDeBackup()
     {
         var usuario = new UsuarioSesion(2, "jperez", RolUsuario.Operador, "Juan Pérez");
