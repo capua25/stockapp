@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
@@ -23,12 +24,16 @@ public sealed class ServicioConsultaBackups
     private readonly ICorridaBackupRepository _corridas;
     private readonly ICurrentSession _session;
     private readonly IAuthorizationService _auth;
+    private readonly ILogger<ServicioConsultaBackups> _logger;
 
-    public ServicioConsultaBackups(ICorridaBackupRepository corridas, ICurrentSession session, IAuthorizationService auth)
+    public ServicioConsultaBackups(
+        ICorridaBackupRepository corridas, ICurrentSession session, IAuthorizationService auth,
+        ILogger<ServicioConsultaBackups> logger)
     {
         _corridas = corridas;
         _session = session;
         _auth = auth;
+        _logger = logger;
     }
 
     public async Task<IReadOnlyList<CorridaBackupDto>> ListarAsync()
@@ -63,10 +68,36 @@ public sealed class ServicioConsultaBackups
             throw new EntidadNoEncontradaException($"La corrida de backup {id} no tiene un archivo de backup asociado.");
 
         var ruta = Path.Combine(directorioBackups, corrida.NombreArchivo);
+        if (!RutaDentroDelDirectorio(directorioBackups, ruta))
+        {
+            _logger.LogWarning(
+                "Intento de resolver un backup fuera del directorio de backups. CorridaId={CorridaId} NombreArchivo='{NombreArchivo}'.",
+                id, corrida.NombreArchivo);
+            throw new EntidadNoEncontradaException($"El archivo del backup {id} no está disponible en el servidor.");
+        }
+
         if (!File.Exists(ruta))
             throw new EntidadNoEncontradaException($"El archivo del backup {id} no está disponible en el servidor.");
 
         return (ruta, corrida.NombreArchivo);
+    }
+
+    /// <summary>Defensa en profundidad: <see cref="CorridaBackup.NombreArchivo"/> es un
+    /// string mutable sin invariante de tipo que impida secuencias "../". Hoy el único
+    /// escritor es ServicioBackup (siempre genera "backup_{timestamp}.dump"), pero este
+    /// endpoint sirve el dump completo de la base — el activo más sensible del sistema —
+    /// así que no confiamos únicamente en ese invariante. Compara rutas absolutas
+    /// normalizadas (en vez de sanear el nombre) porque también cubre symlinks relativos
+    /// y separadores mezclados.</summary>
+    private static bool RutaDentroDelDirectorio(string directorioBackups, string ruta)
+    {
+        var directorioCompleto = Path.GetFullPath(directorioBackups);
+        var rutaCompleta = Path.GetFullPath(ruta);
+        var prefijo = directorioCompleto.EndsWith(Path.DirectorySeparatorChar)
+            ? directorioCompleto
+            : directorioCompleto + Path.DirectorySeparatorChar;
+
+        return rutaCompleta.StartsWith(prefijo, StringComparison.Ordinal);
     }
 
     private static CorridaBackupDto ADto(CorridaBackup c) => new(

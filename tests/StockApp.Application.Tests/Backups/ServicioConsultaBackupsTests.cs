@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Moq;
 using StockApp.Application.Auth;
 using StockApp.Application.Backups;
@@ -19,11 +20,12 @@ public class ServicioConsultaBackupsTests
         var repo = new Mock<ICorridaBackupRepository>();
         var session = new Mock<ICurrentSession>();
         var auth = new Mock<IAuthSvc>();
+        var logger = new Mock<ILogger<ServicioConsultaBackups>>();
 
         session.Setup(s => s.RolActual).Returns(rol);
         session.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(1, "admin", rol, null));
 
-        var svc = new ServicioConsultaBackups(repo.Object, session.Object, auth.Object);
+        var svc = new ServicioConsultaBackups(repo.Object, session.Object, auth.Object, logger.Object);
         return (svc, repo, auth);
     }
 
@@ -164,5 +166,22 @@ public class ServicioConsultaBackupsTests
 
         Assert.Equal(Path.Combine(directorio, "backup.dump"), rutaCompleta);
         Assert.Equal("backup.dump", nombreArchivo);
+    }
+
+    [Fact]
+    public async Task ResolverArchivoParaDescargaAsync_NombreArchivoConEscapeDeDirectorio_LanzaEntidadNoEncontrada()
+    {
+        var (svc, repo, _) = Crear();
+        var maliciosa = new CorridaBackup
+        {
+            Id = 3, IniciadaEn = DateTime.UtcNow.AddMinutes(-1), FinalizadaEn = DateTime.UtcNow,
+            Resultado = ResultadoBackup.Exitosa, NombreArchivo = "../../../../etc/passwd", TamanioBytes = 1024,
+        };
+        repo.Setup(r => r.ObtenerPorIdAsync(3)).ReturnsAsync(maliciosa);
+        var directorio = Path.Combine(Path.GetTempPath(), "ServicioConsultaBackupsTests_" + Guid.NewGuid());
+        Directory.CreateDirectory(directorio);
+
+        await Assert.ThrowsAsync<EntidadNoEncontradaException>(
+            () => svc.ResolverArchivoParaDescargaAsync(3, directorio));
     }
 }
