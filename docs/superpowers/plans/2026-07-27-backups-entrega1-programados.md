@@ -3,7 +3,7 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Backups automáticos de PostgreSQL cada 12h, con retención escalonada y sin intervención manual, descargables desde el desktop (solo Admin) y con aviso de salud al iniciar sesión — tapando el agujero de "hoy no hay ningún backup".
-**Architecture:** Primer `BackgroundService` del repo (`BackupProgramadoService`, StockApp.Api) crea su propio `IServiceScope` por corrida y orquesta `ServicioBackup` (Application) → `IEjecutorPgDump` (abstracción sobre `pg_dump`, implementación real `EjecutorPgDumpProceso` en Infrastructure) → `ICorridaBackupRepository` (metadatos en Postgres) → `PoliticaRetencion` (función pura, retención grandfather-father-son). `BackupsEndpoints` expone listado/descarga/salud leyendo directo del repositorio (spec §6, sin capa de servicio intermedia — decisión documentada en Task 6). El desktop agrega `MantenimientoView` (primera pantalla de Administración, Admin-only) y un banner de salud en `InicioViewModel`.
+**Architecture:** Primer `BackgroundService` del repo (`BackupProgramadoService`, StockApp.Api) crea su propio `IServiceScope` por corrida y orquesta `ServicioBackup` (Application) → `IEjecutorPgDump` (abstracción sobre `pg_dump`, implementación real `EjecutorPgDumpProceso` en Infrastructure) → `ICorridaBackupRepository` (metadatos en Postgres) → `PoliticaRetencion` (función pura, retención grandfather-father-son). `BackupsEndpoints` expone listado/descarga/salud con DOBLE barrera de autorización — policy HTTP (`.RequireAuthorization`) + `_auth.Verificar` en `ServicioConsultaBackups` (Application) — mismo patrón de defensa en profundidad que el resto de Finanzas (`RubroGastoService`/`FinanzasVistasService`); estos endpoints exponen un dump COMPLETO de la base, el activo más sensible del sistema, así que NO se saltea esa segunda capa aunque el spec original no la mencionara. El desktop agrega `MantenimientoView` (primera pantalla de Administración, Admin-only) y un banner de salud en `InicioViewModel`.
 **Tech Stack:** .NET 10, EF Core 10 + Npgsql (PostgreSQL), ASP.NET Core Minimal APIs, `BackgroundService`/`PeriodicTimer`, Avalonia 12.0.5 (desktop), CommunityToolkit.Mvvm 8.4.1, xUnit + Moq + Testcontainers.PostgreSql.
 
 ## Global Constraints
@@ -32,6 +32,7 @@
 - `src/StockApp.Application/Backups/PoliticaRetencion.cs` (crear)
 - `src/StockApp.Application/Backups/IEjecutorPgDump.cs` (crear)
 - `src/StockApp.Application/Backups/ServicioBackup.cs` (crear)
+- `src/StockApp.Application/Backups/ServicioConsultaBackups.cs` (crear) — segunda barrera de autorización para listado/descarga/salud (defensa en profundidad, spec §6 + decisión del usuario)
 - `src/StockApp.Application/Backups/BackupDtos.cs` (crear) — `CorridaBackupDto`, `SaludBackupDto`, `BackupDescargaDto`
 - `src/StockApp.Application/Backups/IBackupsService.cs` (crear)
 - `src/StockApp.Application/Authorization/Permisos.cs` (modificar)
@@ -72,6 +73,7 @@
 - `tests/StockApp.Api.Tests/Backups/BackupProgramadoServiceTests.cs` (crear)
 - `tests/StockApp.Application.Tests/Backups/PoliticaRetencionTests.cs` (crear)
 - `tests/StockApp.Application.Tests/Backups/ServicioBackupTests.cs` (crear)
+- `tests/StockApp.Application.Tests/Backups/ServicioConsultaBackupsTests.cs` (crear)
 - `tests/StockApp.Infrastructure.Tests/Fixtures/PostgresRepositoryTestBase.cs` (modificar)
 - `tests/StockApp.Infrastructure.Tests/Repositories/CorridaBackupRepositoryTests.cs` (crear)
 - `tests/StockApp.Infrastructure.Tests/Backups/RestaurabilidadBackupTests.cs` (crear)
@@ -97,7 +99,7 @@
 
 **Interfaces:**
 - Consumes: patrón de repositorio existente (`IGastoRepository`/`GastoRepository`, `IIngresoCajaRepository`/`IngresoCajaRepository`), convención de `DbSet` (`Gasto`→`Gastos`, acá `CorridaBackup`→`CorridasBackup`), convención de migraciones (`dotnet ef migrations add ... --project src/StockApp.Infrastructure --startup-project src/StockApp.Api`).
-- Produces: entidad `CorridaBackup` (`Id`, `IniciadaEn`, `FinalizadaEn`, `Resultado`, `NombreArchivo`, `TamanioBytes`, `MotivoFallo`), enum `ResultadoBackup { Exitosa, Fallida }`, `ICorridaBackupRepository` con `AgregarAsync`, `ListarTodasAsync`, `ListarExitosasAsync`, `ObtenerPorIdAsync`, `ObtenerUltimaExitosaAsync`, `EliminarAsync` — consumidos por Task 2 (tipo `CorridaBackup` en `PoliticaRetencion`), Task 4 (`ServicioBackup`), Task 5 (`BackupProgramadoService`), Task 6 (`BackupsEndpoints`).
+- Produces: entidad `CorridaBackup` (`Id`, `IniciadaEn`, `FinalizadaEn`, `Resultado`, `NombreArchivo`, `TamanioBytes`, `MotivoFallo`), enum `ResultadoBackup { Exitosa, Fallida }`, `ICorridaBackupRepository` con `AgregarAsync`, `ListarTodasAsync`, `ListarExitosasAsync`, `ObtenerPorIdAsync`, `ObtenerUltimaExitosaAsync`, `EliminarAsync` — consumidos por Task 2 (tipo `CorridaBackup` en `PoliticaRetencion`), Task 4 (`ServicioBackup`), Task 5 (`BackupProgramadoService`), Task 6 (`ServicioConsultaBackups` — NO directo por `BackupsEndpoints`, ver decisión de diseño del Task 6).
 
 **Decisión de diseño (spec §4.1 no fija el tipo exacto de `FinalizadaEn`):** `IniciadaEn`/`FinalizadaEn` son `DateTime` NO nullable — `ServicioBackup` (Task 4) solo persiste una `CorridaBackup` DESPUÉS de que el intento de dump termina (éxito o fallo), nunca un registro "en progreso". Ambos campos se setean en el mismo momento de la persistencia; no existe una fila a medio terminar en la base.
 
@@ -1495,11 +1497,13 @@ git commit -m "feat(backups): agrega BackupProgramadoService, primer BackgroundS
 
 ---
 
-### Task 6: Permiso `GestionarDiagnostico` + `BackupsEndpoints` + exención de licencia
+### Task 6: Permiso `GestionarDiagnostico` + `ServicioConsultaBackups` + `BackupsEndpoints` + exención de licencia
 
 **Files:**
 - Modify: `src/StockApp.Application/Authorization/Permisos.cs`
 - Create: `src/StockApp.Application/Backups/BackupDtos.cs`
+- Create: `src/StockApp.Application/Backups/ServicioConsultaBackups.cs`
+- Test: `tests/StockApp.Application.Tests/Backups/ServicioConsultaBackupsTests.cs`
 - Create: `src/StockApp.Api/Endpoints/BackupsEndpoints.cs`
 - Modify: `src/StockApp.Api/Licenciamiento/BloqueoLicenciaMiddleware.cs`
 - Modify: `src/StockApp.Api/Program.cs`
@@ -1509,10 +1513,16 @@ git commit -m "feat(backups): agrega BackupProgramadoService, primer BackgroundS
 - Modify: `tests/StockApp.Api.Tests/Licenciamiento/BloqueoLicenciaTests.cs`
 
 **Interfaces:**
-- Consumes: `ICorridaBackupRepository` (Task 1), `IUserDataPathProvider.GetBackupsDirectory()` (existente), `AuthorizationService`/`Permisos.Todos` (derivación automática de políticas HTTP, `Program.cs`).
-- Produces: `Permisos.GestionarDiagnostico = "diagnostico.gestionar"`; `CorridaBackupDto(int Id, DateTime FinalizadaEn, string Resultado, string? NombreArchivo, long? TamanioBytes, string? MotivoFallo)`; `SaludBackupDto(DateTime? UltimoExitoEn, bool Vencido)`; endpoints `GET /backups`, `GET /backups/{id:int}/contenido`, `GET /backups/salud` — consumidos por Task 8 (`BackupsApiClient`).
+- Consumes: `ICorridaBackupRepository` (Task 1, consumido AHORA por `ServicioConsultaBackups`, NO directo por `BackupsEndpoints`), `IUserDataPathProvider.GetBackupsDirectory()` (existente, resuelto por `BackupsEndpoints` y pasado como parámetro — ver decisión de diseño 2), `ICurrentSession`/`IAuthorizationService.Verificar(RolUsuario?, string)` (`StockApp.Application.Interfaces`/`StockApp.Application.Authorization`, patrón real confirmado en `RubroGastoService`/`FinanzasVistasService`/`AdjuntoService`), `AuthorizationService`/`Permisos.Todos` (derivación automática de políticas HTTP, `Program.cs`).
+- Produces: `Permisos.GestionarDiagnostico = "diagnostico.gestionar"`; `CorridaBackupDto(int Id, DateTime FinalizadaEn, string Resultado, string? NombreArchivo, long? TamanioBytes, string? MotivoFallo)`; `SaludBackupDto(DateTime? UltimoExitoEn, bool Vencido)`; `ServicioConsultaBackups` (sin interfaz, ver decisión de diseño 1) con `ListarAsync() : Task<IReadOnlyList<CorridaBackupDto>>`, `ObtenerSaludAsync() : Task<SaludBackupDto>`, `ResolverArchivoParaDescargaAsync(int id, string directorioBackups) : Task<(string RutaCompleta, string NombreArchivo)>`; endpoints `GET /backups`, `GET /backups/{id:int}/contenido`, `GET /backups/salud` — consumidos por Task 8 (`BackupsApiClient`, SOLO vía HTTP — el contrato externo no cambió).
 
-**Decisión de diseño (deviación documentada del patrón "endpoint -> servicio Application con `_auth.Verificar`" que usa el resto de Finanzas, spec §6 lo pide explícitamente así):** los 3 endpoints leen directo de `ICorridaBackupRepository`, SIN una capa de servicio Application intermedia — el spec dice literalmente "respaldado por ICorridaBackupRepository". Esto difiere de `FinanzasVistasService`/`RubroGastoService` (que llaman `_auth.Verificar(...)` como defensa en profundidad además del `.RequireAuthorization` HTTP). Se acepta la deviación porque: (a) el spec lo pide así explícitamente, (b) `Permisos.GestionarDiagnostico` ya es fail-closed Admin-only vía `AuthorizationService` (ausente de `AccionesOperador`), y (c) no hay ninguna regla de negocio de LECTURA que enforced en una capa aparte (a diferencia de, por ejemplo, `ObtenerCalendarioPagosAsync` que sí tiene lógica de cálculo).
+**Decisión de diseño 1 (CORRECCIÓN sobre la primera versión de este plan — decisión del usuario, no del spec original):** `BackupsEndpoints` NO lee directo de `ICorridaBackupRepository`. Estos endpoints exponen un dump COMPLETO de la base de datos — el activo más sensible del sistema — así que llevan la MISMA doble barrera que el resto de Finanzas: policy HTTP (`.RequireAuthorization`, primera barrera, corta antes de llegar al código) + `_auth.Verificar(_session.RolActual, Permisos.GestionarDiagnostico)` dentro de un service de Application (segunda barrera, defensa en profundidad — protege del caso en que alguien más adelante toque la policy HTTP sin darse cuenta de lo que deja abierto). Patrón confirmado línea por línea contra `RubroGastoService` (`ICurrentSession`/`IAuthorizationService` inyectados por constructor, `_auth.Verificar(_session.RolActual, Permisos.X)` como primera línea de cada método público) y `FinanzasVistasService` (mismo patrón, service puramente de lectura sin `IAuditLogger` — es el precedente más cercano a `ServicioConsultaBackups`, que tampoco audita lecturas). `_auth.Verificar` lanza `UnauthorizedAccessException`, que `DomainExceptionHandler` ya mapea a 403 (sin cambios ahí). Que el spec original (§6) dijera "respaldado por ICorridaBackupRepository" fue una omisión del spec, no una decisión de diseño — se corrige acá.
+
+**Decisión de diseño 2 (frontera Application↔Infrastructure, la misma que ya resolvió `ServicioBackup` en la Task 4):** `ServicioConsultaBackups` vive en `StockApp.Application` y NO puede inyectar `IUserDataPathProvider` (vive en `Infrastructure.Platform`, no en `Application/Interfaces/` — deliberado, ver Task 4). Se evaluaron dos vías:
+  - (a) **Parámetro de método** — el LLAMADOR (`BackupsEndpoints`, que sí puede referenciar `Infrastructure.Platform`) resuelve `paths.GetBackupsDirectory()` y lo pasa como argumento a `ResolverArchivoParaDescargaAsync(id, directorioBackups)`.
+  - (b) Agregar una abstracción nueva en `Application/Interfaces/` (ej. `IProveedorDirectorioBackups`) que `UserDataPathProvider` (o un adaptador nuevo en Infrastructure) implemente, para poder inyectarla directo en `ServicioConsultaBackups`.
+
+  Se elige **(a)** por coherencia: es EXACTAMENTE el mismo mecanismo que `ServicioBackup.EjecutarCorridaAsync(connectionString, directorioBackups, ...)` ya usa para el mismo problema (Task 4) — mismo tipo de dato (`string`), mismo llamador de la capa Api resolviendo la ruta real. Introducir la opción (b) para UN solo método de UN solo directorio hubiera significado dos soluciones distintas al mismo problema arquitectónico dentro del mismo módulo (`Backups/`), más confuso que una regla única "el directorio de backups siempre entra como parámetro, nunca inyectado en Application". Si en la Entrega 2 aparece un segundo caso de esto (logs), recién ahí se justificaría evaluar (b) como abstracción compartida — hoy sería especular sobre un caso de uso que no existe.
 
 - [ ] **Step 1: Permiso nuevo**
 
@@ -1551,56 +1561,257 @@ public sealed record CorridaBackupDto(
 public sealed record SaludBackupDto(DateTime? UltimoExitoEn, bool Vencido);
 ```
 
-- [ ] **Step 3: `BackupsEndpoints`**
+- [ ] **Step 3: Test que falla — `ServicioConsultaBackups`, segunda barrera de autorización (patrón calcado de `AdjuntoServiceTests`/`FinanzasVistasServiceLibroCajaTests`: `_auth.Setup(...).Throws<UnauthorizedAccessException>()` + `Verify(repo, Times.Never)`)**
 
 ```csharp
-// src/StockApp.Api/Endpoints/BackupsEndpoints.cs
-using StockApp.Application.Authorization;
+// tests/StockApp.Application.Tests/Backups/ServicioConsultaBackupsTests.cs
+using Moq;
+using StockApp.Application.Auth;
 using StockApp.Application.Backups;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
-using StockApp.Infrastructure.Platform;
+using Xunit;
+using IAuthSvc = StockApp.Application.Authorization.IAuthorizationService;
+using Permisos = StockApp.Application.Authorization.Permisos;
 
-namespace StockApp.Api.Endpoints;
+namespace StockApp.Application.Tests.Backups;
 
-public static class BackupsEndpoints
+public class ServicioConsultaBackupsTests
 {
-    /// <summary>Umbral de "backup vencido" (spec §3 decisión 6): dos ventanas de 12h + 2h de margen.</summary>
+    private static (ServicioConsultaBackups svc, Mock<ICorridaBackupRepository> repoMock, Mock<IAuthSvc> authMock)
+        Crear(RolUsuario rol = RolUsuario.Admin)
+    {
+        var repo = new Mock<ICorridaBackupRepository>();
+        var session = new Mock<ICurrentSession>();
+        var auth = new Mock<IAuthSvc>();
+
+        session.Setup(s => s.RolActual).Returns(rol);
+        session.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(1, "admin", rol, null));
+
+        var svc = new ServicioConsultaBackups(repo.Object, session.Object, auth.Object);
+        return (svc, repo, auth);
+    }
+
+    private static CorridaBackup CorridaExitosa(int id = 1) => new()
+    {
+        Id = id, IniciadaEn = DateTime.UtcNow.AddMinutes(-1), FinalizadaEn = DateTime.UtcNow,
+        Resultado = ResultadoBackup.Exitosa, NombreArchivo = "backup.dump", TamanioBytes = 1024,
+    };
+
+    // ── ListarAsync ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ListarAsync_VerificaPermisoGestionarDiagnostico()
+    {
+        var (svc, repo, auth) = Crear();
+        repo.Setup(r => r.ListarTodasAsync()).ReturnsAsync(new List<CorridaBackup>());
+
+        await svc.ListarAsync();
+
+        auth.Verify(a => a.Verificar(RolUsuario.Admin, Permisos.GestionarDiagnostico), Times.Once);
+    }
+
+    [Fact]
+    public async Task ListarAsync_MapeaCorridasADto()
+    {
+        var (svc, repo, _) = Crear();
+        repo.Setup(r => r.ListarTodasAsync()).ReturnsAsync(new List<CorridaBackup> { CorridaExitosa() });
+
+        var resultado = await svc.ListarAsync();
+
+        var dto = Assert.Single(resultado);
+        Assert.Equal("Exitosa", dto.Resultado);
+        Assert.Equal("backup.dump", dto.NombreArchivo);
+    }
+
+    [Fact]
+    public async Task ListarAsync_SinPermiso_PropagaExcepcionYNuncaTocaElRepositorio()
+    {
+        var (svc, repo, auth) = Crear(RolUsuario.Operador);
+        auth.Setup(a => a.Verificar(RolUsuario.Operador, Permisos.GestionarDiagnostico))
+            .Throws<UnauthorizedAccessException>();
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => svc.ListarAsync());
+
+        repo.Verify(r => r.ListarTodasAsync(), Times.Never);
+    }
+
+    // ── ObtenerSaludAsync ────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ObtenerSaludAsync_VerificaPermiso_YSinCorridasDevuelveVencidoTrue()
+    {
+        var (svc, repo, auth) = Crear();
+        repo.Setup(r => r.ObtenerUltimaExitosaAsync()).ReturnsAsync((CorridaBackup?)null);
+
+        var salud = await svc.ObtenerSaludAsync();
+
+        auth.Verify(a => a.Verificar(RolUsuario.Admin, Permisos.GestionarDiagnostico), Times.Once);
+        Assert.True(salud.Vencido);
+        Assert.Null(salud.UltimoExitoEn);
+    }
+
+    [Fact]
+    public async Task ObtenerSaludAsync_SinPermiso_PropagaExcepcionYNuncaTocaElRepositorio()
+    {
+        var (svc, repo, auth) = Crear(RolUsuario.Operador);
+        auth.Setup(a => a.Verificar(RolUsuario.Operador, Permisos.GestionarDiagnostico))
+            .Throws<UnauthorizedAccessException>();
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => svc.ObtenerSaludAsync());
+
+        repo.Verify(r => r.ObtenerUltimaExitosaAsync(), Times.Never);
+    }
+
+    // ── ResolverArchivoParaDescargaAsync ─────────────────────────────────────
+
+    [Fact]
+    public async Task ResolverArchivoParaDescargaAsync_SinPermiso_PropagaExcepcionYNuncaTocaElRepositorio()
+    {
+        var (svc, repo, auth) = Crear(RolUsuario.Operador);
+        auth.Setup(a => a.Verificar(RolUsuario.Operador, Permisos.GestionarDiagnostico))
+            .Throws<UnauthorizedAccessException>();
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => svc.ResolverArchivoParaDescargaAsync(1, "/tmp/no-importa"));
+
+        repo.Verify(r => r.ObtenerPorIdAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ResolverArchivoParaDescargaAsync_IdInexistente_LanzaEntidadNoEncontrada()
+    {
+        var (svc, repo, _) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(999)).ReturnsAsync((CorridaBackup?)null);
+
+        await Assert.ThrowsAsync<EntidadNoEncontradaException>(
+            () => svc.ResolverArchivoParaDescargaAsync(999, "/tmp/no-importa"));
+    }
+
+    [Fact]
+    public async Task ResolverArchivoParaDescargaAsync_CorridaFallidaSinArchivo_LanzaEntidadNoEncontrada()
+    {
+        var (svc, repo, _) = Crear();
+        var fallida = new CorridaBackup
+        {
+            Id = 2, IniciadaEn = DateTime.UtcNow, FinalizadaEn = DateTime.UtcNow,
+            Resultado = ResultadoBackup.Fallida, MotivoFallo = "simulado",
+        };
+        repo.Setup(r => r.ObtenerPorIdAsync(2)).ReturnsAsync(fallida);
+
+        await Assert.ThrowsAsync<EntidadNoEncontradaException>(
+            () => svc.ResolverArchivoParaDescargaAsync(2, "/tmp/no-importa"));
+    }
+
+    [Fact]
+    public async Task ResolverArchivoParaDescargaAsync_ArchivoNoExisteEnDisco_LanzaEntidadNoEncontrada()
+    {
+        var (svc, repo, _) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(CorridaExitosa());
+        var directorioVacio = Path.Combine(Path.GetTempPath(), "ServicioConsultaBackupsTests_" + Guid.NewGuid());
+        Directory.CreateDirectory(directorioVacio);
+
+        await Assert.ThrowsAsync<EntidadNoEncontradaException>(
+            () => svc.ResolverArchivoParaDescargaAsync(1, directorioVacio));
+    }
+
+    [Fact]
+    public async Task ResolverArchivoParaDescargaAsync_ArchivoExiste_DevuelveRutaCompletaYNombre()
+    {
+        var (svc, repo, _) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(CorridaExitosa());
+        var directorio = Path.Combine(Path.GetTempPath(), "ServicioConsultaBackupsTests_" + Guid.NewGuid());
+        Directory.CreateDirectory(directorio);
+        File.WriteAllBytes(Path.Combine(directorio, "backup.dump"), new byte[] { 1, 2, 3 });
+
+        var (rutaCompleta, nombreArchivo) = await svc.ResolverArchivoParaDescargaAsync(1, directorio);
+
+        Assert.Equal(Path.Combine(directorio, "backup.dump"), rutaCompleta);
+        Assert.Equal("backup.dump", nombreArchivo);
+    }
+}
+```
+
+- [ ] **Step 4: Correr — debe fallar en compilación**
+
+Run: `timeout 180 dotnet test tests/StockApp.Application.Tests --filter "FullyQualifiedName~ServicioConsultaBackupsTests"`
+Expected: FAIL — `CS0246: El tipo o el nombre del espacio de nombres 'ServicioConsultaBackups' no se encontró`.
+
+- [ ] **Step 5: Implementación de `ServicioConsultaBackups`**
+
+```csharp
+// src/StockApp.Application/Backups/ServicioConsultaBackups.cs
+using StockApp.Application.Authorization;
+using StockApp.Application.Interfaces;
+using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
+
+namespace StockApp.Application.Backups;
+
+/// <summary>
+/// Segunda barrera de autorización (defensa en profundidad) para la lectura de backups —
+/// mismo patrón que RubroGastoService/FinanzasVistasService: _auth.Verificar ADEMÁS de la
+/// policy HTTP de BackupsEndpoints. GestionarDiagnostico protege el activo más sensible del
+/// sistema (un dump COMPLETO de la base), por eso esta capa no se saltea aunque el spec
+/// original no la mencionara explícitamente (decisión del usuario, ver Task 6 del plan).
+/// Sin interfaz — mismo criterio que ServicioLicencia/ServicioResetAdmin (naming "Servicio+Xxx"
+/// del módulo de Licenciamiento: sin abstracción, inyectado como clase concreta directo en los
+/// endpoints). Puramente de lectura, sin IAuditLogger (igual que FinanzasVistasService).
+/// </summary>
+public sealed class ServicioConsultaBackups
+{
     private static readonly TimeSpan UmbralAviso = TimeSpan.FromHours(26);
 
-    public static IEndpointRouteBuilder MapBackupsEndpoints(this IEndpointRouteBuilder app)
+    private readonly ICorridaBackupRepository _corridas;
+    private readonly ICurrentSession _session;
+    private readonly IAuthorizationService _auth;
+
+    public ServicioConsultaBackups(ICorridaBackupRepository corridas, ICurrentSession session, IAuthorizationService auth)
     {
-        app.MapGet("/backups", async (ICorridaBackupRepository corridas) =>
-            Results.Ok((await corridas.ListarTodasAsync()).Select(ADto)))
-            .RequireAuthorization(Permisos.GestionarDiagnostico);
+        _corridas = corridas;
+        _session = session;
+        _auth = auth;
+    }
 
-        app.MapGet("/backups/{id:int}/contenido",
-            async (int id, ICorridaBackupRepository corridas, IUserDataPathProvider paths) =>
-        {
-            var corrida = await corridas.ObtenerPorIdAsync(id)
-                ?? throw new EntidadNoEncontradaException($"No existe la corrida de backup {id}.");
-            if (corrida.Resultado != ResultadoBackup.Exitosa || corrida.NombreArchivo is null)
-                throw new EntidadNoEncontradaException($"La corrida de backup {id} no tiene un archivo de backup asociado.");
+    public async Task<IReadOnlyList<CorridaBackupDto>> ListarAsync()
+    {
+        _auth.Verificar(_session.RolActual, Permisos.GestionarDiagnostico);
 
-            var ruta = Path.Combine(paths.GetBackupsDirectory(), corrida.NombreArchivo);
-            if (!File.Exists(ruta))
-                throw new EntidadNoEncontradaException($"El archivo del backup {id} no está disponible en el servidor.");
+        return (await _corridas.ListarTodasAsync()).Select(ADto).ToList();
+    }
 
-            return Results.File(ruta, "application/octet-stream", corrida.NombreArchivo);
-        })
-        .RequireAuthorization(Permisos.GestionarDiagnostico);
+    public async Task<SaludBackupDto> ObtenerSaludAsync()
+    {
+        _auth.Verificar(_session.RolActual, Permisos.GestionarDiagnostico);
 
-        app.MapGet("/backups/salud", async (ICorridaBackupRepository corridas) =>
-        {
-            var ultima = await corridas.ObtenerUltimaExitosaAsync();
-            var vencido = ultima is null || DateTime.UtcNow - ultima.FinalizadaEn >= UmbralAviso;
-            return Results.Ok(new SaludBackupDto(ultima?.FinalizadaEn, vencido));
-        })
-        .RequireAuthorization(Permisos.GestionarDiagnostico);
+        var ultima = await _corridas.ObtenerUltimaExitosaAsync();
+        var vencido = ultima is null || DateTime.UtcNow - ultima.FinalizadaEn >= UmbralAviso;
+        return new SaludBackupDto(ultima?.FinalizadaEn, vencido);
+    }
 
-        return app;
+    /// <summary>Resuelve la ruta completa a servir. <paramref name="directorioBackups"/> lo
+    /// resuelve el LLAMADOR (BackupsEndpoints, Api) vía IUserDataPathProvider.GetBackupsDirectory()
+    /// — Application no puede referenciar Infrastructure.Platform (misma frontera ya resuelta
+    /// así en ServicioBackup, Task 4: parámetro de método, no inyección — ver decisión de
+    /// diseño 2 del Task 6).</summary>
+    public async Task<(string RutaCompleta, string NombreArchivo)> ResolverArchivoParaDescargaAsync(
+        int id, string directorioBackups)
+    {
+        _auth.Verificar(_session.RolActual, Permisos.GestionarDiagnostico);
+
+        var corrida = await _corridas.ObtenerPorIdAsync(id)
+            ?? throw new EntidadNoEncontradaException($"No existe la corrida de backup {id}.");
+        if (corrida.Resultado != ResultadoBackup.Exitosa || corrida.NombreArchivo is null)
+            throw new EntidadNoEncontradaException($"La corrida de backup {id} no tiene un archivo de backup asociado.");
+
+        var ruta = Path.Combine(directorioBackups, corrida.NombreArchivo);
+        if (!File.Exists(ruta))
+            throw new EntidadNoEncontradaException($"El archivo del backup {id} no está disponible en el servidor.");
+
+        return (ruta, corrida.NombreArchivo);
     }
 
     private static CorridaBackupDto ADto(CorridaBackup c) => new(
@@ -1608,12 +1819,61 @@ public static class BackupsEndpoints
 }
 ```
 
-- [ ] **Step 4: Registrar el endpoint y exentarlo del bloqueo por licencia**
+- [ ] **Step 6: Correr — deben pasar**
+
+Run: `timeout 180 dotnet test tests/StockApp.Application.Tests --filter "FullyQualifiedName~ServicioConsultaBackupsTests"`
+Expected: PASS (10/10).
+
+- [ ] **Step 7: `BackupsEndpoints` — consume `ServicioConsultaBackups`, ya NO `ICorridaBackupRepository` directo**
+
+```csharp
+// src/StockApp.Api/Endpoints/BackupsEndpoints.cs
+using StockApp.Application.Authorization;
+using StockApp.Application.Backups;
+using StockApp.Infrastructure.Platform;
+
+namespace StockApp.Api.Endpoints;
+
+public static class BackupsEndpoints
+{
+    public static IEndpointRouteBuilder MapBackupsEndpoints(this IEndpointRouteBuilder app)
+    {
+        app.MapGet("/backups", async (ServicioConsultaBackups servicio) =>
+            Results.Ok(await servicio.ListarAsync()))
+            .RequireAuthorization(Permisos.GestionarDiagnostico);
+
+        app.MapGet("/backups/{id:int}/contenido",
+            async (int id, ServicioConsultaBackups servicio, IUserDataPathProvider paths) =>
+        {
+            var (rutaCompleta, nombreArchivo) =
+                await servicio.ResolverArchivoParaDescargaAsync(id, paths.GetBackupsDirectory());
+            return Results.File(rutaCompleta, "application/octet-stream", nombreArchivo);
+        })
+        .RequireAuthorization(Permisos.GestionarDiagnostico);
+
+        app.MapGet("/backups/salud", async (ServicioConsultaBackups servicio) =>
+            Results.Ok(await servicio.ObtenerSaludAsync()))
+            .RequireAuthorization(Permisos.GestionarDiagnostico);
+
+        return app;
+    }
+}
+```
+
+Nota: `.RequireAuthorization(Permisos.GestionarDiagnostico)` se mantiene en los 3 endpoints — es la PRIMERA barrera (HTTP), independiente de `_auth.Verificar` dentro de `ServicioConsultaBackups` (segunda barrera, Application). Ambas coexisten, ninguna reemplaza a la otra (defensa en profundidad real, no redundancia decorativa).
+
+- [ ] **Step 8: Registrar `ServicioConsultaBackups`, mapear el endpoint y exentarlo del bloqueo por licencia**
 
 ```csharp
 // src/StockApp.Api/Program.cs
-// Agregar junto al resto de app.MapXxxEndpoints() (después de "app.MapResetAdminEndpoints();",
-// antes de "app.Run();"):
+// Agregar junto al registro de ICorridaBackupRepository/ServicioBackup (Task 5, bloque
+// "Backups programados"):
+builder.Services.AddScoped<ServicioConsultaBackups>();
+```
+
+```csharp
+// (mismo archivo) Agregar junto al resto de app.MapXxxEndpoints() (después de
+// "app.MapResetAdminEndpoints();", antes de "app.Run();"):
 app.MapBackupsEndpoints();
 ```
 
@@ -1626,7 +1886,7 @@ app.MapBackupsEndpoints();
         || path.StartsWithSegments("/backups");
 ```
 
-- [ ] **Step 5: Fake de `IUserDataPathProvider` para tests (gotcha de hermeticidad — ver Global Constraints)**
+- [ ] **Step 9: Fake de `IUserDataPathProvider` para tests (gotcha de hermeticidad — ver Global Constraints)**
 
 ```csharp
 // tests/StockApp.Api.Tests/Fixtures/UserDataPathProviderFake.cs
@@ -1670,7 +1930,7 @@ public sealed class UserDataPathProviderFake : IUserDataPathProvider
 
 Nota: `IUserDataPathProvider` vive en `StockApp.Infrastructure.Platform` — agregar `using StockApp.Infrastructure.Platform;` al encabezado de `ApiFactory.cs` si no está ya.
 
-- [ ] **Step 6: Test que falla — matriz de autorización + contenido real**
+- [ ] **Step 10: Test que falla — matriz de autorizacion + contenido real (los 401/403 aca ejercitan la PRIMERA barrera, la policy HTTP; no pueden aislar la segunda porque la primera corta antes de llegar al codigo — la segunda barrera de ServicioConsultaBackups ya quedo probada de forma independiente en el Step 3)**
 
 ```csharp
 // tests/StockApp.Api.Tests/BackupsEndpointTests.cs
@@ -1877,17 +2137,17 @@ public class BackupsEndpointTests : ApiTestBase
 }
 ```
 
-- [ ] **Step 7: Correr — deben fallar (endpoints no existen todavía)**
+- [ ] **Step 11: Correr — deben fallar (endpoints no existen todavía)**
 
 Run: `timeout 180 dotnet test tests/StockApp.Api.Tests --filter "FullyQualifiedName~BackupsEndpointTests"`
-Expected: FAIL — 404 en vez de los status esperados (o error de compilación si `CorridaBackupDto`/`SaludBackupDto` todavía no existen).
+Expected: FAIL — 404 en vez de los status esperados (o error de compilación si `CorridaBackupDto`/`SaludBackupDto`/`ServicioConsultaBackups` todavía no existen).
 
-- [ ] **Step 8: Aplicar Steps 1-5, correr de nuevo**
+- [ ] **Step 12: Aplicar Steps 1-2 y 7-9, correr de nuevo**
 
 Run: `timeout 180 dotnet test tests/StockApp.Api.Tests --filter "FullyQualifiedName~BackupsEndpointTests"`
 Expected: PASS (11/11).
 
-- [ ] **Step 9: Test que falla — exención del bloqueo por licencia**
+- [ ] **Step 13: Test que falla — exención del bloqueo por licencia**
 
 ```csharp
 // tests/StockApp.Api.Tests/Licenciamiento/BloqueoLicenciaTests.cs
@@ -1907,29 +2167,36 @@ Expected: PASS (11/11).
     }
 ```
 
-- [ ] **Step 10: Correr — debe fallar antes del Step 4, pasar después**
+- [ ] **Step 14: Correr — debe fallar antes del Step 8, pasar después**
 
 Run: `timeout 180 dotnet test tests/StockApp.Api.Tests --filter "FullyQualifiedName~BloqueoLicenciaTests"`
-Expected: PASS (6/6) una vez aplicado el Step 4.
+Expected: PASS (6/6) una vez aplicado el Step 8.
 
-- [ ] **Step 11: Correr la suite completa de `StockApp.Api.Tests` — confirmar que no hay ripple (el TRUNCATE de Task 1 y el fake de Task 6 no rompieron nada preexistente)**
+- [ ] **Step 15: Correr la suite completa de `StockApp.Api.Tests` — confirmar que no hay ripple (el TRUNCATE de Task 1 y el fake de Task 6 no rompieron nada preexistente)**
 
 Run: `timeout 300 dotnet test tests/StockApp.Api.Tests`
 Expected: PASS (todo verde).
 
-- [ ] **Step 12: Commit**
+- [ ] **Step 16: Correr la suite de `StockApp.Application.Tests` — confirmar `ServicioConsultaBackupsTests` (Step 3-6) sigue verde tras el resto de los cambios**
+
+Run: `timeout 180 dotnet test tests/StockApp.Application.Tests --filter "FullyQualifiedName~Backups"`
+Expected: PASS (todo verde — incluye `PoliticaRetencionTests`, `ServicioBackupTests` y `ServicioConsultaBackupsTests`).
+
+- [ ] **Step 17: Commit**
 
 ```bash
 git add src/StockApp.Application/Authorization/Permisos.cs \
         src/StockApp.Application/Backups/BackupDtos.cs \
+        src/StockApp.Application/Backups/ServicioConsultaBackups.cs \
         src/StockApp.Api/Endpoints/BackupsEndpoints.cs \
         src/StockApp.Api/Licenciamiento/BloqueoLicenciaMiddleware.cs \
         src/StockApp.Api/Program.cs \
+        tests/StockApp.Application.Tests/Backups/ServicioConsultaBackupsTests.cs \
         tests/StockApp.Api.Tests/Fixtures/UserDataPathProviderFake.cs \
         tests/StockApp.Api.Tests/Fixtures/ApiFactory.cs \
         tests/StockApp.Api.Tests/BackupsEndpointTests.cs \
         tests/StockApp.Api.Tests/Licenciamiento/BloqueoLicenciaTests.cs
-git commit -m "feat(backups): agrega permiso GestionarDiagnostico, BackupsEndpoints y exencion de licencia (Entrega 1)"
+git commit -m "feat(backups): agrega ServicioConsultaBackups (segunda barrera de autorizacion), BackupsEndpoints y exencion de licencia (Entrega 1)"
 ```
 
 ---
@@ -2108,9 +2375,12 @@ public sealed class BackupDescargaDto : IAsyncDisposable
 namespace StockApp.Application.Backups;
 
 /// <summary>
-/// Consumido SOLO por el desktop (implementado únicamente por BackupsApiClient) — el servidor
-/// lee directo de ICorridaBackupRepository en BackupsEndpoints (spec §6, ver decisión de diseño
-/// del Task 6), no hay una implementación server-side de esta interfaz.
+/// Consumido SOLO por el desktop (implementado unicamente por BackupsApiClient) — el servidor
+/// resuelve las mismas 3 operaciones via ServicioConsultaBackups (Application, Task 6), con
+/// segunda barrera de autorizacion (_auth.Verificar) ademas de la policy HTTP. No hay una
+/// implementacion server-side de ESTA interfaz: BackupsEndpoints inyecta ServicioConsultaBackups
+/// directo, no IBackupsService — son dos tipos distintos (cliente HTTP vs. service de dominio)
+/// que comparten forma pero no identidad.
 /// </summary>
 public interface IBackupsService
 {
@@ -3199,26 +3469,28 @@ git commit -m "test(backups): agrega test de integracion de restaurabilidad (dum
 - §4.1 Persistencia (`CorridaBackup`, `DbSet`, migración, `ICorridaBackupRepository`/`CorridaBackupRepository`) → Task 1, completo.
 - §4.2 Piezas nuevas: `PoliticaRetencion` → Task 2. `IEjecutorPgDump`/`EjecutorPgDumpProceso` → Task 3. `ServicioBackup` → Task 4. `BackupProgramadoService` con scope propio por corrida y catch-up al arrancar → Task 5. Directorio vía `IUserDataPathProvider.GetBackupsDirectory()` (ya existía) → consumido en Task 5/6, sin cambios a la interfaz.
 - §4.3 Manejo de errores: fallo capturado en `ServicioBackup`, persistido como `CorridaBackup Fallida` con `MotivoFallo`, logueado `ILogger<ServicioBackup>.LogWarning` (va a stdout, no a archivo — Entrega 2), `PeriodicTimer` sigue vivo → Task 4/5. Escritura a `.tmp` + rename atómico + barrido de huérfanos → Task 4 (`ServicioBackup.LimpiarTmpHuerfanos`) + Task 5 (invocado al arrancar).
-- §6 Permiso `GestionarDiagnostico` + endpoints (listado/descarga/salud) + exención de `BloqueoLicenciaMiddleware` → Task 6, completo, con matriz 401/403/200/404/423-exento.
+- §6 Permiso `GestionarDiagnostico` + endpoints (listado/descarga/salud) + exención de `BloqueoLicenciaMiddleware` → Task 6, completo, con matriz 401/403/200/404/423-exento. **Ampliado sobre la versión original del plan**: doble barrera de autorización (`ServicioConsultaBackups` con `_auth.Verificar`, además de la policy HTTP) — decisión del usuario, no estaba en el spec original (omisión del spec, corregida acá).
 - §7 Desktop: `MantenimientoView`/`MantenimientoViewModel` con la zona Backups → Tasks 9-10. `DataContextChanged` → Task 10. `GuardarBytesAsync` → Task 7. `HttpClient` de descargas con timeout extendido → Task 7. `BackupsApiClient` → Task 8. Banner de salud en `InicioViewModel` → Task 11.
-- §8 Testing: `PoliticaRetencion` con los 6 casos borde exigidos (huecos por fallidas — implícito en que solo se pasan exitosas; cruce de mes; semanas parciales; menos de 6; exactamente 6; borrado real con muchas corridas) → Task 2. `ServicioBackup` con fake (éxito/binario ausente/credenciales/timeout/disco lleno vía `[Theory]` de mensajes opacos + limpieza de `.tmp`) → Task 4. `BackupProgramadoService` (scope propio por corrida + catch-up al arrancar) → Task 5. Endpoints `/backups` (matriz completa) → Task 6. Desktop (VM con fakes + test headless) → Tasks 9-10. Test de integración de restaurabilidad → Task 12.
+- §8 Testing: `PoliticaRetencion` con los 6 casos borde exigidos (huecos por fallidas — implícito en que solo se pasan exitosas; cruce de mes; semanas parciales; menos de 6; exactamente 6; borrado real con muchas corridas) → Task 2. `ServicioBackup` con fake (éxito/binario ausente/credenciales/timeout/disco lleno vía `[Theory]` de mensajes opacos + limpieza de `.tmp`) → Task 4. `BackupProgramadoService` (scope propio por corrida + catch-up al arrancar) → Task 5. `ServicioConsultaBackups` (segunda barrera de autorización, unit tests con `_auth` mockeado) + endpoints `/backups` (matriz completa) → Task 6. Desktop (VM con fakes + test headless) → Tasks 9-10. Test de integración de restaurabilidad → Task 12.
 - §9 Fuera de alcance: ningún Task agrega backup manual bajo demanda, nivel de log ajustable, descarga selectiva de logs, envío fuera del servidor, ni un flujo de restore expuesto al usuario — respetado.
 
 **2. Barrido de placeholders:** sin resultados — no hay "TBD", "TODO" (en inglés), "agregar manejo de errores apropiado" ni "similar a la Task N" sin código. La única simplificación señalada explícitamente (el converter de ícono del Task 10) se corrigió en el propio Task con código completo, no se dejó pendiente.
 
 **3. Consistencia de tipos — verificado línea por línea contra las firmas fijadas en Task 1:**
-   - `ICorridaBackupRepository` (`AgregarAsync`, `ListarTodasAsync`, `ListarExitosasAsync`, `ObtenerPorIdAsync`, `ObtenerUltimaExitosaAsync`, `EliminarAsync`) — mismos 6 métodos usados idénticamente en Tasks 4, 5, 6, 12 (fakes y real).
+   - `ICorridaBackupRepository` (`AgregarAsync`, `ListarTodasAsync`, `ListarExitosasAsync`, `ObtenerPorIdAsync`, `ObtenerUltimaExitosaAsync`, `EliminarAsync`) — mismos 6 métodos usados idénticamente en Tasks 4, 5, 6 (ahora vía `ServicioConsultaBackups`, ya no directo desde `BackupsEndpoints`) y 12 (fakes y real).
    - `ServicioBackup.EjecutarCorridaAsync(string connectionString, string directorioBackups, DateTime ahoraUtc, CancellationToken)` y `LimpiarTmpHuerfanos(string)` — firmas idénticas en Task 4 (definición) y Task 5 (consumo vía scope).
-   - `IBackupsService` (`ListarAsync`, `DescargarAsync`, `ObtenerSaludAsync`) — idéntico en Task 8 (definición + `BackupsApiClient`), Task 9 (`MantenimientoViewModel`), Task 10 (fake de test), Task 11 (`InicioViewModel`).
+   - `ServicioConsultaBackups.ListarAsync()`/`ObtenerSaludAsync()`/`ResolverArchivoParaDescargaAsync(int id, string directorioBackups)` — mismo nombre de parámetro `directorioBackups` que `ServicioBackup` (Task 4), coherencia deliberada entre ambos servicios del módulo `Backups/` (misma frontera Application↔Infrastructure, misma solución). Definido y consumido únicamente dentro de Task 6 (`BackupsEndpoints`), sin ripple a otras Tasks — es server-side, no forma parte del contrato HTTP externo que consume el desktop.
+   - `IBackupsService` (`ListarAsync`, `DescargarAsync`, `ObtenerSaludAsync`) — SIN relación de tipo con `ServicioConsultaBackups` (nombres de método parecidos por diseño, pero son dos interfaces/clases independientes: una del lado cliente HTTP en `StockApp.ApiClient`, otra del lado servidor en `StockApp.Api`/`StockApp.Application`, comunicadas solo por el contrato HTTP de `BackupsEndpoints`). `IBackupsService` usado idéntico en Task 8 (definición + `BackupsApiClient`), Task 9 (`MantenimientoViewModel`), Task 10 (fake de test), Task 11 (`InicioViewModel`) — sin cambios por la corrección de Task 6.
    - `CorridaBackupDto`/`SaludBackupDto`/`BackupDescargaDto` — mismo orden posicional de campos en Task 6 (definición), Task 8 (`BackupsApiClient`), Tasks 9-11 (consumo).
    - `MantenimientoViewModel.DescargarCommand` (generado desde `DescargarAsync(CorridaBackupDto corrida)`) — usado consistentemente en Task 9 (tests) y Task 10 (XAML `CommandParameter="{Binding}"`).
    - `InicioViewModel` gana el 4to parámetro `IBackupsService backups` — un único call-site del constructor en los tests (`Crear()`, confirmado por búsqueda antes de escribir Task 11), sin ripple a otros archivos.
 
-**4. Decisiones no especificadas por el spec, documentadas explícitamente en el plan (para que el implementador no las reinterprete):** `IniciadaEn`/`FinalizadaEn` no-nullable, sin fila "en progreso" (Task 1); retención hard-delete de la fila DB junto con el archivo (Task 1/4); `ServicioBackup` recibe `connectionString`/`directorioBackups` como parámetros, no inyectados, por la frontera Application↔Infrastructure (Task 4); `BackupProgramadoService` usa `IServiceScopeFactory` + scope nuevo por corrida, con `internal` + `InternalsVisibleTo` para poder testearlo sin exponerlo como API pública (Task 5); `BackupsEndpoints` lee directo del repositorio sin capa de servicio intermedia, deviación documentada del patrón del resto de Finanzas (Task 6); seguridad de `pg_dump`/`pg_restore` vía `PGPASSWORD` + `ArgumentList` en vez de interpolar la connection string (Task 3/12); `EjecutorPgDumpProceso` sin ciclo red-green (mismo criterio que `ServicioGuardadoArchivo`) — verificado por Task 12 (Task 3); `AddKeyedSingleton`/`GetRequiredKeyedService` para el segundo `HttpClient` (Task 7/8); `BackupDescargaDto` con `Stream` (no `byte[]`) para no bufferear dumps grandes (Task 8); banner de `InicioViewModel` solo consulta salud si `EsAdmin` (Task 11); categoría de test de restaurabilidad = ninguna marca especial, mismo criterio que ya usa el repo (Task 12).
+**4. Decisiones no especificadas por el spec, documentadas explícitamente en el plan (para que el implementador no las reinterprete):** `IniciadaEn`/`FinalizadaEn` no-nullable, sin fila "en progreso" (Task 1); retención hard-delete de la fila DB junto con el archivo (Task 1/4); `ServicioBackup` recibe `connectionString`/`directorioBackups` como parámetros, no inyectados, por la frontera Application↔Infrastructure (Task 4); `BackupProgramadoService` usa `IServiceScopeFactory` + scope nuevo por corrida, con `internal` + `InternalsVisibleTo` para poder testearlo sin exponerlo como API pública (Task 5); **`BackupsEndpoints` usa doble barrera de autorización vía `ServicioConsultaBackups` (`_auth.Verificar` + policy HTTP), CORRIGIENDO la deviación de la versión original de este plan — decisión del usuario, spec §6 tenía una omisión (Task 6)**; `ServicioConsultaBackups` recibe `directorioBackups` como parámetro de método (no inyectado), misma frontera y misma solución que `ServicioBackup` — elegida por coherencia sobre agregar una abstracción nueva en `Application/Interfaces/` para un solo caso de uso (Task 6); `ServicioConsultaBackups` sin interfaz, mismo criterio "Servicio+Xxx" que `ServicioLicencia`/`ServicioResetAdmin` (Task 6); seguridad de `pg_dump`/`pg_restore` vía `PGPASSWORD` + `ArgumentList` en vez de interpolar la connection string (Task 3/12); `EjecutorPgDumpProceso` sin ciclo red-green (mismo criterio que `ServicioGuardadoArchivo`) — verificado por Task 12 (Task 3); `AddKeyedSingleton`/`GetRequiredKeyedService` para el segundo `HttpClient` (Task 7/8); `BackupDescargaDto` con `Stream` (no `byte[]`) para no bufferear dumps grandes (Task 8); banner de `InicioViewModel` solo consulta salud si `EsAdmin` (Task 11); categoría de test de restaurabilidad = ninguna marca especial, mismo criterio que ya usa el repo (Task 12).
 
 **5. Huecos/riesgos detectados (no diluidos, señalados para el usuario):**
    - El Task 10 tuvo un ajuste inline (converter de ícono de un solo uso reemplazado por dos `<i:Icon>` condicionados) — quedó resuelto con código completo en el propio Task, no es una deuda pendiente.
    - Task 12 depende de un binario externo (`postgresql-client`) que puede no estar instalado en el entorno que ejecute el plan — es un riesgo de ejecución real, documentado explícitamente en el Task y en Global Constraints, no un placeholder.
    - `ILogger<ServicioBackup>`/`ILogger<BackupProgramadoService>` van a stdout únicamente en esta entrega (spec §4.3 lo aclara explícitamente: "sin Serilog todavía") — la única fuente de verdad para diagnosticar un fallo es `CorridaBackup.MotivoFallo` vía el endpoint/UI, no el log. Correcto y ya documentado en Global Constraints y en el propio spec; no es un hueco de este plan.
+   - **Resuelto en esta revisión** (ya no es un hueco): la primera versión de este plan aceptaba que `BackupsEndpoints` leyera directo de `ICorridaBackupRepository`, sin segunda barrera de autorización — señalado explícitamente en esa versión y corregido acá por decisión del usuario (Task 6, `ServicioConsultaBackups`). Se deja esta nota para trazabilidad: la razón real (endpoints que exponen un dump completo de la base) no estaba en el spec original y no debería volver a diluirse en una futura revisión de este plan.
 
 ---
