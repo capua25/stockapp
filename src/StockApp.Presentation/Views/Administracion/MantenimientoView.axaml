@@ -28,13 +28,13 @@
                         <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
                             <i:Icon Grid.Column="0"
                                     Value="mdi-check-circle"
-                                    Foreground="{DynamicResource ExitoBrush}"
+                                    Foreground="{DynamicResource SuccessBrush}"
                                     IsVisible="{Binding Resultado, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Exitosa}"
                                     Margin="0,0,8,0"
                                     VerticalAlignment="Center" />
                             <i:Icon Grid.Column="0"
                                     Value="mdi-close-circle"
-                                    Foreground="{DynamicResource ErrorBrush}"
+                                    Foreground="{DynamicResource DangerBrush}"
                                     IsVisible="{Binding Resultado, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Fallida}"
                                     Margin="0,0,8,0"
                                     VerticalAlignment="Center" />
@@ -42,7 +42,7 @@
                                 <TextBlock Text="{Binding FinalizadaEn, Converter={x:Static conv:FechaUtcALocalConverter.Instance}, StringFormat='dd/MM/yyyy HH:mm'}" />
                                 <TextBlock Text="{Binding MotivoFallo}"
                                            Classes="caption"
-                                           Foreground="{DynamicResource ErrorBrush}"
+                                           Foreground="{DynamicResource DangerBrush}"
                                            IsVisible="{Binding MotivoFallo, Converter={x:Static ObjectConverters.IsNotNull}}" />
                             </StackPanel>
                             <TextBlock Grid.Column="2"
