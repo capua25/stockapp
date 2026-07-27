@@ -75,17 +75,32 @@ public class PoliticaRetencionTests
     [Fact]
     public void DeterminarABorrar_CruceDeMes_AgrupaPorBloqueRodanteSinImportarElMes()
     {
-        // ahoraUtc = 2 de agosto. Corridas el 29, 30, 31 de julio y el 1, 2 de agosto: mismo
-        // "día" cada una (offsetDias 0..4), deben quedar TODAS retenidas por la regla diaria
-        // aunque el mes cambie a mitad del rango — sin caso especial en la implementación.
-        var ahoraCruceDeMes = new DateTime(2026, 8, 2, 10, 0, 0, DateTimeKind.Utc);
+        // ahoraUtc = 3 de agosto. Los 6 slots de "recientes" se llenan a propósito con corridas
+        // del propio 3 de agosto (más nuevas que TODO lo demás) para que Take(6) no pueda salvar
+        // a ninguna de las corridas bajo prueba — mismo enfoque que
+        // DeterminarABorrar_SemanaActualParcialConMasDeSeisCorridas_.... Las corridas del 29, 30,
+        // 31 de julio y el 1, 2 de agosto (offsetDias 1..5) sólo pueden sobrevivir gracias al
+        // bucket diario: el semanal tampoco las salva, porque el rango de la semana actual
+        // (28 jul - 3 ago) queda dominado por reciente1, que es la corrida más nueva de todas.
+        var ahoraCruceDeMes = new DateTime(2026, 8, 3, 10, 0, 0, DateTimeKind.Utc);
+
+        var reciente1 = Corrida(ahoraCruceDeMes.AddHours(-1), "reciente1");
+        var reciente2 = Corrida(ahoraCruceDeMes.AddHours(-2), "reciente2");
+        var reciente3 = Corrida(ahoraCruceDeMes.AddHours(-3), "reciente3");
+        var reciente4 = Corrida(ahoraCruceDeMes.AddHours(-4), "reciente4");
+        var reciente5 = Corrida(ahoraCruceDeMes.AddHours(-5), "reciente5");
+        var reciente6 = Corrida(ahoraCruceDeMes.AddHours(-6), "reciente6");
+
+        var jul29 = Corrida(new DateTime(2026, 7, 29, 3, 0, 0, DateTimeKind.Utc), "jul29");
+        var jul30 = Corrida(new DateTime(2026, 7, 30, 3, 0, 0, DateTimeKind.Utc), "jul30");
+        var jul31 = Corrida(new DateTime(2026, 7, 31, 3, 0, 0, DateTimeKind.Utc), "jul31");
+        var ago1 = Corrida(new DateTime(2026, 8, 1, 3, 0, 0, DateTimeKind.Utc), "ago1");
+        var ago2 = Corrida(new DateTime(2026, 8, 2, 3, 0, 0, DateTimeKind.Utc), "ago2");
+
         var corridas = new List<CorridaBackup>
         {
-            Corrida(new DateTime(2026, 7, 29, 3, 0, 0, DateTimeKind.Utc), "jul29"),
-            Corrida(new DateTime(2026, 7, 30, 3, 0, 0, DateTimeKind.Utc), "jul30"),
-            Corrida(new DateTime(2026, 7, 31, 3, 0, 0, DateTimeKind.Utc), "jul31"),
-            Corrida(new DateTime(2026, 8, 1, 3, 0, 0, DateTimeKind.Utc), "ago1"),
-            Corrida(new DateTime(2026, 8, 2, 3, 0, 0, DateTimeKind.Utc), "ago2"),
+            reciente1, reciente2, reciente3, reciente4, reciente5, reciente6,
+            jul29, jul30, jul31, ago1, ago2,
         };
 
         var aBorrar = PoliticaRetencion.DeterminarABorrar(corridas, ahoraCruceDeMes);
@@ -157,26 +172,49 @@ public class PoliticaRetencionTests
         // Fallidas mezcladas", sino "hay días calendario sin NINGUNA corrida" dentro de la
         // ventana diaria de 7 días: eso es lo que ejercita la rama `delDia is not null` cuando
         // NO hay candidato, sin romper el resto de la selección.
-        var d0 = Corrida(Ahora, "d0"); // offset 0
-        var d2 = Corrida(Ahora.AddDays(-2), "d2"); // offset 2
-        var d4 = Corrida(Ahora.AddDays(-4), "d4"); // offset 4
-        var d6 = Corrida(Ahora.AddDays(-6), "d6"); // offset 6
-        // offsets 1, 3 y 5 quedan sin ninguna corrida -> huecos reales en la ventana diaria.
-        var w1 = Corrida(Ahora.AddDays(-10), "w1"); // semana 1
-        var w2 = Corrida(Ahora.AddDays(-17), "w2"); // semana 2
-        var w3 = Corrida(Ahora.AddDays(-25), "w3"); // semana 3 — fuera de las 6 más recientes, sólo la retiene el bucket semanal
-        var muyVieja = Corrida(Ahora.AddDays(-87), "muyVieja"); // fuera de recientes, diaria y semanal -> se borra
+        //
+        // ahoraConHueco = Ahora + 1 día, para dejar el offsetDias 0 ("hoy") libre para 6 corridas
+        // "reciente1..6" que ocupan a propósito los 6 slots de "recientes" (mismo enfoque que el
+        // fix de DeterminarABorrar_CruceDeMes_.../SemanaActualParcial): así d1, d3, d5 y d6 quedan
+        // fuera de Take(6), y el rango semanal actual (semana0) también queda dominado por
+        // reciente1 (la corrida más nueva de todas) — sobreviven ÚNICA Y EXCLUSIVAMENTE gracias
+        // al bucket diario. Los offsets 2 y 4 quedan sin ninguna corrida -> huecos reales en la
+        // ventana diaria que el bucket debe saltear sin romper el resto.
+        var ahoraConHueco = Ahora.AddDays(1);
 
-        var corridas = new List<CorridaBackup> { d0, d2, d4, d6, w1, w2, w3, muyVieja };
+        var reciente1 = Corrida(ahoraConHueco.AddHours(-1), "reciente1");
+        var reciente2 = Corrida(ahoraConHueco.AddHours(-2), "reciente2");
+        var reciente3 = Corrida(ahoraConHueco.AddHours(-3), "reciente3");
+        var reciente4 = Corrida(ahoraConHueco.AddHours(-4), "reciente4");
+        var reciente5 = Corrida(ahoraConHueco.AddHours(-5), "reciente5");
+        var reciente6 = Corrida(ahoraConHueco.AddHours(-6), "reciente6");
 
-        var aBorrar = PoliticaRetencion.DeterminarABorrar(corridas, Ahora);
+        var d1 = Corrida(ahoraConHueco.AddDays(-1), "d1"); // offset 1
+        var d3 = Corrida(ahoraConHueco.AddDays(-3), "d3"); // offset 3
+        var d5 = Corrida(ahoraConHueco.AddDays(-5), "d5"); // offset 5
+        var d6 = Corrida(ahoraConHueco.AddDays(-6), "d6"); // offset 6 (borde de la ventana diaria)
+        // offsets 2 y 4 quedan sin ninguna corrida -> huecos reales en la ventana diaria.
+        var w1 = Corrida(ahoraConHueco.AddDays(-10), "w1"); // semana 1
+        var w2 = Corrida(ahoraConHueco.AddDays(-17), "w2"); // semana 2
+        var w3 = Corrida(ahoraConHueco.AddDays(-25), "w3"); // semana 3 — fuera de las 6 más recientes, sólo la retiene el bucket semanal
+        var muyVieja = Corrida(ahoraConHueco.AddDays(-87), "muyVieja"); // fuera de recientes, diaria y semanal -> se borra
+
+        var corridas = new List<CorridaBackup>
+        {
+            reciente1, reciente2, reciente3, reciente4, reciente5, reciente6,
+            d1, d3, d5, d6, w1, w2, w3, muyVieja,
+        };
+
+        var aBorrar = PoliticaRetencion.DeterminarABorrar(corridas, ahoraConHueco);
         var nombresABorrar = aBorrar.Select(c => c.NombreArchivo).ToHashSet();
 
         Assert.Single(nombresABorrar);
         Assert.Contains("muyVieja", nombresABorrar);
-        Assert.DoesNotContain("d0", nombresABorrar);
-        Assert.DoesNotContain("d2", nombresABorrar);
-        Assert.DoesNotContain("d4", nombresABorrar);
+        Assert.DoesNotContain("reciente1", nombresABorrar);
+        Assert.DoesNotContain("reciente6", nombresABorrar);
+        Assert.DoesNotContain("d1", nombresABorrar);
+        Assert.DoesNotContain("d3", nombresABorrar);
+        Assert.DoesNotContain("d5", nombresABorrar);
         Assert.DoesNotContain("d6", nombresABorrar);
         Assert.DoesNotContain("w1", nombresABorrar);
         Assert.DoesNotContain("w2", nombresABorrar);
