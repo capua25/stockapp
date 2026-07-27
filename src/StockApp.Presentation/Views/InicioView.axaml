@@ -49,6 +49,20 @@
                 </StackPanel>
             </Border>
 
+            <!-- Aviso de salud de backup: condición de FALLA/RIESGO (no informativa como
+                 vencimientos), por eso usa borde DangerBrush además del título en rojo — debe
+                 leerse como más urgente que el aviso de vencimientos de arriba. -->
+            <Border Classes="card"
+                    BorderBrush="{DynamicResource DangerBrush}"
+                    BorderThickness="1"
+                    IsVisible="{Binding MostrarAvisoBackup}">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Backup de la base de datos" Classes="seccion" Foreground="{DynamicResource DangerBrush}" />
+                    <TextBlock Text="{Binding TextoAvisoBackup}"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+
             <!-- Accesos rápidos -->
             <Border Classes="card">
                 <StackPanel Spacing="12">
