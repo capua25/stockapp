@@ -23,6 +23,7 @@ public class AppDbContext : DbContext
     public DbSet<Adjunto> Adjuntos => Set<Adjunto>();
     public DbSet<AdjuntoContenido> AdjuntosContenido => Set<AdjuntoContenido>();
     public DbSet<IngresoCaja> IngresosCaja => Set<IngresoCaja>();
+    public DbSet<CorridaBackup> CorridasBackup => Set<CorridaBackup>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -245,6 +246,12 @@ public class AppDbContext : DbContext
             e.HasIndex(m => m.GastoId);
             e.HasOne(m => m.Gasto).WithMany()
                 .HasForeignKey(m => m.GastoId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── Backups programados (Entrega 1) ───────────────────────────────────
+        modelBuilder.Entity<CorridaBackup>(e =>
+        {
+            e.HasIndex(c => c.FinalizadaEn);
         });
     }
 }

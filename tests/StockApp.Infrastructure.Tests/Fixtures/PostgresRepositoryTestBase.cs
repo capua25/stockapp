@@ -30,7 +30,7 @@ public abstract class PostgresRepositoryTestBase : IDisposable
             "TRUNCATE TABLE \"LogsAuditoria\", \"MovimientosStock\", \"Productos\", " +
             "\"Categorias\", \"Proveedores\", \"UnidadesMedida\", \"Usuarios\", " +
             "\"AsignacionesPresupuestales\", \"LineasPoa\", \"RubrosGasto\", \"FuentesFinanciamiento\", " +
-            "\"AdjuntosContenido\", \"Adjuntos\", \"PagosGasto\", \"Gastos\", \"IngresosCaja\" " +
-            "RESTART IDENTITY CASCADE;");
+            "\"AdjuntosContenido\", \"Adjuntos\", \"PagosGasto\", \"Gastos\", \"IngresosCaja\", " +
+            "\"CorridasBackup\" RESTART IDENTITY CASCADE;");
     }
 }
