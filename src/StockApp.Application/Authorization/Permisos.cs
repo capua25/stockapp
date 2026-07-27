@@ -26,6 +26,10 @@ public static class Permisos
     // reemplaza datos históricos de todo el ejercicio; Operador queda afuera por diseño.
     public const string ImportarPlanillas         = "finanzas.importar";
 
+    // Backups programados (Entrega 1) — Admin-only desde el vamos, mismo criterio que
+    // ImportarPlanillas: superficie sensible (backups y, en la Entrega 2, logs del servidor).
+    public const string GestionarDiagnostico = "diagnostico.gestionar";
+
     /// <summary>
     /// Lista explícita de todos los permisos del sistema (sin reflection). Consumida por
     /// StockApp.Api/Program.cs (Fase 2b, D1) para derivar las políticas de autorización
@@ -45,5 +49,6 @@ public static class Permisos
         RegistrarPagos,
         RegistrarIngresos,
         ImportarPlanillas,
+        GestionarDiagnostico,
     ];
 }

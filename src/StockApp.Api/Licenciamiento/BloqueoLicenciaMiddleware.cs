@@ -40,5 +40,6 @@ public sealed class BloqueoLicenciaMiddleware
 
     private static bool EsRutaPermitida(PathString path)
         => path.StartsWithSegments("/licencia")
-        || path.StartsWithSegments("/auth/reset-admin");
+        || path.StartsWithSegments("/auth/reset-admin")
+        || path.StartsWithSegments("/backups");
 }

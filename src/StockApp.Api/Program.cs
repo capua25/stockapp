@@ -188,6 +188,7 @@ builder.Services.AddScoped<ServicioResetAdmin>();
 builder.Services.AddScoped<ICorridaBackupRepository, CorridaBackupRepository>();
 builder.Services.AddScoped<IEjecutorPgDump, EjecutorPgDumpProceso>();
 builder.Services.AddScoped<ServicioBackup>();
+builder.Services.AddScoped<ServicioConsultaBackups>();
 builder.Services.AddHostedService<BackupProgramadoService>();
 
 // JwtOptions: misma razón que AppDbContext arriba — el secreto (y ahora la expiración,
@@ -449,6 +450,7 @@ app.MapFinanzasVistasEndpoints();
 app.MapImportacionEndpoints();
 app.MapLicenciaEndpoints();
 app.MapResetAdminEndpoints();
+app.MapBackupsEndpoints();
 
 app.Run();
 

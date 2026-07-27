@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using StockApp.Application.Licenciamiento;
 using StockApp.Infrastructure.Persistence;
+using StockApp.Infrastructure.Platform;
 using Testcontainers.PostgreSql;
 using Xunit;
 
@@ -70,6 +71,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
             services.Replace(ServiceDescriptor.Singleton<IFingerprintMaquina, FingerprintMaquinaFake>());
             services.Replace(ServiceDescriptor.Singleton<IAlmacenLicencia>(
                 _ => new AlmacenLicenciaEnMemoria(ClavesDePrueba.EmitirLicencia())));
+            services.Replace(ServiceDescriptor.Singleton<IUserDataPathProvider>(
+                _ => new UserDataPathProviderFake()));
         });
     }
 

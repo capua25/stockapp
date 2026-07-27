@@ -73,6 +73,19 @@ public class BloqueoLicenciaTests : ApiTestBase
     }
 
     [Fact]
+    public async Task Bloqueada_Backups_Pasa()
+    {
+        Bloquear();
+        var client = Factory.CreateClient();
+
+        // Sin token -> 401 (no 423): confirma que la ruta atraviesa el middleware de licencia
+        // (que la dejaría pasar) y llega hasta el de autenticación.
+        var response = await client.GetAsync("/backups");
+
+        Assert.NotEqual((HttpStatusCode)423, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Activada_EndpointNormal_NoDevuelve423()
     {
         // ApiTestBase deja Activada=true por defecto.

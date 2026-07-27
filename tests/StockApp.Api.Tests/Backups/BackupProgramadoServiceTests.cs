@@ -2,11 +2,11 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using StockApp.Api.Backups;
+using StockApp.Api.Tests.Fixtures;
 using StockApp.Application.Backups;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
-using StockApp.Infrastructure.Platform;
 using Xunit;
 
 namespace StockApp.Api.Tests.Backups;
@@ -51,15 +51,6 @@ public class BackupProgramadoServiceTests
             File.WriteAllText(r, string.Empty);
             return Task.FromResult(new ResultadoEjecucionPgDump(true, null));
         }
-    }
-
-    private sealed class UserDataPathProviderFake : IUserDataPathProvider
-    {
-        private readonly string _dir = Path.Combine(Path.GetTempPath(), "BackupProgramadoServiceTests_" + Guid.NewGuid());
-        public string GetDataDirectory() => _dir;
-        public string GetDatabasePath() => Path.Combine(_dir, "stockapp.db");
-        public string GetBackupsDirectory() => Path.Combine(_dir, "backups");
-        public string GetLicenciaPath() => Path.Combine(_dir, "licencia.lic");
     }
 
     /// <summary>Simula el caso real que motiva el Fix 1: la API arranca antes de que Postgres
