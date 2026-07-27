@@ -4,6 +4,7 @@ using AvaloniaApp = Avalonia.Application;
 using Avalonia.Controls.ApplicationLifetimes;
 using System;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
@@ -159,6 +160,32 @@ public partial class App : AvaloniaApp
                 // 10 s (spec 3b, OQ-3): LAN local — cubre el reporte más pesado y acota la
                 // espera con el server caído (el default de 100 s colgaría la UI).
                 Timeout = TimeSpan.FromSeconds(10),
+            };
+        });
+
+        // HttpClient "Descargas": mismo BaseAddress/AuthTokenHandler que el principal, pero SIN
+        // el timeout de 10s (spec §7 — "LAN local... el default de 100s colgaría la UI" aplica a
+        // requests normales, NO a la descarga de un dump de varios MB/GB). Timeout.InfiniteTimeSpan
+        // porque la operación ya tiene su propio corte natural (el usuario puede cancelar el
+        // selector de archivo, o cerrar la app); no hay un valor fijo razonable para un dump que
+        // crece con el tiempo.
+        services.AddKeyedSingleton<HttpClient>("Descargas", (sp, _) =>
+        {
+            var baseUrl = configuration["Api:BaseUrl"];
+            if (string.IsNullOrWhiteSpace(baseUrl))
+            {
+                baseUrl = "http://localhost:5000";
+            }
+
+            var handler = new AuthTokenHandler(sp.GetRequiredService<ApiSession>())
+            {
+                InnerHandler = new SocketsHttpHandler(),
+            };
+
+            return new HttpClient(handler)
+            {
+                BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/"),
+                Timeout = Timeout.InfiniteTimeSpan,
             };
         });
 

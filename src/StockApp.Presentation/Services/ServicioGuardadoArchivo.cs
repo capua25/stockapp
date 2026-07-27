@@ -62,4 +62,36 @@ public class ServicioGuardadoArchivo : IServicioGuardadoArchivo
 
         return true;
     }
+
+    /// <inheritdoc />
+    public Task<bool> GuardarBytesAsync(Stream contenido, string nombreSugerido)
+    {
+        if (AvaloniaApp.Current is null)
+            return Task.FromResult(false);
+
+        return Dispatcher.UIThread.InvokeAsync(() => GuardarBytesInternoAsync(contenido, nombreSugerido));
+    }
+
+    private static async Task<bool> GuardarBytesInternoAsync(Stream contenido, string nombreSugerido)
+    {
+        var lifetime = AvaloniaApp.Current?.ApplicationLifetime
+            as IClassicDesktopStyleApplicationLifetime;
+        var storageProvider = lifetime?.MainWindow?.StorageProvider;
+
+        if (storageProvider is null)
+            return false;
+
+        var archivo = await storageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            SuggestedFileName = nombreSugerido,
+        });
+
+        if (archivo is null)
+            return false;
+
+        await using var destino = await archivo.OpenWriteAsync();
+        await contenido.CopyToAsync(destino);
+
+        return true;
+    }
 }
