@@ -2273,16 +2273,21 @@ git commit -m "feat(backups): agrega ServicioConsultaBackups (segunda barrera de
 
 **Interfaces:**
 - Consumes: nada nuevo — `Avalonia.Platform.Storage.IStorageProvider` (ya usado por `GuardarTextoAsync`).
-- Produces: `IServicioGuardadoArchivo.GuardarBytesAsync(Stream contenido, string nombreSugerido) : Task<bool>`, `HttpClient` con key `"Descargas"` registrado vía `AddKeyedSingleton` — consumidos por Task 8 (`BackupsApiClient`) y Task 9 (`MantenimientoViewModel`).
+- Produces: `IServicioGuardadoArchivo.GuardarBytesAsync(Stream contenido, string nombreSugerido, CancellationToken ct = default) : Task<bool>`, `HttpClient` con key `"Descargas"` registrado vía `AddKeyedSingleton`, **timeout finito de 30 minutos** (ver decisión de diseño 2) — consumidos por Task 8 (`BackupsApiClient`) y Task 9 (`MantenimientoViewModel`).
 
-**Decisión de diseño (spec §7 no fija el mecanismo de registro del segundo `HttpClient` — se documenta acá):** el proyecto NO usa `IHttpClientFactory`/`AddHttpClient` en ningún lado (`App.axaml.cs` registra el `HttpClient` principal como singleton manual vía factory lambda). Para el segundo cliente se usa `AddKeyedSingleton<HttpClient>("Descargas", ...)` (soportado desde `Microsoft.Extensions.DependencyInjection` 8+, el proyecto ya está en 10.0.9) resuelto con `GetRequiredKeyedService<HttpClient>("Descargas")` dentro de una factory lambda para `IBackupsService` — mismo estilo manual que el resto de `ConfigurarServicios()`, sin introducir un patrón nuevo (`[FromKeyedServices]` por atributo no se usa en ningún otro lado del proyecto).
+**Decisión de diseño 1 (spec §7 no fija el mecanismo de registro del segundo `HttpClient` — se documenta acá):** el proyecto NO usa `IHttpClientFactory`/`AddHttpClient` en ningún lado (`App.axaml.cs` registra el `HttpClient` principal como singleton manual vía factory lambda). Para el segundo cliente se usa `AddKeyedSingleton<HttpClient>("Descargas", ...)` (soportado desde `Microsoft.Extensions.DependencyInjection` 8+, el proyecto ya está en 10.0.9) resuelto con `GetRequiredKeyedService<HttpClient>("Descargas")` dentro de una factory lambda para `IBackupsService` — mismo estilo manual que el resto de `ConfigurarServicios()`, sin introducir un patrón nuevo (`[FromKeyedServices]` por atributo no se usa en ningún otro lado del proyecto).
 
-- [ ] **Step 1: Extender la interfaz**
+**Decisión de diseño 2 (CORRECCIÓN post-review — decisión del usuario, no del spec original):** `Timeout.InfiniteTimeSpan` (versión ya implementada de esta Task) queda REEMPLAZADO por un timeout finito de **30 minutos** (`TimeSpan.FromMinutes(30)`), Y `GuardarBytesAsync` gana un `CancellationToken` que se propaga hasta `Stream.CopyToAsync`. El problema real: con timeout infinito y sin ningún `CancellationToken` en toda la cadena (`GuardarBytesAsync` → `IBackupsService.DescargarAsync` → `DescargarCommand`), si el servidor colgaba a mitad de una descarga (proceso muerto, red cortada sin FIN, proxy que traga la conexión) el botón de esa fila quedaba trabado indefinidamente y la única salida del usuario era cerrar la aplicación. Fix de dos partes, ambas necesarias:
+  - **Timeout finito holgado** (red de seguridad pasiva, sin que el usuario tenga que hacer nada): 30 minutos. Justificación del valor: el despliegue real de este sistema es LAN local (mismo criterio que el comentario ya existente sobre el timeout de 10s del `HttpClient` principal — "LAN local... el default de 100s colgaría la UI"); en una LAN, incluso un dump de varios GB baja en segundos a pocos minutos. 30 minutos cubre con margen generoso un acceso remoto por VPN, un disco del servidor con carga alta, o un dump diez veces más grande que cualquier cosa realista para esta base — y sigue garantizando que la UI se libere sola aunque el usuario nunca toque el botón de cancelar.
+  - **Cancelación activa desde la UI** (vía Tasks 8-10): para el caso en que 30 minutos siguen siendo demasiada espera para el usuario, o el usuario simplemente se arrepiente.
+
+- [ ] **Step 1: Extender la interfaz con `CancellationToken`**
 
 ```csharp
 // src/StockApp.Presentation/Services/IServicioGuardadoArchivo.cs
 // Agregar el método (sin tocar GuardarTextoAsync):
 using System.IO;
+using System.Threading;
 
     /// <summary>
     /// Muestra el selector de archivo y copia <paramref name="contenido"/> directo al Stream de
@@ -2291,8 +2296,11 @@ using System.IO;
     /// </summary>
     /// <param name="contenido">Stream de origen (ej. el body de la respuesta HTTP de descarga).</param>
     /// <param name="nombreSugerido">Nombre de archivo sugerido en el selector.</param>
-    /// <returns><c>true</c> si el usuario eligió una ubicación y el archivo se guardó; <c>false</c> si canceló.</returns>
-    Task<bool> GuardarBytesAsync(Stream contenido, string nombreSugerido);
+    /// <param name="ct">Token de cancelación — propagado hasta el CopyToAsync final, para que
+    /// cancelar la descarga desde la UI (Task 9) corte la copia a disco, no solo la lectura HTTP.</param>
+    /// <returns><c>true</c> si el usuario eligió una ubicación y el archivo se guardó; <c>false</c> si canceló el selector.</returns>
+    /// <exception cref="OperationCanceledException">Si <paramref name="ct"/> se cancela durante la copia.</exception>
+    Task<bool> GuardarBytesAsync(Stream contenido, string nombreSugerido, CancellationToken ct = default);
 ```
 
 - [ ] **Step 2: Implementación (sin ciclo red-green — mismo criterio ya documentado en el archivo para `GuardarTextoAsync`: "No se testea unitariamente (es UI)")**
@@ -2301,15 +2309,15 @@ using System.IO;
 // src/StockApp.Presentation/Services/ServicioGuardadoArchivo.cs
 // Agregar el método a la clase:
     /// <inheritdoc />
-    public Task<bool> GuardarBytesAsync(Stream contenido, string nombreSugerido)
+    public Task<bool> GuardarBytesAsync(Stream contenido, string nombreSugerido, CancellationToken ct = default)
     {
         if (AvaloniaApp.Current is null)
             return Task.FromResult(false);
 
-        return Dispatcher.UIThread.InvokeAsync(() => GuardarBytesInternoAsync(contenido, nombreSugerido));
+        return Dispatcher.UIThread.InvokeAsync(() => GuardarBytesInternoAsync(contenido, nombreSugerido, ct));
     }
 
-    private static async Task<bool> GuardarBytesInternoAsync(Stream contenido, string nombreSugerido)
+    private static async Task<bool> GuardarBytesInternoAsync(Stream contenido, string nombreSugerido, CancellationToken ct)
     {
         var lifetime = AvaloniaApp.Current?.ApplicationLifetime
             as IClassicDesktopStyleApplicationLifetime;
@@ -2327,7 +2335,7 @@ using System.IO;
             return false;
 
         await using var destino = await archivo.OpenWriteAsync();
-        await contenido.CopyToAsync(destino);
+        await contenido.CopyToAsync(destino, ct);
 
         return true;
     }
@@ -2338,21 +2346,22 @@ using System.IO;
 Run: `timeout 180 dotnet build src/StockApp.Presentation`
 Expected: `Build succeeded.`
 
-- [ ] **Step 4: `HttpClient` de descargas en `App.axaml.cs`**
+- [ ] **Step 4: `HttpClient` de descargas en `App.axaml.cs` — timeout finito (CORRECCIÓN sobre `Timeout.InfiniteTimeSpan`)**
 
 ```csharp
 // src/StockApp.Presentation/App.axaml.cs
 // Agregar DESPUÉS del bloque que registra el HttpClient principal (después del cierre del
 // services.AddSingleton(sp => { ... return new HttpClient(handler) { ... }; }); del HttpClient
-// con Timeout de 10s), un HttpClient keyed con timeout extendido para descargas de dumps
-// (pueden ser varios MB/GB, spec §7):
+// con Timeout de 10s), un HttpClient keyed con timeout extendido (pero FINITO) para descargas
+// de dumps (pueden ser varios MB/GB, spec §7):
 
-        // HttpClient "Descargas": mismo BaseAddress/AuthTokenHandler que el principal, pero SIN
-        // el timeout de 10s (spec §7 — "LAN local... el default de 100s colgaría la UI" aplica a
-        // requests normales, NO a la descarga de un dump de varios MB/GB). Timeout.InfiniteTimeSpan
-        // porque la operación ya tiene su propio corte natural (el usuario puede cancelar el
-        // selector de archivo, o cerrar la app); no hay un valor fijo razonable para un dump que
-        // crece con el tiempo.
+        // HttpClient "Descargas": mismo BaseAddress/AuthTokenHandler que el principal, pero con
+        // timeout de 30 MINUTOS (no 10s como el principal, y NO infinito — ver decisión de
+        // diseño 2 del Task). En una LAN (despliegue real de este sistema, mismo criterio que el
+        // timeout de 10s del HttpClient principal) hasta un dump de varios GB baja en minutos;
+        // 30 minutos es margen de sobra para VPN/disco lento del servidor, pero sigue siendo un
+        // límite finito: si el servidor cuelga a mitad de una descarga, la UI se libera sola aun
+        // si el usuario nunca toca "Cancelar" (Task 9).
         services.AddKeyedSingleton<HttpClient>("Descargas", (sp, _) =>
         {
             var baseUrl = configuration["Api:BaseUrl"];
@@ -2369,7 +2378,7 @@ Expected: `Build succeeded.`
             return new HttpClient(handler)
             {
                 BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/"),
-                Timeout = Timeout.InfiniteTimeSpan,
+                Timeout = TimeSpan.FromMinutes(30),
             };
         });
 ```
@@ -2379,13 +2388,15 @@ Expected: `Build succeeded.`
 Run: `timeout 180 dotnet build src/StockApp.Presentation`
 Expected: `Build succeeded.`
 
+Nota: `ComposicionDIApiTests.cs` (Task 8) tiene su PROPIA copia del registro de este `HttpClient` keyed "Descargas" y un test que asumía `Timeout.InfiniteTimeSpan` — se corrige en la Task 8 (Step 6 de esa Task), no acá, porque ese archivo de test todavía no existe en este punto de la ejecución secuencial del plan (Task 7 corre antes que Task 8).
+
 - [ ] **Step 6: Commit**
 
 ```bash
 git add src/StockApp.Presentation/Services/IServicioGuardadoArchivo.cs \
         src/StockApp.Presentation/Services/ServicioGuardadoArchivo.cs \
         src/StockApp.Presentation/App.axaml.cs
-git commit -m "feat(backups): agrega GuardarBytesAsync y HttpClient de descargas con timeout extendido (Entrega 1)"
+git commit -m "fix(backups): timeout finito (30min) + CancellationToken en GuardarBytesAsync y HttpClient de descargas (Entrega 1)"
 ```
 
 ---
@@ -2395,17 +2406,75 @@ git commit -m "feat(backups): agrega GuardarBytesAsync y HttpClient de descargas
 **Files:**
 - Modify: `src/StockApp.Application/Backups/BackupDtos.cs`
 - Create: `src/StockApp.Application/Backups/IBackupsService.cs`
+- Modify: `src/StockApp.ApiClient/ApiErrores.cs`
 - Create: `src/StockApp.ApiClient/BackupsApiClient.cs`
 - Modify: `src/StockApp.Presentation/App.axaml.cs`
 - Modify: `tests/StockApp.Presentation.Tests/DI/ComposicionDIApiTests.cs`
 
 **Interfaces:**
-- Consumes: `CorridaBackupDto`/`SaludBackupDto` (Task 6, deserializados directo — "records planos, sin entidades de EF", mismo criterio que `FinanzasVistasApiClient`), `ApiErrores.EnviarAsync`/`AsegurarExitoAsync` (`StockApp.ApiClient`, patrón establecido), `HttpClient` keyed `"Descargas"` (Task 7).
-- Produces: `IBackupsService.ListarAsync()/DescargarAsync(int)/ObtenerSaludAsync()`, `BackupDescargaDto` (sealed class, `IAsyncDisposable`, `NombreArchivo`+`Contenido: Stream`), `BackupsApiClient : IBackupsService` — consumidos por Task 9 (`MantenimientoViewModel`) y Task 11 (`InicioViewModel`).
+- Consumes: `CorridaBackupDto`/`SaludBackupDto` (Task 6, deserializados directo — "records planos, sin entidades de EF", mismo criterio que `FinanzasVistasApiClient`), `ApiErrores.EnviarAsync`/`AsegurarExitoAsync` (`StockApp.ApiClient`, patrón establecido), `HttpClient` keyed `"Descargas"` (Task 7, timeout finito de 30 minutos).
+- Produces: `IBackupsService.ListarAsync(CancellationToken ct = default)`/`DescargarAsync(int id, CancellationToken ct = default)`/`ObtenerSaludAsync(CancellationToken ct = default)`, `BackupDescargaDto` (sealed class, `IAsyncDisposable`, `NombreArchivo`+`Contenido: Stream`), `BackupsApiClient : IBackupsService` — consumidos por Task 9 (`MantenimientoViewModel`) y Task 11 (`InicioViewModel`).
 
-**Decisión de diseño (spec no fija el tipo de retorno de la descarga — se documenta acá):** `DescargarAsync` devuelve `BackupDescargaDto` con un `Stream` (NO `byte[]`) — un dump de varios GB no puede bufferearse completo en memoria (mismo motivo que `GuardarBytesAsync`, Task 7). `BackupDescargaDto` implementa `IAsyncDisposable` (dispone el `Stream`, lo que libera la conexión HTTP subyacente — comportamiento estándar de `HttpContent.ReadAsStreamAsync`); no retiene una referencia al `HttpResponseMessage` para no filtrar concerns de transporte HTTP en el contrato de `StockApp.Application`.
+**Decisión de diseño 1 (spec no fija el tipo de retorno de la descarga — se documenta acá):** `DescargarAsync` devuelve `BackupDescargaDto` con un `Stream` (NO `byte[]`) — un dump de varios GB no puede bufferearse completo en memoria (mismo motivo que `GuardarBytesAsync`, Task 7). `BackupDescargaDto` implementa `IAsyncDisposable` (dispone el `Stream`, lo que libera la conexión HTTP subyacente — comportamiento estándar de `HttpContent.ReadAsStreamAsync`); no retiene una referencia al `HttpResponseMessage` para no filtrar concerns de transporte HTTP en el contrato de `StockApp.Application`.
 
-- [ ] **Step 1: `BackupDescargaDto` + `IBackupsService`**
+**Decisión de diseño 2 (CORRECCIÓN post-review — `CancellationToken` en los 3 métodos, no solo en `DescargarAsync`):** el problema reportado era específico de la descarga, pero se decide agregar `CancellationToken ct = default` a las TRES operaciones de `IBackupsService` (`ListarAsync`, `ObtenerSaludAsync` incluidas), no solo a `DescargarAsync`. Razón: consistencia con el único precedente real de una interfaz async con cancelación en este proyecto, `IVelopackGateway`/`VelopackUpdateService` (`Actualizaciones/`), que aplica `CancellationToken ct = default` de forma UNIFORME a todos sus métodos (`BuscarUpdateAsync`, `DescargarUpdateAsync`) en vez de solo al que más lo necesita — evita que la interfaz tenga "algunos métodos cancelables y otros no" sin un criterio claro para quien la lea después. Costo cero para los callers actuales: `ct = default` es un parámetro opcional, así que `CargarAsync()` en `MantenimientoViewModel` (Task 9) e `InicioViewModel` (Task 11) siguen compilando sin pasar el argumento — ninguno de los dos tiene hoy una fuente natural de cancelación para "cargar la lista"/"consultar salud" (a diferencia de la descarga, que si la tiene: el botón Cancelar de Task 9). Fuera de alcance de esta corrección: propagar el token hasta `ServicioConsultaBackups`/`BackupsEndpoints` (servidor) vía `HttpContext.RequestAborted` — no fue pedido y es una mejora independiente para un momento futuro, no de esta entrega.
+
+**Decisión de diseño 3 (bug real, no estaba en la primera versión de este plan):** propagar el `CancellationToken` expuso que `ApiErrores.EnviarAsync` (código ya existente, compartido por los ~10 `XxxApiClient`) siempre trata una cancelación como timeout del servidor — ver Step 1 más abajo para el detalle completo del arreglo, necesario para que "cancelar" no se reporte como error.
+
+- [ ] **Step 1: Arreglar `ApiErrores.EnviarAsync` — distinguir cancelación deliberada de timeout real (bug encontrado al propagar `CancellationToken`, CORRECCIÓN)**
+
+`ApiErrores.EnviarAsync` (código YA EXISTENTE, compartido por los ~10 `XxxApiClient` del desktop) atrapa `TaskCanceledException` y SIEMPRE la envuelve en `ServidorNoDisponibleException` — el comentario propio del código dice literalmente "Los clients no pasan CancellationToken propio → toda cancelación es timeout". Esa asunción era CIERTA hasta este Task: `BackupsApiClient` (Step 3 de este Task) es el primer `XxxApiClient` que pasa un `CancellationToken` real y cancelable por el usuario (el botón Cancelar de Task 9). Sin este fix, cancelar una descarga en curso NO lanzaría `OperationCanceledException` hasta `MantenimientoViewModel` — lanzaría `ServidorNoDisponibleException`, indistinguible de un timeout real, y se reportaría al usuario como error (violando el requisito explícito de la corrección: "cancelar es una acción deliberada, no una falla").
+
+```csharp
+// src/StockApp.ApiClient/ApiErrores.cs
+// Reemplazar el método EnviarAsync (firma y cuerpo):
+
+    /// <summary>
+    /// Ejecuta el envío HTTP convirtiendo los fallos de transporte en
+    /// <see cref="ServidorNoDisponibleException"/> (conexión rechazada, DNS, timeout).
+    /// <paramref name="ct"/> es OPCIONAL — los ~10 XxxApiClient que no pasan un token propio
+    /// siguen con el comportamiento de siempre (toda cancelación es timeout). BackupsApiClient
+    /// (Task Backups) es el primero en pasar un ct real, cancelable desde la UI: con ct
+    /// explícito, una cancelación deliberada del CALLER se distingue de un timeout real y se
+    /// repropaga tal cual en vez de envolverse.
+    /// </summary>
+    internal static async Task<HttpResponseMessage> EnviarAsync(
+        Func<Task<HttpResponseMessage>> enviar, CancellationToken ct = default)
+    {
+        try
+        {
+            return await enviar();
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new ServidorNoDisponibleException(ex);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // Cancelación deliberada del caller (ej. BackupsApiClient.DescargarAsync con el
+            // CancellationToken del botón "Cancelar" de MantenimientoViewModel) — se repropaga
+            // tal cual para que el caller la distinga de una falla real del servidor. Mismo
+            // criterio que EjecutorPgDumpProceso.EjecutarAsync del lado servidor (Task 3):
+            // catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested).
+            throw;
+        }
+        catch (TaskCanceledException ex)
+        {
+            // HttpClient.Timeout vencido, o cualquier cancelación SIN que el ct propio del
+            // caller esté marcado — se sigue tratando como indisponibilidad del servidor.
+            // Comportamiento SIN CAMBIOS para los ~10 ApiClients que no pasan ct (entran acá
+            // con ct = default, que nunca está cancelado).
+            throw new ServidorNoDisponibleException(ex);
+        }
+    }
+```
+
+Agregar `using System.Threading;` al encabezado de `ApiErrores.cs` si no está.
+
+Run: `timeout 120 dotnet build src/StockApp.ApiClient`
+Expected: `Build succeeded.` — los ~10 `XxxApiClient` existentes llaman `EnviarAsync(() => ...)` sin el nuevo parámetro, compilan sin cambios (parámetro opcional).
+
+- [ ] **Step 2: `BackupDescargaDto` + `IBackupsService`**
 
 ```csharp
 // src/StockApp.Application/Backups/BackupDtos.cs
@@ -2435,6 +2504,8 @@ public sealed class BackupDescargaDto : IAsyncDisposable
 
 ```csharp
 // src/StockApp.Application/Backups/IBackupsService.cs
+using System.Threading;
+
 namespace StockApp.Application.Backups;
 
 /// <summary>
@@ -2444,20 +2515,26 @@ namespace StockApp.Application.Backups;
 /// implementacion server-side de ESTA interfaz: BackupsEndpoints inyecta ServicioConsultaBackups
 /// directo, no IBackupsService — son dos tipos distintos (cliente HTTP vs. service de dominio)
 /// que comparten forma pero no identidad.
+///
+/// Los 3 métodos aceptan CancellationToken (mismo criterio uniforme que IVelopackGateway,
+/// Actualizaciones/) — ver decisión de diseño 2 del Task. DescargarAsync es el único que un
+/// caller de esta entrega realmente cancela (Task 9, botón Cancelar); Listar/ObtenerSalud lo
+/// exponen por consistencia de la interfaz, con default para no romper a los callers actuales.
 /// </summary>
 public interface IBackupsService
 {
-    Task<IReadOnlyList<CorridaBackupDto>> ListarAsync();
-    Task<BackupDescargaDto> DescargarAsync(int id);
-    Task<SaludBackupDto> ObtenerSaludAsync();
+    Task<IReadOnlyList<CorridaBackupDto>> ListarAsync(CancellationToken ct = default);
+    Task<BackupDescargaDto> DescargarAsync(int id, CancellationToken ct = default);
+    Task<SaludBackupDto> ObtenerSaludAsync(CancellationToken ct = default);
 }
 ```
 
-- [ ] **Step 2: `BackupsApiClient`**
+- [ ] **Step 3: `BackupsApiClient`**
 
 ```csharp
 // src/StockApp.ApiClient/BackupsApiClient.cs
 using System.Net.Http.Json;
+using System.Threading;
 using StockApp.Application.Backups;
 
 namespace StockApp.ApiClient;
@@ -2472,18 +2549,20 @@ public sealed class BackupsApiClient : IBackupsService
 
     public BackupsApiClient(HttpClient http) => _http = http;
 
-    public async Task<IReadOnlyList<CorridaBackupDto>> ListarAsync()
+    public async Task<IReadOnlyList<CorridaBackupDto>> ListarAsync(CancellationToken ct = default)
     {
-        var response = await ApiErrores.EnviarAsync(() => _http.GetAsync("backups"));
+        // ct viaja DOBLE: al propio GetAsync (corta la llamada HTTP) y a EnviarAsync (para que
+        // distinga "yo lo cancelé" de "se venció el timeout" — ver Step 1 de este Task).
+        var response = await ApiErrores.EnviarAsync(() => _http.GetAsync("backups", ct), ct);
         await ApiErrores.AsegurarExitoAsync(response);
 
-        return await response.Content.ReadFromJsonAsync<List<CorridaBackupDto>>() ?? new();
+        return await response.Content.ReadFromJsonAsync<List<CorridaBackupDto>>(cancellationToken: ct) ?? new();
     }
 
-    public async Task<BackupDescargaDto> DescargarAsync(int id)
+    public async Task<BackupDescargaDto> DescargarAsync(int id, CancellationToken ct = default)
     {
         var response = await ApiErrores.EnviarAsync(
-            () => _http.GetAsync($"backups/{id}/contenido", HttpCompletionOption.ResponseHeadersRead));
+            () => _http.GetAsync($"backups/{id}/contenido", HttpCompletionOption.ResponseHeadersRead, ct), ct);
         await ApiErrores.AsegurarExitoAsync(response);
 
         var contentDisposition = response.Content.Headers.ContentDisposition;
@@ -2491,27 +2570,30 @@ public sealed class BackupsApiClient : IBackupsService
             ?? contentDisposition?.FileName?.Trim('"')
             ?? $"backup_{id}.dump";
 
-        var contenido = await response.Content.ReadAsStreamAsync();
+        // Si el servidor ya mandó headers y se cancela DESPUÉS (mientras se lee el body), no
+        // pasa por ApiErrores — ReadAsStreamAsync(ct) y el CopyToAsync de GuardarBytesAsync
+        // (Task 7) lanzan OperationCanceledException directo, sin envoltorio.
+        var contenido = await response.Content.ReadAsStreamAsync(ct);
         return new BackupDescargaDto(nombreArchivo, contenido);
     }
 
-    public async Task<SaludBackupDto> ObtenerSaludAsync()
+    public async Task<SaludBackupDto> ObtenerSaludAsync(CancellationToken ct = default)
     {
-        var response = await ApiErrores.EnviarAsync(() => _http.GetAsync("backups/salud"));
+        var response = await ApiErrores.EnviarAsync(() => _http.GetAsync("backups/salud", ct), ct);
         await ApiErrores.AsegurarExitoAsync(response);
 
-        return await response.Content.ReadFromJsonAsync<SaludBackupDto>()
+        return await response.Content.ReadFromJsonAsync<SaludBackupDto>(cancellationToken: ct)
             ?? throw new InvalidOperationException("Respuesta vacía del servidor al obtener la salud del backup.");
     }
 }
 ```
 
-- [ ] **Step 3: Verificar que compila**
+- [ ] **Step 4: Verificar que compila**
 
 Run: `timeout 120 dotnet build src/StockApp.ApiClient`
 Expected: `Build succeeded.`
 
-- [ ] **Step 4: Registrar en `App.axaml.cs`**
+- [ ] **Step 5: Registrar en `App.axaml.cs`**
 
 ```csharp
 // src/StockApp.Presentation/App.axaml.cs
@@ -2525,12 +2607,12 @@ Expected: `Build succeeded.`
 
 Agregar `using StockApp.Application.Backups;` al encabezado si no está.
 
-- [ ] **Step 5: Verificar que compila**
+- [ ] **Step 6: Verificar que compila**
 
 Run: `timeout 180 dotnet build src/StockApp.Presentation`
 Expected: `Build succeeded.`
 
-- [ ] **Step 6: Test que falla — red de seguridad de composición DI**
+- [ ] **Step 7: Test que falla — red de seguridad de composición DI**
 
 ```csharp
 // tests/StockApp.Presentation.Tests/DI/ComposicionDIApiTests.cs
@@ -2551,12 +2633,14 @@ using StockApp.Application.Backups;
             return new HttpClient(handler)
             {
                 BaseAddress = new Uri("http://localhost:5000/"),
-                Timeout = Timeout.InfiniteTimeSpan,
+                Timeout = TimeSpan.FromMinutes(30),
             };
         });
         services.AddTransient<IBackupsService>(sp =>
             new BackupsApiClient(sp.GetRequiredKeyedService<HttpClient>("Descargas")));
 ```
+
+Nota (CORRECCIÓN post-review, timeout finito en vez de infinito — ver Task 7, decisión de diseño 2): este registro espeja exactamente al de `App.axaml.cs` (Task 7, Step 4) — `Timeout.InfiniteTimeSpan` original queda reemplazado por `TimeSpan.FromMinutes(30)`.
 
 ```csharp
 // Agregar el test (junto a Contenedor_Resuelve_CadaInterfazConSuApiClient — como caso aparte
@@ -2574,50 +2658,113 @@ using StockApp.Application.Backups;
     }
 
     [Fact]
-    public void HttpClient_Descargas_TieneTimeoutInfinitoYBaseAddressTerminadaEnBarra()
+    public void HttpClient_Descargas_TieneTimeoutFinitoDeTreintaMinutosYBaseAddressTerminadaEnBarra()
     {
         var sp = CrearContenedor();
 
         var http = sp.GetRequiredKeyedService<HttpClient>("Descargas");
 
-        Assert.Equal(Timeout.InfiniteTimeSpan, http.Timeout);
+        Assert.Equal(TimeSpan.FromMinutes(30), http.Timeout);
         Assert.EndsWith("/", http.BaseAddress!.ToString());
     }
 ```
 
-- [ ] **Step 7: Correr — deben fallar en compilación (`AddKeyedSingleton` faltante en el helper) hasta aplicar el Step anterior; luego deben pasar**
+- [ ] **Step 8: Correr - deben fallar en compilacion (AddKeyedSingleton faltante en el helper) hasta aplicar el Step anterior; luego deben pasar**
 
 Run: `timeout 180 dotnet test tests/StockApp.Presentation.Tests --filter "FullyQualifiedName~ComposicionDIApiTests"`
-Expected: PASS (todo verde, incluidos los 2 tests nuevos) tras aplicar el Step 6 completo.
+Expected: PASS (todo verde, incluidos los 2 tests nuevos) tras aplicar el Step 7 completo.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add src/StockApp.Application/Backups/BackupDtos.cs \
         src/StockApp.Application/Backups/IBackupsService.cs \
+        src/StockApp.ApiClient/ApiErrores.cs \
         src/StockApp.ApiClient/BackupsApiClient.cs \
         src/StockApp.Presentation/App.axaml.cs \
         tests/StockApp.Presentation.Tests/DI/ComposicionDIApiTests.cs
-git commit -m "feat(backups): agrega IBackupsService y BackupsApiClient, registro DI (Entrega 1)"
+git commit -m "feat(backups): agrega IBackupsService y BackupsApiClient con CancellationToken, registro DI (Entrega 1)"
 ```
 
 ---
 
-### Task 9: `MantenimientoViewModel` (zona Backups)
+### Task 9: `MantenimientoViewModel` (zona Backups) + cancelación de descarga
 
 **Files:**
+- Create: `src/StockApp.Presentation/ViewModels/Administracion/FilaCorridaBackupVm.cs`
 - Create: `src/StockApp.Presentation/ViewModels/Administracion/MantenimientoViewModel.cs`
 - Test: `tests/StockApp.Presentation.Tests/ViewModels/Administracion/MantenimientoViewModelTests.cs`
 
 **Interfaces:**
-- Consumes: `IBackupsService.ListarAsync()/DescargarAsync(int)` (Task 8), `IServicioGuardadoArchivo.GuardarBytesAsync(Stream, string)` (Task 7), `IConfirmacionService.InformarAsync(string)` (existente).
-- Produces: `MantenimientoViewModel` con `ObservableCollection<CorridaBackupDto> Corridas`, `bool Cargando`, `Task CargarAsync()`, `[RelayCommand] DescargarAsync(CorridaBackupDto corrida)` (genera `DescargarCommand`) — consumidos por Task 10 (`MantenimientoView.axaml`).
+- Consumes: `IBackupsService.ListarAsync(CancellationToken ct = default)/DescargarAsync(int id, CancellationToken ct = default)` (Task 8), `IServicioGuardadoArchivo.GuardarBytesAsync(Stream, string, CancellationToken ct = default)` (Task 7), `IConfirmacionService.InformarAsync(string)` (existente).
+- Produces:
+  - `FilaCorridaBackupVm` (`ObservableObject`): `int Id`, `DateTime FinalizadaEn`, `string Resultado`, `string? NombreArchivo`, `long? TamanioBytes`, `string? MotivoFallo` (get-only, mapeados 1:1 desde `CorridaBackupDto` en el constructor), `bool Descargando` (`[ObservableProperty]`), `internal CancellationTokenSource? Cts` — consumido por Task 10 (XAML de la fila).
+  - `MantenimientoViewModel` con `ObservableCollection<FilaCorridaBackupVm> Corridas` (YA NO `ObservableCollection<CorridaBackupDto>` — ver decisión de diseño), `bool Cargando`, `Task CargarAsync()`, `[RelayCommand] DescargarAsync(FilaCorridaBackupVm fila)` (genera `DescargarCommand`), `[RelayCommand] Cancelar(FilaCorridaBackupVm fila)` (genera `CancelarCommand`) — consumidos por Task 10 (`MantenimientoView.axaml`).
 
-- [ ] **Step 1: Test que falla — carga**
+**Decisión de diseño (CORRECCIÓN post-review — cancelación de descarga desde la UI, no estaba en la primera versión de este plan):** con timeout infinito y sin `CancellationToken` en toda la cadena (versión original de Tasks 7-9), si el servidor colgaba a mitad de una descarga el botón de esa fila quedaba trabado indefinidamente sin salida salvo cerrar la app. Fix de dos partes (Task 7 ya cubrió la primera — timeout finito de 30 min): esta Task agrega la cancelación ACTIVA desde la UI.
+  - **`FilaCorridaBackupVm` envuelve cada `CorridaBackupDto`** — mismo criterio que los `FilaXxxVm` de Finanzas (F5d: `FilaGastoEditableVm` et al.): el DTO es un record inmutable sin estado de UI; la fila agrega el ÚNICO campo mutable que la vista necesita (`Descargando`), para que el botón "Cancelar" de CADA fila se muestre/oculte con un binding directo (`{Binding Descargando}`) SIN comparar ids entre la fila y el ViewModel padre en XAML — se evalúa y descarta explícitamente comparar `IdEnDescarga: int?` (VM padre) contra `Id` (por fila) vía `MultiBinding`/`IMultiValueConverter`: sin precedente en el repo (cero usos de `MultiBinding` en todo `StockApp.Presentation`), sería el primer uso de un patrón de binding más complejo para resolver algo que un campo booleano por fila resuelve más simple.
+  - **Cancelación es POR FILA, no global**: cada `FilaCorridaBackupVm` es dueña de su propio `CancellationTokenSource` (propiedad `Cts`, `internal set` — el ViewModel padre la crea/cancela/descarta, la fila solo la retiene). Esto permite, sin código adicional, que dos descargas de filas distintas corran en paralelo sin pisarse — no se restringe a "una descarga a la vez" porque el pedido original no lo exige y agregar esa restricción sería una segunda decisión de producto no pedida.
+  - **`OperationCanceledException` NO se informa como error** (requisito explícito): `DescargarAsync` tiene un `catch (OperationCanceledException)` separado del `catch (Exception ex)` genérico, vacío a propósito — cancelar es una acción DELIBERADA del usuario (`CancelarCommand`), no una falla. Ver también Task 8, decisión de diseño 3: sin el fix de `ApiErrores.EnviarAsync` ahí, esta distinción sería imposible (todo `TaskCanceledException` llegaría disfrazado de `ServidorNoDisponibleException`).
+  - **`finally` deja la fila en estado consistente siempre** (éxito, error O cancelación): `Descargando = false` y `Cts` se dispone y se limpia a `null` — el requisito mínimo de testing pedido ("cancelar... deja al ViewModel en un estado consistente, sin quedar 'descargando' para siempre") se cubre exactamente acá.
+
+- [ ] **Step 1: `FilaCorridaBackupVm` (sin ciclo red-green propio — wrapper de mapeo simple, cubierto indirectamente por el Step 3 de este Task; mismo criterio que los DTOs de `BackupDtos.cs`, que tampoco tienen test file dedicado)**
+
+```csharp
+// src/StockApp.Presentation/ViewModels/Administracion/FilaCorridaBackupVm.cs
+using System;
+using System.Threading;
+using CommunityToolkit.Mvvm.ComponentModel;
+using StockApp.Application.Backups;
+
+namespace StockApp.Presentation.ViewModels.Administracion;
+
+/// <summary>
+/// Envoltorio de fila sobre CorridaBackupDto (mismo criterio que los FilaXxxVm de Finanzas,
+/// F5d): el DTO es un record inmutable sin estado de UI; esta fila agrega el ÚNICO campo mutable
+/// que la vista necesita — Descargando — para que el botón "Cancelar" de ESA fila se muestre/
+/// oculte con un binding directo, sin comparar ids entre la fila y el ViewModel padre en XAML.
+/// Cts es propiedad de MantenimientoViewModel durante la descarga (la crea, la cancela, la
+/// dispone) — la fila solo la retiene para que CancelarCommand la encuentre sin un diccionario
+/// aparte en el padre. Cada fila es dueña de SU PROPIO CancellationTokenSource: dos descargas de
+/// filas distintas pueden correr en paralelo sin pisarse (no se restringe a "una a la vez",
+/// nadie lo pidió).
+/// </summary>
+public partial class FilaCorridaBackupVm : ObservableObject
+{
+    public int Id { get; }
+    public DateTime FinalizadaEn { get; }
+    public string Resultado { get; }
+    public string? NombreArchivo { get; }
+    public long? TamanioBytes { get; }
+    public string? MotivoFallo { get; }
+
+    [ObservableProperty]
+    private bool _descargando;
+
+    internal CancellationTokenSource? Cts { get; set; }
+
+    public FilaCorridaBackupVm(CorridaBackupDto dto)
+    {
+        Id = dto.Id;
+        FinalizadaEn = dto.FinalizadaEn;
+        Resultado = dto.Resultado;
+        NombreArchivo = dto.NombreArchivo;
+        TamanioBytes = dto.TamanioBytes;
+        MotivoFallo = dto.MotivoFallo;
+    }
+}
+```
+
+Run: `timeout 180 dotnet build src/StockApp.Presentation`
+Expected: `Build succeeded.`
+
+- [ ] **Step 2: Test que falla — carga (colección de `FilaCorridaBackupVm`, no de `CorridaBackupDto`)**
 
 ```csharp
 // tests/StockApp.Presentation.Tests/ViewModels/Administracion/MantenimientoViewModelTests.cs
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using Moq;
 using StockApp.Application.Backups;
 using StockApp.Presentation.Services;
@@ -2635,7 +2782,7 @@ public class MantenimientoViewModelTests
         Crear(IReadOnlyList<CorridaBackupDto>? corridas = null)
     {
         var backupsMock = new Mock<IBackupsService>();
-        backupsMock.Setup(b => b.ListarAsync()).ReturnsAsync(corridas ?? new List<CorridaBackupDto>());
+        backupsMock.Setup(b => b.ListarAsync(It.IsAny<CancellationToken>())).ReturnsAsync(corridas ?? new List<CorridaBackupDto>());
 
         var guardadoMock = new Mock<IServicioGuardadoArchivo>();
         var confirmacionMock = new Mock<IConfirmacionService>();
@@ -2657,6 +2804,8 @@ public class MantenimientoViewModelTests
 
         Assert.Equal(2, vm.Corridas.Count);
         Assert.Equal("Exitosa", vm.Corridas[0].Resultado);
+        Assert.Equal(1, vm.Corridas[0].Id);
+        Assert.False(vm.Corridas[0].Descargando);
     }
 
     [Fact]
@@ -2674,7 +2823,7 @@ public class MantenimientoViewModelTests
     public async Task CargarAsync_ElServicioFalla_InformaElErrorYNoRompe()
     {
         var backupsMock = new Mock<IBackupsService>();
-        backupsMock.Setup(b => b.ListarAsync()).ThrowsAsync(new InvalidOperationException("servidor caído"));
+        backupsMock.Setup(b => b.ListarAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("servidor caído"));
         var confirmacionMock = new Mock<IConfirmacionService>();
         var vm = new MantenimientoViewModel(backupsMock.Object, new Mock<IServicioGuardadoArchivo>().Object, confirmacionMock.Object);
 
@@ -2686,17 +2835,18 @@ public class MantenimientoViewModelTests
 }
 ```
 
-- [ ] **Step 2: Correr — debe fallar en compilación**
+- [ ] **Step 3: Correr — debe fallar en compilación**
 
 Run: `timeout 180 dotnet test tests/StockApp.Presentation.Tests --filter "FullyQualifiedName~MantenimientoViewModelTests"`
 Expected: FAIL — `CS0246: El tipo o el nombre del espacio de nombres 'MantenimientoViewModel' no se encontró`.
 
-- [ ] **Step 3: Implementación — carga**
+- [ ] **Step 4: Implementación — carga**
 
 ```csharp
 // src/StockApp.Presentation/ViewModels/Administracion/MantenimientoViewModel.cs
 using System;
 using System.Collections.ObjectModel;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -2716,7 +2866,7 @@ public partial class MantenimientoViewModel : ViewModelBase
     private readonly IServicioGuardadoArchivo _guardado;
     private readonly IConfirmacionService _confirmacion;
 
-    public ObservableCollection<CorridaBackupDto> Corridas { get; } = new();
+    public ObservableCollection<FilaCorridaBackupVm> Corridas { get; } = new();
 
     [ObservableProperty]
     private bool _cargando;
@@ -2736,7 +2886,7 @@ public partial class MantenimientoViewModel : ViewModelBase
             var lista = await _backups.ListarAsync();
             Corridas.Clear();
             foreach (var c in lista)
-                Corridas.Add(c);
+                Corridas.Add(new FilaCorridaBackupVm(c));
         }
         catch (Exception ex)
         {
@@ -2750,12 +2900,12 @@ public partial class MantenimientoViewModel : ViewModelBase
 }
 ```
 
-- [ ] **Step 4: Correr — deben pasar**
+- [ ] **Step 5: Correr — deben pasar**
 
 Run: `timeout 180 dotnet test tests/StockApp.Presentation.Tests --filter "FullyQualifiedName~MantenimientoViewModelTests"`
 Expected: PASS (3/3).
 
-- [ ] **Step 5: Test que falla — descarga**
+- [ ] **Step 6: Test que falla — descarga (con `FilaCorridaBackupVm` como parámetro del comando, y `CancellationToken` en los mocks)**
 
 ```csharp
 // Agregar a MantenimientoViewModelTests.cs:
@@ -2764,79 +2914,190 @@ Expected: PASS (3/3).
     public async Task DescargarCommand_CopiaElStreamAlServicioDeGuardadoConElNombreCorrecto()
     {
         var (vm, backupsMock, guardadoMock, _) = Crear();
-        var corrida = new CorridaBackupDto(5, DateTime.UtcNow, "Exitosa", "backup_5.dump", 2048, null);
+        var fila = new FilaCorridaBackupVm(new CorridaBackupDto(5, DateTime.UtcNow, "Exitosa", "backup_5.dump", 2048, null));
         var streamFake = new MemoryStream(new byte[] { 1, 2, 3 });
-        backupsMock.Setup(b => b.DescargarAsync(5)).ReturnsAsync(new BackupDescargaDto("backup_5.dump", streamFake));
-        guardadoMock.Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "backup_5.dump")).ReturnsAsync(true);
+        backupsMock.Setup(b => b.DescargarAsync(5, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BackupDescargaDto("backup_5.dump", streamFake));
+        guardadoMock.Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "backup_5.dump", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
 
-        await vm.DescargarCommand.ExecuteAsync(corrida);
+        await vm.DescargarCommand.ExecuteAsync(fila);
 
-        guardadoMock.Verify(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "backup_5.dump"), Times.Once);
+        guardadoMock.Verify(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "backup_5.dump", It.IsAny<CancellationToken>()), Times.Once);
+        Assert.False(fila.Descargando);
     }
 
     [Fact]
     public async Task DescargarCommand_ElServicioFalla_InformaElErrorYNoRompe()
     {
         var (vm, backupsMock, _, confirmacionMock) = Crear();
-        var corrida = new CorridaBackupDto(5, DateTime.UtcNow, "Exitosa", "backup_5.dump", 2048, null);
-        backupsMock.Setup(b => b.DescargarAsync(5)).ThrowsAsync(new InvalidOperationException("archivo no disponible"));
+        var fila = new FilaCorridaBackupVm(new CorridaBackupDto(5, DateTime.UtcNow, "Exitosa", "backup_5.dump", 2048, null));
+        backupsMock.Setup(b => b.DescargarAsync(5, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("archivo no disponible"));
 
-        await vm.DescargarCommand.ExecuteAsync(corrida);
+        await vm.DescargarCommand.ExecuteAsync(fila);
 
         confirmacionMock.Verify(c => c.InformarAsync("archivo no disponible"), Times.Once);
+        Assert.False(fila.Descargando);
     }
 
     [Fact]
     public async Task DescargarCommand_UsuarioCancelaElSelector_NoInformaError()
     {
         var (vm, backupsMock, guardadoMock, confirmacionMock) = Crear();
-        var corrida = new CorridaBackupDto(5, DateTime.UtcNow, "Exitosa", "backup_5.dump", 2048, null);
-        backupsMock.Setup(b => b.DescargarAsync(5)).ReturnsAsync(new BackupDescargaDto("backup_5.dump", new MemoryStream()));
-        guardadoMock.Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>())).ReturnsAsync(false);
+        var fila = new FilaCorridaBackupVm(new CorridaBackupDto(5, DateTime.UtcNow, "Exitosa", "backup_5.dump", 2048, null));
+        backupsMock.Setup(b => b.DescargarAsync(5, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new BackupDescargaDto("backup_5.dump", new MemoryStream()));
+        guardadoMock.Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
 
-        await vm.DescargarCommand.ExecuteAsync(corrida);
+        await vm.DescargarCommand.ExecuteAsync(fila);
 
         confirmacionMock.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Never);
     }
+
+    [Fact]
+    public async Task DescargarCommand_MientrasDescarga_FilaQuedaEnDescargando()
+    {
+        var (vm, backupsMock, guardadoMock, _) = Crear();
+        var fila = new FilaCorridaBackupVm(new CorridaBackupDto(5, DateTime.UtcNow, "Exitosa", "backup_5.dump", 2048, null));
+        var tcsIniciada = new TaskCompletionSource();
+        backupsMock.Setup(b => b.DescargarAsync(5, It.IsAny<CancellationToken>()))
+            .Returns(async () =>
+            {
+                tcsIniciada.SetResult();
+                return new BackupDescargaDto("backup_5.dump", new MemoryStream());
+            });
+        guardadoMock.Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var tarea = vm.DescargarCommand.ExecuteAsync(fila);
+        await tcsIniciada.Task;
+
+        Assert.True(fila.Descargando);
+
+        await tarea;
+        Assert.False(fila.Descargando);
+    }
 ```
 
-- [ ] **Step 6: Correr — debe fallar en compilación (`DescargarCommand` no existe)**
+- [ ] **Step 7: Correr — debe fallar en compilación (`DescargarCommand` no existe)**
 
 Run: `timeout 180 dotnet test tests/StockApp.Presentation.Tests --filter "FullyQualifiedName~MantenimientoViewModelTests"`
 Expected: FAIL — `CS1061: 'MantenimientoViewModel' no contiene una definición para 'DescargarCommand'`.
 
-- [ ] **Step 7: Implementación — comando de descarga**
+- [ ] **Step 8: Implementación — comando de descarga con `CancellationTokenSource` por fila**
 
 ```csharp
 // src/StockApp.Presentation/ViewModels/Administracion/MantenimientoViewModel.cs
 // Agregar el using System.IO; al encabezado, y el método a la clase:
 
     [RelayCommand]
-    private async Task DescargarAsync(CorridaBackupDto corrida)
+    private async Task DescargarAsync(FilaCorridaBackupVm fila)
     {
+        fila.Cts = new CancellationTokenSource();
+        fila.Descargando = true;
         try
         {
-            await using var descarga = await _backups.DescargarAsync(corrida.Id);
-            await _guardado.GuardarBytesAsync(descarga.Contenido, descarga.NombreArchivo);
+            await using var descarga = await _backups.DescargarAsync(fila.Id, fila.Cts.Token);
+            await _guardado.GuardarBytesAsync(descarga.Contenido, descarga.NombreArchivo, fila.Cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // Cancelación deliberada del usuario (CancelarCommand, más abajo) — NO es un error,
+            // no se informa (ver decisión de diseño del Task).
         }
         catch (Exception ex)
         {
             await _confirmacion.InformarAsync(ex.Message);
         }
+        finally
+        {
+            fila.Descargando = false;
+            fila.Cts?.Dispose();
+            fila.Cts = null;
+        }
     }
 ```
 
-- [ ] **Step 8: Correr — deben pasar**
+- [ ] **Step 9: Correr — deben pasar**
 
 Run: `timeout 180 dotnet test tests/StockApp.Presentation.Tests --filter "FullyQualifiedName~MantenimientoViewModelTests"`
-Expected: PASS (6/6).
+Expected: PASS (7/7).
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 10: Test que falla — `CancelarCommand` corta una descarga en curso y deja la fila consistente**
+
+```csharp
+// Agregar a MantenimientoViewModelTests.cs:
+
+    [Fact]
+    public async Task CancelarCommand_CancelaElTokenDeLaDescargaEnCurso_DejaLaFilaConsistente()
+    {
+        var (vm, backupsMock, _, confirmacionMock) = Crear();
+        var fila = new FilaCorridaBackupVm(new CorridaBackupDto(5, DateTime.UtcNow, "Exitosa", "backup_5.dump", 2048, null));
+        var tcsIniciada = new TaskCompletionSource();
+        var tcsNuncaCompleta = new TaskCompletionSource<BackupDescargaDto>();
+        backupsMock.Setup(b => b.DescargarAsync(5, It.IsAny<CancellationToken>()))
+            .Returns(async (int id, CancellationToken ct) =>
+            {
+                tcsIniciada.SetResult();
+                // Simula el servidor colgado: nunca completa por su cuenta, solo el ct lo corta.
+                return await tcsNuncaCompleta.Task.WaitAsync(ct);
+            });
+
+        var tareaDescarga = vm.DescargarCommand.ExecuteAsync(fila);
+        await tcsIniciada.Task;
+        Assert.True(fila.Descargando);
+
+        vm.CancelarCommand.Execute(fila);
+        await tareaDescarga;
+
+        // Estado consistente: no queda "descargando" para siempre, y la cancelación deliberada
+        // no se reporta como error (requisito explícito de la corrección).
+        Assert.False(fila.Descargando);
+        Assert.Null(fila.Cts);
+        confirmacionMock.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public void CancelarCommand_SinDescargaEnCurso_NoLanza()
+    {
+        var (vm, _, _, _) = Crear();
+        var fila = new FilaCorridaBackupVm(new CorridaBackupDto(5, DateTime.UtcNow, "Exitosa", "backup_5.dump", 2048, null));
+
+        vm.CancelarCommand.Execute(fila);
+
+        Assert.False(fila.Descargando);
+    }
+```
+
+- [ ] **Step 11: Correr — debe fallar en compilación (`CancelarCommand` no existe)**
+
+Run: `timeout 180 dotnet test tests/StockApp.Presentation.Tests --filter "FullyQualifiedName~MantenimientoViewModelTests"`
+Expected: FAIL — `CS1061: 'MantenimientoViewModel' no contiene una definición para 'CancelarCommand'`.
+
+- [ ] **Step 12: Implementación — comando de cancelación**
+
+```csharp
+// src/StockApp.Presentation/ViewModels/Administracion/MantenimientoViewModel.cs
+// Agregar el método a la clase (junto a DescargarAsync):
+
+    [RelayCommand]
+    private void Cancelar(FilaCorridaBackupVm fila) => fila.Cts?.Cancel();
+```
+
+- [ ] **Step 13: Correr — deben pasar**
+
+Run: `timeout 180 dotnet test tests/StockApp.Presentation.Tests --filter "FullyQualifiedName~MantenimientoViewModelTests"`
+Expected: PASS (9/9).
+
+- [ ] **Step 14: Commit**
 
 ```bash
-git add src/StockApp.Presentation/ViewModels/Administracion/MantenimientoViewModel.cs \
+git add src/StockApp.Presentation/ViewModels/Administracion/FilaCorridaBackupVm.cs \
+        src/StockApp.Presentation/ViewModels/Administracion/MantenimientoViewModel.cs \
         tests/StockApp.Presentation.Tests/ViewModels/Administracion/MantenimientoViewModelTests.cs
-git commit -m "feat(backups): agrega MantenimientoViewModel, zona Backups (Entrega 1)"
+git commit -m "feat(backups): agrega MantenimientoViewModel con cancelacion de descarga por fila (Entrega 1)"
 ```
 
 ---
@@ -2852,8 +3113,10 @@ git commit -m "feat(backups): agrega MantenimientoViewModel, zona Backups (Entre
 - Test: `tests/StockApp.Presentation.UiTests/MantenimientoViewTests.cs`
 
 **Interfaces:**
-- Consumes: `MantenimientoViewModel` (Task 9), patrón `DataContextChanged` a `CargarAsync()` (`InicioView.axaml.cs`), patrón de nav command + `IsVisible="{Binding EsAdmin}"` (`ShellMainViewModel`/`ShellMainView.axaml`), patrón de `ItemsControl` + card + `CommandParameter="{Binding}"` con `$parent[UserControl]` (`AdjuntosPanelView.axaml`).
-- Produces: `ShellMainViewModel.NavMantenimientoCommand`, `MantenimientoView` registrada en el `ViewLocator`/DI — no consumidos por otras Tasks (última pieza de navegación de la Entrega 1).
+- Consumes: `MantenimientoViewModel.Corridas: ObservableCollection<FilaCorridaBackupVm>`, `DescargarCommand`, `CancelarCommand` (Task 9), patron `DataContextChanged` a `CargarAsync()` (`InicioView.axaml.cs`), patron de nav command + `IsVisible="{Binding EsAdmin}"` (`ShellMainViewModel`/`ShellMainView.axaml`), patron de `ItemsControl` + card + `CommandParameter="{Binding}"` con `$parent[UserControl]` (`AdjuntosPanelView.axaml`).
+- Produces: `ShellMainViewModel.NavMantenimientoCommand`, `MantenimientoView` registrada en el `ViewLocator`/DI — no consumidos por otras Tasks (ultima pieza de navegacion de la Entrega 1).
+
+**Decision de diseño (CORRECCION post-review — boton Cancelar, no estaba en la primera version de este plan):** el `DataTemplate` de cada fila pasa a tipar contra `vm:FilaCorridaBackupVm` (Task 9), no `dto:CorridaBackupDto` — la fila ahora expone `Descargando`, que la vista usa para alternar "Descargar"/"Cancelar" con un binding directo (`{Binding Descargando}`/`{Binding !Descargando}`), sin comparar ids entre filas (ver decision de diseño de la Task 9). `xmlns:dto="using:StockApp.Application.Backups"` queda sin uso en el archivo y se retira.
 
 - [ ] **Step 1: Registrar `MantenimientoViewModel` en DI**
 
@@ -2892,7 +3155,6 @@ public partial class MantenimientoView : UserControl
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Administracion"
-             xmlns:dto="using:StockApp.Application.Backups"
              xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:i="https://github.com/projektanker/icons.avalonia"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -2915,7 +3177,7 @@ public partial class MantenimientoView : UserControl
 
         <ItemsControl ItemsSource="{Binding Corridas}">
             <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="dto:CorridaBackupDto">
+                <DataTemplate x:DataType="vm:FilaCorridaBackupVm">
                     <Border Classes="card" Margin="0,0,0,8">
                         <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
                             <i:Icon Grid.Column="0"
@@ -2942,12 +3204,24 @@ public partial class MantenimientoView : UserControl
                                        IsVisible="{Binding TamanioBytes, Converter={x:Static ObjectConverters.IsNotNull}}"
                                        Margin="8,0"
                                        VerticalAlignment="Center" />
+                            <!-- Descargar: visible mientras esta fila NO esta descargando. IsEnabled
+                                 sigue atado a NombreArchivo (corridas Fallidas no tienen archivo). -->
                             <Button Grid.Column="3"
                                     Classes="secondary"
                                     Content="Descargar"
                                     Margin="8,0,0,0"
+                                    IsVisible="{Binding !Descargando}"
                                     IsEnabled="{Binding NombreArchivo, Converter={x:Static ObjectConverters.IsNotNull}}"
                                     Command="{Binding $parent[UserControl].((vm:MantenimientoViewModel)DataContext).DescargarCommand}"
+                                    CommandParameter="{Binding}" />
+                            <!-- Cancelar: visible SOLO mientras esta fila puntual esta descargando
+                                 (Descargando es por-fila, Task 9 — no hay comparacion de ids acá). -->
+                            <Button Grid.Column="4"
+                                    Classes="secondary"
+                                    Content="Cancelar"
+                                    Margin="8,0,0,0"
+                                    IsVisible="{Binding Descargando}"
+                                    Command="{Binding $parent[UserControl].((vm:MantenimientoViewModel)DataContext).CancelarCommand}"
                                     CommandParameter="{Binding}" />
                         </Grid>
                     </Border>
@@ -2960,7 +3234,7 @@ public partial class MantenimientoView : UserControl
 </UserControl>
 ```
 
-Nota: `Resultado` es `string` ("Exitosa"/"Fallida") — dos `<i:Icon>` condicionados por `ObjectConverters.Equal` (mismo mecanismo que `ShellMainView` usa para resaltar la seccion activa del sidebar via `Classes.active`), sin necesidad de un `IValueConverter` dedicado para dos valores.
+Nota: `Resultado` es `string` ("Exitosa"/"Fallida") — dos `<i:Icon>` condicionados por `ObjectConverters.Equal` (mismo mecanismo que `ShellMainView` usa para resaltar la sección activa del sidebar vía `Classes.active`), sin necesidad de un `IValueConverter` dedicado para dos valores. `{Binding !Descargando}` es sintaxis de negación ya usada en el repo (`ProductoFormView.axaml`, `CategoriaListView.axaml`, etc. — `IsVisible="{Binding !Activo}"`), no un patrón nuevo.
 
 - [ ] **Step 3: Comando de navegacion en `ShellMainViewModel`**
 
@@ -3017,11 +3291,12 @@ using StockApp.Presentation.ViewModels.Administracion;
 Run: `timeout 180 dotnet build src/StockApp.Presentation`
 Expected: `Build succeeded.`
 
-- [ ] **Step 6: Test headless que falla — la vista real carga y el candado de "Descargar" respeta `NombreArchivo`**
+- [ ] **Step 6: Test headless que falla — la vista real carga, el candado de "Descargar" respeta `NombreArchivo`, y "Descargar"/"Cancelar" alternan con `Descargando`**
 
 ```csharp
 // tests/StockApp.Presentation.UiTests/MantenimientoViewTests.cs
 using System.Linq;
+using System.Threading;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
@@ -3049,16 +3324,16 @@ public class MantenimientoViewTests
         private readonly IReadOnlyList<CorridaBackupDto> _corridas;
         public BackupsServiceFake(IReadOnlyList<CorridaBackupDto> corridas) => _corridas = corridas;
 
-        public Task<IReadOnlyList<CorridaBackupDto>> ListarAsync() => Task.FromResult(_corridas);
-        public Task<BackupDescargaDto> DescargarAsync(int id) =>
+        public Task<IReadOnlyList<CorridaBackupDto>> ListarAsync(CancellationToken ct = default) => Task.FromResult(_corridas);
+        public Task<BackupDescargaDto> DescargarAsync(int id, CancellationToken ct = default) =>
             Task.FromResult(new BackupDescargaDto("x.dump", new MemoryStream()));
-        public Task<SaludBackupDto> ObtenerSaludAsync() => Task.FromResult(new SaludBackupDto(null, true, 26));
+        public Task<SaludBackupDto> ObtenerSaludAsync(CancellationToken ct = default) => Task.FromResult(new SaludBackupDto(null, true, 26));
     }
 
     private sealed class ServicioGuardadoArchivoFake : IServicioGuardadoArchivo
     {
         public Task<bool> GuardarTextoAsync(string contenido, string nombreSugerido) => Task.FromResult(true);
-        public Task<bool> GuardarBytesAsync(Stream contenido, string nombreSugerido) => Task.FromResult(true);
+        public Task<bool> GuardarBytesAsync(Stream contenido, string nombreSugerido, CancellationToken ct = default) => Task.FromResult(true);
     }
 
     private const string Xaml = """
@@ -3122,13 +3397,46 @@ public class MantenimientoViewTests
         var boton = window.GetVisualDescendants().OfType<Button>().First(b => b.Content as string == "Descargar");
         Assert.True(boton.IsEnabled);
     }
+
+    [AvaloniaFact]
+    public void Montar_FilaSinDescargaEnCurso_MuestraDescargarYOcultaCancelar()
+    {
+        var corridas = new List<CorridaBackupDto> { new(1, DateTime.UtcNow, "Exitosa", "backup_1.dump", 1024, null) };
+
+        var (window, _) = Montar(corridas);
+
+        var botonDescargar = window.GetVisualDescendants().OfType<Button>().First(b => b.Content as string == "Descargar");
+        var botonCancelar = window.GetVisualDescendants().OfType<Button>().First(b => b.Content as string == "Cancelar");
+        Assert.True(botonDescargar.IsVisible);
+        Assert.False(botonCancelar.IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void Montar_FilaConDescargaEnCurso_MuestraCancelarYOcultaDescargar()
+    {
+        // Setea Descargando directo sobre la fila (ObservableObject) en vez de orquestar una
+        // descarga async real dentro del dispatcher headless — la coordinacion async de
+        // DescargarCommand/CancelarCommand ya esta cubierta a nivel logico por los tests de
+        // MantenimientoViewModelTests (Task 9); aca solo se verifica el WIRING de XAML (que
+        // Descargando efectivamente alterna que boton se ve), que es lo que le toca a esta Task.
+        var corridas = new List<CorridaBackupDto> { new(1, DateTime.UtcNow, "Exitosa", "backup_1.dump", 1024, null) };
+        var (window, vm) = Montar(corridas);
+
+        vm.Corridas[0].Descargando = true;
+        Dispatcher.UIThread.RunJobs();
+
+        var botonDescargar = window.GetVisualDescendants().OfType<Button>().First(b => b.Content as string == "Descargar");
+        var botonCancelar = window.GetVisualDescendants().OfType<Button>().First(b => b.Content as string == "Cancelar");
+        Assert.False(botonDescargar.IsVisible);
+        Assert.True(botonCancelar.IsVisible);
+    }
 }
 ```
 
 - [ ] **Step 7: Correr — FOREGROUND, con `timeout`, NUNCA en background (Global Constraints)**
 
 Run: `timeout 180 dotnet test tests/StockApp.Presentation.UiTests --filter "FullyQualifiedName~MantenimientoViewTests"`
-Expected: PASS (3/3). Si da timeout, reportar y seguir — no reintentar en loop.
+Expected: PASS (5/5). Si da timeout, reportar y seguir — no reintentar en loop.
 
 - [ ] **Step 8: Verificacion organica** — levantar la API + el desktop reales (WSLg/Windows), loguearse como Admin, entrar a "Mantenimiento" en el sidebar, confirmar que la lista carga y que "Descargar" abre el selector de archivo nativo.
 
@@ -3152,7 +3460,7 @@ git commit -m "feat(backups): agrega MantenimientoView y navegacion Admin-only (
 - Modify: `tests/StockApp.Presentation.Tests/ViewModels/InicioViewModelTests.cs`
 
 **Interfaces:**
-- Consumes: `IBackupsService.ObtenerSaludAsync() : Task<SaludBackupDto>` (Task 8).
+- Consumes: `IBackupsService.ObtenerSaludAsync(CancellationToken ct = default) : Task<SaludBackupDto>` (Task 8) — `InicioViewModel` NO pasa el token (sin fuente de cancelación propia; `ct` queda en su default), sin ripple a los tests existentes de esta Task.
 - Produces: `InicioViewModel` gana el 4to parámetro de constructor `IBackupsService backups`, propiedades `bool MostrarAvisoBackup`, `string? TextoAvisoBackup` — no consumidos por otras Tasks (última pieza funcional de la Entrega 1). `InicioView.axaml.cs` NO se modifica: ya llama `await vm.CargarAsync()` en `DataContextChanged`, y este Task extiende `CargarAsync()`, no agrega un método nuevo.
 
 **Decisión de diseño (spec §3 decisión 6, "Visible solo para Admin" — el mecanismo de guardado no está en el spec, se documenta acá):** la consulta a `ObtenerSaludAsync()` solo se dispara si `EsAdmin` — `Permisos.GestionarDiagnostico` es Admin-only fail-closed (Task 6), así que un Operador llamando a `/backups/salud` recibiría 403. Evitar la llamada innecesaria (y su excepción esperable) para Operador es más limpio que dejar que el catch-silencioso de `CargarAsync` la absorba.
@@ -3548,7 +3856,7 @@ git commit -m "test(backups): agrega test de integracion de restaurabilidad (dum
 - §4.2 Piezas nuevas: `PoliticaRetencion` → Task 2. `IEjecutorPgDump`/`EjecutorPgDumpProceso` → Task 3. `ServicioBackup` → Task 4. `BackupProgramadoService` con scope propio por corrida y catch-up al arrancar → Task 5. Directorio vía `IUserDataPathProvider.GetBackupsDirectory()` (ya existía) → consumido en Task 5/6, sin cambios a la interfaz.
 - §4.3 Manejo de errores: fallo capturado en `ServicioBackup`, persistido como `CorridaBackup Fallida` con `MotivoFallo`, logueado `ILogger<ServicioBackup>.LogWarning` (va a stdout, no a archivo — Entrega 2), `PeriodicTimer` sigue vivo → Task 4/5. Escritura a `.tmp` + rename atómico + barrido de huérfanos → Task 4 (`ServicioBackup.LimpiarTmpHuerfanos`) + Task 5 (invocado al arrancar).
 - §6 Permiso `GestionarDiagnostico` + endpoints (listado/descarga/salud) + exención de `BloqueoLicenciaMiddleware` → Task 6, completo, con matriz 401/403/200/404/423-exento. **Ampliado sobre la versión original del plan**: doble barrera de autorización (`ServicioConsultaBackups` con `_auth.Verificar`, además de la policy HTTP) — decisión del usuario, no estaba en el spec original (omisión del spec, corregida acá).
-- §7 Desktop: `MantenimientoView`/`MantenimientoViewModel` con la zona Backups → Tasks 9-10. `DataContextChanged` → Task 10. `GuardarBytesAsync` → Task 7. `HttpClient` de descargas con timeout extendido → Task 7. `BackupsApiClient` → Task 8. Banner de salud en `InicioViewModel` → Task 11.
+- §7 Desktop: `MantenimientoView`/`MantenimientoViewModel` con la zona Backups → Tasks 9-10. `DataContextChanged` → Task 10. `GuardarBytesAsync` → Task 7. `HttpClient` de descargas con timeout **finito de 30 minutos** (corregido sobre la versión original, que era infinito) → Task 7. `BackupsApiClient` → Task 8. Banner de salud en `InicioViewModel` → Task 11. **Ampliado sobre la versión original**: cancelación activa de una descarga en curso desde la UI, por fila (`FilaCorridaBackupVm.Descargando` + `CancelarCommand`) → Task 9-10, con el fix necesario de `ApiErrores.EnviarAsync` para que la cancelación no se reporte como error → Task 8.
 - §8 Testing: `PoliticaRetencion` con los 6 casos borde exigidos (huecos por fallidas — implícito en que solo se pasan exitosas; cruce de mes; semanas parciales; menos de 6; exactamente 6; borrado real con muchas corridas) → Task 2. `ServicioBackup` con fake (éxito/binario ausente/credenciales/timeout/disco lleno vía `[Theory]` de mensajes opacos + limpieza de `.tmp`) → Task 4. `BackupProgramadoService` (scope propio por corrida + catch-up al arrancar) → Task 5. `ServicioConsultaBackups` (segunda barrera de autorización, unit tests con `_auth` mockeado) + endpoints `/backups` (matriz completa) → Task 6. Desktop (VM con fakes + test headless) → Tasks 9-10. Test de integración de restaurabilidad → Task 12.
 - §9 Fuera de alcance: ningún Task agrega backup manual bajo demanda, nivel de log ajustable, descarga selectiva de logs, envío fuera del servidor, ni un flujo de restore expuesto al usuario — respetado.
 
@@ -3558,9 +3866,12 @@ git commit -m "test(backups): agrega test de integracion de restaurabilidad (dum
    - `ICorridaBackupRepository` (`AgregarAsync`, `ListarTodasAsync`, `ListarExitosasAsync`, `ObtenerPorIdAsync`, `ObtenerUltimaExitosaAsync`, `EliminarAsync`) — mismos 6 métodos usados idénticamente en Tasks 4, 5, 6 (ahora vía `ServicioConsultaBackups`, ya no directo desde `BackupsEndpoints`) y 12 (fakes y real).
    - `ServicioBackup.EjecutarCorridaAsync(string connectionString, string directorioBackups, DateTime ahoraUtc, CancellationToken)` y `LimpiarTmpHuerfanos(string)` — firmas idénticas en Task 4 (definición) y Task 5 (consumo vía scope).
    - `ServicioConsultaBackups.ListarAsync()`/`ObtenerSaludAsync()`/`ResolverArchivoParaDescargaAsync(int id, string directorioBackups)` — mismo nombre de parámetro `directorioBackups` que `ServicioBackup` (Task 4), coherencia deliberada entre ambos servicios del módulo `Backups/` (misma frontera Application↔Infrastructure, misma solución). Definido y consumido únicamente dentro de Task 6 (`BackupsEndpoints`), sin ripple a otras Tasks — es server-side, no forma parte del contrato HTTP externo que consume el desktop.
-   - `IBackupsService` (`ListarAsync`, `DescargarAsync`, `ObtenerSaludAsync`) — SIN relación de tipo con `ServicioConsultaBackups` (nombres de método parecidos por diseño, pero son dos interfaces/clases independientes: una del lado cliente HTTP en `StockApp.ApiClient`, otra del lado servidor en `StockApp.Api`/`StockApp.Application`, comunicadas solo por el contrato HTTP de `BackupsEndpoints`). `IBackupsService` usado idéntico en Task 8 (definición + `BackupsApiClient`), Task 9 (`MantenimientoViewModel`), Task 10 (fake de test), Task 11 (`InicioViewModel`) — sin cambios por la corrección de Task 6.
-   - `CorridaBackupDto`/`SaludBackupDto`/`BackupDescargaDto` — mismo orden posicional de campos en Task 6 (definición), Task 8 (`BackupsApiClient`), Tasks 9-11 (consumo).
-   - `MantenimientoViewModel.DescargarCommand` (generado desde `DescargarAsync(CorridaBackupDto corrida)`) — usado consistentemente en Task 9 (tests) y Task 10 (XAML `CommandParameter="{Binding}"`).
+   - `IBackupsService` (`ListarAsync(CancellationToken ct = default)`, `DescargarAsync(int id, CancellationToken ct = default)`, `ObtenerSaludAsync(CancellationToken ct = default)`) — SIN relación de tipo con `ServicioConsultaBackups` (nombres de método parecidos por diseño, pero son dos interfaces/clases independientes: una del lado cliente HTTP en `StockApp.ApiClient`, otra del lado servidor en `StockApp.Api`/`StockApp.Application`, comunicadas solo por el contrato HTTP de `BackupsEndpoints`). Los 3 métodos ganan `CancellationToken ct = default` (Task 8, decisión de diseño 2) — firma idéntica en la definición (Task 8), `BackupsApiClient` (Task 8), consumo en `MantenimientoViewModel` (Task 9, `ct` real vía `fila.Cts.Token`) e `InicioViewModel` (Task 11, `ct` implícito/default, sin ripple).
+   - `IServicioGuardadoArchivo.GuardarBytesAsync(Stream contenido, string nombreSugerido, CancellationToken ct = default)` — firma idéntica en Task 7 (definición + impl) y Task 9 (`MantenimientoViewModel.DescargarAsync`, pasa `fila.Cts.Token`).
+   - `CorridaBackupDto`/`SaludBackupDto`/`BackupDescargaDto` — mismo orden posicional de campos en Task 6 (definición), Task 8 (`BackupsApiClient`), Tasks 9-11 (consumo). `SaludBackupDto` con 3er campo `UmbralHoras` consistente en las 6 construcciones del archivo (Tasks 6, 10, 11).
+   - `FilaCorridaBackupVm` (Task 9: `Id`, `FinalizadaEn`, `Resultado`, `NombreArchivo`, `TamanioBytes`, `MotivoFallo`, `Descargando`, `internal Cts`) — mismo tipo consumido por `MantenimientoViewModel.Corridas: ObservableCollection<FilaCorridaBackupVm>` (Task 9) y por el `DataTemplate x:DataType="vm:FilaCorridaBackupVm"` de Task 10 (ya NO `dto:CorridaBackupDto`, `xmlns:dto` retirado del archivo por quedar sin uso).
+   - `MantenimientoViewModel.DescargarCommand` (generado desde `DescargarAsync(FilaCorridaBackupVm fila)`, YA NO `CorridaBackupDto corrida`) y `CancelarCommand` (generado desde `Cancelar(FilaCorridaBackupVm fila)`, nuevo) — usados consistentemente en Task 9 (tests, ambos toman `FilaCorridaBackupVm`) y Task 10 (XAML, ambos con `CommandParameter="{Binding}"` sobre la fila).
+   - `ApiErrores.EnviarAsync(Func<Task<HttpResponseMessage>> enviar, CancellationToken ct = default)` (Task 8) — los 3 call-sites de `BackupsApiClient` pasan `ct` en AMBAS posiciones (al `GetAsync` y a `EnviarAsync`); los ~9 `XxxApiClient` restantes del proyecto NO se tocan (parámetro opcional, comportamiento sin cambios).
    - `InicioViewModel` gana el 4to parámetro `IBackupsService backups` — un único call-site del constructor en los tests (`Crear()`, confirmado por búsqueda antes de escribir Task 11), sin ripple a otros archivos.
 
 **4. Decisiones no especificadas por el spec, documentadas explícitamente en el plan (para que el implementador no las reinterprete):** `IniciadaEn`/`FinalizadaEn` no-nullable, sin fila "en progreso" (Task 1); retención hard-delete de la fila DB junto con el archivo (Task 1/4); `ServicioBackup` recibe `connectionString`/`directorioBackups` como parámetros, no inyectados, por la frontera Application↔Infrastructure (Task 4); `BackupProgramadoService` usa `IServiceScopeFactory` + scope nuevo por corrida, con `internal` + `InternalsVisibleTo` para poder testearlo sin exponerlo como API pública (Task 5); **`BackupsEndpoints` usa doble barrera de autorización vía `ServicioConsultaBackups` (`_auth.Verificar` + policy HTTP), CORRIGIENDO la deviación de la versión original de este plan — decisión del usuario, spec §6 tenía una omisión (Task 6)**; `ServicioConsultaBackups` recibe `directorioBackups` como parámetro de método (no inyectado), misma frontera y misma solución que `ServicioBackup` — elegida por coherencia sobre agregar una abstracción nueva en `Application/Interfaces/` para un solo caso de uso (Task 6); `ServicioConsultaBackups` sin interfaz, mismo criterio "Servicio+Xxx" que `ServicioLicencia`/`ServicioResetAdmin` (Task 6); seguridad de `pg_dump`/`pg_restore` vía `PGPASSWORD` + `ArgumentList` en vez de interpolar la connection string (Task 3/12); `EjecutorPgDumpProceso` sin ciclo red-green (mismo criterio que `ServicioGuardadoArchivo`) — verificado por Task 12 (Task 3); `AddKeyedSingleton`/`GetRequiredKeyedService` para el segundo `HttpClient` (Task 7/8); `BackupDescargaDto` con `Stream` (no `byte[]`) para no bufferear dumps grandes (Task 8); banner de `InicioViewModel` solo consulta salud si `EsAdmin` (Task 11); categoría de test de restaurabilidad = ninguna marca especial, mismo criterio que ya usa el repo (Task 12).
@@ -3577,5 +3888,12 @@ git commit -m "test(backups): agrega test de integracion de restaurabilidad (dum
    - **Corregido**: dos tests sin assert (`EliminarAsync_IdInexistente_NoLanza`, Task 1; `LimpiarTmpHuerfanos_DirectorioInexistente_NoLanza`, Task 4) que solo probaban ausencia de excepcion. Ambos ganan un assert explicito sobre el estado resultante (conteo de filas sin cambios; el directorio sigue sin existir) — la intencion queda escrita, no implicita.
    - **Corregido**: `UserDataPathProviderFake` duplicado — clase anidada privada en `BackupProgramadoServiceTests` (Task 5, creada antes de que existiera la version compartida) y la de `tests/StockApp.Api.Tests/Fixtures/` (Task 6). Se mantiene el orden de creacion (Task 5 sigue creando la suya primero), pero Task 6 agrega un Step de consolidacion al final que la elimina y deja un solo fake compartido en `Fixtures/`.
    - **Dejado deliberadamente, NO corregido** (decision del usuario): la duplicacion de ~15 lineas de invocacion de proceso entre `EjecutorPgDumpProceso.EjecutarAsync` (Task 3, produccion) y `EjecutarPgRestoreAsync` (Task 12, test de integracion). Extraer un helper comun acoplaria un test de integracion al codigo de produccion para una sola funcion (`pg_restore` no es parte del feature, solo se usa para verificar el dump en el test). Nota explicita agregada en el propio metodo de Task 12 para que un reviewer futuro no la reporte como hallazgo nuevo.
+
+**7. Cancelacion de descarga (Task 7 ya implementada, revisada post-review) — timeout finito + cancelacion activa desde la UI:**
+   - **Problema real**: `Timeout.InfiniteTimeSpan` (Task 7) + cero `CancellationToken` en toda la cadena (`GuardarBytesAsync` -> `IBackupsService.DescargarAsync` -> `DescargarCommand`) significaba que un servidor colgado a mitad de una descarga trababa el boton de esa fila para siempre — unica salida, cerrar la app.
+   - **Fix de dos partes**: (a) timeout finito de 30 minutos en el `HttpClient` "Descargas" (Task 7, red de seguridad pasiva — justificacion del valor: LAN local, igual criterio que el timeout de 10s del `HttpClient` principal, 30 min cubre VPN/disco lento con margen generoso); (b) `CancellationToken` propagado extremo a extremo — `IServicioGuardadoArchivo.GuardarBytesAsync` (Task 7) -> `IBackupsService` completo, los 3 metodos por consistencia con `IVelopackGateway` (Task 8) -> `FilaCorridaBackupVm.Cts` por fila + `MantenimientoViewModel.CancelarCommand` (Task 9) -> boton "Cancelar" por fila (Task 10).
+   - **Bug real encontrado al propagar el token, no anticipado en la primera version de este plan**: `ApiErrores.EnviarAsync` (codigo YA EXISTENTE, compartido por ~10 XxxApiClient) envolvia TODA `TaskCanceledException` en `ServidorNoDisponibleException` bajo el supuesto documentado en su propio comentario de que "los clients no pasan CancellationToken propio". `BackupsApiClient` rompe ese supuesto — sin el fix (Task 8, decision de diseño 3), cancelar se hubiera reportado al usuario como error de servidor, violando el requisito explicito de la correccion. Arreglado con un parametro opcional (`ct = default`) que no afecta a ningun otro XxxApiClient existente.
+   - **Diseño de la cancelacion**: por FILA, no global — cada `FilaCorridaBackupVm` es dueña de su propio `CancellationTokenSource` (se evaluo y descarto explicitamente un `IdEnDescarga: int?` a nivel del VM padre comparado via `MultiBinding`/`IMultiValueConverter` en XAML, por no tener precedente en el repo y ser mas complejo que un booleano por fila). Dos descargas de filas distintas pueden correr en paralelo — no se restringio a "una a la vez" porque no fue pedido.
+   - **Cobertura de tests de la cancelacion** (requisito minimo explicito del pedido): Task 9 tiene un test que fuerza la cancelacion con un `TaskCompletionSource` + `Task.WaitAsync(ct)` (simula un servidor colgado real, no solo un mock que tira la excepcion) y verifica `Descargando == false`, `Cts == null` y `InformarAsync` NUNCA llamado tras cancelar. Task 10 verifica el wiring visual (que boton se ve) seteando `Descargando` directo sobre la fila, sin duplicar la coordinacion async ya cubierta en Task 9.
 
 ---
