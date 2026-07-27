@@ -31,7 +31,9 @@ public sealed class ServicioBackup
     {
         Directory.CreateDirectory(directorioBackups);
 
-        var nombreArchivo = $"backup_{ahoraUtc:yyyyMMdd_HHmmss}.dump";
+        // Milisegundos en el nombre (no solo segundo): dos corridas dentro del mismo segundo ya
+        // no colisionan en el rename atómico de abajo.
+        var nombreArchivo = $"backup_{ahoraUtc:yyyyMMdd_HHmmssfff}.dump";
         var rutaFinal = Path.Combine(directorioBackups, nombreArchivo);
         var rutaTmp = rutaFinal + ".tmp";
 
@@ -40,16 +42,40 @@ public sealed class ServicioBackup
         CorridaBackup corrida;
         if (resultado.Exitoso)
         {
-            File.Move(rutaTmp, rutaFinal); // rename atómico al cerrar con éxito (spec §4.3)
-            corrida = new CorridaBackup
+            try
             {
-                IniciadaEn = ahoraUtc,
-                FinalizadaEn = DateTime.UtcNow,
-                Resultado = ResultadoBackup.Exitosa,
-                NombreArchivo = nombreArchivo,
-                TamanioBytes = new FileInfo(rutaFinal).Length,
-                MotivoFallo = null,
-            };
+                File.Move(rutaTmp, rutaFinal); // rename atómico al cerrar con éxito (spec §4.3)
+                corrida = new CorridaBackup
+                {
+                    IniciadaEn = ahoraUtc,
+                    FinalizadaEn = DateTime.UtcNow,
+                    Resultado = ResultadoBackup.Exitosa,
+                    NombreArchivo = nombreArchivo,
+                    TamanioBytes = new FileInfo(rutaFinal).Length,
+                    MotivoFallo = null,
+                };
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Principio rector de la entrega: nada falla en silencio. Sin este catch, la
+                // excepción escapaba ANTES de _corridas.AgregarAsync -> ni Exitosa ni Fallida
+                // quedaban registradas, y si la corrida siguiente tenía éxito, esta pérdida era
+                // invisible para siempre (el banner de salud de 26h nunca se disparaba). Acotado
+                // a IOException/UnauthorizedAccessException -las que File.Move realmente puede
+                // lanzar por colisión de destino, disco lleno, permisos o un antivirus reteniendo
+                // el handle en Windows- mismo criterio que BorrarSiExiste: un catch (Exception)
+                // genérico taparía errores de programación que sí queremos que exploten.
+                _logger.LogWarning(ex, "No se pudo mover el backup de '{RutaTmp}' a '{RutaFinal}'.", rutaTmp, rutaFinal);
+                corrida = new CorridaBackup
+                {
+                    IniciadaEn = ahoraUtc,
+                    FinalizadaEn = DateTime.UtcNow,
+                    Resultado = ResultadoBackup.Fallida,
+                    NombreArchivo = null,
+                    TamanioBytes = null,
+                    MotivoFallo = $"El dump se generó pero no se pudo mover a destino: {ex.Message}",
+                };
+            }
         }
         else
         {

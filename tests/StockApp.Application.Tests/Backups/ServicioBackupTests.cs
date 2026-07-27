@@ -139,6 +139,54 @@ public class ServicioBackupTests
         }
     }
 
+    /// <summary>Simula el caso real del Fix 2 (report Task 5): pg_dump termina bien y escribe el
+    /// .tmp, pero el rename atómico a destino falla (colisión, disco lleno, permisos, antivirus
+    /// reteniendo el handle en Windows). Bloquea el directorio DESPUÉS de escribir el .tmp -no
+    /// antes- porque si no, ni el propio ejecutor podría escribir el archivo.</summary>
+    private sealed class EjecutorPgDumpFakeQueBloqueaDirectorioTrasEscribir : IEjecutorPgDump
+    {
+        public Task<ResultadoEjecucionPgDump> EjecutarAsync(
+            string connectionString, string rutaDestino, CancellationToken cancellationToken)
+        {
+            File.WriteAllBytes(rutaDestino, new byte[] { 1, 2, 3 });
+            var directorio = Path.GetDirectoryName(rutaDestino)!;
+            File.SetUnixFileMode(directorio, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+            return Task.FromResult(new ResultadoEjecucionPgDump(true, null));
+        }
+    }
+
+    [Fact]
+    public async Task EjecutarCorridaAsync_FileMoveFalla_PersisteCorridaFallidaConMotivoYNoLanza()
+    {
+        var directorio = CrearDirectorioTemporal();
+        var ejecutor = new EjecutorPgDumpFakeQueBloqueaDirectorioTrasEscribir();
+        var repo = new CorridaBackupRepositoryFake();
+        var svc = new ServicioBackup(ejecutor, repo, NullLogger<ServicioBackup>.Instance);
+
+        try
+        {
+            // Filesystem real, sin fakes de File.Move, siguiendo el patrón de
+            // LimpiarTmpHuerfanos_ArchivoSinPermisoDeBorrado_NoLanzaYLoDejaEnDisco.
+            var ex = await Record.ExceptionAsync(
+                () => svc.EjecutarCorridaAsync("Host=x;Database=y", directorio, Ahora, CancellationToken.None));
+
+            Assert.Null(ex);
+
+            // Comportamiento real, no ausencia de excepción: si el fallo del File.Move quedara
+            // sin registrar, repo.Corridas estaría vacío acá (el bug original: la excepción
+            // escapaba ANTES de _corridas.AgregarAsync).
+            var corrida = Assert.Single(repo.Corridas);
+            Assert.Equal(ResultadoBackup.Fallida, corrida.Resultado);
+            Assert.Null(corrida.NombreArchivo);
+            Assert.Null(corrida.TamanioBytes);
+            Assert.False(string.IsNullOrWhiteSpace(corrida.MotivoFallo));
+        }
+        finally
+        {
+            File.SetUnixFileMode(directorio, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+    }
+
     [Fact]
     public void LimpiarTmpHuerfanos_BorraSoloArchivosTmp()
     {
