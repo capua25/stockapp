@@ -56,12 +56,24 @@ public partial class MantenimientoViewModel : ViewModelBase
     [RelayCommand]
     private async Task DescargarAsync(FilaCorridaBackupVm fila)
     {
-        fila.Cts = new CancellationTokenSource();
+        // Guard explícito por fila (no [RelayCommand(AllowConcurrentExecutions = false)]): esa
+        // opción es global al comando, no por parámetro — bloquearía descargar dos filas DISTINTAS
+        // en paralelo, que es justamente el diseño (ver comentario de Cts en FilaCorridaBackupVm).
+        // La comprobación y el `Descargando = true` de más abajo corren sin ningún await entre
+        // medio, así que un doble click reentrante en la MISMA fila siempre ve el flag ya en true.
+        if (fila.Descargando)
+            return;
+
+        // CTS local: el ciclo de vida (creación, cancelación vía Cts.Token, disposición) se maneja
+        // sobre esta variable, nunca releyendo fila.Cts — así esta invocación nunca dispone ni
+        // pierde de vista el CTS de otra invocación.
+        var cts = new CancellationTokenSource();
+        fila.Cts = cts;
         fila.Descargando = true;
         try
         {
-            await using var descarga = await _backups.DescargarAsync(fila.Id, fila.Cts.Token);
-            await _guardado.GuardarBytesAsync(descarga.Contenido, descarga.NombreArchivo, fila.Cts.Token);
+            await using var descarga = await _backups.DescargarAsync(fila.Id, cts.Token);
+            await _guardado.GuardarBytesAsync(descarga.Contenido, descarga.NombreArchivo, cts.Token);
         }
         catch (OperationCanceledException)
         {
@@ -75,8 +87,9 @@ public partial class MantenimientoViewModel : ViewModelBase
         finally
         {
             fila.Descargando = false;
-            fila.Cts?.Dispose();
-            fila.Cts = null;
+            if (ReferenceEquals(fila.Cts, cts))
+                fila.Cts = null;
+            cts.Dispose();
         }
     }
 

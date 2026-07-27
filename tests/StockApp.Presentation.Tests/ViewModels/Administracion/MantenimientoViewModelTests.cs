@@ -182,4 +182,125 @@ public class MantenimientoViewModelTests
 
         Assert.False(fila.Descargando);
     }
+
+    [Fact]
+    public async Task DescargarCommand_DobleInvocacionSobreLaMismaFila_LaSegundaEsNoOpYNoPierdeElCts()
+    {
+        var (vm, backupsMock, guardadoMock, _) = Crear();
+        var fila = new FilaCorridaBackupVm(new CorridaBackupDto(5, DateTime.UtcNow, "Exitosa", "backup_5.dump", 2048, null));
+        var tcsIniciada = new TaskCompletionSource();
+        var tcsDescarga = new TaskCompletionSource<BackupDescargaDto>();
+        var invocaciones = 0;
+        backupsMock.Setup(b => b.DescargarAsync(5, It.IsAny<CancellationToken>()))
+            .Returns(async () =>
+            {
+                invocaciones++;
+                tcsIniciada.SetResult();
+                return await tcsDescarga.Task;
+            });
+        guardadoMock.Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        // Click 1: arranca y queda "en curso" (suspendido en el await de red).
+        var tarea1 = vm.DescargarCommand.ExecuteAsync(fila);
+        await tcsIniciada.Task;
+        var ctsDeLaPrimera = fila.Cts;
+        Assert.NotNull(ctsDeLaPrimera);
+
+        // Click 2 (doble click humano): la fila ya está Descargando == true, así que la segunda
+        // invocación debe ser un no-op — no debe reemplazar fila.Cts ni disparar otro pedido al server.
+        var tarea2 = vm.DescargarCommand.ExecuteAsync(fila);
+        await tarea2;
+
+        Assert.Equal(1, invocaciones);
+        Assert.Same(ctsDeLaPrimera, fila.Cts);
+        Assert.False(ctsDeLaPrimera!.IsCancellationRequested);
+
+        tcsDescarga.SetResult(new BackupDescargaDto("backup_5.dump", new MemoryStream()));
+        await tarea1;
+
+        Assert.False(fila.Descargando);
+        Assert.Null(fila.Cts);
+    }
+
+    [Fact]
+    public async Task CancelarCommand_TrasDobleInvocacion_CancelaLaDescargaQueElUsuarioVe()
+    {
+        var (vm, backupsMock, _, confirmacionMock) = Crear();
+        var fila = new FilaCorridaBackupVm(new CorridaBackupDto(5, DateTime.UtcNow, "Exitosa", "backup_5.dump", 2048, null));
+        var tcsIniciada = new TaskCompletionSource();
+        var tcsNuncaCompleta = new TaskCompletionSource<BackupDescargaDto>();
+        backupsMock.Setup(b => b.DescargarAsync(5, It.IsAny<CancellationToken>()))
+            .Returns(async (int id, CancellationToken ct) =>
+            {
+                tcsIniciada.SetResult();
+                return await tcsNuncaCompleta.Task.WaitAsync(ct);
+            });
+
+        var tarea1 = vm.DescargarCommand.ExecuteAsync(fila);
+        await tcsIniciada.Task;
+
+        // Doble click: no-op sobre la misma fila (Descargando ya es true).
+        var tarea2 = vm.DescargarCommand.ExecuteAsync(fila);
+        await tarea2;
+
+        // Cancelar debe cortar la ÚNICA descarga real en curso (la del click 1), no una referencia
+        // huérfana de un segundo CTS que ya no existe.
+        vm.CancelarCommand.Execute(fila);
+        await tarea1;
+
+        Assert.False(fila.Descargando);
+        Assert.Null(fila.Cts);
+        confirmacionMock.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DescargarCommand_DosFilasDistintas_DescarganEnParaleloYCancelarUnaNoAfectaALaOtra()
+    {
+        var (vm, backupsMock, guardadoMock, confirmacionMock) = Crear();
+        var filaA = new FilaCorridaBackupVm(new CorridaBackupDto(5, DateTime.UtcNow, "Exitosa", "backup_5.dump", 2048, null));
+        var filaB = new FilaCorridaBackupVm(new CorridaBackupDto(7, DateTime.UtcNow, "Exitosa", "backup_7.dump", 4096, null));
+
+        var tcsIniciadaA = new TaskCompletionSource();
+        var tcsNuncaCompletaA = new TaskCompletionSource<BackupDescargaDto>();
+        backupsMock.Setup(b => b.DescargarAsync(5, It.IsAny<CancellationToken>()))
+            .Returns(async (int id, CancellationToken ct) =>
+            {
+                tcsIniciadaA.SetResult();
+                return await tcsNuncaCompletaA.Task.WaitAsync(ct);
+            });
+
+        var tcsIniciadaB = new TaskCompletionSource();
+        var tcsDescargaB = new TaskCompletionSource<BackupDescargaDto>();
+        backupsMock.Setup(b => b.DescargarAsync(7, It.IsAny<CancellationToken>()))
+            .Returns(async () =>
+            {
+                tcsIniciadaB.SetResult();
+                return await tcsDescargaB.Task;
+            });
+        guardadoMock.Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
+        var tareaA = vm.DescargarCommand.ExecuteAsync(filaA);
+        await tcsIniciadaA.Task;
+        var tareaB = vm.DescargarCommand.ExecuteAsync(filaB);
+        await tcsIniciadaB.Task;
+
+        // Ambas en curso al mismo tiempo: el guard es por fila, no global al comando.
+        Assert.True(filaA.Descargando);
+        Assert.True(filaB.Descargando);
+
+        // Cancelar A no debe tocar a B.
+        vm.CancelarCommand.Execute(filaA);
+        await tareaA;
+
+        Assert.False(filaA.Descargando);
+        Assert.True(filaB.Descargando);
+
+        tcsDescargaB.SetResult(new BackupDescargaDto("backup_7.dump", new MemoryStream()));
+        await tareaB;
+
+        Assert.False(filaB.Descargando);
+        confirmacionMock.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Never);
+    }
 }
