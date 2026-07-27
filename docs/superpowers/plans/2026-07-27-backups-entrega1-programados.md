@@ -384,11 +384,17 @@ public class CorridaBackupRepositoryTests : PostgresRepositoryTestBase
     }
 
     [Fact]
-    public async Task EliminarAsync_IdInexistente_NoLanza()
+    public async Task EliminarAsync_IdInexistente_NoLanzaYNoAfectaOtrasFilas()
     {
         var repo = Crear();
+        await repo.AgregarAsync(Corrida(ResultadoBackup.Exitosa, DateTime.UtcNow));
 
         await repo.EliminarAsync(999999);
+
+        // Assert explícito (pre-flight scan, corregido): antes este test solo probaba que NO
+        // lanzaba, sin verificar ningún estado — la intención real (un id inexistente no toca
+        // ninguna fila real) quedaba implícita, no escrita.
+        Assert.Single(await repo.ListarTodasAsync());
     }
 
     private static CorridaBackup Corrida(ResultadoBackup resultado, DateTime finalizadaEn, string? nombreArchivo = null) => new()
@@ -653,10 +659,10 @@ git commit -m "feat(backups): agrega PoliticaRetencion (grandfather-father-son) 
 - Create: `src/StockApp.Infrastructure/Backups/EjecutorPgDumpProceso.cs`
 
 **Interfaces:**
-- Consumes: nada nuevo — `NpgsqlConnectionStringBuilder` (ya disponible transitivamente vía `Npgsql.EntityFrameworkCore.PostgreSQL` en `StockApp.Infrastructure`), `System.Diagnostics.Process` (BCL).
-- Produces: `ResultadoEjecucionPgDump(bool Exitoso, string? MensajeError)` (record), `IEjecutorPgDump.EjecutarAsync(string connectionString, string rutaDestino, CancellationToken cancellationToken) : Task<ResultadoEjecucionPgDump>` — consumido por Task 4 (`ServicioBackup`, vía fake en tests) y Task 12 (test de restaurabilidad, usando la implementación REAL).
+- Consumes: nada nuevo — `NpgsqlConnectionStringBuilder` (ya disponible transitivamente vía `Npgsql.EntityFrameworkCore.PostgreSQL` en `StockApp.Infrastructure`), `System.Diagnostics.Process` (BCL), `ILogger<EjecutorPgDumpProceso>` (`Microsoft.Extensions.Logging`, resuelto automático por el hosting de ASP.NET Core — sin registro explícito en `Program.cs`, mismo mecanismo que el resto de los `ILogger<T>` del proyecto).
+- Produces: `ResultadoEjecucionPgDump(bool Exitoso, string? MensajeError)` (record), `IEjecutorPgDump.EjecutarAsync(string connectionString, string rutaDestino, CancellationToken cancellationToken) : Task<ResultadoEjecucionPgDump>` — consumido por Task 4 (`ServicioBackup`, vía fake en tests) y Task 12 (test de restaurabilidad, usando la implementación REAL, construida con `new EjecutorPgDumpProceso(configuracion, NullLogger<EjecutorPgDumpProceso>.Instance)` — el 2do parámetro del constructor).
 
-**Decisión de diseño (deviación documentada, NO diluida):** `EjecutorPgDumpProceso` es un adaptador de I/O externo real (invoca un proceso del sistema operativo) — mismo tipo de clase que `ServicioGuardadoArchivo` (`src/StockApp.Presentation/Services/ServicioGuardadoArchivo.cs`, comentario propio: "No se testea unitariamente (es UI)") o `AlmacenLicenciaArchivo`: sin lógica de negocio propia, no hay nada que un mock de `Process` verificaría que no sea "se llamó a `Process.Start`". Este Task NO tiene ciclo red-green — se implementa directo contra la firma de `IEjecutorPgDump` y se verifica con `dotnet build`. La única verificación real de que `EjecutorPgDumpProceso` funciona es el test de integración de restaurabilidad (Task 12), que lo ejercita con un `pg_dump` de verdad contra un Postgres real.
+**Decisión de diseño (deviación documentada, NO diluida):** `EjecutorPgDumpProceso` es un adaptador de I/O externo real (invoca un proceso del sistema operativo) — mismo tipo de clase que `ServicioGuardadoArchivo` (`src/StockApp.Presentation/Services/ServicioGuardadoArchivo.cs`, comentario propio: "No se testea unitariamente (es UI)") o `AlmacenLicenciaArchivo`: sin lógica de negocio propia, no hay nada que un mock de `Process` verificaría que no sea "se llamó a `Process.Start`". Este Task NO tiene ciclo red-green — se implementa directo contra la firma de `IEjecutorPgDump` y se verifica con `dotnet build`. La única verificación real de que `EjecutorPgDumpProceso` funciona es el test de integración de restaurabilidad (Task 12), que lo ejercita con un `pg_dump` de verdad contra un Postgres real. **`TryKill` loguea con `_logger.LogWarning` (pre-flight scan, corregido)** — un kill fallido sin diagnóstico es exactamente el caso que necesita rastro; por eso el constructor gana `ILogger<EjecutorPgDumpProceso>` aunque el resto de la clase no lo necesite para nada más.
 
 - [ ] **Step 1: Interfaz + record de resultado**
 
@@ -687,6 +693,7 @@ public interface IEjecutorPgDump
 // src/StockApp.Infrastructure/Backups/EjecutorPgDumpProceso.cs
 using System.Diagnostics;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Npgsql;
 using StockApp.Application.Backups;
 
@@ -711,12 +718,14 @@ public sealed class EjecutorPgDumpProceso : IEjecutorPgDump
 {
     private readonly string? _pgDumpPathOverride;
     private readonly TimeSpan _timeout;
+    private readonly ILogger<EjecutorPgDumpProceso> _logger;
 
-    public EjecutorPgDumpProceso(IConfiguration configuration)
+    public EjecutorPgDumpProceso(IConfiguration configuration, ILogger<EjecutorPgDumpProceso> logger)
     {
         _pgDumpPathOverride = configuration["Backups:PgDumpPath"];
         var timeoutSegundos = configuration.GetValue<int?>("Backups:TimeoutSegundos") ?? 300;
         _timeout = TimeSpan.FromSeconds(timeoutSegundos);
+        _logger = logger;
     }
 
     public async Task<ResultadoEjecucionPgDump> EjecutarAsync(
@@ -777,16 +786,21 @@ public sealed class EjecutorPgDumpProceso : IEjecutorPgDump
         }
     }
 
-    private static void TryKill(Process proceso)
+    private void TryKill(Process proceso)
     {
         try
         {
             if (!proceso.HasExited)
                 proceso.Kill(entireProcessTree: true);
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException ex)
         {
-            // El proceso ya había terminado entre el chequeo y el Kill (carrera benigna).
+            // El proceso ya había terminado entre el chequeo y el Kill (carrera benigna) — NO
+            // es un error real, pero se loguea igual (pre-flight scan corregido): un kill
+            // fallido que además siguiera vivo (el caso realmente anómalo, distinto de la
+            // carrera benigna) no debe desaparecer sin dejar rastro. Va a stdout en esta
+            // entrega (mismo criterio que el resto de los logs, Serilog llega en la E2).
+            _logger.LogWarning(ex, "No se pudo matar el proceso pg_dump (pid {Pid}).", proceso.Id);
         }
     }
 }
@@ -1029,16 +1043,22 @@ public sealed class ServicioBackup
             BorrarSiExiste(tmp);
     }
 
-    private static void BorrarSiExiste(string ruta)
+    private void BorrarSiExiste(string ruta)
     {
         try
         {
             if (File.Exists(ruta))
                 File.Delete(ruta);
         }
-        catch (IOException)
+        catch (IOException ex)
         {
             // Mejor esfuerzo: un archivo bloqueado no debe tumbar la corrida ni el arranque.
+            // LogWarning (no silencioso, pre-flight scan corregido): un .tmp/.dump que no se
+            // pudo borrar es exactamente el caso que necesita diagnóstico — sin este log, un
+            // huérfano que se acumula corrida tras corrida no deja ningún rastro. Va a stdout
+            // en esta entrega (Serilog llega en la E2, que lo captura retroactivamente — no
+            // hace falta tocar este código en la E2).
+            _logger.LogWarning(ex, "No se pudo borrar el archivo '{Ruta}'.", ruta);
         }
     }
 }
@@ -1119,12 +1139,17 @@ Expected: PASS (1/1).
     }
 
     [Fact]
-    public void LimpiarTmpHuerfanos_DirectorioInexistente_NoLanza()
+    public void LimpiarTmpHuerfanos_DirectorioInexistente_NoLanzaYNoCreaElDirectorio()
     {
         var svc = new ServicioBackup(
             new EjecutorPgDumpFake(exitoso: true), new CorridaBackupRepositoryFake(), NullLogger<ServicioBackup>.Instance);
+        var directorioInexistente = Path.Combine(Path.GetTempPath(), "no-existe-" + Guid.NewGuid());
 
-        svc.LimpiarTmpHuerfanos(Path.Combine(Path.GetTempPath(), "no-existe-" + Guid.NewGuid()));
+        svc.LimpiarTmpHuerfanos(directorioInexistente);
+
+        // Assert explícito (pre-flight scan, corregido): el guard "if (!Directory.Exists(...))
+        // return;" no debe tener el efecto secundario de crear el directorio al comprobarlo.
+        Assert.False(Directory.Exists(directorioInexistente));
     }
 ```
 
@@ -1514,7 +1539,9 @@ git commit -m "feat(backups): agrega BackupProgramadoService, primer BackgroundS
 
 **Interfaces:**
 - Consumes: `ICorridaBackupRepository` (Task 1, consumido AHORA por `ServicioConsultaBackups`, NO directo por `BackupsEndpoints`), `IUserDataPathProvider.GetBackupsDirectory()` (existente, resuelto por `BackupsEndpoints` y pasado como parámetro — ver decisión de diseño 2), `ICurrentSession`/`IAuthorizationService.Verificar(RolUsuario?, string)` (`StockApp.Application.Interfaces`/`StockApp.Application.Authorization`, patrón real confirmado en `RubroGastoService`/`FinanzasVistasService`/`AdjuntoService`), `AuthorizationService`/`Permisos.Todos` (derivación automática de políticas HTTP, `Program.cs`).
-- Produces: `Permisos.GestionarDiagnostico = "diagnostico.gestionar"`; `CorridaBackupDto(int Id, DateTime FinalizadaEn, string Resultado, string? NombreArchivo, long? TamanioBytes, string? MotivoFallo)`; `SaludBackupDto(DateTime? UltimoExitoEn, bool Vencido)`; `ServicioConsultaBackups` (sin interfaz, ver decisión de diseño 1) con `ListarAsync() : Task<IReadOnlyList<CorridaBackupDto>>`, `ObtenerSaludAsync() : Task<SaludBackupDto>`, `ResolverArchivoParaDescargaAsync(int id, string directorioBackups) : Task<(string RutaCompleta, string NombreArchivo)>`; endpoints `GET /backups`, `GET /backups/{id:int}/contenido`, `GET /backups/salud` — consumidos por Task 8 (`BackupsApiClient`, SOLO vía HTTP — el contrato externo no cambió).
+- Produces: `Permisos.GestionarDiagnostico = "diagnostico.gestionar"`; `CorridaBackupDto(int Id, DateTime FinalizadaEn, string Resultado, string? NombreArchivo, long? TamanioBytes, string? MotivoFallo)`; `SaludBackupDto(DateTime? UltimoExitoEn, bool Vencido, int UmbralHoras)` (el umbral viaja EN el DTO — única fuente de verdad, ver Nota de consistencia más abajo); `ServicioConsultaBackups` (sin interfaz, ver decisión de diseño 1) con `ListarAsync() : Task<IReadOnlyList<CorridaBackupDto>>`, `ObtenerSaludAsync() : Task<SaludBackupDto>`, `ResolverArchivoParaDescargaAsync(int id, string directorioBackups) : Task<(string RutaCompleta, string NombreArchivo)>`; endpoints `GET /backups`, `GET /backups/{id:int}/contenido`, `GET /backups/salud` — consumidos por Task 8 (`BackupsApiClient`, SOLO vía HTTP — el contrato externo no cambió).
+
+**Nota de consistencia (pre-flight scan — corregido):** el umbral de "backup vencido" (26h) estaba duplicado: `ServicioConsultaBackups.UmbralAviso` (Application) y el texto hardcodeado en `InicioViewModel` (Presentation, Task 11). Si el umbral cambiara en un solo lugar, el banner que el admin lee para decidir hubiera quedado mintiendo en silencio. Fix: `UmbralAviso` sigue siendo la única CONSTANTE (vive en `ServicioConsultaBackups`), pero su valor en horas viaja en `SaludBackupDto.UmbralHoras` en cada respuesta — `InicioViewModel` (Task 11) interpola ese campo en el texto del banner en vez de hardcodear "26 horas". Propagado a Tasks 6, 8 (sin cambio de código — `BackupsApiClient` deserializa el record tal cual, gana el campo gratis), 9 (sin cambio — no construye `SaludBackupDto`), 10 y 11 (fakes/tests que construyen el DTO a mano, actualizados).
 
 **Decisión de diseño 1 (CORRECCIÓN sobre la primera versión de este plan — decisión del usuario, no del spec original):** `BackupsEndpoints` NO lee directo de `ICorridaBackupRepository`. Estos endpoints exponen un dump COMPLETO de la base de datos — el activo más sensible del sistema — así que llevan la MISMA doble barrera que el resto de Finanzas: policy HTTP (`.RequireAuthorization`, primera barrera, corta antes de llegar al código) + `_auth.Verificar(_session.RolActual, Permisos.GestionarDiagnostico)` dentro de un service de Application (segunda barrera, defensa en profundidad — protege del caso en que alguien más adelante toque la policy HTTP sin darse cuenta de lo que deja abierto). Patrón confirmado línea por línea contra `RubroGastoService` (`ICurrentSession`/`IAuthorizationService` inyectados por constructor, `_auth.Verificar(_session.RolActual, Permisos.X)` como primera línea de cada método público) y `FinanzasVistasService` (mismo patrón, service puramente de lectura sin `IAuditLogger` — es el precedente más cercano a `ServicioConsultaBackups`, que tampoco audita lecturas). `_auth.Verificar` lanza `UnauthorizedAccessException`, que `DomainExceptionHandler` ya mapea a 403 (sin cambios ahí). Que el spec original (§6) dijera "respaldado por ICorridaBackupRepository" fue una omisión del spec, no una decisión de diseño — se corrige acá.
 
@@ -1556,9 +1583,12 @@ public sealed record CorridaBackupDto(
     int Id, DateTime FinalizadaEn, string Resultado, string? NombreArchivo, long? TamanioBytes, string? MotivoFallo);
 
 /// <summary>Estado de salud del backup programado (spec §6 /backups/salud, spec §3 decisión 6
-/// banner de InicioViewModel). Vencido = más de 26h sin una corrida exitosa (dos ventanas de
-/// 12h + 2h de margen, para no disparar falsas alarmas por reinicios del servidor).</summary>
-public sealed record SaludBackupDto(DateTime? UltimoExitoEn, bool Vencido);
+/// banner de InicioViewModel). Vencido = más de UmbralHoras sin una corrida exitosa (dos
+/// ventanas de 12h + 2h de margen, para no disparar falsas alarmas por reinicios del servidor).
+/// UmbralHoras viaja en el DTO (no se hardcodea el número en el texto del banner del desktop)
+/// para que el umbral tenga una sola fuente de verdad: si cambia en ServicioConsultaBackups, el
+/// texto que lee el admin en InicioViewModel no puede quedar mintiendo en silencio.</summary>
+public sealed record SaludBackupDto(DateTime? UltimoExitoEn, bool Vencido, int UmbralHoras);
 ```
 
 - [ ] **Step 3: Test que falla — `ServicioConsultaBackups`, segunda barrera de autorización (patrón calcado de `AdjuntoServiceTests`/`FinanzasVistasServiceLibroCajaTests`: `_auth.Setup(...).Throws<UnauthorizedAccessException>()` + `Verify(repo, Times.Never)`)**
@@ -1651,6 +1681,7 @@ public class ServicioConsultaBackupsTests
         auth.Verify(a => a.Verificar(RolUsuario.Admin, Permisos.GestionarDiagnostico), Times.Once);
         Assert.True(salud.Vencido);
         Assert.Null(salud.UltimoExitoEn);
+        Assert.Equal(26, salud.UmbralHoras);
     }
 
     [Fact]
@@ -1789,7 +1820,7 @@ public sealed class ServicioConsultaBackups
 
         var ultima = await _corridas.ObtenerUltimaExitosaAsync();
         var vencido = ultima is null || DateTime.UtcNow - ultima.FinalizadaEn >= UmbralAviso;
-        return new SaludBackupDto(ultima?.FinalizadaEn, vencido);
+        return new SaludBackupDto(ultima?.FinalizadaEn, vencido, (int)UmbralAviso.TotalHours);
     }
 
     /// <summary>Resuelve la ruta completa a servir. <paramref name="directorioBackups"/> lo
@@ -2111,6 +2142,7 @@ public class BackupsEndpointTests : ApiTestBase
         var salud = await response.Content.ReadFromJsonAsync<SaludBackupDto>();
         Assert.True(salud!.Vencido);
         Assert.Null(salud.UltimoExitoEn);
+        Assert.Equal(26, salud.UmbralHoras);
     }
 
     [Fact]
@@ -2182,7 +2214,37 @@ Expected: PASS (todo verde).
 Run: `timeout 180 dotnet test tests/StockApp.Application.Tests --filter "FullyQualifiedName~Backups"`
 Expected: PASS (todo verde — incluye `PoliticaRetencionTests`, `ServicioBackupTests` y `ServicioConsultaBackupsTests`).
 
-- [ ] **Step 17: Commit**
+- [ ] **Step 17: Consolidar el fake de IUserDataPathProvider — eliminar el duplicado de la Task 5 (pre-flight scan, corregido)**
+
+`BackupProgramadoServiceTests.cs` (Task 5) definio su propia clase anidada privada `UserDataPathProviderFake` ANTES de que esta Task existiera. Ahora que `tests/StockApp.Api.Tests/Fixtures/UserDataPathProviderFake.cs` (Step 9) existe y es del mismo proyecto de test (`StockApp.Api.Tests`), la copia anidada es una duplicacion real (dos implementaciones identicas de la misma interfaz fake) — se elimina, no se mantienen las dos.
+
+```csharp
+// tests/StockApp.Api.Tests/Backups/BackupProgramadoServiceTests.cs
+// Eliminar la clase anidada completa (agregada en la Task 5, ya no hace falta):
+//
+//     private sealed class UserDataPathProviderFake : IUserDataPathProvider
+//     {
+//         private readonly string _dir = Path.Combine(Path.GetTempPath(), "BackupProgramadoServiceTests_" + Guid.NewGuid());
+//         public string GetDataDirectory() => _dir;
+//         public string GetDatabasePath() => Path.Combine(_dir, "stockapp.db");
+//         public string GetBackupsDirectory() => Path.Combine(_dir, "backups");
+//         public string GetLicenciaPath() => Path.Combine(_dir, "licencia.lic");
+//     }
+```
+
+```csharp
+// Reemplazar el using StockApp.Infrastructure.Platform; (ya sin uso en el archivo una vez
+// borrada la clase anidada de arriba — era el unico lugar que referenciaba IUserDataPathProvider
+// por nombre) por:
+using StockApp.Api.Tests.Fixtures;
+```
+
+Nota: el resto del archivo NO cambia — `Crear()` sigue llamando `new UserDataPathProviderFake()` textualmente igual (linea sin tocar); con el `using StockApp.Api.Tests.Fixtures;` de arriba, ese `new UserDataPathProviderFake()` ahora resuelve a la clase de `Fixtures/` en vez de a la anidada (mismo nombre de tipo, elegido a proposito para que el diff sea minimo).
+
+Run: `timeout 180 dotnet test tests/StockApp.Api.Tests --filter "FullyQualifiedName~BackupProgramadoServiceTests"`
+Expected: PASS (4/4) — sin cambios de comportamiento, solo consolidacion del fake.
+
+- [ ] **Step 18: Commit**
 
 ```bash
 git add src/StockApp.Application/Authorization/Permisos.cs \
@@ -2195,7 +2257,8 @@ git add src/StockApp.Application/Authorization/Permisos.cs \
         tests/StockApp.Api.Tests/Fixtures/UserDataPathProviderFake.cs \
         tests/StockApp.Api.Tests/Fixtures/ApiFactory.cs \
         tests/StockApp.Api.Tests/BackupsEndpointTests.cs \
-        tests/StockApp.Api.Tests/Licenciamiento/BloqueoLicenciaTests.cs
+        tests/StockApp.Api.Tests/Licenciamiento/BloqueoLicenciaTests.cs \
+        tests/StockApp.Api.Tests/Backups/BackupProgramadoServiceTests.cs
 git commit -m "feat(backups): agrega ServicioConsultaBackups (segunda barrera de autorizacion), BackupsEndpoints y exencion de licencia (Entrega 1)"
 ```
 
@@ -2989,7 +3052,7 @@ public class MantenimientoViewTests
         public Task<IReadOnlyList<CorridaBackupDto>> ListarAsync() => Task.FromResult(_corridas);
         public Task<BackupDescargaDto> DescargarAsync(int id) =>
             Task.FromResult(new BackupDescargaDto("x.dump", new MemoryStream()));
-        public Task<SaludBackupDto> ObtenerSaludAsync() => Task.FromResult(new SaludBackupDto(null, true));
+        public Task<SaludBackupDto> ObtenerSaludAsync() => Task.FromResult(new SaludBackupDto(null, true, 26));
     }
 
     private sealed class ServicioGuardadoArchivoFake : IServicioGuardadoArchivo
@@ -3120,7 +3183,7 @@ using StockApp.Application.Backups;
                 new List<FacturaCalendarioDto>(), new List<PagoRecienteDto>()));
 
         var backupsMock = new Mock<IBackupsService>();
-        backupsMock.Setup(b => b.ObtenerSaludAsync()).ReturnsAsync(salud ?? new SaludBackupDto(DateTime.UtcNow, false));
+        backupsMock.Setup(b => b.ObtenerSaludAsync()).ReturnsAsync(salud ?? new SaludBackupDto(DateTime.UtcNow, false, 26));
 
         var vm = new InicioViewModel(sessionMock.Object, navMock.Object, finanzasMock.Object, backupsMock.Object);
         return (vm, sessionMock, navMock, finanzasMock, backupsMock);
@@ -3136,19 +3199,20 @@ Nota (self-review — único call-site de `new InicioViewModel(` en el archivo, 
     public async Task CargarAsync_AdminConBackupVencido_MuestraAvisoBackup()
     {
         var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
-        var (vm, _, _, _, _) = Crear(usuario, salud: new SaludBackupDto(DateTime.UtcNow.AddHours(-30), true));
+        var (vm, _, _, _, _) = Crear(usuario, salud: new SaludBackupDto(DateTime.UtcNow.AddHours(-30), true, 26));
 
         await vm.CargarAsync();
 
         Assert.True(vm.MostrarAvisoBackup);
         Assert.NotNull(vm.TextoAvisoBackup);
+        Assert.Contains("26", vm.TextoAvisoBackup);
     }
 
     [Fact]
     public async Task CargarAsync_AdminConBackupAlDia_NoMuestraAvisoBackup()
     {
         var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
-        var (vm, _, _, _, _) = Crear(usuario, salud: new SaludBackupDto(DateTime.UtcNow, false));
+        var (vm, _, _, _, _) = Crear(usuario, salud: new SaludBackupDto(DateTime.UtcNow, false, 26));
 
         await vm.CargarAsync();
 
@@ -3255,8 +3319,11 @@ using StockApp.Application.Backups;
         {
             var salud = await _backups.ObtenerSaludAsync();
             MostrarAvisoBackup = salud.Vencido;
+            // UmbralHoras viaja en el DTO (SaludBackupDto, Task 6) — NUNCA hardcodear el número
+            // acá: si el umbral cambia en ServicioConsultaBackups, este texto tiene que reflejarlo
+            // solo, sin quedar mintiendo en silencio (pre-flight scan, corregido).
             TextoAvisoBackup = salud.UltimoExitoEn is DateTime ultimo
-                ? $"El último backup exitoso fue el {ultimo:dd/MM/yyyy HH:mm} UTC (hace más de 26 horas)."
+                ? $"El último backup exitoso fue el {ultimo:dd/MM/yyyy HH:mm} UTC (hace más de {salud.UmbralHoras} horas)."
                 : "Todavía no se registró ningún backup exitoso.";
         }
         catch (Exception)
@@ -3311,6 +3378,7 @@ git commit -m "feat(backups): agrega banner de salud del backup a InicioViewMode
 using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using StockApp.Domain.Entities;
 using StockApp.Infrastructure.Backups;
@@ -3376,7 +3444,7 @@ public class RestaurabilidadBackupTests : IAsyncLifetime
 
         // 2) Dump real con el ejecutor de PRODUCCIÓN (Task 3), no un fake.
         var configuracion = new ConfigurationBuilder().Build(); // sin Backups:PgDumpPath -> resuelve "pg_dump" por PATH
-        var ejecutor = new EjecutorPgDumpProceso(configuracion);
+        var ejecutor = new EjecutorPgDumpProceso(configuracion, NullLogger<EjecutorPgDumpProceso>.Instance);
         var rutaDump = Path.Combine(_directorioTrabajo, "restaurabilidad.dump");
 
         var resultado = await ejecutor.EjecutarAsync(_fixture.ConnectionString, rutaDump, CancellationToken.None);
@@ -3410,6 +3478,16 @@ public class RestaurabilidadBackupTests : IAsyncLifetime
         Assert.Contains(await restaurada.Categorias.ToListAsync(), c => c.Nombre == "Restaurabilidad-Cat");
     }
 
+    /// <summary>
+    /// NOTA (pre-flight scan — duplicación DELIBERADA, no corregida): este bloque de invocación
+    /// de proceso (ArgumentList, PGPASSWORD, RedirectStandardError) es ~15 líneas casi idénticas
+    /// a EjecutorPgDumpProceso.EjecutarAsync (Task 3). NO se extrajo un helper común a propósito:
+    /// hacerlo acoplaría este test de integración al código de producción (EjecutorPgDumpProceso
+    /// es SOLO para pg_dump, nunca ejecuta pg_restore — no hay una abstracción de producción que
+    /// este método debiera reusar sin inventar una interfaz nueva solo para un test). Es una
+    /// decisión del usuario, no un descuido — si un reviewer futuro señala esta duplicación como
+    /// hallazgo nuevo, este comentario ya explica por qué se dejó así.
+    /// </summary>
     private static async Task<int> EjecutarPgRestoreAsync(string connectionStringDestino, string rutaDump)
     {
         var builder = new NpgsqlConnectionStringBuilder(connectionStringDestino);
@@ -3491,6 +3569,13 @@ git commit -m "test(backups): agrega test de integracion de restaurabilidad (dum
    - El Task 10 tuvo un ajuste inline (converter de ícono de un solo uso reemplazado por dos `<i:Icon>` condicionados) — quedó resuelto con código completo en el propio Task, no es una deuda pendiente.
    - Task 12 depende de un binario externo (`postgresql-client`) que puede no estar instalado en el entorno que ejecute el plan — es un riesgo de ejecución real, documentado explícitamente en el Task y en Global Constraints, no un placeholder.
    - `ILogger<ServicioBackup>`/`ILogger<BackupProgramadoService>` van a stdout únicamente en esta entrega (spec §4.3 lo aclara explícitamente: "sin Serilog todavía") — la única fuente de verdad para diagnosticar un fallo es `CorridaBackup.MotivoFallo` vía el endpoint/UI, no el log. Correcto y ya documentado en Global Constraints y en el propio spec; no es un hueco de este plan.
-   - **Resuelto en esta revisión** (ya no es un hueco): la primera versión de este plan aceptaba que `BackupsEndpoints` leyera directo de `ICorridaBackupRepository`, sin segunda barrera de autorización — señalado explícitamente en esa versión y corregido acá por decisión del usuario (Task 6, `ServicioConsultaBackups`). Se deja esta nota para trazabilidad: la razón real (endpoints que exponen un dump completo de la base) no estaba en el spec original y no debería volver a diluirse en una futura revisión de este plan.
+   - **Resuelto en esta revisión** (ya no es un hueco): la primera versión de este plan aceptaba que `BackupsEndpoints` leyera directo de `ICorridaBackupRepository`, sin segunda barrera de autorización — señalado explícitamente en esa versión y corregido acá por decisión del usuario (Task 6, `ServicioConsultaBackups`). Se deja esta nota para trazabilidad: la razón real (endpoints que exponen un dump completo de la base) no estaba en el spec original y no deberia volver a diluirse en una futura revision de este plan.
+
+**6. Pre-flight scan (revision de code-review sobre el plan) — 5 hallazgos, 4 corregidos y 1 dejado deliberadamente:**
+   - **Corregido**: umbral de "backup vencido" (26h) duplicado entre `ServicioConsultaBackups.UmbralAviso` (Application) y el texto hardcodeado de `InicioViewModel` (Presentation). Fix: `SaludBackupDto` gana el campo `UmbralHoras`, unica fuente de verdad — si el umbral cambia en un solo lugar, el banner que lee el admin ya no puede quedar mintiendo en silencio (Tasks 6, 10, 11).
+   - **Corregido**: dos `catch` que descartaban la excepcion sin loguear — `ServicioBackup.BorrarSiExiste` (`catch (IOException)`, Task 4) y `EjecutorPgDumpProceso.TryKill` (`catch (InvalidOperationException)`, Task 3). Ambos ganan `LogWarning` con contexto (ruta del archivo / pid del proceso); `EjecutorPgDumpProceso` gana `ILogger<EjecutorPgDumpProceso>` inyectado (no lo tenia) — resuelto automatico por el hosting de ASP.NET Core, sin cambios de registro en `Program.cs`. Van a stdout en esta entrega (Serilog llega en la E2, que los captura retroactivamente).
+   - **Corregido**: dos tests sin assert (`EliminarAsync_IdInexistente_NoLanza`, Task 1; `LimpiarTmpHuerfanos_DirectorioInexistente_NoLanza`, Task 4) que solo probaban ausencia de excepcion. Ambos ganan un assert explicito sobre el estado resultante (conteo de filas sin cambios; el directorio sigue sin existir) — la intencion queda escrita, no implicita.
+   - **Corregido**: `UserDataPathProviderFake` duplicado — clase anidada privada en `BackupProgramadoServiceTests` (Task 5, creada antes de que existiera la version compartida) y la de `tests/StockApp.Api.Tests/Fixtures/` (Task 6). Se mantiene el orden de creacion (Task 5 sigue creando la suya primero), pero Task 6 agrega un Step de consolidacion al final que la elimina y deja un solo fake compartido en `Fixtures/`.
+   - **Dejado deliberadamente, NO corregido** (decision del usuario): la duplicacion de ~15 lineas de invocacion de proceso entre `EjecutorPgDumpProceso.EjecutarAsync` (Task 3, produccion) y `EjecutarPgRestoreAsync` (Task 12, test de integracion). Extraer un helper comun acoplaria un test de integracion al codigo de produccion para una sola funcion (`pg_restore` no es parte del feature, solo se usa para verificar el dump en el test). Nota explicita agregada en el propio metodo de Task 12 para que un reviewer futuro no la reporte como hallazgo nuevo.
 
 ---
