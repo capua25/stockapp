@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using StockApp.Application.Backups;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Enums;
@@ -24,6 +25,7 @@ public partial class InicioViewModel : ViewModelBase
     private readonly ICurrentSession        _session;
     private readonly INavigationService     _navigation;
     private readonly IFinanzasVistasService _finanzasVistas;
+    private readonly IBackupsService        _backups;
 
     public string NombreUsuario =>
         _session.UsuarioActual?.NombreCompleto ?? _session.UsuarioActual?.NombreUsuario ?? "Usuario";
@@ -52,12 +54,17 @@ public partial class InicioViewModel : ViewModelBase
             ? "1 factura por vencer esta semana"
             : $"{CantidadAVencer7Dias} facturas por vencer esta semana";
 
+    [ObservableProperty] private bool _mostrarAvisoBackup;
+    [ObservableProperty] private string? _textoAvisoBackup;
+
     public InicioViewModel(
-        ICurrentSession session, INavigationService navigation, IFinanzasVistasService finanzasVistas)
+        ICurrentSession session, INavigationService navigation,
+        IFinanzasVistasService finanzasVistas, IBackupsService backups)
     {
         _session        = session;
         _navigation     = navigation;
         _finanzasVistas = finanzasVistas;
+        _backups        = backups;
     }
 
     /// <summary>
@@ -77,6 +84,28 @@ public partial class InicioViewModel : ViewModelBase
         catch (Exception)
         {
             MostrarAvisoVencimientos = false;
+        }
+
+        if (!EsAdmin)
+        {
+            MostrarAvisoBackup = false;
+            return;
+        }
+
+        try
+        {
+            var salud = await _backups.ObtenerSaludAsync();
+            MostrarAvisoBackup = salud.Vencido;
+            // UmbralHoras viaja en el DTO (SaludBackupDto, Task 6) — NUNCA hardcodear el número
+            // acá: si el umbral cambia en ServicioConsultaBackups, este texto tiene que reflejarlo
+            // solo, sin quedar mintiendo en silencio (pre-flight scan, corregido).
+            TextoAvisoBackup = salud.UltimoExitoEn is DateTime ultimo
+                ? $"El último backup exitoso fue el {ultimo:dd/MM/yyyy HH:mm} UTC (hace más de {salud.UmbralHoras} horas)."
+                : "Todavía no se registró ningún backup exitoso.";
+        }
+        catch (Exception)
+        {
+            MostrarAvisoBackup = false;
         }
     }
 

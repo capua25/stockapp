@@ -3,6 +3,7 @@ using StockApp.ApiClient;
 using StockApp.Application.Actualizaciones;
 using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
+using StockApp.Application.Backups;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
 using StockApp.Application.Licenciamiento;
@@ -42,7 +43,8 @@ public class LoginViewModelTests
                     Mock.Of<IInfoApp>(x => x.Version == "0.0.0"), Mock.Of<IConfirmacionService>());
             if (t == typeof(InicioViewModel))
                 return new InicioViewModel(
-                    sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IFinanzasVistasService>());
+                    sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IFinanzasVistasService>(),
+                    Mock.Of<IBackupsService>());
             throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
         });
 

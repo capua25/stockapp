@@ -1,5 +1,6 @@
 using Moq;
 using StockApp.Application.Auth;
+using StockApp.Application.Backups;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Enums;
@@ -18,8 +19,8 @@ public class InicioViewModelTests
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private static (InicioViewModel vm, Mock<ICurrentSession> sessionMock, Mock<INavigationService> navMock,
-                     Mock<IFinanzasVistasService> finanzasMock)
-        Crear(UsuarioSesion usuario, CalendarioPagosDto? calendario = null)
+                     Mock<IFinanzasVistasService> finanzasMock, Mock<IBackupsService> backupsMock)
+        Crear(UsuarioSesion usuario, CalendarioPagosDto? calendario = null, SaludBackupDto? salud = null)
     {
         var sessionMock = new Mock<ICurrentSession>();
         sessionMock.Setup(s => s.UsuarioActual).Returns(usuario);
@@ -32,8 +33,11 @@ public class InicioViewModelTests
                 new List<FacturaCalendarioDto>(), new List<FacturaCalendarioDto>(),
                 new List<FacturaCalendarioDto>(), new List<PagoRecienteDto>()));
 
-        var vm = new InicioViewModel(sessionMock.Object, navMock.Object, finanzasMock.Object);
-        return (vm, sessionMock, navMock, finanzasMock);
+        var backupsMock = new Mock<IBackupsService>();
+        backupsMock.Setup(b => b.ObtenerSaludAsync()).ReturnsAsync(salud ?? new SaludBackupDto(DateTime.UtcNow, false, 26));
+
+        var vm = new InicioViewModel(sessionMock.Object, navMock.Object, finanzasMock.Object, backupsMock.Object);
+        return (vm, sessionMock, navMock, finanzasMock, backupsMock);
     }
 
     // ── Saludo ───────────────────────────────────────────────────────────────
@@ -42,7 +46,7 @@ public class InicioViewModelTests
     public void Saludo_IncluyeNombreCompleto_CuandoEstaPresente()
     {
         var usuario = new UsuarioSesion(1, "jperez", RolUsuario.Operador, "Juan Pérez");
-        var (vm, _, _, _) = Crear(usuario);
+        var (vm, _, _, _, _) = Crear(usuario);
 
         Assert.Contains("Juan Pérez", vm.Saludo);
     }
@@ -51,7 +55,7 @@ public class InicioViewModelTests
     public void Saludo_CaeANombreUsuario_CuandoNombreCompletoEsNull()
     {
         var usuario = new UsuarioSesion(1, "jperez", RolUsuario.Operador, null);
-        var (vm, _, _, _) = Crear(usuario);
+        var (vm, _, _, _, _) = Crear(usuario);
 
         Assert.Contains("jperez", vm.Saludo);
     }
@@ -62,7 +66,7 @@ public class InicioViewModelTests
     public void EsAdmin_True_ConRolAdmin()
     {
         var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
-        var (vm, _, _, _) = Crear(usuario);
+        var (vm, _, _, _, _) = Crear(usuario);
 
         Assert.True(vm.EsAdmin);
     }
@@ -71,7 +75,7 @@ public class InicioViewModelTests
     public void EsAdmin_False_ConRolOperador()
     {
         var usuario = new UsuarioSesion(1, "jperez", RolUsuario.Operador, "Juan Pérez");
-        var (vm, _, _, _) = Crear(usuario);
+        var (vm, _, _, _, _) = Crear(usuario);
 
         Assert.False(vm.EsAdmin);
     }
@@ -80,7 +84,7 @@ public class InicioViewModelTests
     public void RolTexto_Administrador_ConRolAdmin()
     {
         var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
-        var (vm, _, _, _) = Crear(usuario);
+        var (vm, _, _, _, _) = Crear(usuario);
 
         Assert.Equal("Administrador", vm.RolTexto);
     }
@@ -89,7 +93,7 @@ public class InicioViewModelTests
     public void RolTexto_Operador_ConRolOperador()
     {
         var usuario = new UsuarioSesion(1, "jperez", RolUsuario.Operador, "Juan Pérez");
-        var (vm, _, _, _) = Crear(usuario);
+        var (vm, _, _, _, _) = Crear(usuario);
 
         Assert.Equal("Operador", vm.RolTexto);
     }
@@ -100,7 +104,7 @@ public class InicioViewModelTests
     public void IrAProductos_LlamaNavegar_AProductoListViewModel()
     {
         var usuario = new UsuarioSesion(1, "jperez", RolUsuario.Operador, "Juan Pérez");
-        var (vm, _, navMock, _) = Crear(usuario);
+        var (vm, _, navMock, _, _) = Crear(usuario);
 
         vm.IrAProductosCommand.Execute(null);
 
@@ -111,7 +115,7 @@ public class InicioViewModelTests
     public void IrARegistrarEntrada_LlamaNavegar_AEntradaRegistroViewModel()
     {
         var usuario = new UsuarioSesion(1, "jperez", RolUsuario.Operador, "Juan Pérez");
-        var (vm, _, navMock, _) = Crear(usuario);
+        var (vm, _, navMock, _, _) = Crear(usuario);
 
         vm.IrARegistrarEntradaCommand.Execute(null);
 
@@ -122,7 +126,7 @@ public class InicioViewModelTests
     public void IrARegistrarSalida_LlamaNavegar_ASalidaRegistroViewModel()
     {
         var usuario = new UsuarioSesion(1, "jperez", RolUsuario.Operador, "Juan Pérez");
-        var (vm, _, navMock, _) = Crear(usuario);
+        var (vm, _, navMock, _, _) = Crear(usuario);
 
         vm.IrARegistrarSalidaCommand.Execute(null);
 
@@ -133,7 +137,7 @@ public class InicioViewModelTests
     public void IrAHistorialMovimientos_LlamaNavegar_AMovimientoHistorialViewModel()
     {
         var usuario = new UsuarioSesion(1, "jperez", RolUsuario.Operador, "Juan Pérez");
-        var (vm, _, navMock, _) = Crear(usuario);
+        var (vm, _, navMock, _, _) = Crear(usuario);
 
         vm.IrAHistorialMovimientosCommand.Execute(null);
 
@@ -144,7 +148,7 @@ public class InicioViewModelTests
     public void IrAValorizacion_LlamaNavegar_AValorizacionViewModel()
     {
         var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
-        var (vm, _, navMock, _) = Crear(usuario);
+        var (vm, _, navMock, _, _) = Crear(usuario);
 
         vm.IrAValorizacionCommand.Execute(null);
 
@@ -155,7 +159,7 @@ public class InicioViewModelTests
     public void IrAAuditoria_LlamaNavegar_AAuditoriaLogViewModel()
     {
         var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
-        var (vm, _, navMock, _) = Crear(usuario);
+        var (vm, _, navMock, _, _) = Crear(usuario);
 
         vm.IrAAuditoriaCommand.Execute(null);
 
@@ -168,7 +172,7 @@ public class InicioViewModelTests
     public async Task CargarAsync_ConFacturasVencidas_MuestraElAviso()
     {
         var usuario = new UsuarioSesion(1, "jperez", RolUsuario.Operador, "Juan Pérez");
-        var (vm, _, _, _) = Crear(usuario, new CalendarioPagosDto(
+        var (vm, _, _, _, _) = Crear(usuario, new CalendarioPagosDto(
             new List<FacturaCalendarioDto> { new(1, "Barraca X", "A-1", 500m, new DateOnly(2026, 7, 1), "Vencida") },
             new List<FacturaCalendarioDto>(), new List<FacturaCalendarioDto>(), new List<PagoRecienteDto>()));
 
@@ -183,7 +187,7 @@ public class InicioViewModelTests
     public async Task CargarAsync_ConAVencerEn7DiasSinVencidas_MuestraElAviso()
     {
         var usuario = new UsuarioSesion(1, "jperez", RolUsuario.Operador, "Juan Pérez");
-        var (vm, _, _, _) = Crear(usuario, new CalendarioPagosDto(
+        var (vm, _, _, _, _) = Crear(usuario, new CalendarioPagosDto(
             new List<FacturaCalendarioDto>(),
             new List<FacturaCalendarioDto> { new(1, "Barraca X", "A-1", 500m, new DateOnly(2026, 7, 20), "PorVencer") },
             new List<FacturaCalendarioDto>(), new List<PagoRecienteDto>()));
@@ -199,7 +203,7 @@ public class InicioViewModelTests
     public async Task CargarAsync_SinVencidasNiAVencer_NoMuestraElAviso()
     {
         var usuario = new UsuarioSesion(1, "jperez", RolUsuario.Operador, "Juan Pérez");
-        var (vm, _, _, _) = Crear(usuario);
+        var (vm, _, _, _, _) = Crear(usuario);
 
         await vm.CargarAsync();
 
@@ -210,7 +214,7 @@ public class InicioViewModelTests
     public async Task CargarAsync_ElServicioFalla_NoRompeYOcultaElAviso()
     {
         var usuario = new UsuarioSesion(1, "jperez", RolUsuario.Operador, "Juan Pérez");
-        var (vm, _, _, finanzas) = Crear(usuario);
+        var (vm, _, _, finanzas, _) = Crear(usuario);
         finanzas.Setup(f => f.ObtenerCalendarioPagosAsync(null))
             .ThrowsAsync(new UnauthorizedAccessException());
 
@@ -219,11 +223,71 @@ public class InicioViewModelTests
         Assert.False(vm.MostrarAvisoVencimientos);
     }
 
+    // ── Aviso de salud de backup (nuevo) ─────────────────────────────────────
+
+    [Fact]
+    public async Task CargarAsync_AdminConBackupVencido_MuestraAvisoBackup()
+    {
+        var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
+        var (vm, _, _, _, _) = Crear(usuario, salud: new SaludBackupDto(DateTime.UtcNow.AddHours(-30), true, 26));
+
+        await vm.CargarAsync();
+
+        Assert.True(vm.MostrarAvisoBackup);
+        Assert.NotNull(vm.TextoAvisoBackup);
+        Assert.Contains("26", vm.TextoAvisoBackup);
+    }
+
+    [Fact]
+    public async Task CargarAsync_AdminConBackupAlDia_NoMuestraAvisoBackup()
+    {
+        var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
+        var (vm, _, _, _, _) = Crear(usuario, salud: new SaludBackupDto(DateTime.UtcNow, false, 26));
+
+        await vm.CargarAsync();
+
+        Assert.False(vm.MostrarAvisoBackup);
+    }
+
+    [Fact]
+    public async Task CargarAsync_Operador_NuncaConsultaSaludDeBackup()
+    {
+        var usuario = new UsuarioSesion(2, "jperez", RolUsuario.Operador, "Juan Pérez");
+        var (vm, _, _, _, backupsMock) = Crear(usuario);
+
+        await vm.CargarAsync();
+
+        backupsMock.Verify(b => b.ObtenerSaludAsync(), Times.Never);
+        Assert.False(vm.MostrarAvisoBackup);
+    }
+
+    [Fact]
+    public async Task CargarAsync_ServicioDeBackupFalla_NoRompeYOcultaElAviso()
+    {
+        var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.UsuarioActual).Returns(usuario);
+        sessionMock.Setup(s => s.RolActual).Returns(usuario.Rol);
+        var navMock = new Mock<INavigationService>();
+        var finanzasMock = new Mock<IFinanzasVistasService>();
+        finanzasMock.Setup(f => f.ObtenerCalendarioPagosAsync(null)).ReturnsAsync(
+            new CalendarioPagosDto(new List<FacturaCalendarioDto>(), new List<FacturaCalendarioDto>(),
+                new List<FacturaCalendarioDto>(), new List<PagoRecienteDto>()));
+        var backupsMock = new Mock<IBackupsService>();
+        backupsMock.Setup(b => b.ObtenerSaludAsync()).ThrowsAsync(new InvalidOperationException("servidor caído"));
+
+        var vm = new InicioViewModel(sessionMock.Object, navMock.Object, finanzasMock.Object, backupsMock.Object);
+
+        await vm.CargarAsync();
+
+        Assert.False(vm.MostrarAvisoBackup);
+    }
+
     [Fact]
     public async Task IrACalendarioPagos_NavegaACalendarioPagosViewModel()
     {
         var usuario = new UsuarioSesion(1, "jperez", RolUsuario.Operador, "Juan Pérez");
-        var (vm, _, nav, _) = Crear(usuario);
+        var (vm, _, nav, _, _) = Crear(usuario);
 
         vm.IrACalendarioPagosCommand.Execute(null);
 
@@ -234,7 +298,7 @@ public class InicioViewModelTests
     public async Task TextoVencidas_Singular_ConUnaFacturaVencida()
     {
         var usuario = new UsuarioSesion(1, "jperez", RolUsuario.Operador, "Juan Pérez");
-        var (vm, _, _, _) = Crear(usuario, new CalendarioPagosDto(
+        var (vm, _, _, _, _) = Crear(usuario, new CalendarioPagosDto(
             new List<FacturaCalendarioDto> { new(1, "Barraca X", "A-1", 500m, new DateOnly(2026, 7, 1), "Vencida") },
             new List<FacturaCalendarioDto>(), new List<FacturaCalendarioDto>(), new List<PagoRecienteDto>()));
 
@@ -247,7 +311,7 @@ public class InicioViewModelTests
     public async Task TextoVencidas_Plural_ConVariasFacturasVencidas()
     {
         var usuario = new UsuarioSesion(1, "jperez", RolUsuario.Operador, "Juan Pérez");
-        var (vm, _, _, _) = Crear(usuario, new CalendarioPagosDto(
+        var (vm, _, _, _, _) = Crear(usuario, new CalendarioPagosDto(
             new List<FacturaCalendarioDto>
             {
                 new(1, "Barraca X", "A-1", 500m, new DateOnly(2026, 7, 1), "Vencida"),
@@ -264,7 +328,7 @@ public class InicioViewModelTests
     public async Task TextoAVencer7Dias_Singular_ConUnaFacturaPorVencer()
     {
         var usuario = new UsuarioSesion(1, "jperez", RolUsuario.Operador, "Juan Pérez");
-        var (vm, _, _, _) = Crear(usuario, new CalendarioPagosDto(
+        var (vm, _, _, _, _) = Crear(usuario, new CalendarioPagosDto(
             new List<FacturaCalendarioDto>(),
             new List<FacturaCalendarioDto> { new(1, "Barraca X", "A-1", 500m, new DateOnly(2026, 7, 20), "PorVencer") },
             new List<FacturaCalendarioDto>(), new List<PagoRecienteDto>()));
@@ -278,7 +342,7 @@ public class InicioViewModelTests
     public async Task TextoAVencer7Dias_Plural_ConVariasFacturasPorVencer()
     {
         var usuario = new UsuarioSesion(1, "jperez", RolUsuario.Operador, "Juan Pérez");
-        var (vm, _, _, _) = Crear(usuario, new CalendarioPagosDto(
+        var (vm, _, _, _, _) = Crear(usuario, new CalendarioPagosDto(
             new List<FacturaCalendarioDto>(),
             new List<FacturaCalendarioDto>
             {
