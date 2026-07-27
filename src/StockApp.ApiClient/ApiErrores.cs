@@ -35,8 +35,14 @@ internal static class ApiErrores
     /// <summary>
     /// Ejecuta el envío HTTP convirtiendo los fallos de transporte en
     /// <see cref="ServidorNoDisponibleException"/> (conexión rechazada, DNS, timeout).
+    /// <paramref name="ct"/> es OPCIONAL — los ~10 XxxApiClient que no pasan un token propio
+    /// siguen con el comportamiento de siempre (toda cancelación es timeout). BackupsApiClient
+    /// (Task Backups) es el primero en pasar un ct real, cancelable desde la UI: con ct
+    /// explícito, una cancelación deliberada del CALLER se distingue de un timeout real y se
+    /// repropaga tal cual en vez de envolverse.
     /// </summary>
-    internal static async Task<HttpResponseMessage> EnviarAsync(Func<Task<HttpResponseMessage>> enviar)
+    internal static async Task<HttpResponseMessage> EnviarAsync(
+        Func<Task<HttpResponseMessage>> enviar, CancellationToken ct = default)
     {
         try
         {
@@ -46,10 +52,21 @@ internal static class ApiErrores
         {
             throw new ServidorNoDisponibleException(ex);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // Cancelación deliberada del caller (ej. BackupsApiClient.DescargarAsync con el
+            // CancellationToken del botón "Cancelar" de MantenimientoViewModel) — se repropaga
+            // tal cual para que el caller la distinga de una falla real del servidor. Mismo
+            // criterio que EjecutorPgDumpProceso.EjecutarAsync del lado servidor (Task 3):
+            // catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested).
+            throw;
+        }
         catch (TaskCanceledException ex)
         {
-            // HttpClient.Timeout vencido: llega como TaskCanceledException (inner TimeoutException).
-            // Los clients no pasan CancellationToken propio → toda cancelación es timeout.
+            // HttpClient.Timeout vencido, o cualquier cancelación SIN que el ct propio del
+            // caller esté marcado — se sigue tratando como indisponibilidad del servidor.
+            // Comportamiento SIN CAMBIOS para los ~10 ApiClients que no pasan ct (entran acá
+            // con ct = default, que nunca está cancelado).
             throw new ServidorNoDisponibleException(ex);
         }
     }

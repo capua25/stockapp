@@ -15,6 +15,7 @@ using StockApp.Application.Actualizaciones;
 using StockApp.Application.Auditoria;
 using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
+using StockApp.Application.Backups;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Finanzas;
@@ -212,6 +213,10 @@ public partial class App : AvaloniaApp
         services.AddTransient<IIngresoCajaService, IngresoCajaApiClient>();
         services.AddTransient<IFinanzasVistasService, FinanzasVistasApiClient>();
         services.AddTransient<IAdjuntoService, AdjuntoApiClient>();
+
+        // ── Backups programados (Entrega 1) ────────────────────────────────────
+        services.AddTransient<IBackupsService>(sp =>
+            new BackupsApiClient(sp.GetRequiredKeyedService<HttpClient>("Descargas")));
 
         // ── Módulo Finanzas — F5d: importador de planillas (historial + análisis/confirmación/reversa) ──
         services.AddTransient<IImportacionService, ImportacionApiClient>();

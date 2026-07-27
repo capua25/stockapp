@@ -178,6 +178,35 @@ public class ApiErroresTests
     }
 
     [Fact]
+    public async Task EnviarAsync_CancelacionDeliberadaDelCallerConCtCancelado_RepropagaSinEnvolver()
+    {
+        // BackupsApiClient pasa su propio ct (botón "Cancelar", Task 9). Si el CALLER lo
+        // canceló, la MISMA TaskCanceledException que dispara HttpClient tiene que llegar tal
+        // cual (throw; conserva el tipo exacto) — NO envuelta en ServidorNoDisponibleException,
+        // que sería indistinguible de una caída real del servidor. Assert.ThrowsAsync<T> exige
+        // tipo EXACTO: comparar esto contra el próximo test (mismo tipo de excepción interna,
+        // ct SIN cancelar) es lo que prueba que la distinción es real y no un espejismo.
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAsync<TaskCanceledException>(
+            () => ApiErrores.EnviarAsync(() => throw new TaskCanceledException("cancelado"), cts.Token));
+    }
+
+    [Fact]
+    public async Task EnviarAsync_TaskCanceledConCtPropioSinCancelar_SigueSiendoServidorNoDisponible()
+    {
+        // Mismo ct real que BackupsApiClient pasaría, pero SIN cancelar: el timeout de
+        // HttpClient vence igual (TaskCanceledException) sin que el caller haya pedido
+        // cancelar — tiene que seguir tratándose como caída del servidor, no como cancelación
+        // deliberada. Distingue de verdad "yo cancelé" de "el servidor no respondió".
+        using var cts = new CancellationTokenSource();
+
+        await Assert.ThrowsAsync<ServidorNoDisponibleException>(
+            () => ApiErrores.EnviarAsync(() => throw new TaskCanceledException("timeout"), cts.Token));
+    }
+
+    [Fact]
     public async Task EnviarAsync_Exito_DevuelveLaResponse()
     {
         var esperada = new HttpResponseMessage(HttpStatusCode.OK);

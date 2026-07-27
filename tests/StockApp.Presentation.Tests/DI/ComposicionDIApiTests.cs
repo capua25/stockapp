@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using StockApp.ApiClient;
 using StockApp.Application.Auditoria;
 using StockApp.Application.Auth;
+using StockApp.Application.Backups;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Interfaces;
@@ -52,6 +53,21 @@ public class ComposicionDIApiTests
                 Timeout = TimeSpan.FromSeconds(10),
             };
         });
+
+        services.AddKeyedSingleton<HttpClient>("Descargas", (sp, _) =>
+        {
+            var handler = new AuthTokenHandler(sp.GetRequiredService<ApiSession>())
+            {
+                InnerHandler = new SocketsHttpHandler(),
+            };
+            return new HttpClient(handler)
+            {
+                BaseAddress = new Uri("http://localhost:5000/"),
+                Timeout = TimeSpan.FromMinutes(30),
+            };
+        });
+        services.AddTransient<IBackupsService>(sp =>
+            new BackupsApiClient(sp.GetRequiredKeyedService<HttpClient>("Descargas")));
 
         // ── ApiClients: las mismas 9 interfaces de Application ────────────────
         services.AddTransient<IAuthService, AuthApiClient>();
@@ -114,6 +130,27 @@ public class ComposicionDIApiTests
         var servicio = sp.GetRequiredService(interfaz);
 
         Assert.IsType(implementacion, servicio);
+    }
+
+    [Fact]
+    public void Contenedor_Resuelve_IBackupsService_ConBackupsApiClient()
+    {
+        var sp = CrearContenedor();
+
+        var servicio = sp.GetRequiredService<IBackupsService>();
+
+        Assert.IsType<BackupsApiClient>(servicio);
+    }
+
+    [Fact]
+    public void HttpClient_Descargas_TieneTimeoutFinitoDeTreintaMinutosYBaseAddressTerminadaEnBarra()
+    {
+        var sp = CrearContenedor();
+
+        var http = sp.GetRequiredKeyedService<HttpClient>("Descargas");
+
+        Assert.Equal(TimeSpan.FromMinutes(30), http.Timeout);
+        Assert.EndsWith("/", http.BaseAddress!.ToString());
     }
 
     // ─── Sesión y HttpClient ──────────────────────────────────────────────────

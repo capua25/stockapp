@@ -13,3 +13,23 @@ public sealed record CorridaBackupDto(
 /// para que el umbral tenga una sola fuente de verdad: si cambia en ServicioConsultaBackups, el
 /// texto que lee el admin en InicioViewModel no puede quedar mintiendo en silencio.</summary>
 public sealed record SaludBackupDto(DateTime? UltimoExitoEn, bool Vencido, int UmbralHoras);
+
+/// <summary>
+/// Backup descargado del servidor: el contenido viaja como Stream (no byte[]) para no
+/// bufferear un dump de varios MB/GB completo en memoria — GuardarBytesAsync lo copia directo
+/// al Stream de escritura del archivo elegido por el usuario (spec §7). IAsyncDisposable:
+/// liberar Contenido también libera la conexión HTTP subyacente.
+/// </summary>
+public sealed class BackupDescargaDto : IAsyncDisposable
+{
+    public string NombreArchivo { get; }
+    public Stream Contenido { get; }
+
+    public BackupDescargaDto(string nombreArchivo, Stream contenido)
+    {
+        NombreArchivo = nombreArchivo;
+        Contenido = contenido;
+    }
+
+    public ValueTask DisposeAsync() => Contenido.DisposeAsync();
+}
