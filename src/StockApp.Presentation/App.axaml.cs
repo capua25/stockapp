@@ -280,6 +280,7 @@ public partial class App : AvaloniaApp
         // VMs de catálogo: transient — se resuelven por el NavigationService
         services.AddTransient<ShellMainViewModel>();
         services.AddTransient<InicioViewModel>();
+        services.AddTransient<StockApp.Presentation.ViewModels.Administracion.MantenimientoViewModel>();
         services.AddTransient<ProductoListViewModel>();
         services.AddTransient<ProductoFormViewModel>();
         services.AddTransient<CategoriaListViewModel>();

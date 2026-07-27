@@ -314,6 +314,27 @@
                     </Grid>
                 </Button>
 
+                <!-- Administracion: solo Admin (Entrega 1 Backups) -->
+                <TextBlock Text="Administración"
+                           Classes="caption"
+                           Foreground="{DynamicResource SidebarTextoBrush}"
+                           FontWeight="SemiBold"
+                           Margin="8,8,0,4"
+                           IsVisible="{Binding EsAdmin}"
+                           Opacity="0.6" />
+
+                <Button Command="{Binding NavMantenimientoCommand}"
+                        Classes="ghost"
+                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Mantenimiento}"
+                        HorizontalAlignment="Stretch"
+                        IsVisible="{Binding EsAdmin}">
+                    <Grid ColumnDefinitions="Auto,*">
+                        <i:Icon Grid.Column="0" Value="mdi-database-cog" Foreground="{DynamicResource SidebarTextoBrush}" />
+                        <TextBlock Grid.Column="1" Text="Mantenimiento" VerticalAlignment="Center"
+                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                </Button>
+
                 </StackPanel>
                 </ScrollViewer>
             </DockPanel>

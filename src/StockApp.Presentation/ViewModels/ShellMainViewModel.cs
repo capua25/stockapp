@@ -6,6 +6,7 @@ using StockApp.Application.Interfaces;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
+using StockApp.Presentation.ViewModels.Administracion;
 using StockApp.Presentation.ViewModels.Catalogo;
 using StockApp.Presentation.ViewModels.Finanzas;
 using StockApp.Presentation.ViewModels.Movimientos;
@@ -198,6 +199,15 @@ public partial class ShellMainViewModel : ViewModelBase
     {
         SeccionActiva = "AuditoriaLog";
         _navigation.Navegar<AuditoriaLogViewModel>();
+    }
+
+    // ── Administracion (Entrega 1 Backups): solo Admin ────────────────────────
+
+    [RelayCommand]
+    private void NavMantenimiento()
+    {
+        SeccionActiva = "Mantenimiento";
+        _navigation.Navegar<MantenimientoViewModel>();
     }
 
     // ── Finanzas — Fase 1: Admin y Operador ───────────────────────────────────
