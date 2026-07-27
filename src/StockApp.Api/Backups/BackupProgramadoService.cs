@@ -33,21 +33,39 @@ public sealed class BackupProgramadoService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        // GetBackupsDirectory() es cómputo puro (Path.Combine sobre un directorio ya conocido),
+        // no toca disco ni red — se deja fuera del try porque el timer de abajo necesita
+        // `directorio` de todas formas para poder seguir reintentando corrida tras corrida.
         var directorio = _paths.GetBackupsDirectory();
-        Directory.CreateDirectory(directorio);
 
-        await using (var scopeArranque = _scopeFactory.CreateAsyncScope())
+        try
         {
-            // Barrido de .tmp huérfanos (spec §4.3): un dump interrumpido a mitad (ej. la API se
-            // reinició) deja un .tmp que nadie más va a limpiar.
-            scopeArranque.ServiceProvider.GetRequiredService<ServicioBackup>().LimpiarTmpHuerfanos(directorio);
-        }
+            Directory.CreateDirectory(directorio);
 
-        // Catch-up al arrancar (spec §4.2): si la última corrida exitosa tiene más de 12h (o no
-        // hay ninguna), dispara enseguida en vez de esperar el primer tick del PeriodicTimer —
-        // cubre el caso "servidor apagado durante la ventana".
-        if (await DebeCorrerAhoraAsync())
-            await EjecutarCorridaSeguraAsync(directorio, stoppingToken);
+            await using (var scopeArranque = _scopeFactory.CreateAsyncScope())
+            {
+                // Barrido de .tmp huérfanos (spec §4.3): un dump interrumpido a mitad (ej. la API se
+                // reinició) deja un .tmp que nadie más va a limpiar.
+                scopeArranque.ServiceProvider.GetRequiredService<ServicioBackup>().LimpiarTmpHuerfanos(directorio);
+            }
+
+            // Catch-up al arrancar (spec §4.2): si la última corrida exitosa tiene más de 12h (o no
+            // hay ninguna), dispara enseguida en vez de esperar el primer tick del PeriodicTimer —
+            // cubre el caso "servidor apagado durante la ventana".
+            if (await DebeCorrerAhoraAsync())
+                await EjecutarCorridaSeguraAsync(directorio, stoppingToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Misma red de última resistencia que EjecutarCorridaSeguraAsync, pero para la
+            // secuencia de ARRANQUE: DebeCorrerAhoraAsync hace una llamada real a la BD, y si la
+            // API arranca antes de que Postgres esté listo (o Postgres se reinicia), esto explota
+            // ACÁ, fuera del try de EjecutarCorridaSeguraAsync. Sin este catch, la excepción sale
+            // de ExecuteAsync y (con el HostOptions.BackgroundServiceExceptionBehavior default de
+            // StopHost) tumba el host ENTERO — endpoints HTTP incluidos, en un servidor sin acceso
+            // remoto. Logueamos y seguimos al timer: 12h después Postgres probablemente esté vivo.
+            _logger.LogError(ex, "Secuencia de arranque de backups programados falló de forma inesperada; se reintentará en la próxima ventana.");
+        }
 
         using var timer = new PeriodicTimer(IntervaloEntreCorridas);
         while (await timer.WaitForNextTickAsync(stoppingToken))

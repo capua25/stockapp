@@ -62,6 +62,41 @@ public class BackupProgramadoServiceTests
         public string GetLicenciaPath() => Path.Combine(_dir, "licencia.lic");
     }
 
+    /// <summary>Simula el caso real que motiva el Fix 1: la API arranca antes de que Postgres
+    /// esté listo (o Postgres se reinicia) y la consulta de ObtenerUltimaExitosaAsync -llamada
+    /// desde DebeCorrerAhoraAsync, dentro de la secuencia de ARRANQUE de ExecuteAsync- explota.</summary>
+    private sealed class CorridaBackupRepositoryQueFallaAlConsultarFake : ICorridaBackupRepository
+    {
+        public Task<int> AgregarAsync(CorridaBackup corrida) => Task.FromResult(1);
+        public Task<IReadOnlyList<CorridaBackup>> ListarTodasAsync()
+            => Task.FromResult((IReadOnlyList<CorridaBackup>)new List<CorridaBackup>());
+        public Task<IReadOnlyList<CorridaBackup>> ListarExitosasAsync()
+            => Task.FromResult((IReadOnlyList<CorridaBackup>)new List<CorridaBackup>());
+        public Task<CorridaBackup?> ObtenerPorIdAsync(int id) => Task.FromResult<CorridaBackup?>(null);
+        public Task<CorridaBackup?> ObtenerUltimaExitosaAsync()
+            => throw new InvalidOperationException("Postgres no está listo (simulado).");
+        public Task EliminarAsync(int id) => Task.CompletedTask;
+    }
+
+    /// <summary>Logger espía: no hay forma de assertar "no lanza" sin distinguir de qué rama vino
+    /// (ver Fix 2 del report de la Task 5) — acá lo que importa es que el fallo de arranque quedó
+    /// REGISTRADO, no sólo que no tumbó el proceso.</summary>
+    private sealed class LoggerEspiaFake : Microsoft.Extensions.Logging.ILogger<BackupProgramadoService>
+    {
+        public List<Exception?> ErroresLogueados { get; } = new();
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
+            TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == Microsoft.Extensions.Logging.LogLevel.Error)
+                ErroresLogueados.Add(exception);
+        }
+    }
+
     private static (BackupProgramadoService servicio, List<object> instanciasQueAgregaron, CorridaBackup? ultimaExitosaSemilla)
         Crear(CorridaBackup? ultimaExitosaSemilla = null)
     {
@@ -94,16 +129,9 @@ public class BackupProgramadoServiceTests
 
         await servicio.EjecutarCorridaSeguraAsync(directorio, CancellationToken.None);
 
-        // Gap del brief detectado al correr el test: ServicioBackup.EjecutarCorridaAsync (Task 4)
-        // nombra el .dump con precisión de segundo (yyyyMMdd_HHmmss). Dos corridas dentro del
-        // mismo segundo generan el mismo NombreArchivo -> el segundo File.Move choca contra un
-        // destino existente -> IOException -> BackupProgramadoService la atrapa como "falla
-        // inesperada" (por diseño) y esa corrida se pierde sin dejar registro. Es una colisión de
-        // Task 4 (ya aprobada/mergeada), ajena a lo que este test verifica (scope-per-corrida);
-        // se cruza el borde de segundo acá para no confundir esa colisión con el comportamiento
-        // bajo prueba. Ver concern en el reporte de Task 5.
-        await Task.Delay(TimeSpan.FromMilliseconds(1100));
-
+        // Ya NO hace falta cruzar el borde de segundo acá: el Fix 2 de la Task 5 (ver report)
+        // agregó milisegundos al nombre del .dump (yyyyMMdd_HHmmssfff), así que dos corridas
+        // consecutivas dentro del mismo segundo ya no colisionan de nombre.
         await servicio.EjecutarCorridaSeguraAsync(directorio, CancellationToken.None);
 
         Assert.Equal(2, instancias.Count);
@@ -138,5 +166,45 @@ public class BackupProgramadoServiceTests
         });
 
         Assert.False(await servicio.DebeCorrerAhoraAsync());
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_FalloEnSecuenciaDeArranque_NoTumbaLaTareaDelServicioYQuedaLogueado()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<ICorridaBackupRepository, CorridaBackupRepositoryQueFallaAlConsultarFake>();
+        services.AddScoped<IEjecutorPgDump, EjecutorPgDumpFake>();
+        services.AddScoped<ServicioBackup>();
+        services.AddSingleton<Microsoft.Extensions.Logging.ILogger<ServicioBackup>>(NullLogger<ServicioBackup>.Instance);
+        var sp = services.BuildServiceProvider();
+        var configuracion = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:Default"] = "Host=x;Database=y" })
+            .Build();
+        var loggerEspia = new LoggerEspiaFake();
+
+        var servicio = new BackupProgramadoService(
+            sp.GetRequiredService<IServiceScopeFactory>(),
+            configuracion,
+            new UserDataPathProviderFake(),
+            loggerEspia);
+
+        // Ciclo de vida REAL de un BackgroundService (el mismo que usa el host de ASP.NET Core en
+        // producción), no una llamada directa a un método interno: así se ejerce exactamente la
+        // ruta que rompía antes del fix.
+        await servicio.StartAsync(CancellationToken.None);
+        await Task.Delay(TimeSpan.FromMilliseconds(300));
+
+        // Comportamiento real, no ausencia de excepción: sin el fix, ExecuteTask queda Faulted
+        // con la InvalidOperationException del repo (fuga fuera de ExecuteAsync) y esta línea
+        // falla. Con el fix, la excepción fue atrapada y el servicio sigue vivo esperando el
+        // próximo tick del PeriodicTimer.
+        Assert.NotNull(servicio.ExecuteTask);
+        Assert.False(servicio.ExecuteTask!.IsFaulted, servicio.ExecuteTask.Exception?.ToString());
+        Assert.False(servicio.ExecuteTask.IsCompleted);
+
+        // Y el fallo quedó registrado -> no es un fallo silencioso.
+        Assert.Contains(loggerEspia.ErroresLogueados, ex => ex is InvalidOperationException);
+
+        await servicio.StopAsync(CancellationToken.None);
     }
 }

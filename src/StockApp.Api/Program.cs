@@ -35,6 +35,18 @@ using StockApp.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Segunda barrera de defensa en profundidad para BackupProgramadoService (Entrega 1, Task 5):
+// el default de HostOptions.BackgroundServiceExceptionBehavior es StopHost, es decir que
+// cualquier excepción no atrapada en UN BackgroundService tumba TODO el host, endpoints HTTP
+// incluidos. BackupProgramadoService ya atrapa todo lo que puede (arranque + cada corrida), pero
+// si algo se escapa igual, Ignore hace que solo muera el servicio de backup y la API siga
+// sirviendo. Un municipio sin backups automáticos es un problema; un municipio sin sistema
+// (porque un pg_dump falló mal) es una emergencia.
+builder.Services.Configure<HostOptions>(options =>
+{
+    options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
+});
+
 // AppDbContext: Scoped por request (patrón natural de ASP.NET Core). La app desktop
 // sigue con AppDbContext Transient en su propia composición root — no se unifican.
 //
