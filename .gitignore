@@ -262,6 +262,11 @@ Generated_Code/
 # because we have git ;-)
 _UpgradeReport_Files/
 Backup*/
+# Excepción: "Backups/" es el directorio real del feature de backups programados
+# (ServicioBackup, BackupProgramadoService, etc.), no el boilerplate de conversión
+# de proyectos de Visual Studio de arriba. NO borrar pensando que sobra: sin esto,
+# git ignora en silencio los archivos nuevos de Backups/ en los 5 proyectos que lo usan.
+!**/Backups/
 UpgradeLog*.XML
 UpgradeLog*.htm
 ServiceFabricBackup/
