@@ -163,12 +163,13 @@ public partial class App : AvaloniaApp
             };
         });
 
-        // HttpClient "Descargas": mismo BaseAddress/AuthTokenHandler que el principal, pero SIN
-        // el timeout de 10s (spec §7 — "LAN local... el default de 100s colgaría la UI" aplica a
-        // requests normales, NO a la descarga de un dump de varios MB/GB). Timeout.InfiniteTimeSpan
-        // porque la operación ya tiene su propio corte natural (el usuario puede cancelar el
-        // selector de archivo, o cerrar la app); no hay un valor fijo razonable para un dump que
-        // crece con el tiempo.
+        // HttpClient "Descargas": mismo BaseAddress/AuthTokenHandler que el principal, pero con
+        // timeout de 30 MINUTOS (no 10s como el principal, y NO infinito — ver decisión de
+        // diseño 2 del Task). En una LAN (despliegue real de este sistema, mismo criterio que el
+        // timeout de 10s del HttpClient principal) hasta un dump de varios GB baja en minutos;
+        // 30 minutos es margen de sobra para VPN/disco lento del servidor, pero sigue siendo un
+        // límite finito: si el servidor cuelga a mitad de una descarga, la UI se libera sola aun
+        // si el usuario nunca toca "Cancelar" (Task 9).
         services.AddKeyedSingleton<HttpClient>("Descargas", (sp, _) =>
         {
             var baseUrl = configuration["Api:BaseUrl"];
@@ -185,7 +186,7 @@ public partial class App : AvaloniaApp
             return new HttpClient(handler)
             {
                 BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/"),
-                Timeout = Timeout.InfiniteTimeSpan,
+                Timeout = TimeSpan.FromMinutes(30),
             };
         });
 

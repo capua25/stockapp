@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Platform.Storage;
@@ -64,15 +65,15 @@ public class ServicioGuardadoArchivo : IServicioGuardadoArchivo
     }
 
     /// <inheritdoc />
-    public Task<bool> GuardarBytesAsync(Stream contenido, string nombreSugerido)
+    public Task<bool> GuardarBytesAsync(Stream contenido, string nombreSugerido, CancellationToken ct = default)
     {
         if (AvaloniaApp.Current is null)
             return Task.FromResult(false);
 
-        return Dispatcher.UIThread.InvokeAsync(() => GuardarBytesInternoAsync(contenido, nombreSugerido));
+        return Dispatcher.UIThread.InvokeAsync(() => GuardarBytesInternoAsync(contenido, nombreSugerido, ct));
     }
 
-    private static async Task<bool> GuardarBytesInternoAsync(Stream contenido, string nombreSugerido)
+    private static async Task<bool> GuardarBytesInternoAsync(Stream contenido, string nombreSugerido, CancellationToken ct)
     {
         var lifetime = AvaloniaApp.Current?.ApplicationLifetime
             as IClassicDesktopStyleApplicationLifetime;
@@ -90,7 +91,7 @@ public class ServicioGuardadoArchivo : IServicioGuardadoArchivo
             return false;
 
         await using var destino = await archivo.OpenWriteAsync();
-        await contenido.CopyToAsync(destino);
+        await contenido.CopyToAsync(destino, ct);
 
         return true;
     }

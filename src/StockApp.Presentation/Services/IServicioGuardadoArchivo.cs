@@ -1,4 +1,5 @@
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace StockApp.Presentation.Services;
@@ -25,6 +26,9 @@ public interface IServicioGuardadoArchivo
     /// </summary>
     /// <param name="contenido">Stream de origen (ej. el body de la respuesta HTTP de descarga).</param>
     /// <param name="nombreSugerido">Nombre de archivo sugerido en el selector.</param>
-    /// <returns><c>true</c> si el usuario eligió una ubicación y el archivo se guardó; <c>false</c> si canceló.</returns>
-    Task<bool> GuardarBytesAsync(Stream contenido, string nombreSugerido);
+    /// <param name="ct">Token de cancelación — propagado hasta el CopyToAsync final, para que
+    /// cancelar la descarga desde la UI (Task 9) corte la copia a disco, no solo la lectura HTTP.</param>
+    /// <returns><c>true</c> si el usuario eligió una ubicación y el archivo se guardó; <c>false</c> si canceló el selector.</returns>
+    /// <exception cref="OperationCanceledException">Si <paramref name="ct"/> se cancela durante la copia.</exception>
+    Task<bool> GuardarBytesAsync(Stream contenido, string nombreSugerido, CancellationToken ct = default);
 }
