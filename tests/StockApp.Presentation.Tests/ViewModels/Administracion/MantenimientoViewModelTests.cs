@@ -121,11 +121,14 @@ public class MantenimientoViewModelTests
         var (vm, backupsMock, guardadoMock, _) = Crear();
         var fila = new FilaCorridaBackupVm(new CorridaBackupDto(5, DateTime.UtcNow, "Exitosa", "backup_5.dump", 2048, null));
         var tcsIniciada = new TaskCompletionSource();
+        var tcsDescarga = new TaskCompletionSource<BackupDescargaDto>();
         backupsMock.Setup(b => b.DescargarAsync(5, It.IsAny<CancellationToken>()))
             .Returns(async () =>
             {
                 tcsIniciada.SetResult();
-                return new BackupDescargaDto("backup_5.dump", new MemoryStream());
+                // No completa sola: obliga al comando a seguir "en curso" hasta que el test
+                // libere tcsDescarga, igual que el patrón usado en CancelarCommand_* más abajo.
+                return await tcsDescarga.Task;
             });
         guardadoMock.Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
@@ -135,6 +138,7 @@ public class MantenimientoViewModelTests
 
         Assert.True(fila.Descargando);
 
+        tcsDescarga.SetResult(new BackupDescargaDto("backup_5.dump", new MemoryStream()));
         await tarea;
         Assert.False(fila.Descargando);
     }
