@@ -210,12 +210,61 @@ public class ServicioBackupTests
     {
         var directorio = CrearDirectorioTemporal();
         var repo = new CorridaBackupRepositoryFake();
+
+        // Mismo dataset que EjecutarCorridaAsync_TrasCorridaExitosa_AplicaRetencionYBorraLoQueSobra:
+        // 90 corridas exitosas viejas, muy por encima de los niveles de retención (6 recientes +
+        // 7 diarias + 4 semanales), así que hay candidatas REALES a borrado si la política llegara
+        // a ejecutarse. Con un repo vacío el test no distingue "no se llamó a la retención" de
+        // "se llamó y no había nada que borrar" — con este dataset sí lo distingue.
+        for (var i = 1; i <= 90; i++)
+        {
+            var finalizadaEn = Ahora.AddHours(-12 * i);
+            var nombre = $"vieja_{i}.dump";
+            File.WriteAllBytes(Path.Combine(directorio, nombre), new byte[] { 1 });
+            await repo.AgregarAsync(new CorridaBackup
+            {
+                IniciadaEn = finalizadaEn.AddMinutes(-1), FinalizadaEn = finalizadaEn,
+                Resultado = ResultadoBackup.Exitosa, NombreArchivo = nombre, TamanioBytes = 1,
+            });
+        }
+        var idsAntes = repo.Corridas.Select(c => c.Id).ToList();
+
         var svc = new ServicioBackup(
             new EjecutorPgDumpFake(exitoso: false, mensajeError: "falló"), repo, NullLogger<ServicioBackup>.Instance);
 
         // No debe lanzar ni intentar listar/borrar nada más allá de agregar la corrida fallida.
         await svc.EjecutarCorridaAsync("Host=x;Database=y", directorio, Ahora, CancellationToken.None);
 
-        Assert.Single(repo.Corridas);
+        // +1 por la corrida fallida de hoy; ninguna de las 90 viejas fue tocada por la retención.
+        Assert.Equal(91, repo.Corridas.Count);
+        Assert.All(idsAntes, id => Assert.Contains(repo.Corridas, c => c.Id == id));
+        foreach (var i in Enumerable.Range(1, 90))
+            Assert.True(File.Exists(Path.Combine(directorio, $"vieja_{i}.dump")));
+    }
+
+    [Fact]
+    public void LimpiarTmpHuerfanos_ArchivoSinPermisoDeBorrado_NoLanzaYLoDejaEnDisco()
+    {
+        var directorio = CrearDirectorioTemporal();
+        File.WriteAllBytes(Path.Combine(directorio, "bloqueado.tmp"), new byte[] { 1 });
+        var svc = new ServicioBackup(
+            new EjecutorPgDumpFake(exitoso: true), new CorridaBackupRepositoryFake(), NullLogger<ServicioBackup>.Instance);
+
+        // Quitamos el permiso de escritura del directorio (dejamos lectura+ejecución): en Linux
+        // esto hace que File.Delete falle con UnauthorizedAccessException (no IOException) —
+        // filesystem real, sin fakes, siguiendo el patrón de los demás tests de este archivo. Es
+        // el análogo de un .tmp/.dump bloqueado por permisos/antivirus en un servidor Windows.
+        File.SetUnixFileMode(directorio, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        try
+        {
+            var ex = Record.Exception(() => svc.LimpiarTmpHuerfanos(directorio));
+
+            Assert.Null(ex);
+            Assert.True(File.Exists(Path.Combine(directorio, "bloqueado.tmp")));
+        }
+        finally
+        {
+            File.SetUnixFileMode(directorio, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
     }
 }

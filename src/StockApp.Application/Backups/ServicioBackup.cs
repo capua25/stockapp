@@ -103,9 +103,15 @@ public sealed class ServicioBackup
             if (File.Exists(ruta))
                 File.Delete(ruta);
         }
-        catch (IOException ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // Mejor esfuerzo: un archivo bloqueado no debe tumbar la corrida ni el arranque.
+            // UnauthorizedAccessException se suma a IOException porque File.Delete la lanza
+            // cuando el archivo es de sólo lectura, faltan permisos, o el archivo está tomado
+            // por otro proceso (antivirus incluido) — escenario realista en un servidor Windows,
+            // no teórico. Acotado a estas dos excepciones a propósito: un catch (Exception)
+            // genérico taparía errores de programación (null refs, argumentos inválidos) que sí
+            // queremos que exploten.
             // LogWarning (no silencioso, pre-flight scan corregido): un .tmp/.dump que no se
             // pudo borrar es exactamente el caso que necesita diagnóstico — sin este log, un
             // huérfano que se acumula corrida tras corrida no deja ningún rastro. Va a stdout
