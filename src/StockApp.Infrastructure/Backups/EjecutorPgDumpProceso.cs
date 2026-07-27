@@ -30,7 +30,14 @@ public sealed class EjecutorPgDumpProceso : IEjecutorPgDump
     public EjecutorPgDumpProceso(IConfiguration configuration, ILogger<EjecutorPgDumpProceso> logger)
     {
         _pgDumpPathOverride = configuration["Backups:PgDumpPath"];
-        var timeoutSegundos = configuration.GetValue<int?>("Backups:TimeoutSegundos") ?? 300;
+        var timeoutSegundosRaw = configuration["Backups:TimeoutSegundos"];
+        var timeoutSegundos = 300;
+        if (!string.IsNullOrEmpty(timeoutSegundosRaw) && !int.TryParse(timeoutSegundosRaw, out timeoutSegundos))
+        {
+            throw new InvalidOperationException(
+                $"La configuración 'Backups:TimeoutSegundos' tiene un valor inválido: '{timeoutSegundosRaw}'. " +
+                "Debe ser un número entero de segundos.");
+        }
         _timeout = TimeSpan.FromSeconds(timeoutSegundos);
         _logger = logger;
     }
