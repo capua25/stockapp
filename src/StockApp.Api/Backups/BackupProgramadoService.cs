@@ -1,0 +1,88 @@
+using Microsoft.Extensions.Configuration;
+using StockApp.Application.Backups;
+using StockApp.Application.Interfaces;
+using StockApp.Infrastructure.Platform;
+
+namespace StockApp.Api.Backups;
+
+/// <summary>
+/// PRIMER BackgroundService del repo (spec Backups §3 decisión 2: scheduler dentro de la API,
+/// cero superficie de instalación nueva). Crea su PROPIO IServiceScope por corrida — ver
+/// decisión de diseño del Task: AppDbContext es Scoped, este servicio es Singleton.
+/// </summary>
+public sealed class BackupProgramadoService : BackgroundService
+{
+    private static readonly TimeSpan IntervaloEntreCorridas = TimeSpan.FromHours(12);
+
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IConfiguration _configuration;
+    private readonly IUserDataPathProvider _paths;
+    private readonly ILogger<BackupProgramadoService> _logger;
+
+    public BackupProgramadoService(
+        IServiceScopeFactory scopeFactory,
+        IConfiguration configuration,
+        IUserDataPathProvider paths,
+        ILogger<BackupProgramadoService> logger)
+    {
+        _scopeFactory = scopeFactory;
+        _configuration = configuration;
+        _paths = paths;
+        _logger = logger;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        var directorio = _paths.GetBackupsDirectory();
+        Directory.CreateDirectory(directorio);
+
+        await using (var scopeArranque = _scopeFactory.CreateAsyncScope())
+        {
+            // Barrido de .tmp huérfanos (spec §4.3): un dump interrumpido a mitad (ej. la API se
+            // reinició) deja un .tmp que nadie más va a limpiar.
+            scopeArranque.ServiceProvider.GetRequiredService<ServicioBackup>().LimpiarTmpHuerfanos(directorio);
+        }
+
+        // Catch-up al arrancar (spec §4.2): si la última corrida exitosa tiene más de 12h (o no
+        // hay ninguna), dispara enseguida en vez de esperar el primer tick del PeriodicTimer —
+        // cubre el caso "servidor apagado durante la ventana".
+        if (await DebeCorrerAhoraAsync())
+            await EjecutarCorridaSeguraAsync(directorio, stoppingToken);
+
+        using var timer = new PeriodicTimer(IntervaloEntreCorridas);
+        while (await timer.WaitForNextTickAsync(stoppingToken))
+        {
+            await EjecutarCorridaSeguraAsync(directorio, stoppingToken);
+        }
+    }
+
+    internal async Task<bool> DebeCorrerAhoraAsync()
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var corridas = scope.ServiceProvider.GetRequiredService<ICorridaBackupRepository>();
+        var ultima = await corridas.ObtenerUltimaExitosaAsync();
+        return ultima is null || DateTime.UtcNow - ultima.FinalizadaEn >= IntervaloEntreCorridas;
+    }
+
+    internal async Task EjecutarCorridaSeguraAsync(string directorio, CancellationToken stoppingToken)
+    {
+        try
+        {
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var servicio = scope.ServiceProvider.GetRequiredService<ServicioBackup>();
+            var connectionString = _configuration.GetConnectionString("Default")
+                ?? throw new InvalidOperationException("Falta ConnectionStrings:Default.");
+
+            await servicio.EjecutarCorridaAsync(connectionString, directorio, DateTime.UtcNow, stoppingToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Red de última resistencia: ServicioBackup ya captura los fallos esperables de
+            // pg_dump y los persiste como CorridaBackup Fallida (spec §4.3); esto solo cubre un
+            // error realmente inesperado (ej. la propia BD de la app caída al registrar la
+            // corrida). Nunca debe tumbar el BackgroundService — el PeriodicTimer sigue vivo y
+            // reintenta en la ventana siguiente.
+            _logger.LogError(ex, "Corrida de backup programado falló de forma inesperada.");
+        }
+    }
+}

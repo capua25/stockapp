@@ -8,12 +8,14 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using StockApp.Api.Auth;
+using StockApp.Api.Backups;
 using StockApp.Api.Endpoints;
 using StockApp.Api.ErrorHandling;
 using StockApp.Api.Licenciamiento;
 using StockApp.Application.Auditoria;
 using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
+using StockApp.Application.Backups;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
@@ -22,6 +24,7 @@ using StockApp.Application.Movimientos;
 using StockApp.Application.Reportes;
 using StockApp.Domain.Enums;
 using StockApp.Infrastructure.Auth;
+using StockApp.Infrastructure.Backups;
 using StockApp.Infrastructure.Finanzas;
 using StockApp.Infrastructure.Licenciamiento;
 using StockApp.Infrastructure.Persistence;
@@ -165,6 +168,15 @@ builder.Services.AddSingleton(sp =>
 builder.Services.AddScoped<ServicioLicencia>();
 builder.Services.AddSingleton<IAlmacenDesafiosReset, AlmacenDesafiosResetEnMemoria>();
 builder.Services.AddScoped<ServicioResetAdmin>();
+
+// Backups programados (Entrega 1): primer BackgroundService del repo. IUserDataPathProvider ya
+// está registrado Singleton más arriba (Licenciamiento). ICorridaBackupRepository/ServicioBackup
+// Scoped porque usan AppDbContext; BackupProgramadoService crea su propio scope por corrida
+// (ver Backups/BackupProgramadoService.cs) así que no importa que él mismo sea Singleton.
+builder.Services.AddScoped<ICorridaBackupRepository, CorridaBackupRepository>();
+builder.Services.AddScoped<IEjecutorPgDump, EjecutorPgDumpProceso>();
+builder.Services.AddScoped<ServicioBackup>();
+builder.Services.AddHostedService<BackupProgramadoService>();
 
 // JwtOptions: misma razón que AppDbContext arriba — el secreto (y ahora la expiración,
 // Fase 3a D10) se leen de forma diferida en el factory (resuelto post-Build), no en una
