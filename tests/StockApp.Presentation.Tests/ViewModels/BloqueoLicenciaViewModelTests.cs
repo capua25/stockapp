@@ -79,4 +79,18 @@ public class BloqueoLicenciaViewModelTests
         vm.LicenciaPegada = "algo";
         Assert.True(vm.ActivarCommand.CanExecute(null));
     }
+
+    [Fact]
+    public void IrALoginAccesoLimitado_DisparaIngresoLimitadoSolicitado()
+    {
+        // FIX 1 (IMPORTANT, re-review final E1): único camino a los backups con licencia
+        // vencida. El Shell lo cablea a MostrarLoginAccesoLimitado.
+        var vm = new BloqueoLicenciaViewModel(Mock.Of<ILicenciaService>());
+        var disparado = false;
+        vm.IngresoLimitadoSolicitado += () => disparado = true;
+
+        vm.IrALoginAccesoLimitadoCommand.Execute(null);
+
+        Assert.True(disparado);
+    }
 }

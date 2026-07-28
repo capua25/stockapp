@@ -18,6 +18,13 @@ public partial class LoginViewModel : ViewModelBase
     private readonly ShellViewModel _shell;
     private readonly IInfoApp       _infoApp;
 
+    /// <summary>
+    /// Modo acotado (FIX 1, re-review final E1): true cuando este login se abrió desde la
+    /// pantalla de bloqueo por licencia vencida (BloqueoLicenciaViewModel.IngresoLimitadoSolicitado).
+    /// Un login exitoso en este modo navega a Mantenimiento (solo backups), no al shell completo.
+    /// </summary>
+    public bool SoloAccesoLimitado { get; }
+
     // ── propiedades observables ──────────────────────────────────────────────
 
     [ObservableProperty]
@@ -37,11 +44,12 @@ public partial class LoginViewModel : ViewModelBase
 
     // ── constructor ──────────────────────────────────────────────────────────
 
-    public LoginViewModel(IAuthService authService, ShellViewModel shell, IInfoApp infoApp)
+    public LoginViewModel(IAuthService authService, ShellViewModel shell, IInfoApp infoApp, bool soloAccesoLimitado = false)
     {
-        _authService = authService;
-        _shell       = shell;
-        _infoApp     = infoApp;
+        _authService        = authService;
+        _shell              = shell;
+        _infoApp            = infoApp;
+        SoloAccesoLimitado  = soloAccesoLimitado;
     }
 
     /// <summary>
@@ -71,7 +79,10 @@ public partial class LoginViewModel : ViewModelBase
 
             if (resultado.Exitoso)
             {
-                _shell.MostrarContenidoPrincipal();
+                if (SoloAccesoLimitado)
+                    _shell.MostrarAccesoLimitado();
+                else
+                    _shell.MostrarContenidoPrincipal();
             }
             else
             {

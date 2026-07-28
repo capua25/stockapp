@@ -20,6 +20,15 @@ public partial class BloqueoLicenciaViewModel : ViewModelBase
     /// <summary>La activación fue exitosa; el Shell debe navegar al login.</summary>
     public event Action? LicenciaActivada;
 
+    /// <summary>
+    /// Fix (IMPORTANT, re-review final E1): antes de este fix, esta pantalla era un callejón
+    /// sin salida — sin licencia activa no había forma de autenticarse ni de llegar a los
+    /// backups, aunque /auth/login y /backups ya estuvieran exentos del bloqueo del lado
+    /// servidor. El admin pide entrar en modo acotado (solo Mantenimiento/backups); el Shell
+    /// lo cablea a <see cref="ShellViewModel.MostrarLoginAccesoLimitado"/>.
+    /// </summary>
+    public event Action? IngresoLimitadoSolicitado;
+
     [ObservableProperty]
     private string _codigoMaquina = "";
 
@@ -80,4 +89,12 @@ public partial class BloqueoLicenciaViewModel : ViewModelBase
             OperacionEnCurso = false;
         }
     }
+
+    /// <summary>
+    /// Único camino a los backups con licencia vencida (FIX 1, re-review final E1): dispara
+    /// <see cref="IngresoLimitadoSolicitado"/> para que el Shell muestre un login que, al
+    /// autenticar, navega a Mantenimiento en modo acotado — no al shell completo.
+    /// </summary>
+    [RelayCommand]
+    private void IrALoginAccesoLimitado() => IngresoLimitadoSolicitado?.Invoke();
 }

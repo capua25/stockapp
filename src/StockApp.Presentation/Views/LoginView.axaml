@@ -29,6 +29,14 @@
                            HorizontalAlignment="Center"
                            Opacity="0.7" />
 
+                <!-- Modo acceso limitado (FIX 1, re-review final E1): avisa que este login,
+                     al autenticar, va a Mantenimiento (solo backups) y no al sistema completo. -->
+                <TextBlock Text="Modo de acceso limitado: la licencia está vencida. Solo vas a poder descargar backups."
+                           HorizontalAlignment="Center"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource WarningBrush}"
+                           IsVisible="{Binding SoloAccesoLimitado}" />
+
                 <!-- Usuario -->
                 <StackPanel Spacing="4">
                     <TextBlock Text="Usuario" />

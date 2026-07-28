@@ -66,6 +66,12 @@
                         HorizontalAlignment="Stretch"
                         HorizontalContentAlignment="Center" />
 
+                <!-- Modo acceso limitado (FIX 1, re-review final E1): único camino a los backups
+                     mientras la licencia sigue vencida. No habilita operar el sistema. -->
+                <Button Content="¿Necesitás bajar un backup? Iniciar sesión"
+                        Command="{Binding IrALoginAccesoLimitadoCommand}"
+                        HorizontalAlignment="Center" />
+
             </StackPanel>
         </Border>
 

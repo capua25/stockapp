@@ -6,6 +6,7 @@ using StockApp.Application.Licenciamiento;
 using StockApp.Presentation.Actualizaciones;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
+using StockApp.Presentation.ViewModels.Administracion;
 
 namespace StockApp.Presentation.ViewModels;
 
@@ -22,6 +23,15 @@ public partial class ShellViewModel : ViewModelBase
     private readonly CoordinadorActualizacion _coordinadorActualizacion;
     private readonly IUiDispatcher           _uiDispatcher;
     private readonly IInfoApp                _infoApp;
+
+    /// <summary>
+    /// Factory de MantenimientoViewModel (FIX 1, re-review final E1): resuelve una instancia
+    /// fresca desde DI para el modo acceso limitado (ver <see cref="MostrarAccesoLimitado"/>).
+    /// Opcional con default null para no romper los tests existentes que construyen
+    /// ShellViewModel directamente y no ejercitan este camino — en producción App.axaml.cs
+    /// siempre lo provee (registrado junto a MantenimientoViewModel en ConfigurarServicios).
+    /// </summary>
+    private readonly Func<MantenimientoViewModel>? _mantenimientoFactory;
 
     [ObservableProperty]
     private ViewModelBase? _currentViewModel;
@@ -41,7 +51,8 @@ public partial class ShellViewModel : ViewModelBase
         INavigationService       navigation,
         CoordinadorActualizacion coordinadorActualizacion,
         IUiDispatcher            uiDispatcher,
-        IInfoApp                 infoApp)
+        IInfoApp                 infoApp,
+        Func<MantenimientoViewModel>? mantenimientoFactory = null)
     {
         _authService              = authService;
         _licenciaService          = licenciaService;
@@ -50,6 +61,7 @@ public partial class ShellViewModel : ViewModelBase
         _coordinadorActualizacion = coordinadorActualizacion;
         _uiDispatcher             = uiDispatcher;
         _infoApp                  = infoApp;
+        _mantenimientoFactory     = mantenimientoFactory;
     }
 
     /// <summary>
@@ -205,11 +217,51 @@ public partial class ShellViewModel : ViewModelBase
         if (CurrentViewModel is BloqueoLicenciaViewModel)
             return;
 
+        // Fix (IMPORTANT, re-review final E1): un 423 mientras el admin está en modo acceso
+        // limitado (Mantenimiento con licencia vencida, ver MostrarAccesoLimitado) es ESPERABLE
+        // — la licencia sigue inactiva a propósito — y no debe patearlo de ese único camino a
+        // los backups. Sin este guard, cualquier 423 durante la descarga (ApiSession.
+        // LicenciaDesactivada, cableado en App.axaml.cs) lo mandaría de vuelta a esta pantalla,
+        // y de ahí solo puede volver a entrar por el mismo camino: un loop de navegación que
+        // deshace exactamente lo que este fix habilita.
+        if (CurrentViewModel is AccesoLimitadoViewModel)
+            return;
+
         DesconectarShellMainSiActivo();
 
         var bloqueo = new BloqueoLicenciaViewModel(_licenciaService);
         bloqueo.LicenciaActivada += () => _uiDispatcher.Post(MostrarLogin);
+        bloqueo.IngresoLimitadoSolicitado += () => _uiDispatcher.Post(MostrarLoginAccesoLimitado);
         CurrentViewModel = bloqueo;
+    }
+
+    /// <summary>
+    /// Login en modo acotado (FIX 1, re-review final E1): se abre desde la pantalla de
+    /// bloqueo por licencia vencida (BloqueoLicenciaViewModel.IngresoLimitadoSolicitado). Un
+    /// login exitoso navega a <see cref="MostrarAccesoLimitado"/> (solo Mantenimiento), nunca
+    /// a <see cref="MostrarContenidoPrincipal"/> — ver LoginViewModel.SoloAccesoLimitado.
+    /// </summary>
+    public void MostrarLoginAccesoLimitado()
+    {
+        CurrentViewModel = new LoginViewModel(_authService, this, _infoApp, soloAccesoLimitado: true);
+    }
+
+    /// <summary>
+    /// Modo acotado (FIX 1, re-review final E1): hostea EXCLUSIVAMENTE MantenimientoViewModel
+    /// (backups), a diferencia de MostrarContenidoPrincipal que abre el shell completo con
+    /// sidebar y ~20 comandos de navegación. Es la barrera real que impide operar el sistema
+    /// (Productos/Finanzas/Reportes) mientras la licencia sigue vencida.
+    /// </summary>
+    public void MostrarAccesoLimitado()
+    {
+        if (CurrentViewModel is AccesoLimitadoViewModel)
+            return;
+
+        if (_mantenimientoFactory is null)
+            throw new InvalidOperationException(
+                "ShellViewModel no tiene configurado mantenimientoFactory: no se puede entrar en modo acceso limitado.");
+
+        CurrentViewModel = new AccesoLimitadoViewModel(_mantenimientoFactory());
     }
 
     /// <summary>
@@ -230,7 +282,15 @@ public partial class ShellViewModel : ViewModelBase
     {
         DesconectarShellMainSiActivo();
 
-        var login = new LoginViewModel(_authService, this, _infoApp);
+        // Fix (IMPORTANT, re-review final E1): si el 401 (sesión vencida) llega estando en
+        // modo acceso limitado (AccesoLimitadoViewModel — la única forma de tener sesión con
+        // licencia vencida), el re-login tiene que seguir siendo acotado. Sin este chequeo,
+        // un JWT que expira a mitad de una descarga reabriría un login SIN el flag, y un
+        // segundo login exitoso navegaría al shell completo pese a que la licencia sigue
+        // inactiva — exactamente el bypass que el modo acotado existe para evitar.
+        var soloAccesoLimitado = CurrentViewModel is AccesoLimitadoViewModel;
+
+        var login = new LoginViewModel(_authService, this, _infoApp, soloAccesoLimitado);
         login.MensajeError = aviso;
         CurrentViewModel = login;
     }

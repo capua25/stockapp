@@ -11,6 +11,7 @@ using StockApp.Presentation.Actualizaciones;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels;
+using StockApp.Presentation.ViewModels.Administracion;
 using StockApp.Presentation.ViewModels.Catalogo;
 using Xunit;
 
@@ -86,6 +87,47 @@ public class ShellViewModelTests
     }
 
     private static ShellViewModel Crear() => CrearConNavegacionExpuesta().Shell;
+
+    /// <summary>
+    /// Helper para el modo acceso limitado (FIX 1, re-review final E1): configura ShellViewModel
+    /// con un mantenimientoFactory funcional y licencia vencida. El NavigationService lanza si se
+    /// invoca — el modo acotado no debe tocar INavigationService en absoluto (es la barrera real
+    /// que impide llegar a Productos/Finanzas/Reportes, ver AccesoLimitadoViewModel).
+    /// </summary>
+    private static (ShellViewModel Shell, MantenimientoViewModel Mantenimiento) CrearConAccesoLimitado(
+        IAuthService authService)
+    {
+        var backupsMock = new Mock<IBackupsService>();
+        backupsMock.Setup(b => b.ListarAsync(It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(new List<CorridaBackupDto>());
+
+        var licenciaMock = new Mock<ILicenciaService>();
+        licenciaMock.Setup(s => s.ObtenerEstadoAsync())
+                    .ReturnsAsync(new EstadoLicenciaDto(false, "MAQ-1")); // vencida
+
+        var updateStub = new Mock<IUpdateService>();
+        updateStub.Setup(s => s.BuscarAsync(default)).ReturnsAsync(UpdateCheckResult.SinUpdate);
+        var coordinador = new CoordinadorActualizacion(updateStub.Object, new PoliticaUxActualizacion());
+
+        var navSvc = new NavigationService(
+            t => throw new InvalidOperationException(
+                $"El modo acceso limitado no debería navegar via INavigationService: {t.Name}"));
+
+        var mantenimiento = new MantenimientoViewModel(
+            backupsMock.Object, Mock.Of<IServicioGuardadoArchivo>(), Mock.Of<IConfirmacionService>());
+
+        var shell = new ShellViewModel(
+            authService,
+            licenciaMock.Object,
+            Mock.Of<IResetAdminService>(),
+            navSvc,
+            coordinador,
+            new FakeUiDispatcher(),
+            InfoAppStub,
+            () => mantenimiento);
+
+        return (shell, mantenimiento);
+    }
 
     // ── tests: navegación de arranque ────────────────────────────────────────
 
@@ -302,5 +344,98 @@ public class ShellViewModelTests
         navSvc.Navegar<InicioViewModel>();
 
         Assert.Same(contenidoAntes, shellMainActivo.CurrentContent);
+    }
+
+    // ── tests: FIX 1 (IMPORTANT, re-review final E1) — modo acceso limitado ─────
+
+    [Fact]
+    public async Task FlujoAccesoLimitado_BloqueoLoginYLoginExitoso_LlegaAMantenimiento()
+    {
+        // Camino completo del fix: antes, BloqueoLicenciaViewModel era un callejón sin salida
+        // (solo activar licencia, sin login) — con licencia vencida no había forma de llegar
+        // a los backups desde la app, aunque /auth/login y /backups ya estuvieran exentos del
+        // bloqueo del lado servidor.
+        var authMock = new Mock<IAuthService>();
+        authMock.Setup(a => a.LoginAsync("admin", "secreto")).ReturnsAsync(LoginResult.Ok());
+        var (shell, mantenimiento) = CrearConAccesoLimitado(authMock.Object);
+
+        shell.MostrarBloqueoLicencia();
+        var bloqueo = Assert.IsType<BloqueoLicenciaViewModel>(shell.CurrentViewModel);
+
+        bloqueo.IrALoginAccesoLimitadoCommand.Execute(null);
+        var login = Assert.IsType<LoginViewModel>(shell.CurrentViewModel);
+        Assert.True(login.SoloAccesoLimitado);
+
+        login.NombreUsuario = "admin";
+        login.Contrasena    = "secreto";
+        await login.EntrarCommand.ExecuteAsync(null);
+
+        var acceso = Assert.IsType<AccesoLimitadoViewModel>(shell.CurrentViewModel);
+        Assert.Same(mantenimiento, acceso.Mantenimiento);
+    }
+
+    [Fact]
+    public async Task MostrarBloqueoLicencia_EnModoAccesoLimitado_NoSacaAlUsuario()
+    {
+        // Un 423 durante la descarga en modo acotado es esperable (la licencia sigue inactiva
+        // a propósito) y no debe patear al admin del único camino que tiene a los backups —
+        // ver ApiSession.LicenciaDesactivada, cableado en App.axaml.cs a MostrarBloqueoLicencia.
+        var authMock = new Mock<IAuthService>();
+        authMock.Setup(a => a.LoginAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync(LoginResult.Ok());
+        var (shell, _) = CrearConAccesoLimitado(authMock.Object);
+
+        shell.MostrarBloqueoLicencia();
+        ((BloqueoLicenciaViewModel)shell.CurrentViewModel!).IrALoginAccesoLimitadoCommand.Execute(null);
+        var login = (LoginViewModel)shell.CurrentViewModel!;
+        login.NombreUsuario = "admin";
+        login.Contrasena    = "secreto";
+        await login.EntrarCommand.ExecuteAsync(null);
+        var accesoLimitado = Assert.IsType<AccesoLimitadoViewModel>(shell.CurrentViewModel);
+
+        // Simula el handler de 423.
+        shell.MostrarBloqueoLicencia();
+
+        Assert.Same(accesoLimitado, shell.CurrentViewModel);
+    }
+
+    [Fact]
+    public async Task MostrarLoginConAviso_EnModoAccesoLimitado_ElReloginSigueAcotado()
+    {
+        // Si el token expira (401) a mitad de la sesión acotada (ApiSession.SesionVencida →
+        // MostrarLoginConAviso, cableado en App.axaml.cs), el re-login tiene que seguir siendo
+        // acotado: sin esto, un segundo login exitoso navegaría al shell completo pese a que
+        // la licencia sigue vencida — el bypass que el modo acotado existe para evitar.
+        var authMock = new Mock<IAuthService>();
+        authMock.Setup(a => a.LoginAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync(LoginResult.Ok());
+        var (shell, _) = CrearConAccesoLimitado(authMock.Object);
+
+        shell.MostrarBloqueoLicencia();
+        ((BloqueoLicenciaViewModel)shell.CurrentViewModel!).IrALoginAccesoLimitadoCommand.Execute(null);
+        var login1 = (LoginViewModel)shell.CurrentViewModel!;
+        login1.NombreUsuario = "admin";
+        login1.Contrasena    = "secreto";
+        await login1.EntrarCommand.ExecuteAsync(null);
+        Assert.IsType<AccesoLimitadoViewModel>(shell.CurrentViewModel);
+
+        shell.MostrarLoginConAviso("Sesión vencida, ingresá de nuevo.");
+
+        var login2 = Assert.IsType<LoginViewModel>(shell.CurrentViewModel);
+        Assert.True(login2.SoloAccesoLimitado);
+
+        login2.NombreUsuario = "admin";
+        login2.Contrasena    = "secreto";
+        await login2.EntrarCommand.ExecuteAsync(null);
+
+        Assert.IsType<AccesoLimitadoViewModel>(shell.CurrentViewModel);
+    }
+
+    [Fact]
+    public void MostrarAccesoLimitado_SinFactoryConfigurada_Lanza()
+    {
+        // Guard defensivo: los tests que construyen ShellViewModel sin el 8vo parámetro
+        // (mantenimientoFactory = null) no deberían poder entrar en modo acotado en silencio.
+        var shell = Crear();
+
+        Assert.Throws<InvalidOperationException>(() => shell.MostrarAccesoLimitado());
     }
 }
