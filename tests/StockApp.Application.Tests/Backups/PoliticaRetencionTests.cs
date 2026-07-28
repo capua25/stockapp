@@ -228,4 +228,45 @@ public class PoliticaRetencionTests
 
         Assert.Empty(aBorrar);
     }
+
+    [Fact]
+    public void DeterminarABorrar_Semana4EnBloqueRodante28A34Dias_RetieneUnaPorSemanaYBorraElResto()
+    {
+        // Fix (review final E1): el loop original arrancaba en semana=0, cuyo rango [hoy-6, hoy]
+        // es EXACTAMENTE el mismo que la ventana diaria (offsetDias 0..6) ya cubre entero -- un
+        // slot redundante. Con SemanasRetencionSemanal=4 eso dejaba SOLO 3 semanas reales
+        // (1: 7-13d, 2: 14-20d, 3: 21-27d) y la semana "4" (28-34 días atrás) nunca se alcanzaba.
+        // Este test aísla exactamente esa semana 4: si el loop no llega a ella (bug original),
+        // semana4Keeper cae fuera de TODOS los buckets y se borra igual que fueraDeTodo.
+        var actual1 = Corrida(Ahora.AddDays(-1), "actual1");
+        var actual2 = Corrida(Ahora.AddDays(-2), "actual2");
+        var actual3 = Corrida(Ahora.AddDays(-3), "actual3");
+        var actual4 = Corrida(Ahora.AddDays(-4), "actual4");
+        var actual5 = Corrida(Ahora.AddDays(-5), "actual5");
+        var actual6 = Corrida(Ahora.AddDays(-6), "actual6");
+
+        // Semana 4 (28-34 días atrás): dos corridas -> el bucket debe retener SOLO la más
+        // reciente (semana4Keeper, día -29) y descartar la otra (semana4Extra, día -33).
+        var semana4Keeper = Corrida(Ahora.AddDays(-29), "semana4Keeper");
+        var semana4Extra = Corrida(Ahora.AddDays(-33), "semana4Extra");
+
+        // Fuera de las 4 semanas de retención (> 34 días) y fuera de las 6 recientes -> se borra.
+        var fueraDeTodo = Corrida(Ahora.AddDays(-40), "fueraDeTodo");
+
+        var corridas = new List<CorridaBackup>
+        {
+            actual1, actual2, actual3, actual4, actual5, actual6,
+            semana4Keeper, semana4Extra, fueraDeTodo,
+        };
+
+        var aBorrar = PoliticaRetencion.DeterminarABorrar(corridas, Ahora);
+        var nombresABorrar = aBorrar.Select(c => c.NombreArchivo).ToHashSet();
+
+        Assert.Equal(2, nombresABorrar.Count);
+        Assert.Contains("semana4Extra", nombresABorrar);
+        Assert.Contains("fueraDeTodo", nombresABorrar);
+        Assert.DoesNotContain("semana4Keeper", nombresABorrar);
+        Assert.DoesNotContain("actual1", nombresABorrar);
+        Assert.DoesNotContain("actual6", nombresABorrar);
+    }
 }

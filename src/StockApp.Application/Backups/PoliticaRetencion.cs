@@ -34,7 +34,14 @@ public static class PoliticaRetencion
                 retener.Add(delDia);
         }
 
-        for (var semana = 0; semana < SemanasRetencionSemanal; semana++)
+        // Fix (review final E1): arrancaba en semana=0, cuyo rango [hoy-6, hoy] es EXACTAMENTE
+        // el mismo que offsetDias 0..6 ya cubre entero (la ventana diaria de arriba) — un slot
+        // redundante que nunca podía retener nada que la ventana diaria no retuviera ya. Con
+        // SemanasRetencionSemanal=4 la retención semanal EFECTIVA eran 3 slots, no 4 como decían
+        // la constante y el spec. Arranca en 1: semana=1..4 son bloques rodantes de 7 días REALES
+        // y no solapados con la ventana diaria (7-13, 14-20, 21-27, 28-34 días atrás) — 4 slots
+        // genuinos, como promete el nombre de la constante.
+        for (var semana = 1; semana <= SemanasRetencionSemanal; semana++)
         {
             var hasta = ahoraUtc.Date.AddDays(-7 * semana);
             var desde = hasta.AddDays(-6);
