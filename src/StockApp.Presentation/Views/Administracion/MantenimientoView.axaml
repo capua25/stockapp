@@ -91,6 +91,16 @@
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"
                        IsVisible="{Binding MostrarListaVacia}" />
+
+            <!-- Fix (MINOR, re-review final E1): si ListarAsync() falla, no mostrar el mensaje
+                 de "no hay backups" — el diálogo de InformarAsync ya avisó, pero este texto
+                 reemplaza el estado vacío para que no mienta sobre la causa una vez cerrado. -->
+            <TextBlock Text="No se pudieron cargar los backups."
+                       Classes="caption"
+                       Foreground="{DynamicResource DangerBrush}"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       IsVisible="{Binding ErrorAlCargar}" />
         </Grid>
 
     </DockPanel>

@@ -35,9 +35,21 @@ public partial class MantenimientoViewModel : ViewModelBase
     /// Estado vacío explícito (review final E1): sin esto, una instalación nueva sin backups
     /// deja la pantalla en blanco bajo el subtítulo, indistinguible de "falló algo y no me
     /// enteré". Solo se muestra una vez terminada la carga, para no destellar antes de que
-    /// Corridas se pueble.
+    /// Corridas se pueble. Excluye explícitamente el caso de error (ver <see cref="ErrorAlCargar"/>):
+    /// si ListarAsync() falla, Corridas también queda en 0, pero eso NO es "no hay backups".
     /// </summary>
-    public bool MostrarListaVacia => !Cargando && Corridas.Count == 0;
+    public bool MostrarListaVacia => !Cargando && !ErrorAlCargar && Corridas.Count == 0;
+
+    /// <summary>
+    /// Fix (MINOR, re-review final E1): si ListarAsync() falla en la primera carga, Corridas
+    /// queda vacío y sin este flag se mostraba "Todavía no hay backups registrados." — el
+    /// mensaje de "todo bien" para un caso que es un error. InformarAsync ya avisa con un
+    /// diálogo, pero el texto de la pantalla quedaba mintiendo sobre la causa después de
+    /// cerrarlo. Misma clase de bug que el banner de Inicio (Inc 7), acá en miniatura.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MostrarListaVacia))]
+    private bool _errorAlCargar;
 
     public MantenimientoViewModel(IBackupsService backups, IServicioGuardadoArchivo guardado, IConfirmacionService confirmacion)
     {
@@ -49,6 +61,7 @@ public partial class MantenimientoViewModel : ViewModelBase
     public async Task CargarAsync()
     {
         Cargando = true;
+        ErrorAlCargar = false;
         try
         {
             var lista = await _backups.ListarAsync();
@@ -58,6 +71,7 @@ public partial class MantenimientoViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
+            ErrorAlCargar = true;
             await _confirmacion.InformarAsync(ex.Message);
         }
         finally

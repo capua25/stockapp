@@ -70,6 +70,42 @@ public class MantenimientoViewModelTests
     }
 
     [Fact]
+    public async Task CargarAsync_ElServicioFalla_NoMuestraElEstadoDeListaVacia()
+    {
+        // Fix (MINOR, re-review final E1): antes, Corridas quedaba en 0 tras el catch y
+        // MostrarListaVacia (basado solo en Cargando/Count) mostraba "Todavía no hay backups
+        // registrados." — el mensaje de "todo bien" para un caso que es un error de carga.
+        var backupsMock = new Mock<IBackupsService>();
+        backupsMock.Setup(b => b.ListarAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("servidor caído"));
+        var vm = new MantenimientoViewModel(
+            backupsMock.Object, new Mock<IServicioGuardadoArchivo>().Object, new Mock<IConfirmacionService>().Object);
+
+        await vm.CargarAsync();
+
+        Assert.True(vm.ErrorAlCargar);
+        Assert.False(vm.MostrarListaVacia);
+    }
+
+    [Fact]
+    public async Task CargarAsync_ExitosaTrasUnErrorPrevio_LimpiaElFlagDeError()
+    {
+        var backupsMock = new Mock<IBackupsService>();
+        backupsMock.SetupSequence(b => b.ListarAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("servidor caído"))
+            .ReturnsAsync(new List<CorridaBackupDto>());
+        var vm = new MantenimientoViewModel(
+            backupsMock.Object, new Mock<IServicioGuardadoArchivo>().Object, new Mock<IConfirmacionService>().Object);
+
+        await vm.CargarAsync();
+        Assert.True(vm.ErrorAlCargar);
+
+        await vm.CargarAsync();
+
+        Assert.False(vm.ErrorAlCargar);
+        Assert.True(vm.MostrarListaVacia); // ahora sí es el caso real de "no hay backups"
+    }
+
+    [Fact]
     public async Task DescargarCommand_CopiaElStreamAlServicioDeGuardadoConElNombreCorrecto()
     {
         var (vm, backupsMock, guardadoMock, _) = Crear();
