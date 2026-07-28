@@ -56,10 +56,11 @@ public sealed class BackupProgramadoService : BackgroundService
                 // reinició) deja un .tmp que nadie más va a limpiar.
                 servicio.LimpiarTmpHuerfanos(directorio);
 
-                // Barrido de .dump huérfanos (fix del review final E1): tras restaurar la base,
-                // CorridasBackup vuelve al estado del dump restaurado y los .dump posteriores
-                // quedan en disco sin fila -- nada más los reconcilia.
-                await servicio.LimpiarDumpHuerfanosAsync(directorio, DateTime.UtcNow);
+                // Reconciliación de .dump huérfanos (fix del re-review final E1): tras restaurar
+                // la base, CorridasBackup vuelve al estado del dump restaurado y los .dump
+                // posteriores quedan en disco sin fila -- se reconcilian dando de alta su corrida
+                // (nunca se borran), y PoliticaRetencion decide su destino en la corrida siguiente.
+                await servicio.ReconciliarDumpHuerfanosAsync(directorio, DateTime.UtcNow);
             }
 
             // Catch-up al arrancar (spec §4.2): si la última corrida exitosa tiene más de 12h (o no

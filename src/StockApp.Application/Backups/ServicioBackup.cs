@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
@@ -128,21 +129,55 @@ public sealed class ServicioBackup
             BorrarSiExiste(tmp);
     }
 
-    /// <summary>Barrido de archivos .dump huérfanos: dumps en disco sin fila correspondiente en
-    /// <see cref="ICorridaBackupRepository"/> (fix del review final E1). Disparador principal:
-    /// RESTAURAR la base -propósito de toda esta feature- vuelve CorridasBackup al estado del
-    /// dump restaurado, y todos los .dump generados DESPUÉS de ese punto quedan en disco sin
-    /// fila que los referencie -- nada más en la entrega reconcilia disco contra DB. Llamado al
-    /// arrancar BackupProgramadoService, junto a <see cref="LimpiarTmpHuerfanos"/>.
+    /// <summary>Marca en <see cref="CorridaBackup.MotivoFallo"/> de una fila reconstruida por
+    /// <see cref="ReconciliarDumpHuerfanosAsync"/>. Se apoya en ese campo -en vez de agregar una
+    /// columna nueva, lo que exigiría una migración a esta altura de la entrega- porque para una
+    /// corrida <see cref="ResultadoBackup.Exitosa"/> real siempre es null: cualquier valor no-nulo
+    /// ahí ya es, de por sí, una señal de "esto no salió de EjecutarCorridaAsync".</summary>
+    internal const string MarcaFilaReconciliada =
+        "[Reconciliado] Fila reconstruida a partir de un .dump huérfano en disco -- no proviene de una corrida real.";
+
+    private const string FormatoNombreArchivo = "yyyyMMdd_HHmmssfff";
+    private const string PrefijoNombreArchivo = "backup_";
+    private const string SufijoNombreArchivo = ".dump";
+
+    /// <summary>Reconciliación disco↔DB de archivos .dump huérfanos: dumps en disco sin fila
+    /// correspondiente en <see cref="ICorridaBackupRepository"/> (fix del re-review final E1).
+    /// Disparador principal: RESTAURAR la base -propósito de toda esta feature- vuelve
+    /// CorridasBackup al estado del dump restaurado, y todos los .dump generados DESPUÉS de ese
+    /// punto quedan en disco sin fila que los referencie -- en el peor caso, incluido el backup de
+    /// seguridad que el admin tomó recién ANTES de restaurar.
+    ///
+    /// Este método reemplaza a un barrido anterior (mismo nombre "Limpiar...") que directamente
+    /// BORRABA esos archivos: contra el escenario de arriba, eso convertía una fuga de disco
+    /// acotada en la destrucción de backups válidos en el momento exacto de recuperación ante
+    /// desastre. Ahora, en cambio, se DA DE ALTA la fila que le falta al .dump -reconstruida a
+    /// partir de su propio nombre y de la metadata del filesystem- y se deja que
+    /// <see cref="PoliticaRetencion"/> decida su destino en la corrida siguiente, igual que
+    /// cualquier otra corrida exitosa: sin fuga (la retención lo va a limpiar cuando corresponda)
+    /// y sin pérdida (mientras tanto vuelve a ser descargable desde Mantenimiento).
+    ///
+    /// Un archivo cuyo nombre NO matchea el formato "backup_yyyyMMdd_HHmmssfff.dump" (ej. algo
+    /// que un operador copió a mano en el directorio) nunca se borra NI se reconcilia -- no hay de
+    /// dónde reconstruir su <see cref="CorridaBackup.IniciadaEn"/>, y el criterio es no destruir
+    /// nunca un archivo que no se reconoce. Se loguea y se deja en disco para revisión manual.
+    ///
+    /// Fila reconstruida: Resultado = Exitosa (el archivo existe en disco), NombreArchivo = el
+    /// propio nombre, TamanioBytes = el tamaño real en disco, IniciadaEn = el timestamp parseado
+    /// del nombre (es el mismo ahoraUtc con el que EjecutarCorridaAsync lo generó originalmente),
+    /// FinalizadaEn = LastWriteTimeUtc del archivo (aproxima el fin de la corrida real: el rename
+    /// atómico ocurre a los pocos milisegundos/segundos de que pg_dump termina). MotivoFallo lleva
+    /// <see cref="MarcaFilaReconciliada"/> -ver su doc- para poder distinguir esta fila de una
+    /// corrida real sin agregar columnas a la tabla.
     ///
     /// Margen de gracia (<paramref name="margenDeGracia"/>, default 15 minutos): entre el rename
     /// atómico a .dump (spec §4.3) y el _corridas.AgregarAsync que le da su fila hay una ventana
     /// real, aunque chica, donde el archivo existe en disco sin fila todavía -- sin este margen,
-    /// un barrido que corriera justo en ese instante borraría un backup recién creado y válido.
-    /// 15 minutos es generoso frente a esa ventana (típicamente milisegundos: un insert en la
-    /// misma base que ya está arriba) sin dejar de reconciliar con prontitud, dado que este
-    /// barrido corre en cada arranque de la API.</summary>
-    public async Task LimpiarDumpHuerfanosAsync(
+    /// una reconciliación que corriera justo en ese instante daría de alta una fila DUPLICADA para
+    /// un backup recién creado y válido (la fila real llega milisegundos después). 15 minutos es
+    /// generoso frente a esa ventana sin dejar de reconciliar con prontitud, dado que este barrido
+    /// corre en cada arranque de la API.</summary>
+    public async Task ReconciliarDumpHuerfanosAsync(
         string directorioBackups, DateTime ahoraUtc, TimeSpan? margenDeGracia = null)
     {
         if (!Directory.Exists(directorioBackups))
@@ -164,8 +199,45 @@ public sealed class ServicioBackup
             if (ahoraUtc - ultimaEscritura < margen)
                 continue; // Podría ser el rename atómico de una corrida en vuelo -- todavía no.
 
-            BorrarSiExiste(ruta);
+            if (!TryParseIniciadaEn(nombre, out var iniciadaEn))
+            {
+                // Criterio del usuario: nunca borrar un archivo que no se reconoce. Se deja en
+                // disco, sin fila, y el log es el único rastro para que un humano lo revise.
+                _logger.LogWarning(
+                    "Dump huérfano '{Nombre}' no matchea el formato esperado ({Prefijo}{Formato}{Sufijo}) -- se deja en disco sin reconciliar.",
+                    nombre, PrefijoNombreArchivo, FormatoNombreArchivo, SufijoNombreArchivo);
+                continue;
+            }
+
+            _logger.LogWarning(
+                "Dump huérfano '{Nombre}' sin fila en CorridasBackup (probablemente por un restore) -- se reconcilia dando de alta su corrida.",
+                nombre);
+            await _corridas.AgregarAsync(new CorridaBackup
+            {
+                IniciadaEn = iniciadaEn,
+                FinalizadaEn = ultimaEscritura,
+                Resultado = ResultadoBackup.Exitosa,
+                NombreArchivo = nombre,
+                TamanioBytes = new FileInfo(ruta).Length,
+                MotivoFallo = MarcaFilaReconciliada,
+            });
         }
+    }
+
+    /// <summary>Intenta reconstruir el <see cref="CorridaBackup.IniciadaEn"/> original a partir del
+    /// nombre de archivo que <see cref="EjecutarCorridaAsync"/> genera ("backup_{ahoraUtc:yyyyMMdd_HHmmssfff}.dump").
+    /// false si el nombre no matchea ese formato exacto (prefijo/sufijo o marca de tiempo inválida).</summary>
+    private static bool TryParseIniciadaEn(string nombreArchivo, out DateTime iniciadaEn)
+    {
+        iniciadaEn = default;
+        if (!nombreArchivo.StartsWith(PrefijoNombreArchivo, StringComparison.OrdinalIgnoreCase)
+            || !nombreArchivo.EndsWith(SufijoNombreArchivo, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var marcaDeTiempo = nombreArchivo[PrefijoNombreArchivo.Length..^SufijoNombreArchivo.Length];
+        return DateTime.TryParseExact(
+            marcaDeTiempo, FormatoNombreArchivo, CultureInfo.InvariantCulture,
+            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out iniciadaEn);
     }
 
     /// <summary>Devuelve true si el archivo quedó borrado (o ya no existía), false si el borrado

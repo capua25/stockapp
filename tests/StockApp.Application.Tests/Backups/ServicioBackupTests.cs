@@ -371,43 +371,83 @@ public class ServicioBackupTests
         }
     }
 
-    // ── LimpiarDumpHuerfanosAsync (Fix 3 del review final E1) ─────────────────
+    // ── ReconciliarDumpHuerfanosAsync (Fix 1 del re-review final E1) ──────────
 
+    /// <summary>Escenario completo de restore que motiva este fix (report Fix 1): el admin toma un
+    /// backup de seguridad y restaura la base a un punto de hace 10 días. CorridasBackup vuelve a
+    /// ese estado -- el propio backup de seguridad recién tomado queda sin fila, exactamente como
+    /// cualquier otro .dump generado después del punto de restore. La API se reinicia y este
+    /// barrido corre. ANTES este método (entonces "LimpiarDumpHuerfanosAsync") BORRABA el archivo;
+    /// ahora lo reconcilia: da de alta su fila y lo deja en disco, descargable desde Mantenimiento,
+    /// para que PoliticaRetencion decida su destino en la corrida siguiente.</summary>
     [Fact]
-    public async Task LimpiarDumpHuerfanosAsync_SinFilaYFueraDelMargenDeGracia_LoBorra()
+    public async Task ReconciliarDumpHuerfanosAsync_EscenarioDeRestore_DaDeAltaLaCorridaSinBorrarElArchivo()
     {
         var directorio = CrearDirectorioTemporal();
-        var ruta = Path.Combine(directorio, "huerfano.dump");
+        var iniciadaEn = new DateTime(2026, 7, 17, 3, 0, 0, 0, DateTimeKind.Utc); // 10 días antes de Ahora
+        var nombreArchivo = $"backup_{iniciadaEn:yyyyMMdd_HHmmssfff}.dump";
+        var ruta = Path.Combine(directorio, nombreArchivo);
+        File.WriteAllBytes(ruta, new byte[] { 1, 2, 3, 4, 5 });
+        File.SetLastWriteTimeUtc(ruta, Ahora.AddDays(-10)); // bien fuera del margen de gracia
+        var ultimaEscrituraReal = File.GetLastWriteTimeUtc(ruta); // lo que el filesystem realmente guardó
+        var repo = new CorridaBackupRepositoryFake();
+        var svc = new ServicioBackup(new EjecutorPgDumpFake(exitoso: true), repo, NullLogger<ServicioBackup>.Instance);
+
+        await svc.ReconciliarDumpHuerfanosAsync(directorio, Ahora, TimeSpan.FromMinutes(15));
+
+        Assert.True(File.Exists(ruta)); // nunca se borra
+        var corrida = Assert.Single(repo.Corridas);
+        Assert.Equal(nombreArchivo, corrida.NombreArchivo);
+        Assert.Equal(ResultadoBackup.Exitosa, corrida.Resultado);
+        Assert.Equal(5, corrida.TamanioBytes);
+        Assert.Equal(iniciadaEn, corrida.IniciadaEn);
+        Assert.Equal(ultimaEscrituraReal, corrida.FinalizadaEn);
+        // Marca de fila reconstruida (sin agregar columnas nuevas a la tabla) -- MotivoFallo es
+        // siempre null en una corrida Exitosa real.
+        Assert.False(string.IsNullOrWhiteSpace(corrida.MotivoFallo));
+    }
+
+    /// <summary>Criterio del usuario: nunca borrar un archivo que no se reconoce. Un nombre que no
+    /// matchea "backup_yyyyMMdd_HHmmssfff.dump" (ej. alguien copió un .dump ahí a mano) no se
+    /// puede reconciliar -- no hay de dónde reconstruir IniciadaEn -- y tampoco se borra.</summary>
+    [Fact]
+    public async Task ReconciliarDumpHuerfanosAsync_NombreNoParseable_NoLoBorraNiLoReconcilia()
+    {
+        var directorio = CrearDirectorioTemporal();
+        var ruta = Path.Combine(directorio, "respaldo_manual_admin.dump");
         File.WriteAllBytes(ruta, new byte[] { 1 });
-        File.SetLastWriteTimeUtc(ruta, Ahora.AddMinutes(-20));
-        var svc = new ServicioBackup(
-            new EjecutorPgDumpFake(exitoso: true), new CorridaBackupRepositoryFake(), NullLogger<ServicioBackup>.Instance);
+        File.SetLastWriteTimeUtc(ruta, Ahora.AddDays(-10)); // bien fuera del margen de gracia
+        var repo = new CorridaBackupRepositoryFake();
+        var svc = new ServicioBackup(new EjecutorPgDumpFake(exitoso: true), repo, NullLogger<ServicioBackup>.Instance);
 
-        await svc.LimpiarDumpHuerfanosAsync(directorio, Ahora, TimeSpan.FromMinutes(15));
+        await svc.ReconciliarDumpHuerfanosAsync(directorio, Ahora, TimeSpan.FromMinutes(15));
 
-        Assert.False(File.Exists(ruta));
+        Assert.True(File.Exists(ruta));
+        Assert.Empty(repo.Corridas);
     }
 
     [Fact]
-    public async Task LimpiarDumpHuerfanosAsync_SinFilaPeroDentroDelMargenDeGracia_LoDejaEnDisco()
+    public async Task ReconciliarDumpHuerfanosAsync_SinFilaPeroDentroDelMargenDeGracia_NoLoTocaAunSinFila()
     {
         var directorio = CrearDirectorioTemporal();
         var ruta = Path.Combine(directorio, "reciente.dump");
         File.WriteAllBytes(ruta, new byte[] { 1 });
         File.SetLastWriteTimeUtc(ruta, Ahora.AddMinutes(-1));
-        var svc = new ServicioBackup(
-            new EjecutorPgDumpFake(exitoso: true), new CorridaBackupRepositoryFake(), NullLogger<ServicioBackup>.Instance);
+        var repo = new CorridaBackupRepositoryFake();
+        var svc = new ServicioBackup(new EjecutorPgDumpFake(exitoso: true), repo, NullLogger<ServicioBackup>.Instance);
 
         // El archivo no tiene fila en CorridasBackup todavía, pero es "reciente" (dentro del
         // margen de gracia) -- podría ser el rename atómico de una corrida en vuelo, a un paso
-        // de que _corridas.AgregarAsync le dé su fila. No debe borrarse.
-        await svc.LimpiarDumpHuerfanosAsync(directorio, Ahora, TimeSpan.FromMinutes(15));
+        // de que _corridas.AgregarAsync le dé su fila. No debe borrarse NI reconciliarse (una
+        // reconciliación acá crearía una fila DUPLICADA cuando la real llegue).
+        await svc.ReconciliarDumpHuerfanosAsync(directorio, Ahora, TimeSpan.FromMinutes(15));
 
         Assert.True(File.Exists(ruta));
+        Assert.Empty(repo.Corridas);
     }
 
     [Fact]
-    public async Task LimpiarDumpHuerfanosAsync_ConFilaCorrespondienteAunqueViejo_LoDejaEnDisco()
+    public async Task ReconciliarDumpHuerfanosAsync_ConFilaCorrespondienteAunqueViejo_LoDejaEnDiscoSinDuplicarLaFila()
     {
         var directorio = CrearDirectorioTemporal();
         var nombreArchivo = "backup_valido.dump";
@@ -422,13 +462,14 @@ public class ServicioBackupTests
         });
         var svc = new ServicioBackup(new EjecutorPgDumpFake(exitoso: true), repo, NullLogger<ServicioBackup>.Instance);
 
-        await svc.LimpiarDumpHuerfanosAsync(directorio, Ahora, TimeSpan.FromMinutes(15));
+        await svc.ReconciliarDumpHuerfanosAsync(directorio, Ahora, TimeSpan.FromMinutes(15));
 
         Assert.True(File.Exists(ruta));
+        Assert.Single(repo.Corridas); // no se agregó una segunda fila para el mismo archivo
     }
 
     [Fact]
-    public async Task LimpiarDumpHuerfanosAsync_IgnoraArchivosTmp()
+    public async Task ReconciliarDumpHuerfanosAsync_IgnoraArchivosTmp()
     {
         var directorio = CrearDirectorioTemporal();
         var ruta = Path.Combine(directorio, "en-progreso.tmp");
@@ -439,19 +480,19 @@ public class ServicioBackupTests
 
         // El glob de este barrido es *.dump -- un .tmp sin fila lo maneja LimpiarTmpHuerfanos,
         // no este método.
-        await svc.LimpiarDumpHuerfanosAsync(directorio, Ahora, TimeSpan.FromMinutes(15));
+        await svc.ReconciliarDumpHuerfanosAsync(directorio, Ahora, TimeSpan.FromMinutes(15));
 
         Assert.True(File.Exists(ruta));
     }
 
     [Fact]
-    public async Task LimpiarDumpHuerfanosAsync_DirectorioInexistente_NoLanzaYNoCreaElDirectorio()
+    public async Task ReconciliarDumpHuerfanosAsync_DirectorioInexistente_NoLanzaYNoCreaElDirectorio()
     {
         var svc = new ServicioBackup(
             new EjecutorPgDumpFake(exitoso: true), new CorridaBackupRepositoryFake(), NullLogger<ServicioBackup>.Instance);
         var directorioInexistente = Path.Combine(Path.GetTempPath(), "no-existe-" + Guid.NewGuid());
 
-        await svc.LimpiarDumpHuerfanosAsync(directorioInexistente, Ahora);
+        await svc.ReconciliarDumpHuerfanosAsync(directorioInexistente, Ahora);
 
         Assert.False(Directory.Exists(directorioInexistente));
     }
