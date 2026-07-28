@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Threading;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
@@ -112,6 +113,48 @@ public class MantenimientoViewTests
         var botonCancelar = window.GetVisualDescendants().OfType<Button>().First(b => b.Content as string == "Cancelar");
         Assert.True(botonDescargar.IsVisible);
         Assert.False(botonCancelar.IsVisible);
+    }
+
+    /// <summary>
+    /// Reproduce el bug real reportado en el review: sin ScrollViewer, MantenimientoView era un
+    /// DockPanel -> ItemsControl sin nada que scrollee; a los pocos días de retención (~13-16
+    /// corridas exitosas + fallidas) la lista supera el alto de la ventana y el botón "Descargar"
+    /// de las filas más viejas queda fuera del área clickeable. Se monta con 25 filas en la misma
+    /// ventana chica (700x500) que ya usan los demás tests de esta clase para que el contenido
+    /// exceda el viewport de verdad.
+    /// </summary>
+    [AvaloniaFact]
+    public void Montar_ConMuchasCorridas_ElScrollViewerHaceAlcanzableLaUltimaFila()
+    {
+        var corridas = Enumerable.Range(1, 25)
+            .Select(i => new CorridaBackupDto(i, DateTime.UtcNow.AddHours(-i), "Exitosa", $"backup_{i}.dump", 1024, null))
+            .ToList();
+
+        var (window, vm) = Montar(corridas);
+
+        Assert.Equal(25, vm.Corridas.Count);
+
+        var scrollViewer = window.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
+        Assert.NotNull(scrollViewer);
+
+        // 25 cards de ~60px superan largamente el alto de la ventana (500px): el contenido
+        // medido (Extent) tiene que ser mayor que lo visible (Viewport). Sin el ScrollViewer
+        // esta aserción ya falla arriba (NotNull) porque no hay ningún ScrollViewer en el árbol.
+        Assert.True(scrollViewer!.Extent.Height > scrollViewer.Viewport.Height);
+
+        // Escrolleamos hasta el final y confirmamos que el botón "Descargar" de la ÚLTIMA fila
+        // (la corrida más vieja, la que el bug real dejaba inalcanzable) cae dentro del área
+        // visible de la ventana una vez scrolleado — no solo que "existe" en el árbol visual
+        // (GetVisualDescendants encuentra controles fuera de vista igual).
+        scrollViewer.Offset = new Vector(0, scrollViewer.Extent.Height - scrollViewer.Viewport.Height);
+        Dispatcher.UIThread.RunJobs();
+
+        var ultimoBoton = window.GetVisualDescendants().OfType<Button>()
+            .Last(b => b.Content as string == "Descargar");
+        var posicion = ultimoBoton.TranslatePoint(new Point(0, 0), window);
+
+        Assert.NotNull(posicion);
+        Assert.InRange(posicion!.Value.Y, 0, window.Bounds.Height);
     }
 
     [AvaloniaFact]

@@ -9,6 +9,7 @@
              x:Class="StockApp.Presentation.Views.Administracion.MantenimientoView"
              x:DataType="vm:MantenimientoViewModel">
 
+    <ScrollViewer>
     <DockPanel Margin="16">
 
         <TextBlock DockPanel.Dock="Top"
@@ -76,5 +77,6 @@
         </ItemsControl>
 
     </DockPanel>
+    </ScrollViewer>
 
 </UserControl>
