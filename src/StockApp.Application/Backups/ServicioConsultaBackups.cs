@@ -87,8 +87,11 @@ public sealed class ServicioConsultaBackups
     /// escritor es ServicioBackup (siempre genera "backup_{timestamp}.dump"), pero este
     /// endpoint sirve el dump completo de la base — el activo más sensible del sistema —
     /// así que no confiamos únicamente en ese invariante. Compara rutas absolutas
-    /// normalizadas (en vez de sanear el nombre) porque también cubre symlinks relativos
-    /// y separadores mezclados.</summary>
+    /// normalizadas (en vez de sanear el nombre) porque también cubre separadores mezclados.
+    /// Fix (review final E1, comentario corregido): Path.GetFullPath es normalización léxica,
+    /// NO resuelve symlinks — la mención anterior de que esto cubría "symlinks relativos" era
+    /// falsa. El código en sí está bien (el único escritor real nunca produce un symlink), pero
+    /// el comentario prometía una garantía que no da.</summary>
     private static bool RutaDentroDelDirectorio(string directorioBackups, string ruta)
     {
         var directorioCompleto = Path.GetFullPath(directorioBackups);
