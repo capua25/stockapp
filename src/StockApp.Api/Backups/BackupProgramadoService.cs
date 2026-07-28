@@ -33,20 +33,33 @@ public sealed class BackupProgramadoService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // GetBackupsDirectory() es cómputo puro (Path.Combine sobre un directorio ya conocido),
-        // no toca disco ni red — se deja fuera del try porque el timer de abajo necesita
-        // `directorio` de todas formas para poder seguir reintentando corrida tras corrida.
-        var directorio = _paths.GetBackupsDirectory();
+        // Fix (review final E1): GetBackupsDirectory() quedaba fuera del try aunque no es
+        // realmente "cómputo puro" desde la perspectiva de este método -- es la única línea de
+        // la secuencia de arranque que no pasaba por la red de contención de abajo. Movido
+        // adentro para que un IUserDataPathProvider que explote (path inválido, etc.) también
+        // caiga en el catch y no tumbe el BackgroundService entero. Arranca en string.Empty
+        // (nunca se usa si GetBackupsDirectory no explota, la línea de abajo lo pisa enseguida)
+        // para que el timer de más abajo siga teniendo un valor con el que reintentar corrida
+        // tras corrida -- mismo invariante que antes, ahora también cubierto por el catch.
+        var directorio = string.Empty;
 
         try
         {
+            directorio = _paths.GetBackupsDirectory();
             Directory.CreateDirectory(directorio);
 
             await using (var scopeArranque = _scopeFactory.CreateAsyncScope())
             {
+                var servicio = scopeArranque.ServiceProvider.GetRequiredService<ServicioBackup>();
+
                 // Barrido de .tmp huérfanos (spec §4.3): un dump interrumpido a mitad (ej. la API se
                 // reinició) deja un .tmp que nadie más va a limpiar.
-                scopeArranque.ServiceProvider.GetRequiredService<ServicioBackup>().LimpiarTmpHuerfanos(directorio);
+                servicio.LimpiarTmpHuerfanos(directorio);
+
+                // Barrido de .dump huérfanos (fix del review final E1): tras restaurar la base,
+                // CorridasBackup vuelve al estado del dump restaurado y los .dump posteriores
+                // quedan en disco sin fila -- nada más los reconcilia.
+                await servicio.LimpiarDumpHuerfanosAsync(directorio, DateTime.UtcNow);
             }
 
             // Catch-up al arrancar (spec §4.2): si la última corrida exitosa tiene más de 12h (o no

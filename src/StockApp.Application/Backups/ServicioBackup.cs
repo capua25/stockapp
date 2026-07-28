@@ -105,9 +105,15 @@ public sealed class ServicioBackup
 
         foreach (var corrida in aBorrar)
         {
-            if (corrida.NombreArchivo is not null)
-                BorrarSiExiste(Path.Combine(directorioBackups, corrida.NombreArchivo));
-            await _corridas.EliminarAsync(corrida.Id);
+            // Fix (review final E1): antes se borraba la fila SIN importar si BorrarSiExiste
+            // pudo borrar el archivo -- un .dump que un antivirus tenía tomado en la ventana de
+            // retención quedaba huérfano en disco PARA SIEMPRE (LimpiarTmpHuerfanos sólo barre
+            // .tmp). Ahora sólo se elimina la fila si el archivo efectivamente se borró (o ya no
+            // existía); si el borrado falló, la fila sobrevive y la corrida siguiente reintenta.
+            var archivoBorrado = corrida.NombreArchivo is null
+                || BorrarSiExiste(Path.Combine(directorioBackups, corrida.NombreArchivo));
+            if (archivoBorrado)
+                await _corridas.EliminarAsync(corrida.Id);
         }
     }
 
@@ -122,12 +128,57 @@ public sealed class ServicioBackup
             BorrarSiExiste(tmp);
     }
 
-    private void BorrarSiExiste(string ruta)
+    /// <summary>Barrido de archivos .dump huérfanos: dumps en disco sin fila correspondiente en
+    /// <see cref="ICorridaBackupRepository"/> (fix del review final E1). Disparador principal:
+    /// RESTAURAR la base -propósito de toda esta feature- vuelve CorridasBackup al estado del
+    /// dump restaurado, y todos los .dump generados DESPUÉS de ese punto quedan en disco sin
+    /// fila que los referencie -- nada más en la entrega reconcilia disco contra DB. Llamado al
+    /// arrancar BackupProgramadoService, junto a <see cref="LimpiarTmpHuerfanos"/>.
+    ///
+    /// Margen de gracia (<paramref name="margenDeGracia"/>, default 15 minutos): entre el rename
+    /// atómico a .dump (spec §4.3) y el _corridas.AgregarAsync que le da su fila hay una ventana
+    /// real, aunque chica, donde el archivo existe en disco sin fila todavía -- sin este margen,
+    /// un barrido que corriera justo en ese instante borraría un backup recién creado y válido.
+    /// 15 minutos es generoso frente a esa ventana (típicamente milisegundos: un insert en la
+    /// misma base que ya está arriba) sin dejar de reconciliar con prontitud, dado que este
+    /// barrido corre en cada arranque de la API.</summary>
+    public async Task LimpiarDumpHuerfanosAsync(
+        string directorioBackups, DateTime ahoraUtc, TimeSpan? margenDeGracia = null)
+    {
+        if (!Directory.Exists(directorioBackups))
+            return;
+
+        var margen = margenDeGracia ?? TimeSpan.FromMinutes(15);
+        var nombresConocidos = (await _corridas.ListarTodasAsync())
+            .Where(c => c.NombreArchivo is not null)
+            .Select(c => c.NombreArchivo!)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var ruta in Directory.GetFiles(directorioBackups, "*.dump"))
+        {
+            var nombre = Path.GetFileName(ruta);
+            if (nombresConocidos.Contains(nombre))
+                continue;
+
+            var ultimaEscritura = File.GetLastWriteTimeUtc(ruta);
+            if (ahoraUtc - ultimaEscritura < margen)
+                continue; // Podría ser el rename atómico de una corrida en vuelo -- todavía no.
+
+            BorrarSiExiste(ruta);
+        }
+    }
+
+    /// <summary>Devuelve true si el archivo quedó borrado (o ya no existía), false si el borrado
+    /// falló -- <see cref="AplicarRetencionAsync"/> usa este valor para decidir si es seguro
+    /// eliminar también la fila de <see cref="ICorridaBackupRepository"/> (fix del review final
+    /// E1: antes se borraba la fila SIEMPRE, sin importar si el archivo se pudo borrar).</summary>
+    private bool BorrarSiExiste(string ruta)
     {
         try
         {
             if (File.Exists(ruta))
                 File.Delete(ruta);
+            return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -144,6 +195,7 @@ public sealed class ServicioBackup
             // en esta entrega (Serilog llega en la E2, que lo captura retroactivamente — no
             // hace falta tocar este código en la E2).
             _logger.LogWarning(ex, "No se pudo borrar el archivo '{Ruta}'.", ruta);
+            return false;
         }
     }
 }

@@ -247,7 +247,7 @@ public class ServicioBackupTests
         Assert.True(repo.Corridas.Count < cantidadAntes + 1);
         // Las filas borradas de la DB tampoco dejan archivo huérfano en disco.
         foreach (var nombreBorrado in Enumerable.Range(1, 90).Select(i => $"vieja_{i}.dump")
-                     .Except(repo.Corridas.Select(c => c.NombreArchivo)))
+                     .Except(repo.Corridas.Select(c => c.NombreArchivo).OfType<string>()))
         {
             Assert.False(File.Exists(Path.Combine(directorio, nombreBorrado)));
         }
@@ -314,5 +314,145 @@ public class ServicioBackupTests
         {
             File.SetUnixFileMode(directorio, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         }
+    }
+
+    /// <summary>Fix 2 del review final E1: antes, la fila de una corrida seleccionada por la
+    /// retención se borraba de la DB SIN importar si el archivo en disco se pudo borrar. Este
+    /// test pone el archivo bajo un directorio sin permiso de escritura (mismo truco que
+    /// LimpiarTmpHuerfanos_ArchivoSinPermisoDeBorrado, pero en un SUBdirectorio -no en
+    /// `directorio` mismo- para que la corrida de HOY pueda seguir escribiendo su propio dump
+    /// normalmente y la retención llegue a ejecutarse). Sin el fix, este test falla porque la
+    /// fila desaparece igual aunque el archivo siga en disco.</summary>
+    [Fact]
+    public async Task EjecutarCorridaAsync_RetencionConArchivoQueNoSePudoBorrar_NoEliminaLaFilaDeLaCorrida()
+    {
+        var directorio = CrearDirectorioTemporal();
+        var subdirBloqueado = Path.Combine(directorio, "bloqueado");
+        Directory.CreateDirectory(subdirBloqueado);
+        var nombreArchivoBloqueado = Path.Combine("bloqueado", "vieja_bloqueada.dump");
+        File.WriteAllBytes(Path.Combine(directorio, nombreArchivoBloqueado), new byte[] { 1 });
+
+        var repo = new CorridaBackupRepositoryFake();
+        var corridaBloqueada = new CorridaBackup
+        {
+            IniciadaEn = Ahora.AddDays(-40).AddMinutes(-1), FinalizadaEn = Ahora.AddDays(-40),
+            Resultado = ResultadoBackup.Exitosa, NombreArchivo = nombreArchivoBloqueado, TamanioBytes = 1,
+        };
+        await repo.AgregarAsync(corridaBloqueada);
+
+        // Candidatas viejas "normales" adicionales (0.5 a 10 días atrás): con la corridaBloqueada
+        // a 40 días, queda muy por fuera de los 6 recientes / 7 días / 4 semanas sin importar
+        // estas — es una candidata REAL a borrado, no una que la política salvaría de todas formas.
+        for (var i = 1; i <= 20; i++)
+        {
+            var finalizadaEn = Ahora.AddHours(-12 * i);
+            var nombre = $"vieja_{i}.dump";
+            File.WriteAllBytes(Path.Combine(directorio, nombre), new byte[] { 1 });
+            await repo.AgregarAsync(new CorridaBackup
+            {
+                IniciadaEn = finalizadaEn.AddMinutes(-1), FinalizadaEn = finalizadaEn,
+                Resultado = ResultadoBackup.Exitosa, NombreArchivo = nombre, TamanioBytes = 1,
+            });
+        }
+
+        File.SetUnixFileMode(subdirBloqueado, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+        try
+        {
+            var svc = new ServicioBackup(new EjecutorPgDumpFake(exitoso: true), repo, NullLogger<ServicioBackup>.Instance);
+
+            await svc.EjecutarCorridaAsync("Host=x;Database=y", directorio, Ahora, CancellationToken.None);
+
+            Assert.Contains(repo.Corridas, c => c.Id == corridaBloqueada.Id);
+            Assert.True(File.Exists(Path.Combine(directorio, nombreArchivoBloqueado)));
+        }
+        finally
+        {
+            File.SetUnixFileMode(subdirBloqueado, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+    }
+
+    // ── LimpiarDumpHuerfanosAsync (Fix 3 del review final E1) ─────────────────
+
+    [Fact]
+    public async Task LimpiarDumpHuerfanosAsync_SinFilaYFueraDelMargenDeGracia_LoBorra()
+    {
+        var directorio = CrearDirectorioTemporal();
+        var ruta = Path.Combine(directorio, "huerfano.dump");
+        File.WriteAllBytes(ruta, new byte[] { 1 });
+        File.SetLastWriteTimeUtc(ruta, Ahora.AddMinutes(-20));
+        var svc = new ServicioBackup(
+            new EjecutorPgDumpFake(exitoso: true), new CorridaBackupRepositoryFake(), NullLogger<ServicioBackup>.Instance);
+
+        await svc.LimpiarDumpHuerfanosAsync(directorio, Ahora, TimeSpan.FromMinutes(15));
+
+        Assert.False(File.Exists(ruta));
+    }
+
+    [Fact]
+    public async Task LimpiarDumpHuerfanosAsync_SinFilaPeroDentroDelMargenDeGracia_LoDejaEnDisco()
+    {
+        var directorio = CrearDirectorioTemporal();
+        var ruta = Path.Combine(directorio, "reciente.dump");
+        File.WriteAllBytes(ruta, new byte[] { 1 });
+        File.SetLastWriteTimeUtc(ruta, Ahora.AddMinutes(-1));
+        var svc = new ServicioBackup(
+            new EjecutorPgDumpFake(exitoso: true), new CorridaBackupRepositoryFake(), NullLogger<ServicioBackup>.Instance);
+
+        // El archivo no tiene fila en CorridasBackup todavía, pero es "reciente" (dentro del
+        // margen de gracia) -- podría ser el rename atómico de una corrida en vuelo, a un paso
+        // de que _corridas.AgregarAsync le dé su fila. No debe borrarse.
+        await svc.LimpiarDumpHuerfanosAsync(directorio, Ahora, TimeSpan.FromMinutes(15));
+
+        Assert.True(File.Exists(ruta));
+    }
+
+    [Fact]
+    public async Task LimpiarDumpHuerfanosAsync_ConFilaCorrespondienteAunqueViejo_LoDejaEnDisco()
+    {
+        var directorio = CrearDirectorioTemporal();
+        var nombreArchivo = "backup_valido.dump";
+        var ruta = Path.Combine(directorio, nombreArchivo);
+        File.WriteAllBytes(ruta, new byte[] { 1 });
+        File.SetLastWriteTimeUtc(ruta, Ahora.AddDays(-30));
+        var repo = new CorridaBackupRepositoryFake();
+        await repo.AgregarAsync(new CorridaBackup
+        {
+            IniciadaEn = Ahora.AddDays(-30), FinalizadaEn = Ahora.AddDays(-30),
+            Resultado = ResultadoBackup.Exitosa, NombreArchivo = nombreArchivo, TamanioBytes = 1,
+        });
+        var svc = new ServicioBackup(new EjecutorPgDumpFake(exitoso: true), repo, NullLogger<ServicioBackup>.Instance);
+
+        await svc.LimpiarDumpHuerfanosAsync(directorio, Ahora, TimeSpan.FromMinutes(15));
+
+        Assert.True(File.Exists(ruta));
+    }
+
+    [Fact]
+    public async Task LimpiarDumpHuerfanosAsync_IgnoraArchivosTmp()
+    {
+        var directorio = CrearDirectorioTemporal();
+        var ruta = Path.Combine(directorio, "en-progreso.tmp");
+        File.WriteAllBytes(ruta, new byte[] { 1 });
+        File.SetLastWriteTimeUtc(ruta, Ahora.AddDays(-30));
+        var svc = new ServicioBackup(
+            new EjecutorPgDumpFake(exitoso: true), new CorridaBackupRepositoryFake(), NullLogger<ServicioBackup>.Instance);
+
+        // El glob de este barrido es *.dump -- un .tmp sin fila lo maneja LimpiarTmpHuerfanos,
+        // no este método.
+        await svc.LimpiarDumpHuerfanosAsync(directorio, Ahora, TimeSpan.FromMinutes(15));
+
+        Assert.True(File.Exists(ruta));
+    }
+
+    [Fact]
+    public async Task LimpiarDumpHuerfanosAsync_DirectorioInexistente_NoLanzaYNoCreaElDirectorio()
+    {
+        var svc = new ServicioBackup(
+            new EjecutorPgDumpFake(exitoso: true), new CorridaBackupRepositoryFake(), NullLogger<ServicioBackup>.Instance);
+        var directorioInexistente = Path.Combine(Path.GetTempPath(), "no-existe-" + Guid.NewGuid());
+
+        await svc.LimpiarDumpHuerfanosAsync(directorioInexistente, Ahora);
+
+        Assert.False(Directory.Exists(directorioInexistente));
     }
 }
