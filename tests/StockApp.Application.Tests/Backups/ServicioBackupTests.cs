@@ -403,8 +403,10 @@ public class ServicioBackupTests
         Assert.Equal(iniciadaEn, corrida.IniciadaEn);
         Assert.Equal(ultimaEscrituraReal, corrida.FinalizadaEn);
         // Marca de fila reconstruida (sin agregar columnas nuevas a la tabla) -- MotivoFallo es
-        // siempre null en una corrida Exitosa real.
-        Assert.False(string.IsNullOrWhiteSpace(corrida.MotivoFallo));
+        // siempre null en una corrida Exitosa real. Fix (MINOR, tercer review final E1): antes
+        // solo chequeaba !IsNullOrWhiteSpace, que pasa igual si alguien cambia la constante por
+        // "x" -- ahora compara contra el valor real de la constante.
+        Assert.Equal(ServicioBackup.MarcaFilaReconciliada, corrida.MotivoFallo);
     }
 
     /// <summary>Criterio del usuario: nunca borrar un archivo que no se reconoce. Un nombre que no
