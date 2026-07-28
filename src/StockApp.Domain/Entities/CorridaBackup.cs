@@ -21,6 +21,17 @@ public class CorridaBackup
     /// <summary>Tamaño del archivo generado. Null si Resultado == Fallida.</summary>
     public long? TamanioBytes { get; set; }
 
-    /// <summary>stderr de pg_dump (o el motivo del fallo). Null si Resultado == Exitosa.</summary>
+    /// <summary>
+    /// stderr de pg_dump (o el motivo del fallo) cuando Resultado == Fallida.
+    /// Deuda conocida (tercer review final E1, FIX MINOR): este campo cumple HOY dos roles
+    /// distintos. Para una corrida Fallida real, es el motivo del fallo. Pero
+    /// ServicioBackup.ReconciliarDumpHuerfanosAsync también lo usa -sin agregar una columna
+    /// nueva, lo que exigiría una migración a esta altura de la entrega- para marcar una fila
+    /// Exitosa reconstruida a partir de un .dump huérfano en disco (ver
+    /// ServicioBackup.MarcaFilaReconciliada): en ese caso el campo no es null pese a que
+    /// Resultado == Exitosa. Por eso ya NO es cierto que "Null si Resultado == Exitosa" -- ver
+    /// FilaCorridaBackupVm.EsFallo / EsNotaInformativa en Presentation, que distinguen ambos
+    /// casos para no pintar la nota informativa como un error.
+    /// </summary>
     public string? MotivoFallo { get; set; }
 }
