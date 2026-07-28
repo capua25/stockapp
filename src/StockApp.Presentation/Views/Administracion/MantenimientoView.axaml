@@ -22,59 +22,76 @@
                    Opacity="0.6"
                    Margin="0,0,0,12" />
 
-        <ItemsControl ItemsSource="{Binding Corridas}">
-            <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="vm:FilaCorridaBackupVm">
-                    <Border Classes="card" Margin="0,0,0,8">
-                        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
-                            <i:Icon Grid.Column="0"
-                                    Value="mdi-check-circle"
-                                    Foreground="{DynamicResource SuccessBrush}"
-                                    IsVisible="{Binding Resultado, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Exitosa}"
-                                    Margin="0,0,8,0"
-                                    VerticalAlignment="Center" />
-                            <i:Icon Grid.Column="0"
-                                    Value="mdi-close-circle"
-                                    Foreground="{DynamicResource DangerBrush}"
-                                    IsVisible="{Binding Resultado, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Fallida}"
-                                    Margin="0,0,8,0"
-                                    VerticalAlignment="Center" />
-                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding FinalizadaEn, Converter={x:Static conv:FechaUtcALocalConverter.Instance}, StringFormat='dd/MM/yyyy HH:mm'}" />
-                                <TextBlock Text="{Binding MotivoFallo}"
-                                           Classes="caption"
-                                           Foreground="{DynamicResource DangerBrush}"
-                                           IsVisible="{Binding MotivoFallo, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                            </StackPanel>
-                            <TextBlock Grid.Column="2"
-                                       Text="{Binding TamanioBytes, StringFormat={}{0:N0} B}"
-                                       IsVisible="{Binding TamanioBytes, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                       Margin="8,0"
-                                       VerticalAlignment="Center" />
-                            <!-- Descargar: visible mientras esta fila NO esta descargando. IsEnabled
-                                 sigue atado a NombreArchivo (corridas Fallidas no tienen archivo). -->
-                            <Button Grid.Column="3"
-                                    Classes="secondary"
-                                    Content="Descargar"
-                                    Margin="8,0,0,0"
-                                    IsVisible="{Binding !Descargando}"
-                                    IsEnabled="{Binding NombreArchivo, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                    Command="{Binding $parent[UserControl].((vm:MantenimientoViewModel)DataContext).DescargarCommand}"
-                                    CommandParameter="{Binding}" />
-                            <!-- Cancelar: visible SOLO mientras esta fila puntual esta descargando
-                                 (Descargando es por-fila, Task 9 — no hay comparacion de ids acá). -->
-                            <Button Grid.Column="4"
-                                    Classes="secondary"
-                                    Content="Cancelar"
-                                    Margin="8,0,0,0"
-                                    IsVisible="{Binding Descargando}"
-                                    Command="{Binding $parent[UserControl].((vm:MantenimientoViewModel)DataContext).CancelarCommand}"
-                                    CommandParameter="{Binding}" />
-                        </Grid>
-                    </Border>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
+        <TextBlock DockPanel.Dock="Top"
+                   Text="Cargando backups..."
+                   Classes="caption"
+                   Margin="0,0,0,12"
+                   IsVisible="{Binding Cargando}" />
+
+        <Grid>
+            <ItemsControl ItemsSource="{Binding Corridas}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:FilaCorridaBackupVm">
+                        <Border Classes="card" Margin="0,0,0,8">
+                            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
+                                <i:Icon Grid.Column="0"
+                                        Value="mdi-check-circle"
+                                        Foreground="{DynamicResource SuccessBrush}"
+                                        IsVisible="{Binding Resultado, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Exitosa}"
+                                        Margin="0,0,8,0"
+                                        VerticalAlignment="Center" />
+                                <i:Icon Grid.Column="0"
+                                        Value="mdi-close-circle"
+                                        Foreground="{DynamicResource DangerBrush}"
+                                        IsVisible="{Binding Resultado, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Fallida}"
+                                        Margin="0,0,8,0"
+                                        VerticalAlignment="Center" />
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding FinalizadaEn, Converter={x:Static conv:FechaUtcALocalConverter.Instance}, StringFormat='dd/MM/yyyy HH:mm'}" />
+                                    <TextBlock Text="{Binding MotivoFallo}"
+                                               Classes="caption"
+                                               Foreground="{DynamicResource DangerBrush}"
+                                               TextWrapping="Wrap"
+                                               IsVisible="{Binding MotivoFallo, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="2"
+                                           Text="{Binding TamanioBytes, StringFormat={}{0:N0} B}"
+                                           IsVisible="{Binding TamanioBytes, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                           Margin="8,0"
+                                           VerticalAlignment="Center" />
+                                <!-- Descargar: visible mientras esta fila NO esta descargando. IsEnabled
+                                     sigue atado a NombreArchivo (corridas Fallidas no tienen archivo). -->
+                                <Button Grid.Column="3"
+                                        Classes="secondary"
+                                        Content="Descargar"
+                                        Margin="8,0,0,0"
+                                        IsVisible="{Binding !Descargando}"
+                                        IsEnabled="{Binding NombreArchivo, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                        Command="{Binding $parent[UserControl].((vm:MantenimientoViewModel)DataContext).DescargarCommand}"
+                                        CommandParameter="{Binding}" />
+                                <!-- Cancelar: visible SOLO mientras esta fila puntual esta descargando
+                                     (Descargando es por-fila, Task 9 — no hay comparacion de ids acá). -->
+                                <Button Grid.Column="4"
+                                        Classes="secondary"
+                                        Content="Cancelar"
+                                        Margin="8,0,0,0"
+                                        IsVisible="{Binding Descargando}"
+                                        Command="{Binding $parent[UserControl].((vm:MantenimientoViewModel)DataContext).CancelarCommand}"
+                                        CommandParameter="{Binding}" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Estado vacío (review final E1): sin esto una instalación nueva sin backups queda
+                 en blanco bajo el subtítulo, indistinguible de "falló algo y no me enteré". -->
+            <TextBlock Text="Todavía no hay backups registrados."
+                       Classes="caption"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       IsVisible="{Binding MostrarListaVacia}" />
+        </Grid>
 
     </DockPanel>
     </ScrollViewer>

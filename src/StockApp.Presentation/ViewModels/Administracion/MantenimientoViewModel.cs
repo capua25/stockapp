@@ -23,8 +23,21 @@ public partial class MantenimientoViewModel : ViewModelBase
 
     public ObservableCollection<FilaCorridaBackupVm> Corridas { get; } = new();
 
+    // MostrarListaVacia solo se recalcula cuando cambia Cargando, no Corridas.CollectionChanged
+    // directamente: CargarAsync() mutila Corridas (Clear/Add) de forma síncrona, ANTES de que el
+    // finally ponga Cargando en false, así que cuando el binding se re-evalúa el conteo ya está
+    // definitivo. Evita colgar un handler de CollectionChanged para un caso que ya está cubierto.
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MostrarListaVacia))]
     private bool _cargando;
+
+    /// <summary>
+    /// Estado vacío explícito (review final E1): sin esto, una instalación nueva sin backups
+    /// deja la pantalla en blanco bajo el subtítulo, indistinguible de "falló algo y no me
+    /// enteré". Solo se muestra una vez terminada la carga, para no destellar antes de que
+    /// Corridas se pueble.
+    /// </summary>
+    public bool MostrarListaVacia => !Cargando && Corridas.Count == 0;
 
     public MantenimientoViewModel(IBackupsService backups, IServicioGuardadoArchivo guardado, IConfirmacionService confirmacion)
     {

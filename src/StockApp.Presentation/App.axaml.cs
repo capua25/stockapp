@@ -4,7 +4,6 @@ using AvaloniaApp = Avalonia.Application;
 using Avalonia.Controls.ApplicationLifetimes;
 using System;
 using System.Net.Http;
-using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;

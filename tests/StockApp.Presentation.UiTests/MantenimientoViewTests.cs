@@ -157,6 +157,37 @@ public class MantenimientoViewTests
         Assert.InRange(posicion!.Value.Y, 0, window.Bounds.Height);
     }
 
+    /// <summary>
+    /// Estado vacío (review final E1): sin backups cargados, la pantalla mostraba nada bajo el
+    /// subtítulo, indistinguible de "falló algo y no me enteré" — es lo primero que ve el
+    /// municipio el día 1 de una instalación nueva.
+    /// </summary>
+    [AvaloniaFact]
+    public void Montar_SinCorridas_MuestraElMensajeDeListaVacia()
+    {
+        var (window, vm) = Montar(new List<CorridaBackupDto>());
+
+        Assert.Empty(vm.Corridas);
+        Assert.True(vm.MostrarListaVacia);
+        var texto = window.GetVisualDescendants().OfType<TextBlock>()
+            .FirstOrDefault(t => t.Text == "Todavía no hay backups registrados.");
+        Assert.NotNull(texto);
+        Assert.True(texto!.IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void Montar_ConCorridas_OcultaElMensajeDeListaVacia()
+    {
+        var corridas = new List<CorridaBackupDto> { new(1, DateTime.UtcNow, "Exitosa", "backup_1.dump", 1024, null) };
+
+        var (window, vm) = Montar(corridas);
+
+        Assert.False(vm.MostrarListaVacia);
+        var texto = window.GetVisualDescendants().OfType<TextBlock>()
+            .First(t => t.Text == "Todavía no hay backups registrados.");
+        Assert.False(texto.IsVisible);
+    }
+
     [AvaloniaFact]
     public void Montar_FilaConDescargaEnCurso_MuestraCancelarYOcultaDescargar()
     {
