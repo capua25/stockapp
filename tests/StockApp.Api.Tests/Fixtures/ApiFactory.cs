@@ -1,3 +1,4 @@
+using System.Linq;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -5,6 +6,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
+using StockApp.Api.Backups;
 using StockApp.Application.Licenciamiento;
 using StockApp.Infrastructure.Persistence;
 using StockApp.Infrastructure.Platform;
@@ -73,6 +76,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
                 _ => new AlmacenLicenciaEnMemoria(ClavesDePrueba.EmitirLicencia())));
             services.Replace(ServiceDescriptor.Singleton<IUserDataPathProvider>(
                 _ => new UserDataPathProviderFake()));
+
+            QuitarBackupProgramadoService(services);
         });
     }
 
@@ -90,6 +95,24 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
             .UseNpgsql(_container.GetConnectionString())
             .Options;
         return new AppDbContext(options);
+    }
+
+    /// <summary>
+    /// Fix (review final E1): sin esto, ApiTestBase arranca el host completo y
+    /// BackupProgramadoService (un BackgroundService de verdad) ejecuta pg_dump contra el
+    /// Postgres de Testcontainers al mismo tiempo que LimpiarTablas() del siguiente test —
+    /// condición de carrera que exponía a BackupsEndpointTests.GetBackups_ConTokenAdmin_
+    /// Devuelve200ConLaLista (Assert.Single de golpe con dos filas) y a GetSalud_SinCorridas_
+    /// DevuelveVencidoTrueYUltimoExitoNull (Assert.True(salud.Vencido) en falso si la corrida
+    /// llegó a tiempo). El servicio ya tiene su propia cobertura en
+    /// BackupProgramadoServiceTests; acá sólo interesa que NO corra solo.
+    /// </summary>
+    private static void QuitarBackupProgramadoService(IServiceCollection services)
+    {
+        var descriptor = services.FirstOrDefault(d =>
+            d.ServiceType == typeof(IHostedService) && d.ImplementationType == typeof(BackupProgramadoService));
+        if (descriptor is not null)
+            services.Remove(descriptor);
     }
 }
 
