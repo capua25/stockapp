@@ -234,8 +234,27 @@ public class InicioViewModelTests
         await vm.CargarAsync();
 
         Assert.True(vm.MostrarAvisoBackup);
+        Assert.True(vm.MostrarAvisoBackupProblema);
+        Assert.False(vm.MostrarAvisoBackupDesconocido);
         Assert.NotNull(vm.TextoAvisoBackup);
         Assert.Contains("26", vm.TextoAvisoBackup);
+    }
+
+    [Fact]
+    public async Task CargarAsync_AdminConBackupVencido_UsaHoraLocalSinEtiquetaUtc()
+    {
+        var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
+        var ultimoExitoUtc = new DateTime(2026, 7, 20, 3, 0, 0, DateTimeKind.Utc);
+        var (vm, _, _, _, _) = Crear(usuario, salud: new SaludBackupDto(ultimoExitoUtc, true, 26));
+
+        await vm.CargarAsync();
+
+        // Mismo criterio que el converter FechaUtcALocalConverter (MantenimientoView): la fecha
+        // persistida en UTC se muestra en hora LOCAL de la máquina, no cruda con etiqueta "UTC"
+        // — antes el mismo backup aparecía con distinta hora según la pantalla.
+        var esperadoLocal = DateTime.SpecifyKind(ultimoExitoUtc, DateTimeKind.Utc).ToLocalTime();
+        Assert.Contains(esperadoLocal.ToString("dd/MM/yyyy HH:mm"), vm.TextoAvisoBackup);
+        Assert.DoesNotContain("UTC", vm.TextoAvisoBackup);
     }
 
     [Fact]
@@ -247,6 +266,8 @@ public class InicioViewModelTests
         await vm.CargarAsync();
 
         Assert.False(vm.MostrarAvisoBackup);
+        Assert.False(vm.MostrarAvisoBackupProblema);
+        Assert.False(vm.MostrarAvisoBackupDesconocido);
     }
 
     [Fact]
@@ -271,10 +292,21 @@ public class InicioViewModelTests
 
         backupsMock.Verify(b => b.ObtenerSaludAsync(), Times.Never);
         Assert.False(vm.MostrarAvisoBackup);
+        Assert.False(vm.MostrarAvisoBackupDesconocido);
     }
 
+    /// <summary>
+    /// Antes este test se llamaba "...NoRompeYOcultaElAviso" y afirmaba
+    /// Assert.False(vm.MostrarAvisoBackup) — congelaba el bug real del review: un fallo
+    /// consultando /backups/salud (API caída, 403, 404 por versión vieja, cambio de forma del
+    /// JSON) se renderizaba IGUAL que "backup al día", maquillando en silencio la falta total
+    /// de información. Decisión del usuario: tercer estado explícito ("no se pudo verificar"),
+    /// ni ocultar el aviso ni afirmar que el backup falló. Lo que SIGUE valiendo (y este test
+    /// también lo cubre) es que un fallo acá nunca debe romper CargarAsync ni tocar el aviso de
+    /// vencimientos, que se resuelve en un try/catch totalmente independiente.
+    /// </summary>
     [Fact]
-    public async Task CargarAsync_ServicioDeBackupFalla_NoRompeYOcultaElAviso()
+    public async Task CargarAsync_ServicioDeBackupFalla_MuestraAvisoDeEstadoDesconocidoSinRomper()
     {
         var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
         var sessionMock = new Mock<ICurrentSession>();
@@ -283,8 +315,9 @@ public class InicioViewModelTests
         var navMock = new Mock<INavigationService>();
         var finanzasMock = new Mock<IFinanzasVistasService>();
         finanzasMock.Setup(f => f.ObtenerCalendarioPagosAsync(null)).ReturnsAsync(
-            new CalendarioPagosDto(new List<FacturaCalendarioDto>(), new List<FacturaCalendarioDto>(),
-                new List<FacturaCalendarioDto>(), new List<PagoRecienteDto>()));
+            new CalendarioPagosDto(
+                new List<FacturaCalendarioDto> { new(1, "Barraca X", "A-1", 500m, new DateOnly(2026, 7, 1), "Vencida") },
+                new List<FacturaCalendarioDto>(), new List<FacturaCalendarioDto>(), new List<PagoRecienteDto>()));
         var backupsMock = new Mock<IBackupsService>();
         backupsMock.Setup(b => b.ObtenerSaludAsync()).ThrowsAsync(new InvalidOperationException("servidor caído"));
 
@@ -292,7 +325,15 @@ public class InicioViewModelTests
 
         await vm.CargarAsync();
 
-        Assert.False(vm.MostrarAvisoBackup);
+        // Tercer estado: se avisa (no se oculta), pero como "desconocido", no como "problema".
+        Assert.True(vm.MostrarAvisoBackup);
+        Assert.True(vm.MostrarAvisoBackupDesconocido);
+        Assert.False(vm.MostrarAvisoBackupProblema);
+        Assert.Equal("No se pudo verificar el estado del backup.", vm.TextoAvisoBackup);
+
+        // Lo que seguía valiendo antes de este fix: el fallo de backup no afecta el aviso de
+        // vencimientos, que se resuelve en su propio try/catch, aguas arriba en CargarAsync.
+        Assert.True(vm.MostrarAvisoVencimientos);
     }
 
     [Fact]

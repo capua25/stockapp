@@ -53,11 +53,29 @@
                  vencimientos), por eso usa borde DangerBrush además del título en rojo — debe
                  leerse como más urgente que el aviso de vencimientos de arriba. -->
             <Border Classes="card"
+                    x:Name="BorderAvisoBackupProblema"
                     BorderBrush="{DynamicResource DangerBrush}"
                     BorderThickness="1"
-                    IsVisible="{Binding MostrarAvisoBackup}">
+                    IsVisible="{Binding MostrarAvisoBackupProblema}">
                 <StackPanel Spacing="8">
                     <TextBlock Text="Backup de la base de datos" Classes="seccion" Foreground="{DynamicResource DangerBrush}" />
+                    <TextBlock Text="{Binding TextoAvisoBackup}"
+                               TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+
+            <!-- Tercer estado (review final E1): no se pudo VERIFICAR la salud del backup (API
+                 caída, 403, 404 por una versión vieja del servidor, cambio de forma del JSON) —
+                 NO es lo mismo que "backup vencido" (arriba, rojo) ni que "backup al día"
+                 (sin aviso). Usa WarningBrush (ámbar) para no confundirse visualmente con una
+                 falla confirmada: nunca hay que ocultar en silencio un fallo de consulta. -->
+            <Border Classes="card"
+                    x:Name="BorderAvisoBackupDesconocido"
+                    BorderBrush="{DynamicResource WarningBrush}"
+                    BorderThickness="1"
+                    IsVisible="{Binding MostrarAvisoBackupDesconocido}">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Backup de la base de datos" Classes="seccion" Foreground="{DynamicResource WarningBrush}" />
                     <TextBlock Text="{Binding TextoAvisoBackup}"
                                TextWrapping="Wrap" />
                 </StackPanel>

@@ -60,8 +60,11 @@ public class InicioViewTests
 
     private sealed class BackupsServiceFake : IBackupsService
     {
-        private readonly SaludBackupDto _salud;
+        private readonly SaludBackupDto? _salud;
+        private readonly Exception? _excepcion;
+
         public BackupsServiceFake(SaludBackupDto salud) => _salud = salud;
+        public BackupsServiceFake(Exception excepcion) => _excepcion = excepcion;
 
         public Task<IReadOnlyList<CorridaBackupDto>> ListarAsync(CancellationToken ct = default)
             => throw new NotSupportedException("No usado en este banco de pruebas.");
@@ -69,7 +72,8 @@ public class InicioViewTests
         public Task<BackupDescargaDto> DescargarAsync(int id, CancellationToken ct = default)
             => throw new NotSupportedException("No usado en este banco de pruebas.");
 
-        public Task<SaludBackupDto> ObtenerSaludAsync(CancellationToken ct = default) => Task.FromResult(_salud);
+        public Task<SaludBackupDto> ObtenerSaludAsync(CancellationToken ct = default) =>
+            _excepcion is not null ? Task.FromException<SaludBackupDto>(_excepcion) : Task.FromResult(_salud!);
     }
 
     private const string Xaml = """
@@ -82,10 +86,13 @@ public class InicioViewTests
         """;
 
     private static (Window Window, InicioViewModel Vm) Montar(UsuarioSesion usuario, SaludBackupDto salud)
+        => Montar(usuario, new BackupsServiceFake(salud));
+
+    private static (Window Window, InicioViewModel Vm) Montar(UsuarioSesion usuario, IBackupsService backups)
     {
         var vm = new InicioViewModel(
             new CurrentSessionFake(usuario), new NavigationServiceFake(),
-            new FinanzasVistasServiceFake(), new BackupsServiceFake(salud));
+            new FinanzasVistasServiceFake(), backups);
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
         window.DataContext = vm;
@@ -96,12 +103,14 @@ public class InicioViewTests
         return (window, vm);
     }
 
-    private static Border BuscarBorderAvisoBackup(Window window)
-    {
-        var texto = window.GetVisualDescendants().OfType<TextBlock>()
-            .First(t => t.Text == "Backup de la base de datos");
-        return texto.GetVisualAncestors().OfType<Border>().First();
-    }
+    // Tercer estado (review final E1): ahora hay DOS Border con el mismo texto "Backup de la
+    // base de datos" (Problema y Desconocido, InicioView.axaml), uno oculto y otro visible según
+    // el caso — buscar por el TextBlock hijo ya no alcanza para desambiguar. x:Name también
+    // pobla StyledElement.Name, así que se busca por ahí directamente en el árbol visual (NO por
+    // Window.FindControl: InicioView es un UserControl separado con su propio NameScope, el
+    // Window de este test no lo alcanza).
+    private static Border BuscarBorderPorNombre(Window window, string nombre)
+        => window.GetVisualDescendants().OfType<Border>().First(b => b.Name == nombre);
 
     [AvaloniaFact]
     public void Montar_AdminConBackupVencido_MuestraElBanner()
@@ -112,8 +121,11 @@ public class InicioViewTests
         var (window, vm) = Montar(usuario, salud);
 
         Assert.True(vm.MostrarAvisoBackup);
-        var border = BuscarBorderAvisoBackup(window);
-        Assert.True(border.IsVisible);
+        Assert.True(vm.MostrarAvisoBackupProblema);
+        var borderProblema = BuscarBorderPorNombre(window, "BorderAvisoBackupProblema");
+        Assert.True(borderProblema.IsVisible);
+        var borderDesconocido = BuscarBorderPorNombre(window, "BorderAvisoBackupDesconocido");
+        Assert.False(borderDesconocido.IsVisible);
     }
 
     [AvaloniaFact]
@@ -125,7 +137,28 @@ public class InicioViewTests
         var (window, vm) = Montar(usuario, salud);
 
         Assert.False(vm.MostrarAvisoBackup);
-        var border = BuscarBorderAvisoBackup(window);
-        Assert.False(border.IsVisible);
+        var borderProblema = BuscarBorderPorNombre(window, "BorderAvisoBackupProblema");
+        Assert.False(borderProblema.IsVisible);
+        var borderDesconocido = BuscarBorderPorNombre(window, "BorderAvisoBackupDesconocido");
+        Assert.False(borderDesconocido.IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void Montar_ServicioDeBackupFalla_MuestraElBannerDeEstadoDesconocido()
+    {
+        // Tercer estado (review final E1): API caída / 403 / 404 de una versión vieja del
+        // servidor — el banner correcto acá es "no se pudo verificar", NUNCA ni "al día"
+        // (ocultarlo) ni "vencido" (el border rojo de Problema).
+        var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
+        var (window, vm) = Montar(usuario, new BackupsServiceFake(new InvalidOperationException("servidor caído")));
+
+        Assert.True(vm.MostrarAvisoBackup);
+        Assert.True(vm.MostrarAvisoBackupDesconocido);
+        Assert.False(vm.MostrarAvisoBackupProblema);
+
+        var borderDesconocido = BuscarBorderPorNombre(window, "BorderAvisoBackupDesconocido");
+        Assert.True(borderDesconocido.IsVisible);
+        var borderProblema = BuscarBorderPorNombre(window, "BorderAvisoBackupProblema");
+        Assert.False(borderProblema.IsVisible);
     }
 }

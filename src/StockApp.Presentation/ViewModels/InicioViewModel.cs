@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -6,6 +7,7 @@ using StockApp.Application.Backups;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Enums;
+using StockApp.Presentation.Converters;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.ViewModels.Catalogo;
 using StockApp.Presentation.ViewModels.Finanzas;
@@ -54,8 +56,29 @@ public partial class InicioViewModel : ViewModelBase
             ? "1 factura por vencer esta semana"
             : $"{CantidadAVencer7Dias} facturas por vencer esta semana";
 
-    [ObservableProperty] private bool _mostrarAvisoBackup;
+    // Tercer estado (review final E1): un fallo consultando /backups/salud (API caída, 403,
+    // 404 por una versión vieja del servidor sin la ruta, cambio de forma del JSON) NO es lo
+    // mismo que "backup al día" ni que "backup vencido" — antes el catch de más abajo ocultaba
+    // el aviso, maquillando un fallo de consulta como salud OK, la inversión exacta del
+    // principio de esta entrega. MostrarAvisoBackup sigue siendo "hay que avisar algo" (true
+    // para Problema Y Desconocido); AvisoBackupEsDesconocido discrimina cuál de los dos, para
+    // que la vista pueda mostrar textos y colores distintos sin afirmar ninguno de los otros
+    // dos estados.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MostrarAvisoBackupProblema))]
+    [NotifyPropertyChangedFor(nameof(MostrarAvisoBackupDesconocido))]
+    private bool _mostrarAvisoBackup;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MostrarAvisoBackupProblema))]
+    [NotifyPropertyChangedFor(nameof(MostrarAvisoBackupDesconocido))]
+    private bool _avisoBackupEsDesconocido;
+
     [ObservableProperty] private string? _textoAvisoBackup;
+
+    public bool MostrarAvisoBackupProblema => MostrarAvisoBackup && !AvisoBackupEsDesconocido;
+
+    public bool MostrarAvisoBackupDesconocido => MostrarAvisoBackup && AvisoBackupEsDesconocido;
 
     public InicioViewModel(
         ICurrentSession session, INavigationService navigation,
@@ -96,16 +119,32 @@ public partial class InicioViewModel : ViewModelBase
         {
             var salud = await _backups.ObtenerSaludAsync();
             MostrarAvisoBackup = salud.Vencido;
+            AvisoBackupEsDesconocido = false;
             // UmbralHoras viaja en el DTO (SaludBackupDto, Task 6) — NUNCA hardcodear el número
             // acá: si el umbral cambia en ServicioConsultaBackups, este texto tiene que reflejarlo
             // solo, sin quedar mintiendo en silencio (pre-flight scan, corregido).
-            TextoAvisoBackup = salud.UltimoExitoEn is DateTime ultimo
-                ? $"El último backup exitoso fue el {ultimo:dd/MM/yyyy HH:mm} UTC (hace más de {salud.UmbralHoras} horas)."
-                : "Todavía no se registró ningún backup exitoso.";
+            if (salud.UltimoExitoEn is DateTime ultimo)
+            {
+                // Hora LOCAL, no UTC cruda: mismo patrón que MantenimientoView.axaml
+                // (FechaUtcALocalConverter) — un backup mostraba distinta hora según la pantalla.
+                var local = (DateTime)FechaUtcALocalConverter.Instance.Convert(
+                    ultimo, typeof(DateTime), null, CultureInfo.InvariantCulture)!;
+                TextoAvisoBackup =
+                    $"El último backup exitoso fue el {local:dd/MM/yyyy HH:mm} (hace más de {salud.UmbralHoras} horas).";
+            }
+            else
+            {
+                TextoAvisoBackup = "Todavía no se registró ningún backup exitoso.";
+            }
         }
         catch (Exception)
         {
-            MostrarAvisoBackup = false;
+            // Tercer estado: NO se pudo verificar (ver comentario de AvisoBackupEsDesconocido
+            // más arriba) — se avisa igual que un problema real, pero sin afirmar que el backup
+            // está vencido ni que está al día.
+            MostrarAvisoBackup = true;
+            AvisoBackupEsDesconocido = true;
+            TextoAvisoBackup = "No se pudo verificar el estado del backup.";
         }
     }
 
