@@ -585,7 +585,8 @@ Expected: PASS (2/2).
         Assert.DoesNotContain("c5", nombresABorrar);
 
         // Una corrida de hace 40 días no cae en ningún conjunto retenido (fuera de 6 recientes,
-        // fuera de los últimos 7 días, fuera de las últimas 4 semanas = 28 días) -> se borra.
+        // fuera de los últimos 7 días, fuera de las últimas 4 semanas -bloques rodantes de
+        // 7-13/14-20/21-27/28-34 días, horizonte real de 35 días-) -> se borra.
         var indiceViejo = corridas.FindIndex(c => (Ahora - c.FinalizadaEn).TotalDays >= 40);
         Assert.Contains($"c{indiceViejo}", nombresABorrar);
 

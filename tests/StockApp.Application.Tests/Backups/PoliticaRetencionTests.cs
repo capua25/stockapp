@@ -62,7 +62,8 @@ public class PoliticaRetencionTests
         Assert.DoesNotContain("c5", nombresABorrar);
 
         // Una corrida de hace 40 días no cae en ningún conjunto retenido (fuera de 6 recientes,
-        // fuera de los últimos 7 días, fuera de las últimas 4 semanas = 28 días) -> se borra.
+        // fuera de los últimos 7 días, fuera de las últimas 4 semanas -bloques rodantes de
+        // 7-13/14-20/21-27/28-34 días, horizonte real de 35 días-) -> se borra.
         var indiceViejo = corridas.FindIndex(c => (Ahora - c.FinalizadaEn).TotalDays >= 40);
         Assert.Contains($"c{indiceViejo}", nombresABorrar);
 
@@ -136,7 +137,8 @@ public class PoliticaRetencionTests
         // Semana 3 (21-27 días atrás): una sola corrida, debe retenerse igual.
         var week3Keeper = Corrida(Ahora.AddDays(-22), "week3Keeper");
 
-        // Fuera de las 4 semanas de retención (> 27 días) y fuera de las 6 recientes -> se borra.
+        // Fuera de las 4 semanas de retención (horizonte real de 35 días: 0-6 diaria + bloques
+        // rodantes 7-13/14-20/21-27/28-34 semanales, > 34 días) y fuera de las 6 recientes -> se borra.
         var fueraDeTodo = Corrida(Ahora.AddDays(-40), "fueraDeTodo");
 
         var corridas = new List<CorridaBackup>

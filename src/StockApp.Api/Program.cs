@@ -422,8 +422,11 @@ app.UseExceptionHandler();
 // endpoints con .RequireRateLimiting("licenciamiento") — el resto pasa de largo sin costo.
 app.UseRateLimiter();
 
-// Bloqueo por licencia (Inc 7 Fase B): 423 Locked a todo salvo /licencia/* y /auth/reset-admin/*
-// cuando no hay licencia activa. Va antes de autenticación (bloquea incluso el login).
+// Bloqueo por licencia (Inc 7 Fase B): 423 Locked a todo salvo /licencia/*, /auth/reset-admin/*,
+// /auth/login y /backups (ver BloqueoLicenciaMiddleware para el detalle y el porqué de cada
+// excepción) cuando no hay licencia activa. Va antes de autenticación por RUTA, no por identidad
+// -- un token obtenido vía /auth/login con licencia vencida solo abre el camino hacia /backups,
+// el resto del sistema sigue bloqueado incondicionalmente.
 app.UseMiddleware<BloqueoLicenciaMiddleware>();
 
 app.UseAuthentication();
