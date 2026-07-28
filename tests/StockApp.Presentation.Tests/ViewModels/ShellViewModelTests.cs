@@ -438,4 +438,37 @@ public class ShellViewModelTests
 
         Assert.Throws<InvalidOperationException>(() => shell.MostrarAccesoLimitado());
     }
+
+    [Fact]
+    public async Task MostrarReset_EnModoAccesoLimitado_VolverSigueAcotado()
+    {
+        // Fix (MINOR, tercer review final E1): antes, reset.Volver llamaba a MostrarLogin()
+        // pelado sin importar de dónde venía el reset. Secuencia real: bloqueo por licencia →
+        // login acotado → "No puedo entrar" → reset admin → Volver → login SIN el flag → login
+        // exitoso → shell completo con la licencia vencida (que después devuelve 423 en todas
+        // las pantallas). Mismo criterio que MostrarLoginConAviso_EnModoAccesoLimitado_
+        // ElReloginSigueAcotado ya cubre para el 401.
+        var authMock = new Mock<IAuthService>();
+        authMock.Setup(a => a.LoginAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync(LoginResult.Ok());
+        var (shell, _) = CrearConAccesoLimitado(authMock.Object);
+
+        shell.MostrarBloqueoLicencia();
+        ((BloqueoLicenciaViewModel)shell.CurrentViewModel!).IrALoginAccesoLimitadoCommand.Execute(null);
+        var login = Assert.IsType<LoginViewModel>(shell.CurrentViewModel);
+        Assert.True(login.SoloAccesoLimitado);
+
+        login.ResetearAdminCommand.Execute(null);
+        var reset = Assert.IsType<ResetAdminViewModel>(shell.CurrentViewModel);
+
+        reset.VolverCommand.Execute(null);
+
+        var loginTrasVolver = Assert.IsType<LoginViewModel>(shell.CurrentViewModel);
+        Assert.True(loginTrasVolver.SoloAccesoLimitado);
+
+        loginTrasVolver.NombreUsuario = "admin";
+        loginTrasVolver.Contrasena = "secreto";
+        await loginTrasVolver.EntrarCommand.ExecuteAsync(null);
+
+        Assert.IsType<AccesoLimitadoViewModel>(shell.CurrentViewModel);
+    }
 }

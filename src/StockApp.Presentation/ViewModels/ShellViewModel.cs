@@ -267,10 +267,20 @@ public partial class ShellViewModel : ViewModelBase
     /// <summary>
     /// Flujo "No puedo entrar / resetear Admin" (Inc 7 Fase B), abierto desde el login.
     /// </summary>
-    public void MostrarReset()
+    /// <param name="soloAccesoLimitado">
+    /// Fix (MINOR, tercer review final E1): true cuando este reset se abrió desde un login en
+    /// modo acotado (LoginViewModel.SoloAccesoLimitado — ver ResetearAdmin). Antes, Volver
+    /// llamaba a MostrarLogin() pelado sin importar de dónde venía: bloqueo por licencia →
+    /// login acotado → "No puedo entrar" → reset admin → Volver → login SIN el flag → login
+    /// exitoso → MostrarContenidoPrincipal() → shell completo con la licencia vencida (que
+    /// después devuelve 423 en todas las pantallas). Mismo criterio que ya se aplicó al 401 en
+    /// MostrarLoginConAviso: el re-login tiene que seguir siendo acotado si de ahí venía.
+    /// </param>
+    public void MostrarReset(bool soloAccesoLimitado = false)
     {
         var reset = new ResetAdminViewModel(_resetAdminService);
-        reset.Volver += () => _uiDispatcher.Post(MostrarLogin);
+        reset.Volver += () => _uiDispatcher.Post(
+            () => { if (soloAccesoLimitado) MostrarLoginAccesoLimitado(); else MostrarLogin(); });
         CurrentViewModel = reset;
     }
 

@@ -101,7 +101,11 @@ public partial class LoginViewModel : ViewModelBase
         }
     }
 
-    /// <summary>Abre el flujo de recuperación de Admin ("No puedo entrar / resetear Admin").</summary>
+    /// <summary>
+    /// Abre el flujo de recuperación de Admin ("No puedo entrar / resetear Admin"). Propaga
+    /// SoloAccesoLimitado (fix MINOR, tercer review final E1) para que, si el reset se cancela
+    /// (Volver), el re-login siga siendo acotado en vez de perder el flag.
+    /// </summary>
     [RelayCommand]
-    private void ResetearAdmin() => _shell.MostrarReset();
+    private void ResetearAdmin() => _shell.MostrarReset(SoloAccesoLimitado);
 }
