@@ -25,6 +25,26 @@ public partial class FilaCorridaBackupVm : ObservableObject
     public long? TamanioBytes { get; }
     public string? MotivoFallo { get; }
 
+    /// <summary>
+    /// FIX (IMPORTANT, tercer review final E1): true solo cuando <see cref="MotivoFallo"/>
+    /// describe un fallo real (Resultado == Fallida). Antes, la vista mostraba CUALQUIER
+    /// MotivoFallo no nulo en rojo con DangerBrush -- incluida la marca de una fila
+    /// reconciliada (dump huérfano dado de alta tras un restore, ver
+    /// ServicioBackup.MarcaFilaReconciliada), que es Exitosa. El admin veía el ícono verde de
+    /// éxito y, debajo, un texto rojo diciendo que esa fila "no proviene de una corrida real"
+    /// -- justo sobre el backup que necesitaba para restaurar. Esta propiedad separa "es un
+    /// fallo" de "es una nota informativa sobre una corrida exitosa" (ver EsNotaInformativa).
+    /// </summary>
+    public bool EsFallo => Resultado == "Fallida" && MotivoFallo is not null;
+
+    /// <summary>
+    /// FIX (IMPORTANT, tercer review final E1): true cuando MotivoFallo trae contenido pero la
+    /// corrida es Exitosa (hoy, únicamente la marca de reconciliación). Se renderiza aparte, sin
+    /// DangerBrush, con el mismo tratamiento visual que el resto de los textos secundarios de la
+    /// vista.
+    /// </summary>
+    public bool EsNotaInformativa => Resultado == "Exitosa" && MotivoFallo is not null;
+
     [ObservableProperty]
     private bool _descargando;
 

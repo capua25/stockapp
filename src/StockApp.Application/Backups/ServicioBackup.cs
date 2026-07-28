@@ -133,9 +133,14 @@ public sealed class ServicioBackup
     /// <see cref="ReconciliarDumpHuerfanosAsync"/>. Se apoya en ese campo -en vez de agregar una
     /// columna nueva, lo que exigiría una migración a esta altura de la entrega- porque para una
     /// corrida <see cref="ResultadoBackup.Exitosa"/> real siempre es null: cualquier valor no-nulo
-    /// ahí ya es, de por sí, una señal de "esto no salió de EjecutarCorridaAsync".</summary>
+    /// ahí ya es, de por sí, una señal de "esto no salió de EjecutarCorridaAsync". Texto acortado
+    /// (tercer review final E1, FIX IMPORTANT): la versión anterior decía "no proviene de una
+    /// corrida real" -- cierto, pero un admin mirando esta lista justo después de restaurar la
+    /// base para bajar su backup de seguridad lo lee como "este archivo no sirve". Presentation
+    /// (FilaCorridaBackupVm.EsNotaInformativa) ya distingue esta nota de un fallo real, así que el
+    /// texto no necesita cargar esa advertencia.</summary>
     internal const string MarcaFilaReconciliada =
-        "[Reconciliado] Fila reconstruida a partir de un .dump huérfano en disco -- no proviene de una corrida real.";
+        "[Reconciliado] Registro reconstruido desde el archivo en disco (posterior a una restauración).";
 
     private const string FormatoNombreArchivo = "yyyyMMdd_HHmmssfff";
     private const string PrefijoNombreArchivo = "backup_";

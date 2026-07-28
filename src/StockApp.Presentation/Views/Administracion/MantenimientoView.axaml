@@ -48,11 +48,24 @@
                                         VerticalAlignment="Center" />
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding FinalizadaEn, Converter={x:Static conv:FechaUtcALocalConverter.Instance}, StringFormat='dd/MM/yyyy HH:mm'}" />
+                                    <!-- Fix (IMPORTANT, tercer review final E1): antes esto se
+                                         ataba solo a "MotivoFallo no es null", sin mirar
+                                         Resultado — una fila reconciliada (Exitosa, dump
+                                         huérfano dado de alta tras un restore) también trae
+                                         MotivoFallo y se pintaba en rojo como si fuera un error.
+                                         Ahora el rojo queda exclusivo del fallo real. -->
                                     <TextBlock Text="{Binding MotivoFallo}"
                                                Classes="caption"
                                                Foreground="{DynamicResource DangerBrush}"
                                                TextWrapping="Wrap"
-                                               IsVisible="{Binding MotivoFallo, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                               IsVisible="{Binding EsFallo}" />
+                                    <!-- Nota informativa (misma corrida, Exitosa): sin
+                                         DangerBrush, mismo tratamiento que el resto de los
+                                         textos "caption" secundarios de esta vista. -->
+                                    <TextBlock Text="{Binding MotivoFallo}"
+                                               Classes="caption"
+                                               TextWrapping="Wrap"
+                                               IsVisible="{Binding EsNotaInformativa}" />
                                 </StackPanel>
                                 <TextBlock Grid.Column="2"
                                            Text="{Binding TamanioBytes, StringFormat={}{0:N0} B}"
