@@ -144,4 +144,82 @@ public class SaneadorCredencialesTests
         Assert.DoesNotContain("tok;en-secreto", resultado);
         Assert.Contains("Bearer ***", resultado);
     }
+
+    // ── Bypasses encontrados en el review final (Entrega 2) ────────────────────────
+
+    [Fact]
+    public void Sanear_ConPasswordSinComillasConEspacios_NoDejaElRestoDeLaCredencialEnClaro()
+    {
+        const string texto = "Password=hola mundo;Host=x";
+
+        var resultado = SaneadorCredenciales.Sanear(texto);
+
+        Assert.DoesNotContain("mundo", resultado);
+        Assert.Contains("Host=x", resultado);
+    }
+
+    [Fact]
+    public void Sanear_ConPasswordEntreComillasSinCerrar_NoDejaLaCredencialEnClaro()
+    {
+        const string texto = "Password=\"abc sin cerrar";
+
+        var resultado = SaneadorCredenciales.Sanear(texto);
+
+        Assert.DoesNotContain("abc sin cerrar", resultado);
+    }
+
+    [Fact]
+    public void Sanear_ConAliasPwd_LoEnmascara()
+    {
+        const string texto = "Pwd=secreto123;Host=x";
+
+        var resultado = SaneadorCredenciales.Sanear(texto);
+
+        Assert.DoesNotContain("secreto123", resultado);
+        Assert.Contains("Host=x", resultado);
+    }
+
+    [Fact]
+    public void Sanear_ConAliasPsw_LoEnmascara()
+    {
+        const string texto = "Psw=otra;Host=x";
+
+        var resultado = SaneadorCredenciales.Sanear(texto);
+
+        Assert.DoesNotContain("otra", resultado);
+        Assert.Contains("Host=x", resultado);
+    }
+
+    [Fact]
+    public void Sanear_ConPassword_NoSeComeElRestoDeLaConnectionString()
+    {
+        const string texto = "Password=abc;Host=localhost;Database=stockapp";
+
+        var resultado = SaneadorCredenciales.Sanear(texto);
+
+        Assert.Contains("Host=localhost", resultado);
+        Assert.Contains("Database=stockapp", resultado);
+    }
+
+    [Fact]
+    public void Sanear_ConSecretSinComillasConEspacios_NoDejaElRestoEnClaro()
+    {
+        const string texto = "Secret=con espacios;otra=cosa";
+
+        var resultado = SaneadorCredenciales.Sanear(texto);
+
+        Assert.DoesNotContain("espacios", resultado);
+        Assert.Contains("otra=cosa", resultado);
+    }
+
+    [Fact]
+    public void Sanear_ConBearerYTextoDespuesEnLaMismaLinea_NoSeComeElTextoPosterior()
+    {
+        const string texto = "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.abc.def resto del mensaje";
+
+        var resultado = SaneadorCredenciales.Sanear(texto);
+
+        Assert.DoesNotContain("eyJhbGciOiJIUzI1NiJ9.abc.def", resultado);
+        Assert.Contains("resto del mensaje", resultado);
+    }
 }
