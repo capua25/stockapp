@@ -66,6 +66,13 @@ try
             PlantillaLog, CultureInfo.InvariantCulture)),
         path: Path.Combine(directorioLogs, "stockapp-.log"),
         rollingInterval: RollingInterval.Day,
+        // Sin esto, el default de Serilog es 1 GB con rollOnFileSizeLimit=false: al
+        // llegar ahi el archivo del dia deja de recibir eventos EN SILENCIO por el resto
+        // del dia -- justo cuando una tormenta de errores es cuando mas se necesitan los
+        // logs. 50 MB + rollOnFileSizeLimit=true hace que rote a un archivo nuevo (con
+        // sufijo de secuencia dentro del mismo dia) en vez de callarse.
+        fileSizeLimitBytes: 50 * 1024 * 1024,
+        rollOnFileSizeLimit: true,
         retainedFileTimeLimit: TimeSpan.FromDays(30),
         restrictedToMinimumLevel: LogEventLevel.Warning,
         shared: true);
