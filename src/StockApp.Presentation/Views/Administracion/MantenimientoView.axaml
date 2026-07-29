@@ -133,8 +133,22 @@
                         Classes="secondary"
                         Content="Descargar logs"
                         Margin="12,0,0,0"
+                        IsVisible="{Binding !DescargandoLogs}"
                         IsEnabled="{Binding HayLogs}"
                         Command="{Binding DescargarLogsCommand}" />
+
+                <!-- Señal de progreso (fix MINOR, review final E2): DescargandoLogs existía en
+                     el VM pero no estaba bindeada en ningún XAML — con el timeout de 30
+                     minutos del HttpClient "Descargas", si el ZIP pesa la UI quedaba muda.
+                     Mismo patrón de swap Descargar/Cancelar que usa la lista de corridas de
+                     backup más arriba en esta vista: un botón deshabilitado reemplaza al de
+                     acción mientras dura la descarga. -->
+                <Button Grid.Column="1"
+                        Classes="secondary"
+                        Content="Descargando…"
+                        Margin="12,0,0,0"
+                        IsVisible="{Binding DescargandoLogs}"
+                        IsEnabled="False" />
             </Grid>
         </Border>
 

@@ -238,4 +238,31 @@ public class MantenimientoViewTests
             .Select(t => t.Text ?? string.Empty).ToList();
         Assert.Contains(textos, t => t.Contains("No hay archivos de log todavía", StringComparison.Ordinal));
     }
+
+    /// <summary>
+    /// Hallazgo MINOR (review final E2): DescargandoLogs existía en el VM pero no estaba
+    /// bindeada en ningún XAML -- con el timeout de 30 minutos del HttpClient "Descargas", si
+    /// el ZIP pesa la UI quedaba muda. Mismo criterio que
+    /// Montar_FilaConDescargaEnCurso_MuestraCancelarYOcultaDescargar: setea DescargandoLogs
+    /// directo sobre el VM en vez de orquestar una descarga async real dentro del dispatcher
+    /// headless -- acá solo se verifica el WIRING de XAML.
+    /// </summary>
+    [AvaloniaFact]
+    public void Montar_DescargaDeLogsEnCurso_MuestraLaSenialDeProgresoYOcultaElBotonDeAccion()
+    {
+        var (window, vm) = Montar(
+            [], new ResumenLogsDto(2, new DateTime(2026, 7, 28), new DateTime(2026, 7, 29), 4096));
+
+        vm.DescargandoLogs = true;
+        Dispatcher.UIThread.RunJobs();
+
+        var botonDescargar = window.GetVisualDescendants().OfType<Button>()
+            .First(b => b.Content as string == "Descargar logs");
+        var botonDescargando = window.GetVisualDescendants().OfType<Button>()
+            .First(b => b.Content as string == "Descargando…");
+
+        Assert.False(botonDescargar.IsVisible);
+        Assert.True(botonDescargando.IsVisible);
+        Assert.False(botonDescargando.IsEnabled);
+    }
 }
