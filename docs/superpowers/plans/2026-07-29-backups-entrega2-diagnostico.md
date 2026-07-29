@@ -598,7 +598,7 @@ git commit -m "feat(diagnostico): configurar serilog con rolling diario y retenc
 
 **Files:**
 - Modify: `src/StockApp.Api/ErrorHandling/DomainExceptionHandler.cs`
-- Test: `tests/StockApp.Api.Tests/ErrorHandling/DomainExceptionHandlerTests.cs`
+- Modify: `tests/StockApp.Api.Tests/ErrorHandling/DomainExceptionHandlerTests.cs`
 
 **Interfaces:**
 - Consumes: nada de tasks anteriores (Serilog ya está enganchado por Task 4, pero este handler solo depende de `ILogger<T>`).
@@ -606,9 +606,13 @@ git commit -m "feat(diagnostico): configurar serilog con rolling diario y retenc
 
 **Por qué:** hoy el handler mapea la excepción a `ProblemDetails` y no loguea nada. Sin este cambio, montamos toda la infraestructura de logging y justo el caso `_ => 500` — el error no anticipado, el que más falta hace diagnosticar — no queda registrado en ningún lado.
 
+**Corrección post-brief (2026-07-29):** este plan asumía, sin verificarlo, que `DomainExceptionHandlerTests.cs` no existía. En realidad ya existe con 12 tests que cubren el switch completo de mapeo (404/409/400/403/500, extensions de `StockInsuficienteException`/`ValidacionImportacionException`, no-exposición de `detail` en 500), instanciando `new DomainExceptionHandler()` sin argumentos. Regla de fondo: nunca se borran tests que pasan para hacer entrar código nuevo. El Step 1 de abajo queda corregido: el archivo se MODIFICA, no se crea.
+
 - [ ] **Step 1: Escribir el test que falla**
 
-Creá `tests/StockApp.Api.Tests/ErrorHandling/DomainExceptionHandlerTests.cs`:
+El archivo `tests/StockApp.Api.Tests/ErrorHandling/DomainExceptionHandlerTests.cs` YA EXISTE con 12 tests de mapeo (ver corrección arriba). No se reemplaza: se AGREGAN los 2 tests nuevos de este brief al final de la clase, junto con el `LoggerEspia`. Los 12 tests preexistentes se actualizan para construir el handler vía un helper `CrearHandler() => new(NullLogger<DomainExceptionHandler>.Instance)` (requiere `using Microsoft.Extensions.Logging.Abstractions;`) en vez de `new DomainExceptionHandler()` — un logger no-op, porque esos tests verifican el mapeo a `ProblemDetails`, no el logueo. El cuerpo/las aserciones de esos 12 tests no cambian.
+
+Contenido a agregar (no reemplaza el archivo entero):
 
 ```csharp
 using Microsoft.AspNetCore.Http;
@@ -669,7 +673,7 @@ public class DomainExceptionHandlerTests
 - [ ] **Step 2: Correr el test y verificar que falla**
 
 Run: `dotnet test tests/StockApp.Api.Tests/StockApp.Api.Tests.csproj --filter "FullyQualifiedName~DomainExceptionHandlerTests"`
-Expected: FAIL — error de compilación, `DomainExceptionHandler` no tiene constructor con `ILogger`.
+Expected: FAIL — error de compilación, `DomainExceptionHandler` no tiene constructor con `ILogger` (los 12 tests preexistentes siguen intactos hasta este punto; el error de compilación viene de los 2 tests nuevos + del helper `CrearHandler`).
 
 - [ ] **Step 3: Agregar el logger al handler**
 
@@ -711,7 +715,7 @@ En `src/StockApp.Api/Program.cs`, buscá el registro del handler (`AddExceptionH
 - [ ] **Step 5: Correr los tests y verificar que pasan**
 
 Run: `dotnet test tests/StockApp.Api.Tests/StockApp.Api.Tests.csproj`
-Expected: PASS, incluyendo los 2 tests nuevos y toda la matriz de endpoints existente sin regresiones.
+Expected: PASS, 14/14 en `DomainExceptionHandlerTests` (12 preexistentes + 2 nuevos) y toda la matriz de endpoints existente sin regresiones.
 
 - [ ] **Step 6: Commit**
 
