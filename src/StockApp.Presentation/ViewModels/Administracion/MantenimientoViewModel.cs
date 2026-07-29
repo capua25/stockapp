@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Backups;
+using StockApp.Application.Logs;
 using StockApp.Presentation.Services;
 
 namespace StockApp.Presentation.ViewModels.Administracion;
@@ -20,8 +21,18 @@ public partial class MantenimientoViewModel : ViewModelBase
     private readonly IBackupsService _backups;
     private readonly IServicioGuardadoArchivo _guardado;
     private readonly IConfirmacionService _confirmacion;
+    private readonly ILogsService _logs;
 
     public ObservableCollection<FilaCorridaBackupVm> Corridas { get; } = new();
+
+    [ObservableProperty]
+    private string _textoResumenLogs = "Sin datos de logs todavía.";
+
+    [ObservableProperty]
+    private bool _hayLogs;
+
+    [ObservableProperty]
+    private bool _descargandoLogs;
 
     // MostrarListaVacia solo se recalcula cuando cambia Cargando, no Corridas.CollectionChanged
     // directamente: CargarAsync() mutila Corridas (Clear/Add) de forma síncrona, ANTES de que el
@@ -51,11 +62,16 @@ public partial class MantenimientoViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(MostrarListaVacia))]
     private bool _errorAlCargar;
 
-    public MantenimientoViewModel(IBackupsService backups, IServicioGuardadoArchivo guardado, IConfirmacionService confirmacion)
+    public MantenimientoViewModel(
+        IBackupsService backups,
+        IServicioGuardadoArchivo guardado,
+        IConfirmacionService confirmacion,
+        ILogsService logs)
     {
         _backups = backups;
         _guardado = guardado;
         _confirmacion = confirmacion;
+        _logs = logs;
     }
 
     public async Task CargarAsync()
@@ -78,6 +94,53 @@ public partial class MantenimientoViewModel : ViewModelBase
         {
             Cargando = false;
         }
+
+        await CargarResumenLogsAsync();
+    }
+
+    /// <summary>
+    /// El resumen de logs se carga aparte y se traga sus propios errores: que el
+    /// diagnostico no esté disponible no puede dejar la lista de backups en blanco.
+    /// </summary>
+    private async Task CargarResumenLogsAsync()
+    {
+        try
+        {
+            var resumen = await _logs.ObtenerResumenAsync();
+            HayLogs = resumen.CantidadArchivos > 0;
+            TextoResumenLogs = HayLogs
+                ? $"{resumen.CantidadArchivos} archivo(s), {FormatearTamanio(resumen.TamanioTotalBytes)}, "
+                  + $"del {resumen.DesdeFecha:dd/MM/yyyy} al {resumen.HastaFecha:dd/MM/yyyy}."
+                : "No hay archivos de log todavía.";
+        }
+        catch (Exception)
+        {
+            HayLogs = false;
+            TextoResumenLogs = "No se pudo consultar el estado de los logs.";
+        }
+    }
+
+    private static string FormatearTamanio(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} B",
+        < 1024 * 1024 => $"{bytes / 1024.0:0.#} KB",
+        _ => $"{bytes / (1024.0 * 1024.0):0.#} MB",
+    };
+
+    [RelayCommand]
+    private async Task DescargarLogsAsync()
+    {
+        if (DescargandoLogs) return;
+
+        DescargandoLogs = true;
+        try
+        {
+            await using var descarga = await _logs.DescargarZipAsync();
+            await _guardado.GuardarBytesAsync(descarga.Contenido, descarga.NombreArchivo);
+        }
+        catch (OperationCanceledException) { /* cancelación deliberada, no se informa */ }
+        catch (Exception ex) { await _confirmacion.InformarAsync(ex.Message); }
+        finally { DescargandoLogs = false; }
     }
 
     [RelayCommand]

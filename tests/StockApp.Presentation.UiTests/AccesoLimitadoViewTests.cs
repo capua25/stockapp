@@ -56,7 +56,7 @@ public class AccesoLimitadoViewTests
     private static (Window Window, AccesoLimitadoViewModel Vm) Montar(IReadOnlyList<CorridaBackupDto> corridas)
     {
         var mantenimiento = new MantenimientoViewModel(
-            new BackupsServiceFake(corridas), new ServicioGuardadoArchivoFake(), new ConfirmacionServiceFake());
+            new BackupsServiceFake(corridas), new ServicioGuardadoArchivoFake(), new ConfirmacionServiceFake(), new LogsServiceFake());
         var vm = new AccesoLimitadoViewModel(mantenimiento);
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);

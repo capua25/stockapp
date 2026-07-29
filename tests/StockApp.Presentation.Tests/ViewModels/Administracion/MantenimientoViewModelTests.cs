@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Moq;
 using StockApp.Application.Backups;
+using StockApp.Application.Logs;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Administracion;
 using Xunit;
@@ -15,16 +16,35 @@ public class MantenimientoViewModelTests
                     Mock<IBackupsService> backupsMock,
                     Mock<IServicioGuardadoArchivo> guardadoMock,
                     Mock<IConfirmacionService> confirmacionMock)
-        Crear(IReadOnlyList<CorridaBackupDto>? corridas = null)
+        Crear(IReadOnlyList<CorridaBackupDto>? corridas = null, Mock<ILogsService>? logs = null)
     {
         var backupsMock = new Mock<IBackupsService>();
-        backupsMock.Setup(b => b.ListarAsync(It.IsAny<CancellationToken>())).ReturnsAsync(corridas ?? new List<CorridaBackupDto>());
-
+        backupsMock.Setup(b => b.ListarAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(corridas ?? new List<CorridaBackupDto>());
         var guardadoMock = new Mock<IServicioGuardadoArchivo>();
         var confirmacionMock = new Mock<IConfirmacionService>();
 
-        var vm = new MantenimientoViewModel(backupsMock.Object, guardadoMock.Object, confirmacionMock.Object);
+        var logsMock = logs ?? new Mock<ILogsService>();
+        if (logs is null)
+            logsMock.Setup(l => l.ObtenerResumenAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new ResumenLogsDto(0, null, null, 0));
+
+        var vm = new MantenimientoViewModel(
+            backupsMock.Object, guardadoMock.Object, confirmacionMock.Object, logsMock.Object);
         return (vm, backupsMock, guardadoMock, confirmacionMock);
+    }
+
+    /// <summary>
+    /// Mock de ILogsService por defecto ("sin logs") para los tests preexistentes de la zona
+    /// Backups que construyen el VM a mano (sin pasar por <see cref="Crear"/>) y no ejercitan
+    /// nada de Diagnóstico — evita repetir el setup de ObtenerResumenAsync en cada uno.
+    /// </summary>
+    private static ILogsService LogsSinDatos()
+    {
+        var mock = new Mock<ILogsService>();
+        mock.Setup(l => l.ObtenerResumenAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResumenLogsDto(0, null, null, 0));
+        return mock.Object;
     }
 
     [Fact]
@@ -61,7 +81,8 @@ public class MantenimientoViewModelTests
         var backupsMock = new Mock<IBackupsService>();
         backupsMock.Setup(b => b.ListarAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("servidor caído"));
         var confirmacionMock = new Mock<IConfirmacionService>();
-        var vm = new MantenimientoViewModel(backupsMock.Object, new Mock<IServicioGuardadoArchivo>().Object, confirmacionMock.Object);
+        var vm = new MantenimientoViewModel(
+            backupsMock.Object, new Mock<IServicioGuardadoArchivo>().Object, confirmacionMock.Object, LogsSinDatos());
 
         await vm.CargarAsync();
 
@@ -78,7 +99,7 @@ public class MantenimientoViewModelTests
         var backupsMock = new Mock<IBackupsService>();
         backupsMock.Setup(b => b.ListarAsync(It.IsAny<CancellationToken>())).ThrowsAsync(new InvalidOperationException("servidor caído"));
         var vm = new MantenimientoViewModel(
-            backupsMock.Object, new Mock<IServicioGuardadoArchivo>().Object, new Mock<IConfirmacionService>().Object);
+            backupsMock.Object, new Mock<IServicioGuardadoArchivo>().Object, new Mock<IConfirmacionService>().Object, LogsSinDatos());
 
         await vm.CargarAsync();
 
@@ -94,7 +115,7 @@ public class MantenimientoViewModelTests
             .ThrowsAsync(new InvalidOperationException("servidor caído"))
             .ReturnsAsync(new List<CorridaBackupDto>());
         var vm = new MantenimientoViewModel(
-            backupsMock.Object, new Mock<IServicioGuardadoArchivo>().Object, new Mock<IConfirmacionService>().Object);
+            backupsMock.Object, new Mock<IServicioGuardadoArchivo>().Object, new Mock<IConfirmacionService>().Object, LogsSinDatos());
 
         await vm.CargarAsync();
         Assert.True(vm.ErrorAlCargar);
@@ -338,5 +359,87 @@ public class MantenimientoViewModelTests
 
         Assert.False(filaB.Descargando);
         confirmacionMock.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CargarAsync_ConLogs_ArmaElTextoDelResumen()
+    {
+        var logsMock = new Mock<ILogsService>();
+        logsMock.Setup(l => l.ObtenerResumenAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResumenLogsDto(
+                3, new DateTime(2026, 7, 1), new DateTime(2026, 7, 29), 2048));
+        var (vm, _, _, _) = Crear(logs: logsMock);
+
+        await vm.CargarAsync();
+
+        Assert.True(vm.HayLogs);
+        Assert.Contains("3", vm.TextoResumenLogs);
+    }
+
+    [Fact]
+    public async Task CargarAsync_SinLogs_NoHabilitaLaDescarga()
+    {
+        var logsMock = new Mock<ILogsService>();
+        logsMock.Setup(l => l.ObtenerResumenAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResumenLogsDto(0, null, null, 0));
+        var (vm, _, _, _) = Crear(logs: logsMock);
+
+        await vm.CargarAsync();
+
+        Assert.False(vm.HayLogs);
+    }
+
+    [Fact]
+    public async Task CargarAsync_ElServicioDeLogsFalla_NoRompeLaCargaDeBackups()
+    {
+        var logsMock = new Mock<ILogsService>();
+        logsMock.Setup(l => l.ObtenerResumenAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("la api de logs esta caida"));
+        var (vm, _, _, _) = Crear(
+            corridas: new List<CorridaBackupDto>
+            {
+                new(1, new DateTime(2026, 7, 29), "Exitosa", "backup_1.dump", 1024, null),
+            },
+            logs: logsMock);
+
+        await vm.CargarAsync();
+
+        Assert.Single(vm.Corridas);
+        Assert.False(vm.HayLogs);
+    }
+
+    [Fact]
+    public async Task DescargarLogsCommand_GuardaElZip()
+    {
+        var logsMock = new Mock<ILogsService>();
+        logsMock.Setup(l => l.ObtenerResumenAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResumenLogsDto(1, new DateTime(2026, 7, 29), new DateTime(2026, 7, 29), 10));
+        logsMock.Setup(l => l.DescargarZipAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(() => new LogsDescargaDto("logs_20260729.zip", new MemoryStream([1, 2, 3])));
+        var (vm, _, guardadoMock, _) = Crear(logs: logsMock);
+        await vm.CargarAsync();
+
+        await vm.DescargarLogsCommand.ExecuteAsync(null);
+
+        guardadoMock.Verify(g => g.GuardarBytesAsync(
+            It.IsAny<Stream>(), "logs_20260729.zip", It.IsAny<CancellationToken>()), Times.Once);
+        Assert.False(vm.DescargandoLogs);
+    }
+
+    [Fact]
+    public async Task DescargarLogsCommand_ElServicioFalla_InformaElErrorYNoRompe()
+    {
+        var logsMock = new Mock<ILogsService>();
+        logsMock.Setup(l => l.ObtenerResumenAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResumenLogsDto(1, new DateTime(2026, 7, 29), new DateTime(2026, 7, 29), 10));
+        logsMock.Setup(l => l.DescargarZipAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("se cayo la api"));
+        var (vm, _, _, confirmacionMock) = Crear(logs: logsMock);
+        await vm.CargarAsync();
+
+        await vm.DescargarLogsCommand.ExecuteAsync(null);
+
+        confirmacionMock.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Once);
+        Assert.False(vm.DescargandoLogs);
     }
 }

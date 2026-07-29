@@ -6,6 +6,7 @@ using StockApp.Application.Backups;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
 using StockApp.Application.Licenciamiento;
+using StockApp.Application.Logs;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Actualizaciones;
 using StockApp.Presentation.Navigation;
@@ -113,8 +114,12 @@ public class ShellViewModelTests
             t => throw new InvalidOperationException(
                 $"El modo acceso limitado no debería navegar via INavigationService: {t.Name}"));
 
+        var logsMock = new Mock<ILogsService>();
+        logsMock.Setup(l => l.ObtenerResumenAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new ResumenLogsDto(0, null, null, 0));
+
         var mantenimiento = new MantenimientoViewModel(
-            backupsMock.Object, Mock.Of<IServicioGuardadoArchivo>(), Mock.Of<IConfirmacionService>());
+            backupsMock.Object, Mock.Of<IServicioGuardadoArchivo>(), Mock.Of<IConfirmacionService>(), logsMock.Object);
 
         var shell = new ShellViewModel(
             authService,

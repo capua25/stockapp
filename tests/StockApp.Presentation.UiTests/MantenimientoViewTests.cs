@@ -52,7 +52,7 @@ public class MantenimientoViewTests
     private static (Window Window, MantenimientoViewModel Vm) Montar(IReadOnlyList<CorridaBackupDto> corridas)
     {
         var vm = new MantenimientoViewModel(
-            new BackupsServiceFake(corridas), new ServicioGuardadoArchivoFake(), new ConfirmacionServiceFake());
+            new BackupsServiceFake(corridas), new ServicioGuardadoArchivoFake(), new ConfirmacionServiceFake(), new LogsServiceFake());
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
         window.DataContext = vm;

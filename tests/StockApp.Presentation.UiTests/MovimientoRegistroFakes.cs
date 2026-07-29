@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using StockApp.Application.Catalogo;
+using StockApp.Application.Logs;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Entities;
 using StockApp.Presentation.Navigation;
@@ -74,4 +77,18 @@ internal sealed class ConfirmacionServiceFake : IConfirmacionService
     public Task<bool> PreguntarAsync(string mensaje) => Task.FromResult(true);
 
     public Task InformarAsync(string mensaje) => Task.CompletedTask;
+}
+
+/// <summary>
+/// Fake de ILogsService "sin datos" (Entrega 2, Task 9): usado por los montajes headless de
+/// MantenimientoView/AccesoLimitadoView que no ejercitan la zona Diagnóstico, solo necesitan que
+/// el ViewModel pueda construirse y que CargarResumenLogsAsync() no explote al ejecutarse.
+/// </summary>
+internal sealed class LogsServiceFake : ILogsService
+{
+    public Task<ResumenLogsDto> ObtenerResumenAsync(CancellationToken ct = default) =>
+        Task.FromResult(new ResumenLogsDto(0, null, null, 0));
+
+    public Task<LogsDescargaDto> DescargarZipAsync(CancellationToken ct = default) =>
+        Task.FromResult(new LogsDescargaDto("logs.zip", new MemoryStream()));
 }
