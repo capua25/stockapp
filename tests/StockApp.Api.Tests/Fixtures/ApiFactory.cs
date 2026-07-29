@@ -33,6 +33,12 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         .WithImage("postgres:16-alpine")
         .Build();
 
+    // Program.cs (via DirectorioLogsResolver) crea y llena este directorio al arrancar el
+    // host de cada test. Guardado como campo para poder borrarlo en DisposeAsync -- sin
+    // esto, cada corrida de `dotnet test` deja un directorio huérfano bajo el temp del SO.
+    private readonly string _directorioLogsTemporal =
+        Path.Combine(Path.GetTempPath(), "StockAppApiTestsLogs_" + Guid.NewGuid());
+
     public async Task InitializeAsync()
     {
         await _container.StartAsync();
@@ -44,6 +50,18 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     {
         await _container.DisposeAsync();
         await base.DisposeAsync();
+
+        // Defensivo: un fallo al limpiar (archivo en uso, permisos) nunca debe romper la
+        // corrida de tests -- es prolijidad del entorno, no parte de lo que se está probando.
+        try
+        {
+            if (Directory.Exists(_directorioLogsTemporal))
+                Directory.Delete(_directorioLogsTemporal, recursive: true);
+        }
+        catch (Exception)
+        {
+            // Ignorado a propósito: ver comentario arriba.
+        }
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -57,7 +75,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
                 ["Bootstrap:AdminUser"] = AdminUsuarioDePrueba,
                 ["Bootstrap:Password"] = AdminPasswordDePrueba,
                 ["Licencia:ClavePublicaBase64"] = ClavesDePrueba.ClavePublicaBase64,
-                ["Logs:Directorio"] = Path.Combine(Path.GetTempPath(), "StockAppApiTestsLogs_" + Guid.NewGuid()),
+                ["Logs:Directorio"] = _directorioLogsTemporal,
 
                 // Límite alto por defecto: la ApiFactory es compartida por toda la
                 // collection "Api" (ver ApiCollection abajo), así que el contador del
