@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using StockApp.Domain.Exceptions;
 
 namespace StockApp.Api.ErrorHandling;
@@ -11,6 +12,10 @@ namespace StockApp.Api.ErrorHandling;
 /// </summary>
 public class DomainExceptionHandler : IExceptionHandler
 {
+    private readonly ILogger<DomainExceptionHandler> _logger;
+
+    public DomainExceptionHandler(ILogger<DomainExceptionHandler> logger) => _logger = logger;
+
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
@@ -36,6 +41,15 @@ public class DomainExceptionHandler : IExceptionHandler
             BadHttpRequestException ex   => (ex.StatusCode, "Solicitud inválida."),
             _                            => (StatusCodes.Status500InternalServerError, "Error interno."),
         };
+
+        // Los 4xx son fallas de negocio esperables (Warning). El 500 es el caso que no
+        // anticipamos: va como Error porque es el que alguien va a tener que diagnosticar
+        // despues, sin acceso al servidor, leyendo el ZIP de logs.
+        if (status == StatusCodes.Status500InternalServerError)
+            _logger.LogError(exception, "Error no controlado en {Ruta}", httpContext.Request.Path);
+        else
+            _logger.LogWarning(exception, "Falla de negocio {Status} en {Ruta}",
+                status, httpContext.Request.Path);
 
         httpContext.Response.StatusCode = status;
         httpContext.Response.ContentType = "application/problem+json";

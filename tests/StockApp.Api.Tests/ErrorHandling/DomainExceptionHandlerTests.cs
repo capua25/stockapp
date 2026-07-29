@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using StockApp.Api.ErrorHandling;
 using StockApp.Domain.Exceptions;
 using System.Text.Json;
@@ -16,6 +18,23 @@ namespace StockApp.Api.Tests.ErrorHandling;
 /// </summary>
 public class DomainExceptionHandlerTests
 {
+    // Task 5 (Entrega 2, diagnóstico): estos tests preexistentes verifican el mapeo a
+    // ProblemDetails, no el logueo. Usan NullLogger para no enterarse de que ahora el
+    // handler loguea — el LoggerEspia de abajo es solo para los 2 tests que sí lo verifican.
+    private static DomainExceptionHandler CrearHandler() =>
+        new(NullLogger<DomainExceptionHandler>.Instance);
+
+    private sealed class LoggerEspia : ILogger<DomainExceptionHandler>
+    {
+        public List<LogLevel> Niveles { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state,
+            Exception? exception, Func<TState, Exception?, string> formatter) => Niveles.Add(logLevel);
+    }
+
     private static async Task<(int Status, string ContentType, JsonDocument Body)> EjecutarAsync(Exception excepcion)
     {
         var services = new ServiceCollection();
@@ -29,7 +48,7 @@ public class DomainExceptionHandlerTests
             Response = { Body = new MemoryStream() },
         };
 
-        var handler = new DomainExceptionHandler();
+        var handler = CrearHandler();
         var manejada = await handler.TryHandleAsync(context, excepcion, CancellationToken.None);
 
         Assert.True(manejada);
@@ -166,5 +185,42 @@ public class DomainExceptionHandlerTests
             "El rubro 340 no existe ni fue declarado nuevo",
             errorsElement.GetProperty("Gastos[12].CodigoRubro")[0].GetString());
         Assert.Equal("Requerido", errorsElement.GetProperty("LineasPoa[3].Programa")[0].GetString());
+    }
+
+    [Fact]
+    public async Task TryHandleAsync_ExcepcionDeNegocio_LogueaWarning()
+    {
+        var espia = new LoggerEspia();
+        var handler = new DomainExceptionHandler(espia);
+
+        await handler.TryHandleAsync(CrearContextoConProblemDetails(),
+            new EntidadNoEncontradaException("no existe"), CancellationToken.None);
+
+        Assert.Contains(LogLevel.Warning, espia.Niveles);
+        Assert.DoesNotContain(LogLevel.Error, espia.Niveles);
+    }
+
+    [Fact]
+    public async Task TryHandleAsync_ExcepcionNoAnticipada_LogueaError()
+    {
+        var espia = new LoggerEspia();
+        var handler = new DomainExceptionHandler(espia);
+
+        await handler.TryHandleAsync(CrearContextoConProblemDetails(),
+            new InvalidOperationException("algo se rompio feo"), CancellationToken.None);
+
+        Assert.Contains(LogLevel.Error, espia.Niveles);
+    }
+
+    private static DefaultHttpContext CrearContextoConProblemDetails()
+    {
+        var servicios = new ServiceCollection();
+        servicios.AddProblemDetails();
+        servicios.AddLogging();
+        return new DefaultHttpContext
+        {
+            RequestServices = servicios.BuildServiceProvider(),
+            Response = { Body = new MemoryStream() },
+        };
     }
 }
