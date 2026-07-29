@@ -34,6 +34,12 @@ bld/
 [Oo]bj/
 [Ll]og/
 [Ll]ogs/
+# Excepción: "Logs/" es el directorio real del feature de diagnóstico de logs
+# (ServicioConsultaLogs, ILogsService, etc. — Entrega 2 de backups), no el
+# boilerplate de logs de build de Visual Studio de arriba. Mismo criterio que
+# la excepción de Backups/: sin esto, git ignora en silencio los archivos
+# nuevos de Logs/ en los proyectos que lo usan.
+!**/Logs/
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/
