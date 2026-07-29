@@ -46,9 +46,7 @@ var builder = WebApplication.CreateBuilder(args);
 // no se puede crear, la API arranca igual y solo pierde el sink de archivo.
 const string PlantillaLog = "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}";
 
-var directorioLogs = builder.Configuration["Logs:Directorio"];
-if (string.IsNullOrWhiteSpace(directorioLogs))
-    directorioLogs = new UserDataPathProvider().GetLogsDirectory();
+var directorioLogs = DirectorioLogsResolver.Resolver(builder.Configuration, new UserDataPathProvider());
 
 // La consola también se sanea: si el proceso corre como servicio (systemd, journald,
 // Docker), stdout queda capturado y persistido igual que el archivo — sin esto, esa es

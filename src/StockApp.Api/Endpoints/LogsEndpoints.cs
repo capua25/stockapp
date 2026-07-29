@@ -1,5 +1,7 @@
 using System.IO.Compression;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Extensions.Configuration;
+using StockApp.Api.Logging;
 using StockApp.Application.Authorization;
 using StockApp.Application.Logs;
 using StockApp.Infrastructure.Platform;
@@ -10,16 +12,16 @@ public static class LogsEndpoints
 {
     public static IEndpointRouteBuilder MapLogsEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/logs", (ServicioConsultaLogs servicio, IUserDataPathProvider paths) =>
-            Results.Ok(servicio.ObtenerResumen(paths.GetLogsDirectory())))
+        app.MapGet("/logs", (ServicioConsultaLogs servicio, IConfiguration configuration, IUserDataPathProvider paths) =>
+            Results.Ok(servicio.ObtenerResumen(DirectorioLogsResolver.Resolver(configuration, paths))))
             .RequireAuthorization(Permisos.GestionarDiagnostico);
 
         // Un unico ZIP con todos los archivos, sin parametro de nombre: sin parametro no
         // hay superficie de path traversal. Se arma por streaming sobre el Response.Body,
         // asi no materializamos el zip completo ni en memoria ni en disco temporal.
-        app.MapGet("/logs/contenido", (HttpContext context, ServicioConsultaLogs servicio, IUserDataPathProvider paths) =>
+        app.MapGet("/logs/contenido", (HttpContext context, ServicioConsultaLogs servicio, IConfiguration configuration, IUserDataPathProvider paths) =>
         {
-            var archivos = servicio.ResolverArchivosParaZip(paths.GetLogsDirectory());
+            var archivos = servicio.ResolverArchivosParaZip(DirectorioLogsResolver.Resolver(configuration, paths));
             var nombreZip = $"logs_{DateTime.Now:yyyyMMdd_HHmmss}.zip";
 
             // ZipArchive no tiene API async en el BCL: Dispose() escribe el directorio central

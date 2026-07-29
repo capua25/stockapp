@@ -2,13 +2,13 @@ using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using StockApp.Api.Auth;
 using StockApp.Api.Tests.Fixtures;
 using StockApp.Application.Logs;
 using StockApp.Application.Licenciamiento;
 using StockApp.Domain.Enums;
-using StockApp.Infrastructure.Platform;
 using Xunit;
 
 namespace StockApp.Api.Tests;
@@ -30,8 +30,12 @@ public class LogsEndpointTests : ApiTestBase
         return client;
     }
 
+    // Con la unificacion del hallazgo "dos fuentes de verdad", LogsEndpoints ahora resuelve
+    // el directorio via DirectorioLogsResolver (config primero, IUserDataPathProvider como
+    // fallback). ApiFactory setea Logs:Directorio, asi que los tests tienen que sembrar ahi,
+    // no en el directorio del fake de IUserDataPathProvider (que ya no gana).
     private string DirectorioLogs() =>
-        Factory.Services.GetRequiredService<IUserDataPathProvider>().GetLogsDirectory();
+        Factory.Services.GetRequiredService<IConfiguration>()["Logs:Directorio"]!;
 
     private void SembrarLog(string nombre, string contenido)
     {
