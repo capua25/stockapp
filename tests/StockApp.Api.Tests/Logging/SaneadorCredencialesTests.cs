@@ -19,13 +19,22 @@ public class SaneadorCredencialesTests
     [Fact]
     public void Sanear_ConSecret_LoEnmascara()
     {
+        // NOTA (Fix round 2): esta aserción cambió de comportamiento a propósito. Antes el
+        // valor sin comillas cortaba en el primer espacio, así que "y sigue el mensaje"
+        // sobrevivía. Eso mismo (cortar en el primer espacio) era el Hallazgo A: un
+        // "Password=hola mundo" sin ';' dejaba " mundo" en claro. No hay forma de distinguir
+        // por regex "un valor legítimo con espacios sin terminador" de "una credencial seguida
+        // de texto libre" sin reintroducir el lookahead cuadrático del Hallazgo B (falla
+        // cerrado igual, pero puede tirar RegexMatchTimeoutException y perder el evento de log
+        // entero). Se prioriza no filtrar nunca un fragmento de credencial por sobre preservar
+        // el texto que la sigue en la misma línea cuando no hay ';' que delimite el valor.
         const string texto = "Jwt:Secret=clave-de-firma-de-32-caracteres-abcdef y sigue el mensaje";
 
         var resultado = SaneadorCredenciales.Sanear(texto);
 
         Assert.DoesNotContain("clave-de-firma-de-32-caracteres-abcdef", resultado);
         Assert.Contains("Secret=***", resultado);
-        Assert.Contains("y sigue el mensaje", resultado);
+        Assert.DoesNotContain("y sigue el mensaje", resultado);
     }
 
     [Fact]
@@ -221,5 +230,44 @@ public class SaneadorCredencialesTests
 
         Assert.DoesNotContain("eyJhbGciOiJIUzI1NiJ9.abc.def", resultado);
         Assert.Contains("resto del mensaje", resultado);
+    }
+
+    // ── Fix round 2: el lookahead (?=;) dejaba un bypass cuando la línea no tenía ';' ──
+
+    [Fact]
+    public void Sanear_ConPasswordSinComillasConEspacios_SinPuntoYComaAlFinal_LoEnmascaraCompleto()
+    {
+        const string texto = "Password=hola mundo";
+
+        var resultado = SaneadorCredenciales.Sanear(texto);
+
+        Assert.DoesNotContain("mundo", resultado);
+        Assert.Contains("Password=***", resultado);
+    }
+
+    [Fact]
+    public void Sanear_ConPasswordSinComillasConEspacios_AlFinalDeLaLinea_ConservaLoAnterior()
+    {
+        const string texto = "Host=x;Password=hola mundo";
+
+        var resultado = SaneadorCredenciales.Sanear(texto);
+
+        Assert.DoesNotContain("mundo", resultado);
+        Assert.Contains("Host=x", resultado);
+        Assert.Contains("Password=***", resultado);
+    }
+
+    [Fact]
+    public void Sanear_ConTextoGrandeSinPuntoYComa_NoLanzaPorTimeout()
+    {
+        // Antes del fix, la rama con lookahead (?=;) era cuadrática: sin ';' en el resto de la
+        // línea, retrocedía carácter por carácter por cada "Password=" y terminaba superando
+        // matchTimeoutMilliseconds: 1000 con textos de unos pocos cientos de miles de caracteres.
+        // Un texto de 500 KB sin ';' tiene que sanearse sin lanzar RegexMatchTimeoutException.
+        var texto = string.Concat(Enumerable.Repeat("xx Password=abcdefghij ", 25_000));
+
+        var excepcion = Record.Exception(() => SaneadorCredenciales.Sanear(texto));
+
+        Assert.Null(excepcion);
     }
 }

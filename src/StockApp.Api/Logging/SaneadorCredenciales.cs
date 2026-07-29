@@ -15,22 +15,27 @@ internal static partial class SaneadorCredenciales
     private const string Mascara = "***";
 
     // El valor puede venir entre comillas (dobles o simples, con ; adentro), entre comillas
-    // SIN cerrar (la connection string quedó cortada a la mitad) o sin comillas. El caso sin
-    // comillas tiene DOS variantes que hay que distinguir para no romper ninguna de las dos:
-    //   - connection string real: "Password=hola mundo;Host=x" -> el valor tiene espacios
-    //     adentro y termina en el próximo ';' (Npgsql lo permite sin comillas).
-    //   - mensaje de log libre: "Secret=clave-abc y sigue el mensaje" -> no hay ';' que
-    //     delimite el valor, así que hay que cortar en el primer espacio como antes, o el
-    //     saneador se comería el resto del mensaje.
-    // El lookahead (?=;) en la primera rama sin comillas hace exactamente esa distinción: solo
-    // se anima a incluir espacios si más adelante en la línea hay un ';' que cierre el valor;
-    // si no lo hay, esa rama nunca matchea y cae a la de siempre (corta en el primer espacio).
+    // SIN cerrar (la connection string quedó cortada a la mitad) o sin comillas. Sin comillas,
+    // Npgsql permite espacios adentro del valor (p.ej. "Password=hola mundo;Host=x"), así que
+    // la rama final es simplemente "todo lo que no sea ; ni fin de línea": [^;\r\n]* para en el
+    // próximo ';' si lo hay, y si no lo hay llega hasta el final de la línea sin backtracking
+    // (el motor de regex la resuelve de un solo paso, es lineal).
+    //
+    // ¡OJO! Antes esta rama tenía un lookahead (?=;) para "solo animarse a incluir espacios si
+    // más adelante hay un ';'" y así no comerse mensajes de log libres sin ';'. Eso era CUADRÁTICO:
+    // sin ';' en el resto de la línea, el motor consume codicioso hasta el final, falla el
+    // lookahead, y retrocede carácter por carácter — por cada "Password=" en el texto. Medido:
+    // con matchTimeoutMilliseconds: 1000, una línea de ~230.000 caracteres sin ';' ya tira
+    // RegexMatchTimeoutException, y como Sanear() no tiene try/catch y Serilog se traga la
+    // excepción del Emit en silencio, ESE EVENTO DE LOG SE PIERDE COMPLETO sin dejar rastro.
+    // La solución no es acotar el lookahead: es no usar lookahead. [^;\r\n]* solo, sin la rama
+    // alternativa de whitespace-cut, cubre los tres casos (con ';', sin ';', vacío) en un paso.
     // Pwd/Psw son alias reales de Password para Npgsql (aprobado por el dueño del proyecto):
     // sin ellos, una connection string armada con "Pwd=" queda completamente sin sanear.
-    [GeneratedRegex(@"(?i)\b(?:Password|Pwd|Psw)\s*=\s*(?:""[^""\r\n]*""?|'[^'\r\n]*'?|[^;\r\n]*(?=;)|[^;\s\r\n]+)", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    [GeneratedRegex(@"(?i)\b(?:Password|Pwd|Psw)\s*=\s*(?:""[^""\r\n]*""?|'[^'\r\n]*'?|[^;\r\n]*)", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex RegexPassword();
 
-    [GeneratedRegex(@"(?i)\bSecret\s*=\s*(?:""[^""\r\n]*""?|'[^'\r\n]*'?|[^;\r\n]*(?=;)|[^;\s\r\n]+)", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    [GeneratedRegex(@"(?i)\bSecret\s*=\s*(?:""[^""\r\n]*""?|'[^'\r\n]*'?|[^;\r\n]*)", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex RegexSecret();
 
     // Bearer sí corta en whitespace en la rama sin comillas: un JWT no tiene espacios, y
