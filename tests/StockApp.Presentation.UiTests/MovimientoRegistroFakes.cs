@@ -80,15 +80,22 @@ internal sealed class ConfirmacionServiceFake : IConfirmacionService
 }
 
 /// <summary>
-/// Fake de ILogsService "sin datos" (Entrega 2, Task 9): usado por los montajes headless de
-/// MantenimientoView/AccesoLimitadoView que no ejercitan la zona Diagnóstico, solo necesitan que
-/// el ViewModel pueda construirse y que CargarResumenLogsAsync() no explote al ejecutarse.
+/// Fake de ILogsService (Entrega 2, Task 9; extendido Task 10 con resumen configurable). Por
+/// defecto "sin datos": usado por los montajes headless de MantenimientoView/AccesoLimitadoView
+/// que no ejercitan la zona Diagnóstico, solo necesitan que el ViewModel pueda construirse y que
+/// CargarResumenLogsAsync() no explote al ejecutarse. MantenimientoViewTests le pasa un
+/// ResumenLogsDto explícito para cubrir los casos "con logs" y "sin logs" de esa zona.
 /// </summary>
 internal sealed class LogsServiceFake : ILogsService
 {
+    private readonly ResumenLogsDto _resumen;
+
+    public LogsServiceFake(ResumenLogsDto? resumen = null) =>
+        _resumen = resumen ?? new ResumenLogsDto(0, null, null, 0);
+
     public Task<ResumenLogsDto> ObtenerResumenAsync(CancellationToken ct = default) =>
-        Task.FromResult(new ResumenLogsDto(0, null, null, 0));
+        Task.FromResult(_resumen);
 
     public Task<LogsDescargaDto> DescargarZipAsync(CancellationToken ct = default) =>
-        Task.FromResult(new LogsDescargaDto("logs.zip", new MemoryStream()));
+        Task.FromResult(new LogsDescargaDto("logs.zip", new MemoryStream([1, 2, 3])));
 }

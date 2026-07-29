@@ -28,7 +28,7 @@
                    Margin="0,0,0,12"
                    IsVisible="{Binding Cargando}" />
 
-        <Grid>
+        <Grid DockPanel.Dock="Top">
             <ItemsControl ItemsSource="{Binding Corridas}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:FilaCorridaBackupVm">
@@ -115,6 +115,28 @@
                        VerticalAlignment="Center"
                        IsVisible="{Binding ErrorAlCargar}" />
         </Grid>
+
+        <TextBlock DockPanel.Dock="Top"
+                   Text="Diagnóstico"
+                   Classes="caption"
+                   Opacity="0.6"
+                   Margin="0,24,0,12" />
+
+        <Border Classes="card">
+            <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
+                <TextBlock Grid.Column="0"
+                           Text="{Binding TextoResumenLogs}"
+                           TextWrapping="Wrap"
+                           VerticalAlignment="Center" />
+
+                <Button Grid.Column="1"
+                        Classes="secondary"
+                        Content="Descargar logs"
+                        Margin="12,0,0,0"
+                        IsEnabled="{Binding HayLogs}"
+                        Command="{Binding DescargarLogsCommand}" />
+            </Grid>
+        </Border>
 
     </DockPanel>
     </ScrollViewer>

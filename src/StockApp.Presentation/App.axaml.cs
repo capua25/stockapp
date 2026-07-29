@@ -20,6 +20,7 @@ using StockApp.Application.Exportacion;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
 using StockApp.Application.Licenciamiento;
+using StockApp.Application.Logs;
 using StockApp.Application.Movimientos;
 using StockApp.Application.Reportes;
 using StockApp.Presentation.Actualizaciones;
@@ -216,6 +217,13 @@ public partial class App : AvaloniaApp
         // ── Backups programados (Entrega 1) ────────────────────────────────────
         services.AddTransient<IBackupsService>(sp =>
             new BackupsApiClient(sp.GetRequiredKeyedService<HttpClient>("Descargas")));
+
+        // ── Diagnóstico/logs (Entrega 2): mismo HttpClient keyed "Descargas" (timeout de 30
+        //    minutos) que IBackupsService — el ZIP de logs es una descarga, no una llamada de
+        //    API común, y el HttpClient por defecto tiene timeout de 10s (colgaría con archivos
+        //    grandes) ──────────────────────────────────────────────────────────
+        services.AddTransient<ILogsService>(sp =>
+            new LogsApiClient(sp.GetRequiredKeyedService<HttpClient>("Descargas")));
 
         // ── Módulo Finanzas — F5d: importador de planillas (historial + análisis/confirmación/reversa) ──
         services.AddTransient<IImportacionService, ImportacionApiClient>();

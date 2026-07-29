@@ -8,6 +8,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using StockApp.Application.Backups;
+using StockApp.Application.Logs;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Administracion;
 using Xunit;
@@ -49,10 +50,11 @@ public class MantenimientoViewTests
         </Window>
         """;
 
-    private static (Window Window, MantenimientoViewModel Vm) Montar(IReadOnlyList<CorridaBackupDto> corridas)
+    private static (Window Window, MantenimientoViewModel Vm) Montar(
+        IReadOnlyList<CorridaBackupDto> corridas, ResumenLogsDto? resumenLogs = null)
     {
         var vm = new MantenimientoViewModel(
-            new BackupsServiceFake(corridas), new ServicioGuardadoArchivoFake(), new ConfirmacionServiceFake(), new LogsServiceFake());
+            new BackupsServiceFake(corridas), new ServicioGuardadoArchivoFake(), new ConfirmacionServiceFake(), new LogsServiceFake(resumenLogs));
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
         window.DataContext = vm;
@@ -206,5 +208,34 @@ public class MantenimientoViewTests
         var botonCancelar = window.GetVisualDescendants().OfType<Button>().First(b => b.Content as string == "Cancelar");
         Assert.False(botonDescargar.IsVisible);
         Assert.True(botonCancelar.IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void Montar_ConLogs_MuestraElResumenYHabilitaLaDescarga()
+    {
+        var (window, vm) = Montar(
+            [],
+            new ResumenLogsDto(2, new DateTime(2026, 7, 28), new DateTime(2026, 7, 29), 4096));
+
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(vm.HayLogs);
+        var textos = window.GetVisualDescendants().OfType<TextBlock>()
+            .Select(t => t.Text ?? string.Empty).ToList();
+        Assert.Contains(textos, t => t.Contains("Diagnóstico", StringComparison.Ordinal));
+        Assert.Contains(textos, t => t.Contains("2 archivo(s)", StringComparison.Ordinal));
+    }
+
+    [AvaloniaFact]
+    public void Montar_SinLogs_MuestraLaZonaConElMensajeVacio()
+    {
+        var (window, vm) = Montar([], new ResumenLogsDto(0, null, null, 0));
+
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(vm.HayLogs);
+        var textos = window.GetVisualDescendants().OfType<TextBlock>()
+            .Select(t => t.Text ?? string.Empty).ToList();
+        Assert.Contains(textos, t => t.Contains("No hay archivos de log todavía", StringComparison.Ordinal));
     }
 }
