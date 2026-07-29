@@ -19,8 +19,12 @@ namespace StockApp.Api.Licenciamiento;
 /// (ver Program.cs), así que exime por RUTA, no por identidad -- un token válido obtenido acá
 /// NO sirve para pasar el bloqueo de ningún otro endpoint, que sigue devolviendo 423
 /// incondicionalmente. Autenticarse con licencia vencida sólo abre el camino hacia /backups y
-/// /logs (que además exigen el permiso GestionarDiagnostico en la capa de Application); el
-/// resto del sistema sigue completamente bloqueado.
+/// /logs, cuyos endpoints exigen el permiso GestionarDiagnostico vía RequireAuthorization
+/// (primera barrera, HTTP). Ojo: a diferencia de /backups (donde ServicioConsultaBackups
+/// vuelve a validar el permiso con IAuthorizationService), /logs NO tiene esa segunda barrera
+/// en Application -- ServicioConsultaLogs no valida nada, el gate HTTP es el único control. No
+/// es un agujero (está cubierto por tests que esperan 403 para Operador), pero no hay defensa
+/// en profundidad ahí; el resto del sistema sigue completamente bloqueado.
 /// </summary>
 public sealed class BloqueoLicenciaMiddleware
 {
