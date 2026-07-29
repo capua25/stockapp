@@ -29,6 +29,7 @@ public class AlmacenLicenciaArchivoTests : IDisposable
         public string GetDatabasePath() => Path.Combine(_dir, "stockapp.db");
         public string GetBackupsDirectory() => Path.Combine(_dir, "backups");
         public string GetLicenciaPath() => Path.Combine(_dir, "licencia.lic");
+        public string GetLogsDirectory() => Path.Combine(_dir, "logs");
     }
 
     [Fact]

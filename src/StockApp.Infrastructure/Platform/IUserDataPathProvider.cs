@@ -17,4 +17,7 @@ public interface IUserDataPathProvider
 
     /// <summary>Ruta del archivo de licencia (licencia.lic) en el directorio de datos.</summary>
     string GetLicenciaPath();
+
+    /// <summary>Ruta completa al subdirectorio de logs.</summary>
+    string GetLogsDirectory();
 }

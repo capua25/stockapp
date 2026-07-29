@@ -19,4 +19,5 @@ public sealed class UserDataPathProviderFake : IUserDataPathProvider
     public string GetDatabasePath() => Path.Combine(_directorioDatos, "stockapp.db");
     public string GetBackupsDirectory() => Path.Combine(_directorioDatos, "backups");
     public string GetLicenciaPath() => Path.Combine(_directorioDatos, "licencia.lic");
+    public string GetLogsDirectory() => Path.Combine(_directorioDatos, "logs");
 }

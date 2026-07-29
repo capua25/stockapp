@@ -6,6 +6,7 @@ public class UserDataPathProvider : IUserDataPathProvider
     private const string DbFileName = "stockapp.db";
     private const string BackupsSubdir = "backups";
     private const string LicenciaFileName = "licencia.lic";
+    private const string LogsSubdir = "logs";
 
     public string GetDataDirectory()
     {
@@ -25,4 +26,7 @@ public class UserDataPathProvider : IUserDataPathProvider
 
     public string GetLicenciaPath()
         => Path.Combine(GetDataDirectory(), LicenciaFileName);
+
+    public string GetLogsDirectory()
+        => Path.Combine(GetDataDirectory(), LogsSubdir);
 }
