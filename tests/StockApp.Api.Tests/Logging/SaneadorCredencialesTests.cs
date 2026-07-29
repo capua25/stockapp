@@ -78,4 +78,70 @@ public class SaneadorCredencialesTests
     {
         Assert.Equal(string.Empty, SaneadorCredenciales.Sanear(string.Empty));
     }
+
+    [Fact]
+    public void Sanear_ConPasswordEntreComillasDobles_ConPuntoYComaAdentro_LoEnmascara()
+    {
+        const string texto = "Password=\"p@ss;word\"";
+
+        var resultado = SaneadorCredenciales.Sanear(texto);
+
+        Assert.DoesNotContain("p@ss;word", resultado);
+        Assert.Contains("Password=***", resultado);
+    }
+
+    [Fact]
+    public void Sanear_ConPasswordEntreComillasSimples_ConPuntoYComaAdentro_LoEnmascara()
+    {
+        const string texto = "Password='p@ss;word'";
+
+        var resultado = SaneadorCredenciales.Sanear(texto);
+
+        Assert.DoesNotContain("p@ss;word", resultado);
+        Assert.Contains("Password=***", resultado);
+    }
+
+    [Fact]
+    public void Sanear_ConSecretEntreComillasDobles_ConPuntoYComaAdentro_LoEnmascara()
+    {
+        const string texto = "Secret=\"cl;ave-secreta\"";
+
+        var resultado = SaneadorCredenciales.Sanear(texto);
+
+        Assert.DoesNotContain("cl;ave-secreta", resultado);
+        Assert.Contains("Secret=***", resultado);
+    }
+
+    [Fact]
+    public void Sanear_ConSecretEntreComillasSimples_ConPuntoYComaAdentro_LoEnmascara()
+    {
+        const string texto = "Secret='cl;ave-secreta'";
+
+        var resultado = SaneadorCredenciales.Sanear(texto);
+
+        Assert.DoesNotContain("cl;ave-secreta", resultado);
+        Assert.Contains("Secret=***", resultado);
+    }
+
+    [Fact]
+    public void Sanear_ConBearerEntreComillasDobles_ConPuntoYComaAdentro_LoEnmascara()
+    {
+        const string texto = "Bearer \"tok;en-secreto\"";
+
+        var resultado = SaneadorCredenciales.Sanear(texto);
+
+        Assert.DoesNotContain("tok;en-secreto", resultado);
+        Assert.Contains("Bearer ***", resultado);
+    }
+
+    [Fact]
+    public void Sanear_ConBearerEntreComillasSimples_ConPuntoYComaAdentro_LoEnmascara()
+    {
+        const string texto = "Bearer 'tok;en-secreto'";
+
+        var resultado = SaneadorCredenciales.Sanear(texto);
+
+        Assert.DoesNotContain("tok;en-secreto", resultado);
+        Assert.Contains("Bearer ***", resultado);
+    }
 }

@@ -200,8 +200,76 @@ public class SaneadorCredencialesTests
     {
         Assert.Equal(string.Empty, SaneadorCredenciales.Sanear(string.Empty));
     }
+
+    [Fact]
+    public void Sanear_ConPasswordEntreComillasDobles_ConPuntoYComaAdentro_LoEnmascara()
+    {
+        const string texto = "Password=\"p@ss;word\"";
+
+        var resultado = SaneadorCredenciales.Sanear(texto);
+
+        Assert.DoesNotContain("p@ss;word", resultado);
+        Assert.Contains("Password=***", resultado);
+    }
+
+    [Fact]
+    public void Sanear_ConPasswordEntreComillasSimples_ConPuntoYComaAdentro_LoEnmascara()
+    {
+        const string texto = "Password='p@ss;word'";
+
+        var resultado = SaneadorCredenciales.Sanear(texto);
+
+        Assert.DoesNotContain("p@ss;word", resultado);
+        Assert.Contains("Password=***", resultado);
+    }
+
+    [Fact]
+    public void Sanear_ConSecretEntreComillasDobles_ConPuntoYComaAdentro_LoEnmascara()
+    {
+        const string texto = "Secret=\"cl;ave-secreta\"";
+
+        var resultado = SaneadorCredenciales.Sanear(texto);
+
+        Assert.DoesNotContain("cl;ave-secreta", resultado);
+        Assert.Contains("Secret=***", resultado);
+    }
+
+    [Fact]
+    public void Sanear_ConSecretEntreComillasSimples_ConPuntoYComaAdentro_LoEnmascara()
+    {
+        const string texto = "Secret='cl;ave-secreta'";
+
+        var resultado = SaneadorCredenciales.Sanear(texto);
+
+        Assert.DoesNotContain("cl;ave-secreta", resultado);
+        Assert.Contains("Secret=***", resultado);
+    }
+
+    [Fact]
+    public void Sanear_ConBearerEntreComillasDobles_ConPuntoYComaAdentro_LoEnmascara()
+    {
+        const string texto = "Bearer \"tok;en-secreto\"";
+
+        var resultado = SaneadorCredenciales.Sanear(texto);
+
+        Assert.DoesNotContain("tok;en-secreto", resultado);
+        Assert.Contains("Bearer ***", resultado);
+    }
+
+    [Fact]
+    public void Sanear_ConBearerEntreComillasSimples_ConPuntoYComaAdentro_LoEnmascara()
+    {
+        const string texto = "Bearer 'tok;en-secreto'";
+
+        var resultado = SaneadorCredenciales.Sanear(texto);
+
+        Assert.DoesNotContain("tok;en-secreto", resultado);
+        Assert.Contains("Bearer ***", resultado);
+    }
 }
 ```
+
+**Nota (post fix round 1):** los seis casos de "entre comillas" existen porque Npgsql cita automáticamente el valor de una connection string cuando contiene `;` o `'`. Con la regex original (`[^;\s"']+`), un valor citado no matcheaba nunca — la comilla de apertura queda excluida de la clase de caracteres y el `+` no puede arrancar. Resultado: cuanto más fuerte la contraseña (más probable que tenga `;`), menos la protegía el saneador. Ver Step 3 para el fix.
 
 - [ ] **Step 2: Correr el test y verificar que falla**
 
@@ -229,13 +297,13 @@ internal static partial class SaneadorCredenciales
 {
     private const string Mascara = "***";
 
-    [GeneratedRegex(@"(?i)\bPassword\s*=\s*[^;\s""']+", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    [GeneratedRegex(@"(?i)\bPassword\s*=\s*(?:""[^""]*""|'[^']*'|[^;\s""']+)", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex RegexPassword();
 
-    [GeneratedRegex(@"(?i)\bSecret\s*=\s*[^;\s""']+", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    [GeneratedRegex(@"(?i)\bSecret\s*=\s*(?:""[^""]*""|'[^']*'|[^;\s""']+)", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex RegexSecret();
 
-    [GeneratedRegex(@"(?i)\bBearer\s+[^\s""']+", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    [GeneratedRegex(@"(?i)\bBearer\s+(?:""[^""]*""|'[^']*'|[^;\s""']+)", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex RegexBearer();
 
     internal static string Sanear(string texto)
@@ -253,7 +321,7 @@ internal static partial class SaneadorCredenciales
 - [ ] **Step 4: Correr el test y verificar que pasa**
 
 Run: `dotnet test tests/StockApp.Api.Tests/StockApp.Api.Tests.csproj --filter "FullyQualifiedName~SaneadorCredencialesTests"`
-Expected: PASS, 7 tests.
+Expected: PASS, 13 tests (7 originales + 6 de los casos "entre comillas" agregados en fix round 1).
 
 Si `Sanear_EsInsensibleAMayusculas` falla porque la máscara sale como `Password=***` cuando el original decía `PASSWORD=`, está bien: el test solo exige que el valor secreto desaparezca. No agregues lógica para preservar el casing del nombre de la clave.
 
@@ -262,6 +330,15 @@ Si `Sanear_EsInsensibleAMayusculas` falla porque la máscara sale como `Password
 ```bash
 git add src/StockApp.Api/Logging/SaneadorCredenciales.cs tests/StockApp.Api.Tests/Logging/SaneadorCredencialesTests.cs
 git commit -m "feat(diagnostico): agregar saneador de credenciales para logs"
+```
+
+- [ ] **Step 6 (fix round 1): Endurecer las regex para valores citados**
+
+La regex original (`[^;\s"']+`) no matcheaba un valor entre comillas — Npgsql cita automáticamente la password de una connection string cuando contiene `;` o `'`, así que cuanto más fuerte la contraseña, menos la protegía el saneador. Fix: reemplazar el grupo de captura por `(?:"[^"]*"|'[^']*'|[^;\s"']+)` en las tres regex (`RegexPassword`, `RegexSecret`, `RegexBearer`), sin tocar nada más de la clase.
+
+```bash
+git add src/StockApp.Api/Logging/SaneadorCredenciales.cs tests/StockApp.Api.Tests/Logging/SaneadorCredencialesTests.cs docs/superpowers/plans/2026-07-29-backups-entrega2-diagnostico.md
+git commit -m "fix(diagnostico): enmascarar credenciales entre comillas en los logs"
 ```
 
 ---

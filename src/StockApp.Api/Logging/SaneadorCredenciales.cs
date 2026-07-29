@@ -14,13 +14,13 @@ internal static partial class SaneadorCredenciales
 {
     private const string Mascara = "***";
 
-    [GeneratedRegex(@"(?i)\bPassword\s*=\s*[^;\s""']+", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    [GeneratedRegex(@"(?i)\bPassword\s*=\s*(?:""[^""]*""|'[^']*'|[^;\s""']+)", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex RegexPassword();
 
-    [GeneratedRegex(@"(?i)\bSecret\s*=\s*[^;\s""']+", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    [GeneratedRegex(@"(?i)\bSecret\s*=\s*(?:""[^""]*""|'[^']*'|[^;\s""']+)", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex RegexSecret();
 
-    [GeneratedRegex(@"(?i)\bBearer\s+[^\s""']+", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
+    [GeneratedRegex(@"(?i)\bBearer\s+(?:""[^""]*""|'[^']*'|[^;\s""']+)", RegexOptions.None, matchTimeoutMilliseconds: 1000)]
     private static partial Regex RegexBearer();
 
     internal static string Sanear(string texto)
