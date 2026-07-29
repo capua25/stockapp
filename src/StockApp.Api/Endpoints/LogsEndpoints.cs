@@ -36,13 +36,31 @@ public static class LogsEndpoints
                 using var zip = new ZipArchive(salida, ZipArchiveMode.Create, leaveOpen: true);
                 foreach (var ruta in archivos)
                 {
-                    var entrada = zip.CreateEntry(Path.GetFileName(ruta), CompressionLevel.Optimal);
-                    // FileShare.ReadWrite es obligatorio: Serilog tiene abierto el archivo
-                    // del dia en curso y sin esto la descarga falla justo cuando mas importa.
-                    await using var origen = new FileStream(
-                        ruta, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                    await using var destino = entrada.Open();
-                    await origen.CopyToAsync(destino);
+                    // TOCTOU entre ResolverArchivosParaZip (arriba) y este punto: la retencion
+                    // de Serilog puede purgar el archivo mas viejo justo en el medio. El 200 y
+                    // los headers ya se enviaron (Results.Stream empieza a escribir apenas
+                    // arranca), asi que no podemos abortar todo el ZIP por un archivo que ya no
+                    // esta -- se lo salta y se sigue con el resto.
+                    FileStream origen;
+                    try
+                    {
+                        // FileShare.ReadWrite es obligatorio: Serilog tiene abierto el archivo
+                        // del dia en curso y sin esto la descarga falla justo cuando mas importa.
+                        origen = new FileStream(
+                            ruta, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    }
+                    catch (Exception ex) when (
+                        ex is FileNotFoundException or DirectoryNotFoundException or IOException)
+                    {
+                        continue;
+                    }
+
+                    await using (origen)
+                    {
+                        var entrada = zip.CreateEntry(Path.GetFileName(ruta), CompressionLevel.Optimal);
+                        await using var destino = entrada.Open();
+                        await origen.CopyToAsync(destino);
+                    }
                 }
             }, "application/zip", nombreZip);
         })
