@@ -43,21 +43,28 @@ var builder = WebApplication.CreateBuilder(args);
 // ── Logging a archivo (Entrega 2) ──────────────────────────────────────
 // Un problema de logging no puede dejar al municipio sin sistema: si el directorio
 // no se puede crear, la API arranca igual y solo pierde el sink de archivo.
+const string PlantillaLog = "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}";
+
 var directorioLogs = builder.Configuration["Logs:Directorio"];
 if (string.IsNullOrWhiteSpace(directorioLogs))
     directorioLogs = new UserDataPathProvider().GetLogsDirectory();
 
+// La consola también se sanea: si el proceso corre como servicio (systemd, journald,
+// Docker), stdout queda capturado y persistido igual que el archivo — sin esto, esa es
+// una segunda vía de filtración de credenciales que las tasks 2-4 justamente vienen a
+// cerrar. Se pierde el coloreado por nivel de Serilog al usar un formatter propio; es
+// aceptable.
 var configuracionLog = new LoggerConfiguration()
     .MinimumLevel.Warning()
-    .WriteTo.Console();
+    .WriteTo.Console(new FormateadorSaneado(new MessageTemplateTextFormatter(
+        PlantillaLog, CultureInfo.InvariantCulture)));
 
 try
 {
     Directory.CreateDirectory(directorioLogs);
     configuracionLog = configuracionLog.WriteTo.File(
         formatter: new FormateadorSaneado(new MessageTemplateTextFormatter(
-            "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
-            CultureInfo.InvariantCulture)),
+            PlantillaLog, CultureInfo.InvariantCulture)),
         path: Path.Combine(directorioLogs, "stockapp-.log"),
         rollingInterval: RollingInterval.Day,
         retainedFileTimeLimit: TimeSpan.FromDays(30),
