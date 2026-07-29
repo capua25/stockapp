@@ -57,6 +57,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
                 ["Bootstrap:AdminUser"] = AdminUsuarioDePrueba,
                 ["Bootstrap:Password"] = AdminPasswordDePrueba,
                 ["Licencia:ClavePublicaBase64"] = ClavesDePrueba.ClavePublicaBase64,
+                ["Logs:Directorio"] = Path.Combine(Path.GetTempPath(), "StockAppApiTestsLogs_" + Guid.NewGuid()),
 
                 // Límite alto por defecto: la ApiFactory es compartida por toda la
                 // collection "Api" (ver ApiCollection abajo), así que el contador del

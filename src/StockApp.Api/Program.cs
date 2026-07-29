@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 using System.Threading.RateLimiting;
@@ -7,11 +8,15 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
+using Serilog;
+using Serilog.Events;
+using Serilog.Formatting.Display;
 using StockApp.Api.Auth;
 using StockApp.Api.Backups;
 using StockApp.Api.Endpoints;
 using StockApp.Api.ErrorHandling;
 using StockApp.Api.Licenciamiento;
+using StockApp.Api.Logging;
 using StockApp.Application.Auditoria;
 using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
@@ -34,6 +39,41 @@ using StockApp.Infrastructure.Reportes;
 using StockApp.Infrastructure.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ── Logging a archivo (Entrega 2) ──────────────────────────────────────
+// Un problema de logging no puede dejar al municipio sin sistema: si el directorio
+// no se puede crear, la API arranca igual y solo pierde el sink de archivo.
+var directorioLogs = builder.Configuration["Logs:Directorio"];
+if (string.IsNullOrWhiteSpace(directorioLogs))
+    directorioLogs = new UserDataPathProvider().GetLogsDirectory();
+
+var configuracionLog = new LoggerConfiguration()
+    .MinimumLevel.Warning()
+    .WriteTo.Console();
+
+try
+{
+    Directory.CreateDirectory(directorioLogs);
+    configuracionLog = configuracionLog.WriteTo.File(
+        formatter: new FormateadorSaneado(new MessageTemplateTextFormatter(
+            "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}",
+            CultureInfo.InvariantCulture)),
+        path: Path.Combine(directorioLogs, "stockapp-.log"),
+        rollingInterval: RollingInterval.Day,
+        retainedFileTimeLimit: TimeSpan.FromDays(30),
+        restrictedToMinimumLevel: LogEventLevel.Warning,
+        shared: true);
+}
+catch (Exception ex)
+{
+    Console.Error.WriteLine(
+        $"[StockApp] No se pudo inicializar el log de archivo en '{directorioLogs}': {ex.Message}. "
+        + "La API arranca igual, pero no va a haber logs descargables.");
+}
+
+Log.Logger = configuracionLog.CreateLogger();
+builder.Logging.ClearProviders();
+builder.Host.UseSerilog();
 
 // Segunda barrera de defensa en profundidad para BackupProgramadoService (Entrega 1, Task 5):
 // el default de HostOptions.BackgroundServiceExceptionBehavior es StopHost, es decir que
