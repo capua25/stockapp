@@ -25,6 +25,7 @@ using StockApp.Application.Catalogo;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
 using StockApp.Application.Licenciamiento;
+using StockApp.Application.Logs;
 using StockApp.Application.Movimientos;
 using StockApp.Application.Reportes;
 using StockApp.Domain.Enums;
@@ -237,6 +238,11 @@ builder.Services.AddScoped<IEjecutorPgDump, EjecutorPgDumpProceso>();
 builder.Services.AddScoped<ServicioBackup>();
 builder.Services.AddScoped<ServicioConsultaBackups>();
 builder.Services.AddHostedService<BackupProgramadoService>();
+
+// Diagnóstico/logs (Entrega 2, Task 7): ServicioConsultaLogs es stateless (recibe la ruta
+// por parámetro, mismo patrón que ServicioConsultaBackups), pero se registra Scoped por
+// consistencia con el resto de los servicios de request.
+builder.Services.AddScoped<ServicioConsultaLogs>();
 
 // JwtOptions: misma razón que AppDbContext arriba — el secreto (y ahora la expiración,
 // Fase 3a D10) se leen de forma diferida en el factory (resuelto post-Build), no en una
@@ -501,6 +507,7 @@ app.MapImportacionEndpoints();
 app.MapLicenciaEndpoints();
 app.MapResetAdminEndpoints();
 app.MapBackupsEndpoints();
+app.MapLogsEndpoints();
 
 app.Run();
 
