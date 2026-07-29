@@ -1802,6 +1802,24 @@ git commit -m "feat(diagnostico): agregar zona de diagnostico a la vista de mant
 
 ---
 
+## Fix wave — hallazgos MINOR del review final de la rama (2026-07-29)
+
+El review final de `feat/backups-entrega2-diagnostico` (post Task 10, con las 10 tasks ya mergeadas) dejó un hallazgo IMPORTANT (saneador de credenciales entre comillas — ya cerrado, ver Task 2 Step 6) y 6 hallazgos MINOR, cerrados en esta pasada con un commit por hallazgo. Quedan documentados acá porque cambian código y tests que las tasks de arriba describen con su versión ORIGINAL (pre-fix) — si releés Task 4 o Task 7 de punta a punta, el snippet de código de esos steps ya no es el que corre en `main`.
+
+- [x] **Hallazgo 1 — dos fuentes de verdad para el directorio de logs.** `Program.cs` (Task 4) resolvía `Logs:Directorio` con fallback a `IUserDataPathProvider`, pero `LogsEndpoints` (Task 7) leía siempre `IUserDataPathProvider` sin mirar la config: si alguien seteaba `Logs:Directorio` en producción, Serilog escribía en un directorio y el endpoint leía otro. Fix: `src/StockApp.Api/Logging/DirectorioLogsResolver.cs` (nuevo) centraliza la precedencia (`IConfiguration` primero, `IUserDataPathProvider` como fallback); lo usan tanto `Program.cs` como los dos endpoints de `LogsEndpoints.cs`. `LogsEndpointTests.DirectorioLogs()` pasa a leer `IConfiguration["Logs:Directorio"]` (lo que `ApiFactory` ya seteaba) en vez de `IUserDataPathProvider.GetLogsDirectory()`, porque ahora es la config la que gana. Commit: `fix(diagnostico): unificar la resolucion del directorio de logs`.
+
+- [x] **Hallazgo 2 — TOCTOU entre listar y comprimir el ZIP.** `ResolverArchivosParaZip` (Task 6) lista los archivos y el `Results.Stream` (Task 7) los abre uno por uno más tarde; si la retención de Serilog purga el más viejo en el medio, el `FileStream.Open` tira con el 200 y los headers ya enviados — ZIP truncado sin ningún error visible. Fix: en `LogsEndpoints.cs`, el `FileStream.Open` de cada archivo va en su propio `try/catch` (`FileNotFoundException`, `DirectoryNotFoundException`, `IOException`) DENTRO del loop; si el archivo ya no está, se lo salta y sigue con el resto — el `ZipArchive.CreateEntry` solo se llama después de abrir el `FileStream` con éxito, para no dejar entradas vacías en el ZIP.
+
+- [x] **Hallazgo 3 — el archivo del día puede dejar de recibir eventos en silencio.** El `WriteTo.File` de `Program.cs` (Task 4) no seteaba `fileSizeLimitBytes`: el default de Serilog es 1 GB con `rollOnFileSizeLimit: false`, así que al llegar ahí el archivo del día deja de recibir eventos EN SILENCIO por el resto del día — justo cuando una tormenta de errores es cuando más se necesitan los logs. Fix: se agregó `fileSizeLimitBytes: 50 * 1024 * 1024` y `rollOnFileSizeLimit: true`, compatible con `rollingInterval: RollingInterval.Day` (Serilog agrega un sufijo de secuencia dentro del mismo día si hace falta rotar por tamaño).
+
+- [x] **Hallazgo 4 — comentario de seguridad desactualizado.** El comentario de `BloqueoLicenciaMiddleware.cs` decía que `/backups` Y `/logs` "exigen el permiso `GestionarDiagnostico` en la capa de Application". Cierto para `/backups` (`ServicioConsultaBackups` llama `_auth.Verificar`), falso para `/logs` (`ServicioConsultaLogs` no valida nada; el único control es el `RequireAuthorization` HTTP del endpoint). No es un agujero — está cubierto por tests que esperan 403 para Operador — pero el comentario mentía. Fix: solo se corrigió el texto del comentario, sin tocar `ServicioConsultaLogs`.
+
+- [x] **Hallazgo 5 — `DescargandoLogs` no bindeada en el XAML.** `MantenimientoViewModel.DescargandoLogs` (Task 9) existía pero ningún XAML de Task 10 lo usaba: con el timeout de 30 minutos del `HttpClient` "Descargas", si el ZIP pesaba la UI quedaba muda sin ninguna señal de progreso. Fix: en `MantenimientoView.axaml`, el botón "Descargar logs" de la zona Diagnóstico ahora usa el mismo patrón de swap que ya usa la lista de corridas de backup (Descargar/Cancelar, Task 9 de Entrega 1) — un segundo botón "Descargando…" deshabilitado (`IsEnabled="False"`) lo reemplaza mientras `DescargandoLogs` es `true`. Test headless nuevo en `MantenimientoViewTests.cs`: `Montar_DescargaDeLogsEnCurso_MuestraLaSenialDeProgresoYOcultaElBotonDeAccion`.
+
+- [x] **Hallazgo 6 — directorio temporal huérfano en los tests.** `ApiFactory` (Task 4 Step 2) generaba `Logs:Directorio` con un GUID bajo `Path.GetTempPath()` en un literal inline dentro de `ConfigureWebHost`, que `Program.cs` crea y llena al arrancar cada test — nadie lo borraba, así que cada corrida de `dotnet test` dejaba basura. Fix: el valor pasa a un campo `_directorioLogsTemporal` de `ApiFactory`, borrado (con `try/catch` defensivo) en `DisposeAsync`.
+
+---
+
 ## Verificación orgánica (obligatoria antes de cerrar)
 
 Convención del proyecto: además de los tests, hay que probar la app REAL. No alcanza con la suite verde.
