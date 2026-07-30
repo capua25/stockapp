@@ -186,6 +186,20 @@ mkdir -p "${STOCKAPP_HOME}/.local/share"
 chown -R stockapp:stockapp "${STOCKAPP_HOME}/.local"
 chmod 750 "${STOCKAPP_HOME}/.local" "${STOCKAPP_HOME}/.local/share"
 
+echo "== Deteniendo ${SERVICE_NAME} (si está corriendo) antes de tocar ${APP_DIR} =="
+# IMPORTANTE 3 (review deploy-vps-linux): sin esto, en una actualización el proceso
+# self-contained sigue vivo mientras se borra/repuebla /opt/stockapp-api -- ensambles
+# todavía no cargados se resuelven contra los archivos NUEVOS, y el resultado es un
+# MissingMethodException/TypeLoadException impredecible hasta el próximo restart.
+# 'is-active' en vez de 'stop' directo: en la primera instalación la unit ni siquiera
+# existe todavía, y no queremos que eso sea un error bajo 'set -e'.
+if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+    systemctl stop "$SERVICE_NAME"
+    echo "  Detenido."
+else
+    echo "  No estaba corriendo (primera instalación, o ya estaba detenido) -- nada que parar."
+fi
+
 echo "== Backup de la instalación anterior (si existe) =="
 mkdir -p "$BACKUP_ROOT"
 if [[ -d "$APP_DIR" ]] && [[ -n "$(ls -A "$APP_DIR" 2>/dev/null || true)" ]]; then
