@@ -426,12 +426,23 @@ builder.Services.AddRateLimiter(options =>
     // setup/recuperación), login es tráfico normal y frecuente del desktop -- compartir
     // el mismo balde de 10 req/60s haría que el uso legítimo de login agote la cuota de
     // los endpoints de recuperación (o viceversa). Mismo shape de configuración
-    // (RateLimiting:Login:PermitLimit/WindowSeconds), mismo default 10/60 como punto de
-    // partida conservador, ajustable en appsettings sin tocar código.
+    // (RateLimiting:Login:PermitLimit/WindowSeconds).
+    //
+    // Default 30/60, NO 10/60 como antes (review deploy-vps-linux, IMPORTANTE 6): la
+    // partición es por RemoteIpAddress, pero el acceso productivo es SIEMPRE por túnel
+    // SSH -- todo el tráfico entra como 127.0.0.1, así que el límite no es "N intentos por
+    // usuario", es "N intentos por MINUTO para todo el municipio". Con el default viejo
+    // (10), varios empleados abriendo el desktop a la misma hora (lunes 8am) más algún
+    // typo de contraseña alcanzaba para que el intento 11 devolviera 429 a todos, incluido
+    // el admin. 30/60 sigue siendo un freno real contra fuerza bruta automatizada (cada
+    // intento paga el costo de un login completo, hashing incluido) mientras deja margen
+    // para uso humano compartido y simultáneo. Ajustable sin recompilar vía appsettings o
+    // una variable extra en deploy/.env -- ver el passthrough en deploy/install.sh y
+    // deploy/.env.example.
     options.AddPolicy("login", httpContext =>
     {
         var config = httpContext.RequestServices.GetRequiredService<IConfiguration>();
-        var permitLimit = config.GetValue<int?>("RateLimiting:Login:PermitLimit") ?? 10;
+        var permitLimit = config.GetValue<int?>("RateLimiting:Login:PermitLimit") ?? 30;
         var windowSeconds = config.GetValue<int?>("RateLimiting:Login:WindowSeconds") ?? 60;
 
         return RateLimitPartition.GetFixedWindowLimiter(

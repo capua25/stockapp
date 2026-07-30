@@ -350,6 +350,35 @@ curl -s http://127.0.0.1:5080/licencia/estado
 Si `codigoMaquina` cambió respecto a la licencia que emitiste (por ejemplo, reinstalaste el
 SO del VPS), tenés que volver a emitir una licencia para el código nuevo.
 
+### Login devuelve `429 Too Many Requests` en horario pico
+
+El límite de login (`RateLimiting:Login`, default 30 intentos/60s) se particiona por
+`RemoteIpAddress` — pero el acceso productivo es siempre por túnel SSH, así que TODO el
+tráfico entra como `127.0.0.1`: no es "30 intentos por usuario", es "30 intentos por
+minuto para todo el municipio". Si varios empleados abren el desktop a la misma hora y
+alguno se equivoca de contraseña, el balde se puede agotar para todos, incluido el admin.
+
+Para subir el límite sin recompilar, agregá esto a tu `deploy/.env` (ver
+`deploy/.env.example`, sección "Overrides opcionales"):
+
+```bash
+RateLimiting__Login__PermitLimit=50
+RateLimiting__Login__WindowSeconds=60
+```
+
+Y volvé a correr `install.sh` con el mismo tarball ya instalado (no hace falta publicar
+uno nuevo):
+
+```bash
+sudo ./install.sh <tarball-ya-instalado>.tar.gz .env
+```
+
+`install.sh` pasa cualquier variable extra de tu `.env` tal cual a
+`/etc/stockapp-api/api.env` (passthrough) — sobrevive a las próximas actualizaciones sin
+que tengas que volver a tocarlo. `appsettings.json` (con el default 30) vive dentro de
+`/opt/stockapp-api`, que `install.sh` reemplaza en cada actualización — por eso el override
+tiene que vivir en `.env`/`api.env`, no editado a mano ahí adentro.
+
 ### Los backups fallan (`pg_dump` ausente o con error)
 
 ```bash

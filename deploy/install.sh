@@ -97,6 +97,21 @@ readonly SERVICE_NAME="stockapp-api"
 readonly BACKUP_ROOT="/var/backups/stockapp-api"
 readonly BACKUPS_A_CONSERVAR=3
 
+# Variables que este script ya conoce y escribe explícitamente en $ENV_TARGET. Cualquier
+# otra variable definida en $ENV_FILE se pasa TAL CUAL (ver "Passthrough" más abajo,
+# IMPORTANTE 6 del review deploy-vps-linux) -- para que un override puesto a mano (p.ej.
+# RateLimiting__Login__PermitLimit) sobreviva a la próxima actualización.
+readonly VARS_CONOCIDAS=(POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB API_PORT JWT_SECRET \
+    BOOTSTRAP_ADMIN_USER BOOTSTRAP_PASSWORD LICENCIA_CLAVE_PUBLICA_BASE64)
+
+es_var_conocida() {
+    local nombre="$1" v
+    for v in "${VARS_CONOCIDAS[@]}"; do
+        [[ "$nombre" == "$v" ]] && return 0
+    done
+    return 1
+}
+
 echo "== Verificando convivencia con 'pinar' (otro proyecto en este VPS) =="
 if docker ps --format '{{.Names}}' 2>/dev/null | grep -qi 'pinar'; then
     echo "  Detecté contenedores de 'pinar' corriendo. Este script no los toca -- solo gestiona"
@@ -282,6 +297,17 @@ CONNECTION_STRING="Host=127.0.0.1;Port=5433;Database=${POSTGRES_DB};Username=${P
     echo "Bootstrap__Password=${BOOTSTRAP_PASSWORD}"
     echo "Licencia__ClavePublicaBase64=${LICENCIA_CLAVE_PUBLICA_BASE64}"
     echo "ConnectionStrings__Default=${CONNECTION_STRING}"
+
+    # Passthrough (IMPORTANTE 6, review deploy-vps-linux): cualquier variable EXTRA que el
+    # operador haya agregado a mano en $ENV_FILE (p.ej. RateLimiting__Login__PermitLimit
+    # para ajustar el límite de login sin recompilar -- ver deploy/.env.example) se copia
+    # tal cual acá. Sin esto, esta sección solo escribía estas 5 claves fijas y CUALQUIER
+    # override manual se perdía en la próxima corrida de install.sh (que regenera
+    # $ENV_TARGET desde cero).
+    while IFS='=' read -r NOMBRE _; do
+        [[ -z "$NOMBRE" || "$NOMBRE" == \#* ]] && continue
+        es_var_conocida "$NOMBRE" || echo "${NOMBRE}=${!NOMBRE}"
+    done < <(grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "$ENV_FILE")
 } > "$ENV_TARGET"
 chown stockapp:stockapp "$ENV_TARGET"
 chmod 600 "$ENV_TARGET"
