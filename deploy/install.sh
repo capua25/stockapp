@@ -363,7 +363,9 @@ if [[ "$OK" -eq 1 ]]; then
 else
     echo
     echo "ERROR: la API no respondió en 127.0.0.1:${API_PORT} tras $((INTENTOS * 2))s." >&2
-    echo "Revisá:" >&2
+    echo "Antes de restaurar un backup: puede ser un falso negativo de este script -- ver" >&2
+    echo "'El script de instalación falló pero el servicio parece estar andando' en" >&2
+    echo "deploy/DEPLOY.md. Revisá:" >&2
     echo "  sudo systemctl status ${SERVICE_NAME} --no-pager" >&2
     echo "  sudo journalctl -u ${SERVICE_NAME} -n 100 --no-pager" >&2
     exit 1
