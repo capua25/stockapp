@@ -45,8 +45,22 @@ public sealed class ServicioConsultaLogs
         if (string.IsNullOrWhiteSpace(directorioLogs) || !Directory.Exists(directorioLogs))
             return [];
 
-        return Directory.GetFiles(directorioLogs, PatronArchivos)
-            .OrderBy(r => Path.GetFileName(r), StringComparer.Ordinal)
-            .ToList();
+        try
+        {
+            return Directory.GetFiles(directorioLogs, PatronArchivos)
+                .OrderBy(r => Path.GetFileName(r), StringComparer.Ordinal)
+                .ToList();
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            // El directorio EXISTE (ya lo chequeamos arriba) pero el proceso no puede leerlo:
+            // esto es un problema de permisos del filesystem del servidor, no del usuario que
+            // pidió el diagnóstico. DomainExceptionHandler distingue esta excepción del
+            // UnauthorizedAccessException genérico (403) para que el mensaje no mande al admin
+            // a revisar SU cuenta en vez del directorio del servidor.
+            throw new DirectorioLogsInaccesibleException(
+                $"No se pudo leer el directorio de logs del servidor. Revisar los permisos de '{directorioLogs}'.",
+                ex);
+        }
     }
 }

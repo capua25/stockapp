@@ -61,6 +61,17 @@ var configuracionLog = new LoggerConfiguration()
 try
 {
     Directory.CreateDirectory(directorioLogs);
+
+    // Directory.CreateDirectory no lanza si el directorio YA existe, sin importar si el
+    // proceso puede leerlo o escribirlo -- alcanza con que exista para que no haga nada. Sin
+    // esta prueba explícita, un directorio que existe pero perdió permisos (chmod manual,
+    // política nueva del municipio, etc.) deja a la API arrancando en silencio, sin sink de
+    // archivo y sin ningún aviso por consola. El archivo de prueba se escribe y se borra acá
+    // mismo, antes de comprometernos con Serilog.WriteTo.File más abajo.
+    var archivoDePrueba = Path.Combine(directorioLogs, $".stockapp-prueba-{Guid.NewGuid():N}");
+    File.WriteAllText(archivoDePrueba, string.Empty);
+    File.Delete(archivoDePrueba);
+
     configuracionLog = configuracionLog.WriteTo.File(
         formatter: new FormateadorSaneado(new MessageTemplateTextFormatter(
             PlantillaLog, CultureInfo.InvariantCulture)),

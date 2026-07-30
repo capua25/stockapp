@@ -34,6 +34,12 @@ public class DomainExceptionHandler : IExceptionHandler
             // ArgumentException, pero con el diccionario Errores agregado más abajo.
             ValidacionImportacionException => (StatusCodes.Status400BadRequest, "Solicitud inválida."),
             ArgumentException            => (StatusCodes.Status400BadRequest, "Solicitud inválida."),
+            // Entrega 2 (diagnóstico): el directorio de logs existe pero el servidor no puede
+            // leerlo (permisos del filesystem, no del usuario). 503 en vez de 403 porque el
+            // problema es del entorno del servidor, no una falta de permiso del cliente — y a
+            // diferencia del 500 genérico de abajo, el detail NO se borra: el admin necesita ver
+            // la ruta para poder pasársela a quien tenga acceso al servidor.
+            DirectorioLogsInaccesibleException => (StatusCodes.Status503ServiceUnavailable, "Servicio no disponible."),
             UnauthorizedAccessException  => (StatusCodes.Status403Forbidden, "Prohibido."),
             // Binding fallido de Minimal API (ej. valor de query param que no matchea un enum):
             // input inválido del cliente, nunca un 500. Se respeta el StatusCode propio de la

@@ -146,6 +146,23 @@ public class DomainExceptionHandlerTests
     }
 
     [Fact]
+    public async Task DirectorioLogsInaccesibleException_Mapea503ConElDetailVisible()
+    {
+        // Punto del fix (bug de review manual, Entrega 2): a diferencia del 500 genérico, acá
+        // el detail NO se borra -- el admin necesita ver el mensaje con la ruta para saber que
+        // el problema es del servidor, no de su propia cuenta (eso era el 403 que tiraba antes).
+        var mensaje = "No se pudo leer el directorio de logs del servidor. " +
+            "Revisar los permisos de '/var/stockapp/logs'.";
+
+        var (status, _, body) = await EjecutarAsync(new DirectorioLogsInaccesibleException(mensaje));
+
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, status);
+        var tieneDetail = body.RootElement.TryGetProperty("detail", out var detalle);
+        Assert.True(tieneDetail);
+        Assert.Equal(mensaje, detalle.GetString());
+    }
+
+    [Fact]
     public async Task StockInsuficienteException_IncluyeLosDatosEstructuradosComoExtensiones()
     {
         // Fase 3b (Mina 2): el cliente HTTP del desktop reconstruye StockInsuficienteException

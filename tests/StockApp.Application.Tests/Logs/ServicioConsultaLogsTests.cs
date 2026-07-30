@@ -95,4 +95,52 @@ public class ServicioConsultaLogsTests : IDisposable
         Assert.Throws<EntidadNoEncontradaException>(
             () => servicio.ResolverArchivosParaZip(Path.Combine(_directorio, "no-existe")));
     }
+
+    [Fact]
+    public void ObtenerResumen_DirectorioSinPermiso_LanzaDirectorioLogsInaccesibleConLaRuta()
+    {
+        Directory.CreateDirectory(_directorio);
+        var servicio = new ServicioConsultaLogs();
+
+        // Quitamos el permiso de lectura+ejecución del directorio: en Linux esto hace que
+        // Directory.GetFiles falle con UnauthorizedAccessException real de System.IO -- mismo
+        // truco de filesystem real (sin fakes) que ServicioBackupTests.
+        // LimpiarTmpHuerfanos_ArchivoSinPermisoDeBorrado_NoLanzaYLoDejaEnDisco. Deuda de
+        // portabilidad conocida: no corre en Windows (SetUnixFileMode es no-op/no aplica ahí).
+        File.SetUnixFileMode(_directorio, UnixFileMode.None);
+        try
+        {
+            var ex = Assert.Throws<DirectorioLogsInaccesibleException>(
+                () => servicio.ObtenerResumen(_directorio));
+
+            Assert.Contains(_directorio, ex.Message);
+            Assert.IsType<UnauthorizedAccessException>(ex.InnerException);
+        }
+        finally
+        {
+            File.SetUnixFileMode(_directorio,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+    }
+
+    [Fact]
+    public void ResolverArchivosParaZip_DirectorioSinPermiso_LanzaDirectorioLogsInaccesibleConLaRuta()
+    {
+        Directory.CreateDirectory(_directorio);
+        var servicio = new ServicioConsultaLogs();
+
+        File.SetUnixFileMode(_directorio, UnixFileMode.None);
+        try
+        {
+            var ex = Assert.Throws<DirectorioLogsInaccesibleException>(
+                () => servicio.ResolverArchivosParaZip(_directorio));
+
+            Assert.Contains(_directorio, ex.Message);
+        }
+        finally
+        {
+            File.SetUnixFileMode(_directorio,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+    }
 }
