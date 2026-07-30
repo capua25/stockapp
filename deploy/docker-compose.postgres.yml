@@ -1,0 +1,46 @@
+# Postgres dedicado a StockApp en el VPS.
+#
+# Este VPS ya corre "pinar" (otro proyecto, en Docker: nginx en 0.0.0.0:80/:443, web, api,
+# postgres, redis) — este compose es un stack INDEPENDIENTE, con su propio nombre de
+# proyecto ("stockapp", ver `name:` abajo) para que `docker compose` nunca lo confunda con
+# el de pinar aunque se invoque desde otro directorio. No declara redes ni depende de nada
+# de pinar.
+#
+# Bindeado a 127.0.0.1:5433 (nunca 0.0.0.0): el acceso es solo desde localhost — la propia
+# API de StockApp (systemd, en el host) y, en emergencias, un túnel SSH manual. 5433 en vez
+# de 5432 a propósito, para evitar cualquier ambigüedad con un Postgres que corriera en el
+# host (no es el caso hoy, pero así queda inequívoco igual).
+#
+# Uso (desde la raíz del repo, o donde sea — el --env-file evita cualquier ambigüedad de
+# "directorio del proyecto" de docker compose):
+#   docker compose --env-file deploy/.env -f deploy/docker-compose.postgres.yml up -d
+#   docker compose --env-file deploy/.env -f deploy/docker-compose.postgres.yml ps
+#   docker compose --env-file deploy/.env -f deploy/docker-compose.postgres.yml logs -f
+
+name: stockapp
+
+services:
+  stockapp-pg:
+    image: postgres:16-alpine
+    container_name: stockapp-pg
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5433:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Falta POSTGRES_USER en deploy/.env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en deploy/.env}
+      POSTGRES_DB: ${POSTGRES_DB:?Falta POSTGRES_DB en deploy/.env}
+    volumes:
+      - stockapp_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  # Nombre explícito (no autogenerado) para que sea inconfundible en `docker volume ls`
+  # frente a los volúmenes de pinar.
+  stockapp_pgdata:
+    name: stockapp_pgdata
