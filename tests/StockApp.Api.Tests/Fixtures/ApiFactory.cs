@@ -39,17 +39,40 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     private readonly string _directorioLogsTemporal =
         Path.Combine(Path.GetTempPath(), "StockAppApiTestsLogs_" + Guid.NewGuid());
 
+    // Ver LockInicializacionContenedores: se retiene desde que arranca el contenedor
+    // hasta que se dispone, para que este proceso (Api.Tests) y StockApp.Infrastructure.Tests
+    // -- que corre como proceso `dotnet test` separado cuando se invoca `dotnet test
+    // StockApp.sln` -- nunca tengan contenedores/Ryuk vivos a la vez.
+    private IDisposable? _lockContenedores;
+
     public async Task InitializeAsync()
     {
-        await _container.StartAsync();
-        await using var ctx = CrearContexto();
-        await ctx.Database.MigrateAsync();
+        _lockContenedores = await LockInicializacionContenedores.AdquirirAsync();
+        try
+        {
+            await _container.StartAsync();
+            await using var ctx = CrearContexto();
+            await ctx.Database.MigrateAsync();
+        }
+        catch
+        {
+            _lockContenedores.Dispose();
+            _lockContenedores = null;
+            throw;
+        }
     }
 
     async Task IAsyncLifetime.DisposeAsync()
     {
-        await _container.DisposeAsync();
-        await base.DisposeAsync();
+        try
+        {
+            await _container.DisposeAsync();
+            await base.DisposeAsync();
+        }
+        finally
+        {
+            _lockContenedores?.Dispose();
+        }
 
         // Defensivo: un fallo al limpiar (archivo en uso, permisos) nunca debe romper la
         // corrida de tests -- es prolijidad del entorno, no parte de lo que se está probando.

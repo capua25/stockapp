@@ -29,13 +29,39 @@ public class ApiStartupMigrationTests : IAsyncLifetime
 
     private WebApplicationFactory<Program>? _factory;
 
-    public async Task InitializeAsync() => await _container.StartAsync();
+    // Ver LockInicializacionContenedores: se retiene desde que arranca el contenedor
+    // hasta que se dispone, contra StockApp.Infrastructure.Tests (proceso separado) y
+    // contra ApiFactory (puede correr en paralelo dentro de este mismo proceso, al no
+    // compartir collection con este test).
+    private IDisposable? _lockContenedores;
+
+    public async Task InitializeAsync()
+    {
+        _lockContenedores = await LockInicializacionContenedores.AdquirirAsync();
+        try
+        {
+            await _container.StartAsync();
+        }
+        catch
+        {
+            _lockContenedores.Dispose();
+            _lockContenedores = null;
+            throw;
+        }
+    }
 
     public async Task DisposeAsync()
     {
-        if (_factory is not null)
-            await _factory.DisposeAsync();
-        await _container.DisposeAsync();
+        try
+        {
+            if (_factory is not null)
+                await _factory.DisposeAsync();
+            await _container.DisposeAsync();
+        }
+        finally
+        {
+            _lockContenedores?.Dispose();
+        }
     }
 
     [Fact]
