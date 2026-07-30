@@ -310,6 +310,24 @@ sudo journalctl -u stockapp-api -n 100 --no-pager
   armado en `/etc/stockapp-api/api.env` — reinstalar con `install.sh` regenera ese archivo
   desde `deploy/.env`).
 
+### El script de instalación falló pero el servicio parece estar andando
+
+Antes de restaurar cualquier backup (ver "Rollback" más abajo), confirmá que el servicio
+está realmente roto y no fue un falso negativo del script:
+
+```bash
+sudo systemctl status stockapp-api --no-pager
+curl -s http://127.0.0.1:5080/licencia/estado ; echo
+```
+
+Si `systemctl status` muestra `active (running)` y el `curl` devuelve un JSON con
+`codigoMaquina` (no importa si `activada` es `true` o `false`), la API está sana — el fallo
+fue del script (por ejemplo, un timeout corto si la primera migración tardó más de lo
+esperado), no del servicio. Revisá `sudo journalctl -u stockapp-api -n 100 --no-pager` para
+entender la causa antes de tocar nada más. **No corras el Rollback B**
+(`rm -rf /opt/stockapp-api/*`) sobre una instalación sana — perdés el release que sí
+funciona.
+
 ### La API responde pero todo da `423 Locked`
 
 Licencia no activada, o activada para otro fingerprint. Ver paso 4. Confirmá el código de

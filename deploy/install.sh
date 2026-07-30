@@ -216,10 +216,17 @@ echo "== Arrancando/reiniciando ${SERVICE_NAME} =="
 systemctl restart "$SERVICE_NAME"
 
 echo "  Esperando a que la API responda en 127.0.0.1:${API_PORT}..."
+# CRÍTICO (review deploy-vps-linux): antes se pedía '/', que NO está en la allowlist de
+# BloqueoLicenciaMiddleware -- con la licencia recién instalada (siempre desactivada al
+# principio) '/' devuelve 423 y 'curl -f' sale con código 22, así que este healthcheck
+# fallaba SIEMPRE en una instalación de cero, aunque el servicio estuviera perfectamente
+# sano. '/licencia/estado' sí está en la allowlist (LicenciaEndpoints.cs, anónimo, sin rate
+# limit) y responde 200 tanto con la licencia activada como desactivada -- sirve como
+# healthcheck real antes y después del paso 4 de deploy/DEPLOY.md.
 INTENTOS=20
 OK=0
 for i in $(seq 1 "$INTENTOS"); do
-    if curl -fsS "http://127.0.0.1:${API_PORT}/" >/dev/null 2>&1; then
+    if curl -fsS "http://127.0.0.1:${API_PORT}/licencia/estado" >/dev/null 2>&1; then
         OK=1
         break
     fi
