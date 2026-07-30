@@ -13,4 +13,12 @@ public interface IRevocadorTokens
 
     /// <summary>Indica si un token con claim iat = <paramref name="emitidoEn"/> sigue siendo válido.</summary>
     bool EsValido(int usuarioId, DateTime emitidoEn);
+
+    /// <summary>
+    /// Snapshot de solo lectura del estado interno (usuarioId -> mínimo iat aceptado).
+    /// Instrumentación para tests (Parte 2 del fix de flakiness, ver
+    /// .superpowers/sdd/flakiness-fix.md) -- no participa del flujo real de
+    /// autenticación/revocación, solo diagnóstico.
+    /// </summary>
+    IReadOnlyDictionary<int, DateTime> ObtenerEstadoDiagnostico();
 }

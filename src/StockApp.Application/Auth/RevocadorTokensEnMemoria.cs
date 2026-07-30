@@ -36,4 +36,7 @@ public sealed class RevocadorTokensEnMemoria : IRevocadorTokens
     public bool EsValido(int usuarioId, DateTime emitidoEn)
         => !_minimoAceptadoPorUsuario.TryGetValue(usuarioId, out var minimo)
         || emitidoEn >= minimo;
+
+    public IReadOnlyDictionary<int, DateTime> ObtenerEstadoDiagnostico()
+        => new Dictionary<int, DateTime>(_minimoAceptadoPorUsuario);
 }

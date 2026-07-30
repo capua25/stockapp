@@ -120,6 +120,19 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
                 _ => new UserDataPathProviderFake()));
 
             QuitarBackupProgramadoService(services);
+
+            // Instrumentación del 401 intermitente (Parte 2 del fix de flakiness, ver
+            // .superpowers/sdd/flakiness-fix.md). NO se pudo reproducir la causa raíz ni
+            // descartarla del todo -- esto NO parchea nada, solo deja evidencia la
+            // próxima vez que un 401 inesperado aparezca. IStartupFilter es el punto de
+            // menor invasión: envuelve el pipeline HTTP del host de test SIN tocar
+            // Program.cs (código de producción) ni ninguno de los 278 tests -- se
+            // registra una sola vez acá y cubre TODOS los requests de la collection
+            // "Api" automáticamente. `CreateDefaultClient`/`CreateClient` no son
+            // virtuales en esta versión de Microsoft.AspNetCore.Mvc.Testing (se probó y
+            // no compila), así que instrumentar del lado del servidor -- en vez del
+            // cliente -- fue la alternativa real, no la preferida a priori.
+            services.AddTransient<IStartupFilter, DiagnosticoAutenticacionStartupFilter>();
         });
     }
 

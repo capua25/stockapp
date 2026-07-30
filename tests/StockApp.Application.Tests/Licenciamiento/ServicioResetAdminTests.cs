@@ -66,6 +66,9 @@ public class ServicioResetAdminTests
         public List<int> Revocados { get; } = new();
         public void Revocar(int usuarioId, DateTime ahora) => Revocados.Add(usuarioId);
         public bool EsValido(int usuarioId, DateTime emitidoEn) => !Revocados.Contains(usuarioId);
+
+        public IReadOnlyDictionary<int, DateTime> ObtenerEstadoDiagnostico()
+            => Revocados.ToDictionary(id => id, _ => DateTime.MinValue);
     }
 
     private sealed class UsuarioRepoFake : IUsuarioRepository
