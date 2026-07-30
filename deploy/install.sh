@@ -95,6 +95,7 @@ readonly LIB_DIR="/usr/local/lib/stockapp-api"
 readonly UNIT_TARGET="/etc/systemd/system/stockapp-api.service"
 readonly SERVICE_NAME="stockapp-api"
 readonly BACKUP_ROOT="/var/backups/stockapp-api"
+readonly BACKUPS_A_CONSERVAR=3
 
 echo "== Verificando convivencia con 'pinar' (otro proyecto en este VPS) =="
 if docker ps --format '{{.Names}}' 2>/dev/null | grep -qi 'pinar'; then
@@ -211,6 +212,24 @@ if [[ -d "$APP_DIR" ]] && [[ -n "$(ls -A "$APP_DIR" 2>/dev/null || true)" ]]; th
     echo "  Backup OK (para rollback manual, ver deploy/DEPLOY.md)."
 else
     echo "  No hay instalación previa en '${APP_DIR}' (primera instalación)."
+fi
+
+echo "== Podando backups viejos (conservando los últimos ${BACKUPS_A_CONSERVAR}) =="
+# IMPORTANTE 5 (review deploy-vps-linux): cada corrida copia el release completo (~100 MB)
+# y nada lo borraba nunca -- 20 updates ~ 2 GB. Es el único disco compartido con 'pinar' en
+# este VPS: si se llena, Postgres/Redis de 'pinar' dejan de escribir -- es el único camino
+# por el que este despliegue podría tumbar producción ajena. Cuidado extremo con el
+# borrado: BACKUP_ROOT es readonly y absoluto; "$ts" sale de nombres de directorio que YA
+# existen bajo BACKUP_ROOT (find -mindepth 1 -maxdepth 1); "${DEST_VIEJO:?}" es un
+# cinturón extra contra un 'rm -rf' con variable vacía.
+if [[ -d "$BACKUP_ROOT" ]]; then
+    mapfile -t BACKUPS_VIEJOS < <(find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -r | tail -n "+$((BACKUPS_A_CONSERVAR + 1))")
+    for ts in "${BACKUPS_VIEJOS[@]}"; do
+        [[ -n "$ts" ]] || continue
+        DEST_VIEJO="${BACKUP_ROOT}/${ts}"
+        echo "  Borrando backup viejo '${DEST_VIEJO}' (fuera de los últimos ${BACKUPS_A_CONSERVAR})."
+        rm -rf -- "${DEST_VIEJO:?}"
+    done
 fi
 
 echo "== Extrayendo release =="

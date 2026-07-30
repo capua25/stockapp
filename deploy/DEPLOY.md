@@ -161,7 +161,9 @@ sudo ./install.sh "${TARBALL}" .env
 
 `install.sh` es idempotente: crea el usuario `stockapp` (si no existe), instala
 `postgresql-client-16` y `curl` (si faltan), respalda cualquier instalación previa en
-`/var/backups/stockapp-api/<timestamp>/`, extrae el release en `/opt/stockapp-api`, genera
+`/var/backups/stockapp-api/<timestamp>/` (conservando solo los últimos 3 — los más
+viejos se borran automáticamente para no acumular ~100 MB por actualización sin límite
+en un disco compartido con "pinar"), extrae el release en `/opt/stockapp-api`, genera
 `/etc/stockapp-api/api.env` (600, secretos) a partir de tu `.env`, instala la unit de
 systemd con el puerto correcto, y arranca el servicio — verificando al final que responde
 en `127.0.0.1:5080`.
@@ -421,7 +423,8 @@ sudo ./install.sh stockapp-api-<version-anterior>-linux-x64.tar.gz .env
 ```
 
 **B) Restaurar el backup automático que hizo `install.sh` antes de la última actualización**
-(útil si no conservaste el tarball anterior):
+(útil si no conservaste el tarball anterior — solo quedan disponibles los últimos 3
+backups, `install.sh` poda los más viejos automáticamente en cada corrida):
 
 ```bash
 ls /var/backups/stockapp-api/                      # elegí el timestamp correcto
