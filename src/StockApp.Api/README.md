@@ -9,7 +9,10 @@ Fase 3a: bootstrap de primer arranque, migración automática, DTOs de lectura).
 - .NET 10 SDK
 - PostgreSQL accesible (local o contenedor Docker).
   En desarrollo se usa el contenedor `stockapp-pg` (`postgres:16-alpine`), expuesto
-  en `localhost:5432`, con la connection string por defecto de `appsettings.json`.
+  en `localhost:5432`. `appsettings.json` NO trae una connection string funcional —
+  es un placeholder a propósito (nunca se commitea una credencial real). La real se
+  configura vía user-secrets en dev (ver más abajo) o `ConnectionStrings__Default` en
+  producción.
 - El primer Admin nace por seed al arrancar la API (`Bootstrap:AdminUser`/`Bootstrap:Password`,
   vía user-secrets en dev o variables de entorno `Bootstrap__AdminUser`/`Bootstrap__Password`
   en producción) — ya no depende de `StockApp.Seeder` ni de la app desktop. Los endpoints

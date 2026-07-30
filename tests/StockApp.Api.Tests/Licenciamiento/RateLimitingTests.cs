@@ -56,4 +56,33 @@ public class RateLimitingTests : ApiTestBase
             Assert.NotEqual(HttpStatusCode.TooManyRequests, response.StatusCode);
         }
     }
+
+    /// <summary>
+    /// F1 (deploy-vps-linux): POST /auth/login no tenía freno alguno antes de este fix —
+    /// aunque el acceso productivo sea por túnel SSH, un login sin límite es fuerza bruta
+    /// gratis. Política propia "login" (no comparte balde con "licenciamiento", ver
+    /// Program.cs), mismo mecanismo de test que LicenciaActivar_SuperaElLimiteConfigurado_
+    /// Devuelve429 de arriba.
+    /// </summary>
+    [Fact]
+    public async Task Login_SuperaElLimiteConfigurado_Devuelve429()
+    {
+        await using var factoryLimitado = Factory.WithWebHostBuilder(builder =>
+            builder.ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(
+                new Dictionary<string, string?>
+                {
+                    ["RateLimiting:Login:PermitLimit"] = "2",
+                    ["RateLimiting:Login:WindowSeconds"] = "60",
+                })));
+        var client = factoryLimitado.CreateClient();
+        var body = new LoginRequest("usuario-inexistente", "lo-que-sea");
+
+        var r1 = await client.PostAsJsonAsync("/auth/login", body);
+        var r2 = await client.PostAsJsonAsync("/auth/login", body);
+        var r3 = await client.PostAsJsonAsync("/auth/login", body);
+
+        Assert.NotEqual(HttpStatusCode.TooManyRequests, r1.StatusCode);
+        Assert.NotEqual(HttpStatusCode.TooManyRequests, r2.StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, r3.StatusCode);
+    }
 }

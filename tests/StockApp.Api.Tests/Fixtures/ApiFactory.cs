@@ -108,6 +108,13 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
                 // pisa este valor sin afectar al resto.
                 ["RateLimiting:Licenciamiento:PermitLimit"] = "1000",
                 ["RateLimiting:Licenciamiento:WindowSeconds"] = "60",
+
+                // Mismo motivo que arriba, para la política "login" (F1, deploy-vps-linux):
+                // casi toda la suite hace POST /auth/login para obtener un token, así que un
+                // default bajo tumbaría la collection entera con 429 mucho antes de llegar a
+                // RateLimitingTests. Ese test override el límite igual que el de licencia.
+                ["RateLimiting:Login:PermitLimit"] = "1000",
+                ["RateLimiting:Login:WindowSeconds"] = "60",
             });
         });
 

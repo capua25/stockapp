@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.RateLimiting;
 using StockApp.Api.Auth;
 using StockApp.Application.Auth;
 using StockApp.Application.Interfaces;
@@ -46,7 +47,7 @@ public static class AuthEndpoints
             var usuarioResponse = new UsuarioLoginResponse(
                 usuario.Id, usuario.NombreUsuario, usuario.NombreCompleto, usuario.Rol);
             return Results.Ok(new LoginResponse(token, usuarioResponse));
-        });
+        }).RequireRateLimiting("login");
 
         return app;
     }

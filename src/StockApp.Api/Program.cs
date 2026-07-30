@@ -421,6 +421,30 @@ builder.Services.AddRateLimiter(options =>
             });
     });
 
+    // POST /auth/login (hardening deploy-vps-linux): política PROPIA, no reutiliza
+    // "licenciamiento". A diferencia de licencia/activar y reset-admin (uso raro, solo
+    // setup/recuperación), login es tráfico normal y frecuente del desktop -- compartir
+    // el mismo balde de 10 req/60s haría que el uso legítimo de login agote la cuota de
+    // los endpoints de recuperación (o viceversa). Mismo shape de configuración
+    // (RateLimiting:Login:PermitLimit/WindowSeconds), mismo default 10/60 como punto de
+    // partida conservador, ajustable en appsettings sin tocar código.
+    options.AddPolicy("login", httpContext =>
+    {
+        var config = httpContext.RequestServices.GetRequiredService<IConfiguration>();
+        var permitLimit = config.GetValue<int?>("RateLimiting:Login:PermitLimit") ?? 10;
+        var windowSeconds = config.GetValue<int?>("RateLimiting:Login:WindowSeconds") ?? 60;
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "desconocido",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = permitLimit,
+                Window = TimeSpan.FromSeconds(windowSeconds),
+                QueueLimit = 0,
+                AutoReplenishment = true,
+            });
+    });
+
     // Mismo shape de ProblemDetails que el resto de la API (401/403/500) en vez de un
     // body vacío por defecto.
     options.OnRejected = async (context, _) =>
@@ -485,10 +509,11 @@ using (var scope = app.Services.CreateScope())
 app.UseExceptionHandler();
 
 // UseRateLimiter ANTES del bloqueo por licencia: aunque BloqueoLicenciaMiddleware siempre
-// deja pasar /licencia/* y /auth/reset-admin/* (están en su propia allowlist), el rate
-// limiter va primero en el pipeline para cortar un flood contra esos endpoints lo antes
-// posible, sin depender de esa allowlist como única defensa. Solo pesa sobre los 3
-// endpoints con .RequireRateLimiting("licenciamiento") — el resto pasa de largo sin costo.
+// deja pasar /licencia/*, /auth/reset-admin/* y /auth/login (están en su propia allowlist),
+// el rate limiter va primero en el pipeline para cortar un flood contra esos endpoints lo
+// antes posible, sin depender de esa allowlist como única defensa. Solo pesa sobre los 4
+// endpoints con .RequireRateLimiting("licenciamiento"|"login") — el resto pasa de largo
+// sin costo.
 app.UseRateLimiter();
 
 // Bloqueo por licencia (Inc 7 Fase B): 423 Locked a todo salvo /licencia/*, /auth/reset-admin/*,
