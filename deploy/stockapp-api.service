@@ -1,0 +1,82 @@
+# Unit de systemd para StockApp.Api.
+#
+# NO se instala este archivo tal cual con `cp`: install.sh lo copia a
+# /etc/systemd/system/stockapp-api.service reemplazando el placeholder __API_PORT__ por el
+# valor de API_PORT en deploy/.env (default 5080 si no está seteado). Si preferís instalarlo
+# a mano, reemplazá __API_PORT__ vos mismo antes de copiarlo.
+#
+# Decisiones de arquitectura que este unit refleja (ver deploy/DEPLOY.md):
+#   - La API corre por systemd, NO en contenedor: containerizarla haría que
+#     /etc/machine-id cambie en cada recreación del contenedor y la licencia (atada al
+#     fingerprint de esta máquina) quedaría bloqueada.
+#   - Bindeada a 127.0.0.1 únicamente. No se abre ningún puerto — el acceso es por túnel
+#     SSH (ver DEPLOY.md). No se toca el firewall ni el nginx de "pinar" (otro proyecto en
+#     este mismo VPS).
+#   - User=stockapp con HOME=/var/lib/stockapp (HOME real, no /nonexistent): StockApp.Api
+#     resuelve backups/logs/licencia vía Environment.SpecialFolder.LocalApplicationData,
+#     que en Linux es $HOME/.local/share -- sin un HOME real, esos tres subsistemas
+#     escribirían a un path inexistente o inaccesible.
+#   - CRÍTICO, verificado empíricamente (no es documentación oficial): .NET en Linux solo
+#     devuelve "$HOME/.local/share" si ESE DIRECTORIO YA EXISTE Y ES LEGIBLE en el momento
+#     en que arranca el proceso (Environment.GetFolderPathCore hace un Access(path, R_OK)
+#     y, si falla, con la opción por defecto devuelve STRING VACÍO en vez de crear el
+#     directorio). Si nadie lo crea antes del primer arranque, UserDataPathProvider
+#     resuelve un path RELATIVO ("StockApp/logs", etc.) contra WorkingDirectory -- que bajo
+#     ProtectSystem=strict rompe backups y la persistencia de la licencia EN SILENCIO. Por
+#     eso install.sh crea /var/lib/stockapp/.local/share explícitamente antes de instalar
+#     la unit — no asumas que useradd --create-home alcanza (NO crea esa subcarpeta).
+
+[Unit]
+Description=StockApp API (StockApp.Api, self-contained linux-x64)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=stockapp
+Group=stockapp
+WorkingDirectory=/opt/stockapp-api
+
+Environment=HOME=/var/lib/stockapp
+Environment=ASPNETCORE_URLS=http://127.0.0.1:__API_PORT__
+Environment=ASPNETCORE_ENVIRONMENT=Production
+
+# Secretos (Jwt__Secret, Bootstrap__AdminUser, Bootstrap__Password,
+# Licencia__ClavePublicaBase64, ConnectionStrings__Default). Generado por install.sh a
+# partir de deploy/.env, con permisos 600 — NUNCA se commitea ni vive en el repo.
+EnvironmentFile=/etc/stockapp-api/api.env
+
+# Espera activa a que Postgres responda ANTES de arrancar la API (ver el comentario largo
+# en wait-for-postgres.sh sobre por qué esto es necesario y no opcional).
+ExecStartPre=/usr/local/lib/stockapp-api/wait-for-postgres.sh
+
+ExecStart=/opt/stockapp-api/StockApp.Api
+
+Restart=on-failure
+RestartSec=5
+
+# wait-for-postgres.sh puede tardar hasta 60s (30 intentos x 2s) antes de que ExecStart
+# siquiera arranque; más el tiempo de MigrateAsync + seed + carga de licencia al inicio de
+# Program.cs. 180s da margen holgado sin ocultar un cuelgue real indefinidamente.
+TimeoutStartSec=180
+
+# ── Endurecimiento ──────────────────────────────────────────────────────────────────
+# Verificado contra lo que la app necesita en tiempo de ejecución:
+#   - Escribir en su directorio de datos ($HOME/.local/share/StockApp: logs, backups,
+#     licencia.lic) -> cubierto por ReadWritePaths=/var/lib/stockapp.
+#   - Leer /etc/machine-id (fingerprint de licencia) -> ProtectSystem=strict deja /etc
+#     de solo lectura, no lo oculta; alcanza para leer.
+#   - Ejecutar pg_dump (postgresql-client-16, en el PATH del sistema) -> ProtectSystem no
+#     restringe ejecución de binarios existentes, solo escritura fuera de ReadWritePaths.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/stockapp
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target
