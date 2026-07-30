@@ -289,6 +289,13 @@ mv "$STAGING_DIR" "$APP_DIR"
 echo "== Generando ${ENV_TARGET} (secretos, 600) =="
 mkdir -p "$ENV_DIR"
 CONNECTION_STRING="Host=127.0.0.1;Port=5433;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+# MENOR 8 (review deploy-vps-linux): umask 077 ANTES de crear el archivo. Sin esto,
+# '> "$ENV_TARGET"' lo crea con el umask por defecto (0644) y hay una ventana -- hasta el
+# 'chmod 600' de más abajo -- en la que otro usuario local de este VPS compartido podría
+# leer JWT_SECRET y las contraseñas. El 'chmod 600' se mantiene igual, como cinturón y
+# tiradores.
+UMASK_PREVIO="$(umask)"
+umask 077
 {
     echo "# Generado por install.sh a partir de $(basename "$ENV_FILE") — NO editar a mano,"
     echo "# volver a correr install.sh con el .env correcto en su lugar."
@@ -309,6 +316,7 @@ CONNECTION_STRING="Host=127.0.0.1;Port=5433;Database=${POSTGRES_DB};Username=${P
         es_var_conocida "$NOMBRE" || echo "${NOMBRE}=${!NOMBRE}"
     done < <(grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "$ENV_FILE")
 } > "$ENV_TARGET"
+umask "$UMASK_PREVIO"
 chown stockapp:stockapp "$ENV_TARGET"
 chmod 600 "$ENV_TARGET"
 
