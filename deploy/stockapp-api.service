@@ -31,6 +31,16 @@ Description=StockApp API (StockApp.Api, self-contained linux-x64)
 After=docker.service
 Requires=docker.service
 
+# MENOR 7 (review deploy-vps-linux): ExecStartPre (hasta 60s) + Restart=on-failure +
+# RestartSec=5 da ciclos de ~65s -- muy por encima de la ventana de 10s que systemd usa
+# por defecto para su propio rate-limiter de arranques (5 intentos/10s). Sin esto, con
+# Postgres caído la unit reintenta PARA SIEMPRE sin caer nunca a "failed": nadie se entera.
+# Con StartLimitIntervalSec/Burst explícitos, después de 5 intentos fallidos en 10 minutos
+# systemd deja de reintentar y marca la unit "failed" -- visible en 'systemctl status' y
+# para cualquier monitoreo que mire ese estado.
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
 [Service]
 Type=simple
 User=stockapp
