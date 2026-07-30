@@ -213,17 +213,44 @@ else
     echo "  No hay instalación previa en '${APP_DIR}' (primera instalación)."
 fi
 
-echo "== Extrayendo release en ${APP_DIR} =="
-mkdir -p "$APP_DIR"
-find "$APP_DIR" -mindepth 1 -delete
-tar -xzf "$TARBALL" -C "$APP_DIR"
-
-if [[ ! -x "${APP_DIR}/StockApp.Api" ]]; then
-    echo "ERROR: el tarball extraído no contiene un ejecutable 'StockApp.Api' en la raíz de ${APP_DIR}." >&2
-    echo "       ¿Se generó con deploy/publish-api.sh?" >&2
+echo "== Extrayendo release =="
+echo "  Verificando integridad del tarball..."
+# IMPORTANTE 4 (review deploy-vps-linux): esta verificación, y toda la extracción, corren
+# contra un directorio de STAGING -- nunca contra $APP_DIR directamente. Antes, 'find
+# -delete' corría ANTES de 'tar -xzf': un tarball corrupto/truncado (p.ej. un scp cortado a
+# mitad de camino, escenario realista con un tarball de ~100MB) dejaba $APP_DIR vacío y el
+# script salía por 'set -e', con la instalación rota y sólo recuperable a mano. Ahora un
+# tarball corrupto falla ACÁ, antes de tocar un solo byte de la instalación existente.
+if ! tar -tzf "$TARBALL" >/dev/null; then
+    echo "ERROR: '${TARBALL}' está corrupto o incompleto (falló 'tar -tzf')." >&2
+    echo "       No se tocó ${APP_DIR}. Si el servicio anterior estaba corriendo y lo" >&2
+    echo "       necesitás arriba ya: sudo systemctl start ${SERVICE_NAME}" >&2
     exit 1
 fi
-chown -R stockapp:stockapp "$APP_DIR"
+
+STAGING_DIR="${APP_DIR}.new"
+rm -rf "$STAGING_DIR"
+mkdir -p "$STAGING_DIR"
+tar -xzf "$TARBALL" -C "$STAGING_DIR"
+
+if [[ ! -x "${STAGING_DIR}/StockApp.Api" ]]; then
+    echo "ERROR: el tarball extraído no contiene un ejecutable 'StockApp.Api' en su raíz." >&2
+    echo "       ¿Se generó con deploy/publish-api.sh? No se tocó ${APP_DIR}." >&2
+    rm -rf "$STAGING_DIR"
+    exit 1
+fi
+chown -R stockapp:stockapp "$STAGING_DIR"
+
+echo "  Swap atómico: reemplazando ${APP_DIR} por la release nueva..."
+# 'mv' entre dos directorios del mismo filesystem (ambos bajo /opt) es un simple rename --
+# prácticamente instantáneo, minimiza a casi cero la ventana sin binarios en $APP_DIR.
+OLD_DIR=""
+if [[ -d "$APP_DIR" ]]; then
+    OLD_DIR="${APP_DIR}.previo.$$"
+    mv "$APP_DIR" "$OLD_DIR"
+fi
+mv "$STAGING_DIR" "$APP_DIR"
+[[ -n "$OLD_DIR" ]] && rm -rf "$OLD_DIR"
 
 echo "== Generando ${ENV_TARGET} (secretos, 600) =="
 mkdir -p "$ENV_DIR"
