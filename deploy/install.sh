@@ -342,7 +342,11 @@ echo "  Esperando a que la API responda en 127.0.0.1:${API_PORT}..."
 # sano. '/licencia/estado' sí está en la allowlist (LicenciaEndpoints.cs, anónimo, sin rate
 # limit) y responde 200 tanto con la licencia activada como desactivada -- sirve como
 # healthcheck real antes y después del paso 4 de deploy/DEPLOY.md.
-INTENTOS=20
+# MENOR 9 (review deploy-vps-linux): 90 intentos x 2s = 180s, alineado con
+# TimeoutStartSec=180 de stockapp-api.service (antes: 20 x 2s = 40s, muy por debajo --
+# daba un "ERROR" falso en un primer arranque con migración lenta, aunque el servicio
+# terminara arrancando bien segundos después).
+INTENTOS=90
 OK=0
 for i in $(seq 1 "$INTENTOS"); do
     if curl -fsS "http://127.0.0.1:${API_PORT}/licencia/estado" >/dev/null 2>&1; then
