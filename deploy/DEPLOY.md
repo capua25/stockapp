@@ -132,11 +132,19 @@ En tu máquina:
 deploy/publish-api.sh                 # genera deploy/dist/stockapp-api-<version>-linux-x64.tar.gz
 ```
 
-Copiá el tarball y el resto de los artefactos de instalación al VPS:
+El comando anterior imprime la ruta EXACTA del tarball generado (última línea,
+`[publish-api] OK: ...`). Usá siempre ese nombre exacto de acá en adelante — **nunca un
+glob** como `stockapp-api-*-linux-x64.tar.gz`: `deploy/dist/` normalmente tiene más de un
+tarball (versiones previas, guardadas a propósito para rollback — ver el final de esta
+sección), y un glob ahí expande a más de un argumento. `install.sh` ahora exige
+exactamente 2 argumentos y rechaza correr si no los recibe, así que ese escenario ya no
+pasa desapercibido — pero de todos modos no dependas de que el script te salve, escribí el
+nombre exacto:
 
 ```bash
+TARBALL="stockapp-api-<version>-linux-x64.tar.gz"   # el que imprimió el comando anterior
 scp -P 34377 \
-  deploy/dist/stockapp-api-*-linux-x64.tar.gz \
+  "deploy/dist/${TARBALL}" \
   deploy/install.sh deploy/stockapp-api.service deploy/wait-for-postgres.sh \
   usuario@<ip-del-vps>:~/stockapp-deploy/
 ```
@@ -148,7 +156,7 @@ En el VPS:
 
 ```bash
 cd ~/stockapp-deploy
-sudo ./install.sh stockapp-api-*-linux-x64.tar.gz .env
+sudo ./install.sh "${TARBALL}" .env
 ```
 
 `install.sh` es idempotente: crea el usuario `stockapp` (si no existe), instala

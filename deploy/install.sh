@@ -30,13 +30,23 @@ if [[ "${EUID}" -ne 0 ]]; then
     exit 1
 fi
 
-TARBALL="${1:-}"
-ENV_FILE="${2:-}"
-
-if [[ -z "$TARBALL" || -z "$ENV_FILE" ]]; then
+# Exactamente 2 argumentos (review deploy-vps-linux, IMPORTANTE 2): un glob ambiguo como
+# 'stockapp-api-*-linux-x64.tar.gz .env' contra un deploy/dist/ con más de un tarball
+# (publish-api.sh no borra los anteriores a propósito -- son el mecanismo de rollback, ver
+# DEPLOY.md) expande a MÁS de 2 argumentos. Sin esta guarda, el .env real terminaba
+# corriéndose a $3 (ignorado en silencio) y ENV_FILE quedaba siendo un segundo tarball --
+# que pasaba el chequeo '[[ -f ]]' de abajo y llegaba intacto hasta el 'source' más abajo:
+# un 'source' de un binario gzip, COMO ROOT.
+if [[ "$#" -ne 2 ]]; then
     echo "Uso: sudo $0 <ruta-al-tar.gz> <ruta-al-.env>" >&2
+    echo "Recibí $# argumento(s); deben ser exactamente 2. Si le pasaste un glob y" >&2
+    echo "'deploy/dist/' tiene más de un tarball, escribí la ruta exacta del que" >&2
+    echo "querés instalar en vez de un patrón." >&2
     exit 1
 fi
+
+TARBALL="$1"
+ENV_FILE="$2"
 
 if [[ ! -f "$TARBALL" ]]; then
     echo "ERROR: no existe el tarball '${TARBALL}'." >&2
@@ -45,6 +55,21 @@ fi
 
 if [[ ! -f "$ENV_FILE" ]]; then
     echo "ERROR: no existe el archivo de entorno '${ENV_FILE}'. Copiá deploy/.env.example y completalo." >&2
+    exit 1
+fi
+
+# Defensa en profundidad además del chequeo de argumentos de arriba: que ENV_FILE no sea,
+# él mismo, un tarball -- y que tenga forma de archivo de entorno -- ANTES de hacer
+# 'source' sobre él más abajo.
+if [[ "$ENV_FILE" == *.tar.gz || "$ENV_FILE" == *.tgz ]]; then
+    echo "ERROR: '${ENV_FILE}' tiene extensión de tarball, no de archivo de entorno." >&2
+    echo "       Uso: sudo $0 <ruta-al-tar.gz> <ruta-al-.env>" >&2
+    exit 1
+fi
+
+if ! grep -qE '^[A-Za-z_][A-Za-z0-9_]*=' "$ENV_FILE"; then
+    echo "ERROR: '${ENV_FILE}' no parece un archivo de entorno (ninguna línea con forma" >&2
+    echo "       CLAVE=valor). ¿Es realmente tu .env?" >&2
     exit 1
 fi
 
