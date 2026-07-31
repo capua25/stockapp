@@ -99,6 +99,18 @@ public class IngresoPorFacturaServiceTests
         movRepo.Verify(r => r.RegistrarIngresoPorFacturaAtomicoAsync(It.IsAny<IngresoPorFacturaArgs>()), Times.Never);
     }
 
+    [Fact]
+    public async Task RegistrarAsync_SinPermisoGastos_LanzaExcepcionSinTocarElRepo()
+    {
+        var (svc, movRepo, _, _, _, _, _, _, _, _, auth) = Crear();
+        auth.Setup(a => a.Verificar(It.IsAny<RolUsuario?>(), Permisos.RegistrarGastos))
+            .Throws<UnauthorizedAccessException>();
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => svc.RegistrarAsync(DtoValido()));
+
+        movRepo.Verify(r => r.RegistrarIngresoPorFacturaAtomicoAsync(It.IsAny<IngresoPorFacturaArgs>()), Times.Never);
+    }
+
     // ── Validaciones de renglones y cabecera ─────────────────────────────────
 
     [Fact]
@@ -156,6 +168,20 @@ public class IngresoPorFacturaServiceTests
             1, new ProductoNuevoDto("X", "Y", null, 1, 1m), 1m, 10m, false);
 
         await Assert.ThrowsAsync<ArgumentException>(() => svc.RegistrarAsync(DtoValido(renglon)));
+    }
+
+    [Fact]
+    public async Task RegistrarAsync_ProductoNuevoConUnidadMedidaInexistente_LanzaEntidadNoEncontrada()
+    {
+        var (svc, movRepo, _, _, _, _, _, _, unidades, _, _) = Crear();
+        unidades.Setup(u => u.ObtenerPorIdAsync(99)).ReturnsAsync((UnidadMedida?)null);
+
+        var renglon = new RenglonFacturaDto(
+            null, new ProductoNuevoDto("SKU-N1", "Producto nuevo", null, 99, 50m), 3m, 20m, false);
+
+        await Assert.ThrowsAsync<EntidadNoEncontradaException>(() => svc.RegistrarAsync(DtoValido(renglon)));
+
+        movRepo.Verify(r => r.RegistrarIngresoPorFacturaAtomicoAsync(It.IsAny<IngresoPorFacturaArgs>()), Times.Never);
     }
 
     [Fact]

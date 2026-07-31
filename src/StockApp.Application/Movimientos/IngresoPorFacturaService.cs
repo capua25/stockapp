@@ -132,7 +132,7 @@ public class IngresoPorFacturaService : IIngresoPorFacturaService
                 if (string.IsNullOrWhiteSpace(nuevo.Nombre))
                     throw new ArgumentException("El nombre del producto nuevo es obligatorio.");
                 if (await _unidades.ObtenerPorIdAsync(nuevo.UnidadMedidaId) is null)
-                    throw new ArgumentException($"La unidad de medida {nuevo.UnidadMedidaId} no existe.");
+                    throw new EntidadNoEncontradaException($"Unidad de medida {nuevo.UnidadMedidaId} no encontrada.");
                 if (await _productos.ExisteCodigoAsync(nuevo.Codigo, null))
                     throw new ReglaDeNegocioException($"Ya existe un producto con el código '{nuevo.Codigo}'.");
 
