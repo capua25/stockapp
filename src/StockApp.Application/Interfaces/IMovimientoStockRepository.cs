@@ -43,6 +43,25 @@ public record RecalculoAtomicoArgs(
     int UsuarioId,
     string DetalleAuditoria);
 
+/// <summary>Renglón del lote de ingreso por factura, ya validado y compuesto por el service.</summary>
+public record RenglonIngresoFacturaArgs(
+    int? ProductoId,                  // producto existente
+    Producto? ProductoNuevo,          // entidad nueva sin Id, o null si ProductoId no es null
+    decimal Cantidad,
+    decimal PrecioUnitario,
+    bool ActualizarPrecioCosto,
+    decimal? PrecioCostoAnterior);    // snapshot pre-mutación, solo si ActualizarPrecioCosto
+
+/// <summary>Args del lote atómico de ingreso por factura (Gasto + N MovimientoStock + deltas de stock).</summary>
+public record IngresoPorFacturaArgs(
+    Gasto Gasto,
+    IReadOnlyList<RenglonIngresoFacturaArgs> Renglones,
+    int UsuarioId,
+    string DetalleAuditoria);
+
+/// <summary>Resultado del alta atómica: id del gasto y los ids de movimiento generados.</summary>
+public record ResultadoIngresoPorFactura(int GastoId, IReadOnlyList<int> MovimientoIds);
+
 /// <summary>
 /// Contrato de persistencia para movimientos de stock.
 /// Todos los métodos de escritura son atómicos: insert/update + auditoría en UN solo SaveChangesAsync.
@@ -77,4 +96,10 @@ public interface IMovimientoStockRepository
     /// Retorna lista vacía si no hay coincidencias.
     /// </summary>
     Task<IReadOnlyList<MovimientoHistorialDto>> ObtenerHistorialAsync(HistorialMovimientoFiltro filtro);
+
+    /// <summary>
+    /// ATÓMICO: insert Gasto + insert productos nuevos + insert N MovimientoStock + deltas de
+    /// StockActual + cambios selectivos de PrecioCosto + LogAuditoria, todo en UNA transacción.
+    /// </summary>
+    Task<ResultadoIngresoPorFactura> RegistrarIngresoPorFacturaAtomicoAsync(IngresoPorFacturaArgs args);
 }
