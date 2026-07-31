@@ -61,4 +61,8 @@ public enum AccionAuditada
     // ── Finanzas — F5c: importador de planillas, confirmación y reversa (append-only a partir de 42) ──
     ImportacionPlanillas   = 42,
     ReversionImportacion   = 43,
+
+    // ── Movimientos — Ingreso por factura (append-only a partir de 44) ───────
+    IngresoPorFactura           = 44,
+    AnulacionIngresoPorFactura  = 45,
 }

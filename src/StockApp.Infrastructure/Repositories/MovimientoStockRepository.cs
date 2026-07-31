@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using StockApp.Application.Interfaces;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Entities;
@@ -213,4 +214,79 @@ public class MovimientoStockRepository : IMovimientoStockRepository
             .ThenByDescending(i => i.MovimientoId)
             .ToList();
     }
+
+    /// <inheritdoc/>
+    /// ATÓMICO (Task 2: solo productos EXISTENTES; Task 3 agrega producto nuevo; Task 4 agrega
+    /// precio selectivo). Dos SaveChangesAsync dentro de la MISMA transacción explícita: el
+    /// primero genera los Ids de Gasto/MovimientoStock; el segundo escribe el LogAuditoria que
+    /// necesita el Id del Gasto ya generado. Ambos se revierten juntos si algo falla antes del
+    /// commit (mismo principio que RegistrarMovimientoAtomicoAsync).
+    public virtual async Task<ResultadoIngresoPorFactura> RegistrarIngresoPorFacturaAtomicoAsync(IngresoPorFacturaArgs args)
+    {
+        await using var tx = await _ctx.Database.BeginTransactionAsync();
+
+        var movimientos = new List<MovimientoStock>(args.Renglones.Count);
+
+        try
+        {
+            _ctx.Gastos.Add(args.Gasto);
+
+            foreach (var renglon in args.Renglones)
+            {
+                if (renglon.ProductoId is not int productoId)
+                    throw new InvalidOperationException(
+                        "Alta de producto nuevo dentro del lote todavía no soportada (ver Task 3).");
+
+                await _ctx.Productos
+                    .Where(p => p.Id == productoId)
+                    .ExecuteUpdateAsync(s => s.SetProperty(
+                        p => p.StockActual, p => p.StockActual + renglon.Cantidad));
+
+                var movimiento = new MovimientoStock
+                {
+                    ProductoId     = productoId,
+                    UsuarioId      = args.UsuarioId,
+                    Tipo           = TipoMovimiento.Entrada,
+                    Motivo         = MotivoMovimiento.Compra,
+                    Cantidad       = renglon.Cantidad,
+                    PrecioUnitario = renglon.PrecioUnitario,
+                    Fecha          = DateTime.UtcNow,
+                    Gasto          = args.Gasto,
+                };
+                movimientos.Add(movimiento);
+                _ctx.MovimientosStock.Add(movimiento);
+            }
+
+            await _ctx.SaveChangesAsync();
+
+            _ctx.LogsAuditoria.Add(new LogAuditoria
+            {
+                UsuarioId = args.UsuarioId,
+                Fecha     = DateTime.UtcNow,
+                Accion    = AccionAuditada.IngresoPorFactura,
+                Entidad   = "Gasto",
+                EntidadId = args.Gasto.Id,
+                Detalle   = args.DetalleAuditoria,
+            });
+            await _ctx.SaveChangesAsync();
+
+            await tx.CommitAsync();
+
+            return new ResultadoIngresoPorFactura(args.Gasto.Id, movimientos.Select(m => m.Id).ToList());
+        }
+        catch (DbUpdateException ex) when (EsViolacionFacturaUnica(ex))
+        {
+            throw new ReglaDeNegocioException(
+                $"Ya existe la factura '{args.Gasto.NumeroFactura}' para ese proveedor.");
+        }
+    }
+
+    /// <summary>
+    /// Mismo criterio que GastoRepository.EsViolacionFacturaUnica: traduce la violación del
+    /// índice único parcial (Proveedor, Factura, Orden) a 409 en vez de dejarla llegar como
+    /// DbUpdateException cruda (500).
+    /// </summary>
+    private static bool EsViolacionFacturaUnica(DbUpdateException ex)
+        => ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } pg
+           && pg.ConstraintName == "IX_Gastos_ProveedorId_NumeroFactura_NumeroOrden";
 }
