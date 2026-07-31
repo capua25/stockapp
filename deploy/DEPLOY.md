@@ -338,6 +338,39 @@ entender la causa antes de tocar nada más. **No corras el Rollback B**
 (`rm -rf /opt/stockapp-api/*`) sobre una instalación sana — perdés el release que sí
 funciona.
 
+### La unit queda en `failed` y `install.sh` (o `systemctl start`/`restart`) la rechaza
+
+Causa: `stockapp-api.service` tiene `StartLimitIntervalSec=600`/`StartLimitBurst=5` (a
+propósito — ver el comentario en `deploy/stockapp-api.service`, es lo que evita que la unit
+reintente para siempre en silencio si Postgres nunca levanta). Si el servicio falló 5 veces
+en los últimos 10 minutos (el caso típico: el Postgres en Docker no llegó a estar listo a
+tiempo), systemd deja la unit en `failed` y **rechaza cualquier arranque nuevo** con
+`Start request repeated too quickly` hasta que pasen esos 600s.
+
+`install.sh` ya corre `systemctl reset-failed` antes de reiniciar (así que volver a
+correrlo alcanza en la mayoría de los casos), pero si estás operando la unit a mano:
+
+```bash
+sudo systemctl status stockapp-api --no-pager
+# "Active: failed" + "start request repeated too quickly" confirma este escenario
+```
+
+Antes de limpiar el contador, entendé POR QUÉ falló (si no, vas a volver a pegar contra el
+mismo límite en 5 arranques más):
+
+```bash
+sudo journalctl -u stockapp-api -n 100 --no-pager
+```
+
+Con la causa resuelta (por ejemplo, Postgres ya está `healthy` — ver
+`docker compose --env-file .env -f docker-compose.postgres.yml ps`), limpiá el contador de
+fallos y arrancá de nuevo:
+
+```bash
+sudo systemctl reset-failed stockapp-api
+sudo systemctl start stockapp-api
+```
+
 ### La API responde pero todo da `423 Locked`
 
 Licencia no activada, o activada para otro fingerprint. Ver paso 4. Confirmá el código de

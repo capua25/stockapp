@@ -332,6 +332,16 @@ systemctl daemon-reload
 systemctl enable "$SERVICE_NAME" >/dev/null
 
 echo "== Arrancando/reiniciando ${SERVICE_NAME} =="
+# IMPORTANTE (review deploy-vps-linux, fix wave): StartLimitIntervalSec=600/StartLimitBurst=5
+# (stockapp-api.service) hace que, tras 5 arranques fallidos en 10 minutos, systemd deje la
+# unit en "failed" y rechace CUALQUIER 'systemctl start'/'restart' ("start request repeated
+# too quickly") hasta que pasen esos 600s -- o se limpie el contador con 'reset-failed'. Sin
+# esto, re-correr install.sh dentro de esa ventana (el escenario de falla más probable: el
+# Postgres en Docker no llegó a levantar a tiempo) aborta ACÁ bajo 'set -e' -- DESPUÉS de
+# haber parado el servicio, hecho el backup, podado los viejos y swapeado los binarios. El
+# '2>/dev/null || true' es porque 'reset-failed' sobre una unit que nunca falló (o que ni
+# siquiera existe, primera instalación) no es un error real, solo no hay nada que limpiar.
+systemctl reset-failed "$SERVICE_NAME" 2>/dev/null || true
 systemctl restart "$SERVICE_NAME"
 
 echo "  Esperando a que la API responda en 127.0.0.1:${API_PORT}..."
