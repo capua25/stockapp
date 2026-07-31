@@ -353,9 +353,20 @@ umask 077
     # tal cual acá. Sin esto, esta sección solo escribía estas 5 claves fijas y CUALQUIER
     # override manual se perdía en la próxima corrida de install.sh (que regenera
     # $ENV_TARGET desde cero).
+    #
+    # MENOR (review deploy-vps-linux, fix wave): el grep de abajo matchea cualquier línea con
+    # forma 'CLAVE=' -- incluida una línea INTERNA de un valor multilínea entrecomillado en
+    # $ENV_FILE, que 'source' nunca asignó como variable real. '${!NOMBRE}' sobre un NOMBRE
+    # así, bajo 'set -u', es "unbound variable": el script moría ACÁ ADENTRO, con
+    # $ENV_TARGET ya truncado (la redirección de todo este bloque se abrió arriba, en la
+    # línea del '{'), el umask sin restaurar (la línea de más abajo nunca se alcanza) y el
+    # servicio parado. El chequeo '-v' evita evaluar '${!NOMBRE}' salvo que NOMBRE sea
+    # realmente una variable definida -- si no lo es, no era un override real de todos modos
+    # y se salta sin romper nada.
     while IFS='=' read -r NOMBRE _; do
         [[ -z "$NOMBRE" || "$NOMBRE" == \#* ]] && continue
-        es_var_conocida "$NOMBRE" || echo "${NOMBRE}=${!NOMBRE}"
+        es_var_conocida "$NOMBRE" && continue
+        [[ -v "$NOMBRE" ]] && echo "${NOMBRE}=${!NOMBRE-}"
     done < <(grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "$ENV_FILE")
 } > "$ENV_TARGET"
 umask "$UMASK_PREVIO"
