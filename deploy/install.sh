@@ -112,8 +112,10 @@ es_var_conocida() {
     return 1
 }
 
-# Prefijos/nombres PROHIBIDOS en el passthrough (IMPORTANTE 2, review deploy-vps-linux):
-# systemd hace que EnvironmentFile= (stockapp-api.service línea 57) PISE a los Environment=
+# Prefijos/nombres PROHIBIDOS en el passthrough (IMPORTANTE, review deploy-vps-linux, fix
+# wave 2 -- no confundir con "IMPORTANTE 2" de arriba, que es la validación de argumentos
+# de una wave anterior): systemd hace que EnvironmentFile= (stockapp-api.service línea 57)
+# PISE a los Environment=
 # declarados ANTES en el unit -- incluidos ASPNETCORE_URLS=http://127.0.0.1:__API_PORT__
 # (línea 51) y HOME=/var/lib/stockapp (línea 50). Si alguien agrega ASPNETCORE_URLS acá (error
 # natural de quien conoce .NET y quiere cambiar el puerto sin descubrir API_PORT), la API
