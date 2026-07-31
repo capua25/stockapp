@@ -16,13 +16,15 @@ try
         case "generar-claves":
         {
             var salida = LeerOpcion(args, "--salida") ?? Directory.GetCurrentDirectory();
-            Directory.CreateDirectory(salida);
+            var forzar = args.Contains("--forzar");
             var (privadaPem, publicaBase64) = GeneradorClaves.Generar();
 
-            var rutaPrivada = Path.Combine(salida, "clave-privada.pem");
-            File.WriteAllText(rutaPrivada, privadaPem);
+            var resultado = EscritorClavePrivada.Escribir(salida, privadaPem, forzar);
 
-            Console.WriteLine($"Clave privada escrita en: {rutaPrivada}");
+            if (resultado.RutaRespaldo is not null)
+                Console.WriteLine($"Respaldo de la clave anterior: {resultado.RutaRespaldo}");
+
+            Console.WriteLine($"Clave privada escrita en: {resultado.RutaPrivada}");
             Console.WriteLine("GUARDALA FUERA DEL REPO. No la compartas ni la commitees.");
             Console.WriteLine();
             Console.WriteLine("Clave pública (pegar en OpcionesLicencia.ClavePublicaBase64Default):");
@@ -83,7 +85,7 @@ static void ImprimirAyuda()
 {
     Console.WriteLine("StockApp.Licencias.Cli — herramienta interna (no distribuir).");
     Console.WriteLine();
-    Console.WriteLine("  generar-claves  --salida <dir>");
+    Console.WriteLine("  generar-claves  --salida <dir> [--forzar]");
     Console.WriteLine("  emitir-licencia --clave <clave-privada.pem> --cliente \"Ferretería X\" --maquina A3F2-9B41-...");
     Console.WriteLine("  emitir-reset    --clave <clave-privada.pem> --maquina A3F2-9B41-... --desafio <nonce>");
 }
