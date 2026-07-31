@@ -57,6 +57,14 @@ public class PagosGastoViewModelTests
     }
 
     [Fact]
+    public void FechaSeleccionada_EsDateTimeNullable_ParaBindearConCalendarDatePicker()
+    {
+        // Migración DatePicker (DateTimeOffset?) → CalendarDatePicker (DateTime?).
+        Assert.Equal(typeof(DateTime?),
+            typeof(PagosGastoViewModel).GetProperty(nameof(PagosGastoViewModel.FechaSeleccionada))!.PropertyType);
+    }
+
+    [Fact]
     public async Task Inicializar_MuestraPagosYSaldo()
     {
         var (vm, _, _, _, _) = Crear();
@@ -83,6 +91,24 @@ public class PagosGastoViewModelTests
         svc.Verify(s => s.RegistrarPagoAsync(It.Is<PagoGasto>(p =>
             p.GastoId == 5 && p.Monto == 600m && p.Nota == "saldo final")), Times.Once);
         svc.Verify(s => s.ObtenerPorIdAsync(5), Times.AtLeastOnce);  // refresco post-pago
+    }
+
+    [Fact]
+    public async Task RegistrarPago_FechaSeleccionada_SinCorrimientoDeDia()
+    {
+        // CalendarDatePicker bindea DateTime? (no DateTimeOffset?). El pago se registra
+        // fijando el Date elegido a medianoche UTC, sin conversión de huso horario (el
+        // dominio de Finanzas no tiene componente horario).
+        var (vm, svc, _, _, _) = Crear();
+        vm.CargarParaGasto(GastoConPago());
+        await vm.InicializarAsync();
+        vm.MontoTexto = "100,00";
+        vm.FechaSeleccionada = new DateTime(2026, 5, 10);
+
+        await vm.RegistrarPagoCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.RegistrarPagoAsync(It.Is<PagoGasto>(p =>
+            p.Fecha == new DateTime(2026, 5, 10, 0, 0, 0, DateTimeKind.Utc))), Times.Once);
     }
 
     [Fact]

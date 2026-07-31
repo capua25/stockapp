@@ -72,7 +72,7 @@ public partial class GastoFormViewModel : ViewModelBase
 
     [ObservableProperty] private string? _destino;
 
-    [ObservableProperty] private DateTimeOffset? _fechaSeleccionada = DateTimeOffset.Now;
+    [ObservableProperty] private DateTime? _fechaSeleccionada = DateTime.Today;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
@@ -89,7 +89,7 @@ public partial class GastoFormViewModel : ViewModelBase
     [ObservableProperty] private LineaPoa? _lineaPoaSeleccionada;
 
     [ObservableProperty] private bool _esCredito;
-    [ObservableProperty] private DateTimeOffset? _fechaVencimientoSeleccionada;
+    [ObservableProperty] private DateTime? _fechaVencimientoSeleccionada;
 
     [ObservableProperty] private string? _mensajeError;
 
@@ -135,11 +135,10 @@ public partial class GastoFormViewModel : ViewModelBase
         NumeroOrden      = gasto.NumeroOrden;
         Detalle          = gasto.Detalle;
         Destino          = gasto.Destino;
-        FechaSeleccionada = new DateTimeOffset(DateTime.SpecifyKind(gasto.Fecha, DateTimeKind.Utc));
+        FechaSeleccionada = gasto.Fecha;
         MontoTexto       = gasto.MontoTotal.ToString("N2", CulturaMonto);
         EsCredito        = gasto.CondicionPago == CondicionPago.Credito;
-        FechaVencimientoSeleccionada = gasto.FechaVencimiento is null
-            ? null : new DateTimeOffset(DateTime.SpecifyKind(gasto.FechaVencimiento.Value, DateTimeKind.Utc));
+        FechaVencimientoSeleccionada = gasto.FechaVencimiento;
         EsEdicion        = true;
 
         // Fire-and-forget consciente: el panel de adjuntos se carga async sin bloquear

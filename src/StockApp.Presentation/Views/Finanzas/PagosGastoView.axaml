@@ -3,6 +3,7 @@
              xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
              xmlns:e="using:StockApp.Domain.Entities"
              xmlns:conv="using:StockApp.Presentation.Converters"
+             xmlns:beh="using:StockApp.Presentation.Behaviors"
              xmlns:i="https://github.com/projektanker/icons.avalonia"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -53,7 +54,11 @@
                 <WrapPanel>
                     <StackPanel Margin="0,0,12,8">
                         <TextBlock Text="Fecha" />
-                        <DatePicker SelectedDate="{Binding FechaSeleccionada}" />
+                        <CalendarDatePicker SelectedDate="{Binding FechaSeleccionada}"
+                                            PlaceholderText="dd/mm/aaaa"
+                                            SelectedDateFormat="Custom"
+                                            CustomDateFormatString="dd/MM/yyyy"
+                                            beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
                     </StackPanel>
                     <StackPanel Margin="0,0,12,8" MinWidth="140">
                         <TextBlock Text="Monto" />

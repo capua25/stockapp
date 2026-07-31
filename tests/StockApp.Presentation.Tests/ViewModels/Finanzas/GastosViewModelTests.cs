@@ -81,6 +81,16 @@ public class GastosViewModelTests
     }
 
     [Fact]
+    public void FechaDesdeYHasta_SonDateTimeNullable_ParaBindearConCalendarDatePicker()
+    {
+        // Migración DatePicker (DateTimeOffset?) → CalendarDatePicker (DateTime?).
+        Assert.Equal(typeof(DateTime?),
+            typeof(GastosViewModel).GetProperty(nameof(GastosViewModel.FechaDesde))!.PropertyType);
+        Assert.Equal(typeof(DateTime?),
+            typeof(GastosViewModel).GetProperty(nameof(GastosViewModel.FechaHasta))!.PropertyType);
+    }
+
+    [Fact]
     public async Task CargarAsync_PopulaFilasConEstadoCalculado()
     {
         var (vm, _, _, _) = Crear(new List<Gasto>
@@ -151,13 +161,33 @@ public class GastosViewModelTests
     {
         var (vm, svc, _, _) = Crear();
         await vm.CargarAsync();
-        vm.FechaDesde = new DateTimeOffset(2026, 7, 1, 0, 0, 0, TimeSpan.Zero);
+        vm.FechaDesde = new DateTime(2026, 7, 1);
         vm.ProveedorSeleccionado = vm.ProveedoresDisponibles[0];
 
         await vm.FiltrarCommand.ExecuteAsync(null);
 
         svc.Verify(s => s.ListarAsync(It.Is<GastoFiltro>(f =>
             f.ProveedorId == 1 && f.FechaDesde != null)), Times.AtLeastOnce);
+    }
+
+    [Fact]
+    public async Task FiltrarCommand_FechaDesdeYHasta_SinCorrimientoDeDia()
+    {
+        // CalendarDatePicker bindea DateTime? (no DateTimeOffset?). El filtro se arma
+        // fijando el Date elegido a medianoche UTC, SIN conversión real de huso horario
+        // (el dominio de Finanzas no tiene componente horario): Desde = medianoche del
+        // día, Hasta = el último tick del día elegido.
+        var (vm, svc, _, _) = Crear();
+        await vm.CargarAsync();
+        vm.FechaDesde = new DateTime(2026, 7, 1);
+        vm.FechaHasta = new DateTime(2026, 7, 31);
+
+        await vm.FiltrarCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.ListarAsync(It.Is<GastoFiltro>(f =>
+            f.FechaDesde == new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc)
+            && f.FechaHasta == new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc).AddTicks(-1))),
+            Times.AtLeastOnce);
     }
 
     [Fact]

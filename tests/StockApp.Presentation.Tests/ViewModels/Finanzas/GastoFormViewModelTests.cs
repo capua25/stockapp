@@ -82,6 +82,17 @@ public class GastoFormViewModelTests
     }
 
     [Fact]
+    public void FechaSeleccionadaYVencimiento_SonDateTimeNullable_ParaBindearConCalendarDatePicker()
+    {
+        // Migración DatePicker (DateTimeOffset?) → CalendarDatePicker (DateTime?), spec de
+        // reemplazo del spinner de 3 columnas por el calendario desplegable.
+        Assert.Equal(typeof(DateTime?),
+            typeof(GastoFormViewModel).GetProperty(nameof(GastoFormViewModel.FechaSeleccionada))!.PropertyType);
+        Assert.Equal(typeof(DateTime?),
+            typeof(GastoFormViewModel).GetProperty(nameof(GastoFormViewModel.FechaVencimientoSeleccionada))!.PropertyType);
+    }
+
+    [Fact]
     public async Task InicializarAsync_SoloOfreceProveedoresActivos()
     {
         var (vm, _, _, _) = Crear();
@@ -124,12 +135,34 @@ public class GastoFormViewModelTests
         var (vm, svc, _, _) = Crear();
         await CompletarFormularioValidoAsync(vm);
         vm.EsCredito = true;
-        vm.FechaVencimientoSeleccionada = DateTimeOffset.UtcNow.AddDays(30);
+        vm.FechaVencimientoSeleccionada = DateTime.UtcNow.AddDays(30);
 
         await vm.GuardarCommand.ExecuteAsync(null);
 
         svc.Verify(s => s.AltaAsync(It.Is<Gasto>(g =>
             g.CondicionPago == CondicionPago.Credito && g.FechaVencimiento != null), null), Times.Once);
+    }
+
+    [Fact]
+    public async Task Guardar_FechaSeleccionadaYVencimiento_SinCorrimientoDeDia()
+    {
+        // CalendarDatePicker bindea DateTime? (no DateTimeOffset?, ver migración de
+        // DatePicker→CalendarDatePicker). El dominio de Finanzas no tiene componente
+        // horario: la fecha elegida debe guardarse tal cual, sin conversión de huso
+        // horario (a diferencia de MovimientoHistorialViewModel, que sí convierte
+        // local→UTC porque ahí Fecha es un instante real).
+        var (vm, svc, _, _) = Crear();
+        await CompletarFormularioValidoAsync(vm);
+        vm.FechaSeleccionada = new DateTime(2026, 7, 20);
+        vm.EsCredito = true;
+        vm.FechaVencimientoSeleccionada = new DateTime(2026, 8, 19);
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.AltaAsync(It.Is<Gasto>(g =>
+            g.Fecha == new DateTime(2026, 7, 20, 0, 0, 0, DateTimeKind.Utc)
+            && g.FechaVencimiento == new DateTime(2026, 8, 19, 0, 0, 0, DateTimeKind.Utc)),
+            null), Times.Once);
     }
 
     [Fact]
@@ -182,6 +215,34 @@ public class GastoFormViewModelTests
 
         await vm.GuardarCommand.ExecuteAsync(null);
         svc.Verify(s => s.ModificarAsync(It.Is<Gasto>(g => g.Id == 9)), Times.Once);
+    }
+
+    [Fact]
+    public async Task CargarParaEditar_FechaYVencimiento_SinCorrimientoDeDia()
+    {
+        // Round-trip: la fecha que carga CargarParaEditar (gasto.Fecha, ya en UTC
+        // medianoche) tiene que reflejarse igual en FechaSeleccionada (DateTime?,
+        // ver migración a CalendarDatePicker) y volver idéntica al guardar.
+        var (vm, svc, _, _) = Crear();
+        var gasto = new Gasto
+        {
+            Id = 11, ProveedorId = 1, Detalle = "Histórico con fecha",
+            Fecha = new DateTime(2026, 3, 15, 0, 0, 0, DateTimeKind.Utc), MontoTotal = 500m,
+            FuenteFinanciamientoId = 2, RubroGastoId = 3,
+            CondicionPago = CondicionPago.Credito,
+            FechaVencimiento = new DateTime(2026, 4, 15, 0, 0, 0, DateTimeKind.Utc),
+        };
+        vm.CargarParaEditar(gasto);
+        await vm.InicializarAsync();
+
+        Assert.Equal(new DateTime(2026, 3, 15), vm.FechaSeleccionada!.Value.Date);
+        Assert.Equal(new DateTime(2026, 4, 15), vm.FechaVencimientoSeleccionada!.Value.Date);
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.ModificarAsync(It.Is<Gasto>(g =>
+            g.Fecha == new DateTime(2026, 3, 15, 0, 0, 0, DateTimeKind.Utc)
+            && g.FechaVencimiento == new DateTime(2026, 4, 15, 0, 0, 0, DateTimeKind.Utc))), Times.Once);
     }
 
     [Fact]

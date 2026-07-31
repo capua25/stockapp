@@ -40,7 +40,7 @@ public partial class IngresoFormViewModel : ViewModelBase
         }
     }
 
-    [ObservableProperty] private DateTimeOffset? _fechaSeleccionada = DateTimeOffset.Now;
+    [ObservableProperty] private DateTime? _fechaSeleccionada = DateTime.Today;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
@@ -78,7 +78,7 @@ public partial class IngresoFormViewModel : ViewModelBase
     {
         _idEdicion         = ingreso.Id;
         _ingresoParaEditar = ingreso;
-        FechaSeleccionada  = new DateTimeOffset(DateTime.SpecifyKind(ingreso.Fecha, DateTimeKind.Utc));
+        FechaSeleccionada  = ingreso.Fecha;
         Concepto           = ingreso.Concepto;
         MontoTexto         = ingreso.Monto.ToString("N2", CulturaMonto);
         EsEdicion          = true;

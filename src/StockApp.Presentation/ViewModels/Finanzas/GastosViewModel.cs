@@ -75,8 +75,8 @@ public partial class GastosViewModel : ViewModelBase
     private readonly IServicioGuardadoArchivo     _guardado;
 
     // ── Filtros ───────────────────────────────────────────────────────────────
-    [ObservableProperty] private DateTimeOffset? _fechaDesde;
-    [ObservableProperty] private DateTimeOffset? _fechaHasta;
+    [ObservableProperty] private DateTime? _fechaDesde;
+    [ObservableProperty] private DateTime? _fechaHasta;
     [ObservableProperty] private Proveedor? _proveedorSeleccionado;
     [ObservableProperty] private FuenteFinanciamiento? _fuenteSeleccionada;
     [ObservableProperty] private RubroGasto? _rubroSeleccionado;
@@ -183,8 +183,10 @@ public partial class GastosViewModel : ViewModelBase
     }
 
     private GastoFiltro ArmarFiltro() => new(
-        // DatePicker devuelve fecha local: se fija a medianoche UTC del día elegido
-        // (mismo criterio que MovimientoHistorialViewModel).
+        // CalendarDatePicker devuelve la fecha elegida sin componente horario: se fija a
+        // medianoche UTC del día elegido, SIN conversión de huso horario (a diferencia de
+        // MovimientoHistorialViewModel, que sí convierte local→UTC porque ahí Fecha es un
+        // instante real — acá el dominio de Finanzas no tiene componente horario).
         FechaDesde: FechaDesde is null
             ? null : DateTime.SpecifyKind(FechaDesde.Value.Date, DateTimeKind.Utc),
         FechaHasta: FechaHasta is null

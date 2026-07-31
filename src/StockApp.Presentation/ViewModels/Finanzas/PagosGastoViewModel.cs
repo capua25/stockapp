@@ -55,7 +55,7 @@ public partial class PagosGastoViewModel : ViewModelBase
     [ObservableProperty] private decimal _saldoPendiente;
     [ObservableProperty] private string _estado = string.Empty;
 
-    [ObservableProperty] private DateTimeOffset? _fechaSeleccionada = DateTimeOffset.Now;
+    [ObservableProperty] private DateTime? _fechaSeleccionada = DateTime.Today;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(RegistrarPagoCommand))]

@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
+             xmlns:beh="using:StockApp.Presentation.Behaviors"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="760" d:DesignHeight="760"
@@ -50,7 +51,11 @@
                     <Grid ColumnDefinitions="*,12,*">
                         <StackPanel Grid.Column="0" Spacing="4">
                             <TextBlock Text="Fecha" />
-                            <DatePicker SelectedDate="{Binding FechaSeleccionada}" />
+                            <CalendarDatePicker SelectedDate="{Binding FechaSeleccionada}"
+                                                PlaceholderText="dd/mm/aaaa"
+                                                SelectedDateFormat="Custom"
+                                                CustomDateFormatString="dd/MM/yyyy"
+                                                beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
                         </StackPanel>
                         <StackPanel Grid.Column="2" Spacing="4">
                             <TextBlock Text="Monto total" />
@@ -97,7 +102,11 @@
                     <CheckBox IsChecked="{Binding EsCredito}" Content="Compra a crédito" />
                     <StackPanel Spacing="4" IsVisible="{Binding EsCredito}">
                         <TextBlock Text="Fecha de vencimiento" />
-                        <DatePicker SelectedDate="{Binding FechaVencimientoSeleccionada}" />
+                        <CalendarDatePicker SelectedDate="{Binding FechaVencimientoSeleccionada}"
+                                            PlaceholderText="dd/mm/aaaa"
+                                            SelectedDateFormat="Custom"
+                                            CustomDateFormatString="dd/MM/yyyy"
+                                            beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
                     </StackPanel>
 
                     <ContentControl Content="{Binding AdjuntosPanel}"

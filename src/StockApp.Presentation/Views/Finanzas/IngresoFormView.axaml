@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
+             xmlns:beh="using:StockApp.Presentation.Behaviors"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="640" d:DesignHeight="520"
@@ -18,7 +19,11 @@
             <StackPanel Spacing="12" MaxWidth="480" HorizontalAlignment="Left">
 
                 <TextBlock Text="Fecha" />
-                <DatePicker SelectedDate="{Binding FechaSeleccionada}" />
+                <CalendarDatePicker SelectedDate="{Binding FechaSeleccionada}"
+                                    PlaceholderText="dd/mm/aaaa"
+                                    SelectedDateFormat="Custom"
+                                    CustomDateFormatString="dd/MM/yyyy"
+                                    beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
 
                 <TextBlock Text="Concepto" />
                 <TextBox Text="{Binding Concepto}" Watermark="Ej.: Partida mensual FIGM julio" />
