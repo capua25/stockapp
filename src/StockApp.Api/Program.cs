@@ -15,6 +15,7 @@ using StockApp.Api.Auth;
 using StockApp.Api.Backups;
 using StockApp.Api.Endpoints;
 using StockApp.Api.ErrorHandling;
+using StockApp.Api.Json;
 using StockApp.Api.Licenciamiento;
 using StockApp.Api.Logging;
 using StockApp.Application.Auditoria;
@@ -148,6 +149,16 @@ builder.Services.AddExceptionHandler<DomainExceptionHandler>();
 // depende de comportamiento implícito del framework. UseExceptionHandler() (más abajo,
 // post-Build) cubre el caso de excepción no manejada (500) con el mismo servicio.
 builder.Services.AddProblemDetails();
+
+// JSON: normaliza DateTime Unspecified (fecha pelada sin zona horaria, ej. "2026-01-15")
+// a UTC medianoche al deserializar el body de un request — ver DateTimeUnspecifiedAsUtcConverter
+// para el detalle del bug (Npgsql rechaza escribir Unspecified en columnas timestamptz).
+// Minimal APIs con binding de parámetro complejo (Results.Ok(request)) usan las opciones de
+// ConfigureHttpJsonOptions, no las de AddControllers/AddJsonOptions (esta API no usa MVC).
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(new DateTimeUnspecifiedAsUtcConverter());
+});
 
 builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
 builder.Services.AddScoped<IAuditLogger, AuditService>();

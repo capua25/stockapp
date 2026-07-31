@@ -109,6 +109,47 @@ public class GastosEndpointTests : ApiTestBase
     }
 
     [Fact]
+    public async Task PostGastos_FechaSinZonaHoraria_Devuelve201()
+    {
+        // Mismo bug que en /finanzas/ingresos (ver comentario ahí): JSON crudo con "fecha"
+        // pelada (sin offset) deserializa a DateTime Kind=Unspecified, y Npgsql rechaza
+        // escribirlo en la columna timestamptz -> 500 antes del fix.
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var json = $$"""
+            {"proveedorId":{{proveedorId}},"numeroFactura":"SINZONA-01","numeroOrden":null,
+            "detalle":"Gasto sin zona horaria","destino":null,"fecha":"2026-01-15","montoTotal":1500,
+            "fuenteFinanciamientoId":{{fuenteId}},"rubroGastoId":{{rubroId}},"lineaPoaId":null,
+            "condicionPago":0,"fechaVencimiento":null,"movimientoIds":null}
+            """;
+        var response = await client.PostAsync("/finanzas/gastos",
+            new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostGastos_FechaVencimientoSinZonaHoraria_Devuelve201()
+    {
+        // Mismo bug, pero en el campo opcional FechaVencimiento (DateTime?) — condición
+        // Crédito exige que venga completo.
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var json = $$"""
+            {"proveedorId":{{proveedorId}},"numeroFactura":"SINZONA-02","numeroOrden":null,
+            "detalle":"Gasto a crédito sin zona horaria","destino":null,"fecha":"2026-01-15","montoTotal":1500,
+            "fuenteFinanciamientoId":{{fuenteId}},"rubroGastoId":{{rubroId}},"lineaPoaId":null,
+            "condicionPago":1,"fechaVencimiento":"2026-02-15","movimientoIds":null}
+            """;
+        var response = await client.PostAsync("/finanzas/gastos",
+            new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    [Fact]
     public async Task PostGastos_CreditoSinVencimiento_Devuelve409()
     {
         var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();

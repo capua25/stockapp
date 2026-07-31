@@ -68,6 +68,26 @@ public class IngresosCajaEndpointTests : ApiTestBase
     }
 
     [Fact]
+    public async Task PostIngresos_FechaSinZonaHoraria_Devuelve201()
+    {
+        // Bug real: System.Text.Json deserializa "2026-01-15" (sin offset) a un DateTime
+        // con Kind=Unspecified. La columna Fecha es timestamptz (sin HasColumnType explícito
+        // en AppDbContext) y Npgsql rechaza escribir un DateTime Unspecified ahí -> 500.
+        // JSON crudo a propósito: un CrearIngresoCajaRequest tipado en C# ya trae el Kind
+        // seteado (DateTime.UtcNow), por eso ningún test existente agarraba este bug.
+        var fuenteId = await SeedFuenteAsync();
+        var client = ClienteAutenticado(TokenOperador());
+
+        var json = $$"""
+            {"fecha":"2026-01-15","concepto":"Sin zona horaria","fuenteFinanciamientoId":{{fuenteId}},"monto":100}
+            """;
+        var response = await client.PostAsync("/finanzas/ingresos",
+            new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    [Fact]
     public async Task PostIngresos_MontoNoPositivo_Devuelve400()
     {
         var fuenteId = await SeedFuenteAsync();
