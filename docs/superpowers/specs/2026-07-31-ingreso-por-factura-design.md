@@ -19,6 +19,7 @@ El modelo de datos ya soporta el caso: `Gasto` es la cabecera de la factura (pro
 6. **Anulación por asiento inverso.** El libro de movimientos es append-only por diseño; `MovimientoStock` no tiene campo de anulación y no existe ningún método para revertir un movimiento. Anular un lote genera, por cada entrada, una salida espejo (misma cantidad, mismo precio, `Motivo = Ajuste`, comentario con el número de factura) y anula el `Gasto`, todo en una transacción.
 7. **La anulación rechaza si no hay stock.** Si parte de la mercadería ya se consumió, la salida espejo no puede aplicarse: la operación falla entera e informa qué artículos no tienen stock suficiente. Nunca se generan saldos negativos silenciosos.
 8. **Fuente de financiamiento y rubro se eligen a mano en cada carga.** No se preseleccionan ni se configura un default: el municipio imputa a partidas distintas según la compra y la elección debe ser consciente.
+9. **La anulación aplica a cualquier gasto con movimientos asociados**, no solo a los creados por esta pantalla. Un gasto cargado desde Finanzas y asociado a movimientos a mano se anula por el mismo camino. Esto además corrige un agujero existente: hoy `GastoService.AnularAsync` desvincula los movimientos pero deja el stock sumado.
 
 ## Alcance
 
