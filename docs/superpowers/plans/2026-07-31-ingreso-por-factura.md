@@ -45,6 +45,9 @@
 | `tests/StockApp.Api.Tests/IngresoPorFacturaEndpointTests.cs` | (Create) Matriz HTTP. |
 | `tests/StockApp.ApiClient.Tests/IngresoPorFacturaApiClientTests.cs` | (Create) Serialización + mapeo de errores. |
 | `tests/StockApp.Presentation.Tests/ViewModels/Movimientos/IngresoPorFacturaViewModelTests.cs` | (Create) Totales, alta en línea, confirmación de precios. |
+| `src/StockApp.Application/Finanzas/GastoService.cs` | (Modify, Task 11) `AnularAsync` se bifurca a la anulación por asiento inverso cuando el gasto tiene movimientos. |
+| `tests/StockApp.Application.Tests/Finanzas/GastoServiceTests.cs` | (Modify, Task 11) Tests de la bifurcación de `AnularAsync`. |
+| `tests/StockApp.Api.Tests/GastosEndpointTests.cs` | (Modify, Task 11) 409 del DELETE existente ante stock insuficiente. |
 
 ---
 
@@ -3150,7 +3153,374 @@ git commit -m "feat(presentation): vista de ingreso por factura, navegacion y ad
 
 ---
 
+## Task 11: Unificar la anulación de gastos con movimientos
+
+Cierra el agujero que documenta la decisión 9 del spec: hoy `GastoService.AnularAsync` desvincula
+los movimientos del gasto (`DesvincularMovimientosAsync`) pero nunca revierte el stock que esos
+movimientos sumaron — el stock queda "fantasma". La decisión 9 exige que la anulación por asiento
+inverso aplique a CUALQUIER gasto con movimientos asociados, no solo a los creados por la pantalla
+de este plan: también a los vinculados a mano vía `GastoService.AsociarMovimientosAsync` (flujo
+"Asociar factura" ya existente en `EntradaRegistroViewModel`). `AnularAsync` se bifurca: sin
+movimientos asociados, la baja lógica simple de siempre (sin cambios de comportamiento); con
+movimientos asociados, delega en `IMovimientoStockRepository.AnularIngresoPorFacturaAtomicoAsync`
+— el mismo método atómico que ya usa `IIngresoPorFacturaService.AnularLoteAsync` (Task 5) — que
+revierte el stock con salidas espejo y rechaza con el detalle de faltantes si no hay stock
+suficiente, en vez de dejar un saldo fantasma.
+
+**Files:**
+- Modify: `src/StockApp.Application/Interfaces/IMovimientoStockRepository.cs`
+- Modify: `src/StockApp.Infrastructure/Repositories/MovimientoStockRepository.cs`
+- Modify: `src/StockApp.Application/Finanzas/GastoService.cs`
+- Modify: `tests/StockApp.Application.Tests/Finanzas/GastoServiceTests.cs`
+- Modify: `tests/StockApp.Infrastructure.Tests/Repositories/MovimientoStockRepositoryIngresoTests.cs`
+- Modify: `tests/StockApp.Api.Tests/GastosEndpointTests.cs`
+
+**Interfaces:**
+- Consumes: `IMovimientoStockRepository.AnularIngresoPorFacturaAtomicoAsync(int, int, string)`, `ResultadoAnulacionIngreso`, `ResultadoAnulacionIngresoEstado`, `ItemFaltanteStock` (ya declarados en Task 5, sin cambios).
+- Produces: `IMovimientoStockRepository.ExistenMovimientosDeGastoAsync(int)` — consumido únicamente por `GastoService.AnularAsync`. `GastoService` gana el constructor param `IMovimientoStockRepository movRepo`; no requiere tocar `Program.cs` (`IMovimientoStockRepository` ya está registrado — `Program.cs:179`). Sin consumidores adicionales fuera de este plan.
+
+- [ ] **Step 1: Escribir los tests que fallan**
+
+Agregar a `tests/StockApp.Infrastructure.Tests/Repositories/MovimientoStockRepositoryIngresoTests.cs` (dentro de la clase `MovimientoStockRepositoryIngresoTests`, antes del cierre — reutiliza `SeedMaestrosAsync`/`NuevoProducto`/`NuevoGasto` ya definidos ahí):
+
+```csharp
+    [Fact]
+    public async Task ExistenMovimientosDeGastoAsync_SinMovimientos_DevuelveFalse()
+    {
+        var (_, _, proveedor, fuente, rubro) = await SeedMaestrosAsync();
+        var gasto = NuevoGasto(proveedor, fuente, rubro, factura: "EXIST-FAC-1");
+        Context.Gastos.Add(gasto);
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        var existen = await _repo.ExistenMovimientosDeGastoAsync(gasto.Id);
+
+        Assert.False(existen);
+    }
+
+    [Fact]
+    public async Task ExistenMovimientosDeGastoAsync_ConUnMovimiento_DevuelveTrue()
+    {
+        var (um, usuario, proveedor, fuente, rubro) = await SeedMaestrosAsync();
+        var producto = NuevoProducto("EXIST-1", um, stock: 5m);
+        Context.Productos.Add(producto);
+        var gasto = NuevoGasto(proveedor, fuente, rubro, factura: "EXIST-FAC-2");
+        Context.Gastos.Add(gasto);
+        await Context.SaveChangesAsync();
+
+        Context.MovimientosStock.Add(new MovimientoStock
+        {
+            ProductoId = producto.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada,
+            Motivo = MotivoMovimiento.Compra, Cantidad = 5m, PrecioUnitario = 10m,
+            Fecha = DateTime.UtcNow, GastoId = gasto.Id,
+        });
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        var existen = await _repo.ExistenMovimientosDeGastoAsync(gasto.Id);
+
+        Assert.True(existen);
+    }
+```
+
+Reemplazar en `tests/StockApp.Application.Tests/Finanzas/GastoServiceTests.cs` el `record Mocks` y el método `Crear` por (agrega el mock de `IMovimientoStockRepository`, con default `false` para no alterar ningún test existente):
+
+```csharp
+    private sealed record Mocks(
+        GastoService Svc,
+        Mock<IGastoRepository> Repo,
+        Mock<IProveedorRepository> Proveedores,
+        Mock<IFuenteFinanciamientoRepository> Fuentes,
+        Mock<IRubroGastoRepository> Rubros,
+        Mock<ILineaPoaRepository> LineasPoa,
+        Mock<IMovimientoStockRepository> MovRepo,
+        Mock<IAuditLogger> Audit);
+
+    private static Mocks Crear(RolUsuario rol = RolUsuario.Admin)
+    {
+        var repo       = new Mock<IGastoRepository>();
+        var proveedores = new Mock<IProveedorRepository>();
+        var fuentes    = new Mock<IFuenteFinanciamientoRepository>();
+        var rubros     = new Mock<IRubroGastoRepository>();
+        var lineasPoa  = new Mock<ILineaPoaRepository>();
+        var movRepo    = new Mock<IMovimientoStockRepository>();
+        var session    = new Mock<ICurrentSession>();
+        var auth       = new Mock<IAuthSvc>();
+        var audit      = new Mock<IAuditLogger>();
+
+        session.Setup(s => s.RolActual).Returns(rol);
+        session.Setup(s => s.UsuarioActual)
+            .Returns(new StockApp.Application.Auth.UsuarioSesion(1, "usuario", rol, null));
+
+        // Maestros por defecto: existen y están activos (los tests puntuales los pisan)
+        proveedores.Setup(p => p.ObtenerPorIdAsync(It.IsAny<int>()))
+            .ReturnsAsync((int id) => new Proveedor { Id = id, Nombre = $"Proveedor {id}", Activo = true });
+        fuentes.Setup(f => f.ObtenerPorIdAsync(It.IsAny<int>()))
+            .ReturnsAsync((int id) => new FuenteFinanciamiento { Id = id, Nombre = $"Fuente {id}", Activo = true });
+        rubros.Setup(r => r.ObtenerPorIdAsync(It.IsAny<int>()))
+            .ReturnsAsync((int id) => new RubroGasto { Id = id, Codigo = id, Nombre = $"Rubro {id}", Activo = true });
+
+        // Por defecto, sin movimientos asociados: preserva el camino de baja lógica simple para
+        // TODOS los tests que no lo pisan explícitamente (Task 11 — decisión 9 del spec).
+        movRepo.Setup(r => r.ExistenMovimientosDeGastoAsync(It.IsAny<int>())).ReturnsAsync(false);
+
+        var svc = new GastoService(
+            repo.Object, proveedores.Object, fuentes.Object, rubros.Object, lineasPoa.Object,
+            movRepo.Object, session.Object, auth.Object, audit.Object);
+        return new Mocks(svc, repo, proveedores, fuentes, rubros, lineasPoa, movRepo, audit);
+    }
+```
+
+Agregar a `tests/StockApp.Application.Tests/Finanzas/GastoServiceTests.cs`, debajo de `AnularAsync_SinPagosActivos_AnulaDesvinculaYAudita` (sección "── Anulación del gasto ──"):
+
+```csharp
+    [Fact]
+    public async Task AnularAsync_ConMovimientosAsociados_DelegaEnAsientoInversoYNoDesvincula()
+    {
+        // Decisión 9 del spec: un gasto CON movimientos se anula por el mismo camino atómico que
+        // IIngresoPorFacturaService.AnularLoteAsync (Task 5) — nunca por la baja lógica simple,
+        // sin importar si el vínculo lo hizo esta pantalla o AsociarMovimientosAsync a mano.
+        var m = Crear();
+        var gasto = GastoValido();
+        gasto.Id = 1;
+        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(gasto);
+        m.MovRepo.Setup(r => r.ExistenMovimientosDeGastoAsync(1)).ReturnsAsync(true);
+        m.MovRepo.Setup(r => r.AnularIngresoPorFacturaAtomicoAsync(1, It.IsAny<int>(), It.IsAny<string>()))
+            .ReturnsAsync(new ResultadoAnulacionIngreso(ResultadoAnulacionIngresoEstado.Ok, Array.Empty<ItemFaltanteStock>()));
+
+        await m.Svc.AnularAsync(1);
+
+        m.MovRepo.Verify(r => r.AnularIngresoPorFacturaAtomicoAsync(1, It.IsAny<int>(), It.IsAny<string>()), Times.Once);
+        m.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Gasto>()), Times.Never);
+        m.Repo.Verify(r => r.DesvincularMovimientosAsync(It.IsAny<int>()), Times.Never);
+        // El propio AnularIngresoPorFacturaAtomicoAsync ya audita (AnulacionIngresoPorFactura,
+        // Task 5) — auditar acá también sería doble asiento de auditoría para la misma anulación.
+        m.Audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), AccionAuditada.AnulacionGasto, "Gasto", 1, It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AnularAsync_ConMovimientosYStockInsuficiente_LanzaReglaDeNegocioConElProducto()
+    {
+        var m = Crear();
+        var gasto = GastoValido();
+        gasto.Id = 1;
+        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(gasto);
+        m.MovRepo.Setup(r => r.ExistenMovimientosDeGastoAsync(1)).ReturnsAsync(true);
+        m.MovRepo.Setup(r => r.AnularIngresoPorFacturaAtomicoAsync(1, It.IsAny<int>(), It.IsAny<string>()))
+            .ReturnsAsync(new ResultadoAnulacionIngreso(
+                ResultadoAnulacionIngresoEstado.StockInsuficiente,
+                new List<ItemFaltanteStock> { new(5, "Cemento", 2m, 10m) }));
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.AnularAsync(1));
+
+        Assert.Contains("Cemento", ex.Message);
+        m.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Gasto>()), Times.Never);
+    }
+```
+
+Agregar a `tests/StockApp.Api.Tests/GastosEndpointTests.cs`, debajo de `DeleteGasto_ConPagosActivos409_SinPagosAnula`:
+
+```csharp
+    [Fact]
+    public async Task DeleteGasto_ConMovimientosYStockInsuficiente_Devuelve409()
+    {
+        // Matriz E2E de la decisión 9: un gasto vinculado a mano (AsociarMovimientosAsync, el
+        // flujo "asociar factura" ya existente) también pasa por el asiento inverso al anularse,
+        // y si el stock ya se consumió, el DELETE existente ahora devuelve 409 en vez de 200.
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+        var creado = await (await client.PostAsJsonAsync("/finanzas/gastos",
+                RequestValido(proveedorId, fuenteId, rubroId, CondicionPago.Credito)))
+            .Content.ReadFromJsonAsync<GastoGuardadoResponse>();
+
+        int productoId;
+        await using (var ctx = Factory.CrearContexto())
+        {
+            var producto = new Producto
+            {
+                Codigo = $"DEL-{Guid.NewGuid():N}", Nombre = "Producto con movimiento",
+                UnidadMedida = new UnidadMedida { Nombre = "Unidad", Abreviatura = "u" },
+                PrecioCosto = 10m, PrecioVenta = 20m, StockActual = 2m,
+                Activo = true, FechaAlta = DateTime.UtcNow,
+            };
+            ctx.Add(producto);
+            await ctx.SaveChangesAsync();
+            productoId = producto.Id;
+
+            ctx.MovimientosStock.Add(new MovimientoStock
+            {
+                ProductoId = productoId, UsuarioId = 1, Tipo = TipoMovimiento.Entrada,
+                Motivo = MotivoMovimiento.Compra, Cantidad = 5m, PrecioUnitario = 10m,
+                Fecha = DateTime.UtcNow, GastoId = creado!.Id,
+            });
+            await ctx.SaveChangesAsync();
+        }
+
+        var response = await client.DeleteAsync($"/finanzas/gastos/{creado!.Id}");
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+
+        await using var verificacion = Factory.CrearContexto();
+        Assert.True((await verificacion.Gastos.SingleAsync(g => g.Id == creado.Id)).Activo);
+        Assert.Equal(2m, (await verificacion.Productos.FindAsync(productoId))!.StockActual);
+    }
+```
+
+- [ ] **Step 2: Correr los tests y verificar que fallan**
+
+Run: `dotnet test tests/StockApp.Infrastructure.Tests --filter "FullyQualifiedName~MovimientoStockRepositoryIngresoTests"`
+Expected: FAIL — no compila (`ExistenMovimientosDeGastoAsync` no existe en `IMovimientoStockRepository`).
+
+Run: `dotnet test tests/StockApp.Application.Tests --filter "FullyQualifiedName~GastoServiceTests"`
+Expected: FAIL — no compila (`GastoService` no tiene un constructor que acepte `IMovimientoStockRepository`).
+
+Run: `dotnet test tests/StockApp.Api.Tests --filter "FullyQualifiedName~GastosEndpointTests"`
+Expected: FAIL — `DeleteGasto_ConMovimientosYStockInsuficiente_Devuelve409` recibe 200 (el `AnularAsync` viejo desvincula sin revisar stock).
+
+- [ ] **Step 3: Implementación mínima**
+
+```csharp
+// src/StockApp.Application/Interfaces/IMovimientoStockRepository.cs
+// Agregar a la interfaz, DEBAJO de AnularIngresoPorFacturaAtomicoAsync:
+
+    /// <summary>
+    /// True si el gasto tiene al menos un MovimientoStock asociado, sin importar si el vínculo
+    /// se hizo por el ingreso por factura (Task 1-5) o a mano vía
+    /// GastoService.AsociarMovimientosAsync. GastoService.AnularAsync la usa para decidir entre
+    /// la baja lógica simple y la anulación por asiento inverso (decisión 9 del spec).
+    /// </summary>
+    Task<bool> ExistenMovimientosDeGastoAsync(int gastoId);
+```
+
+```csharp
+// src/StockApp.Infrastructure/Repositories/MovimientoStockRepository.cs
+// Agregar DEBAJO de AnularIngresoPorFacturaAtomicoAsync:
+
+    /// <inheritdoc/>
+    public virtual Task<bool> ExistenMovimientosDeGastoAsync(int gastoId)
+        => _ctx.MovimientosStock.AnyAsync(m => m.GastoId == gastoId);
+```
+
+```csharp
+// src/StockApp.Application/Finanzas/GastoService.cs
+// Reemplazar el campo/constructor: agregar el campo DEBAJO de "_audit" y el parámetro
+// "IMovimientoStockRepository movRepo" al constructor (entre lineasPoa y session, mismo orden
+// que el resto de las inyecciones de repos):
+
+    private readonly IGastoRepository                _repo;
+    private readonly IProveedorRepository            _proveedores;
+    private readonly IFuenteFinanciamientoRepository _fuentes;
+    private readonly IRubroGastoRepository           _rubros;
+    private readonly ILineaPoaRepository             _lineasPoa;
+    private readonly IMovimientoStockRepository      _movRepo;
+    private readonly ICurrentSession                 _session;
+    private readonly IAuthorizationService           _auth;
+    private readonly IAuditLogger                    _audit;
+
+    public GastoService(
+        IGastoRepository repo,
+        IProveedorRepository proveedores,
+        IFuenteFinanciamientoRepository fuentes,
+        IRubroGastoRepository rubros,
+        ILineaPoaRepository lineasPoa,
+        IMovimientoStockRepository movRepo,
+        ICurrentSession session,
+        IAuthorizationService auth,
+        IAuditLogger audit)
+    {
+        _repo        = repo;
+        _proveedores = proveedores;
+        _fuentes     = fuentes;
+        _rubros      = rubros;
+        _lineasPoa   = lineasPoa;
+        _movRepo     = movRepo;
+        _session     = session;
+        _auth        = auth;
+        _audit       = audit;
+    }
+```
+
+```csharp
+// src/StockApp.Application/Finanzas/GastoService.cs
+// Reemplazar el método AnularAsync completo:
+
+    public async Task AnularAsync(int id)
+    {
+        _auth.Verificar(_session.RolActual, Permisos.RegistrarGastos);
+
+        var gasto = await _repo.ObtenerPorIdAsync(id)
+            ?? throw new EntidadNoEncontradaException($"Gasto {id} no encontrado.");
+
+        if (!gasto.Activo)
+            throw new ReglaDeNegocioException($"El gasto {id} ya está anulado.");
+        if (gasto.Pagos.Any(p => p.Activo))
+            throw new ReglaDeNegocioException(
+                "No se puede anular un gasto con pagos activos: primero anulá los pagos.");
+
+        if (await _movRepo.ExistenMovimientosDeGastoAsync(id))
+        {
+            // Decisión 9 del spec: un gasto CON movimientos asociados se anula por asiento
+            // inverso — la misma ruta atómica que IIngresoPorFacturaService.AnularLoteAsync
+            // (Task 5) — para que el stock se revierta en vez de quedar sumado con el gasto
+            // desvinculado (el agujero que tenía DesvincularMovimientosAsync).
+            var detalle = $"Anulación de '{gasto.Detalle}' (factura {gasto.NumeroFactura ?? "s/n"}, monto {gasto.MontoTotal})";
+            var resultado = await _movRepo.AnularIngresoPorFacturaAtomicoAsync(
+                id, _session.UsuarioActual!.Id, detalle);
+
+            if (resultado.Estado == ResultadoAnulacionIngresoEstado.StockInsuficiente)
+            {
+                var detalleFaltantes = string.Join("; ", resultado.Faltantes.Select(f =>
+                    $"{f.ProductoNombre}: stock {f.StockActual}, necesita {f.CantidadNecesaria}"));
+                throw new ReglaDeNegocioException(
+                    $"No se puede anular: stock insuficiente en {resultado.Faltantes.Count} producto(s). {detalleFaltantes}");
+            }
+
+            // AnularIngresoPorFacturaAtomicoAsync ya marcó Gasto.Activo=false y escribió su
+            // propio LogAuditoria (AnulacionIngresoPorFactura) dentro de la misma transacción.
+            return;
+        }
+
+        gasto.Activo = false;
+        await _repo.ActualizarAsync(gasto);
+        // Los movimientos quedan libres para re-facturar (el gasto anulado no los retiene)
+        await _repo.DesvincularMovimientosAsync(id);
+
+        await _audit.RegistrarAsync(
+            _session.UsuarioActual!.Id, AccionAuditada.AnulacionGasto, "Gasto", id,
+            $"Anulación de '{gasto.Detalle}' (factura {gasto.NumeroFactura ?? "s/n"}, monto {gasto.MontoTotal})");
+    }
+```
+
+- [ ] **Step 4: Correr los tests y verificar que pasan**
+
+Run: `dotnet test tests/StockApp.Infrastructure.Tests --filter "FullyQualifiedName~MovimientoStockRepositoryIngresoTests"`
+Expected: PASS — 12 tests verdes.
+
+Run: `dotnet test tests/StockApp.Application.Tests --filter "FullyQualifiedName~GastoServiceTests"`
+Expected: PASS — 32 tests verdes.
+
+Run: `dotnet test tests/StockApp.Api.Tests --filter "FullyQualifiedName~GastosEndpointTests"`
+Expected: PASS — 19 tests verdes.
+
+Run completo de la suite antes de cerrar la entrega (mismo criterio que Task 10 — un constructor nuevo en un service compartido es exactamente el tipo de cambio que ya rompió tests de otro módulo antes):
+
+Run: `dotnet test StockApp.sln`
+Expected: PASS — 0 fallos.
+
+- [ ] **Step 5: Commit**
+```bash
+git add src/StockApp.Application/Interfaces/IMovimientoStockRepository.cs \
+        src/StockApp.Infrastructure/Repositories/MovimientoStockRepository.cs \
+        src/StockApp.Application/Finanzas/GastoService.cs \
+        tests/StockApp.Application.Tests/Finanzas/GastoServiceTests.cs \
+        tests/StockApp.Infrastructure.Tests/Repositories/MovimientoStockRepositoryIngresoTests.cs \
+        tests/StockApp.Api.Tests/GastosEndpointTests.cs
+git commit -m "fix(finanzas): unifica la anulacion de gastos con movimientos por asiento inverso"
+```
+
+---
+
 ## Deuda conocida / fuera de alcance
 
-- **`GastosViewModel` sigue llamando al `IGastoService.AnularAsync` viejo** para el botón "Anular" de la grilla de Finanzas. La decisión 9 del spec corrige el agujero (stock sumado tras desvincular) SOLO en el nuevo camino `IIngresoPorFacturaService.AnularLoteAsync` (Task 5) — redirigir el botón existente de `GastosViewModel` a este nuevo método, para que la corrección aplique también a gastos cargados manualmente, no está en el alcance de las 10 tareas de este plan y queda como seguimiento explícito.
 - El adjunto se sube en una segunda llamada (Task 10): si esa llamada falla, la factura queda creada sin adjunto — mismo comportamiento ya aceptado en el alta de gastos existente (`GastoFormViewModel`), documentado como riesgo en el spec.
