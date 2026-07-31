@@ -112,6 +112,30 @@ es_var_conocida() {
     return 1
 }
 
+# Prefijos/nombres PROHIBIDOS en el passthrough (IMPORTANTE 2, review deploy-vps-linux):
+# systemd hace que EnvironmentFile= (stockapp-api.service línea 57) PISE a los Environment=
+# declarados ANTES en el unit -- incluidos ASPNETCORE_URLS=http://127.0.0.1:__API_PORT__
+# (línea 51) y HOME=/var/lib/stockapp (línea 50). Si alguien agrega ASPNETCORE_URLS acá (error
+# natural de quien conoce .NET y quiere cambiar el puerto sin descubrir API_PORT), la API
+# queda escuchando en la interfaz que haya puesto -- en este VPS SIN FIREWALL, un
+# "0.0.0.0:..." expone la API entera a Internet. Un HOME pisado manda el directorio de datos
+# fuera de ReadWritePaths (licencia y backups rotos en silencio); un PATH roto tumba
+# pg_dump/pg_isready. DOTNET_*/LD_* pueden alterar el runtime o el linker de formas igual de
+# silenciosas. Estas variables se RECHAZAN con error explícito, nunca se ignoran en silencio.
+readonly PREFIJOS_PROHIBIDOS=(ASPNETCORE_ DOTNET_ LD_)
+readonly VARS_PROHIBIDAS=(HOME PATH)
+
+es_var_prohibida() {
+    local nombre="$1" p
+    for p in "${PREFIJOS_PROHIBIDOS[@]}"; do
+        [[ "$nombre" == "${p}"* ]] && return 0
+    done
+    for p in "${VARS_PROHIBIDAS[@]}"; do
+        [[ "$nombre" == "$p" ]] && return 0
+    done
+    return 1
+}
+
 echo "== Verificando convivencia con 'pinar' (otro proyecto en este VPS) =="
 if docker ps --format '{{.Names}}' 2>/dev/null | grep -qi 'pinar'; then
     echo "  Detecté contenedores de 'pinar' corriendo. Este script no los toca -- solo gestiona"
@@ -151,6 +175,24 @@ if ! [[ "$API_PORT" =~ ^[0-9]+$ ]]; then
     exit 1
 fi
 echo "  OK. API_PORT=${API_PORT}"
+
+echo "== Verificando variables prohibidas en el passthrough =="
+# Corre ACÁ (antes de tocar el servicio, hacer backup o swapear binarios) para fallar rápido
+# -- ver deploy/.env.example, sección "Overrides opcionales", para la lista completa de qué
+# se puede y qué no se puede agregar acá.
+while IFS='=' read -r NOMBRE _; do
+    [[ -z "$NOMBRE" || "$NOMBRE" == \#* ]] && continue
+    if es_var_prohibida "$NOMBRE"; then
+        echo "ERROR: '${NOMBRE}' en '${ENV_FILE}' no se puede pasar por passthrough." >&2
+        echo "       Pisaría un 'Environment=' de stockapp-api.service (EnvironmentFile= va" >&2
+        echo "       DESPUÉS y systemd lo hace ganar) -- en este VPS sin firewall eso puede" >&2
+        echo "       exponer la API a Internet (ASPNETCORE_URLS) o romper licencia/backups/PATH" >&2
+        echo "       en silencio. Si querés cambiar el puerto, usá API_PORT en '${ENV_FILE}'," >&2
+        echo "       no ASPNETCORE_URLS. Ver deploy/.env.example." >&2
+        exit 1
+    fi
+done < <(grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "$ENV_FILE")
+echo "  OK. Ninguna variable prohibida en ${ENV_FILE}."
 
 echo "== Paquetes del sistema (postgresql-client-16, curl) =="
 NECESITA_APT_UPDATE=0

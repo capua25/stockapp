@@ -412,6 +412,16 @@ que tengas que volver a tocarlo. `appsettings.json` (con el default 30) vive den
 `/opt/stockapp-api`, que `install.sh` reemplaza en cada actualización — por eso el override
 tiene que vivir en `.env`/`api.env`, no editado a mano ahí adentro.
 
+**Variables prohibidas en el passthrough:** `ASPNETCORE_*`, `DOTNET_*`, `LD_*`, `HOME`,
+`PATH`. `install.sh` rechaza instalar (con error explícito, ANTES de tocar el servicio) si
+detecta alguna en tu `.env`. Razón: `EnvironmentFile=/etc/stockapp-api/api.env` en
+`stockapp-api.service` se declara DESPUÉS de los `Environment=ASPNETCORE_URLS=...` y
+`Environment=HOME=...` del unit, y systemd hace que el archivo los pise. Un
+`ASPNETCORE_URLS=http://0.0.0.0:...` puesto ahí "para cambiar el puerto" (el error natural
+de quien conoce .NET pero no `API_PORT`) sacaría a la API de `127.0.0.1` — y en este VPS,
+**sin firewall**, la expondría a Internet entera. Para cambiar el puerto usá `API_PORT` en
+`deploy/.env` (ver `deploy/.env.example`), nunca `ASPNETCORE_URLS`.
+
 ### Los backups fallan (`pg_dump` ausente o con error)
 
 ```bash
