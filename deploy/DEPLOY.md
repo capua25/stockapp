@@ -81,6 +81,26 @@ Si ya generaste el par en una entrega anterior (Inc 7 Fase B), **reusá la misma
 privada** — no generes un par nuevo por despliegue, o vas a tener que reemitir licencias
 para todas las instalaciones existentes.
 
+**El comando se niega a pisar una clave privada existente.** Si `<salida>/clave-privada.pem`
+ya existe, `generar-claves` falla sin escribir nada y te lo dice con la ruta completa. Esto es
+a propósito: sobreescribir la clave privada en uso invalida TODAS las licencias ya emitidas
+con ella (dejan de validar, 423 en cada instalación) y no hay forma de reemitirlas sin la
+clave original.
+
+Si de verdad necesitás regenerar el par (nunca se emitió ninguna licencia con el anterior,
+o estás arrancando de cero), pasá `--forzar`:
+
+```bash
+dotnet run --project tools/StockApp.Licencias.Cli -- generar-claves --salida ~/stockapp-claves --forzar
+```
+
+Con `--forzar`, la clave vieja NO se pierde: se respalda junto a la nueva como
+`clave-privada.pem.bak-<timestamp>` antes de sobreescribir, y el comando imprime la ruta del
+respaldo. Si el respaldo falla por cualquier motivo, aborta sin tocar la clave nueva.
+
+En Unix, la clave privada se escribe con permisos `600` (solo el usuario dueño puede leerla) y
+el directorio de salida con `700`.
+
 ---
 
 ## 2. Levantar Postgres y crear la base
