@@ -24,6 +24,8 @@ public class AppDbContext : DbContext
     public DbSet<AdjuntoContenido> AdjuntosContenido => Set<AdjuntoContenido>();
     public DbSet<IngresoCaja> IngresosCaja => Set<IngresoCaja>();
     public DbSet<CorridaBackup> CorridasBackup => Set<CorridaBackup>();
+    public DbSet<Tarea> Tareas => Set<Tarea>();
+    public DbSet<NotaTarea> NotasTarea => Set<NotaTarea>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -252,6 +254,25 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<CorridaBackup>(e =>
         {
             e.HasIndex(c => c.FinalizadaEn);
+        });
+
+        // ── Tareas (módulo independiente, spec 2026-08-01) ────────────────────
+        modelBuilder.Entity<Tarea>(e =>
+        {
+            e.Property(t => t.Titulo).IsRequired();
+            e.HasIndex(t => t.Estado);
+            e.HasOne(t => t.TomadaPor).WithMany()
+                .HasForeignKey(t => t.TomadaPorUsuarioId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<NotaTarea>(e =>
+        {
+            e.Property(n => n.Texto).IsRequired();
+            e.HasIndex(n => n.TareaId);
+            // Sin nav Tarea en NotaTarea (mismo criterio que AsignacionPresupuestal → LineaPoa):
+            // la relación se configura solo del lado padre.
+            e.HasOne<Tarea>().WithMany(t => t.Notas)
+                .HasForeignKey(n => n.TareaId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }

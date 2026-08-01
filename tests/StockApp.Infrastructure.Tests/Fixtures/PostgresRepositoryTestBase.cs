@@ -31,6 +31,6 @@ public abstract class PostgresRepositoryTestBase : IDisposable
             "\"Categorias\", \"Proveedores\", \"UnidadesMedida\", \"Usuarios\", " +
             "\"AsignacionesPresupuestales\", \"LineasPoa\", \"RubrosGasto\", \"FuentesFinanciamiento\", " +
             "\"AdjuntosContenido\", \"Adjuntos\", \"PagosGasto\", \"Gastos\", \"IngresosCaja\", " +
-            "\"CorridasBackup\" RESTART IDENTITY CASCADE;");
+            "\"CorridasBackup\", \"NotasTarea\", \"Tareas\" RESTART IDENTITY CASCADE;");
     }
 }
