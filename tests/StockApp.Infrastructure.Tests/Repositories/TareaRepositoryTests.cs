@@ -122,4 +122,22 @@ public class TareaRepositoryTests : PostgresRepositoryTestBase
         Assert.Equal(EstadoTarea.EnCurso, encontrada!.Estado);
         Assert.Equal(usuario.Id, encontrada.TomadaPorUsuarioId);
     }
+
+    [Fact]
+    public async Task AgregarAsync_ConFechaLimiteUtc_PersisteYSeMantieneAlReleerla()
+    {
+        // Fix (review final, Important): ningún test de ninguna capa persistía FechaLimite
+        // antes de este fix, así que el rechazo real de Npgsql (timestamptz exige
+        // DateTimeKind Utc o Unspecified, no Local) quedaba completamente sin cubrir.
+        var tarea = NuevaTarea();
+        tarea.FechaLimite = DateTime.SpecifyKind(new DateTime(2026, 8, 15), DateTimeKind.Utc);
+
+        var id = await _repo.AgregarAsync(tarea);
+        Context.ChangeTracker.Clear();
+
+        var encontrada = await _repo.ObtenerPorIdAsync(id);
+
+        Assert.NotNull(encontrada!.FechaLimite);
+        Assert.Equal(new DateTime(2026, 8, 15), encontrada.FechaLimite!.Value.Date);
+    }
 }

@@ -83,6 +83,29 @@ public class TareaFormViewModelTests
     }
 
     [Fact]
+    public async Task GuardarAsync_ConFechaLimite_NormalizaAUtcAntesDeEnviarla()
+    {
+        // Fix (review final, Important): CalendarDatePicker puede entregar Kind=Local; el
+        // converter del servidor solo normaliza Unspecified, así que Npgsql rechazaría el
+        // insert en timestamptz. DateTime.== ignora Kind, por eso se assertea Kind
+        // explícitamente -- de lo contrario este test "pasaría" incluso sin el fix.
+        var ctx = Crear();
+        Tarea? tareaCreada = null;
+        ctx.Svc.Setup(s => s.CrearAsync(It.IsAny<Tarea>()))
+            .Callback<Tarea>(t => tareaCreada = t)
+            .ReturnsAsync(1);
+        ctx.Vm.CargarParaCrear();
+        ctx.Vm.Titulo = "Reparar bache";
+        ctx.Vm.FechaLimiteSeleccionada = new DateTime(2026, 8, 10, 0, 0, 0, DateTimeKind.Local);
+
+        await ctx.Vm.GuardarCommand.ExecuteAsync(null);
+
+        Assert.NotNull(tareaCreada);
+        Assert.Equal(DateTimeKind.Utc, tareaCreada!.FechaLimite!.Value.Kind);
+        Assert.Equal(new DateTime(2026, 8, 10), tareaCreada.FechaLimite!.Value.Date);
+    }
+
+    [Fact]
     public async Task AgregarNotaAsync_SumaLaNotaAlHiloSinRecargarTodo()
     {
         var ctx = Crear();

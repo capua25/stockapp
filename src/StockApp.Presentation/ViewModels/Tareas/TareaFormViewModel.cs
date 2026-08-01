@@ -120,7 +120,13 @@ public partial class TareaFormViewModel : ViewModelBase
             {
                 Titulo = Titulo,
                 Descripcion = string.IsNullOrWhiteSpace(Descripcion) ? null : Descripcion,
-                FechaLimite = FechaLimiteSeleccionada,
+                // Fix (review final, Important): mismo criterio que el resto de los VMs con
+                // fecha del proyecto (Gasto/Ingreso Form, IngresoPorFactura, PagosGasto) —
+                // si el CalendarDatePicker entrega Kind=Local, Npgsql rechaza el insert en
+                // timestamptz (el converter del servidor solo normaliza Unspecified).
+                FechaLimite = FechaLimiteSeleccionada.HasValue
+                    ? DateTime.SpecifyKind(FechaLimiteSeleccionada.Value.Date, DateTimeKind.Utc)
+                    : null,
             });
             _navigation.Navegar<TareaListViewModel>();
         }
