@@ -394,6 +394,58 @@ public class GastosEndpointTests : ApiTestBase
     }
 
     [Fact]
+    public async Task DeleteGasto_ConMovimientosYStockSuficiente_RevierteElStockPorAsientoInverso()
+    {
+        // Ronda de correcciones 1, Hallazgo 2: el camino exitoso de la decisión 9 (anular por
+        // DELETE un gasto CON movimientos y stock suficiente) solo estaba probado a nivel de
+        // repositorio (Task 5). Este test cierra el agujero real por la puerta que usa el
+        // usuario: el endpoint DELETE existente. Vincula el movimiento a mano, como hace
+        // AsociarMovimientosAsync (el flujo "asociar factura" ya existente), no vía la pantalla
+        // nueva de ingreso por factura.
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+        var creado = await (await client.PostAsJsonAsync("/finanzas/gastos",
+                RequestValido(proveedorId, fuenteId, rubroId, CondicionPago.Credito)))
+            .Content.ReadFromJsonAsync<GastoGuardadoResponse>();
+
+        int productoId;
+        await using (var ctx = Factory.CrearContexto())
+        {
+            var producto = new Producto
+            {
+                Codigo = $"DEL-OK-{Guid.NewGuid():N}", Nombre = "Producto con stock suficiente",
+                UnidadMedida = new UnidadMedida { Nombre = "Unidad", Abreviatura = "u" },
+                PrecioCosto = 10m, PrecioVenta = 20m, StockActual = 20m,
+                Activo = true, FechaAlta = DateTime.UtcNow,
+            };
+            ctx.Add(producto);
+            await ctx.SaveChangesAsync();
+            productoId = producto.Id;
+
+            ctx.MovimientosStock.Add(new MovimientoStock
+            {
+                ProductoId = productoId, UsuarioId = 1, Tipo = TipoMovimiento.Entrada,
+                Motivo = MotivoMovimiento.Compra, Cantidad = 5m, PrecioUnitario = 10m,
+                Fecha = DateTime.UtcNow, GastoId = creado!.Id,
+            });
+            await ctx.SaveChangesAsync();
+        }
+
+        var response = await client.DeleteAsync($"/finanzas/gastos/{creado!.Id}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var verificacion = Factory.CrearContexto();
+        Assert.False((await verificacion.Gastos.SingleAsync(g => g.Id == creado.Id)).Activo);
+        Assert.Equal(15m, (await verificacion.Productos.FindAsync(productoId))!.StockActual);   // 20 - 5
+
+        var salida = await verificacion.MovimientosStock.SingleAsync(m =>
+            m.ProductoId == productoId && m.Tipo == TipoMovimiento.Salida);
+        Assert.Equal(MotivoMovimiento.Ajuste, salida.Motivo);
+        Assert.Equal(5m, salida.Cantidad);
+    }
+
+    [Fact]
     public async Task PutGasto_Modifica200ConCambios()
     {
         var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();

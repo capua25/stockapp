@@ -499,6 +499,32 @@ public class GastoServiceTests
         m.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Gasto>()), Times.Never);
     }
 
+    [Fact]
+    public async Task AnularAsync_ConMovimientosYCarreraDeDobleAnulacion_LanzaReglaDeNegocioSinAuditar()
+    {
+        // Ronda de correcciones 1, Hallazgo 1: antes de este fix, GastoYaAnulado caía en el
+        // mismo `return` silencioso que el caso Ok — el usuario recibía confirmación de una
+        // anulación que el repo, bajo el FOR UPDATE de AnularIngresoPorFacturaAtomicoAsync,
+        // nunca llegó a escribir. Mismo patrón de manejo que
+        // IngresoPorFacturaService.AnularLoteAsync para GastoYaAnulado.
+        var m = Crear();
+        var gasto = GastoValido();
+        gasto.Id = 1;
+        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(gasto);
+        m.MovRepo.Setup(r => r.ExistenMovimientosDeGastoAsync(1)).ReturnsAsync(true);
+        m.MovRepo.Setup(r => r.AnularIngresoPorFacturaAtomicoAsync(1, It.IsAny<int>(), It.IsAny<string>()))
+            .ReturnsAsync(new ResultadoAnulacionIngreso(
+                ResultadoAnulacionIngresoEstado.GastoYaAnulado, Array.Empty<ItemFaltanteStock>()));
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.AnularAsync(1));
+
+        Assert.Contains("ya está anulado", ex.Message);
+        m.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Gasto>()), Times.Never);
+        m.Audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), It.IsAny<AccionAuditada>(), It.IsAny<string>(),
+            It.IsAny<int>(), It.IsAny<string>()), Times.Never);
+    }
+
     // ── Asociación de movimientos a factura existente ────────────────────────
 
     [Fact]

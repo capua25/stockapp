@@ -178,6 +178,15 @@ public class GastoService : IGastoService
             var resultado = await _movRepo.AnularIngresoPorFacturaAtomicoAsync(
                 id, _session.UsuarioActual!.Id, detalle);
 
+            // GastoYaAnulado: la re-verificación bajo lock DENTRO de la transacción del repo
+            // detectó que el gasto ya no está activo (cierra la ventana de doble anulación
+            // concurrente que el chequeo de arriba, hecho ANTES de entrar a la transacción, no
+            // puede cerrar por sí solo) — el repo NO escribió nada en ese caso. Mismo mensaje
+            // que el chequeo optimista de arriba, por consistencia (mismo patrón que
+            // IngresoPorFacturaService.AnularLoteAsync).
+            if (resultado.Estado == ResultadoAnulacionIngresoEstado.GastoYaAnulado)
+                throw new ReglaDeNegocioException($"El gasto {id} ya está anulado.");
+
             if (resultado.Estado == ResultadoAnulacionIngresoEstado.StockInsuficiente)
             {
                 var detalleFaltantes = string.Join("; ", resultado.Faltantes.Select(f =>
@@ -186,8 +195,9 @@ public class GastoService : IGastoService
                     $"No se puede anular: stock insuficiente en {resultado.Faltantes.Count} producto(s). {detalleFaltantes}");
             }
 
-            // AnularIngresoPorFacturaAtomicoAsync ya marcó Gasto.Activo=false y escribió su
-            // propio LogAuditoria (AnulacionIngresoPorFactura) dentro de la misma transacción.
+            // Estado Ok: AnularIngresoPorFacturaAtomicoAsync ya marcó Gasto.Activo=false y
+            // escribió su propio LogAuditoria (AnulacionIngresoPorFactura) dentro de la misma
+            // transacción.
             return;
         }
 
