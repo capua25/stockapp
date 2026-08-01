@@ -92,6 +92,16 @@ public class TareaApiClientTests
     }
 
     [Fact]
+    public async Task CancelarAsync_403_LanzaUnauthorizedAccess()
+    {
+        var fake = new FakeHttpHandler(_ => TestHttp.Problema(
+            HttpStatusCode.Forbidden, "El rol autenticado no tiene permiso para esta acción."));
+        var client = new TareaApiClient(TestHttp.CrearCliente(fake));
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => client.CancelarAsync(5));
+    }
+
+    [Fact]
     public async Task CambiarPrioridadAsync_POSTPrioridad_SerializaElBody()
     {
         var fake = new FakeHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
