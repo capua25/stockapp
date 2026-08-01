@@ -2,6 +2,7 @@ using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 
 namespace StockApp.Application.Tareas;
 
@@ -15,14 +16,18 @@ namespace StockApp.Application.Tareas;
 public class TareaService : ITareaService
 {
     private readonly ITareaRepository      _repo;
+    private readonly IUsuarioRepository    _usuarios;
     private readonly ICurrentSession       _session;
     private readonly IAuthorizationService _auth;
 
-    public TareaService(ITareaRepository repo, ICurrentSession session, IAuthorizationService auth)
+    public TareaService(
+        ITareaRepository repo, IUsuarioRepository usuarios,
+        ICurrentSession session, IAuthorizationService auth)
     {
-        _repo    = repo;
-        _session = session;
-        _auth    = auth;
+        _repo     = repo;
+        _usuarios = usuarios;
+        _session  = session;
+        _auth     = auth;
     }
 
     public async Task<int> CrearAsync(Tarea tarea)
@@ -52,9 +57,77 @@ public class TareaService : ITareaService
         return await _repo.ListarAsync();
     }
 
-    public Task TomarAsync(int id) => throw new NotImplementedException();                                     // Task 4
-    public Task SoltarAsync(int id) => throw new NotImplementedException();                                    // Task 4
-    public Task TerminarAsync(int id) => throw new NotImplementedException();                                  // Task 4
+    public async Task TomarAsync(int id)
+    {
+        _auth.Verificar(_session.RolActual, Permisos.GestionarTareas);
+
+        var tarea = await _repo.ObtenerPorIdAsync(id)
+            ?? throw new EntidadNoEncontradaException($"Tarea {id} no encontrada.");
+
+        tarea.CambiarEstado(EstadoTarea.EnCurso);
+        tarea.TomadaPorUsuarioId = _session.UsuarioActual!.Id;
+        tarea.FechaInicio        = DateTime.UtcNow;
+
+        await _repo.ActualizarAsync(tarea);
+    }
+
+    public async Task SoltarAsync(int id)
+    {
+        _auth.Verificar(_session.RolActual, Permisos.GestionarTareas);
+
+        var tarea = await _repo.ObtenerPorIdAsync(id)
+            ?? throw new EntidadNoEncontradaException($"Tarea {id} no encontrada.");
+
+        var actorId = _session.UsuarioActual!.Id;
+        var tomadorAnteriorId = tarea.TomadaPorUsuarioId;
+
+        tarea.CambiarEstado(EstadoTarea.Pendiente);
+        tarea.TomadaPorUsuarioId = null;
+        tarea.FechaInicio        = null;
+
+        // Decisión 11 del spec: toda acción sobre una tarea ajena genera nota automática.
+        if (tomadorAnteriorId is int tomadorId && tomadorId != actorId)
+            tarea.Notas.Add(await NotaAjenaAsync(actorId, tomadorId, "soltó"));
+
+        await _repo.ActualizarAsync(tarea);
+    }
+
+    public async Task TerminarAsync(int id)
+    {
+        _auth.Verificar(_session.RolActual, Permisos.GestionarTareas);
+
+        var tarea = await _repo.ObtenerPorIdAsync(id)
+            ?? throw new EntidadNoEncontradaException($"Tarea {id} no encontrada.");
+
+        var actorId = _session.UsuarioActual!.Id;
+        var tomadorId = tarea.TomadaPorUsuarioId;
+
+        tarea.CambiarEstado(EstadoTarea.Terminada);
+        tarea.CerradaPorUsuarioId = actorId;
+        tarea.FechaFin            = DateTime.UtcNow;
+
+        if (tomadorId is int idTomador && idTomador != actorId)
+            tarea.Notas.Add(await NotaAjenaAsync(actorId, idTomador, "terminó"));
+
+        await _repo.ActualizarAsync(tarea);
+    }
+
+    /// <summary>Formato exacto de la decisión 11 del spec: "García terminó una tarea tomada por Juan".</summary>
+    private async Task<NotaTarea> NotaAjenaAsync(int actorId, int tomadorId, string verbo)
+    {
+        var actorNombre   = _session.UsuarioActual!.NombreUsuario;
+        var tomador       = await _usuarios.ObtenerPorIdAsync(tomadorId);
+        var tomadorNombre = tomador?.NombreUsuario ?? $"usuario {tomadorId}";
+
+        return new NotaTarea
+        {
+            UsuarioId    = actorId,
+            Fecha        = DateTime.UtcNow,
+            Texto        = $"{actorNombre} {verbo} una tarea tomada por {tomadorNombre}.",
+            EsAutomatica = true,
+        };
+    }
+
     public Task CancelarAsync(int id) => throw new NotImplementedException();                                  // Task 5
     public Task CambiarPrioridadAsync(int id, PrioridadTarea prioridad) => throw new NotImplementedException(); // Task 5
     public Task AgregarNotaAsync(int id, string texto) => throw new NotImplementedException();                 // Task 6
