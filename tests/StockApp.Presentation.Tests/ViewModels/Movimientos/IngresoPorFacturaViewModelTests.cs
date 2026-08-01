@@ -159,4 +159,86 @@ public class IngresoPorFacturaViewModelTests
         Assert.False(vm.GuardadoExitoso);
         Assert.Null(vm.GastoIdCreado);
     }
+
+    [Fact]
+    public async Task AltaEnLinea_NoDescartaLosRenglonesYaCargados()
+    {
+        var (vm, _, _) = Crear();
+        await InicializarYCompletarCabeceraAsync(vm);
+
+        vm.AgregarRenglonCommand.Execute(null);
+        vm.Renglones[0].Producto = vm.ProductosDisponibles[0];
+        vm.Renglones[0].Cantidad = 2m;
+        vm.Renglones[0].PrecioUnitario = 30m;
+
+        vm.AgregarRenglonCommand.Execute(null);
+        var filaNueva = vm.Renglones[1];
+
+        vm.AbrirAltaProductoCommand.Execute(filaNueva);
+        vm.NuevoProductoCodigo = "SKU-INLINE";
+        vm.NuevoProductoNombre = "Producto cargado en línea";
+        vm.NuevaUnidadSeleccionada = vm.UnidadesMedidaDisponibles[0];
+        vm.NuevoProductoPrecioVenta = 40m;
+        vm.ConfirmarAltaProductoCommand.Execute(null);
+
+        Assert.Equal(2, vm.Renglones.Count);
+        Assert.False(vm.MostrandoAltaProducto);
+        // el renglón cargado antes queda intacto
+        Assert.Equal(2m, vm.Renglones[0].Cantidad);
+        Assert.Equal(30m, vm.Renglones[0].PrecioUnitario);
+        // el renglón editado queda marcado como producto nuevo
+        Assert.True(filaNueva.EsProductoNuevo);
+        Assert.Equal("SKU-INLINE", filaNueva.ProductoNuevoCodigo);
+        Assert.Equal("Producto cargado en línea", filaNueva.ProductoNuevoNombre);
+    }
+
+    [Fact]
+    public async Task Guardar_ListaSoloLosProductosCuyoPrecioCostoDifiere()
+    {
+        var (vm, svc, _) = Crear();
+        await InicializarYCompletarCabeceraAsync(vm);
+
+        // Renglon 1: mismo precio que PrecioCosto del producto (10m) → NO entra en la confirmación.
+        vm.AgregarRenglonCommand.Execute(null);
+        vm.Renglones[0].Producto = vm.ProductosDisponibles[0];
+        vm.Renglones[0].Cantidad = 1m;
+        vm.Renglones[0].PrecioUnitario = 10m;
+
+        // Renglon 2: precio distinto (15m != 10m) → SÍ entra en la confirmación.
+        vm.AgregarRenglonCommand.Execute(null);
+        vm.Renglones[1].Producto = vm.ProductosDisponibles[0];
+        vm.Renglones[1].Cantidad = 1m;
+        vm.Renglones[1].PrecioUnitario = 15m;
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        Assert.True(vm.MostrandoConfirmacionPrecios);
+        var cambio = Assert.Single(vm.CambiosDePrecio);
+        Assert.Equal(10m, cambio.PrecioActual);
+        Assert.Equal(15m, cambio.PrecioNuevo);
+        svc.Verify(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ConfirmarPreciosYGuardar_SoloAplicaLosTildados()
+    {
+        var (vm, svc, _) = Crear();
+        svc.Setup(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()))
+            .ReturnsAsync(new IngresoPorFacturaResultadoDto(1, new List<int> { 1 }, 15m, 0m));
+        await InicializarYCompletarCabeceraAsync(vm);
+
+        vm.AgregarRenglonCommand.Execute(null);
+        vm.Renglones[0].Producto = vm.ProductosDisponibles[0];
+        vm.Renglones[0].Cantidad = 1m;
+        vm.Renglones[0].PrecioUnitario = 15m;
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+        vm.CambiosDePrecio[0].Confirmado = true;
+
+        await vm.ConfirmarPreciosYGuardarCommand.ExecuteAsync(null);
+
+        Assert.True(vm.Renglones[0].ActualizarPrecioCosto);
+        svc.Verify(s => s.RegistrarAsync(It.Is<IngresoPorFacturaDto>(
+            d => d.Renglones.Single().ActualizarPrecioCosto)), Times.Once);
+    }
 }

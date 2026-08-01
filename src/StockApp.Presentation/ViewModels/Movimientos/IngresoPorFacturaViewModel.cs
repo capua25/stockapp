@@ -98,6 +98,20 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
     public ObservableCollection<UnidadMedida> UnidadesMedidaDisponibles { get; } = new();
     public ObservableCollection<FilaRenglonFacturaVm> Renglones { get; } = new();
 
+    private FilaRenglonFacturaVm? _filaEnAltaProducto;
+
+    [ObservableProperty] private bool _mostrandoAltaProducto;
+    [ObservableProperty] private string? _nuevoProductoCodigo;
+    [ObservableProperty] private string? _nuevoProductoNombre;
+    [ObservableProperty] private Categoria? _nuevaCategoriaSeleccionada;
+    [ObservableProperty] private UnidadMedida? _nuevaUnidadSeleccionada;
+    [ObservableProperty] private decimal _nuevoProductoPrecioVenta;
+
+    [ObservableProperty] private bool _mostrandoConfirmacionPrecios;
+    private decimal _montoConfirmadoPendiente;
+
+    public ObservableCollection<ItemConfirmacionPrecioVm> CambiosDePrecio { get; } = new();
+
     public IngresoPorFacturaViewModel(
         IIngresoPorFacturaService service,
         IProductoService productoService,
@@ -191,6 +205,44 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
         GuardarCommand.NotifyCanExecuteChanged();
     }
 
+    [RelayCommand]
+    private void AbrirAltaProducto(FilaRenglonFacturaVm fila)
+    {
+        _filaEnAltaProducto = fila;
+        NuevoProductoCodigo = null;
+        NuevoProductoNombre = null;
+        NuevaCategoriaSeleccionada = null;
+        NuevaUnidadSeleccionada = null;
+        NuevoProductoPrecioVenta = 0m;
+        MostrandoAltaProducto = true;
+    }
+
+    [RelayCommand]
+    private void ConfirmarAltaProducto()
+    {
+        if (_filaEnAltaProducto is null || string.IsNullOrWhiteSpace(NuevoProductoCodigo)
+            || string.IsNullOrWhiteSpace(NuevoProductoNombre) || NuevaUnidadSeleccionada is null)
+            return;
+
+        _filaEnAltaProducto.EsProductoNuevo = true;
+        _filaEnAltaProducto.Producto = null;
+        _filaEnAltaProducto.ProductoNuevoCodigo = NuevoProductoCodigo;
+        _filaEnAltaProducto.ProductoNuevoNombre = NuevoProductoNombre;
+        _filaEnAltaProducto.ProductoNuevoCategoriaId = NuevaCategoriaSeleccionada?.Id;
+        _filaEnAltaProducto.ProductoNuevoUnidadMedidaId = NuevaUnidadSeleccionada.Id;
+        _filaEnAltaProducto.ProductoNuevoPrecioVenta = NuevoProductoPrecioVenta;
+
+        MostrandoAltaProducto = false;
+        _filaEnAltaProducto = null;
+    }
+
+    [RelayCommand]
+    private void CancelarAltaProducto()
+    {
+        MostrandoAltaProducto = false;
+        _filaEnAltaProducto = null;
+    }
+
     private bool PuedeGuardar()
         => !GuardadoExitoso
            && Renglones.Count > 0
@@ -211,8 +263,41 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
             return;
         }
 
+        CambiosDePrecio.Clear();
+        foreach (var fila in Renglones)
+        {
+            if (!fila.EsProductoNuevo && fila.Producto is not null && fila.Producto.PrecioCosto != fila.PrecioUnitario)
+                CambiosDePrecio.Add(new ItemConfirmacionPrecioVm
+                {
+                    Fila           = fila,
+                    ProductoNombre = fila.Producto.Nombre,
+                    PrecioActual   = fila.Producto.PrecioCosto,
+                    PrecioNuevo    = fila.PrecioUnitario,
+                });
+        }
+
+        if (CambiosDePrecio.Count > 0)
+        {
+            _montoConfirmadoPendiente = monto;
+            MostrandoConfirmacionPrecios = true;
+            return;
+        }
+
         await GuardarInternoAsync(monto);
     }
+
+    [RelayCommand]
+    private async Task ConfirmarPreciosYGuardarAsync()
+    {
+        foreach (var item in CambiosDePrecio)
+            item.Fila.ActualizarPrecioCosto = item.Confirmado;
+
+        MostrandoConfirmacionPrecios = false;
+        await GuardarInternoAsync(_montoConfirmadoPendiente);
+    }
+
+    [RelayCommand]
+    private void CancelarConfirmacionPrecios() => MostrandoConfirmacionPrecios = false;
 
     private async Task GuardarInternoAsync(decimal monto)
     {
