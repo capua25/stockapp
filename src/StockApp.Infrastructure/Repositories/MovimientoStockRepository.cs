@@ -287,15 +287,7 @@ public class MovimientoStockRepository : IMovimientoStockRepository
 
             await _ctx.SaveChangesAsync();
 
-            _ctx.LogsAuditoria.Add(new LogAuditoria
-            {
-                UsuarioId = args.UsuarioId,
-                Fecha     = DateTime.UtcNow,
-                Accion    = AccionAuditada.IngresoPorFactura,
-                Entidad   = "Gasto",
-                EntidadId = args.Gasto.Id,
-                Detalle   = args.DetalleAuditoria,
-            });
+            _ctx.LogsAuditoria.Add(CrearLogAuditoriaIngreso(args));
             await _ctx.SaveChangesAsync();
 
             await tx.CommitAsync();
@@ -377,7 +369,11 @@ public class MovimientoStockRepository : IMovimientoStockRepository
                 Cantidad       = movimiento.Cantidad,
                 PrecioUnitario = movimiento.PrecioUnitario,
                 Fecha          = DateTime.UtcNow,
-                Comentario     = $"Anulación de ingreso por factura (Gasto {gastoId})",
+                // Fix 6 (revisión final, decisión 6 del spec): la salida espejo NO lleva GastoId
+                // (append-only, ver comentario de la clase), así que este comentario es el único
+                // rastro que vincula la salida con la factura anulada en el historial — antes solo
+                // traía el Gasto.Id interno, sin el número de factura que ve el operario.
+                Comentario     = $"Anulación de ingreso por factura '{gasto.NumeroFactura ?? "s/n"}' (Gasto {gastoId})",
             });
         }
 
@@ -385,15 +381,7 @@ public class MovimientoStockRepository : IMovimientoStockRepository
             .Where(g => g.Id == gastoId)
             .ExecuteUpdateAsync(s => s.SetProperty(g => g.Activo, false));
 
-        _ctx.LogsAuditoria.Add(new LogAuditoria
-        {
-            UsuarioId = usuarioId,
-            Fecha     = DateTime.UtcNow,
-            Accion    = AccionAuditada.AnulacionIngresoPorFactura,
-            Entidad   = "Gasto",
-            EntidadId = gastoId,
-            Detalle   = detalleAuditoria,
-        });
+        _ctx.LogsAuditoria.Add(CrearLogAuditoriaAnulacion(gastoId, usuarioId, detalleAuditoria));
 
         await _ctx.SaveChangesAsync();
         await tx.CommitAsync();
@@ -404,6 +392,42 @@ public class MovimientoStockRepository : IMovimientoStockRepository
     /// <inheritdoc/>
     public virtual Task<bool> ExistenMovimientosDeGastoAsync(int gastoId)
         => _ctx.MovimientosStock.AnyAsync(m => m.GastoId == gastoId);
+
+    /// <summary>
+    /// Fix 7 (revisión final): seam de inyección de fallo para los tests de rollback de
+    /// RegistrarIngresoPorFacturaAtomicoAsync (ver MovimientoStockRepositoryIngresoTests.cs). El
+    /// LogAuditoria final es el punto donde esos tests fuerzan un DbUpdateException DENTRO de la
+    /// transacción explícita, DESPUÉS de que los renglones ya fueron procesados — así verifican
+    /// que el rollback revierte también los ExecuteUpdateAsync de stock y precio ya ejecutados.
+    /// Antes de este fix, los helpers de test reimplementaban a mano el cuerpo completo del
+    /// método (~50 líneas) solo para poder pisar este único campo, y esa copia YA divergió del
+    /// original (no replicaba la rama de producto nuevo ni los catch de DbUpdateException) — con
+    /// este seam, los helpers solo sobrescriben este método y el resto del método real se ejecuta
+    /// sin duplicar nada.
+    /// </summary>
+    protected virtual LogAuditoria CrearLogAuditoriaIngreso(IngresoPorFacturaArgs args) => new()
+    {
+        UsuarioId = args.UsuarioId,
+        Fecha     = DateTime.UtcNow,
+        Accion    = AccionAuditada.IngresoPorFactura,
+        Entidad   = "Gasto",
+        EntidadId = args.Gasto.Id,
+        Detalle   = args.DetalleAuditoria,
+    };
+
+    /// <summary>
+    /// Fix 7 (revisión final): mismo seam que <see cref="CrearLogAuditoriaIngreso"/>, para
+    /// AnularIngresoPorFacturaAtomicoAsync.
+    /// </summary>
+    protected virtual LogAuditoria CrearLogAuditoriaAnulacion(int gastoId, int usuarioId, string detalleAuditoria) => new()
+    {
+        UsuarioId = usuarioId,
+        Fecha     = DateTime.UtcNow,
+        Accion    = AccionAuditada.AnulacionIngresoPorFactura,
+        Entidad   = "Gasto",
+        EntidadId = gastoId,
+        Detalle   = detalleAuditoria,
+    };
 
     /// <summary>
     /// Mismo criterio que GastoRepository.EsViolacionFacturaUnica: traduce la violación del

@@ -286,6 +286,10 @@ public class MovimientoStockRepositoryIngresoTests : PostgresRepositoryTestBase
         var salidas = await ctx2.MovimientosStock.Where(m => m.Tipo == TipoMovimiento.Salida).ToListAsync();
         Assert.Equal(2, salidas.Count);
         Assert.All(salidas, s => Assert.Equal(MotivoMovimiento.Ajuste, s.Motivo));
+        // Fix 6 (revisión final, decisión 6 del spec): la salida espejo no lleva GastoId, así que
+        // el comentario es el único rastro que la vincula con la factura anulada.
+        Assert.All(salidas, s => Assert.Equal(
+            $"Anulación de ingreso por factura '{gasto.NumeroFactura}' (Gasto {gasto.Id})", s.Comentario));
 
         Assert.Equal(12m, (await ctx2.Productos.FindAsync(p1.Id))!.StockActual);   // 20 - 8
         Assert.Equal(15m, (await ctx2.Productos.FindAsync(p2.Id))!.StockActual);   // 20 - 5
@@ -517,68 +521,28 @@ public class MovimientoStockRepositoryIngresoTests : PostgresRepositoryTestBase
 /// de precio) ya ejecutados. Mismo patrón que MovimientoStockRepositoryConDetalleNulo
 /// (MovimientoStockRepositoryTests.cs).
 ///
-/// NOTA (Task 4, ronda de correcciones 1): este helper duplica a mano el cuerpo de
-/// RegistrarIngresoPorFacturaAtomicoAsync en vez de reusarlo. Cada cambio futuro en el método
-/// real (nuevas ramas, nuevos side-effects) puede quedar sin reflejarse acá, y entonces el test
-/// de rollback pasaría trivialmente sin probar nada — como pasó con la rama de precio antes de
-/// este fix. Riesgo estructural señalado para la revisión final; no se refactoriza en esta ronda.
+/// Fix 7 (revisión final): antes, este helper reimplementaba a mano el cuerpo completo de
+/// RegistrarIngresoPorFacturaAtomicoAsync (~50 líneas) — copia que YA había divergido del
+/// original (no replicaba la rama de producto nuevo ni los catch de DbUpdateException). Ahora
+/// sobrescribe únicamente el seam <see cref="MovimientoStockRepository.CrearLogAuditoriaIngreso"/>
+/// que el método real usa para construir el LogAuditoria final; todo el resto del método (stock,
+/// precio, producto nuevo, catch de violación de unicidad) corre el código de producción real.
 /// </summary>
 internal sealed class MovimientoStockRepositoryIngresoConDetalleNulo : MovimientoStockRepository
 {
-    private readonly AppDbContext _ctx;
-    public MovimientoStockRepositoryIngresoConDetalleNulo(AppDbContext ctx) : base(ctx) => _ctx = ctx;
-
-    public override async Task<ResultadoIngresoPorFactura> RegistrarIngresoPorFacturaAtomicoAsync(IngresoPorFacturaArgs args)
+    public MovimientoStockRepositoryIngresoConDetalleNulo(AppDbContext ctx) : base(ctx)
     {
-        await using var tx = await _ctx.Database.BeginTransactionAsync();
-
-        _ctx.Gastos.Add(args.Gasto);
-        var movimientos = new List<MovimientoStock>();
-        foreach (var renglon in args.Renglones)
-        {
-            var productoId = renglon.ProductoId!.Value;
-            await _ctx.Productos.Where(p => p.Id == productoId)
-                .ExecuteUpdateAsync(s => s.SetProperty(p => p.StockActual, p => p.StockActual + renglon.Cantidad));
-
-            if (renglon.ActualizarPrecioCosto)
-            {
-                await _ctx.Productos
-                    .Where(p => p.Id == productoId)
-                    .ExecuteUpdateAsync(s => s.SetProperty(p => p.PrecioCosto, renglon.PrecioUnitario));
-
-                _ctx.LogsAuditoria.Add(new LogAuditoria
-                {
-                    UsuarioId = args.UsuarioId,
-                    Fecha     = DateTime.UtcNow,
-                    Accion    = AccionAuditada.CambioPrecio,
-                    Entidad   = "Producto",
-                    EntidadId = productoId,
-                    Detalle   = $"PrecioCosto: {renglon.PrecioCostoAnterior} → {renglon.PrecioUnitario} (ingreso por factura)",
-                });
-            }
-
-            var movimiento = new MovimientoStock
-            {
-                ProductoId = productoId, UsuarioId = args.UsuarioId, Tipo = TipoMovimiento.Entrada,
-                Motivo = MotivoMovimiento.Compra, Cantidad = renglon.Cantidad,
-                PrecioUnitario = renglon.PrecioUnitario, Fecha = DateTime.UtcNow, Gasto = args.Gasto,
-            };
-            movimientos.Add(movimiento);
-            _ctx.MovimientosStock.Add(movimiento);
-        }
-        await _ctx.SaveChangesAsync();
-
-        _ctx.LogsAuditoria.Add(new LogAuditoria
-        {
-            UsuarioId = args.UsuarioId, Fecha = DateTime.UtcNow,
-            Accion = AccionAuditada.IngresoPorFactura, Entidad = "Gasto", EntidadId = args.Gasto.Id,
-            Detalle = null!,   // viola NOT NULL → DbUpdateException dentro de la transacción
-        });
-        await _ctx.SaveChangesAsync();
-        await tx.CommitAsync();
-
-        return new ResultadoIngresoPorFactura(args.Gasto.Id, movimientos.Select(m => m.Id).ToList());
     }
+
+    protected override LogAuditoria CrearLogAuditoriaIngreso(IngresoPorFacturaArgs args) => new()
+    {
+        UsuarioId = args.UsuarioId,
+        Fecha     = DateTime.UtcNow,
+        Accion    = AccionAuditada.IngresoPorFactura,
+        Entidad   = "Gasto",
+        EntidadId = args.Gasto.Id,
+        Detalle   = null!,   // viola NOT NULL → DbUpdateException dentro de la transacción
+    };
 }
 
 /// <summary>
@@ -598,90 +562,26 @@ internal sealed class MovimientoStockRepositoryIngresoConDetalleNulo : Movimient
 /// lanzando DbUpdateException. Se revirtió la mutación (se sacó el CommitAsync temprano) y el
 /// test volvió a VERDE. Detalle completo en task-5-report.md, sección "Ronda de correcciones 1".
 ///
-/// NOTA (heredada de Task 4/este mismo archivo): este helper duplica a mano el cuerpo de
-/// AnularIngresoPorFacturaAtomicoAsync en vez de reusarlo — mismo riesgo estructural ya señalado
-/// para RegistrarIngresoPorFacturaAtomicoAsync; no se refactoriza en esta ronda (fuera de
-/// alcance, señalado explícitamente como diferido por la revisión).
+/// Fix 7 (revisión final): mismo refactor que MovimientoStockRepositoryIngresoConDetalleNulo —
+/// este helper ahora solo sobrescribe el seam
+/// <see cref="MovimientoStockRepository.CrearLogAuditoriaAnulacion"/> en vez de duplicar el
+/// cuerpo entero de AnularIngresoPorFacturaAtomicoAsync. Se repitió la prueba de mutación
+/// (commit temprano) contra esta versión refactorizada para confirmar que el seam sigue
+/// probando una atomicidad real y no solo pasando trivialmente — ver fix-final-report.md.
 /// </summary>
 internal sealed class MovimientoStockRepositoryAnulacionConDetalleNulo : MovimientoStockRepository
 {
-    private readonly AppDbContext _ctx;
-    public MovimientoStockRepositoryAnulacionConDetalleNulo(AppDbContext ctx) : base(ctx) => _ctx = ctx;
-
-    public override async Task<ResultadoAnulacionIngreso> AnularIngresoPorFacturaAtomicoAsync(
-        int gastoId, int usuarioId, string detalleAuditoria)
+    public MovimientoStockRepositoryAnulacionConDetalleNulo(AppDbContext ctx) : base(ctx)
     {
-        await using var tx = await _ctx.Database.BeginTransactionAsync();
-
-        var gasto = await _ctx.Gastos
-            .FromSqlInterpolated($"SELECT * FROM \"Gastos\" WHERE \"Id\" = {gastoId} FOR UPDATE")
-            .FirstOrDefaultAsync();
-
-        if (gasto is null)
-        {
-            await tx.RollbackAsync();
-            throw new EntidadNoEncontradaException($"Gasto {gastoId} no encontrado.");
-        }
-        if (!gasto.Activo)
-        {
-            await tx.RollbackAsync();
-            return new ResultadoAnulacionIngreso(ResultadoAnulacionIngresoEstado.GastoYaAnulado, Array.Empty<ItemFaltanteStock>());
-        }
-
-        var movimientos = await _ctx.MovimientosStock
-            .Include(m => m.Producto)
-            .Where(m => m.GastoId == gastoId)
-            .ToListAsync();
-
-        var faltantes = new List<ItemFaltanteStock>();
-        foreach (var grupo in movimientos.GroupBy(m => m.ProductoId))
-        {
-            var necesario = grupo.Sum(m => m.Cantidad);
-            var producto  = grupo.First().Producto!;
-            if (producto.StockActual < necesario)
-                faltantes.Add(new ItemFaltanteStock(producto.Id, producto.Nombre, producto.StockActual, necesario));
-        }
-
-        if (faltantes.Count > 0)
-        {
-            await tx.RollbackAsync();
-            return new ResultadoAnulacionIngreso(ResultadoAnulacionIngresoEstado.StockInsuficiente, faltantes);
-        }
-
-        foreach (var movimiento in movimientos)
-        {
-            await _ctx.Productos
-                .Where(p => p.Id == movimiento.ProductoId)
-                .ExecuteUpdateAsync(s => s.SetProperty(
-                    p => p.StockActual, p => p.StockActual - movimiento.Cantidad));
-
-            _ctx.MovimientosStock.Add(new MovimientoStock
-            {
-                ProductoId     = movimiento.ProductoId,
-                UsuarioId      = usuarioId,
-                Tipo           = TipoMovimiento.Salida,
-                Motivo         = MotivoMovimiento.Ajuste,
-                Cantidad       = movimiento.Cantidad,
-                PrecioUnitario = movimiento.PrecioUnitario,
-                Fecha          = DateTime.UtcNow,
-                Comentario     = $"Anulación de ingreso por factura (Gasto {gastoId})",
-            });
-        }
-
-        await _ctx.Gastos
-            .Where(g => g.Id == gastoId)
-            .ExecuteUpdateAsync(s => s.SetProperty(g => g.Activo, false));
-
-        _ctx.LogsAuditoria.Add(new LogAuditoria
-        {
-            UsuarioId = usuarioId, Fecha = DateTime.UtcNow,
-            Accion = AccionAuditada.AnulacionIngresoPorFactura, Entidad = "Gasto", EntidadId = gastoId,
-            Detalle = null!,   // viola NOT NULL → DbUpdateException dentro de la transacción
-        });
-
-        await _ctx.SaveChangesAsync();
-        await tx.CommitAsync();
-
-        return new ResultadoAnulacionIngreso(ResultadoAnulacionIngresoEstado.Ok, Array.Empty<ItemFaltanteStock>());
     }
+
+    protected override LogAuditoria CrearLogAuditoriaAnulacion(int gastoId, int usuarioId, string detalleAuditoria) => new()
+    {
+        UsuarioId = usuarioId,
+        Fecha     = DateTime.UtcNow,
+        Accion    = AccionAuditada.AnulacionIngresoPorFactura,
+        Entidad   = "Gasto",
+        EntidadId = gastoId,
+        Detalle   = null!,   // viola NOT NULL → DbUpdateException dentro de la transacción
+    };
 }
