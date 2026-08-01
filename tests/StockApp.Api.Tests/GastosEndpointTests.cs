@@ -350,6 +350,50 @@ public class GastosEndpointTests : ApiTestBase
     }
 
     [Fact]
+    public async Task DeleteGasto_ConMovimientosYStockInsuficiente_Devuelve409()
+    {
+        // Matriz E2E de la decisión 9: un gasto vinculado a mano (AsociarMovimientosAsync, el
+        // flujo "asociar factura" ya existente) también pasa por el asiento inverso al anularse,
+        // y si el stock ya se consumió, el DELETE existente ahora devuelve 409 en vez de 200.
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+        var creado = await (await client.PostAsJsonAsync("/finanzas/gastos",
+                RequestValido(proveedorId, fuenteId, rubroId, CondicionPago.Credito)))
+            .Content.ReadFromJsonAsync<GastoGuardadoResponse>();
+
+        int productoId;
+        await using (var ctx = Factory.CrearContexto())
+        {
+            var producto = new Producto
+            {
+                Codigo = $"DEL-{Guid.NewGuid():N}", Nombre = "Producto con movimiento",
+                UnidadMedida = new UnidadMedida { Nombre = "Unidad", Abreviatura = "u" },
+                PrecioCosto = 10m, PrecioVenta = 20m, StockActual = 2m,
+                Activo = true, FechaAlta = DateTime.UtcNow,
+            };
+            ctx.Add(producto);
+            await ctx.SaveChangesAsync();
+            productoId = producto.Id;
+
+            ctx.MovimientosStock.Add(new MovimientoStock
+            {
+                ProductoId = productoId, UsuarioId = 1, Tipo = TipoMovimiento.Entrada,
+                Motivo = MotivoMovimiento.Compra, Cantidad = 5m, PrecioUnitario = 10m,
+                Fecha = DateTime.UtcNow, GastoId = creado!.Id,
+            });
+            await ctx.SaveChangesAsync();
+        }
+
+        var response = await client.DeleteAsync($"/finanzas/gastos/{creado!.Id}");
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+
+        await using var verificacion = Factory.CrearContexto();
+        Assert.True((await verificacion.Gastos.SingleAsync(g => g.Id == creado.Id)).Activo);
+        Assert.Equal(2m, (await verificacion.Productos.FindAsync(productoId))!.StockActual);
+    }
+
+    [Fact]
     public async Task PutGasto_Modifica200ConCambios()
     {
         var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();

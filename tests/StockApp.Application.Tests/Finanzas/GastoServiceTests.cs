@@ -20,6 +20,7 @@ public class GastoServiceTests
         Mock<IFuenteFinanciamientoRepository> Fuentes,
         Mock<IRubroGastoRepository> Rubros,
         Mock<ILineaPoaRepository> LineasPoa,
+        Mock<IMovimientoStockRepository> MovRepo,
         Mock<IAuditLogger> Audit);
 
     private static Mocks Crear(RolUsuario rol = RolUsuario.Admin)
@@ -29,6 +30,7 @@ public class GastoServiceTests
         var fuentes    = new Mock<IFuenteFinanciamientoRepository>();
         var rubros     = new Mock<IRubroGastoRepository>();
         var lineasPoa  = new Mock<ILineaPoaRepository>();
+        var movRepo    = new Mock<IMovimientoStockRepository>();
         var session    = new Mock<ICurrentSession>();
         var auth       = new Mock<IAuthSvc>();
         var audit      = new Mock<IAuditLogger>();
@@ -45,10 +47,14 @@ public class GastoServiceTests
         rubros.Setup(r => r.ObtenerPorIdAsync(It.IsAny<int>()))
             .ReturnsAsync((int id) => new RubroGasto { Id = id, Codigo = id, Nombre = $"Rubro {id}", Activo = true });
 
+        // Por defecto, sin movimientos asociados: preserva el camino de baja lógica simple para
+        // TODOS los tests que no lo pisan explícitamente (Task 11 — decisión 9 del spec).
+        movRepo.Setup(r => r.ExistenMovimientosDeGastoAsync(It.IsAny<int>())).ReturnsAsync(false);
+
         var svc = new GastoService(
             repo.Object, proveedores.Object, fuentes.Object, rubros.Object, lineasPoa.Object,
-            session.Object, auth.Object, audit.Object);
-        return new Mocks(svc, repo, proveedores, fuentes, rubros, lineasPoa, audit);
+            movRepo.Object, session.Object, auth.Object, audit.Object);
+        return new Mocks(svc, repo, proveedores, fuentes, rubros, lineasPoa, movRepo, audit);
     }
 
     private static Gasto GastoValido(CondicionPago condicion = CondicionPago.Credito) => new()
@@ -447,6 +453,50 @@ public class GastoServiceTests
         m.Repo.Verify(r => r.DesvincularMovimientosAsync(1), Times.Once);
         m.Audit.Verify(a => a.RegistrarAsync(
             It.IsAny<int>(), AccionAuditada.AnulacionGasto, "Gasto", 1, It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task AnularAsync_ConMovimientosAsociados_DelegaEnAsientoInversoYNoDesvincula()
+    {
+        // Decisión 9 del spec: un gasto CON movimientos se anula por el mismo camino atómico que
+        // IIngresoPorFacturaService.AnularLoteAsync (Task 5) — nunca por la baja lógica simple,
+        // sin importar si el vínculo lo hizo esta pantalla o AsociarMovimientosAsync a mano.
+        var m = Crear();
+        var gasto = GastoValido();
+        gasto.Id = 1;
+        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(gasto);
+        m.MovRepo.Setup(r => r.ExistenMovimientosDeGastoAsync(1)).ReturnsAsync(true);
+        m.MovRepo.Setup(r => r.AnularIngresoPorFacturaAtomicoAsync(1, It.IsAny<int>(), It.IsAny<string>()))
+            .ReturnsAsync(new ResultadoAnulacionIngreso(ResultadoAnulacionIngresoEstado.Ok, Array.Empty<ItemFaltanteStock>()));
+
+        await m.Svc.AnularAsync(1);
+
+        m.MovRepo.Verify(r => r.AnularIngresoPorFacturaAtomicoAsync(1, It.IsAny<int>(), It.IsAny<string>()), Times.Once);
+        m.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Gasto>()), Times.Never);
+        m.Repo.Verify(r => r.DesvincularMovimientosAsync(It.IsAny<int>()), Times.Never);
+        // El propio AnularIngresoPorFacturaAtomicoAsync ya audita (AnulacionIngresoPorFactura,
+        // Task 5) — auditar acá también sería doble asiento de auditoría para la misma anulación.
+        m.Audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), AccionAuditada.AnulacionGasto, "Gasto", 1, It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AnularAsync_ConMovimientosYStockInsuficiente_LanzaReglaDeNegocioConElProducto()
+    {
+        var m = Crear();
+        var gasto = GastoValido();
+        gasto.Id = 1;
+        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(gasto);
+        m.MovRepo.Setup(r => r.ExistenMovimientosDeGastoAsync(1)).ReturnsAsync(true);
+        m.MovRepo.Setup(r => r.AnularIngresoPorFacturaAtomicoAsync(1, It.IsAny<int>(), It.IsAny<string>()))
+            .ReturnsAsync(new ResultadoAnulacionIngreso(
+                ResultadoAnulacionIngresoEstado.StockInsuficiente,
+                new List<ItemFaltanteStock> { new(5, "Cemento", 2m, 10m) }));
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.AnularAsync(1));
+
+        Assert.Contains("Cemento", ex.Message);
+        m.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Gasto>()), Times.Never);
     }
 
     // ── Asociación de movimientos a factura existente ────────────────────────

@@ -401,6 +401,10 @@ public class MovimientoStockRepository : IMovimientoStockRepository
         return new ResultadoAnulacionIngreso(ResultadoAnulacionIngresoEstado.Ok, Array.Empty<ItemFaltanteStock>());
     }
 
+    /// <inheritdoc/>
+    public virtual Task<bool> ExistenMovimientosDeGastoAsync(int gastoId)
+        => _ctx.MovimientosStock.AnyAsync(m => m.GastoId == gastoId);
+
     /// <summary>
     /// Mismo criterio que GastoRepository.EsViolacionFacturaUnica: traduce la violación del
     /// índice único parcial (Proveedor, Factura, Orden) a 409 en vez de dejarla llegar como

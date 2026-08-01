@@ -125,4 +125,12 @@ public interface IMovimientoStockRepository
     /// </summary>
     Task<ResultadoAnulacionIngreso> AnularIngresoPorFacturaAtomicoAsync(
         int gastoId, int usuarioId, string detalleAuditoria);
+
+    /// <summary>
+    /// True si el gasto tiene al menos un MovimientoStock asociado, sin importar si el vínculo
+    /// se hizo por el ingreso por factura (Task 1-5) o a mano vía
+    /// GastoService.AsociarMovimientosAsync. GastoService.AnularAsync la usa para decidir entre
+    /// la baja lógica simple y la anulación por asiento inverso (decisión 9 del spec).
+    /// </summary>
+    Task<bool> ExistenMovimientosDeGastoAsync(int gastoId);
 }

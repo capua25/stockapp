@@ -13,6 +13,7 @@ public class GastoService : IGastoService
     private readonly IFuenteFinanciamientoRepository _fuentes;
     private readonly IRubroGastoRepository           _rubros;
     private readonly ILineaPoaRepository             _lineasPoa;
+    private readonly IMovimientoStockRepository      _movRepo;
     private readonly ICurrentSession                 _session;
     private readonly IAuthorizationService           _auth;
     private readonly IAuditLogger                    _audit;
@@ -23,6 +24,7 @@ public class GastoService : IGastoService
         IFuenteFinanciamientoRepository fuentes,
         IRubroGastoRepository rubros,
         ILineaPoaRepository lineasPoa,
+        IMovimientoStockRepository movRepo,
         ICurrentSession session,
         IAuthorizationService auth,
         IAuditLogger audit)
@@ -32,6 +34,7 @@ public class GastoService : IGastoService
         _fuentes     = fuentes;
         _rubros      = rubros;
         _lineasPoa   = lineasPoa;
+        _movRepo     = movRepo;
         _session     = session;
         _auth        = auth;
         _audit       = audit;
@@ -164,6 +167,29 @@ public class GastoService : IGastoService
         if (gasto.Pagos.Any(p => p.Activo))
             throw new ReglaDeNegocioException(
                 "No se puede anular un gasto con pagos activos: primero anulá los pagos.");
+
+        if (await _movRepo.ExistenMovimientosDeGastoAsync(id))
+        {
+            // Decisión 9 del spec: un gasto CON movimientos asociados se anula por asiento
+            // inverso — la misma ruta atómica que IIngresoPorFacturaService.AnularLoteAsync
+            // (Task 5) — para que el stock se revierta en vez de quedar sumado con el gasto
+            // desvinculado (el agujero que tenía DesvincularMovimientosAsync).
+            var detalle = $"Anulación de '{gasto.Detalle}' (factura {gasto.NumeroFactura ?? "s/n"}, monto {gasto.MontoTotal})";
+            var resultado = await _movRepo.AnularIngresoPorFacturaAtomicoAsync(
+                id, _session.UsuarioActual!.Id, detalle);
+
+            if (resultado.Estado == ResultadoAnulacionIngresoEstado.StockInsuficiente)
+            {
+                var detalleFaltantes = string.Join("; ", resultado.Faltantes.Select(f =>
+                    $"{f.ProductoNombre}: stock {f.StockActual}, necesita {f.CantidadNecesaria}"));
+                throw new ReglaDeNegocioException(
+                    $"No se puede anular: stock insuficiente en {resultado.Faltantes.Count} producto(s). {detalleFaltantes}");
+            }
+
+            // AnularIngresoPorFacturaAtomicoAsync ya marcó Gasto.Activo=false y escribió su
+            // propio LogAuditoria (AnulacionIngresoPorFactura) dentro de la misma transacción.
+            return;
+        }
 
         gasto.Activo = false;
         await _repo.ActualizarAsync(gasto);

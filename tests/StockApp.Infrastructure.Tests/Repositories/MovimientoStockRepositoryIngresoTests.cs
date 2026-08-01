@@ -470,6 +470,44 @@ public class MovimientoStockRepositoryIngresoTests : PostgresRepositoryTestBase
         await using var ctx2 = Fixture.CrearContexto();
         Assert.Equal(10m, (await ctx2.Productos.FindAsync(p1.Id))!.PrecioCosto);   // sin cambios
     }
+
+    [Fact]
+    public async Task ExistenMovimientosDeGastoAsync_SinMovimientos_DevuelveFalse()
+    {
+        var (_, _, proveedor, fuente, rubro) = await SeedMaestrosAsync();
+        var gasto = NuevoGasto(proveedor, fuente, rubro, factura: "EXIST-FAC-1");
+        Context.Gastos.Add(gasto);
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        var existen = await _repo.ExistenMovimientosDeGastoAsync(gasto.Id);
+
+        Assert.False(existen);
+    }
+
+    [Fact]
+    public async Task ExistenMovimientosDeGastoAsync_ConUnMovimiento_DevuelveTrue()
+    {
+        var (um, usuario, proveedor, fuente, rubro) = await SeedMaestrosAsync();
+        var producto = NuevoProducto("EXIST-1", um, stock: 5m);
+        Context.Productos.Add(producto);
+        var gasto = NuevoGasto(proveedor, fuente, rubro, factura: "EXIST-FAC-2");
+        Context.Gastos.Add(gasto);
+        await Context.SaveChangesAsync();
+
+        Context.MovimientosStock.Add(new MovimientoStock
+        {
+            ProductoId = producto.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada,
+            Motivo = MotivoMovimiento.Compra, Cantidad = 5m, PrecioUnitario = 10m,
+            Fecha = DateTime.UtcNow, GastoId = gasto.Id,
+        });
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        var existen = await _repo.ExistenMovimientosDeGastoAsync(gasto.Id);
+
+        Assert.True(existen);
+    }
 }
 
 /// <summary>
