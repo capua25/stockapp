@@ -27,4 +27,8 @@ public partial class FilaRenglonFacturaVm : ObservableObject
     public string NombreMostrado => EsProductoNuevo
         ? (ProductoNuevoNombre ?? "(producto nuevo)")
         : (Producto?.Nombre ?? string.Empty);
+
+    partial void OnProductoChanged(ProductoDto? value) => OnPropertyChanged(nameof(NombreMostrado));
+    partial void OnEsProductoNuevoChanged(bool value) => OnPropertyChanged(nameof(NombreMostrado));
+    partial void OnProductoNuevoNombreChanged(string? value) => OnPropertyChanged(nameof(NombreMostrado));
 }

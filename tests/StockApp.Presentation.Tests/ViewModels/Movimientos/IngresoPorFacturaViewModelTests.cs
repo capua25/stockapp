@@ -330,4 +330,40 @@ public class IngresoPorFacturaViewModelTests
 
         Assert.NotNull(vm.AdjuntosPanel);
     }
+
+    [Fact]
+    public void FilaRenglonFacturaVm_NombreMostrado_NotificaAlCambiarProducto()
+    {
+        var fila = new FilaRenglonFacturaVm();
+        var notificados = new List<string?>();
+        fila.PropertyChanged += (_, e) => notificados.Add(e.PropertyName);
+
+        fila.Producto = new ProductoDto(1, "SKU1", null, "Producto Uno", null, null, null, null, 1, "Unidad", 10m, 20m, 5m, 0m, true, DateTime.UtcNow);
+
+        Assert.Contains(nameof(FilaRenglonFacturaVm.NombreMostrado), notificados);
+    }
+
+    [Fact]
+    public void FilaRenglonFacturaVm_NombreMostrado_NotificaAlCambiarEsProductoNuevo()
+    {
+        var fila = new FilaRenglonFacturaVm();
+        var notificados = new List<string?>();
+        fila.PropertyChanged += (_, e) => notificados.Add(e.PropertyName);
+
+        fila.EsProductoNuevo = true;
+
+        Assert.Contains(nameof(FilaRenglonFacturaVm.NombreMostrado), notificados);
+    }
+
+    [Fact]
+    public void FilaRenglonFacturaVm_NombreMostrado_NotificaAlCambiarProductoNuevoNombre()
+    {
+        var fila = new FilaRenglonFacturaVm();
+        var notificados = new List<string?>();
+        fila.PropertyChanged += (_, e) => notificados.Add(e.PropertyName);
+
+        fila.ProductoNuevoNombre = "Producto cargado en línea";
+
+        Assert.Contains(nameof(FilaRenglonFacturaVm.NombreMostrado), notificados);
+    }
 }
