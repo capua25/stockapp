@@ -210,6 +210,16 @@ public class IngresoPorFacturaService : IIngresoPorFacturaService
             throw new ReglaDeNegocioException(
                 "No se puede anular un gasto con pagos activos: primero anulá los pagos.");
 
+        // Fix 4 (revisión final): el spec exige "tenga movimientos asociados" como cuarta
+        // condición. Sin este chequeo, anular por esta ruta un gasto de servicios (sin
+        // movimientos de stock, ej. una factura de luz) lo marcaba inactivo con
+        // AccionAuditada.AnulacionIngresoPorFactura sin pasar por DesvincularMovimientosAsync ni
+        // por AccionAuditada.AnulacionGasto: quedaba auditado como algo que no fue.
+        if (!await _movRepo.ExistenMovimientosDeGastoAsync(gastoId))
+            throw new ReglaDeNegocioException(
+                $"El gasto {gastoId} no tiene movimientos de stock asociados: no se puede anular " +
+                "por esta ruta. Si corresponde, anulalo desde Finanzas.");
+
         var detalle = $"Anulación de ingreso por factura '{gasto.NumeroFactura ?? "s/n"}' (Gasto {gastoId})";
 
         var resultado = await _movRepo.AnularIngresoPorFacturaAtomicoAsync(

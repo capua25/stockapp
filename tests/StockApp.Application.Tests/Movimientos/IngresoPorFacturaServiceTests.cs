@@ -310,6 +310,7 @@ public class IngresoPorFacturaServiceTests
         // chequeo optimista lo hubiera detectado.
         var (svc, movRepo, gastoRepo, _, _, _, _, _, _, _, _) = Crear();
         gastoRepo.Setup(g => g.ObtenerPorIdAsync(9)).ReturnsAsync(new Gasto { Id = 9, Activo = true });
+        movRepo.Setup(m => m.ExistenMovimientosDeGastoAsync(9)).ReturnsAsync(true);
         movRepo.Setup(m => m.AnularIngresoPorFacturaAtomicoAsync(9, It.IsAny<int>(), It.IsAny<string>()))
             .ReturnsAsync(new ResultadoAnulacionIngreso(ResultadoAnulacionIngresoEstado.GastoYaAnulado, Array.Empty<ItemFaltanteStock>()));
 
@@ -321,6 +322,7 @@ public class IngresoPorFacturaServiceTests
     {
         var (svc, movRepo, gastoRepo, _, _, _, _, _, _, _, _) = Crear();
         gastoRepo.Setup(g => g.ObtenerPorIdAsync(7)).ReturnsAsync(new Gasto { Id = 7, Activo = true });
+        movRepo.Setup(m => m.ExistenMovimientosDeGastoAsync(7)).ReturnsAsync(true);
         movRepo.Setup(m => m.AnularIngresoPorFacturaAtomicoAsync(7, It.IsAny<int>(), It.IsAny<string>()))
             .ReturnsAsync(new ResultadoAnulacionIngreso(
                 ResultadoAnulacionIngresoEstado.StockInsuficiente,
@@ -335,11 +337,28 @@ public class IngresoPorFacturaServiceTests
     {
         var (svc, movRepo, gastoRepo, _, _, _, _, _, _, _, _) = Crear();
         gastoRepo.Setup(g => g.ObtenerPorIdAsync(8)).ReturnsAsync(new Gasto { Id = 8, Activo = true });
+        movRepo.Setup(m => m.ExistenMovimientosDeGastoAsync(8)).ReturnsAsync(true);
         movRepo.Setup(m => m.AnularIngresoPorFacturaAtomicoAsync(8, It.IsAny<int>(), It.IsAny<string>()))
             .ReturnsAsync(new ResultadoAnulacionIngreso(ResultadoAnulacionIngresoEstado.Ok, Array.Empty<ItemFaltanteStock>()));
 
         await svc.AnularLoteAsync(8);
 
         movRepo.Verify(m => m.AnularIngresoPorFacturaAtomicoAsync(8, It.IsAny<int>(), It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task AnularLoteAsync_GastoSinMovimientosAsociados_LanzaReglaDeNegocioSinTocarElRepo()
+    {
+        // Fix 4 (revisión final): el spec exige "tenga movimientos asociados" como cuarta
+        // condición de AnularLoteAsync — anular por esta ruta un gasto de servicios (sin
+        // movimientos de stock) no debe auditarse como AnulacionIngresoPorFactura.
+        var (svc, movRepo, gastoRepo, _, _, _, _, _, _, _, _) = Crear();
+        gastoRepo.Setup(g => g.ObtenerPorIdAsync(10)).ReturnsAsync(new Gasto { Id = 10, Activo = true });
+        movRepo.Setup(m => m.ExistenMovimientosDeGastoAsync(10)).ReturnsAsync(false);
+
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => svc.AnularLoteAsync(10));
+
+        movRepo.Verify(m => m.AnularIngresoPorFacturaAtomicoAsync(
+            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>()), Times.Never);
     }
 }
