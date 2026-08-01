@@ -1,0 +1,138 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels.Tareas"
+             xmlns:conv="using:StockApp.Presentation.Converters"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
+             x:Class="StockApp.Presentation.Views.Tareas.TareaListView"
+             x:DataType="vm:TareaListViewModel">
+
+    <DockPanel Margin="24">
+
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
+            <TextBlock Grid.Column="0" Text="Tareas" Classes="titulo-vista" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                <CheckBox Content="Mostrar canceladas" IsChecked="{Binding MostrarCanceladas}" />
+                <Button Classes="primary" Content="Nueva tarea" Command="{Binding NuevaCommand}" />
+            </StackPanel>
+        </Grid>
+
+        <ScrollViewer>
+            <StackPanel Spacing="24">
+
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Pendientes" Classes="seccion" />
+                    <ItemsControl ItemsSource="{Binding Pendientes}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:TareaFila">
+                                <Border Classes="card" Margin="0,0,0,8">
+                                    <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                                        <StackPanel Grid.Column="0" Spacing="2">
+                                            <TextBlock Text="{Binding Titulo}" FontWeight="SemiBold"
+                                                       Foreground="{Binding DiasParaVencer, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}" />
+                                            <TextBlock Text="{Binding PrioridadTexto}" Classes="caption" Opacity="0.7" />
+                                            <TextBlock Text="{Binding FechaLimite, StringFormat='Vence: {0:dd/MM/yyyy}'}"
+                                                       Classes="caption" Opacity="0.7"
+                                                       IsVisible="{Binding FechaLimite, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                        </StackPanel>
+                                        <Button Grid.Column="1" Classes="ghost" Content="Ver"
+                                                Command="{Binding $parent[UserControl].((vm:TareaListViewModel)DataContext).VerDetalleCommand}"
+                                                CommandParameter="{Binding}" />
+                                        <Button Grid.Column="2" Classes="secondary" Content="Tomar"
+                                                IsVisible="{Binding PuedeTomar}"
+                                                Command="{Binding $parent[UserControl].((vm:TareaListViewModel)DataContext).TomarCommand}"
+                                                CommandParameter="{Binding}" />
+                                        <Button Grid.Column="3" Classes="danger" Content="Cancelar"
+                                                IsVisible="{Binding PuedeCancelar}"
+                                                Command="{Binding $parent[UserControl].((vm:TareaListViewModel)DataContext).CancelarCommand}"
+                                                CommandParameter="{Binding}" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <StackPanel Spacing="8">
+                    <TextBlock Text="En curso" Classes="seccion" />
+                    <ItemsControl ItemsSource="{Binding EnCurso}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:TareaFila">
+                                <Border Classes="card" Margin="0,0,0,8">
+                                    <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
+                                        <StackPanel Grid.Column="0" Spacing="2">
+                                            <TextBlock Text="{Binding Titulo}" FontWeight="SemiBold"
+                                                       Foreground="{Binding DiasParaVencer, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}" />
+                                            <TextBlock Text="{Binding PrioridadTexto}" Classes="caption" Opacity="0.7" />
+                                            <TextBlock Text="{Binding FechaLimite, StringFormat='Vence: {0:dd/MM/yyyy}'}"
+                                                       Classes="caption" Opacity="0.7"
+                                                       IsVisible="{Binding FechaLimite, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                            <TextBlock Text="{Binding TomadaPorNombre, StringFormat='Tomada por {0}'}"
+                                                       Classes="caption" Opacity="0.7" />
+                                        </StackPanel>
+                                        <Button Grid.Column="1" Classes="ghost" Content="Ver"
+                                                Command="{Binding $parent[UserControl].((vm:TareaListViewModel)DataContext).VerDetalleCommand}"
+                                                CommandParameter="{Binding}" />
+                                        <Button Grid.Column="2" Classes="secondary" Content="Soltar"
+                                                IsVisible="{Binding PuedeSoltar}"
+                                                Command="{Binding $parent[UserControl].((vm:TareaListViewModel)DataContext).SoltarCommand}"
+                                                CommandParameter="{Binding}" />
+                                        <Button Grid.Column="3" Classes="primary" Content="Terminar"
+                                                IsVisible="{Binding PuedeTerminar}"
+                                                Command="{Binding $parent[UserControl].((vm:TareaListViewModel)DataContext).TerminarCommand}"
+                                                CommandParameter="{Binding}" />
+                                        <Button Grid.Column="4" Classes="danger" Content="Cancelar"
+                                                IsVisible="{Binding PuedeCancelar}"
+                                                Command="{Binding $parent[UserControl].((vm:TareaListViewModel)DataContext).CancelarCommand}"
+                                                CommandParameter="{Binding}" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <StackPanel Spacing="8">
+                    <TextBlock Text="Terminadas" Classes="seccion" />
+                    <ItemsControl ItemsSource="{Binding Terminadas}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:TareaFila">
+                                <Border Classes="card" Margin="0,0,0,8">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Grid.Column="0" Text="{Binding Titulo}" Opacity="0.8" />
+                                        <Button Grid.Column="1" Classes="ghost" Content="Ver"
+                                                Command="{Binding $parent[UserControl].((vm:TareaListViewModel)DataContext).VerDetalleCommand}"
+                                                CommandParameter="{Binding}" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+                <StackPanel Spacing="8" IsVisible="{Binding MostrarCanceladas}">
+                    <TextBlock Text="Canceladas" Classes="seccion" />
+                    <ItemsControl ItemsSource="{Binding Canceladas}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:TareaFila">
+                                <Border Classes="card" Margin="0,0,0,8">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <TextBlock Grid.Column="0" Text="{Binding Titulo}" Opacity="0.6"
+                                                   TextDecorations="Strikethrough" />
+                                        <Button Grid.Column="1" Classes="ghost" Content="Ver"
+                                                Command="{Binding $parent[UserControl].((vm:TareaListViewModel)DataContext).VerDetalleCommand}"
+                                                CommandParameter="{Binding}" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
+            </StackPanel>
+        </ScrollViewer>
+
+    </DockPanel>
+
+</UserControl>

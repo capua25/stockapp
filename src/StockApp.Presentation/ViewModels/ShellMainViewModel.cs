@@ -11,6 +11,7 @@ using StockApp.Presentation.ViewModels.Catalogo;
 using StockApp.Presentation.ViewModels.Finanzas;
 using StockApp.Presentation.ViewModels.Movimientos;
 using StockApp.Presentation.ViewModels.Reportes;
+using StockApp.Presentation.ViewModels.Tareas;
 
 namespace StockApp.Presentation.ViewModels;
 
@@ -169,6 +170,15 @@ public partial class ShellMainViewModel : ViewModelBase
     {
         SeccionActiva = "HistorialMovimientos";
         _navigation.Navegar<MovimientoHistorialViewModel>();
+    }
+
+    // ── Tareas (spec 2026-08-01): Admin y Operador ────────────────────────────
+
+    [RelayCommand]
+    private void NavTareas()
+    {
+        SeccionActiva = "Tareas";
+        _navigation.Navegar<TareaListViewModel>();
     }
 
     // ── Reportes (Inc 6): solo Admin ──────────────────────────────────────────
