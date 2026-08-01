@@ -140,7 +140,7 @@ public class TareaFormViewModelTests
 
         await ctx.Vm.AgregarNotaCommand.ExecuteAsync(null);
 
-        Assert.False(string.IsNullOrWhiteSpace(ctx.Vm.MensajeError));
+        Assert.Equal(TareaFormViewModel.MensajeSinPermiso, ctx.Vm.MensajeError);
         Assert.Empty(ctx.Vm.Notas);
     }
 }

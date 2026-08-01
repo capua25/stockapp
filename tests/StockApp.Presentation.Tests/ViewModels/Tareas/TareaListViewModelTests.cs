@@ -130,6 +130,6 @@ public class TareaListViewModelTests
 
         await ctx.Vm.TomarCommand.ExecuteAsync(fila);
 
-        ctx.Confirm.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Once);
+        ctx.Confirm.Verify(c => c.InformarAsync(TareaListViewModel.MensajeSinPermiso), Times.Once);
     }
 }

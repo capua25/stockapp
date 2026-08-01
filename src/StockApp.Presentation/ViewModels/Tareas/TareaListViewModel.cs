@@ -57,6 +57,14 @@ public sealed class TareaFila
 /// </summary>
 public partial class TareaListViewModel : ViewModelBase
 {
+    /// <summary>
+    /// Mensaje para UnauthorizedAccessException (const, no literal repetido): lo referencian
+    /// tanto ManejarErrorAsync como los tests, así un test que verifica la rama específica no
+    /// pasaría "por accidente" si se la eliminara y el catch-all genérico tomara su lugar.
+    /// </summary>
+    public const string MensajeSinPermiso =
+        "La sesión expiró o no tiene permiso para realizar esta acción. Vuelva a iniciar sesión e intente de nuevo.";
+
     private readonly ITareaService        _service;
     private readonly ICurrentSession      _session;
     private readonly INavigationService   _navigation;
@@ -159,8 +167,7 @@ public partial class TareaListViewModel : ViewModelBase
         {
             ReglaDeNegocioException or EntidadNoEncontradaException or ArgumentException
                 or ServidorNoDisponibleException => ex.Message,
-            UnauthorizedAccessException =>
-                "La sesión expiró o no tiene permiso para realizar esta acción. Vuelva a iniciar sesión e intente de nuevo.",
+            UnauthorizedAccessException => MensajeSinPermiso,
             _ => "Ocurrió un error inesperado. Si el problema persiste, contactá a soporte.",
         };
         await _confirmacion.InformarAsync(mensaje);
