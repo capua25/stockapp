@@ -19,15 +19,17 @@ public class TareaService : ITareaService
     private readonly IUsuarioRepository    _usuarios;
     private readonly ICurrentSession       _session;
     private readonly IAuthorizationService _auth;
+    private readonly IAuditLogger          _audit;
 
     public TareaService(
-        ITareaRepository repo, IUsuarioRepository usuarios,
-        ICurrentSession session, IAuthorizationService auth)
+        ITareaRepository repo, IUsuarioRepository usuarios, ICurrentSession session,
+        IAuthorizationService auth, IAuditLogger audit)
     {
         _repo     = repo;
         _usuarios = usuarios;
         _session  = session;
         _auth     = auth;
+        _audit    = audit;
     }
 
     public async Task<int> CrearAsync(Tarea tarea)
@@ -48,7 +50,14 @@ public class TareaService : ITareaService
         tarea.CerradaPorUsuarioId = null;
         tarea.FechaFin            = null;
 
-        return await _repo.AgregarAsync(tarea);
+        var id = await _repo.AgregarAsync(tarea);
+
+        await _audit.RegistrarAsync(
+            _session.UsuarioActual!.Id, AccionAuditada.AltaTarea, "Tarea", id,
+            $"Título: {tarea.Titulo}" +
+            (tarea.FechaLimite is not null ? $"; Vence: {tarea.FechaLimite:yyyy-MM-dd}" : string.Empty));
+
+        return id;
     }
 
     public async Task<IReadOnlyList<Tarea>> ListarAsync()
@@ -64,11 +73,16 @@ public class TareaService : ITareaService
         var tarea = await _repo.ObtenerPorIdAsync(id)
             ?? throw new EntidadNoEncontradaException($"Tarea {id} no encontrada.");
 
+        var estadoAnterior = tarea.Estado;
         tarea.CambiarEstado(EstadoTarea.EnCurso);
         tarea.TomadaPorUsuarioId = _session.UsuarioActual!.Id;
         tarea.FechaInicio        = DateTime.UtcNow;
 
         await _repo.ActualizarAsync(tarea);
+
+        await _audit.RegistrarAsync(
+            _session.UsuarioActual!.Id, AccionAuditada.CambioEstadoTarea, "Tarea", id,
+            $"{estadoAnterior} → {tarea.Estado} (tomada)");
     }
 
     public async Task SoltarAsync(int id)
@@ -80,6 +94,7 @@ public class TareaService : ITareaService
 
         var actorId = _session.UsuarioActual!.Id;
         var tomadorAnteriorId = tarea.TomadaPorUsuarioId;
+        var estadoAnterior = tarea.Estado;
 
         tarea.CambiarEstado(EstadoTarea.Pendiente);
         tarea.TomadaPorUsuarioId = null;
@@ -90,6 +105,10 @@ public class TareaService : ITareaService
             tarea.Notas.Add(await NotaAjenaAsync(actorId, tomadorId, "soltó"));
 
         await _repo.ActualizarAsync(tarea);
+
+        await _audit.RegistrarAsync(
+            actorId, AccionAuditada.CambioEstadoTarea, "Tarea", id,
+            $"{estadoAnterior} → {tarea.Estado} (soltada)");
     }
 
     public async Task TerminarAsync(int id)
@@ -101,6 +120,7 @@ public class TareaService : ITareaService
 
         var actorId = _session.UsuarioActual!.Id;
         var tomadorId = tarea.TomadaPorUsuarioId;
+        var estadoAnterior = tarea.Estado;
 
         tarea.CambiarEstado(EstadoTarea.Terminada);
         tarea.CerradaPorUsuarioId = actorId;
@@ -110,6 +130,10 @@ public class TareaService : ITareaService
             tarea.Notas.Add(await NotaAjenaAsync(actorId, idTomador, "terminó"));
 
         await _repo.ActualizarAsync(tarea);
+
+        await _audit.RegistrarAsync(
+            actorId, AccionAuditada.CambioEstadoTarea, "Tarea", id,
+            $"{estadoAnterior} → {tarea.Estado}");
     }
 
     /// <summary>Formato exacto de la decisión 11 del spec: "García terminó una tarea tomada por Juan".</summary>
@@ -140,6 +164,10 @@ public class TareaService : ITareaService
         tarea.FechaFin            = DateTime.UtcNow;
 
         await _repo.ActualizarAsync(tarea);
+
+        await _audit.RegistrarAsync(
+            _session.UsuarioActual!.Id, AccionAuditada.CancelacionTarea, "Tarea", id,
+            $"Cancelación de '{tarea.Titulo}'");
     }
 
     public async Task CambiarPrioridadAsync(int id, PrioridadTarea prioridad)
@@ -164,7 +192,34 @@ public class TareaService : ITareaService
         });
 
         await _repo.ActualizarAsync(tarea);
+
+        await _audit.RegistrarAsync(
+            _session.UsuarioActual!.Id, AccionAuditada.CambioPrioridadTarea, "Tarea", id,
+            $"{anterior} → {prioridad}");
     }
 
-    public Task AgregarNotaAsync(int id, string texto) => throw new NotImplementedException();                 // Task 6
+    public async Task AgregarNotaAsync(int id, string texto)
+    {
+        _auth.Verificar(_session.RolActual, Permisos.GestionarTareas);
+
+        if (string.IsNullOrWhiteSpace(texto))
+            throw new ArgumentException("El texto de la nota no puede estar vacío.", nameof(texto));
+
+        var tarea = await _repo.ObtenerPorIdAsync(id)
+            ?? throw new EntidadNoEncontradaException($"Tarea {id} no encontrada.");
+
+        var nota = new NotaTarea
+        {
+            UsuarioId    = _session.UsuarioActual!.Id,
+            Fecha        = DateTime.UtcNow,
+            Texto        = texto.Trim(),
+            EsAutomatica = false,
+        };
+        tarea.Notas.Add(nota);
+        await _repo.ActualizarAsync(tarea);
+
+        await _audit.RegistrarAsync(
+            _session.UsuarioActual!.Id, AccionAuditada.AltaNotaTarea, "Tarea", id,
+            $"Nota: {nota.Texto}");
+    }
 }

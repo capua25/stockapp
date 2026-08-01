@@ -13,20 +13,21 @@ namespace StockApp.Application.Tests.Tareas;
 public class TareaServiceTests
 {
     private static (TareaService Svc, Mock<ITareaRepository> Repo, Mock<IUsuarioRepository> Usuarios,
-                     Mock<ICurrentSession> Session, Mock<IAuthorizationService> Auth)
+                     Mock<ICurrentSession> Session, Mock<IAuthorizationService> Auth, Mock<IAuditLogger> Audit)
         Crear(RolUsuario rol = RolUsuario.Admin, int idSesion = 1, string nombreUsuario = "admin.test")
     {
         var repo     = new Mock<ITareaRepository>();
         var usuarios = new Mock<IUsuarioRepository>();
         var session  = new Mock<ICurrentSession>();
         var auth     = new Mock<IAuthorizationService>();
+        var audit    = new Mock<IAuditLogger>();
 
         session.Setup(s => s.RolActual).Returns(rol);
         session.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(idSesion, nombreUsuario, rol, null));
         auth.Setup(a => a.Verificar(It.IsAny<RolUsuario?>(), It.IsAny<string>()));
 
-        var svc = new TareaService(repo.Object, usuarios.Object, session.Object, auth.Object);
-        return (svc, repo, usuarios, session, auth);
+        var svc = new TareaService(repo.Object, usuarios.Object, session.Object, auth.Object, audit.Object);
+        return (svc, repo, usuarios, session, auth, audit);
     }
 
     // ── CrearAsync ────────────────────────────────────────────────────────────
@@ -317,5 +318,104 @@ public class TareaServiceTests
 
         Assert.Empty(tarea.Notas);
         ctx.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Tarea>()), Times.Never);
+    }
+
+    // ── AgregarNotaAsync ──────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task AgregarNotaAsync_SinPermiso_LanzaExcepcion()
+    {
+        var ctx = Crear();
+        ctx.Auth.Setup(a => a.Verificar(It.IsAny<RolUsuario?>(), Permisos.GestionarTareas))
+            .Throws<UnauthorizedAccessException>();
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => ctx.Svc.AgregarNotaAsync(1, "avance"));
+    }
+
+    [Fact]
+    public async Task AgregarNotaAsync_TextoVacio_LanzaArgumentException()
+    {
+        var ctx = Crear();
+        await Assert.ThrowsAsync<ArgumentException>(() => ctx.Svc.AgregarNotaAsync(1, "   "));
+    }
+
+    [Fact]
+    public async Task AgregarNotaAsync_GuardaLaNotaConSuAutorYRegistraAuditoria()
+    {
+        var ctx = Crear(idSesion: 3);
+        var tarea = new Tarea { Id = 1, Titulo = "x" };
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(tarea);
+
+        await ctx.Svc.AgregarNotaAsync(1, "avance del trabajo");
+
+        var nota = Assert.Single(tarea.Notas);
+        Assert.Equal(3, nota.UsuarioId);
+        Assert.Equal("avance del trabajo", nota.Texto);
+        Assert.False(nota.EsAutomatica);
+        ctx.Audit.Verify(a => a.RegistrarAsync(3, AccionAuditada.AltaNotaTarea, "Tarea", 1, It.IsAny<string>()), Times.Once);
+    }
+
+    // ── Notas append-only: sin métodos para editar ni borrar ─────────────────
+
+    [Fact]
+    public void ITareaService_NoExponeMetodosParaEditarOBorrarNotas()
+    {
+        var metodos = typeof(ITareaService).GetMethods().Select(m => m.Name).ToList();
+
+        Assert.DoesNotContain(metodos, n =>
+            n.Contains("Editar", StringComparison.OrdinalIgnoreCase) && n.Contains("Nota", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(metodos, n =>
+            n.Contains("Borrar", StringComparison.OrdinalIgnoreCase) && n.Contains("Nota", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(metodos, n =>
+            n.Contains("Eliminar", StringComparison.OrdinalIgnoreCase) && n.Contains("Nota", StringComparison.OrdinalIgnoreCase));
+    }
+
+    // ── Auditoría en el resto de las acciones ─────────────────────────────────
+
+    [Fact]
+    public async Task CrearAsync_RegistraAuditoria()
+    {
+        var ctx = Crear(idSesion: 1);
+        ctx.Repo.Setup(r => r.AgregarAsync(It.IsAny<Tarea>())).ReturnsAsync(9);
+
+        await ctx.Svc.CrearAsync(new Tarea { Titulo = "Reparar bache" });
+
+        ctx.Audit.Verify(a => a.RegistrarAsync(1, AccionAuditada.AltaTarea, "Tarea", 9, It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task TomarAsync_RegistraAuditoria()
+    {
+        var ctx = Crear(idSesion: 1);
+        var tarea = new Tarea { Id = 5, Titulo = "x", Estado = EstadoTarea.Pendiente };
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(tarea);
+
+        await ctx.Svc.TomarAsync(5);
+
+        ctx.Audit.Verify(a => a.RegistrarAsync(1, AccionAuditada.CambioEstadoTarea, "Tarea", 5, It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task CancelarAsync_RegistraAuditoria()
+    {
+        var ctx = Crear(rol: RolUsuario.Admin, idSesion: 1);
+        var tarea = new Tarea { Id = 5, Titulo = "x", Estado = EstadoTarea.Pendiente };
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(tarea);
+
+        await ctx.Svc.CancelarAsync(5);
+
+        ctx.Audit.Verify(a => a.RegistrarAsync(1, AccionAuditada.CancelacionTarea, "Tarea", 5, It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task CambiarPrioridadAsync_RegistraAuditoria()
+    {
+        var ctx = Crear(rol: RolUsuario.Admin, idSesion: 1);
+        var tarea = new Tarea { Id = 5, Titulo = "x", Prioridad = PrioridadTarea.Media };
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(tarea);
+
+        await ctx.Svc.CambiarPrioridadAsync(5, PrioridadTarea.Alta);
+
+        ctx.Audit.Verify(a => a.RegistrarAsync(1, AccionAuditada.CambioPrioridadTarea, "Tarea", 5, It.IsAny<string>()), Times.Once);
     }
 }

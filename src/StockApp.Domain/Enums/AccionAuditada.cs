@@ -65,4 +65,11 @@ public enum AccionAuditada
     // ── Movimientos — Ingreso por factura (append-only a partir de 44) ───────
     IngresoPorFactura           = 44,
     AnulacionIngresoPorFactura  = 45,
+
+    // ── Tareas (append-only a partir de 46) ───────────────────────────────────
+    AltaTarea            = 46,
+    CambioEstadoTarea    = 47,
+    CambioPrioridadTarea = 48,
+    CancelacionTarea     = 49,
+    AltaNotaTarea        = 50,
 }
