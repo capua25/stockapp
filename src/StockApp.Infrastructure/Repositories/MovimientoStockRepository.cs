@@ -233,18 +233,8 @@ public class MovimientoStockRepository : IMovimientoStockRepository
 
             foreach (var renglon in args.Renglones)
             {
-                if (renglon.ProductoId is not int productoId)
-                    throw new InvalidOperationException(
-                        "Alta de producto nuevo dentro del lote todavía no soportada (ver Task 3).");
-
-                await _ctx.Productos
-                    .Where(p => p.Id == productoId)
-                    .ExecuteUpdateAsync(s => s.SetProperty(
-                        p => p.StockActual, p => p.StockActual + renglon.Cantidad));
-
                 var movimiento = new MovimientoStock
                 {
-                    ProductoId     = productoId,
                     UsuarioId      = args.UsuarioId,
                     Tipo           = TipoMovimiento.Entrada,
                     Motivo         = MotivoMovimiento.Compra,
@@ -253,6 +243,27 @@ public class MovimientoStockRepository : IMovimientoStockRepository
                     Fecha          = DateTime.UtcNow,
                     Gasto          = args.Gasto,
                 };
+
+                if (renglon.ProductoId is int productoId)
+                {
+                    await _ctx.Productos
+                        .Where(p => p.Id == productoId)
+                        .ExecuteUpdateAsync(s => s.SetProperty(
+                            p => p.StockActual, p => p.StockActual + renglon.Cantidad));
+                    movimiento.ProductoId = productoId;
+                }
+                else
+                {
+                    // Producto nuevo: se inserta en la MISMA transacción. El nav fixup de EF
+                    // asigna MovimientoStock.ProductoId al Id generado del producto recién
+                    // insertado, sin necesidad de conocerlo de antemano. El repo es la fuente
+                    // de verdad del stock inicial: se fuerza a Cantidad del renglón (no se
+                    // confía en el StockActual que haya traído el caller).
+                    renglon.ProductoNuevo!.StockActual = renglon.Cantidad;
+                    _ctx.Productos.Add(renglon.ProductoNuevo);
+                    movimiento.Producto = renglon.ProductoNuevo;
+                }
+
                 movimientos.Add(movimiento);
                 _ctx.MovimientosStock.Add(movimiento);
             }
@@ -279,6 +290,10 @@ public class MovimientoStockRepository : IMovimientoStockRepository
             throw new ReglaDeNegocioException(
                 $"Ya existe la factura '{args.Gasto.NumeroFactura}' para ese proveedor.");
         }
+        catch (DbUpdateException ex) when (EsViolacionCodigoProducto(ex))
+        {
+            throw new ReglaDeNegocioException("Ya existe un producto con ese código.");
+        }
     }
 
     /// <summary>
@@ -289,4 +304,10 @@ public class MovimientoStockRepository : IMovimientoStockRepository
     private static bool EsViolacionFacturaUnica(DbUpdateException ex)
         => ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } pg
            && pg.ConstraintName == "IX_Gastos_ProveedorId_NumeroFactura_NumeroOrden";
+
+    /// <summary>Índice único IX_Productos_Codigo — defensa en profundidad ante la carrera que el
+    /// chequeo previo de IngresoPorFacturaService.ExisteCodigoAsync no cierra (check-then-insert).</summary>
+    private static bool EsViolacionCodigoProducto(DbUpdateException ex)
+        => ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } pg
+           && pg.ConstraintName == "IX_Productos_Codigo";
 }

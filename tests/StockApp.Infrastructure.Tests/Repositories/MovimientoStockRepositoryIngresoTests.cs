@@ -166,6 +166,67 @@ public class MovimientoStockRepositoryIngresoTests : PostgresRepositoryTestBase
         Assert.Equal(10m, (await ctx2.Productos.FindAsync(p3.Id))!.StockActual);
         Assert.Equal(0, await ctx2.LogsAuditoria.CountAsync());
     }
+
+    [Fact]
+    public async Task RegistrarIngresoPorFacturaAtomicoAsync_ProductoNuevo_SeCreaConStockIgualALaCantidad()
+    {
+        var (um, usuario, proveedor, fuente, rubro) = await SeedMaestrosAsync();
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        var productoNuevo = new Producto
+        {
+            Codigo = "NUEVO-1", Nombre = "Producto recién creado", UnidadMedidaId = um.Id,
+            PrecioCosto = 45m, PrecioVenta = 90m, StockActual = 0m, Activo = true, FechaAlta = DateTime.UtcNow,
+        };
+
+        var gasto = NuevoGasto(proveedor, fuente, rubro, factura: "NUEVO-FAC-1");
+        var args = new IngresoPorFacturaArgs(
+            Gasto: gasto,
+            Renglones: new[] { new RenglonIngresoFacturaArgs(null, productoNuevo, 12m, 45m, false, null) },
+            UsuarioId: usuario.Id,
+            DetalleAuditoria: "Alta de producto nuevo en el lote");
+
+        var resultado = await _repo.RegistrarIngresoPorFacturaAtomicoAsync(args);
+
+        await using var ctx2 = Fixture.CrearContexto();
+        var creado = await ctx2.Productos.SingleAsync(p => p.Codigo == "NUEVO-1");
+        Assert.Equal(12m, creado.StockActual);
+        Assert.Equal(45m, creado.PrecioCosto);
+
+        var movimiento = await ctx2.MovimientosStock.SingleAsync();
+        Assert.Equal(creado.Id, movimiento.ProductoId);
+        Assert.Equal(resultado.GastoId, movimiento.GastoId);
+    }
+
+    [Fact]
+    public async Task RegistrarIngresoPorFacturaAtomicoAsync_ProductoNuevoConCodigoDuplicado_RollbackTotal()
+    {
+        var (um, usuario, proveedor, fuente, rubro) = await SeedMaestrosAsync();
+        var existente = NuevoProducto("DUP-PROD", um);
+        Context.Productos.Add(existente);
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        var productoNuevo = new Producto
+        {
+            Codigo = "DUP-PROD", Nombre = "Choca contra el existente", UnidadMedidaId = um.Id,
+            PrecioCosto = 10m, PrecioVenta = 20m, StockActual = 0m, Activo = true, FechaAlta = DateTime.UtcNow,
+        };
+        var gasto = NuevoGasto(proveedor, fuente, rubro, factura: "DUP-PROD-FAC");
+        var args = new IngresoPorFacturaArgs(
+            Gasto: gasto,
+            Renglones: new[] { new RenglonIngresoFacturaArgs(null, productoNuevo, 5m, 10m, false, null) },
+            UsuarioId: usuario.Id,
+            DetalleAuditoria: "código duplicado");
+
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => _repo.RegistrarIngresoPorFacturaAtomicoAsync(args));
+
+        await using var ctx2 = Fixture.CrearContexto();
+        Assert.Equal(1, await ctx2.Productos.CountAsync());   // solo el existente
+        Assert.Equal(0, await ctx2.Gastos.CountAsync());
+        Assert.Equal(0, await ctx2.MovimientosStock.CountAsync());
+    }
 }
 
 /// <summary>

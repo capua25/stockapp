@@ -240,4 +240,27 @@ public class IngresoPorFacturaServiceTests
         Assert.Equal(450m, resultado.SumaRenglones);       // 5 * 90
         Assert.Equal(50m, resultado.DiferenciaConTotal);    // 500 - 450
     }
+
+    [Fact]
+    public async Task RegistrarAsync_ProductoNuevo_SinPermisoCatalogo_NoLlegaAlRepo()
+    {
+        // Ya cubierto por RegistrarAsync_ConProductoNuevo_SinPermisoCatalogo_LanzaExcepcionSinTocarElRepo
+        // (Task 1). Este test confirma que CON permiso, un renglón de producto nuevo SÍ llega al
+        // repo con ProductoNuevo seteado y PrecioCosto == PrecioUnitario del renglón.
+        var (svc, movRepo, _, _, _, _, _, _, unidades, _, _) = Crear();
+        unidades.Setup(u => u.ObtenerPorIdAsync(2))
+            .ReturnsAsync(new UnidadMedida { Id = 2, Nombre = "Kilo", Abreviatura = "kg", Activo = true });
+        movRepo.Setup(r => r.RegistrarIngresoPorFacturaAtomicoAsync(It.IsAny<IngresoPorFacturaArgs>()))
+            .ReturnsAsync(new ResultadoIngresoPorFactura(1, new List<int> { 1 }));
+
+        var renglon = new RenglonFacturaDto(
+            null, new ProductoNuevoDto("SKU-N2", "Producto Nuevo", null, 2, 80m), 4m, 35m, false);
+
+        await svc.RegistrarAsync(DtoValido(renglon));
+
+        movRepo.Verify(r => r.RegistrarIngresoPorFacturaAtomicoAsync(It.Is<IngresoPorFacturaArgs>(a =>
+            a.Renglones.Single().ProductoNuevo!.Codigo == "SKU-N2"
+            && a.Renglones.Single().ProductoNuevo!.PrecioCosto == 35m
+            && a.Renglones.Single().ProductoNuevo!.StockActual == 4m)), Times.Once);
+    }
 }
