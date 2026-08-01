@@ -139,4 +139,24 @@ public class IngresoPorFacturaViewModelTests
 
         Assert.True(vm.GuardarCommand.CanExecute(null));
     }
+
+    [Fact]
+    public async Task Guardar_SesionExpirada_MuestraMensajeYNoQuedaInconsistente()
+    {
+        var (vm, svc, _) = Crear();
+        await InicializarYCompletarCabeceraAsync(vm);
+        vm.AgregarRenglonCommand.Execute(null);
+        vm.Renglones[0].Producto = vm.ProductosDisponibles[0];
+        vm.Renglones[0].Cantidad = 1m;
+        vm.Renglones[0].PrecioUnitario = 10m;
+
+        svc.Setup(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()))
+            .ThrowsAsync(new UnauthorizedAccessException());
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        Assert.False(string.IsNullOrWhiteSpace(vm.MensajeError));
+        Assert.False(vm.GuardadoExitoso);
+        Assert.Null(vm.GastoIdCreado);
+    }
 }

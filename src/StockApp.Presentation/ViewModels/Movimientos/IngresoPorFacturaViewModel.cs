@@ -238,6 +238,10 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
         {
             MensajeError = ex.Message;
         }
+        catch (UnauthorizedAccessException)
+        {
+            MensajeError = "La sesión expiró o no tiene permiso para registrar esta factura. Vuelva a iniciar sesión e intente de nuevo.";
+        }
     }
 
     private static RenglonFacturaDto ARenglonDto(FilaRenglonFacturaVm fila) => new(
