@@ -26,6 +26,7 @@ public class AuthorizationService : IAuthorizationService
         Permisos.RegistrarGastos,
         Permisos.RegistrarPagos,
         Permisos.RegistrarIngresos,
+        Permisos.GestionarTareas,
     ];
 
     public void Verificar(RolUsuario? rolActual, string accion)

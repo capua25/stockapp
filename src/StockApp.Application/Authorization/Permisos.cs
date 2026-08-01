@@ -30,6 +30,11 @@ public static class Permisos
     // ImportarPlanillas: superficie sensible (backups y, en la Entrega 2, logs del servidor).
     public const string GestionarDiagnostico = "diagnostico.gestionar";
 
+    // Tareas (spec 2026-08-01) — módulo independiente. GestionarTareas: crear, tomar,
+    // soltar, terminar, comentar — Admin Y Operador. AdministrarTareas (Task 5): cancelar
+    // y cambiar prioridad — solo Admin.
+    public const string GestionarTareas = "tareas.gestionar";
+
     /// <summary>
     /// Lista explícita de todos los permisos del sistema (sin reflection). Consumida por
     /// StockApp.Api/Program.cs (Fase 2b, D1) para derivar las políticas de autorización
@@ -50,5 +55,6 @@ public static class Permisos
         RegistrarIngresos,
         ImportarPlanillas,
         GestionarDiagnostico,
+        GestionarTareas,
     ];
 }
