@@ -224,21 +224,54 @@ public class IngresoPorFacturaViewModelTests
     {
         var (vm, svc, _) = Crear();
         svc.Setup(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()))
-            .ReturnsAsync(new IngresoPorFacturaResultadoDto(1, new List<int> { 1 }, 15m, 0m));
+            .ReturnsAsync(new IngresoPorFacturaResultadoDto(1, new List<int> { 1, 2 }, 35m, 0m));
         await InicializarYCompletarCabeceraAsync(vm);
 
+        // Renglon 1: precio distinto (15m != 10m), el usuario SÍ confirma la actualización.
         vm.AgregarRenglonCommand.Execute(null);
         vm.Renglones[0].Producto = vm.ProductosDisponibles[0];
         vm.Renglones[0].Cantidad = 1m;
         vm.Renglones[0].PrecioUnitario = 15m;
 
+        // Renglon 2: precio distinto (20m != 10m), el usuario NO confirma la actualización.
+        vm.AgregarRenglonCommand.Execute(null);
+        vm.Renglones[1].Producto = vm.ProductosDisponibles[0];
+        vm.Renglones[1].Cantidad = 1m;
+        vm.Renglones[1].PrecioUnitario = 20m;
+
         await vm.GuardarCommand.ExecuteAsync(null);
+
+        Assert.Equal(2, vm.CambiosDePrecio.Count);
         vm.CambiosDePrecio[0].Confirmado = true;
+        vm.CambiosDePrecio[1].Confirmado = false;
 
         await vm.ConfirmarPreciosYGuardarCommand.ExecuteAsync(null);
 
         Assert.True(vm.Renglones[0].ActualizarPrecioCosto);
+        Assert.False(vm.Renglones[1].ActualizarPrecioCosto);
         svc.Verify(s => s.RegistrarAsync(It.Is<IngresoPorFacturaDto>(
-            d => d.Renglones.Single().ActualizarPrecioCosto)), Times.Once);
+            d => d.Renglones[0].ActualizarPrecioCosto && !d.Renglones[1].ActualizarPrecioCosto)), Times.Once);
+    }
+
+    [Fact]
+    public async Task Guardar_SinCambiosDePrecio_NoMuestraConfirmacionYGuardaDirecto()
+    {
+        var (vm, svc, _) = Crear();
+        svc.Setup(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()))
+            .ReturnsAsync(new IngresoPorFacturaResultadoDto(1, new List<int> { 1 }, 10m, 0m));
+        await InicializarYCompletarCabeceraAsync(vm);
+
+        // Mismo precio que PrecioCosto del producto (10m) → ningún renglón entra en la confirmación.
+        vm.AgregarRenglonCommand.Execute(null);
+        vm.Renglones[0].Producto = vm.ProductosDisponibles[0];
+        vm.Renglones[0].Cantidad = 1m;
+        vm.Renglones[0].PrecioUnitario = 10m;
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        Assert.False(vm.MostrandoConfirmacionPrecios);
+        Assert.Empty(vm.CambiosDePrecio);
+        Assert.True(vm.GuardadoExitoso);
+        svc.Verify(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()), Times.Once);
     }
 }
