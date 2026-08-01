@@ -29,6 +29,7 @@ using StockApp.Application.Licenciamiento;
 using StockApp.Application.Logs;
 using StockApp.Application.Movimientos;
 using StockApp.Application.Reportes;
+using StockApp.Application.Tareas;
 using StockApp.Domain.Enums;
 using StockApp.Infrastructure.Auth;
 using StockApp.Infrastructure.Backups;
@@ -221,6 +222,10 @@ builder.Services.AddScoped<IFinanzasVistasService, FinanzasVistasService>();
 // Infrastructure PlanillaOdsParser.
 builder.Services.AddScoped<IPlanillaParser, PlanillaOdsParser>();
 builder.Services.AddScoped<IAnalisisImportacionService, AnalisisImportacionService>();
+
+// Tareas — módulo independiente (spec 2026-08-01)
+builder.Services.AddScoped<ITareaRepository, TareaRepository>();
+builder.Services.AddScoped<ITareaService, TareaService>();
 
 // Finanzas — F5c: confirmación transaccional del importador (escritura + idempotencia +
 // guard de re-importación + reversa). IImportacionRepository es la única pieza de todo el
@@ -573,6 +578,7 @@ app.MapLicenciaEndpoints();
 app.MapResetAdminEndpoints();
 app.MapBackupsEndpoints();
 app.MapLogsEndpoints();
+app.MapTareasEndpoints();
 
 app.Run();
 
