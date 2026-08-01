@@ -32,6 +32,7 @@ using StockApp.Presentation.ViewModels.Catalogo;
 using StockApp.Presentation.ViewModels.Finanzas;
 using StockApp.Presentation.ViewModels.Movimientos;
 using StockApp.Presentation.ViewModels.Reportes;
+using StockApp.Presentation.ViewModels.Tareas;
 using StockApp.Presentation.Views;
 
 namespace StockApp.Presentation;
@@ -334,6 +335,9 @@ public partial class App : AvaloniaApp
         services.AddTransient<HistorialImportacionesViewModel>();
         services.AddTransient<NuevaImportacionViewModel>();
         services.AddTransient<StockApp.Presentation.ViewModels.Finanzas.ImportacionViewModel>();
+
+        // ── Módulo Tareas (spec 2026-08-01) ───────────────────────────────────
+        services.AddTransient<TareaListViewModel>();
 
         // ── Presentation: ViewModels del shell ───────────────────────────────
 
