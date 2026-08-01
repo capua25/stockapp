@@ -158,6 +158,13 @@ public partial class ShellMainViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private void NavIngresoPorFactura()
+    {
+        SeccionActiva = "IngresoPorFactura";
+        _navigation.Navegar<IngresoPorFacturaViewModel>();
+    }
+
+    [RelayCommand]
     private void NavHistorialMovimientos()
     {
         SeccionActiva = "HistorialMovimientos";

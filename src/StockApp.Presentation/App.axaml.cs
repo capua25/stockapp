@@ -271,6 +271,7 @@ public partial class App : AvaloniaApp
         services.AddTransient<EntradaRegistroViewModel>();
         services.AddTransient<SalidaRegistroViewModel>();
         services.AddTransient<MovimientoHistorialViewModel>();
+        services.AddTransient<IngresoPorFacturaViewModel>();
 
         // ── Inc 6: VMs de reportes ────────────────────────────────────────────
         services.AddTransient<ValorizacionViewModel>();

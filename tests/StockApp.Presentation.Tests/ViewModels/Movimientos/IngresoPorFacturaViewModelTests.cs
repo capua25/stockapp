@@ -274,4 +274,14 @@ public class IngresoPorFacturaViewModelTests
         Assert.True(vm.GuardadoExitoso);
         svc.Verify(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()), Times.Once);
     }
+
+    [Fact]
+    public void Constructor_ExponeAdjuntosPanel()
+    {
+        // Smoke test de wiring: confirma que la vista puede bindear vm.AdjuntosPanel.* sin
+        // que el VM lo oculte accidentalmente al agregar Task 9's ObservableProperty nuevos.
+        var (vm, _, _) = Crear();
+
+        Assert.NotNull(vm.AdjuntosPanel);
+    }
 }

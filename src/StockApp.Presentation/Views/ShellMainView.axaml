@@ -82,6 +82,18 @@
                     </Grid>
                 </Button>
 
+                <!-- Ingreso por factura: visible para Admin y Operador -->
+                <Button Command="{Binding NavIngresoPorFacturaCommand}"
+                        Classes="ghost"
+                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=IngresoPorFactura}"
+                        HorizontalAlignment="Stretch">
+                    <Grid ColumnDefinitions="Auto,*">
+                        <i:Icon Grid.Column="0" Value="mdi-receipt-text-plus" Foreground="{DynamicResource SidebarTextoBrush}" />
+                        <TextBlock Grid.Column="1" Text="Ingreso por factura" VerticalAlignment="Center"
+                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                </Button>
+
                 <!-- Registrar Salida: visible para Admin y Operador -->
                 <Button Command="{Binding NavRegistrarSalidaCommand}"
                         Classes="ghost"
