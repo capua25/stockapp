@@ -23,6 +23,7 @@ using StockApp.Application.Licenciamiento;
 using StockApp.Application.Logs;
 using StockApp.Application.Movimientos;
 using StockApp.Application.Reportes;
+using StockApp.Application.Tareas;
 using StockApp.Presentation.Actualizaciones;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
@@ -214,6 +215,9 @@ public partial class App : AvaloniaApp
         services.AddTransient<IFinanzasVistasService, FinanzasVistasApiClient>();
         services.AddTransient<IAdjuntoService, AdjuntoApiClient>();
         services.AddTransient<IIngresoPorFacturaService, IngresoPorFacturaApiClient>();
+
+        // ── Módulo Tareas (independiente de Finanzas, spec 2026-08-01) ────────
+        services.AddTransient<ITareaService, TareaApiClient>();
 
         // ── Backups programados (Entrega 1) ────────────────────────────────────
         services.AddTransient<IBackupsService>(sp =>
