@@ -1,4 +1,5 @@
 using Moq;
+using StockApp.ApiClient;
 using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Finanzas;
@@ -152,6 +153,51 @@ public class IngresoPorFacturaViewModelTests
 
         svc.Setup(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()))
             .ThrowsAsync(new UnauthorizedAccessException());
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        Assert.False(string.IsNullOrWhiteSpace(vm.MensajeError));
+        Assert.False(vm.GuardadoExitoso);
+        Assert.Null(vm.GastoIdCreado);
+    }
+
+    [Fact]
+    public async Task Guardar_ServidorNoDisponible_MuestraMensajeAccionableYNoQuedaInconsistente()
+    {
+        // Fix 5 (revisión final): antes de este fix, ServidorNoDisponibleException no estaba
+        // entre los catch de GuardarInternoAsync y, al venir de un AsyncRelayCommand, terminaba
+        // en TaskScheduler.UnobservedTaskException (crash.log) sin avisar al operario.
+        var (vm, svc, _) = Crear();
+        await InicializarYCompletarCabeceraAsync(vm);
+        vm.AgregarRenglonCommand.Execute(null);
+        vm.Renglones[0].Producto = vm.ProductosDisponibles[0];
+        vm.Renglones[0].Cantidad = 1m;
+        vm.Renglones[0].PrecioUnitario = 10m;
+
+        svc.Setup(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()))
+            .ThrowsAsync(new ServidorNoDisponibleException());
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        Assert.Equal(ServidorNoDisponibleException.MensajePorDefecto, vm.MensajeError);
+        Assert.False(vm.GuardadoExitoso);
+        Assert.Null(vm.GastoIdCreado);
+    }
+
+    [Fact]
+    public async Task Guardar_ErrorInesperado_MuestraMensajeGenericoYNoQuedaInconsistente()
+    {
+        // Red de último recurso agregada junto con el fix de ServidorNoDisponibleException: una
+        // excepción no prevista no debe quedar muda.
+        var (vm, svc, _) = Crear();
+        await InicializarYCompletarCabeceraAsync(vm);
+        vm.AgregarRenglonCommand.Execute(null);
+        vm.Renglones[0].Producto = vm.ProductosDisponibles[0];
+        vm.Renglones[0].Cantidad = 1m;
+        vm.Renglones[0].PrecioUnitario = 10m;
+
+        svc.Setup(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()))
+            .ThrowsAsync(new InvalidOperationException("boom"));
 
         await vm.GuardarCommand.ExecuteAsync(null);
 

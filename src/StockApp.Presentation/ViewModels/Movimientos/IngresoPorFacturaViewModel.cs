@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using StockApp.ApiClient;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Movimientos;
@@ -323,9 +324,28 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
         {
             MensajeError = ex.Message;
         }
+        catch (ServidorNoDisponibleException ex)
+        {
+            // Fix 5 (revisión final): GuardarAsync es un AsyncRelayCommand — una excepción no
+            // capturada acá NO llega al handler global de App.axaml.cs (que solo cubre
+            // Dispatcher.UIThread.UnhandledException); termina en TaskScheduler.UnobservedTaskException
+            // → crash.log, sin avisar al operario. Mismo mensaje accionable que usan
+            // LoginViewModel/BloqueoLicenciaViewModel/ResetAdminViewModel para este mismo caso.
+            MensajeError = ex.Message;
+        }
         catch (UnauthorizedAccessException)
         {
             MensajeError = "La sesión expiró o no tiene permiso para registrar esta factura. Vuelva a iniciar sesión e intente de nuevo.";
+        }
+        catch (Exception)
+        {
+            // Red de último recurso: cualquier excepción que no sea de las esperadas arriba no
+            // debe quedar muda (mismo motivo que el catch global de App.axaml.cs — "un crash real
+            // por una excepción de dominio esperable demostró que dejar morir el proceso es un
+            // bug sistémico"). Acá no hay logger inyectable en el ViewModel (ningún otro
+            // ViewModel del proyecto loguea localmente); si escapa igual, cae en la red global.
+            MensajeError = "Ocurrió un error inesperado al guardar la factura. " +
+                            "Si el problema persiste, contactá a soporte.";
         }
     }
 
