@@ -358,16 +358,30 @@ public class TareaServiceTests
     // ── Notas append-only: sin métodos para editar ni borrar ─────────────────
 
     [Fact]
-    public void ITareaService_NoExponeMetodosParaEditarOBorrarNotas()
+    public void ITareaService_ExponeExactamenteLosMetodosEsperados()
     {
-        var metodos = typeof(ITareaService).GetMethods().Select(m => m.Name).ToList();
+        // Lista blanca intencionalmente cerrada (no lista negra de sinónimos): una lista
+        // negra de "Editar/Borrar/Eliminar + Nota" solo atrapa los nombres que ya se te
+        // ocurrieron (ActualizarNota, CorregirNota, QuitarNota, ArchivarNota... pasan
+        // gratis). Con la lista blanca, CUALQUIER método nuevo en la interfaz —se llame
+        // como se llame— rompe este test y obliga a quien lo agrega a justificarlo acá.
+        // Así se protege el append-only de las notas (decisión 12 del spec: se agregan,
+        // no se editan ni se borran).
+        var esperados = new HashSet<string>
+        {
+            nameof(ITareaService.CrearAsync),
+            nameof(ITareaService.ListarAsync),
+            nameof(ITareaService.TomarAsync),
+            nameof(ITareaService.SoltarAsync),
+            nameof(ITareaService.TerminarAsync),
+            nameof(ITareaService.CancelarAsync),
+            nameof(ITareaService.CambiarPrioridadAsync),
+            nameof(ITareaService.AgregarNotaAsync),
+        };
 
-        Assert.DoesNotContain(metodos, n =>
-            n.Contains("Editar", StringComparison.OrdinalIgnoreCase) && n.Contains("Nota", StringComparison.OrdinalIgnoreCase));
-        Assert.DoesNotContain(metodos, n =>
-            n.Contains("Borrar", StringComparison.OrdinalIgnoreCase) && n.Contains("Nota", StringComparison.OrdinalIgnoreCase));
-        Assert.DoesNotContain(metodos, n =>
-            n.Contains("Eliminar", StringComparison.OrdinalIgnoreCase) && n.Contains("Nota", StringComparison.OrdinalIgnoreCase));
+        var metodos = typeof(ITareaService).GetMethods().Select(m => m.Name).ToHashSet();
+
+        Assert.Equal(esperados, metodos);
     }
 
     // ── Auditoría en el resto de las acciones ─────────────────────────────────
