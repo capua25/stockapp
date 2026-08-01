@@ -1,5 +1,6 @@
 using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
+using StockApp.Application.Reportes;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
@@ -17,6 +18,7 @@ public class GastoService : IGastoService
     private readonly ICurrentSession                 _session;
     private readonly IAuthorizationService           _auth;
     private readonly IAuditLogger                    _audit;
+    private readonly IVersionReportes                _version;
 
     public GastoService(
         IGastoRepository repo,
@@ -27,7 +29,8 @@ public class GastoService : IGastoService
         IMovimientoStockRepository movRepo,
         ICurrentSession session,
         IAuthorizationService auth,
-        IAuditLogger audit)
+        IAuditLogger audit,
+        IVersionReportes version)
     {
         _repo        = repo;
         _proveedores = proveedores;
@@ -38,6 +41,7 @@ public class GastoService : IGastoService
         _session     = session;
         _auth        = auth;
         _audit       = audit;
+        _version     = version;
     }
 
     // ── Alta ──────────────────────────────────────────────────────────────────
@@ -197,7 +201,11 @@ public class GastoService : IGastoService
 
             // Estado Ok: AnularIngresoPorFacturaAtomicoAsync ya marcó Gasto.Activo=false y
             // escribió su propio LogAuditoria (AnulacionIngresoPorFactura) dentro de la misma
-            // transacción.
+            // transacción. Esta rama SÍ mutó StockActual (asiento inverso de N productos) — el
+            // caché de reportes de Valorización queda stale si no se invalida (Fix 3, revisión
+            // final: IngresoPorFacturaService.AnularLoteAsync ya invalida en el mismo camino
+            // atómico; a este service le faltaba porque hasta ahora nunca tocaba stock).
+            _version.Invalidar();
             return;
         }
 
@@ -205,6 +213,9 @@ public class GastoService : IGastoService
         await _repo.ActualizarAsync(gasto);
         // Los movimientos quedan libres para re-facturar (el gasto anulado no los retiene)
         await _repo.DesvincularMovimientosAsync(id);
+        // Rama SIN movimientos: no toca StockActual (mismo criterio que
+        // FuenteFinanciamientoService — "ese caché versiona solo reportes de stock"), así que NO
+        // se invalida acá.
 
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id, AccionAuditada.AnulacionGasto, "Gasto", id,

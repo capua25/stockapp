@@ -1,6 +1,7 @@
 using Moq;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
+using StockApp.Application.Reportes;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
@@ -21,7 +22,8 @@ public class GastoServiceTests
         Mock<IRubroGastoRepository> Rubros,
         Mock<ILineaPoaRepository> LineasPoa,
         Mock<IMovimientoStockRepository> MovRepo,
-        Mock<IAuditLogger> Audit);
+        Mock<IAuditLogger> Audit,
+        Mock<IVersionReportes> Version);
 
     private static Mocks Crear(RolUsuario rol = RolUsuario.Admin)
     {
@@ -34,6 +36,7 @@ public class GastoServiceTests
         var session    = new Mock<ICurrentSession>();
         var auth       = new Mock<IAuthSvc>();
         var audit      = new Mock<IAuditLogger>();
+        var version    = new Mock<IVersionReportes>();
 
         session.Setup(s => s.RolActual).Returns(rol);
         session.Setup(s => s.UsuarioActual)
@@ -53,8 +56,8 @@ public class GastoServiceTests
 
         var svc = new GastoService(
             repo.Object, proveedores.Object, fuentes.Object, rubros.Object, lineasPoa.Object,
-            movRepo.Object, session.Object, auth.Object, audit.Object);
-        return new Mocks(svc, repo, proveedores, fuentes, rubros, lineasPoa, movRepo, audit);
+            movRepo.Object, session.Object, auth.Object, audit.Object, version.Object);
+        return new Mocks(svc, repo, proveedores, fuentes, rubros, lineasPoa, movRepo, audit, version);
     }
 
     private static Gasto GastoValido(CondicionPago condicion = CondicionPago.Credito) => new()
@@ -478,6 +481,40 @@ public class GastoServiceTests
         // Task 5) — auditar acá también sería doble asiento de auditoría para la misma anulación.
         m.Audit.Verify(a => a.RegistrarAsync(
             It.IsAny<int>(), AccionAuditada.AnulacionGasto, "Gasto", 1, It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AnularAsync_ConMovimientosAsociados_InvalidaVersionReportes()
+    {
+        // Fix 3 (revisión final): la rama de asiento inverso muta StockActual de N productos;
+        // el caché de reportes de Valorización queda stale si nadie lo invalida.
+        var m = Crear();
+        var gasto = GastoValido();
+        gasto.Id = 1;
+        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(gasto);
+        m.MovRepo.Setup(r => r.ExistenMovimientosDeGastoAsync(1)).ReturnsAsync(true);
+        m.MovRepo.Setup(r => r.AnularIngresoPorFacturaAtomicoAsync(1, It.IsAny<int>(), It.IsAny<string>()))
+            .ReturnsAsync(new ResultadoAnulacionIngreso(ResultadoAnulacionIngresoEstado.Ok, Array.Empty<ItemFaltanteStock>()));
+
+        await m.Svc.AnularAsync(1);
+
+        m.Version.Verify(v => v.Invalidar(), Times.Once);
+    }
+
+    [Fact]
+    public async Task AnularAsync_SinMovimientosAsociados_NoInvalidaVersionReportes()
+    {
+        // La baja lógica simple no toca StockActual (mismo criterio que
+        // FuenteFinanciamientoService: "ese caché versiona solo reportes de stock").
+        var m = Crear();
+        var gasto = GastoValido();
+        gasto.Id = 1;
+        gasto.Pagos.Add(new PagoGasto { GastoId = 1, Fecha = Hoy, Monto = 100m, Activo = false });
+        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(gasto);
+
+        await m.Svc.AnularAsync(1);
+
+        m.Version.Verify(v => v.Invalidar(), Times.Never);
     }
 
     [Fact]
