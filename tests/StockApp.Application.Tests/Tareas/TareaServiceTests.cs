@@ -203,7 +203,12 @@ public class TareaServiceTests
     public async Task TerminarAsync_DesdeEnCurso_CambiaATerminadaYRegistraCierre()
     {
         var ctx = Crear(idSesion: 1);
-        var tarea = new Tarea { Id = 5, Titulo = "x", Estado = EstadoTarea.EnCurso, TomadaPorUsuarioId = 1 };
+        var fechaInicioOriginal = DateTime.UtcNow.AddHours(-2);
+        var tarea = new Tarea
+        {
+            Id = 5, Titulo = "x", Estado = EstadoTarea.EnCurso,
+            TomadaPorUsuarioId = 1, FechaInicio = fechaInicioOriginal,
+        };
         ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(tarea);
 
         await ctx.Svc.TerminarAsync(5);
@@ -211,6 +216,23 @@ public class TareaServiceTests
         Assert.Equal(EstadoTarea.Terminada, tarea.Estado);
         Assert.Equal(1, tarea.CerradaPorUsuarioId);
         Assert.NotNull(tarea.FechaFin);
+
+        // El par de trazabilidad de "toma" (quién y cuándo la agarró) debe sobrevivir
+        // intacto al cierre: es lo que distingue quién la tomó de quién la cerró.
+        Assert.Equal(1, tarea.TomadaPorUsuarioId);
+        Assert.Equal(fechaInicioOriginal, tarea.FechaInicio);
+    }
+
+    [Fact]
+    public async Task TerminarAsync_TareaPropia_NoGeneraNotaAutomatica()
+    {
+        var ctx = Crear(idSesion: 1);
+        var tarea = new Tarea { Id = 5, Titulo = "x", Estado = EstadoTarea.EnCurso, TomadaPorUsuarioId = 1 };
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(tarea);
+
+        await ctx.Svc.TerminarAsync(5);
+
+        Assert.Empty(tarea.Notas);
     }
 
     [Fact]
