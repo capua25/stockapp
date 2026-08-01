@@ -248,4 +248,74 @@ public class TareaServiceTests
         var nota = Assert.Single(tarea.Notas);
         Assert.Equal("garcia terminó una tarea tomada por juan.", nota.Texto);
     }
+
+    // ── CancelarAsync ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task CancelarAsync_ComoOperador_LanzaExcepcionSinTocarElRepo()
+    {
+        var ctx = Crear(rol: RolUsuario.Operador);
+        ctx.Auth.Setup(a => a.Verificar(RolUsuario.Operador, Permisos.AdministrarTareas))
+            .Throws<UnauthorizedAccessException>();
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => ctx.Svc.CancelarAsync(1));
+
+        ctx.Repo.Verify(r => r.ObtenerPorIdAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CancelarAsync_ComoAdmin_CambiaACanceladaYRegistraCierre()
+    {
+        var ctx = Crear(rol: RolUsuario.Admin, idSesion: 1);
+        var tarea = new Tarea { Id = 1, Titulo = "x", Estado = EstadoTarea.Pendiente };
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(tarea);
+
+        await ctx.Svc.CancelarAsync(1);
+
+        Assert.Equal(EstadoTarea.Cancelada, tarea.Estado);
+        Assert.Equal(1, tarea.CerradaPorUsuarioId);
+    }
+
+    // ── CambiarPrioridadAsync ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task CambiarPrioridadAsync_ComoOperador_LanzaExcepcionSinTocarElRepo()
+    {
+        var ctx = Crear(rol: RolUsuario.Operador);
+        ctx.Auth.Setup(a => a.Verificar(RolUsuario.Operador, Permisos.AdministrarTareas))
+            .Throws<UnauthorizedAccessException>();
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => ctx.Svc.CambiarPrioridadAsync(1, PrioridadTarea.Alta));
+
+        ctx.Repo.Verify(r => r.ObtenerPorIdAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CambiarPrioridadAsync_ComoAdmin_CambiaLaPrioridadYGeneraNotaAutomatica()
+    {
+        var ctx = Crear(rol: RolUsuario.Admin, idSesion: 1);
+        var tarea = new Tarea { Id = 1, Titulo = "x", Prioridad = PrioridadTarea.Media };
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(tarea);
+
+        await ctx.Svc.CambiarPrioridadAsync(1, PrioridadTarea.Alta);
+
+        Assert.Equal(PrioridadTarea.Alta, tarea.Prioridad);
+        var nota = Assert.Single(tarea.Notas);
+        Assert.Equal("Prioridad: Media → Alta", nota.Texto);
+        Assert.True(nota.EsAutomatica);
+    }
+
+    [Fact]
+    public async Task CambiarPrioridadAsync_MismaPrioridad_NoHaceNadaYNoGeneraNota()
+    {
+        var ctx = Crear(rol: RolUsuario.Admin);
+        var tarea = new Tarea { Id = 1, Titulo = "x", Prioridad = PrioridadTarea.Media };
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(tarea);
+
+        await ctx.Svc.CambiarPrioridadAsync(1, PrioridadTarea.Media);
+
+        Assert.Empty(tarea.Notas);
+        ctx.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Tarea>()), Times.Never);
+    }
 }

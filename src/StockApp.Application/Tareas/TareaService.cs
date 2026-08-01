@@ -128,7 +128,43 @@ public class TareaService : ITareaService
         };
     }
 
-    public Task CancelarAsync(int id) => throw new NotImplementedException();                                  // Task 5
-    public Task CambiarPrioridadAsync(int id, PrioridadTarea prioridad) => throw new NotImplementedException(); // Task 5
+    public async Task CancelarAsync(int id)
+    {
+        _auth.Verificar(_session.RolActual, Permisos.AdministrarTareas);
+
+        var tarea = await _repo.ObtenerPorIdAsync(id)
+            ?? throw new EntidadNoEncontradaException($"Tarea {id} no encontrada.");
+
+        tarea.CambiarEstado(EstadoTarea.Cancelada);
+        tarea.CerradaPorUsuarioId = _session.UsuarioActual!.Id;
+        tarea.FechaFin            = DateTime.UtcNow;
+
+        await _repo.ActualizarAsync(tarea);
+    }
+
+    public async Task CambiarPrioridadAsync(int id, PrioridadTarea prioridad)
+    {
+        _auth.Verificar(_session.RolActual, Permisos.AdministrarTareas);
+
+        var tarea = await _repo.ObtenerPorIdAsync(id)
+            ?? throw new EntidadNoEncontradaException($"Tarea {id} no encontrada.");
+
+        if (tarea.Prioridad == prioridad)
+            return;   // sin cambios: no hay nada que registrar
+
+        var anterior = tarea.Prioridad;
+        tarea.Prioridad = prioridad;
+        // Decisión 9 del spec: cada cambio de prioridad genera nota automática.
+        tarea.Notas.Add(new NotaTarea
+        {
+            UsuarioId    = _session.UsuarioActual!.Id,
+            Fecha        = DateTime.UtcNow,
+            Texto        = $"Prioridad: {anterior} → {prioridad}",
+            EsAutomatica = true,
+        });
+
+        await _repo.ActualizarAsync(tarea);
+    }
+
     public Task AgregarNotaAsync(int id, string texto) => throw new NotImplementedException();                 // Task 6
 }

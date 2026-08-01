@@ -17,6 +17,7 @@ public class AuthorizationServiceTests
     [InlineData(Permisos.RegistrarMovimientos)]
     [InlineData(Permisos.GestionarTablasMaestras)]
     [InlineData(Permisos.ImportarPlanillas)]
+    [InlineData(Permisos.AdministrarTareas)]
     public void Admin_PuedeEjecutarCualquierAccion(string accion)
     {
         // No debe lanzar
@@ -41,6 +42,7 @@ public class AuthorizationServiceTests
     [InlineData(Permisos.GestionarUsuarios)]
     [InlineData(Permisos.VerReportes)]
     [InlineData(Permisos.ImportarPlanillas)]
+    [InlineData(Permisos.AdministrarTareas)]
     public void Operador_NoPuedeEjecutarAccionesDeAdmin(string accion)
     {
         Assert.Throws<UnauthorizedAccessException>(
@@ -75,6 +77,7 @@ public class AuthorizationServiceTests
     [InlineData(Permisos.RegistrarMovimientos)]
     [InlineData(Permisos.RecalcularStock)]
     [InlineData(Permisos.ImportarPlanillas)]
+    [InlineData(Permisos.AdministrarTareas)]
     public void TienePermiso_Admin_DevuelveTrueParaTodo(string accion)
     {
         Assert.True(_svc.TienePermiso(RolUsuario.Admin, accion));
@@ -94,6 +97,7 @@ public class AuthorizationServiceTests
     [InlineData(Permisos.VerReportes)]
     [InlineData(Permisos.GestionarTablasMaestras)]
     [InlineData(Permisos.ImportarPlanillas)]
+    [InlineData(Permisos.AdministrarTareas)]
     public void TienePermiso_Operador_DevuelveFalseParaAccionesDeAdmin(string accion)
     {
         Assert.False(_svc.TienePermiso(RolUsuario.Operador, accion));

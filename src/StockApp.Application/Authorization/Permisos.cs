@@ -35,6 +35,9 @@ public static class Permisos
     // y cambiar prioridad — solo Admin.
     public const string GestionarTareas = "tareas.gestionar";
 
+    /// <summary>Cancelar y cambiar prioridad: decide sobre trabajo que otro cargó — solo Admin.</summary>
+    public const string AdministrarTareas = "tareas.administrar";
+
     /// <summary>
     /// Lista explícita de todos los permisos del sistema (sin reflection). Consumida por
     /// StockApp.Api/Program.cs (Fase 2b, D1) para derivar las políticas de autorización
@@ -56,5 +59,6 @@ public static class Permisos
         ImportarPlanillas,
         GestionarDiagnostico,
         GestionarTareas,
+        AdministrarTareas,
     ];
 }
