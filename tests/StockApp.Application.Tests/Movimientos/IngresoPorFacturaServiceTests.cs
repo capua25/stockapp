@@ -242,11 +242,13 @@ public class IngresoPorFacturaServiceTests
     }
 
     [Fact]
-    public async Task RegistrarAsync_ProductoNuevo_SinPermisoCatalogo_NoLlegaAlRepo()
+    public async Task RegistrarAsync_ProductoNuevo_ConPermisoCatalogo_LlegaAlRepoConStockYPrecioCorrectos()
     {
-        // Ya cubierto por RegistrarAsync_ConProductoNuevo_SinPermisoCatalogo_LanzaExcepcionSinTocarElRepo
-        // (Task 1). Este test confirma que CON permiso, un renglón de producto nuevo SÍ llega al
-        // repo con ProductoNuevo seteado y PrecioCosto == PrecioUnitario del renglón.
+        // El caso "sin permiso" ya está cubierto por
+        // RegistrarAsync_ConProductoNuevo_SinPermisoCatalogo_LanzaExcepcionSinTocarElRepo (Task 1).
+        // Este test confirma que CON permiso (rol Admin por defecto de Crear()), un renglón de
+        // producto nuevo SÍ llega al repo con ProductoNuevo seteado, StockActual == Cantidad del
+        // renglón y PrecioCosto == PrecioUnitario del renglón.
         var (svc, movRepo, _, _, _, _, _, _, unidades, _, _) = Crear();
         unidades.Setup(u => u.ObtenerPorIdAsync(2))
             .ReturnsAsync(new UnidadMedida { Id = 2, Nombre = "Kilo", Abreviatura = "kg", Activo = true });
