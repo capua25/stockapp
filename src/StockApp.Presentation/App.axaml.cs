@@ -213,6 +213,7 @@ public partial class App : AvaloniaApp
         services.AddTransient<IIngresoCajaService, IngresoCajaApiClient>();
         services.AddTransient<IFinanzasVistasService, FinanzasVistasApiClient>();
         services.AddTransient<IAdjuntoService, AdjuntoApiClient>();
+        services.AddTransient<IIngresoPorFacturaService, IngresoPorFacturaApiClient>();
 
         // ── Backups programados (Entrega 1) ────────────────────────────────────
         services.AddTransient<IBackupsService>(sp =>
