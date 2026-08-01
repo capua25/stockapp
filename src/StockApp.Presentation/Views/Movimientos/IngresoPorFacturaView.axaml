@@ -41,6 +41,9 @@
                         <TextBlock Text="Detalle" />
                         <TextBox Text="{Binding Detalle}" Watermark="Ej.: Materiales para la rambla" />
 
+                        <TextBlock Text="Destino (opcional)" />
+                        <TextBox Text="{Binding Destino}" Watermark="Ej.: Corralón municipal" />
+
                         <Grid ColumnDefinitions="*,12,*">
                             <StackPanel Grid.Column="0" Spacing="4">
                                 <TextBlock Text="Fecha" />
@@ -69,6 +72,24 @@
                                 <DataTemplate><TextBlock Text="{Binding Nombre}" /></DataTemplate>
                             </ComboBox.ItemTemplate>
                         </ComboBox>
+
+                        <TextBlock Text="Línea POA (opcional)" />
+                        <ComboBox ItemsSource="{Binding LineasPoaDisponibles}"
+                                  SelectedItem="{Binding LineaPoaSeleccionada}"
+                                  PlaceholderText="Sin línea POA" HorizontalAlignment="Stretch">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+
+                        <CheckBox IsChecked="{Binding EsCredito}" Content="Compra a crédito" />
+                        <StackPanel Spacing="4" IsVisible="{Binding EsCredito}">
+                            <TextBlock Text="Fecha de vencimiento" />
+                            <CalendarDatePicker SelectedDate="{Binding FechaVencimientoSeleccionada}"
+                                                PlaceholderText="dd/mm/aaaa" SelectedDateFormat="Custom"
+                                                CustomDateFormatString="dd/MM/yyyy"
+                                                beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 
@@ -83,7 +104,27 @@
                                 <DataGridTemplateColumn Header="Producto" Width="3*">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate x:DataType="vm:FilaRenglonFacturaVm">
-                                            <TextBlock Text="{Binding NombreMostrado}" VerticalAlignment="Center" Margin="4" />
+                                            <!-- FIX 1: elegir un producto EXISTENTE del catálogo. Cuando la fila
+                                                 corresponde a un alta en línea (EsProductoNuevo), el ComboBox se
+                                                 oculta y se muestra el nombre del producto nuevo en su lugar —
+                                                 así nunca puede pisar ni contradecir los datos cargados en el
+                                                 diálogo de alta rápida. -->
+                                            <Grid>
+                                                <ComboBox IsVisible="{Binding !EsProductoNuevo}"
+                                                          ItemsSource="{Binding $parent[UserControl].((vm:IngresoPorFacturaViewModel)DataContext).ProductosDisponibles}"
+                                                          SelectedItem="{Binding Producto}"
+                                                          PlaceholderText="Elegí el producto"
+                                                          HorizontalAlignment="Stretch" Margin="4">
+                                                    <ComboBox.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <TextBlock Text="{Binding Nombre}" />
+                                                        </DataTemplate>
+                                                    </ComboBox.ItemTemplate>
+                                                </ComboBox>
+                                                <TextBlock IsVisible="{Binding EsProductoNuevo}"
+                                                           Text="{Binding NombreMostrado}"
+                                                           VerticalAlignment="Center" Margin="4" FontStyle="Italic" />
+                                            </Grid>
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
