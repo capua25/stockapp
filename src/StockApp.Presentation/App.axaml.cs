@@ -338,6 +338,7 @@ public partial class App : AvaloniaApp
 
         // ── Módulo Tareas (spec 2026-08-01) ───────────────────────────────────
         services.AddTransient<TareaListViewModel>();
+        services.AddTransient<TareaFormViewModel>();
 
         // ── Presentation: ViewModels del shell ───────────────────────────────
 
