@@ -26,6 +26,14 @@ public class TareaServiceTests
         session.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(idSesion, nombreUsuario, rol, null));
         auth.Setup(a => a.Verificar(It.IsAny<RolUsuario?>(), It.IsAny<string>()));
 
+        // Fix (review final, Critical): NotaAjenaAsync ahora resuelve el nombre del actor
+        // contra IUsuarioRepository (igual que el tomador) en vez de leerlo de la sesión —
+        // HttpCurrentSession (el ICurrentSession real de la API) siempre lo trae vacío. Este
+        // mock del actor mantiene "garcia"/"admin.test" disponibles para los tests de nota
+        // automática que ya existían, sin cambiar ninguna aserción.
+        usuarios.Setup(u => u.ObtenerPorIdAsync(idSesion))
+            .ReturnsAsync(new Usuario { Id = idSesion, NombreUsuario = nombreUsuario });
+
         var svc = new TareaService(repo.Object, usuarios.Object, session.Object, auth.Object, audit.Object);
         return (svc, repo, usuarios, session, auth, audit);
     }
@@ -275,6 +283,39 @@ public class TareaServiceTests
 
         Assert.Equal(EstadoTarea.Cancelada, tarea.Estado);
         Assert.Equal(1, tarea.CerradaPorUsuarioId);
+    }
+
+    [Fact]
+    public async Task CancelarAsync_TareaAjena_GeneraNotaAutomaticaConNombres()
+    {
+        // Fix (review final, Important): antes solo Soltar y Terminar generaban nota
+        // automática al actuar sobre una tarea ajena; Cancelar cancela trabajo en curso de
+        // otro usuario (EnCurso→Cancelada es transición válida) y no dejaba rastro.
+        var ctx = Crear(rol: RolUsuario.Admin, idSesion: 1, nombreUsuario: "garcia");
+        var tarea = new Tarea
+        {
+            Id = 5, Titulo = "x", Estado = EstadoTarea.EnCurso, TomadaPorUsuarioId = 99,
+        };
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(tarea);
+        ctx.Usuarios.Setup(u => u.ObtenerPorIdAsync(99)).ReturnsAsync(new Usuario { Id = 99, NombreUsuario = "juan" });
+
+        await ctx.Svc.CancelarAsync(5);
+
+        var nota = Assert.Single(tarea.Notas);
+        Assert.True(nota.EsAutomatica);
+        Assert.Equal("garcia canceló una tarea tomada por juan.", nota.Texto);
+    }
+
+    [Fact]
+    public async Task CancelarAsync_TareaPropiaOSinTomador_NoGeneraNotaAutomatica()
+    {
+        var ctx = Crear(rol: RolUsuario.Admin, idSesion: 1);
+        var tarea = new Tarea { Id = 5, Titulo = "x", Estado = EstadoTarea.EnCurso, TomadaPorUsuarioId = 1 };
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(tarea);
+
+        await ctx.Svc.CancelarAsync(5);
+
+        Assert.Empty(tarea.Notas);
     }
 
     // ── CambiarPrioridadAsync ─────────────────────────────────────────────────

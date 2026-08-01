@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using StockApp.Api.Auth;
 using StockApp.Api.Endpoints;
@@ -175,5 +176,35 @@ public class TareasEndpointTests : ApiTestBase
         var response = await client.PostAsJsonAsync($"/tareas/{id}/notas", new AgregarNotaRequest("avance del día"));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostTerminar_TareaAjena_LaNotaAutomaticaIncluyeElNombreDelActor()
+    {
+        // Fix (review final, Critical): circuito real de punta a punta contra
+        // HttpCurrentSession (el ICurrentSession real de la API, NO el mock de
+        // TareaServiceTests). Un usuario ("juan") toma la tarea y OTRO ("garcia") la
+        // termina; se lee la nota directo de la base para verificar el texto exacto de
+        // la decisión 11 del spec: "García terminó una tarea tomada por Juan".
+        await using var seedCtx = Factory.CrearContexto();
+        var juan = await DatosDePrueba.SeedUsuarioAsync(seedCtx, "juan", "Secreta123!", RolUsuario.Operador);
+        var garcia = await DatosDePrueba.SeedUsuarioAsync(seedCtx, "garcia", "Secreta123!", RolUsuario.Operador);
+
+        var jwt = Factory.Services.GetRequiredService<IJwtTokenService>();
+        var clienteJuan = ClienteAutenticado(jwt.GenerarToken(juan.Id, RolUsuario.Operador));
+        var clienteGarcia = ClienteAutenticado(jwt.GenerarToken(garcia.Id, RolUsuario.Operador));
+
+        var id = await CrearTareaAsync(clienteJuan);
+        var tomar = await clienteJuan.PostAsync($"/tareas/{id}/tomar", content: null);
+        Assert.Equal(HttpStatusCode.OK, tomar.StatusCode);
+
+        var terminar = await clienteGarcia.PostAsync($"/tareas/{id}/terminar", content: null);
+        Assert.Equal(HttpStatusCode.OK, terminar.StatusCode);
+
+        await using var verificarCtx = Factory.CrearContexto();
+        var tarea = await verificarCtx.Tareas.Include(t => t.Notas).SingleAsync(t => t.Id == id);
+        var nota = Assert.Single(tarea.Notas);
+        Assert.True(nota.EsAutomatica);
+        Assert.Equal("garcia terminó una tarea tomada por juan.", nota.Texto);
     }
 }

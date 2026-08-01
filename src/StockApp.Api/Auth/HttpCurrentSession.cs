@@ -10,8 +10,12 @@ namespace StockApp.Api.Auth;
 /// Reemplaza a InMemorySession SOLO en el grafo de DI de StockApp.Api; InMemorySession
 /// sigue en uso, sin cambios, en la composición root de la app desktop (App.axaml.cs).
 /// No admite mutación: el JWT de 2a solo lleva usuarioId y rol (spec §2), así que
-/// UsuarioActual.NombreUsuario/NombreCompleto quedan vacíos — ningún endpoint del
-/// slice de 2a los consume (solo RolActual, vía AuthorizationService.Verificar).
+/// UsuarioActual.NombreUsuario/NombreCompleto quedan vacíos.
+/// ¡OJO! (fix review final, Critical): el supuesto original de este comentario — "ningún
+/// endpoint consume NombreUsuario" — dejó de valer con el módulo de Tareas
+/// (TareaService.NotaAjenaAsync). Cualquier código que necesite el nombre del usuario
+/// actual DEBE resolverlo contra IUsuarioRepository.ObtenerPorIdAsync(UsuarioActual.Id),
+/// nunca leerlo de acá.
 /// </summary>
 public class HttpCurrentSession : ICurrentSession
 {

@@ -136,10 +136,17 @@ public class TareaService : ITareaService
             $"{estadoAnterior} → {tarea.Estado}");
     }
 
-    /// <summary>Formato exacto de la decisión 11 del spec: "García terminó una tarea tomada por Juan".</summary>
+    /// <summary>
+    /// Formato exacto de la decisión 11 del spec: "García terminó una tarea tomada por Juan".
+    /// Fix (review final, Critical): el actor se resuelve contra la base igual que el
+    /// tomador, NUNCA desde _session.UsuarioActual.NombreUsuario — HttpCurrentSession (el
+    /// ICurrentSession real de la API) siempre lo arma vacío (ver comentario en
+    /// HttpCurrentSession), así que la nota salía sin el nombre de quien actuó.
+    /// </summary>
     private async Task<NotaTarea> NotaAjenaAsync(int actorId, int tomadorId, string verbo)
     {
-        var actorNombre   = _session.UsuarioActual!.NombreUsuario;
+        var actor         = await _usuarios.ObtenerPorIdAsync(actorId);
+        var actorNombre   = actor?.NombreUsuario ?? $"usuario {actorId}";
         var tomador       = await _usuarios.ObtenerPorIdAsync(tomadorId);
         var tomadorNombre = tomador?.NombreUsuario ?? $"usuario {tomadorId}";
 
@@ -159,14 +166,23 @@ public class TareaService : ITareaService
         var tarea = await _repo.ObtenerPorIdAsync(id)
             ?? throw new EntidadNoEncontradaException($"Tarea {id} no encontrada.");
 
+        var actorId = _session.UsuarioActual!.Id;
+        var tomadorId = tarea.TomadaPorUsuarioId;
+
         tarea.CambiarEstado(EstadoTarea.Cancelada);
-        tarea.CerradaPorUsuarioId = _session.UsuarioActual!.Id;
+        tarea.CerradaPorUsuarioId = actorId;
         tarea.FechaFin            = DateTime.UtcNow;
+
+        // Fix (review final, Important): cancelar una tarea ajena es la acción que MÁS
+        // necesita quedar registrada (decisiones 9 y 11 del spec) — antes solo Soltar y
+        // Terminar generaban nota automática.
+        if (tomadorId is int idTomador && idTomador != actorId)
+            tarea.Notas.Add(await NotaAjenaAsync(actorId, idTomador, "canceló"));
 
         await _repo.ActualizarAsync(tarea);
 
         await _audit.RegistrarAsync(
-            _session.UsuarioActual!.Id, AccionAuditada.CancelacionTarea, "Tarea", id,
+            actorId, AccionAuditada.CancelacionTarea, "Tarea", id,
             $"Cancelación de '{tarea.Titulo}'");
     }
 
