@@ -215,6 +215,13 @@ public class IngresoPorFacturaService : IIngresoPorFacturaService
         var resultado = await _movRepo.AnularIngresoPorFacturaAtomicoAsync(
             gastoId, _session.UsuarioActual!.Id, detalle);
 
+        // GastoYaAnulado: la re-verificación bajo lock DENTRO de la transacción del repo detectó
+        // que el gasto ya no está activo (cierra la ventana de doble anulación concurrente que
+        // el chequeo de arriba, hecho ANTES de entrar a la transacción, no puede cerrar por sí
+        // solo). Mismo mensaje que el chequeo optimista de arriba, por consistencia.
+        if (resultado.Estado == ResultadoAnulacionIngresoEstado.GastoYaAnulado)
+            throw new ReglaDeNegocioException($"El gasto {gastoId} ya está anulado.");
+
         if (resultado.Estado == ResultadoAnulacionIngresoEstado.StockInsuficiente)
         {
             var detalleFaltantes = string.Join("; ", resultado.Faltantes.Select(f =>

@@ -62,8 +62,13 @@ public record IngresoPorFacturaArgs(
 /// <summary>Resultado del alta atómica: id del gasto y los ids de movimiento generados.</summary>
 public record ResultadoIngresoPorFactura(int GastoId, IReadOnlyList<int> MovimientoIds);
 
-/// <summary>Estado del intento de anulación atómica del lote.</summary>
-public enum ResultadoAnulacionIngresoEstado { Ok, StockInsuficiente }
+/// <summary>
+/// Estado del intento de anulación atómica del lote. GastoYaAnulado se devuelve cuando la
+/// re-verificación bajo lock (FOR UPDATE) dentro de la transacción encuentra que el gasto ya
+/// no está activo — cierra la ventana de doble anulación concurrente que el chequeo previo del
+/// service (fuera de la transacción) no puede cerrar por sí solo.
+/// </summary>
+public enum ResultadoAnulacionIngresoEstado { Ok, StockInsuficiente, GastoYaAnulado }
 
 /// <summary>Detalle de un producto sin stock suficiente para la salida espejo de la anulación.</summary>
 public record ItemFaltanteStock(int ProductoId, string ProductoNombre, decimal StockActual, decimal CantidadNecesaria);

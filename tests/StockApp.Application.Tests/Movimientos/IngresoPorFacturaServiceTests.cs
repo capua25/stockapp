@@ -300,6 +300,23 @@ public class IngresoPorFacturaServiceTests
     }
 
     [Fact]
+    public async Task AnularLoteAsync_GastoYaAnuladoDetectadoBajoLockEnElRepo_LanzaReglaDeNegocio()
+    {
+        // Ronda de correcciones 1, Hallazgo 1: simula la carrera que motivó el fix — el chequeo
+        // optimista de arriba (gastoRepo.ObtenerPorIdAsync) ve el gasto todavía Activo=true
+        // (lectura stale, otra llamada concurrente ya lo anuló en la BD), pero la re-verificación
+        // bajo lock DENTRO de la transacción del repo detecta el estado real y devuelve
+        // GastoYaAnulado. El service debe traducir eso a ReglaDeNegocioException igual que si el
+        // chequeo optimista lo hubiera detectado.
+        var (svc, movRepo, gastoRepo, _, _, _, _, _, _, _, _) = Crear();
+        gastoRepo.Setup(g => g.ObtenerPorIdAsync(9)).ReturnsAsync(new Gasto { Id = 9, Activo = true });
+        movRepo.Setup(m => m.AnularIngresoPorFacturaAtomicoAsync(9, It.IsAny<int>(), It.IsAny<string>()))
+            .ReturnsAsync(new ResultadoAnulacionIngreso(ResultadoAnulacionIngresoEstado.GastoYaAnulado, Array.Empty<ItemFaltanteStock>()));
+
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => svc.AnularLoteAsync(9));
+    }
+
+    [Fact]
     public async Task AnularLoteAsync_StockInsuficiente_LanzaReglaDeNegocioConElDetalle()
     {
         var (svc, movRepo, gastoRepo, _, _, _, _, _, _, _, _) = Crear();

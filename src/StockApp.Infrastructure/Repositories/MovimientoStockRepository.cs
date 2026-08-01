@@ -314,13 +314,32 @@ public class MovimientoStockRepository : IMovimientoStockRepository
     }
 
     /// <inheritdoc/>
-    /// ATÓMICO: lee TODOS los movimientos de entrada del gasto agrupados por producto, verifica
-    /// stock suficiente para TODOS antes de escribir una sola fila (ningún saldo negativo
-    /// silencioso — spec riesgo/decisión 7), y recién ahí inserta las salidas espejo.
+    /// ATÓMICO: bloquea la fila del Gasto (FOR UPDATE, mismo patrón que
+    /// GastoRepository.RegistrarPagoAtomicoAsync) y re-verifica Activo DENTRO de la transacción
+    /// antes de leer nada más — cierra la ventana de doble anulación concurrente que un chequeo
+    /// de Activo hecho solo en el service (fuera de la transacción) no puede cerrar. Recién con
+    /// el gasto confirmado activo y bajo lock, lee TODOS los movimientos de entrada agrupados
+    /// por producto, verifica stock suficiente para TODOS antes de escribir una sola fila (ningún
+    /// saldo negativo silencioso — spec riesgo/decisión 7), y recién ahí inserta las salidas espejo.
     public virtual async Task<ResultadoAnulacionIngreso> AnularIngresoPorFacturaAtomicoAsync(
         int gastoId, int usuarioId, string detalleAuditoria)
     {
         await using var tx = await _ctx.Database.BeginTransactionAsync();
+
+        var gasto = await _ctx.Gastos
+            .FromSqlInterpolated($"SELECT * FROM \"Gastos\" WHERE \"Id\" = {gastoId} FOR UPDATE")
+            .FirstOrDefaultAsync();
+
+        if (gasto is null)
+        {
+            await tx.RollbackAsync();
+            throw new EntidadNoEncontradaException($"Gasto {gastoId} no encontrado.");
+        }
+        if (!gasto.Activo)
+        {
+            await tx.RollbackAsync();
+            return new ResultadoAnulacionIngreso(ResultadoAnulacionIngresoEstado.GastoYaAnulado, Array.Empty<ItemFaltanteStock>());
+        }
 
         var movimientos = await _ctx.MovimientosStock
             .Include(m => m.Producto)
