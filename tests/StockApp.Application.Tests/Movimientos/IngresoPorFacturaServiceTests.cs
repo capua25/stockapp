@@ -265,4 +265,64 @@ public class IngresoPorFacturaServiceTests
             && a.Renglones.Single().ProductoNuevo!.PrecioCosto == 35m
             && a.Renglones.Single().ProductoNuevo!.StockActual == 4m)), Times.Once);
     }
+
+    // ── AnularLoteAsync ────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task AnularLoteAsync_GastoInexistente_LanzaEntidadNoEncontrada()
+    {
+        var (svc, _, gastoRepo, _, _, _, _, _, _, _, _) = Crear();
+        gastoRepo.Setup(g => g.ObtenerPorIdAsync(99)).ReturnsAsync((Gasto?)null);
+
+        await Assert.ThrowsAsync<EntidadNoEncontradaException>(() => svc.AnularLoteAsync(99));
+    }
+
+    [Fact]
+    public async Task AnularLoteAsync_GastoYaAnulado_LanzaReglaDeNegocio()
+    {
+        var (svc, _, gastoRepo, _, _, _, _, _, _, _, _) = Crear();
+        gastoRepo.Setup(g => g.ObtenerPorIdAsync(5)).ReturnsAsync(new Gasto { Id = 5, Activo = false });
+
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => svc.AnularLoteAsync(5));
+    }
+
+    [Fact]
+    public async Task AnularLoteAsync_GastoConPagosActivos_LanzaReglaDeNegocio()
+    {
+        var (svc, _, gastoRepo, _, _, _, _, _, _, _, _) = Crear();
+        gastoRepo.Setup(g => g.ObtenerPorIdAsync(6)).ReturnsAsync(new Gasto
+        {
+            Id = 6, Activo = true,
+            Pagos = new List<PagoGasto> { new() { Id = 1, Monto = 100m, Activo = true } },
+        });
+
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => svc.AnularLoteAsync(6));
+    }
+
+    [Fact]
+    public async Task AnularLoteAsync_StockInsuficiente_LanzaReglaDeNegocioConElDetalle()
+    {
+        var (svc, movRepo, gastoRepo, _, _, _, _, _, _, _, _) = Crear();
+        gastoRepo.Setup(g => g.ObtenerPorIdAsync(7)).ReturnsAsync(new Gasto { Id = 7, Activo = true });
+        movRepo.Setup(m => m.AnularIngresoPorFacturaAtomicoAsync(7, It.IsAny<int>(), It.IsAny<string>()))
+            .ReturnsAsync(new ResultadoAnulacionIngreso(
+                ResultadoAnulacionIngresoEstado.StockInsuficiente,
+                new List<ItemFaltanteStock> { new(1, "Producto X", 2m, 5m) }));
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(() => svc.AnularLoteAsync(7));
+        Assert.Contains("Producto X", ex.Message);
+    }
+
+    [Fact]
+    public async Task AnularLoteAsync_DatosValidos_DelegaAlRepo()
+    {
+        var (svc, movRepo, gastoRepo, _, _, _, _, _, _, _, _) = Crear();
+        gastoRepo.Setup(g => g.ObtenerPorIdAsync(8)).ReturnsAsync(new Gasto { Id = 8, Activo = true });
+        movRepo.Setup(m => m.AnularIngresoPorFacturaAtomicoAsync(8, It.IsAny<int>(), It.IsAny<string>()))
+            .ReturnsAsync(new ResultadoAnulacionIngreso(ResultadoAnulacionIngresoEstado.Ok, Array.Empty<ItemFaltanteStock>()));
+
+        await svc.AnularLoteAsync(8);
+
+        movRepo.Verify(m => m.AnularIngresoPorFacturaAtomicoAsync(8, It.IsAny<int>(), It.IsAny<string>()), Times.Once);
+    }
 }

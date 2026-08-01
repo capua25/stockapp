@@ -260,6 +260,113 @@ public class MovimientoStockRepositoryIngresoTests : PostgresRepositoryTestBase
     }
 
     [Fact]
+    public async Task AnularIngresoPorFacturaAtomicoAsync_ConStockSuficiente_GeneraSalidasEspejoYAnulaElGasto()
+    {
+        var (um, usuario, proveedor, fuente, rubro) = await SeedMaestrosAsync();
+        var p1 = NuevoProducto("ANU-1", um, stock: 20m);
+        var p2 = NuevoProducto("ANU-2", um, stock: 20m);
+        Context.Productos.AddRange(p1, p2);
+        await Context.SaveChangesAsync();
+
+        var gasto = NuevoGasto(proveedor, fuente, rubro, factura: "ANU-FAC-1");
+        Context.Gastos.Add(gasto);
+        await Context.SaveChangesAsync();
+
+        Context.MovimientosStock.AddRange(
+            new MovimientoStock { ProductoId = p1.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Motivo = MotivoMovimiento.Compra, Cantidad = 8m, PrecioUnitario = 10m, Fecha = DateTime.UtcNow, GastoId = gasto.Id },
+            new MovimientoStock { ProductoId = p2.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Motivo = MotivoMovimiento.Compra, Cantidad = 5m, PrecioUnitario = 10m, Fecha = DateTime.UtcNow, GastoId = gasto.Id });
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        var resultado = await _repo.AnularIngresoPorFacturaAtomicoAsync(gasto.Id, usuario.Id, "Anulación de prueba");
+
+        Assert.Equal(ResultadoAnulacionIngresoEstado.Ok, resultado.Estado);
+
+        await using var ctx2 = Fixture.CrearContexto();
+        var salidas = await ctx2.MovimientosStock.Where(m => m.Tipo == TipoMovimiento.Salida).ToListAsync();
+        Assert.Equal(2, salidas.Count);
+        Assert.All(salidas, s => Assert.Equal(MotivoMovimiento.Ajuste, s.Motivo));
+
+        Assert.Equal(12m, (await ctx2.Productos.FindAsync(p1.Id))!.StockActual);   // 20 - 8
+        Assert.Equal(15m, (await ctx2.Productos.FindAsync(p2.Id))!.StockActual);   // 20 - 5
+
+        var gastoFresh = await ctx2.Gastos.FindAsync(gasto.Id);
+        Assert.False(gastoFresh!.Activo);
+
+        var log = await ctx2.LogsAuditoria.SingleAsync();
+        Assert.Equal(45, (int)log.Accion);   // AccionAuditada.AnulacionIngresoPorFactura
+    }
+
+    [Fact]
+    public async Task AnularIngresoPorFacturaAtomicoAsync_StockInsuficienteEnUnoDeTres_NoEscribeNadaYNombraElProducto()
+    {
+        var (um, usuario, proveedor, fuente, rubro) = await SeedMaestrosAsync();
+        var p1 = NuevoProducto("INS-1", um, stock: 10m);
+        var p2 = NuevoProducto("INS-2", um, stock: 10m);
+        var p3 = NuevoProducto("INS-3", um, stock: 2m);   // insuficiente: se consumió parte
+        p3.Nombre = "Producto consumido";
+        Context.Productos.AddRange(p1, p2, p3);
+        await Context.SaveChangesAsync();
+
+        var gasto = NuevoGasto(proveedor, fuente, rubro, factura: "INS-FAC-1");
+        Context.Gastos.Add(gasto);
+        await Context.SaveChangesAsync();
+
+        Context.MovimientosStock.AddRange(
+            new MovimientoStock { ProductoId = p1.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Motivo = MotivoMovimiento.Compra, Cantidad = 5m, PrecioUnitario = 10m, Fecha = DateTime.UtcNow, GastoId = gasto.Id },
+            new MovimientoStock { ProductoId = p2.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Motivo = MotivoMovimiento.Compra, Cantidad = 5m, PrecioUnitario = 10m, Fecha = DateTime.UtcNow, GastoId = gasto.Id },
+            new MovimientoStock { ProductoId = p3.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Motivo = MotivoMovimiento.Compra, Cantidad = 5m, PrecioUnitario = 10m, Fecha = DateTime.UtcNow, GastoId = gasto.Id });
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        var resultado = await _repo.AnularIngresoPorFacturaAtomicoAsync(gasto.Id, usuario.Id, "Anulación con faltante");
+
+        Assert.Equal(ResultadoAnulacionIngresoEstado.StockInsuficiente, resultado.Estado);
+        var faltante = Assert.Single(resultado.Faltantes);
+        Assert.Equal("Producto consumido", faltante.ProductoNombre);
+        Assert.Equal(2m, faltante.StockActual);
+        Assert.Equal(5m, faltante.CantidadNecesaria);
+
+        await using var ctx2 = Fixture.CrearContexto();
+        Assert.Equal(3, await ctx2.MovimientosStock.CountAsync());   // solo las 3 entradas originales
+        Assert.Equal(10m, (await ctx2.Productos.FindAsync(p1.Id))!.StockActual);
+        Assert.Equal(10m, (await ctx2.Productos.FindAsync(p2.Id))!.StockActual);
+        Assert.Equal(2m, (await ctx2.Productos.FindAsync(p3.Id))!.StockActual);
+        Assert.True((await ctx2.Gastos.FindAsync(gasto.Id))!.Activo);
+    }
+
+    [Fact]
+    public async Task AnularIngresoPorFacturaAtomicoAsync_GastoConMovimientosAsociadosPorElFlujoViejo_TambienSeAnula()
+    {
+        // Decisión 9 del spec: la anulación aplica a CUALQUIER gasto con movimientos asociados,
+        // no solo a los creados por esta pantalla — cubre el vínculo hecho a mano desde
+        // GastoService.AsociarMovimientosAsync (flujo "Asociar factura" existente).
+        var (um, usuario, proveedor, fuente, rubro) = await SeedMaestrosAsync();
+        var producto = NuevoProducto("VIEJO-1", um, stock: 15m);
+        Context.Productos.Add(producto);
+        await Context.SaveChangesAsync();
+
+        var gasto = NuevoGasto(proveedor, fuente, rubro, factura: "VIEJO-FAC-1");
+        Context.Gastos.Add(gasto);
+        await Context.SaveChangesAsync();
+
+        Context.MovimientosStock.Add(new MovimientoStock
+        {
+            ProductoId = producto.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada,
+            Motivo = MotivoMovimiento.Compra, Cantidad = 6m, PrecioUnitario = 10m,
+            Fecha = DateTime.UtcNow, GastoId = gasto.Id,   // vínculo hecho por el flujo viejo
+        });
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        var resultado = await _repo.AnularIngresoPorFacturaAtomicoAsync(gasto.Id, usuario.Id, "Anulación de vínculo viejo");
+
+        Assert.Equal(ResultadoAnulacionIngresoEstado.Ok, resultado.Estado);
+        await using var ctx2 = Fixture.CrearContexto();
+        Assert.Equal(9m, (await ctx2.Productos.FindAsync(producto.Id))!.StockActual);   // 15 - 6
+    }
+
+    [Fact]
     public async Task RegistrarIngresoPorFacturaAtomicoAsync_RollbackRevierteTambienLosPrecios()
     {
         var (um, usuario, proveedor, fuente, rubro) = await SeedMaestrosAsync();

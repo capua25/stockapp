@@ -62,6 +62,17 @@ public record IngresoPorFacturaArgs(
 /// <summary>Resultado del alta atómica: id del gasto y los ids de movimiento generados.</summary>
 public record ResultadoIngresoPorFactura(int GastoId, IReadOnlyList<int> MovimientoIds);
 
+/// <summary>Estado del intento de anulación atómica del lote.</summary>
+public enum ResultadoAnulacionIngresoEstado { Ok, StockInsuficiente }
+
+/// <summary>Detalle de un producto sin stock suficiente para la salida espejo de la anulación.</summary>
+public record ItemFaltanteStock(int ProductoId, string ProductoNombre, decimal StockActual, decimal CantidadNecesaria);
+
+/// <summary>Resultado tipado de la anulación atómica.</summary>
+public record ResultadoAnulacionIngreso(
+    ResultadoAnulacionIngresoEstado Estado,
+    IReadOnlyList<ItemFaltanteStock> Faltantes);
+
 /// <summary>
 /// Contrato de persistencia para movimientos de stock.
 /// Todos los métodos de escritura son atómicos: insert/update + auditoría en UN solo SaveChangesAsync.
@@ -102,4 +113,11 @@ public interface IMovimientoStockRepository
     /// StockActual + cambios selectivos de PrecioCosto + LogAuditoria, todo en UNA transacción.
     /// </summary>
     Task<ResultadoIngresoPorFactura> RegistrarIngresoPorFacturaAtomicoAsync(IngresoPorFacturaArgs args);
+
+    /// <summary>
+    /// ATÓMICO: verifica stock suficiente para CADA salida espejo antes de escribir nada;
+    /// inserta las salidas, descuenta StockActual, marca Gasto.Activo=false y audita.
+    /// </summary>
+    Task<ResultadoAnulacionIngreso> AnularIngresoPorFacturaAtomicoAsync(
+        int gastoId, int usuarioId, string detalleAuditoria);
 }

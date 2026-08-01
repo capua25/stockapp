@@ -9,7 +9,7 @@ namespace StockApp.Application.Movimientos;
 
 /// <summary>
 /// Servicio de ingreso de stock por factura. Patrón: auth → validación → composición de
-/// entidades → delegación al repo atómico. AnularLoteAsync se implementa en Task 5.
+/// entidades → delegación al repo atómico.
 /// </summary>
 public class IngresoPorFacturaService : IIngresoPorFacturaService
 {
@@ -196,6 +196,33 @@ public class IngresoPorFacturaService : IIngresoPorFacturaService
             DiferenciaConTotal: dto.MontoTotal - sumaRenglones);
     }
 
-    /// <summary>Implementado en Task 5 (necesita IMovimientoStockRepository.AnularIngresoPorFacturaAtomicoAsync).</summary>
-    public Task AnularLoteAsync(int gastoId) => throw new NotImplementedException();
+    public async Task AnularLoteAsync(int gastoId)
+    {
+        _auth.Verificar(_session.RolActual, Permisos.RegistrarMovimientos);
+        _auth.Verificar(_session.RolActual, Permisos.RegistrarGastos);
+
+        var gasto = await _gastoRepo.ObtenerPorIdAsync(gastoId)
+            ?? throw new EntidadNoEncontradaException($"Gasto {gastoId} no encontrado.");
+
+        if (!gasto.Activo)
+            throw new ReglaDeNegocioException($"El gasto {gastoId} ya está anulado.");
+        if (gasto.Pagos.Any(p => p.Activo))
+            throw new ReglaDeNegocioException(
+                "No se puede anular un gasto con pagos activos: primero anulá los pagos.");
+
+        var detalle = $"Anulación de ingreso por factura '{gasto.NumeroFactura ?? "s/n"}' (Gasto {gastoId})";
+
+        var resultado = await _movRepo.AnularIngresoPorFacturaAtomicoAsync(
+            gastoId, _session.UsuarioActual!.Id, detalle);
+
+        if (resultado.Estado == ResultadoAnulacionIngresoEstado.StockInsuficiente)
+        {
+            var detalleFaltantes = string.Join("; ", resultado.Faltantes.Select(f =>
+                $"{f.ProductoNombre}: stock {f.StockActual}, necesita {f.CantidadNecesaria}"));
+            throw new ReglaDeNegocioException(
+                $"No se puede anular: stock insuficiente en {resultado.Faltantes.Count} producto(s). {detalleFaltantes}");
+        }
+
+        _version.Invalidar();
+    }
 }

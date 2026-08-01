@@ -313,6 +313,75 @@ public class MovimientoStockRepository : IMovimientoStockRepository
         }
     }
 
+    /// <inheritdoc/>
+    /// ATÓMICO: lee TODOS los movimientos de entrada del gasto agrupados por producto, verifica
+    /// stock suficiente para TODOS antes de escribir una sola fila (ningún saldo negativo
+    /// silencioso — spec riesgo/decisión 7), y recién ahí inserta las salidas espejo.
+    public virtual async Task<ResultadoAnulacionIngreso> AnularIngresoPorFacturaAtomicoAsync(
+        int gastoId, int usuarioId, string detalleAuditoria)
+    {
+        await using var tx = await _ctx.Database.BeginTransactionAsync();
+
+        var movimientos = await _ctx.MovimientosStock
+            .Include(m => m.Producto)
+            .Where(m => m.GastoId == gastoId)
+            .ToListAsync();
+
+        var faltantes = new List<ItemFaltanteStock>();
+        foreach (var grupo in movimientos.GroupBy(m => m.ProductoId))
+        {
+            var necesario = grupo.Sum(m => m.Cantidad);
+            var producto  = grupo.First().Producto!;
+            if (producto.StockActual < necesario)
+                faltantes.Add(new ItemFaltanteStock(producto.Id, producto.Nombre, producto.StockActual, necesario));
+        }
+
+        if (faltantes.Count > 0)
+        {
+            await tx.RollbackAsync();
+            return new ResultadoAnulacionIngreso(ResultadoAnulacionIngresoEstado.StockInsuficiente, faltantes);
+        }
+
+        foreach (var movimiento in movimientos)
+        {
+            await _ctx.Productos
+                .Where(p => p.Id == movimiento.ProductoId)
+                .ExecuteUpdateAsync(s => s.SetProperty(
+                    p => p.StockActual, p => p.StockActual - movimiento.Cantidad));
+
+            _ctx.MovimientosStock.Add(new MovimientoStock
+            {
+                ProductoId     = movimiento.ProductoId,
+                UsuarioId      = usuarioId,
+                Tipo           = TipoMovimiento.Salida,
+                Motivo         = MotivoMovimiento.Ajuste,
+                Cantidad       = movimiento.Cantidad,
+                PrecioUnitario = movimiento.PrecioUnitario,
+                Fecha          = DateTime.UtcNow,
+                Comentario     = $"Anulación de ingreso por factura (Gasto {gastoId})",
+            });
+        }
+
+        await _ctx.Gastos
+            .Where(g => g.Id == gastoId)
+            .ExecuteUpdateAsync(s => s.SetProperty(g => g.Activo, false));
+
+        _ctx.LogsAuditoria.Add(new LogAuditoria
+        {
+            UsuarioId = usuarioId,
+            Fecha     = DateTime.UtcNow,
+            Accion    = AccionAuditada.AnulacionIngresoPorFactura,
+            Entidad   = "Gasto",
+            EntidadId = gastoId,
+            Detalle   = detalleAuditoria,
+        });
+
+        await _ctx.SaveChangesAsync();
+        await tx.CommitAsync();
+
+        return new ResultadoAnulacionIngreso(ResultadoAnulacionIngresoEstado.Ok, Array.Empty<ItemFaltanteStock>());
+    }
+
     /// <summary>
     /// Mismo criterio que GastoRepository.EsViolacionFacturaUnica: traduce la violación del
     /// índice único parcial (Proveedor, Factura, Orden) a 409 en vez de dejarla llegar como
