@@ -285,9 +285,16 @@ public class MovimientoStockRepositoryIngresoTests : PostgresRepositoryTestBase
 
 /// <summary>
 /// Variante que inyecta Detalle=null en el LogAuditoria final para forzar DbUpdateException
-/// DENTRO de la transacción explícita, después de que los 3 renglones ya fueron procesados —
-/// verifica que el rollback revierte también los ExecuteUpdateAsync de stock ya ejecutados.
-/// Mismo patrón que MovimientoStockRepositoryConDetalleNulo (MovimientoStockRepositoryTests.cs).
+/// DENTRO de la transacción explícita, después de que los renglones ya fueron procesados —
+/// verifica que el rollback revierte también los ExecuteUpdateAsync de stock (y, desde Task 4,
+/// de precio) ya ejecutados. Mismo patrón que MovimientoStockRepositoryConDetalleNulo
+/// (MovimientoStockRepositoryTests.cs).
+///
+/// NOTA (Task 4, ronda de correcciones 1): este helper duplica a mano el cuerpo de
+/// RegistrarIngresoPorFacturaAtomicoAsync en vez de reusarlo. Cada cambio futuro en el método
+/// real (nuevas ramas, nuevos side-effects) puede quedar sin reflejarse acá, y entonces el test
+/// de rollback pasaría trivialmente sin probar nada — como pasó con la rama de precio antes de
+/// este fix. Riesgo estructural señalado para la revisión final; no se refactoriza en esta ronda.
 /// </summary>
 internal sealed class MovimientoStockRepositoryIngresoConDetalleNulo : MovimientoStockRepository
 {
@@ -305,6 +312,24 @@ internal sealed class MovimientoStockRepositoryIngresoConDetalleNulo : Movimient
             var productoId = renglon.ProductoId!.Value;
             await _ctx.Productos.Where(p => p.Id == productoId)
                 .ExecuteUpdateAsync(s => s.SetProperty(p => p.StockActual, p => p.StockActual + renglon.Cantidad));
+
+            if (renglon.ActualizarPrecioCosto)
+            {
+                await _ctx.Productos
+                    .Where(p => p.Id == productoId)
+                    .ExecuteUpdateAsync(s => s.SetProperty(p => p.PrecioCosto, renglon.PrecioUnitario));
+
+                _ctx.LogsAuditoria.Add(new LogAuditoria
+                {
+                    UsuarioId = args.UsuarioId,
+                    Fecha     = DateTime.UtcNow,
+                    Accion    = AccionAuditada.CambioPrecio,
+                    Entidad   = "Producto",
+                    EntidadId = productoId,
+                    Detalle   = $"PrecioCosto: {renglon.PrecioCostoAnterior} → {renglon.PrecioUnitario} (ingreso por factura)",
+                });
+            }
+
             var movimiento = new MovimientoStock
             {
                 ProductoId = productoId, UsuarioId = args.UsuarioId, Tipo = TipoMovimiento.Entrada,
