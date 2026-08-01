@@ -251,6 +251,23 @@ public class MovimientoStockRepository : IMovimientoStockRepository
                         .ExecuteUpdateAsync(s => s.SetProperty(
                             p => p.StockActual, p => p.StockActual + renglon.Cantidad));
                     movimiento.ProductoId = productoId;
+
+                    if (renglon.ActualizarPrecioCosto)
+                    {
+                        await _ctx.Productos
+                            .Where(p => p.Id == productoId)
+                            .ExecuteUpdateAsync(s => s.SetProperty(p => p.PrecioCosto, renglon.PrecioUnitario));
+
+                        _ctx.LogsAuditoria.Add(new LogAuditoria
+                        {
+                            UsuarioId = args.UsuarioId,
+                            Fecha     = DateTime.UtcNow,
+                            Accion    = AccionAuditada.CambioPrecio,
+                            Entidad   = "Producto",
+                            EntidadId = productoId,
+                            Detalle   = $"PrecioCosto: {renglon.PrecioCostoAnterior} → {renglon.PrecioUnitario} (ingreso por factura)",
+                        });
+                    }
                 }
                 else
                 {

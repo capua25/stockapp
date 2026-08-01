@@ -227,6 +227,60 @@ public class MovimientoStockRepositoryIngresoTests : PostgresRepositoryTestBase
         Assert.Equal(0, await ctx2.Gastos.CountAsync());
         Assert.Equal(0, await ctx2.MovimientosStock.CountAsync());
     }
+
+    [Fact]
+    public async Task RegistrarIngresoPorFacturaAtomicoAsync_SoloActualizaLosTildados()
+    {
+        var (um, usuario, proveedor, fuente, rubro) = await SeedMaestrosAsync();
+        var p1 = NuevoProducto("PRC-1", um, stock: 10m, precioCosto: 10m);
+        var p2 = NuevoProducto("PRC-2", um, stock: 10m, precioCosto: 10m);
+        Context.Productos.AddRange(p1, p2);
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        var gasto = NuevoGasto(proveedor, fuente, rubro, factura: "PRC-FAC-1");
+        var args = new IngresoPorFacturaArgs(
+            Gasto: gasto,
+            Renglones: new[]
+            {
+                new RenglonIngresoFacturaArgs(p1.Id, null, 2m, 15m, true, 10m),   // se actualiza
+                new RenglonIngresoFacturaArgs(p2.Id, null, 2m, 15m, false, null), // NO se actualiza
+            },
+            UsuarioId: usuario.Id,
+            DetalleAuditoria: "precio selectivo");
+
+        await _repo.RegistrarIngresoPorFacturaAtomicoAsync(args);
+
+        await using var ctx2 = Fixture.CrearContexto();
+        Assert.Equal(15m, (await ctx2.Productos.FindAsync(p1.Id))!.PrecioCosto);
+        Assert.Equal(10m, (await ctx2.Productos.FindAsync(p2.Id))!.PrecioCosto);   // intacto
+
+        var logCambioPrecio = await ctx2.LogsAuditoria.SingleAsync(l => l.Accion == AccionAuditada.CambioPrecio);
+        Assert.Equal(p1.Id, logCambioPrecio.EntidadId);
+    }
+
+    [Fact]
+    public async Task RegistrarIngresoPorFacturaAtomicoAsync_RollbackRevierteTambienLosPrecios()
+    {
+        var (um, usuario, proveedor, fuente, rubro) = await SeedMaestrosAsync();
+        var p1 = NuevoProducto("PRC-RB-1", um, stock: 10m, precioCosto: 10m);
+        Context.Productos.Add(p1);
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        var repoRoto = new MovimientoStockRepositoryIngresoConDetalleNulo(Context);
+        var gasto = NuevoGasto(proveedor, fuente, rubro, factura: "PRC-RB-FAC");
+        var args = new IngresoPorFacturaArgs(
+            Gasto: gasto,
+            Renglones: new[] { new RenglonIngresoFacturaArgs(p1.Id, null, 1m, 99m, true, 10m) },
+            UsuarioId: usuario.Id,
+            DetalleAuditoria: "se sobreescribe con null en el repo roto");
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => repoRoto.RegistrarIngresoPorFacturaAtomicoAsync(args));
+
+        await using var ctx2 = Fixture.CrearContexto();
+        Assert.Equal(10m, (await ctx2.Productos.FindAsync(p1.Id))!.PrecioCosto);   // sin cambios
+    }
 }
 
 /// <summary>
