@@ -207,6 +207,7 @@ builder.Services.AddScoped<IGastoRepository, GastoRepository>();
 builder.Services.AddScoped<IGastoService, GastoService>();
 builder.Services.AddScoped<IIngresoCajaRepository, IngresoCajaRepository>();
 builder.Services.AddScoped<IIngresoCajaService, IngresoCajaService>();
+builder.Services.AddScoped<IIngresoPorFacturaService, IngresoPorFacturaService>();
 
 // Finanzas — Fase 3: adjuntos de gastos/pagos
 builder.Services.AddScoped<IAdjuntoRepository, AdjuntoRepository>();
@@ -553,6 +554,7 @@ app.MapGet("/", () => Results.Ok(new { status = "ok", service = "StockApp.Api" }
 app.MapAuthEndpoints();
 app.MapProductosEndpoints();
 app.MapMovimientosEndpoints();
+app.MapIngresoPorFacturaEndpoints();
 app.MapReportesEndpoints();
 app.MapAuditoriaEndpoints();
 app.MapUsuariosEndpoints();
