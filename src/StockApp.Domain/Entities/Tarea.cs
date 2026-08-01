@@ -52,9 +52,18 @@ public class Tarea
     /// </summary>
     public void CambiarEstado(EstadoTarea destino)
     {
-        if (!TransicionesValidas[Estado].Contains(destino))
+        if (!PuedeTransicionarA(destino))
             throw new ReglaDeNegocioException(
                 $"No se puede pasar la tarea de '{Estado}' a '{destino}'.");
         Estado = destino;
     }
+
+    /// <summary>
+    /// Consulta de solo lectura sobre la misma tabla que usa CambiarEstado (fix review
+    /// final, Minor): única fuente de verdad de la máquina de estados. La UI
+    /// (TareaFila.PuedeTomar/Soltar/Terminar/Cancelar en TareaListViewModel) debe consultar
+    /// este método en vez de recodificar las transiciones a mano — si mañana cambia
+    /// TransicionesValidas, la UI lo sigue automáticamente en vez de quedar desincronizada.
+    /// </summary>
+    public bool PuedeTransicionarA(EstadoTarea destino) => TransicionesValidas[Estado].Contains(destino);
 }

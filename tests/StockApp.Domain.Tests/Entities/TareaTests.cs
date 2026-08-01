@@ -115,4 +115,35 @@ public class TareaTests
         var tarea = new Tarea { Titulo = "x", CreadaPorUsuarioId = 1, FechaCreacion = DateTime.UtcNow };
         Assert.Equal(PrioridadTarea.Media, tarea.Prioridad);
     }
+
+    // ── PuedeTransicionarA (fix review final, Minor): misma tabla que CambiarEstado, ─────
+    // pero de solo lectura -- es la fuente única que consulta TareaFila en Presentation
+    // en vez de recodificar las transiciones a mano.
+
+    [Theory]
+    [InlineData(EstadoTarea.Pendiente, EstadoTarea.EnCurso, true)]
+    [InlineData(EstadoTarea.Pendiente, EstadoTarea.Cancelada, true)]
+    [InlineData(EstadoTarea.Pendiente, EstadoTarea.Terminada, false)]
+    [InlineData(EstadoTarea.Pendiente, EstadoTarea.Pendiente, false)]
+    [InlineData(EstadoTarea.EnCurso, EstadoTarea.Pendiente, true)]
+    [InlineData(EstadoTarea.EnCurso, EstadoTarea.Terminada, true)]
+    [InlineData(EstadoTarea.EnCurso, EstadoTarea.Cancelada, true)]
+    [InlineData(EstadoTarea.EnCurso, EstadoTarea.EnCurso, false)]
+    [InlineData(EstadoTarea.Terminada, EstadoTarea.Pendiente, false)]
+    [InlineData(EstadoTarea.Terminada, EstadoTarea.EnCurso, false)]
+    [InlineData(EstadoTarea.Terminada, EstadoTarea.Cancelada, false)]
+    [InlineData(EstadoTarea.Terminada, EstadoTarea.Terminada, false)]
+    [InlineData(EstadoTarea.Cancelada, EstadoTarea.Pendiente, false)]
+    [InlineData(EstadoTarea.Cancelada, EstadoTarea.EnCurso, false)]
+    [InlineData(EstadoTarea.Cancelada, EstadoTarea.Terminada, false)]
+    [InlineData(EstadoTarea.Cancelada, EstadoTarea.Cancelada, false)]
+    public void PuedeTransicionarA_ReflejaExactamenteLaMismaTablaQueCambiarEstado(
+        EstadoTarea origen, EstadoTarea destino, bool esperado)
+    {
+        var tarea = NuevaTarea(origen);
+
+        Assert.Equal(esperado, tarea.PuedeTransicionarA(destino));
+        // De solo lectura: consultar no debe mutar el estado.
+        Assert.Equal(origen, tarea.Estado);
+    }
 }

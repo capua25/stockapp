@@ -43,12 +43,15 @@ public sealed class TareaFila
             ? 0m
             : (decimal)(Tarea.FechaLimite.Value.Date - DateTime.UtcNow.Date).TotalDays;
 
-    public bool PuedeTomar    => Tarea.Estado == EstadoTarea.Pendiente;
-    public bool PuedeSoltar   => Tarea.Estado == EstadoTarea.EnCurso;
-    public bool PuedeTerminar => Tarea.Estado == EstadoTarea.EnCurso;
+    // Fix (review final, Minor): antes recodificaban a mano las transiciones que ya vive
+    // en Tarea.TransicionesValidas (vía PuedeTransicionarA) — segunda fuente de verdad que
+    // podía desincronizarse en silencio si el dominio agregaba una transición nueva.
+    public bool PuedeTomar    => Tarea.PuedeTransicionarA(EstadoTarea.EnCurso);
+    public bool PuedeSoltar   => Tarea.PuedeTransicionarA(EstadoTarea.Pendiente);
+    public bool PuedeTerminar => Tarea.PuedeTransicionarA(EstadoTarea.Terminada);
 
     public bool PuedeCancelar =>
-        _rol == RolUsuario.Admin && Tarea.Estado is EstadoTarea.Pendiente or EstadoTarea.EnCurso;
+        _rol == RolUsuario.Admin && Tarea.PuedeTransicionarA(EstadoTarea.Cancelada);
 }
 
 /// <summary>
