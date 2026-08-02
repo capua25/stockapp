@@ -380,6 +380,28 @@ public class TareaServiceTests
         ctx.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Tarea>()), Times.Never);
     }
 
+    [Fact]
+    public async Task CambiarPrioridadAsync_TareaTerminadaConMismaPrioridad_CasoBordeDeliberado_NoHaceNadaSinLanzar()
+    {
+        // Caso borde deliberado (ver "Decisión: misma prioridad sobre tarea terminada" en
+        // .superpowers/sdd/2026-08-01-modulo-tareas/fix-prioridad-terminada.md): el
+        // early-return por igualdad corre ANTES que la validación de estado terminal de
+        // Tarea.CambiarPrioridad, así que pedir la MISMA prioridad sobre una tarea cerrada es
+        // un no-op silencioso (200), no un 409. Si el día de mañana alguien reordena los
+        // checks de este método, este test es el que se entera.
+        var ctx = Crear(rol: RolUsuario.Admin);
+        var tarea = new Tarea
+        {
+            Id = 1, Titulo = "x", Estado = EstadoTarea.Terminada, Prioridad = PrioridadTarea.Media,
+        };
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(tarea);
+
+        await ctx.Svc.CambiarPrioridadAsync(1, PrioridadTarea.Media);
+
+        Assert.Empty(tarea.Notas);
+        ctx.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Tarea>()), Times.Never);
+    }
+
     // ── AgregarNotaAsync ──────────────────────────────────────────────────────
 
     [Fact]
