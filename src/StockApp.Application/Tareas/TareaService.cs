@@ -197,7 +197,7 @@ public class TareaService : ITareaService
             return;   // sin cambios: no hay nada que registrar
 
         var anterior = tarea.Prioridad;
-        tarea.Prioridad = prioridad;
+        tarea.CambiarPrioridad(prioridad);
         // Decisión 9 del spec: cada cambio de prioridad genera nota automática.
         tarea.Notas.Add(new NotaTarea
         {

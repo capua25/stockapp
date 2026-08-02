@@ -116,6 +116,46 @@ public class TareaTests
         Assert.Equal(PrioridadTarea.Media, tarea.Prioridad);
     }
 
+    // ── CambiarPrioridad (decisión 14 del spec): rechazada en estados terminales ──────────
+
+    [Fact]
+    public void CambiarPrioridad_DesdePendiente_Permitido()
+    {
+        var tarea = NuevaTarea(EstadoTarea.Pendiente);
+        tarea.CambiarPrioridad(PrioridadTarea.Alta);
+        Assert.Equal(PrioridadTarea.Alta, tarea.Prioridad);
+    }
+
+    [Fact]
+    public void CambiarPrioridad_DesdeEnCurso_Permitido()
+    {
+        var tarea = NuevaTarea(EstadoTarea.EnCurso);
+        tarea.CambiarPrioridad(PrioridadTarea.Alta);
+        Assert.Equal(PrioridadTarea.Alta, tarea.Prioridad);
+    }
+
+    [Fact]
+    public void CambiarPrioridad_DesdeTerminada_LanzaReglaDeNegocioYNoCambiaLaPrioridad()
+    {
+        var tarea = NuevaTarea(EstadoTarea.Terminada);
+        var prioridadOriginal = tarea.Prioridad;
+
+        Assert.Throws<ReglaDeNegocioException>(() => tarea.CambiarPrioridad(PrioridadTarea.Alta));
+
+        Assert.Equal(prioridadOriginal, tarea.Prioridad);
+    }
+
+    [Fact]
+    public void CambiarPrioridad_DesdeCancelada_LanzaReglaDeNegocioYNoCambiaLaPrioridad()
+    {
+        var tarea = NuevaTarea(EstadoTarea.Cancelada);
+        var prioridadOriginal = tarea.Prioridad;
+
+        Assert.Throws<ReglaDeNegocioException>(() => tarea.CambiarPrioridad(PrioridadTarea.Alta));
+
+        Assert.Equal(prioridadOriginal, tarea.Prioridad);
+    }
+
     // ── PuedeTransicionarA (fix review final, Minor): misma tabla que CambiarEstado, ─────
     // pero de solo lectura -- es la fuente única que consulta TareaFila en Presentation
     // en vez de recodificar las transiciones a mano.

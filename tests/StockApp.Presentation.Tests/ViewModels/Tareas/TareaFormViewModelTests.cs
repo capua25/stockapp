@@ -124,6 +124,19 @@ public class TareaFormViewModelTests
     }
 
     [Fact]
+    public void CargarParaVer_ComoAdminConTareaTerminada_NoMuestraCambioDePrioridad()
+    {
+        // Decisión 14 del spec: un botón que siempre va a fallar con 409 es peor que no
+        // tener botón — MuestraCambioPrioridad también considera el estado, no solo el rol.
+        var ctx = Crear(rol: RolUsuario.Admin);
+        var tarea = new Tarea { Id = 5, Titulo = "x", Estado = EstadoTarea.Terminada };
+
+        ctx.Vm.CargarParaVer(tarea);
+
+        Assert.False(ctx.Vm.MuestraCambioPrioridad);
+    }
+
+    [Fact]
     public async Task CambiarPrioridadAsync_ComoAdmin_LlamaAlServicio()
     {
         var ctx = Crear(rol: RolUsuario.Admin);

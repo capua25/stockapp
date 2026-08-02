@@ -41,6 +41,13 @@ public partial class TareaFormViewModel : ViewModelBase
 
     private int _idTarea;
 
+    /// <summary>
+    /// Espejo de Tarea.EsTerminal para la tarea cargada (decisión 14 del spec): se consulta
+    /// una sola vez en CargarParaVer, no se recalcula con un estado propio del VM, para no
+    /// duplicar el conocimiento de qué estados son terminales fuera del dominio.
+    /// </summary>
+    private bool _tareaEsTerminal;
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
     private string _titulo = string.Empty;
@@ -66,7 +73,13 @@ public partial class TareaFormViewModel : ViewModelBase
         new[] { PrioridadTarea.Baja, PrioridadTarea.Media, PrioridadTarea.Alta };
 
     public bool EsAdmin => _session.RolActual == RolUsuario.Admin;
-    public bool MuestraCambioPrioridad => EsAdmin && !EsNuevaTarea;
+
+    /// <summary>
+    /// Decisión 14 del spec: además de ser Admin y no estar en modo alta, la tarea no puede
+    /// estar en un estado terminal — un botón que siempre va a fallar con 409 es peor que no
+    /// tener botón.
+    /// </summary>
+    public bool MuestraCambioPrioridad => EsAdmin && !EsNuevaTarea && !_tareaEsTerminal;
 
     public TareaFormViewModel(
         ITareaService service, ICurrentSession session,
@@ -81,6 +94,7 @@ public partial class TareaFormViewModel : ViewModelBase
     public void CargarParaCrear()
     {
         _idTarea = 0;
+        _tareaEsTerminal = false;
         EsNuevaTarea = true;
         Titulo = string.Empty;
         Descripcion = null;
@@ -94,6 +108,7 @@ public partial class TareaFormViewModel : ViewModelBase
     public void CargarParaVer(Tarea tarea)
     {
         _idTarea = tarea.Id;
+        _tareaEsTerminal = tarea.EsTerminal;
         EsNuevaTarea = false;
         Titulo = tarea.Titulo;
         Descripcion = tarea.Descripcion;

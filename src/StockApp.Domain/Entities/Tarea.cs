@@ -66,4 +66,27 @@ public class Tarea
     /// TransicionesValidas, la UI lo sigue automáticamente en vez de quedar desincronizada.
     /// </summary>
     public bool PuedeTransicionarA(EstadoTarea destino) => TransicionesValidas[Estado].Contains(destino);
+
+    /// <summary>
+    /// True si el estado actual no tiene ninguna transición de salida en TransicionesValidas:
+    /// la tarea está cerrada (Terminada o Cancelada) y no puede seguir cambiando. Se deriva de
+    /// la misma tabla que CambiarEstado y PuedeTransicionarA en vez de mantener una lista de
+    /// estados terminales aparte, que se desincronizaría con la máquina de estados real.
+    /// </summary>
+    public bool EsTerminal => TransicionesValidas[Estado].Length == 0;
+
+    /// <summary>
+    /// Cambia la prioridad (decisión 14 del spec). Rechaza el cambio si la tarea ya está en
+    /// un estado terminal: priorizar sirve para ordenar trabajo pendiente, y una tarea
+    /// cerrada no tiene nada que ordenar. Vive acá, no en TareaService, por el mismo motivo
+    /// que CambiarEstado: el conocimiento de qué le está permitido a cada estado no se
+    /// reparte entre capas.
+    /// </summary>
+    public void CambiarPrioridad(PrioridadTarea nueva)
+    {
+        if (EsTerminal)
+            throw new ReglaDeNegocioException(
+                $"No se puede cambiar la prioridad de una tarea en estado '{Estado}'.");
+        Prioridad = nueva;
+    }
 }

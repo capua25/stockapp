@@ -24,6 +24,7 @@ Ese pedido describe una pantalla, no un problema. Lo que hay que resolver es có
 11. **Cualquiera puede terminar o soltar una tarea ajena, y queda registrado.** La tarea guarda dos pares de trazabilidad: `TomadaPor` + `FechaInicio` y `CerradaPor` + `FechaFin`. Toda acción sobre una tarea ajena genera nota automática (`García terminó una tarea tomada por Juan`). Así el dato de quién hizo el trabajo se conserva sin trabar a nadie cuando la persona que la tomó no está.
 12. **Las notas son append-only**: se agregan, no se editan ni se borran. Son el registro de lo que pasó.
 13. **La API expone las transiciones como acciones explícitas**, no como un `PUT` genérico que reciba el estado nuevo. Cada endpoint tiene una sola precondición y la máquina de estados vive en el dominio, testeable sin levantar la API.
+14. **La prioridad no se puede cambiar una vez que la tarea está `Terminada` o `Cancelada`.** Priorizar sirve para ordenar trabajo pendiente; una tarea cerrada no ordena nada, y permitirlo solo dejaría reescribir el pasado. La validación vive en `Tarea.CambiarPrioridad`, no en `TareaService`: se deriva de la misma tabla de transiciones que ya identifica los estados terminales, sin una lista nueva que mantener en paralelo. `TareaFormViewModel` deja de ofrecer el panel de cambio de prioridad sobre una tarea cerrada, para no mostrar una acción que solo va a devolver 409.
 
 ## Alcance
 

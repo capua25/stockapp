@@ -167,6 +167,27 @@ public class TareasEndpointTests : ApiTestBase
     }
 
     [Fact]
+    public async Task PostPrioridad_TareaTerminada_Devuelve409()
+    {
+        // Decisión 14 del spec: la prioridad no se puede tocar una vez que la tarea está
+        // Terminada. DomainExceptionHandler ya mapea ReglaDeNegocioException a 409; esto
+        // verifica el circuito completo (dominio → servicio → endpoint) contra la API real.
+        await SeedUsuariosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+        var id = await CrearTareaAsync(client);
+
+        var tomar = await client.PostAsync($"/tareas/{id}/tomar", content: null);
+        Assert.Equal(HttpStatusCode.OK, tomar.StatusCode);
+        var terminar = await client.PostAsync($"/tareas/{id}/terminar", content: null);
+        Assert.Equal(HttpStatusCode.OK, terminar.StatusCode);
+
+        var response = await client.PostAsJsonAsync(
+            $"/tareas/{id}/prioridad", new CambiarPrioridadRequest(PrioridadTarea.Alta));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
     public async Task PostNotas_ConTokenOperador_Crea200()
     {
         await SeedUsuariosAsync();

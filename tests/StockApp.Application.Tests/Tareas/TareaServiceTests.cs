@@ -361,6 +361,25 @@ public class TareaServiceTests
         ctx.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Tarea>()), Times.Never);
     }
 
+    [Fact]
+    public async Task CambiarPrioridadAsync_TareaTerminada_LanzaReglaDeNegocioSinTocarElRepo()
+    {
+        // Decisión 14 del spec: una vez Terminada o Cancelada, la prioridad no se puede
+        // volver a tocar. La regla vive en Tarea.CambiarPrioridad; acá solo se verifica que
+        // el servicio la deje propagar y no persista nada.
+        var ctx = Crear(rol: RolUsuario.Admin);
+        var tarea = new Tarea
+        {
+            Id = 1, Titulo = "x", Estado = EstadoTarea.Terminada, Prioridad = PrioridadTarea.Media,
+        };
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(tarea);
+
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => ctx.Svc.CambiarPrioridadAsync(1, PrioridadTarea.Alta));
+
+        ctx.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Tarea>()), Times.Never);
+    }
+
     // ── AgregarNotaAsync ──────────────────────────────────────────────────────
 
     [Fact]
