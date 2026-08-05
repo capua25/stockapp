@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Movimientos"
              xmlns:beh="using:StockApp.Presentation.Behaviors"
+             xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="760"
@@ -129,9 +130,9 @@
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>
                                 <DataGridTextColumn Header="Cantidad"
-                                    Binding="{Binding Cantidad, DataType={x:Type vm:FilaRenglonFacturaVm}}" Width="Auto" />
+                                    Binding="{Binding Cantidad, DataType={x:Type vm:FilaRenglonFacturaVm}, Converter={x:Static conv:DecimalConverter.Instance}}" Width="Auto" />
                                 <DataGridTextColumn Header="Precio unitario"
-                                    Binding="{Binding PrecioUnitario, DataType={x:Type vm:FilaRenglonFacturaVm}}" Width="Auto" />
+                                    Binding="{Binding PrecioUnitario, DataType={x:Type vm:FilaRenglonFacturaVm}, Converter={x:Static conv:DecimalConverter.Instance}}" Width="Auto" />
                                 <DataGridTextColumn Header="Subtotal"
                                     Binding="{Binding Subtotal, DataType={x:Type vm:FilaRenglonFacturaVm}}"
                                     IsReadOnly="True" Width="Auto" />
@@ -222,7 +223,7 @@
                             <DataTemplate><TextBlock Text="{Binding Nombre}" /></DataTemplate>
                         </ComboBox.ItemTemplate>
                     </ComboBox>
-                    <TextBlock Text="Precio de venta" /><TextBox Text="{Binding NuevoProductoPrecioVenta}" />
+                    <TextBlock Text="Precio de venta" /><TextBox Text="{Binding NuevoProductoPrecioVenta, Converter={x:Static conv:DecimalConverter.Instance}}" />
                     <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
                         <Button Content="Cancelar" Command="{Binding CancelarAltaProductoCommand}" />
                         <Button Content="Confirmar" Command="{Binding ConfirmarAltaProductoCommand}" Classes="primary" />
