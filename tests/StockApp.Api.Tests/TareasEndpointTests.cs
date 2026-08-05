@@ -52,6 +52,82 @@ public class TareasEndpointTests : ApiTestBase
     }
 
     [Fact]
+    public async Task PostTareas_FechaLimiteConZ_Devuelve201YGuardaElInstanteUtc()
+    {
+        await SeedUsuariosAsync();
+        var client = ClienteAutenticado(TokenOperador());
+
+        var json = """{"titulo":"x","fechaLimite":"2026-08-10T15:00:00Z"}""";
+        var response = await client.PostAsync("/tareas",
+            new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        await using var ctx = Factory.CrearContexto();
+        var tarea = await ctx.Tareas.SingleAsync();
+        Assert.Equal(new DateTime(2026, 8, 10, 15, 0, 0, DateTimeKind.Utc), tarea.FechaLimite);
+    }
+
+    [Fact]
+    public async Task PostTareas_FechaLimiteSinZonaHoraria_Devuelve201YLaInterpretaComoUtc()
+    {
+        // Comportamiento preexistente (no romper): sin offset ni "Z", se asume UTC.
+        await SeedUsuariosAsync();
+        var client = ClienteAutenticado(TokenOperador());
+
+        var json = """{"titulo":"x","fechaLimite":"2026-08-10T15:00:00"}""";
+        var response = await client.PostAsync("/tareas",
+            new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        await using var ctx = Factory.CrearContexto();
+        var tarea = await ctx.Tareas.SingleAsync();
+        Assert.Equal(new DateTime(2026, 8, 10, 15, 0, 0, DateTimeKind.Utc), tarea.FechaLimite);
+    }
+
+    [Fact]
+    public async Task PostTareas_FechaLimiteConOffsetNegativoNoUtc_Devuelve201YConvierteAUtc()
+    {
+        // Bug real (BLOQUEANTE, verificación end-to-end contra API + Postgres reales):
+        // "-03:00" (zona de Argentina) hace que System.Text.Json deserialice FechaLimite
+        // con Kind=Local. El converter viejo dejaba pasar Kind=Local sin tocarlo -- Npgsql
+        // rechaza escribir eso en la columna timestamptz y tiraba 500 crudo para cualquier
+        // cliente HTTP que no sea el desktop (que ya normalizaba a UTC del lado cliente,
+        // commit 3266e02). JSON crudo a propósito, mismo patrón que
+        // IngresosCajaEndpointTests.PostIngresos_FechaSinZonaHoraria_Devuelve201: un
+        // CrearTareaRequest tipado en C# ya trae el Kind seteado, así que ningún test
+        // tipado agarraba este bug. 15:00 -03:00 == 18:00 UTC.
+        await SeedUsuariosAsync();
+        var client = ClienteAutenticado(TokenOperador());
+
+        var json = """{"titulo":"x","fechaLimite":"2026-08-10T15:00:00-03:00"}""";
+        var response = await client.PostAsync("/tareas",
+            new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        await using var ctx = Factory.CrearContexto();
+        var tarea = await ctx.Tareas.SingleAsync();
+        Assert.Equal(new DateTime(2026, 8, 10, 18, 0, 0, DateTimeKind.Utc), tarea.FechaLimite);
+    }
+
+    [Fact]
+    public async Task PostTareas_FechaLimiteConOffsetPositivoNoUtc_Devuelve201YConvierteAUtc()
+    {
+        // Offset distinto a propósito (+05:30, India): no depender de que la zona horaria
+        // local de la máquina que corre el test coincida con la de Argentina.
+        await SeedUsuariosAsync();
+        var client = ClienteAutenticado(TokenOperador());
+
+        var json = """{"titulo":"x","fechaLimite":"2026-08-10T15:00:00+05:30"}""";
+        var response = await client.PostAsync("/tareas",
+            new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        await using var ctx = Factory.CrearContexto();
+        var tarea = await ctx.Tareas.SingleAsync();
+        Assert.Equal(new DateTime(2026, 8, 10, 9, 30, 0, DateTimeKind.Utc), tarea.FechaLimite);
+    }
+
+    [Fact]
     public async Task PostTareas_TituloVacio_Devuelve400()
     {
         await SeedUsuariosAsync();
