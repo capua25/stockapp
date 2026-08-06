@@ -1,4 +1,5 @@
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 
 namespace StockApp.Domain.Entities;
 
@@ -63,5 +64,37 @@ public class Gasto
             && FechaVencimiento.Value.Date < fechaReferencia.Date)
             return EstadoGasto.Vencida;
         return TotalPagado > 0 ? EstadoGasto.Parcial : EstadoGasto.Pendiente;
+    }
+
+    /// <summary>
+    /// Guard de la anulación en cascada (asiento inverso o baja lógica simple, según tenga
+    /// movimientos de stock asociados). Unifica el chequeo que antes estaba DUPLICADO, con el
+    /// mismo texto, en GastoService.AnularAsync e IngresoPorFacturaService.AnularLoteAsync —
+    /// vivía en dos servicios distintos y se habría desincronizado con el primer cambio que
+    /// tocara solo uno de los dos.
+    ///
+    /// Si hay algún pago MANUAL activo (plata que un operador registró a mano — RegistrarPagoAsync
+    /// o ABM), bloquea SIEMPRE, sin importar la confirmación: una confirmación distraída no puede
+    /// borrar un pago parcial real. Si el único pago activo es el automático de contado (creado
+    /// por AltaAsync/IngresoPorFacturaService.RegistrarAsync — spec §4), permite anularlo en
+    /// cascada, pero solo con confirmación explícita: sin ella, informa que hay un pago
+    /// automático que se va a eliminar; con ella, devuelve los pagos automáticos a dar de baja
+    /// junto con el gasto.
+    /// </summary>
+    public IReadOnlyList<PagoGasto> PagosAutomaticosADarDeBajaEnAnulacion(bool confirmarAnulacionDePagoAutomatico)
+    {
+        var pagosActivos = Pagos.Where(p => p.Activo).ToList();
+        if (pagosActivos.Count == 0)
+            return Array.Empty<PagoGasto>();
+
+        if (pagosActivos.Any(p => !p.EsAutomatico))
+            throw new ReglaDeNegocioException(
+                "No se puede anular un gasto con pagos activos: primero anulá los pagos.");
+
+        if (!confirmarAnulacionDePagoAutomatico)
+            throw new AnulacionRequierePagoAutomaticoConfirmadoException(
+                Id, pagosActivos.Sum(p => p.Monto));
+
+        return pagosActivos;
     }
 }

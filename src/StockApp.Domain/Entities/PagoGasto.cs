@@ -25,6 +25,17 @@ public class PagoGasto
     public bool Activo { get; set; } = true;   // false = pago anulado
 
     /// <summary>
+    /// True si el pago lo creó el propio sistema (Contado ⇒ pago automático por el total,
+    /// spec §4), false si lo tipeó un operador a mano (ABM manual / RegistrarPagoAsync).
+    /// Identifica el pago automático de forma robusta para la anulación en cascada
+    /// (Gasto.PagosAutomaticosADarDeBajaEnAnulacion) — comparar contra el texto de
+    /// <see cref="Nota"/> ("Pago contado (automático)") sería frágil: cualquier cambio de
+    /// wording futuro rompería la detección en silencio. Default false: todo pago existente
+    /// antes de esta propiedad se trata como manual salvo que la migración lo corrija.
+    /// </summary>
+    public bool EsAutomatico { get; set; }
+
+    /// <summary>
     /// Guid del lote de /confirmar que creó este pago (F5c Task 8, re-review CRITICAL/IMPORTANT
     /// 2). Null para todo pago cargado a mano (ABM manual, incluidos los que un operador registra
     /// después sobre un gasto importado) — mismo patrón que Gasto.IdImportacion/
