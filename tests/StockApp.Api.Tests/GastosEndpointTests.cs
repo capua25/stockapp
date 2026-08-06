@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using StockApp.Api.Auth;
@@ -469,6 +470,47 @@ public class GastosEndpointTests : ApiTestBase
         Assert.Equal("Gasto vía API (editado)", gasto.Detalle);
         Assert.Equal(1800m, gasto.MontoTotal);
         Assert.Equal("OC-77", gasto.NumeroOrden);
+    }
+
+    [Fact]
+    public async Task DeleteGasto_ContadoConPagoAutomaticoSinConfirmar_Devuelve409ConDatosEstructurados()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+        var creado = await (await client.PostAsJsonAsync("/finanzas/gastos",
+                RequestValido(proveedorId, fuenteId, rubroId, factura: "CASCADA-01")))
+            .Content.ReadFromJsonAsync<GastoGuardadoResponse>();
+
+        var response = await client.DeleteAsync($"/finanzas/gastos/{creado!.Id}");
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(creado.Id, body.GetProperty("gastoId").GetInt32());
+        Assert.Equal(1500m, body.GetProperty("montoPagoAutomatico").GetDecimal());
+
+        await using var verificacion = Factory.CrearContexto();
+        var gasto = await verificacion.Gastos.Include(g => g.Pagos).SingleAsync(g => g.Id == creado.Id);
+        Assert.True(gasto.Activo);
+        Assert.True(Assert.Single(gasto.Pagos).Activo);
+    }
+
+    [Fact]
+    public async Task DeleteGasto_ContadoConPagoAutomaticoConfirmado_AnulaGastoYElPago()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+        var creado = await (await client.PostAsJsonAsync("/finanzas/gastos",
+                RequestValido(proveedorId, fuenteId, rubroId, factura: "CASCADA-02")))
+            .Content.ReadFromJsonAsync<GastoGuardadoResponse>();
+
+        var response = await client.DeleteAsync($"/finanzas/gastos/{creado!.Id}?confirmar=true");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var verificacion = Factory.CrearContexto();
+        var gasto = await verificacion.Gastos.Include(g => g.Pagos).SingleAsync(g => g.Id == creado.Id);
+        Assert.False(gasto.Activo);
+        Assert.False(Assert.Single(gasto.Pagos).Activo);
     }
 
     [Fact]

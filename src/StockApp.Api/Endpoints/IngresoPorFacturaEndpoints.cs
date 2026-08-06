@@ -48,9 +48,11 @@ public static class IngresoPorFacturaEndpoints
         })
         .RequireAuthorization(Permisos.RegistrarMovimientos);
 
-        group.MapPost("/{gastoId:int}/anular", async (int gastoId, IIngresoPorFacturaService service) =>
+        // confirmar (default false): mismo criterio que DELETE /finanzas/gastos/{id} — la
+        // anulación en cascada del pago automático de contado exige confirmación explícita.
+        group.MapPost("/{gastoId:int}/anular", async (int gastoId, IIngresoPorFacturaService service, bool confirmar = false) =>
         {
-            await service.AnularLoteAsync(gastoId);
+            await service.AnularLoteAsync(gastoId, confirmarAnulacionDePagoAutomatico: confirmar);
             return Results.Ok();
         })
         .RequireAuthorization(Permisos.RegistrarMovimientos);

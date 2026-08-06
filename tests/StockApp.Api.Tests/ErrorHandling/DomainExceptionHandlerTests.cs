@@ -186,6 +186,30 @@ public class DomainExceptionHandlerTests
     }
 
     [Fact]
+    public async Task AnulacionRequierePagoAutomaticoConfirmadoException_Mapea409ConLosDatosEstructurados()
+    {
+        // Mismo patrón que StockInsuficienteException (Fase 3b, Mina 2): el cliente HTTP
+        // reconstruye esta excepción específica desde estas extensiones, para distinguir
+        // "che, esto va a borrar un pago automático, ¿confirmás?" de un 409 genérico sin
+        // tener que parsear el texto del mensaje.
+        var (status, _, body) = await EjecutarAsync(
+            new AnulacionRequierePagoAutomaticoConfirmadoException(7, 1000m));
+
+        Assert.Equal(StatusCodes.Status409Conflict, status);
+        Assert.Equal(7, body.RootElement.GetProperty("gastoId").GetInt32());
+        Assert.Equal(1000m, body.RootElement.GetProperty("montoPagoAutomatico").GetDecimal());
+    }
+
+    [Fact]
+    public async Task ReglaDeNegocioException_NoIncluyeLasExtensionesDePagoAutomatico()
+    {
+        var (_, _, body) = await EjecutarAsync(new ReglaDeNegocioException("Ya existe."));
+
+        Assert.False(body.RootElement.TryGetProperty("gastoId", out _));
+        Assert.False(body.RootElement.TryGetProperty("montoPagoAutomatico", out _));
+    }
+
+    [Fact]
     public async Task ValidacionImportacionException_Mapea400ConElDiccionarioDeErroresEnErrors()
     {
         var errores = new Dictionary<string, string[]>

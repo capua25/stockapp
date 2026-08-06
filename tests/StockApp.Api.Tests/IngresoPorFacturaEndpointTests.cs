@@ -46,11 +46,12 @@ public class IngresoPorFacturaEndpointTests : ApiTestBase
     }
 
     private static IngresoPorFacturaRequest RequestValido(
-        int proveedorId, int fuenteId, int rubroId, int productoId, string? factura = null) => new(
+        int proveedorId, int fuenteId, int rubroId, int productoId, string? factura = null,
+        CondicionPago condicion = CondicionPago.Contado, DateTime? fechaVencimiento = null) => new(
         ProveedorId: proveedorId, NumeroFactura: factura, NumeroOrden: null,
         Fecha: DateTime.UtcNow, Detalle: "Compra vía API", Destino: null, MontoTotal: 100m,
         FuenteFinanciamientoId: fuenteId, RubroGastoId: rubroId, LineaPoaId: null,
-        CondicionPago: CondicionPago.Contado, FechaVencimiento: null,
+        CondicionPago: condicion, FechaVencimiento: fechaVencimiento,
         Lineas: new List<RenglonFacturaRequest>
         {
             new(productoId, null, 5m, 20m, false),
@@ -122,8 +123,13 @@ public class IngresoPorFacturaEndpointTests : ApiTestBase
         var (proveedorId, fuenteId, rubroId, productoId) = await SeedMaestrosAsync();
         var client = ClienteAutenticado(TokenOperador());
 
+        // Crédito a propósito: no crea pago automático de contado, así el 409 que se prueba
+        // acá es genuinamente el de stock insuficiente, no el nuevo guard de "falta confirmar
+        // la anulación del pago automático" (que dispara ANTES y taparía este camino si la
+        // factura fuera de contado).
         var creado = await client.PostAsJsonAsync("/movimientos/ingreso-factura",
-            RequestValido(proveedorId, fuenteId, rubroId, productoId, factura: "IPF-ANU-01"));
+            RequestValido(proveedorId, fuenteId, rubroId, productoId, factura: "IPF-ANU-01",
+                condicion: CondicionPago.Credito, fechaVencimiento: DateTime.UtcNow.AddDays(30)));
         var resultado = await creado.Content.ReadFromJsonAsync<IngresoPorFacturaResultadoDto>();
 
         // Consumir el stock recién ingresado hasta dejarlo por debajo de lo necesario para revertir.
@@ -136,5 +142,50 @@ public class IngresoPorFacturaEndpointTests : ApiTestBase
         var response = await client.PostAsync($"/movimientos/ingreso-factura/{resultado!.GastoId}/anular", content: null);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostAnular_ContadoConPagoAutomaticoSinConfirmar_Devuelve409ConDatosEstructurados()
+    {
+        var (proveedorId, fuenteId, rubroId, productoId) = await SeedMaestrosAsync();
+        var client = ClienteAutenticado(TokenOperador());
+        var creado = await client.PostAsJsonAsync("/movimientos/ingreso-factura",
+            RequestValido(proveedorId, fuenteId, rubroId, productoId, factura: "IPF-CASCADA-01"));
+        var resultado = await creado.Content.ReadFromJsonAsync<IngresoPorFacturaResultadoDto>();
+
+        var response = await client.PostAsync(
+            $"/movimientos/ingreso-factura/{resultado!.GastoId}/anular", content: null);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+        Assert.Equal(resultado.GastoId, body.GetProperty("gastoId").GetInt32());
+        Assert.Equal(100m, body.GetProperty("montoPagoAutomatico").GetDecimal());
+
+        await using var verificacion = Factory.CrearContexto();
+        var gasto = await verificacion.Gastos.Include(g => g.Pagos).SingleAsync(g => g.Id == resultado.GastoId);
+        Assert.True(gasto.Activo);
+        Assert.True(Assert.Single(gasto.Pagos).Activo);
+    }
+
+    [Fact]
+    public async Task PostAnular_ContadoConPagoAutomaticoConfirmado_AnulaYRevierteElStock()
+    {
+        var (proveedorId, fuenteId, rubroId, productoId) = await SeedMaestrosAsync();
+        var client = ClienteAutenticado(TokenOperador());
+        var creado = await client.PostAsJsonAsync("/movimientos/ingreso-factura",
+            RequestValido(proveedorId, fuenteId, rubroId, productoId, factura: "IPF-CASCADA-02"));
+        var resultado = await creado.Content.ReadFromJsonAsync<IngresoPorFacturaResultadoDto>();
+
+        var response = await client.PostAsync(
+            $"/movimientos/ingreso-factura/{resultado!.GastoId}/anular?confirmar=true", content: null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var verificacion = Factory.CrearContexto();
+        var gasto = await verificacion.Gastos.Include(g => g.Pagos).SingleAsync(g => g.Id == resultado.GastoId);
+        Assert.False(gasto.Activo);
+        Assert.False(Assert.Single(gasto.Pagos).Activo);
+        var producto = await verificacion.Productos.SingleAsync(p => p.Id == productoId);
+        Assert.Equal(5m, producto.StockActual);   // 5 (seed) + 5 (ingreso) - 5 (anulación) = 5, una sola vez
     }
 }

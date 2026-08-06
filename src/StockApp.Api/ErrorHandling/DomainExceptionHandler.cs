@@ -93,6 +93,15 @@ public class DomainExceptionHandler : IExceptionHandler
             contexto.ProblemDetails.Extensions["errors"] = validacion.Errores;
         }
 
+        // Anulación en cascada del pago automático de contado: mismo patrón que
+        // StockInsuficienteException — el cliente HTTP reconstruye esta excepción específica
+        // desde estas extensiones para distinguir "falta confirmar" de un 409 genérico.
+        if (exception is AnulacionRequierePagoAutomaticoConfirmadoException requiereConfirmacion)
+        {
+            contexto.ProblemDetails.Extensions["gastoId"]             = requiereConfirmacion.GastoId;
+            contexto.ProblemDetails.Extensions["montoPagoAutomatico"] = requiereConfirmacion.MontoPagoAutomatico;
+        }
+
         return await problemDetailsService.TryWriteAsync(contexto);
     }
 }

@@ -95,9 +95,13 @@ public static class GastosEndpoints
         })
         .RequireAuthorization(Permisos.RegistrarGastos);
 
-        group.MapDelete("/{id:int}", async (int id, IGastoService gastos) =>
+        // confirmar (default false): la anulación en cascada del pago automático de contado
+        // exige confirmación EXPLÍCITA del cliente — sin ella, AnularAsync lanza
+        // AnulacionRequierePagoAutomaticoConfirmadoException (409 con gastoId/montoPagoAutomatico
+        // como extensión del problem+json) en vez de destruir el pago en silencio.
+        group.MapDelete("/{id:int}", async (int id, IGastoService gastos, bool confirmar = false) =>
         {
-            await gastos.AnularAsync(id);
+            await gastos.AnularAsync(id, confirmarAnulacionDePagoAutomatico: confirmar);
             return Results.Ok();
         })
         .RequireAuthorization(Permisos.RegistrarGastos);
