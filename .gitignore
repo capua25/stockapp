@@ -510,3 +510,6 @@ tests/StockApp.Infrastructure.Tests/Fixtures/Finanzas/*.ods
 # Despliegue VPS — secretos reales y artefactos de publish, jamás al repo
 deploy/.env
 deploy/dist/
+
+# Harness de agentes — worktrees aislados de sub-agentes (pueden pesar un repo entero)
+.claude/worktrees/
