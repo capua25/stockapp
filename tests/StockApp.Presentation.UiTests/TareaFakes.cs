@@ -8,6 +8,7 @@ using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.ViewModels;
+using StockApp.Presentation.ViewModels.Tareas;
 
 namespace StockApp.Presentation.UiTests;
 
@@ -117,8 +118,19 @@ internal sealed class NavigationRecorderFake : INavigationService
 
     public Type? UltimoTipoNavegado { get; private set; }
 
+    /// <summary>
+    /// Captura el inicializador cuando TVm es TareaFormViewModel (panel de vencimientos de
+    /// Inicio, 2026-08-06): permite ejecutarlo contra un TareaFormViewModel real en el test y
+    /// confirmar que la fila CORRECTA navegó (no solo que se navegó a algún tipo correcto).
+    /// </summary>
+    public Action<TareaFormViewModel>? UltimoInicializadorTareaForm { get; private set; }
+
     public void Navegar<TVm>() where TVm : ViewModelBase => UltimoTipoNavegado = typeof(TVm);
 
     public void Navegar<TVm>(Action<TVm> inicializar) where TVm : ViewModelBase
-        => UltimoTipoNavegado = typeof(TVm);
+    {
+        UltimoTipoNavegado = typeof(TVm);
+        if (inicializar is Action<TareaFormViewModel> accionTareaForm)
+            UltimoInicializadorTareaForm = accionTareaForm;
+    }
 }

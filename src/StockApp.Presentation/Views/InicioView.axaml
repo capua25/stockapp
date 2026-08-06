@@ -54,7 +54,7 @@
                  cuando no hay ninguna tarea vencida ni próxima a vencer (MostrarPanelTareas),
                  nunca un cartel vacío. Cada fila es un Button entero (no solo un "Ver" aparte):
                  toda la fila es clickeable y navega al detalle vía VerTareaCommand. -->
-            <Border Classes="card" IsVisible="{Binding MostrarPanelTareas}">
+            <Border Classes="card" x:Name="BorderPanelTareas" IsVisible="{Binding MostrarPanelTareas}">
                 <StackPanel Spacing="12">
                     <TextBlock Text="Tareas que requieren atención" Classes="seccion" />
 
