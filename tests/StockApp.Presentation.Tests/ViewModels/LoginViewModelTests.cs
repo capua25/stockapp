@@ -7,6 +7,7 @@ using StockApp.Application.Backups;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
 using StockApp.Application.Licenciamiento;
+using StockApp.Application.Tareas;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Actualizaciones;
 using StockApp.Presentation.Navigation;
@@ -44,7 +45,7 @@ public class LoginViewModelTests
             if (t == typeof(InicioViewModel))
                 return new InicioViewModel(
                     sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IFinanzasVistasService>(),
-                    Mock.Of<IBackupsService>());
+                    Mock.Of<IBackupsService>(), Mock.Of<ITareaService>());
             throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
         });
 

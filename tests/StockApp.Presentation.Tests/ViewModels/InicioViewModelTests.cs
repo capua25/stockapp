@@ -3,13 +3,17 @@ using StockApp.Application.Auth;
 using StockApp.Application.Backups;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
+using StockApp.Application.Tareas;
+using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
+using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels;
 using StockApp.Presentation.ViewModels.Catalogo;
 using StockApp.Presentation.ViewModels.Finanzas;
 using StockApp.Presentation.ViewModels.Movimientos;
 using StockApp.Presentation.ViewModels.Reportes;
+using StockApp.Presentation.ViewModels.Tareas;
 using Xunit;
 
 namespace StockApp.Presentation.Tests.ViewModels;
@@ -18,9 +22,16 @@ public class InicioViewModelTests
 {
     // ── helpers ──────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// tareas/errorTareas se agregan sin tocar la forma de la tupla que devuelve este helper
+    /// (20+ tests existentes la desestructuran con discards posicionales) -- Mock&lt;ITareaService&gt;
+    /// queda solo local, armado con ReturnsAsync/ThrowsAsync según lo que pida cada test nuevo.
+    /// </summary>
     private static (InicioViewModel vm, Mock<ICurrentSession> sessionMock, Mock<INavigationService> navMock,
                      Mock<IFinanzasVistasService> finanzasMock, Mock<IBackupsService> backupsMock)
-        Crear(UsuarioSesion usuario, CalendarioPagosDto? calendario = null, SaludBackupDto? salud = null)
+        Crear(
+            UsuarioSesion usuario, CalendarioPagosDto? calendario = null, SaludBackupDto? salud = null,
+            IReadOnlyList<Tarea>? tareas = null, Exception? errorTareas = null)
     {
         var sessionMock = new Mock<ICurrentSession>();
         sessionMock.Setup(s => s.UsuarioActual).Returns(usuario);
@@ -36,7 +47,14 @@ public class InicioViewModelTests
         var backupsMock = new Mock<IBackupsService>();
         backupsMock.Setup(b => b.ObtenerSaludAsync()).ReturnsAsync(salud ?? new SaludBackupDto(DateTime.UtcNow, false, 26));
 
-        var vm = new InicioViewModel(sessionMock.Object, navMock.Object, finanzasMock.Object, backupsMock.Object);
+        var tareasMock = new Mock<ITareaService>();
+        if (errorTareas is not null)
+            tareasMock.Setup(t => t.ListarAsync()).ThrowsAsync(errorTareas);
+        else
+            tareasMock.Setup(t => t.ListarAsync()).ReturnsAsync(tareas ?? new List<Tarea>());
+
+        var vm = new InicioViewModel(
+            sessionMock.Object, navMock.Object, finanzasMock.Object, backupsMock.Object, tareasMock.Object);
         return (vm, sessionMock, navMock, finanzasMock, backupsMock);
     }
 
@@ -321,7 +339,11 @@ public class InicioViewModelTests
         var backupsMock = new Mock<IBackupsService>();
         backupsMock.Setup(b => b.ObtenerSaludAsync()).ThrowsAsync(new InvalidOperationException("servidor caído"));
 
-        var vm = new InicioViewModel(sessionMock.Object, navMock.Object, finanzasMock.Object, backupsMock.Object);
+        var tareasMock = new Mock<ITareaService>();
+        tareasMock.Setup(t => t.ListarAsync()).ReturnsAsync(new List<Tarea>());
+
+        var vm = new InicioViewModel(
+            sessionMock.Object, navMock.Object, finanzasMock.Object, backupsMock.Object, tareasMock.Object);
 
         await vm.CargarAsync();
 
@@ -408,5 +430,152 @@ public class InicioViewModelTests
         await vm.CargarAsync();
 
         Assert.Equal("3 facturas por vencer esta semana", vm.TextoAVencer7Dias);
+    }
+
+    // ── Panel de vencimientos de tareas (nuevo, 2026-08-06) ──────────────────
+
+    private static Tarea TareaCon(
+        int id, string titulo, DateTime? fechaLimite, EstadoTarea estado = EstadoTarea.Pendiente,
+        int? tomadaPorUsuarioId = null) => new()
+    {
+        Id = id, Titulo = titulo, Estado = estado, Prioridad = PrioridadTarea.Media,
+        CreadaPorUsuarioId = 1, FechaCreacion = DateTime.UtcNow, FechaLimite = fechaLimite,
+        TomadaPorUsuarioId = tomadaPorUsuarioId,
+    };
+
+    [Fact]
+    public async Task CargarAsync_ConTareasVencidasYProximas_LasExponeYMuestraElPanel()
+    {
+        var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
+        var tareas = new List<Tarea>
+        {
+            TareaCon(1, "Vencida", DateTime.UtcNow.Date.AddDays(-3)),
+            TareaCon(2, "Por vencer", DateTime.UtcNow.Date.AddDays(2)),
+        };
+        var (vm, _, _, _, _) = Crear(usuario, tareas: tareas);
+
+        await vm.CargarAsync();
+
+        Assert.True(vm.MostrarPanelTareas);
+        Assert.Single(vm.TareasVencidas);
+        Assert.Single(vm.TareasProximasAVencer);
+        Assert.Equal("Vencida", vm.TareasVencidas[0].Titulo);
+        Assert.Equal("Por vencer", vm.TareasProximasAVencer[0].Titulo);
+    }
+
+    [Fact]
+    public async Task CargarAsync_SinTareasQueRequieranAtencion_NoMuestraElPanel()
+    {
+        var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
+        var tareas = new List<Tarea> { TareaCon(1, "Lejana", DateTime.UtcNow.Date.AddDays(30)) };
+        var (vm, _, _, _, _) = Crear(usuario, tareas: tareas);
+
+        await vm.CargarAsync();
+
+        Assert.False(vm.MostrarPanelTareas);
+        Assert.Empty(vm.TareasVencidas);
+        Assert.Empty(vm.TareasProximasAVencer);
+    }
+
+    [Fact]
+    public async Task CargarAsync_SinTareaAlguna_NoMuestraElPanel()
+    {
+        var usuario = new UsuarioSesion(1, "jperez", RolUsuario.Operador, "Juan Pérez");
+        var (vm, _, _, _, _) = Crear(usuario);
+
+        await vm.CargarAsync();
+
+        Assert.False(vm.MostrarPanelTareas);
+    }
+
+    /// <summary>
+    /// La pantalla de Inicio nunca debe romperse por un fallo del servidor: si /tareas falla
+    /// (API caída, sin permiso, etc.), el panel simplemente no se muestra -- degrada en
+    /// silencio, igual que el resto de las zonas de esta pantalla (aviso de vencimientos,
+    /// backup).
+    /// </summary>
+    [Fact]
+    public async Task CargarAsync_ElServicioDeTareasFalla_NoRompeYOcultaElPanel()
+    {
+        var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
+        var (vm, _, _, _, _) = Crear(usuario, errorTareas: new InvalidOperationException("servidor caído"));
+
+        await vm.CargarAsync();
+
+        Assert.False(vm.MostrarPanelTareas);
+        Assert.Empty(vm.TareasVencidas);
+        Assert.Empty(vm.TareasProximasAVencer);
+    }
+
+    [Fact]
+    public async Task CargarAsync_ElServicioDeTareasFalla_NoAfectaLosOtrosAvisosDeLaPantalla()
+    {
+        var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
+        var (vm, _, _, _, _) = Crear(
+            usuario,
+            calendario: new CalendarioPagosDto(
+                new List<FacturaCalendarioDto> { new(1, "Barraca X", "A-1", 500m, new DateOnly(2026, 7, 1), "Vencida") },
+                new List<FacturaCalendarioDto>(), new List<FacturaCalendarioDto>(), new List<PagoRecienteDto>()),
+            errorTareas: new InvalidOperationException("servidor caído"));
+
+        await vm.CargarAsync();
+
+        Assert.False(vm.MostrarPanelTareas);
+        Assert.True(vm.MostrarAvisoVencimientos);
+    }
+
+    [Fact]
+    public async Task CargarAsync_RolOperador_NoMuestraTareasTomadasPorOtroOperador()
+    {
+        var usuario = new UsuarioSesion(5, "jperez", RolUsuario.Operador, "Juan Pérez");
+        var tareas = new List<Tarea>
+        {
+            TareaCon(1, "De otro operador", DateTime.UtcNow.Date.AddDays(-1), EstadoTarea.EnCurso, tomadaPorUsuarioId: 99),
+            TareaCon(2, "Mía", DateTime.UtcNow.Date.AddDays(-1), EstadoTarea.EnCurso, tomadaPorUsuarioId: 5),
+            TareaCon(3, "De nadie", DateTime.UtcNow.Date, EstadoTarea.Pendiente),
+        };
+        var (vm, _, _, _, _) = Crear(usuario, tareas: tareas);
+
+        await vm.CargarAsync();
+
+        Assert.DoesNotContain(vm.TareasVencidas, f => f.Titulo == "De otro operador");
+        Assert.Contains(vm.TareasVencidas, f => f.Titulo == "Mía");
+        Assert.Contains(vm.TareasProximasAVencer, f => f.Titulo == "De nadie");
+    }
+
+    [Fact]
+    public void VerTarea_NavegaATareaFormViewModel_ConLaTareaCorrecta()
+    {
+        var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
+        var (vm, sessionMock, navMock, _, _) = Crear(usuario);
+        var tarea = TareaCon(7, "Reponer stock depósito B", DateTime.UtcNow.Date.AddDays(-3));
+        var fila = new TareaFila(tarea, RolUsuario.Admin);
+
+        Action<TareaFormViewModel>? inicializador = null;
+        navMock.Setup(n => n.Navegar(It.IsAny<Action<TareaFormViewModel>>()))
+            .Callback<Action<TareaFormViewModel>>(a => inicializador = a);
+
+        vm.VerTareaCommand.Execute(fila);
+
+        navMock.Verify(n => n.Navegar(It.IsAny<Action<TareaFormViewModel>>()), Times.Once);
+        Assert.NotNull(inicializador);
+
+        var tareaServiceMock = new Mock<ITareaService>();
+        var confirmMock = new Mock<IConfirmacionService>();
+        var formVm = new TareaFormViewModel(tareaServiceMock.Object, sessionMock.Object, navMock.Object, confirmMock.Object);
+        inicializador!(formVm);
+
+        Assert.Equal("Reponer stock depósito B", formVm.Titulo);
+    }
+
+    [Fact]
+    public void VerTodasLasTareas_NavegaATareaListViewModel()
+    {
+        var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
+        var (vm, _, navMock, _, _) = Crear(usuario);
+
+        vm.VerTodasLasTareasCommand.Execute(null);
+
+        navMock.Verify(n => n.Navegar<TareaListViewModel>(), Times.Once);
     }
 }

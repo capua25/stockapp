@@ -1,4 +1,5 @@
 using System;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -6,6 +7,7 @@ using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Backups;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
+using StockApp.Application.Tareas;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Converters;
 using StockApp.Presentation.Navigation;
@@ -13,6 +15,7 @@ using StockApp.Presentation.ViewModels.Catalogo;
 using StockApp.Presentation.ViewModels.Finanzas;
 using StockApp.Presentation.ViewModels.Movimientos;
 using StockApp.Presentation.ViewModels.Reportes;
+using StockApp.Presentation.ViewModels.Tareas;
 
 namespace StockApp.Presentation.ViewModels;
 
@@ -28,6 +31,7 @@ public partial class InicioViewModel : ViewModelBase
     private readonly INavigationService     _navigation;
     private readonly IFinanzasVistasService _finanzasVistas;
     private readonly IBackupsService        _backups;
+    private readonly ITareaService          _tareas;
 
     public string NombreUsuario =>
         _session.UsuarioActual?.NombreCompleto ?? _session.UsuarioActual?.NombreUsuario ?? "Usuario";
@@ -80,14 +84,44 @@ public partial class InicioViewModel : ViewModelBase
 
     public bool MostrarAvisoBackupDesconocido => MostrarAvisoBackup && AvisoBackupEsDesconocido;
 
+    // ── Panel "Tareas que requieren atención" (spec 2026-08-06) ────────────────
+
+    public ObservableCollection<TareaFila> TareasVencidas { get; } = new();
+    public ObservableCollection<TareaFila> TareasProximasAVencer { get; } = new();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MostrarPanelTareas))]
+    [NotifyPropertyChangedFor(nameof(MostrarSeccionTareasVencidas))]
+    [NotifyPropertyChangedFor(nameof(TituloVencidas))]
+    private int _cantidadTareasVencidas;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MostrarPanelTareas))]
+    [NotifyPropertyChangedFor(nameof(MostrarSeccionTareasProximasAVencer))]
+    [NotifyPropertyChangedFor(nameof(TituloProximasAVencer))]
+    private int _cantidadTareasProximasAVencer;
+
+    /// <summary>
+    /// Decisión del encargo: si no hay ninguna tarea vencida ni próxima a vencer, el panel
+    /// entero no se muestra -- nunca un cartel vacío ensuciando la pantalla de Inicio.
+    /// </summary>
+    public bool MostrarPanelTareas => CantidadTareasVencidas > 0 || CantidadTareasProximasAVencer > 0;
+
+    public bool MostrarSeccionTareasVencidas => CantidadTareasVencidas > 0;
+    public bool MostrarSeccionTareasProximasAVencer => CantidadTareasProximasAVencer > 0;
+
+    public string TituloVencidas => $"VENCIDAS ({CantidadTareasVencidas})";
+    public string TituloProximasAVencer => $"PRÓXIMAS A VENCER ({CantidadTareasProximasAVencer})";
+
     public InicioViewModel(
         ICurrentSession session, INavigationService navigation,
-        IFinanzasVistasService finanzasVistas, IBackupsService backups)
+        IFinanzasVistasService finanzasVistas, IBackupsService backups, ITareaService tareas)
     {
         _session        = session;
         _navigation     = navigation;
         _finanzasVistas = finanzasVistas;
         _backups        = backups;
+        _tareas         = tareas;
     }
 
     /// <summary>
@@ -107,6 +141,34 @@ public partial class InicioViewModel : ViewModelBase
         catch (Exception)
         {
             MostrarAvisoVencimientos = false;
+        }
+
+        // Panel "Tareas que requieren atención" (spec 2026-08-06): try/catch propio, igual
+        // que el aviso de arriba -- un fallo consultando /tareas (API caída, sin permiso) no
+        // debe afectar a ningún otro aviso de esta pantalla, y nunca debe romper Inicio.
+        try
+        {
+            var tareas = await _tareas.ListarAsync();
+            var rol = _session.RolActual ?? RolUsuario.Operador;
+            var usuarioActualId = _session.UsuarioActual?.Id ?? 0;
+
+            var (vencidas, proximas) = PanelVencimientosTareas.Agrupar(tareas, rol, usuarioActualId);
+
+            TareasVencidas.Clear();
+            foreach (var fila in vencidas) TareasVencidas.Add(fila);
+
+            TareasProximasAVencer.Clear();
+            foreach (var fila in proximas) TareasProximasAVencer.Add(fila);
+
+            CantidadTareasVencidas = TareasVencidas.Count;
+            CantidadTareasProximasAVencer = TareasProximasAVencer.Count;
+        }
+        catch (Exception)
+        {
+            TareasVencidas.Clear();
+            TareasProximasAVencer.Clear();
+            CantidadTareasVencidas = 0;
+            CantidadTareasProximasAVencer = 0;
         }
 
         if (!EsAdmin)
@@ -164,6 +226,14 @@ public partial class InicioViewModel : ViewModelBase
 
     [RelayCommand]
     private void IrACalendarioPagos() => _navigation.Navegar<CalendarioPagosViewModel>();
+
+    // ── panel de vencimientos de tareas ─────────────────────────────────────
+
+    [RelayCommand]
+    private void VerTarea(TareaFila fila) => _navigation.Navegar<TareaFormViewModel>(vm => vm.CargarParaVer(fila.Tarea));
+
+    [RelayCommand]
+    private void VerTodasLasTareas() => _navigation.Navegar<TareaListViewModel>();
 
     // ── accesos rápidos: solo Admin ────────────────────────────────────────────
 

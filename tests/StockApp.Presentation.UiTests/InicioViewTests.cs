@@ -92,7 +92,7 @@ public class InicioViewTests
     {
         var vm = new InicioViewModel(
             new CurrentSessionFake(usuario), new NavigationServiceFake(),
-            new FinanzasVistasServiceFake(), backups);
+            new FinanzasVistasServiceFake(), backups, new TareaServiceFake());
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
         window.DataContext = vm;
