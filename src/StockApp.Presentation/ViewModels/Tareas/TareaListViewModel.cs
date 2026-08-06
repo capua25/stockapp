@@ -25,11 +25,30 @@ public sealed class TareaFila
 {
     public Tarea Tarea { get; }
     private readonly RolUsuario _rol;
+    private readonly DateTime _ahoraUtc;
+    private readonly TimeZoneInfo _zonaLocal;
 
-    public TareaFila(Tarea tarea, RolUsuario rol)
+    /// <summary>
+    /// Overload de uso real (TareaListViewModel, TareaFormViewModel): usa el reloj y la zona
+    /// horaria reales de la máquina. La app corre en el escritorio del operador, así que
+    /// TimeZoneInfo.Local ya refleja la zona correcta sin configuración adicional.
+    /// </summary>
+    public TareaFila(Tarea tarea, RolUsuario rol) : this(tarea, rol, DateTime.UtcNow, TimeZoneInfo.Local)
+    {
+    }
+
+    /// <summary>
+    /// Overload testeable (fix panel de vencimientos, 2026-08-06): recibe el instante UTC y la
+    /// zona horaria explícitos en vez de leerlos de DateTime.UtcNow/TimeZoneInfo.Local, para que
+    /// los tests puedan fijar ambos y no dependan de la máquina ni del momento en que corre la
+    /// suite (ver TareaFilaTests para el detalle del bug de zona horaria que motivó esto).
+    /// </summary>
+    public TareaFila(Tarea tarea, RolUsuario rol, DateTime ahoraUtc, TimeZoneInfo zonaLocal)
     {
         Tarea = tarea;
         _rol = rol;
+        _ahoraUtc = ahoraUtc;
+        _zonaLocal = zonaLocal;
     }
 
     public int Id => Tarea.Id;
@@ -38,10 +57,50 @@ public sealed class TareaFila
     public DateTime? FechaLimite => Tarea.FechaLimite;
     public string? TomadaPorNombre => Tarea.TomadaPor?.NombreUsuario;
 
-    public decimal DiasParaVencer =>
-        Tarea.FechaLimite is null || Tarea.Estado is EstadoTarea.Terminada or EstadoTarea.Cancelada
-            ? 0m
-            : (decimal)(Tarea.FechaLimite.Value.Date - DateTime.UtcNow.Date).TotalDays;
+    public decimal DiasParaVencer => CalcularDiasParaVencer(Tarea.FechaLimite, Tarea.Estado, _ahoraUtc, _zonaLocal);
+
+    public bool EsVencida => DiasParaVencer < 0m;
+
+    /// <summary>
+    /// Texto de la fila del panel de vencimientos de Inicio (spec 2026-08-06): "hoy" para 0,
+    /// "N día(s)" para positivos, "-N día(s)" para negativos (vencidas). Vive acá y no en el
+    /// panel porque es pura presentación de DiasParaVencer, el mismo dato que ya expone esta
+    /// clase para TareaListView.
+    /// </summary>
+    public string TextoDiasParaVencer
+    {
+        get
+        {
+            var dias = (int)DiasParaVencer;
+            if (dias == 0) return "hoy";
+            if (dias > 0) return dias == 1 ? "1 día" : $"{dias} días";
+            var abs = -dias;
+            return abs == 1 ? "-1 día" : $"-{abs} días";
+        }
+    }
+
+    /// <summary>
+    /// Cálculo puro de días para vencer (fix panel de vencimientos, 2026-08-06): la versión
+    /// anterior comparaba FechaLimite.Date contra DateTime.UtcNow.Date directo. Uruguay es
+    /// UTC-3: durante las 3 horas antes de la medianoche LOCAL (21:00-23:59), el reloj UTC ya
+    /// pasó a "mañana" mientras el operador sigue "hoy" -- una tarea que vence hoy se mostraba
+    /// vencida un día antes de tiempo. FechaLimite se persiste como una fecha de calendario
+    /// "etiquetada" UTC (TareaFormViewModel.GuardarAsync: FechaLimiteSeleccionada.Value.Date +
+    /// SpecifyKind Utc, NO una conversión real de zona), así que lo único que hay que corregir
+    /// es contra qué "hoy" se compara: el día de calendario en la zona LOCAL del operador, nunca
+    /// en UTC. Recibe ahoraUtc/zonaLocal como parámetros (no lee el reloj/la zona directo) para
+    /// que sea 100% testeable con instantes fijos.
+    /// </summary>
+    public static decimal CalcularDiasParaVencer(
+        DateTime? fechaLimite, EstadoTarea estado, DateTime ahoraUtc, TimeZoneInfo zonaLocal)
+    {
+        if (fechaLimite is null || estado is EstadoTarea.Terminada or EstadoTarea.Cancelada)
+            return 0m;
+
+        var ahoraUtcTagged = DateTime.SpecifyKind(ahoraUtc, DateTimeKind.Utc);
+        var hoyLocal = TimeZoneInfo.ConvertTimeFromUtc(ahoraUtcTagged, zonaLocal).Date;
+        return (decimal)(fechaLimite.Value.Date - hoyLocal).TotalDays;
+    }
 
     // Fix (review final, Minor): antes recodificaban a mano las transiciones que ya vive
     // en Tarea.TransicionesValidas (vía PuedeTransicionarA) — segunda fuente de verdad que
