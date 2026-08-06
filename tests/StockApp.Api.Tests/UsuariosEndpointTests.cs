@@ -68,6 +68,17 @@ public class UsuariosEndpointTests : ApiTestBase
     // ── POST /usuarios ────────────────────────────────────────────────────────
 
     [Fact]
+    public async Task PostUsuarios_SinToken_Devuelve401()
+    {
+        var client = Factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/usuarios",
+            new CrearUsuarioRequest("otro", null, "pwd12345", RolUsuario.Operador));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
     public async Task PostUsuarios_ConTokenAdmin_CreaUsuarioYDevuelve201ConId()
     {
         var client = Factory.CreateClient();
@@ -100,6 +111,27 @@ public class UsuariosEndpointTests : ApiTestBase
     }
 
     // ── DELETE /usuarios/{id} ────────────────────────────────────────────────
+
+    [Fact]
+    public async Task DeleteUsuario_SinToken_Devuelve401()
+    {
+        var client = Factory.CreateClient();
+
+        var response = await client.DeleteAsync("/usuarios/1");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteUsuario_ConTokenOperador_Devuelve403()
+    {
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenOperador());
+
+        var response = await client.DeleteAsync("/usuarios/1");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
 
     [Fact]
     public async Task DeleteUsuario_ConTokenAdmin_HaceBajaLogicaYDevuelve200()
@@ -160,6 +192,27 @@ public class UsuariosEndpointTests : ApiTestBase
     // ── PUT /usuarios/{id}/rol ───────────────────────────────────────────────
 
     [Fact]
+    public async Task PutRol_SinToken_Devuelve401()
+    {
+        var client = Factory.CreateClient();
+
+        var response = await client.PutAsJsonAsync("/usuarios/1/rol", new CambiarRolRequest(RolUsuario.Admin));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PutRol_ConTokenOperador_Devuelve403()
+    {
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenOperador());
+
+        var response = await client.PutAsJsonAsync("/usuarios/1/rol", new CambiarRolRequest(RolUsuario.Admin));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
     public async Task PutRol_ConTokenAdmin_CambiaRolYDevuelve200()
     {
         await using var ctx = Factory.CrearContexto();
@@ -178,6 +231,29 @@ public class UsuariosEndpointTests : ApiTestBase
     }
 
     // ── PUT /usuarios/{id}/contrasena ────────────────────────────────────────
+
+    [Fact]
+    public async Task PutContrasena_SinToken_Devuelve401()
+    {
+        var client = Factory.CreateClient();
+
+        var response = await client.PutAsJsonAsync(
+            "/usuarios/1/contrasena", new CambiarContrasenaRequest("nuevaClave123", null));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PutContrasena_ConTokenOperador_Devuelve403()
+    {
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenOperador());
+
+        var response = await client.PutAsJsonAsync(
+            "/usuarios/1/contrasena", new CambiarContrasenaRequest("nuevaClave123", null));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
 
     [Fact]
     public async Task PutContrasena_AdminReseteandoOtroUsuario_Devuelve200()
