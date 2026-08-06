@@ -571,7 +571,10 @@ public class GastoServiceTests
         var m = Crear();
         var gasto = GastoValido(CondicionPago.Contado);
         gasto.Id = 1;
-        gasto.Pagos.Add(new PagoGasto { Id = 9, GastoId = 1, Fecha = Hoy, Monto = 1000m, Activo = true, EsAutomatico = true });
+        var pago9 = PagoGasto.Automatico(Hoy, 1000m, "Pago contado (automático)");
+        pago9.Id = 9;
+        pago9.GastoId = 1;
+        gasto.Pagos.Add(pago9);
         m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(gasto);
         m.MovRepo.Setup(r => r.ExistenMovimientosDeGastoAsync(1)).ReturnsAsync(true);
 
@@ -596,7 +599,9 @@ public class GastoServiceTests
         var m = Crear();
         var gasto = GastoValido(CondicionPago.Contado);
         gasto.Id = 1;
-        var pagoAutomatico = new PagoGasto { Id = 9, GastoId = 1, Fecha = Hoy, Monto = 1000m, Activo = true, EsAutomatico = true };
+        var pagoAutomatico = PagoGasto.Automatico(Hoy, 1000m, "Pago contado (automático)");
+        pagoAutomatico.Id = 9;
+        pagoAutomatico.GastoId = 1;
         gasto.Pagos.Add(pagoAutomatico);
         m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(gasto);
         m.MovRepo.Setup(r => r.ExistenMovimientosDeGastoAsync(1)).ReturnsAsync(true);
@@ -620,7 +625,7 @@ public class GastoServiceTests
         var m = Crear();
         var gasto = GastoValido();
         gasto.Id = 1;
-        gasto.Pagos.Add(new PagoGasto { Id = 5, GastoId = 1, Fecha = Hoy, Monto = 200m, Activo = true, EsAutomatico = false });
+        gasto.Pagos.Add(new PagoGasto { Id = 5, GastoId = 1, Fecha = Hoy, Monto = 200m, Activo = true });
         m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(gasto);
 
         var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
@@ -639,8 +644,11 @@ public class GastoServiceTests
         var m = Crear();
         var gasto = GastoValido(CondicionPago.Contado);
         gasto.Id = 1;
-        gasto.Pagos.Add(new PagoGasto { Id = 9, GastoId = 1, Fecha = Hoy, Monto = 1000m, Activo = true, EsAutomatico = true });
-        gasto.Pagos.Add(new PagoGasto { Id = 10, GastoId = 1, Fecha = Hoy, Monto = 200m, Activo = true, EsAutomatico = false });
+        var pago9 = PagoGasto.Automatico(Hoy, 1000m, "Pago contado (automático)");
+        pago9.Id = 9;
+        pago9.GastoId = 1;
+        gasto.Pagos.Add(pago9);
+        gasto.Pagos.Add(new PagoGasto { Id = 10, GastoId = 1, Fecha = Hoy, Monto = 200m, Activo = true });
         m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(gasto);
         m.MovRepo.Setup(r => r.ExistenMovimientosDeGastoAsync(1)).ReturnsAsync(true);
 
@@ -652,35 +660,19 @@ public class GastoServiceTests
             It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>()), Times.Never);
     }
 
-    [Fact]
-    public async Task AnularAsync_ConPagoAutomaticoDeImportacionSinEsAutomatico_OfreceConfirmacionEnCascada()
-    {
-        // Bug real (tercer origen olvidado): ImportacionRepository.ConfirmarAsync crea el pago
-        // de contado automático de una importación SIN setear EsAutomatico=true, a diferencia de
-        // GastoService.AltaAsync e IngresoPorFacturaService.RegistrarAsync. El guard unificado
-        // (Gasto.PagosAutomaticosADarDeBajaEnAnulacion) trataba ese pago como MANUAL y bloqueaba
-        // la anulación individual con "primero anulá los pagos" — callejón sin salida, porque el
-        // pago no lo tipeó ningún operador y nunca se llega a ofrecer la confirmación en cascada.
-        var m = Crear();
-        var gasto = GastoValido(CondicionPago.Contado);
-        gasto.Id = 1;
-        // PagoGasto.Automatico: la misma construcción que usa hoy
-        // ImportacionRepository.ConfirmarAsync (post-fix) para el pago de contado de un lote.
-        // Antes del fix, ese call site armaba el PagoGasto a mano sin EsAutomatico=true, y el
-        // guard de abajo lo trataba como pago MANUAL — bloqueaba con "primero anulá los pagos"
-        // en vez de ofrecer la confirmación en cascada.
-        var pago = PagoGasto.Automatico(Hoy, 1000m, "Pago contado (importación)", Guid.NewGuid());
-        pago.Id = 9;
-        pago.GastoId = 1;
-        gasto.Pagos.Add(pago);
-        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(gasto);
-
-        var ex = await Assert.ThrowsAsync<AnulacionRequierePagoAutomaticoConfirmadoException>(
-            () => m.Svc.AnularAsync(1));
-
-        Assert.Equal(1, ex.GastoId);
-        Assert.Equal(1000m, ex.MontoPagoAutomatico);
-    }
+    // NOTA (code review post-fix del tercer origen): existio aca un test llamado
+    // "AnularAsync_ConPagoAutomaticoDeImportacionSinEsAutomatico_OfreceConfirmacionEnCascada"
+    // que nacio en ROJO construyendo el PagoGasto a mano sin EsAutomatico=true, reproduciendo
+    // el bug real de ImportacionRepository.ConfirmarAsync. Al cerrarse el fix se lo reescribio
+    // para usar PagoGasto.Automatico(...) (unica forma de construir un pago automatico una vez
+    // que EsAutomatico paso a setter privado) - pero eso lo volvio estructuralmente incapaz de
+    // detectar la regresion que decia cubrir: nunca instancia ImportacionRepository, y con el
+    // pago construido por el factory el escenario quedo identico al de
+    // AnularAsync_ConMovimientosYPagoAutomaticoSinConfirmar_LanzaExcepcionEstructurada (arriba),
+    // que ademas verifica que no hubo efectos secundarios. Se elimino por redundante en vez de
+    // dejar un nombre que prometia cubrir algo que ya no podia probar. La regresion real la
+    // custodia el test de integracion de ImportacionRepositoryTests mas el setter privado de
+    // PagoGasto.EsAutomatico (guardarrail de compilador).
 
     // ── Asociación de movimientos a factura existente ────────────────────────
 
