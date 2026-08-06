@@ -127,6 +127,58 @@ public class GastoApiClientTests
 
         Assert.Equal(HttpMethod.Delete, fake.UltimaRequest!.Method);
         Assert.Equal("/finanzas/gastos/4", fake.UltimaRequest.RequestUri!.AbsolutePath);
+        Assert.DoesNotContain("confirmar=true", fake.UltimaRequest.RequestUri!.Query);
+    }
+
+    [Fact]
+    public async Task Anular_ConConfirmar_EnviaElQueryParam()
+    {
+        var fake = new FakeHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        var client = new GastoApiClient(TestHttp.CrearCliente(fake));
+
+        await client.AnularAsync(4, confirmarAnulacionDePagoAutomatico: true);
+
+        Assert.Equal(HttpMethod.Delete, fake.UltimaRequest!.Method);
+        Assert.Equal("/finanzas/gastos/4", fake.UltimaRequest.RequestUri!.AbsolutePath);
+        Assert.Contains("confirmar=true", fake.UltimaRequest.RequestUri!.Query);
+    }
+
+    [Fact]
+    public async Task Anular_409ConExtensiones_LanzaExcepcionEstructurada()
+    {
+        // Mismo patrón que MovimientoStockApiClientTests.Registrar_409ConExtensiones_LanzaStockInsuficienteTipada:
+        // el cliente reconstruye la excepción específica desde las extensiones del problem+json,
+        // para que el ViewModel pueda distinguir "falta confirmar" de un 409 genérico.
+        var fake = new FakeHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.Conflict)
+        {
+            Content = System.Net.Http.Json.JsonContent.Create(new
+            {
+                title = "Regla de negocio violada.",
+                detail = "El gasto 4 tiene un pago automático de contado activo por 1500: " +
+                         "anularlo también va a eliminar ese pago. Confirmá la anulación para continuar.",
+                status = 409,
+                gastoId = 4,
+                montoPagoAutomatico = 1500.0,
+            }),
+        });
+        var client = new GastoApiClient(TestHttp.CrearCliente(fake));
+
+        var ex = await Assert.ThrowsAsync<AnulacionRequierePagoAutomaticoConfirmadoException>(
+            () => client.AnularAsync(4));
+
+        Assert.Equal(4, ex.GastoId);
+        Assert.Equal(1500m, ex.MontoPagoAutomatico);
+    }
+
+    [Fact]
+    public async Task Anular_409SinExtensiones_LanzaReglaDeNegocioPlano()
+    {
+        var fake = new FakeHttpHandler(_ => TestHttp.Problema(
+            HttpStatusCode.Conflict, "No se puede anular un gasto con pagos activos: primero anulá los pagos."));
+        var client = new GastoApiClient(TestHttp.CrearCliente(fake));
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(() => client.AnularAsync(4));
+        Assert.IsType<ReglaDeNegocioException>(ex);
     }
 
     [Fact]

@@ -47,10 +47,11 @@ public sealed class IngresoPorFacturaApiClient : IIngresoPorFacturaService
             ?? throw new InvalidOperationException("Respuesta vacía del servidor al registrar el ingreso por factura.");
     }
 
-    public async Task AnularLoteAsync(int gastoId)
+    public async Task AnularLoteAsync(int gastoId, bool confirmarAnulacionDePagoAutomatico = false)
     {
+        var query = confirmarAnulacionDePagoAutomatico ? "?confirmar=true" : string.Empty;
         var response = await ApiErrores.EnviarAsync(() =>
-            _http.PostAsync($"movimientos/ingreso-factura/{gastoId}/anular", content: null));
+            _http.PostAsync($"movimientos/ingreso-factura/{gastoId}/anular" + query, content: null));
         await ApiErrores.AsegurarExitoAsync(response);
     }
 }

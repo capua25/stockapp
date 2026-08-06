@@ -66,9 +66,10 @@ public sealed class GastoApiClient : IGastoService
         return new ResultadoGastoDto(guardado.Id, guardado.AdvertenciaSobregiro);
     }
 
-    public async Task AnularAsync(int id)
+    public async Task AnularAsync(int id, bool confirmarAnulacionDePagoAutomatico = false)
     {
-        var response = await ApiErrores.EnviarAsync(() => _http.DeleteAsync($"finanzas/gastos/{id}"));
+        var query = confirmarAnulacionDePagoAutomatico ? "?confirmar=true" : string.Empty;
+        var response = await ApiErrores.EnviarAsync(() => _http.DeleteAsync($"finanzas/gastos/{id}" + query));
         await ApiErrores.AsegurarExitoAsync(response);
     }
 

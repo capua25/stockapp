@@ -12,9 +12,11 @@ internal sealed record IdCreado(int Id);
 /// <summary>
 /// Proyección del problem+json (RFC 7807) de la API. Además de title/detail/status,
 /// DomainExceptionHandler agrega extensiones estructuradas para StockInsuficienteException
-/// (productoId/stockActual/cantidadSolicitada — Task 5 de este plan) y para
+/// (productoId/stockActual/cantidadSolicitada — Task 5 de este plan), para
 /// ValidacionImportacionException (errors: diccionario "Tipo[i].Campo" → mensajes — F5d Task 4,
-/// fix de review: sin esto la UI no puede resaltar la celda exacta del error de confirmación).
+/// fix de review: sin esto la UI no puede resaltar la celda exacta del error de confirmación) y
+/// para AnulacionRequierePagoAutomaticoConfirmadoException (gastoId/montoPagoAutomatico —
+/// anulación en cascada del pago automático de contado, unificación Contado ⇒ pago automático).
 /// ReadFromJsonAsync usa defaults Web: camelCase + case-insensitive.
 /// </summary>
 internal sealed record ProblemaJson(
@@ -24,6 +26,8 @@ internal sealed record ProblemaJson(
     int? ProductoId,
     decimal? StockActual,
     decimal? CantidadSolicitada,
+    int? GastoId,
+    decimal? MontoPagoAutomatico,
     [property: JsonPropertyName("errors")] IReadOnlyDictionary<string, string[]>? Errores);
 
 /// <summary>
@@ -103,13 +107,19 @@ internal static class ApiErrores
     /// <summary>
     /// 409 con extensiones de stock → StockInsuficienteException reconstruida con el MISMO
     /// constructor que usó el servidor (mensaje y StockResultante idénticos) — preserva el
-    /// flujo "¿forzar salida?" de MovimientoRegistroViewModelBase. Cualquier otro 409 →
-    /// ReglaDeNegocioException con el detail del servidor.
+    /// flujo "¿forzar salida?" de MovimientoRegistroViewModelBase. 409 con extensiones de
+    /// pago automático → AnulacionRequierePagoAutomaticoConfirmadoException, para que el
+    /// ViewModel distinga "falta confirmar la anulación en cascada" de un 409 genérico y
+    /// pueda ofrecer el diálogo de confirmación en vez de solo informar el error. Cualquier
+    /// otro 409 → ReglaDeNegocioException con el detail del servidor.
     /// </summary>
     private static Exception CrearConflicto(ProblemaJson? problema, string mensaje)
     {
         if (problema is { ProductoId: int productoId, StockActual: decimal stockActual, CantidadSolicitada: decimal cantidadSolicitada })
             return new StockInsuficienteException(productoId, stockActual, cantidadSolicitada);
+
+        if (problema is { GastoId: int gastoId, MontoPagoAutomatico: decimal montoPagoAutomatico })
+            return new AnulacionRequierePagoAutomaticoConfirmadoException(gastoId, montoPagoAutomatico);
 
         return new ReglaDeNegocioException(mensaje);
     }

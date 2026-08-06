@@ -72,6 +72,20 @@ public class IngresoPorFacturaApiClientTests
 
         Assert.Equal(HttpMethod.Post, fake.UltimaRequest!.Method);
         Assert.Equal("/movimientos/ingreso-factura/42/anular", fake.UltimaRequest.RequestUri!.AbsolutePath);
+        Assert.DoesNotContain("confirmar=true", fake.UltimaRequest.RequestUri!.Query);
+    }
+
+    [Fact]
+    public async Task AnularLoteAsync_ConConfirmar_EnviaElQueryParam()
+    {
+        var fake = new FakeHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        var client = new IngresoPorFacturaApiClient(TestHttp.CrearCliente(fake));
+
+        await client.AnularLoteAsync(42, confirmarAnulacionDePagoAutomatico: true);
+
+        Assert.Equal(HttpMethod.Post, fake.UltimaRequest!.Method);
+        Assert.Equal("/movimientos/ingreso-factura/42/anular", fake.UltimaRequest.RequestUri!.AbsolutePath);
+        Assert.Contains("confirmar=true", fake.UltimaRequest.RequestUri!.Query);
     }
 
     [Fact]
@@ -83,5 +97,29 @@ public class IngresoPorFacturaApiClientTests
 
         var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(() => client.AnularLoteAsync(42));
         Assert.Contains("stock insuficiente", ex.Message);
+    }
+
+    [Fact]
+    public async Task AnularLoteAsync_409ConExtensiones_LanzaExcepcionEstructurada()
+    {
+        var fake = new FakeHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.Conflict)
+        {
+            Content = System.Net.Http.Json.JsonContent.Create(new
+            {
+                title = "Regla de negocio violada.",
+                detail = "El gasto 42 tiene un pago automático de contado activo por 500: " +
+                         "anularlo también va a eliminar ese pago. Confirmá la anulación para continuar.",
+                status = 409,
+                gastoId = 42,
+                montoPagoAutomatico = 500.0,
+            }),
+        });
+        var client = new IngresoPorFacturaApiClient(TestHttp.CrearCliente(fake));
+
+        var ex = await Assert.ThrowsAsync<AnulacionRequierePagoAutomaticoConfirmadoException>(
+            () => client.AnularLoteAsync(42));
+
+        Assert.Equal(42, ex.GastoId);
+        Assert.Equal(500m, ex.MontoPagoAutomatico);
     }
 }
