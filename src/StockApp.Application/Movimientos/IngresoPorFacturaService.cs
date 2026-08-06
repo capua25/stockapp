@@ -184,11 +184,7 @@ public class IngresoPorFacturaService : IIngresoPorFacturaService
         if (gasto.CondicionPago == CondicionPago.Contado)
             gasto.Pagos = new List<PagoGasto>
             {
-                new()
-                {
-                    Fecha = gasto.Fecha, Monto = gasto.MontoTotal,
-                    Nota = "Pago contado (automático)", EsAutomatico = true,
-                },
+                PagoGasto.Automatico(gasto.Fecha, gasto.MontoTotal, "Pago contado (automático)"),
             };
 
         var sumaRenglones = dto.Renglones.Sum(r => r.Cantidad * r.PrecioUnitario);

@@ -823,17 +823,16 @@ public class ImportacionRepository : IImportacionRepository
 
             if (gastoDto.Condicion == CondicionPago.Contado)
             {
+                // IdImportacion (re-review IMPORTANT 2): estampa el pago automático de contado
+                // como "del lote" — es lo que distingue este pago de uno manual a la hora de
+                // revertir (RevertirAsync bloquea si encuentra un pago activo con IdImportacion
+                // distinto del lote que se está revirtiendo). EsAutomatico=true lo garantiza
+                // ahora el factory PagoGasto.Automatico — antes se armaba el objeto a mano acá y
+                // se había olvidado esa bandera, dejando este pago tratado como MANUAL por el
+                // guard de anulación en cascada (Gasto.PagosAutomaticosADarDeBajaEnAnulacion).
                 gasto.Pagos = new List<PagoGasto>
                 {
-                    new()
-                    {
-                        Fecha = fechaUtc, Monto = gastoDto.MontoTotal, Nota = "Pago contado (importación)",
-                        // IdImportacion (re-review IMPORTANT 2): estampa el pago automático de
-                        // contado como "del lote" — es lo que distingue este pago de uno manual a
-                        // la hora de revertir (RevertirAsync bloquea si encuentra un pago activo
-                        // con IdImportacion distinto del lote que se está revirtiendo).
-                        IdImportacion = idImportacion,
-                    },
+                    PagoGasto.Automatico(fechaUtc, gastoDto.MontoTotal, "Pago contado (importación)", idImportacion),
                 };
                 pagosCreados++;
             }

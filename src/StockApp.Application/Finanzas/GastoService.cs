@@ -58,11 +58,7 @@ public class GastoService : IGastoService
         if (gasto.CondicionPago == CondicionPago.Contado)
             gasto.Pagos = new List<PagoGasto>
             {
-                new()
-                {
-                    Fecha = gasto.Fecha, Monto = gasto.MontoTotal,
-                    Nota = "Pago contado (automático)", EsAutomatico = true,
-                },
+                PagoGasto.Automatico(gasto.Fecha, gasto.MontoTotal, "Pago contado (automático)"),
             };
 
         if (movimientoIds is { Count: > 0 })

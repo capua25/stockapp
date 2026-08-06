@@ -44,4 +44,15 @@ public class PagoGasto
     /// reversa) de un pago manual real (que NUNCA se toca: la reversa se bloquea si lo encuentra).
     /// </summary>
     public Guid? IdImportacion { get; set; }
+
+    /// <summary>
+    /// Único punto de construcción de un pago automático de contado (spec §4). Existe porque
+    /// hubo un origen real (ImportacionRepository.ConfirmarAsync) que armaba el PagoGasto a mano
+    /// y se olvidó de EsAutomatico=true — el guard de anulación en cascada
+    /// (Gasto.PagosAutomaticosADarDeBajaEnAnulacion) lo trataba entonces como un pago MANUAL y
+    /// bloqueaba la anulación individual del gasto. Centralizar la construcción acá hace que
+    /// EsAutomatico=true sea imposible de olvidar en un cuarto origen futuro.
+    /// </summary>
+    public static PagoGasto Automatico(DateTime fecha, decimal monto, string nota, Guid? idImportacion = null)
+        => new() { Fecha = fecha, Monto = monto, Nota = nota, IdImportacion = idImportacion, EsAutomatico = true };
 }

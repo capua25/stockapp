@@ -664,13 +664,15 @@ public class GastoServiceTests
         var m = Crear();
         var gasto = GastoValido(CondicionPago.Contado);
         gasto.Id = 1;
-        gasto.Pagos.Add(new PagoGasto
-        {
-            Id = 9, GastoId = 1, Fecha = Hoy, Monto = 1000m, Activo = true,
-            Nota = "Pago contado (importación)", IdImportacion = Guid.NewGuid(),
-            // EsAutomatico deliberadamente en su default (false): así lo crea hoy
-            // ImportacionRepository.ConfirmarAsync — ese es el bug que este test reproduce.
-        });
+        // PagoGasto.Automatico: la misma construcción que usa hoy
+        // ImportacionRepository.ConfirmarAsync (post-fix) para el pago de contado de un lote.
+        // Antes del fix, ese call site armaba el PagoGasto a mano sin EsAutomatico=true, y el
+        // guard de abajo lo trataba como pago MANUAL — bloqueaba con "primero anulá los pagos"
+        // en vez de ofrecer la confirmación en cascada.
+        var pago = PagoGasto.Automatico(Hoy, 1000m, "Pago contado (importación)", Guid.NewGuid());
+        pago.Id = 9;
+        pago.GastoId = 1;
+        gasto.Pagos.Add(pago);
         m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(gasto);
 
         var ex = await Assert.ThrowsAsync<AnulacionRequierePagoAutomaticoConfirmadoException>(
