@@ -51,13 +51,30 @@ public class GastoRepository : IGastoRepository
             .Include(g => g.LineaPoa)
             .Include(g => g.Pagos);
 
+    /// <summary>
+    /// Proyecta Gasto + el EXISTS correlacionado contra MovimientosStock en el MISMO SELECT
+    /// (Gasto.TieneMovimientosDeStock, deuda "el diálogo de anulación no advierte que descuenta
+    /// stock"). Se traduce a un subquery EXISTS por fila dentro de UNA sola consulta SQL — no es
+    /// una query por gasto (N+1): ver GastoRepositoryTests.ListarAsync_..._EnUnaSolaQuery, que lo
+    /// verifica contando DbCommand ejecutados.
+    /// </summary>
+    private async Task<Gasto?> ConFlagDeMovimientosAsync(IQueryable<Gasto> query)
+    {
+        var fila = await query
+            .Select(g => new { Gasto = g, TieneMovimientos = _ctx.MovimientosStock.Any(m => m.GastoId == g.Id) })
+            .FirstOrDefaultAsync();
+        if (fila is null) return null;
+        fila.Gasto.TieneMovimientosDeStock = fila.TieneMovimientos;
+        return fila.Gasto;
+    }
+
     public Task<Gasto?> ObtenerPorIdAsync(int id)
-        => ConIncludes().FirstOrDefaultAsync(g => g.Id == id);
+        => ConFlagDeMovimientosAsync(ConIncludes().Where(g => g.Id == id));
 
     public Task<Gasto?> ObtenerPorProveedorYFacturaAsync(int proveedorId, string numeroFactura, string? numeroOrden)
-        => ConIncludes().FirstOrDefaultAsync(g =>
+        => ConFlagDeMovimientosAsync(ConIncludes().Where(g =>
             g.Activo && g.ProveedorId == proveedorId && g.NumeroFactura == numeroFactura
-            && g.NumeroOrden == numeroOrden);
+            && g.NumeroOrden == numeroOrden));
 
     public async Task<IReadOnlyList<Gasto>> ListarAsync(GastoFiltro filtro)
     {
@@ -76,10 +93,19 @@ public class GastoRepository : IGastoRepository
         if (filtro.LineaPoaId is not null)
             query = query.Where(g => g.LineaPoaId == filtro.LineaPoaId);
 
-        return await query
+        // Mismo criterio que ConFlagDeMovimientosAsync (EXISTS correlacionado en el SELECT, sin
+        // N+1), pero para una lista: no se puede reutilizar el helper porque acá el resultado es
+        // IReadOnlyList<Gasto>, no un solo Gasto?.
+        var filas = await query
             .OrderByDescending(g => g.Fecha)
             .ThenByDescending(g => g.Id)
+            .Select(g => new { Gasto = g, TieneMovimientos = _ctx.MovimientosStock.Any(m => m.GastoId == g.Id) })
             .ToListAsync();
+
+        foreach (var fila in filas)
+            fila.Gasto.TieneMovimientosDeStock = fila.TieneMovimientos;
+
+        return filas.Select(f => f.Gasto).ToList();
     }
 
     public async Task<int> AgregarAsync(Gasto gasto)

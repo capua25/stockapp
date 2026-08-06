@@ -38,6 +38,17 @@ public class Gasto
     /// </summary>
     public Guid? IdImportacion { get; set; }
 
+    /// <summary>
+    /// True si el gasto tiene al menos un MovimientoStock asociado (ingreso por factura o
+    /// GastoService.AsociarMovimientosAsync). NO es una columna real: se completa solo desde
+    /// GastoRepository (proyectado en la misma query de ListarAsync/ObtenerPorIdAsync — EXISTS
+    /// correlacionado, sin N+1), por eso tiene setter público y AppDbContext.OnModelCreating la
+    /// ignora explícitamente. Cierra la deuda "el diálogo de anulación de Gastos no advierte que
+    /// descuenta stock" (GastosViewModel.AnularAsync): antes de este campo, el ViewModel no tenía
+    /// con qué distinguir el caso "hay stock de por medio" del caso "no hay".
+    /// </summary>
+    public bool TieneMovimientosDeStock { get; set; }
+
     public List<PagoGasto> Pagos { get; set; } = new();
 
     /// <summary>Suma de los pagos ACTIVOS (los anulados no cuentan).</summary>

@@ -1,7 +1,11 @@
+using System.Data.Common;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using StockApp.Application.Finanzas;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
+using StockApp.Infrastructure.Persistence;
 using StockApp.Infrastructure.Repositories;
 using StockApp.Infrastructure.Tests.Fixtures;
 using Xunit;
@@ -345,5 +349,122 @@ public class GastoRepositoryTests : PostgresRepositoryTestBase
 
         var desvinculados = await _repo.ObtenerMovimientosAsync(new[] { movimiento.Id });
         Assert.Null(Assert.Single(desvinculados).GastoId);
+    }
+
+    // ── Deuda: TieneMovimientosDeStock (advertencia de anulación con descuento de stock) ────
+
+    /// <summary>Siembra un MovimientoStock ya vinculado (GastoId) al gasto indicado.</summary>
+    private async Task SeedMovimientoVinculadoAsync(int gastoId)
+    {
+        var unidad = new UnidadMedida
+        {
+            Nombre = $"Unidad {Guid.NewGuid():N}", Abreviatura = Guid.NewGuid().ToString("N")[..8],
+        };
+        var usuario = new Usuario
+        {
+            NombreUsuario = $"user{Guid.NewGuid():N}"[..20], HashContrasena = "x", Rol = RolUsuario.Operador,
+        };
+        Context.AddRange(unidad, usuario);
+        await Context.SaveChangesAsync();
+        var producto = new Producto
+        {
+            Codigo = Guid.NewGuid().ToString("N")[..12], Nombre = "Prod test", UnidadMedidaId = unidad.Id,
+        };
+        Context.Add(producto);
+        await Context.SaveChangesAsync();
+        Context.Add(new MovimientoStock
+        {
+            ProductoId = producto.Id, UsuarioId = usuario.Id,
+            Tipo = TipoMovimiento.Entrada, Motivo = MotivoMovimiento.Compra,
+            Cantidad = 5m, PrecioUnitario = 100m, Fecha = DateTime.UtcNow, GastoId = gastoId,
+        });
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+    }
+
+    [Fact]
+    public async Task ListarAsync_MarcaTieneMovimientosDeStockSegunCorresponda()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var hoy = DateTime.UtcNow;
+        var conMovimientoId = await _repo.AgregarAsync(
+            NuevoGasto(proveedorId, fuenteId, rubroId, hoy, factura: "MOV-01"));
+        var sinMovimientoId = await _repo.AgregarAsync(
+            NuevoGasto(proveedorId, fuenteId, rubroId, hoy, factura: "MOV-02"));
+        Context.ChangeTracker.Clear();
+        await SeedMovimientoVinculadoAsync(conMovimientoId);
+
+        var resultado = await _repo.ListarAsync(new GastoFiltro(ProveedorId: proveedorId));
+
+        Assert.True(resultado.Single(g => g.Id == conMovimientoId).TieneMovimientosDeStock);
+        Assert.False(resultado.Single(g => g.Id == sinMovimientoId).TieneMovimientosDeStock);
+    }
+
+    [Fact]
+    public async Task ObtenerPorIdAsync_MarcaTieneMovimientosDeStockSegunCorresponda()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var hoy = DateTime.UtcNow;
+        var conMovimientoId = await _repo.AgregarAsync(
+            NuevoGasto(proveedorId, fuenteId, rubroId, hoy, factura: "MOV-03"));
+        var sinMovimientoId = await _repo.AgregarAsync(
+            NuevoGasto(proveedorId, fuenteId, rubroId, hoy, factura: "MOV-04"));
+        Context.ChangeTracker.Clear();
+        await SeedMovimientoVinculadoAsync(conMovimientoId);
+
+        var conMovimiento = await _repo.ObtenerPorIdAsync(conMovimientoId);
+        var sinMovimiento = await _repo.ObtenerPorIdAsync(sinMovimientoId);
+
+        Assert.True(conMovimiento!.TieneMovimientosDeStock);
+        Assert.False(sinMovimiento!.TieneMovimientosDeStock);
+    }
+
+    /// <summary>Cuenta los DbCommand ejecutados contra la base, para detectar N+1 en tests.</summary>
+    private sealed class ContadorDeComandosInterceptor : DbCommandInterceptor
+    {
+        public int Comandos { get; private set; }
+
+        public override InterceptionResult<DbDataReader> ReaderExecuting(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result)
+        {
+            Comandos++;
+            return base.ReaderExecuting(command, eventData, result);
+        }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command, CommandEventData eventData, InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            Comandos++;
+            return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
+        }
+    }
+
+    [Fact]
+    public async Task ListarAsync_ConVariosGastos_ResuelveTieneMovimientosDeStockEnUnaSolaQuery()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var hoy = DateTime.UtcNow;
+        var conMovimientoId = await _repo.AgregarAsync(
+            NuevoGasto(proveedorId, fuenteId, rubroId, hoy, factura: "MOV-05"));
+        await _repo.AgregarAsync(NuevoGasto(proveedorId, fuenteId, rubroId, hoy, factura: "MOV-06"));
+        await _repo.AgregarAsync(NuevoGasto(proveedorId, fuenteId, rubroId, hoy, factura: "MOV-07"));
+        Context.ChangeTracker.Clear();
+        await SeedMovimientoVinculadoAsync(conMovimientoId);
+
+        var contador = new ContadorDeComandosInterceptor();
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseNpgsql(Fixture.ConnectionString)
+            .AddInterceptors(contador)
+            .Options;
+        await using var ctxContado = new AppDbContext(options);
+        var repoContado = new GastoRepository(ctxContado);
+
+        var resultado = await repoContado.ListarAsync(new GastoFiltro(ProveedorId: proveedorId));
+
+        Assert.Equal(3, resultado.Count);
+        // Un solo roundtrip SQL para las 3 filas: el flag se resuelve con un EXISTS
+        // correlacionado dentro del mismo SELECT, no con una query por gasto (N+1).
+        Assert.Equal(1, contador.Comandos);
     }
 }

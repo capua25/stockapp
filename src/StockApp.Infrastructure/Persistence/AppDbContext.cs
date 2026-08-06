@@ -190,6 +190,9 @@ public class AppDbContext : DbContext
             e.HasOne(g => g.LineaPoa).WithMany()
                 .HasForeignKey(g => g.LineaPoaId).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(g => g.IdImportacion);
+            // No es una columna real: GastoRepository la proyecta en la misma query (EXISTS
+            // correlacionado contra MovimientosStock), nunca se persiste como escritura.
+            e.Ignore(g => g.TieneMovimientosDeStock);
         });
 
         modelBuilder.Entity<PagoGasto>(e =>
