@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using StockApp.Domain.Entities;
+using StockApp.Presentation.ViewModels;
 using StockApp.Presentation.ViewModels.Finanzas;
 using StockApp.Presentation.ViewModels.Movimientos;
 using StockApp.Presentation.ViewModels.Tareas;
@@ -134,6 +135,36 @@ public class ReflexionVistaViewModelTests
         AssertTodasExpuestas(axaml, miembros, exclusiones);
     }
 
+    /// <summary>
+    /// InicioViewModel (panel "Tareas que requieren atención", 2026-08-06): agrega miembros
+    /// nuevos, así que extiende esta red de seguridad (encargo explícito).
+    /// </summary>
+    [Fact]
+    public void InicioViewModel_TodaPropiedadYComando_TieneUnControlEnLaVista()
+    {
+        var axaml = LeerAxaml("StockApp.Presentation/Views/InicioView.axaml");
+        var miembros = PropiedadesPublicasDeclaradas(typeof(InicioViewModel));
+
+        var exclusiones = new HashSet<string>
+        {
+            // Consumidas solo indirectamente vía TituloVencidas/TituloProximasAVencer (esas SI
+            // están bindeadas como texto de encabezado de cada sección) -- no necesitan un
+            // binding propio en el axaml.
+            nameof(InicioViewModel.CantidadTareasVencidas),
+            nameof(InicioViewModel.CantidadTareasProximasAVencer),
+            // Gaps preexistentes (no introducidos por el panel de tareas, esta es la primera vez
+            // que InicioViewModel entra a esta red de seguridad): helpers consumidos solo
+            // indirectamente por otra propiedad que SI está bindeada -- mismo criterio que
+            // TareaFormViewModel.EsAdmin más abajo. NombreUsuario alimenta Saludo (bindeada);
+            // MostrarAvisoBackup/AvisoBackupEsDesconocido alimentan MostrarAvisoBackupProblema y
+            // MostrarAvisoBackupDesconocido (ambas bindeadas, cada una en su Border propio).
+            nameof(InicioViewModel.NombreUsuario),
+            nameof(InicioViewModel.MostrarAvisoBackup),
+            nameof(InicioViewModel.AvisoBackupEsDesconocido),
+        };
+        AssertTodasExpuestas(axaml, miembros, exclusiones);
+    }
+
     // ── Chequeo inverso (vista -> viewmodel): solo para las vistas donde es viable sin ambiguedad
     // (ver limitacion documentada arriba). ──
 
@@ -209,5 +240,25 @@ public class ReflexionVistaViewModelTests
             "Binding(s) en IngresoPorFacturaView.axaml sin propiedad correspondiente en ninguno de "
             + "los tipos de DataContext posibles (posible typo silencioso de Avalonia): "
             + string.Join(", ", invalidos));
+    }
+
+    /// <summary>
+    /// InicioView solo tiene DOS DataContext posibles (el VM raíz + TareaFila en el
+    /// DataTemplate del panel de tareas), igual que TareaListView -- viable sin ambigüedad.
+    /// </summary>
+    [Fact]
+    public void InicioView_NingunBindingApuntaAUnaPropiedadInexistente()
+    {
+        var axaml = LeerAxaml("StockApp.Presentation/Views/InicioView.axaml");
+        var candidatos = ExtraerPrimerSegmentoDeBindings(axaml);
+
+        var validos = PropiedadesPublicasDeclaradas(typeof(InicioViewModel))
+            .Concat(PropiedadesPublicasDeclaradas(typeof(TareaFila)))
+            .ToHashSet();
+
+        var invalidos = candidatos.Where(c => !validos.Contains(c)).ToList();
+        Assert.True(invalidos.Count == 0,
+            "Binding(s) en InicioView.axaml sin propiedad correspondiente ni en InicioViewModel "
+            + "ni en TareaFila (posible typo silencioso de Avalonia): " + string.Join(", ", invalidos));
     }
 }

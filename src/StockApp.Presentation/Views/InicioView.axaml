@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels"
+             xmlns:tareasvm="using:StockApp.Presentation.ViewModels.Tareas"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
@@ -46,6 +47,72 @@
                     <TextBlock Text="{Binding TextoAVencer7Dias}"
                                IsVisible="{Binding CantidadAVencer7Dias}" />
                     <Button Content="Ver calendario de pagos" Command="{Binding IrACalendarioPagosCommand}" />
+                </StackPanel>
+            </Border>
+
+            <!-- Panel "Tareas que requieren atención" (spec 2026-08-06): oculto por completo
+                 cuando no hay ninguna tarea vencida ni próxima a vencer (MostrarPanelTareas),
+                 nunca un cartel vacío. Cada fila es un Button entero (no solo un "Ver" aparte):
+                 toda la fila es clickeable y navega al detalle vía VerTareaCommand. -->
+            <Border Classes="card" IsVisible="{Binding MostrarPanelTareas}">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Tareas que requieren atención" Classes="seccion" />
+
+                    <StackPanel Spacing="8" IsVisible="{Binding MostrarSeccionTareasVencidas}">
+                        <TextBlock Text="{Binding TituloVencidas}"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource DangerBrush}" />
+                        <ItemsControl ItemsSource="{Binding TareasVencidas}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="tareasvm:TareaFila">
+                                    <Button Classes="ghost"
+                                            HorizontalAlignment="Stretch"
+                                            HorizontalContentAlignment="Stretch"
+                                            Command="{Binding $parent[UserControl].((vm:InicioViewModel)DataContext).VerTareaCommand}"
+                                            CommandParameter="{Binding}">
+                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                                            <TextBlock Grid.Column="0" Text="●"
+                                                       Foreground="{DynamicResource DangerBrush}"
+                                                       Margin="0,0,8,0" />
+                                            <TextBlock Grid.Column="1" Text="{Binding Titulo}" />
+                                            <TextBlock Grid.Column="2" Text="{Binding TextoDiasParaVencer}"
+                                                       Foreground="{DynamicResource DangerBrush}"
+                                                       Margin="8,0" />
+                                            <TextBlock Grid.Column="3" Text="→" Opacity="0.6" />
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
+                    <StackPanel Spacing="8" IsVisible="{Binding MostrarSeccionTareasProximasAVencer}">
+                        <TextBlock Text="{Binding TituloProximasAVencer}" FontWeight="SemiBold" />
+                        <ItemsControl ItemsSource="{Binding TareasProximasAVencer}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="tareasvm:TareaFila">
+                                    <Button Classes="ghost"
+                                            HorizontalAlignment="Stretch"
+                                            HorizontalContentAlignment="Stretch"
+                                            Command="{Binding $parent[UserControl].((vm:InicioViewModel)DataContext).VerTareaCommand}"
+                                            CommandParameter="{Binding}">
+                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                                            <TextBlock Grid.Column="0" Text="○" Margin="0,0,8,0" Opacity="0.6" />
+                                            <TextBlock Grid.Column="1" Text="{Binding Titulo}" />
+                                            <TextBlock Grid.Column="2" Text="{Binding TextoDiasParaVencer}"
+                                                       Margin="8,0" Opacity="0.7" />
+                                            <TextBlock Grid.Column="3" Text="→" Opacity="0.6" />
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
+                    <Button Classes="ghost"
+                            Content="Ver todas las tareas →"
+                            HorizontalAlignment="Right"
+                            Command="{Binding VerTodasLasTareasCommand}" />
                 </StackPanel>
             </Border>
 
