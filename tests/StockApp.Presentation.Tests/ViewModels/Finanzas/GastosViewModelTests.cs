@@ -236,6 +236,83 @@ public class GastosViewModelTests
         confirm.Verify(c => c.InformarAsync("Tiene pagos activos."), Times.Once);
     }
 
+    // -- Deuda A parte 2: el dialogo de anulacion tiene que advertir que va a descontar stock,
+    // SOLO cuando el gasto tiene movimientos asociados (Gasto.TieneMovimientosDeStock, ya
+    // propagado end-to-end por GastoDto/GastoWire). --
+
+    [Fact]
+    public async Task AnularCommand_ConMovimientosDeStock_AdviertePeroDescuentaStock()
+    {
+        var gasto = GastoDe(1, "Para anular");
+        gasto.TieneMovimientosDeStock = true;
+        var (vm, _, _, confirm) = Crear(new List<Gasto> { gasto });
+        await vm.CargarAsync();
+        vm.FilaSeleccionada = vm.Filas[0];
+
+        await vm.AnularCommand.ExecuteAsync(null);
+
+        confirm.Verify(c => c.PreguntarAsync(It.Is<string>(
+            s => s.Contains("stock"))), Times.Once);
+    }
+
+    [Fact]
+    public async Task AnularCommand_SinMovimientosDeStock_NoAdvierteDescuentoDeStock()
+    {
+        // Un test que miente es peor que no tener test: si no hay movimientos de stock,
+        // el dialogo NO debe insinuar que se va a descontar stock.
+        var gasto = GastoDe(1, "Para anular");
+        gasto.TieneMovimientosDeStock = false;
+        var (vm, _, _, confirm) = Crear(new List<Gasto> { gasto });
+        await vm.CargarAsync();
+        vm.FilaSeleccionada = vm.Filas[0];
+
+        await vm.AnularCommand.ExecuteAsync(null);
+
+        confirm.Verify(c => c.PreguntarAsync(It.Is<string>(
+            s => !s.Contains("stock"))), Times.Once);
+    }
+
+    [Fact]
+    public async Task AnularCommand_ConMovimientosYPagoAutomatico_ElReintentoAdvierteAmbasCosasEnUnSoloMensaje()
+    {
+        // No deben ser tres dialogos seguidos que el operador clickea sin leer: el mensaje
+        // FINAL (el que dispara la anulacion en cascada real) tiene que decir todo lo que va
+        // a pasar en un solo PreguntarAsync — pago automatico Y descuento de stock juntos.
+        var gasto = GastoDe(1, "Factura de luz");
+        gasto.TieneMovimientosDeStock = true;
+        var (vm, svc, _, confirm) = Crear(new List<Gasto> { gasto });
+        svc.Setup(s => s.AnularAsync(1, false))
+            .ThrowsAsync(new AnulacionRequierePagoAutomaticoConfirmadoException(1, 500m));
+        await vm.CargarAsync();
+        vm.FilaSeleccionada = vm.Filas[0];
+
+        await vm.AnularCommand.ExecuteAsync(null);
+
+        confirm.Verify(c => c.PreguntarAsync(It.Is<string>(
+            s => (s.Contains("pago automatico") || s.Contains("automático")) && s.Contains("stock"))),
+            Times.Once);
+        svc.Verify(s => s.AnularAsync(1, true), Times.Once);
+    }
+
+    [Fact]
+    public async Task AnularCommand_ConMovimientosYPagoAutomatico_AlRechazarElReintento_NoAnulaNada()
+    {
+        var gasto = GastoDe(1, "Factura de luz");
+        gasto.TieneMovimientosDeStock = true;
+        var (vm, svc, _, confirm) = Crear(new List<Gasto> { gasto });
+        svc.Setup(s => s.AnularAsync(1, false))
+            .ThrowsAsync(new AnulacionRequierePagoAutomaticoConfirmadoException(1, 500m));
+        confirm.Setup(c => c.PreguntarAsync(It.Is<string>(
+                s => (s.Contains("pago automatico") || s.Contains("automático")) && s.Contains("stock"))))
+            .ReturnsAsync(false);
+        await vm.CargarAsync();
+        vm.FilaSeleccionada = vm.Filas[0];
+
+        await vm.AnularCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.AnularAsync(It.IsAny<int>(), true), Times.Never);
+    }
+
     // -- Anulacion en cascada del pago automatico de contado (decision: no bloquear con un
     // 409 seco, ofrecer confirmar la baja del pago en vez de eso) --
 

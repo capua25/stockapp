@@ -261,9 +261,19 @@ public partial class GastosViewModel : ViewModelBase
     {
         if (FilaSeleccionada is null) return;
 
+        // Deuda A: la anulación de un gasto CON movimientos de stock asociados dispara un
+        // asiento inverso que descuenta stock (GastoService.AnularAsync, rama
+        // "ExistenMovimientosDeGastoAsync") — antes de Gasto.TieneMovimientosDeStock (propagado
+        // end-to-end Api → ApiClient → dominio) el ViewModel no tenía con qué distinguir el
+        // caso "hay stock de por medio" del caso "no hay", así que se optó por NO advertir
+        // nunca antes que mentir en la mitad de los casos. Ahora que el dato está disponible
+        // sin round-trip, se agrega la advertencia acá mismo, en la MISMA pregunta inicial —
+        // no como un tercer diálogo separado (ver ReintentarAnulacionConPagoAutomaticoAsync).
+        var tieneMovimientosDeStock = FilaSeleccionada.Gasto.TieneMovimientosDeStock;
         var confirmar = await _confirmacion.PreguntarAsync(
             $"¿Confirma anular el gasto \"{FilaSeleccionada.Detalle}\" " +
-            $"(factura {FilaSeleccionada.NumeroFactura} — {MonedaConverter.Formatear(FilaSeleccionada.MontoTotal)})?");
+            $"(factura {FilaSeleccionada.NumeroFactura} — {MonedaConverter.Formatear(FilaSeleccionada.MontoTotal)})?" +
+            (tieneMovimientosDeStock ? " Esta anulación va a descontar el stock asociado." : string.Empty));
         if (!confirmar) return;
 
         var id = FilaSeleccionada.Id;
@@ -279,7 +289,7 @@ public partial class GastosViewModel : ViewModelBase
             // Contado ⇒ pago automático). Un pago MANUAL activo bloquea SIEMPRE con un
             // ReglaDeNegocioException genérico (Gasto.PagosAutomaticosADarDeBajaEnAnulacion) —
             // ESE no es esta excepción, así que cae en el catch de abajo sin ofrecer diálogo.
-            await ReintentarAnulacionConPagoAutomaticoAsync(id, ex);
+            await ReintentarAnulacionConPagoAutomaticoAsync(id, ex, tieneMovimientosDeStock);
         }
         catch (Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException)
         {
@@ -288,23 +298,23 @@ public partial class GastosViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// NOTA (deuda NO cerrada): esta advertencia solo cubre el pago automático. La anulación de
-    /// un gasto CON movimientos de stock asociados dispara un asiento inverso que descuenta
-    /// stock (GastoService.AnularAsync, rama "ExistenMovimientosDeGastoAsync") — deuda conocida
-    /// del proyecto ("el diálogo de anulación de Gastos no advierte que ahora descuenta stock").
-    /// No se cierra acá: ni Gasto ni GastoDto/GastoWire exponen si el gasto tiene movimientos
-    /// asociados, y el 409 de este flujo tampoco lo informa — el ViewModel no tiene con qué
-    /// distinguir el caso "hay stock de por medio" del caso "no hay", así que mostrar la
-    /// advertencia siempre sería mentir en la mitad de los casos. Cerrarla requiere un campo
-    /// nuevo end-to-end (Api → ApiClient → dominio), fuera del alcance de este cambio.
+    /// Reintento tras el 409 de pago automático (spec: unificación Contado ⇒ pago automático).
+    /// Este diálogo es el que dispara la anulación en cascada REAL, así que tiene que decir
+    /// TODO lo que va a pasar en un solo mensaje: si <paramref name="tieneMovimientosDeStock"/>
+    /// es true, agrega el descuento de stock a la MISMA pregunta en vez de abrir un tercer
+    /// diálogo — el operador ya vio la advertencia de stock en la pregunta inicial de
+    /// <see cref="AnularAsync"/>, pero repetirla acá evita que la olvide justo antes de la
+    /// acción irreversible (y evita la combinatoria de 3 PreguntarAsync seguidos que se
+    /// clickean sin leer).
     /// </summary>
     private async Task ReintentarAnulacionConPagoAutomaticoAsync(
-        int id, AnulacionRequierePagoAutomaticoConfirmadoException ex)
+        int id, AnulacionRequierePagoAutomaticoConfirmadoException ex, bool tieneMovimientosDeStock)
     {
         var confirmar = await _confirmacion.PreguntarAsync(
             $"El gasto tiene un pago automático de contado activo por " +
             $"{MonedaConverter.Formatear(ex.MontoPagoAutomatico)}. Anular el gasto también va a " +
-            "eliminar ese pago. ¿Confirma la anulación?");
+            "eliminar ese pago" + (tieneMovimientosDeStock ? " y a descontar el stock asociado" : string.Empty) +
+            ". ¿Confirma la anulación?");
         if (!confirmar) return;
 
         try
