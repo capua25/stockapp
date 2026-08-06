@@ -6,5 +6,5 @@ public interface IIngresoPorFacturaService
     Task<IngresoPorFacturaResultadoDto> RegistrarAsync(IngresoPorFacturaDto dto);
 
     /// <summary>Anula el lote completo por asiento inverso. Ver Task 5.</summary>
-    Task AnularLoteAsync(int gastoId);
+    Task AnularLoteAsync(int gastoId, bool confirmarAnulacionDePagoAutomatico = false);
 }

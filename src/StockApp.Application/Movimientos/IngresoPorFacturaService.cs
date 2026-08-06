@@ -24,6 +24,7 @@ public class IngresoPorFacturaService : IIngresoPorFacturaService
     private readonly ICurrentSession                    _session;
     private readonly IAuthorizationService              _auth;
     private readonly IVersionReportes                   _version;
+    private readonly IAuditLogger                       _audit;
 
     public IngresoPorFacturaService(
         IMovimientoStockRepository movRepo,
@@ -36,7 +37,8 @@ public class IngresoPorFacturaService : IIngresoPorFacturaService
         IUnidadMedidaRepository unidades,
         ICurrentSession session,
         IAuthorizationService auth,
-        IVersionReportes version)
+        IVersionReportes version,
+        IAuditLogger audit)
     {
         _movRepo     = movRepo;
         _gastoRepo   = gastoRepo;
@@ -49,6 +51,7 @@ public class IngresoPorFacturaService : IIngresoPorFacturaService
         _session     = session;
         _auth        = auth;
         _version     = version;
+        _audit       = audit;
     }
 
     public async Task<IngresoPorFacturaResultadoDto> RegistrarAsync(IngresoPorFacturaDto dto)
@@ -175,6 +178,19 @@ public class IngresoPorFacturaService : IIngresoPorFacturaService
             FechaVencimiento       = dto.FechaVencimiento,
         };
 
+        // Contado ⇒ pago automático por el total en la fecha del gasto (spec §4) — misma regla
+        // y misma forma de pago que GastoService.AltaAsync (unificación: era un olvido de esta
+        // vía que dejaba las importaciones de contado en Pendiente/totalPagado=0).
+        if (gasto.CondicionPago == CondicionPago.Contado)
+            gasto.Pagos = new List<PagoGasto>
+            {
+                new()
+                {
+                    Fecha = gasto.Fecha, Monto = gasto.MontoTotal,
+                    Nota = "Pago contado (automático)", EsAutomatico = true,
+                },
+            };
+
         var sumaRenglones = dto.Renglones.Sum(r => r.Cantidad * r.PrecioUnitario);
         var detalle = $"Proveedor={dto.ProveedorId}; Factura={gasto.NumeroFactura ?? "(sin factura)"}; " +
                       $"Renglones={dto.Renglones.Count}; SumaRenglones={sumaRenglones}; MontoTotal={dto.MontoTotal}";
@@ -196,7 +212,7 @@ public class IngresoPorFacturaService : IIngresoPorFacturaService
             DiferenciaConTotal: dto.MontoTotal - sumaRenglones);
     }
 
-    public async Task AnularLoteAsync(int gastoId)
+    public async Task AnularLoteAsync(int gastoId, bool confirmarAnulacionDePagoAutomatico = false)
     {
         _auth.Verificar(_session.RolActual, Permisos.RegistrarMovimientos);
         _auth.Verificar(_session.RolActual, Permisos.RegistrarGastos);
@@ -206,9 +222,11 @@ public class IngresoPorFacturaService : IIngresoPorFacturaService
 
         if (!gasto.Activo)
             throw new ReglaDeNegocioException($"El gasto {gastoId} ya está anulado.");
-        if (gasto.Pagos.Any(p => p.Activo))
-            throw new ReglaDeNegocioException(
-                "No se puede anular un gasto con pagos activos: primero anulá los pagos.");
+
+        // Guard unificado con GastoService.AnularAsync (Gasto.PagosAutomaticosADarDeBajaEnAnulacion) —
+        // antes esta condición estaba duplicada acá con el mismo texto. Los pagos automáticos
+        // recién se anulan más abajo, DESPUÉS de que el asiento inverso haya tenido éxito.
+        var pagosAutomaticosADarDeBaja = gasto.PagosAutomaticosADarDeBajaEnAnulacion(confirmarAnulacionDePagoAutomatico);
 
         // Fix 4 (revisión final): el spec exige "tenga movimientos asociados" como cuarta
         // condición. Sin este chequeo, anular por esta ruta un gasto de servicios (sin
@@ -238,6 +256,19 @@ public class IngresoPorFacturaService : IIngresoPorFacturaService
                 $"{f.ProductoNombre}: stock {f.StockActual}, necesita {f.CantidadNecesaria}"));
             throw new ReglaDeNegocioException(
                 $"No se puede anular: stock insuficiente en {resultado.Faltantes.Count} producto(s). {detalleFaltantes}");
+        }
+
+        // Estado Ok: el asiento inverso ya sucedió — recién ACÁ se anula en cascada el pago
+        // automático de contado (nunca antes: si el estado hubiera sido StockInsuficiente,
+        // el pago automático tiene que seguir activo).
+        foreach (var pago in pagosAutomaticosADarDeBaja)
+        {
+            pago.Activo = false;
+            await _gastoRepo.ActualizarPagoAsync(pago);
+
+            await _audit.RegistrarAsync(
+                _session.UsuarioActual!.Id, AccionAuditada.AnulacionPagoGasto, "PagoGasto", pago.Id,
+                $"Gasto: {gastoId}; Monto anulado: {pago.Monto} (anulación automática en cascada)");
         }
 
         _version.Invalidar();

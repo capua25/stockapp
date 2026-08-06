@@ -19,7 +19,7 @@ public interface IGastoService
     Task<ResultadoGastoDto> ModificarAsync(Gasto gasto);
 
     /// <summary>Anulación (baja lógica). Exige que no haya pagos activos; desvincula sus movimientos.</summary>
-    Task AnularAsync(int id);
+    Task AnularAsync(int id, bool confirmarAnulacionDePagoAutomatico = false);
 
     /// <summary>Lanza EntidadNoEncontradaException si no existe.</summary>
     Task<Gasto> ObtenerPorIdAsync(int id);

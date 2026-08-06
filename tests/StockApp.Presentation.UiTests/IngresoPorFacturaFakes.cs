@@ -43,7 +43,8 @@ internal sealed class IngresoPorFacturaServiceFake : IIngresoPorFacturaService
             _proximoGastoId++, new List<int> { 1 }, suma, dto.MontoTotal - suma));
     }
 
-    public Task AnularLoteAsync(int gastoId) => throw new NotSupportedException("No usado en este banco de pruebas.");
+    public Task AnularLoteAsync(int gastoId, bool confirmarAnulacionDePagoAutomatico = false) =>
+        throw new NotSupportedException("No usado en este banco de pruebas.");
 }
 
 /// <summary>A diferencia de ProductoServiceFake (MovimientoRegistroFakes.cs, siempre vacío), este

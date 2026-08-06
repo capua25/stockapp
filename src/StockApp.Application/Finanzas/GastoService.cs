@@ -58,7 +58,11 @@ public class GastoService : IGastoService
         if (gasto.CondicionPago == CondicionPago.Contado)
             gasto.Pagos = new List<PagoGasto>
             {
-                new() { Fecha = gasto.Fecha, Monto = gasto.MontoTotal, Nota = "Pago contado (automático)" },
+                new()
+                {
+                    Fecha = gasto.Fecha, Monto = gasto.MontoTotal,
+                    Nota = "Pago contado (automático)", EsAutomatico = true,
+                },
             };
 
         if (movimientoIds is { Count: > 0 })
@@ -159,7 +163,7 @@ public class GastoService : IGastoService
 
     // ── Anulación ────────────────────────────────────────────────────────────
 
-    public async Task AnularAsync(int id)
+    public async Task AnularAsync(int id, bool confirmarAnulacionDePagoAutomatico = false)
     {
         _auth.Verificar(_session.RolActual, Permisos.RegistrarGastos);
 
@@ -168,9 +172,14 @@ public class GastoService : IGastoService
 
         if (!gasto.Activo)
             throw new ReglaDeNegocioException($"El gasto {id} ya está anulado.");
-        if (gasto.Pagos.Any(p => p.Activo))
-            throw new ReglaDeNegocioException(
-                "No se puede anular un gasto con pagos activos: primero anulá los pagos.");
+
+        // Guard unificado (Gasto.PagosAutomaticosADarDeBajaEnAnulacion): bloquea siempre si
+        // hay algún pago MANUAL activo; si el único activo es el automático de contado, exige
+        // confirmarAnulacionDePagoAutomatico y devuelve los pagos a dar de baja en cascada —
+        // recién se anulan más abajo, DESPUÉS de que la anulación del gasto en sí haya
+        // efectivamente sucedido (nunca antes: si el asiento inverso falla por stock
+        // insuficiente, el pago automático tiene que seguir activo).
+        var pagosAutomaticosADarDeBaja = gasto.PagosAutomaticosADarDeBajaEnAnulacion(confirmarAnulacionDePagoAutomatico);
 
         if (await _movRepo.ExistenMovimientosDeGastoAsync(id))
         {
@@ -205,9 +214,12 @@ public class GastoService : IGastoService
             // caché de reportes de Valorización queda stale si no se invalida (Fix 3, revisión
             // final: IngresoPorFacturaService.AnularLoteAsync ya invalida en el mismo camino
             // atómico; a este service le faltaba porque hasta ahora nunca tocaba stock).
+            await AnularPagosAutomaticosAsync(id, pagosAutomaticosADarDeBaja);
             _version.Invalidar();
             return;
         }
+
+        await AnularPagosAutomaticosAsync(id, pagosAutomaticosADarDeBaja);
 
         gasto.Activo = false;
         await _repo.ActualizarAsync(gasto);
@@ -220,6 +232,26 @@ public class GastoService : IGastoService
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id, AccionAuditada.AnulacionGasto, "Gasto", id,
             $"Anulación de '{gasto.Detalle}' (factura {gasto.NumeroFactura ?? "s/n"}, monto {gasto.MontoTotal})");
+    }
+
+    /// <summary>
+    /// Da de baja en cascada los pagos automáticos de contado devueltos por
+    /// Gasto.PagosAutomaticosADarDeBajaEnAnulacion (0 o 1 en la práctica — Contado crea uno
+    /// solo). Misma AccionAuditada que AnularPagoAsync (anulación manual de un pago): es la
+    /// misma operación de dominio, solo que la dispara la anulación del gasto en cascada en
+    /// vez de un click directo del operador sobre el pago.
+    /// </summary>
+    private async Task AnularPagosAutomaticosAsync(int gastoId, IReadOnlyList<PagoGasto> pagosAutomaticos)
+    {
+        foreach (var pago in pagosAutomaticos)
+        {
+            pago.Activo = false;
+            await _repo.ActualizarPagoAsync(pago);
+
+            await _audit.RegistrarAsync(
+                _session.UsuarioActual!.Id, AccionAuditada.AnulacionPagoGasto, "PagoGasto", pago.Id,
+                $"Gasto: {gastoId}; Monto anulado: {pago.Monto} (anulación automática en cascada)");
+        }
     }
 
     // ── Pagos ────────────────────────────────────────────────────────────────

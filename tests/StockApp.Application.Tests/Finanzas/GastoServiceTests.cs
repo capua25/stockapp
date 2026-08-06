@@ -131,6 +131,7 @@ public class GastoServiceTests
         var pago = Assert.Single(persistido!.Pagos);
         Assert.Equal(1000m, pago.Monto);
         Assert.Equal(Hoy, pago.Fecha);
+        Assert.True(pago.EsAutomatico);
         m.Audit.Verify(a => a.RegistrarAsync(
             It.IsAny<int>(), AccionAuditada.AltaGasto, "Gasto", 7, It.IsAny<string>()), Times.Once);
     }
@@ -560,6 +561,95 @@ public class GastoServiceTests
         m.Audit.Verify(a => a.RegistrarAsync(
             It.IsAny<int>(), It.IsAny<AccionAuditada>(), It.IsAny<string>(),
             It.IsAny<int>(), It.IsAny<string>()), Times.Never);
+    }
+
+    // ── Anulación en cascada del pago automático de contado ──────────────────
+
+    [Fact]
+    public async Task AnularAsync_ConMovimientosYPagoAutomaticoSinConfirmar_LanzaExcepcionEstructurada()
+    {
+        var m = Crear();
+        var gasto = GastoValido(CondicionPago.Contado);
+        gasto.Id = 1;
+        gasto.Pagos.Add(new PagoGasto { Id = 9, GastoId = 1, Fecha = Hoy, Monto = 1000m, Activo = true, EsAutomatico = true });
+        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(gasto);
+        m.MovRepo.Setup(r => r.ExistenMovimientosDeGastoAsync(1)).ReturnsAsync(true);
+
+        var ex = await Assert.ThrowsAsync<AnulacionRequierePagoAutomaticoConfirmadoException>(
+            () => m.Svc.AnularAsync(1));
+
+        Assert.Equal(1, ex.GastoId);
+        Assert.Equal(1000m, ex.MontoPagoAutomatico);
+        m.MovRepo.Verify(r => r.AnularIngresoPorFacturaAtomicoAsync(
+            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>()), Times.Never);
+        m.Repo.Verify(r => r.ActualizarPagoAsync(It.IsAny<PagoGasto>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AnularAsync_ConMovimientosYPagoAutomaticoConfirmado_AnulaPagoRevierteStockUnaSolaVezYAudita()
+    {
+        // Cubre los tres efectos de la decisión del usuario: (1) el pago automático queda
+        // anulado, (2) el stock se revierte por el asiento inverso — EXACTAMENTE una vez (ya
+        // hubo un bug real de doble anulación en este proyecto), (3) el gasto queda anulado
+        // (lo marca el propio AnularIngresoPorFacturaAtomicoAsync, mismo criterio que
+        // AnularAsync_ConMovimientosAsociados_DelegaEnAsientoInversoYNoDesvincula).
+        var m = Crear();
+        var gasto = GastoValido(CondicionPago.Contado);
+        gasto.Id = 1;
+        var pagoAutomatico = new PagoGasto { Id = 9, GastoId = 1, Fecha = Hoy, Monto = 1000m, Activo = true, EsAutomatico = true };
+        gasto.Pagos.Add(pagoAutomatico);
+        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(gasto);
+        m.MovRepo.Setup(r => r.ExistenMovimientosDeGastoAsync(1)).ReturnsAsync(true);
+        m.MovRepo.Setup(r => r.AnularIngresoPorFacturaAtomicoAsync(1, It.IsAny<int>(), It.IsAny<string>()))
+            .ReturnsAsync(new ResultadoAnulacionIngreso(ResultadoAnulacionIngresoEstado.Ok, Array.Empty<ItemFaltanteStock>()));
+
+        await m.Svc.AnularAsync(1, confirmarAnulacionDePagoAutomatico: true);
+
+        m.Repo.Verify(r => r.ActualizarPagoAsync(
+            It.Is<PagoGasto>(p => p.Id == 9 && !p.Activo)), Times.Once);
+        m.MovRepo.Verify(r => r.AnularIngresoPorFacturaAtomicoAsync(1, It.IsAny<int>(), It.IsAny<string>()), Times.Once);
+        m.Audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), AccionAuditada.AnulacionPagoGasto, "PagoGasto", 9, It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task AnularAsync_ConPagoManualActivoConfirmando_SigueLanzandoReglaDeNegocioSinTocarNada()
+    {
+        // Protege plata real: la confirmación de "anular el pago automático" no destraba la
+        // anulación si lo que hay es un pago MANUAL activo (plata que alguien movió de verdad).
+        var m = Crear();
+        var gasto = GastoValido();
+        gasto.Id = 1;
+        gasto.Pagos.Add(new PagoGasto { Id = 5, GastoId = 1, Fecha = Hoy, Monto = 200m, Activo = true, EsAutomatico = false });
+        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(gasto);
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => m.Svc.AnularAsync(1, confirmarAnulacionDePagoAutomatico: true));
+
+        Assert.IsType<ReglaDeNegocioException>(ex);
+        m.Repo.Verify(r => r.ActualizarPagoAsync(It.IsAny<PagoGasto>()), Times.Never);
+        m.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Gasto>()), Times.Never);
+        m.MovRepo.Verify(r => r.AnularIngresoPorFacturaAtomicoAsync(
+            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AnularAsync_ConPagoAutomaticoYManualActivosConfirmando_LanzaReglaDeNegocioSinAnularNada()
+    {
+        var m = Crear();
+        var gasto = GastoValido(CondicionPago.Contado);
+        gasto.Id = 1;
+        gasto.Pagos.Add(new PagoGasto { Id = 9, GastoId = 1, Fecha = Hoy, Monto = 1000m, Activo = true, EsAutomatico = true });
+        gasto.Pagos.Add(new PagoGasto { Id = 10, GastoId = 1, Fecha = Hoy, Monto = 200m, Activo = true, EsAutomatico = false });
+        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(gasto);
+        m.MovRepo.Setup(r => r.ExistenMovimientosDeGastoAsync(1)).ReturnsAsync(true);
+
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => m.Svc.AnularAsync(1, confirmarAnulacionDePagoAutomatico: true));
+
+        m.Repo.Verify(r => r.ActualizarPagoAsync(It.IsAny<PagoGasto>()), Times.Never);
+        m.MovRepo.Verify(r => r.AnularIngresoPorFacturaAtomicoAsync(
+            It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>()), Times.Never);
     }
 
     // ── Asociación de movimientos a factura existente ────────────────────────
