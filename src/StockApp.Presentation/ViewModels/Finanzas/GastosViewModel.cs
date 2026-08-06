@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using StockApp.ApiClient;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Finanzas;
@@ -265,14 +266,77 @@ public partial class GastosViewModel : ViewModelBase
             $"(factura {FilaSeleccionada.NumeroFactura} — {MonedaConverter.Formatear(FilaSeleccionada.MontoTotal)})?");
         if (!confirmar) return;
 
+        var id = FilaSeleccionada.Id;
         try
         {
-            await _service.AnularAsync(FilaSeleccionada.Id);
+            await _service.AnularAsync(id);
             await FiltrarAsync();
+        }
+        catch (AnulacionRequierePagoAutomaticoConfirmadoException ex)
+        {
+            // Decisión del usuario: en vez de dejar el 409 seco, se le ofrece al operador
+            // confirmar la baja en cascada del pago automático de contado (spec: unificación
+            // Contado ⇒ pago automático). Un pago MANUAL activo bloquea SIEMPRE con un
+            // ReglaDeNegocioException genérico (Gasto.PagosAutomaticosADarDeBajaEnAnulacion) —
+            // ESE no es esta excepción, así que cae en el catch de abajo sin ofrecer diálogo.
+            await ReintentarAnulacionConPagoAutomaticoAsync(id, ex);
         }
         catch (Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException)
         {
             await _confirmacion.InformarAsync(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// NOTA (deuda NO cerrada): esta advertencia solo cubre el pago automático. La anulación de
+    /// un gasto CON movimientos de stock asociados dispara un asiento inverso que descuenta
+    /// stock (GastoService.AnularAsync, rama "ExistenMovimientosDeGastoAsync") — deuda conocida
+    /// del proyecto ("el diálogo de anulación de Gastos no advierte que ahora descuenta stock").
+    /// No se cierra acá: ni Gasto ni GastoDto/GastoWire exponen si el gasto tiene movimientos
+    /// asociados, y el 409 de este flujo tampoco lo informa — el ViewModel no tiene con qué
+    /// distinguir el caso "hay stock de por medio" del caso "no hay", así que mostrar la
+    /// advertencia siempre sería mentir en la mitad de los casos. Cerrarla requiere un campo
+    /// nuevo end-to-end (Api → ApiClient → dominio), fuera del alcance de este cambio.
+    /// </summary>
+    private async Task ReintentarAnulacionConPagoAutomaticoAsync(
+        int id, AnulacionRequierePagoAutomaticoConfirmadoException ex)
+    {
+        var confirmar = await _confirmacion.PreguntarAsync(
+            $"El gasto tiene un pago automático de contado activo por " +
+            $"{MonedaConverter.Formatear(ex.MontoPagoAutomatico)}. Anular el gasto también va a " +
+            "eliminar ese pago. ¿Confirma la anulación?");
+        if (!confirmar) return;
+
+        try
+        {
+            await _service.AnularAsync(id, confirmarAnulacionDePagoAutomatico: true);
+            await FiltrarAsync();
+        }
+        catch (Exception ex2) when (ex2 is ReglaDeNegocioException or EntidadNoEncontradaException)
+        {
+            await _confirmacion.InformarAsync(ex2.Message);
+        }
+        catch (ServidorNoDisponibleException ex2)
+        {
+            // Mismo motivo que Fix 5 de IngresoPorFacturaViewModel.GuardarInternoAsync: este
+            // reintento corre dentro de AnularCommand (AsyncRelayCommand) — una excepción no
+            // capturada acá NO llega al handler global de App.axaml.cs (que solo cubre
+            // Dispatcher.UIThread.UnhandledException), termina en
+            // TaskScheduler.UnobservedTaskException → crash.log, sin avisar al operador. Sin
+            // este catch, FiltrarAsync() nunca corre pero la UI queda muda — exactamente la
+            // falla silenciosa de sesión expirada que ya hubo en este proyecto.
+            await _confirmacion.InformarAsync(ex2.Message);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            await _confirmacion.InformarAsync(
+                "La sesión expiró o no tenés permiso para esta operación. " +
+                "Volvé a iniciar sesión e intentá de nuevo.");
+        }
+        catch (Exception)
+        {
+            await _confirmacion.InformarAsync(
+                "Ocurrió un error inesperado al anular el gasto. Si el problema persiste, contactá a soporte.");
         }
     }
 

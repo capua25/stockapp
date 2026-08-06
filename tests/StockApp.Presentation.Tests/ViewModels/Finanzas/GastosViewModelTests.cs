@@ -4,10 +4,12 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Collections;
 using Moq;
+using StockApp.ApiClient;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Finanzas;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Finanzas;
@@ -232,6 +234,100 @@ public class GastosViewModelTests
         await vm.AnularCommand.ExecuteAsync(null);
 
         confirm.Verify(c => c.InformarAsync("Tiene pagos activos."), Times.Once);
+    }
+
+    // -- Anulacion en cascada del pago automatico de contado (decision: no bloquear con un
+    // 409 seco, ofrecer confirmar la baja del pago en vez de eso) --
+
+    [Fact]
+    public async Task AnularCommand_PagoAutomatico_OfreceConfirmacionConMontoFormateado()
+    {
+        var (vm, svc, _, confirm) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
+        svc.Setup(s => s.AnularAsync(1, false))
+            .ThrowsAsync(new AnulacionRequierePagoAutomaticoConfirmadoException(1, 850.5000m));
+        await vm.CargarAsync();
+        vm.FilaSeleccionada = vm.Filas[0];
+
+        await vm.AnularCommand.ExecuteAsync(null);
+
+        confirm.Verify(c => c.PreguntarAsync(It.Is<string>(
+            s => s.Contains("$ 850,50") && !s.Contains("850.5000"))), Times.Once);
+    }
+
+    [Fact]
+    public async Task AnularCommand_PagoAutomatico_AlAceptar_ReintentaConfirmandoYAnula()
+    {
+        var (vm, svc, _, confirm) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
+        svc.Setup(s => s.AnularAsync(1, false))
+            .ThrowsAsync(new AnulacionRequierePagoAutomaticoConfirmadoException(1, 500m));
+        confirm.Setup(c => c.PreguntarAsync(It.Is<string>(s => s.Contains("pago automatico") || s.Contains("automático"))))
+            .ReturnsAsync(true);
+        await vm.CargarAsync();
+        vm.FilaSeleccionada = vm.Filas[0];
+
+        await vm.AnularCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.AnularAsync(1, true), Times.Once);
+        svc.Verify(s => s.ListarAsync(It.IsAny<GastoFiltro>()), Times.AtLeast(2));
+    }
+
+    [Fact]
+    public async Task AnularCommand_PagoAutomatico_AlRechazar_NoReintentaNiAnulaNada()
+    {
+        var (vm, svc, _, confirm) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
+        svc.Setup(s => s.AnularAsync(1, false))
+            .ThrowsAsync(new AnulacionRequierePagoAutomaticoConfirmadoException(1, 500m));
+        confirm.Setup(c => c.PreguntarAsync(It.Is<string>(s => s.Contains("pago automatico") || s.Contains("automático"))))
+            .ReturnsAsync(false);
+        await vm.CargarAsync();
+        vm.FilaSeleccionada = vm.Filas[0];
+        var listarLlamadasPrevias = svc.Invocations.Count(i => i.Method.Name == nameof(IGastoService.ListarAsync));
+
+        await vm.AnularCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.AnularAsync(1, true), Times.Never);
+        svc.Verify(s => s.AnularAsync(It.IsAny<int>(), It.IsAny<bool>()), Times.Once);
+        var listarLlamadasPosteriores = svc.Invocations.Count(i => i.Method.Name == nameof(IGastoService.ListarAsync));
+        Assert.Equal(listarLlamadasPrevias, listarLlamadasPosteriores);
+    }
+
+    [Fact]
+    public async Task AnularCommand_PagoManual_NoOfreceConfirmacion_MuestraElErrorTalCual()
+    {
+        var (vm, svc, _, confirm) = Crear(new List<Gasto> { GastoDe(1, "Con pago manual", pagado: true) });
+        svc.Setup(s => s.AnularAsync(1, false))
+            .ThrowsAsync(new ReglaDeNegocioException(
+                "No se puede anular un gasto con pagos activos: primero anula los pagos."));
+        await vm.CargarAsync();
+        vm.FilaSeleccionada = vm.Filas[0];
+
+        await vm.AnularCommand.ExecuteAsync(null);
+
+        confirm.Verify(c => c.PreguntarAsync(It.Is<string>(s => s.Contains("pago automatico") || s.Contains("automático"))), Times.Never);
+        confirm.Verify(c => c.InformarAsync(
+            "No se puede anular un gasto con pagos activos: primero anula los pagos."), Times.Once);
+        svc.Verify(s => s.AnularAsync(It.IsAny<int>(), true), Times.Never);
+    }
+
+    [Fact]
+    public async Task AnularCommand_PagoAutomatico_FalloDeRedEnElReintento_NoQuedaDiciendoQueSeAnulo()
+    {
+        var (vm, svc, _, confirm) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
+        svc.Setup(s => s.AnularAsync(1, false))
+            .ThrowsAsync(new AnulacionRequierePagoAutomaticoConfirmadoException(1, 500m));
+        svc.Setup(s => s.AnularAsync(1, true))
+            .ThrowsAsync(new ServidorNoDisponibleException());
+        confirm.Setup(c => c.PreguntarAsync(It.Is<string>(s => s.Contains("pago automatico") || s.Contains("automático"))))
+            .ReturnsAsync(true);
+        await vm.CargarAsync();
+        vm.FilaSeleccionada = vm.Filas[0];
+        var listarLlamadasPrevias = svc.Invocations.Count(i => i.Method.Name == nameof(IGastoService.ListarAsync));
+
+        await vm.AnularCommand.ExecuteAsync(null);
+
+        var listarLlamadasPosteriores = svc.Invocations.Count(i => i.Method.Name == nameof(IGastoService.ListarAsync));
+        Assert.Equal(listarLlamadasPrevias, listarLlamadasPosteriores);
+        confirm.Verify(c => c.InformarAsync(ServidorNoDisponibleException.MensajePorDefecto), Times.Once);
     }
 
     [Fact]
