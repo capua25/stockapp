@@ -12,7 +12,8 @@ public class GastoApiClientTests
 {
     private static readonly DateTime Hoy = new(2026, 7, 16, 0, 0, 0, DateTimeKind.Utc);
 
-    private static object GastoJson(int id = 1, string estado = "Pendiente", bool activo = true) => new
+    private static object GastoJson(
+        int id = 1, string estado = "Pendiente", bool activo = true, bool tieneMovimientosDeStock = false) => new
     {
         id,
         proveedorId = 3,
@@ -34,6 +35,7 @@ public class GastoApiClientTests
         activo,
         totalPagado = 0m,
         estado,
+        tieneMovimientosDeStock,
         pagos = new[]
         {
             new { id = 9, fecha = Hoy, monto = 0m, nota = (string?)null, activo = true },
@@ -83,6 +85,26 @@ public class GastoApiClientTests
         await client.ListarAsync(new GastoFiltro());
 
         Assert.Equal(string.Empty, fake.UltimaRequest!.RequestUri!.Query);
+    }
+
+    [Fact]
+    public async Task Listar_MapeaTieneMovimientosDeStockDesdeElWire()
+    {
+        // Deuda A parte 2: el dialogo de anulacion necesita saber, ANTES de anular, si el
+        // gasto tiene movimientos de stock asociados. Este test verifica el shape real de la
+        // respuesta HTTP (JSON literal, no un mock de IGastoService que se completaria a si
+        // mismo) contra el mapeo real GastoWire -> Gasto.
+        var fake = new FakeHttpHandler(_ => TestHttp.Json(new[]
+        {
+            GastoJson(id: 1, tieneMovimientosDeStock: true),
+            GastoJson(id: 2, tieneMovimientosDeStock: false),
+        }));
+        var client = new GastoApiClient(TestHttp.CrearCliente(fake));
+
+        var gastos = await client.ListarAsync(new GastoFiltro());
+
+        Assert.True(gastos.Single(g => g.Id == 1).TieneMovimientosDeStock);
+        Assert.False(gastos.Single(g => g.Id == 2).TieneMovimientosDeStock);
     }
 
     [Fact]

@@ -20,6 +20,7 @@ internal sealed record GastoWire(
     int? LineaPoaId, string? LineaPoaNombre,
     CondicionPago CondicionPago, DateTime? FechaVencimiento,
     bool Activo, decimal TotalPagado, string Estado,
+    bool TieneMovimientosDeStock,
     List<PagoGastoWire> Pagos);
 
 internal sealed record GastoBody(
@@ -179,6 +180,7 @@ public sealed class GastoApiClient : IGastoService
         CondicionPago = dto.CondicionPago,
         FechaVencimiento = dto.FechaVencimiento,
         Activo = dto.Activo,
+        TieneMovimientosDeStock = dto.TieneMovimientosDeStock,
         Pagos = dto.Pagos.Select(p => new PagoGasto
         {
             Id = p.Id, GastoId = dto.Id, Fecha = p.Fecha, Monto = p.Monto, Nota = p.Nota, Activo = p.Activo,

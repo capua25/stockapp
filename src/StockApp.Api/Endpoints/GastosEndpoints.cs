@@ -21,6 +21,7 @@ public record GastoDto(
     bool Activo,
     decimal TotalPagado,
     string Estado,                       // calculado por el servidor (DateTime.UtcNow)
+    bool TieneMovimientosDeStock,
     List<PagoGastoDto> Pagos);
 
 public record CrearGastoRequest(
@@ -162,6 +163,7 @@ public static class GastosEndpoints
         g.Activo,
         g.TotalPagado,
         g.CalcularEstado(DateTime.UtcNow).ToString(),
+        g.TieneMovimientosDeStock,
         g.Pagos.OrderBy(p => p.Fecha).ThenBy(p => p.Id)
             .Select(p => new PagoGastoDto(p.Id, p.Fecha, p.Monto, p.Nota, p.Activo))
             .ToList());

@@ -514,6 +514,52 @@ public class GastosEndpointTests : ApiTestBase
     }
 
     [Fact]
+    public async Task GetGasto_ExponeTieneMovimientosDeStockSegunCorresponda()
+    {
+        // Deuda A parte 2: el ViewModel necesita, ANTES de anular, saber si el gasto tiene
+        // movimientos de stock asociados (para advertir el descuento de stock en el dialogo).
+        // Test end-to-end contra Postgres real: no un mock que se completaria a si mismo, sino
+        // el shape real de la respuesta HTTP tras un INSERT real en MovimientosStock.
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+        var conMovimiento = await (await client.PostAsJsonAsync("/finanzas/gastos",
+                RequestValido(proveedorId, fuenteId, rubroId, CondicionPago.Credito, factura: "STOCK-DTO-01")))
+            .Content.ReadFromJsonAsync<GastoGuardadoResponse>();
+        var sinMovimiento = await (await client.PostAsJsonAsync("/finanzas/gastos",
+                RequestValido(proveedorId, fuenteId, rubroId, CondicionPago.Credito, factura: "STOCK-DTO-02")))
+            .Content.ReadFromJsonAsync<GastoGuardadoResponse>();
+
+        await using (var ctx = Factory.CrearContexto())
+        {
+            var producto = new Producto
+            {
+                Codigo = $"STK-DTO-{Guid.NewGuid():N}", Nombre = "Producto con movimiento",
+                UnidadMedida = new UnidadMedida { Nombre = "Unidad", Abreviatura = "u" },
+                PrecioCosto = 10m, PrecioVenta = 20m, StockActual = 20m,
+                Activo = true, FechaAlta = DateTime.UtcNow,
+            };
+            ctx.Add(producto);
+            await ctx.SaveChangesAsync();
+
+            ctx.MovimientosStock.Add(new MovimientoStock
+            {
+                ProductoId = producto.Id, UsuarioId = 1, Tipo = TipoMovimiento.Entrada,
+                Motivo = MotivoMovimiento.Compra, Cantidad = 5m, PrecioUnitario = 10m,
+                Fecha = DateTime.UtcNow, GastoId = conMovimiento!.Id,
+            });
+            await ctx.SaveChangesAsync();
+        }
+
+        var dtoConMovimiento = await (await client.GetAsync($"/finanzas/gastos/{conMovimiento!.Id}"))
+            .Content.ReadFromJsonAsync<GastoDto>();
+        var dtoSinMovimiento = await (await client.GetAsync($"/finanzas/gastos/{sinMovimiento!.Id}"))
+            .Content.ReadFromJsonAsync<GastoDto>();
+
+        Assert.True(dtoConMovimiento!.TieneMovimientosDeStock);
+        Assert.False(dtoSinMovimiento!.TieneMovimientosDeStock);
+    }
+
+    [Fact]
     public async Task PostMovimientos_AsociaEntradasAlGasto()
     {
         var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
