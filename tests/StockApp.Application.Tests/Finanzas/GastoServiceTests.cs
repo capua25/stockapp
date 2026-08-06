@@ -652,6 +652,34 @@ public class GastoServiceTests
             It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>()), Times.Never);
     }
 
+    [Fact]
+    public async Task AnularAsync_ConPagoAutomaticoDeImportacionSinEsAutomatico_OfreceConfirmacionEnCascada()
+    {
+        // Bug real (tercer origen olvidado): ImportacionRepository.ConfirmarAsync crea el pago
+        // de contado automático de una importación SIN setear EsAutomatico=true, a diferencia de
+        // GastoService.AltaAsync e IngresoPorFacturaService.RegistrarAsync. El guard unificado
+        // (Gasto.PagosAutomaticosADarDeBajaEnAnulacion) trataba ese pago como MANUAL y bloqueaba
+        // la anulación individual con "primero anulá los pagos" — callejón sin salida, porque el
+        // pago no lo tipeó ningún operador y nunca se llega a ofrecer la confirmación en cascada.
+        var m = Crear();
+        var gasto = GastoValido(CondicionPago.Contado);
+        gasto.Id = 1;
+        gasto.Pagos.Add(new PagoGasto
+        {
+            Id = 9, GastoId = 1, Fecha = Hoy, Monto = 1000m, Activo = true,
+            Nota = "Pago contado (importación)", IdImportacion = Guid.NewGuid(),
+            // EsAutomatico deliberadamente en su default (false): así lo crea hoy
+            // ImportacionRepository.ConfirmarAsync — ese es el bug que este test reproduce.
+        });
+        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(gasto);
+
+        var ex = await Assert.ThrowsAsync<AnulacionRequierePagoAutomaticoConfirmadoException>(
+            () => m.Svc.AnularAsync(1));
+
+        Assert.Equal(1, ex.GastoId);
+        Assert.Equal(1000m, ex.MontoPagoAutomatico);
+    }
+
     // ── Asociación de movimientos a factura existente ────────────────────────
 
     [Fact]
