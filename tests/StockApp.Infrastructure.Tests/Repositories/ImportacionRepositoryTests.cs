@@ -478,6 +478,10 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         Assert.Equal(resultado.IdImportacion, gasto.IdImportacion);
         Assert.Single(gasto.Pagos);
         Assert.Equal(500m, gasto.Pagos[0].Monto);
+        // Bug real: este pago se armaba sin EsAutomatico=true (tercer origen olvidado por la
+        // migración 20260806022959_AgregaPagoGastoEsAutomatico) — el guard de anulación en
+        // cascada lo trataba como pago MANUAL y bloqueaba la anulación individual del gasto.
+        Assert.True(gasto.Pagos[0].EsAutomatico);
         var ingreso = verificacion.IngresosCaja.Single(i => i.Concepto == "Saldo inicial");
         Assert.Equal(resultado.IdImportacion, ingreso.IdImportacion);
     }
