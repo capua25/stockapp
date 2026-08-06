@@ -33,7 +33,7 @@ public class PagoGasto
     /// wording futuro rompería la detección en silencio. Default false: todo pago existente
     /// antes de esta propiedad se trata como manual salvo que la migración lo corrija.
     /// </summary>
-    public bool EsAutomatico { get; set; }
+    public bool EsAutomatico { get; private set; }
 
     /// <summary>
     /// Guid del lote de /confirmar que creó este pago (F5c Task 8, re-review CRITICAL/IMPORTANT

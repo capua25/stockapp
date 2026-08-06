@@ -415,7 +415,10 @@ public class IngresoPorFacturaServiceTests
     {
         var (svc, movRepo, gastoRepo, _, _, _, _, _, _, _, _, audit) = Crear();
         var gasto = new Gasto { Id = 11, Activo = true };
-        gasto.Pagos.Add(new PagoGasto { Id = 20, GastoId = 11, Monto = 500m, Activo = true, EsAutomatico = true });
+        var pago20 = PagoGasto.Automatico(DateTime.UtcNow, 500m, "Pago contado (automático)");
+        pago20.Id = 20;
+        pago20.GastoId = 11;
+        gasto.Pagos.Add(pago20);
         gastoRepo.Setup(g => g.ObtenerPorIdAsync(11)).ReturnsAsync(gasto);
         movRepo.Setup(m => m.ExistenMovimientosDeGastoAsync(11)).ReturnsAsync(true);
 
@@ -437,7 +440,10 @@ public class IngresoPorFacturaServiceTests
     {
         var (svc, movRepo, gastoRepo, _, _, _, _, _, _, _, _, audit) = Crear();
         var gasto = new Gasto { Id = 12, Activo = true };
-        gasto.Pagos.Add(new PagoGasto { Id = 21, GastoId = 12, Monto = 500m, Activo = true, EsAutomatico = true });
+        var pago21 = PagoGasto.Automatico(DateTime.UtcNow, 500m, "Pago contado (automático)");
+        pago21.Id = 21;
+        pago21.GastoId = 12;
+        gasto.Pagos.Add(pago21);
         gastoRepo.Setup(g => g.ObtenerPorIdAsync(12)).ReturnsAsync(gasto);
         movRepo.Setup(m => m.ExistenMovimientosDeGastoAsync(12)).ReturnsAsync(true);
         movRepo.Setup(m => m.AnularIngresoPorFacturaAtomicoAsync(12, It.IsAny<int>(), It.IsAny<string>()))
@@ -457,7 +463,7 @@ public class IngresoPorFacturaServiceTests
     {
         var (svc, movRepo, gastoRepo, _, _, _, _, _, _, _, _, _) = Crear();
         var gasto = new Gasto { Id = 13, Activo = true };
-        gasto.Pagos.Add(new PagoGasto { Id = 22, GastoId = 13, Monto = 200m, Activo = true, EsAutomatico = false });
+        gasto.Pagos.Add(new PagoGasto { Id = 22, GastoId = 13, Monto = 200m, Activo = true });
         gastoRepo.Setup(g => g.ObtenerPorIdAsync(13)).ReturnsAsync(gasto);
         movRepo.Setup(m => m.ExistenMovimientosDeGastoAsync(13)).ReturnsAsync(true);
 
@@ -475,8 +481,11 @@ public class IngresoPorFacturaServiceTests
     {
         var (svc, movRepo, gastoRepo, _, _, _, _, _, _, _, _, _) = Crear();
         var gasto = new Gasto { Id = 14, Activo = true };
-        gasto.Pagos.Add(new PagoGasto { Id = 23, GastoId = 14, Monto = 500m, Activo = true, EsAutomatico = true });
-        gasto.Pagos.Add(new PagoGasto { Id = 24, GastoId = 14, Monto = 200m, Activo = true, EsAutomatico = false });
+        var pago23 = PagoGasto.Automatico(DateTime.UtcNow, 500m, "Pago contado (automático)");
+        pago23.Id = 23;
+        pago23.GastoId = 14;
+        gasto.Pagos.Add(pago23);
+        gasto.Pagos.Add(new PagoGasto { Id = 24, GastoId = 14, Monto = 200m, Activo = true });
         gastoRepo.Setup(g => g.ObtenerPorIdAsync(14)).ReturnsAsync(gasto);
         movRepo.Setup(m => m.ExistenMovimientosDeGastoAsync(14)).ReturnsAsync(true);
 
