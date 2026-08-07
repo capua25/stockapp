@@ -100,6 +100,29 @@ public class UsuariosEndpointTests : ApiTestBase
     }
 
     [Fact]
+    public async Task PostUsuarios_ConRolAusente_Devuelve400YNoCreaUsuarioAdmin()
+    {
+        // Regresión análoga a PutRol_ConBodyVacio: CrearUsuarioRequest.Rol era RolUsuario
+        // no-nullable con Admin = 0. Un body sin el campo "rol" dejaba a System.Text.Json
+        // poner el default del tipo — 0 = Admin — y el POST creaba un usuario Admin nuevo
+        // en silencio con 201 Created. Este test es el único que impide que el agujero
+        // vuelva: si Rol vuelve a ser no-nullable, este test da 201 con un usuario Admin
+        // en vez de 400.
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var response = await client.PostAsync("/usuarios",
+            new StringContent("""{"nombreUsuario":"usuario.sinrol","contrasenaPlan":"pwd12345"}""",
+                System.Text.Encoding.UTF8, "application/json"));
+
+        await using var verificacion = Factory.CrearContexto();
+        var creado = await verificacion.Usuarios.SingleOrDefaultAsync(u => u.NombreUsuario == "usuario.sinrol");
+        Assert.Null(creado);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task PostUsuarios_ConTokenOperador_Devuelve403()
     {
         var client = Factory.CreateClient();

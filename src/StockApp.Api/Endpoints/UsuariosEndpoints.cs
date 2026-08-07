@@ -4,7 +4,11 @@ using StockApp.Domain.Enums;
 
 namespace StockApp.Api.Endpoints;
 
-public record CrearUsuarioRequest(string NombreUsuario, string? NombreCompleto, string ContrasenaPlan, RolUsuario Rol);
+// Rol es nullable a propósito: RolUsuario.Admin = 0, así que un body sin el campo
+// (ej. sin "rol") dejaba a System.Text.Json poner el default del tipo — 0 = Admin — y
+// creaba un usuario Admin nuevo en silencio con 201 Created. Con el campo nullable, la
+// ausencia deserializa a null y el handler la rechaza explícitamente con 400.
+public record CrearUsuarioRequest(string NombreUsuario, string? NombreCompleto, string ContrasenaPlan, RolUsuario? Rol);
 // NuevoRol es nullable a propósito: RolUsuario.Admin = 0, así que un body sin el campo
 // (ej. "{}") dejaba a System.Text.Json poner el default del tipo — 0 = Admin — y
 // promovía al usuario en silencio con 200 OK. Con el campo nullable, la ausencia
@@ -24,8 +28,11 @@ public static class UsuariosEndpoints
 
         group.MapPost("/", async (CrearUsuarioRequest request, IUsuarioService usuarios) =>
         {
+            if (request.Rol is null)
+                throw new ArgumentException("El campo 'rol' es obligatorio.");
+
             var id = await usuarios.AltaUsuarioAsync(
-                request.NombreUsuario, request.NombreCompleto, request.ContrasenaPlan, request.Rol);
+                request.NombreUsuario, request.NombreCompleto, request.ContrasenaPlan, request.Rol.Value);
             // Sin Location: no existe GET /usuarios/{id} (el único GET del recurso es la lista
             // completa) — emitir una ruta que no resuelve es peor que omitirla.
             return Results.Created((string?)null, new UsuarioCreadoResponse(id));
