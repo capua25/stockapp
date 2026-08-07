@@ -136,6 +136,15 @@ public class UsuarioService : IUsuarioService
         // sin cuenta usable), degradarte a vos mismo con otro Admin activo en el sistema
         // es una acción coherente (cesión de rol) — el chequeo de abajo ya cubre el único
         // caso realmente peligroso (quedar sin ningún Admin activo).
+        //
+        // Hallazgo 3 (conocido, NO arreglado): esto es check-then-act sin lock a nivel
+        // fila ni RowVersion en Usuario. Con 2 Admins activos, dos PUT /rol concurrentes
+        // (o un PUT /rol cruzado con un DELETE /usuarios/{id}) pueden leer ambos
+        // ContarAdminsActivosAsync() == 2, pasar los dos, y dejar el sistema con cero
+        // Admins activos. Mismo patrón preexistente que en BajaLogicaAsync — esta rama
+        // duplica la superficie, no la introduce. Arreglarlo requiere un UPDATE
+        // condicional o un lock a nivel fila (otro trabajo). Si el sistema queda sin
+        // Admin activo, la recuperación es vía ServicioResetAdmin, no reintentando esto.
         if (usuario.Rol == RolUsuario.Admin && usuario.Activo && nuevoRol != RolUsuario.Admin)
         {
             var adminsActivos = await _repo.ContarAdminsActivosAsync();
