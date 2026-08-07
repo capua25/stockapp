@@ -5,7 +5,11 @@ using StockApp.Domain.Enums;
 namespace StockApp.Api.Endpoints;
 
 public record CrearUsuarioRequest(string NombreUsuario, string? NombreCompleto, string ContrasenaPlan, RolUsuario Rol);
-public record CambiarRolRequest(RolUsuario NuevoRol);
+// NuevoRol es nullable a propósito: RolUsuario.Admin = 0, así que un body sin el campo
+// (ej. "{}") dejaba a System.Text.Json poner el default del tipo — 0 = Admin — y
+// promovía al usuario en silencio con 200 OK. Con el campo nullable, la ausencia
+// deserializa a null y el handler la rechaza explícitamente con 400.
+public record CambiarRolRequest(RolUsuario? NuevoRol);
 public record CambiarContrasenaRequest(string NuevaContrasena, string? ContrasenaActual);
 public record UsuarioCreadoResponse(int Id);
 
@@ -35,7 +39,10 @@ public static class UsuariosEndpoints
 
         group.MapPut("/{id:int}/rol", async (int id, CambiarRolRequest request, IUsuarioService usuarios) =>
         {
-            await usuarios.CambiarRolAsync(id, request.NuevoRol);
+            if (request.NuevoRol is null)
+                throw new ArgumentException("El campo 'nuevoRol' es obligatorio.");
+
+            await usuarios.CambiarRolAsync(id, request.NuevoRol.Value);
             return Results.Ok();
         });
 

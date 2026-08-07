@@ -230,6 +230,31 @@ public class UsuariosEndpointTests : ApiTestBase
         Assert.Equal(RolUsuario.Admin, actualizado.Rol);
     }
 
+    [Fact]
+    public async Task PutRol_ConBodyVacio_Devuelve400YNoPromueveANadieAAdmin()
+    {
+        // Regresión del agujero más grave del módulo: CambiarRolRequest tenía NuevoRol
+        // no-nullable con RolUsuario.Admin = 0. Un body {} (o sin el campo) dejaba a
+        // System.Text.Json poner el default del tipo — 0 = Admin — y el usuario quedaba
+        // promovido en silencio con 200 OK. Este test es el único que impide que el
+        // agujero vuelva: si NuevoRol vuelve a ser no-nullable, este test da 200 en vez
+        // de 400.
+        await using var ctx = Factory.CrearContexto();
+        var usuario = await DatosDePrueba.SeedUsuarioAsync(ctx, "usuario.sinrol", "Secreta123!", RolUsuario.Operador);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var response = await client.PutAsync($"/usuarios/{usuario.Id}/rol",
+            new StringContent("{}", System.Text.Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        await using var verificacion = Factory.CrearContexto();
+        var actualizado = await verificacion.Usuarios.SingleAsync(u => u.Id == usuario.Id);
+        Assert.Equal(RolUsuario.Operador, actualizado.Rol);
+    }
+
     // ── PUT /usuarios/{id}/contrasena ────────────────────────────────────────
 
     [Fact]
