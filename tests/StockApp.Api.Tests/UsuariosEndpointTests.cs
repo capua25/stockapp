@@ -123,6 +123,26 @@ public class UsuariosEndpointTests : ApiTestBase
     }
 
     [Fact]
+    public async Task PostUsuarios_ConRolFueraDelEnum_Devuelve400YNoCreaUsuario()
+    {
+        // Hallazgo 1: sin JsonStringEnumConverter, {"rol":99} deserializa a (RolUsuario)99
+        // y pasaba el chequeo de solo-null en el endpoint. Este test es el que impide que
+        // vuelva a colarse una fila con Rol fuera del enum.
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var response = await client.PostAsync("/usuarios",
+            new StringContent("""{"nombreUsuario":"usuario.rolinvalido","contrasenaPlan":"pwd12345","rol":99}""",
+                System.Text.Encoding.UTF8, "application/json"));
+
+        await using var verificacion = Factory.CrearContexto();
+        var creado = await verificacion.Usuarios.SingleOrDefaultAsync(u => u.NombreUsuario == "usuario.rolinvalido");
+        Assert.Null(creado);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task PostUsuarios_ConTokenOperador_Devuelve403()
     {
         var client = Factory.CreateClient();

@@ -52,6 +52,11 @@ public class UsuarioService : IUsuarioService
         // Fix 6: validación mínima de contraseña
         ContrasenaValidator.Validar(contrasenaPlan);
 
+        // Hallazgo 1: sin esto, un rol fuera del enum (ej. {"rol":99} sin
+        // JsonStringEnumConverter) pasaba el chequeo de solo-null del endpoint y quedaba
+        // persistido con 201 Created — una fila inutilizable que nadie sabe por qué no anda.
+        RolUsuarioValidator.ValidarDefinido(rol);
+
         // Fix 4a: chequeo previo del duplicado — camino normal, da un 409 con mensaje
         // claro. El índice único en BD + el catch en UsuarioRepository.AgregarAsync
         // (Fix 4b) cubren la carrera entre este chequeo y el insert.
@@ -118,9 +123,10 @@ public class UsuarioService : IUsuarioService
     {
         _auth.Verificar(_session.RolActual, Permisos.GestionarUsuarios);
 
-        // Fix 1: rechazar valores fuera del enum (ej. casteos crudos desde el endpoint).
-        if (!Enum.IsDefined(typeof(RolUsuario), nuevoRol))
-            throw new ArgumentException($"El rol '{nuevoRol}' no es un valor válido.");
+        // Fix 1 / Hallazgo 1: rechazar valores fuera del enum (ej. casteos crudos desde el
+        // endpoint). Regla centralizada en RolUsuarioValidator — AltaUsuarioAsync la usa
+        // también, para no duplicar la definición.
+        RolUsuarioValidator.ValidarDefinido(nuevoRol);
 
         var usuario = await _repo.ObtenerPorIdAsync(usuarioId)
             ?? throw new EntidadNoEncontradaException($"Usuario {usuarioId} no encontrado.");
