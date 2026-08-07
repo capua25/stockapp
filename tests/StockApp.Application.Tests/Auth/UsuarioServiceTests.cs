@@ -383,6 +383,23 @@ public class UsuarioServiceTests
             () => svc.CambiarRolAsync(99, RolUsuario.Admin));
     }
 
+    // ── Fix 1: CambiarRolAsync rechaza roles fuera del enum ─────────────────
+
+    [Fact]
+    public async Task CambiarRolAsync_RolFueraDelEnum_LanzaArgumentException()
+    {
+        var usuario = new Usuario
+        {
+            Id = 3, NombreUsuario = "alguien", HashContrasena = "h",
+            Rol = RolUsuario.Operador, Activo = true, FechaAlta = DateTime.UtcNow
+        };
+        var (svc, repo, _, _, _, _, _) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(3)).ReturnsAsync(usuario);
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => svc.CambiarRolAsync(3, (RolUsuario)99));
+    }
+
     [Fact]
     public async Task CambiarContrasenaAsync_UsuarioInexistente_LanzaEntidadNoEncontrada()
     {

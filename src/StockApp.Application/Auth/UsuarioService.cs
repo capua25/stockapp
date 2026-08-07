@@ -104,6 +104,10 @@ public class UsuarioService : IUsuarioService
     {
         _auth.Verificar(_session.RolActual, Permisos.GestionarUsuarios);
 
+        // Fix 1: rechazar valores fuera del enum (ej. casteos crudos desde el endpoint).
+        if (!Enum.IsDefined(typeof(RolUsuario), nuevoRol))
+            throw new ArgumentException($"El rol '{nuevoRol}' no es un valor válido.");
+
         var usuario = await _repo.ObtenerPorIdAsync(usuarioId)
             ?? throw new EntidadNoEncontradaException($"Usuario {usuarioId} no encontrado.");
 
