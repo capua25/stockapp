@@ -42,12 +42,15 @@ public class UsuarioService : IUsuarioService
     {
         _auth.Verificar(_session.RolActual, Permisos.GestionarUsuarios);
 
-        // Fix 6: validación mínima de contraseña
-        ContrasenaValidator.Validar(contrasenaPlan);
-
+        // Hallazgo 6: el nombre se valida primero — es el campo más primario del
+        // formulario; con nombre vacío y contraseña corta a la vez, el error reportado
+        // debe ser el del nombre.
         // Fix 3: valida y trimea NombreUsuario (vacío/whitespace o > 100 chars → 400,
         // no un 500 al chocar con el HasMaxLength(100) de EF).
         var nombreNormalizado = NombreUsuarioValidator.ValidarYNormalizar(nombreUsuario);
+
+        // Fix 6: validación mínima de contraseña
+        ContrasenaValidator.Validar(contrasenaPlan);
 
         // Fix 4a: chequeo previo del duplicado — camino normal, da un 409 con mensaje
         // claro. El índice único en BD + el catch en UsuarioRepository.AgregarAsync

@@ -298,6 +298,19 @@ public class UsuarioServiceTests
             () => svc.AltaUsuarioAsync("nuevo", null, "12345", RolUsuario.Operador));
     }
 
+    // ── Hallazgo 6: el nombre se valida antes que la contraseña ─────────────
+
+    [Fact]
+    public async Task AltaUsuario_NombreVacioYContrasenaCorta_ReportaErrorDeNombrePrimero()
+    {
+        var (svc, _, _, _, _, _, _) = Crear();
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(
+            () => svc.AltaUsuarioAsync("", null, "123", RolUsuario.Operador));
+
+        Assert.Contains("nombre", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public async Task AltaUsuario_ContrasenaConExactamente6Chars_Funciona()
     {
