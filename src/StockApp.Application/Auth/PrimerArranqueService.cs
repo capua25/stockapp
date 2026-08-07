@@ -34,11 +34,15 @@ public class PrimerArranqueService : IPrimerArranqueService
     /// </summary>
     public async Task CrearAdminInicialAsync(string nombreUsuario, string contrasenaPlana)
     {
-        // Fix review Fase 3a: sin esto, un nombreUsuario en blanco vía POST /auth/primer-admin
-        // crea el Admin génesis con username whitespace; el login lo rechaza con 400 y
-        // requiereCrearAdmin queda false para siempre (sistema irrecuperable sin tocar la BD).
-        if (string.IsNullOrWhiteSpace(nombreUsuario))
-            throw new ArgumentException("El nombre de usuario es obligatorio.");
+        // Hallazgo 2: usa el mismo validador que AltaUsuarioAsync — antes esto solo
+        // chequeaba IsNullOrWhiteSpace a mano y asignaba el nombre crudo, sin Trim ni cap
+        // de 100. Vía BootstrapAdminSeeder, un "Bootstrap:AdminUser=\" admin \"" se
+        // persistía con espacios: el login compara con == exacto y sin trim, así que
+        // "admin" nunca entra y RequiereCrearAdminAsync ya da false para siempre —
+        // sistema irrecuperable sin tocar la BD a mano. Un nombre >100 chars también
+        // chocaba crudo contra el HasMaxLength(100) de EF con una DbUpdateException que
+        // el catch de BootstrapAdminSeeder no matchea.
+        var nombreNormalizado = NombreUsuarioValidator.ValidarYNormalizar(nombreUsuario);
 
         // Fix 6: validación mínima de contraseña
         ContrasenaValidator.Validar(contrasenaPlana);
@@ -52,7 +56,7 @@ public class PrimerArranqueService : IPrimerArranqueService
 
             var admin = new Usuario
             {
-                NombreUsuario  = nombreUsuario,
+                NombreUsuario  = nombreNormalizado,
                 HashContrasena = _hasher.Hash(contrasenaPlana),
                 Rol            = RolUsuario.Admin,
                 Activo         = true,

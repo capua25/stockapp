@@ -129,4 +129,34 @@ public class PrimerArranqueServiceTests
 
         repo.Verify(r => r.AgregarAsync(It.IsAny<Usuario>()), Times.Never);
     }
+
+    // ── Hallazgo 2: PrimerArranqueService debe usar NombreUsuarioValidator ──
+
+    [Fact]
+    public async Task CrearAdminInicial_NombreConEspaciosAlBorde_SeGuardaTrimeado()
+    {
+        // Sin esto, Bootstrap:AdminUser=" admin " se persiste con espacios: el login
+        // compara con == exacto y sin trim, así que "admin" nunca más entra y el seeder
+        // no reintenta (RequiereCrearAdminAsync ya da false). Sistema irrecuperable.
+        var (svc, repo, _) = Crear(hayUsuarios: false);
+
+        await svc.CrearAdminInicialAsync("  admin  ", "contrasenaSegura");
+
+        repo.Verify(r => r.AgregarAsync(It.Is<Usuario>(u => u.NombreUsuario == "admin")), Times.Once);
+    }
+
+    [Fact]
+    public async Task CrearAdminInicial_NombreConMasDe100Chars_LanzaArgumentException()
+    {
+        // Sin esto, un nombre >100 chars choca crudo contra el HasMaxLength(100) de EF
+        // con una DbUpdateException que el catch de BootstrapAdminSeeder no matchea
+        // (solo matchea UniqueViolation) — la API no arranca con un error opaco.
+        var (svc, repo, _) = Crear(hayUsuarios: false);
+        var nombreLargo = new string('a', 101);
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => svc.CrearAdminInicialAsync(nombreLargo, "contrasenaSegura"));
+
+        repo.Verify(r => r.AgregarAsync(It.IsAny<Usuario>()), Times.Never);
+    }
 }
