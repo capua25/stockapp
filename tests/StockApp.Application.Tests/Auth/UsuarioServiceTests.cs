@@ -400,6 +400,59 @@ public class UsuarioServiceTests
             () => svc.CambiarRolAsync(3, (RolUsuario)99));
     }
 
+    // ── Fix 2: CambiarRolAsync protege al último Admin activo ───────────────
+
+    [Fact]
+    public async Task CambiarRolAsync_DegradarUnicoAdminActivo_LanzaReglaDeNegocio()
+    {
+        var unicoAdmin = new Usuario
+        {
+            Id = 2, NombreUsuario = "admin2", HashContrasena = "h",
+            Rol = RolUsuario.Admin, Activo = true, FechaAlta = DateTime.UtcNow
+        };
+        var (svc, repo, _, _, _, _, _) = Crear(idSesion: 1);
+        repo.Setup(r => r.ObtenerPorIdAsync(2)).ReturnsAsync(unicoAdmin);
+        repo.Setup(r => r.ContarAdminsActivosAsync()).ReturnsAsync(1);
+
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => svc.CambiarRolAsync(2, RolUsuario.Operador));
+    }
+
+    [Fact]
+    public async Task CambiarRolAsync_DegradarAdminConOtroAdminActivo_Funciona()
+    {
+        var admin = new Usuario
+        {
+            Id = 2, NombreUsuario = "admin2", HashContrasena = "h",
+            Rol = RolUsuario.Admin, Activo = true, FechaAlta = DateTime.UtcNow
+        };
+        var (svc, repo, _, _, _, _, _) = Crear(idSesion: 1);
+        repo.Setup(r => r.ObtenerPorIdAsync(2)).ReturnsAsync(admin);
+        repo.Setup(r => r.ContarAdminsActivosAsync()).ReturnsAsync(2); // hay otro Admin
+
+        await svc.CambiarRolAsync(2, RolUsuario.Operador);
+
+        repo.Verify(r => r.ActualizarAsync(It.Is<Usuario>(u => u.Rol == RolUsuario.Operador)), Times.Once);
+    }
+
+    [Fact]
+    public async Task CambiarRolAsync_AscenderOperadorAAdmin_SiempreFunciona()
+    {
+        var operador = new Usuario
+        {
+            Id = 3, NombreUsuario = "operador1", HashContrasena = "h",
+            Rol = RolUsuario.Operador, Activo = true, FechaAlta = DateTime.UtcNow
+        };
+        var (svc, repo, _, _, _, _, _) = Crear(idSesion: 1);
+        repo.Setup(r => r.ObtenerPorIdAsync(3)).ReturnsAsync(operador);
+
+        await svc.CambiarRolAsync(3, RolUsuario.Admin);
+
+        repo.Verify(r => r.ActualizarAsync(It.Is<Usuario>(u => u.Rol == RolUsuario.Admin)), Times.Once);
+        // Ascender no debería ni consultar el conteo de Admins activos.
+        repo.Verify(r => r.ContarAdminsActivosAsync(), Times.Never);
+    }
+
     [Fact]
     public async Task CambiarContrasenaAsync_UsuarioInexistente_LanzaEntidadNoEncontrada()
     {

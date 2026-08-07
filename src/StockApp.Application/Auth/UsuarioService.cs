@@ -111,6 +111,19 @@ public class UsuarioService : IUsuarioService
         var usuario = await _repo.ObtenerPorIdAsync(usuarioId)
             ?? throw new EntidadNoEncontradaException($"Usuario {usuarioId} no encontrado.");
 
+        // Fix 2: proteger último Admin activo (mismo criterio que BajaLogicaAsync). No
+        // bloqueamos la auto-degradación en sí: a diferencia de la auto-baja (que te deja
+        // sin cuenta usable), degradarte a vos mismo con otro Admin activo en el sistema
+        // es una acción coherente (cesión de rol) — el chequeo de abajo ya cubre el único
+        // caso realmente peligroso (quedar sin ningún Admin activo).
+        if (usuario.Rol == RolUsuario.Admin && usuario.Activo && nuevoRol != RolUsuario.Admin)
+        {
+            var adminsActivos = await _repo.ContarAdminsActivosAsync();
+            if (adminsActivos <= 1)
+                throw new ReglaDeNegocioException(
+                    "No se puede quitarle el rol de Admin al último Admin activo del sistema.");
+        }
+
         var rolAnterior = usuario.Rol;
         usuario.Rol = nuevoRol;
         await _repo.ActualizarAsync(usuario);
