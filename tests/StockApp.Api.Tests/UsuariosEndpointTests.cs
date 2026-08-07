@@ -395,6 +395,12 @@ public class UsuariosEndpointTests : ApiTestBase
             new StringContent("""{"nuevoRol":99}""", System.Text.Encoding.UTF8, "application/json"));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        // Hallazgo 5: si el chequeo del enum se mueve a después del ActualizarAsync, este
+        // test debe quedar rojo con la fila ya corrupta, no verde mirando solo el status.
+        await using var verificacion = Factory.CrearContexto();
+        var actualizado = await verificacion.Usuarios.SingleAsync(u => u.Id == usuario.Id);
+        Assert.Equal(RolUsuario.Operador, actualizado.Rol);
     }
 
     [Fact]
