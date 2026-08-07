@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 using StockApp.Infrastructure.Persistence;
 
 namespace StockApp.Infrastructure.Repositories;
@@ -29,10 +31,26 @@ public class UsuarioRepository : IUsuarioRepository
 
     public async Task<int> AgregarAsync(Usuario usuario)
     {
-        _ctx.Usuarios.Add(usuario);
-        await _ctx.SaveChangesAsync();
-        return usuario.Id;
+        try
+        {
+            _ctx.Usuarios.Add(usuario);
+            await _ctx.SaveChangesAsync();
+            return usuario.Id;
+        }
+        catch (DbUpdateException ex) when (EsViolacionNombreUsuarioUnico(ex))
+        {
+            // Fix 4b: cierra la carrera entre el chequeo previo de UsuarioService
+            // (BuscarPorNombreAsync) y este insert. Sin este catch, la violación del
+            // índice único IX_Usuarios_NombreUsuario llegaría como DbUpdateException
+            // cruda y el endpoint respondería 500 en vez de 409.
+            throw new ReglaDeNegocioException(
+                $"Ya existe un usuario con el nombre '{usuario.NombreUsuario}'.");
+        }
     }
+
+    private static bool EsViolacionNombreUsuarioUnico(DbUpdateException ex)
+        => ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } pg
+           && pg.ConstraintName == "IX_Usuarios_NombreUsuario";
 
     public Task ActualizarAsync(Usuario usuario)
     {

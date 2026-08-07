@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 using StockApp.Infrastructure.Persistence;
 using StockApp.Infrastructure.Repositories;
 using StockApp.Infrastructure.Tests.Fixtures;
@@ -92,5 +93,21 @@ public class UsuarioRepositoryTests : PostgresRepositoryTestBase
         var count = await _repo.ContarAdminsActivosAsync();
 
         Assert.Equal(2, count);
+    }
+
+    // ── Fix 4b: carrera de nombre duplicado (índice único IX_Usuarios_NombreUsuario) ──
+
+    [Fact]
+    public async Task AgregarAsync_NombreUsuarioDuplicado_MapeaAReglaDeNegocio()
+    {
+        await _repo.AgregarAsync(NuevoUsuario("jperez"));
+        Context.ChangeTracker.Clear();
+
+        // El índice único de BD es quien realmente bloquea esto; el catch de
+        // UsuarioRepository lo traduce a 409 en vez de dejar pasar el 500 crudo de
+        // DbUpdateException (misma carrera que el chequeo previo de UsuarioService
+        // no puede cerrar solo).
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => _repo.AgregarAsync(NuevoUsuario("jperez")));
     }
 }
