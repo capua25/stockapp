@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using StockApp.Api.Auth;
@@ -108,6 +109,89 @@ public class UsuariosEndpointTests : ApiTestBase
             new CrearUsuarioRequest("otro", null, "pwd12345", RolUsuario.Operador));
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostUsuarios_ConNombreDuplicado_Devuelve409()
+    {
+        await using var ctx = Factory.CrearContexto();
+        await DatosDePrueba.SeedUsuarioAsync(ctx, "duplicado", "Secreta123!", RolUsuario.Operador);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var response = await client.PostAsJsonAsync("/usuarios",
+            new CrearUsuarioRequest("duplicado", null, "pwd12345", RolUsuario.Operador));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        var json = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+        Assert.Contains("duplicado", doc.RootElement.GetProperty("detail").GetString());
+    }
+
+    [Fact]
+    public async Task PostUsuarios_ConNombreVacio_Devuelve400()
+    {
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var response = await client.PostAsJsonAsync("/usuarios",
+            new CrearUsuarioRequest("", null, "pwd12345", RolUsuario.Operador));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostUsuarios_ConNombreSoloWhitespace_Devuelve400()
+    {
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var response = await client.PostAsJsonAsync("/usuarios",
+            new CrearUsuarioRequest("   ", null, "pwd12345", RolUsuario.Operador));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostUsuarios_ConNombreDe101Caracteres_Devuelve400()
+    {
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var nombreDe101Caracteres = new string('a', 101);
+        var response = await client.PostAsJsonAsync("/usuarios",
+            new CrearUsuarioRequest(nombreDe101Caracteres, null, "pwd12345", RolUsuario.Operador));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostUsuarios_ConContrasenaMenorA6Caracteres_Devuelve400()
+    {
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var response = await client.PostAsJsonAsync("/usuarios",
+            new CrearUsuarioRequest("usuario.pwdcorta", null, "abc12", RolUsuario.Operador));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostUsuarios_ConEspaciosAlBorde_Devuelve201YElNombreQuedaTrimeado()
+    {
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var response = await client.PostAsJsonAsync("/usuarios",
+            new CrearUsuarioRequest("  espacios.borde  ", null, "pwd12345", RolUsuario.Operador));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        await using var ctx = Factory.CrearContexto();
+        var creado = await ctx.Usuarios.SingleAsync(u => u.NombreUsuario == "espacios.borde");
+        Assert.Equal("espacios.borde", creado.NombreUsuario);
     }
 
     // ── DELETE /usuarios/{id} ────────────────────────────────────────────────
@@ -253,6 +337,40 @@ public class UsuariosEndpointTests : ApiTestBase
         await using var verificacion = Factory.CrearContexto();
         var actualizado = await verificacion.Usuarios.SingleAsync(u => u.Id == usuario.Id);
         Assert.Equal(RolUsuario.Operador, actualizado.Rol);
+    }
+
+    [Fact]
+    public async Task PutRol_ConValorFueraDelEnum_Devuelve400()
+    {
+        await using var ctx = Factory.CrearContexto();
+        var usuario = await DatosDePrueba.SeedUsuarioAsync(ctx, "usuario.rolinvalido", "Secreta123!", RolUsuario.Operador);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var response = await client.PutAsync($"/usuarios/{usuario.Id}/rol",
+            new StringContent("""{"nuevoRol":99}""", System.Text.Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PutRol_DegradandoAlUltimoAdminActivo_Devuelve409()
+    {
+        await using var ctx = Factory.CrearContexto();
+        var admin = await DatosDePrueba.SeedUsuarioAsync(ctx, "admin.unico", "Secreta123!", RolUsuario.Admin);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var response = await client.PutAsJsonAsync($"/usuarios/{admin.Id}/rol",
+            new CambiarRolRequest(RolUsuario.Operador));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+
+        await using var verificacion = Factory.CrearContexto();
+        var actualizado = await verificacion.Usuarios.SingleAsync(u => u.Id == admin.Id);
+        Assert.Equal(RolUsuario.Admin, actualizado.Rol);
     }
 
     // ── PUT /usuarios/{id}/contrasena ────────────────────────────────────────
