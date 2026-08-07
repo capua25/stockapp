@@ -323,6 +323,66 @@ public class UsuarioServiceTests
             () => svc.CambiarContrasenaAsync(4, "12345"));
     }
 
+    // ── Fix 3: AltaUsuarioAsync valida NombreUsuario ────────────────────────
+
+    [Fact]
+    public async Task AltaUsuario_NombreVacio_LanzaArgumentException()
+    {
+        var (svc, _, _, _, _, _, _) = Crear();
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => svc.AltaUsuarioAsync("", null, "pwd123", RolUsuario.Operador));
+    }
+
+    [Fact]
+    public async Task AltaUsuario_NombreNull_LanzaArgumentException()
+    {
+        var (svc, _, _, _, _, _, _) = Crear();
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => svc.AltaUsuarioAsync(null!, null, "pwd123", RolUsuario.Operador));
+    }
+
+    [Fact]
+    public async Task AltaUsuario_NombreSoloWhitespace_LanzaArgumentException()
+    {
+        var (svc, _, _, _, _, _, _) = Crear();
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => svc.AltaUsuarioAsync("   ", null, "pwd123", RolUsuario.Operador));
+    }
+
+    [Fact]
+    public async Task AltaUsuario_NombreConMasDe100Chars_LanzaArgumentException()
+    {
+        var (svc, _, _, _, _, _, _) = Crear();
+        var nombreLargo = new string('a', 101);
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => svc.AltaUsuarioAsync(nombreLargo, null, "pwd123", RolUsuario.Operador));
+    }
+
+    [Fact]
+    public async Task AltaUsuario_NombreConExactamente100Chars_Funciona()
+    {
+        var (svc, repo, _, _, _, _, _) = Crear();
+        var nombreLimite = new string('a', 100);
+
+        await svc.AltaUsuarioAsync(nombreLimite, null, "pwd123", RolUsuario.Operador);
+
+        repo.Verify(r => r.AgregarAsync(It.Is<Usuario>(u => u.NombreUsuario == nombreLimite)), Times.Once);
+    }
+
+    [Fact]
+    public async Task AltaUsuario_NombreConEspaciosAlBorde_SeGuardaTrimeado()
+    {
+        var (svc, repo, _, _, _, _, _) = Crear();
+
+        await svc.AltaUsuarioAsync("  operador2  ", null, "pwd123", RolUsuario.Operador);
+
+        repo.Verify(r => r.AgregarAsync(It.Is<Usuario>(u => u.NombreUsuario == "operador2")), Times.Once);
+    }
+
     // ── ListarAsync (Fase 2b, D6) ───────────────────────────────────────────
 
     [Fact]

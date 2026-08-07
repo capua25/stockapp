@@ -45,9 +45,13 @@ public class UsuarioService : IUsuarioService
         // Fix 6: validación mínima de contraseña
         ContrasenaValidator.Validar(contrasenaPlan);
 
+        // Fix 3: valida y trimea NombreUsuario (vacío/whitespace o > 100 chars → 400,
+        // no un 500 al chocar con el HasMaxLength(100) de EF).
+        var nombreNormalizado = NombreUsuarioValidator.ValidarYNormalizar(nombreUsuario);
+
         var nuevo = new Usuario
         {
-            NombreUsuario  = nombreUsuario,
+            NombreUsuario  = nombreNormalizado,
             NombreCompleto = nombreCompleto,
             HashContrasena = _hasher.Hash(contrasenaPlan),
             Rol            = rol,
@@ -61,7 +65,7 @@ public class UsuarioService : IUsuarioService
             _session.UsuarioActual!.Id,
             AccionAuditada.AltaUsuario,
             "Usuario", id,
-            $"Alta de '{nombreUsuario}' con rol {rol}");
+            $"Alta de '{nombreNormalizado}' con rol {rol}");
 
         return id;
     }
