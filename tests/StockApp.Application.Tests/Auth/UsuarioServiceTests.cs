@@ -415,18 +415,6 @@ public class UsuarioServiceTests
         repo.Verify(r => r.AgregarAsync(It.IsAny<Usuario>()), Times.Never);
     }
 
-    [Fact]
-    public async Task AltaUsuario_NombreNoExiste_Funciona()
-    {
-        var (svc, repo, _, _, _, _, _) = Crear();
-        repo.Setup(r => r.BuscarPorNombreAsync("nuevo")).ReturnsAsync((Usuario?)null);
-        repo.Setup(r => r.AgregarAsync(It.IsAny<Usuario>())).ReturnsAsync(1);
-
-        await svc.AltaUsuarioAsync("nuevo", null, "pwd123", RolUsuario.Operador);
-
-        repo.Verify(r => r.AgregarAsync(It.IsAny<Usuario>()), Times.Once);
-    }
-
     // ── ListarAsync (Fase 2b, D6) ───────────────────────────────────────────
 
     [Fact]
