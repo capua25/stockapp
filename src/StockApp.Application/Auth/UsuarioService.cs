@@ -49,6 +49,13 @@ public class UsuarioService : IUsuarioService
         // no un 500 al chocar con el HasMaxLength(100) de EF).
         var nombreNormalizado = NombreUsuarioValidator.ValidarYNormalizar(nombreUsuario);
 
+        // Fix 4a: chequeo previo del duplicado — camino normal, da un 409 con mensaje
+        // claro. El índice único en BD + el catch en UsuarioRepository.AgregarAsync
+        // (Fix 4b) cubren la carrera entre este chequeo y el insert.
+        if (await _repo.BuscarPorNombreAsync(nombreNormalizado) is not null)
+            throw new ReglaDeNegocioException(
+                $"Ya existe un usuario con el nombre '{nombreNormalizado}'.");
+
         var nuevo = new Usuario
         {
             NombreUsuario  = nombreNormalizado,

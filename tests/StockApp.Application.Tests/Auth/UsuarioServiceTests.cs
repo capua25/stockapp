@@ -383,6 +383,37 @@ public class UsuarioServiceTests
         repo.Verify(r => r.AgregarAsync(It.Is<Usuario>(u => u.NombreUsuario == "operador2")), Times.Once);
     }
 
+    // ── Fix 4a: AltaUsuarioAsync rechaza nombre duplicado con 409 ───────────
+
+    [Fact]
+    public async Task AltaUsuario_NombreYaExiste_LanzaReglaDeNegocio()
+    {
+        var existente = new Usuario
+        {
+            Id = 9, NombreUsuario = "operador2", HashContrasena = "h",
+            Rol = RolUsuario.Operador, Activo = true, FechaAlta = DateTime.UtcNow
+        };
+        var (svc, repo, _, _, _, _, _) = Crear();
+        repo.Setup(r => r.BuscarPorNombreAsync("operador2")).ReturnsAsync(existente);
+
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => svc.AltaUsuarioAsync("operador2", null, "pwd123", RolUsuario.Operador));
+
+        repo.Verify(r => r.AgregarAsync(It.IsAny<Usuario>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AltaUsuario_NombreNoExiste_Funciona()
+    {
+        var (svc, repo, _, _, _, _, _) = Crear();
+        repo.Setup(r => r.BuscarPorNombreAsync("nuevo")).ReturnsAsync((Usuario?)null);
+        repo.Setup(r => r.AgregarAsync(It.IsAny<Usuario>())).ReturnsAsync(1);
+
+        await svc.AltaUsuarioAsync("nuevo", null, "pwd123", RolUsuario.Operador);
+
+        repo.Verify(r => r.AgregarAsync(It.IsAny<Usuario>()), Times.Once);
+    }
+
     // ── ListarAsync (Fase 2b, D6) ───────────────────────────────────────────
 
     [Fact]
