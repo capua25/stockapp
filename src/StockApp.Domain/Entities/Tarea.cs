@@ -21,6 +21,12 @@ public class Tarea
     public DateTime? FechaLimite { get; set; }
 
     public int CreadaPorUsuarioId { get; set; }
+
+    /// <summary>Nav de solo lectura sobre CreadaPorUsuarioId, mismo criterio que TomadaPor
+    /// (fix/integridad-referencial): la FK ya existía como columna sin restricción; se agrega
+    /// para que sea consistente con el resto de las referencias a Usuario como actor
+    /// (MovimientoStock.Usuario, LogAuditoria.Usuario).</summary>
+    public Usuario? CreadaPor { get; set; }
     public DateTime FechaCreacion { get; set; }
 
     public int? TomadaPorUsuarioId { get; set; }
@@ -32,6 +38,7 @@ public class Tarea
     public DateTime? FechaInicio { get; set; }
 
     public int? CerradaPorUsuarioId { get; set; }
+    public Usuario? CerradaPor { get; set; }
     public DateTime? FechaFin { get; set; }
 
     public List<NotaTarea> Notas { get; set; } = new();

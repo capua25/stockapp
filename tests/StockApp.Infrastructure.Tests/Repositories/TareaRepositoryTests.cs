@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Infrastructure.Repositories;
@@ -34,6 +35,12 @@ public class TareaRepositoryTests : PostgresRepositoryTestBase
     [Fact]
     public async Task AgregarAsync_ConNotas_Y_ObtenerPorId_TraeElHiloCompleto()
     {
+        // fix/integridad-referencial: CreadaPorUsuarioId y NotaTarea.UsuarioId ahora tienen FK
+        // Restrict hacia Usuarios. Se siembra un único Usuario (queda en Id=1 por RESTART
+        // IDENTITY) para que el "1" hardcodeado en NuevaTarea()/UsuarioId siga siendo válido.
+        Context.Usuarios.Add(NuevoUsuario());
+        await Context.SaveChangesAsync();
+
         var tarea = NuevaTarea();
         tarea.Notas.Add(new NotaTarea
         {
@@ -56,6 +63,10 @@ public class TareaRepositoryTests : PostgresRepositoryTestBase
     [Fact]
     public async Task ListarAsync_DevuelveTodasLasTareas_SinFiltrarPorUsuario()
     {
+        // fix/integridad-referencial: ver comentario en AgregarAsync_ConNotas_Y_ObtenerPorId_TraeElHiloCompleto.
+        Context.Usuarios.Add(NuevoUsuario());
+        await Context.SaveChangesAsync();
+
         await _repo.AgregarAsync(NuevaTarea("Tarea A"));
         await _repo.AgregarAsync(NuevaTarea("Tarea B"));
         Context.ChangeTracker.Clear();
@@ -68,6 +79,10 @@ public class TareaRepositoryTests : PostgresRepositoryTestBase
     [Fact]
     public async Task ObtenerPorId_NotasOrdenadasPorFecha()
     {
+        // fix/integridad-referencial: ver comentario en AgregarAsync_ConNotas_Y_ObtenerPorId_TraeElHiloCompleto.
+        Context.Usuarios.Add(NuevoUsuario());
+        await Context.SaveChangesAsync();
+
         var tarea = NuevaTarea();
         var id = await _repo.AgregarAsync(tarea);
 
@@ -129,6 +144,10 @@ public class TareaRepositoryTests : PostgresRepositoryTestBase
         // Fix (review final, Important): ningún test de ninguna capa persistía FechaLimite
         // antes de este fix, así que el rechazo real de Npgsql (timestamptz exige
         // DateTimeKind Utc o Unspecified, no Local) quedaba completamente sin cubrir.
+        // fix/integridad-referencial: ver comentario en AgregarAsync_ConNotas_Y_ObtenerPorId_TraeElHiloCompleto.
+        Context.Usuarios.Add(NuevoUsuario());
+        await Context.SaveChangesAsync();
+
         var tarea = NuevaTarea();
         tarea.FechaLimite = DateTime.SpecifyKind(new DateTime(2026, 8, 15), DateTimeKind.Utc);
 
@@ -139,5 +158,62 @@ public class TareaRepositoryTests : PostgresRepositoryTestBase
 
         Assert.NotNull(encontrada!.FechaLimite);
         Assert.Equal(new DateTime(2026, 8, 15), encontrada.FechaLimite!.Value.Date);
+    }
+
+    [Fact]
+    public async Task AgregarAsync_ConCreadaPorUsuarioIdInexistente_ViolaLaFk()
+    {
+        // Integridad referencial (rama fix/integridad-referencial): Tareas.CreadaPorUsuarioId
+        // apunta a Usuarios.Id sin FK hoy. Este test demuestra que la BASE rechaza el dato
+        // inválido, no solo que la config exista: 999 no es el Id de ningún Usuario sembrado.
+        var tarea = NuevaTarea();
+        tarea.CreadaPorUsuarioId = 999;
+
+        var ex = await Assert.ThrowsAsync<DbUpdateException>(() => _repo.AgregarAsync(tarea));
+
+        var pg = Assert.IsType<PostgresException>(ex.InnerException);
+        Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, pg.SqlState);
+    }
+
+    [Fact]
+    public async Task ActualizarAsync_ConNotaUsuarioIdInexistente_ViolaLaFk()
+    {
+        var usuario = NuevoUsuario();
+        Context.Usuarios.Add(usuario);
+        await Context.SaveChangesAsync();
+
+        var tarea = NuevaTarea();
+        tarea.CreadaPorUsuarioId = usuario.Id;
+        var id = await _repo.AgregarAsync(tarea);
+
+        tarea.Notas.Add(new NotaTarea
+        {
+            UsuarioId = 999, Fecha = DateTime.UtcNow, Texto = "nota huérfana", EsAutomatica = false,
+        });
+
+        var ex = await Assert.ThrowsAsync<DbUpdateException>(() => _repo.ActualizarAsync(tarea));
+
+        var pg = Assert.IsType<PostgresException>(ex.InnerException);
+        Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, pg.SqlState);
+    }
+
+    [Fact]
+    public async Task ActualizarAsync_ConCerradaPorUsuarioIdInexistente_ViolaLaFk()
+    {
+        var usuario = NuevoUsuario();
+        Context.Usuarios.Add(usuario);
+        await Context.SaveChangesAsync();
+
+        var tarea = NuevaTarea();
+        tarea.CreadaPorUsuarioId = usuario.Id;
+        var id = await _repo.AgregarAsync(tarea);
+
+        tarea.CerradaPorUsuarioId = 999;
+        tarea.FechaFin = DateTime.UtcNow;
+
+        var ex = await Assert.ThrowsAsync<DbUpdateException>(() => _repo.ActualizarAsync(tarea));
+
+        var pg = Assert.IsType<PostgresException>(ex.InnerException);
+        Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, pg.SqlState);
     }
 }

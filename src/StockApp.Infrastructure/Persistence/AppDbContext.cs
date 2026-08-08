@@ -260,12 +260,19 @@ public class AppDbContext : DbContext
         });
 
         // ── Tareas (módulo independiente, spec 2026-08-01) ────────────────────
+        // CreadaPorUsuarioId/CerradaPorUsuarioId/NotaTarea.UsuarioId (fix/integridad-referencial):
+        // las tres apuntaban a Usuarios.Id sin FK. Restrict en las tres, mismo criterio que
+        // TomadaPorUsuarioId y el resto del modelo (Usuarios usa baja lógica, nunca DELETE físico).
         modelBuilder.Entity<Tarea>(e =>
         {
             e.Property(t => t.Titulo).IsRequired();
             e.HasIndex(t => t.Estado);
+            e.HasOne(t => t.CreadaPor).WithMany()
+                .HasForeignKey(t => t.CreadaPorUsuarioId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(t => t.TomadaPor).WithMany()
                 .HasForeignKey(t => t.TomadaPorUsuarioId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(t => t.CerradaPor).WithMany()
+                .HasForeignKey(t => t.CerradaPorUsuarioId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<NotaTarea>(e =>
@@ -276,6 +283,8 @@ public class AppDbContext : DbContext
             // la relación se configura solo del lado padre.
             e.HasOne<Tarea>().WithMany(t => t.Notas)
                 .HasForeignKey(n => n.TareaId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(n => n.Usuario).WithMany()
+                .HasForeignKey(n => n.UsuarioId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }
