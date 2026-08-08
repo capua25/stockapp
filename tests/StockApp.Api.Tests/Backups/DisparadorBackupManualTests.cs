@@ -1,0 +1,171 @@
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using StockApp.Api.Backups;
+using StockApp.Application.Interfaces;
+using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
+using StockApp.Infrastructure.Platform;
+using Xunit;
+
+namespace StockApp.Api.Tests.Backups;
+
+/// <summary>
+/// Menor 11 del review adversarial: no existía ningún test dedicado de DisparadorBackupManual --
+/// el bug de la fuga de semáforo (Importante 3) lo habría atrapado en un segundo.
+/// </summary>
+public class DisparadorBackupManualTests
+{
+    /// <summary>Simula IUserDataPathProvider.GetBackupsDirectory() devolviendo string vacío o
+    /// explotando -- deploy-vps.md documenta que devuelve "" si $HOME/.local/share no existe, un
+    /// caso real ya visto en un deploy.</summary>
+    private sealed class UserDataPathProviderQueExplotaFake : IUserDataPathProvider
+    {
+        public string GetDataDirectory() => throw new InvalidOperationException("boom");
+        public string GetDatabasePath() => throw new InvalidOperationException("boom");
+        public string GetBackupsDirectory() => throw new InvalidOperationException("boom");
+        public string GetLicenciaPath() => throw new InvalidOperationException("boom");
+        public string GetLogsDirectory() => throw new InvalidOperationException("boom");
+    }
+
+    private sealed class UserDataPathProviderFake : IUserDataPathProvider
+    {
+        private readonly string _dir = Path.Combine(Path.GetTempPath(), "DisparadorBackupManualTests_" + Guid.NewGuid());
+        public string GetDataDirectory() => _dir;
+        public string GetDatabasePath() => Path.Combine(_dir, "stockapp.db");
+        public string GetBackupsDirectory() => Path.Combine(_dir, "backups");
+        public string GetLicenciaPath() => Path.Combine(_dir, "licencia.lic");
+        public string GetLogsDirectory() => Path.Combine(_dir, "logs");
+    }
+
+    private static IConfiguration CrearConfiguracion(bool conConnectionString = true)
+    {
+        var datos = conConnectionString
+            ? new Dictionary<string, string?> { ["ConnectionStrings:Default"] = "Host=x;Database=y" }
+            : new Dictionary<string, string?>();
+        return new ConfigurationBuilder().AddInMemoryCollection(datos).Build();
+    }
+
+    private static DisparadorBackupManual Crear(
+        IGuardiaCorridaBackup guardia, IUserDataPathProvider paths, IConfiguration? configuracion = null)
+    {
+        var services = new ServiceCollection();
+        var sp = services.BuildServiceProvider();
+
+        return new DisparadorBackupManual(
+            sp.GetRequiredService<IServiceScopeFactory>(),
+            configuracion ?? CrearConfiguracion(),
+            paths,
+            guardia,
+            NullLogger<DisparadorBackupManual>.Instance);
+    }
+
+    [Fact]
+    public void Disparar_PathProviderExplota_LaGuardiaQuedaLibreParaElProximoIntento()
+    {
+        // Bug real (fix/integridad-referencial, IMPORTANTE 3): TryEntrar() toma el turno ANTES de
+        // resolver connectionString/directorio -- si _paths.GetBackupsDirectory() explota (deploy-
+        // vps.md: puede devolver string vacío o, en este test, tirar directamente si
+        // $HOME/.local/share no existe), la excepción sale de Disparar() SIN pasar nunca por el
+        // finally { _guardia.Salir(); } que vive en EjecutarEnBackgroundAsync -- esa Task nunca
+        // llegó a lanzarse. El semáforo Singleton queda tomado para siempre: ni backups manuales
+        // (409 eterno) ni el job automático (BackupProgramadoService se salta cada tick) vuelven a
+        // correr hasta reiniciar el proceso.
+        var guardia = new GuardiaCorridaBackup();
+        var disparador = Crear(guardia, new UserDataPathProviderQueExplotaFake());
+
+        Assert.Throws<InvalidOperationException>(() => disparador.Disparar(usuarioId: 1));
+
+        Assert.True(guardia.TryEntrar(), "La guardia quedó tomada para siempre tras el fallo.");
+    }
+
+    [Fact]
+    public void Disparar_ConnectionStringFaltante_LaGuardiaQuedaLibreParaElProximoIntento()
+    {
+        // Mismo bug, otro disparador posible de la misma línea sin try/finally: falta
+        // ConnectionStrings:Default en configuración.
+        var guardia = new GuardiaCorridaBackup();
+        var disparador = Crear(guardia, new UserDataPathProviderFake(), CrearConfiguracion(conConnectionString: false));
+
+        Assert.Throws<InvalidOperationException>(() => disparador.Disparar(usuarioId: 1));
+
+        Assert.True(guardia.TryEntrar(), "La guardia quedó tomada para siempre tras el fallo.");
+    }
+
+    [Fact]
+    public void Disparar_GuardiaYaOcupada_DevuelveFalseYNoConsultaPaths()
+    {
+        var guardia = new GuardiaCorridaBackup();
+        Assert.True(guardia.TryEntrar()); // simula una corrida ya en curso
+        var disparador = Crear(guardia, new UserDataPathProviderQueExplotaFake());
+
+        // Si llegara a consultar paths (que explota), este Assert nunca se alcanzaría -- prueba
+        // indirectamente que el guard de "ya ocupada" corta ANTES de tocar paths/configuration.
+        var resultado = disparador.Disparar(usuarioId: 1);
+
+        Assert.False(resultado);
+    }
+
+    private sealed class CorridaBackupRepositoryEspiaFake : ICorridaBackupRepository
+    {
+        public List<CorridaBackup> Agregadas { get; } = new();
+
+        public Task<int> AgregarAsync(CorridaBackup corrida)
+        {
+            Agregadas.Add(corrida);
+            return Task.FromResult(1);
+        }
+
+        public Task<IReadOnlyList<CorridaBackup>> ListarTodasAsync()
+            => Task.FromResult((IReadOnlyList<CorridaBackup>)new List<CorridaBackup>());
+        public Task<IReadOnlyList<CorridaBackup>> ListarExitosasAsync()
+            => Task.FromResult((IReadOnlyList<CorridaBackup>)new List<CorridaBackup>());
+        public Task<CorridaBackup?> ObtenerPorIdAsync(int id) => Task.FromResult<CorridaBackup?>(null);
+        public Task<CorridaBackup?> ObtenerUltimaExitosaAsync() => Task.FromResult<CorridaBackup?>(null);
+        public Task EliminarAsync(int id) => Task.CompletedTask;
+    }
+
+    /// <summary>Importante 6 del review adversarial: antes, un fallo inesperado dentro de
+    /// EjecutarEnBackgroundAsync (ej. la propia resolución de ServicioBackup vía DI, o cualquier
+    /// error que ServicioBackup.EjecutarCorridaAsync no llegara a atrapar él mismo) sólo se
+    /// logueaba -- la UI le dijo al usuario "Backup iniciado, actualizá en unos minutos" y esa
+    /// fila NUNCA aparecía en GET /backups. Ahora el catch persiste una CorridaBackup Fallida con
+    /// el motivo, para que el humano que apretó el botón vea qué pasó.</summary>
+    [Fact]
+    public async Task Disparar_FalloInesperadoEnBackground_PersisteUnaCorridaBackupFallida()
+    {
+        var guardia = new GuardiaCorridaBackup();
+        var espia = new CorridaBackupRepositoryEspiaFake();
+        var services = new ServiceCollection();
+        // A propósito NO se registra ServicioBackup/IEjecutorPgDump: simula el "error realmente
+        // inesperado" documentado en el catch de EjecutarEnBackgroundAsync (acá, la propia
+        // resolución del servicio vía DI explota) -- no un fallo esperable de pg_dump, que
+        // ServicioBackup ya persiste por su cuenta.
+        services.AddScoped<ICorridaBackupRepository>(_ => espia);
+        var sp = services.BuildServiceProvider();
+
+        var disparador = new DisparadorBackupManual(
+            sp.GetRequiredService<IServiceScopeFactory>(),
+            CrearConfiguracion(),
+            new UserDataPathProviderFake(),
+            guardia,
+            NullLogger<DisparadorBackupManual>.Instance);
+
+        Assert.True(disparador.Disparar(usuarioId: 7));
+
+        // EjecutarEnBackgroundAsync es fire-and-forget (privado) -- se espera su finalización con
+        // el mismo criterio que BackupProgramadoServiceTests (nada más rápido y determinístico
+        // disponible sin exponer la Task interna).
+        await Task.Delay(TimeSpan.FromMilliseconds(300));
+
+        var fallida = Assert.Single(espia.Agregadas);
+        Assert.Equal(ResultadoBackup.Fallida, fallida.Resultado);
+        Assert.Equal(7, fallida.UsuarioId);
+        Assert.Null(fallida.NombreArchivo);
+        Assert.False(string.IsNullOrWhiteSpace(fallida.MotivoFallo));
+
+        // Y la guardia también quedó libre (finally de EjecutarEnBackgroundAsync, sin relación con
+        // Importante 6 pero verificado igual acá de paso).
+        Assert.True(guardia.TryEntrar());
+    }
+}
