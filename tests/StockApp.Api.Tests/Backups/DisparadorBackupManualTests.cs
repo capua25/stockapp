@@ -28,7 +28,7 @@ public class DisparadorBackupManualTests
         public string GetLogsDirectory() => throw new InvalidOperationException("boom");
     }
 
-    private sealed class UserDataPathProviderFake : IUserDataPathProvider
+    private sealed class UserDataPathProviderFake : IUserDataPathProvider, IDisposable
     {
         private readonly string _dir = Path.Combine(Path.GetTempPath(), "DisparadorBackupManualTests_" + Guid.NewGuid());
         public string GetDataDirectory() => _dir;
@@ -36,6 +36,16 @@ public class DisparadorBackupManualTests
         public string GetBackupsDirectory() => Path.Combine(_dir, "backups");
         public string GetLicenciaPath() => Path.Combine(_dir, "licencia.lic");
         public string GetLogsDirectory() => Path.Combine(_dir, "logs");
+
+        /// <summary>Menor 8 del review adversarial (segunda pasada): el camino feliz de
+        /// Disparar() llega a Directory.CreateDirectory(directorio) y crea un directorio real
+        /// bajo Path.GetTempPath() -- sin este Dispose quedaba basura acumulándose en disco en
+        /// cada corrida de la suite.</summary>
+        public void Dispose()
+        {
+            if (Directory.Exists(_dir))
+                Directory.Delete(_dir, recursive: true);
+        }
     }
 
     private static IConfiguration CrearConfiguracion(bool conConnectionString = true)
@@ -85,13 +95,24 @@ public class DisparadorBackupManualTests
         // Mismo bug, otro disparador posible de la misma línea sin try/finally: falta
         // ConnectionStrings:Default en configuración.
         var guardia = new GuardiaCorridaBackup();
-        var disparador = Crear(guardia, new UserDataPathProviderFake(), CrearConfiguracion(conConnectionString: false));
+        using var paths = new UserDataPathProviderFake();
+        var disparador = Crear(guardia, paths, CrearConfiguracion(conConnectionString: false));
 
         Assert.Throws<InvalidOperationException>(() => disparador.Disparar(usuarioId: 1));
 
         Assert.True(guardia.TryEntrar(), "La guardia quedó tomada para siempre tras el fallo.");
     }
 
+    /// <summary>
+    /// MENOR 7 del review adversarial (segunda pasada, aclaración pedida): este test guarda el
+    /// guard de REENTRANCIA (ya hay una corrida en curso -> corta ANTES de tocar paths), NO el fix
+    /// de la fuga de semáforo (IMPORTANTE 3, cubierto arriba por
+    /// Disparar_PathProviderExplota_.../Disparar_ConnectionStringFaltante_...). Revertir ESE fix
+    /// (sacar el try/catch que libera la guardia si paths/configuration explotan) NO rompe este
+    /// test: acá la guardia nunca se libera dentro de Disparar() -- la toma el propio test antes
+    /// de llamar, y TryEntrar() de Disparar() corta con `return false` antes de llegar a esa
+    /// sección.
+    /// </summary>
     [Fact]
     public void Disparar_GuardiaYaOcupada_DevuelveFalseYNoConsultaPaths()
     {
@@ -143,20 +164,23 @@ public class DisparadorBackupManualTests
         // ServicioBackup ya persiste por su cuenta.
         services.AddScoped<ICorridaBackupRepository>(_ => espia);
         var sp = services.BuildServiceProvider();
+        using var paths = new UserDataPathProviderFake();
 
         var disparador = new DisparadorBackupManual(
             sp.GetRequiredService<IServiceScopeFactory>(),
             CrearConfiguracion(),
-            new UserDataPathProviderFake(),
+            paths,
             guardia,
             NullLogger<DisparadorBackupManual>.Instance);
 
         Assert.True(disparador.Disparar(usuarioId: 7));
 
-        // EjecutarEnBackgroundAsync es fire-and-forget (privado) -- se espera su finalización con
-        // el mismo criterio que BackupProgramadoServiceTests (nada más rápido y determinístico
-        // disponible sin exponer la Task interna).
-        await Task.Delay(TimeSpan.FromMilliseconds(300));
+        // Menor 8 del review adversarial (segunda pasada): antes, un Task.Delay(300ms) a ciegas
+        // esperaba que EjecutarEnBackgroundAsync (fire-and-forget, privado) terminara -- candidato
+        // a flaky bajo CI cargada. DisparadorBackupManual.UltimaCorridaEnBackgroundParaTests
+        // (seam de test) expone esa MISMA Task -- awaitearla es determinístico: espera exactamente
+        // lo que hace falta, ni un tick más ni menos.
+        await disparador.UltimaCorridaEnBackgroundParaTests!;
 
         var fallida = Assert.Single(espia.Agregadas);
         Assert.Equal(ResultadoBackup.Fallida, fallida.Resultado);

@@ -23,6 +23,18 @@ public sealed class DisparadorBackupManual
     private readonly IGuardiaCorridaBackup _guardia;
     private readonly ILogger<DisparadorBackupManual> _logger;
 
+    /// <summary>
+    /// Seam de test (Menor 8 del review adversarial, segunda pasada): expone la Task
+    /// fire-and-forget del último Disparar() para que los tests puedan esperarla de forma
+    /// determinística (await) en vez de un Task.Delay a ciegas -- mismo criterio que
+    /// ImportacionRepository.AntesDeGuardarAsync (seam solo para test, no-op en producción salvo
+    /// por guardar la referencia). Internal: nunca se usa en producción, solo visible para
+    /// StockApp.Api.Tests (InternalsVisibleTo en el .csproj). NO cambia el fire-and-forget real de
+    /// Disparar() -- la Task sigue arrancando y corriendo en background igual que siempre, esto
+    /// solo guarda una referencia extra para que el test pueda engancharse.
+    /// </summary>
+    internal Task? UltimaCorridaEnBackgroundParaTests { get; private set; }
+
     public DisparadorBackupManual(
         IServiceScopeFactory scopeFactory,
         IConfiguration configuration,
@@ -69,7 +81,7 @@ public sealed class DisparadorBackupManual
             // acá, _guardia.Salir() es responsabilidad EXCLUSIVA del finally de
             // EjecutarEnBackgroundAsync -- llamarlo también acá liberaría un turno que esa Task
             // todavía necesita.
-            _ = EjecutarEnBackgroundAsync(connectionString, directorio, usuarioId);
+            UltimaCorridaEnBackgroundParaTests = EjecutarEnBackgroundAsync(connectionString, directorio, usuarioId);
             return true;
         }
         catch
