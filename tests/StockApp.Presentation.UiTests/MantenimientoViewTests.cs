@@ -27,12 +27,32 @@ public class MantenimientoViewTests
     private sealed class BackupsServiceFake : IBackupsService
     {
         private readonly IReadOnlyList<CorridaBackupDto> _corridas;
-        public BackupsServiceFake(IReadOnlyList<CorridaBackupDto> corridas) => _corridas = corridas;
+        private readonly Exception? _excepcionAlIniciar;
+        public int VecesIniciado { get; private set; }
+        private readonly TaskCompletionSource? _senialIniciar;
+
+        public BackupsServiceFake(
+            IReadOnlyList<CorridaBackupDto> corridas, Exception? excepcionAlIniciar = null,
+            TaskCompletionSource? senialIniciar = null)
+        {
+            _corridas = corridas;
+            _excepcionAlIniciar = excepcionAlIniciar;
+            _senialIniciar = senialIniciar;
+        }
 
         public Task<IReadOnlyList<CorridaBackupDto>> ListarAsync(CancellationToken ct = default) => Task.FromResult(_corridas);
         public Task<BackupDescargaDto> DescargarAsync(int id, CancellationToken ct = default) =>
             Task.FromResult(new BackupDescargaDto("x.dump", new MemoryStream()));
         public Task<SaludBackupDto> ObtenerSaludAsync(CancellationToken ct = default) => Task.FromResult(new SaludBackupDto(null, true, 26));
+
+        public async Task IniciarAsync(CancellationToken ct = default)
+        {
+            VecesIniciado++;
+            if (_senialIniciar is not null)
+                await _senialIniciar.Task;
+            if (_excepcionAlIniciar is not null)
+                throw _excepcionAlIniciar;
+        }
     }
 
     private sealed class ServicioGuardadoArchivoFake : IServicioGuardadoArchivo
@@ -51,10 +71,12 @@ public class MantenimientoViewTests
         """;
 
     private static (Window Window, MantenimientoViewModel Vm) Montar(
-        IReadOnlyList<CorridaBackupDto> corridas, ResumenLogsDto? resumenLogs = null)
+        IReadOnlyList<CorridaBackupDto> corridas, ResumenLogsDto? resumenLogs = null,
+        IBackupsService? backups = null, ConfirmacionServiceFake? confirmacion = null)
     {
         var vm = new MantenimientoViewModel(
-            new BackupsServiceFake(corridas), new ServicioGuardadoArchivoFake(), new ConfirmacionServiceFake(), new LogsServiceFake(resumenLogs));
+            backups ?? new BackupsServiceFake(corridas), new ServicioGuardadoArchivoFake(),
+            confirmacion ?? new ConfirmacionServiceFake(), new LogsServiceFake(resumenLogs));
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
         window.DataContext = vm;
@@ -264,5 +286,57 @@ public class MantenimientoViewTests
         Assert.False(botonDescargar.IsVisible);
         Assert.True(botonDescargando.IsVisible);
         Assert.False(botonDescargando.IsEnabled);
+    }
+
+    // ── Hacer backup ahora (fix/integridad-referencial, POST /backups) ──────────
+
+    [AvaloniaFact]
+    public void Montar_ClickEnHacerBackupAhora_DisparaIniciarAsync()
+    {
+        var backups = new BackupsServiceFake(new List<CorridaBackupDto>());
+        var (window, vm) = Montar([], backups: backups);
+
+        var boton = window.GetVisualDescendants().OfType<Button>().First(b => b.Content as string == "Hacer backup ahora");
+        boton.Command!.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(1, backups.VecesIniciado);
+    }
+
+    [AvaloniaFact]
+    public void Montar_MientrasIniciaBackup_MuestraIniciandoYOcultaHacerBackupAhora()
+    {
+        var senial = new TaskCompletionSource();
+        var backups = new BackupsServiceFake(new List<CorridaBackupDto>(), senialIniciar: senial);
+        var (window, vm) = Montar([], backups: backups);
+
+        vm.IniciarBackupCommand.ExecuteAsync(null);
+        Dispatcher.UIThread.RunJobs();
+
+        var botonHacer = window.GetVisualDescendants().OfType<Button>().First(b => b.Content as string == "Hacer backup ahora");
+        var botonIniciando = window.GetVisualDescendants().OfType<Button>().First(b => b.Content as string == "Iniciando…");
+        Assert.False(botonHacer.IsVisible);
+        Assert.True(botonIniciando.IsVisible);
+        Assert.False(botonIniciando.IsEnabled);
+
+        senial.SetResult();
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    [AvaloniaFact]
+    public void Montar_HacerBackupAhoraFalla_InformaElErrorYRestauraElBoton()
+    {
+        var confirmacion = new ConfirmacionServiceFake();
+        var backups = new BackupsServiceFake(
+            new List<CorridaBackupDto>(), excepcionAlIniciar: new InvalidOperationException("Ya hay un backup en curso."));
+        var (window, vm) = Montar([], backups: backups, confirmacion: confirmacion);
+
+        var boton = window.GetVisualDescendants().OfType<Button>().First(b => b.Content as string == "Hacer backup ahora");
+        boton.Command!.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(vm.IniciandoBackup);
+        var botonHacer = window.GetVisualDescendants().OfType<Button>().First(b => b.Content as string == "Hacer backup ahora");
+        Assert.True(botonHacer.IsVisible);
     }
 }

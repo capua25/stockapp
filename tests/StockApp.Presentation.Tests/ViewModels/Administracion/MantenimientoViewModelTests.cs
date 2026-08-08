@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Moq;
 using StockApp.Application.Backups;
 using StockApp.Application.Logs;
+using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Administracion;
 using Xunit;
@@ -441,5 +442,83 @@ public class MantenimientoViewModelTests
 
         confirmacionMock.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Once);
         Assert.False(vm.DescargandoLogs);
+    }
+
+    // ── IniciarBackupCommand (fix/integridad-referencial, POST /backups) ────────
+
+    [Fact]
+    public async Task IniciarBackupCommand_DisparaElBackupYAvisaAlUsuario()
+    {
+        var (vm, backupsMock, _, confirmacionMock) = Crear();
+
+        await vm.IniciarBackupCommand.ExecuteAsync(null);
+
+        backupsMock.Verify(b => b.IniciarAsync(It.IsAny<CancellationToken>()), Times.Once);
+        confirmacionMock.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Once);
+        Assert.False(vm.IniciandoBackup);
+    }
+
+    [Fact]
+    public async Task IniciarBackupCommand_ElServicioFalla_InformaElErrorYNoRompe()
+    {
+        var (vm, backupsMock, _, confirmacionMock) = Crear();
+        backupsMock.Setup(b => b.IniciarAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new ReglaDeNegocioException("Ya hay un backup en curso."));
+
+        await vm.IniciarBackupCommand.ExecuteAsync(null);
+
+        confirmacionMock.Verify(c => c.InformarAsync("Ya hay un backup en curso."), Times.Once);
+        Assert.False(vm.IniciandoBackup);
+    }
+
+    [Fact]
+    public async Task IniciarBackupCommand_MientrasCorre_IniciandoBackupEsTrueYLuegoFalse()
+    {
+        var (vm, backupsMock, _, _) = Crear();
+        var tcsIniciada = new TaskCompletionSource();
+        var tcsFin = new TaskCompletionSource();
+        backupsMock.Setup(b => b.IniciarAsync(It.IsAny<CancellationToken>()))
+            .Returns(async () =>
+            {
+                tcsIniciada.SetResult();
+                await tcsFin.Task;
+            });
+
+        var tarea = vm.IniciarBackupCommand.ExecuteAsync(null);
+        await tcsIniciada.Task;
+
+        Assert.True(vm.IniciandoBackup);
+
+        tcsFin.SetResult();
+        await tarea;
+
+        Assert.False(vm.IniciandoBackup);
+    }
+
+    [Fact]
+    public async Task IniciarBackupCommand_DobleClick_LaSegundaEsNoOp()
+    {
+        var (vm, backupsMock, _, _) = Crear();
+        var tcsIniciada = new TaskCompletionSource();
+        var tcsFin = new TaskCompletionSource();
+        var invocaciones = 0;
+        backupsMock.Setup(b => b.IniciarAsync(It.IsAny<CancellationToken>()))
+            .Returns(async () =>
+            {
+                invocaciones++;
+                tcsIniciada.SetResult();
+                await tcsFin.Task;
+            });
+
+        var tarea1 = vm.IniciarBackupCommand.ExecuteAsync(null);
+        await tcsIniciada.Task;
+
+        var tarea2 = vm.IniciarBackupCommand.ExecuteAsync(null);
+        await tarea2;
+
+        Assert.Equal(1, invocaciones);
+
+        tcsFin.SetResult();
+        await tarea1;
     }
 }

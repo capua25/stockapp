@@ -34,6 +34,13 @@ public partial class MantenimientoViewModel : ViewModelBase
     [ObservableProperty]
     private bool _descargandoLogs;
 
+    /// <summary>Guard del botón "Hacer backup ahora" (fix/integridad-referencial, POST /backups),
+    /// mismo criterio que DescargandoLogs: sin esto un doble click dispara dos POST -- aunque
+    /// IGuardiaCorridaBackup del servidor ya rechaza el segundo con 409, no hay razón para dejar
+    /// que el segundo click ni siquiera salga.</summary>
+    [ObservableProperty]
+    private bool _iniciandoBackup;
+
     // MostrarListaVacia solo se recalcula cuando cambia Cargando, no Corridas.CollectionChanged
     // directamente: CargarAsync() mutila Corridas (Clear/Add) de forma síncrona, ANTES de que el
     // finally ponga Cargando en false, así que cuando el binding se re-evalúa el conteo ya está
@@ -185,4 +192,31 @@ public partial class MantenimientoViewModel : ViewModelBase
 
     [RelayCommand]
     private void Cancelar(FilaCorridaBackupVm fila) => fila.Cts?.Cancel();
+
+    /// <summary>Botón "Hacer backup ahora" (fix/integridad-referencial): dispara POST /backups.
+    /// El servidor responde apenas la corrida arranca en background -- este método NO espera a
+    /// que el dump termine, solo informa que se disparó. Un 409 (IGuardiaCorridaBackup ya tiene
+    /// una corrida en curso) llega acá como ReglaDeNegocioException y se informa como cualquier
+    /// otro error, con el mismo mensaje del servidor.</summary>
+    [RelayCommand]
+    private async Task IniciarBackupAsync()
+    {
+        if (IniciandoBackup) return;
+
+        IniciandoBackup = true;
+        try
+        {
+            await _backups.IniciarAsync();
+            await _confirmacion.InformarAsync(
+                "Backup iniciado en el servidor. Actualizá esta pantalla en unos minutos para verlo en la lista.");
+        }
+        catch (Exception ex)
+        {
+            await _confirmacion.InformarAsync(ex.Message);
+        }
+        finally
+        {
+            IniciandoBackup = false;
+        }
+    }
 }

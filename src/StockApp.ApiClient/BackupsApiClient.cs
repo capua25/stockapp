@@ -50,4 +50,11 @@ public sealed class BackupsApiClient : IBackupsService
         return await response.Content.ReadFromJsonAsync<SaludBackupDto>(cancellationToken: ct)
             ?? throw new InvalidOperationException("Respuesta vacía del servidor al obtener la salud del backup.");
     }
+
+    public async Task IniciarAsync(CancellationToken ct = default)
+    {
+        // Sin body: POST /backups no espera nada del cliente, el usuario viaja en el JWT.
+        var response = await ApiErrores.EnviarAsync(() => _http.PostAsync("backups", null, ct), ct);
+        await ApiErrores.AsegurarExitoAsync(response);
+    }
 }

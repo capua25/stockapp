@@ -74,6 +74,9 @@ public class InicioViewTests
 
         public Task<SaludBackupDto> ObtenerSaludAsync(CancellationToken ct = default) =>
             _excepcion is not null ? Task.FromException<SaludBackupDto>(_excepcion) : Task.FromResult(_salud!);
+
+        public Task IniciarAsync(CancellationToken ct = default)
+            => throw new NotSupportedException("No usado en este banco de pruebas.");
     }
 
     private const string Xaml = """

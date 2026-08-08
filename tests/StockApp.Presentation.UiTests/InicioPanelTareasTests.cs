@@ -72,6 +72,9 @@ public class InicioPanelTareasTests
 
         public Task<SaludBackupDto> ObtenerSaludAsync(CancellationToken ct = default)
             => Task.FromResult(new SaludBackupDto(DateTime.UtcNow, false, 26));
+
+        public Task IniciarAsync(CancellationToken ct = default)
+            => throw new NotSupportedException("No usado en este banco de pruebas.");
     }
 
     private const string Xaml = """

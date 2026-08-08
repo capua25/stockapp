@@ -36,6 +36,7 @@ public class AccesoLimitadoViewTests
         public Task<BackupDescargaDto> DescargarAsync(int id, CancellationToken ct = default) =>
             Task.FromResult(new BackupDescargaDto("x.dump", new MemoryStream()));
         public Task<SaludBackupDto> ObtenerSaludAsync(CancellationToken ct = default) => Task.FromResult(new SaludBackupDto(null, true, 26));
+        public Task IniciarAsync(CancellationToken ct = default) => throw new NotSupportedException("No usado en este banco de pruebas.");
     }
 
     private sealed class ServicioGuardadoArchivoFake : IServicioGuardadoArchivo

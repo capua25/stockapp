@@ -20,4 +20,13 @@ public interface IBackupsService
     Task<IReadOnlyList<CorridaBackupDto>> ListarAsync(CancellationToken ct = default);
     Task<BackupDescargaDto> DescargarAsync(int id, CancellationToken ct = default);
     Task<SaludBackupDto> ObtenerSaludAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Dispara un backup manual (POST /backups, fix/integridad-referencial). El servidor
+    /// responde 202 apenas la corrida arranca en background -- este método vuelve mucho antes
+    /// de que el dump termine, no significa "el backup ya está listo". Lanza
+    /// <see cref="StockApp.Domain.Exceptions.ReglaDeNegocioException"/> si ya hay una corrida
+    /// en curso (job automático o disparo manual anterior).
+    /// </summary>
+    Task IniciarAsync(CancellationToken ct = default);
 }
