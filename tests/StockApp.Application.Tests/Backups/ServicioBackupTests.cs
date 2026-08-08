@@ -93,6 +93,53 @@ public class ServicioBackupTests
         Assert.True(File.Exists(Path.Combine(directorio, corrida.NombreArchivo!)));
     }
 
+    [Fact]
+    public async Task EjecutarCorridaAsync_SinUsuarioId_PersisteCorridaConUsuarioIdNull()
+    {
+        // Job automático (BackupProgramadoService) o llamador que no pasa el parámetro nuevo:
+        // el default debe seguir siendo null, sin cambiar el comportamiento existente.
+        var directorio = CrearDirectorioTemporal();
+        var ejecutor = new EjecutorPgDumpFake(exitoso: true);
+        var repo = new CorridaBackupRepositoryFake();
+        var svc = new ServicioBackup(ejecutor, repo, NullLogger<ServicioBackup>.Instance);
+
+        await svc.EjecutarCorridaAsync("Host=x;Database=y", directorio, Ahora, CancellationToken.None);
+
+        var corrida = Assert.Single(repo.Corridas);
+        Assert.Null(corrida.UsuarioId);
+    }
+
+    [Fact]
+    public async Task EjecutarCorridaAsync_ConUsuarioId_PersisteCorridaConEseUsuarioId()
+    {
+        // Disparo manual (POST /backups, DisparadorBackupManual): el actor viaja hasta la
+        // fila persistida, exitosa o fallida.
+        var directorio = CrearDirectorioTemporal();
+        var ejecutor = new EjecutorPgDumpFake(exitoso: true);
+        var repo = new CorridaBackupRepositoryFake();
+        var svc = new ServicioBackup(ejecutor, repo, NullLogger<ServicioBackup>.Instance);
+
+        await svc.EjecutarCorridaAsync("Host=x;Database=y", directorio, Ahora, CancellationToken.None, usuarioId: 7);
+
+        var corrida = Assert.Single(repo.Corridas);
+        Assert.Equal(7, corrida.UsuarioId);
+    }
+
+    [Fact]
+    public async Task EjecutarCorridaAsync_FallidaConUsuarioId_PersisteCorridaFallidaConEseUsuarioId()
+    {
+        var directorio = CrearDirectorioTemporal();
+        var ejecutor = new EjecutorPgDumpFake(exitoso: false, mensajeError: "pg_dump: fallo simulado");
+        var repo = new CorridaBackupRepositoryFake();
+        var svc = new ServicioBackup(ejecutor, repo, NullLogger<ServicioBackup>.Instance);
+
+        await svc.EjecutarCorridaAsync("Host=x;Database=y", directorio, Ahora, CancellationToken.None, usuarioId: 7);
+
+        var corrida = Assert.Single(repo.Corridas);
+        Assert.Equal(ResultadoBackup.Fallida, corrida.Resultado);
+        Assert.Equal(7, corrida.UsuarioId);
+    }
+
     [Theory]
     [InlineData("pg_dump: no se encontró el ejecutable")]
     [InlineData("pg_dump: password authentication failed for user \"stockapp\"")]

@@ -27,8 +27,13 @@ public sealed class ServicioBackup
         _logger = logger;
     }
 
+    /// <summary><paramref name="usuarioId"/> (fix/integridad-referencial): actor que pidió esta
+    /// corrida, o null si la disparó el job automático (BackupProgramadoService no lo pasa —
+    /// default null, sin cambiar su comportamiento). DisparadorBackupManual (Api, POST /backups)
+    /// es el único llamador que lo pasa con valor.</summary>
     public async Task EjecutarCorridaAsync(
-        string connectionString, string directorioBackups, DateTime ahoraUtc, CancellationToken cancellationToken)
+        string connectionString, string directorioBackups, DateTime ahoraUtc, CancellationToken cancellationToken,
+        int? usuarioId = null)
     {
         Directory.CreateDirectory(directorioBackups);
 
@@ -54,6 +59,7 @@ public sealed class ServicioBackup
                     NombreArchivo = nombreArchivo,
                     TamanioBytes = new FileInfo(rutaFinal).Length,
                     MotivoFallo = null,
+                    UsuarioId = usuarioId,
                 };
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -75,6 +81,7 @@ public sealed class ServicioBackup
                     NombreArchivo = null,
                     TamanioBytes = null,
                     MotivoFallo = $"El dump se generó pero no se pudo mover a destino: {ex.Message}",
+                    UsuarioId = usuarioId,
                 };
             }
         }
@@ -90,6 +97,7 @@ public sealed class ServicioBackup
                 NombreArchivo = null,
                 TamanioBytes = null,
                 MotivoFallo = resultado.MensajeError,
+                UsuarioId = usuarioId,
             };
         }
 
@@ -225,6 +233,8 @@ public sealed class ServicioBackup
                 NombreArchivo = nombre,
                 TamanioBytes = new FileInfo(ruta).Length,
                 MotivoFallo = MarcaFilaReconciliada,
+                // Nadie "pidió" esta corrida -- se reconstruyó de un .dump huérfano en disco.
+                UsuarioId = null,
             });
         }
     }
