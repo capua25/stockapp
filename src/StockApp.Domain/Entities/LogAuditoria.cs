@@ -20,6 +20,13 @@ public class LogAuditoria
     /// tipada con índice NO único (F5c, post-review de Task 6): reemplaza la codificación previa
     /// como texto embebido en <see cref="Detalle"/>, que forzaba un seq scan sobre una tabla
     /// compartida por todo el sistema para ubicar el log de un lote.
+    ///
+    /// fix/integridad-referencial: se evaluó y se descartó a propósito (a) renombrarlo a
+    /// IdImportacion para "unificar" con Gasto/IngresoCaja/LineaPoa/PagoGasto.IdImportacion, y
+    /// (b) convertirlo en FK hacia LoteImportacion. Ambos acoplarían esta bitácora GENÉRICA
+    /// (AccionAuditada tiene 51 valores, de los cuales solo 2 son de importación) al módulo de
+    /// importación — un futuro proceso batch no relacionado (anulación masiva, recálculo) no
+    /// podría reusar este mismo campo si quedara atado por nombre o por FK a LotesImportacion.
     /// </summary>
     public Guid? IdLote { get; set; }
 }

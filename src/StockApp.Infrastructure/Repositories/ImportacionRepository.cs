@@ -24,6 +24,7 @@ public class ImportacionRepository : IImportacionRepository
     public async Task<ResultadoConfirmacionDto> ConfirmarAsync(ConfirmarImportacionDto dto, int usuarioId)
     {
         var idImportacion = Guid.NewGuid();
+        var fechaConfirmacion = DateTime.UtcNow;
 
         await using var tx = await _ctx.Database.BeginTransactionAsync();
         await _ctx.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock({dto.Ejercicio})");
@@ -38,6 +39,20 @@ public class ImportacionRepository : IImportacionRepository
                 $"El ejercicio {dto.Ejercicio} ya tiene una importación previa (IdImportacion " +
                 $"{idNoRevertida}) sin revertir. Usá Forzar=true para reimportar de todas formas, " +
                 "o revertí esa corrida primero con /finanzas/importar/revertir/{id}.");
+
+        // fix/integridad-referencial: el LoteImportacion se agrega al ChangeTracker ACÁ, antes de
+        // cualquier hijo que lo referencie (Gasto/IngresoCaja/LineaPoa/PagoGasto vía IdImportacion,
+        // todos con FK real hacia LotesImportacion.Id — AppDbContext.cs). La relación está mapeada
+        // como HasOne/WithMany en el modelo, así que EF ordena la inserción (el lote primero)
+        // dentro del ÚNICO SaveChangesAsync de más abajo sin importar en qué orden se agregaron al
+        // ChangeTracker — pero igual se agrega primero acá por claridad de lectura.
+        _ctx.LotesImportacion.Add(new LoteImportacion
+        {
+            Id = idImportacion,
+            Fecha = fechaConfirmacion,
+            UsuarioId = usuarioId,
+            Ejercicio = dto.Ejercicio,
+        });
 
         var (proveedorPorNombre, fuentePorNombre, rubroPorCodigo,
                 proveedoresCreados, fuentesCreadas, rubrosCreados,
@@ -55,14 +70,16 @@ public class ImportacionRepository : IImportacionRepository
 
         // Auditoría de la corrida (spec §2.6/§2.7): DENTRO de la transacción y ANTES del único
         // SaveChangesAsync — si algo de arriba o de este mismo save rollbackea, no puede quedar
-        // rastro de auditoría de una corrida que no se confirmó. IdLote es la fuente de verdad
-        // del vínculo con el lote (post-review de Task 6: columna tipada + índice no único en
-        // LogAuditoria, AppDbContext.cs); Detalle queda solo como resumen legible para un humano,
-        // sin ningún dato que otro código necesite parsear.
+        // rastro de auditoría de una corrida que no se confirmó. fix/integridad-referencial: la
+        // fuente de verdad del lote es AHORA LotesImportacion (ver el Add de más arriba) — este
+        // LogAuditoria sigue existiendo igual que siempre (la auditoría no se toca), IdLote queda
+        // como vínculo de trazabilidad hacia ese lote, pero ya no es de dónde se LEE su estado.
+        // Detalle queda solo como resumen legible para un humano, sin ningún dato que otro código
+        // necesite parsear.
         _ctx.LogsAuditoria.Add(new LogAuditoria
         {
             UsuarioId = usuarioId,
-            Fecha = DateTime.UtcNow,
+            Fecha = fechaConfirmacion,
             Accion = AccionAuditada.ImportacionPlanillas,
             Entidad = "Importacion",
             EntidadId = dto.Ejercicio,
@@ -119,8 +136,9 @@ public class ImportacionRepository : IImportacionRepository
     /// Reversa por lote (spec §2.7, Task 8): baja lógica de TODO lo que
     /// <see cref="ConfirmarAsync"/> creó o reactivó con este <paramref name="idImportacion"/>,
     /// en UNA transacción — mismo patrón (una tx, un solo SaveChangesAsync, commit al final) que
-    /// ConfirmarAsync. Busca y marca "revertida" por <see cref="LogAuditoria.IdLote"/> (columna
-    /// tipada, post-review de Task 6) — NO hay ningún parseo de texto embebido en Detalle.
+    /// ConfirmarAsync. fix/integridad-referencial: busca y marca "revertida" en
+    /// <see cref="LoteImportacion"/> (FK real desde Gasto/IngresoCaja/LineaPoa/PagoGasto) — NO
+    /// en LogsAuditoria, que sigue escribiéndose igual pero ya no es la fuente de verdad.
     ///
     /// Gasto/IngresoCaja/LineaPoa del lote → Activo = false. PagoGasto del lote (el pago
     /// automático de contado que el propio importador creó, identificado por
@@ -149,39 +167,39 @@ public class ImportacionRepository : IImportacionRepository
     /// </summary>
     public async Task<ResultadoReversionDto> RevertirAsync(Guid idImportacion, int usuarioId)
     {
-        // Existencia del lote (re-review Minor): se resuelve ANTES de abrir la transacción — el
-        // camino 404 no paga el costo de una conexión + BEGIN + ROLLBACK al pedo. OrderByDescending
-        // + FirstOrDefaultAsync (re-review Minor) da un resultado determinístico aunque, en la
-        // práctica, cada corrida de ConfirmarAsync escribe un IdLote nuevo (Guid.NewGuid()), así
-        // que nunca hay más de UN LogAuditoria de ImportacionPlanillas con el mismo IdLote.
-        var logConfirmacion = await _ctx.LogsAuditoria
-            .Where(l => l.Accion == AccionAuditada.ImportacionPlanillas && l.IdLote == idImportacion)
-            .OrderByDescending(l => l.Id)
-            .FirstOrDefaultAsync();
+        // Existencia del lote: se resuelve ANTES de abrir la transacción — el camino 404 no paga
+        // el costo de una conexión + BEGIN + ROLLBACK al pedo (fix/integridad-referencial: antes
+        // se derivaba de que existiera un LogAuditoria de ImportacionPlanillas con ese IdLote;
+        // ahora es una lectura directa de LotesImportacion por PK).
+        var lote = await _ctx.LotesImportacion.FirstOrDefaultAsync(l => l.Id == idImportacion);
 
-        if (logConfirmacion is null)
+        if (lote is null)
             throw new EntidadNoEncontradaException(
                 $"No existe ninguna importación con IdImportacion {idImportacion}.");
 
         await using var tx = await _ctx.Database.BeginTransactionAsync();
 
         // Advisory lock por EJERCICIO (re-review IMPORTANT 1), tomado con el MISMO recurso
-        // (logConfirmacion.EntidadId, que ConfirmarAsync estampa con dto.Ejercicio) que
-        // ConfirmarAsync toma en su propio pg_advisory_xact_lock — así ambos métodos se
-        // serializan entre sí para el mismo ejercicio, no solo entre sí mismos. Sin esto: (1) dos
-        // /revertir concurrentes sobre el mismo lote pasaban ambos el guard yaRevertida bajo READ
-        // COMMITTED (ninguno ve el LogAuditoria no committeado del otro) y escribían DOS logs de
-        // ReversionImportacion; (2) un /revertir concurrente con un /confirmar del mismo ejercicio
-        // corría en paralelo sin ningún orden garantizado, dejando estados imposibles de
-        // reconciliar (un gasto ACTIVO de una corrida nueva colgado de una LineaPoa que la reversa
-        // de la corrida vieja dejó INACTIVA).
-        await _ctx.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock({logConfirmacion.EntidadId})");
+        // (lote.Ejercicio, que ConfirmarAsync estampa con dto.Ejercicio) que ConfirmarAsync toma
+        // en su propio pg_advisory_xact_lock — así ambos métodos se serializan entre sí para el
+        // mismo ejercicio, no solo entre sí mismos. Sin esto: (1) dos /revertir concurrentes
+        // sobre el mismo lote pasaban ambos el guard yaRevertida bajo READ COMMITTED (ninguno ve
+        // el cambio no committeado del otro) y revertían el mismo lote DOS veces; (2) un
+        // /revertir concurrente con un /confirmar del mismo ejercicio corría en paralelo sin
+        // ningún orden garantizado, dejando estados imposibles de reconciliar (un gasto ACTIVO de
+        // una corrida nueva colgado de una LineaPoa que la reversa de la corrida vieja dejó
+        // INACTIVA).
+        await _ctx.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock({lote.Ejercicio})");
 
-        // Sin tx.RollbackAsync() explícito (mismo criterio que el guard de re-importación de
-        // ConfirmarAsync): el `await using var tx` de arriba hace rollback al disponerse cuando
-        // la excepción se propaga.
-        var yaRevertida = await _ctx.LogsAuditoria.AnyAsync(l =>
-            l.Accion == AccionAuditada.ReversionImportacion && l.IdLote == idImportacion);
+        // Re-chequeo FRESCO bajo el lock (mismo criterio que antes): "lote" se leyó ANTES de
+        // tomar el advisory lock, así que una reversa concurrente pudo haber committeado entre
+        // esa lectura y acá. AnyAsync es una query nueva, no depende del valor en memoria de
+        // "lote" (que el ChangeTracker todavía no refrescó). Sin tx.RollbackAsync() explícito
+        // (mismo criterio que el guard de re-importación de ConfirmarAsync): el
+        // `await using var tx` de arriba hace rollback al disponerse cuando la excepción se
+        // propaga.
+        var yaRevertida = await _ctx.LotesImportacion
+            .AnyAsync(l => l.Id == idImportacion && l.RevertidaEn != null);
 
         if (yaRevertida)
             throw new ReglaDeNegocioException(
@@ -243,13 +261,23 @@ public class ImportacionRepository : IImportacionRepository
             asignacionesRevertidas += linea.Asignaciones.Count;
         }
 
+        var fechaReversion = DateTime.UtcNow;
+
+        // fix/integridad-referencial: el estado "revertida" ahora vive en la fila del lote
+        // (RevertidaEn/RevertidaPorUsuarioId, seteados juntos por MarcarRevertida — ver
+        // LoteImportacion.cs). El LogAuditoria de abajo se sigue escribiendo igual que antes: la
+        // auditoría no se toca, sigue siendo la bitácora — lo que cambió es de dónde se LEE el
+        // estado del lote (ListarHistorialAsync/BuscarImportacionNoRevertidaAsync ya no dependen
+        // de este log).
+        lote.MarcarRevertida(fechaReversion, usuarioId);
+
         _ctx.LogsAuditoria.Add(new LogAuditoria
         {
             UsuarioId = usuarioId,
-            Fecha = DateTime.UtcNow,
+            Fecha = fechaReversion,
             Accion = AccionAuditada.ReversionImportacion,
             Entidad = "Importacion",
-            EntidadId = logConfirmacion.EntidadId,
+            EntidadId = lote.Ejercicio,
             IdLote = idImportacion,
             Detalle = $"Gastos revertidos: {gastos.Count}; Pagos revertidos: {pagosRevertidos}; " +
                 $"Ingresos revertidos: {ingresos.Count}; LineasPoa revertidas: {lineasPoa.Count}; " +
@@ -264,36 +292,20 @@ public class ImportacionRepository : IImportacionRepository
     }
 
     /// <summary>
-    /// F5d §3: historial de importaciones derivado ENTERAMENTE de LogsAuditoria — sin entidad
-    /// cabecera ni migración. Dos queries (mismo criterio que BuscarImportacionNoRevertidaAsync):
-    /// el set de IdLote revertidos se trae una sola vez y se compara en memoria contra cada
-    /// confirmación, evitando un N+1 de AnyAsync por fila. l.Usuario!.NombreUsuario genera el
-    /// JOIN a Usuarios en SQL (mismo patrón que AuditoriaQueryRepository.ObtenerLogAsync) — sin
-    /// Include explícito.
+    /// F5d §3, fix/integridad-referencial: historial de importaciones leído de LotesImportacion
+    /// (antes: derivado enteramente de LogsAuditoria, dos queries + comparación en memoria — ver
+    /// historial de git de este archivo). Una sola query: Revertida = RevertidaEn != null es un
+    /// campo de la misma fila, no un segundo log a correlacionar. l.Usuario!.NombreUsuario genera
+    /// el JOIN a Usuarios en SQL (mismo patrón que antes, AuditoriaQueryRepository.ObtenerLogAsync)
+    /// — sin Include explícito. El contrato hacia afuera (ImportacionHistorialDto) no cambió.
     /// </summary>
     public async Task<IReadOnlyList<ImportacionHistorialDto>> ListarHistorialAsync()
     {
-        var revertidos = await _ctx.LogsAuditoria
-            .Where(l => l.Accion == AccionAuditada.ReversionImportacion && l.IdLote != null)
-            .Select(l => l.IdLote!.Value)
-            .ToHashSetAsync();
-
-        var confirmaciones = await _ctx.LogsAuditoria
-            .Where(l => l.Accion == AccionAuditada.ImportacionPlanillas && l.IdLote != null)
+        return await _ctx.LotesImportacion
             .OrderByDescending(l => l.Fecha)
-            .Select(l => new
-            {
-                IdImportacion = l.IdLote!.Value,
-                l.Fecha,
-                Ejercicio = l.EntidadId,
-                Usuario = l.Usuario!.NombreUsuario,
-            })
+            .Select(l => new ImportacionHistorialDto(
+                l.Id, l.Fecha, l.Ejercicio, l.Usuario!.NombreUsuario, l.RevertidaEn != null))
             .ToListAsync();
-
-        return confirmaciones
-            .Select(c => new ImportacionHistorialDto(
-                c.IdImportacion, c.Fecha, c.Ejercicio, c.Usuario, revertidos.Contains(c.IdImportacion)))
-            .ToList();
     }
 
     /// <summary>
@@ -339,50 +351,24 @@ public class ImportacionRepository : IImportacionRepository
     protected virtual Task AntesDeGuardarAsync() => Task.CompletedTask;
 
     /// <summary>
-    /// Guard de re-importación (spec §2.6). Filtra en SQL por Accion + EntidadId (el Ejercicio,
-    /// para no traer todo el historial de auditoría del sistema a memoria) y compara por
-    /// LogAuditoria.IdLote — columna tipada con índice no único (post-review de Task 6), sin
-    /// parseo de string ni EF.Functions.Like sobre Detalle. "No revertida" = no existe ningún
-    /// LogAuditoria de AccionAuditada.ReversionImportacion (Task 8) con el mismo IdLote. Hasta
-    /// que Task 8 exista, ninguna corrida puede estar revertida — esta consulta ya queda lista
-    /// para cuando RevertirAsync empiece a escribir esos logs con Accion =
-    /// AccionAuditada.ReversionImportacion e IdLote = el mismo Guid de la corrida que revierte.
-    /// Ordenada por Id descendente: si hay más de una corrida sin revertir para el mismo
-    /// ejercicio, se reporta la MÁS RECIENTE — es la que le sirve al humano que lee el 409 para
-    /// saber qué lote revertir (re-review, Minor 3).
+    /// Guard de re-importación (spec §2.6). fix/integridad-referencial: lee LotesImportacion en
+    /// vez de derivar el estado de LogsAuditoria — "no revertida" ahora es RevertidaEn IS NULL,
+    /// una columna real, no la ausencia de un segundo log correlacionado por IdLote. Una sola
+    /// query (antes eran dos: confirmaciones + revertidos, comparadas en memoria — ya no hace
+    /// falta el anti-join porque el estado "revertida" vive en la MISMA fila). Ordenada por Fecha
+    /// descendente: si hay más de un lote sin revertir para el mismo ejercicio (posible: Forzar
+    /// permite reimportar sin revertir el anterior), se reporta el MÁS RECIENTE — es el que le
+    /// sirve al humano que lee el 409 para saber qué lote revertir.
     /// </summary>
     private async Task<Guid?> BuscarImportacionNoRevertidaAsync(int ejercicio)
     {
-        var confirmaciones = await _ctx.LogsAuditoria
-            .Where(l => l.Accion == AccionAuditada.ImportacionPlanillas && l.EntidadId == ejercicio
-                // IdLote != null (re-review, Important 1): el flujo real siempre lo estampa, pero
-                // si alguna fila legacy o una escritura futura fuera de este flujo lo dejara en
-                // null, "l.IdLote == idLote" con idLote = null se traduce a "IS NULL" en SQL — el
-                // guard terminaría matcheando esa fila como "revertida" contra cualquier búsqueda
-                // sin lote real, dejando pasar una re-importación que en realidad no lo fue.
-                && l.IdLote != null)
-            .OrderByDescending(l => l.Id)
-            .Select(l => l.IdLote!.Value)
+        var candidatos = await _ctx.LotesImportacion
+            .Where(l => l.Ejercicio == ejercicio && l.RevertidaEn == null)
+            .OrderByDescending(l => l.Fecha)
+            .Select(l => (Guid?)l.Id)
             .ToListAsync();
 
-        if (confirmaciones.Count == 0)
-            return null;
-
-        // Colapsado a 2 queries (re-review, Minor 2): antes había un AnyAsync por confirmación,
-        // corriendo con el advisory lock tomado. Acá se trae de una el set de IdLote revertidos
-        // (mismo filtro IdLote != null, mismo motivo) y se compara en memoria.
-        var revertidos = await _ctx.LogsAuditoria
-            .Where(l => l.Accion == AccionAuditada.ReversionImportacion && l.IdLote != null)
-            .Select(l => l.IdLote!.Value)
-            .ToHashSetAsync();
-
-        foreach (var idLote in confirmaciones)
-        {
-            if (!revertidos.Contains(idLote))
-                return idLote;
-        }
-
-        return null;
+        return candidatos.FirstOrDefault();
     }
 
     /// <summary>

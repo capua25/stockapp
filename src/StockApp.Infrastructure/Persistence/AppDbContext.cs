@@ -136,6 +136,8 @@ public class AppDbContext : DbContext
             e.HasIndex(l => new { l.Nombre, l.Ejercicio }).IsUnique();
             e.Property(l => l.Activo).HasDefaultValue(true);
             e.HasIndex(l => l.IdImportacion);
+            e.HasOne<LoteImportacion>().WithMany()
+                .HasForeignKey(l => l.IdImportacion).OnDelete(DeleteBehavior.Restrict);
         });
 
         // AsignacionPresupuestal: hija del agregado LineaPoa. FKs Restrict porque los
@@ -216,6 +218,16 @@ public class AppDbContext : DbContext
             e.HasOne(g => g.LineaPoa).WithMany()
                 .HasForeignKey(g => g.LineaPoaId).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(g => g.IdImportacion);
+            // FK real hacia LotesImportacion (fix/integridad-referencial): mapeada como relación
+            // EF (HasOne/WithMany), no solo constraint SQL. Sin esto, EF no sabe que el
+            // LoteImportacion tiene que insertarse ANTES que este Gasto dentro del único
+            // SaveChangesAsync de ConfirmarAsync — el orden de inserción entre tablas sin
+            // relación declarada queda indefinido y produciría violaciones de FK intermitentes.
+            // Sin nav (WithMany() sin colección): nada necesita "los gastos de este lote" por
+            // navegación, todo filtra por el FK escalar IdImportacion (ver AppDbContext.cs,
+            // sección LoteImportacion).
+            e.HasOne<LoteImportacion>().WithMany()
+                .HasForeignKey(g => g.IdImportacion).OnDelete(DeleteBehavior.Restrict);
             // No es una columna real: GastoRepository la proyecta en la misma query (EXISTS
             // correlacionado contra MovimientosStock), nunca se persiste como escritura.
             e.Ignore(g => g.TieneMovimientosDeStock);
@@ -229,6 +241,10 @@ public class AppDbContext : DbContext
             e.HasOne(p => p.Gasto).WithMany(g => g.Pagos)
                 .HasForeignKey(p => p.GastoId).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(p => p.IdImportacion);
+            // Ver comentario de Gasto.IdImportacion más arriba: misma FK real + misma razón
+            // (orden de inserción dentro del único SaveChangesAsync de ConfirmarAsync).
+            e.HasOne<LoteImportacion>().WithMany()
+                .HasForeignKey(p => p.IdImportacion).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<IngresoCaja>(e =>
@@ -240,6 +256,8 @@ public class AppDbContext : DbContext
             e.HasOne(i => i.FuenteFinanciamiento).WithMany()
                 .HasForeignKey(i => i.FuenteFinanciamientoId).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(i => i.IdImportacion);
+            e.HasOne<LoteImportacion>().WithMany()
+                .HasForeignKey(i => i.IdImportacion).OnDelete(DeleteBehavior.Restrict);
         });
 
         // ── Finanzas: adjuntos (Fase 3 módulo Finanzas) ───────────────────────

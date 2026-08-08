@@ -13,6 +13,7 @@ public interface IImportacionRepository
     Task<ResultadoConfirmacionDto> ConfirmarAsync(ConfirmarImportacionDto dto, int usuarioId);
     Task<ResultadoReversionDto> RevertirAsync(Guid idImportacion, int usuarioId);
 
-    /// <summary>F5d §3: historial derivado de LogsAuditoria, sin entidad cabecera ni migración.</summary>
+    /// <summary>F5d §3: historial de importaciones, leído de LoteImportacion (fix/integridad-referencial;
+    /// antes se derivaba de LogsAuditoria, sin entidad cabecera).</summary>
     Task<IReadOnlyList<ImportacionHistorialDto>> ListarHistorialAsync();
 }

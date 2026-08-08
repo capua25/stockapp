@@ -8,8 +8,8 @@ using Xunit;
 
 namespace StockApp.Infrastructure.Tests.Repositories;
 
-/// <summary>F5d Task 1: ListarHistorialAsync lee ÚNICAMENTE de LogsAuditoria, sin entidad
-/// cabecera. Reusa el mismo seed de usuario que ImportacionRepositoryTests.</summary>
+/// <summary>F5d Task 1, fix/integridad-referencial: ListarHistorialAsync lee de LoteImportacion.
+/// Reusa el mismo seed de usuario que ImportacionRepositoryTests.</summary>
 public class ImportacionRepositoryHistorialTests : PostgresRepositoryTestBase
 {
     private const int Ejercicio = 2026;

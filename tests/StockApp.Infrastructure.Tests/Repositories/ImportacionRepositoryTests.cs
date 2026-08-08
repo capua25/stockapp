@@ -486,6 +486,31 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         Assert.Equal(resultado.IdImportacion, ingreso.IdImportacion);
     }
 
+    /// <summary>
+    /// fix/integridad-referencial: prueba que ConfirmarAsync crea la fila de LoteImportacion Y
+    /// que TODOS los hijos (Gasto, PagoGasto, IngresoCaja) apuntan a ella con un ÚNICO
+    /// SaveChangesAsync — es el test que prueba que EF ordena bien las inserciones (el lote
+    /// primero) dentro de esa transacción, ver AppDbContext.cs (comentario en Gasto.IdImportacion)
+    /// sobre por qué la relación tiene que estar mapeada (HasOne/WithMany), no solo el FK en SQL.
+    /// </summary>
+    [Fact]
+    public async Task ConfirmarAsync_CreaElLoteYTodosLosHijosLoReferencian()
+    {
+        var resultado = await _repo.ConfirmarAsync(PayloadConIngresoYGasto(), usuarioId: _usuarioId);
+
+        await using var verificacion = Fixture.CrearContexto();
+        var lote = verificacion.LotesImportacion.Single(l => l.Id == resultado.IdImportacion);
+        Assert.Equal(Ejercicio, lote.Ejercicio);
+        Assert.Equal(_usuarioId, lote.UsuarioId);
+        Assert.Null(lote.RevertidaEn);
+
+        var gasto = verificacion.Gastos.Include(g => g.Pagos).Single(g => g.Detalle == "Compra de insumos");
+        Assert.Equal(lote.Id, gasto.IdImportacion);
+        Assert.Equal(lote.Id, gasto.Pagos.Single().IdImportacion);
+        var ingreso = verificacion.IngresosCaja.Single(i => i.Concepto == "Saldo inicial");
+        Assert.Equal(lote.Id, ingreso.IdImportacion);
+    }
+
     [Fact]
     public async Task ConfirmarAsync_CorridaRepetidaConForzar_NoDuplicaIngresosNiGastos()
     {
