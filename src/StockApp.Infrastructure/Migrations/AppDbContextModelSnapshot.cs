@@ -395,7 +395,7 @@ namespace StockApp.Infrastructure.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<int>("Ejercicio")
+                    b.Property<int?>("Ejercicio")
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("Fecha")
@@ -407,7 +407,7 @@ namespace StockApp.Infrastructure.Migrations
                     b.Property<int?>("RevertidaPorUsuarioId")
                         .HasColumnType("integer");
 
-                    b.Property<int>("UsuarioId")
+                    b.Property<int?>("UsuarioId")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
@@ -952,8 +952,7 @@ namespace StockApp.Infrastructure.Migrations
                     b.HasOne("StockApp.Domain.Entities.Usuario", "Usuario")
                         .WithMany()
                         .HasForeignKey("UsuarioId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("Usuario");
                 });

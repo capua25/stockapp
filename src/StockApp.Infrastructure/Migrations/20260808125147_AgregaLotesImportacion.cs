@@ -17,8 +17,14 @@ namespace StockApp.Infrastructure.Migrations
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     Fecha = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    UsuarioId = table.Column<int>(type: "integer", nullable: false),
-                    Ejercicio = table.Column<int>(type: "integer", nullable: false),
+                    // UsuarioId/Ejercicio nullable (review adversarial, BLOQUEANTE 1+2): un lote
+                    // reconstruido por el backfill de AgregaFksLotesImportacion, para un Guid sin
+                    // LogAuditoria (Accion=ImportacionPlanillas) de origen, no tiene de dónde
+                    // derivar ni el autor ni el ejercicio -- se prefiere preservar el lote con
+                    // esos datos en null antes que perder el vínculo (nulear IdImportacion en los
+                    // hijos) o fallar la migración.
+                    UsuarioId = table.Column<int>(type: "integer", nullable: true),
+                    Ejercicio = table.Column<int>(type: "integer", nullable: true),
                     RevertidaEn = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     RevertidaPorUsuarioId = table.Column<int>(type: "integer", nullable: true)
                 },

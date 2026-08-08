@@ -277,7 +277,12 @@ public class ImportacionRepository : IImportacionRepository
             Fecha = fechaReversion,
             Accion = AccionAuditada.ReversionImportacion,
             Entidad = "Importacion",
-            EntidadId = lote.Ejercicio,
+            // ?? 0 (fix/integridad-referencial): lote.Ejercicio es nullable desde que el backfill
+            // de AgregaFksLotesImportacion puede reconstruir un lote huérfano sin Ejercicio
+            // conocido (ver LoteImportacion.cs) — LogAuditoria.EntidadId sigue siendo int NOT
+            // NULL, no vale la pena volverlo nullable por un caso de borde de reconstrucción
+            // histórica. 0 es un ejercicio imposible en los datos reales del sistema.
+            EntidadId = lote.Ejercicio ?? 0,
             IdLote = idImportacion,
             Detalle = $"Gastos revertidos: {gastos.Count}; Pagos revertidos: {pagosRevertidos}; " +
                 $"Ingresos revertidos: {ingresos.Count}; LineasPoa revertidas: {lineasPoa.Count}; " +
@@ -295,16 +300,29 @@ public class ImportacionRepository : IImportacionRepository
     /// F5d §3, fix/integridad-referencial: historial de importaciones leído de LotesImportacion
     /// (antes: derivado enteramente de LogsAuditoria, dos queries + comparación en memoria — ver
     /// historial de git de este archivo). Una sola query: Revertida = RevertidaEn != null es un
-    /// campo de la misma fila, no un segundo log a correlacionar. l.Usuario!.NombreUsuario genera
+    /// campo de la misma fila, no un segundo log a correlacionar. l.Usuario.NombreUsuario genera
     /// el JOIN a Usuarios en SQL (mismo patrón que antes, AuditoriaQueryRepository.ObtenerLogAsync)
     /// — sin Include explícito. El contrato hacia afuera (ImportacionHistorialDto) no cambió.
+    ///
+    /// Ejercicio/Usuario (review adversarial, BLOQUEANTE 1+2): l.Usuario ya NO se lee con el
+    /// null-forgiving "!" — un lote reconstruido por el backfill de AgregaFksLotesImportacion
+    /// para un Guid sin LogAuditoria de origen puede tener UsuarioId null (autoría desconocida),
+    /// y Usuario!.NombreUsuario habría colado un null silencioso en el string no-nullable del DTO.
+    /// Mismo criterio para Ejercicio ?? 0. El contrato del DTO (int/string no-nullable) se
+    /// mantiene sin ripple hacia ApiClient/ViewModel/Vista: estos son lotes de reconstrucción
+    /// histórica, un caso de borde que se resuelve en el punto de lectura, no propagando
+    /// nullability por toda la pila para una fila que en la práctica no debería existir salvo
+    /// datos pre-existentes a esta migración.
     /// </summary>
     public async Task<IReadOnlyList<ImportacionHistorialDto>> ListarHistorialAsync()
     {
         return await _ctx.LotesImportacion
             .OrderByDescending(l => l.Fecha)
+            .ThenByDescending(l => l.Id)
             .Select(l => new ImportacionHistorialDto(
-                l.Id, l.Fecha, l.Ejercicio, l.Usuario!.NombreUsuario, l.RevertidaEn != null))
+                l.Id, l.Fecha, l.Ejercicio ?? 0,
+                l.Usuario != null ? l.Usuario.NombreUsuario : "(usuario desconocido)",
+                l.RevertidaEn != null))
             .ToListAsync();
     }
 
@@ -362,9 +380,17 @@ public class ImportacionRepository : IImportacionRepository
     /// </summary>
     private async Task<Guid?> BuscarImportacionNoRevertidaAsync(int ejercicio)
     {
+        // ThenByDescending(l => l.Id) (Minor 9 del review): con Forzar=true puede haber más de un
+        // lote sin revertir para el mismo ejercicio, y dos lotes creados dentro del mismo tick de
+        // reloj empatan en Fecha — sin desempate, Postgres puede devolver cualquiera de los dos en
+        // cualquier orden entre corridas (sin ORDER BY total, el resultado no está garantizado).
+        // Id es un Guid (no secuencial: no reintroduce el orden temporal que tenía el viejo Id
+        // autoincremental de LogAuditoria), pero alcanza para hacer el resultado determinístico y
+        // repetible — que es lo que hace falta acá, no recuperar "el más nuevo" entre empatados.
         var candidatos = await _ctx.LotesImportacion
             .Where(l => l.Ejercicio == ejercicio && l.RevertidaEn == null)
             .OrderByDescending(l => l.Fecha)
+            .ThenByDescending(l => l.Id)
             .Select(l => (Guid?)l.Id)
             .ToListAsync();
 

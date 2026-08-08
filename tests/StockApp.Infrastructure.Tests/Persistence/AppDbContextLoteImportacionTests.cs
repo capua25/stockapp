@@ -1,3 +1,6 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
+using Npgsql;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Infrastructure.Tests.Fixtures;
@@ -77,26 +80,54 @@ public class AppDbContextLoteImportacionTests : PostgresRepositoryTestBase
         Assert.Equal(usuarioReversorId, encontrado.RevertidaPorUsuarioId);
     }
 
+    /// <summary>
+    /// Fix (review adversarial, IMPORTANTE 4): la versión anterior de este test insertaba un
+    /// LoteImportacion con un Id asignado y comprobaba que el Id leído era el mismo — pero eso es
+    /// tautológico para una PK Guid en Npgsql. Sin ValueGeneratedNever(), EF usaría
+    /// GuidValueGenerator del lado CLIENTE, que sólo actúa si la propiedad tiene el default CLR
+    /// (Guid.Empty) — un Id ya asignado por la app (como hace ConfirmarAsync) nunca dispara ese
+    /// generador, así que el test viejo pasaba exactamente igual con o sin la config (verificado
+    /// por mutación: borrar ValueGeneratedNever() de AppDbContext.cs y correrlo seguía en verde).
+    /// Este test ahora asegura la config real contra el METAMODELO de EF en vez de un
+    /// comportamiento indistinguible en runtime.
+    /// </summary>
     [Fact]
-    public async Task LoteImportacion_Id_NoEsGeneradoPorLaBase()
+    public void LoteImportacion_Id_EstaConfiguradoComoValueGeneratedNever()
     {
-        // La app genera el Guid ANTES del SaveChangesAsync (ver LoteImportacion.cs) — si el
-        // mapeo EF tuviera el Id como ValueGeneratedOnAdd (default para PKs), Postgres
-        // ignoraría el valor asignado y generaría uno propio (o fallaría, según el tipo). Este
-        // test prueba que el Id que la app asignó ANTES de Add() es EXACTAMENTE el que persiste.
-        var usuarioId = await SembrarUsuarioAsync("lote-tests-3");
-        var idAsignado = Guid.NewGuid();
+        var propiedadId = Context.Model.FindEntityType(typeof(LoteImportacion))!.FindProperty("Id")!;
+
+        Assert.Equal(ValueGenerated.Never, propiedadId.ValueGenerated);
+    }
+
+    /// <summary>
+    /// Minor 8 del review adversarial: ValueGeneratedNever() deja pasar Guid.Empty como PK sin
+    /// ningún guard propio -- no alcanzable HOY porque ConfirmarAsync siempre usa Guid.NewGuid()
+    /// (que nunca produce Guid.Empty), pero este test fija el comportamiento actual: un segundo
+    /// insert con el mismo Id (Guid.Empty u otro cualquiera) da 23505 sobre PK_LotesImportacion,
+    /// que ConfirmarAsync (Repositories/ImportacionRepository.cs) ya traduce genéricamente a
+    /// ReglaDeNegocioException vía ObtenerRestriccionUnicaViolada -- nunca un 500 pelado, aunque
+    /// el mensaje resultante no distinga "colisión de Id" de cualquier otra violación única.
+    /// </summary>
+    [Fact]
+    public async Task LoteImportacion_IdDuplicado_TiraViolacionDeClavePrimaria()
+    {
+        var usuarioId = await SembrarUsuarioAsync("lote-tests-4");
+        var idDuplicado = Guid.Empty;
         Context.LotesImportacion.Add(new LoteImportacion
         {
-            Id = idAsignado,
-            Fecha = DateTime.UtcNow,
-            UsuarioId = usuarioId,
-            Ejercicio = 2023,
+            Id = idDuplicado, Fecha = DateTime.UtcNow, UsuarioId = usuarioId, Ejercicio = 2020,
         });
         await Context.SaveChangesAsync();
         Context.ChangeTracker.Clear();
 
-        var encontrado = Context.LotesImportacion.Single(l => l.Ejercicio == 2023);
-        Assert.Equal(idAsignado, encontrado.Id);
+        Context.LotesImportacion.Add(new LoteImportacion
+        {
+            Id = idDuplicado, Fecha = DateTime.UtcNow, UsuarioId = usuarioId, Ejercicio = 2021,
+        });
+
+        var ex = await Assert.ThrowsAsync<DbUpdateException>(() => Context.SaveChangesAsync());
+        var pg = Assert.IsType<PostgresException>(ex.InnerException);
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, pg.SqlState);
+        Assert.Equal("PK_LotesImportacion", pg.ConstraintName);
     }
 }
