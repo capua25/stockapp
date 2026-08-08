@@ -93,10 +93,11 @@ namespace StockApp.Infrastructure.Migrations
                     SELECT DISTINCT ON ("IdImportacion") "IdImportacion" AS "Id", "Ejercicio"
                     FROM "LineasPoa"
                     WHERE "IdImportacion" IS NOT NULL
+                    ORDER BY "IdImportacion", "Id"
                 )
                 SELECT
                     g."Id",
-                    COALESCE(c."Fecha", fd."Fecha", TIMESTAMPTZ '1970-01-01') AS "Fecha",
+                    COALESCE(c."Fecha", fd."Fecha", TIMESTAMPTZ '1970-01-01 00:00:00+00') AS "Fecha",
                     c."UsuarioId" AS "UsuarioId",
                     COALESCE(c."Ejercicio", ed."Ejercicio") AS "Ejercicio",
                     r."RevertidaEn",
