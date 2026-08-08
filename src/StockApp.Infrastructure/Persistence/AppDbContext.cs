@@ -297,10 +297,14 @@ public class AppDbContext : DbContext
                 .HasForeignKey(m => m.GastoId).OnDelete(DeleteBehavior.Restrict);
         });
 
-        // ── Backups programados (Entrega 1) ───────────────────────────────────
+        // ── Backups programados (Entrega 1 + fix/integridad-referencial) ───────
+        // UsuarioId nullable + Restrict, mismo criterio que NotaTarea.Usuario: null es un
+        // valor legítimo (job automático o fila reconciliada desde disco), no un hueco de FK.
         modelBuilder.Entity<CorridaBackup>(e =>
         {
             e.HasIndex(c => c.FinalizadaEn);
+            e.HasOne(c => c.Usuario).WithMany()
+                .HasForeignKey(c => c.UsuarioId).OnDelete(DeleteBehavior.Restrict);
         });
 
         // ── Tareas (módulo independiente, spec 2026-08-01) ────────────────────

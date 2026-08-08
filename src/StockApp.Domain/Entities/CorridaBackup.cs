@@ -34,4 +34,19 @@ public class CorridaBackup
     /// casos para no pintar la nota informativa como un error.
     /// </summary>
     public string? MotivoFallo { get; set; }
+
+    /// <summary>
+    /// Actor que disparó esta corrida (fix/integridad-referencial: le da sentido a la columna
+    /// agregando la funcionalidad que faltaba, en vez de dejarla sin usar).
+    /// <c>null</c> ⇒ la disparó el job automático (<see cref="ServicioBackup.EjecutarCorridaAsync"/>
+    /// llamado desde BackupProgramadoService) o es una fila reconciliada desde disco
+    /// (<see cref="ServicioBackup.ReconciliarDumpHuerfanosAsync"/> — nadie la "pidió", se
+    /// reconstruyó de un .dump huérfano). Con valor ⇒ la pidió una persona desde
+    /// POST /backups (Api.Backups.DisparadorBackupManual).
+    /// </summary>
+    public int? UsuarioId { get; set; }
+
+    /// <summary>Nav de solo lectura sobre <see cref="UsuarioId"/>, mismo criterio que
+    /// NotaTarea.Usuario / MovimientoStock.Usuario (referencia de actor, siempre con navegación).</summary>
+    public Usuario? Usuario { get; set; }
 }

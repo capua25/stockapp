@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Infrastructure.Repositories;
@@ -99,6 +101,22 @@ public class CorridaBackupRepositoryTests : PostgresRepositoryTestBase
         // lanzaba, sin verificar ningún estado — la intención real (un id inexistente no toca
         // ninguna fila real) quedaba implícita, no escrita.
         Assert.Single(await repo.ListarTodasAsync());
+    }
+
+    [Fact]
+    public async Task AgregarAsync_ConUsuarioIdInexistente_ViolaLaFk()
+    {
+        // Integridad referencial (rama fix/integridad-referencial): CorridasBackup.UsuarioId
+        // apunta a Usuarios.Id. Este test demuestra que la BASE rechaza el dato inválido, no
+        // solo que la config exista: 999 no es el Id de ningún Usuario sembrado.
+        var repo = Crear();
+        var corrida = Corrida(ResultadoBackup.Exitosa, DateTime.UtcNow);
+        corrida.UsuarioId = 999;
+
+        var ex = await Assert.ThrowsAsync<DbUpdateException>(() => repo.AgregarAsync(corrida));
+
+        var pg = Assert.IsType<PostgresException>(ex.InnerException);
+        Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, pg.SqlState);
     }
 
     private static CorridaBackup Corrida(ResultadoBackup resultado, DateTime finalizadaEn, string? nombreArchivo = null) => new()
