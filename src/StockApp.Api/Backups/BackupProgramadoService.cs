@@ -17,17 +17,20 @@ public sealed class BackupProgramadoService : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConfiguration _configuration;
     private readonly IUserDataPathProvider _paths;
+    private readonly IGuardiaCorridaBackup _guardia;
     private readonly ILogger<BackupProgramadoService> _logger;
 
     public BackupProgramadoService(
         IServiceScopeFactory scopeFactory,
         IConfiguration configuration,
         IUserDataPathProvider paths,
+        IGuardiaCorridaBackup guardia,
         ILogger<BackupProgramadoService> logger)
     {
         _scopeFactory = scopeFactory;
         _configuration = configuration;
         _paths = paths;
+        _guardia = guardia;
         _logger = logger;
     }
 
@@ -98,6 +101,18 @@ public sealed class BackupProgramadoService : BackgroundService
 
     internal async Task EjecutarCorridaSeguraAsync(string directorio, CancellationToken stoppingToken)
     {
+        // Concurrencia (fix/integridad-referencial): IGuardiaCorridaBackup es la MISMA instancia
+        // Singleton que usa DisparadorBackupManual (POST /backups) — si un admin disparó un
+        // backup manual justo cuando tiquea el PeriodicTimer, este tick se salta en vez de
+        // arrancar un segundo pg_dump simultáneo contra la misma base. Se reintenta solo, en la
+        // ventana siguiente (12h después) — no hay cola ni reintento inmediato.
+        if (!_guardia.TryEntrar())
+        {
+            _logger.LogInformation(
+                "Corrida de backup programado omitida: ya hay una corrida en curso (probablemente un backup manual).");
+            return;
+        }
+
         try
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
@@ -115,6 +130,10 @@ public sealed class BackupProgramadoService : BackgroundService
             // corrida). Nunca debe tumbar el BackgroundService — el PeriodicTimer sigue vivo y
             // reintenta en la ventana siguiente.
             _logger.LogError(ex, "Corrida de backup programado falló de forma inesperada.");
+        }
+        finally
+        {
+            _guardia.Salir();
         }
     }
 }

@@ -270,6 +270,13 @@ builder.Services.AddScoped<ICorridaBackupRepository, CorridaBackupRepository>();
 builder.Services.AddScoped<IEjecutorPgDump, EjecutorPgDumpProceso>();
 builder.Services.AddScoped<ServicioBackup>();
 builder.Services.AddScoped<ServicioConsultaBackups>();
+
+// fix/integridad-referencial (POST /backups, disparo manual): IGuardiaCorridaBackup es
+// Singleton a propósito -- BackupProgramadoService (job automático) y DisparadorBackupManual
+// (POST /backups) corren en scopes distintos (uno por tick del timer, otro por request HTTP) y
+// necesitan compartir el MISMO gate para que nunca corran dos pg_dump al mismo tiempo.
+builder.Services.AddSingleton<IGuardiaCorridaBackup, GuardiaCorridaBackup>();
+builder.Services.AddSingleton<DisparadorBackupManual>();
 builder.Services.AddHostedService<BackupProgramadoService>();
 
 // Diagnóstico/logs (Entrega 2, Task 7): ServicioConsultaLogs es stateless (recibe la ruta

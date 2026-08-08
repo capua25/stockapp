@@ -89,7 +89,7 @@ public class BackupProgramadoServiceTests
     }
 
     private static (BackupProgramadoService servicio, List<object> instanciasQueAgregaron, CorridaBackup? ultimaExitosaSemilla)
-        Crear(CorridaBackup? ultimaExitosaSemilla = null)
+        Crear(CorridaBackup? ultimaExitosaSemilla = null, IGuardiaCorridaBackup? guardia = null)
     {
         var instancias = new List<object>();
         var services = new ServiceCollection();
@@ -107,9 +107,37 @@ public class BackupProgramadoServiceTests
             sp.GetRequiredService<IServiceScopeFactory>(),
             configuracion,
             new UserDataPathProviderFake(),
+            guardia ?? new GuardiaCorridaBackup(),
             NullLogger<BackupProgramadoService>.Instance);
 
         return (servicio, instancias, ultimaExitosaSemilla);
+    }
+
+    /// <summary>Guardia fake que siempre reporta "ocupada" -- simula una corrida manual (POST
+    /// /backups) ya en curso cuando el PeriodicTimer del job automático tiquea.</summary>
+    private sealed class GuardiaSiempreOcupadaFake : IGuardiaCorridaBackup
+    {
+        public bool SalirFueLlamado { get; private set; }
+        public bool TryEntrar() => false;
+        public void Salir() => SalirFueLlamado = true;
+    }
+
+    [Fact]
+    public async Task EjecutarCorridaSeguraAsync_GuardiaOcupada_NoLlamaAlServicioNiASalir()
+    {
+        // Concurrencia (fix/integridad-referencial): si ya hay una corrida en curso (ej. un
+        // backup manual disparado desde POST /backups), el tick del job automático se salta
+        // en vez de arrancar un segundo pg_dump simultáneo.
+        var guardiaOcupada = new GuardiaSiempreOcupadaFake();
+        var (servicio, instancias, _) = Crear(guardia: guardiaOcupada);
+        var directorio = Path.Combine(Path.GetTempPath(), "BackupProgramadoServiceTests_dir_" + Guid.NewGuid());
+
+        await servicio.EjecutarCorridaSeguraAsync(directorio, CancellationToken.None);
+
+        Assert.Empty(instancias);
+        // No se llama a Salir: TryEntrar nunca devolvió true, así que este llamador nunca tomó
+        // el turno -- llamar a Salir acá liberaría un turno que no es suyo.
+        Assert.False(guardiaOcupada.SalirFueLlamado);
     }
 
     [Fact]
@@ -177,6 +205,7 @@ public class BackupProgramadoServiceTests
             sp.GetRequiredService<IServiceScopeFactory>(),
             configuracion,
             new UserDataPathProviderFake(),
+            new GuardiaCorridaBackup(),
             loggerEspia);
 
         // Ciclo de vida REAL de un BackgroundService (el mismo que usa el host de ASP.NET Core en

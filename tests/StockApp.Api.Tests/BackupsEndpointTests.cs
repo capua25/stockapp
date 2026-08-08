@@ -199,4 +199,93 @@ public class BackupsEndpointTests : ApiTestBase
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
+
+    // ── POST /backups ───────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task PostBackups_SinToken_Devuelve401()
+    {
+        var response = await Factory.CreateClient().PostAsync("/backups", null);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostBackups_ConTokenOperador_Devuelve403()
+    {
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenOperador());
+
+        var response = await client.PostAsync("/backups", null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostBackups_ConTokenAdmin_Devuelve202YLaCorridaQuedaConElUsuarioIdDelToken()
+    {
+        // Admin ocupa Id=1 (coincide con TokenAdmin()): sin este seed, la corrida disparada
+        // violaría la FK CorridasBackup.UsuarioId -> Usuarios.Id agregada en esta rama.
+        await using var ctx = Factory.CrearContexto();
+        var admin = await DatosDePrueba.SeedUsuarioAsync(ctx, "admin.test", "Secreta123!", RolUsuario.Admin);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var response = await client.PostAsync("/backups", null);
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+
+        // La corrida corre en background (pg_dump real contra el Postgres de Testcontainers) --
+        // se espera a que aparezca con un timeout acotado en vez de asumir que ya terminó.
+        var corrida = await EsperarCorridaAsync();
+        Assert.Equal(admin.Id, corrida.UsuarioId);
+    }
+
+    [Fact]
+    public async Task PostBackups_DosDisparosSimultaneos_UnoEsAcceptedYOtroConflict_YSoloUnaCorridaSePersiste()
+    {
+        await using var ctx = Factory.CrearContexto();
+        await DatosDePrueba.SeedUsuarioAsync(ctx, "admin.test", "Secreta123!", RolUsuario.Admin);
+
+        var clienteA = Factory.CreateClient();
+        clienteA.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+        var clienteB = Factory.CreateClient();
+        clienteB.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var tareaA = clienteA.PostAsync("/backups", null);
+        var tareaB = clienteB.PostAsync("/backups", null);
+        var respuestas = await Task.WhenAll(tareaA, tareaB);
+        var codigos = respuestas.Select(r => r.StatusCode).OrderBy(c => c).ToList();
+
+        Assert.Equal(
+            new[] { HttpStatusCode.Accepted, HttpStatusCode.Conflict }.OrderBy(c => c),
+            codigos);
+
+        // Prueba directa de "no corrieron dos pg_dump": esperando lo mismo que el test anterior
+        // (una corrida aparece), después de un margen extra confirmamos que sigue siendo una sola.
+        await EsperarCorridaAsync();
+        await Task.Delay(TimeSpan.FromMilliseconds(500));
+        await using var verificacion = Factory.CrearContexto();
+        Assert.Single(await verificacion.CorridasBackup.ToListAsync());
+    }
+
+    /// <summary>Sondea la BD (no GET /backups: el DTO no expone UsuarioId) hasta que la corrida
+    /// manual disparada en background termina, con timeout acotado -- pg_dump contra una base de
+    /// test prácticamente vacía tarda muy poco, pero corre de verdad, no es instantáneo.</summary>
+    private async Task<CorridaBackup> EsperarCorridaAsync()
+    {
+        var limite = DateTime.UtcNow.AddSeconds(10);
+        while (DateTime.UtcNow < limite)
+        {
+            await using var ctx = Factory.CrearContexto();
+            var corrida = await ctx.CorridasBackup.SingleOrDefaultAsync();
+            if (corrida is not null)
+                return corrida;
+
+            await Task.Delay(TimeSpan.FromMilliseconds(200));
+        }
+
+        throw new TimeoutException("La corrida de backup manual no apareció en CorridasBackup a tiempo.");
+    }
 }
