@@ -17,6 +17,23 @@ namespace StockApp.Infrastructure.Repositories;
 /// </summary>
 public class ImportacionRepository : IImportacionRepository
 {
+    /// <summary>
+    /// Centinela determinístico para pg_advisory_xact_lock cuando lote.Ejercicio es NULL
+    /// (IMPORTANTE 1, re-review adversarial): pg_advisory_xact_lock es STRICT — un argumento NULL
+    /// devuelve NULL SIN TOMAR NINGÚN LOCK (verificado empíricamente: ver
+    /// RevertirAsync_LoteReconstruidoSinEjercicio_TomaUnAdvisoryLockReal), dejando sin protección
+    /// justo el caso de un lote reconstruido por el backfill de AgregaFksLotesImportacion (Guid
+    /// con hijos pero sin LogAuditoria de origen — ver LoteImportacion.Ejercicio). int.MinValue
+    /// nunca colisiona con un Ejercicio real (siempre un año, ej. 2026): todos los lotes sin
+    /// ejercicio conocido comparten este único bucket de lock. Es correcto y suficiente — no hace
+    /// falta un lock por-lote (derivado de lote.Id) porque "serializar contra el ejercicio real X"
+    /// no tiene sentido para un lote cuyo ejercicio real se desconoce; lo único que importa es que
+    /// dos operaciones sobre lotes-sin-ejercicio (dos /revertir concurrentes sobre el MISMO lote
+    /// huérfano, el caso que este lock existe para proteger) se serialicen entre sí, y compartir
+    /// el bucket lo garantiza igual de bien que una key por-lote.
+    /// </summary>
+    internal const int EjercicioDesconocidoLockKey = int.MinValue;
+
     private readonly AppDbContext _ctx;
 
     public ImportacionRepository(AppDbContext ctx) => _ctx = ctx;
@@ -189,7 +206,14 @@ public class ImportacionRepository : IImportacionRepository
         // ningún orden garantizado, dejando estados imposibles de reconciliar (un gasto ACTIVO de
         // una corrida nueva colgado de una LineaPoa que la reversa de la corrida vieja dejó
         // INACTIVA).
-        await _ctx.Database.ExecuteSqlInterpolatedAsync($"SELECT pg_advisory_xact_lock({lote.Ejercicio})");
+        //
+        // ?? EjercicioDesconocidoLockKey (IMPORTANTE 1, re-review adversarial de la segunda
+        // pasada): lote.Ejercicio es int? — para un lote reconstruido por el backfill de
+        // AgregaFksLotesImportacion sin Ejercicio conocido, pasar NULL acá directamente hacía que
+        // pg_advisory_xact_lock (STRICT) devolviera NULL SIN TOMAR NINGÚN LOCK — la protección de
+        // arriba desaparecía en silencio exactamente para ese caso. Ver el XML-doc de la constante.
+        await _ctx.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT pg_advisory_xact_lock({lote.Ejercicio ?? EjercicioDesconocidoLockKey})");
 
         // Re-chequeo FRESCO bajo el lock (mismo criterio que antes): "lote" se leyó ANTES de
         // tomar el advisory lock, así que una reversa concurrente pudo haber committeado entre
@@ -377,6 +401,15 @@ public class ImportacionRepository : IImportacionRepository
     /// descendente: si hay más de un lote sin revertir para el mismo ejercicio (posible: Forzar
     /// permite reimportar sin revertir el anterior), se reporta el MÁS RECIENTE — es el que le
     /// sirve al humano que lee el 409 para saber qué lote revertir.
+    ///
+    /// GAP CONOCIDO, sin fix limpio con el modelo actual (MENOR 3, re-review adversarial de la
+    /// segunda pasada): "l.Ejercicio == ejercicio" traduce a SQL "= @p", que por lógica de tres
+    /// valores NUNCA matchea un Ejercicio NULL. Un lote reconstruido por el backfill de
+    /// AgregaFksLotesImportacion sin Ejercicio conocido (huérfano — ver LoteImportacion.Ejercicio)
+    /// entonces NUNCA bloquea una reimportación, para NINGÚN ejercicio — aunque en la realidad
+    /// haya correspondido exactamente al que se está reimportando. Ver
+    /// ConfirmarAsync_ExisteLoteReconstruidoSinEjercicioSinRevertir_NoLoBloquea_GapConocido, que
+    /// fija este comportamiento como intencional (documentado, no un bug nuevo).
     /// </summary>
     private async Task<Guid?> BuscarImportacionNoRevertidaAsync(int ejercicio)
     {

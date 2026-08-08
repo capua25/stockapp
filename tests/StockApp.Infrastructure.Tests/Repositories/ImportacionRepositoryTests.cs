@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using StockApp.Application.Finanzas;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
@@ -1123,6 +1124,34 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         Assert.DoesNotContain(primera.IdImportacion.ToString(), ex.Message);
     }
 
+    [Fact]
+    public async Task ConfirmarAsync_ExisteLoteReconstruidoSinEjercicioSinRevertir_NoLoBloquea_GapConocido()
+    {
+        // MENOR 3 (re-review adversarial): comportamiento FIJADO por este test, no accidental —
+        // ver el comentario largo sobre BuscarImportacionNoRevertidaAsync. Un lote reconstruido
+        // por el backfill de AgregaFksLotesImportacion sin Ejercicio conocido (huérfano: Guid con
+        // hijos pero sin LogAuditoria de origen) tiene Ejercicio = NULL. "l.Ejercicio == ejercicio"
+        // traduce a SQL "= @p", que por lógica de tres valores NUNCA matchea NULL — así que ese
+        // lote nunca aparece como "importación previa sin revertir" para NINGÚN ejercicio, aunque
+        // en la realidad haya correspondido al mismo que se está reimportando. No hay forma de
+        // saber a qué ejercicio correspondía sin la información que el backfill nunca pudo
+        // recuperar, así que esto no tiene un fix limpio con el modelo actual — queda documentado
+        // acá para que no se lea como un bug nuevo el día que alguien lo note en producción.
+        Context.LotesImportacion.Add(new LoteImportacion
+        {
+            Id = Guid.NewGuid(), Fecha = DateTime.UtcNow, UsuarioId = null, Ejercicio = null,
+        });
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        // Sin Forzar: si el guard viera el lote huérfano como "una importación previa sin revertir
+        // del mismo ejercicio", esto tiraría ReglaDeNegocioException — no lo hace.
+        var excepcion = await Record.ExceptionAsync(
+            () => _repo.ConfirmarAsync(PayloadSoloMaestrosYPoa(), usuarioId: _usuarioId));
+
+        Assert.Null(excepcion);
+    }
+
     // ── Task 8: reversa por lote ─────────────────────────────────────────────────────────────
 
     [Fact]
@@ -1477,6 +1506,60 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         Assert.Equal(confirmacion.IdImportacion, reversion.IdImportacion);
         await using var verificacion = Fixture.CrearContexto();
         Assert.False(verificacion.Gastos.Single().Activo);
+    }
+
+    // ── Re-review adversarial (segunda pasada), IMPORTANTE 1 ────────────────────────────────────
+
+    [Fact]
+    public async Task RevertirAsync_LoteReconstruidoSinEjercicio_TomaUnAdvisoryLockReal()
+    {
+        // IMPORTANTE 1 (re-review): pg_advisory_xact_lock es STRICT -- pasarle NULL devuelve NULL
+        // SIN TOMAR NINGÚN LOCK. lote.Ejercicio es int? desde que el backfill de
+        // AgregaFksLotesImportacion puede reconstruir un lote huérfano (Guid con hijos pero sin
+        // LogAuditoria de origen) con Ejercicio = NULL -- para ESE lote, la protección contra dos
+        // /revertir concurrentes (o un /revertir concurrente con un /confirmar) desaparecía en
+        // silencio.
+        //
+        // Este test prueba el mecanismo DIRECTAMENTE, sin depender de una ventana de carrera: toma
+        // a mano, en una conexión Postgres separada, el MISMO lock key que RevertirAsync usa para
+        // un lote sin ejercicio (ImportacionRepository.EjercicioDesconocidoLockKey) y lo retiene
+        // dentro de una transacción sin comittear. Si RevertirAsync realmente toma ese lock, se
+        // bloquea hasta que la conexión de arriba libera el lock (Rollback) -- si NO toma ningún
+        // lock real (el bug), completa de inmediato, sin esperar nada.
+        var lote = new LoteImportacion
+        {
+            Id = Guid.NewGuid(),
+            Fecha = DateTime.UtcNow,
+            UsuarioId = null,
+            Ejercicio = null,
+        };
+        Context.LotesImportacion.Add(lote);
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        await using var holder = new NpgsqlConnection(Fixture.ConnectionString);
+        await holder.OpenAsync();
+        await using var holderTx = await holder.BeginTransactionAsync();
+        await using (var cmd = holder.CreateCommand())
+        {
+            cmd.CommandText = $"SELECT pg_advisory_xact_lock({ImportacionRepository.EjercicioDesconocidoLockKey})";
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        var tareaRevertir = _repo.RevertirAsync(lote.Id, usuarioId: _usuarioId);
+
+        var terminoAntesDeSoltarElLock = await Task.WhenAny(tareaRevertir, Task.Delay(TimeSpan.FromSeconds(1)))
+            == tareaRevertir;
+        Assert.False(
+            terminoAntesDeSoltarElLock,
+            "RevertirAsync completó sin esperar el advisory lock que la conexión de arriba " +
+            "retiene con la misma key -- prueba que NO está tomando ningún lock real para un " +
+            "lote con Ejercicio NULL (pg_advisory_xact_lock(NULL) es un no-op).");
+
+        await holderTx.RollbackAsync(); // libera el advisory lock
+
+        var reversion = await tareaRevertir; // ahora sí tiene que completar, sin excepción
+        Assert.Equal(lote.Id, reversion.IdImportacion);
     }
 }
 
