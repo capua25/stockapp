@@ -76,7 +76,19 @@ internal sealed class ConfirmacionServiceFake : IConfirmacionService
 {
     public Task<bool> PreguntarAsync(string mensaje) => Task.FromResult(true);
 
-    public Task InformarAsync(string mensaje) => Task.CompletedTask;
+    /// <summary>
+    /// Espía (fix/integridad-referencial, Minor 10 del review adversarial): antes InformarAsync
+    /// era un no-op puro -- ningún test que dijera "informa el error" podía comprobarlo de verdad,
+    /// porque el fake no dejaba rastro de qué se llamó. Ver
+    /// MantenimientoViewTests.Montar_HacerBackupAhoraFalla_InformaElErrorYRestauraElBoton.
+    /// </summary>
+    public List<string> MensajesInformados { get; } = new();
+
+    public Task InformarAsync(string mensaje)
+    {
+        MensajesInformados.Add(mensaje);
+        return Task.CompletedTask;
+    }
 }
 
 /// <summary>

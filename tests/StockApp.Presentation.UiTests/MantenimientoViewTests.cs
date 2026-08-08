@@ -338,5 +338,12 @@ public class MantenimientoViewTests
         Assert.False(vm.IniciandoBackup);
         var botonHacer = window.GetVisualDescendants().OfType<Button>().First(b => b.Content as string == "Hacer backup ahora");
         Assert.True(botonHacer.IsVisible);
+
+        // Fix (review adversarial, Minor 10): el nombre del test promete "informa el error" --
+        // antes de este fix, ConfirmacionServiceFake.InformarAsync no registraba nada y esta
+        // aserción no existía, así que el test pasaba sin haber probado esa parte de su propio
+        // nombre.
+        var mensaje = Assert.Single(confirmacion.MensajesInformados);
+        Assert.Contains("Ya hay un backup en curso.", mensaje);
     }
 }
