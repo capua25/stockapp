@@ -26,6 +26,7 @@ public class AppDbContext : DbContext
     public DbSet<CorridaBackup> CorridasBackup => Set<CorridaBackup>();
     public DbSet<Tarea> Tareas => Set<Tarea>();
     public DbSet<NotaTarea> NotasTarea => Set<NotaTarea>();
+    public DbSet<LoteImportacion> LotesImportacion => Set<LoteImportacion>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -149,6 +150,31 @@ public class AppDbContext : DbContext
                 .HasForeignKey(a => a.LineaPoaId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(a => a.FuenteFinanciamiento).WithMany()
                 .HasForeignKey(a => a.FuenteFinanciamientoId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── LoteImportacion (fix/integridad-referencial) ──────────────────────
+        // Id lo asigna la APP (Guid.NewGuid(), ver LoteImportacion.cs) ANTES del Add() —
+        // ValueGeneratedNever() evita que EF/Postgres intenten generar o ignorar ese valor.
+        // Sin nav de colección hacia los hijos (Gastos/IngresosCaja/LineasPoa/PagosGasto): nada
+        // lee "los gastos de este lote" por navegación, todo el código filtra por el FK escalar
+        // IdImportacion == idLote (mismo criterio ya usado en ImportacionRepository) — mismo
+        // patrón que AsignacionPresupuestal→LineaPoa y NotaTarea→Tarea (relación configurada
+        // solo del lado necesario, sin agregar superficie que nadie consume).
+        //
+        // Índice sobre Ejercicio: NO único. Un único filtrado por RevertidaEn IS NULL fue
+        // evaluado y descartado a propósito — ConfirmarAsync permite reimportar un ejercicio con
+        // un lote previo SIN revertir si dto.Forzar == true (ver BuscarImportacionNoRevertidaAsync
+        // en ImportacionRepository), así que más de un lote sin revertir para el MISMO ejercicio
+        // es un estado válido del negocio, no un bug. Un único filtrado convertiría esa
+        // reimportación forzada en un 23505 real, rompiendo una función soportada.
+        modelBuilder.Entity<LoteImportacion>(e =>
+        {
+            e.Property(l => l.Id).ValueGeneratedNever();
+            e.HasIndex(l => l.Ejercicio);
+            e.HasOne(l => l.Usuario).WithMany()
+                .HasForeignKey(l => l.UsuarioId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Usuario>().WithMany()
+                .HasForeignKey(l => l.RevertidaPorUsuarioId).OnDelete(DeleteBehavior.Restrict);
         });
 
         // ── Finanzas: documentos (Fase 2 módulo Finanzas) ─────────────────────
