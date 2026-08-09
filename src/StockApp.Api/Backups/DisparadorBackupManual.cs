@@ -137,7 +137,7 @@ public sealed class DisparadorBackupManual
             var corridas = scope.ServiceProvider.GetRequiredService<ICorridaBackupRepository>();
             var ahoraUtc = DateTime.UtcNow;
 
-            await corridas.AgregarAsync(new CorridaBackup
+            var corrida = new CorridaBackup
             {
                 IniciadaEn = ahoraUtc,
                 FinalizadaEn = ahoraUtc,
@@ -146,7 +146,18 @@ public sealed class DisparadorBackupManual
                 TamanioBytes = null,
                 MotivoFallo = ex.Message,
                 UsuarioId = usuarioId,
-            });
+            };
+            await corridas.AgregarAsync(corrida);
+
+            var notificador = scope.ServiceProvider.GetRequiredService<INotificadorAlertas>();
+            try
+            {
+                await notificador.NotificarCorridaBackupAsync(corrida);
+            }
+            catch (Exception notifEx)
+            {
+                _logger.LogWarning(notifEx, "Falló la notificación del backup fallido.");
+            }
         }
         catch (Exception persistenciaEx)
         {

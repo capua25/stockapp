@@ -192,4 +192,59 @@ public class DisparadorBackupManualTests
         // Importante 6 pero verificado igual acá de paso).
         Assert.True(guardia.TryEntrar());
     }
+
+    /// <summary>Misma forma que el NotificadorAlertasFake de ServicioBackupTests (Task 3) --
+    /// los proyectos de test no comparten código, así que cada uno declara el suyo.</summary>
+    private sealed class NotificadorAlertasFake : INotificadorAlertas
+    {
+        public List<CorridaBackup> Notificadas { get; } = new();
+
+        public Task NotificarCorridaBackupAsync(CorridaBackup corrida, CancellationToken ct = default)
+        {
+            Notificadas.Add(corrida);
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>Mismo patrón que Disparar_FalloInesperadoEnBackground_PersisteUnaCorridaBackupFallida
+    /// de arriba (a propósito NO se registra ServicioBackup/IEjecutorPgDump, simulando el "error
+    /// realmente inesperado" que dispara el catch de última resistencia), extraído a helper para
+    /// el test de Task 4 que además registra el notificador.</summary>
+    private static (DisparadorBackupManual Disparador, CorridaBackupRepositoryEspiaFake Repo) CrearDisparadorQueFallaInesperadamente(
+        INotificadorAlertas notificador)
+    {
+        var guardia = new GuardiaCorridaBackup();
+        var espia = new CorridaBackupRepositoryEspiaFake();
+        var services = new ServiceCollection();
+        services.AddScoped<ICorridaBackupRepository>(_ => espia);
+        services.AddScoped<INotificadorAlertas>(_ => notificador);
+        var sp = services.BuildServiceProvider();
+        var paths = new UserDataPathProviderFake();
+
+        var disparador = new DisparadorBackupManual(
+            sp.GetRequiredService<IServiceScopeFactory>(),
+            CrearConfiguracion(),
+            paths,
+            guardia,
+            NullLogger<DisparadorBackupManual>.Instance);
+
+        return (disparador, espia);
+    }
+
+    /// <summary>Task 4 (canal de alerta de backups): el camino de "fallo inesperado" no pasa por
+    /// ServicioBackup -- si no se engancha acá, este modo de falla queda mudo.</summary>
+    [Fact]
+    public async Task Disparar_FalloInesperado_PersisteLaFallaYLaNotifica()
+    {
+        var notificador = new NotificadorAlertasFake();
+        var (disparador, repo) = CrearDisparadorQueFallaInesperadamente(notificador);
+
+        disparador.Disparar(usuarioId: 1);
+        await disparador.UltimaCorridaEnBackgroundParaTests!;
+
+        var corrida = Assert.Single(repo.Agregadas);
+        Assert.Equal(ResultadoBackup.Fallida, corrida.Resultado);
+        var notificada = Assert.Single(notificador.Notificadas);
+        Assert.Equal(ResultadoBackup.Fallida, notificada.Resultado);
+    }
 }

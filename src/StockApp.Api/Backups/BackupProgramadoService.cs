@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Configuration;
 using StockApp.Application.Backups;
 using StockApp.Application.Interfaces;
+using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 using StockApp.Infrastructure.Platform;
 
 namespace StockApp.Api.Backups;
@@ -130,6 +132,26 @@ public sealed class BackupProgramadoService : BackgroundService
             // corrida). Nunca debe tumbar el BackgroundService — el PeriodicTimer sigue vivo y
             // reintenta en la ventana siguiente.
             _logger.LogError(ex, "Corrida de backup programado falló de forma inesperada.");
+
+            // Este camino no persiste fila (a diferencia de DisparadorBackupManual): sin esta
+            // notificación, una corrida programada que revienta antes de llegar a ServicioBackup
+            // no deja ningún rastro hacia afuera. Se arma una corrida sintética solo para avisar.
+            try
+            {
+                await using var scopeAviso = _scopeFactory.CreateAsyncScope();
+                var notificador = scopeAviso.ServiceProvider.GetRequiredService<INotificadorAlertas>();
+                await notificador.NotificarCorridaBackupAsync(new CorridaBackup
+                {
+                    IniciadaEn = DateTime.UtcNow,
+                    FinalizadaEn = DateTime.UtcNow,
+                    Resultado = ResultadoBackup.Fallida,
+                    MotivoFallo = $"Fallo inesperado en la corrida programada: {ex.Message}",
+                });
+            }
+            catch (Exception exAviso)
+            {
+                _logger.LogWarning(exAviso, "Además falló la notificación del fallo inesperado.");
+            }
         }
         finally
         {
