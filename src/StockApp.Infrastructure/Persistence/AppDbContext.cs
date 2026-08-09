@@ -24,6 +24,7 @@ public class AppDbContext : DbContext
     public DbSet<AdjuntoContenido> AdjuntosContenido => Set<AdjuntoContenido>();
     public DbSet<IngresoCaja> IngresosCaja => Set<IngresoCaja>();
     public DbSet<CorridaBackup> CorridasBackup => Set<CorridaBackup>();
+    public DbSet<ConfiguracionAlertas> ConfiguracionesAlertas => Set<ConfiguracionAlertas>();
     public DbSet<Tarea> Tareas => Set<Tarea>();
     public DbSet<NotaTarea> NotasTarea => Set<NotaTarea>();
     public DbSet<LoteImportacion> LotesImportacion => Set<LoteImportacion>();
@@ -305,6 +306,16 @@ public class AppDbContext : DbContext
             e.HasIndex(c => c.FinalizadaEn);
             e.HasOne(c => c.Usuario).WithMany()
                 .HasForeignKey(c => c.UsuarioId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── Configuración del canal de alertas (fila única, Id = 1) ─────────────
+        // Mismo patrón de FK que CorridaBackup.Usuario: nullable + Restrict. Null es un valor
+        // legítimo (la fila sembrada por la migración nunca la tocó nadie), no un hueco de FK.
+        modelBuilder.Entity<ConfiguracionAlertas>(e =>
+        {
+            e.Property(c => c.Id).ValueGeneratedNever(); // fila única: el Id lo fija el código, no la secuencia
+            e.HasOne(c => c.Usuario).WithMany()
+                .HasForeignKey(c => c.ActualizadoPorUsuarioId).OnDelete(DeleteBehavior.Restrict);
         });
 
         // ── Tareas (módulo independiente, spec 2026-08-01) ────────────────────
