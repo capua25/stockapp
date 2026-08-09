@@ -18,7 +18,6 @@ using StockApp.Api.ErrorHandling;
 using StockApp.Api.Json;
 using StockApp.Api.Licenciamiento;
 using StockApp.Api.Logging;
-using StockApp.Application.Alertas;
 using StockApp.Application.Auditoria;
 using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
@@ -36,6 +35,7 @@ using StockApp.Infrastructure.Auth;
 using StockApp.Infrastructure.Backups;
 using StockApp.Infrastructure.Finanzas;
 using StockApp.Infrastructure.Licenciamiento;
+using StockApp.Infrastructure.Notificaciones;
 using StockApp.Infrastructure.Persistence;
 using StockApp.Infrastructure.Platform;
 using StockApp.Infrastructure.Repositories;
@@ -269,13 +269,17 @@ builder.Services.AddScoped<ServicioResetAdmin>();
 // (ver Backups/BackupProgramadoService.cs) así que no importa que él mismo sea Singleton.
 builder.Services.AddScoped<ICorridaBackupRepository, CorridaBackupRepository>();
 builder.Services.AddScoped<IEjecutorPgDump, EjecutorPgDumpProceso>();
-// TODO(Task 4, alerta-backup-webhook): reemplazar por NotificadorWebhook. Registro provisorio
-// (no-op) para que el grafo de DI de ServicioBackup siga siendo resoluble -- sin esto,
-// ValidateOnBuild (activo por default en Development, incluido WebApplicationFactory de los
-// tests) tumba el host entero al no poder resolver INotificadorAlertas.
-builder.Services.AddScoped<INotificadorAlertas, NotificadorAlertasNulo>();
 builder.Services.AddScoped<ServicioBackup>();
 builder.Services.AddScoped<ServicioConsultaBackups>();
+
+// ── Canal de alerta de backups ─────────────────────────────────────────────
+// Primer AddHttpClient del repo. Timeout corto a propósito: notificar es best-effort y no
+// puede quedar colgado bloqueando el hilo de una corrida de backup.
+builder.Services.AddHttpClient<INotificadorAlertas, NotificadorWebhook>(c =>
+{
+    c.Timeout = TimeSpan.FromSeconds(10);
+});
+builder.Services.AddScoped<IConfiguracionAlertasRepository, ConfiguracionAlertasRepository>();
 
 // fix/integridad-referencial (POST /backups, disparo manual): IGuardiaCorridaBackup es
 // Singleton a propósito -- BackupProgramadoService (job automático) y DisparadorBackupManual
