@@ -18,12 +18,18 @@ public sealed class ServicioBackup
 {
     private readonly IEjecutorPgDump _ejecutor;
     private readonly ICorridaBackupRepository _corridas;
+    private readonly INotificadorAlertas _notificador;
     private readonly ILogger<ServicioBackup> _logger;
 
-    public ServicioBackup(IEjecutorPgDump ejecutor, ICorridaBackupRepository corridas, ILogger<ServicioBackup> logger)
+    public ServicioBackup(
+        IEjecutorPgDump ejecutor,
+        ICorridaBackupRepository corridas,
+        INotificadorAlertas notificador,
+        ILogger<ServicioBackup> logger)
     {
         _ejecutor = ejecutor;
         _corridas = corridas;
+        _notificador = notificador;
         _logger = logger;
     }
 
@@ -102,6 +108,8 @@ public sealed class ServicioBackup
         }
 
         await _corridas.AgregarAsync(corrida);
+
+        await NotificarSinRomperAsync(corrida, cancellationToken);
 
         if (corrida.Resultado == ResultadoBackup.Exitosa)
             await AplicarRetencionAsync(directorioBackups, ahoraUtc);
@@ -283,6 +291,21 @@ public sealed class ServicioBackup
             // hace falta tocar este código en la E2).
             _logger.LogWarning(ex, "No se pudo borrar el archivo '{Ruta}'.", ruta);
             return false;
+        }
+    }
+
+    /// <summary>Defensa en profundidad: INotificadorAlertas ya se compromete a no propagar
+    /// excepciones, pero notificar es best-effort y no puede tumbar una corrida que salió bien.
+    /// Una implementación mal escrita del contrato no debería costarnos el backup.</summary>
+    private async Task NotificarSinRomperAsync(CorridaBackup corrida, CancellationToken ct)
+    {
+        try
+        {
+            await _notificador.NotificarCorridaBackupAsync(corrida, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Falló la notificación del resultado del backup.");
         }
     }
 }

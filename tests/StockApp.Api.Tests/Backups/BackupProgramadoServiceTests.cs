@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using StockApp.Api.Backups;
 using StockApp.Api.Tests.Fixtures;
+using StockApp.Application.Alertas;
 using StockApp.Application.Backups;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
@@ -95,6 +96,7 @@ public class BackupProgramadoServiceTests
         var services = new ServiceCollection();
         services.AddScoped<ICorridaBackupRepository>(_ => new CorridaBackupRepositoryEspiaFake(instancias) { UltimaExitosa = ultimaExitosaSemilla });
         services.AddScoped<IEjecutorPgDump, EjecutorPgDumpFake>();
+        services.AddScoped<INotificadorAlertas, NotificadorAlertasNulo>();
         services.AddScoped<ServicioBackup>();
         services.AddSingleton<Microsoft.Extensions.Logging.ILogger<ServicioBackup>>(NullLogger<ServicioBackup>.Instance);
 
@@ -193,6 +195,7 @@ public class BackupProgramadoServiceTests
         var services = new ServiceCollection();
         services.AddScoped<ICorridaBackupRepository, CorridaBackupRepositoryQueFallaAlConsultarFake>();
         services.AddScoped<IEjecutorPgDump, EjecutorPgDumpFake>();
+        services.AddScoped<INotificadorAlertas, NotificadorAlertasNulo>();
         services.AddScoped<ServicioBackup>();
         services.AddSingleton<Microsoft.Extensions.Logging.ILogger<ServicioBackup>>(NullLogger<ServicioBackup>.Instance);
         var sp = services.BuildServiceProvider();

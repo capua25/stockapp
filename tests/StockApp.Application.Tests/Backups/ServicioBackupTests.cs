@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using StockApp.Application.Alertas;
 using StockApp.Application.Backups;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
@@ -81,7 +82,7 @@ public class ServicioBackupTests
         var directorio = CrearDirectorioTemporal();
         var ejecutor = new EjecutorPgDumpFake(exitoso: true);
         var repo = new CorridaBackupRepositoryFake();
-        var svc = new ServicioBackup(ejecutor, repo, NullLogger<ServicioBackup>.Instance);
+        var svc = new ServicioBackup(ejecutor, repo, new NotificadorAlertasNulo(), NullLogger<ServicioBackup>.Instance);
 
         await svc.EjecutarCorridaAsync("Host=x;Database=y", directorio, Ahora, CancellationToken.None);
 
@@ -101,7 +102,7 @@ public class ServicioBackupTests
         var directorio = CrearDirectorioTemporal();
         var ejecutor = new EjecutorPgDumpFake(exitoso: true);
         var repo = new CorridaBackupRepositoryFake();
-        var svc = new ServicioBackup(ejecutor, repo, NullLogger<ServicioBackup>.Instance);
+        var svc = new ServicioBackup(ejecutor, repo, new NotificadorAlertasNulo(), NullLogger<ServicioBackup>.Instance);
 
         await svc.EjecutarCorridaAsync("Host=x;Database=y", directorio, Ahora, CancellationToken.None);
 
@@ -117,7 +118,7 @@ public class ServicioBackupTests
         var directorio = CrearDirectorioTemporal();
         var ejecutor = new EjecutorPgDumpFake(exitoso: true);
         var repo = new CorridaBackupRepositoryFake();
-        var svc = new ServicioBackup(ejecutor, repo, NullLogger<ServicioBackup>.Instance);
+        var svc = new ServicioBackup(ejecutor, repo, new NotificadorAlertasNulo(), NullLogger<ServicioBackup>.Instance);
 
         await svc.EjecutarCorridaAsync("Host=x;Database=y", directorio, Ahora, CancellationToken.None, usuarioId: 7);
 
@@ -131,7 +132,7 @@ public class ServicioBackupTests
         var directorio = CrearDirectorioTemporal();
         var ejecutor = new EjecutorPgDumpFake(exitoso: false, mensajeError: "pg_dump: fallo simulado");
         var repo = new CorridaBackupRepositoryFake();
-        var svc = new ServicioBackup(ejecutor, repo, NullLogger<ServicioBackup>.Instance);
+        var svc = new ServicioBackup(ejecutor, repo, new NotificadorAlertasNulo(), NullLogger<ServicioBackup>.Instance);
 
         await svc.EjecutarCorridaAsync("Host=x;Database=y", directorio, Ahora, CancellationToken.None, usuarioId: 7);
 
@@ -150,7 +151,7 @@ public class ServicioBackupTests
         var directorio = CrearDirectorioTemporal();
         var ejecutor = new EjecutorPgDumpFake(exitoso: false, mensajeError: motivo);
         var repo = new CorridaBackupRepositoryFake();
-        var svc = new ServicioBackup(ejecutor, repo, NullLogger<ServicioBackup>.Instance);
+        var svc = new ServicioBackup(ejecutor, repo, new NotificadorAlertasNulo(), NullLogger<ServicioBackup>.Instance);
 
         await svc.EjecutarCorridaAsync("Host=x;Database=y", directorio, Ahora, CancellationToken.None);
 
@@ -167,7 +168,7 @@ public class ServicioBackupTests
         var directorio = CrearDirectorioTemporal();
         var ejecutor = new EjecutorPgDumpFakeQueEscribeYFalla();
         var repo = new CorridaBackupRepositoryFake();
-        var svc = new ServicioBackup(ejecutor, repo, NullLogger<ServicioBackup>.Instance);
+        var svc = new ServicioBackup(ejecutor, repo, new NotificadorAlertasNulo(), NullLogger<ServicioBackup>.Instance);
 
         await svc.EjecutarCorridaAsync("Host=x;Database=y", directorio, Ahora, CancellationToken.None);
 
@@ -208,7 +209,7 @@ public class ServicioBackupTests
         var directorio = CrearDirectorioTemporal();
         var ejecutor = new EjecutorPgDumpFakeQueBloqueaDirectorioTrasEscribir();
         var repo = new CorridaBackupRepositoryFake();
-        var svc = new ServicioBackup(ejecutor, repo, NullLogger<ServicioBackup>.Instance);
+        var svc = new ServicioBackup(ejecutor, repo, new NotificadorAlertasNulo(), NullLogger<ServicioBackup>.Instance);
 
         try
         {
@@ -242,7 +243,7 @@ public class ServicioBackupTests
         File.WriteAllBytes(Path.Combine(directorio, "huerfano2.tmp"), new byte[] { 1 });
         File.WriteAllBytes(Path.Combine(directorio, "backup_valido.dump"), new byte[] { 1 });
         var svc = new ServicioBackup(
-            new EjecutorPgDumpFake(exitoso: true), new CorridaBackupRepositoryFake(), NullLogger<ServicioBackup>.Instance);
+            new EjecutorPgDumpFake(exitoso: true), new CorridaBackupRepositoryFake(), new NotificadorAlertasNulo(), NullLogger<ServicioBackup>.Instance);
 
         svc.LimpiarTmpHuerfanos(directorio);
 
@@ -256,7 +257,7 @@ public class ServicioBackupTests
     public void LimpiarTmpHuerfanos_DirectorioInexistente_NoLanzaYNoCreaElDirectorio()
     {
         var svc = new ServicioBackup(
-            new EjecutorPgDumpFake(exitoso: true), new CorridaBackupRepositoryFake(), NullLogger<ServicioBackup>.Instance);
+            new EjecutorPgDumpFake(exitoso: true), new CorridaBackupRepositoryFake(), new NotificadorAlertasNulo(), NullLogger<ServicioBackup>.Instance);
         var directorioInexistente = Path.Combine(Path.GetTempPath(), "no-existe-" + Guid.NewGuid());
 
         svc.LimpiarTmpHuerfanos(directorioInexistente);
@@ -287,7 +288,7 @@ public class ServicioBackupTests
         }
         var cantidadAntes = repo.Corridas.Count;
 
-        var svc = new ServicioBackup(new EjecutorPgDumpFake(exitoso: true), repo, NullLogger<ServicioBackup>.Instance);
+        var svc = new ServicioBackup(new EjecutorPgDumpFake(exitoso: true), repo, new NotificadorAlertasNulo(), NullLogger<ServicioBackup>.Instance);
         await svc.EjecutarCorridaAsync("Host=x;Database=y", directorio, Ahora, CancellationToken.None);
 
         // +1 por la corrida de hoy, pero MENOS que antes porque la retención barrió las viejas.
@@ -325,7 +326,7 @@ public class ServicioBackupTests
         var idsAntes = repo.Corridas.Select(c => c.Id).ToList();
 
         var svc = new ServicioBackup(
-            new EjecutorPgDumpFake(exitoso: false, mensajeError: "falló"), repo, NullLogger<ServicioBackup>.Instance);
+            new EjecutorPgDumpFake(exitoso: false, mensajeError: "falló"), repo, new NotificadorAlertasNulo(), NullLogger<ServicioBackup>.Instance);
 
         // No debe lanzar ni intentar listar/borrar nada más allá de agregar la corrida fallida.
         await svc.EjecutarCorridaAsync("Host=x;Database=y", directorio, Ahora, CancellationToken.None);
@@ -343,7 +344,7 @@ public class ServicioBackupTests
         var directorio = CrearDirectorioTemporal();
         File.WriteAllBytes(Path.Combine(directorio, "bloqueado.tmp"), new byte[] { 1 });
         var svc = new ServicioBackup(
-            new EjecutorPgDumpFake(exitoso: true), new CorridaBackupRepositoryFake(), NullLogger<ServicioBackup>.Instance);
+            new EjecutorPgDumpFake(exitoso: true), new CorridaBackupRepositoryFake(), new NotificadorAlertasNulo(), NullLogger<ServicioBackup>.Instance);
 
         // Quitamos el permiso de escritura del directorio (dejamos lectura+ejecución): en Linux
         // esto hace que File.Delete falle con UnauthorizedAccessException (no IOException) —
@@ -405,7 +406,7 @@ public class ServicioBackupTests
         File.SetUnixFileMode(subdirBloqueado, UnixFileMode.UserRead | UnixFileMode.UserExecute);
         try
         {
-            var svc = new ServicioBackup(new EjecutorPgDumpFake(exitoso: true), repo, NullLogger<ServicioBackup>.Instance);
+            var svc = new ServicioBackup(new EjecutorPgDumpFake(exitoso: true), repo, new NotificadorAlertasNulo(), NullLogger<ServicioBackup>.Instance);
 
             await svc.EjecutarCorridaAsync("Host=x;Database=y", directorio, Ahora, CancellationToken.None);
 
@@ -438,7 +439,7 @@ public class ServicioBackupTests
         File.SetLastWriteTimeUtc(ruta, Ahora.AddDays(-10)); // bien fuera del margen de gracia
         var ultimaEscrituraReal = File.GetLastWriteTimeUtc(ruta); // lo que el filesystem realmente guardó
         var repo = new CorridaBackupRepositoryFake();
-        var svc = new ServicioBackup(new EjecutorPgDumpFake(exitoso: true), repo, NullLogger<ServicioBackup>.Instance);
+        var svc = new ServicioBackup(new EjecutorPgDumpFake(exitoso: true), repo, new NotificadorAlertasNulo(), NullLogger<ServicioBackup>.Instance);
 
         await svc.ReconciliarDumpHuerfanosAsync(directorio, Ahora, TimeSpan.FromMinutes(15));
 
@@ -467,7 +468,7 @@ public class ServicioBackupTests
         File.WriteAllBytes(ruta, new byte[] { 1 });
         File.SetLastWriteTimeUtc(ruta, Ahora.AddDays(-10)); // bien fuera del margen de gracia
         var repo = new CorridaBackupRepositoryFake();
-        var svc = new ServicioBackup(new EjecutorPgDumpFake(exitoso: true), repo, NullLogger<ServicioBackup>.Instance);
+        var svc = new ServicioBackup(new EjecutorPgDumpFake(exitoso: true), repo, new NotificadorAlertasNulo(), NullLogger<ServicioBackup>.Instance);
 
         await svc.ReconciliarDumpHuerfanosAsync(directorio, Ahora, TimeSpan.FromMinutes(15));
 
@@ -483,7 +484,7 @@ public class ServicioBackupTests
         File.WriteAllBytes(ruta, new byte[] { 1 });
         File.SetLastWriteTimeUtc(ruta, Ahora.AddMinutes(-1));
         var repo = new CorridaBackupRepositoryFake();
-        var svc = new ServicioBackup(new EjecutorPgDumpFake(exitoso: true), repo, NullLogger<ServicioBackup>.Instance);
+        var svc = new ServicioBackup(new EjecutorPgDumpFake(exitoso: true), repo, new NotificadorAlertasNulo(), NullLogger<ServicioBackup>.Instance);
 
         // El archivo no tiene fila en CorridasBackup todavía, pero es "reciente" (dentro del
         // margen de gracia) -- podría ser el rename atómico de una corrida en vuelo, a un paso
@@ -509,7 +510,7 @@ public class ServicioBackupTests
             IniciadaEn = Ahora.AddDays(-30), FinalizadaEn = Ahora.AddDays(-30),
             Resultado = ResultadoBackup.Exitosa, NombreArchivo = nombreArchivo, TamanioBytes = 1,
         });
-        var svc = new ServicioBackup(new EjecutorPgDumpFake(exitoso: true), repo, NullLogger<ServicioBackup>.Instance);
+        var svc = new ServicioBackup(new EjecutorPgDumpFake(exitoso: true), repo, new NotificadorAlertasNulo(), NullLogger<ServicioBackup>.Instance);
 
         await svc.ReconciliarDumpHuerfanosAsync(directorio, Ahora, TimeSpan.FromMinutes(15));
 
@@ -525,7 +526,7 @@ public class ServicioBackupTests
         File.WriteAllBytes(ruta, new byte[] { 1 });
         File.SetLastWriteTimeUtc(ruta, Ahora.AddDays(-30));
         var svc = new ServicioBackup(
-            new EjecutorPgDumpFake(exitoso: true), new CorridaBackupRepositoryFake(), NullLogger<ServicioBackup>.Instance);
+            new EjecutorPgDumpFake(exitoso: true), new CorridaBackupRepositoryFake(), new NotificadorAlertasNulo(), NullLogger<ServicioBackup>.Instance);
 
         // El glob de este barrido es *.dump -- un .tmp sin fila lo maneja LimpiarTmpHuerfanos,
         // no este método.
@@ -538,11 +539,77 @@ public class ServicioBackupTests
     public async Task ReconciliarDumpHuerfanosAsync_DirectorioInexistente_NoLanzaYNoCreaElDirectorio()
     {
         var svc = new ServicioBackup(
-            new EjecutorPgDumpFake(exitoso: true), new CorridaBackupRepositoryFake(), NullLogger<ServicioBackup>.Instance);
+            new EjecutorPgDumpFake(exitoso: true), new CorridaBackupRepositoryFake(), new NotificadorAlertasNulo(), NullLogger<ServicioBackup>.Instance);
         var directorioInexistente = Path.Combine(Path.GetTempPath(), "no-existe-" + Guid.NewGuid());
 
         await svc.ReconciliarDumpHuerfanosAsync(directorioInexistente, Ahora);
 
         Assert.False(Directory.Exists(directorioInexistente));
+    }
+
+    private sealed class NotificadorAlertasFake : INotificadorAlertas
+    {
+        private readonly bool _explota;
+        public List<CorridaBackup> Notificadas { get; } = new();
+
+        public NotificadorAlertasFake(bool explota = false) => _explota = explota;
+
+        public Task NotificarCorridaBackupAsync(CorridaBackup corrida, CancellationToken ct = default)
+        {
+            Notificadas.Add(corrida);
+            if (_explota)
+                throw new InvalidOperationException("el notificador explotó");
+            return Task.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task EjecutarCorridaAsync_Exitosa_NotificaLaCorrida()
+    {
+        var directorio = CrearDirectorioTemporal();
+        var notificador = new NotificadorAlertasFake();
+        var svc = new ServicioBackup(
+            new EjecutorPgDumpFake(exitoso: true), new CorridaBackupRepositoryFake(),
+            notificador, NullLogger<ServicioBackup>.Instance);
+
+        await svc.EjecutarCorridaAsync("Host=x;Database=y", directorio, Ahora, CancellationToken.None);
+
+        var notificada = Assert.Single(notificador.Notificadas);
+        Assert.Equal(ResultadoBackup.Exitosa, notificada.Resultado);
+    }
+
+    [Fact]
+    public async Task EjecutarCorridaAsync_Fallida_NotificaLaCorrida()
+    {
+        var directorio = CrearDirectorioTemporal();
+        var notificador = new NotificadorAlertasFake();
+        var svc = new ServicioBackup(
+            new EjecutorPgDumpFake(exitoso: false, mensajeError: "pg_dump: fallo simulado"),
+            new CorridaBackupRepositoryFake(), notificador, NullLogger<ServicioBackup>.Instance);
+
+        await svc.EjecutarCorridaAsync("Host=x;Database=y", directorio, Ahora, CancellationToken.None);
+
+        var notificada = Assert.Single(notificador.Notificadas);
+        Assert.Equal(ResultadoBackup.Fallida, notificada.Resultado);
+        Assert.Equal("pg_dump: fallo simulado", notificada.MotivoFallo);
+    }
+
+    [Fact]
+    public async Task EjecutarCorridaAsync_ElNotificadorExplota_NoRompeElBackupNiPierdeLaCorrida()
+    {
+        // El test más importante del conjunto: notificar es best-effort. Un canal de alerta roto
+        // que además tumba el backup convierte una molestia en un desastre.
+        var directorio = CrearDirectorioTemporal();
+        var repo = new CorridaBackupRepositoryFake();
+        var svc = new ServicioBackup(
+            new EjecutorPgDumpFake(exitoso: true), repo,
+            new NotificadorAlertasFake(explota: true), NullLogger<ServicioBackup>.Instance);
+
+        var ex = await Record.ExceptionAsync(() =>
+            svc.EjecutarCorridaAsync("Host=x;Database=y", directorio, Ahora, CancellationToken.None));
+
+        Assert.Null(ex);
+        var corrida = Assert.Single(repo.Corridas);
+        Assert.Equal(ResultadoBackup.Exitosa, corrida.Resultado);
     }
 }

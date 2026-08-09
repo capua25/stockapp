@@ -18,6 +18,7 @@ using StockApp.Api.ErrorHandling;
 using StockApp.Api.Json;
 using StockApp.Api.Licenciamiento;
 using StockApp.Api.Logging;
+using StockApp.Application.Alertas;
 using StockApp.Application.Auditoria;
 using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
@@ -268,6 +269,11 @@ builder.Services.AddScoped<ServicioResetAdmin>();
 // (ver Backups/BackupProgramadoService.cs) así que no importa que él mismo sea Singleton.
 builder.Services.AddScoped<ICorridaBackupRepository, CorridaBackupRepository>();
 builder.Services.AddScoped<IEjecutorPgDump, EjecutorPgDumpProceso>();
+// TODO(Task 4, alerta-backup-webhook): reemplazar por NotificadorWebhook. Registro provisorio
+// (no-op) para que el grafo de DI de ServicioBackup siga siendo resoluble -- sin esto,
+// ValidateOnBuild (activo por default en Development, incluido WebApplicationFactory de los
+// tests) tumba el host entero al no poder resolver INotificadorAlertas.
+builder.Services.AddScoped<INotificadorAlertas, NotificadorAlertasNulo>();
 builder.Services.AddScoped<ServicioBackup>();
 builder.Services.AddScoped<ServicioConsultaBackups>();
 
