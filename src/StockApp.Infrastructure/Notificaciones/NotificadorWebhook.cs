@@ -71,10 +71,23 @@ public sealed class NotificadorWebhook : INotificadorAlertas
         }
     }
 
+    /// <summary>
+    /// Inserta el sufijo "/fail" como último segmento del PATH, nunca por concatenación de
+    /// string cruda: una URL con query string (p.ej. "https://host/abc?x=1") tiene como último
+    /// carácter el valor del parámetro, no una "/", así que TrimEnd('/') + "/fail" pegaría el
+    /// sufijo adentro del query en vez de agregarlo como segmento — el receptor jamás lo vería
+    /// como la URL de fallo (bug real, encontrado en review). UriBuilder separa Path de Query,
+    /// así que solo se toca el Path y el Query queda intacto sin tocarlo.
+    /// </summary>
     private static string ConstruirUrl(string urlBase, bool fallo)
     {
-        var limpia = urlBase.Trim().TrimEnd('/');
-        return fallo ? limpia + "/fail" : limpia;
+        var builder = new UriBuilder(urlBase.Trim());
+        if (fallo)
+            builder.Path = builder.Path.TrimEnd('/') + "/fail";
+        else if (builder.Path.Length > 1)
+            builder.Path = builder.Path.TrimEnd('/');
+
+        return builder.Uri.ToString();
     }
 
     private static string ConstruirBody(CorridaBackup corrida, bool fallo)

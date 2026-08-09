@@ -141,4 +141,24 @@ public class NotificadorWebhookTests
 
         Assert.Equal(2000, handler.UltimoBody!.Length);
     }
+
+    [Fact]
+    public async Task UrlConQueryString_InsertaFailEnElPathYPreservaElQuery()
+    {
+        var (sut, handler, _) = Crear(url: "https://hc-ping.com/abc?x=1");
+
+        await sut.NotificarCorridaBackupAsync(Fallida());
+
+        Assert.Equal("https://hc-ping.com/abc/fail?x=1", handler.UltimaRequest!.RequestUri!.ToString());
+    }
+
+    [Fact]
+    public async Task UrlConQueryString_EnExito_PosteaLaUrlTalCual()
+    {
+        var (sut, handler, _) = Crear(url: "https://hc-ping.com/abc?x=1");
+
+        await sut.NotificarCorridaBackupAsync(Exitosa());
+
+        Assert.Equal("https://hc-ping.com/abc?x=1", handler.UltimaRequest!.RequestUri!.ToString());
+    }
 }
