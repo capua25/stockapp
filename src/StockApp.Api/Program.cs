@@ -18,6 +18,7 @@ using StockApp.Api.ErrorHandling;
 using StockApp.Api.Json;
 using StockApp.Api.Licenciamiento;
 using StockApp.Api.Logging;
+using StockApp.Application.Alertas;
 using StockApp.Application.Auditoria;
 using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
@@ -280,6 +281,7 @@ builder.Services.AddHttpClient<INotificadorAlertas, NotificadorWebhook>(c =>
     c.Timeout = TimeSpan.FromSeconds(10);
 });
 builder.Services.AddScoped<IConfiguracionAlertasRepository, ConfiguracionAlertasRepository>();
+builder.Services.AddScoped<ServicioConfiguracionAlertas>();
 
 // fix/integridad-referencial (POST /backups, disparo manual): IGuardiaCorridaBackup es
 // Singleton a propósito -- BackupProgramadoService (job automático) y DisparadorBackupManual
@@ -594,6 +596,7 @@ app.MapImportacionEndpoints();
 app.MapLicenciaEndpoints();
 app.MapResetAdminEndpoints();
 app.MapBackupsEndpoints();
+app.MapConfiguracionAlertasEndpoints();
 app.MapLogsEndpoints();
 app.MapTareasEndpoints();
 
