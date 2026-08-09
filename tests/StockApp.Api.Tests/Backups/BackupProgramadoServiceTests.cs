@@ -90,13 +90,17 @@ public class BackupProgramadoServiceTests
     }
 
     private static (BackupProgramadoService servicio, List<object> instanciasQueAgregaron, CorridaBackup? ultimaExitosaSemilla)
-        Crear(CorridaBackup? ultimaExitosaSemilla = null, IGuardiaCorridaBackup? guardia = null)
+        Crear(
+            CorridaBackup? ultimaExitosaSemilla = null,
+            IGuardiaCorridaBackup? guardia = null,
+            INotificadorAlertas? notificador = null,
+            IEjecutorPgDump? ejecutor = null)
     {
         var instancias = new List<object>();
         var services = new ServiceCollection();
         services.AddScoped<ICorridaBackupRepository>(_ => new CorridaBackupRepositoryEspiaFake(instancias) { UltimaExitosa = ultimaExitosaSemilla });
-        services.AddScoped<IEjecutorPgDump, EjecutorPgDumpFake>();
-        services.AddScoped<INotificadorAlertas, NotificadorAlertasNulo>();
+        services.AddScoped<IEjecutorPgDump>(_ => ejecutor ?? new EjecutorPgDumpFake());
+        services.AddScoped<INotificadorAlertas>(_ => notificador ?? new NotificadorAlertasNulo());
         services.AddScoped<ServicioBackup>();
         services.AddSingleton<Microsoft.Extensions.Logging.ILogger<ServicioBackup>>(NullLogger<ServicioBackup>.Instance);
 
@@ -122,6 +126,32 @@ public class BackupProgramadoServiceTests
         public bool SalirFueLlamado { get; private set; }
         public bool TryEntrar() => false;
         public void Salir() => SalirFueLlamado = true;
+    }
+
+    /// <summary>Ronda de fix 1/5 (Important): misma forma que el NotificadorAlertasFake de
+    /// DisparadorBackupManualTests -- los proyectos de test no comparten código.</summary>
+    private sealed class NotificadorAlertasFake : INotificadorAlertas
+    {
+        public List<CorridaBackup> Notificadas { get; } = new();
+
+        public Task NotificarCorridaBackupAsync(CorridaBackup corrida, CancellationToken ct = default)
+        {
+            Notificadas.Add(corrida);
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>Ronda de fix 1/5: a diferencia de EjecutorPgDumpFake (que devuelve
+    /// Exitoso=false para simular un fallo ESPERABLE de pg_dump, que ServicioBackup ya captura y
+    /// persiste), este fake TIRA -- simula el "error realmente inesperado" que ServicioBackup no
+    /// atrapa (ver ServicioBackup.EjecutarCorridaAsync: la llamada a _ejecutor.EjecutarAsync no
+    /// tiene try/catch propio). La excepción sale de ServicioBackup sin persistir fila ni
+    /// notificar por su cuenta, y llega cruda al catch de última resistencia de
+    /// EjecutarCorridaSeguraAsync.</summary>
+    private sealed class EjecutorPgDumpQueExplotaFake : IEjecutorPgDump
+    {
+        public Task<ResultadoEjecucionPgDump> EjecutarAsync(string c, string r, CancellationToken ct)
+            => throw new InvalidOperationException("pg_dump explotó de forma inesperada (simulado).");
     }
 
     [Fact]
@@ -229,5 +259,26 @@ public class BackupProgramadoServiceTests
         Assert.Contains(loggerEspia.ErroresLogueados, ex => ex is InvalidOperationException);
 
         await servicio.StopAsync(CancellationToken.None);
+    }
+
+    /// <summary>Ronda de fix 1/5 (Important, confianza 90): el camino del scheduler (corre
+    /// desatendido, de madrugada) quedaba sin ningún test que ejerciera la notificación agregada
+    /// en la Task 4 -- a diferencia de DisparadorBackupManual, este camino no persiste ninguna
+    /// fila, así que sin esta notificación una corrida programada que revienta antes de llegar
+    /// a ServicioBackup no deja ningún rastro hacia afuera.</summary>
+    [Fact]
+    public async Task EjecutarCorridaSeguraAsync_FalloInesperado_NotificaSinPersistirFila()
+    {
+        var notificador = new NotificadorAlertasFake();
+        var (servicio, instancias, _) = Crear(notificador: notificador, ejecutor: new EjecutorPgDumpQueExplotaFake());
+        var directorio = Path.Combine(Path.GetTempPath(), "BackupProgramadoServiceTests_dir_" + Guid.NewGuid());
+
+        await servicio.EjecutarCorridaSeguraAsync(directorio, CancellationToken.None);
+
+        // Este camino no persiste fila (a diferencia de DisparadorBackupManual.PersistirFallaAsync).
+        Assert.Empty(instancias);
+
+        var notificada = Assert.Single(notificador.Notificadas);
+        Assert.Equal(ResultadoBackup.Fallida, notificada.Resultado);
     }
 }
