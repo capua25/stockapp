@@ -11,6 +11,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using StockApp.ApiClient;
 using StockApp.Application.Actualizaciones;
+using StockApp.Application.Alertas;
 using StockApp.Application.Auditoria;
 using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
@@ -230,6 +231,11 @@ public partial class App : AvaloniaApp
         //    grandes) ──────────────────────────────────────────────────────────
         services.AddTransient<ILogsService>(sp =>
             new LogsApiClient(sp.GetRequiredKeyedService<HttpClient>("Descargas")));
+
+        // ── Alerta de backup (webhook) ── Bodies chicos, sin descarga de archivos: usa el
+        //    HttpClient PRINCIPAL (timeout 10s), no el keyed "Descargas" de arriba.
+        services.AddTransient<IConfiguracionAlertasService>(sp =>
+            new ConfiguracionAlertasApiClient(sp.GetRequiredService<HttpClient>()));
 
         // ── Módulo Finanzas — F5d: importador de planillas (historial + análisis/confirmación/reversa) ──
         services.AddTransient<IImportacionService, ImportacionApiClient>();
