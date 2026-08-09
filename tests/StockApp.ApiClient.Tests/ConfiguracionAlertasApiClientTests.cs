@@ -35,7 +35,11 @@ public class ConfiguracionAlertasApiClientTests
         await client.GuardarAsync("https://hc-ping.com/b", habilitado: true);
 
         Assert.Equal(HttpMethod.Put, fake.UltimaRequest!.Method);
-        Assert.Contains("hc-ping.com/b", fake.UltimoBody);
+        // Verifica el contrato serializado completo (nombre de propiedad + valor), no solo que
+        // el valor aparezca en algún lado — si mañana se renombra UrlWebhook/Habilitado en el
+        // record de body, esto debe romperse en vez de seguir en verde por casualidad.
+        Assert.Contains("\"urlWebhook\":\"https://hc-ping.com/b\"", fake.UltimoBody);
+        Assert.Contains("\"habilitado\":true", fake.UltimoBody);
     }
 
     [Fact]
