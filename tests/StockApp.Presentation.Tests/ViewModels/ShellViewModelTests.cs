@@ -1,6 +1,7 @@
 using Moq;
 using StockApp.ApiClient;
 using StockApp.Application.Actualizaciones;
+using StockApp.Application.Alertas;
 using StockApp.Application.Auth;
 using StockApp.Application.Backups;
 using StockApp.Application.Finanzas;
@@ -120,7 +121,8 @@ public class ShellViewModelTests
                 .ReturnsAsync(new ResumenLogsDto(0, null, null, 0));
 
         var mantenimiento = new MantenimientoViewModel(
-            backupsMock.Object, Mock.Of<IServicioGuardadoArchivo>(), Mock.Of<IConfirmacionService>(), logsMock.Object);
+            backupsMock.Object, Mock.Of<IServicioGuardadoArchivo>(), Mock.Of<IConfirmacionService>(), logsMock.Object,
+            Mock.Of<IConfiguracionAlertasService>());
 
         var shell = new ShellViewModel(
             authService,

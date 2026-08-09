@@ -76,7 +76,8 @@ public class MantenimientoViewTests
     {
         var vm = new MantenimientoViewModel(
             backups ?? new BackupsServiceFake(corridas), new ServicioGuardadoArchivoFake(),
-            confirmacion ?? new ConfirmacionServiceFake(), new LogsServiceFake(resumenLogs));
+            confirmacion ?? new ConfirmacionServiceFake(), new LogsServiceFake(resumenLogs),
+            new ConfiguracionAlertasServiceFake());
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
         window.DataContext = vm;

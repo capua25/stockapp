@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using StockApp.Application.Alertas;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Logs;
 using StockApp.Application.Movimientos;
@@ -110,4 +111,27 @@ internal sealed class LogsServiceFake : ILogsService
 
     public Task<LogsDescargaDto> DescargarZipAsync(CancellationToken ct = default) =>
         Task.FromResult(new LogsDescargaDto("logs.zip", new MemoryStream([1, 2, 3])));
+}
+
+/// <summary>
+/// Fake de IConfiguracionAlertasService (Task 7, sección Alertas de Mantenimiento). Mismo
+/// criterio que <see cref="LogsServiceFake"/>: por defecto "sin configurar", usado por los
+/// montajes headless que no ejercitan la zona Alertas, solo necesitan que el ViewModel pueda
+/// construirse y que CargarAlertasAsync() no explote al ejecutarse.
+/// </summary>
+internal sealed class ConfiguracionAlertasServiceFake : IConfiguracionAlertasService
+{
+    private readonly ConfiguracionAlertasDto _configuracion;
+
+    public ConfiguracionAlertasServiceFake(ConfiguracionAlertasDto? configuracion = null) =>
+        _configuracion = configuracion ?? new ConfiguracionAlertasDto(null, false, null);
+
+    public Task<ConfiguracionAlertasDto> ObtenerAsync(CancellationToken ct = default) =>
+        Task.FromResult(_configuracion);
+
+    public Task GuardarAsync(string? urlWebhook, bool habilitado, CancellationToken ct = default) =>
+        Task.CompletedTask;
+
+    public Task<ResultadoPruebaAlertaDto> ProbarAsync(CancellationToken ct = default) =>
+        Task.FromResult(new ResultadoPruebaAlertaDto(true, 200, "Se envió un ping de prueba."));
 }

@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using StockApp.Application.Alertas;
 using StockApp.Application.Backups;
 using StockApp.Application.Logs;
 using StockApp.Presentation.Services;
@@ -22,6 +23,7 @@ public partial class MantenimientoViewModel : ViewModelBase
     private readonly IServicioGuardadoArchivo _guardado;
     private readonly IConfirmacionService _confirmacion;
     private readonly ILogsService _logs;
+    private readonly IConfiguracionAlertasService _alertas;
 
     public ObservableCollection<FilaCorridaBackupVm> Corridas { get; } = new();
 
@@ -69,16 +71,30 @@ public partial class MantenimientoViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(MostrarListaVacia))]
     private bool _errorAlCargar;
 
+    [ObservableProperty]
+    private string? _urlWebhook;
+
+    [ObservableProperty]
+    private bool _alertasHabilitadas;
+
+    [ObservableProperty]
+    private bool _guardandoAlertas;
+
+    [ObservableProperty]
+    private bool _probandoAlertas;
+
     public MantenimientoViewModel(
         IBackupsService backups,
         IServicioGuardadoArchivo guardado,
         IConfirmacionService confirmacion,
-        ILogsService logs)
+        ILogsService logs,
+        IConfiguracionAlertasService alertas)
     {
         _backups = backups;
         _guardado = guardado;
         _confirmacion = confirmacion;
         _logs = logs;
+        _alertas = alertas;
     }
 
     public async Task CargarAsync()
@@ -103,6 +119,26 @@ public partial class MantenimientoViewModel : ViewModelBase
         }
 
         await CargarResumenLogsAsync();
+        await CargarAlertasAsync();
+    }
+
+    /// <summary>
+    /// Igual criterio que <see cref="CargarResumenLogsAsync"/>: la sección de alertas se carga
+    /// aparte y se traga sus propios errores, así que si el servidor no responde el resto de
+    /// Mantenimiento (backups, diagnóstico) igual sirve.
+    /// </summary>
+    private async Task CargarAlertasAsync()
+    {
+        try
+        {
+            var cfg = await _alertas.ObtenerAsync();
+            UrlWebhook = cfg.UrlWebhook;
+            AlertasHabilitadas = cfg.Habilitado;
+        }
+        catch (Exception)
+        {
+            // Sección no crítica: si el servidor no responde, el resto de Mantenimiento igual sirve.
+        }
     }
 
     /// <summary>
@@ -217,6 +253,46 @@ public partial class MantenimientoViewModel : ViewModelBase
         finally
         {
             IniciandoBackup = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task GuardarAlertasAsync()
+    {
+        if (GuardandoAlertas) return;
+        GuardandoAlertas = true;
+        try
+        {
+            await _alertas.GuardarAsync(UrlWebhook, AlertasHabilitadas);
+            await _confirmacion.InformarAsync("Configuración de alertas guardada.");
+        }
+        catch (Exception ex)
+        {
+            await _confirmacion.InformarAsync(ex.Message);
+        }
+        finally
+        {
+            GuardandoAlertas = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task ProbarAlertasAsync()
+    {
+        if (ProbandoAlertas) return;
+        ProbandoAlertas = true;
+        try
+        {
+            var resultado = await _alertas.ProbarAsync();
+            await _confirmacion.InformarAsync(resultado.Mensaje ?? "Prueba finalizada.");
+        }
+        catch (Exception ex)
+        {
+            await _confirmacion.InformarAsync(ex.Message);
+        }
+        finally
+        {
+            ProbandoAlertas = false;
         }
     }
 }

@@ -169,6 +169,38 @@
             </Grid>
         </Border>
 
+        <TextBlock DockPanel.Dock="Top"
+                   Text="Alertas"
+                   Classes="caption"
+                   Opacity="0.6"
+                   Margin="0,24,0,12" />
+
+        <Border Classes="card" DockPanel.Dock="Top">
+            <StackPanel Spacing="12" MaxWidth="620" HorizontalAlignment="Left">
+                <TextBlock Text="Avisá cuando un backup falle o cuando el sistema deje de reportar."
+                           Classes="body"
+                           TextWrapping="Wrap" />
+
+                <StackPanel Spacing="4">
+                    <TextBlock Text="URL de webhook (healthchecks.io)" />
+                    <TextBox Text="{Binding UrlWebhook}" Watermark="https://hc-ping.com/xxxxxxxx" />
+                </StackPanel>
+
+                <CheckBox Content="Habilitado" IsChecked="{Binding AlertasHabilitadas}" />
+
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Classes="primary"
+                            Content="Guardar"
+                            Command="{Binding GuardarAlertasCommand}"
+                            IsEnabled="{Binding !GuardandoAlertas}" />
+                    <Button Classes="secondary"
+                            Content="Probar"
+                            Command="{Binding ProbarAlertasCommand}"
+                            IsEnabled="{Binding !ProbandoAlertas}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
     </DockPanel>
     </ScrollViewer>
 
