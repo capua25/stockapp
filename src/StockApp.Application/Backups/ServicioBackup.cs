@@ -57,16 +57,41 @@ public sealed class ServicioBackup
             try
             {
                 File.Move(rutaTmp, rutaFinal); // rename atómico al cerrar con éxito (spec §4.3)
-                corrida = new CorridaBackup
+                var tamanioBytes = new FileInfo(rutaFinal).Length;
+                if (tamanioBytes == 0)
                 {
-                    IniciadaEn = ahoraUtc,
-                    FinalizadaEn = DateTime.UtcNow,
-                    Resultado = ResultadoBackup.Exitosa,
-                    NombreArchivo = nombreArchivo,
-                    TamanioBytes = new FileInfo(rutaFinal).Length,
-                    MotivoFallo = null,
-                    UsuarioId = usuarioId,
-                };
+                    // Fallo silencioso (disco lleno a mitad de escritura, pipe roto, o un binario
+                    // en Backups:PgDumpPath que no es realmente pg_dump): el proceso puede salir
+                    // con ExitCode 0 -EjecutorPgDumpProceso lo reporta como éxito, con razón- y
+                    // aun así dejar un archivo de 0 bytes. Sin este chequeo la corrida quedaba
+                    // Exitosa con un dump inútil, y el operador se enteraba recién al restaurar.
+                    BorrarSiExiste(rutaFinal);
+                    _logger.LogWarning(
+                        "Backup fallido: pg_dump terminó con código de éxito pero el archivo de dump quedó vacío.");
+                    corrida = new CorridaBackup
+                    {
+                        IniciadaEn = ahoraUtc,
+                        FinalizadaEn = DateTime.UtcNow,
+                        Resultado = ResultadoBackup.Fallida,
+                        NombreArchivo = null,
+                        TamanioBytes = null,
+                        MotivoFallo = "pg_dump terminó con código de éxito pero el archivo de dump quedó vacío (0 bytes).",
+                        UsuarioId = usuarioId,
+                    };
+                }
+                else
+                {
+                    corrida = new CorridaBackup
+                    {
+                        IniciadaEn = ahoraUtc,
+                        FinalizadaEn = DateTime.UtcNow,
+                        Resultado = ResultadoBackup.Exitosa,
+                        NombreArchivo = nombreArchivo,
+                        TamanioBytes = tamanioBytes,
+                        MotivoFallo = null,
+                        UsuarioId = usuarioId,
+                    };
+                }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
