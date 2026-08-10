@@ -20,6 +20,14 @@ Fase 3a: bootstrap de primer arranque, migración automática, DTOs de lectura).
   eliminados por ser una superficie de ataque innecesaria (hardening, D7).
 - La API migra la base de datos automáticamente al arrancar (Fase 3a, D9) — no hace falta
   correr migraciones a mano ni depender de `DatabaseInitializer` del desktop.
+- **Gotcha:** `POSTGRES_PASSWORD` de `deploy/.env` solo se aplica cuando Postgres
+  inicializa el volumen por primera vez — si editás ese valor después, el rol ya
+  existente en `stockapp-pg` sigue con el password viejo (el `.env` no se relee). Para
+  alinearlos hay que correr `ALTER ROLE stockapp WITH PASSWORD '<nuevo>';` a mano
+  (por socket Unix: `docker exec stockapp-pg psql -U stockapp -d stockapp -c "..."`,
+  así no depende del password viejo) y, en el mismo movimiento, actualizar los
+  user-secrets de la API (`ConnectionStrings:Default`, ver más abajo) — si no, la app
+  local queda rota con `28P01 password authentication failed`.
 
 ## Configurar el secreto JWT (desarrollo)
 
