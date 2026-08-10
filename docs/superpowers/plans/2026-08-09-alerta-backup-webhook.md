@@ -1930,4 +1930,12 @@ psql -h localhost -U stockapp -d stockapp -c 'SELECT * FROM "ConfiguracionesAler
 
 - [ ] **Ping de fallo real**: forzar un fallo de `pg_dump` (por ejemplo, con una contraseña inválida en la connection string), disparar un backup manual desde la app, y confirmar que healthchecks recibe el `/fail` y que Telegram avisa.
 
-- [ ] **Dead man's switch**: configurar el período y el grace time del check en healthchecks (por ejemplo, período 12h + grace 2h, coherente con `IntervaloEntreCorridas`). Bajar la API y confirmar que, pasado el grace, llega la alerta de "check is down". **Esta es la prueba que valida el motivo entero de la feature** — sin ella, solo se probó la mitad fácil.
+- [ ] **Dead man's switch**: configurar el período y el grace time del check en healthchecks: **período 12h + grace 2h**. Bajar la API y confirmar que, pasado el grace, llega la alerta de "check is down". **Esta es la prueba que valida el motivo entero de la feature** — sin ella, solo se probó la mitad fácil.
+
+  > **Por qué 12h + 2h es correcto (corrección del review final).** La versión anterior de esta guía decía "coherente con `IntervaloEntreCorridas`" y era **incorrecta**, porque el intervalo del scheduler no describe por sí solo el hueco entre dos pings. `BackupProgramadoService` usa un `PeriodicTimer(12h)` **anclado al arranque del proceso**, no a la última corrida: el catch-up de arranque solo dispara si la última corrida exitosa tiene ≥12h. Un reinicio a las 11h de la última corrida empujaba la siguiente a t=23h, y con la ventana de 14h healthchecks marcaba "down" **con el sistema sano**. Falsas alarmas entrenan al usuario a ignorar el canal — peor que no tener canal.
+  >
+  > El fix del review final cierra ese hueco en el código: al arrancar, si la última corrida exitosa está **dentro** de la ventana (el sistema está sano y no hay nada que correr), el servicio manda un **heartbeat de arranque** — ver `BackupProgramadoService.EnviarHeartbeatDeArranqueAsync`. Con eso, cualquier reinicio reinicia también el reloj del ping, y el hueco máximo entre dos pings vuelve a ser ~12h + lo que tarde el `pg_dump`. Las 2h de grace cubren ese margen.
+  >
+  > El heartbeat **no** debilita el dead man's switch: solo se manda cuando hay una corrida exitosa de menos de 12h. Un proceso en crash-loop deja de calificar apenas esa corrida envejece, y a partir de ahí el check cae igual.
+  >
+  > Residual conocido: si el **servidor** queda apagado más de ~14h seguidas, el check cae aunque al volver el catch-up corra bien. Es el comportamiento deseado (un servidor apagado medio día es algo que se quiere saber); si en la práctica el equipo apaga el servidor de noche, subir el grace — a costa de detectar más tarde un fallo real.
