@@ -10,22 +10,35 @@ namespace StockApp.Seeder;
 /// <summary>
 /// Herramienta de consola para sembrar la base de datos de StockApp con datos de ejemplo
 /// en todas las tablas. Uso:
-///   dotnet run --project tools/StockApp.Seeder                              -> siembra la base local por defecto
+///   dotnet run --project tools/StockApp.Seeder                              -> siembra usando ConnectionStrings__Default
 ///   dotnet run --project tools/StockApp.Seeder -- --connection "Host=..."   -> siembra una base alternativa
 ///   dotnet run --project tools/StockApp.Seeder -- --reset                   -> limpia todas las tablas antes de sembrar
 /// Por defecto la siembra es aditiva e idempotente: no duplica catálogos/usuarios/productos
 /// ya existentes (se identifican por su campo único), y solo genera movimientos/logs para
 /// las entidades creadas en la corrida actual.
+///
+/// La cadena de conexión NUNCA se hardcodea: apunta a la base real "stockapp" y su
+/// credencial puede rotar (ver deploy/.env, rol de cluster Postgres). Se resuelve desde
+/// --connection o, si no se pasa, desde la variable de entorno ConnectionStrings__Default
+/// (misma convención de configuración que usa StockApp.Api). Si ninguna está disponible,
+/// el Seeder corta con un mensaje explícito en vez de fallar más adelante con un 28P01
+/// críptico de Postgres.
 /// </summary>
 public static class Program
 {
-    private const string ConnectionStringDefault =
-        "Host=localhost;Port=5432;Database=stockapp;Username=stockapp;Password=stockapp";
-
     public static async Task<int> Main(string[] args)
     {
         var reset = args.Contains("--reset");
         var connectionString = ResolverConnectionString(args);
+
+        if (connectionString is null)
+        {
+            Console.Error.WriteLine(
+                "No se encontró una cadena de conexión. Pasá --connection \"Host=...;Port=...;Database=...;" +
+                "Username=...;Password=...\" o seteá la variable de entorno ConnectionStrings__Default " +
+                "(el mismo valor que usa StockApp.Api, ver deploy/.env).");
+            return 1;
+        }
 
         Console.WriteLine($"Base de datos: {connectionString}");
 
@@ -71,7 +84,7 @@ public static class Program
         return 0;
     }
 
-    private static string ResolverConnectionString(string[] args)
+    private static string? ResolverConnectionString(string[] args)
     {
         for (var i = 0; i < args.Length; i++)
         {
@@ -81,7 +94,7 @@ public static class Program
             }
         }
 
-        return ConnectionStringDefault;
+        return Environment.GetEnvironmentVariable("ConnectionStrings__Default");
     }
 
     private static async Task ResetearAsync(AppDbContext ctx)
