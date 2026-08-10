@@ -139,6 +139,9 @@ public class BackupProgramadoServiceTests
             Notificadas.Add(corrida);
             return Task.CompletedTask;
         }
+
+        public Task<ResultadoPruebaAlertaDto> ProbarPingAsync(string url, CancellationToken ct = default)
+            => Task.FromResult(new ResultadoPruebaAlertaDto(true, 200, "ok"));
     }
 
     /// <summary>Ronda de fix 1/5: a diferencia de EjecutorPgDumpFake (que devuelve
@@ -219,27 +222,53 @@ public class BackupProgramadoServiceTests
         Assert.False(await servicio.DebeCorrerAhoraAsync());
     }
 
-    [Fact]
-    public async Task ExecuteAsync_FalloEnSecuenciaDeArranque_NoTumbaLaTareaDelServicioYQuedaLogueado()
+    /// <summary>
+    /// Espera a que la secuencia de arranque de un BackgroundService ya iniciado produzca su
+    /// efecto observable, con límite. Se comprobó que StopAsync NO alcanza para esperarla (el
+    /// ExecuteTask puede completarse por la cancelación antes de que el efecto sea visible) y un
+    /// Task.Delay fijo a ciegas es candidato a flaky bajo CI cargada: esto poliestea y corta apenas
+    /// se cumple la condición, así que en la práctica tarda un par de milisegundos.
+    /// </summary>
+    private static async Task EsperarHastaAsync(Func<bool> condicion, string queSeEsperaba)
+    {
+        var limite = DateTime.UtcNow.AddSeconds(10);
+        while (!condicion() && DateTime.UtcNow < limite)
+            await Task.Delay(20);
+
+        Assert.True(condicion(), queSeEsperaba);
+    }
+
+    /// <summary>Arma el servicio con la secuencia de arranque condenada a fallar (el repo explota
+    /// al consultar la última exitosa, simulando Postgres que todavía no levantó), con logger y
+    /// notificador inyectables. Compartido por los dos tests de esa ruta.</summary>
+    private static BackupProgramadoService CrearConArranqueQueFalla(
+        Microsoft.Extensions.Logging.ILogger<BackupProgramadoService> logger,
+        INotificadorAlertas notificador)
     {
         var services = new ServiceCollection();
         services.AddScoped<ICorridaBackupRepository, CorridaBackupRepositoryQueFallaAlConsultarFake>();
         services.AddScoped<IEjecutorPgDump, EjecutorPgDumpFake>();
-        services.AddScoped<INotificadorAlertas, NotificadorAlertasNulo>();
+        services.AddScoped<INotificadorAlertas>(_ => notificador);
         services.AddScoped<ServicioBackup>();
         services.AddSingleton<Microsoft.Extensions.Logging.ILogger<ServicioBackup>>(NullLogger<ServicioBackup>.Instance);
         var sp = services.BuildServiceProvider();
         var configuracion = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:Default"] = "Host=x;Database=y" })
             .Build();
-        var loggerEspia = new LoggerEspiaFake();
 
-        var servicio = new BackupProgramadoService(
+        return new BackupProgramadoService(
             sp.GetRequiredService<IServiceScopeFactory>(),
             configuracion,
             new UserDataPathProviderFake(),
             new GuardiaCorridaBackup(),
-            loggerEspia);
+            logger);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_FalloEnSecuenciaDeArranque_NoTumbaLaTareaDelServicioYQuedaLogueado()
+    {
+        var loggerEspia = new LoggerEspiaFake();
+        var servicio = CrearConArranqueQueFalla(loggerEspia, new NotificadorAlertasNulo());
 
         // Ciclo de vida REAL de un BackgroundService (el mismo que usa el host de ASP.NET Core en
         // producción), no una llamada directa a un método interno: así se ejerce exactamente la
@@ -280,5 +309,103 @@ public class BackupProgramadoServiceTests
 
         var notificada = Assert.Single(notificador.Notificadas);
         Assert.Equal(ResultadoBackup.Fallida, notificada.Resultado);
+    }
+
+    /// <summary>
+    /// Fix IMPORTANTE (I4 del review final): CUARTO camino de fallo sin notificación. El catch de
+    /// la SECUENCIA DE ARRANQUE solo hacía LogError -- ni fila ni ping. Si Postgres tarda en
+    /// levantar en cada reinicio, el catch-up se pierde en cada boot y no queda ningún rastro
+    /// hacia afuera del servidor, que es justamente el modo de falla que la feature elimina.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsync_FalloEnSecuenciaDeArranque_NotificaElFalloHaciaAfuera()
+    {
+        var notificador = new NotificadorAlertasFake();
+        var servicio = CrearConArranqueQueFalla(NullLogger<BackupProgramadoService>.Instance, notificador);
+
+        await servicio.StartAsync(CancellationToken.None);
+        await EsperarHastaAsync(
+            () => notificador.Notificadas.Count > 0,
+            "El fallo de la secuencia de arranque no notificó nada hacia afuera.");
+        await servicio.StopAsync(CancellationToken.None);
+
+        var notificada = Assert.Single(notificador.Notificadas);
+        Assert.Equal(ResultadoBackup.Fallida, notificada.Resultado);
+        Assert.Contains("secuencia de arranque", notificada.MotivoFallo!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ── Heartbeat de arranque (fix IMPORTANTE I3) ──────────────────────────────
+    //
+    // El PeriodicTimer se ancla al BOOT del proceso, no a la última corrida: un reinicio a las 11h
+    // de la última corrida empujaba la siguiente a t=23h, y con la ventana recomendada de 14h
+    // (período 12h + grace 2h) healthchecks marcaba "down" CON EL SISTEMA SANO. Una falsa alarma
+    // entrena al usuario a ignorar el canal -- peor que no tener canal.
+
+    [Fact]
+    public async Task ExecuteAsync_UltimaCorridaDentroDeLaVentana_MandaHeartbeatDeArranqueSinCorrerBackup()
+    {
+        var notificador = new NotificadorAlertasFake();
+        var (servicio, instancias, _) = Crear(
+            ultimaExitosaSemilla: new CorridaBackup
+            {
+                FinalizadaEn = DateTime.UtcNow.AddHours(-1),
+                Resultado = ResultadoBackup.Exitosa,
+                NombreArchivo = "backup_previo.dump",
+                TamanioBytes = 1024,
+            },
+            notificador: notificador);
+
+        await servicio.StartAsync(CancellationToken.None);
+        await EsperarHastaAsync(
+            () => notificador.Notificadas.Count > 0,
+            "El arranque con el sistema sano no mandó ningún heartbeat: healthchecks marcaría "
+            + "'down' tras un reinicio, con el sistema perfectamente sano.");
+        await servicio.StopAsync(CancellationToken.None);
+
+        // No corrió ningún backup: la última exitosa tiene 1h, no toca todavía.
+        Assert.Empty(instancias);
+
+        // Pero SÍ avisó que seguimos vivos, con la corrida exitosa como carga (el notificador la
+        // traduce a un ping de heartbeat, sin el sufijo /fail).
+        var heartbeat = Assert.Single(notificador.Notificadas);
+        Assert.Equal(ResultadoBackup.Exitosa, heartbeat.Resultado);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_UltimaCorridaFueraDeLaVentana_CorreElBackupYNoMandaHeartbeatExtra()
+    {
+        // El heartbeat es SOLO para el caso sano-sin-nada-que-hacer: si toca correr, el ping lo
+        // manda la corrida real (vía ServicioBackup), no este camino.
+        var notificador = new NotificadorAlertasFake();
+        var (servicio, instancias, _) = Crear(
+            ultimaExitosaSemilla: new CorridaBackup
+            {
+                FinalizadaEn = DateTime.UtcNow.AddHours(-13),
+                Resultado = ResultadoBackup.Exitosa,
+                NombreArchivo = "backup_viejo.dump",
+                TamanioBytes = 1024,
+            },
+            notificador: notificador);
+
+        await servicio.StartAsync(CancellationToken.None);
+        await EsperarHastaAsync(
+            () => instancias.Count > 0, "El catch-up de arranque no corrió el backup atrasado.");
+        await servicio.StopAsync(CancellationToken.None);
+
+        Assert.Single(instancias);
+    }
+
+    [Fact]
+    public async Task EnviarHeartbeatDeArranqueAsync_SinCorridaPrevia_NoNotificaNada()
+    {
+        // Instalación nueva: no hay nada que reportar como "sano". Este camino ni siquiera se
+        // alcanza en producción (DebeCorrerAhoraAsync devuelve true sin corrida previa), pero el
+        // guard defensivo tiene que estar cubierto.
+        var notificador = new NotificadorAlertasFake();
+        var (servicio, _, _) = Crear(ultimaExitosaSemilla: null, notificador: notificador);
+
+        await servicio.EnviarHeartbeatDeArranqueAsync(CancellationToken.None);
+
+        Assert.Empty(notificador.Notificadas);
     }
 }

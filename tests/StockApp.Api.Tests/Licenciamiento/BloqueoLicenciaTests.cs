@@ -123,6 +123,61 @@ public class BloqueoLicenciaTests : ApiTestBase
         Assert.Equal((HttpStatusCode)423, productosResponse.StatusCode);
     }
 
+    /// <summary>
+    /// Fix (IMPORTANTE I1 del review final): /configuracion/alertas no estaba exento, así que con
+    /// la licencia vencida el GET devolvía 423, el desktop se lo comía en un catch mudo y la
+    /// sección mostraba "sin URL / deshabilitado" -- indistinguible de la verdad. Desde ese
+    /// estado, un click en Guardar mandaba PUT (null, false) y APAGABA el canal de alerta. Mismo
+    /// argumento que /logs: con la licencia vencida los backups siguen corriendo y siguen pudiendo
+    /// fallar, así que el canal que avisa de eso tiene que seguir siendo configurable.
+    /// </summary>
+    [Fact]
+    public async Task Bloqueada_ConfiguracionDeAlertas_Pasa()
+    {
+        Bloquear();
+        var client = Factory.CreateClient();
+
+        // Sin token -> 401 (no 423): la ruta atraviesa el middleware de licencia y llega al de
+        // autenticación.
+        var response = await client.GetAsync("/configuracion/alertas");
+
+        Assert.NotEqual((HttpStatusCode)423, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Bloqueada_UnAdminLeeYGuardaLaConfiguracionDeAlertas_FlujoCompletoReal()
+    {
+        // Mismo criterio que Bloqueada_UnAdminSeAutenticaYObtiene200DeBackups_FlujoCompletoReal:
+        // Assert.NotEqual(423) también pasa con un 401, o sea que pasaría CON el bug presente si
+        // el gate de autenticación tapara el de licencia. Acá se ejercita el camino REAL -- login
+        // por HTTP con la licencia bloqueada, y después leer y GUARDAR la configuración.
+        await using (var ctx = Factory.CrearContexto())
+        {
+            await DatosDePrueba.SeedUsuarioAsync(ctx, "admin.alertas", "Secreta123!", RolUsuario.Admin);
+        }
+        Bloquear();
+        var client = Factory.CreateClient();
+
+        var loginResponse = await client.PostAsJsonAsync("/auth/login",
+            new { NombreUsuario = "admin.alertas", Contrasena = "Secreta123!" });
+        Assert.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
+        var login = await loginResponse.Content.ReadFromJsonAsync<LoginResponse>();
+
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", login!.Token);
+
+        var get = await client.GetAsync("/configuracion/alertas");
+        Assert.Equal(HttpStatusCode.OK, get.StatusCode);
+
+        var put = await client.PutAsJsonAsync(
+            "/configuracion/alertas", new { UrlWebhook = "https://hc-ping.com/vencida", Habilitado = true });
+        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+
+        // Acotado: la exención es por ruta y NO abrió /configuracion entero ni el resto del
+        // sistema -- el mismo token sigue dando 423 contra un endpoint cualquiera.
+        var productosResponse = await client.GetAsync("/productos");
+        Assert.Equal((HttpStatusCode)423, productosResponse.StatusCode);
+    }
+
     [Fact]
     public async Task Activada_EndpointNormal_NoDevuelve423()
     {

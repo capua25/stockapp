@@ -107,6 +107,19 @@ public class ConfiguracionAlertasEndpointTests : ApiTestBase
         Assert.True(dto.Habilitado);
     }
 
+    /// <summary>
+    /// Fix (MENOR M5 del review final): la matriz 401/403 estaba completa para GET y PUT, pero
+    /// para POST /probar solo existía el 403. El plan pedía la matriz sobre los tres — y /probar
+    /// es justo el que hace que el SERVIDOR emita una petición saliente a una URL provista por el
+    /// usuario, así que es el último donde conviene tener un hueco en la matriz de autenticación.
+    /// </summary>
+    [Fact]
+    public async Task Probar_SinToken_Devuelve401()
+    {
+        var response = await Factory.CreateClient().PostAsync("/configuracion/alertas/probar", null);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
     [Fact]
     public async Task Probar_ConTokenOperador_Devuelve403()
     {
@@ -122,5 +135,38 @@ public class ConfiguracionAlertasEndpointTests : ApiTestBase
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var dto = await response.Content.ReadFromJsonAsync<ResultadoPruebaAlertaDto>();
         Assert.False(dto!.Exitoso);
+    }
+
+    [Fact]
+    public async Task Probar_ConUrlHttpEnElBody_Devuelve400()
+    {
+        // Fix IMPORTANTE (I2): la URL de pantalla se valida IGUAL que al guardar. Si esta ruta no
+        // validara, "probar sin guardar" sería la puerta de atrás que saltea el gate de https.
+        var response = await ClienteCon(TokenAdmin())
+            .PostAsJsonAsync("/configuracion/alertas/probar", new { UrlWebhook = "http://hc-ping.com/a" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Probar_ConUrlRelativaEnElBody_Devuelve400()
+    {
+        var response = await ClienteCon(TokenAdmin())
+            .PostAsJsonAsync("/configuracion/alertas/probar", new { UrlWebhook = "hc-ping.com/a" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Probar_ConBodyVacio_UsaLaConfiguracionGuardadaYDevuelve200()
+    {
+        // El body es opcional: sin URL en pantalla se prueba la guardada (acá, ninguna).
+        var response = await ClienteCon(TokenAdmin())
+            .PostAsJsonAsync("/configuracion/alertas/probar", new { UrlWebhook = (string?)null });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var dto = await response.Content.ReadFromJsonAsync<ResultadoPruebaAlertaDto>();
+        Assert.False(dto!.Exitoso);
+        Assert.Contains("URL", dto.Mensaje!);
     }
 }

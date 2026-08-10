@@ -5,8 +5,9 @@ namespace StockApp.Api.Licenciamiento;
 /// <summary>
 /// Sin licencia activa, TODO devuelve 423 Locked salvo /licencia/*, /auth/reset-admin/* (los
 /// flujos pre-login de activación y recuperación), /auth/login, /backups (fix del review final
-/// de Entrega 1) y, desde Entrega 2 Task 7, /logs. El estado se lee del singleton EstadoLicencia
-/// — costo cero por request cuando la licencia está activa.
+/// de Entrega 1), /logs (desde Entrega 2 Task 7) y /configuracion/alertas (fix del review final
+/// del canal de alerta). El estado se lee del singleton EstadoLicencia — costo cero por request
+/// cuando la licencia está activa.
 ///
 /// POR QUÉ /auth/login: sin esta excepción, con licencia vencida el admin no podía ni
 /// autenticarse (423 en el login) para llegar a /backups -- los dumps quedaban inalcanzables
@@ -14,6 +15,13 @@ namespace StockApp.Api.Licenciamiento;
 ///
 /// POR QUÉ /logs: cuando la licencia vence es JUSTO cuando más se necesita poder mirar los
 /// logs para diagnosticar por qué (fingerprint cambiado, licencia corrupta, etc.).
+///
+/// POR QUÉ /configuracion/alertas: mismo argumento. Con la licencia vencida los backups siguen
+/// corriendo (el BackgroundService no mira la licencia) y siguen pudiendo fallar, así que el
+/// canal que avisa de eso tiene que seguir siendo configurable y probable. Además, sin esta
+/// exención el GET devolvía 423, el cliente lo mostraba como "sin URL / deshabilitado" y un
+/// Guardar desde ese estado APAGABA el canal. Acotado a /configuracion/alertas a propósito:
+/// NO se exime /configuracion entero.
 ///
 /// Acotado a propósito: este middleware corre ANTES de UseAuthentication/UseAuthorization
 /// (ver Program.cs), así que exime por RUTA, no por identidad -- un token válido obtenido acá
@@ -62,5 +70,6 @@ public sealed class BloqueoLicenciaMiddleware
         || path.StartsWithSegments("/auth/reset-admin")
         || path.StartsWithSegments("/auth/login")
         || path.StartsWithSegments("/backups")
-        || path.StartsWithSegments("/logs");
+        || path.StartsWithSegments("/logs")
+        || path.StartsWithSegments("/configuracion/alertas");
 }

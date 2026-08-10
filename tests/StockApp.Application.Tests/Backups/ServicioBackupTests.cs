@@ -561,6 +561,9 @@ public class ServicioBackupTests
                 throw new InvalidOperationException("el notificador explotó");
             return Task.CompletedTask;
         }
+
+        public Task<ResultadoPruebaAlertaDto> ProbarPingAsync(string url, CancellationToken ct = default)
+            => Task.FromResult(new ResultadoPruebaAlertaDto(true, 200, "ok"));
     }
 
     [Fact]

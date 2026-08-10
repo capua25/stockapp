@@ -131,33 +131,23 @@ public sealed class DisparadorBackupManual
     /// </summary>
     private async Task PersistirFallaAsync(Exception ex, int usuarioId)
     {
+        var ahoraUtc = DateTime.UtcNow;
+        var corrida = new CorridaBackup
+        {
+            IniciadaEn = ahoraUtc,
+            FinalizadaEn = ahoraUtc,
+            Resultado = ResultadoBackup.Fallida,
+            NombreArchivo = null,
+            TamanioBytes = null,
+            MotivoFallo = ex.Message,
+            UsuarioId = usuarioId,
+        };
+
         try
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var corridas = scope.ServiceProvider.GetRequiredService<ICorridaBackupRepository>();
-            var ahoraUtc = DateTime.UtcNow;
-
-            var corrida = new CorridaBackup
-            {
-                IniciadaEn = ahoraUtc,
-                FinalizadaEn = ahoraUtc,
-                Resultado = ResultadoBackup.Fallida,
-                NombreArchivo = null,
-                TamanioBytes = null,
-                MotivoFallo = ex.Message,
-                UsuarioId = usuarioId,
-            };
             await corridas.AgregarAsync(corrida);
-
-            var notificador = scope.ServiceProvider.GetRequiredService<INotificadorAlertas>();
-            try
-            {
-                await notificador.NotificarCorridaBackupAsync(corrida);
-            }
-            catch (Exception notifEx)
-            {
-                _logger.LogWarning(notifEx, "Falló la notificación del backup fallido.");
-            }
         }
         catch (Exception persistenciaEx)
         {
@@ -166,6 +156,22 @@ public sealed class DisparadorBackupManual
                 "No se pudo persistir la CorridaBackup Fallida del backup manual disparado por el " +
                 "usuario {UsuarioId} (motivo original del fallo: {MotivoOriginal}).",
                 usuarioId, ex.Message);
+        }
+
+        // Fix (MENOR, review final): la notificación estaba DENTRO del try de persistencia, así
+        // que si AgregarAsync tiraba (la propia base caída -- que es un motivo típico de llegar
+        // acá) ni siquiera se intentaba avisar hacia afuera. Los dos rastros son independientes y
+        // el aviso externo es justamente el que sobrevive a una BD caída: su propio try, su
+        // propio scope.
+        try
+        {
+            await using var scopeAviso = _scopeFactory.CreateAsyncScope();
+            var notificador = scopeAviso.ServiceProvider.GetRequiredService<INotificadorAlertas>();
+            await notificador.NotificarCorridaBackupAsync(corrida);
+        }
+        catch (Exception notifEx)
+        {
+            _logger.LogWarning(notifEx, "Falló la notificación del backup fallido.");
         }
     }
 }

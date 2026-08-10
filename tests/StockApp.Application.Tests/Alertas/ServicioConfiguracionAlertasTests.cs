@@ -39,12 +39,46 @@ public class ServicioConfiguracionAlertasTests
         public void CerrarSesion() => UsuarioActual = null;
     }
 
+    /// <summary>
+    /// Fake que REGISTRA la URL pingueada y devuelve un resultado configurable. Es lo que permite
+    /// afirmar que ProbarAsync devuelve el resultado REAL del notificador (fix crítico del review
+    /// final) y que prueba la URL de pantalla y no la guardada (fix I2).
+    /// </summary>
+    private sealed class NotificadorFake : INotificadorAlertas
+    {
+        private readonly ResultadoPruebaAlertaDto _resultado;
+
+        public NotificadorFake(ResultadoPruebaAlertaDto? resultado = null) =>
+            _resultado = resultado ?? new ResultadoPruebaAlertaDto(true, 200, "ok");
+
+        public List<string> UrlsPingueadas { get; } = new();
+
+        public Task NotificarCorridaBackupAsync(CorridaBackup corrida, CancellationToken ct = default)
+            => Task.CompletedTask;
+
+        public Task<ResultadoPruebaAlertaDto> ProbarPingAsync(string url, CancellationToken ct = default)
+        {
+            UrlsPingueadas.Add(url);
+            return Task.FromResult(_resultado);
+        }
+    }
+
     private static (ServicioConfiguracionAlertas Sut, RepoFake Repo) Crear()
     {
         var repo = new RepoFake();
         var sut = new ServicioConfiguracionAlertas(
             repo, new AuthorizationService(), new SesionFake(), new NotificadorAlertasNulo());
         return (sut, repo);
+    }
+
+    private static (ServicioConfiguracionAlertas Sut, RepoFake Repo, NotificadorFake Notificador) CrearConNotificador(
+        ResultadoPruebaAlertaDto? resultado = null)
+    {
+        var repo = new RepoFake();
+        var notificador = new NotificadorFake(resultado);
+        var sut = new ServicioConfiguracionAlertas(
+            repo, new AuthorizationService(), new SesionFake(), notificador);
+        return (sut, repo, notificador);
     }
 
     [Fact]
@@ -116,5 +150,132 @@ public class ServicioConfiguracionAlertasTests
 
         Assert.Equal("https://hc-ping.com/xyz", dto.UrlWebhook);
         Assert.True(dto.Habilitado);
+    }
+
+    // ── ProbarAsync ───────────────────────────────────────────────────────────
+    //
+    // Fix CRÍTICO del review final: ProbarAsync devolvía (true, null, "Se envió un ping de
+    // prueba.") INCONDICIONALMENTE, porque estaba construido sobre NotificarCorridaBackupAsync,
+    // que no devuelve nada. El verificador del canal no podía fallar nunca.
+
+    [Fact]
+    public async Task ProbarAsync_ElWebhookRechazaElPing_DevuelveElFalloYElStatusCodeReal()
+    {
+        var (sut, repo, _) = CrearConNotificador(new ResultadoPruebaAlertaDto(false, 404, "El webhook respondió 404."));
+        repo.Configuracion = new ConfiguracionAlertas { UrlWebhook = "https://hc-ping.com/typo", Habilitado = true };
+
+        var resultado = await sut.ProbarAsync();
+
+        Assert.False(resultado.Exitoso);
+        Assert.Equal(404, resultado.StatusCode);
+    }
+
+    [Fact]
+    public async Task ProbarAsync_ElWebhookAcepta_DevuelveElStatusCodeReal()
+    {
+        var (sut, repo, _) = CrearConNotificador(new ResultadoPruebaAlertaDto(true, 200, "El webhook respondió 200."));
+        repo.Configuracion = new ConfiguracionAlertas { UrlWebhook = "https://hc-ping.com/abc", Habilitado = true };
+
+        var resultado = await sut.ProbarAsync();
+
+        Assert.True(resultado.Exitoso);
+        Assert.Equal(200, resultado.StatusCode);
+    }
+
+    [Fact]
+    public async Task ProbarAsync_SinUrlEnPantalla_PingueaLaGuardada()
+    {
+        var (sut, repo, notificador) = CrearConNotificador();
+        repo.Configuracion = new ConfiguracionAlertas { UrlWebhook = "https://hc-ping.com/guardada", Habilitado = true };
+
+        await sut.ProbarAsync();
+
+        Assert.Equal("https://hc-ping.com/guardada", Assert.Single(notificador.UrlsPingueadas));
+    }
+
+    [Fact]
+    public async Task ProbarAsync_ConUrlEnPantalla_PingueaEsaYNoLaGuardada()
+    {
+        // Fix IMPORTANTE (I2): el flujo natural es pegar la URL y apretar Probar. Antes eso
+        // pingueaba la URL VIEJA (o decía "no hay URL configurada").
+        var (sut, repo, notificador) = CrearConNotificador();
+        repo.Configuracion = new ConfiguracionAlertas { UrlWebhook = "https://hc-ping.com/vieja", Habilitado = true };
+
+        await sut.ProbarAsync("https://hc-ping.com/nueva");
+
+        Assert.Equal("https://hc-ping.com/nueva", Assert.Single(notificador.UrlsPingueadas));
+    }
+
+    [Fact]
+    public async Task ProbarAsync_ConUrlEnPantalla_NoLaPersiste()
+    {
+        var (sut, repo, _) = CrearConNotificador();
+        repo.Configuracion = new ConfiguracionAlertas { UrlWebhook = "https://hc-ping.com/vieja", Habilitado = true };
+
+        await sut.ProbarAsync("https://hc-ping.com/nueva");
+
+        Assert.Null(repo.Guardada);
+        Assert.Equal("https://hc-ping.com/vieja", repo.Configuracion.UrlWebhook);
+    }
+
+    [Fact]
+    public async Task ProbarAsync_UrlEnPantallaHttp_RechazaConArgumentException()
+    {
+        // La validación no es negociable: es la MISMA superficie SSRF que GuardarAsync. "Probar
+        // sin guardar" no puede ser la puerta de atrás que saltea el gate de https.
+        var (sut, _, notificador) = CrearConNotificador();
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(
+            () => sut.ProbarAsync("http://hc-ping.com/abc"));
+
+        Assert.Contains("https", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(notificador.UrlsPingueadas);
+    }
+
+    [Fact]
+    public async Task ProbarAsync_UrlEnPantallaRelativa_RechazaConArgumentException()
+    {
+        var (sut, _, notificador) = CrearConNotificador();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => sut.ProbarAsync("hc-ping.com/abc"));
+
+        Assert.Empty(notificador.UrlsPingueadas);
+    }
+
+    [Fact]
+    public async Task ProbarAsync_ConUrlEnPantallaYCanalDeshabilitado_IgualPrueba()
+    {
+        // Probar ANTES de habilitar es el orden real en que se configura esto por primera vez.
+        var (sut, repo, notificador) = CrearConNotificador();
+        repo.Configuracion = new ConfiguracionAlertas { UrlWebhook = null, Habilitado = false };
+
+        var resultado = await sut.ProbarAsync("https://hc-ping.com/nueva");
+
+        Assert.True(resultado.Exitoso);
+        Assert.Single(notificador.UrlsPingueadas);
+    }
+
+    [Fact]
+    public async Task ProbarAsync_SinUrlEnPantallaNiGuardada_NoPingueaYAvisa()
+    {
+        var (sut, repo, notificador) = CrearConNotificador();
+        repo.Configuracion = new ConfiguracionAlertas { UrlWebhook = null, Habilitado = false };
+
+        var resultado = await sut.ProbarAsync();
+
+        Assert.False(resultado.Exitoso);
+        Assert.Empty(notificador.UrlsPingueadas);
+    }
+
+    [Fact]
+    public async Task ProbarAsync_SinUrlEnPantallaYCanalGuardadoDeshabilitado_NoPinguea()
+    {
+        var (sut, repo, notificador) = CrearConNotificador();
+        repo.Configuracion = new ConfiguracionAlertas { UrlWebhook = "https://hc-ping.com/abc", Habilitado = false };
+
+        var resultado = await sut.ProbarAsync();
+
+        Assert.False(resultado.Exitoso);
+        Assert.Empty(notificador.UrlsPingueadas);
     }
 }

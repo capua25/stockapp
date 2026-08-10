@@ -10,7 +10,15 @@
              x:DataType="vm:MantenimientoViewModel">
 
     <ScrollViewer>
-    <DockPanel Margin="16">
+    <!-- LastChildFill="False" explícito (fix de la regresión de layout del review final): con el
+         default (true) el ÚLTIMO hijo ignora su Dock y llena el espacio sobrante. Eso convertía a
+         "ser el último" en una propiedad invisible de la que dependía el layout: la sección
+         Diagnóstico no tenía DockPanel.Dock y funcionaba solo porque era la última; al agregar la
+         sección Alertas debajo pasó a usar su Dock real (Left por default) y se dockeó a la
+         izquierda ocupando todo el alto, con Alertas renderizándose al costado derecho.
+         Con False, TODOS los hijos honran su Dock y agregar una sección al final deja de ser una
+         trampa. De paso, la última tarjeta ya no se estira verticalmente para rellenar la ventana. -->
+    <DockPanel Margin="16" LastChildFill="False">
 
         <TextBlock DockPanel.Dock="Top"
                    Text="Mantenimiento"
@@ -139,7 +147,7 @@
                    Opacity="0.6"
                    Margin="0,24,0,12" />
 
-        <Border Classes="card">
+        <Border Classes="card" DockPanel.Dock="Top">
             <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
                 <TextBlock Grid.Column="0"
                            Text="{Binding TextoResumenLogs}"
@@ -181,22 +189,36 @@
                            Classes="body"
                            TextWrapping="Wrap" />
 
+                <!-- Fix (IMPORTANTE, review final): mismo patrón que "No se pudieron cargar los
+                     backups." más arriba en esta vista. Sin esto, un GET fallido (p.ej. 423 con la
+                     licencia vencida) dejaba la sección mostrando "sin URL / deshabilitado", que
+                     es indistinguible de la verdad, y desde ahí un Guardar apagaba el canal. -->
+                <TextBlock Text="No se pudo cargar la configuración de alertas. Guardar y Probar quedan deshabilitados para no pisar la configuración del servidor."
+                           Classes="caption"
+                           Foreground="{DynamicResource DangerBrush}"
+                           TextWrapping="Wrap"
+                           IsVisible="{Binding ErrorAlCargarAlertas}" />
+
                 <StackPanel Spacing="4">
                     <TextBlock Text="URL de webhook (healthchecks.io)" />
-                    <TextBox Text="{Binding UrlWebhook}" Watermark="https://hc-ping.com/xxxxxxxx" />
+                    <TextBox Text="{Binding UrlWebhook}"
+                             Watermark="https://hc-ping.com/xxxxxxxx"
+                             IsEnabled="{Binding !ErrorAlCargarAlertas}" />
                 </StackPanel>
 
-                <CheckBox Content="Habilitado" IsChecked="{Binding AlertasHabilitadas}" />
+                <CheckBox Content="Habilitado"
+                          IsChecked="{Binding AlertasHabilitadas}"
+                          IsEnabled="{Binding !ErrorAlCargarAlertas}" />
 
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <Button Classes="primary"
                             Content="Guardar"
                             Command="{Binding GuardarAlertasCommand}"
-                            IsEnabled="{Binding !GuardandoAlertas}" />
+                            IsEnabled="{Binding PuedeGuardarAlertas}" />
                     <Button Classes="secondary"
                             Content="Probar"
                             Command="{Binding ProbarAlertasCommand}"
-                            IsEnabled="{Binding !ProbandoAlertas}" />
+                            IsEnabled="{Binding PuedeProbarAlertas}" />
                 </StackPanel>
             </StackPanel>
         </Border>

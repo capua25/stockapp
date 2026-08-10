@@ -1,7 +1,5 @@
 using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
-using StockApp.Domain.Entities;
-using StockApp.Domain.Enums;
 
 namespace StockApp.Application.Alertas;
 
@@ -47,13 +45,7 @@ public sealed class ServicioConfiguracionAlertas
         var url = string.IsNullOrWhiteSpace(urlWebhook) ? null : urlWebhook.Trim();
 
         if (url is not null)
-        {
-            if (!Uri.TryCreate(url, UriKind.Absolute, out var parseada))
-                throw new ArgumentException("La URL del webhook debe ser una URL absoluta.");
-
-            if (parseada.Scheme != Uri.UriSchemeHttps)
-                throw new ArgumentException("La URL del webhook debe usar https.");
-        }
+            ValidarUrl(url);
 
         // Habilitar sin URL es una configuración que miente: el interruptor queda en "sí" y no
         // notifica nada. Se rechaza en vez de guardar un estado engañoso.
@@ -70,13 +62,36 @@ public sealed class ServicioConfiguracionAlertas
     }
 
     /// <summary>
-    /// Dispara un ping real contra la URL configurada, como si fuera una corrida exitosa. Es el
-    /// núcleo de la funcionalidad: un canal de alerta que nunca se probó no es un canal, es una
-    /// creencia — la URL mal escrita se descubriría recién el día del fallo.
+    /// Dispara un ping REAL y devuelve el status code obtenido (spec §4). Es el núcleo de la
+    /// funcionalidad: un canal de alerta que nunca se probó no es un canal, es una creencia — la
+    /// URL mal escrita se descubriría recién el día del fallo.
+    ///
+    /// <paramref name="urlWebhook"/> (fix del review final): si viene, se prueba ESA — la que el
+    /// usuario tiene en pantalla — sin persistirla. El flujo natural es pegar la URL y apretar
+    /// Probar; antes se pingueaba siempre la guardada, o sea la URL VIEJA (o ninguna), y el
+    /// verificador contestaba sobre una configuración distinta de la que el usuario estaba
+    /// mirando. Si no viene, se usa la guardada.
+    ///
+    /// La validación de la URL de pantalla es la MISMA que la de <see cref="GuardarAsync"/> y no
+    /// es negociable: la superficie SSRF es idéntica (el servidor postea a una URL provista por
+    /// el usuario), así que "probar sin guardar" no puede ser la puerta de atrás que saltea el
+    /// gate de absoluta + https.
     /// </summary>
-    public async Task<ResultadoPruebaAlertaDto> ProbarAsync()
+    public async Task<ResultadoPruebaAlertaDto> ProbarAsync(
+        string? urlWebhook = null, CancellationToken ct = default)
     {
         _auth.Verificar(_session.RolActual, Permisos.GestionarDiagnostico);
+
+        var urlEnPantalla = string.IsNullOrWhiteSpace(urlWebhook) ? null : urlWebhook.Trim();
+
+        if (urlEnPantalla is not null)
+        {
+            ValidarUrl(urlEnPantalla);
+
+            // A propósito NO se mira cfg.Habilitado acá: probar ANTES de habilitar es
+            // exactamente el orden en que un humano configura esto por primera vez.
+            return await _notificador.ProbarPingAsync(urlEnPantalla, ct);
+        }
 
         var cfg = await _repo.ObtenerAsync();
 
@@ -86,18 +101,20 @@ public sealed class ServicioConfiguracionAlertas
         if (!cfg.Habilitado)
             return new ResultadoPruebaAlertaDto(false, null, "El canal de alerta está deshabilitado.");
 
-        await _notificador.NotificarCorridaBackupAsync(new CorridaBackup
-        {
-            IniciadaEn = DateTime.UtcNow,
-            FinalizadaEn = DateTime.UtcNow,
-            Resultado = ResultadoBackup.Exitosa,
-            NombreArchivo = "prueba-de-canal",
-            TamanioBytes = 0,
-        });
+        return await _notificador.ProbarPingAsync(cfg.UrlWebhook!, ct);
+    }
 
-        // El notificador se traga los errores por contrato, así que este resultado confirma que
-        // el ping se intentó, no que el servidor remoto lo haya aceptado. El detalle fino queda
-        // en el log del servidor, descargable desde la misma pantalla de Mantenimiento.
-        return new ResultadoPruebaAlertaDto(true, null, "Se envió un ping de prueba al webhook configurado.");
+    /// <summary>
+    /// Gate de SSRF compartido por GuardarAsync y ProbarAsync: absoluta + https, sin excepciones.
+    /// Extraído para que las dos entradas por las que una URL provista por el usuario llega a un
+    /// POST del servidor no puedan divergir.
+    /// </summary>
+    private static void ValidarUrl(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var parseada))
+            throw new ArgumentException("La URL del webhook debe ser una URL absoluta.");
+
+        if (parseada.Scheme != Uri.UriSchemeHttps)
+            throw new ArgumentException("La URL del webhook debe usar https.");
     }
 }

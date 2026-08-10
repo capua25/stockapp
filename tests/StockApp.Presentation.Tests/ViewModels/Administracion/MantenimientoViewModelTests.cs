@@ -585,15 +585,150 @@ public class MantenimientoViewModelTests
     }
 
     [Fact]
-    public async Task ProbarAlertasCommand_InformaElResultadoDelPing()
+    public async Task ProbarAlertasCommand_PingExitoso_InformaUnMensajeDeExito()
     {
         var (vm, _, _, confirmacionMock, alertasMock) = Crear();
-        alertasMock.Setup(a => a.ProbarAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ResultadoPruebaAlertaDto(true, 200, "Se envió un ping de prueba."));
+        alertasMock.Setup(a => a.ProbarAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResultadoPruebaAlertaDto(true, 200, "El webhook respondió 200."));
 
         await vm.ProbarAlertasCommand.ExecuteAsync(null);
 
-        confirmacionMock.Verify(c => c.InformarAsync("Se envió un ping de prueba."), Times.Once);
+        confirmacionMock.Verify(
+            c => c.InformarAsync(It.Is<string>(m => m.Contains("exitosa") && m.Contains("El webhook respondió 200."))),
+            Times.Once);
         Assert.False(vm.ProbandoAlertas);
+    }
+
+    /// <summary>
+    /// Fix CRÍTICO del review final: el VM ignoraba <c>resultado.Exitoso</c> y mostraba solo
+    /// <c>Mensaje</c>, así que un 404 (URL con typo, check borrado) y un 200 se leían igual de
+    /// bien. El usuario tiene que poder distinguir los dos casos sin interpretar el texto.
+    /// </summary>
+    [Fact]
+    public async Task ProbarAlertasCommand_PingFallido_InformaUnMensajeDeErrorDistinguible()
+    {
+        var (vm, _, _, confirmacionMock, alertasMock) = Crear();
+        alertasMock.Setup(a => a.ProbarAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResultadoPruebaAlertaDto(false, 404, "El webhook respondió 404."));
+
+        await vm.ProbarAlertasCommand.ExecuteAsync(null);
+
+        confirmacionMock.Verify(
+            c => c.InformarAsync(It.Is<string>(m => m.Contains("FALLÓ") && m.Contains("El webhook respondió 404."))),
+            Times.Once);
+        // Y no puede confundirse con el mensaje de éxito.
+        confirmacionMock.Verify(
+            c => c.InformarAsync(It.Is<string>(m => m.Contains("exitosa"))), Times.Never);
+    }
+
+    /// <summary>
+    /// Fix IMPORTANTE (I2): "Probar" tiene que probar lo que está EN PANTALLA. Antes llamaba a
+    /// ProbarAsync() sin argumentos y el servidor leía de la base: pegar una URL y apretar Probar
+    /// pingueaba la URL vieja, o decía "no hay URL configurada".
+    /// </summary>
+    [Fact]
+    public async Task ProbarAlertasCommand_MandaLaUrlQueEstaEnPantalla()
+    {
+        var (vm, _, _, _, alertasMock) = Crear();
+        alertasMock.Setup(a => a.ProbarAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ResultadoPruebaAlertaDto(true, 200, "ok"));
+        vm.UrlWebhook = "https://hc-ping.com/en-pantalla";
+
+        await vm.ProbarAlertasCommand.ExecuteAsync(null);
+
+        alertasMock.Verify(
+            a => a.ProbarAsync("https://hc-ping.com/en-pantalla", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    // ── Carga fallida de la sección Alertas (fix IMPORTANTE I1) ──────────────
+    //
+    // CargarAlertasAsync se tragaba el error sin dejar rastro: la sección mostraba "sin URL /
+    // deshabilitado", indistinguible de la verdad. Disparador real: con la licencia vencida el GET
+    // devolvía 423. Desde ese estado, un click en Guardar mandaba PUT (null, false) y APAGABA el
+    // canal de alerta.
+
+    [Fact]
+    public async Task CargarAsync_ElServicioDeAlertasFalla_MarcaElErrorYNoRompeElResto()
+    {
+        var alertasMock = new Mock<IConfiguracionAlertasService>();
+        alertasMock.Setup(a => a.ObtenerAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("423 Locked"));
+        var (vm, _, _, _, _) = Crear(
+            corridas: new List<CorridaBackupDto>
+            {
+                new(1, new DateTime(2026, 8, 9), "Exitosa", "backup_1.dump", 1024, null),
+            },
+            alertas: alertasMock);
+
+        await vm.CargarAsync();
+
+        Assert.True(vm.ErrorAlCargarAlertas);
+        Assert.Single(vm.Corridas); // la sección de backups sigue funcionando
+    }
+
+    [Fact]
+    public async Task CargarAsync_ElServicioDeAlertasFalla_DeshabilitaGuardarYProbar()
+    {
+        var alertasMock = new Mock<IConfiguracionAlertasService>();
+        alertasMock.Setup(a => a.ObtenerAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("423 Locked"));
+        var (vm, _, _, _, _) = Crear(alertas: alertasMock);
+
+        await vm.CargarAsync();
+
+        Assert.False(vm.PuedeGuardarAlertas);
+        Assert.False(vm.PuedeProbarAlertas);
+    }
+
+    [Fact]
+    public async Task GuardarAlertasCommand_TrasUnaCargaFallida_NoMandaNadaAlServidor()
+    {
+        // ESTE es el bug de verdad: sin el gate, un Guardar desde el estado de error mandaba
+        // PUT (null, false) y apagaba el canal con valores que nunca se leyeron.
+        var alertasMock = new Mock<IConfiguracionAlertasService>();
+        alertasMock.Setup(a => a.ObtenerAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("423 Locked"));
+        var (vm, _, _, _, _) = Crear(alertas: alertasMock);
+        await vm.CargarAsync();
+
+        await vm.GuardarAlertasCommand.ExecuteAsync(null);
+
+        alertasMock.Verify(
+            a => a.GuardarAsync(It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ProbarAlertasCommand_TrasUnaCargaFallida_NoMandaNadaAlServidor()
+    {
+        var alertasMock = new Mock<IConfiguracionAlertasService>();
+        alertasMock.Setup(a => a.ObtenerAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("423 Locked"));
+        var (vm, _, _, _, _) = Crear(alertas: alertasMock);
+        await vm.CargarAsync();
+
+        await vm.ProbarAlertasCommand.ExecuteAsync(null);
+
+        alertasMock.Verify(
+            a => a.ProbarAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CargarAsync_ExitosaTrasUnaCargaFallidaDeAlertas_LimpiaElFlagYRehabilita()
+    {
+        var alertasMock = new Mock<IConfiguracionAlertasService>();
+        alertasMock.SetupSequence(a => a.ObtenerAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("423 Locked"))
+            .ReturnsAsync(new ConfiguracionAlertasDto("https://hc-ping.com/a", true, null));
+        var (vm, _, _, _, _) = Crear(alertas: alertasMock);
+
+        await vm.CargarAsync();
+        Assert.True(vm.ErrorAlCargarAlertas);
+
+        await vm.CargarAsync();
+
+        Assert.False(vm.ErrorAlCargarAlertas);
+        Assert.True(vm.PuedeGuardarAlertas);
+        Assert.True(vm.PuedeProbarAlertas);
+        Assert.Equal("https://hc-ping.com/a", vm.UrlWebhook);
     }
 }

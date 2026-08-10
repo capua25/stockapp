@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.Extensions.Logging;
+using StockApp.Application.Alertas;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
@@ -70,6 +71,60 @@ public sealed class NotificadorWebhook : INotificadorAlertas
             _logger.LogWarning(ex, "No se pudo notificar el resultado del backup al webhook configurado.");
         }
     }
+
+    /// <summary>
+    /// Ping de prueba contra la URL indicada (la que el usuario tiene en pantalla, no
+    /// necesariamente la guardada) y devuelve lo que realmente pasó. NO lee la configuración: el
+    /// caso de uso natural es pegar una URL y apretar Probar ANTES de guardarla, y exigir que
+    /// esté guardada y habilitada convertiría al verificador en algo que solo confirma lo que ya
+    /// se sabía.
+    ///
+    /// Siempre es un ping de ÉXITO (sin el sufijo /fail): probar el canal no puede dejar el check
+    /// de healthchecks en rojo ni despertar a nadie por un simulacro.
+    /// </summary>
+    public async Task<ResultadoPruebaAlertaDto> ProbarPingAsync(string url, CancellationToken ct = default)
+    {
+        try
+        {
+            var destino = ConstruirUrl(url, fallo: false);
+
+            using var contenido = new StringContent(
+                "Ping de prueba del canal de alerta de StockApp.", Encoding.UTF8, "text/plain");
+            var respuesta = await _http.PostAsync(destino, contenido, ct);
+            var status = (int)respuesta.StatusCode;
+
+            if (!respuesta.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("El webhook de alertas respondió {Status} al ping de prueba.", status);
+                return new ResultadoPruebaAlertaDto(
+                    false, status,
+                    $"El webhook respondió {status}. Revisá que la URL sea la del check correcto.");
+            }
+
+            return new ResultadoPruebaAlertaDto(
+                true, status, $"El webhook respondió {status}: el ping de prueba llegó.");
+        }
+        catch (Exception ex)
+        {
+            // Igual que NotificarCorridaBackupAsync, NO propaga (contrato de INotificadorAlertas)
+            // -- pero acá el fallo sí se REPORTA al llamador en vez de quedar solo en el log.
+            _logger.LogWarning(ex, "No se pudo contactar el webhook configurado durante el ping de prueba.");
+            return new ResultadoPruebaAlertaDto(
+                false, null, $"No se pudo contactar el webhook: {DescribirFallo(ex)}.");
+        }
+    }
+
+    /// <summary>
+    /// Traduce la excepción a una causa entendible SIN filtrar nada que venga del otro lado: se
+    /// mira el TIPO de la excepción, nunca su mensaje ni el cuerpo de la respuesta (nota SSRF).
+    /// </summary>
+    private static string DescribirFallo(Exception ex) => ex switch
+    {
+        TaskCanceledException or OperationCanceledException => "tiempo de espera agotado",
+        HttpRequestException => "no hubo respuesta (DNS, red o firewall)",
+        UriFormatException or ArgumentException => "la URL no es válida",
+        _ => ex.GetType().Name,
+    };
 
     /// <summary>
     /// Inserta el sufijo "/fail" como último segmento del PATH, nunca por concatenación de

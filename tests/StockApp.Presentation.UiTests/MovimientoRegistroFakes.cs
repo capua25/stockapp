@@ -122,16 +122,24 @@ internal sealed class LogsServiceFake : ILogsService
 internal sealed class ConfiguracionAlertasServiceFake : IConfiguracionAlertasService
 {
     private readonly ConfiguracionAlertasDto _configuracion;
+    private readonly Exception? _excepcionAlObtener;
 
-    public ConfiguracionAlertasServiceFake(ConfiguracionAlertasDto? configuracion = null) =>
+    public ConfiguracionAlertasServiceFake(
+        ConfiguracionAlertasDto? configuracion = null, Exception? excepcionAlObtener = null)
+    {
         _configuracion = configuracion ?? new ConfiguracionAlertasDto(null, false, null);
+        _excepcionAlObtener = excepcionAlObtener;
+    }
 
     public Task<ConfiguracionAlertasDto> ObtenerAsync(CancellationToken ct = default) =>
-        Task.FromResult(_configuracion);
+        _excepcionAlObtener is not null
+            ? Task.FromException<ConfiguracionAlertasDto>(_excepcionAlObtener)
+            : Task.FromResult(_configuracion);
 
     public Task GuardarAsync(string? urlWebhook, bool habilitado, CancellationToken ct = default) =>
         Task.CompletedTask;
 
-    public Task<ResultadoPruebaAlertaDto> ProbarAsync(CancellationToken ct = default) =>
+    public Task<ResultadoPruebaAlertaDto> ProbarAsync(
+        string? urlWebhook = null, CancellationToken ct = default) =>
         Task.FromResult(new ResultadoPruebaAlertaDto(true, 200, "Se envió un ping de prueba."));
 }

@@ -73,6 +73,8 @@ public sealed class BackupProgramadoService : BackgroundService
             // cubre el caso "servidor apagado durante la ventana".
             if (await DebeCorrerAhoraAsync())
                 await EjecutarCorridaSeguraAsync(directorio, stoppingToken);
+            else
+                await EnviarHeartbeatDeArranqueAsync(stoppingToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -84,6 +86,15 @@ public sealed class BackupProgramadoService : BackgroundService
             // StopHost) tumba el host ENTERO — endpoints HTTP incluidos, en un servidor sin acceso
             // remoto. Logueamos y seguimos al timer: 12h después Postgres probablemente esté vivo.
             _logger.LogError(ex, "Secuencia de arranque de backups programados falló de forma inesperada; se reintentará en la próxima ventana.");
+
+            // Fix (IMPORTANTE, review final): este era el CUARTO camino de fallo sin notificación.
+            // Solo se logueaba -- ni fila ni ping. Si Postgres tarda en levantar en cada reinicio,
+            // el catch-up se pierde en cada boot sin ningún rastro hacia AFUERA del servidor, que
+            // es exactamente el fallo silencioso que esta feature existe para eliminar. Mismo
+            // bloque de aviso que EjecutarCorridaSeguraAsync: corrida sintética Fallida (no se
+            // persiste, la BD puede ser justamente lo que está caído) en su propio try/catch.
+            await NotificarFalloSinPersistirAsync(
+                $"Fallo inesperado en la secuencia de arranque de backups: {ex.Message}");
         }
 
         using var timer = new PeriodicTimer(IntervaloEntreCorridas);
@@ -99,6 +110,79 @@ public sealed class BackupProgramadoService : BackgroundService
         var corridas = scope.ServiceProvider.GetRequiredService<ICorridaBackupRepository>();
         var ultima = await corridas.ObtenerUltimaExitosaAsync();
         return ultima is null || DateTime.UtcNow - ultima.FinalizadaEn >= IntervaloEntreCorridas;
+    }
+
+    /// <summary>
+    /// Heartbeat de arranque (fix IMPORTANTE del review final: la guía del dead man's switch
+    /// producía FALSAS ALARMAS con el sistema sano).
+    ///
+    /// EL PROBLEMA: el <see cref="PeriodicTimer"/> se ancla al BOOT del proceso, no a la última
+    /// corrida. Un reinicio a las 11h de la última corrida empuja la siguiente a t=23h; con la
+    /// ventana de 14h que recomendaba el plan (12h + 2h de grace), healthchecks marcaba "down"
+    /// con el sistema perfectamente sano. Y una falsa alarma es peor que no tener canal: entrena
+    /// al usuario a ignorarlo.
+    ///
+    /// LA SOLUCIÓN: si al arrancar la última corrida exitosa está DENTRO de la ventana (o sea:
+    /// no hay nada que hacer, el sistema está sano), se avisa igual que seguimos vivos. Así el
+    /// hueco entre dos pings nunca supera el intervalo, por más reinicios que haya.
+    ///
+    /// POR QUÉ ESTO NO ROMPE EL DEAD MAN'S SWITCH: solo se manda cuando
+    /// <see cref="DebeCorrerAhoraAsync"/> dice que NO hay que correr, es decir cuando hay una
+    /// corrida exitosa de menos de 12h. Un proceso en crash-loop deja de calificar apenas esa
+    /// corrida envejece más de 12h, y a partir de ahí ningún boot manda heartbeat: el check cae,
+    /// que es lo correcto.
+    ///
+    /// Se traga sus propios errores: corre DENTRO del try de la secuencia de arranque, y un fallo
+    /// acá no puede disfrazarse de "falló el arranque de backups" en el catch de afuera.
+    /// </summary>
+    internal async Task EnviarHeartbeatDeArranqueAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var corridas = scope.ServiceProvider.GetRequiredService<ICorridaBackupRepository>();
+            var ultima = await corridas.ObtenerUltimaExitosaAsync();
+
+            // Defensivo: DebeCorrerAhoraAsync ya devolvió false, así que acá siempre hay una.
+            if (ultima is null)
+                return;
+
+            var notificador = scope.ServiceProvider.GetRequiredService<INotificadorAlertas>();
+            await notificador.NotificarCorridaBackupAsync(ultima, stoppingToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "No se pudo enviar el heartbeat de arranque al canal de alerta.");
+        }
+    }
+
+    /// <summary>
+    /// Arma una corrida sintética Fallida SOLO para tener algo que notificar y la manda por el
+    /// canal de alerta, sin persistir nada. Los dos llamadores (la secuencia de arranque y el
+    /// catch de última resistencia de una corrida) comparten el mismo motivo: son caminos que no
+    /// dejan fila en la base, así que sin este aviso el fallo no existe para nadie de afuera.
+    /// Nunca propaga: notificar es best-effort.
+    /// </summary>
+    private async Task NotificarFalloSinPersistirAsync(string motivo, CancellationToken ct = default)
+    {
+        try
+        {
+            await using var scopeAviso = _scopeFactory.CreateAsyncScope();
+            var notificador = scopeAviso.ServiceProvider.GetRequiredService<INotificadorAlertas>();
+            await notificador.NotificarCorridaBackupAsync(
+                new CorridaBackup
+                {
+                    IniciadaEn = DateTime.UtcNow,
+                    FinalizadaEn = DateTime.UtcNow,
+                    Resultado = ResultadoBackup.Fallida,
+                    MotivoFallo = motivo,
+                },
+                ct);
+        }
+        catch (Exception exAviso)
+        {
+            _logger.LogWarning(exAviso, "Además falló la notificación del fallo inesperado.");
+        }
     }
 
     internal async Task EjecutarCorridaSeguraAsync(string directorio, CancellationToken stoppingToken)
@@ -136,22 +220,8 @@ public sealed class BackupProgramadoService : BackgroundService
             // Este camino no persiste fila (a diferencia de DisparadorBackupManual): sin esta
             // notificación, una corrida programada que revienta antes de llegar a ServicioBackup
             // no deja ningún rastro hacia afuera. Se arma una corrida sintética solo para avisar.
-            try
-            {
-                await using var scopeAviso = _scopeFactory.CreateAsyncScope();
-                var notificador = scopeAviso.ServiceProvider.GetRequiredService<INotificadorAlertas>();
-                await notificador.NotificarCorridaBackupAsync(new CorridaBackup
-                {
-                    IniciadaEn = DateTime.UtcNow,
-                    FinalizadaEn = DateTime.UtcNow,
-                    Resultado = ResultadoBackup.Fallida,
-                    MotivoFallo = $"Fallo inesperado en la corrida programada: {ex.Message}",
-                });
-            }
-            catch (Exception exAviso)
-            {
-                _logger.LogWarning(exAviso, "Además falló la notificación del fallo inesperado.");
-            }
+            await NotificarFalloSinPersistirAsync(
+                $"Fallo inesperado en la corrida programada: {ex.Message}");
         }
         finally
         {

@@ -5,6 +5,8 @@ namespace StockApp.ApiClient;
 
 internal sealed record GuardarConfiguracionAlertasBody(string? UrlWebhook, bool Habilitado);
 
+internal sealed record ProbarConfiguracionAlertasBody(string? UrlWebhook);
+
 /// <summary>IConfiguracionAlertasService contra /configuracion/alertas.</summary>
 public sealed class ConfiguracionAlertasApiClient : IConfiguracionAlertasService
 {
@@ -27,10 +29,14 @@ public sealed class ConfiguracionAlertasApiClient : IConfiguracionAlertasService
         await ApiErrores.AsegurarExitoAsync(response);
     }
 
-    public async Task<ResultadoPruebaAlertaDto> ProbarAsync(CancellationToken ct = default)
+    public async Task<ResultadoPruebaAlertaDto> ProbarAsync(
+        string? urlWebhook = null, CancellationToken ct = default)
     {
+        // Siempre se manda body (aunque UrlWebhook sea null): el endpoint lo acepta vacío igual,
+        // pero mandarlo siempre evita dos formas distintas de la misma llamada.
         var response = await ApiErrores.EnviarAsync(
-            () => _http.PostAsync("configuracion/alertas/probar", null, ct), ct);
+            () => _http.PostAsJsonAsync(
+                "configuracion/alertas/probar", new ProbarConfiguracionAlertasBody(urlWebhook), ct), ct);
         await ApiErrores.AsegurarExitoAsync(response);
         return await response.Content.ReadFromJsonAsync<ResultadoPruebaAlertaDto>(cancellationToken: ct)
                ?? new ResultadoPruebaAlertaDto(false, null, "Respuesta vacía del servidor.");

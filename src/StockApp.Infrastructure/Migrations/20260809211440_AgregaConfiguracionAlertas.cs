@@ -37,10 +37,14 @@ namespace StockApp.Infrastructure.Migrations
                 table: "ConfiguracionesAlertas",
                 column: "ActualizadoPorUsuarioId");
 
+            // NOW() a secas, NO "NOW() AT TIME ZONE 'utc'" (fix del review final): la columna es
+            // timestamptz, así que el resultado de la resta de zona se REINTERPRETA con el
+            // TimeZone de la sesión -- en un servidor UTC-3 la fila quedaba sembrada con un
+            // instante 3 horas en el FUTURO. NOW() ya devuelve timestamptz correcto.
             migrationBuilder.Sql(
                 """
                 INSERT INTO "ConfiguracionesAlertas" ("Id", "UrlWebhook", "Habilitado", "ActualizadoEn", "ActualizadoPorUsuarioId")
-                VALUES (1, NULL, FALSE, NOW() AT TIME ZONE 'utc', NULL)
+                VALUES (1, NULL, FALSE, NOW(), NULL)
                 ON CONFLICT ("Id") DO NOTHING;
                 """);
         }

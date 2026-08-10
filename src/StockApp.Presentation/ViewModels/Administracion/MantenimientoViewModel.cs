@@ -78,10 +78,34 @@ public partial class MantenimientoViewModel : ViewModelBase
     private bool _alertasHabilitadas;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PuedeGuardarAlertas))]
     private bool _guardandoAlertas;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PuedeProbarAlertas))]
     private bool _probandoAlertas;
+
+    /// <summary>
+    /// Fix (IMPORTANTE, review final del canal de alerta): <see cref="CargarAlertasAsync"/> se
+    /// tragaba el error sin dejar rastro y la sección quedaba mostrando "sin URL / deshabilitado"
+    /// — indistinguible de la verdad. Es el MISMO bug que <see cref="ErrorAlCargar"/> ya arregló
+    /// para la lista de backups, una sección más arriba en este archivo.
+    ///
+    /// Disparador concreto y real: con la licencia vencida el GET a /configuracion/alertas
+    /// devolvía 423, el catch se lo comía, y desde ese estado un click en Guardar hacía
+    /// PUT (null, false) — APAGANDO el canal de alerta sin que nadie lo pidiera. Por eso el flag
+    /// no solo pinta un texto: también deshabilita Guardar y Probar (ver
+    /// <see cref="PuedeGuardarAlertas"/>), para que no se pueda pisar la configuración con
+    /// valores que nunca se leyeron.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PuedeGuardarAlertas))]
+    [NotifyPropertyChangedFor(nameof(PuedeProbarAlertas))]
+    private bool _errorAlCargarAlertas;
+
+    public bool PuedeGuardarAlertas => !GuardandoAlertas && !ErrorAlCargarAlertas;
+
+    public bool PuedeProbarAlertas => !ProbandoAlertas && !ErrorAlCargarAlertas;
 
     public MantenimientoViewModel(
         IBackupsService backups,
@@ -124,11 +148,13 @@ public partial class MantenimientoViewModel : ViewModelBase
 
     /// <summary>
     /// Igual criterio que <see cref="CargarResumenLogsAsync"/>: la sección de alertas se carga
-    /// aparte y se traga sus propios errores, así que si el servidor no responde el resto de
-    /// Mantenimiento (backups, diagnóstico) igual sirve.
+    /// aparte y no propaga su error, así que si el servidor no responde el resto de Mantenimiento
+    /// (backups, diagnóstico) igual sirve. Pero el error NO se pierde: queda en
+    /// <see cref="ErrorAlCargarAlertas"/>, que la vista muestra y que bloquea Guardar/Probar.
     /// </summary>
     private async Task CargarAlertasAsync()
     {
+        ErrorAlCargarAlertas = false;
         try
         {
             var cfg = await _alertas.ObtenerAsync();
@@ -137,7 +163,11 @@ public partial class MantenimientoViewModel : ViewModelBase
         }
         catch (Exception)
         {
-            // Sección no crítica: si el servidor no responde, el resto de Mantenimiento igual sirve.
+            // Se limpian los valores en pantalla a propósito: dejar los de una carga anterior
+            // (o los defaults) invita a apretar Guardar sobre datos que no son los del servidor.
+            ErrorAlCargarAlertas = true;
+            UrlWebhook = null;
+            AlertasHabilitadas = false;
         }
     }
 
@@ -259,7 +289,10 @@ public partial class MantenimientoViewModel : ViewModelBase
     [RelayCommand]
     private async Task GuardarAlertasAsync()
     {
-        if (GuardandoAlertas) return;
+        // El gate de ErrorAlCargarAlertas también vive acá, no solo en el IsEnabled del XAML: un
+        // PUT que apaga el canal de alerta a partir de valores que nunca se leyeron es
+        // exactamente la clase de fallo silencioso que esta feature existe para eliminar.
+        if (!PuedeGuardarAlertas) return;
         GuardandoAlertas = true;
         try
         {
@@ -279,12 +312,15 @@ public partial class MantenimientoViewModel : ViewModelBase
     [RelayCommand]
     private async Task ProbarAlertasAsync()
     {
-        if (ProbandoAlertas) return;
+        if (!PuedeProbarAlertas) return;
         ProbandoAlertas = true;
         try
         {
-            var resultado = await _alertas.ProbarAsync();
-            await _confirmacion.InformarAsync(resultado.Mensaje ?? "Prueba finalizada.");
+            // Se manda la URL que está EN PANTALLA (fix del review final): el flujo natural es
+            // pegar la URL y apretar Probar, y antes eso pingueaba la guardada -- la vieja, o
+            // ninguna. El servidor la valida igual que al guardar y no la persiste.
+            var resultado = await _alertas.ProbarAsync(UrlWebhook);
+            await _confirmacion.InformarAsync(FormatearResultadoPrueba(resultado));
         }
         catch (Exception ex)
         {
@@ -295,4 +331,14 @@ public partial class MantenimientoViewModel : ViewModelBase
             ProbandoAlertas = false;
         }
     }
+
+    /// <summary>
+    /// Fix (CRÍTICO, review final): antes se mostraba <c>resultado.Mensaje</c> pelado, ignorando
+    /// <c>Exitoso</c> — un 404 y un 200 se leían igual de bien. El prefijo hace que el usuario no
+    /// tenga que interpretar el texto para saber si el canal funciona o no.
+    /// </summary>
+    private static string FormatearResultadoPrueba(ResultadoPruebaAlertaDto resultado)
+        => resultado.Exitoso
+            ? $"Prueba exitosa. {resultado.Mensaje ?? "El webhook respondió correctamente."}"
+            : $"La prueba FALLÓ. {resultado.Mensaje ?? "No se pudo contactar el webhook."}";
 }

@@ -7,6 +7,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using StockApp.Application.Alertas;
 using StockApp.Application.Backups;
 using StockApp.Application.Logs;
 using StockApp.Presentation.Services;
@@ -72,12 +73,13 @@ public class MantenimientoViewTests
 
     private static (Window Window, MantenimientoViewModel Vm) Montar(
         IReadOnlyList<CorridaBackupDto> corridas, ResumenLogsDto? resumenLogs = null,
-        IBackupsService? backups = null, ConfirmacionServiceFake? confirmacion = null)
+        IBackupsService? backups = null, ConfirmacionServiceFake? confirmacion = null,
+        ConfiguracionAlertasServiceFake? alertas = null)
     {
         var vm = new MantenimientoViewModel(
             backups ?? new BackupsServiceFake(corridas), new ServicioGuardadoArchivoFake(),
             confirmacion ?? new ConfirmacionServiceFake(), new LogsServiceFake(resumenLogs),
-            new ConfiguracionAlertasServiceFake());
+            alertas ?? new ConfiguracionAlertasServiceFake());
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
         window.DataContext = vm;
@@ -346,5 +348,124 @@ public class MantenimientoViewTests
         // nombre.
         var mensaje = Assert.Single(confirmacion.MensajesInformados);
         Assert.Contains("Ya hay un backup en curso.", mensaje);
+    }
+
+    // ── Layout del DockPanel (regresión real, review final) ─────────────────────
+    //
+    // La tarjeta de Diagnóstico NO tenía DockPanel.Dock y funcionaba igual porque era el ÚLTIMO
+    // hijo del DockPanel: con LastChildFill="true" (default de Avalonia) el último hijo ignora su
+    // Dock y llena el resto. Al agregar la sección "Alertas" debajo, Diagnóstico dejó de ser el
+    // último, pasó a usar su Dock REAL (Left por default) y se dockeó a la izquierda ocupando todo
+    // el alto -- con "Alertas" renderizándose al costado DERECHO en vez de abajo. Ningún test lo
+    // detectaba: todos buscaban controles por contenido, y GetVisualDescendants los encuentra
+    // estén donde estén.
+
+    /// <summary>
+    /// Guardián de la regresión. Verifica DOS cosas, porque la primera sola no alcanza:
+    ///
+    /// 1. La Y del botón "Guardar" (Alertas) es mayor que la del botón "Descargar logs"
+    ///    (Diagnóstico) — la aserción pedida en el review.
+    /// 2. La tarjeta de Alertas arranca DEBAJO del borde inferior de la de Diagnóstico y con el
+    ///    MISMO borde izquierdo.
+    ///
+    /// La (2) es la que hace de guardián de verdad. Se comprobó por mutación que la (1) sola NO
+    /// detecta el bug: cuando la tarjeta de Diagnóstico se dockea a la izquierda queda estirada a
+    /// todo el alto sobrante y su botón, centrado verticalmente, cae más o menos a la mitad de la
+    /// ventana — o sea con una Y que casualmente sigue siendo MENOR que la del botón Guardar del
+    /// panel de la derecha. "Alertas al costado" y "Alertas abajo" son indistinguibles mirando
+    /// solo la Y de dos botones; hay que mirar la geometría de las tarjetas.
+    /// </summary>
+    [AvaloniaFact]
+    public void Montar_LaSeccionDeAlertasQuedaDebajoDeLaDeDiagnostico()
+    {
+        var (window, _) = Montar(
+            [], new ResumenLogsDto(2, new DateTime(2026, 8, 8), new DateTime(2026, 8, 9), 4096));
+
+        Dispatcher.UIThread.RunJobs();
+
+        var botonLogs = window.GetVisualDescendants().OfType<Button>()
+            .First(b => b.Content as string == "Descargar logs");
+        var botonGuardar = window.GetVisualDescendants().OfType<Button>()
+            .First(b => b.Content as string == "Guardar");
+
+        var yLogs = botonLogs.TranslatePoint(new Point(0, 0), window);
+        var yGuardar = botonGuardar.TranslatePoint(new Point(0, 0), window);
+
+        Assert.NotNull(yLogs);
+        Assert.NotNull(yGuardar);
+        Assert.True(
+            yGuardar!.Value.Y > yLogs!.Value.Y,
+            $"El botón 'Guardar' (Alertas) debe quedar más abajo que 'Descargar logs' "
+            + $"(Diagnóstico). Y de 'Descargar logs' = {yLogs.Value.Y}, Y de 'Guardar' = {yGuardar.Value.Y}.");
+
+        var tarjetaDiagnostico = botonLogs.GetVisualAncestors().OfType<Border>()
+            .First(b => b.Classes.Contains("card"));
+        var tarjetaAlertas = botonGuardar.GetVisualAncestors().OfType<Border>()
+            .First(b => b.Classes.Contains("card"));
+
+        var origenDiagnostico = tarjetaDiagnostico.TranslatePoint(new Point(0, 0), window)!.Value;
+        var origenAlertas = tarjetaAlertas.TranslatePoint(new Point(0, 0), window)!.Value;
+
+        Assert.True(
+            origenAlertas.Y >= origenDiagnostico.Y + tarjetaDiagnostico.Bounds.Height,
+            $"La tarjeta de Alertas debe empezar DEBAJO de la de Diagnóstico, no al costado. "
+            + $"Diagnóstico: y={origenDiagnostico.Y} alto={tarjetaDiagnostico.Bounds.Height}; "
+            + $"Alertas: y={origenAlertas.Y}.");
+
+        Assert.True(
+            Math.Abs(origenAlertas.X - origenDiagnostico.X) < 0.5,
+            $"Las dos tarjetas deben compartir el borde izquierdo (una arriba de la otra). "
+            + $"X de Diagnóstico = {origenDiagnostico.X}, X de Alertas = {origenAlertas.X}.");
+    }
+
+    // ── Carga fallida de la sección Alertas (fix IMPORTANTE I1) ─────────────────
+
+    /// <summary>
+    /// Wiring de XAML del flag ErrorAlCargarAlertas: el texto de error se ve y los botones
+    /// Guardar/Probar quedan deshabilitados. La lógica ya está cubierta en
+    /// MantenimientoViewModelTests; acá se verifica que el XAML efectivamente lo refleje -- sin
+    /// esto, el flag podría existir en el VM y no estar bindeado en ningún lado (que es
+    /// exactamente lo que pasó con DescargandoLogs en su momento).
+    /// </summary>
+    [AvaloniaFact]
+    public void Montar_LaCargaDeAlertasFalla_MuestraElErrorYDeshabilitaGuardarYProbar()
+    {
+        var alertas = new ConfiguracionAlertasServiceFake(
+            excepcionAlObtener: new InvalidOperationException("423 Locked"));
+
+        var (window, vm) = Montar([], alertas: alertas);
+
+        Assert.True(vm.ErrorAlCargarAlertas);
+
+        var texto = window.GetVisualDescendants().OfType<TextBlock>()
+            .FirstOrDefault(t => t.Text is not null
+                                 && t.Text.Contains("No se pudo cargar la configuración de alertas", StringComparison.Ordinal));
+        Assert.NotNull(texto);
+        Assert.True(texto!.IsVisible);
+
+        var botonGuardar = window.GetVisualDescendants().OfType<Button>()
+            .First(b => b.Content as string == "Guardar");
+        var botonProbar = window.GetVisualDescendants().OfType<Button>()
+            .First(b => b.Content as string == "Probar");
+        Assert.False(botonGuardar.IsEnabled);
+        Assert.False(botonProbar.IsEnabled);
+    }
+
+    [AvaloniaFact]
+    public void Montar_LaCargaDeAlertasFunciona_GuardarYProbarQuedanHabilitados()
+    {
+        var alertas = new ConfiguracionAlertasServiceFake(
+            new ConfiguracionAlertasDto("https://hc-ping.com/a", true, null));
+
+        var (window, vm) = Montar([], alertas: alertas);
+
+        Assert.False(vm.ErrorAlCargarAlertas);
+
+        var botonGuardar = window.GetVisualDescendants().OfType<Button>()
+            .First(b => b.Content as string == "Guardar");
+        var botonProbar = window.GetVisualDescendants().OfType<Button>()
+            .First(b => b.Content as string == "Probar");
+        Assert.True(botonGuardar.IsEnabled);
+        Assert.True(botonProbar.IsEnabled);
     }
 }

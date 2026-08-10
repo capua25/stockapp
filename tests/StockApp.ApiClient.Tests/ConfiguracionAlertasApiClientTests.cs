@@ -57,4 +57,39 @@ public class ConfiguracionAlertasApiClientTests
         Assert.EndsWith("configuracion/alertas/probar", fake.UltimaRequest.RequestUri!.ToString());
         Assert.True(resultado.Exitoso);
     }
+
+    [Fact]
+    public async Task ProbarAsync_ConUrl_LaViajaEnElBody()
+    {
+        // Fix IMPORTANTE (I2): el desktop manda la URL que el usuario tiene en pantalla para que
+        // el servidor pruebe ESA y no la guardada. Se verifica el contrato serializado completo,
+        // mismo criterio que GuardarAsync_EnviaPutConElBody.
+        var fake = new FakeHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = JsonContent.Create(new ResultadoPruebaAlertaDto(true, 200, "ok")),
+        });
+        var client = new ConfiguracionAlertasApiClient(TestHttp.CrearCliente(fake));
+
+        await client.ProbarAsync("https://hc-ping.com/nueva");
+
+        Assert.Contains("\"urlWebhook\":\"https://hc-ping.com/nueva\"", fake.UltimoBody);
+    }
+
+    [Fact]
+    public async Task ProbarAsync_ElServidorReportaFallo_DevuelveElStatusCodeYExitosoFalse()
+    {
+        // El 200 HTTP es del endpoint (el resultado de la prueba ES la respuesta); el fallo real
+        // viaja adentro del DTO. Sin este test, un cliente que descartara Exitoso/StatusCode
+        // pasaría desapercibido.
+        var fake = new FakeHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = JsonContent.Create(new ResultadoPruebaAlertaDto(false, 404, "El webhook respondió 404.")),
+        });
+        var client = new ConfiguracionAlertasApiClient(TestHttp.CrearCliente(fake));
+
+        var resultado = await client.ProbarAsync("https://hc-ping.com/typo");
+
+        Assert.False(resultado.Exitoso);
+        Assert.Equal(404, resultado.StatusCode);
+    }
 }

@@ -5,6 +5,9 @@ namespace StockApp.Api.Endpoints;
 
 public record GuardarConfiguracionAlertasRequest(string? UrlWebhook, bool Habilitado);
 
+/// <summary>Body OPCIONAL de POST /probar: la URL que el usuario tiene en pantalla.</summary>
+public record ProbarConfiguracionAlertasRequest(string? UrlWebhook);
+
 public static class ConfiguracionAlertasEndpoints
 {
     public static IEndpointRouteBuilder MapConfiguracionAlertasEndpoints(this IEndpointRouteBuilder app)
@@ -24,11 +27,19 @@ public static class ConfiguracionAlertasEndpoints
         })
         .RequireAuthorization(Permisos.GestionarDiagnostico);
 
-        // Ping de prueba. Devuelve 200 con Exitoso = false ante configuración incompleta: no es un
-        // error del cliente, es un diagnóstico — el resultado de la prueba ES la respuesta.
-        // Nunca se devuelve el cuerpo de la respuesta remota (nota SSRF del spec).
-        group.MapPost("/probar", async (ServicioConfiguracionAlertas servicio) =>
-            Results.Ok(await servicio.ProbarAsync()))
+        // Ping de prueba. Devuelve 200 con Exitoso = false ante configuración incompleta O ante un
+        // webhook que rechaza/no responde: no es un error del cliente, es un diagnóstico — el
+        // resultado de la prueba ES la respuesta. Nunca se devuelve el cuerpo de la respuesta
+        // remota (nota SSRF del spec), solo el status code y un mensaje propio.
+        //
+        // El body es OPCIONAL (parámetro nullable): sin body se prueba la configuración guardada;
+        // con body se prueba la URL que el usuario tiene en pantalla, sin persistirla. La
+        // validación de esa URL vive en el servicio, igual que la de PUT.
+        group.MapPost("/probar", async (
+                ProbarConfiguracionAlertasRequest? request,
+                ServicioConfiguracionAlertas servicio,
+                CancellationToken ct) =>
+            Results.Ok(await servicio.ProbarAsync(request?.UrlWebhook, ct)))
             .RequireAuthorization(Permisos.GestionarDiagnostico);
 
         return app;

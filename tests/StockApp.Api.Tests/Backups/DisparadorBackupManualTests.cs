@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using StockApp.Api.Backups;
+using StockApp.Application.Alertas;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
@@ -204,6 +205,9 @@ public class DisparadorBackupManualTests
             Notificadas.Add(corrida);
             return Task.CompletedTask;
         }
+
+        public Task<ResultadoPruebaAlertaDto> ProbarPingAsync(string url, CancellationToken ct = default)
+            => Task.FromResult(new ResultadoPruebaAlertaDto(true, 200, "ok"));
     }
 
     /// <summary>Mismo patrón que Disparar_FalloInesperadoEnBackground_PersisteUnaCorridaBackupFallida
@@ -246,5 +250,57 @@ public class DisparadorBackupManualTests
         Assert.Equal(ResultadoBackup.Fallida, corrida.Resultado);
         var notificada = Assert.Single(notificador.Notificadas);
         Assert.Equal(ResultadoBackup.Fallida, notificada.Resultado);
+    }
+
+    /// <summary>Repo que no puede persistir: simula la propia base de la app caída, que es
+    /// justamente uno de los motivos típicos por los que se llega a PersistirFallaAsync.</summary>
+    private sealed class CorridaBackupRepositoryQueNoPersisteFake : ICorridaBackupRepository
+    {
+        public Task<int> AgregarAsync(CorridaBackup corrida)
+            => throw new InvalidOperationException("la base no responde (simulado)");
+
+        public Task<IReadOnlyList<CorridaBackup>> ListarTodasAsync()
+            => Task.FromResult((IReadOnlyList<CorridaBackup>)new List<CorridaBackup>());
+        public Task<IReadOnlyList<CorridaBackup>> ListarExitosasAsync()
+            => Task.FromResult((IReadOnlyList<CorridaBackup>)new List<CorridaBackup>());
+        public Task<CorridaBackup?> ObtenerPorIdAsync(int id) => Task.FromResult<CorridaBackup?>(null);
+        public Task<CorridaBackup?> ObtenerUltimaExitosaAsync() => Task.FromResult<CorridaBackup?>(null);
+        public Task EliminarAsync(int id) => Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Fix (MENOR M1 del review final): la notificación vivía DENTRO del try de persistencia, así
+    /// que si AgregarAsync tiraba ni siquiera se INTENTABA avisar hacia afuera -- y el escenario en
+    /// el que la persistencia falla (la base de la app caída) es exactamente aquel en el que el
+    /// aviso externo es el ÚNICO rastro que puede sobrevivir. Los dos rastros son independientes.
+    /// </summary>
+    [Fact]
+    public async Task Disparar_FalloInesperadoYLaPersistenciaTambienFalla_IgualNotificaHaciaAfuera()
+    {
+        var notificador = new NotificadorAlertasFake();
+        var guardia = new GuardiaCorridaBackup();
+        var services = new ServiceCollection();
+        // A propósito NO se registra ServicioBackup: fuerza el catch de última resistencia.
+        services.AddScoped<ICorridaBackupRepository, CorridaBackupRepositoryQueNoPersisteFake>();
+        services.AddScoped<INotificadorAlertas>(_ => notificador);
+        var sp = services.BuildServiceProvider();
+        using var paths = new UserDataPathProviderFake();
+
+        var disparador = new DisparadorBackupManual(
+            sp.GetRequiredService<IServiceScopeFactory>(),
+            CrearConfiguracion(),
+            paths,
+            guardia,
+            NullLogger<DisparadorBackupManual>.Instance);
+
+        Assert.True(disparador.Disparar(usuarioId: 3));
+        await disparador.UltimaCorridaEnBackgroundParaTests!;
+
+        var notificada = Assert.Single(notificador.Notificadas);
+        Assert.Equal(ResultadoBackup.Fallida, notificada.Resultado);
+        Assert.Equal(3, notificada.UsuarioId);
+
+        // Y el fallo de persistencia tampoco tumbó nada: la guardia quedó libre.
+        Assert.True(guardia.TryEntrar());
     }
 }
