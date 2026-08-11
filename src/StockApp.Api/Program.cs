@@ -3,6 +3,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
@@ -139,7 +140,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentSession, HttpCurrentSession>();
 
 builder.Services.AddSingleton<IPasswordHasher, BcryptPasswordHasher>();
-builder.Services.AddSingleton<IAuthorizationService, AuthorizationService>();
+builder.Services.AddSingleton<StockApp.Application.Authorization.IAuthorizationService, AuthorizationService>();
 
 // DomainExceptionHandler: mapeo centralizado de excepciones de dominio/aplicación a
 // status HTTP (Fase 2b, sección "Manejo de errores" del spec). Los endpoints de
@@ -415,23 +416,19 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
         };
     });
 
-// Políticas derivadas de AuthorizationService (Fase 2b, D1): NO se declaran a mano.
-// Para cada permiso de Permisos.Todos, se arma la política con los roles que
-// AuthorizationService.TienePermiso autoriza — una sola fuente de verdad para la
-// tabla rol→permiso, compartida entre la API (primera barrera) y los servicios de
-// aplicación (segunda barrera, defensa en profundidad — D2).
-var authServiceParaPoliticas = new AuthorizationService();
+// Políticas derivadas de un AuthorizationHandler (spec 2026-08-10): reemplaza el RequireClaim
+// fijo por rol. Cada policy sigue llamándose igual que el permiso (Permisos.X) — los 32
+// endpoints existentes no cambian ni una línea de .RequireAuthorization(Permisos.X). El
+// handler resuelve contra los permisos reales del usuario (PermisoAuthorizationHandler,
+// Api/Auth/), consultando IProveedorPermisos solo quando el permiso no es uno de los 4
+// estructurales (AuthorizationService.PermisosEstructuralesAdmin).
+builder.Services.AddScoped<IAuthorizationHandler, PermisoAuthorizationHandler>();
 builder.Services.AddAuthorization(options =>
 {
     foreach (var permiso in Permisos.Todos)
     {
-        var rolesPermitidos = Enum.GetValues<RolUsuario>()
-            .Where(rol => authServiceParaPoliticas.TienePermiso(rol, permiso))
-            .Select(rol => rol.ToString())
-            .ToArray();
-
         options.AddPolicy(permiso, policy =>
-            policy.RequireClaim(StockAppClaimTypes.Rol, rolesPermitidos));
+            policy.Requirements.Add(new PermisoRequirement(permiso)));
     }
 });
 
