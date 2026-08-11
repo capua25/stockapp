@@ -576,6 +576,29 @@ app.UseMiddleware<BloqueoLicenciaMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Middleware de permisos (spec 2026-08-10): resuelve una sola vez por request, DESPUÉS de que
+// el usuario esté autenticado y autorizado a nivel de policy (PermisoAuthorizationHandler, que
+// corre DENTRO de UseAuthorization() y por lo tanto ANTES que este middleware), ANTES de que
+// cualquier endpoint (y por lo tanto cualquier servicio de Application) se ejecute. Es el único
+// punto de I/O asíncrono de todo este diseño del lado Application — permite que
+// AuthorizationService.Verificar siga siendo sincrónico. Para requests sin sesión (login,
+// licencia) no hace nada. Cuando el handler ya resolvió el permiso de la policy del endpoint,
+// esto pega al mismo cache de IProveedorPermisos — cache-hit, no un segundo SELECT.
+app.Use(async (context, next) =>
+{
+    if (context.User.Identity?.IsAuthenticated == true)
+    {
+        var usuarioIdClaim = context.User.FindFirst(StockAppClaimTypes.UsuarioId)?.Value;
+        if (usuarioIdClaim is not null && int.TryParse(usuarioIdClaim, out var usuarioId))
+        {
+            var session = context.RequestServices.GetRequiredService<ICurrentSession>();
+            var proveedor = context.RequestServices.GetRequiredService<IProveedorPermisos>();
+            session.EstablecerPermisos(await proveedor.ObtenerAsync(usuarioId));
+        }
+    }
+    await next(context);
+});
+
 app.MapGet("/", () => Results.Ok(new { status = "ok", service = "StockApp.Api" }));
 
 app.MapAuthEndpoints();
