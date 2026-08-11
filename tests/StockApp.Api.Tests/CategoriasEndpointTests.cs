@@ -151,9 +151,13 @@ public class CategoriasEndpointTests : ApiTestBase
         ctx.Categorias.Add(new Categoria { Nombre = "Activa", Activo = true });
         ctx.Categorias.Add(new Categoria { Nombre = "Inactiva", Activo = false });
         await ctx.SaveChangesAsync();
+        // Operador real (no el "2" inventado de TokenOperador()): con PoblarPermisosMiddleware
+        // puesto, un JWT para un usuarioId que no existe en la base da 403 fail-closed.
+        var (_, token) = await DatosDePrueba.SeedOperadorConTokenAsync(
+            ctx, Factory.Services.GetRequiredService<IJwtTokenService>(), "operador.test");
 
         var client = Factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenOperador());
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var response = await client.GetAsync("/categorias/activas");
 

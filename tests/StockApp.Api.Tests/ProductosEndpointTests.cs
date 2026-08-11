@@ -51,9 +51,10 @@ public class ProductosEndpointTests : ApiTestBase
     {
         await using var ctx = Factory.CrearContexto();
         await DatosDePrueba.SeedProductoAsync(ctx, "SKU-O1", "Producto Operador Test");
-
-        var jwt = Factory.Services.GetRequiredService<IJwtTokenService>();
-        var token = jwt.GenerarToken(2, RolUsuario.Operador);
+        // Operador real (no el "2" inventado): con PoblarPermisosMiddleware puesto, un JWT para
+        // un usuarioId que no existe en la base da 403 fail-closed.
+        var (_, token) = await DatosDePrueba.SeedOperadorConTokenAsync(
+            ctx, Factory.Services.GetRequiredService<IJwtTokenService>(), "operador.test");
 
         var client = Factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);

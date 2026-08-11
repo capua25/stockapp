@@ -141,9 +141,13 @@ public class UnidadesMedidaEndpointTests : ApiTestBase
         ctx.UnidadesMedida.Add(new UnidadMedida { Nombre = "Activa", Abreviatura = "ac", Activo = true });
         ctx.UnidadesMedida.Add(new UnidadMedida { Nombre = "Inactiva", Abreviatura = "in", Activo = false });
         await ctx.SaveChangesAsync();
+        // Operador real (no el "2" inventado de TokenOperador()): con PoblarPermisosMiddleware
+        // puesto, un JWT para un usuarioId que no existe en la base da 403 fail-closed.
+        var (_, token) = await DatosDePrueba.SeedOperadorConTokenAsync(
+            ctx, Factory.Services.GetRequiredService<IJwtTokenService>(), "operador.test");
 
         var client = Factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenOperador());
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var response = await client.GetAsync("/unidades-medida/activas");
 
@@ -201,11 +205,11 @@ public class UnidadesMedidaEndpointTests : ApiTestBase
     public async Task PostGarantizarPorDefecto_ConTokenOperador_Devuelve200()
     {
         await using var ctx = Factory.CrearContexto();
-        var operador = await DatosDePrueba.SeedUsuarioAsync(ctx, "operador.test", "Secreta123!", RolUsuario.Operador);
+        var (_, token) = await DatosDePrueba.SeedOperadorConTokenAsync(
+            ctx, Factory.Services.GetRequiredService<IJwtTokenService>(), "operador.test");
 
         var client = Factory.CreateClient();
-        var tokenOperador = Factory.Services.GetRequiredService<IJwtTokenService>().GenerarToken(operador.Id, RolUsuario.Operador);
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", tokenOperador);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var response = await client.PostAsync("/unidades-medida/garantizar-por-defecto", content: null);
 

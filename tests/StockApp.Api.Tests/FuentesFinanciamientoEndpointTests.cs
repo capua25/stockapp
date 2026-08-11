@@ -40,9 +40,13 @@ public class FuentesFinanciamientoEndpointTests : ApiTestBase
         await using var ctx = Factory.CrearContexto();
         ctx.FuentesFinanciamiento.Add(new FuenteFinanciamiento { Nombre = "Literal B", Activo = true });
         await ctx.SaveChangesAsync();
+        // Operador real (no el "2" inventado de TokenOperador()): con PoblarPermisosMiddleware
+        // puesto, un JWT para un usuarioId que no existe en la base da 403 fail-closed.
+        var (_, token) = await DatosDePrueba.SeedOperadorConTokenAsync(
+            ctx, Factory.Services.GetRequiredService<IJwtTokenService>(), "operador.test");
 
         var client = Factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenOperador());
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var response = await client.GetAsync("/finanzas/fuentes");
 
@@ -133,9 +137,13 @@ public class FuentesFinanciamientoEndpointTests : ApiTestBase
         ctx.FuentesFinanciamiento.Add(new FuenteFinanciamiento { Nombre = "Activa", Activo = true });
         ctx.FuentesFinanciamiento.Add(new FuenteFinanciamiento { Nombre = "Inactiva", Activo = false });
         await ctx.SaveChangesAsync();
+        // Operador real (no el "2" inventado de TokenOperador()): con PoblarPermisosMiddleware
+        // puesto, un JWT para un usuarioId que no existe en la base da 403 fail-closed.
+        var (_, token) = await DatosDePrueba.SeedOperadorConTokenAsync(
+            ctx, Factory.Services.GetRequiredService<IJwtTokenService>(), "operador.test");
 
         var client = Factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenOperador());
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var response = await client.GetAsync("/finanzas/fuentes/activas");
 

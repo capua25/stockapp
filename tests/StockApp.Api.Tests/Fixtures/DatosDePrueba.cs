@@ -1,3 +1,4 @@
+using StockApp.Api.Auth;
 using StockApp.Application.Authorization;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
@@ -73,6 +74,27 @@ public static class DatosDePrueba
             ctx.PermisosUsuario.Add(new PermisoUsuario { UsuarioId = usuarioId, Permiso = permiso });
 
         await ctx.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Siembra un Operador real (los 9 PermisosInicialesOperador completos, vía SeedUsuarioAsync)
+    /// y firma su JWT a partir del Id que la base le asignó — nunca un Id inventado como "2".
+    /// Existe porque con PoblarPermisosMiddleware puesto (spec 2026-08-10, Task 8), un JWT para
+    /// un usuarioId que no existe en la tabla Usuarios da 403 por diseño (fail-closed):
+    /// IProveedorPermisos.ObtenerAsync no encuentra filas y el conjunto de permisos queda vacío.
+    /// Antes de ese middleware esto no importaba (la autorización viejo era solo por rol, nunca
+    /// tocaba la base) — varios tests fabricaban `GenerarToken(2, RolUsuario.Operador)` sin
+    /// sembrar ningún Usuario y "andaban" por eso mismo. Este helper reemplaza ese patrón por
+    /// uno que refleja un estado real de producción: todo Operador real tiene una fila en
+    /// Usuarios. Mismo patrón que ya usaba PostGarantizarPorDefecto_ConTokenOperador_Devuelve200
+    /// (UnidadesMedidaEndpointTests) de forma inline, antes de que este helper existiera.
+    /// </summary>
+    public static async Task<(Usuario Usuario, string Token)> SeedOperadorConTokenAsync(
+        AppDbContext ctx, IJwtTokenService jwt, string nombreUsuario, string contrasena = "Secreta123!")
+    {
+        var usuario = await SeedUsuarioAsync(ctx, nombreUsuario, contrasena, RolUsuario.Operador);
+        var token = jwt.GenerarToken(usuario.Id, RolUsuario.Operador);
+        return (usuario, token);
     }
 
     public static async Task<Producto> SeedProductoAsync(AppDbContext ctx, string codigo, string nombre)

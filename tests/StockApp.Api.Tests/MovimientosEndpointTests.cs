@@ -66,9 +66,13 @@ public class MovimientosEndpointTests : ApiTestBase
     {
         await using var ctx = Factory.CrearContexto();
         var producto = await DatosDePrueba.SeedProductoConStockAsync(ctx, "SKU-M2", "Producto Mov 2", 3m);
+        // Operador real (no el "2" inventado de TokenOperador()): con PoblarPermisosMiddleware
+        // puesto, un JWT para un usuarioId que no existe en la base da 403 fail-closed.
+        var (_, token) = await DatosDePrueba.SeedOperadorConTokenAsync(
+            ctx, Factory.Services.GetRequiredService<IJwtTokenService>(), "operador.test");
 
         var client = Factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenOperador());
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var response = await client.PostAsJsonAsync("/movimientos",
             new RegistrarMovimientoRequest(producto.Id, TipoMovimiento.Salida, MotivoMovimiento.Venta, 10m, 20m, null));
