@@ -79,6 +79,15 @@ public partial class LoginViewModel : ViewModelBase
 
             if (resultado.Exitoso)
             {
+                // Poblar los permisos configurables ANTES de navegar (spec 2026-08-10, decisión
+                // 7): el gating del menú (ShellMainViewModel.Puede*, Task 14) lee
+                // ApiSession.PermisosActuales desde el primer render. Best-effort vía el helper
+                // compartido (RefrescoPermisos, Steps 1-4 de esta task): si la consulta falla,
+                // no bloquea el login — el menú arranca sin permisos configurables hasta el
+                // próximo refresh (navegación, Task 14, o el manejo de 403, Task 15).
+                await RefrescoPermisos.DispararBestEffortAsync(
+                    () => _authService.ObtenerPermisosPropiosAsync(), nameof(LoginViewModel));
+
                 if (SoloAccesoLimitado)
                     _shell.MostrarAccesoLimitado();
                 else

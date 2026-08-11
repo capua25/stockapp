@@ -1,3 +1,6 @@
+using System.Net;
+using System.Text;
+using System.Text.Json;
 using Moq;
 using StockApp.ApiClient;
 using StockApp.Application.Actualizaciones;
@@ -118,6 +121,88 @@ public class LoginViewModelTests
 
         Assert.IsType<ShellMainViewModel>(shell.CurrentViewModel);
         Assert.Null(vm.MensajeError);
+    }
+
+    [Fact]
+    public async Task Login_Exitoso_ConsultaLosPermisosPropiosAntesDeNavegar()
+    {
+        var (vm, authMock, shell) = Crear(LoginResult.Ok());
+        vm.NombreUsuario = "admin";
+        vm.Contrasena    = "secreto";
+
+        await vm.EntrarCommand.ExecuteAsync(null);
+
+        authMock.Verify(a => a.ObtenerPermisosPropiosAsync(), Times.Once);
+        Assert.IsType<ShellMainViewModel>(shell.CurrentViewModel);
+    }
+
+    [Fact]
+    public async Task Login_ObtenerPermisosPropiosFalla_IgualNavegaAContenidoPrincipal()
+    {
+        var (vm, authMock, shell) = Crear(LoginResult.Ok());
+        authMock.Setup(a => a.ObtenerPermisosPropiosAsync())
+            .ThrowsAsync(new ServidorNoDisponibleException(new HttpRequestException()));
+        vm.NombreUsuario = "admin";
+        vm.Contrasena    = "secreto";
+
+        await vm.EntrarCommand.ExecuteAsync(null);
+
+        Assert.IsType<ShellMainViewModel>(shell.CurrentViewModel);
+    }
+
+    /// <summary>
+    /// Fake HttpMessageHandler mínimo: responde login o permisos según el path, sin depender
+    /// de FakeHttpHandler de StockApp.ApiClient.Tests (proyecto de test distinto).
+    /// </summary>
+    private sealed class FakeTransporte : HttpMessageHandler
+    {
+        private readonly Func<HttpRequestMessage, object> _responder;
+
+        public FakeTransporte(Func<HttpRequestMessage, object> responder) => _responder = responder;
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var body = _responder(request);
+            var json = JsonSerializer.Serialize(body, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(json, Encoding.UTF8, "application/json"),
+            };
+            return Task.FromResult(response);
+        }
+    }
+
+    [Fact]
+    public async Task Login_Exitoso_PueblaApiSessionPermisosActuales_DePuntaAPunta()
+    {
+        // Cierra la regresión detectada en el pre-flight de esta task (spec 2026-08-10): la
+        // Task 7 dejó AdjuntosPanelViewModel.PuedeModificar leyendo
+        // ICurrentSession.PermisosActuales, pero hasta esta task nadie lo poblaba del lado
+        // desktop — todo Operador quedaba con PuedeModificar en false sin importar sus
+        // permisos reales. Este test usa un AuthApiClient REAL (no mockeado, a diferencia del
+        // resto de esta clase) contra un transporte HTTP falso, para probar el cableado
+        // completo login -> RefrescoPermisos -> GET /auth/permisos -> ApiSession poblada — no
+        // solo el fetch aislado (eso ya lo cubre AuthApiClientPermisosTests).
+        var session = new ApiSession();
+        var transporte = new FakeTransporte(request =>
+            request.RequestUri!.AbsolutePath == "/auth/login"
+                ? new
+                {
+                    token = "tok-1",
+                    usuario = new { id = 7, nombreUsuario = "operador", nombreCompleto = (string?)null, rol = 1 },
+                }
+                : new { permisos = new[] { "finanzas.gastos" } });
+        var authHandler = new AuthTokenHandler(session) { InnerHandler = transporte };
+        var http = new HttpClient(authHandler) { BaseAddress = new Uri("http://localhost:5000/") };
+        var authService = new AuthApiClient(http, session);
+        var vm = new LoginViewModel(authService, CrearShellFake(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"));
+        vm.NombreUsuario = "operador";
+        vm.Contrasena    = "secreto";
+
+        await vm.EntrarCommand.ExecuteAsync(null);
+
+        Assert.Contains("finanzas.gastos", session.PermisosActuales);
     }
 
     // ── tests: mensajes de error (anti user-enumeration) ────────────────────

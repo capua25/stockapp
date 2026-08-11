@@ -8,6 +8,7 @@ namespace StockApp.ApiClient;
 internal sealed record LoginBody(string NombreUsuario, string Contrasena);
 internal sealed record UsuarioLoginWire(int Id, string NombreUsuario, string? NombreCompleto, StockApp.Domain.Enums.RolUsuario Rol);
 internal sealed record LoginRespuestaWire(string Token, UsuarioLoginWire Usuario);
+internal sealed record PermisosPropiosWire(List<string> Permisos);
 
 /// <summary>
 /// IAuthService contra POST /auth/login (3a, D8: LoginResponse enriquecido). Puebla
@@ -57,5 +58,18 @@ public sealed class AuthApiClient : IAuthService
         // JWT sin estado: no hay endpoint de logout; alcanza con descartar el token local.
         _session.CerrarSesion();
         return Task.CompletedTask;
+    }
+
+    public async Task<IReadOnlySet<string>> ObtenerPermisosPropiosAsync()
+    {
+        var response = await ApiErrores.EnviarAsync(() => _http.GetAsync("auth/permisos"));
+        await ApiErrores.AsegurarExitoAsync(response);
+
+        var body = await response.Content.ReadFromJsonAsync<PermisosPropiosWire>()
+            ?? throw new InvalidOperationException("Respuesta vacía del servidor al consultar permisos.");
+
+        IReadOnlySet<string> permisos = new HashSet<string>(body.Permisos);
+        _session.EstablecerPermisos(permisos);
+        return permisos;
     }
 }

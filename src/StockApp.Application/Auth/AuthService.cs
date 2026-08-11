@@ -53,4 +53,14 @@ public class AuthService : IAuthService
         _session.CerrarSesion();
         return Task.CompletedTask;
     }
+
+    /// <summary>
+    /// AuthService es el IAuthService server-side legacy (pre-migración a API, sin call sites
+    /// activos en DI hoy — ver AuthEndpoints.MapPost("/login"), que implementa el login inline
+    /// sin pasar por esta clase). No hace ningún request: PermisosActuales ya está poblado en
+    /// ICurrentSession por quien corresponda en este modo (mismo criterio que IniciarSesion/
+    /// CerrarSesion arriba, que tampoco hablan con la red).
+    /// </summary>
+    public Task<IReadOnlySet<string>> ObtenerPermisosPropiosAsync()
+        => Task.FromResult(_session.PermisosActuales);
 }

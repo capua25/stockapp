@@ -1,6 +1,8 @@
+using System.Linq;
 using Microsoft.AspNetCore.RateLimiting;
 using StockApp.Api.Auth;
 using StockApp.Application.Auth;
+using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Enums;
 
@@ -9,6 +11,7 @@ namespace StockApp.Api.Endpoints;
 public record LoginRequest(string? NombreUsuario, string? Contrasena);
 public record UsuarioLoginResponse(int Id, string NombreUsuario, string? NombreCompleto, RolUsuario Rol);
 public record LoginResponse(string Token, UsuarioLoginResponse Usuario);
+public record PermisosPropiosResponse(IReadOnlyList<string> Permisos);
 
 public static class AuthEndpoints
 {
@@ -48,6 +51,15 @@ public static class AuthEndpoints
                 usuario.Id, usuario.NombreUsuario, usuario.NombreCompleto, usuario.Rol);
             return Results.Ok(new LoginResponse(token, usuarioResponse));
         }).RequireRateLimiting("login");
+
+        group.MapGet("/permisos", async (ICurrentSession session, IProveedorPermisos proveedor) =>
+        {
+            if (session.RolActual == RolUsuario.Admin)
+                return Results.Ok(new PermisosPropiosResponse(AuthorizationService.PermisosConfigurables));
+
+            var permisos = await proveedor.ObtenerAsync(session.UsuarioActual!.Id);
+            return Results.Ok(new PermisosPropiosResponse(permisos.ToList()));
+        }).RequireAuthorization();
 
         return app;
     }
