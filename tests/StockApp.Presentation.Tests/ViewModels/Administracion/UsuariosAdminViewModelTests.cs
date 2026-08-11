@@ -134,4 +134,82 @@ public class UsuariosAdminViewModelTests
         svc.Verify(s => s.CambiarContrasenaAsync(2, "otraClave123", null), Times.Once);
         Assert.Equal(string.Empty, vm.NuevaContrasenaParaSeleccionado);
     }
+
+    // ── Round 1 (review Task 12) ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task CambiarRolAsync_UsuarioYaNoExiste_InformaAlUsuarioSinExplotar()
+    {
+        var (vm, svc, confirm) = Crear();
+        var mensaje = "El usuario ya no existe.";
+        svc.Setup(s => s.CambiarRolAsync(2, RolUsuario.Admin))
+            .ThrowsAsync(new EntidadNoEncontradaException(mensaje));
+        vm.UsuarioSeleccionado = Dto(2, RolUsuario.Operador);
+
+        await vm.CambiarRolCommand.ExecuteAsync(RolUsuario.Admin);
+
+        confirm.Verify(c => c.InformarAsync(mensaje), Times.Once);
+    }
+
+    [Fact]
+    public async Task CambiarContrasenaAsync_UsuarioYaNoExiste_InformaAlUsuarioSinExplotar()
+    {
+        var (vm, svc, confirm) = Crear();
+        var mensaje = "El usuario ya no existe.";
+        svc.Setup(s => s.CambiarContrasenaAsync(2, "otraClave123", null))
+            .ThrowsAsync(new EntidadNoEncontradaException(mensaje));
+        vm.UsuarioSeleccionado = Dto(2, RolUsuario.Operador);
+        vm.NuevaContrasenaParaSeleccionado = "otraClave123";
+
+        await vm.CambiarContrasenaCommand.ExecuteAsync(null);
+
+        confirm.Verify(c => c.InformarAsync(mensaje), Times.Once);
+    }
+
+    [Fact]
+    public async Task CambiarContrasenaAsync_PideConfirmacionAntesDeLlamarAlServicio()
+    {
+        var (vm, svc, confirm) = Crear();
+        vm.UsuarioSeleccionado = Dto(2, RolUsuario.Operador);
+        vm.NuevaContrasenaParaSeleccionado = "otraClave123";
+
+        await vm.CambiarContrasenaCommand.ExecuteAsync(null);
+
+        confirm.Verify(c => c.PreguntarAsync(It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task CambiarContrasenaAsync_SinConfirmacion_NoLlamaAlServicioNiLimpiaElCampo()
+    {
+        var svc = new Mock<IUsuarioService>();
+        var confirm = new Mock<IConfirmacionService>();
+        confirm.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(false);
+        var vm = new UsuariosAdminViewModel(svc.Object, confirm.Object);
+        vm.UsuarioSeleccionado = Dto(2, RolUsuario.Operador);
+        vm.NuevaContrasenaParaSeleccionado = "otraClave123";
+
+        await vm.CambiarContrasenaCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.CambiarContrasenaAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string?>()), Times.Never);
+        Assert.Equal("otraClave123", vm.NuevaContrasenaParaSeleccionado);
+    }
+
+    [Fact]
+    public async Task MensajeError_SeLimpiaAlIniciarOtraOperacion()
+    {
+        var (vm, svc, _) = Crear();
+        svc.Setup(s => s.AltaUsuarioAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string>(), It.IsAny<RolUsuario>()))
+            .ThrowsAsync(new ReglaDeNegocioException("Ya existe un usuario con ese nombre."));
+        vm.NuevoNombreUsuario = "repetido";
+        vm.NuevaContrasenaPlan = "pwd12345";
+        await vm.AltaCommand.ExecuteAsync(null);
+        Assert.NotNull(vm.MensajeError);
+
+        svc.Setup(s => s.ListarAsync()).ReturnsAsync(new List<UsuarioDto>());
+        vm.UsuarioSeleccionado = Dto(2, RolUsuario.Operador);
+
+        await vm.BajaCommand.ExecuteAsync(null);
+
+        Assert.Null(vm.MensajeError);
+    }
 }

@@ -86,6 +86,8 @@ public partial class UsuariosAdminViewModel : ViewModelBase
     {
         if (UsuarioSeleccionado is null) return;
 
+        MensajeError = null;
+
         var confirmar = await _confirmacion.PreguntarAsync(
             $"¿Confirma dar de baja a \"{UsuarioSeleccionado.NombreUsuario}\"?");
         if (!confirmar) return;
@@ -106,12 +108,19 @@ public partial class UsuariosAdminViewModel : ViewModelBase
     {
         if (UsuarioSeleccionado is null) return;
 
+        MensajeError = null;
+
         try
         {
             await _usuarios.CambiarRolAsync(UsuarioSeleccionado.Id, nuevoRol);
             await CargarAsync();
         }
-        catch (Exception ex) when (ex is ReglaDeNegocioException or ArgumentException)
+        // Fix (review Task 12): faltaba EntidadNoEncontradaException, que
+        // UsuarioService.CambiarRolAsync SÍ puede lanzar (usuario dado de baja por otro Admin
+        // entremedio) — sin este catch la excepción escapaba del AsyncRelayCommand y el botón
+        // quedaba "roto" sin feedback, mismo mecanismo que ya documentan GastosViewModel.AnularAsync
+        // e IngresoPorFacturaViewModel.GuardarInternoAsync.
+        catch (Exception ex) when (ex is ReglaDeNegocioException or ArgumentException or EntidadNoEncontradaException)
         {
             await _confirmacion.InformarAsync(ex.Message);
         }
@@ -122,6 +131,16 @@ public partial class UsuariosAdminViewModel : ViewModelBase
     {
         if (UsuarioSeleccionado is null) return;
 
+        MensajeError = null;
+
+        // Confirmación (decisión de review, Task 12): resetear la contraseña de otro usuario
+        // le corta el acceso con su clave actual sin aviso previo — mismo mecanismo de
+        // PreguntarAsync que ya usa BajaAsync más arriba en esta clase.
+        var confirmar = await _confirmacion.PreguntarAsync(
+            $"¿Confirma cambiar la contraseña de \"{UsuarioSeleccionado.NombreUsuario}\"? " +
+            "La persona no va a poder volver a entrar con su contraseña actual.");
+        if (!confirmar) return;
+
         try
         {
             // Reset administrativo (spec Auth §5.1): Admin cambia la de otro sin requerir la
@@ -131,7 +150,9 @@ public partial class UsuariosAdminViewModel : ViewModelBase
             NuevaContrasenaParaSeleccionado = string.Empty;
             await _confirmacion.InformarAsync("Contraseña actualizada.");
         }
-        catch (Exception ex) when (ex is ReglaDeNegocioException or ArgumentException)
+        // Fix (review Task 12): faltaba EntidadNoEncontradaException, mismo motivo que en
+        // CambiarRolAsync — UsuarioService.CambiarContrasenaAsync también la lanza.
+        catch (Exception ex) when (ex is ReglaDeNegocioException or ArgumentException or EntidadNoEncontradaException)
         {
             await _confirmacion.InformarAsync(ex.Message);
         }
