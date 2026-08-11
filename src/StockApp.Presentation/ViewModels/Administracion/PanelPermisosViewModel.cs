@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -32,21 +33,47 @@ public partial class PanelPermisosViewModel : ViewModelBase
     internal Task _tareaCarga = Task.CompletedTask;
 
     // ── Catálogo / Stock ───────────────────────────────────────────────────
-    [ObservableProperty] private bool _permisoGestionarProductos;
-    [ObservableProperty] private bool _permisoRecalcularStock;
+    // Crítico 1 (review Task 13): las propiedades base que participan de un checkbox compuesto
+    // necesitan [NotifyPropertyChangedFor] hacia esa compuesta — si no, Avalonia nunca se entera
+    // de que "Productos"/"GastosYFacturas"/"IngresosDeCaja" cambiaron cuando CargarAsync asigna
+    // las bases directamente (no pasa por los setters de las compuestas), y el checkbox queda
+    // congelado con el estado del usuario anterior. Verificadas las 11: solo estas 5 alimentan
+    // el getter de alguna compuesta (Productos, GastosYFacturas o IngresosDeCaja) — el resto son
+    // checkboxes standalone bindeados directo a su propia base, que ya se notifican solas.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Productos))]
+    private bool _permisoGestionarProductos;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(Productos))]
+    private bool _permisoRecalcularStock;
     [ObservableProperty] private bool _permisoGestionarTablasMaestras;
     [ObservableProperty] private bool _permisoRegistrarMovimientos;
 
     // ── Finanzas ───────────────────────────────────────────────────────────
     [ObservableProperty] private bool _permisoVerFinanzas;
     [ObservableProperty] private bool _permisoGestionarMaestrosFinanzas;
-    [ObservableProperty] private bool _permisoRegistrarGastos;
-    [ObservableProperty] private bool _permisoRegistrarPagos;
-    [ObservableProperty] private bool _permisoRegistrarIngresos;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(GastosYFacturas))]
+    private bool _permisoRegistrarGastos;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(GastosYFacturas))]
+    private bool _permisoRegistrarPagos;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IngresosDeCaja))]
+    private bool _permisoRegistrarIngresos;
 
     // ── Tareas / Reportes ──────────────────────────────────────────────────
     [ObservableProperty] private bool _permisoGestionarTareas;
     [ObservableProperty] private bool _permisoVerReportes;
+
+    /// <summary>Crítico 2, capa b (review Task 13): estado explícito de "no se pudieron cargar
+    /// los permisos" — un panel simplemente destildado no le avisa nada al Admin, y si aprieta
+    /// Guardar le saca TODOS los permisos al usuario seleccionado. Mismo patrón que
+    /// FuenteFinanciamientoFormViewModel/RubroGastoFormViewModel/etc. usan en este repo:
+    /// MensajeError + [NotifyCanExecuteChangedFor(GuardarCommand)] + PuedeGuardar().</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
+    private string? _mensajeError;
 
     /// <summary>Deshabilita el panel entero cuando el usuario seleccionado es Admin (leyenda
     /// "Acceso total" en la View) — proxy de UsuariosAdminViewModel.EsAdminSeleccionado. False
@@ -123,24 +150,45 @@ public partial class PanelPermisosViewModel : ViewModelBase
 
     public async Task CargarAsync()
     {
+        MensajeError = null;
+
         if (_padre?.UsuarioSeleccionado is null || _padre.EsAdminSeleccionado)
         {
             LimpiarTodo();
             return;
         }
 
-        var permisos = await _usuarios.ObtenerPermisosAsync(_padre.UsuarioSeleccionado.Id);
-        PermisoGestionarProductos       = permisos.Contains(Permisos.GestionarProductos);
-        PermisoRecalcularStock          = permisos.Contains(Permisos.RecalcularStock);
-        PermisoGestionarTablasMaestras  = permisos.Contains(Permisos.GestionarTablasMaestras);
-        PermisoRegistrarMovimientos     = permisos.Contains(Permisos.RegistrarMovimientos);
-        PermisoVerFinanzas              = permisos.Contains(Permisos.VerFinanzas);
-        PermisoGestionarMaestrosFinanzas = permisos.Contains(Permisos.GestionarMaestrosFinanzas);
-        PermisoRegistrarGastos          = permisos.Contains(Permisos.RegistrarGastos);
-        PermisoRegistrarPagos           = permisos.Contains(Permisos.RegistrarPagos);
-        PermisoRegistrarIngresos        = permisos.Contains(Permisos.RegistrarIngresos);
-        PermisoGestionarTareas          = permisos.Contains(Permisos.GestionarTareas);
-        PermisoVerReportes              = permisos.Contains(Permisos.VerReportes);
+        // Crítico 2, capa a (review Task 13): limpiar ANTES del await, no después del éxito.
+        // Así el panel nunca muestra (ni puede guardar) los permisos del usuario anterior
+        // mientras el fetch del nuevo está en vuelo o si termina fallando — sin esto, elegir al
+        // Operador B dejaba en pantalla los checkboxes tildados del Operador A.
+        LimpiarTodo();
+
+        try
+        {
+            var permisos = await _usuarios.ObtenerPermisosAsync(_padre.UsuarioSeleccionado.Id);
+            PermisoGestionarProductos       = permisos.Contains(Permisos.GestionarProductos);
+            PermisoRecalcularStock          = permisos.Contains(Permisos.RecalcularStock);
+            PermisoGestionarTablasMaestras  = permisos.Contains(Permisos.GestionarTablasMaestras);
+            PermisoRegistrarMovimientos     = permisos.Contains(Permisos.RegistrarMovimientos);
+            PermisoVerFinanzas              = permisos.Contains(Permisos.VerFinanzas);
+            PermisoGestionarMaestrosFinanzas = permisos.Contains(Permisos.GestionarMaestrosFinanzas);
+            PermisoRegistrarGastos          = permisos.Contains(Permisos.RegistrarGastos);
+            PermisoRegistrarPagos           = permisos.Contains(Permisos.RegistrarPagos);
+            PermisoRegistrarIngresos        = permisos.Contains(Permisos.RegistrarIngresos);
+            PermisoGestionarTareas          = permisos.Contains(Permisos.GestionarTareas);
+            PermisoVerReportes              = permisos.Contains(Permisos.VerReportes);
+        }
+        catch (Exception)
+        {
+            // Crítico 2, capa b: el panel ya quedó limpio (capa a), pero eso solo no alcanza —
+            // MensajeError bloquea GuardarCommand vía PuedeGuardar() hasta que una carga
+            // posterior tenga éxito. Se relanza para que RefrescoPermisos.DispararBestEffortAsync
+            // (que sigue envolviendo esta llamada desde AlCambiarSeleccion) la registre en
+            // crash.log — la UI se entera por MensajeError, el log queda para diagnóstico.
+            MensajeError = "No se pudieron cargar los permisos de este usuario. Guardar está deshabilitado hasta reintentar.";
+            throw;
+        }
     }
 
     private void LimpiarTodo()
@@ -158,7 +206,12 @@ public partial class PanelPermisosViewModel : ViewModelBase
         PermisoVerReportes = false;
     }
 
-    [RelayCommand]
+    /// <summary>Crítico 2, capa b: gatea GuardarCommand mientras MensajeError esté seteado
+    /// (última carga fallida) — evita que el Admin persista, sin querer, los permisos que
+    /// quedaron en el modelo desde antes de que el fetch fallara.</summary>
+    private bool PuedeGuardar() => MensajeError is null;
+
+    [RelayCommand(CanExecute = nameof(PuedeGuardar))]
     private async Task GuardarAsync()
     {
         if (_padre?.UsuarioSeleccionado is null) return;

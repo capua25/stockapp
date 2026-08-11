@@ -141,4 +141,73 @@ public class PanelPermisosViewModelTests
 
         svc.Verify(s => s.GuardarPermisosAsync(It.IsAny<int>(), It.IsAny<IReadOnlyList<string>>()), Times.Never);
     }
+
+    // ── Round 1 (review Task 13) — lo que la UI observa, no solo el modelo ──────────────────
+
+    [Fact]
+    public async Task CargarAsync_NotificaLasPropiedadesCompuestas_NoSoloLasBase()
+    {
+        // Crítico 1: CargarAsync asigna las propiedades BASE directamente (no pasa por los
+        // setters de Productos/GastosYFacturas/IngresosDeCaja), así que el binding del checkbox
+        // compuesto ("IsChecked={Binding Productos}", etc.) solo se re-evalúa si esas bases
+        // notifican también el nombre de la compuesta vía [NotifyPropertyChangedFor]. Este test
+        // se suscribe a PropertyChanged (lo que la View realmente observa), no lee las bases
+        // directamente como el resto de los tests de este archivo.
+        var (panel, padre, svc) = Crear();
+        svc.Setup(s => s.ObtenerPermisosAsync(10))
+            .ReturnsAsync(new List<string>
+            {
+                Permisos.GestionarProductos, Permisos.RecalcularStock,
+                Permisos.RegistrarGastos, Permisos.RegistrarPagos,
+                Permisos.RegistrarIngresos,
+            });
+
+        var notificadas = new List<string>();
+        panel.PropertyChanged += (_, e) => { if (e.PropertyName is not null) notificadas.Add(e.PropertyName); };
+
+        padre.UsuarioSeleccionado = Dto(10, RolUsuario.Operador);
+        await panel._tareaCarga;
+
+        Assert.Contains(nameof(PanelPermisosViewModel.Productos), notificadas);
+        Assert.Contains(nameof(PanelPermisosViewModel.GastosYFacturas), notificadas);
+        Assert.Contains(nameof(PanelPermisosViewModel.IngresosDeCaja), notificadas);
+    }
+
+    [Fact]
+    public async Task CambiarUsuarioSeleccionado_FetchDelNuevoFalla_NoQuedaConLosPermisosDelAnterior()
+    {
+        // Crítico 2: seleccionar al Operador A (carga OK), después al Operador B (el fetch
+        // falla). Sin limpiar antes del await, el panel se queda mostrando (y podría guardar)
+        // los permisos tildados de A sobre B.
+        var (panel, padre, svc) = Crear();
+        svc.Setup(s => s.ObtenerPermisosAsync(10))
+            .ReturnsAsync(new List<string> { Permisos.VerFinanzas, Permisos.GestionarProductos });
+        padre.UsuarioSeleccionado = Dto(10, RolUsuario.Operador);
+        await panel._tareaCarga;
+        Assert.True(panel.PermisoVerFinanzas);
+        Assert.True(panel.PermisoGestionarProductos);
+
+        svc.Setup(s => s.ObtenerPermisosAsync(11))
+            .ThrowsAsync(new InvalidOperationException("el servidor no respondió"));
+        padre.UsuarioSeleccionado = Dto(11, RolUsuario.Operador);
+        await panel._tareaCarga;
+
+        Assert.False(panel.PermisoVerFinanzas);
+        Assert.False(panel.PermisoGestionarProductos);
+    }
+
+    [Fact]
+    public async Task CambiarUsuarioSeleccionado_FetchFalla_BloqueaGuardarCommand()
+    {
+        // Crítico 2, capa b: limpiar no alcanza — un panel destildado tampoco avisa que hubo
+        // un error, y Guardar le sacaría todos los permisos al usuario si el Admin no lo nota.
+        var (panel, padre, svc) = Crear();
+        svc.Setup(s => s.ObtenerPermisosAsync(10))
+            .ThrowsAsync(new InvalidOperationException("el servidor no respondió"));
+
+        padre.UsuarioSeleccionado = Dto(10, RolUsuario.Operador);
+        await panel._tareaCarga;
+
+        Assert.False(panel.GuardarCommand.CanExecute(null));
+    }
 }
