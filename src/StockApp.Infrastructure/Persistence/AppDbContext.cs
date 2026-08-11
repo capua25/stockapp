@@ -28,6 +28,7 @@ public class AppDbContext : DbContext
     public DbSet<Tarea> Tareas => Set<Tarea>();
     public DbSet<NotaTarea> NotasTarea => Set<NotaTarea>();
     public DbSet<LoteImportacion> LotesImportacion => Set<LoteImportacion>();
+    public DbSet<PermisoUsuario> PermisosUsuario => Set<PermisoUsuario>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -344,6 +345,18 @@ public class AppDbContext : DbContext
                 .HasForeignKey(n => n.TareaId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(n => n.Usuario).WithMany()
                 .HasForeignKey(n => n.UsuarioId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── Permisos por operador (spec 2026-08-10) ───────────────────────────
+        // UNIQUE (UsuarioId, Permiso): un mismo permiso no puede estar duplicado para el mismo
+        // usuario. Restrict hacia Usuarios, mismo criterio que el resto del modelo (baja lógica,
+        // nunca DELETE físico). Sin fila = sin ese permiso (fail-closed, decisión 3 del spec).
+        modelBuilder.Entity<PermisoUsuario>(e =>
+        {
+            e.Property(p => p.Permiso).IsRequired();
+            e.HasIndex(p => new { p.UsuarioId, p.Permiso }).IsUnique();
+            e.HasOne(p => p.Usuario).WithMany()
+                .HasForeignKey(p => p.UsuarioId).OnDelete(DeleteBehavior.Restrict);
         });
     }
 }
