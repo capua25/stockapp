@@ -62,7 +62,6 @@ public class GastoFormViewModelTests
             new Mock<IServicioSeleccionArchivo>().Object,
             new Mock<IServicioAperturaArchivo>().Object,
             confirm.Object,
-            new Mock<IAuthorizationService>().Object,
             new Mock<ICurrentSession>().Object);
 
         var vm = new GastoFormViewModel(
@@ -308,13 +307,14 @@ public class GastoFormViewModelTests
             {
                 new(1, "a.pdf", "application/pdf", 10, 42, null, DateTime.UtcNow),
             });
+        var session = new Mock<ICurrentSession>();
+        session.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
         var adjuntosPanel = new AdjuntosPanelViewModel(
             adjuntosService.Object,
             new Mock<IServicioSeleccionArchivo>().Object,
             new Mock<IServicioAperturaArchivo>().Object,
             confirm.Object,
-            new Mock<IAuthorizationService>().Object,
-            new Mock<ICurrentSession>().Object);
+            session.Object);
 
         var vm = new GastoFormViewModel(
             svc.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,

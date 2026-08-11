@@ -23,7 +23,6 @@ public partial class AdjuntosPanelViewModel : ViewModelBase
     private readonly IServicioSeleccionArchivo _seleccion;
     private readonly IServicioAperturaArchivo _apertura;
     private readonly IConfirmacionService _confirmacion;
-    private readonly IAuthorizationService _authorization;
     private readonly ICurrentSession _session;
 
     private int? _gastoId;
@@ -39,14 +38,12 @@ public partial class AdjuntosPanelViewModel : ViewModelBase
         IServicioSeleccionArchivo seleccion,
         IServicioAperturaArchivo apertura,
         IConfirmacionService confirmacion,
-        IAuthorizationService authorization,
         ICurrentSession session)
     {
         _adjuntos = adjuntos;
         _seleccion = seleccion;
         _apertura = apertura;
         _confirmacion = confirmacion;
-        _authorization = authorization;
         _session = session;
     }
 
@@ -56,7 +53,7 @@ public partial class AdjuntosPanelViewModel : ViewModelBase
         _pagoGastoId = pagoGastoId;
 
         var accion = gastoId is int ? Permisos.RegistrarGastos : Permisos.RegistrarPagos;
-        PuedeModificar = _session.RolActual is RolUsuario rol && _authorization.TienePermiso(rol, accion);
+        PuedeModificar = _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(accion);
 
         await RecargarAsync();
     }

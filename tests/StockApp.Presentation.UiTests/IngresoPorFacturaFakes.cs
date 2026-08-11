@@ -120,7 +120,5 @@ internal sealed class ServicioAperturaArchivoFake : IServicioAperturaArchivo
 
 internal sealed class AuthorizationServiceFake : IAuthorizationService
 {
-    public void Verificar(RolUsuario? rolActual, string accion) { }
     public void Verificar(ICurrentSession sesion, string accion) { }
-    public bool TienePermiso(RolUsuario rol, string accion) => true;
 }

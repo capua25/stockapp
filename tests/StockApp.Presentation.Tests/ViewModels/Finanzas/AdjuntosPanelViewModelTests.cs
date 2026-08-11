@@ -15,15 +15,19 @@ public class AdjuntosPanelViewModelTests
     private readonly Mock<IServicioSeleccionArchivo> _seleccion = new();
     private readonly Mock<IServicioAperturaArchivo> _apertura = new();
     private readonly Mock<IConfirmacionService> _confirmacion = new();
-    private readonly Mock<IAuthorizationService> _authorization = new();
     private readonly Mock<ICurrentSession> _session = new();
     private readonly AdjuntosPanelViewModel _vm;
 
     public AdjuntosPanelViewModelTests()
     {
+        // Default: sin permisos configurados (mismo comportamiento que el TienePermiso mockeado
+        // sin Setup, que devolvía false). Los tests de PuedeModificar pisan este Setup con el
+        // suyo propio.
+        _session.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+
         _vm = new AdjuntosPanelViewModel(
             _adjuntos.Object, _seleccion.Object, _apertura.Object, _confirmacion.Object,
-            _authorization.Object, _session.Object);
+            _session.Object);
     }
 
     [Fact]
@@ -108,20 +112,19 @@ public class AdjuntosPanelViewModelTests
     public async Task InicializarAsync_PanelDeGasto_ConPermisoRegistrarGastos_HabilitaPuedeModificar()
     {
         _session.Setup(s => s.RolActual).Returns(RolUsuario.Operador);
-        _authorization.Setup(a => a.TienePermiso(RolUsuario.Operador, Permisos.RegistrarGastos)).Returns(true);
+        _session.Setup(s => s.PermisosActuales).Returns(new HashSet<string> { Permisos.RegistrarGastos });
         _adjuntos.Setup(a => a.ListarPorGastoAsync(5)).ReturnsAsync(new List<AdjuntoDto>());
 
         await _vm.InicializarAsync(gastoId: 5, pagoGastoId: null);
 
         Assert.True(_vm.PuedeModificar);
-        _authorization.Verify(a => a.TienePermiso(RolUsuario.Operador, Permisos.RegistrarGastos), Times.Once);
     }
 
     [Fact]
     public async Task InicializarAsync_PanelDeGasto_SinPermisoRegistrarGastos_DeshabilitaPuedeModificar()
     {
         _session.Setup(s => s.RolActual).Returns(RolUsuario.Operador);
-        _authorization.Setup(a => a.TienePermiso(RolUsuario.Operador, Permisos.RegistrarGastos)).Returns(false);
+        _session.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
         _adjuntos.Setup(a => a.ListarPorGastoAsync(5)).ReturnsAsync(new List<AdjuntoDto>());
 
         await _vm.InicializarAsync(gastoId: 5, pagoGastoId: null);
@@ -133,13 +136,12 @@ public class AdjuntosPanelViewModelTests
     public async Task InicializarAsync_PanelDePago_ConPermisoRegistrarPagos_HabilitaPuedeModificar()
     {
         _session.Setup(s => s.RolActual).Returns(RolUsuario.Operador);
-        _authorization.Setup(a => a.TienePermiso(RolUsuario.Operador, Permisos.RegistrarPagos)).Returns(true);
+        _session.Setup(s => s.PermisosActuales).Returns(new HashSet<string> { Permisos.RegistrarPagos });
         _adjuntos.Setup(a => a.ListarPorPagoAsync(8)).ReturnsAsync(new List<AdjuntoDto>());
 
         await _vm.InicializarAsync(gastoId: null, pagoGastoId: 8);
 
         Assert.True(_vm.PuedeModificar);
-        _authorization.Verify(a => a.TienePermiso(RolUsuario.Operador, Permisos.RegistrarPagos), Times.Once);
     }
 
     [Fact]

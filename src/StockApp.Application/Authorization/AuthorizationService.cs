@@ -55,25 +55,6 @@ public class AuthorizationService : IAuthorizationService
         Permisos.GestionarTareas,
     ];
 
-    // OBSOLETO: se elimina en la Task 7. Derivada de PermisosInicialesOperador (pre-flight,
-    // corrección D) en vez de repetir la misma lista de 9 permisos por segunda vez en el mismo
-    // archivo — una sola fuente de verdad, mismo contenido exacto, Verificar(RolUsuario?, string)
-    // sigue funcionando idéntico hasta que la Task 7 elimina las dos.
-    private static readonly HashSet<string> AccionesOperador = new(PermisosInicialesOperador);
-
-    public void Verificar(RolUsuario? rolActual, string accion)
-    {
-        if (rolActual is null)
-            throw new UnauthorizedAccessException("No hay sesión activa.");
-
-        if (rolActual == RolUsuario.Admin)
-            return;
-
-        if (!AccionesOperador.Contains(accion))
-            throw new UnauthorizedAccessException(
-                $"El rol Operador no tiene permiso para ejecutar la acción '{accion}'.");
-    }
-
     public void Verificar(ICurrentSession sesion, string accion)
     {
         if (!sesion.EstaAutenticado)
@@ -92,7 +73,4 @@ public class AuthorizationService : IAuthorizationService
             throw new UnauthorizedAccessException(
                 $"El rol Operador no tiene permiso para ejecutar la acción '{accion}'.");
     }
-
-    public bool TienePermiso(RolUsuario rol, string accion) =>
-        rol == RolUsuario.Admin || AccionesOperador.Contains(accion);
 }

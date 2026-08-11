@@ -62,7 +62,6 @@ public class IngresoPorFacturaViewModelTests
             new Mock<IServicioSeleccionArchivo>().Object,
             new Mock<IServicioAperturaArchivo>().Object,
             confirm.Object,
-            new Mock<IAuthorizationService>().Object,
             new Mock<ICurrentSession>().Object);
 
         var vm = new IngresoPorFacturaViewModel(

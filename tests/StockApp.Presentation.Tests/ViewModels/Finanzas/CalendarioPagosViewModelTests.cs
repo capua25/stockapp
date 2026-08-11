@@ -82,7 +82,6 @@ public class CalendarioPagosViewModelTests
                     new Mock<IServicioSeleccionArchivo>().Object,
                     new Mock<IServicioAperturaArchivo>().Object,
                     pagosConfirm.Object,
-                    new Mock<IAuthorizationService>().Object,
                     new Mock<ICurrentSession>().Object);
                 pagosVm = new PagosGastoViewModel(pagosSvc.Object, pagosNav.Object, pagosConfirm.Object, pagosAdjuntosPanel);
                 cb(pagosVm);

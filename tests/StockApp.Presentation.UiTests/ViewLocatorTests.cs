@@ -23,7 +23,7 @@ public class ViewLocatorTests
     [AvaloniaFact]
     public void Build_ConAdjuntosPanelViewModel_ResuelveAdjuntosPanelView()
     {
-        var vm = new AdjuntosPanelViewModel(null!, null!, null!, null!, null!, null!);
+        var vm = new AdjuntosPanelViewModel(null!, null!, null!, null!, null!);
 
         var control = new ViewLocator().Build(vm);
 
@@ -33,7 +33,7 @@ public class ViewLocatorTests
     [AvaloniaFact]
     public void Build_ConAdjuntosPanelViewModel_NoDevuelveElPlaceholder()
     {
-        var vm = new AdjuntosPanelViewModel(null!, null!, null!, null!, null!, null!);
+        var vm = new AdjuntosPanelViewModel(null!, null!, null!, null!, null!);
 
         var control = new ViewLocator().Build(vm);
 
