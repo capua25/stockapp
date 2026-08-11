@@ -23,7 +23,7 @@ public class MovimientoStockServiceInvalidacionTests
         session.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
         session.Setup(s => s.UsuarioActual).Returns(
             new StockApp.Application.Auth.UsuarioSesion(1, "test-user", RolUsuario.Admin, null));
-        auth.Setup(a => a.Verificar(It.IsAny<RolUsuario?>(), It.IsAny<string>()));
+        auth.Setup(a => a.Verificar(It.IsAny<ICurrentSession>(), It.IsAny<string>()));
 
         var producto = new Producto
         {
@@ -54,7 +54,7 @@ public class MovimientoStockServiceInvalidacionTests
         session.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
         session.Setup(s => s.UsuarioActual).Returns(
             new StockApp.Application.Auth.UsuarioSesion(1, "test-user", RolUsuario.Admin, null));
-        auth.Setup(a => a.Verificar(It.IsAny<RolUsuario?>(), It.IsAny<string>()));
+        auth.Setup(a => a.Verificar(It.IsAny<ICurrentSession>(), It.IsAny<string>()));
 
         var producto = new Producto
         {
