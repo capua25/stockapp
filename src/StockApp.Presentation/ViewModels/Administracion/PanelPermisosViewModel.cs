@@ -185,8 +185,12 @@ public partial class PanelPermisosViewModel : ViewModelBase
             // MensajeError bloquea GuardarCommand vía PuedeGuardar() hasta que una carga
             // posterior tenga éxito. Se relanza para que RefrescoPermisos.DispararBestEffortAsync
             // (que sigue envolviendo esta llamada desde AlCambiarSeleccion) la registre en
-            // crash.log — la UI se entera por MensajeError, el log queda para diagnóstico.
-            MensajeError = "No se pudieron cargar los permisos de este usuario. Guardar está deshabilitado hasta reintentar.";
+            // crash.log — la UI se entera por MensajeError (mostrado en la View, review Task 13
+            // Round 2), el log queda para diagnóstico. Mensaje accionable, no solo informativo
+            // (mismo criterio que el bloqueo del auto-cambio de contraseña en
+            // UsuariosAdminViewModel.CambiarContrasenaAsync): explica qué pasó y qué hacer.
+            MensajeError = "No se pudieron cargar los permisos de este usuario. Volvé a seleccionarlo en la " +
+                "lista para reintentar la carga — Guardar va a seguir deshabilitado hasta que se cargue bien.";
             throw;
         }
     }

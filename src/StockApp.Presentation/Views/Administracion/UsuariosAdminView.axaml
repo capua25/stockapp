@@ -104,6 +104,12 @@
                             <TextBlock Text="Tareas y reportes" FontWeight="Bold" Margin="0,8,0,0" />
                             <CheckBox Content="Tareas" IsChecked="{Binding PermisoGestionarTareas}" />
                             <CheckBox Content="Reportes" IsChecked="{Binding PermisoVerReportes}" />
+
+                            <TextBlock Text="{Binding MensajeError}"
+                                       Foreground="Red"
+                                       TextWrapping="Wrap"
+                                       IsVisible="{Binding MensajeError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
                             <Button Content="Guardar permisos" Command="{Binding GuardarCommand}" Margin="0,12,0,0" />
                         </StackPanel>
                     </Border>
