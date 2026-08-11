@@ -1,5 +1,6 @@
 using Moq;
 using StockApp.Application.Auth;
+using StockApp.Application.Authorization;
 using StockApp.Application.Backups;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
@@ -577,5 +578,34 @@ public class InicioViewModelTests
         vm.VerTodasLasTareasCommand.Execute(null);
 
         navMock.Verify(n => n.Navegar<TareaListViewModel>(), Times.Once);
+    }
+
+    // ── Gating por permiso configurable (spec 2026-08-10) ─────────────────────
+
+    [Fact]
+    public void PuedeVerReportes_Admin_EsTrue()
+    {
+        var (vm, sessionMock, _, _, _) = Crear(new UsuarioSesion(1, "admin", RolUsuario.Admin, null));
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+
+        Assert.True(vm.PuedeVerReportes);
+    }
+
+    [Fact]
+    public void PuedeVerReportes_OperadorSinPermiso_EsFalse()
+    {
+        var (vm, sessionMock, _, _, _) = Crear(new UsuarioSesion(2, "operador", RolUsuario.Operador, null));
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+
+        Assert.False(vm.PuedeVerReportes);
+    }
+
+    [Fact]
+    public void PuedeVerReportes_OperadorConPermiso_EsTrue()
+    {
+        var (vm, sessionMock, _, _, _) = Crear(new UsuarioSesion(2, "operador", RolUsuario.Operador, null));
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string> { Permisos.VerReportes });
+
+        Assert.True(vm.PuedeVerReportes);
     }
 }

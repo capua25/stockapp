@@ -1,5 +1,7 @@
 using System.Threading.Tasks;
 using Moq;
+using StockApp.Application.Auth;
+using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
@@ -27,7 +29,8 @@ public class ShellMainViewModelTests
         confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(true);
 
         var vm = new ShellMainViewModel(
-            sessionMock.Object, navMock.Object, Mock.Of<IInfoApp>(x => x.Version == "0.0.0"), confirmMock.Object);
+            sessionMock.Object, navMock.Object, Mock.Of<IInfoApp>(x => x.Version == "0.0.0"), confirmMock.Object,
+            Mock.Of<IAuthService>());
         return (vm, sessionMock, navMock, confirmMock);
     }
 
@@ -81,7 +84,8 @@ public class ShellMainViewModelTests
         var infoApp = Mock.Of<IInfoApp>(x => x.Version == "9.9.9");
 
         var vm = new ShellMainViewModel(
-            sessionMock.Object, Mock.Of<INavigationService>(), infoApp, Mock.Of<IConfirmacionService>());
+            sessionMock.Object, Mock.Of<INavigationService>(), infoApp, Mock.Of<IConfirmacionService>(),
+            Mock.Of<IAuthService>());
 
         Assert.Equal("v9.9.9", vm.VersionTexto);
     }
@@ -389,5 +393,136 @@ public class ShellMainViewModelTests
         vm.NavImportacionCommand.Execute(null);
 
         Assert.Equal("Importacion", vm.SeccionActiva);
+    }
+
+    // ── Refresco de permisos al navegar (spec decisión 7) ──────────────────────
+    // Pre-flight (mismo riesgo que el bug crítico de Task 13, checkboxes congelados): las
+    // propiedades Puede* son getters calculados sobre ICurrentSession.PermisosActuales, que
+    // no implementa INotifyPropertyChanged. Si OnNavegacionCambiada solo dispara el refresco
+    // sin notificar después, el menú queda mostrando los permisos viejos hasta la próxima
+    // navegación aunque el cache subyacente ya haya cambiado.
+
+    [Fact]
+    public async Task Navegacion_RefrescaPermisos_YNotificaLasPropiedadesPuede()
+    {
+        var permisos = new HashSet<string>();
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Operador);
+        sessionMock.Setup(s => s.PermisosActuales).Returns(() => permisos);
+
+        var authMock = new Mock<IAuthService>();
+        authMock.Setup(a => a.ObtenerPermisosPropiosAsync()).ReturnsAsync(() =>
+        {
+            permisos.Add(Permisos.VerReportes);
+            return (IReadOnlySet<string>)permisos;
+        });
+
+        var navMock = new Mock<INavigationService>();
+        var vm = new ShellMainViewModel(
+            sessionMock.Object, navMock.Object, Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
+            Mock.Of<IConfirmacionService>(), authMock.Object);
+
+        Assert.False(vm.PuedeVerReportes);
+
+        var propiedadesNotificadas = new List<string?>();
+        vm.PropertyChanged += (_, e) => propiedadesNotificadas.Add(e.PropertyName);
+
+        navMock.Raise(n => n.Cambiado += null);
+        await vm._tareaRefrescoPermisos;
+
+        authMock.Verify(a => a.ObtenerPermisosPropiosAsync(), Times.Once);
+        Assert.Contains(nameof(ShellMainViewModel.PuedeVerReportes), propiedadesNotificadas);
+        Assert.True(vm.PuedeVerReportes);
+    }
+
+    [Fact]
+    public async Task Navegacion_SiElRefrescoFalla_NoRompeYElTaskNuncaLanza()
+    {
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Operador);
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+
+        var authMock = new Mock<IAuthService>();
+        authMock.Setup(a => a.ObtenerPermisosPropiosAsync())
+            .ThrowsAsync(new InvalidOperationException("API caída"));
+
+        var navMock = new Mock<INavigationService>();
+        var vm = new ShellMainViewModel(
+            sessionMock.Object, navMock.Object, Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
+            Mock.Of<IConfirmacionService>(), authMock.Object);
+
+        navMock.Raise(n => n.Cambiado += null);
+
+        var ex = await Record.ExceptionAsync(() => vm._tareaRefrescoPermisos);
+
+        Assert.Null(ex);
+    }
+
+    // ── Gating por permiso configurable (spec 2026-08-10) ─────────────────────
+
+    [Theory]
+    [InlineData(nameof(ShellMainViewModel.PuedeGestionarProductos), Permisos.GestionarProductos)]
+    [InlineData(nameof(ShellMainViewModel.PuedeRegistrarMovimientos), Permisos.RegistrarMovimientos)]
+    [InlineData(nameof(ShellMainViewModel.PuedeGestionarTareas), Permisos.GestionarTareas)]
+    [InlineData(nameof(ShellMainViewModel.PuedeVerFinanzas), Permisos.VerFinanzas)]
+    [InlineData(nameof(ShellMainViewModel.PuedeGestionarMaestrosFinanzas), Permisos.GestionarMaestrosFinanzas)]
+    [InlineData(nameof(ShellMainViewModel.PuedeGestionarTablasMaestras), Permisos.GestionarTablasMaestras)]
+    [InlineData(nameof(ShellMainViewModel.PuedeVerReportes), Permisos.VerReportes)]
+    public void Admin_TodasLasPropiedadesPuede_SonTrue(string propiedad, string permisoIgnorado)
+    {
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+        var vm = new ShellMainViewModel(
+            sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
+            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>());
+
+        var valor = (bool)typeof(ShellMainViewModel).GetProperty(propiedad)!.GetValue(vm)!;
+
+        Assert.True(valor);
+    }
+
+    [Theory]
+    [InlineData(nameof(ShellMainViewModel.PuedeGestionarProductos), Permisos.GestionarProductos)]
+    [InlineData(nameof(ShellMainViewModel.PuedeRegistrarMovimientos), Permisos.RegistrarMovimientos)]
+    [InlineData(nameof(ShellMainViewModel.PuedeGestionarTareas), Permisos.GestionarTareas)]
+    [InlineData(nameof(ShellMainViewModel.PuedeVerFinanzas), Permisos.VerFinanzas)]
+    [InlineData(nameof(ShellMainViewModel.PuedeGestionarMaestrosFinanzas), Permisos.GestionarMaestrosFinanzas)]
+    [InlineData(nameof(ShellMainViewModel.PuedeGestionarTablasMaestras), Permisos.GestionarTablasMaestras)]
+    [InlineData(nameof(ShellMainViewModel.PuedeVerReportes), Permisos.VerReportes)]
+    public void Operador_ConElPermisoEnPermisosActuales_LaPropiedadEsTrue(string propiedad, string permiso)
+    {
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Operador);
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string> { permiso });
+        var vm = new ShellMainViewModel(
+            sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
+            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>());
+
+        var valor = (bool)typeof(ShellMainViewModel).GetProperty(propiedad)!.GetValue(vm)!;
+
+        Assert.True(valor);
+    }
+
+    [Theory]
+    [InlineData(nameof(ShellMainViewModel.PuedeGestionarProductos))]
+    [InlineData(nameof(ShellMainViewModel.PuedeRegistrarMovimientos))]
+    [InlineData(nameof(ShellMainViewModel.PuedeGestionarTareas))]
+    [InlineData(nameof(ShellMainViewModel.PuedeVerFinanzas))]
+    [InlineData(nameof(ShellMainViewModel.PuedeGestionarMaestrosFinanzas))]
+    [InlineData(nameof(ShellMainViewModel.PuedeGestionarTablasMaestras))]
+    [InlineData(nameof(ShellMainViewModel.PuedeVerReportes))]
+    public void Operador_SinNingunPermisoEnPermisosActuales_LaPropiedadEsFalse(string propiedad)
+    {
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Operador);
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+        var vm = new ShellMainViewModel(
+            sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
+            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>());
+
+        var valor = (bool)typeof(ShellMainViewModel).GetProperty(propiedad)!.GetValue(vm)!;
+
+        Assert.False(valor);
     }
 }

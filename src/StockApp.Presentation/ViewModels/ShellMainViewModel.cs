@@ -2,6 +2,8 @@ using System;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using StockApp.Application.Auth;
+using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
@@ -26,6 +28,15 @@ public partial class ShellMainViewModel : ViewModelBase
     private readonly INavigationService _navigation;
     private readonly IInfoApp           _infoApp;
     private readonly IConfirmacionService _confirmacion;
+    private readonly IAuthService       _authService;
+
+    /// <summary>
+    /// Task del refresco de permisos disparado por la última navegación (spec decisión 7).
+    /// internal (+ InternalsVisibleTo) para que los tests lo esperen de forma determinista —
+    /// mismo patrón que PanelPermisosViewModel._tareaCarga (Task 13): sin esto, un test no
+    /// tiene forma de saber cuándo terminó el fire-and-forget sin Task.Delay.
+    /// </summary>
+    internal Task _tareaRefrescoPermisos = Task.CompletedTask;
 
     /// <summary>
     /// Se dispara cuando el usuario confirma "Cerrar sesión" y la sesión ya fue limpiada
@@ -36,6 +47,33 @@ public partial class ShellMainViewModel : ViewModelBase
     public event Action? CerrarSesionSolicitado;
 
     public bool EsAdmin => _session.RolActual == RolUsuario.Admin;
+
+    // ── Gating por permiso configurable (spec 2026-08-10) ─────────────────────
+    // Misma condición que evalúa AuthorizationService.Verificar del lado servidor: Admin
+    // siempre pasa, Operador según PermisosActuales. Esto es cosmética, no seguridad — la
+    // autorización real vive en las dos barreras de la API (HTTP + Application); si el binding
+    // tuviera un bug y mostrara un ítem de más, el peor caso es un clic que rebota con 403.
+
+    public bool PuedeGestionarProductos =>
+        _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.GestionarProductos);
+
+    public bool PuedeRegistrarMovimientos =>
+        _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.RegistrarMovimientos);
+
+    public bool PuedeGestionarTareas =>
+        _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.GestionarTareas);
+
+    public bool PuedeVerFinanzas =>
+        _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.VerFinanzas);
+
+    public bool PuedeGestionarMaestrosFinanzas =>
+        _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.GestionarMaestrosFinanzas);
+
+    public bool PuedeGestionarTablasMaestras =>
+        _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.GestionarTablasMaestras);
+
+    public bool PuedeVerReportes =>
+        _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.VerReportes);
 
     /// <summary>
     /// Número de versión de la app para mostrar al pie del menú lateral (ej. "v0.1.1").
@@ -53,12 +91,14 @@ public partial class ShellMainViewModel : ViewModelBase
         ICurrentSession session,
         INavigationService navigation,
         IInfoApp infoApp,
-        IConfirmacionService confirmacion)
+        IConfirmacionService confirmacion,
+        IAuthService authService)
     {
         _session      = session;
         _navigation   = navigation;
         _infoApp      = infoApp;
         _confirmacion = confirmacion;
+        _authService  = authService;
 
         // Suscribirse al evento del servicio para actualizar la región de contenido
         _navigation.Cambiado += OnNavegacionCambiada;
@@ -82,6 +122,34 @@ public partial class ShellMainViewModel : ViewModelBase
         // debiera poder navegarse como contenido válido.
         if (!ReferenceEquals(_navigation.Actual, this))
             CurrentContent = _navigation.Actual;
+
+        // Refresco de permisos al navegar (spec decisión 7): best-effort, en segundo plano —
+        // si el Admin revocó un permiso mientras la sesión seguía abierta, el menú se actualiza
+        // sin esperar a la próxima acción que dispare un 403 (Task 15). No bloquea la
+        // navegación: si la API está caída, el usuario sigue navegando con el cache viejo.
+        _tareaRefrescoPermisos = RefrescarPermisosAsync();
+    }
+
+    /// <summary>
+    /// Espera el refresco best-effort y luego notifica las 7 propiedades Puede* (pre-flight,
+    /// mismo riesgo que el bug crítico de Task 13 con los checkboxes del panel de permisos):
+    /// son getters calculados sobre ICurrentSession.PermisosActuales, que no implementa
+    /// INotifyPropertyChanged, así que nadie avisa a los bindings del menú cuando el cache
+    /// local cambia por debajo. Sin este aviso manual, el menú quedaría "congelado" con los
+    /// permisos viejos hasta la próxima navegación (o para siempre, en el caso de Inicio).
+    /// </summary>
+    private async Task RefrescarPermisosAsync()
+    {
+        await RefrescoPermisos.DispararBestEffortAsync(
+            () => _authService.ObtenerPermisosPropiosAsync(), nameof(ShellMainViewModel));
+
+        OnPropertyChanged(nameof(PuedeGestionarProductos));
+        OnPropertyChanged(nameof(PuedeRegistrarMovimientos));
+        OnPropertyChanged(nameof(PuedeGestionarTareas));
+        OnPropertyChanged(nameof(PuedeVerFinanzas));
+        OnPropertyChanged(nameof(PuedeGestionarMaestrosFinanzas));
+        OnPropertyChanged(nameof(PuedeGestionarTablasMaestras));
+        OnPropertyChanged(nameof(PuedeVerReportes));
     }
 
     /// <summary>

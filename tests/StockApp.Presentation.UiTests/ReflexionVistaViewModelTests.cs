@@ -161,6 +161,12 @@ public class ReflexionVistaViewModelTests
             nameof(InicioViewModel.NombreUsuario),
             nameof(InicioViewModel.MostrarAvisoBackup),
             nameof(InicioViewModel.AvisoBackupEsDesconocido),
+            // Task 14 (spec 2026-08-10): los dos accesos rápidos que usaban
+            // {Binding EsAdmin} directamente ahora usan {Binding PuedeVerReportes} (gating por
+            // permiso configurable, no por rol). EsAdmin sigue consumido indirectamente vía
+            // RolTexto (bindeada en el header de bienvenida) -- mismo criterio que las
+            // exclusiones de arriba.
+            nameof(InicioViewModel.EsAdmin),
         };
         AssertTodasExpuestas(axaml, miembros, exclusiones);
     }

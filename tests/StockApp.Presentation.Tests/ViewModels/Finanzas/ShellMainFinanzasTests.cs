@@ -1,4 +1,5 @@
 using Moq;
+using StockApp.Application.Auth;
 using StockApp.Application.Interfaces;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
@@ -18,7 +19,8 @@ public class ShellMainFinanzasTests
             new Mock<ICurrentSession>().Object,
             navMock.Object,
             Mock.Of<IInfoApp>(i => i.Version == "0.0.0"),
-            Mock.Of<IConfirmacionService>());
+            Mock.Of<IConfirmacionService>(),
+            Mock.Of<IAuthService>());
 
         vm.NavMaestrosFinanzasCommand.Execute(null);
 

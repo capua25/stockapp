@@ -60,7 +60,7 @@ public class ShellViewModelTests
         {
             if (t == typeof(ShellMainViewModel))
                 return new ShellMainViewModel(
-                    sessionMock.Object, navSvcRef!, InfoAppStub, confirmMock.Object);
+                    sessionMock.Object, navSvcRef!, InfoAppStub, confirmMock.Object, Mock.Of<IAuthService>());
             if (t == typeof(InicioViewModel))
                 return new InicioViewModel(
                     sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IFinanzasVistasService>(),

@@ -234,7 +234,7 @@
                         </Button>
 
                         <Button Command="{Binding IrAValorizacionCommand}"
-                                IsVisible="{Binding EsAdmin}"
+                                IsVisible="{Binding PuedeVerReportes}"
                                 Width="200"
                                 Height="90"
                                 Background="{DynamicResource FondoBrush}"
@@ -254,7 +254,7 @@
                         </Button>
 
                         <Button Command="{Binding IrAAuditoriaCommand}"
-                                IsVisible="{Binding EsAdmin}"
+                                IsVisible="{Binding PuedeVerReportes}"
                                 Width="200"
                                 Height="90"
                                 Background="{DynamicResource FondoBrush}"

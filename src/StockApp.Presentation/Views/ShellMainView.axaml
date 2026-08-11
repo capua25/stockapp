@@ -58,11 +58,12 @@
                     </Grid>
                 </Button>
 
-                <!-- Productos: visible para Admin y Operador -->
+                <!-- Productos: gateado por GestionarProductos (spec 2026-08-10) -->
                 <Button Command="{Binding NavProductosCommand}"
                         Classes="ghost"
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Productos}"
-                        HorizontalAlignment="Stretch">
+                        HorizontalAlignment="Stretch"
+                        IsVisible="{Binding PuedeGestionarProductos}">
                     <Grid ColumnDefinitions="Auto,*">
                         <i:Icon Grid.Column="0" Value="mdi-package-variant" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Grid.Column="1" Text="Productos" VerticalAlignment="Center"
@@ -70,11 +71,12 @@
                     </Grid>
                 </Button>
 
-                <!-- Registrar Entrada: visible para Admin y Operador -->
+                <!-- Registrar Entrada: gateado por RegistrarMovimientos (spec 2026-08-10) -->
                 <Button Command="{Binding NavRegistrarEntradaCommand}"
                         Classes="ghost"
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=RegistrarEntrada}"
-                        HorizontalAlignment="Stretch">
+                        HorizontalAlignment="Stretch"
+                        IsVisible="{Binding PuedeRegistrarMovimientos}">
                     <Grid ColumnDefinitions="Auto,*">
                         <i:Icon Grid.Column="0" Value="mdi-tray-arrow-down" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Grid.Column="1" Text="Registrar Entrada" VerticalAlignment="Center"
@@ -82,11 +84,12 @@
                     </Grid>
                 </Button>
 
-                <!-- Ingreso por factura: visible para Admin y Operador -->
+                <!-- Ingreso por factura: gateado por RegistrarMovimientos (spec 2026-08-10) -->
                 <Button Command="{Binding NavIngresoPorFacturaCommand}"
                         Classes="ghost"
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=IngresoPorFactura}"
-                        HorizontalAlignment="Stretch">
+                        HorizontalAlignment="Stretch"
+                        IsVisible="{Binding PuedeRegistrarMovimientos}">
                     <Grid ColumnDefinitions="Auto,*">
                         <i:Icon Grid.Column="0" Value="mdi-receipt-text-plus" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Grid.Column="1" Text="Ingreso por factura" VerticalAlignment="Center"
@@ -94,11 +97,12 @@
                     </Grid>
                 </Button>
 
-                <!-- Registrar Salida: visible para Admin y Operador -->
+                <!-- Registrar Salida: gateado por RegistrarMovimientos (spec 2026-08-10) -->
                 <Button Command="{Binding NavRegistrarSalidaCommand}"
                         Classes="ghost"
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=RegistrarSalida}"
-                        HorizontalAlignment="Stretch">
+                        HorizontalAlignment="Stretch"
+                        IsVisible="{Binding PuedeRegistrarMovimientos}">
                     <Grid ColumnDefinitions="Auto,*">
                         <i:Icon Grid.Column="0" Value="mdi-tray-arrow-up" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Grid.Column="1" Text="Registrar Salida" VerticalAlignment="Center"
@@ -109,7 +113,8 @@
                 <Button Command="{Binding NavHistorialMovimientosCommand}"
                         Classes="ghost"
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=HistorialMovimientos}"
-                        HorizontalAlignment="Stretch">
+                        HorizontalAlignment="Stretch"
+                        IsVisible="{Binding PuedeRegistrarMovimientos}">
                     <Grid ColumnDefinitions="Auto,*">
                         <i:Icon Grid.Column="0" Value="mdi-history" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Grid.Column="1" Text="Historial de movimientos" VerticalAlignment="Center"
@@ -117,18 +122,20 @@
                     </Grid>
                 </Button>
 
-                <!-- Tareas: visible para Admin y Operador -->
+                <!-- Tareas: gateado por GestionarTareas (spec 2026-08-10) -->
                 <TextBlock Text="Tareas"
                            Classes="caption"
                            Foreground="{DynamicResource SidebarTextoBrush}"
                            FontWeight="SemiBold"
                            Margin="8,8,0,4"
+                           IsVisible="{Binding PuedeGestionarTareas}"
                            Opacity="0.6" />
 
                 <Button Command="{Binding NavTareasCommand}"
                         Classes="ghost"
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Tareas}"
-                        HorizontalAlignment="Stretch">
+                        HorizontalAlignment="Stretch"
+                        IsVisible="{Binding PuedeGestionarTareas}">
                     <Grid ColumnDefinitions="Auto,*">
                         <i:Icon Grid.Column="0" Value="mdi-checkbox-marked-outline" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Grid.Column="1" Text="Tareas" VerticalAlignment="Center"
@@ -136,18 +143,24 @@
                     </Grid>
                 </Button>
 
-                <!-- Finanzas: visible para Admin y Operador (spec Finanzas §9) -->
+                <!-- Finanzas: gateado por VerFinanzas (spec 2026-08-10). Caso borde aceptado
+                     (cosmética, no seguridad): un Operador con SOLO GestionarMaestrosFinanzas
+                     (sin VerFinanzas) ve el botón "Maestros de finanzas" sin este header encima
+                     — no hay overlap real en la práctica (VerFinanzas es el permiso base de
+                     Finanzas que casi siempre se concede junto con los demás). -->
                 <TextBlock Text="Finanzas"
                            Classes="caption"
                            Foreground="{DynamicResource SidebarTextoBrush}"
                            FontWeight="SemiBold"
                            Margin="8,8,0,4"
+                           IsVisible="{Binding PuedeVerFinanzas}"
                            Opacity="0.6" />
 
                 <Button Command="{Binding NavGastosCommand}"
                         Classes="ghost"
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Gastos}"
-                        HorizontalAlignment="Stretch">
+                        HorizontalAlignment="Stretch"
+                        IsVisible="{Binding PuedeVerFinanzas}">
                     <Grid ColumnDefinitions="Auto,*">
                         <i:Icon Grid.Column="0" Value="mdi-receipt-text" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Grid.Column="1" Text="Gastos y facturas" VerticalAlignment="Center"
@@ -158,7 +171,8 @@
                 <Button Command="{Binding NavIngresosCommand}"
                         Classes="ghost"
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Ingresos}"
-                        HorizontalAlignment="Stretch">
+                        HorizontalAlignment="Stretch"
+                        IsVisible="{Binding PuedeVerFinanzas}">
                     <Grid ColumnDefinitions="Auto,*">
                         <i:Icon Grid.Column="0" Value="mdi-cash-plus" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Grid.Column="1" Text="Ingresos de caja" VerticalAlignment="Center"
@@ -169,7 +183,8 @@
                 <Button Command="{Binding NavMaestrosFinanzasCommand}"
                         Classes="ghost"
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=MaestrosFinanzas}"
-                        HorizontalAlignment="Stretch">
+                        HorizontalAlignment="Stretch"
+                        IsVisible="{Binding PuedeGestionarMaestrosFinanzas}">
                     <Grid ColumnDefinitions="Auto,*">
                         <i:Icon Grid.Column="0" Value="mdi-cash-multiple" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Grid.Column="1" Text="Maestros de finanzas" VerticalAlignment="Center"
@@ -180,7 +195,8 @@
                 <Button Command="{Binding NavLibroCajaCommand}"
                         Classes="ghost"
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=LibroCaja}"
-                        HorizontalAlignment="Stretch">
+                        HorizontalAlignment="Stretch"
+                        IsVisible="{Binding PuedeVerFinanzas}">
                     <Grid ColumnDefinitions="Auto,*">
                         <i:Icon Grid.Column="0" Value="mdi-book-open-variant" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Grid.Column="1" Text="Libro caja" VerticalAlignment="Center"
@@ -191,7 +207,8 @@
                 <Button Command="{Binding NavControlPoaCommand}"
                         Classes="ghost"
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=ControlPoa}"
-                        HorizontalAlignment="Stretch">
+                        HorizontalAlignment="Stretch"
+                        IsVisible="{Binding PuedeVerFinanzas}">
                     <Grid ColumnDefinitions="Auto,*">
                         <i:Icon Grid.Column="0" Value="mdi-chart-donut" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Grid.Column="1" Text="Control POA" VerticalAlignment="Center"
@@ -202,7 +219,8 @@
                 <Button Command="{Binding NavCalendarioPagosCommand}"
                         Classes="ghost"
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=CalendarioPagos}"
-                        HorizontalAlignment="Stretch">
+                        HorizontalAlignment="Stretch"
+                        IsVisible="{Binding PuedeVerFinanzas}">
                     <Grid ColumnDefinitions="Auto,*">
                         <i:Icon Grid.Column="0" Value="mdi-calendar-clock" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Grid.Column="1" Text="Calendario de pagos" VerticalAlignment="Center"
@@ -237,14 +255,14 @@
                            Foreground="{DynamicResource SidebarTextoBrush}"
                            FontWeight="SemiBold"
                            Margin="8,8,0,4"
-                           IsVisible="{Binding EsAdmin}"
+                           IsVisible="{Binding PuedeGestionarTablasMaestras}"
                            Opacity="0.6" />
 
                 <Button Command="{Binding NavCategoriasCommand}"
                         Classes="ghost"
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Categorias}"
                         HorizontalAlignment="Stretch"
-                        IsVisible="{Binding EsAdmin}">
+                        IsVisible="{Binding PuedeGestionarTablasMaestras}">
                     <Grid ColumnDefinitions="Auto,*">
                         <i:Icon Grid.Column="0" Value="mdi-shape" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Grid.Column="1" Text="Categorías" VerticalAlignment="Center"
@@ -256,7 +274,7 @@
                         Classes="ghost"
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Proveedores}"
                         HorizontalAlignment="Stretch"
-                        IsVisible="{Binding EsAdmin}">
+                        IsVisible="{Binding PuedeGestionarTablasMaestras}">
                     <Grid ColumnDefinitions="Auto,*">
                         <i:Icon Grid.Column="0" Value="mdi-truck" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Grid.Column="1" Text="Proveedores" VerticalAlignment="Center"
@@ -268,7 +286,7 @@
                         Classes="ghost"
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=UnidadesMedida}"
                         HorizontalAlignment="Stretch"
-                        IsVisible="{Binding EsAdmin}">
+                        IsVisible="{Binding PuedeGestionarTablasMaestras}">
                     <Grid ColumnDefinitions="Auto,*">
                         <i:Icon Grid.Column="0" Value="mdi-ruler" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Grid.Column="1" Text="Unidades de medida" VerticalAlignment="Center"
@@ -282,14 +300,14 @@
                            Foreground="{DynamicResource SidebarTextoBrush}"
                            FontWeight="SemiBold"
                            Margin="8,8,0,4"
-                           IsVisible="{Binding EsAdmin}"
+                           IsVisible="{Binding PuedeVerReportes}"
                            Opacity="0.6" />
 
                 <Button Command="{Binding NavValorizacionCommand}"
                         Classes="ghost"
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Valorizacion}"
                         HorizontalAlignment="Stretch"
-                        IsVisible="{Binding EsAdmin}">
+                        IsVisible="{Binding PuedeVerReportes}">
                     <Grid ColumnDefinitions="Auto,*">
                         <i:Icon Grid.Column="0" Value="mdi-currency-usd" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Grid.Column="1" Text="Valorización de inventario" VerticalAlignment="Center"
@@ -301,7 +319,7 @@
                         Classes="ghost"
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=StockCategoria}"
                         HorizontalAlignment="Stretch"
-                        IsVisible="{Binding EsAdmin}">
+                        IsVisible="{Binding PuedeVerReportes}">
                     <Grid ColumnDefinitions="Auto,*">
                         <i:Icon Grid.Column="0" Value="mdi-chart-pie" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Grid.Column="1" Text="Stock por categoría" VerticalAlignment="Center"
@@ -313,7 +331,7 @@
                         Classes="ghost"
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=HistorialPorProducto}"
                         HorizontalAlignment="Stretch"
-                        IsVisible="{Binding EsAdmin}">
+                        IsVisible="{Binding PuedeVerReportes}">
                     <Grid ColumnDefinitions="Auto,*">
                         <i:Icon Grid.Column="0" Value="mdi-file-document" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Grid.Column="1" Text="Historial por producto" VerticalAlignment="Center"
@@ -325,7 +343,7 @@
                         Classes="ghost"
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=MasMovidos}"
                         HorizontalAlignment="Stretch"
-                        IsVisible="{Binding EsAdmin}">
+                        IsVisible="{Binding PuedeVerReportes}">
                     <Grid ColumnDefinitions="Auto,*">
                         <i:Icon Grid.Column="0" Value="mdi-trending-up" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Grid.Column="1" Text="Productos más movidos" VerticalAlignment="Center"
@@ -337,7 +355,7 @@
                         Classes="ghost"
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=AuditoriaLog}"
                         HorizontalAlignment="Stretch"
-                        IsVisible="{Binding EsAdmin}">
+                        IsVisible="{Binding PuedeVerReportes}">
                     <Grid ColumnDefinitions="Auto,*">
                         <i:Icon Grid.Column="0" Value="mdi-shield-search" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Grid.Column="1" Text="Log de auditoría" VerticalAlignment="Center"

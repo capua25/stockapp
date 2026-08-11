@@ -44,7 +44,8 @@ public class LoginViewModelTests
             if (t == typeof(ShellMainViewModel))
                 return new ShellMainViewModel(
                     sessionMock.Object, Mock.Of<INavigationService>(),
-                    Mock.Of<IInfoApp>(x => x.Version == "0.0.0"), Mock.Of<IConfirmacionService>());
+                    Mock.Of<IInfoApp>(x => x.Version == "0.0.0"), Mock.Of<IConfirmacionService>(),
+                    Mock.Of<IAuthService>());
             if (t == typeof(InicioViewModel))
                 return new InicioViewModel(
                     sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IFinanzasVistasService>(),

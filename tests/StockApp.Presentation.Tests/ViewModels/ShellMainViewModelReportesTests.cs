@@ -1,4 +1,5 @@
 using Moq;
+using StockApp.Application.Auth;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
@@ -25,7 +26,8 @@ public class ShellMainViewModelReportesTests
         var navMock = new Mock<INavigationService>();
 
         var vm = new ShellMainViewModel(
-            sessionMock.Object, navMock.Object, Mock.Of<IInfoApp>(x => x.Version == "0.0.0"), Mock.Of<IConfirmacionService>());
+            sessionMock.Object, navMock.Object, Mock.Of<IInfoApp>(x => x.Version == "0.0.0"), Mock.Of<IConfirmacionService>(),
+            Mock.Of<IAuthService>());
         return (vm, sessionMock, navMock);
     }
 

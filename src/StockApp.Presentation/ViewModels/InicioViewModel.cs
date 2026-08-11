@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using StockApp.Application.Authorization;
 using StockApp.Application.Backups;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
@@ -41,6 +42,9 @@ public partial class InicioViewModel : ViewModelBase
     public bool EsAdmin => _session.RolActual == RolUsuario.Admin;
 
     public string RolTexto => EsAdmin ? "Administrador" : "Operador";
+
+    public bool PuedeVerReportes =>
+        _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.VerReportes);
 
     [ObservableProperty] private bool _mostrarAvisoVencimientos;
 
