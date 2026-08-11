@@ -701,4 +701,30 @@ public class UsuarioServiceTests
         await Assert.ThrowsAsync<EntidadNoEncontradaException>(
             () => svc.GuardarPermisosAsync(404, new[] { Permisos.VerFinanzas }));
     }
+
+    // ── Task 11: AltaUsuarioAsync siembra PermisosInicialesOperador ─────────
+
+    [Fact]
+    public async Task AltaUsuario_Operador_SiembraPermisosInicialesOperador()
+    {
+        var (svc, repo, _, _, _, _, _, permisos) = Crear();
+        repo.Setup(r => r.AgregarAsync(It.IsAny<Usuario>())).ReturnsAsync(50);
+
+        await svc.AltaUsuarioAsync("operador.nuevo", "Nuevo Operador", "pwd12345", RolUsuario.Operador);
+
+        permisos.Verify(p => p.GuardarAsync(50,
+            It.Is<IReadOnlyCollection<string>>(c => c.SequenceEqual(AuthorizationService.PermisosInicialesOperador))),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task AltaUsuario_Admin_NoSiembraNingunPermiso()
+    {
+        var (svc, repo, _, _, _, _, _, permisos) = Crear();
+        repo.Setup(r => r.AgregarAsync(It.IsAny<Usuario>())).ReturnsAsync(51);
+
+        await svc.AltaUsuarioAsync("admin.nuevo", "Nuevo Admin", "pwd12345", RolUsuario.Admin);
+
+        permisos.Verify(p => p.GuardarAsync(It.IsAny<int>(), It.IsAny<IReadOnlyCollection<string>>()), Times.Never);
+    }
 }

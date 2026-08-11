@@ -79,6 +79,12 @@ public class UsuarioService : IUsuarioService
 
         var id = await _repo.AgregarAsync(nuevo);
 
+        // Plantilla de arranque (spec decisión 3): sin este paso, todo Operador nuevo
+        // arrancaría con cero permisos configurables — fail-closed correcto pero inútil en la
+        // práctica. Admin nunca siembra nada acá: sus permisos son siempre todos, sin filas.
+        if (rol == RolUsuario.Operador)
+            await _permisos.GuardarAsync(id, AuthorizationService.PermisosInicialesOperador);
+
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id,
             AccionAuditada.AltaUsuario,
