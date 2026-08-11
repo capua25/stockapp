@@ -36,6 +36,10 @@ public class UsuarioServiceTests
         session.Setup(s => s.RolActual).Returns(rolSesion);
         session.Setup(s => s.UsuarioActual).Returns(SesionAdmin(idSesion));
         hasher.Setup(h => h.Hash(It.IsAny<string>())).Returns("$2a$12$hashed");
+        // Default: sin filas previas, salvo que el test lo pise con un Setup más específico
+        // (Moq usa el Setup configurado más recientemente cuando varios matchean).
+        permisos.Setup(p => p.ObtenerAsync(It.IsAny<int>()))
+            .ReturnsAsync((IReadOnlySet<string>)new HashSet<string>());
 
         // Admin: Verificar no lanza
         if (rolSesion == RolUsuario.Admin)
@@ -724,6 +728,84 @@ public class UsuarioServiceTests
         repo.Setup(r => r.AgregarAsync(It.IsAny<Usuario>())).ReturnsAsync(51);
 
         await svc.AltaUsuarioAsync("admin.nuevo", "Nuevo Admin", "pwd12345", RolUsuario.Admin);
+
+        permisos.Verify(p => p.GuardarAsync(It.IsAny<int>(), It.IsAny<IReadOnlyCollection<string>>()), Times.Never);
+    }
+
+    // ── Task 12: CambiarRolAsync cierra el gap de permisos por la vía del cambio de rol ──
+
+    [Fact]
+    public async Task CambiarRolAsync_AdminAOperador_SinFilasPrevias_SiembraPermisosIniciales()
+    {
+        var admin = new Usuario
+        {
+            Id = 2, NombreUsuario = "admin2", HashContrasena = "h",
+            Rol = RolUsuario.Admin, Activo = true, FechaAlta = DateTime.UtcNow
+        };
+        var (svc, repo, _, _, _, _, _, permisos) = Crear(idSesion: 1);
+        repo.Setup(r => r.ObtenerPorIdAsync(2)).ReturnsAsync(admin);
+        repo.Setup(r => r.ContarAdminsActivosAsync()).ReturnsAsync(2);
+        // Sin filas previas: usa el default de Crear() (HashSet vacío).
+
+        await svc.CambiarRolAsync(2, RolUsuario.Operador);
+
+        permisos.Verify(p => p.GuardarAsync(2,
+            It.Is<IReadOnlyCollection<string>>(c => c.SequenceEqual(AuthorizationService.PermisosInicialesOperador))),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task CambiarRolAsync_AdminAOperador_ConFilasPrevias_ConservaLasQueTenia()
+    {
+        // El caso que prueba que no destruimos configuración: este Admin fue Operador antes,
+        // le configuraron permisos a mano, lo promovieron (las filas quedaron huérfanas) y
+        // ahora lo degradan de nuevo. Debe recuperar lo que tenía, no la plantilla base.
+        var admin = new Usuario
+        {
+            Id = 2, NombreUsuario = "admin2", HashContrasena = "h",
+            Rol = RolUsuario.Admin, Activo = true, FechaAlta = DateTime.UtcNow
+        };
+        var (svc, repo, _, _, _, _, _, permisos) = Crear(idSesion: 1);
+        repo.Setup(r => r.ObtenerPorIdAsync(2)).ReturnsAsync(admin);
+        repo.Setup(r => r.ContarAdminsActivosAsync()).ReturnsAsync(2);
+        permisos.Setup(p => p.ObtenerAsync(2))
+            .ReturnsAsync((IReadOnlySet<string>)new HashSet<string> { Permisos.VerFinanzas });
+
+        await svc.CambiarRolAsync(2, RolUsuario.Operador);
+
+        permisos.Verify(p => p.GuardarAsync(It.IsAny<int>(), It.IsAny<IReadOnlyCollection<string>>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CambiarRolAsync_OperadorAAdmin_NoTocaPermisos()
+    {
+        var operador = new Usuario
+        {
+            Id = 3, NombreUsuario = "operador1", HashContrasena = "h",
+            Rol = RolUsuario.Operador, Activo = true, FechaAlta = DateTime.UtcNow
+        };
+        var (svc, repo, _, _, _, _, _, permisos) = Crear(idSesion: 1);
+        repo.Setup(r => r.ObtenerPorIdAsync(3)).ReturnsAsync(operador);
+
+        await svc.CambiarRolAsync(3, RolUsuario.Admin);
+
+        // Las filas quedan intactas: ni se consultan ni se tocan.
+        permisos.Verify(p => p.ObtenerAsync(It.IsAny<int>()), Times.Never);
+        permisos.Verify(p => p.GuardarAsync(It.IsAny<int>(), It.IsAny<IReadOnlyCollection<string>>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CambiarRolAsync_OperadorAOperador_NoSiembraDeMas()
+    {
+        var operador = new Usuario
+        {
+            Id = 3, NombreUsuario = "operador1", HashContrasena = "h",
+            Rol = RolUsuario.Operador, Activo = true, FechaAlta = DateTime.UtcNow
+        };
+        var (svc, repo, _, _, _, _, _, permisos) = Crear(idSesion: 1);
+        repo.Setup(r => r.ObtenerPorIdAsync(3)).ReturnsAsync(operador);
+
+        await svc.CambiarRolAsync(3, RolUsuario.Operador);
 
         permisos.Verify(p => p.GuardarAsync(It.IsAny<int>(), It.IsAny<IReadOnlyCollection<string>>()), Times.Never);
     }

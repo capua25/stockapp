@@ -166,6 +166,22 @@ public class UsuarioService : IUsuarioService
         usuario.Rol = nuevoRol;
         await _repo.ActualizarAsync(usuario);
 
+        // Task 12 (permisos por operador — cierre del gap de cambio de rol): AltaUsuarioAsync
+        // (Task 11) ya siembra PermisosInicialesOperador para el alta directa, pero degradar
+        // un Admin a Operador es una tercera vía de creación de Operadores que hasta acá nacía
+        // con cero permisos — mismo agujero, reabierto por esta puerta. Solo se siembra si el
+        // usuario NO tiene filas: así no se pisa una configuración que un Admin armó a mano
+        // antes de una promoción previa (nunca destruimos configuración, nunca dejamos a un
+        // Operador sin nada). Al revés (Operador → Admin) no se toca nada a propósito: las
+        // filas quedan huérfanas pero inertes (Admin nunca consulta la tabla, bypass total), y
+        // así sobreviven intactas si más adelante lo vuelven a degradar.
+        if (rolAnterior == RolUsuario.Admin && nuevoRol == RolUsuario.Operador)
+        {
+            var permisosActuales = await _permisos.ObtenerAsync(usuarioId);
+            if (permisosActuales.Count == 0)
+                await _permisos.GuardarAsync(usuarioId, AuthorizationService.PermisosInicialesOperador);
+        }
+
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id,
             AccionAuditada.CambioRol,
