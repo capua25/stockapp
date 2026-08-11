@@ -14,12 +14,21 @@ public class InMemorySession : ICurrentSession
 {
     private readonly object _lock = new();
     private UsuarioSesion? _sesionActual;
+    private IReadOnlySet<string> _permisos = new HashSet<string>();
 
     public bool EstaAutenticado { get { lock (_lock) return _sesionActual != null; } }
 
     public UsuarioSesion? UsuarioActual { get { lock (_lock) return _sesionActual; } }
 
     public RolUsuario? RolActual { get { lock (_lock) return _sesionActual?.Rol; } }
+
+    public IReadOnlySet<string> PermisosActuales { get { lock (_lock) return _permisos; } }
+
+    public void EstablecerPermisos(IReadOnlySet<string> permisos)
+    {
+        ArgumentNullException.ThrowIfNull(permisos);
+        lock (_lock) _permisos = permisos;
+    }
 
     public void IniciarSesion(Usuario usuario)
     {
@@ -34,6 +43,10 @@ public class InMemorySession : ICurrentSession
 
     public void CerrarSesion()
     {
-        lock (_lock) _sesionActual = null;
+        lock (_lock)
+        {
+            _sesionActual = null;
+            _permisos     = new HashSet<string>();
+        }
     }
 }

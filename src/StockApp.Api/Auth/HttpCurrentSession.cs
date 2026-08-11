@@ -20,6 +20,7 @@ namespace StockApp.Api.Auth;
 public class HttpCurrentSession : ICurrentSession
 {
     private readonly IHttpContextAccessor _accessor;
+    private IReadOnlySet<string> _permisos = new HashSet<string>();
 
     public HttpCurrentSession(IHttpContextAccessor accessor) => _accessor = accessor;
 
@@ -54,6 +55,14 @@ public class HttpCurrentSession : ICurrentSession
             var rolClaim = _accessor.HttpContext?.User.FindFirst(StockAppClaimTypes.Rol)?.Value;
             return rolClaim is null ? null : Enum.Parse<RolUsuario>(rolClaim);
         }
+    }
+
+    public IReadOnlySet<string> PermisosActuales => _permisos;
+
+    public void EstablecerPermisos(IReadOnlySet<string> permisos)
+    {
+        ArgumentNullException.ThrowIfNull(permisos);
+        _permisos = permisos;
     }
 
     public void IniciarSesion(Usuario usuario) =>

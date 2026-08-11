@@ -100,6 +100,8 @@ internal sealed class TareaSessionFake : ICurrentSession
     public bool EstaAutenticado => true;
     public StockApp.Application.Auth.UsuarioSesion? UsuarioActual => null;
     public RolUsuario? RolActual { get; }
+    public IReadOnlySet<string> PermisosActuales => new HashSet<string>();
+    public void EstablecerPermisos(IReadOnlySet<string> permisos) { }
 
     public void IniciarSesion(Usuario usuario) => throw new NotSupportedException("No usado en este banco de pruebas.");
     public void CerrarSesion() => throw new NotSupportedException("No usado en este banco de pruebas.");

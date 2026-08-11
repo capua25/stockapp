@@ -80,4 +80,35 @@ public class ApiSessionTests
 
         session.DispararSesionVencida();
     }
+
+    [Fact]
+    public void PermisosActuales_SinSesion_DevuelveConjuntoVacio()
+    {
+        var session = new ApiSession();
+
+        Assert.Empty(session.PermisosActuales);
+    }
+
+    [Fact]
+    public void EstablecerPermisos_PueblaPermisosActuales()
+    {
+        var session = new ApiSession();
+        session.EstablecerSesion(new UsuarioSesion(1, "operador", RolUsuario.Operador, null), "token123");
+
+        session.EstablecerPermisos(new HashSet<string> { "finanzas.ver" });
+
+        Assert.Contains("finanzas.ver", session.PermisosActuales);
+    }
+
+    [Fact]
+    public void CerrarSesion_LimpiaTambienLosPermisos()
+    {
+        var session = new ApiSession();
+        session.EstablecerSesion(new UsuarioSesion(1, "operador", RolUsuario.Operador, null), "token123");
+        session.EstablecerPermisos(new HashSet<string> { "finanzas.ver" });
+
+        session.CerrarSesion();
+
+        Assert.Empty(session.PermisosActuales);
+    }
 }

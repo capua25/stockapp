@@ -17,6 +17,7 @@ public class ApiSession : ICurrentSession
     private readonly object _lock = new();
     private UsuarioSesion? _sesionActual;
     private string? _token;
+    private IReadOnlySet<string> _permisos = new HashSet<string>();
 
     /// <summary>
     /// El servidor respondió 401 a un request que llevaba token: la sesión venció.
@@ -38,6 +39,14 @@ public class ApiSession : ICurrentSession
 
     /// <summary>Token JWT vigente, o null si no hay sesión.</summary>
     public string? Token { get { lock (_lock) return _token; } }
+
+    public IReadOnlySet<string> PermisosActuales { get { lock (_lock) return _permisos; } }
+
+    public void EstablecerPermisos(IReadOnlySet<string> permisos)
+    {
+        ArgumentNullException.ThrowIfNull(permisos);
+        lock (_lock) _permisos = permisos;
+    }
 
     /// <summary>
     /// Miembro de ICurrentSession (proyección entidad → snapshot, igual que InMemorySession).
@@ -77,6 +86,7 @@ public class ApiSession : ICurrentSession
         {
             _sesionActual = null;
             _token        = null;
+            _permisos     = new HashSet<string>();
         }
     }
 

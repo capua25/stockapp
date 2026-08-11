@@ -32,6 +32,8 @@ public class ServicioConfiguracionAlertasTests
         public bool EstaAutenticado => UsuarioActual is not null;
         public UsuarioSesion? UsuarioActual { get; set; } = new UsuarioSesion(3, "admin", RolUsuario.Admin, "Admin");
         public RolUsuario? RolActual => UsuarioActual?.Rol;
+        public IReadOnlySet<string> PermisosActuales => new HashSet<string>();
+        public void EstablecerPermisos(IReadOnlySet<string> permisos) { }
 
         public void IniciarSesion(Usuario usuario) =>
             UsuarioActual = new UsuarioSesion(usuario.Id, usuario.NombreUsuario, usuario.Rol, null);
