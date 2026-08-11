@@ -29,9 +29,9 @@ public class UnidadMedidaServiceTests
         session.Setup(s => s.UsuarioActual).Returns(sesion);
 
         if (rol == RolUsuario.Admin)
-            auth.Setup(a => a.Verificar(RolUsuario.Admin, It.IsAny<string>()));
+            auth.Setup(a => a.Verificar(session.Object, It.IsAny<string>()));
         else
-            auth.Setup(a => a.Verificar(RolUsuario.Operador, Permisos.GestionarTablasMaestras))
+            auth.Setup(a => a.Verificar(session.Object, Permisos.GestionarTablasMaestras))
                 .Throws<UnauthorizedAccessException>();
 
         var svc = new UnidadMedidaService(repo.Object, session.Object, auth.Object, audit.Object);

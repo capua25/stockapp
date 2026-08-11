@@ -24,7 +24,7 @@ public class CategoriaServiceInvalidacionTests
         session.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
         session.Setup(s => s.UsuarioActual).Returns(
             new StockApp.Application.Auth.UsuarioSesion(1, "usuario", RolUsuario.Admin, null));
-        auth.Setup(a => a.Verificar(RolUsuario.Admin, It.IsAny<string>()));
+        auth.Setup(a => a.Verificar(session.Object, It.IsAny<string>()));
 
         repo.Setup(r => r.ExisteNombreAsync("Lácteos", null)).ReturnsAsync(false);
         repo.Setup(r => r.AgregarAsync(It.IsAny<Categoria>())).ReturnsAsync(5);

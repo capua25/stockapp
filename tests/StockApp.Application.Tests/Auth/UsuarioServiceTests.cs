@@ -37,9 +37,9 @@ public class UsuarioServiceTests
 
         // Admin: Verificar no lanza
         if (rolSesion == RolUsuario.Admin)
-            auth.Setup(a => a.Verificar(RolUsuario.Admin, It.IsAny<string>()));
+            auth.Setup(a => a.Verificar(session.Object, It.IsAny<string>()));
         else
-            auth.Setup(a => a.Verificar(RolUsuario.Operador, Permisos.GestionarUsuarios))
+            auth.Setup(a => a.Verificar(session.Object, Permisos.GestionarUsuarios))
                 .Throws<UnauthorizedAccessException>();
 
         var svc = new UsuarioService(

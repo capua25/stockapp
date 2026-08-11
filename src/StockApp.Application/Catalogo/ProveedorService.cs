@@ -31,7 +31,7 @@ public class ProveedorService : IProveedorService
 
     public async Task<int> AltaAsync(Proveedor proveedor)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarTablasMaestras);
+        _auth.Verificar(_session, Permisos.GestionarTablasMaestras);
 
         if (string.IsNullOrWhiteSpace(proveedor.Nombre))
             throw new ArgumentException("El nombre del proveedor es obligatorio.");
@@ -52,7 +52,7 @@ public class ProveedorService : IProveedorService
 
     public async Task ModificarAsync(Proveedor proveedor)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarTablasMaestras);
+        _auth.Verificar(_session, Permisos.GestionarTablasMaestras);
 
         var original = await _repo.ObtenerPorIdAsync(proveedor.Id)
             ?? throw new EntidadNoEncontradaException($"Proveedor {proveedor.Id} no encontrado.");
@@ -87,7 +87,7 @@ public class ProveedorService : IProveedorService
 
     public async Task BajaLogicaAsync(int id)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarTablasMaestras);
+        _auth.Verificar(_session, Permisos.GestionarTablasMaestras);
 
         var proveedor = await _repo.ObtenerPorIdAsync(id)
             ?? throw new EntidadNoEncontradaException($"Proveedor {id} no encontrado.");
@@ -107,7 +107,7 @@ public class ProveedorService : IProveedorService
 
     public async Task<IReadOnlyList<Proveedor>> ListarTodosAsync()
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarTablasMaestras);
+        _auth.Verificar(_session, Permisos.GestionarTablasMaestras);
         return await _repo.ListarTodosAsync();
     }
 }

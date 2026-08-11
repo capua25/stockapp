@@ -25,7 +25,7 @@ public class ProductoServiceInvalidacionTests
         session.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
         session.Setup(s => s.UsuarioActual).Returns(
             new StockApp.Application.Auth.UsuarioSesion(1, "usuario", RolUsuario.Admin, null));
-        auth.Setup(a => a.Verificar(RolUsuario.Admin, It.IsAny<string>()));
+        auth.Setup(a => a.Verificar(session.Object, It.IsAny<string>()));
 
         umRepo.Setup(r => r.ObtenerPorIdAsync(It.IsAny<int>()))
               .ReturnsAsync(new UnidadMedida { Id = 1, Nombre = "Unidad", Abreviatura = "u" });

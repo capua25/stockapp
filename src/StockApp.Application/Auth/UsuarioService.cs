@@ -40,7 +40,7 @@ public class UsuarioService : IUsuarioService
         string nombreUsuario, string? nombreCompleto,
         string contrasenaPlan, RolUsuario rol)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarUsuarios);
+        _auth.Verificar(_session, Permisos.GestionarUsuarios);
 
         // Hallazgo 6: el nombre se valida primero — es el campo más primario del
         // formulario; con nombre vacío y contraseña corta a la vez, el error reportado
@@ -87,7 +87,7 @@ public class UsuarioService : IUsuarioService
 
     public async Task BajaLogicaAsync(int usuarioId)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarUsuarios);
+        _auth.Verificar(_session, Permisos.GestionarUsuarios);
 
         // Fix 2: no auto-baja
         if (usuarioId == _session.UsuarioActual!.Id)
@@ -121,7 +121,7 @@ public class UsuarioService : IUsuarioService
 
     public async Task CambiarRolAsync(int usuarioId, RolUsuario nuevoRol)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarUsuarios);
+        _auth.Verificar(_session, Permisos.GestionarUsuarios);
 
         // Fix 1 / Hallazgo 1: rechazar valores fuera del enum (ej. casteos crudos desde el
         // endpoint). Regla centralizada en RolUsuarioValidator — AltaUsuarioAsync la usa
@@ -178,7 +178,7 @@ public class UsuarioService : IUsuarioService
         string nuevaContrasenaPlan,
         string? contrasenaActualPlan = null)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarUsuarios);
+        _auth.Verificar(_session, Permisos.GestionarUsuarios);
 
         // Fix 6: validación mínima de contraseña
         ContrasenaValidator.Validar(nuevaContrasenaPlan);
@@ -215,7 +215,7 @@ public class UsuarioService : IUsuarioService
 
     public async Task<IReadOnlyList<UsuarioDto>> ListarAsync()
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarUsuarios);
+        _auth.Verificar(_session, Permisos.GestionarUsuarios);
 
         var usuarios = await _repo.ListarTodosAsync();
         return usuarios.Select(AUsuarioDto).ToList();

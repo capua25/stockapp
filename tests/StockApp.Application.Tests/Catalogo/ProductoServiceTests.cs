@@ -32,9 +32,9 @@ public class ProductoServiceTests
         session.Setup(s => s.UsuarioActual).Returns(sesionHelper);
 
         if (rol == RolUsuario.Admin)
-            auth.Setup(a => a.Verificar(RolUsuario.Admin, It.IsAny<string>()));
+            auth.Setup(a => a.Verificar(session.Object, It.IsAny<string>()));
         else
-            auth.Setup(a => a.Verificar(RolUsuario.Operador, Permisos.GestionarProductos));
+            auth.Setup(a => a.Verificar(session.Object, Permisos.GestionarProductos));
 
         // Por defecto la unidad de medida con id > 0 existe — evita romper tests existentes
         umRepo.Setup(r => r.ObtenerPorIdAsync(It.IsAny<int>()))
@@ -332,7 +332,7 @@ public class ProductoServiceTests
     [Fact]
     public async Task Operador_TieneGestionarProductos_NoLanzaUnauthorized()
     {
-        var (svc, repo, _, auth, _, _) = Crear(RolUsuario.Operador, idSesion: 2);
+        var (svc, repo, session, auth, _, _) = Crear(RolUsuario.Operador, idSesion: 2);
         repo.Setup(r => r.ExisteCodigoAsync("SKU-OP", null)).ReturnsAsync(false);
         repo.Setup(r => r.AgregarAsync(It.IsAny<Producto>())).ReturnsAsync(10);
 
@@ -341,7 +341,7 @@ public class ProductoServiceTests
         var ex = await Record.ExceptionAsync(() => svc.AltaAsync(p));
 
         Assert.Null(ex);
-        auth.Verify(a => a.Verificar(RolUsuario.Operador, Permisos.GestionarProductos), Times.Once);
+        auth.Verify(a => a.Verificar(session.Object, Permisos.GestionarProductos), Times.Once);
     }
 
     // ─── Validación de existencia de UnidadMedida (W2) ───────────────────────

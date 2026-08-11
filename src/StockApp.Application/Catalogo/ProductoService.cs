@@ -39,7 +39,7 @@ public class ProductoService : IProductoService
 
     public async Task<int> AltaAsync(Producto producto)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarProductos);
+        _auth.Verificar(_session, Permisos.GestionarProductos);
 
         // Validaciones de negocio
         if (string.IsNullOrWhiteSpace(producto.Nombre))
@@ -79,7 +79,7 @@ public class ProductoService : IProductoService
 
     public async Task ModificarAsync(Producto producto)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarProductos);
+        _auth.Verificar(_session, Permisos.GestionarProductos);
 
         var original = await _repo.ObtenerPorIdAsync(producto.Id)
             ?? throw new EntidadNoEncontradaException($"Producto {producto.Id} no encontrado.");
@@ -161,7 +161,7 @@ public class ProductoService : IProductoService
 
     public async Task BajaLogicaAsync(int id)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarProductos);
+        _auth.Verificar(_session, Permisos.GestionarProductos);
 
         var producto = await _repo.ObtenerPorIdAsync(id)
             ?? throw new EntidadNoEncontradaException($"Producto {id} no encontrado.");
@@ -183,7 +183,7 @@ public class ProductoService : IProductoService
 
     public async Task CambiarPrecioAsync(int id, decimal precioCosto, decimal precioVenta)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarProductos);
+        _auth.Verificar(_session, Permisos.GestionarProductos);
 
         if (precioCosto < 0)
             throw new ArgumentException("El precio de costo no puede ser negativo.");
@@ -210,14 +210,14 @@ public class ProductoService : IProductoService
 
     public async Task<IReadOnlyList<ProductoDto>> BuscarAsync(string? sku, string? codigoBarras, string? nombre)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarProductos);
+        _auth.Verificar(_session, Permisos.GestionarProductos);
         var productos = await _repo.BuscarAsync(sku, codigoBarras, nombre);
         return productos.Select(AProductoDto).ToList();
     }
 
     public async Task<IReadOnlyList<ProductoDto>> BuscarPorTextoAsync(string? texto)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarProductos);
+        _auth.Verificar(_session, Permisos.GestionarProductos);
         var productos = await _repo.BuscarPorTextoAsync(texto);
         return productos.Select(AProductoDto).ToList();
     }

@@ -34,7 +34,7 @@ public class CategoriaService : ICategoriaService
 
     public async Task<int> AltaAsync(Categoria categoria)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarTablasMaestras);
+        _auth.Verificar(_session, Permisos.GestionarTablasMaestras);
 
         if (string.IsNullOrWhiteSpace(categoria.Nombre))
             throw new ArgumentException("El nombre de la categoría es obligatorio.");
@@ -57,7 +57,7 @@ public class CategoriaService : ICategoriaService
 
     public async Task ModificarAsync(Categoria categoria)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarTablasMaestras);
+        _auth.Verificar(_session, Permisos.GestionarTablasMaestras);
 
         var original = await _repo.ObtenerPorIdAsync(categoria.Id)
             ?? throw new EntidadNoEncontradaException($"Categoría {categoria.Id} no encontrada.");
@@ -87,7 +87,7 @@ public class CategoriaService : ICategoriaService
 
     public async Task BajaLogicaAsync(int id)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarTablasMaestras);
+        _auth.Verificar(_session, Permisos.GestionarTablasMaestras);
 
         var categoria = await _repo.ObtenerPorIdAsync(id)
             ?? throw new EntidadNoEncontradaException($"Categoría {id} no encontrada.");
@@ -109,13 +109,13 @@ public class CategoriaService : ICategoriaService
 
     public async Task<IReadOnlyList<Categoria>> ListarTodasAsync()
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarTablasMaestras);
+        _auth.Verificar(_session, Permisos.GestionarTablasMaestras);
         return await _repo.ListarTodasAsync();
     }
 
     public async Task<IReadOnlyList<Categoria>> ListarActivasAsync()
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarProductos);
+        _auth.Verificar(_session, Permisos.GestionarProductos);
         var todas = await _repo.ListarTodasAsync();
         return todas.Where(c => c.Activo).ToList();
     }

@@ -35,7 +35,7 @@ public class UnidadMedidaService : IUnidadMedidaService
 
     public async Task<int> AltaAsync(UnidadMedida unidadMedida)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarTablasMaestras);
+        _auth.Verificar(_session, Permisos.GestionarTablasMaestras);
 
         if (string.IsNullOrWhiteSpace(unidadMedida.Nombre))
             throw new ArgumentException("El nombre de la unidad de medida es obligatorio.");
@@ -61,7 +61,7 @@ public class UnidadMedidaService : IUnidadMedidaService
 
     public async Task ModificarAsync(UnidadMedida unidadMedida)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarTablasMaestras);
+        _auth.Verificar(_session, Permisos.GestionarTablasMaestras);
 
         var original = await _repo.ObtenerPorIdAsync(unidadMedida.Id)
             ?? throw new EntidadNoEncontradaException($"UnidadMedida {unidadMedida.Id} no encontrada.");
@@ -94,7 +94,7 @@ public class UnidadMedidaService : IUnidadMedidaService
 
     public async Task BajaLogicaAsync(int id)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarTablasMaestras);
+        _auth.Verificar(_session, Permisos.GestionarTablasMaestras);
 
         var unidadMedida = await _repo.ObtenerPorIdAsync(id)
             ?? throw new EntidadNoEncontradaException($"UnidadMedida {id} no encontrada.");
@@ -114,20 +114,20 @@ public class UnidadMedidaService : IUnidadMedidaService
 
     public async Task<IReadOnlyList<UnidadMedida>> ListarTodasAsync()
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarTablasMaestras);
+        _auth.Verificar(_session, Permisos.GestionarTablasMaestras);
         return await _repo.ListarTodasAsync();
     }
 
     public async Task<IReadOnlyList<UnidadMedida>> ListarActivasAsync()
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarProductos);
+        _auth.Verificar(_session, Permisos.GestionarProductos);
         var todas = await _repo.ListarTodasAsync();
         return todas.Where(u => u.Activo).ToList();
     }
 
     public async Task<UnidadMedida> GarantizarUnidadPorDefectoAsync()
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarProductos);
+        _auth.Verificar(_session, Permisos.GestionarProductos);
 
         var todas = await _repo.ListarTodasAsync();
         var existente = todas.FirstOrDefault(u =>
