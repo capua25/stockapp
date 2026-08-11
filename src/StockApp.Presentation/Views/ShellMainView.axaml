@@ -366,6 +366,21 @@
                     </Grid>
                 </Button>
 
+                <!-- Usuarios (Task 12, spec 2026-08-10): ABM que hasta ahora solo existía vía
+                     curl contra la API. GestionarUsuarios es Admin-only siempre, mismo gating
+                     que Mantenimiento hasta que la Task 14 introduzca el gating por permiso. -->
+                <Button Command="{Binding NavUsuariosCommand}"
+                        Classes="ghost"
+                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Usuarios}"
+                        HorizontalAlignment="Stretch"
+                        IsVisible="{Binding EsAdmin}">
+                    <Grid ColumnDefinitions="Auto,*">
+                        <i:Icon Grid.Column="0" Value="mdi-account-cog" Foreground="{DynamicResource SidebarTextoBrush}" />
+                        <TextBlock Grid.Column="1" Text="Usuarios" VerticalAlignment="Center"
+                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                </Button>
+
                 </StackPanel>
                 </ScrollViewer>
             </DockPanel>

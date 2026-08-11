@@ -227,6 +227,17 @@ public partial class ShellMainViewModel : ViewModelBase
         _navigation.Navegar<MantenimientoViewModel>();
     }
 
+    /// <summary>ABM de usuarios (Task 12, spec 2026-08-10): antes solo se administraba por
+    /// curl contra la API; protegido por GestionarUsuarios, uno de los 4 permisos
+    /// estructurales Admin-only siempre — mismo gating (EsAdmin) que Mantenimiento hasta que
+    /// la Task 14 introduzca el gating genérico por permiso.</summary>
+    [RelayCommand]
+    private void NavUsuarios()
+    {
+        SeccionActiva = "Usuarios";
+        _navigation.Navegar<UsuariosAdminViewModel>();
+    }
+
     // ── Finanzas — Fase 1: Admin y Operador ───────────────────────────────────
 
     [RelayCommand]
