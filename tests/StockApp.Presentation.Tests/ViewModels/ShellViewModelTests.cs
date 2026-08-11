@@ -64,7 +64,7 @@ public class ShellViewModelTests
             if (t == typeof(InicioViewModel))
                 return new InicioViewModel(
                     sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IFinanzasVistasService>(),
-                    Mock.Of<IBackupsService>(), Mock.Of<ITareaService>());
+                    Mock.Of<IBackupsService>(), Mock.Of<ITareaService>(), Mock.Of<IAuthService>());
             throw new InvalidOperationException($"Tipo no registrado en test: {t.Name}");
         });
         navSvcRef = navSvc;

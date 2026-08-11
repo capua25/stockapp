@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
 using StockApp.Application.Backups;
 using StockApp.Application.Finanzas;
@@ -12,6 +13,7 @@ using StockApp.Application.Tareas;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Converters;
 using StockApp.Presentation.Navigation;
+using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Catalogo;
 using StockApp.Presentation.ViewModels.Finanzas;
 using StockApp.Presentation.ViewModels.Movimientos;
@@ -33,6 +35,15 @@ public partial class InicioViewModel : ViewModelBase
     private readonly IFinanzasVistasService _finanzasVistas;
     private readonly IBackupsService        _backups;
     private readonly ITareaService          _tareas;
+    private readonly IAuthService           _authService;
+
+    /// <summary>
+    /// Task del refresco de permisos disparado por <see cref="CargarAsync"/> (review Ronda 1,
+    /// Task 14): internal (+ InternalsVisibleTo) para que los tests lo esperen de forma
+    /// determinista, mismo patrón que ShellMainViewModel._tareaRefrescoPermisos y
+    /// PanelPermisosViewModel._tareaCarga (Task 13).
+    /// </summary>
+    internal Task _tareaRefrescoPermisos = Task.CompletedTask;
 
     public string NombreUsuario =>
         _session.UsuarioActual?.NombreCompleto ?? _session.UsuarioActual?.NombreUsuario ?? "Usuario";
@@ -119,13 +130,15 @@ public partial class InicioViewModel : ViewModelBase
 
     public InicioViewModel(
         ICurrentSession session, INavigationService navigation,
-        IFinanzasVistasService finanzasVistas, IBackupsService backups, ITareaService tareas)
+        IFinanzasVistasService finanzasVistas, IBackupsService backups, ITareaService tareas,
+        IAuthService authService)
     {
         _session        = session;
         _navigation     = navigation;
         _finanzasVistas = finanzasVistas;
         _backups        = backups;
         _tareas         = tareas;
+        _authService    = authService;
     }
 
     /// <summary>
@@ -135,6 +148,17 @@ public partial class InicioViewModel : ViewModelBase
     /// </summary>
     public async Task CargarAsync()
     {
+        // Refresco de permisos al entrar a Inicio (review Ronda 1, Task 14): InicioView.axaml.cs
+        // llama a CargarAsync() en cada DataContextChanged, es decir, en CADA navegación (el VM
+        // es Transient). Sin este refresco propio, un Operador al que se le concede VerReportes
+        // con la sesión abierta no ve los accesos rápidos hasta la SEGUNDA vez que entra a
+        // Inicio: el sidebar SÍ se actualiza al toque (ShellMainViewModel notifica desde una
+        // instancia que persiste), pero esta instancia nueva se construyó y evaluó
+        // PuedeVerReportes ANTES de que termine cualquier refresco disparado por la navegación
+        // anterior. Fire-and-forget, igual que ShellMainViewModel.OnNavegacionCambiada: no
+        // bloquea la carga del resto de la pantalla ni introduce una espera visible.
+        _tareaRefrescoPermisos = RefrescarPermisosAsync();
+
         try
         {
             var calendario = await _finanzasVistas.ObtenerCalendarioPagosAsync();
@@ -212,6 +236,20 @@ public partial class InicioViewModel : ViewModelBase
             AvisoBackupEsDesconocido = true;
             TextoAvisoBackup = "No se pudo verificar el estado del backup.";
         }
+    }
+
+    /// <summary>
+    /// Espera el refresco best-effort y notifica <see cref="PuedeVerReportes"/> (mismo criterio
+    /// que ShellMainViewModel.RefrescarPermisosAsync): es un getter calculado sobre
+    /// ICurrentSession.PermisosActuales, que no implementa INotifyPropertyChanged, así que nadie
+    /// avisa a los bindings de los accesos rápidos cuando el cache local cambia por debajo.
+    /// </summary>
+    private async Task RefrescarPermisosAsync()
+    {
+        await RefrescoPermisos.DispararBestEffortAsync(
+            () => _authService.ObtenerPermisosPropiosAsync(), nameof(InicioViewModel));
+
+        OnPropertyChanged(nameof(PuedeVerReportes));
     }
 
     // ── accesos rápidos: comunes (Admin + Operador) ───────────────────────────

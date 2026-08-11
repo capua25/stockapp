@@ -11,9 +11,17 @@ using Xunit;
 namespace StockApp.Presentation.Tests.ViewModels;
 
 /// <summary>
-/// Tarea E1 (Inc 6): navegación al grupo "Reportes" desde el ShellMainViewModel,
-/// visible solo para Admin. Mismo patrón de visibilidad por rol (EsAdmin) y de
-/// navegación (INavigationService.Navegar) que las entradas existentes del Inc 5.
+/// Tarea E1 (Inc 6): navegación al grupo "Reportes" desde el ShellMainViewModel.
+///
+/// La visibilidad del grupo (review Ronda 1, Task 14, spec 2026-08-10): dejó de depender de
+/// EsAdmin/rol y pasó a depender de PuedeVerReportes/permiso configurable VerReportes. Ese
+/// contrato ya se prueba de forma completa en ShellMainViewModelTests.cs — Theories
+/// Admin_TodasLasPropiedadesPuede_SonTrue / Operador_ConElPermisoEnPermisosActuales_LaPropiedadEsTrue /
+/// Operador_SinNingunPermisoEnPermisosActuales_LaPropiedadEsFalse, con `PuedeVerReportes` como uno
+/// de los 7 casos de cada Theory — por eso este archivo ya NO prueba visibilidad (los dos Facts
+/// que asertaban EsAdmin quedaron redundantes con esas Theories y, peor, dejaron de validar lo
+/// que realmente controla el IsVisible real del grupo). Este archivo solo prueba la navegación
+/// (INavigationService.Navegar) a los 5 reportes, algo que las Theories de arriba no cubren.
 /// </summary>
 public class ShellMainViewModelReportesTests
 {
@@ -29,24 +37,6 @@ public class ShellMainViewModelReportesTests
             sessionMock.Object, navMock.Object, Mock.Of<IInfoApp>(x => x.Version == "0.0.0"), Mock.Of<IConfirmacionService>(),
             Mock.Of<IAuthService>());
         return (vm, sessionMock, navMock);
-    }
-
-    // ── E1 — Visibilidad del grupo Reportes (solo Admin) ──────────────────────
-
-    [Fact]
-    public void Admin_VeEntradasGrupoReportes()
-    {
-        var (vm, _, _) = Crear(RolUsuario.Admin);
-
-        Assert.True(vm.EsAdmin);
-    }
-
-    [Fact]
-    public void Operador_NoVeEntradasGrupoReportes()
-    {
-        var (vm, _, _) = Crear(RolUsuario.Operador);
-
-        Assert.False(vm.EsAdmin);
     }
 
     // ── E1 — Navegación a los 5 reportes ──────────────────────────────────────

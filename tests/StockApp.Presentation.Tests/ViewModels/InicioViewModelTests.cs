@@ -55,7 +55,8 @@ public class InicioViewModelTests
             tareasMock.Setup(t => t.ListarAsync()).ReturnsAsync(tareas ?? new List<Tarea>());
 
         var vm = new InicioViewModel(
-            sessionMock.Object, navMock.Object, finanzasMock.Object, backupsMock.Object, tareasMock.Object);
+            sessionMock.Object, navMock.Object, finanzasMock.Object, backupsMock.Object, tareasMock.Object,
+            Mock.Of<IAuthService>());
         return (vm, sessionMock, navMock, finanzasMock, backupsMock);
     }
 
@@ -344,7 +345,8 @@ public class InicioViewModelTests
         tareasMock.Setup(t => t.ListarAsync()).ReturnsAsync(new List<Tarea>());
 
         var vm = new InicioViewModel(
-            sessionMock.Object, navMock.Object, finanzasMock.Object, backupsMock.Object, tareasMock.Object);
+            sessionMock.Object, navMock.Object, finanzasMock.Object, backupsMock.Object, tareasMock.Object,
+            Mock.Of<IAuthService>());
 
         await vm.CargarAsync();
 
@@ -607,5 +609,99 @@ public class InicioViewModelTests
         sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string> { Permisos.VerReportes });
 
         Assert.True(vm.PuedeVerReportes);
+    }
+
+    // ── Refresco de permisos al entrar a Inicio (review Ronda 1, Task 14) ──────
+    // Pre-flight: InicioViewModel es Transient -- se reconstruye en cada navegación y evalúa
+    // PuedeVerReportes contra el PermisosActuales del instante de construcción. Sin un refresco
+    // propio en CargarAsync (que SÍ se ejecuta en cada entrada a la pantalla, a diferencia del
+    // refresco de ShellMainViewModel que vive en una instancia que persiste), un Operador al que
+    // se le concede VerReportes en caliente no ve los accesos rápidos hasta la SEGUNDA vez que
+    // entra a Inicio.
+
+    [Fact]
+    public async Task CargarAsync_RefrescaPermisos_YNotificaPuedeVerReportes()
+    {
+        var permisos = new HashSet<string>();
+        var usuario = new UsuarioSesion(2, "operador", RolUsuario.Operador, null);
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.UsuarioActual).Returns(usuario);
+        sessionMock.Setup(s => s.RolActual).Returns(usuario.Rol);
+        sessionMock.Setup(s => s.PermisosActuales).Returns(() => permisos);
+
+        var navMock = new Mock<INavigationService>();
+
+        var finanzasMock = new Mock<IFinanzasVistasService>();
+        finanzasMock.Setup(f => f.ObtenerCalendarioPagosAsync(null)).ReturnsAsync(
+            new CalendarioPagosDto(
+                new List<FacturaCalendarioDto>(), new List<FacturaCalendarioDto>(),
+                new List<FacturaCalendarioDto>(), new List<PagoRecienteDto>()));
+
+        var backupsMock = new Mock<IBackupsService>();
+        backupsMock.Setup(b => b.ObtenerSaludAsync()).ReturnsAsync(new SaludBackupDto(DateTime.UtcNow, false, 26));
+
+        var tareasMock = new Mock<ITareaService>();
+        tareasMock.Setup(t => t.ListarAsync()).ReturnsAsync(new List<Tarea>());
+
+        var authMock = new Mock<IAuthService>();
+        authMock.Setup(a => a.ObtenerPermisosPropiosAsync()).ReturnsAsync(() =>
+        {
+            permisos.Add(Permisos.VerReportes);
+            return (IReadOnlySet<string>)permisos;
+        });
+
+        var vm = new InicioViewModel(
+            sessionMock.Object, navMock.Object, finanzasMock.Object, backupsMock.Object, tareasMock.Object,
+            authMock.Object);
+
+        Assert.False(vm.PuedeVerReportes);
+
+        var propiedadesNotificadas = new List<string?>();
+        vm.PropertyChanged += (_, e) => propiedadesNotificadas.Add(e.PropertyName);
+
+        await vm.CargarAsync();
+        await vm._tareaRefrescoPermisos;
+
+        authMock.Verify(a => a.ObtenerPermisosPropiosAsync(), Times.Once);
+        Assert.Contains(nameof(InicioViewModel.PuedeVerReportes), propiedadesNotificadas);
+        Assert.True(vm.PuedeVerReportes);
+    }
+
+    [Fact]
+    public async Task CargarAsync_SiElRefrescoDePermisosFalla_NoRompeYElTaskNuncaLanza()
+    {
+        var usuario = new UsuarioSesion(2, "operador", RolUsuario.Operador, null);
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.UsuarioActual).Returns(usuario);
+        sessionMock.Setup(s => s.RolActual).Returns(usuario.Rol);
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+
+        var navMock = new Mock<INavigationService>();
+
+        var finanzasMock = new Mock<IFinanzasVistasService>();
+        finanzasMock.Setup(f => f.ObtenerCalendarioPagosAsync(null)).ReturnsAsync(
+            new CalendarioPagosDto(
+                new List<FacturaCalendarioDto>(), new List<FacturaCalendarioDto>(),
+                new List<FacturaCalendarioDto>(), new List<PagoRecienteDto>()));
+
+        var backupsMock = new Mock<IBackupsService>();
+        backupsMock.Setup(b => b.ObtenerSaludAsync()).ReturnsAsync(new SaludBackupDto(DateTime.UtcNow, false, 26));
+
+        var tareasMock = new Mock<ITareaService>();
+        tareasMock.Setup(t => t.ListarAsync()).ReturnsAsync(new List<Tarea>());
+
+        var authMock = new Mock<IAuthService>();
+        authMock.Setup(a => a.ObtenerPermisosPropiosAsync())
+            .ThrowsAsync(new InvalidOperationException("API caída"));
+
+        var vm = new InicioViewModel(
+            sessionMock.Object, navMock.Object, finanzasMock.Object, backupsMock.Object, tareasMock.Object,
+            authMock.Object);
+
+        await vm.CargarAsync();
+
+        var ex = await Record.ExceptionAsync(() => vm._tareaRefrescoPermisos);
+
+        Assert.Null(ex);
     }
 }

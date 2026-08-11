@@ -19,8 +19,11 @@ namespace StockApp.Presentation.ViewModels;
 
 /// <summary>
 /// ViewModel del shell principal post-login. Hostea el menú lateral y la región de contenido.
-/// Los ítems de "Tablas maestras" solo son visibles para Admin; "Productos" está disponible
-/// para Admin y Operador.
+/// La mayoría de los ítems del menú (Productos, Movimientos, Tareas, Finanzas, Tablas maestras,
+/// Reportes) se gatean por permiso configurable (propiedades <c>Puede*</c>, Task 14, spec
+/// 2026-08-10) contra <see cref="ICurrentSession.PermisosActuales"/>, no por rol fijo. Solo los
+/// 4 permisos estructurales (Importación, Administración de usuarios, Diagnóstico) siguen atados
+/// a <see cref="EsAdmin"/>, porque un Operador nunca puede tenerlos.
 /// </summary>
 public partial class ShellMainViewModel : ViewModelBase
 {
