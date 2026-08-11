@@ -105,10 +105,17 @@ public partial class App : AvaloniaApp
             // a diferencia de SesionVencida, NO se cierra sesión ni se navega. Se avisa y se
             // refresca el cache de permisos para que el menú deje de mostrar ítems ya
             // revocados. Best-effort: si el refresco falla, el aviso igual se mostró.
+            //
+            // Mensaje (Round 1, fix sobre el texto literal del spec): sigue la convención que
+            // ya establecen las Tasks 12/13 en este mismo módulo (ver comentario en
+            // PanelPermisosViewModel.CargarPermisosAsync) — decir QUÉ pasó y QUÉ hacer, no solo
+            // informar. Deja explícito que no es un error de la app y a quién recurrir.
             apiSession.AccesoRevocado += () => uiDispatcher.Post(async () =>
             {
                 var confirmacion = _serviceProvider!.GetRequiredService<IConfirmacionService>();
-                await confirmacion.InformarAsync("Ya no tenés acceso a esta sección.");
+                await confirmacion.InformarAsync(
+                    "Tus permisos cambiaron mientras trabajabas y ya no tenés acceso a esta " +
+                    "sección. Si no lo esperabas, pedile a un Administrador que te oriente.");
 
                 var authService = _serviceProvider!.GetRequiredService<IAuthService>();
                 await RefrescoPermisos.DispararBestEffortAsync(

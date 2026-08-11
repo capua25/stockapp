@@ -244,8 +244,11 @@ public class UsuariosAdminViewModelTests
     }
 
     [Fact]
-    public async Task CambiarContrasenaAsync_ErrorDeAutorizacion_InformaAlUsuarioSinExplotar()
+    public async Task CambiarContrasenaAsync_ErrorDeAutorizacion_NoExplotaYNoMuestraUnSegundoAviso()
     {
+        // Fix (Task 15, Round 1): el 403 ya dispara el aviso central (App.axaml.cs) — el
+        // catch local NO debe mostrar un segundo InformarAsync con el ex.Message crudo del
+        // servidor. Solo tiene que evitar que la excepción escape del comando.
         var (vm, svc, confirm) = Crear();
         var mensaje = "Prohibido.";
         svc.Setup(s => s.CambiarContrasenaAsync(2, "otraClave123", null))
@@ -255,7 +258,7 @@ public class UsuariosAdminViewModelTests
 
         await vm.CambiarContrasenaCommand.ExecuteAsync(null);
 
-        confirm.Verify(c => c.InformarAsync(mensaje), Times.Once);
+        confirm.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Never);
     }
 
     // ── Task 15: 403 en pleno vuelo (Admin te revoca el permiso a mitad de sesión) ──────────
@@ -276,8 +279,10 @@ public class UsuariosAdminViewModelTests
     }
 
     [Fact]
-    public async Task BajaAsync_ErrorDeAutorizacion_InformaAlUsuarioSinExplotar()
+    public async Task BajaAsync_ErrorDeAutorizacion_NoExplotaYNoMuestraUnSegundoAviso()
     {
+        // Fix (Task 15, Round 1): mismo motivo que CambiarContrasenaAsync — el aviso central
+        // del 403 ya avisó, el catch local no debe duplicarlo.
         var (vm, svc, confirm) = Crear();
         var mensaje = "Prohibido.";
         svc.Setup(s => s.BajaLogicaAsync(2)).ThrowsAsync(new UnauthorizedAccessException(mensaje));
@@ -285,12 +290,15 @@ public class UsuariosAdminViewModelTests
 
         await vm.BajaCommand.ExecuteAsync(null);
 
-        confirm.Verify(c => c.InformarAsync(mensaje), Times.Once);
+        // PreguntarAsync (la confirmación "¿Confirma dar de baja...?") sí se llama antes del
+        // catch — el Never de acá apunta puntualmente al InformarAsync posterior al error.
+        confirm.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Never);
     }
 
     [Fact]
-    public async Task CambiarRolAsync_ErrorDeAutorizacion_InformaAlUsuarioSinExplotar()
+    public async Task CambiarRolAsync_ErrorDeAutorizacion_NoExplotaYNoMuestraUnSegundoAviso()
     {
+        // Fix (Task 15, Round 1): mismo motivo que CambiarContrasenaAsync.
         var (vm, svc, confirm) = Crear();
         var mensaje = "Prohibido.";
         svc.Setup(s => s.CambiarRolAsync(2, RolUsuario.Admin))
@@ -299,7 +307,7 @@ public class UsuariosAdminViewModelTests
 
         await vm.CambiarRolCommand.ExecuteAsync(RolUsuario.Admin);
 
-        confirm.Verify(c => c.InformarAsync(mensaje), Times.Once);
+        confirm.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Never);
     }
 
     [Fact]

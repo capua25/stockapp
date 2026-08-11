@@ -114,9 +114,15 @@ public partial class UsuariosAdminViewModel : ViewModelBase
             await _usuarios.BajaLogicaAsync(UsuarioSeleccionado.Id);
             await CargarAsync();
         }
-        // Fix (Task 15): mismo motivo que en AltaAsync — UnauthorizedAccessException puede
-        // llegar acá si el permiso se revoca a mitad de sesión.
-        catch (Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException or UnauthorizedAccessException)
+        // Fix (Task 15, Round 1): UnauthorizedAccessException se atrapa APARTE, sin mostrar
+        // ex.Message — un 403 ya dispara el aviso central en App.axaml.cs (mensaje propio +
+        // refresco de permisos). Mostrar acá el detalle crudo del servidor sería un segundo
+        // diálogo para el mismo evento. El catch solo existe para que la excepción no escape
+        // del comando (AsyncRelayCommand no debe explotar mudo).
+        catch (UnauthorizedAccessException)
+        {
+        }
+        catch (Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException)
         {
             await _confirmacion.InformarAsync(ex.Message);
         }
@@ -139,9 +145,13 @@ public partial class UsuariosAdminViewModel : ViewModelBase
         // entremedio) — sin este catch la excepción escapaba del AsyncRelayCommand y el botón
         // quedaba "roto" sin feedback, mismo mecanismo que ya documentan GastosViewModel.AnularAsync
         // e IngresoPorFacturaViewModel.GuardarInternoAsync.
-        // Fix (Task 15): sumamos UnauthorizedAccessException, mismo motivo que en AltaAsync.
-        catch (Exception ex) when (ex is ReglaDeNegocioException or ArgumentException
-            or EntidadNoEncontradaException or UnauthorizedAccessException)
+        // Fix (Task 15, Round 1): UnauthorizedAccessException se atrapa APARTE, sin mostrar
+        // ex.Message — mismo motivo que en BajaAsync: el aviso central del 403 ya avisó, este
+        // catch solo evita que la excepción escape.
+        catch (UnauthorizedAccessException)
+        {
+        }
+        catch (Exception ex) when (ex is ReglaDeNegocioException or ArgumentException or EntidadNoEncontradaException)
         {
             await _confirmacion.InformarAsync(ex.Message);
         }
@@ -195,8 +205,15 @@ public partial class UsuariosAdminViewModel : ViewModelBase
         // profundidad — el bloqueo explícito de arriba cubre el camino conocido (auto-cambio),
         // pero si mañana aparece otro camino que la dispare (ej. el permiso se revoca a mitad
         // de sesión), que se muestre como diálogo y no como una falla muda en crash.log.
-        catch (Exception ex) when (ex is ReglaDeNegocioException or ArgumentException
-            or EntidadNoEncontradaException or UnauthorizedAccessException)
+        // Fix (Task 15, Round 1): esa "defensa en profundidad" original mostraba ex.Message —
+        // correcto ANTES de esta task, cuando no existía otro aviso. Ahora que el 403 dispara
+        // el aviso central en App.axaml.cs, mostrar acá el mensaje crudo del servidor duplica
+        // el aviso para el mismo evento. Se separa en su propio catch, sin diálogo local: el
+        // objetivo pasa a ser solamente que la excepción no escape.
+        catch (UnauthorizedAccessException)
+        {
+        }
+        catch (Exception ex) when (ex is ReglaDeNegocioException or ArgumentException or EntidadNoEncontradaException)
         {
             await _confirmacion.InformarAsync(ex.Message);
         }
