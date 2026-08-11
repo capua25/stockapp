@@ -7,23 +7,41 @@ namespace StockApp.Application.Tests.Authorization;
 
 public class ProveedorPermisosEnMemoriaTests
 {
+    /// <summary>
+    /// Round 1 de fix (revisión adversarial post-Task 10): este fake ANTES guardaba con
+    /// <c>Datos[usuarioId] = new HashSet&lt;string&gt;(permisos)</c> — deduplicaba la entrada
+    /// "gratis" por el solo hecho de convertirla a HashSet. Eso NO es lo que hace
+    /// PermisoUsuarioRepository real: ese repo hace un INSERT por elemento dentro de la
+    /// transacción de reemplazo (foreach sin dedupe), y es el índice único
+    /// (UsuarioId, Permiso) de Postgres el que rechaza el duplicado con un DbUpdateException.
+    /// Un test que pasaba contra el fake viejo (`GuardarAsync_ConPermisoDuplicadoEnLaEntrada_
+    /// LoDedupeaSinFallar`, ver abajo) escondió el bug real: en producción ese mismo input
+    /// terminaba en un 500. Este fake ahora PRESERVA la entrada tal cual (una lista, no un
+    /// HashSet) y simula la violación del índice único lanzando si hay duplicados — mismo
+    /// modo de falla que el repositorio real, sin necesitar Postgres para este test unitario.
+    /// </summary>
     private sealed class PermisoUsuarioRepositoryFake : IPermisoUsuarioRepository
     {
         public int LlamadasObtener { get; private set; }
         public int LlamadasReemplazar { get; private set; }
-        public Dictionary<int, HashSet<string>> Datos { get; } = new();
+        public Dictionary<int, List<string>> Datos { get; } = new();
 
         public Task<IReadOnlySet<string>> ObtenerPermisosAsync(int usuarioId)
         {
             LlamadasObtener++;
-            var permisos = Datos.TryGetValue(usuarioId, out var p) ? p : new HashSet<string>();
-            return Task.FromResult<IReadOnlySet<string>>(permisos);
+            var permisos = Datos.TryGetValue(usuarioId, out var p) ? p : new List<string>();
+            return Task.FromResult<IReadOnlySet<string>>(new HashSet<string>(permisos));
         }
 
         public Task ReemplazarPermisosAsync(int usuarioId, IReadOnlyCollection<string> permisos)
         {
             LlamadasReemplazar++;
-            Datos[usuarioId] = new HashSet<string>(permisos);
+
+            if (permisos.Count != permisos.Distinct().Count())
+                throw new InvalidOperationException(
+                    "Simulación de violación del índice único (UsuarioId, Permiso): la entrada tiene duplicados.");
+
+            Datos[usuarioId] = permisos.ToList();
             return Task.CompletedTask;
         }
     }
@@ -116,7 +134,7 @@ public class ProveedorPermisosEnMemoriaTests
     public async Task ObtenerAsync_CacheMiss_DisparaUnSoloSelect()
     {
         var (sut, repo) = Crear();
-        repo.Datos[7] = new HashSet<string> { Permisos.VerFinanzas };
+        repo.Datos[7] = new List<string> { Permisos.VerFinanzas };
 
         var permisos = await sut.ObtenerAsync(7);
 
@@ -128,7 +146,7 @@ public class ProveedorPermisosEnMemoriaTests
     public async Task ObtenerAsync_CacheHit_NoVuelveATocarElRepositorio()
     {
         var (sut, repo) = Crear();
-        repo.Datos[7] = new HashSet<string> { Permisos.VerFinanzas };
+        repo.Datos[7] = new List<string> { Permisos.VerFinanzas };
         await sut.ObtenerAsync(7);
 
         await sut.ObtenerAsync(7);
@@ -238,14 +256,22 @@ public class ProveedorPermisosEnMemoriaTests
     }
 
     [Fact]
-    public async Task GuardarAsync_ConPermisoDuplicadoEnLaEntrada_LoDedupeaSinFallar()
+    public async Task GuardarAsync_ConPermisoDuplicadoEnLaEntrada_PropagaLaFallaDelRepositorio()
     {
+        // Round 1 de fix (revisión adversarial post-Task 10): este test se llamaba
+        // "...LoDedupeaSinFallar" y afirmaba que ProveedorPermisosEnMemoria deduplicaba en
+        // silencio -- pero eso nunca fue cierto de esta capa. Pasaba solo porque el fake
+        // viejo convertía la entrada a HashSet en el WRITE, un artefacto del doble que no
+        // existe en PermisoUsuarioRepository real (que inserta una fila por elemento y deja
+        // que el índice único de Postgres rechace el duplicado). Alineado el fake para que
+        // preserve la entrada y falle igual que el repositorio real, este test pasa a
+        // documentar lo contrario de lo que decía: ProveedorPermisosEnMemoria es una capa
+        // "tonta" que NO deduplica -- la deduplicación real y única vive en
+        // UsuarioService.GuardarPermisosAsync (`.Distinct()` antes de llegar acá), la capa
+        // que efectivamente recibe input no confiable.
         var (sut, _) = Crear();
 
-        await sut.GuardarAsync(7, new[] { Permisos.VerFinanzas, Permisos.VerFinanzas });
-        var permisos = await sut.ObtenerAsync(7);
-
-        Assert.Single(permisos);
-        Assert.Contains(Permisos.VerFinanzas, permisos);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => sut.GuardarAsync(7, new[] { Permisos.VerFinanzas, Permisos.VerFinanzas }));
     }
 }

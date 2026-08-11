@@ -629,12 +629,15 @@ public class UsuarioServiceTests
     }
 
     [Fact]
-    public async Task GuardarPermisosAsync_PermisosDuplicados_PasaLaListaTalCualAlProveedor()
+    public async Task GuardarPermisosAsync_PermisosDuplicados_LosDedupeaAntesDeGuardar()
     {
-        // La deduplicación (si corresponde) es responsabilidad de la capa de persistencia
-        // (Task 2/3, transacción de reemplazo completo) — GuardarPermisosAsync no debe
-        // rechazar duplicados por sí solo: cada elemento individualmente sigue siendo un
-        // permiso configurable válido.
+        // Round 1 de fix (revisión adversarial): un permiso repetido llegaba tal cual hasta
+        // PermisoUsuarioRepository.ReemplazarPermisosAsync, que inserta una fila por elemento
+        // sin deduplicar — dos INSERT idénticos violan el índice único (UsuarioId, Permiso) y
+        // el DbUpdateException sin catch caía al 500 genérico del DomainExceptionHandler.
+        // Decisión: se deduplica en SILENCIO acá (el punto de entrada del input no confiable),
+        // no se rechaza con 400 — enviar el mismo permiso dos veces expresa la misma intención
+        // que enviarlo una vez, y el estado final es idéntico. La operación es idempotente.
         var (svc, repo, _, _, _, _, _, permisos) = Crear();
         var operador = new Usuario { Id = 9, Rol = RolUsuario.Operador, NombreUsuario = "op", HashContrasena = "h", FechaAlta = DateTime.UtcNow };
         repo.Setup(r => r.ObtenerPorIdAsync(9)).ReturnsAsync(operador);
@@ -642,7 +645,25 @@ public class UsuarioServiceTests
         await svc.GuardarPermisosAsync(9, new[] { Permisos.VerFinanzas, Permisos.VerFinanzas });
 
         permisos.Verify(p => p.GuardarAsync(9,
-            It.Is<IReadOnlyCollection<string>>(c => c.Count(x => x == Permisos.VerFinanzas) == 2)),
+            It.Is<IReadOnlyCollection<string>>(c => c.Count == 1 && c.Contains(Permisos.VerFinanzas))),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task GuardarPermisosAsync_PermisosDuplicadosEntreVariosDistintos_ConservaCadaUnoUnaSolaVez()
+    {
+        var (svc, repo, _, _, _, _, _, permisos) = Crear();
+        var operador = new Usuario { Id = 9, Rol = RolUsuario.Operador, NombreUsuario = "op", HashContrasena = "h", FechaAlta = DateTime.UtcNow };
+        repo.Setup(r => r.ObtenerPorIdAsync(9)).ReturnsAsync(operador);
+
+        await svc.GuardarPermisosAsync(9,
+            new[] { Permisos.VerFinanzas, Permisos.GestionarProductos, Permisos.VerFinanzas });
+
+        permisos.Verify(p => p.GuardarAsync(9,
+            It.Is<IReadOnlyCollection<string>>(c =>
+                c.Count == 2 &&
+                c.Count(x => x == Permisos.VerFinanzas) == 1 &&
+                c.Count(x => x == Permisos.GestionarProductos) == 1)),
             Times.Once);
     }
 

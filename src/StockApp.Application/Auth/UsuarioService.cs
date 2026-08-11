@@ -260,13 +260,23 @@ public class UsuarioService : IUsuarioService
             throw new ArgumentException(
                 $"Los siguientes permisos no son configurables: {string.Join(", ", fueraDeWhitelist)}.");
 
-        await _permisos.GuardarAsync(usuarioId, permisos);
+        // Fix (revisión adversarial post-Task 10): un permiso repetido en la entrada (doble
+        // click, cliente que reintenta) llegaba tal cual hasta
+        // PermisoUsuarioRepository.ReemplazarPermisosAsync, que inserta una fila por elemento
+        // sin deduplicar — dos INSERT idénticos violan el índice único (UsuarioId, Permiso) y
+        // el DbUpdateException sin catch caía al 500 genérico. Se deduplica en SILENCIO acá,
+        // el punto de entrada del input no confiable: enviar el mismo permiso dos veces
+        // expresa la misma intención que enviarlo una vez y el estado final es idéntico —
+        // rechazarlo con 400 sería pedante y la operación tiene que ser idempotente.
+        var permisosUnicos = permisos.Distinct().ToList();
+
+        await _permisos.GuardarAsync(usuarioId, permisosUnicos);
 
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id,
             AccionAuditada.ModificacionPermisosUsuario,
             "Usuario", usuarioId,
-            $"Permisos actualizados: {string.Join(", ", permisos)}");
+            $"Permisos actualizados: {string.Join(", ", permisosUnicos)}");
     }
 
     private static UsuarioDto AUsuarioDto(Usuario u) => new UsuarioDto(

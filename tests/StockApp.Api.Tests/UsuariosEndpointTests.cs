@@ -523,6 +523,32 @@ public class UsuariosEndpointTests : ApiTestBase
     }
 
     [Fact]
+    public async Task PutPermisos_ConPermisoRepetido_Devuelve200YQuedaDeduplicadoEnGet()
+    {
+        // Round 1 de fix (revisión adversarial post-Task 10): ["finanzas.ver", "finanzas.ver"]
+        // hacía que PermisoUsuarioRepository.ReemplazarPermisosAsync insertara dos filas
+        // idénticas -- el índice único (UsuarioId, Permiso) real de Postgres las rechaza con
+        // un DbUpdateException sin catch, que el DomainExceptionHandler mapea al 500 genérico
+        // del caso `_`. Este test corre contra el Postgres REAL de Testcontainers (no un fake
+        // ni un mock): es la única capa donde el índice único existe de verdad. Debe dar 200
+        // (dedup en silencio, idempotente) y el GET debe reflejar el permiso una sola vez.
+        await using var ctx = Factory.CrearContexto();
+        var operador = await DatosDePrueba.SeedUsuarioAsync(ctx, "operador.duplicado", "Secreta123!", RolUsuario.Operador);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var put = await client.PutAsJsonAsync($"/usuarios/{operador.Id}/permisos",
+            new { Permisos = new[] { "finanzas.ver", "finanzas.ver" } });
+        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+
+        var get = await client.GetAsync($"/usuarios/{operador.Id}/permisos");
+        var body = await get.Content.ReadFromJsonAsync<PermisosPropiosResponseTest>();
+        Assert.Single(body!.Permisos);
+        Assert.Contains("finanzas.ver", body.Permisos);
+    }
+
+    [Fact]
     public async Task PutPermisos_ListaVacia_Devuelve200YQuedaSinPermisosEnGet()
     {
         // Camino válido: el Admin le quita TODOS los permisos configurables a un Operador.
