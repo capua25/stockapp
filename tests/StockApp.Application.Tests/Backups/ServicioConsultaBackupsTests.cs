@@ -45,7 +45,7 @@ public class ServicioConsultaBackupsTests
 
         await svc.ListarAsync();
 
-        auth.Verify(a => a.Verificar(RolUsuario.Admin, Permisos.GestionarDiagnostico), Times.Once);
+        auth.Verify(a => a.Verificar(It.Is<ICurrentSession>(s => s.RolActual == RolUsuario.Admin), Permisos.GestionarDiagnostico), Times.Once);
     }
 
     [Fact]
@@ -65,7 +65,7 @@ public class ServicioConsultaBackupsTests
     public async Task ListarAsync_SinPermiso_PropagaExcepcionYNuncaTocaElRepositorio()
     {
         var (svc, repo, auth) = Crear(RolUsuario.Operador);
-        auth.Setup(a => a.Verificar(RolUsuario.Operador, Permisos.GestionarDiagnostico))
+        auth.Setup(a => a.Verificar(It.Is<ICurrentSession>(s => s.RolActual == RolUsuario.Operador), Permisos.GestionarDiagnostico))
             .Throws<UnauthorizedAccessException>();
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => svc.ListarAsync());
@@ -83,7 +83,7 @@ public class ServicioConsultaBackupsTests
 
         var salud = await svc.ObtenerSaludAsync();
 
-        auth.Verify(a => a.Verificar(RolUsuario.Admin, Permisos.GestionarDiagnostico), Times.Once);
+        auth.Verify(a => a.Verificar(It.Is<ICurrentSession>(s => s.RolActual == RolUsuario.Admin), Permisos.GestionarDiagnostico), Times.Once);
         Assert.True(salud.Vencido);
         Assert.Null(salud.UltimoExitoEn);
         Assert.Equal(26, salud.UmbralHoras);
@@ -93,7 +93,7 @@ public class ServicioConsultaBackupsTests
     public async Task ObtenerSaludAsync_SinPermiso_PropagaExcepcionYNuncaTocaElRepositorio()
     {
         var (svc, repo, auth) = Crear(RolUsuario.Operador);
-        auth.Setup(a => a.Verificar(RolUsuario.Operador, Permisos.GestionarDiagnostico))
+        auth.Setup(a => a.Verificar(It.Is<ICurrentSession>(s => s.RolActual == RolUsuario.Operador), Permisos.GestionarDiagnostico))
             .Throws<UnauthorizedAccessException>();
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => svc.ObtenerSaludAsync());
@@ -107,7 +107,7 @@ public class ServicioConsultaBackupsTests
     public async Task ResolverArchivoParaDescargaAsync_SinPermiso_PropagaExcepcionYNuncaTocaElRepositorio()
     {
         var (svc, repo, auth) = Crear(RolUsuario.Operador);
-        auth.Setup(a => a.Verificar(RolUsuario.Operador, Permisos.GestionarDiagnostico))
+        auth.Setup(a => a.Verificar(It.Is<ICurrentSession>(s => s.RolActual == RolUsuario.Operador), Permisos.GestionarDiagnostico))
             .Throws<UnauthorizedAccessException>();
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(

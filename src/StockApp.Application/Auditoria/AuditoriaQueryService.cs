@@ -28,7 +28,7 @@ public class AuditoriaQueryService : IAuditoriaQueryService
         int? usuarioId, DateTime? fechaDesde, DateTime? fechaHasta)
     {
         // Autorización fail-closed: PRIMERO, antes de tocar el repo.
-        _auth.Verificar(_session.RolActual, Permisos.VerReportes);
+        _auth.Verificar(_session, Permisos.VerReportes);
 
         // Parámetros se pasan TAL CUAL (incluida FechaHasta cruda): el filtrado,
         // el ajuste de fin de día y el orden los realiza el repo (C4).

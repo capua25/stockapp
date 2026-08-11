@@ -25,7 +25,7 @@ public class AuditoriaQueryServiceTests
         session.Setup(s => s.RolActual).Returns(rol);
 
         // Por defecto auth no lanza (permiso concedido)
-        auth.Setup(a => a.Verificar(It.IsAny<RolUsuario?>(), It.IsAny<string>()));
+        auth.Setup(a => a.Verificar(It.IsAny<ICurrentSession>(), It.IsAny<string>()));
 
         var svc = new AuditoriaQueryService(repo.Object, session.Object, auth.Object);
         return (svc, repo, session, auth);
@@ -118,7 +118,7 @@ public class AuditoriaQueryServiceTests
     public async Task ObtenerLogAsync_Operador_LanzaUnauthorized()
     {
         var (svc, repo, _, auth) = Crear(RolUsuario.Operador);
-        auth.Setup(a => a.Verificar(It.IsAny<RolUsuario?>(), Permisos.VerReportes))
+        auth.Setup(a => a.Verificar(It.IsAny<ICurrentSession>(), Permisos.VerReportes))
             .Throws<UnauthorizedAccessException>();
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(

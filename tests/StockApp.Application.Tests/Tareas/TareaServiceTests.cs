@@ -24,7 +24,7 @@ public class TareaServiceTests
 
         session.Setup(s => s.RolActual).Returns(rol);
         session.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(idSesion, nombreUsuario, rol, null));
-        auth.Setup(a => a.Verificar(It.IsAny<RolUsuario?>(), It.IsAny<string>()));
+        auth.Setup(a => a.Verificar(It.IsAny<ICurrentSession>(), It.IsAny<string>()));
 
         // Fix (review final, Critical): NotaAjenaAsync ahora resuelve el nombre del actor
         // contra IUsuarioRepository (igual que el tomador) en vez de leerlo de la sesión —
@@ -44,7 +44,7 @@ public class TareaServiceTests
     public async Task CrearAsync_SinPermiso_LanzaExcepcionSinTocarElRepo()
     {
         var ctx = Crear();
-        ctx.Auth.Setup(a => a.Verificar(It.IsAny<RolUsuario?>(), Permisos.GestionarTareas))
+        ctx.Auth.Setup(a => a.Verificar(It.IsAny<ICurrentSession>(), Permisos.GestionarTareas))
             .Throws<UnauthorizedAccessException>();
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(
@@ -93,7 +93,7 @@ public class TareaServiceTests
     public async Task ListarAsync_SinPermiso_LanzaExcepcion()
     {
         var ctx = Crear();
-        ctx.Auth.Setup(a => a.Verificar(It.IsAny<RolUsuario?>(), Permisos.GestionarTareas))
+        ctx.Auth.Setup(a => a.Verificar(It.IsAny<ICurrentSession>(), Permisos.GestionarTareas))
             .Throws<UnauthorizedAccessException>();
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => ctx.Svc.ListarAsync());
@@ -117,7 +117,7 @@ public class TareaServiceTests
     public async Task TomarAsync_SinPermiso_LanzaExcepcionSinTocarElRepo()
     {
         var ctx = Crear();
-        ctx.Auth.Setup(a => a.Verificar(It.IsAny<RolUsuario?>(), Permisos.GestionarTareas))
+        ctx.Auth.Setup(a => a.Verificar(It.IsAny<ICurrentSession>(), Permisos.GestionarTareas))
             .Throws<UnauthorizedAccessException>();
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => ctx.Svc.TomarAsync(1));
@@ -264,7 +264,7 @@ public class TareaServiceTests
     public async Task CancelarAsync_ComoOperador_LanzaExcepcionSinTocarElRepo()
     {
         var ctx = Crear(rol: RolUsuario.Operador);
-        ctx.Auth.Setup(a => a.Verificar(RolUsuario.Operador, Permisos.AdministrarTareas))
+        ctx.Auth.Setup(a => a.Verificar(It.Is<ICurrentSession>(s => s.RolActual == RolUsuario.Operador), Permisos.AdministrarTareas))
             .Throws<UnauthorizedAccessException>();
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => ctx.Svc.CancelarAsync(1));
@@ -324,7 +324,7 @@ public class TareaServiceTests
     public async Task CambiarPrioridadAsync_ComoOperador_LanzaExcepcionSinTocarElRepo()
     {
         var ctx = Crear(rol: RolUsuario.Operador);
-        ctx.Auth.Setup(a => a.Verificar(RolUsuario.Operador, Permisos.AdministrarTareas))
+        ctx.Auth.Setup(a => a.Verificar(It.Is<ICurrentSession>(s => s.RolActual == RolUsuario.Operador), Permisos.AdministrarTareas))
             .Throws<UnauthorizedAccessException>();
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(
@@ -408,7 +408,7 @@ public class TareaServiceTests
     public async Task AgregarNotaAsync_SinPermiso_LanzaExcepcion()
     {
         var ctx = Crear();
-        ctx.Auth.Setup(a => a.Verificar(It.IsAny<RolUsuario?>(), Permisos.GestionarTareas))
+        ctx.Auth.Setup(a => a.Verificar(It.IsAny<ICurrentSession>(), Permisos.GestionarTareas))
             .Throws<UnauthorizedAccessException>();
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => ctx.Svc.AgregarNotaAsync(1, "avance"));

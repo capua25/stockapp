@@ -29,7 +29,7 @@ public sealed class ServicioConfiguracionAlertas
 
     public async Task<ConfiguracionAlertasDto> ObtenerAsync()
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarDiagnostico);
+        _auth.Verificar(_session, Permisos.GestionarDiagnostico);
 
         var cfg = await _repo.ObtenerAsync();
         return new ConfiguracionAlertasDto(
@@ -40,7 +40,7 @@ public sealed class ServicioConfiguracionAlertas
 
     public async Task GuardarAsync(string? urlWebhook, bool habilitado)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarDiagnostico);
+        _auth.Verificar(_session, Permisos.GestionarDiagnostico);
 
         var url = string.IsNullOrWhiteSpace(urlWebhook) ? null : urlWebhook.Trim();
 
@@ -80,7 +80,7 @@ public sealed class ServicioConfiguracionAlertas
     public async Task<ResultadoPruebaAlertaDto> ProbarAsync(
         string? urlWebhook = null, CancellationToken ct = default)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarDiagnostico);
+        _auth.Verificar(_session, Permisos.GestionarDiagnostico);
 
         var urlEnPantalla = string.IsNullOrWhiteSpace(urlWebhook) ? null : urlWebhook.Trim();
 

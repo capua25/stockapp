@@ -38,14 +38,14 @@ public sealed class ServicioConsultaBackups
 
     public async Task<IReadOnlyList<CorridaBackupDto>> ListarAsync()
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarDiagnostico);
+        _auth.Verificar(_session, Permisos.GestionarDiagnostico);
 
         return (await _corridas.ListarTodasAsync()).Select(ADto).ToList();
     }
 
     public async Task<SaludBackupDto> ObtenerSaludAsync()
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarDiagnostico);
+        _auth.Verificar(_session, Permisos.GestionarDiagnostico);
 
         var ultima = await _corridas.ObtenerUltimaExitosaAsync();
         var vencido = ultima is null || DateTime.UtcNow - ultima.FinalizadaEn >= UmbralAviso;
@@ -60,7 +60,7 @@ public sealed class ServicioConsultaBackups
     public async Task<(string RutaCompleta, string NombreArchivo)> ResolverArchivoParaDescargaAsync(
         int id, string directorioBackups)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarDiagnostico);
+        _auth.Verificar(_session, Permisos.GestionarDiagnostico);
 
         var corrida = await _corridas.ObtenerPorIdAsync(id)
             ?? throw new EntidadNoEncontradaException($"No existe la corrida de backup {id}.");

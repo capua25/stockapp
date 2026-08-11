@@ -48,7 +48,7 @@ public static class BackupsEndpoints
         // IGuardiaCorridaBackup ya tiene una corrida en curso -- ver su doc para el porque.
         app.MapPost("/backups", (ICurrentSession session, IAuthorizationService auth, DisparadorBackupManual disparador) =>
         {
-            auth.Verificar(session.RolActual, Permisos.GestionarDiagnostico);
+            auth.Verificar(session, Permisos.GestionarDiagnostico);
 
             var usuarioId = session.UsuarioActual!.Id;
             if (!disparador.Disparar(usuarioId))

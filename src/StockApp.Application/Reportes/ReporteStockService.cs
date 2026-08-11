@@ -31,7 +31,7 @@ public class ReporteStockService : IReporteStockService
     public async Task<ValorizacionReporteDto> ObtenerValorizacionAsync()
     {
         // Autorización fail-closed: PRIMERO, antes de tocar el repo.
-        _auth.Verificar(_session.RolActual, Permisos.VerReportes);
+        _auth.Verificar(_session, Permisos.VerReportes);
 
         var items = await _repo.ObtenerValorizacionAsync();
 
@@ -45,7 +45,7 @@ public class ReporteStockService : IReporteStockService
     public async Task<IReadOnlyList<StockCategoriaDto>> ObtenerStockPorCategoriaAsync()
     {
         // Autorización fail-closed: PRIMERO, antes de tocar el repo.
-        _auth.Verificar(_session.RolActual, Permisos.VerReportes);
+        _auth.Verificar(_session, Permisos.VerReportes);
 
         return await _repo.ObtenerStockPorCategoriaAsync();
     }
@@ -54,7 +54,7 @@ public class ReporteStockService : IReporteStockService
         DateTime? fechaDesde, DateTime? fechaHasta, int topN = 20)
     {
         // Autorización fail-closed: PRIMERO, antes de tocar el repo.
-        _auth.Verificar(_session.RolActual, Permisos.VerReportes);
+        _auth.Verificar(_session, Permisos.VerReportes);
 
         // Parámetros se pasan TAL CUAL: el ajuste de FechaHasta, el orden y el
         // Take(topN) son responsabilidad del repo (C3).
@@ -65,7 +65,7 @@ public class ReporteStockService : IReporteStockService
         int productoId, DateTime? fechaDesde, DateTime? fechaHasta)
     {
         // Autorización fail-closed: PRIMERO, antes de delegar.
-        _auth.Verificar(_session.RolActual, Permisos.VerReportes);
+        _auth.Verificar(_session, Permisos.VerReportes);
 
         // DOBLE-GUARD: este método verifica VerReportes; el servicio delegado
         // (IMovimientoStockService.ObtenerHistorialAsync) verifica RegistrarMovimientos.

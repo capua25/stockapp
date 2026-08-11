@@ -26,7 +26,7 @@ public class ReporteStockServiceHistorialTests
         var auth        = new Mock<IAuthSvc>();
 
         session.Setup(s => s.RolActual).Returns(rol);
-        auth.Setup(a => a.Verificar(It.IsAny<RolUsuario?>(), It.IsAny<string>()));
+        auth.Setup(a => a.Verificar(It.IsAny<ICurrentSession>(), It.IsAny<string>()));
 
         var svc = new ReporteStockService(
             repo.Object, movimientos.Object, session.Object, auth.Object);
@@ -79,7 +79,7 @@ public class ReporteStockServiceHistorialTests
     public async Task ObtenerHistorialPorProductoAsync_Operador_LanzaUnauthorized()
     {
         var (svc, _, movimientos, _, auth) = Crear(RolUsuario.Operador);
-        auth.Setup(a => a.Verificar(It.IsAny<RolUsuario?>(), Permisos.VerReportes))
+        auth.Setup(a => a.Verificar(It.IsAny<ICurrentSession>(), Permisos.VerReportes))
             .Throws<UnauthorizedAccessException>();
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(

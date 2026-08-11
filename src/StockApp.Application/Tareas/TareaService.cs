@@ -34,7 +34,7 @@ public class TareaService : ITareaService
 
     public async Task<int> CrearAsync(Tarea tarea)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarTareas);
+        _auth.Verificar(_session, Permisos.GestionarTareas);
 
         if (string.IsNullOrWhiteSpace(tarea.Titulo))
             throw new ArgumentException("El título de la tarea es obligatorio.", nameof(tarea.Titulo));
@@ -62,13 +62,13 @@ public class TareaService : ITareaService
 
     public async Task<IReadOnlyList<Tarea>> ListarAsync()
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarTareas);
+        _auth.Verificar(_session, Permisos.GestionarTareas);
         return await _repo.ListarAsync();
     }
 
     public async Task TomarAsync(int id)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarTareas);
+        _auth.Verificar(_session, Permisos.GestionarTareas);
 
         var tarea = await _repo.ObtenerPorIdAsync(id)
             ?? throw new EntidadNoEncontradaException($"Tarea {id} no encontrada.");
@@ -87,7 +87,7 @@ public class TareaService : ITareaService
 
     public async Task SoltarAsync(int id)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarTareas);
+        _auth.Verificar(_session, Permisos.GestionarTareas);
 
         var tarea = await _repo.ObtenerPorIdAsync(id)
             ?? throw new EntidadNoEncontradaException($"Tarea {id} no encontrada.");
@@ -113,7 +113,7 @@ public class TareaService : ITareaService
 
     public async Task TerminarAsync(int id)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarTareas);
+        _auth.Verificar(_session, Permisos.GestionarTareas);
 
         var tarea = await _repo.ObtenerPorIdAsync(id)
             ?? throw new EntidadNoEncontradaException($"Tarea {id} no encontrada.");
@@ -161,7 +161,7 @@ public class TareaService : ITareaService
 
     public async Task CancelarAsync(int id)
     {
-        _auth.Verificar(_session.RolActual, Permisos.AdministrarTareas);
+        _auth.Verificar(_session, Permisos.AdministrarTareas);
 
         var tarea = await _repo.ObtenerPorIdAsync(id)
             ?? throw new EntidadNoEncontradaException($"Tarea {id} no encontrada.");
@@ -188,7 +188,7 @@ public class TareaService : ITareaService
 
     public async Task CambiarPrioridadAsync(int id, PrioridadTarea prioridad)
     {
-        _auth.Verificar(_session.RolActual, Permisos.AdministrarTareas);
+        _auth.Verificar(_session, Permisos.AdministrarTareas);
 
         var tarea = await _repo.ObtenerPorIdAsync(id)
             ?? throw new EntidadNoEncontradaException($"Tarea {id} no encontrada.");
@@ -216,7 +216,7 @@ public class TareaService : ITareaService
 
     public async Task AgregarNotaAsync(int id, string texto)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarTareas);
+        _auth.Verificar(_session, Permisos.GestionarTareas);
 
         if (string.IsNullOrWhiteSpace(texto))
             throw new ArgumentException("El texto de la nota no puede estar vacío.", nameof(texto));
