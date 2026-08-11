@@ -49,7 +49,7 @@ public class IngresoCajaService : IIngresoCajaService
 
     public async Task<int> AltaAsync(IngresoCaja ingreso)
     {
-        _auth.Verificar(_session.RolActual, Permisos.RegistrarIngresos);
+        _auth.Verificar(_session, Permisos.RegistrarIngresos);
         await ValidarAsync(ingreso, original: null);
 
         var id = await _repo.AgregarAsync(ingreso);
@@ -63,7 +63,7 @@ public class IngresoCajaService : IIngresoCajaService
 
     public async Task ModificarAsync(IngresoCaja ingreso)
     {
-        _auth.Verificar(_session.RolActual, Permisos.RegistrarIngresos);
+        _auth.Verificar(_session, Permisos.RegistrarIngresos);
 
         var original = await _repo.ObtenerPorIdAsync(ingreso.Id)
             ?? throw new EntidadNoEncontradaException($"Ingreso de caja {ingreso.Id} no encontrado.");
@@ -100,7 +100,7 @@ public class IngresoCajaService : IIngresoCajaService
 
     public async Task BajaLogicaAsync(int id)
     {
-        _auth.Verificar(_session.RolActual, Permisos.RegistrarIngresos);
+        _auth.Verificar(_session, Permisos.RegistrarIngresos);
 
         var ingreso = await _repo.ObtenerPorIdAsync(id)
             ?? throw new EntidadNoEncontradaException($"Ingreso de caja {id} no encontrado.");
@@ -117,7 +117,7 @@ public class IngresoCajaService : IIngresoCajaService
 
     public async Task<IReadOnlyList<IngresoCaja>> ListarTodosAsync()
     {
-        _auth.Verificar(_session.RolActual, Permisos.VerFinanzas);
+        _auth.Verificar(_session, Permisos.VerFinanzas);
         return await _repo.ListarTodosAsync();
     }
 }

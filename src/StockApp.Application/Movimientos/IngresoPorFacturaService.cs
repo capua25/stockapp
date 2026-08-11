@@ -56,12 +56,12 @@ public class IngresoPorFacturaService : IIngresoPorFacturaService
 
     public async Task<IngresoPorFacturaResultadoDto> RegistrarAsync(IngresoPorFacturaDto dto)
     {
-        _auth.Verificar(_session.RolActual, Permisos.RegistrarMovimientos);
-        _auth.Verificar(_session.RolActual, Permisos.RegistrarGastos);
+        _auth.Verificar(_session, Permisos.RegistrarMovimientos);
+        _auth.Verificar(_session, Permisos.RegistrarGastos);
 
         var requierePermisoCatalogo = dto.Renglones.Any(r => r.ProductoNuevo is not null || r.ActualizarPrecioCosto);
         if (requierePermisoCatalogo)
-            _auth.Verificar(_session.RolActual, Permisos.GestionarProductos);
+            _auth.Verificar(_session, Permisos.GestionarProductos);
 
         if (dto.Renglones.Count == 0)
             throw new ArgumentException("La factura debe tener al menos un renglón.", nameof(dto.Renglones));
@@ -210,8 +210,8 @@ public class IngresoPorFacturaService : IIngresoPorFacturaService
 
     public async Task AnularLoteAsync(int gastoId, bool confirmarAnulacionDePagoAutomatico = false)
     {
-        _auth.Verificar(_session.RolActual, Permisos.RegistrarMovimientos);
-        _auth.Verificar(_session.RolActual, Permisos.RegistrarGastos);
+        _auth.Verificar(_session, Permisos.RegistrarMovimientos);
+        _auth.Verificar(_session, Permisos.RegistrarGastos);
 
         var gasto = await _gastoRepo.ObtenerPorIdAsync(gastoId)
             ?? throw new EntidadNoEncontradaException($"Gasto {gastoId} no encontrado.");

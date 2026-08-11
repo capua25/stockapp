@@ -67,7 +67,7 @@ public class LineaPoaService : ILineaPoaService
 
     public async Task<int> AltaAsync(LineaPoa linea)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarMaestrosFinanzas);
+        _auth.Verificar(_session, Permisos.GestionarMaestrosFinanzas);
         await ValidarAsync(linea);
 
         if (await _repo.ExisteNombreEjercicioAsync(linea.Nombre, linea.Ejercicio, null))
@@ -88,7 +88,7 @@ public class LineaPoaService : ILineaPoaService
 
     public async Task ModificarAsync(LineaPoa linea)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarMaestrosFinanzas);
+        _auth.Verificar(_session, Permisos.GestionarMaestrosFinanzas);
         await ValidarAsync(linea);
 
         var original = await _repo.ObtenerPorIdAsync(linea.Id)
@@ -133,7 +133,7 @@ public class LineaPoaService : ILineaPoaService
 
     public async Task BajaLogicaAsync(int id)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarMaestrosFinanzas);
+        _auth.Verificar(_session, Permisos.GestionarMaestrosFinanzas);
 
         var linea = await _repo.ObtenerPorIdAsync(id)
             ?? throw new EntidadNoEncontradaException($"Línea POA {id} no encontrada.");
@@ -155,13 +155,13 @@ public class LineaPoaService : ILineaPoaService
 
     public async Task<IReadOnlyList<LineaPoa>> ListarTodasAsync()
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarMaestrosFinanzas);
+        _auth.Verificar(_session, Permisos.GestionarMaestrosFinanzas);
         return await _repo.ListarTodasAsync();
     }
 
     public async Task<IReadOnlyList<LineaPoa>> ListarActivasAsync()
     {
-        _auth.Verificar(_session.RolActual, Permisos.VerFinanzas);
+        _auth.Verificar(_session, Permisos.VerFinanzas);
         var todas = await _repo.ListarTodasAsync();
         return todas.Where(l => l.Activo).ToList();
     }

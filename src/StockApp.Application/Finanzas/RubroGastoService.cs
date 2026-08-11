@@ -39,7 +39,7 @@ public class RubroGastoService : IRubroGastoService
 
     public async Task<int> AltaAsync(RubroGasto rubro)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarMaestrosFinanzas);
+        _auth.Verificar(_session, Permisos.GestionarMaestrosFinanzas);
         ValidarCampos(rubro);
 
         if (await _repo.ExisteCodigoAsync(rubro.Codigo, null))
@@ -58,7 +58,7 @@ public class RubroGastoService : IRubroGastoService
 
     public async Task ModificarAsync(RubroGasto rubro)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarMaestrosFinanzas);
+        _auth.Verificar(_session, Permisos.GestionarMaestrosFinanzas);
         ValidarCampos(rubro);
 
         var original = await _repo.ObtenerPorIdAsync(rubro.Id)
@@ -90,7 +90,7 @@ public class RubroGastoService : IRubroGastoService
 
     public async Task BajaLogicaAsync(int id)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarMaestrosFinanzas);
+        _auth.Verificar(_session, Permisos.GestionarMaestrosFinanzas);
 
         var rubro = await _repo.ObtenerPorIdAsync(id)
             ?? throw new EntidadNoEncontradaException($"Rubro de gasto {id} no encontrado.");
@@ -110,13 +110,13 @@ public class RubroGastoService : IRubroGastoService
 
     public async Task<IReadOnlyList<RubroGasto>> ListarTodosAsync()
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarMaestrosFinanzas);
+        _auth.Verificar(_session, Permisos.GestionarMaestrosFinanzas);
         return await _repo.ListarTodosAsync();
     }
 
     public async Task<IReadOnlyList<RubroGasto>> ListarActivosAsync()
     {
-        _auth.Verificar(_session.RolActual, Permisos.VerFinanzas);
+        _auth.Verificar(_session, Permisos.VerFinanzas);
         var todos = await _repo.ListarTodosAsync();
         return todos.Where(r => r.Activo).ToList();
     }

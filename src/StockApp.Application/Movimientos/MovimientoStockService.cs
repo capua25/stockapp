@@ -37,7 +37,7 @@ public class MovimientoStockService : IMovimientoStockService
         RegistrarMovimientoDto dto, bool forzar = false)
     {
         // B3: autorización fail-closed (PRIMERO, antes de leer cualquier dato)
-        _auth.Verificar(_session.RolActual, Permisos.RegistrarMovimientos);
+        _auth.Verificar(_session, Permisos.RegistrarMovimientos);
 
         // B4: validaciones de dominio
         if (dto.Cantidad <= 0)
@@ -116,7 +116,7 @@ public class MovimientoStockService : IMovimientoStockService
         HistorialMovimientoFiltro filtro)
     {
         // B3: fail-closed
-        _auth.Verificar(_session.RolActual, Permisos.RegistrarMovimientos);
+        _auth.Verificar(_session, Permisos.RegistrarMovimientos);
 
         return await _repo.ObtenerHistorialAsync(filtro);
     }
@@ -126,7 +126,7 @@ public class MovimientoStockService : IMovimientoStockService
     public async Task<RecalculoResultadoDto> RecalcularStockAsync(int productoId)
     {
         // B3: fail-closed
-        _auth.Verificar(_session.RolActual, Permisos.RecalcularStock);
+        _auth.Verificar(_session, Permisos.RecalcularStock);
 
         var producto = await _repo.ObtenerProductoAsync(productoId)
             ?? throw new EntidadNoEncontradaException($"Producto {productoId} no encontrado.");

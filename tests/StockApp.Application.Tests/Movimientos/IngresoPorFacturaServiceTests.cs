@@ -41,7 +41,7 @@ public class IngresoPorFacturaServiceTests
         session.Setup(s => s.RolActual).Returns(rol);
         session.Setup(s => s.UsuarioActual).Returns(
             new StockApp.Application.Auth.UsuarioSesion(idSesion, "test-user", rol, null));
-        auth.Setup(a => a.Verificar(It.IsAny<RolUsuario?>(), It.IsAny<string>()));
+        auth.Setup(a => a.Verificar(It.IsAny<ICurrentSession>(), It.IsAny<string>()));
 
         proveedores.Setup(p => p.ObtenerPorIdAsync(1))
             .ReturnsAsync(new Proveedor { Id = 1, Nombre = "Proveedor Test", Activo = true });
@@ -78,7 +78,7 @@ public class IngresoPorFacturaServiceTests
     public async Task RegistrarAsync_SinPermisoMovimientos_LanzaExcepcionSinTocarElRepo()
     {
         var (svc, movRepo, _, _, _, _, _, _, _, _, auth, _) = Crear();
-        auth.Setup(a => a.Verificar(It.IsAny<RolUsuario?>(), Permisos.RegistrarMovimientos))
+        auth.Setup(a => a.Verificar(It.IsAny<ICurrentSession>(), Permisos.RegistrarMovimientos))
             .Throws<UnauthorizedAccessException>();
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => svc.RegistrarAsync(DtoValido()));
@@ -90,7 +90,7 @@ public class IngresoPorFacturaServiceTests
     public async Task RegistrarAsync_ConProductoNuevo_SinPermisoCatalogo_LanzaExcepcionSinTocarElRepo()
     {
         var (svc, movRepo, _, _, _, _, _, _, _, _, auth, _) = Crear();
-        auth.Setup(a => a.Verificar(It.IsAny<RolUsuario?>(), Permisos.GestionarProductos))
+        auth.Setup(a => a.Verificar(It.IsAny<ICurrentSession>(), Permisos.GestionarProductos))
             .Throws<UnauthorizedAccessException>();
 
         var renglon = new RenglonFacturaDto(
@@ -105,7 +105,7 @@ public class IngresoPorFacturaServiceTests
     public async Task RegistrarAsync_SinPermisoGastos_LanzaExcepcionSinTocarElRepo()
     {
         var (svc, movRepo, _, _, _, _, _, _, _, _, auth, _) = Crear();
-        auth.Setup(a => a.Verificar(It.IsAny<RolUsuario?>(), Permisos.RegistrarGastos))
+        auth.Setup(a => a.Verificar(It.IsAny<ICurrentSession>(), Permisos.RegistrarGastos))
             .Throws<UnauthorizedAccessException>();
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => svc.RegistrarAsync(DtoValido()));

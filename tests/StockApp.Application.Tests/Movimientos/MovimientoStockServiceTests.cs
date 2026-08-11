@@ -30,7 +30,7 @@ public class MovimientoStockServiceTests
             new StockApp.Application.Auth.UsuarioSesion(idSesion, "test-user", rol, null));
 
         // Por defecto auth no lanza (permiso concedido)
-        auth.Setup(a => a.Verificar(It.IsAny<RolUsuario?>(), It.IsAny<string>()));
+        auth.Setup(a => a.Verificar(It.IsAny<ICurrentSession>(), It.IsAny<string>()));
 
         var svc = new MovimientoStockService(repo.Object, session.Object, auth.Object, Mock.Of<IVersionReportes>());
         return (svc, repo, session, auth);
@@ -54,7 +54,7 @@ public class MovimientoStockServiceTests
     public async Task RegistrarAsync_SinPermiso_LanzaExcepcionSinLeerDatos()
     {
         var (svc, repo, _, auth) = Crear();
-        auth.Setup(a => a.Verificar(It.IsAny<RolUsuario?>(), Permisos.RegistrarMovimientos))
+        auth.Setup(a => a.Verificar(It.IsAny<ICurrentSession>(), Permisos.RegistrarMovimientos))
             .Throws<UnauthorizedAccessException>();
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(
@@ -69,7 +69,7 @@ public class MovimientoStockServiceTests
     public async Task RecalcularStockAsync_SinPermiso_LanzaExcepcionSinLeerDatos()
     {
         var (svc, repo, _, auth) = Crear();
-        auth.Setup(a => a.Verificar(It.IsAny<RolUsuario?>(), Permisos.RecalcularStock))
+        auth.Setup(a => a.Verificar(It.IsAny<ICurrentSession>(), Permisos.RecalcularStock))
             .Throws<UnauthorizedAccessException>();
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(
@@ -82,7 +82,7 @@ public class MovimientoStockServiceTests
     public async Task ObtenerHistorialAsync_SinPermiso_LanzaExcepcionSinLeerDatos()
     {
         var (svc, repo, _, auth) = Crear();
-        auth.Setup(a => a.Verificar(It.IsAny<RolUsuario?>(), Permisos.RegistrarMovimientos))
+        auth.Setup(a => a.Verificar(It.IsAny<ICurrentSession>(), Permisos.RegistrarMovimientos))
             .Throws<UnauthorizedAccessException>();
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(
