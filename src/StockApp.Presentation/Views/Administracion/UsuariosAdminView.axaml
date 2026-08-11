@@ -87,7 +87,26 @@
                         <Button Classes="secondary" Content="Cambiar contraseña" Command="{Binding CambiarContrasenaCommand}" />
                     </StackPanel>
 
-                    <!-- Panel de permisos: ver PanelPermisosView, insertado acá en la Task 13 -->
+                    <Border BorderBrush="Gray" BorderThickness="1" Padding="12" CornerRadius="4"
+                            DataContext="{Binding PanelPermisos}">
+                        <StackPanel Spacing="8" IsEnabled="{Binding !EsAdminSeleccionado}">
+                            <TextBlock Text="Acceso total" FontWeight="Bold" Foreground="Gray"
+                                       IsVisible="{Binding EsAdminSeleccionado}" />
+                            <TextBlock Text="Catálogo" FontWeight="Bold" />
+                            <CheckBox Content="Productos (ver, editar, recalcular stock)" IsChecked="{Binding Productos}" />
+                            <CheckBox Content="Tablas maestras (categorías, proveedores, unidades)" IsChecked="{Binding PermisoGestionarTablasMaestras}" />
+                            <CheckBox Content="Registrar movimientos de stock" IsChecked="{Binding PermisoRegistrarMovimientos}" />
+                            <TextBlock Text="Finanzas" FontWeight="Bold" Margin="0,8,0,0" />
+                            <CheckBox Content="Gastos y facturas" IsChecked="{Binding GastosYFacturas}" />
+                            <CheckBox Content="Ingresos de caja" IsChecked="{Binding IngresosDeCaja}" />
+                            <CheckBox Content="Ver Finanzas (libro caja, control POA, calendario)" IsChecked="{Binding PermisoVerFinanzas}" />
+                            <CheckBox Content="Maestros de finanzas (fuentes, rubros, líneas POA)" IsChecked="{Binding PermisoGestionarMaestrosFinanzas}" />
+                            <TextBlock Text="Tareas y reportes" FontWeight="Bold" Margin="0,8,0,0" />
+                            <CheckBox Content="Tareas" IsChecked="{Binding PermisoGestionarTareas}" />
+                            <CheckBox Content="Reportes" IsChecked="{Binding PermisoVerReportes}" />
+                            <Button Content="Guardar permisos" Command="{Binding GuardarCommand}" Margin="0,12,0,0" />
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
             </Border>
         </Grid>

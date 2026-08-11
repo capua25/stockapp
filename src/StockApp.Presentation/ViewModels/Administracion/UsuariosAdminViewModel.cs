@@ -46,10 +46,19 @@ public partial class UsuariosAdminViewModel : ViewModelBase
     /// dos valores del enum en el XAML.</summary>
     public IReadOnlyList<RolUsuario> RolesDisponibles { get; } = Enum.GetValues<RolUsuario>();
 
-    public UsuariosAdminViewModel(IUsuarioService usuarios, IConfirmacionService confirmacion)
+    /// <summary>Panel de permisos de la columna derecha (Task 13). Recibido por DI —
+    /// PanelPermisosViewModel se registra AddTransient sin depender de este tipo en su propio
+    /// constructor (ver Decisión de diseño 2 de la Task 13: ViewLocator exige Views sin
+    /// argumentos, así que la composición vive enteramente acá, no en el code-behind).</summary>
+    public PanelPermisosViewModel PanelPermisos { get; }
+
+    public UsuariosAdminViewModel(
+        IUsuarioService usuarios, IConfirmacionService confirmacion, PanelPermisosViewModel panelPermisos)
     {
         _usuarios = usuarios;
         _confirmacion = confirmacion;
+        PanelPermisos = panelPermisos;
+        PanelPermisos.Conectar(this);
     }
 
     public async Task CargarAsync()

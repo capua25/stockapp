@@ -302,6 +302,7 @@ public partial class App : AvaloniaApp
         services.AddTransient<InicioViewModel>();
         services.AddTransient<StockApp.Presentation.ViewModels.Administracion.MantenimientoViewModel>();
         services.AddTransient<StockApp.Presentation.ViewModels.Administracion.UsuariosAdminViewModel>();
+        services.AddTransient<StockApp.Presentation.ViewModels.Administracion.PanelPermisosViewModel>();
 
         // Factory de MantenimientoViewModel para ShellViewModel (FIX 1, re-review final E1):
         // el modo acceso limitado (licencia vencida) resuelve una instancia fresca desde acá
