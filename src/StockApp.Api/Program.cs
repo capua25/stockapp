@@ -243,6 +243,12 @@ builder.Services.AddScoped<IAuditoriaQueryService, AuditoriaQueryService>();
 // ya están registrados desde Fase 2a (usados por AuthEndpoints).
 builder.Services.AddScoped<IUsuarioService, UsuarioService>();
 
+// Permisos por operador (spec 2026-08-10): IProveedorPermisos es Singleton (cache de proceso);
+// IPermisoUsuarioRepository es Scoped (usa AppDbContext) — el proveedor resuelve el lifetime
+// mismatch con su propio IServiceScopeFactory, no inyectando el repo directo.
+builder.Services.AddScoped<IPermisoUsuarioRepository, PermisoUsuarioRepository>();
+builder.Services.AddSingleton<IProveedorPermisos, ProveedorPermisosEnMemoria>();
+
 // Bootstrap de primer arranque (Fase 3a, D7) — reusa IUsuarioRepository/IPasswordHasher.
 builder.Services.AddScoped<IPrimerArranqueService, PrimerArranqueService>();
 
