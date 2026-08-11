@@ -258,6 +258,50 @@ public class UsuariosAdminViewModelTests
         confirm.Verify(c => c.InformarAsync(mensaje), Times.Once);
     }
 
+    // ── Task 15: 403 en pleno vuelo (Admin te revoca el permiso a mitad de sesión) ──────────
+
+    [Fact]
+    public async Task AltaAsync_ErrorDeAutorizacion_MuestraMensajeErrorSinExplotar()
+    {
+        var (vm, svc, _) = Crear();
+        var mensaje = "Prohibido.";
+        svc.Setup(s => s.AltaUsuarioAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string>(), It.IsAny<RolUsuario>()))
+            .ThrowsAsync(new UnauthorizedAccessException(mensaje));
+        vm.NuevoNombreUsuario = "nuevo";
+        vm.NuevaContrasenaPlan = "pwd12345";
+
+        await vm.AltaCommand.ExecuteAsync(null);
+
+        Assert.Equal(mensaje, vm.MensajeError);
+    }
+
+    [Fact]
+    public async Task BajaAsync_ErrorDeAutorizacion_InformaAlUsuarioSinExplotar()
+    {
+        var (vm, svc, confirm) = Crear();
+        var mensaje = "Prohibido.";
+        svc.Setup(s => s.BajaLogicaAsync(2)).ThrowsAsync(new UnauthorizedAccessException(mensaje));
+        vm.UsuarioSeleccionado = Dto(2, RolUsuario.Operador);
+
+        await vm.BajaCommand.ExecuteAsync(null);
+
+        confirm.Verify(c => c.InformarAsync(mensaje), Times.Once);
+    }
+
+    [Fact]
+    public async Task CambiarRolAsync_ErrorDeAutorizacion_InformaAlUsuarioSinExplotar()
+    {
+        var (vm, svc, confirm) = Crear();
+        var mensaje = "Prohibido.";
+        svc.Setup(s => s.CambiarRolAsync(2, RolUsuario.Admin))
+            .ThrowsAsync(new UnauthorizedAccessException(mensaje));
+        vm.UsuarioSeleccionado = Dto(2, RolUsuario.Operador);
+
+        await vm.CambiarRolCommand.ExecuteAsync(RolUsuario.Admin);
+
+        confirm.Verify(c => c.InformarAsync(mensaje), Times.Once);
+    }
+
     [Fact]
     public async Task MensajeError_SeLimpiaAlIniciarCambiarRol()
     {

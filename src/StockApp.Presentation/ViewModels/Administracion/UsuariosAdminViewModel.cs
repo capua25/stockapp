@@ -86,7 +86,11 @@ public partial class UsuariosAdminViewModel : ViewModelBase
             NuevoRol = RolUsuario.Operador;
             await CargarAsync();
         }
-        catch (Exception ex) when (ex is ReglaDeNegocioException or ArgumentException)
+        // Fix (Task 15): sumamos UnauthorizedAccessException — si el permiso GestionarUsuarios
+        // se revoca a mitad de sesión, el manejo central del 403 (AuthTokenHandler/App.axaml.cs)
+        // ya avisa y refresca el menú, pero la excepción sigue subiendo hasta acá. Sin este
+        // catch, el comando explota mudo: crash.log y el botón "sin efecto" para quien mira.
+        catch (Exception ex) when (ex is ReglaDeNegocioException or ArgumentException or UnauthorizedAccessException)
         {
             MensajeError = ex.Message;
         }
@@ -110,7 +114,9 @@ public partial class UsuariosAdminViewModel : ViewModelBase
             await _usuarios.BajaLogicaAsync(UsuarioSeleccionado.Id);
             await CargarAsync();
         }
-        catch (Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException)
+        // Fix (Task 15): mismo motivo que en AltaAsync — UnauthorizedAccessException puede
+        // llegar acá si el permiso se revoca a mitad de sesión.
+        catch (Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException or UnauthorizedAccessException)
         {
             await _confirmacion.InformarAsync(ex.Message);
         }
@@ -133,7 +139,9 @@ public partial class UsuariosAdminViewModel : ViewModelBase
         // entremedio) — sin este catch la excepción escapaba del AsyncRelayCommand y el botón
         // quedaba "roto" sin feedback, mismo mecanismo que ya documentan GastosViewModel.AnularAsync
         // e IngresoPorFacturaViewModel.GuardarInternoAsync.
-        catch (Exception ex) when (ex is ReglaDeNegocioException or ArgumentException or EntidadNoEncontradaException)
+        // Fix (Task 15): sumamos UnauthorizedAccessException, mismo motivo que en AltaAsync.
+        catch (Exception ex) when (ex is ReglaDeNegocioException or ArgumentException
+            or EntidadNoEncontradaException or UnauthorizedAccessException)
         {
             await _confirmacion.InformarAsync(ex.Message);
         }
