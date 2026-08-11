@@ -45,12 +45,13 @@
 | `src/StockApp.Api/Endpoints/BackupsEndpoints.cs` | Modificar: migrar el call site restante (Task 6d) |
 | `src/StockApp.Api/Auth/PermisoRequirement.cs` | `IAuthorizationRequirement` nuevo |
 | `src/StockApp.Api/Auth/PermisoAuthorizationHandler.cs` | Handler nuevo, reemplaza `RequireClaim` |
-| `src/StockApp.Api/Program.cs` | Modificar: bloque de policies (Task 7), middleware (Task 8), registros DI (Tasks 1-3, 7, 9) |
+| `src/StockApp.Api/Program.cs` | Modificar: registro DI de `IPermisoUsuarioRepository`/`IProveedorPermisos` (Task 3), bloque de policies (Task 7), middleware (Task 8) |
 | `tests/StockApp.Api.Tests/Auth/PermisosEndpointGuardTests.cs` | Test guardián de endpoints (Task 7) |
 | `tests/StockApp.Api.Tests/Auth/PoblarPermisosMiddlewareTests.cs` | Tests del middleware (Task 8) |
 | `src/StockApp.Api/Endpoints/AuthEndpoints.cs` | Modificar: `GET /auth/permisos` (Task 9) |
 | `src/StockApp.Application/Auth/IAuthService.cs` | Modificar: `ObtenerPermisosPropiosAsync` (Task 9) |
 | `src/StockApp.ApiClient/AuthApiClient.cs` | Modificar: implementación + refresco tras login (Task 9) |
+| `src/StockApp.Presentation/Services/RefrescoPermisos.cs` | Helper compartido de "mejor esfuerzo" (Task 9), consumido por Tasks 13, 14 y 15 |
 | `src/StockApp.Api/Endpoints/UsuariosEndpoints.cs` | Modificar: `GET/PUT /usuarios/{id}/permisos` (Task 10) |
 | `src/StockApp.Application/Auth/IUsuarioService.cs` / `UsuarioApiClient.cs` | Modificar: métodos de permisos del cliente (Task 10) |
 | `src/StockApp.Domain/Enums/AccionAuditada.cs` | Modificar: `ModificacionPermisosUsuario = 51` (Task 10) |
@@ -542,6 +543,7 @@ git commit -m "feat(permisos): repositorio EF de PermisoUsuario con reemplazo tr
 **Files:**
 - Create: `src/StockApp.Application/Authorization/IProveedorPermisos.cs`
 - Create: `src/StockApp.Application/Authorization/ProveedorPermisosEnMemoria.cs`
+- Modify: `src/StockApp.Api/Program.cs` (registro DI, Step 6)
 - Test: `tests/StockApp.Application.Tests/Authorization/ProveedorPermisosEnMemoriaTests.cs`
 
 **Interfaces:**
@@ -1249,21 +1251,11 @@ public class AuthorizationService : IAuthorizationService
         Permisos.GestionarTareas,
     ];
 
-    // OBSOLETO: se elimina en la Task 7. Se mantiene textualmente igual a como estaba antes de
-    // esta task — ningún call site la usa todavía distinto, y los tests de AccionesOperador
-    // (ahora PermisosInicialesOperador) verifican el reemplazo por separado.
-    private static readonly HashSet<string> AccionesOperador =
-    [
-        Permisos.GestionarProductos,
-        Permisos.RegistrarMovimientos,
-        Permisos.RecalcularStock,
-        Permisos.VerFinanzas,
-        Permisos.GestionarMaestrosFinanzas,
-        Permisos.RegistrarGastos,
-        Permisos.RegistrarPagos,
-        Permisos.RegistrarIngresos,
-        Permisos.GestionarTareas,
-    ];
+    // OBSOLETO: se elimina en la Task 7. Derivada de PermisosInicialesOperador (pre-flight,
+    // corrección D) en vez de repetir la misma lista de 9 permisos por segunda vez en el mismo
+    // archivo — una sola fuente de verdad, mismo contenido exacto, Verificar(RolUsuario?, string)
+    // sigue funcionando idéntico hasta que la Task 7 elimina las dos.
+    private static readonly HashSet<string> AccionesOperador = new(PermisosInicialesOperador);
 
     public void Verificar(RolUsuario? rolActual, string accion)
     {
@@ -1722,6 +1714,12 @@ git commit -m "refactor(permisos): migra los call sites restantes (Reportes, Aud
 - Modify: `src/StockApp.Application/Authorization/IAuthorizationService.cs` (elimina miembros viejos)
 - Modify: `src/StockApp.Application/Authorization/AuthorizationService.cs` (elimina miembros viejos)
 - Modify: `tests/StockApp.Application.Tests/Authorization/AuthorizationServiceTests.cs` (elimina tests del overload viejo)
+- Modify: `src/StockApp.Presentation/ViewModels/Finanzas/AdjuntosPanelViewModel.cs` (gap real, Step 11a: usaba `TienePermiso` directo)
+- Modify: `tests/StockApp.Presentation.Tests/ViewModels/Finanzas/AdjuntosPanelViewModelTests.cs` (Step 11a)
+- Modify: `tests/StockApp.Presentation.Tests/ViewModels/Movimientos/IngresoPorFacturaViewModelTests.cs` (Step 11a — call site de `AdjuntosPanelViewModel`)
+- Modify: `tests/StockApp.Presentation.Tests/ViewModels/Finanzas/CalendarioPagosViewModelTests.cs` (Step 11a — call site de `AdjuntosPanelViewModel`)
+- Modify: `tests/StockApp.Presentation.Tests/ViewModels/Finanzas/PagosGastoViewModelTests.cs` (Step 11a — call site de `AdjuntosPanelViewModel`)
+- Modify: `tests/StockApp.Presentation.Tests/ViewModels/Finanzas/GastoFormViewModelTests.cs` (Step 11a — 2 call sites de `AdjuntosPanelViewModel`)
 - Test: `tests/StockApp.Api.Tests/Auth/PermisoAuthorizationHandlerTests.cs`
 - Test: `tests/StockApp.Api.Tests/Auth/PermisosEndpointGuardTests.cs`
 
@@ -2676,17 +2674,138 @@ git commit -m "feat(permisos): middleware que puebla ICurrentSession.PermisosAct
 - Modify: `src/StockApp.Application/Auth/IAuthService.cs`
 - Modify: `src/StockApp.ApiClient/AuthApiClient.cs`
 - Modify: `src/StockApp.Presentation/ViewModels/LoginViewModel.cs`
+- Create: `src/StockApp.Presentation/Services/RefrescoPermisos.cs`
 - Test: `tests/StockApp.Api.Tests/AuthEndpointPermisosTests.cs`
 - Test: `tests/StockApp.ApiClient.Tests/AuthApiClientPermisosTests.cs`
+- Test: `tests/StockApp.Presentation.Tests/Services/RefrescoPermisosTests.cs`
 - Test: `tests/StockApp.Presentation.Tests/ViewModels/LoginViewModelTests.cs` (agregar)
 
 **Interfaces:**
 - Consumes: `ICurrentSession.RolActual`/`.UsuarioActual` (existente), `IProveedorPermisos.ObtenerAsync` (Task 3), `AuthorizationService.PermisosConfigurables` (Task 5), `ApiSession.EstablecerPermisos` (Task 4).
-- Produces: `IAuthService.ObtenerPermisosPropiosAsync()` → `Task<IReadOnlySet<string>>`; `AuthEndpoints` gana `GET /permisos` bajo el grupo `/auth`.
+- Produces: `IAuthService.ObtenerPermisosPropiosAsync()` → `Task<IReadOnlySet<string>>`; `AuthEndpoints` gana `GET /permisos` bajo el grupo `/auth`; `StockApp.Presentation.Services.RefrescoPermisos.DispararBestEffortAsync(Func<Task> operacion, string origen)` → `Task` (helper compartido, consumido también por las Tasks 13, 14 y 15 — la firma de arriba es EXACTA y no puede variar entre esas tasks).
+
+**Decisión de diseño — helper compartido `RefrescoPermisos` (pre-flight, corrección C):** cuatro puntos del sistema de permisos disparan una operación asíncrona en modo "mejor esfuerzo" (nunca bloquean su flujo disparador, nunca propagan la excepción): el refresco tras login (esta task), el refresco al navegar entre secciones (Task 14), el refresco al cambiar de usuario seleccionado en el panel de permisos (Task 13) y el aviso de 403 (Task 15). Los cuatro son estructuralmente el mismo bloque `try { await operacion(); } catch (Exception) { /* best-effort */ }` — se factoriza acá, en la PRIMERA task que lo necesita, para que las tres siguientes lo consuman en vez de repetirlo. Vive en `StockApp.Presentation/Services/` (no en `StockApp.ApiClient` ni `StockApp.Application`) porque los cuatro consumidores están en `StockApp.Presentation` (`LoginViewModel`, `ShellMainViewModel`, `PanelPermisosViewModel` y `App.axaml.cs` — este último también vive en el proyecto Presentation, no en ApiClient) — no hace falta ninguna referencia nueva entre proyectos. Es una clase `static` (no una interfaz con DI): su comportamiento (capturar y loguear, nunca lanzar) no necesita sustituirse en tests — lo que varía por test es la función que envuelve, no el wrapper. Devuelve el `Task` que envuelve (nunca lanza) para que un llamador que necesite sincronización determinista en tests pueda guardarlo en un campo `internal Task` y hacerle `await` — mismo patrón ya establecido en el repo (`ShellViewModel._tareaActualizacion`, `ProductoListViewModel._tareaDebounce`) — ver Task 13, Step 1 (Corrección A).
+
+**Decisión de diseño — logging, no silencio (pre-flight, corrección C):** "mejor esfuerzo" no debería significar "invisible". `StockApp.Presentation` no tiene `ILogger<T>` inyectado en ningún ViewModel — el único mecanismo de logging del proyecto es `Program.LogFatal(string origen, Exception ex)` (`src/StockApp.Presentation/Program.cs`), que ya escribe a `crash.log` y ya se usa hoy para excepciones "atrapadas pero dignas de rastro" (ver `Dispatcher.UIThread.UnhandledException` en `App.axaml.cs`: "se loguea a crash.log y se informa al usuario" — un caso manejado, no un crash real). `Program` es una clase top-level `internal` en el namespace `StockApp.Presentation`; `RefrescoPermisos` puede llamar a `Program.LogFatal` directo, mismo assembly, sin necesitar `InternalsVisibleTo` adicional.
+
+- [ ] **Step 1: Escribir el test del helper que falla**
+
+`tests/StockApp.Presentation.Tests/Services/RefrescoPermisosTests.cs`:
+
+```csharp
+using StockApp.Presentation.Services;
+using Xunit;
+
+namespace StockApp.Presentation.Tests.Services;
+
+public class RefrescoPermisosTests
+{
+    [Fact]
+    public async Task DispararBestEffortAsync_OperacionExitosa_LaEjecuta()
+    {
+        var ejecutada = false;
+
+        await RefrescoPermisos.DispararBestEffortAsync(
+            () => { ejecutada = true; return Task.CompletedTask; }, "test");
+
+        Assert.True(ejecutada);
+    }
+
+    [Fact]
+    public async Task DispararBestEffortAsync_OperacionLanzaSincronicamente_NoPropagaLaExcepcion()
+    {
+        var ex = await Record.ExceptionAsync(() =>
+            RefrescoPermisos.DispararBestEffortAsync(
+                () => throw new InvalidOperationException("boom"), "test"));
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public async Task DispararBestEffortAsync_OperacionLanzaAsincronicamente_NoPropagaLaExcepcion()
+    {
+        var ex = await Record.ExceptionAsync(() =>
+            RefrescoPermisos.DispararBestEffortAsync(
+                async () => { await Task.Yield(); throw new InvalidOperationException("boom"); }, "test"));
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public async Task DispararBestEffortAsync_DevuelveElTaskQueEnvuelveLaOperacion_ParaSincronizacionDeterministaEnTests()
+    {
+        // Este es el contrato que consume PanelPermisosViewModel (Task 13, corrección A): el
+        // Task devuelto completa DESPUÉS de que la operación (exitosa o no) terminó, nunca
+        // antes — es lo que permite awaitarlo desde un test sin Task.Delay.
+        var ordenDeEjecucion = new List<string>();
+
+        var tarea = RefrescoPermisos.DispararBestEffortAsync(async () =>
+        {
+            await Task.Yield();
+            ordenDeEjecucion.Add("operacion");
+        }, "test");
+        await tarea;
+        ordenDeEjecucion.Add("despues-del-await");
+
+        Assert.Equal(new[] { "operacion", "despues-del-await" }, ordenDeEjecucion);
+    }
+}
+```
+
+- [ ] **Step 2: Correr el test y verificar que falla**
+
+Run: `dotnet test tests/StockApp.Presentation.Tests --filter FullyQualifiedName~RefrescoPermisosTests`
+Expected: FALLA de compilación — `RefrescoPermisos` no existe.
+
+- [ ] **Step 3: Implementar el helper**
+
+`src/StockApp.Presentation/Services/RefrescoPermisos.cs`:
+
+```csharp
+using System;
+using System.Threading.Tasks;
+
+namespace StockApp.Presentation.Services;
+
+/// <summary>
+/// Ejecuta una operación asíncrona en modo "mejor esfuerzo" (spec 2026-08-10): nunca propaga
+/// la excepción, la deja registrada en crash.log vía Program.LogFatal con el origen indicado
+/// — "mejor esfuerzo" no significa "invisible". Consumido por los cuatro puntos del sistema de
+/// permisos que refrescan el cache local sin poder bloquear ni interrumpir el flujo que los
+/// dispara: login (LoginViewModel, esta task), navegación entre secciones (ShellMainViewModel,
+/// Task 14), cambio de usuario seleccionado en el panel de permisos (PanelPermisosViewModel,
+/// Task 13) y el aviso de 403 (App.axaml.cs, Task 15).
+///
+/// Devuelve el Task que envuelve la operación (nunca lanza): quien lo llame puede ignorarlo
+/// (fire-and-forget puro, `_ = RefrescoPermisos.DispararBestEffortAsync(...)`) o guardarlo en
+/// un campo `internal Task` para que un test lo awaite de forma determinista — mismo patrón que
+/// ShellViewModel._tareaActualizacion / ProductoListViewModel._tareaDebounce ya usan en este
+/// repo para el mismo problema (sincronizar un test con trabajo fire-and-forget sin Task.Delay).
+/// </summary>
+public static class RefrescoPermisos
+{
+    public static async Task DispararBestEffortAsync(Func<Task> operacion, string origen)
+    {
+        try
+        {
+            await operacion();
+        }
+        catch (Exception ex)
+        {
+            StockApp.Presentation.Program.LogFatal(origen, ex);
+        }
+    }
+}
+```
+
+- [ ] **Step 4: Correr el test y verificar que pasa**
+
+Run: `dotnet test tests/StockApp.Presentation.Tests --filter FullyQualifiedName~RefrescoPermisosTests`
+Expected: 4 tests PASS.
 
 **Decisión de diseño (evita romper `AuthApiClientTests.cs` existente):** el spec dice "el desktop lo consulta al loguearse, con un GET /auth/permisos inmediato". Encadenar esa llamada DENTRO de `AuthApiClient.LoginAsync` rompería los ~10 tests existentes de ese archivo (su `FakeHttpHandler` devuelve una única respuesta canned sin importar la URL — un segundo request dentro del mismo método recibiría el body de login, no el de permisos, y fallaría al deserializar). En cambio, el refresco se dispara desde `LoginViewModel.EntrarAsync`, inmediatamente después de un login exitoso y antes de navegar — mismo efecto observable (permisos poblados antes de que se dibuje el shell), sin tocar `AuthApiClient.LoginAsync` ni sus tests.
 
-- [ ] **Step 1: Escribir los tests de Api que fallan**
+- [ ] **Step 5: Escribir los tests de Api que fallan**
 
 `tests/StockApp.Api.Tests/AuthEndpointPermisosTests.cs`:
 
@@ -2760,12 +2879,12 @@ public class AuthEndpointPermisosTests : ApiTestBase
 }
 ```
 
-- [ ] **Step 2: Correr los tests y verificar que fallan**
+- [ ] **Step 6: Correr los tests y verificar que fallan**
 
 Run: `dotnet test tests/StockApp.Api.Tests --filter FullyQualifiedName~AuthEndpointPermisosTests`
 Expected: FALLA — `GET /auth/permisos` no existe (404).
 
-- [ ] **Step 3: Agregar el endpoint**
+- [ ] **Step 7: Agregar el endpoint**
 
 En `src/StockApp.Api/Endpoints/AuthEndpoints.cs`, agregar el record de response (junto a los existentes) y el endpoint dentro de `MapAuthEndpoints`:
 
@@ -2786,12 +2905,12 @@ public record PermisosPropiosResponse(IReadOnlyList<string> Permisos);
 
 `AuthEndpoints.cs` hoy importa `StockApp.Api.Auth`, `StockApp.Application.Auth`, `StockApp.Application.Interfaces` y `StockApp.Domain.Enums`, pero no `StockApp.Application.Authorization` (para `AuthorizationService`) ni `System.Linq` (para `.ToList()` sobre el `IReadOnlySet<string>` que devuelve `IProveedorPermisos.ObtenerAsync`) — agregar ambos al tope.
 
-- [ ] **Step 4: Correr los tests y verificar que pasan**
+- [ ] **Step 8: Correr los tests y verificar que pasan**
 
 Run: `dotnet test tests/StockApp.Api.Tests --filter FullyQualifiedName~AuthEndpointPermisosTests`
 Expected: 3 tests PASS.
 
-- [ ] **Step 5: Escribir el test del cliente que falla**
+- [ ] **Step 9: Escribir el test del cliente que falla**
 
 `tests/StockApp.ApiClient.Tests/AuthApiClientPermisosTests.cs`:
 
@@ -2822,12 +2941,12 @@ public class AuthApiClientPermisosTests
 }
 ```
 
-- [ ] **Step 6: Correr el test y verificar que falla**
+- [ ] **Step 10: Correr el test y verificar que falla**
 
 Run: `dotnet test tests/StockApp.ApiClient.Tests --filter FullyQualifiedName~AuthApiClientPermisosTests`
 Expected: FALLA de compilación — `ObtenerPermisosPropiosAsync` no existe en `IAuthService`/`AuthApiClient`.
 
-- [ ] **Step 7: Ampliar `IAuthService`**
+- [ ] **Step 11: Ampliar `IAuthService`**
 
 En `src/StockApp.Application/Auth/IAuthService.cs`:
 
@@ -2847,7 +2966,7 @@ public interface IAuthService
 }
 ```
 
-- [ ] **Step 8: Implementar en `AuthApiClient`**
+- [ ] **Step 12: Implementar en `AuthApiClient`**
 
 En `src/StockApp.ApiClient/AuthApiClient.cs`, agregar el wire record y el método:
 
@@ -2870,12 +2989,12 @@ internal sealed record PermisosPropiosWire(List<string> Permisos);
     }
 ```
 
-- [ ] **Step 9: Correr el test del cliente y verificar que pasa**
+- [ ] **Step 13: Correr el test del cliente y verificar que pasa**
 
 Run: `dotnet test tests/StockApp.ApiClient.Tests --filter FullyQualifiedName~AuthApiClientPermisosTests`
 Expected: 1 test PASS.
 
-- [ ] **Step 10: Refrescar los permisos tras un login exitoso**
+- [ ] **Step 14: Refrescar los permisos tras un login exitoso**
 
 En `src/StockApp.Presentation/ViewModels/LoginViewModel.cs`, en `EntrarAsync`, reemplazar:
 
@@ -2896,17 +3015,12 @@ por:
             {
                 // Poblar los permisos configurables ANTES de navegar (spec 2026-08-10, decisión
                 // 7): el gating del menú (ShellMainViewModel.Puede*, Task 14) lee
-                // ApiSession.PermisosActuales desde el primer render. Best-effort: si la consulta
-                // falla, no bloquea el login — el menú arranca sin permisos configurables hasta
-                // el próximo refresh (navegación, o el manejo de 403 de la Task 15).
-                try
-                {
-                    await _authService.ObtenerPermisosPropiosAsync();
-                }
-                catch (Exception)
-                {
-                    // Intencional: ver comentario de arriba.
-                }
+                // ApiSession.PermisosActuales desde el primer render. Best-effort vía el helper
+                // compartido (RefrescoPermisos, Steps 1-4 de esta task): si la consulta falla,
+                // no bloquea el login — el menú arranca sin permisos configurables hasta el
+                // próximo refresh (navegación, Task 14, o el manejo de 403, Task 15).
+                await RefrescoPermisos.DispararBestEffortAsync(
+                    () => _authService.ObtenerPermisosPropiosAsync(), nameof(LoginViewModel));
 
                 if (SoloAccesoLimitado)
                     _shell.MostrarAccesoLimitado();
@@ -2915,7 +3029,9 @@ por:
             }
 ```
 
-- [ ] **Step 11: Agregar el test de Presentation**
+Agregar `using StockApp.Presentation.Services;` al tope de `LoginViewModel.cs` si falta (para `RefrescoPermisos`). `ObtenerPermisosPropiosAsync()` devuelve `Task<IReadOnlySet<string>>`, no `Task` — `Func<Task>` acepta el lambda `() => _authService.ObtenerPermisosPropiosAsync()` igual porque `Task<T>` es un `Task` (covarianza de retorno implícita del compilador para delegados `Func<Task>`, el valor de retorno del `Task<T>` simplemente se descarta).
+
+- [ ] **Step 15: Agregar el test de Presentation**
 
 `LoginViewModelTests.cs` usa un `ShellViewModel` REAL construido por el helper `CrearShellFake()` (no un mock — `ShellViewModel` es una clase concreta), y el helper `Crear(LoginResult resultado)` devuelve `(LoginViewModel vm, Mock<IAuthService> authMock, ShellViewModel shell)`. Los tests existentes de login exitoso verifican la navegación con `Assert.IsType<ShellMainViewModel>(shell.CurrentViewModel)` (ver `Login_Exitoso_NavegaAContenidoPrincipal`), no con un `Verify` sobre un mock de shell — mismo patrón a seguir acá.
 
@@ -2952,22 +3068,24 @@ Agregar a `tests/StockApp.Presentation.Tests/ViewModels/LoginViewModelTests.cs`:
 
 Agregar `using StockApp.Domain.Exceptions;` al tope del archivo si falta (para `ServidorNoDisponibleException`).
 
-- [ ] **Step 12: Correr la suite completa de los proyectos tocados**
+- [ ] **Step 16: Correr la suite completa de los proyectos tocados**
 
 Run: `dotnet test tests/StockApp.Api.Tests && dotnet test tests/StockApp.ApiClient.Tests && dotnet test tests/StockApp.Presentation.Tests`
 Expected: todo verde.
 
-- [ ] **Step 13: Commit**
+- [ ] **Step 17: Commit**
 
 ```bash
 git add src/StockApp.Api/Endpoints/AuthEndpoints.cs \
         src/StockApp.Application/Auth/IAuthService.cs \
         src/StockApp.ApiClient/AuthApiClient.cs \
         src/StockApp.Presentation/ViewModels/LoginViewModel.cs \
+        src/StockApp.Presentation/Services/RefrescoPermisos.cs \
         tests/StockApp.Api.Tests/AuthEndpointPermisosTests.cs \
         tests/StockApp.ApiClient.Tests/AuthApiClientPermisosTests.cs \
+        tests/StockApp.Presentation.Tests/Services/RefrescoPermisosTests.cs \
         tests/StockApp.Presentation.Tests/ViewModels/LoginViewModelTests.cs
-git commit -m "feat(permisos): GET /auth/permisos y refresco de permisos tras login"
+git commit -m "feat(permisos): GET /auth/permisos, refresco tras login y helper RefrescoPermisos"
 ```
 
 ---
@@ -4039,12 +4157,16 @@ git commit -m "feat(permisos): pantalla de administracion de usuarios (ABM compl
 - Test: `tests/StockApp.Presentation.Tests/ViewModels/Administracion/UsuariosAdminViewModelTests.cs` (ajustar `Crear`)
 
 **Interfaces:**
-- Consumes: `UsuariosAdminViewModel.UsuarioSeleccionado`/`.EsAdminSeleccionado` (Task 12); `IUsuarioService.ObtenerPermisosAsync`/`.GuardarPermisosAsync` (Task 10).
-- Produces: `PanelPermisosViewModel` con 11 propiedades booleanas (`Permiso*`, una por permiso configurable), 3 propiedades compuestas (`Productos`, `GastosYFacturas`, `IngresosDeCaja`), `EsAdminSeleccionado`, `GuardarCommand`, método `Conectar(UsuariosAdminViewModel padre)`.
+- Consumes: `UsuariosAdminViewModel.UsuarioSeleccionado`/`.EsAdminSeleccionado` (Task 12); `IUsuarioService.ObtenerPermisosAsync`/`.GuardarPermisosAsync` (Task 10); `StockApp.Presentation.Services.RefrescoPermisos.DispararBestEffortAsync(Func<Task> operacion, string origen)` → `Task` (Task 9).
+- Produces: `PanelPermisosViewModel` con 11 propiedades booleanas (`Permiso*`, una por permiso configurable), 3 propiedades compuestas (`Productos`, `GastosYFacturas`, `IngresosDeCaja`), `EsAdminSeleccionado`, `GuardarCommand`, método `Conectar(UsuariosAdminViewModel padre)`, campo `internal Task _tareaCarga`.
 
 **Decisión de diseño 1 (deriva de la tabla de mapeo del spec, no está en el spec como código):** las 11 propiedades booleanas base (una por permiso) son la fuente de verdad; los checkboxes que comparten permiso (Libro caja/Control POA/Calendario de pagos/Gastos/Ingresos, todos atados a `PermisoVerFinanzas`) se bindean literalmente a la misma propiedad — tildar cualquiera tilda los demás sin lógica extra. Los checkboxes compuestos (`Productos`, `GastosYFacturas`, `IngresosDeCaja`) son propiedades calculadas que fijan 2-3 propiedades base a la vez; tildar `GastosYFacturas` enciende también `PermisoVerFinanzas` (efecto visible, spec §"Sobre los checkboxes compuestos"), pero destildarlo NO apaga `PermisoVerFinanzas` (podría seguir siendo necesario para Libro caja/Control POA/Calendario, que tienen su propio checkbox independiente atado a la misma propiedad).
 
 **Decisión de diseño 2 (gap real de infraestructura, no del spec):** `StockApp.Presentation/ViewLocator.cs` resuelve cada View con `Activator.CreateInstance(type)` — **sin argumentos**. Ninguna View de este repo puede tener un constructor con parámetros. Por eso `PanelPermisosViewModel` NO puede recibir la instancia de `UsuariosAdminViewModel` en su propio constructor (eso obligaría a resolver la composición en el code-behind de la View, que no puede recibir dependencias) — en cambio, `PanelPermisosViewModel` se registra `AddTransient` sin dependencias circulares, `UsuariosAdminViewModel` lo recibe como tercer parámetro de SU constructor (DI lo resuelve solo, sin ciclos: `PanelPermisosViewModel` no depende de `UsuariosAdminViewModel` en su constructor), y `UsuariosAdminViewModel` llama a `panelPermisos.Conectar(this)` una vez construido. El code-behind de la View (Task 12, Step 6) no cambia ni una línea.
+
+**Decisión de diseño 3 (pre-flight, correcciones A y B):** `AlCambiarSeleccion` dispara `CargarAsync()` en fire-and-forget cada vez que cambia `UsuarioSeleccionado` — dos problemas reales de la primera versión de este plan, corregidos acá:
+- **Determinismo del test** (corrección A): un test que espera con `await Task.Delay(10)` a que termine un fire-and-forget es flaky por construcción — pasa en una máquina liviana y falla bajo CI cargado, sin que nadie entienda por qué al leer el fallo. El VM expone el `Task` en curso en un campo `internal Task _tareaCarga = Task.CompletedTask;` (visible para `StockApp.Presentation.Tests` vía el `InternalsVisibleTo` que ya declara `StockApp.Presentation.csproj`) — mismo patrón exacto que `ShellViewModel._tareaActualizacion` y `ProductoListViewModel._tareaDebounce` ya usan en este repo para el mismo problema. El test hace `await panel._tareaCarga;` en vez de esperar un tiempo fijo.
+- **Excepción no observada** (corrección B): sin manejo, una falla de `_usuarios.ObtenerPermisosAsync(...)` (ej. `ServidorNoDisponibleException` de un `UsuarioApiClient` real) queda como excepción no observada — inconsistente con las Tasks 14 y 15, que sí tratan sus fire-and-forget como mejor esfuerzo. `AlCambiarSeleccion` envuelve la llamada con `RefrescoPermisos.DispararBestEffortAsync` (Task 9) — el mismo helper que consumen las Tasks 14 y 15, así que las cuatro instancias de este patrón en el sistema de permisos comparten una sola implementación. El `Task` que devuelve el helper (que nunca lanza) es el que se guarda en `_tareaCarga` — así el test sigue pudiendo esperar de forma determinista sin importar si la carga tuvo éxito o falló.
 
 - [ ] **Step 1: Escribir los tests que fallan**
 
@@ -4081,11 +4203,29 @@ public class PanelPermisosViewModelTests
             .ReturnsAsync(new List<string> { Permisos.VerFinanzas, Permisos.GestionarProductos });
 
         padre.UsuarioSeleccionado = Dto(9, RolUsuario.Operador);
-        await Task.Delay(10); // el handler de PropertyChanged dispara CargarAsync en fire-and-forget
+        // AlCambiarSeleccion dispara CargarAsync en fire-and-forget vía RefrescoPermisos —
+        // _tareaCarga expone ese Task para esperarlo de forma determinista (pre-flight,
+        // corrección A: nada de Task.Delay).
+        await panel._tareaCarga;
 
         Assert.True(panel.PermisoVerFinanzas);
         Assert.True(panel.PermisoGestionarProductos);
         Assert.False(panel.PermisoRegistrarGastos);
+    }
+
+    [Fact]
+    public async Task CambiarUsuarioSeleccionado_ObtenerPermisosAsyncFalla_NoPropagaLaExcepcion()
+    {
+        // Corrección B del pre-flight: sin RefrescoPermisos, esto quedaba como excepción no
+        // observada. _tareaCarga nunca lanza — es el contrato de RefrescoPermisos.DispararBestEffortAsync.
+        var (panel, padre, svc) = Crear();
+        svc.Setup(s => s.ObtenerPermisosAsync(9))
+            .ThrowsAsync(new InvalidOperationException("el servidor no respondió"));
+
+        padre.UsuarioSeleccionado = Dto(9, RolUsuario.Operador);
+        var ex = await Record.ExceptionAsync(() => panel._tareaCarga);
+
+        Assert.Null(ex);
     }
 
     [Fact]
@@ -4194,6 +4334,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
+using StockApp.Presentation.Services;
 
 namespace StockApp.Presentation.ViewModels.Administracion;
 
@@ -4212,6 +4353,11 @@ public partial class PanelPermisosViewModel : ViewModelBase
     /// argumentos, así que la composición se resuelve enteramente en el grafo de constructores
     /// de los ViewModels, nunca en el code-behind).</summary>
     private UsuariosAdminViewModel? _padre;
+
+    /// <summary>Expone el fire-and-forget de AlCambiarSeleccion para que los tests lo esperen
+    /// de forma determinista, sin Task.Delay (pre-flight, corrección A) — mismo patrón que
+    /// ShellViewModel._tareaActualizacion / ProductoListViewModel._tareaDebounce.</summary>
+    internal Task _tareaCarga = Task.CompletedTask;
 
     // ── Catálogo / Stock ───────────────────────────────────────────────────
     [ObservableProperty] private bool _permisoGestionarProductos;
@@ -4296,7 +4442,11 @@ public partial class PanelPermisosViewModel : ViewModelBase
         if (e.PropertyName != nameof(UsuariosAdminViewModel.UsuarioSeleccionado)) return;
 
         OnPropertyChanged(nameof(EsAdminSeleccionado));
-        _ = CargarAsync();
+        // Mejor esfuerzo (pre-flight, corrección B): sin esto, una falla de
+        // ObtenerPermisosAsync (ej. ServidorNoDisponibleException) quedaba como excepción no
+        // observada. El Task envolvente (nunca lanza) se guarda en _tareaCarga para que los
+        // tests lo esperen de forma determinista (corrección A).
+        _tareaCarga = RefrescoPermisos.DispararBestEffortAsync(CargarAsync, nameof(PanelPermisosViewModel));
     }
 
     public async Task CargarAsync()
@@ -4362,7 +4512,7 @@ public partial class PanelPermisosViewModel : ViewModelBase
 - [ ] **Step 4: Correr los tests y verificar que pasan**
 
 Run: `dotnet test tests/StockApp.Presentation.Tests --filter FullyQualifiedName~PanelPermisosViewModelTests`
-Expected: 8 tests PASS.
+Expected: 9 tests PASS.
 
 - [ ] **Step 5: Ampliar el constructor de `UsuariosAdminViewModel` para recibir y conectar el panel**
 
@@ -4476,10 +4626,12 @@ git commit -m "feat(permisos): panel de permisos con checkboxes agrupados y comp
 - Modify: `src/StockApp.Presentation/Views/ShellMainView.axaml`
 - Modify: `src/StockApp.Presentation/Views/InicioView.axaml`
 - Test: `tests/StockApp.Presentation.Tests/ViewModels/ShellMainViewModelTests.cs` (agregar)
+- Test: `tests/StockApp.Presentation.Tests/ViewModels/ShellMainViewModelReportesTests.cs` (ajustar construcción — nuevo parámetro `IAuthService` del constructor, Step 11)
+- Test: `tests/StockApp.Presentation.Tests/ViewModels/Finanzas/ShellMainFinanzasTests.cs` (ajustar construcción — ídem)
 - Test: `tests/StockApp.Presentation.Tests/ViewModels/InicioViewModelTests.cs` (agregar)
 
 **Interfaces:**
-- Consumes: `ICurrentSession.RolActual`/`.PermisosActuales` (Task 4).
+- Consumes: `ICurrentSession.RolActual`/`.PermisosActuales` (Task 4); `IAuthService.ObtenerPermisosPropiosAsync()` → `Task<IReadOnlySet<string>>` (Task 9); `StockApp.Presentation.Services.RefrescoPermisos.DispararBestEffortAsync(Func<Task> operacion, string origen)` → `Task` (Task 9).
 - Produces: `ShellMainViewModel.PuedeGestionarProductos`/`.PuedeRegistrarMovimientos`/`.PuedeGestionarTareas`/`.PuedeVerFinanzas`/`.PuedeGestionarMaestrosFinanzas`/`.PuedeGestionarTablasMaestras`/`.PuedeVerReportes` → `bool`; `InicioViewModel.PuedeVerReportes` → `bool`.
 
 **Gap real hallado (excede la letra del spec, la cubre en espíritu):** el spec dice "los 16 `IsVisible={Binding EsAdmin}` se reemplazan uno a uno" — pero de los ítems de Finanzas/Movimientos/Productos/Tareas del sidebar, **ninguno tiene hoy ningún `IsVisible`** (siempre visibles, porque bajo el modelo viejo Admin y Operador tenían siempre los mismos permisos de esas secciones — `Permisos.cs`: "por ahora Admin Y Operador tienen todos"). Con permisos genuinamente revocables por operador, dejar esos ítems sin gating deja a un Operador sin `VerFinanzas` viendo igual el ítem "Gastos y facturas" en el menú (entra igual, rebota con 403 — no es un agujero de seguridad, pero sí una regresión de UX frente al propósito completo del feature). Esta task gatea también esos ítems, no solo los 16 originales — de lo contrario, las propiedades `Puede*` que el spec describe como "calculadas contra el cache local de permisos" (sección "Gating del menú lateral") quedarían sin usarse en la mitad de los casos reales.
@@ -4797,7 +4949,7 @@ sed -i '257s/EsAdmin/PuedeVerReportes/' src/StockApp.Presentation/Views/InicioVi
 
 - [ ] **Step 11: Refresco de permisos al navegar entre secciones (spec decisión 7, segunda mitad)**
 
-En `src/StockApp.Presentation/ViewModels/ShellMainViewModel.cs`, en `OnNavegacionCambiada` (el handler ya suscripto a `INavigationService.Cambiado` desde el constructor), agregar un refresco en segundo plano — fire-and-forget, nunca bloquea la navegación ni la revienta si falla:
+En `src/StockApp.Presentation/ViewModels/ShellMainViewModel.cs`, en `OnNavegacionCambiada` (el handler ya suscripto a `INavigationService.Cambiado` desde el constructor), agregar un refresco en segundo plano — fire-and-forget, nunca bloquea la navegación ni la revienta si falla. Usa el mismo helper compartido `RefrescoPermisos` (Task 9) que consumen `LoginViewModel` (Task 9), `PanelPermisosViewModel` (Task 13) y `App.axaml.cs` (Task 15) — pre-flight, corrección C: un solo lugar con el patrón try/catch de mejor esfuerzo, no cuatro copias:
 
 ```csharp
     private void OnNavegacionCambiada()
@@ -4809,21 +4961,12 @@ En `src/StockApp.Presentation/ViewModels/ShellMainViewModel.cs`, en `OnNavegacio
         // si el Admin revocó un permiso mientras la sesión seguía abierta, el menú se actualiza
         // sin esperar a la próxima acción que dispare un 403 (Task 15). No bloquea la
         // navegación: si la API está caída, el usuario sigue navegando con el cache viejo.
-        _ = RefrescarPermisosSinBloquearAsync();
-    }
-
-    private async Task RefrescarPermisosSinBloquearAsync()
-    {
-        try
-        {
-            await _authService.ObtenerPermisosPropiosAsync();
-        }
-        catch (Exception)
-        {
-            // Intencional: un refresco fallido no debe interrumpir la navegación.
-        }
+        _ = RefrescoPermisos.DispararBestEffortAsync(
+            () => _authService.ObtenerPermisosPropiosAsync(), nameof(ShellMainViewModel));
     }
 ```
+
+`StockApp.Presentation.Services` (namespace de `RefrescoPermisos`) ya está importado en este archivo — no hace falta agregar ningún `using` para esto.
 
 Esto requiere agregar `IAuthService _authService` al constructor de `ShellMainViewModel` (hoy no lo tiene). Reemplazar:
 
@@ -4910,7 +5053,7 @@ git commit -m "feat(permisos): gating del menu lateral por permiso configurable"
 - Test: `tests/StockApp.ApiClient.Tests/ApiSessionTests.cs` (agregar)
 
 **Interfaces:**
-- Consumes: `IAuthService.ObtenerPermisosPropiosAsync` (Task 9), `IConfirmacionService.InformarAsync` (existente).
+- Consumes: `IAuthService.ObtenerPermisosPropiosAsync()` → `Task<IReadOnlySet<string>>` (Task 9), `IConfirmacionService.InformarAsync` (existente), `StockApp.Presentation.Services.RefrescoPermisos.DispararBestEffortAsync(Func<Task> operacion, string origen)` → `Task` (Task 9).
 - Produces: `ApiSession.AccesoRevocado` → `event Action?`.
 
 - [ ] **Step 1: Escribir los tests que fallan**
@@ -5021,7 +5164,7 @@ Expected: todos PASS.
 
 - [ ] **Step 6: Cablear el evento en la composition root**
 
-En `src/StockApp.Presentation/App.axaml.cs`, en `OnFrameworkInitializationCompleted`, junto al cableado de `SesionVencida`/`LicenciaDesactivada` (líneas ~92-101):
+En `src/StockApp.Presentation/App.axaml.cs`, en `OnFrameworkInitializationCompleted`, junto al cableado de `SesionVencida`/`LicenciaDesactivada` (líneas ~92-101). El refresco de permisos usa el mismo helper compartido `RefrescoPermisos` (Task 9) que consumen `LoginViewModel` (Task 9), `PanelPermisosViewModel` (Task 13) y `ShellMainViewModel` (Task 14) — pre-flight, corrección C: un solo lugar con el patrón try/catch de mejor esfuerzo. El mensaje al usuario (`InformarAsync`) NO pasa por el helper — no es la parte "mejor esfuerzo" de este flujo, es el aviso que sí tiene que verse:
 
 ```csharp
             apiSession.LicenciaDesactivada += () => uiDispatcher.Post(
@@ -5037,18 +5180,13 @@ En `src/StockApp.Presentation/App.axaml.cs`, en `OnFrameworkInitializationComple
                 var confirmacion = _serviceProvider!.GetRequiredService<IConfirmacionService>();
                 await confirmacion.InformarAsync("Ya no tenés acceso a esta sección.");
 
-                try
-                {
-                    await _serviceProvider!.GetRequiredService<IAuthService>().ObtenerPermisosPropiosAsync();
-                }
-                catch (Exception)
-                {
-                    // Intencional: el aviso ya se mostró: un refresco fallido no debe crashear.
-                }
+                var authService = _serviceProvider!.GetRequiredService<IAuthService>();
+                await RefrescoPermisos.DispararBestEffortAsync(
+                    () => authService.ObtenerPermisosPropiosAsync(), "AccesoRevocado");
             });
 ```
 
-Agregar `using StockApp.Presentation.Services;` si falta (ya está, por `IConfirmacionService` usado en otros lugares del archivo).
+Agregar `using StockApp.Presentation.Services;` si falta (ya está, por `IConfirmacionService` usado en otros lugares del archivo — el mismo `using` cubre `RefrescoPermisos`, mismo namespace).
 
 - [ ] **Step 7: Correr la suite completa de ApiClient y Presentation**
 
