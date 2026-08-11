@@ -73,7 +73,8 @@ public class AnalisisImportacionServiceGastosTests
         session.Setup(s => s.RolActual).Returns(rol);
 
         var auth = new Mock<IAuthSvc>();
-        auth.Setup(a => a.Verificar(RolUsuario.Operador, Permisos.ImportarPlanillas))
+        auth.Setup(a => a.Verificar(
+                It.Is<ICurrentSession>(s => s.RolActual == RolUsuario.Operador), Permisos.ImportarPlanillas))
             .Throws<UnauthorizedAccessException>();
 
         var svc = new AnalisisImportacionService(

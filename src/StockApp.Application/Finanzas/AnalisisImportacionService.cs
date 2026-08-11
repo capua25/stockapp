@@ -40,7 +40,7 @@ public class AnalisisImportacionService : IAnalisisImportacionService
 
     public async Task<ResultadoAnalisisDto> AnalizarAsync(Stream planillaGastos, Stream planillaPoa, int ejercicio)
     {
-        _auth.Verificar(_session.RolActual, Permisos.ImportarPlanillas);
+        _auth.Verificar(_session, Permisos.ImportarPlanillas);
 
         // Maestros normalizados para clasificar OK vs nuevo. Proveedores/Rubros se comparan
         // contra TODOS los existentes (spec: sin calificador de "activo"); Fuentes SOLO contra

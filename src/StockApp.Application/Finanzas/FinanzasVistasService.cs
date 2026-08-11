@@ -29,7 +29,7 @@ public class FinanzasVistasService : IFinanzasVistasService
 
     public async Task<LibroCajaMesDto> ObtenerLibroCajaMesAsync(int anio, int mes)
     {
-        _auth.Verificar(_session.RolActual, Permisos.VerFinanzas);
+        _auth.Verificar(_session, Permisos.VerFinanzas);
 
         if (mes is < 1 or > 12)
             throw new ArgumentException("El mes debe estar entre 1 y 12.");
@@ -91,7 +91,7 @@ public class FinanzasVistasService : IFinanzasVistasService
 
     public async Task<LibroCajaAnualDto> ObtenerLibroCajaAnualAsync(int anio)
     {
-        _auth.Verificar(_session.RolActual, Permisos.VerFinanzas);
+        _auth.Verificar(_session, Permisos.VerFinanzas);
 
         var desde = new DateTime(anio, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var hasta = desde.AddYears(1).AddTicks(-1);
@@ -119,7 +119,7 @@ public class FinanzasVistasService : IFinanzasVistasService
 
     public async Task<IReadOnlyList<ControlPoaLineaDto>> ObtenerControlPoaAsync(int ejercicio)
     {
-        _auth.Verificar(_session.RolActual, Permisos.VerFinanzas);
+        _auth.Verificar(_session, Permisos.VerFinanzas);
 
         var lineas = (await _lineasPoa.ListarTodasAsync()).Where(l => l.Ejercicio == ejercicio).ToList();
         var gastadoPorLinea = await _gastos.TotalGastadoPorLineaAsync(ejercicio);
@@ -140,7 +140,7 @@ public class FinanzasVistasService : IFinanzasVistasService
 
     public async Task<CalendarioPagosDto> ObtenerCalendarioPagosAsync(DateTime? fechaReferencia = null)
     {
-        _auth.Verificar(_session.RolActual, Permisos.VerFinanzas);
+        _auth.Verificar(_session, Permisos.VerFinanzas);
 
         var hoy = (fechaReferencia ?? DateTime.UtcNow).Date;
         var gastos = await _gastos.ListarActivosConSaldoAsync();

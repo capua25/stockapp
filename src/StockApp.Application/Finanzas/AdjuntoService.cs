@@ -30,7 +30,7 @@ public class AdjuntoService : IAdjuntoService
 
     public async Task<AdjuntoDto> AgregarAGastoAsync(int gastoId, string nombreArchivo, byte[] contenido)
     {
-        _auth.Verificar(_session.RolActual, Permisos.RegistrarGastos);
+        _auth.Verificar(_session, Permisos.RegistrarGastos);
 
         var gasto = await _gastos.ObtenerPorIdAsync(gastoId)
             ?? throw new EntidadNoEncontradaException($"No existe el gasto {gastoId}.");
@@ -57,7 +57,7 @@ public class AdjuntoService : IAdjuntoService
 
     public async Task<AdjuntoDto> AgregarAPagoAsync(int pagoGastoId, string nombreArchivo, byte[] contenido)
     {
-        _auth.Verificar(_session.RolActual, Permisos.RegistrarPagos);
+        _auth.Verificar(_session, Permisos.RegistrarPagos);
 
         AdjuntoValidador.Validar(contenido, nombreArchivo);
 
@@ -81,19 +81,19 @@ public class AdjuntoService : IAdjuntoService
 
     public async Task<IReadOnlyList<AdjuntoDto>> ListarPorGastoAsync(int gastoId)
     {
-        _auth.Verificar(_session.RolActual, Permisos.VerFinanzas);
+        _auth.Verificar(_session, Permisos.VerFinanzas);
         return (await _repo.ListarPorGastoAsync(gastoId)).Select(ADto).ToList();
     }
 
     public async Task<IReadOnlyList<AdjuntoDto>> ListarPorPagoAsync(int pagoGastoId)
     {
-        _auth.Verificar(_session.RolActual, Permisos.VerFinanzas);
+        _auth.Verificar(_session, Permisos.VerFinanzas);
         return (await _repo.ListarPorPagoAsync(pagoGastoId)).Select(ADto).ToList();
     }
 
     public async Task<AdjuntoContenidoDto> ObtenerContenidoAsync(int adjuntoId)
     {
-        _auth.Verificar(_session.RolActual, Permisos.VerFinanzas);
+        _auth.Verificar(_session, Permisos.VerFinanzas);
 
         var adjunto = await _repo.ObtenerPorIdAsync(adjuntoId)
             ?? throw new EntidadNoEncontradaException($"No existe el adjunto {adjuntoId}.");
@@ -116,7 +116,7 @@ public class AdjuntoService : IAdjuntoService
             ?? throw new EntidadNoEncontradaException($"No existe el adjunto {adjuntoId}.");
 
         // El permiso depende de a qué pertenece el adjunto (spec F3, decisión 2).
-        _auth.Verificar(_session.RolActual, adjunto.EsDePago ? Permisos.RegistrarPagos : Permisos.RegistrarGastos);
+        _auth.Verificar(_session, adjunto.EsDePago ? Permisos.RegistrarPagos : Permisos.RegistrarGastos);
 
         adjunto.Activo = false;
         await _repo.ActualizarAsync(adjunto);

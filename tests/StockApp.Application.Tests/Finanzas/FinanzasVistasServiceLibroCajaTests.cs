@@ -43,7 +43,7 @@ public class FinanzasVistasServiceLibroCajaTests
     {
         var m = Crear();
         var auth = new Mock<IAuthSvc>();
-        auth.Setup(a => a.Verificar(It.IsAny<RolUsuario?>(), Permisos.VerFinanzas))
+        auth.Setup(a => a.Verificar(It.IsAny<ICurrentSession>(), Permisos.VerFinanzas))
             .Throws(new UnauthorizedAccessException());
         var svc = new FinanzasVistasService(
             m.Ingresos.Object, m.Gastos.Object, m.LineasPoa.Object,

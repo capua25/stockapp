@@ -48,7 +48,7 @@ public class GastoService : IGastoService
 
     public async Task<ResultadoGastoDto> AltaAsync(Gasto gasto, IReadOnlyList<int>? movimientoIds = null)
     {
-        _auth.Verificar(_session.RolActual, Permisos.RegistrarGastos);
+        _auth.Verificar(_session, Permisos.RegistrarGastos);
 
         var linea = await ValidarAsync(gasto, esAlta: true, original: null);
         await ValidarFacturaUnicaAsync(gasto);
@@ -82,7 +82,7 @@ public class GastoService : IGastoService
 
     public async Task<ResultadoGastoDto> ModificarAsync(Gasto gasto)
     {
-        _auth.Verificar(_session.RolActual, Permisos.RegistrarGastos);
+        _auth.Verificar(_session, Permisos.RegistrarGastos);
 
         var original = await _repo.ObtenerPorIdAsync(gasto.Id)
             ?? throw new EntidadNoEncontradaException($"Gasto {gasto.Id} no encontrado.");
@@ -161,7 +161,7 @@ public class GastoService : IGastoService
 
     public async Task AnularAsync(int id, bool confirmarAnulacionDePagoAutomatico = false)
     {
-        _auth.Verificar(_session.RolActual, Permisos.RegistrarGastos);
+        _auth.Verificar(_session, Permisos.RegistrarGastos);
 
         var gasto = await _repo.ObtenerPorIdAsync(id)
             ?? throw new EntidadNoEncontradaException($"Gasto {id} no encontrado.");
@@ -254,7 +254,7 @@ public class GastoService : IGastoService
 
     public async Task<int> RegistrarPagoAsync(PagoGasto pago)
     {
-        _auth.Verificar(_session.RolActual, Permisos.RegistrarPagos);
+        _auth.Verificar(_session, Permisos.RegistrarPagos);
 
         if (pago.Monto <= 0)
             throw new ArgumentException("El monto del pago debe ser mayor a cero.");
@@ -275,7 +275,7 @@ public class GastoService : IGastoService
 
     public async Task AnularPagoAsync(int gastoId, int pagoId)
     {
-        _auth.Verificar(_session.RolActual, Permisos.RegistrarPagos);
+        _auth.Verificar(_session, Permisos.RegistrarPagos);
 
         var gasto = await _repo.ObtenerPorIdAsync(gastoId)
             ?? throw new EntidadNoEncontradaException($"Gasto {gastoId} no encontrado.");
@@ -297,7 +297,7 @@ public class GastoService : IGastoService
 
     public async Task AsociarMovimientosAsync(int gastoId, IReadOnlyList<int> movimientoIds)
     {
-        _auth.Verificar(_session.RolActual, Permisos.RegistrarGastos);
+        _auth.Verificar(_session, Permisos.RegistrarGastos);
 
         var gasto = await _repo.ObtenerPorIdAsync(gastoId)
             ?? throw new EntidadNoEncontradaException($"Gasto {gastoId} no encontrado.");
@@ -316,20 +316,20 @@ public class GastoService : IGastoService
 
     public async Task<Gasto> ObtenerPorIdAsync(int id)
     {
-        _auth.Verificar(_session.RolActual, Permisos.VerFinanzas);
+        _auth.Verificar(_session, Permisos.VerFinanzas);
         return await _repo.ObtenerPorIdAsync(id)
             ?? throw new EntidadNoEncontradaException($"Gasto {id} no encontrado.");
     }
 
     public async Task<Gasto?> ObtenerPorProveedorYFacturaAsync(int proveedorId, string numeroFactura, string? numeroOrden)
     {
-        _auth.Verificar(_session.RolActual, Permisos.VerFinanzas);
+        _auth.Verificar(_session, Permisos.VerFinanzas);
         return await _repo.ObtenerPorProveedorYFacturaAsync(proveedorId, numeroFactura, numeroOrden);
     }
 
     public async Task<IReadOnlyList<Gasto>> ListarAsync(GastoFiltro filtro)
     {
-        _auth.Verificar(_session.RolActual, Permisos.VerFinanzas);
+        _auth.Verificar(_session, Permisos.VerFinanzas);
         return await _repo.ListarAsync(filtro);
     }
 

@@ -34,7 +34,7 @@ public class ConfirmacionImportacionService : IConfirmacionImportacionService
 
     public async Task<ResultadoConfirmacionDto> ConfirmarAsync(ConfirmarImportacionDto dto)
     {
-        _auth.Verificar(_session.RolActual, Permisos.ImportarPlanillas);
+        _auth.Verificar(_session, Permisos.ImportarPlanillas);
 
         await ValidarAsync(dto);
 
@@ -47,14 +47,14 @@ public class ConfirmacionImportacionService : IConfirmacionImportacionService
 
     public async Task<ResultadoReversionDto> RevertirAsync(Guid idImportacion)
     {
-        _auth.Verificar(_session.RolActual, Permisos.ImportarPlanillas);
+        _auth.Verificar(_session, Permisos.ImportarPlanillas);
 
         return await _importacionRepo.RevertirAsync(idImportacion, _session.UsuarioActual!.Id);
     }
 
     public async Task<IReadOnlyList<ImportacionHistorialDto>> ListarHistorialAsync()
     {
-        _auth.Verificar(_session.RolActual, Permisos.ImportarPlanillas);
+        _auth.Verificar(_session, Permisos.ImportarPlanillas);
 
         return await _importacionRepo.ListarHistorialAsync();
     }

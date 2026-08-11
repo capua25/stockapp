@@ -37,7 +37,7 @@ public class AdjuntoServiceTests
 
         await _service.AgregarAGastoAsync(1, "factura.pdf", BytesPdf);
 
-        _auth.Verify(a => a.Verificar(RolUsuario.Admin, Permisos.RegistrarGastos), Times.Once);
+        _auth.Verify(a => a.Verificar(_session.Object, Permisos.RegistrarGastos), Times.Once);
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public class AdjuntoServiceTests
     [Fact]
     public async Task AgregarAGastoAsync_SinPermiso_NoPersisteNiAuditaYPropagaExcepcion()
     {
-        _auth.Setup(a => a.Verificar(RolUsuario.Admin, Permisos.RegistrarGastos))
+        _auth.Setup(a => a.Verificar(_session.Object, Permisos.RegistrarGastos))
             .Throws<UnauthorizedAccessException>();
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(
@@ -105,7 +105,7 @@ public class AdjuntoServiceTests
 
         await _service.AgregarAPagoAsync(5, "recibo.pdf", BytesPdf);
 
-        _auth.Verify(a => a.Verificar(RolUsuario.Admin, Permisos.RegistrarPagos), Times.Once);
+        _auth.Verify(a => a.Verificar(_session.Object, Permisos.RegistrarPagos), Times.Once);
     }
 
     [Fact]
@@ -115,7 +115,7 @@ public class AdjuntoServiceTests
 
         await _service.ListarPorGastoAsync(1);
 
-        _auth.Verify(a => a.Verificar(RolUsuario.Admin, Permisos.VerFinanzas), Times.Once);
+        _auth.Verify(a => a.Verificar(_session.Object, Permisos.VerFinanzas), Times.Once);
     }
 
     [Fact]
@@ -174,7 +174,7 @@ public class AdjuntoServiceTests
 
         await _service.QuitarAsync(8);
 
-        _auth.Verify(a => a.Verificar(RolUsuario.Admin, Permisos.RegistrarPagos), Times.Once);
+        _auth.Verify(a => a.Verificar(_session.Object, Permisos.RegistrarPagos), Times.Once);
     }
 
     [Fact]
@@ -182,7 +182,7 @@ public class AdjuntoServiceTests
     {
         var adjunto = new Adjunto { Id = 9, PagoGastoId = 5, Activo = true, NombreArchivo = "r2.pdf" };
         _adjuntos.Setup(r => r.ObtenerPorIdAsync(9)).ReturnsAsync(adjunto);
-        _auth.Setup(a => a.Verificar(RolUsuario.Admin, Permisos.RegistrarPagos))
+        _auth.Setup(a => a.Verificar(_session.Object, Permisos.RegistrarPagos))
             .Throws<UnauthorizedAccessException>();
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => _service.QuitarAsync(9));

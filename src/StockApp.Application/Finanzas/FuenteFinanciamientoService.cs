@@ -31,7 +31,7 @@ public class FuenteFinanciamientoService : IFuenteFinanciamientoService
 
     public async Task<int> AltaAsync(FuenteFinanciamiento fuente)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarMaestrosFinanzas);
+        _auth.Verificar(_session, Permisos.GestionarMaestrosFinanzas);
 
         if (string.IsNullOrWhiteSpace(fuente.Nombre))
             throw new ArgumentException("El nombre de la fuente de financiamiento es obligatorio.");
@@ -53,7 +53,7 @@ public class FuenteFinanciamientoService : IFuenteFinanciamientoService
 
     public async Task ModificarAsync(FuenteFinanciamiento fuente)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarMaestrosFinanzas);
+        _auth.Verificar(_session, Permisos.GestionarMaestrosFinanzas);
 
         if (string.IsNullOrWhiteSpace(fuente.Nombre))
             throw new ArgumentException("El nombre de la fuente de financiamiento es obligatorio.");
@@ -85,7 +85,7 @@ public class FuenteFinanciamientoService : IFuenteFinanciamientoService
 
     public async Task BajaLogicaAsync(int id)
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarMaestrosFinanzas);
+        _auth.Verificar(_session, Permisos.GestionarMaestrosFinanzas);
 
         var fuente = await _repo.ObtenerPorIdAsync(id)
             ?? throw new EntidadNoEncontradaException($"Fuente de financiamiento {id} no encontrada.");
@@ -105,13 +105,13 @@ public class FuenteFinanciamientoService : IFuenteFinanciamientoService
 
     public async Task<IReadOnlyList<FuenteFinanciamiento>> ListarTodasAsync()
     {
-        _auth.Verificar(_session.RolActual, Permisos.GestionarMaestrosFinanzas);
+        _auth.Verificar(_session, Permisos.GestionarMaestrosFinanzas);
         return await _repo.ListarTodasAsync();
     }
 
     public async Task<IReadOnlyList<FuenteFinanciamiento>> ListarActivasAsync()
     {
-        _auth.Verificar(_session.RolActual, Permisos.VerFinanzas);
+        _auth.Verificar(_session, Permisos.VerFinanzas);
         var todas = await _repo.ListarTodasAsync();
         return todas.Where(f => f.Activo).ToList();
     }
