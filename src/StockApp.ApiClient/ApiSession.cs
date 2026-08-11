@@ -31,6 +31,14 @@ public class ApiSession : ICurrentSession
     /// </summary>
     public event Action? LicenciaDesactivada;
 
+    /// <summary>
+    /// El servidor respondió 403 Forbidden: el Admin cambió los permisos del usuario mientras
+    /// la sesión seguía abierta (spec 2026-08-10). A diferencia de SesionVencida, la sesión
+    /// SIGUE siendo válida — no se cierra. La composition root lo cablea a un mensaje claro y
+    /// a un refresco de GET /auth/permisos (App.axaml.cs).
+    /// </summary>
+    public event Action? AccesoRevocado;
+
     public bool EstaAutenticado { get { lock (_lock) return _sesionActual != null; } }
 
     public UsuarioSesion? UsuarioActual { get { lock (_lock) return _sesionActual; } }
@@ -95,4 +103,7 @@ public class ApiSession : ICurrentSession
 
     /// <summary>Lo invoca AuthTokenHandler ante un 423 (internal + InternalsVisibleTo).</summary>
     internal void DispararLicenciaDesactivada() => LicenciaDesactivada?.Invoke();
+
+    /// <summary>Lo invoca AuthTokenHandler ante un 403 (internal + InternalsVisibleTo).</summary>
+    internal void DispararAccesoRevocado() => AccesoRevocado?.Invoke();
 }

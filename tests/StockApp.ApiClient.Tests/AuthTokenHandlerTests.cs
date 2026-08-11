@@ -101,4 +101,36 @@ public class AuthTokenHandlerTests
 
         Assert.True(disparado);
     }
+
+    [Fact]
+    public async Task Un403_DisparaAccesoRevocado()
+    {
+        var session = SesionConToken();
+        var disparado = false;
+        session.AccesoRevocado += () => disparado = true;
+        var fake = new FakeHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.Forbidden));
+        var http = TestHttp.CrearCliente(fake, session);
+
+        var response = await http.GetAsync("finanzas/gastos");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.True(disparado);
+        // A diferencia del 401, la sesión SIGUE siendo válida — un 403 significa que el
+        // Admin cambió algo, no que el token venció.
+        Assert.True(session.EstaAutenticado);
+    }
+
+    [Fact]
+    public async Task Un200_NoDisparaAccesoRevocado()
+    {
+        var session = SesionConToken();
+        var disparado = false;
+        session.AccesoRevocado += () => disparado = true;
+        var fake = new FakeHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        var http = TestHttp.CrearCliente(fake, session);
+
+        await http.GetAsync("categorias");
+
+        Assert.False(disparado);
+    }
 }

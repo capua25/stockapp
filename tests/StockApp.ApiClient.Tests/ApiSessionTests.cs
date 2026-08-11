@@ -111,4 +111,19 @@ public class ApiSessionTests
 
         Assert.Empty(session.PermisosActuales);
     }
+
+    [Fact]
+    public void DispararAccesoRevocado_InvocaElEvento()
+    {
+        // DispararAccesoRevocado es internal — visible acá porque StockApp.ApiClient.csproj
+        // declara InternalsVisibleTo hacia StockApp.ApiClient.Tests (mismo mecanismo que ya
+        // usan los tests de SesionVencida/LicenciaDesactivada en AuthTokenHandlerTests.cs).
+        var session = new ApiSession();
+        var disparado = false;
+        session.AccesoRevocado += () => disparado = true;
+
+        session.DispararAccesoRevocado();
+
+        Assert.True(disparado);
+    }
 }

@@ -39,6 +39,11 @@ public class AuthTokenHandler : DelegatingHandler
             _session.DispararLicenciaDesactivada();
         }
 
+        if (response.StatusCode == HttpStatusCode.Forbidden)
+        {
+            _session.DispararAccesoRevocado();
+        }
+
         return response;
     }
 }

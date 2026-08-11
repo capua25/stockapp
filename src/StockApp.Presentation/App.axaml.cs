@@ -100,6 +100,21 @@ public partial class App : AvaloniaApp
             apiSession.LicenciaDesactivada += () => uiDispatcher.Post(
                 () => shell.MostrarBloqueoLicencia());
 
+            // Acceso revocado (spec 2026-08-10): un 403 con sesión válida significa que el
+            // Admin cambió los permisos de este usuario mientras la sesión seguía abierta —
+            // a diferencia de SesionVencida, NO se cierra sesión ni se navega. Se avisa y se
+            // refresca el cache de permisos para que el menú deje de mostrar ítems ya
+            // revocados. Best-effort: si el refresco falla, el aviso igual se mostró.
+            apiSession.AccesoRevocado += () => uiDispatcher.Post(async () =>
+            {
+                var confirmacion = _serviceProvider!.GetRequiredService<IConfirmacionService>();
+                await confirmacion.InformarAsync("Ya no tenés acceso a esta sección.");
+
+                var authService = _serviceProvider!.GetRequiredService<IAuthService>();
+                await RefrescoPermisos.DispararBestEffortAsync(
+                    () => authService.ObtenerPermisosPropiosAsync(), "AccesoRevocado");
+            });
+
             // Inicializa el shell (decide login / primer arranque) ANTES de asignar el
             // DataContext, y en el thread pool, para no deadlockear el UI thread ni disparar
             // PropertyChanged desde un hilo no-UI con el binding ya activo. Si la API está
