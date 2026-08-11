@@ -1,6 +1,7 @@
 using Moq;
 using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
+using StockApp.Application.Interfaces;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.ViewModels.Administracion;
 using Xunit;
@@ -15,8 +16,10 @@ public class PanelPermisosViewModelTests
     {
         var svc = new Mock<IUsuarioService>();
         var confirm = new Mock<StockApp.Presentation.Services.IConfirmacionService>();
+        var session = new Mock<ICurrentSession>();
+        session.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(1, "admin1", RolUsuario.Admin, null));
         var panel = new PanelPermisosViewModel(svc.Object);
-        var padre = new UsuariosAdminViewModel(svc.Object, confirm.Object, panel);
+        var padre = new UsuariosAdminViewModel(svc.Object, confirm.Object, panel, session.Object);
         return (panel, padre, svc);
     }
 

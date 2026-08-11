@@ -1,5 +1,6 @@
 using Moq;
 using StockApp.Application.Auth;
+using StockApp.Application.Interfaces;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Services;
@@ -10,12 +11,23 @@ namespace StockApp.Presentation.Tests.ViewModels.Administracion;
 
 public class UsuariosAdminViewModelTests
 {
+    /// <summary>Id del Admin "logueado" en todos los tests que usan Crear() (Round 2, review
+    /// Task 12) — Dto(1, ...) representa "el usuario de la sesión actual" en los tests de
+    /// auto-cambio de contraseña; cualquier otro id (ej. 2) representa "otro usuario".</summary>
+    private static Mock<ICurrentSession> CrearSesionAdmin(int id = 1)
+    {
+        var session = new Mock<ICurrentSession>();
+        session.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(id, $"usuario{id}", RolUsuario.Admin, null));
+        return session;
+    }
+
     private static (UsuariosAdminViewModel vm, Mock<IUsuarioService> svc, Mock<IConfirmacionService> confirm) Crear()
     {
         var svc = new Mock<IUsuarioService>();
         var confirm = new Mock<IConfirmacionService>();
         confirm.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(true);
-        var vm = new UsuariosAdminViewModel(svc.Object, confirm.Object, new PanelPermisosViewModel(svc.Object));
+        var session = CrearSesionAdmin();
+        var vm = new UsuariosAdminViewModel(svc.Object, confirm.Object, new PanelPermisosViewModel(svc.Object), session.Object);
         return (vm, svc, confirm);
     }
 
@@ -184,7 +196,8 @@ public class UsuariosAdminViewModelTests
         var svc = new Mock<IUsuarioService>();
         var confirm = new Mock<IConfirmacionService>();
         confirm.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(false);
-        var vm = new UsuariosAdminViewModel(svc.Object, confirm.Object, new PanelPermisosViewModel(svc.Object));
+        var vm = new UsuariosAdminViewModel(
+            svc.Object, confirm.Object, new PanelPermisosViewModel(svc.Object), CrearSesionAdmin().Object);
         vm.UsuarioSeleccionado = Dto(2, RolUsuario.Operador);
         vm.NuevaContrasenaParaSeleccionado = "otraClave123";
 
@@ -209,6 +222,76 @@ public class UsuariosAdminViewModelTests
         vm.UsuarioSeleccionado = Dto(2, RolUsuario.Operador);
 
         await vm.BajaCommand.ExecuteAsync(null);
+
+        Assert.Null(vm.MensajeError);
+    }
+
+    // ── Round 2 (review Task 12) ────────────────────────────────────────────────
+
+    [Fact]
+    public async Task CambiarContrasenaAsync_SeleccionaSuPropioUsuario_NoLlamaAlServicioYExplicaPorQue()
+    {
+        var (vm, svc, confirm) = Crear();
+        // Dto(1, ...) coincide con el Id que CrearSesionAdmin() le da al usuario de la sesión.
+        vm.UsuarioSeleccionado = Dto(1, RolUsuario.Admin);
+        vm.NuevaContrasenaParaSeleccionado = "otraClave123";
+
+        await vm.CambiarContrasenaCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.CambiarContrasenaAsync(It.IsAny<int>(), It.IsAny<string>(), It.IsAny<string?>()), Times.Never);
+        confirm.Verify(c => c.PreguntarAsync(It.IsAny<string>()), Times.Never);
+        confirm.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task CambiarContrasenaAsync_ErrorDeAutorizacion_InformaAlUsuarioSinExplotar()
+    {
+        var (vm, svc, confirm) = Crear();
+        var mensaje = "Prohibido.";
+        svc.Setup(s => s.CambiarContrasenaAsync(2, "otraClave123", null))
+            .ThrowsAsync(new UnauthorizedAccessException(mensaje));
+        vm.UsuarioSeleccionado = Dto(2, RolUsuario.Operador);
+        vm.NuevaContrasenaParaSeleccionado = "otraClave123";
+
+        await vm.CambiarContrasenaCommand.ExecuteAsync(null);
+
+        confirm.Verify(c => c.InformarAsync(mensaje), Times.Once);
+    }
+
+    [Fact]
+    public async Task MensajeError_SeLimpiaAlIniciarCambiarRol()
+    {
+        var (vm, svc, _) = Crear();
+        svc.Setup(s => s.AltaUsuarioAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string>(), It.IsAny<RolUsuario>()))
+            .ThrowsAsync(new ReglaDeNegocioException("Ya existe un usuario con ese nombre."));
+        vm.NuevoNombreUsuario = "repetido";
+        vm.NuevaContrasenaPlan = "pwd12345";
+        await vm.AltaCommand.ExecuteAsync(null);
+        Assert.NotNull(vm.MensajeError);
+
+        svc.Setup(s => s.ListarAsync()).ReturnsAsync(new List<UsuarioDto>());
+        vm.UsuarioSeleccionado = Dto(2, RolUsuario.Operador);
+
+        await vm.CambiarRolCommand.ExecuteAsync(RolUsuario.Admin);
+
+        Assert.Null(vm.MensajeError);
+    }
+
+    [Fact]
+    public async Task MensajeError_SeLimpiaAlIniciarCambiarContrasena()
+    {
+        var (vm, svc, _) = Crear();
+        svc.Setup(s => s.AltaUsuarioAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string>(), It.IsAny<RolUsuario>()))
+            .ThrowsAsync(new ReglaDeNegocioException("Ya existe un usuario con ese nombre."));
+        vm.NuevoNombreUsuario = "repetido";
+        vm.NuevaContrasenaPlan = "pwd12345";
+        await vm.AltaCommand.ExecuteAsync(null);
+        Assert.NotNull(vm.MensajeError);
+
+        vm.UsuarioSeleccionado = Dto(2, RolUsuario.Operador);
+        vm.NuevaContrasenaParaSeleccionado = "otraClave123";
+
+        await vm.CambiarContrasenaCommand.ExecuteAsync(null);
 
         Assert.Null(vm.MensajeError);
     }

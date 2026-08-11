@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Auth;
+using StockApp.Application.Interfaces;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Services;
@@ -22,6 +23,7 @@ public partial class UsuariosAdminViewModel : ViewModelBase
 {
     private readonly IUsuarioService _usuarios;
     private readonly IConfirmacionService _confirmacion;
+    private readonly ICurrentSession _session;
 
     public ObservableCollection<UsuarioDto> Items { get; } = new();
 
@@ -53,12 +55,14 @@ public partial class UsuariosAdminViewModel : ViewModelBase
     public PanelPermisosViewModel PanelPermisos { get; }
 
     public UsuariosAdminViewModel(
-        IUsuarioService usuarios, IConfirmacionService confirmacion, PanelPermisosViewModel panelPermisos)
+        IUsuarioService usuarios, IConfirmacionService confirmacion, PanelPermisosViewModel panelPermisos,
+        ICurrentSession session)
     {
         _usuarios = usuarios;
         _confirmacion = confirmacion;
         PanelPermisos = panelPermisos;
         PanelPermisos.Conectar(this);
+        _session = session;
     }
 
     public async Task CargarAsync()
@@ -142,6 +146,24 @@ public partial class UsuariosAdminViewModel : ViewModelBase
 
         MensajeError = null;
 
+        // Bloqueo explícito (Round 2, review Task 12): esta pantalla es un reset
+        // administrativo — SIEMPRE manda contrasenaActualPlan: null (ver comentario más abajo).
+        // Si el seleccionado sos vos mismo, UsuarioService.CambiarContrasenaAsync (Fix 7, §5.1)
+        // SIEMPRE rechaza con UnauthorizedAccessException porque el auto-cambio exige verificar
+        // la contraseña actual, y acá no hay ningún campo para proveerla. Se corta ANTES de
+        // llamar al servicio (mismo criterio de "no dejar que explote" que BajaLogicaAsync usa
+        // para la auto-baja), con un mensaje propio que explica el motivo y la salida real —
+        // el mensaje de UnauthorizedAccessException del servicio ("confirmá tu contraseña
+        // actual") sería un callejón sin salida acá, porque este formulario no tiene ese campo.
+        if (UsuarioSeleccionado.Id == _session.UsuarioActual?.Id)
+        {
+            await _confirmacion.InformarAsync(
+                "No podés cambiar tu propia contraseña desde esta pantalla: acá el reset no " +
+                "pide tu contraseña actual, y el cambio propio sí la exige por seguridad. " +
+                "Pedile a otro Admin que te la cambie desde esta misma pantalla.");
+            return;
+        }
+
         // Confirmación (decisión de review, Task 12): resetear la contraseña de otro usuario
         // le corta el acceso con su clave actual sin aviso previo — mismo mecanismo de
         // PreguntarAsync que ya usa BajaAsync más arriba en esta clase.
@@ -159,9 +181,14 @@ public partial class UsuariosAdminViewModel : ViewModelBase
             NuevaContrasenaParaSeleccionado = string.Empty;
             await _confirmacion.InformarAsync("Contraseña actualizada.");
         }
-        // Fix (review Task 12): faltaba EntidadNoEncontradaException, mismo motivo que en
-        // CambiarRolAsync — UsuarioService.CambiarContrasenaAsync también la lanza.
-        catch (Exception ex) when (ex is ReglaDeNegocioException or ArgumentException or EntidadNoEncontradaException)
+        // Fix (review Task 12, Round 1): faltaba EntidadNoEncontradaException, mismo motivo
+        // que en CambiarRolAsync — UsuarioService.CambiarContrasenaAsync también la lanza.
+        // Fix (review Task 12, Round 2): sumamos UnauthorizedAccessException como defensa en
+        // profundidad — el bloqueo explícito de arriba cubre el camino conocido (auto-cambio),
+        // pero si mañana aparece otro camino que la dispare (ej. el permiso se revoca a mitad
+        // de sesión), que se muestre como diálogo y no como una falla muda en crash.log.
+        catch (Exception ex) when (ex is ReglaDeNegocioException or ArgumentException
+            or EntidadNoEncontradaException or UnauthorizedAccessException)
         {
             await _confirmacion.InformarAsync(ex.Message);
         }
