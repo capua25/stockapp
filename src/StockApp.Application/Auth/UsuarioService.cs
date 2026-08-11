@@ -19,6 +19,7 @@ public class UsuarioService : IUsuarioService
     private readonly IAuthorizationService _auth;
     private readonly IAuditLogger          _audit;
     private readonly IRevocadorTokens      _revocador;
+    private readonly IProveedorPermisos    _permisos;
 
     public UsuarioService(
         IUsuarioRepository    repo,
@@ -26,7 +27,8 @@ public class UsuarioService : IUsuarioService
         ICurrentSession       session,
         IAuthorizationService auth,
         IAuditLogger          audit,
-        IRevocadorTokens      revocador)
+        IRevocadorTokens      revocador,
+        IProveedorPermisos    permisos)
     {
         _repo      = repo;
         _hasher    = hasher;
@@ -34,6 +36,7 @@ public class UsuarioService : IUsuarioService
         _auth      = auth;
         _audit     = audit;
         _revocador = revocador;
+        _permisos  = permisos;
     }
 
     public async Task<int> AltaUsuarioAsync(
@@ -219,6 +222,51 @@ public class UsuarioService : IUsuarioService
 
         var usuarios = await _repo.ListarTodosAsync();
         return usuarios.Select(AUsuarioDto).ToList();
+    }
+
+    public async Task<IReadOnlyList<string>> ObtenerPermisosAsync(int usuarioId)
+    {
+        _auth.Verificar(_session, Permisos.GestionarUsuarios);
+
+        var usuario = await _repo.ObtenerPorIdAsync(usuarioId)
+            ?? throw new EntidadNoEncontradaException($"Usuario {usuarioId} no encontrado.");
+
+        // Admin siempre tiene los 11 configurables — no hace falta consultar el proveedor
+        // (y de hecho no debería haber filas: nunca se le escriben, spec decisión 3).
+        if (usuario.Rol == RolUsuario.Admin)
+            return AuthorizationService.PermisosConfigurables;
+
+        var permisos = await _permisos.ObtenerAsync(usuarioId);
+        return permisos.ToList();
+    }
+
+    public async Task GuardarPermisosAsync(int usuarioId, IReadOnlyList<string> permisos)
+    {
+        _auth.Verificar(_session, Permisos.GestionarUsuarios);
+
+        var usuario = await _repo.ObtenerPorIdAsync(usuarioId)
+            ?? throw new EntidadNoEncontradaException($"Usuario {usuarioId} no encontrado.");
+
+        // El servidor no confía en que el cliente deshabilite el panel de permisos para Admin
+        // (spec, endpoint de administración): lo valida también del lado seguro.
+        if (usuario.Rol == RolUsuario.Admin)
+            throw new ArgumentException(
+                "No se pueden configurar permisos para un usuario Admin: tiene acceso total.");
+
+        // Defensa contra un cliente viejo o manipulado intentando colar un permiso estructural
+        // (ej. GestionarUsuarios) — nunca deberían estar en la whitelist de configurables.
+        var fueraDeWhitelist = permisos.Where(p => !AuthorizationService.PermisosConfigurables.Contains(p)).ToList();
+        if (fueraDeWhitelist.Count > 0)
+            throw new ArgumentException(
+                $"Los siguientes permisos no son configurables: {string.Join(", ", fueraDeWhitelist)}.");
+
+        await _permisos.GuardarAsync(usuarioId, permisos);
+
+        await _audit.RegistrarAsync(
+            _session.UsuarioActual!.Id,
+            AccionAuditada.ModificacionPermisosUsuario,
+            "Usuario", usuarioId,
+            $"Permisos actualizados: {string.Join(", ", permisos)}");
     }
 
     private static UsuarioDto AUsuarioDto(Usuario u) => new UsuarioDto(

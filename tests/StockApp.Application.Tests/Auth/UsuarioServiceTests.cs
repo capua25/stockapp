@@ -21,7 +21,8 @@ public class UsuarioServiceTests
                     Mock<ICurrentSession> sessionMock,
                     Mock<IAuthSvc> authMock,
                     Mock<IAuditLogger> auditMock,
-                    Mock<IRevocadorTokens> revocadorMock)
+                    Mock<IRevocadorTokens> revocadorMock,
+                    Mock<IProveedorPermisos> permisosMock)
         Crear(RolUsuario rolSesion = RolUsuario.Admin, int idSesion = 1)
     {
         var repo       = new Mock<IUsuarioRepository>();
@@ -30,6 +31,7 @@ public class UsuarioServiceTests
         var auth       = new Mock<IAuthSvc>();
         var audit      = new Mock<IAuditLogger>();
         var revocador  = new Mock<IRevocadorTokens>();
+        var permisos   = new Mock<IProveedorPermisos>();
 
         session.Setup(s => s.RolActual).Returns(rolSesion);
         session.Setup(s => s.UsuarioActual).Returns(SesionAdmin(idSesion));
@@ -43,14 +45,15 @@ public class UsuarioServiceTests
                 .Throws<UnauthorizedAccessException>();
 
         var svc = new UsuarioService(
-            repo.Object, hasher.Object, session.Object, auth.Object, audit.Object, revocador.Object);
-        return (svc, repo, hasher, session, auth, audit, revocador);
+            repo.Object, hasher.Object, session.Object, auth.Object, audit.Object, revocador.Object,
+            permisos.Object);
+        return (svc, repo, hasher, session, auth, audit, revocador, permisos);
     }
 
     [Fact]
     public async Task AltaUsuario_Admin_CreaConHashYEventoAuditoria_DevuelveId()
     {
-        var (svc, repo, hasher, session, _, audit, _) = Crear();
+        var (svc, repo, hasher, session, _, audit, _, _) = Crear();
         repo.Setup(r => r.AgregarAsync(It.IsAny<Usuario>())).ReturnsAsync(42);
 
         var id = await svc.AltaUsuarioAsync("operador2", "Nombre Completo", "pwd123", RolUsuario.Operador);
@@ -76,7 +79,7 @@ public class UsuarioServiceTests
             Id = 5, NombreUsuario = "operador1", HashContrasena = "h",
             Rol = RolUsuario.Operador, Activo = true, FechaAlta = DateTime.UtcNow
         };
-        var (svc, repo, _, session, _, audit, _) = Crear(idSesion: 1);
+        var (svc, repo, _, session, _, audit, _, _) = Crear(idSesion: 1);
         repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(usuario);
         repo.Setup(r => r.ContarAdminsActivosAsync()).ReturnsAsync(1);
 
@@ -97,7 +100,7 @@ public class UsuarioServiceTests
             Id = 1, NombreUsuario = "admin", HashContrasena = "h",
             Rol = RolUsuario.Admin, Activo = true, FechaAlta = DateTime.UtcNow
         };
-        var (svc, repo, _, _, _, _, _) = Crear(idSesion: 1);
+        var (svc, repo, _, _, _, _, _, _) = Crear(idSesion: 1);
         repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(usuario);
 
         await Assert.ThrowsAsync<ReglaDeNegocioException>(() => svc.BajaLogicaAsync(1));
@@ -111,7 +114,7 @@ public class UsuarioServiceTests
             Id = 2, NombreUsuario = "admin2", HashContrasena = "h",
             Rol = RolUsuario.Admin, Activo = true, FechaAlta = DateTime.UtcNow
         };
-        var (svc, repo, _, _, _, _, _) = Crear(idSesion: 1);
+        var (svc, repo, _, _, _, _, _, _) = Crear(idSesion: 1);
         repo.Setup(r => r.ObtenerPorIdAsync(2)).ReturnsAsync(usuario);
         repo.Setup(r => r.ContarAdminsActivosAsync()).ReturnsAsync(1); // único Admin activo
 
@@ -126,7 +129,7 @@ public class UsuarioServiceTests
             Id = 2, NombreUsuario = "admin2", HashContrasena = "h",
             Rol = RolUsuario.Admin, Activo = true, FechaAlta = DateTime.UtcNow
         };
-        var (svc, repo, _, _, _, audit, revocador) = Crear(idSesion: 1);
+        var (svc, repo, _, _, _, audit, revocador, _) = Crear(idSesion: 1);
         repo.Setup(r => r.ObtenerPorIdAsync(2)).ReturnsAsync(usuario);
         repo.Setup(r => r.ContarAdminsActivosAsync()).ReturnsAsync(2); // hay otro Admin
 
@@ -145,7 +148,7 @@ public class UsuarioServiceTests
             Id = 5, NombreUsuario = "operador1", HashContrasena = "h",
             Rol = RolUsuario.Operador, Activo = true, FechaAlta = DateTime.UtcNow
         };
-        var (svc, repo, _, _, _, _, revocador) = Crear(idSesion: 1);
+        var (svc, repo, _, _, _, _, revocador, _) = Crear(idSesion: 1);
         repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(usuario);
         repo.Setup(r => r.ContarAdminsActivosAsync()).ReturnsAsync(1);
 
@@ -157,7 +160,7 @@ public class UsuarioServiceTests
     [Fact]
     public async Task AltaUsuario_Operador_LanzaUnauthorized()
     {
-        var (svc, _, _, _, _, _, _) = Crear(rolSesion: RolUsuario.Operador);
+        var (svc, _, _, _, _, _, _, _) = Crear(rolSesion: RolUsuario.Operador);
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(
             () => svc.AltaUsuarioAsync("x", null, "pwd123", RolUsuario.Operador));
@@ -171,7 +174,7 @@ public class UsuarioServiceTests
             Id = 3, NombreUsuario = "alguien", HashContrasena = "h",
             Rol = RolUsuario.Operador, Activo = true, FechaAlta = DateTime.UtcNow
         };
-        var (svc, repo, _, session, _, audit, _) = Crear();
+        var (svc, repo, _, session, _, audit, _, _) = Crear();
         repo.Setup(r => r.ObtenerPorIdAsync(3)).ReturnsAsync(usuario);
 
         await svc.CambiarRolAsync(3, RolUsuario.Admin);
@@ -191,7 +194,7 @@ public class UsuarioServiceTests
             Id = 3, NombreUsuario = "alguien", HashContrasena = "h",
             Rol = RolUsuario.Operador, Activo = true, FechaAlta = DateTime.UtcNow
         };
-        var (svc, repo, _, _, _, _, revocador) = Crear();
+        var (svc, repo, _, _, _, _, revocador, _) = Crear();
         repo.Setup(r => r.ObtenerPorIdAsync(3)).ReturnsAsync(usuario);
 
         await svc.CambiarRolAsync(3, RolUsuario.Admin);
@@ -211,7 +214,7 @@ public class UsuarioServiceTests
             Id = 4, NombreUsuario = "alguien", HashContrasena = "hash_viejo",
             Rol = RolUsuario.Operador, Activo = true, FechaAlta = DateTime.UtcNow
         };
-        var (svc, repo, hasher, session, _, audit, revocador) = Crear(idSesion: 1);
+        var (svc, repo, hasher, session, _, audit, revocador, _) = Crear(idSesion: 1);
         repo.Setup(r => r.ObtenerPorIdAsync(4)).ReturnsAsync(usuario);
 
         await svc.CambiarContrasenaAsync(4, "nuevaContrasena123");
@@ -229,7 +232,7 @@ public class UsuarioServiceTests
     public async Task CambioContrasena_AutoCambio_SinContrasenaActual_LanzaUnauthorized()
     {
         // El usuario (id=1) intenta cambiar su propia contraseña sin proveer la actual
-        var (svc, repo, _, _, _, _, _) = Crear(idSesion: 1);
+        var (svc, repo, _, _, _, _, _, _) = Crear(idSesion: 1);
         var usuario = new Usuario
         {
             Id = 1, NombreUsuario = "admin", HashContrasena = "hash_actual",
@@ -249,7 +252,7 @@ public class UsuarioServiceTests
             Id = 1, NombreUsuario = "admin", HashContrasena = "hash_actual",
             Rol = RolUsuario.Admin, Activo = true, FechaAlta = DateTime.UtcNow
         };
-        var (svc, repo, hasher, _, _, _, _) = Crear(idSesion: 1);
+        var (svc, repo, hasher, _, _, _, _, _) = Crear(idSesion: 1);
         repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(usuario);
         hasher.Setup(h => h.Verify("contrasenaIncorrecta", "hash_actual")).Returns(false);
 
@@ -265,7 +268,7 @@ public class UsuarioServiceTests
             Id = 1, NombreUsuario = "admin", HashContrasena = "hash_actual",
             Rol = RolUsuario.Admin, Activo = true, FechaAlta = DateTime.UtcNow
         };
-        var (svc, repo, hasher, _, _, audit, revocador) = Crear(idSesion: 1);
+        var (svc, repo, hasher, _, _, audit, revocador, _) = Crear(idSesion: 1);
         repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(usuario);
         hasher.Setup(h => h.Verify("contrasenaCorrecta", "hash_actual")).Returns(true);
 
@@ -283,7 +286,7 @@ public class UsuarioServiceTests
     [Fact]
     public async Task AltaUsuario_ContrasenaVacia_LanzaArgumentException()
     {
-        var (svc, _, _, _, _, _, _) = Crear();
+        var (svc, _, _, _, _, _, _, _) = Crear();
 
         await Assert.ThrowsAsync<ArgumentException>(
             () => svc.AltaUsuarioAsync("nuevo", null, "", RolUsuario.Operador));
@@ -292,7 +295,7 @@ public class UsuarioServiceTests
     [Fact]
     public async Task AltaUsuario_ContrasenaConMenosDe6Chars_LanzaArgumentException()
     {
-        var (svc, _, _, _, _, _, _) = Crear();
+        var (svc, _, _, _, _, _, _, _) = Crear();
 
         await Assert.ThrowsAsync<ArgumentException>(
             () => svc.AltaUsuarioAsync("nuevo", null, "12345", RolUsuario.Operador));
@@ -303,7 +306,7 @@ public class UsuarioServiceTests
     [Fact]
     public async Task AltaUsuario_NombreVacioYContrasenaCorta_ReportaErrorDeNombrePrimero()
     {
-        var (svc, _, _, _, _, _, _) = Crear();
+        var (svc, _, _, _, _, _, _, _) = Crear();
 
         var ex = await Assert.ThrowsAsync<ArgumentException>(
             () => svc.AltaUsuarioAsync("", null, "123", RolUsuario.Operador));
@@ -314,7 +317,7 @@ public class UsuarioServiceTests
     [Fact]
     public async Task AltaUsuario_ContrasenaConExactamente6Chars_Funciona()
     {
-        var (svc, repo, _, _, _, _, _) = Crear();
+        var (svc, repo, _, _, _, _, _, _) = Crear();
 
         await svc.AltaUsuarioAsync("nuevo", null, "123456", RolUsuario.Operador);
 
@@ -329,7 +332,7 @@ public class UsuarioServiceTests
             Id = 4, NombreUsuario = "alguien", HashContrasena = "hash_viejo",
             Rol = RolUsuario.Operador, Activo = true, FechaAlta = DateTime.UtcNow
         };
-        var (svc, repo, _, _, _, _, _) = Crear(idSesion: 1);
+        var (svc, repo, _, _, _, _, _, _) = Crear(idSesion: 1);
         repo.Setup(r => r.ObtenerPorIdAsync(4)).ReturnsAsync(usuario);
 
         await Assert.ThrowsAsync<ArgumentException>(
@@ -341,7 +344,7 @@ public class UsuarioServiceTests
     [Fact]
     public async Task AltaUsuario_NombreVacio_LanzaArgumentException()
     {
-        var (svc, _, _, _, _, _, _) = Crear();
+        var (svc, _, _, _, _, _, _, _) = Crear();
 
         await Assert.ThrowsAsync<ArgumentException>(
             () => svc.AltaUsuarioAsync("", null, "pwd123", RolUsuario.Operador));
@@ -350,7 +353,7 @@ public class UsuarioServiceTests
     [Fact]
     public async Task AltaUsuario_NombreNull_LanzaArgumentException()
     {
-        var (svc, _, _, _, _, _, _) = Crear();
+        var (svc, _, _, _, _, _, _, _) = Crear();
 
         await Assert.ThrowsAsync<ArgumentException>(
             () => svc.AltaUsuarioAsync(null!, null, "pwd123", RolUsuario.Operador));
@@ -359,7 +362,7 @@ public class UsuarioServiceTests
     [Fact]
     public async Task AltaUsuario_NombreSoloWhitespace_LanzaArgumentException()
     {
-        var (svc, _, _, _, _, _, _) = Crear();
+        var (svc, _, _, _, _, _, _, _) = Crear();
 
         await Assert.ThrowsAsync<ArgumentException>(
             () => svc.AltaUsuarioAsync("   ", null, "pwd123", RolUsuario.Operador));
@@ -368,7 +371,7 @@ public class UsuarioServiceTests
     [Fact]
     public async Task AltaUsuario_NombreConMasDe100Chars_LanzaArgumentException()
     {
-        var (svc, _, _, _, _, _, _) = Crear();
+        var (svc, _, _, _, _, _, _, _) = Crear();
         var nombreLargo = new string('a', 101);
 
         await Assert.ThrowsAsync<ArgumentException>(
@@ -378,7 +381,7 @@ public class UsuarioServiceTests
     [Fact]
     public async Task AltaUsuario_NombreConExactamente100Chars_Funciona()
     {
-        var (svc, repo, _, _, _, _, _) = Crear();
+        var (svc, repo, _, _, _, _, _, _) = Crear();
         var nombreLimite = new string('a', 100);
 
         await svc.AltaUsuarioAsync(nombreLimite, null, "pwd123", RolUsuario.Operador);
@@ -389,7 +392,7 @@ public class UsuarioServiceTests
     [Fact]
     public async Task AltaUsuario_NombreConEspaciosAlBorde_SeGuardaTrimeado()
     {
-        var (svc, repo, _, _, _, _, _) = Crear();
+        var (svc, repo, _, _, _, _, _, _) = Crear();
 
         await svc.AltaUsuarioAsync("  operador2  ", null, "pwd123", RolUsuario.Operador);
 
@@ -406,7 +409,7 @@ public class UsuarioServiceTests
             Id = 9, NombreUsuario = "operador2", HashContrasena = "h",
             Rol = RolUsuario.Operador, Activo = true, FechaAlta = DateTime.UtcNow
         };
-        var (svc, repo, _, _, _, _, _) = Crear();
+        var (svc, repo, _, _, _, _, _, _) = Crear();
         repo.Setup(r => r.BuscarPorNombreAsync("operador2")).ReturnsAsync(existente);
 
         await Assert.ThrowsAsync<ReglaDeNegocioException>(
@@ -420,7 +423,7 @@ public class UsuarioServiceTests
     [Fact]
     public async Task ListarAsync_Admin_DevuelveDtosSinHashContrasena()
     {
-        var (svc, repo, _, _, _, _, _) = Crear();
+        var (svc, repo, _, _, _, _, _, _) = Crear();
         repo.Setup(r => r.ListarTodosAsync()).ReturnsAsync(new List<Usuario>
         {
             new()
@@ -449,7 +452,7 @@ public class UsuarioServiceTests
     [Fact]
     public async Task ListarAsync_Operador_LanzaUnauthorized()
     {
-        var (svc, _, _, _, _, _, _) = Crear(rolSesion: RolUsuario.Operador);
+        var (svc, _, _, _, _, _, _, _) = Crear(rolSesion: RolUsuario.Operador);
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => svc.ListarAsync());
     }
@@ -459,7 +462,7 @@ public class UsuarioServiceTests
     [Fact]
     public async Task BajaLogicaAsync_UsuarioInexistente_LanzaEntidadNoEncontrada()
     {
-        var (svc, repo, _, _, _, _, _) = Crear(idSesion: 1);
+        var (svc, repo, _, _, _, _, _, _) = Crear(idSesion: 1);
         repo.Setup(r => r.ObtenerPorIdAsync(99)).ReturnsAsync((Usuario?)null);
 
         await Assert.ThrowsAsync<EntidadNoEncontradaException>(() => svc.BajaLogicaAsync(99));
@@ -468,7 +471,7 @@ public class UsuarioServiceTests
     [Fact]
     public async Task CambiarRolAsync_UsuarioInexistente_LanzaEntidadNoEncontrada()
     {
-        var (svc, repo, _, _, _, _, _) = Crear();
+        var (svc, repo, _, _, _, _, _, _) = Crear();
         repo.Setup(r => r.ObtenerPorIdAsync(99)).ReturnsAsync((Usuario?)null);
 
         await Assert.ThrowsAsync<EntidadNoEncontradaException>(
@@ -485,7 +488,7 @@ public class UsuarioServiceTests
             Id = 3, NombreUsuario = "alguien", HashContrasena = "h",
             Rol = RolUsuario.Operador, Activo = true, FechaAlta = DateTime.UtcNow
         };
-        var (svc, repo, _, _, _, _, _) = Crear();
+        var (svc, repo, _, _, _, _, _, _) = Crear();
         repo.Setup(r => r.ObtenerPorIdAsync(3)).ReturnsAsync(usuario);
 
         await Assert.ThrowsAsync<ArgumentException>(
@@ -502,7 +505,7 @@ public class UsuarioServiceTests
             Id = 2, NombreUsuario = "admin2", HashContrasena = "h",
             Rol = RolUsuario.Admin, Activo = true, FechaAlta = DateTime.UtcNow
         };
-        var (svc, repo, _, _, _, _, _) = Crear(idSesion: 1);
+        var (svc, repo, _, _, _, _, _, _) = Crear(idSesion: 1);
         repo.Setup(r => r.ObtenerPorIdAsync(2)).ReturnsAsync(unicoAdmin);
         repo.Setup(r => r.ContarAdminsActivosAsync()).ReturnsAsync(1);
 
@@ -518,7 +521,7 @@ public class UsuarioServiceTests
             Id = 2, NombreUsuario = "admin2", HashContrasena = "h",
             Rol = RolUsuario.Admin, Activo = true, FechaAlta = DateTime.UtcNow
         };
-        var (svc, repo, _, _, _, _, _) = Crear(idSesion: 1);
+        var (svc, repo, _, _, _, _, _, _) = Crear(idSesion: 1);
         repo.Setup(r => r.ObtenerPorIdAsync(2)).ReturnsAsync(admin);
         repo.Setup(r => r.ContarAdminsActivosAsync()).ReturnsAsync(2); // hay otro Admin
 
@@ -535,7 +538,7 @@ public class UsuarioServiceTests
             Id = 3, NombreUsuario = "operador1", HashContrasena = "h",
             Rol = RolUsuario.Operador, Activo = true, FechaAlta = DateTime.UtcNow
         };
-        var (svc, repo, _, _, _, _, _) = Crear(idSesion: 1);
+        var (svc, repo, _, _, _, _, _, _) = Crear(idSesion: 1);
         repo.Setup(r => r.ObtenerPorIdAsync(3)).ReturnsAsync(operador);
 
         await svc.CambiarRolAsync(3, RolUsuario.Admin);
@@ -548,10 +551,133 @@ public class UsuarioServiceTests
     [Fact]
     public async Task CambiarContrasenaAsync_UsuarioInexistente_LanzaEntidadNoEncontrada()
     {
-        var (svc, repo, _, _, _, _, _) = Crear();
+        var (svc, repo, _, _, _, _, _, _) = Crear();
         repo.Setup(r => r.ObtenerPorIdAsync(99)).ReturnsAsync((Usuario?)null);
 
         await Assert.ThrowsAsync<EntidadNoEncontradaException>(
             () => svc.CambiarContrasenaAsync(99, "nuevaContrasena123"));
+    }
+
+    // ── Permisos por operador (spec 2026-08-10) ─────────────────────────────
+
+    [Fact]
+    public async Task ObtenerPermisosAsync_UsuarioOperador_DevuelveLosDelProveedor()
+    {
+        var (svc, repo, _, _, _, _, _, permisos) = Crear();
+        var operador = new Usuario { Id = 9, Rol = RolUsuario.Operador, NombreUsuario = "op", HashContrasena = "h", FechaAlta = DateTime.UtcNow };
+        repo.Setup(r => r.ObtenerPorIdAsync(9)).ReturnsAsync(operador);
+        permisos.Setup(p => p.ObtenerAsync(9))
+            .ReturnsAsync((IReadOnlySet<string>)new HashSet<string> { Permisos.VerFinanzas });
+
+        var resultado = await svc.ObtenerPermisosAsync(9);
+
+        Assert.Contains(Permisos.VerFinanzas, resultado);
+    }
+
+    [Fact]
+    public async Task ObtenerPermisosAsync_UsuarioAdmin_DevuelveLos11ConfigurablesSinConsultarElProveedor()
+    {
+        var (svc, repo, _, _, _, _, _, permisos) = Crear();
+        var admin = new Usuario { Id = 10, Rol = RolUsuario.Admin, NombreUsuario = "adm2", HashContrasena = "h", FechaAlta = DateTime.UtcNow };
+        repo.Setup(r => r.ObtenerPorIdAsync(10)).ReturnsAsync(admin);
+
+        var resultado = await svc.ObtenerPermisosAsync(10);
+
+        Assert.Equal(11, resultado.Count);
+        permisos.Verify(p => p.ObtenerAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ObtenerPermisosAsync_UsuarioInexistente_LanzaEntidadNoEncontrada()
+    {
+        var (svc, repo, _, _, _, _, _, _) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(404)).ReturnsAsync((Usuario?)null);
+
+        await Assert.ThrowsAsync<EntidadNoEncontradaException>(() => svc.ObtenerPermisosAsync(404));
+    }
+
+    [Fact]
+    public async Task GuardarPermisosAsync_UsuarioOperador_LlamaAGuardarAsyncYAuditar()
+    {
+        var (svc, repo, _, _, _, audit, _, permisos) = Crear();
+        var operador = new Usuario { Id = 9, Rol = RolUsuario.Operador, NombreUsuario = "op", HashContrasena = "h", FechaAlta = DateTime.UtcNow };
+        repo.Setup(r => r.ObtenerPorIdAsync(9)).ReturnsAsync(operador);
+
+        await svc.GuardarPermisosAsync(9, new[] { Permisos.VerFinanzas, Permisos.GestionarProductos });
+
+        permisos.Verify(p => p.GuardarAsync(9,
+            It.Is<IReadOnlyCollection<string>>(c => c.Contains(Permisos.VerFinanzas) && c.Contains(Permisos.GestionarProductos))),
+            Times.Once);
+        audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), AccionAuditada.ModificacionPermisosUsuario, "Usuario", 9, It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GuardarPermisosAsync_ListaVacia_LlamaAGuardarAsyncConColeccionVacia()
+    {
+        // Un Admin le quita TODOS los permisos configurables a un Operador — camino válido,
+        // no un error: debe llegar hasta GuardarAsync con una colección vacía.
+        var (svc, repo, _, _, _, audit, _, permisos) = Crear();
+        var operador = new Usuario { Id = 9, Rol = RolUsuario.Operador, NombreUsuario = "op", HashContrasena = "h", FechaAlta = DateTime.UtcNow };
+        repo.Setup(r => r.ObtenerPorIdAsync(9)).ReturnsAsync(operador);
+
+        await svc.GuardarPermisosAsync(9, Array.Empty<string>());
+
+        permisos.Verify(p => p.GuardarAsync(9, It.Is<IReadOnlyCollection<string>>(c => c.Count == 0)), Times.Once);
+        audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), AccionAuditada.ModificacionPermisosUsuario, "Usuario", 9, It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GuardarPermisosAsync_PermisosDuplicados_PasaLaListaTalCualAlProveedor()
+    {
+        // La deduplicación (si corresponde) es responsabilidad de la capa de persistencia
+        // (Task 2/3, transacción de reemplazo completo) — GuardarPermisosAsync no debe
+        // rechazar duplicados por sí solo: cada elemento individualmente sigue siendo un
+        // permiso configurable válido.
+        var (svc, repo, _, _, _, _, _, permisos) = Crear();
+        var operador = new Usuario { Id = 9, Rol = RolUsuario.Operador, NombreUsuario = "op", HashContrasena = "h", FechaAlta = DateTime.UtcNow };
+        repo.Setup(r => r.ObtenerPorIdAsync(9)).ReturnsAsync(operador);
+
+        await svc.GuardarPermisosAsync(9, new[] { Permisos.VerFinanzas, Permisos.VerFinanzas });
+
+        permisos.Verify(p => p.GuardarAsync(9,
+            It.Is<IReadOnlyCollection<string>>(c => c.Count(x => x == Permisos.VerFinanzas) == 2)),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task GuardarPermisosAsync_UsuarioAdmin_Rechaza400SinLlamarAlProveedor()
+    {
+        var (svc, repo, _, _, _, _, _, permisos) = Crear();
+        var admin = new Usuario { Id = 10, Rol = RolUsuario.Admin, NombreUsuario = "adm2", HashContrasena = "h", FechaAlta = DateTime.UtcNow };
+        repo.Setup(r => r.ObtenerPorIdAsync(10)).ReturnsAsync(admin);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => svc.GuardarPermisosAsync(10, new[] { Permisos.VerFinanzas }));
+        permisos.Verify(p => p.GuardarAsync(It.IsAny<int>(), It.IsAny<IReadOnlyCollection<string>>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GuardarPermisosAsync_PermisoFueraDeWhitelist_Rechaza400()
+    {
+        var (svc, repo, _, _, _, _, _, permisos) = Crear();
+        var operador = new Usuario { Id = 9, Rol = RolUsuario.Operador, NombreUsuario = "op", HashContrasena = "h", FechaAlta = DateTime.UtcNow };
+        repo.Setup(r => r.ObtenerPorIdAsync(9)).ReturnsAsync(operador);
+
+        // GestionarUsuarios es estructural — nunca debería poder colarse por esta vía, ni
+        // siquiera como intento de un cliente viejo o manipulado.
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => svc.GuardarPermisosAsync(9, new[] { Permisos.GestionarUsuarios }));
+        permisos.Verify(p => p.GuardarAsync(It.IsAny<int>(), It.IsAny<IReadOnlyCollection<string>>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GuardarPermisosAsync_UsuarioInexistente_LanzaEntidadNoEncontrada()
+    {
+        var (svc, repo, _, _, _, _, _, _) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(404)).ReturnsAsync((Usuario?)null);
+
+        await Assert.ThrowsAsync<EntidadNoEncontradaException>(
+            () => svc.GuardarPermisosAsync(404, new[] { Permisos.VerFinanzas }));
     }
 }

@@ -16,6 +16,8 @@ public record CrearUsuarioRequest(string NombreUsuario, string? NombreCompleto, 
 public record CambiarRolRequest(RolUsuario? NuevoRol);
 public record CambiarContrasenaRequest(string NuevaContrasena, string? ContrasenaActual);
 public record UsuarioCreadoResponse(int Id);
+public record GuardarPermisosRequest(string[]? Permisos);
+public record PermisosUsuarioResponse(IReadOnlyList<string> Permisos);
 
 public static class UsuariosEndpoints
 {
@@ -56,6 +58,15 @@ public static class UsuariosEndpoints
         group.MapPut("/{id:int}/contrasena", async (int id, CambiarContrasenaRequest request, IUsuarioService usuarios) =>
         {
             await usuarios.CambiarContrasenaAsync(id, request.NuevaContrasena, request.ContrasenaActual);
+            return Results.Ok();
+        });
+
+        group.MapGet("/{id:int}/permisos", async (int id, IUsuarioService usuarios) =>
+            Results.Ok(new PermisosUsuarioResponse(await usuarios.ObtenerPermisosAsync(id))));
+
+        group.MapPut("/{id:int}/permisos", async (int id, GuardarPermisosRequest request, IUsuarioService usuarios) =>
+        {
+            await usuarios.GuardarPermisosAsync(id, request.Permisos ?? Array.Empty<string>());
             return Results.Ok();
         });
 

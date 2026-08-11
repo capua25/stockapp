@@ -8,6 +8,8 @@ internal sealed record CrearUsuarioBody(
     string NombreUsuario, string? NombreCompleto, string ContrasenaPlan, RolUsuario Rol);
 internal sealed record CambiarRolBody(RolUsuario NuevoRol);
 internal sealed record CambiarContrasenaBody(string NuevaContrasena, string? ContrasenaActual);
+internal sealed record GuardarPermisosBody(IReadOnlyList<string> Permisos);
+internal sealed record PermisosUsuarioWire(List<string> Permisos);
 
 /// <summary>IUsuarioService contra /usuarios (Admin-only; el alta devuelve el id — 3a, D2).</summary>
 public sealed class UsuarioApiClient : IUsuarioService
@@ -56,5 +58,22 @@ public sealed class UsuarioApiClient : IUsuarioService
         await ApiErrores.AsegurarExitoAsync(response);
 
         return await response.Content.ReadFromJsonAsync<List<UsuarioDto>>() ?? new();
+    }
+
+    public async Task<IReadOnlyList<string>> ObtenerPermisosAsync(int usuarioId)
+    {
+        var response = await ApiErrores.EnviarAsync(() => _http.GetAsync($"usuarios/{usuarioId}/permisos"));
+        await ApiErrores.AsegurarExitoAsync(response);
+
+        var body = await response.Content.ReadFromJsonAsync<PermisosUsuarioWire>()
+            ?? throw new InvalidOperationException("Respuesta vacía del servidor al consultar permisos.");
+        return body.Permisos;
+    }
+
+    public async Task GuardarPermisosAsync(int usuarioId, IReadOnlyList<string> permisos)
+    {
+        var response = await ApiErrores.EnviarAsync(() =>
+            _http.PutAsJsonAsync($"usuarios/{usuarioId}/permisos", new GuardarPermisosBody(permisos)));
+        await ApiErrores.AsegurarExitoAsync(response);
     }
 }

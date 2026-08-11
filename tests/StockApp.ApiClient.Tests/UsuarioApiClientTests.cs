@@ -106,4 +106,42 @@ public class UsuarioApiClientTests
 
         Assert.Equal("No se puede dar de baja al último Admin activo.", ex.Message);
     }
+
+    // ── GET/PUT /usuarios/{id}/permisos (spec 2026-08-10) ────────────────────
+
+    [Fact]
+    public async Task ObtenerPermisos_GETUsuariosIdPermisos_DevuelveLaLista()
+    {
+        var fake = new FakeHttpHandler(_ => TestHttp.Json(new { permisos = new[] { "finanzas.ver" } }));
+        var client = new UsuarioApiClient(TestHttp.CrearCliente(fake));
+
+        var permisos = await client.ObtenerPermisosAsync(9);
+
+        Assert.Equal("/usuarios/9/permisos", fake.UltimaRequest!.RequestUri!.AbsolutePath);
+        Assert.Contains("finanzas.ver", permisos);
+    }
+
+    [Fact]
+    public async Task GuardarPermisos_PUTUsuariosIdPermisos()
+    {
+        var fake = new FakeHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        var client = new UsuarioApiClient(TestHttp.CrearCliente(fake));
+
+        await client.GuardarPermisosAsync(9, new[] { "finanzas.ver", "catalogo.productos" });
+
+        Assert.Equal("/usuarios/9/permisos", fake.UltimaRequest!.RequestUri!.AbsolutePath);
+        Assert.Contains("\"finanzas.ver\"", fake.UltimoBody);
+        Assert.Contains("\"catalogo.productos\"", fake.UltimoBody);
+    }
+
+    [Fact]
+    public async Task GuardarPermisos_400UsuarioAdmin_LanzaArgumentException()
+    {
+        var fake = new FakeHttpHandler(_ => TestHttp.Problema(
+            HttpStatusCode.BadRequest, "No se pueden configurar permisos para un usuario Admin: tiene acceso total."));
+        var client = new UsuarioApiClient(TestHttp.CrearCliente(fake));
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => client.GuardarPermisosAsync(1, new[] { "finanzas.ver" }));
+    }
 }

@@ -478,4 +478,129 @@ public class UsuariosEndpointTests : ApiTestBase
         Assert.False(hasher.Verify("Secreta123!", usuarioActualizado.HashContrasena),
             "La contraseña vieja verifica contra el nuevo hash (bug: contraseña no se cambió).");
     }
+
+    // ── GET/PUT /usuarios/{id}/permisos (spec 2026-08-10) ────────────────────
+
+    [Fact]
+    public async Task GetPermisos_SinToken_Devuelve401()
+    {
+        var client = Factory.CreateClient();
+
+        var response = await client.GetAsync("/usuarios/1/permisos");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetPermisos_ConTokenOperador_Devuelve403()
+    {
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenOperador());
+
+        var response = await client.GetAsync("/usuarios/1/permisos");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PutPermisos_Admin_GuardaYQuedaLegibleEnGet()
+    {
+        await using var ctx = Factory.CrearContexto();
+        var operador = await DatosDePrueba.SeedUsuarioAsync(ctx, "operador.putpermisos", "Secreta123!", RolUsuario.Operador);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var put = await client.PutAsJsonAsync($"/usuarios/{operador.Id}/permisos",
+            new { Permisos = new[] { "finanzas.ver", "catalogo.productos" } });
+        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+
+        var get = await client.GetAsync($"/usuarios/{operador.Id}/permisos");
+        var body = await get.Content.ReadFromJsonAsync<PermisosPropiosResponseTest>();
+        Assert.Equal(2, body!.Permisos.Count);
+        Assert.Contains("finanzas.ver", body.Permisos);
+        Assert.Contains("catalogo.productos", body.Permisos);
+    }
+
+    [Fact]
+    public async Task PutPermisos_ListaVacia_Devuelve200YQuedaSinPermisosEnGet()
+    {
+        // Camino válido: el Admin le quita TODOS los permisos configurables a un Operador.
+        await using var ctx = Factory.CrearContexto();
+        var operador = await DatosDePrueba.SeedUsuarioAsync(ctx, "operador.sinpermisos", "Secreta123!", RolUsuario.Operador);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var put = await client.PutAsJsonAsync($"/usuarios/{operador.Id}/permisos",
+            new { Permisos = Array.Empty<string>() });
+        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+
+        var get = await client.GetAsync($"/usuarios/{operador.Id}/permisos");
+        var body = await get.Content.ReadFromJsonAsync<PermisosPropiosResponseTest>();
+        Assert.Empty(body!.Permisos);
+    }
+
+    [Fact]
+    public async Task PutPermisos_BodySinCampoPermisos_TratadoComoListaVaciaYDevuelve200()
+    {
+        // GuardarPermisosRequest.Permisos es nullable a propósito: un body "{}" (cliente
+        // viejo o manipulado) no debe crashear con un 500 — se trata como lista vacía.
+        await using var ctx = Factory.CrearContexto();
+        var operador = await DatosDePrueba.SeedUsuarioAsync(ctx, "operador.bodyvacio", "Secreta123!", RolUsuario.Operador);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var response = await client.PutAsync($"/usuarios/{operador.Id}/permisos",
+            new StringContent("{}", System.Text.Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var get = await client.GetAsync($"/usuarios/{operador.Id}/permisos");
+        var body = await get.Content.ReadFromJsonAsync<PermisosPropiosResponseTest>();
+        Assert.Empty(body!.Permisos);
+    }
+
+    [Fact]
+    public async Task PutPermisos_UsuarioObjetivoEsAdmin_Devuelve400()
+    {
+        await using var ctx = Factory.CrearContexto();
+        var otroAdmin = await DatosDePrueba.SeedUsuarioAsync(ctx, "admin.destino", "Secreta123!", RolUsuario.Admin);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var response = await client.PutAsJsonAsync($"/usuarios/{otroAdmin.Id}/permisos",
+            new { Permisos = new[] { "finanzas.ver" } });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PutPermisos_IdInexistente_Devuelve404()
+    {
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var response = await client.PutAsJsonAsync("/usuarios/999999/permisos",
+            new { Permisos = new[] { "finanzas.ver" } });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PutPermisos_PermisoFueraDeWhitelist_Devuelve400()
+    {
+        await using var ctx = Factory.CrearContexto();
+        var operador = await DatosDePrueba.SeedUsuarioAsync(ctx, "operador.whitelist", "Secreta123!", RolUsuario.Operador);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var response = await client.PutAsJsonAsync($"/usuarios/{operador.Id}/permisos",
+            new { Permisos = new[] { "usuarios.gestionar" } });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
 }

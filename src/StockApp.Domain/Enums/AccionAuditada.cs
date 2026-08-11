@@ -72,4 +72,7 @@ public enum AccionAuditada
     CambioPrioridadTarea = 48,
     CancelacionTarea     = 49,
     AltaNotaTarea        = 50,
+
+    // ── Permisos por operador (append-only a partir de 51) ───────────────────
+    ModificacionPermisosUsuario = 51,
 }
