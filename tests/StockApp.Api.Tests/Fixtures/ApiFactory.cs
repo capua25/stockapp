@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using StockApp.Api.Backups;
+using StockApp.Application.Authorization;
 using StockApp.Application.Licenciamiento;
 using StockApp.Infrastructure.Persistence;
 using StockApp.Infrastructure.Platform;
@@ -125,6 +126,16 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
                 _ => new AlmacenLicenciaEnMemoria(ClavesDePrueba.EmitirLicencia())));
             services.Replace(ServiceDescriptor.Singleton<IUserDataPathProvider>(
                 _ => new UserDataPathProviderFake()));
+
+            // IProveedorPermisos es Singleton en producción (cache de proceso, spec 2026-08-10) —
+            // pero ApiFactory es UNA sola instancia para toda la collection "Api", mientras que
+            // ApiTestBase hace TRUNCATE ... RESTART IDENTITY entre cada test. Con la cache
+            // Singleton, un usuarioId reciclado (ej. el Operador siempre nace con id=2) podía
+            // arrastrar los permisos cacheados de un test anterior al siguiente. Se pisa a Scoped
+            // acá (una instancia nueva, cache vacía, por request) — mismo criterio que los demás
+            // Replace de este método para servicios cuyo lifetime de producción no es seguro
+            // entre tests.
+            services.Replace(ServiceDescriptor.Scoped<IProveedorPermisos, ProveedorPermisosEnMemoria>());
 
             QuitarBackupProgramadoService(services);
 
