@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Finanzas;
+using StockApp.Application.Interfaces;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
@@ -120,5 +121,6 @@ internal sealed class ServicioAperturaArchivoFake : IServicioAperturaArchivo
 internal sealed class AuthorizationServiceFake : IAuthorizationService
 {
     public void Verificar(RolUsuario? rolActual, string accion) { }
+    public void Verificar(ICurrentSession sesion, string accion) { }
     public bool TienePermiso(RolUsuario rol, string accion) => true;
 }
