@@ -143,6 +143,27 @@
                     </Grid>
                 </Button>
 
+                <!-- Documentos administrativos: gateado por GestionarDocumentos (spec 2026-08-11) -->
+                <TextBlock Text="Documentos"
+                           Classes="caption"
+                           Foreground="{DynamicResource SidebarTextoBrush}"
+                           FontWeight="SemiBold"
+                           Margin="8,8,0,4"
+                           IsVisible="{Binding PuedeGestionarDocumentos}"
+                           Opacity="0.6" />
+
+                <Button Command="{Binding NavDocumentosCommand}"
+                        Classes="ghost"
+                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Documentos}"
+                        HorizontalAlignment="Stretch"
+                        IsVisible="{Binding PuedeGestionarDocumentos}">
+                    <Grid ColumnDefinitions="Auto,*">
+                        <i:Icon Grid.Column="0" Value="mdi-file-cabinet" Foreground="{DynamicResource SidebarTextoBrush}" />
+                        <TextBlock Grid.Column="1" Text="Documentos administrativos" VerticalAlignment="Center"
+                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                </Button>
+
                 <!-- Finanzas: gateado por VerFinanzas (spec 2026-08-10). Caso borde aceptado
                      (cosmética, no seguridad): un Operador con SOLO GestionarMaestrosFinanzas
                      (sin VerFinanzas) ve el botón "Maestros de finanzas" sin este header encima

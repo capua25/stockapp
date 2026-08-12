@@ -10,6 +10,7 @@ using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Administracion;
 using StockApp.Presentation.ViewModels.Catalogo;
+using StockApp.Presentation.ViewModels.Documentos;
 using StockApp.Presentation.ViewModels.Finanzas;
 using StockApp.Presentation.ViewModels.Movimientos;
 using StockApp.Presentation.ViewModels.Reportes;
@@ -65,6 +66,9 @@ public partial class ShellMainViewModel : ViewModelBase
 
     public bool PuedeGestionarTareas =>
         _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.GestionarTareas);
+
+    public bool PuedeGestionarDocumentos =>
+        _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.GestionarDocumentos);
 
     public bool PuedeVerFinanzas =>
         _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.VerFinanzas);
@@ -149,6 +153,7 @@ public partial class ShellMainViewModel : ViewModelBase
         OnPropertyChanged(nameof(PuedeGestionarProductos));
         OnPropertyChanged(nameof(PuedeRegistrarMovimientos));
         OnPropertyChanged(nameof(PuedeGestionarTareas));
+        OnPropertyChanged(nameof(PuedeGestionarDocumentos));
         OnPropertyChanged(nameof(PuedeVerFinanzas));
         OnPropertyChanged(nameof(PuedeGestionarMaestrosFinanzas));
         OnPropertyChanged(nameof(PuedeGestionarTablasMaestras));
@@ -250,6 +255,15 @@ public partial class ShellMainViewModel : ViewModelBase
     {
         SeccionActiva = "Tareas";
         _navigation.Navegar<TareaListViewModel>();
+    }
+
+    // ── Documentos administrativos (spec 2026-08-11): Admin y Operador con permiso ───────────
+
+    [RelayCommand]
+    private void NavDocumentos()
+    {
+        SeccionActiva = "Documentos";
+        _navigation.Navegar<DocumentoListViewModel>();
     }
 
     // ── Reportes (Inc 6): solo Admin ──────────────────────────────────────────
