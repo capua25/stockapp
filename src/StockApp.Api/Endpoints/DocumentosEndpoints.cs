@@ -122,6 +122,34 @@ public static class DocumentosEndpoints
         })
         .RequireAuthorization(Permisos.AdministrarDocumentos);
 
+        group.MapPost("/{id:int}/adjuntos", async (int id, IFormFile archivo, IAdjuntoDocumentoService adjuntos) =>
+        {
+            using var ms = new MemoryStream();
+            await archivo.CopyToAsync(ms);
+            var dto = await adjuntos.AgregarAsync(id, archivo.FileName, ms.ToArray());
+            return Results.Created((string?)null, dto);
+        })
+        .DisableAntiforgery()
+        .RequireAuthorization(Permisos.GestionarDocumentos);
+
+        group.MapGet("/{id:int}/adjuntos", async (int id, IAdjuntoDocumentoService adjuntos) =>
+            Results.Ok(await adjuntos.ListarPorDocumentoAsync(id)))
+            .RequireAuthorization(Permisos.GestionarDocumentos);
+
+        group.MapGet("/adjuntos/{adjuntoId:int}/contenido", async (int adjuntoId, IAdjuntoDocumentoService adjuntos) =>
+        {
+            var contenido = await adjuntos.ObtenerContenidoAsync(adjuntoId);
+            return Results.File(contenido.Contenido, contenido.ContentType, contenido.NombreArchivo);
+        })
+        .RequireAuthorization(Permisos.GestionarDocumentos);
+
+        group.MapDelete("/adjuntos/{adjuntoId:int}", async (int adjuntoId, IAdjuntoDocumentoService adjuntos) =>
+        {
+            await adjuntos.QuitarAsync(adjuntoId);
+            return Results.Ok();
+        })
+        .RequireAuthorization(Permisos.AdministrarDocumentos);
+
         return app;
     }
 

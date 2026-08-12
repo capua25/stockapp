@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using StockApp.Api.Auth;
 using StockApp.Api.Endpoints;
 using StockApp.Api.Tests.Fixtures;
+using StockApp.Application.Documentos;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using Xunit;
@@ -598,5 +599,222 @@ public class DocumentosEndpointTests : ApiTestBase
             $"/documentos/{id}/reabrir", new MotivoRequest("se encontró documentación nueva"));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    private static readonly byte[] BytesPdf = { 0x25, 0x50, 0x44, 0x46, 0x01, 0x02 };
+
+    private static MultipartFormDataContent ArmarMultipart(byte[] bytes, string nombre)
+    {
+        var contenido = new MultipartFormDataContent();
+        var archivo = new ByteArrayContent(bytes);
+        archivo.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
+        contenido.Add(archivo, "archivo", nombre);
+        return contenido;
+    }
+
+    [Fact]
+    public async Task PostAdjunto_ComoOperador_Devuelve201()
+    {
+        // Orden: SeedUsuariosAsync PRIMERO — ver comentario en GetActivos_.../200SoloConPendientesYEnProceso.
+        await SeedUsuariosAsync();
+        var id = await SembrarDocumentoAsync(EstadoDocumento.Pendiente);
+        var client = ClienteAutenticado(TokenOperador());
+
+        var response = await client.PostAsync($"/documentos/{id}/adjuntos", ArmarMultipart(BytesPdf, "expediente.pdf"));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var dto = await response.Content.ReadFromJsonAsync<AdjuntoDocumentoDto>();
+        Assert.Equal("expediente.pdf", dto!.NombreArchivo);
+        Assert.Equal(id, dto.DocumentoAdministrativoId);
+    }
+
+    [Fact]
+    public async Task PostAdjunto_SinToken_Devuelve401()
+    {
+        var id = await SembrarDocumentoAsync(EstadoDocumento.Pendiente);
+
+        var response = await Factory.CreateClient().PostAsync(
+            $"/documentos/{id}/adjuntos", ArmarMultipart(BytesPdf, "expediente.pdf"));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostAdjunto_SobreDocumentoCerrado_Devuelve409()
+    {
+        // D11a: ni agregar ni quitar adjuntos está permitido salvo que el documento esté EsActivo.
+        // Orden: SeedUsuariosAsync PRIMERO — ver comentario en GetActivos_.../200SoloConPendientesYEnProceso.
+        await SeedUsuariosAsync();
+        var id = await SembrarDocumentoAsync(EstadoDocumento.Finalizado);
+        var client = ClienteAutenticado(TokenOperador());
+
+        var response = await client.PostAsync($"/documentos/{id}/adjuntos", ArmarMultipart(BytesPdf, "expediente.pdf"));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostAdjunto_ConTokenOperadorSinPermiso_Devuelve403()
+    {
+        // C7: 403 propio de POST /adjuntos.
+        var id = await SembrarDocumentoAsync(EstadoDocumento.Pendiente);
+        await using var ctx = Factory.CrearContexto();
+        var operador = await DatosDePrueba.SeedOperadorConPermisosAsync(
+            ctx, "operador.sinpermiso", "Secreta123!", Array.Empty<string>());
+        var jwt = Factory.Services.GetRequiredService<IJwtTokenService>();
+        var client = ClienteAutenticado(jwt.GenerarToken(operador.Id, RolUsuario.Operador));
+
+        var response = await client.PostAsync($"/documentos/{id}/adjuntos", ArmarMultipart(BytesPdf, "expediente.pdf"));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetAdjuntos_ListaLosActivos()
+    {
+        // Orden: SeedUsuariosAsync PRIMERO — ver comentario en GetActivos_.../200SoloConPendientesYEnProceso.
+        await SeedUsuariosAsync();
+        var id = await SembrarDocumentoAsync(EstadoDocumento.Pendiente);
+        var client = ClienteAutenticado(TokenOperador());
+        await client.PostAsync($"/documentos/{id}/adjuntos", ArmarMultipart(BytesPdf, "expediente.pdf"));
+
+        var response = await client.GetAsync($"/documentos/{id}/adjuntos");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var lista = await response.Content.ReadFromJsonAsync<List<AdjuntoDocumentoDto>>();
+        Assert.Single(lista!);
+    }
+
+    [Fact]
+    public async Task GetAdjuntos_ConTokenOperadorSinPermiso_Devuelve403()
+    {
+        // C7: 403 propio de GET /{id}/adjuntos.
+        var id = await SembrarDocumentoAsync(EstadoDocumento.Pendiente);
+        await using var ctx = Factory.CrearContexto();
+        var operador = await DatosDePrueba.SeedOperadorConPermisosAsync(
+            ctx, "operador.sinpermiso", "Secreta123!", Array.Empty<string>());
+        var jwt = Factory.Services.GetRequiredService<IJwtTokenService>();
+        var client = ClienteAutenticado(jwt.GenerarToken(operador.Id, RolUsuario.Operador));
+
+        var response = await client.GetAsync($"/documentos/{id}/adjuntos");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetContenido_DevuelveLosBytesOriginales()
+    {
+        // Orden: SeedUsuariosAsync PRIMERO — ver comentario en GetActivos_.../200SoloConPendientesYEnProceso.
+        await SeedUsuariosAsync();
+        var id = await SembrarDocumentoAsync(EstadoDocumento.Pendiente);
+        var client = ClienteAutenticado(TokenOperador());
+        var creado = await client.PostAsync($"/documentos/{id}/adjuntos", ArmarMultipart(BytesPdf, "expediente.pdf"));
+        var dto = await creado.Content.ReadFromJsonAsync<AdjuntoDocumentoDto>();
+
+        var response = await client.GetAsync($"/documentos/adjuntos/{dto!.Id}/contenido");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        Assert.Equal(BytesPdf, bytes);
+    }
+
+    [Fact]
+    public async Task GetContenido_ConTokenOperadorSinPermiso_Devuelve403()
+    {
+        // C7: 403 propio de GET /adjuntos/{id}/contenido.
+        // Orden: SeedUsuariosAsync PRIMERO — ver comentario en GetActivos_.../200SoloConPendientesYEnProceso.
+        await SeedUsuariosAsync();
+        var id = await SembrarDocumentoAsync(EstadoDocumento.Pendiente);
+        var clienteOperador = ClienteAutenticado(TokenOperador());
+        var creado = await clienteOperador.PostAsync($"/documentos/{id}/adjuntos", ArmarMultipart(BytesPdf, "expediente.pdf"));
+        var dto = await creado.Content.ReadFromJsonAsync<AdjuntoDocumentoDto>();
+
+        await using var ctx = Factory.CrearContexto();
+        var operadorSinPermiso = await DatosDePrueba.SeedOperadorConPermisosAsync(
+            ctx, "operador.sinpermiso", "Secreta123!", Array.Empty<string>());
+        var jwt = Factory.Services.GetRequiredService<IJwtTokenService>();
+        var clienteSinPermiso = ClienteAutenticado(jwt.GenerarToken(operadorSinPermiso.Id, RolUsuario.Operador));
+
+        var response = await clienteSinPermiso.GetAsync($"/documentos/adjuntos/{dto!.Id}/contenido");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetContenido_Inexistente_Devuelve404()
+    {
+        await SeedUsuariosAsync();
+        var client = ClienteAutenticado(TokenOperador());
+
+        var response = await client.GetAsync("/documentos/adjuntos/999999/contenido");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteAdjunto_ConTokenOperador_Devuelve403()
+    {
+        // D11b: quitar exige documentos.administrar, no gestionar (a diferencia de agregar).
+        // Orden: SeedUsuariosAsync PRIMERO — ver comentario en GetActivos_.../200SoloConPendientesYEnProceso.
+        await SeedUsuariosAsync();
+        var id = await SembrarDocumentoAsync(EstadoDocumento.Pendiente);
+        var client = ClienteAutenticado(TokenOperador());
+        var creado = await client.PostAsync($"/documentos/{id}/adjuntos", ArmarMultipart(BytesPdf, "expediente.pdf"));
+        var dto = await creado.Content.ReadFromJsonAsync<AdjuntoDocumentoDto>();
+
+        var response = await client.DeleteAsync($"/documentos/adjuntos/{dto!.Id}");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteAdjunto_ConTokenAdmin_HaceBajaLogica()
+    {
+        // Orden: SeedUsuariosAsync PRIMERO — ver comentario en GetActivos_.../200SoloConPendientesYEnProceso.
+        await SeedUsuariosAsync();
+        var id = await SembrarDocumentoAsync(EstadoDocumento.Pendiente);
+        var clienteOperador = ClienteAutenticado(TokenOperador());
+        var creado = await clienteOperador.PostAsync($"/documentos/{id}/adjuntos", ArmarMultipart(BytesPdf, "expediente.pdf"));
+        var dto = await creado.Content.ReadFromJsonAsync<AdjuntoDocumentoDto>();
+        var clienteAdmin = ClienteAutenticado(TokenAdmin());
+
+        var response = await clienteAdmin.DeleteAsync($"/documentos/adjuntos/{dto!.Id}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var listado = await clienteOperador.GetAsync($"/documentos/{id}/adjuntos");
+        var lista = await listado.Content.ReadFromJsonAsync<List<AdjuntoDocumentoDto>>();
+        Assert.Empty(lista!);
+    }
+
+    [Fact]
+    public async Task DeleteAdjunto_Inexistente_Devuelve404()
+    {
+        // F7: QuitarAsync (Task 12) lanza EntidadNoEncontradaException si el adjunto no existe.
+        await SeedUsuariosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var response = await client.DeleteAsync("/documentos/adjuntos/999999");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteAdjunto_SobreDocumentoCerrado_Devuelve409()
+    {
+        // F7: QuitarAsync (Task 12) lanza ReglaDeNegocioException si el documento dueño ya no
+        // está EsActivo (D11a) -- el adjunto se agrega mientras el documento está activo y
+        // recién después se cierra, para probar el rechazo en QuitarAsync y no en el alta.
+        // Orden: SeedUsuariosAsync PRIMERO — ver comentario en GetActivos_.../200SoloConPendientesYEnProceso.
+        await SeedUsuariosAsync();
+        var id = await SembrarDocumentoAsync(EstadoDocumento.Pendiente);
+        var clienteOperador = ClienteAutenticado(TokenOperador());
+        var creado = await clienteOperador.PostAsync($"/documentos/{id}/adjuntos", ArmarMultipart(BytesPdf, "expediente.pdf"));
+        var dto = await creado.Content.ReadFromJsonAsync<AdjuntoDocumentoDto>();
+        var clienteAdmin = ClienteAutenticado(TokenAdmin());
+        await clienteAdmin.PostAsJsonAsync($"/documentos/{id}/anular", new MotivoRequest("el interesado desistió"));
+
+        var response = await clienteAdmin.DeleteAsync($"/documentos/adjuntos/{dto!.Id}");
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
 }

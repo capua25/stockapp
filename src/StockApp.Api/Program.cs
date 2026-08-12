@@ -234,6 +234,8 @@ builder.Services.AddScoped<ITareaService, TareaService>();
 // Documentos administrativos — módulo independiente (spec 2026-08-11)
 builder.Services.AddScoped<IDocumentoAdministrativoRepository, DocumentoAdministrativoRepository>();
 builder.Services.AddScoped<IDocumentoAdministrativoService, DocumentoAdministrativoService>();
+builder.Services.AddScoped<IAdjuntoDocumentoRepository, AdjuntoDocumentoRepository>();
+builder.Services.AddScoped<IAdjuntoDocumentoService, AdjuntoDocumentoService>();
 
 // Finanzas — F5c: confirmación transaccional del importador (escritura + idempotencia +
 // guard de re-importación + reversa). IImportacionRepository es la única pieza de todo el
