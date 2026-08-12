@@ -19,11 +19,27 @@
             <TabItem Header="Activos">
                 <DockPanel Margin="0,12,0,0">
 
-                    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*" Margin="0,0,0,12">
-                        <TextBlock Grid.Column="0" Text="Buscar:" VerticalAlignment="Center" Margin="0,0,8,0" />
-                        <TextBox Grid.Column="1" Text="{Binding FiltroActivosTexto}"
-                                 Watermark="Número, descripción..." Width="300" HorizontalAlignment="Left" />
-                    </Grid>
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="12"
+                                VerticalAlignment="Bottom" Margin="0,0,0,12">
+                        <StackPanel MinWidth="150">
+                            <TextBlock Text="Tipo" />
+                            <ComboBox ItemsSource="{Binding TiposDisponibles}"
+                                      SelectedItem="{Binding FiltroActivosTipoSeleccionado}"
+                                      HorizontalAlignment="Stretch">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Nombre}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </StackPanel>
+                        <StackPanel MinWidth="280">
+                            <TextBlock Text="Buscar" />
+                            <TextBox Text="{Binding FiltroActivosTexto}"
+                                     Watermark="Número, descripción..." />
+                        </StackPanel>
+                        <Button Classes="secondary" Content="Buscar" Command="{Binding BuscarActivosCommand}" />
+                    </StackPanel>
 
                     <ScrollViewer>
                         <ItemsControl ItemsSource="{Binding Activos}">
@@ -59,7 +75,12 @@
                                                     IsVisible="{Binding PuedeFinalizar}"
                                                     Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).FinalizarCommand}"
                                                     CommandParameter="{Binding}" />
-                                            <Button Grid.Column="5" Classes="danger" Content="Anular"
+                                            <!-- I3: "Anular…" navega al detalle (VerDetalleCommand) en vez de ejecutar
+                                                 la acción acá mismo, porque anular exige motivo obligatorio, y ese
+                                                 flujo vive en DocumentoFormViewModel.AnularAsync. Los puntos
+                                                 suspensivos marcan que el botón abre otra pantalla, no que anula
+                                                 en el acto. -->
+                                            <Button Grid.Column="5" Classes="danger" Content="Anular…"
                                                     IsVisible="{Binding PuedeAnular}"
                                                     Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).VerDetalleCommand}"
                                                     CommandParameter="{Binding}" />
@@ -75,15 +96,44 @@
             <TabItem Header="Historial">
                 <DockPanel Margin="0,12,0,0">
 
-                    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="0,0,0,12">
-                        <TextBlock Grid.Column="0" Text="Año:" VerticalAlignment="Center" Margin="0,0,8,0" />
-                        <NumericUpDown Grid.Column="1" Value="{Binding FiltroHistorialAnio}"
-                                       Minimum="2000" Maximum="2100" FormatString="0" Width="120" Margin="0,0,16,0" />
-                        <TextBox Grid.Column="2" Text="{Binding FiltroHistorialTexto}"
-                                 Watermark="Número, descripción..." Width="260" Margin="0,0,16,0" />
-                        <Button Grid.Column="4" Classes="secondary" Content="Buscar"
-                                Command="{Binding BuscarHistorialCommand}" />
-                    </Grid>
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="12"
+                                VerticalAlignment="Bottom" Margin="0,0,0,12">
+                        <StackPanel MinWidth="100">
+                            <TextBlock Text="Año" />
+                            <NumericUpDown Value="{Binding FiltroHistorialAnio}"
+                                           Minimum="2000" Maximum="2100" FormatString="0" />
+                        </StackPanel>
+                        <StackPanel MinWidth="150">
+                            <TextBlock Text="Tipo" />
+                            <ComboBox ItemsSource="{Binding TiposDisponibles}"
+                                      SelectedItem="{Binding FiltroHistorialTipoSeleccionado}"
+                                      HorizontalAlignment="Stretch">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Nombre}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </StackPanel>
+                        <StackPanel MinWidth="150">
+                            <TextBlock Text="Estado" />
+                            <ComboBox ItemsSource="{Binding EstadosDisponibles}"
+                                      SelectedItem="{Binding FiltroHistorialEstadoSeleccionado}"
+                                      HorizontalAlignment="Stretch">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Nombre}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </StackPanel>
+                        <StackPanel MinWidth="240">
+                            <TextBlock Text="Buscar" />
+                            <TextBox Text="{Binding FiltroHistorialTexto}"
+                                     Watermark="Número, descripción..." />
+                        </StackPanel>
+                        <Button Classes="secondary" Content="Buscar" Command="{Binding BuscarHistorialCommand}" />
+                    </StackPanel>
 
                     <ScrollViewer>
                         <ItemsControl ItemsSource="{Binding Historial}">
@@ -107,7 +157,10 @@
                                             <Button Grid.Column="1" Classes="ghost" Content="Ver"
                                                     Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).VerDetalleCommand}"
                                                     CommandParameter="{Binding}" />
-                                            <Button Grid.Column="2" Classes="secondary" Content="Reabrir"
+                                            <!-- I3: "Reabrir…" navega al detalle (VerDetalleCommand), mismo motivo
+                                                 que "Anular…" en Activos: reabrir exige motivo obligatorio y ese
+                                                 flujo vive en DocumentoFormViewModel.ReabrirAsync. -->
+                                            <Button Grid.Column="2" Classes="secondary" Content="Reabrir…"
                                                     IsVisible="{Binding PuedeReabrir}"
                                                     Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).VerDetalleCommand}"
                                                     CommandParameter="{Binding}" />

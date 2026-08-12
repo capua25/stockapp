@@ -26,6 +26,8 @@ internal sealed class DocumentoServiceFake : IDocumentoAdministrativoService
     }
 
     public int LlamadasListarHistorial { get; private set; }
+    public int LlamadasListarActivos { get; private set; }
+    public FiltroDocumentos? UltimoFiltroActivos { get; private set; }
 
     public Task<int> RegistrarAsync(DocumentoAdministrativo documento)
     {
@@ -36,8 +38,12 @@ internal sealed class DocumentoServiceFake : IDocumentoAdministrativoService
 
     public Task EditarAsync(int id, DatosEdicionDocumento datos) => Task.CompletedTask;
 
-    public Task<IReadOnlyList<DocumentoAdministrativo>> ListarActivosAsync(FiltroDocumentos filtro) =>
-        Task.FromResult<IReadOnlyList<DocumentoAdministrativo>>(_activos.ToList());
+    public Task<IReadOnlyList<DocumentoAdministrativo>> ListarActivosAsync(FiltroDocumentos filtro)
+    {
+        LlamadasListarActivos++;
+        UltimoFiltroActivos = filtro;
+        return Task.FromResult<IReadOnlyList<DocumentoAdministrativo>>(_activos.ToList());
+    }
 
     public Task<IReadOnlyList<DocumentoAdministrativo>> ListarHistorialAsync(FiltroDocumentos filtro)
     {

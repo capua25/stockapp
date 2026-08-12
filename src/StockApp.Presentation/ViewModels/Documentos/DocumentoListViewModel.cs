@@ -58,6 +58,21 @@ public sealed class DocumentoFila
 }
 
 /// <summary>
+/// Opción de filtro por tipo de documento para los ComboBox de Activos/Historial.
+/// Valor=null representa "Todos" (sin filtro de tipo). Molde: OpcionTipoMovimiento
+/// (MovimientoHistorialViewModel).
+/// </summary>
+public sealed record OpcionTipoDocumento(string Nombre, TipoDocumento? Valor);
+
+/// <summary>
+/// Opción de filtro por estado para el ComboBox de Historial. Solo ofrece los dos estados
+/// cerrados (Finalizado/Anulado, D9) -- un Pendiente/EnProceso nunca aparecería en
+/// ListarCerradosAsync, así que ofrecerlo como opción sería un filtro que siempre da vacío.
+/// Valor=null representa "Todos" (sin filtro de estado).
+/// </summary>
+public sealed record OpcionEstadoDocumento(string Nombre, EstadoDocumento? Valor);
+
+/// <summary>
 /// Pantalla "Documentos administrativos": dos solapas, Activos (Pendiente/EnProceso) e
 /// Historial (Finalizado/Anulado, D9). El historial se carga perezoso -- recién al abrir la
 /// solapa, no en CargarAsync() inicial -- y exige año (el servidor lo rechaza si viene nulo,
@@ -81,8 +96,34 @@ public partial class DocumentoListViewModel : ViewModelBase
     [ObservableProperty] private string? _filtroHistorialTexto;
     [ObservableProperty] private EstadoDocumento? _filtroHistorialEstado;
 
+    /// <summary>Opción elegida en el ComboBox de Tipo de la solapa Activos (Valor=null = "Todos").</summary>
+    [ObservableProperty] private OpcionTipoDocumento? _filtroActivosTipoSeleccionado;
+
+    /// <summary>Opción elegida en el ComboBox de Tipo de la solapa Historial (Valor=null = "Todos").</summary>
+    [ObservableProperty] private OpcionTipoDocumento? _filtroHistorialTipoSeleccionado;
+
+    /// <summary>Opción elegida en el ComboBox de Estado de la solapa Historial (Valor=null = "Todos").</summary>
+    [ObservableProperty] private OpcionEstadoDocumento? _filtroHistorialEstadoSeleccionado;
+
     public ObservableCollection<DocumentoFila> Activos { get; } = new();
     public ObservableCollection<DocumentoFila> Historial { get; } = new();
+
+    /// <summary>Opciones fijas para los ComboBox de filtro por tipo ("Todos" + los 3 tipos del dominio).</summary>
+    public ObservableCollection<OpcionTipoDocumento> TiposDisponibles { get; } = new()
+    {
+        new OpcionTipoDocumento("Todos", null),
+        new OpcionTipoDocumento("Expediente", TipoDocumento.Expediente),
+        new OpcionTipoDocumento("Oficio", TipoDocumento.Oficio),
+        new OpcionTipoDocumento("Suministro", TipoDocumento.Suministro),
+    };
+
+    /// <summary>Opciones fijas para el ComboBox de filtro por estado de Historial ("Todos" + los 2 estados cerrados).</summary>
+    public ObservableCollection<OpcionEstadoDocumento> EstadosDisponibles { get; } = new()
+    {
+        new OpcionEstadoDocumento("Todos", null),
+        new OpcionEstadoDocumento("Finalizado", EstadoDocumento.Finalizado),
+        new OpcionEstadoDocumento("Anulado", EstadoDocumento.Anulado),
+    };
 
     public DocumentoListViewModel(
         IDocumentoAdministrativoService service, ICurrentSession session,
@@ -92,7 +133,20 @@ public partial class DocumentoListViewModel : ViewModelBase
         _session      = session;
         _navigation   = navigation;
         _confirmacion = confirmacion;
+
+        _filtroActivosTipoSeleccionado = TiposDisponibles[0];
+        _filtroHistorialTipoSeleccionado = TiposDisponibles[0];
+        _filtroHistorialEstadoSeleccionado = EstadosDisponibles[0];
     }
+
+    partial void OnFiltroActivosTipoSeleccionadoChanged(OpcionTipoDocumento? value)
+        => FiltroActivosTipo = value?.Valor;
+
+    partial void OnFiltroHistorialTipoSeleccionadoChanged(OpcionTipoDocumento? value)
+        => FiltroHistorialTipo = value?.Valor;
+
+    partial void OnFiltroHistorialEstadoSeleccionadoChanged(OpcionEstadoDocumento? value)
+        => FiltroHistorialEstado = value?.Valor;
 
     private RolUsuario RolActualODefault => _session.RolActual ?? RolUsuario.Operador;
 
@@ -161,6 +215,14 @@ public partial class DocumentoListViewModel : ViewModelBase
     [RelayCommand]
     private async Task BuscarHistorial() => await CargarHistorialAsync();
 
+    /// <summary>
+    /// Botón "Buscar" de la solapa Activos (I2 del review final): FiltroActivosTexto/Tipo no
+    /// tenían disparador propio -- el único punto de recarga era DataContextChanged, que corre
+    /// una sola vez al entrar a la pantalla. Molde: BuscarHistorialCommand.
+    /// </summary>
+    [RelayCommand]
+    private async Task BuscarActivos() => await CargarAsync();
+
     [RelayCommand]
     private void Nuevo() => _navigation.Navegar<DocumentoFormViewModel>(vm => vm.CargarParaCrear());
 
@@ -185,7 +247,11 @@ public partial class DocumentoListViewModel : ViewModelBase
     [RelayCommand]
     private async Task Finalizar(DocumentoFila fila)
     {
-        try { await _service.FinalizarAsync(fila.Id); await CargarAsync(); }
+        // M9: Finalizar es la única acción de esta pantalla que cierra un documento (Anular
+        // vive en el formulario, D... ver comentario del botón en el XAML) -- sin invalidar
+        // acá, _historialCargado seguía en true y el documento recién cerrado no aparecía en
+        // Historial hasta apretar "Buscar" a mano.
+        try { await _service.FinalizarAsync(fila.Id); await CargarAsync(); _historialCargado = false; }
         catch (Exception ex) { await ManejarErrorAsync(ex); }
     }
 

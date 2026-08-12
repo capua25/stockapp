@@ -106,6 +106,96 @@ public class DocumentoListViewTests
 
         Assert.Equal(1, servicio.LlamadasListarHistorial);
     }
+
+    [AvaloniaFact]
+    public void ClickReal_EnBuscarDeActivos_VuelveAConsultarAlServicio()
+    {
+        // I2 del review final: FiltroActivosTexto/Tipo no tenían ningún disparador propio en
+        // la vista real -- el único punto de recarga era DataContextChanged (una sola vez).
+        var (window, _, servicio) = Montar(activos: new List<DocumentoAdministrativo>
+        {
+            DocumentoDe(1, "0087", EstadoDocumento.Pendiente),
+        });
+        Assert.Equal(1, servicio.LlamadasListarActivos);
+
+        var boton = window.GetVisualDescendants().OfType<Button>().First(b => b.Content as string == "Buscar");
+        boton.Command!.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(2, servicio.LlamadasListarActivos);
+    }
+
+    [AvaloniaFact]
+    public void ClickReal_EligiendoTipoEnElComboDeActivosYBuscando_LlegaAlServicio()
+    {
+        var (window, vm, servicio) = Montar(activos: new List<DocumentoAdministrativo>
+        {
+            DocumentoDe(1, "0087", EstadoDocumento.Pendiente),
+        });
+
+        var combo = window.GetVisualDescendants().OfType<ComboBox>()
+            .First(c => (c.ItemsSource as System.Collections.IEnumerable)?
+                .Cast<OpcionTipoDocumento>().Any() == true && c.SelectedItem is OpcionTipoDocumento);
+        combo.SelectedItem = vm.TiposDisponibles.First(o => o.Valor == TipoDocumento.Oficio);
+        Dispatcher.UIThread.RunJobs();
+
+        var boton = window.GetVisualDescendants().OfType<Button>().First(b => b.Content as string == "Buscar");
+        boton.Command!.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(TipoDocumento.Oficio, servicio.UltimoFiltroActivos?.Tipo);
+    }
+
+    [AvaloniaFact]
+    public void Montar_FilaActivaQuePuedeAnular_MuestraBotonAnularConPuntosSuspensivos()
+    {
+        // I3: el botón mentía sobre lo que hacía ("Anular" sin indicar que abre otra pantalla).
+        var (window, _, _) = Montar(activos: new List<DocumentoAdministrativo>
+        {
+            DocumentoDe(1, "0087", EstadoDocumento.Pendiente),
+        }, rol: RolUsuario.Admin);
+
+        var botones = window.GetVisualDescendants().OfType<Button>()
+            .Select(b => b.Content as string).ToList();
+        Assert.Contains("Anular…", botones);
+        Assert.DoesNotContain("Anular", botones);
+    }
+
+    [AvaloniaFact]
+    public void ClickReal_EnAnular_NavegaAlDetalleEnVezDeEjecutarLaAccionAca()
+    {
+        // I3: el botón "Anular…" sigue navegando al detalle (motivo obligatorio vive en el
+        // formulario) -- este test fija esa decisión de diseño para que no se rompa sin querer.
+        var (window, _, servicio) = Montar(activos: new List<DocumentoAdministrativo>
+        {
+            DocumentoDe(1, "0087", EstadoDocumento.Pendiente),
+        }, rol: RolUsuario.Admin);
+
+        var boton = window.GetVisualDescendants().OfType<Button>().First(b => b.Content as string == "Anular…");
+        boton.Command!.Execute(boton.DataContext);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(0, servicio.LlamadasListarHistorial); // no llamó a AnularAsync ni recargó nada del servicio
+    }
+
+    [AvaloniaFact]
+    public void Montar_FilaCerradaQuePuedeReabrir_MuestraBotonReabrirConPuntosSuspensivos()
+    {
+        var (window, vm, _) = Montar(historial: new List<DocumentoAdministrativo>
+        {
+            DocumentoDe(9, "0001", EstadoDocumento.Finalizado),
+        }, rol: RolUsuario.Admin);
+
+        var tabControl = window.GetVisualDescendants().OfType<TabControl>().First();
+        tabControl.SelectedIndex = 1;
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
+
+        var botones = window.GetVisualDescendants().OfType<Button>()
+            .Select(b => b.Content as string).ToList();
+        Assert.Contains("Reabrir…", botones);
+        Assert.DoesNotContain("Reabrir", botones);
+    }
 }
 
 /// <summary>Análogo de NavigationRecorderFake (TareaFakes.cs) para el módulo Documentos --

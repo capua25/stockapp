@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Moq;
 using StockApp.ApiClient;
@@ -191,6 +192,118 @@ public class DocumentoListViewModelTests
         await ctx.Vm.IniciarCommand.ExecuteAsync(fila);
 
         ctx.Svc.Verify(s => s.IniciarProcesoAsync(1), Times.Once);
+    }
+
+    [Fact]
+    public async Task FinalizarCommand_InvalidaElCacheDelHistorial_LaProximaAperturaVuelveAConsultar()
+    {
+        // M9: _historialCargado quedaba en true después de la primera apertura de la solapa
+        // Historial; finalizar un documento desde Activos no lo invalidaba, así que el
+        // documento recién cerrado no aparecía hasta apretar "Buscar" a mano.
+        var ctx = Crear(activos: new List<DocumentoAdministrativo>
+        {
+            DocumentoDe(1, EstadoDocumento.Pendiente),
+        });
+        await ctx.Vm.CargarAsync();
+        await ctx.Vm.AbrirHistorialCommand.ExecuteAsync(null);
+        var fila = ctx.Vm.Activos[0];
+
+        await ctx.Vm.FinalizarCommand.ExecuteAsync(fila);
+        await ctx.Vm.AbrirHistorialCommand.ExecuteAsync(null);
+
+        ctx.Svc.Verify(s => s.ListarHistorialAsync(It.IsAny<FiltroDocumentos>()), Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task BuscarActivosCommand_RecargaLaColeccionActivos()
+    {
+        // I2: FiltroActivosTexto/Tipo no tenían ningún disparador propio -- el único punto de
+        // recarga era DataContextChanged, que corre una sola vez al entrar a la pantalla.
+        var ctx = Crear(activos: new List<DocumentoAdministrativo>
+        {
+            DocumentoDe(1, EstadoDocumento.Pendiente),
+        });
+
+        await ctx.Vm.BuscarActivosCommand.ExecuteAsync(null);
+
+        Assert.Single(ctx.Vm.Activos);
+        ctx.Svc.Verify(s => s.ListarActivosAsync(It.IsAny<FiltroDocumentos>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task BuscarActivosCommand_ConFiltroTipoElegido_LoEnviaAlServicio()
+    {
+        var ctx = Crear();
+        ctx.Vm.FiltroActivosTipo = TipoDocumento.Oficio;
+
+        await ctx.Vm.BuscarActivosCommand.ExecuteAsync(null);
+
+        ctx.Svc.Verify(s => s.ListarActivosAsync(
+            It.Is<FiltroDocumentos>(f => f.Tipo == TipoDocumento.Oficio)), Times.Once);
+    }
+
+    [Fact]
+    public async Task BuscarHistorialCommand_ConFiltroTipoElegido_LoEnviaAlServicio()
+    {
+        var ctx = Crear();
+        ctx.Vm.FiltroHistorialTipo = TipoDocumento.Suministro;
+
+        await ctx.Vm.BuscarHistorialCommand.ExecuteAsync(null);
+
+        ctx.Svc.Verify(s => s.ListarHistorialAsync(
+            It.Is<FiltroDocumentos>(f => f.Tipo == TipoDocumento.Suministro)), Times.Once);
+    }
+
+    [Fact]
+    public async Task BuscarHistorialCommand_ConFiltroEstadoElegido_LoEnviaAlServicio()
+    {
+        var ctx = Crear();
+        ctx.Vm.FiltroHistorialEstado = EstadoDocumento.Anulado;
+
+        await ctx.Vm.BuscarHistorialCommand.ExecuteAsync(null);
+
+        ctx.Svc.Verify(s => s.ListarHistorialAsync(
+            It.Is<FiltroDocumentos>(f => f.Estado == EstadoDocumento.Anulado)), Times.Once);
+    }
+
+    [Fact]
+    public void TiposDisponibles_EmpiezaConLaOpcionTodosQueMapeaANull()
+    {
+        var ctx = Crear();
+
+        Assert.Equal("Todos", ctx.Vm.TiposDisponibles[0].Nombre);
+        Assert.Null(ctx.Vm.TiposDisponibles[0].Valor);
+    }
+
+    [Fact]
+    public void EstadosDisponibles_EmpiezaConLaOpcionTodosQueMapeaANull()
+    {
+        var ctx = Crear();
+
+        Assert.Equal("Todos", ctx.Vm.EstadosDisponibles[0].Nombre);
+        Assert.Null(ctx.Vm.EstadosDisponibles[0].Valor);
+    }
+
+    [Fact]
+    public void FiltroActivosTipoSeleccionado_AlCambiarlo_ActualizaFiltroActivosTipo()
+    {
+        var ctx = Crear();
+        var oficio = ctx.Vm.TiposDisponibles.Single(o => o.Valor == TipoDocumento.Oficio);
+
+        ctx.Vm.FiltroActivosTipoSeleccionado = oficio;
+
+        Assert.Equal(TipoDocumento.Oficio, ctx.Vm.FiltroActivosTipo);
+    }
+
+    [Fact]
+    public void FiltroHistorialEstadoSeleccionado_AlCambiarlo_ActualizaFiltroHistorialEstado()
+    {
+        var ctx = Crear();
+        var anulado = ctx.Vm.EstadosDisponibles.Single(o => o.Valor == EstadoDocumento.Anulado);
+
+        ctx.Vm.FiltroHistorialEstadoSeleccionado = anulado;
+
+        Assert.Equal(EstadoDocumento.Anulado, ctx.Vm.FiltroHistorialEstado);
     }
 
     [Fact]
