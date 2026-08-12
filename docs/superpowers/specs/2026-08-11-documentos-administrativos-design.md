@@ -72,7 +72,7 @@ Las tres acciones quedan registradas dos veces: como evento automático en el hi
 
 - Tiene filtros propios (número, año, tipo, estado), independientes de los de Activos.
 - **Se carga perezoso**, recién al abrir la solapa. Si se cargara junto con Activos, cada consulta de tres expedientes pendientes arrastraría el archivo completo del año.
-- **Exige año, y esa exigencia es validación de servicio, no solo un default de UI.** `ListarHistorialAsync` rechaza `Anio` nulo con `ReglaDeNegocioException` — no es que la pantalla precargue el año actual "por comodidad" y el usuario pueda borrarlo: si pudiera, el argumento de "no paginar" de abajo se cae, porque un Operador que limpia el filtro traería el archivo completo. La UI precarga el año actual como valor inicial del filtro; el servidor lo exige siempre, sin excepción para Admin.
+- **Exige año, y esa exigencia es validación de servicio, no solo un default de UI.** `ListarHistorialAsync` rechaza `Anio` nulo con `ArgumentException` (400 — filtro obligatorio ausente del request, no un choque contra el estado de un recurso; ver "Api" para el contraste explícito con el 409 del número duplicado) — no es que la pantalla precargue el año actual "por comodidad" y el usuario pueda borrarlo: si pudiera, el argumento de "no paginar" de abajo se cae, porque un Operador que limpia el filtro traería el archivo completo. La UI precarga el año actual como valor inicial del filtro; el servidor lo exige siempre, sin excepción para Admin.
 - Se decidió **no paginar**: paginar cuesta cambios en las cinco capas (repositorio, servicio, endpoint, cliente HTTP, ViewModel) para un problema que el filtro por año obligatorio ya resuelve con una condición `WHERE`. Si algún año puntual empieza a traer miles de registros, ahí se agrega paginación con el dato real en la mano — no antes.
 
 **D10. Adjuntos: entidad propia `AdjuntoDocumento`, no se reusa `Adjunto` de Finanzas.** El `Adjunto` de Finanzas (`src/StockApp.Domain/Entities/Adjunto.cs`) tiene dos FK reales —`GastoId`/`PagoGastoId`— con un CHECK `CK_Adjuntos_GastoOPago` en la base que impone el invariante XOR: es integridad referencial de verdad, no decorativa.
@@ -184,7 +184,7 @@ Migración `AgregaDocumentosAdministrativos`.
 | `RegistrarAsync(doc)` | `documentos.gestionar` |
 | `EditarAsync(id, datos)` | `documentos.gestionar` |
 | `ListarActivosAsync(filtro)` | `documentos.gestionar` |
-| `ListarHistorialAsync(filtro)` | `documentos.gestionar` |
+| `ListarHistorialAsync(filtro)` — rechaza `Anio` nulo con `ArgumentException` (400) | `documentos.gestionar` |
 | `ObtenerPorIdAsync(id)` | `documentos.gestionar` |
 | `IniciarProcesoAsync(id)` | `documentos.gestionar` |
 | `VolverAPendienteAsync(id)` | `documentos.gestionar` |
@@ -195,7 +195,7 @@ Migración `AgregaDocumentosAdministrativos`.
 
 Más los tres de `IAdjuntoDocumentoService` (ver más abajo): `AgregarAsync`/`ListarAsync`/`ObtenerContenidoAsync` con `documentos.gestionar`, `QuitarAsync` con `documentos.administrar` — la matriz completa queda **12 métodos bajo `documentos.gestionar`** (los 9 de arriba más los 3 de lectura/alta de adjuntos que no son `QuitarAsync`) **y 3 bajo `documentos.administrar`** (`AnularAsync`, `ReabrirAsync`, `QuitarAsync`).
 
-Patrón fijo por método: `_auth.Verificar(_session, Permisos.X)` primero, después validar (motivo no vacío en `Anular`/`Reabrir`; `EsCerrado` en `Reabrir`, D8; `Anio` no nulo en `ListarHistorialAsync`, D9; documento existe), después **mutar vía la entidad** (`documento.CambiarEstado(...)`, nunca reimplementar la máquina de estados en el servicio), después sellar/limpiar `FechaCierre` a mano en `FinalizarAsync`/`AnularAsync`/`ReabrirAsync` (D8 — el dominio no toca fechas), después guardar, después auditar. Mismo orden que `TareaService`.
+Patrón fijo por método: `_auth.Verificar(_session, Permisos.X)` primero, después validar (motivo no vacío en `Anular`/`Reabrir`, `ReglaDeNegocioException`; `EsCerrado` en `Reabrir`, D8, `ReglaDeNegocioException`; `Anio` no nulo en `ListarHistorialAsync`, D9, **`ArgumentException`** — es el único 400 del módulo, el resto de las validaciones son reglas de negocio y devuelven 409; documento existe, `EntidadNoEncontradaException`), después **mutar vía la entidad** (`documento.CambiarEstado(...)`, nunca reimplementar la máquina de estados en el servicio), después sellar/limpiar `FechaCierre` a mano en `FinalizarAsync`/`AnularAsync`/`ReabrirAsync` (D8 — el dominio no toca fechas), después guardar, después auditar. Mismo orden que `TareaService`.
 
 `VolverAPendienteAsync(id)` es el análogo exacto de `TareaService.SoltarAsync` (D4): vuelve el documento a `Pendiente` y genera evento automático. No lleva motivo — a diferencia de anular/reabrir, no es una decisión que necesite quedar explicada, es una corrección de rumbo dentro del flujo normal.
 
@@ -213,7 +213,7 @@ Adjuntos, en un servicio separado (mismo criterio que Finanzas: `AdjuntoService`
 
 `DocumentosEndpoints.cs` en `src/StockApp.Api/Endpoints/`, minimal API, grupo `/documentos`, cada endpoint con su `.RequireAuthorization(Permisos.X)`:
 
-- `GET /documentos/activos`, `GET /documentos/historial` (con querystring de `FiltroDocumentos`; `Anio` ausente devuelve 409 vía `ReglaDeNegocioException` — D9, mismo mapeo genérico que el resto de las reglas de negocio, no un 400 de validación de payload), `GET /documentos/{id:int}` — `documentos.gestionar`.
+- `GET /documentos/activos`, `GET /documentos/historial` (con querystring de `FiltroDocumentos`; `Anio` ausente devuelve **400** vía `ArgumentException` — D9), `GET /documentos/{id:int}` — `documentos.gestionar`.
 - `POST /documentos` — alta, `documentos.gestionar`.
 - `PUT /documentos/{id:int}` — edición (D1, `EditarAsync`), `documentos.gestionar`.
 - `POST /documentos/{id:int}/iniciar`, `POST /documentos/{id:int}/volver-a-pendiente`, `POST /documentos/{id:int}/finalizar`, `POST /documentos/{id:int}/notas` — `documentos.gestionar`.
@@ -224,6 +224,8 @@ Adjuntos, en un servicio separado (mismo criterio que Finanzas: `AdjuntoService`
 - `DELETE /documentos/adjuntos/{id:int}` — `documentos.administrar`.
 
 Transiciones inválidas devuelven 409 (vía `ReglaDeNegocioException`, mapeado genéricamente por `DomainExceptionHandler`); el documento inexistente, 404 (`EntidadNoEncontradaException`).
+
+**Contraste explícito entre los dos códigos de error propios del módulo** (confirmado contra `src/StockApp.Api/ErrorHandling/DomainExceptionHandler.cs`, líneas 31 y 36): **400** es un request mal formado — falta un dato que el cliente tenía que mandar y no mandó (`Anio` ausente en `/documentos/historial`, `ArgumentException`); **409** es un conflicto contra el estado actual de los datos — algo que ya existe y choca con lo que se pide (el número de documento duplicado). No son intercambiables: si ambos devolvieran 409, quien depure la API en producción vería el mismo código para "mandaste mal el pedido" (arreglás el cliente) y para "ya existe ese expediente" (mostrás el mensaje y el usuario corrige el número) — dos problemas sin relación, con soluciones opuestas.
 
 **El número duplicado devuelve 409, no un 500 con el error crudo de Postgres adentro.** El índice único `(Tipo, Anio, Numero)` es la última defensa contra dos funcionarios cargando el mismo expediente a la vez — condición de carrera real, no hipotética. Mismo patrón que ya resuelve `GastoRepository.AgregarAsync` para la factura duplicada (`src/StockApp.Infrastructure/Repositories/GastoRepository.cs`, constraint `IX_Gastos_ProveedorId_NumeroFactura_NumeroOrden`): el repositorio atrapa el `DbUpdateException` cuya `PostgresException.SqlState` es `UniqueViolation` y cuyo `ConstraintName` coincide con el índice esperado, y lo traduce a `ReglaDeNegocioException` con mensaje de dominio:
 
@@ -243,7 +245,7 @@ El catch vive en `DocumentoAdministrativoRepository` (no en `Application`, que n
 
 ### ApiClient
 
-`DocumentoApiClient` en `src/StockApp.ApiClient/`, implementa `IDocumentoAdministrativoService` contra HTTP, con records Wire propios y mapeo de errores vía `ApiErrores` (403 → `UnauthorizedAccessException`, 409 → `ReglaDeNegocioException` con el mensaje del servidor). `AdjuntoDocumentoApiClient` implementa `IAdjuntoDocumentoService`, mismo criterio que `AdjuntoApiClient`.
+`DocumentoApiClient` en `src/StockApp.ApiClient/`, implementa `IDocumentoAdministrativoService` contra HTTP, con records Wire propios y mapeo de errores vía `ApiErrores` (403 → `UnauthorizedAccessException`, 409 → `ReglaDeNegocioException`, 400 → `ArgumentException` — ej. el `Anio` ausente de `ListarHistorialAsync`, D9 —, todos con el mensaje del servidor). `AdjuntoDocumentoApiClient` implementa `IAdjuntoDocumentoService`, mismo criterio que `AdjuntoApiClient`.
 
 ### Presentation
 
@@ -297,10 +299,10 @@ EdicionDocumento            = 59,
 TDD por capas, un archivo por capa, mismo orden que Tareas y Permisos:
 
 - **Domain**: la máquina de estados completa (cada transición válida e inválida, incluida la identidad), `EsActivo`/`EsCerrado` para los cuatro estados, y que `CambiarEstado` no toque `FechaCierre` (queda en manos del servicio, D8).
-- **Application**: permiso por método — los 12 de `documentos.gestionar` y los 3 de `documentos.administrar` (`AnularAsync`, `ReabrirAsync`, `QuitarAsync` de adjuntos); motivo obligatorio en `AnularAsync`/`ReabrirAsync` (vacío y en blanco); que `ReabrirAsync` rechace con `ReglaDeNegocioException` sobre un documento que no está `EsCerrado` (D4/D8 — incluido el caso puntual `Pendiente`, que el dominio por sí solo no rechazaría); que `FinalizarAsync`/`AnularAsync` sellen `FechaCierre` y `ReabrirAsync` la limpie; que `ListarHistorialAsync` rechace `Anio` nulo (D9); generación de evento automático en cada cambio de estado, en cada edición (D1) y en cada alta/baja de adjunto; auditoría por acción; que `AgregarAsync` **y** `QuitarAsync` de adjuntos rechacen sobre un documento cerrado (D11a); que `EditarAsync` revalide el índice único cuando cambia `Numero`/`Anio`/`Tipo` y rechace sobre un documento cerrado (D1).
+- **Application**: permiso por método — los 12 de `documentos.gestionar` y los 3 de `documentos.administrar` (`AnularAsync`, `ReabrirAsync`, `QuitarAsync` de adjuntos); motivo obligatorio en `AnularAsync`/`ReabrirAsync` (vacío y en blanco); que `ReabrirAsync` rechace con `ReglaDeNegocioException` sobre un documento que no está `EsCerrado` (D4/D8 — incluido el caso puntual `Pendiente`, que el dominio por sí solo no rechazaría); que `FinalizarAsync`/`AnularAsync` sellen `FechaCierre` y `ReabrirAsync` la limpie; que `ListarHistorialAsync` rechace `Anio` nulo con `ArgumentException`, no `ReglaDeNegocioException` (D9 — es un request mal formado, no un conflicto de negocio); generación de evento automático en cada cambio de estado, en cada edición (D1) y en cada alta/baja de adjunto; auditoría por acción; que `AgregarAsync` **y** `QuitarAsync` de adjuntos rechacen sobre un documento cerrado (D11a); que `EditarAsync` revalide el índice único cuando cambia `Numero`/`Anio`/`Tipo` y rechace sobre un documento cerrado (D1).
 - **Infrastructure**: repositorio contra PostgreSQL real (Testcontainers), y **el índice único: el duplicado tiene que explotar** — alta de `(Expediente, 2026, "0087")` dos veces en paralelo, uno gana y el otro recibe `ReglaDeNegocioException`; mismo test repetido para `EditarAsync` cuando la edición choca con otro documento existente.
-- **Api**: matriz 401/403 por endpoint, 409 real del duplicado (no simulado — contra Postgres real), 409 de `Anio` ausente en `/documentos/historial`, policies correctas por acción, multipart para adjuntos.
-- **ApiClient**: mapeo Wire↔dominio, mapeo de errores (403, 409).
+- **Api**: matriz 401/403 por endpoint, 409 real del duplicado (no simulado — contra Postgres real), **400** de `Anio` ausente en `/documentos/historial` (distinto del 409 del duplicado — mismo test que verifica que no se confundan los dos códigos), policies correctas por acción, multipart para adjuntos.
+- **ApiClient**: mapeo Wire↔dominio, mapeo de errores (403 → `UnauthorizedAccessException`, 409 → `ReglaDeNegocioException`, 400 → `ArgumentException` — mismo mapeo genérico ya establecido en `ApiErrores.CrearBadRequest`).
 - **Presentation**: filtros por solapa, carga perezosa del Historial (que `CargarAsync()` inicial NO dispare `CargarHistorialAsync()`), gating de botones por `PuedeTransicionarA` combinado con rol (`PuedeAnular`/`PuedeReabrir` en falso para Operador aunque la transición sea válida — Importante 5), y el nuevo `PedirTextoAsync` cancelable.
 - **UiTests**: carga por `DataContextChanged`, cambio de solapa dispara la carga perezosa.
 
