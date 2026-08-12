@@ -86,6 +86,27 @@ public class AdjuntoDocumentoRepositoryTests : PostgresRepositoryTestBase
     }
 
     [Fact]
+    public async Task ListarPorDocumentoAsync_ExcluyeAdjuntosInactivos()
+    {
+        var documentoId = await SeedDocumentoAsync();
+        Context.ChangeTracker.Clear();
+
+        var idActivo = await _repo.AgregarAsync(NuevoAdjunto(documentoId, "factura.pdf"), new byte[] { 1, 2, 3 });
+        var idInactivo = await _repo.AgregarAsync(NuevoAdjunto(documentoId, "nota.jpg"), new byte[] { 4, 5, 6 });
+        Context.ChangeTracker.Clear();
+
+        var adjuntoInactivo = await _repo.ObtenerPorIdAsync(idInactivo);
+        adjuntoInactivo!.Activo = false;
+        await _repo.ActualizarAsync(adjuntoInactivo);
+        Context.ChangeTracker.Clear();
+
+        var listado = await _repo.ListarPorDocumentoAsync(documentoId);
+
+        var unico = Assert.Single(listado);
+        Assert.Equal(idActivo, unico.Id);
+    }
+
+    [Fact]
     public async Task ObtenerPorIdAsync_Inexistente_DevuelveNull()
     {
         var encontrado = await _repo.ObtenerPorIdAsync(999);

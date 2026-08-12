@@ -29,6 +29,7 @@ public class AdjuntoDocumentoRepository : IAdjuntoDocumentoRepository
 
     public async Task<IReadOnlyList<AdjuntoDocumento>> ListarPorDocumentoAsync(int documentoId)
         => await _ctx.AdjuntosDocumento
+            .Where(a => a.Activo)
             .Where(a => a.DocumentoAdministrativoId == documentoId)
             .OrderByDescending(a => a.FechaAltaUtc)
             .ThenByDescending(a => a.Id)
