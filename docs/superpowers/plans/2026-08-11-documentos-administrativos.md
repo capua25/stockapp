@@ -3502,6 +3502,8 @@ git commit -m "feat(documentos): implementa edicion de documentos activos"
 - Consumes (del bloque A): entidad `StockApp.Domain.Entities.AdjuntoDocumento` (`Id`, `DocumentoAdministrativoId`, `NombreArchivo`, `ContentType`, `TamanoBytes`, `Activo`, `FechaAltaUtc`); `StockApp.Application.Interfaces.IAdjuntoDocumentoRepository` con `AgregarAsync(AdjuntoDocumento, byte[])`, `ListarPorDocumentoAsync(int)`, `ObtenerPorIdAsync(int)`, `ObtenerContenidoAsync(int)`, `ActualizarAsync(AdjuntoDocumento)`. También `IDocumentoAdministrativoRepository.ObtenerPorIdAsync`/`ActualizarAsync` (para chequear `EsActivo` y sumar el evento en el documento dueño — Task 7), `AdjuntoValidador` (`StockApp.Application.Finanzas`, se reusa TAL CUAL, sin duplicar — D10), `Permisos.GestionarDocumentos`/`AdministrarDocumentos` (Task 6), `AccionAuditada.AltaAdjuntoDocumento`/`BajaAdjuntoDocumento` (Task 6).
 - Produces: `record AdjuntoDocumentoDto(int Id, int DocumentoAdministrativoId, string NombreArchivo, string ContentType, long TamanoBytes, DateTime FechaAltaUtc)`, `record AdjuntoDocumentoContenidoDto(string NombreArchivo, string ContentType, byte[] Contenido)`, `IAdjuntoDocumentoService`, `AdjuntoDocumentoService` — consumidos por los endpoints de adjuntos (bloque C) y `AdjuntosDocumentoPanelViewModel` (bloque D).
 
+**Nota — filtro de `Activo` (bug real corregido fuera de tarea):** `IAdjuntoDocumentoRepository.ListarPorDocumentoAsync` ya excluye los adjuntos dados de baja (`Activo == false`) en el repositorio, mismo criterio que `AdjuntoRepository.ListarAsync` de Finanzas (`.Where(a => a.Activo)`). El servicio de esta tarea **NO debe volver a filtrar por `Activo`** — confía en el contrato del repositorio y solo mapea a DTO. No dupliques el filtro acá ni lo quites del repositorio.
+
 - [ ] **Step 1: Escribir el test que falla**
 
 ```csharp
@@ -3637,6 +3639,25 @@ public class AdjuntoDocumentoServiceTests
         var resultado = await _service.ListarPorDocumentoAsync(1);
 
         Assert.Single(resultado);
+    }
+
+    [Fact]
+    public async Task ListarPorDocumentoAsync_NoIncluyeAdjuntosDadosDeBaja()
+    {
+        // El filtro por Activo vive en el repositorio (AdjuntoDocumentoRepository.ListarPorDocumentoAsync,
+        // mismo criterio que AdjuntoRepository de Finanzas) — el service confía en ese contrato y NO
+        // vuelve a filtrar acá. El mock devuelve solo el adjunto activo, como haría el repo real
+        // post-fix; la cobertura de la exclusión en sí vive en el test de integración
+        // AdjuntoDocumentoRepositoryTests.ListarPorDocumentoAsync_ExcluyeAdjuntosInactivos.
+        _adjuntos.Setup(r => r.ListarPorDocumentoAsync(1)).ReturnsAsync(new List<AdjuntoDocumento>
+        {
+            new() { Id = 1, DocumentoAdministrativoId = 1, NombreArchivo = "activo.pdf", ContentType = "application/pdf", Activo = true },
+        });
+
+        var resultado = await _service.ListarPorDocumentoAsync(1);
+
+        var unico = Assert.Single(resultado);
+        Assert.Equal("activo.pdf", unico.NombreArchivo);
     }
 
     // ── ObtenerContenidoAsync ─────────────────────────────────────────────────
@@ -3936,12 +3957,12 @@ Nota: `AccionAuditada` vive en `StockApp.Domain.Enums`; agregar `using StockApp.
 - [ ] **Step 4: Correr el test y verificar que pasa**
 
 Run: `dotnet test tests/StockApp.Application.Tests --filter "FullyQualifiedName~AdjuntoDocumentoServiceTests"`
-Expected: PASS — 17 tests verdes.
+Expected: PASS — 18 tests verdes.
 
 - [ ] **Step 5: Correr la suite completa de Application (secuencial, NUNCA en paralelo con StockApp.Api.Tests — colisión de Testcontainers)**
 
 Run: `dotnet test tests/StockApp.Application.Tests`
-Expected: PASS — todos los tests verdes, incluidos los 58 de `DocumentoAdministrativoServiceTests` y los 17 nuevos de `AdjuntoDocumentoServiceTests`.
+Expected: PASS — todos los tests verdes, incluidos los 58 de `DocumentoAdministrativoServiceTests` y los 18 nuevos de `AdjuntoDocumentoServiceTests`.
 
 - [ ] **Step 6: Commit**
 ```bash
