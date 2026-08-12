@@ -177,6 +177,23 @@ public class DocumentoAdministrativoRepositoryTests : PostgresRepositoryTestBase
     }
 
     [Fact]
+    public async Task ListarActivosAsync_FiltraPorTexto_BuscaTambienEnNumero_ConCoincidenciaParcial()
+    {
+        // I1: la UI promete "Número, descripción..." en el watermark pero el filtro solo
+        // pegaba contra Descripcion -- un funcionario que tipea el número del expediente se
+        // encontraba con la grilla vacía. El índice IX (Numero) ya existía sin usuario.
+        var usuarioId = await SeedUsuarioAsync();
+        await _repo.AgregarAsync(NuevoDocumento(usuarioId, numero: "0087", descripcion: "Poda de árbol en vereda"));
+        await _repo.AgregarAsync(NuevoDocumento(usuarioId, numero: "0099", descripcion: "Bacheo de calle Rivera"));
+        Context.ChangeTracker.Clear();
+
+        var resultado = await _repo.ListarActivosAsync(new FiltroDocumentos(null, null, "087", null));
+
+        var unico = Assert.Single(resultado);
+        Assert.Equal("0087", unico.Numero);
+    }
+
+    [Fact]
     public async Task ListarCerradosAsync_FiltraPorEstado_AcotaEntreFinalizadoYAnulado()
     {
         var usuarioId = await SeedUsuarioAsync();

@@ -63,7 +63,9 @@ public class DocumentoAdministrativoRepository : IDocumentoAdministrativoReposit
         if (filtro.Estado is not null)
             query = query.Where(d => d.Estado == filtro.Estado);
         if (!string.IsNullOrWhiteSpace(filtro.Texto))
-            query = query.Where(d => EF.Functions.ILike(d.Descripcion, $"%{filtro.Texto}%"));
+            query = query.Where(d =>
+                EF.Functions.ILike(d.Descripcion, $"%{filtro.Texto}%") ||
+                EF.Functions.ILike(d.Numero, $"%{filtro.Texto}%"));
 
         return await query
             .OrderByDescending(d => d.FechaRegistro)
