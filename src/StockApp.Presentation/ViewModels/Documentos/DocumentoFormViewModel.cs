@@ -186,6 +186,11 @@ public partial class DocumentoFormViewModel : ViewModelBase
         OnPropertyChanged(nameof(PuedeFinalizar));
         OnPropertyChanged(nameof(PuedeAnular));
         OnPropertyChanged(nameof(PuedeReabrir));
+
+        // I4: sin esto, AdjuntosPanel quedaba con el PuedeAgregar/PuedeQuitar calculados en la
+        // carga inicial -- finalizar dejaba "Agregar" habilitado (409 al clickear) y reabrir
+        // lo dejaba deshabilitado hasta salir y volver a entrar.
+        await AdjuntosPanel.InicializarAsync(_documento.Id, _documento.EsActivo);
     }
 
     private bool PuedeGuardar() => !string.IsNullOrWhiteSpace(Numero) && !string.IsNullOrWhiteSpace(Descripcion)

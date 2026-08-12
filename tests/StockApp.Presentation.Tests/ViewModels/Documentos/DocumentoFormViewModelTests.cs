@@ -179,6 +179,41 @@ public class DocumentoFormViewModelTests
     }
 
     [Fact]
+    public async Task FinalizarAsync_ReinicializaElPanelDeAdjuntos_PuedeAgregarPasaAFalse()
+    {
+        // I4: RecargarAsync() refresca los 7 Puede* del formulario pero no reinicializaba
+        // AdjuntosPanel -- el botón "Agregar" adjunto seguía habilitado tras finalizar, y el
+        // clic comía un 409 del servidor (el servidor sí valida EsActivo).
+        var ctx = Crear();
+        await ctx.Vm.CargarParaVerAsync(DocumentoDe(1, EstadoDocumento.Pendiente));
+        Assert.True(ctx.Vm.AdjuntosPanel.PuedeAgregar);
+
+        ctx.Svc.Setup(s => s.ObtenerPorIdAsync(1)).ReturnsAsync(DocumentoDe(1, EstadoDocumento.Finalizado));
+
+        await ctx.Vm.FinalizarCommand.ExecuteAsync(null);
+
+        Assert.False(ctx.Vm.AdjuntosPanel.PuedeAgregar);
+    }
+
+    [Fact]
+    public async Task ReabrirAsync_ReinicializaElPanelDeAdjuntos_PuedeAgregarVuelveATrue()
+    {
+        // Caso inverso de I4: al revés, reabrir dejaba los botones deshabilitados hasta salir
+        // y volver a entrar a la pantalla.
+        var ctx = Crear();
+        await ctx.Vm.CargarParaVerAsync(DocumentoDe(1, EstadoDocumento.Anulado));
+        Assert.False(ctx.Vm.AdjuntosPanel.PuedeAgregar);
+
+        ctx.Svc.Setup(s => s.ObtenerPorIdAsync(1)).ReturnsAsync(DocumentoDe(1, EstadoDocumento.Pendiente));
+        ctx.Confirm.Setup(c => c.PedirTextoAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync("Se encontró documentación adicional.");
+
+        await ctx.Vm.ReabrirCommand.ExecuteAsync(null);
+
+        Assert.True(ctx.Vm.AdjuntosPanel.PuedeAgregar);
+    }
+
+    [Fact]
     public void FechaEmisionSeleccionada_AlSetearlaUltima_HabilitaGuardarCommand()
     {
         // F4: PuedeGuardar() exige Numero + Descripcion + FechaEmisionSeleccionada. No se llama
