@@ -318,4 +318,285 @@ public class DocumentosEndpointTests : ApiTestBase
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
+
+    [Fact]
+    public async Task PostIniciar_SinToken_Devuelve401()
+    {
+        var response = await Factory.CreateClient().PostAsync("/documentos/1/iniciar", content: null);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostIniciar_DocumentoInexistente_Devuelve404()
+    {
+        await SeedUsuariosAsync();
+        var client = ClienteAutenticado(TokenOperador());
+
+        var response = await client.PostAsync("/documentos/9999/iniciar", content: null);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostIniciar_ConTokenOperador_Devuelve200()
+    {
+        // Orden: SeedUsuariosAsync PRIMERO — ver comentario en GetActivos_.../200SoloConPendientesYEnProceso.
+        await SeedUsuariosAsync();
+        var id = await SembrarDocumentoAsync(EstadoDocumento.Pendiente);
+        var client = ClienteAutenticado(TokenOperador());
+
+        var response = await client.PostAsync($"/documentos/{id}/iniciar", content: null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostIniciar_ConTokenOperadorSinPermiso_Devuelve403()
+    {
+        // C7: 403 propio de /iniciar, no representativo del de otro endpoint.
+        var id = await SembrarDocumentoAsync(EstadoDocumento.Pendiente);
+        await using var ctx = Factory.CrearContexto();
+        var operador = await DatosDePrueba.SeedOperadorConPermisosAsync(
+            ctx, "operador.sinpermiso", "Secreta123!", Array.Empty<string>());
+        var jwt = Factory.Services.GetRequiredService<IJwtTokenService>();
+        var client = ClienteAutenticado(jwt.GenerarToken(operador.Id, RolUsuario.Operador));
+
+        var response = await client.PostAsync($"/documentos/{id}/iniciar", content: null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostVolverAPendiente_DesdeEnProceso_Devuelve200()
+    {
+        // Análogo de TareaService.SoltarAsync (D4). Orden: SeedUsuariosAsync PRIMERO — ver
+        // comentario en GetActivos_.../200SoloConPendientesYEnProceso.
+        await SeedUsuariosAsync();
+        var id = await SembrarDocumentoAsync(EstadoDocumento.EnProceso);
+        var client = ClienteAutenticado(TokenOperador());
+
+        var response = await client.PostAsync($"/documentos/{id}/volver-a-pendiente", content: null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostVolverAPendiente_ConTokenOperadorSinPermiso_Devuelve403()
+    {
+        // C7: 403 propio de /volver-a-pendiente.
+        var id = await SembrarDocumentoAsync(EstadoDocumento.EnProceso);
+        await using var ctx = Factory.CrearContexto();
+        var operador = await DatosDePrueba.SeedOperadorConPermisosAsync(
+            ctx, "operador.sinpermiso", "Secreta123!", Array.Empty<string>());
+        var jwt = Factory.Services.GetRequiredService<IJwtTokenService>();
+        var client = ClienteAutenticado(jwt.GenerarToken(operador.Id, RolUsuario.Operador));
+
+        var response = await client.PostAsync($"/documentos/{id}/volver-a-pendiente", content: null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostFinalizar_DesdePendiente_Devuelve409()
+    {
+        // Máquina de estados (D4): Pendiente no puede pasar directo a Finalizado.
+        // Orden: SeedUsuariosAsync PRIMERO — ver comentario en GetActivos_.../200SoloConPendientesYEnProceso.
+        await SeedUsuariosAsync();
+        var id = await SembrarDocumentoAsync(EstadoDocumento.Pendiente);
+        var client = ClienteAutenticado(TokenOperador());
+
+        var response = await client.PostAsync($"/documentos/{id}/finalizar", content: null);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostFinalizar_DesdeEnProceso_Devuelve200()
+    {
+        // Orden: SeedUsuariosAsync PRIMERO — ver comentario en GetActivos_.../200SoloConPendientesYEnProceso.
+        await SeedUsuariosAsync();
+        var id = await SembrarDocumentoAsync(EstadoDocumento.EnProceso);
+        var client = ClienteAutenticado(TokenOperador());
+
+        var response = await client.PostAsync($"/documentos/{id}/finalizar", content: null);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostFinalizar_ConTokenOperadorSinPermiso_Devuelve403()
+    {
+        // C7: 403 propio de /finalizar.
+        var id = await SembrarDocumentoAsync(EstadoDocumento.EnProceso);
+        await using var ctx = Factory.CrearContexto();
+        var operador = await DatosDePrueba.SeedOperadorConPermisosAsync(
+            ctx, "operador.sinpermiso", "Secreta123!", Array.Empty<string>());
+        var jwt = Factory.Services.GetRequiredService<IJwtTokenService>();
+        var client = ClienteAutenticado(jwt.GenerarToken(operador.Id, RolUsuario.Operador));
+
+        var response = await client.PostAsync($"/documentos/{id}/finalizar", content: null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostNotas_ConTokenOperador_Devuelve200()
+    {
+        // Orden: SeedUsuariosAsync PRIMERO — ver comentario en GetActivos_.../200SoloConPendientesYEnProceso.
+        await SeedUsuariosAsync();
+        var id = await SembrarDocumentoAsync(EstadoDocumento.Pendiente);
+        var client = ClienteAutenticado(TokenOperador());
+
+        var response = await client.PostAsJsonAsync(
+            $"/documentos/{id}/notas", new AgregarNotaDocumentoRequest("avance del trámite"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostNotas_ConTokenOperadorSinPermiso_Devuelve403()
+    {
+        // C7: 403 propio de /notas.
+        var id = await SembrarDocumentoAsync(EstadoDocumento.Pendiente);
+        await using var ctx = Factory.CrearContexto();
+        var operador = await DatosDePrueba.SeedOperadorConPermisosAsync(
+            ctx, "operador.sinpermiso", "Secreta123!", Array.Empty<string>());
+        var jwt = Factory.Services.GetRequiredService<IJwtTokenService>();
+        var client = ClienteAutenticado(jwt.GenerarToken(operador.Id, RolUsuario.Operador));
+
+        var response = await client.PostAsJsonAsync(
+            $"/documentos/{id}/notas", new AgregarNotaDocumentoRequest("avance del trámite"));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostAnular_ConTokenOperador_Devuelve403()
+    {
+        // D7: documentos.administrar es estructural, Operador nunca lo tiene.
+        var id = await SembrarDocumentoAsync(EstadoDocumento.Pendiente);
+        await SeedUsuariosAsync();
+        var client = ClienteAutenticado(TokenOperador());
+
+        var response = await client.PostAsJsonAsync(
+            $"/documentos/{id}/anular", new MotivoRequest("el interesado desistió"));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostAnular_ConTokenAdmin_MotivoVacio_Devuelve409()
+    {
+        // D8: motivo obligatorio -> ReglaDeNegocioException, no una validación de request (400).
+        var id = await SembrarDocumentoAsync(EstadoDocumento.Pendiente);
+        await SeedUsuariosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var response = await client.PostAsJsonAsync($"/documentos/{id}/anular", new MotivoRequest(""));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostAnular_ConTokenAdmin_MotivoNulo_Devuelve409()
+    {
+        // Pedido explícito: por HTTP el JSON puede traer "motivo": null aunque la firma de C#
+        // (string motivo) no admita null en compilación -- STJ no lo rechaza sin
+        // RespectNullableAnnotations, así que debe llegar a IsNullOrWhiteSpace -> 409, no 500/400.
+        var id = await SembrarDocumentoAsync(EstadoDocumento.Pendiente);
+        await SeedUsuariosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var response = await client.PostAsJsonAsync(
+            $"/documentos/{id}/anular", new { motivo = (string?)null });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostAnular_ConTokenAdmin_Devuelve200()
+    {
+        var id = await SembrarDocumentoAsync(EstadoDocumento.Pendiente);
+        await SeedUsuariosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var response = await client.PostAsJsonAsync(
+            $"/documentos/{id}/anular", new MotivoRequest("el interesado desistió"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostReabrir_ConTokenOperador_Devuelve403()
+    {
+        // D7: documentos.administrar es estructural, Operador nunca lo tiene -- 403 propio de
+        // /reabrir, no representativo del de /anular (C7).
+        var id = await SembrarDocumentoAsync(EstadoDocumento.Finalizado);
+        await SeedUsuariosAsync();
+        var client = ClienteAutenticado(TokenOperador());
+
+        var response = await client.PostAsJsonAsync(
+            $"/documentos/{id}/reabrir", new MotivoRequest("se encontró documentación nueva"));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostReabrir_SobreDocumentoNoCerrado_Devuelve409()
+    {
+        // D8: Pendiente -> EnProceso ya es válida por otra vía (iniciar); ReabrirAsync exige
+        // EsCerrado explícitamente, así que sobre Pendiente debe rechazar, no dejarlo pasar
+        // como si fuera un IniciarProcesoAsync más.
+        var id = await SembrarDocumentoAsync(EstadoDocumento.Pendiente);
+        await SeedUsuariosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var response = await client.PostAsJsonAsync(
+            $"/documentos/{id}/reabrir", new MotivoRequest("se encontró documentación nueva"));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostReabrir_ConTokenAdmin_MotivoVacio_Devuelve409()
+    {
+        // D8: motivo obligatorio -> ReglaDeNegocioException, no una validación de request (400).
+        var id = await SembrarDocumentoAsync(EstadoDocumento.Finalizado);
+        await SeedUsuariosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var response = await client.PostAsJsonAsync($"/documentos/{id}/reabrir", new MotivoRequest(""));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostReabrir_ConTokenAdmin_MotivoNulo_Devuelve409()
+    {
+        // Pedido explícito: mismo caso que PostAnular_ConTokenAdmin_MotivoNulo_Devuelve409,
+        // pero del lado de /reabrir -- sobre un documento cerrado para no confundir con el 409
+        // de "no cerrado" del test anterior.
+        var id = await SembrarDocumentoAsync(EstadoDocumento.Finalizado);
+        await SeedUsuariosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var response = await client.PostAsJsonAsync(
+            $"/documentos/{id}/reabrir", new { motivo = (string?)null });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostReabrir_ConTokenAdmin_SobreDocumentoCerrado_Devuelve200()
+    {
+        var id = await SembrarDocumentoAsync(EstadoDocumento.Finalizado);
+        await SeedUsuariosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var response = await client.PostAsJsonAsync(
+            $"/documentos/{id}/reabrir", new MotivoRequest("se encontró documentación nueva"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
 }

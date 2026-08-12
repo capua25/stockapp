@@ -22,6 +22,8 @@ public record DocumentoDto(
 public record CrearDocumentoRequest(string Numero, int Anio, TipoDocumento Tipo, DateTime FechaEmision, string Descripcion);
 public record EditarDocumentoRequest(string Numero, int Anio, TipoDocumento Tipo, DateTime FechaEmision, string Descripcion);
 public record DocumentoCreadoResponse(int Id);
+public record AgregarNotaDocumentoRequest(string Texto);
+public record MotivoRequest(string Motivo);
 
 public static class DocumentosEndpoints
 {
@@ -77,6 +79,48 @@ public static class DocumentosEndpoints
             return Results.Ok();
         })
         .RequireAuthorization(Permisos.GestionarDocumentos);
+
+        group.MapPost("/{id:int}/iniciar", async (int id, IDocumentoAdministrativoService documentos) =>
+        {
+            await documentos.IniciarProcesoAsync(id);
+            return Results.Ok();
+        })
+        .RequireAuthorization(Permisos.GestionarDocumentos);
+
+        group.MapPost("/{id:int}/volver-a-pendiente", async (int id, IDocumentoAdministrativoService documentos) =>
+        {
+            await documentos.VolverAPendienteAsync(id);
+            return Results.Ok();
+        })
+        .RequireAuthorization(Permisos.GestionarDocumentos);
+
+        group.MapPost("/{id:int}/finalizar", async (int id, IDocumentoAdministrativoService documentos) =>
+        {
+            await documentos.FinalizarAsync(id);
+            return Results.Ok();
+        })
+        .RequireAuthorization(Permisos.GestionarDocumentos);
+
+        group.MapPost("/{id:int}/notas", async (int id, AgregarNotaDocumentoRequest request, IDocumentoAdministrativoService documentos) =>
+        {
+            await documentos.AgregarNotaAsync(id, request.Texto);
+            return Results.Ok();
+        })
+        .RequireAuthorization(Permisos.GestionarDocumentos);
+
+        group.MapPost("/{id:int}/anular", async (int id, MotivoRequest request, IDocumentoAdministrativoService documentos) =>
+        {
+            await documentos.AnularAsync(id, request.Motivo);
+            return Results.Ok();
+        })
+        .RequireAuthorization(Permisos.AdministrarDocumentos);
+
+        group.MapPost("/{id:int}/reabrir", async (int id, MotivoRequest request, IDocumentoAdministrativoService documentos) =>
+        {
+            await documentos.ReabrirAsync(id, request.Motivo);
+            return Results.Ok();
+        })
+        .RequireAuthorization(Permisos.AdministrarDocumentos);
 
         return app;
     }
