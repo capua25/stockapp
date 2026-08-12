@@ -29,6 +29,10 @@ public class AppDbContext : DbContext
     public DbSet<NotaTarea> NotasTarea => Set<NotaTarea>();
     public DbSet<LoteImportacion> LotesImportacion => Set<LoteImportacion>();
     public DbSet<PermisoUsuario> PermisosUsuario => Set<PermisoUsuario>();
+    public DbSet<DocumentoAdministrativo> DocumentosAdministrativos => Set<DocumentoAdministrativo>();
+    public DbSet<EventoDocumento> EventosDocumento => Set<EventoDocumento>();
+    public DbSet<AdjuntoDocumento> AdjuntosDocumento => Set<AdjuntoDocumento>();
+    public DbSet<AdjuntoDocumentoContenido> AdjuntosDocumentoContenido => Set<AdjuntoDocumentoContenido>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -357,6 +361,53 @@ public class AppDbContext : DbContext
             e.HasIndex(p => new { p.UsuarioId, p.Permiso }).IsUnique();
             e.HasOne(p => p.Usuario).WithMany()
                 .HasForeignKey(p => p.UsuarioId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── Documentos administrativos (módulo independiente, spec 2026-08-11) ────
+        // RegistradoPorUsuarioId/EventoDocumento.UsuarioId: Restrict, mismo criterio que todo
+        // el resto del modelo (Usuarios usa baja lógica, nunca DELETE físico). Índice único
+        // compuesto (Tipo, Anio, Numero): última defensa contra dos funcionarios cargando el
+        // mismo expediente a la vez (decisión 1 del spec) — DocumentoAdministrativoRepository
+        // (Task 5) atrapa la violación por nombre de constraint y la traduce a 409.
+        modelBuilder.Entity<DocumentoAdministrativo>(e =>
+        {
+            e.Property(d => d.Numero).IsRequired();
+            e.Property(d => d.Descripcion).IsRequired();
+            e.HasIndex(d => new { d.Tipo, d.Anio, d.Numero }).IsUnique();
+            e.HasIndex(d => d.Estado);
+            e.HasIndex(d => d.Numero);
+            e.HasOne(d => d.RegistradoPor).WithMany()
+                .HasForeignKey(d => d.RegistradoPorUsuarioId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<EventoDocumento>(e =>
+        {
+            e.Property(ev => ev.Texto).IsRequired();
+            e.HasIndex(ev => ev.DocumentoAdministrativoId);
+            // Sin nav DocumentoAdministrativo en EventoDocumento (mismo criterio que NotaTarea →
+            // Tarea): la relación se configura solo del lado padre.
+            e.HasOne<DocumentoAdministrativo>().WithMany(d => d.Eventos)
+                .HasForeignKey(ev => ev.DocumentoAdministrativoId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(ev => ev.Usuario).WithMany()
+                .HasForeignKey(ev => ev.UsuarioId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<AdjuntoDocumento>(e =>
+        {
+            e.Property(a => a.NombreArchivo).IsRequired();
+            e.Property(a => a.ContentType).IsRequired();
+            e.Property(a => a.Activo).HasDefaultValue(true);
+            e.HasIndex(a => a.DocumentoAdministrativoId);
+            e.HasOne(a => a.Documento).WithMany()
+                .HasForeignKey(a => a.DocumentoAdministrativoId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<AdjuntoDocumentoContenido>().WithOne()
+                .HasForeignKey<AdjuntoDocumentoContenido>(c => c.Id)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AdjuntoDocumentoContenido>(e =>
+        {
+            e.Property(c => c.Contenido).IsRequired();
         });
     }
 }

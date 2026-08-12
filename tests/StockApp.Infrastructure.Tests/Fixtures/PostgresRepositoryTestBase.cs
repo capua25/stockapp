@@ -32,6 +32,7 @@ public abstract class PostgresRepositoryTestBase : IDisposable
             "\"AsignacionesPresupuestales\", \"LineasPoa\", \"RubrosGasto\", \"FuentesFinanciamiento\", " +
             "\"AdjuntosContenido\", \"Adjuntos\", \"PagosGasto\", \"Gastos\", \"IngresosCaja\", " +
             "\"CorridasBackup\", \"NotasTarea\", \"Tareas\", \"LotesImportacion\", " +
-            "\"PermisosUsuario\" RESTART IDENTITY CASCADE;");
+            "\"PermisosUsuario\", \"AdjuntosDocumentoContenido\", \"AdjuntosDocumento\", " +
+            "\"EventosDocumento\", \"DocumentosAdministrativos\" RESTART IDENTITY CASCADE;");
     }
 }
