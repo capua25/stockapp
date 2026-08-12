@@ -1,0 +1,115 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels.Documentos"
+             xmlns:dom="using:StockApp.Domain.Entities"
+             xmlns:beh="using:StockApp.Presentation.Behaviors"
+             xmlns:adj="using:StockApp.Presentation.Views.Documentos"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="760" d:DesignHeight="800"
+             x:Class="StockApp.Presentation.Views.Documentos.DocumentoFormView"
+             x:DataType="vm:DocumentoFormViewModel">
+
+    <ScrollViewer>
+        <DockPanel Margin="24">
+
+            <Border Classes="card" VerticalAlignment="Top">
+                <StackPanel Spacing="12" MaxWidth="680" HorizontalAlignment="Left">
+
+                    <TextBlock Text="Nuevo documento" Classes="titulo-vista" IsVisible="{Binding EsNuevoDocumento}" />
+                    <TextBlock Text="Detalle del documento" Classes="titulo-vista" IsVisible="{Binding !EsNuevoDocumento}" />
+
+                    <TextBlock Text="{Binding EstadoTexto, StringFormat='Estado: {0}'}" Classes="caption"
+                               IsVisible="{Binding !EsNuevoDocumento}" />
+                    <TextBlock Text="{Binding RegistradoPorNombre, StringFormat='Registrado por: {0}'}" Classes="caption"
+                               IsVisible="{Binding RegistradoPorNombre, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+                    <!-- Campos: editables en alta (EsNuevoDocumento) o en detalle solo si PuedeEditar
+                         (D1: documento activo). PuedeEditarCampos unifica las dos condiciones para
+                         no duplicar este bloque completo. -->
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="Número" />
+                        <TextBox Text="{Binding Numero}" IsEnabled="{Binding PuedeEditarCampos}" />
+
+                        <TextBlock Text="Año" />
+                        <NumericUpDown Value="{Binding AnioSeleccionado}" Minimum="2000" Maximum="2100"
+                                       FormatString="0" IsEnabled="{Binding PuedeEditarCampos}" HorizontalAlignment="Left" Width="140" />
+
+                        <TextBlock Text="Tipo" />
+                        <ComboBox ItemsSource="{Binding TiposDisponibles}" SelectedItem="{Binding TipoSeleccionado}"
+                                  IsEnabled="{Binding PuedeEditarCampos}" Width="200" HorizontalAlignment="Left" />
+
+                        <TextBlock Text="Fecha de emisión" />
+                        <CalendarDatePicker SelectedDate="{Binding FechaEmisionSeleccionada}"
+                                            PlaceholderText="dd/mm/aaaa" SelectedDateFormat="Custom"
+                                            CustomDateFormatString="dd/MM/yyyy" IsEnabled="{Binding PuedeEditarCampos}"
+                                            beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
+
+                        <TextBlock Text="Descripción" />
+                        <TextBox Text="{Binding Descripcion}" AcceptsReturn="True" Height="80"
+                                  IsEnabled="{Binding PuedeEditarCampos}" />
+
+                        <Button Classes="primary" Content="Guardar cambios" Command="{Binding GuardarEdicionCommand}"
+                                IsVisible="{Binding PuedeEditar}" HorizontalAlignment="Left" />
+                    </StackPanel>
+
+                    <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding EsNuevoDocumento}">
+                        <Button Classes="primary" Content="Guardar" Command="{Binding GuardarCommand}" />
+                        <Button Classes="secondary" Content="Volver" Command="{Binding VolverCommand}" />
+                    </StackPanel>
+
+                    <!-- Transiciones de estado: documento existente -->
+                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,8,0,0" IsVisible="{Binding !EsNuevoDocumento}">
+                        <Button Classes="secondary" Content="Iniciar" Command="{Binding IniciarCommand}" IsVisible="{Binding PuedeIniciar}" />
+                        <Button Classes="secondary" Content="Volver a pendiente" Command="{Binding VolverAPendienteCommand}" IsVisible="{Binding PuedeVolverAPendiente}" />
+                        <Button Classes="primary" Content="Finalizar" Command="{Binding FinalizarCommand}" IsVisible="{Binding PuedeFinalizar}" />
+                        <Button Classes="danger" Content="Anular" Command="{Binding AnularCommand}" IsVisible="{Binding PuedeAnular}" />
+                        <Button Classes="secondary" Content="Reabrir" Command="{Binding ReabrirCommand}" IsVisible="{Binding PuedeReabrir}" />
+                        <Button Classes="secondary" Content="Volver" Command="{Binding VolverCommand}" />
+                    </StackPanel>
+
+                    <!-- Hilo de eventos: documento existente -->
+                    <StackPanel Spacing="6" IsVisible="{Binding !EsNuevoDocumento}" Margin="0,8,0,0">
+                        <TextBlock Text="Historial del trámite" Classes="seccion" />
+                        <ItemsControl ItemsSource="{Binding Eventos}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="dom:EventoDocumento">
+                                    <Border Classes="card" Margin="0,0,0,6" Padding="8">
+                                        <StackPanel Spacing="2">
+                                            <TextBlock Text="{Binding Texto}" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding Fecha, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}"
+                                                       Classes="caption" Opacity="0.7" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Text="Nueva nota" />
+                        <TextBox Text="{Binding NuevaNotaTexto}" AcceptsReturn="True" Height="60"
+                                  Watermark="Agregar una nota al hilo" />
+                        <Button Classes="secondary" Content="Agregar nota" Command="{Binding AgregarNotaCommand}" />
+                    </StackPanel>
+
+                    <!-- Adjuntos: solo documento existente (D11a: agregar exige que ya exista).
+                         IsVisible/Margin van en el Panel envolvente, no en AdjuntosDocumentoPanelView:
+                         ese control declara su propio x:DataType (AdjuntosDocumentoPanelViewModel) en
+                         su propio archivo, y compilar un binding de otra propiedad en el MISMO tag que
+                         asigna DataContext hace que el compilador de bindings resuelva esa propiedad
+                         contra el DataType del hijo en vez del de DocumentoFormViewModel (AVLN2000). -->
+                    <Panel IsVisible="{Binding !EsNuevoDocumento}" Margin="0,8,0,0">
+                        <adj:AdjuntosDocumentoPanelView DataContext="{Binding AdjuntosPanel}" />
+                    </Panel>
+
+                    <TextBlock Text="{Binding MensajeError}"
+                               Foreground="Red"
+                               TextWrapping="Wrap"
+                               IsVisible="{Binding MensajeError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+                </StackPanel>
+            </Border>
+
+        </DockPanel>
+    </ScrollViewer>
+
+</UserControl>

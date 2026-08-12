@@ -1,0 +1,127 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels.Documentos"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
+             x:Class="StockApp.Presentation.Views.Documentos.DocumentoListView"
+             x:DataType="vm:DocumentoListViewModel">
+
+    <DockPanel Margin="24">
+
+        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
+            <TextBlock Grid.Column="0" Text="Documentos administrativos" Classes="titulo-vista" />
+            <Button Grid.Column="1" Classes="primary" Content="Nuevo documento" Command="{Binding NuevoCommand}" />
+        </Grid>
+
+        <TabControl x:Name="Solapas" SelectionChanged="OnSolapaSeleccionada">
+
+            <TabItem Header="Activos">
+                <DockPanel Margin="0,12,0,0">
+
+                    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*" Margin="0,0,0,12">
+                        <TextBlock Grid.Column="0" Text="Buscar:" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <TextBox Grid.Column="1" Text="{Binding FiltroActivosTexto}"
+                                 Watermark="Número, descripción..." Width="300" HorizontalAlignment="Left" />
+                    </Grid>
+
+                    <ScrollViewer>
+                        <ItemsControl ItemsSource="{Binding Activos}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:DocumentoFila">
+                                    <Border Classes="card" Margin="0,0,0,8">
+                                        <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="2">
+                                                <TextBlock FontWeight="SemiBold">
+                                                    <TextBlock.Text>
+                                                        <MultiBinding StringFormat="{}{0} {1}/{2}">
+                                                            <Binding Path="TipoTexto" />
+                                                            <Binding Path="Numero" />
+                                                            <Binding Path="Anio" />
+                                                        </MultiBinding>
+                                                    </TextBlock.Text>
+                                                </TextBlock>
+                                                <TextBlock Text="{Binding Descripcion}" Classes="caption" Opacity="0.8" />
+                                                <TextBlock Text="{Binding EstadoTexto}" Classes="caption" Opacity="0.7" />
+                                            </StackPanel>
+                                            <Button Grid.Column="1" Classes="ghost" Content="Ver"
+                                                    Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).VerDetalleCommand}"
+                                                    CommandParameter="{Binding}" />
+                                            <Button Grid.Column="2" Classes="secondary" Content="Iniciar"
+                                                    IsVisible="{Binding PuedeIniciar}"
+                                                    Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).IniciarCommand}"
+                                                    CommandParameter="{Binding}" />
+                                            <Button Grid.Column="3" Classes="secondary" Content="Volver a pendiente"
+                                                    IsVisible="{Binding PuedeVolverAPendiente}"
+                                                    Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).VolverAPendienteCommand}"
+                                                    CommandParameter="{Binding}" />
+                                            <Button Grid.Column="4" Classes="primary" Content="Finalizar"
+                                                    IsVisible="{Binding PuedeFinalizar}"
+                                                    Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).FinalizarCommand}"
+                                                    CommandParameter="{Binding}" />
+                                            <Button Grid.Column="5" Classes="danger" Content="Anular"
+                                                    IsVisible="{Binding PuedeAnular}"
+                                                    Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).VerDetalleCommand}"
+                                                    CommandParameter="{Binding}" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </TabItem>
+
+            <TabItem Header="Historial">
+                <DockPanel Margin="0,12,0,0">
+
+                    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,Auto,*,Auto" Margin="0,0,0,12">
+                        <TextBlock Grid.Column="0" Text="Año:" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <NumericUpDown Grid.Column="1" Value="{Binding FiltroHistorialAnio}"
+                                       Minimum="2000" Maximum="2100" FormatString="0" Width="120" Margin="0,0,16,0" />
+                        <TextBox Grid.Column="2" Text="{Binding FiltroHistorialTexto}"
+                                 Watermark="Número, descripción..." Width="260" Margin="0,0,16,0" />
+                        <Button Grid.Column="4" Classes="secondary" Content="Buscar"
+                                Command="{Binding BuscarHistorialCommand}" />
+                    </Grid>
+
+                    <ScrollViewer>
+                        <ItemsControl ItemsSource="{Binding Historial}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:DocumentoFila">
+                                    <Border Classes="card" Margin="0,0,0,8">
+                                        <Grid ColumnDefinitions="*,Auto,Auto">
+                                            <StackPanel Grid.Column="0" Spacing="2">
+                                                <TextBlock FontWeight="SemiBold">
+                                                    <TextBlock.Text>
+                                                        <MultiBinding StringFormat="{}{0} {1}/{2}">
+                                                            <Binding Path="TipoTexto" />
+                                                            <Binding Path="Numero" />
+                                                            <Binding Path="Anio" />
+                                                        </MultiBinding>
+                                                    </TextBlock.Text>
+                                                </TextBlock>
+                                                <TextBlock Text="{Binding Descripcion}" Classes="caption" Opacity="0.8" />
+                                                <TextBlock Text="{Binding EstadoTexto}" Classes="caption" Opacity="0.7" />
+                                            </StackPanel>
+                                            <Button Grid.Column="1" Classes="ghost" Content="Ver"
+                                                    Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).VerDetalleCommand}"
+                                                    CommandParameter="{Binding}" />
+                                            <Button Grid.Column="2" Classes="secondary" Content="Reabrir"
+                                                    IsVisible="{Binding PuedeReabrir}"
+                                                    Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).VerDetalleCommand}"
+                                                    CommandParameter="{Binding}" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </DockPanel>
+            </TabItem>
+
+        </TabControl>
+
+    </DockPanel>
+
+</UserControl>

@@ -17,6 +17,7 @@ using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
 using StockApp.Application.Backups;
 using StockApp.Application.Catalogo;
+using StockApp.Application.Documentos;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
@@ -30,6 +31,7 @@ using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels;
 using StockApp.Presentation.ViewModels.Catalogo;
+using StockApp.Presentation.ViewModels.Documentos;
 using StockApp.Presentation.ViewModels.Finanzas;
 using StockApp.Presentation.ViewModels.Movimientos;
 using StockApp.Presentation.ViewModels.Reportes;
@@ -243,6 +245,10 @@ public partial class App : AvaloniaApp
         // ── Módulo Tareas (independiente de Finanzas, spec 2026-08-01) ────────
         services.AddTransient<ITareaService, TareaApiClient>();
 
+        // ── Módulo Documentos administrativos (spec 2026-08-11) ────────────────
+        services.AddTransient<IDocumentoAdministrativoService, DocumentoApiClient>();
+        services.AddTransient<IAdjuntoDocumentoService, AdjuntoDocumentoApiClient>();
+
         // ── Backups programados (Entrega 1) ────────────────────────────────────
         services.AddTransient<IBackupsService>(sp =>
             new BackupsApiClient(sp.GetRequiredKeyedService<HttpClient>("Descargas")));
@@ -369,6 +375,11 @@ public partial class App : AvaloniaApp
         // ── Módulo Tareas (spec 2026-08-01) ───────────────────────────────────
         services.AddTransient<TareaListViewModel>();
         services.AddTransient<TareaFormViewModel>();
+
+        // ── Módulo Documentos administrativos (spec 2026-08-11) ────────────────
+        services.AddTransient<AdjuntosDocumentoPanelViewModel>();
+        services.AddTransient<DocumentoListViewModel>();
+        services.AddTransient<DocumentoFormViewModel>();
 
         // ── Presentation: ViewModels del shell ───────────────────────────────
 
