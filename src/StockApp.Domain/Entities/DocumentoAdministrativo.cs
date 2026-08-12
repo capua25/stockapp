@@ -64,4 +64,26 @@ public class DocumentoAdministrativo
     /// método en vez de recodificar las transiciones a mano.
     /// </summary>
     public bool PuedeTransicionarA(EstadoDocumento destino) => TransicionesValidas[Estado].Contains(destino);
+
+    /// <summary>
+    /// Suma un evento al hilo append-only del documento (decisión 5 del spec). Única vía
+    /// para agregar a Eventos — no hay método de borrado ni de edición en EventoDocumento.
+    /// Fecha se sella acá (DateTime.UtcNow), igual que TareaService sella FechaFin: el
+    /// llamador nunca pasa la fecha a mano.
+    /// </summary>
+    public void AgregarEvento(
+        int usuarioId, string texto, bool esAutomatico,
+        EstadoDocumento? anterior = null, EstadoDocumento? nuevo = null)
+    {
+        Eventos.Add(new EventoDocumento
+        {
+            DocumentoAdministrativoId = Id,
+            Fecha = DateTime.UtcNow,
+            UsuarioId = usuarioId,
+            Texto = texto,
+            EsAutomatico = esAutomatico,
+            EstadoAnterior = anterior,
+            EstadoNuevo = nuevo,
+        });
+    }
 }
