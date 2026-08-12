@@ -9,3 +9,7 @@ namespace StockApp.Application.Documentos;
 /// (bloque de Application), que rechaza Anio nulo con ArgumentException (decisión 9).
 /// </summary>
 public record FiltroDocumentos(TipoDocumento? Tipo, int? Anio, string? Texto, EstadoDocumento? Estado);
+
+/// <summary>Datos editables de un documento activo (D1): Numero, Anio, Tipo, FechaEmision,
+/// Descripcion. RegistradoPorUsuarioId/FechaRegistro/Estado/FechaCierre NO son editables acá.</summary>
+public record DatosEdicionDocumento(string Numero, int Anio, TipoDocumento Tipo, DateTime FechaEmision, string Descripcion);
