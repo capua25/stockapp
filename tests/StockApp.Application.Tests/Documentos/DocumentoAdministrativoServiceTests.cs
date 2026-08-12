@@ -666,4 +666,169 @@ public class DocumentoAdministrativoServiceTests
         ctx.Audit.Verify(a => a.RegistrarAsync(
             1, AccionAuditada.ReaperturaDocumento, "DocumentoAdministrativo", 5, It.IsAny<string>()), Times.Once);
     }
+
+    // ── EditarAsync ───────────────────────────────────────────────────────────
+
+    private static DatosEdicionDocumento NuevosDatos(
+        string numero = "0087", int anio = 2026, TipoDocumento tipo = TipoDocumento.Expediente,
+        string descripcion = "Solicitud de poda de árbol")
+        => new(numero, anio, tipo, new DateTime(2026, 1, 15), descripcion);
+
+    [Fact]
+    public async Task EditarAsync_SinPermiso_LanzaExcepcionSinTocarElRepo()
+    {
+        var ctx = Crear();
+        ctx.Auth.Setup(a => a.Verificar(It.IsAny<ICurrentSession>(), Permisos.GestionarDocumentos))
+            .Throws<UnauthorizedAccessException>();
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => ctx.Svc.EditarAsync(1, NuevosDatos()));
+
+        ctx.Repo.Verify(r => r.ObtenerPorIdAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task EditarAsync_DocumentoInexistente_LanzaEntidadNoEncontrada()
+    {
+        var ctx = Crear();
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync((DocumentoAdministrativo?)null);
+
+        await Assert.ThrowsAsync<EntidadNoEncontradaException>(() => ctx.Svc.EditarAsync(1, NuevosDatos()));
+    }
+
+    [Fact]
+    public async Task EditarAsync_DocumentoCerrado_LanzaReglaDeNegocio()
+    {
+        var ctx = Crear();
+        var documento = NuevoDocumento(EstadoDocumento.Finalizado);
+        documento.Id = 1;
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(documento);
+
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => ctx.Svc.EditarAsync(1, NuevosDatos()));
+
+        ctx.Repo.Verify(r => r.ActualizarAsync(It.IsAny<DocumentoAdministrativo>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task EditarAsync_NumeroVacio_LanzaArgumentException()
+    {
+        var ctx = Crear();
+        var documento = NuevoDocumento(EstadoDocumento.Pendiente);
+        documento.Id = 1;
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(documento);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => ctx.Svc.EditarAsync(1, NuevosDatos(numero: "  ")));
+    }
+
+    [Fact]
+    public async Task EditarAsync_CambiaNumero_RevalidaIndiceUnicoExcluyendoId()
+    {
+        var ctx = Crear();
+        var documento = NuevoDocumento(EstadoDocumento.Pendiente);
+        documento.Id = 1;
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(documento);
+        ctx.Repo.Setup(r => r.ExisteNumeroAsync(TipoDocumento.Expediente, 2026, "0088", 1)).ReturnsAsync(false);
+
+        await ctx.Svc.EditarAsync(1, NuevosDatos(numero: "0088"));
+
+        ctx.Repo.Verify(r => r.ExisteNumeroAsync(TipoDocumento.Expediente, 2026, "0088", 1), Times.Once);
+        Assert.Equal("0088", documento.Numero);
+    }
+
+    [Fact]
+    public async Task EditarAsync_NumeroChocaConOtroDocumento_LanzaReglaDeNegocio()
+    {
+        var ctx = Crear();
+        var documento = NuevoDocumento(EstadoDocumento.Pendiente);
+        documento.Id = 1;
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(documento);
+        ctx.Repo.Setup(r => r.ExisteNumeroAsync(TipoDocumento.Expediente, 2026, "0088", 1)).ReturnsAsync(true);
+
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => ctx.Svc.EditarAsync(1, NuevosDatos(numero: "0088")));
+
+        ctx.Repo.Verify(r => r.ActualizarAsync(It.IsAny<DocumentoAdministrativo>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task EditarAsync_SoloCambiaDescripcion_NoRevalidaIndiceUnico()
+    {
+        var ctx = Crear();
+        var documento = NuevoDocumento(EstadoDocumento.Pendiente);
+        documento.Id = 1;
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(documento);
+
+        await ctx.Svc.EditarAsync(1, NuevosDatos(descripcion: "Descripción corregida"));
+
+        ctx.Repo.Verify(r => r.ExisteNumeroAsync(
+            It.IsAny<TipoDocumento>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<int?>()), Times.Never);
+        Assert.Equal("Descripción corregida", documento.Descripcion);
+    }
+
+    [Fact]
+    public async Task EditarAsync_GeneraEventoAutomaticoDetallandoCambios()
+    {
+        var ctx = Crear();
+        var documento = NuevoDocumento(EstadoDocumento.Pendiente);
+        documento.Id = 1;
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(documento);
+        ctx.Repo.Setup(r => r.ExisteNumeroAsync(TipoDocumento.Expediente, 2026, "0088", 1)).ReturnsAsync(false);
+
+        await ctx.Svc.EditarAsync(1, NuevosDatos(numero: "0088"));
+
+        var evento = Assert.Single(documento.Eventos);
+        Assert.True(evento.EsAutomatico);
+        Assert.Contains("0087", evento.Texto);
+        Assert.Contains("0088", evento.Texto);
+    }
+
+    [Fact]
+    public async Task EditarAsync_SinCambios_NoGeneraEvento()
+    {
+        var ctx = Crear();
+        var documento = NuevoDocumento(EstadoDocumento.Pendiente);
+        documento.Id = 1;
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(documento);
+
+        await ctx.Svc.EditarAsync(1, NuevosDatos());
+
+        Assert.Empty(documento.Eventos);
+    }
+
+    [Fact]
+    public async Task EditarAsync_RegistraAuditoria()
+    {
+        var ctx = Crear(idSesion: 1);
+        var documento = NuevoDocumento(EstadoDocumento.Pendiente);
+        documento.Id = 1;
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(documento);
+
+        await ctx.Svc.EditarAsync(1, NuevosDatos(descripcion: "Otra descripción"));
+
+        ctx.Audit.Verify(a => a.RegistrarAsync(
+            1, AccionAuditada.EdicionDocumento, "DocumentoAdministrativo", 1, It.IsAny<string>()), Times.Once);
+    }
+
+    // ── Superficie de la interfaz (append-only, whitelist explícita) ─────────
+
+    [Fact]
+    public void IDocumentoAdministrativoService_ExponeExactamenteLosMetodosEsperados()
+    {
+        var esperados = new HashSet<string>
+        {
+            nameof(IDocumentoAdministrativoService.RegistrarAsync),
+            nameof(IDocumentoAdministrativoService.EditarAsync),
+            nameof(IDocumentoAdministrativoService.ListarActivosAsync),
+            nameof(IDocumentoAdministrativoService.ListarHistorialAsync),
+            nameof(IDocumentoAdministrativoService.ObtenerPorIdAsync),
+            nameof(IDocumentoAdministrativoService.IniciarProcesoAsync),
+            nameof(IDocumentoAdministrativoService.VolverAPendienteAsync),
+            nameof(IDocumentoAdministrativoService.FinalizarAsync),
+            nameof(IDocumentoAdministrativoService.AgregarNotaAsync),
+            nameof(IDocumentoAdministrativoService.AnularAsync),
+            nameof(IDocumentoAdministrativoService.ReabrirAsync),
+        };
+
+        var metodos = typeof(IDocumentoAdministrativoService).GetMethods().Select(m => m.Name).ToHashSet();
+
+        Assert.Equal(esperados, metodos);
+    }
 }

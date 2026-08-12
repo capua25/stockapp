@@ -244,5 +244,55 @@ public class DocumentoAdministrativoService : IDocumentoAdministrativoService
             $"{estadoAnterior} → {documento.Estado}: {motivo.Trim()}");
     }
 
-    public Task EditarAsync(int id, DatosEdicionDocumento datos) => throw new NotImplementedException(); // Task 11
+    public async Task EditarAsync(int id, DatosEdicionDocumento datos)
+    {
+        _auth.Verificar(_session, Permisos.GestionarDocumentos);
+
+        var documento = await _repo.ObtenerPorIdAsync(id)
+            ?? throw new EntidadNoEncontradaException($"Documento {id} no encontrado.");
+
+        if (!documento.EsActivo)
+            throw new ReglaDeNegocioException(
+                $"No se puede editar un documento en estado '{documento.Estado}': no está activo.");
+
+        if (string.IsNullOrWhiteSpace(datos.Numero))
+            throw new ArgumentException("El número del documento es obligatorio.", nameof(datos));
+        if (string.IsNullOrWhiteSpace(datos.Descripcion))
+            throw new ArgumentException("La descripción del documento es obligatoria.", nameof(datos));
+
+        var cambiaClave = documento.Numero != datos.Numero || documento.Anio != datos.Anio || documento.Tipo != datos.Tipo;
+        if (cambiaClave && await _repo.ExisteNumeroAsync(datos.Tipo, datos.Anio, datos.Numero, id))
+            throw new ReglaDeNegocioException(
+                $"Ya existe un {datos.Tipo} {datos.Numero}/{datos.Anio}.");
+
+        var cambios = new List<string>();
+        if (documento.Numero != datos.Numero)
+            cambios.Add($"Número: {documento.Numero} → {datos.Numero}");
+        if (documento.Anio != datos.Anio)
+            cambios.Add($"Año: {documento.Anio} → {datos.Anio}");
+        if (documento.Tipo != datos.Tipo)
+            cambios.Add($"Tipo: {documento.Tipo} → {datos.Tipo}");
+        if (documento.FechaEmision != datos.FechaEmision)
+            cambios.Add($"Fecha de emisión: {documento.FechaEmision:yyyy-MM-dd} → {datos.FechaEmision:yyyy-MM-dd}");
+        if (documento.Descripcion != datos.Descripcion)
+            cambios.Add($"Descripción: '{documento.Descripcion}' → '{datos.Descripcion}'");
+
+        documento.Numero       = datos.Numero;
+        documento.Anio         = datos.Anio;
+        documento.Tipo         = datos.Tipo;
+        documento.FechaEmision = datos.FechaEmision;
+        documento.Descripcion  = datos.Descripcion;
+
+        // D1: solo se deja rastro si algo cambió de verdad — evita un evento vacío cuando
+        // el usuario reenvía los mismos datos.
+        if (cambios.Count > 0)
+            documento.AgregarEvento(
+                _session.UsuarioActual!.Id, $"Se corrigieron datos: {string.Join("; ", cambios)}.", esAutomatico: true);
+
+        await _repo.ActualizarAsync(documento);
+
+        await _audit.RegistrarAsync(
+            _session.UsuarioActual!.Id, AccionAuditada.EdicionDocumento, "DocumentoAdministrativo", id,
+            cambios.Count > 0 ? string.Join("; ", cambios) : "Sin cambios");
+    }
 }
