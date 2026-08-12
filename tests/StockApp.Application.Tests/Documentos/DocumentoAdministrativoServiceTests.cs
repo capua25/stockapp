@@ -475,4 +475,195 @@ public class DocumentoAdministrativoServiceTests
         ctx.Audit.Verify(a => a.RegistrarAsync(
             3, AccionAuditada.AltaNotaDocumento, "DocumentoAdministrativo", 1, It.IsAny<string>()), Times.Once);
     }
+
+    // ── AnularAsync ───────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task AnularAsync_ComoOperador_LanzaExcepcionSinTocarElRepo()
+    {
+        var ctx = Crear(rol: RolUsuario.Operador);
+        ctx.Auth.Setup(a => a.Verificar(It.Is<ICurrentSession>(s => s.RolActual == RolUsuario.Operador), Permisos.AdministrarDocumentos))
+            .Throws<UnauthorizedAccessException>();
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => ctx.Svc.AnularAsync(1, "motivo válido"));
+
+        ctx.Repo.Verify(r => r.ObtenerPorIdAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AnularAsync_MotivoVacio_LanzaReglaDeNegocio()
+    {
+        var ctx = Crear(rol: RolUsuario.Admin);
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => ctx.Svc.AnularAsync(1, ""));
+    }
+
+    [Fact]
+    public async Task AnularAsync_MotivoEnBlanco_LanzaReglaDeNegocio()
+    {
+        var ctx = Crear(rol: RolUsuario.Admin);
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => ctx.Svc.AnularAsync(1, "   "));
+    }
+
+    [Fact]
+    public async Task AnularAsync_DocumentoInexistente_LanzaEntidadNoEncontrada()
+    {
+        var ctx = Crear(rol: RolUsuario.Admin);
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync((DocumentoAdministrativo?)null);
+
+        await Assert.ThrowsAsync<EntidadNoEncontradaException>(() => ctx.Svc.AnularAsync(1, "motivo válido"));
+    }
+
+    [Fact]
+    public async Task AnularAsync_ComoAdmin_CambiaAAnuladoYSellaFechaCierre()
+    {
+        var ctx = Crear(rol: RolUsuario.Admin, idSesion: 1);
+        var documento = NuevoDocumento(EstadoDocumento.Pendiente);
+        documento.Id = 5;
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(documento);
+
+        await ctx.Svc.AnularAsync(5, "el interesado no volvió a presentarse");
+
+        Assert.Equal(EstadoDocumento.Anulado, documento.Estado);
+        Assert.NotNull(documento.FechaCierre);
+    }
+
+    [Fact]
+    public async Task AnularAsync_GeneraEventoAutomaticoConMotivo()
+    {
+        var ctx = Crear(rol: RolUsuario.Admin, idSesion: 1);
+        var documento = NuevoDocumento(EstadoDocumento.Pendiente);
+        documento.Id = 5;
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(documento);
+
+        await ctx.Svc.AnularAsync(5, "el interesado no volvió a presentarse");
+
+        var evento = Assert.Single(documento.Eventos);
+        Assert.True(evento.EsAutomatico);
+        Assert.Contains("el interesado no volvió a presentarse", evento.Texto);
+        Assert.Equal(EstadoDocumento.Pendiente, evento.EstadoAnterior);
+        Assert.Equal(EstadoDocumento.Anulado, evento.EstadoNuevo);
+    }
+
+    [Fact]
+    public async Task AnularAsync_RegistraAuditoria()
+    {
+        var ctx = Crear(rol: RolUsuario.Admin, idSesion: 1);
+        var documento = NuevoDocumento(EstadoDocumento.Pendiente);
+        documento.Id = 5;
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(documento);
+
+        await ctx.Svc.AnularAsync(5, "motivo válido");
+
+        ctx.Audit.Verify(a => a.RegistrarAsync(
+            1, AccionAuditada.AnulacionDocumento, "DocumentoAdministrativo", 5, It.IsAny<string>()), Times.Once);
+    }
+
+    // ── ReabrirAsync ──────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ReabrirAsync_ComoOperador_LanzaExcepcionSinTocarElRepo()
+    {
+        var ctx = Crear(rol: RolUsuario.Operador);
+        ctx.Auth.Setup(a => a.Verificar(It.Is<ICurrentSession>(s => s.RolActual == RolUsuario.Operador), Permisos.AdministrarDocumentos))
+            .Throws<UnauthorizedAccessException>();
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => ctx.Svc.ReabrirAsync(1, "motivo válido"));
+
+        ctx.Repo.Verify(r => r.ObtenerPorIdAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ReabrirAsync_MotivoVacio_LanzaReglaDeNegocio()
+    {
+        var ctx = Crear(rol: RolUsuario.Admin);
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => ctx.Svc.ReabrirAsync(1, ""));
+    }
+
+    [Fact]
+    public async Task ReabrirAsync_SobreDocumentoPendiente_LanzaReglaDeNegocio()
+    {
+        // Caso puntual del spec (D4/D8): Pendiente -> EnProceso ya es válida por otra vía
+        // (IniciarProcesoAsync), así que sin esta guarda explícita el dominio no rechazaría
+        // "reabrir" algo que nunca estuvo cerrado.
+        var ctx = Crear(rol: RolUsuario.Admin);
+        var documento = NuevoDocumento(EstadoDocumento.Pendiente);
+        documento.Id = 5;
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(documento);
+
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => ctx.Svc.ReabrirAsync(5, "motivo válido"));
+
+        ctx.Repo.Verify(r => r.ActualizarAsync(It.IsAny<DocumentoAdministrativo>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ReabrirAsync_SobreDocumentoEnProceso_LanzaReglaDeNegocio()
+    {
+        var ctx = Crear(rol: RolUsuario.Admin);
+        var documento = NuevoDocumento(EstadoDocumento.EnProceso);
+        documento.Id = 5;
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(documento);
+
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => ctx.Svc.ReabrirAsync(5, "motivo válido"));
+    }
+
+    [Fact]
+    public async Task ReabrirAsync_SobreDocumentoFinalizado_CambiaAEnProcesoYLimpiaFechaCierre()
+    {
+        var ctx = Crear(rol: RolUsuario.Admin, idSesion: 1);
+        var documento = NuevoDocumento(EstadoDocumento.Finalizado);
+        documento.Id = 5;
+        documento.FechaCierre = DateTime.UtcNow.AddDays(-1);
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(documento);
+
+        await ctx.Svc.ReabrirAsync(5, "faltaba documentación, se retoma");
+
+        Assert.Equal(EstadoDocumento.EnProceso, documento.Estado);
+        Assert.Null(documento.FechaCierre);
+    }
+
+    [Fact]
+    public async Task ReabrirAsync_SobreDocumentoAnulado_CambiaAEnProcesoYLimpiaFechaCierre()
+    {
+        var ctx = Crear(rol: RolUsuario.Admin, idSesion: 1);
+        var documento = NuevoDocumento(EstadoDocumento.Anulado);
+        documento.Id = 5;
+        documento.FechaCierre = DateTime.UtcNow.AddDays(-1);
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(documento);
+
+        await ctx.Svc.ReabrirAsync(5, "el interesado volvió a presentarse");
+
+        Assert.Equal(EstadoDocumento.EnProceso, documento.Estado);
+        Assert.Null(documento.FechaCierre);
+    }
+
+    [Fact]
+    public async Task ReabrirAsync_GeneraEventoAutomaticoConMotivo()
+    {
+        var ctx = Crear(rol: RolUsuario.Admin, idSesion: 1);
+        var documento = NuevoDocumento(EstadoDocumento.Finalizado);
+        documento.Id = 5;
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(documento);
+
+        await ctx.Svc.ReabrirAsync(5, "faltaba documentación, se retoma");
+
+        var evento = Assert.Single(documento.Eventos);
+        Assert.True(evento.EsAutomatico);
+        Assert.Contains("faltaba documentación, se retoma", evento.Texto);
+        Assert.Equal(EstadoDocumento.Finalizado, evento.EstadoAnterior);
+        Assert.Equal(EstadoDocumento.EnProceso, evento.EstadoNuevo);
+    }
+
+    [Fact]
+    public async Task ReabrirAsync_RegistraAuditoria()
+    {
+        var ctx = Crear(rol: RolUsuario.Admin, idSesion: 1);
+        var documento = NuevoDocumento(EstadoDocumento.Finalizado);
+        documento.Id = 5;
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(documento);
+
+        await ctx.Svc.ReabrirAsync(5, "motivo válido");
+
+        ctx.Audit.Verify(a => a.RegistrarAsync(
+            1, AccionAuditada.ReaperturaDocumento, "DocumentoAdministrativo", 5, It.IsAny<string>()), Times.Once);
+    }
 }
