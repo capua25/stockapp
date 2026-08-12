@@ -1123,6 +1123,22 @@ public class DocumentoAdministrativoRepositoryTests : PostgresRepositoryTestBase
     }
 
     [Fact]
+    public async Task ObtenerPorId_TraeLaNavRegistradoPorPoblada()
+    {
+        // F3: ConIncludes() no traía RegistradoPor -- sin lazy loading en el proyecto (no hay
+        // UseLazyLoadingProxies), la nav quedaba null y RegistradoPorNombre viajaba vacío en el
+        // ADto de la Api (Task 13) aunque RegistradoPorUsuarioId estuviera bien guardado.
+        var usuarioId = await SeedUsuarioAsync("registrante.conocido");
+        var id = await _repo.AgregarAsync(NuevoDocumento(usuarioId));
+        Context.ChangeTracker.Clear();
+
+        var encontrado = await _repo.ObtenerPorIdAsync(id);
+
+        Assert.NotNull(encontrado!.RegistradoPor);
+        Assert.Equal("registrante.conocido", encontrado.RegistradoPor!.NombreUsuario);
+    }
+
+    [Fact]
     public async Task ListarActivosAsync_SoloDevuelvePendienteYEnProceso()
     {
         var usuarioId = await SeedUsuarioAsync();
@@ -1394,7 +1410,8 @@ public class DocumentoAdministrativoRepository : IDocumentoAdministrativoReposit
 
     private IQueryable<DocumentoAdministrativo> ConIncludes() =>
         _ctx.DocumentosAdministrativos
-            .Include(d => d.Eventos.OrderBy(e => e.Fecha).ThenBy(e => e.Id));
+            .Include(d => d.Eventos.OrderBy(e => e.Fecha).ThenBy(e => e.Id))
+            .Include(d => d.RegistradoPor);
 
     public async Task<int> AgregarAsync(DocumentoAdministrativo documento)
     {
@@ -2800,7 +2817,7 @@ Expected: FAIL — `IniciarProcesoAsync`/`VolverAPendienteAsync`/`FinalizarAsync
 - [ ] **Step 4: Correr el test y verificar que pasa**
 
 Run: `dotnet test tests/StockApp.Application.Tests --filter "FullyQualifiedName~DocumentoAdministrativoServiceTests"`
-Expected: PASS — 27 tests verdes (15 de Task 7 + 12 nuevos).
+Expected: PASS — 28 tests verdes (15 de Task 7 + 13 nuevos).
 
 - [ ] **Step 5: Commit**
 ```bash
@@ -2908,7 +2925,7 @@ Expected: FAIL — `AgregarNotaAsync` lanza `NotImplementedException`.
 - [ ] **Step 4: Correr el test y verificar que pasa**
 
 Run: `dotnet test tests/StockApp.Application.Tests --filter "FullyQualifiedName~DocumentoAdministrativoServiceTests"`
-Expected: PASS — 31 tests verdes (27 de Task 8 + 4 nuevos).
+Expected: PASS — 32 tests verdes (28 de Task 8 + 4 nuevos).
 
 - [ ] **Step 5: Commit**
 ```bash
@@ -3198,7 +3215,7 @@ Expected: FAIL — `AnularAsync`/`ReabrirAsync` lanzan `NotImplementedException`
 - [ ] **Step 4: Correr el test y verificar que pasa**
 
 Run: `dotnet test tests/StockApp.Application.Tests --filter "FullyQualifiedName~DocumentoAdministrativoServiceTests"`
-Expected: PASS — 46 tests verdes (31 de Task 9 + 15 nuevos).
+Expected: PASS — 47 tests verdes (32 de Task 9 + 15 nuevos).
 
 - [ ] **Step 5: Commit**
 ```bash
@@ -3457,7 +3474,7 @@ Expected: FAIL — `EditarAsync` lanza `NotImplementedException`.
 - [ ] **Step 4: Correr el test y verificar que pasa**
 
 Run: `dotnet test tests/StockApp.Application.Tests --filter "FullyQualifiedName~DocumentoAdministrativoServiceTests"`
-Expected: PASS — 57 tests verdes (46 de Task 10 + 11 nuevos).
+Expected: PASS — 58 tests verdes (47 de Task 10 + 11 nuevos).
 
 - [ ] **Step 5: Correr la suite completa de Application para confirmar que no rompió nada más**
 
@@ -3924,7 +3941,7 @@ Expected: PASS — 17 tests verdes.
 - [ ] **Step 5: Correr la suite completa de Application (secuencial, NUNCA en paralelo con StockApp.Api.Tests — colisión de Testcontainers)**
 
 Run: `dotnet test tests/StockApp.Application.Tests`
-Expected: PASS — todos los tests verdes, incluidos los 57 de `DocumentoAdministrativoServiceTests` y los 17 nuevos de `AdjuntoDocumentoServiceTests`.
+Expected: PASS — todos los tests verdes, incluidos los 58 de `DocumentoAdministrativoServiceTests` y los 17 nuevos de `AdjuntoDocumentoServiceTests`.
 
 - [ ] **Step 6: Commit**
 ```bash
@@ -4207,6 +4224,26 @@ public class DocumentosEndpointTests : ApiTestBase
     }
 
     [Fact]
+    public async Task GetPorId_Existente_TraeRegistradoPorNombre()
+    {
+        // F3: ObtenerPorIdAsync devolvía RegistradoPor null porque el repositorio no lo incluía
+        // (Task 5) -- este test pega contra la Api real para que el bug no vuelva en la próxima
+        // refactorización del repositorio.
+        await using var ctx = Factory.CrearContexto();
+        var registrante = await DatosDePrueba.SeedUsuarioAsync(
+            ctx, "registrante.conocido", "Secreta123!", RolUsuario.Admin);
+        var jwt = Factory.Services.GetRequiredService<IJwtTokenService>();
+        var clienteRegistrante = ClienteAutenticado(jwt.GenerarToken(registrante.Id, RolUsuario.Admin));
+        var id = await CrearDocumentoAsync(clienteRegistrante);
+
+        var response = await clienteRegistrante.GetAsync($"/documentos/{id}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var documento = await response.Content.ReadFromJsonAsync<DocumentoDto>();
+        Assert.Equal("registrante.conocido", documento!.RegistradoPorNombre);
+    }
+
+    [Fact]
     public async Task PutDocumentos_CorrigeNumero_Devuelve200()
     {
         await SeedUsuariosAsync();
@@ -4364,7 +4401,7 @@ app.MapDocumentosEndpoints();
   Nota: esta es la ÚNICA tarea del plan que registra `IDocumentoAdministrativoRepository`/`IDocumentoAdministrativoService` en `Program.cs` — las Tasks 1-12 (dominio, persistencia, aplicación) no tocan `Program.cs`. Una sola línea por tipo, sin duplicar.
 - [ ] 13.5 Correr y ver que pasa:
   `dotnet test tests/StockApp.Api.Tests/StockApp.Api.Tests.csproj --filter DocumentosEndpointTests`
-  Salida esperada: `Passed! - Failed: 0, Passed: 15`.
+  Salida esperada: `Passed! - Failed: 0, Passed: 16`.
 - [ ] 13.6 Commit:
   `git add src/StockApp.Api/Endpoints/DocumentosEndpoints.cs src/StockApp.Api/Program.cs tests/StockApp.Api.Tests/DocumentosEndpointTests.cs`
   `git commit -m "feat(documentos): endpoints de lectura y alta/edición de documentos administrativos"`
@@ -4677,7 +4714,7 @@ public record MotivoRequest(string Motivo);
 ```
 - [ ] 14.4 Correr y ver que pasa:
   `dotnet test tests/StockApp.Api.Tests/StockApp.Api.Tests.csproj --filter DocumentosEndpointTests`
-  Salida esperada: `Passed! - Failed: 0, Passed: 32`.
+  Salida esperada: `Passed! - Failed: 0, Passed: 33`.
 - [ ] 14.5 Commit:
   `git add src/StockApp.Api/Endpoints/DocumentosEndpoints.cs tests/StockApp.Api.Tests/DocumentosEndpointTests.cs`
   `git commit -m "feat(documentos): endpoints de transición de estado (iniciar/finalizar/anular/reabrir)"`
@@ -4697,7 +4734,7 @@ public record MotivoRequest(string Motivo);
   - `POST /documentos/{id:int}/adjuntos` (multipart, campo `archivo`) → 201 `AdjuntoDocumentoDto` | 409 (documento no `EsActivo`, o MIME inválido).
   - `GET /documentos/{id:int}/adjuntos` → 200 `List<AdjuntoDocumentoDto>`.
   - `GET /documentos/adjuntos/{adjuntoId:int}/contenido` → `Results.File(...)` | 404.
-  - `DELETE /documentos/adjuntos/{adjuntoId:int}` → 200 | 403.
+  - `DELETE /documentos/adjuntos/{adjuntoId:int}` → 200 | 403 | 404 (adjunto inexistente) | 409 (documento no `EsActivo`, `QuitarAsync` → `ReglaDeNegocioException`).
 
 **Steps:**
 
@@ -4880,10 +4917,41 @@ public record MotivoRequest(string Motivo);
         var lista = await listado.Content.ReadFromJsonAsync<List<AdjuntoDocumentoDto>>();
         Assert.Empty(lista!);
     }
+
+    [Fact]
+    public async Task DeleteAdjunto_Inexistente_Devuelve404()
+    {
+        // F7: QuitarAsync (Task 12) lanza EntidadNoEncontradaException si el adjunto no existe.
+        await SeedUsuariosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var response = await client.DeleteAsync("/documentos/adjuntos/999999");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteAdjunto_SobreDocumentoCerrado_Devuelve409()
+    {
+        // F7: QuitarAsync (Task 12) lanza ReglaDeNegocioException si el documento dueño ya no
+        // está EsActivo (D11a) -- el adjunto se agrega mientras el documento está activo y
+        // recién después se cierra, para probar el rechazo en QuitarAsync y no en el alta.
+        var id = await SembrarDocumentoAsync(EstadoDocumento.Pendiente);
+        await SeedUsuariosAsync();
+        var clienteOperador = ClienteAutenticado(TokenOperador());
+        var creado = await clienteOperador.PostAsync($"/documentos/{id}/adjuntos", ArmarMultipart(BytesPdf, "expediente.pdf"));
+        var dto = await creado.Content.ReadFromJsonAsync<AdjuntoDocumentoDto>();
+        var clienteAdmin = ClienteAutenticado(TokenAdmin());
+        await clienteAdmin.PostAsJsonAsync($"/documentos/{id}/anular", new MotivoRequest("el interesado desistió"));
+
+        var response = await clienteAdmin.DeleteAsync($"/documentos/adjuntos/{dto!.Id}");
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
 ```
 - [ ] 15.2 Correr y ver que falla (no existen las rutas de adjuntos):
   `dotnet test tests/StockApp.Api.Tests/StockApp.Api.Tests.csproj --filter DocumentosEndpointTests`
-  Salida esperada: 404 en los `Assert.Equal(HttpStatusCode.Created, ...)`/`Assert.Equal(HttpStatusCode.OK, ...)` de los 11 tests nuevos.
+  Salida esperada: 404 en los `Assert.Equal(HttpStatusCode.Created, ...)`/`Assert.Equal(HttpStatusCode.OK, ...)` de los 13 tests nuevos.
 - [ ] 15.3 Implementación. En `src/StockApp.Api/Endpoints/DocumentosEndpoints.cs`, agregar `using StockApp.Application.Documentos;` ya está (Task 13); dentro de `MapDocumentosEndpoints`, antes del `return app;`:
 ```csharp
         group.MapPost("/{id:int}/adjuntos", async (int id, IFormFile archivo, IAdjuntoDocumentoService adjuntos) =>
@@ -4923,7 +4991,7 @@ builder.Services.AddScoped<IAdjuntoDocumentoService, AdjuntoDocumentoService>();
   Misma nota que 13.4: esta es la ÚNICA tarea que registra `IAdjuntoDocumentoRepository`/`IAdjuntoDocumentoService` — una sola línea por tipo.
 - [ ] 15.5 Correr y ver que pasa:
   `dotnet test tests/StockApp.Api.Tests/StockApp.Api.Tests.csproj --filter DocumentosEndpointTests`
-  Salida esperada: `Passed! - Failed: 0, Passed: 43`.
+  Salida esperada: `Passed! - Failed: 0, Passed: 46`.
 - [ ] 15.6 Correr la suite completa de `StockApp.Api.Tests` (no solo el filtro) para descartar rotura de otros endpoints por el registro nuevo del grupo `/documentos`:
   `dotnet test tests/StockApp.Api.Tests/StockApp.Api.Tests.csproj`
   Salida esperada: todos los tests preexistentes siguen en verde (ningún fallo fuera de `DocumentosEndpointTests`).
@@ -5474,7 +5542,7 @@ public sealed class AdjuntoDocumentoApiClient : IAdjuntoDocumentoService
 ```
 - [ ] 17.4 Correr y ver que pasa:
   `dotnet test tests/StockApp.ApiClient.Tests/StockApp.ApiClient.Tests.csproj --filter AdjuntoDocumentoApiClientTests`
-  Salida esperada: `Passed! - Failed: 0, Passed: 5`.
+  Salida esperada: `Passed! - Failed: 0, Passed: 6`.
 - [ ] 17.5 Correr la suite completa de `StockApp.ApiClient.Tests` para descartar roturas cruzadas:
   `dotnet test tests/StockApp.ApiClient.Tests/StockApp.ApiClient.Tests.csproj`
   Salida esperada: todos los tests preexistentes en verde.
@@ -5806,7 +5874,7 @@ git commit -m "feat(documentos): agrega PedirTextoAsync a IConfirmacionService"
 
 **Interfaces:**
 - Consumes: `IDocumentoAdministrativoService` (`ListarActivosAsync(FiltroDocumentos)`, `ListarHistorialAsync(FiltroDocumentos)`) — contrato de los bloques A-C; `ICurrentSession`, `INavigationService`, `IConfirmacionService` (existentes); `DocumentoAdministrativo.PuedeTransicionarA(EstadoDocumento)`/`.EsCerrado` (dominio, bloque A).
-- Produces: `DocumentoFila` (`Id`, `Numero`, `Anio`, `TipoTexto`, `FechaEmision`, `Descripcion`, `EstadoTexto`, `RegistradoPorNombre`, `PuedeIniciar`, `PuedeVolverAPendiente`, `PuedeFinalizar`, `PuedeAnular`, `PuedeReabrir`); `DocumentoListViewModel` (`Activos`, `Historial`, filtros por solapa, `CargarAsync()`, `AbrirHistorialCommand`, `CargarHistorialAsync()`, `NuevoCommand`, `VerDetalleCommand`, `IniciarCommand`, `VolverAPendienteCommand`, `FinalizarCommand`) — consumido por Task 22 (`DocumentoListView`) y Task 23 (`ShellMainViewModel.NavDocumentos`).
+- Produces: `DocumentoFila` (`Id`, `Numero`, `Anio`, `TipoTexto`, `FechaEmision`, `Descripcion`, `EstadoTexto`, `RegistradoPorNombre`, `PuedeIniciar`, `PuedeVolverAPendiente`, `PuedeFinalizar`, `PuedeAnular`, `PuedeReabrir`); `DocumentoListViewModel` (`Activos`, `Historial`, filtros por solapa, `CargarAsync()`, `AbrirHistorialCommand`, `CargarHistorialAsync()`, `BuscarHistorialCommand`, `NuevoCommand`, `VerDetalleCommand`, `IniciarCommand`, `VolverAPendienteCommand`, `FinalizarCommand`) — consumido por Task 22 (`DocumentoListView`) y Task 23 (`ShellMainViewModel.NavDocumentos`). `DocumentoListViewModel` NO expone `AnularCommand`: anular exige motivo (`PedirTextoAsync`) y ese flujo vive en `DocumentoFormViewModel` (Task 20) -- el botón "Anular" de la lista (Task 22) navega a `VerDetalleCommand`.
 
 Nota sobre `DocumentoFila`: además de `PuedeAnular`/`PuedeReabrir` (los dos exigidos explícitamente por el contrato, gateados por rol porque son `documentos.administrar`), se agrega `PuedeVolverAPendiente` — análogo de `TareaFila.PuedeSoltar`, sin gate de rol porque `VolverAPendienteAsync` es `documentos.gestionar` (Operador y Admin). No está en el contrato fijo pero lo exige el alcance del spec ("iniciar proceso, volver a pendiente, finalizar, anular, reabrir") y el molde de `TareaFila` que la Task pide copiar.
 
@@ -5925,6 +5993,23 @@ public class DocumentoListViewModelTests
         await ctx.Vm.CargarHistorialAsync();
 
         ctx.Svc.Verify(s => s.ListarHistorialAsync(It.IsAny<FiltroDocumentos>()), Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task BuscarHistorialCommand_RecargaLaColeccionHistorial()
+    {
+        // F2: el botón "Buscar" del filtro del historial (Task 22) bindea este comando --
+        // CargarHistorialAsync() es un método plano, no un ICommand, así que hace falta un
+        // [RelayCommand] propio que lo envuelva.
+        var ctx = Crear(historial: new List<DocumentoAdministrativo>
+        {
+            DocumentoDe(3, EstadoDocumento.Finalizado),
+        });
+
+        await ctx.Vm.BuscarHistorialCommand.ExecuteAsync(null);
+
+        Assert.Single(ctx.Vm.Historial);
+        ctx.Svc.Verify(s => s.ListarHistorialAsync(It.IsAny<FiltroDocumentos>()), Times.Once);
     }
 
     [Fact]
@@ -6180,6 +6265,16 @@ public partial class DocumentoListViewModel : ViewModelBase
         await CargarHistorialAsync();
     }
 
+    /// <summary>
+    /// Botón "Buscar" del filtro propio del historial (Task 22): a diferencia de
+    /// AbrirHistorialCommand (carga perezosa, una sola vez), este comando envuelve
+    /// CargarHistorialAsync() -- que queda público y sin [RelayCommand] porque también lo
+    /// invocan AbrirHistorialCommand y los tests -- para exponer un ICommand bindeable que
+    /// siempre vuelve a consultar al servidor con el filtro actual.
+    /// </summary>
+    [RelayCommand]
+    private async Task BuscarHistorial() => await CargarHistorialAsync();
+
     [RelayCommand]
     private void Nuevo() => _navigation.Navegar<DocumentoFormViewModel>(vm => vm.CargarParaCrear());
 
@@ -6234,7 +6329,7 @@ public partial class DocumentoListViewModel : ViewModelBase
 - [ ] **Step 4: Correr el test y verificar que pasa**
 
 Run: `timeout 180 dotnet test tests/StockApp.Presentation.Tests --filter "FullyQualifiedName~DocumentoListViewModelTests"`
-Expected: FAIL en compilación por `DocumentoFormViewModel` (referenciado por `Nuevo`/`VerDetalle`, se crea recién en la Task 20) — correr Task 19 y Task 20 en el mismo ciclo antes de testear, o dejar un stub vacío de `DocumentoFormViewModel` con `CargarParaCrear()`/`CargarParaVerAsync(DocumentoAdministrativo)` si se ejecutan por separado. Con el stub (o con la Task 20 ya aplicada): PASS — 10 tests verdes.
+Expected: FAIL en compilación por `DocumentoFormViewModel` (referenciado por `Nuevo`/`VerDetalle`, se crea recién en la Task 20) — correr Task 19 y Task 20 en el mismo ciclo antes de testear, o dejar un stub vacío de `DocumentoFormViewModel` con `CargarParaCrear()`/`CargarParaVerAsync(DocumentoAdministrativo)` si se ejecutan por separado. Con el stub (o con la Task 20 ya aplicada): PASS — 12 tests verdes.
 
 - [ ] **Step 5: Commit**
 ```bash
@@ -6440,6 +6535,23 @@ public class DocumentoFormViewModelTests
 
         Assert.Null(ctx.Vm.MensajeError);
     }
+
+    [Fact]
+    public void FechaEmisionSeleccionada_AlSetearlaUltima_HabilitaGuardarCommand()
+    {
+        // F4: PuedeGuardar() exige Numero + Descripcion + FechaEmisionSeleccionada. No se llama
+        // a CargarParaCrear() acá porque ya deja FechaEmisionSeleccionada precargada con
+        // DateTime.UtcNow.Date -- eso taparía el hallazgo (la propiedad no llevaba
+        // [NotifyCanExecuteChangedFor], a diferencia de Numero/Descripcion que sí).
+        var ctx = Crear();
+        ctx.Vm.Numero = "0099";
+        ctx.Vm.Descripcion = "Pedido de materiales";
+        Assert.False(ctx.Vm.GuardarCommand.CanExecute(null));
+
+        ctx.Vm.FechaEmisionSeleccionada = new DateTime(2026, 8, 11);
+
+        Assert.True(ctx.Vm.GuardarCommand.CanExecute(null));
+    }
 }
 ```
 
@@ -6500,7 +6612,11 @@ public partial class DocumentoFormViewModel : ViewModelBase
 
     [ObservableProperty] private int _anioSeleccionado = DateTime.UtcNow.Year;
     [ObservableProperty] private TipoDocumento _tipoSeleccionado = TipoDocumento.Expediente;
-    [ObservableProperty] private DateTime? _fechaEmisionSeleccionada;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
+    [NotifyCanExecuteChangedFor(nameof(GuardarEdicionCommand))]
+    private DateTime? _fechaEmisionSeleccionada;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
@@ -6615,7 +6731,18 @@ public partial class DocumentoFormViewModel : ViewModelBase
     private async Task RecargarAsync()
     {
         if (_documento is null) return;
-        _documento = await _service.ObtenerPorIdAsync(_documento.Id);
+
+        var documento = await _service.ObtenerPorIdAsync(_documento.Id);
+        if (documento is null)
+        {
+            // F5: ObtenerPorIdAsync es nullable -- si el documento ya no existe (borrado o
+            // inaccesible entre acciones), no hay nada que recargar; se avisa con el mismo
+            // canal que ManejarErrorAsync (MensajeError) en vez de reventar con NRE.
+            MensajeError = "El documento ya no existe. Volvé a la lista e intentá de nuevo.";
+            return;
+        }
+
+        _documento = documento;
         CargarCamposDesdeDocumento(_documento);
         OnPropertyChanged(nameof(PuedeEditar));
         OnPropertyChanged(nameof(PuedeEditarCampos));
@@ -6764,12 +6891,12 @@ public partial class DocumentoFormViewModel : ViewModelBase
 - [ ] **Step 4: Correr el test y verificar que pasa**
 
 Run: `timeout 180 dotnet test tests/StockApp.Presentation.Tests --filter "FullyQualifiedName~DocumentoFormViewModelTests"`
-Expected: PASS — 11 tests verdes.
+Expected: PASS — 12 tests verdes.
 
 - [ ] **Step 5: Correr toda la carpeta Documentos de Presentation.Tests**
 
 Run: `timeout 180 dotnet test tests/StockApp.Presentation.Tests --filter "FullyQualifiedName~Documentos"`
-Expected: PASS — 22 tests verdes (Task 19 + Task 20 juntas).
+Expected: PASS — 24 tests verdes (12 de Task 19 + 12 de Task 20).
 
 - [ ] **Step 6: Commit**
 ```bash
@@ -7201,7 +7328,7 @@ Las vistas deben enganchar `DataContextChanged` para disparar la carga inicial �
                                                     CommandParameter="{Binding}" />
                                             <Button Grid.Column="5" Classes="danger" Content="Anular"
                                                     IsVisible="{Binding PuedeAnular}"
-                                                    Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).AnularCommand}"
+                                                    Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).VerDetalleCommand}"
                                                     CommandParameter="{Binding}" />
                                         </Grid>
                                     </Border>
@@ -7222,7 +7349,7 @@ Las vistas deben enganchar `DataContextChanged` para disparar la carga inicial �
                         <TextBox Grid.Column="2" Text="{Binding FiltroHistorialTexto}"
                                  Watermark="Número, descripción..." Width="260" Margin="0,0,16,0" />
                         <Button Grid.Column="4" Classes="secondary" Content="Buscar"
-                                Command="{Binding CargarHistorialCommand}" />
+                                Command="{Binding BuscarHistorialCommand}" />
                     </Grid>
 
                     <ScrollViewer>
@@ -7267,7 +7394,7 @@ Las vistas deben enganchar `DataContextChanged` para disparar la carga inicial �
 </UserControl>
 ```
 
-Nota: el botón "Reabrir" del Historial navega a `VerDetalleCommand` (el detalle) en vez de reabrir directo desde la fila -- reabrir exige motivo (`PedirTextoAsync`, Task 20), y ese flujo vive en `DocumentoFormViewModel.ReabrirCommand`, no en la lista.
+Nota: los botones "Anular" (Activos) y "Reabrir" (Historial) navegan a `VerDetalleCommand` (el detalle) en vez de ejecutar la acción directo desde la fila -- tanto anular como reabrir exigen motivo (`PedirTextoAsync`, Task 20), y ese flujo vive en `DocumentoFormViewModel.AnularCommand`/`ReabrirCommand`, no en la lista. `DocumentoListViewModel` (Task 19) no expone `AnularCommand`: solo `AbrirHistorial`, `Nuevo`, `VerDetalle`, `Iniciar`, `VolverAPendiente` y `Finalizar`.
 
 ```csharp
 // src/StockApp.Presentation/Views/Documentos/DocumentoListView.axaml.cs
