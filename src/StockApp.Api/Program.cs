@@ -25,6 +25,7 @@ using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
 using StockApp.Application.Backups;
 using StockApp.Application.Catalogo;
+using StockApp.Application.Documentos;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
 using StockApp.Application.Licenciamiento;
@@ -229,6 +230,10 @@ builder.Services.AddScoped<IAnalisisImportacionService, AnalisisImportacionServi
 // Tareas — módulo independiente (spec 2026-08-01)
 builder.Services.AddScoped<ITareaRepository, TareaRepository>();
 builder.Services.AddScoped<ITareaService, TareaService>();
+
+// Documentos administrativos — módulo independiente (spec 2026-08-11)
+builder.Services.AddScoped<IDocumentoAdministrativoRepository, DocumentoAdministrativoRepository>();
+builder.Services.AddScoped<IDocumentoAdministrativoService, DocumentoAdministrativoService>();
 
 // Finanzas — F5c: confirmación transaccional del importador (escritura + idempotencia +
 // guard de re-importación + reversa). IImportacionRepository es la única pieza de todo el
@@ -625,6 +630,7 @@ app.MapBackupsEndpoints();
 app.MapConfiguracionAlertasEndpoints();
 app.MapLogsEndpoints();
 app.MapTareasEndpoints();
+app.MapDocumentosEndpoints();
 
 app.Run();
 
