@@ -428,4 +428,51 @@ public class DocumentoAdministrativoServiceTests
         ctx.Audit.Verify(a => a.RegistrarAsync(
             1, AccionAuditada.CambioEstadoDocumento, "DocumentoAdministrativo", 5, It.IsAny<string>()), Times.Once);
     }
+
+    // ── AgregarNotaAsync ──────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task AgregarNotaAsync_SinPermiso_LanzaExcepcion()
+    {
+        var ctx = Crear();
+        ctx.Auth.Setup(a => a.Verificar(It.IsAny<ICurrentSession>(), Permisos.GestionarDocumentos))
+            .Throws<UnauthorizedAccessException>();
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => ctx.Svc.AgregarNotaAsync(1, "avance"));
+    }
+
+    [Fact]
+    public async Task AgregarNotaAsync_TextoVacio_LanzaArgumentException()
+    {
+        var ctx = Crear();
+        await Assert.ThrowsAsync<ArgumentException>(() => ctx.Svc.AgregarNotaAsync(1, "   "));
+    }
+
+    [Fact]
+    public async Task AgregarNotaAsync_DocumentoInexistente_LanzaEntidadNoEncontrada()
+    {
+        var ctx = Crear();
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync((DocumentoAdministrativo?)null);
+
+        await Assert.ThrowsAsync<EntidadNoEncontradaException>(() => ctx.Svc.AgregarNotaAsync(1, "avance"));
+    }
+
+    [Fact]
+    public async Task AgregarNotaAsync_GuardaEventoManualYRegistraAuditoria()
+    {
+        var ctx = Crear(idSesion: 3);
+        var documento = NuevoDocumento();
+        documento.Id = 1;
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(documento);
+
+        await ctx.Svc.AgregarNotaAsync(1, "avance del trámite");
+
+        var evento = Assert.Single(documento.Eventos);
+        Assert.False(evento.EsAutomatico);
+        Assert.Null(evento.EstadoAnterior);
+        Assert.Null(evento.EstadoNuevo);
+        ctx.Repo.Verify(r => r.ActualizarAsync(documento), Times.Once);
+        ctx.Audit.Verify(a => a.RegistrarAsync(
+            3, AccionAuditada.AltaNotaDocumento, "DocumentoAdministrativo", 1, It.IsAny<string>()), Times.Once);
+    }
 }

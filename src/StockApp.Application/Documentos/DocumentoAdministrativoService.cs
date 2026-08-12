@@ -169,7 +169,24 @@ public class DocumentoAdministrativoService : IDocumentoAdministrativoService
             $"{estadoAnterior} → {documento.Estado}");
     }
 
-    public Task AgregarNotaAsync(int id, string texto) => throw new NotImplementedException(); // Task 9
+    public async Task AgregarNotaAsync(int id, string texto)
+    {
+        _auth.Verificar(_session, Permisos.GestionarDocumentos);
+
+        if (string.IsNullOrWhiteSpace(texto))
+            throw new ArgumentException("El texto de la nota no puede estar vacío.", nameof(texto));
+
+        var documento = await _repo.ObtenerPorIdAsync(id)
+            ?? throw new EntidadNoEncontradaException($"Documento {id} no encontrado.");
+
+        documento.AgregarEvento(_session.UsuarioActual!.Id, texto.Trim(), esAutomatico: false);
+
+        await _repo.ActualizarAsync(documento);
+
+        await _audit.RegistrarAsync(
+            _session.UsuarioActual!.Id, AccionAuditada.AltaNotaDocumento, "DocumentoAdministrativo", id,
+            $"Nota: {texto.Trim()}");
+    }
     public Task AnularAsync(int id, string motivo) => throw new NotImplementedException();     // Task 10
     public Task ReabrirAsync(int id, string motivo) => throw new NotImplementedException();    // Task 10
     public Task EditarAsync(int id, DatosEdicionDocumento datos) => throw new NotImplementedException(); // Task 11
