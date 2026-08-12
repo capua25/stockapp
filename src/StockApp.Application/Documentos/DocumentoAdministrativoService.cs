@@ -92,9 +92,83 @@ public class DocumentoAdministrativoService : IDocumentoAdministrativoService
         return await _repo.ObtenerPorIdAsync(id);
     }
 
-    public Task IniciarProcesoAsync(int id) => throw new NotImplementedException();     // Task 8
-    public Task VolverAPendienteAsync(int id) => throw new NotImplementedException();   // Task 8
-    public Task FinalizarAsync(int id) => throw new NotImplementedException();          // Task 8
+    public async Task IniciarProcesoAsync(int id)
+    {
+        _auth.Verificar(_session, Permisos.GestionarDocumentos);
+
+        var documento = await _repo.ObtenerPorIdAsync(id)
+            ?? throw new EntidadNoEncontradaException($"Documento {id} no encontrado.");
+
+        // Guarda de estado ORIGEN, simétrica a la de ReabrirAsync (D4/D8 del spec): en la
+        // tabla del dominio, Finalizado -> EnProceso y Anulado -> EnProceso también son
+        // transiciones válidas (son la reapertura). Si esta acción se limitara a llamar
+        // CambiarEstado(EnProceso) sin verificar primero que el documento esté Pendiente,
+        // CambiarEstado NO rechazaría iniciar el proceso de un documento cerrado — y
+        // cualquier Operador con documentos.gestionar (sin documentos.administrar) podría
+        // reabrir un documento cerrado sin motivo y sin pasar por ReabrirAsync. El spec solo
+        // documenta la guarda simétrica del lado de ReabrirAsync; esta es la misma guarda
+        // aplicada del lado de IniciarProcesoAsync.
+        if (documento.Estado != EstadoDocumento.Pendiente)
+            throw new ReglaDeNegocioException(
+                $"No se puede iniciar el proceso de un documento en estado '{documento.Estado}': no está pendiente.");
+
+        var estadoAnterior = documento.Estado;
+        documento.CambiarEstado(EstadoDocumento.EnProceso);
+
+        documento.AgregarEvento(
+            _session.UsuarioActual!.Id, $"{estadoAnterior} → {documento.Estado}", esAutomatico: true,
+            anterior: estadoAnterior, nuevo: documento.Estado);
+
+        await _repo.ActualizarAsync(documento);
+
+        await _audit.RegistrarAsync(
+            _session.UsuarioActual!.Id, AccionAuditada.CambioEstadoDocumento, "DocumentoAdministrativo", id,
+            $"{estadoAnterior} → {documento.Estado}");
+    }
+
+    public async Task VolverAPendienteAsync(int id)
+    {
+        _auth.Verificar(_session, Permisos.GestionarDocumentos);
+
+        var documento = await _repo.ObtenerPorIdAsync(id)
+            ?? throw new EntidadNoEncontradaException($"Documento {id} no encontrado.");
+
+        var estadoAnterior = documento.Estado;
+        documento.CambiarEstado(EstadoDocumento.Pendiente);
+
+        documento.AgregarEvento(
+            _session.UsuarioActual!.Id, $"{estadoAnterior} → {documento.Estado}", esAutomatico: true,
+            anterior: estadoAnterior, nuevo: documento.Estado);
+
+        await _repo.ActualizarAsync(documento);
+
+        await _audit.RegistrarAsync(
+            _session.UsuarioActual!.Id, AccionAuditada.CambioEstadoDocumento, "DocumentoAdministrativo", id,
+            $"{estadoAnterior} → {documento.Estado}");
+    }
+
+    public async Task FinalizarAsync(int id)
+    {
+        _auth.Verificar(_session, Permisos.GestionarDocumentos);
+
+        var documento = await _repo.ObtenerPorIdAsync(id)
+            ?? throw new EntidadNoEncontradaException($"Documento {id} no encontrado.");
+
+        var estadoAnterior = documento.Estado;
+        documento.CambiarEstado(EstadoDocumento.Finalizado);
+        documento.FechaCierre = DateTime.UtcNow;   // D8: lo sella el servicio, no la entidad.
+
+        documento.AgregarEvento(
+            _session.UsuarioActual!.Id, $"{estadoAnterior} → {documento.Estado}", esAutomatico: true,
+            anterior: estadoAnterior, nuevo: documento.Estado);
+
+        await _repo.ActualizarAsync(documento);
+
+        await _audit.RegistrarAsync(
+            _session.UsuarioActual!.Id, AccionAuditada.CambioEstadoDocumento, "DocumentoAdministrativo", id,
+            $"{estadoAnterior} → {documento.Estado}");
+    }
+
     public Task AgregarNotaAsync(int id, string texto) => throw new NotImplementedException(); // Task 9
     public Task AnularAsync(int id, string motivo) => throw new NotImplementedException();     // Task 10
     public Task ReabrirAsync(int id, string motivo) => throw new NotImplementedException();    // Task 10

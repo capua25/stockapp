@@ -242,4 +242,190 @@ public class DocumentoAdministrativoServiceTests
 
         Assert.Same(documento, resultado);
     }
+
+    // ── IniciarProcesoAsync ───────────────────────────────────────────────────
+
+    [Fact]
+    public async Task IniciarProcesoAsync_SinPermiso_LanzaExcepcionSinTocarElRepo()
+    {
+        var ctx = Crear();
+        ctx.Auth.Setup(a => a.Verificar(It.IsAny<ICurrentSession>(), Permisos.GestionarDocumentos))
+            .Throws<UnauthorizedAccessException>();
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => ctx.Svc.IniciarProcesoAsync(1));
+
+        ctx.Repo.Verify(r => r.ActualizarAsync(It.IsAny<DocumentoAdministrativo>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task IniciarProcesoAsync_DocumentoInexistente_LanzaEntidadNoEncontrada()
+    {
+        var ctx = Crear();
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync((DocumentoAdministrativo?)null);
+
+        await Assert.ThrowsAsync<EntidadNoEncontradaException>(() => ctx.Svc.IniciarProcesoAsync(1));
+    }
+
+    [Fact]
+    public async Task IniciarProcesoAsync_DesdePendiente_CambiaAEnProcesoYGeneraEventoAutomatico()
+    {
+        var ctx = Crear(idSesion: 3);
+        var documento = NuevoDocumento(EstadoDocumento.Pendiente);
+        documento.Id = 1;
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(documento);
+
+        await ctx.Svc.IniciarProcesoAsync(1);
+
+        Assert.Equal(EstadoDocumento.EnProceso, documento.Estado);
+        var evento = Assert.Single(documento.Eventos);
+        Assert.True(evento.EsAutomatico);
+        Assert.Equal(EstadoDocumento.Pendiente, evento.EstadoAnterior);
+        Assert.Equal(EstadoDocumento.EnProceso, evento.EstadoNuevo);
+        ctx.Repo.Verify(r => r.ActualizarAsync(documento), Times.Once);
+    }
+
+    [Fact]
+    public async Task IniciarProcesoAsync_DesdeFinalizado_LanzaReglaDeNegocio()
+    {
+        // Guarda de estado origen (ver nota de Interfaces más abajo): Finalizado -> EnProceso
+        // es una transición válida en la tabla del dominio (es la reapertura), así que sin
+        // esta guarda explícita CambiarEstado no rechazaría esto y un Operador con solo
+        // documentos.gestionar terminaría reabriendo un documento cerrado.
+        var ctx = Crear();
+        var documento = NuevoDocumento(EstadoDocumento.Finalizado);
+        documento.Id = 1;
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(documento);
+
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => ctx.Svc.IniciarProcesoAsync(1));
+
+        ctx.Repo.Verify(r => r.ActualizarAsync(It.IsAny<DocumentoAdministrativo>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task IniciarProcesoAsync_DesdeAnulado_LanzaReglaDeNegocio()
+    {
+        // Mismo caso que el de arriba: Anulado -> EnProceso también es la reapertura.
+        var ctx = Crear();
+        var documento = NuevoDocumento(EstadoDocumento.Anulado);
+        documento.Id = 1;
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(documento);
+
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => ctx.Svc.IniciarProcesoAsync(1));
+    }
+
+    [Fact]
+    public async Task IniciarProcesoAsync_RegistraAuditoria()
+    {
+        var ctx = Crear(idSesion: 1);
+        var documento = NuevoDocumento(EstadoDocumento.Pendiente);
+        documento.Id = 5;
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(documento);
+
+        await ctx.Svc.IniciarProcesoAsync(5);
+
+        ctx.Audit.Verify(a => a.RegistrarAsync(
+            1, AccionAuditada.CambioEstadoDocumento, "DocumentoAdministrativo", 5, It.IsAny<string>()), Times.Once);
+    }
+
+    // ── VolverAPendienteAsync ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task VolverAPendienteAsync_DesdeEnProceso_CambiaAPendienteYGeneraEventoAutomatico()
+    {
+        var ctx = Crear(idSesion: 1);
+        var documento = NuevoDocumento(EstadoDocumento.EnProceso);
+        documento.Id = 5;
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(documento);
+
+        await ctx.Svc.VolverAPendienteAsync(5);
+
+        Assert.Equal(EstadoDocumento.Pendiente, documento.Estado);
+        var evento = Assert.Single(documento.Eventos);
+        Assert.True(evento.EsAutomatico);
+        Assert.Equal(EstadoDocumento.EnProceso, evento.EstadoAnterior);
+        Assert.Equal(EstadoDocumento.Pendiente, evento.EstadoNuevo);
+    }
+
+    [Fact]
+    public async Task VolverAPendienteAsync_DesdePendiente_LanzaReglaDeNegocio()
+    {
+        var ctx = Crear();
+        var documento = NuevoDocumento(EstadoDocumento.Pendiente);
+        documento.Id = 5;
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(documento);
+
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => ctx.Svc.VolverAPendienteAsync(5));
+    }
+
+    [Fact]
+    public async Task VolverAPendienteAsync_RegistraAuditoria()
+    {
+        var ctx = Crear(idSesion: 1);
+        var documento = NuevoDocumento(EstadoDocumento.EnProceso);
+        documento.Id = 5;
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(documento);
+
+        await ctx.Svc.VolverAPendienteAsync(5);
+
+        ctx.Audit.Verify(a => a.RegistrarAsync(
+            1, AccionAuditada.CambioEstadoDocumento, "DocumentoAdministrativo", 5, It.IsAny<string>()), Times.Once);
+    }
+
+    // ── FinalizarAsync ────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task FinalizarAsync_DesdeEnProceso_CambiaAFinalizadoYSellaFechaCierre()
+    {
+        var ctx = Crear(idSesion: 1);
+        var documento = NuevoDocumento(EstadoDocumento.EnProceso);
+        documento.Id = 5;
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(documento);
+
+        await ctx.Svc.FinalizarAsync(5);
+
+        Assert.Equal(EstadoDocumento.Finalizado, documento.Estado);
+        Assert.NotNull(documento.FechaCierre);
+        Assert.True((DateTime.UtcNow - documento.FechaCierre!.Value) < TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task FinalizarAsync_GeneraEventoAutomaticoConEstados()
+    {
+        var ctx = Crear(idSesion: 1);
+        var documento = NuevoDocumento(EstadoDocumento.EnProceso);
+        documento.Id = 5;
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(documento);
+
+        await ctx.Svc.FinalizarAsync(5);
+
+        var evento = Assert.Single(documento.Eventos);
+        Assert.True(evento.EsAutomatico);
+        Assert.Equal(EstadoDocumento.EnProceso, evento.EstadoAnterior);
+        Assert.Equal(EstadoDocumento.Finalizado, evento.EstadoNuevo);
+    }
+
+    [Fact]
+    public async Task FinalizarAsync_DesdePendiente_LanzaReglaDeNegocio()
+    {
+        var ctx = Crear();
+        var documento = NuevoDocumento(EstadoDocumento.Pendiente);
+        documento.Id = 5;
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(documento);
+
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => ctx.Svc.FinalizarAsync(5));
+    }
+
+    [Fact]
+    public async Task FinalizarAsync_RegistraAuditoria()
+    {
+        var ctx = Crear(idSesion: 1);
+        var documento = NuevoDocumento(EstadoDocumento.EnProceso);
+        documento.Id = 5;
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(documento);
+
+        await ctx.Svc.FinalizarAsync(5);
+
+        ctx.Audit.Verify(a => a.RegistrarAsync(
+            1, AccionAuditada.CambioEstadoDocumento, "DocumentoAdministrativo", 5, It.IsAny<string>()), Times.Once);
+    }
 }
