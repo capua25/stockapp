@@ -75,4 +75,14 @@ public enum AccionAuditada
 
     // ── Permisos por operador (append-only a partir de 51) ───────────────────
     ModificacionPermisosUsuario = 51,
+
+    // ── Documentos administrativos (append-only a partir de 52) ──────────────
+    AltaDocumentoAdministrativo = 52,
+    CambioEstadoDocumento       = 53,
+    ReaperturaDocumento         = 54,
+    AnulacionDocumento          = 55,
+    AltaNotaDocumento           = 56,
+    AltaAdjuntoDocumento        = 57,
+    BajaAdjuntoDocumento        = 58,
+    EdicionDocumento            = 59,
 }

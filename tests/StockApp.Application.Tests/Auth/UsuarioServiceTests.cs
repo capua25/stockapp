@@ -579,7 +579,7 @@ public class UsuarioServiceTests
     }
 
     [Fact]
-    public async Task ObtenerPermisosAsync_UsuarioAdmin_DevuelveLos11ConfigurablesSinConsultarElProveedor()
+    public async Task ObtenerPermisosAsync_UsuarioAdmin_DevuelveLos12ConfigurablesSinConsultarElProveedor()
     {
         var (svc, repo, _, _, _, _, _, permisos) = Crear();
         var admin = new Usuario { Id = 10, Rol = RolUsuario.Admin, NombreUsuario = "adm2", HashContrasena = "h", FechaAlta = DateTime.UtcNow };
@@ -587,7 +587,7 @@ public class UsuarioServiceTests
 
         var resultado = await svc.ObtenerPermisosAsync(10);
 
-        Assert.Equal(11, resultado.Count);
+        Assert.Equal(12, resultado.Count);
         permisos.Verify(p => p.ObtenerAsync(It.IsAny<int>()), Times.Never);
     }
 

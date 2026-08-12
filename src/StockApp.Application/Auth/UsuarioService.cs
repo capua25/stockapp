@@ -253,7 +253,7 @@ public class UsuarioService : IUsuarioService
         var usuario = await _repo.ObtenerPorIdAsync(usuarioId)
             ?? throw new EntidadNoEncontradaException($"Usuario {usuarioId} no encontrado.");
 
-        // Admin siempre tiene los 11 configurables — no hace falta consultar el proveedor
+        // Admin siempre tiene los 12 configurables — no hace falta consultar el proveedor
         // (y de hecho no debería haber filas: nunca se le escriben, spec decisión 3).
         if (usuario.Rol == RolUsuario.Admin)
             return AuthorizationService.PermisosConfigurables;

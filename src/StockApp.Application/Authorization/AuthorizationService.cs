@@ -25,6 +25,7 @@ public class AuthorizationService : IAuthorizationService
         Permisos.ImportarPlanillas,
         Permisos.GestionarDiagnostico,
         Permisos.AdministrarTareas,
+        Permisos.AdministrarDocumentos,
     };
 
     /// <summary>
@@ -53,6 +54,7 @@ public class AuthorizationService : IAuthorizationService
         Permisos.RegistrarPagos,
         Permisos.RegistrarIngresos,
         Permisos.GestionarTareas,
+        Permisos.GestionarDocumentos,
     ];
 
     public void Verificar(ICurrentSession sesion, string accion)

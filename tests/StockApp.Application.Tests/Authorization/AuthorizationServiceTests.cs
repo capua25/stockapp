@@ -50,7 +50,8 @@ public class AuthorizationServiceTests
     [InlineData(Permisos.ImportarPlanillas)]
     [InlineData(Permisos.GestionarDiagnostico)]
     [InlineData(Permisos.AdministrarTareas)]
-    public void VerificarConSesion_Operador_LosCuatroEstructurales_RechazanSiempre(string permisoEstructural)
+    [InlineData(Permisos.AdministrarDocumentos)]
+    public void VerificarConSesion_Operador_LosCincoEstructurales_RechazanSiempre(string permisoEstructural)
     {
         var sesion = new SesionFake { RolActual = RolUsuario.Operador, PermisosActuales = new HashSet<string>() };
 
@@ -62,7 +63,8 @@ public class AuthorizationServiceTests
     [InlineData(Permisos.ImportarPlanillas)]
     [InlineData(Permisos.GestionarDiagnostico)]
     [InlineData(Permisos.AdministrarTareas)]
-    public void VerificarConSesion_SesionEnvenenada_LosCuatroEstructuralesRechazanIgual(string permisoEstructural)
+    [InlineData(Permisos.AdministrarDocumentos)]
+    public void VerificarConSesion_SesionEnvenenada_LosCincoEstructuralesRechazanIgual(string permisoEstructural)
     {
         // El test más importante de esta clase: aunque PermisosActuales CONTENGA el permiso
         // estructural (una fila colada por error, o un bug futuro en PUT /usuarios/{id}/permisos),
@@ -105,25 +107,27 @@ public class AuthorizationServiceTests
     }
 
     [Fact]
-    public void PermisosEstructuralesAdmin_ContieneExactamenteLosCuatroDocumentados()
+    public void PermisosEstructuralesAdmin_ContieneExactamenteLosCincoDocumentados()
     {
-        Assert.Equal(4, AuthorizationService.PermisosEstructuralesAdmin.Count);
+        Assert.Equal(5, AuthorizationService.PermisosEstructuralesAdmin.Count);
         Assert.Contains(Permisos.GestionarUsuarios, AuthorizationService.PermisosEstructuralesAdmin);
         Assert.Contains(Permisos.ImportarPlanillas, AuthorizationService.PermisosEstructuralesAdmin);
         Assert.Contains(Permisos.GestionarDiagnostico, AuthorizationService.PermisosEstructuralesAdmin);
         Assert.Contains(Permisos.AdministrarTareas, AuthorizationService.PermisosEstructuralesAdmin);
+        Assert.Contains(Permisos.AdministrarDocumentos, AuthorizationService.PermisosEstructuralesAdmin);
     }
 
     [Fact]
-    public void PermisosConfigurables_TieneLos11RestantesYNoIntersecaConLosEstructurales()
+    public void PermisosConfigurables_TieneLos12RestantesYNoIntersecaConLosEstructurales()
     {
-        Assert.Equal(11, AuthorizationService.PermisosConfigurables.Count);
+        Assert.Equal(12, AuthorizationService.PermisosConfigurables.Count);
+        Assert.Contains(Permisos.GestionarDocumentos, AuthorizationService.PermisosConfigurables);
         foreach (var permiso in AuthorizationService.PermisosConfigurables)
             Assert.DoesNotContain(permiso, AuthorizationService.PermisosEstructuralesAdmin);
     }
 
     [Fact]
-    public void PermisosInicialesOperador_TieneExactamenteLos9DeAccionesOperadorEnOrden()
+    public void PermisosInicialesOperador_TieneExactamenteLos10DeAccionesOperadorEnOrden()
     {
         Assert.Equal(new[]
         {
@@ -136,6 +140,7 @@ public class AuthorizationServiceTests
             Permisos.RegistrarPagos,
             Permisos.RegistrarIngresos,
             Permisos.GestionarTareas,
+            Permisos.GestionarDocumentos,
         }, AuthorizationService.PermisosInicialesOperador);
     }
 }

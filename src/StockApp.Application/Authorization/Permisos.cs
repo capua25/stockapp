@@ -38,6 +38,15 @@ public static class Permisos
     /// <summary>Cancelar y cambiar prioridad: decide sobre trabajo que otro cargó — solo Admin.</summary>
     public const string AdministrarTareas = "tareas.administrar";
 
+    // Documentos administrativos (spec 2026-08-11) — módulo independiente. GestionarDocumentos:
+    // registrar, editar, listar, transicionar (iniciar/volver a pendiente/finalizar), notas y
+    // adjuntos (agregar/listar/descargar) — Admin Y Operador. AdministrarDocumentos: anular,
+    // reabrir y quitar adjuntos — solo Admin, mismo criterio que AdministrarTareas.
+    public const string GestionarDocumentos = "documentos.gestionar";
+
+    /// <summary>Anular, reabrir y quitar adjuntos: decide sobre el cierre/apertura de un trámite y sobre evidencia documental ya cargada — solo Admin.</summary>
+    public const string AdministrarDocumentos = "documentos.administrar";
+
     /// <summary>
     /// Lista explícita de todos los permisos del sistema (sin reflection). Consumida por
     /// StockApp.Api/Program.cs (Fase 2b, D1) para derivar las políticas de autorización
@@ -60,5 +69,7 @@ public static class Permisos
         GestionarDiagnostico,
         GestionarTareas,
         AdministrarTareas,
+        GestionarDocumentos,
+        AdministrarDocumentos,
     ];
 }
