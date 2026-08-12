@@ -293,7 +293,8 @@ namespace StockApp.Infrastructure.Migrations
                     b.HasIndex("RegistradoPorUsuarioId");
 
                     b.HasIndex("Tipo", "Anio", "Numero")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("IX_DocumentosAdministrativos_Tipo_Anio_Numero");
 
                     b.ToTable("DocumentosAdministrativos");
                 });

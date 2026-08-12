@@ -373,7 +373,8 @@ public class AppDbContext : DbContext
         {
             e.Property(d => d.Numero).IsRequired();
             e.Property(d => d.Descripcion).IsRequired();
-            e.HasIndex(d => new { d.Tipo, d.Anio, d.Numero }).IsUnique();
+            e.HasIndex(d => new { d.Tipo, d.Anio, d.Numero }).IsUnique()
+                .HasDatabaseName("IX_DocumentosAdministrativos_Tipo_Anio_Numero");
             e.HasIndex(d => d.Estado);
             e.HasIndex(d => d.Numero);
             e.HasOne(d => d.RegistradoPor).WithMany()
