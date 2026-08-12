@@ -1,7 +1,5 @@
 using System.Globalization;
 using System.Net.Http.Json;
-using System.Text.Encodings.Web;
-using System.Text.Json;
 using StockApp.Application.Documentos;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
@@ -30,16 +28,6 @@ internal sealed record MotivoBody(string Motivo);
 /// <summary>IDocumentoAdministrativoService contra /documentos.</summary>
 public sealed class DocumentoApiClient : IDocumentoAdministrativoService
 {
-    /// <summary>
-    /// Motivos/descripciones libres pueden traer acentos ("desistió"). Sin esto,
-    /// PostAsJsonAsync usa el encoder HTML-safe por defecto y escapa a \uXXXX: el server los
-    /// decodifica igual, pero rompe cualquier assert que compare el JSON crudo (Task 16).
-    /// </summary>
-    private static readonly JsonSerializerOptions JsonBody = new(JsonSerializerDefaults.Web)
-    {
-        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-    };
-
     private readonly HttpClient _http;
 
     public DocumentoApiClient(HttpClient http) => _http = http;
@@ -48,7 +36,7 @@ public sealed class DocumentoApiClient : IDocumentoAdministrativoService
     {
         var body = new CrearDocumentoBody(
             documento.Numero, documento.Anio, documento.Tipo, documento.FechaEmision, documento.Descripcion);
-        var response = await ApiErrores.EnviarAsync(() => _http.PostAsJsonAsync("documentos", body, JsonBody));
+        var response = await ApiErrores.EnviarAsync(() => _http.PostAsJsonAsync("documentos", body));
         await ApiErrores.AsegurarExitoAsync(response);
 
         var creado = await response.Content.ReadFromJsonAsync<IdCreado>()
@@ -59,7 +47,7 @@ public sealed class DocumentoApiClient : IDocumentoAdministrativoService
     public async Task EditarAsync(int id, DatosEdicionDocumento datos)
     {
         var body = new EditarDocumentoBody(datos.Numero, datos.Anio, datos.Tipo, datos.FechaEmision, datos.Descripcion);
-        var response = await ApiErrores.EnviarAsync(() => _http.PutAsJsonAsync($"documentos/{id}", body, JsonBody));
+        var response = await ApiErrores.EnviarAsync(() => _http.PutAsJsonAsync($"documentos/{id}", body));
         await ApiErrores.AsegurarExitoAsync(response);
     }
 
@@ -109,21 +97,21 @@ public sealed class DocumentoApiClient : IDocumentoAdministrativoService
     public async Task AgregarNotaAsync(int id, string texto)
     {
         var response = await ApiErrores.EnviarAsync(() =>
-            _http.PostAsJsonAsync($"documentos/{id}/notas", new AgregarNotaDocumentoBody(texto), JsonBody));
+            _http.PostAsJsonAsync($"documentos/{id}/notas", new AgregarNotaDocumentoBody(texto)));
         await ApiErrores.AsegurarExitoAsync(response);
     }
 
     public async Task AnularAsync(int id, string motivo)
     {
         var response = await ApiErrores.EnviarAsync(() =>
-            _http.PostAsJsonAsync($"documentos/{id}/anular", new MotivoBody(motivo), JsonBody));
+            _http.PostAsJsonAsync($"documentos/{id}/anular", new MotivoBody(motivo)));
         await ApiErrores.AsegurarExitoAsync(response);
     }
 
     public async Task ReabrirAsync(int id, string motivo)
     {
         var response = await ApiErrores.EnviarAsync(() =>
-            _http.PostAsJsonAsync($"documentos/{id}/reabrir", new MotivoBody(motivo), JsonBody));
+            _http.PostAsJsonAsync($"documentos/{id}/reabrir", new MotivoBody(motivo)));
         await ApiErrores.AsegurarExitoAsync(response);
     }
 

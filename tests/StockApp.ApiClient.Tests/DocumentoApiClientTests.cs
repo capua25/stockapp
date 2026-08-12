@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using StockApp.ApiClient;
 using StockApp.ApiClient.Tests.TestInfra;
 using StockApp.Application.Documentos;
@@ -160,7 +161,8 @@ public class DocumentoApiClientTests
 
         Assert.Equal(HttpMethod.Post, fake.UltimaRequest!.Method);
         Assert.Equal("/documentos/5/anular", fake.UltimaRequest.RequestUri!.AbsolutePath);
-        Assert.Contains("\"motivo\":\"el interesado desistió\"", fake.UltimoBody);
+        var motivo = JsonDocument.Parse(fake.UltimoBody!).RootElement.GetProperty("motivo").GetString();
+        Assert.Equal("el interesado desistió", motivo);
     }
 
     [Fact]
