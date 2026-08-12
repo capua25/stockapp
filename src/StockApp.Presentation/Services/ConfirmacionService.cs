@@ -68,4 +68,32 @@ public class ConfirmacionService : IConfirmacionService
         var dialog = new MensajeDialog(mensaje);
         await dialog.ShowDialog(owner);
     }
+
+    /// <inheritdoc />
+    public Task<string?> PedirTextoAsync(string titulo, string mensaje)
+    {
+        // Mismo criterio defensivo que PreguntarAsync/InformarAsync.
+        if (AvaloniaApp.Current is null)
+            return Task.FromResult<string?>(null);
+
+        return Dispatcher.UIThread.InvokeAsync(() => MostrarPedirTextoAsync(titulo, mensaje));
+    }
+
+    private static async Task<string?> MostrarPedirTextoAsync(string titulo, string mensaje)
+    {
+        var lifetime = AvaloniaApp.Current?.ApplicationLifetime
+            as IClassicDesktopStyleApplicationLifetime;
+
+        var owner = lifetime?.MainWindow;
+
+        if (owner is null)
+        {
+            // No hay ventana principal disponible: rechazar de forma segura (equivale a cancelar).
+            return null;
+        }
+
+        var dialog = new PedirTextoDialog(titulo, mensaje);
+        var resultado = await dialog.ShowDialog<string?>(owner);
+        return resultado;
+    }
 }

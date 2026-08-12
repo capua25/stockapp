@@ -1,0 +1,48 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="220"
+        x:Class="StockApp.Presentation.Views.Dialogs.PedirTextoDialog"
+        Title="Ingresar motivo"
+        Width="400"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        ShowInTaskbar="False">
+
+    <Border Padding="24">
+        <StackPanel Spacing="12">
+
+            <TextBlock x:Name="MensajeText"
+                       TextWrapping="Wrap"
+                       FontSize="14" />
+
+            <TextBox x:Name="TextoTextBox"
+                     AcceptsReturn="True"
+                     Height="80"
+                     Watermark="Escriba el motivo" />
+
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Right"
+                        Spacing="8"
+                        Margin="0,8,0,0">
+
+                <Button x:Name="CancelarButton"
+                        Content="Cancelar"
+                        Classes="secondary"
+                        Width="100"
+                        Click="OnCancelarClick" />
+
+                <Button x:Name="AceptarButton"
+                        Content="Aceptar"
+                        Classes="primary"
+                        Width="100"
+                        Click="OnAceptarClick" />
+
+            </StackPanel>
+
+        </StackPanel>
+    </Border>
+
+</Window>

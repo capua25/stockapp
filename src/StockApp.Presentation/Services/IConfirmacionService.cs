@@ -24,4 +24,15 @@ public interface IConfirmacionService
     /// </summary>
     /// <param name="mensaje">Texto del mensaje a mostrar.</param>
     Task InformarAsync(string mensaje);
+
+    /// <summary>
+    /// Pide al usuario un texto libre obligatorio (módulo Documentos, spec 2026-08-11:
+    /// anular y reabrir un documento administrativo exigen motivo). No valida "no vacío" —
+    /// esa validación vive en el servicio de Application (documentos.gestionar/administrar
+    /// pasa el texto crudo); este método solo recolecta lo que el usuario tipeó.
+    /// </summary>
+    /// <param name="titulo">Título de la ventana del diálogo.</param>
+    /// <param name="mensaje">Texto explicativo mostrado sobre el campo de texto.</param>
+    /// <returns>El texto tipeado, o null si el usuario canceló.</returns>
+    Task<string?> PedirTextoAsync(string titulo, string mensaje);
 }

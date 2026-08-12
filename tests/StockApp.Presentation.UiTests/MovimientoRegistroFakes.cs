@@ -90,6 +90,22 @@ internal sealed class ConfirmacionServiceFake : IConfirmacionService
         MensajesInformados.Add(mensaje);
         return Task.CompletedTask;
     }
+
+    /// <summary>
+    /// Módulo Documentos (spec 2026-08-11): valor que devuelve PedirTextoAsync. Default no
+    /// vacío para que los recorridos "felices" de Anular/Reabrir no necesiten configurarlo;
+    /// un test que quiera simular "el usuario canceló" lo pone en null explícitamente.
+    /// </summary>
+    public string? TextoAPedir { get; set; } = "Motivo de prueba";
+
+    /// <summary>Espía de qué título/mensaje se pidió, en el orden en que se pidieron.</summary>
+    public List<(string Titulo, string Mensaje)> PedidosDeTexto { get; } = new();
+
+    public Task<string?> PedirTextoAsync(string titulo, string mensaje)
+    {
+        PedidosDeTexto.Add((titulo, mensaje));
+        return Task.FromResult(TextoAPedir);
+    }
 }
 
 /// <summary>
