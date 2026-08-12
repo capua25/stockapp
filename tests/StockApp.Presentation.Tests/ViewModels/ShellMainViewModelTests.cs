@@ -436,6 +436,39 @@ public class ShellMainViewModelTests
     }
 
     [Fact]
+    public async Task Navegacion_RefrescaPermisos_NotificaPuedeGestionarDocumentos()
+    {
+        var permisos = new HashSet<string>();
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Operador);
+        sessionMock.Setup(s => s.PermisosActuales).Returns(() => permisos);
+
+        var authMock = new Mock<IAuthService>();
+        authMock.Setup(a => a.ObtenerPermisosPropiosAsync()).ReturnsAsync(() =>
+        {
+            permisos.Add(Permisos.GestionarDocumentos);
+            return (IReadOnlySet<string>)permisos;
+        });
+
+        var navMock = new Mock<INavigationService>();
+        var vm = new ShellMainViewModel(
+            sessionMock.Object, navMock.Object, Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
+            Mock.Of<IConfirmacionService>(), authMock.Object);
+
+        Assert.False(vm.PuedeGestionarDocumentos);
+
+        var propiedadesNotificadas = new List<string?>();
+        vm.PropertyChanged += (_, e) => propiedadesNotificadas.Add(e.PropertyName);
+
+        navMock.Raise(n => n.Cambiado += null);
+        await vm._tareaRefrescoPermisos;
+
+        authMock.Verify(a => a.ObtenerPermisosPropiosAsync(), Times.Once);
+        Assert.Contains(nameof(ShellMainViewModel.PuedeGestionarDocumentos), propiedadesNotificadas);
+        Assert.True(vm.PuedeGestionarDocumentos);
+    }
+
+    [Fact]
     public async Task Navegacion_SiElRefrescoFalla_NoRompeYElTaskNuncaLanza()
     {
         var sessionMock = new Mock<ICurrentSession>();
@@ -464,6 +497,7 @@ public class ShellMainViewModelTests
     [InlineData(nameof(ShellMainViewModel.PuedeGestionarProductos), Permisos.GestionarProductos)]
     [InlineData(nameof(ShellMainViewModel.PuedeRegistrarMovimientos), Permisos.RegistrarMovimientos)]
     [InlineData(nameof(ShellMainViewModel.PuedeGestionarTareas), Permisos.GestionarTareas)]
+    [InlineData(nameof(ShellMainViewModel.PuedeGestionarDocumentos), Permisos.GestionarDocumentos)]
     [InlineData(nameof(ShellMainViewModel.PuedeVerFinanzas), Permisos.VerFinanzas)]
     [InlineData(nameof(ShellMainViewModel.PuedeGestionarMaestrosFinanzas), Permisos.GestionarMaestrosFinanzas)]
     [InlineData(nameof(ShellMainViewModel.PuedeGestionarTablasMaestras), Permisos.GestionarTablasMaestras)]
@@ -486,6 +520,7 @@ public class ShellMainViewModelTests
     [InlineData(nameof(ShellMainViewModel.PuedeGestionarProductos), Permisos.GestionarProductos)]
     [InlineData(nameof(ShellMainViewModel.PuedeRegistrarMovimientos), Permisos.RegistrarMovimientos)]
     [InlineData(nameof(ShellMainViewModel.PuedeGestionarTareas), Permisos.GestionarTareas)]
+    [InlineData(nameof(ShellMainViewModel.PuedeGestionarDocumentos), Permisos.GestionarDocumentos)]
     [InlineData(nameof(ShellMainViewModel.PuedeVerFinanzas), Permisos.VerFinanzas)]
     [InlineData(nameof(ShellMainViewModel.PuedeGestionarMaestrosFinanzas), Permisos.GestionarMaestrosFinanzas)]
     [InlineData(nameof(ShellMainViewModel.PuedeGestionarTablasMaestras), Permisos.GestionarTablasMaestras)]
@@ -508,6 +543,7 @@ public class ShellMainViewModelTests
     [InlineData(nameof(ShellMainViewModel.PuedeGestionarProductos))]
     [InlineData(nameof(ShellMainViewModel.PuedeRegistrarMovimientos))]
     [InlineData(nameof(ShellMainViewModel.PuedeGestionarTareas))]
+    [InlineData(nameof(ShellMainViewModel.PuedeGestionarDocumentos))]
     [InlineData(nameof(ShellMainViewModel.PuedeVerFinanzas))]
     [InlineData(nameof(ShellMainViewModel.PuedeGestionarMaestrosFinanzas))]
     [InlineData(nameof(ShellMainViewModel.PuedeGestionarTablasMaestras))]
