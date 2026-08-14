@@ -1,3 +1,4 @@
+using System.Reflection;
 using Moq;
 using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
@@ -209,5 +210,111 @@ public class PanelPermisosViewModelTests
         await panel._tareaCarga;
 
         Assert.False(panel.GuardarCommand.CanExecute(null));
+    }
+
+    // ── Bug: panel desincronizado de AuthorizationService.PermisosConfigurables ─────────────
+    // Diagnóstico real (2026-08-14): Permisos.cs define 17 permisos, PermisosConfigurables
+    // calcula 12 asignables (17 - 5 estructurales Admin-only), pero este panel tenía 11
+    // checkboxes hardcodeados a mano. Faltaba Permisos.GestionarDocumentos. Agravante: un
+    // Operador NACE con documentos.gestionar (PermisosInicialesOperador lo incluye), pero
+    // GuardarAsync reconstruye la lista completa desde los checkboxes visibles — así que
+    // guardar CUALQUIER otro cambio se lo borraba en silencio. Evidencia real de la base:
+    // usuario Prueba8 (nunca editado desde el panel) lo tiene, opverif (editado una vez) no.
+
+    [Fact]
+    public async Task GuardarAsync_TildarTodosLosCheckboxes_EnviaExactamenteLosPermisosConfigurables()
+    {
+        // El guardián: si mañana se agrega un permiso nuevo a Permisos.Todos como configurable
+        // y se olvida el checkbox correspondiente en este ViewModel (el mismo agujero que dejó
+        // afuera a GestionarDocumentos), este test tiene que reventar con un mensaje que diga
+        // EXACTAMENTE cuál permiso falta — no alcanza con "algo falló". Deriva el nombre de
+        // propiedad esperado ("Permiso" + nombre del campo en Permisos) por reflection, en vez
+        // de mantener una lista de nombres a mano que podría desincronizarse del mismo modo.
+        var (panel, padre, svc) = Crear();
+        padre.UsuarioSeleccionado = Dto(9, RolUsuario.Operador);
+
+        var nombrePorValorDePermiso = typeof(Permisos)
+            .GetFields(BindingFlags.Public | BindingFlags.Static)
+            .Where(f => f.FieldType == typeof(string))
+            .ToDictionary(f => (string)f.GetValue(null)!, f => f.Name);
+
+        var propiedadesEncontradas = new List<PropertyInfo>();
+        var permisosSinCheckbox = new List<string>();
+        foreach (var permiso in AuthorizationService.PermisosConfigurables)
+        {
+            var nombreEsperado = "Permiso" + nombrePorValorDePermiso[permiso];
+            var prop = typeof(PanelPermisosViewModel).GetProperty(nombreEsperado, BindingFlags.Public | BindingFlags.Instance);
+            if (prop is null || prop.PropertyType != typeof(bool))
+                permisosSinCheckbox.Add($"{permiso} (esperaba una propiedad bool pública '{nombreEsperado}')");
+            else
+                propiedadesEncontradas.Add(prop);
+        }
+
+        Assert.True(permisosSinCheckbox.Count == 0,
+            "El panel no tiene checkbox para estos permisos configurables: " +
+            string.Join("; ", permisosSinCheckbox));
+
+        foreach (var prop in propiedadesEncontradas)
+            prop.SetValue(panel, true);
+
+        List<string>? enviados = null;
+        svc.Setup(s => s.GuardarPermisosAsync(9, It.IsAny<IReadOnlyList<string>>()))
+            .Callback<int, IReadOnlyList<string>>((_, permisos) => enviados = permisos.ToList())
+            .Returns(Task.CompletedTask);
+
+        await panel.GuardarCommand.ExecuteAsync(null);
+
+        var faltantesEnGuardar = AuthorizationService.PermisosConfigurables.Except(enviados ?? new List<string>()).ToList();
+        Assert.True(faltantesEnGuardar.Count == 0,
+            "GuardarAsync no envió estos permisos configurables aunque sus checkboxes estaban tildados: " +
+            string.Join(", ", faltantesEnGuardar));
+        Assert.Equal(AuthorizationService.PermisosConfigurables.Count, enviados?.Count ?? -1);
+    }
+
+    [Fact]
+    public async Task GuardarAsync_UsuarioYaTeniaGestionarDocumentos_NoLoBorraAlGuardarOtroCambio()
+    {
+        // Reproduce el agravante: cargar un usuario que YA tiene documentos.gestionar, cambiar
+        // un permiso ajeno (VerReportes) y guardar. Antes del fix, GuardarAsync reconstruye la
+        // lista desde los 11 checkboxes visibles y documentos.gestionar desaparece en silencio.
+        var (panel, padre, svc) = Crear();
+        svc.Setup(s => s.ObtenerPermisosAsync(9))
+            .ReturnsAsync(new List<string> { Permisos.GestionarDocumentos, Permisos.GestionarTareas });
+
+        padre.UsuarioSeleccionado = Dto(9, RolUsuario.Operador);
+        await panel._tareaCarga;
+
+        panel.PermisoVerReportes = true;
+
+        List<string>? enviados = null;
+        svc.Setup(s => s.GuardarPermisosAsync(9, It.IsAny<IReadOnlyList<string>>()))
+            .Callback<int, IReadOnlyList<string>>((_, permisos) => enviados = permisos.ToList())
+            .Returns(Task.CompletedTask);
+
+        await panel.GuardarCommand.ExecuteAsync(null);
+
+        Assert.Contains(Permisos.GestionarDocumentos, enviados ?? new List<string>());
+    }
+
+    [Fact]
+    public async Task PermisoGestionarDocumentos_IdaYVuelta_CargaYGuardaCorrectamente()
+    {
+        var (panel, padre, svc) = Crear();
+        svc.Setup(s => s.ObtenerPermisosAsync(9))
+            .ReturnsAsync(new List<string> { Permisos.GestionarDocumentos });
+
+        padre.UsuarioSeleccionado = Dto(9, RolUsuario.Operador);
+        await panel._tareaCarga;
+
+        Assert.True(panel.PermisoGestionarDocumentos);
+
+        List<string>? enviados = null;
+        svc.Setup(s => s.GuardarPermisosAsync(9, It.IsAny<IReadOnlyList<string>>()))
+            .Callback<int, IReadOnlyList<string>>((_, permisos) => enviados = permisos.ToList())
+            .Returns(Task.CompletedTask);
+
+        await panel.GuardarCommand.ExecuteAsync(null);
+
+        Assert.Contains(Permisos.GestionarDocumentos, enviados ?? new List<string>());
     }
 }
