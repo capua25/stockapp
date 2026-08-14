@@ -358,10 +358,18 @@ public partial class GastosViewModel : ViewModelBase
         nameof(GastoFila.Saldo), nameof(GastoFila.Estado),
     };
 
+    /// <summary>
+    /// El guardado a disco corre bajo <see cref="ExportacionCsv"/> (bugfix 2026-08-14): un fallo
+    /// DESPUÉS de elegir la ubicación (permiso denegado, disco lleno) se informa en vez de
+    /// escapar del comando sin observar.
+    /// </summary>
     [RelayCommand]
     private async Task ExportarCsvAsync()
     {
-        var contenido = _csvExporter.Exportar(Filas, ColumnasCsv);
-        await _guardado.GuardarTextoAsync(contenido, $"gastos-{DateTime.Now:yyyyMMdd}.csv");
+        await ExportacionCsv.EjecutarAsync(async () =>
+        {
+            var contenido = _csvExporter.Exportar(Filas, ColumnasCsv);
+            await _guardado.GuardarTextoAsync(contenido, $"gastos-{DateTime.Now:yyyyMMdd}.csv");
+        }, _confirmacion);
     }
 }

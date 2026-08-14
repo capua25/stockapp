@@ -33,6 +33,7 @@ public partial class AuditoriaLogViewModel : ViewModelBase
     private readonly IAuditoriaQueryService _servicio;
     private readonly ICsvExporter _csvExporter;
     private readonly IServicioGuardadoArchivo _guardado;
+    private readonly IConfirmacionService _confirmacion;
 
     [ObservableProperty]
     private int? _usuarioId;
@@ -52,11 +53,13 @@ public partial class AuditoriaLogViewModel : ViewModelBase
     public AuditoriaLogViewModel(
         IAuditoriaQueryService servicio,
         ICsvExporter csvExporter,
-        IServicioGuardadoArchivo guardado)
+        IServicioGuardadoArchivo guardado,
+        IConfirmacionService confirmacion)
     {
         _servicio = servicio;
         _csvExporter = csvExporter;
         _guardado = guardado;
+        _confirmacion = confirmacion;
     }
 
     /// <summary>Consulta el log de auditoría filtrado y puebla <see cref="Items"/>.</summary>
@@ -94,7 +97,9 @@ public partial class AuditoriaLogViewModel : ViewModelBase
 
     /// <summary>
     /// Exporta <see cref="Items"/> a CSV con el orden de columnas fijo y delega el guardado.
-    /// No hace nada si no hay datos cargados.
+    /// No hace nada si no hay datos cargados. El guardado a disco corre bajo
+    /// <see cref="ExportacionCsv"/> (bugfix 2026-08-14): un fallo DESPUÉS de elegir la ubicación
+    /// (permiso denegado, disco lleno) se informa en vez de escapar del comando sin observar.
     /// </summary>
     [RelayCommand]
     private async Task ExportarAsync()
@@ -102,7 +107,10 @@ public partial class AuditoriaLogViewModel : ViewModelBase
         if (Items.Count == 0)
             return;
 
-        var csv = _csvExporter.Exportar(Items, ColumnOrder);
-        await _guardado.GuardarTextoAsync(csv, "auditoria.csv");
+        await ExportacionCsv.EjecutarAsync(async () =>
+        {
+            var csv = _csvExporter.Exportar(Items, ColumnOrder);
+            await _guardado.GuardarTextoAsync(csv, "auditoria.csv");
+        }, _confirmacion);
     }
 }

@@ -23,6 +23,7 @@ public partial class ControlPoaViewModel : ViewModelBase
     private readonly INavigationService     _navigation;
     private readonly ICsvExporter           _csvExporter;
     private readonly IServicioGuardadoArchivo _guardado;
+    private readonly IConfirmacionService   _confirmacion;
 
     [ObservableProperty] private int _ejercicio = DateTime.UtcNow.Year;
 
@@ -35,12 +36,13 @@ public partial class ControlPoaViewModel : ViewModelBase
 
     public ControlPoaViewModel(
         IFinanzasVistasService service, INavigationService navigation,
-        ICsvExporter csvExporter, IServicioGuardadoArchivo guardado)
+        ICsvExporter csvExporter, IServicioGuardadoArchivo guardado, IConfirmacionService confirmacion)
     {
         _service     = service;
         _navigation  = navigation;
         _csvExporter = csvExporter;
         _guardado    = guardado;
+        _confirmacion = confirmacion;
 
         FilasView = new DataGridCollectionView(Filas);
     }
@@ -77,10 +79,18 @@ public partial class ControlPoaViewModel : ViewModelBase
         nameof(ControlPoaLineaDto.PorcentajeEjecucion), nameof(ControlPoaLineaDto.Sobregirada),
     };
 
+    /// <summary>
+    /// El guardado a disco corre bajo <see cref="ExportacionCsv"/> (bugfix 2026-08-14): un fallo
+    /// DESPUÉS de elegir la ubicación (permiso denegado, disco lleno) se informa en vez de
+    /// escapar del comando sin observar.
+    /// </summary>
     [RelayCommand]
     private async Task ExportarCsvAsync()
     {
-        var contenido = _csvExporter.Exportar(Filas, ColumnasCsv);
-        await _guardado.GuardarTextoAsync(contenido, $"control-poa-{Ejercicio}.csv");
+        await ExportacionCsv.EjecutarAsync(async () =>
+        {
+            var contenido = _csvExporter.Exportar(Filas, ColumnasCsv);
+            await _guardado.GuardarTextoAsync(contenido, $"control-poa-{Ejercicio}.csv");
+        }, _confirmacion);
     }
 }

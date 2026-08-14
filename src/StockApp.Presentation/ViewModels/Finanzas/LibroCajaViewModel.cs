@@ -20,6 +20,7 @@ public partial class LibroCajaViewModel : ViewModelBase
     private readonly IFinanzasVistasService _service;
     private readonly ICsvExporter           _csvExporter;
     private readonly IServicioGuardadoArchivo _guardado;
+    private readonly IConfirmacionService   _confirmacion;
 
     [ObservableProperty] private int _anio = DateTime.UtcNow.Year;
     [ObservableProperty] private int _mes = DateTime.UtcNow.Month;
@@ -36,11 +37,13 @@ public partial class LibroCajaViewModel : ViewModelBase
     public ObservableCollection<TotalPorClaveDto> TotalesPorFuente { get; } = new();
 
     public LibroCajaViewModel(
-        IFinanzasVistasService service, ICsvExporter csvExporter, IServicioGuardadoArchivo guardado)
+        IFinanzasVistasService service, ICsvExporter csvExporter, IServicioGuardadoArchivo guardado,
+        IConfirmacionService confirmacion)
     {
         _service     = service;
         _csvExporter = csvExporter;
         _guardado    = guardado;
+        _confirmacion = confirmacion;
 
         MovimientosView = new DataGridCollectionView(Movimientos);
     }
@@ -81,10 +84,18 @@ public partial class LibroCajaViewModel : ViewModelBase
         nameof(MovimientoCajaDto.Ingreso), nameof(MovimientoCajaDto.Egreso), nameof(MovimientoCajaDto.SaldoCorrido),
     };
 
+    /// <summary>
+    /// El guardado a disco corre bajo <see cref="ExportacionCsv"/> (bugfix 2026-08-14): un fallo
+    /// DESPUÉS de elegir la ubicación (permiso denegado, disco lleno) se informa en vez de
+    /// escapar del comando sin observar.
+    /// </summary>
     [RelayCommand]
     private async Task ExportarCsvAsync()
     {
-        var contenido = _csvExporter.Exportar(Movimientos, ColumnasCsv);
-        await _guardado.GuardarTextoAsync(contenido, $"libro-caja-{Anio:0000}-{Mes:00}.csv");
+        await ExportacionCsv.EjecutarAsync(async () =>
+        {
+            var contenido = _csvExporter.Exportar(Movimientos, ColumnasCsv);
+            await _guardado.GuardarTextoAsync(contenido, $"libro-caja-{Anio:0000}-{Mes:00}.csv");
+        }, _confirmacion);
     }
 }
