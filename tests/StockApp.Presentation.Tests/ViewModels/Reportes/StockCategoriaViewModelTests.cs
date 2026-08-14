@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Moq;
@@ -26,19 +27,23 @@ public class StockCategoriaViewModelTests
         StockCategoriaViewModel vm,
         Mock<IReporteStockService> servicioMock,
         Mock<ICsvExporter> exporterMock,
-        Mock<IServicioGuardadoArchivo> guardadoMock)
+        Mock<IServicioGuardadoArchivo> guardadoMock,
+        Mock<IConfirmacionService> confirmMock)
         Crear(IReadOnlyList<StockCategoriaDto>? items = null)
     {
         var servicioMock = new Mock<IReporteStockService>();
         var exporterMock = new Mock<ICsvExporter>();
         var guardadoMock = new Mock<IServicioGuardadoArchivo>();
+        var confirmMock = new Mock<IConfirmacionService>();
+        confirmMock.Setup(c => c.InformarAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
 
         servicioMock
             .Setup(s => s.ObtenerStockPorCategoriaAsync())
             .ReturnsAsync(items ?? new List<StockCategoriaDto>());
 
-        var vm = new StockCategoriaViewModel(servicioMock.Object, exporterMock.Object, guardadoMock.Object);
-        return (vm, servicioMock, exporterMock, guardadoMock);
+        var vm = new StockCategoriaViewModel(
+            servicioMock.Object, exporterMock.Object, guardadoMock.Object, confirmMock.Object);
+        return (vm, servicioMock, exporterMock, guardadoMock, confirmMock);
     }
 
     // ── tests ──────────────────────────────────────────────────────────────
@@ -47,7 +52,7 @@ public class StockCategoriaViewModelTests
     public async Task BuscarCommand_LlamaObtenerStockPorCategoriaAsync_YPopulaItems()
     {
         var items = new List<StockCategoriaDto> { CrearItem("Almacén"), CrearItem("Bebidas") };
-        var (vm, servicioMock, _, _) = Crear(items);
+        var (vm, servicioMock, _, _, _) = Crear(items);
 
         await vm.BuscarCommand.ExecuteAsync(null);
 
@@ -60,7 +65,7 @@ public class StockCategoriaViewModelTests
     public async Task CargarAsync_LlamaObtenerStockPorCategoriaAsync_YPopulaItems()
     {
         var items = new List<StockCategoriaDto> { CrearItem("Almacén"), CrearItem("Bebidas") };
-        var (vm, servicioMock, _, _) = Crear(items);
+        var (vm, servicioMock, _, _, _) = Crear(items);
 
         await vm.CargarAsync();
 
@@ -73,7 +78,7 @@ public class StockCategoriaViewModelTests
     public async Task ExportarCommand_LlamaExportarConItems()
     {
         var items = new List<StockCategoriaDto> { CrearItem() };
-        var (vm, _, exporterMock, guardadoMock) = Crear(items);
+        var (vm, _, exporterMock, guardadoMock, _) = Crear(items);
 
         var esperado = new[]
         {
@@ -96,5 +101,27 @@ public class StockCategoriaViewModelTests
             Times.Once);
 
         guardadoMock.Verify(g => g.GuardarTextoAsync(csvResultante, "stock-categoria.csv"), Times.Once);
+    }
+
+    // ── bugfix 2026-08-14: falla silenciosa al guardar el CSV ──────────────────
+
+    [Fact]
+    public async Task ExportarCommand_SiFallaGuardarTextoAsync_InformaYNoPropagaLaExcepcion()
+    {
+        var items = new List<StockCategoriaDto> { CrearItem() };
+        var (vm, _, exporterMock, guardadoMock, confirmMock) = Crear(items);
+        exporterMock
+            .Setup(e => e.Exportar(
+                It.IsAny<IEnumerable<StockCategoriaDto>>(),
+                It.IsAny<IReadOnlyList<string>>()))
+            .Returns("csv-generado");
+        guardadoMock
+            .Setup(g => g.GuardarTextoAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ThrowsAsync(new IOException("disco lleno"));
+
+        await vm.BuscarCommand.ExecuteAsync(null);
+        await vm.ExportarCommand.ExecuteAsync(null);
+
+        confirmMock.Verify(c => c.InformarAsync("No se pudo guardar el archivo. disco lleno"), Times.Once);
     }
 }

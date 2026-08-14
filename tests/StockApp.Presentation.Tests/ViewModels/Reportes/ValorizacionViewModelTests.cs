@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Moq;
@@ -30,7 +31,8 @@ public class ValorizacionViewModelTests
         ValorizacionViewModel vm,
         Mock<IReporteStockService> servicioMock,
         Mock<ICsvExporter> exporterMock,
-        Mock<IServicioGuardadoArchivo> guardadoMock)
+        Mock<IServicioGuardadoArchivo> guardadoMock,
+        Mock<IConfirmacionService> confirmMock)
         Crear(
             IReadOnlyList<ValorizacionItemDto>? items = null,
             ValorizacionTotalesDto? totales = null)
@@ -38,6 +40,8 @@ public class ValorizacionViewModelTests
         var servicioMock = new Mock<IReporteStockService>();
         var exporterMock = new Mock<ICsvExporter>();
         var guardadoMock = new Mock<IServicioGuardadoArchivo>();
+        var confirmMock = new Mock<IConfirmacionService>();
+        confirmMock.Setup(c => c.InformarAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
 
         servicioMock
             .Setup(s => s.ObtenerValorizacionAsync())
@@ -45,8 +49,9 @@ public class ValorizacionViewModelTests
                 items ?? new List<ValorizacionItemDto>(),
                 totales ?? new ValorizacionTotalesDto(0m, 0m)));
 
-        var vm = new ValorizacionViewModel(servicioMock.Object, exporterMock.Object, guardadoMock.Object);
-        return (vm, servicioMock, exporterMock, guardadoMock);
+        var vm = new ValorizacionViewModel(
+            servicioMock.Object, exporterMock.Object, guardadoMock.Object, confirmMock.Object);
+        return (vm, servicioMock, exporterMock, guardadoMock, confirmMock);
     }
 
     // ── tests ──────────────────────────────────────────────────────────────
@@ -56,7 +61,7 @@ public class ValorizacionViewModelTests
     {
         var items = new List<ValorizacionItemDto> { CrearItem(1), CrearItem(2) };
         var totales = new ValorizacionTotalesDto(TotalValorCosto: 100m, TotalValorVenta: 160m);
-        var (vm, servicioMock, _, _) = Crear(items, totales);
+        var (vm, servicioMock, _, _, _) = Crear(items, totales);
 
         await vm.BuscarCommand.ExecuteAsync(null);
 
@@ -73,7 +78,7 @@ public class ValorizacionViewModelTests
     {
         var items = new List<ValorizacionItemDto> { CrearItem(1), CrearItem(2) };
         var totales = new ValorizacionTotalesDto(TotalValorCosto: 100m, TotalValorVenta: 160m);
-        var (vm, servicioMock, _, _) = Crear(items, totales);
+        var (vm, servicioMock, _, _, _) = Crear(items, totales);
 
         await vm.CargarAsync();
 
@@ -89,7 +94,7 @@ public class ValorizacionViewModelTests
     public async Task ExportarCommand_LlamaExportarConOrdenColumnasFijo()
     {
         var items = new List<ValorizacionItemDto> { CrearItem(1) };
-        var (vm, _, exporterMock, guardadoMock) = Crear(items);
+        var (vm, _, exporterMock, guardadoMock, _) = Crear(items);
 
         var esperado = new[]
         {
@@ -120,7 +125,7 @@ public class ValorizacionViewModelTests
     [Fact]
     public async Task ExportarCommand_SinItems_NoExporta()
     {
-        var (vm, _, exporterMock, guardadoMock) = Crear(new List<ValorizacionItemDto>());
+        var (vm, _, exporterMock, guardadoMock, _) = Crear(new List<ValorizacionItemDto>());
 
         await vm.ExportarCommand.ExecuteAsync(null);
 
@@ -130,5 +135,29 @@ public class ValorizacionViewModelTests
         guardadoMock.Verify(
             g => g.GuardarTextoAsync(It.IsAny<string>(), It.IsAny<string>()),
             Times.Never);
+    }
+
+    // ── bugfix 2026-08-14: falla silenciosa al guardar el CSV ──────────────────
+
+    [Fact]
+    public async Task ExportarCommand_SiFallaGuardarTextoAsync_InformaYNoPropagaLaExcepcion()
+    {
+        var items = new List<ValorizacionItemDto> { CrearItem(1) };
+        var (vm, _, exporterMock, guardadoMock, confirmMock) = Crear(items);
+        exporterMock
+            .Setup(e => e.Exportar(
+                It.IsAny<IEnumerable<ValorizacionItemDto>>(),
+                It.IsAny<IReadOnlyList<string>>()))
+            .Returns("csv-generado");
+        guardadoMock
+            .Setup(g => g.GuardarTextoAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ThrowsAsync(new IOException("disco lleno"));
+
+        await vm.BuscarCommand.ExecuteAsync(null);
+
+        // No debe propagar: AsyncRelayCommand no observa excepciones no capturadas.
+        await vm.ExportarCommand.ExecuteAsync(null);
+
+        confirmMock.Verify(c => c.InformarAsync("No se pudo guardar el archivo. disco lleno"), Times.Once);
     }
 }

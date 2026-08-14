@@ -1,5 +1,6 @@
 using Avalonia.Collections;
 using Moq;
+using System.IO;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Finanzas;
 using StockApp.Presentation.Services;
@@ -10,7 +11,11 @@ namespace StockApp.Presentation.Tests.ViewModels.Finanzas;
 
 public class LibroCajaViewModelTests
 {
-    private static (LibroCajaViewModel vm, Mock<IFinanzasVistasService> svcMock)
+    private static (
+        LibroCajaViewModel vm,
+        Mock<IFinanzasVistasService> svcMock,
+        Mock<IServicioGuardadoArchivo> guardadoMock,
+        Mock<IConfirmacionService> confirmMock)
         Crear()
     {
         var svc = new Mock<IFinanzasVistasService>();
@@ -19,15 +24,17 @@ public class LibroCajaViewModelTests
             .Returns("csv");
         var guardado = new Mock<IServicioGuardadoArchivo>();
         guardado.Setup(g => g.GuardarTextoAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync(true);
+        var confirm = new Mock<IConfirmacionService>();
+        confirm.Setup(c => c.InformarAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
 
-        var vm = new LibroCajaViewModel(svc.Object, csv.Object, guardado.Object);
-        return (vm, svc);
+        var vm = new LibroCajaViewModel(svc.Object, csv.Object, guardado.Object, confirm.Object);
+        return (vm, svc, guardado, confirm);
     }
 
     [Fact]
     public async Task CargarAsync_PorDefecto_PideElMesActual()
     {
-        var (vm, svc) = Crear();
+        var (vm, svc, _, _) = Crear();
         svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()))
             .ReturnsAsync(new LibroCajaMesDto(
                 2026, 7, 100m, 100m,
@@ -44,7 +51,7 @@ public class LibroCajaViewModelTests
     [Fact]
     public async Task CargarAsync_ConMovimientos_PopulaLaGrilla()
     {
-        var (vm, svc) = Crear();
+        var (vm, svc, _, _) = Crear();
         svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()))
             .ReturnsAsync(new LibroCajaMesDto(
                 2026, 7, 0m, 500m,
@@ -64,7 +71,7 @@ public class LibroCajaViewModelTests
     [Fact]
     public async Task VerAnioCompleto_True_PideLibroCajaAnual()
     {
-        var (vm, svc) = Crear();
+        var (vm, svc, _, _) = Crear();
         svc.Setup(s => s.ObtenerLibroCajaAnualAsync(It.IsAny<int>()))
             .ReturnsAsync(new LibroCajaAnualDto(2026, new List<TotalMensualDto>(), new List<TotalPorClaveDto>()));
 
@@ -79,7 +86,7 @@ public class LibroCajaViewModelTests
     public async Task VerAnioCompleto_ExponeTotalesPorRubroDelAnio()
     {
         // spec §7.3: el toggle "Año completo" muestra "totales por mes y por rubro, sin gráficos".
-        var (vm, svc) = Crear();
+        var (vm, svc, _, _) = Crear();
         svc.Setup(s => s.ObtenerLibroCajaAnualAsync(It.IsAny<int>()))
             .ReturnsAsync(new LibroCajaAnualDto(
                 2026,
@@ -97,7 +104,7 @@ public class LibroCajaViewModelTests
     [Fact]
     public async Task FilasView_EsOrdenable()
     {
-        var (vm, svc) = Crear();
+        var (vm, svc, _, _) = Crear();
         svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()))
             .ReturnsAsync(new LibroCajaMesDto(
                 2026, 7, 0m, 0m, new List<MovimientoCajaDto>(), new List<TotalPorClaveDto>(), new List<TotalPorClaveDto>()));
@@ -111,7 +118,7 @@ public class LibroCajaViewModelTests
     [Fact]
     public async Task ExportarCsvAsync_LlamaAlExportadorYAlGuardado()
     {
-        var (vm, svc) = Crear();
+        var (vm, svc, _, _) = Crear();
         svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()))
             .ReturnsAsync(new LibroCajaMesDto(
                 2026, 7, 0m, 0m, new List<MovimientoCajaDto>(), new List<TotalPorClaveDto>(), new List<TotalPorClaveDto>()));
@@ -120,5 +127,24 @@ public class LibroCajaViewModelTests
         await vm.ExportarCsvCommand.ExecuteAsync(null);
 
         Assert.True(true); // el mock no lanza: cubre el camino feliz de Exportar + GuardarTextoAsync
+    }
+
+    // ── bugfix 2026-08-14: falla silenciosa al guardar el CSV ──────────────────
+
+    [Fact]
+    public async Task ExportarCsvCommand_SiFallaGuardarTextoAsync_InformaYNoPropagaLaExcepcion()
+    {
+        var (vm, svc, guardado, confirm) = Crear();
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new LibroCajaMesDto(
+                2026, 7, 0m, 0m, new List<MovimientoCajaDto>(), new List<TotalPorClaveDto>(), new List<TotalPorClaveDto>()));
+        guardado
+            .Setup(g => g.GuardarTextoAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ThrowsAsync(new IOException("disco lleno"));
+        await vm.CargarAsync();
+
+        await vm.ExportarCsvCommand.ExecuteAsync(null);
+
+        confirm.Verify(c => c.InformarAsync("No se pudo guardar el archivo. disco lleno"), Times.Once);
     }
 }

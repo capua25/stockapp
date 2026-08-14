@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Collections;
@@ -47,7 +48,8 @@ public class GastosViewModelTests
     private static (GastosViewModel vm,
                     Mock<IGastoService> svcMock,
                     Mock<INavigationService> navMock,
-                    Mock<IConfirmacionService> confirmMock)
+                    Mock<IConfirmacionService> confirmMock,
+                    Mock<IServicioGuardadoArchivo> guardadoMock)
         Crear(IReadOnlyList<Gasto>? gastos = null, IReadOnlyList<LineaPoa>? lineasPoa = null)
     {
         var svc = new Mock<IGastoService>();
@@ -79,7 +81,7 @@ public class GastosViewModelTests
         var vm = new GastosViewModel(
             svc.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
             nav.Object, confirm.Object, csv.Object, guardado.Object);
-        return (vm, svc, nav, confirm);
+        return (vm, svc, nav, confirm, guardado);
     }
 
     [Fact]
@@ -95,7 +97,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task CargarAsync_PopulaFilasConEstadoCalculado()
     {
-        var (vm, _, _, _) = Crear(new List<Gasto>
+        var (vm, _, _, _, _) = Crear(new List<Gasto>
         {
             GastoDe(1, "Pendiente de pago"),
             GastoDe(2, "Ya pagado", pagado: true),
@@ -114,7 +116,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task FilasView_EsOrdenable()
     {
-        var (vm, _, _, _) = Crear(new List<Gasto>
+        var (vm, _, _, _, _) = Crear(new List<Gasto>
         {
             GastoDe(1, "Pendiente de pago"),
             GastoDe(2, "Ya pagado", pagado: true),
@@ -130,7 +132,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task FilasView_TrasCargarAsync_ReflejaLosItemsDeFilas()
     {
-        var (vm, _, _, _) = Crear(new List<Gasto>
+        var (vm, _, _, _, _) = Crear(new List<Gasto>
         {
             GastoDe(1, "Pendiente de pago"),
             GastoDe(2, "Ya pagado", pagado: true),
@@ -144,7 +146,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task FiltroDeEstado_FiltraEnMemoria()
     {
-        var (vm, _, _, _) = Crear(new List<Gasto>
+        var (vm, _, _, _, _) = Crear(new List<Gasto>
         {
             GastoDe(1, "Pendiente de pago"),
             GastoDe(2, "Ya pagado", pagado: true),
@@ -161,7 +163,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task FiltrarCommand_PasaLosFiltrosAlServicio()
     {
-        var (vm, svc, _, _) = Crear();
+        var (vm, svc, _, _, _) = Crear();
         await vm.CargarAsync();
         vm.FechaDesde = new DateTime(2026, 7, 1);
         vm.ProveedorSeleccionado = vm.ProveedoresDisponibles[0];
@@ -179,7 +181,7 @@ public class GastosViewModelTests
         // fijando el Date elegido a medianoche UTC, SIN conversión real de huso horario
         // (el dominio de Finanzas no tiene componente horario): Desde = medianoche del
         // día, Hasta = el último tick del día elegido.
-        var (vm, svc, _, _) = Crear();
+        var (vm, svc, _, _, _) = Crear();
         await vm.CargarAsync();
         vm.FechaDesde = new DateTime(2026, 7, 1);
         vm.FechaHasta = new DateTime(2026, 7, 31);
@@ -199,7 +201,7 @@ public class GastosViewModelTests
         // ("850.5000") en vez del formato moneda es-UY que usan las grillas ("$ 850,50").
         var gasto = GastoDe(1, "Para anular");
         gasto.MontoTotal = 850.5000m;
-        var (vm, _, _, confirm) = Crear(new List<Gasto> { gasto });
+        var (vm, _, _, confirm, _) = Crear(new List<Gasto> { gasto });
         await vm.CargarAsync();
         vm.FilaSeleccionada = vm.Filas[0];
 
@@ -212,7 +214,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task AnularCommand_ConConfirmacion_AnulaYRecarga()
     {
-        var (vm, svc, _, _) = Crear(new List<Gasto> { GastoDe(1, "Para anular") });
+        var (vm, svc, _, _, _) = Crear(new List<Gasto> { GastoDe(1, "Para anular") });
         await vm.CargarAsync();
         vm.FilaSeleccionada = vm.Filas[0];
 
@@ -225,7 +227,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task AnularCommand_ErrorDeRegla_SeInformaSinCrashear()
     {
-        var (vm, svc, _, confirm) = Crear(new List<Gasto> { GastoDe(1, "Con pagos", pagado: true) });
+        var (vm, svc, _, confirm, _) = Crear(new List<Gasto> { GastoDe(1, "Con pagos", pagado: true) });
         svc.Setup(s => s.AnularAsync(1))
             .ThrowsAsync(new StockApp.Domain.Exceptions.ReglaDeNegocioException("Tiene pagos activos."));
         await vm.CargarAsync();
@@ -245,7 +247,7 @@ public class GastosViewModelTests
     {
         var gasto = GastoDe(1, "Para anular");
         gasto.TieneMovimientosDeStock = true;
-        var (vm, _, _, confirm) = Crear(new List<Gasto> { gasto });
+        var (vm, _, _, confirm, _) = Crear(new List<Gasto> { gasto });
         await vm.CargarAsync();
         vm.FilaSeleccionada = vm.Filas[0];
 
@@ -262,7 +264,7 @@ public class GastosViewModelTests
         // el dialogo NO debe insinuar que se va a descontar stock.
         var gasto = GastoDe(1, "Para anular");
         gasto.TieneMovimientosDeStock = false;
-        var (vm, _, _, confirm) = Crear(new List<Gasto> { gasto });
+        var (vm, _, _, confirm, _) = Crear(new List<Gasto> { gasto });
         await vm.CargarAsync();
         vm.FilaSeleccionada = vm.Filas[0];
 
@@ -280,7 +282,7 @@ public class GastosViewModelTests
         // a pasar en un solo PreguntarAsync — pago automatico Y descuento de stock juntos.
         var gasto = GastoDe(1, "Factura de luz");
         gasto.TieneMovimientosDeStock = true;
-        var (vm, svc, _, confirm) = Crear(new List<Gasto> { gasto });
+        var (vm, svc, _, confirm, _) = Crear(new List<Gasto> { gasto });
         svc.Setup(s => s.AnularAsync(1, false))
             .ThrowsAsync(new AnulacionRequierePagoAutomaticoConfirmadoException(1, 500m));
         await vm.CargarAsync();
@@ -299,7 +301,7 @@ public class GastosViewModelTests
     {
         var gasto = GastoDe(1, "Factura de luz");
         gasto.TieneMovimientosDeStock = true;
-        var (vm, svc, _, confirm) = Crear(new List<Gasto> { gasto });
+        var (vm, svc, _, confirm, _) = Crear(new List<Gasto> { gasto });
         svc.Setup(s => s.AnularAsync(1, false))
             .ThrowsAsync(new AnulacionRequierePagoAutomaticoConfirmadoException(1, 500m));
         confirm.Setup(c => c.PreguntarAsync(It.Is<string>(
@@ -319,7 +321,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task AnularCommand_PagoAutomatico_OfreceConfirmacionConMontoFormateado()
     {
-        var (vm, svc, _, confirm) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
+        var (vm, svc, _, confirm, _) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
         svc.Setup(s => s.AnularAsync(1, false))
             .ThrowsAsync(new AnulacionRequierePagoAutomaticoConfirmadoException(1, 850.5000m));
         await vm.CargarAsync();
@@ -334,7 +336,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task AnularCommand_PagoAutomatico_AlAceptar_ReintentaConfirmandoYAnula()
     {
-        var (vm, svc, _, confirm) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
+        var (vm, svc, _, confirm, _) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
         svc.Setup(s => s.AnularAsync(1, false))
             .ThrowsAsync(new AnulacionRequierePagoAutomaticoConfirmadoException(1, 500m));
         confirm.Setup(c => c.PreguntarAsync(It.Is<string>(s => s.Contains("pago automatico") || s.Contains("automático"))))
@@ -351,7 +353,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task AnularCommand_PagoAutomatico_AlRechazar_NoReintentaNiAnulaNada()
     {
-        var (vm, svc, _, confirm) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
+        var (vm, svc, _, confirm, _) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
         svc.Setup(s => s.AnularAsync(1, false))
             .ThrowsAsync(new AnulacionRequierePagoAutomaticoConfirmadoException(1, 500m));
         confirm.Setup(c => c.PreguntarAsync(It.Is<string>(s => s.Contains("pago automatico") || s.Contains("automático"))))
@@ -371,7 +373,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task AnularCommand_PagoManual_NoOfreceConfirmacion_MuestraElErrorTalCual()
     {
-        var (vm, svc, _, confirm) = Crear(new List<Gasto> { GastoDe(1, "Con pago manual", pagado: true) });
+        var (vm, svc, _, confirm, _) = Crear(new List<Gasto> { GastoDe(1, "Con pago manual", pagado: true) });
         svc.Setup(s => s.AnularAsync(1, false))
             .ThrowsAsync(new ReglaDeNegocioException(
                 "No se puede anular un gasto con pagos activos: primero anula los pagos."));
@@ -389,7 +391,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task AnularCommand_PagoAutomatico_FalloDeRedEnElReintento_NoQuedaDiciendoQueSeAnulo()
     {
-        var (vm, svc, _, confirm) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
+        var (vm, svc, _, confirm, _) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
         svc.Setup(s => s.AnularAsync(1, false))
             .ThrowsAsync(new AnulacionRequierePagoAutomaticoConfirmadoException(1, 500m));
         svc.Setup(s => s.AnularAsync(1, true))
@@ -410,7 +412,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task NuevoCommand_NavegaAlFormulario()
     {
-        var (vm, _, nav, _) = Crear();
+        var (vm, _, nav, _, _) = Crear();
 
         await vm.NuevoCommand.ExecuteAsync(null);
 
@@ -420,7 +422,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task EditarYPagos_ConSeleccion_NaveganConElGasto()
     {
-        var (vm, _, nav, _) = Crear(new List<Gasto> { GastoDe(1, "Editable") });
+        var (vm, _, nav, _, _) = Crear(new List<Gasto> { GastoDe(1, "Editable") });
         await vm.CargarAsync();
         vm.FilaSeleccionada = vm.Filas[0];
 
@@ -440,7 +442,7 @@ public class GastosViewModelTests
         // un día para atrás porque GastoFila.Fecha era DateTime y CsvExporter convierte TODO
         // DateTime a hora local. Fecha debe ser DateOnly: no hay instante que convertir.
         var fechaUtc = new DateTime(2026, 7, 16, 0, 0, 0, DateTimeKind.Utc);
-        var (vm, _, _, _) = Crear(new List<Gasto> { GastoDe(1, "Con fecha límite", fechaUtc: fechaUtc) });
+        var (vm, _, _, _, _) = Crear(new List<Gasto> { GastoDe(1, "Con fecha límite", fechaUtc: fechaUtc) });
 
         await vm.CargarAsync();
 
@@ -450,7 +452,7 @@ public class GastosViewModelTests
     [Fact]
     public void EditarCommand_SinSeleccion_EstaDeshabilitado()
     {
-        var (vm, _, _, _) = Crear();
+        var (vm, _, _, _, _) = Crear();
 
         Assert.False(vm.EditarCommand.CanExecute(null));
         Assert.False(vm.PagosCommand.CanExecute(null));
@@ -460,7 +462,7 @@ public class GastosViewModelTests
     [Fact]
     public void FiltrarPorLineaPoa_SeteaLineaPoaSeleccionada()
     {
-        var (vm, _, _, _) = Crear();
+        var (vm, _, _, _, _) = Crear();
         var linea = new LineaPoa { Id = 5, Nombre = "Rambla", Programa = "Obras", Ejercicio = 2026 };
 
         vm.FiltrarPorLineaPoa(linea);
@@ -477,7 +479,7 @@ public class GastosViewModelTests
         // combo de la View (bindeado por referencia) se mostraba en "Todas".
         var lineaDeOtraConsulta = new LineaPoa { Id = 5, Nombre = "Rambla", Programa = "Obras", Ejercicio = 2026 };
         var lineaDelCombo = new LineaPoa { Id = 5, Nombre = "Rambla", Programa = "Obras", Ejercicio = 2026 };
-        var (vm, _, _, _) = Crear(lineasPoa: new List<LineaPoa> { lineaDelCombo });
+        var (vm, _, _, _, _) = Crear(lineasPoa: new List<LineaPoa> { lineaDelCombo });
 
         vm.FiltrarPorLineaPoa(lineaDeOtraConsulta);
         await vm.CargarAsync();
@@ -491,7 +493,7 @@ public class GastosViewModelTests
     public async Task CargarAsync_SinFiltroPrevio_LineaPoaSeleccionadaQuedaNull()
     {
         // Flujo normal: abrir Gastos sin venir de Control POA debe seguir mostrando "Todas".
-        var (vm, _, _, _) = Crear(lineasPoa: new List<LineaPoa>
+        var (vm, _, _, _, _) = Crear(lineasPoa: new List<LineaPoa>
         {
             new() { Id = 1, Nombre = "Rambla", Programa = "Obras", Ejercicio = 2026 },
         });
@@ -499,5 +501,21 @@ public class GastosViewModelTests
         await vm.CargarAsync();
 
         Assert.Null(vm.LineaPoaSeleccionada);
+    }
+
+    // ── bugfix 2026-08-14: falla silenciosa al guardar el CSV ──────────────────
+
+    [Fact]
+    public async Task ExportarCsvCommand_SiFallaGuardarTextoAsync_InformaYNoPropagaLaExcepcion()
+    {
+        var (vm, _, _, confirm, guardado) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
+        guardado
+            .Setup(g => g.GuardarTextoAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ThrowsAsync(new IOException("disco lleno"));
+        await vm.CargarAsync();
+
+        await vm.ExportarCsvCommand.ExecuteAsync(null);
+
+        confirm.Verify(c => c.InformarAsync("No se pudo guardar el archivo. disco lleno"), Times.Once);
     }
 }

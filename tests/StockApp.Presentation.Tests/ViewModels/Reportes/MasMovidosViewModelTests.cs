@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Moq;
@@ -27,20 +28,24 @@ public class MasMovidosViewModelTests
         MasMovidosViewModel vm,
         Mock<IReporteStockService> servicioMock,
         Mock<ICsvExporter> exporterMock,
-        Mock<IServicioGuardadoArchivo> guardadoMock)
+        Mock<IServicioGuardadoArchivo> guardadoMock,
+        Mock<IConfirmacionService> confirmMock)
         Crear(IReadOnlyList<MasMovidoDto>? items = null)
     {
         var servicioMock = new Mock<IReporteStockService>();
         var exporterMock = new Mock<ICsvExporter>();
         var guardadoMock = new Mock<IServicioGuardadoArchivo>();
+        var confirmMock = new Mock<IConfirmacionService>();
+        confirmMock.Setup(c => c.InformarAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
 
         servicioMock
             .Setup(s => s.ObtenerMasMovidosAsync(
                 It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<int>()))
             .ReturnsAsync(items ?? new List<MasMovidoDto>());
 
-        var vm = new MasMovidosViewModel(servicioMock.Object, exporterMock.Object, guardadoMock.Object);
-        return (vm, servicioMock, exporterMock, guardadoMock);
+        var vm = new MasMovidosViewModel(
+            servicioMock.Object, exporterMock.Object, guardadoMock.Object, confirmMock.Object);
+        return (vm, servicioMock, exporterMock, guardadoMock, confirmMock);
     }
 
     // ── tests ──────────────────────────────────────────────────────────────
@@ -49,7 +54,7 @@ public class MasMovidosViewModelTests
     public async Task BuscarCommand_LlamaObtenerMasMovidosAsync_ConTopN()
     {
         var items = new List<MasMovidoDto> { CrearItem(1), CrearItem(2) };
-        var (vm, servicioMock, _, _) = Crear(items);
+        var (vm, servicioMock, _, _, _) = Crear(items);
 
         // TopN arranca en 20 por default — verificamos que se respeta.
         var desde = new DateTime(2026, 1, 1);
@@ -79,7 +84,7 @@ public class MasMovidosViewModelTests
     [Fact]
     public async Task BuscarCommand_ConFechaLocal_ConvierteAUtcAntesDeDelegarAlServicio()
     {
-        var (vm, servicioMock, _, _) = Crear();
+        var (vm, servicioMock, _, _, _) = Crear();
         var fechaLocal = new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Unspecified);
         vm.FechaDesde = fechaLocal;
 
@@ -94,7 +99,7 @@ public class MasMovidosViewModelTests
     public async Task CargarAsync_LlamaObtenerMasMovidosAsync_YPopulaItems()
     {
         var items = new List<MasMovidoDto> { CrearItem(1), CrearItem(2) };
-        var (vm, servicioMock, _, _) = Crear(items);
+        var (vm, servicioMock, _, _, _) = Crear(items);
 
         await vm.CargarAsync();
 
@@ -108,7 +113,7 @@ public class MasMovidosViewModelTests
     public async Task ExportarCommand_LlamaExportarConItems()
     {
         var items = new List<MasMovidoDto> { CrearItem() };
-        var (vm, _, exporterMock, guardadoMock) = Crear(items);
+        var (vm, _, exporterMock, guardadoMock, _) = Crear(items);
 
         var esperado = new[]
         {
@@ -136,7 +141,7 @@ public class MasMovidosViewModelTests
     [Fact]
     public async Task BuscarCommand_ConRangoInvertido_NoLlamaAlServicioYSeteaMensajeError()
     {
-        var (vm, servicioMock, _, _) = Crear();
+        var (vm, servicioMock, _, _, _) = Crear();
 
         vm.FechaDesde = new DateTime(2026, 2, 1);
         vm.FechaHasta = new DateTime(2026, 1, 1);
@@ -151,7 +156,7 @@ public class MasMovidosViewModelTests
     [Fact]
     public async Task BuscarCommand_ConRangoValido_LimpiaMensajeError()
     {
-        var (vm, servicioMock, _, _) = Crear();
+        var (vm, servicioMock, _, _, _) = Crear();
 
         vm.FechaDesde = new DateTime(2026, 1, 1);
         vm.FechaHasta = new DateTime(2026, 1, 31);
@@ -161,5 +166,27 @@ public class MasMovidosViewModelTests
         Assert.True(string.IsNullOrEmpty(vm.MensajeError));
         servicioMock.Verify(s => s.ObtenerMasMovidosAsync(
             It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<int>()), Times.Once);
+    }
+
+    // ── bugfix 2026-08-14: falla silenciosa al guardar el CSV ──────────────────
+
+    [Fact]
+    public async Task ExportarCommand_SiFallaGuardarTextoAsync_InformaYNoPropagaLaExcepcion()
+    {
+        var items = new List<MasMovidoDto> { CrearItem() };
+        var (vm, _, exporterMock, guardadoMock, confirmMock) = Crear(items);
+        exporterMock
+            .Setup(e => e.Exportar(
+                It.IsAny<IEnumerable<MasMovidoDto>>(),
+                It.IsAny<IReadOnlyList<string>>()))
+            .Returns("csv-generado");
+        guardadoMock
+            .Setup(g => g.GuardarTextoAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ThrowsAsync(new IOException("disco lleno"));
+
+        await vm.BuscarCommand.ExecuteAsync(null);
+        await vm.ExportarCommand.ExecuteAsync(null);
+
+        confirmMock.Verify(c => c.InformarAsync("No se pudo guardar el archivo. disco lleno"), Times.Once);
     }
 }
