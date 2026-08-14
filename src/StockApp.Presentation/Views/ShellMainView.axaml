@@ -10,8 +10,11 @@
 
     <Grid ColumnDefinitions="232,*" Background="{DynamicResource FondoBrush}">
 
-        <!-- Menú lateral: verde bosque oscuro sólido, look dashboard SaaS -->
+        <!-- Menú lateral: verde bosque oscuro sólido, look dashboard SaaS.
+             Classes="sidebar" es lo que activa la variante de texto blanco de
+             Button.ghost (ver "Border.sidebar Button.ghost" en Controls.axaml) -->
         <Border Grid.Column="0"
+                Classes="sidebar"
                 Background="{DynamicResource SidebarBrush}"
                 Padding="8">
             <DockPanel>

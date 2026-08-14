@@ -81,28 +81,57 @@
         <Setter Property="BorderBrush" Value="{DynamicResource DeshabilitadoBordeBrush}" />
     </Style>
 
-    <!-- ── Button: ghost (sidebar) ──────────────────────────────────────────
-         Único uso actual: ítems de menú del sidebar (ShellMainView), que
-         ahora tiene fondo VERDE BOSQUE OSCURO (SidebarBrush). Por eso .ghost
-         pasa de estar pensado para fondo claro (Foreground oscuro + hover
-         BrandSuave) a texto blanco + overlays translúcidos de blanco. Si en
-         el futuro .ghost se usa también sobre fondo claro (toolbar), esto
-         necesitará una variante separada. -->
+    <!-- ── Button: ghost (neutro, fondo claro) ──────────────────────────────
+         Variante DEFAULT, pensada para fondo claro (Border.card / Superficie
+         blanca). Hasta acá .ghost estaba diseñado EXCLUSIVAMENTE para el
+         sidebar (fondo verde bosque oscuro) con texto blanco: ese mismo
+         estilo se reusó sobre fondo claro (DocumentoListView, TareaListView,
+         InicioView, NuevaImportacionView) y dio texto blanco sobre blanco:
+         contraste 1:1, botones invisibles aunque clickeables. Ahora
+         Button.ghost es la variante neutra (texto TextoPrimarioBrush, hover/
+         pressed con overlay OSCURO translúcido) y la variante de sidebar se
+         aplica más abajo vía el selector de descendencia "Border.sidebar
+         Button.ghost": no hace falta tocar los ~26 usos de ShellMainView.axaml
+         ni los 11 usos rotos uno por uno: el tema los arregla a todos. -->
     <Style Selector="Button.ghost">
         <Setter Property="Background" Value="Transparent" />
-        <Setter Property="Foreground" Value="{DynamicResource SidebarTextoBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextoPrimarioBrush}" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="CornerRadius" Value="6" />
         <Setter Property="Padding" Value="12,8" />
         <Setter Property="HorizontalContentAlignment" Value="Left" />
     </Style>
     <Style Selector="Button.ghost:pointerover">
-        <Setter Property="Background" Value="{DynamicResource SidebarHoverOverlayBrush}" />
+        <Setter Property="Background" Value="{DynamicResource GhostHoverOverlayBrush}" />
     </Style>
     <Style Selector="Button.ghost:pressed">
-        <Setter Property="Background" Value="{DynamicResource SidebarPressedOverlayBrush}" />
+        <Setter Property="Background" Value="{DynamicResource GhostPressedOverlayBrush}" />
     </Style>
     <Style Selector="Button.ghost:disabled">
+        <Setter Property="Foreground" Value="{DynamicResource DeshabilitadoTextoBrush}" />
+        <Setter Property="Opacity" Value="0.5" />
+    </Style>
+
+    <!-- ── Button: ghost (sidebar, fondo oscuro) ─────────────────────────────
+         Selector de descendencia: cualquier Button.ghost DENTRO de un
+         Border.sidebar (ver ShellMainView.axaml: el Border con
+         Background="{DynamicResource SidebarBrush}" tiene Classes="sidebar")
+         recibe texto blanco + overlays translúcidos de blanco, sin necesidad
+         de agregar Classes en cada uno de los ~26 botones del menú. Mayor
+         especificidad que "Button.ghost" a secas (2 selectores simples más:
+         el tipo y la clase del Border ancestro), así que gana sin importar
+         el orden de declaración: mismo criterio que Button vs Button.primary
+         más arriba en este archivo. -->
+    <Style Selector="Border.sidebar Button.ghost">
+        <Setter Property="Foreground" Value="{DynamicResource SidebarTextoBrush}" />
+    </Style>
+    <Style Selector="Border.sidebar Button.ghost:pointerover">
+        <Setter Property="Background" Value="{DynamicResource SidebarHoverOverlayBrush}" />
+    </Style>
+    <Style Selector="Border.sidebar Button.ghost:pressed">
+        <Setter Property="Background" Value="{DynamicResource SidebarPressedOverlayBrush}" />
+    </Style>
+    <Style Selector="Border.sidebar Button.ghost:disabled">
         <Setter Property="Foreground" Value="{DynamicResource SidebarTextoBrush}" />
         <Setter Property="Opacity" Value="0.5" />
     </Style>
@@ -111,7 +140,7 @@
          seminegrita + barra izquierda de acento en verde brillante (#4ADE80,
          el único lugar donde ese verde vivo se usa como color plano, no como
          fondo de texto, así que no tiene restricción de contraste 4.5:1). -->
-    <Style Selector="Button.ghost.active">
+    <Style Selector="Border.sidebar Button.ghost.active">
         <Setter Property="Background" Value="{DynamicResource SidebarActivoBrush}" />
         <Setter Property="Foreground" Value="{DynamicResource SidebarTextoBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource SidebarAccentBrush}" />

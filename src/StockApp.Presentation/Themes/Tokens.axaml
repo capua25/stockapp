@@ -49,6 +49,14 @@
     <Color x:Key="ColorSidebarHoverOverlay">#22FFFFFF</Color>
     <Color x:Key="ColorSidebarPressedOverlay">#33FFFFFF</Color>
 
+    <!-- Overlays translúcidos para hover/pressed de Button.ghost sobre fondo
+         CLARO (variante default, fuera del sidebar): mismos escalones de
+         opacidad que ColorSidebarHoverOverlay/PressedOverlay (0x22/0x33) pero
+         con base oscura (ColorTextoPrimario) en vez de blanca, para que el
+         overlay oscurezca en vez de aclarar un fondo blanco/Superficie. -->
+    <Color x:Key="ColorGhostHoverOverlay">#220F172A</Color>
+    <Color x:Key="ColorGhostPressedOverlay">#330F172A</Color>
+
     <!-- ── Brushes (lo que efectivamente se referencia desde XAML) ────────── -->
     <SolidColorBrush x:Key="BrandBrush" Color="{StaticResource ColorBrand}" />
     <SolidColorBrush x:Key="BrandHoverBrush" Color="{StaticResource ColorBrandHover}" />
@@ -79,5 +87,8 @@
     <SolidColorBrush x:Key="SidebarTextoBrush" Color="{StaticResource ColorSidebarTexto}" />
     <SolidColorBrush x:Key="SidebarHoverOverlayBrush" Color="{StaticResource ColorSidebarHoverOverlay}" />
     <SolidColorBrush x:Key="SidebarPressedOverlayBrush" Color="{StaticResource ColorSidebarPressedOverlay}" />
+
+    <SolidColorBrush x:Key="GhostHoverOverlayBrush" Color="{StaticResource ColorGhostHoverOverlay}" />
+    <SolidColorBrush x:Key="GhostPressedOverlayBrush" Color="{StaticResource ColorGhostPressedOverlay}" />
 
 </ResourceDictionary>
