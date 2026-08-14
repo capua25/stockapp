@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
+using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Services;
 
 namespace StockApp.Presentation.ViewModels.Administracion;
@@ -20,6 +21,7 @@ namespace StockApp.Presentation.ViewModels.Administracion;
 public partial class PanelPermisosViewModel : ViewModelBase
 {
     private readonly IUsuarioService _usuarios;
+    private readonly IConfirmacionService _confirmacion;
 
     /// <summary>Poblado por Conectar(), llamado una única vez desde el constructor de
     /// UsuariosAdminViewModel — ver Decisión de diseño 2 (ViewLocator exige Views sin
@@ -126,9 +128,10 @@ public partial class PanelPermisosViewModel : ViewModelBase
         }
     }
 
-    public PanelPermisosViewModel(IUsuarioService usuarios)
+    public PanelPermisosViewModel(IUsuarioService usuarios, IConfirmacionService confirmacion)
     {
         _usuarios = usuarios;
+        _confirmacion = confirmacion;
     }
 
     /// <summary>Conecta este panel con el UsuariosAdminViewModel que lo hostea. Llamado UNA
@@ -242,6 +245,25 @@ public partial class PanelPermisosViewModel : ViewModelBase
         if (PermisoVerReportes) seleccionados.Add(Permisos.VerReportes);
         if (PermisoGestionarDocumentos) seleccionados.Add(Permisos.GestionarDocumentos);
 
-        await _usuarios.GuardarPermisosAsync(_padre.UsuarioSeleccionado.Id, seleccionados);
+        // Feedback faltante (reporte de uso real 2026-08-14): guardar no mostraba NINGÚN
+        // mensaje, ni de éxito ni de error — quedaba indistinguible de una falla silenciosa.
+        // Mismo mecanismo que usan CambiarRolAsync/CambiarContrasenaAsync en
+        // UsuariosAdminViewModel (el padre de este panel): IConfirmacionService.InformarAsync
+        // para ambos casos, en vez de un MensajeExito propio — es el único patrón de
+        // confirmación puntual que existe en toda la app.
+        try
+        {
+            await _usuarios.GuardarPermisosAsync(_padre.UsuarioSeleccionado.Id, seleccionados);
+            await _confirmacion.InformarAsync("Permisos guardados.");
+        }
+        // Mismo criterio que BajaAsync/CambiarRolAsync: un 403 ya dispara el aviso central en
+        // App.axaml.cs, mostrar acá ex.Message duplicaría el aviso para el mismo evento.
+        catch (UnauthorizedAccessException)
+        {
+        }
+        catch (Exception ex) when (ex is ReglaDeNegocioException or ArgumentException or EntidadNoEncontradaException)
+        {
+            await _confirmacion.InformarAsync(ex.Message);
+        }
     }
 }
