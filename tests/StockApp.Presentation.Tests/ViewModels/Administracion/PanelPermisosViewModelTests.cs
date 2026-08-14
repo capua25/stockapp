@@ -19,9 +19,21 @@ public class PanelPermisosViewModelTests
         var confirm = new Mock<StockApp.Presentation.Services.IConfirmacionService>();
         var session = new Mock<ICurrentSession>();
         session.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(1, "admin1", RolUsuario.Admin, null));
-        var panel = new PanelPermisosViewModel(svc.Object);
+        var panel = new PanelPermisosViewModel(svc.Object, confirm.Object);
         var padre = new UsuariosAdminViewModel(svc.Object, confirm.Object, panel, session.Object);
         return (panel, padre, svc);
+    }
+
+    private static (PanelPermisosViewModel panel, UsuariosAdminViewModel padre, Mock<IUsuarioService> svc,
+        Mock<StockApp.Presentation.Services.IConfirmacionService> confirm) CrearConConfirmacion()
+    {
+        var svc = new Mock<IUsuarioService>();
+        var confirm = new Mock<StockApp.Presentation.Services.IConfirmacionService>();
+        var session = new Mock<ICurrentSession>();
+        session.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(1, "admin1", RolUsuario.Admin, null));
+        var panel = new PanelPermisosViewModel(svc.Object, confirm.Object);
+        var padre = new UsuariosAdminViewModel(svc.Object, confirm.Object, panel, session.Object);
+        return (panel, padre, svc, confirm);
     }
 
     [Fact]
@@ -316,5 +328,38 @@ public class PanelPermisosViewModelTests
         await panel.GuardarCommand.ExecuteAsync(null);
 
         Assert.Contains(Permisos.GestionarDocumentos, enviados ?? new List<string>());
+    }
+
+    // ── Feedback faltante (reporte de uso real 2026-08-14): guardar permisos no mostraba
+    // NINGÚN mensaje de éxito ni de error — el patrón establecido en toda la app para
+    // confirmar una acción puntual es IConfirmacionService.InformarAsync (ver
+    // UsuariosAdminViewModel.CambiarContrasenaAsync: "Contraseña actualizada.", el mismo
+    // mecanismo usado tanto para éxito como para error en los comandos de esta pantalla).
+
+    [Fact]
+    public async Task GuardarAsync_Exitoso_InformaLaConfirmacion()
+    {
+        var (panel, padre, svc, confirm) = CrearConConfirmacion();
+        padre.UsuarioSeleccionado = Dto(9, RolUsuario.Operador);
+        svc.Setup(s => s.GuardarPermisosAsync(9, It.IsAny<IReadOnlyList<string>>()))
+            .Returns(Task.CompletedTask);
+
+        await panel.GuardarCommand.ExecuteAsync(null);
+
+        confirm.Verify(c => c.InformarAsync("Permisos guardados."), Times.Once);
+    }
+
+    [Fact]
+    public async Task GuardarAsync_Falla_InformaElErrorYNoElMensajeDeExito()
+    {
+        var (panel, padre, svc, confirm) = CrearConConfirmacion();
+        padre.UsuarioSeleccionado = Dto(9, RolUsuario.Operador);
+        svc.Setup(s => s.GuardarPermisosAsync(9, It.IsAny<IReadOnlyList<string>>()))
+            .ThrowsAsync(new StockApp.Domain.Exceptions.ReglaDeNegocioException("no se pudieron guardar los permisos"));
+
+        await panel.GuardarCommand.ExecuteAsync(null);
+
+        confirm.Verify(c => c.InformarAsync("no se pudieron guardar los permisos"), Times.Once);
+        confirm.Verify(c => c.InformarAsync("Permisos guardados."), Times.Never);
     }
 }

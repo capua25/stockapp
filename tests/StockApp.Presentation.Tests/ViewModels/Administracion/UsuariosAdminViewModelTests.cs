@@ -27,7 +27,7 @@ public class UsuariosAdminViewModelTests
         var confirm = new Mock<IConfirmacionService>();
         confirm.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(true);
         var session = CrearSesionAdmin();
-        var vm = new UsuariosAdminViewModel(svc.Object, confirm.Object, new PanelPermisosViewModel(svc.Object), session.Object);
+        var vm = new UsuariosAdminViewModel(svc.Object, confirm.Object, new PanelPermisosViewModel(svc.Object, confirm.Object), session.Object);
         return (vm, svc, confirm);
     }
 
@@ -197,7 +197,7 @@ public class UsuariosAdminViewModelTests
         var confirm = new Mock<IConfirmacionService>();
         confirm.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(false);
         var vm = new UsuariosAdminViewModel(
-            svc.Object, confirm.Object, new PanelPermisosViewModel(svc.Object), CrearSesionAdmin().Object);
+            svc.Object, confirm.Object, new PanelPermisosViewModel(svc.Object, confirm.Object), CrearSesionAdmin().Object);
         vm.UsuarioSeleccionado = Dto(2, RolUsuario.Operador);
         vm.NuevaContrasenaParaSeleccionado = "otraClave123";
 
