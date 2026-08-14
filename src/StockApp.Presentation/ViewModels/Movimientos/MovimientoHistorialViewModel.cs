@@ -8,7 +8,9 @@ using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
+using StockApp.Presentation.Services;
 
 namespace StockApp.Presentation.ViewModels.Movimientos;
 
@@ -32,6 +34,7 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
     private readonly IMovimientoStockService _service;
     private readonly INavigationService      _navigation;
     private readonly IProductoService        _productoService;
+    private readonly IConfirmacionService    _confirmacion;
 
     [ObservableProperty]
     private int? _filtroProductoId;
@@ -81,11 +84,13 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
     public MovimientoHistorialViewModel(
         IMovimientoStockService service,
         INavigationService navigation,
-        IProductoService productoService)
+        IProductoService productoService,
+        IConfirmacionService confirmacion)
     {
         _service         = service;
         _navigation      = navigation;
         _productoService = productoService;
+        _confirmacion    = confirmacion;
 
         ItemsView = new DataGridCollectionView(Items);
 
@@ -154,13 +159,32 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
             ? DateTime.SpecifyKind(fechaLocal.Value, DateTimeKind.Local).ToUniversalTime()
             : null;
 
+    /// <summary>
+    /// ProductoIdParaRecalcular se tipea a mano en un campo libre, sin relación con el filtro
+    /// activo de la grilla — si ese producto no está en el resultado filtrado (caso normal),
+    /// CargarAsync no cambia una sola fila y el click queda sin ninguna señal (reporte de uso
+    /// real). Mismo mecanismo que PanelPermisosViewModel.GuardarAsync: informa éxito y error
+    /// puntual vía IConfirmacionService.InformarAsync, silenciando UnauthorizedAccessException
+    /// porque el 403 ya lo avisa el manejo central de App.axaml.cs.
+    /// </summary>
     [RelayCommand]
     private async Task RecalcularAsync()
     {
         if (ProductoIdParaRecalcular is null)
             return;
 
-        await _service.RecalcularStockAsync(ProductoIdParaRecalcular.Value);
-        await CargarAsync();
+        try
+        {
+            await _service.RecalcularStockAsync(ProductoIdParaRecalcular.Value);
+            await CargarAsync();
+            await _confirmacion.InformarAsync("Stock recalculado.");
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+        catch (Exception ex) when (ex is ReglaDeNegocioException or ArgumentException or EntidadNoEncontradaException)
+        {
+            await _confirmacion.InformarAsync(ex.Message);
+        }
     }
 }
