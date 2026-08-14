@@ -13,7 +13,7 @@ namespace StockApp.Presentation.ViewModels.Administracion;
 
 /// <summary>
 /// Panel de permisos de la columna derecha de UsuariosAdminView (spec 2026-08-10, Task 12).
-/// 11 checkboxes agrupados por sección, algunos compuestos (tildan 2-3 permisos juntos) y
+/// 12 checkboxes agrupados por sección, algunos compuestos (tildan 2-3 permisos juntos) y
 /// algunos compartidos (bindeados a la MISMA propiedad cuando dos pantallas usan el mismo
 /// permiso — tildar uno tilda el otro en el acto, sin lógica extra que lo sincronice).
 /// </summary>
@@ -65,6 +65,12 @@ public partial class PanelPermisosViewModel : ViewModelBase
     // ── Tareas / Reportes ──────────────────────────────────────────────────
     [ObservableProperty] private bool _permisoGestionarTareas;
     [ObservableProperty] private bool _permisoVerReportes;
+
+    // ── Documentos ─────────────────────────────────────────────────────────
+    // Bugfix 2026-08-14: faltaba este checkbox — AuthorizationService.PermisosConfigurables
+    // ya contaba 12 permisos asignables, pero el panel solo exponía 11. AdministrarDocumentos
+    // NO tiene checkbox (es estructural Admin-only, igual que AdministrarTareas).
+    [ObservableProperty] private bool _permisoGestionarDocumentos;
 
     /// <summary>Crítico 2, capa b (review Task 13): estado explícito de "no se pudieron cargar
     /// los permisos" — un panel simplemente destildado no le avisa nada al Admin, y si aprieta
@@ -178,6 +184,7 @@ public partial class PanelPermisosViewModel : ViewModelBase
             PermisoRegistrarIngresos        = permisos.Contains(Permisos.RegistrarIngresos);
             PermisoGestionarTareas          = permisos.Contains(Permisos.GestionarTareas);
             PermisoVerReportes              = permisos.Contains(Permisos.VerReportes);
+            PermisoGestionarDocumentos      = permisos.Contains(Permisos.GestionarDocumentos);
         }
         catch (Exception)
         {
@@ -208,6 +215,7 @@ public partial class PanelPermisosViewModel : ViewModelBase
         PermisoRegistrarIngresos = false;
         PermisoGestionarTareas = false;
         PermisoVerReportes = false;
+        PermisoGestionarDocumentos = false;
     }
 
     /// <summary>Crítico 2, capa b: gatea GuardarCommand mientras MensajeError esté seteado
@@ -232,6 +240,7 @@ public partial class PanelPermisosViewModel : ViewModelBase
         if (PermisoRegistrarIngresos) seleccionados.Add(Permisos.RegistrarIngresos);
         if (PermisoGestionarTareas) seleccionados.Add(Permisos.GestionarTareas);
         if (PermisoVerReportes) seleccionados.Add(Permisos.VerReportes);
+        if (PermisoGestionarDocumentos) seleccionados.Add(Permisos.GestionarDocumentos);
 
         await _usuarios.GuardarPermisosAsync(_padre.UsuarioSeleccionado.Id, seleccionados);
     }
