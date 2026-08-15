@@ -57,6 +57,24 @@ public partial class InicioViewModel : ViewModelBase
     public bool PuedeVerReportes =>
         _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.VerReportes);
 
+    /// <summary>
+    /// Bug 2026-08-15: CargarAsync llamaba a GET /finanzas/calendario-pagos (que exige
+    /// Permisos.VerFinanzas, FinanzasVistasEndpoints) sin importar si el usuario tenía el
+    /// permiso -- el 403 resultante quedaba tragado por el catch genérico, dejando el aviso de
+    /// vencimientos sin mostrarse y sin que nadie se entere (falla silenciosa). Mismo patrón que
+    /// PuedeVerReportes: se chequea ANTES de llamar, nunca después de que la llamada ya falló.
+    /// </summary>
+    public bool PuedeVerCalendarioPagos =>
+        _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.VerFinanzas);
+
+    /// <summary>
+    /// Mismo bug y mismo criterio que PuedeVerCalendarioPagos: GET /tareas exige
+    /// Permisos.GestionarTareas (TareasEndpoints) -- un Operador sin ese permiso no debe ni
+    /// intentar la llamada.
+    /// </summary>
+    public bool PuedeVerTareas =>
+        _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.GestionarTareas);
+
     [ObservableProperty] private bool _mostrarAvisoVencimientos;
 
     [ObservableProperty]
@@ -159,39 +177,62 @@ public partial class InicioViewModel : ViewModelBase
         // bloquea la carga del resto de la pantalla ni introduce una espera visible.
         _tareaRefrescoPermisos = RefrescarPermisosAsync();
 
-        try
+        // Bug 2026-08-15: antes se llamaba siempre, sin importar si el usuario tenía
+        // Permisos.VerFinanzas -- un Operador sin ese permiso se comía un 403 tragado por el
+        // catch de abajo. Ahora Inicio no pide lo que sabe que no puede pedir: si no tiene el
+        // permiso, el widget simplemente no se muestra, sin siquiera intentar la llamada.
+        if (PuedeVerCalendarioPagos)
         {
-            var calendario = await _finanzasVistas.ObtenerCalendarioPagosAsync();
-            CantidadVencidas = calendario.Vencidas.Count;
-            CantidadAVencer7Dias = calendario.AVencer7Dias.Count;
-            MostrarAvisoVencimientos = CantidadVencidas > 0 || CantidadAVencer7Dias > 0;
+            try
+            {
+                var calendario = await _finanzasVistas.ObtenerCalendarioPagosAsync();
+                CantidadVencidas = calendario.Vencidas.Count;
+                CantidadAVencer7Dias = calendario.AVencer7Dias.Count;
+                MostrarAvisoVencimientos = CantidadVencidas > 0 || CantidadAVencer7Dias > 0;
+            }
+            catch (Exception)
+            {
+                MostrarAvisoVencimientos = false;
+            }
         }
-        catch (Exception)
+        else
         {
             MostrarAvisoVencimientos = false;
         }
 
         // Panel "Tareas que requieren atención" (spec 2026-08-06): try/catch propio, igual
-        // que el aviso de arriba -- un fallo consultando /tareas (API caída, sin permiso) no
-        // debe afectar a ningún otro aviso de esta pantalla, y nunca debe romper Inicio.
-        try
+        // que el aviso de arriba -- un fallo consultando /tareas (API caída) no debe afectar a
+        // ningún otro aviso de esta pantalla, y nunca debe romper Inicio. Bug 2026-08-15: la
+        // llamada ahora está gateada por PuedeVerTareas (Permisos.GestionarTareas) por el mismo
+        // motivo que el calendario de arriba -- sin permiso, ni se intenta.
+        if (PuedeVerTareas)
         {
-            var tareas = await _tareas.ListarAsync();
-            var rol = _session.RolActual ?? RolUsuario.Operador;
-            var usuarioActualId = _session.UsuarioActual?.Id ?? 0;
+            try
+            {
+                var tareas = await _tareas.ListarAsync();
+                var rol = _session.RolActual ?? RolUsuario.Operador;
+                var usuarioActualId = _session.UsuarioActual?.Id ?? 0;
 
-            var (vencidas, proximas) = PanelVencimientosTareas.Agrupar(tareas, rol, usuarioActualId);
+                var (vencidas, proximas) = PanelVencimientosTareas.Agrupar(tareas, rol, usuarioActualId);
 
-            TareasVencidas.Clear();
-            foreach (var fila in vencidas) TareasVencidas.Add(fila);
+                TareasVencidas.Clear();
+                foreach (var fila in vencidas) TareasVencidas.Add(fila);
 
-            TareasProximasAVencer.Clear();
-            foreach (var fila in proximas) TareasProximasAVencer.Add(fila);
+                TareasProximasAVencer.Clear();
+                foreach (var fila in proximas) TareasProximasAVencer.Add(fila);
 
-            CantidadTareasVencidas = TareasVencidas.Count;
-            CantidadTareasProximasAVencer = TareasProximasAVencer.Count;
+                CantidadTareasVencidas = TareasVencidas.Count;
+                CantidadTareasProximasAVencer = TareasProximasAVencer.Count;
+            }
+            catch (Exception)
+            {
+                TareasVencidas.Clear();
+                TareasProximasAVencer.Clear();
+                CantidadTareasVencidas = 0;
+                CantidadTareasProximasAVencer = 0;
+            }
         }
-        catch (Exception)
+        else
         {
             TareasVencidas.Clear();
             TareasProximasAVencer.Clear();
