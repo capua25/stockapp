@@ -14,6 +14,10 @@
             <TextBlock Text="Calendario de pagos" Classes="titulo-vista" />
             <Button Content="Actualizar" Command="{Binding RecargarCommand}" HorizontalAlignment="Left" />
 
+            <!-- Los tres botones "Registrar pago" (Vencidas / A vencer 7 dias / A vencer 30
+                 dias) estan gateados por PuedeRegistrarPagos (bugfix 2026-08-15): coherencia de
+                 navegacion, no seguridad. PagosGastoView, el destino, ya gatea la accion por su
+                 cuenta con Permisos.RegistrarPagos. -->
             <Border Classes="card">
                 <StackPanel Spacing="8">
                     <TextBlock Text="Vencidas" Classes="seccion" Foreground="{DynamicResource DangerBrush}" />
@@ -28,7 +32,8 @@
                                                Margin="0,0,12,0" />
                                     <Button Grid.Column="2" Content="Registrar pago"
                                             Command="{Binding $parent[UserControl].((vm:CalendarioPagosViewModel)DataContext).RegistrarPagoCommand}"
-                                            CommandParameter="{Binding}" />
+                                            CommandParameter="{Binding}"
+                                            IsVisible="{Binding $parent[UserControl].((vm:CalendarioPagosViewModel)DataContext).PuedeRegistrarPagos}" />
                                 </Grid>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
@@ -49,7 +54,8 @@
                                                Margin="0,0,12,0" />
                                     <Button Grid.Column="2" Content="Registrar pago"
                                             Command="{Binding $parent[UserControl].((vm:CalendarioPagosViewModel)DataContext).RegistrarPagoCommand}"
-                                            CommandParameter="{Binding}" />
+                                            CommandParameter="{Binding}"
+                                            IsVisible="{Binding $parent[UserControl].((vm:CalendarioPagosViewModel)DataContext).PuedeRegistrarPagos}" />
                                 </Grid>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
@@ -70,7 +76,8 @@
                                                Margin="0,0,12,0" />
                                     <Button Grid.Column="2" Content="Registrar pago"
                                             Command="{Binding $parent[UserControl].((vm:CalendarioPagosViewModel)DataContext).RegistrarPagoCommand}"
-                                            CommandParameter="{Binding}" />
+                                            CommandParameter="{Binding}"
+                                            IsVisible="{Binding $parent[UserControl].((vm:CalendarioPagosViewModel)DataContext).PuedeRegistrarPagos}" />
                                 </Grid>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
