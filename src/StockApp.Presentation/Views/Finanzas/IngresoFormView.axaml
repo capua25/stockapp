@@ -50,7 +50,13 @@
                            IsVisible="{Binding MensajeError, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <Button Classes="primary" Content="Guardar" Command="{Binding GuardarCommand}" />
+                    <!-- Guardar: gateado por PuedeRegistrarIngresos (bugfix 2026-08-15) - antes
+                         sin gating, un Operador con VerFinanzas (alcanza para entrar a esta
+                         pantalla via IngresosView) pero sin RegistrarIngresos llenaba el
+                         formulario y recien al guardar se comia un 403
+                         (IngresoCajaService.AltaAsync/ModificarAsync). -->
+                    <Button Classes="primary" Content="Guardar" Command="{Binding GuardarCommand}"
+                            IsVisible="{Binding PuedeRegistrarIngresos}" />
                     <Button Classes="secondary" Content="Cancelar" Command="{Binding CancelarCommand}" />
                 </StackPanel>
 

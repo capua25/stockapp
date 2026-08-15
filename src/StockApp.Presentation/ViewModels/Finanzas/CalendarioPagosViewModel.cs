@@ -2,7 +2,10 @@ using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using StockApp.Application.Authorization;
 using StockApp.Application.Finanzas;
+using StockApp.Application.Interfaces;
+using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
 
 namespace StockApp.Presentation.ViewModels.Finanzas;
@@ -15,6 +18,7 @@ public partial class CalendarioPagosViewModel : ViewModelBase
 {
     private readonly IFinanzasVistasService _service;
     private readonly IGastoService          _gastoService;
+    private readonly ICurrentSession        _session;
     private readonly INavigationService     _navigation;
 
     public ObservableCollection<FacturaCalendarioDto> Vencidas { get; } = new();
@@ -22,11 +26,27 @@ public partial class CalendarioPagosViewModel : ViewModelBase
     public ObservableCollection<FacturaCalendarioDto> AVencer30Dias { get; } = new();
     public ObservableCollection<PagoRecienteDto> PagosRecientes { get; } = new();
 
+    /// <summary>
+    /// Gatea los botones "Registrar pago" (bugfix 2026-08-15). Esto NO es un gap de seguridad:
+    /// PagosGastoView (destino de la navegación) ya gatea la acción por su cuenta, exigiendo
+    /// Permisos.RegistrarPagos — un Operador sin ese permiso ya no puede ejecutar el pago ahí.
+    /// Esto es coherencia de navegación: evita que un link de esta pantalla (que solo exige
+    /// Permisos.VerFinanzas) ofrezca algo inalcanzable. Se OCULTA (no se deshabilita), mismo
+    /// patrón que GastosViewModel.PuedeRegistrarPagos: IsVisible="{Binding Puede*}", nunca
+    /// IsEnabled. No se refresca en caliente: CalendarioPagosViewModel se registra AddTransient
+    /// y se recrea en cada navegación a la pantalla.
+    /// </summary>
+    public bool PuedeRegistrarPagos =>
+        _session.RolActual == RolUsuario.Admin ||
+        _session.PermisosActuales.Contains(Permisos.RegistrarPagos);
+
     public CalendarioPagosViewModel(
-        IFinanzasVistasService service, IGastoService gastoService, INavigationService navigation)
+        IFinanzasVistasService service, IGastoService gastoService,
+        ICurrentSession session, INavigationService navigation)
     {
         _service      = service;
         _gastoService = gastoService;
+        _session      = session;
         _navigation   = navigation;
     }
 
