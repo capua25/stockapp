@@ -6,8 +6,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Finanzas;
+using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
@@ -26,6 +28,7 @@ namespace StockApp.Presentation.ViewModels.Finanzas;
 public partial class GastoFormViewModel : ViewModelBase
 {
     private readonly IGastoService                _service;
+    private readonly ICurrentSession              _session;
     private readonly IProveedorService            _proveedoresService;
     private readonly IFuenteFinanciamientoService _fuentesService;
     private readonly IRubroGastoService           _rubrosService;
@@ -35,6 +38,16 @@ public partial class GastoFormViewModel : ViewModelBase
     private readonly AdjuntosPanelViewModel       _adjuntosPanel;
 
     public AdjuntosPanelViewModel AdjuntosPanel => _adjuntosPanel;
+
+    /// <summary>
+    /// Gatea el botón "Guardar" (bugfix 2026-08-15): no tenía NINGÚN gating por permiso.
+    /// GastoService.AltaAsync/ModificarAsync exigen Permisos.RegistrarGastos sin condición — se
+    /// llega a este formulario desde GastosView ("Nuevo gasto"/"Editar"), que solo exige
+    /// VerFinanzas. Mismo patrón que GastosViewModel.PuedeRegistrarGastos.
+    /// </summary>
+    public bool PuedeRegistrarGastos =>
+        _session.RolActual == RolUsuario.Admin ||
+        _session.PermisosActuales.Contains(Permisos.RegistrarGastos);
 
     private int _idEdicion;
     private Gasto? _gastoParaEditar;
@@ -108,6 +121,7 @@ public partial class GastoFormViewModel : ViewModelBase
 
     public GastoFormViewModel(
         IGastoService service,
+        ICurrentSession session,
         IProveedorService proveedoresService,
         IFuenteFinanciamientoService fuentesService,
         IRubroGastoService rubrosService,
@@ -117,6 +131,7 @@ public partial class GastoFormViewModel : ViewModelBase
         AdjuntosPanelViewModel adjuntosPanel)
     {
         _service            = service;
+        _session            = session;
         _proveedoresService = proveedoresService;
         _fuentesService     = fuentesService;
         _rubrosService      = rubrosService;
