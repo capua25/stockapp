@@ -87,12 +87,15 @@
                     </Grid>
                 </Button>
 
-                <!-- Ingreso por factura: gateado por RegistrarMovimientos (spec 2026-08-10) -->
+                <!-- Ingreso por factura: gateado por PuedeIngresarPorFactura (fix bug de coherencia
+                     2026-08-15) - requiere RegistrarMovimientos + RegistrarGastos + VerFinanzas,
+                     no solo RegistrarMovimientos como los demás botones de este bloque, porque
+                     el servicio y los combos de la pantalla exigen los tres. -->
                 <Button Command="{Binding NavIngresoPorFacturaCommand}"
                         Classes="ghost"
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=IngresoPorFactura}"
                         HorizontalAlignment="Stretch"
-                        IsVisible="{Binding PuedeRegistrarMovimientos}">
+                        IsVisible="{Binding PuedeIngresarPorFactura}">
                     <Grid ColumnDefinitions="Auto,*">
                         <i:Icon Grid.Column="0" Value="mdi-receipt-text-plus" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Grid.Column="1" Text="Ingreso por factura" VerticalAlignment="Center"

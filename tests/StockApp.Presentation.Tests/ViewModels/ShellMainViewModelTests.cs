@@ -502,6 +502,7 @@ public class ShellMainViewModelTests
     [InlineData(nameof(ShellMainViewModel.PuedeGestionarMaestrosFinanzas), Permisos.GestionarMaestrosFinanzas)]
     [InlineData(nameof(ShellMainViewModel.PuedeGestionarTablasMaestras), Permisos.GestionarTablasMaestras)]
     [InlineData(nameof(ShellMainViewModel.PuedeVerReportes), Permisos.VerReportes)]
+    [InlineData(nameof(ShellMainViewModel.PuedeIngresarPorFactura), Permisos.RegistrarMovimientos)]
     public void Admin_TodasLasPropiedadesPuede_SonTrue(string propiedad, string permisoIgnorado)
     {
         var sessionMock = new Mock<ICurrentSession>();
@@ -548,6 +549,7 @@ public class ShellMainViewModelTests
     [InlineData(nameof(ShellMainViewModel.PuedeGestionarMaestrosFinanzas))]
     [InlineData(nameof(ShellMainViewModel.PuedeGestionarTablasMaestras))]
     [InlineData(nameof(ShellMainViewModel.PuedeVerReportes))]
+    [InlineData(nameof(ShellMainViewModel.PuedeIngresarPorFactura))]
     public void Operador_SinNingunPermisoEnPermisosActuales_LaPropiedadEsFalse(string propiedad)
     {
         var sessionMock = new Mock<ICurrentSession>();
@@ -560,5 +562,95 @@ public class ShellMainViewModelTests
         var valor = (bool)typeof(ShellMainViewModel).GetProperty(propiedad)!.GetValue(vm)!;
 
         Assert.False(valor);
+    }
+
+    // ── PuedeIngresarPorFactura (fix bug de coherencia de permisos, 2026-08-15) ────────────────
+    // A diferencia de las demás Puede*, esta combina TRES permisos porque el flujo real los
+    // exige los tres: RegistrarMovimientos y RegistrarGastos (ambos verificados sin condición
+    // por IngresoPorFacturaService.RegistrarAsync/AnularLoteAsync) y VerFinanzas (sin él, los
+    // combos de fuente/rubro/línea POA de la pantalla quedan vacíos — FuenteFinanciamientoService
+    // y RubroGastoService.ListarActivas/os exigen VerFinanzas — y GuardarCommand queda
+    // permanentemente deshabilitado porque PuedeGuardar exige FuenteSeleccionada y
+    // RubroSeleccionado no nulos). No incluye GestionarProductos: ese permiso lo exige el
+    // servicio SOLO cuando la factura da de alta un producto nuevo o actualiza precio de costo
+    // (condicional, spec) — no es un requisito para usar la pantalla en el caso base.
+
+    [Fact]
+    public void Operador_ConSoloRegistrarMovimientos_PuedeIngresarPorFactura_EsFalse()
+    {
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Operador);
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string> { Permisos.RegistrarMovimientos });
+        var vm = new ShellMainViewModel(
+            sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
+            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>());
+
+        Assert.False(vm.PuedeIngresarPorFactura);
+    }
+
+    [Fact]
+    public void Operador_ConRegistrarMovimientosYRegistrarGastosSinVerFinanzas_PuedeIngresarPorFactura_EsFalse()
+    {
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Operador);
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>
+        {
+            Permisos.RegistrarMovimientos, Permisos.RegistrarGastos,
+        });
+        var vm = new ShellMainViewModel(
+            sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
+            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>());
+
+        Assert.False(vm.PuedeIngresarPorFactura);
+    }
+
+    [Fact]
+    public void Operador_ConLosTresPermisosCompletos_PuedeIngresarPorFactura_EsTrue()
+    {
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Operador);
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>
+        {
+            Permisos.RegistrarMovimientos, Permisos.RegistrarGastos, Permisos.VerFinanzas,
+        });
+        var vm = new ShellMainViewModel(
+            sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
+            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>());
+
+        Assert.True(vm.PuedeIngresarPorFactura);
+    }
+
+    [Fact]
+    public async Task Navegacion_RefrescaPermisos_NotificaPuedeIngresarPorFactura()
+    {
+        var permisos = new HashSet<string>();
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Operador);
+        sessionMock.Setup(s => s.PermisosActuales).Returns(() => permisos);
+
+        var authMock = new Mock<IAuthService>();
+        authMock.Setup(a => a.ObtenerPermisosPropiosAsync()).ReturnsAsync(() =>
+        {
+            permisos.Add(Permisos.RegistrarMovimientos);
+            permisos.Add(Permisos.RegistrarGastos);
+            permisos.Add(Permisos.VerFinanzas);
+            return (IReadOnlySet<string>)permisos;
+        });
+
+        var navMock = new Mock<INavigationService>();
+        var vm = new ShellMainViewModel(
+            sessionMock.Object, navMock.Object, Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
+            Mock.Of<IConfirmacionService>(), authMock.Object);
+
+        Assert.False(vm.PuedeIngresarPorFactura);
+
+        var propiedadesNotificadas = new List<string?>();
+        vm.PropertyChanged += (_, e) => propiedadesNotificadas.Add(e.PropertyName);
+
+        navMock.Raise(n => n.Cambiado += null);
+        await vm._tareaRefrescoPermisos;
+
+        Assert.Contains(nameof(ShellMainViewModel.PuedeIngresarPorFactura), propiedadesNotificadas);
+        Assert.True(vm.PuedeIngresarPorFactura);
     }
 }

@@ -83,6 +83,24 @@ public partial class ShellMainViewModel : ViewModelBase
         _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.VerReportes);
 
     /// <summary>
+    /// Ingreso por factura (fix bug de coherencia de permisos, 2026-08-15): a diferencia de las
+    /// demás Puede*, combina TRES permisos porque el flujo real los exige los tres —
+    /// RegistrarMovimientos y RegistrarGastos (ambos verificados sin condición por
+    /// IngresoPorFacturaService.RegistrarAsync/AnularLoteAsync) y VerFinanzas (sin él, los
+    /// combos de fuente/rubro/línea POA de la pantalla quedan vacíos —
+    /// FuenteFinanciamientoService/RubroGastoService.ListarActivas/os exigen VerFinanzas— y
+    /// GuardarCommand queda permanentemente deshabilitado porque PuedeGuardar exige
+    /// FuenteSeleccionada y RubroSeleccionado no nulos). No incluye GestionarProductos: el
+    /// servicio solo lo exige cuando la factura da de alta un producto nuevo o actualiza precio
+    /// de costo (condicional) — no es un requisito para usar la pantalla en el caso base.
+    /// </summary>
+    public bool PuedeIngresarPorFactura =>
+        _session.RolActual == RolUsuario.Admin ||
+        (_session.PermisosActuales.Contains(Permisos.RegistrarMovimientos) &&
+         _session.PermisosActuales.Contains(Permisos.RegistrarGastos) &&
+         _session.PermisosActuales.Contains(Permisos.VerFinanzas));
+
+    /// <summary>
     /// Número de versión de la app para mostrar al pie del menú lateral (ej. "v0.1.1").
     /// </summary>
     public string VersionTexto => $"v{_infoApp.Version}";
@@ -158,6 +176,7 @@ public partial class ShellMainViewModel : ViewModelBase
         OnPropertyChanged(nameof(PuedeGestionarMaestrosFinanzas));
         OnPropertyChanged(nameof(PuedeGestionarTablasMaestras));
         OnPropertyChanged(nameof(PuedeVerReportes));
+        OnPropertyChanged(nameof(PuedeIngresarPorFactura));
     }
 
     /// <summary>

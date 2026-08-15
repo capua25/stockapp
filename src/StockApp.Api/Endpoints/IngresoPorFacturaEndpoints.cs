@@ -46,7 +46,14 @@ public static class IngresoPorFacturaEndpoints
             // convención de Location en los POST del proyecto).
             return Results.Created((string?)null, resultado);
         })
-        .RequireAuthorization(Permisos.RegistrarMovimientos);
+        // Fix bug de coherencia (2026-08-15): la policy HTTP exigía solo RegistrarMovimientos
+        // mientras IngresoPorFacturaService.RegistrarAsync verifica además RegistrarGastos sin
+        // condición — el 403 llegaba recién desde Application, más adentro del pipeline. Se
+        // encadenan dos RequireAuthorization (AND, ambas policies deben pasar) en vez de una
+        // policy compuesta nueva: cada permiso ya tiene su policy 1:1 registrada en Program.cs
+        // (foreach sobre Permisos.Todos), así que no hace falta declarar nada nuevo.
+        .RequireAuthorization(Permisos.RegistrarMovimientos)
+        .RequireAuthorization(Permisos.RegistrarGastos);
 
         // confirmar (default false): mismo criterio que DELETE /finanzas/gastos/{id} — la
         // anulación en cascada del pago automático de contado exige confirmación explícita.
@@ -55,7 +62,9 @@ public static class IngresoPorFacturaEndpoints
             await service.AnularLoteAsync(gastoId, confirmarAnulacionDePagoAutomatico: confirmar);
             return Results.Ok();
         })
-        .RequireAuthorization(Permisos.RegistrarMovimientos);
+        // Mismo fix que arriba: AnularLoteAsync también exige RegistrarMovimientos + RegistrarGastos.
+        .RequireAuthorization(Permisos.RegistrarMovimientos)
+        .RequireAuthorization(Permisos.RegistrarGastos);
 
         return app;
     }

@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using StockApp.Api.Auth;
 using StockApp.Api.Endpoints;
 using StockApp.Api.Tests.Fixtures;
+using StockApp.Application.Authorization;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
@@ -64,6 +65,26 @@ public class IngresoPorFacturaEndpointTests : ApiTestBase
             .PostAsJsonAsync("/movimientos/ingreso-factura", RequestValido(1, 1, 1, 1));
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostIngresoFactura_OperadorConSoloRegistrarMovimientos_Devuelve403()
+    {
+        // Fix bug de coherencia (2026-08-15): la policy HTTP ahora encadena RegistrarMovimientos
+        // + RegistrarGastos (antes solo exigía el primero). Este Operador recortado — mismo
+        // estado real que deja PUT /usuarios/{id}/permisos — tenía el botón visible en el
+        // sidebar pero el submit le fallaba adentro (Application). Ahora el 403 llega desde la
+        // barrera HTTP, antes de tocar el servicio.
+        await using var ctx = Factory.CrearContexto();
+        var jwt = Factory.Services.GetRequiredService<IJwtTokenService>();
+        var operador = await DatosDePrueba.SeedOperadorConPermisosAsync(
+            ctx, "operador.sin-gastos", "Secreta123!", new[] { Permisos.RegistrarMovimientos });
+        var token = jwt.GenerarToken(operador.Id, RolUsuario.Operador);
+        var client = ClienteAutenticado(token);
+
+        var response = await client.PostAsJsonAsync("/movimientos/ingreso-factura", RequestValido(1, 1, 1, 1));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]
