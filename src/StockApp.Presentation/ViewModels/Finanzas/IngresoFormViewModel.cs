@@ -5,8 +5,11 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using StockApp.Application.Authorization;
 using StockApp.Application.Finanzas;
+using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 
@@ -17,6 +20,7 @@ public partial class IngresoFormViewModel : ViewModelBase
 {
     private readonly IIngresoCajaService          _service;
     private readonly IFuenteFinanciamientoService _fuentesService;
+    private readonly ICurrentSession              _session;
     private readonly INavigationService           _navigation;
 
     private int _idEdicion;
@@ -64,13 +68,30 @@ public partial class IngresoFormViewModel : ViewModelBase
 
     public ObservableCollection<FuenteFinanciamiento> FuentesDisponibles { get; } = new();
 
+    /// <summary>
+    /// Gatea el botón "Guardar" (bugfix 2026-08-15): antes no tenía ningún gating — se llega
+    /// desde IngresosView ("Nuevo ingreso"/"Editar"), que solo exige Permisos.VerFinanzas, pero
+    /// IngresoCajaService.AltaAsync/ModificarAsync exigen Permisos.RegistrarIngresos sin
+    /// condición. Un Operador con VerFinanzas pero sin RegistrarIngresos llenaba el formulario y
+    /// recién al guardar se comía un 403. Se OCULTA (no se deshabilita), mismo patrón que
+    /// GastosViewModel.PuedeRegistrarPagos y DocumentoFormViewModel.PuedeAnular/PuedeReabrir:
+    /// IsVisible="{Binding Puede*}" en los botones de acción de pantalla del repo, nunca
+    /// IsEnabled. No se refresca en caliente: IngresoFormViewModel se registra AddTransient y
+    /// se recrea en cada navegación a la pantalla.
+    /// </summary>
+    public bool PuedeRegistrarIngresos =>
+        _session.RolActual == RolUsuario.Admin ||
+        _session.PermisosActuales.Contains(Permisos.RegistrarIngresos);
+
     public IngresoFormViewModel(
         IIngresoCajaService service,
         IFuenteFinanciamientoService fuentesService,
+        ICurrentSession session,
         INavigationService navigation)
     {
         _service        = service;
         _fuentesService = fuentesService;
+        _session        = session;
         _navigation     = navigation;
     }
 
