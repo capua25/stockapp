@@ -113,7 +113,11 @@
                  (GastoService.RegistrarPagoAsync). -->
             <Button Classes="secondary" Content="Pagos" Command="{Binding PagosCommand}"
                     IsVisible="{Binding PuedeRegistrarPagos}" />
-            <Button Classes="secondary" Content="Anular" Command="{Binding AnularCommand}" />
+            <!-- Anular: gateado por PuedeRegistrarGastos (bugfix 2026-08-15) - antes solo gateado
+                 por TieneSeleccion(), GastoService.AnularAsync exige Permisos.RegistrarGastos
+                 sin condicion. -->
+            <Button Classes="secondary" Content="Anular" Command="{Binding AnularCommand}"
+                    IsVisible="{Binding PuedeRegistrarGastos}" />
             <Button Classes="secondary" Command="{Binding ExportarCsvCommand}">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                     <i:Icon Value="mdi-file-export" />

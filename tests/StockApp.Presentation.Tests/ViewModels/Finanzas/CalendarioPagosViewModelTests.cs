@@ -83,7 +83,8 @@ public class CalendarioPagosViewModelTests
                     new Mock<IServicioAperturaArchivo>().Object,
                     pagosConfirm.Object,
                     new Mock<ICurrentSession>().Object);
-                pagosVm = new PagosGastoViewModel(pagosSvc.Object, pagosNav.Object, pagosConfirm.Object, pagosAdjuntosPanel);
+                var pagosSession = new Mock<ICurrentSession>();
+                pagosVm = new PagosGastoViewModel(pagosSvc.Object, pagosSession.Object, pagosNav.Object, pagosConfirm.Object, pagosAdjuntosPanel);
                 cb(pagosVm);
             });
 

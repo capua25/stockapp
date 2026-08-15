@@ -4,8 +4,11 @@ using System.Globalization;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using StockApp.Application.Authorization;
 using StockApp.Application.Finanzas;
+using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
@@ -21,11 +24,28 @@ namespace StockApp.Presentation.ViewModels.Finanzas;
 public partial class PagosGastoViewModel : ViewModelBase
 {
     private readonly IGastoService        _service;
+    private readonly ICurrentSession      _session;
     private readonly INavigationService   _navigation;
     private readonly IConfirmacionService _confirmacion;
     private readonly AdjuntosPanelViewModel _adjuntosPanel;
 
     public AdjuntosPanelViewModel AdjuntosPanel => _adjuntosPanel;
+
+    /// <summary>
+    /// Gatea "Registrar pago" y "Anular pago" (bugfix 2026-08-15): ninguno de los dos tenía
+    /// gating por permiso — GastoService.RegistrarPagoAsync/AnularPagoAsync exigen
+    /// Permisos.RegistrarPagos sin condición, así que un Operador con VerFinanzas (alcanza para
+    /// entrar a esta pantalla) pero sin RegistrarPagos llenaba el formulario y recién al guardar
+    /// se comía un 403. Esta pantalla es alcanzable por DOS caminos (GastosView, ya gateado, y
+    /// CalendarioPagosView, sin gatear) — el gating va acá porque acá vive la ACCIÓN, cubriendo
+    /// ambos caminos de navegación por definición. Mismo patrón que
+    /// GastosViewModel.PuedeRegistrarPagos / DocumentoFormViewModel.PuedeAnular: se OCULTA
+    /// (IsVisible), nunca se deshabilita. Sin refresco en caliente: PagosGastoViewModel se
+    /// registra AddTransient y se recrea en cada navegación, toma el ICurrentSession vigente.
+    /// </summary>
+    public bool PuedeRegistrarPagos =>
+        _session.RolActual == RolUsuario.Admin ||
+        _session.PermisosActuales.Contains(Permisos.RegistrarPagos);
 
     private int _gastoId;
     private Action _volver;
@@ -70,11 +90,13 @@ public partial class PagosGastoViewModel : ViewModelBase
 
     public PagosGastoViewModel(
         IGastoService service,
+        ICurrentSession session,
         INavigationService navigation,
         IConfirmacionService confirmacion,
         AdjuntosPanelViewModel adjuntosPanel)
     {
         _service       = service;
+        _session       = session;
         _navigation    = navigation;
         _confirmacion  = confirmacion;
         _adjuntosPanel = adjuntosPanel;

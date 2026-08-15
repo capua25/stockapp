@@ -131,6 +131,15 @@ public partial class GastosViewModel : ViewModelBase
         _session.RolActual == RolUsuario.Admin ||
         _session.PermisosActuales.Contains(Permisos.RegistrarPagos);
 
+    /// <summary>
+    /// Gatea el botón "Anular" de la vista (bugfix 2026-08-15): antes solo estaba gateado por
+    /// TieneSeleccion() (CanExecute) — nunca por permiso. GastoService.AnularAsync exige
+    /// Permisos.RegistrarGastos sin condición. Mismo patrón que PuedeRegistrarPagos, calcado.
+    /// </summary>
+    public bool PuedeRegistrarGastos =>
+        _session.RolActual == RolUsuario.Admin ||
+        _session.PermisosActuales.Contains(Permisos.RegistrarGastos);
+
     public GastosViewModel(
         IGastoService service,
         ICurrentSession session,

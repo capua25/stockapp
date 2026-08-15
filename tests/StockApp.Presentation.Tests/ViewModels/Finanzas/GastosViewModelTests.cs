@@ -558,4 +558,35 @@ public class GastosViewModelTests
 
         Assert.True(vm.PuedeRegistrarPagos);
     }
+
+    // ── PuedeRegistrarGastos: gating del botón "Anular" (bugfix 2026-08-15) ────────────────
+    // El botón "Anular" solo estaba gateado por TieneSeleccion() (CanExecute), nunca por
+    // permiso. GastoService.AnularAsync exige Permisos.RegistrarGastos sin condición — mismo
+    // patrón que PuedeRegistrarPagos, calcado.
+
+    [Fact]
+    public void Operador_ConVerFinanzasSinRegistrarGastos_PuedeRegistrarGastos_EsFalse()
+    {
+        var (vm, _, _, _, _) = Crear(
+            rol: RolUsuario.Operador, permisos: new[] { Permisos.VerFinanzas });
+
+        Assert.False(vm.PuedeRegistrarGastos);
+    }
+
+    [Fact]
+    public void Operador_ConRegistrarGastos_PuedeRegistrarGastos_EsTrue()
+    {
+        var (vm, _, _, _, _) = Crear(
+            rol: RolUsuario.Operador, permisos: new[] { Permisos.VerFinanzas, Permisos.RegistrarGastos });
+
+        Assert.True(vm.PuedeRegistrarGastos);
+    }
+
+    [Fact]
+    public void Admin_PuedeRegistrarGastos_EsTrue()
+    {
+        var (vm, _, _, _, _) = Crear(rol: RolUsuario.Admin, permisos: Array.Empty<string>());
+
+        Assert.True(vm.PuedeRegistrarGastos);
+    }
 }

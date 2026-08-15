@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Moq;
 using StockApp.Application.Authorization;
@@ -22,7 +23,7 @@ public class GastoFormViewModelTests
                     Mock<IGastoService> svcMock,
                     Mock<INavigationService> navMock,
                     Mock<IConfirmacionService> confirmMock)
-        Crear()
+        Crear(RolUsuario rol = RolUsuario.Admin, IEnumerable<string>? permisos = null)
     {
         var svc = new Mock<IGastoService>();
         svc.Setup(s => s.AltaAsync(It.IsAny<Gasto>(), It.IsAny<IReadOnlyList<int>?>()))
@@ -57,15 +58,19 @@ public class GastoFormViewModelTests
         confirm.Setup(c => c.InformarAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
         confirm.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(true);
 
+        var session = new Mock<ICurrentSession>();
+        session.Setup(s => s.RolActual).Returns(rol);
+        session.Setup(s => s.PermisosActuales).Returns(new HashSet<string>(permisos ?? Enumerable.Empty<string>()));
+
         var adjuntosPanel = new AdjuntosPanelViewModel(
             new Mock<IAdjuntoService>().Object,
             new Mock<IServicioSeleccionArchivo>().Object,
             new Mock<IServicioAperturaArchivo>().Object,
             confirm.Object,
-            new Mock<ICurrentSession>().Object);
+            session.Object);
 
         var vm = new GastoFormViewModel(
-            svc.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
+            svc.Object, session.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
             nav.Object, confirm.Object, adjuntosPanel);
         return (vm, svc, nav, confirm);
     }
@@ -317,7 +322,7 @@ public class GastoFormViewModelTests
             session.Object);
 
         var vm = new GastoFormViewModel(
-            svc.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
+            svc.Object, session.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
             nav.Object, confirm.Object, adjuntosPanel);
 
         var gasto = new Gasto
@@ -333,5 +338,36 @@ public class GastoFormViewModelTests
         Assert.Same(adjuntosPanel, vm.AdjuntosPanel);
         adjuntosService.Verify(a => a.ListarPorGastoAsync(42), Times.Once);
         Assert.Single(vm.AdjuntosPanel.Items);
+    }
+
+    // ── PuedeRegistrarGastos: gating del botón "Guardar" (bugfix 2026-08-15) ───────────────
+    // El botón Guardar no tenía NINGÚN gating por permiso. GastoService.AltaAsync/
+    // ModificarAsync exigen Permisos.RegistrarGastos sin condición — se llega a este
+    // formulario desde GastosView ("Nuevo gasto"/"Editar"), que solo exige VerFinanzas.
+
+    [Fact]
+    public void Operador_ConVerFinanzasSinRegistrarGastos_PuedeRegistrarGastos_EsFalse()
+    {
+        var (vm, _, _, _) = Crear(
+            rol: RolUsuario.Operador, permisos: new[] { Permisos.VerFinanzas });
+
+        Assert.False(vm.PuedeRegistrarGastos);
+    }
+
+    [Fact]
+    public void Operador_ConRegistrarGastos_PuedeRegistrarGastos_EsTrue()
+    {
+        var (vm, _, _, _) = Crear(
+            rol: RolUsuario.Operador, permisos: new[] { Permisos.VerFinanzas, Permisos.RegistrarGastos });
+
+        Assert.True(vm.PuedeRegistrarGastos);
+    }
+
+    [Fact]
+    public void Admin_PuedeRegistrarGastos_EsTrue()
+    {
+        var (vm, _, _, _) = Crear(rol: RolUsuario.Admin, permisos: Array.Empty<string>());
+
+        Assert.True(vm.PuedeRegistrarGastos);
     }
 }
