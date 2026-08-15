@@ -10,19 +10,28 @@ using Xunit;
 namespace StockApp.Presentation.UiTests;
 
 /// <summary>
-/// Reproduce (FASE 1, bug reportado 2026-08-14) un freeze observado UNA sola vez en la app real
-/// bajo WSLg: click en "Reabrir" en el detalle de un documento anulado congela la ventana
-/// (no responde, no crashea), ANTES de mostrar el diálogo de motivo y ANTES de cualquier request
-/// HTTP. La secuencia exacta que lo produjo: diálogo 1 CANCELADO sin escribir nada, diálogo 2
-/// CONFIRMADO con motivo, navegación a otra vista, diálogo 3 ("Reabrir") -- congela.
+/// Guardián de cobertura, NO reproductor de bug. Nació intentando reproducir un freeze
+/// reportado el 2026-08-14 en el módulo de documentos administrativos (click en "Reabrir"
+/// congelaba la ventana en la app real bajo WSLg); ese reporte se declaró NO reproducible el
+/// 2026-08-15 tras 3 corridas manuales (incluida la secuencia original exacta), este mismo
+/// arnés en verde validado por mutación, y la decompilación de Avalonia 12.0.5 confirmando que
+/// <c>Window.ShowDialog&lt;T&gt;</c> es async puro (TaskCompletionSource, sin PushFrame) — la
+/// causa probable fue contaminación del entorno WSLg con múltiples actores sobre la misma
+/// ventana X11, no un bug de la app.
 ///
-/// Este banco monta un <see cref="Window"/> real como MainWindow (vía
-/// <see cref="ClassicDesktopStyleApplicationLifetime"/>, inyectado por reflexión en
-/// Application.Current porque el setter público de ApplicationLifetime tira
-/// InvalidOperationException una vez completado el Setup de AppBuilder, que ya corrió para
-/// cuando arranca el cuerpo de un [AvaloniaFact]) y ejercita <see cref="ConfirmacionService"/>
-/// tal cual lo usa DocumentoFormViewModel.AnularAsync/ReabrirAsync: mismo Dispatcher.InvokeAsync,
-/// mismo ShowDialog&lt;string?&gt; sobre el mismo owner, tres veces seguidas.
+/// Lo que cubre en concreto: es el único test que monta un <see cref="Window"/> real como
+/// MainWindow y encadena tres <see cref="ConfirmacionService.PedirTextoAsync"/> reales sobre el
+/// mismo owner, tal cual lo usa DocumentoFormViewModel.AnularAsync/ReabrirAsync (mismo
+/// Dispatcher.InvokeAsync, mismo ShowDialog&lt;string?&gt; sobre el mismo owner, tres veces
+/// seguidas). El <c>ConfirmacionServiceTests.cs</c> de Presentation.Tests solo ejercita el
+/// camino defensivo con Application.Current sin inicializar; no hay otro test que llegue a
+/// mostrar un diálogo real.
+///
+/// Deuda conocida: <see cref="InyectarApplicationLifetime"/> inyecta por reflexión el campo
+/// privado <c>Avalonia.Application._applicationLifetime</c> porque el setter público de
+/// ApplicationLifetime tira InvalidOperationException una vez completado el Setup de AppBuilder
+/// (que ya corrió para cuando arranca el cuerpo de un [AvaloniaFact]). Si un bump de Avalonia
+/// renombra o elimina ese campo privado, este test se rompe por eso, no por una regresión real.
 /// </summary>
 public class ConfirmacionServiceDialogosConsecutivosTests
 {
