@@ -4,8 +4,11 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Collections;
 using Moq;
+using StockApp.Application.Authorization;
 using StockApp.Application.Finanzas;
+using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
@@ -28,18 +31,24 @@ public class IngresosViewModelTests
                     Mock<IIngresoCajaService> svcMock,
                     Mock<INavigationService> navMock,
                     Mock<IConfirmacionService> confirmMock)
-        Crear(IReadOnlyList<IngresoCaja>? ingresos = null)
+        Crear(
+            IReadOnlyList<IngresoCaja>? ingresos = null,
+            RolUsuario rol = RolUsuario.Admin, IEnumerable<string>? permisos = null)
     {
         var svc = new Mock<IIngresoCajaService>();
         svc.Setup(s => s.ListarTodosAsync()).ReturnsAsync(ingresos ?? new List<IngresoCaja>());
         svc.Setup(s => s.BajaLogicaAsync(It.IsAny<int>())).Returns(Task.CompletedTask);
+
+        var session = new Mock<ICurrentSession>();
+        session.Setup(s => s.RolActual).Returns(rol);
+        session.Setup(s => s.PermisosActuales).Returns(new HashSet<string>(permisos ?? Enumerable.Empty<string>()));
 
         var nav = new Mock<INavigationService>();
         var confirm = new Mock<IConfirmacionService>();
         confirm.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(true);
         confirm.Setup(c => c.InformarAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
 
-        var vm = new IngresosViewModel(svc.Object, nav.Object, confirm.Object);
+        var vm = new IngresosViewModel(svc.Object, session.Object, nav.Object, confirm.Object);
         return (vm, svc, nav, confirm);
     }
 
@@ -164,5 +173,36 @@ public class IngresosViewModelTests
 
         Assert.False(vm.EditarCommand.CanExecute(null));
         Assert.False(vm.BajaCommand.CanExecute(null));
+    }
+
+    // ── PuedeRegistrarIngresos: gating de los botones "Editar" y "Dar de baja" (bugfix 2026-08-15) ──
+    // Ambos botones no tenían NINGÚN gating por permiso. Basta VerFinanzas para entrar a la
+    // pantalla, pero IngresoCajaService.ModificarAsync/BajaLogicaAsync exigen
+    // Permisos.RegistrarIngresos sin condición.
+
+    [Fact]
+    public void Operador_ConVerFinanzasSinRegistrarIngresos_PuedeRegistrarIngresos_EsFalse()
+    {
+        var (vm, _, _, _) = Crear(
+            rol: RolUsuario.Operador, permisos: new[] { Permisos.VerFinanzas });
+
+        Assert.False(vm.PuedeRegistrarIngresos);
+    }
+
+    [Fact]
+    public void Operador_ConRegistrarIngresos_PuedeRegistrarIngresos_EsTrue()
+    {
+        var (vm, _, _, _) = Crear(
+            rol: RolUsuario.Operador, permisos: new[] { Permisos.VerFinanzas, Permisos.RegistrarIngresos });
+
+        Assert.True(vm.PuedeRegistrarIngresos);
+    }
+
+    [Fact]
+    public void Admin_PuedeRegistrarIngresos_EsTrue()
+    {
+        var (vm, _, _, _) = Crear(rol: RolUsuario.Admin, permisos: Array.Empty<string>());
+
+        Assert.True(vm.PuedeRegistrarIngresos);
     }
 }

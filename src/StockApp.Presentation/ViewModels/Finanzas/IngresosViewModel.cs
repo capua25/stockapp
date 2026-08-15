@@ -4,8 +4,11 @@ using System.Threading.Tasks;
 using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using StockApp.Application.Authorization;
 using StockApp.Application.Finanzas;
+using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Converters;
 using StockApp.Presentation.Navigation;
@@ -20,6 +23,7 @@ namespace StockApp.Presentation.ViewModels.Finanzas;
 public partial class IngresosViewModel : ViewModelBase
 {
     private readonly IIngresoCajaService  _service;
+    private readonly ICurrentSession      _session;
     private readonly INavigationService   _navigation;
     private readonly IConfirmacionService _confirmacion;
 
@@ -39,12 +43,30 @@ public partial class IngresosViewModel : ViewModelBase
     /// </summary>
     public DataGridCollectionView ItemsView { get; }
 
+    /// <summary>
+    /// Gatea los botones "Editar" y "Dar de baja" (bugfix 2026-08-15): antes no tenían ningún
+    /// gating — basta con Permisos.VerFinanzas para entrar a esta pantalla, pero
+    /// IngresoCajaService.ModificarAsync/BajaLogicaAsync exigen Permisos.RegistrarIngresos sin
+    /// condición. Un Operador con VerFinanzas pero sin RegistrarIngresos veía ambos botones
+    /// habilitados, editaba o pedía la baja y recién ahí se comía un 403. Se OCULTA (no se
+    /// deshabilita), mismo patrón que GastosViewModel.PuedeRegistrarPagos y
+    /// DocumentoFormViewModel.PuedeAnular/PuedeReabrir: IsVisible="{Binding Puede*}" en los
+    /// botones de acción de pantalla del repo, nunca IsEnabled. No se refresca en caliente:
+    /// IngresosViewModel se registra AddTransient y se recrea en cada navegación a la pantalla,
+    /// así que ya toma el ICurrentSession vigente en ese momento.
+    /// </summary>
+    public bool PuedeRegistrarIngresos =>
+        _session.RolActual == RolUsuario.Admin ||
+        _session.PermisosActuales.Contains(Permisos.RegistrarIngresos);
+
     public IngresosViewModel(
         IIngresoCajaService service,
+        ICurrentSession session,
         INavigationService navigation,
         IConfirmacionService confirmacion)
     {
         _service      = service;
+        _session      = session;
         _navigation   = navigation;
         _confirmacion = confirmacion;
 
