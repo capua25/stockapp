@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Moq;
 using StockApp.Application.Authorization;
@@ -32,7 +33,7 @@ public class PagosGastoViewModelTests
                     Mock<INavigationService> navMock,
                     Mock<IConfirmacionService> confirmMock,
                     Mock<IAdjuntoService> adjuntosSvcMock)
-        Crear()
+        Crear(RolUsuario rol = RolUsuario.Admin, IEnumerable<string>? permisos = null)
     {
         var svc = new Mock<IGastoService>();
         svc.Setup(s => s.ObtenerPorIdAsync(5)).ReturnsAsync(GastoConPago());
@@ -45,7 +46,8 @@ public class PagosGastoViewModelTests
 
         var adjuntosSvc = new Mock<IAdjuntoService>();
         var session = new Mock<ICurrentSession>();
-        session.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+        session.Setup(s => s.RolActual).Returns(rol);
+        session.Setup(s => s.PermisosActuales).Returns(new HashSet<string>(permisos ?? Enumerable.Empty<string>()));
         var adjuntosPanel = new AdjuntosPanelViewModel(
             adjuntosSvc.Object,
             new Mock<IServicioSeleccionArchivo>().Object,
@@ -53,7 +55,7 @@ public class PagosGastoViewModelTests
             confirm.Object,
             session.Object);
 
-        var vm = new PagosGastoViewModel(svc.Object, nav.Object, confirm.Object, adjuntosPanel);
+        var vm = new PagosGastoViewModel(svc.Object, session.Object, nav.Object, confirm.Object, adjuntosPanel);
         return (vm, svc, nav, confirm, adjuntosSvc);
     }
 
@@ -178,5 +180,37 @@ public class PagosGastoViewModelTests
 
         Assert.NotNull(vm.AdjuntosPanel);
         adjuntosSvc.Verify(a => a.ListarPorPagoAsync(21), Times.Once);
+    }
+
+    // ── PuedeRegistrarPagos: gating de "Registrar pago" / "Anular pago" (bugfix 2026-08-15) ──
+    // Ninguno de los dos botones tenía gating por permiso. GastoService.RegistrarPagoAsync/
+    // AnularPagoAsync exigen Permisos.RegistrarPagos sin condición — esta pantalla se alcanza
+    // desde GastosView (ya gateado) y desde CalendarioPagosView (sin gatear), así que el gating
+    // tiene que vivir ACÁ, donde vive la acción, para cubrir ambos caminos.
+
+    [Fact]
+    public void Operador_ConVerFinanzasSinRegistrarPagos_PuedeRegistrarPagos_EsFalse()
+    {
+        var (vm, _, _, _, _) = Crear(
+            rol: RolUsuario.Operador, permisos: new[] { Permisos.VerFinanzas });
+
+        Assert.False(vm.PuedeRegistrarPagos);
+    }
+
+    [Fact]
+    public void Operador_ConRegistrarPagos_PuedeRegistrarPagos_EsTrue()
+    {
+        var (vm, _, _, _, _) = Crear(
+            rol: RolUsuario.Operador, permisos: new[] { Permisos.VerFinanzas, Permisos.RegistrarPagos });
+
+        Assert.True(vm.PuedeRegistrarPagos);
+    }
+
+    [Fact]
+    public void Admin_PuedeRegistrarPagos_EsTrue()
+    {
+        var (vm, _, _, _, _) = Crear(rol: RolUsuario.Admin, permisos: Array.Empty<string>());
+
+        Assert.True(vm.PuedeRegistrarPagos);
     }
 }
