@@ -7,10 +7,13 @@ using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.ApiClient;
+using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Finanzas;
+using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Converters;
 using StockApp.Presentation.Navigation;
@@ -66,6 +69,7 @@ public partial class GastosViewModel : ViewModelBase
     public const string EstadoTodos = "Todos";
 
     private readonly IGastoService                _service;
+    private readonly ICurrentSession              _session;
     private readonly IProveedorService            _proveedoresService;
     private readonly IFuenteFinanciamientoService _fuentesService;
     private readonly IRubroGastoService           _rubrosService;
@@ -109,8 +113,27 @@ public partial class GastosViewModel : ViewModelBase
     public IReadOnlyList<string> EstadosDisponibles { get; } =
         new[] { EstadoTodos, "Pendiente", "Parcial", "Pagada", "Vencida", "Anulada" };
 
+    /// <summary>
+    /// Gatea el botón "Pagos" de la vista (bugfix 2026-08-15): antes no tenía ningún gating —
+    /// basta con Permisos.VerFinanzas para entrar a esta pantalla, pero
+    /// GastoService.RegistrarPagoAsync/AnularPagoAsync exigen Permisos.RegistrarPagos sin
+    /// condición. Un Operador con VerFinanzas pero sin RegistrarPagos veía el botón habilitado,
+    /// llenaba el formulario de PagosGastoView y recién al guardar se comía un 403. Se OCULTA
+    /// (no se deshabilita) siguiendo el mismo patrón que DocumentoFormViewModel.PuedeAnular/
+    /// PuedeReabrir y TareaListViewModel.Puede*: IsVisible="{Binding Puede*}" en todos los
+    /// botones de acción de pantalla del repo, nunca IsEnabled. No se refresca en caliente
+    /// (a diferencia de ShellMainViewModel/InicioViewModel, que son singletons de larga vida):
+    /// GastosViewModel se registra AddTransient y se recrea en cada navegación a la pantalla,
+    /// así que ya toma el ICurrentSession vigente en ese momento — mismo criterio que
+    /// DocumentoFormViewModel.EsAdmin, que tampoco tiene mecanismo de refresco.
+    /// </summary>
+    public bool PuedeRegistrarPagos =>
+        _session.RolActual == RolUsuario.Admin ||
+        _session.PermisosActuales.Contains(Permisos.RegistrarPagos);
+
     public GastosViewModel(
         IGastoService service,
+        ICurrentSession session,
         IProveedorService proveedoresService,
         IFuenteFinanciamientoService fuentesService,
         IRubroGastoService rubrosService,
@@ -121,6 +144,7 @@ public partial class GastosViewModel : ViewModelBase
         IServicioGuardadoArchivo guardado)
     {
         _service            = service;
+        _session            = session;
         _proveedoresService = proveedoresService;
         _fuentesService     = fuentesService;
         _rubrosService      = rubrosService;

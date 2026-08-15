@@ -107,7 +107,12 @@
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,12">
             <Button Classes="primary" Content="Nuevo gasto" Command="{Binding NuevoCommand}" />
             <Button Classes="secondary" Content="Editar" Command="{Binding EditarCommand}" />
-            <Button Classes="secondary" Content="Pagos" Command="{Binding PagosCommand}" />
+            <!-- Pagos: gateado por PuedeRegistrarPagos (bugfix 2026-08-15) - antes sin gating,
+                 un Operador con VerFinanzas (alcanza para entrar a esta pantalla) pero sin
+                 RegistrarPagos podia abrir el formulario y recien al guardar se comia un 403
+                 (GastoService.RegistrarPagoAsync). -->
+            <Button Classes="secondary" Content="Pagos" Command="{Binding PagosCommand}"
+                    IsVisible="{Binding PuedeRegistrarPagos}" />
             <Button Classes="secondary" Content="Anular" Command="{Binding AnularCommand}" />
             <Button Classes="secondary" Command="{Binding ExportarCsvCommand}">
                 <StackPanel Orientation="Horizontal" Spacing="6">

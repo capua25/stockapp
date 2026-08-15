@@ -6,8 +6,10 @@ using System.Threading.Tasks;
 using Avalonia.Collections;
 using Moq;
 using StockApp.ApiClient;
+using StockApp.Application.Authorization;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Finanzas;
+using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
@@ -50,11 +52,17 @@ public class GastosViewModelTests
                     Mock<INavigationService> navMock,
                     Mock<IConfirmacionService> confirmMock,
                     Mock<IServicioGuardadoArchivo> guardadoMock)
-        Crear(IReadOnlyList<Gasto>? gastos = null, IReadOnlyList<LineaPoa>? lineasPoa = null)
+        Crear(
+            IReadOnlyList<Gasto>? gastos = null, IReadOnlyList<LineaPoa>? lineasPoa = null,
+            RolUsuario rol = RolUsuario.Admin, IEnumerable<string>? permisos = null)
     {
         var svc = new Mock<IGastoService>();
         svc.Setup(s => s.ListarAsync(It.IsAny<GastoFiltro>()))
             .ReturnsAsync(gastos ?? new List<Gasto>());
+
+        var session = new Mock<ICurrentSession>();
+        session.Setup(s => s.RolActual).Returns(rol);
+        session.Setup(s => s.PermisosActuales).Returns(new HashSet<string>(permisos ?? Enumerable.Empty<string>()));
 
         var proveedores = new Mock<ICategoriaProveedorService>();
         proveedores.Setup(p => p.ListarTodosAsync()).ReturnsAsync(new List<Proveedor>
@@ -79,7 +87,7 @@ public class GastosViewModelTests
         guardado.Setup(g => g.GuardarTextoAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync(true);
 
         var vm = new GastosViewModel(
-            svc.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
+            svc.Object, session.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
             nav.Object, confirm.Object, csv.Object, guardado.Object);
         return (vm, svc, nav, confirm, guardado);
     }
@@ -517,5 +525,37 @@ public class GastosViewModelTests
         await vm.ExportarCsvCommand.ExecuteAsync(null);
 
         confirm.Verify(c => c.InformarAsync("No se pudo guardar el archivo. disco lleno"), Times.Once);
+    }
+
+    // ── PuedeRegistrarPagos: gating del botón "Pagos" (bugfix 2026-08-15) ──────────────────
+    // El botón no tenía NINGÚN gating por permiso. Basta VerFinanzas para entrar a la pantalla,
+    // pero GastoService.RegistrarPagoAsync/AnularPagoAsync exigen Permisos.RegistrarPagos sin
+    // condición — un Operador con VerFinanzas pero sin RegistrarPagos llenaba el formulario y
+    // recién al guardar se comía un 403.
+
+    [Fact]
+    public void Operador_ConVerFinanzasSinRegistrarPagos_PuedeRegistrarPagos_EsFalse()
+    {
+        var (vm, _, _, _, _) = Crear(
+            rol: RolUsuario.Operador, permisos: new[] { Permisos.VerFinanzas });
+
+        Assert.False(vm.PuedeRegistrarPagos);
+    }
+
+    [Fact]
+    public void Operador_ConRegistrarPagos_PuedeRegistrarPagos_EsTrue()
+    {
+        var (vm, _, _, _, _) = Crear(
+            rol: RolUsuario.Operador, permisos: new[] { Permisos.VerFinanzas, Permisos.RegistrarPagos });
+
+        Assert.True(vm.PuedeRegistrarPagos);
+    }
+
+    [Fact]
+    public void Admin_PuedeRegistrarPagos_EsTrue()
+    {
+        var (vm, _, _, _, _) = Crear(rol: RolUsuario.Admin, permisos: Array.Empty<string>());
+
+        Assert.True(vm.PuedeRegistrarPagos);
     }
 }
