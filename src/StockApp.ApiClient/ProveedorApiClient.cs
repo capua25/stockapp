@@ -9,7 +9,7 @@ internal sealed record ProveedorWire(
 internal sealed record ProveedorBody(
     string Nombre, string? Telefono, string? Email, string? Direccion, string? Notas);
 
-/// <summary>IProveedorService contra /proveedores (sin variante /activas: asimetría real del dominio).</summary>
+/// <summary>IProveedorService contra /proveedores (bugfix 2026-08-15: agrega /proveedores/activas).</summary>
 public sealed class ProveedorApiClient : IProveedorService
 {
     private readonly HttpClient _http;
@@ -43,6 +43,15 @@ public sealed class ProveedorApiClient : IProveedorService
     public async Task<IReadOnlyList<Proveedor>> ListarTodosAsync()
     {
         var response = await ApiErrores.EnviarAsync(() => _http.GetAsync("proveedores"));
+        await ApiErrores.AsegurarExitoAsync(response);
+
+        var dtos = await response.Content.ReadFromJsonAsync<List<ProveedorWire>>() ?? new();
+        return dtos.Select(AEntidad).ToList();
+    }
+
+    public async Task<IReadOnlyList<Proveedor>> ListarActivasAsync()
+    {
+        var response = await ApiErrores.EnviarAsync(() => _http.GetAsync("proveedores/activas"));
         await ApiErrores.AsegurarExitoAsync(response);
 
         var dtos = await response.Content.ReadFromJsonAsync<List<ProveedorWire>>() ?? new();

@@ -15,10 +15,11 @@ public static class ProveedoresEndpoints
 {
     public static IEndpointRouteBuilder MapProveedoresEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/proveedores").RequireAuthorization(Permisos.GestionarTablasMaestras);
+        var group = app.MapGroup("/proveedores");
 
         group.MapGet("/", async (IProveedorService proveedores) =>
-            Results.Ok((await proveedores.ListarTodosAsync()).Select(AProveedorDto)));
+            Results.Ok((await proveedores.ListarTodosAsync()).Select(AProveedorDto)))
+            .RequireAuthorization(Permisos.GestionarTablasMaestras);
 
         group.MapPost("/", async (CrearProveedorRequest request, IProveedorService proveedores) =>
         {
@@ -31,10 +32,11 @@ public static class ProveedoresEndpoints
                 Notas = request.Notas,
             };
             var id = await proveedores.AltaAsync(proveedor);
-            // Sin Location: no existe GET /proveedores/{id} (el único GET del recurso es la
-            // lista completa) — emitir una ruta que no resuelve es peor que omitirla.
+            // Sin Location: no existe GET /proveedores/{id} (el GET del recurso es la lista
+            // completa o /activas) — emitir una ruta que no resuelve es peor que omitirla.
             return Results.Created((string?)null, new { id });
-        });
+        })
+        .RequireAuthorization(Permisos.GestionarTablasMaestras);
 
         group.MapPut("/{id:int}", async (int id, ModificarProveedorRequest request, IProveedorService proveedores) =>
         {
@@ -49,13 +51,23 @@ public static class ProveedoresEndpoints
             };
             await proveedores.ModificarAsync(proveedor);
             return Results.Ok();
-        });
+        })
+        .RequireAuthorization(Permisos.GestionarTablasMaestras);
 
         group.MapDelete("/{id:int}", async (int id, IProveedorService proveedores) =>
         {
             await proveedores.BajaLogicaAsync(id);
             return Results.Ok();
-        });
+        })
+        .RequireAuthorization(Permisos.GestionarTablasMaestras);
+
+        // Lectura para Finanzas (bugfix 2026-08-15, mismo patrón que /finanzas/fuentes/activas,
+        // /finanzas/rubros/activos y /finanzas/lineas-poa/activas): un gasto TIENE un proveedor,
+        // así que un Operador con VerFinanzas pero sin GestionarTablasMaestras necesita poder
+        // leerlos (filtrados a Activo=true) para armar el combo de "Gastos y facturas".
+        group.MapGet("/activas", async (IProveedorService proveedores) =>
+            Results.Ok((await proveedores.ListarActivasAsync()).Select(AProveedorDto)))
+            .RequireAuthorization(Permisos.VerFinanzas);
 
         return app;
     }

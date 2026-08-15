@@ -178,9 +178,14 @@ public partial class GastosViewModel : ViewModelBase
     {
         try
         {
-            var proveedores = await _proveedoresService.ListarTodosAsync();
+            // ListarActivasAsync, no ListarTodosAsync (bugfix 2026-08-15): el servidor exige
+            // GestionarTablasMaestras para ListarTodosAsync, pero un Operador de Finanzas solo
+            // tiene VerFinanzas — se comía un 403 al abrir esta pantalla. Mismo criterio que
+            // los otros tres combos de este método (fuentes/rubros/líneas POA): ya vienen
+            // filtrados a Activo=true del lado del servidor, sin filtro repetido acá.
+            var proveedores = await _proveedoresService.ListarActivasAsync();
             ProveedoresDisponibles.Clear();
-            foreach (var p in proveedores.Where(p => p.Activo))
+            foreach (var p in proveedores)
                 ProveedoresDisponibles.Add(p);
 
             var fuentes = await _fuentesService.ListarActivasAsync();

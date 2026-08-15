@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using StockApp.Api.Auth;
 using StockApp.Api.Endpoints;
 using StockApp.Api.Tests.Fixtures;
+using StockApp.Application.Authorization;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using Xunit;
@@ -134,5 +135,93 @@ public class ProveedoresEndpointTests : ApiTestBase
         await using var verificacion = Factory.CrearContexto();
         var actualizado = await verificacion.Proveedores.SingleAsync(p => p.Id == proveedor.Id);
         Assert.False(actualizado.Activo);
+    }
+
+    // ── bugfix 2026-08-15: GET /proveedores/activas con Permisos.VerFinanzas ───────────────
+    // Un Operador de finanzas (solo finanzas.ver) se comía un 403 al abrir "Gastos y facturas"
+    // porque GET /proveedores exige GestionarTablasMaestras. Un gasto TIENE un proveedor, así
+    // que la LECTURA (filtrada a Activo=true) tiene que ser accesible con VerFinanzas — la
+    // ESCRITURA (POST/PUT/DELETE) queda intacta en GestionarTablasMaestras.
+
+    [Fact]
+    public async Task GetProveedoresActivas_ConOperadorSoloVerFinanzas_Devuelve200YFiltraInactivas()
+    {
+        await using var ctx = Factory.CrearContexto();
+        ctx.Proveedores.Add(new Proveedor { Nombre = "Activo", Activo = true });
+        ctx.Proveedores.Add(new Proveedor { Nombre = "Inactivo", Activo = false });
+        await ctx.SaveChangesAsync();
+        var operador = await DatosDePrueba.SeedOperadorConPermisosAsync(
+            ctx, "opfinanzas", "Secreta123!", new[] { Permisos.VerFinanzas });
+        var token = Factory.Services.GetRequiredService<IJwtTokenService>()
+            .GenerarToken(operador.Id, RolUsuario.Operador);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.GetAsync("/proveedores/activas");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var proveedores = await response.Content.ReadFromJsonAsync<List<ProveedorDto>>();
+        Assert.Contains(proveedores!, p => p.Nombre == "Activo");
+        Assert.DoesNotContain(proveedores!, p => p.Nombre == "Inactivo");
+    }
+
+    [Fact]
+    public async Task PostProveedores_ConOperadorSoloVerFinanzas_Devuelve403()
+    {
+        await using var ctx = Factory.CrearContexto();
+        var operador = await DatosDePrueba.SeedOperadorConPermisosAsync(
+            ctx, "opfinanzas", "Secreta123!", new[] { Permisos.VerFinanzas });
+        var token = Factory.Services.GetRequiredService<IJwtTokenService>()
+            .GenerarToken(operador.Id, RolUsuario.Operador);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PostAsJsonAsync("/proveedores",
+            new CrearProveedorRequest("No debería crearse", null, null, null, null));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PutProveedores_ConOperadorSoloVerFinanzas_Devuelve403()
+    {
+        await using var ctx = Factory.CrearContexto();
+        var proveedor = new Proveedor { Nombre = "Original", Activo = true };
+        ctx.Proveedores.Add(proveedor);
+        await ctx.SaveChangesAsync();
+        var operador = await DatosDePrueba.SeedOperadorConPermisosAsync(
+            ctx, "opfinanzas", "Secreta123!", new[] { Permisos.VerFinanzas });
+        var token = Factory.Services.GetRequiredService<IJwtTokenService>()
+            .GenerarToken(operador.Id, RolUsuario.Operador);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.PutAsJsonAsync($"/proveedores/{proveedor.Id}",
+            new ModificarProveedorRequest("No debería modificarse", null, null, null, null));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteProveedores_ConOperadorSoloVerFinanzas_Devuelve403()
+    {
+        await using var ctx = Factory.CrearContexto();
+        var proveedor = new Proveedor { Nombre = "No debería anularse", Activo = true };
+        ctx.Proveedores.Add(proveedor);
+        await ctx.SaveChangesAsync();
+        var operador = await DatosDePrueba.SeedOperadorConPermisosAsync(
+            ctx, "opfinanzas", "Secreta123!", new[] { Permisos.VerFinanzas });
+        var token = Factory.Services.GetRequiredService<IJwtTokenService>()
+            .GenerarToken(operador.Id, RolUsuario.Operador);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.DeleteAsync($"/proveedores/{proveedor.Id}");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 }
