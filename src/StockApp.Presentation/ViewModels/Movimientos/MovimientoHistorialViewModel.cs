@@ -59,6 +59,21 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
     [ObservableProperty]
     private OpcionTipoMovimiento? _tipoFiltroSeleccionado;
 
+    /// <summary>
+    /// Gatea la VISIBILIDAD del combo "Producto" (bugfix 2026-08-16, familia de 323c007/
+    /// 1ab2cd8, PERO variante distinta): a diferencia de Entrada/Salida e Ingreso por
+    /// factura, acá el combo es un FILTRO, no un campo obligatorio — GET /movimientos/
+    /// historial (MovimientosEndpoints.cs) exige el MISMO permiso que ya gatea el sidebar
+    /// (RegistrarMovimientos), sin relación con GestionarProductos, así que el resto de la
+    /// pantalla (Tipo, Desde/Hasta, la grilla) sigue siendo perfectamente usable sin él. Por
+    /// eso NO se agrega GestionarProductos al gate del sidebar (eso sería esconder el
+    /// historial entero a alguien que puede consultarlo); en cambio, si
+    /// IProductoService.BuscarAsync (GET /productos, sí exige GestionarProductos) devuelve
+    /// 403, se oculta solo este combo y el resto de InicializarAsync sigue su curso.
+    /// </summary>
+    [ObservableProperty]
+    private bool _puedeFiltrarPorProducto = true;
+
     public ObservableCollection<MovimientoHistorialDto> Items { get; } = new();
 
     /// <summary>
@@ -108,15 +123,35 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
     /// y el historial completo. Se invoca una sola vez al mostrar la vista
     /// (no hay hook de navegación que lo dispare, ver code-behind).
     /// </summary>
+    /// <remarks>
+    /// Bugfix 2026-08-16: GET /productos (IProductoService.BuscarAsync) exige
+    /// GestionarProductos, permiso que el sidebar NO exige para esta pantalla (solo
+    /// RegistrarMovimientos, igual que GET /movimientos/historial). Antes de este fix, un
+    /// 403 acá abortaba TODA la inicialización — incluida la carga del historial, que no
+    /// depende de GestionarProductos — y encima escalaba a "Ocurrió un error inesperado"
+    /// (sin catch, ver App.axaml.cs). Ahora el 403 se atrapa en silencio (AuthTokenHandler +
+    /// App.axaml.cs ya avisan "Tus permisos cambiaron...", mismo criterio que
+    /// PagosGastoViewModel.InicializarAsync), se oculta el combo vía
+    /// <see cref="PuedeFiltrarPorProducto"/> y CargarAsync corre igual: el historial completo
+    /// (sin filtrar por producto) sigue siendo útil.
+    /// </remarks>
     public async Task InicializarAsync()
     {
-        var productos = await _productoService.BuscarAsync(null, null, null);
-        Productos.Clear();
-        Productos.Add(new OpcionProducto("Todos", null));
-        foreach (var p in productos.Where(p => p.Activo))
-            Productos.Add(new OpcionProducto(p.Nombre, p));
+        try
+        {
+            var productos = await _productoService.BuscarAsync(null, null, null);
+            Productos.Clear();
+            Productos.Add(new OpcionProducto("Todos", null));
+            foreach (var p in productos.Where(p => p.Activo))
+                Productos.Add(new OpcionProducto(p.Nombre, p));
 
-        ProductoFiltroSeleccionado = Productos[0];
+            ProductoFiltroSeleccionado = Productos[0];
+            PuedeFiltrarPorProducto = true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            PuedeFiltrarPorProducto = false;
+        }
 
         await CargarAsync();
     }

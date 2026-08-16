@@ -22,7 +22,12 @@
 
                 <!-- Barra de filtros -->
                 <WrapPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
-                    <StackPanel Spacing="4" Margin="0,0,12,8">
+                    <!-- Filtro por producto: oculto si GET /productos devuelve 403 (bugfix
+                         2026-08-16, ver PuedeFiltrarPorProducto) - a diferencia de Entrada/
+                         Salida e Ingreso por factura, este combo es un FILTRO, no un campo
+                         obligatorio, asi que el resto del historial sigue siendo usable sin
+                         GestionarProductos. -->
+                    <StackPanel Spacing="4" Margin="0,0,12,8" IsVisible="{Binding PuedeFiltrarPorProducto}">
                         <TextBlock Text="Producto" Classes="caption" />
                         <ComboBox ItemsSource="{Binding Productos}"
                                   SelectedItem="{Binding ProductoFiltroSeleccionado}"

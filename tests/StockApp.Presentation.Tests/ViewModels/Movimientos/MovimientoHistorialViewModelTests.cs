@@ -278,6 +278,61 @@ public class MovimientoHistorialViewModelTests
         Assert.Single(vm.Items);
     }
 
+    /// <summary>
+    /// Bugfix 2026-08-16 (misma familia que 323c007/1ab2cd8, PERO variante distinta):
+    /// el combo de producto de esta pantalla es un FILTRO, no un campo obligatorio — a
+    /// diferencia de Entrada/Salida e Ingreso por factura, GET /movimientos/historial
+    /// (MovimientosEndpoints.cs) exige el MISMO permiso que ya gatea el sidebar
+    /// (RegistrarMovimientos), sin relación con GestionarProductos. Por eso acá NO se toca
+    /// el gate: si BuscarAsync (productos) devuelve 403, el historial completo debe seguir
+    /// cargando igual — antes del fix, InicializarAsync llamaba BuscarAsync ANTES de
+    /// CargarAsync, así que una excepción no atrapada abortaba toda la inicialización,
+    /// incluida la carga del historial (que no necesita GestionarProductos).
+    /// </summary>
+    [Fact]
+    public async Task InicializarAsync_ProductoServiceLanzaUnauthorized_CargaHistorialIgual()
+    {
+        var lista = new List<MovimientoHistorialDto> { CrearDto(1) };
+        var (vm, svcMock, _, productoSvcMock, _) = Crear(items: lista);
+        productoSvcMock
+            .Setup(s => s.BuscarAsync(null, null, null))
+            .ThrowsAsync(new UnauthorizedAccessException());
+
+        var excepcion = await Record.ExceptionAsync(() => vm.InicializarAsync());
+
+        Assert.Null(excepcion);
+        svcMock.Verify(s => s.ObtenerHistorialAsync(It.IsAny<HistorialMovimientoFiltro>()), Times.Once);
+        Assert.Single(vm.Items);
+    }
+
+    /// <summary>
+    /// Complemento del test anterior: además de no romper la carga, oculta el combo de
+    /// producto (IsVisible del filtro en la vista) para no dejar un ComboBox vacío sin
+    /// explicación — mismo criterio de "ocultar, no reventar" que PuedeRegistrarPagos.
+    /// </summary>
+    [Fact]
+    public async Task InicializarAsync_ProductoServiceLanzaUnauthorized_OcultaFiltroDeProducto()
+    {
+        var (vm, _, _, productoSvcMock, _) = Crear();
+        productoSvcMock
+            .Setup(s => s.BuscarAsync(null, null, null))
+            .ThrowsAsync(new UnauthorizedAccessException());
+
+        await vm.InicializarAsync();
+
+        Assert.False(vm.PuedeFiltrarPorProducto);
+    }
+
+    [Fact]
+    public async Task InicializarAsync_ProductoServiceOk_PuedeFiltrarPorProductoQuedaEnTrue()
+    {
+        var (vm, _, _, _, _) = Crear();
+
+        await vm.InicializarAsync();
+
+        Assert.True(vm.PuedeFiltrarPorProducto);
+    }
+
     [Fact]
     public void ProductoFiltroSeleccionado_AlAsignarProductoReal_DerivaFiltroProductoId()
     {
