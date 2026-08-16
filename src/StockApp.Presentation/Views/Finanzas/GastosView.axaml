@@ -105,8 +105,15 @@
 
         <!-- Acciones -->
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,12">
-            <Button Classes="primary" Content="Nuevo gasto" Command="{Binding NuevoCommand}" />
-            <Button Classes="secondary" Content="Editar" Command="{Binding EditarCommand}" />
+            <!-- Nuevo/Editar: gateados por PuedeRegistrarGastos (bugfix 2026-08-15) - antes sin
+                 gating, un Operador con VerFinanzas (alcanza para entrar a esta pantalla) pero sin
+                 RegistrarGastos veia ambos botones habilitados: abria GastoFormView, llenaba el
+                 formulario completo... y no habia boton "Guardar" (ese SI esta gateado por
+                 PuedeRegistrarGastos en GastoFormView), una puerta a una habitacion sin salida. -->
+            <Button Classes="primary" Content="Nuevo gasto" Command="{Binding NuevoCommand}"
+                    IsVisible="{Binding PuedeRegistrarGastos}" />
+            <Button Classes="secondary" Content="Editar" Command="{Binding EditarCommand}"
+                    IsVisible="{Binding PuedeRegistrarGastos}" />
             <!-- Pagos: gateado por PuedeRegistrarPagos (bugfix 2026-08-15) - antes sin gating,
                  un Operador con VerFinanzas (alcanza para entrar a esta pantalla) pero sin
                  RegistrarPagos podia abrir el formulario y recien al guardar se comia un 403
