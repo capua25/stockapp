@@ -68,6 +68,24 @@ public class LibroCajaViewModelTests
         Assert.Equal(500m, fila.SaldoCorrido);
     }
 
+    // ── bugfix 2026-08-15: red de contención — CargarAsync no debe escalar un 403 ──────────
+    // Mismo criterio que GastosViewModel.CargarAsync (ec0696c): CargarAsync la dispara la View
+    // (DataContextChanged) fire-and-forget — un UnauthorizedAccessException no atrapado escala
+    // a Dispatcher.UIThread.UnhandledException (App.axaml.cs). Este método no tenía NINGÚN
+    // try/catch.
+
+    [Fact]
+    public async Task CargarAsync_SiObtenerLibroCajaMesLanzaUnauthorized_NoPropagaLaExcepcion()
+    {
+        var (vm, svc, _, _) = Crear();
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()))
+            .ThrowsAsync(new UnauthorizedAccessException());
+
+        var excepcion = await Record.ExceptionAsync(() => vm.CargarAsync());
+
+        Assert.Null(excepcion);
+    }
+
     [Fact]
     public async Task VerAnioCompleto_True_PideLibroCajaAnual()
     {

@@ -53,6 +53,29 @@ public class CalendarioPagosViewModelTests
         Assert.Single(vm.PagosRecientes);
     }
 
+    // ── bugfix 2026-08-15: red de contención — CargarAsync no debe escalar un 403 ──────────
+    // Mismo criterio que GastosViewModel.CargarAsync (ec0696c): CargarAsync la dispara la View
+    // (DataContextChanged) fire-and-forget — un UnauthorizedAccessException no atrapado escala
+    // a Dispatcher.UIThread.UnhandledException (App.axaml.cs). Este método no tenía NINGÚN
+    // try/catch.
+
+    [Fact]
+    public async Task CargarAsync_SiObtenerCalendarioPagosLanzaUnauthorized_NoPropagaLaExcepcion()
+    {
+        var svc = new Mock<IFinanzasVistasService>();
+        svc.Setup(s => s.ObtenerCalendarioPagosAsync(null)).ThrowsAsync(new UnauthorizedAccessException());
+        var gastoSvc = new Mock<IGastoService>();
+        var session = new Mock<ICurrentSession>();
+        session.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+        var nav = new Mock<INavigationService>();
+
+        var vm = new CalendarioPagosViewModel(svc.Object, gastoSvc.Object, session.Object, nav.Object);
+
+        var excepcion = await Record.ExceptionAsync(() => vm.CargarAsync());
+
+        Assert.Null(excepcion);
+    }
+
     [Fact]
     public async Task RegistrarPago_ObtieneElGastoYNavegaAPagosGastoViewModel()
     {

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -52,16 +53,30 @@ public partial class CalendarioPagosViewModel : ViewModelBase
 
     public async Task CargarAsync()
     {
-        var calendario = await _service.ObtenerCalendarioPagosAsync();
+        try
+        {
+            var calendario = await _service.ObtenerCalendarioPagosAsync();
 
-        Vencidas.Clear();
-        foreach (var f in calendario.Vencidas) Vencidas.Add(f);
-        AVencer7Dias.Clear();
-        foreach (var f in calendario.AVencer7Dias) AVencer7Dias.Add(f);
-        AVencer30Dias.Clear();
-        foreach (var f in calendario.AVencer30Dias) AVencer30Dias.Add(f);
-        PagosRecientes.Clear();
-        foreach (var p in calendario.PagosRecientes) PagosRecientes.Add(p);
+            Vencidas.Clear();
+            foreach (var f in calendario.Vencidas) Vencidas.Add(f);
+            AVencer7Dias.Clear();
+            foreach (var f in calendario.AVencer7Dias) AVencer7Dias.Add(f);
+            AVencer30Dias.Clear();
+            foreach (var f in calendario.AVencer30Dias) AVencer30Dias.Add(f);
+            PagosRecientes.Clear();
+            foreach (var p in calendario.PagosRecientes) PagosRecientes.Add(p);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Red de contención (bugfix 2026-08-15): CargarAsync la dispara la View
+            // (DataContextChanged) fire-and-forget — una excepción no atrapada acá escala a
+            // Dispatcher.UIThread.UnhandledException (App.axaml.cs), que loguea a crash.log y
+            // muestra el genérico "Ocurrió un error inesperado" como si fuera un bug real. Un
+            // 403 ya se avisó ANTES de llegar acá: AuthTokenHandler dispara
+            // ApiSession.AccesoRevocado apenas ve el 403 en la respuesta HTTP, y App.axaml.cs
+            // ya informa "Tus permisos cambiaron...". Mismo criterio que
+            // GastosViewModel.CargarAsync (ec0696c): silencioso, para no duplicar el aviso.
+        }
     }
 
     [RelayCommand]

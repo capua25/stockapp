@@ -107,19 +107,33 @@ public partial class IngresoFormViewModel : ViewModelBase
 
     public async Task InicializarAsync()
     {
-        var fuentes = await _fuentesService.ListarActivasAsync();
-        FuentesDisponibles.Clear();
-        foreach (var f in fuentes)
-            FuentesDisponibles.Add(f);
-
-        if (_ingresoParaEditar is not null)
+        try
         {
-            FuenteSeleccionada =
-                FuentesDisponibles.FirstOrDefault(f => f.Id == _ingresoParaEditar.FuenteFinanciamientoId)
-                ?? _ingresoParaEditar.FuenteFinanciamiento;
-            if (FuenteSeleccionada is not null
-                && FuentesDisponibles.All(f => f.Id != FuenteSeleccionada.Id))
-                FuentesDisponibles.Add(FuenteSeleccionada);
+            var fuentes = await _fuentesService.ListarActivasAsync();
+            FuentesDisponibles.Clear();
+            foreach (var f in fuentes)
+                FuentesDisponibles.Add(f);
+
+            if (_ingresoParaEditar is not null)
+            {
+                FuenteSeleccionada =
+                    FuentesDisponibles.FirstOrDefault(f => f.Id == _ingresoParaEditar.FuenteFinanciamientoId)
+                    ?? _ingresoParaEditar.FuenteFinanciamiento;
+                if (FuenteSeleccionada is not null
+                    && FuentesDisponibles.All(f => f.Id != FuenteSeleccionada.Id))
+                    FuentesDisponibles.Add(FuenteSeleccionada);
+            }
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Red de contención (bugfix 2026-08-15): InicializarAsync la dispara la View
+            // (DataContextChanged) fire-and-forget — una excepción no atrapada acá escala a
+            // Dispatcher.UIThread.UnhandledException (App.axaml.cs), que loguea a crash.log y
+            // muestra el genérico "Ocurrió un error inesperado" como si fuera un bug real. Un
+            // 403 ya se avisó ANTES de llegar acá: AuthTokenHandler dispara
+            // ApiSession.AccesoRevocado apenas ve el 403 en la respuesta HTTP, y App.axaml.cs
+            // ya informa "Tus permisos cambiaron...". Mismo criterio que
+            // GastosViewModel.CargarAsync (ec0696c): silencioso, para no duplicar el aviso.
         }
     }
 

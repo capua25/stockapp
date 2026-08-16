@@ -51,6 +51,29 @@ public class ControlPoaViewModelTests
         Assert.True(vm.Filas[1].Sobregirada);
     }
 
+    // ── bugfix 2026-08-15: red de contención — CargarAsync no debe escalar un 403 ──────────
+    // Mismo criterio que GastosViewModel.CargarAsync (ec0696c): CargarAsync la dispara la View
+    // (DataContextChanged) fire-and-forget — un UnauthorizedAccessException no atrapado escala
+    // a Dispatcher.UIThread.UnhandledException (App.axaml.cs). Este método no tenía NINGÚN
+    // try/catch.
+
+    [Fact]
+    public async Task CargarAsync_SiObtenerControlPoaLanzaUnauthorized_NoPropagaLaExcepcion()
+    {
+        var svc = new Mock<IFinanzasVistasService>();
+        svc.Setup(s => s.ObtenerControlPoaAsync(It.IsAny<int>())).ThrowsAsync(new UnauthorizedAccessException());
+        var nav = new Mock<INavigationService>();
+        var csv = new Mock<ICsvExporter>();
+        var guardado = new Mock<IServicioGuardadoArchivo>();
+        var confirm = new Mock<IConfirmacionService>();
+
+        var vm = new ControlPoaViewModel(svc.Object, nav.Object, csv.Object, guardado.Object, confirm.Object);
+
+        var excepcion = await Record.ExceptionAsync(() => vm.CargarAsync());
+
+        Assert.Null(excepcion);
+    }
+
     [Fact]
     public async Task FilasView_EsOrdenable()
     {

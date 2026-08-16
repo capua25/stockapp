@@ -66,6 +66,29 @@ public class IngresosViewModelTests
         Assert.Equal("Partida FIGM", vm.Items[0].Concepto);
     }
 
+    // ── bugfix 2026-08-15: red de contención — CargarAsync no debe escalar un 403 ──────────
+    // Mismo criterio que GastosViewModel.CargarAsync (ec0696c): CargarAsync la dispara la View
+    // (DataContextChanged) fire-and-forget — un UnauthorizedAccessException no atrapado escala
+    // a Dispatcher.UIThread.UnhandledException (App.axaml.cs). El 403 ya se avisó ANTES de
+    // llegar acá, así que el catch es silencioso.
+
+    [Fact]
+    public async Task CargarAsync_SiListarTodosLanzaUnauthorized_NoPropagaLaExcepcion()
+    {
+        var svc = new Mock<IIngresoCajaService>();
+        svc.Setup(s => s.ListarTodosAsync()).ThrowsAsync(new UnauthorizedAccessException());
+        var session = new Mock<ICurrentSession>();
+        session.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+        var nav = new Mock<INavigationService>();
+        var confirm = new Mock<IConfirmacionService>();
+
+        var vm = new IngresosViewModel(svc.Object, session.Object, nav.Object, confirm.Object);
+
+        var excepcion = await Record.ExceptionAsync(() => vm.CargarAsync());
+
+        Assert.Null(excepcion);
+    }
+
     // ── ItemsView: fix de ordenamiento por click en encabezados (Avalonia 12, regresión #21129) ──
 
     [Fact]
