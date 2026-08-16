@@ -33,6 +33,16 @@
                     IsVisible="{Binding PuedeRegistrarIngresos}" />
             <Button Classes="secondary" Content="Dar de baja" Command="{Binding BajaCommand}"
                     IsVisible="{Binding PuedeRegistrarIngresos}" />
+            <!-- Indicador "Solo lectura" (bugfix 2026-08-16): con los tres botones de arriba
+                 ocultos por PuedeRegistrarIngresos, un Operador con solo VerFinanzas se quedaba
+                 con titulo y grilla y NINGUN indicio de por que no puede hacer nada - se lee
+                 como pantalla rota en vez de "sin permiso". Negacion directa en el binding
+                 (patron ya usado en DocumentoFormView.axaml IsVisible="{Binding !EsNuevoDocumento}"),
+                 sin propiedad derivada ni converter. Classes="caption" es el estilo de texto
+                 secundario ya definido en Typography.axaml (TextoSecundarioBrush), el mismo que
+                 usan los textos de ayuda de DocumentoFormView/TareaFormView. -->
+            <TextBlock Text="Solo lectura" Classes="caption" VerticalAlignment="Center"
+                       IsVisible="{Binding !PuedeRegistrarIngresos}" />
         </StackPanel>
 
         <Border Classes="card">
