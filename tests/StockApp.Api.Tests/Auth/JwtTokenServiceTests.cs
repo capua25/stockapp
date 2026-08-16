@@ -1,6 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using StockApp.Api.Auth;
+using StockApp.Application.Auth;
 using StockApp.Domain.Enums;
 using Xunit;
 
@@ -14,7 +15,7 @@ public class JwtTokenServiceTests
     [Fact]
     public void GenerarToken_IncluyeClaimsDeUsuarioIdYRol()
     {
-        var service = new JwtTokenService(Options);
+        var service = new JwtTokenService(Options, new RelojMonotonico());
 
         var token = service.GenerarToken(42, RolUsuario.Admin);
 
@@ -26,7 +27,7 @@ public class JwtTokenServiceTests
     [Fact]
     public void GenerarToken_VenceEnDiezHoras()
     {
-        var service = new JwtTokenService(Options);
+        var service = new JwtTokenService(Options, new RelojMonotonico());
         var antes = DateTime.UtcNow;
 
         var token = service.GenerarToken(1, RolUsuario.Operador);
@@ -42,7 +43,7 @@ public class JwtTokenServiceTests
     [Fact]
     public void GenerarToken_IncluyeClaimIatCercanoAAhora()
     {
-        var service = new JwtTokenService(Options);
+        var service = new JwtTokenService(Options, new RelojMonotonico());
         var antes = DateTime.UtcNow;
 
         var token = service.GenerarToken(1, RolUsuario.Operador);

@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
+using StockApp.Application.Auth;
 using StockApp.Domain.Enums;
 
 namespace StockApp.Api.Auth;
@@ -9,12 +10,22 @@ namespace StockApp.Api.Auth;
 public class JwtTokenService : IJwtTokenService
 {
     private readonly JwtOptions _options;
+    private readonly IRelojMonotonico _reloj;
 
-    public JwtTokenService(JwtOptions options) => _options = options;
+    public JwtTokenService(JwtOptions options, IRelojMonotonico reloj)
+    {
+        _options = options;
+        _reloj = reloj;
+    }
 
     public string GenerarToken(int usuarioId, RolUsuario rol)
     {
-        var ahora = DateTime.UtcNow;
+        // Hardening del hardening (post-4293c6b): "ahora" ya NO sale de DateTime.UtcNow
+        // directo -- sale de IRelojMonotonico.AhoraUtc(), la MISMA instancia compartida
+        // con IRevocadorTokens (ver comentario completo en RelojMonotonico), para que un
+        // salto de reloj de pared bajo carga no pueda desalinear "iat" respecto de la
+        // marca de revocación. Ver RelojMonotonico para el porqué completo.
+        var ahora = _reloj.AhoraUtc();
 
         // Claim "iat" (Fase B hardening): sin este claim, IRevocadorTokens no tiene forma
         // de comparar el instante de emisión del token contra el mínimo aceptado tras un

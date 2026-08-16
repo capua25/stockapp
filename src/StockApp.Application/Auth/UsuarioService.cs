@@ -20,6 +20,7 @@ public class UsuarioService : IUsuarioService
     private readonly IAuditLogger          _audit;
     private readonly IRevocadorTokens      _revocador;
     private readonly IProveedorPermisos    _permisos;
+    private readonly IRelojMonotonico      _reloj;
 
     public UsuarioService(
         IUsuarioRepository    repo,
@@ -28,7 +29,8 @@ public class UsuarioService : IUsuarioService
         IAuthorizationService auth,
         IAuditLogger          audit,
         IRevocadorTokens      revocador,
-        IProveedorPermisos    permisos)
+        IProveedorPermisos    permisos,
+        IRelojMonotonico      reloj)
     {
         _repo      = repo;
         _hasher    = hasher;
@@ -37,6 +39,7 @@ public class UsuarioService : IUsuarioService
         _audit     = audit;
         _revocador = revocador;
         _permisos  = permisos;
+        _reloj     = reloj;
     }
 
     public async Task<int> AltaUsuarioAsync(
@@ -124,8 +127,9 @@ public class UsuarioService : IUsuarioService
             $"Baja lógica de '{usuario.NombreUsuario}'");
 
         // Fase B hardening (deuda M3): un usuario deshabilitado no debe poder seguir
-        // usando su JWT viejo hasta que expire naturalmente.
-        _revocador.Revocar(usuarioId, DateTime.UtcNow);
+        // usando su JWT viejo hasta que expire naturalmente. "ahora" sale del reloj
+        // monotónico compartido (ver RelojMonotonico), no de DateTime.UtcNow directo.
+        _revocador.Revocar(usuarioId, _reloj.AhoraUtc());
     }
 
     public async Task CambiarRolAsync(int usuarioId, RolUsuario nuevoRol)
@@ -189,8 +193,9 @@ public class UsuarioService : IUsuarioService
             $"Rol: {rolAnterior} → {nuevoRol}");
 
         // Fase B hardening (deuda M3): un JWT viejo con el rol anterior no debe seguir
-        // siendo válido tras el cambio.
-        _revocador.Revocar(usuarioId, DateTime.UtcNow);
+        // siendo válido tras el cambio. "ahora" sale del reloj monotónico compartido
+        // (ver RelojMonotonico), no de DateTime.UtcNow directo.
+        _revocador.Revocar(usuarioId, _reloj.AhoraUtc());
     }
 
     /// <summary>
@@ -234,8 +239,9 @@ public class UsuarioService : IUsuarioService
 
         // Fase B hardening: cualquier JWT de este usuario emitido antes de ahora queda
         // inválido de inmediato, sin esperar a su expiración natural. Aplica a ambos
-        // caminos (auto-cambio y reset administrativo de otro usuario).
-        _revocador.Revocar(usuarioId, DateTime.UtcNow);
+        // caminos (auto-cambio y reset administrativo de otro usuario). "ahora" sale del
+        // reloj monotónico compartido (ver RelojMonotonico), no de DateTime.UtcNow directo.
+        _revocador.Revocar(usuarioId, _reloj.AhoraUtc());
     }
 
     public async Task<IReadOnlyList<UsuarioDto>> ListarAsync()

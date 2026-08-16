@@ -50,7 +50,7 @@ public class UsuarioServiceTests
 
         var svc = new UsuarioService(
             repo.Object, hasher.Object, session.Object, auth.Object, audit.Object, revocador.Object,
-            permisos.Object);
+            permisos.Object, new RelojMonotonico());
         return (svc, repo, hasher, session, auth, audit, revocador, permisos);
     }
 

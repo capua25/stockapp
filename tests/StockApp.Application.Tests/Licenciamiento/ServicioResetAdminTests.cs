@@ -125,7 +125,7 @@ public class ServicioResetAdminTests
         var revocador = new RevocadorFake();
         var servicio = new ServicioResetAdmin(
             validador, new FingerprintFake(), desafios, repo, hasher, audit, revocador,
-            NullLogger<ServicioResetAdmin>.Instance);
+            NullLogger<ServicioResetAdmin>.Instance, new RelojMonotonico());
 
         return new Contexto
         {
@@ -255,7 +255,7 @@ public class ServicioResetAdminTests
         var logger = new LoggerFake();
         var servicio = new ServicioResetAdmin(
             validador, new FingerprintRotoFake(), desafios, repo, new HasherFake(), audit,
-            new RevocadorFake(), logger);
+            new RevocadorFake(), logger, new RelojMonotonico());
 
         var desafio = desafios.GenerarNuevo();
         var token = FirmadorLicencias.EmitirTokenReset(
@@ -322,7 +322,7 @@ public class ServicioResetAdminTests
         var desafios = new AlmacenDesafiosResetEnMemoria(TimeSpan.FromMinutes(5), () => ahora);
         var servicio = new ServicioResetAdmin(
             validador, new FingerprintFake(), desafios, repo, new HasherFake(), audit,
-            new RevocadorFake(), NullLogger<ServicioResetAdmin>.Instance);
+            new RevocadorFake(), NullLogger<ServicioResetAdmin>.Instance, new RelojMonotonico());
 
         var desafio = desafios.GenerarNuevo();
         ahora = ahora.AddMinutes(6); // más allá del TTL de 5 minutos

@@ -321,6 +321,14 @@ builder.Services.AddScoped<ServicioConsultaLogs>();
 builder.Services.AddSingleton(sp => JwtOptionsFactory.Crear(sp.GetRequiredService<IConfiguration>()));
 builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
 
+// IRelojMonotonico: SINGLETON único de proceso, compartido entre JwtTokenService
+// (emisión, claim "iat") y todo llamador de IRevocadorTokens.Revocar (UsuarioService,
+// ServicioResetAdmin). Hardening del hardening: evita el 401 espurio por un salto de
+// reloj de pared (CLOCK_REALTIME) bajo saturación de CPU -- ver comentario completo en
+// RelojMonotonico. TIENE que ser una única instancia compartida por ambos lados: si cada
+// uno anclara por su cuenta, un salto entre esos dos anclajes reintroduciría el bug.
+builder.Services.AddSingleton<IRelojMonotonico, RelojMonotonico>();
+
 // IRevocadorTokens: SINGLETON en memoria (Fase B hardening). Guarda por usuario el
 // mínimo iat aceptado; se pierde al reiniciar la API (LAN, expiración de JWT corta —
 // ver comentario de la limitación aceptada en RevocadorTokensEnMemoria).

@@ -26,6 +26,7 @@ public sealed class ServicioResetAdmin
     private readonly IAuditLogger          _audit;
     private readonly IRevocadorTokens      _revocador;
     private readonly ILogger<ServicioResetAdmin> _logger;
+    private readonly IRelojMonotonico      _reloj;
 
     public ServicioResetAdmin(
         ValidadorFirma         validador,
@@ -35,7 +36,8 @@ public sealed class ServicioResetAdmin
         IPasswordHasher        hasher,
         IAuditLogger           audit,
         IRevocadorTokens       revocador,
-        ILogger<ServicioResetAdmin> logger)
+        ILogger<ServicioResetAdmin> logger,
+        IRelojMonotonico       reloj)
     {
         _validador      = validador;
         _fingerprint    = fingerprint;
@@ -45,6 +47,7 @@ public sealed class ServicioResetAdmin
         _audit          = audit;
         _revocador      = revocador;
         _logger         = logger;
+        _reloj          = reloj;
     }
 
     public async Task<ResultadoValidacionReset> ResetearAsync(string token, string nuevaContrasena)
@@ -103,8 +106,9 @@ public sealed class ServicioResetAdmin
 
         // Fase B hardening: cualquier JWT del admin emitido antes de ahora queda inválido
         // de inmediato (el admin recreado siempre tiene un id nuevo, así que esto no
-        // afecta a la sesión recién creada por el reset).
-        _revocador.Revocar(adminId, DateTime.UtcNow);
+        // afecta a la sesión recién creada por el reset). "ahora" sale del reloj
+        // monotónico compartido (ver RelojMonotonico), no de DateTime.UtcNow directo.
+        _revocador.Revocar(adminId, _reloj.AhoraUtc());
 
         return ResultadoValidacionReset.Valido;
     }
