@@ -706,6 +706,97 @@ public class UsuarioServiceTests
             () => svc.GuardarPermisosAsync(404, new[] { Permisos.VerFinanzas }));
     }
 
+    // ── Paso 2 del refactor de permisos: PermisoDependencias.Requisitos (duras) ────────────
+
+    [Fact]
+    public async Task GuardarPermisosAsync_RegistrarGastosSinVerFinanzas_Rechaza()
+    {
+        var (svc, repo, _, _, _, _, _, permisos) = Crear();
+        var operador = new Usuario { Id = 9, Rol = RolUsuario.Operador, NombreUsuario = "op", HashContrasena = "h", FechaAlta = DateTime.UtcNow };
+        repo.Setup(r => r.ObtenerPorIdAsync(9)).ReturnsAsync(operador);
+
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => svc.GuardarPermisosAsync(9, new[] { Permisos.RegistrarGastos }));
+        permisos.Verify(p => p.GuardarAsync(It.IsAny<int>(), It.IsAny<IReadOnlyCollection<string>>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GuardarPermisosAsync_RegistrarPagosSinVerFinanzas_Rechaza()
+    {
+        var (svc, repo, _, _, _, _, _, permisos) = Crear();
+        var operador = new Usuario { Id = 9, Rol = RolUsuario.Operador, NombreUsuario = "op", HashContrasena = "h", FechaAlta = DateTime.UtcNow };
+        repo.Setup(r => r.ObtenerPorIdAsync(9)).ReturnsAsync(operador);
+
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => svc.GuardarPermisosAsync(9, new[] { Permisos.RegistrarPagos }));
+        permisos.Verify(p => p.GuardarAsync(It.IsAny<int>(), It.IsAny<IReadOnlyCollection<string>>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GuardarPermisosAsync_RegistrarIngresosSinVerFinanzas_Rechaza()
+    {
+        var (svc, repo, _, _, _, _, _, permisos) = Crear();
+        var operador = new Usuario { Id = 9, Rol = RolUsuario.Operador, NombreUsuario = "op", HashContrasena = "h", FechaAlta = DateTime.UtcNow };
+        repo.Setup(r => r.ObtenerPorIdAsync(9)).ReturnsAsync(operador);
+
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => svc.GuardarPermisosAsync(9, new[] { Permisos.RegistrarIngresos }));
+        permisos.Verify(p => p.GuardarAsync(It.IsAny<int>(), It.IsAny<IReadOnlyCollection<string>>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GuardarPermisosAsync_RecalcularStockSinRegistrarMovimientos_Rechaza()
+    {
+        var (svc, repo, _, _, _, _, _, permisos) = Crear();
+        var operador = new Usuario { Id = 9, Rol = RolUsuario.Operador, NombreUsuario = "op", HashContrasena = "h", FechaAlta = DateTime.UtcNow };
+        repo.Setup(r => r.ObtenerPorIdAsync(9)).ReturnsAsync(operador);
+
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => svc.GuardarPermisosAsync(9, new[] { Permisos.RecalcularStock }));
+        permisos.Verify(p => p.GuardarAsync(It.IsAny<int>(), It.IsAny<IReadOnlyCollection<string>>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GuardarPermisosAsync_CombinacionCompletaConTodosLosRequisitos_Guarda()
+    {
+        // Los cuatro permisos con requisito duro, junto con sus requisitos: ninguna regla se
+        // dispara y la operación llega hasta GuardarAsync.
+        var (svc, repo, _, _, _, audit, _, permisos) = Crear();
+        var operador = new Usuario { Id = 9, Rol = RolUsuario.Operador, NombreUsuario = "op", HashContrasena = "h", FechaAlta = DateTime.UtcNow };
+        repo.Setup(r => r.ObtenerPorIdAsync(9)).ReturnsAsync(operador);
+
+        await svc.GuardarPermisosAsync(9, new[]
+        {
+            Permisos.VerFinanzas,
+            Permisos.RegistrarGastos,
+            Permisos.RegistrarPagos,
+            Permisos.RegistrarIngresos,
+            Permisos.RegistrarMovimientos,
+            Permisos.RecalcularStock,
+        });
+
+        permisos.Verify(p => p.GuardarAsync(9,
+            It.Is<IReadOnlyCollection<string>>(c => c.Count == 6)),
+            Times.Once);
+        audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), AccionAuditada.ModificacionPermisosUsuario, "Usuario", 9, It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GuardarPermisosAsync_ListaVacia_NoDisparaNingunaReglaDeRequisitos()
+    {
+        // Confirmación explícita (no asumida): una lista vacía no tiene ningún permiso
+        // concedido que exija otro, así que ninguna regla de PermisoDependencias.Requisitos
+        // se dispara y el camino sigue siendo válido tras el paso 2 del refactor.
+        var (svc, repo, _, _, _, _, _, permisos) = Crear();
+        var operador = new Usuario { Id = 9, Rol = RolUsuario.Operador, NombreUsuario = "op", HashContrasena = "h", FechaAlta = DateTime.UtcNow };
+        repo.Setup(r => r.ObtenerPorIdAsync(9)).ReturnsAsync(operador);
+
+        await svc.GuardarPermisosAsync(9, Array.Empty<string>());
+
+        permisos.Verify(p => p.GuardarAsync(9, It.Is<IReadOnlyCollection<string>>(c => c.Count == 0)), Times.Once);
+    }
+
     // ── Task 11: AltaUsuarioAsync siembra PermisosInicialesOperador ─────────
 
     [Fact]
