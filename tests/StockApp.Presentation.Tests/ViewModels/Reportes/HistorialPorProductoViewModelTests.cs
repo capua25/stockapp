@@ -202,4 +202,32 @@ public class HistorialPorProductoViewModelTests
 
         confirmMock.Verify(c => c.InformarAsync("No se pudo guardar el archivo. disco lleno"), Times.Once);
     }
+
+    // ── bugfix 2026-08-16 (auditoría, fix bug de coherencia de permisos): red de contención ──
+    // CargarAsync se dispara fire-and-forget desde DataContextChanged
+    // (HistorialPorProductoView.axaml.cs). Antes del fix del gate (endurecido a VerReportes +
+    // RegistrarMovimientos en ShellMainViewModel), un Operador con VerReportes pero sin
+    // RegistrarMovimientos llegaba a esta pantalla y cada búsqueda le tiraba 403 sin atrapar --
+    // escalaba al dispatcher global (App.axaml.cs) y mostraba el genérico "Ocurrió un error
+    // inesperado" duplicando el aviso de "Tus permisos cambiaron..." que ya dispara
+    // AuthTokenHandler. Mismo criterio que GastosViewModel.CargarAsync: catch silencioso.
+    [Fact]
+    public async Task CargarAsync_SiElServicioLanzaUnauthorized_NoPropagaLaExcepcion()
+    {
+        var servicioMock = new Mock<IReporteStockService>();
+        servicioMock
+            .Setup(s => s.ObtenerHistorialPorProductoAsync(
+                It.IsAny<int>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>()))
+            .ThrowsAsync(new UnauthorizedAccessException());
+        var exporterMock = new Mock<ICsvExporter>();
+        var guardadoMock = new Mock<IServicioGuardadoArchivo>();
+        var confirmMock = new Mock<IConfirmacionService>();
+
+        var vm = new HistorialPorProductoViewModel(
+            servicioMock.Object, exporterMock.Object, guardadoMock.Object, confirmMock.Object);
+
+        var ex = await Record.ExceptionAsync(() => vm.CargarAsync());
+
+        Assert.Null(ex);
+    }
 }

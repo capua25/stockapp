@@ -126,6 +126,23 @@ public partial class ShellMainViewModel : ViewModelBase
          _session.PermisosActuales.Contains(Permisos.GestionarProductos));
 
     /// <summary>
+    /// Historial por producto (fix bug de coherencia de permisos, 2026-08-16, auditoría):
+    /// ReporteStockService.ObtenerHistorialPorProductoAsync verifica VerReportes pero DELEGA en
+    /// MovimientoStockService.ObtenerHistorialAsync, que exige RegistrarMovimientos -- un permiso
+    /// independiente. El comentario "DOBLE-GUARD" original asumía que VerReportes era Admin-only
+    /// (premisa que dejó de ser cierta cuando pasó a ser configurable por usuario). Se endurece
+    /// el gate de ENTRADA a esta pantalla en vez de relajar el servicio delegado: mismo criterio
+    /// que PuedeRegistrarEntradaSalida/PuedeIngresarPorFactura -- el gate exige el MÁXIMO de los
+    /// permisos que piden las capas de abajo, nunca el mínimo. A diferencia de las otras 4
+    /// pantallas de Reportes (Valorización/StockCategoria/MasMovidos/AuditoriaLog), que solo
+    /// verifican VerReportes sin delegar a otro servicio con otro permiso.
+    /// </summary>
+    public bool PuedeVerHistorialPorProducto =>
+        _session.RolActual == RolUsuario.Admin ||
+        (_session.PermisosActuales.Contains(Permisos.VerReportes) &&
+         _session.PermisosActuales.Contains(Permisos.RegistrarMovimientos));
+
+    /// <summary>
     /// Número de versión de la app para mostrar al pie del menú lateral (ej. "v0.1.1").
     /// </summary>
     public string VersionTexto => $"v{_infoApp.Version}";
@@ -203,6 +220,7 @@ public partial class ShellMainViewModel : ViewModelBase
         OnPropertyChanged(nameof(PuedeVerReportes));
         OnPropertyChanged(nameof(PuedeIngresarPorFactura));
         OnPropertyChanged(nameof(PuedeRegistrarEntradaSalida));
+        OnPropertyChanged(nameof(PuedeVerHistorialPorProducto));
     }
 
     /// <summary>

@@ -87,8 +87,21 @@ public partial class HistorialPorProductoViewModel : ViewModelBase
         }
 
         MensajeError = null;
-        Items = await _servicio.ObtenerHistorialPorProductoAsync(
-            ProductoId, ALocalAUtc(FechaDesde), ALocalAUtc(FechaHasta));
+
+        try
+        {
+            Items = await _servicio.ObtenerHistorialPorProductoAsync(
+                ProductoId, ALocalAUtc(FechaDesde), ALocalAUtc(FechaHasta));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Red de contención (bugfix 2026-08-16, auditoría): CargarAsync la dispara la View
+            // (DataContextChanged) fire-and-forget -- un 403 sin atrapar acá escala a
+            // Dispatcher.UIThread.UnhandledException (App.axaml.cs), que muestra el genérico
+            // "Ocurrió un error inesperado" duplicando el aviso "Tus permisos cambiaron..." que
+            // ya dispara AuthTokenHandler al ver el 403. Mismo criterio que
+            // GastosViewModel.CargarAsync (Finanzas): catch silencioso, sin volver a informar.
+        }
     }
 
     /// <summary>

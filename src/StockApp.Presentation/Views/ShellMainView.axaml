@@ -360,11 +360,15 @@
                     </Grid>
                 </Button>
 
+                <!-- Historial por producto: gateado por PuedeVerHistorialPorProducto (fix bug de
+                     coherencia de permisos 2026-08-16) - requiere VerReportes + RegistrarMovimientos,
+                     no solo VerReportes como los demás ítems de Reportes, porque el servicio delega
+                     en MovimientoStockService.ObtenerHistorialAsync, que exige RegistrarMovimientos. -->
                 <Button Command="{Binding NavHistorialPorProductoCommand}"
                         Classes="ghost"
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=HistorialPorProducto}"
                         HorizontalAlignment="Stretch"
-                        IsVisible="{Binding PuedeVerReportes}">
+                        IsVisible="{Binding PuedeVerHistorialPorProducto}">
                     <Grid ColumnDefinitions="Auto,*">
                         <i:Icon Grid.Column="0" Value="mdi-file-document" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Grid.Column="1" Text="Historial por producto" VerticalAlignment="Center"

@@ -67,11 +67,18 @@ public class ReporteStockService : IReporteStockService
         // Autorización fail-closed: PRIMERO, antes de delegar.
         _auth.Verificar(_session, Permisos.VerReportes);
 
-        // DOBLE-GUARD: este método verifica VerReportes; el servicio delegado
-        // (IMovimientoStockService.ObtenerHistorialAsync) verifica RegistrarMovimientos.
-        // Hoy es seguro porque VerReportes es Admin-only y Admin tiene todos los permisos.
-        // Si la matriz de roles evoluciona (ej. dar VerReportes a un rol sin RegistrarMovimientos),
-        // este reporte fallará. Tener presente si se cambian permisos.
+        // DOBLE-GUARD (actualizado 2026-08-16, auditoría): este método verifica VerReportes; el
+        // servicio delegado (IMovimientoStockService.ObtenerHistorialAsync) verifica
+        // RegistrarMovimientos, un permiso INDEPENDIENTE. La premisa original ("es seguro porque
+        // VerReportes es Admin-only") dejó de ser cierta cuando VerReportes pasó a ser
+        // configurable por usuario (Task 14, spec 2026-08-10): un Operador con VerReportes pero
+        // sin RegistrarMovimientos entraba a "Historial por producto" y cada búsqueda le tiraba
+        // 403. Decisión: NO se relaja este servicio ni el delegado -- ambos guards siguen
+        // vigentes y son correctos (cada capa exige lo que le corresponde). Lo que se corrigió es
+        // el GATE DE NAVEGACIÓN de la pantalla (ShellMainViewModel.PuedeVerHistorialPorProducto),
+        // que ahora exige VerReportes + RegistrarMovimientos para que la pantalla sea alcanzable
+        // -- el gate de entrada exige el MÁXIMO de los permisos de las capas de abajo, nunca el
+        // mínimo. Este doble-guard queda como defensa en profundidad, no como el único control.
 
         // D2: no reimplementamos el historial; delegamos al servicio de movimientos
         // del Inc 5, que ya resuelve el running balance y el ajuste de fechas.
