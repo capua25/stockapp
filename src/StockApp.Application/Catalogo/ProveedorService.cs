@@ -110,4 +110,11 @@ public class ProveedorService : IProveedorService
         _auth.Verificar(_session, Permisos.GestionarTablasMaestras);
         return await _repo.ListarTodosAsync();
     }
+
+    public async Task<IReadOnlyList<Proveedor>> ListarActivasAsync()
+    {
+        _auth.Verificar(_session, Permisos.VerFinanzas);
+        var todos = await _repo.ListarTodosAsync();
+        return todos.Where(p => p.Activo).ToList();
+    }
 }

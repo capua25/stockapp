@@ -80,6 +80,7 @@ internal sealed class ProveedorServiceFake : IProveedorService
     public Task ModificarAsync(Proveedor proveedor) => throw new NotSupportedException("No usado en este banco de pruebas.");
     public Task BajaLogicaAsync(int id) => throw new NotSupportedException("No usado en este banco de pruebas.");
     public Task<IReadOnlyList<Proveedor>> ListarTodosAsync() => Task.FromResult(_proveedores);
+    public Task<IReadOnlyList<Proveedor>> ListarActivasAsync() => Task.FromResult(_proveedores);
 }
 
 internal sealed class LineaPoaServiceFake : ILineaPoaService

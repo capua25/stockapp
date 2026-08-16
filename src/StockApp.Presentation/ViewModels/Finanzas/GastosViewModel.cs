@@ -178,9 +178,14 @@ public partial class GastosViewModel : ViewModelBase
     {
         try
         {
-            var proveedores = await _proveedoresService.ListarTodosAsync();
+            // ListarActivasAsync, no ListarTodosAsync (bugfix 2026-08-15): el servidor exige
+            // GestionarTablasMaestras para ListarTodosAsync, pero un Operador de Finanzas solo
+            // tiene VerFinanzas — se comía un 403 al abrir esta pantalla. Mismo criterio que
+            // los otros tres combos de este método (fuentes/rubros/líneas POA): ya vienen
+            // filtrados a Activo=true del lado del servidor, sin filtro repetido acá.
+            var proveedores = await _proveedoresService.ListarActivasAsync();
             ProveedoresDisponibles.Clear();
-            foreach (var p in proveedores.Where(p => p.Activo))
+            foreach (var p in proveedores)
                 ProveedoresDisponibles.Add(p);
 
             var fuentes = await _fuentesService.ListarActivasAsync();
@@ -213,6 +218,18 @@ public partial class GastosViewModel : ViewModelBase
         catch (Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException)
         {
             await _confirmacion.InformarAsync(ex.Message);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Red de contención (bugfix 2026-08-15): CargarAsync la dispara la View
+            // (DataContextChanged) fire-and-forget — una excepción no atrapada acá escala a
+            // Dispatcher.UIThread.UnhandledException (App.axaml.cs), que loguea a crash.log y
+            // muestra el genérico "Ocurrió un error inesperado" como si fuera un bug real. Un
+            // 403 ya se avisó ANTES de llegar acá: AuthTokenHandler dispara
+            // ApiSession.AccesoRevocado apenas ve el 403 en la respuesta HTTP, y App.axaml.cs
+            // ya informa "Tus permisos cambiaron...". Mismo criterio que
+            // MovimientoHistorialViewModel.RecalcularAsync: silencioso, para no duplicar el
+            // aviso.
         }
     }
 

@@ -102,6 +102,7 @@ public class PermisosEndpointGuardTests : ApiTestBase
         ("POST",   "/proveedores", Permisos.GestionarTablasMaestras),
         ("PUT",    "/proveedores/{id}", Permisos.GestionarTablasMaestras),
         ("DELETE", "/proveedores/{id}", Permisos.GestionarTablasMaestras),
+        ("GET",    "/proveedores/activas", Permisos.VerFinanzas),
 
         ("GET",    "/reportes/valorizacion", Permisos.VerReportes),
         ("GET",    "/reportes/stock-por-categoria", Permisos.VerReportes),

@@ -65,10 +65,12 @@ public class GastosViewModelTests
         session.Setup(s => s.PermisosActuales).Returns(new HashSet<string>(permisos ?? Enumerable.Empty<string>()));
 
         var proveedores = new Mock<ICategoriaProveedorService>();
-        proveedores.Setup(p => p.ListarTodosAsync()).ReturnsAsync(new List<Proveedor>
+        var proveedoresDisponibles = new List<Proveedor>
         {
             new() { Id = 1, Nombre = "Barraca X", Activo = true },
-        });
+        };
+        proveedores.Setup(p => p.ListarTodosAsync()).ReturnsAsync(proveedoresDisponibles);
+        proveedores.Setup(p => p.ListarActivasAsync()).ReturnsAsync(proveedoresDisponibles);
         var fuentes = new Mock<IFuenteFinanciamientoService>();
         fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>());
         var rubros = new Mock<IRubroGastoService>();
@@ -588,5 +590,86 @@ public class GastosViewModelTests
         var (vm, _, _, _, _) = Crear(rol: RolUsuario.Admin, permisos: Array.Empty<string>());
 
         Assert.True(vm.PuedeRegistrarGastos);
+    }
+
+    // ── bugfix 2026-08-15: un Operador con solo VerFinanzas se comía un 403 al abrir
+    // "Gastos y facturas" — CargarAsync llamaba IProveedorService.ListarTodosAsync(), que en
+    // el servidor exige GestionarTablasMaestras. El resto de los combos de este mismo método
+    // (fuentes, rubros, líneas POA) ya consultan sus variantes *ActivasAsync/*ActivosAsync con
+    // VerFinanzas — Proveedor era la excepción, por una asimetría real del código (spec Fase
+    // 2b, alternativa C descartada: IProveedorService no tenía ListarActivasAsync todavía).
+
+    [Fact]
+    public async Task CargarAsync_ConsultaProveedoresActivos_NoTodosLosProveedores()
+    {
+        var svc = new Mock<IGastoService>();
+        svc.Setup(s => s.ListarAsync(It.IsAny<GastoFiltro>())).ReturnsAsync(new List<Gasto>());
+        var session = new Mock<ICurrentSession>();
+        session.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
+        session.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+        var proveedores = new Mock<ICategoriaProveedorService>();
+        proveedores.Setup(p => p.ListarActivasAsync()).ReturnsAsync(new List<Proveedor>());
+        var fuentes = new Mock<IFuenteFinanciamientoService>();
+        fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>());
+        var rubros = new Mock<IRubroGastoService>();
+        rubros.Setup(r => r.ListarActivosAsync()).ReturnsAsync(new List<RubroGasto>());
+        var lineas = new Mock<ILineaPoaService>();
+        lineas.Setup(l => l.ListarActivasAsync()).ReturnsAsync(new List<LineaPoa>());
+        var nav = new Mock<INavigationService>();
+        var confirm = new Mock<IConfirmacionService>();
+        var csv = new Mock<ICsvExporter>();
+        var guardado = new Mock<IServicioGuardadoArchivo>();
+
+        var vm = new GastosViewModel(
+            svc.Object, session.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
+            nav.Object, confirm.Object, csv.Object, guardado.Object);
+
+        await vm.CargarAsync();
+
+        proveedores.Verify(p => p.ListarActivasAsync(), Times.Once);
+        proveedores.Verify(p => p.ListarTodosAsync(), Times.Never);
+    }
+
+    // ── bugfix 2026-08-15: red de contención — CargarAsync no debe escalar un 403 ──────────
+    // Un UnauthorizedAccessException que escapa de CargarAsync (llamado fire-and-forget desde
+    // DataContextChanged de la View) termina en Dispatcher.UIThread.UnhandledException
+    // (App.axaml.cs), que muestra el genérico "Ocurrió un error inesperado" y lo loguea a
+    // crash.log como si fuera un bug real. Pero un 403 YA se avisa antes de llegar acá:
+    // AuthTokenHandler dispara ApiSession.AccesoRevocado en cuanto ve el 403 en la respuesta
+    // HTTP, y App.axaml.cs ya tiene un handler que informa "Tus permisos cambiaron...". Por
+    // eso el catch acá es silencioso — mismo criterio que
+    // MovimientoHistorialViewModel.RecalcularAsync ("silenciando UnauthorizedAccessException
+    // porque el 403 ya lo avisa el manejo central de App.axaml.cs"), no el de
+    // GastosViewModel.ReintentarAnulacionConPagoAutomaticoAsync (que sí informa, porque corre
+    // dentro de un AsyncRelayCommand que NO llega al handler global).
+
+    [Fact]
+    public async Task CargarAsync_SiProveedoresLanzaUnauthorized_NoPropagaLaExcepcionYNoDuplicaAviso()
+    {
+        var svc = new Mock<IGastoService>();
+        svc.Setup(s => s.ListarAsync(It.IsAny<GastoFiltro>())).ReturnsAsync(new List<Gasto>());
+        var session = new Mock<ICurrentSession>();
+        session.Setup(s => s.RolActual).Returns(RolUsuario.Operador);
+        session.Setup(s => s.PermisosActuales).Returns(new HashSet<string> { Permisos.VerFinanzas });
+        var proveedores = new Mock<ICategoriaProveedorService>();
+        proveedores.Setup(p => p.ListarActivasAsync()).ThrowsAsync(new UnauthorizedAccessException());
+        var fuentes = new Mock<IFuenteFinanciamientoService>();
+        fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>());
+        var rubros = new Mock<IRubroGastoService>();
+        rubros.Setup(r => r.ListarActivosAsync()).ReturnsAsync(new List<RubroGasto>());
+        var lineas = new Mock<ILineaPoaService>();
+        lineas.Setup(l => l.ListarActivasAsync()).ReturnsAsync(new List<LineaPoa>());
+        var nav = new Mock<INavigationService>();
+        var confirm = new Mock<IConfirmacionService>();
+        var csv = new Mock<ICsvExporter>();
+        var guardado = new Mock<IServicioGuardadoArchivo>();
+
+        var vm = new GastosViewModel(
+            svc.Object, session.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
+            nav.Object, confirm.Object, csv.Object, guardado.Object);
+
+        await vm.CargarAsync();
+
+        confirm.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Never);
     }
 }
