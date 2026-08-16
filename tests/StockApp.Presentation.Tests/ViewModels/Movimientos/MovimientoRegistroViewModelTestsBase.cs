@@ -239,4 +239,29 @@ public abstract class MovimientoRegistroViewModelTestsBase
         Assert.Single(vm.Productos);
         Assert.Equal("Activo", vm.Productos[0].Nombre);
     }
+
+    // ── bugfix 2026-08-16: red de contención — InicializarAsync no debe escalar un 403 ─────────
+    // Mismo criterio que PagosGastoViewModel.InicializarAsync (1791f0d): InicializarAsync la
+    // dispara la View (DataContextChanged) fire-and-forget — un UnauthorizedAccessException no
+    // atrapado escala a Dispatcher.UIThread.UnhandledException (App.axaml.cs), que loguea a
+    // crash.log y muestra el genérico "Ocurrió un error inesperado" como si fuera un bug real.
+
+    [Fact]
+    public async Task InicializarAsync_SiBuscarLanzaUnauthorized_NoPropagaLaExcepcion()
+    {
+        var svcMock      = new Mock<IMovimientoStockService>();
+        var productoMock = new Mock<IProductoService>();
+        var navMock      = new Mock<INavigationService>();
+        var confirmMock  = new Mock<IConfirmacionService>();
+
+        productoMock
+            .Setup(s => s.BuscarAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .ThrowsAsync(new UnauthorizedAccessException());
+
+        var vm = CrearVm(svcMock.Object, productoMock.Object, navMock.Object, confirmMock.Object);
+
+        var excepcion = await Record.ExceptionAsync(() => vm.InicializarAsync());
+
+        Assert.Null(excepcion);
+    }
 }

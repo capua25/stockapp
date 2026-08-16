@@ -109,6 +109,23 @@ public partial class ShellMainViewModel : ViewModelBase
          _session.PermisosActuales.Contains(Permisos.GestionarProductos));
 
     /// <summary>
+    /// Registrar Entrada / Registrar Salida (fix bug de coherencia de permisos, 2026-08-16):
+    /// a diferencia de PuedeRegistrarMovimientos (usado por Historial de movimientos), combina
+    /// DOS permisos porque MovimientoRegistroViewModelBase.InicializarAsync (base común de
+    /// EntradaRegistroViewModel/SalidaRegistroViewModel) carga IProductoService.BuscarAsync
+    /// (GET /productos, ProductosEndpoints.cs) para poblar el combo de producto, y ese endpoint
+    /// exige GestionarProductos sin ninguna ruta de lectura alternativa — mismo caso que
+    /// ProductosDisponibles en PuedeIngresarPorFactura. El combo de MovimientoFormControl es el
+    /// ÚNICO modo de elegir un producto existente en el renglón (no hay campo de código/SKU ni
+    /// escaneo), así que sin GestionarProductos la pantalla queda inusable en el caso base, no
+    /// solo para gestión de catálogo.
+    /// </summary>
+    public bool PuedeRegistrarEntradaSalida =>
+        _session.RolActual == RolUsuario.Admin ||
+        (_session.PermisosActuales.Contains(Permisos.RegistrarMovimientos) &&
+         _session.PermisosActuales.Contains(Permisos.GestionarProductos));
+
+    /// <summary>
     /// Número de versión de la app para mostrar al pie del menú lateral (ej. "v0.1.1").
     /// </summary>
     public string VersionTexto => $"v{_infoApp.Version}";
@@ -185,6 +202,7 @@ public partial class ShellMainViewModel : ViewModelBase
         OnPropertyChanged(nameof(PuedeGestionarTablasMaestras));
         OnPropertyChanged(nameof(PuedeVerReportes));
         OnPropertyChanged(nameof(PuedeIngresarPorFactura));
+        OnPropertyChanged(nameof(PuedeRegistrarEntradaSalida));
     }
 
     /// <summary>

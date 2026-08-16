@@ -74,12 +74,15 @@
                     </Grid>
                 </Button>
 
-                <!-- Registrar Entrada: gateado por RegistrarMovimientos (spec 2026-08-10) -->
+                <!-- Registrar Entrada: gateado por PuedeRegistrarEntradaSalida (fix bug de
+                     coherencia de permisos 2026-08-16) - requiere RegistrarMovimientos +
+                     GestionarProductos, no solo RegistrarMovimientos, porque el combo de
+                     producto exige GestionarProductos del lado del servidor. -->
                 <Button Command="{Binding NavRegistrarEntradaCommand}"
                         Classes="ghost"
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=RegistrarEntrada}"
                         HorizontalAlignment="Stretch"
-                        IsVisible="{Binding PuedeRegistrarMovimientos}">
+                        IsVisible="{Binding PuedeRegistrarEntradaSalida}">
                     <Grid ColumnDefinitions="Auto,*">
                         <i:Icon Grid.Column="0" Value="mdi-tray-arrow-down" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Grid.Column="1" Text="Registrar Entrada" VerticalAlignment="Center"
@@ -103,12 +106,15 @@
                     </Grid>
                 </Button>
 
-                <!-- Registrar Salida: gateado por RegistrarMovimientos (spec 2026-08-10) -->
+                <!-- Registrar Salida: gateado por PuedeRegistrarEntradaSalida (fix bug de
+                     coherencia de permisos 2026-08-16) - requiere RegistrarMovimientos +
+                     GestionarProductos, no solo RegistrarMovimientos, porque el combo de
+                     producto exige GestionarProductos del lado del servidor. -->
                 <Button Command="{Binding NavRegistrarSalidaCommand}"
                         Classes="ghost"
                         Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=RegistrarSalida}"
                         HorizontalAlignment="Stretch"
-                        IsVisible="{Binding PuedeRegistrarMovimientos}">
+                        IsVisible="{Binding PuedeRegistrarEntradaSalida}">
                     <Grid ColumnDefinitions="Auto,*">
                         <i:Icon Grid.Column="0" Value="mdi-tray-arrow-up" Foreground="{DynamicResource SidebarTextoBrush}" />
                         <TextBlock Grid.Column="1" Text="Registrar Salida" VerticalAlignment="Center"
