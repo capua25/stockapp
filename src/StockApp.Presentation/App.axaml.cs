@@ -103,25 +103,32 @@ public partial class App : AvaloniaApp
                 () => shell.MostrarBloqueoLicencia());
 
             // Acceso revocado (spec 2026-08-10): un 403 con sesión válida significa que el
-            // Admin cambió los permisos de este usuario mientras la sesión seguía abierta —
-            // a diferencia de SesionVencida, NO se cierra sesión ni se navega. Se avisa y se
-            // refresca el cache de permisos para que el menú deje de mostrar ítems ya
-            // revocados. Best-effort: si el refresco falla, el aviso igual se mostró.
+            // servidor rechazó una operación por falta de permiso. A diferencia de
+            // SesionVencida, NO se cierra sesión ni se navega. Se refresca el cache de permisos
+            // para que el menú deje de mostrar ítems ya revocados, y se avisa. Best-effort: si
+            // el refresco falla, el aviso igual se muestra.
             //
-            // Mensaje (Round 1, fix sobre el texto literal del spec): sigue la convención que
-            // ya establecen las Tasks 12/13 en este mismo módulo (ver comentario en
-            // PanelPermisosViewModel.CargarPermisosAsync) — decir QUÉ pasó y QUÉ hacer, no solo
-            // informar. Deja explícito que no es un error de la app y a quién recurrir.
+            // Bug 2026-08-15 (corrección sobre el fix de Round 1): un 403 NO siempre significa
+            // que el Admin revocó algo en caliente -- puede ser que el usuario NUNCA tuvo ese
+            // permiso (ej. Operador con permisos mínimos que toca una sección para la que nunca
+            // tuvo acceso). Afirmar "tus permisos cambiaron" en ese caso es falso y manda al
+            // usuario a buscar un cambio que no ocurrió. AvisoAccesoRevocado.Resolver compara el
+            // snapshot de permisos ANTES del refresco contra el de DESPUÉS -- solo si difieren
+            // se usa el mensaje de "cambiaron"; si no, un mensaje genérico pero siempre
+            // verdadero (el 403 ya probó que no tiene acceso). Por eso el refresco ahora corre
+            // ANTES de mostrar el aviso (antes se mostraba primero): el contenido del mensaje
+            // depende de su resultado.
             apiSession.AccesoRevocado += () => uiDispatcher.Post(async () =>
             {
-                var confirmacion = _serviceProvider!.GetRequiredService<IConfirmacionService>();
-                await confirmacion.InformarAsync(
-                    "Tus permisos cambiaron mientras trabajabas y ya no tenés acceso a esta " +
-                    "sección. Si no lo esperabas, pedile a un Administrador que te oriente.");
-
                 var authService = _serviceProvider!.GetRequiredService<IAuthService>();
+
+                var permisosAntes = apiSession.PermisosActuales;
                 await RefrescoPermisos.DispararBestEffortAsync(
                     () => authService.ObtenerPermisosPropiosAsync(), "AccesoRevocado");
+                var mensaje = AvisoAccesoRevocado.Resolver(permisosAntes, apiSession.PermisosActuales);
+
+                var confirmacion = _serviceProvider!.GetRequiredService<IConfirmacionService>();
+                await confirmacion.InformarAsync(mensaje);
             });
 
             // Inicializa el shell (decide login / primer arranque) ANTES de asignar el

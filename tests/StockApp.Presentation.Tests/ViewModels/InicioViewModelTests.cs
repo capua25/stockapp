@@ -37,6 +37,12 @@ public class InicioViewModelTests
         var sessionMock = new Mock<ICurrentSession>();
         sessionMock.Setup(s => s.UsuarioActual).Returns(usuario);
         sessionMock.Setup(s => s.RolActual).Returns(usuario.Rol);
+        // Default sin restricciones (bug 2026-08-15: CargarAsync ahora gatea las llamadas a
+        // calendario-pagos y tareas por PermisosActuales) -- los tests de gating de más abajo
+        // pisan este default con un conjunto más chico cuando quieren ejercitar el caso "sin
+        // permiso".
+        sessionMock.Setup(s => s.PermisosActuales)
+            .Returns(new HashSet<string> { Permisos.VerFinanzas, Permisos.GestionarTareas });
 
         var navMock = new Mock<INavigationService>();
         var finanzasMock = new Mock<IFinanzasVistasService>();
@@ -665,6 +671,119 @@ public class InicioViewModelTests
         authMock.Verify(a => a.ObtenerPermisosPropiosAsync(), Times.Once);
         Assert.Contains(nameof(InicioViewModel.PuedeVerReportes), propiedadesNotificadas);
         Assert.True(vm.PuedeVerReportes);
+    }
+
+    // ── Bug 2026-08-15: Inicio no debe pedir lo que sabe que no puede pedir ───────────
+    // Un Operador sin VerFinanzas/GestionarTareas se comía un 403 de /finanzas/calendario-pagos
+    // o /tareas, tragado por el catch genérico -- el widget correspondiente simplemente no
+    // aparecía y nadie se enteraba (falla silenciosa). El fix chequea el permiso ANTES de llamar,
+    // mismo patrón que PuedeVerReportes.
+
+    [Fact]
+    public void PuedeVerCalendarioPagos_Admin_EsTrue()
+    {
+        var (vm, sessionMock, _, _, _) = Crear(new UsuarioSesion(1, "admin", RolUsuario.Admin, null));
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+
+        Assert.True(vm.PuedeVerCalendarioPagos);
+    }
+
+    [Fact]
+    public void PuedeVerCalendarioPagos_OperadorSinPermiso_EsFalse()
+    {
+        var (vm, sessionMock, _, _, _) = Crear(new UsuarioSesion(2, "operador", RolUsuario.Operador, null));
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+
+        Assert.False(vm.PuedeVerCalendarioPagos);
+    }
+
+    [Fact]
+    public void PuedeVerCalendarioPagos_OperadorConPermiso_EsTrue()
+    {
+        var (vm, sessionMock, _, _, _) = Crear(new UsuarioSesion(2, "operador", RolUsuario.Operador, null));
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string> { Permisos.VerFinanzas });
+
+        Assert.True(vm.PuedeVerCalendarioPagos);
+    }
+
+    [Fact]
+    public void PuedeVerTareas_Admin_EsTrue()
+    {
+        var (vm, sessionMock, _, _, _) = Crear(new UsuarioSesion(1, "admin", RolUsuario.Admin, null));
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+
+        Assert.True(vm.PuedeVerTareas);
+    }
+
+    [Fact]
+    public void PuedeVerTareas_OperadorSinPermiso_EsFalse()
+    {
+        var (vm, sessionMock, _, _, _) = Crear(new UsuarioSesion(2, "operador", RolUsuario.Operador, null));
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+
+        Assert.False(vm.PuedeVerTareas);
+    }
+
+    [Fact]
+    public void PuedeVerTareas_OperadorConPermiso_EsTrue()
+    {
+        var (vm, sessionMock, _, _, _) = Crear(new UsuarioSesion(2, "operador", RolUsuario.Operador, null));
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string> { Permisos.GestionarTareas });
+
+        Assert.True(vm.PuedeVerTareas);
+    }
+
+    [Fact]
+    public async Task CargarAsync_OperadorSinVerFinanzas_NuncaConsultaCalendarioPagosYOcultaElAviso()
+    {
+        var usuario = new UsuarioSesion(2, "opfinanzas", RolUsuario.Operador, "Op Finanzas");
+        var (vm, sessionMock, _, finanzasMock, _) = Crear(usuario, new CalendarioPagosDto(
+            new List<FacturaCalendarioDto> { new(1, "Barraca X", "A-1", 500m, new DateOnly(2026, 7, 1), "Vencida") },
+            new List<FacturaCalendarioDto>(), new List<FacturaCalendarioDto>(), new List<PagoRecienteDto>()));
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+
+        await vm.CargarAsync();
+
+        finanzasMock.Verify(f => f.ObtenerCalendarioPagosAsync(null), Times.Never);
+        Assert.False(vm.MostrarAvisoVencimientos);
+        Assert.Equal(0, vm.CantidadVencidas);
+        Assert.Equal(0, vm.CantidadAVencer7Dias);
+    }
+
+    [Fact]
+    public async Task CargarAsync_OperadorSinGestionarTareas_NuncaConsultaTareasYOcultaElPanel()
+    {
+        // Instanciado a mano (no vía Crear()) para poder verificar Times.Never sobre
+        // ITareaService.ListarAsync -- Crear() no expone su Mock<ITareaService>.
+        var usuario = new UsuarioSesion(2, "opfinanzas", RolUsuario.Operador, "Op Finanzas");
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.UsuarioActual).Returns(usuario);
+        sessionMock.Setup(s => s.RolActual).Returns(usuario.Rol);
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+
+        var navMock = new Mock<INavigationService>();
+        var finanzasMock = new Mock<IFinanzasVistasService>();
+        finanzasMock.Setup(f => f.ObtenerCalendarioPagosAsync(null)).ReturnsAsync(
+            new CalendarioPagosDto(
+                new List<FacturaCalendarioDto>(), new List<FacturaCalendarioDto>(),
+                new List<FacturaCalendarioDto>(), new List<PagoRecienteDto>()));
+        var backupsMock = new Mock<IBackupsService>();
+        var tareasMock = new Mock<ITareaService>();
+        tareasMock.Setup(t => t.ListarAsync()).ReturnsAsync(
+            new List<Tarea> { TareaCon(1, "Vencida", DateTime.UtcNow.Date.AddDays(-3)) });
+
+        var vm = new InicioViewModel(
+            sessionMock.Object, navMock.Object, finanzasMock.Object, backupsMock.Object, tareasMock.Object,
+            Mock.Of<IAuthService>());
+
+        await vm.CargarAsync();
+
+        tareasMock.Verify(t => t.ListarAsync(), Times.Never);
+        Assert.False(vm.MostrarPanelTareas);
+        Assert.Empty(vm.TareasVencidas);
+        Assert.Empty(vm.TareasProximasAVencer);
+        Assert.Equal(0, vm.CantidadTareasVencidas);
+        Assert.Equal(0, vm.CantidadTareasProximasAVencer);
     }
 
     [Fact]

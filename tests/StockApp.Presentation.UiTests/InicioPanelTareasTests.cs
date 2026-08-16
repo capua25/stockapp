@@ -12,6 +12,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using StockApp.Application.Auth;
+using StockApp.Application.Authorization;
 using StockApp.Application.Backups;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
@@ -40,7 +41,13 @@ public class InicioPanelTareasTests
         public bool EstaAutenticado => true;
         public UsuarioSesion? UsuarioActual => _usuario;
         public RolUsuario? RolActual => _usuario.Rol;
-        public IReadOnlySet<string> PermisosActuales => new HashSet<string>();
+
+        // Bug 2026-08-15: InicioViewModel.CargarAsync ahora gatea la carga del panel de tareas
+        // por Permisos.GestionarTareas (PuedeVerTareas) antes de llamar a /tareas -- este banco
+        // de pruebas ejercita el FILTRADO de tareas ajenas por rol (spec: "un Operador no ve las
+        // tareas tomadas por otro operador"), no el gating de permisos en sí, así que el fake le
+        // otorga el permiso para que el escenario Operador siga teniendo sentido.
+        public IReadOnlySet<string> PermisosActuales => new HashSet<string> { Permisos.GestionarTareas };
         public void EstablecerPermisos(IReadOnlySet<string> permisos) { }
 
         public void IniciarSesion(Usuario usuario) => throw new NotSupportedException("No usado en este banco de pruebas.");

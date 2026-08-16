@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels"
              xmlns:tareasvm="using:StockApp.Presentation.ViewModels.Tareas"
+             xmlns:convA="using:Avalonia.Data.Converters"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
@@ -38,8 +39,17 @@
                 </StackPanel>
             </Border>
 
-            <!-- Aviso de vencimientos -->
-            <Border Classes="card" IsVisible="{Binding MostrarAvisoVencimientos}">
+            <!-- Aviso de vencimientos: gateado por PuedeVerCalendarioPagos ademas de
+                 MostrarAvisoVencimientos. El fix del bug 2026-08-15 evita la LLAMADA a
+                 /finanzas/calendario-pagos sin VerFinanzas, pero el panel tambien debe
+                 desaparecer explicitamente (no solo quedar en cero por la falta de datos). -->
+            <Border Classes="card">
+                <Border.IsVisible>
+                    <MultiBinding Converter="{x:Static convA:BoolConverters.And}">
+                        <Binding Path="PuedeVerCalendarioPagos" />
+                        <Binding Path="MostrarAvisoVencimientos" />
+                    </MultiBinding>
+                </Border.IsVisible>
                 <StackPanel Spacing="8">
                     <TextBlock Text="Vencimientos de facturas" Classes="seccion" Foreground="{DynamicResource DangerBrush}" />
                     <TextBlock Text="{Binding TextoVencidas}"
@@ -53,8 +63,16 @@
             <!-- Panel "Tareas que requieren atención" (spec 2026-08-06): oculto por completo
                  cuando no hay ninguna tarea vencida ni próxima a vencer (MostrarPanelTareas),
                  nunca un cartel vacío. Cada fila es un Button entero (no solo un "Ver" aparte):
-                 toda la fila es clickeable y navega al detalle vía VerTareaCommand. -->
-            <Border Classes="card" x:Name="BorderPanelTareas" IsVisible="{Binding MostrarPanelTareas}">
+                 toda la fila es clickeable y navega al detalle vía VerTareaCommand. Gateado
+                 ademas por PuedeVerTareas (fix del bug 2026-08-15): sin Permisos.GestionarTareas
+                 el panel tambien debe desaparecer explicitamente, no solo quedar en cero. -->
+            <Border Classes="card" x:Name="BorderPanelTareas">
+                <Border.IsVisible>
+                    <MultiBinding Converter="{x:Static convA:BoolConverters.And}">
+                        <Binding Path="PuedeVerTareas" />
+                        <Binding Path="MostrarPanelTareas" />
+                    </MultiBinding>
+                </Border.IsVisible>
                 <StackPanel Spacing="12">
                     <TextBlock Text="Tareas que requieren atención" Classes="seccion" />
 
