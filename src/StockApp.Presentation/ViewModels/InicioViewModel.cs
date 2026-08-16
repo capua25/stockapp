@@ -58,6 +58,35 @@ public partial class InicioViewModel : ViewModelBase
         _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.VerReportes);
 
     /// <summary>
+    /// Gates de los accesos rápidos operativos (fix bug de coherencia de permisos, 2026-08-16):
+    /// auditoría de permisos encontró que Productos/Registrar Entrada/Registrar Salida/Historial
+    /// de movimientos NO tenían gate acá -- InicioViewModel nunca replicó las propiedades Puede*
+    /// que sí tiene ShellMainViewModel (sidebar) para esas mismas 4 pantallas, a pesar de que el
+    /// patrón ya se usaba en este mismo archivo/vista para Valorización/Auditoría
+    /// (PuedeVerReportes). Un Operador sin GestionarProductos veía las 4 tarjetas, clickeaba
+    /// "Productos" y se comía un 403 en silencio (ProductoListViewModel.CargarAsync no atrapaba
+    /// UnauthorizedAccessException, dejando la grilla vacía para siempre sin explicación). Mismas
+    /// condiciones EXACTAS que ShellMainViewModel para mantener la coherencia sidebar/Inicio.
+    /// </summary>
+    public bool PuedeGestionarProductos =>
+        _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.GestionarProductos);
+
+    public bool PuedeRegistrarMovimientos =>
+        _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.RegistrarMovimientos);
+
+    /// <summary>
+    /// Registrar Entrada / Registrar Salida: combina DOS permisos, mismo criterio y mismo
+    /// comentario que ShellMainViewModel.PuedeRegistrarEntradaSalida -- el combo de producto de
+    /// EntradaRegistroViewModel/SalidaRegistroViewModel (vía MovimientoRegistroViewModelBase)
+    /// exige GestionarProductos sin ninguna ruta de lectura alternativa, así que
+    /// RegistrarMovimientos solo no alcanza.
+    /// </summary>
+    public bool PuedeRegistrarEntradaSalida =>
+        _session.RolActual == RolUsuario.Admin ||
+        (_session.PermisosActuales.Contains(Permisos.RegistrarMovimientos) &&
+         _session.PermisosActuales.Contains(Permisos.GestionarProductos));
+
+    /// <summary>
     /// Bug 2026-08-15: CargarAsync llamaba a GET /finanzas/calendario-pagos (que exige
     /// Permisos.VerFinanzas, FinanzasVistasEndpoints) sin importar si el usuario tenía el
     /// permiso -- el 403 resultante quedaba tragado por el catch genérico, dejando el aviso de
@@ -291,6 +320,9 @@ public partial class InicioViewModel : ViewModelBase
             () => _authService.ObtenerPermisosPropiosAsync(), nameof(InicioViewModel));
 
         OnPropertyChanged(nameof(PuedeVerReportes));
+        OnPropertyChanged(nameof(PuedeGestionarProductos));
+        OnPropertyChanged(nameof(PuedeRegistrarMovimientos));
+        OnPropertyChanged(nameof(PuedeRegistrarEntradaSalida));
     }
 
     // ── accesos rápidos: comunes (Admin + Operador) ───────────────────────────

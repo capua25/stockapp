@@ -632,6 +632,165 @@ public class InicioViewModelTests
         Assert.True(vm.PuedeVerReportes);
     }
 
+    // ── Gating de accesos rápidos operativos (fix bug de coherencia de permisos, 2026-08-16) ──
+    // Auditoría: Productos / Registrar Entrada / Registrar Salida / Historial de movimientos NO
+    // tenían gate en Inicio -- InicioViewModel nunca replicó las propiedades Puede* que sí tiene
+    // ShellMainViewModel (sidebar) para estas mismas 4 pantallas. Un Operador sin
+    // GestionarProductos veía las 4 tarjetas, clickeaba "Productos" y se comía un 403 en silencio
+    // (ProductoListViewModel.CargarAsync no atrapaba UnauthorizedAccessException). Estas
+    // propiedades replican EXACTAMENTE los gates de ShellMainViewModel para las mismas pantallas.
+
+    [Fact]
+    public void PuedeGestionarProductos_Admin_EsTrue()
+    {
+        var (vm, sessionMock, _, _, _) = Crear(new UsuarioSesion(1, "admin", RolUsuario.Admin, null));
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+
+        Assert.True(vm.PuedeGestionarProductos);
+    }
+
+    [Fact]
+    public void PuedeGestionarProductos_OperadorSinPermiso_EsFalse()
+    {
+        var (vm, sessionMock, _, _, _) = Crear(new UsuarioSesion(2, "operador", RolUsuario.Operador, null));
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+
+        Assert.False(vm.PuedeGestionarProductos);
+    }
+
+    [Fact]
+    public void PuedeGestionarProductos_OperadorConPermiso_EsTrue()
+    {
+        var (vm, sessionMock, _, _, _) = Crear(new UsuarioSesion(2, "operador", RolUsuario.Operador, null));
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string> { Permisos.GestionarProductos });
+
+        Assert.True(vm.PuedeGestionarProductos);
+    }
+
+    [Fact]
+    public void PuedeRegistrarMovimientos_Admin_EsTrue()
+    {
+        var (vm, sessionMock, _, _, _) = Crear(new UsuarioSesion(1, "admin", RolUsuario.Admin, null));
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+
+        Assert.True(vm.PuedeRegistrarMovimientos);
+    }
+
+    [Fact]
+    public void PuedeRegistrarMovimientos_OperadorSinPermiso_EsFalse()
+    {
+        var (vm, sessionMock, _, _, _) = Crear(new UsuarioSesion(2, "operador", RolUsuario.Operador, null));
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+
+        Assert.False(vm.PuedeRegistrarMovimientos);
+    }
+
+    [Fact]
+    public void PuedeRegistrarMovimientos_OperadorConPermiso_EsTrue()
+    {
+        var (vm, sessionMock, _, _, _) = Crear(new UsuarioSesion(2, "operador", RolUsuario.Operador, null));
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string> { Permisos.RegistrarMovimientos });
+
+        Assert.True(vm.PuedeRegistrarMovimientos);
+    }
+
+    // ── PuedeRegistrarEntradaSalida: combina RegistrarMovimientos + GestionarProductos, mismo
+    // criterio y mismo comentario que ShellMainViewModel.PuedeRegistrarEntradaSalida -- el combo
+    // de producto de EntradaRegistroViewModel/SalidaRegistroViewModel exige GestionarProductos.
+
+    [Fact]
+    public void PuedeRegistrarEntradaSalida_Admin_EsTrue()
+    {
+        var (vm, sessionMock, _, _, _) = Crear(new UsuarioSesion(1, "admin", RolUsuario.Admin, null));
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+
+        Assert.True(vm.PuedeRegistrarEntradaSalida);
+    }
+
+    [Fact]
+    public void Operador_ConSoloRegistrarMovimientos_PuedeRegistrarEntradaSalida_EsFalse()
+    {
+        var (vm, sessionMock, _, _, _) = Crear(new UsuarioSesion(2, "operador", RolUsuario.Operador, null));
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string> { Permisos.RegistrarMovimientos });
+
+        Assert.False(vm.PuedeRegistrarEntradaSalida);
+    }
+
+    [Fact]
+    public void Operador_ConSoloGestionarProductos_PuedeRegistrarEntradaSalida_EsFalse()
+    {
+        var (vm, sessionMock, _, _, _) = Crear(new UsuarioSesion(2, "operador", RolUsuario.Operador, null));
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string> { Permisos.GestionarProductos });
+
+        Assert.False(vm.PuedeRegistrarEntradaSalida);
+    }
+
+    [Fact]
+    public void Operador_ConRegistrarMovimientosYGestionarProductos_PuedeRegistrarEntradaSalida_EsTrue()
+    {
+        var (vm, sessionMock, _, _, _) = Crear(new UsuarioSesion(2, "operador", RolUsuario.Operador, null));
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>
+        {
+            Permisos.RegistrarMovimientos, Permisos.GestionarProductos,
+        });
+
+        Assert.True(vm.PuedeRegistrarEntradaSalida);
+    }
+
+    [Fact]
+    public async Task CargarAsync_RefrescaPermisos_YNotificaLosGatesDeAccesosRapidos()
+    {
+        var permisos = new HashSet<string>();
+        var usuario = new UsuarioSesion(2, "operador", RolUsuario.Operador, null);
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.UsuarioActual).Returns(usuario);
+        sessionMock.Setup(s => s.RolActual).Returns(usuario.Rol);
+        sessionMock.Setup(s => s.PermisosActuales).Returns(() => permisos);
+
+        var navMock = new Mock<INavigationService>();
+
+        var finanzasMock = new Mock<IFinanzasVistasService>();
+        finanzasMock.Setup(f => f.ObtenerCalendarioPagosAsync(null)).ReturnsAsync(
+            new CalendarioPagosDto(
+                new List<FacturaCalendarioDto>(), new List<FacturaCalendarioDto>(),
+                new List<FacturaCalendarioDto>(), new List<PagoRecienteDto>()));
+
+        var backupsMock = new Mock<IBackupsService>();
+        backupsMock.Setup(b => b.ObtenerSaludAsync()).ReturnsAsync(new SaludBackupDto(DateTime.UtcNow, false, 26));
+
+        var tareasMock = new Mock<ITareaService>();
+        tareasMock.Setup(t => t.ListarAsync()).ReturnsAsync(new List<Tarea>());
+
+        var authMock = new Mock<IAuthService>();
+        authMock.Setup(a => a.ObtenerPermisosPropiosAsync()).ReturnsAsync(() =>
+        {
+            permisos.Add(Permisos.GestionarProductos);
+            permisos.Add(Permisos.RegistrarMovimientos);
+            return (IReadOnlySet<string>)permisos;
+        });
+
+        var vm = new InicioViewModel(
+            sessionMock.Object, navMock.Object, finanzasMock.Object, backupsMock.Object, tareasMock.Object,
+            authMock.Object);
+
+        Assert.False(vm.PuedeGestionarProductos);
+        Assert.False(vm.PuedeRegistrarMovimientos);
+        Assert.False(vm.PuedeRegistrarEntradaSalida);
+
+        var propiedadesNotificadas = new List<string?>();
+        vm.PropertyChanged += (_, e) => propiedadesNotificadas.Add(e.PropertyName);
+
+        await vm.CargarAsync();
+        await vm._tareaRefrescoPermisos;
+
+        Assert.Contains(nameof(InicioViewModel.PuedeGestionarProductos), propiedadesNotificadas);
+        Assert.Contains(nameof(InicioViewModel.PuedeRegistrarMovimientos), propiedadesNotificadas);
+        Assert.Contains(nameof(InicioViewModel.PuedeRegistrarEntradaSalida), propiedadesNotificadas);
+        Assert.True(vm.PuedeGestionarProductos);
+        Assert.True(vm.PuedeRegistrarMovimientos);
+        Assert.True(vm.PuedeRegistrarEntradaSalida);
+    }
+
     // ── Refresco de permisos al entrar a Inicio (review Ronda 1, Task 14) ──────
     // Pre-flight: InicioViewModel es Transient -- se reconstruye en cada navegación y evalúa
     // PuedeVerReportes contra el PermisosActuales del instante de construcción. Sin un refresco

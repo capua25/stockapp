@@ -175,7 +175,9 @@
 
                     <WrapPanel>
 
-                        <Button Command="{Binding IrAProductosCommand}"
+                        <Button x:Name="BotonAccesoProductos"
+                                Command="{Binding IrAProductosCommand}"
+                                IsVisible="{Binding PuedeGestionarProductos}"
                                 Width="200"
                                 Height="90"
                                 Background="{DynamicResource FondoBrush}"
@@ -194,7 +196,9 @@
                             </StackPanel>
                         </Button>
 
-                        <Button Command="{Binding IrARegistrarEntradaCommand}"
+                        <Button x:Name="BotonAccesoRegistrarEntrada"
+                                Command="{Binding IrARegistrarEntradaCommand}"
+                                IsVisible="{Binding PuedeRegistrarEntradaSalida}"
                                 Width="200"
                                 Height="90"
                                 Background="{DynamicResource FondoBrush}"
@@ -213,7 +217,9 @@
                             </StackPanel>
                         </Button>
 
-                        <Button Command="{Binding IrARegistrarSalidaCommand}"
+                        <Button x:Name="BotonAccesoRegistrarSalida"
+                                Command="{Binding IrARegistrarSalidaCommand}"
+                                IsVisible="{Binding PuedeRegistrarEntradaSalida}"
                                 Width="200"
                                 Height="90"
                                 Background="{DynamicResource FondoBrush}"
@@ -232,7 +238,9 @@
                             </StackPanel>
                         </Button>
 
-                        <Button Command="{Binding IrAHistorialMovimientosCommand}"
+                        <Button x:Name="BotonAccesoHistorialMovimientos"
+                                Command="{Binding IrAHistorialMovimientosCommand}"
+                                IsVisible="{Binding PuedeRegistrarMovimientos}"
                                 Width="200"
                                 Height="90"
                                 Background="{DynamicResource FondoBrush}"

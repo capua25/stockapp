@@ -184,4 +184,50 @@ public class InicioViewTests
         var borderProblema = BuscarBorderPorNombre(window, "BorderAvisoBackupProblema");
         Assert.False(borderProblema.IsVisible);
     }
+
+    // ── Gating de accesos rápidos operativos (fix bug de coherencia de permisos, 2026-08-16) ──
+    // La auditoría encontró el bug en el XAML, no en el ViewModel: PuedeGestionarProductos/
+    // PuedeRegistrarEntradaSalida/PuedeRegistrarMovimientos podían existir perfectamente en
+    // InicioViewModel y el binding igual faltar en InicioView.axaml -- un test de VM puro no
+    // hubiese detectado eso. Estos tests montan la vista REAL para probar el binding IsVisible
+    // de punta a punta, mismo motivo que el resto de esta clase (ver comentario de la clase).
+
+    private static Button BuscarBotonPorNombre(Window window, string nombre)
+        => window.GetVisualDescendants().OfType<Button>().First(b => b.Name == nombre);
+
+    [AvaloniaFact]
+    public void Montar_OperadorSinPermisos_OcultaLosCuatroAccesosRapidosOperativos()
+    {
+        var usuario = new UsuarioSesion(2, "operador", RolUsuario.Operador, "Juan Pérez");
+        var salud = new SaludBackupDto(DateTime.UtcNow, false, 26);
+
+        var (window, vm) = Montar(usuario, salud);
+
+        Assert.False(vm.PuedeGestionarProductos);
+        Assert.False(vm.PuedeRegistrarEntradaSalida);
+        Assert.False(vm.PuedeRegistrarMovimientos);
+
+        Assert.False(BuscarBotonPorNombre(window, "BotonAccesoProductos").IsVisible);
+        Assert.False(BuscarBotonPorNombre(window, "BotonAccesoRegistrarEntrada").IsVisible);
+        Assert.False(BuscarBotonPorNombre(window, "BotonAccesoRegistrarSalida").IsVisible);
+        Assert.False(BuscarBotonPorNombre(window, "BotonAccesoHistorialMovimientos").IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void Montar_AdminConTodosLosPermisos_MuestraLosCuatroAccesosRapidosOperativos()
+    {
+        var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
+        var salud = new SaludBackupDto(DateTime.UtcNow, false, 26);
+
+        var (window, vm) = Montar(usuario, salud);
+
+        Assert.True(vm.PuedeGestionarProductos);
+        Assert.True(vm.PuedeRegistrarEntradaSalida);
+        Assert.True(vm.PuedeRegistrarMovimientos);
+
+        Assert.True(BuscarBotonPorNombre(window, "BotonAccesoProductos").IsVisible);
+        Assert.True(BuscarBotonPorNombre(window, "BotonAccesoRegistrarEntrada").IsVisible);
+        Assert.True(BuscarBotonPorNombre(window, "BotonAccesoRegistrarSalida").IsVisible);
+        Assert.True(BuscarBotonPorNombre(window, "BotonAccesoHistorialMovimientos").IsVisible);
+    }
 }
