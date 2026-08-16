@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using StockApp.Application.Auth;
 using StockApp.Application.Licenciamiento;
 using Xunit;
 
@@ -36,6 +37,17 @@ public abstract class ApiTestBase
         // El EstadoLicencia es singleton y se comparte en la collection: restaurarlo evita
         // que un test de modo-bloqueado filtre estado a los demás.
         Factory.Services.GetRequiredService<EstadoLicencia>().Activada = true;
+
+        // Mismo motivo que la línea de arriba, para el revocador de tokens: también es
+        // singleton de la collection, pero está indexado por usuarioId — y LimpiarTablas()
+        // acaba de hacer RESTART IDENTITY, así que los ids 1 y 2 (los que usan los helpers
+        // TokenAdmin()/TokenOperador()) se reciclan en cada test. Una revocación dejada por
+        // un test anterior (baja lógica, cambio de rol, cambio de contraseña o reset de
+        // admin) queda apuntando a un usuario lógico distinto y hace que un token recién
+        // emitido de ESTE test se rechace con un 401 espurio. Ese arrastre es la vía por la
+        // que el 401 intermitente se propagaba entre tests que ni siquiera revocan nada.
+        ((RevocadorTokensEnMemoria)Factory.Services.GetRequiredService<IRevocadorTokens>())
+            .LimpiarTodo();
     }
 
     private void LimpiarTablas()

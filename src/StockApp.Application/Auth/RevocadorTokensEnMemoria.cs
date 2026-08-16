@@ -18,19 +18,31 @@ public sealed class RevocadorTokensEnMemoria : IRevocadorTokens
 
     public void Revocar(int usuarioId, DateTime ahora)
     {
-        // OJO con la precisión: "ahora" NO se trunca acá — se guarda tal cual, con
-        // sub-segundo. El claim "iat" del JWT se emite en MILISEGUNDOS (Unix epoch,
-        // ver JwtTokenService — se desvía a propósito del estándar RFC 7519, que es de
-        // segundo entero) precisamente para que ambos lados de esta comparación tengan
-        // la misma resolución: un login y una revocación que caigan en el mismo segundo
-        // de reloj (algo frecuente bajo test o con I/O rápido) siguen siendo distinguibles.
-        // Si "ahora" se truncara acá a segundo, se perdería esa precisión y un token
-        // emitido milisegundos antes de la revocación (mismo segundo) podría colarse
-        // como válido por error — exactamente el caso que este diseño tiene que cubrir.
+        // PRECISIÓN: se trunca a MILISEGUNDO ENTERO, que es exactamente la resolución del
+        // otro lado de la comparación. El claim "iat" del JWT viaja en milisegundos Unix
+        // (ver JwtTokenService: ToUnixTimeMilliseconds se desvía a propósito del RFC 7519,
+        // que es de segundo entero) y ToUnixTimeMilliseconds TRUNCA HACIA ABAJO. O sea:
+        // el instante de emisión que EsValido recibe es siempre MENOR O IGUAL al instante
+        // real en que el token se firmó, hasta por 0,9999 ms.
+        //
+        // Guardar "ahora" con la precisión completa de DateTime (100 ns) generaba una
+        // asimetría: un token emitido DESPUÉS de la revocación, pero dentro del mismo
+        // milisegundo, volvía del decode con un iat anterior al mínimo aceptado y se
+        // rechazaba — 401 con un token legítimo recién emitido. Ésa era la causa raíz del
+        // 401 espurio intermitente de StockApp.Api.Tests.
+        //
+        // El costo de truncar es que un token emitido en el MISMO milisegundo que la
+        // revocación sigue valiendo. Es el mínimo inevitable: el formato de "iat" no puede
+        // representar nada más fino que el milisegundo, así que no hay forma de distinguir
+        // esos dos casos. Sigue cubierto lo que importa — un token de un milisegundo
+        // anterior o más queda invalidado —, y se prefiere fallar hacia "válido" por menos
+        // de 1 ms antes que rechazar sesiones legítimas.
+        var ahoraEnMilisegundos = ahora.AddTicks(-(ahora.Ticks % TimeSpan.TicksPerMillisecond));
+
         _minimoAceptadoPorUsuario.AddOrUpdate(
             usuarioId,
-            ahora,
-            (_, actual) => ahora > actual ? ahora : actual);
+            ahoraEnMilisegundos,
+            (_, actual) => ahoraEnMilisegundos > actual ? ahoraEnMilisegundos : actual);
     }
 
     public bool EsValido(int usuarioId, DateTime emitidoEn)
@@ -39,4 +51,18 @@ public sealed class RevocadorTokensEnMemoria : IRevocadorTokens
 
     public IReadOnlyDictionary<int, DateTime> ObtenerEstadoDiagnostico()
         => new Dictionary<int, DateTime>(_minimoAceptadoPorUsuario);
+
+    /// <summary>
+    /// Borra todas las revocaciones. NO se usa en producción — está sólo para aislar los
+    /// tests de integración, y por eso vive en la clase concreta y no en
+    /// <see cref="IRevocadorTokens"/>: nada del código de producción puede invocarla.
+    ///
+    /// Motivo: este revocador es SINGLETON y vive durante toda la collection "Api", pero
+    /// ApiTestBase hace TRUNCATE ... RESTART IDENTITY antes de cada test, así que los
+    /// usuarioId (1, 2, 3…) se reciclan entre usuarios lógicos completamente distintos. Una
+    /// revocación dejada por un test viejo queda apuntando al usuario de otro test y lo
+    /// rechaza con un 401 espurio. Es el mismo criterio con el que ApiTestBase ya resetea
+    /// EstadoLicencia y con el que ApiFactory baja IProveedorPermisos a Scoped.
+    /// </summary>
+    public void LimpiarTodo() => _minimoAceptadoPorUsuario.Clear();
 }
