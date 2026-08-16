@@ -329,4 +329,72 @@ public class PanelPermisosViewModelTests
         confirm.Verify(c => c.InformarAsync("no se pudieron guardar los permisos"), Times.Once);
         confirm.Verify(c => c.InformarAsync("Permisos guardados."), Times.Never);
     }
+
+    // ── Paso 5 del refactor: aviso NO bloqueante para dependencias BLANDAS
+    // (PermisoDependencias.Recomendados). A diferencia de Requisitos (dependencia DURA,
+    // validada server-side en UsuarioService.GuardarPermisosAsync), esta combinación es válida
+    // y sostiene un rol real -- el aviso es informativo, nunca impide el guardado.
+
+    [Fact]
+    public void TildarRegistrarMovimientos_SinGestionarProductos_MuestraLaAdvertencia()
+    {
+        var (panel, _, _) = Crear();
+
+        Item(panel, Permisos.RegistrarMovimientos).Seleccionado = true;
+
+        Assert.Equal(
+            PermisoDependencias.Recomendados[Permisos.RegistrarMovimientos].Mensaje,
+            Item(panel, Permisos.RegistrarMovimientos).Advertencia);
+    }
+
+    [Fact]
+    public void TildarTambienGestionarProductos_OcultaLaAdvertencia()
+    {
+        var (panel, _, _) = Crear();
+        Item(panel, Permisos.RegistrarMovimientos).Seleccionado = true;
+
+        Item(panel, Permisos.GestionarProductos).Seleccionado = true;
+
+        Assert.Null(Item(panel, Permisos.RegistrarMovimientos).Advertencia);
+    }
+
+    [Fact]
+    public void DestildarGestionarProductosDeNuevo_ReaparecenLaAdvertencia()
+    {
+        var (panel, _, _) = Crear();
+        Item(panel, Permisos.RegistrarMovimientos).Seleccionado = true;
+        Item(panel, Permisos.GestionarProductos).Seleccionado = true;
+
+        Item(panel, Permisos.GestionarProductos).Seleccionado = false;
+
+        Assert.Equal(
+            PermisoDependencias.Recomendados[Permisos.RegistrarMovimientos].Mensaje,
+            Item(panel, Permisos.RegistrarMovimientos).Advertencia);
+    }
+
+    [Fact]
+    public void PermisoSinRecomendacion_NuncaMuestraAdvertencia()
+    {
+        var (panel, _, _) = Crear();
+
+        Item(panel, Permisos.VerReportes).Seleccionado = true;
+
+        Assert.Null(Item(panel, Permisos.VerReportes).Advertencia);
+    }
+
+    [Fact]
+    public async Task GuardarAsync_ConCombinacionAvisada_NoBloqueaElGuardado()
+    {
+        // El aviso es informativo: RegistrarMovimientos tildado sin GestionarProductos se
+        // guarda igual, tal cual lo tildó el Admin.
+        var (panel, padre, svc) = Crear();
+        padre.UsuarioSeleccionado = Dto(9, RolUsuario.Operador);
+        Item(panel, Permisos.RegistrarMovimientos).Seleccionado = true;
+
+        await panel.GuardarCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.GuardarPermisosAsync(9,
+            It.Is<IReadOnlyList<string>>(l => l.Contains(Permisos.RegistrarMovimientos) && l.Count == 1)),
+            Times.Once);
+    }
 }

@@ -103,7 +103,20 @@
                                             <ItemsControl ItemsSource="{Binding Items}">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate x:DataType="vm:ItemPermiso">
-                                                        <CheckBox Content="{Binding Etiqueta}" IsChecked="{Binding Seleccionado}" />
+                                                        <StackPanel Spacing="2">
+                                                            <CheckBox Content="{Binding Etiqueta}" IsChecked="{Binding Seleccionado}" />
+                                                            <!-- Aviso NO bloqueante de dependencia BLANDA (paso 5 del refactor;
+                                                                 PermisoDependencias.Recomendados). Mismo patrón que el indicador
+                                                                 "Solo lectura" de IngresosView.axaml: Classes="caption" ya usa
+                                                                 TextoSecundarioBrush (Typography.axaml). Se descartó WarningBrush
+                                                                 (Tokens.axaml): sobre el fondo blanco de Border.card da 3.19:1,
+                                                                 por debajo del piso WCAG AA de 4.5:1 (ver ButtonGhostContrasteTests). -->
+                                                            <TextBlock Text="{Binding Advertencia}"
+                                                                       Classes="caption"
+                                                                       Margin="24,0,0,0"
+                                                                       TextWrapping="Wrap"
+                                                                       IsVisible="{Binding Advertencia, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                                        </StackPanel>
                                                     </DataTemplate>
                                                 </ItemsControl.ItemTemplate>
                                             </ItemsControl>

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Auth;
+using StockApp.Application.Authorization;
 using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Services;
 
@@ -62,6 +63,42 @@ public partial class PanelPermisosViewModel : ViewModelBase
                 g.Key,
                 g.Select(e => new ItemPermiso(e.Permiso, e.Etiqueta)).ToList()))
             .ToList();
+
+        // Paso 5 del refactor: el aviso de una dependencia BLANDA (PermisoDependencias.
+        // Recomendados) depende del estado de OTRO ítem -- destildar GestionarProductos tiene
+        // que reaparecer el aviso de RegistrarMovimientos, no el propio. Por eso se escucha el
+        // PropertyChanged de TODOS los ítems (no solo "el que cambió" desde afuera) y se
+        // recalculan TODAS las advertencias juntas cada vez: son 12 ítems, recorrerlos entero
+        // es más simple y más difícil de romper que mantener un grafo de dependencias inversas
+        // a mano. Suscripción única acá porque los ítems nunca cambian de identidad (Grupos se
+        // arma una sola vez, ver comentario de la propiedad).
+        foreach (var item in Grupos.SelectMany(g => g.Items))
+            item.PropertyChanged += AlCambiarSeleccionDeItem;
+    }
+
+    private void AlCambiarSeleccionDeItem(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(ItemPermiso.Seleccionado)) return;
+        RecalcularAdvertencias();
+    }
+
+    /// <summary>No bloquea nada -- la única dependencia que puede impedir el guardado es la
+    /// DURA (PermisoDependencias.Requisitos), validada del lado servidor en
+    /// UsuarioService.GuardarPermisosAsync (ya mergeado, no se toca acá).</summary>
+    private void RecalcularAdvertencias()
+    {
+        var seleccionados = new HashSet<string>(
+            Grupos.SelectMany(g => g.Items).Where(i => i.Seleccionado).Select(i => i.Clave));
+
+        foreach (var item in Grupos.SelectMany(g => g.Items))
+        {
+            item.Advertencia =
+                item.Seleccionado
+                && PermisoDependencias.Recomendados.TryGetValue(item.Clave, out var recomendacion)
+                && !seleccionados.Contains(recomendacion.PermisoRecomendado)
+                    ? recomendacion.Mensaje
+                    : null;
+        }
     }
 
     /// <summary>Conecta este panel con el UsuariosAdminViewModel que lo hostea. Llamado UNA
