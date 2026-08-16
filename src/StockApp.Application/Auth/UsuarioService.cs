@@ -275,6 +275,20 @@ public class UsuarioService : IUsuarioService
             throw new ArgumentException(
                 "No se pueden configurar permisos para un usuario Admin: tiene acceso total.");
 
+        // Bug reportado por uso real (2026-08-16, verificación orgánica): el panel de permisos
+        // seguía completamente editable para un usuario dado de baja -- se le podían tildar o
+        // destildar permisos y guardar como si estuviera activo. El daño concreto era ensuciar
+        // el log de auditoría con una entrada ModificacionPermisosUsuario idéntica a la de un
+        // usuario activo. A diferencia de Categoría/Proveedor/Producto (donde el gateo de
+        // Activo es solo de UI), acá se valida también del lado servidor: protege la API cruda
+        // y evita esa entrada de auditoría espuria -- mismo criterio que ya usa este método con
+        // las dependencias duras de permisos más abajo (no confiar en que el cliente gatee
+        // todo). LEER los permisos de un usuario de baja (ObtenerPermisosAsync) sigue permitido
+        // a propósito: hace falta para mostrarlos en modo consulta; solo se bloquea ESCRIBIR.
+        if (!usuario.Activo)
+            throw new ReglaDeNegocioException(
+                "No se pueden configurar permisos para un usuario dado de baja.");
+
         // Defensa contra un cliente viejo o manipulado intentando colar un permiso estructural
         // (ej. GestionarUsuarios) — nunca deberían estar en la whitelist de configurables.
         var fueraDeWhitelist = permisos.Where(p => !AuthorizationService.PermisosConfigurables.Contains(p)).ToList();
