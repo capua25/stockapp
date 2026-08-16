@@ -43,6 +43,25 @@ public partial class PanelPermisosViewModel : ViewModelBase
 
     public bool EsAdminSeleccionado => _padre?.EsAdminSeleccionado ?? false;
 
+    /// <summary>Bug reportado por uso real (2026-08-16): el panel seguía completamente
+    /// editable para un usuario dado de baja. A diferencia de EsAdminSeleccionado (bool
+    /// puro), acá hace falta el default explícito a <c>false</c> cuando no hay selección --
+    /// mismo patrón que EsAdminSeleccionado de arriba.</summary>
+    public bool EsUsuarioSeleccionadoActivo => _padre?.UsuarioSeleccionado?.Activo ?? false;
+
+    /// <summary>Gatea el panel completo para ESCRITURA: ni un Admin (acceso total, aviso
+    /// propio "Acceso total") ni un usuario dado de baja pueden editarse desde acá. Doble
+    /// barrera con UsuarioService.GuardarPermisosAsync (Application) -- mismo criterio que ya
+    /// usa este refactor con las dependencias duras de permisos: no confiar solo en la UI.</summary>
+    public bool PuedeEditar => !EsAdminSeleccionado && EsUsuarioSeleccionadoActivo;
+
+    /// <summary>Indicador visual (mismo patrón que el "Solo lectura" de IngresosView.axaml,
+    /// bugfix 2026-08-16): explica por qué el panel está deshabilitado cuando el usuario
+    /// seleccionado fue dado de baja. No aplica al caso Admin, que ya tiene su propio aviso
+    /// ("Acceso total") -- mostrar los dos sería redundante.</summary>
+    public bool MostrarAvisoSoloLectura =>
+        _padre?.UsuarioSeleccionado is not null && !EsAdminSeleccionado && !EsUsuarioSeleccionadoActivo;
+
     /// <summary>Crítico 2, capa b (review Task 13): estado explícito de "no se pudieron cargar
     /// los permisos" — un panel simplemente destildado no le avisa nada al Admin, y si aprieta
     /// Guardar le saca TODOS los permisos al usuario seleccionado. Mismo patrón que
@@ -117,6 +136,17 @@ public partial class PanelPermisosViewModel : ViewModelBase
         if (e.PropertyName != nameof(UsuariosAdminViewModel.UsuarioSeleccionado)) return;
 
         OnPropertyChanged(nameof(EsAdminSeleccionado));
+        // Bug reportado por uso real (2026-08-16): EsUsuarioSeleccionadoActivo/PuedeEditar/
+        // MostrarAvisoSoloLectura son propiedades computadas (no [ObservableProperty]), así
+        // que no se enteran solas del cambio de UsuarioSeleccionado -- hay que notificarlas a
+        // mano, mismo mecanismo que ya usa EsAdminSeleccionado arriba. NotifyCanExecuteChanged
+        // explícito porque PuedeGuardar ahora depende de PuedeEditar, que no es una
+        // [ObservableProperty] -- el [NotifyCanExecuteChangedFor(GuardarCommand)] de
+        // MensajeError no alcanza para este otro camino.
+        OnPropertyChanged(nameof(EsUsuarioSeleccionadoActivo));
+        OnPropertyChanged(nameof(PuedeEditar));
+        OnPropertyChanged(nameof(MostrarAvisoSoloLectura));
+        GuardarCommand.NotifyCanExecuteChanged();
         // Mejor esfuerzo (pre-flight, corrección B): sin esto, una falla de
         // ObtenerPermisosAsync (ej. ServidorNoDisponibleException) quedaba como excepción no
         // observada. El Task envolvente (nunca lanza) se guarda en _tareaCarga para que los
@@ -171,8 +201,11 @@ public partial class PanelPermisosViewModel : ViewModelBase
 
     /// <summary>Crítico 2, capa b: gatea GuardarCommand mientras MensajeError esté seteado
     /// (última carga fallida) — evita que el Admin persista, sin querer, los permisos que
-    /// quedaron en el modelo desde antes de que el fetch fallara.</summary>
-    private bool PuedeGuardar() => MensajeError is null;
+    /// quedaron en el modelo desde antes de que el fetch fallara. Bug reportado por uso real
+    /// (2026-08-16): suma PuedeEditar -- sin esto, un usuario dado de baja seguía pudiendo
+    /// guardar desde acá (la UI), aunque UsuarioService.GuardarPermisosAsync ya lo rechace del
+    /// lado servidor.</summary>
+    private bool PuedeGuardar() => MensajeError is null && PuedeEditar;
 
     [RelayCommand(CanExecute = nameof(PuedeGuardar))]
     private async Task GuardarAsync()

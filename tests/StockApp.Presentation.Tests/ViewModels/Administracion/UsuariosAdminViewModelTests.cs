@@ -31,8 +31,8 @@ public class UsuariosAdminViewModelTests
         return (vm, svc, confirm);
     }
 
-    private static UsuarioDto Dto(int id, RolUsuario rol) =>
-        new(id, $"usuario{id}", null, rol, true, DateTime.UtcNow);
+    private static UsuarioDto Dto(int id, RolUsuario rol, bool activo = true) =>
+        new(id, $"usuario{id}", null, rol, activo, DateTime.UtcNow);
 
     [Fact]
     public async Task CargarAsync_PueblaItemsDesdeElServicio()
@@ -346,5 +346,58 @@ public class UsuariosAdminViewModelTests
         await vm.CambiarContrasenaCommand.ExecuteAsync(null);
 
         Assert.Null(vm.MensajeError);
+    }
+
+    // ── Bug reportado por uso real (2026-08-16): además del panel de permisos, los otros
+    // botones de acción ("Dar de baja", "Hacer Admin"/"Hacer Operador", "Cambiar contraseña")
+    // seguían habilitados para un usuario ya dado de baja. Sin un método de "reactivar" en
+    // IUsuarioService, no hay ningún camino de vuelta -- así que las tres acciones son
+    // igual de nonsense sobre un usuario inactivo: "Dar de baja" es redundante (ya está de
+    // baja), y cambiar su rol o su contraseña no tiene efecto porque no puede volver a entrar.
+    // Mismo criterio que ya usa el repo en Categoría/Proveedor/Producto (PuedeEditar =>
+    // PuedeDarBaja: "solo se edita un ítem seleccionado y activo").
+
+    [Fact]
+    public void UsuarioSeleccionado_Inactivo_ComandosDeAccion_QuedanDeshabilitados()
+    {
+        var (vm, _, _) = Crear();
+
+        vm.UsuarioSeleccionado = Dto(2, RolUsuario.Operador, activo: false);
+
+        Assert.False(vm.BajaCommand.CanExecute(null));
+        Assert.False(vm.CambiarRolCommand.CanExecute(RolUsuario.Admin));
+        Assert.False(vm.CambiarContrasenaCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void UsuarioSeleccionado_Activo_ComandosDeAccion_QuedanHabilitados()
+    {
+        var (vm, _, _) = Crear();
+
+        vm.UsuarioSeleccionado = Dto(2, RolUsuario.Operador, activo: true);
+
+        Assert.True(vm.BajaCommand.CanExecute(null));
+        Assert.True(vm.CambiarRolCommand.CanExecute(RolUsuario.Admin));
+        Assert.True(vm.CambiarContrasenaCommand.CanExecute(null));
+    }
+
+    // ── El caso del refresco: dar de baja al usuario seleccionado desde esta misma pantalla
+    // no actualizaba UsuarioSeleccionado -- AlCambiarSeleccion en PanelPermisosViewModel solo
+    // reacciona al cambio de REFERENCIA de UsuarioSeleccionado, no al cambio de su propiedad
+    // Activo, así que el panel (y ahora también estos tres comandos) quedaban leyendo el
+    // estado viejo (Activo=true) hasta que el Admin volvía a tocar la lista a mano.
+
+    [Fact]
+    public async Task BajaAsync_ConConfirmacion_ActualizaUsuarioSeleccionadoReflejandoLaBaja()
+    {
+        var (vm, svc, _) = Crear();
+        svc.Setup(s => s.ListarAsync())
+            .ReturnsAsync(new List<UsuarioDto> { Dto(2, RolUsuario.Operador, activo: false) });
+        vm.UsuarioSeleccionado = Dto(2, RolUsuario.Operador, activo: true);
+
+        await vm.BajaCommand.ExecuteAsync(null);
+
+        Assert.NotNull(vm.UsuarioSeleccionado);
+        Assert.False(vm.UsuarioSeleccionado!.Activo);
     }
 }

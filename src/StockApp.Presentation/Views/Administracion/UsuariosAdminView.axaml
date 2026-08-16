@@ -89,9 +89,23 @@
 
                     <Border BorderBrush="Gray" BorderThickness="1" Padding="12" CornerRadius="4"
                             DataContext="{Binding PanelPermisos}">
-                        <StackPanel Spacing="8" IsEnabled="{Binding !EsAdminSeleccionado}">
+                        <!-- IsEnabled por PuedeEditar (bugfix 2026-08-16), no solo !EsAdminSeleccionado:
+                             el panel seguía completamente editable para un usuario dado de baja,
+                             se veían y se podían tildar/destildar sus permisos igual que a uno
+                             activo. PuedeEditar cubre los dos casos (Admin y usuario inactivo) sin
+                             ocultar nada: el panel se ve siempre (hace falta para consultar qué
+                             permisos tenía), solo se deshabilita la edición. -->
+                        <StackPanel Spacing="8" IsEnabled="{Binding PuedeEditar}">
                             <TextBlock Text="Acceso total" FontWeight="Bold" Foreground="Gray"
                                        IsVisible="{Binding EsAdminSeleccionado}" />
+                            <!-- Indicador "Solo lectura" (bugfix 2026-08-16): mismo patrón que
+                                 IngresosView.axaml, Classes="caption" ya usa TextoSecundarioBrush
+                                 (Typography.axaml, 4.76:1 sobre blanco, AA); se descartó WarningBrush
+                                 por el mismo motivo que el aviso de dependencia blanda más abajo
+                                 (3.19:1, por debajo del piso AA de 4.5:1). No aplica al caso Admin,
+                                 que ya tiene su propio aviso "Acceso total" arriba. -->
+                            <TextBlock Text="Solo lectura: usuario dado de baja" Classes="caption"
+                                       IsVisible="{Binding MostrarAvisoSoloLectura}" />
 
                             <!-- Catálogo/grupos generados desde CatalogoPermisosPanel (Task 3/4/6):
                                  un checkbox independiente por permiso configurable, sin compuestos. -->
