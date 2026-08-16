@@ -56,6 +56,24 @@ public class CategoriaListViewModelTests
         Assert.Equal("Electrónica", vm.Items[0].Nombre);
     }
 
+    // ── bugfix 2026-08-16 (auditoría): red de contención — CargarAsync no debe escalar un 403 ──
+    // Mismo hermano de ProductoListViewModel.CargarAsync (ver comentario ahí): CargarAsync se
+    // dispara fire-and-forget desde DataContextChanged, sin try/catch un 403 escalaba al
+    // dispatcher global. Silencioso: App.axaml.cs ya informa "Tus permisos cambiaron...".
+    [Fact]
+    public async Task CargarAsync_SiElServicioLanzaUnauthorized_NoPropagaLaExcepcion()
+    {
+        var svcMock = new Mock<ICategoriaService>();
+        svcMock.Setup(s => s.ListarTodasAsync()).ThrowsAsync(new UnauthorizedAccessException());
+        var navMock = new Mock<INavigationService>();
+        var confirmMock = new Mock<IConfirmacionService>();
+        var vm = new CategoriaListViewModel(svcMock.Object, navMock.Object, confirmMock.Object);
+
+        var ex = await Record.ExceptionAsync(() => vm.CargarAsync());
+
+        Assert.Null(ex);
+    }
+
     [Fact]
     public async Task NuevoCommand_NavegaACategoriaFormViewModel()
     {

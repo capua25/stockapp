@@ -65,12 +65,27 @@ public partial class ProductoListViewModel : ViewModelBase
         ItemsView = new DataGridCollectionView(Items);
     }
 
+    /// <summary>
+    /// Red de contención (bugfix 2026-08-16, auditoría): CargarAsync la dispara la View
+    /// (DataContextChanged) fire-and-forget -- un UnauthorizedAccessException que escapa acá
+    /// escala a Dispatcher.UIThread.UnhandledException (App.axaml.cs), que muestra el genérico
+    /// "Ocurrió un error inesperado" y lo loguea a crash.log como si fuera un bug real. Un 403 ya
+    /// se avisó ANTES de llegar acá: AuthTokenHandler dispara ApiSession.AccesoRevocado apenas ve
+    /// el 403 en la respuesta HTTP, y App.axaml.cs ya informa "Tus permisos cambiaron...". Mismo
+    /// criterio que GastosViewModel.CargarAsync (Finanzas): silencioso, para no duplicar el aviso.
+    /// </summary>
     public async Task CargarAsync()
     {
-        var resultados = await _service.BuscarAsync(null, null, null);
-        Items.Clear();
-        foreach (var p in resultados)
-            Items.Add(p);
+        try
+        {
+            var resultados = await _service.BuscarAsync(null, null, null);
+            Items.Clear();
+            foreach (var p in resultados)
+                Items.Add(p);
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
     }
 
     /// <summary>

@@ -39,12 +39,24 @@ public partial class CategoriaListViewModel : ViewModelBase
         _confirmacion = confirmacion;
     }
 
+    /// <summary>
+    /// Red de contención (bugfix 2026-08-16, auditoría): mismo hermano y mismo criterio que
+    /// ProductoListViewModel.CargarAsync -- CargarAsync se dispara fire-and-forget desde
+    /// DataContextChanged; un UnauthorizedAccessException se atrapa en silencio porque
+    /// App.axaml.cs ya informa "Tus permisos cambiaron..." apenas ve el 403 en la respuesta HTTP.
+    /// </summary>
     public async Task CargarAsync()
     {
-        var resultados = await _service.ListarTodasAsync();
-        Items.Clear();
-        foreach (var c in resultados)
-            Items.Add(c);
+        try
+        {
+            var resultados = await _service.ListarTodasAsync();
+            Items.Clear();
+            foreach (var c in resultados)
+                Items.Add(c);
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
     }
 
     [RelayCommand]

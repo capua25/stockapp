@@ -71,6 +71,30 @@ public class ProductoListViewModelTests
         Assert.Equal("P001", vm.Items[0].Codigo);
     }
 
+    // ── bugfix 2026-08-16 (auditoría): red de contención — CargarAsync no debe escalar un 403 ──
+    // CargarAsync la dispara la View (ProductoListView.axaml.cs, DataContextChanged)
+    // fire-and-forget: un Operador que llega a esta pantalla sin GestionarProductos (por ej.
+    // navegando desde Inicio antes del fix de gating) se comía un 403 sin atrapar, que escalaba
+    // a Dispatcher.UIThread.UnhandledException (App.axaml.cs) y dejaba la grilla vacía para
+    // siempre sin explicación. Mismo criterio que GastosViewModel.CargarAsync (Finanzas, fix
+    // 2026-08-15): silencioso, porque AuthTokenHandler + App.axaml.cs ya informan "Tus permisos
+    // cambiaron..." apenas ven el 403 en la respuesta HTTP -- no hay que duplicar el aviso.
+    [Fact]
+    public async Task CargarAsync_SiElServicioLanzaUnauthorized_NoPropagaLaExcepcion()
+    {
+        var svcMock = new Mock<IProductoService>();
+        svcMock
+            .Setup(s => s.BuscarAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .ThrowsAsync(new UnauthorizedAccessException());
+        var navMock = new Mock<INavigationService>();
+        var confirmMock = new Mock<IConfirmacionService>();
+        var vm = new ProductoListViewModel(svcMock.Object, navMock.Object, confirmMock.Object);
+
+        var ex = await Record.ExceptionAsync(() => vm.CargarAsync());
+
+        Assert.Null(ex);
+    }
+
     [Fact]
     public async Task Buscar_FiltroTexto_InvocaBuscarPorTextoAsyncConElTermino()
     {
