@@ -10,7 +10,8 @@ namespace StockApp.Presentation.Tests.ViewModels.Administracion;
 
 public class PanelPermisosViewModelTests
 {
-    private static UsuarioDto Dto(int id, RolUsuario rol) => new(id, $"u{id}", null, rol, true, DateTime.UtcNow);
+    private static UsuarioDto Dto(int id, RolUsuario rol, bool activo = true) =>
+        new(id, $"u{id}", null, rol, activo, DateTime.UtcNow);
 
     private static (PanelPermisosViewModel panel, UsuariosAdminViewModel padre, Mock<IUsuarioService> svc) Crear()
     {
@@ -396,5 +397,78 @@ public class PanelPermisosViewModelTests
         svc.Verify(s => s.GuardarPermisosAsync(9,
             It.Is<IReadOnlyList<string>>(l => l.Contains(Permisos.RegistrarMovimientos) && l.Count == 1)),
             Times.Once);
+    }
+
+    // ── Bug reportado por uso real (2026-08-16): el panel seguía completamente editable para
+    // un usuario dado de baja -- se le podían tildar/destildar permisos y guardar como si
+    // estuviera activo. UsuarioService.GuardarPermisosAsync ya rechaza del lado servidor
+    // (ReglaDeNegocioException); acá se verifica la barrera de UI: GuardarCommand deshabilitado
+    // y un indicador visual ("Solo lectura") que explique por qué, sin ocultar el panel --
+    // sigue siendo necesario poder CONSULTAR qué permisos tenía.
+
+    [Fact]
+    public async Task UsuarioInactivoSeleccionado_GuardarCommand_NoPuedeEjecutarse()
+    {
+        // Mock configurado (no unconfigured) a propósito: sin esto, ObtenerPermisosAsync sin
+        // Setup devuelve una lista null vía Moq y CargarAsync termina en su catch -- MensajeError
+        // quedaría seteado y taparía la razón real que este test quiere aislar (PuedeEditar).
+        var (panel, padre, svc) = Crear();
+        svc.Setup(s => s.ObtenerPermisosAsync(9)).ReturnsAsync(new List<string>());
+
+        padre.UsuarioSeleccionado = Dto(9, RolUsuario.Operador, activo: false);
+        await panel._tareaCarga;
+
+        Assert.False(panel.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task UsuarioActivoSeleccionado_GuardarCommand_PuedeEjecutarse()
+    {
+        var (panel, padre, svc) = Crear();
+        svc.Setup(s => s.ObtenerPermisosAsync(9)).ReturnsAsync(new List<string>());
+
+        padre.UsuarioSeleccionado = Dto(9, RolUsuario.Operador, activo: true);
+        await panel._tareaCarga;
+
+        Assert.True(panel.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void UsuarioInactivoNoAdminSeleccionado_MuestraAvisoSoloLectura()
+    {
+        var (panel, padre, _) = Crear();
+
+        padre.UsuarioSeleccionado = Dto(9, RolUsuario.Operador, activo: false);
+
+        Assert.True(panel.MostrarAvisoSoloLectura);
+    }
+
+    [Fact]
+    public void UsuarioActivoSeleccionado_NoMuestraAvisoSoloLectura()
+    {
+        var (panel, padre, _) = Crear();
+
+        padre.UsuarioSeleccionado = Dto(9, RolUsuario.Operador, activo: true);
+
+        Assert.False(panel.MostrarAvisoSoloLectura);
+    }
+
+    [Fact]
+    public void AdminSeleccionado_NoMuestraAvisoSoloLectura()
+    {
+        // El Admin ya tiene su propio aviso ("Acceso total") -- no duplicar el mensaje.
+        var (panel, padre, _) = Crear();
+
+        padre.UsuarioSeleccionado = Dto(1, RolUsuario.Admin);
+
+        Assert.False(panel.MostrarAvisoSoloLectura);
+    }
+
+    [Fact]
+    public void SinUsuarioSeleccionado_NoMuestraAvisoSoloLectura()
+    {
+        var (panel, _, _) = Crear();
+
+        Assert.False(panel.MostrarAvisoSoloLectura);
     }
 }

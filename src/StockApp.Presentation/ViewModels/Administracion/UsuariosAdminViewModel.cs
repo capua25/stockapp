@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -96,7 +97,16 @@ public partial class UsuariosAdminViewModel : ViewModelBase
         }
     }
 
-    private bool PuedeOperarSobreSeleccionado() => UsuarioSeleccionado is not null;
+    // Bug reportado por uso real (2026-08-16): "Dar de baja", "Hacer Admin"/"Hacer Operador" y
+    // "Cambiar contraseña" seguían habilitados para un usuario ya dado de baja. Sin un método
+    // de "reactivar" en IUsuarioService, no hay ningún camino de vuelta desde la baja -- las
+    // tres acciones son igual de nonsense sobre un usuario inactivo: "Dar de baja" es
+    // redundante (ya lo está, y BajaLogicaAsync no rechaza la doble baja: solo ensuciaría el
+    // log de auditoría de nuevo), y cambiar rol o contraseña no tiene efecto porque ese
+    // usuario no puede volver a entrar. Mismo criterio que ya usa este repo en
+    // Categoría/Proveedor/Producto (CategoriaListViewModel.PuedeEditar => PuedeDarBaja: "solo
+    // se edita un ítem seleccionado y activo").
+    private bool PuedeOperarSobreSeleccionado() => UsuarioSeleccionado is not null && UsuarioSeleccionado.Activo;
 
     [RelayCommand(CanExecute = nameof(PuedeOperarSobreSeleccionado))]
     private async Task BajaAsync()
@@ -111,8 +121,19 @@ public partial class UsuariosAdminViewModel : ViewModelBase
 
         try
         {
-            await _usuarios.BajaLogicaAsync(UsuarioSeleccionado.Id);
+            var idDadoDeBaja = UsuarioSeleccionado.Id;
+            await _usuarios.BajaLogicaAsync(idDadoDeBaja);
             await CargarAsync();
+
+            // El caso del refresco (bug reportado por uso real, 2026-08-16): PanelPermisosViewModel
+            // (y ahora también PuedeOperarSobreSeleccionado de acá arriba) solo reaccionan al
+            // cambio de REFERENCIA de UsuarioSeleccionado -- CargarAsync trae un UsuarioDto nuevo
+            // (record, Activo=false) para el mismo Id, pero sin esta reasignación explícita
+            // UsuarioSeleccionado seguía apuntando a la instancia vieja (Activo=true) y el panel
+            // quedaba editable sobre el usuario recién dado de baja. Reseleccionar por Id desde
+            // Items (ya recargado) es más simple que escuchar la propiedad Activo del Dto: reusa
+            // CargarAsync, que ya es la única fuente de verdad de la lista.
+            UsuarioSeleccionado = Items.FirstOrDefault(u => u.Id == idDadoDeBaja);
         }
         // Fix (Task 15, Round 1): UnauthorizedAccessException se atrapa APARTE, sin mostrar
         // ex.Message — un 403 ya dispara el aviso central en App.axaml.cs (mensaje propio +

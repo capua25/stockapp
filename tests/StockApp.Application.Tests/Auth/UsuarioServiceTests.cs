@@ -601,6 +601,27 @@ public class UsuarioServiceTests
     }
 
     [Fact]
+    public async Task ObtenerPermisosAsync_UsuarioInactivo_SiguePermitidoParaConsulta()
+    {
+        // Bug reportado por uso real (2026-08-16): a diferencia de GuardarPermisosAsync, LEER
+        // los permisos de un usuario dado de baja tiene que seguir andando -- hace falta para
+        // mostrarlos en modo consulta (panel deshabilitado, no oculto). Solo se bloquea ESCRIBIR.
+        var (svc, repo, _, _, _, _, _, permisos) = Crear();
+        var operadorInactivo = new Usuario
+        {
+            Id = 9, Rol = RolUsuario.Operador, NombreUsuario = "op", HashContrasena = "h",
+            Activo = false, FechaAlta = DateTime.UtcNow,
+        };
+        repo.Setup(r => r.ObtenerPorIdAsync(9)).ReturnsAsync(operadorInactivo);
+        permisos.Setup(p => p.ObtenerAsync(9))
+            .ReturnsAsync((IReadOnlySet<string>)new HashSet<string> { Permisos.VerFinanzas });
+
+        var resultado = await svc.ObtenerPermisosAsync(9);
+
+        Assert.Contains(Permisos.VerFinanzas, resultado);
+    }
+
+    [Fact]
     public async Task GuardarPermisosAsync_UsuarioOperador_LlamaAGuardarAsyncYAuditar()
     {
         var (svc, repo, _, _, _, audit, _, permisos) = Crear();
@@ -704,6 +725,28 @@ public class UsuarioServiceTests
 
         await Assert.ThrowsAsync<EntidadNoEncontradaException>(
             () => svc.GuardarPermisosAsync(404, new[] { Permisos.VerFinanzas }));
+    }
+
+    [Fact]
+    public async Task GuardarPermisosAsync_UsuarioInactivo_Rechaza()
+    {
+        // Bug reportado por uso real (2026-08-16): el panel de permisos seguía completamente
+        // editable para un usuario dado de baja -- se le podían tildar/destildar permisos y
+        // guardar como si estuviera activo. El daño concreto: una entrada de auditoría
+        // ModificacionPermisosUsuario idéntica a la de un usuario activo, sin marca alguna.
+        var (svc, repo, _, _, _, audit, _, permisos) = Crear();
+        var operadorInactivo = new Usuario
+        {
+            Id = 9, Rol = RolUsuario.Operador, NombreUsuario = "op", HashContrasena = "h",
+            Activo = false, FechaAlta = DateTime.UtcNow,
+        };
+        repo.Setup(r => r.ObtenerPorIdAsync(9)).ReturnsAsync(operadorInactivo);
+
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => svc.GuardarPermisosAsync(9, new[] { Permisos.VerFinanzas }));
+        permisos.Verify(p => p.GuardarAsync(It.IsAny<int>(), It.IsAny<IReadOnlyCollection<string>>()), Times.Never);
+        audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), AccionAuditada.ModificacionPermisosUsuario, "Usuario", 9, It.IsAny<string>()), Times.Never);
     }
 
     // ── Paso 2 del refactor de permisos: PermisoDependencias.Requisitos (duras) ────────────
