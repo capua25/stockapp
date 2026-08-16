@@ -92,20 +92,25 @@
                         <StackPanel Spacing="8" IsEnabled="{Binding !EsAdminSeleccionado}">
                             <TextBlock Text="Acceso total" FontWeight="Bold" Foreground="Gray"
                                        IsVisible="{Binding EsAdminSeleccionado}" />
-                            <TextBlock Text="Catálogo" FontWeight="Bold" />
-                            <CheckBox Content="Productos (ver, editar, recalcular stock)" IsChecked="{Binding Productos}" />
-                            <CheckBox Content="Tablas maestras (categorías, proveedores, unidades)" IsChecked="{Binding PermisoGestionarTablasMaestras}" />
-                            <CheckBox Content="Registrar movimientos de stock" IsChecked="{Binding PermisoRegistrarMovimientos}" />
-                            <TextBlock Text="Finanzas" FontWeight="Bold" Margin="0,8,0,0" />
-                            <CheckBox Content="Gastos y facturas" IsChecked="{Binding GastosYFacturas}" />
-                            <CheckBox Content="Ingresos de caja" IsChecked="{Binding IngresosDeCaja}" />
-                            <CheckBox Content="Ver Finanzas (libro caja, control POA, calendario)" IsChecked="{Binding PermisoVerFinanzas}" />
-                            <CheckBox Content="Maestros de finanzas (fuentes, rubros, líneas POA)" IsChecked="{Binding PermisoGestionarMaestrosFinanzas}" />
-                            <TextBlock Text="Tareas y reportes" FontWeight="Bold" Margin="0,8,0,0" />
-                            <CheckBox Content="Tareas" IsChecked="{Binding PermisoGestionarTareas}" />
-                            <CheckBox Content="Reportes" IsChecked="{Binding PermisoVerReportes}" />
-                            <TextBlock Text="Documentos" FontWeight="Bold" Margin="0,8,0,0" />
-                            <CheckBox Content="Documentos administrativos" IsChecked="{Binding PermisoGestionarDocumentos}" />
+
+                            <!-- Catálogo/grupos generados desde CatalogoPermisosPanel (Task 3/4/6):
+                                 un checkbox independiente por permiso configurable, sin compuestos. -->
+                            <ItemsControl ItemsSource="{Binding Grupos}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:GrupoPermisos">
+                                        <StackPanel Spacing="8">
+                                            <TextBlock Text="{Binding Nombre}" FontWeight="Bold" Margin="0,8,0,0" />
+                                            <ItemsControl ItemsSource="{Binding Items}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="vm:ItemPermiso">
+                                                        <CheckBox Content="{Binding Etiqueta}" IsChecked="{Binding Seleccionado}" />
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
 
                             <TextBlock Text="{Binding MensajeError}"
                                        Foreground="Red"
