@@ -86,6 +86,9 @@ public class IngresosViewTests
     private static Button BuscarBotonPorTexto(Window window, string texto)
         => window.GetVisualDescendants().OfType<Button>().First(b => (b.Content as string) == texto);
 
+    private static TextBlock BuscarTextoPorContenido(Window window, string texto)
+        => window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == texto);
+
     [AvaloniaFact]
     public void Montar_OperadorSinRegistrarIngresos_OcultaNuevoIngreso()
     {
@@ -103,5 +106,37 @@ public class IngresosViewTests
 
         Assert.True(vm.PuedeRegistrarIngresos);
         Assert.True(BuscarBotonPorTexto(window, "Nuevo ingreso").IsVisible);
+    }
+
+    // ── Indicador "Solo lectura" (bugfix 2026-08-16): con los tres botones de accion ocultos
+    // por PuedeRegistrarIngresos, un Operador con solo VerFinanzas se quedaba con titulo y
+    // grilla y NINGUN indicio de por que no puede hacer nada -- se lee como pantalla rota. ──
+
+    [AvaloniaFact]
+    public void Montar_OperadorSinRegistrarIngresos_MuestraIndicadorSoloLectura()
+    {
+        var (window, vm) = Montar(RolUsuario.Operador, new HashSet<string> { Permisos.VerFinanzas });
+
+        Assert.False(vm.PuedeRegistrarIngresos);
+        Assert.True(BuscarTextoPorContenido(window, "Solo lectura").IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void Montar_OperadorConRegistrarIngresos_OcultaIndicadorSoloLectura()
+    {
+        var (window, vm) = Montar(
+            RolUsuario.Operador, new HashSet<string> { Permisos.VerFinanzas, Permisos.RegistrarIngresos });
+
+        Assert.True(vm.PuedeRegistrarIngresos);
+        Assert.False(BuscarTextoPorContenido(window, "Solo lectura").IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void Montar_Admin_OcultaIndicadorSoloLectura()
+    {
+        var (window, vm) = Montar(RolUsuario.Admin, new HashSet<string>());
+
+        Assert.True(vm.PuedeRegistrarIngresos);
+        Assert.False(BuscarTextoPorContenido(window, "Solo lectura").IsVisible);
     }
 }
