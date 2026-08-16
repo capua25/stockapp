@@ -83,22 +83,30 @@ public partial class ShellMainViewModel : ViewModelBase
         _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.VerReportes);
 
     /// <summary>
-    /// Ingreso por factura (fix bug de coherencia de permisos, 2026-08-15): a diferencia de las
-    /// demás Puede*, combina TRES permisos porque el flujo real los exige los tres —
-    /// RegistrarMovimientos y RegistrarGastos (ambos verificados sin condición por
-    /// IngresoPorFacturaService.RegistrarAsync/AnularLoteAsync) y VerFinanzas (sin él, los
-    /// combos de fuente/rubro/línea POA de la pantalla quedan vacíos —
+    /// Ingreso por factura (fix bug de coherencia de permisos, 2026-08-15; ampliado 2026-08-16
+    /// tras auditoría): a diferencia de las demás Puede*, combina CUATRO permisos porque el
+    /// flujo real los exige los cuatro — RegistrarMovimientos y RegistrarGastos (ambos
+    /// verificados sin condición por IngresoPorFacturaService.RegistrarAsync/AnularLoteAsync),
+    /// VerFinanzas (sin él, los combos de fuente/rubro/línea POA de la pantalla quedan vacíos —
     /// FuenteFinanciamientoService/RubroGastoService.ListarActivas/os exigen VerFinanzas— y
     /// GuardarCommand queda permanentemente deshabilitado porque PuedeGuardar exige
-    /// FuenteSeleccionada y RubroSeleccionado no nulos). No incluye GestionarProductos: el
-    /// servicio solo lo exige cuando la factura da de alta un producto nuevo o actualiza precio
-    /// de costo (condicional) — no es un requisito para usar la pantalla en el caso base.
+    /// FuenteSeleccionada y RubroSeleccionado no nulos) y GestionarProductos. Este último NO es
+    /// el mismo caso que /proveedores/activas (gateado a VerFinanzas, más laxo que
+    /// GestionarMaestrosFinanzas): los endpoints GET /productos, /categorias/activas y
+    /// /unidades-medida/activas que consume IngresoPorFacturaViewModel.InicializarAsync para
+    /// poblar ProductosDisponibles/CategoriasDisponibles/UnidadesMedidaDisponibles no tienen
+    /// ninguna ruta de lectura alternativa más laxa — exigen GestionarProductos sin excepción.
+    /// ProductosDisponibles en particular es el ÚNICO combo para elegir un producto EXISTENTE en
+    /// un renglón (no solo para el alta de producto nuevo, que sí es condicional del lado del
+    /// servicio — ver IngresoPorFacturaService.RegistrarAsync, requierePermisoCatalogo): sin
+    /// GestionarProductos la pantalla es inusable incluso en el caso base.
     /// </summary>
     public bool PuedeIngresarPorFactura =>
         _session.RolActual == RolUsuario.Admin ||
         (_session.PermisosActuales.Contains(Permisos.RegistrarMovimientos) &&
          _session.PermisosActuales.Contains(Permisos.RegistrarGastos) &&
-         _session.PermisosActuales.Contains(Permisos.VerFinanzas));
+         _session.PermisosActuales.Contains(Permisos.VerFinanzas) &&
+         _session.PermisosActuales.Contains(Permisos.GestionarProductos));
 
     /// <summary>
     /// Número de versión de la app para mostrar al pie del menú lateral (ej. "v0.1.1").

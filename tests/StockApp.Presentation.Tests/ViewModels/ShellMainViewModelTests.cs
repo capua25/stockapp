@@ -565,15 +565,20 @@ public class ShellMainViewModelTests
     }
 
     // ── PuedeIngresarPorFactura (fix bug de coherencia de permisos, 2026-08-15) ────────────────
-    // A diferencia de las demás Puede*, esta combina TRES permisos porque el flujo real los
-    // exige los tres: RegistrarMovimientos y RegistrarGastos (ambos verificados sin condición
-    // por IngresoPorFacturaService.RegistrarAsync/AnularLoteAsync) y VerFinanzas (sin él, los
+    // A diferencia de las demás Puede*, esta combina CUATRO permisos porque el flujo real los
+    // exige los cuatro: RegistrarMovimientos y RegistrarGastos (ambos verificados sin condición
+    // por IngresoPorFacturaService.RegistrarAsync/AnularLoteAsync), VerFinanzas (sin él, los
     // combos de fuente/rubro/línea POA de la pantalla quedan vacíos — FuenteFinanciamientoService
     // y RubroGastoService.ListarActivas/os exigen VerFinanzas — y GuardarCommand queda
     // permanentemente deshabilitado porque PuedeGuardar exige FuenteSeleccionada y
-    // RubroSeleccionado no nulos). No incluye GestionarProductos: ese permiso lo exige el
-    // servicio SOLO cuando la factura da de alta un producto nuevo o actualiza precio de costo
-    // (condicional, spec) — no es un requisito para usar la pantalla en el caso base.
+    // RubroSeleccionado no nulos) y GestionarProductos (auditoría 2026-08-16: a diferencia de
+    // /proveedores/activas → VerFinanzas, los endpoints GET /productos, /categorias/activas y
+    // /unidades-medida/activas NO tienen ruta alternativa de lectura más laxa — exigen
+    // GestionarProductos sin excepción. IngresoPorFacturaViewModel.InicializarAsync los usa para
+    // poblar ProductosDisponibles, el ÚNICO combo para elegir un producto EXISTENTE en un
+    // renglón — no es exclusivo del alta de producto nuevo. Sin GestionarProductos ese combo
+    // queda vacío y la pantalla es inusable para el caso base, no solo para alta/actualización
+    // de precio de costo).
 
     [Fact]
     public void Operador_ConSoloRegistrarMovimientos_PuedeIngresarPorFactura_EsFalse()
@@ -605,13 +610,30 @@ public class ShellMainViewModelTests
     }
 
     [Fact]
-    public void Operador_ConLosTresPermisosCompletos_PuedeIngresarPorFactura_EsTrue()
+    public void Operador_ConLosTresPermisosOriginalesSinGestionarProductos_PuedeIngresarPorFactura_EsFalse()
     {
         var sessionMock = new Mock<ICurrentSession>();
         sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Operador);
         sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>
         {
             Permisos.RegistrarMovimientos, Permisos.RegistrarGastos, Permisos.VerFinanzas,
+        });
+        var vm = new ShellMainViewModel(
+            sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
+            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>());
+
+        Assert.False(vm.PuedeIngresarPorFactura);
+    }
+
+    [Fact]
+    public void Operador_ConLosCuatroPermisosCompletos_PuedeIngresarPorFactura_EsTrue()
+    {
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Operador);
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>
+        {
+            Permisos.RegistrarMovimientos, Permisos.RegistrarGastos, Permisos.VerFinanzas,
+            Permisos.GestionarProductos,
         });
         var vm = new ShellMainViewModel(
             sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
@@ -634,6 +656,7 @@ public class ShellMainViewModelTests
             permisos.Add(Permisos.RegistrarMovimientos);
             permisos.Add(Permisos.RegistrarGastos);
             permisos.Add(Permisos.VerFinanzas);
+            permisos.Add(Permisos.GestionarProductos);
             return (IReadOnlySet<string>)permisos;
         });
 
