@@ -292,6 +292,20 @@ public class UsuarioService : IUsuarioService
         // rechazarlo con 400 sería pedante y la operación tiene que ser idempotente.
         var permisosUnicos = permisos.Distinct().ToList();
 
+        // Paso 2 del refactor de permisos: valida las dependencias DURAS (PermisoDependencias
+        // .Requisitos) del lado servidor. Antes, lo único que impedía guardar una combinación
+        // rota eran tres checkboxes compuestos del panel (efecto lateral en el ViewModel) que
+        // no protegen a quien pegue un conjunto de permisos directo por API cruda. Las
+        // dependencias blandas (Recomendados) NO se validan acá — se avisan del lado del
+        // panel, no se rechazan (paso posterior de este mismo refactor).
+        foreach (var permiso in permisosUnicos)
+        {
+            if (PermisoDependencias.Requisitos.TryGetValue(permiso, out var requisito) &&
+                !permisosUnicos.Contains(requisito))
+                throw new ReglaDeNegocioException(
+                    $"El permiso '{permiso}' requiere el permiso '{requisito}', que no está en la lista.");
+        }
+
         await _permisos.GuardarAsync(usuarioId, permisosUnicos);
 
         await _audit.RegistrarAsync(
