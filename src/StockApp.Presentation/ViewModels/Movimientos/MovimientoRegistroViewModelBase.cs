@@ -79,11 +79,26 @@ public abstract partial class MovimientoRegistroViewModelBase : ViewModelBase
     /// </summary>
     public async Task InicializarAsync()
     {
-        var productos = await _productoService.BuscarAsync(null, null, null);
+        try
+        {
+            var productos = await _productoService.BuscarAsync(null, null, null);
 
-        Productos.Clear();
-        foreach (var p in productos.Where(p => p.Activo))
-            Productos.Add(p);
+            Productos.Clear();
+            foreach (var p in productos.Where(p => p.Activo))
+                Productos.Add(p);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Red de contención (bugfix 2026-08-16): InicializarAsync la dispara la View
+            // (DataContextChanged) fire-and-forget — una excepción no atrapada acá escala a
+            // Dispatcher.UIThread.UnhandledException (App.axaml.cs), que loguea a crash.log y
+            // muestra el genérico "Ocurrió un error inesperado" como si fuera un bug real. Un
+            // 403 ya se avisó ANTES de llegar acá: AuthTokenHandler dispara
+            // ApiSession.AccesoRevocado apenas ve el 403 en la respuesta HTTP, y App.axaml.cs
+            // ya informa "Tus permisos cambiaron...". Mismo criterio que
+            // PagosGastoViewModel.InicializarAsync (1791f0d): silencioso, para no duplicar el
+            // aviso.
+        }
     }
 
     private bool PuedeRegistrar()

@@ -503,6 +503,7 @@ public class ShellMainViewModelTests
     [InlineData(nameof(ShellMainViewModel.PuedeGestionarTablasMaestras), Permisos.GestionarTablasMaestras)]
     [InlineData(nameof(ShellMainViewModel.PuedeVerReportes), Permisos.VerReportes)]
     [InlineData(nameof(ShellMainViewModel.PuedeIngresarPorFactura), Permisos.RegistrarMovimientos)]
+    [InlineData(nameof(ShellMainViewModel.PuedeRegistrarEntradaSalida), Permisos.RegistrarMovimientos)]
     public void Admin_TodasLasPropiedadesPuede_SonTrue(string propiedad, string permisoIgnorado)
     {
         var sessionMock = new Mock<ICurrentSession>();
@@ -550,6 +551,7 @@ public class ShellMainViewModelTests
     [InlineData(nameof(ShellMainViewModel.PuedeGestionarTablasMaestras))]
     [InlineData(nameof(ShellMainViewModel.PuedeVerReportes))]
     [InlineData(nameof(ShellMainViewModel.PuedeIngresarPorFactura))]
+    [InlineData(nameof(ShellMainViewModel.PuedeRegistrarEntradaSalida))]
     public void Operador_SinNingunPermisoEnPermisosActuales_LaPropiedadEsFalse(string propiedad)
     {
         var sessionMock = new Mock<ICurrentSession>();
@@ -675,5 +677,89 @@ public class ShellMainViewModelTests
 
         Assert.Contains(nameof(ShellMainViewModel.PuedeIngresarPorFactura), propiedadesNotificadas);
         Assert.True(vm.PuedeIngresarPorFactura);
+    }
+
+    // ── PuedeRegistrarEntradaSalida (fix bug de coherencia de permisos, 2026-08-16) ────────────
+    // Entrada/Salida de movimientos combinan DOS permisos porque MovimientoRegistroViewModelBase.
+    // InicializarAsync carga ProductoService.BuscarAsync (GET /productos, ProductosEndpoints.cs),
+    // que exige GestionarProductos sin ruta alternativa — mismo caso que ProductosDisponibles en
+    // IngresoPorFacturaViewModel (PuedeIngresarPorFactura). El combo de MovimientoFormControl es
+    // el ÚNICO modo de elegir un producto existente (no hay campo de código/SKU/escaneo), así que
+    // sin GestionarProductos la pantalla es inusable en el caso base, no solo para gestión de
+    // catálogo.
+
+    [Fact]
+    public void Operador_ConSoloRegistrarMovimientos_PuedeRegistrarEntradaSalida_EsFalse()
+    {
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Operador);
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string> { Permisos.RegistrarMovimientos });
+        var vm = new ShellMainViewModel(
+            sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
+            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>());
+
+        Assert.False(vm.PuedeRegistrarEntradaSalida);
+    }
+
+    [Fact]
+    public void Operador_ConSoloGestionarProductos_PuedeRegistrarEntradaSalida_EsFalse()
+    {
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Operador);
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string> { Permisos.GestionarProductos });
+        var vm = new ShellMainViewModel(
+            sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
+            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>());
+
+        Assert.False(vm.PuedeRegistrarEntradaSalida);
+    }
+
+    [Fact]
+    public void Operador_ConRegistrarMovimientosYGestionarProductos_PuedeRegistrarEntradaSalida_EsTrue()
+    {
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Operador);
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>
+        {
+            Permisos.RegistrarMovimientos, Permisos.GestionarProductos,
+        });
+        var vm = new ShellMainViewModel(
+            sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
+            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>());
+
+        Assert.True(vm.PuedeRegistrarEntradaSalida);
+    }
+
+    [Fact]
+    public async Task Navegacion_RefrescaPermisos_NotificaPuedeRegistrarEntradaSalida()
+    {
+        var permisos = new HashSet<string>();
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Operador);
+        sessionMock.Setup(s => s.PermisosActuales).Returns(() => permisos);
+
+        var authMock = new Mock<IAuthService>();
+        authMock.Setup(a => a.ObtenerPermisosPropiosAsync()).ReturnsAsync(() =>
+        {
+            permisos.Add(Permisos.RegistrarMovimientos);
+            permisos.Add(Permisos.GestionarProductos);
+            return (IReadOnlySet<string>)permisos;
+        });
+
+        var navMock = new Mock<INavigationService>();
+        var vm = new ShellMainViewModel(
+            sessionMock.Object, navMock.Object, Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
+            Mock.Of<IConfirmacionService>(), authMock.Object);
+
+        Assert.False(vm.PuedeRegistrarEntradaSalida);
+
+        var propiedadesNotificadas = new List<string?>();
+        vm.PropertyChanged += (_, e) => propiedadesNotificadas.Add(e.PropertyName);
+
+        navMock.Raise(n => n.Cambiado += null);
+        await vm._tareaRefrescoPermisos;
+
+        Assert.Contains(nameof(ShellMainViewModel.PuedeRegistrarEntradaSalida), propiedadesNotificadas);
+        Assert.True(vm.PuedeRegistrarEntradaSalida);
     }
 }
