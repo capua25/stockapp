@@ -6,17 +6,18 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Auth;
-using StockApp.Application.Authorization;
 using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Services;
 
 namespace StockApp.Presentation.ViewModels.Administracion;
 
 /// <summary>
-/// Panel de permisos de la columna derecha de UsuariosAdminView (spec 2026-08-10, Task 12).
-/// 12 checkboxes agrupados por sección, algunos compuestos (tildan 2-3 permisos juntos) y
-/// algunos compartidos (bindeados a la MISMA propiedad cuando dos pantallas usan el mismo
-/// permiso — tildar uno tilda el otro en el acto, sin lógica extra que lo sincronice).
+/// Panel de permisos de la columna derecha de UsuariosAdminView (spec 2026-08-10, Task 12;
+/// aplanado Tasks 3/4/6, spec 2026-08-15). 12 checkboxes independientes, uno por permiso
+/// configurable, generados desde CatalogoPermisosPanel -- ya no hay checkboxes compuestos ni
+/// efectos laterales entre ítems: el Admin ve y concede EXACTAMENTE lo que tilda. La
+/// protección contra combinaciones inválidas (ej. RegistrarGastos sin RegistrarMovimientos) la
+/// da UsuarioService.GuardarPermisosAsync, validando PermisoDependencias.Requisitos.
 /// </summary>
 public partial class PanelPermisosViewModel : ViewModelBase
 {
@@ -34,45 +35,12 @@ public partial class PanelPermisosViewModel : ViewModelBase
     /// ShellViewModel._tareaActualizacion / ProductoListViewModel._tareaDebounce.</summary>
     internal Task _tareaCarga = Task.CompletedTask;
 
-    // ── Catálogo / Stock ───────────────────────────────────────────────────
-    // Crítico 1 (review Task 13): las propiedades base que participan de un checkbox compuesto
-    // necesitan [NotifyPropertyChangedFor] hacia esa compuesta — si no, Avalonia nunca se entera
-    // de que "Productos"/"GastosYFacturas"/"IngresosDeCaja" cambiaron cuando CargarAsync asigna
-    // las bases directamente (no pasa por los setters de las compuestas), y el checkbox queda
-    // congelado con el estado del usuario anterior. Verificadas las 11: solo estas 5 alimentan
-    // el getter de alguna compuesta (Productos, GastosYFacturas o IngresosDeCaja) — el resto son
-    // checkboxes standalone bindeados directo a su propia base, que ya se notifican solas.
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Productos))]
-    private bool _permisoGestionarProductos;
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Productos))]
-    private bool _permisoRecalcularStock;
-    [ObservableProperty] private bool _permisoGestionarTablasMaestras;
-    [ObservableProperty] private bool _permisoRegistrarMovimientos;
+    /// <summary>Los 12 checkboxes agrupados por sección, construidos UNA vez a partir de
+    /// CatalogoPermisosPanel.Entradas -- en el orden de declaración del catálogo, nunca
+    /// alfabético (Documentos va último en el catálogo aunque "Documentos" ordenaría 2do).</summary>
+    public IReadOnlyList<GrupoPermisos> Grupos { get; }
 
-    // ── Finanzas ───────────────────────────────────────────────────────────
-    [ObservableProperty] private bool _permisoVerFinanzas;
-    [ObservableProperty] private bool _permisoGestionarMaestrosFinanzas;
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(GastosYFacturas))]
-    private bool _permisoRegistrarGastos;
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(GastosYFacturas))]
-    private bool _permisoRegistrarPagos;
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IngresosDeCaja))]
-    private bool _permisoRegistrarIngresos;
-
-    // ── Tareas / Reportes ──────────────────────────────────────────────────
-    [ObservableProperty] private bool _permisoGestionarTareas;
-    [ObservableProperty] private bool _permisoVerReportes;
-
-    // ── Documentos ─────────────────────────────────────────────────────────
-    // Bugfix 2026-08-14: faltaba este checkbox — AuthorizationService.PermisosConfigurables
-    // ya contaba 12 permisos asignables, pero el panel solo exponía 11. AdministrarDocumentos
-    // NO tiene checkbox (es estructural Admin-only, igual que AdministrarTareas).
-    [ObservableProperty] private bool _permisoGestionarDocumentos;
+    public bool EsAdminSeleccionado => _padre?.EsAdminSeleccionado ?? false;
 
     /// <summary>Crítico 2, capa b (review Task 13): estado explícito de "no se pudieron cargar
     /// los permisos" — un panel simplemente destildado no le avisa nada al Admin, y si aprieta
@@ -83,55 +51,17 @@ public partial class PanelPermisosViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
     private string? _mensajeError;
 
-    /// <summary>Deshabilita el panel entero cuando el usuario seleccionado es Admin (leyenda
-    /// "Acceso total" en la View) — proxy de UsuariosAdminViewModel.EsAdminSeleccionado. False
-    /// antes de Conectar() (no debería observarse: Conectar corre en el constructor del padre,
-    /// antes de que la View pueda bindear nada).</summary>
-    public bool EsAdminSeleccionado => _padre?.EsAdminSeleccionado ?? false;
-
-    /// <summary>Checkbox compuesto: Productos → GestionarProductos + RecalcularStock juntos.</summary>
-    public bool Productos
-    {
-        get => PermisoGestionarProductos && PermisoRecalcularStock;
-        set
-        {
-            PermisoGestionarProductos = value;
-            PermisoRecalcularStock = value;
-            OnPropertyChanged(nameof(Productos));
-        }
-    }
-
-    /// <summary>Checkbox compuesto: Gastos y facturas → VerFinanzas + RegistrarGastos +
-    /// RegistrarPagos. Tildarlo enciende también VerFinanzas (efecto visible, spec); destildarlo
-    /// NO apaga VerFinanzas (Libro caja/Control POA/Calendario pueden seguir necesitándolo).</summary>
-    public bool GastosYFacturas
-    {
-        get => PermisoRegistrarGastos && PermisoRegistrarPagos;
-        set
-        {
-            PermisoRegistrarGastos = value;
-            PermisoRegistrarPagos = value;
-            if (value) PermisoVerFinanzas = true;
-            OnPropertyChanged(nameof(GastosYFacturas));
-        }
-    }
-
-    /// <summary>Checkbox compuesto: Ingresos de caja → VerFinanzas + RegistrarIngresos.</summary>
-    public bool IngresosDeCaja
-    {
-        get => PermisoRegistrarIngresos;
-        set
-        {
-            PermisoRegistrarIngresos = value;
-            if (value) PermisoVerFinanzas = true;
-            OnPropertyChanged(nameof(IngresosDeCaja));
-        }
-    }
-
     public PanelPermisosViewModel(IUsuarioService usuarios, IConfirmacionService confirmacion)
     {
         _usuarios = usuarios;
         _confirmacion = confirmacion;
+
+        Grupos = CatalogoPermisosPanel.Entradas
+            .GroupBy(e => e.Grupo)
+            .Select(g => new GrupoPermisos(
+                g.Key,
+                g.Select(e => new ItemPermiso(e.Permiso, e.Etiqueta)).ToList()))
+            .ToList();
     }
 
     /// <summary>Conecta este panel con el UsuariosAdminViewModel que lo hostea. Llamado UNA
@@ -176,18 +106,9 @@ public partial class PanelPermisosViewModel : ViewModelBase
         try
         {
             var permisos = await _usuarios.ObtenerPermisosAsync(_padre.UsuarioSeleccionado.Id);
-            PermisoGestionarProductos       = permisos.Contains(Permisos.GestionarProductos);
-            PermisoRecalcularStock          = permisos.Contains(Permisos.RecalcularStock);
-            PermisoGestionarTablasMaestras  = permisos.Contains(Permisos.GestionarTablasMaestras);
-            PermisoRegistrarMovimientos     = permisos.Contains(Permisos.RegistrarMovimientos);
-            PermisoVerFinanzas              = permisos.Contains(Permisos.VerFinanzas);
-            PermisoGestionarMaestrosFinanzas = permisos.Contains(Permisos.GestionarMaestrosFinanzas);
-            PermisoRegistrarGastos          = permisos.Contains(Permisos.RegistrarGastos);
-            PermisoRegistrarPagos           = permisos.Contains(Permisos.RegistrarPagos);
-            PermisoRegistrarIngresos        = permisos.Contains(Permisos.RegistrarIngresos);
-            PermisoGestionarTareas          = permisos.Contains(Permisos.GestionarTareas);
-            PermisoVerReportes              = permisos.Contains(Permisos.VerReportes);
-            PermisoGestionarDocumentos      = permisos.Contains(Permisos.GestionarDocumentos);
+            var seleccionados = new HashSet<string>(permisos);
+            foreach (var item in Grupos.SelectMany(g => g.Items))
+                item.Seleccionado = seleccionados.Contains(item.Clave);
         }
         catch (Exception)
         {
@@ -207,18 +128,8 @@ public partial class PanelPermisosViewModel : ViewModelBase
 
     private void LimpiarTodo()
     {
-        PermisoGestionarProductos = false;
-        PermisoRecalcularStock = false;
-        PermisoGestionarTablasMaestras = false;
-        PermisoRegistrarMovimientos = false;
-        PermisoVerFinanzas = false;
-        PermisoGestionarMaestrosFinanzas = false;
-        PermisoRegistrarGastos = false;
-        PermisoRegistrarPagos = false;
-        PermisoRegistrarIngresos = false;
-        PermisoGestionarTareas = false;
-        PermisoVerReportes = false;
-        PermisoGestionarDocumentos = false;
+        foreach (var item in Grupos.SelectMany(g => g.Items))
+            item.Seleccionado = false;
     }
 
     /// <summary>Crítico 2, capa b: gatea GuardarCommand mientras MensajeError esté seteado
@@ -231,19 +142,10 @@ public partial class PanelPermisosViewModel : ViewModelBase
     {
         if (_padre?.UsuarioSeleccionado is null) return;
 
-        var seleccionados = new List<string>();
-        if (PermisoGestionarProductos) seleccionados.Add(Permisos.GestionarProductos);
-        if (PermisoRecalcularStock) seleccionados.Add(Permisos.RecalcularStock);
-        if (PermisoGestionarTablasMaestras) seleccionados.Add(Permisos.GestionarTablasMaestras);
-        if (PermisoRegistrarMovimientos) seleccionados.Add(Permisos.RegistrarMovimientos);
-        if (PermisoVerFinanzas) seleccionados.Add(Permisos.VerFinanzas);
-        if (PermisoGestionarMaestrosFinanzas) seleccionados.Add(Permisos.GestionarMaestrosFinanzas);
-        if (PermisoRegistrarGastos) seleccionados.Add(Permisos.RegistrarGastos);
-        if (PermisoRegistrarPagos) seleccionados.Add(Permisos.RegistrarPagos);
-        if (PermisoRegistrarIngresos) seleccionados.Add(Permisos.RegistrarIngresos);
-        if (PermisoGestionarTareas) seleccionados.Add(Permisos.GestionarTareas);
-        if (PermisoVerReportes) seleccionados.Add(Permisos.VerReportes);
-        if (PermisoGestionarDocumentos) seleccionados.Add(Permisos.GestionarDocumentos);
+        var seleccionados = Grupos.SelectMany(g => g.Items)
+            .Where(i => i.Seleccionado)
+            .Select(i => i.Clave)
+            .ToList();
 
         // Feedback faltante (reporte de uso real 2026-08-14): guardar no mostraba NINGÚN
         // mensaje, ni de éxito ni de error — quedaba indistinguible de una falla silenciosa.

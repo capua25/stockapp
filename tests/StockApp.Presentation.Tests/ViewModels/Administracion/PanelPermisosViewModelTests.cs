@@ -1,4 +1,3 @@
-using System.Reflection;
 using Moq;
 using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
@@ -36,6 +35,11 @@ public class PanelPermisosViewModelTests
         return (panel, padre, svc, confirm);
     }
 
+    /// <summary>Helper central (recomendado por el plan): evita repetir
+    /// panel.Grupos.SelectMany(g => g.Items).Single(...) treinta veces.</summary>
+    private static ItemPermiso Item(PanelPermisosViewModel panel, string permiso) =>
+        panel.Grupos.SelectMany(g => g.Items).Single(i => i.Clave == permiso);
+
     [Fact]
     public async Task CambiarUsuarioSeleccionado_CargaLosPermisosDelNuevo()
     {
@@ -49,9 +53,9 @@ public class PanelPermisosViewModelTests
         // corrección A: nada de Task.Delay).
         await panel._tareaCarga;
 
-        Assert.True(panel.PermisoVerFinanzas);
-        Assert.True(panel.PermisoGestionarProductos);
-        Assert.False(panel.PermisoRegistrarGastos);
+        Assert.True(Item(panel, Permisos.VerFinanzas).Seleccionado);
+        Assert.True(Item(panel, Permisos.GestionarProductos).Seleccionado);
+        Assert.False(Item(panel, Permisos.RegistrarGastos).Seleccionado);
     }
 
     [Fact]
@@ -77,56 +81,61 @@ public class PanelPermisosViewModelTests
 
         await panel.CargarAsync();
 
-        Assert.False(panel.PermisoVerFinanzas);
+        Assert.False(Item(panel, Permisos.VerFinanzas).Seleccionado);
         svc.Verify(s => s.ObtenerPermisosAsync(It.IsAny<int>()), Times.Never);
     }
 
+    // ── Aplanado (Task 3/4/6): 12 checkboxes independientes, sin compuestos ni efectos
+    // laterales entre ítems. Los tests que verificaban el comportamiento de los compuestos
+    // (GastosYFacturas_AlTildar_EnciendeRegistrarGastosRegistrarPagosYVerFinanzas,
+    // GastosYFacturas_AlDestildar_ApagaGastosYPagosPeroNoVerFinanzas,
+    // IngresosDeCaja_AlTildar_EnciendeRegistrarIngresosYVerFinanzas,
+    // Productos_AlTildar_EnciendeGestionarProductosYRecalcularStockJuntos) se ELIMINARON: ese
+    // comportamiento (un checkbox prendía otros permisos por su cuenta) se saca a propósito.
+    // La decisión central del refactor es que el Admin ve y concede EXACTAMENTE lo que tilda;
+    // la protección contra combinaciones inválidas ya la da
+    // UsuarioService.GuardarPermisosAsync validando PermisoDependencias.Requisitos (mergeado
+    // en main). Este test nuevo documenta la independencia que las reemplaza.
     [Fact]
-    public void GastosYFacturas_AlTildar_EnciendeRegistrarGastosRegistrarPagosYVerFinanzas()
+    public void Item_TildarUno_NoAfectaAOtrosItems()
     {
         var (panel, _, _) = Crear();
 
-        panel.GastosYFacturas = true;
+        Item(panel, Permisos.GestionarProductos).Seleccionado = true;
 
-        Assert.True(panel.PermisoRegistrarGastos);
-        Assert.True(panel.PermisoRegistrarPagos);
-        Assert.True(panel.PermisoVerFinanzas);
+        Assert.False(Item(panel, Permisos.RecalcularStock).Seleccionado);
+        Assert.False(Item(panel, Permisos.VerFinanzas).Seleccionado);
+        Assert.False(Item(panel, Permisos.RegistrarGastos).Seleccionado);
+        Assert.False(Item(panel, Permisos.RegistrarPagos).Seleccionado);
     }
 
     [Fact]
-    public void GastosYFacturas_AlDestildar_ApagaGastosYPagosPeroNoVerFinanzas()
+    public void Grupos_RespetanElOrdenDeDeclaracionDelCatalogo_NoOrdenAlfabetico()
     {
+        // "Documentos" va último en el catálogo (Tarea/Reportes lo precede) pero alfabéticamente
+        // caería 2do (Catálogo, Documentos, Finanzas, Tareas y reportes) -- si Grupos usara
+        // OrderBy alfabético este test lo detecta.
         var (panel, _, _) = Crear();
-        panel.PermisoVerFinanzas = true; // ej. porque Libro caja lo necesita
-        panel.GastosYFacturas = true;
 
-        panel.GastosYFacturas = false;
-
-        Assert.False(panel.PermisoRegistrarGastos);
-        Assert.False(panel.PermisoRegistrarPagos);
-        Assert.True(panel.PermisoVerFinanzas);
+        Assert.Equal(
+            new[] { "Catálogo", "Finanzas", "Tareas y reportes", "Documentos" },
+            panel.Grupos.Select(g => g.Nombre));
     }
 
     [Fact]
-    public void IngresosDeCaja_AlTildar_EnciendeRegistrarIngresosYVerFinanzas()
+    public void Grupos_ItemsRespetanElOrdenDeDeclaracionDentroDelGrupo()
     {
         var (panel, _, _) = Crear();
 
-        panel.IngresosDeCaja = true;
+        var grupoFinanzas = panel.Grupos.Single(g => g.Nombre == "Finanzas");
 
-        Assert.True(panel.PermisoRegistrarIngresos);
-        Assert.True(panel.PermisoVerFinanzas);
-    }
-
-    [Fact]
-    public void Productos_AlTildar_EnciendeGestionarProductosYRecalcularStockJuntos()
-    {
-        var (panel, _, _) = Crear();
-
-        panel.Productos = true;
-
-        Assert.True(panel.PermisoGestionarProductos);
-        Assert.True(panel.PermisoRecalcularStock);
+        Assert.Equal(
+            new[]
+            {
+                Permisos.RegistrarGastos, Permisos.RegistrarPagos, Permisos.RegistrarIngresos,
+                Permisos.VerFinanzas, Permisos.GestionarMaestrosFinanzas,
+            },
+            grupoFinanzas.Items.Select(i => i.Clave));
     }
 
     [Fact]
@@ -134,8 +143,8 @@ public class PanelPermisosViewModelTests
     {
         var (panel, padre, svc) = Crear();
         padre.UsuarioSeleccionado = Dto(9, RolUsuario.Operador);
-        panel.PermisoVerFinanzas = true;
-        panel.PermisoGestionarTareas = true;
+        Item(panel, Permisos.VerFinanzas).Seleccionado = true;
+        Item(panel, Permisos.GestionarTareas).Seleccionado = true;
 
         await panel.GuardarCommand.ExecuteAsync(null);
 
@@ -156,35 +165,15 @@ public class PanelPermisosViewModelTests
     }
 
     // ── Round 1 (review Task 13) — lo que la UI observa, no solo el modelo ──────────────────
-
-    [Fact]
-    public async Task CargarAsync_NotificaLasPropiedadesCompuestas_NoSoloLasBase()
-    {
-        // Crítico 1: CargarAsync asigna las propiedades BASE directamente (no pasa por los
-        // setters de Productos/GastosYFacturas/IngresosDeCaja), así que el binding del checkbox
-        // compuesto ("IsChecked={Binding Productos}", etc.) solo se re-evalúa si esas bases
-        // notifican también el nombre de la compuesta vía [NotifyPropertyChangedFor]. Este test
-        // se suscribe a PropertyChanged (lo que la View realmente observa), no lee las bases
-        // directamente como el resto de los tests de este archivo.
-        var (panel, padre, svc) = Crear();
-        svc.Setup(s => s.ObtenerPermisosAsync(10))
-            .ReturnsAsync(new List<string>
-            {
-                Permisos.GestionarProductos, Permisos.RecalcularStock,
-                Permisos.RegistrarGastos, Permisos.RegistrarPagos,
-                Permisos.RegistrarIngresos,
-            });
-
-        var notificadas = new List<string>();
-        panel.PropertyChanged += (_, e) => { if (e.PropertyName is not null) notificadas.Add(e.PropertyName); };
-
-        padre.UsuarioSeleccionado = Dto(10, RolUsuario.Operador);
-        await panel._tareaCarga;
-
-        Assert.Contains(nameof(PanelPermisosViewModel.Productos), notificadas);
-        Assert.Contains(nameof(PanelPermisosViewModel.GastosYFacturas), notificadas);
-        Assert.Contains(nameof(PanelPermisosViewModel.IngresosDeCaja), notificadas);
-    }
+    //
+    // NOTA: CargarAsync_NotificaLasPropiedadesCompuestas_NoSoloLasBase se ELIMINÓ. Ese test
+    // cubría un riesgo específico de los checkboxes COMPUESTOS: CargarAsync asignaba las
+    // propiedades base directamente (sin pasar por los setters de Productos/GastosYFacturas/
+    // IngresosDeCaja), así que hacía falta [NotifyPropertyChangedFor] a mano para que el
+    // binding del compuesto se enterara. Sin compuestos, cada ItemPermiso.Seleccionado se
+    // asigna directo en CargarAsync y notifica solo (el setter generado por
+    // [ObservableProperty] ya dispara PropertyChanged) -- el riesgo que este test vigilaba ya
+    // no existe en el diseño nuevo.
 
     [Fact]
     public async Task CambiarUsuarioSeleccionado_FetchDelNuevoFalla_NoQuedaConLosPermisosDelAnterior()
@@ -197,16 +186,16 @@ public class PanelPermisosViewModelTests
             .ReturnsAsync(new List<string> { Permisos.VerFinanzas, Permisos.GestionarProductos });
         padre.UsuarioSeleccionado = Dto(10, RolUsuario.Operador);
         await panel._tareaCarga;
-        Assert.True(panel.PermisoVerFinanzas);
-        Assert.True(panel.PermisoGestionarProductos);
+        Assert.True(Item(panel, Permisos.VerFinanzas).Seleccionado);
+        Assert.True(Item(panel, Permisos.GestionarProductos).Seleccionado);
 
         svc.Setup(s => s.ObtenerPermisosAsync(11))
             .ThrowsAsync(new InvalidOperationException("el servidor no respondió"));
         padre.UsuarioSeleccionado = Dto(11, RolUsuario.Operador);
         await panel._tareaCarga;
 
-        Assert.False(panel.PermisoVerFinanzas);
-        Assert.False(panel.PermisoGestionarProductos);
+        Assert.False(Item(panel, Permisos.VerFinanzas).Seleccionado);
+        Assert.False(Item(panel, Permisos.GestionarProductos).Seleccionado);
     }
 
     [Fact]
@@ -232,42 +221,20 @@ public class PanelPermisosViewModelTests
     // GuardarAsync reconstruye la lista completa desde los checkboxes visibles — así que
     // guardar CUALQUIER otro cambio se lo borraba en silencio. Evidencia real de la base:
     // usuario Prueba8 (nunca editado desde el panel) lo tiene, opverif (editado una vez) no.
+    //
+    // La garantía de completitud (¿todo permiso configurable tiene checkbox?) ahora la da
+    // CatalogoPermisosPanelTests, un nivel antes (Tasks 3/4/6) -- este test queda para
+    // verificar que GuardarAsync efectivamente ENVÍA todo lo tildado, no para detectar
+    // checkboxes faltantes.
 
     [Fact]
     public async Task GuardarAsync_TildarTodosLosCheckboxes_EnviaExactamenteLosPermisosConfigurables()
     {
-        // El guardián: si mañana se agrega un permiso nuevo a Permisos.Todos como configurable
-        // y se olvida el checkbox correspondiente en este ViewModel (el mismo agujero que dejó
-        // afuera a GestionarDocumentos), este test tiene que reventar con un mensaje que diga
-        // EXACTAMENTE cuál permiso falta — no alcanza con "algo falló". Deriva el nombre de
-        // propiedad esperado ("Permiso" + nombre del campo en Permisos) por reflection, en vez
-        // de mantener una lista de nombres a mano que podría desincronizarse del mismo modo.
         var (panel, padre, svc) = Crear();
         padre.UsuarioSeleccionado = Dto(9, RolUsuario.Operador);
 
-        var nombrePorValorDePermiso = typeof(Permisos)
-            .GetFields(BindingFlags.Public | BindingFlags.Static)
-            .Where(f => f.FieldType == typeof(string))
-            .ToDictionary(f => (string)f.GetValue(null)!, f => f.Name);
-
-        var propiedadesEncontradas = new List<PropertyInfo>();
-        var permisosSinCheckbox = new List<string>();
-        foreach (var permiso in AuthorizationService.PermisosConfigurables)
-        {
-            var nombreEsperado = "Permiso" + nombrePorValorDePermiso[permiso];
-            var prop = typeof(PanelPermisosViewModel).GetProperty(nombreEsperado, BindingFlags.Public | BindingFlags.Instance);
-            if (prop is null || prop.PropertyType != typeof(bool))
-                permisosSinCheckbox.Add($"{permiso} (esperaba una propiedad bool pública '{nombreEsperado}')");
-            else
-                propiedadesEncontradas.Add(prop);
-        }
-
-        Assert.True(permisosSinCheckbox.Count == 0,
-            "El panel no tiene checkbox para estos permisos configurables: " +
-            string.Join("; ", permisosSinCheckbox));
-
-        foreach (var prop in propiedadesEncontradas)
-            prop.SetValue(panel, true);
+        foreach (var item in panel.Grupos.SelectMany(g => g.Items))
+            item.Seleccionado = true;
 
         List<string>? enviados = null;
         svc.Setup(s => s.GuardarPermisosAsync(9, It.IsAny<IReadOnlyList<string>>()))
@@ -296,7 +263,7 @@ public class PanelPermisosViewModelTests
         padre.UsuarioSeleccionado = Dto(9, RolUsuario.Operador);
         await panel._tareaCarga;
 
-        panel.PermisoVerReportes = true;
+        Item(panel, Permisos.VerReportes).Seleccionado = true;
 
         List<string>? enviados = null;
         svc.Setup(s => s.GuardarPermisosAsync(9, It.IsAny<IReadOnlyList<string>>()))
@@ -318,7 +285,7 @@ public class PanelPermisosViewModelTests
         padre.UsuarioSeleccionado = Dto(9, RolUsuario.Operador);
         await panel._tareaCarga;
 
-        Assert.True(panel.PermisoGestionarDocumentos);
+        Assert.True(Item(panel, Permisos.GestionarDocumentos).Seleccionado);
 
         List<string>? enviados = null;
         svc.Setup(s => s.GuardarPermisosAsync(9, It.IsAny<IReadOnlyList<string>>()))
