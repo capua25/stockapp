@@ -122,6 +122,22 @@ public class InicioPanelTareasTests
         TomadaPorUsuarioId = tomadaPorUsuarioId,
     };
 
+    /// <summary>
+    /// "Hoy" en el calendario LOCAL, no en UTC (bugfix 2026-08-15): TareaFila.CalcularDiasParaVencer
+    /// compara FechaLimite contra el día calendario LOCAL (TimeZoneInfo.Local) -- InicioView monta
+    /// InicioViewModel real, cuyo CargarAsync usa el overload de reloj real de
+    /// PanelVencimientosTareas.Agrupar, así que este banco de pruebas no puede inyectar un instante
+    /// fijo. Armar los offsets con DateTime.UtcNow.Date (calendario UTC) hacía que el test
+    /// dependiera de la hora de la máquina: en Uruguay (UTC-3), entre las 21:00 y las 23:59 locales
+    /// el calendario UTC ya avanzó a "mañana" mientras el local sigue en "hoy", y el offset armado
+    /// contra UTC quedaba corrido un día. Se etiqueta Kind=Utc (no es una conversión real de zona)
+    /// porque así persiste FechaLimite TareaFormViewModel.GuardarAsync: una fecha de calendario
+    /// local "etiquetada" UTC.
+    /// </summary>
+    private static DateTime HoyLocal() =>
+        DateTime.SpecifyKind(
+            TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.Local).Date, DateTimeKind.Utc);
+
     private static (Window Window, InicioViewModel Vm, NavigationRecorderFake Navegacion) Montar(
         UsuarioSesion usuario, List<Tarea> tareas)
     {
@@ -168,9 +184,9 @@ public class InicioPanelTareasTests
         var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
         var tareas = new List<Tarea>
         {
-            TareaCon(1, "Reponer stock depósito B", DateTime.UtcNow.Date.AddDays(-3)),
-            TareaCon(2, "Controlar vencimientos", DateTime.UtcNow.Date.AddDays(-1)),
-            TareaCon(3, "Inventario estantería 4", DateTime.UtcNow.Date),
+            TareaCon(1, "Reponer stock depósito B", HoyLocal().AddDays(-3)),
+            TareaCon(2, "Controlar vencimientos", HoyLocal().AddDays(-1)),
+            TareaCon(3, "Inventario estantería 4", HoyLocal()),
         };
         var (window, _, _) = Montar(usuario, tareas);
 
@@ -211,8 +227,8 @@ public class InicioPanelTareasTests
         var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
         var tareas = new List<Tarea>
         {
-            TareaCon(1, "Controlar vencimientos", DateTime.UtcNow.Date.AddDays(-1)),
-            TareaCon(2, "Reponer stock depósito B", DateTime.UtcNow.Date.AddDays(-3)),
+            TareaCon(1, "Controlar vencimientos", HoyLocal().AddDays(-1)),
+            TareaCon(2, "Reponer stock depósito B", HoyLocal().AddDays(-3)),
         };
         var (window, _, navegacion) = Montar(usuario, tareas);
 
@@ -236,8 +252,8 @@ public class InicioPanelTareasTests
         var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
         var tareas = new List<Tarea>
         {
-            TareaCon(1, "Inventario estantería 4", DateTime.UtcNow.Date),
-            TareaCon(2, "Recibir factura proveedor", DateTime.UtcNow.Date.AddDays(2)),
+            TareaCon(1, "Inventario estantería 4", HoyLocal()),
+            TareaCon(2, "Recibir factura proveedor", HoyLocal().AddDays(2)),
         };
         var (window, _, navegacion) = Montar(usuario, tareas);
 
@@ -257,7 +273,7 @@ public class InicioPanelTareasTests
     public void ClickReal_EnVerTodasLasTareas_NavegaATareaListViewModel()
     {
         var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
-        var tareas = new List<Tarea> { TareaCon(1, "x", DateTime.UtcNow.Date) };
+        var tareas = new List<Tarea> { TareaCon(1, "x", HoyLocal()) };
         var (window, _, navegacion) = Montar(usuario, tareas);
 
         var boton = window.GetVisualDescendants().OfType<Button>()
@@ -278,9 +294,9 @@ public class InicioPanelTareasTests
         var usuario = new UsuarioSesion(5, "jperez", RolUsuario.Operador, "Juan Pérez");
         var tareas = new List<Tarea>
         {
-            TareaCon(1, "De otro operador", DateTime.UtcNow.Date.AddDays(-1), EstadoTarea.EnCurso, tomadaPorUsuarioId: 99),
-            TareaCon(2, "Mía", DateTime.UtcNow.Date.AddDays(-1), EstadoTarea.EnCurso, tomadaPorUsuarioId: 5),
-            TareaCon(3, "De nadie", DateTime.UtcNow.Date, EstadoTarea.Pendiente),
+            TareaCon(1, "De otro operador", HoyLocal().AddDays(-1), EstadoTarea.EnCurso, tomadaPorUsuarioId: 99),
+            TareaCon(2, "Mía", HoyLocal().AddDays(-1), EstadoTarea.EnCurso, tomadaPorUsuarioId: 5),
+            TareaCon(3, "De nadie", HoyLocal(), EstadoTarea.Pendiente),
         };
         var (window, _, _) = Montar(usuario, tareas);
 
@@ -296,7 +312,7 @@ public class InicioPanelTareasTests
         var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
         var tareas = new List<Tarea>
         {
-            TareaCon(1, "De un operador", DateTime.UtcNow.Date.AddDays(-1), EstadoTarea.EnCurso, tomadaPorUsuarioId: 99),
+            TareaCon(1, "De un operador", HoyLocal().AddDays(-1), EstadoTarea.EnCurso, tomadaPorUsuarioId: 99),
         };
         var (window, _, _) = Montar(usuario, tareas);
 

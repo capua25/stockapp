@@ -452,14 +452,29 @@ public class InicioViewModelTests
         TomadaPorUsuarioId = tomadaPorUsuarioId,
     };
 
+    /// <summary>
+    /// "Hoy" en el calendario LOCAL, no en UTC (bugfix 2026-08-15): TareaFila.CalcularDiasParaVencer
+    /// compara FechaLimite contra el día calendario LOCAL (TimeZoneInfo.Local) -- CargarAsync usa
+    /// el overload de reloj real de PanelVencimientosTareas.Agrupar, así que estos tests no pueden
+    /// inyectar un instante fijo. Armar los offsets con DateTime.UtcNow.Date (calendario UTC) hacía
+    /// que el test dependiera de la hora de la máquina: en Uruguay (UTC-3), entre las 21:00 y las
+    /// 23:59 locales el calendario UTC ya avanzó a "mañana" mientras el local sigue en "hoy", y el
+    /// offset armado contra UTC quedaba corrido un día. Se etiqueta Kind=Utc (no es una conversión
+    /// real de zona) porque así persiste FechaLimite TareaFormViewModel.GuardarAsync: una fecha de
+    /// calendario local "etiquetada" UTC.
+    /// </summary>
+    private static DateTime HoyLocal() =>
+        DateTime.SpecifyKind(
+            TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.Local).Date, DateTimeKind.Utc);
+
     [Fact]
     public async Task CargarAsync_ConTareasVencidasYProximas_LasExponeYMuestraElPanel()
     {
         var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
         var tareas = new List<Tarea>
         {
-            TareaCon(1, "Vencida", DateTime.UtcNow.Date.AddDays(-3)),
-            TareaCon(2, "Por vencer", DateTime.UtcNow.Date.AddDays(2)),
+            TareaCon(1, "Vencida", HoyLocal().AddDays(-3)),
+            TareaCon(2, "Por vencer", HoyLocal().AddDays(2)),
         };
         var (vm, _, _, _, _) = Crear(usuario, tareas: tareas);
 
@@ -476,7 +491,7 @@ public class InicioViewModelTests
     public async Task CargarAsync_SinTareasQueRequieranAtencion_NoMuestraElPanel()
     {
         var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
-        var tareas = new List<Tarea> { TareaCon(1, "Lejana", DateTime.UtcNow.Date.AddDays(30)) };
+        var tareas = new List<Tarea> { TareaCon(1, "Lejana", HoyLocal().AddDays(30)) };
         var (vm, _, _, _, _) = Crear(usuario, tareas: tareas);
 
         await vm.CargarAsync();
@@ -539,9 +554,9 @@ public class InicioViewModelTests
         var usuario = new UsuarioSesion(5, "jperez", RolUsuario.Operador, "Juan Pérez");
         var tareas = new List<Tarea>
         {
-            TareaCon(1, "De otro operador", DateTime.UtcNow.Date.AddDays(-1), EstadoTarea.EnCurso, tomadaPorUsuarioId: 99),
-            TareaCon(2, "Mía", DateTime.UtcNow.Date.AddDays(-1), EstadoTarea.EnCurso, tomadaPorUsuarioId: 5),
-            TareaCon(3, "De nadie", DateTime.UtcNow.Date, EstadoTarea.Pendiente),
+            TareaCon(1, "De otro operador", HoyLocal().AddDays(-1), EstadoTarea.EnCurso, tomadaPorUsuarioId: 99),
+            TareaCon(2, "Mía", HoyLocal().AddDays(-1), EstadoTarea.EnCurso, tomadaPorUsuarioId: 5),
+            TareaCon(3, "De nadie", HoyLocal(), EstadoTarea.Pendiente),
         };
         var (vm, _, _, _, _) = Crear(usuario, tareas: tareas);
 
@@ -557,7 +572,7 @@ public class InicioViewModelTests
     {
         var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
         var (vm, sessionMock, navMock, _, _) = Crear(usuario);
-        var tarea = TareaCon(7, "Reponer stock depósito B", DateTime.UtcNow.Date.AddDays(-3));
+        var tarea = TareaCon(7, "Reponer stock depósito B", HoyLocal().AddDays(-3));
         var fila = new TareaFila(tarea, RolUsuario.Admin);
 
         Action<TareaFormViewModel>? inicializador = null;
@@ -770,7 +785,7 @@ public class InicioViewModelTests
         var backupsMock = new Mock<IBackupsService>();
         var tareasMock = new Mock<ITareaService>();
         tareasMock.Setup(t => t.ListarAsync()).ReturnsAsync(
-            new List<Tarea> { TareaCon(1, "Vencida", DateTime.UtcNow.Date.AddDays(-3)) });
+            new List<Tarea> { TareaCon(1, "Vencida", HoyLocal().AddDays(-3)) });
 
         var vm = new InicioViewModel(
             sessionMock.Object, navMock.Object, finanzasMock.Object, backupsMock.Object, tareasMock.Object,
