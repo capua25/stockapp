@@ -37,6 +37,12 @@ public class GastoFormViewModelTests
             new() { Id = 1, Nombre = "Barraca X", Activo = true },
             new() { Id = 2, Nombre = "Dado de baja", Activo = false },
         });
+        // ListarActivasAsync, no ListarTodosAsync (bugfix 2026-08-15, mismo criterio que
+        // GastosViewModel/ec429d5): el servidor ya filtra a Activo=true, sin filtro repetido acá.
+        proveedores.Setup(p => p.ListarActivasAsync()).ReturnsAsync(new List<Proveedor>
+        {
+            new() { Id = 1, Nombre = "Barraca X", Activo = true },
+        });
         var fuentes = new Mock<IFuenteFinanciamientoService>();
         fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>
         {
@@ -105,6 +111,86 @@ public class GastoFormViewModelTests
 
         var proveedor = Assert.Single(vm.ProveedoresDisponibles);
         Assert.Equal("Barraca X", proveedor.Nombre);
+    }
+
+    // ── bugfix 2026-08-15: un Operador de finanzas (solo VerFinanzas + RegistrarGastos) se
+    // comía un 403 y "Ocurrió un error inesperado" al abrir "Nuevo gasto" — InicializarAsync
+    // llamaba IProveedorService.ListarTodosAsync(), que en el servidor exige
+    // GestionarTablasMaestras. Mismo bug (y mismo fix) que GastosViewModel.CargarAsync (ec429d5):
+    // pasa a ListarActivasAsync(), que ya filtra a Activo=true del lado del servidor con
+    // VerFinanzas.
+
+    [Fact]
+    public async Task InicializarAsync_ConsultaProveedoresActivos_NoTodosLosProveedores()
+    {
+        var svc = new Mock<IGastoService>();
+        var proveedores = new Mock<ICategoriaProveedorService>();
+        proveedores.Setup(p => p.ListarActivasAsync()).ReturnsAsync(new List<Proveedor>());
+        var fuentes = new Mock<IFuenteFinanciamientoService>();
+        fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>());
+        var rubros = new Mock<IRubroGastoService>();
+        rubros.Setup(r => r.ListarActivosAsync()).ReturnsAsync(new List<RubroGasto>());
+        var lineas = new Mock<ILineaPoaService>();
+        lineas.Setup(l => l.ListarActivasAsync()).ReturnsAsync(new List<LineaPoa>());
+        var nav = new Mock<INavigationService>();
+        var confirm = new Mock<IConfirmacionService>();
+        var session = new Mock<ICurrentSession>();
+        session.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+        var adjuntosPanel = new AdjuntosPanelViewModel(
+            new Mock<IAdjuntoService>().Object,
+            new Mock<IServicioSeleccionArchivo>().Object,
+            new Mock<IServicioAperturaArchivo>().Object,
+            confirm.Object,
+            session.Object);
+
+        var vm = new GastoFormViewModel(
+            svc.Object, session.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
+            nav.Object, confirm.Object, adjuntosPanel);
+
+        await vm.InicializarAsync();
+
+        proveedores.Verify(p => p.ListarActivasAsync(), Times.Once);
+        proveedores.Verify(p => p.ListarTodosAsync(), Times.Never);
+    }
+
+    // ── bugfix 2026-08-15: red de contención — InicializarAsync no debe escalar un 403 ─────
+    // Mismo criterio que GastosViewModel.CargarAsync (ec0696c): InicializarAsync la dispara la
+    // View (DataContextChanged) fire-and-forget — un UnauthorizedAccessException no atrapado
+    // escala a Dispatcher.UIThread.UnhandledException (App.axaml.cs), que muestra el genérico
+    // "Ocurrió un error inesperado" y lo loguea a crash.log como si fuera un bug real. El 403 ya
+    // se avisó ANTES de llegar acá (AuthTokenHandler + App.axaml.cs), así que el catch es
+    // silencioso.
+
+    [Fact]
+    public async Task InicializarAsync_SiProveedoresLanzaUnauthorized_NoPropagaLaExcepcion()
+    {
+        var svc = new Mock<IGastoService>();
+        var proveedores = new Mock<ICategoriaProveedorService>();
+        proveedores.Setup(p => p.ListarActivasAsync()).ThrowsAsync(new UnauthorizedAccessException());
+        var fuentes = new Mock<IFuenteFinanciamientoService>();
+        fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>());
+        var rubros = new Mock<IRubroGastoService>();
+        rubros.Setup(r => r.ListarActivosAsync()).ReturnsAsync(new List<RubroGasto>());
+        var lineas = new Mock<ILineaPoaService>();
+        lineas.Setup(l => l.ListarActivasAsync()).ReturnsAsync(new List<LineaPoa>());
+        var nav = new Mock<INavigationService>();
+        var confirm = new Mock<IConfirmacionService>();
+        var session = new Mock<ICurrentSession>();
+        session.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+        var adjuntosPanel = new AdjuntosPanelViewModel(
+            new Mock<IAdjuntoService>().Object,
+            new Mock<IServicioSeleccionArchivo>().Object,
+            new Mock<IServicioAperturaArchivo>().Object,
+            confirm.Object,
+            session.Object);
+
+        var vm = new GastoFormViewModel(
+            svc.Object, session.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
+            nav.Object, confirm.Object, adjuntosPanel);
+
+        var excepcion = await Record.ExceptionAsync(() => vm.InicializarAsync());
+
+        Assert.Null(excepcion);
     }
 
     [Fact]

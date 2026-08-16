@@ -40,6 +40,13 @@ public class IngresoPorFacturaViewModelTests
         {
             new() { Id = 1, Nombre = "Proveedor Uno", Activo = true },
         });
+        // ListarActivasAsync, no ListarTodosAsync (bugfix 2026-08-15, mismo criterio que
+        // GastosViewModel/GastoFormViewModel): el servidor ya filtra a Activo=true, sin filtro
+        // repetido acá.
+        proveedores.Setup(p => p.ListarActivasAsync()).ReturnsAsync(new List<Proveedor>
+        {
+            new() { Id = 1, Nombre = "Proveedor Uno", Activo = true },
+        });
         var fuentes = new Mock<IFuenteFinanciamientoService>();
         fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>
         {
@@ -80,6 +87,81 @@ public class IngresoPorFacturaViewModelTests
         vm.RubroSeleccionado = vm.RubrosDisponibles[0];
         vm.Detalle = "Compra de insumos";
         vm.MontoTotalTexto = "1.000,00";
+    }
+
+    // ── bugfix 2026-08-15: mismo bug que GastoFormViewModel — InicializarAsync llamaba
+    // IProveedorService.ListarTodosAsync(), que en el servidor exige GestionarTablasMaestras.
+    // Esta pantalla la alcanza un Operador con RegistrarMovimientos + RegistrarGastos +
+    // VerFinanzas (ShellMainViewModel.PuedeIngresarPorFactura), que no necesariamente tiene
+    // GestionarTablasMaestras.
+
+    [Fact]
+    public async Task InicializarAsync_ConsultaProveedoresActivos_NoTodosLosProveedores()
+    {
+        var svc = new Mock<IIngresoPorFacturaService>();
+        var productos = new Mock<IProductoService>();
+        productos.Setup(p => p.BuscarAsync(null, null, null)).ReturnsAsync(new List<ProductoDto>());
+        var categorias = new Mock<ICategoriaService>();
+        categorias.Setup(c => c.ListarActivasAsync()).ReturnsAsync(new List<Categoria>());
+        var unidades = new Mock<IUnidadMedidaService>();
+        unidades.Setup(u => u.ListarActivasAsync()).ReturnsAsync(new List<UnidadMedida>());
+        var proveedores = new Mock<ICategoriaProveedorService>();
+        proveedores.Setup(p => p.ListarActivasAsync()).ReturnsAsync(new List<Proveedor>());
+        var fuentes = new Mock<IFuenteFinanciamientoService>();
+        fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>());
+        var rubros = new Mock<IRubroGastoService>();
+        rubros.Setup(r => r.ListarActivosAsync()).ReturnsAsync(new List<RubroGasto>());
+        var lineas = new Mock<ILineaPoaService>();
+        lineas.Setup(l => l.ListarActivasAsync()).ReturnsAsync(new List<LineaPoa>());
+        var nav = new Mock<INavigationService>();
+        var confirm = new Mock<IConfirmacionService>();
+        var adjuntosPanel = new AdjuntosPanelViewModel(
+            new Mock<IAdjuntoService>().Object,
+            new Mock<IServicioSeleccionArchivo>().Object,
+            new Mock<IServicioAperturaArchivo>().Object,
+            confirm.Object,
+            new Mock<ICurrentSession>().Object);
+
+        var vm = new IngresoPorFacturaViewModel(
+            svc.Object, productos.Object, categorias.Object, unidades.Object,
+            proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
+            nav.Object, confirm.Object, adjuntosPanel);
+
+        await vm.InicializarAsync();
+
+        proveedores.Verify(p => p.ListarActivasAsync(), Times.Once);
+        proveedores.Verify(p => p.ListarTodosAsync(), Times.Never);
+    }
+
+    [Fact]
+    public async Task InicializarAsync_SiProveedoresLanzaUnauthorized_NoPropagaLaExcepcion()
+    {
+        var svc = new Mock<IIngresoPorFacturaService>();
+        var productos = new Mock<IProductoService>();
+        var categorias = new Mock<ICategoriaService>();
+        var unidades = new Mock<IUnidadMedidaService>();
+        var proveedores = new Mock<ICategoriaProveedorService>();
+        proveedores.Setup(p => p.ListarActivasAsync()).ThrowsAsync(new UnauthorizedAccessException());
+        var fuentes = new Mock<IFuenteFinanciamientoService>();
+        var rubros = new Mock<IRubroGastoService>();
+        var lineas = new Mock<ILineaPoaService>();
+        var nav = new Mock<INavigationService>();
+        var confirm = new Mock<IConfirmacionService>();
+        var adjuntosPanel = new AdjuntosPanelViewModel(
+            new Mock<IAdjuntoService>().Object,
+            new Mock<IServicioSeleccionArchivo>().Object,
+            new Mock<IServicioAperturaArchivo>().Object,
+            confirm.Object,
+            new Mock<ICurrentSession>().Object);
+
+        var vm = new IngresoPorFacturaViewModel(
+            svc.Object, productos.Object, categorias.Object, unidades.Object,
+            proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
+            nav.Object, confirm.Object, adjuntosPanel);
+
+        var excepcion = await Record.ExceptionAsync(() => vm.InicializarAsync());
+
+        Assert.Null(excepcion);
     }
 
     [Fact]

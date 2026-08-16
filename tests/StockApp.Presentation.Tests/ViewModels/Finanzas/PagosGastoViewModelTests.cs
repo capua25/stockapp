@@ -80,6 +80,37 @@ public class PagosGastoViewModelTests
         Assert.Contains("Materiales", vm.TituloGasto);
     }
 
+    // ── bugfix 2026-08-15: red de contención — InicializarAsync no debe escalar un 403 ─────
+    // Mismo criterio que GastosViewModel.CargarAsync (ec0696c): InicializarAsync la dispara la
+    // View (DataContextChanged) fire-and-forget — un UnauthorizedAccessException no atrapado
+    // escala a Dispatcher.UIThread.UnhandledException (App.axaml.cs). El try/catch existente
+    // solo cubría ReglaDeNegocioException/EntidadNoEncontradaException.
+
+    [Fact]
+    public async Task InicializarAsync_SiObtenerPorIdLanzaUnauthorized_NoPropagaLaExcepcion()
+    {
+        var svc = new Mock<IGastoService>();
+        svc.Setup(s => s.ObtenerPorIdAsync(5)).ThrowsAsync(new UnauthorizedAccessException());
+        var nav = new Mock<INavigationService>();
+        var confirm = new Mock<IConfirmacionService>();
+        var adjuntosSvc = new Mock<IAdjuntoService>();
+        var session = new Mock<ICurrentSession>();
+        session.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+        var adjuntosPanel = new AdjuntosPanelViewModel(
+            adjuntosSvc.Object,
+            new Mock<IServicioSeleccionArchivo>().Object,
+            new Mock<IServicioAperturaArchivo>().Object,
+            confirm.Object,
+            session.Object);
+
+        var vm = new PagosGastoViewModel(svc.Object, session.Object, nav.Object, confirm.Object, adjuntosPanel);
+        vm.CargarParaGasto(GastoConPago());
+
+        var excepcion = await Record.ExceptionAsync(() => vm.InicializarAsync());
+
+        Assert.Null(excepcion);
+    }
+
     [Fact]
     public async Task RegistrarPago_ParseaEsUY_RegistraYRefresca()
     {

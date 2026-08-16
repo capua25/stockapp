@@ -174,43 +174,63 @@ public partial class GastoFormViewModel : ViewModelBase
     /// <summary>Carga los combos. La dispara la View (DataContextChanged).</summary>
     public async Task InicializarAsync()
     {
-        var proveedores = await _proveedoresService.ListarTodosAsync();
-        ProveedoresDisponibles.Clear();
-        foreach (var p in proveedores.Where(p => p.Activo))
-            ProveedoresDisponibles.Add(p);
-
-        var fuentes = await _fuentesService.ListarActivasAsync();
-        FuentesDisponibles.Clear();
-        foreach (var f in fuentes)
-            FuentesDisponibles.Add(f);
-
-        var rubros = await _rubrosService.ListarActivosAsync();
-        RubrosDisponibles.Clear();
-        foreach (var r in rubros)
-            RubrosDisponibles.Add(r);
-
-        var lineas = await _lineasService.ListarActivasAsync();
-        LineasPoaDisponibles.Clear();
-        foreach (var l in lineas)
-            LineasPoaDisponibles.Add(l);
-
-        if (_gastoParaEditar is not null)
+        try
         {
-            // Resuelve las selecciones por Id contra los combos; si un maestro fue dado
-            // de baja después, cae al objeto de la nav para no perder el dato histórico.
-            ProveedorSeleccionado =
-                ProveedoresDisponibles.FirstOrDefault(p => p.Id == _gastoParaEditar.ProveedorId)
-                ?? Agregar(ProveedoresDisponibles, _gastoParaEditar.Proveedor);
-            FuenteSeleccionada =
-                FuentesDisponibles.FirstOrDefault(f => f.Id == _gastoParaEditar.FuenteFinanciamientoId)
-                ?? Agregar(FuentesDisponibles, _gastoParaEditar.FuenteFinanciamiento);
-            RubroSeleccionado =
-                RubrosDisponibles.FirstOrDefault(r => r.Id == _gastoParaEditar.RubroGastoId)
-                ?? Agregar(RubrosDisponibles, _gastoParaEditar.RubroGasto);
-            if (_gastoParaEditar.LineaPoaId is not null)
-                LineaPoaSeleccionada =
-                    LineasPoaDisponibles.FirstOrDefault(l => l.Id == _gastoParaEditar.LineaPoaId)
-                    ?? Agregar(LineasPoaDisponibles, _gastoParaEditar.LineaPoa);
+            // ListarActivasAsync, no ListarTodosAsync (bugfix 2026-08-15): el servidor exige
+            // GestionarTablasMaestras para ListarTodosAsync, pero un Operador de Finanzas solo
+            // tiene VerFinanzas — se comía un 403 al abrir "Nuevo gasto". Mismo criterio que
+            // GastosViewModel.CargarAsync (ec429d5) y los otros tres combos de este método
+            // (fuentes/rubros/líneas POA): ya vienen filtrados a Activo=true del lado del
+            // servidor, sin filtro repetido acá.
+            var proveedores = await _proveedoresService.ListarActivasAsync();
+            ProveedoresDisponibles.Clear();
+            foreach (var p in proveedores)
+                ProveedoresDisponibles.Add(p);
+
+            var fuentes = await _fuentesService.ListarActivasAsync();
+            FuentesDisponibles.Clear();
+            foreach (var f in fuentes)
+                FuentesDisponibles.Add(f);
+
+            var rubros = await _rubrosService.ListarActivosAsync();
+            RubrosDisponibles.Clear();
+            foreach (var r in rubros)
+                RubrosDisponibles.Add(r);
+
+            var lineas = await _lineasService.ListarActivasAsync();
+            LineasPoaDisponibles.Clear();
+            foreach (var l in lineas)
+                LineasPoaDisponibles.Add(l);
+
+            if (_gastoParaEditar is not null)
+            {
+                // Resuelve las selecciones por Id contra los combos; si un maestro fue dado
+                // de baja después, cae al objeto de la nav para no perder el dato histórico.
+                ProveedorSeleccionado =
+                    ProveedoresDisponibles.FirstOrDefault(p => p.Id == _gastoParaEditar.ProveedorId)
+                    ?? Agregar(ProveedoresDisponibles, _gastoParaEditar.Proveedor);
+                FuenteSeleccionada =
+                    FuentesDisponibles.FirstOrDefault(f => f.Id == _gastoParaEditar.FuenteFinanciamientoId)
+                    ?? Agregar(FuentesDisponibles, _gastoParaEditar.FuenteFinanciamiento);
+                RubroSeleccionado =
+                    RubrosDisponibles.FirstOrDefault(r => r.Id == _gastoParaEditar.RubroGastoId)
+                    ?? Agregar(RubrosDisponibles, _gastoParaEditar.RubroGasto);
+                if (_gastoParaEditar.LineaPoaId is not null)
+                    LineaPoaSeleccionada =
+                        LineasPoaDisponibles.FirstOrDefault(l => l.Id == _gastoParaEditar.LineaPoaId)
+                        ?? Agregar(LineasPoaDisponibles, _gastoParaEditar.LineaPoa);
+            }
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Red de contención (bugfix 2026-08-15): InicializarAsync la dispara la View
+            // (DataContextChanged) fire-and-forget — una excepción no atrapada acá escala a
+            // Dispatcher.UIThread.UnhandledException (App.axaml.cs), que loguea a crash.log y
+            // muestra el genérico "Ocurrió un error inesperado" como si fuera un bug real. Un
+            // 403 ya se avisó ANTES de llegar acá: AuthTokenHandler dispara
+            // ApiSession.AccesoRevocado apenas ve el 403 en la respuesta HTTP, y App.axaml.cs
+            // ya informa "Tus permisos cambiaron...". Mismo criterio que
+            // GastosViewModel.CargarAsync (ec0696c): silencioso, para no duplicar el aviso.
         }
     }
 

@@ -49,10 +49,24 @@ public partial class ControlPoaViewModel : ViewModelBase
 
     public async Task CargarAsync()
     {
-        var lineas = await _service.ObtenerControlPoaAsync(Ejercicio);
-        Filas.Clear();
-        foreach (var l in lineas)
-            Filas.Add(l);
+        try
+        {
+            var lineas = await _service.ObtenerControlPoaAsync(Ejercicio);
+            Filas.Clear();
+            foreach (var l in lineas)
+                Filas.Add(l);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Red de contención (bugfix 2026-08-15): CargarAsync la dispara la View
+            // (DataContextChanged) fire-and-forget — una excepción no atrapada acá escala a
+            // Dispatcher.UIThread.UnhandledException (App.axaml.cs), que loguea a crash.log y
+            // muestra el genérico "Ocurrió un error inesperado" como si fuera un bug real. Un
+            // 403 ya se avisó ANTES de llegar acá: AuthTokenHandler dispara
+            // ApiSession.AccesoRevocado apenas ve el 403 en la respuesta HTTP, y App.axaml.cs
+            // ya informa "Tus permisos cambiaron...". Mismo criterio que
+            // GastosViewModel.CargarAsync (ec0696c): silencioso, para no duplicar el aviso.
+        }
     }
 
     [RelayCommand]

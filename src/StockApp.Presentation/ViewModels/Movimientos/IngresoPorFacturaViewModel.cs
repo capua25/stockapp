@@ -143,33 +143,54 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
     /// (decisión 8 del spec): fuente y rubro arrancan sin seleccionar.</summary>
     public async Task InicializarAsync()
     {
-        var proveedores = await _proveedorService.ListarTodosAsync();
-        ProveedoresDisponibles.Clear();
-        foreach (var p in proveedores.Where(p => p.Activo)) ProveedoresDisponibles.Add(p);
+        try
+        {
+            // ListarActivasAsync, no ListarTodosAsync (bugfix 2026-08-15): el servidor exige
+            // GestionarTablasMaestras para ListarTodosAsync, pero esta pantalla la alcanza un
+            // Operador con RegistrarMovimientos + RegistrarGastos + VerFinanzas
+            // (ShellMainViewModel.PuedeIngresarPorFactura), que no necesariamente tiene
+            // GestionarTablasMaestras. Mismo criterio que GastoFormViewModel.InicializarAsync
+            // y GastosViewModel.CargarAsync (ec429d5): ya viene filtrado a Activo=true del lado
+            // del servidor, sin filtro repetido acá.
+            var proveedores = await _proveedorService.ListarActivasAsync();
+            ProveedoresDisponibles.Clear();
+            foreach (var p in proveedores) ProveedoresDisponibles.Add(p);
 
-        var fuentes = await _fuenteService.ListarActivasAsync();
-        FuentesDisponibles.Clear();
-        foreach (var f in fuentes) FuentesDisponibles.Add(f);
+            var fuentes = await _fuenteService.ListarActivasAsync();
+            FuentesDisponibles.Clear();
+            foreach (var f in fuentes) FuentesDisponibles.Add(f);
 
-        var rubros = await _rubroService.ListarActivosAsync();
-        RubrosDisponibles.Clear();
-        foreach (var r in rubros) RubrosDisponibles.Add(r);
+            var rubros = await _rubroService.ListarActivosAsync();
+            RubrosDisponibles.Clear();
+            foreach (var r in rubros) RubrosDisponibles.Add(r);
 
-        var lineas = await _lineaService.ListarActivasAsync();
-        LineasPoaDisponibles.Clear();
-        foreach (var l in lineas) LineasPoaDisponibles.Add(l);
+            var lineas = await _lineaService.ListarActivasAsync();
+            LineasPoaDisponibles.Clear();
+            foreach (var l in lineas) LineasPoaDisponibles.Add(l);
 
-        var productos = await _productoService.BuscarAsync(null, null, null);
-        ProductosDisponibles.Clear();
-        foreach (var p in productos.Where(p => p.Activo)) ProductosDisponibles.Add(p);
+            var productos = await _productoService.BuscarAsync(null, null, null);
+            ProductosDisponibles.Clear();
+            foreach (var p in productos.Where(p => p.Activo)) ProductosDisponibles.Add(p);
 
-        var categorias = await _categoriaService.ListarActivasAsync();
-        CategoriasDisponibles.Clear();
-        foreach (var c in categorias) CategoriasDisponibles.Add(c);
+            var categorias = await _categoriaService.ListarActivasAsync();
+            CategoriasDisponibles.Clear();
+            foreach (var c in categorias) CategoriasDisponibles.Add(c);
 
-        var unidades = await _unidadMedidaService.ListarActivasAsync();
-        UnidadesMedidaDisponibles.Clear();
-        foreach (var u in unidades) UnidadesMedidaDisponibles.Add(u);
+            var unidades = await _unidadMedidaService.ListarActivasAsync();
+            UnidadesMedidaDisponibles.Clear();
+            foreach (var u in unidades) UnidadesMedidaDisponibles.Add(u);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Red de contención (bugfix 2026-08-15): InicializarAsync la dispara la View
+            // (DataContextChanged) fire-and-forget — una excepción no atrapada acá escala a
+            // Dispatcher.UIThread.UnhandledException (App.axaml.cs), que loguea a crash.log y
+            // muestra el genérico "Ocurrió un error inesperado" como si fuera un bug real. Un
+            // 403 ya se avisó ANTES de llegar acá: AuthTokenHandler dispara
+            // ApiSession.AccesoRevocado apenas ve el 403 en la respuesta HTTP, y App.axaml.cs
+            // ya informa "Tus permisos cambiaron...". Mismo criterio que
+            // GastosViewModel.CargarAsync (ec0696c): silencioso, para no duplicar el aviso.
+        }
     }
 
     private void RecalcularTotales()

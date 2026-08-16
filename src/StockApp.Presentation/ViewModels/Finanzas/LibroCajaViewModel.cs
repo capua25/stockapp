@@ -56,21 +56,35 @@ public partial class LibroCajaViewModel : ViewModelBase
         TotalesPorFuente.Clear();
         LibroAnual = null;
 
-        if (VerAnioCompleto)
+        try
         {
-            LibroAnual = await _service.ObtenerLibroCajaAnualAsync(Anio);
-            return;
-        }
+            if (VerAnioCompleto)
+            {
+                LibroAnual = await _service.ObtenerLibroCajaAnualAsync(Anio);
+                return;
+            }
 
-        var libro = await _service.ObtenerLibroCajaMesAsync(Anio, Mes);
-        SaldoInicial = libro.SaldoInicial;
-        SaldoFinal = libro.SaldoFinal;
-        foreach (var mov in libro.Movimientos)
-            Movimientos.Add(mov);
-        foreach (var t in libro.TotalesPorRubro)
-            TotalesPorRubro.Add(t);
-        foreach (var t in libro.TotalesPorFuente)
-            TotalesPorFuente.Add(t);
+            var libro = await _service.ObtenerLibroCajaMesAsync(Anio, Mes);
+            SaldoInicial = libro.SaldoInicial;
+            SaldoFinal = libro.SaldoFinal;
+            foreach (var mov in libro.Movimientos)
+                Movimientos.Add(mov);
+            foreach (var t in libro.TotalesPorRubro)
+                TotalesPorRubro.Add(t);
+            foreach (var t in libro.TotalesPorFuente)
+                TotalesPorFuente.Add(t);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Red de contención (bugfix 2026-08-15): CargarAsync la dispara la View
+            // (DataContextChanged) fire-and-forget — una excepción no atrapada acá escala a
+            // Dispatcher.UIThread.UnhandledException (App.axaml.cs), que loguea a crash.log y
+            // muestra el genérico "Ocurrió un error inesperado" como si fuera un bug real. Un
+            // 403 ya se avisó ANTES de llegar acá: AuthTokenHandler dispara
+            // ApiSession.AccesoRevocado apenas ve el 403 en la respuesta HTTP, y App.axaml.cs
+            // ya informa "Tus permisos cambiaron...". Mismo criterio que
+            // GastosViewModel.CargarAsync (ec0696c): silencioso, para no duplicar el aviso.
+        }
     }
 
     [RelayCommand]

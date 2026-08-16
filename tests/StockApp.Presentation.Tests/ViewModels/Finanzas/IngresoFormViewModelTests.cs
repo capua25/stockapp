@@ -69,6 +69,30 @@ public class IngresoFormViewModelTests
         Assert.Equal("Literal B", fuente.Nombre);
     }
 
+    // ── bugfix 2026-08-15: red de contención — InicializarAsync no debe escalar un 403 ─────
+    // Mismo criterio que GastosViewModel.CargarAsync (ec0696c) y GastoFormViewModel.
+    // InicializarAsync la dispara la View (DataContextChanged) fire-and-forget — un
+    // UnauthorizedAccessException no atrapado escala a Dispatcher.UIThread.UnhandledException
+    // (App.axaml.cs), que muestra el genérico "Ocurrió un error inesperado". El 403 ya se
+    // avisó ANTES de llegar acá, así que el catch es silencioso.
+
+    [Fact]
+    public async Task InicializarAsync_SiFuentesLanzaUnauthorized_NoPropagaLaExcepcion()
+    {
+        var svc = new Mock<IIngresoCajaService>();
+        var fuentes = new Mock<IFuenteFinanciamientoService>();
+        fuentes.Setup(f => f.ListarActivasAsync()).ThrowsAsync(new UnauthorizedAccessException());
+        var session = new Mock<ICurrentSession>();
+        session.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+        var nav = new Mock<INavigationService>();
+
+        var vm = new IngresoFormViewModel(svc.Object, fuentes.Object, session.Object, nav.Object);
+
+        var excepcion = await Record.ExceptionAsync(() => vm.InicializarAsync());
+
+        Assert.Null(excepcion);
+    }
+
     [Fact]
     public async Task Guardar_ParseaElMontoConCulturaEsUY()
     {
