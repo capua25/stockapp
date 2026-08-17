@@ -10,6 +10,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using StockApp.Application.Auth;
+using StockApp.Application.Authorization;
 using StockApp.Application.Backups;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
@@ -31,12 +32,25 @@ public class InicioViewTests
     private sealed class CurrentSessionFake : ICurrentSession
     {
         private readonly UsuarioSesion _usuario;
-        public CurrentSessionFake(UsuarioSesion usuario) => _usuario = usuario;
+        private readonly IReadOnlySet<string> _permisos;
+
+        public CurrentSessionFake(UsuarioSesion usuario) : this(usuario, new HashSet<string>()) { }
+
+        /// <summary>
+        /// Overload con permisos configurables (fix bug cosmético 2026-08-17): los tests de
+        /// gating del panel "Accesos rápidos" necesitan un Operador con EXACTAMENTE un permiso
+        /// (ej. solo VerReportes), no el vacío fijo del constructor original.
+        /// </summary>
+        public CurrentSessionFake(UsuarioSesion usuario, IReadOnlySet<string> permisos)
+        {
+            _usuario = usuario;
+            _permisos = permisos;
+        }
 
         public bool EstaAutenticado => true;
         public UsuarioSesion? UsuarioActual => _usuario;
         public RolUsuario? RolActual => _usuario.Rol;
-        public IReadOnlySet<string> PermisosActuales => new HashSet<string>();
+        public IReadOnlySet<string> PermisosActuales => _permisos;
         public void EstablecerPermisos(IReadOnlySet<string> permisos) { }
 
         public void IniciarSesion(Usuario usuario) => throw new NotSupportedException("No usado en este banco de pruebas.");
@@ -229,5 +243,57 @@ public class InicioViewTests
         Assert.True(BuscarBotonPorNombre(window, "BotonAccesoRegistrarEntrada").IsVisible);
         Assert.True(BuscarBotonPorNombre(window, "BotonAccesoRegistrarSalida").IsVisible);
         Assert.True(BuscarBotonPorNombre(window, "BotonAccesoHistorialMovimientos").IsVisible);
+    }
+
+    // ── Gating del panel completo "Accesos rápidos" (fix bug cosmético, 2026-08-17) ──
+    // El Border que envuelve las 6 tarjetas no tenía IsVisible propio -- si el usuario no
+    // cumplía NINGUNO de los 6 gates de las tarjetas, éstas se ocultaban pero el card y el
+    // título "Accesos rápidos" quedaban visibles, vacíos (reproducible con opfinanzas, que solo
+    // tiene VerFinanzas). Mismo motivo que la sección de arriba para montar la vista REAL: un
+    // test de VM puro (PuedeVerAccesosRapidos) no detecta que el binding falte en el XAML.
+
+    [AvaloniaFact]
+    public void Montar_OperadorSinNingunPermisoDeAccesoRapido_OcultaElPanelCompleto()
+    {
+        var usuario = new UsuarioSesion(2, "opfinanzas", RolUsuario.Operador, "Op Finanzas");
+        var salud = new SaludBackupDto(DateTime.UtcNow, false, 26);
+
+        var (window, vm) = Montar(usuario, salud);
+
+        Assert.False(vm.PuedeVerAccesosRapidos);
+        Assert.False(BuscarBorderPorNombre(window, "BorderAccesosRapidos").IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void Montar_OperadorConSoloVerReportes_MuestraElPanelCompleto()
+    {
+        var usuario = new UsuarioSesion(2, "opreportes", RolUsuario.Operador, "Op Reportes");
+        var salud = new SaludBackupDto(DateTime.UtcNow, false, 26);
+
+        var vm = new InicioViewModel(
+            new CurrentSessionFake(usuario, new HashSet<string> { Permisos.VerReportes }),
+            new NavigationServiceFake(), new FinanzasVistasServiceFake(), new BackupsServiceFake(salud),
+            new TareaServiceFake(), new AuthServiceFake());
+
+        var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
+        window.DataContext = vm;
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(vm.PuedeVerAccesosRapidos);
+        Assert.True(BuscarBorderPorNombre(window, "BorderAccesosRapidos").IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void Montar_Admin_MuestraElPanelCompleto()
+    {
+        var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
+        var salud = new SaludBackupDto(DateTime.UtcNow, false, 26);
+
+        var (window, vm) = Montar(usuario, salud);
+
+        Assert.True(vm.PuedeVerAccesosRapidos);
+        Assert.True(BuscarBorderPorNombre(window, "BorderAccesosRapidos").IsVisible);
     }
 }

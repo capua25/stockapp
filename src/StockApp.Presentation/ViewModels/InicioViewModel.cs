@@ -87,6 +87,18 @@ public partial class InicioViewModel : ViewModelBase
          _session.PermisosActuales.Contains(Permisos.GestionarProductos));
 
     /// <summary>
+    /// Gate del panel "Accesos rápidos" completo (bug cosmético, 2026-08-17): el Border que
+    /// envuelve las 6 tarjetas no tenía IsVisible propio -- si un usuario no cumplía NINGUNO de
+    /// los 6 gates de las tarjetas (ej. opfinanzas, que solo tiene VerFinanzas), las 6 tarjetas se
+    /// ocultaban pero el card y el título "Accesos rápidos" quedaban visibles, vacíos. Se deriva
+    /// de las propiedades Puede* existentes -- nunca re-consulta permisos ni duplica lógica --
+    /// para que no se pueda desincronizar de las tarjetas: si el día de mañana se agrega o saca
+    /// una tarjeta, este gate cambia solo junto con ella.
+    /// </summary>
+    public bool PuedeVerAccesosRapidos =>
+        PuedeGestionarProductos || PuedeRegistrarEntradaSalida || PuedeRegistrarMovimientos || PuedeVerReportes;
+
+    /// <summary>
     /// Bug 2026-08-15: CargarAsync llamaba a GET /finanzas/calendario-pagos (que exige
     /// Permisos.VerFinanzas, FinanzasVistasEndpoints) sin importar si el usuario tenía el
     /// permiso -- el 403 resultante quedaba tragado por el catch genérico, dejando el aviso de
@@ -323,6 +335,7 @@ public partial class InicioViewModel : ViewModelBase
         OnPropertyChanged(nameof(PuedeGestionarProductos));
         OnPropertyChanged(nameof(PuedeRegistrarMovimientos));
         OnPropertyChanged(nameof(PuedeRegistrarEntradaSalida));
+        OnPropertyChanged(nameof(PuedeVerAccesosRapidos));
     }
 
     // ── accesos rápidos: comunes (Admin + Operador) ───────────────────────────

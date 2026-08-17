@@ -737,6 +737,39 @@ public class InicioViewModelTests
         Assert.True(vm.PuedeRegistrarEntradaSalida);
     }
 
+    // ── Gating del panel completo "Accesos rápidos" (fix bug cosmético, 2026-08-17) ──
+    // El Border que envuelve las 6 tarjetas no tenía IsVisible propio: si el usuario no cumplía
+    // NINGUNO de los 6 gates de las tarjetas, éstas se ocultaban pero el card y el título
+    // "Accesos rápidos" quedaban visibles, vacíos (reproducible con opfinanzas, que solo tiene
+    // VerFinanzas). PuedeVerAccesosRapidos se deriva de las propiedades Puede* existentes.
+
+    [Fact]
+    public void PuedeVerAccesosRapidos_OperadorSinNingunPermiso_EsFalse()
+    {
+        var (vm, sessionMock, _, _, _) = Crear(new UsuarioSesion(2, "opfinanzas", RolUsuario.Operador, null));
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+
+        Assert.False(vm.PuedeVerAccesosRapidos);
+    }
+
+    [Fact]
+    public void PuedeVerAccesosRapidos_OperadorConSoloVerReportes_EsTrue()
+    {
+        var (vm, sessionMock, _, _, _) = Crear(new UsuarioSesion(2, "opfinanzas", RolUsuario.Operador, null));
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string> { Permisos.VerReportes });
+
+        Assert.True(vm.PuedeVerAccesosRapidos);
+    }
+
+    [Fact]
+    public void PuedeVerAccesosRapidos_Admin_EsTrue()
+    {
+        var (vm, sessionMock, _, _, _) = Crear(new UsuarioSesion(1, "admin", RolUsuario.Admin, null));
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+
+        Assert.True(vm.PuedeVerAccesosRapidos);
+    }
+
     [Fact]
     public async Task CargarAsync_RefrescaPermisos_YNotificaLosGatesDeAccesosRapidos()
     {

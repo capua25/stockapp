@@ -166,8 +166,13 @@
                 </StackPanel>
             </Border>
 
-            <!-- Accesos rápidos -->
-            <Border Classes="card">
+            <!-- Accesos rápidos: gateado por PuedeVerAccesosRapidos (fix bug cosmético
+                 2026-08-17). Antes el card y el título quedaban visibles y vacíos cuando ninguna
+                 de las 6 tarjetas de abajo pasaba su propio IsVisible (ej. opfinanzas, que solo
+                 tiene VerFinanzas). -->
+            <Border Classes="card"
+                    x:Name="BorderAccesosRapidos"
+                    IsVisible="{Binding PuedeVerAccesosRapidos}">
                 <StackPanel Spacing="12">
 
                     <TextBlock Text="Accesos rápidos"
