@@ -70,4 +70,48 @@ public class RelojMonotonicoTests
 
         Assert.Equal(ancla.AddMilliseconds(250), reloj.AhoraUtc());
     }
+
+    // GUARDIÁN de la resolución del reloj de PRODUCCIÓN (ctor sin parámetros). No alcanza
+    // con que la fuente monótona no retroceda: tiene que avanzar FINO. La comparación de
+    // revocación es "emitidoEn >= minimo", así que dos eventos que leen el mismo valor de
+    // reloj comparan como "no revocado" -- un token sobrevive a su propia revocación.
+    //
+    // Con Environment.TickCount64 (CLOCK_MONOTONIC_COARSE) este reloj avanzaba a saltos de
+    // 3-4 ms MEDIDOS en esta máquina, y ese agujero hacía fallar de forma intermitente a
+    // DeleteUsuario_ConTokenAdmin_RevocaElTokenViejoDelUsuarioDeshabilitado con 403 (token
+    // aceptado) en vez de 401 (token revocado). Con Stopwatch.GetTimestamp()
+    // (CLOCK_MONOTONIC, sin COARSE) el paso es de microsegundos.
+    //
+    // El umbral es 1 ms porque es el límite útil: por debajo de esa marca el truncado a
+    // milisegundos del claim "iat" pasa a ser el factor que manda, no el reloj.
+    [Fact]
+    public void AhoraUtc_DeProduccion_AvanzaConResolucionMejorQueUnMilisegundo()
+    {
+        var reloj = new RelojMonotonico();
+
+        var pasoMinimo = TimeSpan.MaxValue;
+        var anterior = reloj.AhoraUtc();
+        var limite = DateTime.UtcNow.AddSeconds(2);
+        var cambios = 0;
+
+        while (cambios < 50 && DateTime.UtcNow < limite)
+        {
+            var actual = reloj.AhoraUtc();
+            if (actual == anterior)
+                continue;
+
+            var paso = actual - anterior;
+            if (paso < pasoMinimo)
+                pasoMinimo = paso;
+
+            anterior = actual;
+            cambios++;
+        }
+
+        Assert.True(cambios > 0, "El reloj de producción nunca avanzó en 2 segundos.");
+        Assert.True(pasoMinimo < TimeSpan.FromMilliseconds(1),
+            $"El reloj de producción avanza a saltos de {pasoMinimo.TotalMilliseconds} ms. " +
+            "Con una granularidad de 1 ms o peor, una revocación y una emisión dentro del " +
+            "mismo salto son indistinguibles y el token sobrevive a su revocación.");
+    }
 }
