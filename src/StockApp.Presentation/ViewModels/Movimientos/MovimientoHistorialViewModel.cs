@@ -5,7 +5,9 @@ using System.Threading.Tasks;
 using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
+using StockApp.Application.Interfaces;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
@@ -35,6 +37,7 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
     private readonly INavigationService      _navigation;
     private readonly IProductoService        _productoService;
     private readonly IConfirmacionService    _confirmacion;
+    private readonly ICurrentSession         _session;
 
     [ObservableProperty]
     private int? _filtroProductoId;
@@ -74,6 +77,23 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
     [ObservableProperty]
     private bool _puedeFiltrarPorProducto = true;
 
+    /// <summary>
+    /// Gatea el botón "Recalcular stock" y el campo "Producto a recalcular" (bugfix
+    /// 2026-08-16, hermano de <see cref="PuedeFiltrarPorProducto"/> encontrado al barrer la
+    /// clase): el botón no tenía NINGÚN gating -- cualquiera que llegue a esta pantalla
+    /// (RegistrarMovimientos) lo ve habilitado, pero MovimientoStockService.RecalcularStockAsync
+    /// exige Permisos.RecalcularStock, un permiso DISTINTO e independiente
+    /// (PermisoDependencias.cs: RecalcularStock depende de RegistrarMovimientos, no al revés).
+    /// Un Operador con RegistrarMovimientos pero sin RecalcularStock generaba el mismo 403 ->
+    /// modal incondicional vía AuthTokenHandler, el mismo bug que PuedeFiltrarPorProducto, solo
+    /// que acá se calcula de antemano (no depende de una llamada previa que pueda fallar) por
+    /// eso es una propiedad computada, no un ObservableProperty seteado post-request. Mismo
+    /// patrón que GastosViewModel.PuedeRegistrarPagos: IsVisible en la vista, nunca IsEnabled.
+    /// </summary>
+    public bool PuedeRecalcularStock =>
+        _session.RolActual == RolUsuario.Admin ||
+        _session.PermisosActuales.Contains(Permisos.RecalcularStock);
+
     public ObservableCollection<MovimientoHistorialDto> Items { get; } = new();
 
     /// <summary>
@@ -100,12 +120,14 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
         IMovimientoStockService service,
         INavigationService navigation,
         IProductoService productoService,
-        IConfirmacionService confirmacion)
+        IConfirmacionService confirmacion,
+        ICurrentSession session)
     {
         _service         = service;
         _navigation      = navigation;
         _productoService = productoService;
         _confirmacion    = confirmacion;
+        _session         = session;
 
         ItemsView = new DataGridCollectionView(Items);
 
@@ -124,33 +146,49 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
     /// (no hay hook de navegación que lo dispare, ver code-behind).
     /// </summary>
     /// <remarks>
-    /// Bugfix 2026-08-16: GET /productos (IProductoService.BuscarAsync) exige
-    /// GestionarProductos, permiso que el sidebar NO exige para esta pantalla (solo
-    /// RegistrarMovimientos, igual que GET /movimientos/historial). Antes de este fix, un
-    /// 403 acá abortaba TODA la inicialización — incluida la carga del historial, que no
-    /// depende de GestionarProductos — y encima escalaba a "Ocurrió un error inesperado"
-    /// (sin catch, ver App.axaml.cs). Ahora el 403 se atrapa en silencio (AuthTokenHandler +
-    /// App.axaml.cs ya avisan "Tus permisos cambiaron...", mismo criterio que
-    /// PagosGastoViewModel.InicializarAsync), se oculta el combo vía
-    /// <see cref="PuedeFiltrarPorProducto"/> y CargarAsync corre igual: el historial completo
-    /// (sin filtrar por producto) sigue siendo útil.
+    /// Bugfix 2026-08-16 (reporte real, opcombo/Combo2026!): GET /productos
+    /// (IProductoService.BuscarAsync) exige GestionarProductos, permiso que el sidebar NO exige
+    /// para esta pantalla (solo RegistrarMovimientos, igual que GET /movimientos/historial). La
+    /// primera versión de este fix atrapaba UnauthorizedAccessException acá (llamar-y-atrapar):
+    /// evitaba el crash, pero NO evitaba el modal "No tenés permiso para esta operación", porque
+    /// AuthTokenHandler.SendAsync dispara ApiSession.DispararAccesoRevocado() de forma
+    /// INCONDICIONAL ante cualquier 403, en la capa de transporte, ANTES de que la excepción
+    /// llegue a este catch (ver deuda documentada en AuthTokenHandler.SendAsync). Por eso ahora
+    /// se CONSULTA el permiso ANTES de llamar (mismo mecanismo que ShellMainViewModel.Puede* /
+    /// GastosViewModel.PuedeRegistrarPagos: ICurrentSession.RolActual + PermisosActuales): si no
+    /// lo tiene, jamás se genera el 403, así que AuthTokenHandler nunca lo anuncia. El
+    /// try/catch de UnauthorizedAccessException se CONSERVA como red de contención (el permiso
+    /// puede revocarse entre el chequeo y la llamada), no como mecanismo principal. En cualquier
+    /// caso, se oculta el combo vía <see cref="PuedeFiltrarPorProducto"/> y CargarAsync corre
+    /// igual: el historial completo (sin filtrar por producto) sigue siendo útil.
     /// </remarks>
     public async Task InicializarAsync()
     {
-        try
-        {
-            var productos = await _productoService.BuscarAsync(null, null, null);
-            Productos.Clear();
-            Productos.Add(new OpcionProducto("Todos", null));
-            foreach (var p in productos.Where(p => p.Activo))
-                Productos.Add(new OpcionProducto(p.Nombre, p));
+        var puedeVerProductos =
+            _session.RolActual == RolUsuario.Admin ||
+            _session.PermisosActuales.Contains(Permisos.GestionarProductos);
 
-            ProductoFiltroSeleccionado = Productos[0];
-            PuedeFiltrarPorProducto = true;
-        }
-        catch (UnauthorizedAccessException)
+        if (!puedeVerProductos)
         {
             PuedeFiltrarPorProducto = false;
+        }
+        else
+        {
+            try
+            {
+                var productos = await _productoService.BuscarAsync(null, null, null);
+                Productos.Clear();
+                Productos.Add(new OpcionProducto("Todos", null));
+                foreach (var p in productos.Where(p => p.Activo))
+                    Productos.Add(new OpcionProducto(p.Nombre, p));
+
+                ProductoFiltroSeleccionado = Productos[0];
+                PuedeFiltrarPorProducto = true;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                PuedeFiltrarPorProducto = false;
+            }
         }
 
         await CargarAsync();
@@ -199,13 +237,19 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
     /// activo de la grilla — si ese producto no está en el resultado filtrado (caso normal),
     /// CargarAsync no cambia una sola fila y el click queda sin ninguna señal (reporte de uso
     /// real). Mismo mecanismo que PanelPermisosViewModel.GuardarAsync: informa éxito y error
-    /// puntual vía IConfirmacionService.InformarAsync, silenciando UnauthorizedAccessException
-    /// porque el 403 ya lo avisa el manejo central de App.axaml.cs.
+    /// puntual vía IConfirmacionService.InformarAsync.
     /// </summary>
+    /// <remarks>
+    /// Bugfix 2026-08-16 (hermano de InicializarAsync, encontrado al barrer la clase): el gate
+    /// de entrada previo (<see cref="PuedeRecalcularStock"/>) es el chequeo PRINCIPAL — evita
+    /// generar el 403 que dispararía el modal incondicional de AuthTokenHandler. El catch de
+    /// UnauthorizedAccessException se CONSERVA como red de contención (el permiso puede
+    /// revocarse entre el chequeo y la llamada), no como mecanismo principal.
+    /// </remarks>
     [RelayCommand]
     private async Task RecalcularAsync()
     {
-        if (ProductoIdParaRecalcular is null)
+        if (ProductoIdParaRecalcular is null || !PuedeRecalcularStock)
             return;
 
         try

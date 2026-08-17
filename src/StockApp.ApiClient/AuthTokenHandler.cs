@@ -41,6 +41,20 @@ public class AuthTokenHandler : DelegatingHandler
 
         if (response.StatusCode == HttpStatusCode.Forbidden)
         {
+            // DEUDA ARQUITECTÓNICA (anotada 2026-08-16, no resuelta): este disparo es
+            // INCONDICIONAL ante CUALQUIER 403, en la capa de transporte -- no distingue un 403
+            // inesperado (violación real de seguridad) de uno ESPERADO que la capa de aplicación
+            // ya sabe manejar (ej. MovimientoHistorialViewModel.InicializarAsync chequeando un
+            // permiso opcional antes de decidir qué mostrar). Antes de que la excepción llegue a
+            // cualquier catch de la aplicación, ya se disparó el modal "No tenés permiso para
+            // esta operación" acá. La solución de fondo (bugfix opcombo/Combo2026!,
+            // 2026-08-16) fue evitar GENERAR el 403 con un chequeo previo de permiso en el
+            // ViewModel -- no tocar este handler. Pero eso es pan-para-hoy: cualquier código que
+            // vuelva a "llamar y atrapar" en vez de "chequear antes" va a pisar este mismo modal,
+            // porque el aviso vive en la capa de transporte y la capa de aplicación no tiene
+            // forma de opinar (no hay mecanismo de supresión por-request, y se descartó
+            // deliberadamente agregar uno: invita a tapar errores reales). Si esto se repite una
+            // cuarta vez, vale la pena reconsiderar mover la decisión a la capa de aplicación.
             _session.DispararAccesoRevocado();
         }
 

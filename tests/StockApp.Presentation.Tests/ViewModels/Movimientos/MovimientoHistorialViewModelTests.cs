@@ -5,7 +5,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Collections;
 using Moq;
+using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
+using StockApp.Application.Interfaces;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
@@ -51,7 +53,9 @@ public class MovimientoHistorialViewModelTests
         Mock<IConfirmacionService> confirmacionMock)
         Crear(
             IReadOnlyList<MovimientoHistorialDto>? items = null,
-            IReadOnlyList<ProductoDto>? productos = null)
+            IReadOnlyList<ProductoDto>? productos = null,
+            RolUsuario rol = RolUsuario.Admin,
+            IEnumerable<string>? permisos = null)
     {
         var svcMock = new Mock<IMovimientoStockService>();
         var navMock = new Mock<INavigationService>();
@@ -66,8 +70,12 @@ public class MovimientoHistorialViewModelTests
             .Setup(s => s.BuscarAsync(null, null, null))
             .ReturnsAsync(productos ?? new List<ProductoDto>());
 
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.RolActual).Returns(rol);
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>(permisos ?? Enumerable.Empty<string>()));
+
         var vm = new MovimientoHistorialViewModel(
-            svcMock.Object, navMock.Object, productoSvcMock.Object, confirmacionMock.Object);
+            svcMock.Object, navMock.Object, productoSvcMock.Object, confirmacionMock.Object, sessionMock.Object);
         return (vm, svcMock, navMock, productoSvcMock, confirmacionMock);
     }
 
@@ -185,6 +193,51 @@ public class MovimientoHistorialViewModelTests
         await vm.RecalcularCommand.ExecuteAsync(null);
 
         svcMock.Verify(s => s.RecalcularStockAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    /// <summary>
+    /// Guardián de la MISMA clase de bug, aplicado al hermano encontrado al barrer la clase
+    /// (2026-08-16): el botón "Recalcular stock" (MovimientoHistorialView.axaml:79-81) no tenía
+    /// NINGÚN gating -- cualquiera que llegue a esta pantalla (gateada solo por
+    /// RegistrarMovimientos) lo ve habilitado, pero POST /productos/{id}/recalcular-stock exige
+    /// Permisos.RecalcularStock, un permiso DISTINTO e independiente (PermisoDependencias.cs:41:
+    /// RecalcularStock depende de RegistrarMovimientos, no al revés). Un Operador con
+    /// RegistrarMovimientos pero sin RecalcularStock (mismo perfil que opcombo) generaba el
+    /// mismo 403 -> modal incondicional vía AuthTokenHandler, aunque el catch de
+    /// UnauthorizedAccessException ya existente evitaba el crash. Mismo tratamiento: chequear
+    /// ANTES de llamar, no llamar-y-atrapar.
+    /// </summary>
+    [Fact]
+    public async Task RecalcularAsync_SinPermisoRecalcularStock_NoInvocaServicio()
+    {
+        var (vm, svcMock, _, _, _) = Crear(
+            rol: RolUsuario.Operador,
+            permisos: new[] { Permisos.RegistrarMovimientos });
+        vm.ProductoIdParaRecalcular = 1;
+
+        await vm.RecalcularCommand.ExecuteAsync(null);
+
+        svcMock.Verify(s => s.RecalcularStockAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public void PuedeRecalcularStock_SinPermiso_EsFalse()
+    {
+        var (vm, _, _, _, _) = Crear(
+            rol: RolUsuario.Operador,
+            permisos: new[] { Permisos.RegistrarMovimientos });
+
+        Assert.False(vm.PuedeRecalcularStock);
+    }
+
+    [Fact]
+    public void PuedeRecalcularStock_ConPermiso_EsTrue()
+    {
+        var (vm, _, _, _, _) = Crear(
+            rol: RolUsuario.Operador,
+            permisos: new[] { Permisos.RegistrarMovimientos, Permisos.RecalcularStock });
+
+        Assert.True(vm.PuedeRecalcularStock);
     }
 
     /// <summary>
@@ -330,6 +383,46 @@ public class MovimientoHistorialViewModelTests
 
         await vm.InicializarAsync();
 
+        Assert.True(vm.PuedeFiltrarPorProducto);
+    }
+
+    /// <summary>
+    /// Guardián de la CLASE de bug (2026-08-16, opcombo/Combo2026!): antes, InicializarAsync
+    /// llamaba a BuscarAsync directamente y confiaba en el catch de UnauthorizedAccessException
+    /// para no crashear. Eso no alcanza: AuthTokenHandler.SendAsync dispara
+    /// ApiSession.DispararAccesoRevocado() de forma INCONDICIONAL ante cualquier 403, en la capa
+    /// de transporte, antes de que la excepción llegue acá — así que aunque el catch evitaba el
+    /// crash, el modal "No tenés permiso" igual aparecía. El fix real es no generar el 403: si
+    /// no tiene GestionarProductos, ni siquiera se llama a BuscarAsync (Times.Never). Si alguien
+    /// vuelve al patrón "llamar y atrapar", este test cae aunque el catch siga funcionando.
+    /// </summary>
+    [Fact]
+    public async Task InicializarAsync_SinGestionarProductos_NoInvocaProductoService()
+    {
+        var lista = new List<MovimientoHistorialDto> { CrearDto(1) };
+        var (vm, svcMock, _, productoSvcMock, _) = Crear(
+            items: lista,
+            rol: RolUsuario.Operador,
+            permisos: new[] { Permisos.RegistrarMovimientos });
+
+        await vm.InicializarAsync();
+
+        productoSvcMock.Verify(s => s.BuscarAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        Assert.False(vm.PuedeFiltrarPorProducto);
+        svcMock.Verify(s => s.ObtenerHistorialAsync(It.IsAny<HistorialMovimientoFiltro>()), Times.Once);
+        Assert.Single(vm.Items);
+    }
+
+    [Fact]
+    public async Task InicializarAsync_ConGestionarProductos_SiInvocaProductoService()
+    {
+        var (vm, _, _, productoSvcMock, _) = Crear(
+            rol: RolUsuario.Operador,
+            permisos: new[] { Permisos.RegistrarMovimientos, Permisos.GestionarProductos });
+
+        await vm.InicializarAsync();
+
+        productoSvcMock.Verify(s => s.BuscarAsync(null, null, null), Times.Once);
         Assert.True(vm.PuedeFiltrarPorProducto);
     }
 

@@ -76,14 +76,20 @@
                                 Content="Buscar"
                                 Command="{Binding BuscarCommand}"
                                 Margin="0,0,8,0" />
+                        <!-- Oculto sin Permisos.RecalcularStock (bugfix 2026-08-16, hermano de
+                             PuedeFiltrarPorProducto): el botón no tenía gating y el servidor
+                             exige un permiso DISTINTO de RegistrarMovimientos, ver
+                             MovimientoHistorialViewModel.PuedeRecalcularStock. -->
                         <Button Classes="secondary"
                                 Content="Recalcular stock"
-                                Command="{Binding RecalcularCommand}" />
+                                Command="{Binding RecalcularCommand}"
+                                IsVisible="{Binding PuedeRecalcularStock}" />
                     </StackPanel>
                 </WrapPanel>
 
                 <!-- Producto a recalcular -->
-                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,0,0,12">
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
+                            Margin="0,0,0,12" IsVisible="{Binding PuedeRecalcularStock}">
                     <TextBlock Text="Producto a recalcular (ID):" VerticalAlignment="Center" />
                     <NumericUpDown Value="{Binding ProductoIdParaRecalcular}" Minimum="0" Width="140"
                                    FormatString="0" Increment="1" />
