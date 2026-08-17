@@ -8,8 +8,11 @@ Asume el entorno relevado para este despliegue:
 - **SSH en el puerto 34377**, no en el 22.
 - El VPS ya corre **"pinar"** (otro proyecto, en Docker: nginx en `0.0.0.0:80`/`:443`, web,
   api, postgres, redis). **Este runbook nunca lo toca.**
-- **No hay firewall activo** (`ufw` sin uso). Ver la sección "Firewall" al final —
-  léela ANTES de tocar `ufw`, aunque sea en otro momento.
+- **`ufw` está ACTIVO** (verificado en el VPS real, 2026-08-17), con reglas para
+  `80/tcp`, `443/tcp`, `34377/tcp` (SSH) y `5080/tcp` (StockApp API, abierto actualmente
+  como prueba temporal). Ver la sección "Firewall" al final para el detalle completo y la
+  secuencia segura si hace falta tocar `ufw` de nuevo (por ejemplo, al preparar un VPS
+  nuevo desde cero).
 
 Arquitectura elegida (no se re-discute acá, ver `.superpowers/sdd/deploy-vps.md` para el
 razonamiento completo):
@@ -612,6 +615,21 @@ evaluar caso por caso si eso llega a pasar).
 
 ## Firewall — advertencia importante
 
+**Estado real en este VPS (verificado con `sudo ufw status numbered`, 2026-08-17): `ufw`
+está ACTIVO**, con estas reglas (+ las mismas 4 en IPv6):
+
+```
+[ 1] 80/tcp        ALLOW IN  Anywhere
+[ 2] 443/tcp       ALLOW IN  Anywhere
+[ 3] 34377/tcp     ALLOW IN  Anywhere   # SSH custom port
+[ 4] 5080/tcp      ALLOW IN  Anywhere   # StockApp API - prueba temporal
+```
+
+No asumas lo contrario en ningún punto de este documento: confirmá siempre con
+`sudo ufw status numbered` antes de decidir si hace falta tocar algo. La secuencia
+"`allow` ANTES de `enable`" que sigue abajo sigue siendo la referencia correcta — pero
+pensada para un **VPS nuevo** que todavía no tiene `ufw` activado, no para este.
+
 Esta sección aplica distinto según el modo elegido en `API_BIND` (ver "Modos de acceso" al
 principio de este documento).
 
@@ -621,7 +639,7 @@ principio de este documento).
 StockApp: el único "perímetro" real de StockApp.Api es que escucha exclusivamente en
 `127.0.0.1:5080` (nunca `0.0.0.0`), así que no hay puerto nuevo que proteger.
 
-**Si en algún momento futuro se activa `ufw` en este VPS** (por cualquier motivo, incluso
+**Si activás `ufw` en un VPS nuevo que todavía no lo tiene** (por cualquier motivo, incluso
 uno ajeno a StockApp), hacelo en este orden exacto, ANTES de poner `ufw enable`:
 
 ```bash
