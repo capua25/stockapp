@@ -1,17 +1,21 @@
 # Unit de systemd para StockApp.Api.
 #
 # NO se instala este archivo tal cual con `cp`: install.sh lo copia a
-# /etc/systemd/system/stockapp-api.service reemplazando el placeholder __API_PORT__ por el
-# valor de API_PORT en deploy/.env (default 5080 si no está seteado). Si preferís instalarlo
-# a mano, reemplazá __API_PORT__ vos mismo antes de copiarlo.
+# /etc/systemd/system/stockapp-api.service reemplazando los placeholders __API_PORT__ y
+# __API_BIND__ por los valores de API_PORT/API_BIND en deploy/.env (default 5080/127.0.0.1
+# si no están seteados). Si preferís instalarlo a mano, reemplazá ambos vos mismo antes de
+# copiarlo.
 #
 # Decisiones de arquitectura que este unit refleja (ver deploy/DEPLOY.md):
 #   - La API corre por systemd, NO en contenedor: containerizarla haría que
 #     /etc/machine-id cambie en cada recreación del contenedor y la licencia (atada al
 #     fingerprint de esta máquina) quedaría bloqueada.
-#   - Bindeada a 127.0.0.1 únicamente. No se abre ningún puerto — el acceso es por túnel
-#     SSH (ver DEPLOY.md). No se toca el firewall ni el nginx de "pinar" (otro proyecto en
-#     este mismo VPS).
+#   - La interfaz de bind es configurable vía API_BIND en deploy/.env (default 127.0.0.1).
+#     Con el default, no se abre ningún puerto y el acceso es por túnel SSH (ver DEPLOY.md,
+#     modo "loopback + túnel"). Si se pone API_BIND=0.0.0.0 (modo "expuesto"), la API queda
+#     accesible directamente desde Internet en HTTP plano — install.sh exige firewall en ese
+#     caso. Ninguno de los dos modos toca el firewall ni el nginx de "pinar" (otro proyecto
+#     en este mismo VPS).
 #   - User=stockapp con HOME=/var/lib/stockapp (HOME real, no /nonexistent): StockApp.Api
 #     resuelve backups/logs/licencia vía Environment.SpecialFolder.LocalApplicationData,
 #     que en Linux es $HOME/.local/share -- sin un HOME real, esos tres subsistemas
@@ -48,7 +52,7 @@ Group=stockapp
 WorkingDirectory=/opt/stockapp-api
 
 Environment=HOME=/var/lib/stockapp
-Environment=ASPNETCORE_URLS=http://127.0.0.1:__API_PORT__
+Environment=ASPNETCORE_URLS=http://__API_BIND__:__API_PORT__
 Environment=ASPNETCORE_ENVIRONMENT=Production
 
 # Secretos (Jwt__Secret, Bootstrap__AdminUser, Bootstrap__Password,

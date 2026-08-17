@@ -17,11 +17,53 @@ razonamiento completo):
 1. La API corre por **systemd**, no en contenedor (containerizarla cambiaría
    `/etc/machine-id` en cada recreación y rompería la licencia).
 2. Publish **self-contained** `linux-x64` (el VPS no tiene .NET).
-3. API bindeada a **`127.0.0.1:5080`**. El acceso es por **túnel SSH**, nunca por puerto
-   público. No se abre ningún puerto, no se toca `ufw`, no se toca el nginx de pinar.
-4. Postgres propio en contenedor `stockapp-pg`, bindeado a **`127.0.0.1:5433`**.
+3. La interfaz de bind de la API es **configurable** vía `API_BIND` en `deploy/.env` — hay
+   **dos modos** (ver "Modos de acceso" más abajo):
+   - **Loopback + túnel** (default, `API_BIND=127.0.0.1`): la API solo escucha en
+     `127.0.0.1:5080`, el acceso externo es por **túnel SSH**. No se abre ningún puerto, no
+     se toca `ufw`, no se toca el nginx de pinar. Es el modo más seguro y el recomendado.
+   - **Expuesto** (`API_BIND=0.0.0.0`): la API escucha en todas las interfaces y es
+     accesible directamente desde Internet en `<ip-del-vps>:5080`, sin túnel. Exige firewall
+     activo y el tráfico va en HTTP plano (sin TLS) — ver la advertencia completa en "Modos
+     de acceso".
+4. Postgres propio en contenedor `stockapp-pg`, bindeado a **`127.0.0.1:5433`** (esto NO es
+   configurable — Postgres siempre queda en loopback, solo el bind de la API cambia con
+   `API_BIND`).
 5. Usuario de sistema `stockapp` con **HOME real en `/var/lib/stockapp`**.
 6. `postgresql-client-16` instalado en el host (matchea la versión del contenedor).
+
+---
+
+## Modos de acceso: loopback + túnel vs. expuesto
+
+`API_BIND` (en `deploy/.env`, ver `deploy/.env.example`) elige la interfaz donde escucha la
+API. `install.sh` la valida e inyecta en la unit de systemd.
+
+### Modo loopback + túnel (default, `API_BIND=127.0.0.1`)
+
+La API solo escucha en `127.0.0.1:5080` — inalcanzable desde fuera del VPS. El acceso
+externo es por **túnel SSH** (ver el paso 5 más abajo). Es el modo más seguro: no hay
+puerto nuevo expuesto, no hace falta tocar `ufw`, y el tráfico entre tu máquina y el VPS va
+cifrado por el túnel SSH.
+
+### Modo expuesto (`API_BIND=0.0.0.0`)
+
+La API escucha en todas las interfaces y queda accesible directamente en
+`http://<ip-del-vps>:5080` desde cualquier punto de Internet, sin túnel. Usalo solo cuando
+el túnel SSH no sea viable (por ejemplo, un entorno de pruebas con varios clientes que no
+pueden mantener un túnel abierto).
+
+**Esto EXIGE dos cosas, sin excepción:**
+
+1. **Firewall activo.** Sin `ufw` (o equivalente) filtrando el puerto de la API, cualquiera
+   en Internet puede pegarle al endpoint de login. `install.sh` imprime una advertencia no
+   bloqueante al detectar `API_BIND` distinto de `127.0.0.1`, pero NO activa el firewall por
+   vos — ver la sección "Firewall" más abajo para la secuencia exacta (el orden importa: SSH
+   antes que `ufw enable`, o te quedás afuera del VPS).
+2. **Asumir HTTP plano.** Este modo no agrega TLS: las credenciales de login y el JWT viajan
+   **sin cifrar** en cada request. Aceptable para un entorno de pruebas propio; **deuda a
+   resolver (TLS/reverse proxy) antes de que este modo toque PCs de usuarios reales** —
+   ver la advertencia repetida en el paso 5.
 
 ---
 
@@ -32,6 +74,8 @@ En tu máquina de trabajo (NO en el VPS):
 - .NET 10 SDK (para `dotnet publish`).
 - Acceso SSH al VPS: `ssh -p 34377 usuario@<ip-del-vps>`.
 - El repo clonado, en la rama que vayas a desplegar.
+- Decidido el modo de acceso (`API_BIND` en `deploy/.env` — ver "Modos de acceso" arriba):
+  `127.0.0.1` (default, loopback + túnel) o `0.0.0.0` (expuesto, requiere firewall).
 
 En el VPS, antes de tocar nada, verificá que no vas a pisar "pinar":
 
@@ -113,6 +157,11 @@ cp deploy/.env.example deploy/.env
 # LICENCIA_CLAVE_PUBLICA_BASE64 (la clave pública del paso 1). Generá los secretos con:
 #   openssl rand -base64 24   # POSTGRES_PASSWORD
 #   openssl rand -base64 48   # JWT_SECRET
+#
+# Además, elegí API_BIND según el modo de acceso (ver "Modos de acceso" arriba):
+#   - Dejalo en 127.0.0.1 (default) para el modo loopback + túnel.
+#   - Ponelo en 0.0.0.0 para el modo expuesto -- y no te olvides del firewall (sección
+#     "Firewall" al final de este documento) antes de dar la instalación por terminada.
 ```
 
 Copiá `deploy/.env` y `deploy/docker-compose.postgres.yml` al VPS (por ejemplo a
@@ -185,12 +234,15 @@ sudo ./install.sh "${TARBALL}" .env
 viejos se borran automáticamente para no acumular ~100 MB por actualización sin límite
 en un disco compartido con "pinar"), extrae el release en `/opt/stockapp-api`, genera
 `/etc/stockapp-api/api.env` (600, secretos) a partir de tu `.env`, instala la unit de
-systemd con el puerto correcto, y arranca el servicio — verificando al final que responde
-en `127.0.0.1:5080`.
+systemd con el bind y el puerto correctos (`API_BIND`/`API_PORT` de tu `.env`), y arranca
+el servicio — verificando al final que responde (en `127.0.0.1:5080` si estás en el modo
+default; en `API_BIND:5080` si pusiste una IP específica no-loopback).
 
-Si termina con "OK: StockApp.Api responde en 127.0.0.1:5080", la API está arriba pero
-**bloqueada (423)** hasta que actives la licencia (paso siguiente) — es el comportamiento
-esperado, no un error.
+Si termina con "OK: StockApp.Api responde en 127.0.0.1:5080" (o en la IP que hayas puesto
+en `API_BIND`), la API está arriba pero **bloqueada (423)** hasta que actives la licencia
+(paso siguiente) — es el comportamiento esperado, no un error. Si elegiste el modo
+expuesto, `install.sh` ya te mostró la advertencia de firewall al validar `API_BIND` —
+resolvela (ver "Firewall" al final) antes de seguir.
 
 ---
 
@@ -230,9 +282,12 @@ la activación (login, primer uso) se puede hacer desde el desktop una vez conec
 
 ---
 
-## 5. Conectar el desktop por túnel SSH
+## 5. Conectar el desktop
 
-El acceso productivo es SIEMPRE por túnel — la API nunca escucha en una interfaz pública.
+Cómo conectás el desktop depende del modo elegido en `API_BIND` (ver "Modos de acceso" al
+principio de este documento).
+
+### Modo loopback + túnel (default)
 
 Desde la máquina del puesto de trabajo (Windows/Linux con el cliente OpenSSH):
 
@@ -250,6 +305,21 @@ En el `appsettings.json` junto al ejecutable del desktop:
 { "Api": { "BaseUrl": "http://localhost:5080" } }
 ```
 
+### Modo expuesto (`API_BIND=0.0.0.0`)
+
+Sin túnel: el desktop apunta directo a la IP pública del VPS.
+
+```json
+{ "Api": { "BaseUrl": "http://<ip-del-vps>:5080" } }
+```
+
+**Antes de usar este modo con datos o usuarios reales, confirmá el firewall** (sección
+"Firewall" al final) **y recordá que el tráfico va sin cifrar** — cualquiera que pueda
+observar la red entre el desktop y el VPS ve las credenciales de login y el JWT en texto
+plano. Es la deuda pendiente de este modo (ver "Modos de acceso" arriba).
+
+### En ambos modos
+
 Abrí el desktop. Con la licencia ya activada (paso 4), debería llegar directo a la
 pantalla de login. Si activaste la licencia por curl salteando este paso, también podés
 activarla acá: con la licencia sin activar, el desktop muestra la pantalla de bloqueo con
@@ -263,7 +333,9 @@ primer arranque.
 
 ## 6. Verificación post-instalación
 
-Con el túnel abierto (paso 5), desde tu máquina:
+Con el túnel abierto (paso 5, modo loopback + túnel) — o apuntando directo a
+`<ip-del-vps>:5080` en vez de `localhost:5080` si estás en modo expuesto —, desde tu
+máquina:
 
 ```bash
 # Healthcheck básico
@@ -406,10 +478,12 @@ SO del VPS), tenés que volver a emitir una licencia para el código nuevo.
 ### Login devuelve `429 Too Many Requests` en horario pico
 
 El límite de login (`RateLimiting:Login`, default 30 intentos/60s) se particiona por
-`RemoteIpAddress` — pero el acceso productivo es siempre por túnel SSH, así que TODO el
-tráfico entra como `127.0.0.1`: no es "30 intentos por usuario", es "30 intentos por
-minuto para todo el municipio". Si varios empleados abren el desktop a la misma hora y
-alguno se equivoca de contraseña, el balde se puede agotar para todos, incluido el admin.
+`RemoteIpAddress`. En modo loopback + túnel (default), TODO el tráfico entra como
+`127.0.0.1`: no es "30 intentos por usuario", es "30 intentos por minuto para todo el
+municipio". Si varios empleados abren el desktop a la misma hora y alguno se equivoca de
+contraseña, el balde se puede agotar para todos, incluido el admin. En modo expuesto, en
+cambio, el límite sí se particiona por la IP real de cada cliente — este síntoma puntual
+(un balde compartido) no aplica ahí, aunque el límite total sigue siendo el mismo.
 
 Para subir el límite sin recompilar, agregá esto a tu `deploy/.env` (ver
 `deploy/.env.example`, sección "Overrides opcionales"):
@@ -437,10 +511,12 @@ tiene que vivir en `.env`/`api.env`, no editado a mano ahí adentro.
 detecta alguna en tu `.env`. Razón: `EnvironmentFile=/etc/stockapp-api/api.env` en
 `stockapp-api.service` se declara DESPUÉS de los `Environment=ASPNETCORE_URLS=...` y
 `Environment=HOME=...` del unit, y systemd hace que el archivo los pise. Un
-`ASPNETCORE_URLS=http://0.0.0.0:...` puesto ahí "para cambiar el puerto" (el error natural
-de quien conoce .NET pero no `API_PORT`) sacaría a la API de `127.0.0.1` — y en este VPS,
-**sin firewall**, la expondría a Internet entera. Para cambiar el puerto usá `API_PORT` en
-`deploy/.env` (ver `deploy/.env.example`), nunca `ASPNETCORE_URLS`.
+`ASPNETCORE_URLS=http://0.0.0.0:...` puesto ahí a mano se saltea la validación y la
+advertencia de firewall que sí aplica el camino soportado (`API_BIND`) — en un VPS sin
+firewall, expondría la API a Internet entera sin que nadie se entere. Para cambiar el
+puerto o la interfaz de bind usá `API_PORT`/`API_BIND` en `deploy/.env` (ver
+`deploy/.env.example` y "Modos de acceso" al principio de este documento), nunca
+`ASPNETCORE_URLS`.
 
 ### Los backups fallan (`pg_dump` ausente o con error)
 
@@ -536,10 +612,14 @@ evaluar caso por caso si eso llega a pasar).
 
 ## Firewall — advertencia importante
 
-**Esta instalación NO toca `ufw` ni ningún firewall.** El VPS queda tal como estaba
-relevado: sin firewall activo. Eso es intencional acá — el único "perímetro" real de
-StockApp.Api es que escucha exclusivamente en `127.0.0.1:5080` (nunca `0.0.0.0`), así que
-no hay puerto nuevo que proteger.
+Esta sección aplica distinto según el modo elegido en `API_BIND` (ver "Modos de acceso" al
+principio de este documento).
+
+### Modo loopback + túnel (default, `API_BIND=127.0.0.1`)
+
+**Esta instalación NO toca `ufw` ni ningún firewall**, y no hace falta que lo hagas vos por
+StockApp: el único "perímetro" real de StockApp.Api es que escucha exclusivamente en
+`127.0.0.1:5080` (nunca `0.0.0.0`), así que no hay puerto nuevo que proteger.
 
 **Si en algún momento futuro se activa `ufw` en este VPS** (por cualquier motivo, incluso
 uno ajeno a StockApp), hacelo en este orden exacto, ANTES de poner `ufw enable`:
@@ -551,10 +631,37 @@ sudo ufw allow 443/tcp       # pinar (nginx)
 sudo ufw enable
 ```
 
-No hace falta ninguna regla para `5080` ni `5433` — ambos están bindeados a `127.0.0.1`,
-un firewall de `ufw` (que filtra tráfico de red externo) ni siquiera los ve. Abrir esos
-puertos en `ufw` no haría nada por sí solo (seguirían inaccesibles desde afuera porque el
-bind es a loopback) — pero tampoco hace falta intentarlo.
+No hace falta ninguna regla para `5080` ni `5433` en este modo — ambos están bindeados a
+`127.0.0.1`, un firewall de `ufw` (que filtra tráfico de red externo) ni siquiera los ve.
+Abrir esos puertos en `ufw` no haría nada por sí solo (seguirían inaccesibles desde afuera
+porque el bind es a loopback) — pero tampoco hace falta intentarlo.
+
+### Modo expuesto (`API_BIND=0.0.0.0`)
+
+Acá el firewall **no es opcional**: la API queda escuchando en todas las interfaces, y sin
+`ufw` filtrando, el puerto de la API queda abierto a Internet entera sin ninguna capa
+adicional de protección de red. `install.sh` imprime una advertencia no bloqueante al
+detectar este modo, pero la instalación sigue igual — activar el firewall es
+responsabilidad tuya, ANTES de considerar la instalación terminada.
+
+Mismo orden exacto que en el modo default, agregando el puerto de la API:
+
+```bash
+sudo ufw allow 34377/tcp     # SSH -- este VPS NO usa el 22. Sin esto, PERDÉS EL ACCESO AL VPS.
+sudo ufw allow 80/tcp        # pinar (nginx)
+sudo ufw allow 443/tcp       # pinar (nginx)
+sudo ufw allow 5080/tcp      # StockApp.Api (modo expuesto -- ajustá el puerto si usaste otro API_PORT)
+sudo ufw enable
+```
+
+Esto solo cubre la capa de red. **Seguí sin TLS**: el tráfico entre el desktop y la API va
+en HTTP plano, así que las credenciales de login y el JWT viajan sin cifrar dentro de la
+red que sí tiene acceso al puerto — el firewall no resuelve eso. Este modo es aceptable
+para un entorno de pruebas propio; agregar TLS (por ejemplo, un reverse proxy como el nginx
+que ya corre para "pinar", con un certificado) es deuda pendiente antes de que este modo
+llegue a tocar PCs de usuarios reales.
+
+### En ambos modos
 
 Si te salteás el primer `allow` (34377) antes de `ufw enable`, y no tenés una consola de
 emergencia (KVM/VNC del proveedor del VPS), **te quedás afuera del servidor** — y de paso,

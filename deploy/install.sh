@@ -101,7 +101,7 @@ readonly BACKUPS_A_CONSERVAR=3
 # otra variable definida en $ENV_FILE se pasa TAL CUAL (ver "Passthrough" más abajo,
 # IMPORTANTE 6 del review deploy-vps-linux) -- para que un override puesto a mano (p.ej.
 # RateLimiting__Login__PermitLimit) sobreviva a la próxima actualización.
-readonly VARS_CONOCIDAS=(POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB API_PORT JWT_SECRET \
+readonly VARS_CONOCIDAS=(POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB API_PORT API_BIND JWT_SECRET \
     BOOTSTRAP_ADMIN_USER BOOTSTRAP_PASSWORD LICENCIA_CLAVE_PUBLICA_BASE64)
 
 es_var_conocida() {
@@ -116,14 +116,15 @@ es_var_conocida() {
 # wave 2 -- no confundir con "IMPORTANTE 2" de arriba, que es la validación de argumentos
 # de una wave anterior): systemd hace que EnvironmentFile= (stockapp-api.service línea 57)
 # PISE a los Environment=
-# declarados ANTES en el unit -- incluidos ASPNETCORE_URLS=http://127.0.0.1:__API_PORT__
+# declarados ANTES en el unit -- incluidos ASPNETCORE_URLS=http://__API_BIND__:__API_PORT__
 # (línea 51) y HOME=/var/lib/stockapp (línea 50). Si alguien agrega ASPNETCORE_URLS acá (error
-# natural de quien conoce .NET y quiere cambiar el puerto sin descubrir API_PORT), la API
-# queda escuchando en la interfaz que haya puesto -- en este VPS SIN FIREWALL, un
-# "0.0.0.0:..." expone la API entera a Internet. Un HOME pisado manda el directorio de datos
-# fuera de ReadWritePaths (licencia y backups rotos en silencio); un PATH roto tumba
-# pg_dump/pg_isready. DOTNET_*/LD_* pueden alterar el runtime o el linker de formas igual de
-# silenciosas. Estas variables se RECHAZAN con error explícito, nunca se ignoran en silencio.
+# natural de quien conoce .NET y quiere cambiar el puerto o la interfaz sin descubrir
+# API_PORT/API_BIND), la API queda escuchando en lo que haya puesto ahí, SIN pasar por la
+# validación ni la advertencia de firewall que sí aplica API_BIND. Un HOME pisado manda el
+# directorio de datos fuera de ReadWritePaths (licencia y backups rotos en silencio); un PATH
+# roto tumba pg_dump/pg_isready. DOTNET_*/LD_* pueden alterar el runtime o el linker de formas
+# igual de silenciosas. Estas variables se RECHAZAN con error explícito, nunca se ignoran en
+# silencio.
 readonly PREFIJOS_PROHIBIDOS=(ASPNETCORE_ DOTNET_ LD_)
 readonly VARS_PROHIBIDAS=(HOME PATH)
 
@@ -178,6 +179,47 @@ if ! [[ "$API_PORT" =~ ^[0-9]+$ ]]; then
 fi
 echo "  OK. API_PORT=${API_PORT}"
 
+# API_BIND: interfaz de bind de la API (ver deploy/.env.example). Default 127.0.0.1 --
+# retrocompatible con un .env viejo que no la define, que se comporta exactamente igual que
+# antes de este cambio (bind a loopback, acceso solo por túnel SSH).
+API_BIND="${API_BIND:-127.0.0.1}"
+
+es_ipv4_valida() {
+    local ip="$1" octeto
+    [[ "$ip" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]] || return 1
+    for octeto in ${ip//./ }; do
+        # "10#$octeto" fuerza base 10: sin esto, un octeto con cero a la izquierda (p.ej.
+        # "008") hace que bash lo interprete como octal y "8" no es un dígito octal válido
+        # -- error de runtime feo ("value too great for base") en vez de un rechazo limpio.
+        (( 10#$octeto <= 255 )) || return 1
+    done
+    return 0
+}
+
+# "0.0.0.0"/"*"/"+" son formas equivalentes de "todas las interfaces" que ASP.NET Core
+# acepta en ASPNETCORE_URLS -- además de una IPv4 específica (p.ej. la IP pública del VPS).
+# Cualquier otra cosa (hostname, IPv6, texto arbitrario) se rechaza acá, ANTES de tocar el
+# servicio, en vez de dejar que systemd falle al arrancar con un ASPNETCORE_URLS inválido.
+if [[ "$API_BIND" == "0.0.0.0" || "$API_BIND" == "*" || "$API_BIND" == "+" ]] || es_ipv4_valida "$API_BIND"; then
+    echo "  OK. API_BIND=${API_BIND}"
+else
+    echo "ERROR: API_BIND ('${API_BIND}') no es una interfaz válida." >&2
+    echo "       Debe ser una IPv4 (p.ej. 127.0.0.1 o la IP pública del VPS), '0.0.0.0', '*' o '+'." >&2
+    exit 1
+fi
+
+if [[ "$API_BIND" != "127.0.0.1" ]]; then
+    echo >&2
+    echo "  ADVERTENCIA: API_BIND=${API_BIND} -- la API va a quedar expuesta en esa interfaz," >&2
+    echo "  en HTTP PLANO (credenciales de login y JWT viajan sin cifrar). Esto EXIGE firewall" >&2
+    echo "  activo en este VPS. Como mínimo, antes de que termine este script, corré (en este" >&2
+    echo "  orden, el SSH primero -- ver deploy/DEPLOY.md, sección Firewall):" >&2
+    echo "    sudo ufw allow 34377/tcp        # SSH -- sin esto PERDÉS EL ACCESO AL VPS" >&2
+    echo "    sudo ufw allow ${API_PORT}/tcp   # API (modo expuesto)" >&2
+    echo "    sudo ufw enable" >&2
+    echo >&2
+fi
+
 echo "== Verificando variables prohibidas en el passthrough =="
 # Corre ACÁ (antes de tocar el servicio, hacer backup o swapear binarios) para fallar rápido
 # -- ver deploy/.env.example, sección "Overrides opcionales", para la lista completa de qué
@@ -189,8 +231,8 @@ while IFS='=' read -r NOMBRE _; do
         echo "       Pisaría un 'Environment=' de stockapp-api.service (EnvironmentFile= va" >&2
         echo "       DESPUÉS y systemd lo hace ganar) -- en este VPS sin firewall eso puede" >&2
         echo "       exponer la API a Internet (ASPNETCORE_URLS) o romper licencia/backups/PATH" >&2
-        echo "       en silencio. Si querés cambiar el puerto, usá API_PORT en '${ENV_FILE}'," >&2
-        echo "       no ASPNETCORE_URLS. Ver deploy/.env.example." >&2
+        echo "       en silencio. Si querés cambiar el puerto o la interfaz, usá API_PORT o" >&2
+        echo "       API_BIND en '${ENV_FILE}', no ASPNETCORE_URLS. Ver deploy/.env.example." >&2
         exit 1
     fi
 done < <(grep -E '^[A-Za-z_][A-Za-z0-9_]*=' "$ENV_FILE")
@@ -379,8 +421,8 @@ echo "== Instalando script auxiliar (wait-for-postgres.sh) =="
 mkdir -p "$LIB_DIR"
 install -m 0755 -o root -g root "$WAIT_SCRIPT_SRC" "${LIB_DIR}/wait-for-postgres.sh"
 
-echo "== Instalando unit de systemd (puerto ${API_PORT}) =="
-sed "s/__API_PORT__/${API_PORT}/g" "$UNIT_TEMPLATE" > "$UNIT_TARGET"
+echo "== Instalando unit de systemd (bind ${API_BIND}, puerto ${API_PORT}) =="
+sed -e "s/__API_PORT__/${API_PORT}/g" -e "s/__API_BIND__/${API_BIND}/g" "$UNIT_TEMPLATE" > "$UNIT_TARGET"
 chmod 0644 "$UNIT_TARGET"
 
 systemctl daemon-reload
@@ -399,7 +441,19 @@ echo "== Arrancando/reiniciando ${SERVICE_NAME} =="
 systemctl reset-failed "$SERVICE_NAME" 2>/dev/null || true
 systemctl restart "$SERVICE_NAME"
 
-echo "  Esperando a que la API responda en 127.0.0.1:${API_PORT}..."
+# Host contra el que se hace polling del healthcheck. Cuando API_BIND es 127.0.0.1,
+# 0.0.0.0, '*' o '+', la API escucha en loopback (ya sea exclusivamente, o entre otras
+# interfaces) -- así que 127.0.0.1 siempre responde, sin depender de que este script conozca
+# la IP pública real del VPS. Cuando API_BIND es una IPv4 ESPECÍFICA no-loopback, la API
+# SOLO escucha en esa interfaz (ASP.NET Core no hace fallback a loopback) -- 127.0.0.1
+# fallaría siempre ahí, así que el healthcheck tiene que apuntar a esa misma IP.
+if [[ "$API_BIND" == "127.0.0.1" || "$API_BIND" == "0.0.0.0" || "$API_BIND" == "*" || "$API_BIND" == "+" ]]; then
+    HEALTHCHECK_HOST="127.0.0.1"
+else
+    HEALTHCHECK_HOST="$API_BIND"
+fi
+
+echo "  Esperando a que la API responda en ${HEALTHCHECK_HOST}:${API_PORT}..."
 # CRÍTICO (review deploy-vps-linux): antes se pedía '/', que NO está en la allowlist de
 # BloqueoLicenciaMiddleware -- con la licencia recién instalada (siempre desactivada al
 # principio) '/' devuelve 423 y 'curl -f' sale con código 22, así que este healthcheck
@@ -414,7 +468,7 @@ echo "  Esperando a que la API responda en 127.0.0.1:${API_PORT}..."
 INTENTOS=90
 OK=0
 for i in $(seq 1 "$INTENTOS"); do
-    if curl -fsS "http://127.0.0.1:${API_PORT}/licencia/estado" >/dev/null 2>&1; then
+    if curl -fsS "http://${HEALTHCHECK_HOST}:${API_PORT}/licencia/estado" >/dev/null 2>&1; then
         OK=1
         break
     fi
@@ -423,11 +477,15 @@ done
 
 if [[ "$OK" -eq 1 ]]; then
     echo
-    echo "OK: StockApp.Api responde en 127.0.0.1:${API_PORT}."
+    echo "OK: StockApp.Api responde en ${HEALTHCHECK_HOST}:${API_PORT}."
+    if [[ "$API_BIND" != "127.0.0.1" ]]; then
+        echo "RECORDATORIO: API_BIND=${API_BIND} -- confirmá que el firewall (ufw) está activo" >&2
+        echo "antes de considerar esta instalación terminada (ver deploy/DEPLOY.md, sección Firewall)." >&2
+    fi
     echo "Siguiente paso: activar la licencia y conectar el desktop — ver deploy/DEPLOY.md."
 else
     echo
-    echo "ERROR: la API no respondió en 127.0.0.1:${API_PORT} tras $((INTENTOS * 2))s." >&2
+    echo "ERROR: la API no respondió en ${HEALTHCHECK_HOST}:${API_PORT} tras $((INTENTOS * 2))s." >&2
     echo "Antes de restaurar un backup: puede ser un falso negativo de este script -- ver" >&2
     echo "'El script de instalación falló pero el servicio parece estar andando' en" >&2
     echo "deploy/DEPLOY.md. Revisá:" >&2
