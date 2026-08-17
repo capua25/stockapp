@@ -229,8 +229,8 @@ while IFS='=' read -r NOMBRE _; do
     if es_var_prohibida "$NOMBRE"; then
         echo "ERROR: '${NOMBRE}' en '${ENV_FILE}' no se puede pasar por passthrough." >&2
         echo "       Pisaría un 'Environment=' de stockapp-api.service (EnvironmentFile= va" >&2
-        echo "       DESPUÉS y systemd lo hace ganar) -- en este VPS sin firewall eso puede" >&2
-        echo "       exponer la API a Internet (ASPNETCORE_URLS) o romper licencia/backups/PATH" >&2
+        echo "       DESPUÉS y systemd lo hace ganar) -- eso puede exponer la API a Internet" >&2
+        echo "       (ASPNETCORE_URLS) o romper licencia/backups/PATH" >&2
         echo "       en silencio. Si querés cambiar el puerto o la interfaz, usá API_PORT o" >&2
         echo "       API_BIND en '${ENV_FILE}', no ASPNETCORE_URLS. Ver deploy/.env.example." >&2
         exit 1
