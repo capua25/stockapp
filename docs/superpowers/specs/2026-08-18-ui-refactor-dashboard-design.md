@@ -172,6 +172,7 @@ Barrido completo de las 58 vistas, partido en tandas. **Cada tanda es un commit 
 | Mecanismo de persistencia de preferencias de UI sin confirmar | Se resuelve en el plan de implementación, antes de la tanda 5 |
 | `MantenimientoViewTests.cs:379` compara posiciones geométricas con `TranslatePoint` | Se rompe ante cualquier rediseño correcto del layout de Mantenimiento. Se decide en la tanda 11: reescribir o borrar |
 | Los 30 asserts `Content as string` se romperían al meter íconos en botones | Los íconos van con `i:Attached.Icon` (propiedad adjunta), que **no toca `Content`**. Es el patrón que el sidebar ya usa |
+| El componente "campo de formulario" toca el seam de validación | `Controls.axaml:185` y `:203` definen los `Setter` de `DataValidationErrors.ErrorConverter`, de los que dependen los 2 tests A puro de `MovimientoFormControlValidacionTests.cs`. El componente nuevo debe **conservar** ese seam, no reemplazarlo. Esos 2 tests se corren antes y después de la tanda 3 |
 
 ## 5. Fuera de alcance
 
