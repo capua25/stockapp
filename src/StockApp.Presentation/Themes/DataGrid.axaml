@@ -36,4 +36,69 @@
         <Setter Property="IsVisible" Value="False" />
     </Style>
 
+    <!-- ════════════════════════════════════════════════════════════════════
+         Estilo real de grilla (Tanda 2). Hasta acá este archivo solo apagaba dos
+         indicadores de foco y las 21 grillas de la app corrian con Fluent crudo.
+         La app SON sus grillas: esto es lo que mas cambia lo que el usuario ve.
+
+         FontFeatures (tnum/smcp) en DataGridCell.num: Ruling 1 del ledger (ver
+         .superpowers/sdd/2026-08-18-ui-refactor-dashboard-fase-a/progress.md) preveia
+         que el veredicto de la Task 0.3 viajara como "Veredicto FontFeatures: tnum=<X>,
+         smcp=<Y>". Ese veredicto es INCONCLUSO (ver task-0-cierre-report.md: la sonda
+         media el ancho del STACKPANEL contenedor, no el del glifo — 600px identicos
+         para textos de tamano y contenido distintos). Misma rama conservadora que la
+         Task 1.3 aplico para .micro (SIN smcp): acá tampoco se agrega FontFeatures
+         "+tnum" a DataGridCell.num. La alineacion a la derecha ya resuelve la lectura;
+         un ancho fijo por columna queda para las tandas 6-13, caso por caso.
+         ════════════════════════════════════════════════════════════════════ -->
+
+    <Style Selector="DataGrid">
+        <Setter Property="RowHeight" Value="36" />
+        <Setter Property="Background" Value="{DynamicResource SuperficieBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BordeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{DynamicResource RadioCard}" />
+        <Setter Property="GridLinesVisibility" Value="Horizontal" />
+        <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource BordeBrush}" />
+    </Style>
+
+    <!-- Fondo alternado: Avalonia.Controls.DataGrid 12.0.1 NO tiene la propiedad
+         AlternatingRowBackground de WPF (confirmado decompilando el ensamblado: solo
+         existe RowBackground, unico, sin variante alternada). El equivalente en este
+         puerto es un selector estructural nth-child sobre DataGridRow (Avalonia SI
+         soporta :nth-child). Fila par = FondoBrush; fila impar hereda el Background
+         de DataGrid (SuperficieBrush) sin Setter propio. -->
+    <Style Selector="DataGridRow:nth-child(2n)">
+        <Setter Property="Background" Value="{DynamicResource FondoBrush}" />
+    </Style>
+
+    <!-- Header: misma escala .micro que los eyebrows (11px SemiBold con letter-spacing).
+         Es una etiqueta estructural, no copy — DataGridColumnHeader no es un TextBlock,
+         no puede tomar la clase ".micro" de Typography.axaml, así que se duplican acá
+         las mismas propiedades (deliberado, ver Ruling del pre-flight scan del ledger). -->
+    <Style Selector="DataGridColumnHeader">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="LetterSpacing" Value="0.6" />
+        <Setter Property="Foreground" Value="{DynamicResource TextoTerciarioBrush}" />
+        <Setter Property="Background" Value="{DynamicResource FondoBrush}" />
+        <Setter Property="Padding" Value="{DynamicResource PaddingCelda}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BordeBrush}" />
+        <Setter Property="BorderThickness" Value="0,0,0,1" />
+    </Style>
+
+    <Style Selector="DataGridCell">
+        <Setter Property="Padding" Value="{DynamicResource PaddingCelda}" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+
+    <!-- Celda numerica. Hoy este estilo esta COPIADO 7 veces en vistas sueltas; la
+         tanda 10 borra esas copias y se apoya en este. -->
+    <Style Selector="DataGridCell.num">
+        <Setter Property="HorizontalContentAlignment" Value="Right" />
+    </Style>
+    <Style Selector="DataGridCell.num TextBlock">
+        <Setter Property="HorizontalAlignment" Value="Right" />
+    </Style>
+
 </Styles>
