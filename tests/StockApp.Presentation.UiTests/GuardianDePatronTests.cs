@@ -127,6 +127,7 @@ public class GuardianDePatronTests
         typeof(HistorialImportacionesView),
         typeof(NuevaImportacionView),
         typeof(AdjuntosPanelView),
+        typeof(AdjuntosDocumentoPanelView),
     };
 
     [AvaloniaTheory]
