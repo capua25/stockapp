@@ -29,6 +29,10 @@
     <Thickness x:Key="MargenVista">24</Thickness>
     <Thickness x:Key="PaddingCard">16</Thickness>
     <Thickness x:Key="PaddingCelda">12,8</Thickness>
+    <!-- Ruling B-2 (Fase B): Padding compacto de barras de accion (~20 vistas). La tanda 5 ya
+         se comio esta deuda con Padding="8" literal en ShellMainView.axaml; sin este token la
+         Fase B la repite 20 veces mas y convierte una deuda puntual en un patron. -->
+    <Thickness x:Key="PaddingCompacto">8</Thickness>
 
     <!-- ── Radios ──────────────────────────────────────────────────────────
          De 4/6/8/10 sin criterio a tres con significado: chico para badges,

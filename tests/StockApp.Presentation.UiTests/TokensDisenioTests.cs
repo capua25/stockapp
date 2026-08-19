@@ -56,6 +56,14 @@ public class TokensDisenioTests
         Assert.Equal(new Thickness(12, 8, 12, 8), Assert.IsType<Thickness>(Recurso("PaddingCelda")));
     }
 
+    [AvaloniaFact]
+    public void PaddingCompacto_Es8EnLosCuatroLados()
+    {
+        // Ruling B-2 de la Fase B: faltaba un Thickness de 8 para las barras de accion de
+        // ~20 vistas; sin el, la tanda 5 se lo comio como Padding="8" literal puntual.
+        Assert.Equal(new Thickness(8), Assert.IsType<Thickness>(Recurso("PaddingCompacto")));
+    }
+
     [AvaloniaTheory]
     [InlineData("RadioChico", 4.0)]
     [InlineData("RadioBase", 6.0)]
