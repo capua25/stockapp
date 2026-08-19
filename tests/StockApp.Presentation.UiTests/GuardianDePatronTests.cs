@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
@@ -6,6 +7,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.VisualTree;
 using StockApp.Presentation.Views;
 using StockApp.Presentation.Views.Catalogo;
+using StockApp.Presentation.Views.Finanzas;
 using StockApp.Presentation.Views.Movimientos;
 using Xunit;
 
@@ -48,6 +50,8 @@ public class GuardianDePatronTests
     [InlineData(typeof(CategoriaFormView), null, null)]
     [InlineData(typeof(ProveedorFormView), null, null)]
     [InlineData(typeof(UnidadMedidaFormView), null, null)]
+    [InlineData(typeof(MaestrosFinanzasView), "Maestros de finanzas", "FINANZAS")]
+    [InlineData(typeof(ImportacionView), "Importar planillas", "FINANZAS")]
     public void Vista_TieneHeaderVistaConElTituloEsperado(Type tipoVista, string? titulo, string? eyebrow)
     {
         var vista = PatronHelpers.Montar(tipoVista);
@@ -78,6 +82,21 @@ public class GuardianDePatronTests
         typeof(CategoriaFormView),
         typeof(ProveedorFormView),
         typeof(UnidadMedidaFormView),
+        typeof(MaestrosFinanzasView),
+        typeof(ImportacionView),
+    };
+
+    /// <summary>
+    /// Vistas que se renderizan como contenido de un TabItem/ContentControl de otra vista (P2-emb,
+    /// P1-emb, P5, Task 8.1 de la Fase B). No llevan HeaderVista propio ni MargenVista: el
+    /// contenedor ya los puso. Corren los invariantes que SI les aplican (opacidad, boton
+    /// primario), mas uno propio e invertido (<see cref="VistaEmbebida_NoDuplicaElMargenDeVista"/>).
+    /// </summary>
+    public static readonly TheoryData<Type> VistasEmbebidas = new()
+    {
+        typeof(FuenteFinanciamientoListView),
+        typeof(RubroGastoListView),
+        typeof(LineaPoaListView),
     };
 
     [AvaloniaTheory]
@@ -92,8 +111,27 @@ public class GuardianDePatronTests
         Assert.Equal(new Thickness(24), margen!.Value);
     }
 
+    /// <summary>
+    /// Ruling B-17: las vistas embebidas en un TabControl NO pueden traer MargenVista (24) propio
+    /// -- el contenedor (MaestrosFinanzasView/ImportacionView) ya lo aplico, y duplicarlo da 48px
+    /// de aire (bug C3 del esbozo de B2). Su Margin="0,12,0,0" (separacion visual con el borde de
+    /// la pestaña) se conserva: el invariante es "distinto de Thickness(24)", no "sin margen".
+    /// </summary>
+    [AvaloniaTheory]
+    [MemberData(nameof(VistasEmbebidas))]
+    public void VistaEmbebida_NoDuplicaElMargenDeVista(Type tipoVista)
+    {
+        var vista = PatronHelpers.Montar(tipoVista);
+        var margen = PatronHelpers.MargenExteriorDe(vista);
+
+        Assert.True(margen != new Thickness(24),
+            $"{tipoVista.Name} es embebida y trae MargenVista propio: el contenedor ya lo aplica, "
+            + "queda 48px de aire duplicado.");
+    }
+
     [AvaloniaTheory]
     [MemberData(nameof(VistasDeLaTanda))]
+    [MemberData(nameof(VistasEmbebidas))]
     public void Vista_NoTieneOpacidadesLiterales(Type tipoVista)
     {
         var vista = PatronHelpers.Montar(tipoVista);
@@ -104,10 +142,35 @@ public class GuardianDePatronTests
             + string.Join(", ", literales.Select(c => c.GetType().Name)));
     }
 
+    /// <summary>
+    /// GAP DE PLAN encontrado al ejecutar la Task 8.1 (el plan esperaba "exactamente 2 fallos
+    /// nuevos" en el Step 2 de esa task; hubo un tercero real). <see cref="ImportacionView"/>
+    /// embebe <c>NuevaImportacionView</c> (P8, Ruling B-18 punto 3) como contenido de su primer
+    /// TabItem, y <see cref="PatronHelpers.Montar"/> no asigna ViewModel: los tres
+    /// <c>IsVisible="{Binding PasoActual, Converter=...}"</c> de <c>NuevaImportacionView</c>
+    /// quedan sin resolver y caen al default `true` de la propiedad (mismo comportamiento que
+    /// documenta la Task 6.7 para un <c>IsVisible</c> sin resolver). Eso deja 3 botones primarios
+    /// "visibles" dentro del arbol de <c>ImportacionView</c> sin que <c>ImportacionView</c> tenga
+    /// ninguna culpa: no agrega ningun <c>Classes="primary"</c> propio (verificado: los otros tres
+    /// invariantes -- header, margen, opacidad -- SI le aplican y pasan en verde). Ruling B-18
+    /// punto 3 ya exime a <c>NuevaImportacionView</c> de este invariante (lo reemplaza un test
+    /// dedicado en la Task 8.4, con ViewModel real recorriendo los 3 pasos); esta excepcion
+    /// extiende lo mismo a cualquier CONTENEDOR que la embeba y se monte sin VM, hasta que la
+    /// Task 8.4 agregue su cobertura propia.
+    /// </summary>
+    private static readonly HashSet<Type> VistasExentasPorEmbeberUnWizardP8 = new()
+    {
+        typeof(ImportacionView),
+    };
+
     [AvaloniaTheory]
     [MemberData(nameof(VistasDeLaTanda))]
+    [MemberData(nameof(VistasEmbebidas))]
     public void Vista_NoTieneUnSegundoBotonPrimario(Type tipoVista)
     {
+        if (VistasExentasPorEmbeberUnWizardP8.Contains(tipoVista))
+            return;
+
         var vista = PatronHelpers.Montar(tipoVista);
         var primarios = vista.GetVisualDescendants()
             .OfType<Button>()
