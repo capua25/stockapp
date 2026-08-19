@@ -52,6 +52,11 @@ public class GuardianDePatronTests
     [InlineData(typeof(UnidadMedidaFormView), null, null)]
     [InlineData(typeof(MaestrosFinanzasView), "Maestros de finanzas", "FINANZAS")]
     [InlineData(typeof(ImportacionView), "Importar planillas", "FINANZAS")]
+    [InlineData(typeof(FuenteFinanciamientoFormView), null, "FINANZAS")]
+    [InlineData(typeof(RubroGastoFormView), null, "FINANZAS")]
+    [InlineData(typeof(IngresoFormView), null, "FINANZAS")]
+    [InlineData(typeof(LineaPoaFormView), null, "FINANZAS")]
+    [InlineData(typeof(GastoFormView), null, "FINANZAS")]
     public void Vista_TieneHeaderVistaConElTituloEsperado(Type tipoVista, string? titulo, string? eyebrow)
     {
         var vista = PatronHelpers.Montar(tipoVista);
@@ -84,6 +89,11 @@ public class GuardianDePatronTests
         typeof(UnidadMedidaFormView),
         typeof(MaestrosFinanzasView),
         typeof(ImportacionView),
+        typeof(FuenteFinanciamientoFormView),
+        typeof(RubroGastoFormView),
+        typeof(IngresoFormView),
+        typeof(LineaPoaFormView),
+        typeof(GastoFormView),
     };
 
     /// <summary>

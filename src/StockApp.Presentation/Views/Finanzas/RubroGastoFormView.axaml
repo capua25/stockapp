@@ -1,34 +1,34 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
+             xmlns:c="using:StockApp.Presentation.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="600" d:DesignHeight="400"
              x:Class="StockApp.Presentation.Views.Finanzas.RubroGastoFormView"
              x:DataType="vm:RubroGastoFormViewModel">
 
-    <DockPanel Margin="24">
+    <DockPanel Margin="{DynamicResource MargenVista}">
 
-        <TextBlock DockPanel.Dock="Top"
-                   Text="{Binding Titulo}"
-                   Classes="titulo-vista"
-                   Margin="0,0,0,16" />
+        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="FINANZAS" Titulo="{Binding Titulo}" />
 
         <Border Classes="card" VerticalAlignment="Top">
-            <StackPanel Spacing="12" MaxWidth="420" HorizontalAlignment="Left">
+            <StackPanel Spacing="{DynamicResource Espacio3}" MaxWidth="420" HorizontalAlignment="Left">
 
-                <TextBlock Text="Código" />
-                <TextBox Text="{Binding CodigoTexto}" Watermark="Ej.: 3" />
+                <c:CampoFormulario Etiqueta="Código">
+                    <TextBox Text="{Binding CodigoTexto}" Watermark="Ej.: 3" />
+                </c:CampoFormulario>
 
-                <TextBlock Text="Nombre" />
-                <TextBox Text="{Binding Nombre}" Watermark="Ej.: Combustibles" />
+                <c:CampoFormulario Etiqueta="Nombre">
+                    <TextBox Text="{Binding Nombre}" Watermark="Ej.: Combustibles" />
+                </c:CampoFormulario>
 
                 <TextBlock Text="{Binding MensajeError}"
-                           Foreground="Red"
+                           Foreground="{DynamicResource DangerBrush}"
                            TextWrapping="Wrap"
                            IsVisible="{Binding MensajeError, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
-                <StackPanel Orientation="Horizontal" Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
                     <Button Classes="primary" Content="Guardar" Command="{Binding GuardarCommand}" />
                     <Button Classes="secondary" Content="Cancelar" Command="{Binding CancelarCommand}" />
                 </StackPanel>
