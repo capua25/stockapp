@@ -2,33 +2,31 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Catalogo"
              xmlns:conv="using:StockApp.Presentation.Converters"
+             xmlns:c="using:StockApp.Presentation.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="600" d:DesignHeight="400"
              x:Class="StockApp.Presentation.Views.Catalogo.CategoriaListView"
              x:DataType="vm:CategoriaListViewModel">
 
-    <DockPanel Margin="24">
+    <DockPanel Margin="{DynamicResource MargenVista}">
 
-        <TextBlock DockPanel.Dock="Top"
-                   Text="Categorías"
-                   Classes="titulo-vista"
-                   Margin="0,0,0,16" />
+        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="CATÁLOGO" Titulo="Categorías">
+            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
+                <Button Classes="primary"
+                        Content="Nueva categoría"
+                        Command="{Binding NuevoCommand}" />
+                <Button Classes="secondary"
+                        Content="Editar"
+                        Command="{Binding EditarCommand}" />
+                <Button Classes="secondary"
+                        Content="Dar de baja"
+                        Command="{Binding BajaCommand}" />
+            </StackPanel>
+        </c:HeaderVista>
 
         <Border Classes="card">
             <DockPanel>
-
-                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,12">
-                    <Button Classes="primary"
-                            Content="Nueva categoría"
-                            Command="{Binding NuevoCommand}" />
-                    <Button Classes="secondary"
-                            Content="Editar"
-                            Command="{Binding EditarCommand}" />
-                    <Button Classes="secondary"
-                            Content="Dar de baja"
-                            Command="{Binding BajaCommand}" />
-                </StackPanel>
 
                 <ListBox ItemsSource="{Binding Items}"
                          SelectedItem="{Binding ItemSeleccionado}">
@@ -38,12 +36,10 @@
                                  badge "Inactiva" a full opacidad — el badge queda FUERA del panel
                                  atenuado para que siga siendo legible (la opacidad es multiplicativa
                                  por el árbol visual en Avalonia). -->
-                            <StackPanel Orientation="Horizontal" Spacing="16" Margin="4">
+                            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio4}" Margin="4">
                                 <TextBlock Text="{Binding Nombre}"
                                            Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}" />
-                                <Border Classes="badge-inactiva" IsVisible="{Binding !Activo}">
-                                    <TextBlock Text="Inactiva" Classes="badge-inactiva-texto" />
-                                </Border>
+                                <c:BadgeEstado Texto="Inactiva" Tono="Neutro" IsVisible="{Binding !Activo}" />
                             </StackPanel>
                         </DataTemplate>
                     </ListBox.ItemTemplate>

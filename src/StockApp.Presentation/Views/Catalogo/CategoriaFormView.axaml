@@ -1,24 +1,23 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Catalogo"
+             xmlns:c="using:StockApp.Presentation.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="250"
              x:Class="StockApp.Presentation.Views.Catalogo.CategoriaFormView"
              x:DataType="vm:CategoriaFormViewModel">
 
-    <Border Classes="card" Padding="24" Margin="24" MaxWidth="380" HorizontalAlignment="Center" VerticalAlignment="Center">
-        <StackPanel Spacing="12">
+    <Border Classes="card" Padding="{DynamicResource MargenVista}" Margin="{DynamicResource MargenVista}"
+            MaxWidth="380" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <StackPanel Spacing="{DynamicResource Espacio3}">
 
-            <TextBlock Text="{Binding Titulo}"
-                       Classes="titulo-vista"
-                       Margin="0,0,0,8" />
+            <c:HeaderVista Titulo="{Binding Titulo}" />
 
-            <StackPanel Spacing="4">
-                <TextBlock Text="Nombre (obligatorio)" />
+            <c:CampoFormulario Etiqueta="Nombre" Requerido="True">
                 <TextBox Text="{Binding Nombre}"
                          PlaceholderText="Nombre de la categoría" />
-            </StackPanel>
+            </c:CampoFormulario>
 
             <TextBlock Text="{Binding MensajeError}"
                        Foreground="{DynamicResource DangerBrush}"

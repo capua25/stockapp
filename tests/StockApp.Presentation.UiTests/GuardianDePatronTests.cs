@@ -42,6 +42,12 @@ public class GuardianDePatronTests
     [InlineData(typeof(EntradaRegistroView), null, null)]
     [InlineData(typeof(SalidaRegistroView), null, null)]
     [InlineData(typeof(IngresoPorFacturaView), "Ingreso de stock por factura", "MOVIMIENTOS")]
+    [InlineData(typeof(CategoriaListView), "Categorías", "CATÁLOGO")]
+    [InlineData(typeof(ProveedorListView), "Proveedores", "CATÁLOGO")]
+    [InlineData(typeof(UnidadMedidaListView), "Unidades de medida", "CATÁLOGO")]
+    [InlineData(typeof(CategoriaFormView), null, null)]
+    [InlineData(typeof(ProveedorFormView), null, null)]
+    [InlineData(typeof(UnidadMedidaFormView), null, null)]
     public void Vista_TieneHeaderVistaConElTituloEsperado(Type tipoVista, string? titulo, string? eyebrow)
     {
         var vista = PatronHelpers.Montar(tipoVista);
@@ -66,6 +72,12 @@ public class GuardianDePatronTests
         typeof(EntradaRegistroView),
         typeof(SalidaRegistroView),
         typeof(IngresoPorFacturaView),
+        typeof(CategoriaListView),
+        typeof(ProveedorListView),
+        typeof(UnidadMedidaListView),
+        typeof(CategoriaFormView),
+        typeof(ProveedorFormView),
+        typeof(UnidadMedidaFormView),
     };
 
     [AvaloniaTheory]
