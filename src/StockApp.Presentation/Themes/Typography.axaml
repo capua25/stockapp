@@ -46,4 +46,18 @@
         <Setter Property="Foreground" Value="{DynamicResource TextoSecundarioBrush}" />
     </Style>
 
+    <!-- Etiqueta estructural: headers de columna de grilla y eyebrows de seccion.
+         Es el nivel que faltaba en la escala. Color declarado (terciario), NUNCA
+         Opacity: asi el contraste es medible. El texto va escrito en MAYUSCULAS
+         en cada XAML — Avalonia no tiene text-transform. Eso NO viola la regla
+         de "no se cambia el copy": headers de columna y eyebrows son etiquetas
+         estructurales, no copy de negocio. Botones, mensajes, titulos de vista y
+         labels de formulario no se tocan. -->
+    <Style Selector="TextBlock.micro">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="LetterSpacing" Value="0.6" />
+        <Setter Property="Foreground" Value="{DynamicResource TextoTerciarioBrush}" />
+    </Style>
+
 </Styles>

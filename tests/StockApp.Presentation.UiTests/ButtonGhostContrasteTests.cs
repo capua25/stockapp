@@ -65,30 +65,6 @@ public class ButtonGhostContrasteTests
         return (window, contenedor, boton);
     }
 
-    /// <summary>
-    /// Calcula el ratio de contraste WCAG 2.x entre dos colores a partir de su luminancia
-    /// relativa. Fórmula estándar: L = 0.2126R + 0.7152G + 0.0722B (canales linealizados),
-    /// contraste = (L_claro + 0.05) / (L_oscuro + 0.05).
-    /// </summary>
-    private static double RatioDeContraste(Color a, Color b)
-    {
-        var luminanciaA = LuminanciaRelativa(a);
-        var luminanciaB = LuminanciaRelativa(b);
-        var (claro, oscuro) = luminanciaA >= luminanciaB ? (luminanciaA, luminanciaB) : (luminanciaB, luminanciaA);
-        return (claro + 0.05) / (oscuro + 0.05);
-    }
-
-    private static double LuminanciaRelativa(Color color)
-    {
-        double Canal(byte c)
-        {
-            var s = c / 255.0;
-            return s <= 0.03928 ? s / 12.92 : Math.Pow((s + 0.055) / 1.055, 2.4);
-        }
-
-        return 0.2126 * Canal(color.R) + 0.7152 * Canal(color.G) + 0.0722 * Canal(color.B);
-    }
-
     [AvaloniaFact]
     public void BotonGhost_SobreCardClara_TieneContrasteSuficienteConElFondo()
     {
@@ -100,7 +76,7 @@ public class ButtonGhostContrasteTests
         // El bug: el texto NO debe ser indistinguible del fondo blanco de la card.
         Assert.NotEqual(fondoCard, textoBoton);
 
-        var ratio = RatioDeContraste(fondoCard, textoBoton);
+        var ratio = Contraste.Ratio(fondoCard, textoBoton);
         Assert.True(ratio >= 4.5, $"Contraste insuficiente sobre card clara: {ratio:F2}:1 (fondo {fondoCard}, texto {textoBoton}). Se requiere >= 4.5:1 (WCAG AA).");
     }
 
@@ -112,7 +88,7 @@ public class ButtonGhostContrasteTests
         var fondoSidebar = Assert.IsAssignableFrom<ISolidColorBrush>(sidebar.Background).Color;
         var textoBoton = Assert.IsAssignableFrom<ISolidColorBrush>(boton.Foreground).Color;
 
-        var ratio = RatioDeContraste(fondoSidebar, textoBoton);
+        var ratio = Contraste.Ratio(fondoSidebar, textoBoton);
         Assert.True(ratio >= 4.5, $"Contraste insuficiente sobre sidebar oscuro: {ratio:F2}:1 (fondo {fondoSidebar}, texto {textoBoton}). Se requiere >= 4.5:1 (WCAG AA).");
     }
 }
