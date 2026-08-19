@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Auth;
@@ -170,6 +171,27 @@ public partial class ShellMainViewModel : ViewModelBase
     /// </summary>
     public IReadOnlyList<GrupoNavegacion> Grupos { get; }
 
+    /// <summary>
+    /// Items creados vía <see cref="CrearItem"/> junto con el evaluador de su gate de permiso.
+    /// Ruling 6 (2026-08-19): sin esto, EsVisible es un snapshot tomado una sola vez en el
+    /// constructor -- <see cref="RecalcularVisibilidad"/> lo recorre para reevaluar cada item
+    /// contra las propiedades Puede* actuales después de un refresco de permisos. ItemInicio no
+    /// participa: su EsVisible es fijo (true), no depende de ningún permiso.
+    /// </summary>
+    private readonly List<(ItemNavegacion Item, Func<bool> Evaluador)> _itemsGateados = new();
+
+    /// <summary>
+    /// Crea un ItemNavegacion y lo registra en <see cref="_itemsGateados"/> junto con el
+    /// evaluador de su gate, para que <see cref="RecalcularVisibilidad"/> pueda reasignarle
+    /// EsVisible más adelante sin tener que repetir la tabla Seccion→permiso en otro lugar.
+    /// </summary>
+    private ItemNavegacion CrearItem(string titulo, string icono, ICommand comando, string seccion, Func<bool> evaluador)
+    {
+        var item = new ItemNavegacion(titulo, icono, comando, seccion, evaluador());
+        _itemsGateados.Add((item, evaluador));
+        return item;
+    }
+
     public ShellMainViewModel(
         ICurrentSession session,
         INavigationService navigation,
@@ -194,51 +216,51 @@ public partial class ShellMainViewModel : ViewModelBase
         {
             new GrupoNavegacion("Movimientos", new List<ItemNavegacion>
             {
-                new ItemNavegacion("Productos", "mdi-package-variant", NavProductosCommand, "Productos", PuedeGestionarProductos),
-                new ItemNavegacion("Registrar Entrada", "mdi-tray-arrow-down", NavRegistrarEntradaCommand, "RegistrarEntrada", PuedeRegistrarEntradaSalida),
-                new ItemNavegacion("Ingreso por factura", "mdi-receipt-text-plus", NavIngresoPorFacturaCommand, "IngresoPorFactura", PuedeIngresarPorFactura),
-                new ItemNavegacion("Registrar Salida", "mdi-tray-arrow-up", NavRegistrarSalidaCommand, "RegistrarSalida", PuedeRegistrarEntradaSalida),
-                new ItemNavegacion("Historial de movimientos", "mdi-history", NavHistorialMovimientosCommand, "HistorialMovimientos", PuedeRegistrarMovimientos),
+                CrearItem("Productos", "mdi-package-variant", NavProductosCommand, "Productos", () => PuedeGestionarProductos),
+                CrearItem("Registrar Entrada", "mdi-tray-arrow-down", NavRegistrarEntradaCommand, "RegistrarEntrada", () => PuedeRegistrarEntradaSalida),
+                CrearItem("Ingreso por factura", "mdi-receipt-text-plus", NavIngresoPorFacturaCommand, "IngresoPorFactura", () => PuedeIngresarPorFactura),
+                CrearItem("Registrar Salida", "mdi-tray-arrow-up", NavRegistrarSalidaCommand, "RegistrarSalida", () => PuedeRegistrarEntradaSalida),
+                CrearItem("Historial de movimientos", "mdi-history", NavHistorialMovimientosCommand, "HistorialMovimientos", () => PuedeRegistrarMovimientos),
             }),
             new GrupoNavegacion("Tareas", new List<ItemNavegacion>
             {
-                new ItemNavegacion("Tareas", "mdi-checkbox-marked-outline", NavTareasCommand, "Tareas", PuedeGestionarTareas),
+                CrearItem("Tareas", "mdi-checkbox-marked-outline", NavTareasCommand, "Tareas", () => PuedeGestionarTareas),
             }),
             new GrupoNavegacion("Documentos", new List<ItemNavegacion>
             {
-                new ItemNavegacion("Documentos administrativos", "mdi-file-cabinet", NavDocumentosCommand, "Documentos", PuedeGestionarDocumentos),
+                CrearItem("Documentos administrativos", "mdi-file-cabinet", NavDocumentosCommand, "Documentos", () => PuedeGestionarDocumentos),
             }),
             new GrupoNavegacion("Finanzas", new List<ItemNavegacion>
             {
-                new ItemNavegacion("Gastos y facturas", "mdi-receipt-text", NavGastosCommand, "Gastos", PuedeVerFinanzas),
-                new ItemNavegacion("Ingresos de caja", "mdi-cash-plus", NavIngresosCommand, "Ingresos", PuedeVerFinanzas),
-                new ItemNavegacion("Maestros de finanzas", "mdi-cash-multiple", NavMaestrosFinanzasCommand, "MaestrosFinanzas", PuedeGestionarMaestrosFinanzas),
-                new ItemNavegacion("Libro caja", "mdi-book-open-variant", NavLibroCajaCommand, "LibroCaja", PuedeVerFinanzas),
-                new ItemNavegacion("Control POA", "mdi-chart-donut", NavControlPoaCommand, "ControlPoa", PuedeVerFinanzas),
-                new ItemNavegacion("Calendario de pagos", "mdi-calendar-clock", NavCalendarioPagosCommand, "CalendarioPagos", PuedeVerFinanzas),
+                CrearItem("Gastos y facturas", "mdi-receipt-text", NavGastosCommand, "Gastos", () => PuedeVerFinanzas),
+                CrearItem("Ingresos de caja", "mdi-cash-plus", NavIngresosCommand, "Ingresos", () => PuedeVerFinanzas),
+                CrearItem("Maestros de finanzas", "mdi-cash-multiple", NavMaestrosFinanzasCommand, "MaestrosFinanzas", () => PuedeGestionarMaestrosFinanzas),
+                CrearItem("Libro caja", "mdi-book-open-variant", NavLibroCajaCommand, "LibroCaja", () => PuedeVerFinanzas),
+                CrearItem("Control POA", "mdi-chart-donut", NavControlPoaCommand, "ControlPoa", () => PuedeVerFinanzas),
+                CrearItem("Calendario de pagos", "mdi-calendar-clock", NavCalendarioPagosCommand, "CalendarioPagos", () => PuedeVerFinanzas),
             }),
             new GrupoNavegacion("Importación", new List<ItemNavegacion>
             {
-                new ItemNavegacion("Importar planillas", "mdi-file-upload", NavImportacionCommand, "Importacion", EsAdmin),
+                CrearItem("Importar planillas", "mdi-file-upload", NavImportacionCommand, "Importacion", () => EsAdmin),
             }),
             new GrupoNavegacion("Tablas maestras", new List<ItemNavegacion>
             {
-                new ItemNavegacion("Categorías", "mdi-shape", NavCategoriasCommand, "Categorias", PuedeGestionarTablasMaestras),
-                new ItemNavegacion("Proveedores", "mdi-truck", NavProveedoresCommand, "Proveedores", PuedeGestionarTablasMaestras),
-                new ItemNavegacion("Unidades de medida", "mdi-ruler", NavUnidadesMedidaCommand, "UnidadesMedida", PuedeGestionarTablasMaestras),
+                CrearItem("Categorías", "mdi-shape", NavCategoriasCommand, "Categorias", () => PuedeGestionarTablasMaestras),
+                CrearItem("Proveedores", "mdi-truck", NavProveedoresCommand, "Proveedores", () => PuedeGestionarTablasMaestras),
+                CrearItem("Unidades de medida", "mdi-ruler", NavUnidadesMedidaCommand, "UnidadesMedida", () => PuedeGestionarTablasMaestras),
             }),
             new GrupoNavegacion("Reportes", new List<ItemNavegacion>
             {
-                new ItemNavegacion("Valorización de inventario", "mdi-currency-usd", NavValorizacionCommand, "Valorizacion", PuedeVerReportes),
-                new ItemNavegacion("Stock por categoría", "mdi-chart-pie", NavStockCategoriaCommand, "StockCategoria", PuedeVerReportes),
-                new ItemNavegacion("Historial por producto", "mdi-file-document", NavHistorialPorProductoCommand, "HistorialPorProducto", PuedeVerHistorialPorProducto),
-                new ItemNavegacion("Productos más movidos", "mdi-trending-up", NavMasMovidosCommand, "MasMovidos", PuedeVerReportes),
-                new ItemNavegacion("Log de auditoría", "mdi-shield-search", NavAuditoriaLogCommand, "AuditoriaLog", PuedeVerReportes),
+                CrearItem("Valorización de inventario", "mdi-currency-usd", NavValorizacionCommand, "Valorizacion", () => PuedeVerReportes),
+                CrearItem("Stock por categoría", "mdi-chart-pie", NavStockCategoriaCommand, "StockCategoria", () => PuedeVerReportes),
+                CrearItem("Historial por producto", "mdi-file-document", NavHistorialPorProductoCommand, "HistorialPorProducto", () => PuedeVerHistorialPorProducto),
+                CrearItem("Productos más movidos", "mdi-trending-up", NavMasMovidosCommand, "MasMovidos", () => PuedeVerReportes),
+                CrearItem("Log de auditoría", "mdi-shield-search", NavAuditoriaLogCommand, "AuditoriaLog", () => PuedeVerReportes),
             }),
             new GrupoNavegacion("Administración", new List<ItemNavegacion>
             {
-                new ItemNavegacion("Mantenimiento", "mdi-database-cog", NavMantenimientoCommand, "Mantenimiento", EsAdmin),
-                new ItemNavegacion("Usuarios", "mdi-account-cog", NavUsuariosCommand, "Usuarios", EsAdmin),
+                CrearItem("Mantenimiento", "mdi-database-cog", NavMantenimientoCommand, "Mantenimiento", () => EsAdmin),
+                CrearItem("Usuarios", "mdi-account-cog", NavUsuariosCommand, "Usuarios", () => EsAdmin),
             }),
         };
 
@@ -311,6 +333,25 @@ public partial class ShellMainViewModel : ViewModelBase
         OnPropertyChanged(nameof(PuedeIngresarPorFactura));
         OnPropertyChanged(nameof(PuedeRegistrarEntradaSalida));
         OnPropertyChanged(nameof(PuedeVerHistorialPorProducto));
+        RecalcularVisibilidad();
+    }
+
+    /// <summary>
+    /// Ruling 6 (2026-08-19): reevalúa el EsVisible de cada ItemNavegacion gateado contra las
+    /// propiedades Puede* actuales y propaga el cambio a los grupos que derivan su visibilidad de
+    /// sus items. Sin este método, EsVisible quedaba fijo en el valor tomado por CrearItem en el
+    /// constructor: las notificaciones de las Puede* de arriba refrescan los bindings que leen
+    /// esas propiedades directamente (ej. un futuro panel de permisos), pero el sidebar de la
+    /// Task 5.3 bindea IsVisible al ItemNavegacion, no a las Puede* -- a un usuario al que se le
+    /// revoca un permiso en caliente, el botón le hubiera quedado visible.
+    /// </summary>
+    private void RecalcularVisibilidad()
+    {
+        foreach (var (item, evaluador) in _itemsGateados)
+            item.EsVisible = evaluador();
+
+        foreach (var grupo in Grupos)
+            grupo.ActualizarVisibilidad();
     }
 
     /// <summary>

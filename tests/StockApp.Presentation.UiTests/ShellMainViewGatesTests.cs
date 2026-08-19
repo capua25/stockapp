@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
@@ -44,6 +45,15 @@ public class ShellMainViewGatesTests
             new AuthServiceFake(),
             new PreferenciasSidebarFake());
 
+        // Tanda 5.3: expandir todos los grupos a proposito. Este banco de pruebas verifica que
+        // el item exista en el arbol visual y este permitido -- no que el usuario haya dejado
+        // ese grupo particular abierto. Sin esto, los items de un grupo colapsado quedan dentro
+        // de un ItemsControl con IsVisible="False" y ArbolVisual.EsVisibleEnArbol los reporta
+        // como no visibles aunque el gate de permiso los deje pasar, lo que daria falsos
+        // negativos en cualquier test que pida Assert.True sobre un item de un grupo cerrado.
+        foreach (var grupo in vm.Grupos)
+            grupo.EstaExpandido = true;
+
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
         window.DataContext = vm;
         window.Show();
@@ -51,6 +61,39 @@ public class ShellMainViewGatesTests
         Dispatcher.UIThread.RunJobs();
 
         return (window, vm);
+    }
+
+    /// <summary>
+    /// Variante de <see cref="Montar"/> para el caso de revocación en caliente (Ruling 6): expone
+    /// la fake de navegación para poder disparar <see cref="INavigationService.Cambiado"/> a mano
+    /// -- el mismo evento que dispara una navegación real -- y arma AuthServiceFake para que el
+    /// "refresco desde el servidor" resultante devuelva un set de permisos distinto al que la
+    /// sesión tenía al arrancar.
+    /// </summary>
+    private static (Window Window, ShellMainViewModel Vm, NavigationServiceFake Navegacion) MontarParaRevocacion(
+        RolUsuario rol, string[] permisosIniciales, IReadOnlySet<string> permisosTrasRefresco)
+    {
+        var sesion = new SesionFake(rol, permisosIniciales);
+        var navegacion = new NavigationServiceFake();
+
+        var vm = new ShellMainViewModel(
+            sesion,
+            navegacion,
+            new InfoAppFake(),
+            new ConfirmacionServiceFake(),
+            new AuthServiceFake(sesion, permisosTrasRefresco),
+            new PreferenciasSidebarFake());
+
+        foreach (var grupo in vm.Grupos)
+            grupo.EstaExpandido = true;
+
+        var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
+        window.DataContext = vm;
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
+
+        return (window, vm, navegacion);
     }
 
     /// <summary>
@@ -212,5 +255,98 @@ public class ShellMainViewGatesTests
         Assert.True(EsVisible(window, vm.NavImportacionCommand));
         Assert.True(EsVisible(window, vm.NavMantenimientoCommand));
         Assert.True(EsVisible(window, vm.NavUsuariosCommand));
+    }
+
+    // ── Task 5.3, Step 4: gates de grupo ──────────────────────────────────────────
+
+    [AvaloniaFact]
+    public void OperadorConSoloGestionarMaestrosFinanzas_VeElGrupoFinanzasCONSuTitulo()
+    {
+        // Bug preexistente que la tanda 5 arregla: el header "Finanzas" estaba gateado por
+        // PuedeVerFinanzas mientras Maestros va por PuedeGestionarMaestrosFinanzas, asi que este
+        // operador veia el boton colgando suelto, sin titulo de seccion arriba.
+        var (window, vm) = Montar(RolUsuario.Operador, Permisos.GestionarMaestrosFinanzas);
+
+        var grupoFinanzas = vm.Grupos.First(g => g.Titulo == "Finanzas");
+
+        Assert.True(grupoFinanzas.EsVisible);
+        Assert.Single(grupoFinanzas.ItemsVisibles);
+        Assert.True(EsVisible(window, vm.NavMaestrosFinanzasCommand));
+        Assert.False(EsVisible(window, vm.NavGastosCommand));
+    }
+
+    [AvaloniaFact]
+    public void OperadorSinPermisos_NingunGrupoSeRenderiza()
+    {
+        var (_, vm) = Montar(RolUsuario.Operador);
+
+        Assert.All(vm.Grupos, g => Assert.False(g.EsVisible));
+    }
+
+    [AvaloniaFact]
+    public void OperadorConTODOSLosPermisos_NO_VeLosGruposAdminOnly()
+    {
+        var (_, vm) = Montar(RolUsuario.Operador, Permisos.Todos.ToArray());
+
+        Assert.False(vm.Grupos.First(g => g.Titulo == "Importación").EsVisible);
+        Assert.False(vm.Grupos.First(g => g.Titulo == "Administración").EsVisible);
+    }
+
+    // ── Ruling 6: revocación en caliente ─────────────────────────────────────────
+
+    /// <summary>
+    /// Red de seguridad del bug que dejó sin resolver la tanda anterior: ItemNavegacion.EsVisible
+    /// era un snapshot tomado una sola vez en el constructor de ShellMainViewModel.
+    /// RefrescarPermisosAsync notifica las propiedades Puede* del ViewModel, pero -- antes de este
+    /// ruling -- nunca recalculaba el EsVisible de los ItemNavegacion ya construidos. Como el
+    /// XAML de la Task 5.3 bindea IsVisible directamente al item, el resultado era: a un usuario
+    /// al que se le revoca un permiso en caliente, el botón le queda visible. Este repo tiene
+    /// flujo real de revocación en caliente (panel de permisos + refresco best-effort al navegar),
+    /// así que era explotable de verdad.
+    ///
+    /// Dispara el refresco por el mismo camino que usa la app: INavigationService.Cambiado (lo que
+    /// levanta cada Navegar&lt;T&gt;() real) -&gt; ShellMainViewModel.OnNavegacionCambiada -&gt;
+    /// RefrescarPermisosAsync. AuthServiceFake resuelve de forma síncrona (Task.FromResult), así
+    /// que para cuando SimularNavegacion() retorna, el refresco fire-and-forget ya corrió entero
+    /// -- no hace falta await sobre el Task interno.
+    ///
+    /// Limitación anotada al escribir este test: hasta que la Task 5.3 reescriba
+    /// ShellMainView.axaml, el botón de Productos sigue bindeado directamente a
+    /// PuedeGestionarProductos (no a ItemNavegacion.EsVisible), y esa propiedad SIEMPRE quedó
+    /// bien notificada -- el bug de Ruling 6 vive en el ItemNavegacion, todavía no conectado al
+    /// árbol visual. Por eso el assert sobre el botón, solo, no alcanzaba para poner este test en
+    /// rojo antes del fix: aunque se comentara RecalcularVisibilidad(), el botón seguía
+    /// ocultándose igual por el camino viejo. La guardia real de Ruling 6 es el assert directo
+    /// sobre ItemNavegacion.EsVisible de abajo, confirmado en rojo por mutación (comentando la
+    /// llamada a RecalcularVisibilidad() en RefrescarPermisosAsync) antes de implementar el fix.
+    /// El assert sobre el botón queda igual, como guardia punta a punta: pasa a ser una red real
+    /// en cuanto la Task 5.3 conecta el XAML al item, más abajo en este mismo commit.
+    /// </summary>
+    [AvaloniaFact]
+    public void RevocacionEnCaliente_OcultaElBotonQueYaEraVisible()
+    {
+        var (window, vm, navegacion) = MontarParaRevocacion(
+            RolUsuario.Operador,
+            new[] { Permisos.GestionarProductos },
+            new HashSet<string>()); // el "refresco desde el servidor" ya no trae el permiso
+
+        var itemProductos = vm.Grupos.SelectMany(g => g.Items).First(i => i.Seccion == "Productos");
+
+        Assert.True(EsVisible(window, vm.NavProductosCommand),
+            "Con el permiso concedido al arrancar, el botón de Productos tiene que ser visible.");
+        Assert.True(itemProductos.EsVisible);
+
+        navegacion.SimularNavegacion();
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
+
+        // Guardia directa del Ruling 6: el ItemNavegacion tiene que recalcular su EsVisible
+        // contra las Puede* actuales, no quedarse con el valor tomado en CrearItem.
+        Assert.False(itemProductos.EsVisible,
+            "Tras revocar el permiso en caliente, ItemNavegacion.EsVisible tiene que pasar a false.");
+
+        // Guardia punta a punta (ver limitación en el doc de este test).
+        Assert.False(EsVisible(window, vm.NavProductosCommand),
+            "Tras revocar el permiso en caliente, el botón tiene que dejar de ser visible.");
     }
 }

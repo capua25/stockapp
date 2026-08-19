@@ -21,7 +21,13 @@ namespace StockApp.Presentation.ViewModels;
 /// <param name="Icono">Valor para i:Icon, con prefijo mdi (ej. "mdi-package-variant").</param>
 /// <param name="Comando">El RelayCommand de navegacion del ShellMainViewModel.</param>
 /// <param name="Seccion">Clave que se compara contra SeccionActiva para marcar el item activo.</param>
-/// <param name="EsVisible">Resultado del gate de permiso, evaluado al construir el menu.</param>
+/// <param name="EsVisible">Resultado del gate de permiso, evaluado al construir el menu.
+/// Ruling 6 (2026-08-19): dejó de ser un snapshot get-only. Antes de este ruling era un valor
+/// fijo tomado una sola vez en el constructor -- si el binding de la Task 5.3 lo usara así, a un
+/// usuario al que se le revoca un permiso en caliente (flujo real de este repo) el botón le
+/// quedaba visible, porque nada volvía a evaluarlo después de RefrescarPermisosAsync. Ahora es
+/// [ObservableProperty]: ShellMainViewModel lo reasigna en cada refresco de permisos y el binding
+/// de IsVisible se entera solo.</param>
 public partial class ItemNavegacion : ObservableObject
 {
     public ItemNavegacion(string titulo, string icono, ICommand comando, string seccion, bool esVisible)
@@ -41,7 +47,8 @@ public partial class ItemNavegacion : ObservableObject
 
     public string Seccion { get; }
 
-    public bool EsVisible { get; }
+    [ObservableProperty]
+    private bool _esVisible;
 
     [ObservableProperty]
     private bool _estaActivo;

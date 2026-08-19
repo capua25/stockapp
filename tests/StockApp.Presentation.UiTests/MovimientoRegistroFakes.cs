@@ -58,11 +58,7 @@ internal sealed class NavigationServiceFake : INavigationService
 {
     public ViewModelBase? Actual => null;
 
-    public event Action? Cambiado
-    {
-        add { }
-        remove { }
-    }
+    public event Action? Cambiado;
 
     public void Navegar<TVm>() where TVm : ViewModelBase
     {
@@ -71,6 +67,14 @@ internal sealed class NavigationServiceFake : INavigationService
     public void Navegar<TVm>(Action<TVm> inicializar) where TVm : ViewModelBase
     {
     }
+
+    /// <summary>
+    /// Dispara Cambiado a mano, simulando el evento que INavigationService real levanta tras
+    /// cada Navegar&lt;T&gt;() (Ruling 6, ShellMainViewGatesTests): permite ejercitar
+    /// ShellMainViewModel.OnNavegacionCambiada -&gt; RefrescarPermisosAsync desde un test de UI
+    /// sin depender de una navegación real.
+    /// </summary>
+    public void SimularNavegacion() => Cambiado?.Invoke();
 }
 
 internal sealed class ConfirmacionServiceFake : IConfirmacionService

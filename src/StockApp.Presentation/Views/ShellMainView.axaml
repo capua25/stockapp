@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels"
              xmlns:i="https://github.com/projektanker/icons.avalonia"
+             xmlns:conv="clr-namespace:StockApp.Presentation.Converters;assembly=StockApp.Presentation"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
@@ -10,7 +11,7 @@
 
     <Grid ColumnDefinitions="232,*" Background="{DynamicResource FondoBrush}">
 
-        <!-- Menú lateral: verde bosque oscuro sólido, look dashboard SaaS.
+        <!-- Menú lateral: pizarra media sólida, look dashboard SaaS.
              Classes="sidebar" es lo que activa la variante de texto blanco de
              Button.ghost (ver "Border.sidebar Button.ghost" en Controls.axaml) -->
         <Border Grid.Column="0"
@@ -22,9 +23,8 @@
                 <!-- Versión de la app: discreta, fija al pie del menú lateral -->
                 <TextBlock Text="{Binding VersionTexto}"
                            Classes="caption"
-                           Foreground="{DynamicResource SidebarTextoBrush}"
+                           Foreground="{DynamicResource TextoTerciarioBrush}"
                            DockPanel.Dock="Bottom"
-                           Opacity="0.5"
                            HorizontalAlignment="Center"
                            Margin="0,8,0,4" />
 
@@ -42,401 +42,82 @@
                 </Button>
 
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <StackPanel Spacing="4">
+                    <StackPanel Spacing="{DynamicResource Espacio1}">
 
-                <TextBlock Text="StockApp"
-                           Classes="titulo-vista"
-                           Foreground="{DynamicResource SidebarTextoBrush}"
-                           Margin="8,8,8,16" />
+                        <TextBlock Text="StockApp"
+                                   Classes="titulo-vista"
+                                   Foreground="{DynamicResource SidebarTextoBrush}"
+                                   Margin="8,8,8,16" />
 
-                <!-- Inicio: visible para Admin y Operador -->
-                <Button Command="{Binding NavInicioCommand}"
-                        Classes="ghost"
-                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Inicio}"
-                        HorizontalAlignment="Stretch">
-                    <Grid ColumnDefinitions="Auto,*">
-                        <i:Icon Grid.Column="0" Value="mdi-home" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Grid.Column="1" Text="Inicio" VerticalAlignment="Center"
-                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
-                    </Grid>
-                </Button>
+                        <!-- Inicio: fijo arriba, fuera de todo grupo, sin gate de permiso.
+                             Classes.active bindea EstaActivo directamente (Ruling 2026-08-19,
+                             ver ItemNavegacion.cs): ConverterParameter no acepta un {Binding},
+                             así que ShellMainViewModel.OnSeccionActivaChanged ya lo calcula. -->
+                        <Button Command="{Binding ItemInicio.Comando}"
+                                Classes="ghost"
+                                Classes.active="{Binding ItemInicio.EstaActivo}"
+                                HorizontalAlignment="Stretch">
+                            <Grid ColumnDefinitions="Auto,*">
+                                <i:Icon Grid.Column="0" Value="{Binding ItemInicio.Icono}" Foreground="{DynamicResource SidebarTextoBrush}" />
+                                <TextBlock Grid.Column="1" Text="{Binding ItemInicio.Titulo}" VerticalAlignment="Center"
+                                           Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                            </Grid>
+                        </Button>
 
-                <!-- Productos: gateado por GestionarProductos (spec 2026-08-10) -->
-                <Button Command="{Binding NavProductosCommand}"
-                        Classes="ghost"
-                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Productos}"
-                        HorizontalAlignment="Stretch"
-                        IsVisible="{Binding PuedeGestionarProductos}">
-                    <Grid ColumnDefinitions="Auto,*">
-                        <i:Icon Grid.Column="0" Value="mdi-package-variant" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Grid.Column="1" Text="Productos" VerticalAlignment="Center"
-                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
-                    </Grid>
-                </Button>
+                        <!-- Los 8 grupos colapsables. Reemplaza los 26 bloques copiados
+                             literalmente (7 headers + 24 botones) que tenía este archivo. -->
+                        <ItemsControl ItemsSource="{Binding Grupos}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="vm:GrupoNavegacion">
+                                    <StackPanel IsVisible="{Binding EsVisible}" Margin="0,8,0,0">
 
-                <!-- Registrar Entrada: gateado por PuedeRegistrarEntradaSalida (fix bug de
-                     coherencia de permisos 2026-08-16) - requiere RegistrarMovimientos +
-                     GestionarProductos, no solo RegistrarMovimientos, porque el combo de
-                     producto exige GestionarProductos del lado del servidor. -->
-                <Button Command="{Binding NavRegistrarEntradaCommand}"
-                        Classes="ghost"
-                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=RegistrarEntrada}"
-                        HorizontalAlignment="Stretch"
-                        IsVisible="{Binding PuedeRegistrarEntradaSalida}">
-                    <Grid ColumnDefinitions="Auto,*">
-                        <i:Icon Grid.Column="0" Value="mdi-tray-arrow-down" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Grid.Column="1" Text="Registrar Entrada" VerticalAlignment="Center"
-                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
-                    </Grid>
-                </Button>
+                                        <!-- $parent[ItemsControl] resolvería al ItemsControl MÁS
+                                             CERCANO (el de items, no este de grupos), así que hay
+                                             que subir hasta el UserControl — mismo patrón que
+                                             DocumentoListView.axaml:65. -->
+                                        <Button Command="{Binding $parent[UserControl].((vm:ShellMainViewModel)DataContext).AlternarGrupoCommand}"
+                                                CommandParameter="{Binding}"
+                                                Classes="ghost"
+                                                HorizontalAlignment="Stretch">
+                                            <Grid ColumnDefinitions="*,Auto">
+                                                <TextBlock Grid.Column="0"
+                                                           Text="{Binding Titulo}"
+                                                           Classes="micro"
+                                                           Foreground="{DynamicResource SidebarTextoBrush}"
+                                                           VerticalAlignment="Center" />
+                                                <i:Icon Grid.Column="1"
+                                                        Value="{Binding EstaExpandido, Converter={x:Static conv:IconoChevronConverter.Instance}}"
+                                                        Foreground="{DynamicResource SidebarTextoBrush}" />
+                                            </Grid>
+                                        </Button>
 
-                <!-- Ingreso por factura: gateado por PuedeIngresarPorFactura (fix bug de coherencia
-                     2026-08-15) - requiere RegistrarMovimientos + RegistrarGastos + VerFinanzas,
-                     no solo RegistrarMovimientos como los demás botones de este bloque, porque
-                     el servicio y los combos de la pantalla exigen los tres. -->
-                <Button Command="{Binding NavIngresoPorFacturaCommand}"
-                        Classes="ghost"
-                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=IngresoPorFactura}"
-                        HorizontalAlignment="Stretch"
-                        IsVisible="{Binding PuedeIngresarPorFactura}">
-                    <Grid ColumnDefinitions="Auto,*">
-                        <i:Icon Grid.Column="0" Value="mdi-receipt-text-plus" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Grid.Column="1" Text="Ingreso por factura" VerticalAlignment="Center"
-                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
-                    </Grid>
-                </Button>
+                                        <ItemsControl ItemsSource="{Binding ItemsVisibles}"
+                                                      IsVisible="{Binding EstaExpandido}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="vm:ItemNavegacion">
+                                                    <!-- Classes.active bindea EstaActivo directamente: un
+                                                         ConverterParameter={Binding Seccion} no es viable acá
+                                                         (ConverterParameter no acepta bindings en Avalonia). -->
+                                                    <Button Command="{Binding Comando}"
+                                                            Classes="ghost"
+                                                            Classes.active="{Binding EstaActivo}"
+                                                            HorizontalAlignment="Stretch">
+                                                        <Grid ColumnDefinitions="Auto,*">
+                                                            <i:Icon Grid.Column="0" Value="{Binding Icono}" Foreground="{DynamicResource SidebarTextoBrush}" />
+                                                            <TextBlock Grid.Column="1" Text="{Binding Titulo}" VerticalAlignment="Center"
+                                                                       Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
+                                                        </Grid>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
 
-                <!-- Registrar Salida: gateado por PuedeRegistrarEntradaSalida (fix bug de
-                     coherencia de permisos 2026-08-16) - requiere RegistrarMovimientos +
-                     GestionarProductos, no solo RegistrarMovimientos, porque el combo de
-                     producto exige GestionarProductos del lado del servidor. -->
-                <Button Command="{Binding NavRegistrarSalidaCommand}"
-                        Classes="ghost"
-                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=RegistrarSalida}"
-                        HorizontalAlignment="Stretch"
-                        IsVisible="{Binding PuedeRegistrarEntradaSalida}">
-                    <Grid ColumnDefinitions="Auto,*">
-                        <i:Icon Grid.Column="0" Value="mdi-tray-arrow-up" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Grid.Column="1" Text="Registrar Salida" VerticalAlignment="Center"
-                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
-                    </Grid>
-                </Button>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
 
-                <Button Command="{Binding NavHistorialMovimientosCommand}"
-                        Classes="ghost"
-                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=HistorialMovimientos}"
-                        HorizontalAlignment="Stretch"
-                        IsVisible="{Binding PuedeRegistrarMovimientos}">
-                    <Grid ColumnDefinitions="Auto,*">
-                        <i:Icon Grid.Column="0" Value="mdi-history" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Grid.Column="1" Text="Historial de movimientos" VerticalAlignment="Center"
-                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
-                    </Grid>
-                </Button>
-
-                <!-- Tareas: gateado por GestionarTareas (spec 2026-08-10) -->
-                <TextBlock Text="Tareas"
-                           Classes="caption"
-                           Foreground="{DynamicResource SidebarTextoBrush}"
-                           FontWeight="SemiBold"
-                           Margin="8,8,0,4"
-                           IsVisible="{Binding PuedeGestionarTareas}"
-                           Opacity="0.6" />
-
-                <Button Command="{Binding NavTareasCommand}"
-                        Classes="ghost"
-                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Tareas}"
-                        HorizontalAlignment="Stretch"
-                        IsVisible="{Binding PuedeGestionarTareas}">
-                    <Grid ColumnDefinitions="Auto,*">
-                        <i:Icon Grid.Column="0" Value="mdi-checkbox-marked-outline" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Grid.Column="1" Text="Tareas" VerticalAlignment="Center"
-                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
-                    </Grid>
-                </Button>
-
-                <!-- Documentos administrativos: gateado por GestionarDocumentos (spec 2026-08-11) -->
-                <TextBlock Text="Documentos"
-                           Classes="caption"
-                           Foreground="{DynamicResource SidebarTextoBrush}"
-                           FontWeight="SemiBold"
-                           Margin="8,8,0,4"
-                           IsVisible="{Binding PuedeGestionarDocumentos}"
-                           Opacity="0.6" />
-
-                <Button Command="{Binding NavDocumentosCommand}"
-                        Classes="ghost"
-                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Documentos}"
-                        HorizontalAlignment="Stretch"
-                        IsVisible="{Binding PuedeGestionarDocumentos}">
-                    <Grid ColumnDefinitions="Auto,*">
-                        <i:Icon Grid.Column="0" Value="mdi-file-cabinet" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Grid.Column="1" Text="Documentos administrativos" VerticalAlignment="Center"
-                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
-                    </Grid>
-                </Button>
-
-                <!-- Finanzas: gateado por VerFinanzas (spec 2026-08-10). Caso borde aceptado
-                     (cosmética, no seguridad): un Operador con SOLO GestionarMaestrosFinanzas
-                     (sin VerFinanzas) ve el botón "Maestros de finanzas" sin este header encima
-                     — no hay overlap real en la práctica (VerFinanzas es el permiso base de
-                     Finanzas que casi siempre se concede junto con los demás). -->
-                <TextBlock Text="Finanzas"
-                           Classes="caption"
-                           Foreground="{DynamicResource SidebarTextoBrush}"
-                           FontWeight="SemiBold"
-                           Margin="8,8,0,4"
-                           IsVisible="{Binding PuedeVerFinanzas}"
-                           Opacity="0.6" />
-
-                <Button Command="{Binding NavGastosCommand}"
-                        Classes="ghost"
-                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Gastos}"
-                        HorizontalAlignment="Stretch"
-                        IsVisible="{Binding PuedeVerFinanzas}">
-                    <Grid ColumnDefinitions="Auto,*">
-                        <i:Icon Grid.Column="0" Value="mdi-receipt-text" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Grid.Column="1" Text="Gastos y facturas" VerticalAlignment="Center"
-                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
-                    </Grid>
-                </Button>
-
-                <Button Command="{Binding NavIngresosCommand}"
-                        Classes="ghost"
-                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Ingresos}"
-                        HorizontalAlignment="Stretch"
-                        IsVisible="{Binding PuedeVerFinanzas}">
-                    <Grid ColumnDefinitions="Auto,*">
-                        <i:Icon Grid.Column="0" Value="mdi-cash-plus" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Grid.Column="1" Text="Ingresos de caja" VerticalAlignment="Center"
-                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
-                    </Grid>
-                </Button>
-
-                <Button Command="{Binding NavMaestrosFinanzasCommand}"
-                        Classes="ghost"
-                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=MaestrosFinanzas}"
-                        HorizontalAlignment="Stretch"
-                        IsVisible="{Binding PuedeGestionarMaestrosFinanzas}">
-                    <Grid ColumnDefinitions="Auto,*">
-                        <i:Icon Grid.Column="0" Value="mdi-cash-multiple" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Grid.Column="1" Text="Maestros de finanzas" VerticalAlignment="Center"
-                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
-                    </Grid>
-                </Button>
-
-                <Button Command="{Binding NavLibroCajaCommand}"
-                        Classes="ghost"
-                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=LibroCaja}"
-                        HorizontalAlignment="Stretch"
-                        IsVisible="{Binding PuedeVerFinanzas}">
-                    <Grid ColumnDefinitions="Auto,*">
-                        <i:Icon Grid.Column="0" Value="mdi-book-open-variant" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Grid.Column="1" Text="Libro caja" VerticalAlignment="Center"
-                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
-                    </Grid>
-                </Button>
-
-                <Button Command="{Binding NavControlPoaCommand}"
-                        Classes="ghost"
-                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=ControlPoa}"
-                        HorizontalAlignment="Stretch"
-                        IsVisible="{Binding PuedeVerFinanzas}">
-                    <Grid ColumnDefinitions="Auto,*">
-                        <i:Icon Grid.Column="0" Value="mdi-chart-donut" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Grid.Column="1" Text="Control POA" VerticalAlignment="Center"
-                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
-                    </Grid>
-                </Button>
-
-                <Button Command="{Binding NavCalendarioPagosCommand}"
-                        Classes="ghost"
-                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=CalendarioPagos}"
-                        HorizontalAlignment="Stretch"
-                        IsVisible="{Binding PuedeVerFinanzas}">
-                    <Grid ColumnDefinitions="Auto,*">
-                        <i:Icon Grid.Column="0" Value="mdi-calendar-clock" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Grid.Column="1" Text="Calendario de pagos" VerticalAlignment="Center"
-                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
-                    </Grid>
-                </Button>
-
-                <!-- Importación: solo Admin -->
-                <TextBlock Text="Importación"
-                           Classes="caption"
-                           Foreground="{DynamicResource SidebarTextoBrush}"
-                           FontWeight="SemiBold"
-                           Margin="8,8,0,4"
-                           IsVisible="{Binding EsAdmin}"
-                           Opacity="0.6" />
-
-                <Button Command="{Binding NavImportacionCommand}"
-                        Classes="ghost"
-                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Importacion}"
-                        HorizontalAlignment="Stretch"
-                        IsVisible="{Binding EsAdmin}">
-                    <Grid ColumnDefinitions="Auto,*">
-                        <i:Icon Grid.Column="0" Value="mdi-file-upload" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Grid.Column="1" Text="Importar planillas" VerticalAlignment="Center"
-                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
-                    </Grid>
-                </Button>
-
-                <!-- Tablas maestras: solo Admin -->
-                <TextBlock Text="Tablas maestras"
-                           Classes="caption"
-                           Foreground="{DynamicResource SidebarTextoBrush}"
-                           FontWeight="SemiBold"
-                           Margin="8,8,0,4"
-                           IsVisible="{Binding PuedeGestionarTablasMaestras}"
-                           Opacity="0.6" />
-
-                <Button Command="{Binding NavCategoriasCommand}"
-                        Classes="ghost"
-                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Categorias}"
-                        HorizontalAlignment="Stretch"
-                        IsVisible="{Binding PuedeGestionarTablasMaestras}">
-                    <Grid ColumnDefinitions="Auto,*">
-                        <i:Icon Grid.Column="0" Value="mdi-shape" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Grid.Column="1" Text="Categorías" VerticalAlignment="Center"
-                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
-                    </Grid>
-                </Button>
-
-                <Button Command="{Binding NavProveedoresCommand}"
-                        Classes="ghost"
-                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Proveedores}"
-                        HorizontalAlignment="Stretch"
-                        IsVisible="{Binding PuedeGestionarTablasMaestras}">
-                    <Grid ColumnDefinitions="Auto,*">
-                        <i:Icon Grid.Column="0" Value="mdi-truck" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Grid.Column="1" Text="Proveedores" VerticalAlignment="Center"
-                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
-                    </Grid>
-                </Button>
-
-                <Button Command="{Binding NavUnidadesMedidaCommand}"
-                        Classes="ghost"
-                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=UnidadesMedida}"
-                        HorizontalAlignment="Stretch"
-                        IsVisible="{Binding PuedeGestionarTablasMaestras}">
-                    <Grid ColumnDefinitions="Auto,*">
-                        <i:Icon Grid.Column="0" Value="mdi-ruler" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Grid.Column="1" Text="Unidades de medida" VerticalAlignment="Center"
-                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
-                    </Grid>
-                </Button>
-
-                <!-- Reportes: solo Admin -->
-                <TextBlock Text="Reportes"
-                           Classes="caption"
-                           Foreground="{DynamicResource SidebarTextoBrush}"
-                           FontWeight="SemiBold"
-                           Margin="8,8,0,4"
-                           IsVisible="{Binding PuedeVerReportes}"
-                           Opacity="0.6" />
-
-                <Button Command="{Binding NavValorizacionCommand}"
-                        Classes="ghost"
-                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Valorizacion}"
-                        HorizontalAlignment="Stretch"
-                        IsVisible="{Binding PuedeVerReportes}">
-                    <Grid ColumnDefinitions="Auto,*">
-                        <i:Icon Grid.Column="0" Value="mdi-currency-usd" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Grid.Column="1" Text="Valorización de inventario" VerticalAlignment="Center"
-                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
-                    </Grid>
-                </Button>
-
-                <Button Command="{Binding NavStockCategoriaCommand}"
-                        Classes="ghost"
-                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=StockCategoria}"
-                        HorizontalAlignment="Stretch"
-                        IsVisible="{Binding PuedeVerReportes}">
-                    <Grid ColumnDefinitions="Auto,*">
-                        <i:Icon Grid.Column="0" Value="mdi-chart-pie" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Grid.Column="1" Text="Stock por categoría" VerticalAlignment="Center"
-                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
-                    </Grid>
-                </Button>
-
-                <!-- Historial por producto: gateado por PuedeVerHistorialPorProducto (fix bug de
-                     coherencia de permisos 2026-08-16) - requiere VerReportes + RegistrarMovimientos,
-                     no solo VerReportes como los demás ítems de Reportes, porque el servicio delega
-                     en MovimientoStockService.ObtenerHistorialAsync, que exige RegistrarMovimientos. -->
-                <Button Command="{Binding NavHistorialPorProductoCommand}"
-                        Classes="ghost"
-                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=HistorialPorProducto}"
-                        HorizontalAlignment="Stretch"
-                        IsVisible="{Binding PuedeVerHistorialPorProducto}">
-                    <Grid ColumnDefinitions="Auto,*">
-                        <i:Icon Grid.Column="0" Value="mdi-file-document" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Grid.Column="1" Text="Historial por producto" VerticalAlignment="Center"
-                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
-                    </Grid>
-                </Button>
-
-                <Button Command="{Binding NavMasMovidosCommand}"
-                        Classes="ghost"
-                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=MasMovidos}"
-                        HorizontalAlignment="Stretch"
-                        IsVisible="{Binding PuedeVerReportes}">
-                    <Grid ColumnDefinitions="Auto,*">
-                        <i:Icon Grid.Column="0" Value="mdi-trending-up" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Grid.Column="1" Text="Productos más movidos" VerticalAlignment="Center"
-                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
-                    </Grid>
-                </Button>
-
-                <Button Command="{Binding NavAuditoriaLogCommand}"
-                        Classes="ghost"
-                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=AuditoriaLog}"
-                        HorizontalAlignment="Stretch"
-                        IsVisible="{Binding PuedeVerReportes}">
-                    <Grid ColumnDefinitions="Auto,*">
-                        <i:Icon Grid.Column="0" Value="mdi-shield-search" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Grid.Column="1" Text="Log de auditoría" VerticalAlignment="Center"
-                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
-                    </Grid>
-                </Button>
-
-                <!-- Administracion: solo Admin (Entrega 1 Backups) -->
-                <TextBlock Text="Administración"
-                           Classes="caption"
-                           Foreground="{DynamicResource SidebarTextoBrush}"
-                           FontWeight="SemiBold"
-                           Margin="8,8,0,4"
-                           IsVisible="{Binding EsAdmin}"
-                           Opacity="0.6" />
-
-                <Button Command="{Binding NavMantenimientoCommand}"
-                        Classes="ghost"
-                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Mantenimiento}"
-                        HorizontalAlignment="Stretch"
-                        IsVisible="{Binding EsAdmin}">
-                    <Grid ColumnDefinitions="Auto,*">
-                        <i:Icon Grid.Column="0" Value="mdi-database-cog" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Grid.Column="1" Text="Mantenimiento" VerticalAlignment="Center"
-                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
-                    </Grid>
-                </Button>
-
-                <!-- Usuarios (Task 12, spec 2026-08-10): ABM que hasta ahora solo existía vía
-                     curl contra la API. GestionarUsuarios es Admin-only siempre, mismo gating
-                     que Mantenimiento hasta que la Task 14 introduzca el gating por permiso. -->
-                <Button Command="{Binding NavUsuariosCommand}"
-                        Classes="ghost"
-                        Classes.active="{Binding SeccionActiva, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Usuarios}"
-                        HorizontalAlignment="Stretch"
-                        IsVisible="{Binding EsAdmin}">
-                    <Grid ColumnDefinitions="Auto,*">
-                        <i:Icon Grid.Column="0" Value="mdi-account-cog" Foreground="{DynamicResource SidebarTextoBrush}" />
-                        <TextBlock Grid.Column="1" Text="Usuarios" VerticalAlignment="Center"
-                                   Margin="10,0,0,0" TextTrimming="CharacterEllipsis" />
-                    </Grid>
-                </Button>
-
-                </StackPanel>
+                    </StackPanel>
                 </ScrollViewer>
             </DockPanel>
         </Border>

@@ -18,7 +18,7 @@ namespace StockApp.Presentation.UiTests;
 /// </summary>
 internal sealed class SesionFake : ICurrentSession
 {
-    private readonly IReadOnlySet<string> _permisos;
+    private IReadOnlySet<string> _permisos;
 
     public SesionFake(RolUsuario rol, params string[] permisos)
     {
@@ -31,7 +31,12 @@ internal sealed class SesionFake : ICurrentSession
     public RolUsuario? RolActual { get; }
     public IReadOnlySet<string> PermisosActuales => _permisos;
 
-    public void EstablecerPermisos(IReadOnlySet<string> permisos) { }
+    /// <summary>
+    /// Ruling 6: antes era un no-op. Ahora aplica de verdad el set recibido, igual que
+    /// ApiSession/InMemorySession en producción, para poder simular una revocación de permiso
+    /// en caliente (AuthServiceFake la llama tras "refrescar" desde el servidor).
+    /// </summary>
+    public void EstablecerPermisos(IReadOnlySet<string> permisos) => _permisos = permisos;
 
     public void IniciarSesion(Usuario usuario)
         => throw new NotSupportedException("No usado en este banco de pruebas.");
@@ -54,13 +59,36 @@ internal sealed class InfoAppFake : IInfoApp
 /// </summary>
 internal sealed class AuthServiceFake : IAuthService
 {
+    private readonly ICurrentSession? _session;
+    private readonly IReadOnlySet<string>? _permisosARefrescar;
+
+    public AuthServiceFake()
+    {
+    }
+
+    /// <summary>
+    /// Ruling 6: variante que simula el refresco real de permisos. AuthApiClient.ObtenerPermisosPropiosAsync
+    /// (producción) llama _session.EstablecerPermisos(permisos) como efecto de borde tras pegarle
+    /// al servidor; este fake reproduce exactamente eso para poder simular una revocación en
+    /// caliente sin un ApiClient real.
+    /// </summary>
+    public AuthServiceFake(ICurrentSession session, IReadOnlySet<string> permisosARefrescar)
+    {
+        _session = session;
+        _permisosARefrescar = permisosARefrescar;
+    }
+
     public Task<LoginResult> LoginAsync(string nombreUsuario, string contrasena)
         => throw new NotSupportedException("No usado en este banco de pruebas.");
 
     public Task LogoutAsync() => throw new NotSupportedException("No usado en este banco de pruebas.");
 
     public Task<IReadOnlySet<string>> ObtenerPermisosPropiosAsync()
-        => Task.FromResult<IReadOnlySet<string>>(new HashSet<string>());
+    {
+        var permisos = _permisosARefrescar ?? new HashSet<string>();
+        _session?.EstablecerPermisos(permisos);
+        return Task.FromResult(permisos);
+    }
 }
 
 /// <summary>
