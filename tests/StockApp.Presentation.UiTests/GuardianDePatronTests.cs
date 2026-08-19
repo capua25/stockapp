@@ -65,6 +65,7 @@ public class GuardianDePatronTests
     [InlineData(typeof(CalendarioPagosView), "Calendario de pagos", "FINANZAS")]
     [InlineData(typeof(PagosGastoView), "Pagos de la factura", "FINANZAS")]
     [InlineData(typeof(DocumentoListView), "Documentos administrativos", "DOCUMENTOS")]
+    [InlineData(typeof(DocumentoFormView), "Nuevo documento", "DOCUMENTOS")]
     public void Vista_TieneHeaderVistaConElTituloEsperado(Type tipoVista, string? titulo, string? eyebrow)
     {
         var vista = PatronHelpers.Montar(tipoVista);
@@ -109,6 +110,7 @@ public class GuardianDePatronTests
         typeof(CalendarioPagosView),
         typeof(PagosGastoView),
         typeof(DocumentoListView),
+        typeof(DocumentoFormView),
     };
 
     /// <summary>
@@ -197,12 +199,32 @@ public class GuardianDePatronTests
         typeof(NuevaImportacionView),
     };
 
+    /// <summary>
+    /// GAP DE PLAN encontrado en la Task 9.2 (Fase B, tanda 9): <c>DocumentoFormView</c> tiene dos
+    /// <c>Classes="primary"</c> gateados por estado del ViewModel -- "Guardar" (alta,
+    /// <c>IsVisible="{Binding EsNuevoDocumento}"</c>) y "Guardar cambios" (edicion,
+    /// <c>IsVisible="{Binding PuedeEditar}"</c>). Verificado en <c>DocumentoFormViewModel.cs:88</c>:
+    /// <c>PuedeEditar =&gt; !EsNuevoDocumento &amp;&amp; _documento is { EsActivo: true }</c> -- el
+    /// termino <c>!EsNuevoDocumento</c> hace que los dos NUNCA sean true a la vez en produccion.
+    /// Pero <see cref="PatronHelpers.Montar"/> no asigna DataContext (mismo mecanismo que el
+    /// Ruling B-20 documenta para los dos <c>HeaderVista</c> de esta vista): sin VM real, ambos
+    /// <c>IsVisible</c> caen al default `true` de la propiedad y el guardian ve dos primarios. Los
+    /// 10 casos de <c>DocumentoFormViewGatesTests</c> (Task 9.0) ya ejercitan las dos ramas con un
+    /// VM real via <c>ArbolVisual.EsVisibleEnArbol</c>; no se duplica esa cobertura aca.
+    /// </summary>
+    private static readonly HashSet<Type> VistasExentasPorPrimariosMutuamenteExcluyentesSinVm = new()
+    {
+        typeof(DocumentoFormView),
+    };
+
     [AvaloniaTheory]
     [MemberData(nameof(VistasDeLaTanda))]
     [MemberData(nameof(VistasEmbebidas))]
     public void Vista_NoTieneUnSegundoBotonPrimario(Type tipoVista)
     {
         if (VistasExentasPorEmbeberUnWizardP8.Contains(tipoVista))
+            return;
+        if (VistasExentasPorPrimariosMutuamenteExcluyentesSinVm.Contains(tipoVista))
             return;
 
         var vista = PatronHelpers.Montar(tipoVista);
