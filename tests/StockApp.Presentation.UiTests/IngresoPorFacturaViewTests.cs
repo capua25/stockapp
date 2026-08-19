@@ -90,20 +90,8 @@ public class IngresoPorFacturaViewTests
         Dispatcher.UIThread.RunJobs();
     }
 
-    /// <summary>Mismo criterio que TareaFormViewTests.EsVisibleEnArbol: IsVisible propio de un
-    /// control no cae en cascada, hay que caminar la cadena de ancestros para saber si de verdad
-    /// esta en pantalla (necesario para el panel de vencimiento, superpuesto con IsVisible).</summary>
-    private static bool EsVisibleEnArbol(Visual visual)
-    {
-        for (Visual? actual = visual; actual is not null; actual = actual.GetVisualParent())
-        {
-            if (actual is Control c && !c.IsVisible) return false;
-        }
-        return true;
-    }
-
     private static Button BotonPorTexto(Window window, string texto)
-        => window.GetVisualDescendants().OfType<Button>().First(b => Equals(b.Content, texto) && EsVisibleEnArbol(b));
+        => window.GetVisualDescendants().OfType<Button>().First(b => Equals(b.Content, texto) && ArbolVisual.EsVisibleEnArbol(b));
 
     /// <summary>
     /// Varios botones de esta vista comparten texto ("Cancelar"/"Confirmar" aparecen en el
@@ -171,7 +159,7 @@ public class IngresoPorFacturaViewTests
 
         var comboProducto = window.GetVisualDescendants().OfType<ComboBox>()
             .Single(c => ReferenceEquals(c.DataContext, fila));
-        Assert.True(EsVisibleEnArbol(comboProducto)); // EsProductoNuevo arranca en false: el combo debe estar visible.
+        Assert.True(ArbolVisual.EsVisibleEnArbol(comboProducto)); // EsProductoNuevo arranca en false: el combo debe estar visible.
         Assert.Contains(producto, comboProducto.ItemsSource!.Cast<ProductoDto>());
 
         comboProducto.SelectedItem = producto;
@@ -203,15 +191,15 @@ public class IngresoPorFacturaViewTests
         var fechaVencimiento = window.GetVisualDescendants().OfType<CalendarDatePicker>().ElementAt(1);
 
         Assert.False(vm.EsCredito);
-        Assert.False(EsVisibleEnArbol(fechaVencimiento)); // Contado: el panel de vencimiento arranca oculto.
+        Assert.False(ArbolVisual.EsVisibleEnArbol(fechaVencimiento)); // Contado: el panel de vencimiento arranca oculto.
 
         Clickear(window, checkCredito);
         Assert.True(vm.EsCredito);
-        Assert.True(EsVisibleEnArbol(fechaVencimiento));
+        Assert.True(ArbolVisual.EsVisibleEnArbol(fechaVencimiento));
 
         Clickear(window, checkCredito);
         Assert.False(vm.EsCredito);
-        Assert.False(EsVisibleEnArbol(fechaVencimiento));
+        Assert.False(ArbolVisual.EsVisibleEnArbol(fechaVencimiento));
     }
 
     /// <summary>
@@ -471,7 +459,7 @@ public class IngresoPorFacturaViewTests
         Assert.Equal(mensajeEsperado, vm.MensajeError);
         var mensajeVisible = window.GetVisualDescendants().OfType<TextBlock>()
             .Single(t => t.Text == mensajeEsperado);
-        Assert.True(EsVisibleEnArbol(mensajeVisible));
+        Assert.True(ArbolVisual.EsVisibleEnArbol(mensajeVisible));
     }
 
     [AvaloniaFact]
@@ -518,6 +506,6 @@ public class IngresoPorFacturaViewTests
         Assert.Equal(mensajeEsperado, vm.MensajeError);
         var mensajeVisible = window.GetVisualDescendants().OfType<TextBlock>()
             .Single(t => t.Text == mensajeEsperado);
-        Assert.True(EsVisibleEnArbol(mensajeVisible));
+        Assert.True(ArbolVisual.EsVisibleEnArbol(mensajeVisible));
     }
 }

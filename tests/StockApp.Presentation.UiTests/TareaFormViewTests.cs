@@ -79,25 +79,8 @@ public class TareaFormViewTests
         Dispatcher.UIThread.RunJobs();
     }
 
-    /// <summary>
-    /// IsVisible propio de un control NO cae en cascada automaticamente al valor del ancestro en
-    /// Avalonia (un TextBox dentro de un StackPanel con IsVisible=False sigue reportando su
-    /// propio IsVisible=True) -- MantenimientoViewTests.cs ya lo documenta ("GetVisualDescendants
-    /// encuentra controles fuera de vista igual"). Caminamos la cadena de ancestros para saber si
-    /// de verdad esta en pantalla, necesario porque TareaFormView superpone 3 paneles (alta/
-    /// detalle/notas) en el mismo arbol y se turnan por IsVisible.
-    /// </summary>
-    private static bool EsVisibleEnArbol(Visual visual)
-    {
-        for (Visual? actual = visual; actual is not null; actual = actual.GetVisualParent())
-        {
-            if (actual is Control c && !c.IsVisible) return false;
-        }
-        return true;
-    }
-
     private static Button BotonVisiblePorTexto(Window window, string texto)
-        => window.GetVisualDescendants().OfType<Button>().First(b => Equals(b.Content, texto) && EsVisibleEnArbol(b));
+        => window.GetVisualDescendants().OfType<Button>().First(b => Equals(b.Content, texto) && ArbolVisual.EsVisibleEnArbol(b));
 
     [AvaloniaFact]
     public void ModoAlta_MuestraTituloDescripcionFechaYBotonesGuardarVolver()
@@ -110,12 +93,12 @@ public class TareaFormViewTests
         // Descripcion); el picker se verifica aparte mas abajo.
         var textBoxesVisibles = window.GetVisualDescendants().OfType<TextBox>()
             .Where(t => t.FindAncestorOfType<CalendarDatePicker>() is null)
-            .Where(EsVisibleEnArbol)
+            .Where(ArbolVisual.EsVisibleEnArbol)
             .ToList();
         Assert.Equal(2, textBoxesVisibles.Count); // Titulo + Descripcion
 
         var fechaPicker = window.GetVisualDescendants().OfType<CalendarDatePicker>().Single();
-        Assert.True(EsVisibleEnArbol(fechaPicker));
+        Assert.True(ArbolVisual.EsVisibleEnArbol(fechaPicker));
 
         Assert.True(BotonVisiblePorTexto(window, "Guardar").IsVisible);
         Assert.True(BotonVisiblePorTexto(window, "Volver").IsVisible);
@@ -151,7 +134,7 @@ public class TareaFormViewTests
     {
         var (window, vm, servicio, nav) = MontarParaCrear();
 
-        var titulo = window.GetVisualDescendants().OfType<TextBox>().Where(EsVisibleEnArbol).First();
+        var titulo = window.GetVisualDescendants().OfType<TextBox>().Where(ArbolVisual.EsVisibleEnArbol).First();
         titulo.Focus();
         titulo.Text = "Reparar bache en calle Rivera";
         Dispatcher.UIThread.RunJobs();
@@ -190,7 +173,7 @@ public class TareaFormViewTests
 
         Assert.Equal(2, vm.Notas.Count);
         var textos = window.GetVisualDescendants().OfType<TextBlock>()
-            .Where(EsVisibleEnArbol).Select(t => t.Text).ToList();
+            .Where(ArbolVisual.EsVisibleEnArbol).Select(t => t.Text).ToList();
         Assert.Contains("primera nota", textos);
         Assert.Contains("segunda nota", textos);
     }
@@ -204,7 +187,7 @@ public class TareaFormViewTests
         var tarea = new Tarea { Id = 5, Titulo = "Bache" };
         var (window, vm, servicio, _) = MontarParaVer(tarea);
 
-        var cajaNota = window.GetVisualDescendants().OfType<TextBox>().Where(EsVisibleEnArbol).Single();
+        var cajaNota = window.GetVisualDescendants().OfType<TextBox>().Where(ArbolVisual.EsVisibleEnArbol).Single();
         cajaNota.Focus();
         cajaNota.Text = "avance del dia";
         Dispatcher.UIThread.RunJobs();
@@ -217,7 +200,7 @@ public class TareaFormViewTests
         Assert.Contains((5, "avance del dia"), servicio.NotasAgregadas);
         Assert.Single(vm.Notas);
         var textos = window.GetVisualDescendants().OfType<TextBlock>()
-            .Where(EsVisibleEnArbol).Select(t => t.Text);
+            .Where(ArbolVisual.EsVisibleEnArbol).Select(t => t.Text);
         Assert.Contains("avance del dia", textos);
     }
 
@@ -228,7 +211,7 @@ public class TareaFormViewTests
         var (window, vm, _, _) = MontarParaVer(tarea, rol: RolUsuario.Admin);
 
         Assert.True(vm.MuestraCambioPrioridad);
-        var combo = window.GetVisualDescendants().OfType<ComboBox>().Where(EsVisibleEnArbol).ToList();
+        var combo = window.GetVisualDescendants().OfType<ComboBox>().Where(ArbolVisual.EsVisibleEnArbol).ToList();
         Assert.Single(combo);
         Assert.True(BotonVisiblePorTexto(window, "Actualizar prioridad").IsVisible);
     }
@@ -246,9 +229,9 @@ public class TareaFormViewTests
         var (window, vm, _, _) = MontarParaVer(tarea, rol: RolUsuario.Operador);
 
         Assert.False(vm.MuestraCambioPrioridad);
-        Assert.DoesNotContain(window.GetVisualDescendants().OfType<ComboBox>(), EsVisibleEnArbol);
+        Assert.DoesNotContain(window.GetVisualDescendants().OfType<ComboBox>(), ArbolVisual.EsVisibleEnArbol);
         Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(),
-            b => Equals(b.Content, "Actualizar prioridad") && EsVisibleEnArbol(b));
+            b => Equals(b.Content, "Actualizar prioridad") && ArbolVisual.EsVisibleEnArbol(b));
     }
 
     [AvaloniaFact]
@@ -258,7 +241,7 @@ public class TareaFormViewTests
         var (window, vm, _, _) = MontarParaVer(tarea, rol: RolUsuario.Admin);
 
         Assert.False(vm.MuestraCambioPrioridad);
-        Assert.DoesNotContain(window.GetVisualDescendants().OfType<ComboBox>(), EsVisibleEnArbol);
+        Assert.DoesNotContain(window.GetVisualDescendants().OfType<ComboBox>(), ArbolVisual.EsVisibleEnArbol);
     }
 
     [AvaloniaFact]
@@ -267,7 +250,7 @@ public class TareaFormViewTests
         var tarea = new Tarea { Id = 5, Titulo = "x", Estado = EstadoTarea.Pendiente, Prioridad = PrioridadTarea.Media };
         var (window, vm, servicio, _) = MontarParaVer(tarea, rol: RolUsuario.Admin);
 
-        var combo = window.GetVisualDescendants().OfType<ComboBox>().Where(EsVisibleEnArbol).Single();
+        var combo = window.GetVisualDescendants().OfType<ComboBox>().Where(ArbolVisual.EsVisibleEnArbol).Single();
         combo.SelectedItem = PrioridadTarea.Alta;
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(PrioridadTarea.Alta, vm.PrioridadSeleccionada);

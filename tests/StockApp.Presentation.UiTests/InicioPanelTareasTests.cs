@@ -169,15 +169,6 @@ public class InicioPanelTareasTests
     private static Border BuscarBorderPorNombre(Window window, string nombre)
         => window.GetVisualDescendants().OfType<Border>().First(b => b.Name == nombre);
 
-    private static bool IsVisibleEnArbol(Visual visual)
-    {
-        for (Visual? actual = visual; actual is not null; actual = actual.GetVisualParent())
-        {
-            if (actual is Control c && !c.IsVisible) return false;
-        }
-        return true;
-    }
-
     [AvaloniaFact]
     public void Montar_ConTareasVencidasYProximas_MuestraElPanelConLasFilasCorrectas()
     {
@@ -213,7 +204,7 @@ public class InicioPanelTareasTests
 
         Assert.False(vm.MostrarPanelTareas);
         var border = BuscarBorderPorNombre(window, "BorderPanelTareas");
-        Assert.False(IsVisibleEnArbol(border));
+        Assert.False(ArbolVisual.EsVisibleEnArbol(border));
     }
 
     /// <summary>

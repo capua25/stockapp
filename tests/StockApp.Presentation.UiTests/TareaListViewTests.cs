@@ -98,16 +98,7 @@ public class TareaListViewTests
         var seccionCanceladas = window.GetVisualDescendants().OfType<TextBlock>()
             .FirstOrDefault(t => t.Text == "Canceladas");
         Assert.NotNull(seccionCanceladas);
-        Assert.False(IsVisibleEnArbol(seccionCanceladas!));
-    }
-
-    private static bool IsVisibleEnArbol(Visual visual)
-    {
-        for (Visual? actual = visual; actual is not null; actual = actual.GetVisualParent())
-        {
-            if (actual is Control c && !c.IsVisible) return false;
-        }
-        return true;
+        Assert.False(ArbolVisual.EsVisibleEnArbol(seccionCanceladas!));
     }
 
     [AvaloniaFact]

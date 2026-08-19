@@ -85,6 +85,15 @@ public class TestApp : Avalonia.Application
         {
             Source = new Uri("avares://StockApp.Presentation/Themes/Controls.axaml")
         });
+
+        // DESPUES del StyleInclude del Fluent.xaml del DataGrid y de Controls.axaml, mismo orden
+        // exacto que App.axaml. Sin esto, las grillas se testean contra Fluent crudo. El guardian
+        // de este include llega con el estilo real de grilla (tanda 2): hoy no hay nada observable
+        // que distinga cargarlo de no cargarlo.
+        Styles.Add(new StyleInclude(new Uri("avares://StockApp.Presentation.UiTests/"))
+        {
+            Source = new Uri("avares://StockApp.Presentation/Themes/DataGrid.axaml")
+        });
     }
 
     public static AppBuilder BuildAvaloniaApp()

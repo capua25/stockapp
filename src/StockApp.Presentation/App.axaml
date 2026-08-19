@@ -2,8 +2,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="StockApp.Presentation.App"
              xmlns:local="using:StockApp.Presentation"
-             RequestedThemeVariant="Default">
-             <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
+             RequestedThemeVariant="Light">
+             <!-- Tema fijo claro (spec 2026-08-18). Todos los tokens de Themes/Tokens.axaml son
+                  de tema claro y no hay ThemeDictionaries: con "Default", en un SO en modo oscuro
+                  FluentTheme renderizaba en oscuro lo que él controla (fondo de ventana, TextBox,
+                  ComboBox, DataGrid, scrollbars) mientras los tokens propios seguían claros,
+                  resultado ilegible. La app tiene aspecto fijo, no negociado con el SO. -->
 
     <Application.DataTemplates>
         <local:ViewLocator/>

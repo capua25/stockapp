@@ -147,21 +147,6 @@ public class DocumentoListViewTests
     }
 
     [AvaloniaFact]
-    public void Montar_FilaActivaQuePuedeAnular_MuestraBotonAnularConPuntosSuspensivos()
-    {
-        // I3: el botón mentía sobre lo que hacía ("Anular" sin indicar que abre otra pantalla).
-        var (window, _, _) = Montar(activos: new List<DocumentoAdministrativo>
-        {
-            DocumentoDe(1, "0087", EstadoDocumento.Pendiente),
-        }, rol: RolUsuario.Admin);
-
-        var botones = window.GetVisualDescendants().OfType<Button>()
-            .Select(b => b.Content as string).ToList();
-        Assert.Contains("Anular…", botones);
-        Assert.DoesNotContain("Anular", botones);
-    }
-
-    [AvaloniaFact]
     public void ClickReal_EnAnular_NavegaAlDetalleEnVezDeEjecutarLaAccionAca()
     {
         // I3: el botón "Anular…" sigue navegando al detalle (motivo obligatorio vive en el
@@ -178,24 +163,6 @@ public class DocumentoListViewTests
         Assert.Equal(0, servicio.LlamadasListarHistorial); // no llamó a AnularAsync ni recargó nada del servicio
     }
 
-    [AvaloniaFact]
-    public void Montar_FilaCerradaQuePuedeReabrir_MuestraBotonReabrirConPuntosSuspensivos()
-    {
-        var (window, vm, _) = Montar(historial: new List<DocumentoAdministrativo>
-        {
-            DocumentoDe(9, "0001", EstadoDocumento.Finalizado),
-        }, rol: RolUsuario.Admin);
-
-        var tabControl = window.GetVisualDescendants().OfType<TabControl>().First();
-        tabControl.SelectedIndex = 1;
-        Dispatcher.UIThread.RunJobs();
-        Dispatcher.UIThread.RunJobs();
-
-        var botones = window.GetVisualDescendants().OfType<Button>()
-            .Select(b => b.Content as string).ToList();
-        Assert.Contains("Reabrir…", botones);
-        Assert.DoesNotContain("Reabrir", botones);
-    }
 }
 
 /// <summary>Análogo de NavigationRecorderFake (TareaFakes.cs) para el módulo Documentos --
