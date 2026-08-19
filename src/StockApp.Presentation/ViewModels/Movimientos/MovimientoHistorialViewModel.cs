@@ -25,12 +25,6 @@ namespace StockApp.Presentation.ViewModels.Movimientos;
 public sealed record OpcionTipoMovimiento(string Nombre, TipoMovimiento? Valor);
 
 /// <summary>
-/// Opción de filtro por producto para el ComboBox del historial.
-/// Valor=null representa "Todos" (sin filtro de producto).
-/// </summary>
-public sealed record OpcionProducto(string Nombre, ProductoDto? Valor);
-
-/// <summary>
 /// ViewModel del historial de movimientos de stock con filtros y recálculo.
 /// </summary>
 public partial class MovimientoHistorialViewModel : ViewModelBase
@@ -73,25 +67,37 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
     [ObservableProperty]
     private ProductoDto? _productoSeleccionadoParaRecalcular;
 
-    /// <summary>Opción de producto seleccionada en el ComboBox de filtro (Valor=null = "Todos").</summary>
+    /// <summary>
+    /// Producto elegido en el AutoCompleteBox de filtro (bugfix 2026-08-19, migración del
+    /// ComboBox con precarga completa): SIN wrapper "Todos" explícito, a diferencia del filtro
+    /// de usuario de AuditoriaLogViewModel -- acá "sin selección" (null) YA ES "Todos" de forma
+    /// natural (ver <see cref="OnProductoFiltroSeleccionadoChanged"/>), porque no hay una lista
+    /// fija precargada donde insertar un ítem "Todos": es un campo de búsqueda, se limpia
+    /// borrando el texto/la selección.
+    /// </summary>
     [ObservableProperty]
-    private OpcionProducto? _productoFiltroSeleccionado;
+    private ProductoDto? _productoFiltroSeleccionado;
 
     /// <summary>Opción de tipo seleccionada en el ComboBox de filtro (Valor=null = "Todos").</summary>
     [ObservableProperty]
     private OpcionTipoMovimiento? _tipoFiltroSeleccionado;
 
     /// <summary>
-    /// Gatea la VISIBILIDAD del combo "Producto" (bugfix 2026-08-16, familia de 323c007/
+    /// Gatea la VISIBILIDAD del filtro "Producto" (bugfix 2026-08-16, familia de 323c007/
     /// 1ab2cd8, PERO variante distinta): a diferencia de Entrada/Salida e Ingreso por
-    /// factura, acá el combo es un FILTRO, no un campo obligatorio — GET /movimientos/
+    /// factura, acá el filtro es OPCIONAL, no un campo obligatorio — GET /movimientos/
     /// historial (MovimientosEndpoints.cs) exige el MISMO permiso que ya gatea el sidebar
     /// (RegistrarMovimientos), sin relación con GestionarProductos, así que el resto de la
     /// pantalla (Tipo, Desde/Hasta, la grilla) sigue siendo perfectamente usable sin él. Por
     /// eso NO se agrega GestionarProductos al gate del sidebar (eso sería esconder el
-    /// historial entero a alguien que puede consultarlo); en cambio, si
-    /// IProductoService.BuscarAsync (GET /productos, sí exige GestionarProductos) devuelve
-    /// 403, se oculta solo este combo y el resto de InicializarAsync sigue su curso.
+    /// historial entero a alguien que puede consultarlo).
+    ///
+    /// Dos momentos de detección distintos (bugfix 2026-08-19, ver
+    /// <see cref="InicializarAsync"/> y <see cref="BuscarProductosParaFiltroInternalAsync"/>):
+    /// (a) sin GestionarProductos en la sesión, se apaga de entrada, sin HTTP; (b) con el
+    /// permiso "aparente" pero el servidor rechazando igual (403 real), se apaga recién cuando
+    /// el usuario busca un producto en el AutoCompleteBox -- ya no hay una carga completa en
+    /// InicializarAsync que sirva de punto único de detección temprana.
     /// </summary>
     [ObservableProperty]
     private bool _puedeFiltrarPorProducto = true;
@@ -124,9 +130,6 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
     /// </summary>
     public DataGridCollectionView ItemsView { get; }
 
-    /// <summary>Opciones de producto disponibles para el ComboBox de filtro ("Todos" + productos activos).</summary>
-    public ObservableCollection<OpcionProducto> Productos { get; } = new();
-
     /// <summary>Opciones fijas para el ComboBox de filtro por tipo ("Todos", "Entrada", "Salida").</summary>
     public ObservableCollection<OpcionTipoMovimiento> TiposDisponibles { get; } = new()
     {
@@ -139,11 +142,26 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
     /// Delegado para <c>AutoCompleteBox.AsyncPopulator</c> del campo "Producto a recalcular"
     /// (bugfix 2026-08-19): búsqueda SERVER-SIDE vía IProductoService.BuscarPorTextoAsync (ILIKE
     /// sobre Codigo/CodigoBarras/Nombre). El catálogo se estima en 100-1000 productos en
-    /// producción, así que NO se precarga completo (a diferencia de Productos, el combo del
-    /// filtro) — el propio AutoCompleteBox ya trae debounce (MinimumPopulateDelay) y cancela
-    /// búsquedas obsoletas vía el CancellationToken que recibe.
+    /// producción, así que NO se precarga completo — el propio AutoCompleteBox ya trae debounce
+    /// (MinimumPopulateDelay) y cancela búsquedas obsoletas vía el CancellationToken que recibe.
+    /// Sin catch de UnauthorizedAccessException acá: este campo lo gatea
+    /// <see cref="PuedeRecalcularStock"/> (Permisos.RecalcularStock), un permiso INDEPENDIENTE
+    /// de GestionarProductos (que exige BuscarPorTextoAsync) -- si alguna vez se necesita
+    /// manejar ese 403 puntual, tiene que ser un mecanismo propio, no compartir el catch de
+    /// <see cref="BuscarProductosParaFiltroAsync"/> (que apaga <see cref="PuedeFiltrarPorProducto"/>,
+    /// un flag de un campo completamente distinto).
     /// </summary>
     public Func<string?, CancellationToken, Task<IEnumerable<object>>> BuscarProductosAsync { get; }
+
+    /// <summary>
+    /// Delegado para <c>AutoCompleteBox.AsyncPopulator</c> del filtro "Producto" de la barra de
+    /// arriba (bugfix 2026-08-19): migración del ComboBox con precarga completa
+    /// (IProductoService.BuscarAsync en InicializarAsync) a búsqueda server-side, mismo
+    /// mecanismo que <see cref="BuscarProductosAsync"/> pero en un delegado APARTE porque el
+    /// manejo de errores es distinto (ver el catch de abajo y el comentario de
+    /// <see cref="InicializarAsync"/>).
+    /// </summary>
+    public Func<string?, CancellationToken, Task<IEnumerable<object>>> BuscarProductosParaFiltroAsync { get; }
 
     public MovimientoHistorialViewModel(
         IMovimientoStockService service,
@@ -163,10 +181,19 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
         _tipoFiltroSeleccionado = TiposDisponibles[0];
 
         BuscarProductosAsync = BuscarProductosInternalAsync;
+        BuscarProductosParaFiltroAsync = BuscarProductosParaFiltroInternalAsync;
     }
 
-    partial void OnProductoFiltroSeleccionadoChanged(OpcionProducto? value)
-        => FiltroProductoId = value?.Valor?.Id;
+    /// <summary>
+    /// "Sin selección" ya ES "Todos" (bugfix 2026-08-19): a diferencia del ComboBox viejo, que
+    /// necesitaba un ítem "Todos" explícito porque SIEMPRE hay algo seleccionado en un
+    /// ComboBox, un AutoCompleteBox sin selección (SelectedItem=null, texto vacío o borrado)
+    /// es un estado perfectamente natural, y FiltroProductoId=null YA significa "sin filtro de
+    /// producto" en <see cref="BuscarAsync"/> (HistorialMovimientoFiltro.ProductoId=null trae
+    /// todo el historial). No hace falta modelar "Todos" como un valor propio.
+    /// </summary>
+    partial void OnProductoFiltroSeleccionadoChanged(ProductoDto? value)
+        => FiltroProductoId = value?.Id;
 
     partial void OnTipoFiltroSeleccionadoChanged(OpcionTipoMovimiento? value)
         => FiltroTipo = value?.Valor;
@@ -181,26 +208,66 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Inicialización de la vista: carga los productos activos para el filtro
-    /// y el historial completo. Se invoca una sola vez al mostrar la vista
-    /// (no hay hook de navegación que lo dispare, ver code-behind).
+    /// Bugfix 2026-08-19 (evolución del fix 2026-08-16, ver <see cref="InicializarAsync"/>):
+    /// sin la carga completa de InicializarAsync ya no hay un único punto donde detectar el
+    /// 403 REAL del servidor (sesión con el permiso "aparente" pero el servidor igual rechaza
+    /// -- permiso revocado entre el chequeo y la llamada). Se detecta acá, en el momento en que
+    /// el usuario efectivamente busca: si BuscarPorTextoAsync rechaza, se oculta el filtro
+    /// reactivamente (<see cref="PuedeFiltrarPorProducto"/>=false) y se devuelve una lista
+    /// vacía para que el AutoCompleteBox no explote (no propaga -- ver
+    /// AutoCompleteBox.PopulateAsync, que solo atrapa TaskCanceledException, cualquier otra
+    /// excepción quedaría sin observar).
+    /// </summary>
+    private async Task<IEnumerable<object>> BuscarProductosParaFiltroInternalAsync(string? texto, CancellationToken ct)
+    {
+        try
+        {
+            var resultados = await _productoService.BuscarPorTextoAsync(texto);
+            return resultados;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            PuedeFiltrarPorProducto = false;
+            return Array.Empty<object>();
+        }
+    }
+
+    /// <summary>
+    /// Inicialización de la vista: decide si el filtro "Producto" queda visible y carga el
+    /// historial completo. Se invoca una sola vez al mostrar la vista (no hay hook de
+    /// navegación que lo dispare, ver code-behind).
     /// </summary>
     /// <remarks>
-    /// Bugfix 2026-08-16 (reporte real, opcombo/Combo2026!): GET /productos
-    /// (IProductoService.BuscarAsync) exige GestionarProductos, permiso que el sidebar NO exige
-    /// para esta pantalla (solo RegistrarMovimientos, igual que GET /movimientos/historial). La
-    /// primera versión de este fix atrapaba UnauthorizedAccessException acá (llamar-y-atrapar):
-    /// evitaba el crash, pero NO evitaba el modal "No tenés permiso para esta operación", porque
+    /// Bugfix 2026-08-16 (reporte real, opcombo/Combo2026!): GET /productos exige
+    /// GestionarProductos, permiso que el sidebar NO exige para esta pantalla (solo
+    /// RegistrarMovimientos, igual que GET /movimientos/historial). La primera versión de este
+    /// fix atrapaba UnauthorizedAccessException acá (llamar-y-atrapar): evitaba el crash, pero
+    /// NO evitaba el modal "No tenés permiso para esta operación", porque
     /// AuthTokenHandler.SendAsync dispara ApiSession.DispararAccesoRevocado() de forma
     /// INCONDICIONAL ante cualquier 403, en la capa de transporte, ANTES de que la excepción
-    /// llegue a este catch (ver deuda documentada en AuthTokenHandler.SendAsync). Por eso ahora
-    /// se CONSULTA el permiso ANTES de llamar (mismo mecanismo que ShellMainViewModel.Puede* /
-    /// GastosViewModel.PuedeRegistrarPagos: ICurrentSession.RolActual + PermisosActuales): si no
-    /// lo tiene, jamás se genera el 403, así que AuthTokenHandler nunca lo anuncia. El
-    /// try/catch de UnauthorizedAccessException se CONSERVA como red de contención (el permiso
-    /// puede revocarse entre el chequeo y la llamada), no como mecanismo principal. En cualquier
-    /// caso, se oculta el combo vía <see cref="PuedeFiltrarPorProducto"/> y CargarAsync corre
-    /// igual: el historial completo (sin filtrar por producto) sigue siendo útil.
+    /// llegue a un catch acá (ver deuda documentada en AuthTokenHandler.SendAsync). Por eso se
+    /// CONSULTA el permiso ANTES de mostrar el filtro (mismo mecanismo que
+    /// ShellMainViewModel.Puede* / GastosViewModel.PuedeRegistrarPagos: ICurrentSession.RolActual
+    /// + PermisosActuales): si no lo tiene, jamás se genera el 403, así que AuthTokenHandler
+    /// nunca lo anuncia.
+    ///
+    /// Bugfix 2026-08-19 (evolución del fix anterior -- ComboBox con precarga completa
+    /// reemplazado por AutoCompleteBox de búsqueda server-side, ver
+    /// <see cref="BuscarProductosParaFiltroAsync"/>): la versión ANTERIOR de este método hacía
+    /// una llamada real a IProductoService.BuscarAsync ACÁ (con el permiso ya confirmado por
+    /// sesión) para precargar el catálogo completo, y el catch de UnauthorizedAccessException
+    /// de ESA llamada era la red de contención que detectaba el 403 real del servidor (permiso
+    /// revocado entre el chequeo de sesión y la llamada). Esa llamada YA NO EXISTE: cargar el
+    /// catálogo entero de antemano es EXACTAMENTE el problema que este fix elimina (el usuario
+    /// estima 100-1000 productos en producción). Sin una llamada eager, no hay ningún punto en
+    /// InicializarAsync donde detectar ese 403 real -- PuedeFiltrarPorProducto queda en TRUE de
+    /// forma OPTIMISTA (el chequeo de sesión, sin HTTP, es la única señal disponible acá). La
+    /// red de contención se movió al lugar donde SÍ hay una llamada real al servidor: la
+    /// primera búsqueda efectiva del usuario, ver el catch en
+    /// <see cref="BuscarProductosParaFiltroInternalAsync"/>. Trade-off documentado: con esto,
+    /// el filtro puede aparecer visible un instante y ocultarse recién cuando el usuario
+    /// busca (en vez de estar oculto desde el arranque como antes) -- inevitable sin volver a
+    /// pagar el costo de la precarga completa que motivó este cambio.
     /// </remarks>
     public async Task InicializarAsync()
     {
@@ -208,28 +275,7 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
             _session.RolActual == RolUsuario.Admin ||
             _session.PermisosActuales.Contains(Permisos.GestionarProductos);
 
-        if (!puedeVerProductos)
-        {
-            PuedeFiltrarPorProducto = false;
-        }
-        else
-        {
-            try
-            {
-                var productos = await _productoService.BuscarAsync(null, null, null);
-                Productos.Clear();
-                Productos.Add(new OpcionProducto("Todos", null));
-                foreach (var p in productos.Where(p => p.Activo))
-                    Productos.Add(new OpcionProducto(p.Nombre, p));
-
-                ProductoFiltroSeleccionado = Productos[0];
-                PuedeFiltrarPorProducto = true;
-            }
-            catch (UnauthorizedAccessException)
-            {
-                PuedeFiltrarPorProducto = false;
-            }
-        }
+        PuedeFiltrarPorProducto = puedeVerProductos;
 
         await CargarAsync();
     }
@@ -273,6 +319,15 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
             : null;
 
     /// <summary>
+    /// Gatea el botón "Recalcular stock" en la UI (bugfix 2026-08-19): sin selección, apretar
+    /// el botón antes hacía RecalcularAsync retornar en silencio -- ninguna señal de que "no
+    /// pasó nada" porque no había producto elegido. Mismo criterio que
+    /// MovimientoRegistroViewModelBase con ProductoSeleccionado != null. El guard interno de
+    /// RecalcularAsync se conserva igual (ExecuteAsync invocado directo bypasea CanExecute).
+    /// </summary>
+    private bool PuedeEjecutarRecalcular() => ProductoIdParaRecalcular is not null;
+
+    /// <summary>
     /// ProductoIdParaRecalcular se tipea a mano en un campo libre, sin relación con el filtro
     /// activo de la grilla — si ese producto no está en el resultado filtrado (caso normal),
     /// CargarAsync no cambia una sola fila y el click queda sin ninguna señal (reporte de uso
@@ -286,15 +341,6 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
     /// UnauthorizedAccessException se CONSERVA como red de contención (el permiso puede
     /// revocarse entre el chequeo y la llamada), no como mecanismo principal.
     /// </remarks>
-    /// <summary>
-    /// Gatea el botón "Recalcular stock" en la UI (bugfix 2026-08-19): sin selección, apretar
-    /// el botón antes hacía RecalcularAsync retornar en silencio -- ninguna señal de que "no
-    /// pasó nada" porque no había producto elegido. Mismo criterio que
-    /// MovimientoRegistroViewModelBase con ProductoSeleccionado != null. El guard interno de
-    /// RecalcularAsync se conserva igual (ExecuteAsync invocado directo bypasea CanExecute).
-    /// </summary>
-    private bool PuedeEjecutarRecalcular() => ProductoIdParaRecalcular is not null;
-
     [RelayCommand(CanExecute = nameof(PuedeEjecutarRecalcular))]
     private async Task RecalcularAsync()
     {

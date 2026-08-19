@@ -35,7 +35,8 @@
                                       AsyncPopulator="{Binding BuscarProductosAsync}"
                                       SelectedItem="{Binding ProductoSeleccionadoParaRecalcular}"
                                       ValueMemberBinding="{Binding Nombre, DataType={x:Type cat:ProductoDto}}"
-                                      FilterMode="None">
+                                      FilterMode="None"
+                                      MinimumPopulateDelay="0:0:0.3">
                         <AutoCompleteBox.ItemTemplate>
                             <DataTemplate x:DataType="cat:ProductoDto">
                                 <TextBlock Text="{Binding Nombre}" />
@@ -55,22 +56,30 @@
 
                 <!-- Barra de filtros -->
                 <WrapPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
-                    <!-- Filtro por producto: oculto si GET /productos devuelve 403 (bugfix
-                         2026-08-16, ver PuedeFiltrarPorProducto) - a diferencia de Entrada/
-                         Salida e Ingreso por factura, este combo es un FILTRO, no un campo
-                         obligatorio, asi que el resto del historial sigue siendo usable sin
-                         GestionarProductos. -->
+                    <!-- Filtro por producto: oculto si no hay GestionarProductos en la sesion,
+                         o si una busqueda real choca con un 403 del servidor (bugfix 2026-08-16
+                         + evolucion 2026-08-19, ver PuedeFiltrarPorProducto) - a diferencia de
+                         Entrada/Salida e Ingreso por factura, este filtro es OPCIONAL, asi que
+                         el resto del historial sigue siendo usable sin GestionarProductos.
+                         Migrado de ComboBox con precarga completa a AutoCompleteBox con
+                         busqueda server-side (mismo motivo que "Producto a recalcular" mas
+                         arriba): sin seleccion = "Todos" (no hay opcion "Todos" explicita, ver
+                         OnProductoFiltroSeleccionadoChanged). -->
                     <StackPanel Spacing="{DynamicResource Espacio1}" Margin="0,0,12,8" IsVisible="{Binding PuedeFiltrarPorProducto}">
                         <TextBlock Text="Producto" Classes="caption" />
-                        <ComboBox ItemsSource="{Binding Productos}"
-                                  SelectedItem="{Binding ProductoFiltroSeleccionado}"
-                                  MinWidth="180">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
+                        <AutoCompleteBox MinWidth="180"
+                                          PlaceholderText="Todos"
+                                          AsyncPopulator="{Binding BuscarProductosParaFiltroAsync}"
+                                          SelectedItem="{Binding ProductoFiltroSeleccionado}"
+                                          ValueMemberBinding="{Binding Nombre, DataType={x:Type cat:ProductoDto}}"
+                                          FilterMode="None"
+                                          MinimumPopulateDelay="0:0:0.3">
+                            <AutoCompleteBox.ItemTemplate>
+                                <DataTemplate x:DataType="cat:ProductoDto">
                                     <TextBlock Text="{Binding Nombre}" />
                                 </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
+                            </AutoCompleteBox.ItemTemplate>
+                        </AutoCompleteBox>
                     </StackPanel>
 
                     <StackPanel Spacing="4" Margin="0,0,12,8">

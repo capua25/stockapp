@@ -54,7 +54,6 @@ public class MovimientoHistorialViewModelTests
         Mock<IConfirmacionService> confirmacionMock)
         Crear(
             IReadOnlyList<MovimientoHistorialDto>? items = null,
-            IReadOnlyList<ProductoDto>? productos = null,
             RolUsuario rol = RolUsuario.Admin,
             IEnumerable<string>? permisos = null)
     {
@@ -67,9 +66,11 @@ public class MovimientoHistorialViewModelTests
             .Setup(s => s.ObtenerHistorialAsync(It.IsAny<HistorialMovimientoFiltro>()))
             .ReturnsAsync(items ?? new List<MovimientoHistorialDto>());
 
-        productoSvcMock
-            .Setup(s => s.BuscarAsync(null, null, null))
-            .ReturnsAsync(productos ?? new List<ProductoDto>());
+        // IProductoService.BuscarAsync (el overload de 3 parámetros) YA NO se invoca desde
+        // este ViewModel (bugfix 2026-08-19: se eliminó la precarga completa del catálogo en
+        // InicializarAsync). Sin stub acá a propósito: si algún cambio futuro reintroduce esa
+        // llamada sin querer, el mock (loose) devuelve null y el consumo revienta con NPE en
+        // vez de pasar desapercibido con una lista vacía.
 
         var sessionMock = new Mock<ICurrentSession>();
         sessionMock.Setup(s => s.RolActual).Returns(rol);
@@ -288,35 +289,23 @@ public class MovimientoHistorialViewModelTests
     }
 
     // ── InicializarAsync / filtro de producto y tipo ──────────────────────────
+    // Bugfix 2026-08-19: el ComboBox con precarga completa del catálogo se migró a un
+    // AutoCompleteBox de búsqueda server-side, igual que "Producto a recalcular". Los tests
+    // que verificaban la precarga (Productos.Count, "Todos" preseleccionado, BuscarAsync
+    // invocado con el permiso presente) quedaron sin premisa -- se reemplazan por los de abajo,
+    // que verifican el comportamiento NUEVO: cero llamadas eager a IProductoService desde
+    // InicializarAsync (con o sin permiso) y detección del 403 real movida a
+    // BuscarProductosParaFiltroAsync (la única llamada real que queda).
 
     [Fact]
-    public async Task InicializarAsync_PopulaOpcionTodosYProductosActivos()
-    {
-        var productos = new List<ProductoDto>
-        {
-            CrearProducto(1, "Activo", activo: true),
-            CrearProducto(2, "Inactivo", activo: false),
-        };
-        var (vm, _, _, productoSvcMock, _) = Crear(productos: productos);
-
-        await vm.InicializarAsync();
-
-        productoSvcMock.Verify(s => s.BuscarAsync(null, null, null), Times.Once);
-        Assert.Equal(2, vm.Productos.Count);
-        Assert.Equal("Todos", vm.Productos[0].Nombre);
-        Assert.Null(vm.Productos[0].Valor);
-        Assert.Equal("Activo", vm.Productos[1].Nombre);
-    }
-
-    [Fact]
-    public async Task InicializarAsync_PreseleccionaOpcionTodos()
+    public async Task InicializarAsync_ConPermiso_NoPreseleccionaProductoYFiltroQuedaEnTodos()
     {
         var (vm, _, _, _, _) = Crear();
 
         await vm.InicializarAsync();
 
-        Assert.NotNull(vm.ProductoFiltroSeleccionado);
-        Assert.Null(vm.ProductoFiltroSeleccionado!.Valor);
+        // Sin wrapper "Todos" explícito (a diferencia del ComboBox viejo): null YA es "Todos".
+        Assert.Null(vm.ProductoFiltroSeleccionado);
         Assert.Null(vm.FiltroProductoId);
     }
 
@@ -333,68 +322,14 @@ public class MovimientoHistorialViewModelTests
     }
 
     /// <summary>
-    /// Bugfix 2026-08-16 (misma familia que 323c007/1ab2cd8, PERO variante distinta):
-    /// el combo de producto de esta pantalla es un FILTRO, no un campo obligatorio — a
-    /// diferencia de Entrada/Salida e Ingreso por factura, GET /movimientos/historial
-    /// (MovimientosEndpoints.cs) exige el MISMO permiso que ya gatea el sidebar
-    /// (RegistrarMovimientos), sin relación con GestionarProductos. Por eso acá NO se toca
-    /// el gate: si BuscarAsync (productos) devuelve 403, el historial completo debe seguir
-    /// cargando igual — antes del fix, InicializarAsync llamaba BuscarAsync ANTES de
-    /// CargarAsync, así que una excepción no atrapada abortaba toda la inicialización,
-    /// incluida la carga del historial (que no necesita GestionarProductos).
-    /// </summary>
-    [Fact]
-    public async Task InicializarAsync_ProductoServiceLanzaUnauthorized_CargaHistorialIgual()
-    {
-        var lista = new List<MovimientoHistorialDto> { CrearDto(1) };
-        var (vm, svcMock, _, productoSvcMock, _) = Crear(items: lista);
-        productoSvcMock
-            .Setup(s => s.BuscarAsync(null, null, null))
-            .ThrowsAsync(new UnauthorizedAccessException());
-
-        var excepcion = await Record.ExceptionAsync(() => vm.InicializarAsync());
-
-        Assert.Null(excepcion);
-        svcMock.Verify(s => s.ObtenerHistorialAsync(It.IsAny<HistorialMovimientoFiltro>()), Times.Once);
-        Assert.Single(vm.Items);
-    }
-
-    /// <summary>
-    /// Complemento del test anterior: además de no romper la carga, oculta el combo de
-    /// producto (IsVisible del filtro en la vista) para no dejar un ComboBox vacío sin
-    /// explicación — mismo criterio de "ocultar, no reventar" que PuedeRegistrarPagos.
-    /// </summary>
-    [Fact]
-    public async Task InicializarAsync_ProductoServiceLanzaUnauthorized_OcultaFiltroDeProducto()
-    {
-        var (vm, _, _, productoSvcMock, _) = Crear();
-        productoSvcMock
-            .Setup(s => s.BuscarAsync(null, null, null))
-            .ThrowsAsync(new UnauthorizedAccessException());
-
-        await vm.InicializarAsync();
-
-        Assert.False(vm.PuedeFiltrarPorProducto);
-    }
-
-    [Fact]
-    public async Task InicializarAsync_ProductoServiceOk_PuedeFiltrarPorProductoQuedaEnTrue()
-    {
-        var (vm, _, _, _, _) = Crear();
-
-        await vm.InicializarAsync();
-
-        Assert.True(vm.PuedeFiltrarPorProducto);
-    }
-
-    /// <summary>
-    /// Guardián de la CLASE de bug (2026-08-16, opcombo/Combo2026!): antes, InicializarAsync
-    /// llamaba a BuscarAsync directamente y confiaba en el catch de UnauthorizedAccessException
-    /// para no crashear. Eso no alcanza: AuthTokenHandler.SendAsync dispara
-    /// ApiSession.DispararAccesoRevocado() de forma INCONDICIONAL ante cualquier 403, en la capa
-    /// de transporte, antes de que la excepción llegue acá — así que aunque el catch evitaba el
-    /// crash, el modal "No tenés permiso" igual aparecía. El fix real es no generar el 403: si
-    /// no tiene GestionarProductos, ni siquiera se llama a BuscarAsync (Times.Never). Si alguien
+    /// Guardián de la CLASE de bug (2026-08-16, opcombo/Combo2026!), REFORZADO por el fix
+    /// 2026-08-19: antes, InicializarAsync llamaba a BuscarAsync directamente y confiaba en el
+    /// catch de UnauthorizedAccessException para no crashear. Eso no alcanza:
+    /// AuthTokenHandler.SendAsync dispara ApiSession.DispararAccesoRevocado() de forma
+    /// INCONDICIONAL ante cualquier 403, en la capa de transporte, antes de que la excepción
+    /// llegue acá — así que aunque el catch evitaba el crash, el modal "No tenés permiso" igual
+    /// aparecía. El fix real es no generar el 403: si no tiene GestionarProductos, ni siquiera
+    /// se llama a IProductoService (ninguno de los dos overloads, Times.Never). Si alguien
     /// vuelve al patrón "llamar y atrapar", este test cae aunque el catch siga funcionando.
     /// </summary>
     [Fact]
@@ -409,13 +344,26 @@ public class MovimientoHistorialViewModelTests
         await vm.InicializarAsync();
 
         productoSvcMock.Verify(s => s.BuscarAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        productoSvcMock.Verify(s => s.BuscarPorTextoAsync(It.IsAny<string>()), Times.Never);
         Assert.False(vm.PuedeFiltrarPorProducto);
         svcMock.Verify(s => s.ObtenerHistorialAsync(It.IsAny<HistorialMovimientoFiltro>()), Times.Once);
         Assert.Single(vm.Items);
     }
 
+    /// <summary>
+    /// Cambio de comportamiento DIAGNOSTICADO y deliberado (bugfix 2026-08-19, evolución del
+    /// fix 2026-08-16): este test antes se llamaba "...SiInvocaProductoService" y verificaba
+    /// Times.Once -- correcto CUANDO InicializarAsync precargaba el catálogo completo. Esa
+    /// precarga es EXACTAMENTE el problema que motivó migrar a AutoCompleteBox con búsqueda
+    /// server-side (el usuario estima 100-1000 productos en producción), así que ahora, CON
+    /// GestionarProductos presente, InicializarAsync sigue sin invocar a IProductoService --
+    /// ninguno de los dos overloads. El chequeo de sesión (sin HTTP) es la única señal
+    /// disponible en este punto, y deja el filtro visible de forma OPTIMISTA. La detección del
+    /// 403 real (permiso revocado entre el chequeo y una búsqueda) se movió a
+    /// BuscarProductosParaFiltroAsync, ver el test de más abajo.
+    /// </summary>
     [Fact]
-    public async Task InicializarAsync_ConGestionarProductos_SiInvocaProductoService()
+    public async Task InicializarAsync_ConGestionarProductos_NoConsultaAlServicioYPuedeFiltrarQuedaEnTrue()
     {
         var (vm, _, _, productoSvcMock, _) = Crear(
             rol: RolUsuario.Operador,
@@ -423,8 +371,48 @@ public class MovimientoHistorialViewModelTests
 
         await vm.InicializarAsync();
 
-        productoSvcMock.Verify(s => s.BuscarAsync(null, null, null), Times.Once);
+        productoSvcMock.Verify(s => s.BuscarAsync(null, null, null), Times.Never);
+        productoSvcMock.Verify(s => s.BuscarPorTextoAsync(It.IsAny<string>()), Times.Never);
         Assert.True(vm.PuedeFiltrarPorProducto);
+    }
+
+    /// <summary>
+    /// El reemplazo directo de InicializarAsync_ProductoServiceLanzaUnauthorized_OcultaFiltroDeProducto
+    /// (bugfix 2026-08-19): sin la precarga completa, el único punto donde el servidor puede
+    /// rechazar de verdad (permiso revocado entre el chequeo de sesión y la búsqueda) es acá,
+    /// en el AsyncPopulator del filtro. Verifica las DOS mitades del contrato: no explota (el
+    /// AutoCompleteBox solo atrapa TaskCanceledException, ver comentario en el VM) y apaga
+    /// PuedeFiltrarPorProducto para ocultar el filtro reactivamente.
+    /// </summary>
+    [Fact]
+    public async Task BuscarProductosParaFiltroAsync_ServidorRechaza403_OcultaFiltroYNoPropaga()
+    {
+        var (vm, _, _, productoSvcMock, _) = Crear(
+            rol: RolUsuario.Operador,
+            permisos: new[] { Permisos.RegistrarMovimientos, Permisos.GestionarProductos });
+        productoSvcMock
+            .Setup(s => s.BuscarPorTextoAsync(It.IsAny<string>()))
+            .ThrowsAsync(new UnauthorizedAccessException());
+
+        var resultado = await vm.BuscarProductosParaFiltroAsync("azu", CancellationToken.None);
+
+        Assert.Empty(resultado);
+        Assert.False(vm.PuedeFiltrarPorProducto);
+    }
+
+    [Fact]
+    public async Task BuscarProductosParaFiltroAsync_DelegaEnProductoServiceBuscarPorTextoAsync()
+    {
+        var productos = new List<ProductoDto> { CrearProducto(1, "Azúcar") };
+        var (vm, _, _, productoSvcMock, _) = Crear();
+        productoSvcMock
+            .Setup(s => s.BuscarPorTextoAsync("azu"))
+            .ReturnsAsync(productos);
+
+        var resultado = await vm.BuscarProductosParaFiltroAsync("azu", CancellationToken.None);
+
+        Assert.Single(resultado);
+        productoSvcMock.Verify(s => s.BuscarPorTextoAsync("azu"), Times.Once);
     }
 
     [Fact]
@@ -433,27 +421,22 @@ public class MovimientoHistorialViewModelTests
         var (vm, _, _, _, _) = Crear();
         var producto = CrearProducto(7, "Azúcar");
 
-        vm.ProductoFiltroSeleccionado = new OpcionProducto(producto.Nombre, producto);
+        vm.ProductoFiltroSeleccionado = producto;
 
         Assert.Equal(7, vm.FiltroProductoId);
     }
 
+    /// <summary>
+    /// Reemplaza a los dos tests "AlSeleccionarTodos"/"AlAsignarNull" (bugfix 2026-08-19): ya
+    /// no existe un objeto "Todos" separado -- limpiar la selección del AutoCompleteBox
+    /// (SelectedItem=null) ES la forma de volver a "Todos", así que ambos escenarios son
+    /// literalmente el mismo assert ahora.
+    /// </summary>
     [Fact]
-    public void ProductoFiltroSeleccionado_AlSeleccionarTodos_FiltroProductoIdVuelveANull()
+    public void ProductoFiltroSeleccionado_AlLimpiarSeleccion_FiltroProductoIdVuelveANull()
     {
         var (vm, _, _, _, _) = Crear();
-        vm.ProductoFiltroSeleccionado = new OpcionProducto("Azúcar", CrearProducto(7));
-
-        vm.ProductoFiltroSeleccionado = new OpcionProducto("Todos", null);
-
-        Assert.Null(vm.FiltroProductoId);
-    }
-
-    [Fact]
-    public void ProductoFiltroSeleccionado_AlAsignarNull_FiltroProductoIdVuelveANull()
-    {
-        var (vm, _, _, _, _) = Crear();
-        vm.ProductoFiltroSeleccionado = new OpcionProducto("Azúcar", CrearProducto(7));
+        vm.ProductoFiltroSeleccionado = CrearProducto(7, "Azúcar");
 
         vm.ProductoFiltroSeleccionado = null;
 

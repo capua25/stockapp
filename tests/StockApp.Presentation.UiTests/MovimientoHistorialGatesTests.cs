@@ -17,17 +17,20 @@ using Xunit;
 namespace StockApp.Presentation.UiTests;
 
 /// <summary>
-/// Red de seguridad de los 3 IsVisible de MovimientoHistorialView.axaml (:30, :86, :92) --
-/// Task 6.2 del plan de Fase B, ANTES de tocar la vista (Task 6.3). Hasta esta tanda, la vista
-/// tenia cero tests de UI y estos 3 gates custodian dos bugfixes reales de 2026-08-16
-/// (MovimientoHistorialViewModel.cs:72-93, :152-163).
+/// Red de seguridad de los 3 IsVisible de MovimientoHistorialView.axaml -- Task 6.2 del plan de
+/// Fase B, ANTES de tocar la vista (Task 6.3). Estos 3 gates custodian dos bugfixes reales de
+/// 2026-08-16 (MovimientoHistorialViewModel.cs), evolucionados por el bugfix 2026-08-19 (migración
+/// del ComboBox de precarga completa del filtro "Producto" a AutoCompleteBox de búsqueda
+/// server-side, mismo mecanismo que "Producto a recalcular").
 ///
-/// Fórmulas (leidas del ViewModel, ver comentarios ahi):
-/// - PuedeFiltrarPorProducto: NO es una propiedad calculada, es un campo que InicializarAsync
-///   setea en false si (a) la sesion no tiene GestionarProductos (ni es Admin), o (b)
-///   IProductoService.BuscarAsync lanza UnauthorizedAccessException (403 real del servidor, aun
-///   con el permiso "aparente"). Por eso hay tres casos, no dos: sin permiso, con permiso pero
-///   el servidor igual rechaza, y el camino feliz.
+/// Fórmulas (leidas del ViewModel, ver comentarios ahí):
+/// - PuedeFiltrarPorProducto: NO es una propiedad calculada. Desde el bugfix 2026-08-19 tiene DOS
+///   puntos de escritura distintos, no uno solo: (a) InicializarAsync la fija de forma OPTIMISTA
+///   según el chequeo de sesión (sin HTTP) -- true si tiene GestionarProductos, false si no; (b)
+///   BuscarProductosParaFiltroInternalAsync (el AsyncPopulator del filtro) la apaga
+///   REACTIVAMENTE si una búsqueda real choca con un 403 del servidor (permiso "aparente" pero
+///   revocado). Ya no hay una única llamada eager en InicializarAsync que cubra el caso "permiso
+///   presente pero servidor rechaza" -- ese caso hoy requiere simular una búsqueda real.
 /// - PuedeRecalcularStock: computada, `_session.RolActual == Admin || PermisosActuales.Contains(
 ///   Permisos.RecalcularStock)`. Rol Operador con permisos explicitos (nunca Admin: cortocircuita
 ///   el OR antes de mirar el permiso real).
@@ -52,8 +55,11 @@ public class MovimientoHistorialGatesTests
     }
 
     /// <summary>
-    /// IProductoService configurable para forzar el camino "403 real" de InicializarAsync:
-    /// GestionarProductos presente en la sesion, pero el servidor igual rechaza BuscarAsync.
+    /// IProductoService configurable para forzar el camino "403 real" de una búsqueda del
+    /// filtro. BuscarAsync (el overload de 3 parámetros, usado por la precarga VIEJA) lanza
+    /// SIEMPRE: bugfix 2026-08-19 eliminó esa precarga de InicializarAsync, así que si algún
+    /// cambio futuro la reintroduce sin querer, este fake explota en vez de devolver
+    /// silenciosamente una lista vacía y dejar pasar la regresión.
     /// </summary>
     private sealed class ProductoServiceHistorialFake : IProductoService
     {
@@ -74,12 +80,13 @@ public class MovimientoHistorialGatesTests
             => throw new NotSupportedException("No usado en este banco de pruebas.");
 
         public Task<IReadOnlyList<ProductoDto>> BuscarAsync(string? sku, string? codigoBarras, string? nombre)
+            => throw new NotSupportedException(
+                "No debe invocarse mas: bugfix 2026-08-19 elimino la precarga completa de InicializarAsync.");
+
+        public Task<IReadOnlyList<ProductoDto>> BuscarPorTextoAsync(string? texto)
             => _lanzar403
                 ? Task.FromException<IReadOnlyList<ProductoDto>>(new UnauthorizedAccessException())
                 : Task.FromResult<IReadOnlyList<ProductoDto>>(Array.Empty<ProductoDto>());
-
-        public Task<IReadOnlyList<ProductoDto>> BuscarPorTextoAsync(string? texto)
-            => throw new NotSupportedException("No usado en este banco de pruebas.");
     }
 
     private const string Xaml = """
@@ -92,12 +99,12 @@ public class MovimientoHistorialGatesTests
         """;
 
     private static (Window Window, MovimientoHistorialViewModel Vm) Montar(
-        RolUsuario rol, string[] permisos, bool lanzar403AlBuscarProductos = false)
+        RolUsuario rol, string[] permisos, bool lanzar403AlBuscarPorTexto = false)
     {
         var vm = new MovimientoHistorialViewModel(
             new MovimientoStockServiceHistorialFake(),
             new NavigationServiceFake(),
-            new ProductoServiceHistorialFake(lanzar403AlBuscarProductos),
+            new ProductoServiceHistorialFake(lanzar403AlBuscarPorTexto),
             new ConfirmacionServiceFake(),
             new SesionFake(rol, permisos));
 
@@ -124,7 +131,7 @@ public class MovimientoHistorialGatesTests
         var (window, _) = Montar(
             RolUsuario.Operador,
             [Permisos.RegistrarMovimientos, Permisos.GestionarProductos],
-            lanzar403AlBuscarProductos: false);
+            lanzar403AlBuscarPorTexto: false);
 
         var etiqueta = TextoPorContenido(window, "Producto");
 
@@ -143,17 +150,31 @@ public class MovimientoHistorialGatesTests
         Assert.False(ArbolVisual.EsVisibleEnArbol(etiqueta));
     }
 
+    /// <summary>
+    /// Bugfix 2026-08-19 (evolución del gate anterior, mismo nombre de test conservado a
+    /// propósito porque el CONTRATO que custodia es el mismo: "permiso presente pero servidor
+    /// rechaza -> filtro oculto"): sin la precarga completa de InicializarAsync, ya no hay una
+    /// única llamada eager al montar la vista que dispare el 403 -- el filtro arranca VISIBLE
+    /// (chequeo de sesión optimista, sin HTTP) y recién se oculta cuando el usuario efectivamente
+    /// busca. Se simula esa búsqueda invocando el AsyncPopulator del VM directo (mismo patrón que
+    /// usa el AutoCompleteBox real, ver AutoCompleteBox.PopulateAsync), sin necesidad de manejar
+    /// el timer de MinimumPopulateDelay en un test headless.
+    /// </summary>
     [AvaloniaFact]
-    public void PuedeFiltrarPorProducto_ConPermisoPeroServidorRechaza403_ComboOculto()
+    public async Task PuedeFiltrarPorProducto_ConPermisoPeroBusquedaRechaza403_SeOcultaTrasLaBusqueda()
     {
-        var (window, _) = Montar(
+        var (window, vm) = Montar(
             RolUsuario.Operador,
             [Permisos.RegistrarMovimientos, Permisos.GestionarProductos],
-            lanzar403AlBuscarProductos: true);
+            lanzar403AlBuscarPorTexto: true);
 
         var etiqueta = TextoPorContenido(window, "Producto");
+        Assert.True(ArbolVisual.EsVisibleEnArbol(etiqueta), "arranca visible: chequeo optimista de sesion, sin HTTP");
 
-        Assert.False(ArbolVisual.EsVisibleEnArbol(etiqueta));
+        await vm.BuscarProductosParaFiltroAsync("azu", System.Threading.CancellationToken.None);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(ArbolVisual.EsVisibleEnArbol(etiqueta), "se oculta reactivamente tras el 403 real de la busqueda");
     }
 
     // ---- PuedeRecalcularStock (:86 boton, :92 campo) ----

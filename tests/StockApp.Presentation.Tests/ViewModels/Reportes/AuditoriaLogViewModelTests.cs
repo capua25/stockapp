@@ -208,8 +208,10 @@ public class AuditoriaLogViewModelTests
     // usuarios que no crecen como el catálogo: se carga la lista completa
     // (IUsuarioService.ListarAsync, sin parámetros, igual que UsuariosAdminViewModel) y se usa
     // el filtrado NATIVO del control (FilterMode/ItemFilter), sin backend nuevo. Este filtro SÍ
-    // admite "todos" (UsuarioId: int?, ObtenerLogAsync acepta null) — opción "Todos" como el
-    // patrón OpcionProducto("Todos", null) de MovimientoHistorialViewModel.
+    // admite "todos" (UsuarioId: int?, ObtenerLogAsync acepta null) — opción "Todos" explícita
+    // vía OpcionUsuario("Todos", null) (el filtro de producto de MovimientoHistorialViewModel
+    // ya NO tiene un wrapper equivalente desde el bugfix 2026-08-19: se migró a búsqueda
+    // server-side, donde "sin selección" ya es "Todos" de forma natural).
 
     [Fact]
     public async Task InicializarAsync_PopulaOpcionTodosYUsuarios()

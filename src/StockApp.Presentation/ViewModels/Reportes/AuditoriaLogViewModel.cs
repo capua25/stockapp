@@ -13,8 +13,11 @@ namespace StockApp.Presentation.ViewModels.Reportes;
 
 /// <summary>
 /// Opción de filtro por usuario para el AutoCompleteBox del log de auditoría (bugfix
-/// 2026-08-19). Valor=null representa "Todos" (sin filtro de usuario) — mismo patrón que
-/// <c>OpcionProducto</c> en <see cref="Movimientos.MovimientoHistorialViewModel"/>.
+/// 2026-08-19). Valor=null representa "Todos" (sin filtro de usuario). A diferencia del
+/// filtro de producto de <see cref="Movimientos.MovimientoHistorialViewModel"/> (que se
+/// migró a búsqueda server-side pura, sin wrapper "Todos" explícito porque sin selección YA
+/// es "Todos"), acá el universo es chico (~14 usuarios) y se precarga completo, así que SÍ
+/// hace falta un ítem "Todos" explícito para poder elegirlo desde la lista fija.
 /// </summary>
 public sealed record OpcionUsuario(string Nombre, UsuarioDto? Valor);
 
