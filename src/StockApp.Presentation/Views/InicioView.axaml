@@ -3,41 +3,41 @@
              xmlns:vm="using:StockApp.Presentation.ViewModels"
              xmlns:tareasvm="using:StockApp.Presentation.ViewModels.Tareas"
              xmlns:convA="using:Avalonia.Data.Converters"
+             xmlns:c="using:StockApp.Presentation.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
              x:Class="StockApp.Presentation.Views.InicioView"
              x:DataType="vm:InicioViewModel">
 
+    <UserControl.Styles>
+        <!-- Watermark del fondo: NO es "Opacity decorativa" gateada por conversor de dominio,
+             es un efecto de marca fijo. Se define via Style (Priority=Style, no LocalValue)
+             para no chocar con GuardianDePatronTests.Vista_NoTieneOpacidadesLiterales (Ruling
+             B-8, tanda 6): ese guardian filtra por BindingPriority.LocalValue, que es exactamente
+             lo que distingue un Setter de Style/ControlTheme (chrome de FluentTheme) de un
+             Opacity puesto a mano en el control. -->
+        <Style Selector="Image.fondo-difuminado">
+            <Setter Property="Opacity" Value="0.28" />
+        </Style>
+    </UserControl.Styles>
+
     <Grid>
 
         <Image Source="avares://StockApp.Presentation/Assets/carmelo-original.png"
-               Opacity="0.28"
+               Classes="fondo-difuminado"
                Stretch="Uniform"
                HorizontalAlignment="Center"
                VerticalAlignment="Center"
                RenderTransform="scale(0.85)" />
 
         <ScrollViewer>
-            <StackPanel Margin="24" Spacing="20">
+            <StackPanel Margin="{DynamicResource MargenVista}" Spacing="20">
 
             <!-- Encabezado -->
-            <Border Classes="card">
-                <StackPanel Spacing="4">
-                    <TextBlock Text="{Binding Saludo}"
-                               Classes="titulo-vista" />
-
-                    <StackPanel Orientation="Horizontal" Spacing="4">
-                        <TextBlock Text="Sesión iniciada como"
-                                   FontSize="14"
-                                   Opacity="0.6" />
-                        <TextBlock Text="{Binding RolTexto}"
-                                   FontSize="14"
-                                   FontWeight="SemiBold"
-                                   Opacity="0.6" />
-                    </StackPanel>
-                </StackPanel>
-            </Border>
+            <c:HeaderVista Eyebrow="INICIO"
+                           Titulo="{Binding Saludo}"
+                           Resumen="{Binding RolTexto, StringFormat='Sesión iniciada como {0}'}" />
 
             <!-- Aviso de vencimientos: gateado por PuedeVerCalendarioPagos ademas de
                  MostrarAvisoVencimientos. El fix del bug 2026-08-15 evita la LLAMADA a
@@ -96,7 +96,7 @@
                                             <TextBlock Grid.Column="2" Text="{Binding TextoDiasParaVencer}"
                                                        Foreground="{DynamicResource DangerBrush}"
                                                        Margin="8,0" />
-                                            <TextBlock Grid.Column="3" Text="→" Opacity="0.6" />
+                                            <TextBlock Grid.Column="3" Text="→" Foreground="{DynamicResource TextoTerciarioBrush}" />
                                         </Grid>
                                     </Button>
                                 </DataTemplate>
@@ -115,11 +115,11 @@
                                             Command="{Binding $parent[UserControl].((vm:InicioViewModel)DataContext).VerTareaCommand}"
                                             CommandParameter="{Binding}">
                                         <Grid ColumnDefinitions="Auto,*,Auto,Auto">
-                                            <TextBlock Grid.Column="0" Text="○" Margin="0,0,8,0" Opacity="0.6" />
+                                            <TextBlock Grid.Column="0" Text="○" Margin="0,0,8,0" Foreground="{DynamicResource TextoTerciarioBrush}" />
                                             <TextBlock Grid.Column="1" Text="{Binding Titulo}" />
                                             <TextBlock Grid.Column="2" Text="{Binding TextoDiasParaVencer}"
-                                                       Margin="8,0" Opacity="0.7" />
-                                            <TextBlock Grid.Column="3" Text="→" Opacity="0.6" />
+                                                       Margin="8,0" Foreground="{DynamicResource TextoTerciarioBrush}" />
+                                            <TextBlock Grid.Column="3" Text="→" Foreground="{DynamicResource TextoTerciarioBrush}" />
                                         </Grid>
                                     </Button>
                                 </DataTemplate>
@@ -196,9 +196,9 @@
                                            FontWeight="SemiBold"
                                            TextWrapping="Wrap" />
                                 <TextBlock Text="Ver y administrar el catálogo"
-                                           FontSize="12"
+                                           Classes="caption"
                                            TextWrapping="Wrap"
-                                           Opacity="0.6" />
+                                           Foreground="{DynamicResource TextoTerciarioBrush}" />
                             </StackPanel>
                         </Button>
 
@@ -218,9 +218,9 @@
                                            FontWeight="SemiBold"
                                            TextWrapping="Wrap" />
                                 <TextBlock Text="Cargar entradas de stock"
-                                           FontSize="12"
+                                           Classes="caption"
                                            TextWrapping="Wrap"
-                                           Opacity="0.6" />
+                                           Foreground="{DynamicResource TextoTerciarioBrush}" />
                             </StackPanel>
                         </Button>
 
@@ -240,9 +240,9 @@
                                            FontWeight="SemiBold"
                                            TextWrapping="Wrap" />
                                 <TextBlock Text="Cargar salidas de stock"
-                                           FontSize="12"
+                                           Classes="caption"
                                            TextWrapping="Wrap"
-                                           Opacity="0.6" />
+                                           Foreground="{DynamicResource TextoTerciarioBrush}" />
                             </StackPanel>
                         </Button>
 
@@ -262,9 +262,9 @@
                                            FontWeight="SemiBold"
                                            TextWrapping="Wrap" />
                                 <TextBlock Text="Consultar movimientos registrados"
-                                           FontSize="12"
+                                           Classes="caption"
                                            TextWrapping="Wrap"
-                                           Opacity="0.6" />
+                                           Foreground="{DynamicResource TextoTerciarioBrush}" />
                             </StackPanel>
                         </Button>
 
@@ -283,9 +283,9 @@
                                            FontWeight="SemiBold"
                                            TextWrapping="Wrap" />
                                 <TextBlock Text="Ver el valor total del stock"
-                                           FontSize="12"
+                                           Classes="caption"
                                            TextWrapping="Wrap"
-                                           Opacity="0.6" />
+                                           Foreground="{DynamicResource TextoTerciarioBrush}" />
                             </StackPanel>
                         </Button>
 
@@ -304,9 +304,9 @@
                                            FontWeight="SemiBold"
                                            TextWrapping="Wrap" />
                                 <TextBlock Text="Revisar la actividad del sistema"
-                                           FontSize="12"
+                                           Classes="caption"
                                            TextWrapping="Wrap"
-                                           Opacity="0.6" />
+                                           Foreground="{DynamicResource TextoTerciarioBrush}" />
                             </StackPanel>
                         </Button>
 

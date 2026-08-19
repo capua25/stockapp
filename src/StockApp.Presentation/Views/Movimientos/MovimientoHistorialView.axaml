@@ -4,21 +4,35 @@
              xmlns:dto="using:StockApp.Application.Movimientos"
              xmlns:beh="using:StockApp.Presentation.Behaviors"
              xmlns:conv="using:StockApp.Presentation.Converters"
+             xmlns:c="using:StockApp.Presentation.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="600"
              x:Class="StockApp.Presentation.Views.Movimientos.MovimientoHistorialView"
              x:DataType="vm:MovimientoHistorialViewModel">
 
-    <DockPanel Margin="24">
+    <DockPanel Margin="{DynamicResource MargenVista}">
 
-        <TextBlock DockPanel.Dock="Top"
-                   Text="Historial de movimientos"
-                   Classes="titulo-vista"
-                   Margin="0,0,0,16" />
+        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="MOVIMIENTOS" Titulo="Historial de movimientos">
+            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
+                <!-- "Recalcular stock": oculto sin Permisos.RecalcularStock (bugfix 2026-08-16,
+                     ver MovimientoHistorialViewModel.PuedeRecalcularStock). Cada control conserva
+                     su propio IsVisible textual (Task 6.3), no se consolido en uno solo. -->
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
+                            IsVisible="{Binding PuedeRecalcularStock}">
+                    <TextBlock Text="Producto a recalcular (ID):" VerticalAlignment="Center" />
+                    <NumericUpDown Value="{Binding ProductoIdParaRecalcular}" Minimum="0" Width="140"
+                                   FormatString="0" Increment="1" />
+                </StackPanel>
+                <Button Classes="secondary"
+                        Content="Recalcular stock"
+                        Command="{Binding RecalcularCommand}"
+                        IsVisible="{Binding PuedeRecalcularStock}" />
+            </StackPanel>
+        </c:HeaderVista>
 
         <Border Classes="card">
-            <Grid RowDefinitions="Auto,Auto,*">
+            <Grid RowDefinitions="Auto,*">
 
                 <!-- Barra de filtros -->
                 <WrapPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
@@ -27,7 +41,7 @@
                          Salida e Ingreso por factura, este combo es un FILTRO, no un campo
                          obligatorio, asi que el resto del historial sigue siendo usable sin
                          GestionarProductos. -->
-                    <StackPanel Spacing="4" Margin="0,0,12,8" IsVisible="{Binding PuedeFiltrarPorProducto}">
+                    <StackPanel Spacing="{DynamicResource Espacio1}" Margin="0,0,12,8" IsVisible="{Binding PuedeFiltrarPorProducto}">
                         <TextBlock Text="Producto" Classes="caption" />
                         <ComboBox ItemsSource="{Binding Productos}"
                                   SelectedItem="{Binding ProductoFiltroSeleccionado}"
@@ -74,41 +88,18 @@
                     <StackPanel Spacing="4" VerticalAlignment="Bottom" Orientation="Horizontal" Margin="0,0,0,8">
                         <Button Classes="primary"
                                 Content="Buscar"
-                                Command="{Binding BuscarCommand}"
-                                Margin="0,0,8,0" />
-                        <!-- Oculto sin Permisos.RecalcularStock (bugfix 2026-08-16, hermano de
-                             PuedeFiltrarPorProducto): el botón no tenía gating y el servidor
-                             exige un permiso DISTINTO de RegistrarMovimientos, ver
-                             MovimientoHistorialViewModel.PuedeRecalcularStock. -->
-                        <Button Classes="secondary"
-                                Content="Recalcular stock"
-                                Command="{Binding RecalcularCommand}"
-                                IsVisible="{Binding PuedeRecalcularStock}" />
+                                Command="{Binding BuscarCommand}" />
                     </StackPanel>
                 </WrapPanel>
 
-                <!-- Producto a recalcular -->
-                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
-                            Margin="0,0,0,12" IsVisible="{Binding PuedeRecalcularStock}">
-                    <TextBlock Text="Producto a recalcular (ID):" VerticalAlignment="Center" />
-                    <NumericUpDown Value="{Binding ProductoIdParaRecalcular}" Minimum="0" Width="140"
-                                   FormatString="0" Increment="1" />
-                </StackPanel>
-
                 <!-- Listado -->
-                <DataGrid Grid.Row="2"
+                <DataGrid Grid.Row="1"
                           ItemsSource="{Binding ItemsView}"
                           IsReadOnly="True"
                           CanUserSortColumns="True"
                           CanUserResizeColumns="True"
                           GridLinesVisibility="Horizontal"
                           ScrollViewer.HorizontalScrollBarVisibility="Auto">
-                    <DataGrid.Styles>
-                        <!-- Columnas numéricas (montos/cantidades) alineadas a la derecha. -->
-                        <Style Selector="DataGridCell.num">
-                            <Setter Property="HorizontalContentAlignment" Value="Right" />
-                        </Style>
-                    </DataGrid.Styles>
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha, Converter={x:Static conv:FechaUtcALocalConverter.Instance}, StringFormat='dd/MM/yyyy HH:mm', DataType={x:Type dto:MovimientoHistorialDto}}" Width="Auto" />
                         <DataGridTemplateColumn Header="Producto" Width="2*" SortMemberPath="ProductoNombre">

@@ -84,6 +84,7 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
+    [NotifyPropertyChangedFor(nameof(GuardarEsAccionPrincipal))]
     private bool _guardadoExitoso;
 
     [ObservableProperty] private decimal _sumaRenglones;
@@ -101,15 +102,31 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
 
     private FilaRenglonFacturaVm? _filaEnAltaProducto;
 
-    [ObservableProperty] private bool _mostrandoAltaProducto;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(GuardarEsAccionPrincipal))]
+    private bool _mostrandoAltaProducto;
     [ObservableProperty] private string? _nuevoProductoCodigo;
     [ObservableProperty] private string? _nuevoProductoNombre;
     [ObservableProperty] private Categoria? _nuevaCategoriaSeleccionada;
     [ObservableProperty] private UnidadMedida? _nuevaUnidadSeleccionada;
     [ObservableProperty] private decimal _nuevoProductoPrecioVenta;
 
-    [ObservableProperty] private bool _mostrandoConfirmacionPrecios;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(GuardarEsAccionPrincipal))]
+    private bool _mostrandoConfirmacionPrecios;
     private decimal _montoConfirmadoPendiente;
+
+    /// <summary>
+    /// Jerarquia de botones (Task 6.7, refactor visual): "Guardar" es la unica accion primaria
+    /// mientras el formulario esta activo. Se apaga (Classes.primary en la vista) apenas hay OTRA
+    /// accion primaria compitiendo por atencion en la misma pantalla -- "Finalizar" tras guardar,
+    /// o el CTA del overlay modal de alta de producto / confirmacion de precios. Sin esto,
+    /// GuardadoExitoso=true dejaba "Guardar" (deshabilitado pero visible) Y "Finalizar" primarios
+    /// a la vez, y cada overlay dejaba su propio boton primario compitiendo con "Guardar" de fondo
+    /// (el backdrop semitransparente lo oculta VISUALMENTE, pero sigue IsVisible=true en el arbol).
+    /// </summary>
+    public bool GuardarEsAccionPrincipal
+        => !GuardadoExitoso && !MostrandoAltaProducto && !MostrandoConfirmacionPrecios;
 
     public ObservableCollection<ItemConfirmacionPrecioVm> CambiosDePrecio { get; } = new();
 

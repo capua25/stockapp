@@ -41,7 +41,7 @@ public class GuardianDePatronTests
     [InlineData(typeof(InicioView), null, "INICIO")]
     [InlineData(typeof(EntradaRegistroView), null, null)]
     [InlineData(typeof(SalidaRegistroView), null, null)]
-    [InlineData(typeof(IngresoPorFacturaView), "Ingreso de stock por factura", null)]
+    [InlineData(typeof(IngresoPorFacturaView), "Ingreso de stock por factura", "MOVIMIENTOS")]
     public void Vista_TieneHeaderVistaConElTituloEsperado(Type tipoVista, string? titulo, string? eyebrow)
     {
         var vista = PatronHelpers.Montar(tipoVista);

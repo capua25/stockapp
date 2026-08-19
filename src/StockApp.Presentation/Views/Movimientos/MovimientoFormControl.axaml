@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Movimientos"
              xmlns:conv="using:StockApp.Presentation.Converters"
+             xmlns:c="using:StockApp.Presentation.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="500" d:DesignHeight="450"
@@ -9,15 +10,13 @@
              x:DataType="vm:MovimientoRegistroViewModelBase">
 
     <ScrollViewer>
-        <Border Classes="card" Padding="24" Margin="24" MaxWidth="480">
-            <StackPanel Spacing="12">
+        <Border Classes="card" Padding="{DynamicResource MargenVista}" Margin="{DynamicResource MargenVista}"
+                MaxWidth="480">
+            <StackPanel Spacing="{DynamicResource Espacio3}">
 
-                <TextBlock Text="{Binding Titulo}"
-                           Classes="titulo-vista"
-                           Margin="0,0,0,8" />
+                <c:HeaderVista Titulo="{Binding Titulo}" />
 
-                <StackPanel Spacing="4">
-                    <TextBlock Text="Producto (obligatorio)" />
+                <c:CampoFormulario Etiqueta="Producto" Requerido="True">
                     <ComboBox ItemsSource="{Binding Productos}"
                               SelectedItem="{Binding ProductoSeleccionado}"
                               HorizontalAlignment="Stretch">
@@ -27,40 +26,41 @@
                             </DataTemplate>
                         </ComboBox.ItemTemplate>
                     </ComboBox>
-                </StackPanel>
+                </c:CampoFormulario>
 
-                <StackPanel Spacing="4">
-                    <TextBlock Text="Cantidad (obligatorio)" />
+                <c:CampoFormulario Etiqueta="Cantidad" Requerido="True">
                     <TextBox Text="{Binding Cantidad}"
                              PlaceholderText="Ingresá la cantidad" />
-                </StackPanel>
+                </c:CampoFormulario>
 
-                <StackPanel Spacing="4">
-                    <TextBlock Text="Motivo" />
+                <c:CampoFormulario Etiqueta="Motivo">
                     <ComboBox ItemsSource="{Binding MotivosDisponibles}"
                               SelectedItem="{Binding Motivo}"
                               HorizontalAlignment="Stretch" />
-                </StackPanel>
+                </c:CampoFormulario>
 
-                <StackPanel Spacing="4">
-                    <TextBlock Text="Precio unitario" />
-                    <!-- PrecioUnitario es decimal? (opcional): el conversor default de Avalonia
-                         no mapea "" a null y explota con InvalidCastException al vaciar el campo
-                         (bug real reproducido en tests). DecimalOpcionalConverter trata "" como
-                         null y, si el texto no es numérico, devuelve un BindingNotification en
-                         vez de lanzar (ver Converters/DecimalOpcionalConverter.cs). -->
+                <!-- PrecioUnitario es decimal? (opcional): el conversor default de Avalonia
+                     no mapea "" a null y explota con InvalidCastException al vaciar el campo
+                     (bug real reproducido en tests). DecimalOpcionalConverter trata "" como
+                     null y, si el texto no es numérico, devuelve un BindingNotification en
+                     vez de lanzar (ver Converters/DecimalOpcionalConverter.cs).
+                     x:Name="PrecioUnitarioBox" queda en el TextBox, NUNCA se mueve al
+                     CampoFormulario (Task 6.4): MovimientoFormControlValidacionTests busca
+                     t.Name == "PrecioUnitarioBox" sobre window.GetVisualDescendants(), y el
+                     TextBox sigue en el mismo NameScope porque CampoFormulario lo proyecta por
+                     ContentPresenter, no por template propio. -->
+                <c:CampoFormulario Etiqueta="Precio unitario">
                     <TextBox Name="PrecioUnitarioBox"
                              Text="{Binding PrecioUnitario, Converter={x:Static conv:DecimalOpcionalConverter.Instance}}"
                              PlaceholderText="Opcional" />
-                </StackPanel>
+                </c:CampoFormulario>
 
-                <StackPanel Spacing="4">
-                    <TextBlock Text="Comentario" />
+                <c:CampoFormulario Etiqueta="Comentario">
                     <TextBox Text="{Binding Comentario}"
                              PlaceholderText="Comentario opcional"
                              AcceptsReturn="True"
                              Height="60" />
-                </StackPanel>
+                </c:CampoFormulario>
 
                 <!-- Mensaje de error -->
                 <TextBlock Text="{Binding MensajeError}"

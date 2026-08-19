@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Catalogo"
+             xmlns:c="using:StockApp.Presentation.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="500" d:DesignHeight="450"
@@ -8,42 +9,37 @@
              x:DataType="vm:ProductoFormViewModel">
 
     <ScrollViewer>
-        <Border Classes="card" Padding="24" Margin="24" MaxWidth="480">
-            <StackPanel Spacing="12">
+        <Border Classes="card" Padding="{DynamicResource MargenVista}" Margin="{DynamicResource MargenVista}"
+                MaxWidth="480">
+            <StackPanel Spacing="{DynamicResource Espacio3}">
 
-                <TextBlock Text="{Binding Titulo}"
-                           Classes="titulo-vista"
-                           Margin="0,0,0,8" />
+                <c:HeaderVista Titulo="{Binding Titulo}" />
 
-                <StackPanel Spacing="4">
-                    <TextBlock Text="SKU (obligatorio)" />
+                <c:CampoFormulario Etiqueta="SKU" Requerido="True">
                     <!-- En modo edición el SKU no es editable: ProductoService.ModificarAsync
                          ignora cambios al Código (no lo reasigna sobre la entidad original),
                          así que permitir tipearlo confundiría al usuario sin efecto real. -->
                     <TextBox Text="{Binding Codigo}"
                              IsEnabled="{Binding !EsEdicion}"
                              PlaceholderText="Ej: P001" />
-                </StackPanel>
+                </c:CampoFormulario>
 
-                <StackPanel Spacing="4">
-                    <TextBlock Text="Nombre (obligatorio)" />
+                <c:CampoFormulario Etiqueta="Nombre" Requerido="True">
                     <TextBox Text="{Binding Nombre}"
                              PlaceholderText="Nombre del producto" />
-                </StackPanel>
+                </c:CampoFormulario>
 
-                <StackPanel Spacing="4">
-                    <TextBlock Text="Código de barras" />
+                <c:CampoFormulario Etiqueta="Código de barras">
                     <TextBox Text="{Binding CodigoBarras}"
                              PlaceholderText="EAN (opcional)" />
-                </StackPanel>
+                </c:CampoFormulario>
 
-                <StackPanel Spacing="4">
-                    <TextBlock Text="Descripción" />
+                <c:CampoFormulario Etiqueta="Descripción">
                     <TextBox Text="{Binding Descripcion}"
                              PlaceholderText="Descripción opcional"
                              AcceptsReturn="True"
                              Height="60" />
-                </StackPanel>
+                </c:CampoFormulario>
 
                 <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
                     <TextBlock Grid.Column="0" Text="Precio costo" Margin="0,0,8,4" />
@@ -55,8 +51,7 @@
                              Text="{Binding PrecioVenta}" />
                 </Grid>
 
-                <StackPanel Spacing="4">
-                    <TextBlock Text="Unidad de medida" />
+                <c:CampoFormulario Etiqueta="Unidad de medida">
                     <ComboBox ItemsSource="{Binding UnidadesMedida}"
                               SelectedItem="{Binding UnidadMedidaSeleccionada}"
                               HorizontalAlignment="Stretch">
@@ -66,10 +61,9 @@
                             </DataTemplate>
                         </ComboBox.ItemTemplate>
                     </ComboBox>
-                </StackPanel>
+                </c:CampoFormulario>
 
-                <StackPanel Spacing="4">
-                    <TextBlock Text="Categoría" />
+                <c:CampoFormulario Etiqueta="Categoría">
                     <ComboBox ItemsSource="{Binding Categorias}"
                               SelectedItem="{Binding CategoriaSeleccionada}"
                               PlaceholderText="Sin categoría"
@@ -80,7 +74,7 @@
                             </DataTemplate>
                         </ComboBox.ItemTemplate>
                     </ComboBox>
-                </StackPanel>
+                </c:CampoFormulario>
 
                 <!-- Mensaje de error -->
                 <TextBlock Text="{Binding MensajeError}"
