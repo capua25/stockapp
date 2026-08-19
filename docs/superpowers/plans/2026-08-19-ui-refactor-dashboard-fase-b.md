@@ -195,6 +195,11 @@ Decisiones tomadas al planificar, con su costo si me equivoco. Se toman acá par
 *Costo si me equivoco:* ninguno funcional — es una decisión de secuenciación de commits, no de diseño. Si hiciera falta revertir, es un solo commit a revertir en vez de cuatro.
 **Decisión del usuario, 2026-08-19.**
 
+**Ruling B-13 — Tanda 13 / unificación de Adjuntos: se descopa. Solo armonización visual, sin fusionar ViewModels ni renombrar Views.** `AdjuntosPanelView` y `AdjuntosDocumentoPanelView` no son gemelos cosméticos: bindean a dos tipos de ViewModel distintos con APIs distintas (`AdjuntosPanelViewModel`, `ViewModels.Finanzas`, con `PuedeAgregar`+`PuedeQuitar`; `AdjuntosDocumentoPanelViewModel`, `ViewModels.Documentos`, con `PuedeModificar`), sobre DTOs de namespaces distintos.
+*Por qué:* unificarlos exige reconciliar dos contratos de ViewModel y renombrar una View — y "renombrar o mover Views" está explícitamente fuera de alcance en la sección 5 de la spec, custodiado por `ViewLocatorTests`. La Task 13 de la spec se contradecía a sí misma acá (pedía unificar pero también prohibía renombrar/mover Views); este ruling resuelve la contradicción a favor de la sección 5. En la tanda 13 se hace únicamente que los dos paneles se vean idénticos (tokens, espaciado, estilo); la fusión real de los ViewModels queda como trabajo aparte, sin fecha.
+*Costo si me equivoco:* ninguno inmediato — no se pierde nada al descopar, la fusión sigue disponible como iniciativa futura si se decide abrirla.
+**APROBADO por el usuario el 2026-08-19.** Ya no requiere OK — la tanda 13 puede ejecutarse solo con armonización visual.
+
 ---
 
 ## Catálogo de patrones (P0-P7)
@@ -839,13 +844,13 @@ Riesgo bajo (cero tests) pero **hay un hueco**: no hay `Fondo*Suave` para Info/W
 - [ ] **Borrar `Views/MainWindowView.axaml` + `.axaml.cs` + `ViewModels/MainWindowViewModel.cs`.** Verificado: **cero referencias** fuera de sí mismos; `ViewLocatorTests` no enumera ViewModels, es específico. Es la única vista con `FontSize="28"`. **Antes de borrar, re-correr el grep** — puede haber aparecido un uso durante las tandas 6-12.
 - [ ] **Tokenizar `Views/MainWindow.axaml`** (29 líneas, la `Window` host). Mínimo: verificar que no queda nada literal.
 - [ ] **Borrar `Border.badge-inactiva` y `TextBlock.badge-inactiva-texto` de `Themes/Controls.axaml:234,242`,** una vez que las 10 vistas migraron a `c:BadgeEstado`. Verificar con grep que no queda ningún uso antes de borrar.
-- [ ] **`AdjuntosPanelView` vs `AdjuntosDocumentoPanelView`: RECOMENDACIÓN — descopar la unificación.**
+- [ ] **`AdjuntosPanelView` vs `AdjuntosDocumentoPanelView`: DESCOPADA la unificación (Ruling B-13, aprobado por el usuario el 2026-08-19).**
 
   La spec dice "unificar los gemelos de 63 y 62 líneas". Los diffeé: **no son gemelos**. Bindean a **dos tipos de ViewModel distintos** (`AdjuntosPanelViewModel` en `ViewModels.Finanzas`, `AdjuntosDocumentoPanelViewModel` en `ViewModels.Documentos`), con **APIs distintas** (`PuedeAgregar` + `PuedeQuitar` vs un único `PuedeModificar`) y DTOs de namespaces distintos.
 
   Unificarlos exige (a) reconciliar dos contratos de ViewModel y (b) renombrar una View — y **"renombrar o mover Views" está explícitamente fuera de alcance** en la sección 5 de la spec, custodiado por `ViewLocatorTests` (que tiene 2 casos dedicados a `AdjuntosPanelView` justamente porque este panel ya se creó una vez sin su View y hubo regresión).
 
-  **La tanda 13 de la spec se contradice con la sección 5 de la spec.** Recomendación: en esta tanda, **solo armonización visual** (que los dos se vean idénticos), y abrir la unificación real como trabajo aparte con su propia decisión de alcance. **Requiere OK del usuario.**
+  **La tanda 13 de la spec se contradice con la sección 5 de la spec; Ruling B-13 la resuelve a favor de la sección 5.** En esta tanda se hace **solo armonización visual** (que los dos se vean idénticos). La unificación real de los ViewModels queda como trabajo aparte, sin fecha.
 
 - [ ] **Verificación orgánica final** de la app entera, con la app real corriendo.
 - [ ] **Auditoría final de residuos** sobre las 58 vistas:
