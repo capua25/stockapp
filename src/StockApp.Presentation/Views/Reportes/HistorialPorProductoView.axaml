@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Reportes"
              xmlns:dto="using:StockApp.Application.Movimientos"
+             xmlns:cat="using:StockApp.Application.Catalogo"
              xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:beh="using:StockApp.Presentation.Behaviors"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -22,9 +23,26 @@
 
                 <!-- Filtros + acciones -->
                 <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,0,0,12">
-                    <TextBlock Text="Producto ID:" VerticalAlignment="Center" />
-                    <NumericUpDown Value="{Binding ProductoId}" Minimum="0" Width="120"
-                                   FormatString="0" Increment="1" />
+                    <!-- Bugfix 2026-08-19: "Producto ID" era el ÚNICO filtro de esta pantalla
+                         y pedía la PK a mano, vista entera inusable sin mirar la base. Se
+                         reemplaza por búsqueda server-side (AsyncPopulator ->
+                         HistorialPorProductoViewModel.BuscarProductosAsync ->
+                         IProductoService.BuscarPorTextoAsync). FilterMode="None": el servidor
+                         ya matcheo por SKU/código de barras/nombre, no hay que reaplicar un
+                         filtro client-side de "empieza con" sobre esos resultados. -->
+                    <TextBlock Text="Producto:" VerticalAlignment="Center" />
+                    <AutoCompleteBox Width="220"
+                                      PlaceholderText="Buscar producto..."
+                                      AsyncPopulator="{Binding BuscarProductosAsync}"
+                                      SelectedItem="{Binding ProductoSeleccionado}"
+                                      ValueMemberBinding="{Binding Nombre, DataType={x:Type cat:ProductoDto}}"
+                                      FilterMode="None">
+                        <AutoCompleteBox.ItemTemplate>
+                            <DataTemplate x:DataType="cat:ProductoDto">
+                                <TextBlock Text="{Binding Nombre}" />
+                            </DataTemplate>
+                        </AutoCompleteBox.ItemTemplate>
+                    </AutoCompleteBox>
                     <TextBlock Text="Desde:" VerticalAlignment="Center" />
                     <CalendarDatePicker SelectedDate="{Binding FechaDesde}"
                                         PlaceholderText="dd/mm/aaaa"

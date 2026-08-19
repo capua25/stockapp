@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using StockApp.Application.Catalogo;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Movimientos;
 using StockApp.Application.Reportes;
@@ -41,9 +43,27 @@ public partial class HistorialPorProductoViewModel : ViewModelBase
     private readonly ICsvExporter _csvExporter;
     private readonly IServicioGuardadoArchivo _guardado;
     private readonly IConfirmacionService _confirmacion;
+    private readonly IProductoService _productoService;
 
+    /// <summary>
+    /// PK del producto filtrado. Antes se tipeaba a mano en un NumericUpDown -- el ÚNICO
+    /// filtro de esta pantalla, y un ID que no se muestra en ninguna vista de la app (bugfix
+    /// 2026-08-19). Ahora se deriva de <see cref="ProductoSeleccionado"/> (AutoCompleteBox con
+    /// búsqueda server-side), pero se conserva como ObservableProperty propio porque
+    /// CargarAsync/ExportarAsync ya lo usan como fuente de verdad y los tests existentes lo
+    /// asignan directo.
+    /// </summary>
     [ObservableProperty]
     private int _productoId;
+
+    /// <summary>
+    /// Producto elegido en el AutoCompleteBox (bugfix 2026-08-19): "historial de UN producto"
+    /// no admite "todos", así que no hay opción "Todos" acá (a diferencia de
+    /// AuditoriaLogViewModel.UsuarioFiltroSeleccionado).
+    /// </summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(BuscarCommand))]
+    private ProductoDto? _productoSeleccionado;
 
     [ObservableProperty]
     private DateTime? _fechaDesde;
@@ -61,16 +81,45 @@ public partial class HistorialPorProductoViewModel : ViewModelBase
         IReporteStockService servicio,
         ICsvExporter csvExporter,
         IServicioGuardadoArchivo guardado,
-        IConfirmacionService confirmacion)
+        IConfirmacionService confirmacion,
+        IProductoService productoService)
     {
         _servicio = servicio;
         _csvExporter = csvExporter;
         _guardado = guardado;
         _confirmacion = confirmacion;
+        _productoService = productoService;
+
+        BuscarProductosAsync = BuscarProductosInternalAsync;
     }
 
+    partial void OnProductoSeleccionadoChanged(ProductoDto? value)
+        => ProductoId = value?.Id ?? 0;
+
+    /// <summary>
+    /// Delegado para <c>AutoCompleteBox.AsyncPopulator</c> del filtro de producto (bugfix
+    /// 2026-08-19): búsqueda SERVER-SIDE vía IProductoService.BuscarPorTextoAsync (ILIKE sobre
+    /// Codigo/CodigoBarras/Nombre). El catálogo se estima en 100-1000 productos en producción,
+    /// así que NO se precarga completo — el propio AutoCompleteBox ya trae debounce
+    /// (MinimumPopulateDelay) y cancela búsquedas obsoletas vía el CancellationToken.
+    /// </summary>
+    public Func<string?, CancellationToken, Task<IEnumerable<object>>> BuscarProductosAsync { get; }
+
+    private async Task<IEnumerable<object>> BuscarProductosInternalAsync(string? texto, CancellationToken ct)
+    {
+        var resultados = await _productoService.BuscarPorTextoAsync(texto);
+        return resultados;
+    }
+
+    /// <summary>
+    /// Gatea el botón "Buscar" en la UI (bugfix 2026-08-19): sin producto seleccionado, la
+    /// pantalla (cuyo ÚNICO filtro es el producto) no tiene nada sensato que consultar. Mismo
+    /// criterio que MovimientoHistorialViewModel.PuedeEjecutarRecalcular.
+    /// </summary>
+    private bool PuedeBuscar() => ProductoSeleccionado is not null;
+
     /// <summary>Consulta el historial del producto filtrado y puebla <see cref="Items"/>.</summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(PuedeBuscar))]
     private async Task BuscarAsync() => await CargarAsync();
 
     /// <summary>

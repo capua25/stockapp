@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Moq;
+using StockApp.Application.Catalogo;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Movimientos;
 using StockApp.Application.Reportes;
@@ -34,18 +36,27 @@ public class HistorialPorProductoViewModelTests
             UsuarioId: 3,
             UsuarioNombre: "Admin");
 
+    private static ProductoDto CrearProducto(int id, string nombre = "Producto")
+        => new ProductoDto(
+            Id: id, Codigo: $"SKU{id}", CodigoBarras: null, Nombre: nombre, Descripcion: null,
+            CategoriaId: null, CategoriaNombre: null, ProveedorId: null, UnidadMedidaId: 1,
+            UnidadMedidaNombre: "Unidad", PrecioCosto: 0m, PrecioVenta: 0m, StockActual: 0m,
+            StockMinimo: 0m, Activo: true, FechaAlta: default);
+
     private static (
         HistorialPorProductoViewModel vm,
         Mock<IReporteStockService> servicioMock,
         Mock<ICsvExporter> exporterMock,
         Mock<IServicioGuardadoArchivo> guardadoMock,
-        Mock<IConfirmacionService> confirmMock)
+        Mock<IConfirmacionService> confirmMock,
+        Mock<IProductoService> productoSvcMock)
         Crear(IReadOnlyList<MovimientoHistorialDto>? items = null)
     {
         var servicioMock = new Mock<IReporteStockService>();
         var exporterMock = new Mock<ICsvExporter>();
         var guardadoMock = new Mock<IServicioGuardadoArchivo>();
         var confirmMock = new Mock<IConfirmacionService>();
+        var productoSvcMock = new Mock<IProductoService>();
         confirmMock.Setup(c => c.InformarAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
 
         servicioMock
@@ -54,8 +65,9 @@ public class HistorialPorProductoViewModelTests
             .ReturnsAsync(items ?? new List<MovimientoHistorialDto>());
 
         var vm = new HistorialPorProductoViewModel(
-            servicioMock.Object, exporterMock.Object, guardadoMock.Object, confirmMock.Object);
-        return (vm, servicioMock, exporterMock, guardadoMock, confirmMock);
+            servicioMock.Object, exporterMock.Object, guardadoMock.Object, confirmMock.Object,
+            productoSvcMock.Object);
+        return (vm, servicioMock, exporterMock, guardadoMock, confirmMock, productoSvcMock);
     }
 
     // ── tests ──────────────────────────────────────────────────────────────
@@ -64,7 +76,7 @@ public class HistorialPorProductoViewModelTests
     public async Task BuscarCommand_LlamaObtenerHistorialPorProductoAsync_ConParametros()
     {
         var items = new List<MovimientoHistorialDto> { CrearItem(1), CrearItem(2) };
-        var (vm, servicioMock, _, _, _) = Crear(items);
+        var (vm, servicioMock, _, _, _, _) = Crear(items);
 
         var desde = new DateTime(2026, 1, 1);
         var hasta = new DateTime(2026, 1, 31);
@@ -93,7 +105,7 @@ public class HistorialPorProductoViewModelTests
     [Fact]
     public async Task BuscarCommand_ConFechaLocal_ConvierteAUtcAntesDeDelegarAlServicio()
     {
-        var (vm, servicioMock, _, _, _) = Crear();
+        var (vm, servicioMock, _, _, _, _) = Crear();
         var fechaLocal = new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Unspecified);
         vm.ProductoId = 7;
         vm.FechaDesde = fechaLocal;
@@ -109,7 +121,7 @@ public class HistorialPorProductoViewModelTests
     public async Task CargarAsync_LlamaObtenerHistorialPorProductoAsync_YPopulaItems()
     {
         var items = new List<MovimientoHistorialDto> { CrearItem(1), CrearItem(2) };
-        var (vm, servicioMock, _, _, _) = Crear(items);
+        var (vm, servicioMock, _, _, _, _) = Crear(items);
         vm.ProductoId = 7;
 
         await vm.CargarAsync();
@@ -124,7 +136,7 @@ public class HistorialPorProductoViewModelTests
     public async Task ExportarCommand_LlamaExportarConItems()
     {
         var items = new List<MovimientoHistorialDto> { CrearItem() };
-        var (vm, _, exporterMock, guardadoMock, _) = Crear(items);
+        var (vm, _, exporterMock, guardadoMock, _, _) = Crear(items);
 
         var esperado = new[]
         {
@@ -154,7 +166,7 @@ public class HistorialPorProductoViewModelTests
     [Fact]
     public async Task BuscarCommand_ConRangoInvertido_NoLlamaAlServicioYSeteaMensajeError()
     {
-        var (vm, servicioMock, _, _, _) = Crear();
+        var (vm, servicioMock, _, _, _, _) = Crear();
 
         vm.FechaDesde = new DateTime(2026, 2, 1);
         vm.FechaHasta = new DateTime(2026, 1, 1);
@@ -169,7 +181,7 @@ public class HistorialPorProductoViewModelTests
     [Fact]
     public async Task BuscarCommand_ConRangoValido_LimpiaMensajeError()
     {
-        var (vm, servicioMock, _, _, _) = Crear();
+        var (vm, servicioMock, _, _, _, _) = Crear();
 
         vm.FechaDesde = new DateTime(2026, 1, 1);
         vm.FechaHasta = new DateTime(2026, 1, 31);
@@ -187,7 +199,7 @@ public class HistorialPorProductoViewModelTests
     public async Task ExportarCommand_SiFallaGuardarTextoAsync_InformaYNoPropagaLaExcepcion()
     {
         var items = new List<MovimientoHistorialDto> { CrearItem() };
-        var (vm, _, exporterMock, guardadoMock, confirmMock) = Crear(items);
+        var (vm, _, exporterMock, guardadoMock, confirmMock, _) = Crear(items);
         exporterMock
             .Setup(e => e.Exportar(
                 It.IsAny<IEnumerable<MovimientoHistorialDto>>(),
@@ -222,12 +234,74 @@ public class HistorialPorProductoViewModelTests
         var exporterMock = new Mock<ICsvExporter>();
         var guardadoMock = new Mock<IServicioGuardadoArchivo>();
         var confirmMock = new Mock<IConfirmacionService>();
+        var productoSvcMock = new Mock<IProductoService>();
 
         var vm = new HistorialPorProductoViewModel(
-            servicioMock.Object, exporterMock.Object, guardadoMock.Object, confirmMock.Object);
+            servicioMock.Object, exporterMock.Object, guardadoMock.Object, confirmMock.Object,
+            productoSvcMock.Object);
 
         var ex = await Record.ExceptionAsync(() => vm.CargarAsync());
 
         Assert.Null(ex);
+    }
+
+    // ── Bloque "ID imposible de completar" (2026-08-19): NumericUpDown → AutoCompleteBox ──
+    // "Producto ID" era el ÚNICO filtro de esta pantalla y pedía una PK a mano sin mostrarse en
+    // ninguna vista de la app — el peor caso de los tres, la vista entera era inusable. Se
+    // reemplaza por búsqueda server-side (IProductoService.BuscarPorTextoAsync). "Historial de
+    // UN producto" no admite "todos", así que no hay opción "Todos" acá.
+
+    [Fact]
+    public void BuscarCommand_CanExecute_SinProductoSeleccionado_EsFalse()
+    {
+        var (vm, _, _, _, _, _) = Crear();
+
+        Assert.False(vm.BuscarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void BuscarCommand_CanExecute_ConProductoSeleccionado_EsTrue()
+    {
+        var (vm, _, _, _, _, _) = Crear();
+
+        vm.ProductoSeleccionado = CrearProducto(7, "Azúcar");
+
+        Assert.True(vm.BuscarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void ProductoSeleccionado_AlAsignarProducto_DerivaProductoId()
+    {
+        var (vm, _, _, _, _, _) = Crear();
+
+        vm.ProductoSeleccionado = CrearProducto(7, "Azúcar");
+
+        Assert.Equal(7, vm.ProductoId);
+    }
+
+    [Fact]
+    public void ProductoSeleccionado_AlAsignarNull_ProductoIdVuelveACero()
+    {
+        var (vm, _, _, _, _, _) = Crear();
+        vm.ProductoSeleccionado = CrearProducto(7, "Azúcar");
+
+        vm.ProductoSeleccionado = null;
+
+        Assert.Equal(0, vm.ProductoId);
+    }
+
+    [Fact]
+    public async Task BuscarProductosAsync_DelegaEnProductoServiceBuscarPorTextoAsync()
+    {
+        var productos = new List<ProductoDto> { CrearProducto(1, "Azúcar") };
+        var (vm, _, _, _, _, productoSvcMock) = Crear();
+        productoSvcMock
+            .Setup(s => s.BuscarPorTextoAsync("azu"))
+            .ReturnsAsync(productos);
+
+        var resultado = await vm.BuscarProductosAsync("azu", CancellationToken.None);
+
+        Assert.Single(resultado);
+        productoSvcMock.Verify(s => s.BuscarPorTextoAsync("azu"), Times.Once);
     }
 }
