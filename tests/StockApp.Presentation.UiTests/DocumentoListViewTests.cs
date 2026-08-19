@@ -45,7 +45,7 @@ public class DocumentoListViewTests
     {
         var servicio = new DocumentoServiceFake(activos, historial);
         var vm = new DocumentoListViewModel(
-            servicio, new TareaSessionFake(rol), new NavigationRecorderDocumentosFake(), new ConfirmacionServiceFake());
+            servicio, new SesionFake(rol), new NavigationRecorderDocumentosFake(), new ConfirmacionServiceFake());
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
         window.DataContext = vm;

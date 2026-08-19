@@ -48,7 +48,7 @@ public class TareaListViewTests
     {
         var servicio = new TareaServiceFake(tareas);
         var vm = new TareaListViewModel(
-            servicio, new TareaSessionFake(rol), navegacion ?? new NavigationRecorderFake(), new ConfirmacionServiceFake());
+            servicio, new SesionFake(rol), navegacion ?? new NavigationRecorderFake(), new ConfirmacionServiceFake());
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
         window.DataContext = vm;

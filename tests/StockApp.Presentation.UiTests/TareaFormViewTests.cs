@@ -39,7 +39,7 @@ public class TareaFormViewTests
     {
         var servicio = new TareaServiceFake();
         var nav = new NavigationRecorderFake();
-        var vm = new TareaFormViewModel(servicio, new TareaSessionFake(rol), nav, new ConfirmacionServiceFake());
+        var vm = new TareaFormViewModel(servicio, new SesionFake(rol), nav, new ConfirmacionServiceFake());
         vm.CargarParaCrear();
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
@@ -56,7 +56,7 @@ public class TareaFormViewTests
     {
         var servicio = servicioExistente ?? new TareaServiceFake(new System.Collections.Generic.List<Tarea> { tarea });
         var nav = new NavigationRecorderFake();
-        var vm = new TareaFormViewModel(servicio, new TareaSessionFake(rol), nav, new ConfirmacionServiceFake());
+        var vm = new TareaFormViewModel(servicio, new SesionFake(rol), nav, new ConfirmacionServiceFake());
         vm.CargarParaVer(tarea);
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
