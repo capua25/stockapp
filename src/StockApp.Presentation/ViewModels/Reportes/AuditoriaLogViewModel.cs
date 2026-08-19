@@ -1,13 +1,22 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Auditoria;
+using StockApp.Application.Auth;
 using StockApp.Application.Exportacion;
 using StockApp.Presentation.Services;
 
 namespace StockApp.Presentation.ViewModels.Reportes;
+
+/// <summary>
+/// Opción de filtro por usuario para el AutoCompleteBox del log de auditoría (bugfix
+/// 2026-08-19). Valor=null representa "Todos" (sin filtro de usuario) — mismo patrón que
+/// <c>OpcionProducto</c> en <see cref="Movimientos.MovimientoHistorialViewModel"/>.
+/// </summary>
+public sealed record OpcionUsuario(string Nombre, UsuarioDto? Valor);
 
 /// <summary>
 /// ViewModel del reporte de Log de Auditoría (Inc 6). Consulta el historial de
@@ -34,9 +43,25 @@ public partial class AuditoriaLogViewModel : ViewModelBase
     private readonly ICsvExporter _csvExporter;
     private readonly IServicioGuardadoArchivo _guardado;
     private readonly IConfirmacionService _confirmacion;
+    private readonly IUsuarioService _usuarioService;
 
+    /// <summary>
+    /// PK del usuario filtrado. Antes se tipeaba a mano en un NumericUpDown -- un ID que no se
+    /// muestra en ninguna vista de la app (bugfix 2026-08-19). Ahora se deriva de
+    /// <see cref="UsuarioFiltroSeleccionado"/> (AutoCompleteBox con filtrado client-side), pero
+    /// se conserva como ObservableProperty propio porque CargarAsync/ExportarAsync ya lo usan
+    /// como fuente de verdad y los tests existentes lo asignan directo.
+    /// </summary>
     [ObservableProperty]
     private int? _usuarioId;
+
+    /// <summary>Opciones de usuario disponibles para el AutoCompleteBox de filtro ("Todos" +
+    /// todos los usuarios, activos e inactivos -- mismo universo que UsuariosAdminViewModel).</summary>
+    public ObservableCollection<OpcionUsuario> Usuarios { get; } = new();
+
+    /// <summary>Opción de usuario seleccionada (Valor=null = "Todos").</summary>
+    [ObservableProperty]
+    private OpcionUsuario? _usuarioFiltroSeleccionado;
 
     [ObservableProperty]
     private DateTime? _fechaDesde;
@@ -54,12 +79,40 @@ public partial class AuditoriaLogViewModel : ViewModelBase
         IAuditoriaQueryService servicio,
         ICsvExporter csvExporter,
         IServicioGuardadoArchivo guardado,
-        IConfirmacionService confirmacion)
+        IConfirmacionService confirmacion,
+        IUsuarioService usuarioService)
     {
         _servicio = servicio;
         _csvExporter = csvExporter;
         _guardado = guardado;
         _confirmacion = confirmacion;
+        _usuarioService = usuarioService;
+    }
+
+    partial void OnUsuarioFiltroSeleccionadoChanged(OpcionUsuario? value)
+        => UsuarioId = value?.Valor?.Id;
+
+    /// <summary>
+    /// Inicialización de la vista (bugfix 2026-08-19): carga TODOS los usuarios (activos e
+    /// inactivos, igual que UsuariosAdminViewModel.CargarAsync) para el AutoCompleteBox del
+    /// filtro y el log completo. Se invoca una sola vez al mostrar la vista (no hay hook de
+    /// navegación que lo dispare, ver code-behind) -- mismo patrón que
+    /// MovimientoHistorialViewModel.InicializarAsync. A diferencia del filtro de Producto
+    /// (server-side, cientos de filas), acá son ~14 usuarios que no crecen como el catálogo:
+    /// se precarga todo y se usa el filtrado nativo del AutoCompleteBox (FilterMode/ItemFilter,
+    /// ver XAML), sin backend nuevo.
+    /// </summary>
+    public async Task InicializarAsync()
+    {
+        var usuarios = await _usuarioService.ListarAsync();
+        Usuarios.Clear();
+        Usuarios.Add(new OpcionUsuario("Todos", null));
+        foreach (var u in usuarios)
+            Usuarios.Add(new OpcionUsuario(u.NombreUsuario, u));
+
+        UsuarioFiltroSeleccionado = Usuarios[0];
+
+        await CargarAsync();
     }
 
     /// <summary>Consulta el log de auditoría filtrado y puebla <see cref="Items"/>.</summary>

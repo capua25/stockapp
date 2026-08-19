@@ -22,9 +22,27 @@
 
                 <!-- Filtros + acciones -->
                 <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,0,0,12">
-                    <TextBlock Text="Usuario ID:" VerticalAlignment="Center" />
-                    <NumericUpDown Value="{Binding UsuarioId}" Minimum="0" Width="120"
-                                   FormatString="0" Increment="1" />
+                    <!-- Bugfix 2026-08-19: "Usuario ID" pedía la PK a mano, sin mostrarse en
+                         ninguna vista de la app. A diferencia de los filtros de Producto
+                         (cientos de filas, búsqueda server-side), acá son ~14 usuarios que no
+                         crecen como el catálogo: se precarga la lista completa
+                         (AuditoriaLogViewModel.InicializarAsync -> IUsuarioService.ListarAsync)
+                         y se usa el filtrado NATIVO del control (FilterMode="Contains" sobre
+                         ValueMemberBinding). MinimumPrefixLength="0" para que "Todos" se pueda
+                         ver de entrada, sin necesidad de tipear. -->
+                    <TextBlock Text="Usuario:" VerticalAlignment="Center" />
+                    <AutoCompleteBox Width="200"
+                                      ItemsSource="{Binding Usuarios}"
+                                      SelectedItem="{Binding UsuarioFiltroSeleccionado}"
+                                      ValueMemberBinding="{Binding Nombre}"
+                                      FilterMode="Contains"
+                                      MinimumPrefixLength="0">
+                        <AutoCompleteBox.ItemTemplate>
+                            <DataTemplate x:DataType="vm:OpcionUsuario">
+                                <TextBlock Text="{Binding Nombre}" />
+                            </DataTemplate>
+                        </AutoCompleteBox.ItemTemplate>
+                    </AutoCompleteBox>
                     <TextBlock Text="Desde:" VerticalAlignment="Center" />
                     <CalendarDatePicker SelectedDate="{Binding FechaDesde}"
                                         PlaceholderText="dd/mm/aaaa"
