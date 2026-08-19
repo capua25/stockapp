@@ -1,42 +1,46 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Documentos"
+             xmlns:c="using:StockApp.Presentation.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
              x:Class="StockApp.Presentation.Views.Documentos.DocumentoListView"
              x:DataType="vm:DocumentoListViewModel">
 
-    <DockPanel Margin="24">
+    <DockPanel Margin="{DynamicResource MargenVista}">
 
-        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
-            <TextBlock Grid.Column="0" Text="Documentos administrativos" Classes="titulo-vista" />
-            <Button Grid.Column="1" Classes="primary" Content="Nuevo documento" Command="{Binding NuevoCommand}" />
-        </Grid>
+        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="DOCUMENTOS" Titulo="Documentos administrativos">
+            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
+                <Button Classes="primary" Content="Nuevo documento" Command="{Binding NuevoCommand}" />
+            </StackPanel>
+        </c:HeaderVista>
 
         <TabControl x:Name="Solapas" SelectionChanged="OnSolapaSeleccionada">
 
             <TabItem Header="Activos">
                 <DockPanel Margin="0,12,0,0">
 
-                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="12"
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="{DynamicResource Espacio3}"
                                 VerticalAlignment="Bottom" Margin="0,0,0,12">
                         <StackPanel MinWidth="150">
-                            <TextBlock Text="Tipo" />
-                            <ComboBox ItemsSource="{Binding TiposDisponibles}"
-                                      SelectedItem="{Binding FiltroActivosTipoSeleccionado}"
-                                      HorizontalAlignment="Stretch">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding Nombre}" />
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
+                            <c:CampoFormulario Etiqueta="Tipo">
+                                <ComboBox ItemsSource="{Binding TiposDisponibles}"
+                                          SelectedItem="{Binding FiltroActivosTipoSeleccionado}"
+                                          HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Nombre}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </c:CampoFormulario>
                         </StackPanel>
                         <StackPanel MinWidth="280">
-                            <TextBlock Text="Buscar" />
-                            <TextBox Text="{Binding FiltroActivosTexto}"
-                                     Watermark="Número, descripción..." />
+                            <c:CampoFormulario Etiqueta="Buscar">
+                                <TextBox Text="{Binding FiltroActivosTexto}"
+                                         Watermark="Número, descripción..." />
+                            </c:CampoFormulario>
                         </StackPanel>
                         <Button Classes="secondary" Content="Buscar" Command="{Binding BuscarActivosCommand}" />
                     </StackPanel>
@@ -57,8 +61,8 @@
                                                         </MultiBinding>
                                                     </TextBlock.Text>
                                                 </TextBlock>
-                                                <TextBlock Text="{Binding Descripcion}" Classes="caption" Opacity="0.8" />
-                                                <TextBlock Text="{Binding EstadoTexto}" Classes="caption" Opacity="0.7" />
+                                                <TextBlock Text="{Binding Descripcion}" Classes="caption" />
+                                                <TextBlock Text="{Binding EstadoTexto}" Classes="caption" Foreground="{DynamicResource TextoTerciarioBrush}" />
                                             </StackPanel>
                                             <Button Grid.Column="1" Classes="ghost" Content="Ver"
                                                     Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).VerDetalleCommand}"
@@ -71,7 +75,7 @@
                                                     IsVisible="{Binding PuedeVolverAPendiente}"
                                                     Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).VolverAPendienteCommand}"
                                                     CommandParameter="{Binding}" />
-                                            <Button Grid.Column="4" Classes="primary" Content="Finalizar"
+                                            <Button Grid.Column="4" Classes="secondary" Content="Finalizar"
                                                     IsVisible="{Binding PuedeFinalizar}"
                                                     Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).FinalizarCommand}"
                                                     CommandParameter="{Binding}" />
@@ -96,41 +100,45 @@
             <TabItem Header="Historial">
                 <DockPanel Margin="0,12,0,0">
 
-                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="12"
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="{DynamicResource Espacio3}"
                                 VerticalAlignment="Bottom" Margin="0,0,0,12">
                         <StackPanel MinWidth="100">
-                            <TextBlock Text="Año" />
-                            <NumericUpDown Value="{Binding FiltroHistorialAnio}"
-                                           Minimum="2000" Maximum="2100" FormatString="0" />
+                            <c:CampoFormulario Etiqueta="Año">
+                                <NumericUpDown Value="{Binding FiltroHistorialAnio}"
+                                               Minimum="2000" Maximum="2100" FormatString="0" />
+                            </c:CampoFormulario>
                         </StackPanel>
                         <StackPanel MinWidth="150">
-                            <TextBlock Text="Tipo" />
-                            <ComboBox ItemsSource="{Binding TiposDisponibles}"
-                                      SelectedItem="{Binding FiltroHistorialTipoSeleccionado}"
-                                      HorizontalAlignment="Stretch">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding Nombre}" />
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
+                            <c:CampoFormulario Etiqueta="Tipo">
+                                <ComboBox ItemsSource="{Binding TiposDisponibles}"
+                                          SelectedItem="{Binding FiltroHistorialTipoSeleccionado}"
+                                          HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Nombre}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </c:CampoFormulario>
                         </StackPanel>
                         <StackPanel MinWidth="150">
-                            <TextBlock Text="Estado" />
-                            <ComboBox ItemsSource="{Binding EstadosDisponibles}"
-                                      SelectedItem="{Binding FiltroHistorialEstadoSeleccionado}"
-                                      HorizontalAlignment="Stretch">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding Nombre}" />
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
+                            <c:CampoFormulario Etiqueta="Estado">
+                                <ComboBox ItemsSource="{Binding EstadosDisponibles}"
+                                          SelectedItem="{Binding FiltroHistorialEstadoSeleccionado}"
+                                          HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding Nombre}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </c:CampoFormulario>
                         </StackPanel>
                         <StackPanel MinWidth="240">
-                            <TextBlock Text="Buscar" />
-                            <TextBox Text="{Binding FiltroHistorialTexto}"
-                                     Watermark="Número, descripción..." />
+                            <c:CampoFormulario Etiqueta="Buscar">
+                                <TextBox Text="{Binding FiltroHistorialTexto}"
+                                         Watermark="Número, descripción..." />
+                            </c:CampoFormulario>
                         </StackPanel>
                         <Button Classes="secondary" Content="Buscar" Command="{Binding BuscarHistorialCommand}" />
                     </StackPanel>
@@ -151,8 +159,8 @@
                                                         </MultiBinding>
                                                     </TextBlock.Text>
                                                 </TextBlock>
-                                                <TextBlock Text="{Binding Descripcion}" Classes="caption" Opacity="0.8" />
-                                                <TextBlock Text="{Binding EstadoTexto}" Classes="caption" Opacity="0.7" />
+                                                <TextBlock Text="{Binding Descripcion}" Classes="caption" />
+                                                <TextBlock Text="{Binding EstadoTexto}" Classes="caption" Foreground="{DynamicResource TextoTerciarioBrush}" />
                                             </StackPanel>
                                             <Button Grid.Column="1" Classes="ghost" Content="Ver"
                                                     Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).VerDetalleCommand}"
