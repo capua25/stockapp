@@ -29,26 +29,6 @@ namespace StockApp.Presentation.UiTests;
 /// </summary>
 public class IngresosViewTests
 {
-    private sealed class CurrentSessionFake : ICurrentSession
-    {
-        private readonly RolUsuario _rol;
-        private readonly IReadOnlySet<string> _permisos;
-
-        public CurrentSessionFake(RolUsuario rol, IReadOnlySet<string> permisos)
-        {
-            _rol = rol;
-            _permisos = permisos;
-        }
-
-        public bool EstaAutenticado => true;
-        public UsuarioSesion? UsuarioActual => new(1, "operador", _rol, "Operador de prueba");
-        public RolUsuario? RolActual => _rol;
-        public IReadOnlySet<string> PermisosActuales => _permisos;
-        public void EstablecerPermisos(IReadOnlySet<string> permisos) { }
-        public void IniciarSesion(Usuario usuario) => throw new NotSupportedException("No usado en este banco de pruebas.");
-        public void CerrarSesion() => throw new NotSupportedException("No usado en este banco de pruebas.");
-    }
-
     private sealed class IngresoCajaServiceFake : IIngresoCajaService
     {
         public Task<int> AltaAsync(IngresoCaja ingreso) => throw new NotSupportedException("No usado en este banco de pruebas.");
@@ -70,7 +50,7 @@ public class IngresosViewTests
     {
         var vm = new IngresosViewModel(
             new IngresoCajaServiceFake(),
-            new CurrentSessionFake(rol, permisos),
+            new SesionFake(rol, permisos.ToArray()),
             new NavigationServiceFake(),
             new ConfirmacionServiceFake());
 

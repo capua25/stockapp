@@ -33,26 +33,6 @@ namespace StockApp.Presentation.UiTests;
 /// </summary>
 public class GastosViewTests
 {
-    private sealed class CurrentSessionFake : ICurrentSession
-    {
-        private readonly RolUsuario _rol;
-        private readonly IReadOnlySet<string> _permisos;
-
-        public CurrentSessionFake(RolUsuario rol, IReadOnlySet<string> permisos)
-        {
-            _rol = rol;
-            _permisos = permisos;
-        }
-
-        public bool EstaAutenticado => true;
-        public UsuarioSesion? UsuarioActual => new(1, "operador", _rol, "Operador de prueba");
-        public RolUsuario? RolActual => _rol;
-        public IReadOnlySet<string> PermisosActuales => _permisos;
-        public void EstablecerPermisos(IReadOnlySet<string> permisos) { }
-        public void IniciarSesion(Usuario usuario) => throw new NotSupportedException("No usado en este banco de pruebas.");
-        public void CerrarSesion() => throw new NotSupportedException("No usado en este banco de pruebas.");
-    }
-
     private sealed class GastoServiceFake : IGastoService
     {
         public Task<ResultadoGastoDto> AltaAsync(Gasto gasto, IReadOnlyList<int>? movimientoIds = null)
@@ -99,7 +79,7 @@ public class GastosViewTests
     {
         var vm = new GastosViewModel(
             new GastoServiceFake(),
-            new CurrentSessionFake(rol, permisos),
+            new SesionFake(rol, permisos.ToArray()),
             new ProveedorServiceFake(Array.Empty<Proveedor>()),
             new FuenteFinanciamientoServiceFake(Array.Empty<FuenteFinanciamiento>()),
             new RubroGastoServiceFake(Array.Empty<RubroGasto>()),

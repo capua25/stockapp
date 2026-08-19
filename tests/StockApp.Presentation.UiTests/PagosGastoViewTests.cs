@@ -31,26 +31,6 @@ namespace StockApp.Presentation.UiTests;
 /// </summary>
 public class PagosGastoViewTests
 {
-    private sealed class CurrentSessionFake : ICurrentSession
-    {
-        private readonly RolUsuario _rol;
-        private readonly IReadOnlySet<string> _permisos;
-
-        public CurrentSessionFake(RolUsuario rol, IReadOnlySet<string> permisos)
-        {
-            _rol = rol;
-            _permisos = permisos;
-        }
-
-        public bool EstaAutenticado => true;
-        public UsuarioSesion? UsuarioActual => new(1, "operador", _rol, "Operador de prueba");
-        public RolUsuario? RolActual => _rol;
-        public IReadOnlySet<string> PermisosActuales => _permisos;
-        public void EstablecerPermisos(IReadOnlySet<string> permisos) { }
-        public void IniciarSesion(Usuario usuario) => throw new NotSupportedException("No usado en este banco de pruebas.");
-        public void CerrarSesion() => throw new NotSupportedException("No usado en este banco de pruebas.");
-    }
-
     private sealed class GastoServiceFake : IGastoService
     {
         private readonly Gasto _gasto;
@@ -98,7 +78,7 @@ public class PagosGastoViewTests
 
     private static (Window Window, PagosGastoViewModel Vm) Montar(RolUsuario rol, IReadOnlySet<string> permisos)
     {
-        var session = new CurrentSessionFake(rol, permisos);
+        var session = new SesionFake(rol, permisos.ToArray());
         var adjuntosPanel = new AdjuntosPanelViewModel(
             new AdjuntoServiceFake(),
             new ServicioSeleccionArchivoFake(),

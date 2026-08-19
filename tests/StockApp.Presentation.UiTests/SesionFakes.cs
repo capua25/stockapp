@@ -10,8 +10,17 @@ using StockApp.Presentation.Services;
 namespace StockApp.Presentation.UiTests;
 
 /// <summary>
-/// Sesion de prueba con rol Y permisos explicitos. Reemplaza los CurrentSessionFake duplicados
-/// en GastosViewTests, PagosGastoViewTests, IngresosViewTests e InicioViewTests.
+/// Sesion de prueba con rol Y permisos explicitos.
+///
+/// Reemplaza el CurrentSessionFake privado no-op de GastosViewTests, IngresosViewTests y
+/// PagosGastoViewTests (Task 8.0 de la Fase B). El comentario anterior afirmaba que ya
+/// reemplazaba tambien a InicioViewTests -- eso era falso: nunca se toco ese archivo. La
+/// migracion real, verificada con grep sobre EstablecerPermisos sin resolver contra codigo
+/// viejo (Ruling B-19), encontro SEIS archivos con un EstablecerPermisos no-op, no tres ni
+/// cuatro: los tres de arriba (cerrados aca), TareaFakes.cs (TareaSessionFake, compartido por
+/// Documentos y Tareas, se cierra en la tanda 9) e InicioViewTests.cs/InicioPanelTareasTests.cs
+/// (se cierran en B3). Mientras un EstablecerPermisos sea no-op no se puede testear revocacion
+/// de permiso en caliente en esa vista -- ver FinanzasRevocacionPermisosTests.cs.
 ///
 /// Usar SIEMPRE RolUsuario.Operador con permisos explicitos para testear un gate: Admin
 /// cortocircuita el chequeo en AuthorizationService.cs:65-66 y el test pasa sin probar nada.
