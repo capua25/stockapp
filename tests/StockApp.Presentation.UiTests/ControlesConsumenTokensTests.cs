@@ -24,6 +24,7 @@ public class ControlesConsumenTokensTests
             <StackPanel>
                 <TextBox x:Name="Caja" />
                 <ComboBox x:Name="Combo" />
+                <NumericUpDown x:Name="Numero" />
                 <Button x:Name="BotonPrimario" Classes="primary" Content="Guardar" />
                 <Border x:Name="Tarjeta" Classes="card" />
             </StackPanel>
@@ -73,5 +74,40 @@ public class ControlesConsumenTokensTests
         Assert.Equal(Token("RadioCard"), tarjeta.CornerRadius);
         Assert.Equal(new Thickness(16), tarjeta.Padding);
         Assert.True(tarjeta.BoxShadow.Count > 0, "La card perdio su sombra: sin ella no se despega del fondo.");
+    }
+
+    // ── Bug visual reportado 2026-08-19: flechitas del spinner en TODOS los campos
+    //    numéricos (ej. "Producto ID"). Sin un Style global para NumericUpDown, el control
+    //    queda con el default crudo de FluentTheme (ShowButtonSpinner=True, Background
+    //    semitransparente, Padding asimétrico) que además NO combina con el TextBox themeado
+    //    de este archivo. El fix es un Style global en Controls.axaml, mismo patrón que
+    //    TextBox/ComboBox de más arriba.
+
+    [AvaloniaFact]
+    public void NumericUpDown_OcultaElBotonSpinner()
+    {
+        Assert.False(Buscar<NumericUpDown>(Montar(), "Numero").ShowButtonSpinner);
+    }
+
+    [AvaloniaFact]
+    public void NumericUpDown_UsaElRadioBaseDelSistema()
+    {
+        Assert.Equal(Token("RadioBase"), Buscar<NumericUpDown>(Montar(), "Numero").CornerRadius);
+    }
+
+    [AvaloniaFact]
+    public void NumericUpDown_UsaElMismoPaddingQueUnTextBoxComun()
+    {
+        var window = Montar();
+        var numero = Buscar<NumericUpDown>(window, "Numero");
+        var caja = Buscar<TextBox>(window, "Caja");
+
+        // Sin flechitas, un NumericUpDown tiene que quedar indistinguible de un TextBox: mismo
+        // padding (que además se propaga por TemplateBinding al TextBox interno PART_TextBox,
+        // así que alcanza con igualarlo acá para que el texto se vea alineado igual) y mismo
+        // fondo/borde/radio -- si alguno diverge, el campo "sin spinner" igual se ve como un
+        // control distinto en vez de un campo de texto común.
+        Assert.Equal(caja.Padding, numero.Padding);
+        Assert.Equal(caja.CornerRadius, numero.CornerRadius);
     }
 }

@@ -192,6 +192,30 @@
         <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}" />
     </Style>
 
+    <!-- ── NumericUpDown (global, sin clase requerida) ──────────────────────────
+         ShowButtonSpinner="False" en TODA la app: el usuario reportó las flechitas
+         arriba/abajo como ruido visual en cada campo numérico (ej. "Producto ID").
+         Sin este Style, NumericUpDown queda con el default crudo de FluentTheme
+         (Background semitransparente #66ffffff, BorderBrush #99000000, Padding
+         asimétrico 10,6,6,5, CornerRadius 3) que NO combina con el TextBox
+         themeado de acá arriba — se ve como un control totalmente distinto. Mismos
+         tokens que TextBox (Background/BorderBrush/CornerRadius/Padding) para que,
+         sin flechitas, un NumericUpDown sea visualmente indistinguible de un campo
+         de texto común. El Padding del NumericUpDown se propaga por TemplateBinding
+         al TextBox interno (PART_TextBox), así que definirlo acá alcanza para que
+         el texto quede alineado igual que en un TextBox — no hace falta tocar el
+         template. Verificado (headless): al ocultar el spinner el TextBox interno
+         ya se estira solo para ocupar el ancho completo, sin dejar hueco. -->
+    <Style Selector="NumericUpDown">
+        <Setter Property="ShowButtonSpinner" Value="False" />
+        <Setter Property="Background" Value="{DynamicResource SuperficieBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BordeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{DynamicResource RadioBase}" />
+        <Setter Property="Padding" Value="10,8" />
+        <Setter Property="Foreground" Value="{DynamicResource TextoPrimarioBrush}" />
+    </Style>
+
     <!-- ── ComboBox (global, sin clase requerida) ───────────────────────────── -->
     <Style Selector="ComboBox">
         <Setter Property="Background" Value="{DynamicResource SuperficieBrush}" />
