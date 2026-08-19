@@ -95,12 +95,26 @@ internal sealed class TareaServiceFake : ITareaService
 /// TareaFila.PuedeCancelar y TareaFormViewModel.EsAdmin, que controles debe exponer la VISTA.</summary>
 internal sealed class TareaSessionFake : ICurrentSession
 {
-    public TareaSessionFake(RolUsuario rol) => RolActual = rol;
+    private readonly IReadOnlySet<string> _permisos;
+
+    public TareaSessionFake(RolUsuario rol) : this(rol, Array.Empty<string>()) { }
+
+    /// <summary>
+    /// Overload con permisos explicitos. Sin esto, PermisosActuales devolvia SIEMPRE un set
+    /// vacio y la unica forma de que un gate diera true era montar con Admin — que cortocircuita
+    /// el chequeo y deja el test verde sin probar el gate.
+    /// </summary>
+    public TareaSessionFake(RolUsuario rol, params string[] permisos)
+    {
+        RolActual = rol;
+        _permisos = new HashSet<string>(permisos);
+    }
 
     public bool EstaAutenticado => true;
-    public StockApp.Application.Auth.UsuarioSesion? UsuarioActual => null;
+    public StockApp.Application.Auth.UsuarioSesion? UsuarioActual
+        => new(1, "prueba", RolActual!.Value, "Usuario de prueba");
     public RolUsuario? RolActual { get; }
-    public IReadOnlySet<string> PermisosActuales => new HashSet<string>();
+    public IReadOnlySet<string> PermisosActuales => _permisos;
     public void EstablecerPermisos(IReadOnlySet<string> permisos) { }
 
     public void IniciarSesion(Usuario usuario) => throw new NotSupportedException("No usado en este banco de pruebas.");

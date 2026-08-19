@@ -54,24 +54,6 @@ public class InicioPanelTareasTests
         public void CerrarSesion() => throw new NotSupportedException("No usado en este banco de pruebas.");
     }
 
-    /// <summary>
-    /// Fake mínimo de IAuthService (review Ronda 1, Task 14): InicioViewModel lo necesita para
-    /// refrescar permisos al entrar a la pantalla (CargarAsync). ObtenerPermisosPropiosAsync
-    /// devuelve vacío -- ninguno de estos tests ejercita el refresco en sí, solo necesitan que
-    /// no rompa (RefrescoPermisos.DispararBestEffortAsync ya absorbe cualquier excepción, así
-    /// que ni siquiera hace falta que este fake tenga éxito).
-    /// </summary>
-    private sealed class AuthServiceFake : IAuthService
-    {
-        public Task<LoginResult> LoginAsync(string nombreUsuario, string contrasena)
-            => throw new NotSupportedException("No usado en este banco de pruebas.");
-
-        public Task LogoutAsync() => throw new NotSupportedException("No usado en este banco de pruebas.");
-
-        public Task<IReadOnlySet<string>> ObtenerPermisosPropiosAsync()
-            => Task.FromResult<IReadOnlySet<string>>(new HashSet<string>());
-    }
-
     private sealed class FinanzasVistasServiceFake : IFinanzasVistasService
     {
         public Task<LibroCajaMesDto> ObtenerLibroCajaMesAsync(int anio, int mes)
