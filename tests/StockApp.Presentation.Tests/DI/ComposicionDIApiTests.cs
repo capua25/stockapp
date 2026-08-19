@@ -89,6 +89,7 @@ public class ComposicionDIApiTests
         services.AddSingleton<IConfirmacionService, ConfirmacionService>();
         services.AddSingleton<IServicioGuardadoArchivo, ServicioGuardadoArchivo>();
         services.AddSingleton<IServicioEstadoVentana, ServicioEstadoVentana>();
+        services.AddSingleton<IServicioPreferenciasSidebar, ServicioPreferenciasSidebar>();
         services.AddTransient<ICsvExporter, CsvExporter>();
 
         // ── ViewModels (los mismos que cubrían los 3 tests reemplazados) ──────

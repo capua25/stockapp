@@ -22,6 +22,10 @@ public class ShellMainViewModelTests
     {
         var sessionMock = new Mock<ICurrentSession>();
         sessionMock.Setup(s => s.RolActual).Returns(rol);
+        // Grupos/ItemNavegacion (Task 5.2) evalúan las Puede* en el constructor para armar el
+        // sidebar; sin este setup, un Operador (RolActual != Admin) dispara
+        // PermisosActuales.Contains(...) sobre un mock sin configurar -> NullReferenceException.
+        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
 
         var navMock = new Mock<INavigationService>();
 
@@ -30,7 +34,7 @@ public class ShellMainViewModelTests
 
         var vm = new ShellMainViewModel(
             sessionMock.Object, navMock.Object, Mock.Of<IInfoApp>(x => x.Version == "0.0.0"), confirmMock.Object,
-            Mock.Of<IAuthService>());
+            Mock.Of<IAuthService>(), Mock.Of<IServicioPreferenciasSidebar>());
         return (vm, sessionMock, navMock, confirmMock);
     }
 
@@ -85,7 +89,7 @@ public class ShellMainViewModelTests
 
         var vm = new ShellMainViewModel(
             sessionMock.Object, Mock.Of<INavigationService>(), infoApp, Mock.Of<IConfirmacionService>(),
-            Mock.Of<IAuthService>());
+            Mock.Of<IAuthService>(), Mock.Of<IServicioPreferenciasSidebar>());
 
         Assert.Equal("v9.9.9", vm.VersionTexto);
     }
@@ -420,7 +424,7 @@ public class ShellMainViewModelTests
         var navMock = new Mock<INavigationService>();
         var vm = new ShellMainViewModel(
             sessionMock.Object, navMock.Object, Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
-            Mock.Of<IConfirmacionService>(), authMock.Object);
+            Mock.Of<IConfirmacionService>(), authMock.Object, Mock.Of<IServicioPreferenciasSidebar>());
 
         Assert.False(vm.PuedeVerReportes);
 
@@ -453,7 +457,7 @@ public class ShellMainViewModelTests
         var navMock = new Mock<INavigationService>();
         var vm = new ShellMainViewModel(
             sessionMock.Object, navMock.Object, Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
-            Mock.Of<IConfirmacionService>(), authMock.Object);
+            Mock.Of<IConfirmacionService>(), authMock.Object, Mock.Of<IServicioPreferenciasSidebar>());
 
         Assert.False(vm.PuedeGestionarDocumentos);
 
@@ -482,7 +486,7 @@ public class ShellMainViewModelTests
         var navMock = new Mock<INavigationService>();
         var vm = new ShellMainViewModel(
             sessionMock.Object, navMock.Object, Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
-            Mock.Of<IConfirmacionService>(), authMock.Object);
+            Mock.Of<IConfirmacionService>(), authMock.Object, Mock.Of<IServicioPreferenciasSidebar>());
 
         navMock.Raise(n => n.Cambiado += null);
 
@@ -511,7 +515,7 @@ public class ShellMainViewModelTests
         sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
         var vm = new ShellMainViewModel(
             sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
-            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>());
+            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>(), Mock.Of<IServicioPreferenciasSidebar>());
 
         var valor = (bool)typeof(ShellMainViewModel).GetProperty(propiedad)!.GetValue(vm)!;
 
@@ -534,7 +538,7 @@ public class ShellMainViewModelTests
         sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string> { permiso });
         var vm = new ShellMainViewModel(
             sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
-            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>());
+            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>(), Mock.Of<IServicioPreferenciasSidebar>());
 
         var valor = (bool)typeof(ShellMainViewModel).GetProperty(propiedad)!.GetValue(vm)!;
 
@@ -559,7 +563,7 @@ public class ShellMainViewModelTests
         sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
         var vm = new ShellMainViewModel(
             sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
-            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>());
+            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>(), Mock.Of<IServicioPreferenciasSidebar>());
 
         var valor = (bool)typeof(ShellMainViewModel).GetProperty(propiedad)!.GetValue(vm)!;
 
@@ -590,7 +594,7 @@ public class ShellMainViewModelTests
         sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string> { Permisos.RegistrarMovimientos });
         var vm = new ShellMainViewModel(
             sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
-            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>());
+            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>(), Mock.Of<IServicioPreferenciasSidebar>());
 
         Assert.False(vm.PuedeIngresarPorFactura);
     }
@@ -606,7 +610,7 @@ public class ShellMainViewModelTests
         });
         var vm = new ShellMainViewModel(
             sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
-            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>());
+            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>(), Mock.Of<IServicioPreferenciasSidebar>());
 
         Assert.False(vm.PuedeIngresarPorFactura);
     }
@@ -622,7 +626,7 @@ public class ShellMainViewModelTests
         });
         var vm = new ShellMainViewModel(
             sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
-            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>());
+            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>(), Mock.Of<IServicioPreferenciasSidebar>());
 
         Assert.False(vm.PuedeIngresarPorFactura);
     }
@@ -639,7 +643,7 @@ public class ShellMainViewModelTests
         });
         var vm = new ShellMainViewModel(
             sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
-            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>());
+            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>(), Mock.Of<IServicioPreferenciasSidebar>());
 
         Assert.True(vm.PuedeIngresarPorFactura);
     }
@@ -665,7 +669,7 @@ public class ShellMainViewModelTests
         var navMock = new Mock<INavigationService>();
         var vm = new ShellMainViewModel(
             sessionMock.Object, navMock.Object, Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
-            Mock.Of<IConfirmacionService>(), authMock.Object);
+            Mock.Of<IConfirmacionService>(), authMock.Object, Mock.Of<IServicioPreferenciasSidebar>());
 
         Assert.False(vm.PuedeIngresarPorFactura);
 
@@ -696,7 +700,7 @@ public class ShellMainViewModelTests
         sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string> { Permisos.RegistrarMovimientos });
         var vm = new ShellMainViewModel(
             sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
-            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>());
+            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>(), Mock.Of<IServicioPreferenciasSidebar>());
 
         Assert.False(vm.PuedeRegistrarEntradaSalida);
     }
@@ -709,7 +713,7 @@ public class ShellMainViewModelTests
         sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string> { Permisos.GestionarProductos });
         var vm = new ShellMainViewModel(
             sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
-            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>());
+            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>(), Mock.Of<IServicioPreferenciasSidebar>());
 
         Assert.False(vm.PuedeRegistrarEntradaSalida);
     }
@@ -725,7 +729,7 @@ public class ShellMainViewModelTests
         });
         var vm = new ShellMainViewModel(
             sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
-            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>());
+            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>(), Mock.Of<IServicioPreferenciasSidebar>());
 
         Assert.True(vm.PuedeRegistrarEntradaSalida);
     }
@@ -749,7 +753,7 @@ public class ShellMainViewModelTests
         var navMock = new Mock<INavigationService>();
         var vm = new ShellMainViewModel(
             sessionMock.Object, navMock.Object, Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
-            Mock.Of<IConfirmacionService>(), authMock.Object);
+            Mock.Of<IConfirmacionService>(), authMock.Object, Mock.Of<IServicioPreferenciasSidebar>());
 
         Assert.False(vm.PuedeRegistrarEntradaSalida);
 
@@ -781,7 +785,7 @@ public class ShellMainViewModelTests
         sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
         var vm = new ShellMainViewModel(
             sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
-            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>());
+            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>(), Mock.Of<IServicioPreferenciasSidebar>());
 
         Assert.True(vm.PuedeVerHistorialPorProducto);
     }
@@ -794,7 +798,7 @@ public class ShellMainViewModelTests
         sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string> { Permisos.VerReportes });
         var vm = new ShellMainViewModel(
             sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
-            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>());
+            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>(), Mock.Of<IServicioPreferenciasSidebar>());
 
         Assert.False(vm.PuedeVerHistorialPorProducto);
     }
@@ -807,7 +811,7 @@ public class ShellMainViewModelTests
         sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string> { Permisos.RegistrarMovimientos });
         var vm = new ShellMainViewModel(
             sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
-            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>());
+            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>(), Mock.Of<IServicioPreferenciasSidebar>());
 
         Assert.False(vm.PuedeVerHistorialPorProducto);
     }
@@ -823,7 +827,7 @@ public class ShellMainViewModelTests
         });
         var vm = new ShellMainViewModel(
             sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
-            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>());
+            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>(), Mock.Of<IServicioPreferenciasSidebar>());
 
         Assert.True(vm.PuedeVerHistorialPorProducto);
     }
@@ -847,7 +851,7 @@ public class ShellMainViewModelTests
         var navMock = new Mock<INavigationService>();
         var vm = new ShellMainViewModel(
             sessionMock.Object, navMock.Object, Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
-            Mock.Of<IConfirmacionService>(), authMock.Object);
+            Mock.Of<IConfirmacionService>(), authMock.Object, Mock.Of<IServicioPreferenciasSidebar>());
 
         Assert.False(vm.PuedeVerHistorialPorProducto);
 

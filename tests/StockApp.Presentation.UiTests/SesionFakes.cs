@@ -62,3 +62,17 @@ internal sealed class AuthServiceFake : IAuthService
     public Task<IReadOnlySet<string>> ObtenerPermisosPropiosAsync()
         => Task.FromResult<IReadOnlySet<string>>(new HashSet<string>());
 }
+
+/// <summary>
+/// Fake escrito a mano (StockApp.Presentation.UiTests no tiene Moq) del sexto parametro de
+/// ShellMainViewModel (Task 5.2). Siempre arranca sin preferencias guardadas: los 11 tests de
+/// ShellMainViewGatesTests.cs prueban gates de permiso, no persistencia de expansion de grupos —
+/// esa persistencia ya tiene su propia cobertura en ServicioPreferenciasSidebarTests.cs y
+/// ShellMainViewModelGruposTests.cs.
+/// </summary>
+internal sealed class PreferenciasSidebarFake : IServicioPreferenciasSidebar
+{
+    public PreferenciasSidebar? Cargar() => null;
+
+    public void Guardar(PreferenciasSidebar preferencias) { }
+}

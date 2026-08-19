@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -33,6 +35,7 @@ public partial class ShellMainViewModel : ViewModelBase
     private readonly IInfoApp           _infoApp;
     private readonly IConfirmacionService _confirmacion;
     private readonly IAuthService       _authService;
+    private readonly IServicioPreferenciasSidebar _preferencias;
 
     /// <summary>
     /// Task del refresco de permisos disparado por la última navegación (spec decisión 7).
@@ -154,21 +157,108 @@ public partial class ShellMainViewModel : ViewModelBase
     [ObservableProperty]
     private ViewModelBase? _currentContent;
 
+    /// <summary>
+    /// Item fijo "Inicio", fuera de todo grupo (tabla de grupos, spec 2026-08-18: "(ninguno) —
+    /// Inicio — siempre, queda fijo arriba").
+    /// </summary>
+    public ItemNavegacion ItemInicio { get; }
+
+    /// <summary>
+    /// Los 8 grupos colapsables del sidebar (Tanda 5). Títulos e íconos son literales copiados
+    /// de ShellMainView.axaml — la única etiqueta nueva es "Movimientos" (ver spec, excepción
+    /// explícita al Global Constraint de copy).
+    /// </summary>
+    public IReadOnlyList<GrupoNavegacion> Grupos { get; }
+
     public ShellMainViewModel(
         ICurrentSession session,
         INavigationService navigation,
         IInfoApp infoApp,
         IConfirmacionService confirmacion,
-        IAuthService authService)
+        IAuthService authService,
+        IServicioPreferenciasSidebar preferencias)
     {
         _session      = session;
         _navigation   = navigation;
         _infoApp      = infoApp;
         _confirmacion = confirmacion;
         _authService  = authService;
+        _preferencias = preferencias;
 
         // Suscribirse al evento del servicio para actualizar la región de contenido
         _navigation.Cambiado += OnNavegacionCambiada;
+
+        ItemInicio = new ItemNavegacion("Inicio", "mdi-home", NavInicioCommand, "Inicio", true);
+
+        Grupos = new List<GrupoNavegacion>
+        {
+            new GrupoNavegacion("Movimientos", new List<ItemNavegacion>
+            {
+                new ItemNavegacion("Productos", "mdi-package-variant", NavProductosCommand, "Productos", PuedeGestionarProductos),
+                new ItemNavegacion("Registrar Entrada", "mdi-tray-arrow-down", NavRegistrarEntradaCommand, "RegistrarEntrada", PuedeRegistrarEntradaSalida),
+                new ItemNavegacion("Ingreso por factura", "mdi-receipt-text-plus", NavIngresoPorFacturaCommand, "IngresoPorFactura", PuedeIngresarPorFactura),
+                new ItemNavegacion("Registrar Salida", "mdi-tray-arrow-up", NavRegistrarSalidaCommand, "RegistrarSalida", PuedeRegistrarEntradaSalida),
+                new ItemNavegacion("Historial de movimientos", "mdi-history", NavHistorialMovimientosCommand, "HistorialMovimientos", PuedeRegistrarMovimientos),
+            }),
+            new GrupoNavegacion("Tareas", new List<ItemNavegacion>
+            {
+                new ItemNavegacion("Tareas", "mdi-checkbox-marked-outline", NavTareasCommand, "Tareas", PuedeGestionarTareas),
+            }),
+            new GrupoNavegacion("Documentos", new List<ItemNavegacion>
+            {
+                new ItemNavegacion("Documentos administrativos", "mdi-file-cabinet", NavDocumentosCommand, "Documentos", PuedeGestionarDocumentos),
+            }),
+            new GrupoNavegacion("Finanzas", new List<ItemNavegacion>
+            {
+                new ItemNavegacion("Gastos y facturas", "mdi-receipt-text", NavGastosCommand, "Gastos", PuedeVerFinanzas),
+                new ItemNavegacion("Ingresos de caja", "mdi-cash-plus", NavIngresosCommand, "Ingresos", PuedeVerFinanzas),
+                new ItemNavegacion("Maestros de finanzas", "mdi-cash-multiple", NavMaestrosFinanzasCommand, "MaestrosFinanzas", PuedeGestionarMaestrosFinanzas),
+                new ItemNavegacion("Libro caja", "mdi-book-open-variant", NavLibroCajaCommand, "LibroCaja", PuedeVerFinanzas),
+                new ItemNavegacion("Control POA", "mdi-chart-donut", NavControlPoaCommand, "ControlPoa", PuedeVerFinanzas),
+                new ItemNavegacion("Calendario de pagos", "mdi-calendar-clock", NavCalendarioPagosCommand, "CalendarioPagos", PuedeVerFinanzas),
+            }),
+            new GrupoNavegacion("Importación", new List<ItemNavegacion>
+            {
+                new ItemNavegacion("Importar planillas", "mdi-file-upload", NavImportacionCommand, "Importacion", EsAdmin),
+            }),
+            new GrupoNavegacion("Tablas maestras", new List<ItemNavegacion>
+            {
+                new ItemNavegacion("Categorías", "mdi-shape", NavCategoriasCommand, "Categorias", PuedeGestionarTablasMaestras),
+                new ItemNavegacion("Proveedores", "mdi-truck", NavProveedoresCommand, "Proveedores", PuedeGestionarTablasMaestras),
+                new ItemNavegacion("Unidades de medida", "mdi-ruler", NavUnidadesMedidaCommand, "UnidadesMedida", PuedeGestionarTablasMaestras),
+            }),
+            new GrupoNavegacion("Reportes", new List<ItemNavegacion>
+            {
+                new ItemNavegacion("Valorización de inventario", "mdi-currency-usd", NavValorizacionCommand, "Valorizacion", PuedeVerReportes),
+                new ItemNavegacion("Stock por categoría", "mdi-chart-pie", NavStockCategoriaCommand, "StockCategoria", PuedeVerReportes),
+                new ItemNavegacion("Historial por producto", "mdi-file-document", NavHistorialPorProductoCommand, "HistorialPorProducto", PuedeVerHistorialPorProducto),
+                new ItemNavegacion("Productos más movidos", "mdi-trending-up", NavMasMovidosCommand, "MasMovidos", PuedeVerReportes),
+                new ItemNavegacion("Log de auditoría", "mdi-shield-search", NavAuditoriaLogCommand, "AuditoriaLog", PuedeVerReportes),
+            }),
+            new GrupoNavegacion("Administración", new List<ItemNavegacion>
+            {
+                new ItemNavegacion("Mantenimiento", "mdi-database-cog", NavMantenimientoCommand, "Mantenimiento", EsAdmin),
+                new ItemNavegacion("Usuarios", "mdi-account-cog", NavUsuariosCommand, "Usuarios", EsAdmin),
+            }),
+        };
+
+        // Restaurar expansión guardada (Task 5.1). Un nombre de grupo desconocido (ej. si se
+        // renombró un grupo entre versiones) se ignora sin romper el arranque.
+        var gruposAbiertos = _preferencias.Cargar()?.GruposAbiertos ?? Array.Empty<string>();
+        foreach (var grupo in Grupos)
+            grupo.EstaExpandido = gruposAbiertos.Contains(grupo.Titulo);
+    }
+
+    /// <summary>
+    /// Alterna la expansión de un grupo del sidebar y persiste la preferencia (Task 5.1).
+    /// </summary>
+    [RelayCommand]
+    private void AlternarGrupo(GrupoNavegacion grupo)
+    {
+        grupo.EstaExpandido = !grupo.EstaExpandido;
+
+        var abiertos = Grupos.Where(g => g.EstaExpandido).Select(g => g.Titulo).ToList();
+        _preferencias.Guardar(new PreferenciasSidebar(abiertos));
     }
 
     /// <summary>
@@ -243,6 +333,34 @@ public partial class ShellMainViewModel : ViewModelBase
     /// </summary>
     [ObservableProperty]
     private string? _seccionActiva;
+
+    /// <summary>
+    /// Setter parcial que CommunityToolkit genera para <see cref="SeccionActiva"/>: una sola
+    /// implementación en vez de repetir la lógica en cada uno de los 24 NavXxx(). Actualiza
+    /// <see cref="ItemNavegacion.EstaActivo"/> de todos los items (Ruling 2026-08-19: Avalonia no
+    /// acepta {Binding} en ConverterParameter, así que el resaltado del item activo ya no puede
+    /// resolverse en el XAML con un converter) y auto-expande el grupo que contiene la sección
+    /// recién activada (spec: "el grupo que contiene la sección activa se abre solo"), sin cerrar
+    /// los demás grupos ya abiertos.
+    /// </summary>
+    partial void OnSeccionActivaChanged(string? value)
+    {
+        ItemInicio.EstaActivo = ItemInicio.Seccion == value;
+
+        foreach (var grupo in Grupos)
+        {
+            var contieneActiva = false;
+
+            foreach (var item in grupo.Items)
+            {
+                item.EstaActivo = item.Seccion == value;
+                if (item.EstaActivo) contieneActiva = true;
+            }
+
+            if (contieneActiva)
+                grupo.EstaExpandido = true;
+        }
+    }
 
     // ── comandos de navegación ────────────────────────────────────────────────
 

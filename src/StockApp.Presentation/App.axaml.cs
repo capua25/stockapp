@@ -313,6 +313,11 @@ public partial class App : AvaloniaApp
         // logueado ni en BD/API. Sin estado interno propio más allá de la ruta del archivo.
         services.AddSingleton<IServicioEstadoVentana, ServicioEstadoVentana>();
 
+        // ── Persistencia de preferencias del sidebar (grupos abiertos) ────────
+        // Singleton — preferencia LOCAL por PC, archivo propio sidebar.json (ciclo de vida
+        // distinto al de ventana.json: se guarda en cada click, no solo al cerrar la app).
+        services.AddSingleton<IServicioPreferenciasSidebar, ServicioPreferenciasSidebar>();
+
         // ── Inc 5: VMs de movimientos ─────────────────────────────────────────
         services.AddTransient<EntradaRegistroViewModel>();
         services.AddTransient<SalidaRegistroViewModel>();

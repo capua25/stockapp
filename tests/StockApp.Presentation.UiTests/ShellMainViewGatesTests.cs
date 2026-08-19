@@ -41,7 +41,8 @@ public class ShellMainViewGatesTests
             new NavigationServiceFake(),
             new InfoAppFake(),
             new ConfirmacionServiceFake(),
-            new AuthServiceFake());
+            new AuthServiceFake(),
+            new PreferenciasSidebarFake());
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
         window.DataContext = vm;

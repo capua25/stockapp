@@ -35,7 +35,7 @@ public class ShellMainViewModelReportesTests
 
         var vm = new ShellMainViewModel(
             sessionMock.Object, navMock.Object, Mock.Of<IInfoApp>(x => x.Version == "0.0.0"), Mock.Of<IConfirmacionService>(),
-            Mock.Of<IAuthService>());
+            Mock.Of<IAuthService>(), Mock.Of<IServicioPreferenciasSidebar>());
         return (vm, sessionMock, navMock);
     }
 

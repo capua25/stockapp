@@ -1,6 +1,7 @@
 using Moq;
 using StockApp.Application.Auth;
 using StockApp.Application.Interfaces;
+using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels;
@@ -15,12 +16,15 @@ public class ShellMainFinanzasTests
     public void NavMaestrosFinanzas_NavegaYMarcaSeccionActiva()
     {
         var navMock = new Mock<INavigationService>();
+        var sessionMock = new Mock<ICurrentSession>();
+        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
         var vm = new ShellMainViewModel(
-            new Mock<ICurrentSession>().Object,
+            sessionMock.Object,
             navMock.Object,
             Mock.Of<IInfoApp>(i => i.Version == "0.0.0"),
             Mock.Of<IConfirmacionService>(),
-            Mock.Of<IAuthService>());
+            Mock.Of<IAuthService>(),
+            Mock.Of<IServicioPreferenciasSidebar>());
 
         vm.NavMaestrosFinanzasCommand.Execute(null);
 
