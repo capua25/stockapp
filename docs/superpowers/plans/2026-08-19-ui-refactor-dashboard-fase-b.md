@@ -159,7 +159,7 @@ Decisiones tomadas al planificar, con su costo si me equivoco. Se toman acá par
 **Ruling B-1 — "(obligatorio)" pasa a asterisco.** `<TextBlock Text="SKU (obligatorio)" />` se convierte en `<c:CampoFormulario Etiqueta="SKU" Requerido="True">`. Esto **cambia el texto renderizado**, y el comentario de `Typography.axaml:47-55` dice que "labels de formulario no se tocan".
 *Por qué igual:* el sufijo "(obligatorio)" **es** el marcado de obligatoriedad, y `CampoFormulario` existe precisamente para estandarizarlo. Conservarlo Y poner `Requerido="True"` marca lo mismo dos veces; conservarlo con `Requerido="False"` deja el componente sin razón de ser en los 12 formularios. Verificado: **ningún test depende de esos literales** (`grep -rn "obligatorio" tests/` → cero coincidencias en localización de controles de UI).
 *Costo si me equivoco:* revertir es mecánico — `Etiqueta="SKU (obligatorio)" Requerido="False"` en cada sitio.
-**⚠ REQUIERE OK EXPLÍCITO DEL USUARIO ANTES DE LA TANDA 6.**
+**APROBADO por el usuario el 2026-08-19.** Ya no bloquea la tanda 6.
 
 **Ruling B-2 — se agrega el token `Thickness` faltante de 8.** `Tokens.axaml` tiene `MargenVista` (24), `PaddingCard` (16) y `PaddingCelda` (12,8), pero no un `Thickness` de 8. La barra de acciones de ~20 vistas lo necesita.
 *Por qué:* la tanda 5 ya se comió esta deuda (`Padding="8"` literal en `ShellMainView.axaml:22`, documentado en el ledger). Repetirla 20 veces convierte una deuda puntual en un patrón.
@@ -189,6 +189,11 @@ Decisiones tomadas al planificar, con su costo si me equivoco. Se toman acá par
 **No hay ningún `OR` de permisos que cortocircuitar.** El problema real de montar con Admin es otro: `PuedeAnular`/`PuedeReabrir` quedan **fijos en `true`** y nunca se ve el gate en `false`. Un test de "permisos mixtos" sobre estos cinco daría verde sin probar nada — el mismo error, con otro disfraz.
 *Corrección:* la matriz correcta cruza **rol** (Admin / Operador) con **estado del documento** (Pendiente / EnProceso / Finalizado / Anulado). Detalle en la tanda 9.
 *Costo si me equivoco:* ninguno; es lectura directa de tres archivos.
+
+**Ruling B-6 — Stock negativo: task transversal propia al final de B2.** `SignoNegativoBrushConverter` está en 11 sitios de 8 vistas repartidas en 4 tandas distintas (6, 8, 10 y potencialmente otras). En vez de migrar cada sitio a `BadgeEstado` en la tanda que toca ese archivo, se agrupan los 11 en una sola task dedicada, al cierre de B2 (tras la tanda 10).
+*Por qué:* repartir un cambio de semántica (color→badge) en 4 commits distintos deja la app comunicando lo mismo de dos formas diferentes durante todo B2/B3 — algunas vistas con badge, otras todavía con el color solo, durante semanas de refactor. Es peor que la inconsistencia visual que el refactor busca eliminar. Un cambio de semántica se hace de una vez o no se hace.
+*Costo si me equivoco:* ninguno funcional — es una decisión de secuenciación de commits, no de diseño. Si hiciera falta revertir, es un solo commit a revertir en vez de cuatro.
+**Decisión del usuario, 2026-08-19.**
 
 ---
 
@@ -309,7 +314,7 @@ Cada ítem se asigna a la tanda que toca el archivo, para no abrir commits trans
 | `Views/MainWindowView.axaml` + `.axaml.cs` + `ViewModels/MainWindowViewModel.cs` | **muertos** (verificado: cero referencias fuera de sí mismos; `ViewLocatorTests` no enumera) | **13** |
 | Paleta Material en `Actualizaciones/` (`#2196F3`, `#FF9800`, `#F44336`, `#FFFDF0`, `#E8F4FD`, `#B71C1C`, `#E65100`, `#FFEBEE`) | 9 sitios en 3 archivos | **12** |
 | `CurrentSessionFake` privados con `EstablecerPermisos` no-op | 3 archivos de test | **8** |
-| `SignoNegativoBrushConverter` (color sin palabra) | 11 sitios en 8 vistas | **ver pregunta abierta** |
+| `SignoNegativoBrushConverter` (color sin palabra) | 11 sitios en 8 vistas | **task transversal propia, al cierre de B2 (Ruling B-6)** |
 
 ---
 
