@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Collections;
 using Moq;
@@ -532,5 +533,77 @@ public class MovimientoHistorialViewModelTests
 
         Assert.Equal(3, vm.Items.Count);
         Assert.Equal(3, vm.ItemsView.Cast<MovimientoHistorialDto>().Count());
+    }
+
+    // ── Bloque "ID imposible de completar" (2026-08-19): NumericUpDown → AutoCompleteBox ──
+    // "Producto a recalcular (ID)" pedía una PK a mano, sin mostrarse en ninguna vista de la
+    // app. Se reemplaza por búsqueda server-side (IProductoService.BuscarPorTextoAsync, ya
+    // existente) vía AutoCompleteBox.AsyncPopulator. RecalcularStockAsync(int) siempre opera
+    // sobre UN producto puntual — no admite "todos" — así que no hay opción "Todos" acá (a
+    // diferencia de ProductoFiltroSeleccionado, que sí la tiene porque es un filtro).
+
+    [Fact]
+    public void RecalcularCommand_CanExecute_SinProductoSeleccionado_EsFalse()
+    {
+        var (vm, _, _, _, _) = Crear();
+
+        Assert.False(vm.RecalcularCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void RecalcularCommand_CanExecute_ConProductoIdParaRecalcularSeteado_EsTrue()
+    {
+        var (vm, _, _, _, _) = Crear();
+
+        vm.ProductoIdParaRecalcular = 5;
+
+        Assert.True(vm.RecalcularCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void ProductoSeleccionadoParaRecalcular_AlAsignarProducto_DerivaProductoIdParaRecalcular()
+    {
+        var (vm, _, _, _, _) = Crear();
+        var producto = CrearProducto(9, "Harina");
+
+        vm.ProductoSeleccionadoParaRecalcular = producto;
+
+        Assert.Equal(9, vm.ProductoIdParaRecalcular);
+    }
+
+    [Fact]
+    public void ProductoSeleccionadoParaRecalcular_AlAsignarNull_ProductoIdParaRecalcularVuelveANull()
+    {
+        var (vm, _, _, _, _) = Crear();
+        vm.ProductoSeleccionadoParaRecalcular = CrearProducto(9, "Harina");
+
+        vm.ProductoSeleccionadoParaRecalcular = null;
+
+        Assert.Null(vm.ProductoIdParaRecalcular);
+    }
+
+    [Fact]
+    public void ProductoSeleccionadoParaRecalcular_AlAsignarProducto_HabilitaRecalcularCommand()
+    {
+        var (vm, _, _, _, _) = Crear();
+
+        vm.ProductoSeleccionadoParaRecalcular = CrearProducto(9, "Harina");
+
+        Assert.True(vm.RecalcularCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task BuscarProductosAsync_DelegaEnProductoServiceBuscarPorTextoAsync()
+    {
+        var productos = new List<ProductoDto> { CrearProducto(1, "Azúcar") };
+        var (vm, _, _, productoSvcMock, _) = Crear();
+        productoSvcMock
+            .Setup(s => s.BuscarPorTextoAsync("azu"))
+            .ReturnsAsync(productos);
+
+        var resultado = await vm.BuscarProductosAsync("azu", CancellationToken.None);
+
+        Assert.Single(resultado);
+        productoSvcMock.Verify(s => s.BuscarPorTextoAsync("azu"), Times.Once);
     }
 }

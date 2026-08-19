@@ -166,7 +166,7 @@ public class MovimientoHistorialGatesTests
             [Permisos.RegistrarMovimientos, Permisos.RecalcularStock]);
 
         var boton = BotonPorContenido(window, "Recalcular stock");
-        var etiquetaCampo = TextoPorContenido(window, "Producto a recalcular (ID):");
+        var etiquetaCampo = TextoPorContenido(window, "Producto a recalcular:");
 
         Assert.True(ArbolVisual.EsVisibleEnArbol(boton));
         Assert.True(ArbolVisual.EsVisibleEnArbol(etiquetaCampo));
@@ -180,7 +180,7 @@ public class MovimientoHistorialGatesTests
             [Permisos.RegistrarMovimientos]);
 
         var boton = BotonPorContenido(window, "Recalcular stock");
-        var etiquetaCampo = TextoPorContenido(window, "Producto a recalcular (ID):");
+        var etiquetaCampo = TextoPorContenido(window, "Producto a recalcular:");
 
         Assert.False(ArbolVisual.EsVisibleEnArbol(boton));
         Assert.False(ArbolVisual.EsVisibleEnArbol(etiquetaCampo));

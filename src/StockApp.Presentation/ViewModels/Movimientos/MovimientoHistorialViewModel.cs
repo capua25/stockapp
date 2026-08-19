@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -51,8 +53,25 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
     [ObservableProperty]
     private DateTime? _fechaHasta;
 
+    /// <summary>
+    /// PK del producto a recalcular. Antes se tipeaba a mano en un NumericUpDown -- un ID que
+    /// no se muestra en NINGUNA vista de la app (bugfix 2026-08-19). Ahora se deriva de
+    /// <see cref="ProductoSeleccionadoParaRecalcular"/> (AutoCompleteBox con búsqueda
+    /// server-side), pero se conserva como ObservableProperty propio porque RecalcularAsync ya
+    /// lo usa como fuente de verdad y los tests existentes lo asignan directo.
+    /// </summary>
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RecalcularCommand))]
     private int? _productoIdParaRecalcular;
+
+    /// <summary>
+    /// Producto elegido en el AutoCompleteBox de "Producto a recalcular" (bugfix 2026-08-19):
+    /// a diferencia de <see cref="ProductoFiltroSeleccionado"/> (que es un FILTRO y admite
+    /// "Todos"), RecalcularStockAsync(int) siempre opera sobre un producto puntual -- no hay
+    /// opción "Todos" acá.
+    /// </summary>
+    [ObservableProperty]
+    private ProductoDto? _productoSeleccionadoParaRecalcular;
 
     /// <summary>Opción de producto seleccionada en el ComboBox de filtro (Valor=null = "Todos").</summary>
     [ObservableProperty]
@@ -116,6 +135,16 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
         new OpcionTipoMovimiento("Salida", TipoMovimiento.Salida),
     };
 
+    /// <summary>
+    /// Delegado para <c>AutoCompleteBox.AsyncPopulator</c> del campo "Producto a recalcular"
+    /// (bugfix 2026-08-19): búsqueda SERVER-SIDE vía IProductoService.BuscarPorTextoAsync (ILIKE
+    /// sobre Codigo/CodigoBarras/Nombre). El catálogo se estima en 100-1000 productos en
+    /// producción, así que NO se precarga completo (a diferencia de Productos, el combo del
+    /// filtro) — el propio AutoCompleteBox ya trae debounce (MinimumPopulateDelay) y cancela
+    /// búsquedas obsoletas vía el CancellationToken que recibe.
+    /// </summary>
+    public Func<string?, CancellationToken, Task<IEnumerable<object>>> BuscarProductosAsync { get; }
+
     public MovimientoHistorialViewModel(
         IMovimientoStockService service,
         INavigationService navigation,
@@ -132,6 +161,8 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
         ItemsView = new DataGridCollectionView(Items);
 
         _tipoFiltroSeleccionado = TiposDisponibles[0];
+
+        BuscarProductosAsync = BuscarProductosInternalAsync;
     }
 
     partial void OnProductoFiltroSeleccionadoChanged(OpcionProducto? value)
@@ -139,6 +170,15 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
 
     partial void OnTipoFiltroSeleccionadoChanged(OpcionTipoMovimiento? value)
         => FiltroTipo = value?.Valor;
+
+    partial void OnProductoSeleccionadoParaRecalcularChanged(ProductoDto? value)
+        => ProductoIdParaRecalcular = value?.Id;
+
+    private async Task<IEnumerable<object>> BuscarProductosInternalAsync(string? texto, CancellationToken ct)
+    {
+        var resultados = await _productoService.BuscarPorTextoAsync(texto);
+        return resultados;
+    }
 
     /// <summary>
     /// Inicialización de la vista: carga los productos activos para el filtro
@@ -246,7 +286,16 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
     /// UnauthorizedAccessException se CONSERVA como red de contención (el permiso puede
     /// revocarse entre el chequeo y la llamada), no como mecanismo principal.
     /// </remarks>
-    [RelayCommand]
+    /// <summary>
+    /// Gatea el botón "Recalcular stock" en la UI (bugfix 2026-08-19): sin selección, apretar
+    /// el botón antes hacía RecalcularAsync retornar en silencio -- ninguna señal de que "no
+    /// pasó nada" porque no había producto elegido. Mismo criterio que
+    /// MovimientoRegistroViewModelBase con ProductoSeleccionado != null. El guard interno de
+    /// RecalcularAsync se conserva igual (ExecuteAsync invocado directo bypasea CanExecute).
+    /// </summary>
+    private bool PuedeEjecutarRecalcular() => ProductoIdParaRecalcular is not null;
+
+    [RelayCommand(CanExecute = nameof(PuedeEjecutarRecalcular))]
     private async Task RecalcularAsync()
     {
         if (ProductoIdParaRecalcular is null || !PuedeRecalcularStock)

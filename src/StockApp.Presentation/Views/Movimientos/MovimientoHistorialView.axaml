@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Movimientos"
              xmlns:dto="using:StockApp.Application.Movimientos"
+             xmlns:cat="using:StockApp.Application.Catalogo"
              xmlns:beh="using:StockApp.Presentation.Behaviors"
              xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:c="using:StockApp.Presentation.Controls"
@@ -18,11 +19,29 @@
                 <!-- "Recalcular stock": oculto sin Permisos.RecalcularStock (bugfix 2026-08-16,
                      ver MovimientoHistorialViewModel.PuedeRecalcularStock). Cada control conserva
                      su propio IsVisible textual (Task 6.3), no se consolido en uno solo. -->
+                <!-- Bugfix 2026-08-19: el NumericUpDown pedia el ID (PK) del producto a mano, un
+                     dato que no se muestra en ninguna vista de la app. Se reemplaza por un
+                     AutoCompleteBox con búsqueda SERVER-SIDE (AsyncPopulator ->
+                     MovimientoHistorialViewModel.BuscarProductosAsync ->
+                     IProductoService.BuscarPorTextoAsync, ILIKE sobre Codigo/CodigoBarras/
+                     Nombre). FilterMode="None" para no reaplicar un filtro client-side de
+                     "empieza con" sobre resultados que el servidor ya matcheo por SKU/código de
+                     barras (no solo por nombre). -->
                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
                             IsVisible="{Binding PuedeRecalcularStock}">
-                    <TextBlock Text="Producto a recalcular (ID):" VerticalAlignment="Center" />
-                    <NumericUpDown Value="{Binding ProductoIdParaRecalcular}" Minimum="0" Width="140"
-                                   FormatString="0" Increment="1" />
+                    <TextBlock Text="Producto a recalcular:" VerticalAlignment="Center" />
+                    <AutoCompleteBox Width="220"
+                                      PlaceholderText="Buscar producto..."
+                                      AsyncPopulator="{Binding BuscarProductosAsync}"
+                                      SelectedItem="{Binding ProductoSeleccionadoParaRecalcular}"
+                                      ValueMemberBinding="{Binding Nombre, DataType={x:Type cat:ProductoDto}}"
+                                      FilterMode="None">
+                        <AutoCompleteBox.ItemTemplate>
+                            <DataTemplate x:DataType="cat:ProductoDto">
+                                <TextBlock Text="{Binding Nombre}" />
+                            </DataTemplate>
+                        </AutoCompleteBox.ItemTemplate>
+                    </AutoCompleteBox>
                 </StackPanel>
                 <Button Classes="secondary"
                         Content="Recalcular stock"
