@@ -184,7 +184,7 @@
                                 Command="{Binding IrAProductosCommand}"
                                 IsVisible="{Binding PuedeGestionarProductos}"
                                 Width="200"
-                                Height="90"
+                                MinHeight="104"
                                 Background="{DynamicResource FondoBrush}"
                                 BorderBrush="{DynamicResource BordeBrush}"
                                 BorderThickness="1"
@@ -193,7 +193,8 @@
                                 Padding="16">
                             <StackPanel Spacing="4">
                                 <TextBlock Text="Productos"
-                                           FontWeight="SemiBold" />
+                                           FontWeight="SemiBold"
+                                           TextWrapping="Wrap" />
                                 <TextBlock Text="Ver y administrar el catálogo"
                                            FontSize="12"
                                            TextWrapping="Wrap"
@@ -205,7 +206,7 @@
                                 Command="{Binding IrARegistrarEntradaCommand}"
                                 IsVisible="{Binding PuedeRegistrarEntradaSalida}"
                                 Width="200"
-                                Height="90"
+                                MinHeight="104"
                                 Background="{DynamicResource FondoBrush}"
                                 BorderBrush="{DynamicResource BordeBrush}"
                                 BorderThickness="1"
@@ -214,7 +215,8 @@
                                 Padding="16">
                             <StackPanel Spacing="4">
                                 <TextBlock Text="Registrar Entrada"
-                                           FontWeight="SemiBold" />
+                                           FontWeight="SemiBold"
+                                           TextWrapping="Wrap" />
                                 <TextBlock Text="Cargar entradas de stock"
                                            FontSize="12"
                                            TextWrapping="Wrap"
@@ -226,7 +228,7 @@
                                 Command="{Binding IrARegistrarSalidaCommand}"
                                 IsVisible="{Binding PuedeRegistrarEntradaSalida}"
                                 Width="200"
-                                Height="90"
+                                MinHeight="104"
                                 Background="{DynamicResource FondoBrush}"
                                 BorderBrush="{DynamicResource BordeBrush}"
                                 BorderThickness="1"
@@ -235,7 +237,8 @@
                                 Padding="16">
                             <StackPanel Spacing="4">
                                 <TextBlock Text="Registrar Salida"
-                                           FontWeight="SemiBold" />
+                                           FontWeight="SemiBold"
+                                           TextWrapping="Wrap" />
                                 <TextBlock Text="Cargar salidas de stock"
                                            FontSize="12"
                                            TextWrapping="Wrap"
@@ -247,7 +250,7 @@
                                 Command="{Binding IrAHistorialMovimientosCommand}"
                                 IsVisible="{Binding PuedeRegistrarMovimientos}"
                                 Width="200"
-                                Height="90"
+                                MinHeight="104"
                                 Background="{DynamicResource FondoBrush}"
                                 BorderBrush="{DynamicResource BordeBrush}"
                                 BorderThickness="1"
@@ -256,7 +259,8 @@
                                 Padding="16">
                             <StackPanel Spacing="4">
                                 <TextBlock Text="Historial de movimientos"
-                                           FontWeight="SemiBold" />
+                                           FontWeight="SemiBold"
+                                           TextWrapping="Wrap" />
                                 <TextBlock Text="Consultar movimientos registrados"
                                            FontSize="12"
                                            TextWrapping="Wrap"
@@ -267,7 +271,7 @@
                         <Button Command="{Binding IrAValorizacionCommand}"
                                 IsVisible="{Binding PuedeVerReportes}"
                                 Width="200"
-                                Height="90"
+                                MinHeight="104"
                                 Background="{DynamicResource FondoBrush}"
                                 BorderBrush="{DynamicResource BordeBrush}"
                                 BorderThickness="1"
@@ -276,7 +280,8 @@
                                 Padding="16">
                             <StackPanel Spacing="4">
                                 <TextBlock Text="Valorización de inventario"
-                                           FontWeight="SemiBold" />
+                                           FontWeight="SemiBold"
+                                           TextWrapping="Wrap" />
                                 <TextBlock Text="Ver el valor total del stock"
                                            FontSize="12"
                                            TextWrapping="Wrap"
@@ -287,7 +292,7 @@
                         <Button Command="{Binding IrAAuditoriaCommand}"
                                 IsVisible="{Binding PuedeVerReportes}"
                                 Width="200"
-                                Height="90"
+                                MinHeight="104"
                                 Background="{DynamicResource FondoBrush}"
                                 BorderBrush="{DynamicResource BordeBrush}"
                                 BorderThickness="1"
@@ -296,7 +301,8 @@
                                 Padding="16">
                             <StackPanel Spacing="4">
                                 <TextBlock Text="Log de auditoría"
-                                           FontWeight="SemiBold" />
+                                           FontWeight="SemiBold"
+                                           TextWrapping="Wrap" />
                                 <TextBlock Text="Revisar la actividad del sistema"
                                            FontSize="12"
                                            TextWrapping="Wrap"

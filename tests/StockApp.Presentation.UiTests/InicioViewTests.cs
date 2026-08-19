@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using StockApp.Application.Auth;
@@ -277,5 +278,37 @@ public class InicioViewTests
 
         Assert.True(vm.PuedeVerAccesosRapidos);
         Assert.True(BuscarBorderPorNombre(window, "BorderAccesosRapidos").IsVisible);
+    }
+
+    // ── Bug visual reportado 2026-08-19: título de card de acceso rápido cortado ──
+    // "Valorización de inventari" se veía cortado a mitad de palabra, sin ellipsis ni wrap.
+    // Causa raíz: el TextBlock del título NO tenía TextWrapping="Wrap" (el subtítulo de abajo sí
+    // lo tiene), y la card tiene Width fijo (200). Con NoWrap el texto no encaja en el ancho
+    // disponible y queda recortado por el clip del Button/Border ancestro, en vez de envolver.
+    // Test observable: comparamos el Bounds.Height (layout REAL vía Skia headless, no una
+    // suposición) del título largo "Valorización de inventario" contra el de un título corto de
+    // una sola línea ("Productos"). Sin Wrap ambos miden lo mismo (una línea) aunque el largo esté
+    // recortado visualmente -- el bug es invisible a esta métrica. Con Wrap, el título largo pasa
+    // a 2 líneas y su Bounds.Height crece sensiblemente por sobre el de una sola línea.
+    private static TextBlock BuscarTextBlockPorTexto(Window window, string texto)
+        => window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == texto);
+
+    [AvaloniaFact]
+    public void Montar_CardValorizacionDeInventario_TituloEnvuelveEnVezDeCortarse()
+    {
+        var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
+        var salud = new SaludBackupDto(DateTime.UtcNow, false, 26);
+
+        var (window, _) = Montar(usuario, salud);
+
+        var tituloLargo = BuscarTextBlockPorTexto(window, "Valorización de inventario");
+        var tituloCorto = BuscarTextBlockPorTexto(window, "Productos");
+
+        Assert.Equal(TextWrapping.Wrap, tituloLargo.TextWrapping);
+        Assert.True(
+            tituloLargo.Bounds.Height > tituloCorto.Bounds.Height * 1.4,
+            "El título 'Valorización de inventario' debe envolver a (al menos) dos líneas, no "
+            + $"quedar recortado en una sola. Alto título largo={tituloLargo.Bounds.Height}, "
+            + $"alto título corto (referencia 1 línea)={tituloCorto.Bounds.Height}.");
     }
 }
