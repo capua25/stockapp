@@ -14,18 +14,24 @@
         <TextBlock Grid.Row="0" Text="Libro caja" Classes="titulo-vista" />
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="12" Margin="0,12">
-            <NumericUpDown Value="{Binding Anio}" Minimum="2020" Maximum="2100" Width="120" />
-            <NumericUpDown Value="{Binding Mes}" Minimum="1" Maximum="12"
-                           Width="100" IsEnabled="{Binding !VerAnioCompleto}" />
-            <CheckBox Content="Año completo" IsChecked="{Binding VerAnioCompleto}" />
-            <Button Content="Actualizar" Command="{Binding RecargarCommand}" />
-            <Button Content="Exportar CSV" Command="{Binding ExportarCsvCommand}" IsVisible="{Binding !VerAnioCompleto}" />
-            <TextBlock Text="Saldo inicial:" IsVisible="{Binding !VerAnioCompleto}" VerticalAlignment="Center" />
+            <StackPanel Spacing="4">
+                <TextBlock Text="Año" Classes="caption" />
+                <NumericUpDown Value="{Binding Anio}" Minimum="2020" Maximum="2100" Width="120" />
+            </StackPanel>
+            <StackPanel Spacing="4">
+                <TextBlock Text="Mes" Classes="caption" />
+                <NumericUpDown Value="{Binding Mes}" Minimum="1" Maximum="12"
+                               Width="100" IsEnabled="{Binding !VerAnioCompleto}" />
+            </StackPanel>
+            <CheckBox Content="Año completo" IsChecked="{Binding VerAnioCompleto}" VerticalAlignment="Bottom" />
+            <Button Content="Actualizar" Command="{Binding RecargarCommand}" VerticalAlignment="Bottom" />
+            <Button Content="Exportar CSV" Command="{Binding ExportarCsvCommand}" IsVisible="{Binding !VerAnioCompleto}" VerticalAlignment="Bottom" />
+            <TextBlock Text="Saldo inicial:" IsVisible="{Binding !VerAnioCompleto}" VerticalAlignment="Bottom" />
             <TextBlock Text="{Binding SaldoInicial, Converter={x:Static conv:MonedaConverter.Instance}}"
-                       IsVisible="{Binding !VerAnioCompleto}" VerticalAlignment="Center" FontWeight="SemiBold" />
-            <TextBlock Text="Saldo final:" IsVisible="{Binding !VerAnioCompleto}" VerticalAlignment="Center" />
+                       IsVisible="{Binding !VerAnioCompleto}" VerticalAlignment="Bottom" FontWeight="SemiBold" />
+            <TextBlock Text="Saldo final:" IsVisible="{Binding !VerAnioCompleto}" VerticalAlignment="Bottom" />
             <TextBlock Text="{Binding SaldoFinal, Converter={x:Static conv:MonedaConverter.Instance}}"
-                       IsVisible="{Binding !VerAnioCompleto}" VerticalAlignment="Center" FontWeight="SemiBold"
+                       IsVisible="{Binding !VerAnioCompleto}" VerticalAlignment="Bottom" FontWeight="SemiBold"
                        Foreground="{Binding SaldoFinal, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}" />
         </StackPanel>
 
