@@ -513,3 +513,6 @@ deploy/dist/
 
 # Harness de agentes — worktrees aislados de sub-agentes (pueden pesar un repo entero)
 .claude/worktrees/
+
+# Mockups de brainstorming (superpowers)
+.superpowers/
