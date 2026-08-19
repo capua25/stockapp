@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
              xmlns:conv="using:StockApp.Presentation.Converters"
+             xmlns:c="using:StockApp.Presentation.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="800"
@@ -9,10 +10,11 @@
              x:DataType="vm:CalendarioPagosViewModel">
 
     <ScrollViewer>
-        <StackPanel Margin="16" Spacing="20">
+        <StackPanel Margin="{DynamicResource MargenVista}" Spacing="{DynamicResource Espacio5}">
 
-            <TextBlock Text="Calendario de pagos" Classes="titulo-vista" />
-            <Button Content="Actualizar" Command="{Binding RecargarCommand}" HorizontalAlignment="Left" />
+            <c:HeaderVista Eyebrow="FINANZAS" Titulo="Calendario de pagos">
+                <Button Classes="primary" Content="Actualizar" Command="{Binding RecargarCommand}" />
+            </c:HeaderVista>
 
             <!-- Los tres botones "Registrar pago" (Vencidas / A vencer 7 dias / A vencer 30
                  dias) estan gateados por PuedeRegistrarPagos (bugfix 2026-08-15): coherencia de
@@ -30,7 +32,7 @@
                                     <TextBlock Grid.Column="1"
                                                Text="{Binding SaldoPendiente, Converter={x:Static conv:MonedaConverter.Instance}}"
                                                Margin="0,0,12,0" />
-                                    <Button Grid.Column="2" Content="Registrar pago"
+                                    <Button Grid.Column="2" Classes="secondary" Content="Registrar pago"
                                             Command="{Binding $parent[UserControl].((vm:CalendarioPagosViewModel)DataContext).RegistrarPagoCommand}"
                                             CommandParameter="{Binding}"
                                             IsVisible="{Binding $parent[UserControl].((vm:CalendarioPagosViewModel)DataContext).PuedeRegistrarPagos}" />
@@ -52,7 +54,7 @@
                                     <TextBlock Grid.Column="1"
                                                Text="{Binding SaldoPendiente, Converter={x:Static conv:MonedaConverter.Instance}}"
                                                Margin="0,0,12,0" />
-                                    <Button Grid.Column="2" Content="Registrar pago"
+                                    <Button Grid.Column="2" Classes="secondary" Content="Registrar pago"
                                             Command="{Binding $parent[UserControl].((vm:CalendarioPagosViewModel)DataContext).RegistrarPagoCommand}"
                                             CommandParameter="{Binding}"
                                             IsVisible="{Binding $parent[UserControl].((vm:CalendarioPagosViewModel)DataContext).PuedeRegistrarPagos}" />
@@ -74,7 +76,7 @@
                                     <TextBlock Grid.Column="1"
                                                Text="{Binding SaldoPendiente, Converter={x:Static conv:MonedaConverter.Instance}}"
                                                Margin="0,0,12,0" />
-                                    <Button Grid.Column="2" Content="Registrar pago"
+                                    <Button Grid.Column="2" Classes="secondary" Content="Registrar pago"
                                             Command="{Binding $parent[UserControl].((vm:CalendarioPagosViewModel)DataContext).RegistrarPagoCommand}"
                                             CommandParameter="{Binding}"
                                             IsVisible="{Binding $parent[UserControl].((vm:CalendarioPagosViewModel)DataContext).PuedeRegistrarPagos}" />

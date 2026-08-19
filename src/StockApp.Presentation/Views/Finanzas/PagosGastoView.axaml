@@ -6,43 +6,37 @@
              xmlns:convA="using:Avalonia.Data.Converters"
              xmlns:beh="using:StockApp.Presentation.Behaviors"
              xmlns:i="https://github.com/projektanker/icons.avalonia"
+             xmlns:c="using:StockApp.Presentation.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="820" d:DesignHeight="640"
              x:Class="StockApp.Presentation.Views.Finanzas.PagosGastoView"
              x:DataType="vm:PagosGastoViewModel">
 
-    <DockPanel Margin="24">
+    <DockPanel Margin="{DynamicResource MargenVista}">
 
-        <TextBlock DockPanel.Dock="Top"
-                   Text="Pagos de la factura"
-                   Classes="titulo-vista"
-                   Margin="0,0,0,8" />
-        <TextBlock DockPanel.Dock="Top"
-                   Text="{Binding TituloGasto}"
-                   TextWrapping="Wrap"
-                   Margin="0,0,0,16" />
+        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="FINANZAS" Titulo="Pagos de la factura" Resumen="{Binding TituloGasto}" />
 
         <!-- Resumen -->
         <Border DockPanel.Dock="Top" Classes="card" Margin="0,0,0,12">
-            <StackPanel Orientation="Horizontal" Spacing="32">
+            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio6}">
                 <StackPanel>
-                    <TextBlock Text="Monto total" Opacity="0.7" />
+                    <TextBlock Text="Monto total" Classes="caption" />
                     <TextBlock Text="{Binding MontoTotal, Converter={x:Static conv:MonedaConverter.Instance}}"
                                FontWeight="SemiBold" />
                 </StackPanel>
                 <StackPanel>
-                    <TextBlock Text="Pagado" Opacity="0.7" />
+                    <TextBlock Text="Pagado" Classes="caption" />
                     <TextBlock Text="{Binding TotalPagado, Converter={x:Static conv:MonedaConverter.Instance}}"
                                FontWeight="SemiBold" />
                 </StackPanel>
                 <StackPanel>
-                    <TextBlock Text="Saldo" Opacity="0.7" />
+                    <TextBlock Text="Saldo" Classes="caption" />
                     <TextBlock Text="{Binding SaldoPendiente, Converter={x:Static conv:MonedaConverter.Instance}}"
                                FontWeight="SemiBold" />
                 </StackPanel>
                 <StackPanel>
-                    <TextBlock Text="Estado" Opacity="0.7" />
+                    <TextBlock Text="Estado" Classes="caption" />
                     <TextBlock Text="{Binding Estado}" FontWeight="SemiBold" />
                 </StackPanel>
             </StackPanel>
@@ -56,9 +50,9 @@
                      formulario se seguia mostrando entero: un Operador sin RegistrarPagos podia
                      llenarlo y no tenia como guardarlo, el mismo callejon sin salida ya cerrado en
                      Gasto/Ingreso. Se oculta el panel completo, no solo el boton. -->
-                <StackPanel x:Name="PanelRegistrarPago" Spacing="8"
+                <StackPanel x:Name="PanelRegistrarPago" Spacing="{DynamicResource Espacio2}"
                             IsVisible="{Binding PuedeRegistrarPagos}">
-                    <TextBlock Text="Registrar pago" FontWeight="SemiBold" />
+                    <TextBlock Text="Registrar pago" Classes="seccion" />
                     <WrapPanel>
                         <StackPanel Margin="0,0,12,8">
                             <TextBlock Text="Fecha" />
@@ -78,11 +72,11 @@
                         </StackPanel>
                     </WrapPanel>
                     <TextBlock Text="{Binding MensajeError}"
-                               Foreground="Red"
+                               Foreground="{DynamicResource DangerBrush}"
                                TextWrapping="Wrap"
                                IsVisible="{Binding MensajeError, Converter={x:Static ObjectConverters.IsNotNull}}" />
                 </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
                     <!-- Registrar pago: gateado por PuedeRegistrarPagos (bugfix 2026-08-15) - GastoService.
                          RegistrarPagoAsync exige Permisos.RegistrarPagos sin condicion. -->
                     <Button Classes="primary" Content="Registrar pago" Command="{Binding RegistrarPagoCommand}"
@@ -122,12 +116,10 @@
                                        Margin="0,0,16,0" />
                             <TextBlock Grid.Column="2"
                                        Text="{Binding Nota}"
-                                       Opacity="0.8"
+                                       Foreground="{DynamicResource TextoTerciarioBrush}"
                                        TextTrimming="CharacterEllipsis" />
-                            <Border Grid.Column="3" Classes="badge-inactiva" IsVisible="{Binding !Activo}"
-                                    Margin="0,0,8,0">
-                                <TextBlock Text="Anulado" Classes="badge-inactiva-texto" />
-                            </Border>
+                            <c:BadgeEstado Grid.Column="3" Texto="Anulado" Tono="Neutro" IsVisible="{Binding !Activo}"
+                                           Margin="0,0,8,0" />
                             <!-- Anular pago: IsVisible combina la condicion de DATOS (Activo: un pago ya
                                  anulado no se vuelve a anular) con la de PERMISO (PuedeRegistrarPagos,
                                  bugfix 2026-08-15) - GastoService.AnularPagoAsync exige

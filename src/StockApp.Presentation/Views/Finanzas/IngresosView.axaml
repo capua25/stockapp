@@ -3,47 +3,45 @@
              xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
              xmlns:e="using:StockApp.Domain.Entities"
              xmlns:conv="using:StockApp.Presentation.Converters"
+             xmlns:c="using:StockApp.Presentation.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
              x:Class="StockApp.Presentation.Views.Finanzas.IngresosView"
              x:DataType="vm:IngresosViewModel">
 
-    <DockPanel Margin="24">
+    <DockPanel Margin="{DynamicResource MargenVista}">
 
-        <TextBlock DockPanel.Dock="Top"
-                   Text="Ingresos de caja"
-                   Classes="titulo-vista"
-                   Margin="0,0,0,16" />
-
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,12">
-            <!-- Nuevo ingreso: gateado por PuedeRegistrarIngresos (bugfix 2026-08-15) - antes sin
-                 gating, un Operador con VerFinanzas (alcanza para entrar a esta pantalla) pero sin
-                 RegistrarIngresos veia el boton habilitado: abria IngresoFormView, llenaba el
-                 formulario completo... y no habia boton "Guardar" (ese SI esta gateado por
-                 PuedeRegistrarIngresos en IngresoFormView), una puerta a una habitacion sin
-                 salida. -->
-            <Button Classes="primary" Content="Nuevo ingreso" Command="{Binding NuevoCommand}"
-                    IsVisible="{Binding PuedeRegistrarIngresos}" />
-            <!-- Editar / Dar de baja: gateados por PuedeRegistrarIngresos (bugfix 2026-08-15)
-                 - antes sin gating, un Operador con VerFinanzas (alcanza para entrar a esta
-                 pantalla) pero sin RegistrarIngresos podia editar o pedir la baja y recien ahi
-                 se comia un 403 (IngresoCajaService.ModificarAsync/BajaLogicaAsync). -->
-            <Button Classes="secondary" Content="Editar" Command="{Binding EditarCommand}"
-                    IsVisible="{Binding PuedeRegistrarIngresos}" />
-            <Button Classes="secondary" Content="Dar de baja" Command="{Binding BajaCommand}"
-                    IsVisible="{Binding PuedeRegistrarIngresos}" />
-            <!-- Indicador "Solo lectura" (bugfix 2026-08-16): con los tres botones de arriba
-                 ocultos por PuedeRegistrarIngresos, un Operador con solo VerFinanzas se quedaba
-                 con titulo y grilla y NINGUN indicio de por que no puede hacer nada - se lee
-                 como pantalla rota en vez de "sin permiso". Negacion directa en el binding
-                 (patron ya usado en DocumentoFormView.axaml IsVisible="{Binding !EsNuevoDocumento}"),
-                 sin propiedad derivada ni converter. Classes="caption" es el estilo de texto
-                 secundario ya definido en Typography.axaml (TextoSecundarioBrush), el mismo que
-                 usan los textos de ayuda de DocumentoFormView/TareaFormView. -->
-            <TextBlock Text="Solo lectura" Classes="caption" VerticalAlignment="Center"
-                       IsVisible="{Binding !PuedeRegistrarIngresos}" />
-        </StackPanel>
+        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="FINANZAS" Titulo="Ingresos de caja">
+            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
+                <!-- Nuevo ingreso: gateado por PuedeRegistrarIngresos (bugfix 2026-08-15) - antes sin
+                     gating, un Operador con VerFinanzas (alcanza para entrar a esta pantalla) pero sin
+                     RegistrarIngresos veia el boton habilitado: abria IngresoFormView, llenaba el
+                     formulario completo... y no habia boton "Guardar" (ese SI esta gateado por
+                     PuedeRegistrarIngresos en IngresoFormView), una puerta a una habitacion sin
+                     salida. -->
+                <Button Classes="primary" Content="Nuevo ingreso" Command="{Binding NuevoCommand}"
+                        IsVisible="{Binding PuedeRegistrarIngresos}" />
+                <!-- Editar / Dar de baja: gateados por PuedeRegistrarIngresos (bugfix 2026-08-15)
+                     - antes sin gating, un Operador con VerFinanzas (alcanza para entrar a esta
+                     pantalla) pero sin RegistrarIngresos podia editar o pedir la baja y recien ahi
+                     se comia un 403 (IngresoCajaService.ModificarAsync/BajaLogicaAsync). -->
+                <Button Classes="secondary" Content="Editar" Command="{Binding EditarCommand}"
+                        IsVisible="{Binding PuedeRegistrarIngresos}" />
+                <Button Classes="secondary" Content="Dar de baja" Command="{Binding BajaCommand}"
+                        IsVisible="{Binding PuedeRegistrarIngresos}" />
+                <!-- Indicador "Solo lectura" (bugfix 2026-08-16): con los tres botones de arriba
+                     ocultos por PuedeRegistrarIngresos, un Operador con solo VerFinanzas se quedaba
+                     con titulo y grilla y NINGUN indicio de por que no puede hacer nada - se lee
+                     como pantalla rota en vez de "sin permiso". Negacion directa en el binding
+                     (patron ya usado en DocumentoFormView.axaml IsVisible="{Binding !EsNuevoDocumento}"),
+                     sin propiedad derivada ni converter. Classes="caption" es el estilo de texto
+                     secundario ya definido en Typography.axaml (TextoSecundarioBrush), el mismo que
+                     usan los textos de ayuda de DocumentoFormView/TareaFormView. -->
+                <TextBlock Text="Solo lectura" Classes="caption" VerticalAlignment="Center"
+                           IsVisible="{Binding !PuedeRegistrarIngresos}" />
+            </StackPanel>
+        </c:HeaderVista>
 
         <Border Classes="card">
             <DataGrid ItemsSource="{Binding ItemsView}"

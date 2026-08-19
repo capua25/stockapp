@@ -57,6 +57,12 @@ public class GuardianDePatronTests
     [InlineData(typeof(IngresoFormView), null, "FINANZAS")]
     [InlineData(typeof(LineaPoaFormView), null, "FINANZAS")]
     [InlineData(typeof(GastoFormView), null, "FINANZAS")]
+    [InlineData(typeof(GastosView), "Gastos y facturas", "FINANZAS")]
+    [InlineData(typeof(IngresosView), "Ingresos de caja", "FINANZAS")]
+    [InlineData(typeof(ControlPoaView), "Control POA", "FINANZAS")]
+    [InlineData(typeof(LibroCajaView), "Libro caja", "FINANZAS")]
+    [InlineData(typeof(CalendarioPagosView), "Calendario de pagos", "FINANZAS")]
+    [InlineData(typeof(PagosGastoView), "Pagos de la factura", "FINANZAS")]
     public void Vista_TieneHeaderVistaConElTituloEsperado(Type tipoVista, string? titulo, string? eyebrow)
     {
         var vista = PatronHelpers.Montar(tipoVista);
@@ -94,6 +100,12 @@ public class GuardianDePatronTests
         typeof(IngresoFormView),
         typeof(LineaPoaFormView),
         typeof(GastoFormView),
+        typeof(GastosView),
+        typeof(IngresosView),
+        typeof(ControlPoaView),
+        typeof(LibroCajaView),
+        typeof(CalendarioPagosView),
+        typeof(PagosGastoView),
     };
 
     /// <summary>
@@ -107,6 +119,7 @@ public class GuardianDePatronTests
         typeof(FuenteFinanciamientoListView),
         typeof(RubroGastoListView),
         typeof(LineaPoaListView),
+        typeof(HistorialImportacionesView),
     };
 
     [AvaloniaTheory]

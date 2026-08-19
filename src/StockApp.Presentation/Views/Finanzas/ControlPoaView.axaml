@@ -3,20 +3,24 @@
              xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
              xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:dto="using:StockApp.Application.Finanzas"
+             xmlns:c="using:StockApp.Presentation.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
              x:Class="StockApp.Presentation.Views.Finanzas.ControlPoaView"
              x:DataType="vm:ControlPoaViewModel">
 
-    <Grid RowDefinitions="Auto,Auto,*" Margin="16">
+    <Grid RowDefinitions="Auto,Auto,*" Margin="{DynamicResource MargenVista}">
 
-        <TextBlock Grid.Row="0" Text="Control POA" Classes="titulo-vista" />
+        <c:HeaderVista Grid.Row="0" Eyebrow="FINANZAS" Titulo="Control POA">
+            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
+                <Button Classes="primary" Content="Actualizar" Command="{Binding RecargarCommand}" />
+                <Button Classes="secondary" Content="Exportar CSV" Command="{Binding ExportarCsvCommand}" />
+            </StackPanel>
+        </c:HeaderVista>
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="12" Margin="0,12">
             <NumericUpDown Value="{Binding Ejercicio}" Minimum="2020" Maximum="2100" Width="120" />
-            <Button Content="Actualizar" Command="{Binding RecargarCommand}" />
-            <Button Content="Exportar CSV" Command="{Binding ExportarCsvCommand}" />
         </StackPanel>
 
         <DataGrid Grid.Row="2" ItemsSource="{Binding FilasView}"
