@@ -10,6 +10,7 @@ using StockApp.Presentation.Views.Catalogo;
 using StockApp.Presentation.Views.Documentos;
 using StockApp.Presentation.Views.Finanzas;
 using StockApp.Presentation.Views.Movimientos;
+using StockApp.Presentation.Views.Tareas;
 using Xunit;
 
 namespace StockApp.Presentation.UiTests;
@@ -66,6 +67,8 @@ public class GuardianDePatronTests
     [InlineData(typeof(PagosGastoView), "Pagos de la factura", "FINANZAS")]
     [InlineData(typeof(DocumentoListView), "Documentos administrativos", "DOCUMENTOS")]
     [InlineData(typeof(DocumentoFormView), "Nuevo documento", "DOCUMENTOS")]
+    [InlineData(typeof(TareaListView), "Tareas", "TAREAS")]
+    [InlineData(typeof(TareaFormView), "Nueva tarea", "TAREAS")]
     public void Vista_TieneHeaderVistaConElTituloEsperado(Type tipoVista, string? titulo, string? eyebrow)
     {
         var vista = PatronHelpers.Montar(tipoVista);
@@ -111,6 +114,8 @@ public class GuardianDePatronTests
         typeof(PagosGastoView),
         typeof(DocumentoListView),
         typeof(DocumentoFormView),
+        typeof(TareaListView),
+        typeof(TareaFormView),
     };
 
     /// <summary>
