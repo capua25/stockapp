@@ -10,6 +10,7 @@ using StockApp.Presentation.Views.Catalogo;
 using StockApp.Presentation.Views.Documentos;
 using StockApp.Presentation.Views.Finanzas;
 using StockApp.Presentation.Views.Movimientos;
+using StockApp.Presentation.Views.Reportes;
 using StockApp.Presentation.Views.Tareas;
 using Xunit;
 
@@ -69,6 +70,11 @@ public class GuardianDePatronTests
     [InlineData(typeof(DocumentoFormView), "Nuevo documento", "DOCUMENTOS")]
     [InlineData(typeof(TareaListView), "Tareas", "TAREAS")]
     [InlineData(typeof(TareaFormView), "Nueva tarea", "TAREAS")]
+    [InlineData(typeof(ValorizacionView), "Valorización de inventario", "REPORTES")]
+    [InlineData(typeof(StockCategoriaView), "Stock por categoría", "REPORTES")]
+    [InlineData(typeof(MasMovidosView), "Productos más movidos", "REPORTES")]
+    [InlineData(typeof(HistorialPorProductoView), "Historial por producto", "REPORTES")]
+    [InlineData(typeof(AuditoriaLogView), "Auditoría", "REPORTES")]
     public void Vista_TieneHeaderVistaConElTituloEsperado(Type tipoVista, string? titulo, string? eyebrow)
     {
         var vista = PatronHelpers.Montar(tipoVista);
@@ -116,6 +122,11 @@ public class GuardianDePatronTests
         typeof(DocumentoFormView),
         typeof(TareaListView),
         typeof(TareaFormView),
+        typeof(ValorizacionView),
+        typeof(StockCategoriaView),
+        typeof(MasMovidosView),
+        typeof(HistorialPorProductoView),
+        typeof(AuditoriaLogView),
     };
 
     /// <summary>

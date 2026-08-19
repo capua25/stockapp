@@ -3,41 +3,32 @@
              xmlns:vm="using:StockApp.Presentation.ViewModels.Reportes"
              xmlns:dto="using:StockApp.Application.Reportes"
              xmlns:conv="using:StockApp.Presentation.Converters"
+             xmlns:c="using:StockApp.Presentation.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
              x:Class="StockApp.Presentation.Views.Reportes.ValorizacionView"
              x:DataType="vm:ValorizacionViewModel">
 
-    <DockPanel Margin="24">
+    <DockPanel Margin="{DynamicResource MargenVista}">
 
-        <TextBlock DockPanel.Dock="Top"
-                   Text="Valorización de inventario"
-                   Classes="titulo-vista"
-                   Margin="0,0,0,16" />
+        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="REPORTES" Titulo="Valorización de inventario">
+            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
+                <Button Classes="primary" Content="Buscar" Command="{Binding BuscarCommand}" />
+                <Button Classes="secondary" Content="Exportar CSV" Command="{Binding ExportarCommand}" />
+            </StackPanel>
+        </c:HeaderVista>
 
         <Border Classes="card">
-            <Grid RowDefinitions="Auto,*,Auto">
-
-                <!-- Barra de acciones -->
-                <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,12">
-                    <Button Classes="primary" Content="Buscar" Command="{Binding BuscarCommand}" />
-                    <Button Classes="secondary" Content="Exportar CSV" Command="{Binding ExportarCommand}" />
-                </StackPanel>
+            <Grid RowDefinitions="*,Auto">
 
                 <!-- Grilla de valorización -->
-                <DataGrid Grid.Row="1"
+                <DataGrid Grid.Row="0"
                           ItemsSource="{Binding Items}"
                           IsReadOnly="True"
                           CanUserResizeColumns="True"
                           GridLinesVisibility="Horizontal"
                           ScrollViewer.HorizontalScrollBarVisibility="Auto">
-                    <DataGrid.Styles>
-                        <!-- Columnas numéricas (montos) alineadas a la derecha. -->
-                        <Style Selector="DataGridCell.num">
-                            <Setter Property="HorizontalContentAlignment" Value="Right" />
-                        </Style>
-                    </DataGrid.Styles>
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Código" Binding="{Binding Codigo}" Width="Auto" MinWidth="80" />
                         <DataGridTemplateColumn Header="Nombre" Width="2*" SortMemberPath="Nombre">
@@ -85,7 +76,7 @@
                 </DataGrid>
 
                 <!-- Totales -->
-                <StackPanel Grid.Row="2"
+                <StackPanel Grid.Row="1"
                             Orientation="Horizontal"
                             Spacing="24"
                             Margin="0,12,0,0"
