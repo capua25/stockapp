@@ -69,6 +69,14 @@ public class TestApp : Avalonia.Application
             Source = new Uri("avares://StockApp.Presentation/Themes/Tokens.axaml")
         });
 
+        // Componentes de Controls/: sus ControlTheme viven aca. Sin este include, un
+        // c:HeaderVista monta sin Template y el arbol visual queda vacio.
+        Resources.MergedDictionaries.Add(new Avalonia.Markup.Xaml.Styling.ResourceInclude(
+            new Uri("avares://StockApp.Presentation.UiTests/"))
+        {
+            Source = new Uri("avares://StockApp.Presentation/Controls/Componentes.axaml")
+        });
+
         Styles.Add(new FluentTheme());
         Styles.Add(new StyleInclude(new Uri("avares://StockApp.Presentation.UiTests/"))
         {

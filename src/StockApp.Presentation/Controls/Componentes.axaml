@@ -1,0 +1,160 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:c="using:StockApp.Presentation.Controls">
+
+    <!-- ════════════════════════════════════════════════════════════════════
+         StockApp UI Kit — ControlThemes de los componentes de Controls/.
+         Se incluye en App.axaml como ResourceInclude y en TestAppBuilder.cs
+         del banco de pruebas. Los componentes son TemplatedControl, no
+         UserControl: un UserControl trae su propio NameScope y complica la
+         localizacion desde los tests.
+         ════════════════════════════════════════════════════════════════════ -->
+
+    <ControlTheme x:Key="{x:Type c:HeaderVista}" TargetType="c:HeaderVista">
+        <Setter Property="Margin" Value="0,0,0,24" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Top">
+                    <StackPanel Grid.Column="0" Spacing="{DynamicResource Espacio1}">
+                        <TextBlock Classes="micro"
+                                   Text="{TemplateBinding Eyebrow}"
+                                   IsVisible="{TemplateBinding Eyebrow, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                        <TextBlock Classes="titulo-vista"
+                                   Text="{TemplateBinding Titulo}" />
+                        <TextBlock Classes="body"
+                                   Foreground="{DynamicResource TextoSecundarioBrush}"
+                                   Text="{TemplateBinding Resumen}"
+                                   IsVisible="{TemplateBinding Resumen, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    </StackPanel>
+
+                    <ContentPresenter Grid.Column="1"
+                                      Content="{TemplateBinding Acciones}"
+                                      VerticalAlignment="Center" />
+                </Grid>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+
+    <ControlTheme x:Key="{x:Type c:TarjetaMetrica}" TargetType="c:TarjetaMetrica">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Classes="card">
+                    <StackPanel Spacing="{DynamicResource Espacio1}">
+                        <TextBlock Classes="micro" Text="{TemplateBinding Etiqueta}" />
+                        <TextBlock Text="{TemplateBinding Valor}"
+                                   FontSize="24"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextoPrimarioBrush}" />
+                        <TextBlock Classes="caption"
+                                   Text="{TemplateBinding Detalle}"
+                                   IsVisible="{TemplateBinding Detalle, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    </StackPanel>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+
+    <ControlTheme x:Key="{x:Type c:BadgeEstado}" TargetType="c:BadgeEstado">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border x:Name="Fondo"
+                        CornerRadius="{DynamicResource RadioChico}"
+                        Padding="8,2"
+                        HorizontalAlignment="Left">
+                    <TextBlock x:Name="Texto"
+                               Text="{TemplateBinding Texto}"
+                               FontSize="12"
+                               FontWeight="Medium" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+
+        <!-- Tono neutro por defecto -->
+        <Style Selector="^ /template/ TextBlock#Texto">
+            <Setter Property="Foreground" Value="{DynamicResource TextoSecundarioBrush}" />
+        </Style>
+        <Style Selector="^ /template/ Border#Fondo">
+            <Setter Property="Background" Value="{DynamicResource DeshabilitadoFondoBrush}" />
+        </Style>
+
+        <Style Selector="^[Tono=Exito] /template/ TextBlock#Texto">
+            <Setter Property="Foreground" Value="{DynamicResource SuccessBrush}" />
+        </Style>
+        <Style Selector="^[Tono=Exito] /template/ Border#Fondo">
+            <Setter Property="Background" Value="{DynamicResource BrandSuaveBrush}" />
+        </Style>
+
+        <Style Selector="^[Tono=Advertencia] /template/ TextBlock#Texto">
+            <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
+        </Style>
+
+        <Style Selector="^[Tono=Peligro] /template/ TextBlock#Texto">
+            <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+        </Style>
+
+        <Style Selector="^[Tono=Info] /template/ TextBlock#Texto">
+            <Setter Property="Foreground" Value="{DynamicResource InfoBrush}" />
+        </Style>
+    </ControlTheme>
+
+    <ControlTheme x:Key="{x:Type c:EstadoVacio}" TargetType="c:EstadoVacio">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <StackPanel Spacing="{DynamicResource Espacio2}"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Margin="{DynamicResource MargenVista}">
+                    <TextBlock x:Name="Titulo"
+                               Text="{TemplateBinding Titulo}"
+                               FontSize="16"
+                               FontWeight="Medium"
+                               HorizontalAlignment="Center" />
+                    <TextBlock Text="{TemplateBinding Mensaje}"
+                               Classes="caption"
+                               HorizontalAlignment="Center"
+                               TextWrapping="Wrap"
+                               MaxWidth="360"
+                               TextAlignment="Center" />
+                </StackPanel>
+            </ControlTemplate>
+        </Setter>
+
+        <!-- Foreground del titulo NO usa Classes="seccion": ese selector global de
+             Typography.axaml (TextBlock.seccion) gana precedencia sobre el Style anidado del
+             ControlTheme y pisaba el override de EsError de abajo. Se fija aca directo. -->
+        <Style Selector="^ /template/ TextBlock#Titulo">
+            <Setter Property="Foreground" Value="{DynamicResource TextoPrimarioBrush}" />
+        </Style>
+
+        <!-- Fallo de carga: el titulo va en Danger. Sin esto, "no hay datos" y
+             "no se pudo cargar" se ven identicos y el usuario no sabe si cargar
+             datos o reintentar. -->
+        <Style Selector="^[EsError=True] /template/ TextBlock#Titulo">
+            <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+        </Style>
+    </ControlTheme>
+
+    <ControlTheme x:Key="{x:Type c:CampoFormulario}" TargetType="c:CampoFormulario">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <StackPanel Spacing="{DynamicResource Espacio1}">
+                    <StackPanel Orientation="Horizontal" Spacing="2">
+                        <TextBlock Text="{TemplateBinding Etiqueta}"
+                                   Classes="caption"
+                                   Foreground="{DynamicResource TextoPrimarioBrush}" />
+                        <TextBlock Text="*"
+                                   Classes="caption"
+                                   Foreground="{DynamicResource DangerBrush}"
+                                   IsVisible="{TemplateBinding Requerido}" />
+                    </StackPanel>
+
+                    <!-- ContentPresenter pelado: el control de entrada queda como hijo directo y
+                         sigue recibiendo los Setter por selector de tipo de Controls.axaml,
+                         incluido el ErrorConverter. NO agregar ErrorTemplate aca. -->
+                    <ContentPresenter Content="{TemplateBinding Content}" />
+                </StackPanel>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+
+</ResourceDictionary>

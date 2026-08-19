@@ -17,6 +17,7 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <ResourceInclude Source="avares://StockApp.Presentation/Themes/Tokens.axaml"/>
+                <ResourceInclude Source="avares://StockApp.Presentation/Controls/Componentes.axaml"/>
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>
