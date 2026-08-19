@@ -32,26 +32,33 @@
             <Setter Property="BorderBrush" Value="{Binding TieneErrorServidor, Converter={x:Static conv:ErrorServidorBrushConverter.Instance}}" />
             <Setter Property="BorderThickness" Value="2" />
         </Style>
+        <!-- Candado de celda no editable (mdi-lock): Opacity/FontSize via Style, no valor local, para
+             que Vista_NoTieneOpacidadesLiterales (Priority==LocalValue) no lo marque — mismo
+             mecanismo que Image.fondo-difuminado en InicioView (Ruling B-11). -->
+        <Style Selector="i|Icon.candado">
+            <Setter Property="Opacity" Value="0.5" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
     </UserControl.Styles>
 
-    <Grid Margin="24">
+    <Grid>
 
         <!-- Paso 1: Cargar -->
-        <StackPanel Spacing="12"
+        <StackPanel Spacing="{DynamicResource Espacio3}"
                     IsVisible="{Binding PasoActual, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:PasoWizardImportacion.Cargar}}">
-            <TextBlock Text="Paso 1 · Cargar planillas" Classes="titulo-vista" />
+            <TextBlock Text="Paso 1 · Cargar planillas" Classes="seccion" />
 
             <Border Classes="card">
-                <StackPanel Spacing="12">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
+                <StackPanel Spacing="{DynamicResource Espacio3}">
+                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
                         <Button Classes="secondary" Content="Elegir planilla de Gastos..." Command="{Binding SeleccionarGastosCommand}" />
                         <TextBlock Text="{Binding GastosNombreArchivo}" VerticalAlignment="Center" />
                     </StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
                         <Button Classes="secondary" Content="Elegir planilla POA..." Command="{Binding SeleccionarPoaCommand}" />
                         <TextBlock Text="{Binding PoaNombreArchivo}" VerticalAlignment="Center" />
                     </StackPanel>
-                    <StackPanel Orientation="Horizontal" Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
                         <TextBlock Text="Ejercicio" VerticalAlignment="Center" />
                         <NumericUpDown Value="{Binding Ejercicio}" Minimum="2000" Maximum="2100" FormatString="0" Width="140" />
                     </StackPanel>
@@ -63,11 +70,11 @@
 
         <!-- Paso 2: Revisar (solo lectura, con color por EstadoFila) -->
         <DockPanel IsVisible="{Binding PasoActual, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:PasoWizardImportacion.Revisar}}">
-            <TextBlock DockPanel.Dock="Top" Text="Paso 2 · Revisar" Classes="titulo-vista" Margin="0,0,0,8" />
+            <TextBlock DockPanel.Dock="Top" Text="Paso 2 · Revisar" Classes="seccion" Margin="0,0,0,8" />
 
             <Border DockPanel.Dock="Top" Classes="card" Margin="0,0,0,12">
-                <StackPanel Spacing="8">
-                    <StackPanel Orientation="Horizontal" Spacing="16">
+                <StackPanel Spacing="{DynamicResource Espacio2}">
+                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio4}">
                         <TextBlock Text="{Binding Resumen.Ok, StringFormat='Ok: {0}'}" />
                         <TextBlock Text="{Binding Resumen.Advertencias, StringFormat='Advertencias: {0}'}" />
                         <TextBlock Text="{Binding Resumen.Errores, StringFormat='Errores: {0}'}" />
@@ -90,7 +97,7 @@
                                     <DataTemplate x:DataType="vm:FilaGastoEditableVm">
                                         <StackPanel Orientation="Horizontal" Spacing="4">
                                             <TextBlock Text="{Binding Fecha, StringFormat='{}{0:dd/MM/yyyy}'}" VerticalAlignment="Center" />
-                                            <i:Icon Value="mdi-lock" IsVisible="{Binding !EsEditableFecha}" FontSize="12" Opacity="0.5" />
+                                            <i:Icon Value="mdi-lock" Classes="candado" IsVisible="{Binding !EsEditableFecha}" />
                                         </StackPanel>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
@@ -108,7 +115,7 @@
                                     <DataTemplate>
                                         <StackPanel Orientation="Horizontal" Spacing="4">
                                             <TextBlock Text="{Binding Proveedor}" VerticalAlignment="Center" />
-                                            <i:Icon Value="mdi-lock" IsVisible="{Binding !EsEditableProveedor}" FontSize="12" Opacity="0.5" />
+                                            <i:Icon Value="mdi-lock" Classes="candado" IsVisible="{Binding !EsEditableProveedor}" />
                                         </StackPanel>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
@@ -153,7 +160,7 @@
                                     <DataTemplate x:DataType="vm:FilaGastoEditableVm">
                                         <StackPanel Orientation="Horizontal" Spacing="4">
                                             <TextBlock Text="{Binding Detalle}" VerticalAlignment="Center" />
-                                            <i:Icon Value="mdi-lock" IsVisible="{Binding !EsEditableDetalle}" FontSize="12" Opacity="0.5" />
+                                            <i:Icon Value="mdi-lock" Classes="candado" IsVisible="{Binding !EsEditableDetalle}" />
                                         </StackPanel>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
@@ -169,7 +176,7 @@
                                     <DataTemplate x:DataType="vm:FilaGastoEditableVm">
                                         <StackPanel Orientation="Horizontal" Spacing="4">
                                             <TextBlock Text="{Binding Monto}" VerticalAlignment="Center" />
-                                            <i:Icon Value="mdi-lock" IsVisible="{Binding !EsEditableMonto}" FontSize="12" Opacity="0.5" />
+                                            <i:Icon Value="mdi-lock" Classes="candado" IsVisible="{Binding !EsEditableMonto}" />
                                         </StackPanel>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
@@ -186,7 +193,7 @@
                                     <DataTemplate>
                                         <StackPanel Orientation="Horizontal" Spacing="4">
                                             <TextBlock Text="{Binding Fuente}" VerticalAlignment="Center" />
-                                            <i:Icon Value="mdi-lock" IsVisible="{Binding !EsEditableFuente}" FontSize="12" Opacity="0.5" />
+                                            <i:Icon Value="mdi-lock" Classes="candado" IsVisible="{Binding !EsEditableFuente}" />
                                         </StackPanel>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
@@ -214,7 +221,7 @@
                                     <DataTemplate>
                                         <StackPanel Orientation="Horizontal" Spacing="4">
                                             <TextBlock Text="{Binding Rubro}" VerticalAlignment="Center" />
-                                            <i:Icon Value="mdi-lock" IsVisible="{Binding !EsEditableRubro}" FontSize="12" Opacity="0.5" />
+                                            <i:Icon Value="mdi-lock" Classes="candado" IsVisible="{Binding !EsEditableRubro}" />
                                         </StackPanel>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
@@ -304,7 +311,7 @@
                                     <DataTemplate x:DataType="vm:FilaIngresoEditableVm">
                                         <StackPanel Orientation="Horizontal" Spacing="4">
                                             <TextBlock Text="{Binding Fecha, StringFormat='{}{0:dd/MM/yyyy}'}" VerticalAlignment="Center" />
-                                            <i:Icon Value="mdi-lock" IsVisible="{Binding !EsEditableFecha}" FontSize="12" Opacity="0.5" />
+                                            <i:Icon Value="mdi-lock" Classes="candado" IsVisible="{Binding !EsEditableFecha}" />
                                         </StackPanel>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
@@ -322,7 +329,7 @@
                                     <DataTemplate x:DataType="vm:FilaIngresoEditableVm">
                                         <StackPanel Orientation="Horizontal" Spacing="4">
                                             <TextBlock Text="{Binding Concepto}" VerticalAlignment="Center" />
-                                            <i:Icon Value="mdi-lock" IsVisible="{Binding !EsEditableConcepto}" FontSize="12" Opacity="0.5" />
+                                            <i:Icon Value="mdi-lock" Classes="candado" IsVisible="{Binding !EsEditableConcepto}" />
                                         </StackPanel>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
@@ -338,7 +345,7 @@
                                     <DataTemplate x:DataType="vm:FilaIngresoEditableVm">
                                         <StackPanel Orientation="Horizontal" Spacing="4">
                                             <TextBlock Text="{Binding Monto}" VerticalAlignment="Center" />
-                                            <i:Icon Value="mdi-lock" IsVisible="{Binding !EsEditableMonto}" FontSize="12" Opacity="0.5" />
+                                            <i:Icon Value="mdi-lock" Classes="candado" IsVisible="{Binding !EsEditableMonto}" />
                                         </StackPanel>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
@@ -355,7 +362,7 @@
                                     <DataTemplate>
                                         <StackPanel Orientation="Horizontal" Spacing="4">
                                             <TextBlock Text="{Binding Fuente}" VerticalAlignment="Center" />
-                                            <i:Icon Value="mdi-lock" IsVisible="{Binding !EsEditableFuente}" FontSize="12" Opacity="0.5" />
+                                            <i:Icon Value="mdi-lock" Classes="candado" IsVisible="{Binding !EsEditableFuente}" />
                                         </StackPanel>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
@@ -448,7 +455,7 @@
                     </DataGrid>
                 </TabItem>
                 <TabItem Header="Maestros nuevos">
-                    <StackPanel Orientation="Horizontal" Spacing="24" Margin="12">
+                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio5}" Margin="12">
                         <StackPanel Spacing="4">
                             <TextBlock Text="Proveedores nuevos" FontWeight="SemiBold" />
                             <ItemsControl ItemsSource="{Binding ProveedoresNuevos}" />
@@ -476,25 +483,25 @@
         </DockPanel>
 
         <!-- Paso 3: Resultado -->
-        <StackPanel Spacing="12"
+        <StackPanel Spacing="{DynamicResource Espacio3}"
                     IsVisible="{Binding PasoActual, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:PasoWizardImportacion.Resultado}}">
-            <TextBlock Text="Paso 3 · Resultado" Classes="titulo-vista" />
+            <TextBlock Text="Paso 3 · Resultado" Classes="seccion" />
 
             <Border Classes="card">
-                <StackPanel Spacing="8">
+                <StackPanel Spacing="{DynamicResource Espacio2}">
                     <TextBlock Text="{Binding ResultadoConfirmacion.GastosCreados, StringFormat='Gastos creados: {0}'}" />
                     <TextBlock Text="{Binding ResultadoConfirmacion.IngresosCreados, StringFormat='Ingresos creados: {0}'}" />
                     <TextBlock Text="{Binding ResultadoConfirmacion.ProveedoresCreados, StringFormat='Proveedores creados: {0}'}" />
                     <TextBlock Text="{Binding ResultadoConfirmacion.FuentesCreadas, StringFormat='Fuentes creadas: {0}'}" />
                     <TextBlock Text="{Binding ResultadoConfirmacion.RubrosCreados, StringFormat='Rubros creados: {0}'}" />
-                    <StackPanel Orientation="Horizontal" Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
                         <Button Classes="secondary" Content="Revertir esta importación" Command="{Binding RevertirCommand}" />
                         <Button Classes="primary" Content="Nueva importación" Command="{Binding NuevaImportacionCommand}" />
                     </StackPanel>
                 </StackPanel>
             </Border>
 
-            <TextBlock Text="Conflictos (no se escribieron — resolvé a mano)" FontWeight="SemiBold" />
+            <TextBlock Text="Conflictos (no se escribieron — resolvé a mano)" Classes="seccion" />
             <DataGrid ItemsSource="{Binding Conflictos}" IsReadOnly="True" AutoGenerateColumns="False">
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="Proveedor" Binding="{Binding Proveedor, DataType={x:Type vm:ConflictoGastoFila}}" Width="Auto" />

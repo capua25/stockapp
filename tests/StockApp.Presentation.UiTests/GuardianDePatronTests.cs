@@ -120,6 +120,8 @@ public class GuardianDePatronTests
         typeof(RubroGastoListView),
         typeof(LineaPoaListView),
         typeof(HistorialImportacionesView),
+        typeof(NuevaImportacionView),
+        typeof(AdjuntosPanelView),
     };
 
     [AvaloniaTheory]
@@ -175,15 +177,21 @@ public class GuardianDePatronTests
     /// documenta la Task 6.7 para un <c>IsVisible</c> sin resolver). Eso deja 3 botones primarios
     /// "visibles" dentro del arbol de <c>ImportacionView</c> sin que <c>ImportacionView</c> tenga
     /// ninguna culpa: no agrega ningun <c>Classes="primary"</c> propio (verificado: los otros tres
-    /// invariantes -- header, margen, opacidad -- SI le aplican y pasan en verde). Ruling B-18
-    /// punto 3 ya exime a <c>NuevaImportacionView</c> de este invariante (lo reemplaza un test
-    /// dedicado en la Task 8.4, con ViewModel real recorriendo los 3 pasos); esta excepcion
-    /// extiende lo mismo a cualquier CONTENEDOR que la embeba y se monte sin VM, hasta que la
-    /// Task 8.4 agregue su cobertura propia.
+    /// invariantes -- header, margen, opacidad -- SI le aplican y pasan en verde).
+    ///
+    /// Task 8.4: <c>NuevaImportacionView</c> se agrego a <see cref="VistasEmbebidas"/> (P8) y por
+    /// lo tanto ENTRA a este mismo invariante generico -- y por la misma razon (montada sin VM,
+    /// los 3 IsVisible sin resolver) tambien daria 3 primarios visibles. Se agrega ella misma
+    /// aca, no solo su contenedor. El reemplazo real es
+    /// <see cref="NuevaImportacionJerarquiaBotonesTests"/>: monta la vista CON un ViewModel real
+    /// y verifica, para cada uno de los 3 valores de <c>PasoWizardImportacion</c>, que hay
+    /// EXACTAMENTE un boton primario visible y que es el correcto -- eso custodia mas que este
+    /// invariante generico, no menos.
     /// </summary>
     private static readonly HashSet<Type> VistasExentasPorEmbeberUnWizardP8 = new()
     {
         typeof(ImportacionView),
+        typeof(NuevaImportacionView),
     };
 
     [AvaloniaTheory]
