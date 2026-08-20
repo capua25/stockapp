@@ -33,7 +33,7 @@ public class IngresoPorFacturaViewTests
     private const string Xaml = """
         <Window xmlns="https://github.com/avaloniaui"
                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                xmlns:mov="clr-namespace:StockApp.Presentation.Views.Movimientos;assembly=StockApp.Presentation"
+                xmlns:mov="clr-namespace:StockApp.Presentation.Views.Movimientos;assembly=GestionMunicipal"
                 Width="1000" Height="1600">
             <mov:IngresoPorFacturaView />
         </Window>

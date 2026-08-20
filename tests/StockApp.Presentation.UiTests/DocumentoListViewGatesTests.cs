@@ -40,7 +40,7 @@ public class DocumentoListViewGatesTests
     private const string Xaml = """
         <Window xmlns="https://github.com/avaloniaui"
                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                xmlns:docs="clr-namespace:StockApp.Presentation.Views.Documentos;assembly=StockApp.Presentation"
+                xmlns:docs="clr-namespace:StockApp.Presentation.Views.Documentos;assembly=GestionMunicipal"
                 Width="1100" Height="800">
             <docs:DocumentoListView />
         </Window>

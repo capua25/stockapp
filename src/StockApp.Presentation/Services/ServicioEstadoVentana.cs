@@ -7,7 +7,7 @@ namespace StockApp.Presentation.Services;
 /// <summary>
 /// Implementación real de <see cref="IServicioEstadoVentana"/>. Persiste el estado en un
 /// archivo JSON local por PC (no por usuario logueado, no en BD/API), en
-/// <c>%APPDATA%/StockApp/ventana.json</c> en Windows o <c>~/.config/StockApp/ventana.json</c>
+/// <c>%APPDATA%/GestionMunicipal/ventana.json</c> en Windows o <c>~/.config/GestionMunicipal/ventana.json</c>
 /// en Linux (resuelto por <see cref="Environment.SpecialFolder.ApplicationData"/>).
 /// Robusta ante archivo corrupto/ilegible (devuelve <c>null</c>) y ante errores de IO al
 /// guardar (no propaga la excepción: cerrar la app nunca debe fallar por esto).
@@ -32,7 +32,7 @@ public class ServicioEstadoVentana : IServicioEstadoVentana
     {
         var carpeta = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "StockApp");
+            "GestionMunicipal");
 
         return Path.Combine(carpeta, "ventana.json");
     }

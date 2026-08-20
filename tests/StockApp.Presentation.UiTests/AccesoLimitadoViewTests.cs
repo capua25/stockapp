@@ -48,7 +48,7 @@ public class AccesoLimitadoViewTests
     private const string Xaml = """
         <Window xmlns="https://github.com/avaloniaui"
                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                xmlns:acc="clr-namespace:StockApp.Presentation.Views;assembly=StockApp.Presentation"
+                xmlns:acc="clr-namespace:StockApp.Presentation.Views;assembly=GestionMunicipal"
                 Width="700" Height="500">
             <acc:AccesoLimitadoView />
         </Window>

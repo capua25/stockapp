@@ -22,7 +22,7 @@ public class ServicioPreferenciasSidebar : IServicioPreferenciasSidebar
     private static string RutaPorDefecto()
         => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "StockApp",
+            "GestionMunicipal",
             "sidebar.json");
 
     public PreferenciasSidebar? Cargar()

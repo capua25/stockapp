@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# pack-linux.sh — Empaquetado de StockApp para Linux (AppImage) via Velopack
+# pack-linux.sh — Empaquetado de Gestión Municipal para Linux (AppImage) via Velopack
 #
 # Uso:
 #   ./build/pack-linux.sh [VERSION]
@@ -20,9 +20,10 @@ CSPROJ="src/StockApp.Presentation/StockApp.Presentation.csproj"
 PUBLISH_DIR="publish/linux-x64"
 OUTPUT_DIR="releases/linux"
 RELEASE_NOTES="build/RELEASE_NOTES.md"
-PACK_ID="StockApp"
+PACK_ID="GestionMunicipal"
+PACK_TITLE="Gestión Municipal"
 CHANNEL="linux"
-MAIN_EXE="StockApp.Presentation"
+MAIN_EXE="GestionMunicipal"
 RUNTIME="linux-x64"
 
 # ── Funciones auxiliares ──────────────────────────────────────────────────────
@@ -80,6 +81,7 @@ mkdir -p "$OUTPUT_DIR"
 
 vpk pack \
     --packId       "$PACK_ID"       \
+    --packTitle    "$PACK_TITLE"    \
     --packVersion  "$VERSION"       \
     --packDir      "$PUBLISH_DIR"   \
     --mainExe      "$MAIN_EXE"      \
@@ -96,9 +98,9 @@ echo ""
 echo "Empaquetado completado exitosamente."
 echo ""
 echo "Artefactos generados en: $OUTPUT_DIR"
-echo "  StockApp.AppImage                    -> portable, sin instalador"
-echo "  StockApp-$VERSION-linux-full.nupkg   -> paquete completo"
-echo "  StockApp-$VERSION-linux-delta.nupkg  -> paquete delta (si habia release previa)"
+echo "  GestionMunicipal.AppImage                    -> portable, sin instalador"
+echo "  GestionMunicipal-$VERSION-linux-full.nupkg   -> paquete completo"
+echo "  GestionMunicipal-$VERSION-linux-delta.nupkg  -> paquete delta (si habia release previa)"
 echo "  releases.linux.json                  -> feed de updates para Velopack"
 echo "  assets.linux.json                    -> metadata de assets"
 echo "  RELEASES-linux                       -> indice de releases (formato Squirrel)"

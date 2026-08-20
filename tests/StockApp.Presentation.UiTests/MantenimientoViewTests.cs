@@ -65,7 +65,7 @@ public class MantenimientoViewTests
     private const string Xaml = """
         <Window xmlns="https://github.com/avaloniaui"
                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                xmlns:admin="clr-namespace:StockApp.Presentation.Views.Administracion;assembly=StockApp.Presentation"
+                xmlns:admin="clr-namespace:StockApp.Presentation.Views.Administracion;assembly=GestionMunicipal"
                 Width="700" Height="500">
             <admin:MantenimientoView />
         </Window>

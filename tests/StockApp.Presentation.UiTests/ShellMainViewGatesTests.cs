@@ -29,7 +29,7 @@ public class ShellMainViewGatesTests
     private const string Xaml = """
         <Window xmlns="https://github.com/avaloniaui"
                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                xmlns:vistas="clr-namespace:StockApp.Presentation.Views;assembly=StockApp.Presentation"
+                xmlns:vistas="clr-namespace:StockApp.Presentation.Views;assembly=GestionMunicipal"
                 Width="1000" Height="800">
             <vistas:ShellMainView />
         </Window>

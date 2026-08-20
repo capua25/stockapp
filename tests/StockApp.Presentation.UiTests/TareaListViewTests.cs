@@ -30,7 +30,7 @@ public class TareaListViewTests
     private const string Xaml = """
         <Window xmlns="https://github.com/avaloniaui"
                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                xmlns:tareas="clr-namespace:StockApp.Presentation.Views.Tareas;assembly=StockApp.Presentation"
+                xmlns:tareas="clr-namespace:StockApp.Presentation.Views.Tareas;assembly=GestionMunicipal"
                 Width="1000" Height="800">
             <tareas:TareaListView />
         </Window>

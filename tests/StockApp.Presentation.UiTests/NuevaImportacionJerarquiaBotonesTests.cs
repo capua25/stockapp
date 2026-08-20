@@ -27,7 +27,7 @@ public class NuevaImportacionJerarquiaBotonesTests
     private const string Xaml = """
         <Window xmlns="https://github.com/avaloniaui"
                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                xmlns:fin="clr-namespace:StockApp.Presentation.Views.Finanzas;assembly=StockApp.Presentation"
+                xmlns:fin="clr-namespace:StockApp.Presentation.Views.Finanzas;assembly=GestionMunicipal"
                 Width="1000" Height="700">
             <fin:NuevaImportacionView />
         </Window>

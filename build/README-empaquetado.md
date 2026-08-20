@@ -1,4 +1,4 @@
-# Flujo de empaquetado y publicacion — StockApp
+# Flujo de empaquetado y publicacion — Gestión Municipal
 
 > Este documento cubre el flujo **manual** de empaquetado por OS, publicacion en GitHub Releases,
 > y la convencion de versionado y severidades. No hay CI/CD en esta fase (Incremento 7 Fase A).
@@ -111,7 +111,7 @@ Antes de empaquetar, editar `build/RELEASE_NOTES.md`:
 ```markdown
 severity: normal
 
-# StockApp 0.2.0
+# Gestión Municipal 0.2.0
 
 - Cambio A
 - Cambio B
@@ -139,17 +139,17 @@ Reglas:
 | Archivo | Descripcion |
 |---------|-------------|
 | `Setup.exe` | Instalador para el usuario final. Incluye .NET 10 runtime embebido. |
-| `StockApp-X.Y.Z-full.nupkg` | Paquete completo (primera instalacion o sin release previa). |
-| `StockApp-X.Y.Z-delta.nupkg` | Paquete diferencial (solo si hay release previa en `releases/win/`). |
+| `GestionMunicipal-X.Y.Z-full.nupkg` | Paquete completo (primera instalacion o sin release previa). |
+| `GestionMunicipal-X.Y.Z-delta.nupkg` | Paquete diferencial (solo si hay release previa en `releases/win/`). |
 | `releases.win.json` | Feed de updates que la app consulta al arrancar. |
 
 ### Linux (`releases/linux/`)
 
 | Archivo | Descripcion |
 |---------|-------------|
-| `StockApp-X.Y.Z-linux.AppImage` | Ejecutable portable. Sin instalador, sin privilegios. |
-| `StockApp-X.Y.Z-full.nupkg` | Paquete completo. |
-| `StockApp-X.Y.Z-delta.nupkg` | Paquete diferencial. |
+| `GestionMunicipal-X.Y.Z-linux.AppImage` | Ejecutable portable. Sin instalador, sin privilegios. |
+| `GestionMunicipal-X.Y.Z-full.nupkg` | Paquete completo. |
+| `GestionMunicipal-X.Y.Z-delta.nupkg` | Paquete diferencial. |
 | `releases.linux.json` | Feed de updates. |
 
 Los deltas se generan **automaticamente** si ya hay una release previa en el directorio de salida.

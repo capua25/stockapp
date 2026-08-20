@@ -66,7 +66,7 @@ public class TestApp : Avalonia.Application
         Resources.MergedDictionaries.Add(new Avalonia.Markup.Xaml.Styling.ResourceInclude(
             new Uri("avares://StockApp.Presentation.UiTests/"))
         {
-            Source = new Uri("avares://StockApp.Presentation/Themes/Tokens.axaml")
+            Source = new Uri("avares://GestionMunicipal/Themes/Tokens.axaml")
         });
 
         // Componentes de Controls/: sus ControlTheme viven aca. Sin este include, un
@@ -74,7 +74,7 @@ public class TestApp : Avalonia.Application
         Resources.MergedDictionaries.Add(new Avalonia.Markup.Xaml.Styling.ResourceInclude(
             new Uri("avares://StockApp.Presentation.UiTests/"))
         {
-            Source = new Uri("avares://StockApp.Presentation/Controls/Componentes.axaml")
+            Source = new Uri("avares://GestionMunicipal/Controls/Componentes.axaml")
         });
 
         Styles.Add(new FluentTheme());
@@ -87,11 +87,11 @@ public class TestApp : Avalonia.Application
         // overridear): Controls.axaml es donde vive la politica de DataValidationErrors.ErrorConverter.
         Styles.Add(new StyleInclude(new Uri("avares://StockApp.Presentation.UiTests/"))
         {
-            Source = new Uri("avares://StockApp.Presentation/Themes/Typography.axaml")
+            Source = new Uri("avares://GestionMunicipal/Themes/Typography.axaml")
         });
         Styles.Add(new StyleInclude(new Uri("avares://StockApp.Presentation.UiTests/"))
         {
-            Source = new Uri("avares://StockApp.Presentation/Themes/Controls.axaml")
+            Source = new Uri("avares://GestionMunicipal/Themes/Controls.axaml")
         });
 
         // DESPUES del StyleInclude del Fluent.xaml del DataGrid y de Controls.axaml, mismo orden
@@ -100,7 +100,7 @@ public class TestApp : Avalonia.Application
         // que distinga cargarlo de no cargarlo.
         Styles.Add(new StyleInclude(new Uri("avares://StockApp.Presentation.UiTests/"))
         {
-            Source = new Uri("avares://StockApp.Presentation/Themes/DataGrid.axaml")
+            Source = new Uri("avares://GestionMunicipal/Themes/DataGrid.axaml")
         });
     }
 

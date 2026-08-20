@@ -17,7 +17,7 @@ sealed class Program
     public static void Main(string[] args)
     {
         // Captura global de excepciones no manejadas: escribe a
-        // %LocalAppData%\StockApp\logs\crash.log para diagnosticar cierres silenciosos
+        // %LocalAppData%\GestionMunicipal\logs\crash.log para diagnosticar cierres silenciosos
         // (exit 0 sin excepción visible en Event Viewer).
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
             LogFatal("AppDomain", (Exception)e.ExceptionObject);
@@ -62,7 +62,7 @@ sealed class Program
     }
 
     /// <summary>
-    /// Escribe una entrada de crash a %LocalAppData%\StockApp\logs\crash.log.
+    /// Escribe una entrada de crash a %LocalAppData%\GestionMunicipal\logs\crash.log.
     /// Nunca debe tirar: si falla la escritura, se traga la excepción silenciosamente
     /// para no enmascarar el error original que se está intentando loguear.
     /// </summary>
@@ -72,7 +72,7 @@ sealed class Program
         {
             var logsDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "StockApp",
+                "GestionMunicipal",
                 "logs");
 
             Directory.CreateDirectory(logsDir);

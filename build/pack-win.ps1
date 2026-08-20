@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Empaqueta StockApp para Windows usando dotnet publish + vpk (Velopack).
+    Empaqueta Gestión Municipal para Windows usando dotnet publish + vpk (Velopack).
 
 .DESCRIPTION
     1. Publica la app como self-contained para win-x64.
@@ -36,9 +36,10 @@ $CsprojPath   = "src\StockApp.Presentation\StockApp.Presentation.csproj"
 $PublishDir   = "publish\win-x64"
 $OutputDir    = "releases\win"
 $ReleaseNotes = "build\RELEASE_NOTES.md"
-$PackId       = "StockApp"
+$PackId       = "GestionMunicipal"
+$PackTitle    = "Gestión Municipal"
 $Channel      = "win"
-$MainExe      = "StockApp.Presentation.exe"
+$MainExe      = "GestionMunicipal.exe"
 $Runtime      = "win-x64"
 
 # ── Funciones auxiliares ──────────────────────────────────────────────────────
@@ -112,6 +113,7 @@ New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 
 vpk pack `
     --packId       $PackId   `
+    --packTitle    $PackTitle `
     --packVersion  $Version  `
     --packDir      $PublishDir `
     --mainExe      $MainExe  `
@@ -129,11 +131,11 @@ if ($LASTEXITCODE -ne 0) { Abort "vpk pack fallo (codigo $LASTEXITCODE)." }
 Write-Host ""
 Write-Host "Empaquetado completado exitosamente." -ForegroundColor Green
 Write-Host ""
-# NOTA (verificado V1): en Windows vpk NO incluye el channel en el nombre del .nupkg -> StockApp-X.Y.Z-full.nupkg. (En Linux si lo incluye: StockApp-X.Y.Z-linux-full.nupkg.)
+# NOTA (verificado V1): en Windows vpk NO incluye el channel en el nombre del .nupkg -> GestionMunicipal-X.Y.Z-full.nupkg. (En Linux si lo incluye: GestionMunicipal-X.Y.Z-linux-full.nupkg.)
 Write-Host "Artefactos generados en: $OutputDir"
 Write-Host "  Setup.exe               -> instalador para el usuario final"
-Write-Host "  StockApp-$Version-full.nupkg -> paquete completo"
-Write-Host "  StockApp-$Version-delta.nupkg -> paquete delta (si habia release previa)"
+Write-Host "  GestionMunicipal-$Version-full.nupkg -> paquete completo"
+Write-Host "  GestionMunicipal-$Version-delta.nupkg -> paquete delta (si habia release previa)"
 Write-Host "  releases.win.json       -> feed de updates para Velopack"
 Write-Host ""
 Write-Host "Siguiente paso: subir el contenido de $OutputDir a un GitHub Release." -ForegroundColor Yellow

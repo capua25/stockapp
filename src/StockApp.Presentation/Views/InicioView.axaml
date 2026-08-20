@@ -24,7 +24,7 @@
 
     <Grid>
 
-        <Image Source="avares://StockApp.Presentation/Assets/carmelo-original.png"
+        <Image Source="avares://GestionMunicipal/Assets/carmelo-original.png"
                Classes="fondo-difuminado"
                Stretch="Uniform"
                HorizontalAlignment="Center"

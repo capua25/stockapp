@@ -92,7 +92,7 @@ public class MovimientoHistorialGatesTests
     private const string Xaml = """
         <Window xmlns="https://github.com/avaloniaui"
                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                xmlns:vistas="clr-namespace:StockApp.Presentation.Views.Movimientos;assembly=StockApp.Presentation"
+                xmlns:vistas="clr-namespace:StockApp.Presentation.Views.Movimientos;assembly=GestionMunicipal"
                 Width="1200" Height="900">
             <vistas:MovimientoHistorialView />
         </Window>

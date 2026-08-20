@@ -16,8 +16,8 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <ResourceInclude Source="avares://StockApp.Presentation/Themes/Tokens.axaml"/>
-                <ResourceInclude Source="avares://StockApp.Presentation/Controls/Componentes.axaml"/>
+                <ResourceInclude Source="avares://GestionMunicipal/Themes/Tokens.axaml"/>
+                <ResourceInclude Source="avares://GestionMunicipal/Controls/Componentes.axaml"/>
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>
@@ -28,10 +28,10 @@
 
         <!-- StockApp UI Kit: capa aditiva, incluida DESPUÉS de FluentTheme para overridear.
              Reversible quitando estos StyleInclude. -->
-        <StyleInclude Source="avares://StockApp.Presentation/Themes/Typography.axaml"/>
-        <StyleInclude Source="avares://StockApp.Presentation/Themes/Controls.axaml"/>
+        <StyleInclude Source="avares://GestionMunicipal/Themes/Typography.axaml"/>
+        <StyleInclude Source="avares://GestionMunicipal/Themes/Controls.axaml"/>
         <!-- DESPUÉS del StyleInclude del Fluent.xaml del DataGrid (arriba): overridea el
              recuadro de foco de celda. Ver el comentario en DataGrid.axaml. -->
-        <StyleInclude Source="avares://StockApp.Presentation/Themes/DataGrid.axaml"/>
+        <StyleInclude Source="avares://GestionMunicipal/Themes/DataGrid.axaml"/>
     </Application.Styles>
 </Application>
