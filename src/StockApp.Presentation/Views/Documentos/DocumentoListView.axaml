@@ -69,14 +69,17 @@
                                                     CommandParameter="{Binding}" />
                                             <Button Grid.Column="2" Classes="secondary" Content="Iniciar"
                                                     IsVisible="{Binding PuedeIniciar}"
+                                                    Margin="8,0,0,0"
                                                     Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).IniciarCommand}"
                                                     CommandParameter="{Binding}" />
                                             <Button Grid.Column="3" Classes="secondary" Content="Volver a pendiente"
                                                     IsVisible="{Binding PuedeVolverAPendiente}"
+                                                    Margin="8,0,0,0"
                                                     Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).VolverAPendienteCommand}"
                                                     CommandParameter="{Binding}" />
                                             <Button Grid.Column="4" Classes="secondary" Content="Finalizar"
                                                     IsVisible="{Binding PuedeFinalizar}"
+                                                    Margin="8,0,0,0"
                                                     Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).FinalizarCommand}"
                                                     CommandParameter="{Binding}" />
                                             <!-- I3: "Anular…" navega al detalle (VerDetalleCommand) en vez de ejecutar
@@ -86,6 +89,7 @@
                                                  en el acto. -->
                                             <Button Grid.Column="5" Classes="danger" Content="Anular…"
                                                     IsVisible="{Binding PuedeAnular}"
+                                                    Margin="8,0,0,0"
                                                     Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).VerDetalleCommand}"
                                                     CommandParameter="{Binding}" />
                                         </Grid>
@@ -170,6 +174,7 @@
                                                  flujo vive en DocumentoFormViewModel.ReabrirAsync. -->
                                             <Button Grid.Column="2" Classes="secondary" Content="Reabrir…"
                                                     IsVisible="{Binding PuedeReabrir}"
+                                                    Margin="8,0,0,0"
                                                     Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).VerDetalleCommand}"
                                                     CommandParameter="{Binding}" />
                                         </Grid>

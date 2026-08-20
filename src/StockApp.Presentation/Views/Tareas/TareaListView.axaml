@@ -45,10 +45,12 @@
                                                 CommandParameter="{Binding}" />
                                         <Button Grid.Column="2" Classes="secondary" Content="Tomar"
                                                 IsVisible="{Binding PuedeTomar}"
+                                                Margin="8,0,0,0"
                                                 Command="{Binding $parent[UserControl].((vm:TareaListViewModel)DataContext).TomarCommand}"
                                                 CommandParameter="{Binding}" />
                                         <Button Grid.Column="3" Classes="danger" Content="Cancelar"
                                                 IsVisible="{Binding PuedeCancelar}"
+                                                Margin="8,0,0,0"
                                                 Command="{Binding $parent[UserControl].((vm:TareaListViewModel)DataContext).CancelarCommand}"
                                                 CommandParameter="{Binding}" />
                                     </Grid>
@@ -84,14 +86,17 @@
                                                 CommandParameter="{Binding}" />
                                         <Button Grid.Column="2" Classes="secondary" Content="Soltar"
                                                 IsVisible="{Binding PuedeSoltar}"
+                                                Margin="8,0,0,0"
                                                 Command="{Binding $parent[UserControl].((vm:TareaListViewModel)DataContext).SoltarCommand}"
                                                 CommandParameter="{Binding}" />
                                         <Button Grid.Column="3" Classes="secondary" Content="Terminar"
                                                 IsVisible="{Binding PuedeTerminar}"
+                                                Margin="8,0,0,0"
                                                 Command="{Binding $parent[UserControl].((vm:TareaListViewModel)DataContext).TerminarCommand}"
                                                 CommandParameter="{Binding}" />
                                         <Button Grid.Column="4" Classes="danger" Content="Cancelar"
                                                 IsVisible="{Binding PuedeCancelar}"
+                                                Margin="8,0,0,0"
                                                 Command="{Binding $parent[UserControl].((vm:TareaListViewModel)DataContext).CancelarCommand}"
                                                 CommandParameter="{Binding}" />
                                     </Grid>
