@@ -79,6 +79,22 @@ public class ComponentesBasicosTests
             Assert.IsType<SolidColorBrush>(texto.Foreground).Color);
     }
 
+    [AvaloniaTheory]
+    [InlineData("Advertencia", "#FEF3C7")]
+    [InlineData("Peligro", "#FEE2E2")]
+    [InlineData("Info", "#E0F2FE")]
+    public void BadgeEstado_TonoNoExito_TieneFondoSuave(string tono, string hexEsperado)
+    {
+        // Ruling B-26 (Fase B, tanda 12): antes de esta task, Advertencia/Peligro/Info se caian
+        // al gris DeshabilitadoFondoBrush del selector default -- solo Exito tenia fondo suave.
+        var badge = Montar($"""<c:BadgeEstado Texto="Estado" Tono="{tono}" />""")
+            .GetVisualDescendants().OfType<BadgeEstado>().First();
+
+        var fondo = badge.GetVisualDescendants().OfType<Border>().First(b => b.Name == "Fondo");
+
+        Assert.Equal(Color.Parse(hexEsperado), Assert.IsType<SolidColorBrush>(fondo.Background).Color);
+    }
+
     [AvaloniaFact]
     public void EstadoVacio_SinDatos_YFalloDeCarga_SonDistinguibles()
     {

@@ -87,13 +87,22 @@
         <Style Selector="^[Tono=Advertencia] /template/ TextBlock#Texto">
             <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
         </Style>
+        <Style Selector="^[Tono=Advertencia] /template/ Border#Fondo">
+            <Setter Property="Background" Value="{DynamicResource WarningSuaveBrush}" />
+        </Style>
 
         <Style Selector="^[Tono=Peligro] /template/ TextBlock#Texto">
             <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
         </Style>
+        <Style Selector="^[Tono=Peligro] /template/ Border#Fondo">
+            <Setter Property="Background" Value="{DynamicResource DangerSuaveBrush}" />
+        </Style>
 
         <Style Selector="^[Tono=Info] /template/ TextBlock#Texto">
             <Setter Property="Foreground" Value="{DynamicResource InfoBrush}" />
+        </Style>
+        <Style Selector="^[Tono=Info] /template/ Border#Fondo">
+            <Setter Property="Background" Value="{DynamicResource InfoSuaveBrush}" />
         </Style>
     </ControlTheme>
 

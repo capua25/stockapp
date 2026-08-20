@@ -101,4 +101,32 @@ public class TokensDisenioTests
         var brush = Assert.IsType<SolidColorBrush>(Recurso("TextoTerciarioBrush"));
         Assert.Equal(Color.Parse("#94A3B8"), brush.Color);
     }
+
+    [AvaloniaTheory]
+    [InlineData("InfoSuaveBrush", "#E0F2FE")]
+    [InlineData("WarningSuaveBrush", "#FEF3C7")]
+    [InlineData("DangerSuaveBrush", "#FEE2E2")]
+    public void FondosSuavesSemanticos_ExistenConElValorDeLaSpec(string clave, string hex)
+    {
+        // Ruling B-26 (Fase B, tanda 12): el unico "suave" que existia era BrandSuaveBrush
+        // (#DCFCE7). Sin estos tres, BadgeEstado[Tono=Advertencia|Peligro|Info] se caia al gris
+        // DeshabilitadoFondoBrush del selector default (Componentes.axaml:76-78).
+        var brush = Assert.IsType<SolidColorBrush>(Recurso(clave));
+        Assert.Equal(Color.Parse(hex), brush.Color);
+    }
+
+    [AvaloniaTheory]
+    [InlineData("InfoSuaveBrush")]
+    [InlineData("WarningSuaveBrush")]
+    [InlineData("DangerSuaveBrush")]
+    public void FondosSuavesSemanticos_SoportanTextoPrimarioConAA(string clave)
+    {
+        // Ruling B-26: sobre estos fondos el texto va en TextoPrimarioBrush, NUNCA en el color
+        // semantico (que da 2.42-3.95:1 medido con el mismo calculo de Contraste.Ratio). Este
+        // test fija esa regla en el banco de pruebas.
+        var fondo = Assert.IsType<SolidColorBrush>(Recurso(clave)).Color;
+        var texto = Assert.IsType<SolidColorBrush>(Recurso("TextoPrimarioBrush")).Color;
+        Assert.True(Contraste.Ratio(texto, fondo) >= 4.5,
+            $"TextoPrimarioBrush sobre {clave} da {Contraste.Ratio(texto, fondo):F2}:1, por debajo de AA.");
+    }
 }

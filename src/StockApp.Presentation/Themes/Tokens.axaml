@@ -77,6 +77,14 @@
     <Color x:Key="ColorDangerPressed">#991B1B</Color>
     <Color x:Key="ColorInfo">#0EA5E9</Color>
 
+    <!-- Ruling B-26 (Fase B, tanda 12): fondos suaves para los 3 semanticos que no lo tenian
+         (solo ColorBrandSuave existia). Escalon 100 de la misma familia de la que sale el
+         escalon 600 de cada semantico. Sobre estos fondos el texto va en TextoPrimarioBrush
+         (14.6-16:1), nunca en el color semantico (2.42-3.95:1, ver ContrasteHelpers). -->
+    <Color x:Key="ColorInfoSuave">#E0F2FE</Color>
+    <Color x:Key="ColorWarningSuave">#FEF3C7</Color>
+    <Color x:Key="ColorDangerSuave">#FEE2E2</Color>
+
     <!-- Estado deshabilitado: derivados neutros, necesarios para los estados
          :disabled de Controls.axaml (Tarea 2). No forman parte de la paleta
          semántica pedida en la spec pero son indispensables para que los
@@ -132,6 +140,9 @@
     <SolidColorBrush x:Key="DangerHoverBrush" Color="{StaticResource ColorDangerHover}" />
     <SolidColorBrush x:Key="DangerPressedBrush" Color="{StaticResource ColorDangerPressed}" />
     <SolidColorBrush x:Key="InfoBrush" Color="{StaticResource ColorInfo}" />
+    <SolidColorBrush x:Key="InfoSuaveBrush" Color="{StaticResource ColorInfoSuave}" />
+    <SolidColorBrush x:Key="WarningSuaveBrush" Color="{StaticResource ColorWarningSuave}" />
+    <SolidColorBrush x:Key="DangerSuaveBrush" Color="{StaticResource ColorDangerSuave}" />
 
     <SolidColorBrush x:Key="DeshabilitadoFondoBrush" Color="{StaticResource ColorDeshabilitadoFondo}" />
     <SolidColorBrush x:Key="DeshabilitadoTextoBrush" Color="{StaticResource ColorDeshabilitadoTexto}" />
