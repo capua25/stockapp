@@ -11,16 +11,16 @@
         CanResize="False"
         ShowInTaskbar="False">
 
-    <Border Padding="24">
-        <StackPanel Spacing="20">
+    <Border Padding="{DynamicResource MargenVista}">
+        <StackPanel Spacing="{DynamicResource Espacio5}">
 
             <TextBlock x:Name="MensajeText"
                        TextWrapping="Wrap"
-                       FontSize="14" />
+                       Classes="body" />
 
             <StackPanel Orientation="Horizontal"
                         HorizontalAlignment="Right"
-                        Spacing="8">
+                        Spacing="{DynamicResource Espacio2}">
 
                 <Button x:Name="CancelarButton"
                         Content="Cancelar"
