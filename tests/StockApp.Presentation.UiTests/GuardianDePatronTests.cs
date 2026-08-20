@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.VisualTree;
+using StockApp.Presentation.Actualizaciones.Views;
 using StockApp.Presentation.Views;
 using StockApp.Presentation.Views.Administracion;
 using StockApp.Presentation.Views.Catalogo;
@@ -136,10 +137,11 @@ public class GuardianDePatronTests
 
     /// <summary>
     /// Vistas que no aportan cromo de vista propio: o estan embebidas en otra (P2-emb, P1-emb, P5,
-    /// Task 8.1 de la Fase B), o hostean a otra que si lo aporta (P9, Ruling B-22, tanda 11). No
-    /// llevan HeaderVista propio ni MargenVista: el contenedor (o el hijo, en el caso P9) ya los
-    /// puso. Corren los invariantes que SI les aplican (opacidad, boton primario), mas uno propio
-    /// e invertido (<see cref="VistaEmbebida_NoDuplicaElMargenDeVista"/>).
+    /// Task 8.1 de la Fase B; P5-ovl, Ruling B-34, tanda 12), o hostean a otra que si lo aporta
+    /// (P9, Ruling B-22, tanda 11). No llevan HeaderVista propio ni MargenVista: el contenedor (o
+    /// el hijo, en el caso P9) ya los puso. Corren los invariantes que SI les aplican (opacidad,
+    /// boton primario), mas uno propio e invertido
+    /// (<see cref="VistaEmbebida_NoDuplicaElMargenDeVista"/>).
     /// </summary>
     public static readonly TheoryData<Type> VistasEmbebidas = new()
     {
@@ -151,6 +153,9 @@ public class GuardianDePatronTests
         typeof(AdjuntosPanelView),
         typeof(AdjuntosDocumentoPanelView),
         typeof(AccesoLimitadoView),
+        typeof(ActualizacionBannerView),
+        typeof(ActualizacionModalView),
+        typeof(ActualizacionBloqueoView),
     };
 
     /// <summary>
