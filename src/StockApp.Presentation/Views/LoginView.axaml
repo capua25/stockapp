@@ -25,7 +25,7 @@
 
     <Grid>
 
-        <Image Source="avares://StockApp.Presentation/Assets/carmelo-original.png"
+        <Image Source="avares://GestionMunicipal/Assets/carmelo-original.png"
                Classes="marca-agua"
                Stretch="Uniform"
                HorizontalAlignment="Center"
@@ -35,7 +35,7 @@
         <Border Classes="card" Padding="{DynamicResource PaddingHolgado}" HorizontalAlignment="Center" VerticalAlignment="Center" Width="360">
             <StackPanel Spacing="{DynamicResource Espacio4}">
 
-                <TextBlock Text="StockApp"
+                <TextBlock Text="Gestión Municipal"
                            Classes="titulo-vista"
                            HorizontalAlignment="Center"
                            Margin="0,0,0,8" />

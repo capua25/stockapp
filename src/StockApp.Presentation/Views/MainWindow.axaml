@@ -7,7 +7,7 @@
         x:Class="StockApp.Presentation.Views.MainWindow"
         x:DataType="vm:ShellViewModel"
         Icon="/Assets/avalonia-logo.ico"
-        Title="StockApp"
+        Title="Gestión Municipal"
         MinWidth="400"
         MinHeight="300">
 
