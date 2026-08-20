@@ -105,7 +105,7 @@ La Fase A fueron 3435 líneas para 6 tandas y 19 archivos. La Fase B toca 55 arc
 |---|---|---|---|
 | **B1** | 6, 7 | 14 | **Detalle completo.** Produce el catálogo de patrones |
 | **B2** | 8, 9, 10 | 29 | **Detalle completo** (2026-08-19). 14 tasks, 14 commits. Amplía el catálogo con P3-b, P*-emb y P8 |
-| **B3** | 11, 12, 13 | 12 + limpieza | Esbozada. Son los casos que no entran en ningún patrón |
+| **B3** | 11, 12, 13 | 12 + limpieza | **Detalle completo** (2026-08-19). 14 tasks, 14 commits. Amplía el catálogo con P1', P9 y P5-ovl, y corrige P4/P6/P7 |
 
 **Por qué B1 se escribe completa y las otras no:** B1 no vale por sus 14 vistas, vale por el molde. Detallar B2 hoy sería especificar sustituciones contra patrones que todavía no se probaron contra el compilador ni contra la suite — exactamente el error que la Fase A evitó al no planificar la Fase B por adelantado ("ese plan se escribe consumiendo componentes que todavía no existen, y planificarlo a ciegas garantiza reescribirlo").
 
@@ -269,8 +269,11 @@ Notas: `<TextBlock Foreground="Red">` de error → `Foreground="{DynamicResource
 Vistas **P3-a** (tarjeta centrada, las 5 de B1): `CategoriaFormView`, `ProductoFormView`, `ProveedorFormView`, `UnidadMedidaFormView`, `MovimientoFormControl`.
 Vistas **P3-b** (formulario de página, las 7 de B2 — ver sección 1 de B2): `GastoFormView`, `IngresoFormView`, `LineaPoaFormView`, `RubroGastoFormView`, `FuenteFinanciamientoFormView`, `DocumentoFormView`, `TareaFormView`. **No son el mismo patrón**: su `titulo-vista` está fuera de la card y su card no está centrada.
 
-### P4 — Contenedor con TabControl (3 vistas)
-`MaestrosFinanzasView`, `ImportacionView`, `AccesoLimitadoView`. El `titulo-vista` pasa a `HeaderVista`; el `TabControl` no se toca. `AccesoLimitadoView` no tiene título hoy — gana uno.
+### P4 — Contenedor con TabControl (~~3~~ **2** vistas)
+`MaestrosFinanzasView`, `ImportacionView`. El `titulo-vista` pasa a `HeaderVista`; el `TabControl` no se toca.
+> **Corregido por B3 (Ruling B-22):** `AccesoLimitadoView` **no tiene `TabControl`** — es un `DockPanel`
+> que hostea `MantenimientoView` entera. Es el patrón **P9 (vista-host)**, definido en la sección 1 de
+> B3, y **no gana `HeaderVista`**.
 
 ### P5 — Panel/wrapper embebido (8 vistas) — **NO lleva `HeaderVista`**
 `EntradaRegistroView`, `SalidaRegistroView` (13 líneas cada uno, wrappers de `MovimientoFormControl`), `AdjuntosPanelView`, `AdjuntosDocumentoPanelView`, los 3 de `Actualizaciones/`.
@@ -278,9 +281,19 @@ Excepción argumentada: `EntradaRegistroView`/`SalidaRegistroView` renderizan a 
 
 ### P6 — Pantalla centrada sin sidebar (3 vistas)
 `LoginView`, `ResetAdminView`, `BloqueoLicenciaView`. Respiro `Espacio7` (48). Tanda 11.
+> **Precisado por B3 (Rulings B-31 y B-32):** las 3 **NO llevan `HeaderVista`** (su título va centrado
+> dentro de la card y el `ControlTheme` lo alinearía a la izquierda) y **no tienen margen exterior**.
+> El respiro se materializa como el token nuevo `PaddingHolgado` (Thickness 48) en el `Padding` de la
+> card, no como `Espacio7` — que es `x:Double` y en `Padding` revienta en runtime (T1). Entran al
+> guardián por una lista propia, `VistasCentradasSinSidebar`.
 
 ### P7 — Diálogo `Window` (3 vistas)
-`ConfirmacionDialog`, `MensajeDialog`, `PedirTextoDialog`. **Sin `x:DataType`, sin bindings, todo code-behind con `x:Name`.** No hay red del compilador. Se tokenizan `Padding`/`Spacing`/`CornerRadius`; **no** llevan `HeaderVista` (tienen `Title` de ventana). Los `x:Name` (`MensajeText`, `CancelarButton`, `ConfirmarButton`, …) son **intocables**: `ConfirmacionServiceDialogosConsecutivosTests` los usa.
+`ConfirmacionDialog`, `MensajeDialog`, `PedirTextoDialog`. **Sin `x:DataType`, sin bindings, todo code-behind con `x:Name`.** No hay red del compilador. Se tokenizan `Padding`/`Spacing`/`CornerRadius`; **no** llevan `HeaderVista` (tienen `Title` de ventana). Los `x:Name` son **intocables**.
+> **Corregido por B3 (Ruling B-27):** la razón NO es `ConfirmacionServiceDialogosConsecutivosTests`
+> (ese test cierra los diálogos con `dialog.Close(...)` y no los nombra). `MensajeText` y `TextoTextBox`
+> los usa el **code-behind** de los propios diálogos, así que los protege el compilador de C# (CS0103).
+> `CancelarButton`/`ConfirmarButton`/`AceptarButton` no los consume nadie. Además, los 3 **no se pueden
+> montar** con `PatronHelpers.Montar` (son `Window`): van a `VistasFueraDelGuardian`.
 
 ---
 
@@ -3006,63 +3019,2288 @@ Al cerrar B2 (tandas 8, 9 y 10 + Task B2-T), tienen que valer los 10:
 
 ---
 
-# SUB-FASE B3 — Los bordes y la limpieza (esbozo)
+# SUB-FASE B3 — Los bordes y la limpieza (12 vistas + limpieza)
 
-## Tanda 11: Administración y acceso (6 vistas)
+> **Escrita el 2026-08-19, al cerrar B2.** El esbozo anterior fijaba alcance y riesgos; esto fija
+> los pasos. **Todo número de línea de esta sub-fase se verificó abriendo el archivo** en el árbol
+> de trabajo. Donde no pude verificar algo, está marcado como **NO VERIFICADO** — no hay ningún
+> número inventado. Este dispatch **no compiló ni corrió tests** (había otro agente compilando en
+> el mismo worktree), así que **toda afirmación sobre el resultado de una corrida está marcada como
+> predicción, no como hecho**.
 
-`MantenimientoView` (P1'), `UsuariosAdminView` (P1'), `LoginView` (P6), `ResetAdminView` (P6), `BloqueoLicenciaView` (P6), `AccesoLimitadoView` (P4).
+**Línea base al arrancar B3:** el cierre de la tanda 10 dejó **3310 tests verdes** (commit
+`ecdb680`). La **Task B2-T** (`SignoNegativoBrushConverter` → color + palabra, Ruling B-6) estaba
+**en ejecución** al escribirse esto: el árbol tenía sin commitear `Converters/EsNegativoConverter.cs`,
+`tests/StockApp.Presentation.Tests/Converters/EsNegativoConverterTests.cs`,
+`tests/StockApp.Presentation.UiTests/SignoNegativoBadgeTests.cs` y 8 `.axaml` modificados
+(`ProductoListView`, `MovimientoHistorialView`, `ControlPoaView`, `LibroCajaView`, `TareaListView`,
+`ValorizacionView`, `StockCategoriaView`, `HistorialPorProductoView`). **B3 arranca DESPUÉS de que
+B2-T cierre**; ninguna de esas 8 vistas es de B3, así que no hay conflicto de archivo, pero la
+línea base de tests será la que deje B2-T, no 3310.
 
-**Riesgo: ALTO, concentrado en `MantenimientoView`.** 229 líneas, **17 tests**, y **4 asserts geométricos con `TranslatePoint`**: `:181`, `:391`, `:392`, `:406-407`. La spec mencionaba uno (`:379`); son cuatro, en dos grupos:
-- `:391-392` compara el **orden vertical** de "Logs" vs "Guardar" — se rompe si el `HeaderVista` reordena el `DockPanel`.
-- `:406-407` compara el origen de dos tarjetas — se rompe si se cambia el layout de tarjetas.
+**B3 son 14 tasks / 14 commits**: 5 en la tanda 11, 4 en la tanda 12, 5 en la tanda 13.
 
-La Fase A ya dictaminó: **no se borran** (custodian una regresión real de `DockPanel`/`LastChildFill`, validada por mutación por su autor). Se **adaptan**, conservando el criterio geométrico. Es la única task del refactor donde está permitido tocar asserts, y solo estos cuatro.
+---
 
-**`UsuariosAdminView:90`:** `BorderBrush="Gray"` + radio 4 fuera de escala (señalado por la spec). Más `Foreground="Red"` en `:143` y `badge-inactiva` en `:51-52`.
+## 0. Correcciones al esbozo (lo que el barrido de verificación encontró)
 
-**P6 (`LoginView`, `ResetAdminView`, `BloqueoLicenciaView`):** son pantallas centradas sin sidebar. `Espacio7` (48) como respiro. `LoginView` ya fue tocada en el uplift de 2026-07-04 (es una de las 3 vistas que sí adoptaron tokens entonces) — verificar antes de reescribir.
+El esbozo de B3 se escribió sin abrir los 12 archivos. Al abrirlos aparecieron **catorce**
+afirmaciones falsas, incompletas o peligrosas. Se corrigen acá para que quien ejecute no trabaje
+contra datos viejos. La numeración sigue la de B2 (que llegó hasta C11).
 
-**`AccesoLimitadoView`:** 28 líneas, sin título hoy. Es la barrera física del modo licencia-vencida — el comentario del archivo (`:14-17`) advierte que **a propósito** no tiene sidebar ni `ContentControl` genérico. **No agregar navegación de ningún tipo.** Solo gana `HeaderVista`. Custodiada por `AccesoLimitadoViewTests` + 2 casos de `ViewLocatorTests`.
+| # | Lo que decía el esbozo (o el catálogo P0-P8) | Lo verificado en el código | Impacto |
+|---|---|---|---|
+| C12 | `AccesoLimitadoView` es **P4** (contenedor con `TabControl`) | **NO tiene `TabControl`.** `AccesoLimitadoView.axaml:16` es un `<DockPanel>` y `:24` es `<admin:MantenimientoView DataContext="{Binding Mantenimiento}" />` — hostea una vista entera, no pestañas | patrón nuevo **P9 (vista-host)**, ver **Ruling B-22**. El catálogo P4 pasa de 3 vistas a 2 |
+| C13 | `MantenimientoView` tiene margen exterior estándar | `:21` es `<DockPanel Margin="16" LastChildFill="False">` — **16, no 24**. `Vista_TieneMargenExteriorEstandar` daría rojo real | la Task 11.3 lo migra a `MargenVista`; es una de las 2 filas rojas reales de la tanda 11 |
+| C14 | "los 4 asserts geométricos con `TranslatePoint`" son el único riesgo de tests de `MantenimientoView` | hay un **quinto** sitio y es de TEXTO, no geométrico: `MantenimientoViewTests.cs:250` hace `Assert.Contains(textos, t => t.Contains("Diagnóstico", StringComparison.Ordinal))` | **prohibido pasar los rótulos de sección a MAYÚSCULAS.** Ver **Ruling B-29** |
+| C15 | los 4 `TranslatePoint` están en un solo bloque | están en **dos tests distintos**: `:181` en `Montar_ConMuchasCorridas_ElScrollViewerHaceAlcanzableLaUltimaFila` (alcanzabilidad tras scroll) y `:391`/`:392`/`:406`/`:407` en `Montar_LaSeccionDeAlertasQuedaDebajoDeLaDeDiagnostico` (orden vertical + origen de las dos tarjetas) | los dos tests se corren por separado en el Step de línea base de 11.3 |
+| C16 | `UsuariosAdminView:90` tiene "radio 4 **fuera de escala**" | **4 SÍ está en la escala**: `Tokens.axaml:40` define `<CornerRadius x:Key="RadioChico">4</CornerRadius>`. Lo único fuera del sistema en esa línea es `BorderBrush="Gray"` | `CornerRadius="4"` → `{DynamicResource RadioChico}` es sustitución **sin cambio visual** |
+| C17 | de `UsuariosAdminView` el esbozo cuenta 3 residuos (`:90`, `:143`, `:51-52`) | son **seis**: `:25` `Opacity="0.6"`, `:50` `Opacity="0.6"` (dentro de `ItemTemplate`), `:51-52` `badge-inactiva`, `:90` `BorderBrush="Gray"`, `:99` `Foreground="Gray"`, `:143` `Foreground="Red"` | `:99` no lo contaba nadie; ver tabla de la Task 11.2 |
+| C18 | `UsuariosAdminView` no tiene problema de jerarquía de botones | `:32` "Crear usuario" es el único `Classes="primary"`; **`:147` "Guardar permisos" no tiene NINGUNA clase** — es un `Button` Fluent crudo en medio de una vista tokenizada | ver **Ruling B-28**: pasa a `secondary`, NO a `primary` |
+| C19 | los `x:Name` de los 3 diálogos "los usa `ConfirmacionServiceDialogosConsecutivosTests`" | **falso.** `grep -rn 'MensajeText\|CancelarButton\|ConfirmarButton\|AceptarButton\|TextoTextBox' --include=*.cs src/ tests/` devuelve **4 coincidencias y las 4 están en el code-behind de los propios diálogos** (`ConfirmacionDialog.axaml.cs:24`, `MensajeDialog.axaml.cs:27`, `PedirTextoDialog.axaml.cs:26` y `:30`). Ese test cierra los diálogos con `dialog.Close(...)` y los busca por `owner.OwnedWindows`, nunca por nombre | ver **Ruling B-27**: `MensajeText`/`TextoTextBox` los protege **el compilador de C#** (campo generado; borrarlos da CS0103). `CancelarButton`/`ConfirmarButton`/`AceptarButton` **no los consume nadie** — igual no se tocan, pero la razón real no es la que decía el esbozo |
+| C20 | "la paleta Material vieja son **9 sitios** en 3 archivos" | son **13 atributos con hex literal** (`Banner:11`×2, `:31`; `Modal:11`×2, `:18`, `:30`; `Bloqueo:16`×2, `:23`, `:31`, `:40`) **más 4 `Foreground="White"`** (`Banner:32`, `Modal:31`, `Bloqueo:32`, `Bloqueo:45`) = **17 sitios de color literal**. Los 8 hex DISTINTOS sí son los que listaba la tabla de "Deuda transversal" | la Task 12.2 migra 17, no 9 |
+| C21 | "puede hacer falta agregar 3 tokens `Fondo*Suave`" (dicho como posibilidad) | **hace falta, confirmado leyendo `Tokens.axaml` entero (145 líneas):** el único "suave" que existe es `ColorBrandSuave`/`BrandSuaveBrush` (`:59`, `:114`). No hay equivalentes con otro nombre. Y el agujero ya se ve hoy: en `Componentes.axaml:87-97`, `BadgeEstado[Tono=Advertencia\|Peligro\|Info]` solo cambia el `Foreground` — el fondo **se cae al gris `DeshabilitadoFondoBrush`** del selector default (`:76-78`), a diferencia de `[Tono=Exito]` que sí tiene `BrandSuaveBrush` (`:83-85`) | ver **Ruling B-26**. La Task 12.1 los agrega y de paso cierra el agujero de `BadgeEstado` |
+| C22 | las 3 vistas P6 "ganan `HeaderVista`" (implícito en el catálogo) | el `ControlTheme` de `HeaderVista` (`Componentes.axaml:13-36`) es un `Grid ColumnDefinitions="*,Auto"` con el título **alineado a la izquierda** y un slot de acciones a la derecha. Las 3 P6 tienen su `titulo-vista` con `HorizontalAlignment="Center"` dentro de una card centrada (`LoginView:23-26`, `ResetAdminView:16-19`, `BloqueoLicenciaView:16-19`) y **ninguna tiene acciones de encabezado** | ver **Ruling B-32**: las 3 P6 **NO** llevan `HeaderVista`. Cambia la cuenta del criterio 2 de la Fase B |
+| C23 | nada sobre el margen exterior de las P6 | las 3 tienen `<Grid>` raíz **sin margen**; `PatronHelpers.MargenExteriorDe` devolvería el primer `Margin` no-default que encuentre bajando (en `LoginView` es el `Margin="0,0,0,8"` del `TextBlock` del título, `:26`) → `Vista_TieneMargenExteriorEstandar` daría rojo **por una razón estructural, no por una migración pendiente** (mismo modo de falla que el Ruling B-9 evitó en la tanda 6) | las 3 P6 entran al guardián por una **cuarta lista** con un invariante propio; ver sección 2 |
+| C24 | nada sobre el logo del municipio | `LoginView:13-18` es un `<Image>` con `Opacity="0.28"` **literal** y `RenderTransform="scale(0.85)"` — diseño aprobado y mergeado (commits `4bb3222` + `8ee5f32`, 2026-07-10). `PatronHelpers.OpacidadesLiteralesDe` filtra por `Priority == LocalValue` sobre **cualquier `Control`**, no solo `TextBlock` → **lo marcaría como residuo** | ver **Ruling B-25** |
+| C25 | nada sobre el contraste de `TextoTerciarioBrush` | medido con el mismo cálculo de `ContrasteHelpers.Contraste.Ratio`: **#94A3B8 sobre blanco = 2.56:1**, sobre `ColorFondo` #F8FAFC = **2.45:1**. Está por debajo del piso AA de texto (4.5:1) **y** del umbral gráfico (3:1). `TextoSecundarioBrush` #64748B da **4.76:1** (AA) | hallazgo **de la Fase A, no de B3** (el token ya se aplicó en ~58 sitios). B3 no lo re-litiga en las vistas ya migradas, pero **sí elige por caso** en las suyas: ver **Ruling B-30** y la pregunta abierta 5 |
 
-## Tanda 12: Actualizaciones y diálogos (6 vistas)
+---
 
-**`Actualizaciones/Views/` (3):** `ActualizacionBannerView`, `ActualizacionModalView`, `ActualizacionBloqueoView`. **El único módulo 100% fuera del sistema de diseño.** Paleta Material vieja, 9 sitios:
+## 1. Ampliaciones del catálogo de patrones que B3 obliga
 
-| Archivo | Colores a reemplazar | Token destino |
+B1 probó P0-P7 contra 14 vistas; B2 agregó P3-b, P*-emb y P8 contra 29. Las 12 de B3 son
+**exactamente las que no entraron en ninguno de esos moldes** — por eso son las últimas.
+
+### P1' — Vista de administración (2 vistas)
+
+`MantenimientoView`, `UsuariosAdminView`. **No es P1**: no tienen grilla ni barra de acciones de
+listado. Son páginas de secciones apiladas (`MantenimientoView`: Backups / Diagnóstico / Alertas,
+3 `Border.card` dockeadas al Top) o de dos columnas (`UsuariosAdminView`: `Grid ColumnDefinitions="360,*"`).
+
+**Forma destino:**
+```xml
+<DockPanel Margin="{DynamicResource MargenVista}">
+    <c:HeaderVista DockPanel.Dock="Top" Eyebrow="ADMINISTRACIÓN" Titulo="…" />
+    <!-- el resto de la vista NO se reestructura -->
+```
+Reglas duras de P1':
+- **`HeaderVista` SIN slot de acciones.** Los botones de estas dos vistas pertenecen a su sección
+  o a su card, no a la vista. Moverlos al encabezado cambiaría el orden de hijos del `DockPanel`,
+  que es justamente lo que custodian los 4 `TranslatePoint` (Ruling B-24).
+- **El `Eyebrow` es `ADMINISTRACIÓN`** en las dos: verificado en `ShellMainViewModel.cs:260-264`,
+  el grupo de sidebar se llama `"Administración"` y contiene los ítems `"Mantenimiento"` y
+  `"Usuarios"`.
+- **El `Titulo` conserva el copy actual**: `"Mantenimiento"` (`MantenimientoView:24`) y
+  `"Administración de usuarios"` (`UsuariosAdminView:15`). No se alinea con la etiqueta del
+  sidebar (`"Usuarios"`): eso sería cambio de copy.
+
+### P6 — corregido: pantalla centrada sin sidebar, SIN `HeaderVista` (3 vistas)
+
+`LoginView`, `ResetAdminView`, `BloqueoLicenciaView`. Las 3 son estructuralmente idénticas
+(verificado línea por línea):
+
+```xml
+<UserControl … Background="{DynamicResource FondoBrush}">
+    <Grid>
+        <Border Classes="card" Padding="40" HorizontalAlignment="Center" VerticalAlignment="Center" Width="360|420">
+            <StackPanel Spacing="16">
+                <TextBlock Text="…" Classes="titulo-vista" HorizontalAlignment="Center" Margin="0,0,0,8" />
+```
+**Forma destino:** el `titulo-vista` centrado **se queda tal cual** (Ruling B-32); lo que cambia es
+`Padding="40"` → `{DynamicResource PaddingHolgado}` (48, token nuevo, Ruling B-31), los `Spacing`
+literales → escala, los pares etiqueta+control → `c:CampoFormulario`, y los `Opacity` literales →
+color declarado. **No ganan `HeaderVista` y no tienen margen exterior**: su respiro es el padding de
+la card sobre el `FondoBrush` de la ventana entera.
+
+`LoginView` es la única de las 3 que ya adoptó tokens parcialmente en el uplift del 2026-07-04:
+verificado, ya usa `FondoBrush` (`:9`), `Classes="card"` (`:20`), `WarningBrush` (`:37`) y
+`DangerBrush` (`:59`). Lo que le falta es exactamente lo mismo que a las otras dos.
+
+### P9 — Vista-host (1 vista)
+
+`AccesoLimitadoView`. Es el inverso de P*-emb: en vez de estar embebida en otra, **hostea a otra
+vista completa que ya trae su propio cromo**. No lleva `HeaderVista` propio (duplicaría el
+"Mantenimiento" de su hijo) ni `MargenVista` propio (`MantenimientoView` lo trae). Entra al guardián
+por `VistasEmbebidas`, cuyo comentario de clase se amplía (Ruling B-22).
+
+**Prohibición explícita, heredada del comentario del propio archivo (`:12-15`):** no se agrega
+sidebar, ni `ContentControl` atado a `INavigationService`, ni ningún camino de navegación. Es la
+barrera física del modo licencia-vencida.
+
+### P5-ovl — Overlay de actualización (3 vistas)
+
+`ActualizacionBannerView`, `ActualizacionModalView`, `ActualizacionBloqueoView`. Son P5 (panel
+embebido, sin `HeaderVista` ni `MargenVista`) con una particularidad: se renderizan dentro del
+segundo `ContentControl` de `MainWindow.axaml:23-26`, superpuestos a toda la app, y **cada uno
+define su propia alineación** (`VerticalAlignment="Top"` el banner, centrado el modal y el bloqueo).
+Eso no se toca. Lo que cambia es **solo la paleta**: 17 sitios de color literal → tokens.
+
+### P7 — Diálogo `Window`: fuera del guardián (3 vistas)
+
+`ConfirmacionDialog`, `MensajeDialog`, `PedirTextoDialog`. Además de lo que ya decía el catálogo
+(sin `x:DataType`, sin bindings, todo code-behind, sin `HeaderVista` porque usan `Window.Title`),
+hay un hecho técnico que el catálogo no registraba: **no se pueden montar con
+`PatronHelpers.Montar`**, porque ese helper hace `new Window { Content = vista }`
+(`PatronHelpers.cs:39`) y una `Window` no puede ser hija de otra `Window` en Avalonia.
+**NO VERIFICADO empíricamente** (este dispatch no pudo compilar); si se intentara, se espera una
+excepción al montar, no un rojo de aserción. Por eso entran a la lista `VistasFueraDelGuardian`
+(sección 2), no a `VistasEmbebidas`.
+
+---
+
+## 2. Cómo se amplía el guardián en B3
+
+Estado al arrancar B3, verificado leyendo `GuardianDePatronTests.cs` (256 líneas):
+**36 filas** de `[InlineData]` (`:42-77`), **36 tipos** en `VistasDeLaTanda` (`:92-130`),
+**7 tipos** en `VistasEmbebidas` (`:138-147`), 4 métodos y **2 conjuntos de exención**
+(`:213-217` y `:232-235`).
+
+### B3 agrega una cuarta lista: `VistasCentradasSinSidebar`
+
+```csharp
+/// <summary>
+/// P6 (Ruling B-32): pantallas centradas sin sidebar (Login, ResetAdmin, BloqueoLicencia). NO
+/// llevan HeaderVista -- su ControlTheme alinea el titulo a la izquierda con slot de acciones a
+/// la derecha, y estas tres tienen el titulo CENTRADO dentro de una card sin acciones. Tampoco
+/// tienen margen exterior: el respiro lo da el Padding de la card sobre el FondoBrush de la
+/// ventana. El invariante propio es ese padding.
+/// </summary>
+public static readonly TheoryData<Type> VistasCentradasSinSidebar = new()
+{
+    typeof(LoginView),
+    typeof(ResetAdminView),
+    typeof(BloqueoLicenciaView),
+};
+
+[AvaloniaTheory]
+[MemberData(nameof(VistasCentradasSinSidebar))]
+public void VistaCentrada_TieneCardConPaddingHolgado(Type tipoVista)
+{
+    var vista = PatronHelpers.Montar(tipoVista);
+    var card = vista.GetVisualDescendants().OfType<Border>()
+        .FirstOrDefault(b => b.Classes.Contains("card"));
+
+    Assert.True(card is not null, $"{tipoVista.Name} no tiene ninguna Border.card en su arbol.");
+    Assert.Equal(new Thickness(48), card!.Padding);
+}
+```
+Las 3 corren además `Vista_NoTieneOpacidadesLiterales` y `Vista_NoTieneUnSegundoBotonPrimario`
+(agregando `[MemberData(nameof(VistasCentradasSinSidebar))]` como tercer atributo de esos dos
+métodos — xUnit acumula los `MemberData`), **salvo** la exención de `LoginView` del Ruling B-25.
+
+**Trampa de mantenimiento, ahora con CUATRO listas.** Cada task de B3 tiene un Step explícito que
+enumera qué listas toca. La Task 13.4 cierra el problema de raíz con un meta-test.
+
+### Las 4 filas nuevas de `VistasEmbebidas` y su comentario ampliado
+
+`VistasEmbebidas` pasa de 7 a **11**: `+ AccesoLimitadoView` (P9),
+`+ ActualizacionBannerView`, `+ ActualizacionModalView`, `+ ActualizacionBloqueoView` (P5-ovl).
+El `<summary>` de la lista (`:132-137`) hoy dice "vistas que se renderizan como contenido de un
+TabItem/ContentControl de otra vista" — se amplía a **"vistas que no aportan cromo de vista propio:
+o están embebidas en otra (P*-emb, P5), o hostean a otra que sí lo aporta (P9)"**.
+
+Predicción del comportamiento de las 4 nuevas (todas **NO VERIFICADAS**, no se corrió nada):
+- `VistaEmbebida_NoDuplicaElMargenDeVista`: **verde desde el minuto cero en las 4.**
+  `AccesoLimitadoView` devuelve `Thickness(16,16,16,0)` (su `Border` de aviso, `:18`), y las 3 de
+  `Actualizaciones/` no tienen ningún `Margin` en su árbol → `MargenExteriorDe` devuelve `null`, y
+  `null != new Thickness(24)` es `true`. Anotarlo en el ledger como hizo el Ruling B-15: **verde no
+  significa "no custodia nada"**, significa que ya cumplían.
+- `Vista_NoTieneOpacidadesLiterales`: **2 rojas reales** — `ActualizacionModalView:22` y
+  `ActualizacionBloqueoView:27`, los dos `Opacity="0.85"`, los dos **fuera** de cualquier
+  `DataTemplate` (el guardián sí los ve). `AccesoLimitadoView` también daría rojo mientras
+  `MantenimientoView` conserve sus 3 `Opacity="0.6"` (`:31`, `:147`, `:183`), porque los hereda en
+  su árbol — por eso la Task 11.4 va **después** de la 11.3.
+- `Vista_NoTieneUnSegundoBotonPrimario`: verde en las 4, antes y después (hoy las 3 de
+  `Actualizaciones/` no tienen ni un `Classes="primary"`; después de la Task 12.2 tienen uno cada
+  una. `AccesoLimitadoView` hereda el único `primary` de `MantenimientoView`, el "Guardar" de
+  Alertas, `:214`).
+
+### `VistasFueraDelGuardian` y el meta-test que cierra la contabilidad (Task 13.4)
+
+Hay 5 vistas que **no pueden** entrar a ninguna lista, cada una por una razón distinta:
+
+| Vista | Por qué no entra | Quién la custodia entonces |
 |---|---|---|
-| `ActualizacionBannerView:11,31` | `#E8F4FD`, `#2196F3` | `InfoBrush` + fondo suave |
-| `ActualizacionModalView:11,18,30` | `#FFFDF0`, `#FF9800`, `#E65100` | `WarningBrush` |
-| `ActualizacionBloqueoView:16,23,31,40` | `#FFEBEE`, `#F44336`, `#B71C1C` | `DangerBrush`/`DangerPressedBrush` |
+| `Views/Dialogs/ConfirmacionDialog` | es `Window`; `PatronHelpers.Montar` no puede montarla | el compilador (campos `x:Name` del code-behind) + `ConfirmacionServiceDialogosConsecutivosTests` (2 tests) |
+| `Views/Dialogs/MensajeDialog` | ídem | ídem |
+| `Views/Dialogs/PedirTextoDialog` | ídem | ídem |
+| `Views/MainWindow` | es `Window` (la host de la app) | `ShellViewModel` + los tests de `Actualizaciones/` de `StockApp.Presentation.Tests` |
+| `Views/ShellMainView` | es el cromo de la app: sidebar + `ContentControl`, no una vista de contenido | `ShellMainViewGatesTests` (15) + `SidebarContrasteTests` |
 
-Riesgo bajo (cero tests) pero **hay un hueco**: no hay `Fondo*Suave` para Info/Warning/Danger en `Tokens.axaml` — solo existe `BrandSuaveBrush`. Puede hacer falta agregar 3 tokens. **Decidir en la task, no inventarlos ahora.**
+**La contabilidad cierra exacto:** 38 (`VistasDeLaTanda`, 36 + `MantenimientoView` +
+`UsuariosAdminView`) + 11 (`VistasEmbebidas`) + 3 (`VistasCentradasSinSidebar`) + 5
+(`VistasFueraDelGuardian`) = **57**. Y `find Views Actualizaciones/Views -name '*.axaml' | wc -l`
+devuelve **58** hoy — la 58ª es `MainWindowView.axaml`, que la Task 13.1 borra. Ese "57 + 1 borrada
+= 58" es el criterio de aceptación duro de la Fase B, y la Task 13.4 lo convierte en un test.
 
-**`Views/Dialogs/` (3):** `ConfirmacionDialog`, `MensajeDialog`, `PedirTextoDialog`. **Las 3 vistas sin `x:DataType` de toda la app** — son `Window` con code-behind puro, sin red del compilador. Solo tokenización de `Padding`/`Spacing`/`CornerRadius`; **no** llevan `HeaderVista` (tienen `Title` de ventana). `SombraModal` es el token que les corresponde.
-**Intocables:** los `x:Name` (`MensajeText`, `CancelarButton`, `ConfirmarButton`, …) y los `Content` de botón — `ConfirmacionServiceDialogosConsecutivosTests` depende de ellos.
+### Revisión de las 2 exenciones acumuladas: **ninguna se puede cerrar en B3**
 
-## Tanda 13: Limpieza
+Encargo explícito del brief. Las leí las dos:
 
-- [ ] **Borrar `Views/MainWindowView.axaml` + `.axaml.cs` + `ViewModels/MainWindowViewModel.cs`.** Verificado: **cero referencias** fuera de sí mismos; `ViewLocatorTests` no enumera ViewModels, es específico. Es la única vista con `FontSize="28"`. **Antes de borrar, re-correr el grep** — puede haber aparecido un uso durante las tandas 6-12.
-- [ ] **Tokenizar `Views/MainWindow.axaml`** (29 líneas, la `Window` host). Mínimo: verificar que no queda nada literal.
-- [ ] **Borrar `Border.badge-inactiva` y `TextBlock.badge-inactiva-texto` de `Themes/Controls.axaml:234,242`,** una vez que las 10 vistas migraron a `c:BadgeEstado`. Verificar con grep que no queda ningún uso antes de borrar.
-- [ ] **`AdjuntosPanelView` vs `AdjuntosDocumentoPanelView`: DESCOPADA la unificación (Ruling B-13, aprobado por el usuario el 2026-08-19).**
+**`VistasExentasPorEmbeberUnWizardP8` = { `ImportacionView`, `NuevaImportacionView` }**
+(`GuardianDePatronTests.cs:213-217`). Causa raíz: `PatronHelpers.Montar` **no asigna DataContext**
+(`PatronHelpers.cs:36-43`, decisión deliberada documentada en el `<summary>` de la clase), así que
+los tres `IsVisible="{Binding PasoActual, Converter=…}"` de `NuevaImportacionView` (`:41`, `:65`,
+`:480`) quedan sin resolver y caen al default `true` → 3 primarios "visibles".
+**No se puede cerrar sin montar con ViewModel real**, y montar con VM real rompe el propósito del
+guardián (montar 55 vistas sin construir 55 grafos de fakes) **y** desactiva la segunda mitad del
+Ruling B-8 (sin `ItemsSource` vacío, los `CellTemplate` se realizan y `OpacidadesLiteralesDe`
+deja de ser preciso). El reemplazo ya existe y es mejor: `NuevaImportacionJerarquiaBotonesTests`
+(3 casos, VM real, un primario por paso). **Veredicto: se queda. Se documenta el porqué en el
+propio código para que nadie la re-litigue.**
 
-  La spec dice "unificar los gemelos de 63 y 62 líneas". Los diffeé: **no son gemelos**. Bindean a **dos tipos de ViewModel distintos** (`AdjuntosPanelViewModel` en `ViewModels.Finanzas`, `AdjuntosDocumentoPanelViewModel` en `ViewModels.Documentos`), con **APIs distintas** (`PuedeAgregar` + `PuedeQuitar` vs un único `PuedeModificar`) y DTOs de namespaces distintos.
+**`VistasExentasPorPrimariosMutuamenteExcluyentesSinVm` = { `DocumentoFormView` }**
+(`:232-235`). Misma causa raíz (`PuedeEditar => !EsNuevoDocumento && …` no resuelto sin VM), mismo
+reemplazo ya existente (`DocumentoFormViewGatesTests`, 10 casos). **Veredicto: se queda.**
 
-  Unificarlos exige (a) reconciliar dos contratos de ViewModel y (b) renombrar una View — y **"renombrar o mover Views" está explícitamente fuera de alcance** en la sección 5 de la spec, custodiado por `ViewLocatorTests` (que tiene 2 casos dedicados a `AdjuntosPanelView` justamente porque este panel ya se creó una vez sin su View y hubo regresión).
+**B3 agrega una tercera exención** (`LoginView`, Ruling B-25) y **la paga con un test dedicado** —
+que es exactamente lo que las dos anteriores hacen. El patrón está bien; lo que faltaba era decirlo
+en un solo lugar. La Task 13.4 lo escribe.
 
-  **La tanda 13 de la spec se contradice con la sección 5 de la spec; Ruling B-13 la resuelve a favor de la sección 5.** En esta tanda se hace **solo armonización visual** (que los dos se vean idénticos). La unificación real de los ViewModels queda como trabajo aparte, sin fecha.
+### El punto ciego de `ItemTemplate` (Ruling B-16) en B3
 
-- [ ] **Verificación orgánica final** de la app entera, con la app real corriendo.
-- [ ] **Auditoría final de residuos** sobre las 58 vistas:
+Reconfirmado empíricamente en la tanda 9: revertir "Terminar" a `Classes="primary"` dentro del
+`ItemTemplate` de `TareaListView` dejó `GuardianDePatronTests` **155/155 verde**. En B3 los sitios
+invisibles son **2, los dos en `UsuariosAdminView`**: `:50` (`Opacity="0.6"` dentro del
+`ListBox.ItemTemplate`) y `:51-52` (el `badge-inactiva`). Los dos los caza **solo el grep manual**.
+Clasificación completa de los `Opacity` literales de B3 (contada abriendo cada archivo):
+
+| Vista | Dentro de plantilla (**el guardián NO los ve**) | Fuera (**sí los ve**) |
+|---|---|---|
+| `Administracion/UsuariosAdminView` | `:50` | `:25` |
+| `Administracion/MantenimientoView` | — | `:31`, `:147`, `:183` |
+| `LoginView` | — | `:14` (logo, Ruling B-25), `:30`, `:79` |
+| `BloqueoLicenciaView` | — | `:24` |
+| `ResetAdminView` | — | — (cero, verificado) |
+| `AccesoLimitadoView` | — | — propios cero; hereda los 3 de `MantenimientoView` |
+| `Actualizaciones/ActualizacionModalView` | — | `:22` |
+| `Actualizaciones/ActualizacionBloqueoView` | — | `:27` |
+| `MainWindowView` (se borra) | — | `:17` |
+| **Total** | **1** | **10** (9 a migrar + 1 exento) |
+
+**El grep manual sigue siendo obligatorio al cerrar cada task**, aunque acá la proporción se invierta
+respecto de B2 (allá eran 25 invisibles de 30):
 ```bash
-grep -rn 'Opacity="0\.\|Foreground="Red"\|Margin="24"\|Margin="16"\|Margin="40"\|FontSize="\|#[0-9A-Fa-f]\{6\}' \
+grep -n 'Opacity="0\.' <cada archivo tocado por la task>
+```
+Expected: **cero coincidencias**, salvo `LoginView:14` (marca de agua aprobada, Ruling B-25) y los
+`Opacity` vía `ActivoOpacidadConverter` (`UsuariosAdminView:49`), que no matchean ese patrón porque
+su valor es un binding.
+
+### Botones primarios duplicados: revisión preventiva de las 12 vistas
+
+Encargo explícito del brief (en las tandas 8 y 9 aparecieron 4 casos que ninguna tabla anticipaba).
+Contados a mano, archivo por archivo:
+
+| Vista | `Classes="primary"` hoy | Después de B3 | ¿Riesgo? |
+|---|---|---|---|
+| `MantenimientoView` | 1 (`:214` "Guardar" de Alertas) | 1 | no. Los pares de swap (`:38`/`:43` y `:157`/`:171`) son **`secondary`**, así que aunque sin VM los dos queden visibles a la vez, el invariante no los cuenta |
+| `UsuariosAdminView` | 1 (`:32` "Crear usuario") | 1 | no, **si** `:147` va a `secondary` (Ruling B-28). Si alguien lo pone `primary`, rojo inmediato |
+| `LoginView` | 1 (`:65` "Entrar") | 1 | no. `:72` no tiene clase (link de reset) |
+| `ResetAdminView` | 1 (`:84` "2) Resetear Admin") | 1 | no. `:21` y `:102` sin clase |
+| `BloqueoLicenciaView` | 1 (`:63` "Activar") | 1 | no. `:71` sin clase |
+| `AccesoLimitadoView` | 0 propios | 1 heredado de `MantenimientoView` | no |
+| `ActualizacionBannerView` | 0 | 1 (`:28` "Actualizar ahora") | no. `:23` "Más tarde" va a `ghost` |
+| `ActualizacionModalView` | 0 | 1 (`:28` "Actualizar ahora") | no. `:25` "Posponer" va a `secondary` |
+| `ActualizacionBloqueoView` | 0 | 1 (`:29` "Aplicar y reiniciar", `danger`) | no. El banner de modo degradado (`:39-50`) no tiene botones |
+| `ConfirmacionDialog` | 1 (`:33`) | 1 | fuera del guardián |
+| `MensajeDialog` | 1 (`:27`) | 1 | fuera del guardián |
+| `PedirTextoDialog` | 1 (`:39`) | 1 | fuera del guardián |
+
+**Cero casos nuevos.** Es la primera tanda del refactor donde eso pasa, y tiene una razón: ninguna
+de las 12 vistas de B3 tiene botones por fila dentro de un `ItemTemplate` con `Classes="primary"`
+(el modo de falla de `DocumentoListView`/`TareaListView`), y ninguna tiene dos acciones de chrome
+compitiendo (el de `GastosView`).
+
+---
+
+## 3. Rulings de B3
+
+**Ruling B-22 — `AccesoLimitadoView` no es P4: es una vista-HOST (P9). No gana `HeaderVista` ni
+`MargenVista`, y entra al guardián por `VistasEmbebidas`.**
+
+El catálogo P4 la listaba junto a `MaestrosFinanzasView` e `ImportacionView` como "contenedor con
+`TabControl`". **No tiene `TabControl`**: `:16` es un `DockPanel`, `:18-22` un `Border.card` con el
+aviso de licencia vencida, y `:24` `<admin:MantenimientoView DataContext="{Binding Mantenimiento}" />`.
+*Por qué no le ponemos header propio:* `MantenimientoView` ya trae el suyo tras la Task 11.3, y
+`PatronHelpers.HeaderDe` devuelve el **primero** del árbol — un header propio acá pondría dos
+títulos apilados ("Mantenimiento" bajo "Acceso limitado") en la única pantalla que un admin ve con
+la licencia vencida.
+*Por qué no le ponemos margen:* mismo argumento que el Ruling B-17 al revés. `MantenimientoView`
+trae `MargenVista` tras la 11.3; sumarle 24 acá da 48 px.
+*Costo si me equivoco:* si algún día `AccesoLimitadoView` hosteara algo sin cromo propio, quedaría
+sin título. Hoy hostea exclusivamente `MantenimientoView` — y el comentario de `:12-15` dice que es
+a propósito, con `AccesoLimitadoViewModel.cs:19-21` exponiendo una única propiedad `Mantenimiento`.
+
+**Ruling B-23 — `MantenimientoView` tiene DOS roles (se navega directo Y la hostea
+`AccesoLimitadoView`), y por eso es ella la que lleva el `MargenVista`.**
+
+Verificado con `grep -rn 'MantenimientoView\|MantenimientoViewModel' --include=*.cs --include=*.axaml src/`:
+- Navegada directo: `ShellMainViewModel.cs:534` (`_navigation.Navegar<MantenimientoViewModel>()`),
+  ítem `"Mantenimiento"` del grupo `"Administración"` (`ShellMainViewModel.cs:262`), gateado por
+  `EsAdmin`.
+- Hosteada: `AccesoLimitadoView.axaml:24`, con el VM inyectado por
+  `AccesoLimitadoViewModel.cs:21`.
+
+Es la **única vista del repo con doble rol**. La regla general "el contenedor pone el margen"
+(Ruling B-17) no aplica: acá el contenedor es opcional, así que el margen tiene que viajar con la
+vista. *Costo si me equivoco:* ninguno — si mañana se decidiera lo contrario, es un atributo.
+
+**Ruling B-24 — los 4 `TranslatePoint` de `MantenimientoViewTests` se adaptan SOLO si dan rojo. El
+permiso de tocar asserts es condicional, se agota en esos 4 sitios, y no se extiende a nada más.**
+
+Los 4 sitios, enumerados uno por uno para que nadie los amplíe:
+
+| # | Sitio | Test | Qué custodia |
+|---|---|---|---|
+| 1 | `MantenimientoViewTests.cs:181` | `Montar_ConMuchasCorridas_ElScrollViewerHaceAlcanzableLaUltimaFila` | tras scrollear al final, la Y del **último** botón "Descargar" cae dentro de `window.Bounds.Height` |
+| 2 | `:391` | `Montar_LaSeccionDeAlertasQuedaDebajoDeLaDeDiagnostico` | Y del botón "Descargar logs" |
+| 3 | `:392` | ídem | Y del botón "Guardar" — el assert es `yGuardar > yLogs` |
+| 4 | `:406-407` | ídem | origen (0,0) de las dos `Border.card` — asserts `origenAlertas.Y >= origenDiagnostico.Y + alto` y `\|ΔX\| < 0.5` |
+
+La Fase A ya dictaminó que **no se borran**: custodian una regresión real de
+`DockPanel`/`LastChildFill` validada por mutación por su autor (el propio test lo documenta en
+`:366-378`: "se comprobó por mutación que la (1) sola NO detecta el bug").
+
+**Predicción de este plan: los 4 quedan VERDES sin tocar nada.** Los cuatro asserts son
+**relativos** (una Y contra otra Y, un origen contra otro origen), y la Task 11.3 no reordena los
+hijos del `DockPanel` ni cambia la estructura de tarjetas — solo reemplaza un `TextBlock` por un
+`c:HeaderVista` **en el mismo lugar** y sube el margen de 16 a 24. El único con componente absoluta
+es el (1) (`Assert.InRange(posicion.Y, 0, window.Bounds.Height)`), y se evalúa **después de
+scrollear al final**, así que el alto extra del header no lo saca de rango.
+
+**Procedimiento obligatorio (Step 1 y Step 6 de la Task 11.3):** correr los dos tests ANTES de
+tocar el XAML (línea base) y DESPUÉS. Si quedan verdes, **no se toca ni una línea de test** — el
+permiso no se ejerce. Si alguno da rojo, se adapta **conservando el criterio geométrico**: se
+recalcula el punto de referencia, nunca se degrada el assert a "el botón existe" ni se sube una
+tolerancia para que pase. Y se documenta en el ledger qué se cambió y por qué.
+*Costo si me equivoco:* alto y silencioso — es el único lugar del refactor donde un test puede
+"arreglarse" en vez de arreglar el código. Por eso está acotado a 4 líneas nombradas.
+
+**Ruling B-25 — el logo del municipio de `LoginView:13-18` NO se toca; `LoginView` se exime de
+`Vista_NoTieneOpacidadesLiterales` y la exención se paga con un test dedicado.**
+
+`<Image Source="avares://StockApp.Presentation/Assets/carmelo-original.png" Opacity="0.28" …
+RenderTransform="scale(0.85)" />` es diseño aprobado y mergeado a main el 2026-07-10 (commits
+`4bb3222` + `8ee5f32`). `PatronHelpers.OpacidadesLiteralesDe` (`PatronHelpers.cs:106-110`) filtra
+`OfType<Control>()` con `Opacity != 1.0` y `Priority == LocalValue` — **un `Image` entra igual que
+un `TextBlock`**, así que marcaría la marca de agua como residuo.
+
+*Decisión:* tercer `HashSet` de exención, `VistasExentasPorMarcaDeAguaAprobada = { LoginView }`,
+**más un test propio** `LoginViewMarcaDeAguaTests` que asserta que el `Image` existe, que su
+`Opacity` es 0.28 y que su `RenderTransform` sigue ahí. Así la exención no abre un agujero: cambia
+un guardián genérico por uno específico **que custodia más** (hoy nada impide borrar el logo por
+accidente; después de esto, sí).
+
+*Alternativa descartada (queda como pregunta abierta 1):* Ruling B-11 — mover el `Opacity="0.28"` a
+un `<Style Selector="Image.marca-agua">` en `UserControl.Styles`, que le da `Priority=Style` y lo
+hace invisible al guardián **sin cambiar un pixel** (es el mismo movimiento que la Task 8.4 hizo
+con los 10 `i:Icon mdi-lock` de `NuevaImportacionView`, `:16-35`). Es técnicamente más limpio y
+mantiene a `LoginView` dentro del invariante genérico, pero **toca el bloque del logo**, y la
+instrucción fue no tocarlo. Si el usuario prefiere esta variante, el cambio es de 4 líneas.
+
+**Ruling B-26 — se agregan 3 tokens `*SuaveBrush` (Info / Warning / Danger), y sobre esos fondos el
+TEXTO va en `TextoPrimarioBrush`, nunca en el color semántico.**
+
+El hueco es real y verificado (C21): `Tokens.axaml` tiene `ColorBrandSuave` #DCFCE7 y su brush, y
+nada más. Se agregan, siguiendo la misma familia de la que salió toda la paleta (los semánticos son
+el escalón 600 y `BrandSuave` es el 100 de la misma familia):
+
+```xml
+<Color x:Key="ColorInfoSuave">#E0F2FE</Color>
+<Color x:Key="ColorWarningSuave">#FEF3C7</Color>
+<Color x:Key="ColorDangerSuave">#FEE2E2</Color>
+…
+<SolidColorBrush x:Key="InfoSuaveBrush" Color="{StaticResource ColorInfoSuave}" />
+<SolidColorBrush x:Key="WarningSuaveBrush" Color="{StaticResource ColorWarningSuave}" />
+<SolidColorBrush x:Key="DangerSuaveBrush" Color="{StaticResource ColorDangerSuave}" />
+```
+
+**Contrastes medidos** (mismo cálculo que `ContrasteHelpers.Contraste.Ratio`, corrido antes de
+elegir los valores):
+
+| Par | Ratio | Veredicto |
+|---|---|---|
+| `SuccessBrush` #16A34A sobre `BrandSuaveBrush` #DCFCE7 (**el que ya existe**) | 3.00:1 | por debajo de AA — precedente, no modelo |
+| `InfoBrush` #0EA5E9 sobre #E0F2FE | 2.42:1 | **no usar como texto** |
+| `WarningBrush` #D97706 sobre #FEF3C7 | 2.86:1 | **no usar como texto** |
+| `DangerBrush` #DC2626 sobre #FEE2E2 | 3.95:1 | **no usar como texto** |
+| `TextoPrimarioBrush` #0F172A sobre #E0F2FE / #FEF3C7 / #FEE2E2 | 15.56 / 16.03 / 14.61 | **este es el que se usa** |
+| Blanco sobre `DangerBrush` #DC2626 | 4.83:1 | AA ✔ (botón "Aplicar y reiniciar") |
+| Blanco sobre `DangerPressedBrush` #991B1B | 8.31:1 | AAA ✔ (banner de modo degradado) |
+
+*Regla que sale de la tabla:* el color semántico va en el **borde y en el ícono** (umbral gráfico),
+el texto va en `TextoPrimarioBrush`. Es exactamente el criterio que el repo ya aplicó dos veces por
+su cuenta: `UsuariosAdminView.axaml:101-108` y `:122-127` descartan `WarningBrush` como texto
+"por 3.19:1, por debajo del piso AA de 4.5:1, ver `ButtonGhostContrasteTests`".
+
+*Efecto colateral que cierra un agujero preexistente:* con los 3 brushes disponibles, el
+`ControlTheme` de `BadgeEstado` puede completar los `Border#Fondo` de `[Tono=Advertencia]`,
+`[Tono=Peligro]` e `[Tono=Info]`, que hoy se caen al gris `DeshabilitadoFondoBrush` del selector
+default (`Componentes.axaml:76-78`) mientras `[Tono=Exito]` sí tiene el suyo (`:83-85`). **Eso lo
+hace la Task 12.1**, no las vistas.
+*Costo si me equivoco:* 3 tokens de más y 3 `Setter` de más; trivial de revertir.
+
+**Ruling B-27 — los 3 diálogos quedan FUERA del guardián, y lo que protege sus `x:Name` es el
+compilador de C#, no un test.**
+
+Dos correcciones al esbozo:
+1. **Ninguno de los 5 `x:Name` lo usa `ConfirmacionServiceDialogosConsecutivosTests`** (C19). Ese
+   test cierra los diálogos con `dialog.Close(valor)` y los localiza por `owner.OwnedWindows`.
+   `MensajeText` (los 3 archivos) y `TextoTextBox` (`PedirTextoDialog`) los usa el **code-behind**:
+   `MensajeText.Text = mensaje` en los tres constructores y `Close(TextoTextBox.Text)` en
+   `PedirTextoDialog.axaml.cs:30`. Borrarlos da **CS0103 en build**, que es una red mejor que un
+   test. `CancelarButton`, `ConfirmarButton` y `AceptarButton` **no los consume nadie** (grep
+   verificado): son inertes. **Igual no se tocan** — están fuera del alcance de una tanda de
+   tokenización, y documentan la intención.
+2. **No se pueden montar con `PatronHelpers.Montar`** (son `Window`; ver P7 en la sección 1). Por
+   eso van a `VistasFueraDelGuardian`, no a `VistasEmbebidas`.
+
+Lo que SÍ cambia en los 3: `Padding`, `Spacing`, `FontSize` y la sombra. **`SombraModal` existe**
+(verificado, `Tokens.axaml:48`, `0 12 32 0 #330F172A`).
+*Costo si me equivoco:* bajo. Sin `x:DataType` no hay red de bindings, pero tampoco hay bindings:
+los 3 archivos no tienen ni uno.
+
+**Ruling B-28 — `UsuariosAdminView:147` "Guardar permisos" pasa a `Classes="secondary"`, NO a
+`primary`.**
+
+Verificado: es un `<Button Content="Guardar permisos" Command="{Binding GuardarCommand}"
+Margin="0,12,0,0" />` **sin ninguna clase** — un Fluent crudo en medio de una vista tokenizada. La
+tentación es ponerlo `primary` porque es la acción del panel; pero `:32` "Crear usuario" ya es el
+único primario de la vista, y dos primarios simultáneos es exactamente el bug que el Ruling B-18
+caso (1) arregló en `GastosView`. **"Crear usuario" es la acción principal de la vista; "Guardar
+permisos" es la acción de un panel dentro de una card.**
+*Verificado que no toca un assert:* `grep -rn 'Guardar permisos' tests/` → cero coincidencias.
+*Costo si me equivoco:* un `Classes` de vuelta.
+
+**Ruling B-29 — los rótulos de sección de `MantenimientoView` NO pasan a mayúsculas, y `HeaderVista`
+se inserta en el MISMO lugar del `TextBlock` que reemplaza, sin slot de acciones.**
+
+Dos restricciones que salen del código, no del gusto:
+1. **Mayúsculas prohibidas.** `MantenimientoViewTests.cs:250` hace
+   `Assert.Contains(textos, t => t.Contains("Diagnóstico", StringComparison.Ordinal))`. Pasar
+   "Diagnóstico" a "DIAGNÓSTICO" (que es lo que la convención de eyebrows haría) pone ese test en
+   **rojo por una razón cosmética**, y "arreglar" el assert violaría la regla global de no tocar
+   tests para que pasen. Los tres rótulos (`:29` "Backups", `:145` "Diagnóstico", `:181` "Alertas")
+   conservan su texto exacto y pasan de `Classes="caption" Opacity="0.6"` a `Classes="seccion"`
+   (16/Medium/`TextoPrimarioBrush`, `Typography.axaml:33-37`) — el mismo tratamiento que la Task
+   9.3 le dio al "Adjuntos" de `AdjuntosDocumentoPanelView`. **Es un cambio visible** (12 px gris →
+   16 px oscuro): está en las preguntas abiertas.
+2. **Sin slot de acciones y en el mismo lugar.** El `HeaderVista` reemplaza al `TextBlock` de
+   `:23-26` y se queda como primer hijo `DockPanel.Dock="Top"`. Los dos botones de swap
+   "Hacer backup ahora" / "Iniciando…" (`:38-47`) **se quedan en su `Grid` de sección**
+   (`:27-48`). Moverlos al encabezado cambiaría el orden de hijos del `DockPanel` — que es
+   exactamente lo que custodian los 4 `TranslatePoint` (Ruling B-24) y lo que el comentario de
+   `:13-20` explica que ya rompió el layout una vez. **`LastChildFill="False"` (`:21`) es
+   INTOCABLE.**
+*Alternativa descartada:* subir el par de botones al slot `Acciones`. Es la lectura "de manual" de
+P1 y se vería mejor, pero cambia la geometría en la única vista con asserts geométricos. Queda como
+pregunta abierta 3.
+
+**Ruling B-30 — el reemplazo de un `Opacity` literal se elige por FUNCIÓN del texto, no por regla
+única: `TextoTerciarioBrush` solo para rótulos micro; `TextoSecundarioBrush` o `Classes="body"`
+para cualquier frase que el usuario tenga que leer.**
+
+Medido con el mismo cálculo de `ContrasteHelpers`: **`TextoTerciarioBrush` #94A3B8 sobre blanco da
+2.56:1** (y 2.45:1 sobre `ColorFondo`), por debajo del piso AA de texto (4.5:1) **y** del umbral
+gráfico (3:1). `TextoSecundarioBrush` #64748B da **4.76:1** (AA). El comentario de `Tokens.axaml:50-52`
+dice que el token existe "para que el contraste sea medible y testeable" — lo es, y la medición dice
+que no alcanza para texto corrido.
+
+**Este NO es un hallazgo de B3**: el token ya se aplicó en decenas de sitios en las tandas 6-10, y
+B3 **no los revisa** (sería reabrir 43 vistas). Lo que B3 hace es no repetir el error en las suyas:
+
+| Sitio de B3 | Función del texto | Reemplazo |
+|---|---|---|
+| `UsuariosAdminView:25` "Nuevo usuario" | rótulo de sección micro | `Classes="micro"` (ya trae `TextoTerciarioBrush`) |
+| `UsuariosAdminView:50` `{Binding Rol}` | metadato de fila | `Classes="caption"` sola (`TextoSecundarioBrush`, 4.76:1) |
+| `MantenimientoView:31`, `:147`, `:183` | rótulos de sección | `Classes="seccion"` (Ruling B-29) |
+| `LoginView:30` "Ingresá tus credenciales…" | **frase que el usuario lee** | `Classes="body" Foreground="{DynamicResource TextoSecundarioBrush}"` |
+| `LoginView:79` versión de la app | rótulo micro al pie | `Classes="micro"` (reemplaza también el `FontSize="11"` de `:78`, que es el mismo 11 de `micro`) |
+| `BloqueoLicenciaView:24` explicación de activación | **frase que el usuario lee** | `Classes="body" Foreground="{DynamicResource TextoSecundarioBrush}"` |
+| `ActualizacionModalView:22`, `ActualizacionBloqueoView:27` (`0.85`) | cuerpo del modal | `Classes="body"` (sin Foreground: `TextoPrimarioBrush` del propio estilo) |
+
+*Costo si me equivoco:* nulo funcionalmente; es elección de token. Lo que sí queda abierto es si
+conviene una pasada de contraste sobre los sitios ya migrados (pregunta abierta 5).
+
+**Ruling B-31 — se agrega el token `PaddingHolgado` (Thickness 48) para las 3 cards P6, y su
+`Padding="40"` pasa a 48.**
+
+Mismo razonamiento que el Ruling B-2: `Padding="40"` está **fuera de la escala** (la escala tiene
+32 y 48, no 40) y se repite idéntico en 3 archivos (`LoginView:20`, `ResetAdminView:13`,
+`BloqueoLicenciaView:13`). El esbozo ya había comprometido `Espacio7` (48) como el respiro de P6, y
+`Espacio7` es `x:Double` — inutilizable en `Padding` (Trampa T1). Se agrega
+`<Thickness x:Key="PaddingHolgado">48</Thickness>` en `Tokens.axaml`, custodiado por un caso nuevo
+en `TokensDisenioTests`, y es la base del invariante `VistaCentrada_TieneCardConPaddingHolgado`.
+*Es un cambio visible:* +8 px de aire en las 3 pantallas de acceso. Pregunta abierta 2.
+*Costo si me equivoco:* un token de más y 3 atributos; trivial.
+
+**Ruling B-32 — las 3 vistas P6 conservan su `TextBlock Classes="titulo-vista"` centrado y NO ganan
+`HeaderVista`.**
+
+`HeaderVista` es un `Grid ColumnDefinitions="*,Auto"` con el título en la columna 0 alineado a la
+izquierda y un `ContentPresenter` de acciones a la derecha (`Componentes.axaml:17-33`), y trae
+`Margin="0,0,0,24"` fijo (`:14`). Meterlo en una card centrada de 360/420 px de ancho sin acciones
+alinearía el título a la izquierda y rompería la simetría de las 3 pantallas de acceso.
+*Consecuencia para el criterio 2 de la Fase B:* las 3 P6 **ya tienen título** (lo tienen desde
+siempre), así que no entran en la cuenta de "15 vistas sin título"; lo que no tienen es el
+componente. Se declara como **excepción argumentada**, igual que los 2 wrappers de Movimientos y
+los 3 diálogos.
+*Alternativa descartada:* darle a `HeaderVista` una variante centrada (`Classes="centrado"` en su
+`ControlTheme`). Es un cambio de componente base en la última tanda del refactor, para 3 vistas que
+ya se ven bien. No.
+*Costo si me equivoco:* si más adelante se quiere unificar, es un `Style Selector` en
+`Componentes.axaml` y 3 sustituciones.
+
+**Ruling B-33 — se agrega `Style Selector="Button.compacto"` en `Controls.axaml` para los 3 botones
+"Copiar" de las pantallas P6.**
+
+`ResetAdminView:35-42` y `:55-62`, y `BloqueoLicenciaView:35-42`, son el mismo botón inline repetido
+3 veces con `Padding="10,4"` y `FontSize="12"` literales. Dejarlos literales deja 3 `FontSize=` y 3
+`Padding=` fuera del sistema **y ensucia la auditoría final de residuos**, que es el criterio de
+cierre de la Fase B. Un `Style` con esos dos `Setter` los borra de las vistas sin cambiar un pixel,
+y los 3 botones pasan a `Classes="secondary compacto"`.
+*Por qué no `PaddingCompacto`:* ese token es `Thickness 8` uniforme, no `10,4` — usarlo cambiaría el
+tamaño del botón.
+*Costo si me equivoco:* un `Style` de 4 líneas.
+
+**Ruling B-34 — los 3 archivos de `Actualizaciones/` NO cambian de estructura ni de copy; solo de
+paleta y de clases de botón.**
+
+Riesgo bajo por cobertura de UI (cero tests de UI: verificado, los únicos tests que los nombran son
+`StockApp.Presentation.Tests/Actualizaciones/{OverlayViewModelFactoryTests,ActualizacionViewModelsTests,ShellViewModelActualizacionTests}.cs`,
+que trabajan sobre ViewModels, no sobre el árbol visual) **pero riesgo alto por función**: el
+overlay de bloqueo crítico es lo único que impide operar con una versión vencida. Por eso:
+- `IsVisible="{Binding !EsModoDegradado}"` (`:15`) e `IsVisible="{Binding EsModoDegradado}"` (`:39`)
+  son **textuales, intocables**.
+- El texto "MODO DEGRADADO — Actualizacion critica no descargada. Reintentara al reiniciar."
+  (`:44`) **no se toca**, ni siquiera para ponerle las tildes que le faltan (es copy, y cambiarlo
+  está fuera del alcance de una tanda visual). Ídem "Actualizacion critica requerida" (`:21`).
+- `Height="56"` del banner (`:13`) y los `Width="480"` de modal/bloqueo se conservan.
+*Costo si me equivoco:* si un token no resuelve, el control se cae a su default **en silencio**
+(mismo modo de falla que documenta `TokensDisenioTests`) — por eso la Task 12.1 va primero y deja
+los 3 tokens con su test antes de que ninguna vista los consuma.
+
+---
+
+## Tanda 11: Administración y acceso (6 vistas, 5 tasks)
+
+**Objetivo:** cerrar las 2 vistas de `Views/Administracion/` (las últimas con residuos del catálogo
+viejo: el último `Foreground="Red"` y el último `badge-inactiva` de toda la app viven acá) y las 4
+pantallas que se ven **fuera** del shell.
+
+**Orden obligatorio:** 11.1 (P6, cero tests de UI, riesgo mínimo) → 11.2 (`UsuariosAdminView`, cero
+tests de UI) → 11.3 (`MantenimientoView`, 17 tests, la crítica) → 11.4 (`AccesoLimitadoView`, que
+**hereda el árbol de 11.3** y no puede ir antes) → 11.5 (cierre).
+
+**Cobertura de tests al arrancar (verificada contando `[AvaloniaFact]`/`[AvaloniaTheory]`):**
+`MantenimientoViewTests` 17, `AccesoLimitadoViewTests` 2, `ViewLocatorTests` 4 (2 de ellos de
+`AccesoLimitadoViewModel`). `LoginView`, `ResetAdminView`, `BloqueoLicenciaView` y
+`UsuariosAdminView`: **cero tests de UI** (los `*ViewModelTests` de `StockApp.Presentation.Tests` no
+montan la vista).
+
+---
+
+### Task 11.1: P6 sobre las 3 pantallas centradas + 2 piezas nuevas de sistema
+
+**Files:**
+- Modify: `src/StockApp.Presentation/Themes/Tokens.axaml` (+1 `Thickness`, Ruling B-31)
+- Modify: `src/StockApp.Presentation/Themes/Controls.axaml` (+1 `Style`, Ruling B-33)
+- Modify: `src/StockApp.Presentation/Views/LoginView.axaml` (88 l)
+- Modify: `src/StockApp.Presentation/Views/ResetAdminView.axaml` (112 l)
+- Modify: `src/StockApp.Presentation/Views/BloqueoLicenciaView.axaml` (80 l)
+- Test: `tests/StockApp.Presentation.UiTests/TokensDisenioTests.cs` (+1 caso)
+- Test: `tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs` (+ lista
+  `VistasCentradasSinSidebar` con 3 tipos, + método `VistaCentrada_TieneCardConPaddingHolgado`,
+  + `[MemberData]` en los 2 métodos compartidos, + `HashSet VistasExentasPorMarcaDeAguaAprobada`)
+- Create: `tests/StockApp.Presentation.UiTests/LoginViewMarcaDeAguaTests.cs` (Ruling B-25)
+
+**Interfaces:**
+- Consumes: `c:CampoFormulario`, tokens `Espacio1..4`, `TextoSecundarioBrush`, `Classes` `body`/`micro`.
+- Produces: el token `PaddingHolgado`, el `Style Button.compacto` y la referencia de **P6**, que
+  ninguna otra task consume (son las 3 únicas P6 de la app).
+
+**Por qué va primera:** cero tests de UI en las 3, cero gates de permiso, y produce las dos piezas
+de sistema (`PaddingHolgado`, `Button.compacto`) que conviene ver funcionando antes de tocar
+`MantenimientoView`.
+
+#### Tabla de sustitución — piezas de sistema
+
+| Archivo | Línea | Hoy | Pasa a |
+|---|---|---|---|
+| `Themes/Tokens.axaml` | tras `:35` (`PaddingCompacto`) | — | `<Thickness x:Key="PaddingHolgado">48</Thickness>` con comentario citando el Ruling B-31 |
+| `Themes/Controls.axaml` | tras `:83` (fin del bloque `Button.secondary`) | — | `<Style Selector="Button.compacto"><Setter Property="Padding" Value="10,4" /><Setter Property="FontSize" Value="12" /></Style>` |
+
+#### Tabla de sustitución — `LoginView.axaml`
+
+| Línea | Hoy | Pasa a |
+|---|---|---|
+| header | — | agregar `xmlns:c="using:StockApp.Presentation.Controls"` |
+| `:9` | `Background="{DynamicResource FondoBrush}"` | **se queda** |
+| `:13-18` | el `<Image>` del logo del municipio con `Opacity="0.28"` y `RenderTransform="scale(0.85)"` | **INTOCABLE, ni un carácter** (Ruling B-25) |
+| `:20` | `<Border Classes="card" Padding="40" … Width="360">` | `Padding="{DynamicResource PaddingHolgado}"`; el resto igual |
+| `:21` | `<StackPanel Spacing="16">` | `Spacing="{DynamicResource Espacio4}"` |
+| `:23-26` | `<TextBlock Text="StockApp" Classes="titulo-vista" HorizontalAlignment="Center" Margin="0,0,0,8" />` | **se queda tal cual** (Ruling B-32). El `Margin="0,0,0,8"` se queda literal (T1) |
+| `:28-30` | `<TextBlock Text="Ingresá tus credenciales para continuar." HorizontalAlignment="Center" Opacity="0.7" />` | `Classes="body" Foreground="{DynamicResource TextoSecundarioBrush}"`, **sin `Opacity`** (Ruling B-30) |
+| `:32-38` | comentario + aviso de acceso limitado con `WarningBrush` e `IsVisible="{Binding SoloAccesoLimitado}"` | **se queda, textual** |
+| `:41-46` | `<StackPanel Spacing="4"><TextBlock Text="Usuario" /><TextBox … KeyDown="OnCampoKeyDown" /></StackPanel>` | `<c:CampoFormulario Etiqueta="Usuario"><TextBox … KeyDown="OnCampoKeyDown" /></c:CampoFormulario>`. **`Requerido` NO se declara** (no hay sufijo "(obligatorio)" que convertir; misma regla que P3-b) |
+| `:49-55` | ídem con `Text="Contraseña"` y `PasswordChar="●"` | `<c:CampoFormulario Etiqueta="Contraseña">…` |
+| `:58-61` | error con `DangerBrush` | **se queda** |
+| `:64-69` | `<Button Content="Entrar" Classes="primary" IsDefault="True" …>` | **se queda** — es el único primario |
+| `:72-74` | `<Button Content="No puedo entrar / resetear Admin" … />` **sin clase** | `Classes="ghost"` |
+| `:77-81` | `<TextBlock Text="{Binding VersionTexto}" FontSize="11" Opacity="0.5" … Margin="0,16,0,0" />` | `Classes="micro"`, **sin `FontSize` ni `Opacity`** (`micro` ya es 11 px + `TextoTerciarioBrush`, `Typography.axaml:56-61`). `Margin="0,16,0,0"` literal |
+
+**Cuidado con `OnCampoKeyDown`:** el handler (`LoginView.axaml.cs:17-29`) lee `DataContext` del
+propio `TextBox`. `CampoFormulario` es un `ContentControl` y el `DataContext` **se hereda**, así que
+envolverlo no lo rompe. Verificado leyendo el code-behind: no usa `Parent` ni `FindControl`.
+
+#### Tabla de sustitución — `ResetAdminView.axaml`
+
+| Línea | Hoy | Pasa a |
+|---|---|---|
+| header | — | agregar `xmlns:c` |
+| `:13` | `Padding="40"` | `{DynamicResource PaddingHolgado}` |
+| `:14` | `Spacing="16"` | `{DynamicResource Espacio4}` |
+| `:16-19` | `titulo-vista` centrado | **se queda** |
+| `:21-24` | `<Button Content="1) Generar código de recuperación" … />` sin clase | `Classes="secondary"` |
+| `:27-44` | `<StackPanel Spacing="4">` + `<TextBlock Text="Código de máquina" />` + `<Grid ColumnDefinitions="*,Auto">…` | `<c:CampoFormulario Etiqueta="Código de máquina">` con el `Grid` como único hijo |
+| `:35-42` | `<Button Content="Copiar" Classes="secondary" Padding="10,4" FontSize="12" Margin="8,0,0,0" … />` | `Classes="secondary compacto"`, **sin `Padding` ni `FontSize`** (Ruling B-33). `Margin="8,0,0,0"` literal |
+| `:47-64` | ídem para "Desafío" | `<c:CampoFormulario Etiqueta="Desafío">`; el `Copiar` de `:55-62` igual que arriba |
+| `:67-73` | `Spacing="4"` + label "Token de reset (del proveedor)" + `TextBox` | `<c:CampoFormulario Etiqueta="Token de reset (del proveedor)">` |
+| `:76-81` | `Spacing="4"` + label "Nueva contraseña de Admin" + `TextBox` | `<c:CampoFormulario Etiqueta="Nueva contraseña de Admin">` |
+| `:83-88` | `Classes="primary"` "2) Resetear Admin" | **se queda** |
+| `:91-94` / `:97-100` | mensajes con `SuccessBrush` / `DangerBrush` | **se quedan** |
+| `:102-105` | `<Button Content="Volver al login" … />` sin clase | `Classes="ghost"` |
+
+`SelectableTextBlock` con `FontFamily="Consolas,monospace"` (`:30-34`, `:50-54`): **se queda**. Es un
+código que el usuario copia a mano; la monoespaciada es funcional, no decorativa.
+
+#### Tabla de sustitución — `BloqueoLicenciaView.axaml`
+
+| Línea | Hoy | Pasa a |
+|---|---|---|
+| header | — | agregar `xmlns:c` |
+| `:13` | `Padding="40"` | `{DynamicResource PaddingHolgado}` |
+| `:14` | `Spacing="16"` | `{DynamicResource Espacio4}` |
+| `:16-19` | `titulo-vista` centrado | **se queda** |
+| `:21-24` | explicación con `Opacity="0.7"` | `Classes="body" Foreground="{DynamicResource TextoSecundarioBrush}"`, **sin `Opacity`** |
+| `:27-44` | `Spacing="4"` + "Código de máquina" + `Grid` | `<c:CampoFormulario Etiqueta="Código de máquina">` |
+| `:35-42` | `Copiar` con `Padding="10,4" FontSize="12"` | `Classes="secondary compacto"` |
+| `:47-53` | `Spacing="4"` + "Licencia" + `TextBox` | `<c:CampoFormulario Etiqueta="Licencia">` |
+| `:56-59` | error con `DangerBrush` | **se queda** |
+| `:62-67` | `Classes="primary"` "Activar" | **se queda** |
+| `:69-73` | comentario + `<Button Content="¿Necesitás bajar un backup? Iniciar sesión" … />` sin clase | comentario **textual**; el botón gana `Classes="ghost"` |
+
+- [ ] **Step 1: escribir el guardián que falla (los tests van ANTES del XAML)**
+
+1. `Tokens.axaml`: agregar `PaddingHolgado`.
+2. `TokensDisenioTests.cs`: agregar `PaddingHolgado_Es48EnLosCuatroLados` con
+   `Assert.Equal(new Thickness(48), Assert.IsType<Thickness>(Recurso("PaddingHolgado")))`.
+3. `GuardianDePatronTests.cs`:
+   - `using StockApp.Presentation.Views;` (ya está, `:8`).
+   - crear `VistasCentradasSinSidebar` con los 3 tipos y el método
+     `VistaCentrada_TieneCardConPaddingHolgado` (código en la sección 2);
+   - agregar `[MemberData(nameof(VistasCentradasSinSidebar))]` como **tercer** atributo de
+     `Vista_NoTieneOpacidadesLiterales` (`:182`) y de `Vista_NoTieneUnSegundoBotonPrimario` (`:240`);
+   - crear `VistasExentasPorMarcaDeAguaAprobada = { typeof(LoginView) }` con su `<summary>` citando
+     el Ruling B-25, y el `if (…Contains(tipoVista)) return;` al principio de
+     `Vista_NoTieneOpacidadesLiterales`.
+   - **NO** agregar las 3 a `[InlineData]` ni a `VistasDeLaTanda` (Ruling B-32: no llevan
+     `HeaderVista`; Ruling C23: no llevan margen exterior).
+4. `LoginViewMarcaDeAguaTests.cs` (nuevo): montar `LoginView` con `PatronHelpers.Montar`, localizar
+   el `Image` por `GetVisualDescendants().OfType<Image>().Single()` y assertar
+   `Assert.Equal(0.28, img.Opacity, 3)` y `Assert.NotNull(img.RenderTransform)`.
+
+- [ ] **Step 2: correr y ver el rojo — y verificar CUÁL rojo**
+
+Run: `dotnet test tests/StockApp.Presentation.UiTests/StockApp.Presentation.UiTests.csproj --filter "FullyQualifiedName~GuardianDePatron|FullyQualifiedName~TokensDisenio|FullyQualifiedName~LoginViewMarcaDeAgua"` (timeout 600000).
+Expected: **3 fallos de `VistaCentrada_TieneCardConPaddingHolgado`** (las 3 cards están en 40, no
+48) **+ 2 fallos de `Vista_NoTieneOpacidadesLiterales`** (`BloqueoLicenciaView:24`; `ResetAdminView`
+no tiene ninguno, verificado). `LoginView` **no** debe aparecer en el segundo grupo: si aparece, la
+exención del Ruling B-25 está mal cableada. `TokensDisenioTests` y `LoginViewMarcaDeAguaTests` en
+verde ya en este Step (el token se agregó en el Step 1.1 y el logo no se toca).
+**Si `VistaCentrada_…` pasa en verde para alguna de las 3, el helper está mal**: `Padding="40"` no
+puede ser `Thickness(48)`.
+
+- [ ] **Step 3: aplicar las tres tablas**
+
+**Cuidado T1:** `Spacing="{DynamicResource Espacio4}"` ✅; `Padding="{DynamicResource Espacio7}"` ❌
+(revienta en runtime: `Espacio7` es `x:Double`). Para `Padding` va `PaddingHolgado`.
+**Cuidado T4:** ningún comentario XAML nuevo con `--`.
+**Cuidado T5:** no poner `Classes="seccion"` ni `.body` donde un `ControlTheme` quiera pisar el
+`Foreground` — acá no aplica, los `Classes="body"` van sobre `TextBlock` sueltos.
+
+- [ ] **Step 4: ver el verde**
+
+Run: el mismo filtro del Step 2. Expected: PASS en todo.
+
+- [ ] **Step 5: grep de residuos (Ruling B-16, obligatorio)**
+
+```bash
+grep -n 'Opacity="0\.\|Padding="40"\|Padding="10,4"\|FontSize="\|Spacing="1[0-9]"\|Spacing="[0-9]"' \
+  src/StockApp.Presentation/Views/LoginView.axaml \
+  src/StockApp.Presentation/Views/ResetAdminView.axaml \
+  src/StockApp.Presentation/Views/BloqueoLicenciaView.axaml
+```
+Expected: **exactamente 1 coincidencia**, `LoginView:14` (`Opacity="0.28"`, la marca de agua
+aprobada). Cualquier otra es residuo real.
+
+- [ ] **Step 6: validar por mutación (3 mutaciones, 3 rojos, revertir cada una)**
+
+1. Volver `Padding` de `ResetAdminView:13` a `"40"` → `VistaCentrada_TieneCardConPaddingHolgado`
+   rojo, **exactamente 1 fallo de 3 filas**.
+2. Borrar el `<Image>` del logo de `LoginView:13-18` → `LoginViewMarcaDeAguaTests` rojo. *Esta es
+   la mutación que paga la exención*: sin este test, borrar el logo aprobado no rompía nada.
+3. Poner `Classes="primary"` en el botón "Copiar" de `BloqueoLicenciaView:36` →
+   `Vista_NoTieneUnSegundoBotonPrimario` rojo para `BloqueoLicenciaView` (2 primarios).
+
+Si la (3) **no** da rojo, el `[MemberData(nameof(VistasCentradasSinSidebar))]` del Step 1.3 no se
+agregó a ese método — es la trampa de las listas múltiples, ahora con cuatro.
+
+- [ ] **Step 7: grep de que los `Classes` nuevos no rompen un assert**
+
+```bash
+grep -rn 'No puedo entrar\|Volver al login\|Necesitás bajar un backup\|"Copiar"\|Generar código' tests/
+```
+Expected: **cero coincidencias** (verificado al planificar: ninguna de las 3 vistas tiene tests de
+UI). Si alguna aparece, revisar si localiza por `Classes` antes de aplicar `ghost`/`compacto`.
+
+- [ ] **Step 8: suite completa + commit**
+
+Run: `dotnet test StockApp.sln` (timeout 600000, `nohup` + polling activo). Expected: PASS.
+**No dejar la suite en rojo entre commits.**
+
+```
+feat(ui): aplica el sistema de diseno a las tres pantallas de acceso
+
+- LoginView, ResetAdminView y BloqueoLicenciaView (P6): CampoFormulario en
+  los 7 pares etiqueta+control, escala de espaciado en los Spacing y color
+  declarado en lugar de Opacity literal
+- Las tres CONSERVAN su TextBlock titulo-vista centrado y NO ganan
+  HeaderVista: su ControlTheme alinea a la izquierda con slot de acciones y
+  estas pantallas no tienen acciones de encabezado (Ruling B-32)
+- Tokens.axaml gana PaddingHolgado (48): el Padding="40" de las tres cards
+  estaba fuera de la escala, que tiene 32 y 48 pero no 40 (Ruling B-31)
+- Controls.axaml gana Button.compacto: los tres botones "Copiar" repetian
+  Padding="10,4" y FontSize="12" inline (Ruling B-33)
+- El logo del municipio de LoginView no se toca. Su Opacity="0.28" literal
+  haria rojo al guardian, asi que la vista se exime de ese invariante y la
+  exencion se paga con LoginViewMarcaDeAguaTests, que custodia que el logo
+  siga ahi con su opacidad y su escala (Ruling B-25)
+- GuardianDePatronTests gana una cuarta lista, VistasCentradasSinSidebar,
+  con un invariante propio: la card de una pantalla centrada tiene padding
+  holgado
+```
+
+**Riesgos específicos:**
+- **Bajo.** Cero tests de UI sobre las 3 vistas, cero gates de permiso, cero bindings nuevos.
+- El `+8 px` de padding (40→48) es visible: se confirma en la verificación orgánica de la Task 11.5.
+- `Button.ghost` sobre `Border.card` blanca: la variante default de `ghost` está pensada para fondo
+  claro (`Controls.axaml:85-95`) y su contraste ya lo custodia `ButtonGhostContrasteTests`. No hace
+  falta test nuevo.
+
+---
+
+### Task 11.2: P1' sobre `UsuariosAdminView` — cierra el último `Foreground="Red"` y el último `badge-inactiva` de la app
+
+**Files:**
+- Modify: `src/StockApp.Presentation/Views/Administracion/UsuariosAdminView.axaml` (155 l)
+- Test: `tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs` (+1 `InlineData`, +1 en
+  `VistasDeLaTanda`)
+
+**Interfaces:**
+- Consumes: `c:HeaderVista`, `c:BadgeEstado`, tokens `Espacio2`/`Espacio3`/`RadioChico`/`BordeBrush`/
+  `DangerBrush`/`TextoSecundarioBrush`.
+- Produces: la referencia de **P1'**, que la Task 11.3 copia. Y deja `Controls.axaml:258` y `:266`
+  (`badge-inactiva`) **sin ningún consumidor**, que es la precondición de la Task 13.2.
+
+**Por qué importa más de lo que parece:** es la última vista de la app con `Classes="badge-inactiva"`
+(verificado: `grep -rn 'badge-inactiva' src/ tests/` devuelve 4 líneas, 2 de definición en
+`Controls.axaml` y 2 de uso, las dos acá) y el último `Foreground="Red"` (el 10º de la lista
+original; los 9 anteriores los cerraron las tandas 6, 8 y 9).
+
+#### Tabla de sustitución — `UsuariosAdminView.axaml`
+
+| Línea | Hoy | Pasa a |
+|---|---|---|
+| header | — | agregar `xmlns:c="using:StockApp.Presentation.Controls"` |
+| `:12` | `<DockPanel Margin="24">` | `Margin="{DynamicResource MargenVista}"` |
+| `:14-17` | `<TextBlock DockPanel.Dock="Top" Text="Administración de usuarios" Classes="titulo-vista" Margin="0,0,0,16" />` | `<c:HeaderVista DockPanel.Dock="Top" Eyebrow="ADMINISTRACIÓN" Titulo="Administración de usuarios" />` — **sin slot de acciones** (Ruling P1'). El `Margin="0,0,0,16"` desaparece: el `ControlTheme` trae `0,0,0,24` |
+| `:19` | `<Grid ColumnDefinitions="360,*">` | **no se toca** |
+| `:22` | `<Border Grid.Column="0" Classes="card" Margin="0,0,16,0">` | `Margin="0,0,16,0"` **se queda literal** (T1: es separación entre columnas, no margen de vista, y no hay `Thickness` asimétrico en la escala) |
+| `:24` | `<StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">` | `Spacing="{DynamicResource Espacio2}"`; `Margin` literal (T1) |
+| `:25` | `<TextBlock Text="Nuevo usuario" Classes="caption" Opacity="0.6" />` | `Classes="micro" Text="NUEVO USUARIO"` — **rótulo estructural, la excepción de mayúsculas ya acordada en la Fase A** (`Typography.axaml:49-55`). Sin `Opacity` |
+| `:26-28` | 3 `TextBox` con `Watermark` | **se quedan** (los `Watermark` son el label acá; no hay par etiqueta+control que envolver) |
+| `:29-31` | `ComboBox` de roles | **se queda** |
+| `:32-36` | `<Button Classes="primary" Content="Crear usuario" …>` | **se queda** — único primario de la vista |
+| `:37-41` | error con `Classes="caption"` + `DangerBrush` | **se queda** |
+| `:44` | `<ListBox ItemsSource="{Binding Items}" …>` | **no se toca** |
+| `:47` | `<StackPanel Orientation="Horizontal" Spacing="8" Margin="4">` | `Spacing="{DynamicResource Espacio2}"`; `Margin="4"` literal (T1, precedente tomado en la Task 7.1) |
+| `:48-49` | `<TextBlock Text="{Binding NombreUsuario}" Opacity="{Binding Activo, Converter=…ActivoOpacidadConverter…}" />` | **se queda** — semántica de dominio |
+| `:50` | `<TextBlock Text="{Binding Rol}" Classes="caption" Opacity="0.6" />` | `Classes="caption"` sola, **sin `Opacity`** (Ruling B-30: `caption` ya es `TextoSecundarioBrush`, 4.76:1). **Dentro del `ItemTemplate`: el guardián NO lo ve** |
+| `:51-53` | `<Border Classes="badge-inactiva" IsVisible="{Binding !Activo}"><TextBlock Text="Inactivo" Classes="badge-inactiva-texto" /></Border>` | `<c:BadgeEstado Texto="Inactivo" Tono="Neutro" IsVisible="{Binding !Activo}" />` — **conservar "Inactivo" en masculino** (es "usuario"). **Dentro del `ItemTemplate`: invisible para el guardián** |
+| `:62-64` | `<Border Grid.Column="1" Classes="card" IsEnabled="{Binding UsuarioSeleccionado, Converter=…}">` | **no se toca** |
+| `:65` | `<StackPanel Spacing="12">` | `Spacing="{DynamicResource Espacio3}"` |
+| `:66` | `<TextBlock Text="{Binding UsuarioSeleccionado.NombreUsuario}" Classes="seccion" />` | **se queda** |
+| `:68`, `:82` | `<StackPanel Orientation="Horizontal" Spacing="8">` | `Spacing="{DynamicResource Espacio2}"` |
+| `:69-79` | `danger` "Dar de baja" + los 2 `secondary` mutuamente excluyentes por `EsAdminSeleccionado` | **se quedan, textuales** |
+| `:83-87` | `TextBox` "Nueva contraseña" `Width="220"` + `Button secondary` | **se quedan** |
+| `:90` | `<Border BorderBrush="Gray" BorderThickness="1" Padding="12" CornerRadius="4" DataContext="{Binding PanelPermisos}">` | `BorderBrush="{DynamicResource BordeBrush}"`, `CornerRadius="{DynamicResource RadioChico}"` (**4 = `RadioChico`, sin cambio visual**, C16), `Padding="12"` **literal** (no hay `Thickness` de 12 uniforme; `PaddingCelda` es `12,8`). `DataContext` y `BorderThickness` **intocables** |
+| `:92-97` | comentario del bugfix 2026-08-16 | **textual, no se toca** |
+| `:98` | `<StackPanel Spacing="8" IsEnabled="{Binding PuedeEditar}">` | `Spacing="{DynamicResource Espacio2}"`; `IsEnabled` **intocable** |
+| `:99-100` | `<TextBlock Text="Acceso total" FontWeight="Bold" Foreground="Gray" IsVisible="{Binding EsAdminSeleccionado}" />` | `Foreground="{DynamicResource TextoSecundarioBrush}"` (#64748B, **4.76:1 contra el 3.95:1 de `Gray`** — mejora medible). `FontWeight="Bold"` y el `IsVisible` **se quedan** |
+| `:101-108` | comentario + "Solo lectura: usuario dado de baja" | **textual, no se toca** |
+| `:112-140` | los 2 `ItemsControl` anidados del catálogo de permisos | **no se tocan.** `:115`, `:120` `Spacing="8"`/`"2"` → `Espacio2` / **`"2"` literal** (no está en la escala: la escala eliminó el 2 a propósito, `Tokens.axaml:12-14`) |
+| `:116` | `<TextBlock Text="{Binding Nombre}" FontWeight="Bold" Margin="0,8,0,0" />` | **se queda** (dentro de `ItemTemplate`; `FontWeight` no es residuo declarado) |
+| `:122-127` | comentario de contraste que descarta `WarningBrush` | **textual, no se toca** — es la evidencia que respalda el Ruling B-26 |
+| `:142-145` | `<TextBlock Text="{Binding MensajeError}" Foreground="Red" TextWrapping="Wrap" IsVisible="…" />` | `Foreground="{DynamicResource DangerBrush}"`. **El último `Foreground="Red"` de la app** |
+| `:147` | `<Button Content="Guardar permisos" Command="{Binding GuardarCommand}" Margin="0,12,0,0" />` **sin clase** | `Classes="secondary"` (Ruling B-28). `Margin` literal |
+
+- [ ] **Step 1: escribir el guardián que falla**
+
+En `GuardianDePatronTests.cs`: agregar
+`[InlineData(typeof(UsuariosAdminView), "Administración de usuarios", "ADMINISTRACIÓN")]` a las
+`[InlineData]` (después de `:77`) **y** `typeof(UsuariosAdminView)` a `VistasDeLaTanda` (después de
+`:129`). Agregar `using StockApp.Presentation.Views.Administracion;`.
+
+- [ ] **Step 2: correr y ver el rojo — y verificar CUÁL rojo**
+
+Run: `--filter "FullyQualifiedName~GuardianDePatron"` (timeout 600000).
+Expected: **exactamente 2 fallos nuevos**:
+- `Vista_TieneHeaderVistaConElTituloEsperado` para `UsuariosAdminView` ("no tiene un HeaderVista").
+- `Vista_NoTieneOpacidadesLiterales` para `UsuariosAdminView` — **1 control**, el `:25`.
+  El `:50` **no** aparece: vive dentro del `ListBox.ItemTemplate` y `Montar` no asigna
+  `ItemsSource`, así que la plantilla nunca se realiza (Ruling B-15/B-16).
+`Vista_TieneMargenExteriorEstandar` y `Vista_NoTieneUnSegundoBotonPrimario` deben pasar **en verde
+desde este Step** (`:12` ya es `Margin="24"`, que produce el mismo `Thickness` que el token; y hay
+un solo `primary`). **Anotarlo en el ledger** para que nadie lea el verde como "no custodia nada".
+
+- [ ] **Step 3: aplicar la tabla**
+
+- [ ] **Step 4: ver el verde**
+
+Run: `--filter "FullyQualifiedName~GuardianDePatron"`. Expected: PASS en todas las filas.
+
+- [ ] **Step 5: grep de plantillas (Ruling B-16, OBLIGATORIO — acá es donde el guardián es ciego)**
+
+```bash
+grep -n 'Opacity="0\.\|Foreground="Red"\|Foreground="Gray"\|BorderBrush="Gray"\|badge-inactiva\|titulo-vista\|Margin="24"' \
+  src/StockApp.Presentation/Views/Administracion/UsuariosAdminView.axaml
+```
+Expected: **cero coincidencias.** El `Opacity` de `:49` no matchea `Opacity="0\.` porque su valor es
+un binding. **Sin este grep, el `Opacity="0.6"` de `:50` y el `badge-inactiva` de `:51-52` quedan
+sin migrar y el guardián nunca lo detecta** — es exactamente el punto ciego que la tanda 9 demostró
+por mutación.
+
+- [ ] **Step 6: verificar que el `badge-inactiva` quedó sin consumidores**
+
+```bash
+grep -rn 'badge-inactiva' src/ tests/
+```
+Expected: **exactamente 2 coincidencias**, `Themes/Controls.axaml:258` y `:266` (las definiciones).
+Si aparece alguna más, la Task 13.2 **no** puede borrarlas todavía.
+
+- [ ] **Step 7: validar por mutación (3 mutaciones, 3 rojos, revertir cada una)**
+
+1. `Titulo="Administración de usuarios"` → `"Usuarios"` → `Vista_TieneHeaderVistaConElTituloEsperado`
+   rojo para esa fila.
+2. `Margin` de `:12` → `"16"` → `Vista_TieneMargenExteriorEstandar` rojo, exactamente 1 fallo.
+3. Poner `Classes="primary"` en "Guardar permisos" (`:147`) → `Vista_NoTieneUnSegundoBotonPrimario`
+   rojo ("UsuariosAdminView tiene 2 botones primarios visibles a la vez"). *Esta es la mutación que
+   custodia el Ruling B-28.*
+
+**Mutación que NO va a dar rojo, y hay que anotarlo en el ledger, no ocultarlo:** revertir el
+`c:BadgeEstado` de `:51-52` al par `Border.badge-inactiva` deja el guardián **verde** (vive en el
+`ItemTemplate`). Su único guardián es el grep del Step 5. Es la misma deuda estructural del Ruling
+B-16, declarada, no inventada.
+
+- [ ] **Step 8: suite completa + commit**
+
+Run: `dotnet test StockApp.sln` (timeout 600000). Expected: PASS.
+
+```
+feat(ui): aplica el sistema de diseno a la administracion de usuarios
+
+- UsuariosAdminView (P1'): HeaderVista con eyebrow ADMINISTRACION reemplaza
+  al TextBlock titulo-vista suelto; el Grid de dos columnas no se toca
+- Cierra los dos ultimos residuos del catalogo viejo de toda la app: el
+  Foreground="Red" de :143 pasa a DangerBrush y el par Border.badge-inactiva
+  + TextBlock de :51-52 pasa a c:BadgeEstado conservando el genero
+  ("Inactivo", es usuario). Themes/Controls.axaml queda con los dos
+  selectores badge-inactiva sin ningun consumidor, listos para la tanda 13
+- BorderBrush="Gray" pasa a BordeBrush y Foreground="Gray" a
+  TextoSecundarioBrush: 3.95:1 contra blanco pasa a 4.76:1, que es AA. El
+  CornerRadius="4" no estaba fuera de escala, es RadioChico exacto
+- "Guardar permisos" no tenia ninguna clase: pasa a secondary, no a primary,
+  porque "Crear usuario" ya es la accion principal de la vista (Ruling B-28)
+- Los dos residuos que viven dentro del ListBox.ItemTemplate (:50 y :51-52)
+  son invisibles para el guardian de patron: los custodia el grep manual del
+  Step 5, no el [AvaloniaTheory] (Ruling B-16)
+```
+
+**Riesgos específicos:**
+- **Bajo-medio.** Cero tests de UI sobre la vista, pero es la vista con más residuos por línea de
+  toda B3 (6 en 155 líneas) y **2 de los 6 son invisibles para el guardián**. Si el Step 5 se
+  saltea, la task queda a medias con la suite en verde.
+- `Classes="micro"` sobre "NUEVO USUARIO" cambia el texto renderizado a mayúsculas. Está cubierto
+  por la excepción de la Fase A (`Typography.axaml:49-55`: "headers de columna y eyebrows son
+  etiquetas estructurales, no copy de negocio") y **verificado que ningún test lo busca**
+  (`grep -rn 'Nuevo usuario' tests/` → cero). A diferencia de `MantenimientoView`, donde sí hay un
+  assert de texto (Ruling B-29).
+
+---
+
+### Task 11.3: P1' sobre `MantenimientoView` — la task crítica de B3
+
+**Files:**
+- Modify: `src/StockApp.Presentation/Views/Administracion/MantenimientoView.axaml` (229 l)
+- Test: `tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs` (+1 `InlineData`, +1 en
+  `VistasDeLaTanda`)
+- Test (**solo si dan rojo, Ruling B-24**): `tests/StockApp.Presentation.UiTests/MantenimientoViewTests.cs`
+  (`:181`, `:391`, `:392`, `:406-407` — y **nada más de ese archivo**)
+
+**Interfaces:**
+- Consumes: `c:HeaderVista`, tokens `MargenVista`/`Espacio2`/`Espacio3`, `Classes="seccion"`.
+- Produces: el árbol visual que la Task 11.4 hereda dentro de `AccesoLimitadoView`.
+
+**Por qué es crítica:** 229 líneas, **17 tests** (el archivo con más cobertura de UI de toda la Fase
+B después de `ShellMainViewGatesTests`), **4 asserts geométricos** con `TranslatePoint` y **1 assert
+de texto** con `StringComparison.Ordinal`. Es la única task del refactor entero donde está permitido
+tocar un assert — y solo los 4 geométricos, y solo si dan rojo.
+
+#### Los 5 sitios de test en riesgo (enumerados; el permiso no se extiende a ninguno más)
+
+| # | Sitio | Tipo | Qué pasa si se rompe |
+|---|---|---|---|
+| 1 | `MantenimientoViewTests.cs:181` | geométrico | el último "Descargar" queda fuera del viewport tras scrollear |
+| 2 | `:391` | geométrico | Y de "Descargar logs" |
+| 3 | `:392` | geométrico | Y de "Guardar" (el assert es `yGuardar > yLogs`) |
+| 4 | `:406-407` | geométrico | origen de las 2 `Border.card` (Alertas debajo de Diagnóstico, mismo X) |
+| 5 | `:250` | **de texto** | `Assert.Contains(textos, t => t.Contains("Diagnóstico", StringComparison.Ordinal))` — **NO se puede tocar**, y por eso los rótulos no van a mayúsculas (Ruling B-29) |
+
+#### Tabla de sustitución — `MantenimientoView.axaml`
+
+| Línea | Hoy | Pasa a |
+|---|---|---|
+| header | — | agregar `xmlns:c="using:StockApp.Presentation.Controls"` |
+| `:12` | `<ScrollViewer>` | **no se toca** (lo custodia el test 1) |
+| `:13-20` | comentario de `LastChildFill="False"` | **textual, intocable** — documenta una regresión real |
+| `:21` | `<DockPanel Margin="16" LastChildFill="False">` | `Margin="{DynamicResource MargenVista}"`. **`LastChildFill="False"` INTOCABLE** |
+| `:23-26` | `<TextBlock DockPanel.Dock="Top" Text="Mantenimiento" Classes="titulo-vista" Margin="0,0,0,4" />` | `<c:HeaderVista DockPanel.Dock="Top" Eyebrow="ADMINISTRACIÓN" Titulo="Mantenimiento" />` — **en el MISMO lugar, primer hijo Dock=Top, sin slot de acciones** (Ruling B-29). El `Margin="0,0,0,4"` desaparece |
+| `:27` | `<Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,12">` | **se queda** (`Margin` literal, T1) |
+| `:28-32` | `<TextBlock Text="Backups" Classes="caption" Opacity="0.6" VerticalAlignment="Center" />` | `Classes="seccion"`, **sin `Opacity`**. Texto **"Backups" exacto**, sin mayúsculas (Ruling B-29) |
+| `:34-47` | comentario + par de swap "Hacer backup ahora" / "Iniciando…" (`secondary`) | **se quedan donde están, textuales** (Ruling B-29) |
+| `:50-54` | "Cargando backups..." con `Classes="caption"` | **se queda** |
+| `:56-142` | el `Grid` con el `ItemsControl` de corridas + los 2 estados vacío/error | **no se toca.** Todo lo de adentro vive en un `DataTemplate` y ya usa `SuccessBrush`/`DangerBrush`/`Classes="caption"`. Verificado: **cero `Opacity` literal** ahí adentro |
+| `:144-148` | `<TextBlock DockPanel.Dock="Top" Text="Diagnóstico" Classes="caption" Opacity="0.6" Margin="0,24,0,12" />` | `Classes="seccion"`, sin `Opacity`. **Texto "Diagnóstico" exacto — lo asserta `:250` con `StringComparison.Ordinal`.** `Margin="0,24,0,12"` literal (T1) |
+| `:150-178` | `Border.card` de Diagnóstico con el par de swap "Descargar logs" / "Descargando…" | **no se toca** (`Margin="12,0,0,0"` literal). Es la tarjeta que el test 4 mide |
+| `:180-184` | `<TextBlock … Text="Alertas" Classes="caption" Opacity="0.6" Margin="0,24,0,12" />` | `Classes="seccion"`, sin `Opacity`. Texto exacto |
+| `:186` | `<Border Classes="card" DockPanel.Dock="Top">` | **no se toca** — es la tarjeta que el test 4 mide contra la anterior |
+| `:187` | `<StackPanel Spacing="12" MaxWidth="620" HorizontalAlignment="Left">` | `Spacing="{DynamicResource Espacio3}"`; `MaxWidth`/`HorizontalAlignment` **se conservan** (misma regla que P3-b: los anchos de formulario son decisiones por vista) |
+| `:188-190` | `Classes="body"` | **se queda** |
+| `:192-200` | comentario + error de carga con `DangerBrush` | **textual, no se toca** |
+| `:202-207` | `<StackPanel Spacing="4"><TextBlock Text="URL de webhook (healthchecks.io)" /><TextBox …/></StackPanel>` | `<c:CampoFormulario Etiqueta="URL de webhook (healthchecks.io)"><TextBox … IsEnabled="{Binding !ErrorAlCargarAlertas}" /></c:CampoFormulario>`. **`Requerido` NO se declara.** El `IsEnabled` es **textual** |
+| `:209-211` | `CheckBox "Habilitado"` con `IsEnabled="{Binding !ErrorAlCargarAlertas}"` | **se queda** |
+| `:213` | `<StackPanel Orientation="Horizontal" Spacing="8">` | `Spacing="{DynamicResource Espacio2}"` |
+| `:214-221` | `primary` "Guardar" + `secondary` "Probar", con sus `IsEnabled` | **se quedan, textuales.** "Guardar" es el único primario de la vista |
+
+- [ ] **Step 1: LÍNEA BASE de los 17 tests (ANTES de tocar nada)**
+
+Run: `dotnet test tests/StockApp.Presentation.UiTests/StockApp.Presentation.UiTests.csproj --filter "FullyQualifiedName~MantenimientoViewTests"` (timeout 600000).
+Expected: **17/17 PASS**. Anotar el número exacto en el ledger. Si algo ya está rojo, **PARAR**: no
+se refactoriza sobre una suite roja.
+
+- [ ] **Step 2: escribir el guardián que falla**
+
+En `GuardianDePatronTests.cs`: agregar
+`[InlineData(typeof(MantenimientoView), "Mantenimiento", "ADMINISTRACIÓN")]` y
+`typeof(MantenimientoView)` a `VistasDeLaTanda`. El `using` de
+`StockApp.Presentation.Views.Administracion` ya lo agregó la Task 11.2.
+
+- [ ] **Step 3: correr y ver el rojo — y verificar CUÁL rojo**
+
+Run: `--filter "FullyQualifiedName~GuardianDePatron"`.
+Expected: **exactamente 3 fallos nuevos** para `MantenimientoView`:
+1. `Vista_TieneHeaderVistaConElTituloEsperado` ("no tiene un HeaderVista").
+2. `Vista_TieneMargenExteriorEstandar` — **`Thickness(16)` en vez de `Thickness(24)`** (C13). Este
+   es el rojo que el esbozo no anticipaba.
+3. `Vista_NoTieneOpacidadesLiterales` — **3 controles** (`:31`, `:147`, `:183`), los 3 fuera de
+   plantilla.
+`Vista_NoTieneUnSegundoBotonPrimario` pasa en verde ya acá: hay un solo `Classes="primary"` y los
+pares de swap son `secondary` (aunque sin VM los dos de cada par queden "visibles", no cuentan).
+
+- [ ] **Step 4: aplicar la tabla**
+
+**Cuidado T1:** `Margin="{DynamicResource Espacio5}"` ❌; va `MargenVista`.
+**Cuidado T4:** los 8 comentarios largos del archivo tienen guiones simples y rayas `—`; si escribís
+uno nuevo, **ningún `--`**.
+**Cuidado de proceso (gotcha real de la tanda 9):** tras varias ediciones seguidas con `sed` sobre
+un mismo `.axaml`, el build incremental de Avalonia queda desincronizado y un control puede reportar
+un estado viejo, **pareciendo un bug de producción**. Antes de diagnosticar cualquier rojo raro:
+`rm -rf src/StockApp.Presentation/obj src/StockApp.Presentation/bin` + rebuild limpio.
+
+- [ ] **Step 5: ver el verde del guardián**
+
+Run: `--filter "FullyQualifiedName~GuardianDePatron"`. Expected: PASS en todas las filas.
+
+- [ ] **Step 6: los 17 tests, y la decisión sobre los 4 asserts (Ruling B-24)**
+
+Run: `--filter "FullyQualifiedName~MantenimientoViewTests"`.
+
+- **Si da 17/17 (lo que este plan predice):** **NO se toca ni una línea de `MantenimientoViewTests.cs`.**
+  El permiso del Ruling B-24 no se ejerce. Anotarlo en el ledger con el número exacto.
+- **Si alguno de los 4 geométricos da rojo:** se adapta **conservando el criterio geométrico** —
+  se recalcula el punto de referencia (p. ej. medir contra el origen de la card en vez de contra la
+  ventana), **nunca** se degrada el assert a "el control existe" ni se sube una tolerancia. Se
+  documenta en el ledger qué línea cambió, por qué, y qué sigue custodiando.
+- **Si el rojo es `:250` (el de texto):** **NO se toca ese assert. Se revierte el cambio del XAML**
+  que lo rompió — significa que alguien puso mayúsculas contra el Ruling B-29.
+- **Si el rojo es cualquier otro de los 17:** es una regresión real. Parar, diagnosticar con clean
+  build, y reportar.
+
+- [ ] **Step 7: grep de residuos**
+
+```bash
+grep -n 'Opacity="0\.\|Foreground="Red"\|Margin="16"\|titulo-vista\|FontSize="\|Spacing="[0-9]"' \
+  src/StockApp.Presentation/Views/Administracion/MantenimientoView.axaml
+```
+Expected: **cero coincidencias.**
+
+- [ ] **Step 8: validar por mutación (3 mutaciones, 3 rojos, revertir cada una)**
+
+1. `Margin` del `DockPanel` (`:21`) → `"16"` → `Vista_TieneMargenExteriorEstandar` rojo,
+   exactamente 1 fallo.
+2. **`LastChildFill="False"` → `"True"` (o borrarlo)** → `Montar_LaSeccionDeAlertasQuedaDebajoDeLaDeDiagnostico`
+   rojo. *Esta es LA mutación de la task:* es el bug real que los 4 `TranslatePoint` custodian, y
+   confirma que siguen custodiándolo después del refactor. Si **no** da rojo, los asserts se
+   degradaron sin querer — parar y revisar.
+3. `Classes="seccion"` de "Diagnóstico" (`:145`) → `Text="DIAGNÓSTICO"` →
+   `Montar_ConLogs_MuestraElResumenYHabilitaLaDescarga` rojo (`:250`). Confirma el Ruling B-29 por
+   evidencia y no por argumento. **Revertir.**
+
+- [ ] **Step 9: suite completa + commit**
+
+Run: `dotnet test StockApp.sln` (timeout 600000). Expected: PASS.
+
+```
+feat(ui): aplica el sistema de diseno a Mantenimiento
+
+- MantenimientoView (P1'): HeaderVista con eyebrow ADMINISTRACION reemplaza
+  al TextBlock titulo-vista, EN EL MISMO LUGAR y sin slot de acciones. El
+  par de botones "Hacer backup ahora"/"Iniciando..." se queda en su Grid de
+  seccion: moverlo al encabezado cambiaria el orden de hijos del DockPanel,
+  que es justo lo que custodian los cuatro asserts con TranslatePoint
+- El margen exterior era 16, no 24: pasa a MargenVista. Era la unica vista
+  de B3 que fallaba Vista_TieneMargenExteriorEstandar por razon real
+- Los tres rotulos de seccion (Backups/Diagnostico/Alertas) pasan de
+  caption+Opacity="0.6" a Classes="seccion" CONSERVANDO SU TEXTO EXACTO:
+  MantenimientoViewTests.cs:250 asserta "Diagnostico" con
+  StringComparison.Ordinal, asi que la convencion de eyebrows en mayusculas
+  no aplica aca (Ruling B-29)
+- LastChildFill="False" y su comentario quedan intactos: documentan una
+  regresion real de layout validada por mutacion en su momento
+- Los 17 tests de MantenimientoViewTests pasan SIN tocar un solo assert
+```
+*(si el Step 6 obligó a adaptar alguno de los 4, reemplazar la última línea del commit por el
+detalle exacto de qué se cambió y por qué)*
+
+**Riesgos específicos:**
+- **Alto.** Es la vista con más cobertura de la tanda y la única con asserts geométricos.
+- El `HeaderVista` agrega ~50 px de alto (eyebrow + título) más su `Margin="0,0,0,24"` fijo, contra
+  los ~30 px del `TextBlock` + `Margin="0,0,0,4"` que reemplaza. En una ventana de 700x500 (la que
+  usan los tests) eso empuja todo hacia abajo. El test 1 scrollea al final antes de medir, así que
+  no debería afectarlo — **pero es la hipótesis más probable de rojo** si el Step 6 falla.
+- `AccesoLimitadoView` hereda este árbol: cualquier cosa que quede a medias acá se ve en la 11.4.
+
+---
+
+### Task 11.4: P9 sobre `AccesoLimitadoView` — la vista-host
+
+**Files:**
+- Modify: `src/StockApp.Presentation/Views/AccesoLimitadoView.axaml` (28 l)
+- Test: `tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs` (+1 en `VistasEmbebidas`,
+  `<summary>` de la lista ampliado)
+
+**Interfaces:**
+- Consumes: el árbol de `MantenimientoView` que produjo la Task 11.3; tokens `Espacio4`,
+  `WarningBrush`.
+- Produces: la referencia de **P9**, única en la app.
+
+**Por qué va después de la 11.3:** su árbol visual **contiene** el de `MantenimientoView` (`:24`),
+así que `Vista_NoTieneOpacidadesLiterales` sobre `AccesoLimitadoView` estaría rojo por los 3
+`Opacity="0.6"` de su hijo mientras la 11.3 no cierre.
+
+#### Tabla de sustitución — `AccesoLimitadoView.axaml`
+
+| Línea | Hoy | Pasa a |
+|---|---|---|
+| `:12-15` | comentario "a propósito NO hay sidebar ni ContentControl genérico… Es la barrera física…" | **textual, intocable.** Y su instrucción se cumple: **NO se agrega navegación de ningún tipo** |
+| `:16` | `<DockPanel>` | **se queda sin `Margin`** (Ruling B-22: el margen lo trae `MantenimientoView`) |
+| `:18` | `<Border DockPanel.Dock="Top" Classes="card" Margin="16,16,16,0" Padding="16">` | `Padding` **se borra** (`Border.card` ya trae `PaddingCard`=16 por `ControlTheme`, `Controls.axaml:247`); `Margin="16,16,16,0"` **se queda literal** — es la separación del aviso con el borde superior de la ventana, no un margen de vista, y **tiene que seguir siendo distinto de `Thickness(24)`** para que `VistaEmbebida_NoDuplicaElMargenDeVista` lo acepte |
+| `:19-21` | `<TextBlock Text="Modo de acceso limitado: …" TextWrapping="Wrap" Foreground="{DynamicResource WarningBrush}" />` | **se queda textual.** El copy es la barrera comunicacional del modo licencia-vencida |
+| `:24` | `<admin:MantenimientoView DataContext="{Binding Mantenimiento}" />` | **INTOCABLE.** El binding anidado es justo lo que custodia `AccesoLimitadoViewTests` |
+| — | — | **NO se agrega `HeaderVista`** (Ruling B-22) ni `xmlns:c` (no hace falta) |
+
+**Es la tabla más corta de toda la Fase B: 2 cambios reales.** Eso es correcto y esperado — la
+vista tiene 28 líneas y ya usa `Classes="card"` y `WarningBrush`. La task existe por el guardián,
+no por el XAML.
+
+- [ ] **Step 1: escribir el guardián que falla**
+
+En `GuardianDePatronTests.cs`:
+1. Agregar `typeof(AccesoLimitadoView)` a `VistasEmbebidas` (`:138-147`).
+2. Ampliar el `<summary>` de `VistasEmbebidas` (`:132-137`) al texto del Ruling B-22: "vistas que no
+   aportan cromo de vista propio: o están embebidas en otra (P*-emb, P5), o hostean a otra que sí lo
+   aporta (P9)".
+
+- [ ] **Step 2: correr y ver el rojo — y verificar CUÁL rojo**
+
+Run: `--filter "FullyQualifiedName~GuardianDePatron"`.
+Expected: **1 fallo**, `Vista_NoTieneOpacidadesLiterales` para `AccesoLimitadoView` — **pero solo si
+esta task se corre ANTES de la 11.3**. Si la 11.3 ya cerró (que es el orden de este plan), las 3
+filas de `AccesoLimitadoView` pasan **en verde desde el Step 2**, y eso **NO es una falla del
+guardián**: su `Margin="16,16,16,0"` ya cumple el invariante invertido, no tiene primario propio, y
+su hijo ya no tiene opacidades. **Anotarlo explícitamente en el ledger** (mismo criterio que la Task
+8.1 con los 3 maestros embebidos).
+
+- [ ] **Step 3: aplicar la tabla** (2 cambios: borrar `Padding="16"` de `:18`; nada más)
+
+- [ ] **Step 4: ver el verde**
+
+Run: `--filter "FullyQualifiedName~GuardianDePatron|FullyQualifiedName~AccesoLimitadoViewTests|FullyQualifiedName~ViewLocatorTests"`.
+Expected: PASS. Los 2 de `AccesoLimitadoViewTests` y los 4 de `ViewLocatorTests` **sin tocar un
+assert** — verificado al planificar que localizan por `Content == "Descargar"`, por
+`Text == "Todavía no hay backups registrados."` y por `Assert.IsType<AccesoLimitadoView>`, nunca por
+`Classes` ni por geometría.
+
+- [ ] **Step 5: verificar que NO se agregó navegación (encargo explícito)**
+
+```bash
+grep -n 'INavigationService\|ContentControl\|sidebar\|Sidebar\|Navegar' \
+  src/StockApp.Presentation/Views/AccesoLimitadoView.axaml \
+  src/StockApp.Presentation/Views/AccesoLimitadoView.axaml.cs
+```
+Expected: **cero coincidencias.** Si aparece alguna, se rompió la barrera física del modo
+licencia-vencida.
+
+- [ ] **Step 6: validar por mutación (2 mutaciones, 2 rojos, revertir cada una)**
+
+1. Poner `Margin="{DynamicResource MargenVista}"` en el `Border` de `:18` →
+   `VistaEmbebida_NoDuplicaElMargenDeVista` rojo, exactamente 1 fallo. *Es el bug C3 de B2 aplicado
+   a P9.*
+2. Borrar `DataContext="{Binding Mantenimiento}"` de `:24` →
+   `Montar_ConCorridas_LaMantenimientoViewAnidadaCargaLaLista` rojo (0 botones "Descargar" en vez de
+   2). Confirma que el wiring anidado sigue custodiado.
+
+- [ ] **Step 7: suite completa + commit**
+
+```
+feat(ui): AccesoLimitadoView entra al guardian como vista-host
+
+- AccesoLimitadoView no es P4: no tiene TabControl. Es una vista-HOST (P9),
+  el inverso de una embebida: hostea MantenimientoView entera, que ya trae
+  su propio HeaderVista y su propio MargenVista tras la task anterior
+- Por eso NO gana HeaderVista (dos titulos apilados) ni MargenVista (48px de
+  aire duplicado), y entra al guardian por VistasEmbebidas, cuyo comentario
+  se amplia: la lista es "vistas que no aportan cromo de vista propio", esten
+  embebidas u hosteando (Ruling B-22)
+- El Padding="16" del Border de aviso era redundante con el PaddingCard que
+  Border.card ya trae por ControlTheme
+- El Margin="16,16,16,0" se conserva a proposito: es la separacion del aviso
+  con el borde de la ventana, y tiene que seguir siendo distinto de 24 para
+  que el invariante invertido lo acepte
+- NO se agrega navegacion de ningun tipo: esta vista es la barrera fisica del
+  modo licencia vencida, como dice su propio comentario
+```
+
+**Riesgos específicos:**
+- **Bajo.** 2 cambios de XAML, 6 tests preexistentes que no dependen de nada de lo que se toca.
+- El único riesgo real es de **orden**: correr esta task antes de la 11.3 la deja con un rojo
+  heredado que parece propio.
+
+---
+
+### Task 11.5: cierre de la tanda 11
+
+**Files:** ninguno de código, salvo lo que encuentre el Step 2.
+
+- [ ] **Step 1: suite completa**
+
+Run: `dotnet test StockApp.sln` (timeout 600000, `nohup` + polling activo con `while kill -0 PID`).
+Expected: PASS, 0 failed. Anotar el total y el delta contra la línea base de la tanda.
+
+**Delta esperado de la tanda 11** (aritmética, **NO VERIFICADA**): +1 caso de `TokensDisenioTests`
+(`PaddingHolgado`) +1 de `LoginViewMarcaDeAguaTests` +3 de `VistaCentrada_TieneCardConPaddingHolgado`
++6 de las 3 P6 en los 2 invariantes compartidos (`Vista_NoTieneOpacidadesLiterales` corre 2, no 3,
+porque `LoginView` está exenta → 2 + 3 = 5) +8 de las 2 filas nuevas de `VistasDeLaTanda`
+(`UsuariosAdminView` y `MantenimientoView` × 4 invariantes) +3 de `AccesoLimitadoView` en
+`VistasEmbebidas` = **+21**. Si el número real difiere, **contarlo antes de seguir**: la diferencia
+suele ser una lista que se tocó a medias.
+
+- [ ] **Step 2: auditoría de residuos de la tanda entera**
+
+```bash
+grep -rn 'Opacity="0\.\|Foreground="Red"\|Foreground="Gray"\|BorderBrush="Gray"\|Margin="16"\|Margin="40"\|Padding="40"\|titulo-vista\|badge-inactiva\|FontSize="' \
+  src/StockApp.Presentation/Views/Administracion/ \
+  src/StockApp.Presentation/Views/LoginView.axaml \
+  src/StockApp.Presentation/Views/ResetAdminView.axaml \
+  src/StockApp.Presentation/Views/BloqueoLicenciaView.axaml \
+  src/StockApp.Presentation/Views/AccesoLimitadoView.axaml
+```
+Expected: **exactamente 2 coincidencias documentadas**: `LoginView:14` (`Opacity="0.28"`, marca de
+agua, Ruling B-25) y `AccesoLimitadoView:18` (`Margin="16,16,16,0"`, separación del aviso, Ruling
+B-22). Cualquier otra es residuo real → se corrige en esta task, con su commit.
+
+- [ ] **Step 3: verificación orgánica de la tanda 11 (app real)**
+
+Es la tanda que **más lo necesita** de toda la Fase B: 4 de sus 6 vistas se ven **fuera del shell**
+y ningún test headless las cubre. Con la app real corriendo:
+1. **Login**: entrar mal (ver el error en `DangerBrush`), entrar bien. Mirar que el logo del
+   municipio siga con su opacidad y su escala, y que el `+8 px` de padding no descuadre la card.
+2. **"No puedo entrar / resetear Admin"** → `ResetAdminView`: pedir el código, copiar con los 3
+   botones "Copiar" (que ahora son `secondary compacto`), ver que el tamaño no cambió.
+3. **Administración → Usuarios**: crear uno, darlo de baja, mirar el `BadgeEstado` "Inactivo" en la
+   lista y el panel de permisos con su borde `BordeBrush` y su "Guardar permisos" `secondary`.
+   Provocar un error de permisos para ver el `DangerBrush` de `:143`.
+4. **Administración → Mantenimiento**: mirar los 3 rótulos de sección en `seccion` (16 px oscuro, no
+   12 px gris), y **que Alertas siga DEBAJO de Diagnóstico, no al costado** — es la regresión que
+   los 4 `TranslatePoint` custodian, y un test verde con la tarjeta al costado conviven mal.
+5. **Modo licencia vencida** (si es reproducible sin tocar el servidor): `BloqueoLicenciaView` y
+   `AccesoLimitadoView`, mirando que este último **no muestre dos títulos apilados**.
+
+**Si el dispatch tiene instrucción de no relanzar la app, declararlo como deuda en el ledger** —
+igual que las tandas 6-10, que la dejaron pendiente las cinco.
+
+- [ ] **Step 4: commit de cierre**
+
+```
+chore(ui): cierra la tanda 11 (administracion y acceso, 6 vistas)
+```
+
+---
+
+## Tanda 12: Actualizaciones y diálogos (6 vistas, 4 tasks)
+
+**Objetivo:** meter al sistema de diseño el **único módulo que quedó 100% afuera**
+(`Actualizaciones/`, con paleta Material heredada) y los 3 diálogos `Window`.
+
+**Orden obligatorio:** 12.1 (los 3 tokens, **sin tocar ninguna vista**) → 12.2 (Actualizaciones) →
+12.3 (diálogos) → 12.4 (cierre). La 12.1 va primera porque si un `DynamicResource` no resuelve, el
+control **se cae a su default en silencio** — el modo de falla que `TokensDisenioTests` existe para
+convertir en rojo.
+
+**Cobertura de tests al arrancar:** las 3 de `Actualizaciones/` tienen **cero tests de UI**
+(verificado: los únicos archivos que las nombran son
+`StockApp.Presentation.Tests/Actualizaciones/{OverlayViewModelFactoryTests,ActualizacionViewModelsTests,ShellViewModelActualizacionTests}.cs`,
+que trabajan sobre ViewModels). Los 3 diálogos tienen `ConfirmacionServiceDialogosConsecutivosTests`
+(2 tests) más la red del compilador de C# sobre sus `x:Name` (Ruling B-27).
+
+---
+
+### Task 12.1: los 3 tokens `*SuaveBrush` + cierre del agujero de `BadgeEstado` (SIN tocar vistas)
+
+**Files:**
+- Modify: `src/StockApp.Presentation/Themes/Tokens.axaml` (+3 `Color`, +3 `SolidColorBrush`)
+- Modify: `src/StockApp.Presentation/Controls/Componentes.axaml` (+3 `Style` de `Border#Fondo`)
+- Test: `tests/StockApp.Presentation.UiTests/TokensDisenioTests.cs` (+3 casos de existencia y valor,
+  +1 de contraste)
+- Test: `tests/StockApp.Presentation.UiTests/ComponentesBasicosTests.cs` (+3 casos de `BadgeEstado`)
+
+**Interfaces:**
+- Consumes: `ContrasteHelpers.Contraste.Ratio` (ya existe, `ContrasteHelpers.cs:23-30`).
+- Produces: `InfoSuaveBrush`, `WarningSuaveBrush`, `DangerSuaveBrush` — los consume la Task 12.2.
+
+**Por qué existe como task propia:** el hueco no es hipotético (C21). Y arreglar `BadgeEstado` acá
+tiene un efecto que ninguna vista de B3 aprovecha pero **la Task B2-T sí**: los badges de tono
+`Peligro` que introdujo el stock negativo hoy salen con fondo **gris**, no rojo suave.
+
+#### Tabla de sustitución
+
+| Archivo | Línea | Hoy | Pasa a |
+|---|---|---|---|
+| `Themes/Tokens.axaml` | tras `:73` (`ColorInfo`) | — | `<Color x:Key="ColorInfoSuave">#E0F2FE</Color>`, `<Color x:Key="ColorWarningSuave">#FEF3C7</Color>`, `<Color x:Key="ColorDangerSuave">#FEE2E2</Color>`, con comentario citando el Ruling B-26 |
+| `Themes/Tokens.axaml` | tras `:129` (`InfoBrush`) | — | los 3 `SolidColorBrush` correspondientes |
+| `Controls/Componentes.axaml` | tras `:89` (`^[Tono=Advertencia] … TextBlock#Texto`) | — | `<Style Selector="^[Tono=Advertencia] /template/ Border#Fondo"><Setter Property="Background" Value="{DynamicResource WarningSuaveBrush}" /></Style>` |
+| `Controls/Componentes.axaml` | tras `:93` (`^[Tono=Peligro] …`) | — | ídem con `DangerSuaveBrush` |
+| `Controls/Componentes.axaml` | tras `:97` (`^[Tono=Info] …`) | — | ídem con `InfoSuaveBrush` |
+| `Controls/Componentes.axaml` | `:87-97` | los 3 `Setter` de `Foreground` con `WarningBrush`/`DangerBrush`/`InfoBrush` | **se quedan.** Sobre su propio fondo suave dan 2.86 / 3.95 / 2.42 — el badge es una **etiqueta gráfica corta**, no texto corrido, y su contraste contra el fondo de la página sigue siendo el que ya tenía. **No se convierte esta task en una revisión de contraste de `BadgeEstado`**; ver pregunta abierta 5 |
+
+- [ ] **Step 1: escribir los tests que fallan**
+
+En `TokensDisenioTests.cs`, siguiendo el patrón exacto de `TextoTerciarioBrush_EsElGrisDeLaSpec`
+(`:88-95`):
+```csharp
+[AvaloniaTheory]
+[InlineData("InfoSuaveBrush", "#E0F2FE")]
+[InlineData("WarningSuaveBrush", "#FEF3C7")]
+[InlineData("DangerSuaveBrush", "#FEE2E2")]
+public void FondosSuavesSemanticos_ExistenConElValorDeLaSpec(string clave, string hex)
+{
+    var brush = Assert.IsType<SolidColorBrush>(Recurso(clave));
+    Assert.Equal(Color.Parse(hex), brush.Color);
+}
+
+[AvaloniaTheory]
+[InlineData("InfoSuaveBrush")]
+[InlineData("WarningSuaveBrush")]
+[InlineData("DangerSuaveBrush")]
+public void FondosSuavesSemanticos_SoportanTextoPrimarioConAA(string clave)
+{
+    // Ruling B-26: sobre estos fondos el texto va en TextoPrimarioBrush, NUNCA en el color
+    // semantico (que da 2.42-3.95:1). Este test fija esa regla en el banco de pruebas.
+    var fondo = Assert.IsType<SolidColorBrush>(Recurso(clave)).Color;
+    var texto = Assert.IsType<SolidColorBrush>(Recurso("TextoPrimarioBrush")).Color;
+    Assert.True(Contraste.Ratio(texto, fondo) >= 4.5,
+        $"TextoPrimarioBrush sobre {clave} da {Contraste.Ratio(texto, fondo):F2}:1, por debajo de AA.");
+}
+```
+En `ComponentesBasicosTests.cs`: 3 casos que monten un `c:BadgeEstado` con `Tono` `Advertencia` /
+`Peligro` / `Info` y asserten que el `Border#Fondo` de su template tiene el `Background` esperado
+(mismo mecanismo de localización que ya usen los casos de `BadgeEstado` existentes en ese archivo —
+**NO VERIFIQUÉ** cómo lo hacen; leerlo antes de escribir).
+
+- [ ] **Step 2: correr y ver el rojo**
+
+Run: `--filter "FullyQualifiedName~TokensDisenio|FullyQualifiedName~ComponentesBasicos"`.
+Expected: **3 fallos de `FondosSuavesSemanticos_Existen…`** con el mensaje de `Recurso()`
+("El token 'X' no existe en Themes/Tokens.axaml"), **3 de `…SoportanTextoPrimarioConAA`** (por la
+misma causa) y **3 de los `BadgeEstado`** (fondo gris `DeshabilitadoFondoBrush` en vez del suave).
+
+- [ ] **Step 3: aplicar la tabla**
+
+- [ ] **Step 4: ver el verde**
+
+Run: el mismo filtro. Expected: PASS.
+
+- [ ] **Step 5: validar por mutación (2 mutaciones, 2 rojos, revertir cada una)**
+
+1. Cambiar `ColorWarningSuave` a `#FFFFFF` → `FondosSuavesSemanticos_ExistenConElValorDeLaSpec`
+   rojo para esa fila **y** `…SoportanTextoPrimarioConAA` **verde** (blanco pasa AA de sobra) — lo
+   que confirma que los dos tests miden cosas distintas y ninguno es redundante.
+2. Borrar el `Style` de `^[Tono=Peligro] /template/ Border#Fondo` → el caso de `BadgeEstado`
+   correspondiente rojo.
+
+- [ ] **Step 6: suite completa + commit**
+
+```
+feat(ui): tokens de fondo suave para Info, Warning y Danger
+
+- Tokens.axaml tenia BrandSuave (#DCFCE7) y ningun equivalente semantico. El
+  agujero ya se veia en produccion: BadgeEstado con Tono Advertencia/Peligro/
+  Info se caia al gris DeshabilitadoFondoBrush del selector default, mientras
+  Tono=Exito si tenia el suyo
+- Los tres valores son el escalon 100 de la misma familia de la que salio
+  toda la paleta, igual que BrandSuave es el 100 de Brand
+- Regla que fija el test de contraste: sobre estos fondos el texto va en
+  TextoPrimarioBrush (14.6 a 16:1). El color semantico sobre su propio fondo
+  suave da 2.42 a 3.95:1 y no se usa para texto corrido (Ruling B-26)
+```
+
+**Riesgos específicos:**
+- **Bajo.** Ninguna vista los consume todavía.
+- El único efecto visible inmediato es sobre los `BadgeEstado` de tono no-Exito que ya existan en la
+  app tras la Task B2-T. **Verificarlo en la orgánica de la 12.4.**
+
+---
+
+### Task 12.2: los 3 overlays de `Actualizaciones/` (P5-ovl)
+
+**Files:**
+- Modify: `src/StockApp.Presentation/Actualizaciones/Views/ActualizacionBannerView.axaml` (37 l)
+- Modify: `src/StockApp.Presentation/Actualizaciones/Views/ActualizacionModalView.axaml` (37 l)
+- Modify: `src/StockApp.Presentation/Actualizaciones/Views/ActualizacionBloqueoView.axaml` (54 l)
+- Test: `tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs` (+3 en `VistasEmbebidas`)
+
+**Interfaces:**
+- Consumes: los 3 tokens de la Task 12.1, `InfoBrush`/`WarningBrush`/`DangerBrush`/
+  `DangerPressedBrush`/`SuperficieBrush`, `Button.primary`/`.secondary`/`.ghost`/`.danger`,
+  `RadioBase`, `MargenVista`, `PaddingCelda`, `Espacio2`/`Espacio3`/`Espacio4`.
+- Produces: nada nuevo.
+
+**Son 17 sitios de color literal, no 9** (C20).
+
+#### Tabla de sustitución — `ActualizacionBannerView.axaml`
+
+| Línea | Hoy | Pasa a |
+|---|---|---|
+| `:10` | comentario "Franja superior discreta (severity: normal)…" | **textual, no se toca** |
+| `:11` | `<Border Background="#E8F4FD" BorderBrush="#2196F3" BorderThickness="0,0,0,2"` | `Background="{DynamicResource InfoSuaveBrush}" BorderBrush="{DynamicResource InfoBrush}"`; `BorderThickness` **se queda** |
+| `:12` | `Padding="16,8"` | **literal** (no hay `Thickness` 16,8 en la escala; `PaddingCelda` es 12,8 y cambiaría el alto de una franja con `Height` fijo) |
+| `:13-15` | `Height="56"`, `HorizontalAlignment="Stretch"`, `VerticalAlignment="Top"` | **se quedan** — definen el anclaje del overlay (`MainWindow.axaml:18-22`) |
+| `:17-20` | `<TextBlock Text="{Binding Titulo}" VerticalAlignment="Center" FontWeight="SemiBold" />` | agregar `Classes="body"`; `FontWeight` **se queda** |
+| `:22` | `Spacing="12"` | `{DynamicResource Espacio3}` |
+| `:23-27` | `<Button Content="Más tarde" … Background="Transparent" BorderThickness="0" />` | `Classes="ghost"`, **borrando `Background` y `BorderThickness`** (eso es exactamente lo que `Button.ghost` hace, `Controls.axaml:96-103`). `IsVisible="{Binding EsPosponible}"` **textual** |
+| `:28-32` | `<Button Content="Actualizar ahora" … Background="#2196F3" Foreground="White" />` | `Classes="primary"`, borrando `Background` y `Foreground`. `IsEnabled="{Binding !OperacionEnCurso}"` **textual** |
+
+#### Tabla de sustitución — `ActualizacionModalView.axaml`
+
+| Línea | Hoy | Pasa a |
+|---|---|---|
+| `:10` | comentario | **textual** |
+| `:11` | `Background="#FFFDF0" BorderBrush="#FF9800" BorderThickness="2"` | `Background="{DynamicResource WarningSuaveBrush}" BorderBrush="{DynamicResource WarningBrush}"`; `BorderThickness="2"` se queda |
+| `:12` | `CornerRadius="6" Padding="24"` | `CornerRadius="{DynamicResource RadioBase}"` (**6 exacto**) y `Padding="{DynamicResource MargenVista}"` (**24 exacto**) — las dos **sin cambio visual** |
+| `:13` | `Width="480"` | **se queda** |
+| `:14` | `Spacing="16"` | `{DynamicResource Espacio4}` |
+| `:16-18` | `<TextBlock Text="Actualización disponible" FontSize="18" FontWeight="Bold" Foreground="#E65100" />` | `Classes="seccion" FontWeight="Bold"`, **sin `FontSize` ni `Foreground`** (`seccion` = 16/Medium/`TextoPrimarioBrush`, y `FontWeight` inline pisa el `Medium`). **Cambio visible: 18 → 16 px y naranja → oscuro.** El naranja sobre el fondo suave da 2.86:1 (Ruling B-26) |
+| `:20-22` | `<TextBlock Text="{Binding TextoMarkdown}" TextWrapping="Wrap" Opacity="0.85" />` | `Classes="body"`, **sin `Opacity`** |
+| `:24` | `Spacing="8"` | `{DynamicResource Espacio2}` |
+| `:25-27` | `<Button Content="Posponer" … IsVisible="{Binding EsPosponible}" />` sin clase | `Classes="secondary"`; `IsVisible` **textual** |
+| `:28-31` | `<Button Content="Actualizar ahora" … Background="#FF9800" Foreground="White" />` | `Classes="primary"` |
+
+#### Tabla de sustitución — `ActualizacionBloqueoView.axaml`
+
+| Línea | Hoy | Pasa a |
+|---|---|---|
+| `:10-11` | comentarios de severidad y de `EsModoDegradado` | **textuales** |
+| `:15` | `IsVisible="{Binding !EsModoDegradado}"` | **INTOCABLE, textual** |
+| `:16` | `Background="#FFEBEE" BorderBrush="#F44336" BorderThickness="2"` | `DangerSuaveBrush` / `DangerBrush`; `BorderThickness` se queda |
+| `:17` | `CornerRadius="6" Padding="24"` | `RadioBase` / `MargenVista` (los dos exactos) |
+| `:18` | `Width="480"` | **se queda** |
+| `:19` | `Spacing="16"` | `{DynamicResource Espacio4}` |
+| `:21-23` | `<TextBlock Text="Actualizacion critica requerida" FontSize="18" FontWeight="Bold" Foreground="#B71C1C" />` | `Classes="seccion" FontWeight="Bold" Foreground="{DynamicResource DangerPressedBrush}"` (#991B1B; sobre `DangerSuaveBrush` da **6.80:1**, AA holgado). **El texto sin tildes NO se corrige** (Ruling B-34: es copy) |
+| `:25-27` | `Opacity="0.85"` | `Classes="body"`, sin `Opacity` |
+| `:29-33` | `<Button Content="Aplicar y reiniciar" … Background="#F44336" Foreground="White" HorizontalAlignment="Right" />` | `Classes="danger"` (blanco sobre `DangerBrush` = **4.83:1**, AA), borrando `Background` y `Foreground`. `HorizontalAlignment` se queda |
+| `:39` | `IsVisible="{Binding EsModoDegradado}"` | **INTOCABLE, textual** |
+| `:40` | `Background="#B71C1C"` | `{DynamicResource DangerPressedBrush}` |
+| `:41` | `Padding="12,6"` | `{DynamicResource PaddingCelda}` (12,8 — **+2 px de alto** en un banner permanente; si preferís no mover un pixel, dejalo literal y anotalo) |
+| `:43` | `Spacing="8"` | `{DynamicResource Espacio2}` |
+| `:44-48` | `<TextBlock Text="MODO DEGRADADO — …" Foreground="White" FontWeight="Bold" … />` | `Foreground="{DynamicResource SuperficieBrush}"` (#FFFFFF, mismo valor). **El texto NO se toca** — ni las tildes que le faltan |
+
+- [ ] **Step 1: escribir el guardián que falla**
+
+En `GuardianDePatronTests.cs`: agregar los 3 tipos a `VistasEmbebidas` y
+`using StockApp.Presentation.Actualizaciones.Views;`.
+
+- [ ] **Step 2: correr y ver el rojo — y verificar CUÁL rojo**
+
+Run: `--filter "FullyQualifiedName~GuardianDePatron"`.
+Expected: **exactamente 2 fallos nuevos**, los dos de `Vista_NoTieneOpacidadesLiterales`:
+`ActualizacionModalView` (1 control, `:22`) y `ActualizacionBloqueoView` (1 control, `:27`).
+`ActualizacionBannerView` pasa en verde en los 3 invariantes desde el Step 2 (no tiene `Opacity`, no
+tiene `Margin`, no tiene `primary`) — **anotarlo en el ledger**, no leerlo como "no custodia nada".
+`VistaEmbebida_NoDuplicaElMargenDeVista` pasa en las 3: `MargenExteriorDe` devuelve `null` (ninguna
+tiene `Margin` en su árbol) y `null != Thickness(24)`.
+
+- [ ] **Step 3: aplicar las tres tablas**
+
+**Cuidado T4:** los comentarios existentes tienen `→` y `—`, no `--`. No introducir ninguno.
+**Cuidado con los `IsVisible` de `ActualizacionBloqueoView`:** `:15` y `:39` son las dos ramas
+mutuamente excluyentes (overlay modal vs. banner de modo degradado). Copiarlos **textualmente**.
+
+- [ ] **Step 4: ver el verde**
+
+Run: `--filter "FullyQualifiedName~GuardianDePatron"`. Expected: PASS.
+
+- [ ] **Step 5: grep de residuos**
+
+```bash
+grep -n 'Opacity="0\.\|#[0-9A-Fa-f]\{6\}\|Foreground="White"\|Background="Transparent"\|FontSize="\|Spacing="[0-9]"' \
+  src/StockApp.Presentation/Actualizaciones/Views/*.axaml
+```
+Expected: **cero coincidencias.** Es el módulo que arrancó con 17 y tiene que terminar con 0.
+
+- [ ] **Step 6: validar por mutación (3 mutaciones, 3 rojos, revertir cada una)**
+
+1. Volver `Opacity="0.85"` a `ActualizacionModalView:22` → `Vista_NoTieneOpacidadesLiterales` rojo,
+   exactamente 1 fallo.
+2. Poner `Classes="primary"` en "Posponer" (`ActualizacionModalView:25`) →
+   `Vista_NoTieneUnSegundoBotonPrimario` rojo. Confirma que las 3 nuevas filas están cableadas a los
+   dos `[MemberData]` compartidos, no solo al invertido.
+3. Poner `Margin="{DynamicResource MargenVista}"` en el `Border` de `ActualizacionBannerView:11` →
+   `VistaEmbebida_NoDuplicaElMargenDeVista` rojo. Es la única forma de comprobar que la fila del
+   banner realmente corre ese invariante y no está pasando por vacuidad.
+
+- [ ] **Step 7: confirmar que los ViewModels no se tocaron**
+
+```bash
+git diff --stat src/StockApp.Presentation/Actualizaciones/
+```
+Expected: **solo los 3 `.axaml`.** Ni `CoordinadorActualizacion.cs`, ni los 3 `*ViewModel.cs`, ni
+`ViewLocator.cs`. Es una tanda de barrido visual.
+
+- [ ] **Step 8: suite completa + commit**
+
+```
+feat(ui): mete el modulo de actualizaciones al sistema de diseno
+
+- ActualizacionBannerView, ActualizacionModalView y ActualizacionBloqueoView
+  eran el unico modulo 100% fuera del sistema: 13 hex literales de paleta
+  Material vieja mas 4 Foreground="White", 17 sitios en 3 archivos
+- Los fondos pasan a los tres tokens nuevos (Info/Warning/Danger suave) y los
+  botones a Classes primary/secondary/ghost/danger, que ya traen su par
+  fondo+texto verificado por contraste
+- El titulo del bloqueo pasa a DangerPressedBrush: 6.80:1 sobre su fondo
+  suave, contra el 3.95:1 que daria DangerBrush
+- Los dos IsVisible mutuamente excluyentes de ActualizacionBloqueoView y los
+  textos sin tildes se copian TEXTUALES: son la logica y el copy del modo
+  degradado, no residuo visual (Ruling B-34)
+- Los tres entran al guardian por VistasEmbebidas: son overlays hosteados por
+  el segundo ContentControl de MainWindow, sin cromo de vista propio
+```
+
+**Riesgos específicos:**
+- **Bajo por cobertura, alto por función.** Cero tests de UI, así que **el grep del Step 5 y la
+  orgánica de la 12.4 son la única red**. Y es la pantalla que impide operar con una versión
+  vencida.
+- Dos cambios visibles reales: el título del modal pasa de 18 px naranja a 16 px oscuro, y los
+  fondos suaves son más saturados que los Material (#FFFDF0 → #FEF3C7). Se confirman en la orgánica.
+
+---
+
+### Task 12.3: los 3 diálogos `Window` (P7)
+
+**Files:**
+- Modify: `src/StockApp.Presentation/Views/Dialogs/ConfirmacionDialog.axaml` (42 l)
+- Modify: `src/StockApp.Presentation/Views/Dialogs/MensajeDialog.axaml` (36 l)
+- Modify: `src/StockApp.Presentation/Views/Dialogs/PedirTextoDialog.axaml` (48 l)
+- Test: ninguno nuevo. **No entran a ninguna lista del guardián** (Ruling B-27); la Task 13.4 los
+  declara en `VistasFueraDelGuardian`
+
+**Interfaces:**
+- Consumes: `MargenVista`, `Espacio2`, `Espacio5`, `Classes="body"`.
+- Produces: nada.
+
+**No hay red del compilador acá.** Son las 3 únicas vistas de la app sin `x:DataType` — pero
+también sin un solo `{Binding}`, así que no hay nada que un typo pueda romper en silencio. Lo que sí
+puede romperse es un `x:Name` (CS0103 en build) o un `Click=` (error de build también).
+
+#### Corrección sobre `SombraModal`
+
+El esbozo decía "`SombraModal` es el token que les toca". **Existe** (`Tokens.axaml:48`,
+`0 12 32 0 #330F172A`) **pero aplicarlo acá no rinde nada**: el `Border` de `:14` llena la `Window`
+entera sin margen, y un `BoxShadow` se dibuja **fuera** de los límites del control — o sea, fuera de
+la ventana, donde no hay superficie que pintar. La elevación de un diálogo la da el gestor de
+ventanas del sistema, no un `BoxShadow` interno. **No se aplica.** (Si se quisiera, habría que darle
+`Margin` y fondo propio al `Border`, que es rediseñar el diálogo.)
+
+#### Tabla de sustitución — las 3 (son estructuralmente idénticas)
+
+| Línea (Confirmacion / Mensaje / PedirTexto) | Hoy | Pasa a |
+|---|---|---|
+| `:1-12` en las 3 | cabecera `Window` con `Title`, `Width`, `SizeToContent`, `WindowStartupLocation`, `CanResize`, `ShowInTaskbar` | **no se toca nada.** El `Title` es el "HeaderVista" de estos tres (Ruling B-27) |
+| `:14` / `:14` / `:14` | `<Border Padding="24">` | `Padding="{DynamicResource MargenVista}"` (**24 exacto, sin cambio visual**). **NO se agrega `BoxShadow`** |
+| `:15` / `:15` | `<StackPanel Spacing="20">` | `Spacing="{DynamicResource Espacio5}"` (**20 → 24**). Precedente ya tomado y mergeado: `CalendarioPagosView:12` hizo exactamente este salto en la Task 8.3 — 20 no está en la escala, que lo eliminó a propósito (`Tokens.axaml:12-14`) |
+| — / — / `:15` | `<StackPanel Spacing="12">` | `Spacing="{DynamicResource Espacio3}"` |
+| `:17-19` en las 3 | `<TextBlock x:Name="MensajeText" TextWrapping="Wrap" FontSize="14" />` | `Classes="body"`, **sin `FontSize`** (`body` es 14, `Typography.axaml:39-42` — mismo valor). **`x:Name="MensajeText"` INTOCABLE: lo usa el code-behind de los 3 (`ConfirmacionDialog.axaml.cs:24`, `MensajeDialog.axaml.cs:27`, `PedirTextoDialog.axaml.cs:26`); borrarlo es CS0103** |
+| — / — / `:21-24` | `<TextBox x:Name="TextoTextBox" AcceptsReturn="True" Height="80" Watermark="Escriba el motivo" />` | **no se toca.** `x:Name` lo usa `PedirTextoDialog.axaml.cs:30` (`Close(TextoTextBox.Text)`) |
+| `:21-23` / `:21-23` / `:26-29` | `<StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" [Margin="0,8,0,0"]>` | `Spacing="{DynamicResource Espacio2}"`; el `Margin` de `PedirTextoDialog:29` **literal** (T1) |
+| `:25-29` / — / `:31-35` | `<Button x:Name="CancelarButton" Content="Cancelar" Classes="secondary" Width="100" Click="OnCancelarClick" />` | **no se toca ni un atributo.** `Width="100"` fija la simetría de los dos botones |
+| `:31-35` / `:25-29` / `:37-41` | `<Button x:Name="ConfirmarButton\|AceptarButton" Content="Sí, continuar\|Aceptar" Classes="primary" Width="110\|100" Click="OnConfirmarClick\|OnAceptarClick" />` | **no se toca ni un atributo** |
+
+**Los 5 `x:Name`, enumerados, todos intocables:** `MensajeText` (×3, **usado por el code-behind**),
+`TextoTextBox` (**usado por el code-behind**), `CancelarButton` (×2), `ConfirmarButton`,
+`AceptarButton` (×2). Los últimos tres **no los consume nadie** (grep verificado) — se conservan
+igual: están fuera del alcance de una task de tokenización.
+**Los `Content` de botón, enumerados, todos intocables:** `"Cancelar"` (×2), `"Sí, continuar"`,
+`"Aceptar"` (×2). Son copy de negocio.
+
+- [ ] **Step 1: línea base**
+
+Run: `--filter "FullyQualifiedName~ConfirmacionServiceDialogosConsecutivos"` (timeout 600000).
+Expected: **2/2 PASS**. Ese test encadena 3 `PedirTextoAsync` reales sobre el mismo owner; es la
+única cobertura que ejercita un diálogo montado de verdad.
+
+- [ ] **Step 2: no hay test que escribir primero — y hay que decir por qué**
+
+Es la única task de toda la Fase B sin un Step de rojo previo, y la razón está verificada, no
+asumida: los 3 son `Window`, y `PatronHelpers.Montar` los mete como `Content` de otra `Window`
+(`PatronHelpers.cs:39`), cosa que Avalonia no permite. **NO VERIFICADO empíricamente** (este plan no
+pudo compilar): si al ejecutar resulta que `Montar` sí los acepta, **escribir el rojo y meterlos a
+`VistasEmbebidas`** — sería mejor que dejarlos afuera, y este plan estaría equivocado en un punto
+acotado.
+El sustituto real es el Step 5 (mutación) más la red del compilador de C# sobre los `x:Name`.
+
+- [ ] **Step 3: aplicar la tabla a los 3**
+
+- [ ] **Step 4: verde + grep**
+
+Run: `--filter "FullyQualifiedName~ConfirmacionServiceDialogosConsecutivos"`. Expected: 2/2 PASS.
+```bash
+grep -n 'FontSize="\|Padding="24"\|Spacing="[0-9]*"' src/StockApp.Presentation/Views/Dialogs/*.axaml
+grep -c 'x:Name' src/StockApp.Presentation/Views/Dialogs/*.axaml
+```
+Expected: cero coincidencias del primero; **2 / 2 / 3** en el segundo (Confirmacion / Mensaje /
+PedirTexto), idéntico a antes de la task.
+
+- [ ] **Step 5: validar por mutación (2 mutaciones, 2 rojos, revertir cada una)**
+
+1. Renombrar `x:Name="MensajeText"` a `MensajeTexto` en `MensajeDialog.axaml:17` → **error de
+   build CS0103** en `MensajeDialog.axaml.cs:27`. Es un rojo de compilador, no de test: pegarlo en
+   el ledger igual. Confirma el Ruling B-27 por evidencia.
+2. Borrar `Click="OnAceptarClick"` de `PedirTextoDialog.axaml:41` →
+   `TresPedirTextoAsyncConsecutivos_…` rojo (el diálogo 2 no devuelve el texto y el
+   `EsperarResultadoAsync` se cae por timeout). Confirma que ese test **sí** cubre el camino real.
+
+- [ ] **Step 6: suite completa + commit**
+
+```
+feat(ui): tokeniza los tres dialogos modales
+
+- ConfirmacionDialog, MensajeDialog y PedirTextoDialog: Padding a MargenVista
+  (24 exacto), Spacing a la escala (el 20 de dos de ellos pasa a 24, mismo
+  salto que ya hizo CalendarioPagosView) y FontSize="14" a Classes="body"
+- Los cinco x:Name y los cinco Content de boton quedan intactos. Correccion
+  al relevamiento: no los usa ConfirmacionServiceDialogosConsecutivosTests
+  (ese test cierra los dialogos por codigo), los usa el code-behind de los
+  propios dialogos, asi que lo que los protege es el compilador de C#
+- SombraModal NO se aplica: el Border llena la Window entera y un BoxShadow
+  se dibuja fuera de los limites del control. La elevacion de un dialogo la
+  da el gestor de ventanas
+- Los tres quedan FUERA del guardian de patron: son Window y PatronHelpers.
+  Montar las meteria como Content de otra Window
+```
+
+**Riesgos específicos:**
+- **Bajo.** Sin bindings, sin gates, con el compilador cubriendo los `x:Name` y los `Click`.
+- El `Spacing` 20 → 24 alto un poco los 3 diálogos. `SizeToContent="Height"` se encarga.
+
+---
+
+### Task 12.4: cierre de la tanda 12
+
+- [ ] **Step 1: suite completa**
+
+Run: `dotnet test StockApp.sln` (timeout 600000, `nohup` + polling activo). Expected: PASS.
+**Delta esperado (aritmética, NO VERIFICADA):** +3 `FondosSuavesSemanticos_Existen…` +3
+`…SoportanTextoPrimarioConAA` +3 de `BadgeEstado` +9 de las 3 filas nuevas de `VistasEmbebidas`
+(× 3 invariantes) = **+18**.
+
+- [ ] **Step 2: auditoría de residuos de la tanda**
+
+```bash
+grep -rn 'Opacity="0\.\|#[0-9A-Fa-f]\{6\}\|Foreground="White"\|FontSize="\|Padding="24"\|Spacing="[0-9]*"' \
+  src/StockApp.Presentation/Actualizaciones/Views/ src/StockApp.Presentation/Views/Dialogs/
+```
+Expected: **cero coincidencias.**
+
+- [ ] **Step 3: verificación orgánica de la tanda 12 (app real)**
+
+Los overlays de actualización **no se disparan solos**: hay que forzarlos. Con la app real:
+1. Provocar cada una de las 3 severidades (banner / modal / bloqueo) por el camino que use el
+   entorno de prueba de `CoordinadorActualizacion` — **NO VERIFIQUÉ** cómo se fuerza sin un feed de
+   updates real; si no hay forma, declararlo como deuda y verificar al menos que la app arranca sin
+   overlay y sin excepción.
+2. Los 3 diálogos sí son fáciles: anular un documento (pide motivo → `PedirTextoDialog`), dar de
+   baja una categoría con dependencias (→ `MensajeDialog`), eliminar un producto (→
+   `ConfirmacionDialog`). Mirar el aire nuevo y que los botones sigan alineados a la derecha.
+3. Un `BadgeEstado` de tono `Peligro` de la Task B2-T: confirmar que ahora tiene fondo rojo suave y
+   no gris.
+
+- [ ] **Step 4: commit de cierre**
+
+```
+chore(ui): cierra la tanda 12 (actualizaciones y dialogos, 6 vistas)
+```
+
+---
+
+## Tanda 13: Limpieza (5 tasks) — cierra la Fase B
+
+**Objetivo:** borrar lo que quedó muerto, cerrar la deuda de banco de pruebas que las tandas 6 y 9
+difirieron acá, convertir la contabilidad de vistas en un test, y hacer la auditoría y la
+verificación orgánica finales.
+
+**Orden obligatorio:** 13.1 → 13.2 → 13.3 → 13.4 → 13.5. La 13.4 (meta-guardián) necesita que la
+13.1 ya haya borrado `MainWindowView`, o la cuenta no cierra.
+
+**Ruling B-13, YA APROBADO, NO SE REABRE:** `AdjuntosPanelView` y `AdjuntosDocumentoPanelView`
+**no se fusionan**. La armonización visual ya se hizo (Task 8.4 sobre `AdjuntosPanelView`, Task 9.3
+sobre `AdjuntosDocumentoPanelView`, con el diff normalizado por namespace verificado en su ledger).
+**En la tanda 13 no queda nada que hacer sobre esos dos archivos.**
+
+---
+
+### Task 13.1: borrar `MainWindowView` muerto y verificar `MainWindow`
+
+**Files:**
+- Delete: `src/StockApp.Presentation/Views/MainWindowView.axaml` (20 l)
+- Delete: `src/StockApp.Presentation/Views/MainWindowView.axaml.cs` (11 l)
+- Delete: `src/StockApp.Presentation/ViewModels/MainWindowViewModel.cs` (9 l)
+- Verify (probablemente sin cambios): `src/StockApp.Presentation/Views/MainWindow.axaml` (29 l)
+
+**Interfaces:**
+- Consumes: nada.
+- Produces: la cuenta de 57 vistas que la Task 13.4 asserta.
+
+**Estado verificado al planificar** (2026-08-19, `grep -rn 'MainWindowView' --include=*.cs
+--include=*.axaml --include=*.csproj src/ tests/`): **5 coincidencias, las 5 dentro de los 3
+archivos que se borran** (`MainWindowView.axaml.cs:5`, `:7`; `MainWindowViewModel.cs:7`;
+`MainWindowView.axaml:7`, `:8`). Cero referencias externas. Confirmado además que
+`ReflexionVistaViewModelTests` (270 líneas, 9 tests) **no** enumera tipos por reflexión sobre el
+ensamblado: nombra explícitamente 6 ViewModels, ninguno de ellos `MainWindowViewModel`.
+`MainWindowView` es también **la única vista con `FontSize="28"`** de toda la app.
+
+- [ ] **Step 1: RE-CORRER EL GREP (bloqueante — pudo aparecer un uso en las tandas 6-12)**
+
+```bash
+grep -rn 'MainWindowView' --include=*.cs --include=*.axaml --include=*.csproj src/ tests/
+```
+Expected: **exactamente 5 coincidencias, todas en los 3 archivos a borrar.** Si hay una sexta,
+**PARAR y reportar**: alguien lo empezó a usar y el borrado deja de ser seguro.
+
+- [ ] **Step 2: verificar `MainWindow.axaml` — probablemente no hay nada que tokenizar**
+
+```bash
+grep -n 'Opacity="0\.\|#[0-9A-Fa-f]\{6\}\|FontSize="\|Margin="\|Padding="\|Spacing="' \
+  src/StockApp.Presentation/Views/MainWindow.axaml
+```
+Expected (verificado al planificar): **cero coincidencias.** `MainWindow.axaml` son 29 líneas:
+cabecera `Window` (`Icon`, `Title`, `MinWidth`, `MinHeight`), un `Grid` pelado y dos
+`ContentControl` con bindings y `HorizontalContentAlignment`/`VerticalContentAlignment`. **No tiene
+un solo literal visual.** Si el grep devuelve algo, tokenizarlo en esta misma task; si no, dejar
+constancia en el ledger de que se verificó y no había nada — el esbozo asumía que sí.
+
+- [ ] **Step 3: borrar los 3 archivos**
+
+```bash
+git rm src/StockApp.Presentation/Views/MainWindowView.axaml \
+       src/StockApp.Presentation/Views/MainWindowView.axaml.cs \
+       src/StockApp.Presentation/ViewModels/MainWindowViewModel.cs
+```
+No hay `<None Remove>` ni `<AvaloniaResource Include>` explícito que actualizar: el `.csproj` usa
+globbing (verificar con `grep -n 'MainWindow' src/StockApp.Presentation/StockApp.Presentation.csproj`
+→ **NO VERIFICADO**, hacerlo en este Step).
+
+- [ ] **Step 4: build + suite completa**
+
+Run: `dotnet test StockApp.sln` (timeout 600000). Expected: PASS, **mismo número de tests que antes**
+(no se borra ningún test). Si algo no compila, el Step 1 mintió.
+
+- [ ] **Step 5: validar por mutación — al revés que siempre**
+
+Acá no hay test que poner en rojo: el guardián del borrado **es el compilador**. La comprobación
+equivalente es la inversa: `git stash` del borrado, agregar en cualquier archivo de producción una
+línea `var _ = new StockApp.Presentation.Views.MainWindowView();`, confirmar que compila (o sea, que
+el tipo existía y era alcanzable), sacarla, y recién ahí aplicar el borrado. **Es opcional**: el
+Step 1 con grep sobre `src/` y `tests/` completos ya es evidencia suficiente. Anotar cuál de los dos
+caminos se usó.
+
+- [ ] **Step 6: commit**
+
+```
+chore(ui): borra MainWindowView y su ViewModel, muertos desde el arranque
+
+- MainWindowView.axaml, su code-behind y MainWindowViewModel.cs no los
+  referenciaba nadie: las 5 coincidencias del grep estaban dentro de los tres
+  archivos. Eran el placeholder "Sesion iniciada correctamente" del primer
+  incremento, reemplazado por ShellMainView hace meses
+- Era la unica vista de la app con FontSize="28"
+- MainWindow.axaml (la Window host) se reviso y NO tenia ningun literal
+  visual: 29 lineas de cabecera, un Grid y dos ContentControl
+- Las vistas de la app pasan de 58 a 57
+```
+
+**Riesgos específicos:** **muy bajo**, si el Step 1 se corre de verdad. El único modo de falla es
+que alguien haya empezado a usarlo entre el planeamiento y la ejecución.
+
+---
+
+### Task 13.2: borrar `badge-inactiva` de `Themes/Controls.axaml`
+
+**Files:**
+- Modify: `src/StockApp.Presentation/Themes/Controls.axaml` (272 l → ~256)
+
+**Precondición dura:** la Task 11.2 migró el último uso. **Sin esa task, esta no se puede ejecutar.**
+
+#### Tabla de sustitución
+
+| Línea | Hoy | Pasa a |
+|---|---|---|
+| `:250-257` | comentario `<!-- ── Badge: inactiva (Border + TextBlock) ──── … -->` | **se borra entero** — describe estilos que dejan de existir |
+| `:258-265` | `<Style Selector="Border.badge-inactiva">` con sus 6 `Setter` | **se borra** |
+| `:266-270` | `<Style Selector="TextBlock.badge-inactiva-texto">` con sus 3 `Setter` | **se borra** |
+
+(Los rangos de comentario son **aproximados**: verificados los dos `Style Selector` en `:258` y
+`:266` con `grep -n 'Style Selector' Themes/Controls.axaml`; el bloque de comentario que los precede
+arranca alrededor de `:250` — **abrir el archivo y confirmar el corte exacto antes de borrar**.)
+
+- [ ] **Step 1: guardián del borrado — verificar que no queda un solo consumidor**
+
+```bash
+grep -rn 'badge-inactiva' src/ tests/
+```
+Expected: **exactamente 2 coincidencias**, `Themes/Controls.axaml:258` y `:266` (las definiciones).
+**Si hay una tercera, PARAR**: hay una vista que todavía las usa y el borrado la deja sin estilo
+**en silencio** (un `Classes` que no matchea ningún selector no es un error en Avalonia, es un
+control sin estilo).
+
+- [ ] **Step 2: guardián por el lado del reemplazo**
+
+Los 10 sitios que migraron a `c:BadgeEstado` a lo largo de las tandas 6, 7, 8 y 11 están cubiertos
+por los invariantes del guardián solo en parte (varios viven dentro de `ItemTemplate`, Ruling B-16).
+El guardián real del reemplazo es:
+```bash
+grep -rn 'c:BadgeEstado' src/StockApp.Presentation/Views/ | wc -l
+```
+Expected: **10 o más.** Anotar el número exacto en el ledger — es la contrapartida del borrado.
+**NO VERIFIQUÉ** ese conteo al planificar (las tandas 6-9 lo fueron acumulando); si da menos de 10,
+hay sitios que se perdieron por el camino y hay que encontrarlos antes de borrar.
+
+- [ ] **Step 3: borrar los dos `Style` y su comentario**
+
+- [ ] **Step 4: suite completa**
+
+Run: `dotnet test StockApp.sln` (timeout 600000). Expected: PASS, **mismo número de tests.**
+
+- [ ] **Step 5: validar por mutación**
+
+Reintroducir un `Classes="badge-inactiva"` en cualquier `Border` de `UsuariosAdminView` y confirmar
+que **NO rompe nada** (ni build ni tests) — eso **es el hallazgo**, no un fallo: demuestra por qué
+el Step 1 con grep es el único guardián posible de este borrado, y por qué tenía que correrse antes.
+Anotarlo en el ledger y revertir.
+
+- [ ] **Step 6: commit**
+
+```
+chore(ui): borra los estilos badge-inactiva, sin consumidores desde la tanda 11
+
+- Border.badge-inactiva y TextBlock.badge-inactiva-texto quedaron muertos
+  cuando UsuariosAdminView migro el ultimo par a c:BadgeEstado
+- El grep previo es el unico guardian posible: un Classes que no matchea
+  ningun selector no es error en Avalonia, es un control sin estilo
+```
+
+---
+
+### Task 13.3: cerrar la deuda de banco de pruebas diferida a B3
+
+**Files:**
+- Modify: `tests/StockApp.Presentation.UiTests/SesionFakes.cs` (+1 sobrecarga de constructor,
+  comentario de clase actualizado)
+- Modify: `tests/StockApp.Presentation.UiTests/InicioViewTests.cs` (borrar `:33-59`, migrar 2 call
+  sites)
+- Modify: `tests/StockApp.Presentation.UiTests/InicioPanelTareasTests.cs` (borrar `:36-55`, migrar
+  3 call sites)
+- Modify: `tests/StockApp.Presentation.UiTests/IngresoPorFacturaViewTests.cs` (`:67`)
+- Modify: `tests/StockApp.Presentation.UiTests/TareaFakes.cs` (borrar `:94-133`)
+
+**Interfaces:**
+- Consumes: `SesionFake` (`SesionFakes.cs:28`).
+- Produces: **cero `EstablecerPermisos` no-op en todo el banco de pruebas de UI.**
+
+**Estado verificado al planificar** (`grep -n 'EstablecerPermisos' tests/StockApp.Presentation.UiTests/*.cs`):
+quedan **3** implementaciones no-op — `InicioViewTests.cs:55`, `InicioPanelTareasTests.cs:51` y
+`TareaFakes.cs:129` (`TareaSessionFake`). El Ruling B-19 las asignó a B3, y el ledger de la Task 9.0
+dejó escrito por qué `TareaSessionFake` no se pudo borrar entonces: además de los 3 archivos
+designados, la usan `IngresoPorFacturaViewTests.cs:67` e `InicioPanelTareasTests.cs:216` y `:239`
+(verificado hoy: siguen ahí, las 3 líneas exactas).
+
+#### El gap que hace que NO sea drop-in (y que el Ruling B-19 no vio)
+
+`SesionFake` tiene un solo constructor, `(RolUsuario rol, params string[] permisos)`
+(`SesionFakes.cs:32`), y expone `UsuarioActual => new(1, "prueba", RolActual!.Value, "Usuario de
+prueba")` (`:39`) — **hardcodeado**. Pero `InicioViewTests` e `InicioPanelTareasTests` construyen
+`UsuarioSesion` explícitos con nombres reales que la vista muestra: `new UsuarioSesion(1, "admin",
+RolUsuario.Admin, "Administrador General")` (`InicioViewTests.cs:138`, `:154`, `:172`, `:216`,
+`:274`, `:299`; `InicioPanelTareasTests.cs:157`, `:184`, `:200`, `:225`, `:248`, `:285`) y
+`new UsuarioSesion(5, "jperez", RolUsuario.Operador, "Juan Pérez")`
+(`InicioPanelTareasTests.cs:267`), `new UsuarioSesion(2, "operador", RolUsuario.Operador, "Juan Pérez")`
+(`InicioViewTests.cs:198`), etc.
+
+`InicioViewModel` deriva `Saludo` y `RolTexto` de ese usuario (`ReflexionVistaViewModelTests.cs:161`
+lo documenta: "`NombreUsuario` alimenta `Saludo`"). Cambiar el nombre a "prueba" **cambia el texto
+renderizado** y puede romper asserts. **Por eso la migración exige una sobrecarga nueva**, no un
+reemplazo de tipo:
+
+```csharp
+/// <summary>
+/// Sobrecarga para los bancos de prueba que necesitan un UsuarioSesion con nombre real (la vista
+/// lo muestra: InicioViewModel deriva Saludo y RolTexto de el). El constructor de rol suelto
+/// hardcodea (1, "prueba", ..., "Usuario de prueba"), que sirve para gates pero no para texto.
+/// </summary>
+public SesionFake(UsuarioSesion usuario, params string[] permisos)
+{
+    _usuario = usuario;
+    RolActual = usuario.Rol;
+    _permisos = new HashSet<string>(permisos);
+}
+```
+(y `UsuarioActual` pasa a devolver `_usuario ?? new(1, "prueba", …)`).
+
+#### Tabla de sustitución
+
+| Archivo | Línea | Hoy | Pasa a |
+|---|---|---|---|
+| `SesionFakes.cs` | `:32-36` | único ctor `(RolUsuario, params string[])` | **se conserva** + se agrega la sobrecarga `(UsuarioSesion, params string[])` |
+| `SesionFakes.cs` | `:38-39` | `UsuarioActual => new(1, "prueba", RolActual!.Value, "Usuario de prueba")` | devuelve el `_usuario` inyectado si lo hay; si no, el hardcodeado de siempre |
+| `SesionFakes.cs` | `:12-26` | comentario de clase que dice que `InicioViewTests.cs`/`InicioPanelTareasTests.cs` "se cierran en B3" | actualizarlo: **ya se cerraron**. Es el mismo tipo de comentario mentiroso que la Task 8.0 tuvo que corregir |
+| `InicioViewTests.cs` | `:33-59` | `private sealed class CurrentSessionFake` con `EstablecerPermisos` no-op (`:55`) | **se borra entera** |
+| `InicioViewTests.cs` | `:114`, `:257` | `new CurrentSessionFake(usuario)` / `new CurrentSessionFake(usuario, new HashSet<string> { Permisos.VerReportes })` | `new SesionFake(usuario)` / `new SesionFake(usuario, Permisos.VerReportes)` (**`params`**, no `HashSet`) |
+| `InicioPanelTareasTests.cs` | `:36-55` | `private sealed class CurrentSessionFake` con `EstablecerPermisos` no-op (`:51`) y `PermisosActuales` fijo en `{ GestionarTareas }` | **se borra entera**; el permiso pasa a ser explícito en el call site |
+| `InicioPanelTareasTests.cs` | `:128` | `new CurrentSessionFake(usuario)` | `new SesionFake(usuario, Permisos.GestionarTareas)` — **el permiso que el fake otorgaba implícitamente ahora se ve** (el comentario de `:42-49` explica por qué está) |
+| `InicioPanelTareasTests.cs` | `:216`, `:239` | `new TareaSessionFake(RolUsuario.Admin)` | `new SesionFake(RolUsuario.Admin)` |
+| `IngresoPorFacturaViewTests.cs` | `:67` | `new TareaSessionFake(RolUsuario.Admin)` | `new SesionFake(RolUsuario.Admin)` |
+| `TareaFakes.cs` | `:94-133` | doc + `internal sealed class TareaSessionFake` | **se borra entera** (el `<summary>` de `:94-106` explica que sigue viva justamente por estos 2 archivos) |
+| `SesionFakesTests.cs` | `:10` | comentario que menciona `TareaSessionFake` en pasado | **se puede dejar**: es un relato histórico correcto ("devolvía SIEMPRE un set vacío"). Si molesta, reformular en pasado explícito |
+
+- [ ] **Step 1: línea base de los 3 archivos afectados**
+
+Run: `--filter "FullyQualifiedName~InicioViewTests|FullyQualifiedName~InicioPanelTareasTests|FullyQualifiedName~IngresoPorFacturaViewTests"`.
+Expected: **9 + 7 + 11 = 27 PASS** (contados al planificar). Anotar el número.
+
+- [ ] **Step 2: agregar la sobrecarga a `SesionFake` y ver que la suite sigue verde**
+
+Sin migrar todavía ningún call site. Run: suite de UI completa. Expected: PASS, mismo número.
+
+- [ ] **Step 3: migrar los 6 call sites y borrar las 3 clases**
+
+**Orden:** primero los call sites, después los borrados. Si se borra primero, no compila y se pierde
+la señal de qué faltaba migrar.
+
+- [ ] **Step 4: ver el verde — SIN tocar un solo assert**
+
+Run: el mismo filtro del Step 1. Expected: **27/27 PASS, cero asserts modificados.**
+**Si algún assert de texto se rompe** (un `Saludo` con "prueba" en vez de "Administrador General"),
+la sobrecarga del Step 2 está mal: el `UsuarioActual` no está devolviendo el usuario inyectado.
+**Arreglar el fake, nunca el assert.**
+
+- [ ] **Step 5: verificar que la deuda quedó en CERO**
+
+```bash
+grep -n 'EstablecerPermisos' tests/StockApp.Presentation.UiTests/*.cs
+grep -rn 'TareaSessionFake\|CurrentSessionFake' tests/ src/
+```
+Expected del primero: **solo `SesionFakes.cs:48` (la implementación real) y las menciones en
+comentarios/tests de `FinanzasRevocacionPermisosTests`**. Cero no-ops.
+Expected del segundo: **cero coincidencias de `TareaSessionFake`** salvo el comentario histórico de
+`SesionFakesTests.cs:10`, y **cero de `CurrentSessionFake`**.
+
+- [ ] **Step 6: validar por mutación — la que justifica toda la task**
+
+Volver `EstablecerPermisos` de `SesionFake` (`SesionFakes.cs:48`) a un no-op
+(`public void EstablecerPermisos(IReadOnlySet<string> permisos) { }`) →
+`FinanzasRevocacionPermisosTests.EstablecerPermisos_RevocaEnCaliente_…` (`:89`) **rojo**. Revertir.
+Es la evidencia de que un fake no-op deja pasar un test de revocación en caliente sin probar nada —
+el Ruling 6 de la Fase A y el Ruling B-19 en una sola línea.
+
+**Segunda mutación, más específica de esta task:** hacer que la sobrecarga nueva ignore el
+`UsuarioSesion` y devuelva el hardcodeado → alguno de los 9 tests de `InicioViewTests` debería
+ponerse rojo. **Si NINGUNO se pone rojo**, significa que ningún test de Inicio depende del nombre
+del usuario y la sobrecarga era innecesaria — **anotarlo como hallazgo y simplificar**, no dejarla
+"por las dudas".
+
+- [ ] **Step 7: suite completa + commit**
+
+```
+test(ui): cierra la deuda de fakes de sesion no-op del banco de pruebas de UI
+
+- InicioViewTests e InicioPanelTareasTests tenian cada uno su CurrentSessionFake
+  privado con EstablecerPermisos no-op, y TareaSessionFake seguia viva porque
+  la Task 9.0 no pudo borrarla (la usaban IngresoPorFacturaViewTests:67 y los
+  dos call sites de InicioPanelTareasTests). Los tres se borran acá
+- SesionFake gana una sobrecarga que acepta un UsuarioSesion explicito: el
+  constructor de rol suelto hardcodea (1, "prueba", ..., "Usuario de prueba"),
+  que sirve para gates pero no para las vistas que MUESTRAN el nombre, como
+  Inicio via Saludo/RolTexto
+- El permiso GestionarTareas que el fake de InicioPanelTareasTests otorgaba de
+  forma implicita ahora se declara en el call site
+- Cero EstablecerPermisos no-op en tests/StockApp.Presentation.UiTests
+```
+
+**Riesgos específicos:**
+- **Medio.** Son 27 tests preexistentes de 3 archivos, y el modo de falla es sutil: un fake que
+  devuelve otro nombre de usuario cambia texto renderizado sin romper la compilación.
+- Es la única task de B3 que toca solo tests. **No se toca ni un assert** — si hay que tocarlo, es
+  el fake el que está mal.
+
+---
+
+### Task 13.4: el meta-guardián de cobertura + la revisión de exenciones
+
+**Files:**
+- Modify: `tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs` (+`VistasFueraDelGuardian`,
+  +1 método nuevo, `<summary>` de las 3 exenciones ampliados)
+
+**Interfaces:**
+- Consumes: reflexión sobre el ensamblado `StockApp.Presentation`.
+- Produces: **el criterio de aceptación 1 y 2 de la Fase B convertidos en test.**
+
+**Por qué existe:** el guardián tiene ahora **cuatro** listas (`[InlineData]`, `VistasDeLaTanda`,
+`VistasEmbebidas`, `VistasCentradasSinSidebar`), y el plan de B2 ya identificó la trampa con dos:
+"agregar una fila a `[InlineData]` sin agregar el tipo a `VistasDeLaTanda` deja la vista con 1
+invariante custodiado en vez de 4, **y no falla nada**". Con cuatro listas, la trampa se triplica.
+Un test de cobertura la cierra de raíz.
+
+```csharp
+/// <summary>
+/// Vistas que no pueden entrar a ninguna lista del guardian, con su razon y con quien las
+/// custodia en su lugar. Es una lista de EXCLUSION explicita: el test de cobertura de abajo
+/// exige que toda vista del ensamblado este en alguna lista o en esta.
+/// </summary>
+public static readonly IReadOnlySet<Type> VistasFueraDelGuardian = new HashSet<Type>
+{
+    // Window: PatronHelpers.Montar las meteria como Content de otra Window (Ruling B-27).
+    // Las custodian el compilador (campos x:Name del code-behind) y
+    // ConfirmacionServiceDialogosConsecutivosTests.
+    typeof(Views.Dialogs.ConfirmacionDialog),
+    typeof(Views.Dialogs.MensajeDialog),
+    typeof(Views.Dialogs.PedirTextoDialog),
+    // Window host de la app.
+    typeof(Views.MainWindow),
+    // Cromo de la app (sidebar + ContentControl), no una vista de contenido.
+    // La custodian ShellMainViewGatesTests (15) y SidebarContrasteTests.
+    typeof(Views.ShellMainView),
+};
+
+[AvaloniaFact]
+public void Guardian_CubreTodasLasVistasDelEnsamblado()
+{
+    var todas = typeof(ViewLocator).Assembly.GetTypes()
+        .Where(t => t is { IsAbstract: false, IsPublic: true } && typeof(Control).IsAssignableFrom(t))
+        .Where(t => t.Namespace is not null
+                    && (t.Namespace.StartsWith("StockApp.Presentation.Views")
+                        || t.Namespace == "StockApp.Presentation.Actualizaciones.Views"))
+        .ToList();
+
+    var cubiertas = VistasDeLaTanda.Select(f => (Type)f[0])
+        .Concat(VistasEmbebidas.Select(f => (Type)f[0]))
+        .Concat(VistasCentradasSinSidebar.Select(f => (Type)f[0]))
+        .Concat(VistasFueraDelGuardian)
+        .ToHashSet();
+
+    var huerfanas = todas.Where(t => !cubiertas.Contains(t)).ToList();
+    Assert.True(huerfanas.Count == 0,
+        "Vista(s) sin ninguna lista del guardian ni exclusion documentada: "
+        + string.Join(", ", huerfanas.Select(t => t.Name)));
+}
+```
+**El filtro de namespaces es el punto delicado**: `StockApp.Presentation.Controls` (los 5
+`TemplatedControl`) **no** debe entrar, ni los `Window` de test. **NO VERIFIQUÉ** que el predicado
+de arriba compile ni que el conteo dé exacto — el ajuste fino es parte del Step 2.
+
+- [ ] **Step 1: escribir el test y la lista de exclusión**
+
+- [ ] **Step 2: correr y ver el rojo — y USAR el rojo para descubrir la cuenta real**
+
+Run: `--filter "FullyQualifiedName~Guardian_CubreTodasLasVistas"`.
+Expected: **verde a la primera si la contabilidad del plan es correcta** (38 + 11 + 3 + 5 = 57, y
+`find Views Actualizaciones/Views -name '*.axaml' | wc -l` da 57 tras la Task 13.1).
+**Si da rojo, el mensaje del assert nombra exactamente qué falta** — que es el punto del test.
+Casos esperables de ruido a filtrar: `MovimientoFormControl` (es un `UserControl` de
+`Views/Movimientos/`, y **sí** está en `VistasDeLaTanda`), y cualquier `partial class` generada.
+Ajustar el predicado, **no** la lista de exclusión, para el ruido.
+
+- [ ] **Step 3: revisión de las 3 exenciones — decisión escrita, no re-litigable**
+
+Ampliar el `<summary>` de cada `HashSet` de exención con el veredicto de B3 (sección 2):
+- `VistasExentasPorEmbeberUnWizardP8`: **se queda.** Causa raíz = `Montar` sin DataContext;
+  cerrarla exigiría montar con VM real, lo que rompe el propósito del guardián **y** desactiva la
+  segunda mitad del Ruling B-8. Reemplazo real ya existente:
+  `NuevaImportacionJerarquiaBotonesTests`.
+- `VistasExentasPorPrimariosMutuamenteExcluyentesSinVm`: **se queda.** Misma causa; reemplazo:
+  `DocumentoFormViewGatesTests` (10 casos).
+- `VistasExentasPorMarcaDeAguaAprobada` (nueva en 11.1): **se queda.** Reemplazo:
+  `LoginViewMarcaDeAguaTests`.
+
+**Regla que sale de las tres, y que conviene dejar escrita en el archivo:** una exención del
+guardián solo es aceptable si viene con un test que custodia **más** que el invariante genérico que
+se apaga. Las tres cumplen.
+
+- [ ] **Step 4: validar por mutación (2 mutaciones, 2 rojos, revertir)**
+
+1. Sacar `typeof(ValorizacionView)` de `VistasDeLaTanda` → `Guardian_CubreTodasLasVistas` rojo
+   nombrándola. *Es la mutación que prueba que el meta-test hace lo que dice.*
+2. Sacar `typeof(Views.MainWindow)` de `VistasFueraDelGuardian` → rojo también. Confirma que la
+   lista de exclusión participa de la cuenta y no es decorativa.
+
+- [ ] **Step 5: suite completa + commit**
+
+```
+test(ui): el guardian de patron ahora exige cubrir TODAS las vistas
+
+- Con cuatro listas (InlineData, VistasDeLaTanda, VistasEmbebidas y
+  VistasCentradasSinSidebar) la trampa que el plan de B2 identifico con dos
+  se triplica: agregar una vista a una lista y olvidarla en otra no falla,
+  simplemente deja invariantes sin correr
+- Guardian_CubreTodasLasVistasDelEnsamblado enumera por reflexion los Control
+  de Views/ y Actualizaciones/Views/ y exige que cada uno este en alguna lista
+  o en VistasFueraDelGuardian, que documenta las cinco exclusiones reales y
+  quien las custodia en su lugar
+- Las tres exenciones acumuladas se revisaron una por una: ninguna se puede
+  cerrar, y las tres cumplen la regla que ahora queda escrita en el archivo:
+  una exencion solo vale si trae un test que custodia MAS que el invariante
+  generico que apaga
+```
+
+**Riesgos específicos:**
+- **Bajo-medio.** El único riesgo es el predicado de reflexión: si es demasiado laxo, arrastra
+  controles de `Controls/` y da rojo por ruido; si es demasiado estricto, da verde sin cubrir nada.
+  El Step 4 mutación 1 es lo que distingue un caso del otro.
+
+---
+
+### Task 13.5: auditoría final de residuos, verificación orgánica y cierre de la Fase B
+
+**Files:** lo que encuentre el Step 1.
+
+- [ ] **Step 1: auditoría final de residuos sobre las 57 vistas**
+
+```bash
+grep -rn 'Opacity="0\.\|Foreground="Red"\|Foreground="Gray"\|Foreground="White"\|BorderBrush="Gray"\|Background="Transparent"\|Margin="16"\|Margin="24"\|Margin="40"\|Padding="24"\|Padding="40"\|titulo-vista\|badge-inactiva\|FontSize="\|#[0-9A-Fa-f]\{6\}\|Selector="DataGridCell.num"' \
   src/StockApp.Presentation/Views src/StockApp.Presentation/Actualizaciones
 ```
-Expected: solo las excepciones documentadas (`Opacity` vía converter, hex dentro de `Tokens.axaml`).
+
+**Expected: exactamente estas excepciones documentadas y ninguna más.**
+
+| Coincidencia | Vista | Por qué se queda |
+|---|---|---|
+| `Opacity="0.28"` | `LoginView:14` | marca de agua del municipio, diseño aprobado y mergeado (Ruling B-25) |
+| `Margin="16,16,16,0"` | `AccesoLimitadoView:18` | separación del aviso con el borde de la ventana; **tiene** que ser distinto de 24 (Ruling B-22). *No matchea `Margin="16"` exacto, pero conviene verificarlo a ojo* |
+| `titulo-vista` ×3 | `LoginView:24`, `ResetAdminView:17`, `BloqueoLicenciaView:17` | P6 conserva su título centrado, no lleva `HeaderVista` (Ruling B-32) |
+| `Padding="16,8"` | `ActualizacionBannerView:12` | franja con `Height` fijo; `PaddingCelda` (12,8) cambiaría el alto |
+| `Padding="12"` | `UsuariosAdminView:90` | no hay `Thickness` de 12 uniforme en la escala |
+| `Opacity="{Binding …ActivoOpacidadConverter…}"` | `UsuariosAdminView:49` y los de Finanzas/Catálogo | semántica de dominio; no matchea `Opacity="0\.` |
+
+**Cualquier otra coincidencia es residuo real** y se corrige en esta task, con su commit.
+
+Verificaciones complementarias:
+```bash
+grep -rn 'Selector="DataGridCell.num"' src/StockApp.Presentation/Views/   # esperado: 0 (cerrado en la tanda 10)
+grep -rn 'Foreground="Red"' src/StockApp.Presentation/                    # esperado: 0 (el ultimo lo cerro la Task 11.2)
+grep -rn 'badge-inactiva' src/ tests/                                     # esperado: 0 (borrado en la Task 13.2)
+grep -rn 'c:HeaderVista' src/StockApp.Presentation/Views/ | wc -l         # esperado: 40 (38 de VistasDeLaTanda + los 2 de DocumentoFormView/TareaFormView, Ruling B-20) -- NO VERIFICADO, contar
+```
+
+- [ ] **Step 2: suite completa**
+
+Run: `dotnet test StockApp.sln` (timeout 600000, `nohup` + polling activo). Expected: PASS, 0 failed.
+Anotar el total final de la Fase B y el delta contra la línea base de B1 (3096).
+**Flaky conocido:** `StockApp.Api.Tests.BackupsEndpointTests.PostBackups_ConTokenAdmin_…` apareció
+una sola vez en toda la Fase B (cierre de Tasks 8.0-8.1) por `TimeoutException` de polling. Si
+aparece, correrlo aislado antes de declararlo regresión — el ledger tiene el precedente.
+
+- [ ] **Step 3: verificación orgánica FINAL de la app entera**
+
+Es la deuda más grande de la Fase B: **ninguna de las tandas 6 a 10 la hizo** (los cinco dispatches
+tuvieron instrucción explícita de no relanzar la app). Recorrido mínimo, con la app real y
+`stockapp-pg` andando:
+
+1. **Login** → Inicio: saludo, avisos de backup, accesos rápidos, panel de tareas.
+2. **Catálogo**: los 3 listados (badges "Inactiva"/"Inactivo") y los 3 formularios.
+3. **Movimientos**: historial (orden por click en columna), entrada, salida, ingreso por factura.
+4. **Finanzas**: las 19 vistas, con foco en `NuevaImportacionView` (los 3 pasos del wizard, un
+   primario por paso) y en los adjuntos.
+5. **Documentos**: un documento en cada uno de los 4 estados (Pendiente / EnProceso / Finalizado /
+   Anulado), **con un Operador y con un Admin**, mirando qué botones aparecen. Es la única forma de
+   confirmar que la matriz rol × estado de la Task 9.0 es la que el usuario ve.
+6. **Tareas** y **Reportes**: las columnas de dinero alineadas a la derecha tras el borrado de los
+   5 `DataGridCell.num` locales.
+7. **Administración**: Mantenimiento (Alertas **debajo** de Diagnóstico) y Usuarios.
+8. **Fuera del shell**: Login con logo, reset de Admin, y —si es reproducible— bloqueo de licencia y
+   modo de acceso limitado.
+9. **Stock/saldo negativo** (Task B2-T): color **y** palabra, en las 8 vistas donde aplica.
+10. **Diálogos**: confirmación, mensaje y pedir texto.
+
+**Si el dispatch no puede relanzar la app, NO se declara la Fase B cerrada.** Se cierra la tanda 13
+y se deja la orgánica como el único pendiente, nombrado, en el ledger.
+
+- [ ] **Step 4: verificar los criterios de aceptación de la Fase B (abajo) uno por uno**
+
+- [ ] **Step 5: commit de cierre**
+
+```
+chore(ui): cierra la Fase B del refactor visual (55 vistas, tandas 6 a 13)
+```
+
+---
+
+## Criterios de aceptación de B3
+
+Al cerrar B3 (tandas 11, 12 y 13) tienen que valer los 12:
+
+1. **`dotnet test StockApp.sln` verde**, y verde **también entre commits**.
+2. **Las 2 vistas de `Views/Administracion/` tienen `HeaderVista`** con `Eyebrow="ADMINISTRACIÓN"`.
+3. **Las 3 vistas P6 NO tienen `HeaderVista`** y su card tiene `PaddingHolgado`, custodiado por
+   `VistaCentrada_TieneCardConPaddingHolgado`.
+4. **`AccesoLimitadoView` no tiene `HeaderVista` ni `MargenVista` propios**, y **no tiene ninguna
+   forma de navegación** (grep del Step 5 de la Task 11.4).
+5. **Cero `Foreground="Red"` en toda la app** (el último, `UsuariosAdminView:143`, lo cerró la 11.2).
+6. **Cero `Classes="badge-inactiva"` y cero definiciones de esos estilos** (Task 13.2).
+7. **Cero color literal en `Actualizaciones/`**: los 13 hex + 4 `Foreground="White"` migrados.
+8. **Los 3 tokens `*SuaveBrush` existen, tienen test de valor y test de contraste**, y
+   `BadgeEstado` ya no cae al gris en los tonos Advertencia/Peligro/Info.
+9. **`MainWindowView` + `MainWindowViewModel` borrados**, con el grep re-corrido antes de borrar.
+10. **Cero `EstablecerPermisos` no-op en `tests/StockApp.Presentation.UiTests/`** y
+    `TareaSessionFake` borrada.
+11. **`Guardian_CubreTodasLasVistasDelEnsamblado` en verde**: 38 + 11 + 3 + 5 = 57 vistas, cero
+    huérfanas.
+12. **Verificación orgánica final hecha con la app real** — o declarada explícitamente como el único
+    pendiente de la Fase B.
+
+---
+
+## Estado de los 9 criterios de la Fase B, verificado al escribir B3
+
+Los 9 criterios originales, con lo que **ya se cumple** (verificado leyendo el código y el ledger) y
+lo que **cierra B3**:
+
+| # | Criterio | Estado | Quién lo cierra |
+|---|---|---|---|
+| 1 | Las vistas tienen margen exterior `MargenVista` o excepción documentada | **parcial** | B3. Faltaba `MantenimientoView` (16, C13). Las excepciones quedan enumeradas: 11 embebidas/host, 3 P6, 5 fuera del guardián |
+| 2 | Las 15 vistas sin título tienen `HeaderVista`, salvo excepciones argumentadas | **parcial, y la cuenta cambia** | B3. La cuenta original ("8 ganan `HeaderVista` propio") **se corrige a 6**: `MainWindowView` se borra (ya estaba descontada), y las **3 P6 pasan de "ganan header" a "excepción argumentada"** (Ruling B-32) mientras `AccesoLimitadoView` pasa a "hereda el de su hijo" (Ruling B-22). Las que efectivamente ganan header en B3 son **2**: `MantenimientoView` y `UsuariosAdminView` |
+| 3 | Cero `Opacity` literal decorativa | **parcial** | B3. Quedan 10 fuera de plantilla + 1 dentro (`UsuariosAdminView:50`). Excepción final: `LoginView:14` |
+| 4 | Cero `Foreground="Red"`; los 10 pasan a `DangerBrush` | **9 de 10** | Task 11.2 cierra el décimo |
+| 5 | Cero `DataGridCell.num` local | **CUMPLIDO** | tanda 10 (verificado en el ledger: `grep` → cero en todo `Views/`) |
+| 6 | Cero bloques de navegación duplicados | **CUMPLIDO** | tanda 5. B3 lo **refuerza**: la Task 11.4 verifica por grep que `AccesoLimitadoView` no ganó ninguno |
+| 7 | Los gates de Documentos tienen red validada por mutación (matriz rol × estado) | **CUMPLIDO Y AMPLIADO** | Task 9.0: 18 tests (no 14) y 12 mutaciones con rojo real, incluidos 2 gates que **no tenían ningún guardián** y que el plan creía cubiertos |
+| 8 | `dotnet test StockApp.sln` verde al cierre de cada tanda | **CUMPLIDO hasta la 10** | B3 lo sostiene |
+| 9 | Verificación orgánica al cierre de las tandas 5, 8 y 13 | **solo la 5** | **la 8 nunca se hizo** (ni la 6, 7, 9 ni 10: los cinco dispatches tuvieron instrucción de no relanzar la app). La Task 13.5 la hace de toda la app junta, o la deja como el único pendiente nombrado |
+
+**Deudas heredadas que B3 NO cierra, declaradas para que no se pierdan:**
+- **Ruling B-4** (`tnum` en `Themes/DataGrid.axaml:97`): un `Setter` en un solo archivo, el día que
+  se quiera. Abierta desde la Fase A.
+- **`TarjetaMetrica` sin usar en `InicioView`**: la Task 6.6 no la agregó porque `InicioViewModel` no
+  expone cifras agregadas y la tanda prohibía tocar ViewModels. El componente existe y no lo consume
+  nadie.
+- **El ícono candado de `NuevaImportacionView` (10 sitios) no tiene guardián de su `IsVisible`**:
+  descubierto por mutación en la Task 8.4; ni el guardián de patrón (ciego a `CellTemplate`) ni los
+  10 tests existentes (que miran `IsEnabled` del control de edición) lo cubren.
+- **Asimetría `DocumentoFormView` / `TareaFormView`** en el "Nueva nota": la tabla de la Task 9.2 lo
+  envolvía en `CampoFormulario` y la de la 9.4 no. Documentado en el ledger de la tanda 9, no
+  corregido.
+- **Contraste de `TextoTerciarioBrush`** (2.56:1): ver pregunta abierta 5.
+
+---
+
+## Preguntas abiertas de B3 (requieren decisión del usuario)
+
+1. **Marca de agua de `LoginView`: ¿exención + test dedicado (lo que escribí), o Ruling B-11
+   (mover el `Opacity="0.28"` a un `<Style Selector="Image.marca-agua">`)?** La segunda mantiene a
+   `LoginView` dentro del invariante genérico y **no cambia un pixel**, pero toca el bloque del logo
+   —y la instrucción fue no tocarlo—. Es un cambio de 4 líneas en cualquier dirección.
+2. **`Padding="40"` → `PaddingHolgado` (48) en las 3 pantallas de acceso.** +8 px de aire, visible.
+   La alternativa es dejar 40 literal y renunciar al invariante de P6.
+3. **`MantenimientoView`: ¿el par "Hacer backup ahora"/"Iniciando…" se queda en su sección (lo que
+   escribí, Ruling B-29) o sube al slot `Acciones` del `HeaderVista`?** Subirlo se ve mejor y es la
+   lectura de manual de P1, pero mueve la geometría en la única vista con asserts geométricos.
+4. **Los 3 rótulos de sección de `MantenimientoView` pasan de `caption` 12 px gris a `seccion`
+   16 px oscuro.** Es un cambio visible. La alternativa mínima es `caption` +
+   `Foreground="{DynamicResource TextoTerciarioBrush}"`, que solo saca el `Opacity`.
+5. **`TextoTerciarioBrush` da 2.56:1 sobre blanco — por debajo de AA (4.5:1) y del umbral gráfico
+   (3:1).** Se aplicó en decenas de sitios en las tandas 6 a 10. ¿Se abre una pasada de contraste
+   como trabajo aparte (fuera de la Fase B), o se deja como está? B3 no lo re-litiga en las vistas
+   ya migradas; en las suyas elige por función (Ruling B-30). Lo mismo vale para
+   `BadgeEstado[Tono=Exito]`, que ya venía con 3.00:1 de fábrica.
+6. **El título del modal de actualización pasa de 18 px naranja `#E65100` a 16 px oscuro
+   (`Classes="seccion"`).** El naranja sobre el fondo suave da 2.86:1. La alternativa es conservar
+   los 18 px con un `FontSize` literal declarado como excepción.
+7. **`ActualizacionBloqueoView:41`: `Padding="12,6"` → `PaddingCelda` (12,8), +2 px de alto en un
+   banner permanente, o se deja literal?**
+8. **Los textos sin tildes de `Actualizaciones/` ("Actualizacion critica requerida", "MODO
+   DEGRADADO — Actualizacion critica no descargada") se conservan tal cual** por la regla de no
+   tocar copy. ¿Se abre un ticket aparte para corregirlos?
 
 ---
 
 ## Criterios de aceptación de la Fase B completa
+
+> **Corregidos por B3 (2026-08-19).** Al abrir las 12 vistas de B3 aparecieron dos errores de
+> cuenta en esta lista: las vistas son **58 hoy y 57 tras borrar `MainWindowView`** (Task 13.1),
+> y el criterio 2 no da 8 sino **2** vistas que ganan `HeaderVista` propio en B3 — las 3 P6 pasan
+> a excepción argumentada (Ruling B-32) y `AccesoLimitadoView` hereda el de su hijo (Ruling
+> B-22). El estado real de los 9, uno por uno, está en la sección "Estado de los 9 criterios de
+> la Fase B, verificado al escribir B3".
 
 1. **Las 58 vistas tienen margen exterior `MargenVista`** o una excepción documentada (paneles embebidos, diálogos).
 2. **Las 15 vistas sin título tienen `HeaderVista`**, salvo las 4 excepciones argumentadas (los 2 wrappers de Movimientos que heredan el de `MovimientoFormControl`, y los 3 diálogos que usan `Window.Title`) — que quedan en 15 − 2 wrappers − 3 diálogos − `MainWindow` − `MainWindowView` (borrada) = **8 ganan `HeaderVista` propio**.
