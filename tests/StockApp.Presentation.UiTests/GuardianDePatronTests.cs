@@ -9,6 +9,7 @@ using StockApp.Presentation.Actualizaciones.Views;
 using StockApp.Presentation.Views;
 using StockApp.Presentation.Views.Administracion;
 using StockApp.Presentation.Views.Catalogo;
+using StockApp.Presentation.Views.Dialogs;
 using StockApp.Presentation.Views.Documentos;
 using StockApp.Presentation.Views.Finanzas;
 using StockApp.Presentation.Views.Movimientos;
@@ -171,6 +172,74 @@ public class GuardianDePatronTests
         typeof(ResetAdminView),
         typeof(BloqueoLicenciaView),
     };
+
+    /// <summary>
+    /// Vistas que no pueden entrar a ninguna lista del guardian, con su razon y con quien las
+    /// custodia en su lugar (Task 13.4). Es una lista de EXCLUSION explicita: el test de
+    /// cobertura de abajo exige que toda vista del ensamblado este en alguna lista o en esta.
+    /// Son CINCO, no tres: la revision de exenciones de la Task 13.4 confirmo que solo hay DOS
+    /// exenciones "vivas" mas arriba (VistasExentasPorEmbeberUnWizardP8 y
+    /// VistasExentasPorPrimariosMutuamenteExcluyentesSinVm) -- el esbozo original de B3 preveia
+    /// una tercera (VistasExentasPorMarcaDeAguaAprobada, LoginView) para el logo del municipio,
+    /// pero el Ruling B-25 quedo SUPERSEDIDO: LoginView usa la variante Ruling B-11
+    /// (Style Selector="Image.marca-agua", Priority=Style) en vez de Opacity local, asi que el
+    /// guardian generico ya no la ve y no hizo falta ninguna exencion. Esta lista es un
+    /// mecanismo DISTINTO: no exime un invariante, saca la vista de la cobertura por completo
+    /// porque PatronHelpers.Montar no puede montarla (Window) o porque no es "una vista de
+    /// contenido" (chrome de la app).
+    /// </summary>
+    public static readonly HashSet<Type> VistasFueraDelGuardian = new()
+    {
+        // Window: PatronHelpers.Montar las meteria como Content de otra Window, y eso tira
+        // InvalidOperationException en runtime (verificado empiricamente en la Task 12.3: "The
+        // control ... already has a visual parent"). Las custodian el compilador de C# (los
+        // x:Name que lee el code-behind dan CS0103 si se rompen, Ruling B-27) y
+        // ConfirmacionServiceDialogosConsecutivosTests.
+        typeof(ConfirmacionDialog),
+        typeof(MensajeDialog),
+        typeof(PedirTextoDialog),
+        // Window host de la app -- tambien queda fuera de Montar por la misma razon (Window).
+        // Revisada en la Task 13.1: no tiene ningun literal visual que custodiar.
+        typeof(MainWindow),
+        // Cromo de la app (sidebar + ContentControl), no una vista de contenido navegable.
+        // La custodian ShellMainViewGatesTests (15 casos) y SidebarContrasteTests.
+        typeof(ShellMainView),
+    };
+
+    /// <summary>
+    /// Con cuatro listas (InlineData, VistasDeLaTanda, VistasEmbebidas y VistasCentradasSinSidebar)
+    /// la trampa que el plan de B2 identifico con dos listas se triplica: agregar una vista a una
+    /// lista y olvidarla en otra no falla nada, simplemente deja invariantes sin correr. Este test
+    /// enumera por reflexion todos los Control publicos, no abstractos, de los namespaces de
+    /// vistas del ensamblado StockApp.Presentation y exige que cada uno este en alguna de las
+    /// cuatro listas del guardian o en VistasFueraDelGuardian.
+    ///
+    /// El predicado de namespace excluye deliberadamente StockApp.Presentation.Controls (los 5
+    /// TemplatedControl del design system: BadgeEstado, CampoFormulario, EstadoVacio, HeaderVista,
+    /// TarjetaMetrica) -- no son vistas, son piezas del catalogo de patrones, y no tienen
+    /// PatronHelpers.Montar ni sentido de "header/margen/opacidad de vista".
+    /// </summary>
+    [AvaloniaFact]
+    public void Guardian_CubreTodasLasVistasDelEnsamblado()
+    {
+        var todas = typeof(ViewLocator).Assembly.GetTypes()
+            .Where(t => t is { IsAbstract: false, IsPublic: true } && typeof(Control).IsAssignableFrom(t))
+            .Where(t => t.Namespace is not null
+                        && (t.Namespace.StartsWith("StockApp.Presentation.Views", StringComparison.Ordinal)
+                            || t.Namespace == "StockApp.Presentation.Actualizaciones.Views"))
+            .ToList();
+
+        var cubiertas = VistasDeLaTanda.Select(r => r.Data)
+            .Concat(VistasEmbebidas.Select(r => r.Data))
+            .Concat(VistasCentradasSinSidebar.Select(r => r.Data))
+            .Concat(VistasFueraDelGuardian)
+            .ToHashSet();
+
+        var huerfanas = todas.Where(t => !cubiertas.Contains(t)).ToList();
+        Assert.True(huerfanas.Count == 0,
+            "Vista(s) sin ninguna lista del guardian ni exclusion documentada: "
+            + string.Join(", ", huerfanas.Select(t => t.Name)));
+    }
 
     [AvaloniaTheory]
     [MemberData(nameof(VistasCentradasSinSidebar))]
