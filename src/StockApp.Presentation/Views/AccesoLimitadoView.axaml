@@ -15,7 +15,7 @@
          Productos/Finanzas/Reportes con la licencia vencida. -->
     <DockPanel>
 
-        <Border DockPanel.Dock="Top" Classes="card" Margin="16,16,16,0" Padding="16">
+        <Border DockPanel.Dock="Top" Classes="card" Margin="16,16,16,0">
             <TextBlock Text="Modo de acceso limitado: la licencia está vencida. Solo podés descargar backups; para operar el sistema, activá la licencia."
                        TextWrapping="Wrap"
                        Foreground="{DynamicResource WarningBrush}" />

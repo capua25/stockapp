@@ -135,10 +135,11 @@ public class GuardianDePatronTests
     };
 
     /// <summary>
-    /// Vistas que se renderizan como contenido de un TabItem/ContentControl de otra vista (P2-emb,
-    /// P1-emb, P5, Task 8.1 de la Fase B). No llevan HeaderVista propio ni MargenVista: el
-    /// contenedor ya los puso. Corren los invariantes que SI les aplican (opacidad, boton
-    /// primario), mas uno propio e invertido (<see cref="VistaEmbebida_NoDuplicaElMargenDeVista"/>).
+    /// Vistas que no aportan cromo de vista propio: o estan embebidas en otra (P2-emb, P1-emb, P5,
+    /// Task 8.1 de la Fase B), o hostean a otra que si lo aporta (P9, Ruling B-22, tanda 11). No
+    /// llevan HeaderVista propio ni MargenVista: el contenedor (o el hijo, en el caso P9) ya los
+    /// puso. Corren los invariantes que SI les aplican (opacidad, boton primario), mas uno propio
+    /// e invertido (<see cref="VistaEmbebida_NoDuplicaElMargenDeVista"/>).
     /// </summary>
     public static readonly TheoryData<Type> VistasEmbebidas = new()
     {
@@ -149,6 +150,7 @@ public class GuardianDePatronTests
         typeof(NuevaImportacionView),
         typeof(AdjuntosPanelView),
         typeof(AdjuntosDocumentoPanelView),
+        typeof(AccesoLimitadoView),
     };
 
     /// <summary>
