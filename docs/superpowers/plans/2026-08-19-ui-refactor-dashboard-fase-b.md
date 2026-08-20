@@ -3378,8 +3378,13 @@ tolerancia para que pase. Y se documenta en el ledger qué se cambió y por qué
 *Costo si me equivoco:* alto y silencioso — es el único lugar del refactor donde un test puede
 "arreglarse" en vez de arreglar el código. Por eso está acotado a 4 líneas nombradas.
 
-**Ruling B-25 — el logo del municipio de `LoginView:13-18` NO se toca; `LoginView` se exime de
-`Vista_NoTieneOpacidadesLiterales` y la exención se paga con un test dedicado.**
+**Ruling B-25 — SUPERSEDIDO por decisión del usuario el 2026-08-19. Ver pregunta abierta 1: se
+implementó la alternativa descartada (variante Ruling B-11), NO lo que sigue en este ruling.**
+El texto original queda abajo como registro histórico de la decisión que se descartó.
+
+**Ruling B-25 (histórico, no implementado) — el logo del municipio de `LoginView:13-18` NO se
+toca; `LoginView` se exime de `Vista_NoTieneOpacidadesLiterales` y la exención se paga con un test
+dedicado.**
 
 `<Image Source="avares://StockApp.Presentation/Assets/carmelo-original.png" Opacity="0.28" …
 RenderTransform="scale(0.85)" />` es diseño aprobado y mergeado a main el 2026-07-10 (commits
@@ -5265,23 +5270,33 @@ lo que **cierra B3**:
 
 ## Preguntas abiertas de B3 (requieren decisión del usuario)
 
-1. **Marca de agua de `LoginView`: ¿exención + test dedicado (lo que escribí), o Ruling B-11
-   (mover el `Opacity="0.28"` a un `<Style Selector="Image.marca-agua">`)?** La segunda mantiene a
-   `LoginView` dentro del invariante genérico y **no cambia un pixel**, pero toca el bloque del logo
-   —y la instrucción fue no tocarlo—. Es un cambio de 4 líneas en cualquier dirección.
+1. ~~Marca de agua de `LoginView`~~ — **DECIDIDO por el usuario el 2026-08-19: Ruling B-11**
+   (mover el `Opacity="0.28"` a un `<Style Selector="Image.marca-agua">` en `UserControl.Styles`).
+   Implementado en la Task 11.1: el logo no cambia un pixel, `LoginView` queda DENTRO del
+   invariante genérico del guardián (`Vista_NoTieneOpacidadesLiterales`), sin `HashSet` de
+   exención ni test dedicado (`LoginViewMarcaDeAguaTests` NO se creó). Validado por mutación:
+   volver el `Opacity` a literal hace rojo ese invariante para `LoginView` — confirma que el
+   `Style` es lo único que lo mantiene verde.
 2. **`Padding="40"` → `PaddingHolgado` (48) en las 3 pantallas de acceso.** +8 px de aire, visible.
-   La alternativa es dejar 40 literal y renunciar al invariante de P6.
-3. **`MantenimientoView`: ¿el par "Hacer backup ahora"/"Iniciando…" se queda en su sección (lo que
-   escribí, Ruling B-29) o sube al slot `Acciones` del `HeaderVista`?** Subirlo se ve mejor y es la
-   lectura de manual de P1, pero mueve la geometría en la única vista con asserts geométricos.
+   La alternativa es dejar 40 literal y renunciar al invariante de P6. **Implementado tal cual el
+   default del plan en la Task 11.1** (no fue una decisión explícita del usuario, es la lectura
+   directa de la tabla de sustitución de la task).
+3. ~~`MantenimientoView`: ¿el par "Hacer backup ahora"/"Iniciando…" se queda en su sección o sube
+   al slot `Acciones`?~~ — **DECIDIDO por el usuario el 2026-08-19: se queda en su sección**
+   (Ruling B-29, lo que ya escribía el plan). Criterio explícito del usuario: no mover geometría
+   en la vista más frágil del refactor. Implementado en la Task 11.3 sin tocar el `Grid` de
+   `:27-48`.
 4. **Los 3 rótulos de sección de `MantenimientoView` pasan de `caption` 12 px gris a `seccion`
    16 px oscuro.** Es un cambio visible. La alternativa mínima es `caption` +
    `Foreground="{DynamicResource TextoTerciarioBrush}"`, que solo saca el `Opacity`.
-5. **`TextoTerciarioBrush` da 2.56:1 sobre blanco — por debajo de AA (4.5:1) y del umbral gráfico
-   (3:1).** Se aplicó en decenas de sitios en las tandas 6 a 10. ¿Se abre una pasada de contraste
-   como trabajo aparte (fuera de la Fase B), o se deja como está? B3 no lo re-litiga en las vistas
-   ya migradas; en las suyas elige por función (Ruling B-30). Lo mismo vale para
-   `BadgeEstado[Tono=Exito]`, que ya venía con 3.00:1 de fábrica.
+   **Implementado tal cual el default del plan (Ruling B-29) en la Task 11.3.**
+5. ~~`TextoTerciarioBrush` da 2.56:1 sobre blanco~~ — **DECIDIDO por el usuario el 2026-08-19: se
+   deja como está.** Cierra la pregunta: NO se abre una pasada de contraste aparte. Es **deuda de
+   accesibilidad DECLARADA** (no un olvido): #94A3B8 sobre blanco = 2.56:1, sobre `ColorFondo`
+   #F8FAFC = 2.45:1 — por debajo del piso AA de texto (4.5:1) y del umbral gráfico (3:1). El token
+   se usa como texto de apoyo (rótulos micro, metadatos secundarios), nunca como texto principal
+   de lectura obligatoria. Se mantiene documentado acá y en el Ruling B-30 para que nadie lo
+   re-litigue: `BadgeEstado[Tono=Exito]` (3.00:1) tiene el mismo estatus.
 6. **El título del modal de actualización pasa de 18 px naranja `#E65100` a 16 px oscuro
    (`Classes="seccion"`).** El naranja sobre el fondo suave da 2.86:1. La alternativa es conservar
    los 18 px con un `FontSize` literal declarado como excepción.
