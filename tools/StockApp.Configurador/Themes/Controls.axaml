@@ -1,0 +1,100 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Subconjunto MÍNIMO de los estilos equivalentes en
+         src/StockApp.Presentation/Themes/Controls.axaml — ver el comentario en Tokens.axaml
+         de este mismo proyecto sobre por qué se replica en vez de referenciar. -->
+
+    <Style Selector="Border.card">
+        <Setter Property="Background" Value="{DynamicResource SuperficieBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BordeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{DynamicResource RadioCard}" />
+        <Setter Property="BoxShadow" Value="{DynamicResource SombraCard}" />
+    </Style>
+
+    <Style Selector="TextBox">
+        <Setter Property="Background" Value="{DynamicResource SuperficieBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource BordeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{DynamicResource RadioBase}" />
+        <Setter Property="Padding" Value="10,8" />
+        <Setter Property="Foreground" Value="{DynamicResource TextoPrimarioBrush}" />
+    </Style>
+    <Style Selector="TextBox:focus">
+        <Setter Property="BorderBrush" Value="{DynamicResource BrandBrush}" />
+    </Style>
+
+    <Style Selector="Button.primary">
+        <Setter Property="Background" Value="{DynamicResource BrandHoverBrush}" />
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="{DynamicResource RadioBase}" />
+        <Setter Property="Padding" Value="16,8" />
+        <Setter Property="FontWeight" Value="Medium" />
+    </Style>
+    <Style Selector="Button.primary:pointerover">
+        <Setter Property="Background" Value="{DynamicResource BrandPressedBrush}" />
+    </Style>
+
+    <Style Selector="Button.ghost">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource TextoPrimarioBrush}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="{DynamicResource RadioBase}" />
+        <Setter Property="Padding" Value="16,8" />
+    </Style>
+    <Style Selector="Button.ghost:pointerover">
+        <Setter Property="Background" Value="{DynamicResource GhostHoverOverlayBrush}" />
+    </Style>
+    <Style Selector="Button.ghost:pressed">
+        <Setter Property="Background" Value="{DynamicResource GhostPressedOverlayBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock.titulo">
+        <Setter Property="FontSize" Value="18" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{DynamicResource TextoPrimarioBrush}" />
+    </Style>
+    <Style Selector="TextBlock.eyebrow">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="Medium" />
+        <Setter Property="Foreground" Value="{DynamicResource TextoSecundarioBrush}" />
+    </Style>
+    <Style Selector="TextBlock.etiqueta-campo">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="Medium" />
+        <Setter Property="Foreground" Value="{DynamicResource TextoSecundarioBrush}" />
+    </Style>
+    <Style Selector="TextBlock.micro">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="Foreground" Value="{DynamicResource TextoSecundarioBrush}" />
+    </Style>
+
+    <!-- Badge de estado de "Probar conexión": Border + TextBlock en vez del TemplatedControl
+         BadgeEstado de Presentation (mismo motivo: no arrastrar ese assembly). Color por
+         Classes, ligado en el ViewModel a un nombre de clase por TonoBadge. -->
+    <Style Selector="Border.badge">
+        <Setter Property="CornerRadius" Value="{DynamicResource RadioChico}" />
+        <Setter Property="Padding" Value="10,4" />
+    </Style>
+    <Style Selector="Border.badge.exito">
+        <Setter Property="Background" Value="{DynamicResource SuccessSuaveBrush}" />
+    </Style>
+    <Style Selector="Border.badge.exito TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource SuccessBrush}" />
+    </Style>
+    <Style Selector="Border.badge.peligro">
+        <Setter Property="Background" Value="{DynamicResource DangerSuaveBrush}" />
+    </Style>
+    <Style Selector="Border.badge.peligro TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+    </Style>
+    <Style Selector="Border.badge.advertencia">
+        <Setter Property="Background" Value="{DynamicResource WarningSuaveBrush}" />
+    </Style>
+    <Style Selector="Border.badge.advertencia TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
+    </Style>
+
+</Styles>

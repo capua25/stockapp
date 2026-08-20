@@ -33,6 +33,13 @@ $ErrorActionPreference = "Stop"
 
 # ── Configuracion ────────────────────────────────────────────────────────────
 $CsprojPath   = "src\StockApp.Presentation\StockApp.Presentation.csproj"
+# Configurador de conexion (2026-08-20): ejecutable SEPARADO que viaja en el MISMO paquete
+# Velopack que la app principal (a diferencia de Seeder y Licencias.Cli, que nunca se
+# empaquetan). Se publica en el MISMO PublishDir que StockApp.Presentation: vpk empaqueta el
+# directorio entero, y Velopack solo crea acceso directo para --mainExe (GestionMunicipal.exe),
+# asi que GestionMunicipal.Configurador.exe queda instalado sin shortcut propio (comportamiento
+# por defecto, no hay que pedirlo).
+$ConfiguradorCsprojPath = "tools\StockApp.Configurador\StockApp.Configurador.csproj"
 $PublishDir   = "publish\win-x64"
 $OutputDir    = "releases\win"
 $ReleaseNotes = "build\RELEASE_NOTES.md"
@@ -75,6 +82,10 @@ if (-not (Test-Path $CsprojPath)) {
     Abort "No se encontro el csproj en: $CsprojPath"
 }
 
+if (-not (Test-Path $ConfiguradorCsprojPath)) {
+    Abort "No se encontro el csproj del configurador en: $ConfiguradorCsprojPath"
+}
+
 if (-not (Test-Path $ReleaseNotes)) {
     Abort "No se encontro el archivo de release notes en: $ReleaseNotes"
 }
@@ -103,6 +114,20 @@ dotnet publish $CsprojPath `
     --output $PublishDir
 
 if ($LASTEXITCODE -ne 0) { Abort "dotnet publish fallo (codigo $LASTEXITCODE)." }
+
+Write-Host "  Publicado en: $PublishDir"
+
+# Configurador de conexion: se publica en el MISMO PublishDir (ver comentario en Configuracion,
+# arriba), asi vpk lo empaqueta junto con la app principal en un solo paquete/instalador.
+Write-Step "Publicando el configurador de conexion para $Runtime (self-contained)..."
+
+dotnet publish $ConfiguradorCsprojPath `
+    --configuration Release `
+    --runtime $Runtime `
+    --self-contained true `
+    --output $PublishDir
+
+if ($LASTEXITCODE -ne 0) { Abort "dotnet publish del configurador fallo (codigo $LASTEXITCODE)." }
 
 Write-Host "  Publicado en: $PublishDir"
 

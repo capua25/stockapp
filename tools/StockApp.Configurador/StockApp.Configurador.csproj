@@ -1,0 +1,37 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <!-- Namespaces NO se renombran en este proyecto (decisión explícita): el binario sí
+         lleva el nombre nuevo, así viaja identificado como parte de la suite Gestión
+         Municipal en el directorio de instalación. -->
+    <RootNamespace>StockApp.Configurador</RootNamespace>
+    <AssemblyName>GestionMunicipal.Configurador</AssemblyName>
+    <Product>Gestión Municipal · Configurador de conexión</Product>
+    <Version>0.1.0</Version>
+    <InformationalVersion>$(Version)</InformationalVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>StockApp.Configurador.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Deliberadamente mínimo: NO referencia StockApp.Presentation (arrastraría ApiClient,
+         Application, DataGrid, Optris.Icons, Velopack y el contenedor DI completo para una
+         ventana de 6 controles). Ver decisión en el reporte de la tarea. -->
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\StockApp.Configuracion\StockApp.Configuracion.csproj" />
+  </ItemGroup>
+</Project>

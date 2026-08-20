@@ -17,6 +17,12 @@ set -euo pipefail
 
 # ── Configuracion ─────────────────────────────────────────────────────────────
 CSPROJ="src/StockApp.Presentation/StockApp.Presentation.csproj"
+# Configurador de conexion (2026-08-20): viaja en el MISMO paquete Velopack que la app
+# principal (a diferencia de Seeder y Licencias.Cli). Se publica en el MISMO PUBLISH_DIR:
+# vpk empaqueta el directorio entero, y Velopack solo crea acceso directo para --mainExe
+# (GestionMunicipal), asi que GestionMunicipal.Configurador queda instalado sin shortcut
+# propio (comportamiento por defecto).
+CONFIGURADOR_CSPROJ="tools/StockApp.Configurador/StockApp.Configurador.csproj"
 PUBLISH_DIR="publish/linux-x64"
 OUTPUT_DIR="releases/linux"
 RELEASE_NOTES="build/RELEASE_NOTES.md"
@@ -47,6 +53,10 @@ if [[ ! -f "$CSPROJ" ]]; then
     abort "No se encontro el csproj en: $CSPROJ"
 fi
 
+if [[ ! -f "$CONFIGURADOR_CSPROJ" ]]; then
+    abort "No se encontro el csproj del configurador en: $CONFIGURADOR_CSPROJ"
+fi
+
 if [[ ! -f "$RELEASE_NOTES" ]]; then
     abort "No se encontro el archivo de release notes en: $RELEASE_NOTES"
 fi
@@ -67,6 +77,18 @@ echo "  Version a empaquetar: $VERSION"
 step "Publicando para $RUNTIME (self-contained)..."
 
 dotnet publish "$CSPROJ" \
+    --configuration Release \
+    --runtime "$RUNTIME" \
+    --self-contained true \
+    --output "$PUBLISH_DIR"
+
+echo "  Publicado en: $PUBLISH_DIR"
+
+# Configurador de conexion: se publica en el MISMO PUBLISH_DIR (ver comentario en
+# Configuracion, arriba), asi vpk lo empaqueta junto con la app principal en un solo paquete.
+step "Publicando el configurador de conexion para $RUNTIME (self-contained)..."
+
+dotnet publish "$CONFIGURADOR_CSPROJ" \
     --configuration Release \
     --runtime "$RUNTIME" \
     --self-contained true \

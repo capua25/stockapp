@@ -1,0 +1,66 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:StockApp.Configurador.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="420" d:DesignHeight="360"
+        x:Class="StockApp.Configurador.Views.MainWindow"
+        x:DataType="vm:ConfiguradorViewModel"
+        Title="Gestión Municipal · Configuración"
+        Width="420" SizeToContent="Height" CanResize="False"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource FondoBrush}">
+
+    <Border Classes="card" Margin="{DynamicResource Espacio5}" Padding="{DynamicResource PaddingHolgado}">
+        <StackPanel Spacing="{DynamicResource Espacio4}">
+
+            <TextBlock Text="Gestión Municipal" Classes="eyebrow" />
+            <TextBlock Text="Configuración de conexión" Classes="titulo" Margin="0,0,0,8" />
+
+            <TextBlock Text="Servidor" Classes="etiqueta-campo" />
+
+            <StackPanel Spacing="{DynamicResource Espacio2}">
+                <TextBlock Text="IP o nombre" Classes="micro" />
+                <TextBox Text="{Binding Ip}" PlaceholderText="192.168.1.50" />
+            </StackPanel>
+
+            <StackPanel Spacing="{DynamicResource Espacio2}">
+                <TextBlock Text="Puerto" Classes="micro" />
+                <TextBox Text="{Binding Puerto}" PlaceholderText="5080" />
+            </StackPanel>
+
+            <!-- Fila: "Probar conexión" + badge de resultado -->
+            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio3}" VerticalAlignment="Center">
+                <Button Content="Probar conexión"
+                        Classes="ghost"
+                        Command="{Binding ProbarConexionCommand}"
+                        IsEnabled="{Binding !Probando}" />
+
+                <Border Classes="badge"
+                        Classes.exito="{Binding ClaseEstado, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=exito}"
+                        Classes.advertencia="{Binding ClaseEstado, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=advertencia}"
+                        Classes.peligro="{Binding ClaseEstado, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=peligro}"
+                        IsVisible="{Binding MensajeEstado, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                    <TextBlock Text="{Binding MensajeEstado}" TextWrapping="Wrap" MaxWidth="220" />
+                </Border>
+            </StackPanel>
+
+            <!-- Requisito explícito: mostrar la ruta completa del archivo que se escribe,
+                 para poder guiar a un colega por teléfono. -->
+            <StackPanel Spacing="2">
+                <TextBlock Text="Este archivo se guarda en:" Classes="micro" />
+                <TextBlock Text="{Binding RutaArchivo}"
+                           Classes="micro"
+                           TextWrapping="Wrap"
+                           FontFamily="Consolas,monospace" />
+            </StackPanel>
+
+            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}" HorizontalAlignment="Right">
+                <Button Content="Cancelar" Classes="ghost" Command="{Binding CancelarCommand}" />
+                <Button Content="Guardar" Classes="primary" Command="{Binding GuardarCommand}" />
+            </StackPanel>
+
+        </StackPanel>
+    </Border>
+
+</Window>
