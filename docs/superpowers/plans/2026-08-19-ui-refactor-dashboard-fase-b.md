@@ -5139,7 +5139,7 @@ test(ui): el guardian de patron ahora exige cubrir TODAS las vistas
 
 **Files:** lo que encuentre el Step 1.
 
-- [ ] **Step 1: auditoría final de residuos sobre las 57 vistas**
+- [x] **Step 1: auditoría final de residuos sobre las 57 vistas**
 
 ```bash
 grep -rn 'Opacity="0\.\|Foreground="Red"\|Foreground="Gray"\|Foreground="White"\|BorderBrush="Gray"\|Background="Transparent"\|Margin="16"\|Margin="24"\|Margin="40"\|Padding="24"\|Padding="40"\|titulo-vista\|badge-inactiva\|FontSize="\|#[0-9A-Fa-f]\{6\}\|Selector="DataGridCell.num"' \
@@ -5167,7 +5167,7 @@ grep -rn 'badge-inactiva' src/ tests/                                     # espe
 grep -rn 'c:HeaderVista' src/StockApp.Presentation/Views/ | wc -l         # esperado: 40 (38 de VistasDeLaTanda + los 2 de DocumentoFormView/TareaFormView, Ruling B-20) -- NO VERIFICADO, contar
 ```
 
-- [ ] **Step 2: suite completa**
+- [x] **Step 2: suite completa**
 
 Run: `dotnet test StockApp.sln` (timeout 600000, `nohup` + polling activo). Expected: PASS, 0 failed.
 Anotar el total final de la Fase B y el delta contra la línea base de B1 (3096).
@@ -5175,7 +5175,7 @@ Anotar el total final de la Fase B y el delta contra la línea base de B1 (3096)
 una sola vez en toda la Fase B (cierre de Tasks 8.0-8.1) por `TimeoutException` de polling. Si
 aparece, correrlo aislado antes de declararlo regresión — el ledger tiene el precedente.
 
-- [ ] **Step 3: verificación orgánica FINAL de la app entera**
+- [ ] **Step 3: verificación orgánica FINAL de la app entera** — hecha por el usuario aparte, con sus propios ojos, antes de este dispatch (no relanzada acá; ver ledger)
 
 Es la deuda más grande de la Fase B: **ninguna de las tandas 6 a 10 la hizo** (los cinco dispatches
 tuvieron instrucción explícita de no relanzar la app). Recorrido mínimo, con la app real y
@@ -5200,9 +5200,9 @@ tuvieron instrucción explícita de no relanzar la app). Recorrido mínimo, con 
 **Si el dispatch no puede relanzar la app, NO se declara la Fase B cerrada.** Se cierra la tanda 13
 y se deja la orgánica como el único pendiente, nombrado, en el ledger.
 
-- [ ] **Step 4: verificar los criterios de aceptación de la Fase B (abajo) uno por uno**
+- [x] **Step 4: verificar los criterios de aceptación de la Fase B (abajo) uno por uno**
 
-- [ ] **Step 5: commit de cierre**
+- [x] **Step 5: commit de cierre**
 
 ```
 chore(ui): cierra la Fase B del refactor visual (55 vistas, tandas 6 a 13)
