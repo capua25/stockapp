@@ -49,6 +49,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StockApp.Configurador.Tests
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StockApp.Configurador", "tools\StockApp.Configurador\StockApp.Configurador.csproj", "{EF8ACDE3-F2F7-412B-8649-ACEFF939FB08}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StockApp.Configurador.UiTests", "tests\StockApp.Configurador.UiTests\StockApp.Configurador.UiTests.csproj", "{88F366EE-A952-47D7-BBD3-00D33E0136DD}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -299,6 +301,18 @@ Global
 		{EF8ACDE3-F2F7-412B-8649-ACEFF939FB08}.Release|x64.Build.0 = Release|Any CPU
 		{EF8ACDE3-F2F7-412B-8649-ACEFF939FB08}.Release|x86.ActiveCfg = Release|Any CPU
 		{EF8ACDE3-F2F7-412B-8649-ACEFF939FB08}.Release|x86.Build.0 = Release|Any CPU
+		{88F366EE-A952-47D7-BBD3-00D33E0136DD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{88F366EE-A952-47D7-BBD3-00D33E0136DD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{88F366EE-A952-47D7-BBD3-00D33E0136DD}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{88F366EE-A952-47D7-BBD3-00D33E0136DD}.Debug|x64.Build.0 = Debug|Any CPU
+		{88F366EE-A952-47D7-BBD3-00D33E0136DD}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{88F366EE-A952-47D7-BBD3-00D33E0136DD}.Debug|x86.Build.0 = Debug|Any CPU
+		{88F366EE-A952-47D7-BBD3-00D33E0136DD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{88F366EE-A952-47D7-BBD3-00D33E0136DD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{88F366EE-A952-47D7-BBD3-00D33E0136DD}.Release|x64.ActiveCfg = Release|Any CPU
+		{88F366EE-A952-47D7-BBD3-00D33E0136DD}.Release|x64.Build.0 = Release|Any CPU
+		{88F366EE-A952-47D7-BBD3-00D33E0136DD}.Release|x86.ActiveCfg = Release|Any CPU
+		{88F366EE-A952-47D7-BBD3-00D33E0136DD}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -324,5 +338,6 @@ Global
 		{1D0AF8BE-9221-4B70-8417-5EA1FEF842DF} = {E17B7D0E-5A3F-4A16-BCB9-E7E1A69B5408}
 		{F32CB6C7-D93A-4037-A1C2-10ED7FE749FD} = {E17B7D0E-5A3F-4A16-BCB9-E7E1A69B5408}
 		{EF8ACDE3-F2F7-412B-8649-ACEFF939FB08} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
+		{88F366EE-A952-47D7-BBD3-00D33E0136DD} = {E17B7D0E-5A3F-4A16-BCB9-E7E1A69B5408}
 	EndGlobalSection
 EndGlobal

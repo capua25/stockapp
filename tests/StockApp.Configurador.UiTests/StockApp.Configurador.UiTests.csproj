@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Mismo motivo que tests/StockApp.Presentation.UiTests: monta la ventana REAL (App +
+         MainWindow reales del Configurador, no una reimplementación) para detectar en un test
+         lo que hoy solo revienta en runtime — un avares://GestionMunicipal.Configurador/...
+         con el nombre de assembly mal escrito compila perfecto y solo se nota al abrir la
+         ventana (mismo AVLN2000/runtime del rename histórico de StockApp.Presentation). -->
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Markup.Xaml.Loader" />
+    <PackageReference Include="Avalonia.Headless" />
+    <PackageReference Include="Avalonia.Headless.XUnit" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <!-- Avalonia.Headless.XUnit depende de xunit v3, no del xunit v2 clásico que usa el resto
+         de la suite (ver mismo comentario en StockApp.Presentation.UiTests.csproj). -->
+    <PackageReference Include="Microsoft.NET.Test.Sdk" VersionOverride="17.12.0" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" VersionOverride="3.1.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\StockApp.Configuracion\StockApp.Configuracion.csproj" />
+    <ProjectReference Include="..\..\tools\StockApp.Configurador\StockApp.Configurador.csproj" />
+  </ItemGroup>
+
+</Project>

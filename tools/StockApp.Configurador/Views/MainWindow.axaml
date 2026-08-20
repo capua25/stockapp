@@ -11,7 +11,7 @@
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource FondoBrush}">
 
-    <Border Classes="card" Margin="{DynamicResource Espacio5}" Padding="{DynamicResource PaddingHolgado}">
+    <Border Classes="card" Margin="{DynamicResource MargenVentana}" Padding="{DynamicResource PaddingHolgado}">
         <StackPanel Spacing="{DynamicResource Espacio4}">
 
             <TextBlock Text="Gestión Municipal" Classes="eyebrow" />

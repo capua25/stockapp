@@ -16,6 +16,9 @@
     <x:Double x:Key="Espacio5">24</x:Double>
 
     <Thickness x:Key="PaddingHolgado">32</Thickness>
+    <!-- Margen exterior de la ventana (Guardián MainWindowAbreTests encontró que Margin
+         no acepta un x:Double como Espacio5, necesita Thickness). -->
+    <Thickness x:Key="MargenVentana">24</Thickness>
 
     <CornerRadius x:Key="RadioBase">6</CornerRadius>
     <CornerRadius x:Key="RadioCard">10</CornerRadius>
