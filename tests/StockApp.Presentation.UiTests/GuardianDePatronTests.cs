@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.VisualTree;
 using StockApp.Presentation.Views;
+using StockApp.Presentation.Views.Administracion;
 using StockApp.Presentation.Views.Catalogo;
 using StockApp.Presentation.Views.Documentos;
 using StockApp.Presentation.Views.Finanzas;
@@ -75,6 +76,7 @@ public class GuardianDePatronTests
     [InlineData(typeof(MasMovidosView), "Productos más movidos", "REPORTES")]
     [InlineData(typeof(HistorialPorProductoView), "Historial por producto", "REPORTES")]
     [InlineData(typeof(AuditoriaLogView), "Auditoría", "REPORTES")]
+    [InlineData(typeof(UsuariosAdminView), "Administración de usuarios", "ADMINISTRACIÓN")]
     public void Vista_TieneHeaderVistaConElTituloEsperado(Type tipoVista, string? titulo, string? eyebrow)
     {
         var vista = PatronHelpers.Montar(tipoVista);
@@ -127,6 +129,7 @@ public class GuardianDePatronTests
         typeof(MasMovidosView),
         typeof(HistorialPorProductoView),
         typeof(AuditoriaLogView),
+        typeof(UsuariosAdminView),
     };
 
     /// <summary>

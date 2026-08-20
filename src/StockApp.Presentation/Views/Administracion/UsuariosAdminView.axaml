@@ -3,26 +3,24 @@
              xmlns:vm="using:StockApp.Presentation.ViewModels.Administracion"
              xmlns:enums="using:StockApp.Domain.Enums"
              xmlns:conv="using:StockApp.Presentation.Converters"
+             xmlns:c="using:StockApp.Presentation.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
              x:Class="StockApp.Presentation.Views.Administracion.UsuariosAdminView"
              x:DataType="vm:UsuariosAdminViewModel">
 
-    <DockPanel Margin="24">
+    <DockPanel Margin="{DynamicResource MargenVista}">
 
-        <TextBlock DockPanel.Dock="Top"
-                   Text="Administración de usuarios"
-                   Classes="titulo-vista"
-                   Margin="0,0,0,16" />
+        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="ADMINISTRACIÓN" Titulo="Administración de usuarios" />
 
         <Grid ColumnDefinitions="360,*">
 
             <!-- Columna izquierda: lista + alta -->
             <Border Grid.Column="0" Classes="card" Margin="0,0,16,0">
                 <DockPanel>
-                    <StackPanel DockPanel.Dock="Top" Spacing="8" Margin="0,0,0,12">
-                        <TextBlock Text="Nuevo usuario" Classes="caption" Opacity="0.6" />
+                    <StackPanel DockPanel.Dock="Top" Spacing="{DynamicResource Espacio2}" Margin="0,0,0,12">
+                        <TextBlock Text="NUEVO USUARIO" Classes="micro" />
                         <TextBox Watermark="Nombre de usuario" Text="{Binding NuevoNombreUsuario}" />
                         <TextBox Watermark="Nombre completo (opcional)" Text="{Binding NuevoNombreCompleto}" />
                         <TextBox Watermark="Contraseña" PasswordChar="*" Text="{Binding NuevaContrasenaPlan}" />
@@ -47,10 +45,8 @@
                                 <StackPanel Orientation="Horizontal" Spacing="8" Margin="4">
                                     <TextBlock Text="{Binding NombreUsuario}"
                                                Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}" />
-                                    <TextBlock Text="{Binding Rol}" Classes="caption" Opacity="0.6" />
-                                    <Border Classes="badge-inactiva" IsVisible="{Binding !Activo}">
-                                        <TextBlock Text="Inactivo" Classes="badge-inactiva-texto" />
-                                    </Border>
+                                    <TextBlock Text="{Binding Rol}" Classes="caption" />
+                                    <c:BadgeEstado Texto="Inactivo" Tono="Neutro" IsVisible="{Binding !Activo}" />
                                 </StackPanel>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
@@ -62,10 +58,10 @@
             <Border Grid.Column="1"
                     Classes="card"
                     IsEnabled="{Binding UsuarioSeleccionado, Converter={x:Static ObjectConverters.IsNotNull}}">
-                <StackPanel Spacing="12">
+                <StackPanel Spacing="{DynamicResource Espacio3}">
                     <TextBlock Text="{Binding UsuarioSeleccionado.NombreUsuario}" Classes="seccion" />
 
-                    <StackPanel Orientation="Horizontal" Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
                         <Button Classes="danger" Content="Dar de baja" Command="{Binding BajaCommand}" />
                         <Button Classes="secondary"
                                 Content="Hacer Admin"
@@ -79,7 +75,7 @@
                                 IsVisible="{Binding EsAdminSeleccionado}" />
                     </StackPanel>
 
-                    <StackPanel Orientation="Horizontal" Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
                         <TextBox Watermark="Nueva contraseña"
                                  PasswordChar="*"
                                  Width="220"
@@ -87,7 +83,7 @@
                         <Button Classes="secondary" Content="Cambiar contraseña" Command="{Binding CambiarContrasenaCommand}" />
                     </StackPanel>
 
-                    <Border BorderBrush="Gray" BorderThickness="1" Padding="12" CornerRadius="4"
+                    <Border BorderBrush="{DynamicResource BordeBrush}" BorderThickness="1" Padding="12" CornerRadius="{DynamicResource RadioChico}"
                             DataContext="{Binding PanelPermisos}">
                         <!-- IsEnabled por PuedeEditar (bugfix 2026-08-16), no solo !EsAdminSeleccionado:
                              el panel seguía completamente editable para un usuario dado de baja,
@@ -95,8 +91,8 @@
                              activo. PuedeEditar cubre los dos casos (Admin y usuario inactivo) sin
                              ocultar nada: el panel se ve siempre (hace falta para consultar qué
                              permisos tenía), solo se deshabilita la edición. -->
-                        <StackPanel Spacing="8" IsEnabled="{Binding PuedeEditar}">
-                            <TextBlock Text="Acceso total" FontWeight="Bold" Foreground="Gray"
+                        <StackPanel Spacing="{DynamicResource Espacio2}" IsEnabled="{Binding PuedeEditar}">
+                            <TextBlock Text="Acceso total" FontWeight="Bold" Foreground="{DynamicResource TextoSecundarioBrush}"
                                        IsVisible="{Binding EsAdminSeleccionado}" />
                             <!-- Indicador "Solo lectura" (bugfix 2026-08-16): mismo patrón que
                                  IngresosView.axaml, Classes="caption" ya usa TextoSecundarioBrush
@@ -112,7 +108,7 @@
                             <ItemsControl ItemsSource="{Binding Grupos}">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate x:DataType="vm:GrupoPermisos">
-                                        <StackPanel Spacing="8">
+                                        <StackPanel Spacing="{DynamicResource Espacio2}">
                                             <TextBlock Text="{Binding Nombre}" FontWeight="Bold" Margin="0,8,0,0" />
                                             <ItemsControl ItemsSource="{Binding Items}">
                                                 <ItemsControl.ItemTemplate>
@@ -140,11 +136,11 @@
                             </ItemsControl>
 
                             <TextBlock Text="{Binding MensajeError}"
-                                       Foreground="Red"
+                                       Foreground="{DynamicResource DangerBrush}"
                                        TextWrapping="Wrap"
                                        IsVisible="{Binding MensajeError, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
-                            <Button Content="Guardar permisos" Command="{Binding GuardarCommand}" Margin="0,12,0,0" />
+                            <Button Content="Guardar permisos" Classes="secondary" Command="{Binding GuardarCommand}" Margin="0,12,0,0" />
                         </StackPanel>
                     </Border>
                 </StackPanel>
