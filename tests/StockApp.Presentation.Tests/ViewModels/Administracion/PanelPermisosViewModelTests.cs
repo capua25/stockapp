@@ -409,9 +409,12 @@ public class PanelPermisosViewModelTests
     [Fact]
     public async Task UsuarioInactivoSeleccionado_GuardarCommand_NoPuedeEjecutarse()
     {
-        // Mock configurado (no unconfigured) a propósito: sin esto, ObtenerPermisosAsync sin
-        // Setup devuelve una lista null vía Moq y CargarAsync termina en su catch -- MensajeError
-        // quedaría seteado y taparía la razón real que este test quiere aislar (PuedeEditar).
+        // Mock configurado (no unconfigured) a propósito: deja explícito que el test aísla
+        // PuedeEditar y no depende del comportamiento por default de ObtenerPermisosAsync sin
+        // Setup (lista null vía Moq). Antes del fix 2026-08-20, ese null hacía que CargarAsync
+        // terminara en su catch y MensajeError quedara seteado, tapando la razón real que este
+        // test quiere aislar -- ya no es el caso (null se trata como colección vacía), pero el
+        // Setup explícito se mantiene igual: es más claro que depender del default de Moq.
         var (panel, padre, svc) = Crear();
         svc.Setup(s => s.ObtenerPermisosAsync(9)).ReturnsAsync(new List<string>());
 
@@ -470,5 +473,27 @@ public class PanelPermisosViewModelTests
         var (panel, _, _) = Crear();
 
         Assert.False(panel.MostrarAvisoSoloLectura);
+    }
+
+    // ── Defensa null en CargarAsync (fix 2026-08-20): ObtenerPermisosAsync no puede devolver
+    // null hoy en producción (el contrato real de UsuarioService.ObtenerPermisosAsync siempre
+    // da una lista), pero un mock sin Setup sí lo hace (default de Moq para tipos referencia) y
+    // eso disparaba un ArgumentNullException real en `new HashSet<string>(permisos)` que
+    // terminaba logueado en crash.log vía RefrescoPermisos -- una de las dos fuentes de
+    // contaminación del log real durante `dotnet test` (75 de 99 entradas). Tratar null como
+    // colección vacía es la defensa correcta en cualquier caso: no hay por qué confiar
+    // ciegamente en que el contrato del servicio nunca cambie.
+    [Fact]
+    public async Task CargarAsync_ObtenerPermisosDevuelveNull_LoTrataComoColeccionVacia_NoLanza()
+    {
+        var (panel, padre, svc) = Crear();
+        svc.Setup(s => s.ObtenerPermisosAsync(9)).ReturnsAsync((List<string>)null!);
+
+        padre.UsuarioSeleccionado = Dto(9, RolUsuario.Operador);
+        var ex = await Record.ExceptionAsync(() => panel._tareaCarga);
+
+        Assert.Null(ex);
+        Assert.Null(panel.MensajeError);
+        Assert.All(panel.Grupos.SelectMany(g => g.Items), item => Assert.False(item.Seleccionado));
     }
 }

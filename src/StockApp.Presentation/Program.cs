@@ -2,9 +2,9 @@
 using Optris.Icons.Avalonia;
 using Optris.Icons.Avalonia.MaterialDesign;
 using System;
-using System.IO;
 using System.Threading.Tasks;
 using Velopack;
+using StockApp.Presentation.Services;
 
 namespace StockApp.Presentation;
 
@@ -63,33 +63,14 @@ sealed class Program
 
     /// <summary>
     /// Escribe una entrada de crash a %LocalAppData%\GestionMunicipal\logs\crash.log.
-    /// Nunca debe tirar: si falla la escritura, se traga la excepción silenciosamente
-    /// para no enmascarar el error original que se está intentando loguear.
+    /// Delega en <see cref="RegistroFallosArchivo"/> (fix 2026-08-20: misma lógica de
+    /// escritura + rotación reusada por RefrescoPermisos vía IRegistroFallos, sin duplicarla
+    /// acá). Sigue siendo el punto de entrada legítimo para los tres handlers globales de
+    /// excepciones no manejadas de este archivo (AppDomain, UnobservedTask, el catch de Main)
+    /// y para Dispatcher.UIThread.UnhandledException en App.axaml.cs — ninguno de esos corre
+    /// durante `dotnet test`, así que no necesitan pasar por la abstracción inyectable.
     /// </summary>
-    internal static void LogFatal(string origen, Exception ex)
-    {
-        try
-        {
-            var logsDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "GestionMunicipal",
-                "logs");
-
-            Directory.CreateDirectory(logsDir);
-
-            var logPath = Path.Combine(logsDir, "crash.log");
-
-            var entrada =
-                $"[{DateTime.Now:yyyy-MM-ddTHH:mm:ss.fffzzz}] origen={origen} " +
-                $"tipo={ex.GetType().FullName} mensaje={ex.Message}{Environment.NewLine}" +
-                $"{ex}{Environment.NewLine}{Environment.NewLine}";
-
-            File.AppendAllText(logPath, entrada);
-        }
-        catch
-        {
-            // El logger nunca debe tirar: si falla la escritura, no hay nada más que hacer acá.
-        }
-    }
+    internal static void LogFatal(string origen, Exception ex) =>
+        new RegistroFallosArchivo().LogFatal(origen, ex);
 
 }

@@ -33,6 +33,12 @@
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
       <_Parameter1>StockApp.Presentation.Tests</_Parameter1>
     </AssemblyAttribute>
+    <!-- Fix 2026-08-20: RefrescoPermisos.ConfigurarRegistroFallos es internal, y UiTests
+         también necesita poder configurar el doble en memoria desde su propio TestBootstrap
+         (ModuleInitializer), igual que StockApp.Presentation.Tests. -->
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>StockApp.Presentation.UiTests</_Parameter1>
+    </AssemblyAttribute>
   </ItemGroup>
 
   <ItemGroup>

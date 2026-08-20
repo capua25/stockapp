@@ -173,7 +173,11 @@ public partial class PanelPermisosViewModel : ViewModelBase
         try
         {
             var permisos = await _usuarios.ObtenerPermisosAsync(_padre.UsuarioSeleccionado.Id);
-            var seleccionados = new HashSet<string>(permisos);
+            // Defensa (fix 2026-08-20): el contrato real de UsuarioService.ObtenerPermisosAsync
+            // siempre devuelve una lista no-nula, pero no hay por qué confiar ciegamente en
+            // eso -- tratar null como colección vacía es una línea y evita un
+            // ArgumentNullException real si alguna implementación futura rompe el contrato.
+            var seleccionados = new HashSet<string>(permisos ?? Enumerable.Empty<string>());
             foreach (var item in Grupos.SelectMany(g => g.Items))
                 item.Seleccionado = seleccionados.Contains(item.Clave);
         }

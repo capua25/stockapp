@@ -54,6 +54,14 @@ public partial class App : AvaloniaApp
     {
         _serviceProvider = ConfigurarServicios();
 
+        // Bridge composition root -> helper estático (fix 2026-08-20): RefrescoPermisos es un
+        // helper estático (lo consumen varios ViewModels vía DispararBestEffortAsync, no un
+        // servicio DI en sí), así que su IRegistroFallos se configura acá, una única vez, en
+        // vez de vía constructor. Antes de este fix llamaba directo a Program.LogFatal y
+        // ensuciaba el crash.log real en cada corrida de `dotnet test` — ver TestBootstrap en
+        // StockApp.Presentation.Tests / .UiTests para el equivalente en los proyectos de test.
+        RefrescoPermisos.ConfigurarRegistroFallos(_serviceProvider.GetRequiredService<IRegistroFallos>());
+
         // Captura excepciones no manejadas del hilo de UI de Avalonia (ej. lanzadas desde
         // handlers de eventos o bindings). Dispatcher.UIThread ya está inicializado en este
         // punto del ciclo de vida.
@@ -286,6 +294,12 @@ public partial class App : AvaloniaApp
 
         // ── Info de la app (versión mostrada en login y shell) ────────────────
         services.AddSingleton<IInfoApp, InfoApp>();
+
+        // ── Registro de fallos best-effort (fix 2026-08-20): singleton porque
+        // RegistroFallosArchivo no tiene estado propio más allá de la ruta fija de crash.log,
+        // igual criterio que IServicioEstadoVentana más abajo. Ver el bridge hacia
+        // RefrescoPermisos en OnFrameworkInitializationCompleted.
+        services.AddSingleton<IRegistroFallos, RegistroFallosArchivo>();
 
         // ── Inc 6: exportación CSV (vive en Application, sin dependencias de Infra — OQ-2)
         services.AddTransient<ICsvExporter, CsvExporter>();
