@@ -86,10 +86,15 @@
                         <DataGridTemplateColumn Header="Stock" Width="Auto" MinWidth="100" SortMemberPath="StockActual">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:ProductoDto">
-                                    <TextBlock Text="{Binding StockActual, Converter={x:Static conv:CantidadConverter.Instance}}"
-                                               Foreground="{Binding StockActual, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}"
-                                               Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
-                                               HorizontalAlignment="Right" VerticalAlignment="Center" Margin="4,0" />
+                                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio1}"
+                                                Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
+                                                HorizontalAlignment="Right" VerticalAlignment="Center" Margin="4,0">
+                                        <c:BadgeEstado Texto="Stock negativo" Tono="Peligro"
+                                                       IsVisible="{Binding StockActual, Converter={x:Static conv:EsNegativoConverter.Instance}}" />
+                                        <TextBlock Text="{Binding StockActual, Converter={x:Static conv:CantidadConverter.Instance}}"
+                                                   Foreground="{Binding StockActual, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}"
+                                                   VerticalAlignment="Center" />
+                                    </StackPanel>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>

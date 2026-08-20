@@ -29,8 +29,12 @@
                                 <Border Classes="card" Margin="0,0,0,8">
                                     <Grid ColumnDefinitions="*,Auto,Auto,Auto">
                                         <StackPanel Grid.Column="0" Spacing="2">
-                                            <TextBlock Text="{Binding Titulo}" FontWeight="SemiBold"
-                                                       Foreground="{Binding DiasParaVencer, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}" />
+                                            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio1}">
+                                                <TextBlock Text="{Binding Titulo}" FontWeight="SemiBold"
+                                                           Foreground="{Binding DiasParaVencer, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}" />
+                                                <c:BadgeEstado Texto="Vencida" Tono="Peligro"
+                                                               IsVisible="{Binding DiasParaVencer, Converter={x:Static conv:EsNegativoConverter.Instance}}" />
+                                            </StackPanel>
                                             <TextBlock Text="{Binding PrioridadTexto}" Classes="caption" />
                                             <TextBlock Text="{Binding FechaLimite, StringFormat='Vence: {0:dd/MM/yyyy}'}"
                                                        Classes="caption"
@@ -62,8 +66,12 @@
                                 <Border Classes="card" Margin="0,0,0,8">
                                     <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
                                         <StackPanel Grid.Column="0" Spacing="2">
-                                            <TextBlock Text="{Binding Titulo}" FontWeight="SemiBold"
-                                                       Foreground="{Binding DiasParaVencer, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}" />
+                                            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio1}">
+                                                <TextBlock Text="{Binding Titulo}" FontWeight="SemiBold"
+                                                           Foreground="{Binding DiasParaVencer, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}" />
+                                                <c:BadgeEstado Texto="Vencida" Tono="Peligro"
+                                                               IsVisible="{Binding DiasParaVencer, Converter={x:Static conv:EsNegativoConverter.Instance}}" />
+                                            </StackPanel>
                                             <TextBlock Text="{Binding PrioridadTexto}" Classes="caption" />
                                             <TextBlock Text="{Binding FechaLimite, StringFormat='Vence: {0:dd/MM/yyyy}'}"
                                                        Classes="caption"

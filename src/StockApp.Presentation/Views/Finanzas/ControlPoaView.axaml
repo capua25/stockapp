@@ -37,8 +37,12 @@
                 <DataGridTemplateColumn Header="Saldo">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate DataType="dto:ControlPoaLineaDto">
-                            <TextBlock Text="{Binding Saldo, Converter={x:Static conv:MonedaConverter.Instance}}"
-                                       Foreground="{Binding Saldo, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}" />
+                            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio1}">
+                                <c:BadgeEstado Texto="Sobreejecutado" Tono="Peligro"
+                                               IsVisible="{Binding Saldo, Converter={x:Static conv:EsNegativoConverter.Instance}}" />
+                                <TextBlock Text="{Binding Saldo, Converter={x:Static conv:MonedaConverter.Instance}}"
+                                           Foreground="{Binding Saldo, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}" />
+                            </StackPanel>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>

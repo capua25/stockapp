@@ -34,9 +34,14 @@
             <TextBlock Text="{Binding SaldoInicial, Converter={x:Static conv:MonedaConverter.Instance}}"
                        IsVisible="{Binding !VerAnioCompleto}" VerticalAlignment="Bottom" FontWeight="SemiBold" />
             <TextBlock Text="Saldo final:" IsVisible="{Binding !VerAnioCompleto}" VerticalAlignment="Bottom" />
-            <TextBlock Text="{Binding SaldoFinal, Converter={x:Static conv:MonedaConverter.Instance}}"
-                       IsVisible="{Binding !VerAnioCompleto}" VerticalAlignment="Bottom" FontWeight="SemiBold"
-                       Foreground="{Binding SaldoFinal, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}" />
+            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio1}"
+                        IsVisible="{Binding !VerAnioCompleto}" VerticalAlignment="Bottom">
+                <c:BadgeEstado Texto="Saldo negativo" Tono="Peligro"
+                               IsVisible="{Binding SaldoFinal, Converter={x:Static conv:EsNegativoConverter.Instance}}" />
+                <TextBlock Text="{Binding SaldoFinal, Converter={x:Static conv:MonedaConverter.Instance}}"
+                           FontWeight="SemiBold"
+                           Foreground="{Binding SaldoFinal, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}" />
+            </StackPanel>
         </StackPanel>
 
         <DataGrid Grid.Row="2" ItemsSource="{Binding MovimientosView}"
@@ -74,8 +79,12 @@
                         <DataGridTemplateColumn Header="Neto">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate DataType="dto:TotalMensualDto">
-                                    <TextBlock Text="{Binding Neto, Converter={x:Static conv:MonedaConverter.Instance}}"
-                                               Foreground="{Binding Neto, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}" />
+                                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio1}">
+                                        <c:BadgeEstado Texto="Déficit" Tono="Peligro"
+                                                       IsVisible="{Binding Neto, Converter={x:Static conv:EsNegativoConverter.Instance}}" />
+                                        <TextBlock Text="{Binding Neto, Converter={x:Static conv:MonedaConverter.Instance}}"
+                                                   Foreground="{Binding Neto, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}" />
+                                    </StackPanel>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>

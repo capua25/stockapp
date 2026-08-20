@@ -97,9 +97,13 @@
                         <DataGridTemplateColumn Header="Stock Nuevo" Width="Auto" MinWidth="100" SortMemberPath="StockNuevo">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:MovimientoHistorialDto">
-                                    <TextBlock Text="{Binding StockNuevo, Converter={x:Static conv:CantidadConverter.Instance}}"
-                                               Foreground="{Binding StockNuevo, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}"
-                                               VerticalAlignment="Center" HorizontalAlignment="Right" Margin="4,0" />
+                                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio1}"
+                                                VerticalAlignment="Center" HorizontalAlignment="Right" Margin="4,0">
+                                        <c:BadgeEstado Texto="Stock negativo" Tono="Peligro"
+                                                       IsVisible="{Binding StockNuevo, Converter={x:Static conv:EsNegativoConverter.Instance}}" />
+                                        <TextBlock Text="{Binding StockNuevo, Converter={x:Static conv:CantidadConverter.Instance}}"
+                                                   Foreground="{Binding StockNuevo, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}" />
+                                    </StackPanel>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
