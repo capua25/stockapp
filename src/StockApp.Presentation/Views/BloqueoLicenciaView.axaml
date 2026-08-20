@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels"
+             xmlns:c="using:StockApp.Presentation.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="400"
@@ -10,8 +11,8 @@
 
     <Grid>
 
-        <Border Classes="card" Padding="40" HorizontalAlignment="Center" VerticalAlignment="Center" Width="420">
-            <StackPanel Spacing="16">
+        <Border Classes="card" Padding="{DynamicResource PaddingHolgado}" HorizontalAlignment="Center" VerticalAlignment="Center" Width="420">
+            <StackPanel Spacing="{DynamicResource Espacio4}">
 
                 <TextBlock Text="Activación de licencia"
                            Classes="titulo-vista"
@@ -19,13 +20,13 @@
                            Margin="0,0,0,8" />
 
                 <TextBlock Text="Este servidor no tiene una licencia activada. Pasale el código de máquina al proveedor y pegá la licencia que te devuelva."
+                           Classes="body"
+                           Foreground="{DynamicResource TextoSecundarioBrush}"
                            HorizontalAlignment="Center"
-                           TextWrapping="Wrap"
-                           Opacity="0.7" />
+                           TextWrapping="Wrap" />
 
                 <!-- Código de máquina -->
-                <StackPanel Spacing="4">
-                    <TextBlock Text="Código de máquina" />
+                <c:CampoFormulario Etiqueta="Código de máquina">
                     <Grid ColumnDefinitions="*,Auto">
                         <SelectableTextBlock Grid.Column="0"
                                               Text="{Binding CodigoMaquina}"
@@ -34,23 +35,20 @@
                                               TextWrapping="Wrap" />
                         <Button Grid.Column="1"
                                 Content="Copiar"
-                                Classes="secondary"
-                                Padding="10,4"
-                                FontSize="12"
+                                Classes="secondary compacto"
                                 Margin="8,0,0,0"
                                 VerticalAlignment="Center"
                                 Click="CopiarCodigoMaquina_Click" />
                     </Grid>
-                </StackPanel>
+                </c:CampoFormulario>
 
                 <!-- Licencia -->
-                <StackPanel Spacing="4">
-                    <TextBlock Text="Licencia" />
+                <c:CampoFormulario Etiqueta="Licencia">
                     <TextBox Text="{Binding LicenciaPegada}"
                              AcceptsReturn="True"
                              Height="90"
                              PlaceholderText="Pegá acá el texto de la licencia" />
-                </StackPanel>
+                </c:CampoFormulario>
 
                 <!-- Mensaje de error -->
                 <TextBlock Text="{Binding MensajeError}"
@@ -69,6 +67,7 @@
                 <!-- Modo acceso limitado (FIX 1, re-review final E1): único camino a los backups
                      mientras la licencia sigue vencida. No habilita operar el sistema. -->
                 <Button Content="¿Necesitás bajar un backup? Iniciar sesión"
+                        Classes="ghost"
                         Command="{Binding IrALoginAccesoLimitadoCommand}"
                         HorizontalAlignment="Center" />
 

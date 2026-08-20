@@ -33,6 +33,11 @@
          se comio esta deuda con Padding="8" literal en ShellMainView.axaml; sin este token la
          Fase B la repite 20 veces mas y convierte una deuda puntual en un patron. -->
     <Thickness x:Key="PaddingCompacto">8</Thickness>
+    <!-- Ruling B-31 (Fase B, tanda 11): respiro de las 3 cards P6 (Login/ResetAdmin/
+         BloqueoLicencia). Su Padding="40" estaba fuera de la escala (que tiene 32 y 48, no 40);
+         Espacio7 (48) es x:Double y en Padding revienta en runtime (Trampa T1), asi que hace
+         falta el Thickness derivado. -->
+    <Thickness x:Key="PaddingHolgado">48</Thickness>
 
     <!-- ── Radios ──────────────────────────────────────────────────────────
          De 4/6/8/10 sin criterio a tres con significado: chico para badges,

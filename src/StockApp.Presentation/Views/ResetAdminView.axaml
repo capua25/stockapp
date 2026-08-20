@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels"
+             xmlns:c="using:StockApp.Presentation.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="420" d:DesignHeight="560"
@@ -10,8 +11,8 @@
 
     <Grid>
 
-        <Border Classes="card" Padding="40" HorizontalAlignment="Center" VerticalAlignment="Center" Width="420">
-            <StackPanel Spacing="16">
+        <Border Classes="card" Padding="{DynamicResource PaddingHolgado}" HorizontalAlignment="Center" VerticalAlignment="Center" Width="420">
+            <StackPanel Spacing="{DynamicResource Espacio4}">
 
                 <TextBlock Text="Recuperar acceso de Admin"
                            Classes="titulo-vista"
@@ -19,13 +20,13 @@
                            Margin="0,0,0,8" />
 
                 <Button Content="1) Generar código de recuperación"
+                        Classes="secondary"
                         Command="{Binding PedirDesafioCommand}"
                         HorizontalAlignment="Stretch"
                         HorizontalContentAlignment="Center" />
 
                 <!-- Código de máquina -->
-                <StackPanel Spacing="4">
-                    <TextBlock Text="Código de máquina" />
+                <c:CampoFormulario Etiqueta="Código de máquina">
                     <Grid ColumnDefinitions="*,Auto">
                         <SelectableTextBlock Grid.Column="0"
                                               Text="{Binding CodigoMaquina}"
@@ -34,18 +35,15 @@
                                               TextWrapping="Wrap" />
                         <Button Grid.Column="1"
                                 Content="Copiar"
-                                Classes="secondary"
-                                Padding="10,4"
-                                FontSize="12"
+                                Classes="secondary compacto"
                                 Margin="8,0,0,0"
                                 VerticalAlignment="Center"
                                 Click="CopiarCodigoMaquina_Click" />
                     </Grid>
-                </StackPanel>
+                </c:CampoFormulario>
 
                 <!-- Desafío -->
-                <StackPanel Spacing="4">
-                    <TextBlock Text="Desafío" />
+                <c:CampoFormulario Etiqueta="Desafío">
                     <Grid ColumnDefinitions="*,Auto">
                         <SelectableTextBlock Grid.Column="0"
                                               Text="{Binding Desafio}"
@@ -54,31 +52,27 @@
                                               TextWrapping="Wrap" />
                         <Button Grid.Column="1"
                                 Content="Copiar"
-                                Classes="secondary"
-                                Padding="10,4"
-                                FontSize="12"
+                                Classes="secondary compacto"
                                 Margin="8,0,0,0"
                                 VerticalAlignment="Center"
                                 Click="CopiarDesafio_Click" />
                     </Grid>
-                </StackPanel>
+                </c:CampoFormulario>
 
                 <!-- Token de reset -->
-                <StackPanel Spacing="4">
-                    <TextBlock Text="Token de reset (del proveedor)" />
+                <c:CampoFormulario Etiqueta="Token de reset (del proveedor)">
                     <TextBox Text="{Binding TokenPegado}"
                              AcceptsReturn="True"
                              Height="90"
                              PlaceholderText="Pegá el token firmado" />
-                </StackPanel>
+                </c:CampoFormulario>
 
                 <!-- Nueva contraseña -->
-                <StackPanel Spacing="4">
-                    <TextBlock Text="Nueva contraseña de Admin" />
+                <c:CampoFormulario Etiqueta="Nueva contraseña de Admin">
                     <TextBox Text="{Binding NuevaContrasena}"
                              PasswordChar="●"
                              PlaceholderText="Nueva contraseña" />
-                </StackPanel>
+                </c:CampoFormulario>
 
                 <Button Content="2) Resetear Admin"
                         Classes="primary"
@@ -100,6 +94,7 @@
                            TextWrapping="Wrap" />
 
                 <Button Content="Volver al login"
+                        Classes="ghost"
                         Command="{Binding VolverCommand}"
                         HorizontalAlignment="Stretch"
                         HorizontalContentAlignment="Center" />

@@ -146,6 +146,32 @@ public class GuardianDePatronTests
         typeof(AdjuntosDocumentoPanelView),
     };
 
+    /// <summary>
+    /// P6 (Ruling B-32): pantallas centradas sin sidebar (Login, ResetAdmin, BloqueoLicencia). NO
+    /// llevan HeaderVista -- su ControlTheme alinea el titulo a la izquierda con slot de acciones a
+    /// la derecha, y estas tres tienen el titulo CENTRADO dentro de una card sin acciones. Tampoco
+    /// tienen margen exterior: el respiro lo da el Padding de la card sobre el FondoBrush de la
+    /// ventana. El invariante propio es ese padding.
+    /// </summary>
+    public static readonly TheoryData<Type> VistasCentradasSinSidebar = new()
+    {
+        typeof(LoginView),
+        typeof(ResetAdminView),
+        typeof(BloqueoLicenciaView),
+    };
+
+    [AvaloniaTheory]
+    [MemberData(nameof(VistasCentradasSinSidebar))]
+    public void VistaCentrada_TieneCardConPaddingHolgado(Type tipoVista)
+    {
+        var vista = PatronHelpers.Montar(tipoVista);
+        var card = vista.GetVisualDescendants().OfType<Border>()
+            .FirstOrDefault(b => b.Classes.Contains("card"));
+
+        Assert.True(card is not null, $"{tipoVista.Name} no tiene ninguna Border.card en su arbol.");
+        Assert.Equal(new Thickness(48), card!.Padding);
+    }
+
     [AvaloniaTheory]
     [MemberData(nameof(VistasDeLaTanda))]
     public void Vista_TieneMargenExteriorEstandar(Type tipoVista)
@@ -179,6 +205,7 @@ public class GuardianDePatronTests
     [AvaloniaTheory]
     [MemberData(nameof(VistasDeLaTanda))]
     [MemberData(nameof(VistasEmbebidas))]
+    [MemberData(nameof(VistasCentradasSinSidebar))]
     public void Vista_NoTieneOpacidadesLiterales(Type tipoVista)
     {
         var vista = PatronHelpers.Montar(tipoVista);
@@ -237,6 +264,7 @@ public class GuardianDePatronTests
     [AvaloniaTheory]
     [MemberData(nameof(VistasDeLaTanda))]
     [MemberData(nameof(VistasEmbebidas))]
+    [MemberData(nameof(VistasCentradasSinSidebar))]
     public void Vista_NoTieneUnSegundoBotonPrimario(Type tipoVista)
     {
         if (VistasExentasPorEmbeberUnWizardP8.Contains(tipoVista))

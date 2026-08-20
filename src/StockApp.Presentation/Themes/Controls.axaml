@@ -248,6 +248,16 @@
         <Setter Property="BoxShadow" Value="{DynamicResource SombraCard}" />
     </Style>
 
+    <!-- ── Button: compacto (modificador, Ruling B-33) ─────────────────────────
+         Los 3 botones "Copiar" de las pantallas P6 (Login/ResetAdmin/BloqueoLicencia) repetian
+         Padding="10,4" FontSize="12" inline. Se usa junto con .secondary (Classes="secondary
+         compacto"): NO reemplaza la escala Padding de .secondary, la RECORTA para este caso
+         puntual. No es PaddingCompacto (Thickness 8 uniforme): ese cambiaria el tamano del boton. -->
+    <Style Selector="Button.compacto">
+        <Setter Property="Padding" Value="10,4" />
+        <Setter Property="FontSize" Value="12" />
+    </Style>
+
     <!-- ── Badge: inactiva (Border + TextBlock) ────────────────────────────────
          Indicador de entidad de catálogo dada de baja (Categoría/Proveedor/
          UnidadMedida), en los 3 listados. Usa los tokens Deshabilitado* (no

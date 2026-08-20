@@ -64,6 +64,14 @@ public class TokensDisenioTests
         Assert.Equal(new Thickness(8), Assert.IsType<Thickness>(Recurso("PaddingCompacto")));
     }
 
+    [AvaloniaFact]
+    public void PaddingHolgado_Es48EnLosCuatroLados()
+    {
+        // Ruling B-31 de la Fase B (tanda 11): respiro de las 3 cards P6 (Login/ResetAdmin/
+        // BloqueoLicencia). Padding="40" estaba fuera de la escala (32 y 48, no 40).
+        Assert.Equal(new Thickness(48), Assert.IsType<Thickness>(Recurso("PaddingHolgado")));
+    }
+
     [AvaloniaTheory]
     [InlineData("RadioChico", 4.0)]
     [InlineData("RadioBase", 6.0)]
