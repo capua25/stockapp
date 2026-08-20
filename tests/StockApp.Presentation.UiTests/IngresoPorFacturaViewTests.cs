@@ -64,7 +64,7 @@ public class IngresoPorFacturaViewTests
         var confirmacion = new ConfirmacionServiceFake();
         var adjuntosPanel = new StockApp.Presentation.ViewModels.Finanzas.AdjuntosPanelViewModel(
             new AdjuntoServiceFake(), new ServicioSeleccionArchivoFake(), new ServicioAperturaArchivoFake(),
-            confirmacion, new TareaSessionFake(RolUsuario.Admin));
+            confirmacion, new SesionFake(RolUsuario.Admin));
 
         var vm = new IngresoPorFacturaViewModel(
             servicio, productoService, categoriaService, unidadService, proveedorService,

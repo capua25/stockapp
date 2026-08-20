@@ -12,21 +12,19 @@ namespace StockApp.Presentation.UiTests;
 /// <summary>
 /// Sesion de prueba con rol Y permisos explicitos.
 ///
-/// Reemplaza el CurrentSessionFake privado no-op de GastosViewTests, IngresosViewTests y
-/// PagosGastoViewTests (Task 8.0 de la Fase B). El comentario anterior afirmaba que ya
-/// reemplazaba tambien a InicioViewTests -- eso era falso: nunca se toco ese archivo. La
-/// migracion real, verificada con grep sobre EstablecerPermisos sin resolver contra codigo
-/// viejo (Ruling B-19), encontro SEIS archivos con un EstablecerPermisos no-op, no tres ni
-/// cuatro: los tres de arriba (cerrados aca), TareaFakes.cs (TareaSessionFake, compartido por
-/// Documentos y Tareas, se cierra en la tanda 9) e InicioViewTests.cs/InicioPanelTareasTests.cs
-/// (se cierran en B3). Mientras un EstablecerPermisos sea no-op no se puede testear revocacion
-/// de permiso en caliente en esa vista -- ver FinanzasRevocacionPermisosTests.cs.
+/// Reemplaza el CurrentSessionFake privado no-op de GastosViewTests, IngresosViewTests,
+/// PagosGastoViewTests (Task 8.0 de la Fase B), InicioViewTests e InicioPanelTareasTests, y
+/// TareaSessionFake de TareaFakes.cs (Task 13.3 de B3, ya cerrada). La migracion real,
+/// verificada con grep sobre EstablecerPermisos sin resolver contra codigo viejo (Ruling B-19),
+/// encontro SEIS archivos con un EstablecerPermisos no-op; los seis quedaron migrados a este
+/// fake. Cero EstablecerPermisos no-op en tests/StockApp.Presentation.UiTests.
 ///
 /// Usar SIEMPRE RolUsuario.Operador con permisos explicitos para testear un gate: Admin
 /// cortocircuita el chequeo en AuthorizationService.cs:65-66 y el test pasa sin probar nada.
 /// </summary>
 internal sealed class SesionFake : ICurrentSession
 {
+    private readonly UsuarioSesion? _usuario;
     private IReadOnlySet<string> _permisos;
 
     public SesionFake(RolUsuario rol, params string[] permisos)
@@ -35,8 +33,21 @@ internal sealed class SesionFake : ICurrentSession
         _permisos = new HashSet<string>(permisos);
     }
 
+    /// <summary>
+    /// Sobrecarga para los bancos de prueba que necesitan un UsuarioSesion con nombre real (la
+    /// vista lo muestra: InicioViewModel deriva Saludo y RolTexto de el, Task 13.3). El
+    /// constructor de rol suelto hardcodea (1, "prueba", ..., "Usuario de prueba"), que sirve
+    /// para gates pero no para texto.
+    /// </summary>
+    public SesionFake(UsuarioSesion usuario, params string[] permisos)
+    {
+        _usuario = usuario;
+        RolActual = usuario.Rol;
+        _permisos = new HashSet<string>(permisos);
+    }
+
     public bool EstaAutenticado => true;
-    public UsuarioSesion? UsuarioActual => new(1, "prueba", RolActual!.Value, "Usuario de prueba");
+    public UsuarioSesion? UsuarioActual => _usuario ?? new(1, "prueba", RolActual!.Value, "Usuario de prueba");
     public RolUsuario? RolActual { get; }
     public IReadOnlySet<string> PermisosActuales => _permisos;
 

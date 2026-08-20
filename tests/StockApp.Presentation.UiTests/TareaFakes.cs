@@ -92,47 +92,6 @@ internal sealed class TareaServiceFake : ITareaService
 }
 
 /// <summary>
-/// Sesion fake con rol configurable -- es exactamente el rol el que decide, en
-/// TareaFila.PuedeCancelar y TareaFormViewModel.EsAdmin, que controles debe exponer la VISTA.
-///
-/// Task 9.0 (Ruling B-19) migró DocumentoListViewTests.cs, TareaListViewTests.cs y
-/// TareaFormViewTests.cs a SesionFake (SesionFakes.cs), que a diferencia de esta clase aplica de
-/// verdad EstablecerPermisos. El plan pedía además BORRAR esta clase entera -- no se hizo: sigue
-/// viva porque IngresoPorFacturaViewTests.cs (:67, gap no detectado por el grep de EstablecerPermisos
-/// de Ruling 6/B-19 -- ese archivo la instancia pero nunca llama EstablecerPermisos) y
-/// InicioPanelTareasTests.cs (:216,:239, diferido a B3 según el comentario de SesionFake más abajo)
-/// siguen dependiendo de ella. Borrarla acá habría roto la compilación de esos dos archivos, fuera
-/// del alcance de la Task 9.0.
-/// </summary>
-internal sealed class TareaSessionFake : ICurrentSession
-{
-    private readonly IReadOnlySet<string> _permisos;
-
-    public TareaSessionFake(RolUsuario rol) : this(rol, Array.Empty<string>()) { }
-
-    /// <summary>
-    /// Overload con permisos explicitos. Sin esto, PermisosActuales devolvia SIEMPRE un set
-    /// vacio y la unica forma de que un gate diera true era montar con Admin — que cortocircuita
-    /// el chequeo y deja el test verde sin probar el gate.
-    /// </summary>
-    public TareaSessionFake(RolUsuario rol, params string[] permisos)
-    {
-        RolActual = rol;
-        _permisos = new HashSet<string>(permisos);
-    }
-
-    public bool EstaAutenticado => true;
-    public StockApp.Application.Auth.UsuarioSesion? UsuarioActual
-        => new(1, "prueba", RolActual!.Value, "Usuario de prueba");
-    public RolUsuario? RolActual { get; }
-    public IReadOnlySet<string> PermisosActuales => _permisos;
-    public void EstablecerPermisos(IReadOnlySet<string> permisos) { }
-
-    public void IniciarSesion(Usuario usuario) => throw new NotSupportedException("No usado en este banco de pruebas.");
-    public void CerrarSesion() => throw new NotSupportedException("No usado en este banco de pruebas.");
-}
-
-/// <summary>
 /// A diferencia de NavigationServiceFake (MovimientoRegistroFakes.cs, que ignora toda navegacion),
 /// este fake GRABA a que ViewModel se navego -- necesario para verificar con un click real que
 /// "Nueva tarea"/"Ver"/"Volver"/"Guardar" efectivamente disparan la navegacion esperada, no solo

@@ -33,27 +33,6 @@ namespace StockApp.Presentation.UiTests;
 /// </summary>
 public class InicioPanelTareasTests
 {
-    private sealed class CurrentSessionFake : ICurrentSession
-    {
-        private readonly UsuarioSesion _usuario;
-        public CurrentSessionFake(UsuarioSesion usuario) => _usuario = usuario;
-
-        public bool EstaAutenticado => true;
-        public UsuarioSesion? UsuarioActual => _usuario;
-        public RolUsuario? RolActual => _usuario.Rol;
-
-        // Bug 2026-08-15: InicioViewModel.CargarAsync ahora gatea la carga del panel de tareas
-        // por Permisos.GestionarTareas (PuedeVerTareas) antes de llamar a /tareas -- este banco
-        // de pruebas ejercita el FILTRADO de tareas ajenas por rol (spec: "un Operador no ve las
-        // tareas tomadas por otro operador"), no el gating de permisos en sí, así que el fake le
-        // otorga el permiso para que el escenario Operador siga teniendo sentido.
-        public IReadOnlySet<string> PermisosActuales => new HashSet<string> { Permisos.GestionarTareas };
-        public void EstablecerPermisos(IReadOnlySet<string> permisos) { }
-
-        public void IniciarSesion(Usuario usuario) => throw new NotSupportedException("No usado en este banco de pruebas.");
-        public void CerrarSesion() => throw new NotSupportedException("No usado en este banco de pruebas.");
-    }
-
     private sealed class FinanzasVistasServiceFake : IFinanzasVistasService
     {
         public Task<LibroCajaMesDto> ObtenerLibroCajaMesAsync(int anio, int mes)
@@ -125,7 +104,7 @@ public class InicioPanelTareasTests
     {
         var navegacion = new NavigationRecorderFake();
         var vm = new InicioViewModel(
-            new CurrentSessionFake(usuario), navegacion, new FinanzasVistasServiceFake(),
+            new SesionFake(usuario, Permisos.GestionarTareas), navegacion, new FinanzasVistasServiceFake(),
             new BackupsServiceFake(), new TareaServiceFake(tareas), new AuthServiceFake());
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
@@ -213,7 +192,7 @@ public class InicioPanelTareasTests
         Assert.NotNull(navegacion.UltimoInicializadorTareaForm);
 
         var formVm = new TareaFormViewModel(
-            new TareaServiceFake(), new TareaSessionFake(RolUsuario.Admin), navegacion, new ConfirmacionServiceFake());
+            new TareaServiceFake(), new SesionFake(RolUsuario.Admin), navegacion, new ConfirmacionServiceFake());
         navegacion.UltimoInicializadorTareaForm!(formVm);
 
         Assert.Equal("Reponer stock depósito B", formVm.Titulo);
@@ -236,7 +215,7 @@ public class InicioPanelTareasTests
 
         Assert.Equal(typeof(TareaFormViewModel), navegacion.UltimoTipoNavegado);
         var formVm = new TareaFormViewModel(
-            new TareaServiceFake(), new TareaSessionFake(RolUsuario.Admin), navegacion, new ConfirmacionServiceFake());
+            new TareaServiceFake(), new SesionFake(RolUsuario.Admin), navegacion, new ConfirmacionServiceFake());
         navegacion.UltimoInicializadorTareaForm!(formVm);
 
         Assert.Equal("Recibir factura proveedor", formVm.Titulo);

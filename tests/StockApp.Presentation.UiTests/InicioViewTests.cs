@@ -30,34 +30,6 @@ namespace StockApp.Presentation.UiTests;
 /// </summary>
 public class InicioViewTests
 {
-    private sealed class CurrentSessionFake : ICurrentSession
-    {
-        private readonly UsuarioSesion _usuario;
-        private readonly IReadOnlySet<string> _permisos;
-
-        public CurrentSessionFake(UsuarioSesion usuario) : this(usuario, new HashSet<string>()) { }
-
-        /// <summary>
-        /// Overload con permisos configurables (fix bug cosmético 2026-08-17): los tests de
-        /// gating del panel "Accesos rápidos" necesitan un Operador con EXACTAMENTE un permiso
-        /// (ej. solo VerReportes), no el vacío fijo del constructor original.
-        /// </summary>
-        public CurrentSessionFake(UsuarioSesion usuario, IReadOnlySet<string> permisos)
-        {
-            _usuario = usuario;
-            _permisos = permisos;
-        }
-
-        public bool EstaAutenticado => true;
-        public UsuarioSesion? UsuarioActual => _usuario;
-        public RolUsuario? RolActual => _usuario.Rol;
-        public IReadOnlySet<string> PermisosActuales => _permisos;
-        public void EstablecerPermisos(IReadOnlySet<string> permisos) { }
-
-        public void IniciarSesion(Usuario usuario) => throw new NotSupportedException("No usado en este banco de pruebas.");
-        public void CerrarSesion() => throw new NotSupportedException("No usado en este banco de pruebas.");
-    }
-
     private sealed class FinanzasVistasServiceFake : IFinanzasVistasService
     {
         public Task<LibroCajaMesDto> ObtenerLibroCajaMesAsync(int anio, int mes)
@@ -111,7 +83,7 @@ public class InicioViewTests
     private static (Window Window, InicioViewModel Vm) Montar(UsuarioSesion usuario, IBackupsService backups)
     {
         var vm = new InicioViewModel(
-            new CurrentSessionFake(usuario), new NavigationServiceFake(),
+            new SesionFake(usuario), new NavigationServiceFake(),
             new FinanzasVistasServiceFake(), backups, new TareaServiceFake(), new AuthServiceFake());
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
@@ -254,7 +226,7 @@ public class InicioViewTests
         var salud = new SaludBackupDto(DateTime.UtcNow, false, 26);
 
         var vm = new InicioViewModel(
-            new CurrentSessionFake(usuario, new HashSet<string> { Permisos.VerReportes }),
+            new SesionFake(usuario, Permisos.VerReportes),
             new NavigationServiceFake(), new FinanzasVistasServiceFake(), new BackupsServiceFake(salud),
             new TareaServiceFake(), new AuthServiceFake());
 
