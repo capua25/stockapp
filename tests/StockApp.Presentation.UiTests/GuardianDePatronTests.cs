@@ -77,6 +77,7 @@ public class GuardianDePatronTests
     [InlineData(typeof(HistorialPorProductoView), "Historial por producto", "REPORTES")]
     [InlineData(typeof(AuditoriaLogView), "Auditoría", "REPORTES")]
     [InlineData(typeof(UsuariosAdminView), "Administración de usuarios", "ADMINISTRACIÓN")]
+    [InlineData(typeof(MantenimientoView), "Mantenimiento", "ADMINISTRACIÓN")]
     public void Vista_TieneHeaderVistaConElTituloEsperado(Type tipoVista, string? titulo, string? eyebrow)
     {
         var vista = PatronHelpers.Montar(tipoVista);
@@ -130,6 +131,7 @@ public class GuardianDePatronTests
         typeof(HistorialPorProductoView),
         typeof(AuditoriaLogView),
         typeof(UsuariosAdminView),
+        typeof(MantenimientoView),
     };
 
     /// <summary>

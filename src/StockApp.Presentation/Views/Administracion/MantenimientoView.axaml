@@ -3,6 +3,7 @@
              xmlns:vm="using:StockApp.Presentation.ViewModels.Administracion"
              xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:i="https://github.com/projektanker/icons.avalonia"
+             xmlns:c="using:StockApp.Presentation.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="700" d:DesignHeight="500"
@@ -18,17 +19,13 @@
          izquierda ocupando todo el alto, con Alertas renderizándose al costado derecho.
          Con False, TODOS los hijos honran su Dock y agregar una sección al final deja de ser una
          trampa. De paso, la última tarjeta ya no se estira verticalmente para rellenar la ventana. -->
-    <DockPanel Margin="16" LastChildFill="False">
+    <DockPanel Margin="{DynamicResource MargenVista}" LastChildFill="False">
 
-        <TextBlock DockPanel.Dock="Top"
-                   Text="Mantenimiento"
-                   Classes="titulo-vista"
-                   Margin="0,0,0,4" />
+        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="ADMINISTRACIÓN" Titulo="Mantenimiento" />
         <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
             <TextBlock Grid.Column="0"
                        Text="Backups"
-                       Classes="caption"
-                       Opacity="0.6"
+                       Classes="seccion"
                        VerticalAlignment="Center" />
 
             <!-- Hacer backup ahora / Iniciando…: mismo patrón de swap que Descargar logs /
@@ -143,8 +140,7 @@
 
         <TextBlock DockPanel.Dock="Top"
                    Text="Diagnóstico"
-                   Classes="caption"
-                   Opacity="0.6"
+                   Classes="seccion"
                    Margin="0,24,0,12" />
 
         <Border Classes="card" DockPanel.Dock="Top">
@@ -179,12 +175,11 @@
 
         <TextBlock DockPanel.Dock="Top"
                    Text="Alertas"
-                   Classes="caption"
-                   Opacity="0.6"
+                   Classes="seccion"
                    Margin="0,24,0,12" />
 
         <Border Classes="card" DockPanel.Dock="Top">
-            <StackPanel Spacing="12" MaxWidth="620" HorizontalAlignment="Left">
+            <StackPanel Spacing="{DynamicResource Espacio3}" MaxWidth="620" HorizontalAlignment="Left">
                 <TextBlock Text="Avisá cuando un backup falle o cuando el sistema deje de reportar."
                            Classes="body"
                            TextWrapping="Wrap" />
@@ -199,18 +194,17 @@
                            TextWrapping="Wrap"
                            IsVisible="{Binding ErrorAlCargarAlertas}" />
 
-                <StackPanel Spacing="4">
-                    <TextBlock Text="URL de webhook (healthchecks.io)" />
+                <c:CampoFormulario Etiqueta="URL de webhook (healthchecks.io)">
                     <TextBox Text="{Binding UrlWebhook}"
                              Watermark="https://hc-ping.com/xxxxxxxx"
                              IsEnabled="{Binding !ErrorAlCargarAlertas}" />
-                </StackPanel>
+                </c:CampoFormulario>
 
                 <CheckBox Content="Habilitado"
                           IsChecked="{Binding AlertasHabilitadas}"
                           IsEnabled="{Binding !ErrorAlCargarAlertas}" />
 
-                <StackPanel Orientation="Horizontal" Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
                     <Button Classes="primary"
                             Content="Guardar"
                             Command="{Binding GuardarAlertasCommand}"
