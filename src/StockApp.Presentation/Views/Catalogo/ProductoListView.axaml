@@ -24,11 +24,14 @@
         <Border Classes="card">
             <DockPanel>
 
-                <!-- Filtro de busqueda de la grilla (no es accion de vista: se queda en la card) -->
-                <TextBox DockPanel.Dock="Top"
-                         Text="{Binding FiltroBusqueda}"
-                         PlaceholderText="Buscar por nombre, SKU o código de barras..."
-                         Margin="0,0,0,12" />
+                <!-- Filtro de busqueda de la grilla (no es accion de vista: se queda en la card).
+                     Etiquetado con CampoFormulario por consistencia: el mismo caso de uso (filtro
+                     de texto arriba de un listado) ya lleva Etiqueta="Buscar" en
+                     DocumentoListView, y acá no hay ícono de lupa que lo explique solo. -->
+                <c:CampoFormulario DockPanel.Dock="Top" Etiqueta="Buscar" Margin="0,0,0,12">
+                    <TextBox Text="{Binding FiltroBusqueda}"
+                             PlaceholderText="Buscar por nombre, SKU o código de barras..." />
+                </c:CampoFormulario>
 
                 <!-- Listado. Columnas como DataGridTemplateColumn (no DataGridTextColumn) para
                      poder atenuar el contenido de cada celda de datos con ActivoOpacidadConverter

@@ -31,6 +31,15 @@
                 <!-- Grilla de asignaciones presupuestales por fuente (mixto B+C) -->
                 <TextBlock Text="Asignaciones presupuestales" Classes="seccion" />
 
+                <!-- Encabezado de columnas: una etiqueta por FILA sería ruido (la fila se repite
+                     por cada asignación), así que se etiqueta la columna una sola vez, igual que
+                     el Header de un DataGrid. Mismas ColumnDefinitions que el Grid del
+                     DataTemplate de abajo para que quede alineado. -->
+                <Grid ColumnDefinitions="*,140,Auto">
+                    <TextBlock Grid.Column="0" Text="Fuente de financiamiento" Classes="caption" />
+                    <TextBlock Grid.Column="1" Text="Monto" Classes="caption" Margin="8,0,0,0" />
+                </Grid>
+
                 <ItemsControl ItemsSource="{Binding Asignaciones}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:AsignacionItemViewModel">

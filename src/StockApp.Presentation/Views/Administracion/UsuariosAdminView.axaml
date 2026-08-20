@@ -75,12 +75,14 @@
                                 IsVisible="{Binding EsAdminSeleccionado}" />
                     </StackPanel>
 
-                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
-                        <TextBox Watermark="Nueva contraseña"
-                                 PasswordChar="*"
-                                 Width="220"
-                                 Text="{Binding NuevaContrasenaParaSeleccionado}" />
-                        <Button Classes="secondary" Content="Cambiar contraseña" Command="{Binding CambiarContrasenaCommand}" />
+                    <StackPanel Spacing="{DynamicResource Espacio1}">
+                        <TextBlock Text="Nueva contraseña" Classes="caption" />
+                        <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
+                            <TextBox PasswordChar="*"
+                                     Width="220"
+                                     Text="{Binding NuevaContrasenaParaSeleccionado}" />
+                            <Button Classes="secondary" Content="Cambiar contraseña" Command="{Binding CambiarContrasenaCommand}" />
+                        </StackPanel>
                     </StackPanel>
 
                     <Border BorderBrush="{DynamicResource BordeBrush}" BorderThickness="1" Padding="12" CornerRadius="{DynamicResource RadioChico}"

@@ -20,7 +20,9 @@
         </c:HeaderVista>
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="12" Margin="0,12">
-            <NumericUpDown Value="{Binding Ejercicio}" Minimum="2020" Maximum="2100" Width="120" />
+            <c:CampoFormulario Etiqueta="Ejercicio">
+                <NumericUpDown Value="{Binding Ejercicio}" Minimum="2020" Maximum="2100" Width="120" />
+            </c:CampoFormulario>
         </StackPanel>
 
         <DataGrid Grid.Row="2" ItemsSource="{Binding FilasView}"
