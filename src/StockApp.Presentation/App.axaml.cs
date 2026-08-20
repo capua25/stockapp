@@ -10,6 +10,7 @@ using Avalonia.Threading;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using StockApp.ApiClient;
+using StockApp.Configuracion;
 using StockApp.Application.Actualizaciones;
 using StockApp.Application.Alertas;
 using StockApp.Application.Auditoria;
@@ -158,12 +159,7 @@ public partial class App : AvaloniaApp
     {
         var services = new ServiceCollection();
 
-        // Configuración externa: appsettings.json es opcional (optional: true) — si falta,
-        // Api:BaseUrl cae al default http://localhost:5000 y el updater a sus defaults.
-        var configuration = new ConfigurationBuilder()
-            .SetBasePath(AppContext.BaseDirectory)
-            .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
-            .Build();
+        var configuration = ConstruirConfiguracion();
 
         // ── Fase 3b: sesión API + HttpClient (reemplazan a AppDbContext/repos/servicios) ──
 
@@ -176,11 +172,7 @@ public partial class App : AvaloniaApp
         // AuthTokenHandler adjunta el Bearer y detecta la sesión vencida en un solo lugar.
         services.AddSingleton(sp =>
         {
-            var baseUrl = configuration["Api:BaseUrl"];
-            if (string.IsNullOrWhiteSpace(baseUrl))
-            {
-                baseUrl = "http://localhost:5000"; // default del spec 3b
-            }
+            var baseUrl = ResolverApiBaseUrl(configuration);
 
             var handler = new AuthTokenHandler(sp.GetRequiredService<ApiSession>())
             {
@@ -207,11 +199,7 @@ public partial class App : AvaloniaApp
         // si el usuario nunca toca "Cancelar" (Task 9).
         services.AddKeyedSingleton<HttpClient>("Descargas", (sp, _) =>
         {
-            var baseUrl = configuration["Api:BaseUrl"];
-            if (string.IsNullOrWhiteSpace(baseUrl))
-            {
-                baseUrl = "http://localhost:5000";
-            }
+            var baseUrl = ResolverApiBaseUrl(configuration);
 
             var handler = new AuthTokenHandler(sp.GetRequiredService<ApiSession>())
             {
@@ -437,5 +425,54 @@ public partial class App : AvaloniaApp
         services.AddSingleton<CoordinadorActualizacion>();
 
         return services.BuildServiceProvider();
+    }
+
+    /// <summary>
+    /// Precedencia de resolución de configuración (2026-08-20, configurador de conexión):
+    /// 1. %AppData%\GestionMunicipal\conexion.json — lo que escribe tools/StockApp.Configurador.
+    /// 2. appsettings.json del directorio de instalación — valor de fábrica.
+    /// 3. ConexionDefaults.UrlPorDefecto — único fallback hardcodeado (ver ResolverApiBaseUrl).
+    ///
+    /// Los providers de Microsoft.Extensions.Configuration.Json se aplican en orden: el que se
+    /// agrega DESPUÉS gana. Por eso conexion.json se agrega después de appsettings.json. Ambos
+    /// son optional: true — si faltan, ResolverApiBaseUrl cae al único default.
+    ///
+    /// Los parámetros de override existen solo para poder testear la precedencia sin depender
+    /// de AppContext.BaseDirectory ni de %AppData% reales (ver
+    /// StockApp.Presentation.Tests.Config.ResolucionApiBaseUrlTests); en producción se llaman
+    /// sin argumentos.
+    /// </summary>
+    internal static IConfiguration ConstruirConfiguracion(
+        string? rutaAppsettingsOverride = null,
+        string? rutaConexionOverride = null)
+    {
+        var builder = new ConfigurationBuilder();
+
+        if (rutaAppsettingsOverride is null)
+        {
+            builder.SetBasePath(AppContext.BaseDirectory)
+                   .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false);
+        }
+        else
+        {
+            builder.AddJsonFile(rutaAppsettingsOverride, optional: true, reloadOnChange: false);
+        }
+
+        var rutaConexion = rutaConexionOverride ?? RutaConexion.ObtenerRutaArchivo();
+        builder.AddJsonFile(rutaConexion, optional: true, reloadOnChange: false);
+
+        return builder.Build();
+    }
+
+    /// <summary>
+    /// ÚNICO lugar que resuelve Api:BaseUrl. Antes de este fix el mismo fallback
+    /// "http://localhost:5000" estaba hardcodeado DOS veces (HttpClient principal y
+    /// "Descargas"), desincronizado del default real de appsettings.json (5043) — si faltaba
+    /// el appsettings.json la app caía a un puerto donde no escuchaba nadie.
+    /// </summary>
+    internal static string ResolverApiBaseUrl(IConfiguration configuration)
+    {
+        var baseUrl = configuration[ConexionDefaults.ClaveApiBaseUrl];
+        return string.IsNullOrWhiteSpace(baseUrl) ? ConexionDefaults.UrlPorDefecto : baseUrl;
     }
 }

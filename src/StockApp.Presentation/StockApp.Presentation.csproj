@@ -69,5 +69,6 @@
   <ItemGroup>
     <ProjectReference Include="..\StockApp.ApiClient\StockApp.ApiClient.csproj" />
     <ProjectReference Include="..\StockApp.Application\StockApp.Application.csproj" />
+    <ProjectReference Include="..\StockApp.Configuracion\StockApp.Configuracion.csproj" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Librería mínima y SIN dependencias de paquetes (solo BCL): la ruta del archivo de
+       conexión y la lógica de leer/escribir la necesitan DOS ejecutables distintos
+       (StockApp.Presentation, que lee, y tools/StockApp.Configurador, que escribe). Un solo
+       lugar de verdad evita que la ruta o la clave "Api:BaseUrl" queden duplicadas en dos
+       binarios sin nada que las ate (ver 2026-08-20-configurador-conexion). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>StockApp.Configuracion.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+</Project>
