@@ -12,6 +12,7 @@ using Avalonia.VisualTree;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Finanzas;
+using StockApp.Application.Movimientos;
 using StockApp.Application.Reportes;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
@@ -20,6 +21,8 @@ using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Finanzas;
 using StockApp.Presentation.ViewModels.Tareas;
 using StockApp.Presentation.Views.Catalogo;
+using StockApp.Presentation.Views.Finanzas;
+using StockApp.Presentation.Views.Movimientos;
 using StockApp.Presentation.Views.Reportes;
 using StockApp.Presentation.Views.Tareas;
 using Xunit;
@@ -208,5 +211,105 @@ public class SignoNegativoBadgeTests
         var badges = BadgesConTexto(window, "Saldo negativo");
 
         Assert.DoesNotContain(badges, b => b.IsVisible);
+    }
+
+    // ---- Movimientos: MovimientoHistorialView, sitio StockNuevo (:165) ----
+
+    [AvaloniaFact]
+    public void Montar_MovimientoHistorialViewConStockNuevoNegativo_MuestraBadgeStockNegativoSoloEnLaFilaNegativa()
+    {
+        var vista = new MovimientoHistorialView();
+        var window = MontarEnVentana(vista);
+
+        var grilla = vista.GetVisualDescendants().OfType<DataGrid>().Single();
+        grilla.ItemsSource = new[]
+        {
+            MovimientoHistorialDe(1, stockNuevo: -5m),
+            MovimientoHistorialDe(2, stockNuevo: 20m),
+        };
+        Dispatcher.UIThread.RunJobs();
+
+        var badges = BadgesConTexto(window, "Stock negativo");
+
+        Assert.Single(badges, b => b.IsVisible);
+    }
+
+    private static MovimientoHistorialDto MovimientoHistorialDe(int id, decimal stockNuevo) => new(
+        MovimientoId: id, ProductoId: 1, ProductoNombre: "Tornillos", Tipo: TipoMovimiento.Entrada,
+        Motivo: MotivoMovimiento.Compra, Cantidad: 10m, PrecioUnitario: 5m, StockAnterior: 0m,
+        StockNuevo: stockNuevo, Comentario: null, Fecha: DateTime.UtcNow, UsuarioId: 1,
+        UsuarioNombre: "admin");
+
+    // ---- Finanzas: ControlPoaView, sitio Saldo (:43) ----
+
+    [AvaloniaFact]
+    public void Montar_ControlPoaViewConSaldoNegativo_MuestraBadgeSobreejecutadoSoloEnLaFilaNegativa()
+    {
+        var vista = new ControlPoaView();
+        var window = MontarEnVentana(vista);
+
+        var grilla = vista.GetVisualDescendants().OfType<DataGrid>().Single();
+        grilla.ItemsSource = new[]
+        {
+            ControlPoaLineaDe(1, saldo: -1000m),
+            ControlPoaLineaDe(2, saldo: 500m),
+        };
+        Dispatcher.UIThread.RunJobs();
+
+        var badges = BadgesConTexto(window, "Sobreejecutado");
+
+        Assert.Single(badges, b => b.IsVisible);
+    }
+
+    private static ControlPoaLineaDto ControlPoaLineaDe(int id, decimal saldo) => new(
+        LineaPoaId: id, Nombre: $"Línea {id}", Programa: "Programa", Ejercicio: 2026,
+        Presupuesto: 10000m, Gastado: 10000m - saldo, Saldo: saldo, PorcentajeEjecucion: 100m,
+        Sobregirada: saldo < 0m);
+
+    // ---- Reportes: ValorizacionView, sitio StockActual (:59) ----
+
+    [AvaloniaFact]
+    public void Montar_ValorizacionViewConStockNegativo_MuestraBadgeStockNegativoSoloEnLaFilaNegativa()
+    {
+        var vista = new ValorizacionView();
+        var window = MontarEnVentana(vista);
+
+        var grilla = vista.GetVisualDescendants().OfType<DataGrid>().Single();
+        grilla.ItemsSource = new[]
+        {
+            ValorizacionItemDe(1, stockActual: -5m),
+            ValorizacionItemDe(2, stockActual: 20m),
+        };
+        Dispatcher.UIThread.RunJobs();
+
+        var badges = BadgesConTexto(window, "Stock negativo");
+
+        Assert.Single(badges, b => b.IsVisible);
+    }
+
+    private static ValorizacionItemDto ValorizacionItemDe(int id, decimal stockActual) => new(
+        ProductoId: id, Codigo: $"C{id}", Nombre: $"Producto {id}", Categoria: "Ferretería",
+        StockActual: stockActual, PrecioCosto: 10m, PrecioVenta: 15m,
+        ValorCosto: stockActual * 10m, ValorVenta: stockActual * 15m);
+
+    // ---- Reportes: HistorialPorProductoView, sitio StockNuevo (:102) ----
+
+    [AvaloniaFact]
+    public void Montar_HistorialPorProductoViewConStockNuevoNegativo_MuestraBadgeStockNegativoSoloEnLaFilaNegativa()
+    {
+        var vista = new HistorialPorProductoView();
+        var window = MontarEnVentana(vista);
+
+        var grilla = vista.GetVisualDescendants().OfType<DataGrid>().Single();
+        grilla.ItemsSource = new[]
+        {
+            MovimientoHistorialDe(1, stockNuevo: -5m),
+            MovimientoHistorialDe(2, stockNuevo: 20m),
+        };
+        Dispatcher.UIThread.RunJobs();
+
+        var badges = BadgesConTexto(window, "Stock negativo");
+
+        Assert.Single(badges, b => b.IsVisible);
     }
 }
