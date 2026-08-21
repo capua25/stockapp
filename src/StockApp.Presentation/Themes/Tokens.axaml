@@ -55,7 +55,14 @@
     <!-- Texto terciario: reemplaza los 60 usos de Opacity="0.5|0.6|0.7".
          El color se DECLARA, no se atenua — asi el contraste es medible y
          testeable, en vez de depender de sobre que fondo cayo la opacidad. -->
-    <Color x:Key="ColorTextoTerciario">#94A3B8</Color>
+    <!-- Escala de grises de texto (Primario/Secundario/Terciario, ver mas abajo): los tres
+         niveles estan calibrados para pasar WCAG AA (>= 4.5:1) contra ColorSuperficie Y
+         ColorFondo. El ORDEN RELATIVO entre ellos es parte del contrato: primario mas
+         oscuro que secundario, secundario mas oscuro que terciario. No muevas un solo
+         nivel sin revisar los otros dos, o la jerarquia se invierte (ver
+         EscalaTextoContrasteTests). El terciario tiene apenas 1.4% de margen sobre el
+         piso de ColorFondo: no hay un gris valido perceptiblemente mas claro. -->
+    <Color x:Key="ColorTextoTerciario">#64748B</Color>
 
     <!-- ── Colores base ─────────────────────────────────────────────────── -->
     <Color x:Key="ColorBrand">#16A34A</Color>
@@ -68,7 +75,7 @@
     <Color x:Key="ColorBorde">#E2E8F0</Color>
 
     <Color x:Key="ColorTextoPrimario">#0F172A</Color>
-    <Color x:Key="ColorTextoSecundario">#64748B</Color>
+    <Color x:Key="ColorTextoSecundario">#475569</Color>
 
     <Color x:Key="ColorSuccess">#16A34A</Color>
     <Color x:Key="ColorWarning">#D97706</Color>

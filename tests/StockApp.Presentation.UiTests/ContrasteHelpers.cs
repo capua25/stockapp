@@ -17,7 +17,12 @@ public static class Contraste
         return c <= 0.03928 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
     }
 
-    private static double Luminancia(Color color)
+    /// <summary>
+    /// Publica (no privada) para que los tests de ORDEN de una escala (ej. EscalaTextoContrasteTests)
+    /// puedan comparar "mas oscuro que" sin duplicar la formula. Ratio es simetrico y no alcanza para
+    /// eso: A vs B da lo mismo que B vs A, no dice cual de los dos es el oscuro.
+    /// </summary>
+    public static double Luminancia(Color color)
         => 0.2126 * Canal(color.R) + 0.7152 * Canal(color.G) + 0.0722 * Canal(color.B);
 
     public static double Ratio(Color a, Color b)

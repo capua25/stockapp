@@ -98,8 +98,10 @@ public class TokensDisenioTests
     {
         // Reemplaza los 60 usos de Opacity="0.5|0.6|0.7". El color se declara, no se atenua:
         // asi el contraste es medible y testeable en vez de depender de sobre que fondo cayo.
+        // #94A3B8 daba 2.56:1 sobre blanco (por debajo de AA); #64748B da 4.76:1. Ver
+        // EscalaTextoContrasteTests para el contrato de contraste y orden de la escala completa.
         var brush = Assert.IsType<SolidColorBrush>(Recurso("TextoTerciarioBrush"));
-        Assert.Equal(Color.Parse("#94A3B8"), brush.Color);
+        Assert.Equal(Color.Parse("#64748B"), brush.Color);
     }
 
     [AvaloniaTheory]

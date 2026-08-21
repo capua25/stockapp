@@ -44,7 +44,7 @@ public class TipografiaMicroTests
         // El punto de todo el ejercicio: el gris se DECLARA. Si aparece un Opacity aca, se
         // vuelve al problema original (contraste no medible, dependiente del fondo).
         var etiqueta = Montar();
-        Assert.Equal(Color.Parse("#94A3B8"), Assert.IsType<SolidColorBrush>(etiqueta.Foreground).Color);
+        Assert.Equal(Color.Parse("#64748B"), Assert.IsType<SolidColorBrush>(etiqueta.Foreground).Color);
         Assert.Equal(1.0, etiqueta.Opacity);
     }
 
