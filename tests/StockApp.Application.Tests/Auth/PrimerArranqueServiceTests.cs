@@ -46,9 +46,9 @@ public class PrimerArranqueServiceTests
     {
         var (svc, repo, hasher) = Crear(hayUsuarios: false);
 
-        await svc.CrearAdminInicialAsync("adminRoot", "contrasenaSegura");
+        await svc.CrearAdminInicialAsync("adminRoot", "contrasenaSegura1");
 
-        hasher.Verify(h => h.Hash("contrasenaSegura"), Times.Once);
+        hasher.Verify(h => h.Hash("contrasenaSegura1"), Times.Once);
         repo.Verify(r => r.AgregarAsync(It.Is<Usuario>(u =>
             u.NombreUsuario == "adminRoot" &&
             u.HashContrasena == "$2a$12$hashed" &&
@@ -62,7 +62,7 @@ public class PrimerArranqueServiceTests
     {
         var (svc, _, _) = Crear(hayUsuarios: true);
 
-        // Fix 6: la contraseña debe cumplir el mínimo (≥6 chars) para llegar al check de usuarios
+        // Fix 6: la contraseña debe cumplir la regla (≥8 chars, letra y número) para llegar al check de usuarios
         await Assert.ThrowsAsync<ReglaDeNegocioException>(
             () => svc.CrearAdminInicialAsync("admin", "password123"));
     }
@@ -88,20 +88,20 @@ public class PrimerArranqueServiceTests
     }
 
     [Fact]
-    public async Task CrearAdminInicial_ContrasenaConMenosDe6Chars_LanzaArgumentException()
+    public async Task CrearAdminInicial_ContrasenaConMenosDe8Chars_LanzaArgumentException()
     {
         var (svc, _, _) = Crear(hayUsuarios: false);
 
         await Assert.ThrowsAsync<ArgumentException>(
-            () => svc.CrearAdminInicialAsync("admin", "12345"));
+            () => svc.CrearAdminInicialAsync("admin", "abc1234"));
     }
 
     [Fact]
-    public async Task CrearAdminInicial_ContrasenaConExactamente6Chars_Funciona()
+    public async Task CrearAdminInicial_ContrasenaConExactamente8CharsLetraYNumero_Funciona()
     {
         var (svc, repo, _) = Crear(hayUsuarios: false);
 
-        await svc.CrearAdminInicialAsync("admin", "123456");
+        await svc.CrearAdminInicialAsync("admin", "clave123");
 
         repo.Verify(r => r.AgregarAsync(It.IsAny<Usuario>()), Times.Once);
     }
@@ -114,7 +114,7 @@ public class PrimerArranqueServiceTests
         var (svc, repo, _) = Crear(hayUsuarios: false);
 
         await Assert.ThrowsAsync<ArgumentException>(
-            () => svc.CrearAdminInicialAsync("", "contrasenaSegura"));
+            () => svc.CrearAdminInicialAsync("", "contrasenaSegura1"));
 
         repo.Verify(r => r.AgregarAsync(It.IsAny<Usuario>()), Times.Never);
     }
@@ -125,7 +125,7 @@ public class PrimerArranqueServiceTests
         var (svc, repo, _) = Crear(hayUsuarios: false);
 
         await Assert.ThrowsAsync<ArgumentException>(
-            () => svc.CrearAdminInicialAsync("   ", "contrasenaSegura"));
+            () => svc.CrearAdminInicialAsync("   ", "contrasenaSegura1"));
 
         repo.Verify(r => r.AgregarAsync(It.IsAny<Usuario>()), Times.Never);
     }
@@ -140,7 +140,7 @@ public class PrimerArranqueServiceTests
         // no reintenta (RequiereCrearAdminAsync ya da false). Sistema irrecuperable.
         var (svc, repo, _) = Crear(hayUsuarios: false);
 
-        await svc.CrearAdminInicialAsync("  admin  ", "contrasenaSegura");
+        await svc.CrearAdminInicialAsync("  admin  ", "contrasenaSegura1");
 
         repo.Verify(r => r.AgregarAsync(It.Is<Usuario>(u => u.NombreUsuario == "admin")), Times.Once);
     }
@@ -155,7 +155,7 @@ public class PrimerArranqueServiceTests
         var nombreLargo = new string('a', 101);
 
         await Assert.ThrowsAsync<ArgumentException>(
-            () => svc.CrearAdminInicialAsync(nombreLargo, "contrasenaSegura"));
+            () => svc.CrearAdminInicialAsync(nombreLargo, "contrasenaSegura1"));
 
         repo.Verify(r => r.AgregarAsync(It.IsAny<Usuario>()), Times.Never);
     }

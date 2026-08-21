@@ -346,4 +346,22 @@ public class ServicioResetAdminTests
 
         Assert.Equal(ResultadoValidacionReset.Valido, resultado);
     }
+
+    // La contraseña se valida ANTES de consumir el desafío (ver comentario en
+    // ServicioResetAdmin.ResetearAsync): un intento con contraseña inválida no debe
+    // quemar el nonce de un solo uso — el mismo token con una contraseña válida
+    // después tiene que seguir funcionando.
+    [Fact]
+    public async Task Resetear_ContrasenaInvalida_LanzaArgumentExceptionYNoConsumeElDesafio()
+    {
+        var c = Armar(conAdmin: true);
+        var desafio = c.Desafios.GenerarNuevo();
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => c.Servicio.ResetearAsync(Token(c.PrivadaPem, desafio), "abc1234"));
+
+        var resultado = await c.Servicio.ResetearAsync(Token(c.PrivadaPem, desafio), "nueva-clave-123");
+
+        Assert.Equal(ResultadoValidacionReset.Valido, resultado);
+    }
 }

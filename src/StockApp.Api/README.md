@@ -53,7 +53,7 @@ leyendo dos claves de configuración (NO van en `appsettings.json`, mismo criter
 `Jwt:Secret`):
 
 - `Bootstrap:AdminUser` — nombre del administrador inicial.
-- `Bootstrap:Password` — su contraseña (mínimo 6 caracteres).
+- `Bootstrap:Password` — su contraseña (mínimo 8 caracteres, con al menos una letra y un número).
 
 En desarrollo (user-secrets):
 

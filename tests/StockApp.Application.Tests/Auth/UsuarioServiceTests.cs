@@ -60,10 +60,10 @@ public class UsuarioServiceTests
         var (svc, repo, hasher, session, _, audit, _, _) = Crear();
         repo.Setup(r => r.AgregarAsync(It.IsAny<Usuario>())).ReturnsAsync(42);
 
-        var id = await svc.AltaUsuarioAsync("operador2", "Nombre Completo", "pwd123", RolUsuario.Operador);
+        var id = await svc.AltaUsuarioAsync("operador2", "Nombre Completo", "pwd12345", RolUsuario.Operador);
 
         Assert.Equal(42, id);
-        hasher.Verify(h => h.Hash("pwd123"), Times.Once);
+        hasher.Verify(h => h.Hash("pwd12345"), Times.Once);
         repo.Verify(r => r.AgregarAsync(It.Is<Usuario>(u =>
             u.NombreUsuario == "operador2" &&
             u.HashContrasena == "$2a$12$hashed" &&
@@ -167,7 +167,7 @@ public class UsuarioServiceTests
         var (svc, _, _, _, _, _, _, _) = Crear(rolSesion: RolUsuario.Operador);
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(
-            () => svc.AltaUsuarioAsync("x", null, "pwd123", RolUsuario.Operador));
+            () => svc.AltaUsuarioAsync("x", null, "pwd12345", RolUsuario.Operador));
     }
 
     [Fact]
@@ -297,12 +297,12 @@ public class UsuarioServiceTests
     }
 
     [Fact]
-    public async Task AltaUsuario_ContrasenaConMenosDe6Chars_LanzaArgumentException()
+    public async Task AltaUsuario_ContrasenaConMenosDe8Chars_LanzaArgumentException()
     {
         var (svc, _, _, _, _, _, _, _) = Crear();
 
         await Assert.ThrowsAsync<ArgumentException>(
-            () => svc.AltaUsuarioAsync("nuevo", null, "12345", RolUsuario.Operador));
+            () => svc.AltaUsuarioAsync("nuevo", null, "abc1234", RolUsuario.Operador));
     }
 
     // ── Hallazgo 6: el nombre se valida antes que la contraseña ─────────────
@@ -319,17 +319,17 @@ public class UsuarioServiceTests
     }
 
     [Fact]
-    public async Task AltaUsuario_ContrasenaConExactamente6Chars_Funciona()
+    public async Task AltaUsuario_ContrasenaConExactamente8CharsLetraYNumero_Funciona()
     {
         var (svc, repo, _, _, _, _, _, _) = Crear();
 
-        await svc.AltaUsuarioAsync("nuevo", null, "123456", RolUsuario.Operador);
+        await svc.AltaUsuarioAsync("nuevo", null, "clave123", RolUsuario.Operador);
 
         repo.Verify(r => r.AgregarAsync(It.IsAny<Usuario>()), Times.Once);
     }
 
     [Fact]
-    public async Task CambioContrasena_NuevaContrasenaConMenosDe6Chars_LanzaArgumentException()
+    public async Task CambioContrasena_NuevaContrasenaConMenosDe8Chars_LanzaArgumentException()
     {
         var usuario = new Usuario
         {
@@ -340,7 +340,7 @@ public class UsuarioServiceTests
         repo.Setup(r => r.ObtenerPorIdAsync(4)).ReturnsAsync(usuario);
 
         await Assert.ThrowsAsync<ArgumentException>(
-            () => svc.CambiarContrasenaAsync(4, "12345"));
+            () => svc.CambiarContrasenaAsync(4, "abc1234"));
     }
 
     // ── Fix 3: AltaUsuarioAsync valida NombreUsuario ────────────────────────
@@ -351,7 +351,7 @@ public class UsuarioServiceTests
         var (svc, _, _, _, _, _, _, _) = Crear();
 
         await Assert.ThrowsAsync<ArgumentException>(
-            () => svc.AltaUsuarioAsync("", null, "pwd123", RolUsuario.Operador));
+            () => svc.AltaUsuarioAsync("", null, "pwd12345", RolUsuario.Operador));
     }
 
     [Fact]
@@ -360,7 +360,7 @@ public class UsuarioServiceTests
         var (svc, _, _, _, _, _, _, _) = Crear();
 
         await Assert.ThrowsAsync<ArgumentException>(
-            () => svc.AltaUsuarioAsync(null!, null, "pwd123", RolUsuario.Operador));
+            () => svc.AltaUsuarioAsync(null!, null, "pwd12345", RolUsuario.Operador));
     }
 
     [Fact]
@@ -369,7 +369,7 @@ public class UsuarioServiceTests
         var (svc, _, _, _, _, _, _, _) = Crear();
 
         await Assert.ThrowsAsync<ArgumentException>(
-            () => svc.AltaUsuarioAsync("   ", null, "pwd123", RolUsuario.Operador));
+            () => svc.AltaUsuarioAsync("   ", null, "pwd12345", RolUsuario.Operador));
     }
 
     [Fact]
@@ -379,7 +379,7 @@ public class UsuarioServiceTests
         var nombreLargo = new string('a', 101);
 
         await Assert.ThrowsAsync<ArgumentException>(
-            () => svc.AltaUsuarioAsync(nombreLargo, null, "pwd123", RolUsuario.Operador));
+            () => svc.AltaUsuarioAsync(nombreLargo, null, "pwd12345", RolUsuario.Operador));
     }
 
     [Fact]
@@ -388,7 +388,7 @@ public class UsuarioServiceTests
         var (svc, repo, _, _, _, _, _, _) = Crear();
         var nombreLimite = new string('a', 100);
 
-        await svc.AltaUsuarioAsync(nombreLimite, null, "pwd123", RolUsuario.Operador);
+        await svc.AltaUsuarioAsync(nombreLimite, null, "pwd12345", RolUsuario.Operador);
 
         repo.Verify(r => r.AgregarAsync(It.Is<Usuario>(u => u.NombreUsuario == nombreLimite)), Times.Once);
     }
@@ -398,7 +398,7 @@ public class UsuarioServiceTests
     {
         var (svc, repo, _, _, _, _, _, _) = Crear();
 
-        await svc.AltaUsuarioAsync("  operador2  ", null, "pwd123", RolUsuario.Operador);
+        await svc.AltaUsuarioAsync("  operador2  ", null, "pwd12345", RolUsuario.Operador);
 
         repo.Verify(r => r.AgregarAsync(It.Is<Usuario>(u => u.NombreUsuario == "operador2")), Times.Once);
     }
@@ -417,7 +417,7 @@ public class UsuarioServiceTests
         repo.Setup(r => r.BuscarPorNombreAsync("operador2")).ReturnsAsync(existente);
 
         await Assert.ThrowsAsync<ReglaDeNegocioException>(
-            () => svc.AltaUsuarioAsync("operador2", null, "pwd123", RolUsuario.Operador));
+            () => svc.AltaUsuarioAsync("operador2", null, "pwd12345", RolUsuario.Operador));
 
         repo.Verify(r => r.AgregarAsync(It.IsAny<Usuario>()), Times.Never);
     }

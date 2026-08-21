@@ -36,7 +36,7 @@ public sealed class BootstrapAdminSeeder
                 "La base de datos no tiene usuarios y falta configurar el administrador inicial. " +
                 "Definí 'Bootstrap:AdminUser' y 'Bootstrap:Password'. En desarrollo: " +
                 "dotnet user-secrets set \"Bootstrap:AdminUser\" \"<usuario>\" y " +
-                "dotnet user-secrets set \"Bootstrap:Password\" \"<contraseña-de-al-menos-6-caracteres>\".");
+                "dotnet user-secrets set \"Bootstrap:Password\" \"<contraseña-de-al-menos-8-caracteres-con-letra-y-numero>\".");
 
         // CrearAdminInicialAsync valida longitud de contraseña y nombre en blanco (ArgumentException),
         // y crea el Admin con el semáforo anti-TOCTOU. Si la contraseña es inválida, la excepción

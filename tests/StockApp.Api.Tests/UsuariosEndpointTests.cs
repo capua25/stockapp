@@ -210,7 +210,7 @@ public class UsuariosEndpointTests : ApiTestBase
     }
 
     [Fact]
-    public async Task PostUsuarios_ConContrasenaMenorA6Caracteres_Devuelve400()
+    public async Task PostUsuarios_ConContrasenaMenorA8Caracteres_Devuelve400()
     {
         var client = Factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());

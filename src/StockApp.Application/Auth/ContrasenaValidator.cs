@@ -6,19 +6,26 @@ namespace StockApp.Application.Auth;
 /// </summary>
 internal static class ContrasenaValidator
 {
-    private const int LongitudMinima = 6;
+    private const int LongitudMinima = 8;
 
     /// <summary>
-    /// Lanza <see cref="ArgumentException"/> si la contraseña es null, vacía/whitespace o
-    /// tiene menos de <see cref="LongitudMinima"/> caracteres.
+    /// Lanza <see cref="ArgumentException"/> si la contraseña es null, vacía/whitespace,
+    /// tiene menos de <see cref="LongitudMinima"/> caracteres, o no incluye al menos una
+    /// letra y al menos un número.
     /// </summary>
     public static void Validar(string? contrasena)
     {
         if (string.IsNullOrWhiteSpace(contrasena))
             throw new ArgumentException("La contraseña no puede estar vacía.");
 
-        if (contrasena.Length < LongitudMinima)
+        // Un solo mensaje para todos los casos de incumplimiento (largo, sin letra, sin
+        // número): no hace falta distinguir la causa y evita filtrar qué le falta.
+        if (contrasena.Length < LongitudMinima
+            || !contrasena.Any(char.IsLetter)
+            || !contrasena.Any(char.IsDigit))
+        {
             throw new ArgumentException(
-                $"La contraseña debe tener al menos {LongitudMinima} caracteres.");
+                $"La contraseña debe tener al menos {LongitudMinima} caracteres e incluir al menos una letra y un número.");
+        }
     }
 }
