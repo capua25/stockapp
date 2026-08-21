@@ -68,10 +68,13 @@ public partial class UsuariosAdminViewModel : ViewModelBase
 
     public async Task CargarAsync()
     {
-        var lista = await _usuarios.ListarAsync();
-        Items.Clear();
-        foreach (var u in lista)
-            Items.Add(u);
+        await EjecutarCargaProtegidaAsync(async () =>
+        {
+            var lista = await _usuarios.ListarAsync();
+            Items.Clear();
+            foreach (var u in lista)
+                Items.Add(u);
+        }, "No tenés permiso para administrar usuarios.");
     }
 
     [RelayCommand]

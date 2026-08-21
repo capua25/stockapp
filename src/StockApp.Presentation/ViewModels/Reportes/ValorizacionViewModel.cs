@@ -67,9 +67,12 @@ public partial class ValorizacionViewModel : ViewModelBase
     /// </summary>
     public async Task CargarAsync()
     {
-        var resultado = await _servicio.ObtenerValorizacionAsync();
-        Items = resultado.Items;
-        Totales = resultado.Totales;
+        await EjecutarCargaProtegidaAsync(async () =>
+        {
+            var resultado = await _servicio.ObtenerValorizacionAsync();
+            Items = resultado.Items;
+            Totales = resultado.Totales;
+        }, "No tenés permiso para ver el reporte de valorización de inventario.");
     }
 
     /// <summary>

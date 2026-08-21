@@ -45,6 +45,22 @@ public class UsuariosAdminViewModelTests
         Assert.Equal(2, vm.Items.Count);
     }
 
+    // ── bugfix "pantalla muda ante un 403": CargarAsync no debe escalar un 403/401, y debe dejar
+    // un estado bindeable para que la vista muestre EstadoVacio (ver ViewModelBase.
+    // EjecutarCargaProtegidaAsync). ──
+    [Fact]
+    public async Task CargarAsync_SiElServicioLanzaUnauthorized_NoPropagaYDejaSinPermiso()
+    {
+        var (vm, svc, _) = Crear();
+        svc.Setup(s => s.ListarAsync()).ThrowsAsync(new UnauthorizedAccessException());
+
+        var ex = await Record.ExceptionAsync(() => vm.CargarAsync());
+
+        Assert.Null(ex);
+        Assert.True(vm.SinPermiso);
+        Assert.False(string.IsNullOrWhiteSpace(vm.MensajeSinPermiso));
+    }
+
     [Fact]
     public void UsuarioSeleccionado_Admin_EsAdminSeleccionadoEsTrue()
     {

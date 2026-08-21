@@ -457,6 +457,21 @@ public class ProductoFormViewModelTests
         return (vm, svcMock, umSvcMock, catSvcMock, navMock);
     }
 
+    // ── bugfix "pantalla muda ante un 403": InicializarAsync no debe escalar un 403/401, y debe
+    // dejar un estado bindeable para que la vista muestre EstadoVacio. ──
+    [Fact]
+    public async Task InicializarAsync_SiElServicioLanzaUnauthorized_NoPropagaYDejaSinPermiso()
+    {
+        var (vm, _, umSvcMock, _, _) = Crear();
+        umSvcMock.Setup(s => s.GarantizarUnidadPorDefectoAsync()).ThrowsAsync(new UnauthorizedAccessException());
+
+        var ex = await Record.ExceptionAsync(() => vm.InicializarAsync());
+
+        Assert.Null(ex);
+        Assert.True(vm.SinPermiso);
+        Assert.False(string.IsNullOrWhiteSpace(vm.MensajeSinPermiso));
+    }
+
     [Fact]
     public async Task GuardarCommand_DatosCompletos_LlamaAltaAsync()
     {

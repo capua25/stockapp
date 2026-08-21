@@ -6,6 +6,7 @@
              xmlns:sys="using:System"
              xmlns:enums="using:StockApp.Domain.Enums"
              xmlns:i="https://github.com/projektanker/icons.avalonia"
+             xmlns:c="using:StockApp.Presentation.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
@@ -510,6 +511,12 @@
                 </DataGrid.Columns>
             </DataGrid>
         </StackPanel>
+
+        <!-- bugfix "pantalla muda ante un 403": ver ViewModelBase.EjecutarCargaProtegidaAsync. -->
+        <c:EstadoVacio Titulo="Sin permiso"
+                       Mensaje="{Binding MensajeSinPermiso}"
+                       EsError="True"
+                       IsVisible="{Binding SinPermiso}" />
 
     </Grid>
 

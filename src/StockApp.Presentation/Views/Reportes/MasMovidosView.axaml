@@ -11,6 +11,7 @@
              x:Class="StockApp.Presentation.Views.Reportes.MasMovidosView"
              x:DataType="vm:MasMovidosViewModel">
 
+    <Grid>
     <DockPanel Margin="{DynamicResource MargenVista}">
 
         <c:HeaderVista DockPanel.Dock="Top" Eyebrow="REPORTES" Titulo="Productos más movidos">
@@ -96,5 +97,12 @@
         </Border>
 
     </DockPanel>
+
+        <!-- bugfix "pantalla muda ante un 403": ver ViewModelBase.EjecutarCargaProtegidaAsync. -->
+        <c:EstadoVacio Titulo="Sin permiso"
+                       Mensaje="{Binding MensajeSinPermiso}"
+                       EsError="True"
+                       IsVisible="{Binding SinPermiso}" />
+    </Grid>
 
 </UserControl>

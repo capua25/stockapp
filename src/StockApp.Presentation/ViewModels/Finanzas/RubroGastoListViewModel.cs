@@ -37,10 +37,13 @@ public partial class RubroGastoListViewModel : ViewModelBase
 
     public async Task CargarAsync()
     {
-        var resultados = await _service.ListarTodosAsync();
-        Items.Clear();
-        foreach (var r in resultados)
-            Items.Add(r);
+        await EjecutarCargaProtegidaAsync(async () =>
+        {
+            var resultados = await _service.ListarTodosAsync();
+            Items.Clear();
+            foreach (var r in resultados)
+                Items.Add(r);
+        }, "No tenés permiso para ver los rubros de gasto.");
     }
 
     [RelayCommand]

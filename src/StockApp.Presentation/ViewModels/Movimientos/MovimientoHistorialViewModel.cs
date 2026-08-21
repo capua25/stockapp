@@ -277,7 +277,10 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
 
         PuedeFiltrarPorProducto = puedeVerProductos;
 
-        await CargarAsync();
+        // Fix (bugfix "pantalla muda ante un 403"): InicializarAsync llamaba a CargarAsync() sin
+        // que NINGUNO de los dos atrapara UnauthorizedAccessException -- caso real que motivó que
+        // el guardián siga la cadena de llamadas locales, no solo el método de entrada.
+        await EjecutarCargaProtegidaAsync(CargarAsync, "No tenés permiso para ver el historial de movimientos.");
     }
 
     public async Task CargarAsync()

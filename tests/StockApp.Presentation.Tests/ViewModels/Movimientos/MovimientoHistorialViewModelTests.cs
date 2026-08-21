@@ -321,6 +321,25 @@ public class MovimientoHistorialViewModelTests
         Assert.Single(vm.Items);
     }
 
+    // ── bugfix "pantalla muda ante un 403": InicializarAsync llama a CargarAsync() (el que
+    // dispara ObtenerHistorialAsync) y NINGUNO de los dos atrapaba UnauthorizedAccessException
+    // -- caso real que motivó que el guardián estructural siga la cadena de llamadas locales,
+    // no solo el método de entrada. Distinto del test de más abajo (que cubre el filtro de
+    // producto, un punto de carga DIFERENTE dentro del mismo VM). ──
+    [Fact]
+    public async Task InicializarAsync_SiElHistorialLanzaUnauthorized_NoPropagaYDejaSinPermiso()
+    {
+        var (vm, svcMock, _, _, _) = Crear();
+        svcMock.Setup(s => s.ObtenerHistorialAsync(It.IsAny<HistorialMovimientoFiltro>()))
+            .ThrowsAsync(new UnauthorizedAccessException());
+
+        var ex = await Record.ExceptionAsync(() => vm.InicializarAsync());
+
+        Assert.Null(ex);
+        Assert.True(vm.SinPermiso);
+        Assert.False(string.IsNullOrWhiteSpace(vm.MensajeSinPermiso));
+    }
+
     /// <summary>
     /// Guardián de la CLASE de bug (2026-08-16, opcombo/Combo2026!), REFORZADO por el fix
     /// 2026-08-19: antes, InicializarAsync llamaba a BuscarAsync directamente y confiaba en el

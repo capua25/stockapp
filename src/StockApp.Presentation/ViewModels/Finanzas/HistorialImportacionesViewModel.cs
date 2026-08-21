@@ -40,6 +40,7 @@ public partial class HistorialImportacionesViewModel : ViewModelBase
 
     public async Task CargarAsync()
     {
+        LimpiarSinPermiso();
         try
         {
             var historial = await _service.ListarHistorialAsync();
@@ -47,9 +48,23 @@ public partial class HistorialImportacionesViewModel : ViewModelBase
             foreach (var fila in historial)
                 Filas.Add(fila);
         }
-        catch (Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException)
+        // Fix (bugfix "pantalla muda ante un 403"): el filtro original solo contemplaba
+        // ReglaDeNegocioException/EntidadNoEncontradaException, así que un
+        // UnauthorizedAccessException no matcheaba, no era atrapado acá y escapaba de CargarAsync
+        // sin protección. Se amplía el filtro en vez de agregar un segundo catch al lado (dos
+        // mecanismos compitiendo en el mismo método) y se bifurca adentro: UnauthorizedAccessException
+        // NO dispara InformarAsync (ese modal ya lo da el aviso global de permisos, ver
+        // ViewModelBase.EjecutarCargaProtegidaAsync), solo deja el estado bindeable para EstadoVacio.
+        catch (Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException or UnauthorizedAccessException)
         {
-            await _confirmacion.InformarAsync(ex.Message);
+            if (ex is UnauthorizedAccessException)
+            {
+                MarcarSinPermiso("No tenés permiso para ver el historial de importaciones.");
+            }
+            else
+            {
+                await _confirmacion.InformarAsync(ex.Message);
+            }
         }
     }
 

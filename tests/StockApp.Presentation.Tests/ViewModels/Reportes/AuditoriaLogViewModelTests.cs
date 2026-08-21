@@ -254,6 +254,22 @@ public class AuditoriaLogViewModelTests
         Assert.Single(vm.Items);
     }
 
+    // ── bugfix "pantalla muda ante un 403": InicializarAsync no debe escalar un 403/401 (ni
+    // desde ListarAsync de usuarios ni desde ObtenerLogAsync), y debe dejar un estado bindeable
+    // para que la vista muestre EstadoVacio. ──
+    [Fact]
+    public async Task InicializarAsync_SiListarUsuariosLanzaUnauthorized_NoPropagaYDejaSinPermiso()
+    {
+        var (vm, _, _, _, _, usuarioSvcMock) = Crear();
+        usuarioSvcMock.Setup(s => s.ListarAsync()).ThrowsAsync(new UnauthorizedAccessException());
+
+        var ex = await Record.ExceptionAsync(() => vm.InicializarAsync());
+
+        Assert.Null(ex);
+        Assert.True(vm.SinPermiso);
+        Assert.False(string.IsNullOrWhiteSpace(vm.MensajeSinPermiso));
+    }
+
     [Fact]
     public void UsuarioFiltroSeleccionado_AlAsignarUsuarioReal_DerivaUsuarioId()
     {

@@ -37,10 +37,13 @@ public partial class LineaPoaListViewModel : ViewModelBase
 
     public async Task CargarAsync()
     {
-        var resultados = await _service.ListarTodasAsync();
-        Items.Clear();
-        foreach (var l in resultados)
-            Items.Add(l);
+        await EjecutarCargaProtegidaAsync(async () =>
+        {
+            var resultados = await _service.ListarTodasAsync();
+            Items.Clear();
+            foreach (var l in resultados)
+                Items.Add(l);
+        }, "No tenés permiso para ver las líneas POA.");
     }
 
     [RelayCommand]

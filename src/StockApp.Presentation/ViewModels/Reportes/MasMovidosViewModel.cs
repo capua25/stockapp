@@ -79,7 +79,10 @@ public partial class MasMovidosViewModel : ViewModelBase
         }
 
         MensajeError = null;
-        Items = await _servicio.ObtenerMasMovidosAsync(ALocalAUtc(FechaDesde), ALocalAUtc(FechaHasta), TopN);
+        await EjecutarCargaProtegidaAsync(async () =>
+        {
+            Items = await _servicio.ObtenerMasMovidosAsync(ALocalAUtc(FechaDesde), ALocalAUtc(FechaHasta), TopN);
+        }, "No tenés permiso para ver el reporte de productos más movidos.");
     }
 
     /// <summary>

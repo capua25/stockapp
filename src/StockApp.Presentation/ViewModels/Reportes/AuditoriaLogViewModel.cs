@@ -107,15 +107,18 @@ public partial class AuditoriaLogViewModel : ViewModelBase
     /// </summary>
     public async Task InicializarAsync()
     {
-        var usuarios = await _usuarioService.ListarAsync();
-        Usuarios.Clear();
-        Usuarios.Add(new OpcionUsuario("Todos", null));
-        foreach (var u in usuarios)
-            Usuarios.Add(new OpcionUsuario(u.NombreUsuario, u));
+        await EjecutarCargaProtegidaAsync(async () =>
+        {
+            var usuarios = await _usuarioService.ListarAsync();
+            Usuarios.Clear();
+            Usuarios.Add(new OpcionUsuario("Todos", null));
+            foreach (var u in usuarios)
+                Usuarios.Add(new OpcionUsuario(u.NombreUsuario, u));
 
-        UsuarioFiltroSeleccionado = Usuarios[0];
+            UsuarioFiltroSeleccionado = Usuarios[0];
 
-        await CargarAsync();
+            await CargarAsync();
+        }, "No tenés permiso para ver el registro de auditoría.");
     }
 
     /// <summary>Consulta el log de auditoría filtrado y puebla <see cref="Items"/>.</summary>

@@ -37,6 +37,26 @@ public class HistorialImportacionesViewModelTests
         Assert.Equal(2, vm.Filas.Count);
     }
 
+    // ── bugfix "pantalla muda ante un 403": el catch original solo filtraba
+    // ReglaDeNegocioException/EntidadNoEncontradaException, así que un Unauthorized se escapaba.
+    // El fix amplía el filtro existente (no agrega un catch al lado) y NO debe llamar a
+    // InformarAsync para este caso puntual (ese modal ya lo da el aviso global de permisos). ──
+    [Fact]
+    public async Task CargarAsync_SiElServicioLanzaUnauthorized_NoPropagaYDejaSinPermiso()
+    {
+        var svc = new Mock<IImportacionService>();
+        svc.Setup(s => s.ListarHistorialAsync()).ThrowsAsync(new UnauthorizedAccessException());
+        var confirm = new Mock<IConfirmacionService>();
+        var vm = new HistorialImportacionesViewModel(svc.Object, confirm.Object);
+
+        var ex = await Record.ExceptionAsync(() => vm.CargarAsync());
+
+        Assert.Null(ex);
+        Assert.True(vm.SinPermiso);
+        Assert.False(string.IsNullOrWhiteSpace(vm.MensajeSinPermiso));
+        confirm.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Never);
+    }
+
     [Fact]
     public async Task RevertirAsync_FilaActiva_LlamaAlServicioYRecarga()
     {

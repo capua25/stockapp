@@ -9,35 +9,43 @@
              x:Class="StockApp.Presentation.Views.Finanzas.FuenteFinanciamientoListView"
              x:DataType="vm:FuenteFinanciamientoListViewModel">
 
-    <Border Classes="card" Margin="0,12,0,0">
-        <DockPanel>
+    <Grid>
+        <Border Classes="card" Margin="0,12,0,0">
+            <DockPanel>
 
-            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="{DynamicResource Espacio2}" Margin="0,0,0,12">
-                <Button Classes="primary"
-                        Content="Nueva fuente"
-                        Command="{Binding NuevoCommand}" />
-                <Button Classes="secondary"
-                        Content="Editar"
-                        Command="{Binding EditarCommand}" />
-                <Button Classes="secondary"
-                        Content="Dar de baja"
-                        Command="{Binding BajaCommand}" />
-            </StackPanel>
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="{DynamicResource Espacio2}" Margin="0,0,0,12">
+                    <Button Classes="primary"
+                            Content="Nueva fuente"
+                            Command="{Binding NuevoCommand}" />
+                    <Button Classes="secondary"
+                            Content="Editar"
+                            Command="{Binding EditarCommand}" />
+                    <Button Classes="secondary"
+                            Content="Dar de baja"
+                            Command="{Binding BajaCommand}" />
+                </StackPanel>
 
-            <ListBox ItemsSource="{Binding Items}"
-                     SelectedItem="{Binding ItemSeleccionado}">
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio4}" Margin="4">
-                            <TextBlock Text="{Binding Nombre}"
-                                       Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}" />
-                            <c:BadgeEstado Texto="Inactiva" Tono="Neutro" IsVisible="{Binding !Activo}" />
-                        </StackPanel>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
+                <ListBox ItemsSource="{Binding Items}"
+                         SelectedItem="{Binding ItemSeleccionado}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio4}" Margin="4">
+                                <TextBlock Text="{Binding Nombre}"
+                                           Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}" />
+                                <c:BadgeEstado Texto="Inactiva" Tono="Neutro" IsVisible="{Binding !Activo}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
 
-        </DockPanel>
-    </Border>
+            </DockPanel>
+        </Border>
+
+        <!-- bugfix "pantalla muda ante un 403": ver ViewModelBase.EjecutarCargaProtegidaAsync. -->
+        <c:EstadoVacio Titulo="Sin permiso"
+                       Mensaje="{Binding MensajeSinPermiso}"
+                       EsError="True"
+                       IsVisible="{Binding SinPermiso}" />
+    </Grid>
 
 </UserControl>

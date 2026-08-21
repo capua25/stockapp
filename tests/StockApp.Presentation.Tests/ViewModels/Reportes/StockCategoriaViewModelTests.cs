@@ -48,6 +48,21 @@ public class StockCategoriaViewModelTests
 
     // ── tests ──────────────────────────────────────────────────────────────
 
+    // ── bugfix "pantalla muda ante un 403": CargarAsync no debe escalar un 403/401, y debe dejar
+    // un estado bindeable para que la vista muestre EstadoVacio. ──
+    [Fact]
+    public async Task CargarAsync_SiElServicioLanzaUnauthorized_NoPropagaYDejaSinPermiso()
+    {
+        var (vm, servicioMock, _, _, _) = Crear();
+        servicioMock.Setup(s => s.ObtenerStockPorCategoriaAsync()).ThrowsAsync(new UnauthorizedAccessException());
+
+        var ex = await Record.ExceptionAsync(() => vm.CargarAsync());
+
+        Assert.Null(ex);
+        Assert.True(vm.SinPermiso);
+        Assert.False(string.IsNullOrWhiteSpace(vm.MensajeSinPermiso));
+    }
+
     [Fact]
     public async Task BuscarCommand_LlamaObtenerStockPorCategoriaAsync_YPopulaItems()
     {

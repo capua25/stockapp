@@ -116,34 +116,37 @@ public partial class LineaPoaFormViewModel : ViewModelBase
     /// <summary>Carga el combo de fuentes activas y arma las filas de asignaciones.</summary>
     public async Task InicializarAsync()
     {
-        var fuentes = await _fuentesService.ListarActivasAsync();
-        FuentesDisponibles.Clear();
-        foreach (var f in fuentes)
-            FuentesDisponibles.Add(f);
-
-        Asignaciones.Clear();
-        if (_lineaParaEditar is not null)
+        await EjecutarCargaProtegidaAsync(async () =>
         {
-            foreach (var a in _lineaParaEditar.Asignaciones)
+            var fuentes = await _fuentesService.ListarActivasAsync();
+            FuentesDisponibles.Clear();
+            foreach (var f in fuentes)
+                FuentesDisponibles.Add(f);
+
+            Asignaciones.Clear();
+            if (_lineaParaEditar is not null)
             {
-                // Resuelve por Id contra el combo; si la fuente fue dada de baja después,
-                // cae al objeto de la nav para no perder la fila histórica.
-                var fuente = FuentesDisponibles.FirstOrDefault(f => f.Id == a.FuenteFinanciamientoId)
-                    ?? a.FuenteFinanciamiento;
-                if (fuente is not null && !FuentesDisponibles.Contains(fuente)
-                    && FuentesDisponibles.All(f => f.Id != fuente.Id))
-                    FuentesDisponibles.Add(fuente);
-
-                Asignaciones.Add(new AsignacionItemViewModel
+                foreach (var a in _lineaParaEditar.Asignaciones)
                 {
-                    FuenteSeleccionada = fuente,
-                    MontoTexto = a.Monto.ToString("0.####", CulturaMonto),
-                });
-            }
-        }
+                    // Resuelve por Id contra el combo; si la fuente fue dada de baja después,
+                    // cae al objeto de la nav para no perder la fila histórica.
+                    var fuente = FuentesDisponibles.FirstOrDefault(f => f.Id == a.FuenteFinanciamientoId)
+                        ?? a.FuenteFinanciamiento;
+                    if (fuente is not null && !FuentesDisponibles.Contains(fuente)
+                        && FuentesDisponibles.All(f => f.Id != fuente.Id))
+                        FuentesDisponibles.Add(fuente);
 
-        if (Asignaciones.Count == 0)
-            Asignaciones.Add(new AsignacionItemViewModel());  // una fila lista para completar
+                    Asignaciones.Add(new AsignacionItemViewModel
+                    {
+                        FuenteSeleccionada = fuente,
+                        MontoTexto = a.Monto.ToString("0.####", CulturaMonto),
+                    });
+                }
+            }
+
+            if (Asignaciones.Count == 0)
+                Asignaciones.Add(new AsignacionItemViewModel());  // una fila lista para completar
+        }, "No tenés permiso para cargar los datos de esta línea POA.");
     }
 
     [RelayCommand]

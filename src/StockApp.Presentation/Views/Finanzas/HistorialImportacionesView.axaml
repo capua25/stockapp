@@ -3,12 +3,14 @@
              xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
              xmlns:dto="using:StockApp.Application.Finanzas"
              xmlns:conv="using:StockApp.Presentation.Converters"
+             xmlns:c="using:StockApp.Presentation.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
              x:Class="StockApp.Presentation.Views.Finanzas.HistorialImportacionesView"
              x:DataType="vm:HistorialImportacionesViewModel">
 
+    <Grid>
     <DockPanel>
 
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="{DynamicResource Espacio2}" Margin="0,0,0,12">
@@ -42,5 +44,12 @@
         </DataGrid>
 
     </DockPanel>
+
+        <!-- bugfix "pantalla muda ante un 403": ver ViewModelBase.EjecutarCargaProtegidaAsync. -->
+        <c:EstadoVacio Titulo="Sin permiso"
+                       Mensaje="{Binding MensajeSinPermiso}"
+                       EsError="True"
+                       IsVisible="{Binding SinPermiso}" />
+    </Grid>
 
 </UserControl>

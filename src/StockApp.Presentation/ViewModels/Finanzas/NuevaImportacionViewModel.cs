@@ -148,22 +148,25 @@ public partial class NuevaImportacionViewModel : ViewModelBase
     /// mismo contrato que GastoFormViewModel.InicializarAsync.</summary>
     public async Task InicializarMaestrosAsync()
     {
-        var fuentes = await _fuentesService.ListarActivasAsync();
-        FuentesDisponibles.Clear();
-        foreach (var f in fuentes) FuentesDisponibles.Add(f);
+        await EjecutarCargaProtegidaAsync(async () =>
+        {
+            var fuentes = await _fuentesService.ListarActivasAsync();
+            FuentesDisponibles.Clear();
+            foreach (var f in fuentes) FuentesDisponibles.Add(f);
 
-        var rubros = await _rubrosService.ListarActivosAsync();
-        RubrosDisponibles.Clear();
-        foreach (var r in rubros) RubrosDisponibles.Add(r);
+            var rubros = await _rubrosService.ListarActivosAsync();
+            RubrosDisponibles.Clear();
+            foreach (var r in rubros) RubrosDisponibles.Add(r);
 
-        var proveedores = await _proveedoresService.ListarTodosAsync();
-        ProveedoresDisponibles.Clear();
-        foreach (var p in proveedores.Where(p => p.Activo)) ProveedoresDisponibles.Add(p);
+            var proveedores = await _proveedoresService.ListarTodosAsync();
+            ProveedoresDisponibles.Clear();
+            foreach (var p in proveedores.Where(p => p.Activo)) ProveedoresDisponibles.Add(p);
 
-        var lineas = await _lineasPoaService.ListarTodasAsync();
-        ProgramasExistentes.Clear();
-        foreach (var programa in lineas.Select(l => l.Programa).Distinct().OrderBy(p => p))
-            ProgramasExistentes.Add(programa);
+            var lineas = await _lineasPoaService.ListarTodasAsync();
+            ProgramasExistentes.Clear();
+            foreach (var programa in lineas.Select(l => l.Programa).Distinct().OrderBy(p => p))
+                ProgramasExistentes.Add(programa);
+        }, "No tenés permiso para cargar los maestros necesarios para importar.");
     }
 
     [RelayCommand]

@@ -52,6 +52,23 @@ public class RubroGastoListViewModelTests
 
         navMock.Verify(n => n.Navegar<RubroGastoFormViewModel>(), Times.Once);
     }
+
+    // ── bugfix "pantalla muda ante un 403": CargarAsync no debe escalar un 403/401, y debe dejar
+    // un estado bindeable para que la vista muestre EstadoVacio. ──
+    [Fact]
+    public async Task CargarAsync_SiElServicioLanzaUnauthorized_NoPropagaYDejaSinPermiso()
+    {
+        var svcMock = new Mock<IRubroGastoService>();
+        svcMock.Setup(s => s.ListarTodosAsync()).ThrowsAsync(new UnauthorizedAccessException());
+        var vm = new RubroGastoListViewModel(
+            svcMock.Object, new Mock<INavigationService>().Object, new Mock<IConfirmacionService>().Object);
+
+        var ex = await Record.ExceptionAsync(() => vm.CargarAsync());
+
+        Assert.Null(ex);
+        Assert.True(vm.SinPermiso);
+        Assert.False(string.IsNullOrWhiteSpace(vm.MensajeSinPermiso));
+    }
 }
 
 public class RubroGastoFormViewModelTests

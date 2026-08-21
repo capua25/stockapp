@@ -12,6 +12,7 @@
              x:Class="StockApp.Presentation.Views.Movimientos.MovimientoHistorialView"
              x:DataType="vm:MovimientoHistorialViewModel">
 
+    <Grid>
     <DockPanel Margin="{DynamicResource MargenVista}">
 
         <c:HeaderVista DockPanel.Dock="Top" Eyebrow="MOVIMIENTOS" Titulo="Historial de movimientos">
@@ -189,5 +190,12 @@
         </Border>
 
     </DockPanel>
+
+        <!-- bugfix "pantalla muda ante un 403": ver ViewModelBase.EjecutarCargaProtegidaAsync. -->
+        <c:EstadoVacio Titulo="Sin permiso"
+                       Mensaje="{Binding MensajeSinPermiso}"
+                       EsError="True"
+                       IsVisible="{Binding SinPermiso}" />
+    </Grid>
 
 </UserControl>

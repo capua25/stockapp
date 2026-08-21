@@ -59,7 +59,10 @@ public partial class StockCategoriaViewModel : ViewModelBase
     /// </summary>
     public async Task CargarAsync()
     {
-        Items = await _servicio.ObtenerStockPorCategoriaAsync();
+        await EjecutarCargaProtegidaAsync(async () =>
+        {
+            Items = await _servicio.ObtenerStockPorCategoriaAsync();
+        }, "No tenés permiso para ver el reporte de stock por categoría.");
     }
 
     /// <summary>

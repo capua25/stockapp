@@ -9,6 +9,7 @@
              x:Class="StockApp.Presentation.Views.Finanzas.LineaPoaListView"
              x:DataType="vm:LineaPoaListViewModel">
 
+    <Grid>
     <Border Classes="card" Margin="0,12,0,0">
         <DockPanel>
 
@@ -43,5 +44,12 @@
 
         </DockPanel>
     </Border>
+
+        <!-- bugfix "pantalla muda ante un 403": ver ViewModelBase.EjecutarCargaProtegidaAsync. -->
+        <c:EstadoVacio Titulo="Sin permiso"
+                       Mensaje="{Binding MensajeSinPermiso}"
+                       EsError="True"
+                       IsVisible="{Binding SinPermiso}" />
+    </Grid>
 
 </UserControl>

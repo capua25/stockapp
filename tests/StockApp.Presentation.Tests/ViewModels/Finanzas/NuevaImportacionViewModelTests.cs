@@ -53,6 +53,21 @@ public class NuevaImportacionViewModelTests
         Assert.Equal(PasoWizardImportacion.Cargar, vm.PasoActual);
     }
 
+    // ── bugfix "pantalla muda ante un 403": InicializarMaestrosAsync no debe escalar un
+    // 403/401, y debe dejar un estado bindeable para que la vista muestre EstadoVacio. ──
+    [Fact]
+    public async Task InicializarMaestrosAsync_SiElServicioLanzaUnauthorized_NoPropagaYDejaSinPermiso()
+    {
+        var (vm, _, _, _, fuentes, _, _) = Crear();
+        fuentes.Setup(f => f.ListarActivasAsync()).ThrowsAsync(new UnauthorizedAccessException());
+
+        var ex = await Record.ExceptionAsync(() => vm.InicializarMaestrosAsync());
+
+        Assert.Null(ex);
+        Assert.True(vm.SinPermiso);
+        Assert.False(string.IsNullOrWhiteSpace(vm.MensajeSinPermiso));
+    }
+
     [Fact]
     public void AnalizarCommand_SinArchivosSeleccionados_NoPuedeEjecutar()
     {

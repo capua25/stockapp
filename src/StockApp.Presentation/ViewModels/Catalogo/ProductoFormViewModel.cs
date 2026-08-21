@@ -137,29 +137,32 @@ public partial class ProductoFormViewModel : ViewModelBase
     /// </summary>
     public async Task InicializarAsync()
     {
-        var unidadPorDefecto = await _unidadMedidaService.GarantizarUnidadPorDefectoAsync();
-
-        var unidades = await _unidadMedidaService.ListarActivasAsync();
-        UnidadesMedida.Clear();
-        foreach (var u in unidades)
-            UnidadesMedida.Add(u);
-
-        var categorias = await _categoriaService.ListarActivasAsync();
-        Categorias.Clear();
-        foreach (var c in categorias)
-            Categorias.Add(c);
-
-        if (EsEdicion)
+        await EjecutarCargaProtegidaAsync(async () =>
         {
-            UnidadMedidaSeleccionada = UnidadesMedida.FirstOrDefault(u => u.Id == _unidadMedidaIdOriginal);
-            CategoriaSeleccionada = _categoriaIdOriginal is int categoriaId
-                ? Categorias.FirstOrDefault(c => c.Id == categoriaId)
-                : null;
-            return;
-        }
+            var unidadPorDefecto = await _unidadMedidaService.GarantizarUnidadPorDefectoAsync();
 
-        UnidadMedidaSeleccionada = UnidadesMedida.FirstOrDefault(u => u.Id == unidadPorDefecto.Id)
-            ?? unidadPorDefecto;
+            var unidades = await _unidadMedidaService.ListarActivasAsync();
+            UnidadesMedida.Clear();
+            foreach (var u in unidades)
+                UnidadesMedida.Add(u);
+
+            var categorias = await _categoriaService.ListarActivasAsync();
+            Categorias.Clear();
+            foreach (var c in categorias)
+                Categorias.Add(c);
+
+            if (EsEdicion)
+            {
+                UnidadMedidaSeleccionada = UnidadesMedida.FirstOrDefault(u => u.Id == _unidadMedidaIdOriginal);
+                CategoriaSeleccionada = _categoriaIdOriginal is int categoriaId
+                    ? Categorias.FirstOrDefault(c => c.Id == categoriaId)
+                    : null;
+                return;
+            }
+
+            UnidadMedidaSeleccionada = UnidadesMedida.FirstOrDefault(u => u.Id == unidadPorDefecto.Id)
+                ?? unidadPorDefecto;
+        }, "No tenés permiso para cargar los datos de este producto.");
     }
 
     private bool PuedeGuardar()

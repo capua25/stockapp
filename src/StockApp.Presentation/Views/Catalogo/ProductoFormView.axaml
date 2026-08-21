@@ -8,6 +8,7 @@
              x:Class="StockApp.Presentation.Views.Catalogo.ProductoFormView"
              x:DataType="vm:ProductoFormViewModel">
 
+    <Grid>
     <ScrollViewer>
         <Border Classes="card" Padding="{DynamicResource MargenVista}" Margin="{DynamicResource MargenVista}"
                 MaxWidth="480">
@@ -91,5 +92,12 @@
             </StackPanel>
         </Border>
     </ScrollViewer>
+
+        <!-- bugfix "pantalla muda ante un 403": ver ViewModelBase.EjecutarCargaProtegidaAsync. -->
+        <c:EstadoVacio Titulo="Sin permiso"
+                       Mensaje="{Binding MensajeSinPermiso}"
+                       EsError="True"
+                       IsVisible="{Binding SinPermiso}" />
+    </Grid>
 
 </UserControl>

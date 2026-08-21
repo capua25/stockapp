@@ -28,6 +28,23 @@ public class LineaPoaListViewModelTests
         Assert.Single(vm.Items);
         Assert.Equal("Rambla", vm.Items[0].Nombre);
     }
+
+    // ── bugfix "pantalla muda ante un 403": CargarAsync no debe escalar un 403/401, y debe dejar
+    // un estado bindeable para que la vista muestre EstadoVacio. ──
+    [Fact]
+    public async Task CargarAsync_SiElServicioLanzaUnauthorized_NoPropagaYDejaSinPermiso()
+    {
+        var svcMock = new Mock<ILineaPoaService>();
+        svcMock.Setup(s => s.ListarTodasAsync()).ThrowsAsync(new UnauthorizedAccessException());
+        var vm = new LineaPoaListViewModel(
+            svcMock.Object, new Mock<INavigationService>().Object, new Mock<IConfirmacionService>().Object);
+
+        var ex = await Record.ExceptionAsync(() => vm.CargarAsync());
+
+        Assert.Null(ex);
+        Assert.True(vm.SinPermiso);
+        Assert.False(string.IsNullOrWhiteSpace(vm.MensajeSinPermiso));
+    }
 }
 
 public class LineaPoaFormViewModelTests
@@ -63,6 +80,21 @@ public class LineaPoaFormViewModelTests
 
         Assert.Equal(2, vm.FuentesDisponibles.Count);
         Assert.Single(vm.Asignaciones);  // arranca con una fila lista para completar
+    }
+
+    // ── bugfix "pantalla muda ante un 403": InicializarAsync no debe escalar un 403/401, y debe
+    // dejar un estado bindeable para que la vista muestre EstadoVacio. ──
+    [Fact]
+    public async Task InicializarAsync_SiElServicioLanzaUnauthorized_NoPropagaYDejaSinPermiso()
+    {
+        var (vm, _, fuentesMock, _) = Crear();
+        fuentesMock.Setup(s => s.ListarActivasAsync()).ThrowsAsync(new UnauthorizedAccessException());
+
+        var ex = await Record.ExceptionAsync(() => vm.InicializarAsync());
+
+        Assert.Null(ex);
+        Assert.True(vm.SinPermiso);
+        Assert.False(string.IsNullOrWhiteSpace(vm.MensajeSinPermiso));
     }
 
     [Fact]

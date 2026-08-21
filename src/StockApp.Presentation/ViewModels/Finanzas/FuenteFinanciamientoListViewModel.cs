@@ -40,10 +40,13 @@ public partial class FuenteFinanciamientoListViewModel : ViewModelBase
 
     public async Task CargarAsync()
     {
-        var resultados = await _service.ListarTodasAsync();
-        Items.Clear();
-        foreach (var f in resultados)
-            Items.Add(f);
+        await EjecutarCargaProtegidaAsync(async () =>
+        {
+            var resultados = await _service.ListarTodasAsync();
+            Items.Clear();
+            foreach (var f in resultados)
+                Items.Add(f);
+        }, "No tenés permiso para ver las fuentes de financiamiento.");
     }
 
     [RelayCommand]

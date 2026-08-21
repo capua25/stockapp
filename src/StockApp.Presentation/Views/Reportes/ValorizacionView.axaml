@@ -10,6 +10,7 @@
              x:Class="StockApp.Presentation.Views.Reportes.ValorizacionView"
              x:DataType="vm:ValorizacionViewModel">
 
+    <Grid>
     <DockPanel Margin="{DynamicResource MargenVista}">
 
         <c:HeaderVista DockPanel.Dock="Top" Eyebrow="REPORTES" Titulo="Valorización de inventario">
@@ -97,5 +98,12 @@
         </Border>
 
     </DockPanel>
+
+        <!-- bugfix "pantalla muda ante un 403": ver ViewModelBase.EjecutarCargaProtegidaAsync. -->
+        <c:EstadoVacio Titulo="Sin permiso"
+                       Mensaje="{Binding MensajeSinPermiso}"
+                       EsError="True"
+                       IsVisible="{Binding SinPermiso}" />
+    </Grid>
 
 </UserControl>
