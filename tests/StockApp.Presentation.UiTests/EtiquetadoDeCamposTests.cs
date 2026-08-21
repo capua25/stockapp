@@ -90,10 +90,9 @@ public class EtiquetadoDeCamposTests
     /// [TextBox + botón "Cambiar contraseña"], no CampoFormulario, porque CampoFormulario apila
     /// verticalmente (label arriba del Content) y desalinearía el botón de al lado.
     ///
-    /// NO se tocan "Nombre de usuario"/"Nombre completo"/"Contraseña"/Rol del panel "NUEVO
-    /// USUARIO" (mismo archivo, más arriba): quedan fuera del pedido puntual de esta tanda, son
-    /// un problema de UX real pero de alcance más grande (4 campos, no 1) — se deja anotado en el
-    /// informe, no se corrige acá.
+    /// El panel "NUEVO USUARIO" del mismo archivo (Nombre de usuario/Nombre completo/Contraseña/
+    /// Rol) tenía el mismo problema, de alcance más grande (4 campos, no 1) — quedó fuera de esta
+    /// tanda a propósito y se corrigió en la tanda siguiente (ver los 4 tests de abajo).
     /// </summary>
     [Fact]
     public void UsuariosAdminView_NuevaContrasena_TieneEtiquetaCaption()
@@ -102,5 +101,31 @@ public class EtiquetadoDeCamposTests
         Assert.True(TieneTextBlockCaptionCon(axaml, "Nueva contraseña"),
             "Falta un TextBlock Classes=\"caption\" con texto \"Nueva contraseña\" arriba del "
             + "TextBox de NuevaContrasenaParaSeleccionado en UsuariosAdminView.");
+    }
+
+    /// <summary>
+    /// UsuariosAdminView, panel "NUEVO USUARIO": los 4 campos (Nombre de usuario, Nombre
+    /// completo, Contraseña, Rol -- este último ni siquiera tenía Watermark, estaba
+    /// completamente mudo) solo tenían Watermark como pista visual. Están apilados
+    /// verticalmente en un StackPanel sin ningún control al costado que se desalinee, así que
+    /// corresponde el mismo criterio que ControlPoaView/ProductoListView: c:CampoFormulario.
+    /// </summary>
+    [Fact]
+    public void UsuariosAdminView_PanelNuevoUsuario_TieneEtiquetasCampoFormulario()
+    {
+        var axaml = LeerAxaml("StockApp.Presentation/Views/Administracion/UsuariosAdminView.axaml");
+
+        Assert.True(TieneCampoFormularioCon(axaml, "Nombre de usuario"),
+            "El TextBox de NuevoNombreUsuario en UsuariosAdminView debe estar envuelto en "
+            + "c:CampoFormulario Etiqueta=\"Nombre de usuario\".");
+        Assert.True(TieneCampoFormularioCon(axaml, "Nombre completo (opcional)"),
+            "El TextBox de NuevoNombreCompleto en UsuariosAdminView debe estar envuelto en "
+            + "c:CampoFormulario Etiqueta=\"Nombre completo (opcional)\".");
+        Assert.True(TieneCampoFormularioCon(axaml, "Contraseña"),
+            "El TextBox de NuevaContrasenaPlan en UsuariosAdminView debe estar envuelto en "
+            + "c:CampoFormulario Etiqueta=\"Contraseña\".");
+        Assert.True(TieneCampoFormularioCon(axaml, "Rol"),
+            "El ComboBox de NuevoRol en UsuariosAdminView debe estar envuelto en "
+            + "c:CampoFormulario Etiqueta=\"Rol\" (antes no tenía ni siquiera Watermark).");
     }
 }

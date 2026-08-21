@@ -21,12 +21,20 @@
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top" Spacing="{DynamicResource Espacio2}" Margin="0,0,0,12">
                         <TextBlock Text="NUEVO USUARIO" Classes="micro" />
-                        <TextBox Watermark="Nombre de usuario" Text="{Binding NuevoNombreUsuario}" />
-                        <TextBox Watermark="Nombre completo (opcional)" Text="{Binding NuevoNombreCompleto}" />
-                        <TextBox Watermark="Contraseña" PasswordChar="*" Text="{Binding NuevaContrasenaPlan}" />
-                        <ComboBox ItemsSource="{Binding RolesDisponibles}"
-                                  SelectedItem="{Binding NuevoRol}"
-                                  HorizontalAlignment="Stretch" />
+                        <c:CampoFormulario Etiqueta="Nombre de usuario">
+                            <TextBox Text="{Binding NuevoNombreUsuario}" />
+                        </c:CampoFormulario>
+                        <c:CampoFormulario Etiqueta="Nombre completo (opcional)">
+                            <TextBox Text="{Binding NuevoNombreCompleto}" />
+                        </c:CampoFormulario>
+                        <c:CampoFormulario Etiqueta="Contraseña">
+                            <TextBox PasswordChar="*" Text="{Binding NuevaContrasenaPlan}" />
+                        </c:CampoFormulario>
+                        <c:CampoFormulario Etiqueta="Rol">
+                            <ComboBox ItemsSource="{Binding RolesDisponibles}"
+                                      SelectedItem="{Binding NuevoRol}"
+                                      HorizontalAlignment="Stretch" />
+                        </c:CampoFormulario>
                         <Button Classes="primary"
                                 Content="Crear usuario"
                                 Command="{Binding AltaCommand}"
