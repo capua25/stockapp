@@ -68,24 +68,20 @@ public partial class App : AvaloniaApp
         //
         // Red de ÚLTIMO recurso (ver historia en el repo: un crash real por una excepción
         // de dominio esperable demostró que dejar morir el proceso es un bug sistémico).
-        // El manejo fino va en los comandos; si algo escapa igual, acá se loguea a
-        // crash.log y se informa al usuario en vez de crashear. Fase 3b: si lo que escapó
-        // es ServidorNoDisponibleException (API caída en un flujo sin catch propio), se
-        // muestra su mensaje accionable en lugar del genérico.
+        // El manejo fino va en los comandos; si algo escapa igual, se loguea a crash.log y
+        // se informa al usuario en vez de crashear. Fase 3b: si lo que escapó es
+        // ServidorNoDisponibleException (API caída en un flujo sin catch propio), se
+        // muestra su mensaje accionable en lugar del genérico. Fix 2026-08-20: un
+        // UnauthorizedAccessException (403/401 legítimo, ver PoliticaExcepcionSilenciosa)
+        // NO se loguea ni se informa acá — AuthTokenHandler ya avisó vía ApiSession.AccesoRevocado.
+        // La lógica completa vive en ManejarExcepcionUiThread (testeada; ver ManejoExcepcionesGlobalesTests).
         Dispatcher.UIThread.UnhandledException += (_, e) =>
         {
-            Program.LogFatal("UIThread", e.Exception);
             e.Handled = true;
-
-            var confirmacion = _serviceProvider?.GetService<IConfirmacionService>();
-            if (confirmacion is not null)
-            {
-                var mensaje = e.Exception is ServidorNoDisponibleException
-                    ? e.Exception.Message
-                    : "Ocurrió un error inesperado. Podés seguir usando la aplicación; " +
-                      "si el problema persiste, contactá a soporte.";
-                _ = confirmacion.InformarAsync(mensaje);
-            }
+            ManejarExcepcionUiThread(
+                e.Exception,
+                _serviceProvider!.GetRequiredService<IRegistroFallos>(),
+                _serviceProvider.GetService<IConfirmacionService>());
         };
 
         // Fase 3b: ya NO se inicializa ninguna base de datos acá — la API migra su BD al
@@ -476,6 +472,34 @@ public partial class App : AvaloniaApp
         builder.AddJsonFile(rutaConexion, optional: true, reloadOnChange: false);
 
         return builder.Build();
+    }
+
+    /// <summary>
+    /// Cuerpo del handler de <c>Dispatcher.UIThread.UnhandledException</c>, extraído para poder
+    /// testearlo (fix 2026-08-20). La suscripción en <see cref="OnFrameworkInitializationCompleted"/>
+    /// es un one-liner que resuelve <paramref name="registro"/> y <paramref name="confirmacion"/>
+    /// por DI y delega acá — no queda lógica propia en la lambda que pueda divergir de lo que
+    /// verifica ManejoExcepcionesGlobalesTests. Ver <see cref="PoliticaExcepcionSilenciosa"/>
+    /// para la decisión de silencio (403/401 legítimo, ya informado por AuthTokenHandler vía
+    /// ApiSession.AccesoRevocado): si aplica, NO se loguea a crash.log ni se muestra ningún
+    /// mensaje nuevo. Cualquier otra excepción sigue el camino de siempre.
+    /// </summary>
+    internal static void ManejarExcepcionUiThread(
+        Exception ex, IRegistroFallos registro, IConfirmacionService? confirmacion)
+    {
+        if (PoliticaExcepcionSilenciosa.EsAccesoRevocado(ex))
+            return;
+
+        registro.LogFatal("UIThread", ex);
+
+        if (confirmacion is null)
+            return;
+
+        var mensaje = ex is ServidorNoDisponibleException
+            ? ex.Message
+            : "Ocurrió un error inesperado. Podés seguir usando la aplicación; " +
+              "si el problema persiste, contactá a soporte.";
+        _ = confirmacion.InformarAsync(mensaje);
     }
 
     /// <summary>

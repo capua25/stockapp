@@ -24,7 +24,7 @@ sealed class Program
 
         TaskScheduler.UnobservedTaskException += (_, e) =>
         {
-            LogFatal("UnobservedTask", e.Exception);
+            ManejarExcepcionNoObservada("UnobservedTask", e.Exception, new RegistroFallosArchivo());
             e.SetObserved();
         };
 
@@ -65,12 +65,34 @@ sealed class Program
     /// Escribe una entrada de crash a %LocalAppData%\GestionMunicipal\logs\crash.log.
     /// Delega en <see cref="RegistroFallosArchivo"/> (fix 2026-08-20: misma lógica de
     /// escritura + rotación reusada por RefrescoPermisos vía IRegistroFallos, sin duplicarla
-    /// acá). Sigue siendo el punto de entrada legítimo para los tres handlers globales de
-    /// excepciones no manejadas de este archivo (AppDomain, UnobservedTask, el catch de Main)
-    /// y para Dispatcher.UIThread.UnhandledException en App.axaml.cs — ninguno de esos corre
-    /// durante `dotnet test`, así que no necesitan pasar por la abstracción inyectable.
+    /// acá). Sigue siendo el punto de entrada legítimo para AppDomain.UnhandledException y el
+    /// catch de Main — ninguno de esos corre durante `dotnet test`, así que no necesitan pasar
+    /// por la abstracción inyectable. UnobservedTask ya NO llama acá directo (fix 2026-08-20):
+    /// pasa por <see cref="ManejarExcepcionNoObservada"/>, que decide primero si debe quedarse
+    /// en silencio (ver <see cref="PoliticaExcepcionSilenciosa"/>); lo mismo para
+    /// Dispatcher.UIThread.UnhandledException en App.axaml.cs (ver
+    /// <see cref="App.ManejarExcepcionUiThread"/>).
     /// </summary>
     internal static void LogFatal(string origen, Exception ex) =>
         new RegistroFallosArchivo().LogFatal(origen, ex);
 
+    /// <summary>
+    /// Cuerpo del handler de <c>TaskScheduler.UnobservedTaskException</c>, extraído para poder
+    /// testearlo (fix 2026-08-20) sin escribir en el crash.log real -- por eso recibe
+    /// <paramref name="registro"/> explícito en vez de llamar a <see cref="LogFatal"/>
+    /// directamente (ese overload instancia un <see cref="RegistroFallosArchivo"/> real). Ver
+    /// <see cref="PoliticaExcepcionSilenciosa"/>: un 403/401 legítimo (UnauthorizedAccessException,
+    /// típicamente envuelta en <see cref="AggregateException"/> cuando la Task de un
+    /// [RelayCommand] asíncrono falla sin que nadie observe la excepción) ya fue informado por
+    /// AuthTokenHandler vía ApiSession.AccesoRevocado -- no se loguea de nuevo acá. A diferencia
+    /// del handler de Dispatcher.UIThread (App.axaml.cs), este NUNCA muestra un mensaje al
+    /// usuario, silencioso o no.
+    /// </summary>
+    internal static void ManejarExcepcionNoObservada(string origen, Exception ex, IRegistroFallos registro)
+    {
+        if (PoliticaExcepcionSilenciosa.EsAccesoRevocado(ex))
+            return;
+
+        registro.LogFatal(origen, ex);
+    }
 }
