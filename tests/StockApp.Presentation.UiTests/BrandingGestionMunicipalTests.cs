@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using Xunit;
@@ -69,5 +70,22 @@ public class BrandingGestionMunicipalTests
         Assert.True(fallos.Count == 0,
             "Volvió a aparecer \"StockApp\" como texto visible (el producto se llama "
             + "\"Gestión Municipal\" en pantalla):\n" + string.Join("\n", fallos));
+    }
+
+    /// <summary>
+    /// AssemblyTitle es lo que Windows muestra como "Descripción del archivo" en las
+    /// propiedades del ejecutable (lo ve el usuario final al inspeccionar el .exe). Ningún
+    /// .csproj lo definía, así que el SDK de MSBuild lo derivaba de AssemblyName
+    /// ("GestionMunicipal", sin espacio ni tilde) en vez de usar el Product ya correcto
+    /// ("Gestión Municipal"). Fix: StockApp.Presentation.csproj ahora define
+    /// &lt;AssemblyTitle&gt; explícito. NO se toca AssemblyName: sigue siendo "GestionMunicipal"
+    /// a propósito (nombre del binario, referenciado por assembly=GestionMunicipal en XAML).
+    /// </summary>
+    [Fact]
+    public void AssemblyTitle_TieneEspacioYTilde()
+    {
+        var titulo = typeof(App).Assembly.GetCustomAttribute<AssemblyTitleAttribute>()?.Title;
+
+        Assert.Equal("Gestión Municipal", titulo);
     }
 }

@@ -9,6 +9,7 @@
          Municipal en el directorio de instalación. -->
     <RootNamespace>StockApp.Configurador</RootNamespace>
     <AssemblyName>GestionMunicipal.Configurador</AssemblyName>
+    <AssemblyTitle>Gestión Municipal · Configurador de conexión</AssemblyTitle>
     <Product>Gestión Municipal · Configurador de conexión</Product>
     <Version>0.1.0</Version>
     <InformationalVersion>$(Version)</InformationalVersion>

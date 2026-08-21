@@ -10,6 +10,7 @@
          rompa los x:Class="StockApp.Presentation.Views...." de todas las vistas. -->
     <RootNamespace>StockApp.Presentation</RootNamespace>
     <AssemblyName>GestionMunicipal</AssemblyName>
+    <AssemblyTitle>Gestión Municipal</AssemblyTitle>
     <Product>Gestión Municipal</Product>
     <!-- Versionado: single source of truth. Editar SOLO acá antes de empaquetar.
          Los scripts build/pack-win.ps1 y build/pack-linux.sh leen este valor
