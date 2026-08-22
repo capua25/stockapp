@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Headless.XUnit;
 using StockApp.Presentation.Services;
+using StockApp.Tests.Compartido;
 using Xunit;
 
 namespace StockApp.Presentation.UiTests;
@@ -81,19 +82,22 @@ public class ConfirmacionServiceDialogosConsecutivosTests
     /// <summary>
     /// Espera (con timeout explícito) a que el diálogo modal aparezca como hijo de <paramref name="owner"/>.
     /// Si el bug se reproduce, esto es lo primero que falla: el diálogo nunca llega a crearse/mostrarse.
+    ///
+    /// bugfix/backups-endpoint-tests-flaky: el timeout se mide con EsperaMonotonica (Stopwatch),
+    /// no con reloj de pared -- ver EsperaMonotonica para la razón.
     /// </summary>
     private static async Task<Window> EsperarDialogoAsync(Window owner)
     {
-        var inicio = DateTime.UtcNow;
-        while (DateTime.UtcNow - inicio < TimeoutEsperaDialogo)
+        var aparecio = await EsperaMonotonica.HastaAsync(
+            () => owner.OwnedWindows.Count > 0, TimeoutEsperaDialogo, TimeSpan.FromMilliseconds(10));
+
+        if (!aparecio)
         {
-            if (owner.OwnedWindows.Count > 0)
-                return owner.OwnedWindows[0];
-            await Task.Delay(10);
+            throw new TimeoutException(
+                $"El diálogo nunca se creó/mostró como hijo de la ventana principal (timeout {TimeoutEsperaDialogo}).");
         }
 
-        throw new TimeoutException(
-            $"El diálogo nunca se creó/mostró como hijo de la ventana principal (timeout {TimeoutEsperaDialogo}).");
+        return owner.OwnedWindows[0];
     }
 
     /// <summary>

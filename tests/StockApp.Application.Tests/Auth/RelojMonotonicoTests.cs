@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using StockApp.Application.Auth;
 using Xunit;
 
@@ -84,6 +85,16 @@ public class RelojMonotonicoTests
     //
     // El umbral es 1 ms porque es el límite útil: por debajo de esa marca el truncado a
     // milisegundos del claim "iat" pasa a ser el factor que manda, no el reloj.
+    //
+    // bugfix/backups-endpoint-tests-flaky: acá el reloj de pared NO es incidental, es el SUJETO
+    // bajo prueba (RelojMonotonico lo usa como ancla) -- lo que hay que sacar es sólo el reloj de
+    // pared que acota la VENTANA de recolección del test, no lo que el test muestrea. La ventana
+    // de 2s se mide con Stopwatch (monotónico); lo muestreado sigue siendo reloj.AhoraUtc(), el
+    // reloj de producción bajo prueba, sin tocar. Deliberadamente NO se delega en
+    // EsperaMonotonica.HastaAsync: ese helper duerme (Task.Delay) entre sondeos, y acá hace falta
+    // lo opuesto -- un loop AJUSTADO, sin dormir, para poder detectar pasos por debajo del
+    // milisegundo. Un Task.Delay(20) entre muestras haría que CUALQUIER reloj pareciera avanzar
+    // "fino" y el test dejaría de medir lo que dice medir.
     [Fact]
     public void AhoraUtc_DeProduccion_AvanzaConResolucionMejorQueUnMilisegundo()
     {
@@ -91,10 +102,10 @@ public class RelojMonotonicoTests
 
         var pasoMinimo = TimeSpan.MaxValue;
         var anterior = reloj.AhoraUtc();
-        var limite = DateTime.UtcNow.AddSeconds(2);
+        var cronometro = Stopwatch.StartNew();
         var cambios = 0;
 
-        while (cambios < 50 && DateTime.UtcNow < limite)
+        while (cambios < 50 && cronometro.Elapsed < TimeSpan.FromSeconds(2))
         {
             var actual = reloj.AhoraUtc();
             if (actual == anterior)

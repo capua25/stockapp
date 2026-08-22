@@ -37,4 +37,15 @@
     </None>
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- bugfix/backups-endpoint-tests-flaky: helper de sondeo con reloj monotónico, compartido
+         por los 4 proyectos de test que esperan una condición observable sin Task expuesta.
+         Mismo mecanismo de Link que las fixtures .ods de StockApp.Api.Tests, aplicado a un
+         Compile item: no hay proyecto TestSupport nuevo, el archivo físico vive en
+         tests\_Compartido\. -->
+    <Compile Include="..\_Compartido\EsperaMonotonica.cs">
+      <Link>Compartido\EsperaMonotonica.cs</Link>
+    </Compile>
+  </ItemGroup>
+
 </Project>

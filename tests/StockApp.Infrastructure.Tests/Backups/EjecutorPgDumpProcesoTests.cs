@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Primitives;
 using StockApp.Infrastructure.Backups;
+using StockApp.Tests.Compartido;
 using Xunit;
 
 namespace StockApp.Infrastructure.Tests.Backups;
@@ -81,7 +82,7 @@ public class EjecutorPgDumpProcesoTests : IDisposable
             "Host=localhost;Port=5;Username=u;Password=p;Database=d", rutaDestino, cts.Token);
 
         // Esperar a que el script realmente haya arrancado (escribió su propio PID).
-        await EsperarHastaAsync(() => File.Exists(pidFile), TimeSpan.FromSeconds(5));
+        await EsperaMonotonica.HastaAsync(() => File.Exists(pidFile), TimeSpan.FromSeconds(5));
         var pid = int.Parse((await File.ReadAllTextAsync(pidFile)).Trim());
         Assert.True(ProcesoSigueVivo(pid), "El script fake no llegó a arrancar -- test inválido.");
 
@@ -96,7 +97,7 @@ public class EjecutorPgDumpProcesoTests : IDisposable
         // aplicaba (su propio filtro lo excluye a propósito) y la excepción se propagaba
         // mientras el "using var proceso" liberaba el objeto SIN matar al hijo real -- quedaba
         // un pg_dump zombie. Con el fix (finally), el proceso hijo debe estar muerto.
-        var siguioVivo = !await EsperarHastaAsync(() => !ProcesoSigueVivo(pid), TimeSpan.FromSeconds(5));
+        var siguioVivo = !await EsperaMonotonica.HastaAsync(() => !ProcesoSigueVivo(pid), TimeSpan.FromSeconds(5));
         Assert.False(siguioVivo, $"El proceso hijo (pid {pid}) seguía vivo tras la cancelación -- quedó zombie.");
     }
 
@@ -135,18 +136,6 @@ public class EjecutorPgDumpProcesoTests : IDisposable
         {
             return false; // No existe ningún proceso con ese pid -- ya terminó.
         }
-    }
-
-    private static async Task<bool> EsperarHastaAsync(Func<bool> condicion, TimeSpan timeout)
-    {
-        var limite = DateTime.UtcNow + timeout;
-        while (DateTime.UtcNow < limite)
-        {
-            if (condicion())
-                return true;
-            await Task.Delay(50);
-        }
-        return condicion();
     }
 
     /// <summary>IConfiguration fake respaldado por un diccionario en memoria -- mismo motivo que

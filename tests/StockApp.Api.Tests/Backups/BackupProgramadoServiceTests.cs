@@ -8,6 +8,7 @@ using StockApp.Application.Backups;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Tests.Compartido;
 using Xunit;
 
 namespace StockApp.Api.Tests.Backups;
@@ -228,14 +229,15 @@ public class BackupProgramadoServiceTests
     /// ExecuteTask puede completarse por la cancelación antes de que el efecto sea visible) y un
     /// Task.Delay fijo a ciegas es candidato a flaky bajo CI cargada: esto poliestea y corta apenas
     /// se cumple la condición, así que en la práctica tarda un par de milisegundos.
+    ///
+    /// bugfix/backups-endpoint-tests-flaky: el límite se mide con EsperaMonotonica (Stopwatch),
+    /// no con reloj de pared -- ver EsperaMonotonica para la razón.
     /// </summary>
     private static async Task EsperarHastaAsync(Func<bool> condicion, string queSeEsperaba)
     {
-        var limite = DateTime.UtcNow.AddSeconds(10);
-        while (!condicion() && DateTime.UtcNow < limite)
-            await Task.Delay(20);
+        var cumplida = await EsperaMonotonica.HastaAsync(condicion, TimeSpan.FromSeconds(10));
 
-        Assert.True(condicion(), queSeEsperaba);
+        Assert.True(cumplida, queSeEsperaba);
     }
 
     /// <summary>Arma el servicio con la secuencia de arranque condenada a fallar (el repo explota
