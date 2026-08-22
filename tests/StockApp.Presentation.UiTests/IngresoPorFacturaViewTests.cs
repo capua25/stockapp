@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
+using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -130,6 +132,20 @@ public class IngresoPorFacturaViewTests
         caja.Text = texto;
         Dispatcher.UIThread.RunJobs();
     }
+
+    /// <summary>Código/Nombre/Precio de venta son los únicos TextBox de AUTOR sin Watermark/
+    /// PlaceholderText del árbol (todos los del formulario de cabecera y la zona de carga SÍ
+    /// tienen uno) -- TemplatedParent == null descarta el PART_EditableTextBox interno que todo
+    /// ComboBox trae en su template por default (existe en el árbol visual aunque
+    /// IsEditable="False", nunca se ve ni se usa). Factorizado a un solo lugar (en vez de
+    /// duplicarlo por test) para no multiplicar el warning CS0618 de leer TextBox.Watermark
+    /// (obsoleto) -- ver el comentario de DecimalConverter/PlaceholderText en la vista real.</summary>
+    private static List<TextBox> CamposDelOverlayDeAltaDeProducto(Window window)
+        => window.GetVisualDescendants().OfType<TextBox>()
+            .Where(t => string.IsNullOrEmpty(t.Watermark) && string.IsNullOrEmpty(t.PlaceholderText))
+            .Where(t => t.TemplatedParent is null)
+            .Where(t => t.FindAncestorOfType<CalendarDatePicker>() is null)
+            .ToList();
 
     /// <summary>
     /// Flujo completo de carga vía clicks/tipeo reales: elegir producto en el combo de la zona de
@@ -331,16 +347,7 @@ public class IngresoPorFacturaViewTests
         Clickear(window, BotonPorTexto(window, "Producto nuevo"));
         Assert.True(vm.MostrandoAltaProducto);
 
-        // Código/Nombre/Precio de venta son los únicos TextBox de AUTOR sin Watermark/PlaceholderText
-        // del árbol (todos los del formulario de cabecera y la zona de carga SÍ tienen uno) --
-        // TemplatedParent == null descarta el PART_EditableTextBox interno que todo ComboBox trae
-        // en su template por default (existe en el árbol visual aunque IsEditable="False", nunca
-        // se ve ni se usa).
-        var camposDelOverlay = window.GetVisualDescendants().OfType<TextBox>()
-            .Where(t => string.IsNullOrEmpty(t.Watermark) && string.IsNullOrEmpty(t.PlaceholderText))
-            .Where(t => t.TemplatedParent is null)
-            .Where(t => t.FindAncestorOfType<CalendarDatePicker>() is null)
-            .ToList();
+        var camposDelOverlay = CamposDelOverlayDeAltaDeProducto(window);
         Assert.Equal(3, camposDelOverlay.Count);
         Tipear(camposDelOverlay[0], "COD-NUEVO-1");
         Tipear(camposDelOverlay[1], "Carretilla reforzada");
@@ -675,5 +682,130 @@ public class IngresoPorFacturaViewTests
         var mensajeVisible = window.GetVisualDescendants().OfType<TextBlock>()
             .Single(t => t.Text == mensajeEsperado);
         Assert.True(ArbolVisual.EsVisibleEnArbol(mensajeVisible));
+    }
+
+    // ── Cultura decimal de la ZONA DE CARGA (encargo 2026-08-21, hueco 1) ──
+    //
+    // IngresoPorFacturaLocaleDecimalTests.cs quedó custodiando un XAML SINTÉTICO ("montar
+    // producto propio, independiente de la vista") que dejó de ser donde vive el riesgo:
+    // Cantidad y Precio unitario se mudaron de las celdas del DataGrid a los TextBox reales de
+    // la zona de carga (ver el comentario de esa clase y el Border "Cargar artículo" del axaml).
+    // El riesgo de cultura (es-UY: coma decimal, DecimalConverter) se mudó con ellos, y ese test
+    // nunca mira los controles reales. Por eso la cobertura nueva va ACÁ, en
+    // IngresoPorFacturaViewTests.cs, que ya monta la vista real vía Montar() y ya tiene los
+    // helpers (CajaPorPlaceholder, ComboPorItemsSource) para tocar los controles reales de la
+    // zona de carga -- extender el archivo sintético hubiera seguido probando el binding
+    // equivocado. La cobertura vieja NO se borra: sigue custodiando el binding crudo (sin
+    // converter) que usaba la vieja celda de DataGrid, un caso que ya no ocurre en esta vista
+    // pero documenta el bug de fondo para cualquier otra grilla editable del proyecto.
+
+    /// <summary>
+    /// Tipea con coma decimal (es-UY, el formato que <see cref="StockApp.Presentation.Converters.DecimalConverter"/>
+    /// exige SIEMPRE) bajo una cultura AMBIENTE hostil (en-US: coma = separador de miles, punto =
+    /// decimal). Si los TextBox reales de "Cantidad"/"Precio unitario" en la zona de carga no
+    /// tuvieran el converter cableado, el binding caería en el converter por defecto de Avalonia
+    /// con la cultura AMBIENTE (en-US) y <c>NumberStyles.Float</c> -- que rechaza la coma
+    /// (ni separador de miles ni decimal válido ahí) y el valor tipeado se pierde en silencio,
+    /// igual que el bug histórico que motivó el converter. Cubre los 3 puntos del encargo:
+    /// Cantidad, Precio unitario, y el Subtotal de la fila resultante en la grilla.
+    /// </summary>
+    [AvaloniaFact]
+    public void ClickReal_ZonaDeCarga_ComaDecimalEsUy_CulturaAmbienteHostil_LlegaCorrectoAlViewModelYElSubtotalDeLaGrillaEsCorrecto()
+    {
+        var culturaOriginal = Thread.CurrentThread.CurrentCulture;
+        Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var producto = Producto(1, "Pala punta cuadrada");
+            var (window, vm, _, _) = Montar(productos: new[] { producto });
+
+            var comboProducto = ComboPorItemsSource(window, vm.ProductosDisponibles);
+            comboProducto.SelectedItem = producto;
+            Dispatcher.UIThread.RunJobs();
+
+            Tipear(CajaPorPlaceholder(window, "Cantidad"), "3,5");
+            Tipear(CajaPorPlaceholder(window, "Precio unitario"), "12,35");
+
+            // Ni truncado (3/12), ni interpretado como miles (3500/1235), ni dividido por 100.
+            Assert.Equal(3.5m, vm.CantidadEnCarga);
+            Assert.Equal(12.35m, vm.PrecioUnitarioEnCarga);
+
+            Clickear(window, BotonPorTexto(window, "Agregar artículo"));
+
+            var fila = Assert.Single(vm.Renglones);
+            Assert.Equal(3.5m, fila.Cantidad);
+            Assert.Equal(12.35m, fila.PrecioUnitario);
+            Assert.Equal(43.225m, fila.Subtotal);
+
+            var filaEnGrilla = window.GetVisualDescendants().OfType<DataGridRow>()
+                .Single(r => ReferenceEquals(r.DataContext, fila));
+            Assert.Equal(43.225m, ((FilaRenglonFacturaVm)filaEnGrilla.DataContext!).Subtotal);
+        }
+        finally
+        {
+            Thread.CurrentThread.CurrentCulture = culturaOriginal;
+        }
+    }
+
+    // ── Salida del modo "producto nuevo" en la zona de carga (encargo 2026-08-21, hueco 2) ──
+
+    /// <summary>
+    /// Callejón sin salida reportado por el propio implementador: una vez confirmado un producto
+    /// nuevo en la zona de carga, EsProductoNuevoEnCarga queda en true y no había forma de volver
+    /// a elegir un producto existente sin agregar la fila -- el ComboBox de productos existentes
+    /// quedaba oculto para siempre y "Cancelar" del overlay solo cierra el overlay (no aplica acá:
+    /// ese botón actúa ANTES de confirmar, el atasco es DESPUÉS). Fix: un botón "Cambiar" junto al
+    /// nombre del producto nuevo (DescartarProductoNuevoEnCargaCommand) que vuelve al modo
+    /// "producto existente" y limpia TODOS los campos de alta (código/nombre/categoría/unidad/
+    /// precio de venta) para que no quede residuo que se cuele en el siguiente renglón.
+    /// </summary>
+    [AvaloniaFact]
+    public void ClickReal_ProductoNuevoConfirmado_CambiarLoDescarta_VuelveAlComboYElSiguienteRenglonEntraSinResiduoDelDescartado()
+    {
+        var unidad = new UnidadMedida { Id = 1, Nombre = "Unidad", Abreviatura = "u", Activo = true };
+        var productoExistente = Producto(2, "Rastrillo de jardín");
+        var (window, vm, _, _) = Montar(unidades: new[] { unidad }, productos: new[] { productoExistente });
+
+        Clickear(window, BotonPorTexto(window, "Producto nuevo"));
+        Assert.True(vm.MostrandoAltaProducto);
+
+        var camposDelOverlay = CamposDelOverlayDeAltaDeProducto(window);
+        Assert.Equal(3, camposDelOverlay.Count);
+        Tipear(camposDelOverlay[0], "COD-NUEVO-1");
+        Tipear(camposDelOverlay[1], "Carretilla reforzada");
+
+        var comboUnidad = ComboPorItemsSource(window, vm.UnidadesMedidaDisponibles);
+        comboUnidad.SelectedItem = unidad;
+        Dispatcher.UIThread.RunJobs();
+
+        Clickear(window, BotonPorCommand(window, vm.ConfirmarAltaProductoCommand));
+
+        Assert.True(vm.EsProductoNuevoEnCarga);
+        var comboProductoOculto = ComboPorItemsSource(window, vm.ProductosDisponibles);
+        Assert.False(ArbolVisual.EsVisibleEnArbol(comboProductoOculto));
+
+        // El usuario se arrepiente: descarta el producto nuevo desde la zona de carga.
+        Clickear(window, BotonPorCommand(window, vm.DescartarProductoNuevoEnCargaCommand));
+
+        Assert.False(vm.EsProductoNuevoEnCarga);
+        Assert.Null(vm.NuevoProductoNombre);
+        Assert.Null(vm.NuevoProductoCodigo);
+        Assert.Null(vm.NuevaCategoriaSeleccionada);
+        Assert.Null(vm.NuevaUnidadSeleccionada);
+        Assert.Equal(0m, vm.NuevoProductoPrecioVenta);
+
+        var comboProductoVisible = ComboPorItemsSource(window, vm.ProductosDisponibles);
+        Assert.True(ArbolVisual.EsVisibleEnArbol(comboProductoVisible));
+
+        // Vuelve a elegir un producto EXISTENTE y agrega -- la fila no debe llevar rastro del
+        // producto nuevo descartado.
+        CargarArticuloPorClicksReales(window, productoExistente, "1", "10");
+
+        var fila = Assert.Single(vm.Renglones);
+        Assert.False(fila.EsProductoNuevo);
+        Assert.Same(productoExistente, fila.Producto);
+        Assert.Null(fila.ProductoNuevoNombre);
+        Assert.Null(fila.ProductoNuevoCodigo);
+        Assert.Equal(productoExistente.Nombre, fila.NombreMostrado);
     }
 }

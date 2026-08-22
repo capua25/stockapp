@@ -278,6 +278,26 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
     private void CancelarAltaProducto() => MostrandoAltaProducto = false;
 
     /// <summary>
+    /// Salida del "callejón sin salida" hallado en la verificación visual (2026-08-21): tras
+    /// confirmar un producto nuevo, EsProductoNuevoEnCarga quedaba en true para siempre -- el
+    /// ComboBox de productos existentes se ocultaba (ver axaml) y no había forma de volver atrás
+    /// sin agregar la fila. "Cancelar" del overlay de alta NO sirve acá: ese botón actúa ANTES de
+    /// confirmar (ver CancelarAltaProducto), y el atasco ocurre DESPUÉS. Este comando descarta el
+    /// modo "producto nuevo" y limpia TODOS los campos de alta -- no solo EsProductoNuevoEnCarga
+    /// -- para que no quede residuo que se cuele en el próximo AgregarArticuloCommand.
+    /// </summary>
+    [RelayCommand]
+    private void DescartarProductoNuevoEnCarga()
+    {
+        EsProductoNuevoEnCarga = false;
+        NuevoProductoCodigo = null;
+        NuevoProductoNombre = null;
+        NuevaCategoriaSeleccionada = null;
+        NuevaUnidadSeleccionada = null;
+        NuevoProductoPrecioVenta = 0m;
+    }
+
+    /// <summary>
     /// Único punto de alta de un renglón (reemplaza el viejo "+ Agregar renglón" + edición
     /// inline): valida ANTES de insertar, con las MISMAS reglas que
     /// <c>IngresoPorFacturaService.RegistrarAsync</c> (cantidad &gt; 0, precio unitario &gt;= 0,

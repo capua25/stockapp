@@ -112,8 +112,9 @@
                                      el ComboBox se oculta y se muestra el nombre en su lugar,
                                      así nunca puede pisar ni contradecir los datos cargados en el
                                      diálogo de alta rápida. -->
-                                <Grid>
-                                    <ComboBox IsVisible="{Binding !EsProductoNuevoEnCarga}"
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <ComboBox Grid.Column="0" Grid.ColumnSpan="2"
+                                              IsVisible="{Binding !EsProductoNuevoEnCarga}"
                                               ItemsSource="{Binding ProductosDisponibles}"
                                               SelectedItem="{Binding ProductoEnCarga}"
                                               PlaceholderText="Elegí el producto"
@@ -125,9 +126,15 @@
                                             </DataTemplate>
                                         </ComboBox.ItemTemplate>
                                     </ComboBox>
-                                    <TextBlock IsVisible="{Binding EsProductoNuevoEnCarga}"
+                                    <TextBlock Grid.Column="0" IsVisible="{Binding EsProductoNuevoEnCarga}"
                                                Text="{Binding NuevoProductoNombre}"
                                                VerticalAlignment="Center" FontStyle="Italic" />
+                                    <!-- Salida del modo "producto nuevo" (hueco hallado en la verificación
+                                         visual): sin este botón, tras confirmar el alta rápida no había forma
+                                         de volver a elegir un producto existente sin agregar la fila. -->
+                                    <Button Grid.Column="1" IsVisible="{Binding EsProductoNuevoEnCarga}"
+                                            Content="Cambiar" Command="{Binding DescartarProductoNuevoEnCargaCommand}"
+                                            ToolTip.Tip="Descartar este producto nuevo y volver a elegir uno existente" />
                                 </Grid>
                             </StackPanel>
                             <StackPanel Grid.Column="2" Spacing="4">
