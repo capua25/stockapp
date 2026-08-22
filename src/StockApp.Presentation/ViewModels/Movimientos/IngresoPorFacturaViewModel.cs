@@ -100,7 +100,18 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
     public ObservableCollection<UnidadMedida> UnidadesMedidaDisponibles { get; } = new();
     public ObservableCollection<FilaRenglonFacturaVm> Renglones { get; } = new();
 
-    private FilaRenglonFacturaVm? _filaEnAltaProducto;
+    // ── Zona de carga (arriba de la grilla): reemplaza la edición inline de renglones -- la
+    // grilla pasa a ser de solo lectura (lista de lo ya cargado). Ver AgregarArticuloCommand.
+    [ObservableProperty] private ProductoDto? _productoEnCarga;
+    [ObservableProperty] private decimal _cantidadEnCarga;
+    [ObservableProperty] private decimal _precioUnitarioEnCarga;
+    [ObservableProperty] private bool _actualizarPrecioCostoEnCarga;
+    [ObservableProperty] private string? _mensajeErrorCarga;
+    [ObservableProperty] private bool _esProductoNuevoEnCarga;
+
+    /// <summary>Truco de "pulso": la View escucha este booleano vía FocoBehavior (TwoWay) para
+    /// devolver el foco al ComboBox de producto apenas se agrega un artículo con éxito.</summary>
+    [ObservableProperty] private bool _solicitarFocoEnProductoCombo;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(GuardarEsAccionPrincipal))]
@@ -226,16 +237,6 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void AgregarRenglon()
-    {
-        var fila = new FilaRenglonFacturaVm { Cantidad = 1m };
-        fila.PropertyChanged += Renglon_PropertyChanged;
-        Renglones.Add(fila);
-        RecalcularTotales();
-        GuardarCommand.NotifyCanExecuteChanged();
-    }
-
-    [RelayCommand]
     private void QuitarRenglon(FilaRenglonFacturaVm fila)
     {
         fila.PropertyChanged -= Renglon_PropertyChanged;
@@ -245,9 +246,8 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void AbrirAltaProducto(FilaRenglonFacturaVm fila)
+    private void AbrirAltaProducto()
     {
-        _filaEnAltaProducto = fila;
         NuevoProductoCodigo = null;
         NuevoProductoNombre = null;
         NuevaCategoriaSeleccionada = null;
@@ -256,30 +256,100 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
         MostrandoAltaProducto = true;
     }
 
+    /// <summary>
+    /// A diferencia del alta en línea original (que escribía directo sobre una fila ya agregada a
+    /// la grilla), acá NO hay fila todavía -- el renglón recién se crea al confirmar la zona de
+    /// carga en AgregarArticuloCommand. Confirmar acá solo deja la zona de carga en "modo producto
+    /// nuevo" (EsProductoNuevoEnCarga), mostrando el nombre en vez del ComboBox de producto.
+    /// </summary>
     [RelayCommand]
     private void ConfirmarAltaProducto()
     {
-        if (_filaEnAltaProducto is null || string.IsNullOrWhiteSpace(NuevoProductoCodigo)
+        if (string.IsNullOrWhiteSpace(NuevoProductoCodigo)
             || string.IsNullOrWhiteSpace(NuevoProductoNombre) || NuevaUnidadSeleccionada is null)
             return;
 
-        _filaEnAltaProducto.EsProductoNuevo = true;
-        _filaEnAltaProducto.Producto = null;
-        _filaEnAltaProducto.ProductoNuevoCodigo = NuevoProductoCodigo;
-        _filaEnAltaProducto.ProductoNuevoNombre = NuevoProductoNombre;
-        _filaEnAltaProducto.ProductoNuevoCategoriaId = NuevaCategoriaSeleccionada?.Id;
-        _filaEnAltaProducto.ProductoNuevoUnidadMedidaId = NuevaUnidadSeleccionada.Id;
-        _filaEnAltaProducto.ProductoNuevoPrecioVenta = NuevoProductoPrecioVenta;
-
+        EsProductoNuevoEnCarga = true;
+        ProductoEnCarga = null;
         MostrandoAltaProducto = false;
-        _filaEnAltaProducto = null;
     }
 
     [RelayCommand]
-    private void CancelarAltaProducto()
+    private void CancelarAltaProducto() => MostrandoAltaProducto = false;
+
+    /// <summary>
+    /// Único punto de alta de un renglón (reemplaza el viejo "+ Agregar renglón" + edición
+    /// inline): valida ANTES de insertar, con las MISMAS reglas que
+    /// <c>IngresoPorFacturaService.RegistrarAsync</c> (cantidad &gt; 0, precio unitario &gt;= 0,
+    /// producto existente o producto nuevo pero no ambos/ninguno) para no divergir cliente/
+    /// servidor. Si la validación falla, la fila NO se agrega y MensajeErrorCarga queda con un
+    /// mensaje específico (no un rebote genérico del servidor). Si tiene éxito, limpia la zona de
+    /// carga y pide el foco de vuelta al ComboBox de producto -- la pantalla existe para cargar N
+    /// artículos rápido, sin tocar el mouse entre uno y el siguiente.
+    /// </summary>
+    [RelayCommand]
+    private void AgregarArticulo()
     {
-        MostrandoAltaProducto = false;
-        _filaEnAltaProducto = null;
+        MensajeErrorCarga = null;
+
+        if (!EsProductoNuevoEnCarga && ProductoEnCarga is null)
+        {
+            MensajeErrorCarga = "Debe seleccionar un producto o cargar uno nuevo.";
+            return;
+        }
+        if (CantidadEnCarga <= 0)
+        {
+            MensajeErrorCarga = "La cantidad debe ser mayor a cero.";
+            return;
+        }
+        if (PrecioUnitarioEnCarga < 0)
+        {
+            MensajeErrorCarga = "El precio unitario no puede ser negativo.";
+            return;
+        }
+
+        var fila = new FilaRenglonFacturaVm
+        {
+            Cantidad = CantidadEnCarga,
+            PrecioUnitario = PrecioUnitarioEnCarga,
+            ActualizarPrecioCosto = ActualizarPrecioCostoEnCarga,
+        };
+
+        if (EsProductoNuevoEnCarga)
+        {
+            fila.EsProductoNuevo = true;
+            fila.ProductoNuevoCodigo = NuevoProductoCodigo;
+            fila.ProductoNuevoNombre = NuevoProductoNombre;
+            fila.ProductoNuevoCategoriaId = NuevaCategoriaSeleccionada?.Id;
+            fila.ProductoNuevoUnidadMedidaId = NuevaUnidadSeleccionada!.Id;
+            fila.ProductoNuevoPrecioVenta = NuevoProductoPrecioVenta;
+        }
+        else
+        {
+            fila.Producto = ProductoEnCarga;
+        }
+
+        fila.PropertyChanged += Renglon_PropertyChanged;
+        Renglones.Add(fila);
+        RecalcularTotales();
+        GuardarCommand.NotifyCanExecuteChanged();
+
+        LimpiarZonaDeCarga();
+        SolicitarFocoEnProductoCombo = true;
+    }
+
+    private void LimpiarZonaDeCarga()
+    {
+        ProductoEnCarga = null;
+        CantidadEnCarga = 0m;
+        PrecioUnitarioEnCarga = 0m;
+        ActualizarPrecioCostoEnCarga = false;
+        EsProductoNuevoEnCarga = false;
+        NuevoProductoCodigo = null;
+        NuevoProductoNombre = null;
+        NuevaCategoriaSeleccionada = null;
+        NuevaUnidadSeleccionada = null;
+        NuevoProductoPrecioVenta = 0m;
     }
 
     private bool PuedeGuardar()

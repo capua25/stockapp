@@ -89,6 +89,118 @@ public class IngresoPorFacturaViewModelTests
         vm.MontoTotalTexto = "1.000,00";
     }
 
+    /// <summary>
+    /// La edición inline de renglones desapareció (encargo "carga por formulario"): la única vía
+    /// de alta es la zona de carga (ProductoEnCarga/CantidadEnCarga/PrecioUnitarioEnCarga +
+    /// AgregarArticuloCommand). Este helper reemplaza el viejo patrón
+    /// "AgregarRenglonCommand.Execute(null); Renglones[i].Cantidad = ..." de todos los tests de
+    /// abajo que solo necesitan un renglón cargado, sin repetir las 4 líneas en cada uno.
+    /// </summary>
+    private static void AgregarArticulo(IngresoPorFacturaViewModel vm, ProductoDto producto, decimal cantidad, decimal precioUnitario)
+    {
+        vm.ProductoEnCarga = producto;
+        vm.CantidadEnCarga = cantidad;
+        vm.PrecioUnitarioEnCarga = precioUnitario;
+        vm.AgregarArticuloCommand.Execute(null);
+    }
+
+    // ── AgregarArticuloCommand: valida ANTES de insertar, mismas reglas que
+    // IngresoPorFacturaService.RegistrarAsync (cantidad > 0, precio >= 0, producto existente o
+    // producto nuevo). La cobertura fuerte de estos caminos vive en IngresoPorFacturaViewTests.cs
+    // (UiTests, clicks reales); estos tests unitarios son una segunda red de contención directa
+    // sobre el VM, útil para mutación rápida sin levantar Avalonia headless.
+
+    [Fact]
+    public async Task AgregarArticulo_SinProductoNiProductoNuevo_NoAgregaYMuestraMensajeEspecifico()
+    {
+        var (vm, _, _) = Crear();
+        await InicializarYCompletarCabeceraAsync(vm);
+
+        vm.CantidadEnCarga = 1m;
+        vm.PrecioUnitarioEnCarga = 10m;
+        vm.AgregarArticuloCommand.Execute(null);
+
+        Assert.Empty(vm.Renglones);
+        Assert.Equal("Debe seleccionar un producto o cargar uno nuevo.", vm.MensajeErrorCarga);
+    }
+
+    [Fact]
+    public async Task AgregarArticulo_CantidadCero_NoAgregaYMuestraMensajeEspecifico()
+    {
+        var (vm, _, _) = Crear();
+        await InicializarYCompletarCabeceraAsync(vm);
+
+        vm.ProductoEnCarga = vm.ProductosDisponibles[0];
+        vm.CantidadEnCarga = 0m;
+        vm.PrecioUnitarioEnCarga = 10m;
+        vm.AgregarArticuloCommand.Execute(null);
+
+        Assert.Empty(vm.Renglones);
+        Assert.Equal("La cantidad debe ser mayor a cero.", vm.MensajeErrorCarga);
+    }
+
+    [Fact]
+    public async Task AgregarArticulo_CantidadNegativa_NoAgregaYMuestraMensajeEspecifico()
+    {
+        var (vm, _, _) = Crear();
+        await InicializarYCompletarCabeceraAsync(vm);
+
+        vm.ProductoEnCarga = vm.ProductosDisponibles[0];
+        vm.CantidadEnCarga = -3m;
+        vm.PrecioUnitarioEnCarga = 10m;
+        vm.AgregarArticuloCommand.Execute(null);
+
+        Assert.Empty(vm.Renglones);
+        Assert.Equal("La cantidad debe ser mayor a cero.", vm.MensajeErrorCarga);
+    }
+
+    [Fact]
+    public async Task AgregarArticulo_PrecioNegativo_NoAgregaYMuestraMensajeEspecifico()
+    {
+        var (vm, _, _) = Crear();
+        await InicializarYCompletarCabeceraAsync(vm);
+
+        vm.ProductoEnCarga = vm.ProductosDisponibles[0];
+        vm.CantidadEnCarga = 1m;
+        vm.PrecioUnitarioEnCarga = -5m;
+        vm.AgregarArticuloCommand.Execute(null);
+
+        Assert.Empty(vm.Renglones);
+        Assert.Equal("El precio unitario no puede ser negativo.", vm.MensajeErrorCarga);
+    }
+
+    [Fact]
+    public async Task AgregarArticulo_ConExito_LimpiaLaZonaDeCargaYPideElFoco()
+    {
+        var (vm, _, _) = Crear();
+        await InicializarYCompletarCabeceraAsync(vm);
+        vm.ActualizarPrecioCostoEnCarga = true;
+
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 2m, precioUnitario: 10m);
+
+        Assert.Null(vm.ProductoEnCarga);
+        Assert.Equal(0m, vm.CantidadEnCarga);
+        Assert.Equal(0m, vm.PrecioUnitarioEnCarga);
+        Assert.False(vm.ActualizarPrecioCostoEnCarga);
+        Assert.Null(vm.MensajeErrorCarga);
+        Assert.True(vm.SolicitarFocoEnProductoCombo);
+    }
+
+    [Fact]
+    public async Task AgregarArticulo_PrecioCero_EsValido_SeAgrega()
+    {
+        // El límite de la regla del service es "PrecioUnitario < 0", NO "<= 0" -- precio 0 es
+        // válido (ej. donaciones/promociones). Mismo límite exacto que
+        // IngresoPorFacturaService.RegistrarAsync:69-79.
+        var (vm, _, _) = Crear();
+        await InicializarYCompletarCabeceraAsync(vm);
+
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 0m);
+
+        Assert.Single(vm.Renglones);
+        Assert.Null(vm.MensajeErrorCarga);
+    }
+
     // ── bugfix 2026-08-15: mismo bug que GastoFormViewModel — InicializarAsync llamaba
     // IProveedorService.ListarTodosAsync(), que en el servidor exige GestionarTablasMaestras.
     // Esta pantalla la alcanza un Operador con RegistrarMovimientos + RegistrarGastos +
@@ -170,16 +282,11 @@ public class IngresoPorFacturaViewModelTests
         var (vm, _, _) = Crear();
         await InicializarYCompletarCabeceraAsync(vm);
 
-        vm.AgregarRenglonCommand.Execute(null);
-        vm.Renglones[0].Producto = vm.ProductosDisponibles[0];
-        vm.Renglones[0].Cantidad = 3m;
-        vm.Renglones[0].PrecioUnitario = 50m;
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 3m, precioUnitario: 50m);
 
         Assert.Equal(150m, vm.SumaRenglones);
 
-        vm.AgregarRenglonCommand.Execute(null);
-        vm.Renglones[1].Cantidad = 2m;
-        vm.Renglones[1].PrecioUnitario = 25m;
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 2m, precioUnitario: 25m);
 
         Assert.Equal(200m, vm.SumaRenglones);   // 150 + 50
 
@@ -193,9 +300,7 @@ public class IngresoPorFacturaViewModelTests
     {
         var (vm, _, _) = Crear();
         await InicializarYCompletarCabeceraAsync(vm);
-        vm.AgregarRenglonCommand.Execute(null);
-        vm.Renglones[0].Cantidad = 4m;
-        vm.Renglones[0].PrecioUnitario = 100m;   // subtotal 400
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 4m, precioUnitario: 100m);   // subtotal 400
 
         vm.MontoTotalTexto = "450,00";
 
@@ -214,10 +319,7 @@ public class IngresoPorFacturaViewModelTests
 
         Assert.False(vm.GuardarCommand.CanExecute(null));
 
-        vm.AgregarRenglonCommand.Execute(null);
-        vm.Renglones[0].Producto = vm.ProductosDisponibles[0];
-        vm.Renglones[0].Cantidad = 1m;
-        vm.Renglones[0].PrecioUnitario = 10m;
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 10m);
 
         Assert.True(vm.GuardarCommand.CanExecute(null));
     }
@@ -227,10 +329,7 @@ public class IngresoPorFacturaViewModelTests
     {
         var (vm, svc, _) = Crear();
         await InicializarYCompletarCabeceraAsync(vm);
-        vm.AgregarRenglonCommand.Execute(null);
-        vm.Renglones[0].Producto = vm.ProductosDisponibles[0];
-        vm.Renglones[0].Cantidad = 1m;
-        vm.Renglones[0].PrecioUnitario = 10m;
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 10m);
 
         svc.Setup(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()))
             .ThrowsAsync(new UnauthorizedAccessException());
@@ -250,10 +349,7 @@ public class IngresoPorFacturaViewModelTests
         // en TaskScheduler.UnobservedTaskException (crash.log) sin avisar al operario.
         var (vm, svc, _) = Crear();
         await InicializarYCompletarCabeceraAsync(vm);
-        vm.AgregarRenglonCommand.Execute(null);
-        vm.Renglones[0].Producto = vm.ProductosDisponibles[0];
-        vm.Renglones[0].Cantidad = 1m;
-        vm.Renglones[0].PrecioUnitario = 10m;
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 10m);
 
         svc.Setup(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()))
             .ThrowsAsync(new ServidorNoDisponibleException());
@@ -272,10 +368,7 @@ public class IngresoPorFacturaViewModelTests
         // excepción no prevista no debe quedar muda.
         var (vm, svc, _) = Crear();
         await InicializarYCompletarCabeceraAsync(vm);
-        vm.AgregarRenglonCommand.Execute(null);
-        vm.Renglones[0].Producto = vm.ProductosDisponibles[0];
-        vm.Renglones[0].Cantidad = 1m;
-        vm.Renglones[0].PrecioUnitario = 10m;
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 10m);
 
         svc.Setup(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()))
             .ThrowsAsync(new InvalidOperationException("boom"));
@@ -287,36 +380,46 @@ public class IngresoPorFacturaViewModelTests
         Assert.Null(vm.GastoIdCreado);
     }
 
+    /// <summary>
+    /// Adaptado al nuevo flujo (encargo "carga por formulario"): el alta en línea ya NO escribe
+    /// directo sobre una fila ya agregada a la grilla (AbrirAltaProductoCommand ya no toma un
+    /// parámetro FilaRenglonFacturaVm). Ahora "Producto nuevo" dejar la ZONA DE CARGA en modo
+    /// producto nuevo (EsProductoNuevoEnCarga), y recién AgregarArticuloCommand crea el renglón.
+    /// La garantía que este test custodia sigue siendo la misma: cargar un producto nuevo NO
+    /// descarta los renglones ya agregados antes.
+    /// </summary>
     [Fact]
     public async Task AltaEnLinea_NoDescartaLosRenglonesYaCargados()
     {
         var (vm, _, _) = Crear();
         await InicializarYCompletarCabeceraAsync(vm);
 
-        vm.AgregarRenglonCommand.Execute(null);
-        vm.Renglones[0].Producto = vm.ProductosDisponibles[0];
-        vm.Renglones[0].Cantidad = 2m;
-        vm.Renglones[0].PrecioUnitario = 30m;
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 2m, precioUnitario: 30m);
 
-        vm.AgregarRenglonCommand.Execute(null);
-        var filaNueva = vm.Renglones[1];
-
-        vm.AbrirAltaProductoCommand.Execute(filaNueva);
+        vm.AbrirAltaProductoCommand.Execute(null);
         vm.NuevoProductoCodigo = "SKU-INLINE";
         vm.NuevoProductoNombre = "Producto cargado en línea";
         vm.NuevaUnidadSeleccionada = vm.UnidadesMedidaDisponibles[0];
         vm.NuevoProductoPrecioVenta = 40m;
         vm.ConfirmarAltaProductoCommand.Execute(null);
 
+        Assert.True(vm.EsProductoNuevoEnCarga);
+        vm.CantidadEnCarga = 1m;
+        vm.PrecioUnitarioEnCarga = 40m;
+        vm.AgregarArticuloCommand.Execute(null);
+
         Assert.Equal(2, vm.Renglones.Count);
         Assert.False(vm.MostrandoAltaProducto);
         // el renglón cargado antes queda intacto
         Assert.Equal(2m, vm.Renglones[0].Cantidad);
         Assert.Equal(30m, vm.Renglones[0].PrecioUnitario);
-        // el renglón editado queda marcado como producto nuevo
+        // el renglón nuevo queda marcado como producto nuevo
+        var filaNueva = vm.Renglones[1];
         Assert.True(filaNueva.EsProductoNuevo);
         Assert.Equal("SKU-INLINE", filaNueva.ProductoNuevoCodigo);
         Assert.Equal("Producto cargado en línea", filaNueva.ProductoNuevoNombre);
+        // la zona de carga queda limpia después de agregar (vuelve a modo "producto existente")
+        Assert.False(vm.EsProductoNuevoEnCarga);
     }
 
     [Fact]
@@ -326,16 +429,10 @@ public class IngresoPorFacturaViewModelTests
         await InicializarYCompletarCabeceraAsync(vm);
 
         // Renglon 1: mismo precio que PrecioCosto del producto (10m) → NO entra en la confirmación.
-        vm.AgregarRenglonCommand.Execute(null);
-        vm.Renglones[0].Producto = vm.ProductosDisponibles[0];
-        vm.Renglones[0].Cantidad = 1m;
-        vm.Renglones[0].PrecioUnitario = 10m;
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 10m);
 
         // Renglon 2: precio distinto (15m != 10m) → SÍ entra en la confirmación.
-        vm.AgregarRenglonCommand.Execute(null);
-        vm.Renglones[1].Producto = vm.ProductosDisponibles[0];
-        vm.Renglones[1].Cantidad = 1m;
-        vm.Renglones[1].PrecioUnitario = 15m;
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 15m);
 
         await vm.GuardarCommand.ExecuteAsync(null);
 
@@ -355,16 +452,10 @@ public class IngresoPorFacturaViewModelTests
         await InicializarYCompletarCabeceraAsync(vm);
 
         // Renglon 1: precio distinto (15m != 10m), el usuario SÍ confirma la actualización.
-        vm.AgregarRenglonCommand.Execute(null);
-        vm.Renglones[0].Producto = vm.ProductosDisponibles[0];
-        vm.Renglones[0].Cantidad = 1m;
-        vm.Renglones[0].PrecioUnitario = 15m;
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 15m);
 
         // Renglon 2: precio distinto (20m != 10m), el usuario NO confirma la actualización.
-        vm.AgregarRenglonCommand.Execute(null);
-        vm.Renglones[1].Producto = vm.ProductosDisponibles[0];
-        vm.Renglones[1].Cantidad = 1m;
-        vm.Renglones[1].PrecioUnitario = 20m;
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 20m);
 
         await vm.GuardarCommand.ExecuteAsync(null);
 
@@ -389,10 +480,7 @@ public class IngresoPorFacturaViewModelTests
         await InicializarYCompletarCabeceraAsync(vm);
 
         // Mismo precio que PrecioCosto del producto (10m) → ningún renglón entra en la confirmación.
-        vm.AgregarRenglonCommand.Execute(null);
-        vm.Renglones[0].Producto = vm.ProductosDisponibles[0];
-        vm.Renglones[0].Cantidad = 1m;
-        vm.Renglones[0].PrecioUnitario = 10m;
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 10m);
 
         await vm.GuardarCommand.ExecuteAsync(null);
 

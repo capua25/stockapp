@@ -94,61 +94,96 @@
                     </StackPanel>
                 </Border>
 
+                <!-- Zona de carga: reemplaza la edición inline de renglones. Se completan los
+                     campos ACÁ y "Agregar artículo" valida (mismas reglas que
+                     IngresoPorFacturaService.RegistrarAsync) e inserta la fila en la grilla de
+                     solo lectura de abajo. Tras agregar, la zona se limpia y el foco vuelve al
+                     ComboBox de producto (FocoBehavior) para poder cargar el siguiente artículo
+                     sin tocar el mouse. -->
+                <Border Classes="card" DockPanel.Dock="Top" Margin="0,0,0,16">
+                    <StackPanel Spacing="12">
+                        <TextBlock Text="Cargar artículo" Classes="seccion" />
+
+                        <Grid ColumnDefinitions="3*,12,*,12,*,12,Auto">
+                            <StackPanel Grid.Column="0" Spacing="4">
+                                <TextBlock Text="Producto" />
+                                <!-- Mismo truco que la vieja celda de la grilla: cuando la zona de
+                                     carga está en modo "producto nuevo" (EsProductoNuevoEnCarga),
+                                     el ComboBox se oculta y se muestra el nombre en su lugar,
+                                     así nunca puede pisar ni contradecir los datos cargados en el
+                                     diálogo de alta rápida. -->
+                                <Grid>
+                                    <ComboBox IsVisible="{Binding !EsProductoNuevoEnCarga}"
+                                              ItemsSource="{Binding ProductosDisponibles}"
+                                              SelectedItem="{Binding ProductoEnCarga}"
+                                              PlaceholderText="Elegí el producto"
+                                              HorizontalAlignment="Stretch"
+                                              beh:FocoBehavior.SolicitarFoco="{Binding SolicitarFocoEnProductoCombo, Mode=TwoWay}">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Nombre}" />
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
+                                    <TextBlock IsVisible="{Binding EsProductoNuevoEnCarga}"
+                                               Text="{Binding NuevoProductoNombre}"
+                                               VerticalAlignment="Center" FontStyle="Italic" />
+                                </Grid>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Spacing="4">
+                                <TextBlock Text="Cantidad" />
+                                <TextBox Text="{Binding CantidadEnCarga, Converter={x:Static conv:DecimalConverter.Instance}}"
+                                         PlaceholderText="Cantidad" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="4" Spacing="4">
+                                <TextBlock Text="Precio unitario" />
+                                <TextBox Text="{Binding PrecioUnitarioEnCarga, Converter={x:Static conv:DecimalConverter.Instance}}"
+                                         PlaceholderText="Precio unitario" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="6" Spacing="4" VerticalAlignment="Bottom">
+                                <CheckBox IsChecked="{Binding ActualizarPrecioCostoEnCarga}" Content="Actualizar precio costo" />
+                            </StackPanel>
+                        </Grid>
+
+                        <TextBlock Text="{Binding MensajeErrorCarga}" Foreground="{DynamicResource DangerBrush}"
+                                   IsVisible="{Binding MensajeErrorCarga, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+                        <StackPanel Orientation="Horizontal" Spacing="12">
+                            <Button Content="Producto nuevo" Command="{Binding AbrirAltaProductoCommand}" />
+                            <Button Content="Agregar artículo" Command="{Binding AgregarArticuloCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Grilla de renglones cargados: SOLO LECTURA (la carga se hace arriba). -->
                 <Border Classes="card" DockPanel.Dock="Top" Margin="0,0,0,16">
                     <DockPanel>
-                        <Button DockPanel.Dock="Top" Content="+ Agregar renglón"
-                                Command="{Binding AgregarRenglonCommand}" Margin="0,0,0,8" />
+                        <TextBlock DockPanel.Dock="Top" Text="Artículos cargados" Classes="seccion" Margin="0,0,0,8" />
 
                         <DataGrid ItemsSource="{Binding Renglones}" AutoGenerateColumns="False"
-                                  CanUserSortColumns="False" MinHeight="220">
+                                  CanUserSortColumns="False" IsReadOnly="True" MinHeight="220">
                             <DataGrid.Columns>
-                                <DataGridTemplateColumn Header="Producto" Width="3*">
-                                    <DataGridTemplateColumn.CellTemplate>
-                                        <DataTemplate x:DataType="vm:FilaRenglonFacturaVm">
-                                            <!-- FIX 1: elegir un producto EXISTENTE del catálogo. Cuando la fila
-                                                 corresponde a un alta en línea (EsProductoNuevo), el ComboBox se
-                                                 oculta y se muestra el nombre del producto nuevo en su lugar —
-                                                 así nunca puede pisar ni contradecir los datos cargados en el
-                                                 diálogo de alta rápida. -->
-                                            <Grid>
-                                                <ComboBox IsVisible="{Binding !EsProductoNuevo}"
-                                                          ItemsSource="{Binding $parent[UserControl].((vm:IngresoPorFacturaViewModel)DataContext).ProductosDisponibles}"
-                                                          SelectedItem="{Binding Producto}"
-                                                          PlaceholderText="Elegí el producto"
-                                                          HorizontalAlignment="Stretch" Margin="4">
-                                                    <ComboBox.ItemTemplate>
-                                                        <DataTemplate>
-                                                            <TextBlock Text="{Binding Nombre}" />
-                                                        </DataTemplate>
-                                                    </ComboBox.ItemTemplate>
-                                                </ComboBox>
-                                                <TextBlock IsVisible="{Binding EsProductoNuevo}"
-                                                           Text="{Binding NombreMostrado}"
-                                                           VerticalAlignment="Center" Margin="4" FontStyle="Italic" />
-                                            </Grid>
-                                        </DataTemplate>
-                                    </DataGridTemplateColumn.CellTemplate>
-                                </DataGridTemplateColumn>
+                                <DataGridTextColumn Header="Producto"
+                                    Binding="{Binding NombreMostrado, DataType={x:Type vm:FilaRenglonFacturaVm}}"
+                                    IsReadOnly="True" Width="3*" />
                                 <DataGridTextColumn Header="Cantidad"
-                                    Binding="{Binding Cantidad, DataType={x:Type vm:FilaRenglonFacturaVm}, Converter={x:Static conv:DecimalConverter.Instance}}" Width="Auto" />
+                                    Binding="{Binding Cantidad, DataType={x:Type vm:FilaRenglonFacturaVm}, Converter={x:Static conv:DecimalConverter.Instance}}"
+                                    IsReadOnly="True" Width="Auto" />
                                 <DataGridTextColumn Header="Precio unitario"
-                                    Binding="{Binding PrecioUnitario, DataType={x:Type vm:FilaRenglonFacturaVm}, Converter={x:Static conv:DecimalConverter.Instance}}" Width="Auto" />
+                                    Binding="{Binding PrecioUnitario, DataType={x:Type vm:FilaRenglonFacturaVm}, Converter={x:Static conv:DecimalConverter.Instance}}"
+                                    IsReadOnly="True" Width="Auto" />
                                 <DataGridTextColumn Header="Subtotal"
                                     Binding="{Binding Subtotal, DataType={x:Type vm:FilaRenglonFacturaVm}}"
                                     IsReadOnly="True" Width="Auto" />
                                 <DataGridCheckBoxColumn Header="Actualizar precio costo"
-                                    Binding="{Binding ActualizarPrecioCosto, DataType={x:Type vm:FilaRenglonFacturaVm}}" Width="Auto" />
+                                    Binding="{Binding ActualizarPrecioCosto, DataType={x:Type vm:FilaRenglonFacturaVm}}"
+                                    IsReadOnly="True" Width="Auto" />
                                 <DataGridTemplateColumn Header="" Width="Auto">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate x:DataType="vm:FilaRenglonFacturaVm">
-                                            <StackPanel Orientation="Horizontal" Spacing="4">
-                                                <Button Content="Producto nuevo"
-                                                        Command="{Binding $parent[UserControl].((vm:IngresoPorFacturaViewModel)DataContext).AbrirAltaProductoCommand}"
-                                                        CommandParameter="{Binding}" />
-                                                <Button Content="Quitar"
-                                                        Command="{Binding $parent[UserControl].((vm:IngresoPorFacturaViewModel)DataContext).QuitarRenglonCommand}"
-                                                        CommandParameter="{Binding}" />
-                                            </StackPanel>
+                                            <Button Content="Quitar"
+                                                    Command="{Binding $parent[UserControl].((vm:IngresoPorFacturaViewModel)DataContext).QuitarRenglonCommand}"
+                                                    CommandParameter="{Binding}" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>

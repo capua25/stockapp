@@ -27,6 +27,13 @@ namespace StockApp.Presentation.UiTests;
 /// controles funcionan de verdad contra un árbol visual real, con clicks/tipeo/selección real,
 /// mismo patrón que TareaListViewTests.cs/TareaFormViewTests.cs y las grillas de
 /// NuevaImportacionView (NuevaImportacionGastosGridTests.cs/NuevaImportacionCondicionCreditoTests.cs).
+///
+/// Encargo "carga por formulario" (2026-08-21): la edición inline de renglones desapareció --
+/// ahora se carga en una ZONA DE CARGA fija arriba de la grilla (ComboBox de producto + Cantidad
+/// + Precio unitario + checkbox "Actualizar precio costo" + botón "Producto nuevo" + botón
+/// "Agregar artículo"), y la grilla pasa a ser de SOLO LECTURA (lista de lo ya cargado + botón
+/// Quitar). Los tests de este archivo se reescribieron para ejercitar la zona de carga con
+/// clicks/tipeo reales en vez del viejo "+ Agregar renglón" + edición de celda.
 /// </summary>
 public class IngresoPorFacturaViewTests
 {
@@ -104,17 +111,42 @@ public class IngresoPorFacturaViewTests
         => window.GetVisualDescendants().OfType<Button>().First(b => ReferenceEquals(b.Command, comando));
 
     /// <summary>Header de la vista: ComboBoxes de Proveedor/Fuente/Rubro/Línea POA/Categoría/Unidad
-    /// tienen ItemsSource propia y única (a diferencia del ComboBox de Producto, que la COMPARTE
-    /// entre todas las filas del renglón) -- identidad de referencia del ItemsSource alcanza para
-    /// ubicar el combo correcto sin ambigüedad.</summary>
+    /// tienen ItemsSource propia y única (a diferencia del viejo ComboBox de Producto por fila).
+    /// Con la zona de carga, el ComboBox de Producto también es único en todo el árbol -- identidad
+    /// de referencia del ItemsSource alcanza para ubicar el combo correcto sin ambigüedad.</summary>
     private static ComboBox ComboPorItemsSource(Window window, object itemsSource)
         => window.GetVisualDescendants().OfType<ComboBox>().First(c => ReferenceEquals(c.ItemsSource, itemsSource));
+
+    /// <summary>Las cajas de Cantidad/Precio unitario de la zona de carga son las únicas de todo
+    /// el árbol con estos PlaceholderText exactos (los demás TextBox del formulario usan
+    /// watermarks distintos, ej. "Ej.: A-0001234") -- alcanza para ubicarlas sin ambigüedad.</summary>
+    private static TextBox CajaPorPlaceholder(Window window, string placeholder)
+        => window.GetVisualDescendants().OfType<TextBox>()
+            .Single(t => t.PlaceholderText == placeholder && ArbolVisual.EsVisibleEnArbol(t));
 
     private static void Tipear(TextBox caja, string texto)
     {
         caja.Focus();
         caja.Text = texto;
         Dispatcher.UIThread.RunJobs();
+    }
+
+    /// <summary>
+    /// Flujo completo de carga vía clicks/tipeo reales: elegir producto en el combo de la zona de
+    /// carga, tipear cantidad y precio (pasando por el DecimalConverter real), y clickear
+    /// "Agregar artículo". Reutilizado por los tests que solo necesitan un renglón cargado sin
+    /// repetir la secuencia entera.
+    /// </summary>
+    private static void CargarArticuloPorClicksReales(Window window, ProductoDto producto, string cantidadTexto, string precioTexto)
+    {
+        var comboProducto = ComboPorItemsSource(window, ((IngresoPorFacturaViewModel)window.DataContext!).ProductosDisponibles);
+        comboProducto.SelectedItem = producto;
+        Dispatcher.UIThread.RunJobs();
+
+        Tipear(CajaPorPlaceholder(window, "Cantidad"), cantidadTexto);
+        Tipear(CajaPorPlaceholder(window, "Precio unitario"), precioTexto);
+
+        Clickear(window, BotonPorTexto(window, "Agregar artículo"));
     }
 
     // ── Sanity: la carga de combos vía DataContextChanged funciona (precondición de todo lo demás) ──
@@ -137,40 +169,77 @@ public class IngresoPorFacturaViewTests
         Assert.Contains(producto, vm.ProductosDisponibles);
     }
 
-    // ── BUG HISTÓRICO #1: elegir producto ──
+    // ── BUG HISTÓRICO #1: elegir producto (ahora desde la zona de carga) ──
 
     /// <summary>
-    /// El bug histórico exacto: la vista no exponía control para elegir producto. Confirma que
-    /// el ComboBox existe en el renglón agregado con un click real, que su ItemsSource ofrece el
-    /// catálogo real, que seleccionar un producto llega al ViewModel (Vista->ViewModel), y que
-    /// el texto mostrado es el NOMBRE legible del producto -- no record.ToString() (el mismo tipo
-    /// de bug de "ToString() en vez del nombre" que el commit 4825caf corrigió para
-    /// NuevaImportacionView con TextSearch.TextBinding).
+    /// El bug histórico exacto: la vista no exponía control para elegir producto. Confirma que el
+    /// ComboBox de la ZONA DE CARGA existe, que su ItemsSource ofrece el catálogo real, que
+    /// seleccionar un producto llega al ViewModel (Vista->ViewModel) y que el texto mostrado es el
+    /// NOMBRE legible del producto -- no record.ToString() (mismo tipo de bug de "ToString() en
+    /// vez del nombre" que el commit 4825caf corrigió para NuevaImportacionView con
+    /// TextSearch.TextBinding). Además, item 3 del encargo "carga por formulario": tipear
+    /// cantidad/precio con el DecimalConverter real y clickear "Agregar artículo" agrega la fila a
+    /// la grilla de solo lectura, y limpia la zona de carga.
     /// </summary>
     [AvaloniaFact]
-    public void ClickReal_AgregarRenglon_ElegirProductoDelCombo_LlegaAlViewModelConNombreLegible()
+    public void ClickReal_ZonaDeCarga_ElegirProductoDelCombo_TipearYAgregar_LlegaAlViewModelConNombreLegibleYApareceEnLaGrilla()
     {
         var producto = Producto(1, "Pala punta cuadrada");
         var (window, vm, _, _) = Montar(productos: new[] { producto });
 
-        Clickear(window, BotonPorTexto(window, "+ Agregar renglón"));
-        Assert.Single(vm.Renglones);
-        var fila = vm.Renglones[0];
-
-        var comboProducto = window.GetVisualDescendants().OfType<ComboBox>()
-            .Single(c => ReferenceEquals(c.DataContext, fila));
-        Assert.True(ArbolVisual.EsVisibleEnArbol(comboProducto)); // EsProductoNuevo arranca en false: el combo debe estar visible.
+        var comboProducto = ComboPorItemsSource(window, vm.ProductosDisponibles);
+        Assert.True(ArbolVisual.EsVisibleEnArbol(comboProducto)); // EsProductoNuevoEnCarga arranca en false: el combo debe estar visible.
         Assert.Contains(producto, comboProducto.ItemsSource!.Cast<ProductoDto>());
 
         comboProducto.SelectedItem = producto;
         Dispatcher.UIThread.RunJobs();
 
-        Assert.Same(producto, fila.Producto);
-        Assert.Equal(producto.Nombre, fila.NombreMostrado);
+        Assert.Same(producto, vm.ProductoEnCarga);
 
         var textoVisible = comboProducto.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
         Assert.Contains(producto.Nombre, textoVisible);
         Assert.DoesNotContain(textoVisible, t => t is not null && t.Contains("ProductoDto"));
+
+        Tipear(CajaPorPlaceholder(window, "Cantidad"), "2");
+        Tipear(CajaPorPlaceholder(window, "Precio unitario"), "10,50");
+
+        Assert.Equal(2m, vm.CantidadEnCarga);
+        Assert.Equal(10.50m, vm.PrecioUnitarioEnCarga);
+
+        Clickear(window, BotonPorTexto(window, "Agregar artículo"));
+
+        var fila = Assert.Single(vm.Renglones);
+        Assert.Same(producto, fila.Producto);
+        Assert.Equal(producto.Nombre, fila.NombreMostrado);
+        Assert.Equal(2m, fila.Cantidad);
+        Assert.Equal(10.50m, fila.PrecioUnitario);
+
+        var filaEnGrilla = window.GetVisualDescendants().OfType<DataGridRow>().SingleOrDefault(r => ReferenceEquals(r.DataContext, fila));
+        Assert.NotNull(filaEnGrilla);
+
+        // La zona de carga se limpia tras agregar con éxito.
+        Assert.Null(vm.ProductoEnCarga);
+        Assert.Equal(0m, vm.CantidadEnCarga);
+        Assert.Equal(0m, vm.PrecioUnitarioEnCarga);
+        Assert.Null(vm.MensajeErrorCarga);
+    }
+
+    /// <summary>
+    /// Item 5 del encargo: tras agregar con éxito, el foco vuelve al ComboBox de producto -- la
+    /// secuencia tiene que ser repetible sin tocar el mouse entre un artículo y el siguiente.
+    /// Verificado por MUTACIÓN (ver informe): sacar el <c>SolicitarFocoEnProductoCombo = true</c>
+    /// de AgregarArticuloCommand pone este test en rojo.
+    /// </summary>
+    [AvaloniaFact]
+    public void ClickReal_TrasAgregarArticuloConExito_ElFocoVuelveAlComboDeProducto()
+    {
+        var producto = Producto(1, "Pala punta cuadrada");
+        var (window, vm, _, _) = Montar(productos: new[] { producto });
+
+        CargarArticuloPorClicksReales(window, producto, "1", "10");
+
+        var comboProducto = ComboPorItemsSource(window, vm.ProductosDisponibles);
+        Assert.True(comboProducto.IsFocused);
     }
 
     // ── BUG HISTÓRICO #2: condición de pago / crédito ──
@@ -233,12 +302,7 @@ public class IngresoPorFacturaViewTests
         vm.FechaVencimientoSeleccionada = new DateTime(2026, 12, 31);
         vm.EsCredito = false; // el usuario se arrepiente y vuelve a Contado -- sin limpiar el picker a mano.
 
-        Clickear(window, BotonPorTexto(window, "+ Agregar renglón"));
-        var fila = vm.Renglones[0];
-        fila.Producto = producto;
-        fila.Cantidad = 1m;
-        fila.PrecioUnitario = 100m;
-        Dispatcher.UIThread.RunJobs();
+        CargarArticuloPorClicksReales(window, producto, "1", "100");
 
         await vm.GuardarCommand.ExecuteAsync(null);
         Dispatcher.UIThread.RunJobs();
@@ -248,38 +312,32 @@ public class IngresoPorFacturaViewTests
         Assert.Null(servicio.Registrados[0].FechaVencimiento);
     }
 
-    // ── Alta de producto nuevo desde el renglón ──
+    // ── Alta de producto nuevo desde la zona de carga ──
 
     /// <summary>
-    /// Item 4 del encargo: alta de producto nuevo (productoNuevo) con ActualizarPrecioCosto.
-    /// Confirma que el botón "Producto nuevo" del renglón abre el overlay, que sus controles
-    /// (Código/Nombre/Unidad, todos obligatorios según ConfirmarAltaProducto) funcionan con
-    /// tipeo/selección real, y que al confirmar la grilla muestra el NOMBRE legible en vez del
-    /// ComboBox de producto -- mismo criterio "nombre legible" que el bug histórico #1.
+    /// Item 4 del encargo: alta de producto nuevo (productoNuevo) con ActualizarPrecioCosto. A
+    /// diferencia del alta en línea original (que escribía directo sobre una fila de la grilla),
+    /// ahora el botón "Producto nuevo" vive en la ZONA DE CARGA (no hay fila todavía) y, al
+    /// confirmar el overlay, la zona de carga queda en "modo producto nuevo" mostrando el nombre
+    /// en vez del ComboBox -- recién al clickear "Agregar artículo" se crea la fila y entra a la
+    /// grilla de solo lectura con el NOMBRE legible.
     /// </summary>
     [AvaloniaFact]
-    public void ClickReal_ProductoNuevoDesdeElRenglon_AlConfirmar_LaGrillaMuestraElNombreLegible()
+    public void ClickReal_ProductoNuevoDesdeLaZonaDeCarga_AlConfirmarYAgregar_LaGrillaMuestraElNombreLegible()
     {
         var unidad = new UnidadMedida { Id = 1, Nombre = "Unidad", Abreviatura = "u", Activo = true };
         var (window, vm, _, _) = Montar(unidades: new[] { unidad });
 
-        Clickear(window, BotonPorTexto(window, "+ Agregar renglón"));
-        var fila = vm.Renglones[0];
-
-        var botonProductoNuevo = window.GetVisualDescendants().OfType<Button>()
-            .Single(b => Equals(b.Content, "Producto nuevo") && ReferenceEquals(b.DataContext, fila));
-        Clickear(window, botonProductoNuevo);
+        Clickear(window, BotonPorTexto(window, "Producto nuevo"));
         Assert.True(vm.MostrandoAltaProducto);
 
-        // Código/Nombre/Precio de venta son los únicos TextBox sin Watermark del árbol (todos
-        // los del formulario de cabecera SÍ tienen Watermark) -- alcanza para ubicarlos sin
-        // ambigüedad, en el mismo orden en que aparecen en el .axaml del overlay.
-        // Código/Nombre/Precio de venta son los únicos TextBox de AUTOR sin Watermark del árbol
-        // (todos los del formulario de cabecera SÍ tienen Watermark) -- TemplatedParent == null
-        // descarta el PART_EditableTextBox interno que todo ComboBox trae en su template por
-        // default (existe en el árbol visual aunque IsEditable="False", nunca se ve ni se usa).
+        // Código/Nombre/Precio de venta son los únicos TextBox de AUTOR sin Watermark/PlaceholderText
+        // del árbol (todos los del formulario de cabecera y la zona de carga SÍ tienen uno) --
+        // TemplatedParent == null descarta el PART_EditableTextBox interno que todo ComboBox trae
+        // en su template por default (existe en el árbol visual aunque IsEditable="False", nunca
+        // se ve ni se usa).
         var camposDelOverlay = window.GetVisualDescendants().OfType<TextBox>()
-            .Where(t => string.IsNullOrEmpty(t.Watermark))
+            .Where(t => string.IsNullOrEmpty(t.Watermark) && string.IsNullOrEmpty(t.PlaceholderText))
             .Where(t => t.TemplatedParent is null)
             .Where(t => t.FindAncestorOfType<CalendarDatePicker>() is null)
             .ToList();
@@ -294,49 +352,59 @@ public class IngresoPorFacturaViewTests
         Clickear(window, BotonPorCommand(window, vm.ConfirmarAltaProductoCommand));
 
         Assert.False(vm.MostrandoAltaProducto);
+        Assert.True(vm.EsProductoNuevoEnCarga);
+        Assert.Equal("Carretilla reforzada", vm.NuevoProductoNombre);
+
+        var comboProducto = ComboPorItemsSource(window, vm.ProductosDisponibles);
+        Assert.False(comboProducto.IsVisible); // EsProductoNuevoEnCarga=true: el combo se oculta (evita pisar el alta).
+
+        var nombreVisibleEnLaZonaDeCarga = window.GetVisualDescendants().OfType<TextBlock>()
+            .Where(t => t.IsVisible)
+            .Select(t => t.Text);
+        Assert.Contains("Carretilla reforzada", nombreVisibleEnLaZonaDeCarga);
+
+        Tipear(CajaPorPlaceholder(window, "Cantidad"), "1");
+        Tipear(CajaPorPlaceholder(window, "Precio unitario"), "40");
+        Clickear(window, BotonPorTexto(window, "Agregar artículo"));
+
+        var fila = Assert.Single(vm.Renglones);
         Assert.True(fila.EsProductoNuevo);
         Assert.Equal("Carretilla reforzada", fila.NombreMostrado);
+        Assert.Equal("COD-NUEVO-1", fila.ProductoNuevoCodigo);
 
-        var comboProducto = window.GetVisualDescendants().OfType<ComboBox>()
-            .Single(c => ReferenceEquals(c.DataContext, fila));
-        Assert.False(comboProducto.IsVisible); // EsProductoNuevo=true: el combo se oculta (evita pisar el alta).
+        var filaEnGrilla = window.GetVisualDescendants().OfType<DataGridRow>().SingleOrDefault(r => ReferenceEquals(r.DataContext, fila));
+        Assert.NotNull(filaEnGrilla);
 
-        var textosVisiblesDeLaFila = window.GetVisualDescendants().OfType<TextBlock>()
-            .Where(t => Equals(t.DataContext, fila) && t.IsVisible)
-            .Select(t => t.Text);
-        Assert.Contains("Carretilla reforzada", textosVisiblesDeLaFila);
+        // La zona de carga vuelve a modo "producto existente" (combo visible) tras agregar.
+        Assert.False(vm.EsProductoNuevoEnCarga);
+        Assert.True(ArbolVisual.EsVisibleEnArbol(ComboPorItemsSource(window, vm.ProductosDisponibles)));
     }
 
     [AvaloniaFact]
-    public void ClickReal_CancelarAltaProducto_NoModificaLaFilaYCierraElOverlay()
+    public void ClickReal_CancelarAltaProducto_NoModificaLaZonaDeCargaYCierraElOverlay()
     {
         var (window, vm, _, _) = Montar();
-        Clickear(window, BotonPorTexto(window, "+ Agregar renglón"));
-        var fila = vm.Renglones[0];
 
-        var botonProductoNuevo = window.GetVisualDescendants().OfType<Button>()
-            .Single(b => Equals(b.Content, "Producto nuevo") && ReferenceEquals(b.DataContext, fila));
-        Clickear(window, botonProductoNuevo);
+        Clickear(window, BotonPorTexto(window, "Producto nuevo"));
         Assert.True(vm.MostrandoAltaProducto);
 
         Clickear(window, BotonPorCommand(window, vm.CancelarAltaProductoCommand));
 
         Assert.False(vm.MostrandoAltaProducto);
-        Assert.False(fila.EsProductoNuevo);
+        Assert.False(vm.EsProductoNuevoEnCarga);
     }
 
-    // ── Renglones: agregar y quitar con clicks reales ──
+    // ── Renglones: agregar (por la zona de carga) y quitar con clicks reales ──
 
     [AvaloniaFact]
-    public void ClickReal_AgregarDosRenglonesYQuitarUno_LaGrillaQuedaConElQueNoSeQuito()
+    public void ClickReal_AgregarDosArticulosYQuitarUno_LaGrillaQuedaConElQueNoSeQuito()
     {
         var producto1 = Producto(1, "Pala punta cuadrada");
         var producto2 = Producto(2, "Rastrillo de jardín");
         var (window, vm, _, _) = Montar(productos: new[] { producto1, producto2 });
 
-        var botonAgregar = BotonPorTexto(window, "+ Agregar renglón");
-        Clickear(window, botonAgregar);
-        Clickear(window, botonAgregar);
+        CargarArticuloPorClicksReales(window, producto1, "1", "10");
+        CargarArticuloPorClicksReales(window, producto2, "1", "20");
         Assert.Equal(2, vm.Renglones.Count);
 
         var filaAQuitar = vm.Renglones[0];
@@ -350,46 +418,151 @@ public class IngresoPorFacturaViewTests
         Assert.Same(filaAConservar, vm.Renglones[0]);
     }
 
+    /// <summary>
+    /// Item 3 del encargo: la grilla queda de SOLO LECTURA. Confirma que ninguna columna de
+    /// edición inline sobrevive (Producto ya no es un DataGridTemplateColumn con ComboBox propio
+    /// por fila) -- el único control interactivo que queda dentro de la grilla es el botón
+    /// "Quitar".
+    /// </summary>
+    [AvaloniaFact]
+    public void LaGrillaDeRenglones_EsDeSoloLectura_SinComboBoxPropioPorFila()
+    {
+        var producto = Producto(1, "Pala punta cuadrada");
+        var (window, vm, _, _) = Montar(productos: new[] { producto });
+
+        CargarArticuloPorClicksReales(window, producto, "1", "10");
+
+        var fila = Assert.Single(vm.Renglones);
+        var grid = window.GetVisualDescendants().OfType<DataGrid>().Single(g => ReferenceEquals(g.ItemsSource, vm.Renglones));
+        Assert.True(grid.IsReadOnly);
+
+        // El único ComboBox de todo el árbol sigue siendo el de la zona de carga (ItemsSource
+        // compartido con vm.ProductosDisponibles) -- ninguno nuevo se generó por fila.
+        var combosDeProducto = window.GetVisualDescendants().OfType<ComboBox>()
+            .Where(c => ReferenceEquals(c.ItemsSource, vm.ProductosDisponibles))
+            .ToList();
+        Assert.Single(combosDeProducto);
+
+        // La fila en la grilla no tiene un ComboBox propio con su DataContext.
+        Assert.DoesNotContain(
+            window.GetVisualDescendants().OfType<ComboBox>(),
+            c => ReferenceEquals(c.DataContext, fila));
+    }
+
     // ── Total: recálculo con decimales no redondos ──
 
     /// <summary>
     /// Item 6 del encargo. IngresoPorFacturaLocaleDecimalTests.cs ya documentó y probó, byte a
-    /// byte, que el binding real de la celda de edición de Cantidad/PrecioUnitario es un TextBox
-    /// con Text bindeado vía DecimalConverter directamente a estas propiedades decimal -- y que
-    /// el arnés headless de este proyecto no puede montar el DataGrid completo en modo edición
-    /// (falta el recurso de tema "DataGridCellTextBoxTheme" fuera de un App.axaml real). Este
-    /// test ejercita el mismo camino de código que ese binding produce (el setter de la
-    /// propiedad decimal en la fila que YA está suscripta a Renglon_PropertyChanged porque se
-    /// agregó con un click real a "+ Agregar renglón"), y confirma el recálculo de
-    /// SumaRenglones/DiferenciaConTotal con valores no redondos y el redondeo a 2 decimales que
-    /// el StringFormat='{}{0:N2}' del axaml aplica en pantalla.
+    /// byte, la cultura fija es-UY del DecimalConverter (independiente de esta vista). Este test
+    /// ejercita el mismo camino de código a través de la ZONA DE CARGA real (Cantidad/Precio
+    /// unitario con DecimalConverter, tipeo real, botón "Agregar artículo") y confirma el
+    /// recálculo de SumaRenglones/DiferenciaConTotal con valores no redondos y el redondeo a 2
+    /// decimales que el StringFormat='{}{0:N2}' del axaml aplica en pantalla.
     /// </summary>
     [AvaloniaFact]
-    public void EditarCantidadYPrecioDeUnRenglonAgregadoPorClick_RecalculaElTotalConRedondeo()
+    public void CargarArticuloConDecimalesNoRedondosPorLaZonaDeCarga_RecalculaElTotalConRedondeo()
     {
-        var (window, vm, _, _) = Montar();
-        Clickear(window, BotonPorTexto(window, "+ Agregar renglón"));
-        var fila = vm.Renglones[0];
+        var producto = Producto(1, "Pala punta cuadrada");
+        var (window, vm, _, _) = Montar(productos: new[] { producto });
 
-        fila.Cantidad = 3m;
-        fila.PrecioUnitario = 12.35m;
-        Dispatcher.UIThread.RunJobs();
+        CargarArticuloPorClicksReales(window, producto, "3", "12,35");
 
+        var fila = Assert.Single(vm.Renglones);
         Assert.Equal(37.05m, fila.Subtotal);
         Assert.Equal(37.05m, vm.SumaRenglones);
 
         // El TextBlock de "Suma de renglones" usa StringFormat='{}{0:N2}' PLANO (sin
-        // ConverterCulture fija, a diferencia de DecimalConverter en las celdas editables) --
-        // el separador decimal depende de CultureInfo.CurrentCulture del proceso que corre la
-        // suite. Lo que importa verificar acá es el REDONDEO a 2 decimales (N2), no un
-        // separador puntual, por eso el texto esperado se arma con la misma cultura ambiente.
+        // ConverterCulture fija, a diferencia de DecimalConverter en la zona de carga) -- el
+        // separador decimal depende de CultureInfo.CurrentCulture del proceso que corre la suite.
+        // Lo que importa verificar acá es el REDONDEO a 2 decimales (N2), no un separador puntual,
+        // por eso el texto esperado se arma con la misma cultura ambiente.
         var textoEsperado = 37.05m.ToString("N2", System.Globalization.CultureInfo.CurrentCulture);
         var totalTextBlock = window.GetVisualDescendants().OfType<TextBlock>()
             .Single(t => ReferenceEquals(t.DataContext, vm) && Equals(t.Text, textoEsperado));
         Assert.Equal(textoEsperado, totalTextBlock.Text);
     }
 
-    // ── Validaciones ──
+    // ── Validaciones de la zona de carga (item 2 del encargo): la fila NO entra a la grilla y el
+    // mensaje aparece visible junto a la zona de carga. ──
+
+    [AvaloniaFact]
+    public void ClickReal_AgregarArticulo_SinProductoSeleccionado_NoAgregaYMuestraMensajeVisible()
+    {
+        var (window, vm, _, _) = Montar();
+
+        Tipear(CajaPorPlaceholder(window, "Cantidad"), "1");
+        Tipear(CajaPorPlaceholder(window, "Precio unitario"), "10");
+        Clickear(window, BotonPorTexto(window, "Agregar artículo"));
+
+        Assert.Empty(vm.Renglones);
+        Assert.Equal("Debe seleccionar un producto o cargar uno nuevo.", vm.MensajeErrorCarga);
+        var mensajeVisible = window.GetVisualDescendants().OfType<TextBlock>()
+            .Single(t => t.Text == "Debe seleccionar un producto o cargar uno nuevo.");
+        Assert.True(ArbolVisual.EsVisibleEnArbol(mensajeVisible));
+    }
+
+    [AvaloniaFact]
+    public void ClickReal_AgregarArticulo_CantidadCero_NoAgregaYMuestraMensajeVisible()
+    {
+        var producto = Producto(1, "Pala punta cuadrada");
+        var (window, vm, _, _) = Montar(productos: new[] { producto });
+
+        var comboProducto = ComboPorItemsSource(window, vm.ProductosDisponibles);
+        comboProducto.SelectedItem = producto;
+        Dispatcher.UIThread.RunJobs();
+
+        Tipear(CajaPorPlaceholder(window, "Cantidad"), "0");
+        Tipear(CajaPorPlaceholder(window, "Precio unitario"), "10");
+        Clickear(window, BotonPorTexto(window, "Agregar artículo"));
+
+        Assert.Empty(vm.Renglones);
+        Assert.Equal("La cantidad debe ser mayor a cero.", vm.MensajeErrorCarga);
+        var mensajeVisible = window.GetVisualDescendants().OfType<TextBlock>()
+            .Single(t => t.Text == "La cantidad debe ser mayor a cero.");
+        Assert.True(ArbolVisual.EsVisibleEnArbol(mensajeVisible));
+    }
+
+    [AvaloniaFact]
+    public void ClickReal_AgregarArticulo_CantidadNegativa_NoAgregaYMuestraMensajeVisible()
+    {
+        var producto = Producto(1, "Pala punta cuadrada");
+        var (window, vm, _, _) = Montar(productos: new[] { producto });
+
+        var comboProducto = ComboPorItemsSource(window, vm.ProductosDisponibles);
+        comboProducto.SelectedItem = producto;
+        Dispatcher.UIThread.RunJobs();
+
+        // DecimalConverter permite signo (NumberStyles.AllowLeadingSign): "-3" parsea a -3m.
+        Tipear(CajaPorPlaceholder(window, "Cantidad"), "-3");
+        Tipear(CajaPorPlaceholder(window, "Precio unitario"), "10");
+        Clickear(window, BotonPorTexto(window, "Agregar artículo"));
+
+        Assert.Empty(vm.Renglones);
+        Assert.Equal("La cantidad debe ser mayor a cero.", vm.MensajeErrorCarga);
+    }
+
+    [AvaloniaFact]
+    public void ClickReal_AgregarArticulo_PrecioNegativo_NoAgregaYMuestraMensajeVisible()
+    {
+        var producto = Producto(1, "Pala punta cuadrada");
+        var (window, vm, _, _) = Montar(productos: new[] { producto });
+
+        var comboProducto = ComboPorItemsSource(window, vm.ProductosDisponibles);
+        comboProducto.SelectedItem = producto;
+        Dispatcher.UIThread.RunJobs();
+
+        Tipear(CajaPorPlaceholder(window, "Cantidad"), "1");
+        Tipear(CajaPorPlaceholder(window, "Precio unitario"), "-5");
+        Clickear(window, BotonPorTexto(window, "Agregar artículo"));
+
+        Assert.Empty(vm.Renglones);
+        Assert.Equal("El precio unitario no puede ser negativo.", vm.MensajeErrorCarga);
+        var mensajeVisible = window.GetVisualDescendants().OfType<TextBlock>()
+            .Single(t => t.Text == "El precio unitario no puede ser negativo.");
+        Assert.True(ArbolVisual.EsVisibleEnArbol(mensajeVisible));
+    }
+
+    // ── Validaciones a nivel Guardar (gating client-side del botón + errores del servicio) ──
 
     [AvaloniaFact]
     public void SinRenglones_ElBotonGuardarQuedaDeshabilitado()
@@ -413,21 +586,21 @@ public class IngresoPorFacturaViewTests
     }
 
     /// <summary>
-    /// PuedeGuardar() (el gating client-side del botón) NO valida Cantidad/PrecioUnitario de los
-    /// renglones -- solo Renglones.Count > 0. La validación real de "cantidad > 0" vive en
-    /// IngresoPorFacturaService.RegistrarAsync (Application), que lanza ArgumentException y cuyo
-    /// catch en GuardarInternoAsync la vuelca a MensajeError. Se configura el fake para relanzar
-    /// EXACTAMENTE esa excepción (mismo tipo y mensaje que el servicio real) y se confirma que el
-    /// error queda visible en un control real de la vista -- la alternativa que el encargo
-    /// habilita explícitamente cuando el botón no se deshabilita.
+    /// Con el gate client-side nuevo (AgregarArticuloCommand), un renglón con cantidad &lt;= 0 ya
+    /// NO puede llegar a la grilla por la UI -- por eso este test, que antes reproducía "el
+    /// servicio rechaza una fila inválida", ya no puede construir esa fila desde clicks reales.
+    /// La garantía que sigue custodiando (que un rechazo del SERVICIO, por el motivo que sea,
+    /// queda visible en la vista -- ej. una regla de negocio server-side sin espejo client-side, o
+    /// una condición de carrera) se preserva inyectando la excepción directo en el fake, que
+    /// siempre la relanzó sin mirar el contenido del DTO (ver IngresoPorFacturaServiceFake).
     /// </summary>
     [AvaloniaFact]
-    public async System.Threading.Tasks.Task RenglonConCantidadCero_ElServicioRechaza_ElErrorQuedaVisibleEnLaVista()
+    public async System.Threading.Tasks.Task Guardar_ElServicioRechazaPorArgumentException_ElErrorQuedaVisibleEnLaVista()
     {
         var proveedor = new Proveedor { Id = 1, Nombre = "Ferretería Central", Activo = true };
         var fuente = new FuenteFinanciamiento { Id = 1, Nombre = "Rentas Generales", Activo = true };
         var rubro = new RubroGasto { Id = 1, Codigo = 10, Nombre = "Materiales", Activo = true };
-        var producto = Producto(1, "Pala punta cuadrada");
+        var producto = Producto(1, "Pala punta cuadrada"); // PrecioCosto = 100m
         var (window, vm, servicio, _) = Montar(
             proveedores: new[] { proveedor }, fuentes: new[] { fuente }, rubros: new[] { rubro },
             productos: new[] { producto });
@@ -438,18 +611,15 @@ public class IngresoPorFacturaViewTests
         vm.Detalle = "Compra de materiales";
         vm.MontoTotalTexto = "150,00";
 
-        Clickear(window, BotonPorTexto(window, "+ Agregar renglón"));
-        var fila = vm.Renglones[0];
-        fila.Producto = producto;
-        fila.Cantidad = 0m; // inválido: mismo caso que valida IngresoPorFacturaService.RegistrarAsync.
-        fila.PrecioUnitario = 100m;
-        Dispatcher.UIThread.RunJobs();
+        // Precio == PrecioCosto (100): no dispara el overlay de confirmación de precio, va directo
+        // a GuardarInternoAsync -- mismo camino que el test original.
+        CargarArticuloPorClicksReales(window, producto, "1", "100");
 
         servicio.ExcepcionARelanzar = new ArgumentException(
             "La cantidad de cada renglón debe ser mayor que cero.", "Cantidad");
 
         var botonGuardar = BotonPorTexto(window, "Guardar");
-        Assert.True(botonGuardar.IsEffectivelyEnabled); // PuedeGuardar() no mira Cantidad -- el gating es server-side.
+        Assert.True(botonGuardar.IsEffectivelyEnabled);
         Clickear(window, botonGuardar);
         Dispatcher.UIThread.RunJobs();
 
@@ -462,13 +632,18 @@ public class IngresoPorFacturaViewTests
         Assert.True(ArbolVisual.EsVisibleEnArbol(mensajeVisible));
     }
 
+    /// <summary>
+    /// Misma adaptación que el test anterior, pero preservando ADEMÁS la secuencia de la
+    /// confirmación de cambio de precio de costo antes de llegar al servicio (precio 50 != costo
+    /// 100 del producto, dispara el overlay igual que el escenario original con precio -5).
+    /// </summary>
     [AvaloniaFact]
-    public async System.Threading.Tasks.Task RenglonConPrecioNegativo_ElServicioRechaza_ElErrorQuedaVisibleEnLaVista()
+    public async System.Threading.Tasks.Task Guardar_ElServicioRechazaPorArgumentException_TrasConfirmarCambioDePrecio_ElErrorQuedaVisibleEnLaVista()
     {
         var proveedor = new Proveedor { Id = 1, Nombre = "Ferretería Central", Activo = true };
         var fuente = new FuenteFinanciamiento { Id = 1, Nombre = "Rentas Generales", Activo = true };
         var rubro = new RubroGasto { Id = 1, Codigo = 10, Nombre = "Materiales", Activo = true };
-        var producto = Producto(1, "Pala punta cuadrada");
+        var producto = Producto(1, "Pala punta cuadrada"); // PrecioCosto = 100m
         var (window, vm, servicio, _) = Montar(
             proveedores: new[] { proveedor }, fuentes: new[] { fuente }, rubros: new[] { rubro },
             productos: new[] { producto });
@@ -479,12 +654,9 @@ public class IngresoPorFacturaViewTests
         vm.Detalle = "Compra de materiales";
         vm.MontoTotalTexto = "150,00";
 
-        Clickear(window, BotonPorTexto(window, "+ Agregar renglón"));
-        var fila = vm.Renglones[0];
-        fila.Producto = producto;
-        fila.Cantidad = 1m;
-        fila.PrecioUnitario = -5m; // inválido: mismo caso que valida IngresoPorFacturaService.RegistrarAsync.
-        Dispatcher.UIThread.RunJobs();
+        // Precio (50) difiere del PrecioCosto del producto (100): dispara el overlay de
+        // confirmación de precio de costo antes de llegar al service.
+        CargarArticuloPorClicksReales(window, producto, "1", "50");
 
         servicio.ExcepcionARelanzar = new ArgumentException(
             "El precio unitario no puede ser negativo.", "PrecioUnitario");
@@ -492,10 +664,6 @@ public class IngresoPorFacturaViewTests
         Clickear(window, BotonPorTexto(window, "Guardar"));
         Dispatcher.UIThread.RunJobs();
 
-        // El precio cargado (-5) difiere del PrecioCosto del producto (100): GuardarAsync
-        // detecta el cambio y muestra PRIMERO el overlay de confirmación de precio de costo
-        // (mismo camino que un usuario real recorrería) -- recién al confirmar ahí se llega a
-        // GuardarInternoAsync y al service que rechaza el precio negativo.
         Assert.True(vm.MostrandoConfirmacionPrecios);
         Clickear(window, BotonPorCommand(window, vm.ConfirmarPreciosYGuardarCommand));
         Dispatcher.UIThread.RunJobs();
