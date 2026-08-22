@@ -33,7 +33,19 @@ public sealed class DisparadorBackupManual
     /// Disparar() -- la Task sigue arrancando y corriendo en background igual que siempre, esto
     /// solo guarda una referencia extra para que el test pueda engancharse.
     /// </summary>
-    internal Task? UltimaCorridaEnBackgroundParaTests { get; private set; }
+    /// <remarks>
+    /// Fix flaky (bugfix/backups-endpoint-tests-flaky): el campo que respalda esta propiedad se
+    /// escribe en el hilo que atiende el request HTTP (dentro de Disparar()) y se lee desde el hilo
+    /// del test, que llega acá por otra vía (DI sobre el mismo Singleton). Sin sincronización
+    /// explícita, el runtime no garantiza que esa escritura sea visible del otro lado -- el JIT/CPU
+    /// pueden reordenar o cachear el valor en un registro. <c>volatile</c> le pone semántica
+    /// release/acquire a la escritura y a la lectura, así que no hace falta un lock completo: es
+    /// single-writer (Disparar() siempre pisa el valor anterior, serializado por _guardia) y esto
+    /// sólo resuelve la visibilidad entre hilos, no la exclusión mutua (que ya la da _guardia).
+    /// </remarks>
+    private volatile Task? _ultimaCorridaEnBackgroundParaTests;
+
+    internal Task? UltimaCorridaEnBackgroundParaTests => _ultimaCorridaEnBackgroundParaTests;
 
     public DisparadorBackupManual(
         IServiceScopeFactory scopeFactory,
@@ -81,7 +93,7 @@ public sealed class DisparadorBackupManual
             // acá, _guardia.Salir() es responsabilidad EXCLUSIVA del finally de
             // EjecutarEnBackgroundAsync -- llamarlo también acá liberaría un turno que esa Task
             // todavía necesita.
-            UltimaCorridaEnBackgroundParaTests = EjecutarEnBackgroundAsync(connectionString, directorio, usuarioId);
+            _ultimaCorridaEnBackgroundParaTests = EjecutarEnBackgroundAsync(connectionString, directorio, usuarioId);
             return true;
         }
         catch

@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using StockApp.Api.Auth;
+using StockApp.Api.Backups;
 using StockApp.Api.Tests.Fixtures;
 using StockApp.Application.Backups;
 using StockApp.Domain.Entities;
@@ -270,22 +271,38 @@ public class BackupsEndpointTests : ApiTestBase
         Assert.Single(await verificacion.CorridasBackup.ToListAsync());
     }
 
-    /// <summary>Sondea la BD (no GET /backups: el DTO no expone UsuarioId) hasta que la corrida
-    /// manual disparada en background termina, con timeout acotado -- pg_dump contra una base de
-    /// test prácticamente vacía tarda muy poco, pero corre de verdad, no es instantáneo.</summary>
+    /// <summary>Espera a que termine la corrida de backup manual disparada en background,
+    /// sincronizándose con la Task real (<see cref="DisparadorBackupManual.UltimaCorridaEnBackgroundParaTests"/>)
+    /// en vez de sondear <see cref="DateTime.UtcNow"/> contra un timeout fijo.
+    ///
+    /// Antes este método calculaba un <c>limite = DateTime.UtcNow.AddSeconds(10)</c> una sola vez y
+    /// lo comparaba en cada vuelta de un sondeo cada 200ms. <see cref="DateTime.UtcNow"/> es reloj
+    /// de PARED (CLOCK_REALTIME), no monotónico: bajo contención de host (WSL2, CI) puede saltar
+    /// hacia adelante al resincronizarse, y el sondeo interpreta ese salto como "pasaron 10
+    /// segundos" aunque el trabajo real haya tardado bien menos de un segundo -- de ahí el
+    /// TimeoutException espurio (~4% de las corridas en loop, ver bugfix/backups-endpoint-tests-flaky).
+    /// Agrandar el timeout no resuelve la causa: sigue midiendo con el reloj equivocado. Este método
+    /// no mide duración en absoluto -- awaitea la Task real del trabajo en background, así que no
+    /// hay reloj de por medio.</summary>
     private async Task<CorridaBackup> EsperarCorridaAsync()
     {
-        var limite = DateTime.UtcNow.AddSeconds(10);
-        while (DateTime.UtcNow < limite)
-        {
-            await using var ctx = Factory.CrearContexto();
-            var corrida = await ctx.CorridasBackup.SingleOrDefaultAsync();
-            if (corrida is not null)
-                return corrida;
+        var disparador = Factory.Services.GetRequiredService<DisparadorBackupManual>();
 
-            await Task.Delay(TimeSpan.FromMilliseconds(200));
-        }
+        // Disparar() asigna esta Task de forma SÍNCRONA, antes de que el endpoint devuelva
+        // 202/Accepted -- y este método siempre se llama después de haber esperado esa respuesta
+        // HTTP. Si acá es null no es una carrera para resolver con un sondeo: es un bug real (un
+        // 202 sin que la corrida haya llegado a arrancar), y hay que fallar rápido, no encubrirlo
+        // reintroduciendo un sondeo (aunque sea con Stopwatch).
+        var tarea = disparador.UltimaCorridaEnBackgroundParaTests
+            ?? throw new InvalidOperationException(
+                "UltimaCorridaEnBackgroundParaTests es null pese al 202/Accepted recibido: " +
+                "Disparar() nunca llegó a arrancar la corrida en background.");
 
-        throw new TimeoutException("La corrida de backup manual no apareció en CorridasBackup a tiempo.");
+        await tarea;
+
+        await using var ctx = Factory.CrearContexto();
+        return await ctx.CorridasBackup.SingleOrDefaultAsync()
+            ?? throw new InvalidOperationException(
+                "La corrida de backup manual terminó (Task completada) pero no aparece en CorridasBackup.");
     }
 }
