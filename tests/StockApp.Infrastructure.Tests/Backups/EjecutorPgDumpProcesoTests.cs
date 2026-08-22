@@ -81,8 +81,13 @@ public class EjecutorPgDumpProcesoTests : IDisposable
         var tarea = ejecutor.EjecutarAsync(
             "Host=localhost;Port=5;Username=u;Password=p;Database=d", rutaDestino, cts.Token);
 
-        // Esperar a que el script realmente haya arrancado (escribió su propio PID).
-        await EsperaMonotonica.HastaAsync(() => File.Exists(pidFile), TimeSpan.FromSeconds(5));
+        // Esperar a que el script realmente haya arrancado (escribió su propio PID). El retorno
+        // de HastaAsync NO se descarta: si el .pid no aparece en 5s, hay que fallar acá mismo con
+        // un mensaje diagnosticable, en vez de dejar que reviente más abajo con un
+        // FileNotFoundException que no dice qué se estaba esperando ni por qué.
+        var pidFileAparecio = await EsperaMonotonica.HastaAsync(() => File.Exists(pidFile), TimeSpan.FromSeconds(5));
+        Assert.True(pidFileAparecio,
+            $"El script fake de pg_dump no escribió su .pid ({pidFile}) en 5s -- no llegó a arrancar.");
         var pid = int.Parse((await File.ReadAllTextAsync(pidFile)).Trim());
         Assert.True(ProcesoSigueVivo(pid), "El script fake no llegó a arrancar -- test inválido.");
 

@@ -298,7 +298,31 @@ public class BackupsEndpointTests : ApiTestBase
                 "UltimaCorridaEnBackgroundParaTests es null pese al 202/Accepted recibido: " +
                 "Disparar() nunca llegó a arrancar la corrida en background.");
 
-        await tarea;
+        // Cota de la espera con Task.WaitAsync -- NO es el reloj de pared que este archivo dejó
+        // atrás: usa el timer del runtime (monotónico), no un sondeo con DateTime.UtcNow, así que
+        // no reintroduce bugfix/backups-endpoint-tests-flaky. Es necesaria por una razón distinta:
+        // sin cota, un await desnudo hereda como único límite el timeout de PRODUCCIÓN de
+        // EjecutorPgDumpProceso (30 minutos, ver TimeoutSegundosDefault) porque la Task de fondo
+        // corre con CancellationToken.None y ApiFactory no sobreescribe Backups:TimeoutSegundos
+        // para tests. Peor: si ese timeout de 30 min vence, ServicioBackup persiste una corrida
+        // Fallida pero igual asigna UsuarioId en esa rama, así que Assert.Equal(admin.Id,
+        // corrida.UsuarioId) pasaría de todas formas -- un pg_dump colgado daría un verde falso
+        // tras 30 minutos en vez de la falla rápida y diagnosticable que había antes de este
+        // método existir. 30s deja margen amplio sobre el ciclo real (500-700ms contra el
+        // Postgres de Testcontainers) y sigue fallando en segundos, no en minutos, si algo cuelga.
+        try
+        {
+            await tarea.WaitAsync(TimeSpan.FromSeconds(30));
+        }
+        catch (TimeoutException)
+        {
+            throw new TimeoutException(
+                "La corrida de backup manual en background (DisparadorBackupManual." +
+                "UltimaCorridaEnBackgroundParaTests) no completó en 30s. El ciclo real contra el " +
+                "Postgres de Testcontainers tarda 500-700ms, así que esto no es un margen ajustado: " +
+                "indica que la corrida quedó colgada de verdad (p.ej. un pg_dump que no responde), " +
+                "no ruido de infraestructura.");
+        }
 
         await using var ctx = Factory.CrearContexto();
         return await ctx.CorridasBackup.SingleOrDefaultAsync()
