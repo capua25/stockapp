@@ -163,6 +163,43 @@ public class ShellMainViewGatesTests
         Assert.True(EsVisible(window, vm.NavUnidadesMedidaCommand));
     }
 
+    [AvaloniaFact]
+    public void OperadorConGestionarTareas_VeTareas()
+    {
+        // Permisos MIXTOS a proposito (target + uno sin relacion): un Admin cortocircuita el
+        // chequeo antes de mirar PermisosActuales, asi que este test no prueba nada montado como
+        // Admin. Con Operador, el gate real es PuedeGestionarTareas.
+        var (window, vm) = Montar(RolUsuario.Operador, Permisos.GestionarTareas, Permisos.VerFinanzas);
+
+        Assert.True(EsVisible(window, vm.NavTareasCommand));
+    }
+
+    [AvaloniaFact]
+    public void OperadorSinGestionarTareas_NoVeTareas()
+    {
+        // Permisos MIXTOS que NO incluyen GestionarTareas: prueba que el gate no se abre por
+        // tener cualquier permiso, sino especificamente el que corresponde a este item.
+        var (window, vm) = Montar(RolUsuario.Operador, Permisos.VerFinanzas, Permisos.GestionarProductos);
+
+        Assert.False(EsVisible(window, vm.NavTareasCommand));
+    }
+
+    [AvaloniaFact]
+    public void OperadorConGestionarDocumentos_VeDocumentos()
+    {
+        var (window, vm) = Montar(RolUsuario.Operador, Permisos.GestionarDocumentos, Permisos.RegistrarMovimientos);
+
+        Assert.True(EsVisible(window, vm.NavDocumentosCommand));
+    }
+
+    [AvaloniaFact]
+    public void OperadorSinGestionarDocumentos_NoVeDocumentos()
+    {
+        var (window, vm) = Montar(RolUsuario.Operador, Permisos.RegistrarMovimientos, Permisos.VerFinanzas);
+
+        Assert.False(EsVisible(window, vm.NavDocumentosCommand));
+    }
+
     // ── Gates COMPUESTOS: aca vive el riesgo ────────────────────────────────────
 
     [AvaloniaFact]
