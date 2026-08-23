@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     Empaqueta Gestión Municipal para Windows usando dotnet publish + vpk (Velopack).
