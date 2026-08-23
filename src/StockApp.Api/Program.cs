@@ -544,6 +544,27 @@ var app = builder.Build();
 // final —incluidos los overrides de test de ApiFactory—, no con la snapshot pre-Build).
 app.Services.GetRequiredService<JwtOptions>();
 
+// Licencia:Habilitado (interruptor de licenciamiento opcional): se lee DIFERIDO, de
+// app.Configuration post-Build — mismo motivo documentado arriba para ConnectionStrings/
+// JwtOptions: ApiFactory (tests de integración) inyecta su override de configuración recién
+// cuando el host termina de construirse, y una lectura eager de builder.Configuration antes de
+// Build() nunca lo vería. Default TRUE (fail-safe): un despliegue existente que actualice sin
+// agregar esta clave a su .env NO debe cambiar de comportamiento — una clave AUSENTE jamás debe
+// apagar una protección.
+//
+// QUÉ NO TOCA ESTE FLAG (deliberado): ValidadorFirma, IFingerprintMaquina, IAlmacenLicencia e
+// IAlmacenDesafiosReset (registrados más arriba, sección "Licenciamiento") se registran SIEMPRE,
+// con su clave pública real, sin importar este valor. ValidadorFirma es un singleton COMPARTIDO
+// entre ServicioLicencia (activación de licencia) y ServicioResetAdmin (reset de contraseña del
+// Admin, endpoints anónimos POST /auth/reset-admin/desafio y POST /auth/reset-admin) — si este
+// flag alguna vez dejara a ValidadorFirma sin clave o stubeado "porque total el licenciamiento
+// está apagado", cualquiera podría forjar un token de reset y cambiar la contraseña del Admin
+// SIN firma válida. Ese es exactamente el agujero que este diseño evita: el flag sólo decide (a)
+// si se registra BloqueoLicenciaMiddleware (más abajo) y (b) si se corre
+// ServicioLicencia.CargarAlArranqueAsync() o se fuerza EstadoLicencia.Activada=true directamente
+// (dentro del scope de arranque, más abajo). Nada más.
+var licenciamientoHabilitado = app.Configuration.GetValue<bool?>("Licencia:Habilitado") ?? true;
+
 // Migración automática al arranque (Fase 3a, D9): reemplaza al DatabaseInitializer del
 // desktop, que se elimina en Fase 3b. MigrateAsync es idempotente — no-op si no hay
 // migraciones pendientes, así que no colisiona con ApiFactory (que ya migra su contenedor
@@ -562,10 +583,23 @@ using (var scope = app.Services.CreateScope())
         app.Configuration["Bootstrap:Password"]);
     await seeder.SembrarAsync();
 
-    // Cargar el estado de licencia al arranque (Inc 7 Fase B): resuelve el código de máquina
-    // y valida licencia.lic. Nunca lanza — si no hay licencia válida, la API arranca bloqueada.
-    var servicioLicencia = scope.ServiceProvider.GetRequiredService<ServicioLicencia>();
-    await servicioLicencia.CargarAlArranqueAsync();
+    if (licenciamientoHabilitado)
+    {
+        // Cargar el estado de licencia al arranque (Inc 7 Fase B): resuelve el código de máquina
+        // y valida licencia.lic. Nunca lanza — si no hay licencia válida, la API arranca bloqueada.
+        var servicioLicencia = scope.ServiceProvider.GetRequiredService<ServicioLicencia>();
+        await servicioLicencia.CargarAlArranqueAsync();
+    }
+    else
+    {
+        // Licencia:Habilitado=false: NO se resuelve el fingerprint ni se lee licencia.lic — se
+        // fuerza el estado "activada" directamente para que GET /licencia/estado reporte
+        // activada=true y el desktop vaya derecho al login, sin pantalla de bloqueo huérfana.
+        // NO toca ValidadorFirma/IFingerprintMaquina/IAlmacenLicencia/IAlmacenDesafiosReset —
+        // ver el comentario junto a "licenciamientoHabilitado" (arriba, post-Build) para el
+        // porqué (reset de Admin comparte ValidadorFirma con esto).
+        scope.ServiceProvider.GetRequiredService<EstadoLicencia>().Activada = true;
+    }
 }
 
 // Andamiaje base para excepciones no manejadas: 500 -> ProblemDetails via
@@ -586,7 +620,16 @@ app.UseRateLimiter();
 // excepción) cuando no hay licencia activa. Va antes de autenticación por RUTA, no por identidad
 // -- un token obtenido vía /auth/login con licencia vencida solo abre el camino hacia /backups,
 // el resto del sistema sigue bloqueado incondicionalmente.
-app.UseMiddleware<BloqueoLicenciaMiddleware>();
+//
+// Licencia:Habilitado=false: este middleware directamente NO se registra — ningún endpoint
+// devuelve 423 por falta de licencia (para ese despliegue, EstadoLicencia.Activada quedó forzado
+// en true más arriba, así que igual daría lo mismo, pero no registrarlo es más explícito que
+// depender de esa condición interna). Ver el comentario junto a "licenciamientoHabilitado"
+// (arriba, post-Build) para qué NO toca este flag.
+if (licenciamientoHabilitado)
+{
+    app.UseMiddleware<BloqueoLicenciaMiddleware>();
+}
 
 app.UseAuthentication();
 app.UseAuthorization();
