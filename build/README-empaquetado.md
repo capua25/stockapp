@@ -60,6 +60,26 @@ Sobreescribir la version (sin editar el csproj):
 .\build\pack-win.ps1 -Version 1.2.0
 ```
 
+### Empaquetar desde WSL
+
+Tambien se puede empaquetar para Windows sin salir de WSL, invocando `powershell.exe` directamente:
+
+```bash
+powershell.exe -File build\pack-win.ps1
+```
+
+**Recomendacion de rendimiento:** copiar el arbol del repo a una ruta nativa de Windows (ej.
+`C:\temp\stockapp`) antes de empaquetar, en vez de publicar directo sobre la ruta UNC
+`\\wsl.localhost\...`. `dotnet publish` sobre UNC es notablemente mas lento.
+
+**Gotcha confirmado:** `dotnet publish` deja vivo un build server (`VBCSCompiler.exe`) que
+mantiene abiertos archivos de la carpeta temporal de publicacion y bloquea su borrado. Si el
+script falla al limpiar o sobreescribir esa carpeta, correr:
+
+```powershell
+dotnet build-server shutdown
+```
+
 ### Linux
 
 Desde la raiz del repositorio, en bash:
@@ -136,12 +156,18 @@ Reglas:
 
 ### Windows (`releases/win/`)
 
+`vpk` antepone el packId y el channel al nombre de archivo — el instalador **no** se llama
+`Setup.exe`. Artefactos reales de una corrida limpia (verificado 2026-08-23 con vpk 1.2.0):
+
 | Archivo | Descripcion |
 |---------|-------------|
-| `Setup.exe` | Instalador para el usuario final. Incluye .NET 10 runtime embebido. |
+| `GestionMunicipal-win-Setup.exe` | Instalador para el usuario final. Incluye .NET 10 runtime embebido. |
+| `GestionMunicipal-win-Portable.zip` | Version portable sin instalador (extraer y ejecutar). |
 | `GestionMunicipal-X.Y.Z-full.nupkg` | Paquete completo (primera instalacion o sin release previa). |
-| `GestionMunicipal-X.Y.Z-delta.nupkg` | Paquete diferencial (solo si hay release previa en `releases/win/`). |
+| `GestionMunicipal-X.Y.Z-delta.nupkg` | Paquete diferencial. Solo se genera cuando ya hay una release previa en `releases/win/`; no aparece en una corrida limpia. |
 | `releases.win.json` | Feed de updates que la app consulta al arrancar. |
+| `assets.win.json` | Metadata de los assets del feed (hashes, tamaños). |
+| `RELEASES` | Indice de releases en formato Squirrel/Velopack, usado por el cliente de updates. |
 
 ### Linux (`releases/linux/`)
 

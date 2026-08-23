@@ -1,10 +1,24 @@
 severity: normal
 
-# StockApp 0.1.5
+# Gestión Municipal 0.2.0
 
-- Actualizador con aviso más claro y botón que aplica la actualización.
-- La versión de la app se muestra en pantalla.
-- Correcciones de estabilidad y mejoras menores.
+Novedades:
+- Rediseño visual completo de la aplicación: nueva paleta de colores, tipografía y un estilo homogéneo en todas las pantallas.
+- La aplicación pasa a llamarse **Gestión Municipal**.
+- Nuevo módulo de Finanzas: gastos, pagos, ingresos de caja, presupuesto (POA), libro de caja, fuentes de financiamiento y rubros, con importación de planillas y adjuntos de comprobantes.
+- Nuevo módulo de Documentos administrativos: alta, seguimiento, adjuntos e historial de documentos.
+- Nuevo módulo de Tareas: gestión de tareas con vencimientos, prioridades y notas.
+- Nueva pantalla de administración de usuarios: alta de usuarios, cambio de rol y permisos configurables por operador.
+- Ingreso de stock por factura: la carga de artículos se hace ahora en campos arriba de la tabla, con un botón que valida los datos antes de agregar la fila.
+- Nuevo configurador de conexión: un programa aparte para configurar la dirección y el puerto del servidor.
+- Nueva sección en Mantenimiento: backup manual con un botón y aviso configurable si un backup falla.
+
+Mejoras:
+- Las pantallas avisan cuando no se tiene permiso para algo, en vez de quedar vacías.
+- Mejor contraste y legibilidad en los textos de toda la aplicación.
+- El stock y los saldos negativos ahora también se indican con la palabra "negativo", no solo con color.
+- Los 4 campos del panel de nuevo usuario ahora tienen etiqueta.
+- Las contraseñas nuevas requieren al menos 8 caracteres, con una letra y un número.
 
 ---
 <!-- INSTRUCCIONES PARA EL PUBLICADOR — leer antes de empaquetar:

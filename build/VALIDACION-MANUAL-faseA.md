@@ -6,7 +6,11 @@
 ## Estado
 
 - **Código**: completo (empaquetado + actualizador + UX por severidad).
-- **Empaquetado**: nunca se corrió. No existe carpeta `releases/` ni artefactos generados todavía.
+- **Empaquetado**: ya se corrió. Existe `releases/linux/` (smoke-test del 2026-07-02, versión 0.1.0) y
+  `releases/win/` (corrida real del 2026-08-23 con vpk 1.2.0, versión 0.2.0: `GestionMunicipal-win-Setup.exe`,
+  `GestionMunicipal-win-Portable.zip`, `GestionMunicipal-0.2.0-full.nupkg`, `releases.win.json`,
+  `assets.win.json`, `RELEASES`). Falta correr los pasos que requieren instalar/actualizar en una
+  máquina real (V3, V5, V7, V8, V9).
 - **Entorno del validador en esta ronda**:
   - Windows real (máquina de desarrollo, con .NET 10 SDK y `vpk`).
   - Una máquina Windows **sin .NET instalado**, para probar el self-contained.
@@ -61,18 +65,20 @@ Si `vpk` no aparece en el PATH después de `dotnet tool install -g vpk`, agregar
 ### V1. Empaquetado Windows
 
 - **Aplica a**: Windows
-- **Estado en esta ronda**: ✅ Validable ahora
-- **Precondición**: .NET 10 SDK y `vpk` instalados. `<Version>` en `src/StockApp.Presentation/StockApp.Presentation.csproj` en `0.1.0`.
+- **Estado en esta ronda**: ✅ Validable ahora — **ya ejecutado**
+- **Precondición**: .NET 10 SDK y `vpk` instalados. `<Version>` en `src/StockApp.Presentation/StockApp.Presentation.csproj` en `0.2.0`.
 - **Pasos**:
   ```powershell
   .\build\pack-win.ps1
   ```
 - **Resultado esperado**:
   - El script termina sin errores (exit code 0).
-  - Se crea `releases/win/` con: `Setup.exe`, `StockApp-0.1.0-full.nupkg`, `releases.win.json`.
-  - No hay `-delta.nupkg` en esta primera corrida (no hay release previa).
-- **Resultado**: [ ] PASA  [ ] FALLA
-  - Notas: ______________________________________
+  - Se crea `releases/win/` con: `GestionMunicipal-win-Setup.exe`, `GestionMunicipal-win-Portable.zip`,
+    `GestionMunicipal-0.2.0-full.nupkg`, `releases.win.json`, `assets.win.json`, `RELEASES`.
+  - No hay `-delta.nupkg` en esta primera corrida (no hay release previa en `releases/win/`).
+- **Resultado**: [x] PASA  [ ] FALLA
+  - Notas: Corrido el 2026-08-23 con vpk 1.2.0. Artefactos verificados en `releases/win/`, sin delta
+    (primera corrida). Pendiente: pasos que requieren ejecutar el instalador (V3, V5, V7, V8, V9).
 
 ---
 
