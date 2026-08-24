@@ -133,13 +133,13 @@ public class IngresoPorFacturaViewTests
         Dispatcher.UIThread.RunJobs();
     }
 
-    /// <summary>Código/Nombre/Precio de venta son los únicos TextBox de AUTOR sin Watermark/
+    /// <summary>Código/Nombre son los únicos TextBox de AUTOR sin Watermark/
     /// PlaceholderText del árbol (todos los del formulario de cabecera y la zona de carga SÍ
     /// tienen uno) -- TemplatedParent == null descarta el PART_EditableTextBox interno que todo
     /// ComboBox trae en su template por default (existe en el árbol visual aunque
     /// IsEditable="False", nunca se ve ni se usa). Factorizado a un solo lugar (en vez de
     /// duplicarlo por test) para no multiplicar el warning CS0618 de leer TextBox.Watermark
-    /// (obsoleto) -- ver el comentario de DecimalConverter/PlaceholderText en la vista real.</summary>
+    /// (obsoleto) -- ver el comentario de PlaceholderText en la vista real.</summary>
     private static List<TextBox> CamposDelOverlayDeAltaDeProducto(Window window)
         => window.GetVisualDescendants().OfType<TextBox>()
             .Where(t => string.IsNullOrEmpty(t.Watermark) && string.IsNullOrEmpty(t.PlaceholderText))
@@ -149,7 +149,7 @@ public class IngresoPorFacturaViewTests
 
     /// <summary>
     /// Flujo completo de carga vía clicks/tipeo reales: elegir producto en el combo de la zona de
-    /// carga, tipear cantidad y precio (pasando por el DecimalConverter real), y clickear
+    /// carga, tipear cantidad y precio (pasando por el DecimalPuntoConverter real), y clickear
     /// "Agregar artículo". Reutilizado por los tests que solo necesitan un renglón cargado sin
     /// repetir la secuencia entera.
     /// </summary>
@@ -194,7 +194,7 @@ public class IngresoPorFacturaViewTests
     /// NOMBRE legible del producto -- no record.ToString() (mismo tipo de bug de "ToString() en
     /// vez del nombre" que el commit 4825caf corrigió para NuevaImportacionView con
     /// TextSearch.TextBinding). Además, item 3 del encargo "carga por formulario": tipear
-    /// cantidad/precio con el DecimalConverter real y clickear "Agregar artículo" agrega la fila a
+    /// cantidad/precio con el DecimalPuntoConverter real y clickear "Agregar artículo" agrega la fila a
     /// la grilla de solo lectura, y limpia la zona de carga.
     /// </summary>
     [AvaloniaFact]
@@ -217,7 +217,7 @@ public class IngresoPorFacturaViewTests
         Assert.DoesNotContain(textoVisible, t => t is not null && t.Contains("ProductoDto"));
 
         Tipear(CajaPorPlaceholder(window, "Cantidad"), "2");
-        Tipear(CajaPorPlaceholder(window, "Precio unitario"), "10,50");
+        Tipear(CajaPorPlaceholder(window, "Precio unitario"), "10.50");
 
         Assert.Equal(2m, vm.CantidadEnCarga);
         Assert.Equal(10.50m, vm.PrecioUnitarioEnCarga);
@@ -348,7 +348,7 @@ public class IngresoPorFacturaViewTests
         Assert.True(vm.MostrandoAltaProducto);
 
         var camposDelOverlay = CamposDelOverlayDeAltaDeProducto(window);
-        Assert.Equal(3, camposDelOverlay.Count);
+        Assert.Equal(2, camposDelOverlay.Count);
         Tipear(camposDelOverlay[0], "COD-NUEVO-1");
         Tipear(camposDelOverlay[1], "Carretilla reforzada");
 
@@ -460,9 +460,10 @@ public class IngresoPorFacturaViewTests
 
     /// <summary>
     /// Item 6 del encargo. IngresoPorFacturaLocaleDecimalTests.cs ya documentó y probó, byte a
-    /// byte, la cultura fija es-UY del DecimalConverter (independiente de esta vista). Este test
+    /// byte, la cultura fija (Invariant, punto decimal) del DecimalPuntoConverter (independiente de
+    /// esta vista). Este test
     /// ejercita el mismo camino de código a través de la ZONA DE CARGA real (Cantidad/Precio
-    /// unitario con DecimalConverter, tipeo real, botón "Agregar artículo") y confirma el
+    /// unitario con DecimalPuntoConverter, tipeo real, botón "Agregar artículo") y confirma el
     /// recálculo de SumaRenglones/DiferenciaConTotal con valores no redondos y el redondeo a 2
     /// decimales que el StringFormat='{}{0:N2}' del axaml aplica en pantalla.
     /// </summary>
@@ -472,14 +473,14 @@ public class IngresoPorFacturaViewTests
         var producto = Producto(1, "Pala punta cuadrada");
         var (window, vm, _, _) = Montar(productos: new[] { producto });
 
-        CargarArticuloPorClicksReales(window, producto, "3", "12,35");
+        CargarArticuloPorClicksReales(window, producto, "3", "12.35");
 
         var fila = Assert.Single(vm.Renglones);
         Assert.Equal(37.05m, fila.Subtotal);
         Assert.Equal(37.05m, vm.SumaRenglones);
 
         // El TextBlock de "Suma de renglones" usa StringFormat='{}{0:N2}' PLANO (sin
-        // ConverterCulture fija, a diferencia de DecimalConverter en la zona de carga) -- el
+        // ConverterCulture fija, a diferencia de DecimalPuntoConverter en la zona de carga) -- el
         // separador decimal depende de CultureInfo.CurrentCulture del proceso que corre la suite.
         // Lo que importa verificar acá es el REDONDEO a 2 decimales (N2), no un separador puntual,
         // por eso el texto esperado se arma con la misma cultura ambiente.
@@ -539,7 +540,7 @@ public class IngresoPorFacturaViewTests
         comboProducto.SelectedItem = producto;
         Dispatcher.UIThread.RunJobs();
 
-        // DecimalConverter permite signo (NumberStyles.AllowLeadingSign): "-3" parsea a -3m.
+        // DecimalPuntoConverter permite signo (NumberStyles.AllowLeadingSign): "-3" parsea a -3m.
         Tipear(CajaPorPlaceholder(window, "Cantidad"), "-3");
         Tipear(CajaPorPlaceholder(window, "Precio unitario"), "10");
         Clickear(window, BotonPorTexto(window, "Agregar artículo"));
@@ -690,7 +691,7 @@ public class IngresoPorFacturaViewTests
     // producto propio, independiente de la vista") que dejó de ser donde vive el riesgo:
     // Cantidad y Precio unitario se mudaron de las celdas del DataGrid a los TextBox reales de
     // la zona de carga (ver el comentario de esa clase y el Border "Cargar artículo" del axaml).
-    // El riesgo de cultura (es-UY: coma decimal, DecimalConverter) se mudó con ellos, y ese test
+    // El riesgo de cultura (es-UY: coma decimal, DecimalPuntoConverter) se mudó con ellos, y ese test
     // nunca mira los controles reales. Por eso la cobertura nueva va ACÁ, en
     // IngresoPorFacturaViewTests.cs, que ya monta la vista real vía Montar() y ya tiene los
     // helpers (CajaPorPlaceholder, ComboPorItemsSource) para tocar los controles reales de la
@@ -700,20 +701,23 @@ public class IngresoPorFacturaViewTests
     // pero documenta el bug de fondo para cualquier otra grilla editable del proyecto.
 
     /// <summary>
-    /// Tipea con coma decimal (es-UY, el formato que <see cref="StockApp.Presentation.Converters.DecimalConverter"/>
-    /// exige SIEMPRE) bajo una cultura AMBIENTE hostil (en-US: coma = separador de miles, punto =
-    /// decimal). Si los TextBox reales de "Cantidad"/"Precio unitario" en la zona de carga no
-    /// tuvieran el converter cableado, el binding caería en el converter por defecto de Avalonia
-    /// con la cultura AMBIENTE (en-US) y <c>NumberStyles.Float</c> -- que rechaza la coma
-    /// (ni separador de miles ni decimal válido ahí) y el valor tipeado se pierde en silencio,
-    /// igual que el bug histórico que motivó el converter. Cubre los 3 puntos del encargo:
-    /// Cantidad, Precio unitario, y el Subtotal de la fila resultante en la grilla.
+    /// Tipea con PUNTO decimal (formato único que <see cref="StockApp.Presentation.Converters.DecimalPuntoConverter"/>
+    /// exige desde el fix "todo va con punto" del 2026-08-24) bajo una cultura AMBIENTE hostil
+    /// (es-UY: coma = decimal, punto = separador de miles). Antes de ese fix este mismo test
+    /// tipeaba con COMA (es-UY, formato viejo del converter) bajo cultura ambiente en-US -- se
+    /// invirtió a propósito: prueba lo mismo (que el converter ignora la cultura ambiente y usa
+    /// su propio formato fijo), pero con el formato nuevo. Si los TextBox reales de
+    /// "Cantidad"/"Precio unitario" en la zona de carga no tuvieran el converter cableado, el
+    /// binding caería en el converter por defecto de Avalonia con la cultura AMBIENTE (es-UY) y
+    /// <c>NumberStyles.Number</c> (incluye AllowThousands) -- que interpretaría el punto como
+    /// separador de miles. Cubre los 3 puntos del encargo: Cantidad, Precio unitario, y el
+    /// Subtotal de la fila resultante en la grilla.
     /// </summary>
     [AvaloniaFact]
-    public void ClickReal_ZonaDeCarga_ComaDecimalEsUy_CulturaAmbienteHostil_LlegaCorrectoAlViewModelYElSubtotalDeLaGrillaEsCorrecto()
+    public void ClickReal_ZonaDeCarga_PuntoDecimal_CulturaAmbienteHostilEsUy_LlegaCorrectoAlViewModelYElSubtotalDeLaGrillaEsCorrecto()
     {
         var culturaOriginal = Thread.CurrentThread.CurrentCulture;
-        Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+        Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo("es-UY");
         try
         {
             var producto = Producto(1, "Pala punta cuadrada");
@@ -723,8 +727,8 @@ public class IngresoPorFacturaViewTests
             comboProducto.SelectedItem = producto;
             Dispatcher.UIThread.RunJobs();
 
-            Tipear(CajaPorPlaceholder(window, "Cantidad"), "3,5");
-            Tipear(CajaPorPlaceholder(window, "Precio unitario"), "12,35");
+            Tipear(CajaPorPlaceholder(window, "Cantidad"), "3.5");
+            Tipear(CajaPorPlaceholder(window, "Precio unitario"), "12.35");
 
             // Ni truncado (3/12), ni interpretado como miles (3500/1235), ni dividido por 100.
             Assert.Equal(3.5m, vm.CantidadEnCarga);
@@ -756,8 +760,8 @@ public class IngresoPorFacturaViewTests
     /// quedaba oculto para siempre y "Cancelar" del overlay solo cierra el overlay (no aplica acá:
     /// ese botón actúa ANTES de confirmar, el atasco es DESPUÉS). Fix: un botón "Cambiar" junto al
     /// nombre del producto nuevo (DescartarProductoNuevoEnCargaCommand) que vuelve al modo
-    /// "producto existente" y limpia TODOS los campos de alta (código/nombre/categoría/unidad/
-    /// precio de venta) para que no quede residuo que se cuele en el siguiente renglón.
+    /// "producto existente" y limpia TODOS los campos de alta (código/nombre/categoría/unidad)
+    /// para que no quede residuo que se cuele en el siguiente renglón.
     /// </summary>
     [AvaloniaFact]
     public void ClickReal_ProductoNuevoConfirmado_CambiarLoDescarta_VuelveAlComboYElSiguienteRenglonEntraSinResiduoDelDescartado()
@@ -770,7 +774,7 @@ public class IngresoPorFacturaViewTests
         Assert.True(vm.MostrandoAltaProducto);
 
         var camposDelOverlay = CamposDelOverlayDeAltaDeProducto(window);
-        Assert.Equal(3, camposDelOverlay.Count);
+        Assert.Equal(2, camposDelOverlay.Count);
         Tipear(camposDelOverlay[0], "COD-NUEVO-1");
         Tipear(camposDelOverlay[1], "Carretilla reforzada");
 
@@ -792,7 +796,6 @@ public class IngresoPorFacturaViewTests
         Assert.Null(vm.NuevoProductoCodigo);
         Assert.Null(vm.NuevaCategoriaSeleccionada);
         Assert.Null(vm.NuevaUnidadSeleccionada);
-        Assert.Equal(0m, vm.NuevoProductoPrecioVenta);
 
         var comboProductoVisible = ComboPorItemsSource(window, vm.ProductosDisponibles);
         Assert.True(ArbolVisual.EsVisibleEnArbol(comboProductoVisible));

@@ -10,6 +10,19 @@
              x:Class="StockApp.Presentation.Views.Movimientos.IngresoPorFacturaView"
              x:DataType="vm:IngresoPorFacturaViewModel">
 
+    <UserControl.Styles>
+        <!-- Fix "botón sin texto visible en celda de DataGrid": Themes/DataGrid.axaml fija
+             RowHeight=36 y DataGridCell.Padding=PaddingCelda (12,8) -> 36-16=20px útiles en la
+             celda. Un Button (Padding 16,8 + BorderThickness 1 en Controls.axaml) necesita
+             ~36px para su contenido; no entra, y el TextBlock interno queda aplastado a 2px
+             (medido). Bajar el padding del botón no alcanza. Esta clase saca el padding
+             VERTICAL de la celda (deja el horizontal) para que el botón tenga los 36px enteros
+             y su propio padding se resuelva adentro (medido: TextBlock pasa de 2px a 18px). -->
+        <Style Selector="DataGridCell.sin-padding-vertical">
+            <Setter Property="Padding" Value="12,0" />
+        </Style>
+    </UserControl.Styles>
+
     <Grid>
         <ScrollViewer>
         <StackPanel Spacing="16">
@@ -139,12 +152,12 @@
                             </StackPanel>
                             <StackPanel Grid.Column="2" Spacing="4">
                                 <TextBlock Text="Cantidad" />
-                                <TextBox Text="{Binding CantidadEnCarga, Converter={x:Static conv:DecimalConverter.Instance}}"
+                                <TextBox Text="{Binding CantidadEnCarga, Converter={x:Static conv:DecimalPuntoConverter.Instance}}"
                                          PlaceholderText="Cantidad" />
                             </StackPanel>
                             <StackPanel Grid.Column="4" Spacing="4">
                                 <TextBlock Text="Precio unitario" />
-                                <TextBox Text="{Binding PrecioUnitarioEnCarga, Converter={x:Static conv:DecimalConverter.Instance}}"
+                                <TextBox Text="{Binding PrecioUnitarioEnCarga, Converter={x:Static conv:DecimalPuntoConverter.Instance}}"
                                          PlaceholderText="Precio unitario" />
                             </StackPanel>
                             <StackPanel Grid.Column="6" Spacing="4" VerticalAlignment="Bottom">
@@ -174,21 +187,21 @@
                                     Binding="{Binding NombreMostrado, DataType={x:Type vm:FilaRenglonFacturaVm}}"
                                     IsReadOnly="True" Width="3*" />
                                 <DataGridTextColumn Header="Cantidad"
-                                    Binding="{Binding Cantidad, DataType={x:Type vm:FilaRenglonFacturaVm}, Converter={x:Static conv:DecimalConverter.Instance}}"
+                                    Binding="{Binding Cantidad, DataType={x:Type vm:FilaRenglonFacturaVm}, Converter={x:Static conv:DecimalPuntoConverter.Instance}}"
                                     IsReadOnly="True" Width="Auto" />
                                 <DataGridTextColumn Header="Precio unitario"
-                                    Binding="{Binding PrecioUnitario, DataType={x:Type vm:FilaRenglonFacturaVm}, Converter={x:Static conv:DecimalConverter.Instance}}"
+                                    Binding="{Binding PrecioUnitario, DataType={x:Type vm:FilaRenglonFacturaVm}, Converter={x:Static conv:DecimalPuntoConverter.Instance}}"
                                     IsReadOnly="True" Width="Auto" />
                                 <DataGridTextColumn Header="Subtotal"
-                                    Binding="{Binding Subtotal, DataType={x:Type vm:FilaRenglonFacturaVm}}"
+                                    Binding="{Binding Subtotal, DataType={x:Type vm:FilaRenglonFacturaVm}, Converter={x:Static conv:DecimalPuntoConverter.Instance}}"
                                     IsReadOnly="True" Width="Auto" />
                                 <DataGridCheckBoxColumn Header="Actualizar precio costo"
                                     Binding="{Binding ActualizarPrecioCosto, DataType={x:Type vm:FilaRenglonFacturaVm}}"
                                     IsReadOnly="True" Width="Auto" />
-                                <DataGridTemplateColumn Header="" Width="Auto">
+                                <DataGridTemplateColumn Header="" Width="Auto" CellStyleClasses="sin-padding-vertical">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate x:DataType="vm:FilaRenglonFacturaVm">
-                                            <Button Content="Quitar"
+                                            <Button Classes="secondary" Content="Quitar"
                                                     Command="{Binding $parent[UserControl].((vm:IngresoPorFacturaViewModel)DataContext).QuitarRenglonCommand}"
                                                     CommandParameter="{Binding}" />
                                         </DataTemplate>
@@ -265,7 +278,6 @@
                             <DataTemplate><TextBlock Text="{Binding Nombre}" /></DataTemplate>
                         </ComboBox.ItemTemplate>
                     </ComboBox>
-                    <TextBlock Text="Precio de venta" /><TextBox Text="{Binding NuevoProductoPrecioVenta, Converter={x:Static conv:DecimalConverter.Instance}}" />
                     <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
                         <Button Content="Cancelar" Command="{Binding CancelarAltaProductoCommand}" />
                         <Button Content="Confirmar" Command="{Binding ConfirmarAltaProductoCommand}" Classes.primary="{Binding MostrandoAltaProducto}" />

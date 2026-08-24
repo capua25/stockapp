@@ -31,8 +31,7 @@ public record ProductoNuevoDto(
     string Codigo,
     string Nombre,
     int? CategoriaId,
-    int UnidadMedidaId,
-    decimal PrecioVenta);
+    int UnidadMedidaId);
 
 /// <summary>Resultado del alta: id del gasto, ids de movimiento generados y totales calculados.</summary>
 public record IngresoPorFacturaResultadoDto(

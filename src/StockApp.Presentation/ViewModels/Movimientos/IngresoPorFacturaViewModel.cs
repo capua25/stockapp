@@ -120,7 +120,6 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
     [ObservableProperty] private string? _nuevoProductoNombre;
     [ObservableProperty] private Categoria? _nuevaCategoriaSeleccionada;
     [ObservableProperty] private UnidadMedida? _nuevaUnidadSeleccionada;
-    [ObservableProperty] private decimal _nuevoProductoPrecioVenta;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(GuardarEsAccionPrincipal))]
@@ -252,7 +251,6 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
         NuevoProductoNombre = null;
         NuevaCategoriaSeleccionada = null;
         NuevaUnidadSeleccionada = null;
-        NuevoProductoPrecioVenta = 0m;
         MostrandoAltaProducto = true;
     }
 
@@ -294,7 +292,6 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
         NuevoProductoNombre = null;
         NuevaCategoriaSeleccionada = null;
         NuevaUnidadSeleccionada = null;
-        NuevoProductoPrecioVenta = 0m;
     }
 
     /// <summary>
@@ -342,7 +339,6 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
             fila.ProductoNuevoNombre = NuevoProductoNombre;
             fila.ProductoNuevoCategoriaId = NuevaCategoriaSeleccionada?.Id;
             fila.ProductoNuevoUnidadMedidaId = NuevaUnidadSeleccionada!.Id;
-            fila.ProductoNuevoPrecioVenta = NuevoProductoPrecioVenta;
         }
         else
         {
@@ -369,7 +365,6 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
         NuevoProductoNombre = null;
         NuevaCategoriaSeleccionada = null;
         NuevaUnidadSeleccionada = null;
-        NuevoProductoPrecioVenta = 0m;
     }
 
     private bool PuedeGuardar()
@@ -481,7 +476,7 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
         fila.EsProductoNuevo ? null : fila.Producto?.Id,
         fila.EsProductoNuevo ? new ProductoNuevoDto(
             fila.ProductoNuevoCodigo!, fila.ProductoNuevoNombre!, fila.ProductoNuevoCategoriaId,
-            fila.ProductoNuevoUnidadMedidaId, fila.ProductoNuevoPrecioVenta) : null,
+            fila.ProductoNuevoUnidadMedidaId) : null,
         fila.Cantidad, fila.PrecioUnitario, fila.ActualizarPrecioCosto);
 
     [RelayCommand]

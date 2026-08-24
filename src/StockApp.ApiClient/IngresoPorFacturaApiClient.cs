@@ -5,7 +5,7 @@ using StockApp.Domain.Enums;
 namespace StockApp.ApiClient;
 
 internal sealed record ProductoNuevoBody(
-    string Codigo, string Nombre, int? CategoriaId, int UnidadMedidaId, decimal PrecioVenta);
+    string Codigo, string Nombre, int? CategoriaId, int UnidadMedidaId);
 
 internal sealed record RenglonFacturaBody(
     int? ProductoId, ProductoNuevoBody? ProductoNuevo,
@@ -36,7 +36,7 @@ public sealed class IngresoPorFacturaApiClient : IIngresoPorFacturaService
                 r.ProductoId,
                 r.ProductoNuevo is null ? null : new ProductoNuevoBody(
                     r.ProductoNuevo.Codigo, r.ProductoNuevo.Nombre, r.ProductoNuevo.CategoriaId,
-                    r.ProductoNuevo.UnidadMedidaId, r.ProductoNuevo.PrecioVenta),
+                    r.ProductoNuevo.UnidadMedidaId),
                 r.Cantidad, r.PrecioUnitario, r.ActualizarPrecioCosto)).ToList());
 
         var response = await ApiErrores.EnviarAsync(() =>

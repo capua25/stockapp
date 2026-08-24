@@ -13,7 +13,6 @@ public partial class FilaRenglonFacturaVm : ObservableObject
     [ObservableProperty] private string? _productoNuevoNombre;
     [ObservableProperty] private int? _productoNuevoCategoriaId;
     [ObservableProperty] private int _productoNuevoUnidadMedidaId;
-    [ObservableProperty] private decimal _productoNuevoPrecioVenta;
     [ObservableProperty] private decimal _cantidad;
     [ObservableProperty] private decimal _precioUnitario;
     [ObservableProperty] private bool _actualizarPrecioCosto;

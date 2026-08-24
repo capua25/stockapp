@@ -5,7 +5,7 @@ using StockApp.Domain.Enums;
 namespace StockApp.Api.Endpoints;
 
 public record ProductoNuevoRequest(
-    string Codigo, string Nombre, int? CategoriaId, int UnidadMedidaId, decimal PrecioVenta);
+    string Codigo, string Nombre, int? CategoriaId, int UnidadMedidaId);
 
 public record RenglonFacturaRequest(
     int? ProductoId,
@@ -38,7 +38,7 @@ public static class IngresoPorFacturaEndpoints
                     l.ProductoId,
                     l.ProductoNuevo is null ? null : new ProductoNuevoDto(
                         l.ProductoNuevo.Codigo, l.ProductoNuevo.Nombre, l.ProductoNuevo.CategoriaId,
-                        l.ProductoNuevo.UnidadMedidaId, l.ProductoNuevo.PrecioVenta),
+                        l.ProductoNuevo.UnidadMedidaId),
                     l.Cantidad, l.PrecioUnitario, l.ActualizarPrecioCosto)).ToList());
 
             var resultado = await service.RegistrarAsync(dto);

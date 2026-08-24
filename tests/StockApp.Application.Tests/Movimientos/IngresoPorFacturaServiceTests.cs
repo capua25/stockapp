@@ -94,7 +94,7 @@ public class IngresoPorFacturaServiceTests
             .Throws<UnauthorizedAccessException>();
 
         var renglon = new RenglonFacturaDto(
-            null, new ProductoNuevoDto("SKU-N1", "Producto nuevo", null, 1, 50m), 3m, 20m, false);
+            null, new ProductoNuevoDto("SKU-N1", "Producto nuevo", null, 1), 3m, 20m, false);
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => svc.RegistrarAsync(DtoValido(renglon)));
 
@@ -167,7 +167,7 @@ public class IngresoPorFacturaServiceTests
     {
         var (svc, _, _, _, _, _, _, _, _, _, _, _) = Crear();
         var renglon = new RenglonFacturaDto(
-            1, new ProductoNuevoDto("X", "Y", null, 1, 1m), 1m, 10m, false);
+            1, new ProductoNuevoDto("X", "Y", null, 1), 1m, 10m, false);
 
         await Assert.ThrowsAsync<ArgumentException>(() => svc.RegistrarAsync(DtoValido(renglon)));
     }
@@ -179,7 +179,7 @@ public class IngresoPorFacturaServiceTests
         unidades.Setup(u => u.ObtenerPorIdAsync(99)).ReturnsAsync((UnidadMedida?)null);
 
         var renglon = new RenglonFacturaDto(
-            null, new ProductoNuevoDto("SKU-N1", "Producto nuevo", null, 99, 50m), 3m, 20m, false);
+            null, new ProductoNuevoDto("SKU-N1", "Producto nuevo", null, 99), 3m, 20m, false);
 
         await Assert.ThrowsAsync<EntidadNoEncontradaException>(() => svc.RegistrarAsync(DtoValido(renglon)));
 
@@ -258,7 +258,7 @@ public class IngresoPorFacturaServiceTests
             .ReturnsAsync(new ResultadoIngresoPorFactura(1, new List<int> { 1 }));
 
         var renglon = new RenglonFacturaDto(
-            null, new ProductoNuevoDto("SKU-N2", "Producto Nuevo", null, 2, 80m), 4m, 35m, false);
+            null, new ProductoNuevoDto("SKU-N2", "Producto Nuevo", null, 2), 4m, 35m, false);
 
         await svc.RegistrarAsync(DtoValido(renglon));
 

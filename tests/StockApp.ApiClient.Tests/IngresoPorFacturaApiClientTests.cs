@@ -18,7 +18,7 @@ public class IngresoPorFacturaApiClientTests
         Renglones: new[]
         {
             new RenglonFacturaDto(10, null, 5m, 90m, false),
-            new RenglonFacturaDto(null, new ProductoNuevoDto("SKU-N", "Nuevo", null, 1, 50m), 2m, 25m, false),
+            new RenglonFacturaDto(null, new ProductoNuevoDto("SKU-N", "Nuevo", null, 1), 2m, 25m, false),
         });
 
     [Fact]
