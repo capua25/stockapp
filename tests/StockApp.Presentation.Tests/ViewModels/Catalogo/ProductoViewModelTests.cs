@@ -21,11 +21,11 @@ public class ProductoListViewModelTests
 
     private static ProductoDto CrearProductoDto(
         int id, string codigo, string nombre, bool activo = true,
-        int unidadMedidaId = 1, decimal precioCosto = 0m, decimal precioVenta = 0m)
+        int unidadMedidaId = 1, decimal precioCosto = 0m)
         => new ProductoDto(
             Id: id, Codigo: codigo, CodigoBarras: null, Nombre: nombre, Descripcion: null,
             CategoriaId: null, CategoriaNombre: null, ProveedorId: null, UnidadMedidaId: unidadMedidaId,
-            UnidadMedidaNombre: "Unidad", PrecioCosto: precioCosto, PrecioVenta: precioVenta,
+            UnidadMedidaNombre: "Unidad", PrecioCosto: precioCosto,
             StockActual: 0m, StockMinimo: 0m, Activo: activo, FechaAlta: default);
 
     private static (ProductoListViewModel vm, Mock<IProductoService> svcMock, Mock<INavigationService> navMock, Mock<IConfirmacionService> confirmMock)
@@ -373,7 +373,7 @@ public class ProductoListViewModelTests
     [Fact]
     public async Task EditarCommand_ElInicializadorPrecargaElProductoSeleccionado()
     {
-        var producto = CrearProductoDto(5, "P005", "Prueba", unidadMedidaId: 1, precioCosto: 10, precioVenta: 20);
+        var producto = CrearProductoDto(5, "P005", "Prueba", unidadMedidaId: 1, precioCosto: 10);
         var (vm, _, navMock, _) = Crear(new List<ProductoDto> { producto });
         await vm.CargarAsync();
         vm.ItemSeleccionado = producto;
@@ -411,14 +411,14 @@ public class ProductoFormViewModelTests
     private static ProductoDto CrearProductoDto(
         int id = 9, string codigo = "P009", string nombre = "Aceite",
         string? codigoBarras = null, string? descripcion = null,
-        decimal precioCosto = 0m, decimal precioVenta = 0m,
+        decimal precioCosto = 0m,
         int unidadMedidaId = 0, int? categoriaId = null, int? proveedorId = null,
         decimal stockMinimo = 0m)
         => new ProductoDto(
             Id: id, Codigo: codigo, CodigoBarras: codigoBarras, Nombre: nombre, Descripcion: descripcion,
             CategoriaId: categoriaId, CategoriaNombre: null, ProveedorId: proveedorId,
             UnidadMedidaId: unidadMedidaId, UnidadMedidaNombre: "", PrecioCosto: precioCosto,
-            PrecioVenta: precioVenta, StockActual: 0m, StockMinimo: stockMinimo, Activo: true,
+            StockActual: 0m, StockMinimo: stockMinimo, Activo: true,
             FechaAlta: default);
 
     private static (ProductoFormViewModel vm,
@@ -617,7 +617,7 @@ public class ProductoFormViewModelTests
         var (vm, _, _, _, _) = Crear();
         var producto = CrearProductoDto(
             codigoBarras: "7791234567890", descripcion: "Aceite de girasol",
-            precioCosto: 100m, precioVenta: 150m);
+            precioCosto: 100m);
 
         vm.CargarParaEditar(producto);
 
@@ -627,7 +627,6 @@ public class ProductoFormViewModelTests
         Assert.Equal("7791234567890", vm.CodigoBarras);
         Assert.Equal("Aceite de girasol", vm.Descripcion);
         Assert.Equal(100m, vm.PrecioCosto);
-        Assert.Equal(150m, vm.PrecioVenta);
     }
 
     [Fact]

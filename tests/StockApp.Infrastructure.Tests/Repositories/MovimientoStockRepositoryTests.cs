@@ -43,7 +43,6 @@ public class MovimientoStockRepositoryTests : PostgresRepositoryTestBase
         Nombre      = $"Producto {codigo}",
         UnidadMedida = um,
         PrecioCosto = 10m,
-        PrecioVenta = 20m,
         StockActual = stockActual,
         Activo      = true,
         FechaAlta   = DateTime.UtcNow

@@ -30,7 +30,6 @@ public class ReporteStockRepositoryValorizacionTests : PostgresRepositoryTestBas
         UnidadMedida um,
         decimal stockActual,
         decimal precioCosto,
-        decimal precioVenta,
         bool activo = true,
         Categoria? categoria = null) => new()
     {
@@ -39,7 +38,6 @@ public class ReporteStockRepositoryValorizacionTests : PostgresRepositoryTestBas
         UnidadMedida = um,
         Categoria   = categoria,
         PrecioCosto = precioCosto,
-        PrecioVenta = precioVenta,
         StockActual = stockActual,
         Activo      = activo,
         FechaAlta   = DateTime.UtcNow
@@ -59,9 +57,9 @@ public class ReporteStockRepositoryValorizacionTests : PostgresRepositoryTestBas
         // Insertar en orden INVERSO al alfabético (Jugo primero, Agua después)
         // para que el Id de inserción sea distinto al orden esperado por Nombre.
         // Esto fuerza que el OrderBy(p => p.Nombre) sea verificable.
-        var activo2   = NuevoProducto("ACT002", "Jugo",   um, stockActual: 4m,  precioCosto: 3m,  precioVenta: 7m,  categoria: cat);
-        var activo1   = NuevoProducto("ACT001", "Agua",   um, stockActual: 10m, precioCosto: 2m,  precioVenta: 5m,  categoria: cat);
-        var inactivo  = NuevoProducto("INA001", "Vino",   um, stockActual: 8m,  precioCosto: 10m, precioVenta: 20m, activo: false, categoria: cat);
+        var activo2   = NuevoProducto("ACT002", "Jugo",   um, stockActual: 4m,  precioCosto: 3m,  categoria: cat);
+        var activo1   = NuevoProducto("ACT001", "Agua",   um, stockActual: 10m, precioCosto: 2m,  categoria: cat);
+        var inactivo  = NuevoProducto("INA001", "Vino",   um, stockActual: 8m,  precioCosto: 10m, activo: false, categoria: cat);
         Context.Productos.AddRange(activo2, activo1, inactivo);
         await Context.SaveChangesAsync();
         Context.ChangeTracker.Clear();
@@ -76,16 +74,14 @@ public class ReporteStockRepositoryValorizacionTests : PostgresRepositoryTestBas
         var nombresResultado = resultado.Select(r => r.Nombre).ToArray();
         Assert.Equal(new[] { "Agua", "Jugo" }, nombresResultado);
 
-        // ValorCosto/ValorVenta = Stock * precio
+        // ValorCosto = Stock * PrecioCosto
         var agua = resultado[0];
         Assert.Equal("Agua", agua.Nombre);
         Assert.Equal(10m * 2m, agua.ValorCosto);   // 20
-        Assert.Equal(10m * 5m, agua.ValorVenta);   // 50
 
         var jugo = resultado[1];
         Assert.Equal("Jugo", jugo.Nombre);
         Assert.Equal(4m * 3m, jugo.ValorCosto);    // 12
-        Assert.Equal(4m * 7m, jugo.ValorVenta);    // 28
     }
 
     [Fact]
@@ -96,7 +92,7 @@ public class ReporteStockRepositoryValorizacionTests : PostgresRepositoryTestBas
         await Context.SaveChangesAsync();
 
         // CategoriaId null → "Sin categoría"
-        var sinCat = NuevoProducto("SC001", "Genérico", um, stockActual: 5m, precioCosto: 1m, precioVenta: 2m, categoria: null);
+        var sinCat = NuevoProducto("SC001", "Genérico", um, stockActual: 5m, precioCosto: 1m, categoria: null);
         Context.Productos.Add(sinCat);
         await Context.SaveChangesAsync();
         Context.ChangeTracker.Clear();
@@ -116,8 +112,8 @@ public class ReporteStockRepositoryValorizacionTests : PostgresRepositoryTestBas
         Context.Categorias.Add(cat);
         await Context.SaveChangesAsync();
 
-        var p1 = NuevoProducto("T001", "Lavandina", um, stockActual: 3m, precioCosto: 4m, precioVenta: 9m,  categoria: cat);
-        var p2 = NuevoProducto("T002", "Esponja",   um, stockActual: 6m, precioCosto: 1m, precioVenta: 3m,  categoria: cat);
+        var p1 = NuevoProducto("T001", "Lavandina", um, stockActual: 3m, precioCosto: 4m, categoria: cat);
+        var p2 = NuevoProducto("T002", "Esponja",   um, stockActual: 6m, precioCosto: 1m, categoria: cat);
         Context.Productos.AddRange(p1, p2);
         await Context.SaveChangesAsync();
         Context.ChangeTracker.Clear();
@@ -126,15 +122,12 @@ public class ReporteStockRepositoryValorizacionTests : PostgresRepositoryTestBas
 
         // Per-item: la suma de estos permite que el service arme el total
         var totalCosto = resultado.Sum(x => x.ValorCosto);
-        var totalVenta = resultado.Sum(x => x.ValorVenta);
 
-        // p1: 3*4=12 costo, 3*9=27 venta ; p2: 6*1=6 costo, 6*3=18 venta
+        // p1: 3*4=12 costo ; p2: 6*1=6 costo
         Assert.Equal(12m + 6m,  totalCosto);   // 18
-        Assert.Equal(27m + 18m, totalVenta);   // 45
 
         // Confirmar valores per-item explícitos
         var lavandina = resultado.Single(x => x.Codigo == "T001");
         Assert.Equal(12m, lavandina.ValorCosto);
-        Assert.Equal(27m, lavandina.ValorVenta);
     }
 }

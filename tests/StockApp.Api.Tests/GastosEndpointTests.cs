@@ -369,7 +369,7 @@ public class GastosEndpointTests : ApiTestBase
             {
                 Codigo = $"DEL-{Guid.NewGuid():N}", Nombre = "Producto con movimiento",
                 UnidadMedida = new UnidadMedida { Nombre = "Unidad", Abreviatura = "u" },
-                PrecioCosto = 10m, PrecioVenta = 20m, StockActual = 2m,
+                PrecioCosto = 10m, StockActual = 2m,
                 Activo = true, FechaAlta = DateTime.UtcNow,
             };
             ctx.Add(producto);
@@ -416,7 +416,7 @@ public class GastosEndpointTests : ApiTestBase
             {
                 Codigo = $"DEL-OK-{Guid.NewGuid():N}", Nombre = "Producto con stock suficiente",
                 UnidadMedida = new UnidadMedida { Nombre = "Unidad", Abreviatura = "u" },
-                PrecioCosto = 10m, PrecioVenta = 20m, StockActual = 20m,
+                PrecioCosto = 10m, StockActual = 20m,
                 Activo = true, FechaAlta = DateTime.UtcNow,
             };
             ctx.Add(producto);
@@ -535,7 +535,7 @@ public class GastosEndpointTests : ApiTestBase
             {
                 Codigo = $"STK-DTO-{Guid.NewGuid():N}", Nombre = "Producto con movimiento",
                 UnidadMedida = new UnidadMedida { Nombre = "Unidad", Abreviatura = "u" },
-                PrecioCosto = 10m, PrecioVenta = 20m, StockActual = 20m,
+                PrecioCosto = 10m, StockActual = 20m,
                 Activo = true, FechaAlta = DateTime.UtcNow,
             };
             ctx.Add(producto);

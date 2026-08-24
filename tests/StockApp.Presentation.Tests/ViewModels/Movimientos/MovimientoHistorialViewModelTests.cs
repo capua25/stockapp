@@ -43,7 +43,7 @@ public class MovimientoHistorialViewModelTests
         => new ProductoDto(
             Id: id, Codigo: $"SKU{id}", CodigoBarras: null, Nombre: nombre, Descripcion: null,
             CategoriaId: null, CategoriaNombre: null, ProveedorId: null, UnidadMedidaId: 1,
-            UnidadMedidaNombre: "Unidad", PrecioCosto: 0m, PrecioVenta: 0m, StockActual: 0m,
+            UnidadMedidaNombre: "Unidad", PrecioCosto: 0m, StockActual: 0m,
             StockMinimo: 0m, Activo: activo, FechaAlta: default);
 
     private static (

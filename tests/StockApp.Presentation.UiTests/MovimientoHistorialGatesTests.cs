@@ -76,7 +76,7 @@ public class MovimientoHistorialGatesTests
         public Task BajaLogicaAsync(int id)
             => throw new NotSupportedException("No usado en este banco de pruebas.");
 
-        public Task CambiarPrecioAsync(int id, decimal precioCosto, decimal precioVenta)
+        public Task CambiarPrecioAsync(int id, decimal precioCosto)
             => throw new NotSupportedException("No usado en este banco de pruebas.");
 
         public Task<IReadOnlyList<ProductoDto>> BuscarAsync(string? sku, string? codigoBarras, string? nombre)

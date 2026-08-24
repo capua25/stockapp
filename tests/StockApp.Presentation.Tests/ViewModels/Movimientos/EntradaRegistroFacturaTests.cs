@@ -40,10 +40,10 @@ public class EntradaRegistroFacturaTests
             {
                 // Firma real de ProductoDto (src/StockApp.Application/Catalogo/Dtos.cs):
                 // (Id, Codigo, CodigoBarras, Nombre, Descripcion, CategoriaId, CategoriaNombre,
-                //  ProveedorId, UnidadMedidaId, UnidadMedidaNombre, PrecioCosto, PrecioVenta,
+                //  ProveedorId, UnidadMedidaId, UnidadMedidaNombre, PrecioCosto,
                 //  StockActual, StockMinimo, Activo, FechaAlta)
                 new(1, "COD1", null, "Prod test", null, null, null, null,
-                    1, "Unidad", 100m, 200m, 10m, 0m, true, DateTime.UtcNow),
+                    1, "Unidad", 100m, 10m, 0m, true, DateTime.UtcNow),
             });
 
         var nav = new Mock<INavigationService>();

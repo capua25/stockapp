@@ -42,8 +42,8 @@ public class ReportesAlineacionNumericaTests
         var grilla = vista.GetVisualDescendants().OfType<DataGrid>().Single();
         grilla.ItemsSource = new[]
         {
-            new StockCategoriaDto("Ferretería", 12, 340m, 15000m, 22000m),
-            new StockCategoriaDto("Electricidad", 5, -3m, 8000m, 9500m),
+            new StockCategoriaDto("Ferretería", 12, 340m, 15000m),
+            new StockCategoriaDto("Electricidad", 5, -3m, 8000m),
         };
         Dispatcher.UIThread.RunJobs();
 

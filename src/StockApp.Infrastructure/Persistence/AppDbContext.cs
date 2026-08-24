@@ -57,7 +57,6 @@ public class AppDbContext : DbContext
             e.Property(p => p.Codigo).IsRequired().HasMaxLength(50);
             e.Property(p => p.Nombre).IsRequired();
             e.Property(p => p.PrecioCosto).HasPrecision(18, 4);
-            e.Property(p => p.PrecioVenta).HasPrecision(18, 4);
             e.Property(p => p.StockActual).HasPrecision(18, 4);
             e.Property(p => p.StockMinimo).HasPrecision(18, 4).HasDefaultValue(0m);
             e.Property(p => p.Activo).HasDefaultValue(true);

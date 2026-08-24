@@ -78,23 +78,13 @@ public class ProductoServiceTests
     }
 
     [Fact]
-    public async Task AltaAsync_PrecioVentaNegativo_LanzaArgumentException()
-    {
-        var (svc, repo, _, _, _, _) = Crear();
-        repo.Setup(r => r.ExisteCodigoAsync(It.IsAny<string>(), null)).ReturnsAsync(false);
-
-        var p = new Producto { Codigo = "SKU-004", Nombre = "Fideos", UnidadMedidaId = 1, PrecioVenta = -0.01m };
-        await Assert.ThrowsAsync<ArgumentException>(() => svc.AltaAsync(p));
-    }
-
-    [Fact]
     public async Task AltaAsync_Exitosa_RetornaId_RegistraAuditoria()
     {
         var (svc, repo, _, _, audit, _) = Crear();
         repo.Setup(r => r.ExisteCodigoAsync("SKU-001", null)).ReturnsAsync(false);
         repo.Setup(r => r.AgregarAsync(It.IsAny<Producto>())).ReturnsAsync(42);
 
-        var p = new Producto { Codigo = "SKU-001", Nombre = "Fideos", UnidadMedidaId = 1, PrecioVenta = 150m };
+        var p = new Producto { Codigo = "SKU-001", Nombre = "Fideos", UnidadMedidaId = 1, PrecioCosto = 150m };
         var id = await svc.AltaAsync(p);
 
         Assert.Equal(42, id);
@@ -134,7 +124,7 @@ public class ProductoServiceTests
         var original = new Producto
         {
             Id = 5, Codigo = "SKU-001", Nombre = "Fideos",
-            UnidadMedidaId = 1, PrecioVenta = 100m, PrecioCosto = 50m, Activo = true
+            UnidadMedidaId = 1, PrecioCosto = 50m, Activo = true
         };
         var (svc, repo, _, _, audit, _) = Crear();
         repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(original);
@@ -143,7 +133,7 @@ public class ProductoServiceTests
         var actualizado = new Producto
         {
             Id = 5, Codigo = "SKU-001", Nombre = "Fideos finos",
-            UnidadMedidaId = 1, PrecioVenta = 100m, PrecioCosto = 50m, Activo = true
+            UnidadMedidaId = 1, PrecioCosto = 50m, Activo = true
         };
         await svc.ModificarAsync(actualizado);
 
@@ -159,7 +149,7 @@ public class ProductoServiceTests
         var original = new Producto
         {
             Id = 5, Codigo = "SKU-001", Nombre = "Fideos",
-            UnidadMedidaId = 1, PrecioVenta = 100m, PrecioCosto = 50m, Activo = true
+            UnidadMedidaId = 1, PrecioCosto = 50m, Activo = true
         };
         var (svc, repo, _, _, audit, _) = Crear();
         repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(original);
@@ -169,7 +159,7 @@ public class ProductoServiceTests
         var sinCambios = new Producto
         {
             Id = 5, Codigo = "SKU-001", Nombre = "Fideos",
-            UnidadMedidaId = 1, PrecioVenta = 100m, PrecioCosto = 50m, Activo = true
+            UnidadMedidaId = 1, PrecioCosto = 50m, Activo = true
         };
         await svc.ModificarAsync(sinCambios);
 
@@ -233,15 +223,15 @@ public class ProductoServiceTests
         var p = new Producto
         {
             Id = 7, Codigo = "SKU-007", Nombre = "Pan",
-            UnidadMedidaId = 1, PrecioCosto = 50m, PrecioVenta = 100m, Activo = true
+            UnidadMedidaId = 1, PrecioCosto = 50m, Activo = true
         };
         var (svc, repo, _, _, audit, _) = Crear();
         repo.Setup(r => r.ObtenerPorIdAsync(7)).ReturnsAsync(p);
 
-        await svc.CambiarPrecioAsync(7, 55m, 110m);
+        await svc.CambiarPrecioAsync(7, 55m);
 
         repo.Verify(r => r.ActualizarAsync(It.Is<Producto>(x =>
-            x.PrecioCosto == 55m && x.PrecioVenta == 110m)), Times.Once);
+            x.PrecioCosto == 55m)), Times.Once);
         audit.Verify(a => a.RegistrarAsync(
             It.IsAny<int>(), AccionAuditada.CambioPrecio,
             "Producto", 7, It.IsAny<string>()), Times.Once);
@@ -391,7 +381,7 @@ public class ProductoServiceTests
             Id = 1, Codigo = "SKU-001", CodigoBarras = "111", Nombre = "Fideos",
             Descripcion = "Fideos secos", CategoriaId = 3, Categoria = categoria,
             ProveedorId = 9, UnidadMedidaId = 1, UnidadMedida = unidad,
-            PrecioCosto = 10m, PrecioVenta = 20m, StockActual = 5m, StockMinimo = 2m,
+            PrecioCosto = 10m, StockActual = 5m, StockMinimo = 2m,
             Activo = true, FechaAlta = new DateTime(2026, 1, 1)
         };
         var (svc, repo, _, _, _, _) = Crear();
@@ -411,7 +401,6 @@ public class ProductoServiceTests
         Assert.Equal(1, dto.UnidadMedidaId);
         Assert.Equal("Kilogramo", dto.UnidadMedidaNombre);
         Assert.Equal(10m, dto.PrecioCosto);
-        Assert.Equal(20m, dto.PrecioVenta);
         Assert.Equal(5m, dto.StockActual);
         Assert.Equal(2m, dto.StockMinimo);
         Assert.True(dto.Activo);

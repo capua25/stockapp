@@ -76,7 +76,7 @@ public class SignoNegativoBadgeTests
     private static ProductoDto ProductoDe(int id, string nombre, decimal stockActual) => new(
         Id: id, Codigo: $"C{id}", CodigoBarras: null, Nombre: nombre, Descripcion: null,
         CategoriaId: null, CategoriaNombre: null, ProveedorId: null, UnidadMedidaId: 1,
-        UnidadMedidaNombre: "Unidad", PrecioCosto: 10m, PrecioVenta: 15m, StockActual: stockActual,
+        UnidadMedidaNombre: "Unidad", PrecioCosto: 10m, StockActual: stockActual,
         StockMinimo: 0m, Activo: true, FechaAlta: DateTime.UtcNow);
 
     // ---- Reportes: StockCategoriaView, sitio StockTotal (:49) ----
@@ -90,8 +90,8 @@ public class SignoNegativoBadgeTests
         var grilla = vista.GetVisualDescendants().OfType<DataGrid>().Single();
         grilla.ItemsSource = new[]
         {
-            new StockCategoriaDto("Ferretería", 12, -3m, 15000m, 22000m),
-            new StockCategoriaDto("Electricidad", 5, 8m, 8000m, 9500m),
+            new StockCategoriaDto("Ferretería", 12, -3m, 15000m),
+            new StockCategoriaDto("Electricidad", 5, 8m, 8000m),
         };
         Dispatcher.UIThread.RunJobs();
 
@@ -289,8 +289,8 @@ public class SignoNegativoBadgeTests
 
     private static ValorizacionItemDto ValorizacionItemDe(int id, decimal stockActual) => new(
         ProductoId: id, Codigo: $"C{id}", Nombre: $"Producto {id}", Categoria: "Ferretería",
-        StockActual: stockActual, PrecioCosto: 10m, PrecioVenta: 15m,
-        ValorCosto: stockActual * 10m, ValorVenta: stockActual * 15m);
+        StockActual: stockActual, PrecioCosto: 10m,
+        ValorCosto: stockActual * 10m);
 
     // ---- Reportes: HistorialPorProductoView, sitio StockNuevo (:102) ----
 

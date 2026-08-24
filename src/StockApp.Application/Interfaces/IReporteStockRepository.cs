@@ -4,20 +4,20 @@ namespace StockApp.Application.Interfaces;
 
 /// <summary>
 /// Contrato de persistencia para reportes de stock (solo lectura).
-/// El repo devuelve los items YA proyectados: ValorCosto/ValorVenta calculados
+/// El repo devuelve los items YA proyectados: ValorCosto calculado
 /// y Categoria resuelta a "Sin categoría" cuando es null. El service solo agrega/totaliza.
 /// </summary>
 public interface IReporteStockRepository
 {
     /// <summary>
-    /// Items de valorización por producto, con ValorCosto/ValorVenta ya calculados
+    /// Items de valorización por producto, con ValorCosto ya calculado
     /// y Categoria resuelta. Retorna lista vacía si no hay productos.
     /// </summary>
     Task<IReadOnlyList<ValorizacionItemDto>> ObtenerValorizacionAsync();
 
     /// <summary>
     /// Resumen de stock agrupado por categoría, con CantidadProductos/StockTotal/
-    /// ValorCosto/ValorVenta ya agregados y la categoría null resuelta a "Sin categoría".
+    /// ValorCosto ya agregados y la categoría null resuelta a "Sin categoría".
     /// Retorna lista vacía si no hay productos.
     /// </summary>
     Task<IReadOnlyList<StockCategoriaDto>> ObtenerStockPorCategoriaAsync();

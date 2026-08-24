@@ -20,8 +20,7 @@ public class StockCategoriaViewModelTests
             Categoria: categoria,
             CantidadProductos: 3,
             StockTotal: 30m,
-            ValorCosto: 150m,
-            ValorVenta: 240m);
+            ValorCosto: 150m);
 
     private static (
         StockCategoriaViewModel vm,
@@ -97,7 +96,7 @@ public class StockCategoriaViewModelTests
 
         var esperado = new[]
         {
-            "Categoria", "CantidadProductos", "StockTotal", "ValorCosto", "ValorVenta"
+            "Categoria", "CantidadProductos", "StockTotal", "ValorCosto"
         };
 
         const string csvResultante = "csv-generado";

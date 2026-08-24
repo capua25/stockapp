@@ -38,14 +38,12 @@ public class ReporteStockServiceCategoriaTests
         string categoria,
         int cantidadProductos = 1,
         decimal stockTotal = 0m,
-        decimal valorCosto = 0m,
-        decimal valorVenta = 0m) =>
+        decimal valorCosto = 0m) =>
         new StockCategoriaDto(
             Categoria:          categoria,
             CantidadProductos:  cantidadProductos,
             StockTotal:         stockTotal,
-            ValorCosto:         valorCosto,
-            ValorVenta:         valorVenta);
+            ValorCosto:         valorCosto);
 
     // ── Tests ─────────────────────────────────────────────────────────────────
 
@@ -55,9 +53,9 @@ public class ReporteStockServiceCategoriaTests
         var (svc, repo, _, _) = Crear();
         var grupos = new[]
         {
-            Cat("Bebidas",   cantidadProductos: 3, stockTotal: 30m, valorCosto: 300m, valorVenta: 450m),
-            Cat("Lácteos",   cantidadProductos: 2, stockTotal: 12m, valorCosto: 120m, valorVenta: 180m),
-            Cat("Limpieza",  cantidadProductos: 5, stockTotal: 50m, valorCosto: 500m, valorVenta: 750m),
+            Cat("Bebidas",   cantidadProductos: 3, stockTotal: 30m, valorCosto: 300m),
+            Cat("Lácteos",   cantidadProductos: 2, stockTotal: 12m, valorCosto: 120m),
+            Cat("Limpieza",  cantidadProductos: 5, stockTotal: 50m, valorCosto: 500m),
         };
         repo.Setup(r => r.ObtenerStockPorCategoriaAsync())
             .ReturnsAsync(grupos);

@@ -108,7 +108,7 @@ public class ProductosEndpointTests : ApiTestBase
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var response = await client.PostAsJsonAsync("/productos", new CrearProductoRequest(
-            "SKU-P1", null, "Producto Nuevo", null, null, null, unidad.Id, 5m, 10m, 0m));
+            "SKU-P1", null, "Producto Nuevo", null, null, null, unidad.Id, 5m, 0m));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         // No existe GET /productos/{id}: Location debe venir null, no una ruta rota.
@@ -131,7 +131,7 @@ public class ProductosEndpointTests : ApiTestBase
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var response = await client.PostAsJsonAsync("/productos", new CrearProductoRequest(
-            "SKU-P2", null, "Otro Nombre", null, null, null, producto.UnidadMedidaId, 5m, 10m, 0m));
+            "SKU-P2", null, "Otro Nombre", null, null, null, producto.UnidadMedidaId, 5m, 0m));
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
@@ -153,7 +153,7 @@ public class ProductosEndpointTests : ApiTestBase
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var response = await client.PutAsJsonAsync($"/productos/{producto.Id}", new ModificarProductoRequest(
-            producto.Codigo, null, "Nombre Modificado", null, null, null, producto.UnidadMedidaId, 10m, 20m, 0m));
+            producto.Codigo, null, "Nombre Modificado", null, null, null, producto.UnidadMedidaId, 10m, 0m));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -205,14 +205,13 @@ public class ProductosEndpointTests : ApiTestBase
         var client = Factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var response = await client.PutAsJsonAsync($"/productos/{producto.Id}/precio", new CambiarPrecioRequest(15m, 30m));
+        var response = await client.PutAsJsonAsync($"/productos/{producto.Id}/precio", new CambiarPrecioRequest(15m));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         await using var verificacion = Factory.CrearContexto();
         var actualizado = await verificacion.Productos.SingleAsync(p => p.Id == producto.Id);
         Assert.Equal(15m, actualizado.PrecioCosto);
-        Assert.Equal(30m, actualizado.PrecioVenta);
     }
 
     // ── GET /productos con sku/codigoBarras/nombre (Fase 3a, D5) ────────────
@@ -249,13 +248,13 @@ public class ProductosEndpointTests : ApiTestBase
         ctx.Productos.Add(new Producto
         {
             Codigo = "SKU-CB1", CodigoBarras = "7791234500001", Nombre = "Producto Con Barras",
-            UnidadMedidaId = unidad.Id, PrecioCosto = 1m, PrecioVenta = 2m,
+            UnidadMedidaId = unidad.Id, PrecioCosto = 1m,
             StockActual = 0m, StockMinimo = 0m, Activo = true, FechaAlta = DateTime.UtcNow,
         });
         ctx.Productos.Add(new Producto
         {
             Codigo = "SKU-CB2", CodigoBarras = "7791234500002", Nombre = "Otro Producto",
-            UnidadMedidaId = unidad.Id, PrecioCosto = 1m, PrecioVenta = 2m,
+            UnidadMedidaId = unidad.Id, PrecioCosto = 1m,
             StockActual = 0m, StockMinimo = 0m, Activo = true, FechaAlta = DateTime.UtcNow,
         });
         await ctx.SaveChangesAsync();

@@ -32,7 +32,7 @@ public abstract class MovimientoRegistroViewModelTestsBase
         => new ProductoDto(
             Id: id, Codigo: $"SKU{id}", CodigoBarras: null, Nombre: nombre, Descripcion: null,
             CategoriaId: null, CategoriaNombre: null, ProveedorId: null, UnidadMedidaId: 1,
-            UnidadMedidaNombre: "Unidad", PrecioCosto: 0m, PrecioVenta: 0m, StockActual: stockActual,
+            UnidadMedidaNombre: "Unidad", PrecioCosto: 0m, StockActual: stockActual,
             StockMinimo: 0m, Activo: true, FechaAlta: default);
 
     private (

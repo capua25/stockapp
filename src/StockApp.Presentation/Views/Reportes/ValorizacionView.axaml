@@ -68,14 +68,8 @@
                         <DataGridTextColumn Header="P. Costo"
                                              Binding="{Binding PrecioCosto, Converter={x:Static conv:MonedaConverter.Instance}}"
                                              Width="Auto" MinWidth="100" CellStyleClasses="num" />
-                        <DataGridTextColumn Header="P. Venta"
-                                             Binding="{Binding PrecioVenta, Converter={x:Static conv:MonedaConverter.Instance}}"
-                                             Width="Auto" MinWidth="100" CellStyleClasses="num" />
                         <DataGridTextColumn Header="Valor Costo"
                                              Binding="{Binding ValorCosto, Converter={x:Static conv:MonedaConverter.Instance}}"
-                                             Width="Auto" MinWidth="100" CellStyleClasses="num" />
-                        <DataGridTextColumn Header="Valor Venta"
-                                             Binding="{Binding ValorVenta, Converter={x:Static conv:MonedaConverter.Instance}}"
                                              Width="Auto" MinWidth="100" CellStyleClasses="num" />
                     </DataGrid.Columns>
                 </DataGrid>
@@ -88,9 +82,6 @@
                             IsVisible="{Binding Totales, Converter={x:Static ObjectConverters.IsNotNull}}">
                     <TextBlock Text="Total Valor Costo:" Classes="seccion" VerticalAlignment="Center" />
                     <TextBlock Text="{Binding Totales.TotalValorCosto, Converter={x:Static conv:MonedaConverter.Instance}}"
-                               Classes="body" FontWeight="SemiBold" VerticalAlignment="Center" />
-                    <TextBlock Text="Total Valor Venta:" Classes="seccion" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding Totales.TotalValorVenta, Converter={x:Static conv:MonedaConverter.Instance}}"
                                Classes="body" FontWeight="SemiBold" VerticalAlignment="Center" />
                 </StackPanel>
 

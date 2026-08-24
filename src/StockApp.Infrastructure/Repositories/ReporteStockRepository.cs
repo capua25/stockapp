@@ -7,7 +7,7 @@ namespace StockApp.Infrastructure.Repositories;
 
 /// <summary>
 /// Repositorio de solo lectura para reportes de stock (EF Core / SQLite).
-/// Devuelve los items YA proyectados: ValorCosto/ValorVenta calculados y la
+/// Devuelve los items YA proyectados: ValorCosto calculado y la
 /// categoría null resuelta a "Sin categoría". El service solo agrega/totaliza.
 /// </summary>
 public class ReporteStockRepository : IReporteStockRepository
@@ -37,9 +37,7 @@ public class ReporteStockRepository : IReporteStockRepository
                 p.Categoria != null ? p.Categoria.Nombre : SinCategoria,
                 p.StockActual,
                 p.PrecioCosto,
-                p.PrecioVenta,
-                p.StockActual * p.PrecioCosto,
-                p.StockActual * p.PrecioVenta))
+                p.StockActual * p.PrecioCosto))
             .ToListAsync();
     }
 
@@ -53,8 +51,7 @@ public class ReporteStockRepository : IReporteStockRepository
                 g.Key,
                 g.Count(),
                 g.Sum(p => p.StockActual),
-                g.Sum(p => p.StockActual * p.PrecioCosto),
-                g.Sum(p => p.StockActual * p.PrecioVenta)))
+                g.Sum(p => p.StockActual * p.PrecioCosto)))
             .ToListAsync();
     }
 

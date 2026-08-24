@@ -37,8 +37,7 @@ public class ReporteStockServiceValorizacionTests
     private static ValorizacionItemDto Item(
         int productoId,
         string categoria = "General",
-        decimal valorCosto = 0m,
-        decimal valorVenta = 0m) =>
+        decimal valorCosto = 0m) =>
         new ValorizacionItemDto(
             ProductoId:  productoId,
             Codigo:      $"P-{productoId:000}",
@@ -46,17 +45,15 @@ public class ReporteStockServiceValorizacionTests
             Categoria:   categoria,
             StockActual: 10m,
             PrecioCosto: 0m,
-            PrecioVenta: 0m,
-            ValorCosto:  valorCosto,
-            ValorVenta:  valorVenta);
+            ValorCosto:  valorCosto);
 
     // ── Tests ─────────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task ObtenerValorizacionAsync_CalculaValorCostoYValorVenta_Correcto()
+    public async Task ObtenerValorizacionAsync_CalculaValorCosto_Correcto()
     {
         var (svc, repo, _, _) = Crear();
-        var items = new[] { Item(1, valorCosto: 150m, valorVenta: 200m) };
+        var items = new[] { Item(1, valorCosto: 150m) };
         repo.Setup(r => r.ObtenerValorizacionAsync())
             .ReturnsAsync(items);
 
@@ -64,7 +61,6 @@ public class ReporteStockServiceValorizacionTests
 
         var item = Assert.Single(resultado.Items);
         Assert.Equal(150m, item.ValorCosto);
-        Assert.Equal(200m, item.ValorVenta);
     }
 
     [Fact]
@@ -73,9 +69,9 @@ public class ReporteStockServiceValorizacionTests
         var (svc, repo, _, _) = Crear();
         var items = new[]
         {
-            Item(1, valorCosto: 100m, valorVenta: 150m),
-            Item(2, valorCosto: 200m, valorVenta: 350m),
-            Item(3, valorCosto:  50m, valorVenta:  75m),
+            Item(1, valorCosto: 100m),
+            Item(2, valorCosto: 200m),
+            Item(3, valorCosto:  50m),
         };
         repo.Setup(r => r.ObtenerValorizacionAsync())
             .ReturnsAsync(items);
@@ -83,7 +79,6 @@ public class ReporteStockServiceValorizacionTests
         var resultado = await svc.ObtenerValorizacionAsync();
 
         Assert.Equal(350m, resultado.Totales.TotalValorCosto); // 100 + 200 + 50
-        Assert.Equal(575m, resultado.Totales.TotalValorVenta); // 150 + 350 + 75
     }
 
     [Fact]

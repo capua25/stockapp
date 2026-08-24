@@ -146,7 +146,6 @@ public class IngresoPorFacturaService : IIngresoPorFacturaService
                     CategoriaId    = nuevo.CategoriaId,
                     UnidadMedidaId = nuevo.UnidadMedidaId,
                     PrecioCosto    = renglon.PrecioUnitario,
-                    PrecioVenta    = nuevo.PrecioVenta,
                     StockActual    = renglon.Cantidad,
                     Activo         = true,
                     FechaAlta      = DateTime.UtcNow,

@@ -34,7 +34,7 @@ public class ProductoServiceInvalidacionTests
 
         var svc = new ProductoService(repo.Object, session.Object, auth.Object, audit.Object, umRepo.Object, version.Object);
 
-        var p = new Producto { Codigo = "SKU-001", Nombre = "Fideos", UnidadMedidaId = 1, PrecioVenta = 150m };
+        var p = new Producto { Codigo = "SKU-001", Nombre = "Fideos", UnidadMedidaId = 1, PrecioCosto = 150m };
         await svc.AltaAsync(p);
 
         version.Verify(v => v.Invalidar(), Times.Once);

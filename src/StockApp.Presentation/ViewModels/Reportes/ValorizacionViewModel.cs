@@ -27,9 +27,7 @@ public partial class ValorizacionViewModel : ViewModelBase
         "Categoria",
         "StockActual",
         "PrecioCosto",
-        "PrecioVenta",
         "ValorCosto",
-        "ValorVenta",
     };
 
     private readonly IReporteStockService _servicio;

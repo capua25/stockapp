@@ -59,9 +59,6 @@
                         <DataGridTextColumn Header="Valor Costo"
                                              Binding="{Binding ValorCosto, Converter={x:Static conv:MonedaConverter.Instance}}"
                                              Width="Auto" MinWidth="100" CellStyleClasses="num" />
-                        <DataGridTextColumn Header="Valor Venta"
-                                             Binding="{Binding ValorVenta, Converter={x:Static conv:MonedaConverter.Instance}}"
-                                             Width="Auto" MinWidth="100" CellStyleClasses="num" />
                     </DataGrid.Columns>
                 </DataGrid>
 

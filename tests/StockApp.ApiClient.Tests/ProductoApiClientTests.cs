@@ -14,7 +14,7 @@ public class ProductoApiClientTests
         id = 1, codigo = "SKU-001", codigoBarras = "7791234567890", nombre = "Agua 2L",
         descripcion = (string?)null, categoriaId = 2, categoriaNombre = "Bebidas",
         proveedorId = (int?)null, unidadMedidaId = 1, unidadMedidaNombre = "Unidad",
-        precioCosto = 25.5, precioVenta = 40.0, stockActual = 12.0, stockMinimo = 3.0,
+        precioCosto = 25.5, stockActual = 12.0, stockMinimo = 3.0,
         activo = true, fechaAlta = "2026-07-01T10:00:00Z",
     };
 
@@ -76,7 +76,7 @@ public class ProductoApiClientTests
         var id = await client.AltaAsync(new Producto
         {
             Codigo = "SKU-002", Nombre = "Yerba 1kg", UnidadMedidaId = 1,
-            CategoriaId = 2, PrecioCosto = 100m, PrecioVenta = 150m, StockMinimo = 5m,
+            CategoriaId = 2, PrecioCosto = 100m, StockMinimo = 5m,
             StockActual = 99m, // el stock NO viaja en el alta: lo gobiernan los movimientos
         });
 
@@ -123,12 +123,11 @@ public class ProductoApiClientTests
         var fake = new FakeHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
         var client = new ProductoApiClient(TestHttp.CrearCliente(fake));
 
-        await client.CambiarPrecioAsync(11, 110m, 165m);
+        await client.CambiarPrecioAsync(11, 110m);
 
         Assert.Equal(HttpMethod.Put, fake.UltimaRequest!.Method);
         Assert.Equal("/productos/11/precio", fake.UltimaRequest.RequestUri!.AbsolutePath);
         Assert.Contains("\"precioCosto\":110", fake.UltimoBody);
-        Assert.Contains("\"precioVenta\":165", fake.UltimoBody);
     }
 
     [Fact]

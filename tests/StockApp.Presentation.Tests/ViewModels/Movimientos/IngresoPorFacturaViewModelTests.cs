@@ -26,7 +26,7 @@ public class IngresoPorFacturaViewModelTests
         var productos = new Mock<IProductoService>();
         productos.Setup(p => p.BuscarAsync(null, null, null)).ReturnsAsync(new List<ProductoDto>
         {
-            new(1, "SKU1", null, "Producto Uno", null, null, null, null, 1, "Unidad", 10m, 20m, 5m, 0m, true, DateTime.UtcNow),
+            new(1, "SKU1", null, "Producto Uno", null, null, null, null, 1, "Unidad", 10m, 5m, 0m, true, DateTime.UtcNow),
         });
         var categorias = new Mock<ICategoriaService>();
         categorias.Setup(c => c.ListarActivasAsync()).ReturnsAsync(new List<Categoria>());
@@ -400,7 +400,6 @@ public class IngresoPorFacturaViewModelTests
         vm.NuevoProductoCodigo = "SKU-INLINE";
         vm.NuevoProductoNombre = "Producto cargado en línea";
         vm.NuevaUnidadSeleccionada = vm.UnidadesMedidaDisponibles[0];
-        vm.NuevoProductoPrecioVenta = 40m;
         vm.ConfirmarAltaProductoCommand.Execute(null);
 
         Assert.True(vm.EsProductoNuevoEnCarga);
@@ -507,7 +506,7 @@ public class IngresoPorFacturaViewModelTests
         var notificados = new List<string?>();
         fila.PropertyChanged += (_, e) => notificados.Add(e.PropertyName);
 
-        fila.Producto = new ProductoDto(1, "SKU1", null, "Producto Uno", null, null, null, null, 1, "Unidad", 10m, 20m, 5m, 0m, true, DateTime.UtcNow);
+        fila.Producto = new ProductoDto(1, "SKU1", null, "Producto Uno", null, null, null, null, 1, "Unidad", 10m, 5m, 0m, true, DateTime.UtcNow);
 
         Assert.Contains(nameof(FilaRenglonFacturaVm.NombreMostrado), notificados);
     }

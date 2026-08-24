@@ -20,7 +20,6 @@ public record ProductoDto(
     int UnidadMedidaId,
     string UnidadMedidaNombre,
     decimal PrecioCosto,
-    decimal PrecioVenta,
     decimal StockActual,
     decimal StockMinimo,
     bool Activo,

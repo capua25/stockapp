@@ -39,7 +39,7 @@ public class MovimientoStockRepositoryIngresoTests : PostgresRepositoryTestBase
     private static Producto NuevoProducto(string codigo, UnidadMedida um, decimal stock = 10m, decimal precioCosto = 5m) => new()
     {
         Codigo = codigo, Nombre = $"Producto {codigo}", UnidadMedida = um,
-        PrecioCosto = precioCosto, PrecioVenta = precioCosto * 2, StockActual = stock,
+        PrecioCosto = precioCosto, StockActual = stock,
         Activo = true, FechaAlta = DateTime.UtcNow,
     };
 
@@ -177,7 +177,7 @@ public class MovimientoStockRepositoryIngresoTests : PostgresRepositoryTestBase
         var productoNuevo = new Producto
         {
             Codigo = "NUEVO-1", Nombre = "Producto recién creado", UnidadMedidaId = um.Id,
-            PrecioCosto = 45m, PrecioVenta = 90m, StockActual = 0m, Activo = true, FechaAlta = DateTime.UtcNow,
+            PrecioCosto = 45m, StockActual = 0m, Activo = true, FechaAlta = DateTime.UtcNow,
         };
 
         var gasto = NuevoGasto(proveedor, fuente, rubro, factura: "NUEVO-FAC-1");
@@ -211,7 +211,7 @@ public class MovimientoStockRepositoryIngresoTests : PostgresRepositoryTestBase
         var productoNuevo = new Producto
         {
             Codigo = "DUP-PROD", Nombre = "Choca contra el existente", UnidadMedidaId = um.Id,
-            PrecioCosto = 10m, PrecioVenta = 20m, StockActual = 0m, Activo = true, FechaAlta = DateTime.UtcNow,
+            PrecioCosto = 10m, StockActual = 0m, Activo = true, FechaAlta = DateTime.UtcNow,
         };
         var gasto = NuevoGasto(proveedor, fuente, rubro, factura: "DUP-PROD-FAC");
         var args = new IngresoPorFacturaArgs(

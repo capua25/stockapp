@@ -36,9 +36,6 @@ public partial class ProductoFormViewModel : ViewModelBase
     [ObservableProperty]
     private decimal _precioCosto;
 
-    [ObservableProperty]
-    private decimal _precioVenta;
-
     /// <summary>
     /// Unidades de medida activas disponibles para elegir. Se carga en <see cref="InicializarAsync"/>,
     /// junto con la garantía idempotente de que exista la unidad "Unidad" por defecto.
@@ -119,7 +116,6 @@ public partial class ProductoFormViewModel : ViewModelBase
         CodigoBarras = producto.CodigoBarras;
         Descripcion  = producto.Descripcion;
         PrecioCosto  = producto.PrecioCosto;
-        PrecioVenta  = producto.PrecioVenta;
 
         _unidadMedidaIdOriginal = producto.UnidadMedidaId;
         _categoriaIdOriginal    = producto.CategoriaId;
@@ -193,7 +189,6 @@ public partial class ProductoFormViewModel : ViewModelBase
                     CodigoBarras   = CodigoBarras,
                     Descripcion    = Descripcion,
                     PrecioCosto    = PrecioCosto,
-                    PrecioVenta    = PrecioVenta,
                     UnidadMedidaId = UnidadMedidaSeleccionada!.Id,
                     CategoriaId    = CategoriaSeleccionada?.Id,
                     ProveedorId    = _proveedorIdOriginal,
@@ -210,7 +205,6 @@ public partial class ProductoFormViewModel : ViewModelBase
                     CodigoBarras   = CodigoBarras,
                     Descripcion    = Descripcion,
                     PrecioCosto    = PrecioCosto,
-                    PrecioVenta    = PrecioVenta,
                     UnidadMedidaId = UnidadMedidaSeleccionada!.Id,
                     CategoriaId    = CategoriaSeleccionada?.Id,
                 };

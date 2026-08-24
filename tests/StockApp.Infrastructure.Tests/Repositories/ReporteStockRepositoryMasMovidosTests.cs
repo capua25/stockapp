@@ -39,7 +39,6 @@ public class ReporteStockRepositoryMasMovidosTests : PostgresRepositoryTestBase
         Nombre      = nombre,
         UnidadMedida = um,
         PrecioCosto = 10m,
-        PrecioVenta = 20m,
         StockActual = 0m,
         Activo      = true,
         FechaAlta   = DateTime.UtcNow

@@ -8,22 +8,18 @@ public record ValorizacionItemDto(
     string Categoria,
     decimal StockActual,
     decimal PrecioCosto,
-    decimal PrecioVenta,
-    decimal ValorCosto,
-    decimal ValorVenta);
+    decimal ValorCosto);
 
 /// <summary>Totales de reporte de valorización.</summary>
 public record ValorizacionTotalesDto(
-    decimal TotalValorCosto,
-    decimal TotalValorVenta);
+    decimal TotalValorCosto);
 
 /// <summary>Resumen de stock por categoría.</summary>
 public record StockCategoriaDto(
     string Categoria,
     int CantidadProductos,
     decimal StockTotal,
-    decimal ValorCosto,
-    decimal ValorVenta);
+    decimal ValorCosto);
 
 /// <summary>Producto más movido en un período.</summary>
 public record MasMovidoDto(

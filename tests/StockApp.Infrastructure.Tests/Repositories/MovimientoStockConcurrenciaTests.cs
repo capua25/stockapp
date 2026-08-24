@@ -35,7 +35,7 @@ public class MovimientoStockConcurrenciaTests : PostgresRepositoryTestBase
         var producto = new Producto
         {
             Codigo = "CONC001", Nombre = "Producto Concurrente", UnidadMedida = um,
-            PrecioCosto = 10m, PrecioVenta = 20m, StockActual = 10m, Activo = true, FechaAlta = DateTime.UtcNow
+            PrecioCosto = 10m, StockActual = 10m, Activo = true, FechaAlta = DateTime.UtcNow
         };
         Context.Productos.Add(producto);
         await Context.SaveChangesAsync();

@@ -77,15 +77,6 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Venta" Width="Auto" MinWidth="100" SortMemberPath="PrecioVenta">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate x:DataType="dto:ProductoDto">
-                                    <TextBlock Text="{Binding PrecioVenta, Converter={x:Static conv:MonedaConverter.Instance}}"
-                                               Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
-                                               HorizontalAlignment="Right" VerticalAlignment="Center" Margin="4,0" />
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
                         <DataGridTemplateColumn Header="Stock" Width="Auto" MinWidth="100" SortMemberPath="StockActual">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:ProductoDto">

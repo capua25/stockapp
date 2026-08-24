@@ -23,9 +23,7 @@ public class ValorizacionViewModelTests
             Categoria: "Almacén",
             StockActual: 10m,
             PrecioCosto: 5m,
-            PrecioVenta: 8m,
-            ValorCosto: 50m,
-            ValorVenta: 80m);
+            ValorCosto: 50m);
 
     private static (
         ValorizacionViewModel vm,
@@ -47,7 +45,7 @@ public class ValorizacionViewModelTests
             .Setup(s => s.ObtenerValorizacionAsync())
             .ReturnsAsync(new ValorizacionReporteDto(
                 items ?? new List<ValorizacionItemDto>(),
-                totales ?? new ValorizacionTotalesDto(0m, 0m)));
+                totales ?? new ValorizacionTotalesDto(0m)));
 
         var vm = new ValorizacionViewModel(
             servicioMock.Object, exporterMock.Object, guardadoMock.Object, confirmMock.Object);
@@ -75,7 +73,7 @@ public class ValorizacionViewModelTests
     public async Task BuscarCommand_LlamaObtenerValorizacionAsync_YPopulaItems()
     {
         var items = new List<ValorizacionItemDto> { CrearItem(1), CrearItem(2) };
-        var totales = new ValorizacionTotalesDto(TotalValorCosto: 100m, TotalValorVenta: 160m);
+        var totales = new ValorizacionTotalesDto(TotalValorCosto: 100m);
         var (vm, servicioMock, _, _, _) = Crear(items, totales);
 
         await vm.BuscarCommand.ExecuteAsync(null);
@@ -85,14 +83,13 @@ public class ValorizacionViewModelTests
         Assert.Same(items, vm.Items);
         Assert.NotNull(vm.Totales);
         Assert.Equal(100m, vm.Totales!.TotalValorCosto);
-        Assert.Equal(160m, vm.Totales.TotalValorVenta);
     }
 
     [Fact]
     public async Task CargarAsync_LlamaObtenerValorizacion_YPopulaItemsYTotales()
     {
         var items = new List<ValorizacionItemDto> { CrearItem(1), CrearItem(2) };
-        var totales = new ValorizacionTotalesDto(TotalValorCosto: 100m, TotalValorVenta: 160m);
+        var totales = new ValorizacionTotalesDto(TotalValorCosto: 100m);
         var (vm, servicioMock, _, _, _) = Crear(items, totales);
 
         await vm.CargarAsync();
@@ -102,7 +99,6 @@ public class ValorizacionViewModelTests
         Assert.Same(items, vm.Items);
         Assert.NotNull(vm.Totales);
         Assert.Equal(100m, vm.Totales!.TotalValorCosto);
-        Assert.Equal(160m, vm.Totales.TotalValorVenta);
     }
 
     [Fact]
@@ -114,7 +110,7 @@ public class ValorizacionViewModelTests
         var esperado = new[]
         {
             "ProductoId", "Codigo", "Nombre", "Categoria",
-            "StockActual", "PrecioCosto", "PrecioVenta", "ValorCosto", "ValorVenta"
+            "StockActual", "PrecioCosto", "ValorCosto"
         };
 
         const string csvResultante = "csv-generado";

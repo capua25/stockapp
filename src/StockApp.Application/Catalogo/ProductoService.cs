@@ -52,8 +52,6 @@ public class ProductoService : IProductoService
             throw new ArgumentException($"La unidad de medida {producto.UnidadMedidaId} no existe.");
         if (producto.PrecioCosto < 0)
             throw new ArgumentException("El precio de costo no puede ser negativo.");
-        if (producto.PrecioVenta < 0)
-            throw new ArgumentException("El precio de venta no puede ser negativo.");
 
         if (await _repo.ExisteCodigoAsync(producto.Codigo, null))
             throw new ReglaDeNegocioException($"Ya existe un producto con el código '{producto.Codigo}'.");
@@ -97,8 +95,6 @@ public class ProductoService : IProductoService
 
         if (producto.PrecioCosto < 0)
             throw new ArgumentException("El precio de costo no puede ser negativo.");
-        if (producto.PrecioVenta < 0)
-            throw new ArgumentException("El precio de venta no puede ser negativo.");
 
         // Construir diff granular
         var cambiosPrecio   = new List<string>();
@@ -106,8 +102,6 @@ public class ProductoService : IProductoService
 
         if (original.PrecioCosto != producto.PrecioCosto)
             cambiosPrecio.Add($"PrecioCosto: {original.PrecioCosto} → {producto.PrecioCosto}");
-        if (original.PrecioVenta != producto.PrecioVenta)
-            cambiosPrecio.Add($"PrecioVenta: {original.PrecioVenta} → {producto.PrecioVenta}");
 
         if (original.Nombre != producto.Nombre)
             cambiosGenerales.Add($"Nombre: {original.Nombre} → {producto.Nombre}");
@@ -133,7 +127,6 @@ public class ProductoService : IProductoService
         original.Descripcion   = producto.Descripcion;
         original.CodigoBarras  = producto.CodigoBarras;
         original.PrecioCosto   = producto.PrecioCosto;
-        original.PrecioVenta   = producto.PrecioVenta;
         original.CategoriaId   = producto.CategoriaId;
         original.ProveedorId   = producto.ProveedorId;
         original.UnidadMedidaId = producto.UnidadMedidaId;
@@ -181,22 +174,19 @@ public class ProductoService : IProductoService
             $"Baja lógica de '{producto.Codigo}' — {producto.Nombre}");
     }
 
-    public async Task CambiarPrecioAsync(int id, decimal precioCosto, decimal precioVenta)
+    public async Task CambiarPrecioAsync(int id, decimal precioCosto)
     {
         _auth.Verificar(_session, Permisos.GestionarProductos);
 
         if (precioCosto < 0)
             throw new ArgumentException("El precio de costo no puede ser negativo.");
-        if (precioVenta < 0)
-            throw new ArgumentException("El precio de venta no puede ser negativo.");
 
         var producto = await _repo.ObtenerPorIdAsync(id)
             ?? throw new EntidadNoEncontradaException($"Producto {id} no encontrado.");
 
-        var detalle = $"PrecioCosto: {producto.PrecioCosto} → {precioCosto}; PrecioVenta: {producto.PrecioVenta} → {precioVenta}";
+        var detalle = $"PrecioCosto: {producto.PrecioCosto} → {precioCosto}";
 
         producto.PrecioCosto = precioCosto;
-        producto.PrecioVenta = precioVenta;
         await _repo.ActualizarAsync(producto);
 
         _version.Invalidar();
@@ -240,7 +230,6 @@ public class ProductoService : IProductoService
         UnidadMedidaId:     p.UnidadMedidaId,
         UnidadMedidaNombre: p.UnidadMedida?.Nombre ?? string.Empty,
         PrecioCosto:        p.PrecioCosto,
-        PrecioVenta:        p.PrecioVenta,
         StockActual:        p.StockActual,
         StockMinimo:        p.StockMinimo,
         Activo:             p.Activo,

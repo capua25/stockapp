@@ -25,7 +25,6 @@ public partial class StockCategoriaViewModel : ViewModelBase
         "CantidadProductos",
         "StockTotal",
         "ValorCosto",
-        "ValorVenta",
     };
 
     private readonly IReporteStockService _servicio;

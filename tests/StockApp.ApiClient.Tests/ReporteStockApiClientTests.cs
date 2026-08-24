@@ -16,11 +16,11 @@ public class ReporteStockApiClientTests
                 new
                 {
                     productoId = 1, codigo = "SKU-001", nombre = "Agua 2L", categoria = "Bebidas",
-                    stockActual = 12.0, precioCosto = 25.5, precioVenta = 40.0,
-                    valorCosto = 306.0, valorVenta = 480.0,
+                    stockActual = 12.0, precioCosto = 25.5,
+                    valorCosto = 306.0,
                 },
             },
-            totales = new { totalValorCosto = 306.0, totalValorVenta = 480.0 },
+            totales = new { totalValorCosto = 306.0 },
         }));
         var client = new ReporteStockApiClient(TestHttp.CrearCliente(fake));
 
@@ -30,7 +30,7 @@ public class ReporteStockApiClientTests
         var item = Assert.Single(reporte.Items);
         Assert.Equal("SKU-001", item.Codigo);
         Assert.Equal(306m, item.ValorCosto);
-        Assert.Equal(480m, reporte.Totales.TotalValorVenta);
+        Assert.Equal(306m, reporte.Totales.TotalValorCosto);
     }
 
     [Fact]
@@ -41,7 +41,7 @@ public class ReporteStockApiClientTests
             new
             {
                 categoria = "Bebidas", cantidadProductos = 3, stockTotal = 50.0,
-                valorCosto = 1000.0, valorVenta = 1500.0,
+                valorCosto = 1000.0,
             },
         }));
         var client = new ReporteStockApiClient(TestHttp.CrearCliente(fake));

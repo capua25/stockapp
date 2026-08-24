@@ -36,8 +36,7 @@ public class ReporteStockService : IReporteStockService
         var items = await _repo.ObtenerValorizacionAsync();
 
         var totales = new ValorizacionTotalesDto(
-            TotalValorCosto: items.Sum(i => i.ValorCosto),
-            TotalValorVenta: items.Sum(i => i.ValorVenta));
+            TotalValorCosto: items.Sum(i => i.ValorCosto));
 
         return new ValorizacionReporteDto(items, totales);
     }

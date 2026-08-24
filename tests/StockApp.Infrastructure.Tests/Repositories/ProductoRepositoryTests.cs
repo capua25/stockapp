@@ -30,7 +30,6 @@ public class ProductoRepositoryTests : PostgresRepositoryTestBase
             CodigoBarras = codigoBarras,
             UnidadMedida = um,
             PrecioCosto  = 10m,
-            PrecioVenta  = 20m,
             Activo       = activo,
             FechaAlta    = DateTime.UtcNow
         };

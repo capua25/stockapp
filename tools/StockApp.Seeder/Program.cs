@@ -264,33 +264,32 @@ public static class Program
         string? ProveedorNombre,
         string UnidadNombre,
         decimal PrecioCosto,
-        decimal PrecioVenta,
         decimal StockMinimo,
         decimal StockFinal,
         int DiasAltaAtras);
 
     private static readonly ProductoSeed[] ProductosData =
     [
-        new("COD-0001", "7791234560017", "Coca-Cola 1.5L", "Gaseosa cola línea familiar", "Bebidas", "Distribuidora Norte S.A.", "Unidad", 800m, 1400m, 10m, 45m, 85),
-        new("COD-0002", null, "Agua Mineral Villa del Sur 2L", "Agua sin gas", "Bebidas", "Distribuidora Norte S.A.", "Unidad", 350m, 650m, 15m, 8m, 60),
-        new("COD-0003", "7791234560031", "Cerveza Quilmes 1L", "Retornable", "Bebidas", null, "Unidad", 500m, 900m, 12m, 30m, 40),
-        new("COD-0004", null, "Arroz Gallo Oro 1kg", "Arroz largo fino", "Almacén", "Almacén Mayorista del Sur", "Kilogramo", 900m, 1500m, 20m, 60m, 100),
-        new("COD-0005", "7791234560055", "Fideos Matarazzo 500g", "Fideos tipo tallarín", "Almacén", "Almacén Mayorista del Sur", "Paquete", 400m, 750m, 25m, 5m, 70),
-        new("COD-0006", null, "Aceite Natura 900ml", "Aceite de girasol", "Almacén", null, "Litro", 1200m, 2100m, 10m, 22m, 55),
-        new("COD-0007", "7791234560079", "Detergente Magistral 750ml", "Lavavajilla", "Limpieza", "Proveedor Express S.R.L.", "Litro", 600m, 1100m, 8m, 18m, 30),
-        new("COD-0008", null, "Lavandina Ayudín 1L", "Lavandina concentrada", "Limpieza", "Proveedor Express S.R.L.", "Litro", 300m, 580m, 15m, 40m, 90),
-        new("COD-0009", null, "Jabón en Polvo Skip 3kg", "Jabón en polvo para ropa", "Limpieza", null, "Kilogramo", 2500m, 4200m, 6m, 3m, 65),
-        new("COD-0010", "7791234560103", "Leche Entera La Serenísima 1L", "Leche entera fresca", "Lácteos", "Lácteos del Valle", "Litro", 450m, 780m, 20m, 50m, 20),
-        new("COD-0011", null, "Yogur Ser Frutilla 190g", "Yogur bebible", "Lácteos", "Lácteos del Valle", "Unidad", 200m, 380m, 30m, 12m, 15),
-        new("COD-0012", "7791234560127", "Queso Cremoso La Paulina 1kg", "Queso cremoso a granel", "Lácteos", "Lácteos del Valle", "Kilogramo", 3800m, 6200m, 5m, 14m, 45),
-        new("COD-0013", null, "Pan Lactal Bimbo 500g", "Pan de molde", "Panadería", null, "Paquete", 700m, 1250m, 15m, 25m, 10),
-        new("COD-0014", "7791234560141", "Facturas Surtidas x6", "Docena de facturas variadas", "Panadería", "Insumos del Litoral", "Caja", 1500m, 2800m, 8m, 6m, 5),
-        new("COD-0015", null, "Galletitas Oreo 118g", "Galletitas rellenas de chocolate", "Panadería", "Insumos del Litoral", "Paquete", 550m, 980m, 20m, 35m, 50),
-        new("COD-0016", "7791234560165", "Hamburguesas Paty x4", "Hamburguesas congeladas de carne", "Congelados", "Insumos del Litoral", "Caja", 1800m, 3100m, 10m, 28m, 35),
-        new("COD-0017", null, "Papas Fritas McCain 1kg", "Papas prefritas congeladas", "Congelados", null, "Kilogramo", 1600m, 2900m, 12m, 4m, 25),
-        new("COD-0018", "7791234560189", "Pilas AA Duracell x4", "Pilas alcalinas", null, "Proveedor Express S.R.L.", "Paquete", 900m, 1600m, 10m, 20m, 60),
-        new("COD-0019", null, "Bolsas de Residuo 50u", "Bolsas negras reforzadas", null, null, "Paquete", 500m, 950m, 15m, 45m, 75),
-        new("COD-0020", "7791234560202", "Cinta Adhesiva Ancha", "Cinta de embalar", null, "Insumos del Litoral", "Unidad", 250m, 500m, 20m, 9m, 95),
+        new("COD-0001", "7791234560017", "Coca-Cola 1.5L", "Gaseosa cola línea familiar", "Bebidas", "Distribuidora Norte S.A.", "Unidad", 800m, 10m, 45m, 85),
+        new("COD-0002", null, "Agua Mineral Villa del Sur 2L", "Agua sin gas", "Bebidas", "Distribuidora Norte S.A.", "Unidad", 350m, 15m, 8m, 60),
+        new("COD-0003", "7791234560031", "Cerveza Quilmes 1L", "Retornable", "Bebidas", null, "Unidad", 500m, 12m, 30m, 40),
+        new("COD-0004", null, "Arroz Gallo Oro 1kg", "Arroz largo fino", "Almacén", "Almacén Mayorista del Sur", "Kilogramo", 900m, 20m, 60m, 100),
+        new("COD-0005", "7791234560055", "Fideos Matarazzo 500g", "Fideos tipo tallarín", "Almacén", "Almacén Mayorista del Sur", "Paquete", 400m, 25m, 5m, 70),
+        new("COD-0006", null, "Aceite Natura 900ml", "Aceite de girasol", "Almacén", null, "Litro", 1200m, 10m, 22m, 55),
+        new("COD-0007", "7791234560079", "Detergente Magistral 750ml", "Lavavajilla", "Limpieza", "Proveedor Express S.R.L.", "Litro", 600m, 8m, 18m, 30),
+        new("COD-0008", null, "Lavandina Ayudín 1L", "Lavandina concentrada", "Limpieza", "Proveedor Express S.R.L.", "Litro", 300m, 15m, 40m, 90),
+        new("COD-0009", null, "Jabón en Polvo Skip 3kg", "Jabón en polvo para ropa", "Limpieza", null, "Kilogramo", 2500m, 6m, 3m, 65),
+        new("COD-0010", "7791234560103", "Leche Entera La Serenísima 1L", "Leche entera fresca", "Lácteos", "Lácteos del Valle", "Litro", 450m, 20m, 50m, 20),
+        new("COD-0011", null, "Yogur Ser Frutilla 190g", "Yogur bebible", "Lácteos", "Lácteos del Valle", "Unidad", 200m, 30m, 12m, 15),
+        new("COD-0012", "7791234560127", "Queso Cremoso La Paulina 1kg", "Queso cremoso a granel", "Lácteos", "Lácteos del Valle", "Kilogramo", 3800m, 5m, 14m, 45),
+        new("COD-0013", null, "Pan Lactal Bimbo 500g", "Pan de molde", "Panadería", null, "Paquete", 700m, 15m, 25m, 10),
+        new("COD-0014", "7791234560141", "Facturas Surtidas x6", "Docena de facturas variadas", "Panadería", "Insumos del Litoral", "Caja", 1500m, 8m, 6m, 5),
+        new("COD-0015", null, "Galletitas Oreo 118g", "Galletitas rellenas de chocolate", "Panadería", "Insumos del Litoral", "Paquete", 550m, 20m, 35m, 50),
+        new("COD-0016", "7791234560165", "Hamburguesas Paty x4", "Hamburguesas congeladas de carne", "Congelados", "Insumos del Litoral", "Caja", 1800m, 10m, 28m, 35),
+        new("COD-0017", null, "Papas Fritas McCain 1kg", "Papas prefritas congeladas", "Congelados", null, "Kilogramo", 1600m, 12m, 4m, 25),
+        new("COD-0018", "7791234560189", "Pilas AA Duracell x4", "Pilas alcalinas", null, "Proveedor Express S.R.L.", "Paquete", 900m, 10m, 20m, 60),
+        new("COD-0019", null, "Bolsas de Residuo 50u", "Bolsas negras reforzadas", null, null, "Paquete", 500m, 15m, 45m, 75),
+        new("COD-0020", "7791234560202", "Cinta Adhesiva Ancha", "Cinta de embalar", null, "Insumos del Litoral", "Unidad", 250m, 20m, 9m, 95),
     ];
 
     private static async Task<List<Producto>> SembrarProductosAsync(
@@ -318,7 +317,6 @@ public static class Program
                 Proveedor = seed.ProveedorNombre is null ? null : proveedores[seed.ProveedorNombre],
                 UnidadMedida = unidades[seed.UnidadNombre],
                 PrecioCosto = seed.PrecioCosto,
-                PrecioVenta = seed.PrecioVenta,
                 StockMinimo = seed.StockMinimo,
                 StockActual = seed.StockFinal,
                 Activo = true,
@@ -399,9 +397,10 @@ public static class Program
             var usuarioAsignado = productIndex % 2 == 0 ? admin : operador;
             foreach (var mov in plan)
             {
-                var precioUnitario = mov.Tipo == TipoMovimiento.Entrada
-                    ? producto.PrecioCosto
-                    : mov.Motivo == MotivoMovimiento.Venta ? producto.PrecioVenta : producto.PrecioCosto;
+                // PrecioVenta se eliminó del dominio (el cliente no vende); todo movimiento,
+                // incluido MotivoMovimiento.Venta (fuera de alcance, no se toca el enum), usa
+                // PrecioCosto como precio unitario.
+                var precioUnitario = producto.PrecioCosto;
 
                 ctx.MovimientosStock.Add(new MovimientoStock
                 {

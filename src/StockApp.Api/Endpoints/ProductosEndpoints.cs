@@ -8,14 +8,14 @@ namespace StockApp.Api.Endpoints;
 public record CrearProductoRequest(
     string Codigo, string? CodigoBarras, string Nombre, string? Descripcion,
     int? CategoriaId, int? ProveedorId, int UnidadMedidaId,
-    decimal PrecioCosto, decimal PrecioVenta, decimal StockMinimo);
+    decimal PrecioCosto, decimal StockMinimo);
 
 public record ModificarProductoRequest(
     string Codigo, string? CodigoBarras, string Nombre, string? Descripcion,
     int? CategoriaId, int? ProveedorId, int UnidadMedidaId,
-    decimal PrecioCosto, decimal PrecioVenta, decimal StockMinimo);
+    decimal PrecioCosto, decimal StockMinimo);
 
-public record CambiarPrecioRequest(decimal PrecioCosto, decimal PrecioVenta);
+public record CambiarPrecioRequest(decimal PrecioCosto);
 
 public static class ProductosEndpoints
 {
@@ -45,7 +45,6 @@ public static class ProductosEndpoints
                 ProveedorId = request.ProveedorId,
                 UnidadMedidaId = request.UnidadMedidaId,
                 PrecioCosto = request.PrecioCosto,
-                PrecioVenta = request.PrecioVenta,
                 StockMinimo = request.StockMinimo,
             };
 
@@ -69,7 +68,6 @@ public static class ProductosEndpoints
                 ProveedorId = request.ProveedorId,
                 UnidadMedidaId = request.UnidadMedidaId,
                 PrecioCosto = request.PrecioCosto,
-                PrecioVenta = request.PrecioVenta,
                 StockMinimo = request.StockMinimo,
             };
 
@@ -87,7 +85,7 @@ public static class ProductosEndpoints
 
         group.MapPut("/{id:int}/precio", async (int id, CambiarPrecioRequest request, IProductoService productos) =>
         {
-            await productos.CambiarPrecioAsync(id, request.PrecioCosto, request.PrecioVenta);
+            await productos.CambiarPrecioAsync(id, request.PrecioCosto);
             return Results.Ok();
         })
         .RequireAuthorization(Permisos.GestionarProductos);

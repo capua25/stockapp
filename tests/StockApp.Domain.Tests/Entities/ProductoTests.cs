@@ -14,7 +14,6 @@ public class ProductoTests
             Nombre = "Tornillo 6x1",
             UnidadMedidaId = 1,
             PrecioCosto = 10.50m,
-            PrecioVenta = 15.00m,
             FechaAlta = DateTime.UtcNow
         };
 
@@ -32,7 +31,6 @@ public class ProductoTests
             Nombre = "Pintura blanca 1L",
             UnidadMedidaId = 2,
             PrecioCosto = 500m,
-            PrecioVenta = 750m,
             FechaAlta = DateTime.UtcNow
         };
 

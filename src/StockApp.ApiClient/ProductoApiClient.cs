@@ -8,8 +8,8 @@ namespace StockApp.ApiClient;
 internal sealed record ProductoBody(
     string Codigo, string? CodigoBarras, string Nombre, string? Descripcion,
     int? CategoriaId, int? ProveedorId, int UnidadMedidaId,
-    decimal PrecioCosto, decimal PrecioVenta, decimal StockMinimo);
-internal sealed record CambiarPrecioBody(decimal PrecioCosto, decimal PrecioVenta);
+    decimal PrecioCosto, decimal StockMinimo);
+internal sealed record CambiarPrecioBody(decimal PrecioCosto);
 
 /// <summary>
 /// IProductoService contra /productos. Las búsquedas devuelven ProductoDto (el mismo DTO
@@ -46,10 +46,10 @@ public sealed class ProductoApiClient : IProductoService
         await ApiErrores.AsegurarExitoAsync(response);
     }
 
-    public async Task CambiarPrecioAsync(int id, decimal precioCosto, decimal precioVenta)
+    public async Task CambiarPrecioAsync(int id, decimal precioCosto)
     {
         var response = await ApiErrores.EnviarAsync(() =>
-            _http.PutAsJsonAsync($"productos/{id}/precio", new CambiarPrecioBody(precioCosto, precioVenta)));
+            _http.PutAsJsonAsync($"productos/{id}/precio", new CambiarPrecioBody(precioCosto)));
         await ApiErrores.AsegurarExitoAsync(response);
     }
 
@@ -70,5 +70,5 @@ public sealed class ProductoApiClient : IProductoService
     private static ProductoBody ABody(Producto p) => new(
         p.Codigo, p.CodigoBarras, p.Nombre, p.Descripcion,
         p.CategoriaId, p.ProveedorId, p.UnidadMedidaId,
-        p.PrecioCosto, p.PrecioVenta, p.StockMinimo);
+        p.PrecioCosto, p.StockMinimo);
 }

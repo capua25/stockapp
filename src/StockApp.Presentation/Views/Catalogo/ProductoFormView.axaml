@@ -42,15 +42,9 @@
                              Height="60" />
                 </c:CampoFormulario>
 
-                <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto">
-                    <TextBlock Grid.Column="0" Text="Precio costo" Margin="0,0,8,4" />
-                    <TextBlock Grid.Column="1" Text="Precio venta" Margin="0,0,0,4" />
-                    <TextBox Grid.Row="1" Grid.Column="0"
-                             Text="{Binding PrecioCosto}"
-                             Margin="0,0,8,0" />
-                    <TextBox Grid.Row="1" Grid.Column="1"
-                             Text="{Binding PrecioVenta}" />
-                </Grid>
+                <c:CampoFormulario Etiqueta="Precio costo">
+                    <TextBox Text="{Binding PrecioCosto}" />
+                </c:CampoFormulario>
 
                 <c:CampoFormulario Etiqueta="Unidad de medida">
                     <ComboBox ItemsSource="{Binding UnidadesMedida}"

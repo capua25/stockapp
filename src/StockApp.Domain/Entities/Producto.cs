@@ -14,7 +14,6 @@ public class Producto
     public int UnidadMedidaId { get; set; }
     public UnidadMedida? UnidadMedida { get; set; }
     public decimal PrecioCosto { get; set; }
-    public decimal PrecioVenta { get; set; }
     public decimal StockActual { get; set; }             // saldo denormalizado; ver §6 del spec
     public decimal StockMinimo { get; set; }             // previsto para alertas futuras; default 0
     public bool Activo { get; set; } = true;

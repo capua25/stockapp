@@ -50,7 +50,7 @@ public class IngresoPorFacturaViewTests
 
     private static ProductoDto Producto(int id, string nombre, decimal precioCosto = 100m) => new(
         id, $"COD{id}", null, nombre, null, null, null, null, 1, "Unidad",
-        precioCosto, precioCosto * 1.5m, 10m, 1m, true, DateTime.Today);
+        precioCosto, 10m, 1m, true, DateTime.Today);
 
     private static (Window Window, IngresoPorFacturaViewModel Vm, IngresoPorFacturaServiceFake Servicio, NavigationRecorderFake Nav) Montar(
         IReadOnlyList<Proveedor>? proveedores = null,

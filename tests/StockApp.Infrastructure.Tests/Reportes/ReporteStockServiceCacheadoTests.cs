@@ -17,7 +17,7 @@ public class ReporteStockServiceCacheadoTests
     public async Task Valorizacion_PrimeraLlamada_DelegaEnElInner()
     {
         var inner = new Mock<IReporteStockService>();
-        var dto = new ValorizacionReporteDto(new List<ValorizacionItemDto>(), new ValorizacionTotalesDto(0, 0));
+        var dto = new ValorizacionReporteDto(new List<ValorizacionItemDto>(), new ValorizacionTotalesDto(0));
         inner.Setup(s => s.ObtenerValorizacionAsync()).ReturnsAsync(dto);
         var sut = Crear(inner.Object, new VersionReportes());
 
@@ -32,7 +32,7 @@ public class ReporteStockServiceCacheadoTests
     {
         var inner = new Mock<IReporteStockService>();
         inner.Setup(s => s.ObtenerValorizacionAsync())
-            .ReturnsAsync(new ValorizacionReporteDto(new List<ValorizacionItemDto>(), new ValorizacionTotalesDto(0, 0)));
+            .ReturnsAsync(new ValorizacionReporteDto(new List<ValorizacionItemDto>(), new ValorizacionTotalesDto(0)));
         var sut = Crear(inner.Object, new VersionReportes());
 
         await sut.ObtenerValorizacionAsync();
@@ -46,7 +46,7 @@ public class ReporteStockServiceCacheadoTests
     {
         var inner = new Mock<IReporteStockService>();
         inner.Setup(s => s.ObtenerValorizacionAsync())
-            .ReturnsAsync(new ValorizacionReporteDto(new List<ValorizacionItemDto>(), new ValorizacionTotalesDto(0, 0)));
+            .ReturnsAsync(new ValorizacionReporteDto(new List<ValorizacionItemDto>(), new ValorizacionTotalesDto(0)));
         var version = new VersionReportes();
         var sut = Crear(inner.Object, version);
 
