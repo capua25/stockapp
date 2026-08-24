@@ -40,6 +40,17 @@
             <Setter Property="Opacity" Value="0.5" />
             <Setter Property="FontSize" Value="12" />
         </Style>
+        <!-- Fix "botón sin contenido visible en celda de DataGrid": Themes/DataGrid.axaml fija
+             RowHeight=36 y DataGridCell.Padding=PaddingCelda (12,8) -> 36-16=20px útiles en la
+             celda. Un Button necesita más alto que eso para su contenido (Padding propio +
+             borde); no entra y el contenido queda aplastado. Bajar el padding del botón no
+             alcanza. Esta clase saca el padding VERTICAL de la celda (deja el horizontal) para
+             que el botón tenga los 36px enteros y su propio padding se resuelva adentro. Mismo
+             fix que IngresoPorFacturaView.axaml (botón "Quitar"), acá aplicado a los botones de
+             ícono mdi-pencil de las columnas "Desbloquear fila" (Gastos e Ingresos). -->
+        <Style Selector="DataGridCell.sin-padding-vertical">
+            <Setter Property="Padding" Value="12,0" />
+        </Style>
     </UserControl.Styles>
 
     <Grid>
@@ -288,7 +299,7 @@
 
                             <DataGridTextColumn Header="Estado" Binding="{Binding Estado, DataType={x:Type vm:FilaGastoEditableVm}}" Width="Auto" IsReadOnly="True" />
 
-                            <DataGridTemplateColumn Header="" Width="40" IsReadOnly="True">
+                            <DataGridTemplateColumn Header="" Width="40" IsReadOnly="True" CellStyleClasses="sin-padding-vertical">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate x:DataType="vm:FilaGastoEditableVm">
                                         <Button Classes="ghost" Command="{Binding DesbloquearCommand}"
@@ -388,7 +399,7 @@
 
                             <DataGridTextColumn Header="Estado" Binding="{Binding Estado, DataType={x:Type vm:FilaIngresoEditableVm}}" Width="Auto" IsReadOnly="True" />
 
-                            <DataGridTemplateColumn Header="" Width="40" IsReadOnly="True">
+                            <DataGridTemplateColumn Header="" Width="40" IsReadOnly="True" CellStyleClasses="sin-padding-vertical">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate x:DataType="vm:FilaIngresoEditableVm">
                                         <Button Classes="ghost" Command="{Binding DesbloquearCommand}"
