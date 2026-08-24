@@ -89,4 +89,32 @@ public class DataGridEstiloRealTests
         Assert.True(filas.Count >= 2, "Se esperaban al menos 2 filas realizadas para comparar el fondo alternado.");
         Assert.NotEqual(filas[0].Background, filas[1].Background);
     }
+
+    /// <summary>
+    /// Pedido del usuario: achicar la letra de las FILAS (celdas de datos) de todas las grillas.
+    /// Diagnóstico previo decompilando Avalonia.Controls.DataGrid 12.0.1 (ControlTheme de
+    /// DataGridCell, método Build_55): el tema del paquete fuerza FontSize=15 en la celda, que se
+    /// hereda al TextBlock de contenido -- 1px MÁS GRANDE que el FontSize=14 default del resto de
+    /// la app, sin que eso fuera nunca una decisión de diseño de este proyecto. Se mide el
+    /// FontSize EFECTIVO de un TextBlock real ya renderizado dentro de una DataGridCell real (no
+    /// alcanza con verificar que el Setter esté escrito en el XAML -- mismo criterio que "Test de
+    /// VM no custodia gate de UI").
+    /// </summary>
+    [AvaloniaFact]
+    public void Montar_UnaGrilla_LasCeldasDeDatosUsanFontSize13()
+    {
+        var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var grilla = window.GetVisualDescendants().OfType<DataGrid>().First();
+        grilla.ItemsSource = new[] { new ItemPrueba("uno", 1) };
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
+
+        var celda = window.GetVisualDescendants().OfType<DataGridCell>().First();
+        var texto = celda.GetVisualDescendants().OfType<TextBlock>().Single();
+
+        Assert.Equal(13.0, texto.FontSize);
+    }
 }

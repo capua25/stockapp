@@ -60,6 +60,32 @@
         <Setter Property="CornerRadius" Value="{DynamicResource RadioCard}" />
         <Setter Property="GridLinesVisibility" Value="Horizontal" />
         <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource BordeBrush}" />
+
+        <!-- Resize de columnas habilitado para TODAS las grillas de la app (pedido transversal,
+             ~21 grillas). Decompilando Avalonia.Controls.DataGrid 12.0.1 el default REAL
+             registrado de CanUserResizeColumnsProperty es false (hay una constante interna
+             DATAGRID_defaultCanUserResizeColumns = true que sugiere lo contrario pero nunca se
+             usa: resto muerto del port de WPF). DataGridColumn.CanUserResize (nullable) resuelve
+             CanUserResizeInternal ?? OwningGrid?.CanUserResizeColumns ?? true: sin este Setter,
+             toda columna que no fije nada explícito hereda el false del DataGrid dueño. Antes de
+             este cambio sólo 7 de ~21 grillas declaraban CanUserResizeColumns="True" a mano en la
+             vista; ese atributo puntual queda ahora redundante (mismo valor) pero no se retira acá,
+             no es parte del pedido tocar 21 vistas para sacar un atributo inofensivo.
+             Compatible con columnas Width="*" (star) y Width="Auto": el motor de resize de
+             Avalonia.Controls.DataGrid ya soporta arrastrar el separador de una columna star
+             (ajusta su peso y el remanente lo absorben las demás star) y de una columna Auto
+             (pasa a un ancho fijo en píxeles tras el drag) sin acción adicional, verificado
+             leyendo AdjustStarColumnWidths/DecreaseNonStarColumnWidths del ensamblado
+             decompilado, no hay ninguna rama que excluya esos dos casos.
+             MinColumnWidth: el piso de fábrica de Avalonia.Controls.DataGrid es 20px
+             (DATAGRID_defaultMinColumnWidth decompilado), insuficiente para que un header de
+             11px SemiBold con letter-spacing (ver Style de DataGridColumnHeader más abajo) siga
+             siendo legible arrastrado a su mínimo. 40px es el piso global; columnas puntuales que
+             ya declaran MinWidth explícito (ProductoListView, MovimientoHistorialView, etc.)
+             siguen mandando porque el MinWidth de columna tiene prioridad sobre este default de
+             grilla (DataGridColumn.ActualMinWidth: _minWidth ?? OwningGrid?.MinColumnWidth). -->
+        <Setter Property="CanUserResizeColumns" Value="True" />
+        <Setter Property="MinColumnWidth" Value="40" />
     </Style>
 
     <!-- Fondo alternado: Avalonia.Controls.DataGrid 12.0.1 NO tiene la propiedad
@@ -87,9 +113,19 @@
         <Setter Property="BorderThickness" Value="0,0,0,1" />
     </Style>
 
+    <!-- FontSize de celda: Avalonia.Controls.DataGrid 12.0.1 fuerza FontSize=15 en el
+         ControlTheme de DataGridCell (Build_55 del ensamblado decompilado), que se hereda a
+         todo el contenido de la celda. Eso deja las FILAS de la grilla 1px MÁS GRANDES que el
+         FontSize=14 default del resto de la app; nunca fue una decisión de diseño de este
+         proyecto. Este Setter explícito pisa el del ControlTheme (mayor prioridad: BindingPriority
+         Style > Template/Theme) y se hereda al TextBlock de contenido igual que Padding/
+         VerticalContentAlignment de acá arriba. Los headers (DataGridColumnHeader, más arriba en
+         este archivo) NO se tocan: ya están en 11px SemiBold y el pedido del usuario fue sólo
+         sobre las filas. -->
     <Style Selector="DataGridCell">
         <Setter Property="Padding" Value="{DynamicResource PaddingCelda}" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="FontSize" Value="13" />
     </Style>
 
     <!-- Celda numerica. Hoy este estilo esta COPIADO 7 veces en vistas sueltas; la
