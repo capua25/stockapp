@@ -1,11 +1,12 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Catalogo"
+             xmlns:e="using:StockApp.Domain.Entities"
              xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:c="using:StockApp.Presentation.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="700" d:DesignHeight="450"
+             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="500"
              x:Class="StockApp.Presentation.Views.Catalogo.ProveedorListView"
              x:DataType="vm:ProveedorListViewModel">
 
@@ -28,28 +29,94 @@
         <Border Classes="card">
             <DockPanel>
 
-                <ListBox ItemsSource="{Binding Items}"
-                         SelectedItem="{Binding ItemSeleccionado}">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate>
-                            <!-- Entidades inactivas: contenido atenuado (Opacity vía converter) +
-                                 badge "Inactiva" a full opacidad — el badge queda FUERA del panel
-                                 atenuado para que siga siendo legible (la opacidad es multiplicativa
-                                 por el árbol visual en Avalonia). Telefono/Email usan
-                                 TextoTerciarioBrush en vez de Opacity literal: es atenuacion
-                                 decorativa de texto secundario, no semantica de dominio (Ruling B-14). -->
-                            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio4}" Margin="4">
-                                <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio4}"
-                                            Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}">
-                                    <TextBlock Text="{Binding Nombre}" Width="250" />
-                                    <TextBlock Text="{Binding Telefono}" Width="120" Foreground="{DynamicResource TextoTerciarioBrush}" />
-                                    <TextBlock Text="{Binding Email}"    Width="200" Foreground="{DynamicResource TextoTerciarioBrush}" />
-                                </StackPanel>
-                                <c:BadgeEstado Texto="Inactiva" Tono="Neutro" IsVisible="{Binding !Activo}" />
-                            </StackPanel>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
+                <!-- Migrado de ListBox a DataGrid (2026-08-24): el ListBox simulaba columnas con
+                     un StackPanel de ancho fijo (Nombre 250 + Teléfono 120 + Email 200 = 570 de
+                     620 disponibles) y no dejaba lugar para Dirección/Notas — ambas ya existían
+                     en Proveedor y llegaban pobladas al ViewModel, solo faltaba mostrarlas. El
+                     tema global (Themes/DataGrid.axaml) da FontSize/RowHeight/resize gratis, y el
+                     usuario reparte el ancho a mano en vez de competir por 18px libres.
+                     Columnas como DataGridTemplateColumn (no DataGridTextColumn), mismo patrón
+                     que ProductoListView.axaml: cada celda de dato se atenúa individualmente con
+                     ActivoOpacidadConverter — si se atenuara la DataGridRow entera, el badge
+                     "Inactiva" (que debe quedar a opacidad plena) también se atenuaría por
+                     herencia del árbol visual. -->
+                <DataGrid ItemsSource="{Binding Items}"
+                          SelectedItem="{Binding ItemSeleccionado}"
+                          IsReadOnly="True"
+                          CanUserSortColumns="True"
+                          CanUserResizeColumns="True"
+                          GridLinesVisibility="Horizontal"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="Nombre" Width="*" MinWidth="140" SortMemberPath="Nombre">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="e:Proveedor">
+                                    <TextBlock Text="{Binding Nombre}"
+                                               Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding Nombre}"
+                                               VerticalAlignment="Center" Margin="4,0" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="Teléfono" Width="Auto" MinWidth="90" SortMemberPath="Telefono">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="e:Proveedor">
+                                    <TextBlock Text="{Binding Telefono}"
+                                               Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
+                                               Foreground="{DynamicResource TextoTerciarioBrush}"
+                                               VerticalAlignment="Center" Margin="4,0" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="Email" Width="*" MinWidth="160" SortMemberPath="Email">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="e:Proveedor">
+                                    <TextBlock Text="{Binding Email}"
+                                               Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
+                                               Foreground="{DynamicResource TextoTerciarioBrush}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding Email}"
+                                               VerticalAlignment="Center" Margin="4,0" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <!-- Dirección/Notas: pedido original del usuario ("no muestra ni las
+                             notas ni la dirección"), sin entrar antes por el ancho fijo del
+                             ListBox. -->
+                        <DataGridTemplateColumn Header="Dirección" Width="*" MinWidth="160" SortMemberPath="Direccion">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="e:Proveedor">
+                                    <TextBlock Text="{Binding Direccion}"
+                                               Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
+                                               Foreground="{DynamicResource TextoTerciarioBrush}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding Direccion}"
+                                               VerticalAlignment="Center" Margin="4,0" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="Notas" Width="*" MinWidth="140" SortMemberPath="Notas">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="e:Proveedor">
+                                    <TextBlock Text="{Binding Notas}"
+                                               Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
+                                               Foreground="{DynamicResource TextoTerciarioBrush}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding Notas}"
+                                               VerticalAlignment="Center" Margin="4,0" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="Estado" Width="Auto" CanUserSort="False">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="e:Proveedor">
+                                    <c:BadgeEstado Texto="Inactiva" Tono="Neutro" IsVisible="{Binding !Activo}" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
 
             </DockPanel>
         </Border>

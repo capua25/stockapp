@@ -13,6 +13,20 @@
              x:Class="StockApp.Presentation.Views.Finanzas.PagosGastoView"
              x:DataType="vm:PagosGastoViewModel">
 
+    <UserControl.Styles>
+        <!-- Fix "botón sin ícono visible en celda de DataGrid" (mismo fix que
+             IngresoPorFacturaView.axaml/NuevaImportacionView.axaml): Themes/DataGrid.axaml fija
+             RowHeight=36 y DataGridCell.Padding=PaddingCelda (12,8) -> 36-16=20px útiles en la
+             celda. El botón "Anular" (Padding propio + ícono mdi-cancel) necesita más alto que
+             eso; sin este fix el ícono queda aplastado a 2px de alto (medido). Esta clase saca
+             el padding VERTICAL de la celda (deja el horizontal) para que el botón tenga los
+             36px enteros y su propio padding se resuelva adentro (medido: el ícono pasa de 2px
+             a 13px de alto). -->
+        <Style Selector="DataGridCell.sin-padding-vertical">
+            <Setter Property="Padding" Value="12,0" />
+        </Style>
+    </UserControl.Styles>
+
     <DockPanel Margin="{DynamicResource MargenVista}">
 
         <c:HeaderVista DockPanel.Dock="Top" Eyebrow="FINANZAS" Titulo="Pagos de la factura" Resumen="{Binding TituloGasto}" />
@@ -100,46 +114,86 @@
                          IsVisible="{Binding PagoSeleccionado, Converter={x:Static ObjectConverters.IsNotNull}}"
                          Margin="0,0,0,12" />
 
-        <!-- Lista de pagos -->
+        <!-- Lista de pagos. Migrado de ListBox a DataGrid (2026-08-24): el ListBox no recibía
+             nada del tema global (Themes/DataGrid.axaml — FontSize/RowHeight/resize), quedando
+             visualmente desalineado del resto de la app. Columnas como DataGridTemplateColumn
+             para poder portar el badge "Anulado" y el botón "Anular" tal cual estaban. A
+             diferencia de ProveedorListView/UnidadMedidaListView, el ListBox original NO usaba
+             ActivoOpacidadConverter acá (solo el badge "Anulado" marcaba el estado) — se
+             preserva ese mismo criterio, sin agregar atenuación que no existía. -->
         <Border Classes="card">
-            <ListBox ItemsSource="{Binding Pagos}"
-                     SelectedItem="{Binding PagoSeleccionado}">
-                <ListBox.ItemTemplate>
-                    <DataTemplate x:DataType="e:PagoGasto">
-                        <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" Margin="4">
-                            <TextBlock Grid.Column="0"
-                                       Text="{Binding Fecha, StringFormat='dd/MM/yyyy'}"
-                                       Margin="0,0,16,0" />
-                            <TextBlock Grid.Column="1"
-                                       Text="{Binding Monto, Converter={x:Static conv:MonedaConverter.Instance}}"
-                                       FontWeight="SemiBold"
-                                       Margin="0,0,16,0" />
-                            <TextBlock Grid.Column="2"
-                                       Text="{Binding Nota}"
-                                       Foreground="{DynamicResource TextoTerciarioBrush}"
-                                       TextTrimming="CharacterEllipsis" />
-                            <c:BadgeEstado Grid.Column="3" Texto="Anulado" Tono="Neutro" IsVisible="{Binding !Activo}"
-                                           Margin="0,0,8,0" />
-                            <!-- Anular pago: IsVisible combina la condicion de DATOS (Activo: un pago ya
-                                 anulado no se vuelve a anular) con la de PERMISO (PuedeRegistrarPagos,
-                                 bugfix 2026-08-15) - GastoService.AnularPagoAsync exige
-                                 Permisos.RegistrarPagos sin condicion. -->
-                            <Button Grid.Column="4"
-                                    Classes="secondary"
-                                    Command="{Binding $parent[UserControl].((vm:PagosGastoViewModel)DataContext).AnularPagoCommand}"
-                                    CommandParameter="{Binding}">
-                                <Button.IsVisible>
-                                    <MultiBinding Converter="{x:Static convA:BoolConverters.And}">
-                                        <Binding Path="Activo" />
-                                        <Binding Path="$parent[UserControl].((vm:PagosGastoViewModel)DataContext).PuedeRegistrarPagos" />
-                                    </MultiBinding>
-                                </Button.IsVisible>
-                                <i:Icon Value="mdi-cancel" />
-                            </Button>
-                        </Grid>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
+            <DataGrid ItemsSource="{Binding Pagos}"
+                      SelectedItem="{Binding PagoSeleccionado}"
+                      IsReadOnly="True"
+                      CanUserSortColumns="True"
+                      CanUserResizeColumns="True"
+                      GridLinesVisibility="Horizontal"
+                      ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                <DataGrid.Columns>
+                    <DataGridTemplateColumn Header="Fecha" Width="Auto" MinWidth="100" SortMemberPath="Fecha">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="e:PagoGasto">
+                                <TextBlock Text="{Binding Fecha, StringFormat='dd/MM/yyyy'}"
+                                           VerticalAlignment="Center" Margin="4,0" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="Monto" Width="Auto" MinWidth="100" SortMemberPath="Monto">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="e:PagoGasto">
+                                <TextBlock Text="{Binding Monto, Converter={x:Static conv:MonedaConverter.Instance}}"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center" Margin="4,0" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="Nota" Width="*" MinWidth="160" SortMemberPath="Nota">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="e:PagoGasto">
+                                <TextBlock Text="{Binding Nota}"
+                                           Foreground="{DynamicResource TextoTerciarioBrush}"
+                                           TextTrimming="CharacterEllipsis"
+                                           ToolTip.Tip="{Binding Nota}"
+                                           VerticalAlignment="Center" Margin="4,0" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="Estado" Width="Auto" CanUserSort="False">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="e:PagoGasto">
+                                <c:BadgeEstado Texto="Anulado" Tono="Neutro" IsVisible="{Binding !Activo}" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <!-- Anular pago: IsVisible combina la condicion de DATOS (Activo: un pago ya
+                         anulado no se vuelve a anular) con la de PERMISO (PuedeRegistrarPagos,
+                         bugfix 2026-08-15) - GastoService.AnularPagoAsync exige
+                         Permisos.RegistrarPagos sin condicion. $parent[UserControl] resuelve
+                         igual que en un ListBox.ItemTemplate: el patrón ya está probado dentro de
+                         una DataGridTemplateColumn en IngresoPorFacturaView.axaml (botón
+                         "Quitar"), sin necesidad de cambiarlo acá. CellStyleClasses
+                         "sin-padding-vertical" evita que el ícono quede aplastado (ver
+                         UserControl.Styles arriba). -->
+                    <DataGridTemplateColumn Header="" Width="Auto" MinWidth="52" IsReadOnly="True"
+                                             CellStyleClasses="sin-padding-vertical">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="e:PagoGasto">
+                                <Button Classes="secondary"
+                                        Command="{Binding $parent[UserControl].((vm:PagosGastoViewModel)DataContext).AnularPagoCommand}"
+                                        CommandParameter="{Binding}">
+                                    <Button.IsVisible>
+                                        <MultiBinding Converter="{x:Static convA:BoolConverters.And}">
+                                            <Binding Path="Activo" />
+                                            <Binding Path="$parent[UserControl].((vm:PagosGastoViewModel)DataContext).PuedeRegistrarPagos" />
+                                        </MultiBinding>
+                                    </Button.IsVisible>
+                                    <i:Icon Value="mdi-cancel" />
+                                </Button>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                </DataGrid.Columns>
+            </DataGrid>
         </Border>
 
     </DockPanel>

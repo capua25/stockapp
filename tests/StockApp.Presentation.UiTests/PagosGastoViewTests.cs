@@ -7,6 +7,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Optris.Icons.Avalonia;
 using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
 using StockApp.Application.Finanzas;
@@ -76,8 +77,10 @@ public class PagosGastoViewTests
         </Window>
         """;
 
-    private static (Window Window, PagosGastoViewModel Vm) Montar(RolUsuario rol, IReadOnlySet<string> permisos)
+    private static (Window Window, PagosGastoViewModel Vm) Montar(
+        RolUsuario rol, IReadOnlySet<string> permisos, Gasto? gasto = null)
     {
+        gasto ??= CrearGasto();
         var session = new SesionFake(rol, permisos.ToArray());
         var adjuntosPanel = new AdjuntosPanelViewModel(
             new AdjuntoServiceFake(),
@@ -87,12 +90,12 @@ public class PagosGastoViewTests
             session);
 
         var vm = new PagosGastoViewModel(
-            new GastoServiceFake(CrearGasto()),
+            new GastoServiceFake(gasto),
             session,
             new NavigationServiceFake(),
             new ConfirmacionServiceFake(),
             adjuntosPanel);
-        vm.CargarParaGasto(CrearGasto());
+        vm.CargarParaGasto(gasto);
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
         window.DataContext = vm;
@@ -169,5 +172,97 @@ public class PagosGastoViewTests
 
         Assert.True(vm.PuedeRegistrarPagos);
         Assert.False(BuscarTextoPorContenido(window, "Solo lectura").IsVisible);
+    }
+
+    // ── Migración de ListBox a DataGrid (2026-08-24) ────────────────────────────────────────
+
+    private static Gasto CrearGastoConPago(PagoGasto pago)
+    {
+        var gasto = CrearGasto();
+        gasto.Pagos.Add(pago);
+        return gasto;
+    }
+
+    /// <summary>
+    /// Repro del bugfix "botón sin ícono visible en celda de DataGrid" (ver comentario XAML de
+    /// <c>DataGridCell.sin-padding-vertical</c>, IngresoPorFacturaView.axaml/
+    /// NuevaImportacionView.axaml), aplicado acá al botón "Anular". Medido con un XAML mínimo
+    /// (Button.secondary + i:Icon "mdi-cancel" dentro de una DataGridTemplateColumn): el control
+    /// <c>Optris.Icons.Avalonia.Icon</c> mide 2px de alto SIN el fix (RowHeight 36 - PaddingCelda
+    /// vertical 16 = 20px útiles, insuficientes) y 13px CON el fix
+    /// (CellStyleClasses="sin-padding-vertical" + el Style en UserControl.Styles). Se mide el
+    /// <c>Icon</c> en sí, no el <c>Image</c> interno: el <c>Image</c> tiene alto intrínseco fijo
+    /// (13px) en ambos casos y solo cambia su Y -- no delata el aplastamiento.
+    /// </summary>
+    [AvaloniaFact]
+    public void Montar_PagoActivoConPermiso_IconoAnular_TieneAltoRenderizadoVisible_DentroDeLaCeldaDelDataGrid()
+    {
+        var pago = new PagoGasto { Id = 1, GastoId = 1, Fecha = DateTime.Today, Monto = 500m, Activo = true };
+        var (window, _) = Montar(RolUsuario.Admin, new HashSet<string>(), CrearGastoConPago(pago));
+
+        var botonAnular = window.GetVisualDescendants().OfType<Button>()
+            .Single(b => ReferenceEquals(b.DataContext, pago));
+        var icono = botonAnular.GetVisualDescendants().OfType<Icon>().Single();
+
+        Assert.True(icono.Bounds.Height > 10,
+            $"El ícono del botón 'Anular' mide {icono.Bounds.Height}px de alto dentro de la " +
+            "celda del DataGrid -- aplastado si la celda conserva el padding vertical de 8px " +
+            "(RowHeight 36 - 16 = 20px útiles, insuficientes). Verificar que la " +
+            "DataGridTemplateColumn tenga CellStyleClasses=\"sin-padding-vertical\" en " +
+            "PagosGastoView.axaml.");
+
+        window.Close();
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    [AvaloniaFact]
+    public void Montar_PagoInactivo_OcultaBotonAnular_YMuestraBadgeAnulado()
+    {
+        var pago = new PagoGasto { Id = 2, GastoId = 1, Fecha = DateTime.Today, Monto = 300m, Activo = false };
+        var (window, _) = Montar(RolUsuario.Admin, new HashSet<string>(), CrearGastoConPago(pago));
+
+        var botonAnular = window.GetVisualDescendants().OfType<Button>()
+            .Single(b => ReferenceEquals(b.DataContext, pago));
+        Assert.False(botonAnular.IsVisible);
+
+        var badge = window.GetVisualDescendants()
+            .OfType<StockApp.Presentation.Controls.BadgeEstado>()
+            .Single(b => ReferenceEquals(b.DataContext, pago));
+        Assert.True(badge.IsVisible);
+        Assert.Equal("Anulado", badge.Texto);
+
+        window.Close();
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    [AvaloniaFact]
+    public void Montar_OperadorSinRegistrarPagos_OcultaBotonAnular_AunqueElPagoEsteActivo()
+    {
+        var pago = new PagoGasto { Id = 3, GastoId = 1, Fecha = DateTime.Today, Monto = 300m, Activo = true };
+        var (window, _) = Montar(
+            RolUsuario.Operador, new HashSet<string> { Permisos.VerFinanzas }, CrearGastoConPago(pago));
+
+        var botonAnular = window.GetVisualDescendants().OfType<Button>()
+            .Single(b => ReferenceEquals(b.DataContext, pago));
+        Assert.False(botonAnular.IsVisible);
+
+        window.Close();
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    [AvaloniaFact]
+    public void Montar_SeleccionarFilaEnGrilla_ActualizaPagoSeleccionadoEnElViewModel()
+    {
+        var pago = new PagoGasto { Id = 4, GastoId = 1, Fecha = DateTime.Today, Monto = 300m, Activo = true };
+        var (window, vm) = Montar(RolUsuario.Admin, new HashSet<string>(), CrearGastoConPago(pago));
+
+        var grid = window.GetVisualDescendants().OfType<DataGrid>().Single();
+        grid.SelectedItem = pago;
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Same(pago, vm.PagoSeleccionado);
+
+        window.Close();
+        Dispatcher.UIThread.RunJobs();
     }
 }
