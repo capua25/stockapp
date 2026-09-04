@@ -378,6 +378,12 @@ public class ShellMainViewModelTests
     }
 
     // ── F5d Task 10 — Navegación a Importar planillas ────────────────────────
+    //
+    // Importación quedó apagada por ShellMainViewModel.ImportacionHabilitada = false
+    // (2026-09-04, pedido del usuario: el módulo no se va a usar). Los dos tests de abajo
+    // documentaban el comportamiento ORIGINAL (navega y cambia de sección); ahora documentan
+    // el no-op. Si se reactiva la constante, revertir Times.Never -> Times.Once y
+    // NotEqual -> Equal("Importacion", ...).
 
     [Fact]
     public void NavImportacion_LlamaNavegar_AImportacionViewModel()
@@ -386,7 +392,7 @@ public class ShellMainViewModelTests
 
         vm.NavImportacionCommand.Execute(null);
 
-        navMock.Verify(n => n.Navegar<StockApp.Presentation.ViewModels.Finanzas.ImportacionViewModel>(), Times.Once);
+        navMock.Verify(n => n.Navegar<StockApp.Presentation.ViewModels.Finanzas.ImportacionViewModel>(), Times.Never);
     }
 
     [Fact]
@@ -396,7 +402,25 @@ public class ShellMainViewModelTests
 
         vm.NavImportacionCommand.Execute(null);
 
-        Assert.Equal("Importacion", vm.SeccionActiva);
+        Assert.NotEqual("Importacion", vm.SeccionActiva);
+    }
+
+    /// <summary>
+    /// Guardián de "inaccesible": aunque alguien invoque el command por código (no solo desde un
+    /// botón oculto), con el módulo apagado no debe navegar NI cambiar de sección. Cubre ambos
+    /// efectos en un solo test, a diferencia de los dos de arriba que ya quedaron acoplados
+    /// (por historia) a un efecto cada uno.
+    /// </summary>
+    [Fact]
+    public void NavImportacion_ConModuloDeshabilitado_EsNoOp()
+    {
+        var (vm, _, navMock, _) = Crear(RolUsuario.Admin);
+        var seccionOriginal = vm.SeccionActiva;
+
+        vm.NavImportacionCommand.Execute(null);
+
+        navMock.Verify(n => n.Navegar<StockApp.Presentation.ViewModels.Finanzas.ImportacionViewModel>(), Times.Never);
+        Assert.Equal(seccionOriginal, vm.SeccionActiva);
     }
 
     // ── Refresco de permisos al navegar (spec decisión 7) ──────────────────────

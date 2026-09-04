@@ -289,9 +289,39 @@ public class ShellMainViewGatesTests
         Assert.True(EsVisible(window, vm.NavIngresoPorFacturaCommand));
         Assert.True(EsVisible(window, vm.NavHistorialPorProductoCommand));
         Assert.True(EsVisible(window, vm.NavMaestrosFinanzasCommand));
-        Assert.True(EsVisible(window, vm.NavImportacionCommand));
+        // Importación: ver Admin_NoVeImportacion_PorqueEstaDeshabilitada. Apagada a propósito
+        // por ShellMainViewModel.ImportacionHabilitada (2026-09-04); revertir este assert a
+        // True si se reactiva la constante.
         Assert.True(EsVisible(window, vm.NavMantenimientoCommand));
         Assert.True(EsVisible(window, vm.NavUsuariosCommand));
+    }
+
+    // ── Importación apagada (2026-09-04) ────────────────────────────────────────
+
+    /// <summary>
+    /// Guardián de "invisible": ShellMainViewModel.ImportacionHabilitada = false apaga el único
+    /// ítem del grupo "Importación" aunque el usuario sea Admin (el gate real sigue siendo
+    /// EsAdmin && ImportacionHabilitada). Si se reactiva la constante, este test debe pasar a
+    /// Assert.True.
+    /// </summary>
+    [AvaloniaFact]
+    public void Admin_NoVeImportacion_PorqueEstaDeshabilitada()
+    {
+        var (window, vm) = Montar(RolUsuario.Admin);
+
+        Assert.False(EsVisible(window, vm.NavImportacionCommand));
+    }
+
+    /// <summary>
+    /// Con el único ítem del grupo oculto, GrupoNavegacion.EsVisible ("algún hijo visible") cae
+    /// solo -- el grupo entero desaparece del sidebar sin tocar GrupoNavegacion.
+    /// </summary>
+    [AvaloniaFact]
+    public void Admin_NoVeElGrupoImportacion_PorqueEstaDeshabilitada()
+    {
+        var (_, vm) = Montar(RolUsuario.Admin);
+
+        Assert.False(vm.Grupos.First(g => g.Titulo == "Importación").EsVisible);
     }
 
     // ── Task 5.3, Step 4: gates de grupo ──────────────────────────────────────────
