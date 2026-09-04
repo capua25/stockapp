@@ -382,11 +382,14 @@ public class ShellMainViewModelTests
     // Importación quedó apagada por ShellMainViewModel.ImportacionHabilitada = false
     // (2026-09-04, pedido del usuario: el módulo no se va a usar). Los dos tests de abajo
     // documentaban el comportamiento ORIGINAL (navega y cambia de sección); ahora documentan
-    // el no-op. Si se reactiva la constante, revertir Times.Never -> Times.Once y
-    // NotEqual -> Equal("Importacion", ...).
+    // el no-op, uno por aserción (así el nombre del test que falla dice cuál de las dos cosas
+    // se rompió). Si se reactiva la constante, revertir:
+    // - NavImportacion_ConModuloDeshabilitado_NoLlamaNavegar: Times.Never -> Times.Once
+    // - NavImportacion_ConModuloDeshabilitado_NoEstableceSeccionActiva:
+    //   Assert.Equal(seccionOriginal, ...) -> Assert.Equal("Importacion", vm.SeccionActiva)
 
     [Fact]
-    public void NavImportacion_LlamaNavegar_AImportacionViewModel()
+    public void NavImportacion_ConModuloDeshabilitado_NoLlamaNavegar()
     {
         var (vm, _, navMock, _) = Crear(RolUsuario.Admin);
 
@@ -396,30 +399,13 @@ public class ShellMainViewModelTests
     }
 
     [Fact]
-    public void NavImportacion_EstableceSeccionActiva_Importacion()
+    public void NavImportacion_ConModuloDeshabilitado_NoEstableceSeccionActiva()
     {
         var (vm, _, _, _) = Crear(RolUsuario.Admin);
-
-        vm.NavImportacionCommand.Execute(null);
-
-        Assert.NotEqual("Importacion", vm.SeccionActiva);
-    }
-
-    /// <summary>
-    /// Guardián de "inaccesible": aunque alguien invoque el command por código (no solo desde un
-    /// botón oculto), con el módulo apagado no debe navegar NI cambiar de sección. Cubre ambos
-    /// efectos en un solo test, a diferencia de los dos de arriba que ya quedaron acoplados
-    /// (por historia) a un efecto cada uno.
-    /// </summary>
-    [Fact]
-    public void NavImportacion_ConModuloDeshabilitado_EsNoOp()
-    {
-        var (vm, _, navMock, _) = Crear(RolUsuario.Admin);
         var seccionOriginal = vm.SeccionActiva;
 
         vm.NavImportacionCommand.Execute(null);
 
-        navMock.Verify(n => n.Navegar<StockApp.Presentation.ViewModels.Finanzas.ImportacionViewModel>(), Times.Never);
         Assert.Equal(seccionOriginal, vm.SeccionActiva);
     }
 
