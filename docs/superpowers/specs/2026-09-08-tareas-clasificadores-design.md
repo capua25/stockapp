@@ -106,6 +106,13 @@ Los cinco campos se reemplazan enteros en cada llamada a `ReclasificarAsync`; `n
 **D22. Orden alfabético de filas en el reporte, con "(sin asignar)" siempre al final; buscador de expediente con mínimo de caracteres y tope de resultados.**
 Las filas del reporte-matriz se ordenan alfabéticamente por el nombre del clasificador; la fila "(sin asignar)" (D17) queda siempre al final, sin importar el orden alfabético. El buscador de expediente (Presentation) exige un mínimo de caracteres antes de disparar la búsqueda y acota los resultados con un tope, mostrando un aviso de refinar la búsqueda si se alcanza. Motivo: `ListarActivosAsync(FiltroDocumentos)` (`src/StockApp.Infrastructure/Repositories/DocumentoAdministrativoRepository.cs:54-68`) no pagina ni limita — devuelve todo lo que matchea el filtro.
 
+**D23. El reporte se diseña para admitir gráficos más adelante sin rework.**
+El usuario anticipó que a futuro probablemente se incorpore una librería de gráficos. Aunque el alcance de este spec excluye charts (D15), el reporte se estructura desde el inicio para que agregarlos sea aditivo:
+- El servicio de reporte devuelve un DTO de matriz agnóstico de presentación (filas de clasificador con sus conteos por estado), no un modelo atado a la grilla.
+- La agregación completa se hace en SQL con `GROUP BY`. El ViewModel no calcula conteos, totales ni porcentajes: solo presenta lo que recibe.
+- Consecuencia: incorporar gráficos después es escribir una vista nueva que consume el mismo DTO. No requiere tocar Application, Api ni ApiClient.
+Advertencia para ese trabajo futuro: la elección de librería (LiveCharts, ScottPlot u otra) exige un spike previo de compatibilidad con la versión de Avalonia que usa el proyecto. No se asume que ninguna funcione hasta verificarlo.
+
 ## Modelo de datos
 
 Cuatro entidades nuevas, todas con el molde de `Categoria` (`Id:int`, `Nombre:string`, `Activo:bool = true`): `Zona`, `DimensionTematica`, `OrganismoResponsable`, `OrigenFinanciamiento`.
