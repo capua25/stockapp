@@ -167,6 +167,7 @@ public class GuardianDePatronTests
         typeof(NuevaImportacionView),
         typeof(AdjuntosPanelView),
         typeof(AdjuntosDocumentoPanelView),
+        typeof(ClasificacionTareaPanelView),
         typeof(AccesoLimitadoView),
         typeof(ActualizacionBannerView),
         typeof(ActualizacionModalView),
