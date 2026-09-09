@@ -29,6 +29,13 @@ public partial class ClasificacionTareaPanelViewModel : ViewModelBase
     private const int MinimoCaracteresBusquedaExpediente = 3;
     private const int TopeResultadosBusquedaExpediente = 20;
 
+    /// <summary>Nombre del centinela "sin asignar" de los cuatro combos (Important 2, revisión
+    /// de integración 2026-09-09) -- molde de DocumentoListViewModel.OpcionTipoDocumento
+    /// ("Todos", Valor=null). Antes los combos bindeaban directo a la entidad y no había forma
+    /// de volver a "ninguna" desde la UI, pese a que D21 (reemplazo total) lo permite del lado
+    /// de Application/Api/ApiClient/VM.</summary>
+    private const string NombreOpcionNinguna = "(ninguna)";
+
     private readonly IZonaService _zonasService;
     private readonly IDimensionTematicaService _dimensionesService;
     private readonly IOrganismoResponsableService _organismosService;
@@ -36,15 +43,15 @@ public partial class ClasificacionTareaPanelViewModel : ViewModelBase
     private readonly IDocumentoAdministrativoService _documentosService;
     private readonly IConfirmacionService _confirmacion;
 
-    public ObservableCollection<Zona> ZonasDisponibles { get; } = new();
-    public ObservableCollection<DimensionTematica> DimensionesDisponibles { get; } = new();
-    public ObservableCollection<OrganismoResponsable> OrganismosDisponibles { get; } = new();
-    public ObservableCollection<OrigenFinanciamiento> OrigenesDisponibles { get; } = new();
+    public ObservableCollection<OpcionClasificador> ZonasDisponibles { get; } = new();
+    public ObservableCollection<OpcionClasificador> DimensionesDisponibles { get; } = new();
+    public ObservableCollection<OpcionClasificador> OrganismosDisponibles { get; } = new();
+    public ObservableCollection<OpcionClasificador> OrigenesDisponibles { get; } = new();
 
-    [ObservableProperty] private Zona? _zonaSeleccionada;
-    [ObservableProperty] private DimensionTematica? _dimensionSeleccionada;
-    [ObservableProperty] private OrganismoResponsable? _organismoSeleccionado;
-    [ObservableProperty] private OrigenFinanciamiento? _origenSeleccionado;
+    [ObservableProperty] private OpcionClasificador? _zonaSeleccionada;
+    [ObservableProperty] private OpcionClasificador? _dimensionSeleccionada;
+    [ObservableProperty] private OpcionClasificador? _organismoSeleccionado;
+    [ObservableProperty] private OpcionClasificador? _origenSeleccionado;
     [ObservableProperty] private DocumentoAdministrativo? _documentoSeleccionado;
     [ObservableProperty] private string? _mensajeBuscadorExpediente;
 
@@ -68,56 +75,82 @@ public partial class ClasificacionTareaPanelViewModel : ViewModelBase
         BuscarExpedientesAsync = BuscarExpedientesInternalAsync;
     }
 
-    /// <summary>Puebla los cuatro catálogos y, si <paramref name="actual"/> no es null,
-    /// precarga la selección (usado por el modal de reclasificación, Task 10 — D21: lo que
-    /// el Admin ve precargado es exactamente lo que queda guardado si no toca nada).
+    /// <summary>Puebla los cuatro catálogos y precarga la selección (usado por el modal de
+    /// reclasificación, Task 10 — D21: lo que el Admin ve precargado es exactamente lo que
+    /// queda guardado si no toca nada). Cada combo siempre incluye el centinela "(ninguna)"
+    /// primero (Important 2) y, si <paramref name="actual"/> trae un id que ya no está entre
+    /// los activos (Important 1: el catálogo fue dado de baja después de asignarse), agrega
+    /// una opción adicional que preserva ese id sin perderlo -- ver <see cref="PoblarOpciones"/>.
     ///
-    /// Fix (revisión final, Important 2): las cuatro llamadas HTTP no tenían try/catch, y
-    /// TareaFormView.axaml.cs la dispara desde un handler async void (DataContextChanged) --
-    /// una excepción acá (API caída, 500) no la atrapa nadie y termina en crash.log sin avisar
-    /// al operario. Molde de AdjuntosDocumentoPanelViewModel.RecargarAsync: UnauthorizedAccessException
-    /// en silencio (ya se avisó aparte, mismo criterio que BuscarExpedientesInternalAsync no
-    /// pisa acá), el resto vía ManejarErrorAsync sin mentir sobre la causa.</summary>
+    /// Fix (revisión final, Important 2 original): las cuatro llamadas HTTP no tenían
+    /// try/catch, y TareaFormView.axaml.cs la dispara desde un handler async void
+    /// (DataContextChanged) -- una excepción acá (API caída, 500) no la atrapa nadie y termina
+    /// en crash.log sin avisar al operario. Molde de AdjuntosDocumentoPanelViewModel.RecargarAsync:
+    /// UnauthorizedAccessException en silencio (ya se avisó aparte, mismo criterio que
+    /// BuscarExpedientesInternalAsync no pisa acá), el resto vía ManejarErrorAsync sin mentir
+    /// sobre la causa.</summary>
     public async Task InicializarAsync(DatosClasificacionTarea? actual = null)
     {
         try
         {
             var zonas = await _zonasService.ListarActivasAsync();
-            ZonasDisponibles.Clear();
-            foreach (var z in zonas) ZonasDisponibles.Add(z);
+            PoblarOpciones(ZonasDisponibles, zonas.Select(z => (z.Id, z.Nombre)), actual?.ZonaId);
 
             var dimensiones = await _dimensionesService.ListarActivasAsync();
-            DimensionesDisponibles.Clear();
-            foreach (var d in dimensiones) DimensionesDisponibles.Add(d);
+            PoblarOpciones(DimensionesDisponibles, dimensiones.Select(d => (d.Id, d.Nombre)), actual?.DimensionTematicaId);
 
             var organismos = await _organismosService.ListarActivasAsync();
-            OrganismosDisponibles.Clear();
-            foreach (var o in organismos) OrganismosDisponibles.Add(o);
+            PoblarOpciones(OrganismosDisponibles, organismos.Select(o => (o.Id, o.Nombre)), actual?.OrganismoResponsableId);
 
             var origenes = await _origenesService.ListarActivasAsync();
-            OrigenesDisponibles.Clear();
-            foreach (var o in origenes) OrigenesDisponibles.Add(o);
+            PoblarOpciones(OrigenesDisponibles, origenes.Select(o => (o.Id, o.Nombre)), actual?.OrigenFinanciamientoId);
 
-            ZonaSeleccionada = null;
-            DimensionSeleccionada = null;
-            OrganismoSeleccionado = null;
-            OrigenSeleccionado = null;
+            ZonaSeleccionada = ZonasDisponibles.FirstOrDefault(o => o.Id == actual?.ZonaId) ?? ZonasDisponibles[0];
+            DimensionSeleccionada = DimensionesDisponibles.FirstOrDefault(o => o.Id == actual?.DimensionTematicaId) ?? DimensionesDisponibles[0];
+            OrganismoSeleccionado = OrganismosDisponibles.FirstOrDefault(o => o.Id == actual?.OrganismoResponsableId) ?? OrganismosDisponibles[0];
+            OrigenSeleccionado = OrigenesDisponibles.FirstOrDefault(o => o.Id == actual?.OrigenFinanciamientoId) ?? OrigenesDisponibles[0];
             DocumentoSeleccionado = null;
             MensajeBuscadorExpediente = null;
 
-            if (actual is null) return;
-
-            ZonaSeleccionada = ZonasDisponibles.FirstOrDefault(z => z.Id == actual.ZonaId);
-            DimensionSeleccionada = DimensionesDisponibles.FirstOrDefault(d => d.Id == actual.DimensionTematicaId);
-            OrganismoSeleccionado = OrganismosDisponibles.FirstOrDefault(o => o.Id == actual.OrganismoResponsableId);
-            OrigenSeleccionado = OrigenesDisponibles.FirstOrDefault(o => o.Id == actual.OrigenFinanciamientoId);
-            if (actual.DocumentoAdministrativoId is int documentoId)
+            if (actual?.DocumentoAdministrativoId is int documentoId)
                 DocumentoSeleccionado = await _documentosService.ObtenerPorIdAsync(documentoId);
         }
         catch (Exception ex)
         {
             await ManejarErrorAsync(ex);
         }
+    }
+
+    /// <summary>Arma las opciones de un combo de clasificador (Important 1 y 2, revisión de
+    /// integración 2026-09-09): siempre antepone el centinela "(ninguna)" (Id=null, permite
+    /// desasignar desde la UI -- D21) y, si <paramref name="actualId"/> no aparece entre las
+    /// opciones activas (el catálogo fue dado de baja después de asignarse a la tarea), agrega
+    /// una opción adicional que preserva ese id sin inventarle el nombre real -- este panel
+    /// solo tiene permiso GestionarTareas, y ListarTodasAsync (el único lugar con el nombre de
+    /// un catálogo inactivo) está gateada con GestionarTablasMaestras (ver ZonaService). El
+    /// servidor sigue rechazando guardar un catálogo inactivo (ValidarClasificacionAsync,
+    /// D12) -- este combo solo evita que la PRECARGA lo pierda en silencio; si el Admin guarda
+    /// sin tocar el campo, el error de negocio real ("La zona '...' está inactiva.") llega
+    /// igual, con el nombre correcto (TareaFormViewModel.ResolverMensajeError /
+    /// ClasificacionTareaPanelViewModel.ManejarErrorAsync ya traducen ReglaDeNegocioException
+    /// con ex.Message, no una excepción cruda).</summary>
+    private static void PoblarOpciones(
+        ObservableCollection<OpcionClasificador> destino,
+        IEnumerable<(int Id, string Nombre)> activos,
+        int? actualId)
+    {
+        destino.Clear();
+        destino.Add(new OpcionClasificador(NombreOpcionNinguna, null));
+
+        var encontroActual = actualId is null;
+        foreach (var (id, nombre) in activos)
+        {
+            destino.Add(new OpcionClasificador(nombre, id));
+            if (actualId == id) encontroActual = true;
+        }
+
+        if (!encontroActual)
+            destino.Add(new OpcionClasificador($"(dado de baja — id {actualId})", actualId));
     }
 
     /// <summary>Mismo molde EXACTO que AdjuntosDocumentoPanelViewModel.ManejarErrorAsync:
@@ -180,8 +213,16 @@ public partial class ClasificacionTareaPanelViewModel : ViewModelBase
     }
 
     /// <summary>Reemplazo total (D21): los cinco campos SIEMPRE reflejan la selección
-    /// actual, incluido null como desasignación explícita.</summary>
+    /// actual, incluido null como desasignación explícita (el centinela "(ninguna)" tiene
+    /// Id=null, Important 2).</summary>
     public DatosClasificacionTarea ObtenerDatos() => new(
         ZonaSeleccionada?.Id, DimensionSeleccionada?.Id, OrganismoSeleccionado?.Id,
         OrigenSeleccionado?.Id, DocumentoSeleccionado?.Id);
 }
+
+/// <summary>Opción de ComboBox para los cuatro clasificadores de este panel (Important 1 y 2,
+/// revisión de integración 2026-09-09) -- molde de DocumentoListViewModel.OpcionTipoDocumento
+/// ("Todos", Valor=null), reutilizado sin distinguir por clasificador porque acá alcanza con
+/// Id+Nombre (a diferencia de OpcionTipoDocumento, que carga un enum de dominio distinto por
+/// filtro). Id=null es el centinela "sin asignar".</summary>
+public sealed record OpcionClasificador(string Nombre, int? Id);

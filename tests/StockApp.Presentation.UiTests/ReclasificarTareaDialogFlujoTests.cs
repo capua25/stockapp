@@ -24,17 +24,28 @@ using Xunit;
 namespace StockApp.Presentation.UiTests;
 
 /// <summary>
-/// Custodia por mutación (revisión post-Task 10, 2026-09-09) del punto de mayor riesgo de
-/// ReclasificarTareaDialog: D21 exige REEMPLAZO TOTAL — <c>OnAceptarClick</c> hace
-/// <c>Close(vm.Panel.ObtenerDatos())</c> SIN filtrar los campos en null, que es justo lo que
-/// permite al Admin desasignar un clasificador dejándolo vacío. Los dos tests de
-/// ClasificacionTareaDialogServiceTests/ReclasificarTareaDialogViewModelTests (Presentation.Tests)
-/// solo cubren el guard headless y el getter del panel — ninguno monta el diálogo real ni
-/// clickea "Aceptar", así que un "arreglo" que filtre los nulls (una tentación razonable si no
-/// se conoce D21) no rompería nada. Este test monta el diálogo REAL a través de
+/// Custodia por mutación (revisión post-Task 10, 2026-09-09; ampliada en la revisión de
+/// integración 2026-09-09) del punto de mayor riesgo de ReclasificarTareaDialog: D21 exige
+/// REEMPLAZO TOTAL — <c>OnAceptarClick</c> hace <c>Close(vm.Panel.ObtenerDatos())</c> SIN
+/// filtrar los campos en null, que es justo lo que permite al Admin desasignar un clasificador
+/// dejándolo vacío. Los dos tests de ClasificacionTareaDialogServiceTests/
+/// ReclasificarTareaDialogViewModelTests (Presentation.Tests) solo cubren el guard headless y
+/// el getter del panel — ninguno monta el diálogo real ni clickea "Aceptar", así que un
+/// "arreglo" que filtre los nulls (una tentación razonable si no se conoce D21) no rompería
+/// nada. Estos tests montan el diálogo REAL a través de
 /// ClasificacionTareaDialogService.PedirClasificacionAsync (mismo mecanismo de
-/// ApplicationLifetime por reflexión que ConfirmacionServiceDialogosConsecutivosTests) y clickea
-/// el botón "Aceptar" real, no llama a Close ni a OnAceptarClick a mano.
+/// ApplicationLifetime por reflexión que ConfirmacionServiceDialogosConsecutivosTests) y
+/// clickean el botón "Aceptar" real, no llaman a Close ni a OnAceptarClick a mano.
+///
+/// Important 2 (revisión de integración 2026-09-09): el primer test elegía "(ninguna)"
+/// asignando null a mano a la propiedad del VM porque el ComboBox real no tenía esa opción en
+/// su ItemsSource (Task 9). Ya corregido: ahora selecciona el ítem centinela desde el
+/// ItemsSource del ComboBox REAL montado en el árbol visual, probando que la opción existe de
+/// verdad y no solo en la firma del VM.
+///
+/// Important 1 (revisión de integración 2026-09-09): el segundo test cubre que reclasificar NO
+/// pierda en silencio un clasificador dado de baja después de asignarse a la tarea, con el
+/// Admin sin tocar ese campo.
 ///
 /// Este proyecto no referencia Moq (mismo criterio que TareaServiceFake/DocumentoServiceFake):
 /// los cuatro fakes de catálogo de acá abajo son privados a este archivo, a propósito, para no
@@ -46,7 +57,7 @@ public class ReclasificarTareaDialogFlujoTests
     private static readonly TimeSpan TimeoutEsperaDialogo = TimeSpan.FromSeconds(5);
 
     [AvaloniaFact]
-    public async Task ClickReal_EnAceptar_ConUnCampoDesasignado_DevuelveEseCampoEnNullYElRestoIntacto()
+    public async Task ClickReal_EnAceptar_EligiendoLaOpcionNingunaDelComboReal_DevuelveEseCampoEnNullYElRestoIntacto()
     {
         var owner = new Window();
         owner.Show();
@@ -83,11 +94,17 @@ public class ReclasificarTareaDialogFlujoTests
         Assert.Equal(4, vm.Panel.OrganismoSeleccionado?.Id);
         Assert.Equal(5, vm.Panel.OrigenSeleccionado?.Id);
 
-        // El Admin "deja vacío" el campo Zona (D21: equivale a desasignar). No hay forma de
-        // clickear una opción "ninguna" en el ComboBox real (no la tiene, Task 9) — limpiar la
-        // propiedad bindeada es la simulación fiel de esa interacción sin acoplar este test a un
-        // mecanismo de UI que no existe todavía.
-        vm.Panel.ZonaSeleccionada = null;
+        // El Admin "deja vacío" el campo Zona (D21: equivale a desasignar) eligiendo "(ninguna)"
+        // en el ComboBox REAL montado en el árbol visual -- ubicado por su selección actual
+        // (los cuatro combos comparten el mismo tipo OpcionClasificador, no alcanza con filtrar
+        // por tipo como en DocumentoListViewTests). El ítem "(ninguna)" sale del ItemsSource
+        // real del control, no de vm.Panel.ZonasDisponibles a secas, para probar que el combo
+        // mismo lo expone.
+        var comboZona = dialog.GetVisualDescendants().OfType<ComboBox>()
+            .First(c => Equals(c.SelectedItem, vm.Panel.ZonaSeleccionada));
+        var opcionNinguna = comboZona.ItemsSource!.Cast<OpcionClasificador>().Single(o => o.Id is null);
+        comboZona.SelectedItem = opcionNinguna;
+        Dispatcher.UIThread.RunJobs();
 
         var botonAceptar = dialog.GetVisualDescendants().OfType<Button>()
             .First(b => Equals(b.Content, "Aceptar"));
@@ -101,6 +118,53 @@ public class ReclasificarTareaDialogFlujoTests
         Assert.Equal(4, resultado.OrganismoResponsableId);
         Assert.Equal(5, resultado.OrigenFinanciamientoId);
         Assert.Null(resultado.DocumentoAdministrativoId);
+    }
+
+    [AvaloniaFact]
+    public async Task ClickReal_EnAceptar_ConLaZonaActualDadaDeBaja_NoLaPierdeSiElAdminNoLaToca()
+    {
+        var owner = new Window();
+        owner.Show();
+
+        var lifetime = new ClassicDesktopStyleApplicationLifetime { MainWindow = owner };
+        InyectarApplicationLifetime(lifetime);
+
+        // La zona 7 de la tarea ya NO está entre las activas (dada de baja) -- solo queda la 8.
+        var zonas = new ZonaServiceStub(new Zona { Id = 8, Nombre = "Norte" });
+        var dimensiones = new DimensionTematicaServiceStub(new DimensionTematica { Id = 3, Nombre = "Tránsito" });
+        var organismos = new OrganismoResponsableServiceStub(new OrganismoResponsable { Id = 4, Nombre = "Intendencia" });
+        var origenes = new OrigenFinanciamientoServiceStub(new OrigenFinanciamiento { Id = 5, Nombre = "Presupuesto propio" });
+        var documentos = new DocumentoServiceFake();
+
+        var svc = new ClasificacionTareaDialogService(
+            zonas, dimensiones, organismos, origenes, documentos, new ConfirmacionServiceFake());
+
+        var actual = new DatosClasificacionTarea(ZonaId: 7, DimensionTematicaId: 3,
+            OrganismoResponsableId: 4, OrigenFinanciamientoId: 5, DocumentoAdministrativoId: null);
+
+        var task = svc.PedirClasificacionAsync(actual);
+
+        var dialog = (ReclasificarTareaDialog)await EsperarDialogoAsync(owner);
+        Dispatcher.UIThread.RunJobs();
+
+        var vm = (ReclasificarTareaDialogViewModel)dialog.DataContext!;
+
+        // La zona 7 (dada de baja) sigue precargada pese a no estar entre las activas -- si
+        // esto fallara, el resto del test estaría verificando un desasignado que nunca estuvo
+        // asignado, igual que en el test hermano de arriba.
+        Assert.Equal(7, vm.Panel.ZonaSeleccionada?.Id);
+
+        // El Admin NO toca el combo de Zona -- solo confirma con "Aceptar". Antes de este fix,
+        // InicializarAsync perdía la precarga (ZonaSeleccionada quedaba null) y ObtenerDatos()
+        // devolvía ZonaId=null acá, borrando la zona sin que el Admin la tocara.
+        var botonAceptar = dialog.GetVisualDescendants().OfType<Button>()
+            .First(b => Equals(b.Content, "Aceptar"));
+        Clickear(dialog, botonAceptar);
+
+        var resultado = await EsperarResultadoAsync(task);
+
+        Assert.NotNull(resultado);
+        Assert.Equal(7, resultado!.ZonaId);
     }
 
     private static void Clickear(Window window, Control control)

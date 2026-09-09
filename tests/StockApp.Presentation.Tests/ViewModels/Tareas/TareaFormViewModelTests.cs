@@ -219,7 +219,7 @@ public class TareaFormViewModelTests
         var ctx = Crear();
         ctx.Vm.CargarParaCrear();
         ctx.Vm.Titulo = "Reparar bache";
-        ctx.Vm.ClasificacionPanel.ZonaSeleccionada = new Zona { Id = 3, Nombre = "Centro" };
+        ctx.Vm.ClasificacionPanel.ZonaSeleccionada = new OpcionClasificador("Centro", 3);
 
         await ctx.Vm.GuardarCommand.ExecuteAsync(null);
 

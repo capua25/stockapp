@@ -55,17 +55,18 @@ public class ClasificacionTareaPanelViewModelTests
     }
 
     [Fact]
-    public async Task InicializarAsync_SinValoresActuales_PopulaLosCuatroCatalogosSinSeleccion()
+    public async Task InicializarAsync_SinValoresActuales_PopulaLosCuatroCatalogosMasElCentinelaSinSeleccion()
     {
         var ctx = Crear();
 
         await ctx.Vm.InicializarAsync();
 
-        Assert.Equal(2, ctx.Vm.ZonasDisponibles.Count);
-        Assert.Single(ctx.Vm.DimensionesDisponibles);
-        Assert.Single(ctx.Vm.OrganismosDisponibles);
-        Assert.Single(ctx.Vm.OrigenesDisponibles);
-        Assert.Null(ctx.Vm.ZonaSeleccionada);
+        // +1 en cada combo: el centinela "(ninguna)" que Important 2 agrega siempre primero.
+        Assert.Equal(3, ctx.Vm.ZonasDisponibles.Count);
+        Assert.Equal(2, ctx.Vm.DimensionesDisponibles.Count);
+        Assert.Equal(2, ctx.Vm.OrganismosDisponibles.Count);
+        Assert.Equal(2, ctx.Vm.OrigenesDisponibles.Count);
+        Assert.Null(ctx.Vm.ZonaSeleccionada?.Id);
         Assert.Null(ctx.Vm.DocumentoSeleccionado);
     }
 
@@ -82,8 +83,81 @@ public class ClasificacionTareaPanelViewModelTests
 
         Assert.Equal(1, ctx.Vm.ZonaSeleccionada?.Id);
         Assert.Equal(3, ctx.Vm.DimensionSeleccionada?.Id);
-        Assert.Null(ctx.Vm.OrganismoSeleccionado);
+        // Campo no asignado en la tarea: no es C# null, es el centinela "(ninguna)" (Important 2)
+        // -- así queda seleccionable/visible en el combo real, no "sin selección" a secas.
+        Assert.Null(ctx.Vm.OrganismoSeleccionado?.Id);
         Assert.Equal(9, ctx.Vm.DocumentoSeleccionado?.Id);
+    }
+
+    // ── Important 1 (revisión de integración 2026-09-09): reclasificar no puede perder en
+    // silencio un clasificador que fue dado de baja después de asignarse a la tarea. ──────────
+
+    [Fact]
+    public async Task InicializarAsync_ZonaDeLaTareaFueDadaDeBaja_LaPreservaEnVezDePerderla()
+    {
+        var ctx = Crear();
+        // La zona 7 de la tarea ya NO está entre las activas (dada de baja) -- solo queda la 8.
+        ctx.Zonas.Setup(z => z.ListarActivasAsync()).ReturnsAsync(new List<Zona>
+        {
+            new() { Id = 8, Nombre = "Norte" },
+        });
+
+        await ctx.Vm.InicializarAsync(new DatosClasificacionTarea(7, null, null, null, null));
+
+        // Verificado por mutación: sacando el fallback de PoblarOpciones que preserva el id
+        // ausente, ZonaSeleccionada?.Id vuelve a dar null acá y este assert se pone rojo.
+        Assert.Equal(7, ctx.Vm.ZonaSeleccionada?.Id);
+    }
+
+    [Fact]
+    public async Task ObtenerDatos_ZonaDeLaTareaFueDadaDeBaja_NoLaBorraSiElAdminNoLaToca()
+    {
+        var ctx = Crear();
+        ctx.Zonas.Setup(z => z.ListarActivasAsync()).ReturnsAsync(new List<Zona>
+        {
+            new() { Id = 8, Nombre = "Norte" },
+        });
+
+        await ctx.Vm.InicializarAsync(new DatosClasificacionTarea(7, null, null, null, null));
+        var datos = ctx.Vm.ObtenerDatos();
+
+        Assert.Equal(7, datos.ZonaId);
+    }
+
+    // ── Important 2 (revisión de integración 2026-09-09): los cuatro combos tienen que poder
+    // volver a "sin asignar" desde la UI -- antes bindeaban directo a la entidad y no había
+    // forma de llegar a null salvo asignando la propiedad del VM a mano, inalcanzable desde
+    // un ComboBox real (molde de DocumentoListViewModel.OpcionTipoDocumento). ────────────────
+
+    [Fact]
+    public async Task InicializarAsync_AntepioneSiempreLaOpcionNinguna_EnLosCuatroCombos()
+    {
+        var ctx = Crear();
+
+        await ctx.Vm.InicializarAsync(new DatosClasificacionTarea(1, 3, 4, 5, null));
+
+        Assert.Null(ctx.Vm.ZonasDisponibles[0].Id);
+        Assert.Null(ctx.Vm.DimensionesDisponibles[0].Id);
+        Assert.Null(ctx.Vm.OrganismosDisponibles[0].Id);
+        Assert.Null(ctx.Vm.OrigenesDisponibles[0].Id);
+    }
+
+    [Fact]
+    public async Task ObtenerDatos_EligiendoLaOpcionNingunaDelComboReal_DesasignaAunHabiendoValorPrevio()
+    {
+        var ctx = Crear();
+        await ctx.Vm.InicializarAsync(new DatosClasificacionTarea(1, null, null, null, null));
+        Assert.Equal(1, ctx.Vm.ZonaSeleccionada?.Id); // precondición: la zona llegó precargada
+
+        // El Admin elige la opción "(ninguna)" tal como aparece en el ComboBox real (no asigna
+        // null a mano -- toma el ítem del propio ItemsSource, molde de
+        // DocumentoListViewTests.ClickReal_EligiendoTipoEnElComboDeActivosYBuscando_LlegaAlServicio).
+        ctx.Vm.ZonaSeleccionada = ctx.Vm.ZonasDisponibles.First(o => o.Id is null);
+
+        // Verificado por mutación: si ObtenerDatos() ignorara la selección "(ninguna)" (por
+        // ejemplo, si alguien la "arreglara" para no reemplazar un id previo), este assert
+        // fallaría con datos.ZonaId == 1 en vez de null.
+        Assert.Null(ctx.Vm.ObtenerDatos().ZonaId);
     }
 
     [Fact]
