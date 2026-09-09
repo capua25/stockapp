@@ -11,9 +11,17 @@ public class TareaRepository : ITareaRepository
 
     public TareaRepository(AppDbContext ctx) => _ctx = ctx;
 
+    // Clasificadores (spec 2026-09-08): las 5 navs se cargan siempre, igual que TomadaPor —
+    // Api/TareasEndpoints.ADto (Task 6) y Presentation (Tasks 12-16) necesitan los nombres,
+    // no solo los ids.
     private IQueryable<Tarea> ConIncludes() =>
         _ctx.Tareas
             .Include(t => t.TomadaPor)
+            .Include(t => t.Zona)
+            .Include(t => t.DimensionTematica)
+            .Include(t => t.OrganismoResponsable)
+            .Include(t => t.OrigenFinanciamiento)
+            .Include(t => t.DocumentoAdministrativo)
             .Include(t => t.Notas.OrderBy(n => n.Fecha).ThenBy(n => n.Id));
 
     public async Task<int> AgregarAsync(Tarea tarea)
@@ -28,6 +36,12 @@ public class TareaRepository : ITareaRepository
 
     public async Task<IReadOnlyList<Tarea>> ListarAsync()
         => await ConIncludes().OrderByDescending(t => t.FechaCreacion).ToListAsync();
+
+    public async Task<IReadOnlyList<Tarea>> ListarPorDocumentoAsync(int documentoId)
+        => await ConIncludes()
+            .Where(t => t.DocumentoAdministrativoId == documentoId)
+            .OrderByDescending(t => t.FechaCreacion)
+            .ToListAsync();
 
     /// <summary>
     /// Notas nuevas (Id == 0, agregadas por el servicio a la colección de una Tarea ya
