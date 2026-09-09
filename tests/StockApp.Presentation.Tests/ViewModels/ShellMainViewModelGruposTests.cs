@@ -154,4 +154,34 @@ public class ShellMainViewModelGruposTests
 
         Assert.Null(ex);
     }
+
+    [Fact]
+    public void GrupoTablasMaestras_TieneElItemCatalogosTarea()
+    {
+        var (vm, _, _) = Crear(RolUsuario.Admin);
+
+        var tablasMaestras = vm.Grupos.Single(g => g.Titulo == "Tablas maestras");
+
+        Assert.Contains(tablasMaestras.ItemsVisibles, i => i.Seccion == "CatalogosTarea");
+    }
+
+    [Fact]
+    public void GrupoTablasMaestras_OperadorSinPermiso_NoVeCatalogosTarea()
+    {
+        var (vm, _, _) = Crear(RolUsuario.Operador);
+
+        var tablasMaestras = vm.Grupos.Single(g => g.Titulo == "Tablas maestras");
+
+        Assert.DoesNotContain(tablasMaestras.ItemsVisibles, i => i.Seccion == "CatalogosTarea");
+    }
+
+    [Fact]
+    public void GrupoTablasMaestras_OperadorConGestionarTablasMaestras_VeCatalogosTarea()
+    {
+        var (vm, _, _) = Crear(RolUsuario.Operador, new[] { Permisos.GestionarTablasMaestras });
+
+        var tablasMaestras = vm.Grupos.Single(g => g.Titulo == "Tablas maestras");
+
+        Assert.Contains(tablasMaestras.ItemsVisibles, i => i.Seccion == "CatalogosTarea");
+    }
 }

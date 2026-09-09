@@ -254,6 +254,7 @@ public partial class ShellMainViewModel : ViewModelBase
                 CrearItem("Categorías", "mdi-shape", NavCategoriasCommand, "Categorias", () => PuedeGestionarTablasMaestras),
                 CrearItem("Proveedores", "mdi-truck", NavProveedoresCommand, "Proveedores", () => PuedeGestionarTablasMaestras),
                 CrearItem("Unidades de medida", "mdi-ruler", NavUnidadesMedidaCommand, "UnidadesMedida", () => PuedeGestionarTablasMaestras),
+                CrearItem("Catálogos de tareas", "mdi-tag-multiple", NavCatalogosTareaCommand, "CatalogosTarea", () => PuedeGestionarTablasMaestras),
             }),
             new GrupoNavegacion("Reportes", new List<ItemNavegacion>
             {
@@ -444,6 +445,13 @@ public partial class ShellMainViewModel : ViewModelBase
     {
         SeccionActiva = "UnidadesMedida";
         _navigation.Navegar<UnidadMedidaListViewModel>();
+    }
+
+    [RelayCommand]
+    private void NavCatalogosTarea()
+    {
+        SeccionActiva = "CatalogosTarea";
+        _navigation.Navegar<CatalogosTareaViewModel>();
     }
 
     // ── Movimientos (Inc 5): Operador + Admin ─────────────────────────────────

@@ -209,6 +209,26 @@ public class ShellMainViewModelTests
     }
 
     [Fact]
+    public void NavCatalogosTarea_Admin_LlamaNavegar_ACatalogosTareaViewModel()
+    {
+        var (vm, _, navMock, _) = Crear(RolUsuario.Admin);
+
+        vm.NavCatalogosTareaCommand.Execute(null);
+
+        navMock.Verify(n => n.Navegar<StockApp.Presentation.ViewModels.Catalogo.CatalogosTareaViewModel>(), Times.Once);
+    }
+
+    [Fact]
+    public void NavCatalogosTarea_EstableceSeccionActiva_CatalogosTarea()
+    {
+        var (vm, _, _, _) = Crear(RolUsuario.Admin);
+
+        vm.NavCatalogosTareaCommand.Execute(null);
+
+        Assert.Equal("CatalogosTarea", vm.SeccionActiva);
+    }
+
+    [Fact]
     public void NavProveedores_EstableceSeccionActiva_Proveedores()
     {
         var (vm, _, _, _) = Crear(RolUsuario.Admin);
