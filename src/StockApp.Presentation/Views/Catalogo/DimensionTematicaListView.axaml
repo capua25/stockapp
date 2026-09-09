@@ -1,0 +1,70 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels.Catalogo"
+             xmlns:e="using:StockApp.Domain.Entities"
+             xmlns:conv="using:StockApp.Presentation.Converters"
+             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="600" d:DesignHeight="400"
+             x:Class="StockApp.Presentation.Views.Catalogo.DimensionTematicaListView"
+             x:DataType="vm:DimensionTematicaListViewModel">
+
+    <DockPanel Margin="{DynamicResource MargenVista}">
+
+        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="CATÁLOGO" Titulo="Dimensiones">
+            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
+                <Button Classes="primary"
+                        Content="Nueva dimensión"
+                        Command="{Binding NuevoCommand}" />
+                <Button Classes="secondary"
+                        Content="Editar"
+                        Command="{Binding EditarCommand}" />
+                <Button Classes="secondary"
+                        Content="Dar de baja"
+                        Command="{Binding BajaCommand}" />
+            </StackPanel>
+        </c:HeaderVista>
+
+        <Border Classes="card">
+            <DockPanel>
+
+                <!-- DataGrid (molde de UnidadMedidaListView.axaml, migrada 2026-08-24): el tema
+                     global (Themes/DataGrid.axaml) da RowHeight/resize/FontSize gratis. Cada
+                     celda de dato se atenúa individualmente con ActivoOpacidadConverter (no la
+                     DataGridRow entera) para que el badge "Inactiva" quede a opacidad plena. -->
+                <DataGrid ItemsSource="{Binding Items}"
+                          SelectedItem="{Binding ItemSeleccionado}"
+                          IsReadOnly="True"
+                          CanUserSortColumns="True"
+                          CanUserResizeColumns="True"
+                          GridLinesVisibility="Horizontal"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="Nombre" Width="*" MinWidth="140" SortMemberPath="Nombre">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="e:DimensionTematica">
+                                    <TextBlock Text="{Binding Nombre}"
+                                               Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding Nombre}"
+                                               VerticalAlignment="Center" Margin="4,0" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="Estado" Width="Auto" CanUserSort="False">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="e:DimensionTematica">
+                                    <c:BadgeEstado Texto="Inactiva" Tono="Neutro" IsVisible="{Binding !Activo}" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+
+            </DockPanel>
+        </Border>
+
+    </DockPanel>
+
+</UserControl>

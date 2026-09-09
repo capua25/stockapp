@@ -225,6 +225,10 @@ public partial class App : AvaloniaApp
         services.AddTransient<ICategoriaService, CategoriaApiClient>();
         services.AddTransient<IProveedorService, ProveedorApiClient>();
         services.AddTransient<IUnidadMedidaService, UnidadMedidaApiClient>();
+        services.AddTransient<IZonaService, ZonaApiClient>();
+        services.AddTransient<IDimensionTematicaService, DimensionTematicaApiClient>();
+        services.AddTransient<IOrganismoResponsableService, OrganismoResponsableApiClient>();
+        services.AddTransient<IOrigenFinanciamientoService, OrigenFinanciamientoApiClient>();
         services.AddTransient<IMovimientoStockService, MovimientoStockApiClient>();
         services.AddTransient<IReporteStockService, ReporteStockApiClient>();
         services.AddTransient<IAuditoriaQueryService, AuditoriaQueryApiClient>();
@@ -356,6 +360,14 @@ public partial class App : AvaloniaApp
         services.AddTransient<ProveedorFormViewModel>();
         services.AddTransient<UnidadMedidaListViewModel>();
         services.AddTransient<UnidadMedidaFormViewModel>();
+        services.AddTransient<ZonaListViewModel>();
+        services.AddTransient<ZonaFormViewModel>();
+        services.AddTransient<DimensionTematicaListViewModel>();
+        services.AddTransient<DimensionTematicaFormViewModel>();
+        services.AddTransient<OrganismoResponsableListViewModel>();
+        services.AddTransient<OrganismoResponsableFormViewModel>();
+        services.AddTransient<OrigenFinanciamientoListViewModel>();
+        services.AddTransient<OrigenFinanciamientoFormViewModel>();
 
         // ── Módulo Finanzas — Fase 1: VMs de maestros ─────────────────────────
         services.AddTransient<MaestrosFinanzasViewModel>();

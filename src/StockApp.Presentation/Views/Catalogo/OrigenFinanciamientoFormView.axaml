@@ -1,0 +1,36 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels.Catalogo"
+             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="250"
+             x:Class="StockApp.Presentation.Views.Catalogo.OrigenFinanciamientoFormView"
+             x:DataType="vm:OrigenFinanciamientoFormViewModel">
+
+    <Border Classes="card" Padding="{DynamicResource MargenVista}" Margin="{DynamicResource MargenVista}"
+            MaxWidth="380" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <StackPanel Spacing="{DynamicResource Espacio3}">
+
+            <c:HeaderVista Titulo="{Binding Titulo}" />
+
+            <c:CampoFormulario Etiqueta="Nombre" Requerido="True">
+                <TextBox Text="{Binding Nombre}"
+                         PlaceholderText="Nombre del origen de financiamiento" />
+            </c:CampoFormulario>
+
+            <TextBlock Text="{Binding MensajeError}"
+                       Foreground="{DynamicResource DangerBrush}"
+                       IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                       TextWrapping="Wrap" />
+
+            <Button Classes="primary"
+                    Content="Guardar"
+                    Command="{Binding GuardarCommand}"
+                    HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Center" />
+
+        </StackPanel>
+    </Border>
+
+</UserControl>
