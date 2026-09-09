@@ -371,6 +371,22 @@ public class AppDbContext : DbContext
                 .HasForeignKey(t => t.TomadaPorUsuarioId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(t => t.CerradaPor).WithMany()
                 .HasForeignKey(t => t.CerradaPorUsuarioId).OnDelete(DeleteBehavior.Restrict);
+
+            // ── Clasificadores (spec 2026-09-08, D7) ──────────────────────────────
+            // Las 5 FKs son nullable y Restrict: migración puramente aditiva, sin backfill,
+            // ninguna tarea existente se toca. Los catálogos (Plan A) usan baja lógica
+            // (Activo), nunca DELETE físico, así que Restrict nunca dispara en la práctica —
+            // mismo criterio que CreadaPor/TomadaPor/CerradaPor arriba.
+            e.HasOne(t => t.Zona).WithMany()
+                .HasForeignKey(t => t.ZonaId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(t => t.DimensionTematica).WithMany()
+                .HasForeignKey(t => t.DimensionTematicaId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(t => t.OrganismoResponsable).WithMany()
+                .HasForeignKey(t => t.OrganismoResponsableId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(t => t.OrigenFinanciamiento).WithMany()
+                .HasForeignKey(t => t.OrigenFinanciamientoId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(t => t.DocumentoAdministrativo).WithMany()
+                .HasForeignKey(t => t.DocumentoAdministrativoId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<NotaTarea>(e =>
