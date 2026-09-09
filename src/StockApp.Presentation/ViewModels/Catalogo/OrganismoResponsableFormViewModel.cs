@@ -56,7 +56,7 @@ public partial class OrganismoResponsableFormViewModel : ViewModelBase
             else
                 await _service.AltaAsync(new OrganismoResponsable { Nombre = Nombre });
 
-            _navigation.Navegar<OrganismoResponsableListViewModel>();
+            _navigation.Navegar<CatalogosTareaViewModel>();
         }
         catch (System.Exception ex)
         {

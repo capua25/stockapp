@@ -230,14 +230,14 @@ public class ZonaFormViewModelTests
     }
 
     [Fact]
-    public async Task GuardarCommand_Exitoso_NavegaAListado()
+    public async Task GuardarCommand_Exitoso_NavegaAlContenedorDePestanas()
     {
         var (vm, _, navMock) = Crear();
         vm.Nombre = "Centro";
 
         await vm.GuardarCommand.ExecuteAsync(null);
 
-        navMock.Verify(n => n.Navegar<ZonaListViewModel>(), Times.Once);
+        navMock.Verify(n => n.Navegar<CatalogosTareaViewModel>(), Times.Once);
     }
 
     [Fact]
@@ -274,6 +274,6 @@ public class ZonaFormViewModelTests
         await vm.GuardarCommand.ExecuteAsync(null);
 
         Assert.Equal("Ya existe una zona con el nombre 'Sur'.", vm.MensajeError);
-        navMock.Verify(n => n.Navegar<ZonaListViewModel>(), Times.Never);
+        navMock.Verify(n => n.Navegar<CatalogosTareaViewModel>(), Times.Never);
     }
 }

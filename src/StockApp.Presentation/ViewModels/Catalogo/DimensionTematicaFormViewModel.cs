@@ -56,7 +56,7 @@ public partial class DimensionTematicaFormViewModel : ViewModelBase
             else
                 await _service.AltaAsync(new DimensionTematica { Nombre = Nombre });
 
-            _navigation.Navegar<DimensionTematicaListViewModel>();
+            _navigation.Navegar<CatalogosTareaViewModel>();
         }
         catch (System.Exception ex)
         {

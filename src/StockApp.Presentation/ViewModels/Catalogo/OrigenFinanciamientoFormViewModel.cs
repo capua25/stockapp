@@ -56,7 +56,7 @@ public partial class OrigenFinanciamientoFormViewModel : ViewModelBase
             else
                 await _service.AltaAsync(new OrigenFinanciamiento { Nombre = Nombre });
 
-            _navigation.Navegar<OrigenFinanciamientoListViewModel>();
+            _navigation.Navegar<CatalogosTareaViewModel>();
         }
         catch (System.Exception ex)
         {

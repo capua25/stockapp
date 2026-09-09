@@ -230,14 +230,14 @@ public class DimensionTematicaFormViewModelTests
     }
 
     [Fact]
-    public async Task GuardarCommand_Exitoso_NavegaAListado()
+    public async Task GuardarCommand_Exitoso_NavegaAlContenedorDePestanas()
     {
         var (vm, _, navMock) = Crear();
         vm.Nombre = "Infraestructura";
 
         await vm.GuardarCommand.ExecuteAsync(null);
 
-        navMock.Verify(n => n.Navegar<DimensionTematicaListViewModel>(), Times.Once);
+        navMock.Verify(n => n.Navegar<CatalogosTareaViewModel>(), Times.Once);
     }
 
     [Fact]
@@ -274,6 +274,6 @@ public class DimensionTematicaFormViewModelTests
         await vm.GuardarCommand.ExecuteAsync(null);
 
         Assert.Equal("Ya existe una dimensión con el nombre 'Tránsito'.", vm.MensajeError);
-        navMock.Verify(n => n.Navegar<DimensionTematicaListViewModel>(), Times.Never);
+        navMock.Verify(n => n.Navegar<CatalogosTareaViewModel>(), Times.Never);
     }
 }

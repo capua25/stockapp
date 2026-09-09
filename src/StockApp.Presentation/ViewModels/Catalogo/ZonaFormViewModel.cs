@@ -57,7 +57,7 @@ public partial class ZonaFormViewModel : ViewModelBase
             else
                 await _service.AltaAsync(new Zona { Nombre = Nombre });
 
-            _navigation.Navegar<ZonaListViewModel>();
+            _navigation.Navegar<CatalogosTareaViewModel>();
         }
         catch (System.Exception ex)
         {

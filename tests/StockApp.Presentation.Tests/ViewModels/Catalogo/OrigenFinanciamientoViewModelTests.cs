@@ -230,14 +230,14 @@ public class OrigenFinanciamientoFormViewModelTests
     }
 
     [Fact]
-    public async Task GuardarCommand_Exitoso_NavegaAListado()
+    public async Task GuardarCommand_Exitoso_NavegaAlContenedorDePestanas()
     {
         var (vm, _, navMock) = Crear();
         vm.Nombre = "Presupuesto propio";
 
         await vm.GuardarCommand.ExecuteAsync(null);
 
-        navMock.Verify(n => n.Navegar<OrigenFinanciamientoListViewModel>(), Times.Once);
+        navMock.Verify(n => n.Navegar<CatalogosTareaViewModel>(), Times.Once);
     }
 
     [Fact]
@@ -274,6 +274,6 @@ public class OrigenFinanciamientoFormViewModelTests
         await vm.GuardarCommand.ExecuteAsync(null);
 
         Assert.Equal("Ya existe un origen de financiamiento con el nombre 'Fondo nacional'.", vm.MensajeError);
-        navMock.Verify(n => n.Navegar<OrigenFinanciamientoListViewModel>(), Times.Never);
+        navMock.Verify(n => n.Navegar<CatalogosTareaViewModel>(), Times.Never);
     }
 }
