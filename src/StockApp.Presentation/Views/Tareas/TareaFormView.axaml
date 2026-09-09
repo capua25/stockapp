@@ -4,6 +4,7 @@
              xmlns:dom="using:StockApp.Domain.Entities"
              xmlns:beh="using:StockApp.Presentation.Behaviors"
              xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:pnl="using:StockApp.Presentation.Views.Tareas"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="700" d:DesignHeight="700"
@@ -38,6 +39,9 @@
                                                 beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
                         </c:CampoFormulario>
 
+                        <TextBlock Text="Clasificación (opcional)" Classes="seccion" Margin="0,8,0,0" />
+                        <pnl:ClasificacionTareaPanelView DataContext="{Binding ClasificacionPanel}" />
+
                         <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
                             <Button Classes="primary" Content="Guardar" Command="{Binding GuardarCommand}" />
                             <Button Classes="secondary" Content="Volver" Command="{Binding VolverCommand}" />
@@ -55,6 +59,24 @@
                         <TextBlock Text="{Binding EstadoTexto, StringFormat='Estado: {0}'}" Classes="caption" />
                         <TextBlock Text="{Binding TomadaPorNombre, StringFormat='Tomada por: {0}'}" Classes="caption"
                                    IsVisible="{Binding TomadaPorNombre, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+                        <!-- Clasificación de solo lectura (spec 2026-09-08): reclasificar es
+                             SIEMPRE vía el modal (Reclasificar más abajo), nunca editando estos
+                             campos in-place. -->
+                        <TextBlock Text="{Binding ZonaTexto, StringFormat='Zona: {0}'}" Classes="caption"
+                                   IsVisible="{Binding ZonaTexto, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                        <TextBlock Text="{Binding DimensionTematicaTexto, StringFormat='Dimensión: {0}'}" Classes="caption"
+                                   IsVisible="{Binding DimensionTematicaTexto, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                        <TextBlock Text="{Binding OrganismoResponsableTexto, StringFormat='Organismo: {0}'}" Classes="caption"
+                                   IsVisible="{Binding OrganismoResponsableTexto, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                        <TextBlock Text="{Binding OrigenFinanciamientoTexto, StringFormat='Origen de financiamiento: {0}'}" Classes="caption"
+                                   IsVisible="{Binding OrigenFinanciamientoTexto, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                        <TextBlock Text="{Binding DocumentoAdministrativoTexto, StringFormat='Expediente: {0}'}" Classes="caption"
+                                   IsVisible="{Binding DocumentoAdministrativoTexto, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+                        <Button Classes="secondary" Content="Reclasificar" Command="{Binding ReclasificarCommand}"
+                                IsVisible="{Binding MuestraReclasificar}"
+                                HorizontalAlignment="Left" Margin="0,8,0,0" />
 
                         <Button Classes="secondary" Content="Volver" Command="{Binding VolverCommand}"
                                 HorizontalAlignment="Left" Margin="0,8,0,0" />

@@ -101,11 +101,14 @@ public class TareaFormViewTests
         var (window, vm, _, _, _) = MontarParaCrear();
 
         Assert.True(vm.EsNuevaTarea);
-        // CalendarDatePicker es un TemplatedControl que trae SU PROPIO TextBox interno (el de
-        // "dd/mm/aaaa") -- se excluye para quedarnos solo con los TextBox de autor (Titulo y
-        // Descripcion); el picker se verifica aparte mas abajo.
+        // CalendarDatePicker y AutoCompleteBox (este ultimo, del buscador de Expediente dentro
+        // de ClasificacionTareaPanelView, agregado por la clasificacion -- spec 2026-09-08) son
+        // TemplatedControls que traen SU PROPIO TextBox interno; se excluyen para quedarnos
+        // solo con los TextBox de autor (Titulo y Descripcion); el picker se verifica aparte
+        // mas abajo.
         var textBoxesVisibles = window.GetVisualDescendants().OfType<TextBox>()
             .Where(t => t.FindAncestorOfType<CalendarDatePicker>() is null)
+            .Where(t => t.FindAncestorOfType<AutoCompleteBox>() is null)
             .Where(ArbolVisual.EsVisibleEnArbol)
             .ToList();
         Assert.Equal(2, textBoxesVisibles.Count); // Titulo + Descripcion
