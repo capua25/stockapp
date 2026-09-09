@@ -1,6 +1,7 @@
 using System.Net;
 using StockApp.ApiClient;
 using StockApp.ApiClient.Tests.TestInfra;
+using StockApp.Application.Tareas;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
@@ -123,5 +124,126 @@ public class TareaApiClientTests
 
         Assert.Equal("/tareas/5/notas", fake.UltimaRequest!.RequestUri!.AbsolutePath);
         Assert.Contains("\"texto\":\"avance registrado\"", fake.UltimoBody);
+    }
+
+    [Fact]
+    public async Task ObtenerPorIdAsync_200_DeserializaLaTarea()
+    {
+        var fake = new FakeHttpHandler(_ => TestHttp.Json(new
+        {
+            id = 5, titulo = "Reparar bache", descripcion = (string?)null,
+            estado = EstadoTarea.Pendiente, prioridad = PrioridadTarea.Media, fechaLimite = (DateTime?)null,
+            creadaPorUsuarioId = 1, fechaCreacion = new DateTime(2026, 9, 1),
+            tomadaPorUsuarioId = (int?)null, tomadaPorNombre = (string?)null, fechaInicio = (DateTime?)null,
+            cerradaPorUsuarioId = (int?)null, fechaFin = (DateTime?)null,
+            zonaId = (int?)null, zonaNombre = (string?)null,
+            dimensionTematicaId = (int?)null, dimensionTematicaNombre = (string?)null,
+            organismoResponsableId = (int?)null, organismoResponsableNombre = (string?)null,
+            origenFinanciamientoId = (int?)null, origenFinanciamientoNombre = (string?)null,
+            documentoAdministrativoId = (int?)null, documentoAdministrativoNumero = (string?)null,
+            notas = Array.Empty<object>(),
+        }));
+        var client = new TareaApiClient(TestHttp.CrearCliente(fake));
+
+        var tarea = await client.ObtenerPorIdAsync(5);
+
+        Assert.Equal("/tareas/5", fake.UltimaRequest!.RequestUri!.AbsolutePath);
+        Assert.Equal("Reparar bache", tarea!.Titulo);
+    }
+
+    [Fact]
+    public async Task ObtenerPorIdAsync_404_DevuelveNull()
+    {
+        var fake = new FakeHttpHandler(_ => TestHttp.Problema(HttpStatusCode.NotFound, "Tarea 999 no encontrada."));
+        var client = new TareaApiClient(TestHttp.CrearCliente(fake));
+
+        var tarea = await client.ObtenerPorIdAsync(999);
+
+        Assert.Null(tarea);
+    }
+
+    [Fact]
+    public async Task CrearAsync_ConClasificacion_SerializaLosCincoIds()
+    {
+        var fake = new FakeHttpHandler(_ => TestHttp.Json(new { id = 1 }, HttpStatusCode.Created));
+        var client = new TareaApiClient(TestHttp.CrearCliente(fake));
+
+        await client.CrearAsync(new Tarea
+        {
+            Titulo = "x", ZonaId = 3, DimensionTematicaId = 4,
+            OrganismoResponsableId = 5, OrigenFinanciamientoId = 6, DocumentoAdministrativoId = 7,
+        });
+
+        Assert.Contains("\"zonaId\":3", fake.UltimoBody);
+        Assert.Contains("\"dimensionTematicaId\":4", fake.UltimoBody);
+        Assert.Contains("\"organismoResponsableId\":5", fake.UltimoBody);
+        Assert.Contains("\"origenFinanciamientoId\":6", fake.UltimoBody);
+        Assert.Contains("\"documentoAdministrativoId\":7", fake.UltimoBody);
+    }
+
+    [Fact]
+    public async Task ListarAsync_ConClasificacion_DeserializaLosNombres()
+    {
+        var fake = new FakeHttpHandler(_ => TestHttp.Json(new[]
+        {
+            new
+            {
+                id = 1, titulo = "x", descripcion = (string?)null,
+                estado = EstadoTarea.Pendiente, prioridad = PrioridadTarea.Media, fechaLimite = (DateTime?)null,
+                creadaPorUsuarioId = 1, fechaCreacion = new DateTime(2026, 9, 1),
+                tomadaPorUsuarioId = (int?)null, tomadaPorNombre = (string?)null, fechaInicio = (DateTime?)null,
+                cerradaPorUsuarioId = (int?)null, fechaFin = (DateTime?)null,
+                zonaId = 3, zonaNombre = "Centro",
+                dimensionTematicaId = (int?)null, dimensionTematicaNombre = (string?)null,
+                organismoResponsableId = (int?)null, organismoResponsableNombre = (string?)null,
+                origenFinanciamientoId = (int?)null, origenFinanciamientoNombre = (string?)null,
+                documentoAdministrativoId = (int?)null, documentoAdministrativoNumero = (string?)null,
+                notas = Array.Empty<object>(),
+            },
+        }));
+        var client = new TareaApiClient(TestHttp.CrearCliente(fake));
+
+        var tareas = await client.ListarAsync();
+
+        var tarea = Assert.Single(tareas);
+        Assert.Equal(3, tarea.ZonaId);
+        Assert.Equal("Centro", tarea.Zona!.Nombre);
+    }
+
+    [Fact]
+    public async Task ReclasificarAsync_PUTClasificacion_SerializaElBody()
+    {
+        var fake = new FakeHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        var client = new TareaApiClient(TestHttp.CrearCliente(fake));
+
+        await client.ReclasificarAsync(5, new DatosClasificacionTarea(1, null, null, null, null));
+
+        Assert.Equal(HttpMethod.Put, fake.UltimaRequest!.Method);
+        Assert.Equal("/tareas/5/clasificacion", fake.UltimaRequest.RequestUri!.AbsolutePath);
+        Assert.Contains("\"zonaId\":1", fake.UltimoBody);
+        Assert.Contains("\"dimensionTematicaId\":null", fake.UltimoBody);
+    }
+
+    [Fact]
+    public async Task ReclasificarAsync_403_LanzaUnauthorizedAccessException()
+    {
+        var fake = new FakeHttpHandler(_ => TestHttp.Problema(HttpStatusCode.Forbidden, "sin permiso"));
+        var client = new TareaApiClient(TestHttp.CrearCliente(fake));
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => client.ReclasificarAsync(5, new DatosClasificacionTarea(null, null, null, null, null)));
+    }
+
+    [Fact]
+    public async Task ListarPorDocumentoAsync_GETConQueryString_DeserializaLaLista()
+    {
+        var fake = new FakeHttpHandler(_ => TestHttp.Json(Array.Empty<object>()));
+        var client = new TareaApiClient(TestHttp.CrearCliente(fake));
+
+        var tareas = await client.ListarPorDocumentoAsync(9);
+
+        Assert.Equal("/tareas", fake.UltimaRequest!.RequestUri!.AbsolutePath);
+        Assert.Contains("documentoId=9", fake.UltimaRequest.RequestUri!.Query);
+        Assert.Empty(tareas);
     }
 }
