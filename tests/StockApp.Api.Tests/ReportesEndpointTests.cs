@@ -156,4 +156,66 @@ public class ReportesEndpointTests : ApiTestBase
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
+
+    // ── GET /reportes/tareas ──────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetReporteTareas_SinToken_Devuelve401()
+    {
+        var client = Factory.CreateClient();
+
+        var response = await client.GetAsync(
+            "/reportes/tareas?agrupador=Zona&criterio=Creacion&desde=2026-01-01&hasta=2026-12-31");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetReporteTareas_ConTokenOperadorSinPermiso_Devuelve403()
+    {
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenOperador());
+
+        var response = await client.GetAsync(
+            "/reportes/tareas?agrupador=Zona&criterio=Creacion&desde=2026-01-01&hasta=2026-12-31");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetReporteTareas_ConTokenAdmin_Devuelve200()
+    {
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var response = await client.GetAsync(
+            "/reportes/tareas?agrupador=Zona&criterio=Creacion&desde=2026-01-01&hasta=2026-12-31");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var reporte = await response.Content.ReadFromJsonAsync<ReporteTareasDto>();
+        Assert.NotNull(reporte);
+    }
+
+    [Fact]
+    public async Task GetReporteTareas_SinRangoDeFechas_Devuelve400()
+    {
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var response = await client.GetAsync("/reportes/tareas?agrupador=Zona&criterio=Creacion");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetReporteTareas_AgrupadoPorExpediente_Devuelve200()
+    {
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var response = await client.GetAsync(
+            "/reportes/tareas?agrupador=Expediente&criterio=Cierre&desde=2026-01-01&hasta=2026-12-31");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
 }

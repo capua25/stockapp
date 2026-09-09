@@ -23,6 +23,22 @@ public static class ReportesEndpoints
             int productoId, DateTime? fechaDesde, DateTime? fechaHasta, IReporteStockService reportes) =>
             Results.Ok(await reportes.ObtenerHistorialPorProductoAsync(productoId, fechaDesde, fechaHasta)));
 
+        group.MapGet("/tareas", async (
+            IReporteTareasService reportes,
+            AgrupadorTareas agrupador, CriterioFechaTareas criterio, DateTime desde, DateTime hasta) =>
+        {
+            // El binding de query string (a diferencia del body JSON, que pasa por
+            // DateTimeUnspecifiedAsUtcConverter) deja Kind=Unspecified cuando la fecha no
+            // trae offset (ej. "2026-01-01"). Npgsql rechaza escribir/comparar Unspecified
+            // contra una columna timestamptz -- se reinterpreta como UTC acá, mismo criterio
+            // que el converter del pipeline (SpecifyKind, no ToUniversalTime).
+            var desdeUtc = DateTime.SpecifyKind(desde, DateTimeKind.Utc);
+            var hastaUtc = DateTime.SpecifyKind(hasta, DateTimeKind.Utc);
+
+            return Results.Ok(await reportes.ObtenerAsync(
+                new FiltroReporteTareas(agrupador, criterio, desdeUtc, hastaUtc)));
+        });
+
         return app;
     }
 }

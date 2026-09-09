@@ -142,6 +142,7 @@ public class PermisosEndpointGuardTests : ApiTestBase
         ("GET",    "/reportes/stock-por-categoria", Permisos.VerReportes),
         ("GET",    "/reportes/mas-movidos", Permisos.VerReportes),
         ("GET",    "/reportes/historial-producto/{productoId}", Permisos.VerReportes),
+        ("GET",    "/reportes/tareas", Permisos.VerReportes),
 
         ("GET",    "/finanzas/rubros", Permisos.GestionarMaestrosFinanzas),
         ("POST",   "/finanzas/rubros", Permisos.GestionarMaestrosFinanzas),

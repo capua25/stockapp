@@ -191,6 +191,11 @@ builder.Services.AddScoped<IReporteStockService>(sp =>
         sp.GetRequiredService<IMemoryCache>(),
         sp.GetRequiredService<IVersionReportes>()));
 
+// Reporte de tareas (slice: GET /reportes/tareas) -- D14: SIN cache, a diferencia del
+// bloque de arriba. No envolver en un decorator ni tocar IVersionReportes.
+builder.Services.AddScoped<IReporteTareasRepository, ReporteTareasRepository>();
+builder.Services.AddScoped<IReporteTareasService, ReporteTareasService>();
+
 // Catálogo — tablas maestras (Fase 2b)
 builder.Services.AddScoped<ICategoriaRepository, CategoriaRepository>();
 builder.Services.AddScoped<ICategoriaService, CategoriaService>();
