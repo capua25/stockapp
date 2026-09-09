@@ -33,4 +33,21 @@ public interface ITareaService
     /// <summary>Nota manual. Las notas son append-only: no hay método para editarlas ni
     /// borrarlas. Implementado en Task 6.</summary>
     Task AgregarNotaAsync(int id, string texto);
+
+    /// <summary>Una sola tarea por id, o null si no existe (spec 2026-09-08). Expone
+    /// ITareaRepository.ObtenerPorIdAsync, que ya existía con sus Includes completos —
+    /// TareaFormViewModel.ReclasificarAsync (Task 12) lo usa para refrescar la tarea
+    /// reclasificada sin traer la lista completa.</summary>
+    Task<Tarea?> ObtenerPorIdAsync(int id);
+
+    /// <summary>Reemplaza los cinco clasificadores (spec 2026-09-08, D21: total, no parcial —
+    /// null desasigna). Solo Admin (AdministrarTareas). Alcanza también tareas terminales
+    /// (D9): reclasificar NO cambia el estado ni reabre la tarea. Misma validación que
+    /// CrearAsync (D12). Si nada cambia, no genera nota ni auditoría (mismo guard que
+    /// CambiarPrioridadAsync).</summary>
+    Task ReclasificarAsync(int tareaId, DatosClasificacionTarea datos);
+
+    /// <summary>Tareas vinculadas a un expediente (D11/D13): la dependencia va en un solo
+    /// sentido, Documentos pregunta acá.</summary>
+    Task<IReadOnlyList<Tarea>> ListarPorDocumentoAsync(int documentoId);
 }

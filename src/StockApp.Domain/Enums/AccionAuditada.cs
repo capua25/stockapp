@@ -99,4 +99,8 @@ public enum AccionAuditada
     AltaOrigenFinanciamiento        = 69,
     BajaOrigenFinanciamiento        = 70,
     ModificacionOrigenFinanciamiento = 71,
+
+    // ── Tareas — Clasificadores (append-only a partir de 72, después del bloque
+    // 60–71 del plan de catálogos) ────────────────────────────────────────────
+    ReclasificacionTarea = 72,
 }

@@ -326,4 +326,100 @@ public class TareaService : ITareaService
             _session.UsuarioActual!.Id, AccionAuditada.AltaNotaTarea, "Tarea", id,
             $"Nota: {nota.Texto}");
     }
+
+    public async Task<Tarea?> ObtenerPorIdAsync(int id)
+    {
+        _auth.Verificar(_session, Permisos.GestionarTareas);
+        return await _repo.ObtenerPorIdAsync(id);
+    }
+
+    public async Task ReclasificarAsync(int tareaId, DatosClasificacionTarea datos)
+    {
+        _auth.Verificar(_session, Permisos.AdministrarTareas);
+
+        var tarea = await _repo.ObtenerPorIdAsync(tareaId)
+            ?? throw new EntidadNoEncontradaException($"Tarea {tareaId} no encontrada.");
+
+        // D12: misma validación que CrearAsync, sin atajos.
+        var (zona, dimension, organismo, origen, documento) = await ValidarClasificacionAsync(
+            datos.ZonaId, datos.DimensionTematicaId, datos.OrganismoResponsableId,
+            datos.OrigenFinanciamientoId, datos.DocumentoAdministrativoId);
+
+        var huboCambios =
+            tarea.ZonaId != datos.ZonaId ||
+            tarea.DimensionTematicaId != datos.DimensionTematicaId ||
+            tarea.OrganismoResponsableId != datos.OrganismoResponsableId ||
+            tarea.OrigenFinanciamientoId != datos.OrigenFinanciamientoId ||
+            tarea.DocumentoAdministrativoId != datos.DocumentoAdministrativoId;
+
+        // Guard "sin cambios" (D10 del spec, mismo patrón que CambiarPrioridadAsync,
+        // TareaService.cs): si la reclasificación no cambia ningún valor, no se genera
+        // nota automática ni entrada de auditoría.
+        if (!huboCambios)
+            return;
+
+        var diff = ConstruirDiffClasificacion(tarea, zona, dimension, organismo, origen, documento);
+
+        // D9: reclasificar NO toca Estado — alcanza también tareas Terminada/Cancelada.
+        tarea.ZonaId = datos.ZonaId;
+        tarea.DimensionTematicaId = datos.DimensionTematicaId;
+        tarea.OrganismoResponsableId = datos.OrganismoResponsableId;
+        tarea.OrigenFinanciamientoId = datos.OrigenFinanciamientoId;
+        tarea.DocumentoAdministrativoId = datos.DocumentoAdministrativoId;
+
+        // D10: doble registro — nota automática en el hilo + entrada de auditoría, mismo
+        // patrón que AnularAsync en Documentos.
+        tarea.Notas.Add(new NotaTarea
+        {
+            UsuarioId    = _session.UsuarioActual!.Id,
+            Fecha        = DateTime.UtcNow,
+            Texto        = $"admin reclasificó — {diff}",
+            EsAutomatica = true,
+        });
+
+        await _repo.ActualizarAsync(tarea);
+
+        await _audit.RegistrarAsync(
+            _session.UsuarioActual!.Id, AccionAuditada.ReclasificacionTarea, "Tarea", tareaId, diff);
+    }
+
+    /// <summary>
+    /// Diff legible de la reclasificación (D10 del spec), ej.: "Zona: (sin asignar) →
+    /// Centro; Dimensión: Tránsito → Infraestructura". Solo incluye los campos que
+    /// efectivamente cambiaron — <see cref="ReclasificarAsync"/> ya filtró el caso "sin
+    /// cambios" antes de llamar acá, pero un cambio parcial (ej. solo Zona) no debe listar
+    /// los otros cuatro campos sin cambiar.
+    /// </summary>
+    private static string ConstruirDiffClasificacion(
+        Tarea tarea, Zona? nuevaZona, DimensionTematica? nuevaDimension,
+        OrganismoResponsable? nuevoOrganismo, OrigenFinanciamiento? nuevoOrigen,
+        DocumentoAdministrativo? nuevoDocumento)
+    {
+        var partes = new List<string>();
+
+        void AgregarSiCambio(string etiqueta, string? anterior, string? nuevo)
+        {
+            var anteriorTexto = anterior ?? "(sin asignar)";
+            var nuevoTexto = nuevo ?? "(sin asignar)";
+            if (anteriorTexto != nuevoTexto)
+                partes.Add($"{etiqueta}: {anteriorTexto} → {nuevoTexto}");
+        }
+
+        AgregarSiCambio("Zona", tarea.Zona?.Nombre, nuevaZona?.Nombre);
+        AgregarSiCambio("Dimensión", tarea.DimensionTematica?.Nombre, nuevaDimension?.Nombre);
+        AgregarSiCambio("Organismo", tarea.OrganismoResponsable?.Nombre, nuevoOrganismo?.Nombre);
+        AgregarSiCambio("Origen de financiamiento", tarea.OrigenFinanciamiento?.Nombre, nuevoOrigen?.Nombre);
+        AgregarSiCambio(
+            "Expediente",
+            tarea.DocumentoAdministrativo is null ? null : $"{tarea.DocumentoAdministrativo.Numero}/{tarea.DocumentoAdministrativo.Anio}",
+            nuevoDocumento is null ? null : $"{nuevoDocumento.Numero}/{nuevoDocumento.Anio}");
+
+        return string.Join("; ", partes);
+    }
+
+    public async Task<IReadOnlyList<Tarea>> ListarPorDocumentoAsync(int documentoId)
+    {
+        _auth.Verificar(_session, Permisos.GestionarTareas);
+        return await _repo.ListarPorDocumentoAsync(documentoId);
+    }
 }
