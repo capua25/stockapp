@@ -58,6 +58,7 @@ public abstract class ApiTestBase
             "\"Categorias\", \"Proveedores\", \"UnidadesMedida\", " +
             "\"AsignacionesPresupuestales\", \"LineasPoa\", \"RubrosGasto\", \"FuentesFinanciamiento\", " +
             "\"AdjuntosContenido\", \"Adjuntos\", \"PagosGasto\", \"Gastos\", \"IngresosCaja\", " +
-            "\"CorridasBackup\", \"Usuarios\" RESTART IDENTITY CASCADE;");
+            "\"CorridasBackup\", \"Zonas\", \"DimensionesTematicas\", \"OrganismosResponsables\", " +
+            "\"OrigenesFinanciamiento\", \"Usuarios\" RESTART IDENTITY CASCADE;");
     }
 }

@@ -33,6 +33,10 @@ public class AppDbContext : DbContext
     public DbSet<EventoDocumento> EventosDocumento => Set<EventoDocumento>();
     public DbSet<AdjuntoDocumento> AdjuntosDocumento => Set<AdjuntoDocumento>();
     public DbSet<AdjuntoDocumentoContenido> AdjuntosDocumentoContenido => Set<AdjuntoDocumentoContenido>();
+    public DbSet<Zona> Zonas => Set<Zona>();
+    public DbSet<DimensionTematica> DimensionesTematicas => Set<DimensionTematica>();
+    public DbSet<OrganismoResponsable> OrganismosResponsables => Set<OrganismoResponsable>();
+    public DbSet<OrigenFinanciamiento> OrigenesFinanciamiento => Set<OrigenFinanciamiento>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -92,6 +96,37 @@ public class AppDbContext : DbContext
             e.HasIndex(u => u.Nombre).IsUnique();
             e.HasIndex(u => u.Abreviatura).IsUnique();
             e.Property(u => u.Activo).HasDefaultValue(true);
+        });
+
+        // ── Clasificadores de Tareas (spec 2026-09-08) ──────────────────────────
+        // D14: catálogos administrables sin invalidación de cache de reportes — ver
+        // ZonaService/DimensionTematicaService/OrganismoResponsableService/OrigenFinanciamientoService.
+        modelBuilder.Entity<Zona>(e =>
+        {
+            e.Property(z => z.Nombre).IsRequired();
+            e.HasIndex(z => z.Nombre).IsUnique();
+            e.Property(z => z.Activo).HasDefaultValue(true);
+        });
+
+        modelBuilder.Entity<DimensionTematica>(e =>
+        {
+            e.Property(d => d.Nombre).IsRequired();
+            e.HasIndex(d => d.Nombre).IsUnique();
+            e.Property(d => d.Activo).HasDefaultValue(true);
+        });
+
+        modelBuilder.Entity<OrganismoResponsable>(e =>
+        {
+            e.Property(o => o.Nombre).IsRequired();
+            e.HasIndex(o => o.Nombre).IsUnique();
+            e.Property(o => o.Activo).HasDefaultValue(true);
+        });
+
+        modelBuilder.Entity<OrigenFinanciamiento>(e =>
+        {
+            e.Property(o => o.Nombre).IsRequired();
+            e.HasIndex(o => o.Nombre).IsUnique();
+            e.Property(o => o.Activo).HasDefaultValue(true);
         });
 
         // ── MovimientoStock ───────────────────────────────────────────────────
