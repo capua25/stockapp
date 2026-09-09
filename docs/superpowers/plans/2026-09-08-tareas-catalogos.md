@@ -7349,6 +7349,7 @@ git commit -m "feat(catalogo): agrega pantalla CatalogosTareaView con las cuatro
 **Files:**
 - Modify: `src/StockApp.Presentation/ViewModels/ShellMainViewModel.cs`
 - Test: `tests/StockApp.Presentation.Tests/ViewModels/ShellMainViewModelTests.cs`
+- Test: `tests/StockApp.Presentation.Tests/ViewModels/ShellMainViewModelGruposTests.cs`
 
 **Interfaces:**
 - Consumes: `CatalogosTareaViewModel` (Task 9); `PuedeGestionarTablasMaestras` (propiedad YA existente en `ShellMainViewModel.cs:89-90`, gateada por `Permisos.GestionarTablasMaestras` — se reutiliza tal cual, no se crea una propiedad `Puede*` nueva); `CrearItem(...)` (helper existente que registra el ítem en `_itemsGateados` para `RecalcularVisibilidad`).
