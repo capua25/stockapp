@@ -6,8 +6,10 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.ApiClient;
+using StockApp.Application.Authorization;
 using StockApp.Application.Documentos;
 using StockApp.Application.Interfaces;
+using StockApp.Application.Tareas;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
@@ -37,6 +39,7 @@ public partial class DocumentoFormViewModel : ViewModelBase
     private readonly ICurrentSession                 _session;
     private readonly INavigationService               _navigation;
     private readonly IConfirmacionService              _confirmacion;
+    private readonly ITareaService                    _tareas;
 
     private DocumentoAdministrativo? _documento;
 
@@ -83,6 +86,14 @@ public partial class DocumentoFormViewModel : ViewModelBase
 
     public AdjuntosDocumentoPanelViewModel AdjuntosPanel { get; }
 
+    public ObservableCollection<Tarea> TareasVinculadas { get; } = new();
+
+    /// <summary>Gate de la sección "Tareas vinculadas" (spec 2026-09-08, D13): un operador
+    /// puede tener documentos.gestionar sin tener tareas.gestionar -- mismo criterio EXACTO
+    /// que InicioViewModel.PuedeVerTareas (InicioViewModel.cs:116-117).</summary>
+    public bool PuedeVerTareasVinculadas =>
+        _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.GestionarTareas);
+
     public bool EsAdmin => _session.RolActual == RolUsuario.Admin;
 
     public bool PuedeEditar          => !EsNuevoDocumento && _documento is { EsActivo: true };
@@ -108,13 +119,14 @@ public partial class DocumentoFormViewModel : ViewModelBase
     public DocumentoFormViewModel(
         IDocumentoAdministrativoService service, ICurrentSession session,
         INavigationService navigation, IConfirmacionService confirmacion,
-        AdjuntosDocumentoPanelViewModel adjuntosPanel)
+        AdjuntosDocumentoPanelViewModel adjuntosPanel, ITareaService tareas)
     {
         _service      = service;
         _session      = session;
         _navigation   = navigation;
         _confirmacion = confirmacion;
         AdjuntosPanel = adjuntosPanel;
+        _tareas       = tareas;
     }
 
     public void CargarParaCrear()
@@ -140,6 +152,31 @@ public partial class DocumentoFormViewModel : ViewModelBase
         MensajeError = null;
 
         await AdjuntosPanel.InicializarAsync(documento.Id, documento.EsActivo);
+        await CargarTareasVinculadasAsync(documento.Id);
+    }
+
+    /// <summary>Sección "Tareas vinculadas" (D11/D13): gateada por PuedeVerTareasVinculadas
+    /// y con try/catch propio, mismo criterio EXACTO que el panel de vencimientos de
+    /// InicioViewModel (InicioViewModel.cs:249-278) -- un fallo consultando /tareas (403, 500,
+    /// timeout, red caída) no debe afectar al resto de la ficha del documento. Sin permiso
+    /// (PuedeVerTareasVinculadas=false) la sección directamente no se consulta; con permiso pero
+    /// consulta fallida, la sección se muestra vacía y la ficha sigue viva -- son dos ramas
+    /// distintas, no un único catch que las confunda.</summary>
+    private async Task CargarTareasVinculadasAsync(int documentoId)
+    {
+        TareasVinculadas.Clear();
+        if (!PuedeVerTareasVinculadas) return;
+
+        try
+        {
+            var tareas = await _tareas.ListarPorDocumentoAsync(documentoId);
+            foreach (var tarea in tareas)
+                TareasVinculadas.Add(tarea);
+        }
+        catch (Exception)
+        {
+            TareasVinculadas.Clear();
+        }
     }
 
     private void CargarCamposDesdeDocumento(DocumentoAdministrativo documento)

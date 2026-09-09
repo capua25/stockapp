@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Moq;
+using StockApp.Application.Authorization;
 using StockApp.Application.Documentos;
 using StockApp.Application.Interfaces;
+using StockApp.Application.Tareas;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
@@ -22,24 +24,27 @@ public class DocumentoFormViewModelTests
         Estado = estado, RegistradoPorUsuarioId = 1, FechaRegistro = DateTime.UtcNow,
     };
 
-    private static (DocumentoFormViewModel Vm, Mock<IDocumentoAdministrativoService> Svc, Mock<IConfirmacionService> Confirm)
-        Crear(RolUsuario rol = RolUsuario.Admin)
+    private static (DocumentoFormViewModel Vm, Mock<IDocumentoAdministrativoService> Svc, Mock<IConfirmacionService> Confirm,
+                     Mock<ITareaService> Tareas)
+        Crear(RolUsuario rol = RolUsuario.Admin, IReadOnlySet<string>? permisos = null)
     {
         var svc = new Mock<IDocumentoAdministrativoService>();
         var session = new Mock<ICurrentSession>();
         session.Setup(s => s.RolActual).Returns(rol);
+        session.Setup(s => s.PermisosActuales).Returns(permisos ?? new HashSet<string>());
         var nav = new Mock<INavigationService>();
         var confirm = new Mock<IConfirmacionService>();
         confirm.Setup(c => c.PedirTextoAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync("Motivo de prueba");
         confirm.Setup(c => c.InformarAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
+        var tareas = new Mock<ITareaService>();
 
         var adjuntosPanel = new AdjuntosDocumentoPanelViewModel(
             Mock.Of<IAdjuntoDocumentoService>(), Mock.Of<IServicioSeleccionArchivo>(),
             Mock.Of<IServicioAperturaArchivo>(), confirm.Object, session.Object);
 
-        var vm = new DocumentoFormViewModel(svc.Object, session.Object, nav.Object, confirm.Object, adjuntosPanel);
-        return (vm, svc, confirm);
+        var vm = new DocumentoFormViewModel(svc.Object, session.Object, nav.Object, confirm.Object, adjuntosPanel, tareas.Object);
+        return (vm, svc, confirm, tareas);
     }
 
     [Fact]
@@ -228,5 +233,49 @@ public class DocumentoFormViewModelTests
         ctx.Vm.FechaEmisionSeleccionada = new DateTime(2026, 8, 11);
 
         Assert.True(ctx.Vm.GuardarCommand.CanExecute(null));
+    }
+
+    // ── Tareas vinculadas (spec 2026-09-08, D11/D13) ────────────────────────────
+
+    [Fact]
+    public async Task CargarParaVerAsync_ConPermisoGestionarTareas_CargaLasTareasVinculadas()
+    {
+        var ctx = Crear(rol: RolUsuario.Operador, permisos: new HashSet<string> { Permisos.GestionarTareas });
+        var documento = DocumentoDe(1, EstadoDocumento.Pendiente);
+        ctx.Tareas.Setup(t => t.ListarPorDocumentoAsync(1))
+            .ReturnsAsync(new List<Tarea> { new() { Id = 9, Titulo = "Vinculada", DocumentoAdministrativoId = 1 } });
+
+        await ctx.Vm.CargarParaVerAsync(documento);
+
+        Assert.True(ctx.Vm.PuedeVerTareasVinculadas);
+        Assert.Single(ctx.Vm.TareasVinculadas);
+    }
+
+    [Fact]
+    public async Task CargarParaVerAsync_SinPermisoGestionarTareas_NoConsultaYQuedaVacio()
+    {
+        var ctx = Crear(rol: RolUsuario.Operador, permisos: new HashSet<string>());
+        var documento = DocumentoDe(1, EstadoDocumento.Pendiente);
+
+        await ctx.Vm.CargarParaVerAsync(documento);
+
+        Assert.False(ctx.Vm.PuedeVerTareasVinculadas);
+        Assert.Empty(ctx.Vm.TareasVinculadas);
+        ctx.Tareas.Verify(t => t.ListarPorDocumentoAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CargarParaVerAsync_LaLlamadaATareasFalla_NoRompeLaFichaDelDocumento()
+    {
+        // Mismo criterio que InicioViewModel.cs:249-278 (panel de vencimientos): un fallo
+        // consultando /tareas no debe afectar al resto de la ficha del documento.
+        var ctx = Crear(rol: RolUsuario.Admin);
+        var documento = DocumentoDe(1, EstadoDocumento.Pendiente);
+        ctx.Tareas.Setup(t => t.ListarPorDocumentoAsync(1)).ThrowsAsync(new InvalidOperationException("caída"));
+
+        await ctx.Vm.CargarParaVerAsync(documento);
+
+        Assert.Empty(ctx.Vm.TareasVinculadas);
+        Assert.Equal(EstadoDocumento.Pendiente.ToString(), ctx.Vm.EstadoTexto); // el resto de la carga sí corrió
     }
 }

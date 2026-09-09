@@ -78,7 +78,7 @@ public class DocumentoFormViewGatesTests
 
         return new DocumentoFormViewModel(
             new DocumentoServiceFake(), sesion, new NavigationRecorderDocumentosFake(),
-            new ConfirmacionServiceFake(), adjuntosPanel);
+            new ConfirmacionServiceFake(), adjuntosPanel, new TareaServiceFake());
     }
 
     private static (Window Window, DocumentoFormViewModel Vm) MontarParaCrear(RolUsuario rol)

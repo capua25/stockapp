@@ -108,6 +108,28 @@
                         <adj:AdjuntosDocumentoPanelView DataContext="{Binding AdjuntosPanel}" />
                     </Panel>
 
+                    <!-- Tareas vinculadas (spec 2026-09-08, D11/D13): gateada por
+                         PuedeVerTareasVinculadas (tareas.gestionar), ya que un operador puede
+                         tener documentos.gestionar sin tener tareas.gestionar. -->
+                    <StackPanel Spacing="6" Margin="0,8,0,0"
+                                IsVisible="{Binding !EsNuevoDocumento}">
+                        <StackPanel IsVisible="{Binding PuedeVerTareasVinculadas}" Spacing="6">
+                            <TextBlock Text="Tareas vinculadas" Classes="seccion" />
+                            <ItemsControl ItemsSource="{Binding TareasVinculadas}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="dom:Tarea">
+                                        <Border Classes="card" Margin="0,0,0,6" Padding="{DynamicResource PaddingCompacto}">
+                                            <StackPanel Spacing="2">
+                                                <TextBlock Text="{Binding Titulo}" FontWeight="SemiBold" />
+                                                <TextBlock Text="{Binding Estado}" Classes="caption" />
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </StackPanel>
+
                     <TextBlock Text="{Binding MensajeError}"
                                Foreground="{DynamicResource DangerBrush}"
                                TextWrapping="Wrap"
