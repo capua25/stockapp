@@ -304,4 +304,108 @@ public class TareasEndpointTests : ApiTestBase
         Assert.True(nota.EsAutomatica);
         Assert.Equal("garcia terminó una tarea tomada por juan.", nota.Texto);
     }
+
+    [Fact]
+    public async Task GetTarea_Existente_Devuelve200ConSuDto()
+    {
+        await SeedUsuariosAsync();
+        var client = ClienteAutenticado(TokenOperador());
+        var id = await CrearTareaAsync(client, "Reparar bache");
+
+        var response = await client.GetAsync($"/tareas/{id}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var tarea = await response.Content.ReadFromJsonAsync<TareaDto>();
+        Assert.Equal("Reparar bache", tarea!.Titulo);
+    }
+
+    [Fact]
+    public async Task GetTarea_Inexistente_Devuelve404()
+    {
+        await SeedUsuariosAsync();
+        var client = ClienteAutenticado(TokenOperador());
+
+        var response = await client.GetAsync("/tareas/9999");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostTareas_ConZonaInexistente_Devuelve409()
+    {
+        await SeedUsuariosAsync();
+        var client = ClienteAutenticado(TokenOperador());
+
+        var json = """{"titulo":"x","zonaId":9999}""";
+        var response = await client.PostAsync("/tareas",
+            new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PutClasificacion_ConTokenOperador_Devuelve403()
+    {
+        await SeedUsuariosAsync();
+        var clienteAdmin = ClienteAutenticado(TokenAdmin());
+        var id = await CrearTareaAsync(clienteAdmin);
+        var clienteOperador = ClienteAutenticado(TokenOperador());
+
+        var response = await clienteOperador.PutAsJsonAsync(
+            $"/tareas/{id}/clasificacion",
+            new ClasificarTareaRequest(null, null, null, null, null));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PutClasificacion_ConTokenAdminSinCambios_Devuelve200()
+    {
+        await SeedUsuariosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+        var id = await CrearTareaAsync(client);
+
+        var response = await client.PutAsJsonAsync(
+            $"/tareas/{id}/clasificacion",
+            new ClasificarTareaRequest(null, null, null, null, null));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PutClasificacion_TareaTerminada_Devuelve200YAplicaLaClasificacion()
+    {
+        // D9 del spec: la reclasificación alcanza también a tareas terminales — a
+        // diferencia de PostPrioridad_TareaTerminada_Devuelve409 (Task existente), acá NO
+        // debe dar 409.
+        await SeedUsuariosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+        var id = await CrearTareaAsync(client);
+        await client.PostAsync($"/tareas/{id}/tomar", content: null);
+        await client.PostAsync($"/tareas/{id}/terminar", content: null);
+
+        var response = await client.PutAsJsonAsync(
+            $"/tareas/{id}/clasificacion",
+            new ClasificarTareaRequest(null, null, null, null, null));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var ctx = Factory.CrearContexto();
+        var tarea = await ctx.Tareas.SingleAsync(t => t.Id == id);
+        Assert.Equal(EstadoTarea.Terminada, tarea.Estado);
+    }
+
+    [Fact]
+    public async Task GetTareas_ConDocumentoId_DevuelveSoloLasVinculadas()
+    {
+        await SeedUsuariosAsync();
+        var client = ClienteAutenticado(TokenOperador());
+        await CrearTareaAsync(client, "Sin expediente");
+
+        var response = await client.GetAsync("/tareas?documentoId=9999");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var tareas = await response.Content.ReadFromJsonAsync<List<TareaDto>>();
+        Assert.Empty(tareas!);
+    }
 }
