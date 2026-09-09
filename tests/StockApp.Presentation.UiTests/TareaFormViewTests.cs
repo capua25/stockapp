@@ -38,7 +38,7 @@ public class TareaFormViewTests
     private static ClasificacionTareaPanelViewModel NuevoPanelClasificacion() => new(
         new ZonaServiceFake(), new DimensionTematicaServiceFake(),
         new OrganismoResponsableServiceFake(), new OrigenFinanciamientoServiceFake(),
-        new DocumentoServiceFake());
+        new DocumentoServiceFake(), new ConfirmacionServiceFake());
 
     private static (Window Window, TareaFormViewModel Vm, TareaServiceFake Servicio, NavigationRecorderFake Nav,
                      ClasificacionDialogServiceFake DialogoClasificacion) MontarParaCrear(

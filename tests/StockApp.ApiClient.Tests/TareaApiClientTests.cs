@@ -197,7 +197,8 @@ public class TareaApiClientTests
                 dimensionTematicaId = 4, dimensionTematicaNombre = "Obras",
                 organismoResponsableId = 5, organismoResponsableNombre = "Intendencia",
                 origenFinanciamientoId = 6, origenFinanciamientoNombre = "Rentas Generales",
-                documentoAdministrativoId = 7, documentoAdministrativoNumero = "123/2026",
+                documentoAdministrativoId = 7, documentoAdministrativoNumero = "123",
+                documentoAdministrativoAnio = 2026, documentoAdministrativoTipo = TipoDocumento.Expediente,
                 notas = Array.Empty<object>(),
             },
         }));
@@ -215,7 +216,13 @@ public class TareaApiClientTests
         Assert.Equal(6, tarea.OrigenFinanciamientoId);
         Assert.Equal("Rentas Generales", tarea.OrigenFinanciamiento!.Nombre);
         Assert.Equal(7, tarea.DocumentoAdministrativoId);
-        Assert.Equal("123/2026", tarea.DocumentoAdministrativo!.Numero);
+        Assert.Equal("123", tarea.DocumentoAdministrativo!.Numero);
+        // Fix (revisión final, Important 1): antes AEntidad solo rehidrataba Id/Numero -- Anio
+        // quedaba en 0 aunque el wire ya lo traía. Verificado por mutación: sacando
+        // "Anio = dto.DocumentoAdministrativoAnio ?? 0," de TareaApiClient.AEntidad, este Assert
+        // se pone rojo (queda en 0 en vez de 2026).
+        Assert.Equal(2026, tarea.DocumentoAdministrativo.Anio);
+        Assert.Equal(TipoDocumento.Expediente, tarea.DocumentoAdministrativo.Tipo);
     }
 
     [Fact]

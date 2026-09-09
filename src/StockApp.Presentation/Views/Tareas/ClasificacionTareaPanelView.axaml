@@ -65,16 +65,34 @@
 
         <c:CampoFormulario Etiqueta="Expediente (opcional)">
             <StackPanel Spacing="4">
+                <!-- Fix (revisión final, Important 1): Numero a secas NO es único, solo lo
+                     es (Tipo, Anio, Numero). Con numeración por año, dos expedientes "45" de
+                     años distintos eran indistinguibles acá (riesgo de vincular el equivocado).
+                     Numero/Anio en los dos lugares donde se muestra un DocumentoAdministrativo
+                     suelto: el texto ya elegido (ValueMemberBinding) y cada fila del desplegable
+                     (ItemTemplate). -->
                 <AutoCompleteBox Watermark="Buscar expediente por número o descripción..."
                                   AsyncPopulator="{Binding BuscarExpedientesAsync}"
                                   SelectedItem="{Binding DocumentoSeleccionado}"
-                                  ValueMemberBinding="{Binding Numero, DataType={x:Type dom:DocumentoAdministrativo}}"
                                   FilterMode="None"
                                   MinimumPopulateDelay="0:0:0.3"
                                   HorizontalAlignment="Stretch">
+                    <AutoCompleteBox.ValueMemberBinding>
+                        <MultiBinding StringFormat="{}{0}/{1}">
+                            <Binding Path="Numero" DataType="{x:Type dom:DocumentoAdministrativo}" />
+                            <Binding Path="Anio" DataType="{x:Type dom:DocumentoAdministrativo}" />
+                        </MultiBinding>
+                    </AutoCompleteBox.ValueMemberBinding>
                     <AutoCompleteBox.ItemTemplate>
                         <DataTemplate x:DataType="dom:DocumentoAdministrativo">
-                            <TextBlock Text="{Binding Numero, StringFormat='Expediente {0}'}" />
+                            <TextBlock>
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="{}Expediente {0}/{1}">
+                                        <Binding Path="Numero" />
+                                        <Binding Path="Anio" />
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
                         </DataTemplate>
                     </AutoCompleteBox.ItemTemplate>
                 </AutoCompleteBox>

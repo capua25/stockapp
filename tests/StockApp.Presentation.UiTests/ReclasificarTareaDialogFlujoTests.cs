@@ -60,7 +60,8 @@ public class ReclasificarTareaDialogFlujoTests
         var origenes = new OrigenFinanciamientoServiceStub(new OrigenFinanciamiento { Id = 5, Nombre = "Presupuesto propio" });
         var documentos = new DocumentoServiceFake();
 
-        var svc = new ClasificacionTareaDialogService(zonas, dimensiones, organismos, origenes, documentos);
+        var svc = new ClasificacionTareaDialogService(
+            zonas, dimensiones, organismos, origenes, documentos, new ConfirmacionServiceFake());
 
         // Clasificación actual completa: los cinco campos precargados (D21 — lo que el Admin ve
         // precargado, salvo que lo toque). DocumentoAdministrativoId queda null a propósito para

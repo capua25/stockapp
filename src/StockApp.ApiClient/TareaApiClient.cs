@@ -19,6 +19,7 @@ internal sealed record TareaWire(
     int? OrganismoResponsableId, string? OrganismoResponsableNombre,
     int? OrigenFinanciamientoId, string? OrigenFinanciamientoNombre,
     int? DocumentoAdministrativoId, string? DocumentoAdministrativoNumero,
+    int? DocumentoAdministrativoAnio, TipoDocumento? DocumentoAdministrativoTipo,
     List<NotaTareaWire> Notas);
 
 internal sealed record CrearTareaBody(
@@ -149,8 +150,18 @@ public sealed class TareaApiClient : ITareaService
         OrigenFinanciamiento = dto.OrigenFinanciamientoNombre is null
             ? null : new OrigenFinanciamiento { Id = dto.OrigenFinanciamientoId!.Value, Nombre = dto.OrigenFinanciamientoNombre },
         DocumentoAdministrativoId = dto.DocumentoAdministrativoId,
+        // Fix (revisión final, Important 1): antes solo rehidrataba Id/Numero -- Anio quedaba
+        // en 0 y Tipo en el default del enum, aunque (Tipo, Anio, Numero) es el índice único
+        // real del dominio (DocumentoAdministrativo). El wire ya trae ambos campos (arriba);
+        // acá solo faltaba leerlos.
         DocumentoAdministrativo = dto.DocumentoAdministrativoNumero is null
-            ? null : new DocumentoAdministrativo { Id = dto.DocumentoAdministrativoId!.Value, Numero = dto.DocumentoAdministrativoNumero },
+            ? null : new DocumentoAdministrativo
+            {
+                Id = dto.DocumentoAdministrativoId!.Value,
+                Numero = dto.DocumentoAdministrativoNumero,
+                Anio = dto.DocumentoAdministrativoAnio ?? 0,
+                Tipo = dto.DocumentoAdministrativoTipo ?? default,
+            },
         Notas = dto.Notas.Select(n => new NotaTarea
         {
             Id = n.Id, TareaId = dto.Id, UsuarioId = n.UsuarioId, Fecha = n.Fecha,

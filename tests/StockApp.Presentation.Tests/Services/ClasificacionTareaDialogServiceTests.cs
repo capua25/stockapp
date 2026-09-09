@@ -22,7 +22,7 @@ public class ClasificacionTareaDialogServiceTests
         var svc = new ClasificacionTareaDialogService(
             Mock.Of<IZonaService>(), Mock.Of<IDimensionTematicaService>(),
             Mock.Of<IOrganismoResponsableService>(), Mock.Of<IOrigenFinanciamientoService>(),
-            Mock.Of<IDocumentoAdministrativoService>());
+            Mock.Of<IDocumentoAdministrativoService>(), Mock.Of<IConfirmacionService>());
 
         var resultado = await svc.PedirClasificacionAsync(new DatosClasificacionTarea(null, null, null, null, null));
 

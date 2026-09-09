@@ -8,6 +8,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using StockApp.Application.Authorization;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.ViewModels.Documentos;
@@ -66,9 +67,15 @@ public class DocumentoFormViewGatesTests
         Estado = estado, RegistradoPorUsuarioId = 1, FechaRegistro = DateTime.UtcNow,
     };
 
-    private static DocumentoFormViewModel CrearVm(RolUsuario rol)
+    /// <summary>Overload con permisos explícitos (Hallazgo 3, revisión final): las pruebas de
+    /// PuedeVerTareasVinculadas necesitan un Operador con/sin tareas.gestionar -- Admin
+    /// cortocircuita el chequeo (RolActual == Admin) y no prueba nada (mismo gotcha ya
+    /// documentado en este archivo). Los llamados existentes con un solo argumento siguen
+    /// compilando igual: permisos vacío no afecta ningún gate probado hasta ahora, que son
+    /// todos de rol/estado, no de PermisosActuales.</summary>
+    private static DocumentoFormViewModel CrearVm(RolUsuario rol, params string[] permisos)
     {
-        var sesion = new SesionFake(rol);
+        var sesion = new SesionFake(rol, permisos);
         var adjuntosPanel = new AdjuntosDocumentoPanelViewModel(
             new AdjuntoDocumentoServiceFake(),
             new ServicioSeleccionArchivoFake(),
@@ -97,9 +104,9 @@ public class DocumentoFormViewGatesTests
     }
 
     private static async Task<(Window Window, DocumentoFormViewModel Vm)> MontarParaVerAsync(
-        RolUsuario rol, DocumentoAdministrativo documento)
+        RolUsuario rol, DocumentoAdministrativo documento, params string[] permisos)
     {
-        var vm = CrearVm(rol);
+        var vm = CrearVm(rol, permisos);
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
         window.DataContext = vm;
@@ -114,6 +121,9 @@ public class DocumentoFormViewGatesTests
 
     private static Button BotonPorContenido(Window window, string texto)
         => window.GetVisualDescendants().OfType<Button>().First(b => b.Content as string == texto);
+
+    private static TextBlock TextBlockPorContenido(Window window, string texto)
+        => window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == texto);
 
     /// <summary>
     /// Los 5 campos gateados por PuedeEditarCampos (:32 Numero, :36 AnioSeleccionado,
@@ -283,5 +293,33 @@ public class DocumentoFormViewGatesTests
 
         foreach (var control in CamposDelFormulario(window))
             Assert.False(control.IsEnabled);
+    }
+
+    // ---- Hallazgo 3 (revisión final, Important): gate de "Tareas vinculadas" sin custodiar ----
+    // El reviewer le sacó IsVisible="{Binding PuedeVerTareasVinculadas}" (DocumentoFormView.axaml)
+    // y la suite entera (527/527 UiTests + 1164/1164 Presentation.Tests) siguió verde -- ningún
+    // test montaba la View real para este gate. Verificado por mutación: sacando el IsVisible de
+    // ese StackPanel, Detalle_OperadorSinTareasGestionar_TareasVinculadasOculto se pone rojo.
+    //
+    // Admin cortocircuita PuedeVerTareasVinculadas (RolActual == Admin) ANTES de mirar
+    // PermisosActuales -- mismo gotcha documentado en Detalle_AdminPendiente_AnularVisible más
+    // arriba. Por eso los dos casos usan Operador con permisos explícitos, nunca Admin.
+
+    [AvaloniaFact]
+    public async Task Detalle_OperadorConTareasGestionar_TareasVinculadasVisible()
+    {
+        var (window, _) = await MontarParaVerAsync(
+            RolUsuario.Operador, DocumentoDe(1, EstadoDocumento.Pendiente), Permisos.GestionarTareas);
+
+        Assert.True(ArbolVisual.EsVisibleEnArbol(TextBlockPorContenido(window, "Tareas vinculadas")));
+    }
+
+    [AvaloniaFact]
+    public async Task Detalle_OperadorSinTareasGestionar_TareasVinculadasOculto()
+    {
+        var (window, _) = await MontarParaVerAsync(
+            RolUsuario.Operador, DocumentoDe(1, EstadoDocumento.Pendiente));
+
+        Assert.False(ArbolVisual.EsVisibleEnArbol(TextBlockPorContenido(window, "Tareas vinculadas")));
     }
 }

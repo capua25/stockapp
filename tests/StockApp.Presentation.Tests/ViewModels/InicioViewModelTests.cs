@@ -591,7 +591,7 @@ public class InicioViewModelTests
         var panelClasificacion = new ClasificacionTareaPanelViewModel(
             Mock.Of<IZonaService>(), Mock.Of<IDimensionTematicaService>(),
             Mock.Of<IOrganismoResponsableService>(), Mock.Of<IOrigenFinanciamientoService>(),
-            Mock.Of<IDocumentoAdministrativoService>());
+            Mock.Of<IDocumentoAdministrativoService>(), confirmMock.Object);
         var formVm = new TareaFormViewModel(
             tareaServiceMock.Object, sessionMock.Object, navMock.Object, confirmMock.Object,
             panelClasificacion, Mock.Of<IClasificacionTareaDialogService>());

@@ -168,4 +168,22 @@ public class TareaFilaTests
 
         Assert.Equal("Centro · Presupuesto propio", fila.EtiquetasClasificacion);
     }
+
+    /// <summary>Fix (revisión final, Hallazgo 1b): el expediente quedaba afuera de las cinco
+    /// etiquetas porque antes no tenía un texto presentable sin Anio (Numero solo no distingue
+    /// expedientes de años distintos). La ficha de detalle SIEMPRE mostró el expediente
+    /// (TareaFormViewModel) -- sin esto, la lista quedaba inconsistente con la ficha.</summary>
+    [Fact]
+    public void EtiquetasClasificacion_ConDocumentoAdministrativo_IncluyeExpedienteConNumeroYAnio()
+    {
+        var tarea = TareaCon(fechaLimite: null);
+        tarea.Zona = new Zona { Id = 1, Nombre = "Centro" };
+        tarea.DocumentoAdministrativo = new DocumentoAdministrativo
+        {
+            Id = 9, Numero = "0045", Anio = 2026, Tipo = TipoDocumento.Expediente,
+        };
+        var fila = new TareaFila(tarea, RolUsuario.Operador);
+
+        Assert.Equal("Centro · Exp. 0045/2026", fila.EtiquetasClasificacion);
+    }
 }

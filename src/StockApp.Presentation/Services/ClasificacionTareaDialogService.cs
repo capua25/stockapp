@@ -24,17 +24,19 @@ public class ClasificacionTareaDialogService : IClasificacionTareaDialogService
     private readonly IOrganismoResponsableService _organismosService;
     private readonly IOrigenFinanciamientoService _origenesService;
     private readonly IDocumentoAdministrativoService _documentosService;
+    private readonly IConfirmacionService _confirmacion;
 
     public ClasificacionTareaDialogService(
         IZonaService zonasService, IDimensionTematicaService dimensionesService,
         IOrganismoResponsableService organismosService, IOrigenFinanciamientoService origenesService,
-        IDocumentoAdministrativoService documentosService)
+        IDocumentoAdministrativoService documentosService, IConfirmacionService confirmacion)
     {
         _zonasService = zonasService;
         _dimensionesService = dimensionesService;
         _organismosService = organismosService;
         _origenesService = origenesService;
         _documentosService = documentosService;
+        _confirmacion = confirmacion;
     }
 
     public Task<DatosClasificacionTarea?> PedirClasificacionAsync(DatosClasificacionTarea actual)
@@ -52,7 +54,8 @@ public class ClasificacionTareaDialogService : IClasificacionTareaDialogService
         if (owner is null) return null;
 
         var panel = new ClasificacionTareaPanelViewModel(
-            _zonasService, _dimensionesService, _organismosService, _origenesService, _documentosService);
+            _zonasService, _dimensionesService, _organismosService, _origenesService, _documentosService,
+            _confirmacion);
         await panel.InicializarAsync(actual);
 
         var vm = new ReclasificarTareaDialogViewModel(panel);

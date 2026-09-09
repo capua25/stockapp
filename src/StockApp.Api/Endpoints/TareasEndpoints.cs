@@ -19,6 +19,7 @@ public record TareaDto(
     int? OrganismoResponsableId, string? OrganismoResponsableNombre,
     int? OrigenFinanciamientoId, string? OrigenFinanciamientoNombre,
     int? DocumentoAdministrativoId, string? DocumentoAdministrativoNumero,
+    int? DocumentoAdministrativoAnio, TipoDocumento? DocumentoAdministrativoTipo,
     List<NotaTareaDto> Notas);
 
 // Los 5 ids de clasificación con default null (bugfix de compatibilidad): los sitios de
@@ -151,6 +152,7 @@ public static class TareasEndpoints
         t.OrganismoResponsableId, t.OrganismoResponsable?.Nombre,
         t.OrigenFinanciamientoId, t.OrigenFinanciamiento?.Nombre,
         t.DocumentoAdministrativoId, t.DocumentoAdministrativo?.Numero,
+        t.DocumentoAdministrativo?.Anio, t.DocumentoAdministrativo?.Tipo,
         t.Notas.OrderBy(n => n.Fecha).ThenBy(n => n.Id)
             .Select(n => new NotaTareaDto(n.Id, n.UsuarioId, n.Fecha, n.Texto, n.EsAutomatica))
             .ToList());

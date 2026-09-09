@@ -196,7 +196,7 @@ public class InicioPanelTareasTests
             new ClasificacionTareaPanelViewModel(
                 new ZonaServiceFake(), new DimensionTematicaServiceFake(),
                 new OrganismoResponsableServiceFake(), new OrigenFinanciamientoServiceFake(),
-                new DocumentoServiceFake()),
+                new DocumentoServiceFake(), new ConfirmacionServiceFake()),
             new ClasificacionDialogServiceFake());
         navegacion.UltimoInicializadorTareaForm!(formVm);
 
@@ -224,7 +224,7 @@ public class InicioPanelTareasTests
             new ClasificacionTareaPanelViewModel(
                 new ZonaServiceFake(), new DimensionTematicaServiceFake(),
                 new OrganismoResponsableServiceFake(), new OrigenFinanciamientoServiceFake(),
-                new DocumentoServiceFake()),
+                new DocumentoServiceFake(), new ConfirmacionServiceFake()),
             new ClasificacionDialogServiceFake());
         navegacion.UltimoInicializadorTareaForm!(formVm);
 

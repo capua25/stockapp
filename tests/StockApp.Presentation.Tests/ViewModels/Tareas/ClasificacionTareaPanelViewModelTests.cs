@@ -7,8 +7,10 @@ using Moq;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Documentos;
 using StockApp.Application.Tareas;
+using StockApp.ApiClient;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Tareas;
 using Xunit;
 
@@ -18,7 +20,8 @@ public class ClasificacionTareaPanelViewModelTests
 {
     private static (ClasificacionTareaPanelViewModel Vm, Mock<IZonaService> Zonas,
                      Mock<IDimensionTematicaService> Dimensiones, Mock<IOrganismoResponsableService> Organismos,
-                     Mock<IOrigenFinanciamientoService> Origenes, Mock<IDocumentoAdministrativoService> Documentos)
+                     Mock<IOrigenFinanciamientoService> Origenes, Mock<IDocumentoAdministrativoService> Documentos,
+                     Mock<IConfirmacionService> Confirm)
         Crear()
     {
         var zonas = new Mock<IZonaService>();
@@ -26,6 +29,8 @@ public class ClasificacionTareaPanelViewModelTests
         var organismos = new Mock<IOrganismoResponsableService>();
         var origenes = new Mock<IOrigenFinanciamientoService>();
         var documentos = new Mock<IDocumentoAdministrativoService>();
+        var confirm = new Mock<IConfirmacionService>();
+        confirm.Setup(c => c.InformarAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
 
         zonas.Setup(z => z.ListarActivasAsync()).ReturnsAsync(new List<Zona>
         {
@@ -45,8 +50,8 @@ public class ClasificacionTareaPanelViewModelTests
         });
 
         var vm = new ClasificacionTareaPanelViewModel(
-            zonas.Object, dimensiones.Object, organismos.Object, origenes.Object, documentos.Object);
-        return (vm, zonas, dimensiones, organismos, origenes, documentos);
+            zonas.Object, dimensiones.Object, organismos.Object, origenes.Object, documentos.Object, confirm.Object);
+        return (vm, zonas, dimensiones, organismos, origenes, documentos, confirm);
     }
 
     [Fact]
@@ -164,5 +169,39 @@ public class ClasificacionTareaPanelViewModelTests
         var datos = ctx.Vm.ObtenerDatos();
         Assert.Equal(2, datos.ZonaId);
         Assert.Null(datos.DocumentoAdministrativoId);
+    }
+
+    // ── InicializarAsync sin try/catch (revisión final, Important 2) ────────────
+    // TareaFormView.axaml.cs dispara InicializarAsync desde un handler async void
+    // (DataContextChanged): una excepción no atrapada acá no la agarra nadie y termina en
+    // crash.log. Molde EXACTO de AdjuntosDocumentoPanelViewModelTests
+    // (AgregarAsync_ErrorDeNegocio_InformaAlUsuario / QuitarAsync_SesionSinPermiso_NoInformaAlUsuario).
+
+    [Fact]
+    public async Task InicializarAsync_FallaElServicio_NoPropagaYInformaConElMensajeReal()
+    {
+        var ctx = Crear();
+        ctx.Zonas.Setup(z => z.ListarActivasAsync())
+            .ThrowsAsync(new ServidorNoDisponibleException());
+
+        // No debe lanzar -- verificado por mutación: sacando el try/catch de InicializarAsync
+        // esta llamada revienta con ServidorNoDisponibleException y el test se pone rojo.
+        await ctx.Vm.InicializarAsync();
+
+        ctx.Confirm.Verify(c => c.InformarAsync(ServidorNoDisponibleException.MensajePorDefecto), Times.Once);
+    }
+
+    [Fact]
+    public async Task InicializarAsync_SesionSinPermiso_NoPropagaYNoInformaSinPermiso()
+    {
+        // El mensaje no debe mentir sobre la causa: un UnauthorizedAccessException ya se avisó
+        // aparte (AuthTokenHandler/App.axaml.cs) -- este catch NO debe agregar un "sin permiso"
+        // propio, mismo criterio que AdjuntosDocumentoPanelViewModel.ManejarErrorAsync.
+        var ctx = Crear();
+        ctx.Zonas.Setup(z => z.ListarActivasAsync()).ThrowsAsync(new UnauthorizedAccessException());
+
+        await ctx.Vm.InicializarAsync();
+
+        ctx.Confirm.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Never);
     }
 }

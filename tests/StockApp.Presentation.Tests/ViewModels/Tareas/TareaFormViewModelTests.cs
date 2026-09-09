@@ -32,7 +32,7 @@ public class TareaFormViewModelTests
         var panel = new ClasificacionTareaPanelViewModel(
             Mock.Of<IZonaService>(), Mock.Of<IDimensionTematicaService>(),
             Mock.Of<IOrganismoResponsableService>(), Mock.Of<IOrigenFinanciamientoService>(),
-            Mock.Of<IDocumentoAdministrativoService>());
+            Mock.Of<IDocumentoAdministrativoService>(), confirm.Object);
 
         var vm = new TareaFormViewModel(svc.Object, session.Object, nav.Object, confirm.Object, panel, dialogoClasificacion.Object);
         return (vm, svc, confirm, dialogoClasificacion);
@@ -66,6 +66,28 @@ public class TareaFormViewModelTests
         Assert.Equal("Reparar bache", ctx.Vm.Titulo);
         Assert.Single(ctx.Vm.Notas);
         Assert.Equal("juan", ctx.Vm.TomadaPorNombre);
+    }
+
+    /// <summary>Fix (revisión final, Important 1): antes anteponía Tipo -- con la etiqueta
+    /// "Expediente:" del XAML delante, se leía "Expediente: Expediente 0099/0" (palabra
+    /// duplicada + año en 0 porque TareaApiClient no lo traía). Con Anio viajando de verdad,
+    /// el texto queda "0099/2026" sin repetir la palabra que ya aporta la etiqueta.</summary>
+    [Fact]
+    public void CargarParaVer_ConDocumentoAdministrativo_FormateaNumeroBarraAnioSinRepetirLaPalabra()
+    {
+        var ctx = Crear();
+        var tarea = new Tarea
+        {
+            Id = 5, Titulo = "Reparar bache", Estado = EstadoTarea.Pendiente,
+            DocumentoAdministrativo = new DocumentoAdministrativo
+            {
+                Id = 9, Numero = "0099", Anio = 2026, Tipo = TipoDocumento.Expediente,
+            },
+        };
+
+        ctx.Vm.CargarParaVer(tarea);
+
+        Assert.Equal("0099/2026", ctx.Vm.DocumentoAdministrativoTexto);
     }
 
     [Fact]

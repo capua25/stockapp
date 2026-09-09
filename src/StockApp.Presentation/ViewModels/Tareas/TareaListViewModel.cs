@@ -60,7 +60,13 @@ public sealed class TareaFila
 
     /// <summary>Etiquetas de clasificación para la tarjeta (spec 2026-09-08, D19): une los
     /// clasificadores asignados con " · ", null si no hay ninguno (así el XAML puede usar
-    /// IsNotNull para ocultar la línea entera en vez de mostrar una cadena vacía).</summary>
+    /// IsNotNull para ocultar la línea entera en vez de mostrar una cadena vacía).
+    ///
+    /// Fix (revisión final, Important 1b): el expediente quedaba afuera de las cinco porque
+    /// DocumentoAdministrativo no tenía un texto presentable sin Anio (Numero solo no
+    /// distingue expedientes de años distintos). Con Anio viajando de verdad (TareaApiClient),
+    /// "Exp. {Numero}/{Anio}" es una línea más -- la ficha de detalle (TareaFormViewModel)
+    /// SIEMPRE mostró el expediente; sin esto la lista quedaba inconsistente con la ficha.</summary>
     public string? EtiquetasClasificacion
     {
         get
@@ -70,6 +76,8 @@ public sealed class TareaFila
             if (Tarea.DimensionTematica is not null) partes.Add(Tarea.DimensionTematica.Nombre);
             if (Tarea.OrganismoResponsable is not null) partes.Add(Tarea.OrganismoResponsable.Nombre);
             if (Tarea.OrigenFinanciamiento is not null) partes.Add(Tarea.OrigenFinanciamiento.Nombre);
+            if (Tarea.DocumentoAdministrativo is not null)
+                partes.Add($"Exp. {Tarea.DocumentoAdministrativo.Numero}/{Tarea.DocumentoAdministrativo.Anio}");
             return partes.Count == 0 ? null : string.Join(" · ", partes);
         }
     }

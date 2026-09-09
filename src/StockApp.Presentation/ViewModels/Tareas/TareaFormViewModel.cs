@@ -152,8 +152,12 @@ public partial class TareaFormViewModel : ViewModelBase
         DimensionTematicaTexto = tarea.DimensionTematica?.Nombre;
         OrganismoResponsableTexto = tarea.OrganismoResponsable?.Nombre;
         OrigenFinanciamientoTexto = tarea.OrigenFinanciamiento?.Nombre;
+        // Fix (revisión final, Important 1): antes anteponía Tipo acá Y el XAML ya antepone la
+        // etiqueta "Expediente:" -- se leía "Expediente: Expediente 0099/0" (palabra duplicada
+        // + año en 0 porque el wire no lo traía). Con Anio viajando de verdad (TareaApiClient),
+        // el texto queda "0099/2026" y la etiqueta del XAML aporta el "Expediente:" una sola vez.
         DocumentoAdministrativoTexto = tarea.DocumentoAdministrativo is null
-            ? null : $"{tarea.DocumentoAdministrativo.Tipo} {tarea.DocumentoAdministrativo.Numero}/{tarea.DocumentoAdministrativo.Anio}";
+            ? null : $"{tarea.DocumentoAdministrativo.Numero}/{tarea.DocumentoAdministrativo.Anio}";
         _clasificacionActual = new DatosClasificacionTarea(
             tarea.ZonaId, tarea.DimensionTematicaId, tarea.OrganismoResponsableId,
             tarea.OrigenFinanciamientoId, tarea.DocumentoAdministrativoId);

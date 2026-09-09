@@ -483,5 +483,12 @@ public class TareasEndpointTests : ApiTestBase
         Assert.Equal("Rentas Generales", tarea.OrigenFinanciamientoNombre);
         Assert.Equal(documentoId, tarea.DocumentoAdministrativoId);
         Assert.Equal("0099", tarea.DocumentoAdministrativoNumero);
+        // Fix (revisión final, Important 1): (Tipo, Anio, Numero) es el índice único real de
+        // DocumentoAdministrativo, pero ADto solo mandaba Numero -- Anio se perdía en el camino
+        // hacia el cliente. Verificado por mutación: sacando
+        // "t.DocumentoAdministrativo?.Anio, t.DocumentoAdministrativo?.Tipo," de
+        // TareasEndpoints.ADto, estos dos Asserts se ponen rojo (Anio=null, Tipo=null).
+        Assert.Equal(2026, tarea.DocumentoAdministrativoAnio);
+        Assert.Equal(TipoDocumento.Expediente, tarea.DocumentoAdministrativoTipo);
     }
 }
