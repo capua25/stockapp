@@ -2023,6 +2023,7 @@ git commit -m "test(tareas): TareaServiceFake implementa ObtenerPorIdAsync, Recl
 - Create: `src/StockApp.Presentation/Views/Tareas/ClasificacionTareaPanelView.axaml`
 - Create: `src/StockApp.Presentation/Views/Tareas/ClasificacionTareaPanelView.axaml.cs`
 - Modify: `src/StockApp.Presentation/App.axaml.cs`
+- Modify: `tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs`
 - Test: `tests/StockApp.Presentation.Tests/ViewModels/Tareas/ClasificacionTareaPanelViewModelTests.cs`
 
 **Interfaces:**
@@ -2458,14 +2459,56 @@ y reemplazarla por:
         services.AddTransient<TareaFormViewModel>();
 ```
 
-- [ ] **Step 4: Correr el test y verificar que pasa**
+- [ ] **Step 4: Registrar la vista nueva en el guardián de patrón**
+
+`ClasificacionTareaPanelView` es un `UserControl` embebido (no aporta cromo de vista propio — lo
+embebe `TareaFormView` en Task 13 y `ReclasificarTareaDialog` en Task 10). El guardián de patrón
+(`Guardian_CubreTodasLasVistasDelEnsamblado` en `tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs`)
+enumera por reflexión todo `Control` público no abstracto bajo `StockApp.Presentation.Views*` y
+exige que esté en alguna de sus listas — si no se registra acá, la próxima corrida de
+`StockApp.Presentation.UiTests` explota con un rojo por reflexión sin relación aparente con esta
+tarea.
+
+En `tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs`, agregar a la lista
+`VistasEmbebidas` (mismo criterio que `AdjuntosDocumentoPanelView`, que también es un panel sin
+`HeaderVista`/margen propio):
+
+```csharp
+    public static readonly TheoryData<Type> VistasEmbebidas = new()
+    {
+        typeof(FuenteFinanciamientoListView),
+        typeof(RubroGastoListView),
+        typeof(LineaPoaListView),
+        typeof(ZonaListView),
+        typeof(DimensionTematicaListView),
+        typeof(OrganismoResponsableListView),
+        typeof(OrigenFinanciamientoListView),
+        typeof(HistorialImportacionesView),
+        typeof(NuevaImportacionView),
+        typeof(AdjuntosPanelView),
+        typeof(AdjuntosDocumentoPanelView),
+        typeof(ClasificacionTareaPanelView),
+        typeof(AccesoLimitadoView),
+        typeof(ActualizacionBannerView),
+        typeof(ActualizacionModalView),
+        typeof(ActualizacionBloqueoView),
+    };
+```
+
+`StockApp.Presentation.Views.Tareas` ya está importado en el archivo (`using
+StockApp.Presentation.Views.Tareas;`), así que no hace falta agregar ningún `using` nuevo.
+
+**NO se debe tocar el predicado de reflexión ni relajar el guardián — solo agregar la vista a la
+lista que le corresponde.**
+
+- [ ] **Step 5: Correr el test y verificar que pasa**
 
 Run: `dotnet test tests/StockApp.Presentation.Tests --filter "FullyQualifiedName~ClasificacionTareaPanelViewModelTests"`
 Expected: PASS (los 7 tests).
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 ```bash
-git add src/StockApp.Presentation/ViewModels/Tareas/ClasificacionTareaPanelViewModel.cs src/StockApp.Presentation/Views/Tareas/ClasificacionTareaPanelView.axaml src/StockApp.Presentation/Views/Tareas/ClasificacionTareaPanelView.axaml.cs src/StockApp.Presentation/App.axaml.cs tests/StockApp.Presentation.Tests/ViewModels/Tareas/ClasificacionTareaPanelViewModelTests.cs
+git add src/StockApp.Presentation/ViewModels/Tareas/ClasificacionTareaPanelViewModel.cs src/StockApp.Presentation/Views/Tareas/ClasificacionTareaPanelView.axaml src/StockApp.Presentation/Views/Tareas/ClasificacionTareaPanelView.axaml.cs src/StockApp.Presentation/App.axaml.cs tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs tests/StockApp.Presentation.Tests/ViewModels/Tareas/ClasificacionTareaPanelViewModelTests.cs
 git commit -m "feat(tareas): panel reusable de clasificación (combos + buscador de expediente)"
 ```
 
@@ -2480,6 +2523,7 @@ git commit -m "feat(tareas): panel reusable de clasificación (combos + buscador
 - Create: `src/StockApp.Presentation/Views/Tareas/ReclasificarTareaDialog.axaml`
 - Create: `src/StockApp.Presentation/Views/Tareas/ReclasificarTareaDialog.axaml.cs`
 - Modify: `src/StockApp.Presentation/App.axaml.cs`
+- Modify: `tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs`
 - Test: `tests/StockApp.Presentation.Tests/Services/ClasificacionTareaDialogServiceTests.cs`
 - Test: `tests/StockApp.Presentation.Tests/ViewModels/Tareas/ReclasificarTareaDialogViewModelTests.cs`
 
@@ -2524,16 +2568,6 @@ public class ClasificacionTareaDialogServiceTests
 
         Assert.Null(resultado);
     }
-
-    [Fact]
-    public void IClasificacionTareaDialogService_EsMockeable()
-    {
-        var mock = new Mock<IClasificacionTareaDialogService>();
-        mock.Setup(s => s.PedirClasificacionAsync(It.IsAny<DatosClasificacionTarea>()))
-            .ReturnsAsync(new DatosClasificacionTarea(1, null, null, null, null));
-
-        Assert.NotNull(mock.Object);
-    }
 }
 ```
 
@@ -2569,6 +2603,7 @@ public class ReclasificarTareaDialogViewModelTests
 
 Run: `dotnet test tests/StockApp.Presentation.Tests --filter "FullyQualifiedName~ClasificacionTareaDialogServiceTests|FullyQualifiedName~ReclasificarTareaDialogViewModelTests"`
 Expected: FAIL con error de compilación — `IClasificacionTareaDialogService`/`ClasificacionTareaDialogService`/`ReclasificarTareaDialogViewModel` no existen.
+(2 tests en total: `PedirClasificacionAsync_SinAppAvalonia_DevuelveNull` + `Constructor_ExponeElPanelRecibido`.)
 
 - [ ] **Step 3: Implementación mínima**
 
@@ -2777,14 +2812,56 @@ y agregar inmediatamente después:
         services.AddSingleton<IClasificacionTareaDialogService, ClasificacionTareaDialogService>();
 ```
 
-- [ ] **Step 4: Correr el test y verificar que pasa**
+- [ ] **Step 4: Registrar la vista nueva en el guardián de patrón**
+
+`ReclasificarTareaDialog` es un `Window` de diálogo modal — no puede montarse con `PatronHelpers.Montar`
+(tira `InvalidOperationException` en runtime, "already has a visual parent") por la misma razón que
+`ConfirmacionDialog`/`MensajeDialog`/`PedirTextoDialog`. El guardián de patrón
+(`Guardian_CubreTodasLasVistasDelEnsamblado` en `tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs`)
+enumera por reflexión todo `Control` público no abstracto bajo `StockApp.Presentation.Views*` y
+exige que esté en alguna de sus listas — si no se registra acá, la próxima corrida de
+`StockApp.Presentation.UiTests` explota con un rojo por reflexión sin relación aparente con esta
+tarea.
+
+En `tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs`, agregar a la lista
+`VistasFueraDelGuardian` (mismo criterio que `PedirTextoDialog`/`ConfirmacionDialog`: la custodian
+el compilador de C# y `ReclasificarTareaDialogViewModelTests`, no el guardián de patrón):
+
+```csharp
+    public static readonly HashSet<Type> VistasFueraDelGuardian = new()
+    {
+        // Window: PatronHelpers.Montar las meteria como Content de otra Window, y eso tira
+        // InvalidOperationException en runtime (verificado empiricamente en la Task 12.3: "The
+        // control ... already has a visual parent"). Las custodian el compilador de C# (los
+        // x:Name que lee el code-behind dan CS0103 si se rompen, Ruling B-27) y
+        // ConfirmacionServiceDialogosConsecutivosTests.
+        typeof(ConfirmacionDialog),
+        typeof(MensajeDialog),
+        typeof(PedirTextoDialog),
+        typeof(ReclasificarTareaDialog),
+        // Window host de la app -- tambien queda fuera de Montar por la misma razon (Window).
+        // Revisada en la Task 13.1: no tiene ningun literal visual que custodiar.
+        typeof(MainWindow),
+        // Cromo de la app (sidebar + ContentControl), no una vista de contenido navegable.
+        // La custodian ShellMainViewGatesTests (15 casos) y SidebarContrasteTests.
+        typeof(ShellMainView),
+    };
+```
+
+`StockApp.Presentation.Views.Tareas` ya está importado en el archivo (`using
+StockApp.Presentation.Views.Tareas;`), así que no hace falta agregar ningún `using` nuevo.
+
+**NO se debe tocar el predicado de reflexión ni relajar el guardián — solo agregar la vista a la
+lista que le corresponde.**
+
+- [ ] **Step 5: Correr el test y verificar que pasa**
 
 Run: `dotnet test tests/StockApp.Presentation.Tests --filter "FullyQualifiedName~ClasificacionTareaDialogServiceTests|FullyQualifiedName~ReclasificarTareaDialogViewModelTests"`
-Expected: PASS (los 3 tests).
+Expected: PASS (los 2 tests).
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 ```bash
-git add src/StockApp.Presentation/Services/IClasificacionTareaDialogService.cs src/StockApp.Presentation/Services/ClasificacionTareaDialogService.cs src/StockApp.Presentation/ViewModels/Tareas/ReclasificarTareaDialogViewModel.cs src/StockApp.Presentation/Views/Tareas/ReclasificarTareaDialog.axaml src/StockApp.Presentation/Views/Tareas/ReclasificarTareaDialog.axaml.cs src/StockApp.Presentation/App.axaml.cs tests/StockApp.Presentation.Tests/Services/ClasificacionTareaDialogServiceTests.cs tests/StockApp.Presentation.Tests/ViewModels/Tareas/ReclasificarTareaDialogViewModelTests.cs
+git add src/StockApp.Presentation/Services/IClasificacionTareaDialogService.cs src/StockApp.Presentation/Services/ClasificacionTareaDialogService.cs src/StockApp.Presentation/ViewModels/Tareas/ReclasificarTareaDialogViewModel.cs src/StockApp.Presentation/Views/Tareas/ReclasificarTareaDialog.axaml src/StockApp.Presentation/Views/Tareas/ReclasificarTareaDialog.axaml.cs src/StockApp.Presentation/App.axaml.cs tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs tests/StockApp.Presentation.Tests/Services/ClasificacionTareaDialogServiceTests.cs tests/StockApp.Presentation.Tests/ViewModels/Tareas/ReclasificarTareaDialogViewModelTests.cs
 git commit -m "feat(tareas): modal de reclasificación con formulario real"
 ```
 
