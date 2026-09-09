@@ -38,6 +38,7 @@ public partial class TareaFormViewModel : ViewModelBase
     private readonly ICurrentSession      _session;
     private readonly INavigationService   _navigation;
     private readonly IConfirmacionService _confirmacion;
+    private readonly IClasificacionTareaDialogService _dialogoClasificacion;
 
     private int _idTarea;
 
@@ -47,6 +48,11 @@ public partial class TareaFormViewModel : ViewModelBase
     /// duplicar el conocimiento de qué estados son terminales fuera del dominio.
     /// </summary>
     private bool _tareaEsTerminal;
+
+    /// <summary>Ids actuales de clasificación de la tarea cargada (spec 2026-09-08): precarga
+    /// el modal de reclasificación (Task 10) — D21, el Admin ve exactamente lo que hay
+    /// guardado. Se recalcula en CargarParaVer, no en el alta (ahí no hay "actual").</summary>
+    private DatosClasificacionTarea _clasificacionActual = new(null, null, null, null, null);
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
@@ -58,8 +64,15 @@ public partial class TareaFormViewModel : ViewModelBase
     [ObservableProperty] private string? _tomadaPorNombre;
     [ObservableProperty] private string? _mensajeError;
 
+    [ObservableProperty] private string? _zonaTexto;
+    [ObservableProperty] private string? _dimensionTematicaTexto;
+    [ObservableProperty] private string? _organismoResponsableTexto;
+    [ObservableProperty] private string? _origenFinanciamientoTexto;
+    [ObservableProperty] private string? _documentoAdministrativoTexto;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(MuestraCambioPrioridad))]
+    [NotifyPropertyChangedFor(nameof(MuestraReclasificar))]
     private bool _esNuevaTarea = true;
 
     [ObservableProperty]
@@ -72,6 +85,11 @@ public partial class TareaFormViewModel : ViewModelBase
     public IReadOnlyList<PrioridadTarea> PrioridadesDisponibles { get; } =
         new[] { PrioridadTarea.Baja, PrioridadTarea.Media, PrioridadTarea.Alta };
 
+    /// <summary>Panel embebido de clasificación (Task 9): solo se usa en modo alta — en
+    /// modo detalle los cinco campos se muestran de solo lectura (ZonaTexto, etc.) y se
+    /// reclasifican vía el modal (ReclasificarCommand), no editando este panel in-place.</summary>
+    public ClasificacionTareaPanelViewModel ClasificacionPanel { get; }
+
     public bool EsAdmin => _session.RolActual == RolUsuario.Admin;
 
     /// <summary>
@@ -81,14 +99,26 @@ public partial class TareaFormViewModel : ViewModelBase
     /// </summary>
     public bool MuestraCambioPrioridad => EsAdmin && !EsNuevaTarea && !_tareaEsTerminal;
 
+    /// <summary>
+    /// Botón "Reclasificar" (spec 2026-09-08, D9): a propósito SIN la condición
+    /// !_tareaEsTerminal que sí tiene MuestraCambioPrioridad — la reclasificación alcanza
+    /// también tareas Terminada/Cancelada (corrige un reporte mal salido sin reabrir la
+    /// tarea). Copiar MuestraCambioPrioridad tal cual acá sería un bug.
+    /// </summary>
+    public bool MuestraReclasificar => EsAdmin && !EsNuevaTarea;
+
     public TareaFormViewModel(
         ITareaService service, ICurrentSession session,
-        INavigationService navigation, IConfirmacionService confirmacion)
+        INavigationService navigation, IConfirmacionService confirmacion,
+        ClasificacionTareaPanelViewModel clasificacionPanel,
+        IClasificacionTareaDialogService dialogoClasificacion)
     {
         _service      = service;
         _session      = session;
         _navigation   = navigation;
         _confirmacion = confirmacion;
+        ClasificacionPanel = clasificacionPanel;
+        _dialogoClasificacion = dialogoClasificacion;
     }
 
     public void CargarParaCrear()
@@ -118,6 +148,16 @@ public partial class TareaFormViewModel : ViewModelBase
         PrioridadSeleccionada = tarea.Prioridad;
         MensajeError = null;
 
+        ZonaTexto = tarea.Zona?.Nombre;
+        DimensionTematicaTexto = tarea.DimensionTematica?.Nombre;
+        OrganismoResponsableTexto = tarea.OrganismoResponsable?.Nombre;
+        OrigenFinanciamientoTexto = tarea.OrigenFinanciamiento?.Nombre;
+        DocumentoAdministrativoTexto = tarea.DocumentoAdministrativo is null
+            ? null : $"{tarea.DocumentoAdministrativo.Tipo} {tarea.DocumentoAdministrativo.Numero}/{tarea.DocumentoAdministrativo.Anio}";
+        _clasificacionActual = new DatosClasificacionTarea(
+            tarea.ZonaId, tarea.DimensionTematicaId, tarea.OrganismoResponsableId,
+            tarea.OrigenFinanciamientoId, tarea.DocumentoAdministrativoId);
+
         Notas.Clear();
         foreach (var nota in tarea.Notas)
             Notas.Add(nota);
@@ -131,6 +171,7 @@ public partial class TareaFormViewModel : ViewModelBase
         MensajeError = null;
         try
         {
+            var clasificacion = ClasificacionPanel.ObtenerDatos();
             await _service.CrearAsync(new Tarea
             {
                 Titulo = Titulo,
@@ -142,6 +183,11 @@ public partial class TareaFormViewModel : ViewModelBase
                 FechaLimite = FechaLimiteSeleccionada.HasValue
                     ? DateTime.SpecifyKind(FechaLimiteSeleccionada.Value.Date, DateTimeKind.Utc)
                     : null,
+                ZonaId = clasificacion.ZonaId,
+                DimensionTematicaId = clasificacion.DimensionTematicaId,
+                OrganismoResponsableId = clasificacion.OrganismoResponsableId,
+                OrigenFinanciamientoId = clasificacion.OrigenFinanciamientoId,
+                DocumentoAdministrativoId = clasificacion.DocumentoAdministrativoId,
             });
             _navigation.Navegar<TareaListViewModel>();
         }
@@ -178,6 +224,32 @@ public partial class TareaFormViewModel : ViewModelBase
         {
             await _service.CambiarPrioridadAsync(_idTarea, PrioridadSeleccionada);
             await _confirmacion.InformarAsync($"Prioridad actualizada a {PrioridadSeleccionada}.");
+        }
+        catch (Exception ex)
+        {
+            MensajeError = ResolverMensajeError(ex);
+        }
+    }
+
+    [RelayCommand]
+    private async Task ReclasificarAsync()
+    {
+        MensajeError = null;
+        try
+        {
+            var resultado = await _dialogoClasificacion.PedirClasificacionAsync(_clasificacionActual);
+            if (resultado is null) return; // el Admin canceló el modal
+
+            await _service.ReclasificarAsync(_idTarea, resultado);
+
+            // Molde de DocumentoFormViewModel.RecargarAsync: refresca desde el servidor y
+            // vuelve a popular los campos de solo lectura vía CargarParaVer, en vez de
+            // mantener una copia local optimista.
+            var actualizada = await _service.ObtenerPorIdAsync(_idTarea);
+            if (actualizada is not null)
+                CargarParaVer(actualizada);
+
+            await _confirmacion.InformarAsync("Clasificación actualizada.");
         }
         catch (Exception ex)
         {

@@ -192,7 +192,12 @@ public class InicioPanelTareasTests
         Assert.NotNull(navegacion.UltimoInicializadorTareaForm);
 
         var formVm = new TareaFormViewModel(
-            new TareaServiceFake(), new SesionFake(RolUsuario.Admin), navegacion, new ConfirmacionServiceFake());
+            new TareaServiceFake(), new SesionFake(RolUsuario.Admin), navegacion, new ConfirmacionServiceFake(),
+            new ClasificacionTareaPanelViewModel(
+                new ZonaServiceFake(), new DimensionTematicaServiceFake(),
+                new OrganismoResponsableServiceFake(), new OrigenFinanciamientoServiceFake(),
+                new DocumentoServiceFake()),
+            new ClasificacionDialogServiceFake());
         navegacion.UltimoInicializadorTareaForm!(formVm);
 
         Assert.Equal("Reponer stock depósito B", formVm.Titulo);
@@ -215,7 +220,12 @@ public class InicioPanelTareasTests
 
         Assert.Equal(typeof(TareaFormViewModel), navegacion.UltimoTipoNavegado);
         var formVm = new TareaFormViewModel(
-            new TareaServiceFake(), new SesionFake(RolUsuario.Admin), navegacion, new ConfirmacionServiceFake());
+            new TareaServiceFake(), new SesionFake(RolUsuario.Admin), navegacion, new ConfirmacionServiceFake(),
+            new ClasificacionTareaPanelViewModel(
+                new ZonaServiceFake(), new DimensionTematicaServiceFake(),
+                new OrganismoResponsableServiceFake(), new OrigenFinanciamientoServiceFake(),
+                new DocumentoServiceFake()),
+            new ClasificacionDialogServiceFake());
         navegacion.UltimoInicializadorTareaForm!(formVm);
 
         Assert.Equal("Recibir factura proveedor", formVm.Titulo);

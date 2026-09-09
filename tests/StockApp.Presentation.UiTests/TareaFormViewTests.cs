@@ -34,12 +34,21 @@ public class TareaFormViewTests
         </Window>
         """;
 
-    private static (Window Window, TareaFormViewModel Vm, TareaServiceFake Servicio, NavigationRecorderFake Nav) MontarParaCrear(
+    private static ClasificacionTareaPanelViewModel NuevoPanelClasificacion() => new(
+        new ZonaServiceFake(), new DimensionTematicaServiceFake(),
+        new OrganismoResponsableServiceFake(), new OrigenFinanciamientoServiceFake(),
+        new DocumentoServiceFake());
+
+    private static (Window Window, TareaFormViewModel Vm, TareaServiceFake Servicio, NavigationRecorderFake Nav,
+                     ClasificacionDialogServiceFake DialogoClasificacion) MontarParaCrear(
         RolUsuario rol = RolUsuario.Admin)
     {
         var servicio = new TareaServiceFake();
         var nav = new NavigationRecorderFake();
-        var vm = new TareaFormViewModel(servicio, new SesionFake(rol), nav, new ConfirmacionServiceFake());
+        var dialogoClasificacion = new ClasificacionDialogServiceFake();
+        var vm = new TareaFormViewModel(
+            servicio, new SesionFake(rol), nav, new ConfirmacionServiceFake(),
+            NuevoPanelClasificacion(), dialogoClasificacion);
         vm.CargarParaCrear();
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
@@ -48,15 +57,19 @@ public class TareaFormViewTests
         Dispatcher.UIThread.RunJobs();
         Dispatcher.UIThread.RunJobs(); // segunda pasada: deja asentar bindings de Command/IsEnabled
 
-        return (window, vm, servicio, nav);
+        return (window, vm, servicio, nav, dialogoClasificacion);
     }
 
-    private static (Window Window, TareaFormViewModel Vm, TareaServiceFake Servicio, NavigationRecorderFake Nav) MontarParaVer(
+    private static (Window Window, TareaFormViewModel Vm, TareaServiceFake Servicio, NavigationRecorderFake Nav,
+                     ClasificacionDialogServiceFake DialogoClasificacion) MontarParaVer(
         Tarea tarea, RolUsuario rol = RolUsuario.Admin, TareaServiceFake? servicioExistente = null)
     {
         var servicio = servicioExistente ?? new TareaServiceFake(new System.Collections.Generic.List<Tarea> { tarea });
         var nav = new NavigationRecorderFake();
-        var vm = new TareaFormViewModel(servicio, new SesionFake(rol), nav, new ConfirmacionServiceFake());
+        var dialogoClasificacion = new ClasificacionDialogServiceFake();
+        var vm = new TareaFormViewModel(
+            servicio, new SesionFake(rol), nav, new ConfirmacionServiceFake(),
+            NuevoPanelClasificacion(), dialogoClasificacion);
         vm.CargarParaVer(tarea);
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
@@ -65,7 +78,7 @@ public class TareaFormViewTests
         Dispatcher.UIThread.RunJobs();
         Dispatcher.UIThread.RunJobs(); // segunda pasada: deja asentar bindings de Command/IsEnabled
 
-        return (window, vm, servicio, nav);
+        return (window, vm, servicio, nav, dialogoClasificacion);
     }
 
     private static void Clickear(Window window, Control control)
@@ -85,7 +98,7 @@ public class TareaFormViewTests
     [AvaloniaFact]
     public void ModoAlta_MuestraTituloDescripcionFechaYBotonesGuardarVolver()
     {
-        var (window, vm, _, _) = MontarParaCrear();
+        var (window, vm, _, _, _) = MontarParaCrear();
 
         Assert.True(vm.EsNuevaTarea);
         // CalendarDatePicker es un TemplatedControl que trae SU PROPIO TextBox interno (el de
@@ -107,7 +120,7 @@ public class TareaFormViewTests
     [AvaloniaFact]
     public void ModoAlta_TituloVacio_ElBotonGuardarQuedaDeshabilitado()
     {
-        var (window, vm, _, _) = MontarParaCrear();
+        var (window, vm, _, _, _) = MontarParaCrear();
 
         Assert.False(vm.GuardarCommand.CanExecute(null));
         var boton = BotonVisiblePorTexto(window, "Guardar");
@@ -132,7 +145,7 @@ public class TareaFormViewTests
     [AvaloniaFact]
     public void ClickReal_TipearTituloYFecha_ClickearGuardar_CreaLaTareaYNavegaAlListado()
     {
-        var (window, vm, servicio, nav) = MontarParaCrear();
+        var (window, vm, servicio, nav, _) = MontarParaCrear();
 
         var titulo = window.GetVisualDescendants().OfType<TextBox>().Where(ArbolVisual.EsVisibleEnArbol).First();
         titulo.Focus();
@@ -169,7 +182,7 @@ public class TareaFormViewTests
         tarea.Notas.Add(new NotaTarea { TareaId = 5, Texto = "primera nota", Fecha = DateTime.UtcNow });
         tarea.Notas.Add(new NotaTarea { TareaId = 5, Texto = "segunda nota", Fecha = DateTime.UtcNow });
 
-        var (window, vm, _, _) = MontarParaVer(tarea);
+        var (window, vm, _, _, _) = MontarParaVer(tarea);
 
         Assert.Equal(2, vm.Notas.Count);
         var textos = window.GetVisualDescendants().OfType<TextBlock>()
@@ -185,7 +198,7 @@ public class TareaFormViewTests
     public void ClickReal_TipearNotaYClickearAgregar_SumaLaNotaAlHiloVisible()
     {
         var tarea = new Tarea { Id = 5, Titulo = "Bache" };
-        var (window, vm, servicio, _) = MontarParaVer(tarea);
+        var (window, vm, servicio, _, _) = MontarParaVer(tarea);
 
         var cajaNota = window.GetVisualDescendants().OfType<TextBox>().Where(ArbolVisual.EsVisibleEnArbol).Single();
         cajaNota.Focus();
@@ -208,7 +221,7 @@ public class TareaFormViewTests
     public void ModoDetalle_AdminConTareaPendiente_MuestraCambioDePrioridad()
     {
         var tarea = new Tarea { Id = 5, Titulo = "x", Estado = EstadoTarea.Pendiente, Prioridad = PrioridadTarea.Media };
-        var (window, vm, _, _) = MontarParaVer(tarea, rol: RolUsuario.Admin);
+        var (window, vm, _, _, _) = MontarParaVer(tarea, rol: RolUsuario.Admin);
 
         Assert.True(vm.MuestraCambioPrioridad);
         var combo = window.GetVisualDescendants().OfType<ComboBox>().Where(ArbolVisual.EsVisibleEnArbol).ToList();
@@ -226,7 +239,7 @@ public class TareaFormViewTests
     public void ModoDetalle_OperadorConTareaPendiente_NoMuestraCambioDePrioridad()
     {
         var tarea = new Tarea { Id = 5, Titulo = "x", Estado = EstadoTarea.Pendiente, Prioridad = PrioridadTarea.Media };
-        var (window, vm, _, _) = MontarParaVer(tarea, rol: RolUsuario.Operador);
+        var (window, vm, _, _, _) = MontarParaVer(tarea, rol: RolUsuario.Operador);
 
         Assert.False(vm.MuestraCambioPrioridad);
         Assert.DoesNotContain(window.GetVisualDescendants().OfType<ComboBox>(), ArbolVisual.EsVisibleEnArbol);
@@ -238,7 +251,7 @@ public class TareaFormViewTests
     public void ModoDetalle_AdminConTareaTerminada_NoMuestraCambioDePrioridad()
     {
         var tarea = new Tarea { Id = 5, Titulo = "x", Estado = EstadoTarea.Terminada, Prioridad = PrioridadTarea.Media };
-        var (window, vm, _, _) = MontarParaVer(tarea, rol: RolUsuario.Admin);
+        var (window, vm, _, _, _) = MontarParaVer(tarea, rol: RolUsuario.Admin);
 
         Assert.False(vm.MuestraCambioPrioridad);
         Assert.DoesNotContain(window.GetVisualDescendants().OfType<ComboBox>(), ArbolVisual.EsVisibleEnArbol);
@@ -248,7 +261,7 @@ public class TareaFormViewTests
     public void ClickReal_EnActualizarPrioridad_LlamaAlServicioConLaOpcionElegida()
     {
         var tarea = new Tarea { Id = 5, Titulo = "x", Estado = EstadoTarea.Pendiente, Prioridad = PrioridadTarea.Media };
-        var (window, vm, servicio, _) = MontarParaVer(tarea, rol: RolUsuario.Admin);
+        var (window, vm, servicio, _, _) = MontarParaVer(tarea, rol: RolUsuario.Admin);
 
         var combo = window.GetVisualDescendants().OfType<ComboBox>().Where(ArbolVisual.EsVisibleEnArbol).Single();
         combo.SelectedItem = PrioridadTarea.Alta;
