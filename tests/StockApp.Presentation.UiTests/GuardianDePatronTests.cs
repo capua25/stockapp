@@ -83,6 +83,7 @@ public class GuardianDePatronTests
     [InlineData(typeof(MasMovidosView), "Productos más movidos", "REPORTES")]
     [InlineData(typeof(HistorialPorProductoView), "Historial por producto", "REPORTES")]
     [InlineData(typeof(AuditoriaLogView), "Auditoría", "REPORTES")]
+    [InlineData(typeof(ReporteTareasView), "Estadística de tareas", "REPORTES")]
     [InlineData(typeof(UsuariosAdminView), "Administración de usuarios", "ADMINISTRACIÓN")]
     [InlineData(typeof(MantenimientoView), "Mantenimiento", "ADMINISTRACIÓN")]
     public void Vista_TieneHeaderVistaConElTituloEsperado(Type tipoVista, string? titulo, string? eyebrow)
@@ -142,6 +143,7 @@ public class GuardianDePatronTests
         typeof(MasMovidosView),
         typeof(HistorialPorProductoView),
         typeof(AuditoriaLogView),
+        typeof(ReporteTareasView),
         typeof(UsuariosAdminView),
         typeof(MantenimientoView),
     };

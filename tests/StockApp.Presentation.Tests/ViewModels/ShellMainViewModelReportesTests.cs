@@ -51,11 +51,13 @@ public class ShellMainViewModelReportesTests
         vm.NavHistorialPorProductoCommand.Execute(null);
         vm.NavMasMovidosCommand.Execute(null);
         vm.NavAuditoriaLogCommand.Execute(null);
+        vm.NavReporteTareasCommand.Execute(null);
 
         navMock.Verify(n => n.Navegar<ValorizacionViewModel>(),        Times.Once);
         navMock.Verify(n => n.Navegar<StockCategoriaViewModel>(),      Times.Once);
         navMock.Verify(n => n.Navegar<HistorialPorProductoViewModel>(), Times.Once);
         navMock.Verify(n => n.Navegar<MasMovidosViewModel>(),          Times.Once);
         navMock.Verify(n => n.Navegar<AuditoriaLogViewModel>(),        Times.Once);
+        navMock.Verify(n => n.Navegar<ReporteTareasViewModel>(),       Times.Once);
     }
 }

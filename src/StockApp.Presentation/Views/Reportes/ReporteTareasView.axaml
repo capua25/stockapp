@@ -1,0 +1,152 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels.Reportes"
+             xmlns:dto="using:StockApp.Application.Reportes"
+             xmlns:conv="using:StockApp.Presentation.Converters"
+             xmlns:beh="using:StockApp.Presentation.Behaviors"
+             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
+             x:Class="StockApp.Presentation.Views.Reportes.ReporteTareasView"
+             x:DataType="vm:ReporteTareasViewModel">
+
+    <Grid>
+    <DockPanel Margin="{DynamicResource MargenVista}">
+
+        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="REPORTES" Titulo="Estadística de tareas">
+            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
+                <Button Classes="primary" Content="Buscar" Command="{Binding BuscarCommand}" />
+            </StackPanel>
+        </c:HeaderVista>
+
+        <Border Classes="card">
+            <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
+
+                <!-- Filtros: agrupador, criterio de fecha, rango -->
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="{DynamicResource Espacio3}"
+                            VerticalAlignment="Bottom" Margin="0,0,0,12">
+                    <StackPanel MinWidth="220">
+                        <c:CampoFormulario Etiqueta="Agrupar por">
+                            <ComboBox ItemsSource="{Binding AgrupadoresDisponibles}"
+                                      SelectedItem="{Binding AgrupadorSeleccionado}"
+                                      HorizontalAlignment="Stretch">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Nombre}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </c:CampoFormulario>
+                    </StackPanel>
+                    <TextBlock Text="Desde:" VerticalAlignment="Center" />
+                    <CalendarDatePicker SelectedDate="{Binding FechaDesde}"
+                                        PlaceholderText="dd/mm/aaaa"
+                                        SelectedDateFormat="Custom"
+                                        CustomDateFormatString="dd/MM/yyyy"
+                                        beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
+                    <TextBlock Text="Hasta:" VerticalAlignment="Center" />
+                    <CalendarDatePicker SelectedDate="{Binding FechaHasta}"
+                                        PlaceholderText="dd/mm/aaaa"
+                                        SelectedDateFormat="Custom"
+                                        CustomDateFormatString="dd/MM/yyyy"
+                                        beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
+                </StackPanel>
+
+                <!-- D16: criterio de fecha, radio button de dos opciones -->
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="{DynamicResource Espacio3}" Margin="0,0,0,12">
+                    <TextBlock Text="Contar por:" VerticalAlignment="Center" />
+                    <RadioButton GroupName="CriterioFecha" Content="Fecha de creación"
+                                 IsChecked="{Binding EsCriterioCreacion, Mode=TwoWay}" />
+                    <RadioButton GroupName="CriterioFecha" Content="Fecha de cierre"
+                                 IsChecked="{Binding EsCriterioCierre, Mode=TwoWay}" />
+                </StackPanel>
+
+                <!-- D16: aviso explícito. Con criterio Cierre, Pendientes/En curso dan cero -->
+                <TextBlock Grid.Row="2"
+                           Text="Criterio 'Fecha de cierre': solo se cuentan tareas Terminadas o Canceladas. Las columnas 'Pendientes' y 'En curso' muestran 0 a propósito, no faltan datos."
+                           Foreground="{DynamicResource WarningBrush}"
+                           IsVisible="{Binding EsCriterioCierre}"
+                           Margin="0,0,0,12"
+                           TextWrapping="Wrap" />
+
+                <!-- Mensaje de error de rango -->
+                <TextBlock Grid.Row="2"
+                           Text="{Binding MensajeError}"
+                           Foreground="{DynamicResource DangerBrush}"
+                           IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                           Margin="0,0,0,12"
+                           TextWrapping="Wrap" />
+
+                <!-- Grilla del reporte-matriz -->
+                <DataGrid Grid.Row="3"
+                          ItemsSource="{Binding Items}"
+                          IsReadOnly="True"
+                          CanUserResizeColumns="True"
+                          GridLinesVisibility="Horizontal"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="Clasificador" Width="*" SortMemberPath="Clasificador">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:FilaReporteTareas">
+                                    <TextBlock Text="{Binding Clasificador}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding Clasificador}"
+                                               VerticalAlignment="Center" Margin="4,0" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Binding="{Binding Pendientes, Converter={x:Static conv:CantidadConverter.Instance}}"
+                                            Width="Auto" MinWidth="90" CellStyleClasses="num">
+                            <DataGridTextColumn.Header>
+                                <TextBlock Text="Pendientes" HorizontalAlignment="Right" TextAlignment="Right" />
+                            </DataGridTextColumn.Header>
+                        </DataGridTextColumn>
+                        <DataGridTextColumn Binding="{Binding EnCurso, Converter={x:Static conv:CantidadConverter.Instance}}"
+                                            Width="Auto" MinWidth="90" CellStyleClasses="num">
+                            <DataGridTextColumn.Header>
+                                <TextBlock Text="En curso" HorizontalAlignment="Right" TextAlignment="Right" />
+                            </DataGridTextColumn.Header>
+                        </DataGridTextColumn>
+                        <DataGridTextColumn Binding="{Binding Terminadas, Converter={x:Static conv:CantidadConverter.Instance}}"
+                                            Width="Auto" MinWidth="90" CellStyleClasses="num">
+                            <DataGridTextColumn.Header>
+                                <TextBlock Text="Terminadas" HorizontalAlignment="Right" TextAlignment="Right" />
+                            </DataGridTextColumn.Header>
+                        </DataGridTextColumn>
+                        <DataGridTextColumn Binding="{Binding Canceladas, Converter={x:Static conv:CantidadConverter.Instance}}"
+                                            Width="Auto" MinWidth="90" CellStyleClasses="num">
+                            <DataGridTextColumn.Header>
+                                <TextBlock Text="Canceladas" HorizontalAlignment="Right" TextAlignment="Right" />
+                            </DataGridTextColumn.Header>
+                        </DataGridTextColumn>
+                        <DataGridTextColumn Binding="{Binding Total, Converter={x:Static conv:CantidadConverter.Instance}}"
+                                            Width="Auto" MinWidth="90" CellStyleClasses="num">
+                            <DataGridTextColumn.Header>
+                                <TextBlock Text="Total" HorizontalAlignment="Right" TextAlignment="Right" />
+                            </DataGridTextColumn.Header>
+                        </DataGridTextColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <!-- Total general: passthrough directo de ReporteTareasDto.TotalGeneral (D23) -->
+                <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="{DynamicResource Espacio2}"
+                            HorizontalAlignment="Right" Margin="0,12,0,0">
+                    <TextBlock Text="Total general:" FontWeight="Bold" />
+                    <TextBlock Text="{Binding TotalGeneral, Converter={x:Static conv:CantidadConverter.Instance}}"
+                               FontWeight="Bold" />
+                </StackPanel>
+
+            </Grid>
+        </Border>
+
+    </DockPanel>
+
+        <!-- bugfix "pantalla muda ante un 403": ver ViewModelBase.EjecutarCargaProtegidaAsync. -->
+        <c:EstadoVacio Titulo="Sin permiso"
+                       Mensaje="{Binding MensajeSinPermiso}"
+                       EsError="True"
+                       IsVisible="{Binding SinPermiso}" />
+    </Grid>
+
+</UserControl>

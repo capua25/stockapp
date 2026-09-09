@@ -263,6 +263,7 @@ public partial class ShellMainViewModel : ViewModelBase
                 CrearItem("Historial por producto", "mdi-file-document", NavHistorialPorProductoCommand, "HistorialPorProducto", () => PuedeVerHistorialPorProducto),
                 CrearItem("Productos más movidos", "mdi-trending-up", NavMasMovidosCommand, "MasMovidos", () => PuedeVerReportes),
                 CrearItem("Log de auditoría", "mdi-shield-search", NavAuditoriaLogCommand, "AuditoriaLog", () => PuedeVerReportes),
+                CrearItem("Estadística de tareas", "mdi-chart-bar", NavReporteTareasCommand, "ReporteTareas", () => PuedeVerReportes),
             }),
             new GrupoNavegacion("Administración", new List<ItemNavegacion>
             {
@@ -537,6 +538,13 @@ public partial class ShellMainViewModel : ViewModelBase
     {
         SeccionActiva = "AuditoriaLog";
         _navigation.Navegar<AuditoriaLogViewModel>();
+    }
+
+    [RelayCommand]
+    private void NavReporteTareas()
+    {
+        SeccionActiva = "ReporteTareas";
+        _navigation.Navegar<ReporteTareasViewModel>();
     }
 
     // ── Administracion (Entrega 1 Backups): solo Admin ────────────────────────
