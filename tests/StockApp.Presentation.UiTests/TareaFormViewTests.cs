@@ -8,6 +8,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Avalonia.Headless.XUnit;
+using StockApp.Application.Tareas;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.ViewModels.Tareas;
@@ -276,5 +277,74 @@ public class TareaFormViewTests
         Dispatcher.UIThread.RunJobs();
 
         Assert.Contains((5, PrioridadTarea.Alta), servicio.CambiosDePrioridad);
+    }
+
+    // ── Reclasificar (spec 2026-09-08, D9): guardián con la View real ──────────
+
+    [AvaloniaFact]
+    public void ModoDetalle_AdminConTareaTerminada_MuestraBotonReclasificar()
+    {
+        // EL guardián crítico de D9: MuestraReclasificar es EsAdmin && !EsNuevaTarea, A
+        // PROPÓSITO sin la condición !_tareaEsTerminal que sí tiene MuestraCambioPrioridad.
+        // Copiar esa fórmula tal cual acá sería un bug — este test lo agarra en el XAML real,
+        // no solo a nivel VM.
+        var tarea = new Tarea { Id = 5, Titulo = "x", Estado = EstadoTarea.Terminada };
+        var (window, vm, _, _, _) = MontarParaVer(tarea, rol: RolUsuario.Admin);
+
+        Assert.True(vm.MuestraReclasificar);
+        Assert.True(BotonVisiblePorTexto(window, "Reclasificar").IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void ModoDetalle_OperadorConTareaTerminada_NoMuestraBotonReclasificar()
+    {
+        var tarea = new Tarea { Id = 5, Titulo = "x", Estado = EstadoTarea.Terminada };
+        var (window, vm, _, _, _) = MontarParaVer(tarea, rol: RolUsuario.Operador);
+
+        Assert.False(vm.MuestraReclasificar);
+        Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(),
+            b => Equals(b.Content, "Reclasificar") && ArbolVisual.EsVisibleEnArbol(b));
+    }
+
+    [AvaloniaFact]
+    public void ModoDetalle_AdminConTareaPendiente_MuestraBotonReclasificar()
+    {
+        var tarea = new Tarea { Id = 5, Titulo = "x", Estado = EstadoTarea.Pendiente };
+        var (window, vm, _, _, _) = MontarParaVer(tarea, rol: RolUsuario.Admin);
+
+        Assert.True(vm.MuestraReclasificar);
+        Assert.True(BotonVisiblePorTexto(window, "Reclasificar").IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void ModoAlta_Admin_NoMuestraBotonReclasificar()
+    {
+        var (window, vm, _, _, _) = MontarParaCrear(rol: RolUsuario.Admin);
+
+        Assert.False(vm.MuestraReclasificar);
+        Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(),
+            b => Equals(b.Content, "Reclasificar") && ArbolVisual.EsVisibleEnArbol(b));
+    }
+
+    [AvaloniaFact]
+    public void ClickReal_EnReclasificar_LlamaAlDialogoYAlServicioConElResultadoYRefrescaLosTextos()
+    {
+        var tarea = new Tarea
+        {
+            Id = 5, Titulo = "x", Estado = EstadoTarea.Terminada,
+            ZonaId = 1, Zona = new Zona { Id = 1, Nombre = "Centro" },
+        };
+        var servicio = new TareaServiceFake(new System.Collections.Generic.List<Tarea> { tarea });
+        var (window, vm, _, _, dialogoClasificacion) = MontarParaVer(tarea, rol: RolUsuario.Admin, servicioExistente: servicio);
+        dialogoClasificacion.ResultadoADevolver = new DatosClasificacionTarea(null, null, null, null, null);
+
+        var boton = BotonVisiblePorTexto(window, "Reclasificar");
+        Clickear(window, boton);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(1, dialogoClasificacion.Llamadas);
+        Assert.Equal(1, dialogoClasificacion.UltimoActualRecibido?.ZonaId);
+        Assert.Contains((5, new DatosClasificacionTarea(null, null, null, null, null)), servicio.Reclasificaciones);
+        Assert.Null(vm.ZonaTexto);
     }
 }

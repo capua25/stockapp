@@ -100,10 +100,15 @@ internal sealed class TareaServiceFake : ITareaService
     {
         var tarea = _tareas.First(t => t.Id == tareaId);
         tarea.ZonaId = datos.ZonaId;
+        tarea.Zona = null; // simula el round-trip al servidor: sin catálogo acá, el nav prop queda stale si no se limpia
         tarea.DimensionTematicaId = datos.DimensionTematicaId;
+        tarea.DimensionTematica = null;
         tarea.OrganismoResponsableId = datos.OrganismoResponsableId;
+        tarea.OrganismoResponsable = null;
         tarea.OrigenFinanciamientoId = datos.OrigenFinanciamientoId;
+        tarea.OrigenFinanciamiento = null;
         tarea.DocumentoAdministrativoId = datos.DocumentoAdministrativoId;
+        tarea.DocumentoAdministrativo = null;
         Reclasificaciones.Add((tareaId, datos));
         return Task.CompletedTask;
     }
