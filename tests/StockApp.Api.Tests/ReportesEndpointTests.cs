@@ -317,12 +317,16 @@ public class ReportesEndpointTests : ApiTestBase
 
     // Los tres casos de entrada que puede mandar un cliente HTTP en el query string, apuntando
     // los tres al MISMO instante UTC (2026-01-01T00:00:00Z) con formatos distintos: sin offset
-    // (Kind=Unspecified al bindear), con "Z" y con un offset explícito no-UTC (Kind=Local en
-    // ambos casos, ya convertido a la zona horaria del servidor -- acá, America/Montevideo,
-    // -03:00). La tarea sembrada tiene FechaCreacion exactamente en ese instante: si la
-    // normalización corrompe el instante (bug original: SpecifyKind ciego sin
-    // ToUniversalTime), el filtro "hasta fin del día" calcula el límite sobre el día
-    // equivocado y la excluye -- Total pasa de 1 a 0.
+    // (Kind=Unspecified al bindear), con "Z" y con un offset explícito no-UTC (estos dos
+    // últimos ya llegan en Kind=Utc, correctamente convertidos por el binder de query string
+    // de Minimal API -- nunca Kind=Local, ver NormalizarAUtc). El caso sin offset es el único
+    // que ejercita la rama Unspecified de NormalizarAUtc (la única normalización real que
+    // hace este endpoint); los casos con "Z" y con offset caen en la rama passthrough (Kind ya
+    // es Utc, NormalizarAUtc es un no-op) y lo que confirman es que el binder ya entrega el
+    // instante correcto por sí solo. La tarea sembrada tiene FechaCreacion exactamente en ese
+    // instante: si la normalización corrompe el instante (bug original: SpecifyKind ciego sin
+    // ToUniversalTime, que sí sería un bug si Kind llegara Local), el filtro "hasta fin del
+    // día" calcula el límite sobre el día equivocado y la excluye -- Total pasa de 1 a 0.
     [Theory]
     [InlineData("2026-01-01")]
     [InlineData("2026-01-01T00:00:00Z")]
