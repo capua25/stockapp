@@ -146,4 +146,23 @@ public class ClasificacionTareaPanelViewModelTests
         Assert.Equal(20, resultado.Count());
         Assert.NotNull(ctx.Vm.MensajeBuscadorExpediente);
     }
+
+    [Fact]
+    public async Task BuscarExpedientesAsync_SinPermisoDeDocumentos_DegradaSinRomperElRestoDelPanel()
+    {
+        var ctx = Crear();
+        await ctx.Vm.InicializarAsync();
+        ctx.Vm.ZonaSeleccionada = ctx.Vm.ZonasDisponibles.First(z => z.Id == 2);
+        ctx.Documentos.Setup(d => d.ListarActivosAsync(It.IsAny<FiltroDocumentos>()))
+            .ThrowsAsync(new UnauthorizedAccessException());
+
+        var resultado = await ctx.Vm.BuscarExpedientesAsync("obra", CancellationToken.None);
+
+        Assert.Empty(resultado);
+        Assert.NotNull(ctx.Vm.MensajeBuscadorExpediente);
+
+        var datos = ctx.Vm.ObtenerDatos();
+        Assert.Equal(2, datos.ZonaId);
+        Assert.Null(datos.DocumentoAdministrativoId);
+    }
 }

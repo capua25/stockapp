@@ -110,7 +110,27 @@ public partial class ClasificacionTareaPanelViewModel : ViewModelBase
         }
 
         var filtro = new FiltroDocumentos(TipoDocumento.Expediente, null, texto, null);
-        var resultados = await _documentosService.ListarActivosAsync(filtro);
+
+        IReadOnlyList<DocumentoAdministrativo> resultados;
+        try
+        {
+            resultados = await _documentosService.ListarActivosAsync(filtro);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Gap de diseño detectado en revisión (2026-09-09): ListarActivosAsync está
+            // gateado con Permisos.GestionarDocumentos, independiente de GestionarTareas que
+            // gatea los cuatro combos de catálogo de este mismo panel. Un usuario con
+            // tareas.gestionar pero sin documentos.gestionar recibiría un 403 apenas tipea acá
+            // -- y como el panel se embebe tal cual en el modal de reclasificación (Task 10) y
+            // en el alta de tarea (Task 12), ambos consumidores heredarían el problema sin
+            // enterarse. Degradación con gracia (mismo criterio que
+            // InicioViewModel.CargarAsync con el panel de vencimientos de tareas, líneas
+            // 249-278): el buscador queda inhabilitado con un mensaje explicativo, pero el
+            // resto del panel (los 4 combos, ObtenerDatos) sigue funcionando sin romperse.
+            MensajeBuscadorExpediente = "No tenés permiso para buscar expedientes.";
+            return Array.Empty<object>();
+        }
 
         if (resultados.Count > TopeResultadosBusquedaExpediente)
         {
