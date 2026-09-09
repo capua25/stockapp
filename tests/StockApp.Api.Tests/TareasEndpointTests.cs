@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using StockApp.Api.Auth;
 using StockApp.Api.Endpoints;
 using StockApp.Api.Tests.Fixtures;
+using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using Xunit;
 
@@ -373,11 +374,14 @@ public class TareasEndpointTests : ApiTestBase
     }
 
     [Fact]
-    public async Task PutClasificacion_TareaTerminada_Devuelve200YAplicaLaClasificacion()
+    public async Task PutClasificacion_TareaTerminada_Devuelve200SinCambiarSuEstado()
     {
         // D9 del spec: la reclasificación alcanza también a tareas terminales — a
         // diferencia de PostPrioridad_TareaTerminada_Devuelve409 (Task existente), acá NO
-        // debe dar 409.
+        // debe dar 409. Este test manda los 5 campos en null: solo verifica que el 200 no
+        // mueva el Estado de la tarea. El round-trip real de los valores de clasificación
+        // (que los nombres viajen completos por HTTP) está en
+        // GetTarea_ConClasificacionCompleta_DevuelveLosCincoNombres.
         await SeedUsuariosAsync();
         var client = ClienteAutenticado(TokenAdmin());
         var id = await CrearTareaAsync(client);
@@ -407,5 +411,77 @@ public class TareasEndpointTests : ApiTestBase
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var tareas = await response.Content.ReadFromJsonAsync<List<TareaDto>>();
         Assert.Empty(tareas!);
+    }
+
+    /// <summary>Siembra los 5 catálogos de clasificación (mismo criterio que
+    /// DocumentosEndpointTests.SembrarDocumentoAsync para DocumentoAdministrativo: seed
+    /// directo por EF, sin pasar por sus propios endpoints de alta, que son ortogonales a
+    /// esta tarea) y devuelve sus ids.</summary>
+    private async Task<(int ZonaId, int DimensionTematicaId, int OrganismoResponsableId,
+        int OrigenFinanciamientoId, int DocumentoAdministrativoId)> SembrarClasificadoresAsync()
+    {
+        await using var ctx = Factory.CrearContexto();
+
+        var zona = new Zona { Nombre = "Centro", Activo = true };
+        var dimension = new DimensionTematica { Nombre = "Obras", Activo = true };
+        var organismo = new OrganismoResponsable { Nombre = "Intendencia", Activo = true };
+        var origen = new OrigenFinanciamiento { Nombre = "Rentas Generales", Activo = true };
+        ctx.Zonas.Add(zona);
+        ctx.DimensionesTematicas.Add(dimension);
+        ctx.OrganismosResponsables.Add(organismo);
+        ctx.OrigenesFinanciamiento.Add(origen);
+        await ctx.SaveChangesAsync();
+
+        var registrante = await DatosDePrueba.SeedUsuarioAsync(
+            ctx, $"registrante.{Guid.NewGuid():N}", "Secreta123!", RolUsuario.Admin);
+        var documento = new DocumentoAdministrativo
+        {
+            Numero = "0099",
+            Anio = 2026,
+            Tipo = TipoDocumento.Expediente,
+            FechaEmision = DateTime.SpecifyKind(new DateTime(2026, 1, 15), DateTimeKind.Utc),
+            Descripcion = "Documento de prueba",
+            Estado = EstadoDocumento.Pendiente,
+            RegistradoPorUsuarioId = registrante.Id,
+            FechaRegistro = DateTime.UtcNow,
+        };
+        ctx.DocumentosAdministrativos.Add(documento);
+        await ctx.SaveChangesAsync();
+
+        return (zona.Id, dimension.Id, organismo.Id, origen.Id, documento.Id);
+    }
+
+    [Fact]
+    public async Task GetTarea_ConClasificacionCompleta_DevuelveLosCincoNombres()
+    {
+        // Hallazgo de review (Task 6): ADto llenaba los 5 pares id/nombre pero ningún test
+        // hacía el camino completo por HTTP (crear con clasificación real, leer, verificar
+        // los nombres) — solo se había confirmado por lectura de código. Este test cierra
+        // ese gap: si el mapper se olvida un campo, alguno de los 5 Asserts de abajo queda
+        // en null y el test se pone rojo.
+        await SeedUsuariosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+        var (zonaId, dimensionId, organismoId, origenId, documentoId) = await SembrarClasificadoresAsync();
+        var id = await CrearTareaAsync(client);
+
+        var put = await client.PutAsJsonAsync(
+            $"/tareas/{id}/clasificacion",
+            new ClasificarTareaRequest(zonaId, dimensionId, organismoId, origenId, documentoId));
+        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+
+        var response = await client.GetAsync($"/tareas/{id}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var tarea = await response.Content.ReadFromJsonAsync<TareaDto>();
+        Assert.Equal(zonaId, tarea!.ZonaId);
+        Assert.Equal("Centro", tarea.ZonaNombre);
+        Assert.Equal(dimensionId, tarea.DimensionTematicaId);
+        Assert.Equal("Obras", tarea.DimensionTematicaNombre);
+        Assert.Equal(organismoId, tarea.OrganismoResponsableId);
+        Assert.Equal("Intendencia", tarea.OrganismoResponsableNombre);
+        Assert.Equal(origenId, tarea.OrigenFinanciamientoId);
+        Assert.Equal("Rentas Generales", tarea.OrigenFinanciamientoNombre);
+        Assert.Equal(documentoId, tarea.DocumentoAdministrativoId);
+        Assert.Equal("0099", tarea.DocumentoAdministrativoNumero);
     }
 }

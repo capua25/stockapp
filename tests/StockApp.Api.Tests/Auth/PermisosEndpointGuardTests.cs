@@ -117,11 +117,13 @@ public class PermisosEndpointGuardTests : ApiTestBase
 
         ("POST",   "/tareas", Permisos.GestionarTareas),
         ("GET",    "/tareas", Permisos.GestionarTareas),
+        ("GET",    "/tareas/{id}", Permisos.GestionarTareas),
         ("POST",   "/tareas/{id}/tomar", Permisos.GestionarTareas),
         ("POST",   "/tareas/{id}/soltar", Permisos.GestionarTareas),
         ("POST",   "/tareas/{id}/terminar", Permisos.GestionarTareas),
         ("POST",   "/tareas/{id}/cancelar", Permisos.AdministrarTareas),
         ("POST",   "/tareas/{id}/prioridad", Permisos.AdministrarTareas),
+        ("PUT",    "/tareas/{id}/clasificacion", Permisos.AdministrarTareas),
         ("POST",   "/tareas/{id}/notas", Permisos.GestionarTareas),
 
         ("GET",    "/unidades-medida", Permisos.GestionarTablasMaestras),
