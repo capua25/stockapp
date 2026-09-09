@@ -85,4 +85,18 @@ public enum AccionAuditada
     AltaAdjuntoDocumento        = 57,
     BajaAdjuntoDocumento        = 58,
     EdicionDocumento            = 59,
+
+    // ── Clasificadores de Tareas — spec 2026-09-08 (append-only a partir de 60) ──
+    AltaZona                        = 60,
+    BajaZona                        = 61,
+    ModificacionZona                = 62,
+    AltaDimensionTematica           = 63,
+    BajaDimensionTematica           = 64,
+    ModificacionDimensionTematica   = 65,
+    AltaOrganismoResponsable        = 66,
+    BajaOrganismoResponsable        = 67,
+    ModificacionOrganismoResponsable = 68,
+    AltaOrigenFinanciamiento        = 69,
+    BajaOrigenFinanciamiento        = 70,
+    ModificacionOrigenFinanciamiento = 71,
 }
