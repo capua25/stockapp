@@ -186,4 +186,41 @@ public class TareaTests
         // De solo lectura: consultar no debe mutar el estado.
         Assert.Equal(origen, tarea.Estado);
     }
+
+    // ── Clasificadores (spec 2026-09-08): puramente aditivo, sin efecto en la máquina de
+    // estados ni en CambiarPrioridad — estos tests solo custodian que la migración de datos
+    // sea coherente con el dominio (los cinco campos nacen null, D7).
+
+    [Fact]
+    public void NuevaTarea_LosCincoClasificadoresNacenNulos()
+    {
+        var tarea = NuevaTarea();
+
+        Assert.Null(tarea.ZonaId);
+        Assert.Null(tarea.Zona);
+        Assert.Null(tarea.DimensionTematicaId);
+        Assert.Null(tarea.DimensionTematica);
+        Assert.Null(tarea.OrganismoResponsableId);
+        Assert.Null(tarea.OrganismoResponsable);
+        Assert.Null(tarea.OrigenFinanciamientoId);
+        Assert.Null(tarea.OrigenFinanciamiento);
+        Assert.Null(tarea.DocumentoAdministrativoId);
+        Assert.Null(tarea.DocumentoAdministrativo);
+    }
+
+    [Fact]
+    public void CambiarEstado_TareaClasificada_NoTocaLosClasificadores()
+    {
+        // D9 del spec: reclasificar/clasificar es independiente de la máquina de estados —
+        // este test prueba la mitad "estado no toca clasificación" (la otra mitad,
+        // "reclasificar no toca estado", vive en TareaServiceTests, Task 5).
+        var tarea = NuevaTarea(EstadoTarea.Pendiente);
+        tarea.ZonaId = 3;
+        tarea.OrigenFinanciamientoId = 7;
+
+        tarea.CambiarEstado(EstadoTarea.EnCurso);
+
+        Assert.Equal(3, tarea.ZonaId);
+        Assert.Equal(7, tarea.OrigenFinanciamientoId);
+    }
 }
