@@ -36,16 +36,25 @@ namespace StockApp.Api.Json;
 /// </summary>
 public sealed class DateTimeUnspecifiedAsUtcConverter : JsonConverter<DateTime>
 {
-    public override DateTime Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    /// <summary>
+    /// Mismo criterio de normalización que <see cref="Read"/>, extraído para reusar fuera del
+    /// pipeline JSON -- ver ReportesEndpoints.MapReportesEndpoints (GET /reportes/tareas), que
+    /// lo aplica a desde/hasta bindeados por query string. Medido empíricamente (repro mínimo,
+    /// mismo TFM/SDK que este proyecto): ese binder ya entrega Kind=Utc, correctamente
+    /// convertido, para un valor con offset o "Z", y Kind=Unspecified para uno sin offset --
+    /// nunca Kind=Local. El caso Local de este switch no lo dispara hoy ningún binder conocido
+    /// de la Api; se reusa esta misma normalización por robustez/consistencia de criterio con
+    /// el pipeline JSON, no porque haya un defecto activo que corregir en query string.
+    /// </summary>
+    public static DateTime NormalizarAUtc(DateTime valor) => valor.Kind switch
     {
-        var valor = reader.GetDateTime();
-        return valor.Kind switch
-        {
-            DateTimeKind.Unspecified => DateTime.SpecifyKind(valor, DateTimeKind.Utc),
-            DateTimeKind.Local => valor.ToUniversalTime(),
-            _ => valor,
-        };
-    }
+        DateTimeKind.Unspecified => DateTime.SpecifyKind(valor, DateTimeKind.Utc),
+        DateTimeKind.Local => valor.ToUniversalTime(),
+        _ => valor,
+    };
+
+    public override DateTime Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        => NormalizarAUtc(reader.GetDateTime());
 
     public override void Write(Utf8JsonWriter writer, DateTime value, JsonSerializerOptions options)
         => writer.WriteStringValue(value);
