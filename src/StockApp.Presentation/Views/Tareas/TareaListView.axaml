@@ -39,6 +39,9 @@
                                             <TextBlock Text="{Binding FechaLimite, StringFormat='Vence: {0:dd/MM/yyyy}'}"
                                                        Classes="caption"
                                                        IsVisible="{Binding FechaLimite, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                            <TextBlock Text="{Binding EtiquetasClasificacion}"
+                                                       Classes="caption" Foreground="{DynamicResource TextoTerciarioBrush}"
+                                                       IsVisible="{Binding EtiquetasClasificacion, Converter={x:Static ObjectConverters.IsNotNull}}" />
                                         </StackPanel>
                                         <Button Grid.Column="1" Classes="ghost" Content="Ver"
                                                 Command="{Binding $parent[UserControl].((vm:TareaListViewModel)DataContext).VerDetalleCommand}"
@@ -80,6 +83,9 @@
                                                        IsVisible="{Binding FechaLimite, Converter={x:Static ObjectConverters.IsNotNull}}" />
                                             <TextBlock Text="{Binding TomadaPorNombre, StringFormat='Tomada por {0}'}"
                                                        Classes="caption" />
+                                            <TextBlock Text="{Binding EtiquetasClasificacion}"
+                                                       Classes="caption" Foreground="{DynamicResource TextoTerciarioBrush}"
+                                                       IsVisible="{Binding EtiquetasClasificacion, Converter={x:Static ObjectConverters.IsNotNull}}" />
                                         </StackPanel>
                                         <Button Grid.Column="1" Classes="ghost" Content="Ver"
                                                 Command="{Binding $parent[UserControl].((vm:TareaListViewModel)DataContext).VerDetalleCommand}"

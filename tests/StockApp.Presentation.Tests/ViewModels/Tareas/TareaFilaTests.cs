@@ -146,4 +146,26 @@ public class TareaFilaTests
 
         Assert.True(fila.DiasParaVencer > 1000m);
     }
+
+    // ── EtiquetasClasificacion (spec 2026-09-08, D19) ───────────────────────────
+
+    [Fact]
+    public void EtiquetasClasificacion_SinNingunClasificador_DevuelveNull()
+    {
+        var tarea = TareaCon(fechaLimite: null);
+        var fila = new TareaFila(tarea, RolUsuario.Operador);
+
+        Assert.Null(fila.EtiquetasClasificacion);
+    }
+
+    [Fact]
+    public void EtiquetasClasificacion_ConAlgunosClasificadores_LosUneConPuntoMedio()
+    {
+        var tarea = TareaCon(fechaLimite: null);
+        tarea.Zona = new Zona { Id = 1, Nombre = "Centro" };
+        tarea.OrigenFinanciamiento = new OrigenFinanciamiento { Id = 2, Nombre = "Presupuesto propio" };
+        var fila = new TareaFila(tarea, RolUsuario.Operador);
+
+        Assert.Equal("Centro · Presupuesto propio", fila.EtiquetasClasificacion);
+    }
 }

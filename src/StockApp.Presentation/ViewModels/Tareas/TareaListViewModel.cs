@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -56,6 +57,22 @@ public sealed class TareaFila
     public string PrioridadTexto => Tarea.Prioridad.ToString();
     public DateTime? FechaLimite => Tarea.FechaLimite;
     public string? TomadaPorNombre => Tarea.TomadaPor?.NombreUsuario;
+
+    /// <summary>Etiquetas de clasificación para la tarjeta (spec 2026-09-08, D19): une los
+    /// clasificadores asignados con " · ", null si no hay ninguno (así el XAML puede usar
+    /// IsNotNull para ocultar la línea entera en vez de mostrar una cadena vacía).</summary>
+    public string? EtiquetasClasificacion
+    {
+        get
+        {
+            var partes = new List<string>();
+            if (Tarea.Zona is not null) partes.Add(Tarea.Zona.Nombre);
+            if (Tarea.DimensionTematica is not null) partes.Add(Tarea.DimensionTematica.Nombre);
+            if (Tarea.OrganismoResponsable is not null) partes.Add(Tarea.OrganismoResponsable.Nombre);
+            if (Tarea.OrigenFinanciamiento is not null) partes.Add(Tarea.OrigenFinanciamiento.Nombre);
+            return partes.Count == 0 ? null : string.Join(" · ", partes);
+        }
+    }
 
     public decimal DiasParaVencer => CalcularDiasParaVencer(Tarea.FechaLimite, Tarea.Estado, _ahoraUtc, _zonaLocal);
 
