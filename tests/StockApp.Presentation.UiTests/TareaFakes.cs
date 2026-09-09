@@ -30,6 +30,7 @@ internal sealed class TareaServiceFake : ITareaService
     public List<Tarea> TareasCreadas { get; } = new();
     public List<(int Id, string Texto)> NotasAgregadas { get; } = new();
     public List<(int Id, PrioridadTarea Prioridad)> CambiosDePrioridad { get; } = new();
+    public List<(int Id, DatosClasificacionTarea Datos)> Reclasificaciones { get; } = new();
     public int LlamadasCancelar { get; private set; }
 
     public Task<int> CrearAsync(Tarea tarea)
@@ -89,6 +90,24 @@ internal sealed class TareaServiceFake : ITareaService
         NotasAgregadas.Add((id, texto));
         return Task.CompletedTask;
     }
+
+    public Task<Tarea?> ObtenerPorIdAsync(int id) =>
+        Task.FromResult(_tareas.FirstOrDefault(t => t.Id == id));
+
+    public Task ReclasificarAsync(int tareaId, DatosClasificacionTarea datos)
+    {
+        var tarea = _tareas.First(t => t.Id == tareaId);
+        tarea.ZonaId = datos.ZonaId;
+        tarea.DimensionTematicaId = datos.DimensionTematicaId;
+        tarea.OrganismoResponsableId = datos.OrganismoResponsableId;
+        tarea.OrigenFinanciamientoId = datos.OrigenFinanciamientoId;
+        tarea.DocumentoAdministrativoId = datos.DocumentoAdministrativoId;
+        Reclasificaciones.Add((tareaId, datos));
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<Tarea>> ListarPorDocumentoAsync(int documentoId) =>
+        Task.FromResult<IReadOnlyList<Tarea>>(_tareas.Where(t => t.DocumentoAdministrativoId == documentoId).ToList());
 }
 
 /// <summary>
