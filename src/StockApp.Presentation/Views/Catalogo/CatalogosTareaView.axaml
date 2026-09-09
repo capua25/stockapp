@@ -1,0 +1,33 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels.Catalogo"
+             xmlns:views="using:StockApp.Presentation.Views.Catalogo"
+             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="600"
+             x:Class="StockApp.Presentation.Views.Catalogo.CatalogosTareaView"
+             x:DataType="vm:CatalogosTareaViewModel">
+
+    <DockPanel Margin="{DynamicResource MargenVista}">
+
+        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="TAREAS" Titulo="Catálogos de tareas" />
+
+        <TabControl>
+            <TabItem Header="Zonas">
+                <views:ZonaListView DataContext="{Binding ZonasVm}" />
+            </TabItem>
+            <TabItem Header="Dimensiones">
+                <views:DimensionTematicaListView DataContext="{Binding DimensionesVm}" />
+            </TabItem>
+            <TabItem Header="Organismos responsables">
+                <views:OrganismoResponsableListView DataContext="{Binding OrganismosVm}" />
+            </TabItem>
+            <TabItem Header="Orígenes de financiamiento">
+                <views:OrigenFinanciamientoListView DataContext="{Binding OrigenesVm}" />
+            </TabItem>
+        </TabControl>
+
+    </DockPanel>
+
+</UserControl>

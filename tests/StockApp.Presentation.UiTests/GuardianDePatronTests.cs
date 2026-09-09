@@ -61,6 +61,7 @@ public class GuardianDePatronTests
     [InlineData(typeof(OrganismoResponsableFormView), null, null)]
     [InlineData(typeof(OrigenFinanciamientoFormView), null, null)]
     [InlineData(typeof(MaestrosFinanzasView), "Maestros de finanzas", "FINANZAS")]
+    [InlineData(typeof(CatalogosTareaView), "Catálogos de tareas", "TAREAS")]
     [InlineData(typeof(ImportacionView), "Importar planillas", "FINANZAS")]
     [InlineData(typeof(FuenteFinanciamientoFormView), null, "FINANZAS")]
     [InlineData(typeof(RubroGastoFormView), null, "FINANZAS")]
@@ -119,6 +120,7 @@ public class GuardianDePatronTests
         typeof(OrganismoResponsableFormView),
         typeof(OrigenFinanciamientoFormView),
         typeof(MaestrosFinanzasView),
+        typeof(CatalogosTareaView),
         typeof(ImportacionView),
         typeof(FuenteFinanciamientoFormView),
         typeof(RubroGastoFormView),
