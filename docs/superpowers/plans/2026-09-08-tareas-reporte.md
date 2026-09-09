@@ -882,11 +882,21 @@ git commit -m "feat(reportes): agrega ReporteTareasRepository con agregación GR
 **Files:**
 - Modify: `src/StockApp.Api/Endpoints/ReportesEndpoints.cs`
 - Modify: `src/StockApp.Api/Program.cs` (sección "Reportes", cerca de la línea 176-192)
+- Modify: `tests/StockApp.Api.Tests/Auth/PermisosEndpointGuardTests.cs`
 - Test: `tests/StockApp.Api.Tests/ReportesEndpointTests.cs`
 
 **Interfaces:**
 - Consumes: `IReporteTareasService.ObtenerAsync(FiltroReporteTareas)` (Task 1), `IReporteTareasRepository`/`ReporteTareasRepository` (Task 2, para el DI).
 - Produces: `GET /reportes/tareas?agrupador={AgrupadorTareas}&criterio={CriterioFechaTareas}&desde={DateTime}&hasta={DateTime}` → 200 `ReporteTareasDto` | 401 | 403 | 400 (rango ausente/inválido, vía `ArgumentException` → `DomainExceptionHandler`). Ya protegido por el `RequireAuthorization(Permisos.VerReportes)` del grupo `/reportes` existente — no hace falta política propia.
+
+> **Corrección (pre-flight):** `tests/StockApp.Api.Tests/Auth/PermisosEndpointGuardTests.cs` tiene
+> una aserción de exhaustividad (`TodoEndpointConPermisoDeclarado_EstaEnLaFixtureDelGuardian`,
+> agregada después de que se escribiera este plan) que recorre TODOS los endpoints con policy y
+> exige que estén declarados en la fixture `EndpointsYPermisos`. `GET /reportes/tareas` queda
+> protegido por `Permisos.VerReportes` (el grupo `/reportes` ya lo exige) y no está en esa fixture
+> → sin el Step 4bis de abajo, ese test se pone rojo. **No tocar el predicado de la aserción de
+> exhaustividad ni el test `CadaEndpointDeLaLista_SigueExigiendoElMismoPermisoQueAntes`** — solo
+> agregar la fila que corresponde a `EndpointsYPermisos`.
 
 - [ ] **Step 1: Escribir el test que falla**
 
@@ -992,10 +1002,37 @@ builder.Services.AddScoped<IReporteTareasService, ReporteTareasService>();
 Run: `dotnet test tests/StockApp.Api.Tests --filter FullyQualifiedName~ReportesEndpointTests`
 Expected: PASS (todos los Facts del archivo, incluidos los preexistentes de valorización/stock-por-categoría/más-movidos/historial y los 5 nuevos de tareas).
 
+- [ ] **Step 4bis: Declarar la ruta nueva en el guardián de permisos**
+
+`GET /reportes/tareas` queda cubierto por `RequireAuthorization(Permisos.VerReportes)` del grupo
+`/reportes` (Step 3), pero eso no alcanza: `PermisosEndpointGuardTests.TodoEndpointConPermisoDeclarado_EstaEnLaFixtureDelGuardian`
+barre por reflexión TODOS los endpoints con policy declarada y exige que estén en la fixture
+`EndpointsYPermisos` de ese archivo — sin este step, ese test queda rojo.
+
+En `tests/StockApp.Api.Tests/Auth/PermisosEndpointGuardTests.cs`, agregar la fila dentro del
+bloque de endpoints `/reportes/*` existente (mismo formato `(Metodo, Ruta, Permiso)` que las
+filas vecinas):
+
+```csharp
+        ("GET",    "/reportes/valorizacion", Permisos.VerReportes),
+        ("GET",    "/reportes/stock-por-categoria", Permisos.VerReportes),
+        ("GET",    "/reportes/mas-movidos", Permisos.VerReportes),
+        ("GET",    "/reportes/historial-producto/{productoId}", Permisos.VerReportes),
+        ("GET",    "/reportes/tareas", Permisos.VerReportes),
+```
+
+**No tocar nada más en este archivo**: ni el predicado de `TodoEndpointConPermisoDeclarado_EstaEnLaFixtureDelGuardian`
+ni el test `CadaEndpointDeLaLista_SigueExigiendoElMismoPermisoQueAntes` — solo se agrega esta fila
+a `EndpointsYPermisos`.
+
+Run: `dotnet test tests/StockApp.Api.Tests --filter FullyQualifiedName~PermisosEndpointGuardTests`
+Expected: PASS (2/2) — sin esta fila, `TodoEndpointConPermisoDeclarado_EstaEnLaFixtureDelGuardian` falla listando `GET /reportes/tareas` como faltante.
+
 - [ ] **Step 5: Commit**
 ```bash
 git add src/StockApp.Api/Endpoints/ReportesEndpoints.cs src/StockApp.Api/Program.cs \
-        tests/StockApp.Api.Tests/ReportesEndpointTests.cs
+        tests/StockApp.Api.Tests/ReportesEndpointTests.cs \
+        tests/StockApp.Api.Tests/Auth/PermisosEndpointGuardTests.cs
 git commit -m "feat(reportes): expone GET /reportes/tareas"
 ```
 
@@ -1157,7 +1194,22 @@ git commit -m "feat(reportes): agrega ReporteTareasApiClient y lo registra en el
 
 **Interfaces:**
 - Consumes: `IReporteTareasService.ObtenerAsync(FiltroReporteTareas)` (Task 1), `ViewModelBase.EjecutarCargaProtegidaAsync` (`src/StockApp.Presentation/ViewModels/ViewModelBase.cs`).
-- Produces: `record OpcionAgrupador(string Nombre, AgrupadorTareas Valor)`, `class ReporteTareasViewModel : ViewModelBase` con `AgrupadoresDisponibles`, `AgrupadorSeleccionado`, `CriterioSeleccionado`, `EsCriterioCreacion`/`EsCriterioCierre`, `FechaDesde`/`FechaHasta` (default año en curso), `Items`, `TotalGeneral`, `MensajeError`, `BuscarCommand`, `CargarAsync()`.
+- Produces: `record OpcionAgrupador(string Nombre, AgrupadorTareas Valor)`, `class ReporteTareasViewModel : ViewModelBase` con `AgrupadoresDisponibles`, `AgrupadorSeleccionado`, `CriterioSeleccionado`, `EsCriterioCreacion`/`EsCriterioCierre`, `FechaDesde`/`FechaHasta` (`DateTime?`, default año en curso), `Items`, `TotalGeneral`, `MensajeError`, `BuscarCommand`, `CargarAsync()`.
+
+> **Corrección (pre-flight):** `FechaDesde`/`FechaHasta` son `DateTime?`, NO `DateTime` no nullable.
+> `CalendarDatePicker.SelectedDate` (Avalonia.Controls 12.0.5, verificado por reflexión) es
+> `Nullable<DateTime>` con `DefaultBindingMode=TwoWay` — con compiled bindings (`x:DataType`), un
+> TwoWay entre `DateTime?` y una propiedad `DateTime` no nullable no compila. Mismo patrón que
+> `MasMovidosViewModel.FechaDesde`/`FechaHasta`, `TareaFormViewModel.FechaLimiteSeleccionada`,
+> `DocumentoFormViewModel.FechaEmisionSeleccionada` y
+> `GastoFormViewModel.FechaSeleccionada`/`FechaVencimientoSeleccionada` (los cuatro `DateTime?`,
+> verificados contra el código real). El rango sigue siendo obligatorio (D18, validado también en
+> `ReporteTareasService`, Task 1): el ViewModel arranca con el año en curso por defecto, pero si el
+> usuario borra una fecha, `CargarAsync()`/`BuscarCommand` la rechazan con un `MensajeError` claro
+> ANTES de tocar el servicio — nunca mandan `null` a `FiltroReporteTareas` (que sigue con
+> `Desde`/`Hasta` no nullable, Task 1 sin cambios) ni caen en un default silencioso. Task 6 no
+> necesita ningún ajuste de binding por este cambio: `SelectedDate="{Binding FechaDesde}"` ya es
+> correcto para una propiedad `DateTime?` tal cual está escrito más abajo.
 
 - [ ] **Step 1: Escribir el test que falla**
 
@@ -1272,6 +1324,32 @@ public class ReporteTareasViewModelTests
     }
 
     [Fact]
+    public async Task BuscarCommand_ConFechaDesdeNula_NoLlamaAlServicioYSeteaMensajeError()
+    {
+        // D18: el rango es obligatorio -- si el usuario borra una fecha del CalendarDatePicker
+        // (FechaDesde queda null), el ViewModel rechaza ACÁ, nunca manda null al servicio.
+        var (vm, servicioMock) = Crear();
+        vm.FechaDesde = null;
+
+        await vm.BuscarCommand.ExecuteAsync(null);
+
+        servicioMock.Verify(s => s.ObtenerAsync(It.IsAny<FiltroReporteTareas>()), Times.Never);
+        Assert.False(string.IsNullOrEmpty(vm.MensajeError));
+    }
+
+    [Fact]
+    public async Task BuscarCommand_ConFechaHastaNula_NoLlamaAlServicioYSeteaMensajeError()
+    {
+        var (vm, servicioMock) = Crear();
+        vm.FechaHasta = null;
+
+        await vm.BuscarCommand.ExecuteAsync(null);
+
+        servicioMock.Verify(s => s.ObtenerAsync(It.IsAny<FiltroReporteTareas>()), Times.Never);
+        Assert.False(string.IsNullOrEmpty(vm.MensajeError));
+    }
+
+    [Fact]
     public async Task CargarAsync_SiElServicioLanzaUnauthorized_NoPropagaYDejaSinPermiso()
     {
         // bugfix "pantalla muda ante un 403": mismo criterio que el resto de los reportes.
@@ -1352,11 +1430,14 @@ public partial class ReporteTareasViewModel : ViewModelBase
     [ObservableProperty]
     private CriterioFechaTareas _criterioSeleccionado;
 
+    // DateTime? (no DateTime): CalendarDatePicker.SelectedDate es Nullable<DateTime> con binding
+    // TwoWay -- mismo tipo que MasMovidosViewModel.FechaDesde/FechaHasta. El rango sigue siendo
+    // obligatorio (D18): CargarAsync() rechaza con MensajeError si el usuario borra una fecha.
     [ObservableProperty]
-    private DateTime _fechaDesde;
+    private DateTime? _fechaDesde;
 
     [ObservableProperty]
-    private DateTime _fechaHasta;
+    private DateTime? _fechaHasta;
 
     [ObservableProperty]
     private IReadOnlyList<FilaReporteTareas> _items = new List<FilaReporteTareas>();
@@ -1411,6 +1492,15 @@ public partial class ReporteTareasViewModel : ViewModelBase
     /// </summary>
     public async Task CargarAsync()
     {
+        // D18: el rango es obligatorio. FechaDesde/FechaHasta son DateTime? (el usuario puede
+        // borrar el CalendarDatePicker) -- rechazar ACÁ con un mensaje claro, nunca mandar null
+        // a FiltroReporteTareas (Desde/Hasta siguen siendo DateTime no nullable en Application).
+        if (FechaDesde is null || FechaHasta is null)
+        {
+            MensajeError = "El rango de fechas es obligatorio.";
+            return;
+        }
+
         if (FechaDesde > FechaHasta)
         {
             MensajeError = "La fecha 'Desde' no puede ser posterior a 'Hasta'.";
@@ -1423,8 +1513,8 @@ public partial class ReporteTareasViewModel : ViewModelBase
             var filtro = new FiltroReporteTareas(
                 AgrupadorSeleccionado.Valor,
                 CriterioSeleccionado,
-                ALocalAUtc(FechaDesde),
-                ALocalAUtc(FechaHasta));
+                ALocalAUtc(FechaDesde.Value),
+                ALocalAUtc(FechaHasta.Value));
 
             var reporte = await _servicio.ObtenerAsync(filtro);
 
@@ -1436,7 +1526,9 @@ public partial class ReporteTareasViewModel : ViewModelBase
 
     /// <summary>Convierte una fecha LOCAL (la que produce el CalendarDatePicker bindeado a
     /// FechaDesde/FechaHasta) a UTC antes de pasarla al servicio -- mismo criterio que
-    /// MasMovidosViewModel.ALocalAUtc: el repositorio compara contra columnas timestamptz.</summary>
+    /// MasMovidosViewModel.ALocalAUtc: el repositorio compara contra columnas timestamptz.
+    /// Toma DateTime no nullable a propósito: los dos call sites ya validaron HasValue arriba
+    /// (D18), así que acá no hace falta (ni conviene) volver a manejar null.</summary>
     private static DateTime ALocalAUtc(DateTime fechaLocal)
         => DateTime.SpecifyKind(fechaLocal, DateTimeKind.Local).ToUniversalTime();
 }
@@ -1445,7 +1537,7 @@ public partial class ReporteTareasViewModel : ViewModelBase
 - [ ] **Step 4: Correr el test y verificar que pasa**
 
 Run: `timeout 180 dotnet test tests/StockApp.Presentation.Tests --filter "FullyQualifiedName~ReporteTareasViewModelTests"`
-Expected: PASS (8/8).
+Expected: PASS (10/10).
 
 - [ ] **Step 5: Commit**
 ```bash
@@ -1463,11 +1555,24 @@ git commit -m "feat(reportes): agrega ReporteTareasViewModel (D23: sin cálculos
 - Create: `src/StockApp.Presentation/Views/Reportes/ReporteTareasView.axaml.cs`
 - Modify: `src/StockApp.Presentation/App.axaml.cs` (cerca de la línea 327, junto a `StockCategoriaViewModel`)
 - Modify: `src/StockApp.Presentation/ViewModels/ShellMainViewModel.cs` (grupo "Reportes", cerca de la línea 258-265, y el bloque de comandos `Nav*`, cerca de la línea 520-525)
+- Modify: `tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs`
 - Test: `tests/StockApp.Presentation.Tests/ViewModels/ShellMainViewModelReportesTests.cs` (modify)
 
 **Interfaces:**
 - Consumes: `ReporteTareasViewModel` (Task 5), `INavigationService.Navegar<T>()`, `c:HeaderVista`/`c:CampoFormulario`/`c:EstadoVacio` (`src/StockApp.Presentation/Controls/`), `conv:CantidadConverter` (`src/StockApp.Presentation/Converters/CantidadConverter.cs`), `beh:CalendarDatePickerFechaBehavior` (`src/StockApp.Presentation/Behaviors/`).
 - Produces: `class ReporteTareasView : UserControl`, item de sidebar "Estadística de tareas" en el grupo "Reportes", comando `NavReporteTareasCommand`.
+
+> **Corrección (pre-flight):** `tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs`
+> exige por reflexión (`Guardian_CubreTodasLasVistasDelEnsamblado`) que toda `Control` pública y
+> no abstracta bajo `StockApp.Presentation.Views.*` esté en alguna de sus cuatro listas
+> (`InlineData` de `Vista_TieneHeaderVistaConElTituloEsperado`, `VistasDeLaTanda`,
+> `VistasEmbebidas`, `VistasCentradasSinSidebar`) o en la exclusión explícita
+> `VistasFueraDelGuardian`. `ReporteTareasView` no está en ninguna → sin el Step 3bis de abajo,
+> `Guardian_CubreTodasLasVistasDelEnsamblado` (y, al estar en `VistasDeLaTanda`, también
+> `Vista_TieneMargenExteriorEstandar`) quedan rojos. **No tocar el predicado de reflexión de
+> `Guardian_CubreTodasLasVistasDelEnsamblado` ni las listas `VistasEmbebidas`,
+> `VistasCentradasSinSidebar` o `VistasFueraDelGuardian`** — solo agregar las dos filas que
+> corresponden, mismo criterio que usaron las Tasks 9 y 10 del Plan B para sus vistas nuevas.
 
 - [ ] **Step 1: Escribir el test que falla**
 
@@ -1707,6 +1812,36 @@ En `src/StockApp.Presentation/App.axaml.cs`, agregar junto a `services.AddTransi
         services.AddTransient<ReporteTareasViewModel>();
 ```
 
+- [ ] **Step 3bis: Registrar la vista nueva en el guardián de patrón**
+
+En `tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs`, agregar `ReporteTareasView` a
+las DOS listas donde están las otras 5 vistas de Reportes (mismo título que el `HeaderVista` del
+Step 3, mismo eyebrow "REPORTES"):
+
+En el `[AvaloniaTheory]` de `Vista_TieneHeaderVistaConElTituloEsperado`, junto a las otras filas
+de REPORTES:
+
+```csharp
+    [InlineData(typeof(AuditoriaLogView), "Auditoría", "REPORTES")]
+    [InlineData(typeof(ReporteTareasView), "Estadística de tareas", "REPORTES")]
+```
+
+Y en `VistasDeLaTanda` (la exige también `Vista_TieneMargenExteriorEstandar`,
+`Vista_NoTieneOpacidadesLiterales` y `Vista_NoTieneUnSegundoBotonPrimario`):
+
+```csharp
+        typeof(AuditoriaLogView),
+        typeof(ReporteTareasView),
+```
+
+**No tocar el predicado de reflexión de `Guardian_CubreTodasLasVistasDelEnsamblado`, ni
+`VistasEmbebidas`, `VistasCentradasSinSidebar` o `VistasFueraDelGuardian`** — `ReporteTareasView`
+no es ni embebida ni sin-sidebar, así que no le corresponde ninguna de esas otras listas.
+
+Run: `dotnet test tests/StockApp.Presentation.UiTests --filter FullyQualifiedName~GuardianDePatronTests`
+Expected: PASS (sin este step, `Guardian_CubreTodasLasVistasDelEnsamblado` falla listando
+`ReporteTareasView` como huérfana).
+
 - [ ] **Step 4: Correr el test y verificar que pasa**
 
 Run: `timeout 180 dotnet test tests/StockApp.Presentation.Tests --filter "FullyQualifiedName~ShellMainViewModelReportesTests"`
@@ -1721,7 +1856,8 @@ git add src/StockApp.Presentation/Views/Reportes/ReporteTareasView.axaml \
         src/StockApp.Presentation/Views/Reportes/ReporteTareasView.axaml.cs \
         src/StockApp.Presentation/App.axaml.cs \
         src/StockApp.Presentation/ViewModels/ShellMainViewModel.cs \
-        tests/StockApp.Presentation.Tests/ViewModels/ShellMainViewModelReportesTests.cs
+        tests/StockApp.Presentation.Tests/ViewModels/ShellMainViewModelReportesTests.cs \
+        tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs
 git commit -m "feat(reportes): agrega la vista del reporte-matriz de tareas y su entrada en el sidebar"
 ```
 
