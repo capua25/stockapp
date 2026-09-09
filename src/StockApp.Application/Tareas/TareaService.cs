@@ -21,15 +21,32 @@ public class TareaService : ITareaService
     private readonly IAuthorizationService _auth;
     private readonly IAuditLogger          _audit;
 
+    // Clasificadores (spec 2026-09-08, D12): repositorios, NO servicios — validar
+    // existencia/actividad acá no debe exigir catalogo.maestras (el permiso de ABM de
+    // catálogos), que es completamente ajeno a tareas.gestionar/tareas.administrar.
+    private readonly IZonaRepository                 _zonas;
+    private readonly IDimensionTematicaRepository    _dimensiones;
+    private readonly IOrganismoResponsableRepository _organismos;
+    private readonly IOrigenFinanciamientoRepository _origenes;
+    private readonly IDocumentoAdministrativoRepository _documentos;
+
     public TareaService(
         ITareaRepository repo, IUsuarioRepository usuarios, ICurrentSession session,
-        IAuthorizationService auth, IAuditLogger audit)
+        IAuthorizationService auth, IAuditLogger audit,
+        IZonaRepository zonas, IDimensionTematicaRepository dimensiones,
+        IOrganismoResponsableRepository organismos, IOrigenFinanciamientoRepository origenes,
+        IDocumentoAdministrativoRepository documentos)
     {
-        _repo     = repo;
-        _usuarios = usuarios;
-        _session  = session;
-        _auth     = auth;
-        _audit    = audit;
+        _repo        = repo;
+        _usuarios    = usuarios;
+        _session     = session;
+        _auth        = auth;
+        _audit       = audit;
+        _zonas       = zonas;
+        _dimensiones = dimensiones;
+        _organismos  = organismos;
+        _origenes    = origenes;
+        _documentos  = documentos;
     }
 
     public async Task<int> CrearAsync(Tarea tarea)
@@ -38,6 +55,12 @@ public class TareaService : ITareaService
 
         if (string.IsNullOrWhiteSpace(tarea.Titulo))
             throw new ArgumentException("El título de la tarea es obligatorio.", nameof(tarea.Titulo));
+
+        // D12 del spec: misma validación de clasificadores que ReclasificarAsync (Task 5) —
+        // no hay atajo por la vía del alta.
+        await ValidarClasificacionAsync(
+            tarea.ZonaId, tarea.DimensionTematicaId, tarea.OrganismoResponsableId,
+            tarea.OrigenFinanciamientoId, tarea.DocumentoAdministrativoId);
 
         // Decisión 8 del spec: la prioridad nace SIEMPRE en Media, incluso si el llamador
         // (Admin incluido) trae otra cosa en la entidad.
@@ -58,6 +81,71 @@ public class TareaService : ITareaService
             (tarea.FechaLimite is not null ? $"; Vence: {tarea.FechaLimite:yyyy-MM-dd}" : string.Empty));
 
         return id;
+    }
+
+    /// <summary>
+    /// Validación compartida de los cinco clasificadores (spec 2026-09-08, D12): cada
+    /// catálogo asignado debe existir y estar activo, y el documento debe ser de tipo
+    /// Expediente y estar activo (EsActivo). La reutilizan CrearAsync y ReclasificarAsync
+    /// (Task 5) SIN atajos — un Admin no puede colar un Oficio ni un catálogo inactivo por
+    /// la vía de la reclasificación. Los cinco ids nulos (caso mayoritario, D7) no disparan
+    /// ninguna consulta.
+    /// </summary>
+    private async Task<(Zona? Zona, DimensionTematica? Dimension, OrganismoResponsable? Organismo,
+                         OrigenFinanciamiento? Origen, DocumentoAdministrativo? Documento)>
+        ValidarClasificacionAsync(
+            int? zonaId, int? dimensionId, int? organismoId, int? origenId, int? documentoId)
+    {
+        Zona? zona = null;
+        if (zonaId is int zid)
+        {
+            zona = await _zonas.ObtenerPorIdAsync(zid)
+                ?? throw new ReglaDeNegocioException($"La zona {zid} no existe.");
+            if (!zona.Activo)
+                throw new ReglaDeNegocioException($"La zona '{zona.Nombre}' está inactiva.");
+        }
+
+        DimensionTematica? dimension = null;
+        if (dimensionId is int did)
+        {
+            dimension = await _dimensiones.ObtenerPorIdAsync(did)
+                ?? throw new ReglaDeNegocioException($"La dimensión temática {did} no existe.");
+            if (!dimension.Activo)
+                throw new ReglaDeNegocioException($"La dimensión temática '{dimension.Nombre}' está inactiva.");
+        }
+
+        OrganismoResponsable? organismo = null;
+        if (organismoId is int oid)
+        {
+            organismo = await _organismos.ObtenerPorIdAsync(oid)
+                ?? throw new ReglaDeNegocioException($"El organismo responsable {oid} no existe.");
+            if (!organismo.Activo)
+                throw new ReglaDeNegocioException($"El organismo responsable '{organismo.Nombre}' está inactivo.");
+        }
+
+        OrigenFinanciamiento? origen = null;
+        if (origenId is int fid)
+        {
+            origen = await _origenes.ObtenerPorIdAsync(fid)
+                ?? throw new ReglaDeNegocioException($"El origen de financiamiento {fid} no existe.");
+            if (!origen.Activo)
+                throw new ReglaDeNegocioException($"El origen de financiamiento '{origen.Nombre}' está inactivo.");
+        }
+
+        DocumentoAdministrativo? documento = null;
+        if (documentoId is int docid)
+        {
+            documento = await _documentos.ObtenerPorIdAsync(docid)
+                ?? throw new ReglaDeNegocioException($"El documento {docid} no existe.");
+            if (documento.Tipo != TipoDocumento.Expediente)
+                throw new ReglaDeNegocioException(
+                    $"El documento {docid} no es un expediente (es {documento.Tipo}).");
+            if (!documento.EsActivo)
+                throw new ReglaDeNegocioException(
+                    $"El expediente {documento.Numero}/{documento.Anio} no está activo.");
+        }
+
+        return (zona, dimension, organismo, origen, documento);
     }
 
     public async Task<IReadOnlyList<Tarea>> ListarAsync()

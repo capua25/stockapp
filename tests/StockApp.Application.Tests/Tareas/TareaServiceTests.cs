@@ -13,14 +13,22 @@ namespace StockApp.Application.Tests.Tareas;
 public class TareaServiceTests
 {
     private static (TareaService Svc, Mock<ITareaRepository> Repo, Mock<IUsuarioRepository> Usuarios,
-                     Mock<ICurrentSession> Session, Mock<IAuthorizationService> Auth, Mock<IAuditLogger> Audit)
+                     Mock<ICurrentSession> Session, Mock<IAuthorizationService> Auth, Mock<IAuditLogger> Audit,
+                     Mock<IZonaRepository> Zonas, Mock<IDimensionTematicaRepository> Dimensiones,
+                     Mock<IOrganismoResponsableRepository> Organismos, Mock<IOrigenFinanciamientoRepository> Origenes,
+                     Mock<IDocumentoAdministrativoRepository> Documentos)
         Crear(RolUsuario rol = RolUsuario.Admin, int idSesion = 1, string nombreUsuario = "admin.test")
     {
-        var repo     = new Mock<ITareaRepository>();
-        var usuarios = new Mock<IUsuarioRepository>();
-        var session  = new Mock<ICurrentSession>();
-        var auth     = new Mock<IAuthorizationService>();
-        var audit    = new Mock<IAuditLogger>();
+        var repo        = new Mock<ITareaRepository>();
+        var usuarios    = new Mock<IUsuarioRepository>();
+        var session     = new Mock<ICurrentSession>();
+        var auth        = new Mock<IAuthorizationService>();
+        var audit       = new Mock<IAuditLogger>();
+        var zonas       = new Mock<IZonaRepository>();
+        var dimensiones = new Mock<IDimensionTematicaRepository>();
+        var organismos  = new Mock<IOrganismoResponsableRepository>();
+        var origenes    = new Mock<IOrigenFinanciamientoRepository>();
+        var documentos  = new Mock<IDocumentoAdministrativoRepository>();
 
         session.Setup(s => s.RolActual).Returns(rol);
         session.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(idSesion, nombreUsuario, rol, null));
@@ -34,8 +42,10 @@ public class TareaServiceTests
         usuarios.Setup(u => u.ObtenerPorIdAsync(idSesion))
             .ReturnsAsync(new Usuario { Id = idSesion, NombreUsuario = nombreUsuario });
 
-        var svc = new TareaService(repo.Object, usuarios.Object, session.Object, auth.Object, audit.Object);
-        return (svc, repo, usuarios, session, auth, audit);
+        var svc = new TareaService(
+            repo.Object, usuarios.Object, session.Object, auth.Object, audit.Object,
+            zonas.Object, dimensiones.Object, organismos.Object, origenes.Object, documentos.Object);
+        return (svc, repo, usuarios, session, auth, audit, zonas, dimensiones, organismos, origenes, documentos);
     }
 
     // ── CrearAsync ────────────────────────────────────────────────────────────
@@ -513,5 +523,104 @@ public class TareaServiceTests
         await ctx.Svc.CambiarPrioridadAsync(5, PrioridadTarea.Alta);
 
         ctx.Audit.Verify(a => a.RegistrarAsync(1, AccionAuditada.CambioPrioridadTarea, "Tarea", 5, It.IsAny<string>()), Times.Once);
+    }
+
+    // ── CrearAsync: validación de clasificadores (D12 del spec) ────────────────
+
+    [Fact]
+    public async Task CrearAsync_ZonaInexistente_LanzaReglaDeNegocioSinTocarElRepo()
+    {
+        var ctx = Crear();
+        ctx.Zonas.Setup(z => z.ObtenerPorIdAsync(99)).ReturnsAsync((Zona?)null);
+
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => ctx.Svc.CrearAsync(new Tarea { Titulo = "x", ZonaId = 99 }));
+
+        ctx.Repo.Verify(r => r.AgregarAsync(It.IsAny<Tarea>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CrearAsync_ZonaInactiva_LanzaReglaDeNegocio()
+    {
+        var ctx = Crear();
+        ctx.Zonas.Setup(z => z.ObtenerPorIdAsync(5)).ReturnsAsync(new Zona { Id = 5, Nombre = "Centro", Activo = false });
+
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => ctx.Svc.CrearAsync(new Tarea { Titulo = "x", ZonaId = 5 }));
+    }
+
+    [Fact]
+    public async Task CrearAsync_DocumentoNoEsExpediente_LanzaReglaDeNegocio()
+    {
+        // D12: el vínculo acepta SOLO documentos de tipo Expediente.
+        var ctx = Crear();
+        ctx.Documentos.Setup(d => d.ObtenerPorIdAsync(3)).ReturnsAsync(new DocumentoAdministrativo
+        {
+            Id = 3, Numero = "0001", Anio = 2026, Tipo = TipoDocumento.Oficio,
+            Descripcion = "x", FechaEmision = DateTime.UtcNow, FechaRegistro = DateTime.UtcNow,
+            Estado = EstadoDocumento.Pendiente,
+        });
+
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => ctx.Svc.CrearAsync(new Tarea { Titulo = "x", DocumentoAdministrativoId = 3 }));
+    }
+
+    [Fact]
+    public async Task CrearAsync_DocumentoExpedienteCerrado_LanzaReglaDeNegocio()
+    {
+        var ctx = Crear();
+        ctx.Documentos.Setup(d => d.ObtenerPorIdAsync(3)).ReturnsAsync(new DocumentoAdministrativo
+        {
+            Id = 3, Numero = "0001", Anio = 2026, Tipo = TipoDocumento.Expediente,
+            Descripcion = "x", FechaEmision = DateTime.UtcNow, FechaRegistro = DateTime.UtcNow,
+            Estado = EstadoDocumento.Finalizado,
+        });
+
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => ctx.Svc.CrearAsync(new Tarea { Titulo = "x", DocumentoAdministrativoId = 3 }));
+    }
+
+    [Fact]
+    public async Task CrearAsync_ClasificacionCompletaYValida_DelegaAlRepoConLosCincoIds()
+    {
+        var ctx = Crear();
+        ctx.Zonas.Setup(z => z.ObtenerPorIdAsync(1)).ReturnsAsync(new Zona { Id = 1, Nombre = "Centro", Activo = true });
+        ctx.Dimensiones.Setup(d => d.ObtenerPorIdAsync(2)).ReturnsAsync(new DimensionTematica { Id = 2, Nombre = "Tránsito", Activo = true });
+        ctx.Organismos.Setup(o => o.ObtenerPorIdAsync(3)).ReturnsAsync(new OrganismoResponsable { Id = 3, Nombre = "Intendencia", Activo = true });
+        ctx.Origenes.Setup(o => o.ObtenerPorIdAsync(4)).ReturnsAsync(new OrigenFinanciamiento { Id = 4, Nombre = "Presupuesto propio", Activo = true });
+        ctx.Documentos.Setup(d => d.ObtenerPorIdAsync(5)).ReturnsAsync(new DocumentoAdministrativo
+        {
+            Id = 5, Numero = "0001", Anio = 2026, Tipo = TipoDocumento.Expediente,
+            Descripcion = "x", FechaEmision = DateTime.UtcNow, FechaRegistro = DateTime.UtcNow,
+            Estado = EstadoDocumento.EnProceso,
+        });
+        ctx.Repo.Setup(r => r.AgregarAsync(It.IsAny<Tarea>())).ReturnsAsync(10);
+
+        await ctx.Svc.CrearAsync(new Tarea
+        {
+            Titulo = "x", ZonaId = 1, DimensionTematicaId = 2, OrganismoResponsableId = 3,
+            OrigenFinanciamientoId = 4, DocumentoAdministrativoId = 5,
+        });
+
+        ctx.Repo.Verify(r => r.AgregarAsync(It.Is<Tarea>(t =>
+            t.ZonaId == 1 && t.DimensionTematicaId == 2 && t.OrganismoResponsableId == 3
+            && t.OrigenFinanciamientoId == 4 && t.DocumentoAdministrativoId == 5)), Times.Once);
+    }
+
+    [Fact]
+    public async Task CrearAsync_SinNingunClasificador_NoConsultaLosRepositoriosDeCatalogo()
+    {
+        // Caso mayoritario (D7: los cinco son opcionales) — no debería pagar el costo de 5
+        // consultas de validación cuando el operador no clasificó nada.
+        var ctx = Crear();
+        ctx.Repo.Setup(r => r.AgregarAsync(It.IsAny<Tarea>())).ReturnsAsync(1);
+
+        await ctx.Svc.CrearAsync(new Tarea { Titulo = "x" });
+
+        ctx.Zonas.Verify(z => z.ObtenerPorIdAsync(It.IsAny<int>()), Times.Never);
+        ctx.Dimensiones.Verify(d => d.ObtenerPorIdAsync(It.IsAny<int>()), Times.Never);
+        ctx.Organismos.Verify(o => o.ObtenerPorIdAsync(It.IsAny<int>()), Times.Never);
+        ctx.Origenes.Verify(o => o.ObtenerPorIdAsync(It.IsAny<int>()), Times.Never);
+        ctx.Documentos.Verify(d => d.ObtenerPorIdAsync(It.IsAny<int>()), Times.Never);
     }
 }
