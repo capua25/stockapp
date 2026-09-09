@@ -29,6 +29,12 @@ public class ReporteTareasRepositoryTests : PostgresRepositoryTestBase
     private static DateTime Utc(int anio, int mes, int dia) =>
         DateTime.SpecifyKind(new DateTime(anio, mes, dia), DateTimeKind.Utc);
 
+    // Overload con hora -- necesario para construir instantes con el offset que manda el
+    // ViewModel (medianoche local de Uruguay = 03:00Z), a diferencia de Utc(y,m,d) que da
+    // siempre medianoche UTC.
+    private static DateTime Utc(int anio, int mes, int dia, int hora, int minuto, int segundo) =>
+        DateTime.SpecifyKind(new DateTime(anio, mes, dia, hora, minuto, segundo), DateTimeKind.Utc);
+
     private static readonly DateTime Desde2026 = Utc(2026, 1, 1);
     private static readonly DateTime Hasta2026 = Utc(2026, 12, 31);
 
@@ -211,6 +217,35 @@ public class ReporteTareasRepositoryTests : PostgresRepositoryTestBase
         Context.ChangeTracker.Clear();
 
         var filas = await _repo.ObtenerAsync(Filtro(AgrupadorTareas.Zona));
+
+        var fila = Assert.Single(filas);
+        Assert.Equal(1, fila.Total);
+    }
+
+    [Fact]
+    public async Task ObtenerAsync_HastaConOffsetUtc_IncluyeTareaCreadaEnLasUltimas3HorasDelDiaLocal()
+    {
+        // El ViewModel manda Desde/Hasta como INSTANTES UTC ya convertidos desde medianoche
+        // local (Uruguay UTC-3): medianoche local del 31/12 es 2026-12-31T03:00:00Z. Si el
+        // repo trunca con Hasta.Date antes de sumar el día, pierde esas 3hs y el fin de rango
+        // queda en 2026-12-31T23:59:59.9999999Z UTC == 2026-12-31T20:59:59 local -- una tarea
+        // creada a las 22:00 local del 31/12 (2027-01-01T01:00:00Z) queda afuera por error.
+        var usuarioId = await SembrarUsuarioAsync();
+        var zona = new Zona { Nombre = "Centro", Activo = true };
+        Context.Add(zona);
+        await Context.SaveChangesAsync();
+
+        var desdeConOffset = Utc(2026, 1, 1, 3, 0, 0);    // medianoche local 1/1 -> UTC
+        var hastaConOffset = Utc(2026, 12, 31, 3, 0, 0);  // medianoche local 31/12 -> UTC
+        var creadaUltimasHorasDelDia = Utc(2027, 1, 1, 1, 0, 0); // 22:00 local del 31/12
+
+        Context.Tareas.Add(
+            NuevaTarea(usuarioId, EstadoTarea.Pendiente, creadaUltimasHorasDelDia, zonaId: zona.Id));
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        var filas = await _repo.ObtenerAsync(
+            Filtro(AgrupadorTareas.Zona, desde: desdeConOffset, hasta: hastaConOffset));
 
         var fila = Assert.Single(filas);
         Assert.Equal(1, fila.Total);

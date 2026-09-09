@@ -55,7 +55,11 @@ public class ReporteTareasRepository : IReporteTareasRepository
     /// </summary>
     private static IQueryable<Tarea> AplicarFiltro(IQueryable<Tarea> query, FiltroReporteTareas filtro)
     {
-        var hastaFinDia = filtro.Hasta.Date.AddDays(1).AddTicks(-1);
+        // filtro.Hasta llega como INSTANTE UTC ya convertido por el ViewModel (medianoche local
+        // de Uruguay = 03:00Z) -- ver el contrato documentado en FiltroReporteTareas. Truncar con
+        // .Date reancla el fin de día a medianoche UTC y pierde las últimas 3hs del día local; el
+        // fin de rango se calcula sumando un día completo al instante recibido, sin tocar su hora.
+        var hastaFinDia = filtro.Hasta.AddDays(1).AddTicks(-1);
 
         return filtro.Criterio switch
         {
