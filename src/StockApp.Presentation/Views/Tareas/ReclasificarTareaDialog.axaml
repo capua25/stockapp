@@ -1,0 +1,46 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:StockApp.Presentation.ViewModels.Tareas"
+        xmlns:pnl="using:StockApp.Presentation.Views.Tareas"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="480" d:DesignHeight="560"
+        x:Class="StockApp.Presentation.Views.Tareas.ReclasificarTareaDialog"
+        x:DataType="vm:ReclasificarTareaDialogViewModel"
+        Title="Reclasificar tarea"
+        Width="480"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        ShowInTaskbar="False">
+
+    <Border Padding="{DynamicResource MargenVista}">
+        <StackPanel Spacing="{DynamicResource Espacio3}">
+
+            <TextBlock Text="Elegí los clasificadores. Dejar un campo vacío lo desasigna." Classes="body" TextWrapping="Wrap" />
+
+            <pnl:ClasificacionTareaPanelView DataContext="{Binding Panel}" />
+
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Right"
+                        Spacing="{DynamicResource Espacio2}"
+                        Margin="0,8,0,0">
+
+                <Button x:Name="CancelarButton"
+                        Content="Cancelar"
+                        Classes="secondary"
+                        Width="100"
+                        Click="OnCancelarClick" />
+
+                <Button x:Name="AceptarButton"
+                        Content="Aceptar"
+                        Classes="primary"
+                        Width="100"
+                        Click="OnAceptarClick" />
+
+            </StackPanel>
+
+        </StackPanel>
+    </Border>
+
+</Window>

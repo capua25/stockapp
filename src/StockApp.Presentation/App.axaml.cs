@@ -287,6 +287,7 @@ public partial class App : AvaloniaApp
 
         // ── Inc 5: confirmación de stock insuficiente ─────────────────────────
         services.AddSingleton<IConfirmacionService, ConfirmacionService>();
+        services.AddSingleton<IClasificacionTareaDialogService, ClasificacionTareaDialogService>();
 
         // ── Marshaling al UI thread para asignaciones desde background (ej: overlay
         // de actualización en ShellViewModel) ─────────────────────────────────────

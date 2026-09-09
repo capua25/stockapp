@@ -213,6 +213,7 @@ public class GuardianDePatronTests
         typeof(ConfirmacionDialog),
         typeof(MensajeDialog),
         typeof(PedirTextoDialog),
+        typeof(ReclasificarTareaDialog),
         // Window host de la app -- tambien queda fuera de Montar por la misma razon (Window).
         // Revisada en la Task 13.1: no tiene ningun literal visual que custodiar.
         typeof(MainWindow),
