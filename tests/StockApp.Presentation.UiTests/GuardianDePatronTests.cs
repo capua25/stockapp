@@ -56,6 +56,14 @@ public class GuardianDePatronTests
     [InlineData(typeof(CategoriaFormView), null, null)]
     [InlineData(typeof(ProveedorFormView), null, null)]
     [InlineData(typeof(UnidadMedidaFormView), null, null)]
+    [InlineData(typeof(ZonaListView), "Zonas", "CATÁLOGO")]
+    [InlineData(typeof(ZonaFormView), null, null)]
+    [InlineData(typeof(DimensionTematicaListView), "Dimensiones", "CATÁLOGO")]
+    [InlineData(typeof(DimensionTematicaFormView), null, null)]
+    [InlineData(typeof(OrganismoResponsableListView), "Organismos responsables", "CATÁLOGO")]
+    [InlineData(typeof(OrganismoResponsableFormView), null, null)]
+    [InlineData(typeof(OrigenFinanciamientoListView), "Orígenes de financiamiento", "CATÁLOGO")]
+    [InlineData(typeof(OrigenFinanciamientoFormView), null, null)]
     [InlineData(typeof(MaestrosFinanzasView), "Maestros de finanzas", "FINANZAS")]
     [InlineData(typeof(ImportacionView), "Importar planillas", "FINANZAS")]
     [InlineData(typeof(FuenteFinanciamientoFormView), null, "FINANZAS")]
@@ -110,6 +118,14 @@ public class GuardianDePatronTests
         typeof(CategoriaFormView),
         typeof(ProveedorFormView),
         typeof(UnidadMedidaFormView),
+        typeof(ZonaListView),
+        typeof(ZonaFormView),
+        typeof(DimensionTematicaListView),
+        typeof(DimensionTematicaFormView),
+        typeof(OrganismoResponsableListView),
+        typeof(OrganismoResponsableFormView),
+        typeof(OrigenFinanciamientoListView),
+        typeof(OrigenFinanciamientoFormView),
         typeof(MaestrosFinanzasView),
         typeof(ImportacionView),
         typeof(FuenteFinanciamientoFormView),
