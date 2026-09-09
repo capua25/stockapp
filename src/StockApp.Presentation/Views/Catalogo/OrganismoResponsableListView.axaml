@@ -10,10 +10,13 @@
              x:Class="StockApp.Presentation.Views.Catalogo.OrganismoResponsableListView"
              x:DataType="vm:OrganismoResponsableListViewModel">
 
-    <DockPanel Margin="{DynamicResource MargenVista}">
+    <!-- Embebida en CatalogosTareaView (Task 9, Ruling B-17): sin MargenVista ni HeaderVista
+         propio: el contenedor de tabs ya pone el header y el margen. Molde exacto de
+         FuenteFinanciamientoListView.axaml/RubroGastoListView.axaml/LineaPoaListView.axaml. -->
+    <Border Classes="card" Margin="0,12,0,0">
+        <DockPanel>
 
-        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="CATÁLOGO" Titulo="Organismos responsables">
-            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
+            <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="{DynamicResource Espacio2}" Margin="0,0,0,12">
                 <Button Classes="primary"
                         Content="Nuevo organismo"
                         Command="{Binding NuevoCommand}" />
@@ -24,47 +27,41 @@
                         Content="Dar de baja"
                         Command="{Binding BajaCommand}" />
             </StackPanel>
-        </c:HeaderVista>
 
-        <Border Classes="card">
-            <DockPanel>
+            <!-- DataGrid (molde de UnidadMedidaListView.axaml, migrada 2026-08-24): el tema
+                 global (Themes/DataGrid.axaml) da RowHeight/resize/FontSize gratis. Cada
+                 celda de dato se atenúa individualmente con ActivoOpacidadConverter (no la
+                 DataGridRow entera) para que el badge "Inactivo" quede a opacidad plena. -->
+            <DataGrid ItemsSource="{Binding Items}"
+                      SelectedItem="{Binding ItemSeleccionado}"
+                      IsReadOnly="True"
+                      CanUserSortColumns="True"
+                      CanUserResizeColumns="True"
+                      GridLinesVisibility="Horizontal"
+                      ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                <DataGrid.Columns>
+                    <DataGridTemplateColumn Header="Nombre" Width="*" MinWidth="140" SortMemberPath="Nombre">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="e:OrganismoResponsable">
+                                <TextBlock Text="{Binding Nombre}"
+                                           Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
+                                           TextTrimming="CharacterEllipsis"
+                                           ToolTip.Tip="{Binding Nombre}"
+                                           VerticalAlignment="Center" Margin="4,0" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="Estado" Width="Auto" CanUserSort="False">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="e:OrganismoResponsable">
+                                <c:BadgeEstado Texto="Inactivo" Tono="Neutro" IsVisible="{Binding !Activo}" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                </DataGrid.Columns>
+            </DataGrid>
 
-                <!-- DataGrid (molde de UnidadMedidaListView.axaml, migrada 2026-08-24): el tema
-                     global (Themes/DataGrid.axaml) da RowHeight/resize/FontSize gratis. Cada
-                     celda de dato se atenúa individualmente con ActivoOpacidadConverter (no la
-                     DataGridRow entera) para que el badge "Inactivo" quede a opacidad plena. -->
-                <DataGrid ItemsSource="{Binding Items}"
-                          SelectedItem="{Binding ItemSeleccionado}"
-                          IsReadOnly="True"
-                          CanUserSortColumns="True"
-                          CanUserResizeColumns="True"
-                          GridLinesVisibility="Horizontal"
-                          ScrollViewer.HorizontalScrollBarVisibility="Auto">
-                    <DataGrid.Columns>
-                        <DataGridTemplateColumn Header="Nombre" Width="*" MinWidth="140" SortMemberPath="Nombre">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate x:DataType="e:OrganismoResponsable">
-                                    <TextBlock Text="{Binding Nombre}"
-                                               Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
-                                               TextTrimming="CharacterEllipsis"
-                                               ToolTip.Tip="{Binding Nombre}"
-                                               VerticalAlignment="Center" Margin="4,0" />
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Estado" Width="Auto" CanUserSort="False">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate x:DataType="e:OrganismoResponsable">
-                                    <c:BadgeEstado Texto="Inactivo" Tono="Neutro" IsVisible="{Binding !Activo}" />
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                    </DataGrid.Columns>
-                </DataGrid>
-
-            </DockPanel>
-        </Border>
-
-    </DockPanel>
+        </DockPanel>
+    </Border>
 
 </UserControl>
