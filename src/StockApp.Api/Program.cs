@@ -199,6 +199,16 @@ builder.Services.AddScoped<IProveedorService, ProveedorService>();
 builder.Services.AddScoped<IUnidadMedidaService, UnidadMedidaService>();
 // IUnidadMedidaRepository ya está registrado desde Fase 2a (usado por ProductosEndpoints).
 
+// Clasificadores de Tareas (spec 2026-09-08) — catálogos sin invalidación de cache (D14).
+builder.Services.AddScoped<IZonaRepository, ZonaRepository>();
+builder.Services.AddScoped<IZonaService, ZonaService>();
+builder.Services.AddScoped<IDimensionTematicaRepository, DimensionTematicaRepository>();
+builder.Services.AddScoped<IDimensionTematicaService, DimensionTematicaService>();
+builder.Services.AddScoped<IOrganismoResponsableRepository, OrganismoResponsableRepository>();
+builder.Services.AddScoped<IOrganismoResponsableService, OrganismoResponsableService>();
+builder.Services.AddScoped<IOrigenFinanciamientoRepository, OrigenFinanciamientoRepository>();
+builder.Services.AddScoped<IOrigenFinanciamientoService, OrigenFinanciamientoService>();
+
 // Finanzas — Fase 1: maestros (fuentes, rubros, líneas POA + asignaciones)
 builder.Services.AddScoped<IFuenteFinanciamientoRepository, FuenteFinanciamientoRepository>();
 builder.Services.AddScoped<IFuenteFinanciamientoService, FuenteFinanciamientoService>();
@@ -669,6 +679,10 @@ app.MapUsuariosEndpoints();
 app.MapCategoriasEndpoints();
 app.MapProveedoresEndpoints();
 app.MapUnidadesMedidaEndpoints();
+app.MapZonasEndpoints();
+app.MapDimensionesTematicasEndpoints();
+app.MapOrganismosResponsablesEndpoints();
+app.MapOrigenesFinanciamientoEndpoints();
 app.MapFuentesFinanciamientoEndpoints();
 app.MapRubrosGastoEndpoints();
 app.MapLineasPoaEndpoints();
