@@ -28,6 +28,14 @@ public enum CriterioFechaTareas
 /// <summary>
 /// Filtro del reporte-matriz de tareas. Desde/Hasta son obligatorios (decisión 18):
 /// se validan en <see cref="ReporteTareasService"/>, no solo con un default en la UI.
+///
+/// Contrato de <see cref="Desde"/>/<see cref="Hasta"/>: se esperan YA CONVERTIDAS A UTC (no
+/// solo reetiquetadas). Quien las construya desde un control de calendario (instante local)
+/// debe convertir con <c>DateTime.SpecifyKind(fechaLocal, DateTimeKind.Local).ToUniversalTime()</c>
+/// -- NO con <c>SpecifyKind(fecha.Date, DateTimeKind.Utc)</c>, que es el criterio correcto para
+/// un día-calendario sin componente horario (p. ej. <c>Tarea.FechaLimite</c>), pero acá filtra
+/// un instante real (<c>FechaCreacion</c>/<c>FechaFin</c>, ambas timestamptz) y reetiquetar sin
+/// convertir corre el rango 3hs respecto de lo que el usuario ve en pantalla (Uruguay UTC-3).
 /// </summary>
 public record FiltroReporteTareas(
     AgrupadorTareas Agrupador,

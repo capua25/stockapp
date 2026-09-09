@@ -9,6 +9,9 @@ namespace StockApp.Application.Reportes;
 /// </summary>
 public interface IReporteTareasService
 {
+    /// <param name="filtro">Ver contrato de <see cref="FiltroReporteTareas.Desde"/>/<see cref="FiltroReporteTareas.Hasta"/>:
+    /// deben llegar ya convertidas a UTC (no reetiquetadas) -- el instante local se convierte con
+    /// <c>SpecifyKind(Local).ToUniversalTime()</c>, no con <c>SpecifyKind(Utc)</c>.</param>
     /// <exception cref="UnauthorizedAccessException">Si el rol no tiene permiso para ver reportes.</exception>
     /// <exception cref="ArgumentException">Si el rango de fechas está ausente o invertido (Desde &gt; Hasta).</exception>
     Task<ReporteTareasDto> ObtenerAsync(FiltroReporteTareas filtro);
