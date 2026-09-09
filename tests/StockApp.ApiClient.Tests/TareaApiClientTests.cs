@@ -194,10 +194,10 @@ public class TareaApiClientTests
                 tomadaPorUsuarioId = (int?)null, tomadaPorNombre = (string?)null, fechaInicio = (DateTime?)null,
                 cerradaPorUsuarioId = (int?)null, fechaFin = (DateTime?)null,
                 zonaId = 3, zonaNombre = "Centro",
-                dimensionTematicaId = (int?)null, dimensionTematicaNombre = (string?)null,
-                organismoResponsableId = (int?)null, organismoResponsableNombre = (string?)null,
-                origenFinanciamientoId = (int?)null, origenFinanciamientoNombre = (string?)null,
-                documentoAdministrativoId = (int?)null, documentoAdministrativoNumero = (string?)null,
+                dimensionTematicaId = 4, dimensionTematicaNombre = "Obras",
+                organismoResponsableId = 5, organismoResponsableNombre = "Intendencia",
+                origenFinanciamientoId = 6, origenFinanciamientoNombre = "Rentas Generales",
+                documentoAdministrativoId = 7, documentoAdministrativoNumero = "123/2026",
                 notas = Array.Empty<object>(),
             },
         }));
@@ -208,6 +208,14 @@ public class TareaApiClientTests
         var tarea = Assert.Single(tareas);
         Assert.Equal(3, tarea.ZonaId);
         Assert.Equal("Centro", tarea.Zona!.Nombre);
+        Assert.Equal(4, tarea.DimensionTematicaId);
+        Assert.Equal("Obras", tarea.DimensionTematica!.Nombre);
+        Assert.Equal(5, tarea.OrganismoResponsableId);
+        Assert.Equal("Intendencia", tarea.OrganismoResponsable!.Nombre);
+        Assert.Equal(6, tarea.OrigenFinanciamientoId);
+        Assert.Equal("Rentas Generales", tarea.OrigenFinanciamiento!.Nombre);
+        Assert.Equal(7, tarea.DocumentoAdministrativoId);
+        Assert.Equal("123/2026", tarea.DocumentoAdministrativo!.Numero);
     }
 
     [Fact]
