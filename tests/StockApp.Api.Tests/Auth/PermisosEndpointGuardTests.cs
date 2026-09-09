@@ -41,6 +41,28 @@ public class PermisosEndpointGuardTests : ApiTestBase
         ("PUT",    "/configuracion/alertas", Permisos.GestionarDiagnostico),
         ("POST",   "/configuracion/alertas/probar", Permisos.GestionarDiagnostico),
 
+        ("GET",    "/dimensiones-tematicas", Permisos.GestionarTablasMaestras),
+        ("POST",   "/dimensiones-tematicas", Permisos.GestionarTablasMaestras),
+        ("PUT",    "/dimensiones-tematicas/{id}", Permisos.GestionarTablasMaestras),
+        ("DELETE", "/dimensiones-tematicas/{id}", Permisos.GestionarTablasMaestras),
+        ("GET",    "/dimensiones-tematicas/activas", Permisos.GestionarTareas),
+
+        ("GET",    "/documentos/activos", Permisos.GestionarDocumentos),
+        ("GET",    "/documentos/historial", Permisos.GestionarDocumentos),
+        ("GET",    "/documentos/{id}", Permisos.GestionarDocumentos),
+        ("POST",   "/documentos", Permisos.GestionarDocumentos),
+        ("PUT",    "/documentos/{id}", Permisos.GestionarDocumentos),
+        ("POST",   "/documentos/{id}/iniciar", Permisos.GestionarDocumentos),
+        ("POST",   "/documentos/{id}/volver-a-pendiente", Permisos.GestionarDocumentos),
+        ("POST",   "/documentos/{id}/finalizar", Permisos.GestionarDocumentos),
+        ("POST",   "/documentos/{id}/notas", Permisos.GestionarDocumentos),
+        ("POST",   "/documentos/{id}/anular", Permisos.AdministrarDocumentos),
+        ("POST",   "/documentos/{id}/reabrir", Permisos.AdministrarDocumentos),
+        ("POST",   "/documentos/{id}/adjuntos", Permisos.GestionarDocumentos),
+        ("GET",    "/documentos/{id}/adjuntos", Permisos.GestionarDocumentos),
+        ("GET",    "/documentos/adjuntos/{adjuntoId}/contenido", Permisos.GestionarDocumentos),
+        ("DELETE", "/documentos/adjuntos/{adjuntoId}", Permisos.AdministrarDocumentos),
+
         ("GET",    "/finanzas/libro-caja", Permisos.VerFinanzas),
         ("GET",    "/finanzas/control-poa", Permisos.VerFinanzas),
         ("GET",    "/finanzas/calendario-pagos", Permisos.VerFinanzas),
@@ -91,6 +113,18 @@ public class PermisosEndpointGuardTests : ApiTestBase
         ("POST",   "/movimientos", Permisos.RegistrarMovimientos),
         ("GET",    "/movimientos/historial", Permisos.RegistrarMovimientos),
 
+        ("GET",    "/organismos-responsables", Permisos.GestionarTablasMaestras),
+        ("POST",   "/organismos-responsables", Permisos.GestionarTablasMaestras),
+        ("PUT",    "/organismos-responsables/{id}", Permisos.GestionarTablasMaestras),
+        ("DELETE", "/organismos-responsables/{id}", Permisos.GestionarTablasMaestras),
+        ("GET",    "/organismos-responsables/activas", Permisos.GestionarTareas),
+
+        ("GET",    "/origenes-financiamiento", Permisos.GestionarTablasMaestras),
+        ("POST",   "/origenes-financiamiento", Permisos.GestionarTablasMaestras),
+        ("PUT",    "/origenes-financiamiento/{id}", Permisos.GestionarTablasMaestras),
+        ("DELETE", "/origenes-financiamiento/{id}", Permisos.GestionarTablasMaestras),
+        ("GET",    "/origenes-financiamiento/activas", Permisos.GestionarTareas),
+
         ("GET",    "/productos", Permisos.GestionarProductos),
         ("POST",   "/productos", Permisos.GestionarProductos),
         ("PUT",    "/productos/{id}", Permisos.GestionarProductos),
@@ -138,6 +172,14 @@ public class PermisosEndpointGuardTests : ApiTestBase
         ("DELETE", "/usuarios/{id}", Permisos.GestionarUsuarios),
         ("PUT",    "/usuarios/{id}/rol", Permisos.GestionarUsuarios),
         ("PUT",    "/usuarios/{id}/contrasena", Permisos.GestionarUsuarios),
+        ("GET",    "/usuarios/{id}/permisos", Permisos.GestionarUsuarios),
+        ("PUT",    "/usuarios/{id}/permisos", Permisos.GestionarUsuarios),
+
+        ("GET",    "/zonas", Permisos.GestionarTablasMaestras),
+        ("POST",   "/zonas", Permisos.GestionarTablasMaestras),
+        ("PUT",    "/zonas/{id}", Permisos.GestionarTablasMaestras),
+        ("DELETE", "/zonas/{id}", Permisos.GestionarTablasMaestras),
+        ("GET",    "/zonas/activas", Permisos.GestionarTareas),
     ];
 
     [Fact]
@@ -181,5 +223,60 @@ public class PermisosEndpointGuardTests : ApiTestBase
 
         Assert.True(faltantes.Count == 0, $"Endpoints no encontrados: {string.Join("; ", faltantes)}");
         Assert.True(incorrectos.Count == 0, $"Permisos cambiados: {string.Join("; ", incorrectos)}");
+    }
+
+    /// <summary>
+    /// El test de arriba solo custodia lo que YA está en <see cref="EndpointsYPermisos"/>: si un
+    /// endpoint nuevo (o uno viejo que nadie migró a la fixture) queda afuera, no falla por
+    /// omisión — el guardián queda en silencio. Este test invierte la mirada: recorre el
+    /// <see cref="EndpointDataSource"/> real y exige que TODA ruta con al menos una policy de
+    /// autorización (IAuthorizeData.Policy no nulo) esté declarada en la fixture, sin importar
+    /// qué permiso le corresponda — esa verificación fina la hace el test de arriba.
+    ///
+    /// Quedan fuera del alcance, sin necesidad de lista de exclusión, los endpoints anónimos
+    /// (ej. "/", "/licencia/estado", "/auth/reset-admin/*") y los que exigen autenticación pero
+    /// sin policy concreta (RequireAuthorization() sin argumentos, ej. GET /auth/permisos y
+    /// DELETE /finanzas/adjuntos/{id}) — ninguno de esos produce un IAuthorizeData con Policy
+    /// no nulo, así que el filtro los descarta naturalmente.
+    /// </summary>
+    [Fact]
+    public void TodoEndpointConPermisoDeclarado_EstaEnLaFixtureDelGuardian()
+    {
+        var endpointDataSource = Factory.Services.GetRequiredService<EndpointDataSource>();
+        var endpointsReales = endpointDataSource.Endpoints.OfType<RouteEndpoint>().ToList();
+
+        var declarados = EndpointsYPermisos
+            .Select(e => (e.Metodo, Ruta: e.Ruta.TrimEnd('/')))
+            .ToHashSet();
+
+        var faltantes = new List<string>();
+
+        foreach (var endpoint in endpointsReales)
+        {
+            var metodos = endpoint.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods;
+            if (metodos is null)
+                continue;
+
+            var tienePermisoConcreto = endpoint.Metadata
+                .OfType<IAuthorizeData>()
+                .Any(a => a.Policy is not null);
+
+            if (!tienePermisoConcreto)
+                continue;
+
+            var ruta = System.Text.RegularExpressions.Regex.Replace(
+                endpoint.RoutePattern.RawText ?? string.Empty, @":[a-zA-Z]+(?=\}|\?)", string.Empty)
+                .TrimEnd('/');
+
+            foreach (var metodo in metodos)
+            {
+                if (!declarados.Contains((metodo, ruta)))
+                    faltantes.Add($"{metodo} {ruta}");
+            }
+        }
+
+        Assert.True(faltantes.Count == 0,
+            $"Endpoints con permiso declarado pero ausentes de la fixture del guardián ({faltantes.Distinct().Count()}): " +
+            string.Join("; ", faltantes.Distinct().OrderBy(f => f)));
     }
 }
