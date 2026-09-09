@@ -117,4 +117,19 @@ public class ReporteTareasServiceTests
         Assert.Same(filas, resultado.Filas);
         Assert.Equal(6 + 2 + 1, resultado.TotalGeneral); // 6 + 2 + 1 = 9
     }
+
+    // ─── D14: guardián de "no invalidación" ─────────────────────────────────
+
+    [Fact]
+    public void Constructor_NoRecibeIVersionReportes()
+    {
+        // Guardián estructural (D14 del spec 2026-09-08): a diferencia de ReporteStockService,
+        // ReporteTareasService no depende de IVersionReportes porque el reporte de tareas no
+        // se cachea. Si alguien "arregla" esto copiando de más desde ReporteStockService, este
+        // test rompe apenas se agregue el parámetro al constructor.
+        var parametros = typeof(ReporteTareasService).GetConstructors().Single().GetParameters();
+
+        Assert.DoesNotContain(parametros, p => p.ParameterType == typeof(IVersionReportes));
+        Assert.Equal(3, parametros.Length);
+    }
 }
