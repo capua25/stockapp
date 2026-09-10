@@ -72,6 +72,20 @@ public class AppDbContext : DbContext
                 .HasForeignKey(p => p.UnidadMedidaId).OnDelete(DeleteBehavior.Restrict);
         });
 
+        // ── Catálogos con Nombre único: HasIndex(...).IsUnique() vs. índice real ──
+        // Los 7 bloques de abajo (Categoria/Proveedor/UnidadMedida/Zona/DimensionTematica/
+        // OrganismoResponsable/OrigenFinanciamiento) declaran HasIndex(x => x.Nombre)
+        // .IsUnique(), pero la migración AgregaIndiceFuncionalNombreCatalogos reemplazó el
+        // índice PLANO que esto generaría por uno FUNCIONAL sobre LOWER("Nombre") vía SQL
+        // crudo (HasIndex no puede expresar índices funcionales). NO borrar ni tocar estas
+        // líneas de HasIndex para "sincronizar" con la base real: el snapshot de EF
+        // (AppDbContextModelSnapshot) se genera a partir de ESTA configuración fluida, no
+        // de una introspección de la base, así que mientras HasIndex(Nombre).IsUnique()
+        // siga igual acá, un futuro `dotnet ef migrations add` no genera ninguna migración
+        // para estos índices — no hay diff que ver. Si algún día se quita HasIndex de acá
+        // "porque ya no hace falta", la PRÓXIMA migración autogenerada SÍ va a intentar
+        // dropear el índice funcional real, rompiendo la normalización case-insensitive.
+
         // ── Categoria ─────────────────────────────────────────────────────────
         modelBuilder.Entity<Categoria>(e =>
         {

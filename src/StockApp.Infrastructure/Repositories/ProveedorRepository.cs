@@ -17,10 +17,16 @@ public class ProveedorRepository : IProveedorRepository
     public async Task<IReadOnlyList<Proveedor>> ListarTodosAsync()
         => await _ctx.Proveedores.OrderBy(p => p.Nombre).ToListAsync();
 
+    // Comparación case-insensitive vía LOWER() (no ILIKE: ILIKE trata % y _ como comodines,
+    // lo cual da falsos positivos en nombres de catálogo que los contengan, y además no puede
+    // usar el índice funcional sobre LOWER("Nombre") — ver migración AgregaIndiceFuncionalNombreCatalogos).
     public Task<bool> ExisteNombreAsync(string nombre, int? excluyendoId = null)
-        => excluyendoId.HasValue
-            ? _ctx.Proveedores.AnyAsync(p => p.Nombre == nombre && p.Id != excluyendoId.Value)
-            : _ctx.Proveedores.AnyAsync(p => p.Nombre == nombre);
+    {
+        var normalizado = nombre.Trim().ToLower();
+        return excluyendoId.HasValue
+            ? _ctx.Proveedores.AnyAsync(p => p.Nombre.ToLower() == normalizado && p.Id != excluyendoId.Value)
+            : _ctx.Proveedores.AnyAsync(p => p.Nombre.ToLower() == normalizado);
+    }
 
     public async Task<int> AgregarAsync(Proveedor proveedor)
     {

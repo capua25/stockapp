@@ -98,6 +98,28 @@ public class ProveedorRepositoryTests : PostgresRepositoryTestBase
         Assert.True(await _repo.ExisteNombreAsync("Distribuidora Norte", excluyendoId: id2));
     }
 
+    // ── Normalización case-insensitive (LOWER) ───────────────────────────────
+
+    [Fact]
+    public async Task ExisteNombreAsync_DiferenteCasing_RetornaTrue()
+    {
+        await _repo.AgregarAsync(NuevoProveedor("Distribuidora Norte"));
+
+        Assert.True(await _repo.ExisteNombreAsync("distribuidora norte"));
+    }
+
+    [Fact]
+    public async Task IndiceDeBase_RechazaDuplicadoPorCasing_AunSinPasarPorElRepositorio()
+    {
+        Context.Proveedores.Add(NuevoProveedor("Distribuidora Norte"));
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        Context.Proveedores.Add(NuevoProveedor("distribuidora norte"));
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => Context.SaveChangesAsync());
+    }
+
     // ── ActualizarAsync ───────────────────────────────────────────────────────
 
     [Fact]

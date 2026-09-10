@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using StockApp.Domain.Entities;
 using StockApp.Infrastructure.Persistence;
 using StockApp.Infrastructure.Repositories;
@@ -100,6 +101,68 @@ public class CategoriaRepositoryTests : PostgresRepositoryTestBase
 
         // cat2 intenta renombrarse a "Bebidas" — ya existe en cat1
         Assert.True(await _repo.ExisteNombreAsync("Bebidas", excluyendoId: id2));
+    }
+
+    // ── Normalización case-insensitive (LOWER) ───────────────────────────────
+
+    [Fact]
+    public async Task ExisteNombreAsync_DiferenteCasing_RetornaTrue()
+    {
+        await _repo.AgregarAsync(NuevaCategoria("Bebidas"));
+
+        Assert.True(await _repo.ExisteNombreAsync("bebidas"));
+        Assert.True(await _repo.ExisteNombreAsync("BEBIDAS"));
+    }
+
+    [Fact]
+    public async Task ExisteNombreAsync_ConEspaciosYCasingDistinto_RetornaTrue()
+    {
+        await _repo.AgregarAsync(NuevaCategoria("Bebidas"));
+
+        Assert.True(await _repo.ExisteNombreAsync("  bebidas  "));
+    }
+
+    [Fact]
+    public async Task ExisteNombreAsync_TraduceToLowerAServidor_NoEvaluaEnCliente()
+    {
+        // Evidencia de que .ToLower() se traduce a SQL server-side (lower(...)), no se evalúa
+        // en cliente: se abre un contexto separado con logging de EF Core habilitado y se
+        // inspecciona el comando SQL real ejecutado contra Postgres.
+        await _repo.AgregarAsync(NuevaCategoria("Bebidas"));
+        Context.ChangeTracker.Clear();
+
+        var logs = new List<string>();
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseNpgsql(Fixture.ConnectionString)
+            .LogTo(logs.Add, LogLevel.Debug)
+            .EnableSensitiveDataLogging()
+            .Options;
+
+        await using var loggedContext = new AppDbContext(options);
+        var repoConLogging = new CategoriaRepository(loggedContext);
+
+        var existe = await repoConLogging.ExisteNombreAsync("bebidas");
+
+        Assert.True(existe);
+        var comandoSql = logs.FirstOrDefault(l =>
+            l.Contains("SELECT", StringComparison.Ordinal) && l.Contains("\"Categorias\"", StringComparison.Ordinal));
+        Assert.NotNull(comandoSql);
+        Assert.Contains("lower(", comandoSql!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task IndiceDeBase_RechazaDuplicadoPorCasing_AunSinPasarPorElRepositorio()
+    {
+        // Guardián real contra la condición de carrera: inserta por fuera de ExisteNombreAsync
+        // (directo por EF) y confirma que es el ÍNDICE FUNCIONAL de la base el que rechaza,
+        // no solo la validación de C#.
+        Context.Categorias.Add(new Categoria { Nombre = "Bebidas" });
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        Context.Categorias.Add(new Categoria { Nombre = "bebidas" });
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => Context.SaveChangesAsync());
     }
 
     // ── ActualizarAsync ───────────────────────────────────────────────────────

@@ -17,10 +17,16 @@ public class ZonaRepository : IZonaRepository
     public async Task<IReadOnlyList<Zona>> ListarTodasAsync()
         => await _ctx.Zonas.OrderBy(z => z.Nombre).ToListAsync();
 
+    // Comparación case-insensitive vía LOWER() (no ILIKE: ILIKE trata % y _ como comodines,
+    // lo cual da falsos positivos en nombres de catálogo que los contengan, y además no puede
+    // usar el índice funcional sobre LOWER("Nombre") — ver migración AgregaIndiceFuncionalNombreCatalogos).
     public Task<bool> ExisteNombreAsync(string nombre, int? excluyendoId = null)
-        => excluyendoId.HasValue
-            ? _ctx.Zonas.AnyAsync(z => z.Nombre == nombre && z.Id != excluyendoId.Value)
-            : _ctx.Zonas.AnyAsync(z => z.Nombre == nombre);
+    {
+        var normalizado = nombre.Trim().ToLower();
+        return excluyendoId.HasValue
+            ? _ctx.Zonas.AnyAsync(z => z.Nombre.ToLower() == normalizado && z.Id != excluyendoId.Value)
+            : _ctx.Zonas.AnyAsync(z => z.Nombre.ToLower() == normalizado);
+    }
 
     public async Task<int> AgregarAsync(Zona zona)
     {

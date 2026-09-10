@@ -93,6 +93,28 @@ public class OrganismoResponsableRepositoryTests : PostgresRepositoryTestBase
         Assert.True(await _repo.ExisteNombreAsync("Intendencia de Colonia", excluyendoId: id2));
     }
 
+    // ── Normalización case-insensitive (LOWER) ───────────────────────────────
+
+    [Fact]
+    public async Task ExisteNombreAsync_DiferenteCasing_RetornaTrue()
+    {
+        await _repo.AgregarAsync(NuevoOrganismo("Intendencia de Colonia"));
+
+        Assert.True(await _repo.ExisteNombreAsync("intendencia de colonia"));
+    }
+
+    [Fact]
+    public async Task IndiceDeBase_RechazaDuplicadoPorCasing_AunSinPasarPorElRepositorio()
+    {
+        Context.OrganismosResponsables.Add(NuevoOrganismo("Intendencia de Colonia"));
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        Context.OrganismosResponsables.Add(NuevoOrganismo("intendencia de colonia"));
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => Context.SaveChangesAsync());
+    }
+
     [Fact]
     public async Task ActualizarAsync_BajaLogica_ActivoFalse_Persiste()
     {

@@ -17,10 +17,16 @@ public class CategoriaRepository : ICategoriaRepository
     public async Task<IReadOnlyList<Categoria>> ListarTodasAsync()
         => await _ctx.Categorias.OrderBy(c => c.Nombre).ToListAsync();
 
+    // Comparación case-insensitive vía LOWER() (no ILIKE: ILIKE trata % y _ como comodines,
+    // lo cual da falsos positivos en nombres de catálogo que los contengan, y además no puede
+    // usar el índice funcional sobre LOWER("Nombre") — ver migración AgregaIndiceFuncionalNombreCatalogos).
     public Task<bool> ExisteNombreAsync(string nombre, int? excluyendoId = null)
-        => excluyendoId.HasValue
-            ? _ctx.Categorias.AnyAsync(c => c.Nombre == nombre && c.Id != excluyendoId.Value)
-            : _ctx.Categorias.AnyAsync(c => c.Nombre == nombre);
+    {
+        var normalizado = nombre.Trim().ToLower();
+        return excluyendoId.HasValue
+            ? _ctx.Categorias.AnyAsync(c => c.Nombre.ToLower() == normalizado && c.Id != excluyendoId.Value)
+            : _ctx.Categorias.AnyAsync(c => c.Nombre.ToLower() == normalizado);
+    }
 
     public async Task<int> AgregarAsync(Categoria categoria)
     {

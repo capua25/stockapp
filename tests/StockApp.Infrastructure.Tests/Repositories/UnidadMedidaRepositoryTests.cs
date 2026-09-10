@@ -91,6 +91,29 @@ public class UnidadMedidaRepositoryTests : PostgresRepositoryTestBase
         Assert.True(await _repo.ExisteNombreAsync("Litro", excluyendoId: id2));
     }
 
+    // ── Normalización case-insensitive de Nombre (LOWER) ─────────────────────
+    // Solo Nombre — Abreviatura queda fuera de alcance de esta normalización.
+
+    [Fact]
+    public async Task ExisteNombreAsync_DiferenteCasing_RetornaTrue()
+    {
+        await _repo.AgregarAsync(NuevaUm("Litro", "l"));
+
+        Assert.True(await _repo.ExisteNombreAsync("litro"));
+    }
+
+    [Fact]
+    public async Task IndiceDeBase_RechazaDuplicadoDeNombrePorCasing_AunSinPasarPorElRepositorio()
+    {
+        Context.UnidadesMedida.Add(NuevaUm("Litro", "l"));
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        Context.UnidadesMedida.Add(NuevaUm("litro", "L2"));
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => Context.SaveChangesAsync());
+    }
+
     // ── ExisteAbreviaturaAsync ────────────────────────────────────────────────
 
     [Fact]

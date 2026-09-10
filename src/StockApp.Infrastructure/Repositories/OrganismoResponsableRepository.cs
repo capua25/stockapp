@@ -17,10 +17,16 @@ public class OrganismoResponsableRepository : IOrganismoResponsableRepository
     public async Task<IReadOnlyList<OrganismoResponsable>> ListarTodasAsync()
         => await _ctx.OrganismosResponsables.OrderBy(o => o.Nombre).ToListAsync();
 
+    // Comparación case-insensitive vía LOWER() (no ILIKE: ILIKE trata % y _ como comodines,
+    // lo cual da falsos positivos en nombres de catálogo que los contengan, y además no puede
+    // usar el índice funcional sobre LOWER("Nombre") — ver migración AgregaIndiceFuncionalNombreCatalogos).
     public Task<bool> ExisteNombreAsync(string nombre, int? excluyendoId = null)
-        => excluyendoId.HasValue
-            ? _ctx.OrganismosResponsables.AnyAsync(o => o.Nombre == nombre && o.Id != excluyendoId.Value)
-            : _ctx.OrganismosResponsables.AnyAsync(o => o.Nombre == nombre);
+    {
+        var normalizado = nombre.Trim().ToLower();
+        return excluyendoId.HasValue
+            ? _ctx.OrganismosResponsables.AnyAsync(o => o.Nombre.ToLower() == normalizado && o.Id != excluyendoId.Value)
+            : _ctx.OrganismosResponsables.AnyAsync(o => o.Nombre.ToLower() == normalizado);
+    }
 
     public async Task<int> AgregarAsync(OrganismoResponsable organismo)
     {

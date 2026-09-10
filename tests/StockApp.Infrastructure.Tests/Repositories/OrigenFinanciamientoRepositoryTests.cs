@@ -93,6 +93,28 @@ public class OrigenFinanciamientoRepositoryTests : PostgresRepositoryTestBase
         Assert.True(await _repo.ExisteNombreAsync("Presupuesto propio", excluyendoId: id2));
     }
 
+    // ── Normalización case-insensitive (LOWER) ───────────────────────────────
+
+    [Fact]
+    public async Task ExisteNombreAsync_DiferenteCasing_RetornaTrue()
+    {
+        await _repo.AgregarAsync(NuevoOrigen("Presupuesto propio"));
+
+        Assert.True(await _repo.ExisteNombreAsync("presupuesto propio"));
+    }
+
+    [Fact]
+    public async Task IndiceDeBase_RechazaDuplicadoPorCasing_AunSinPasarPorElRepositorio()
+    {
+        Context.OrigenesFinanciamiento.Add(NuevoOrigen("Presupuesto propio"));
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        Context.OrigenesFinanciamiento.Add(NuevoOrigen("presupuesto propio"));
+
+        await Assert.ThrowsAsync<DbUpdateException>(() => Context.SaveChangesAsync());
+    }
+
     [Fact]
     public async Task ActualizarAsync_BajaLogica_ActivoFalse_Persiste()
     {
