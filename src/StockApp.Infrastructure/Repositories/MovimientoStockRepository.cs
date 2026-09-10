@@ -204,7 +204,11 @@ public class MovimientoStockRepository : IMovimientoStockRepository
         if (filtro.FechaHasta.HasValue)
         {
             // HM-04: FechaHasta sin hora se normaliza a fin del dia (23:59:59.9999999).
-            var fechaHastaFinDia = filtro.FechaHasta.Value.Date.AddDays(1).AddTicks(-1);
+            // filtro.FechaHasta llega como INSTANTE UTC ya convertido por el ViewModel
+            // (medianoche local de Uruguay = 03:00Z). Truncar con .Date reancla el fin de
+            // día a medianoche UTC y pierde las últimas 3hs del día local; el fin de rango
+            // se calcula sumando un día completo al instante recibido, sin tocar su hora.
+            var fechaHastaFinDia = filtro.FechaHasta.Value.AddDays(1).AddTicks(-1);
             filtrados = filtrados.Where(i => i.Fecha <= fechaHastaFinDia);
         }
 

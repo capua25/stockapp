@@ -560,6 +560,51 @@ public class MovimientoStockRepositoryTests : PostgresRepositoryTestBase
         Assert.Equal(p.Id, resultado[0].ProductoId);
     }
 
+    /// <summary>
+    /// El ViewModel manda FechaHasta como INSTANTE UTC ya convertido desde medianoche local
+    /// (Uruguay UTC-3): medianoche local del 10/6 es 2026-06-10T03:00:00Z. El test HM-04 de
+    /// arriba usa medianoche UTC EXACTA (caso no-op que NO distingue el bug); este usa el
+    /// offset real del ViewModel.
+    /// </summary>
+    [Fact]
+    public async Task ObtenerHistorialAsync_FechaHastaConOffsetUtc_IncluyeMovimientoDeLasUltimas3HorasDelDiaLocal()
+    {
+        var um      = NuevaUm();
+        var usuario = NuevoUsuario("offset_user");
+        Context.UnidadesMedida.Add(um);
+        Context.Usuarios.Add(usuario);
+        await Context.SaveChangesAsync();
+
+        var p = NuevoProducto("OFH", um, 0m);
+        Context.Productos.Add(p);
+        await Context.SaveChangesAsync();
+
+        var fechaHastaConOffset = new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc);
+        // 22:00 hora local del 10/6 == 2026-06-11T01:00:00Z. Si el repo trunca con .Date
+        // antes de sumar el día, el fin de rango queda en 2026-06-10T23:59:59.9999999Z
+        // (== 20:59:59 local) y este movimiento, en las últimas 3hs del día local, queda afuera.
+        var fechaMovUltimasHoras = new DateTime(2026, 6, 11, 1, 0, 0, DateTimeKind.Utc);
+
+        Context.MovimientosStock.Add(new MovimientoStock
+        {
+            ProductoId     = p.Id,
+            UsuarioId      = usuario.Id,
+            Tipo           = TipoMovimiento.Entrada,
+            Cantidad       = 5m,
+            PrecioUnitario = 10m,
+            Fecha          = fechaMovUltimasHoras,
+            Motivo         = MotivoMovimiento.Compra
+        });
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        var resultado = await _repo.ObtenerHistorialAsync(new HistorialMovimientoFiltro(
+            FechaHasta: fechaHastaConOffset));
+
+        Assert.Single(resultado);
+        Assert.Equal(p.Id, resultado[0].ProductoId);
+    }
+
     [Fact]
     public async Task ObtenerHistorialAsync_RunningBalance_StockAnteriorYNuevoCorrectos()
     {
