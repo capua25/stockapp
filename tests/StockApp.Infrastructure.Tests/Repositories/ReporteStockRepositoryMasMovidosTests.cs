@@ -178,6 +178,39 @@ public class ReporteStockRepositoryMasMovidosTests : PostgresRepositoryTestBase
     }
 
     [Fact]
+    public async Task ObtenerMasMovidosAsync_FechaHastaConOffsetUtc_IncluyeMovimientoDeLasUltimas3HorasDelDiaLocal()
+    {
+        // El ViewModel manda FechaHasta como INSTANTE UTC ya convertido desde medianoche
+        // local (Uruguay UTC-3): medianoche local del 10/6 es 2026-06-10T03:00:00Z. El test
+        // ObtenerMasMovidosAsync_FechaHastaFinDeDia de arriba usa medianoche UTC EXACTA
+        // (caso no-op que NO distingue el bug); este usa el offset real del ViewModel.
+        var um = NuevaUm();
+        var usuario = NuevoUsuario();
+        Context.UnidadesMedida.Add(um);
+        Context.Usuarios.Add(usuario);
+        await Context.SaveChangesAsync();
+
+        var p = NuevoProducto("OF", "Offset", um);
+        Context.Productos.Add(p);
+        await Context.SaveChangesAsync();
+
+        var fechaHastaConOffset = new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc);
+        // 22:00 hora local del 10/6 == 2026-06-11T01:00:00Z. Si el repo trunca con .Date
+        // antes de sumar el día, el fin de rango queda en 2026-06-10T23:59:59.9999999Z
+        // (== 20:59:59 local) y este movimiento, en las últimas 3hs del día local, queda afuera.
+        var fechaMovUltimasHoras = new DateTime(2026, 6, 11, 1, 0, 0, DateTimeKind.Utc);
+
+        Context.MovimientosStock.Add(Mov(p.Id, usuario.Id, 9m, fechaMovUltimasHoras));
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        var resultado = await _repo.ObtenerMasMovidosAsync(null, fechaHastaConOffset, topN: 10);
+
+        var item = Assert.Single(resultado);
+        Assert.Equal("OF", item.Codigo);
+    }
+
+    [Fact]
     public async Task ObtenerMasMovidosAsync_SinMovimientos_ListaVacia()
     {
         var um = NuevaUm();

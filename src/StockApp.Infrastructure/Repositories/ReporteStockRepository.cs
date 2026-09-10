@@ -6,7 +6,7 @@ using StockApp.Infrastructure.Persistence;
 namespace StockApp.Infrastructure.Repositories;
 
 /// <summary>
-/// Repositorio de solo lectura para reportes de stock (EF Core / SQLite).
+/// Repositorio de solo lectura para reportes de stock (EF Core / PostgreSQL, Npgsql).
 /// Devuelve los items YA proyectados: ValorCosto calculado y la
 /// categoría null resuelta a "Sin categoría". El service solo agrega/totaliza.
 /// </summary>
@@ -59,9 +59,11 @@ public class ReporteStockRepository : IReporteStockRepository
     public async Task<IReadOnlyList<MasMovidoDto>> ObtenerMasMovidosAsync(
         DateTime? fechaDesde, DateTime? fechaHasta, int topN)
     {
-        // FechaHasta se ajusta a fin de día (23:59:59.9999999) para incluir todos
-        // los movimientos del día indicado, sin importar la hora con que se pasó.
-        var fechaHastaFinDia = fechaHasta?.Date.AddDays(1).AddTicks(-1);
+        // fechaHasta llega como INSTANTE UTC ya convertido por el ViewModel (medianoche local
+        // de Uruguay = 03:00Z). Truncar con .Date reancla el fin de día a medianoche UTC y
+        // pierde las últimas 3hs del día local; el fin de rango se calcula sumando un día
+        // completo al instante recibido, sin tocar su hora.
+        var fechaHastaFinDia = fechaHasta?.AddDays(1).AddTicks(-1);
 
         // ADAPTACIÓN SQLite (REGLA DE ORO): la query de referencia con
         // GroupBy(m => m.ProductoId).Select(g => new MasMovidoDto(g.Key,
