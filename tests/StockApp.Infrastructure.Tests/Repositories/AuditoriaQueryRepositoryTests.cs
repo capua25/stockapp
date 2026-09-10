@@ -98,6 +98,33 @@ public class AuditoriaQueryRepositoryTests : PostgresRepositoryTestBase
     }
 
     [Fact]
+    public async Task ObtenerLogAsync_FiltraPorFechas_FechaHastaConOffsetUtc_IncluyeLogDeLasUltimas3HorasDelDiaLocal()
+    {
+        // El ViewModel manda FechaHasta como INSTANTE UTC ya convertido desde medianoche
+        // local (Uruguay UTC-3): medianoche local del 10/6 es 2026-06-10T03:00:00Z. El test
+        // de arriba usa medianoche UTC EXACTA (caso no-op que NO distingue el bug); este usa
+        // el offset real del ViewModel.
+        var usuario = NuevoUsuario("user2");
+        Context.Usuarios.Add(usuario);
+        await Context.SaveChangesAsync();
+
+        var fechaHastaConOffset = new DateTime(2026, 6, 10, 3, 0, 0, DateTimeKind.Utc);
+        // 22:00 hora local del 10/6 == 2026-06-11T01:00:00Z. Si el repo trunca con .Date
+        // antes de sumar el día, el fin de rango queda en 2026-06-10T23:59:59.9999999Z
+        // (== 20:59:59 local) y este log, en las últimas 3hs del día local, queda afuera.
+        var fechaLogUltimasHoras = new DateTime(2026, 6, 11, 1, 0, 0, DateTimeKind.Utc);
+
+        Context.LogsAuditoria.Add(Log(usuario.Id, fechaLogUltimasHoras, detalle: "ultimas-horas"));
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        var resultado = await _repo.ObtenerLogAsync(null, null, fechaHastaConOffset);
+
+        Assert.Single(resultado);
+        Assert.Equal("ultimas-horas", resultado[0].Detalle);
+    }
+
+    [Fact]
     public async Task ObtenerLogAsync_SinFiltros_RetornaAll()
     {
         var usuario = NuevoUsuario("user");

@@ -6,7 +6,7 @@ using StockApp.Infrastructure.Persistence;
 namespace StockApp.Infrastructure.Repositories;
 
 /// <summary>
-/// Repositorio de solo lectura para el log de auditoría (EF Core / SQLite).
+/// Repositorio de solo lectura para el log de auditoría (EF Core / PostgreSQL, Npgsql).
 /// Aplica los filtros (usuario/fechas), ajusta FechaHasta a fin de día,
 /// ordena por fecha descendente y proyecta a <see cref="AuditoriaItemDto"/>.
 /// </summary>
@@ -20,9 +20,11 @@ public class AuditoriaQueryRepository : IAuditoriaQueryRepository
     public async Task<IReadOnlyList<AuditoriaItemDto>> ObtenerLogAsync(
         int? usuarioId, DateTime? fechaDesde, DateTime? fechaHasta)
     {
-        // FechaHasta se ajusta a fin de día (23:59:59.9999999) para incluir todas las
-        // entradas del día indicado, sin importar la hora con que se pasó.
-        var fechaHastaFinDia = fechaHasta?.Date.AddDays(1).AddTicks(-1);
+        // fechaHasta llega como INSTANTE UTC ya convertido por el ViewModel (medianoche local
+        // de Uruguay = 03:00Z). Truncar con .Date reancla el fin de día a medianoche UTC y
+        // pierde las últimas 3hs del día local; el fin de rango se calcula sumando un día
+        // completo al instante recibido, sin tocar su hora.
+        var fechaHastaFinDia = fechaHasta?.AddDays(1).AddTicks(-1);
 
         // El Select con l.Usuario!.NombreUsuario genera el JOIN a Usuarios en SQL;
         // no hace falta Include explícito al proyectar a DTO.
