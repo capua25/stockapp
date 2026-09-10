@@ -198,4 +198,23 @@ public class CategoriaRepositoryTests : PostgresRepositoryTestBase
         var updated = await _repo.ObtenerPorIdAsync(id);
         Assert.Equal("Nombre Modificado", updated!.Nombre);
     }
+
+    [Fact]
+    public async Task ActualizarAsync_SoloCambiaCasing_PersisteYElIndiceFuncionalNoLoRechaza()
+    {
+        // Riesgo concreto a cubrir: el índice único funcional es sobre LOWER("Nombre"), así
+        // que un UPDATE que solo cambia el casing de la propia fila ("centro" -> "Centro") no
+        // cambia la clave del índice (misma normalización) — pero hay que confirmarlo contra
+        // Postgres real, no solo por razonamiento.
+        var id = await _repo.AgregarAsync(NuevaCategoria("centro"));
+        Context.ChangeTracker.Clear();
+
+        var found = await _repo.ObtenerPorIdAsync(id);
+        found!.Nombre = "Centro";
+        await _repo.ActualizarAsync(found);
+        Context.ChangeTracker.Clear();
+
+        var updated = await _repo.ObtenerPorIdAsync(id);
+        Assert.Equal("Centro", updated!.Nombre);
+    }
 }

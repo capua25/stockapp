@@ -69,12 +69,17 @@ public class CategoriaService : ICategoriaService
 
         categoria.Nombre = categoria.Nombre.Trim();
 
-        if (!string.Equals(original.Nombre, categoria.Nombre, StringComparison.OrdinalIgnoreCase)
+        // Comparación EXACTA (ordinal, case-sensitive) a propósito: esto decide si HAY QUE
+        // PERSISTIR, no si choca con otra fila. Un cambio de solo casing ("centro" → "Centro")
+        // es una corrección legítima del ABM y tiene que guardarse — normalizar acá silenciaría
+        // el trabajo del usuario sin avisar. La comparación case-insensitive contra TERCEROS
+        // vive exclusivamente en ExisteNombreAsync (excluye la propia fila por Id).
+        if (original.Nombre != categoria.Nombre
             && await _repo.ExisteNombreAsync(categoria.Nombre, categoria.Id))
             throw new ReglaDeNegocioException($"Ya existe una categoría con el nombre '{categoria.Nombre}'.");
 
         var cambios = new List<string>();
-        if (!string.Equals(original.Nombre, categoria.Nombre, StringComparison.OrdinalIgnoreCase))
+        if (original.Nombre != categoria.Nombre)
             cambios.Add($"Nombre: {original.Nombre} → {categoria.Nombre}");
 
         if (cambios.Count == 0)

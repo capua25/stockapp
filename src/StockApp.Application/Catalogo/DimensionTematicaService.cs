@@ -64,12 +64,16 @@ public class DimensionTematicaService : IDimensionTematicaService
 
         dimension.Nombre = dimension.Nombre.Trim();
 
-        if (!string.Equals(original.Nombre, dimension.Nombre, StringComparison.OrdinalIgnoreCase)
+        // Comparación EXACTA (ordinal, case-sensitive) a propósito: decide si HAY QUE
+        // PERSISTIR, no si choca con otra fila. Un cambio de solo casing es una corrección
+        // legítima del ABM y se guarda. La comparación case-insensitive contra TERCEROS vive
+        // solo en ExisteNombreAsync (excluye la propia fila por Id).
+        if (original.Nombre != dimension.Nombre
             && await _repo.ExisteNombreAsync(dimension.Nombre, dimension.Id))
             throw new ReglaDeNegocioException($"Ya existe una dimensión con el nombre '{dimension.Nombre}'.");
 
         var cambios = new List<string>();
-        if (!string.Equals(original.Nombre, dimension.Nombre, StringComparison.OrdinalIgnoreCase))
+        if (original.Nombre != dimension.Nombre)
             cambios.Add($"Nombre: {original.Nombre} → {dimension.Nombre}");
 
         if (cambios.Count == 0)

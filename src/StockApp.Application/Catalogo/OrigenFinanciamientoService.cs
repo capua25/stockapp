@@ -65,12 +65,16 @@ public class OrigenFinanciamientoService : IOrigenFinanciamientoService
 
         origen.Nombre = origen.Nombre.Trim();
 
-        if (!string.Equals(original.Nombre, origen.Nombre, StringComparison.OrdinalIgnoreCase)
+        // Comparación EXACTA (ordinal, case-sensitive) a propósito: decide si HAY QUE
+        // PERSISTIR, no si choca con otra fila. Un cambio de solo casing es una corrección
+        // legítima del ABM y se guarda. La comparación case-insensitive contra TERCEROS vive
+        // solo en ExisteNombreAsync (excluye la propia fila por Id).
+        if (original.Nombre != origen.Nombre
             && await _repo.ExisteNombreAsync(origen.Nombre, origen.Id))
             throw new ReglaDeNegocioException($"Ya existe un origen de financiamiento con el nombre '{origen.Nombre}'.");
 
         var cambios = new List<string>();
-        if (!string.Equals(original.Nombre, origen.Nombre, StringComparison.OrdinalIgnoreCase))
+        if (original.Nombre != origen.Nombre)
             cambios.Add($"Nombre: {original.Nombre} → {origen.Nombre}");
 
         if (cambios.Count == 0)

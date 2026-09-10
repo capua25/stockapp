@@ -73,7 +73,11 @@ public class UnidadMedidaService : IUnidadMedidaService
 
         unidadMedida.Nombre = unidadMedida.Nombre.Trim();
 
-        if (!string.Equals(original.Nombre, unidadMedida.Nombre, StringComparison.OrdinalIgnoreCase)
+        // Comparación EXACTA (ordinal, case-sensitive) a propósito: decide si HAY QUE
+        // PERSISTIR, no si choca con otra fila. Un cambio de solo casing es una corrección
+        // legítima del ABM y se guarda. La comparación case-insensitive contra TERCEROS vive
+        // solo en ExisteNombreAsync (excluye la propia fila por Id).
+        if (original.Nombre != unidadMedida.Nombre
             && await _repo.ExisteNombreAsync(unidadMedida.Nombre, unidadMedida.Id))
             throw new ReglaDeNegocioException($"Ya existe una unidad de medida con el nombre '{unidadMedida.Nombre}'.");
 
@@ -82,7 +86,7 @@ public class UnidadMedidaService : IUnidadMedidaService
             throw new ReglaDeNegocioException($"Ya existe una unidad de medida con la abreviatura '{unidadMedida.Abreviatura}'.");
 
         var cambios = new List<string>();
-        if (!string.Equals(original.Nombre, unidadMedida.Nombre, StringComparison.OrdinalIgnoreCase))
+        if (original.Nombre != unidadMedida.Nombre)
             cambios.Add($"Nombre: {original.Nombre} → {unidadMedida.Nombre}");
         if (original.Abreviatura  != unidadMedida.Abreviatura)  cambios.Add($"Abreviatura: {original.Abreviatura} → {unidadMedida.Abreviatura}");
 

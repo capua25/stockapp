@@ -219,18 +219,21 @@ public class ZonaServiceTests
     }
 
     [Fact]
-    public async Task ModificarAsync_SoloCambiaCasing_NoLanzaDuplicadoContraSiMisma()
+    public async Task ModificarAsync_SoloCambiaCasing_PersisteElNuevoCasing()
     {
-        var original = new Zona { Id = 1, Nombre = "Centro", Activo = true };
+        // Guardián contra el fallo silencioso: corregir "centro" a "Centro" es un cambio
+        // legítimo del ABM y TIENE que persistirse. La comparación case-insensitive es solo
+        // para decidir si choca con OTRA fila (ExisteNombreAsync ya excluye la propia por Id).
+        var original = new Zona { Id = 1, Nombre = "centro", Activo = true };
         var (svc, repo, _, _, _) = Crear();
         repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+        repo.Setup(r => r.ExisteNombreAsync("Centro", 1)).ReturnsAsync(false);
 
         var ex = await Record.ExceptionAsync(
-            () => svc.ModificarAsync(new Zona { Id = 1, Nombre = "centro", Activo = true }));
+            () => svc.ModificarAsync(new Zona { Id = 1, Nombre = "Centro", Activo = true }));
 
         Assert.Null(ex);
-        repo.Verify(r => r.ExisteNombreAsync(It.IsAny<string>(), It.IsAny<int?>()), Times.Never);
-        repo.Verify(r => r.ActualizarAsync(It.IsAny<Zona>()), Times.Never);
+        repo.Verify(r => r.ActualizarAsync(It.Is<Zona>(z => z.Nombre == "Centro")), Times.Once);
     }
 
     [Fact]

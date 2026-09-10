@@ -66,12 +66,16 @@ public class ZonaService : IZonaService
 
         zona.Nombre = zona.Nombre.Trim();
 
-        if (!string.Equals(original.Nombre, zona.Nombre, StringComparison.OrdinalIgnoreCase)
+        // Comparación EXACTA (ordinal, case-sensitive) a propósito: decide si HAY QUE
+        // PERSISTIR, no si choca con otra fila. Un cambio de solo casing es una corrección
+        // legítima del ABM y se guarda. La comparación case-insensitive contra TERCEROS vive
+        // solo en ExisteNombreAsync (excluye la propia fila por Id).
+        if (original.Nombre != zona.Nombre
             && await _repo.ExisteNombreAsync(zona.Nombre, zona.Id))
             throw new ReglaDeNegocioException($"Ya existe una zona con el nombre '{zona.Nombre}'.");
 
         var cambios = new List<string>();
-        if (!string.Equals(original.Nombre, zona.Nombre, StringComparison.OrdinalIgnoreCase))
+        if (original.Nombre != zona.Nombre)
             cambios.Add($"Nombre: {original.Nombre} → {zona.Nombre}");
 
         if (cambios.Count == 0)

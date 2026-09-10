@@ -155,4 +155,19 @@ public class ProveedorRepositoryTests : PostgresRepositoryTestBase
         Assert.Equal("099-9999-9999", updated!.Telefono);
         Assert.Equal("Proveedor preferido", updated.Notas);
     }
+
+    [Fact]
+    public async Task ActualizarAsync_SoloCambiaCasing_PersisteYElIndiceFuncionalNoLoRechaza()
+    {
+        var id = await _repo.AgregarAsync(NuevoProveedor("distribuidora norte"));
+        Context.ChangeTracker.Clear();
+
+        var found = await _repo.ObtenerPorIdAsync(id);
+        found!.Nombre = "Distribuidora Norte";
+        await _repo.ActualizarAsync(found);
+        Context.ChangeTracker.Clear();
+
+        var updated = await _repo.ObtenerPorIdAsync(id);
+        Assert.Equal("Distribuidora Norte", updated!.Nombre);
+    }
 }

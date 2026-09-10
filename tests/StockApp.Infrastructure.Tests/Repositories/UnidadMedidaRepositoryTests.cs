@@ -184,4 +184,19 @@ public class UnidadMedidaRepositoryTests : PostgresRepositoryTestBase
         var updated = await _repo.ObtenerPorIdAsync(id);
         Assert.Equal("KG", updated!.Abreviatura);
     }
+
+    [Fact]
+    public async Task ActualizarAsync_SoloCambiaCasingDeNombre_PersisteYElIndiceFuncionalNoLoRechaza()
+    {
+        var id = await _repo.AgregarAsync(NuevaUm("kilogramo", "kg"));
+        Context.ChangeTracker.Clear();
+
+        var found = await _repo.ObtenerPorIdAsync(id);
+        found!.Nombre = "Kilogramo";
+        await _repo.ActualizarAsync(found);
+        Context.ChangeTracker.Clear();
+
+        var updated = await _repo.ObtenerPorIdAsync(id);
+        Assert.Equal("Kilogramo", updated!.Nombre);
+    }
 }

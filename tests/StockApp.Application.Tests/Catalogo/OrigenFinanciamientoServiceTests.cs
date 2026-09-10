@@ -224,18 +224,22 @@ public class OrigenFinanciamientoServiceTests
     }
 
     [Fact]
-    public async Task ModificarAsync_SoloCambiaCasing_NoLanzaDuplicadoContraSiMismo()
+    public async Task ModificarAsync_SoloCambiaCasing_PersisteElNuevoCasing()
     {
-        var original = new OrigenFinanciamiento { Id = 1, Nombre = "Presupuesto propio", Activo = true };
+        // Guardián contra el fallo silencioso: corregir "presupuesto propio" a "Presupuesto
+        // propio" es un cambio legítimo del ABM y TIENE que persistirse. La comparación
+        // case-insensitive es solo para decidir si choca con OTRA fila (ExisteNombreAsync ya
+        // excluye la propia por Id).
+        var original = new OrigenFinanciamiento { Id = 1, Nombre = "presupuesto propio", Activo = true };
         var (svc, repo, _, _, _) = Crear();
         repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+        repo.Setup(r => r.ExisteNombreAsync("Presupuesto propio", 1)).ReturnsAsync(false);
 
         var ex = await Record.ExceptionAsync(
-            () => svc.ModificarAsync(new OrigenFinanciamiento { Id = 1, Nombre = "presupuesto propio", Activo = true }));
+            () => svc.ModificarAsync(new OrigenFinanciamiento { Id = 1, Nombre = "Presupuesto propio", Activo = true }));
 
         Assert.Null(ex);
-        repo.Verify(r => r.ExisteNombreAsync(It.IsAny<string>(), It.IsAny<int?>()), Times.Never);
-        repo.Verify(r => r.ActualizarAsync(It.IsAny<OrigenFinanciamiento>()), Times.Never);
+        repo.Verify(r => r.ActualizarAsync(It.Is<OrigenFinanciamiento>(o => o.Nombre == "Presupuesto propio")), Times.Once);
     }
 
     [Fact]

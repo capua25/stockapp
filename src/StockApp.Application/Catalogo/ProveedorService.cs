@@ -64,12 +64,16 @@ public class ProveedorService : IProveedorService
 
         proveedor.Nombre = proveedor.Nombre.Trim();
 
-        if (!string.Equals(original.Nombre, proveedor.Nombre, StringComparison.OrdinalIgnoreCase)
+        // Comparación EXACTA (ordinal, case-sensitive) a propósito: decide si HAY QUE
+        // PERSISTIR, no si choca con otra fila. Un cambio de solo casing es una corrección
+        // legítima del ABM y se guarda. La comparación case-insensitive contra TERCEROS vive
+        // solo en ExisteNombreAsync (excluye la propia fila por Id).
+        if (original.Nombre != proveedor.Nombre
             && await _repo.ExisteNombreAsync(proveedor.Nombre, proveedor.Id))
             throw new ReglaDeNegocioException($"Ya existe un proveedor con el nombre '{proveedor.Nombre}'.");
 
         var cambios = new List<string>();
-        if (!string.Equals(original.Nombre, proveedor.Nombre, StringComparison.OrdinalIgnoreCase))
+        if (original.Nombre != proveedor.Nombre)
             cambios.Add($"Nombre: {original.Nombre} → {proveedor.Nombre}");
         if (original.Telefono  != proveedor.Telefono)  cambios.Add($"Telefono: {original.Telefono} → {proveedor.Telefono}");
         if (original.Email     != proveedor.Email)     cambios.Add($"Email: {original.Email} → {proveedor.Email}");

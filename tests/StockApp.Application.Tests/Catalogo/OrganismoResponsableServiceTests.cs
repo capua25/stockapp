@@ -224,18 +224,22 @@ public class OrganismoResponsableServiceTests
     }
 
     [Fact]
-    public async Task ModificarAsync_SoloCambiaCasing_NoLanzaDuplicadoContraSiMismo()
+    public async Task ModificarAsync_SoloCambiaCasing_PersisteElNuevoCasing()
     {
-        var original = new OrganismoResponsable { Id = 1, Nombre = "Intendencia de Colonia", Activo = true };
+        // Guardián contra el fallo silencioso: corregir "intendencia de colonia" a
+        // "Intendencia de Colonia" es un cambio legítimo del ABM y TIENE que persistirse. La
+        // comparación case-insensitive es solo para decidir si choca con OTRA fila
+        // (ExisteNombreAsync ya excluye la propia por Id).
+        var original = new OrganismoResponsable { Id = 1, Nombre = "intendencia de colonia", Activo = true };
         var (svc, repo, _, _, _) = Crear();
         repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+        repo.Setup(r => r.ExisteNombreAsync("Intendencia de Colonia", 1)).ReturnsAsync(false);
 
         var ex = await Record.ExceptionAsync(
-            () => svc.ModificarAsync(new OrganismoResponsable { Id = 1, Nombre = "intendencia de colonia", Activo = true }));
+            () => svc.ModificarAsync(new OrganismoResponsable { Id = 1, Nombre = "Intendencia de Colonia", Activo = true }));
 
         Assert.Null(ex);
-        repo.Verify(r => r.ExisteNombreAsync(It.IsAny<string>(), It.IsAny<int?>()), Times.Never);
-        repo.Verify(r => r.ActualizarAsync(It.IsAny<OrganismoResponsable>()), Times.Never);
+        repo.Verify(r => r.ActualizarAsync(It.Is<OrganismoResponsable>(o => o.Nombre == "Intendencia de Colonia")), Times.Once);
     }
 
     [Fact]

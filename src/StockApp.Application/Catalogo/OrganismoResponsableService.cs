@@ -64,12 +64,16 @@ public class OrganismoResponsableService : IOrganismoResponsableService
 
         organismo.Nombre = organismo.Nombre.Trim();
 
-        if (!string.Equals(original.Nombre, organismo.Nombre, StringComparison.OrdinalIgnoreCase)
+        // Comparación EXACTA (ordinal, case-sensitive) a propósito: decide si HAY QUE
+        // PERSISTIR, no si choca con otra fila. Un cambio de solo casing es una corrección
+        // legítima del ABM y se guarda. La comparación case-insensitive contra TERCEROS vive
+        // solo en ExisteNombreAsync (excluye la propia fila por Id).
+        if (original.Nombre != organismo.Nombre
             && await _repo.ExisteNombreAsync(organismo.Nombre, organismo.Id))
             throw new ReglaDeNegocioException($"Ya existe un organismo con el nombre '{organismo.Nombre}'.");
 
         var cambios = new List<string>();
-        if (!string.Equals(original.Nombre, organismo.Nombre, StringComparison.OrdinalIgnoreCase))
+        if (original.Nombre != organismo.Nombre)
             cambios.Add($"Nombre: {original.Nombre} → {organismo.Nombre}");
 
         if (cambios.Count == 0)

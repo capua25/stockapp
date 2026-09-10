@@ -146,4 +146,19 @@ public class DimensionTematicaRepositoryTests : PostgresRepositoryTestBase
         var updated = await _repo.ObtenerPorIdAsync(id);
         Assert.Equal("Nombre Modificado", updated!.Nombre);
     }
+
+    [Fact]
+    public async Task ActualizarAsync_SoloCambiaCasing_PersisteYElIndiceFuncionalNoLoRechaza()
+    {
+        var id = await _repo.AgregarAsync(NuevaDimension("infraestructura"));
+        Context.ChangeTracker.Clear();
+
+        var found = await _repo.ObtenerPorIdAsync(id);
+        found!.Nombre = "Infraestructura";
+        await _repo.ActualizarAsync(found);
+        Context.ChangeTracker.Clear();
+
+        var updated = await _repo.ObtenerPorIdAsync(id);
+        Assert.Equal("Infraestructura", updated!.Nombre);
+    }
 }
