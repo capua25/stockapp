@@ -243,9 +243,19 @@ public class ImportacionRepositoryTests : PostgresRepositoryTestBase
         // mayúsculas pueden coexistir en la base. Antes del fix, el ToDictionary de
         // proveedorPorNombre/fuentePorNombre/lineaPorNombre lanzaba ArgumentException por clave
         // duplicada ANTES de tocar el payload.
-        Context.Proveedores.AddRange(
-            new Proveedor { Nombre = "Ferretería Lopez" },
-            new Proveedor { Nombre = "FERRETERÍA LOPEZ" });
+        //
+        // Nota (rama feat/normalizacion-nombres-catalogos, migración
+        // AgregaIndiceFuncionalNombreCatalogos): a partir de esta migración, Proveedor pasó a
+        // tener un índice único FUNCIONAL sobre LOWER("Nombre") — el escenario de arriba
+        // ("Ferretería Lopez" + "FERRETERÍA LOPEZ" coexistiendo) ya NO es reproducible para
+        // Proveedor por más que el ABM lo permitiera antes: la base lo rechaza. El
+        // Context.Proveedores.AddRange(...) que sembraba ese duplicado se sacó de este test
+        // porque revienta con "duplicate key value violates unique constraint
+        // IX_Proveedores_Nombre" antes de llegar a ConfirmarAsync — el mismo GroupBy+First de
+        // ImportacionRepository.cs:439-443 quedó obsoleto PARA PROVEEDOR (sigue haciendo falta
+        // para FuenteFinanciamiento y LineaPoa, que no forman parte de esa migración y siguen
+        // comparando con "==" sin normalizar). Ver reporte de esa rama para el detalle completo;
+        // no se tocó ImportacionRepository.cs — fuera de alcance de ese cambio.
         Context.FuentesFinanciamiento.AddRange(
             new FuenteFinanciamiento { Nombre = "Literal B" },
             new FuenteFinanciamiento { Nombre = "literal b" });
