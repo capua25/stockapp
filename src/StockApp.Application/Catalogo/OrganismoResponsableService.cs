@@ -36,6 +36,8 @@ public class OrganismoResponsableService : IOrganismoResponsableService
         if (string.IsNullOrWhiteSpace(organismo.Nombre))
             throw new ArgumentException("El nombre del organismo es obligatorio.");
 
+        organismo.Nombre = organismo.Nombre.Trim();
+
         if (await _repo.ExisteNombreAsync(organismo.Nombre, null))
             throw new ReglaDeNegocioException($"Ya existe un organismo con el nombre '{organismo.Nombre}'.");
 
@@ -57,12 +59,17 @@ public class OrganismoResponsableService : IOrganismoResponsableService
         var original = await _repo.ObtenerPorIdAsync(organismo.Id)
             ?? throw new EntidadNoEncontradaException($"Organismo {organismo.Id} no encontrado.");
 
-        if (original.Nombre != organismo.Nombre
+        if (string.IsNullOrWhiteSpace(organismo.Nombre))
+            throw new ArgumentException("El nombre del organismo es obligatorio.");
+
+        organismo.Nombre = organismo.Nombre.Trim();
+
+        if (!string.Equals(original.Nombre, organismo.Nombre, StringComparison.OrdinalIgnoreCase)
             && await _repo.ExisteNombreAsync(organismo.Nombre, organismo.Id))
             throw new ReglaDeNegocioException($"Ya existe un organismo con el nombre '{organismo.Nombre}'.");
 
         var cambios = new List<string>();
-        if (original.Nombre != organismo.Nombre)
+        if (!string.Equals(original.Nombre, organismo.Nombre, StringComparison.OrdinalIgnoreCase))
             cambios.Add($"Nombre: {original.Nombre} → {organismo.Nombre}");
 
         if (cambios.Count == 0)

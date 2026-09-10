@@ -38,6 +38,8 @@ public class ZonaService : IZonaService
         if (string.IsNullOrWhiteSpace(zona.Nombre))
             throw new ArgumentException("El nombre de la zona es obligatorio.");
 
+        zona.Nombre = zona.Nombre.Trim();
+
         if (await _repo.ExisteNombreAsync(zona.Nombre, null))
             throw new ReglaDeNegocioException($"Ya existe una zona con el nombre '{zona.Nombre}'.");
 
@@ -59,12 +61,17 @@ public class ZonaService : IZonaService
         var original = await _repo.ObtenerPorIdAsync(zona.Id)
             ?? throw new EntidadNoEncontradaException($"Zona {zona.Id} no encontrada.");
 
-        if (original.Nombre != zona.Nombre
+        if (string.IsNullOrWhiteSpace(zona.Nombre))
+            throw new ArgumentException("El nombre de la zona es obligatorio.");
+
+        zona.Nombre = zona.Nombre.Trim();
+
+        if (!string.Equals(original.Nombre, zona.Nombre, StringComparison.OrdinalIgnoreCase)
             && await _repo.ExisteNombreAsync(zona.Nombre, zona.Id))
             throw new ReglaDeNegocioException($"Ya existe una zona con el nombre '{zona.Nombre}'.");
 
         var cambios = new List<string>();
-        if (original.Nombre != zona.Nombre)
+        if (!string.Equals(original.Nombre, zona.Nombre, StringComparison.OrdinalIgnoreCase))
             cambios.Add($"Nombre: {original.Nombre} → {zona.Nombre}");
 
         if (cambios.Count == 0)

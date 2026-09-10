@@ -196,4 +196,58 @@ public class OrganismoResponsableServiceTests
         Assert.DoesNotContain(parametros, p => p.ParameterType == typeof(IVersionReportes));
         Assert.Equal(4, parametros.Length);
     }
+
+    // ─── Normalización de nombre (Trim + case-insensitive) ──────────────────
+
+    [Fact]
+    public async Task AltaAsync_TrimmeaNombre_YConservaCasingDelUsuario()
+    {
+        var (svc, repo, _, _, _) = Crear();
+        repo.Setup(r => r.ExisteNombreAsync("Villa Nueva", null)).ReturnsAsync(false);
+        OrganismoResponsable? capturado = null;
+        repo.Setup(r => r.AgregarAsync(It.IsAny<OrganismoResponsable>()))
+            .Callback<OrganismoResponsable>(o => capturado = o)
+            .ReturnsAsync(1);
+
+        await svc.AltaAsync(new OrganismoResponsable { Nombre = "  Villa Nueva  " });
+
+        Assert.Equal("Villa Nueva", capturado!.Nombre);
+    }
+
+    [Fact]
+    public async Task AltaAsync_NombreSoloEspacios_LanzaArgumentException()
+    {
+        var (svc, _, _, _, _) = Crear();
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => svc.AltaAsync(new OrganismoResponsable { Nombre = "   " }));
+    }
+
+    [Fact]
+    public async Task ModificarAsync_SoloCambiaCasing_NoLanzaDuplicadoContraSiMismo()
+    {
+        var original = new OrganismoResponsable { Id = 1, Nombre = "Intendencia de Colonia", Activo = true };
+        var (svc, repo, _, _, _) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+
+        var ex = await Record.ExceptionAsync(
+            () => svc.ModificarAsync(new OrganismoResponsable { Id = 1, Nombre = "intendencia de colonia", Activo = true }));
+
+        Assert.Null(ex);
+        repo.Verify(r => r.ExisteNombreAsync(It.IsAny<string>(), It.IsAny<int?>()), Times.Never);
+        repo.Verify(r => r.ActualizarAsync(It.IsAny<OrganismoResponsable>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ModificarAsync_TrimmeaNombreEntrante()
+    {
+        var original = new OrganismoResponsable { Id = 1, Nombre = "Municipio de Carmelo", Activo = true };
+        var (svc, repo, _, _, _) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+        repo.Setup(r => r.ExisteNombreAsync("Municipio de Carmelo (Junta Local)", 1)).ReturnsAsync(false);
+
+        await svc.ModificarAsync(new OrganismoResponsable { Id = 1, Nombre = "  Municipio de Carmelo (Junta Local)  ", Activo = true });
+
+        repo.Verify(r => r.ActualizarAsync(It.Is<OrganismoResponsable>(o => o.Nombre == "Municipio de Carmelo (Junta Local)")), Times.Once);
+    }
 }

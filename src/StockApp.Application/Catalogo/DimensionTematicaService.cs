@@ -36,6 +36,8 @@ public class DimensionTematicaService : IDimensionTematicaService
         if (string.IsNullOrWhiteSpace(dimension.Nombre))
             throw new ArgumentException("El nombre de la dimensión es obligatorio.");
 
+        dimension.Nombre = dimension.Nombre.Trim();
+
         if (await _repo.ExisteNombreAsync(dimension.Nombre, null))
             throw new ReglaDeNegocioException($"Ya existe una dimensión con el nombre '{dimension.Nombre}'.");
 
@@ -57,12 +59,17 @@ public class DimensionTematicaService : IDimensionTematicaService
         var original = await _repo.ObtenerPorIdAsync(dimension.Id)
             ?? throw new EntidadNoEncontradaException($"Dimensión {dimension.Id} no encontrada.");
 
-        if (original.Nombre != dimension.Nombre
+        if (string.IsNullOrWhiteSpace(dimension.Nombre))
+            throw new ArgumentException("El nombre de la dimensión es obligatorio.");
+
+        dimension.Nombre = dimension.Nombre.Trim();
+
+        if (!string.Equals(original.Nombre, dimension.Nombre, StringComparison.OrdinalIgnoreCase)
             && await _repo.ExisteNombreAsync(dimension.Nombre, dimension.Id))
             throw new ReglaDeNegocioException($"Ya existe una dimensión con el nombre '{dimension.Nombre}'.");
 
         var cambios = new List<string>();
-        if (original.Nombre != dimension.Nombre)
+        if (!string.Equals(original.Nombre, dimension.Nombre, StringComparison.OrdinalIgnoreCase))
             cambios.Add($"Nombre: {original.Nombre} → {dimension.Nombre}");
 
         if (cambios.Count == 0)

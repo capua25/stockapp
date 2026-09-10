@@ -42,6 +42,8 @@ public class UnidadMedidaService : IUnidadMedidaService
         if (string.IsNullOrWhiteSpace(unidadMedida.Abreviatura))
             throw new ArgumentException("La abreviatura de la unidad de medida es obligatoria.");
 
+        unidadMedida.Nombre = unidadMedida.Nombre.Trim();
+
         if (await _repo.ExisteNombreAsync(unidadMedida.Nombre, null))
             throw new ReglaDeNegocioException($"Ya existe una unidad de medida con el nombre '{unidadMedida.Nombre}'.");
 
@@ -66,7 +68,12 @@ public class UnidadMedidaService : IUnidadMedidaService
         var original = await _repo.ObtenerPorIdAsync(unidadMedida.Id)
             ?? throw new EntidadNoEncontradaException($"UnidadMedida {unidadMedida.Id} no encontrada.");
 
-        if (original.Nombre != unidadMedida.Nombre
+        if (string.IsNullOrWhiteSpace(unidadMedida.Nombre))
+            throw new ArgumentException("El nombre de la unidad de medida es obligatorio.");
+
+        unidadMedida.Nombre = unidadMedida.Nombre.Trim();
+
+        if (!string.Equals(original.Nombre, unidadMedida.Nombre, StringComparison.OrdinalIgnoreCase)
             && await _repo.ExisteNombreAsync(unidadMedida.Nombre, unidadMedida.Id))
             throw new ReglaDeNegocioException($"Ya existe una unidad de medida con el nombre '{unidadMedida.Nombre}'.");
 
@@ -75,7 +82,8 @@ public class UnidadMedidaService : IUnidadMedidaService
             throw new ReglaDeNegocioException($"Ya existe una unidad de medida con la abreviatura '{unidadMedida.Abreviatura}'.");
 
         var cambios = new List<string>();
-        if (original.Nombre       != unidadMedida.Nombre)       cambios.Add($"Nombre: {original.Nombre} → {unidadMedida.Nombre}");
+        if (!string.Equals(original.Nombre, unidadMedida.Nombre, StringComparison.OrdinalIgnoreCase))
+            cambios.Add($"Nombre: {original.Nombre} → {unidadMedida.Nombre}");
         if (original.Abreviatura  != unidadMedida.Abreviatura)  cambios.Add($"Abreviatura: {original.Abreviatura} → {unidadMedida.Abreviatura}");
 
         if (cambios.Count == 0)

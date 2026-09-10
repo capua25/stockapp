@@ -36,6 +36,8 @@ public class ProveedorService : IProveedorService
         if (string.IsNullOrWhiteSpace(proveedor.Nombre))
             throw new ArgumentException("El nombre del proveedor es obligatorio.");
 
+        proveedor.Nombre = proveedor.Nombre.Trim();
+
         if (await _repo.ExisteNombreAsync(proveedor.Nombre, null))
             throw new ReglaDeNegocioException($"Ya existe un proveedor con el nombre '{proveedor.Nombre}'.");
 
@@ -57,12 +59,18 @@ public class ProveedorService : IProveedorService
         var original = await _repo.ObtenerPorIdAsync(proveedor.Id)
             ?? throw new EntidadNoEncontradaException($"Proveedor {proveedor.Id} no encontrado.");
 
-        if (original.Nombre != proveedor.Nombre
+        if (string.IsNullOrWhiteSpace(proveedor.Nombre))
+            throw new ArgumentException("El nombre del proveedor es obligatorio.");
+
+        proveedor.Nombre = proveedor.Nombre.Trim();
+
+        if (!string.Equals(original.Nombre, proveedor.Nombre, StringComparison.OrdinalIgnoreCase)
             && await _repo.ExisteNombreAsync(proveedor.Nombre, proveedor.Id))
             throw new ReglaDeNegocioException($"Ya existe un proveedor con el nombre '{proveedor.Nombre}'.");
 
         var cambios = new List<string>();
-        if (original.Nombre    != proveedor.Nombre)    cambios.Add($"Nombre: {original.Nombre} → {proveedor.Nombre}");
+        if (!string.Equals(original.Nombre, proveedor.Nombre, StringComparison.OrdinalIgnoreCase))
+            cambios.Add($"Nombre: {original.Nombre} → {proveedor.Nombre}");
         if (original.Telefono  != proveedor.Telefono)  cambios.Add($"Telefono: {original.Telefono} → {proveedor.Telefono}");
         if (original.Email     != proveedor.Email)     cambios.Add($"Email: {original.Email} → {proveedor.Email}");
         if (original.Direccion != proveedor.Direccion) cambios.Add($"Direccion: {original.Direccion} → {proveedor.Direccion}");

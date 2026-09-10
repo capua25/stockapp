@@ -141,4 +141,58 @@ public class ProveedorServiceTests
 
         await Assert.ThrowsAsync<EntidadNoEncontradaException>(() => svc.BajaLogicaAsync(99));
     }
+
+    // ─── Normalización de nombre (Trim + case-insensitive) ──────────────────
+
+    [Fact]
+    public async Task AltaAsync_TrimmeaNombre_YConservaCasingDelUsuario()
+    {
+        var (svc, repo, _, _, _) = Crear();
+        repo.Setup(r => r.ExisteNombreAsync("Villa Nueva", null)).ReturnsAsync(false);
+        Proveedor? capturado = null;
+        repo.Setup(r => r.AgregarAsync(It.IsAny<Proveedor>()))
+            .Callback<Proveedor>(p => capturado = p)
+            .ReturnsAsync(1);
+
+        await svc.AltaAsync(new Proveedor { Nombre = "  Villa Nueva  " });
+
+        Assert.Equal("Villa Nueva", capturado!.Nombre);
+    }
+
+    [Fact]
+    public async Task AltaAsync_NombreSoloEspacios_LanzaArgumentException()
+    {
+        var (svc, _, _, _, _) = Crear();
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => svc.AltaAsync(new Proveedor { Nombre = "   " }));
+    }
+
+    [Fact]
+    public async Task ModificarAsync_SoloCambiaCasing_NoLanzaDuplicadoContraSiMismo()
+    {
+        var original = new Proveedor { Id = 1, Nombre = "DistX", Activo = true };
+        var (svc, repo, _, _, _) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+
+        var ex = await Record.ExceptionAsync(
+            () => svc.ModificarAsync(new Proveedor { Id = 1, Nombre = "distx", Activo = true }));
+
+        Assert.Null(ex);
+        repo.Verify(r => r.ExisteNombreAsync(It.IsAny<string>(), It.IsAny<int?>()), Times.Never);
+        repo.Verify(r => r.ActualizarAsync(It.IsAny<Proveedor>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ModificarAsync_TrimmeaNombreEntrante()
+    {
+        var original = new Proveedor { Id = 1, Nombre = "DistX", Activo = true };
+        var (svc, repo, _, _, _) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+        repo.Setup(r => r.ExisteNombreAsync("DistX Sur", 1)).ReturnsAsync(false);
+
+        await svc.ModificarAsync(new Proveedor { Id = 1, Nombre = "  DistX Sur  ", Activo = true });
+
+        repo.Verify(r => r.ActualizarAsync(It.Is<Proveedor>(p => p.Nombre == "DistX Sur")), Times.Once);
+    }
 }

@@ -184,4 +184,59 @@ public class CategoriaServiceTests
 
         await Assert.ThrowsAsync<EntidadNoEncontradaException>(() => svc.BajaLogicaAsync(99));
     }
+
+    // ─── Normalización de nombre (Trim + case-insensitive) ──────────────────
+
+    [Fact]
+    public async Task AltaAsync_TrimmeaNombre_YConservaCasingDelUsuario()
+    {
+        var (svc, repo, _, _, _) = Crear();
+        repo.Setup(r => r.ExisteNombreAsync("Villa Nueva", null)).ReturnsAsync(false);
+        Categoria? capturada = null;
+        repo.Setup(r => r.AgregarAsync(It.IsAny<Categoria>()))
+            .Callback<Categoria>(c => capturada = c)
+            .ReturnsAsync(1);
+
+        await svc.AltaAsync(new Categoria { Nombre = "  Villa Nueva  " });
+
+        Assert.Equal("Villa Nueva", capturada!.Nombre);
+    }
+
+    [Fact]
+    public async Task AltaAsync_NombreSoloEspacios_LanzaArgumentException()
+    {
+        var (svc, _, _, _, _) = Crear();
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => svc.AltaAsync(new Categoria { Nombre = "   " }));
+    }
+
+    [Fact]
+    public async Task ModificarAsync_SoloCambiaCasing_NoLanzaDuplicadoContraSiMisma()
+    {
+        var original = new Categoria { Id = 1, Nombre = "Centro", Activo = true };
+        var (svc, repo, _, _, _) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+
+        var ex = await Record.ExceptionAsync(
+            () => svc.ModificarAsync(new Categoria { Id = 1, Nombre = "centro", Activo = true }));
+
+        Assert.Null(ex);
+        // Cambio puramente de casing: no dispara ExisteNombreAsync ni persiste.
+        repo.Verify(r => r.ExisteNombreAsync(It.IsAny<string>(), It.IsAny<int?>()), Times.Never);
+        repo.Verify(r => r.ActualizarAsync(It.IsAny<Categoria>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ModificarAsync_TrimmeaNombreEntrante()
+    {
+        var original = new Categoria { Id = 1, Nombre = "Bebidas", Activo = true };
+        var (svc, repo, _, _, _) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+        repo.Setup(r => r.ExisteNombreAsync("Bebidas Frías", 1)).ReturnsAsync(false);
+
+        await svc.ModificarAsync(new Categoria { Id = 1, Nombre = "  Bebidas Frías  ", Activo = true });
+
+        repo.Verify(r => r.ActualizarAsync(It.Is<Categoria>(c => c.Nombre == "Bebidas Frías")), Times.Once);
+    }
 }

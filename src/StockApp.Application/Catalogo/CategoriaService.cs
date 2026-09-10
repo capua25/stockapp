@@ -39,6 +39,8 @@ public class CategoriaService : ICategoriaService
         if (string.IsNullOrWhiteSpace(categoria.Nombre))
             throw new ArgumentException("El nombre de la categoría es obligatorio.");
 
+        categoria.Nombre = categoria.Nombre.Trim();
+
         if (await _repo.ExisteNombreAsync(categoria.Nombre, null))
             throw new ReglaDeNegocioException($"Ya existe una categoría con el nombre '{categoria.Nombre}'.");
 
@@ -62,12 +64,17 @@ public class CategoriaService : ICategoriaService
         var original = await _repo.ObtenerPorIdAsync(categoria.Id)
             ?? throw new EntidadNoEncontradaException($"Categoría {categoria.Id} no encontrada.");
 
-        if (original.Nombre != categoria.Nombre
+        if (string.IsNullOrWhiteSpace(categoria.Nombre))
+            throw new ArgumentException("El nombre de la categoría es obligatorio.");
+
+        categoria.Nombre = categoria.Nombre.Trim();
+
+        if (!string.Equals(original.Nombre, categoria.Nombre, StringComparison.OrdinalIgnoreCase)
             && await _repo.ExisteNombreAsync(categoria.Nombre, categoria.Id))
             throw new ReglaDeNegocioException($"Ya existe una categoría con el nombre '{categoria.Nombre}'.");
 
         var cambios = new List<string>();
-        if (original.Nombre != categoria.Nombre)
+        if (!string.Equals(original.Nombre, categoria.Nombre, StringComparison.OrdinalIgnoreCase))
             cambios.Add($"Nombre: {original.Nombre} → {categoria.Nombre}");
 
         if (cambios.Count == 0)

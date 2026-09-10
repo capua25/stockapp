@@ -196,4 +196,58 @@ public class OrigenFinanciamientoServiceTests
         Assert.DoesNotContain(parametros, p => p.ParameterType == typeof(IVersionReportes));
         Assert.Equal(4, parametros.Length);
     }
+
+    // ─── Normalización de nombre (Trim + case-insensitive) ──────────────────
+
+    [Fact]
+    public async Task AltaAsync_TrimmeaNombre_YConservaCasingDelUsuario()
+    {
+        var (svc, repo, _, _, _) = Crear();
+        repo.Setup(r => r.ExisteNombreAsync("Villa Nueva", null)).ReturnsAsync(false);
+        OrigenFinanciamiento? capturado = null;
+        repo.Setup(r => r.AgregarAsync(It.IsAny<OrigenFinanciamiento>()))
+            .Callback<OrigenFinanciamiento>(o => capturado = o)
+            .ReturnsAsync(1);
+
+        await svc.AltaAsync(new OrigenFinanciamiento { Nombre = "  Villa Nueva  " });
+
+        Assert.Equal("Villa Nueva", capturado!.Nombre);
+    }
+
+    [Fact]
+    public async Task AltaAsync_NombreSoloEspacios_LanzaArgumentException()
+    {
+        var (svc, _, _, _, _) = Crear();
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => svc.AltaAsync(new OrigenFinanciamiento { Nombre = "   " }));
+    }
+
+    [Fact]
+    public async Task ModificarAsync_SoloCambiaCasing_NoLanzaDuplicadoContraSiMismo()
+    {
+        var original = new OrigenFinanciamiento { Id = 1, Nombre = "Presupuesto propio", Activo = true };
+        var (svc, repo, _, _, _) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+
+        var ex = await Record.ExceptionAsync(
+            () => svc.ModificarAsync(new OrigenFinanciamiento { Id = 1, Nombre = "presupuesto propio", Activo = true }));
+
+        Assert.Null(ex);
+        repo.Verify(r => r.ExisteNombreAsync(It.IsAny<string>(), It.IsAny<int?>()), Times.Never);
+        repo.Verify(r => r.ActualizarAsync(It.IsAny<OrigenFinanciamiento>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ModificarAsync_TrimmeaNombreEntrante()
+    {
+        var original = new OrigenFinanciamiento { Id = 1, Nombre = "Fondo nacional", Activo = true };
+        var (svc, repo, _, _, _) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+        repo.Setup(r => r.ExisteNombreAsync("Fondo nacional de infraestructura", 1)).ReturnsAsync(false);
+
+        await svc.ModificarAsync(new OrigenFinanciamiento { Id = 1, Nombre = "  Fondo nacional de infraestructura  ", Activo = true });
+
+        repo.Verify(r => r.ActualizarAsync(It.Is<OrigenFinanciamiento>(o => o.Nombre == "Fondo nacional de infraestructura")), Times.Once);
+    }
 }

@@ -196,4 +196,58 @@ public class DimensionTematicaServiceTests
         Assert.DoesNotContain(parametros, p => p.ParameterType == typeof(IVersionReportes));
         Assert.Equal(4, parametros.Length);
     }
+
+    // ─── Normalización de nombre (Trim + case-insensitive) ──────────────────
+
+    [Fact]
+    public async Task AltaAsync_TrimmeaNombre_YConservaCasingDelUsuario()
+    {
+        var (svc, repo, _, _, _) = Crear();
+        repo.Setup(r => r.ExisteNombreAsync("Villa Nueva", null)).ReturnsAsync(false);
+        DimensionTematica? capturada = null;
+        repo.Setup(r => r.AgregarAsync(It.IsAny<DimensionTematica>()))
+            .Callback<DimensionTematica>(d => capturada = d)
+            .ReturnsAsync(1);
+
+        await svc.AltaAsync(new DimensionTematica { Nombre = "  Villa Nueva  " });
+
+        Assert.Equal("Villa Nueva", capturada!.Nombre);
+    }
+
+    [Fact]
+    public async Task AltaAsync_NombreSoloEspacios_LanzaArgumentException()
+    {
+        var (svc, _, _, _, _) = Crear();
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => svc.AltaAsync(new DimensionTematica { Nombre = "   " }));
+    }
+
+    [Fact]
+    public async Task ModificarAsync_SoloCambiaCasing_NoLanzaDuplicadoContraSiMisma()
+    {
+        var original = new DimensionTematica { Id = 1, Nombre = "Infraestructura", Activo = true };
+        var (svc, repo, _, _, _) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+
+        var ex = await Record.ExceptionAsync(
+            () => svc.ModificarAsync(new DimensionTematica { Id = 1, Nombre = "infraestructura", Activo = true }));
+
+        Assert.Null(ex);
+        repo.Verify(r => r.ExisteNombreAsync(It.IsAny<string>(), It.IsAny<int?>()), Times.Never);
+        repo.Verify(r => r.ActualizarAsync(It.IsAny<DimensionTematica>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ModificarAsync_TrimmeaNombreEntrante()
+    {
+        var original = new DimensionTematica { Id = 1, Nombre = "Tránsito", Activo = true };
+        var (svc, repo, _, _, _) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+        repo.Setup(r => r.ExisteNombreAsync("Tránsito y Movilidad", 1)).ReturnsAsync(false);
+
+        await svc.ModificarAsync(new DimensionTematica { Id = 1, Nombre = "  Tránsito y Movilidad  ", Activo = true });
+
+        repo.Verify(r => r.ActualizarAsync(It.Is<DimensionTematica>(d => d.Nombre == "Tránsito y Movilidad")), Times.Once);
+    }
 }

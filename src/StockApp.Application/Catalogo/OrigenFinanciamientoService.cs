@@ -37,6 +37,8 @@ public class OrigenFinanciamientoService : IOrigenFinanciamientoService
         if (string.IsNullOrWhiteSpace(origen.Nombre))
             throw new ArgumentException("El nombre del origen de financiamiento es obligatorio.");
 
+        origen.Nombre = origen.Nombre.Trim();
+
         if (await _repo.ExisteNombreAsync(origen.Nombre, null))
             throw new ReglaDeNegocioException($"Ya existe un origen de financiamiento con el nombre '{origen.Nombre}'.");
 
@@ -58,12 +60,17 @@ public class OrigenFinanciamientoService : IOrigenFinanciamientoService
         var original = await _repo.ObtenerPorIdAsync(origen.Id)
             ?? throw new EntidadNoEncontradaException($"Origen de financiamiento {origen.Id} no encontrado.");
 
-        if (original.Nombre != origen.Nombre
+        if (string.IsNullOrWhiteSpace(origen.Nombre))
+            throw new ArgumentException("El nombre del origen de financiamiento es obligatorio.");
+
+        origen.Nombre = origen.Nombre.Trim();
+
+        if (!string.Equals(original.Nombre, origen.Nombre, StringComparison.OrdinalIgnoreCase)
             && await _repo.ExisteNombreAsync(origen.Nombre, origen.Id))
             throw new ReglaDeNegocioException($"Ya existe un origen de financiamiento con el nombre '{origen.Nombre}'.");
 
         var cambios = new List<string>();
-        if (original.Nombre != origen.Nombre)
+        if (!string.Equals(original.Nombre, origen.Nombre, StringComparison.OrdinalIgnoreCase))
             cambios.Add($"Nombre: {original.Nombre} → {origen.Nombre}");
 
         if (cambios.Count == 0)
