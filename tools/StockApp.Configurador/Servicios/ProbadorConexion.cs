@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 namespace StockApp.Configurador.Servicios;
 
 /// <summary>
-/// Pega a GET / de la API (mismo endpoint anónimo que expone StockApp.Api, Program.cs:617) y
+/// Pega a GET / de la API (mismo endpoint anónimo que expone StockApp.Api, Program.cs:675) y
 /// distingue los tres casos de la spec 2026-08-20. Timeout corto (4s, no los 10s del cliente
 /// principal del desktop): acá "no responde" es el caso más común y el usuario está mirando
 /// la ventana en vivo, esperando el resultado.
