@@ -39,6 +39,30 @@ public class BloqueoLicenciaTests : ApiTestBase
             doc.RootElement.GetProperty("detail").GetString());
     }
 
+    /// <summary>
+    /// Bug real: el Configurador prueba conectividad pegándole a GET / (ver ProbadorConexion,
+    /// Program.cs:675) ANTES de que exista una licencia activada. Si la raíz no está exenta,
+    /// una instalación fresca recibe 423 en vez del banner anónimo del servicio, y el
+    /// Configurador lo interpreta como "algo respondió, pero no es la API" -- falso negativo
+    /// en el instalador. No alcanza con el status code: el Configurador también valida el
+    /// shape del body (status/service), así que el contrato que custodiamos lo incluye.
+    /// </summary>
+    [Fact]
+    public async Task Bloqueada_Raiz_DevuelveBannerAnonimo()
+    {
+        Bloquear();
+        var client = Factory.CreateClient();
+
+        var response = await client.GetAsync("/");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var json = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+        Assert.Equal("ok", doc.RootElement.GetProperty("status").GetString());
+        Assert.Equal("StockApp.Api", doc.RootElement.GetProperty("service").GetString());
+    }
+
     [Fact]
     public async Task Bloqueada_Login_Pasa()
     {

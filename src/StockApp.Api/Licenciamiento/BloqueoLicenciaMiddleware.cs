@@ -3,11 +3,17 @@ using StockApp.Application.Licenciamiento;
 namespace StockApp.Api.Licenciamiento;
 
 /// <summary>
-/// Sin licencia activa, TODO devuelve 423 Locked salvo /licencia/*, /auth/reset-admin/* (los
-/// flujos pre-login de activación y recuperación), /auth/login, /backups (fix del review final
-/// de Entrega 1), /logs (desde Entrega 2 Task 7) y /configuracion/alertas (fix del review final
-/// del canal de alerta). El estado se lee del singleton EstadoLicencia — costo cero por request
-/// cuando la licencia está activa.
+/// Sin licencia activa, TODO devuelve 423 Locked salvo la raíz (/, banner anónimo de
+/// identificación del servicio), /licencia/*, /auth/reset-admin/* (los flujos pre-login de
+/// activación y recuperación), /auth/login, /backups (fix del review final de Entrega 1),
+/// /logs (desde Entrega 2 Task 7) y /configuracion/alertas (fix del review final del canal de
+/// alerta). El estado se lee del singleton EstadoLicencia — costo cero por request cuando la
+/// licencia está activa.
+///
+/// POR QUÉ la raíz: es el banner anónimo que usa el Configurador (ProbadorConexion) para
+/// verificar conectividad ANTES de que exista una licencia activada -- en una instalación
+/// fresca, sin esta excepción GET / devuelve 423 y el Configurador lo confunde con "algo
+/// respondió, pero no es la API".
 ///
 /// POR QUÉ /auth/login: sin esta excepción, con licencia vencida el admin no podía ni
 /// autenticarse (423 en el login) para llegar a /backups -- los dumps quedaban inalcanzables
@@ -66,10 +72,20 @@ public sealed class BloqueoLicenciaMiddleware
     }
 
     private static bool EsRutaPermitida(PathString path)
-        => path.StartsWithSegments("/licencia")
+        => EsRaiz(path)
+        || path.StartsWithSegments("/licencia")
         || path.StartsWithSegments("/auth/reset-admin")
         || path.StartsWithSegments("/auth/login")
         || path.StartsWithSegments("/backups")
         || path.StartsWithSegments("/logs")
         || path.StartsWithSegments("/configuracion/alertas");
+
+    // La raíz es el banner anónimo de identificación del servicio: permite al Configurador
+    // verificar conectividad antes de que exista una licencia. Igualdad exacta a propósito:
+    // path.StartsWithSegments("") matchearía TODO path (cualquier ruta empieza con "/") y
+    // abriría la API entera. (Ojo: StartsWithSegments("/") NO tiene ese problema -- por cómo
+    // compara segmentos, PathString exige que el carácter siguiente al prefijo compartido sea
+    // '/', así que "/productos" no matchea contra "/"; verificado por mutación.)
+    private static bool EsRaiz(PathString path)
+        => path.Value is null or "" or "/";
 }
