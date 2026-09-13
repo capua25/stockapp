@@ -6,7 +6,7 @@
 
 **Architecture:** Cinco scripts bash numerados (`00`–`04`) que envuelven — sin modificar — el `deploy/install.sh` ya verificado en producción. La lógica bash que tiene un oráculo en C# (fingerprint de licencia, validaciones) se extrae a una librería sourceable `deploy/kit/lib/` y se testea desde xUnit lanzando `bash` como proceso, de modo que hay UN solo test runner y los guardianes corren en la suite existente. Lo que no tiene oráculo (systemd, Docker, ufw, red) no se finge testeable: se verifica por mutación en una VM limpia con snapshot.
 
-**Tech Stack:** bash 5 (`set -euo pipefail`), Docker + `docker compose`, systemd, Ubuntu Server LTS (versión a fijar — Decisión 7), .NET 10 / xUnit v2 (2.5.3) para los guardianes, Velopack/`vpk` para el cliente Windows.
+**Tech Stack:** bash 5 (`set -euo pipefail`), Docker + `docker compose`, systemd, Ubuntu Server **24.04 LTS** (Decisión 7, RESUELTA), .NET 10 / xUnit v2 (2.5.3) para los guardianes, Velopack/`vpk` para el cliente Windows.
 
 **Spec:** `docs/superpowers/specs/2026-09-10-kit-instalacion-deploy-design.md` (APROBADO 2026-09-10). Leelo junto con este plan: el plan argumenta desde el diseño y no lo reemplaza.
 
@@ -16,7 +16,7 @@
 
 Aplican a TODAS las tareas. Los valores son literales verificados, no aproximaciones.
 
-- **`deploy/install.sh` NO SE MODIFICA.** Única excepción posible: si la Decisión 4 se resuelve por la opción B. Hasta entonces, cualquier tarea que necesite tocarlo está bloqueada, no es libre de improvisar.
+- **`deploy/install.sh` NO SE MODIFICA.** Decisión 4 se resolvió como **A** (puerto de Postgres fijo): no queda excepción abierta. Ninguna tarea de este plan toca este archivo.
 - **Puertos verificados:** API `5080` (configurable vía `API_PORT` del `.env`, `install.sh:175-180`, inyectado por `sed` en la unit en `install.sh:424-425`). Postgres `5433` (HARDCODEADO en tres lugares: `deploy/docker-compose.postgres.yml:28`, `deploy/wait-for-postgres.sh:19`, y la connection string de `install.sh:377`). SSH del VPS `34377`. Puerto de fábrica del desktop `5043`.
 - **`ASPNETCORE_URLS` está PROHIBIDO en cualquier `.env`.** `install.sh:227-238` rechaza la instalación si lo encuentra, junto con todo prefijo `ASPNETCORE_`, `DOTNET_`, `LD_` y los nombres `HOME` y `PATH`. Para cambiar puerto o interfaz se usa `API_PORT` / `API_BIND`.
 - **Reglas transversales de los scripts del kit:** `set -euo pipefail`; exit 0 en éxito / 1 en fallo; todo lo impreso va también a `/var/log/stockapp-kit-<fecha>.log`; TODOS idempotentes.
@@ -236,7 +236,7 @@ Aplicarlas al ejecutar; y si el usuario aprueba, corregir el design doc en un co
 | `deploy/kit/04-licencia.sh` | `fingerprint` / `activar <archivo>` |
 | `deploy/kit/LEEME.md` | Procedimiento del día, reserva DHCP, rescate offline |
 | `deploy/kit/clientes/LEEME-clientes.md` | Instalación del cliente Windows + Configurador |
-| `deploy/kit/clientes/configurar-cliente.cmd` | Solo si Decisión 2 = C: pre-siembra `conexion.json` |
+| `deploy/kit/clientes/configurar-cliente.cmd` | Pre-siembra `conexion.json` (Decisión 2 = C) |
 | `deploy/armar-kit.sh` | Arma el pendrive en la máquina del proveedor, con internet |
 | `deploy/deploy-vps.sh` | Orquestador local del deploy al VPS |
 | `deploy/publish-licencias-cli.sh` | Publica la CLI de licencias self-contained |
@@ -253,10 +253,10 @@ Aplicarlas al ejecutar; y si el usuario aprueba, corregir el design doc en un co
 | `tools/StockApp.Configurador/Servicios/ProbadorConexion.cs` | ~~Sonda a `/licencia/estado`~~ — **[FUERA DE ALCANCE]**, no se toca | Decisión 3 = B → **RESUELTA en A** (Task 1.3 no se ejecuta) |
 | `tools/StockApp.Configurador/ViewModels/ConfiguradorViewModel.cs:73-80` | ~~Mensaje del 4º caso~~ — **[FUERA DE ALCANCE]**, no se toca | Decisión 3 = B → **RESUELTA en A** (Task 1.3 no se ejecuta) |
 | `tools/StockApp.Licencias.Cli/StockApp.Licencias.Cli.csproj` | `RuntimeIdentifier` + `SelfContained` | Arreglo #3 del diseño |
-| `deploy/docker-compose.postgres.yml:28` | `${POSTGRES_PORT:-5433}` | Decisión 4 = B |
-| `deploy/wait-for-postgres.sh:19` | Puerto del entorno, default 5433 | Decisión 4 = B |
-| `deploy/install.sh:377` | Puerto en la connection string | Decisión 4 = B (**requiere autorización**) |
-| `deploy/.env.example` | Documentar `POSTGRES_PORT` | Decisión 4 = B |
+| `deploy/docker-compose.postgres.yml:28` | ~~`${POSTGRES_PORT:-5433}`~~ — **[FUERA DE ALCANCE]**, no se toca | Decisión 4 = B → **RESUELTA en A** (5433 fijo) |
+| `deploy/wait-for-postgres.sh:19` | ~~Puerto del entorno, default 5433~~ — **[FUERA DE ALCANCE]**, no se toca | Decisión 4 = B → **RESUELTA en A** (5433 fijo) |
+| `deploy/install.sh:377` | ~~Puerto en la connection string~~ — **[FUERA DE ALCANCE]**, no se toca | Decisión 4 = B → **RESUELTA en A** (5433 fijo) |
+| `deploy/.env.example` | ~~Documentar `POSTGRES_PORT`~~ — **[FUERA DE ALCANCE]**, no se toca | Decisión 4 = B → **RESUELTA en A** (5433 fijo) |
 | `deploy/DEPLOY.md` | Enlace a `deploy-vps.sh` y a `PROCEDIMIENTOS.md` | Fases 6 y 7 |
 | `.gitignore` | Ignorar la salida de `armar-kit.sh` | Fase 4 |
 
@@ -277,16 +277,16 @@ Fase 0 (decisiones + pins)
    │                        ▼
    │                 Fase 3 (01/02/03/04)
    │                        │
-   │                 Fase 4 (armar-kit + offline)  ◄── bloqueada por Decisión 7
+   │                 Fase 4 (armar-kit + offline)  ◄── Decisión 7 resuelta (Ubuntu 24.04 LTS), desbloqueada
    │                        │
    │                        ▼
-   │                 Fase 5 (ensayo en VM limpia)  ◄── bloqueada por Decisión 8
+   │                 Fase 5 (ensayo en VM limpia)  ◄── Decisión 8 resuelta (Hyper-V), desbloqueada
    │
    └──────────────► Fase 6 (deploy-vps.sh)   ← INDEPENDIENTE, paralelizable
                     Fase 7 (procedimientos)  ← INDEPENDIENTE, paralelizable
 ```
 
-**Fases 6 y 7 no dependen de nada del kit.** Son el mejor candidato para correr en paralelo (o primero, si se quiere valor entregado antes de resolver las decisiones bloqueantes).
+**Fases 6 y 7 no dependen de nada del kit.** Son el mejor candidato para correr en paralelo con el resto (o primero, si se quiere entregar valor cuanto antes).
 
 ---
 
@@ -799,7 +799,7 @@ git commit -m "feat(licencias): publica la CLI self-contained para emitir licenc
 
 **Pendiente, fuera de alcance de este plan:** el gate de abajo también dice "corregir el arreglo #1 del design doc" — falta dar de baja ese arreglo en `docs/superpowers/specs/2026-09-10-kit-instalacion-deploy-design.md:139`, porque `b9b1d71` ya lo resolvió server-side (ver Decisión 3). Esta anotación no edita el design doc.
 
-**GATE: esta tarea solo se ejecuta si la Decisión 3 se resolvió como B o C.** Si se resolvió A, saltearla y en su lugar corregir el arreglo #1 del design doc.
+**GATE (ya evaluado): la Decisión 3 se resolvió como A → esta tarea NO se ejecuta.** En su lugar corresponde corregir el arreglo #1 del design doc (fuera de alcance de este plan, ver nota arriba).
 
 Lo que sigue asume **B** (sonda a `/licencia/estado` + 4º caso). Si se eligió C, la diferencia es que `GET /` sigue siendo la sonda primaria y `/licencia/estado` se consulta solo tras un Ok.
 
@@ -2207,7 +2207,7 @@ set -euo pipefail
 #
 # Uso:
 #   sudo ./01-bootstrap.sh                # puerto de API por defecto (5080)
-#   sudo ./01-bootstrap.sh --puerto 8080  # solo si la Decisión 1 quedó en configurable
+#   sudo ./01-bootstrap.sh --puerto 8080  # override del puerto (Decisión 1: configurable)
 
 DIR_KIT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/log.sh
@@ -2461,7 +2461,7 @@ git commit -m "feat(kit): agrega bootstrap offline de docker, postgres, secretos
 
 ## Fase 4 — `armar-kit.sh`, el payload offline y la documentación
 
-**BLOQUEADA por la Decisión 7** (versión de Ubuntu). No empezar sin eso resuelto.
+**DESBLOQUEADA.** Decisión 7 resuelta: Ubuntu 24.04 LTS.
 
 La idea rectora de esta fase: **todo fallo que pueda ocurrir el día de la instalación debería ocurrir acá, el día del build.** Si `armar-kit.sh` termina bien, el payload offline ya se probó.
 
@@ -2699,7 +2699,7 @@ La documentación del kit **es parte del kit**, no un extra: el día de la insta
 **Files:**
 - Create: `deploy/kit/LEEME.md`
 - Create: `deploy/kit/clientes/LEEME-clientes.md`
-- Create: `deploy/kit/clientes/configurar-cliente.cmd` (solo si Decisión 2 = C)
+- Create: `deploy/kit/clientes/configurar-cliente.cmd` (Decisión 2 = C)
 
 - [ ] **Paso 1: Escribir `LEEME.md`** con estas secciones, en este orden (el orden importa: es el orden en que se necesitan):
 
@@ -2717,9 +2717,9 @@ La documentación del kit **es parte del kit**, no un extra: el día de la insta
 
 - [ ] **Paso 2: Escribir `clientes/LEEME-clientes.md`**
 
-Para quien instala las PC, probablemente no el mismo día ni la misma persona. Tiene que decir: correr el `Setup.exe`; que el Configurador **viene dentro** del mismo instalador (`GestionMunicipal.Configurador.exe`, sin acceso directo propio — verificado en `pack-win.ps1:36-42`); la URL exacta a cargar (`http://<IP>:<PUERTO>`, el valor que imprimió `03-verificar`); y qué significa cada resultado de "Probar conexión", **incluido** el caso "conecta pero la licencia no está activada" si se implementó la Task 1.3.
+Para quien instala las PC, probablemente no el mismo día ni la misma persona. Tiene que decir: correr el `Setup.exe`; que el Configurador **viene dentro** del mismo instalador (`GestionMunicipal.Configurador.exe`, sin acceso directo propio — verificado en `pack-win.ps1:36-42`); la URL exacta a cargar (`http://<IP>:<PUERTO>`, el valor que imprimió `03-verificar`); y qué significa cada resultado de "Probar conexión" (`Ok`, `RespondeOtraCosa`, `NoResponde`; el caso "conecta pero la licencia no está activada" quedó **fuera de alcance** — Decisión 3 = A, Task 1.3 no se ejecuta).
 
-- [ ] **Paso 3: `configurar-cliente.cmd`** (solo si Decisión 2 = C)
+- [ ] **Paso 3: `configurar-cliente.cmd`** (Decisión 2 = C)
 
 Escribe `%AppData%\GestionMunicipal\conexion.json` con el contenido `{"Api":{"BaseUrl":"http://<IP>:<PUERTO>"}}`. Debe crear el directorio si no existe, y **preguntar antes de sobreescribir** un `conexion.json` existente. La clave es exactamente `Api:BaseUrl` (`ConexionDefaults.ClaveApiBaseUrl`) y el archivo exactamente `conexion.json` en la carpeta `GestionMunicipal` (`RutaConexion.cs:18-19`). **Requiere prueba en Windows real** — no se puede verificar desde WSL2.
 
@@ -2734,7 +2734,7 @@ git commit -m "docs(kit): agrega procedimiento del dia, rescate offline y guia d
 
 ## Fase 5 — El ensayo en máquina limpia
 
-**BLOQUEADA por la Decisión 8.** Depende de las Fases 2, 3 y 4 completas.
+**DESBLOQUEADA.** Decisión 8 resuelta: Hyper-V. Depende de las Fases 2, 3 y 4 completas.
 
 Esta fase no produce código. Produce **la única evidencia que vale** de que el kit funciona. Sin ella, todo lo anterior es una hipótesis bien escrita.
 
@@ -2774,7 +2774,7 @@ Cada una parte de un snapshot y verifica que el script **detecta** el problema. 
 - [ ] **Mutación 5 — Correr todo dos veces.** Desde `instalado-ok`: `00`, `01`, `02`, `03` otra vez, en orden.
   **Esperado:** todo idempotente. En particular: (a) `01` **no pisa** el `.env` y lo dice; (b) `install.sh` respalda en `/var/backups/stockapp-api/<nuevo-timestamp>/`; (c) `00-preflight` **no** marca el 5433 como conflicto, porque lo ocupa `stockapp-pg` (Decisión 5); (d) los 8 chequeos siguen verdes; (e) **los datos que creaste en el Paso 8 de la Task 5.2 siguen ahí.** Si se perdieron, hay un bug grave.
 - [ ] **Mutación 6 — Puerto de la API ocupado.** Desde `base-limpia`: `nc -l -p 5080 &`, después `00-preflight.sh`.
-  **Esperado: ROJO antes de tocar nada**, nombrando el proceso que lo ocupa. Si la Decisión 1 quedó en B/C, además tiene que nombrar la salida (`--puerto`), y hay que **verificar que esa salida funciona**: correr `01-bootstrap.sh --puerto 8080` y llegar hasta `03-verificar` en verde con ese puerto.
+  **Esperado: ROJO antes de tocar nada**, nombrando el proceso que lo ocupa. Además tiene que nombrar la salida (`--puerto`, Decisión 1: configurable), y hay que **verificar que esa salida funciona**: correr `01-bootstrap.sh --puerto 8080` y llegar hasta `03-verificar` en verde con ese puerto.
 
 ### Task 5.4: Dos mutaciones que el diseño no pide y conviene hacer
 
@@ -2993,7 +2993,7 @@ Este es el riesgo que ordena todas las decisiones del plan, así que vale desarm
 ### Los riesgos que sobreviven a cualquier script
 
 1. **Pérdida de `/etc/stockapp/.env`.** Si el operador se va sin copiarlo, y algún día hace falta entrar a la base de datos, **no hay forma de recuperar la contraseña de Postgres**. No hay backdoor, y es correcto que no lo haya. Mitigación: el recordatorio en rojo al final de `03-verificar.sh`. **Sugerencia a considerar:** que ese recordatorio sea una **confirmación que bloquea** (`read -p "Escribí COPIADO para terminar"`) en vez de un cartel. Un cartel al final de 60 líneas de salida se lee el 50% de las veces.
-2. **Cambio de IP del servidor.** El diseño ya lo llama el riesgo principal del despliegue (línea 113). Todas las PC pierden la conexión y hay que pasar el Configurador por cada una, a mano, **sin tu ayuda**. Mitigación: reserva DHCP por MAC (lo hace sistemas, es reversible), el aviso grande del preflight, y —si se resuelve la Decisión 2 como C— el `.cmd` que al menos hace que reconfigurar sea un doble clic en vez de tipear una URL.
+2. **Cambio de IP del servidor.** El diseño ya lo llama el riesgo principal del despliegue (línea 113). Todas las PC pierden la conexión y hay que pasar el Configurador por cada una, a mano, **sin tu ayuda**. Mitigación: reserva DHCP por MAC (lo hace sistemas, es reversible), el aviso grande del preflight, y el `.cmd` (Decisión 2 = C) que al menos hace que reconfigurar sea un doble clic en vez de tipear una URL.
 3. **Reinstalación del sistema operativo.** Invalida la licencia (`machine-id` nuevo) y el sistema deja de funcionar, sin que nadie en el municipio pueda arreglarlo. Mitigación: documentarlo en los términos más fuertes en el `LEEME` y en `PROCEDIMIENTOS.md`.
 4. **Pérdida de la clave privada de licenciamiento** (`~/stockapp-claves/clave-privada.pem`). Si se pierde, **ningún servidor se puede relicenciar nunca más**. Es un punto único de fallo de todo el modelo de licenciamiento, fuera de este repo. Mitigación: no es técnica — es tener una copia, y ya estaba anotado como pendiente.
 5. **Backups en el mismo disco que la base** (diseño línea 119). Muere el disco y se van los dos. Es el riesgo de mayor impacto de todo el despliegue y **la Fase 7 es su única mitigación.** Por eso la Fase 7 no es opcional ni "documentación que se hace al final": es la entrega con mejor relación costo/riesgo de todo el plan.
@@ -3012,7 +3012,7 @@ Este es el riesgo que ordena todas las decisiones del plan, así que vale desarm
 Explícito para que nadie lo interprete como un olvido:
 
 - **El camino Windows Server.** La decisión 1 del diseño lo deja como alternativa solo si el municipio lo impone. Implicaría rehacer `install.sh` con NSSM o un servicio de Windows, Docker Desktop, y el fingerprint por registro — que existe (`FingerprintMaquinaWindows.cs`) pero **nunca se probó en un servidor real**.
-- **Modificar `deploy/install.sh`**, salvo que la Decisión 4 se resuelva por la opción B y el usuario lo autorice explícitamente.
+- **Modificar `deploy/install.sh`.** Decisión 4 se resolvió como A (puerto de Postgres fijo): sin excepción posible.
 - **Configurar la red del servidor.** Ni netplan, ni IP estática, ni DHCP. Es deliberado (diseño línea 113): tocar la red de un tercero es cómo te quedás sin conectividad, y la política de IPs es del área de sistemas del municipio. El kit **detecta y avisa**.
 - **HTTPS/TLS en la LAN.** El tráfico va en HTTP plano. Riesgo conocido, aceptado y documentado, no resuelto acá.
 - **Firmar digitalmente el instalador de Windows.** Es la deuda D7 de Inc7 Fase A (`pack-win.ps1:149-151`), sigue abierta y no se cierra en este alcance.
