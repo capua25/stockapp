@@ -309,7 +309,7 @@ git checkout -b feat/kit-instalacion-lan
 
 ## Fase 1 — Arreglos con oráculo en C# (el único TDD de verdad del plan)
 
-Las tres cosas de esta fase comparten una propiedad que nada del resto del kit tiene: **se pueden probar hoy, en la suite que ya existe, con un rojo y un verde reales.** El diseño las marca como parte de E1 porque bloquean la instalación real.
+De las tres tasks que tenía originalmente esta fase, quedan **dos ejecutables (1.1 y 1.2)**: la Task 1.3 quedó **fuera de alcance** (Decisión 3 = A, ver más abajo). Las dos que se ejecutan comparten una propiedad que nada del resto del kit tiene: **se pueden probar hoy, en la suite que ya existe, con un rojo y un verde reales.** El diseño las marca como parte de E1 porque bloquean la instalación real.
 
 ### Task 1.1: Paridad del fingerprint bash ↔ C#
 
@@ -792,7 +792,11 @@ git add deploy/publish-licencias-cli.sh tools/StockApp.Licencias.Cli/StockApp.Li
 git commit -m "feat(licencias): publica la CLI self-contained para emitir licencias sin el SDK"
 ```
 
-### Task 1.3: El Configurador distingue "conecta pero sin licencia"
+### Task 1.3 — [FUERA DE ALCANCE] El Configurador distingue "conecta pero sin licencia"
+
+**NO EJECUTAR.** El propio gate de esta task se disparó: la Decisión 3 (ver sección de decisiones al inicio del documento) quedó resuelta en **A** — dar de baja el arreglo #1, no en B ni en C. El cuerpo que sigue (los 10 pasos, el 4º caso del enum, los tests) se conserva tal cual, como registro del razonamiento evaluado, pero **no se implementa**.
+
+**Pendiente, fuera de alcance de este plan:** el gate de abajo también dice "corregir el arreglo #1 del design doc" — falta dar de baja ese arreglo en `docs/superpowers/specs/2026-09-10-kit-instalacion-deploy-design.md:139`, porque `b9b1d71` ya lo resolvió server-side (ver Decisión 3). Esta anotación no edita el design doc.
 
 **GATE: esta tarea solo se ejecuta si la Decisión 3 se resolvió como B o C.** Si se resolvió A, saltearla y en su lugar corregir el arreglo #1 del design doc.
 
@@ -1286,11 +1290,12 @@ Es read-only por contrato: **no toca nada**. Su valor es que el operador sepa, a
 | RAM > 2GB | **ROJO** | |
 | Disco > 10GB en `/opt`, `/var/lib`, `/var/backups` | **ROJO** | `install.sh` guarda 3 releases de ~100MB más la base y los backups |
 | `/etc/machine-id` legible | **ROJO** | Sin fingerprint no hay licencia, y no hay forma de seguir |
-| Puerto de la API libre | **ROJO** (o AVISO si Decisión 1 = B/C) | Ver Decisión 1 |
+| Puerto de la API libre | **AVISO** si está ocupado | Ver Decisión 1: el puerto es configurable vía `API_PORT`, así que un puerto ocupado no bloquea — se resuelve eligiendo otro antes de correr `01-bootstrap.sh` |
 | Puerto de Postgres libre | **ROJO**, salvo que lo ocupe `stockapp-pg` → **OK** | Ver Decisión 4, y la nota de idempotencia de la Decisión 5 |
 | Docker instalado / corriendo | **AVISO** si falta | En un servidor virgen es lo esperado: lo instala `01-bootstrap.sh` |
 | `postgresql-client-16` | **AVISO** si falta | Ídem |
 | `curl` | **AVISO** si falta | Ídem |
+| Paridad `pg_dump` vs. imagen de `docker-compose.postgres.yml` | **INFO/AVISO** (no bloqueante) | Ver Decisión 13: `pg_dump` corre desde el host (`src/StockApp.Infrastructure/Backups/EjecutorPgDumpProceso.cs:77-88`), no por `docker exec` — un mismatch de major version no se descubre hasta que el backup pre-deploy revienta con "server version mismatch" |
 | Instalación previa de `stockapp-api` | **AVISO** | No es un error: `install.sh` es idempotente y respalda. Pero el operador tiene que saberlo |
 | Red: IP y DHCP vs. estática | **AVISO GRANDE** si DHCP | Diseño línea 113: es el riesgo principal del despliegue |
 | Internet saliente | **INFO** | Informativo, nunca bloqueante (diseño línea 75) |
@@ -1327,9 +1332,19 @@ iniciar_log
 BLOQUEANTES=0
 marcar_bloqueante() { BLOQUEANTES=$((BLOQUEANTES + 1)); rojo "$*"; }
 
-# El puerto de la API sale del kit, no de una constante suelta: si la Decisión 1 quedó en
-# configurable, quien corre 01-bootstrap con --puerto tiene que poder verificar ESE puerto acá.
-API_PORT="${API_PORT:-5080}"
+# El puerto de la API es configurable (Decisión 1): sale de API_PORT en /etc/stockapp/.env, el
+# .env que genera 01-bootstrap.sh (Task 3.4) -- NO del api.env que arma install.sh, que nunca
+# lo persiste (API_PORT es una de las VARS_CONOCIDAS que install.sh consume para inyectar en la
+# unit de systemd por sed y excluye del passthrough, ver install.sh:104-115,412). En una
+# instalación virgen ese archivo todavía no existe: no es un error, es el camino feliz, y cae
+# al default 5080 sin ruido. Si ya existe (re-corrida del preflight tras 01-bootstrap), se
+# respeta el valor real.
+ENV_KIT="/etc/stockapp/.env"
+if [[ -f "$ENV_KIT" ]] && grep -q '^API_PORT=' "$ENV_KIT"; then
+    API_PORT="$(grep '^API_PORT=' "$ENV_KIT" | tail -1 | cut -d= -f2-)"
+else
+    API_PORT="${API_PORT:-5080}"
+fi
 PG_PORT="${PG_PORT:-5433}"
 
 echo
@@ -1395,10 +1410,10 @@ echo "-- Puertos --"
 if puerto_libre "$API_PORT"; then
     ok "Puerto ${API_PORT} (API) libre."
 else
-    marcar_bloqueante "Puerto ${API_PORT} (API) OCUPADO por:"
+    aviso "Puerto ${API_PORT} (API) OCUPADO por:"
     quien_escucha "$API_PORT"
-    info "Si la Decisión 1 quedó en 'configurable': podés instalar en otro puerto con"
-    info "  sudo ./01-bootstrap.sh --puerto <otro>"
+    info "El puerto es configurable (Decisión 1): definí otro API_PORT en ${ENV_KIT}"
+    info "antes de correr 01-bootstrap.sh."
 fi
 
 # Idempotencia: en una segunda corrida el 5433 lo ocupa NUESTRO contenedor. Eso es OK, no un
@@ -1430,6 +1445,19 @@ dpkg -s postgresql-client-16 >/dev/null 2>&1 \
 command -v curl >/dev/null 2>&1 \
     && ok "curl instalado." \
     || aviso "curl no está. Lo instala 01-bootstrap.sh desde offline/pgclient/."
+
+# Decisión 13 (deuda anotada, no bloqueante): pg_dump corre DESDE EL HOST, nunca por 'docker
+# exec' (src/StockApp.Infrastructure/Backups/EjecutorPgDumpProceso.cs:77-88, Process.Start()
+# por TCP a 127.0.0.1:5433), así que su versión y la de la imagen del compose viven en archivos
+# separados sin validación cruzada. Si difieren, la instalación completa sin avisar y el backup
+# pre-deploy revienta después con "server version mismatch".
+if command -v pg_dump >/dev/null 2>&1; then
+    PG_DUMP_MAJOR="$(pg_dump --version | grep -oE '[0-9]+' | head -1)"
+    IMAGEN_MAJOR="$(grep -oE 'postgres:[0-9]+' "${DIR_KIT}/servidor/docker-compose.postgres.yml" 2>/dev/null | grep -oE '[0-9]+' | head -1)"
+    if [[ -n "$PG_DUMP_MAJOR" && -n "$IMAGEN_MAJOR" && "$PG_DUMP_MAJOR" != "$IMAGEN_MAJOR" ]]; then
+        aviso "pg_dump es v${PG_DUMP_MAJOR} pero la imagen del compose es postgres:${IMAGEN_MAJOR}-alpine: pueden no coincidir."
+    fi
+fi
 
 # ── Instalación previa ─────────────────────────────────────────────────────
 echo
@@ -3038,6 +3066,6 @@ Explícito para que nadie lo interprete como un olvido:
 2. **Es el defecto más asimétrico del plan:** 30 segundos de test acá contra un viaje perdido al municipio allá, con un mensaje de error que apunta al lugar equivocado.
 3. **Desbloquea las Fases 2 y 3:** produce `lib/fingerprint.sh`, que consumen `00-preflight.sh` y `04-licencia.sh`, y produce `EjecutorBash.cs`, que es el mecanismo de todo el Nivel 1 de verificación.
 
-Después, dos caminos en paralelo: **Tasks 1.2 y 1.3** (los otros dos arreglos de E1, también sin decisiones bloqueantes), y **Fase 6** (`deploy-vps.sh`), que es independiente del kit, tiene el riesgo más bajo porque automatiza un flujo ejecutado con éxito hoy, y da valor en el próximo deploy al VPS.
+Después, dos caminos en paralelo: **Task 1.2** (el otro arreglo ejecutable de E1, también sin decisiones bloqueantes — la Task 1.3 quedó fuera de alcance, Decisión 3 = A), y **Fase 6** (`deploy-vps.sh`), que es independiente del kit, tiene el riesgo más bajo porque automatiza un flujo ejecutado con éxito hoy, y da valor en el próximo deploy al VPS.
 
 **Lo que hay que destrabar mientras tanto, porque bloquea fases enteras:** la Decisión 7 (versión de Ubuntu → Fase 4), la Decisión 8 (host de VM → Fase 5) y el `Setup.exe` de Windows (dependencia externa → Fase 4).
