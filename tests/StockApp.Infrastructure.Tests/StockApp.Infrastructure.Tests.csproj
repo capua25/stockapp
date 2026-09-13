@@ -46,6 +46,9 @@
     <Compile Include="..\_Compartido\EsperaMonotonica.cs">
       <Link>Compartido\EsperaMonotonica.cs</Link>
     </Compile>
+    <Compile Include="..\_Compartido\EjecutorBash.cs">
+      <Link>Compartido\EjecutorBash.cs</Link>
+    </Compile>
   </ItemGroup>
 
 </Project>
