@@ -215,6 +215,7 @@ Aplicarlas al ejecutar; y si el usuario aprueba, corregir el design doc en un co
 2. **El arreglo #1 ya se resolvió por otra vía.** Ver Decisión 3 (`b9b1d71`).
 3. **El Configurador ya viaja dentro del Setup.exe.** `build/pack-win.ps1:36-42,120-132` publica `StockApp.Configurador` en el **mismo** `PublishDir` que la app y `vpk` empaqueta el directorio entero: `GestionMunicipal.Configurador.exe` queda instalado sin acceso directo propio. El `clientes/` del kit **no** necesita un ejecutable aparte. Pero ojo: `pack-win.ps1:161` dice que el artefacto se llama **`Setup.exe`**, no `GestionMunicipal-win-Setup.exe` como asume el diseño (línea 46) — `armar-kit.sh` debe **buscar** el artefacto en `releases/win/`, no adivinar el nombre.
 4. **El chequeo 2 de `03-verificar.sh` es casi tautológico en una instalación nueva.** `systemctl cat stockapp-api | grep ASPNETCORE_URLS` distingue "antes/después" en el contexto de una **actualización del VPS**; en una instalación desde cero `install.sh:425` siempre escribe esa línea. Para que el chequeo sirva en el kit tiene que asertar los **valores esperados** (`http://<API_BIND>:<API_PORT>`, leídos del `.env`), no la mera presencia de la línea.
+5. **El puerto de la API queda hardcodeado en el diseño.** Diseño línea 85 dice que `01-bootstrap.sh` genera `/etc/stockapp/.env` con `API_PORT=5080` como constante fija. Eso quedó obsoleto con la Decisión 1 (RESUELTA: configurable): `01-bootstrap.sh` (Task 3.4) debe permitir **elegir** el puerto (5080 como default sugerido al operador) y escribir el valor elegido en `/etc/stockapp/.env` — es lo que cierra el circuito con lo que lee `00-preflight.sh` (Task 2.2). Esta línea del design doc queda **stale** y se corrige por separado, no en este plan.
 
 ---
 
@@ -248,9 +249,9 @@ Aplicarlas al ejecutar; y si el usuario aprueba, corregir el design doc en un co
 
 | Ruta | Cambio | Gatillado por |
 |---|---|---|
-| `tools/StockApp.Configurador/Servicios/ResultadoPruebaConexion.cs` | 4º caso `OkLicenciaSinActivar` | Decisión 3 = B |
-| `tools/StockApp.Configurador/Servicios/ProbadorConexion.cs` | Sonda a `/licencia/estado` | Decisión 3 = B |
-| `tools/StockApp.Configurador/ViewModels/ConfiguradorViewModel.cs:73-80` | Mensaje del 4º caso | Decisión 3 = B |
+| `tools/StockApp.Configurador/Servicios/ResultadoPruebaConexion.cs` | ~~4º caso `OkLicenciaSinActivar`~~ — **[FUERA DE ALCANCE]**, no se toca | Decisión 3 = B → **RESUELTA en A** (Task 1.3 no se ejecuta) |
+| `tools/StockApp.Configurador/Servicios/ProbadorConexion.cs` | ~~Sonda a `/licencia/estado`~~ — **[FUERA DE ALCANCE]**, no se toca | Decisión 3 = B → **RESUELTA en A** (Task 1.3 no se ejecuta) |
+| `tools/StockApp.Configurador/ViewModels/ConfiguradorViewModel.cs:73-80` | ~~Mensaje del 4º caso~~ — **[FUERA DE ALCANCE]**, no se toca | Decisión 3 = B → **RESUELTA en A** (Task 1.3 no se ejecuta) |
 | `tools/StockApp.Licencias.Cli/StockApp.Licencias.Cli.csproj` | `RuntimeIdentifier` + `SelfContained` | Arreglo #3 del diseño |
 | `deploy/docker-compose.postgres.yml:28` | `${POSTGRES_PORT:-5433}` | Decisión 4 = B |
 | `deploy/wait-for-postgres.sh:19` | Puerto del entorno, default 5433 | Decisión 4 = B |
@@ -2190,6 +2191,8 @@ El más grande y el que menos se puede probar antes de la VM. Es el único que i
 - Produce: `/etc/stockapp/.env` (600), el contenedor `stockapp-pg` corriendo, `ufw` configurado.
 
 **La guardia más importante de todo el kit** (diseño línea 88): **si ya existe `/etc/stockapp/.env`, NO se pisa.** Regenerarlo con el volumen de Postgres ya creado deja la API sin poder conectar — y Npgsql no arrastra la connection string a sus excepciones, así que el error **no dice** que la contraseña cambió. Es el fallo más difícil de diagnosticar del kit entero y hay que impedirlo, no documentarlo.
+
+**Corrección respecto del diseño (línea 85):** el diseño dice que este script escribe `API_PORT=5080` como constante fija. Eso quedó obsoleto por la Decisión 1 (RESUELTA: configurable) — acá el puerto **no se hardcodea**: `01-bootstrap.sh` debe permitir elegirlo (5080 como default sugerido al operador) y escribir el valor elegido en `/etc/stockapp/.env`. Es lo que cierra el circuito con lo que lee `00-preflight.sh` (Task 2.2). El script de abajo ya lo implementa así (flag `--puerto`, default 5080); la línea 85 del design doc queda **stale** y se corrige por separado, no en este plan (ver "Correcciones factuales al diseño", ítem 5).
 
 - [ ] **Paso 1: Escribir el script**
 
