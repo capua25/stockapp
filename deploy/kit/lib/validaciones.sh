@@ -56,3 +56,23 @@ quien_escucha() {
     local p="$1"
     ss -lntpH "sport = :${p}" 2>/dev/null || true
 }
+
+# resolver_api_port <archivo_env> -> imprime por stdout el puerto de la API a usar.
+#
+# Implementa la Decisión 1 (RESUELTA: el puerto de la API es configurable). Si <archivo_env>
+# existe y define API_PORT=, se usa ese valor (la última ocurrencia si hay más de una, vía
+# 'tail -1'). Si el archivo no existe o no define la variable, cae a la variable de entorno
+# API_PORT si está seteada, o a 5080 por defecto.
+#
+# Que <archivo_env> no exista es el CAMINO FELIZ de una instalación virgen, no un error: ese
+# archivo (/etc/stockapp/.env en 00-preflight.sh) lo crea 01-bootstrap.sh (Task 3.4), que corre
+# DESPUÉS de este preflight. Tratar su ausencia como rojo sería un falso positivo en toda
+# instalación nueva.
+resolver_api_port() {
+    local archivo_env="$1"
+    if [[ -f "$archivo_env" ]] && grep -q '^API_PORT=' "$archivo_env"; then
+        grep '^API_PORT=' "$archivo_env" | tail -1 | cut -d= -f2-
+    else
+        echo "${API_PORT:-5080}"
+    fi
+}
