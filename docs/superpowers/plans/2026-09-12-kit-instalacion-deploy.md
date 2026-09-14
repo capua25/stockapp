@@ -1016,7 +1016,7 @@ La idea de esta fase es mover la mayor cantidad posible de lógica del preflight
 
 **Interfaces:**
 - Consume: `EjecutorBash.Ejecutar` (Task 1.1).
-- Produce, en `validaciones.sh`: `es_puerto_valido <n>`, `es_ipv4_valida <ip>`, `puerto_libre <n>`, `password_admin_valida <pass>`, `subred_de <ip> <mascara>`. Las consumen `00-preflight.sh` (Task 2.2) y `01-bootstrap.sh` (Fase 3).
+- Produce, en `validaciones.sh`: `es_puerto_valido <n>`, `es_ipv4_valida <ip>`, `puerto_libre <n>`, `password_admin_valida <pass>`. Las consumen `00-preflight.sh` (Task 2.2) y `01-bootstrap.sh` (Fase 3).
 - Produce, en `log.sh`: `iniciar_log`, `info <msg>`, `ok <msg>`, `aviso <msg>`, `error_fatal <msg>` (este último hace `exit 1`). Las consumen los cinco scripts numerados.
 
 **Decisión de implementación:** `es_ipv4_valida` se copia **literalmente** de `install.sh:187-197`, incluido el `10#$octeto` que fuerza base 10 (sin eso, un octeto como `008` se interpreta como octal y da un error de runtime feo en vez de un rechazo limpio — el comentario de `install.sh:191-193` ya lo explica). Duplicar 10 líneas es preferible a que el kit haga `source` de `install.sh`, que tiene efectos al cargarse.
