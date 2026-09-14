@@ -41,6 +41,10 @@ marcar_bloqueante() { BLOQUEANTES=$((BLOQUEANTES + 1)); rojo "$*"; }
 ENV_KIT="${ENV_KIT:-/etc/stockapp/.env}"
 API_PORT="$(resolver_api_port "$ENV_KIT")"
 PG_PORT="${PG_PORT:-5433}"
+# Mismo patrón que ENV_KIT/PG_PORT: overridable solo para poder testear la paridad de versión
+# de pg_dump (Decisión 13) con un compose de prueba, sin tocar el sistema real. En producción
+# cae siempre a la ruta real que arma armar-kit.sh (Fase 4) dentro del kit empaquetado.
+COMPOSE_POSTGRES="${COMPOSE_POSTGRES:-${DIR_KIT}/servidor/docker-compose.postgres.yml}"
 
 echo
 echo "======================================================================"
@@ -152,7 +156,7 @@ if command -v pg_dump >/dev/null 2>&1; then
     # armar-kit.sh en la Fase 4) deja el pipeline en no-cero y aborta TODO el preflight bajo
     # 'set -e' -- justo lo contrario de "INFO/AVISO no bloqueante" que pide la Decisión 13.
     PG_DUMP_MAJOR="$(pg_dump --version | grep -oE '[0-9]+' | head -1 || true)"
-    IMAGEN_MAJOR="$(grep -oE 'postgres:[0-9]+' "${DIR_KIT}/servidor/docker-compose.postgres.yml" 2>/dev/null | grep -oE '[0-9]+' | head -1 || true)"
+    IMAGEN_MAJOR="$(grep -oE 'postgres:[0-9]+' "${COMPOSE_POSTGRES}" 2>/dev/null | grep -oE '[0-9]+' | head -1 || true)"
     if [[ -n "$PG_DUMP_MAJOR" && -n "$IMAGEN_MAJOR" && "$PG_DUMP_MAJOR" != "$IMAGEN_MAJOR" ]]; then
         aviso "pg_dump es v${PG_DUMP_MAJOR} pero la imagen del compose es postgres:${IMAGEN_MAJOR}-alpine: pueden no coincidir."
     fi
