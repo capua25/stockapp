@@ -8,6 +8,15 @@
     <RootNamespace>StockApp.Licencias.Cli</RootNamespace>
     <!-- Herramienta interna del desarrollador: NUNCA se empaqueta ni distribuye. -->
     <IsPackable>false</IsPackable>
+
+    <!-- Publicación self-contained (deploy/publish-licencias-cli.sh): emitir una licencia el
+         día de una instalación no debería exigir el SDK de .NET en la laptop del proveedor.
+         IsPackable sigue en false: esto NO se distribuye al cliente ni viaja al pendrive ni
+         al servidor, es un binario para la máquina de quien tiene la clave privada. -->
+    <RuntimeIdentifiers>linux-x64;win-x64</RuntimeIdentifiers>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
   <ItemGroup>
