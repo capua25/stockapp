@@ -96,14 +96,21 @@ cmd_activar() {
 
     info "Activando la licencia contra ${BASE_URL}..."
 
-    local cuerpo codigo_http
+    local cuerpo codigo_http tmp_resp
+    # Nunca una ruta fija bajo /tmp: este script corre como root y /tmp es world-writable -- una
+    # ruta predecible se puede pre-crear como symlink a /etc/shadow o /etc/stockapp/.env antes de
+    # que el script arranque, y 'curl -o' sigue symlinks. mktemp crea el archivo con modo 600,
+    # nombre impredecible, y no sigue un symlink preexistente en esa ruta. El trap reemplaza el
+    # 'rm -f' manual y además limpia si el script muere antes de llegar a esta línea.
+    tmp_resp="$(mktemp -t licencia-respuesta.XXXXXX)"
+    trap 'rm -f "$tmp_resp"' EXIT
+
     # --write-out separa cuerpo de status: necesitamos el status para distinguir 400 de 429.
-    codigo_http="$(curl -sS --max-time 20 -o /tmp/licencia-respuesta.json -w '%{http_code}' \
+    codigo_http="$(curl -sS --max-time 20 -o "$tmp_resp" -w '%{http_code}' \
         -X POST "${BASE_URL}/licencia/activar" \
         -H 'Content-Type: application/json' \
         --data-binary "$(printf '{"licencia":"%s"}' "$licencia")" || true)"
-    cuerpo="$(cat /tmp/licencia-respuesta.json 2>/dev/null || true)"
-    rm -f /tmp/licencia-respuesta.json
+    cuerpo="$(cat "$tmp_resp" 2>/dev/null || true)"
 
     if [[ "$codigo_http" == "200" ]]; then
         # Confirmación independiente: no confiamos en la respuesta del POST, releemos el estado.

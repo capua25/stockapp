@@ -142,4 +142,110 @@ public class LicenciaTests
         Assert.NotEqual(0, exitCode);
         Assert.Contains("Uso:", salida);
     }
+
+    // ---------- Guardián de seguridad: symlink attack sobre la respuesta de "activar" ----------
+
+    /// <summary>
+    /// deploy/kit/04-licencia.sh corre como root en el servidor del municipio. Si "activar"
+    /// escribe la respuesta del POST en una ruta FIJA y predecible bajo /tmp (world-writable),
+    /// cualquier usuario sin privilegios puede crear esa ruta de antemano como symlink a
+    /// /etc/shadow, /etc/passwd o /etc/stockapp/.env. 'curl -o' sigue symlinks, y como el script
+    /// corre con privilegios de root, sobrescribiría el destino con la respuesta del servidor.
+    /// El sticky bit de /tmp impide BORRAR archivos ajenos; no impide CREARLOS antes que el
+    /// script arranque.
+    ///
+    /// El guardián real: pre-crear /tmp/licencia-respuesta.json como symlink a un señuelo DENTRO
+    /// del contenedor descartable, correr "activar", y afirmar que el señuelo NO cambió. Se
+    /// stubea 'curl' (no toca la red, así que no hace falta la API real arriba) escribiendo el
+    /// cuerpo de la respuesta con '>' -- la misma redirección de shell sigue symlinks exactamente
+    /// igual que 'curl -o', así que alcanza para reproducir la semántica que hace explotable una
+    /// ruta fija, sin necesitar curl real ni red.
+    ///
+    /// El script y el stub de curl se escriben a archivos de verdad (no a un heredoc anidado
+    /// dentro del 'bash -c' del contenedor) para no toparse con quoting de tres niveles: los
+    /// scripts de más abajo usan comillas simples sin restricción.
+    /// </summary>
+    [Fact]
+    public void Activar_NoSigueUnSymlinkPreexistenteEnRutaFijaDeTmp_ElSenueloQuedaIntacto()
+    {
+        var dirKit = RutaKit();
+        var ubuntu = VersionUbuntuDelKit();
+
+        var dirTestbin = Path.Combine(Path.GetTempPath(), "licencia-testbin-" + Guid.NewGuid());
+        Directory.CreateDirectory(dirTestbin);
+        try
+        {
+            var rutaCurlFalso = Path.Combine(dirTestbin, "curl");
+            File.WriteAllText(rutaCurlFalso, CurlFalsoScript);
+            File.SetUnixFileMode(rutaCurlFalso,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+                UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+
+            var rutaEntrypoint = Path.Combine(dirTestbin, "entrypoint.sh");
+            File.WriteAllText(rutaEntrypoint, EntrypointScript);
+
+            var comando =
+                $"docker run --rm -v \"{dirKit}:/kit:ro\" -v \"{dirTestbin}:/testbin:ro\" " +
+                $"\"ubuntu:{ubuntu}\" bash /testbin/entrypoint.sh";
+
+            var (exitCodeDocker, stdout, stderr) = EjecutorBash.Ejecutar(comando);
+            var salida = stdout + stderr;
+            Assert.True(exitCodeDocker == 0, $"'docker run' falló. salida={salida}");
+
+            Assert.Contains("SENUELO_INTACTO=si", salida);
+        }
+        finally
+        {
+            Directory.Delete(dirTestbin, recursive: true);
+        }
+    }
+
+    private const string CurlFalsoScript = """
+        #!/usr/bin/env bash
+        # Fake curl para tests: no toca la red. Simula el GET a /licencia/estado (sin -X) y el
+        # POST a /licencia/activar (-X POST ... -o <archivo>), escribiendo el cuerpo con '>' --
+        # la misma redirección de shell sigue symlinks igual que 'curl -o' real.
+        es_post=0
+        outfile=""
+        args=("$@")
+        i=0
+        while [[ $i -lt ${#args[@]} ]]; do
+            case "${args[$i]}" in
+                -X) i=$((i+1)); [[ "${args[$i]}" == "POST" ]] && es_post=1 ;;
+                -o) i=$((i+1)); outfile="${args[$i]}" ;;
+            esac
+            i=$((i+1))
+        done
+
+        if [[ "$es_post" -eq 1 ]]; then
+            printf '%s' 'CUERPO_DE_PRUEBA_SIN_MATCH' > "$outfile"
+            printf '%s' '500'
+        else
+            printf '%s' '{"activada":false,"codigoMaquina":"TEST-0000"}'
+        fi
+        exit 0
+        """;
+
+    private const string EntrypointScript = """
+        #!/usr/bin/env bash
+        set -u
+        export PATH="/testbin:$PATH"
+
+        echo 'CONTENIDO_ORIGINAL' > /root/senuelo.txt
+        rm -f /tmp/licencia-respuesta.json
+        ln -s /root/senuelo.txt /tmp/licencia-respuesta.json
+
+        echo 'LICENCIA-DE-PRUEBA' > /tmp/lic.txt
+
+        /kit/04-licencia.sh activar /tmp/lic.txt
+        echo "EXIT_ACTIVAR=$?"
+
+        SENUELO="$(cat /root/senuelo.txt)"
+        if [[ "$SENUELO" == "CONTENIDO_ORIGINAL" ]]; then
+            echo "SENUELO_INTACTO=si"
+        else
+            echo "SENUELO_INTACTO=no (quedo: ${SENUELO})"
+        fi
+        """;
 }
