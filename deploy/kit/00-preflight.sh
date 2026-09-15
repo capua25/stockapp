@@ -122,9 +122,18 @@ fi
 
 # Idempotencia: en una segunda corrida el 5433 lo ocupa NUESTRO contenedor. Eso es OK, no un
 # conflicto -- distinguirlo es lo que permite correr el preflight de nuevo sin falsos rojos.
+#
+# 'docker port stockapp-pg' (no 'docker ps ... | grep stockapp-pg') porque el nombre del
+# contenedor no alcanza: si stockapp-pg existe pero está mapeado a OTRO puerto y algo distinto
+# ocupa PG_PORT, el chequeo tiene que seguir bloqueando -- que el contenedor "exista en algún
+# lado" no prueba que sea el que está ocupando ESTE puerto. Se compara el mapeo real contra
+# PG_PORT con un ancla de fin de línea ("$") para no confundir, p.ej., 5433 con un prefijo de
+# otro puerto. Sin '|| true' en el pipe: esta condición vive en un 'elif', y 'set -e' no aplica
+# a la condición de un if/elif/while (a diferencia de un 'VAR=$(...)' -- ver los otros '|| true'
+# de este archivo, que sí lo necesitan por estar en asignaciones).
 if puerto_libre "$PG_PORT"; then
     ok "Puerto ${PG_PORT} (Postgres) libre."
-elif docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'stockapp-pg'; then
+elif docker port stockapp-pg 2>/dev/null | grep -q ":${PG_PORT}\$"; then
     ok "Puerto ${PG_PORT} ocupado por el contenedor stockapp-pg (nuestro): esperado en una re-corrida."
 else
     marcar_bloqueante "Puerto ${PG_PORT} (Postgres) OCUPADO por algo que no es stockapp-pg:"

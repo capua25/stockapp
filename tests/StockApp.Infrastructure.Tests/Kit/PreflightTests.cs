@@ -172,6 +172,68 @@ public class PreflightTests
         }
     }
 
+    /// <summary>
+    /// Crea un 'docker' falso en un directorio descartable, para poder testear el chequeo de
+    /// "puerto de Postgres ocupado por stockapp-pg" sin depender del docker real de la máquina
+    /// que corre los tests -- que puede tener el contenedor arriba o no (ambient state), el
+    /// MISMO pecado que CrearIpFalloSinRuta ya resuelve para 'ip' más abajo en este archivo.
+    /// Soporta los dos únicos comandos que 00-preflight.sh invoca: 'docker info' (siempre ok,
+    /// para no ensuciar la salida con avisos de "Docker no responde" que no vienen al caso acá)
+    /// y 'docker port stockapp-pg' (simula el mapeo real de puertos del contenedor, o la
+    /// ausencia total del contenedor si <paramref name="puertoMapeado"/> es null).
+    /// </summary>
+    private static string CrearDockerFalso(string? puertoMapeado)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "preflight-fake-docker-" + Guid.NewGuid());
+        Directory.CreateDirectory(dir);
+        var rutaDocker = Path.Combine(dir, "docker");
+
+        // Responde TAMBIÉN 'docker ps --format ...' (no solo 'docker port'), y no solo por
+        // completitud: es lo que permite que la mutación del Paso 3 (volver a la guardia vieja,
+        // que mira 'docker ps' en vez de 'docker port') reproduzca la regresión real -- que
+        // stockapp-pg EXISTA (aunque esté mapeado a otro puerto) le alcanzaba al código viejo
+        // para dar el visto bueno. Si este stub no contestara 'docker ps', la mutación no podría
+        // distinguirse de "el contenedor no existe" y el guardián no custodiaría nada.
+        var script = puertoMapeado is null
+            ? """
+              #!/usr/bin/env bash
+              if [[ "$1" == "info" ]]; then
+                  exit 0
+              fi
+              if [[ "$1" == "ps" ]]; then
+                  exit 0
+              fi
+              if [[ "$1" == "port" && "$2" == "stockapp-pg" ]]; then
+                  echo "Error: No such container: stockapp-pg" >&2
+                  exit 1
+              fi
+              exit 0
+              """
+            : $"""
+              #!/usr/bin/env bash
+              if [[ "$1" == "info" ]]; then
+                  exit 0
+              fi
+              if [[ "$1" == "ps" ]]; then
+                  echo "stockapp-pg"
+                  exit 0
+              fi
+              if [[ "$1" == "port" && "$2" == "stockapp-pg" ]]; then
+                  echo "5432/tcp -> 0.0.0.0:{puertoMapeado}"
+                  echo "5432/tcp -> [::]:{puertoMapeado}"
+                  exit 0
+              fi
+              exit 0
+              """;
+
+        File.WriteAllText(rutaDocker, script);
+        File.SetUnixFileMode(rutaDocker,
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+            UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+            UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+        return dir;
+    }
+
     [Fact]
     public void Preflight_PuertoDePostgresOcupadoPorAlgoQueNoEsStockappPg_EsBloqueante()
     {
@@ -179,15 +241,67 @@ public class PreflightTests
         var puertoPg = PuertoLibre();
         var listener = new TcpListener(IPAddress.Any, puertoPg);
         listener.Start();
+        var dirDockerFalso = CrearDockerFalso(puertoMapeado: null);
         try
         {
-            var (exitCode, stdout) = EjecutarPreflight(puertoApi, puertoPg);
+            var (exitCode, stdout) = EjecutarPreflight(puertoApi, puertoPg, pathExtra: dirDockerFalso);
             Assert.Contains("OCUPADO por algo que no es stockapp-pg", stdout);
             Assert.Equal(1, exitCode);
         }
         finally
         {
             listener.Stop();
+            Directory.Delete(dirDockerFalso, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Guardián de la regresión: antes del fix, que 'stockapp-pg' EXISTIERA en cualquier puerto
+    /// alcanzaba para dar por buena la ocupación de PG_PORT (docker ps | grep por nombre, sin
+    /// mirar el mapeo real). Acá el contenedor existe pero está mapeado a un puerto DISTINTO del
+    /// que ocupa el listener de prueba -- tiene que seguir bloqueando.
+    /// </summary>
+    [Fact]
+    public void Preflight_PuertoDePostgresOcupado_StockappPgExisteEnOtroPuerto_SigueBloqueante()
+    {
+        var puertoApi = PuertoLibre();
+        var puertoPg = PuertoLibre();
+        var puertoDistinto = PuertoLibre();
+        var listener = new TcpListener(IPAddress.Any, puertoPg);
+        listener.Start();
+        var dirDockerFalso = CrearDockerFalso(puertoMapeado: puertoDistinto.ToString());
+        try
+        {
+            var (exitCode, stdout) = EjecutarPreflight(puertoApi, puertoPg, pathExtra: dirDockerFalso);
+            Assert.Contains("OCUPADO por algo que no es stockapp-pg", stdout);
+            Assert.Equal(1, exitCode);
+        }
+        finally
+        {
+            listener.Stop();
+            Directory.Delete(dirDockerFalso, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Preflight_PuertoDePostgresOcupadoPorStockappPgEnEsePuerto_EsOkNoBloqueante()
+    {
+        var puertoApi = PuertoLibre();
+        var puertoPg = PuertoLibre();
+        var listener = new TcpListener(IPAddress.Any, puertoPg);
+        listener.Start();
+        var dirDockerFalso = CrearDockerFalso(puertoMapeado: puertoPg.ToString());
+        try
+        {
+            var (exitCode, stdout) = EjecutarPreflight(puertoApi, puertoPg, pathExtra: dirDockerFalso);
+            Assert.Contains("esperado en una re-corrida", stdout);
+            Assert.DoesNotContain("OCUPADO por algo que no es stockapp-pg", stdout);
+            Assert.Equal(0, exitCode);
+        }
+        finally
+        {
+            listener.Stop();
+            Directory.Delete(dirDockerFalso, recursive: true);
         }
     }
 
