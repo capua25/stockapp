@@ -2188,7 +2188,7 @@ El más grande y el que menos se puede probar antes de la VM. Es el único que i
 
 **Interfaces:**
 - Consume: `lib/log.sh`, `lib/validaciones.sh`; `offline/docker/*.deb`, `offline/pgclient/*.deb`, `offline/postgres-16-alpine.tar`; `servidor/docker-compose.postgres.yml`, `servidor/wait-for-postgres.sh`.
-- Produce: `/etc/stockapp/.env` (600), el contenedor `stockapp-pg` corriendo, `ufw` configurado.
+- Produce: `/etc/stockapp/.env` (600), el contenedor `stockapp-pg` corriendo, `/etc/stockapp/POST-INSTALACION.txt` (600) con los comandos de firewall ya expandidos. `ufw` **NO** se configura (Decisión 12, RESUELTA 2026-09-13): el script solo imprime el aviso y lo persiste, nunca lo ejecuta.
 
 **La guardia más importante de todo el kit** (diseño línea 88): **si ya existe `/etc/stockapp/.env`, NO se pisa.** Regenerarlo con el volumen de Postgres ya creado deja la API sin poder conectar — y Npgsql no arrastra la connection string a sus excepciones, así que el error **no dice** que la contraseña cambió. Es el fallo más difícil de diagnosticar del kit entero y hay que impedirlo, no documentarlo.
 
@@ -2398,38 +2398,46 @@ bash "${DIR_KIT}/servidor/wait-for-postgres.sh" \
 ok "Postgres arriba en 127.0.0.1:${PG_PORT} (nunca expuesto a la red)."
 
 # ── 6. Firewall ────────────────────────────────────────────────────────────
-# Pregunta antes de activarse (diseño línea 115). Y la regla de SSH va PRIMERO: si alguien
-# administra este servidor por SSH, activar ufw sin esa regla lo deja afuera.
+# Decisión 12 (RESUELTA 2026-09-13): el kit LAN NO configura ufw, nunca -- ni siquiera
+# preguntando. Mismo modelo que install.sh usa para el VPS (install.sh:211-221,471-483):
+# imprime los comandos, no los ejecuta. Razón: el servidor del municipio probablemente sirve
+# más cosas que esta API (impresoras de red, compartidos, accesos de terceros) -- un
+# 'ufw enable' con solo las reglas que conoce este instalador tira abajo todo lo demás. A
+# diferencia de un VPS, acá NO hay operador leyendo la terminal más tarde: por eso el aviso
+# se persiste TAMBIÉN en un archivo (POST-INSTALACION.txt, junto al .env) con los valores ya
+# expandidos, no variables literales.
 echo
 echo "-- Firewall --"
-if ! command -v ufw >/dev/null 2>&1; then
-    aviso "ufw no está instalado. La API va a quedar accesible en ${API_BIND}:${API_PORT} sin filtro."
-    info  "El tráfico es HTTP PLANO: usuario, contraseña y JWT viajan sin cifrar por la LAN."
-else
-    SUBRED="$(ip -4 -o addr show scope global | awk '{print $4}' | head -1)"
-    info "Subred detectada: ${SUBRED}"
-    if ufw status 2>/dev/null | grep -q '^Status: active'; then
-        info "ufw ya está activo. Agrego la regla del puerto ${API_PORT} para ${SUBRED}."
-        ufw allow from "$SUBRED" to any port "$API_PORT" proto tcp
-        ok "Regla agregada."
-    else
-        aviso "ufw está INACTIVO."
-        info  "Si lo activo, primero agrego la regla de SSH (si no, quien administre este"
-        info  "servidor remotamente pierde el acceso) y después la del puerto ${API_PORT},"
-        info  "limitada a la subred ${SUBRED}."
-        read -rp "      ¿Activo el firewall? [s/N]: " RESP
-        if [[ "${RESP,,}" == "s" ]]; then
-            ufw allow 22/tcp
-            ufw allow from "$SUBRED" to any port "$API_PORT" proto tcp
-            ufw --force enable
-            ok "Firewall activo. Reglas:"
-            ufw status numbered
-        else
-            aviso "Firewall NO activado, por tu decisión. La API queda accesible sin filtro"
-            info  "desde cualquier máquina que llegue a ${API_BIND}:${API_PORT}."
-        fi
-    fi
-fi
+SUBRED="$(ip -4 -o addr show scope global 2>/dev/null | awk '{print $4}' | head -1)"
+[[ -n "$SUBRED" ]] || SUBRED="<no se pudo detectar la subred>"
+
+readonly POST_INSTALACION="${ENV_DIR}/POST-INSTALACION.txt"
+cat > "$POST_INSTALACION" <<POSTEOF
+StockApp — pendientes después de la instalación
+Generado por 01-bootstrap.sh el $(date -Is) en $(hostname).
+
+FIREWALL: este kit NO activa ufw automáticamente. La API va a quedar accesible en
+${API_BIND}:${API_PORT} sin filtro hasta que lo actives vos.
+
+El tráfico es HTTP PLANO: usuario, contraseña y JWT viajan sin cifrar por la LAN. Si este
+servidor tiene ufw, corré esto en este orden (SSH PRIMERO -- si no, quien administre el
+servidor remotamente pierde el acceso apenas lo actives):
+
+    sudo ufw allow 22/tcp
+    sudo ufw allow from ${SUBRED} to any port ${API_PORT} proto tcp
+    sudo ufw enable
+
+Si ya tenías ufw activo, alcanza con la segunda línea.
+POSTEOF
+chmod 600 "$POST_INSTALACION"
+
+aviso "La API va a quedar accesible en ${API_BIND}:${API_PORT} sin filtro."
+info  "El tráfico es HTTP PLANO: usuario, contraseña y JWT viajan sin cifrar por la LAN."
+info  "Este kit NO activa el firewall por vos. Si este servidor tiene ufw, corré (SSH primero):"
+info  "    sudo ufw allow 22/tcp"
+info  "    sudo ufw allow from ${SUBRED} to any port ${API_PORT} proto tcp"
+info  "    sudo ufw enable"
+info  "Estos comandos también quedaron guardados en: ${POST_INSTALACION}"
 
 echo
 echo "======================================================================"
@@ -2944,7 +2952,7 @@ Docker es **la única herramienta de aislamiento instalada en esta máquina** (v
 
 Esto **solo** se prueba en una VM desde cero:
 
-- `01-bootstrap.sh` completo: instalación de Docker desde `.deb`, arranque del daemon, carga de la imagen, generación de secretos, `ufw`.
+- `01-bootstrap.sh` completo: instalación de Docker desde `.deb`, arranque del daemon, carga de la imagen, generación de secretos. `ufw` en sí NO lo toca el script (Decisión 12) -- lo que sí requiere la VM es confirmar que `ip -4 -o addr show scope global` detecta la subred real (no NAT) para que el aviso/`POST-INSTALACION.txt` traigan un valor útil.
 - `install.sh` vía `02`: la unit de systemd, el arranque del servicio, las migraciones contra Postgres, el healthcheck.
 - Los chequeos 1, 2, 5, 6 y 7 de `03-verificar.sh` (systemd, la unit, `__EFMigrationsHistory`, login, backups).
 - **El chequeo 4**, que es el más importante del kit para la LAN y necesita una IP de red real, no NAT.
@@ -2999,7 +3007,7 @@ Este es el riesgo que ordena todas las decisiones del plan, así que vale desarm
 5. **Backups en el mismo disco que la base** (diseño línea 119). Muere el disco y se van los dos. Es el riesgo de mayor impacto de todo el despliegue y **la Fase 7 es su única mitigación.** Por eso la Fase 7 no es opcional ni "documentación que se hace al final": es la entrega con mejor relación costo/riesgo de todo el plan.
 6. **El dead-man's-switch no existe en la LAN.** El webhook de alerta de backup necesita salida a internet; si el firewall la bloquea, nadie se entera de que los backups dejaron de correr. El reemplazo es humano: alguien mira `/backups/salud`. Si no hay nombre y frecuencia escritos, no hay monitoreo.
 7. **HTTP plano en la LAN.** Usuario, contraseña y JWT viajan sin cifrar. `install.sh:211-221` ya advierte de esto. Está **aceptado y fuera de alcance**, pero tiene que estar escrito en el `LEEME` para que nadie lo descubra como sorpresa en una auditoría.
-8. **`ufw` mal configurado deja al servidor inaccesible por SSH.** En el VPS sería catastrófico; acá el proveedor está sentado en la consola, así que es recuperable. Pero si alguien del municipio administra esa máquina remotamente, sí es grave. Mitigación: la regla de SSH va **primero** y el script **pregunta** antes de activar `ufw`.
+8. **`ufw` mal configurado deja al servidor inaccesible por SSH.** Ya no es un riesgo de ESTE script: Decisión 12 (RESUELTA 2026-09-13) resolvió que el kit LAN **no configura `ufw`**, ni siquiera preguntando -- solo imprime los comandos (regla de SSH primero) y los persiste en `POST-INSTALACION.txt`. El riesgo de un `ufw` mal configurado pasa a ser enteramente responsabilidad del operador, cuando decida correr esos comandos a mano.
 9. **`/opt/stockapp/` (el compose) y `/opt/stockapp-api/` (los binarios) son dos rutas casi idénticas.** Un `rm -rf /opt/stockapp*` durante un troubleshooting se lleva las dos. Impacto moderado (el compose se reinstala; el volumen de datos vive en `stockapp_pgdata`, no ahí), pero es una trampa gratuita. **Sugerencia:** que el compose vaya a `/opt/stockapp-postgres/`. Es un cambio de una constante en `01-bootstrap.sh` y no toca `install.sh`.
 10. **El `.env` real filtrándose al pendrive o al repo.** `armar-kit.sh` tiene una guardia explícita contra copiar `deploy/.env` a `servidor/`, y `deploy/.env` ya está en `.gitignore:511`. Pero el `.env` **generado** que el operador copia al pendrive es un archivo con secretos viajando en un dispositivo extraíble. Mitigación: decir en el `LEEME` que ese pendrive se guarda como se guarda una llave, no en un cajón de la oficina.
 11. **Un pendrive FAT32 pierde el bit de ejecución de los `.sh`.** Fallo trivial y desmoralizante en el minuto uno. Mitigación: la primera línea del `LEEME` es `chmod +x *.sh lib/*.sh servidor/*.sh`, y la Task 5.1 lo verifica con el medio de transporte real.
