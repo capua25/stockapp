@@ -95,7 +95,12 @@ fi
 
 for punto in /opt /var/lib /var/backups; do
     mkdir -p "$punto" 2>/dev/null || true
-    LIBRE_GB="$(df -BG --output=avail "$punto" 2>/dev/null | tail -1 | tr -dc '0-9')"
+    # '|| true' al final del pipe: bajo 'set -o pipefail', si "$punto" no existe (o df falla por
+    # cualquier otro motivo) el pipeline queda en no-cero y aborta TODO el preflight bajo 'set
+    # -e', aunque el chequeo de disco esté pensado para degradar a bloqueante (mapa de
+    # severidades más abajo), no para matar el script entero. Mismo patrón que el bloque de
+    # pg_dump (Decisión 13) más abajo.
+    LIBRE_GB="$(df -BG --output=avail "$punto" 2>/dev/null | tail -1 | tr -dc '0-9' || true)"
     if [[ -n "$LIBRE_GB" ]] && (( LIBRE_GB > 10 )); then
         ok "Disco en ${punto}: ${LIBRE_GB} GB libres."
     else
@@ -180,8 +185,15 @@ fi
 # ── Red ────────────────────────────────────────────────────────────────────
 echo
 echo "-- Red --"
-IP_LAN="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}' | head -1)"
-IFAZ="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="dev") print $(i+1)}' | head -1)"
+# '|| true' en ambas asignaciones: bajo 'set -o pipefail', si el servidor no tiene
+# gateway/ruta configurada, 'ip route get' sale con "Network is unreachable" (exit 2) y el
+# pipeline entero queda en no-cero, abortando TODO el preflight bajo 'set -e' -- ANTES de llegar
+# a imprimir el fingerprint, que es la razón de ser de este script y tiene que imprimirse
+# SIEMPRE (ver encabezado del archivo). Mismo modo de falla, mismo patrón de fix, que el bloque
+# de pg_dump (Decisión 13) más abajo. El mapa OK/AVISO/ROJO de más abajo ya sabe tratar IP_LAN
+# vacía como bloqueante -- eso no cambia, solo dejamos de morir en silencio antes de llegar ahí.
+IP_LAN="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}' | head -1 || true)"
+IFAZ="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="dev") print $(i+1)}' | head -1 || true)"
 if [[ -n "$IP_LAN" ]] && es_ipv4_valida "$IP_LAN"; then
     ok "IP de este servidor: ${IP_LAN} (interfaz ${IFAZ})."
 else

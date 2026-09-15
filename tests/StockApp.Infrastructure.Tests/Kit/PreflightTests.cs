@@ -126,13 +126,18 @@ public class PreflightTests
 
     private static (int ExitCode, string Stdout) EjecutarPreflight(
         int apiPort, int pgPort, string envKit = "/no/existe/stockapp.env",
-        string? composePostgres = null)
+        string? composePostgres = null, string? pathExtra = null)
     {
         var script = RutaScript();
         Assert.True(File.Exists(script), $"No se encontró el script en: {script}");
         var compose = composePostgres is null ? "" : $"COMPOSE_POSTGRES='{composePostgres}' ";
+        // pathExtra antepone un directorio al PATH con el que corre el script, para poder
+        // stubear un binario del sistema (p.ej. 'ip') sin tocar el PATH real del proceso de
+        // test. Mismo espíritu que ENV_KIT/PG_PORT/COMPOSE_POSTGRES: un override que solo existe
+        // para poder testear de forma determinística, nunca expuesto al operador.
+        var path = pathExtra is null ? "" : $"PATH=\"{pathExtra}:$PATH\" ";
         var (exitCode, stdout, _) = EjecutorBash.Ejecutar(
-            $"ENV_KIT='{envKit}' API_PORT='{apiPort}' PG_PORT='{pgPort}' {compose}bash '{script}'");
+            $"{path}ENV_KIT='{envKit}' API_PORT='{apiPort}' PG_PORT='{pgPort}' {compose}bash '{script}'");
         return (exitCode, stdout);
     }
 
@@ -270,6 +275,59 @@ public class PreflightTests
         finally
         {
             File.Delete(compose);
+        }
+    }
+
+    // ---------- Guardián 3: sin ruta de red, el preflight IGUAL llega al fingerprint ----------
+
+    /// <summary>
+    /// Arma un directorio con un ejecutable 'ip' falso que siempre falla como lo hace el 'ip
+    /// route get' real cuando el servidor no tiene gateway configurado ("Network is
+    /// unreachable", exit 2), y lo antepone al PATH del preflight. Es el único punto del script
+    /// que invoca 'ip' (ver 00-preflight.sh:183-184), así que alcanza con stubear ese único
+    /// binario para forzar el escenario de forma determinística, sin depender de la red real de
+    /// la máquina que corre los tests (que en CI/dev normalmente SÍ tiene ruta, por eso el
+    /// Guardián 1 no lo cubre).
+    /// </summary>
+    private static string CrearIpFalloSinRuta()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "preflight-fake-ip-" + Guid.NewGuid());
+        Directory.CreateDirectory(dir);
+        var rutaIp = Path.Combine(dir, "ip");
+        File.WriteAllText(rutaIp,
+            "#!/usr/bin/env bash\n" +
+            "echo 'RTNETLINK answers: Network is unreachable' >&2\n" +
+            "exit 2\n");
+        File.SetUnixFileMode(rutaIp,
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+            UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+            UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
+        return dir;
+    }
+
+    [Fact]
+    public void Preflight_ServidorSinRutaDeRed_IgualLlegaAlFinalEImprimeElFingerprint()
+    {
+        var dirIpFalso = CrearIpFalloSinRuta();
+        try
+        {
+            var puertoApi = PuertoLibre();
+            var puertoPg = PuertoLibre();
+            var (exitCode, stdout) = EjecutarPreflight(puertoApi, puertoPg, pathExtra: dirIpFalso);
+
+            // Llega al fingerprint (la razón de ser del preflight) pese a que 'ip' reventó.
+            Assert.Matches(PatronFingerprint, stdout);
+            // Sin ruta, IP_LAN queda vacía: el mapa de severidades existente ya lo trata como
+            // bloqueante (ROJO) -- esa semántica NO cambia con este fix, solo dejamos de abortar
+            // en silencio ANTES de llegar a este punto.
+            Assert.Contains("No pude determinar la IP de este servidor", stdout);
+            // Llega al bloque de resultado final (no se cortó a mitad de script).
+            Assert.Contains("BLOQUEANTE", stdout);
+            Assert.Equal(1, exitCode);
+        }
+        finally
+        {
+            Directory.Delete(dirIpFalso, recursive: true);
         }
     }
 }
