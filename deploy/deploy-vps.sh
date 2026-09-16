@@ -225,11 +225,49 @@ SQL
 )
         sql="${sql//TABLA_PLACEHOLDER/$tabla}"
 
+        # La SQL viaja por la ENTRADA ESTÁNDAR de psql (-tA leyendo de stdin), NUNCA como
+        # argumento de -c interpolado en el comando remoto. BUG hallado corriendo --dry-run
+        # contra el VPS real: STRING_AGG usa una comilla simple LITERAL como separador (', '),
+        # y antes viajaba dentro de "docker exec ... -tAc '${sql}'" -- 'ssh_vps "$cmd_remoto"'
+        # manda ese string como UN SOLO argv a ssh, y el shell remoto (el que corre del otro
+        # lado, y que reparsea ese string completo) tomaba la comilla embebida como cierre
+        # prematuro de la comilla externa y partía el comando en pedazos: docker/psql recibían
+        # argumentos extra ("extra command-line argument ... ignored") y psql fallaba con
+        # "syntax error" por *stderr*. Con -tA leyendo de stdin no hay nada que escapar: la SQL
+        # nunca pasa por argv ni por un reparseo de shell (mismo criterio que
+        # ssh_vps_autenticado más arriba para los secretos: lo que no viaja por argv no se
+        # puede corromper al reparsearse).
         local cmd_remoto
-        cmd_remoto="docker exec stockapp-pg psql -U \"${POSTGRES_USER}\" -d \"${POSTGRES_DB}\" -h 127.0.0.1 -tAc '${sql}'"
+        cmd_remoto="docker exec -i stockapp-pg psql -U \"${POSTGRES_USER}\" -d \"${POSTGRES_DB}\" -h 127.0.0.1 -tA"
 
+        # "consulté y no hay duplicados" (salida vacía, exit 0, sin stderr) y "no pude
+        # consultar" (exit != 0 y/o stderr con contenido) antes producían la MISMA señal --
+        # salida vacía -- porque el '|| true' de la versión vieja se tragaba el código de
+        # salida A CIEGAS (el mismo gotcha de pipefail que este proyecto ya conoce, pero acá
+        # aplicado sin la contrapartida de chequear qué pasó). Ahora se capturan por separado
+        # el código de salida y el stderr, y si la consulta FALLÓ se ABORTA con un mensaje
+        # claro -- nunca se interpreta un fallo como "sin duplicados".
+        local archivo_stderr
+        archivo_stderr="$(mktemp)"
         local salida
-        salida="$(ssh_vps "$cmd_remoto" || true)"
+        local codigo_salida=0
+        salida="$(printf '%s' "$sql" | ssh_vps "$cmd_remoto" 2>"$archivo_stderr")" || codigo_salida=$?
+        local error_consulta
+        error_consulta="$(cat "$archivo_stderr")"
+        rm -f "$archivo_stderr"
+
+        if [[ "$codigo_salida" -ne 0 ]] || [[ -n "$error_consulta" ]]; then
+            echo >&2
+            echo "ERROR: no se pudo verificar duplicados en '${tabla}' (código de salida: ${codigo_salida})." >&2
+            echo "       ESTO NO ES 'sin duplicados' -- es que el pre-vuelo NO PUDO CONSULTAR la base." >&2
+            echo "       Un pre-vuelo que no puede verificar no es un pre-vuelo exitoso: ABORTO en vez" >&2
+            echo "       de seguir como si no hubiera duplicados." >&2
+            if [[ -n "$error_consulta" ]]; then
+                echo "       stderr de la consulta remota:" >&2
+                echo "$error_consulta" >&2
+            fi
+            exit 1
+        fi
 
         if [[ -n "$salida" ]]; then
             hubo_duplicados=1

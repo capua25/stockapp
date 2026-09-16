@@ -37,8 +37,14 @@ public class DeployVpsTests
     /// ssh falso: registra cada invocación completa en $RASTRO_SSH (con %q) y despacha una
     /// respuesta según el CONTENIDO del comando remoto (último argumento) -- el mismo patrón de
     /// dispatch-por-contenido que VerificarTests.CurlFalso usa para el path de la URL.
+    ///
+    /// El chequeo de duplicados (paso1_prevuelo_migraciones) manda la SQL por la ENTRADA
+    /// ESTÁNDAR (fix del BUG de quoting, ver deploy-vps.sh) -- por eso el dispatch para ese
+    /// caso ya NO puede mirar el contenido del argv (ahí solo queda "docker exec -i
+    /// stockapp-pg psql ... -tA", sin rastro de SQL): hay que leer stdin para decidir la
+    /// respuesta, igual que haría el psql real.
     /// </summary>
-    private static string SshFalso(bool simularDuplicados = false) => $$"""
+    private static string SshFalso(bool simularDuplicados = false, bool simularFalloConsulta = false) => $$"""
         #!/usr/bin/env bash
         {
             printf 'ARGS:'
@@ -50,11 +56,20 @@ public class DeployVpsTests
         cmd="${args[-1]}"
 
         case "$cmd" in
-            *"HAVING COUNT(*) > 1"*)
-                {{(simularDuplicados
-                    ? "echo 'nombre duplicado|1, 2|2'"
-                    : ": # sin duplicados, sin salida")}}
-                exit 0
+            *"docker exec -i stockapp-pg psql"*"-tA"*)
+                entrada="$(cat)"
+                case "$entrada" in
+                    *"HAVING COUNT(*) > 1"*)
+                        {{(simularFalloConsulta
+                            ? "echo 'psql: FATAL: no se pudo conectar (simulado)' >&2; exit 3"
+                            : simularDuplicados
+                                ? "echo 'nombre duplicado|1, 2|2'; exit 0"
+                                : ": # sin duplicados, sin salida; exit 0")}}
+                        ;;
+                    *)
+                        exit 0
+                        ;;
+                esac
                 ;;
             *"/auth/login"*)
                 echo '{"token":"FAKE-TOKEN-123"}'
@@ -147,11 +162,11 @@ public class DeployVpsTests
             UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
     }
 
-    private static string CrearTestbin(bool simularDuplicados = false)
+    private static string CrearTestbin(bool simularDuplicados = false, bool simularFalloConsulta = false)
     {
         var dir = Path.Combine(Path.GetTempPath(), "deploy-vps-testbin-" + Guid.NewGuid());
         Directory.CreateDirectory(dir);
-        EscribirEjecutable(Path.Combine(dir, "ssh"), SshFalso(simularDuplicados));
+        EscribirEjecutable(Path.Combine(dir, "ssh"), SshFalso(simularDuplicados, simularFalloConsulta));
         EscribirEjecutable(Path.Combine(dir, "scp"), ScpFalso);
         return dir;
     }
@@ -214,9 +229,9 @@ public class DeployVpsTests
     private static (int ExitCode, string Stdout, string Stderr, string RastroSsh, string RastroScp, string RastroPublish) Correr(
         string repoFixture, string argumentos, bool simularDuplicados = false,
         string scpTamanoBytes = "2048", string vpsUser = "operador",
-        bool simularBackupViejoPrimero = false)
+        bool simularBackupViejoPrimero = false, bool simularFalloConsulta = false)
     {
-        var testbin = CrearTestbin(simularDuplicados);
+        var testbin = CrearTestbin(simularDuplicados, simularFalloConsulta);
         var rastroSsh = Path.Combine(Path.GetTempPath(), "deploy-vps-rastro-ssh-" + Guid.NewGuid());
         var rastroScp = Path.Combine(Path.GetTempPath(), "deploy-vps-rastro-scp-" + Guid.NewGuid());
         var rastroPublish = Path.Combine(Path.GetTempPath(), "deploy-vps-rastro-publish-" + Guid.NewGuid());
@@ -328,6 +343,146 @@ public class DeployVpsTests
             Assert.Equal("", rastroScp);
         }
         finally { Directory.Delete(repo, recursive: true); }
+    }
+
+    // ---------- Regla: si la consulta de duplicados FALLA, se ABORTA -- nunca se confunde con "sin duplicados" ----------
+
+    /// <summary>
+    /// EL GUARDIÁN ESTRELLA: BUG hallado corriendo --dry-run contra el VPS real (deploy-vps.sh,
+    /// paso1_prevuelo_migraciones). La SQL de STRING_AGG contiene una comilla simple LITERAL
+    /// (', ') que -- antes de este fix -- viajaba interpolada dentro de "docker exec ...
+    /// -tAc '${sql}'"; el shell remoto la tomaba como cierre prematuro de comillas y partía el
+    /// comando, psql fallaba con "syntax error" por STDERR, y el "|| true" de la versión vieja
+    /// se tragaba el código de salida A CIEGAS. Como la consulta nunca corrió, su stdout
+    /// quedaba vacío -- exactamente la MISMA señal que "consulté y no hay duplicados". El
+    /// pre-vuelo reportaba "OK. Sin duplicados en los 7 catálogos" sin haber verificado nada.
+    ///
+    /// Este test simula esa falla (el stub de ssh sale con código != 0 y escribe en stderr,
+    /// mismo contrato que un psql real que no pudo correr la consulta) y confirma que el
+    /// script AHORA distingue "no pude verificar" de "verifiqué y no hay duplicados": aborta
+    /// con un mensaje explícito, nunca con el falso "OK".
+    /// </summary>
+    [Fact]
+    public void PrevueloFallaAlConsultar_AbortaSinConfundirloConSinDuplicados()
+    {
+        var repo = CrearRepoFixture();
+        try
+        {
+            var (exitCode, stdout, stderr, rastroSsh, rastroScp, rastroPublish) =
+                Correr(repo, "1.0.0", simularFalloConsulta: true);
+            var salida = stdout + stderr;
+
+            Assert.NotEqual(0, exitCode);
+            Assert.Contains("no se pudo verificar", salida, StringComparison.OrdinalIgnoreCase);
+            // El mensaje tiene que dejar explícito que un fallo de consulta NO ES "sin
+            // duplicados" -- si esta afirmación fallara, sería la MISMA confusión del bug real.
+            Assert.DoesNotContain("OK. Sin duplicados", salida);
+            // Nunca llega a copiar artefactos ni a publicar: abortó en el paso 1.
+            Assert.Equal("", rastroScp);
+            Assert.Equal("", rastroPublish);
+            Assert.Contains("docker exec -i stockapp-pg psql", rastroSsh.Replace("\\ ", " "));
+        }
+        finally { Directory.Delete(repo, recursive: true); }
+    }
+
+    // ---------- Regla: la SQL del pre-vuelo viaja por stdin, nunca por argv (guardián del quoting) ----------
+
+    /// <summary>
+    /// ssh falso que hace EXACTAMENTE lo que un shell remoto real hace: recibe el comando como
+    /// UN SOLO argv (el que 'ssh_vps "$cmd_remoto"' le manda) y lo vuelve a tokenizar con
+    /// 'eval' -- así fue como se reprodujo el bug de quoting original la primera vez, sin tocar
+    /// el VPS real. Los demás tests de esta clase usan dispatch por substring (nunca reparsean
+    /// nada), así que no podían detectar este bug -- este stub sí.
+    /// </summary>
+    private const string SshReparseoRealFalso = """
+        #!/usr/bin/env bash
+        args=("$@")
+        cmd="${args[-1]}"
+        eval "$cmd"
+        """;
+
+    /// <summary>
+    /// docker falso para el test de reparseo: registra en $RASTRO_DOCKER la CANTIDAD exacta de
+    /// argumentos que recibió (ARGV(n):...) y, si '-i' está entre ellos (docker exec -i, la
+    /// forma nueva que lee de stdin), también el contenido crudo de su entrada estándar. No
+    /// hace falta comportarse como psql de verdad -- alcanza con probar que ni la CANTIDAD de
+    /// argumentos ni el contenido de stdin se corrompen al pasar por el reparseo.
+    /// </summary>
+    private const string DockerFalso = """
+        #!/usr/bin/env bash
+        {
+            printf 'ARGV(%s):' "$#"
+            printf ' %q' "$@"
+            printf '\n'
+        } >> "${RASTRO_DOCKER:?}"
+
+        tiene_dash_i=0
+        for a in "$@"; do
+            [[ "$a" == "-i" ]] && tiene_dash_i=1
+        done
+        if [[ "$tiene_dash_i" -eq 1 ]]; then
+            {
+                printf 'STDIN:'
+                cat
+                printf '\n'
+            } >> "${RASTRO_DOCKER:?}"
+        fi
+        exit 0
+        """;
+
+    /// <summary>sudo/systemctl falsos: no-ops para que paso0 (docker ps/systemctl/sudo ss, todo
+    /// no bloqueante) no dispare el 'sudo' o 'systemctl' REAL de la máquina de test al pasar
+    /// por 'eval'.</summary>
+    private const string SudoFalso = "#!/usr/bin/env bash\nexit 1\n";
+    private const string SystemctlFalso = "#!/usr/bin/env bash\necho inactive\nexit 1\n";
+
+    [Fact]
+    public void Prevuelo_LaSqlLlegaIntactaPorStdin_AunqueElShellRemotoLaReparse()
+    {
+        var repo = CrearRepoFixture();
+        var testbin = Path.Combine(Path.GetTempPath(), "deploy-vps-testbin-reparseo-" + Guid.NewGuid());
+        Directory.CreateDirectory(testbin);
+        EscribirEjecutable(Path.Combine(testbin, "ssh"), SshReparseoRealFalso);
+        EscribirEjecutable(Path.Combine(testbin, "scp"), ScpFalso);
+        EscribirEjecutable(Path.Combine(testbin, "docker"), DockerFalso);
+        EscribirEjecutable(Path.Combine(testbin, "sudo"), SudoFalso);
+        EscribirEjecutable(Path.Combine(testbin, "systemctl"), SystemctlFalso);
+        var rastroDocker = Path.Combine(Path.GetTempPath(), "deploy-vps-rastro-docker-" + Guid.NewGuid());
+        try
+        {
+            var script =
+                $"export PATH=\"{testbin}:$PATH\"\n" +
+                $"export RASTRO_DOCKER=\"{rastroDocker}\"\n" +
+                "export VPS_USER=\"operador\"\n" +
+                $"bash \"{repo}/deploy/deploy-vps.sh\" 1.0.0 --dry-run";
+            var (exitCode, stdout, stderr) = EjecutorBash.Ejecutar(script);
+            var docker = File.Exists(rastroDocker) ? File.ReadAllText(rastroDocker) : "";
+
+            Assert.True(exitCode == 0, $"stdout={stdout}\nstderr={stderr}\ndocker={docker}");
+
+            // 'docker exec -i stockapp-pg psql -U ... -d ... -h 127.0.0.1 -tA' son EXACTAMENTE
+            // 11 tokens. El bug original corrompía esto: con la SQL interpolada en '-tAc',
+            // docker recibía 12 argumentos (el -tAc truncado por la comilla de STRING_AGG más
+            // un fragmento suelto de la SQL como argumento extra).
+            var lineasArgvPsql = docker.Split('\n')
+                .Where(l => l.StartsWith("ARGV(") && l.Contains("-tA")).ToList();
+            Assert.True(lineasArgvPsql.Count == 7,
+                $"Se esperaban 7 invocaciones a psql (una por catálogo), hubo {lineasArgvPsql.Count}:\n{docker}");
+            Assert.All(lineasArgvPsql, l => Assert.StartsWith("ARGV(11):", l));
+            // La SQL NUNCA aparece en el argv -- solo pudo llegar por stdin.
+            Assert.All(lineasArgvPsql, l => Assert.DoesNotContain("STRING_AGG", l));
+
+            // Y por stdin llega INTACTA -- comilla simple de STRING_AGG incluida, sin truncar.
+            Assert.Contains(
+                "STDIN:SELECT LOWER(\"Nombre\") AS nombre_normalizado, STRING_AGG(\"Id\"::text, ', ' ORDER BY \"Id\") AS ids, COUNT(*) AS cantidad FROM \"Categorias\" GROUP BY LOWER(\"Nombre\") HAVING COUNT(*) > 1;",
+                docker);
+        }
+        finally
+        {
+            Directory.Delete(repo, recursive: true);
+            Directory.Delete(testbin, recursive: true);
+            if (File.Exists(rastroDocker)) File.Delete(rastroDocker);
+        }
     }
 
     // ---------- Regla: backup vacío/0 bytes aborta (no confía en el exit code de scp) ----------
