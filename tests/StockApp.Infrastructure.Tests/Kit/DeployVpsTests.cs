@@ -807,6 +807,48 @@ public class DeployVpsTests
         finally { Directory.Delete(repo, recursive: true); }
     }
 
+    // ---------- Regla: paso4 devuelve el nombre del tarball LIMPIO, sin los logs de progreso ----------
+
+    /// <summary>
+    /// Bug real encontrado en el segundo deploy no-op contra el VPS (con el fix de VPS_DIR ya
+    /// aplicado): paso4_copiar_artefactos() se invoca como
+    /// "NOMBRE_TARBALL=\"$(paso4_copiar_artefactos ...)\"" -- command substitution, que captura
+    /// TODO lo que la función mande a stdout. Sus 'echo' de progreso ("== Paso 4: ...",
+    /// "Copiando...", etc.) no tenían '>&2' (a diferencia de paso3_publish, que sí lo hace en
+    /// cada uno de los suyos) -- así que se colaban DENTRO de NOMBRE_TARBALL, dejándolo con los
+    /// logs de progreso pegados adelante del nombre real, separados por saltos de línea. El
+    /// install.sh REAL (a diferencia del stub de estos tests, que no valida el argumento) lo
+    /// rechazaba con "ERROR: no existe el tarball '&lt;basura&gt;'." -- abortando LIMPIO (el
+    /// tarball ya estaba subido, nada más se tocó) pero sin poder instalar nunca.
+    ///
+    /// Los tests existentes no lo agarraban porque SshFalso no valida el argumento (solo
+    /// dispatchea por contenido, y "install.sh" seguía presente en el string corrompido). Este
+    /// guardián sí lo agarra: afirma que la línea de invocación a install.sh contiene el nombre
+    /// LIMPIO del tarball y NINGÚN rastro de los mensajes de progreso del paso 4 ni de saltos de
+    /// línea embebidos (que %q citaría con el prefijo ANSI-C "$'...'" en vez de una comilla
+    /// simple normal).
+    /// </summary>
+    [Fact]
+    public void Paso4_NombreTarballDevueltoPorStdout_NoSeContaminaConLosLogsDeProgreso()
+    {
+        var repo = CrearRepoFixture();
+        try
+        {
+            var (exitCode, stdout, stderr, rastroSsh, _, _) = Correr(repo, "1.2.3");
+
+            Assert.True(exitCode == 0, $"stdout={stdout}\nstderr={stderr}");
+
+            var lineaInstall = rastroSsh.Split('\n').FirstOrDefault(l => l.Contains("install.sh"));
+            Assert.False(string.IsNullOrEmpty(lineaInstall), $"No se encontró la invocación a install.sh en:\n{rastroSsh}");
+            Assert.Contains("stockapp-api-1.2.3-linux-x64.tar.gz", lineaInstall);
+            Assert.DoesNotContain("Paso 4", lineaInstall);
+            Assert.DoesNotContain("Copiando", lineaInstall);
+            Assert.DoesNotContain("install.sh/stockapp-api.service", lineaInstall);
+            Assert.DoesNotContain("$'", lineaInstall);
+        }
+        finally { Directory.Delete(repo, recursive: true); }
+    }
+
     // ---------- Regla: ningún comando prohibido en el script (custodia el VPS compartido) ----------
 
     /// <summary>

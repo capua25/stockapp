@@ -523,8 +523,8 @@ paso4_copiar_artefactos() {
     local nombre_tarball
     nombre_tarball="$(basename "$tarball_local")"
 
-    echo
-    echo "== Paso 4: Copiando artefactos al VPS =="
+    echo >&2
+    echo "== Paso 4: Copiando artefactos al VPS ==" >&2
     # ${VPS_DIR} SIN comillas a propósito: el default es "~/stockapp-deploy" (tilde literal,
     # bash no la expande dentro de comillas dobles ni siquiera como default de ${VAR:-~/x}) y
     # este string se manda tal cual como comando remoto por ssh -- si quedara entre comillas
@@ -535,7 +535,7 @@ paso4_copiar_artefactos() {
     # por eso nunca tuvo este bug (el sftp-server resuelve "~" del lado servidor).
     ssh_vps "mkdir -p ${VPS_DIR}"
 
-    echo "  Copiando ${nombre_tarball}..."
+    echo "  Copiando ${nombre_tarball}..." >&2
     scp_vps "$tarball_local" "${VPS_USER}@${VPS_HOST}:${VPS_DIR}/"
 
     local copiar_install=1
@@ -549,13 +549,21 @@ paso4_copiar_artefactos() {
     fi
 
     if [[ "$copiar_install" -eq 1 ]]; then
-        echo "  install.sh/stockapp-api.service cambiaron (o es el primer deploy conocido) -- copiando."
+        echo "  install.sh/stockapp-api.service cambiaron (o es el primer deploy conocido) -- copiando." >&2
         scp_vps "${REPO_ROOT}/deploy/install.sh" "${REPO_ROOT}/deploy/stockapp-api.service" \
             "${REPO_ROOT}/deploy/wait-for-postgres.sh" "${VPS_USER}@${VPS_HOST}:${VPS_DIR}/"
     else
-        echo "  install.sh/stockapp-api.service sin cambios desde el último deploy -- no se copian de nuevo."
+        echo "  install.sh/stockapp-api.service sin cambios desde el último deploy -- no se copian de nuevo." >&2
     fi
 
+    # CRÍTICO: esta función se llama como "NOMBRE_TARBALL=\"\$(paso4_copiar_artefactos ...)\"" --
+    # command substitution captura TODO lo que la función manda a stdout. Si algún 'echo' de
+    # arriba se quedara sin '>&2' (bug real encontrado en el primer deploy no-op con el fix de
+    # VPS_DIR ya aplicado), NOMBRE_TARBALL terminaría siendo un string multilínea con los logs de
+    # progreso pegados adelante del nombre real -- que install.sh (INTOCABLE) después rechaza con
+    # "ERROR: no existe el tarball '<basura>'.", ya con el tarball subido y sin haber tocado nada
+    # más (el propio 'set -euo pipefail' cortó ahí). El ÚNICO stdout de esta función tiene que
+    # ser esta línea.
     printf '%s' "$nombre_tarball"
 }
 
