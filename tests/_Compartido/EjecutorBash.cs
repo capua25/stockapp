@@ -36,12 +36,23 @@ internal static class EjecutorBash
         proceso.StartInfo.ArgumentList.Add("-c");
         proceso.StartInfo.ArgumentList.Add(script);
 
+        // Leer stdout y stderr en paralelo (async), NUNCA uno completo antes que el otro: si el
+        // hijo escribe lo suficiente a AMBOS streams (más del buffer de la pipe del SO, ~64KB en
+        // Linux) y acá se lee stdout hasta el final primero, el hijo se queda bloqueado
+        // escribiendo a un stderr que nadie está vaciando todavía -- deadlock clásico de
+        // System.Diagnostics.Process, documentado por Microsoft ("Do not read the standard
+        // output and standard error streams sequentially"). Con la salida chica de la mayoría de
+        // estos scripts nunca se manifestaba, pero bajo contención real (muchos "docker
+        // run"/bash compitiendo) alcanzaba para truncar la captura o colgarse -- encontrado
+        // investigando el rojo intermitente de BootstrapTests en el deploy no-op del
+        // 2026-09-16 (ver EjecutorBashTests, guardián con >64KB intercalados en ambos streams).
         proceso.Start();
-        var stdout = proceso.StandardOutput.ReadToEnd();
-        var stderr = proceso.StandardError.ReadToEnd();
+        var stdoutTask = proceso.StandardOutput.ReadToEndAsync();
+        var stderrTask = proceso.StandardError.ReadToEndAsync();
+        Task.WaitAll(stdoutTask, stderrTask);
         proceso.WaitForExit();
 
-        return (proceso.ExitCode, stdout.TrimEnd('\n'), stderr.TrimEnd('\n'));
+        return (proceso.ExitCode, stdoutTask.Result.TrimEnd('\n'), stderrTask.Result.TrimEnd('\n'));
     }
 
     /// <summary>Raíz del repo, derivada del path de compilación de este archivo.</summary>
