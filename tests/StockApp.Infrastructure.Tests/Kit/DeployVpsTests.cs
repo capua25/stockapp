@@ -64,7 +64,23 @@ public class DeployVpsTests
                 exit 0
                 ;;
             *"curl -fsS http"*"/backups"*)
-                echo '[{"id":42,"estado":"Exitoso"}]'
+                # Contrato real (BackupDtos.CorridaBackupDto + camelCase por default de
+                # ConfigureHttpJsonOptions): campos "finalizadaEn"/"resultado", valor "Exitosa"
+                # (no "estado"/"Exitoso", que nunca existió). "finalizadaEn" se genera EN EL
+                # MOMENTO en que corre el stub para que quede posterior al momento_disparo_epoch
+                # que el script captura antes del POST -- así el camino feliz encuentra
+                # exactamente 1 candidato sin tener que reintentar.
+                ahora="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+                if [[ -n "${SIMULAR_BACKUP_VIEJO_PRIMERO:-}" ]]; then
+                    # El backup VIEJO (id 1, finalizadaEn muy anterior) aparece PRIMERO en la
+                    # lista y el RECIÉN CREADO (id 2, finalizadaEn = ahora) aparece SEGUNDO --
+                    # a propósito, para probar que la selección no depende de la posición ni de
+                    # confiar en un orden dado por el servidor, sino de comparar contra el
+                    # momento real del disparo.
+                    printf '[{"id":1,"finalizadaEn":"2020-01-01T00:00:00Z","resultado":"Exitosa","nombreArchivo":"viejo.bin","tamanioBytes":2048,"motivoFallo":null},{"id":2,"finalizadaEn":"%s","resultado":"Exitosa","nombreArchivo":"nuevo.bin","tamanioBytes":4096,"motivoFallo":null}]\n' "$ahora"
+                else
+                    printf '[{"id":42,"finalizadaEn":"%s","resultado":"Exitosa","nombreArchivo":"x.bin","tamanioBytes":2048,"motivoFallo":null}]\n' "$ahora"
+                fi
                 exit 0
                 ;;
             *"__EFMigrationsHistory"*)
@@ -191,7 +207,8 @@ public class DeployVpsTests
     /// <summary>Corre deploy/deploy-vps.sh del repo falso con ssh/scp stubeados por PATH.</summary>
     private static (int ExitCode, string Stdout, string Stderr, string RastroSsh, string RastroScp, string RastroPublish) Correr(
         string repoFixture, string argumentos, bool simularDuplicados = false,
-        string scpTamanoBytes = "2048", string vpsUser = "operador")
+        string scpTamanoBytes = "2048", string vpsUser = "operador",
+        bool simularBackupViejoPrimero = false)
     {
         var testbin = CrearTestbin(simularDuplicados);
         var rastroSsh = Path.Combine(Path.GetTempPath(), "deploy-vps-rastro-ssh-" + Guid.NewGuid());
@@ -206,6 +223,7 @@ public class DeployVpsTests
                 $"export RASTRO_PUBLISH=\"{rastroPublish}\"\n" +
                 $"export SCP_TAMANO_BYTES=\"{scpTamanoBytes}\"\n" +
                 $"export VPS_USER=\"{vpsUser}\"\n" +
+                (simularBackupViejoPrimero ? "export SIMULAR_BACKUP_VIEJO_PRIMERO=1\n" : "") +
                 $"bash \"{repoFixture}/deploy/deploy-vps.sh\" {argumentos}";
             var (exitCode, stdout, stderr) = EjecutorBash.Ejecutar(script);
             var ssh = File.Exists(rastroSsh) ? File.ReadAllText(rastroSsh) : "";
@@ -424,6 +442,39 @@ public class DeployVpsTests
             Assert.Contains("systemctl is-active stockapp-api", rastroSsh.Replace("\\ ", " "));
             Assert.NotEqual("", rastroScp);
             Assert.Contains("VPS COMPARTIDO", salida);
+        }
+        finally { Directory.Delete(repo, recursive: true); }
+    }
+
+    // ---------- Regla: el backup bajado es el RECIÉN CREADO, no el primero exitoso de la lista ----------
+
+    /// <summary>
+    /// BUG 1 (deploy/deploy-vps.sh:303-309, hallado por revisión independiente): POST /backups
+    /// (BackupsEndpoints.cs:49-59) responde 202 Accepted SIN body -- no hay id que capturar de
+    /// ahí. El script anterior confiaba en "head -1" sobre TODA la lista de GET /backups
+    /// filtrada por exitosos, asumiendo que el servidor la devuelve más-nuevo-primero. Con
+    /// BackupProgramadoService corriendo backups automáticos en paralelo, esa asunción de orden
+    /// no es una garantía de la que dependa la selección del punto de retorno del deploy.
+    ///
+    /// Este guardián arma una lista adversarial -- el backup VIEJO (id 1) aparece PRIMERO y el
+    /// RECIÉN CREADO (id 2, finalizadaEn posterior al momento del disparo) aparece SEGUNDO -- y
+    /// verifica que el script descargue el id 2, nunca el id 1, sin importar el orden en que
+    /// vinieron.
+    /// </summary>
+    [Fact]
+    public void PasoBackup_BajaElBackupRecienCreado_NoElPrimeroExitosoDeLaLista()
+    {
+        var repo = CrearRepoFixture();
+        try
+        {
+            var (exitCode, stdout, stderr, rastroSsh, _, _) =
+                Correr(repo, "1.2.3", simularBackupViejoPrimero: true);
+            var salida = stdout + stderr;
+            var ssh = rastroSsh.Replace("\\ ", " ");
+
+            Assert.True(exitCode == 0, $"stdout={stdout}\nstderr={stderr}");
+            Assert.Contains("/backups/2/contenido", ssh);
+            Assert.DoesNotContain("/backups/1/contenido", ssh);
         }
         finally { Directory.Delete(repo, recursive: true); }
     }

@@ -296,6 +296,25 @@ paso2_backup() {
         exit 1
     fi
 
+    # POST /backups (Api/Endpoints/BackupsEndpoints.cs:49-59) responde 202 Accepted SIN body --
+    # a propósito (fire-and-forget: DisparadorBackupManual corre en background, EjecutorPgDumpProceso
+    # puede tardar hasta 30 min). No hay ningún id que capturar de la respuesta del POST.
+    #
+    # Por eso la corrida se correlaciona por TIEMPO: 'momento_disparo_epoch' se captura ANTES de
+    # disparar el POST, y de GET /backups (CorridaBackupDto: campos "resultado"/"finalizadaEn",
+    # camelCase por default de ConfigureHttpJsonOptions -- NUNCA "estado"/"Exitoso", que no
+    # existen en el contrato real) sólo se acepta una corrida "Exitosa" cuya "finalizadaEn" sea
+    # POSTERIOR a ese momento. "head -1" sobre la lista completa (el código viejo) confiaba en que
+    # el servidor la devolviera más-nuevo-primero -- con BackupProgramadoService corriendo backups
+    # automáticos en paralelo, esa asunción de orden no es una garantía de la que dependa el punto
+    # de retorno del deploy.
+    #
+    # Si hay MÁS de una corrida Exitosa posterior al disparo (ej. el job automático corrió en la
+    # misma ventana), es AMBIGUO -- se ABORTA en vez de elegir en silencio (mismo criterio que
+    # Decisión 11 y armar-kit.sh).
+    local momento_disparo_epoch
+    momento_disparo_epoch="$(date -u +%s)"
+
     echo "  Disparando backup manual (POST /backups)..."
     ssh_vps_autenticado "$token" "curl -fsS -X POST http://127.0.0.1:${API_PORT}/backups" >/dev/null
 
@@ -306,8 +325,38 @@ paso2_backup() {
     for ((intento = 1; intento <= 30; intento++)); do
         local lista
         lista="$(ssh_vps_autenticado "$token" "curl -fsS http://127.0.0.1:${API_PORT}/backups" || true)"
-        backup_id="$(echo "$lista" | sed -n 's/.*"id":\([0-9]*\),"estado":"Exitoso".*/\1/p' | head -1)"
-        [[ -n "$backup_id" ]] && break
+
+        local objetos
+        objetos="$(printf '%s' "$lista" | grep -o '{"id":[0-9]\+,"finalizadaEn":"[^"]*","resultado":"[^"]*"[^}]*}' || true)"
+
+        local -a candidatos=()
+        local obj
+        while IFS= read -r obj; do
+            [[ -z "$obj" ]] && continue
+            local id_obj resultado_obj finalizada_obj finalizada_epoch
+            id_obj="$(printf '%s' "$obj" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')"
+            resultado_obj="$(printf '%s' "$obj" | sed -n 's/.*"resultado":"\([^"]*\)".*/\1/p')"
+            [[ "$resultado_obj" != "Exitosa" ]] && continue
+            finalizada_obj="$(printf '%s' "$obj" | sed -n 's/.*"finalizadaEn":"\([^"]*\)".*/\1/p')"
+            finalizada_epoch="$(date -u -d "$finalizada_obj" +%s 2>/dev/null || true)"
+            [[ -z "$finalizada_epoch" ]] && continue
+            [[ "$finalizada_epoch" -ge "$momento_disparo_epoch" ]] && candidatos+=("$id_obj")
+        done <<< "$objetos"
+
+        if [[ "${#candidatos[@]}" -gt 1 ]]; then
+            echo "ERROR: hay ${#candidatos[@]} corridas de backup Exitosas posteriores al disparo de" >&2
+            echo "       este deploy (ids: ${candidatos[*]}) -- AMBIGUO, no se elige en silencio." >&2
+            echo "       Probablemente el backup programado (BackupProgramadoService) corrió en la" >&2
+            echo "       misma ventana que este disparo manual. Esperá a que termine o revisá" >&2
+            echo "       GET /backups a mano para decidir cuál es el punto de retorno correcto." >&2
+            exit 1
+        fi
+
+        if [[ "${#candidatos[@]}" -eq 1 ]]; then
+            backup_id="${candidatos[0]}"
+            break
+        fi
+
         sleep 2
     done
 
