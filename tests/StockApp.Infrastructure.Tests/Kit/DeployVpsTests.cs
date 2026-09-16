@@ -44,7 +44,10 @@ public class DeployVpsTests
     /// stockapp-pg psql ... -tA", sin rastro de SQL): hay que leer stdin para decidir la
     /// respuesta, igual que haría el psql real.
     /// </summary>
-    private static string SshFalso(bool simularDuplicados = false, bool simularFalloConsulta = false) => $$"""
+    private static string SshFalso(
+        bool simularDuplicados = false, bool simularFalloConsulta = false,
+        bool simularFalloConsultaPaso6 = false, bool simularRespuestaNoNumericaPaso6 = false,
+        bool simularFalloPolling = false, bool simularFalloConectividadEstadoServicio = false) => $$"""
         #!/usr/bin/env bash
         {
             printf 'ARGS:'
@@ -66,6 +69,13 @@ public class DeployVpsTests
                                 ? "echo 'nombre duplicado|1, 2|2'; exit 0"
                                 : ": # sin duplicados, sin salida; exit 0")}}
                         ;;
+                    *"__EFMigrationsHistory"*)
+                        {{(simularFalloConsultaPaso6
+                            ? "echo 'psql: FATAL: no se pudo conectar (simulado)' >&2; exit 3"
+                            : simularRespuestaNoNumericaPaso6
+                                ? "echo 'ERROR:  relation \"__EFMigrationsHistory\" does not exist (simulado)'; exit 0"
+                                : "echo 25; exit 0")}}
+                        ;;
                     *)
                         exit 0
                         ;;
@@ -85,6 +95,7 @@ public class DeployVpsTests
                 exit 0
                 ;;
             *"curl -fsS http"*"/backups"*)
+                {{(simularFalloPolling ? "echo 'curl: (7) Failed to connect (simulado)' >&2; exit 7" : "")}}
                 # Contrato real (BackupDtos.CorridaBackupDto + camelCase por default de
                 # ConfigureHttpJsonOptions): campos "finalizadaEn"/"resultado", valor "Exitosa"
                 # (no "estado"/"Exitoso", que nunca existió). "finalizadaEn" se genera EN EL
@@ -104,17 +115,14 @@ public class DeployVpsTests
                 fi
                 exit 0
                 ;;
-            *"__EFMigrationsHistory"*)
-                echo "5"
-                exit 0
-                ;;
             *"licencia/estado"*)
                 echo '{"activada":true,"codigoMaquina":"TEST-0000"}'
                 exit 0
                 ;;
             *"systemctl is-active stockapp-api"*)
-                echo "active"
-                exit 0
+                {{(simularFalloConectividadEstadoServicio
+                    ? "echo 'ssh: connect to host 194.163.142.86 port 34377: Connection refused (simulado)' >&2; exit 255"
+                    : "echo active; exit 0")}}
                 ;;
             *"install.sh"*)
                 echo "(stub) instalacion OK"
@@ -162,11 +170,17 @@ public class DeployVpsTests
             UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
     }
 
-    private static string CrearTestbin(bool simularDuplicados = false, bool simularFalloConsulta = false)
+    private static string CrearTestbin(
+        bool simularDuplicados = false, bool simularFalloConsulta = false,
+        bool simularFalloConsultaPaso6 = false, bool simularRespuestaNoNumericaPaso6 = false,
+        bool simularFalloPolling = false, bool simularFalloConectividadEstadoServicio = false)
     {
         var dir = Path.Combine(Path.GetTempPath(), "deploy-vps-testbin-" + Guid.NewGuid());
         Directory.CreateDirectory(dir);
-        EscribirEjecutable(Path.Combine(dir, "ssh"), SshFalso(simularDuplicados, simularFalloConsulta));
+        EscribirEjecutable(Path.Combine(dir, "ssh"), SshFalso(
+            simularDuplicados, simularFalloConsulta,
+            simularFalloConsultaPaso6, simularRespuestaNoNumericaPaso6, simularFalloPolling,
+            simularFalloConectividadEstadoServicio));
         EscribirEjecutable(Path.Combine(dir, "scp"), ScpFalso);
         return dir;
     }
@@ -229,9 +243,14 @@ public class DeployVpsTests
     private static (int ExitCode, string Stdout, string Stderr, string RastroSsh, string RastroScp, string RastroPublish) Correr(
         string repoFixture, string argumentos, bool simularDuplicados = false,
         string scpTamanoBytes = "2048", string vpsUser = "operador",
-        bool simularBackupViejoPrimero = false, bool simularFalloConsulta = false)
+        bool simularBackupViejoPrimero = false, bool simularFalloConsulta = false,
+        bool simularFalloConsultaPaso6 = false, bool simularRespuestaNoNumericaPaso6 = false,
+        bool simularFalloPolling = false, bool simularFalloConectividadEstadoServicio = false)
     {
-        var testbin = CrearTestbin(simularDuplicados, simularFalloConsulta);
+        var testbin = CrearTestbin(
+            simularDuplicados, simularFalloConsulta,
+            simularFalloConsultaPaso6, simularRespuestaNoNumericaPaso6, simularFalloPolling,
+            simularFalloConectividadEstadoServicio);
         var rastroSsh = Path.Combine(Path.GetTempPath(), "deploy-vps-rastro-ssh-" + Guid.NewGuid());
         var rastroScp = Path.Combine(Path.GetTempPath(), "deploy-vps-rastro-scp-" + Guid.NewGuid());
         var rastroPublish = Path.Combine(Path.GetTempPath(), "deploy-vps-rastro-publish-" + Guid.NewGuid());
@@ -405,8 +424,11 @@ public class DeployVpsTests
     /// docker falso para el test de reparseo: registra en $RASTRO_DOCKER la CANTIDAD exacta de
     /// argumentos que recibió (ARGV(n):...) y, si '-i' está entre ellos (docker exec -i, la
     /// forma nueva que lee de stdin), también el contenido crudo de su entrada estándar. No
-    /// hace falta comportarse como psql de verdad -- alcanza con probar que ni la CANTIDAD de
-    /// argumentos ni el contenido de stdin se corrompen al pasar por el reparseo.
+    /// hace falta comportarse como psql de verdad para el pre-vuelo -- alcanza con probar que ni
+    /// la CANTIDAD de argumentos ni el contenido de stdin se corrompen al pasar por el reparseo.
+    /// Para el conteo de migraciones del paso 6 (BUG A) SÍ hace falta devolver un número real por
+    /// stdout -- si no, el script del caso feliz abortaría por "no es un número" y el guardián de
+    /// quoting de paso 6 no podría llegar a afirmar nada sobre el argv/stdin que le llegó a docker.
     /// </summary>
     private const string DockerFalso = """
         #!/usr/bin/env bash
@@ -421,11 +443,14 @@ public class DeployVpsTests
             [[ "$a" == "-i" ]] && tiene_dash_i=1
         done
         if [[ "$tiene_dash_i" -eq 1 ]]; then
+            entrada="$(cat)"
             {
-                printf 'STDIN:'
-                cat
+                printf 'STDIN:%s' "$entrada"
                 printf '\n'
             } >> "${RASTRO_DOCKER:?}"
+            case "$entrada" in
+                *"__EFMigrationsHistory"*) echo "5" ;;
+            esac
         fi
         exit 0
         """;
@@ -435,6 +460,60 @@ public class DeployVpsTests
     /// por 'eval'.</summary>
     private const string SudoFalso = "#!/usr/bin/env bash\nexit 1\n";
     private const string SystemctlFalso = "#!/usr/bin/env bash\necho inactive\nexit 1\n";
+
+    /// <summary>
+    /// sudo falso que SÍ ejecuta el comando (sin privilegios reales) -- para el camino feliz
+    /// completo bajo reparseo (a diferencia de <see cref="SudoFalso"/>, que es un no-op pensado
+    /// solo para el paso 0 no bloqueante de --dry-run).
+    /// </summary>
+    private const string SudoEjecutaFalso = "#!/usr/bin/env bash\nexec \"$@\"\n";
+
+    /// <summary>systemctl falso que siempre reporta "active" -- para que el camino feliz completo
+    /// bajo reparseo llegue OK hasta el final del paso 6.</summary>
+    private const string SystemctlActivoFalso = "#!/usr/bin/env bash\necho active\nexit 0\n";
+
+    /// <summary>
+    /// curl falso para el camino feliz completo bajo reparseo: como 'ssh' acá es
+    /// <see cref="SshReparseoRealFalso"/> (eval real), cada 'curl ...' que el script arma como
+    /// texto de comando remoto termina ejecutándose de verdad contra ESTE binario (vía PATH) --
+    /// dispatcha por el contenido de "$@" igual que el resto de los stubs de esta clase.
+    /// </summary>
+    private const string CurlReparseFalso = """
+        #!/usr/bin/env bash
+        args=("$@")
+        texto="${args[*]}"
+
+        salida_o=""
+        for ((i = 0; i < ${#args[@]}; i++)); do
+            [[ "${args[i]}" == "-o" ]] && salida_o="${args[i + 1]}"
+        done
+
+        case "$texto" in
+            *"/auth/login"*)
+                cat >/dev/null
+                echo '{"token":"FAKE-TOKEN-123"}'
+                ;;
+            *"/backups/"*"/contenido"*)
+                cat >/dev/null
+                [[ -n "$salida_o" ]] && head -c 2048 /dev/zero > "$salida_o"
+                ;;
+            *"-X POST"*"/backups"*)
+                cat >/dev/null
+                ;;
+            *"/backups"*)
+                cat >/dev/null
+                ahora="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+                printf '[{"id":42,"finalizadaEn":"%s","resultado":"Exitosa","nombreArchivo":"x.bin","tamanioBytes":2048,"motivoFallo":null}]\n' "$ahora"
+                ;;
+            *"/licencia/estado"*)
+                echo '{"activada":true,"codigoMaquina":"TEST-0000"}'
+                ;;
+            *)
+                cat >/dev/null
+                ;;
+        esac
+        exit 0
+        """;
 
     [Fact]
     public void Prevuelo_LaSqlLlegaIntactaPorStdin_AunqueElShellRemotoLaReparse()
@@ -481,6 +560,79 @@ public class DeployVpsTests
         {
             Directory.Delete(repo, recursive: true);
             Directory.Delete(testbin, recursive: true);
+            if (File.Exists(rastroDocker)) File.Delete(rastroDocker);
+        }
+    }
+
+    // ---------- Regla: la SQL del conteo de migraciones (paso 6) también viaja por stdin, nunca por argv ----------
+
+    /// <summary>
+    /// Guardián de quoting para el paso 6 (BUG A) -- MISMA técnica de reparseo real con 'eval'
+    /// que <see cref="Prevuelo_LaSqlLlegaIntactaPorStdin_AunqueElShellRemotoLaReparse"/>, que es
+    /// justo la que habría cazado el bug de quoting original si hubiera existido en su momento.
+    /// A diferencia de aquel test, acá hace falta correr el CAMINO COMPLETO (sin --dry-run) para
+    /// llegar al paso 6 -- así que además de ssh/docker se stubean sudo (ejecuta de verdad, sin
+    /// privilegios), systemctl (siempre "active") y curl (dispatcha por URL, ya que bajo 'eval'
+    /// cada 'curl ...' del texto de comando remoto corre de verdad contra el PATH del test).
+    /// VPS_DIR apunta a un directorio real (no al VPS) con un install.sh de stub -- porque bajo
+    /// 'eval', "ssh_vps 'cd VPS_DIR && sudo ./install.sh ...'" corre LITERALMENTE en esta
+    /// máquina.
+    /// </summary>
+    [Fact]
+    public void Paso6_LaSqlDelConteoDeMigracionesLlegaIntactaPorStdinAunqueElShellRemotoLaReparse()
+    {
+        var repo = CrearRepoFixture();
+        var testbin = Path.Combine(Path.GetTempPath(), "deploy-vps-testbin-reparseo6-" + Guid.NewGuid());
+        Directory.CreateDirectory(testbin);
+        EscribirEjecutable(Path.Combine(testbin, "ssh"), SshReparseoRealFalso);
+        EscribirEjecutable(Path.Combine(testbin, "scp"), ScpFalso);
+        EscribirEjecutable(Path.Combine(testbin, "docker"), DockerFalso);
+        EscribirEjecutable(Path.Combine(testbin, "sudo"), SudoEjecutaFalso);
+        EscribirEjecutable(Path.Combine(testbin, "systemctl"), SystemctlActivoFalso);
+        EscribirEjecutable(Path.Combine(testbin, "curl"), CurlReparseFalso);
+
+        var vpsDir = Path.Combine(Path.GetTempPath(), "deploy-vps-vpsdir-reparseo6-" + Guid.NewGuid());
+        Directory.CreateDirectory(vpsDir);
+        EscribirEjecutable(Path.Combine(vpsDir, "install.sh"), "#!/usr/bin/env bash\necho '(stub) instalacion OK'\nexit 0\n");
+        File.WriteAllText(Path.Combine(vpsDir, ".env"), "");
+
+        var rastroDocker = Path.Combine(Path.GetTempPath(), "deploy-vps-rastro-docker6-" + Guid.NewGuid());
+        try
+        {
+            var script =
+                $"export PATH=\"{testbin}:$PATH\"\n" +
+                $"export RASTRO_DOCKER=\"{rastroDocker}\"\n" +
+                $"export VPS_DIR=\"{vpsDir}\"\n" +
+                "export VPS_USER=\"operador\"\n" +
+                $"bash \"{repo}/deploy/deploy-vps.sh\" 1.0.0";
+            var (exitCode, stdout, stderr) = EjecutorBash.Ejecutar(script);
+            var docker = File.Exists(rastroDocker) ? File.ReadAllText(rastroDocker) : "";
+
+            Assert.True(exitCode == 0, $"stdout={stdout}\nstderr={stderr}\ndocker={docker}");
+            Assert.Contains("Migraciones aplicadas: 5", stdout + stderr);
+
+            // Las 7 del pre-vuelo (paso 1) + 1 del conteo de migraciones (paso 6) = 8
+            // invocaciones a psql con la forma EXACTA de 11 tokens -- el bug original corrompía
+            // esto agregando un argumento extra a docker cuando la SQL interpolada tenía una
+            // comilla simple embebida.
+            var lineasArgvPsql = docker.Split('\n')
+                .Where(l => l.StartsWith("ARGV(") && l.Contains("-tA")).ToList();
+            Assert.True(lineasArgvPsql.Count == 8,
+                $"Se esperaban 8 invocaciones a psql (7 del pre-vuelo + 1 del conteo de migraciones), hubo {lineasArgvPsql.Count}:\n{docker}");
+            Assert.All(lineasArgvPsql, l => Assert.StartsWith("ARGV(11):", l));
+
+            // La SQL del conteo de migraciones NUNCA aparece en el argv -- solo pudo llegar por
+            // stdin, igual que la del pre-vuelo.
+            Assert.All(lineasArgvPsql, l => Assert.DoesNotContain("__EFMigrationsHistory", l));
+
+            // Y por stdin llega INTACTA.
+            Assert.Contains("STDIN:SELECT COUNT(*) FROM \"__EFMigrationsHistory\";", docker);
+        }
+        finally
+        {
+            Directory.Delete(repo, recursive: true);
+            Directory.Delete(testbin, recursive: true);
+            Directory.Delete(vpsDir, recursive: true);
             if (File.Exists(rastroDocker)) File.Delete(rastroDocker);
         }
     }
@@ -597,12 +749,140 @@ public class DeployVpsTests
             Assert.Contains("ARGS: 1.2.3", rastroPublish);
             Assert.Contains("stockapp-api-1.2.3-linux-x64.tar.gz", stderr);
             Assert.Contains("licencia/estado", rastroSsh);
-            Assert.Contains("__EFMigrationsHistory", rastroSsh);
+            // La SQL del conteo de migraciones (BUG A, ver deploy-vps.sh) viaja por STDIN, no
+            // por argv -- "__EFMigrationsHistory" ya no puede aparecer en el rastro de ARGS de
+            // ssh (eso sería el mismo bug de antes). Lo que sí tiene que verse es el conteo real
+            // que devolvió el stub ("25") reportado en la salida.
+            Assert.DoesNotContain("__EFMigrationsHistory", rastroSsh);
+            Assert.Contains("Migraciones aplicadas: 25", salida);
             // %q escapa los espacios con '\ ' al volcar el rastro -- normalizamos antes de
             // buscar una substring con espacios.
             Assert.Contains("systemctl is-active stockapp-api", rastroSsh.Replace("\\ ", " "));
+            Assert.Contains("Estado de stockapp-api: active", salida);
             Assert.NotEqual("", rastroScp);
             Assert.Contains("VPS COMPARTIDO", salida);
+        }
+        finally { Directory.Delete(repo, recursive: true); }
+    }
+
+    // ---------- Regla: si la consulta de migraciones del paso 6 FALLA, se ABORTA -- nunca se aprueba el deploy en silencio ----------
+
+    /// <summary>
+    /// EL GUARDIÁN ESTRELLA de este brief: BUG A (deploy-vps.sh, paso6_verificar), el MISMO
+    /// patrón que <see cref="PrevueloFallaAlConsultar_AbortaSinConfundirloConSinDuplicados"/>
+    /// pero en el paso que certifica que el deploy salió bien, no en el que lo frena antes de
+    /// tocar nada. Antes de este fix, un "|| true" ciego dejaba 'conteo_migraciones' vacío si la
+    /// consulta fallaba (docker/psql caído, credenciales, VPS inalcanzable) y el script imprimía
+    /// una línea en blanco como si fuera el conteo real -- SIN abortar, reportando "OK: deploy
+    /// verificado" sobre un servidor que nunca se pudo verificar de verdad.
+    ///
+    /// Simula esa falla (el stub de ssh sale con código != 0 y escribe en stderr, mismo contrato
+    /// que un psql real que no pudo correr la consulta) y confirma que el script AHORA aborta con
+    /// un mensaje explícito -- nunca con el falso "OK: deploy ... verificado".
+    /// </summary>
+    [Fact]
+    public void Paso6ConteoMigracionesFallaAlConsultar_AbortaSinAprobarElDeployEnSilencio()
+    {
+        var repo = CrearRepoFixture();
+        try
+        {
+            var (exitCode, stdout, stderr, rastroSsh, _, _) =
+                Correr(repo, "1.2.3", simularFalloConsultaPaso6: true);
+            var salida = stdout + stderr;
+
+            Assert.NotEqual(0, exitCode);
+            Assert.Contains("no se pudo verificar el conteo de migraciones", salida, StringComparison.OrdinalIgnoreCase);
+            // El mensaje tiene que dejar explícito que un fallo de consulta NO ES un deploy
+            // verificado -- si esta afirmación fallara, sería la MISMA confusión del bug real.
+            Assert.DoesNotContain("OK: deploy", salida);
+            Assert.Contains("psql: FATAL", salida);
+            // Sí llegó hasta el paso 6 (licencia/estado se consultó antes de la falla).
+            Assert.Contains("licencia/estado", rastroSsh);
+        }
+        finally { Directory.Delete(repo, recursive: true); }
+    }
+
+    // ---------- Regla: si la consulta de migraciones del paso 6 devuelve algo que no es un número, también se aborta ----------
+
+    [Fact]
+    public void Paso6ConteoMigracionesDevuelveAlgoQueNoEsUnNumero_Aborta()
+    {
+        var repo = CrearRepoFixture();
+        try
+        {
+            var (exitCode, stdout, stderr, _, _, _) =
+                Correr(repo, "1.2.3", simularRespuestaNoNumericaPaso6: true);
+            var salida = stdout + stderr;
+
+            Assert.NotEqual(0, exitCode);
+            Assert.Contains("no se pudo verificar el conteo de migraciones", salida, StringComparison.OrdinalIgnoreCase);
+            // La basura de psql (mensaje de error impreso a STDOUT, sin que el exit code lo
+            // delate) nunca se reporta como si fuera el conteo real.
+            Assert.DoesNotContain("Migraciones aplicadas: ERROR", salida);
+            Assert.DoesNotContain("OK: deploy", salida);
+            Assert.Contains("salida inesperada (no es un número)", salida);
+        }
+        finally { Directory.Delete(repo, recursive: true); }
+    }
+
+    // ---------- Regla: si no se puede CONSULTAR el estado del servicio (paso 6), no se confunde con "está caído" ----------
+
+    /// <summary>
+    /// Mismo criterio que BUG A, aplicado al tercer chequeo del paso 6 (systemctl is-active):
+    /// antes, un "|| true" ciego dejaba 'estado_servicio' vacío tanto si NO SE PUDO CONECTAR al
+    /// VPS por SSH como si SÍ se conectó y el servicio está "inactive"/"failed" -- ambos casos
+    /// terminaban en el mismo mensaje "no quedó activo", que es verdad para el segundo caso pero
+    /// ENGAÑOSO para el primero (nunca se preguntó). Este guardián simula un fallo de
+    /// CONECTIVIDAD (ssh sale con código != 0, stderr con el error real, SIN imprimir ningún
+    /// estado) y confirma que el script distingue "no pude preguntar" de "pregunté y está mal".
+    /// </summary>
+    [Fact]
+    public void Paso6NoPuedeConsultarEstadoDelServicio_NoLoConfundeConServicioCaido()
+    {
+        var repo = CrearRepoFixture();
+        try
+        {
+            var (exitCode, stdout, stderr, _, _, _) =
+                Correr(repo, "1.2.3", simularFalloConectividadEstadoServicio: true);
+            var salida = stdout + stderr;
+
+            Assert.NotEqual(0, exitCode);
+            Assert.Contains("no se pudo consultar el estado de stockapp-api", salida, StringComparison.OrdinalIgnoreCase);
+            // El mensaje real (fallo de conectividad SSH), nunca el genérico de "no quedó activo"
+            // que insinuaría que SÍ se preguntó y el servicio está mal.
+            Assert.Contains("Connection refused (simulado)", salida);
+            Assert.DoesNotContain("no quedó activo tras el deploy", salida);
+        }
+        finally { Directory.Delete(repo, recursive: true); }
+    }
+
+    // ---------- Regla (BUG B): si la consulta de polling del paso 2 FALLA, se aborta rápido -- no se agotan los 30 reintentos ----------
+
+    /// <summary>
+    /// BUG B (deploy-vps.sh:378, paso2_backup): un "|| true" ciego confundía "la consulta de
+    /// GET /backups FALLÓ" con "el backup todavía no terminó" -- ambos casos dejaban 'lista'
+    /// vacía y el loop simplemente reintentaba, agotando los 30 intentos (~60s) para terminar
+    /// abortando por timeout con un motivo EQUIVOCADO ("el backup manual no terminó") en vez del
+    /// motivo real (la consulta de estado falló). Este guardián simula la consulta fallando
+    /// SIEMPRE y confirma que el script aborta con el motivo real, sin agotar los reintentos.
+    /// </summary>
+    [Fact]
+    public void Paso2PollingDeBackupsFallaAlConsultar_AbortaRapidoConElMotivoReal()
+    {
+        var repo = CrearRepoFixture();
+        try
+        {
+            var (exitCode, stdout, stderr, _, _, rastroPublish) =
+                Correr(repo, "1.2.3", simularFalloPolling: true);
+            var salida = stdout + stderr;
+
+            Assert.NotEqual(0, exitCode);
+            Assert.Contains("no se pudo consultar GET /backups", salida, StringComparison.OrdinalIgnoreCase);
+            // El motivo real (curl falló), nunca el motivo equivocado de un timeout agotado.
+            Assert.DoesNotContain("el backup manual no terminó", salida, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("curl: (7)", salida);
+            // Abortó ANTES de publicar/instalar -- nunca llegó a esos pasos.
+            Assert.Equal("", rastroPublish);
         }
         finally { Directory.Delete(repo, recursive: true); }
     }

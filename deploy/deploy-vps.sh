@@ -374,8 +374,34 @@ paso2_backup() {
     # shellcheck disable=SC2034  # 'intento' solo cuenta iteraciones, no se usa en el cuerpo.
     local -i intento
     for ((intento = 1; intento <= 30; intento++)); do
+        # BUG B (hallado por revisión independiente, mismo patrón que el resto de este script):
+        # un '|| true' ciego confundía "la consulta de estado FALLÓ" (VPS inalcanzable,
+        # credenciales vencidas, curl caído) con "el backup todavía no terminó" -- ambos daban
+        # 'lista' vacía y el loop simplemente reintentaba, agotando los 30 intentos (~60s) para
+        # terminar abortando por timeout con un motivo equivocado. Ahora se captura el exit code
+        # por separado y, si la consulta en sí falló, se ABORTA DE INMEDIATO con el motivo real
+        # -- no se gasta el resto de los reintentos en algo que nunca va a cambiar de resultado.
+        local archivo_stderr_poll
+        archivo_stderr_poll="$(mktemp)"
         local lista
-        lista="$(ssh_vps_autenticado "$token" "curl -fsS http://127.0.0.1:${API_PORT}/backups" || true)"
+        local codigo_poll=0
+        lista="$(ssh_vps_autenticado "$token" "curl -fsS http://127.0.0.1:${API_PORT}/backups" 2>"$archivo_stderr_poll")" || codigo_poll=$?
+        local error_poll
+        error_poll="$(cat "$archivo_stderr_poll")"
+        rm -f "$archivo_stderr_poll"
+
+        if [[ "$codigo_poll" -ne 0 ]]; then
+            echo >&2
+            echo "ERROR: no se pudo consultar GET /backups para esperar el backup (código de" >&2
+            echo "       salida: ${codigo_poll})." >&2
+            echo "       ESTO NO ES 'el backup no terminó' -- es que la consulta de estado FALLÓ." >&2
+            echo "       ABORTO ahora en vez de agotar los 30 reintentos con un motivo equivocado." >&2
+            if [[ -n "$error_poll" ]]; then
+                echo "       stderr:" >&2
+                echo "$error_poll" >&2
+            fi
+            exit 1
+        fi
 
         local objetos
         objetos="$(printf '%s' "$lista" | grep -o '{"id":[0-9]\+,"finalizadaEn":"[^"]*","resultado":"[^"]*"[^}]*}' || true)"
@@ -546,12 +572,79 @@ paso6_verificar() {
     ssh_vps "curl -fsS http://127.0.0.1:${API_PORT}/licencia/estado"
     echo
 
+    # BUG A (hallado por revisión independiente, mismo patrón que paso1_prevuelo_migraciones):
+    # la SQL viajaba por argv ('-tAc "SELECT ..."') y el resultado se capturaba con '|| true'
+    # a ciegas. Si la consulta fallaba (docker/psql caído, credenciales, VPS inalcanzable),
+    # 'conteo_migraciones' quedaba vacío y el script imprimía una línea en blanco como si fuera
+    # el conteo real -- SIN abortar. A diferencia del pre-vuelo (que te frena ANTES de tocar
+    # nada), este es el paso que certifica que el deploy salió bien: un paso 6 que no pudo
+    # consultar y aun así sigue de largo te deja terminar el deploy, ver "OK" e irte con el
+    # servidor sin verificar de verdad. Mismo fix que el pre-vuelo: SQL por stdin (nunca por
+    # argv, nada que un shell remoto pueda reparsear mal) + exit code y stderr capturados por
+    # separado + se exige que la salida sea un número -- cualquier otra cosa (fallo o basura
+    # en stdout) ABORTA el deploy en vez de aprobarlo en silencio.
+    local sql_conteo='SELECT COUNT(*) FROM "__EFMigrationsHistory";'
+    local cmd_remoto_conteo
+    cmd_remoto_conteo="docker exec -i stockapp-pg psql -U \"${POSTGRES_USER}\" -d \"${POSTGRES_DB}\" -h 127.0.0.1 -tA"
+
+    local archivo_stderr_conteo
+    archivo_stderr_conteo="$(mktemp)"
     local conteo_migraciones
-    conteo_migraciones="$(ssh_vps "docker exec stockapp-pg psql -U \"${POSTGRES_USER}\" -d \"${POSTGRES_DB}\" -h 127.0.0.1 -tAc 'SELECT COUNT(*) FROM \"__EFMigrationsHistory\"'" || true)"
+    local codigo_salida_conteo=0
+    conteo_migraciones="$(printf '%s' "$sql_conteo" | ssh_vps "$cmd_remoto_conteo" 2>"$archivo_stderr_conteo")" || codigo_salida_conteo=$?
+    local error_conteo
+    error_conteo="$(cat "$archivo_stderr_conteo")"
+    rm -f "$archivo_stderr_conteo"
+
+    if [[ "$codigo_salida_conteo" -ne 0 ]] || [[ -n "$error_conteo" ]] || ! [[ "$conteo_migraciones" =~ ^[0-9]+$ ]]; then
+        echo >&2
+        echo "ERROR: no se pudo verificar el conteo de migraciones aplicadas (código de salida:" >&2
+        echo "       ${codigo_salida_conteo})." >&2
+        echo "       ESTO NO ES un deploy verificado -- es que el paso 6 NO PUDO CONSULTAR la" >&2
+        echo "       base. Un paso de verificación que no pudo verificar no aprueba el deploy:" >&2
+        echo "       ABORTO en vez de reportar el deploy como OK." >&2
+        if [[ -n "$error_conteo" ]]; then
+            echo "       stderr de la consulta remota:" >&2
+            echo "$error_conteo" >&2
+        elif [[ -n "$conteo_migraciones" ]]; then
+            echo "       salida inesperada (no es un número): '${conteo_migraciones}'" >&2
+        fi
+        exit 1
+    fi
+
     echo "  Migraciones aplicadas: ${conteo_migraciones}"
 
+    # Mismo criterio para el estado del servicio: 'systemctl is-active' siempre imprime algo
+    # por stdout (active/inactive/failed/unknown) sin importar su exit code (usa el exit code
+    # PARA CODIFICAR el estado, no para señalar un fallo de consulta) -- así que "vacío" es la
+    # única señal confiable de que NO se pudo preguntar (ssh no llegó al VPS, timeout, etc.),
+    # distinto de "until pregunté y el servicio está caído" (que sí trae un valor por stdout,
+    # típicamente con exit != 0). Antes, un '|| true' ciego dejaba pasar ambos casos como si
+    # fueran el mismo "no está active" -- confundiendo "no until pude preguntar" con "until
+    # pregunté y está mal".
+    local archivo_stderr_estado
+    archivo_stderr_estado="$(mktemp)"
     local estado_servicio
-    estado_servicio="$(ssh_vps "systemctl is-active stockapp-api" || true)"
+    local codigo_ssh_estado=0
+    estado_servicio="$(ssh_vps "systemctl is-active stockapp-api" 2>"$archivo_stderr_estado")" || codigo_ssh_estado=$?
+    local error_estado
+    error_estado="$(cat "$archivo_stderr_estado")"
+    rm -f "$archivo_stderr_estado"
+
+    if [[ -z "$estado_servicio" ]]; then
+        echo >&2
+        echo "ERROR: no se pudo consultar el estado de stockapp-api (código de salida ssh:" >&2
+        echo "       ${codigo_ssh_estado})." >&2
+        echo "       ESTO NO ES 'servicio caído' -- es que no se pudo CONECTAR al VPS para" >&2
+        echo "       preguntar. Un paso de verificación que no pudo verificar no aprueba el" >&2
+        echo "       deploy: ABORTO." >&2
+        if [[ -n "$error_estado" ]]; then
+            echo "       stderr:" >&2
+            echo "$error_estado" >&2
+        fi
+        exit 1
+    fi
+
     echo "  Estado de stockapp-api: ${estado_servicio}"
 
     if [[ "$estado_servicio" != "active" ]]; then
