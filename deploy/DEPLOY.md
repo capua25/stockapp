@@ -198,7 +198,20 @@ docker exec -e PGPASSWORD=<POSTGRES_PASSWORD> stockapp-pg \
 
 ## 3. Publicar, copiar e instalar la API
 
-En tu máquina:
+**Camino automatizado (recomendado):** `deploy/deploy-vps.sh <version>` hace todo lo de
+esta sección (más un pre-vuelo de migraciones y un backup de la versión vieja, ver Fase 6
+del plan de deploy) en un solo comando. Necesita `VPS_USER` definida en el entorno:
+
+```bash
+VPS_USER=usuario deploy/deploy-vps.sh 1.5.0
+```
+
+Probalo primero con `--dry-run` (corre solo el pre-vuelo de migraciones, de solo lectura,
+sin tocar nada más) y usá `--sin-backup` únicamente si aceptás quedarte sin punto de
+retorno. El camino manual de abajo sigue siendo el **fallback** si el script falla — es el
+que está verificado en producción, y `deploy-vps.sh` en el fondo ejecuta los mismos pasos.
+
+En tu máquina (camino manual):
 
 ```bash
 deploy/publish-api.sh                 # genera deploy/dist/stockapp-api-<version>-linux-x64.tar.gz
@@ -560,6 +573,16 @@ de este problema.
 ---
 
 ## 8. Actualizar a una versión nueva
+
+**Camino automatizado (recomendado):** lo de abajo, más el pre-vuelo de migraciones y el
+backup de la versión vieja, en un solo comando (ver sección 3 y Fase 6 del plan de
+deploy):
+
+```bash
+VPS_USER=usuario deploy/deploy-vps.sh 1.5.0
+```
+
+Camino manual:
 
 ```bash
 # En tu máquina
