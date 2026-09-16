@@ -115,6 +115,19 @@ ssh_vps_autenticado() {
     printf 'header = "Authorization: Bearer %s"\n' "$token" | ssh_vps "${cmd} -K -"
 }
 
+# RUTA_REMOTA_BACKUP: seteada por paso2_backup() una vez que crea el dump temporal en el VPS.
+# limpiar_backup_remoto() lo borra pase lo que pase -- registrada como trap EXIT (no solo un 'rm'
+# al final del camino feliz) porque el VPS es COMPARTIDO con 'pinar' y un dump completo de la
+# base del municipio abandonado en /tmp es legible por cualquier otro usuario del sistema (BUG 2,
+# hallado por revisión independiente). No hay otro trap EXIT en este script para encadenar.
+RUTA_REMOTA_BACKUP=""
+limpiar_backup_remoto() {
+    if [[ -n "$RUTA_REMOTA_BACKUP" ]]; then
+        ssh_vps "rm -f '${RUTA_REMOTA_BACKUP}'" || true
+    fi
+}
+trap limpiar_backup_remoto EXIT
+
 ENV_LOCAL="${REPO_ROOT}/deploy/.env"
 if [[ -f "$ENV_LOCAL" ]]; then
     set -a
@@ -365,7 +378,21 @@ paso2_backup() {
         exit 1
     fi
 
-    local ruta_remota="/tmp/stockapp-backup-pre-deploy-${VERSION}.bin"
+    # Nombre FIJO y predecible (BUG 2, hallado por revisión independiente): un dump completo de
+    # la base quedaba en un /tmp COMPARTIDO con 'pinar', sin chmod y sin borrarse nunca. Ahora se
+    # crea con mktemp DENTRO del propio VPS (nunca un nombre armado acá), se restringe con
+    # chmod 600 antes de escribirle nada, y RUTA_REMOTA_BACKUP queda seteada para que
+    # limpiar_backup_remoto() (trap EXIT, ver arriba) lo borre pase lo que pase -- éxito, error a
+    # mitad de camino, o Ctrl-C.
+    local ruta_remota
+    ruta_remota="$(ssh_vps "mktemp /tmp/stockapp-backup-XXXXXX.bin")"
+    if [[ -z "$ruta_remota" ]]; then
+        echo "ERROR: no se pudo crear un archivo temporal remoto para el backup (mktemp)." >&2
+        exit 1
+    fi
+    RUTA_REMOTA_BACKUP="$ruta_remota"
+    ssh_vps "chmod 600 '${ruta_remota}'"
+
     ssh_vps_autenticado "$token" "curl -fsS -o '${ruta_remota}' http://127.0.0.1:${API_PORT}/backups/${backup_id}/contenido"
 
     local dir_backups_local="${REPO_ROOT}/deploy/dist/backups"
@@ -392,6 +419,13 @@ paso2_backup() {
     fi
 
     echo "  OK. Backup verificado: ${ruta_local} (${tamano} bytes)."
+
+    # Ya está a salvo en el local: no hace falta esperar a que termine TODO el script (pasos
+    # 3-6, que pueden tardar varios minutos) para sacar el dump de producción del /tmp
+    # compartido. limpiar_backup_remoto() (trap EXIT) sigue siendo la red de seguridad para
+    # cualquier camino que aborte ANTES de esta línea.
+    ssh_vps "rm -f '${ruta_remota}'" || true
+    RUTA_REMOTA_BACKUP=""
 }
 
 # ---------------------------------------------------------------------------------------

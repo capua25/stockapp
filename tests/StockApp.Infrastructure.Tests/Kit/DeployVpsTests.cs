@@ -60,6 +60,12 @@ public class DeployVpsTests
                 echo '{"token":"FAKE-TOKEN-123"}'
                 exit 0
                 ;;
+            *"mktemp "*"stockapp-backup"*)
+                # Ruta remota FIJA a propósito (no un mktemp real de verdad) -- así el test
+                # puede afirmar sobre el nombre exacto que el script usa después para chmod/rm.
+                echo "/tmp/stockapp-backup-FAKEID.bin"
+                exit 0
+                ;;
             *"-X POST"*"/backups"*)
                 exit 0
                 ;;
@@ -475,6 +481,71 @@ public class DeployVpsTests
             Assert.True(exitCode == 0, $"stdout={stdout}\nstderr={stderr}");
             Assert.Contains("/backups/2/contenido", ssh);
             Assert.DoesNotContain("/backups/1/contenido", ssh);
+        }
+        finally { Directory.Delete(repo, recursive: true); }
+    }
+
+    // ---------- Regla: el dump remoto usa mktemp y se borra siempre (BUG 2, VPS compartido) ----------
+
+    /// <summary>
+    /// BUG 2 (deploy/deploy-vps.sh:319, hallado por revisión independiente): la ruta remota del
+    /// dump pre-deploy era un nombre FIJO y predecible ("/tmp/stockapp-backup-pre-deploy-VERSION.bin")
+    /// y nunca se borraba -- un dump completo de la base del municipio quedaba legible en el /tmp
+    /// de un VPS COMPARTIDO con "pinar" indefinidamente. Estático: el script no puede volver a
+    /// tener una ruta fija bajo /tmp para el backup, y tiene que usar mktemp remoto.
+    /// </summary>
+    [Fact]
+    public void ElScript_NoUsaUnaRutaFijaEnTmpParaElDumpDeBackup()
+    {
+        var texto = File.ReadAllText(RutaScriptReal());
+
+        Assert.DoesNotMatch(@"/tmp/stockapp-backup-pre-deploy-\$\{VERSION\}", texto);
+        Assert.Contains("mktemp", texto);
+    }
+
+    /// <summary>
+    /// Dinámico (guardián fuerte): en el camino feliz, el script tiene que (1) crear la ruta
+    /// remota con mktemp (nunca un nombre armado a mano), (2) restringir permisos con chmod 600
+    /// ANTES de escribirle el dump, y (3) borrarla al terminar -- las tres cosas verificadas
+    /// contra el rastro REAL de comandos que le llegaron a 'ssh' (no contra el texto del script).
+    /// </summary>
+    [Fact]
+    public void PasoBackup_CreaElRemotoConMktempLoRestringeYLoBorraAlTerminar()
+    {
+        var repo = CrearRepoFixture();
+        try
+        {
+            var (exitCode, stdout, stderr, rastroSsh, _, _) = Correr(repo, "1.2.3");
+            var ssh = rastroSsh.Replace("\\ ", " ").Replace("\\'", "'");
+
+            Assert.True(exitCode == 0, $"stdout={stdout}\nstderr={stderr}");
+            Assert.Contains("mktemp /tmp/stockapp-backup-", ssh);
+            Assert.Contains("chmod 600 '/tmp/stockapp-backup-FAKEID.bin'", ssh);
+            Assert.Contains("rm -f '/tmp/stockapp-backup-FAKEID.bin'", ssh);
+        }
+        finally { Directory.Delete(repo, recursive: true); }
+    }
+
+    /// <summary>
+    /// El caso que de verdad importa: si el deploy ABORTA a mitad de camino DESPUÉS de haber
+    /// creado el dump remoto (acá, el mismo escenario que <see cref="BackupDeCeroBytes_Aborta"/> --
+    /// el backup bajado pesa 0 bytes), el archivo remoto se tiene que borrar IGUAL. Si no hay un
+    /// trap de limpieza (solo un 'rm' al final del camino feliz), este es justo el caso que se
+    /// escapa: el dump de producción queda abandonado en el VPS compartido.
+    /// </summary>
+    [Fact]
+    public void PasoBackup_SiElDeployAbortaDespuesDeCrearElRemoto_IgualLoBorra()
+    {
+        var repo = CrearRepoFixture();
+        try
+        {
+            var (exitCode, stdout, stderr, rastroSsh, _, _) =
+                Correr(repo, "1.2.3", scpTamanoBytes: "0");
+            var ssh = rastroSsh.Replace("\\ ", " ").Replace("\\'", "'");
+
+            Assert.NotEqual(0, exitCode);
+            Assert.Contains("mktemp /tmp/stockapp-backup-", ssh);
+            Assert.Contains("rm -f '/tmp/stockapp-backup-FAKEID.bin'", ssh);
         }
         finally { Directory.Delete(repo, recursive: true); }
     }
