@@ -385,6 +385,11 @@ curl -s http://127.0.0.1:5080/backups/salud -H "Authorization: Bearer <TOKEN_ADM
 ls -la /var/lib/stockapp/.local/share/StockApp/backups/
 ```
 
+Esto confirma que el mecanismo funciona el día de la instalación. Que alguien lo siga
+revisando DESPUÉS (bajada periódica de backups fuera del servidor + monitoreo de
+`/backups/salud`) es un procedimiento operativo, no técnico — ver
+[`deploy/PROCEDIMIENTOS.md`](PROCEDIMIENTOS.md).
+
 ---
 
 ## 7. Troubleshooting

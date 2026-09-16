@@ -150,11 +150,12 @@ quien tiene la clave privada para que emita una licencia nueva, y activala de nu
 - [ ] Confirmaste que la **reserva DHCP por MAC** (o la IP estática) quedó hecha y no va a
       cambiar.
 - [ ] Dejaste escrito, en el municipio, **quién** revisa `GET /backups/salud` y **cada
-      cuánto** — el chequeo 7 de `03-verificar.sh` solo confirma que el sistema de backups
-      responde el día de la instalación, no que alguien lo va a seguir mirando después. El
-      procedimiento detallado de esa revisión periódica todavía no existe como documento
-      (`deploy/PROCEDIMIENTOS.md`, planeado para una fase posterior) — hasta que exista, dejalo
-      escrito a mano vos mismo.
+      cuánto**, y **quién** baja los backups fuera del servidor — el chequeo 7 de
+      `03-verificar.sh` solo confirma que el sistema de backups responde el día de la
+      instalación, no que alguien lo va a seguir mirando después. El procedimiento detallado
+      de la bajada periódica, el monitoreo de salud y qué hacer si reinstalan el servidor ya
+      está escrito en [`../PROCEDIMIENTOS.md`](../PROCEDIMIENTOS.md) — completá ahí, con el
+      municipio, los nombres de responsable y suplente antes de irte.
 
 ---
 
