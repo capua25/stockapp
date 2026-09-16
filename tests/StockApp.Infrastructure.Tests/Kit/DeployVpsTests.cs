@@ -637,6 +637,110 @@ public class DeployVpsTests
         }
     }
 
+    // ---------- Regla: VPS_DIR por defecto ("~/stockapp-deploy") se expande a una ruta ----------
+    // ---------- ABSOLUTA -- el mkdir/cd remotos y el destino del scp apuntan al MISMO dir ------
+
+    /// <summary>
+    /// Bug real encontrado en el deploy no-op contra el VPS: "~" NO se expande dentro de
+    /// comillas dobles (ni siquiera como default de ${VAR:-~/x} -- VPS_DIR quedaba con el
+    /// STRING LITERAL "~/stockapp-deploy"), y ese literal se mandaba entre comillas SIMPLES en
+    /// el comando remoto de ssh ("mkdir -p '~/stockapp-deploy'" / "cd '~/stockapp-deploy'") --
+    /// las comillas simples inhiben la expansión de "~" en el shell remoto también, así que
+    /// terminaba creando un directorio LITERAL llamado "~" en vez de resolver el home real del
+    /// usuario remoto. scp nunca tuvo este bug (el sftp-server resuelve "~" server-side,
+    /// independientemente del quoting), lo que hacía el fallo más insidioso: la mitad del paso 4
+    /// funcionaba y la otra mitad no, y el síntoma (install.sh no encontrado) aparecía recién en
+    /// el paso 5.
+    ///
+    /// Misma técnica de reparseo real con 'eval' que <see cref="Paso6_LaSqlDelConteoDeMigracionesLlegaIntactaPorStdinAunqueElShellRemotoLaReparse"/>
+    /// -- a diferencia de aquel test (que fija VPS_DIR a un directorio real para poder llegar al
+    /// paso 6, esquivando este bug sin querer), ESTE test deja VPS_DIR SIN DEFINIR a propósito
+    /// para ejercitar el default "~/stockapp-deploy", y controla el "$HOME" que "~" debe resolver
+    /// exportándolo antes de invocar el script -- así "~" se expande contra un directorio de
+    /// prueba aislado, nunca contra el $HOME real de quien corre la suite.
+    ///
+    /// El cwd desde el que se invoca el script queda en OTRO directorio temporal (distinto del
+    /// "$HOME" simulado): si el bug reaparece, "mkdir -p '~/stockapp-deploy'" crea el directorio
+    /// LITERAL "~" ahí (relativo al cwd, con las comillas simples "~" nunca se expande) -- lo
+    /// que separa nítidamente el caso roto del caso arreglado.
+    /// </summary>
+    [Fact]
+    public void VpsDirPorDefecto_SeExpandeAUnaRutaAbsoluta_YElCdRemotoEncuentraElMismoDirectorioQueElScp()
+    {
+        var repo = CrearRepoFixture();
+        var testbin = Path.Combine(Path.GetTempPath(), "deploy-vps-testbin-vpsdir-" + Guid.NewGuid());
+        Directory.CreateDirectory(testbin);
+        EscribirEjecutable(Path.Combine(testbin, "ssh"), SshReparseoRealFalso);
+        EscribirEjecutable(Path.Combine(testbin, "scp"), ScpFalso);
+        EscribirEjecutable(Path.Combine(testbin, "docker"), DockerFalso);
+        EscribirEjecutable(Path.Combine(testbin, "sudo"), SudoEjecutaFalso);
+        EscribirEjecutable(Path.Combine(testbin, "systemctl"), SystemctlActivoFalso);
+        EscribirEjecutable(Path.Combine(testbin, "curl"), CurlReparseFalso);
+
+        // "$HOME" simulado del usuario remoto. VPS_DIR ("~/stockapp-deploy", el default) tiene
+        // que resolver ACÁ ADENTRO si el fix funciona -- se preexiste con install.sh/.env
+        // (equivalente al scp real, que acá es un no-op para subidas) para que el "cd
+        // ${VPS_DIR} && sudo ./install.sh" del paso 5 lo encuentre.
+        var homeSimulado = Path.Combine(Path.GetTempPath(), "deploy-vps-home-" + Guid.NewGuid());
+        var dirEsperado = Path.Combine(homeSimulado, "stockapp-deploy");
+        Directory.CreateDirectory(dirEsperado);
+        EscribirEjecutable(Path.Combine(dirEsperado, "install.sh"),
+            "#!/usr/bin/env bash\necho '(stub) instalacion OK'\nexit 0\n");
+        File.WriteAllText(Path.Combine(dirEsperado, ".env"), "");
+
+        // cwd aislado del "$HOME" simulado -- acá es donde aparecería el directorio LITERAL "~"
+        // si el bug reaparece (mkdir -p/cd con comillas simples alrededor de un "~" que nunca se
+        // expande).
+        var cwdAislado = Path.Combine(Path.GetTempPath(), "deploy-vps-cwd-" + Guid.NewGuid());
+        Directory.CreateDirectory(cwdAislado);
+        var dirLiteralTilde = Path.Combine(cwdAislado, "~");
+
+        var rastroDocker = Path.Combine(Path.GetTempPath(), "deploy-vps-rastro-docker-vpsdir-" + Guid.NewGuid());
+        var rastroScp = Path.Combine(Path.GetTempPath(), "deploy-vps-rastro-scp-vpsdir-" + Guid.NewGuid());
+        try
+        {
+            var script =
+                $"cd '{cwdAislado}'\n" +
+                $"export PATH=\"{testbin}:$PATH\"\n" +
+                $"export RASTRO_DOCKER=\"{rastroDocker}\"\n" +
+                $"export RASTRO_SCP=\"{rastroScp}\"\n" +
+                $"export HOME=\"{homeSimulado}\"\n" +
+                "export VPS_USER=\"operador\"\n" +
+                $"bash \"{repo}/deploy/deploy-vps.sh\" 1.0.0";
+            var (exitCode, stdout, stderr) = EjecutorBash.Ejecutar(script);
+            var docker = File.Exists(rastroDocker) ? File.ReadAllText(rastroDocker) : "";
+            var scp = File.Exists(rastroScp) ? File.ReadAllText(rastroScp) : "";
+
+            Assert.True(exitCode == 0, $"stdout={stdout}\nstderr={stderr}\ndocker={docker}\nscp={scp}");
+
+            // El cd remoto (paso 5) encontró install.sh en el MISMO directorio donde el mkdir/scp
+            // del paso 4 lo dejaron -- si "~" se hubiera quedado literal, el cd habría aterrizado
+            // en otro lado y "./install.sh" no habría existido ahí.
+            Assert.Contains("(stub) instalacion OK", stdout + stderr);
+
+            // Nunca se creó un directorio LITERAL "~" -- "~/stockapp-deploy" se expandió como
+            // ruta ABSOLUTA contra el $HOME remoto, no se usó tal cual.
+            Assert.False(Directory.Exists(dirLiteralTilde),
+                $"Se creó un directorio LITERAL '~' en {dirLiteralTilde} -- VPS_DIR no se " +
+                "expandió y el mkdir/cd remotos quedaron apuntando a una ruta rota.");
+
+            // El destino del scp (que siempre funcionó, vía sftp-server) sigue apuntando al
+            // mismo "~/stockapp-deploy" -- no lo tocamos, y coincide con dónde el cd remoto
+            // encontró install.sh. (el "~" viaja escapado como "\~" en el trace por el %q del
+            // stub de scp, que a propósito registra el argv tal cual bash lo ve)
+            Assert.Contains(@"194.163.142.86:\~/stockapp-deploy/", scp);
+        }
+        finally
+        {
+            Directory.Delete(repo, recursive: true);
+            Directory.Delete(testbin, recursive: true);
+            Directory.Delete(homeSimulado, recursive: true);
+            Directory.Delete(cwdAislado, recursive: true);
+            if (File.Exists(rastroDocker)) File.Delete(rastroDocker);
+            if (File.Exists(rastroScp)) File.Delete(rastroScp);
+        }
+    }
+
     // ---------- Regla: backup vacío/0 bytes aborta (no confía en el exit code de scp) ----------
 
     [Fact]

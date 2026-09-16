@@ -34,6 +34,10 @@ set -euo pipefail
 VPS_HOST="${VPS_HOST:-194.163.142.86}"
 VPS_USER="${VPS_USER:?Definí VPS_USER (usuario SSH del VPS)}"
 VPS_SSH_PORT="${VPS_SSH_PORT:-34377}"
+# El "~" queda literal a propósito (bash NO lo expande dentro de comillas dobles, ni siquiera
+# como default de ${VAR:-~/x}) -- se expande recién donde se USA (ssh_vps sin comillas, scp por
+# el propio sftp-server), contra el $HOME del usuario REMOTO, que no tiene por qué coincidir con
+# el $HOME de quien corre este script. Ver paso4_copiar_artefactos y paso5_instalar.
 VPS_DIR="${VPS_DIR:-~/stockapp-deploy}"
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -521,7 +525,15 @@ paso4_copiar_artefactos() {
 
     echo
     echo "== Paso 4: Copiando artefactos al VPS =="
-    ssh_vps "mkdir -p '${VPS_DIR}'"
+    # ${VPS_DIR} SIN comillas a propósito: el default es "~/stockapp-deploy" (tilde literal,
+    # bash no la expande dentro de comillas dobles ni siquiera como default de ${VAR:-~/x}) y
+    # este string se manda tal cual como comando remoto por ssh -- si quedara entre comillas
+    # simples, el shell remoto tampoco expandiría el "~" (las comillas simples inhiben CUALQUIER
+    # expansión, no solo la de tilde) y crearía un directorio LITERAL "~" en vez de resolverlo
+    # contra el $HOME real del usuario remoto. Sin comillas, es el shell remoto (no este script)
+    # el que expande "~" contra SU PROPIO $HOME -- mismo criterio que ya usa scp más abajo, que
+    # por eso nunca tuvo este bug (el sftp-server resuelve "~" del lado servidor).
+    ssh_vps "mkdir -p ${VPS_DIR}"
 
     echo "  Copiando ${nombre_tarball}..."
     scp_vps "$tarball_local" "${VPS_USER}@${VPS_HOST}:${VPS_DIR}/"
@@ -558,7 +570,11 @@ paso5_instalar() {
     # install.sh:33-46 exige EXACTAMENTE 2 argumentos a propósito -- un glob ambiguo contra
     # un deploy/dist/ con más de un tarball expandiría a más de 2 argumentos. Por eso acá se
     # pasa el NOMBRE EXACTO (variable ya resuelta), nunca un patrón.
-    ssh_vps "cd '${VPS_DIR}' && sudo ./install.sh '${nombre_tarball}' .env"
+    # ${VPS_DIR} sin comillas por la misma razón que en paso4_copiar_artefactos: tiene que
+    # expandir "~" contra el $HOME del shell remoto. ${nombre_tarball} SÍ va entre comillas --
+    # no tiene tilde y si contuviera espacios (no debería, pero no cuesta nada) se rompería
+    # sin ellas.
+    ssh_vps "cd ${VPS_DIR} && sudo ./install.sh '${nombre_tarball}' .env"
 }
 
 # ---------------------------------------------------------------------------------------
