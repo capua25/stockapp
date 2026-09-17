@@ -21,6 +21,11 @@ namespace StockApp.Presentation.UiTests;
 /// presencia de un botón Cancelar en estos formularios -- el gap lo detectó el usuario usando la
 /// app real, no un test.
 ///
+/// <see cref="BotonCancelar_ExisteVisibleConComandoResueltoYNavegaAlListado"/> también cubre
+/// ProductoFormView y ProveedorFormView (<see cref="CasosSoloCancelar"/>): a esas dos NO les
+/// faltaba el ancho, solo el botón Cancelar -- por eso no entran al banco <see cref="Casos"/> que
+/// también alimenta <see cref="Card_NoQuedaAngostaNiCentrada"/>.
+///
 /// El patrón de referencia (ya resuelto en el repo) es FuenteFinanciamientoFormView.axaml: el card
 /// NO lleva MaxWidth/HorizontalAlignment (queda VerticalAlignment="Top" nomás); el StackPanel
 /// INTERNO es el que lleva MaxWidth="420" HorizontalAlignment="Left". Por eso
@@ -84,6 +89,36 @@ public class CatalogoFormAnchoYCancelarTests
             var vm = new UnidadMedidaFormViewModel(new UnidadMedidaServiceFake(new List<UnidadMedida>()), recorder);
             return ((Control)new UnidadMedidaFormView { DataContext = vm }, recorder);
         }, typeof(UnidadMedidaListViewModel)),
+    };
+
+    /// <summary>
+    /// ProductoFormView y ProveedorFormView YA tenían el ancho correcto (MaxWidth 480/460 puesto
+    /// directamente en el Border.card, sin HorizontalAlignment=Center) -- no sufren el bug de
+    /// "angosta y centrada" que persigue <see cref="Card_NoQuedaAngostaNiCentrada"/>, así que NO se
+    /// agregan a <see cref="Casos"/> (ese test fallaría sin motivo: su StackPanel interno no lleva
+    /// MaxWidth/HorizontalAlignment propios, la propiedad vive en el Border). Solo les faltaba el
+    /// botón Cancelar, por eso arman un segundo banco de casos que <em>solo</em> alimenta
+    /// <see cref="BotonCancelar_ExisteVisibleConComandoResueltoYNavegaAlListado"/>.
+    /// </summary>
+    private static readonly (string Nombre, Func<(Control Vista, NavigationRecorderFake Recorder)> Fabrica, Type DestinoEsperado)[] CasosSoloCancelar =
+    {
+        ("ProductoFormView", () =>
+        {
+            var recorder = new NavigationRecorderFake();
+            var vm = new ProductoFormViewModel(
+                new ProductoServiceFake(),
+                new UnidadMedidaServiceFake(new List<UnidadMedida>()),
+                new CategoriaServiceFake(new List<Categoria>()),
+                recorder);
+            return ((Control)new ProductoFormView { DataContext = vm }, recorder);
+        }, typeof(ProductoListViewModel)),
+
+        ("ProveedorFormView", () =>
+        {
+            var recorder = new NavigationRecorderFake();
+            var vm = new ProveedorFormViewModel(new ProveedorServiceFake(new List<Proveedor>()), recorder);
+            return ((Control)new ProveedorFormView { DataContext = vm }, recorder);
+        }, typeof(ProveedorListViewModel)),
     };
 
     private static Control Montar(Control vista)
@@ -154,7 +189,7 @@ public class CatalogoFormAnchoYCancelarTests
     {
         var errores = new List<string>();
 
-        foreach (var (nombre, fabrica, destinoEsperado) in Casos)
+        foreach (var (nombre, fabrica, destinoEsperado) in Casos.Concat(CasosSoloCancelar))
         {
             var (vistaSinMontar, recorder) = fabrica();
             var vista = Montar(vistaSinMontar);

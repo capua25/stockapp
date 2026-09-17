@@ -95,4 +95,7 @@ public partial class ProveedorFormViewModel : ViewModelBase
             MensajeError = ex.Message;
         }
     }
+
+    [RelayCommand]
+    private void Cancelar() => _navigation.Navegar<ProveedorListViewModel>();
 }

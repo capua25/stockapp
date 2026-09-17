@@ -47,11 +47,10 @@
                            IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                            TextWrapping="Wrap" />
 
-                <Button Classes="primary"
-                        Content="Guardar"
-                        Command="{Binding GuardarCommand}"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Center" />
+                <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
+                    <Button Classes="primary" Content="Guardar" Command="{Binding GuardarCommand}" />
+                    <Button Classes="secondary" Content="Cancelar" Command="{Binding CancelarCommand}" />
+                </StackPanel>
 
             </StackPanel>
         </Border>
