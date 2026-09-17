@@ -63,4 +63,7 @@ public partial class OrigenFinanciamientoFormViewModel : ViewModelBase
             MensajeError = ex.Message;
         }
     }
+
+    [RelayCommand]
+    private void Cancelar() => _navigation.Navegar<CatalogosTareaViewModel>();
 }

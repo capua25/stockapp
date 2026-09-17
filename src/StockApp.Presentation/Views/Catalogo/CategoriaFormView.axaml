@@ -8,29 +8,31 @@
              x:Class="StockApp.Presentation.Views.Catalogo.CategoriaFormView"
              x:DataType="vm:CategoriaFormViewModel">
 
-    <Border Classes="card" Padding="{DynamicResource MargenVista}" Margin="{DynamicResource MargenVista}"
-            MaxWidth="380" HorizontalAlignment="Center" VerticalAlignment="Center">
-        <StackPanel Spacing="{DynamicResource Espacio3}">
+    <DockPanel Margin="{DynamicResource MargenVista}">
 
-            <c:HeaderVista Titulo="{Binding Titulo}" />
+        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="CATÁLOGO" Titulo="{Binding Titulo}" />
 
-            <c:CampoFormulario Etiqueta="Nombre" Requerido="True">
-                <TextBox Text="{Binding Nombre}"
-                         PlaceholderText="Nombre de la categoría" />
-            </c:CampoFormulario>
+        <Border Classes="card" VerticalAlignment="Top">
+            <StackPanel Spacing="{DynamicResource Espacio3}" MaxWidth="420" HorizontalAlignment="Left">
 
-            <TextBlock Text="{Binding MensajeError}"
-                       Foreground="{DynamicResource DangerBrush}"
-                       IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                       TextWrapping="Wrap" />
+                <c:CampoFormulario Etiqueta="Nombre" Requerido="True">
+                    <TextBox Text="{Binding Nombre}"
+                             PlaceholderText="Nombre de la categoría" />
+                </c:CampoFormulario>
 
-            <Button Classes="primary"
-                    Content="Guardar"
-                    Command="{Binding GuardarCommand}"
-                    HorizontalAlignment="Stretch"
-                    HorizontalContentAlignment="Center" />
+                <TextBlock Text="{Binding MensajeError}"
+                           Foreground="{DynamicResource DangerBrush}"
+                           IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                           TextWrapping="Wrap" />
 
-        </StackPanel>
-    </Border>
+                <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
+                    <Button Classes="primary" Content="Guardar" Command="{Binding GuardarCommand}" />
+                    <Button Classes="secondary" Content="Cancelar" Command="{Binding CancelarCommand}" />
+                </StackPanel>
+
+            </StackPanel>
+        </Border>
+
+    </DockPanel>
 
 </UserControl>

@@ -80,4 +80,7 @@ public partial class UnidadMedidaFormViewModel : ViewModelBase
             MensajeError = ex.Message;
         }
     }
+
+    [RelayCommand]
+    private void Cancelar() => _navigation.Navegar<UnidadMedidaListViewModel>();
 }

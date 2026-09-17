@@ -64,4 +64,7 @@ public partial class CategoriaFormViewModel : ViewModelBase
             MensajeError = ex.Message;
         }
     }
+
+    [RelayCommand]
+    private void Cancelar() => _navigation.Navegar<CategoriaListViewModel>();
 }
