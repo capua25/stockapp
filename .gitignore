@@ -507,8 +507,14 @@ clave-privada*
 # NOTA: Los archivos deben existir en disco para que los tests pasen
 tests/StockApp.Infrastructure.Tests/Fixtures/Finanzas/*.ods
 
-# Despliegue VPS — secretos reales y artefactos de publish, jamás al repo
-deploy/.env
+# Despliegue VPS — secretos reales y artefactos de publish, jamás al repo. El patrón cubre
+# TODOS los sufijos (deploy/.env.bak-YYYYMMDD, etc.) -- el literal "deploy/.env" solo
+# cubría el nombre exacto y dejaba afuera cualquier backup con fecha (hallazgo real:
+# deploy/.env.bak-20260918 quedó sin ignorar y sin trackear de pura suerte, 2026-09-18).
+# deploy/.env.example es la plantilla sin secretos y SÍ va al repo -- se re-incluye a
+# propósito para que el patrón de arriba no lo arrastre.
+deploy/.env*
+!deploy/.env.example
 deploy/dist/
 deploy/kit-dist/
 
