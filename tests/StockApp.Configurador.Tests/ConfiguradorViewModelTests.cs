@@ -274,7 +274,10 @@ public class ConfiguradorViewModelTests : IDisposable
         Assert.False(string.IsNullOrWhiteSpace(vm.MensajeEstado));
     }
 
-    // ── Probar conexión: mapea los 3 resultados a mensaje + tono ───────────────
+    // ── Probar conexión: mapea los 6 resultados a mensaje + tono (bug 2026-09-18: antes  ──────
+    // NoResponde colapsaba DNS/rechazo/TLS/timeout en un único mensaje que además afirmaba
+    // "el servidor está apagado" sin haberlo verificado). Cada test verifica el mensaje EXACTO,
+    // no solo el tono: el mensaje es el guardián real de que no se cuele una afirmación falsa. ──
 
     [Fact]
     public async Task ProbarConexion_Ok_MuestraMensajeDeExitoYTonoExito()
@@ -304,16 +307,68 @@ public class ConfiguradorViewModelTests : IDisposable
     }
 
     [Fact]
-    public async Task ProbarConexion_NoResponde_MuestraTonoPeligro()
+    public async Task ProbarConexion_NoResuelveNombre_MensajeHablaDeLaDireccionNoDelServidorApagado()
     {
         var probadorMock = new Mock<IProbadorConexion>();
         probadorMock.Setup(p => p.ProbarAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ResultadoPruebaConexion.NoResponde);
+            .ReturnsAsync(ResultadoPruebaConexion.NoResuelveNombre);
         var vm = Crear(probadorMock.Object);
 
         await vm.ProbarConexionCommand.ExecuteAsync(null);
 
         Assert.Equal("peligro", vm.ClaseEstado);
+        Assert.Equal(
+            "No se pudo resolver esa dirección. Verificá que el nombre o la IP estén bien escritos.",
+            vm.MensajeEstado);
+    }
+
+    [Fact]
+    public async Task ProbarConexion_NoHayConexion_MensajeNoAfirmaQueElServidorEstaEncendido()
+    {
+        var probadorMock = new Mock<IProbadorConexion>();
+        probadorMock.Setup(p => p.ProbarAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ResultadoPruebaConexion.NoHayConexion);
+        var vm = Crear(probadorMock.Object);
+
+        await vm.ProbarConexionCommand.ExecuteAsync(null);
+
+        Assert.Equal("peligro", vm.ClaseEstado);
+        Assert.Equal(
+            "No se pudo conectar con esa dirección y puerto. Verificá la IP, el puerto y la red.",
+            vm.MensajeEstado);
+        // El bug de origen: el mensaje viejo afirmaba "que el servidor esté encendido" sin
+        // haberlo verificado. El nuevo no puede volver a afirmar eso.
+        Assert.DoesNotContain("encendido", vm.MensajeEstado);
+    }
+
+    [Fact]
+    public async Task ProbarConexion_CertificadoInvalido_MensajeMencionaElCertificadoYTonoPeligro()
+    {
+        var probadorMock = new Mock<IProbadorConexion>();
+        probadorMock.Setup(p => p.ProbarAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ResultadoPruebaConexion.CertificadoInvalido);
+        var vm = Crear(probadorMock.Object);
+
+        await vm.ProbarConexionCommand.ExecuteAsync(null);
+
+        Assert.Equal("peligro", vm.ClaseEstado);
+        Assert.Contains("certificado", vm.MensajeEstado, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ProbarConexion_Timeout_MensajeSugiereReintentarYTonoAdvertencia()
+    {
+        var probadorMock = new Mock<IProbadorConexion>();
+        probadorMock.Setup(p => p.ProbarAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ResultadoPruebaConexion.Timeout);
+        var vm = Crear(probadorMock.Object);
+
+        await vm.ProbarConexionCommand.ExecuteAsync(null);
+
+        // Advertencia, no peligro: un timeout no confirma que la conexión sea imposible (el
+        // caso real fue construcción de cadena de certificados en el primer intento).
+        Assert.Equal("advertencia", vm.ClaseEstado);
+        Assert.Contains("probá de nuevo", vm.MensajeEstado, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

@@ -127,14 +127,24 @@ public partial class ConfiguradorViewModel : ObservableObject
 
             var resultado = await _probador.ProbarAsync(url);
 
+            // Mapa causa -> mensaje (bug 2026-09-18): cada mensaje dice solo lo que el probador
+            // efectivamente verificó — ninguno afirma "el servidor está apagado" cuando lo único
+            // confirmado es, por ejemplo, un timeout. Ver ResultadoPruebaConexion para el porqué
+            // de cada caso y ProbadorConexion para cómo se distingue empíricamente.
             (MensajeEstado, ClaseEstado) = resultado switch
             {
                 ResultadoPruebaConexion.Ok =>
                     ("Conectado: es la API de Gestión Municipal.", "exito"),
                 ResultadoPruebaConexion.RespondeOtraCosa =>
                     ("Algo respondió en esa dirección, pero no es la API de Gestión Municipal.", "advertencia"),
-                ResultadoPruebaConexion.NoResponde =>
-                    ("No se pudo conectar. Verificá la IP, el puerto y que el servidor esté encendido.", "peligro"),
+                ResultadoPruebaConexion.NoResuelveNombre =>
+                    ("No se pudo resolver esa dirección. Verificá que el nombre o la IP estén bien escritos.", "peligro"),
+                ResultadoPruebaConexion.NoHayConexion =>
+                    ("No se pudo conectar con esa dirección y puerto. Verificá la IP, el puerto y la red.", "peligro"),
+                ResultadoPruebaConexion.CertificadoInvalido =>
+                    ("El servidor respondió, pero su certificado de seguridad no es válido. Contactá a soporte antes de continuar.", "peligro"),
+                ResultadoPruebaConexion.Timeout =>
+                    ("La conexión tardó demasiado en responder. Puede pasar en el primer intento; probá de nuevo.", "advertencia"),
                 _ => ("Resultado desconocido.", "peligro"),
             };
         }

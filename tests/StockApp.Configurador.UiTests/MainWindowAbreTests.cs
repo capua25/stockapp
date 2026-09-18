@@ -27,7 +27,7 @@ public class MainWindowAbreTests
     private sealed class ProbadorConexionFake : IProbadorConexion
     {
         public Task<ResultadoPruebaConexion> ProbarAsync(string baseUrl, CancellationToken ct = default) =>
-            Task.FromResult(ResultadoPruebaConexion.NoResponde);
+            Task.FromResult(ResultadoPruebaConexion.NoHayConexion);
     }
 
     [AvaloniaFact]
