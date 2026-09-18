@@ -21,13 +21,15 @@
 
             <StackPanel Spacing="{DynamicResource Espacio2}">
                 <TextBlock Text="IP o nombre" Classes="micro" />
-                <TextBox Text="{Binding Ip}" PlaceholderText="192.168.1.50" />
+                <TextBox Text="{Binding Ip}" PlaceholderText="192.168.1.50 o stockapp.midominio.dev" />
             </StackPanel>
 
             <StackPanel Spacing="{DynamicResource Espacio2}">
-                <TextBlock Text="Puerto" Classes="micro" />
+                <TextBlock Text="Puerto (opcional)" Classes="micro" />
                 <TextBox Text="{Binding Puerto}" PlaceholderText="5080" />
             </StackPanel>
+
+            <CheckBox Content="Usar HTTPS" IsChecked="{Binding UsarHttps}" />
 
             <!-- Fila: "Probar conexión" + badge de resultado -->
             <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio3}" VerticalAlignment="Center">
