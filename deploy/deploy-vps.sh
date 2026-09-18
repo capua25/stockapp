@@ -142,7 +142,7 @@ fi
 
 POSTGRES_USER="${POSTGRES_USER:-stockapp}"
 POSTGRES_DB="${POSTGRES_DB:-stockapp}"
-API_PORT="${API_PORT:-5080}"
+API_PORT="${API_PORT:-8080}"
 
 # Credenciales para autenticar el backup del paso 2. Con override explícito porque
 # BOOTSTRAP_PASSWORD (de deploy/.env) solo sirve para el PRIMER arranque -- DEPLOY.md pide

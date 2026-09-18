@@ -209,7 +209,7 @@ public class DeployVpsTests
         echo "[publish-api] OK: ${TARBALL}"
         """;
 
-    private static string CrearRepoFixture()
+    private static string CrearRepoFixture(bool sinApiPort = false)
     {
         var root = Path.Combine(Path.GetTempPath(), "deploy-vps-fixture-" + Guid.NewGuid());
         var deploy = Path.Combine(root, "deploy");
@@ -219,11 +219,11 @@ public class DeployVpsTests
         File.WriteAllText(Path.Combine(deploy, "stockapp-api.service"), "[Unit]\nDescription=dummy\n");
         EscribirEjecutable(Path.Combine(deploy, "wait-for-postgres.sh"), "#!/usr/bin/env bash\nexit 0\n");
         EscribirEjecutable(Path.Combine(deploy, "publish-api.sh"), PublishApiFalso);
-        File.WriteAllText(Path.Combine(deploy, ".env"), """
+        File.WriteAllText(Path.Combine(deploy, ".env"), $"""
             POSTGRES_USER=stockapp
             POSTGRES_DB=stockapp
             POSTGRES_PASSWORD=secreta
-            API_PORT=5080
+            {(sinApiPort ? "" : "API_PORT=5080")}
             BOOTSTRAP_ADMIN_USER=admin
             BOOTSTRAP_PASSWORD=Admin12345
             """);
@@ -316,6 +316,32 @@ public class DeployVpsTests
             Assert.Equal("", rastroScp);
             Assert.Equal("", rastroPublish);
             Assert.Contains("dry-run", salida);
+        }
+        finally { Directory.Delete(repo, recursive: true); }
+    }
+
+    // ---------- Default de puerto (2026-09-17: 5080 -> 8080) ----------
+
+    /// <summary>
+    /// paso0_relevamiento interpola ${API_PORT} en el comando remoto de 'sudo ss -ltnp | grep'
+    /// -- el rastro de ssh es el único lugar observable desde afuera donde ese valor por
+    /// default queda impreso, sin tener que llegar más lejos que --dry-run (paso0 corre
+    /// siempre, incluso ahí).
+    /// </summary>
+    [Fact]
+    public void ApiPortNoDefinidoEnEnv_UsaElDefault8080()
+    {
+        var repo = CrearRepoFixture(sinApiPort: true);
+        try
+        {
+            var (exitCode, stdout, stderr, rastroSsh, _, _) = Correr(repo, "1.0.0 --dry-run");
+            // El rastro queda armado con 'printf %q' (mismo motivo que la línea 929 de este
+            // archivo): los espacios y comillas del comando remoto llegan escapados ('\ ', '\'').
+            // Alcanza con buscar el número de puerto -- no hace falta pelear con el escapado.
+
+            Assert.True(exitCode == 0, $"stdout={stdout}\nstderr={stderr}");
+            Assert.Contains(":8080", rastroSsh);
+            Assert.DoesNotContain(":5080", rastroSsh);
         }
         finally { Directory.Delete(repo, recursive: true); }
     }

@@ -7,8 +7,8 @@ set -euo pipefail
 # offline/ y solo cae a apt si hay internet CONFIRMADO.
 #
 # Uso:
-#   sudo ./01-bootstrap.sh                # puerto de API por defecto (5080)
-#   sudo ./01-bootstrap.sh --puerto 8080  # override del puerto (Decisión 1: configurable)
+#   sudo ./01-bootstrap.sh                # puerto de API por defecto (8080)
+#   sudo ./01-bootstrap.sh --puerto 9090  # override del puerto (Decisión 1: configurable)
 
 DIR_KIT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/log.sh
@@ -23,7 +23,7 @@ readonly ENV_SERVIDOR="${ENV_DIR}/.env"
 readonly COMPOSE_DIR="/opt/stockapp"
 readonly PG_PORT=5433
 
-API_PORT=5080
+API_PORT=8080
 API_BIND="0.0.0.0"
 
 while [[ $# -gt 0 ]]; do

@@ -275,6 +275,21 @@ public class BootstrapTests
         Assert.Contains("---ENV-EXISTE---\nNO", salida);
     }
 
+    // ---------- Default de puerto (2026-09-17: 5080 -> 8080) ----------
+
+    /// <summary>
+    /// El banner se imprime ANTES de tocar Docker/apt -- no hace falta testbin ni que el resto
+    /// del script llegue a terminar (va a fallar más abajo por falta de 'docker' real, y no
+    /// importa: lo único que este guardián custodia es el valor por default que se imprime acá).
+    /// </summary>
+    [Fact]
+    public void SinPuerto_UsaElDefault8080EnElBanner()
+    {
+        var (_, salida) = Correr("/tmp/kit/01-bootstrap.sh");
+
+        Assert.Contains("Puerto de la API: 8080", salida);
+    }
+
     // ---------- Docker ya presente y corriendo: no se reinstala ----------
 
     [Fact]

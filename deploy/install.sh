@@ -101,8 +101,9 @@ readonly BACKUPS_A_CONSERVAR=3
 # otra variable definida en $ENV_FILE se pasa TAL CUAL (ver "Passthrough" más abajo,
 # IMPORTANTE 6 del review deploy-vps-linux) -- para que un override puesto a mano (p.ej.
 # RateLimiting__Login__PermitLimit) sobreviva a la próxima actualización.
-readonly VARS_CONOCIDAS=(POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB API_PORT API_BIND JWT_SECRET \
-    BOOTSTRAP_ADMIN_USER BOOTSTRAP_PASSWORD LICENCIA_CLAVE_PUBLICA_BASE64)
+readonly VARS_CONOCIDAS=(POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB API_PORT API_BIND API_SCHEME \
+    API_HOSTNAME JWT_SECRET BOOTSTRAP_ADMIN_USER BOOTSTRAP_PASSWORD LICENCIA_CLAVE_PUBLICA_BASE64 \
+    Kestrel__Certificates__Default__Path Kestrel__Certificates__Default__KeyPath)
 
 es_var_conocida() {
     local nombre="$1" v
@@ -172,7 +173,7 @@ if [[ "${#JWT_SECRET}" -lt 32 ]]; then
     exit 1
 fi
 
-API_PORT="${API_PORT:-5080}"
+API_PORT="${API_PORT:-8080}"
 if ! [[ "$API_PORT" =~ ^[0-9]+$ ]]; then
     echo "ERROR: API_PORT ('${API_PORT}') no es un número de puerto válido." >&2
     exit 1
@@ -218,6 +219,51 @@ if [[ "$API_BIND" != "127.0.0.1" ]]; then
     echo "    sudo ufw allow ${API_PORT}/tcp   # API (modo expuesto)" >&2
     echo "    sudo ufw enable" >&2
     echo >&2
+fi
+
+# API_SCHEME: esquema (http/https) del bind de la API (ver deploy/.env.example). A diferencia de
+# API_PORT/API_BIND de arriba (que tratan "no definida" y "definida pero vacía" exactamente
+# igual, con `${VAR:-default}`), acá se distinguen A PROPÓSITO con `${API_SCHEME+x}`: "no
+# definida" (un .env viejo, sin la línea) es retrocompatible y cae a http en silencio, pero
+# "definida y vacía" (típicamente un typo tipo 'API_SCHEME=' sin valor) es un error real que hay
+# que frenar, no absorber como si fuera lo mismo que "no la pusiste".
+if [[ -z "${API_SCHEME+x}" ]]; then
+    API_SCHEME="http"
+fi
+if [[ "$API_SCHEME" != "http" && "$API_SCHEME" != "https" ]]; then
+    echo "ERROR: API_SCHEME ('${API_SCHEME}') no es válido -- debe ser exactamente 'http' o 'https'." >&2
+    exit 1
+fi
+echo "  OK. API_SCHEME=${API_SCHEME}"
+
+# Con API_SCHEME=https, fallar ACÁ (instalación) y no en el arranque del servicio: verificado
+# empíricamente que Kestrel levanta TLS leyendo Kestrel__Certificates__Default__Path/KeyPath de
+# variables de entorno, sin ningún cambio de código en la API -- así que "falta una de las tres"
+# es un error de CONFIGURACIÓN, no de código, y tiene que verse acá, no seis horas después con
+# el servicio en 'failed' y nadie enterándose hasta el próximo intento de login. API_HOSTNAME
+# hace falta para el healthcheck de más abajo (--resolve, para no romper la validación de
+# hostname del certificado pegándole a HEALTHCHECK_HOST en vez de al dominio real).
+if [[ "$API_SCHEME" == "https" ]]; then
+    for var in Kestrel__Certificates__Default__Path Kestrel__Certificates__Default__KeyPath API_HOSTNAME; do
+        if [[ -z "${!var:-}" ]]; then
+            echo "ERROR: falta '${var}' en '${ENV_FILE}' (obligatoria porque API_SCHEME=https)." >&2
+            exit 1
+        fi
+    done
+    # shellcheck disable=SC2154 # vienen del 'source "$ENV_FILE"' de arriba (SC1090), no shellcheck
+    if [[ ! -f "$Kestrel__Certificates__Default__Path" ]]; then
+        echo "ERROR: no existe '${Kestrel__Certificates__Default__Path}' (Kestrel__Certificates__Default__Path)." >&2
+        exit 1
+    fi
+    # shellcheck disable=SC2154
+    if [[ ! -f "$Kestrel__Certificates__Default__KeyPath" ]]; then
+        echo "ERROR: no existe '${Kestrel__Certificates__Default__KeyPath}' (Kestrel__Certificates__Default__KeyPath)." >&2
+        exit 1
+    fi
+    echo "  OK. API_SCHEME=https: variables y archivos de certificado presentes."
+    echo "  (falta todavía validar que 'stockapp' pueda LEERLOS -- eso se hace más abajo, después"
+    echo "  de crear ese usuario: la legibilidad no se puede chequear con el usuario todavía sin"
+    echo "  existir)."
 fi
 
 echo "== Verificando variables prohibidas en el passthrough =="
@@ -287,6 +333,24 @@ chmod 750 "$STOCKAPP_HOME"
 mkdir -p "${STOCKAPP_HOME}/.local/share"
 chown -R stockapp:stockapp "${STOCKAPP_HOME}/.local"
 chmod 750 "${STOCKAPP_HOME}/.local" "${STOCKAPP_HOME}/.local/share"
+
+# Legibilidad de los certificados TLS por 'stockapp' (API_SCHEME=https): recién acá, porque
+# 'sudo -u stockapp test -r ...' necesita que el usuario ya exista (arriba). A propósito NO es
+# un 'exit 1': la EXISTENCIA de los archivos ya se validó como guardia dura más arriba (antes de
+# tocar el sistema); esto es un chequeo más fino de PERMISOS, y un permiso mal puesto es más
+# fácil de corregir en caliente (chmod/chown) que de bloquear toda la instalación por -- la
+# decisión es avisar fuerte y dejar seguir, no frenar (decisión tomada, ver reporte de la tarea).
+if [[ "$API_SCHEME" == "https" ]]; then
+    echo "== Verificando que 'stockapp' pueda leer los certificados TLS =="
+    if ! sudo -u stockapp test -r "$Kestrel__Certificates__Default__Path"; then
+        echo "ADVERTENCIA: el usuario 'stockapp' no puede leer '${Kestrel__Certificates__Default__Path}'." >&2
+        echo "  El servicio puede fallar al arrancar. Revisá permisos (chmod/chown) del certificado." >&2
+    fi
+    if ! sudo -u stockapp test -r "$Kestrel__Certificates__Default__KeyPath"; then
+        echo "ADVERTENCIA: el usuario 'stockapp' no puede leer '${Kestrel__Certificates__Default__KeyPath}'." >&2
+        echo "  El servicio puede fallar al arrancar. Revisá permisos (chmod/chown) del certificado." >&2
+    fi
+fi
 
 echo "== Deteniendo ${SERVICE_NAME} (si está corriendo) antes de tocar ${APP_DIR} =="
 # IMPORTANTE 3 (review deploy-vps-linux): sin esto, en una actualización el proceso
@@ -389,6 +453,16 @@ umask 077
     echo "Bootstrap__AdminUser=${BOOTSTRAP_ADMIN_USER}"
     echo "Bootstrap__Password=${BOOTSTRAP_PASSWORD}"
     echo "Licencia__ClavePublicaBase64=${LICENCIA_CLAVE_PUBLICA_BASE64}"
+    # Kestrel__Certificates__Default__Path/KeyPath: a diferencia del resto del passthrough
+    # (genérico, más abajo), estas dos se escriben EXPLÍCITAMENTE porque están en
+    # VARS_CONOCIDAS (para que el passthrough genérico no las duplique) -- exactamente el mismo
+    # patrón que JWT_SECRET/BOOTSTRAP_*/LICENCIA_CLAVE_PUBLICA_BASE64 arriba. Solo con
+    # API_SCHEME=https: en http ninguna de las dos está definida (la validación de arriba las
+    # exige solo en ese caso) y no tiene sentido escribir una clave vacía.
+    if [[ "$API_SCHEME" == "https" ]]; then
+        echo "Kestrel__Certificates__Default__Path=${Kestrel__Certificates__Default__Path}"
+        echo "Kestrel__Certificates__Default__KeyPath=${Kestrel__Certificates__Default__KeyPath}"
+    fi
     echo "ConnectionStrings__Default=${CONNECTION_STRING}"
 
     # Passthrough (IMPORTANTE 6, review deploy-vps-linux): cualquier variable EXTRA que el
@@ -421,8 +495,9 @@ echo "== Instalando script auxiliar (wait-for-postgres.sh) =="
 mkdir -p "$LIB_DIR"
 install -m 0755 -o root -g root "$WAIT_SCRIPT_SRC" "${LIB_DIR}/wait-for-postgres.sh"
 
-echo "== Instalando unit de systemd (bind ${API_BIND}, puerto ${API_PORT}) =="
-sed -e "s/__API_PORT__/${API_PORT}/g" -e "s/__API_BIND__/${API_BIND}/g" "$UNIT_TEMPLATE" > "$UNIT_TARGET"
+echo "== Instalando unit de systemd (esquema ${API_SCHEME}, bind ${API_BIND}, puerto ${API_PORT}) =="
+sed -e "s/__API_PORT__/${API_PORT}/g" -e "s/__API_BIND__/${API_BIND}/g" \
+    -e "s/__API_SCHEME__/${API_SCHEME}/g" "$UNIT_TEMPLATE" > "$UNIT_TARGET"
 chmod 0644 "$UNIT_TARGET"
 
 systemctl daemon-reload
@@ -453,7 +528,23 @@ else
     HEALTHCHECK_HOST="$API_BIND"
 fi
 
-echo "  Esperando a que la API responda en ${HEALTHCHECK_HOST}:${API_PORT}..."
+# Con API_SCHEME=https, un curl liso contra HEALTHCHECK_HOST (típicamente una IP, p.ej.
+# 127.0.0.1) rompería la validación de hostname del certificado -- el cert está emitido para
+# API_HOSTNAME, no para esa IP. '--resolve API_HOSTNAME:PUERTO:HEALTHCHECK_HOST' fuerza esa
+# resolución SIN '--insecure': se sigue validando el certificado real, igual que un cliente de
+# Internet de verdad -- '--insecure' anularía el sentido de tener TLS. Con API_SCHEME=http (el
+# camino del kit municipal) esto queda EXACTAMENTE como estaba antes de este cambio: ni
+# HEALTHCHECK_DISPLAY ni CURL_RESOLVE_ARGS cambian su comportamiento.
+CURL_RESOLVE_ARGS=()
+if [[ "$API_SCHEME" == "https" ]]; then
+    HEALTHCHECK_DISPLAY="${API_HOSTNAME}:${API_PORT}"
+    CURL_RESOLVE_ARGS=(--resolve "${API_HOSTNAME}:${API_PORT}:${HEALTHCHECK_HOST}")
+else
+    HEALTHCHECK_DISPLAY="${HEALTHCHECK_HOST}:${API_PORT}"
+fi
+HEALTHCHECK_URL="${API_SCHEME}://${HEALTHCHECK_DISPLAY}/licencia/estado"
+
+echo "  Esperando a que la API responda en ${HEALTHCHECK_URL}..."
 # CRÍTICO (review deploy-vps-linux): antes se pedía '/', que NO está en la allowlist de
 # BloqueoLicenciaMiddleware -- con la licencia recién instalada (siempre desactivada al
 # principio) '/' devuelve 423 y 'curl -f' sale con código 22, así que este healthcheck
@@ -468,7 +559,7 @@ echo "  Esperando a que la API responda en ${HEALTHCHECK_HOST}:${API_PORT}..."
 INTENTOS=90
 OK=0
 for i in $(seq 1 "$INTENTOS"); do
-    if curl -fsS "http://${HEALTHCHECK_HOST}:${API_PORT}/licencia/estado" >/dev/null 2>&1; then
+    if curl -fsS "${CURL_RESOLVE_ARGS[@]}" "$HEALTHCHECK_URL" >/dev/null 2>&1; then
         OK=1
         break
     fi
@@ -477,7 +568,7 @@ done
 
 if [[ "$OK" -eq 1 ]]; then
     echo
-    echo "OK: StockApp.Api responde en ${HEALTHCHECK_HOST}:${API_PORT}."
+    echo "OK: StockApp.Api responde en ${HEALTHCHECK_DISPLAY}."
     if [[ "$API_BIND" != "127.0.0.1" ]]; then
         echo "RECORDATORIO: API_BIND=${API_BIND} -- confirmá que el firewall (ufw) está activo" >&2
         echo "antes de considerar esta instalación terminada (ver deploy/DEPLOY.md, sección Firewall)." >&2
@@ -485,7 +576,7 @@ if [[ "$OK" -eq 1 ]]; then
     echo "Siguiente paso: activar la licencia y conectar el desktop — ver deploy/DEPLOY.md."
 else
     echo
-    echo "ERROR: la API no respondió en ${HEALTHCHECK_HOST}:${API_PORT} tras $((INTENTOS * 2))s." >&2
+    echo "ERROR: la API no respondió en ${HEALTHCHECK_DISPLAY} tras $((INTENTOS * 2))s." >&2
     echo "Antes de restaurar un backup: puede ser un falso negativo de este script -- ver" >&2
     echo "'El script de instalación falló pero el servicio parece estar andando' en" >&2
     echo "deploy/DEPLOY.md. Revisá:" >&2
