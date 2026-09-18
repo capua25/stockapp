@@ -17,8 +17,14 @@ rem   - src/StockApp.Configuracion/ConexionConfigStore.cs -> forma exacta del JS
 rem     {"Api":{"BaseUrl":"http://<IP>:<PUERTO>"}}
 rem
 rem Uso:
-rem   configurar-cliente.cmd                  (pregunta IP y puerto de forma interactiva)
-rem   configurar-cliente.cmd <IP> <PUERTO>    (los toma como parametros, sin preguntar)
+rem   configurar-cliente.cmd                  (pregunta servidor, puerto opcional y esquema
+rem                                             de forma interactiva)
+rem   configurar-cliente.cmd <IP> <PUERTO>    (retrocompatible: arma http://IP:PUERTO, sin
+rem                                             preguntar nada - forma de siempre, IGUAL que
+rem                                             antes de que este script soportara https)
+rem   configurar-cliente.cmd <URL>            (URL completa, para https o puerto omitido:
+rem                                             ej. https://stockapp.midominio.dev:8080 o
+rem                                             https://stockapp.midominio.dev sin puerto)
 rem
 rem IMPORTANTE: este script REQUIERE PRUEBA EN WINDOWS REAL. Se escribio y se revisó a mano
 rem contra el formato exacto que espera el codigo, pero NO se pudo ejecutar ni verificar desde
@@ -33,28 +39,58 @@ echo   Configurador de conexion - Gestion Municipal (linea de comandos)
 echo ======================================================================
 echo.
 
-set "IP=%~1"
-set "PUERTO=%~2"
+set "ARG1=%~1"
+set "ARG2=%~2"
 
+rem ── Modo URL completa: un solo argumento que ya empieza con http:// o https:// ────────────
+set "ES_URL="
+if not "%ARG1%"=="" if "%ARG2%"=="" (
+    if /I "%ARG1:~0,8%"=="https://" set "ES_URL=1"
+    if /I "%ARG1:~0,7%"=="http://" set "ES_URL=1"
+)
+
+if defined ES_URL (
+    set "URL=%ARG1%"
+    goto :url_lista
+)
+
+rem ── Modo retrocompatible: dos argumentos, IP y PUERTO, siempre http (comportamiento de
+rem    siempre, sin cambios) ─────────────────────────────────────────────────────────────────
+rem NOTA: acá adentro hay que usar %ARG1%/%ARG2% (no una variable recién asignada en este
+rem mismo bloque) porque EnableDelayedExpansion está activo: dentro de un bloque entre
+rem paréntesis, %VAR% se expande UNA sola vez al entrar al bloque, así que asignar y leer la
+rem misma variable con %...% en el mismo bloque lee el valor VIEJO (vacío acá). ARG1/ARG2 se
+rem asignaron en una línea anterior, fuera de este bloque, así que %ARG1%/%ARG2% sí traen el
+rem valor correcto.
+if not "%ARG1%"=="" if not "%ARG2%"=="" (
+    set "URL=http://%ARG1%:%ARG2%"
+    goto :url_lista
+)
+
+rem ── Modo interactivo: servidor, esquema (S/N) y puerto opcional ───────────────────────────
+set "IP=%ARG1%"
 if "%IP%"=="" (
-    set /p "IP=Ingresa la IP del servidor: "
+    set /p "IP=Ingresa la IP o nombre del servidor: "
 )
 if "%IP%"=="" (
     echo.
-    echo ERROR: no ingresaste ninguna IP. Cancelando, no se escribio nada.
+    echo ERROR: no ingresaste ningun servidor. Cancelando, no se escribio nada.
     goto :fin_error
 )
 
+set "USARHTTPS="
+set /p "USARHTTPS=Usar HTTPS? (S/N, Enter = N): "
+if /I "%USARHTTPS%"=="S" (set "ESQUEMA=https") else (set "ESQUEMA=http")
+
+set /p "PUERTO=Ingresa el puerto del servidor (opcional, Enter para omitirlo): "
+
 if "%PUERTO%"=="" (
-    set /p "PUERTO=Ingresa el puerto del servidor: "
-)
-if "%PUERTO%"=="" (
-    echo.
-    echo ERROR: no ingresaste ningun puerto. Cancelando, no se escribio nada.
-    goto :fin_error
+    set "URL=%ESQUEMA%://%IP%"
+) else (
+    set "URL=%ESQUEMA%://%IP%:%PUERTO%"
 )
 
-set "URL=http://%IP%:%PUERTO%"
+:url_lista
 
 set "CARPETA_DESTINO=%AppData%\GestionMunicipal"
 set "ARCHIVO_DESTINO=%CARPETA_DESTINO%\conexion.json"

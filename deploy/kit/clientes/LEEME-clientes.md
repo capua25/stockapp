@@ -27,9 +27,12 @@ el menú de inicio (así viene armado el paquete). Para abrirlo:
 
 ## 3. Cargar la dirección del servidor
 
-En la ventana del Configurador vas a ver dos campos: **IP** y **Puerto**.
+En la ventana del Configurador vas a ver tres controles: **Servidor (IP o nombre)**, **Puerto**
+(opcional) y el checkbox **Usar HTTPS**.
 
-Cargá la IP y el puerto **exactos** que imprimió `03-verificar.sh` en el servidor, en la línea:
+Para el caso normal — el municipio, en su red local — cargá la IP y el puerto **exactos** que
+imprimió `03-verificar.sh` en el servidor, dejando el checkbox **Usar HTTPS destildado**, en
+la línea:
 
 ```
 URL PARA EL CONFIGURADOR (esto es lo que se carga en CADA PC):
@@ -41,6 +44,12 @@ URL PARA EL CONFIGURADOR (esto es lo que se carga en CADA PC):
 `01-bootstrap.sh` en el servidor) y puede no ser el mismo en cada instalación — el único valor
 correcto es el que quedó impreso ahí. Si no tenés ese dato a mano, pedíselo a quien instaló el
 servidor antes de seguir.
+
+Si en cambio estás apuntando a un servidor que usa **HTTPS** (por ejemplo, un servidor de
+pruebas con dominio propio, no el municipio en LAN), tildá **Usar HTTPS** y cargá el nombre del
+servidor en el campo "Servidor" — ahí también podés escribir un nombre de dominio, no solo una
+IP. El campo **Puerto** es opcional: dejalo vacío si el servidor no usa un puerto explícito
+(por ejemplo `https://stockapp.midominio.dev`, sin `:puerto` al final).
 
 ## 4. Probar conexión
 
