@@ -82,16 +82,37 @@ public class DeployVpsTests
                 esac
                 ;;
             *"/auth/login"*)
+                # Recibe el body de login por la ENTRADA ESTÁNDAR (curl --data @-, ver
+                # deploy-vps.sh:378) -- hay que DRENARLA antes de salir. Un 'ssh' real drena
+                # porque el curl remoto que arma la config para --data @- LEE stdin hasta EOF; si
+                # este stub sale sin leerla, cierra su lado del pipe mientras el 'printf' del
+                # script (bajo 'set -euo pipefail') todavía puede estar escribiendo -- el reader
+                # gana la carrera bajo contención real y el printf revienta con SIGPIPE, haciendo
+                # abortar TODO el pipeline aunque el "comando remoto" haya sido exitoso. Mismo
+                # bug, mismo fix, que las dos ramas de /backups de más abajo.
+                cat >/dev/null
                 echo '{"token":"FAKE-TOKEN-123"}'
                 exit 0
                 ;;
             *"mktemp "*"stockapp-backup"*)
                 # Ruta remota FIJA a propósito (no un mktemp real de verdad) -- así el test
                 # puede afirmar sobre el nombre exacto que el script usa después para chmod/rm.
+                # Esta invocación (ssh_vps sin pipe -- ver deploy-vps.sh) NUNCA manda nada por
+                # stdin, así que NO hay que drenar acá: EjecutorBash no redirige el stdin del
+                # proceso hijo (hereda el de quien corre la suite), y un 'cat' sin nada que leer
+                # de verdad podría colgarse esperando EOF de una terminal en vez de terminar.
                 echo "/tmp/stockapp-backup-FAKEID.bin"
                 exit 0
                 ;;
             *"-X POST"*"/backups"*)
+                # Recibe el header de auth por stdin (ssh_vps_autenticado, "curl ... -K -") --
+                # mismo drenaje que /auth/login, mismo motivo: EL GUARDIÁN de este brief
+                # (CaminoFeliz_NingunSecretoApareceEnElArgvDeSsh, 1 fallo en 3 corridas
+                # completas). Reproducido de forma confiable con 24 workers en paralelo sobre
+                # esta misma máquina (contención real de CPU, no con 'sleep' -- ensanchar la
+                # ventana con sleep en el reader NO lo reprodujo): ~4-7% de fallas SIN este
+                # drenaje, 0/960 CON él.
+                cat >/dev/null
                 exit 0
                 ;;
             *"/backups"*)
@@ -104,6 +125,11 @@ public class DeployVpsTests
                 # ("/backups/ID/contenido", más abajo) -- inofensivo: esa llamada no usa el
                 # stdout de ssh (escribe con "-o" en un archivo remoto), así que el JSON que
                 # este caso imprime se descarta sin que nadie lo lea.
+                #
+                # Igual que la rama de "-X POST"*"/backups" de arriba: esta rama también se
+                # alcanza vía ssh_vps_autenticado (el polling de GET /backups Y la descarga de
+                # contenido, ambas piped por el header de auth) -- mismo drenaje, mismo motivo.
+                cat >/dev/null
                 {{(simularFalloPolling ? "echo 'curl: (7) Failed to connect (simulado)' >&2; exit 7" : "")}}
                 # Contrato real (BackupDtos.CorridaBackupDto + camelCase por default de
                 # ConfigureHttpJsonOptions): campos "finalizadaEn"/"resultado", valor "Exitosa"
@@ -125,6 +151,8 @@ public class DeployVpsTests
                 exit 0
                 ;;
             *"licencia/estado"*)
+                # ssh_vps directo, sin pipe (deploy-vps.sh:628) -- no drena por el mismo motivo
+                # que la rama de mktemp más arriba.
                 echo '{"activada":true,"codigoMaquina":"TEST-0000"}'
                 exit 0
                 ;;
