@@ -25,6 +25,15 @@ leer_env() { grep -E "^$1=" "$ENV_SERVIDOR" | tail -1 | cut -d= -f2-; }
 
 API_PORT="$(leer_env API_PORT | tr -d '[:space:]')"; API_PORT="${API_PORT:-5080}"
 API_BIND="$(leer_env API_BIND | tr -d '[:space:]')"; API_BIND="${API_BIND:-127.0.0.1}"
+# El kit municipal nunca escribe API_SCHEME en /etc/stockapp/.env (01-bootstrap.sh se queda
+# siempre en http, ver deploy/kit/01-bootstrap.sh) -- este default es puramente defensivo, por
+# si algún día alguien lo agrega a mano. '|| true': bajo 'set -o pipefail', si API_SCHEME no
+# está en el .env (el caso normal), 'grep' de leer_env no matchea nada y sale con exit 1 -- eso
+# mata TODO el script acá mismo, antes del primer chequeo, sin ni un mensaje (mismo modo de
+# falla, mismo fix, que 00-preflight.sh y esta misma sección para API_PORT/API_BIND más arriba,
+# que no lo sufren solo porque siempre están definidas en un .env real).
+API_SCHEME="$(leer_env API_SCHEME | tr -d '[:space:]')" || true
+API_SCHEME="${API_SCHEME:-http}"
 ADMIN_USER="$(leer_env BOOTSTRAP_ADMIN_USER)"
 ADMIN_PASS="$(leer_env BOOTSTRAP_PASSWORD)"
 
@@ -60,7 +69,7 @@ fi
 # mera presencia de la línea: install.sh:425 siempre escribe una, lo que importa es cuál.
 echo
 echo "[2/8] La unit de systemd declara el bind y el puerto correctos"
-ESPERADO="ASPNETCORE_URLS=http://${API_BIND}:${API_PORT}"
+ESPERADO="ASPNETCORE_URLS=${API_SCHEME}://${API_BIND}:${API_PORT}"
 if systemctl cat "$SERVICIO" 2>/dev/null | grep -qF "$ESPERADO"; then
     ok "La unit declara ${ESPERADO}."
 else

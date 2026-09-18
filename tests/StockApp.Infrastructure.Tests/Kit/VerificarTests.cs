@@ -70,12 +70,12 @@ public class VerificarTests
     /// Valores fijos del "entorno feliz": los stubs de curl/systemctl/psql/ip de más abajo
     /// están todos calibrados contra estos mismos valores.
     /// </summary>
-    private const string ApiPort = "5080";
+    private const string ApiPort = "8080";
     private const string ApiBind = "0.0.0.0";
     private const string IpLan = "10.77.0.5";
     private const string Token = "FAKE-TOKEN-123";
 
-    private static string EnvFeliz() => $"""
+    private static string EnvFeliz(string? apiScheme = null) => $"""
         API_PORT={ApiPort}
         API_BIND={ApiBind}
         BOOTSTRAP_ADMIN_USER=admin
@@ -84,6 +84,7 @@ public class VerificarTests
         POSTGRES_DB=stockapp
         POSTGRES_PASSWORD=secreta
         POSTGRES_PORT=5433
+        {(apiScheme is null ? "" : $"API_SCHEME={apiScheme}")}
         """;
 
     private static void EscribirEjecutable(string ruta, string contenido)
@@ -263,7 +264,7 @@ public class VerificarTests
         }
     }
 
-    private static string UrlEsperada() => $"ASPNETCORE_URLS=http://{ApiBind}:{ApiPort}";
+    private static string UrlEsperada(string esquema = "http") => $"ASPNETCORE_URLS={esquema}://{ApiBind}:{ApiPort}";
 
     // ---------- Guardián: sin /etc/stockapp/.env ----------
 
@@ -324,6 +325,34 @@ public class VerificarTests
         var (exitCode, salida) = EjecutarVerificar(urlConBindEquivocado);
 
         Assert.Contains($"La unit NO declara '{UrlEsperada()}'.", salida);
+        Assert.Equal(1, exitCode);
+    }
+
+    /// <summary>
+    /// API_SCHEME (2026-09-17): si alguna vez /etc/stockapp/.env llegara a declarar
+    /// API_SCHEME=https (el kit municipal nunca lo hace hoy -- 01-bootstrap.sh se queda en
+    /// http), 03-verificar.sh tiene que comparar contra ESE esquema, no contra "http" fijo.
+    /// </summary>
+    [Fact]
+    public void Chequeo2_ApiSchemeHttps_ComparaConHttpsYPasa()
+    {
+        var (exitCode, salida) = EjecutarVerificar(UrlEsperada("https"), envContent: EnvFeliz("https"));
+
+        Assert.DoesNotContain("La unit NO declara", salida);
+        Assert.Contains($"La unit declara {UrlEsperada("https")}.", salida);
+    }
+
+    /// <summary>
+    /// El caso inverso: .env dice API_SCHEME=https pero la unit instalada todavía declara
+    /// http (p.ej. quedó de una instalación anterior con install.sh viejo) -- el Chequeo 2
+    /// tiene que detectarlo como un desajuste real, no darlo por bueno.
+    /// </summary>
+    [Fact]
+    public void Chequeo2_ApiSchemeHttpsPeroUnitDeclaraHttp_EsBloqueante()
+    {
+        var (exitCode, salida) = EjecutarVerificar(UrlEsperada("http"), envContent: EnvFeliz("https"));
+
+        Assert.Contains($"La unit NO declara '{UrlEsperada("https")}'.", salida);
         Assert.Equal(1, exitCode);
     }
 
