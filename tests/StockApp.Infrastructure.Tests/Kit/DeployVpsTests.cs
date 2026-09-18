@@ -94,7 +94,16 @@ public class DeployVpsTests
             *"-X POST"*"/backups"*)
                 exit 0
                 ;;
-            *"curl -fsS http"*"/backups"*)
+            *"/backups"*)
+                # Dispatch por PATH, no por prefijo del curl (runbook HTTPS 2026-09-18): con
+                # API_SCHEME=https el curl real queda "curl -fsS --resolve host:puerto:127.0.0.1
+                # https://host:puerto/backups" -- el prefijo literal "curl -fsS http" (que el
+                # patrón viejo exigía pegado a "-fsS") ya NO aparece porque "--resolve ..." se
+                # mete en el medio. Matchear solo por "/backups" es agnóstico al esquema y al
+                # --resolve. También matchea de paso la descarga de contenido
+                # ("/backups/ID/contenido", más abajo) -- inofensivo: esa llamada no usa el
+                # stdout de ssh (escribe con "-o" en un archivo remoto), así que el JSON que
+                # este caso imprime se descarta sin que nadie lo lea.
                 {{(simularFalloPolling ? "echo 'curl: (7) Failed to connect (simulado)' >&2; exit 7" : "")}}
                 # Contrato real (BackupDtos.CorridaBackupDto + camelCase por default de
                 # ConfigureHttpJsonOptions): campos "finalizadaEn"/"resultado", valor "Exitosa"
@@ -209,7 +218,7 @@ public class DeployVpsTests
         echo "[publish-api] OK: ${TARBALL}"
         """;
 
-    private static string CrearRepoFixture(bool sinApiPort = false)
+    private static string CrearRepoFixture(bool sinApiPort = false, string? apiScheme = null, string? apiHostname = null)
     {
         var root = Path.Combine(Path.GetTempPath(), "deploy-vps-fixture-" + Guid.NewGuid());
         var deploy = Path.Combine(root, "deploy");
@@ -226,6 +235,8 @@ public class DeployVpsTests
             {(sinApiPort ? "" : "API_PORT=5080")}
             BOOTSTRAP_ADMIN_USER=admin
             BOOTSTRAP_PASSWORD=Admin12345
+            {(apiScheme is not null ? $"API_SCHEME={apiScheme}" : "")}
+            {(apiHostname is not null ? $"API_HOSTNAME={apiHostname}" : "")}
             """);
 
         var scriptReal = File.ReadAllText(RutaScriptReal());
@@ -936,6 +947,81 @@ public class DeployVpsTests
         }
         finally { Directory.Delete(repo, recursive: true); }
     }
+
+    // ---------- API_SCHEME=https: los 5 curl contra la API resuelven el hostname y nunca usan -k ----------
+
+    /// <summary>
+    /// Runbook HTTPS del VPS (2026-09-18, corte a puerto 8080 con cert de Let's Encrypt): con
+    /// API_SCHEME=https, los 5 curl que este script dispara contra la API (login, crear backup,
+    /// poll de backup, descarga de contenido y /licencia/estado) tienen que dejar de pegarle en
+    /// plano a "http://127.0.0.1:${API_PORT}" -- ese host no es el que valida el certificado.
+    /// Mismo patrón que install.sh ya usa para su propio healthcheck (deploy/install.sh:531-545):
+    /// '--resolve API_HOSTNAME:PUERTO:127.0.0.1' fuerza la conexión física contra loopback SIN
+    /// tocar la validación del certificado (que sigue viendo el hostname real en la URL), y
+    /// NUNCA con '-k'/'--insecure' -- eso anularía el sentido de haber puesto TLS.
+    /// </summary>
+    [Fact]
+    public void ApiSchemeHttps_LosCurlContraLaApiResuelvenElHostnameYNuncaUsanInsecure()
+    {
+        var repo = CrearRepoFixture(apiScheme: "https", apiHostname: "stockapp.capuanomartin.dev");
+        try
+        {
+            var (exitCode, stdout, stderr, rastroSsh, _, _) = Correr(repo, "1.2.3");
+
+            Assert.True(exitCode == 0, $"stdout={stdout}\nstderr={stderr}");
+
+            // Las URLs pasan a usar el HOSTNAME (nunca 127.0.0.1 en plano) con esquema https.
+            Assert.Contains("https://stockapp.capuanomartin.dev:5080/auth/login", rastroSsh);
+            Assert.Contains("https://stockapp.capuanomartin.dev:5080/backups", rastroSsh);
+            Assert.Contains("https://stockapp.capuanomartin.dev:5080/licencia/estado", rastroSsh);
+
+            // --resolve fuerza la conexión física a 127.0.0.1 sin romper la validación de
+            // hostname del certificado real (que sigue viendo API_HOSTNAME en la URL).
+            Assert.Contains("--resolve", rastroSsh);
+            Assert.Contains("stockapp.capuanomartin.dev:5080:127.0.0.1", rastroSsh);
+
+            // NUNCA -k/--insecure -- eso anularía el sentido de tener TLS (pedido explícito del
+            // runbook, Paso 0).
+            Assert.DoesNotContain("--insecure", rastroSsh);
+            Assert.DoesNotMatch(@"(?m)(?:^|\s)-k(?:\s|$)", rastroSsh.Replace("\\ ", " "));
+
+            // Ya no debe quedar ningún curl pegándole en http:// plano a 127.0.0.1.
+            Assert.DoesNotContain("http://127.0.0.1:5080", rastroSsh);
+        }
+        finally { Directory.Delete(repo, recursive: true); }
+    }
+
+    /// <summary>
+    /// Regresión: con API_SCHEME=http (el default, el único camino que corre HOY en producción
+    /// para el kit municipal) los 5 curl tienen que quedar EXACTAMENTE como estaban antes de
+    /// este cambio -- ni "--resolve" ni el hostname aparecen, siguen pegándole en plano a
+    /// 127.0.0.1. El kit municipal no se puede alterar por un cambio pensado para el VPS.
+    /// </summary>
+    [Fact]
+    public void ApiSchemeHttpPorDefecto_LosCurlQuedanExactamenteComoAntesSinResolve()
+    {
+        var repo = CrearRepoFixture();
+        try
+        {
+            var (exitCode, stdout, stderr, rastroSsh, _, _) = Correr(repo, "1.2.3");
+
+            Assert.True(exitCode == 0, $"stdout={stdout}\nstderr={stderr}");
+
+            Assert.Contains("http://127.0.0.1:5080/auth/login", rastroSsh);
+            Assert.Contains("http://127.0.0.1:5080/backups", rastroSsh);
+            Assert.Contains("http://127.0.0.1:5080/licencia/estado", rastroSsh);
+            Assert.DoesNotContain("--resolve", rastroSsh);
+            Assert.DoesNotContain("https://", rastroSsh);
+        }
+        finally { Directory.Delete(repo, recursive: true); }
+    }
+
+    // El guardián estático "ningún curl usa -k/--insecure" vive ahora en CurlSeguroTests.cs,
+    // que cubre este script JUNTO con install.sh y deploy/kit/*.sh (mismo patrón, un solo
+    // lugar) -- se sacó de acá el 2026-09-18. El caso que motiva cubrir el cluster pegado
+    // ('-fsSk', no solo un '-k' suelto) es exactamente el healthcheck de /licencia/estado: es
+    // el que decide si el deploy fue exitoso, así que un '-k' ahí daría verde con un
+    // certificado mal emitido, vencido o de otro dominio.
 
     // ---------- Regla: si la consulta de migraciones del paso 6 FALLA, se ABORTA -- nunca se aprueba el deploy en silencio ----------
 

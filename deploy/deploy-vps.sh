@@ -144,6 +144,38 @@ POSTGRES_USER="${POSTGRES_USER:-stockapp}"
 POSTGRES_DB="${POSTGRES_DB:-stockapp}"
 API_PORT="${API_PORT:-8080}"
 
+# API_SCHEME/API_HOSTNAME (runbook HTTPS del VPS, 2026-09-18): mismo criterio que install.sh
+# (deploy/install.sh:224-237) para distinguir "no definida" (retrocompatible, cae a http) de
+# "definida y vacía" (typo real, hay que frenar). Los 5 curl de más abajo (login, crear backup,
+# poll de backup, descarga de contenido y /licencia/estado) pegan HOY en plano contra
+# "http://127.0.0.1:${API_PORT}" -- con la API sirviendo SOLO https en el VPS, esos 5 pasos
+# fallarían. Con API_SCHEME=https, un curl liso contra 127.0.0.1 además rompería la validación
+# de hostname del certificado (emitido para API_HOSTNAME, no para esa IP): '--resolve
+# API_HOSTNAME:PUERTO:127.0.0.1' fuerza la conexión física a loopback SIN '-k'/'--insecure' (eso
+# anularía el sentido de tener TLS), validando el certificado real como lo haría un cliente de
+# Internet de verdad. Con API_SCHEME=http (el default, el único camino que corre HOY para el kit
+# municipal) esto queda EXACTAMENTE como estaba: ni CURL_RESOLVE_REMOTO ni API_URL_BASE cambian
+# de comportamiento.
+if [[ -z "${API_SCHEME+x}" ]]; then
+    API_SCHEME="http"
+fi
+if [[ "$API_SCHEME" != "http" && "$API_SCHEME" != "https" ]]; then
+    echo "ERROR: API_SCHEME ('${API_SCHEME}') no es válido -- debe ser exactamente 'http' o 'https'." >&2
+    exit 1
+fi
+if [[ "$API_SCHEME" == "https" ]] && [[ -z "${API_HOSTNAME:-}" ]]; then
+    echo "ERROR: falta API_HOSTNAME en '${ENV_LOCAL}' (obligatoria porque API_SCHEME=https)." >&2
+    exit 1
+fi
+
+CURL_RESOLVE_REMOTO=""
+if [[ "$API_SCHEME" == "https" ]]; then
+    API_URL_BASE="https://${API_HOSTNAME}:${API_PORT}"
+    CURL_RESOLVE_REMOTO="--resolve ${API_HOSTNAME}:${API_PORT}:127.0.0.1 "
+else
+    API_URL_BASE="http://127.0.0.1:${API_PORT}"
+fi
+
 # Credenciales para autenticar el backup del paso 2. Con override explícito porque
 # BOOTSTRAP_PASSWORD (de deploy/.env) solo sirve para el PRIMER arranque -- DEPLOY.md pide
 # cambiarla desde el desktop apenas se activa la licencia, así que en una instalación viva
@@ -343,7 +375,7 @@ paso2_backup() {
     local login_body token
     login_body="$(printf '{"nombreUsuario":"%s","contrasena":"%s"}' "$VPS_ADMIN_USER" "$VPS_ADMIN_PASSWORD")"
     token="$(printf '%s' "$login_body" \
-        | ssh_vps "curl -fsS -X POST http://127.0.0.1:${API_PORT}/auth/login -H 'Content-Type: application/json' --data @-" \
+        | ssh_vps "curl -fsS ${CURL_RESOLVE_REMOTO}-X POST ${API_URL_BASE}/auth/login -H 'Content-Type: application/json' --data @-" \
         | sed -n 's/.*"token":"\([^"]*\)".*/\1/p' || true)"
 
     if [[ -z "$token" ]]; then
@@ -371,7 +403,7 @@ paso2_backup() {
     momento_disparo_epoch="$(date -u +%s)"
 
     echo "  Disparando backup manual (POST /backups)..."
-    ssh_vps_autenticado "$token" "curl -fsS -X POST http://127.0.0.1:${API_PORT}/backups" >/dev/null
+    ssh_vps_autenticado "$token" "curl -fsS ${CURL_RESOLVE_REMOTO}-X POST ${API_URL_BASE}/backups" >/dev/null
 
     echo "  Esperando a que termine..."
     local backup_id=""
@@ -389,7 +421,7 @@ paso2_backup() {
         archivo_stderr_poll="$(mktemp)"
         local lista
         local codigo_poll=0
-        lista="$(ssh_vps_autenticado "$token" "curl -fsS http://127.0.0.1:${API_PORT}/backups" 2>"$archivo_stderr_poll")" || codigo_poll=$?
+        lista="$(ssh_vps_autenticado "$token" "curl -fsS ${CURL_RESOLVE_REMOTO}${API_URL_BASE}/backups" 2>"$archivo_stderr_poll")" || codigo_poll=$?
         local error_poll
         error_poll="$(cat "$archivo_stderr_poll")"
         rm -f "$archivo_stderr_poll"
@@ -461,7 +493,7 @@ paso2_backup() {
     RUTA_REMOTA_BACKUP="$ruta_remota"
     ssh_vps "chmod 600 '${ruta_remota}'"
 
-    ssh_vps_autenticado "$token" "curl -fsS -o '${ruta_remota}' http://127.0.0.1:${API_PORT}/backups/${backup_id}/contenido"
+    ssh_vps_autenticado "$token" "curl -fsS ${CURL_RESOLVE_REMOTO}-o '${ruta_remota}' ${API_URL_BASE}/backups/${backup_id}/contenido"
 
     local dir_backups_local="${REPO_ROOT}/deploy/dist/backups"
     mkdir -p "$dir_backups_local"
@@ -593,7 +625,7 @@ paso6_verificar() {
     echo "== Paso 6: Verificación remota =="
 
     echo "  /licencia/estado:"
-    ssh_vps "curl -fsS http://127.0.0.1:${API_PORT}/licencia/estado"
+    ssh_vps "curl -fsS ${CURL_RESOLVE_REMOTO}${API_URL_BASE}/licencia/estado"
     echo
 
     # BUG A (hallado por revisión independiente, mismo patrón que paso1_prevuelo_migraciones):
