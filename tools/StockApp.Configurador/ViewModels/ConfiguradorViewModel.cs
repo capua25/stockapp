@@ -18,13 +18,23 @@ public partial class ConfiguradorViewModel : ObservableObject
     private readonly IProbadorConexion _probador;
     private readonly string _rutaArchivo;
 
-    public ConfiguradorViewModel(IProbadorConexion probador, string? rutaArchivoOverride = null)
+    public ConfiguradorViewModel(
+        IProbadorConexion probador,
+        string? rutaArchivoOverride = null,
+        string? rutaAppsettingsOverride = null)
     {
         _probador = probador;
         _rutaArchivo = rutaArchivoOverride ?? RutaConexion.ObtenerRutaArchivo();
 
-        var guardado = ConexionConfigStore.Leer(_rutaArchivo);
-        var urlInicial = guardado ?? ConexionDefaults.UrlPorDefecto;
+        // Bug 2026-09-18: acá antes se leía SOLO conexion.json (ConexionConfigStore.Leer) y se
+        // caía directo al default si faltaba, salteándose el appsettings.json del directorio
+        // de instalación — la misma precedencia de tres niveles que usa StockApp.Presentation
+        // (App.axaml.cs). En una instalación fresca sin conexion.json, el Configurador mostraba
+        // localhost:5043 mientras la app real ya usaba la URL de appsettings.json (que viaja en
+        // el mismo PublishDir, ver build/pack-win.ps1 y build/pack-testers-win.sh). Ahora
+        // ResolucionConexion (StockApp.Configuracion) es el ÚNICO lugar que resuelve esa
+        // cadena — este VM no la reimplementa.
+        var urlInicial = ResolucionConexion.ResolverUrlInicial(rutaAppsettingsOverride, _rutaArchivo);
 
         // Uri.TryCreate en vez de asumir que lo guardado es válido: un archivo tocado a mano
         // no debe tirar la ventana abajo, solo cae al default (misma filosofía best-effort

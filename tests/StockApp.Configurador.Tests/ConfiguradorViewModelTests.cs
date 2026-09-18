@@ -60,6 +60,54 @@ public class ConfiguradorViewModelTests : IDisposable
         Assert.False(vm.UsarHttps);
     }
 
+    // ── Bug 2026-09-18: sin conexion.json, tiene que caer a appsettings.json (no al default a
+    // secas) — misma precedencia de tres niveles que usa StockApp.Presentation. ──────────────
+
+    [Fact]
+    public void AlConstruir_SinArchivoDeConexion_ConAppsettingsDeFabrica_PrecargaLaUrlDeAppsettings()
+    {
+        var carpeta = Path.Combine(Path.GetTempPath(), "configurador-appsettings-" + Guid.NewGuid());
+        Directory.CreateDirectory(carpeta);
+        try
+        {
+            var rutaAppsettings = Path.Combine(carpeta, "appsettings.json");
+            File.WriteAllText(rutaAppsettings, "{\"Api\":{\"BaseUrl\":\"https://stockapp.capuanomartin.dev:8080\"}}");
+            // _rutaArchivo (conexion.json) es un guid que nunca se escribió: no existe.
+
+            var vm = new ConfiguradorViewModel(Mock.Of<IProbadorConexion>(), _rutaArchivo, rutaAppsettings);
+
+            Assert.Equal("stockapp.capuanomartin.dev", vm.Ip);
+            Assert.Equal("8080", vm.Puerto);
+            Assert.True(vm.UsarHttps);
+        }
+        finally
+        {
+            Directory.Delete(carpeta, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void AlConstruir_ConConexionJsonYAppsettings_ConexionJsonGana()
+    {
+        var carpeta = Path.Combine(Path.GetTempPath(), "configurador-precedencia-" + Guid.NewGuid());
+        Directory.CreateDirectory(carpeta);
+        try
+        {
+            var rutaAppsettings = Path.Combine(carpeta, "appsettings.json");
+            File.WriteAllText(rutaAppsettings, "{\"Api\":{\"BaseUrl\":\"http://localhost:5043\"}}");
+            ConexionConfigStore.Guardar("http://192.168.1.50:5080", _rutaArchivo);
+
+            var vm = new ConfiguradorViewModel(Mock.Of<IProbadorConexion>(), _rutaArchivo, rutaAppsettings);
+
+            Assert.Equal("192.168.1.50", vm.Ip);
+            Assert.Equal("5080", vm.Puerto);
+        }
+        finally
+        {
+            Directory.Delete(carpeta, recursive: true);
+        }
+    }
+
     // ── Round-trip esquema/puerto: cargar y volver a guardar da el mismo string ──
 
     [Fact]

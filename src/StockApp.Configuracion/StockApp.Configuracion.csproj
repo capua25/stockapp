@@ -17,4 +17,15 @@
     </AssemblyAttribute>
   </ItemGroup>
 
+  <!-- Bug 2026-09-18 (Configurador no lee appsettings.json): la resolución de precedencia
+       conexion.json -> appsettings.json -> ConexionDefaults.UrlPorDefecto se centraliza acá
+       (ResolucionConexion) para que App.axaml.cs (StockApp.Presentation) y
+       tools/StockApp.Configurador consuman EXACTAMENTE la misma función. Antes vivía
+       duplicada: la app armaba un IConfiguration real con dos capas, el Configurador se
+       salteaba appsettings.json por completo. Versiones en Directory.Packages.props (CPM). -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
+  </ItemGroup>
+
 </Project>

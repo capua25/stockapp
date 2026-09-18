@@ -455,41 +455,18 @@ public partial class App : AvaloniaApp
     }
 
     /// <summary>
-    /// Precedencia de resolución de configuración (2026-08-20, configurador de conexión):
-    /// 1. %AppData%\GestionMunicipal\conexion.json — lo que escribe tools/StockApp.Configurador.
-    /// 2. appsettings.json del directorio de instalación — valor de fábrica.
-    /// 3. ConexionDefaults.UrlPorDefecto — único fallback hardcodeado (ver ResolverApiBaseUrl).
-    ///
-    /// Los providers de Microsoft.Extensions.Configuration.Json se aplican en orden: el que se
-    /// agrega DESPUÉS gana. Por eso conexion.json se agrega después de appsettings.json. Ambos
-    /// son optional: true — si faltan, ResolverApiBaseUrl cae al único default.
-    ///
-    /// Los parámetros de override existen solo para poder testear la precedencia sin depender
-    /// de AppContext.BaseDirectory ni de %AppData% reales (ver
-    /// StockApp.Presentation.Tests.Config.ResolucionApiBaseUrlTests); en producción se llaman
-    /// sin argumentos.
+    /// Delega en StockApp.Configuracion.ResolucionConexion — ÚNICO lugar que implementa la
+    /// cadena conexion.json -> appsettings.json -> ConexionDefaults.UrlPorDefecto (bug
+    /// 2026-09-18: tools/StockApp.Configurador reimplementaba esta lógica por su cuenta y se
+    /// salteaba el nivel de appsettings.json; ahora los dos binarios llaman a la misma
+    /// función). Wrapper mantenido para no romper
+    /// StockApp.Presentation.Tests.Config.ResolucionApiBaseUrlTests, que sigue verificando la
+    /// precedencia a través de este mismo nombre.
     /// </summary>
     internal static IConfiguration ConstruirConfiguracion(
         string? rutaAppsettingsOverride = null,
-        string? rutaConexionOverride = null)
-    {
-        var builder = new ConfigurationBuilder();
-
-        if (rutaAppsettingsOverride is null)
-        {
-            builder.SetBasePath(AppContext.BaseDirectory)
-                   .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false);
-        }
-        else
-        {
-            builder.AddJsonFile(rutaAppsettingsOverride, optional: true, reloadOnChange: false);
-        }
-
-        var rutaConexion = rutaConexionOverride ?? RutaConexion.ObtenerRutaArchivo();
-        builder.AddJsonFile(rutaConexion, optional: true, reloadOnChange: false);
-
-        return builder.Build();
-    }
+        string? rutaConexionOverride = null) =>
+        ResolucionConexion.ConstruirConfiguracion(rutaAppsettingsOverride, rutaConexionOverride);
 
     /// <summary>
     /// Cuerpo del handler de <c>Dispatcher.UIThread.UnhandledException</c>, extraído para poder
@@ -520,14 +497,11 @@ public partial class App : AvaloniaApp
     }
 
     /// <summary>
-    /// ÚNICO lugar que resuelve Api:BaseUrl. Antes de este fix el mismo fallback
-    /// "http://localhost:5000" estaba hardcodeado DOS veces (HttpClient principal y
-    /// "Descargas"), desincronizado del default real de appsettings.json (5043) — si faltaba
-    /// el appsettings.json la app caía a un puerto donde no escuchaba nadie.
+    /// Delega en StockApp.Configuracion.ResolucionConexion.ResolverApiBaseUrl (ver comentario
+    /// de <see cref="ConstruirConfiguracion"/>). Antes de la unificación original (2026-08-20)
+    /// el mismo fallback "http://localhost:5000" estaba hardcodeado DOS veces (HttpClient
+    /// principal y "Descargas"), desincronizado del default real de appsettings.json (5043).
     /// </summary>
-    internal static string ResolverApiBaseUrl(IConfiguration configuration)
-    {
-        var baseUrl = configuration[ConexionDefaults.ClaveApiBaseUrl];
-        return string.IsNullOrWhiteSpace(baseUrl) ? ConexionDefaults.UrlPorDefecto : baseUrl;
-    }
+    internal static string ResolverApiBaseUrl(IConfiguration configuration) =>
+        ResolucionConexion.ResolverApiBaseUrl(configuration);
 }
