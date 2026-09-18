@@ -35,7 +35,12 @@ public partial class ConfiguradorViewModel : ObservableObject
         }
 
         _ip = uri.Host;
-        _puerto = uri.Port.ToString();
+        // IsDefaultPort: true tanto si la URL no traía puerto como si traía el default explícito
+        // (:80 en http, :443 en https). En ambos casos el campo queda vacío — round-trip: al
+        // guardar de nuevo, ConstruirUrl() omite el puerto y el string sale igual al que se
+        // cargó cuando no traía puerto explícito.
+        _puerto = uri.IsDefaultPort ? string.Empty : uri.Port.ToString();
+        _usarHttps = string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Ruta completa del archivo que va a escribir "Guardar". Se muestra en la ventana.</summary>
@@ -47,6 +52,10 @@ public partial class ConfiguradorViewModel : ObservableObject
     [ObservableProperty]
     private string _puerto;
 
+    /// <summary>Esquema de la URL a armar. Puerto es opcional; esquema no lo es (default http).</summary>
+    [ObservableProperty]
+    private bool _usarHttps;
+
     [ObservableProperty]
     private string _mensajeEstado = string.Empty;
 
@@ -57,7 +66,38 @@ public partial class ConfiguradorViewModel : ObservableObject
     [ObservableProperty]
     private bool _probando;
 
-    private string ConstruirUrl() => $"http://{Ip.Trim()}:{Puerto.Trim()}";
+    /// <summary>
+    /// Arma la URL a partir de esquema + host + puerto opcional, y la valida con
+    /// Uri.TryCreate antes de devolverla: nunca deja salir un "host:" con dos puntos colgando
+    /// (el bug de origen, con Puerto vacío) ni ningún otro string que Uri rechace.
+    /// </summary>
+    private bool TryConstruirUrl(out string url)
+    {
+        url = string.Empty;
+
+        var esquema = UsarHttps ? Uri.UriSchemeHttps : Uri.UriSchemeHttp;
+        var host = Ip.Trim();
+        var puertoTexto = Puerto.Trim();
+
+        // Host vacío no tiene un guard explícito propio: "esquema://:puerto" (o "esquema://")
+        // ya es una URI sin autoridad válida y Uri.TryCreate de abajo la rechaza sola —
+        // verificado por mutación, agregar el if acá no mata ningún test.
+        var candidata = puertoTexto.Length == 0
+            ? $"{esquema}://{host}"
+            : $"{esquema}://{host}:{puertoTexto}";
+
+        if (!Uri.TryCreate(candidata, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            return false;
+        }
+
+        url = candidata;
+        return true;
+    }
+
+    private const string MensajeUrlInvalida =
+        "La dirección ingresada no es válida. Verificá el servidor y el puerto.";
 
     [RelayCommand]
     private async Task ProbarConexionAsync()
@@ -68,7 +108,14 @@ public partial class ConfiguradorViewModel : ObservableObject
 
         try
         {
-            var resultado = await _probador.ProbarAsync(ConstruirUrl());
+            if (!TryConstruirUrl(out var url))
+            {
+                MensajeEstado = MensajeUrlInvalida;
+                ClaseEstado = "peligro";
+                return;
+            }
+
+            var resultado = await _probador.ProbarAsync(url);
 
             (MensajeEstado, ClaseEstado) = resultado switch
             {
@@ -90,7 +137,14 @@ public partial class ConfiguradorViewModel : ObservableObject
     [RelayCommand]
     private void Guardar()
     {
-        ConexionConfigStore.Guardar(ConstruirUrl(), _rutaArchivo);
+        if (!TryConstruirUrl(out var url))
+        {
+            MensajeEstado = MensajeUrlInvalida;
+            ClaseEstado = "peligro";
+            return;
+        }
+
+        ConexionConfigStore.Guardar(url, _rutaArchivo);
         MensajeEstado = $"Guardado en {_rutaArchivo}";
         ClaseEstado = "exito";
     }
