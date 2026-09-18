@@ -144,7 +144,8 @@ echo "[6/8] Login del administrador"
 # ruta predecible se puede pre-crear como symlink antes de que el script arranque, y 'curl -o'
 # sigue symlinks. Mismo fix que 04-licencia.sh:105 (mktemp + trap en vez de un nombre fijo).
 TMP_LOGIN="$(mktemp -t verificar-login.XXXXXX)"
-trap 'rm -f "$TMP_LOGIN"' EXIT
+# shellcheck disable=SC2016  # comillas simples a propósito: se expande con eval recién al salir (log.sh)
+agregar_trap_exit 'rm -f "$TMP_LOGIN"'
 
 intentar_login() {
     curl -sS --max-time 15 -o "$TMP_LOGIN" -w '%{http_code}' \

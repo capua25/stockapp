@@ -103,7 +103,8 @@ cmd_activar() {
     # nombre impredecible, y no sigue un symlink preexistente en esa ruta. El trap reemplaza el
     # 'rm -f' manual y además limpia si el script muere antes de llegar a esta línea.
     tmp_resp="$(mktemp -t licencia-respuesta.XXXXXX)"
-    trap 'rm -f "$tmp_resp"' EXIT
+    # shellcheck disable=SC2016  # comillas simples a propósito: se expande con eval recién al salir (log.sh)
+    agregar_trap_exit 'rm -f "$tmp_resp"'
 
     # --write-out separa cuerpo de status: necesitamos el status para distinguir 400 de 429.
     codigo_http="$(curl -sS --max-time 20 -o "$tmp_resp" -w '%{http_code}' \
