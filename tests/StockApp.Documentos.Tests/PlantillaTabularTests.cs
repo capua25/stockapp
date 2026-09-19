@@ -128,37 +128,58 @@ public class PlantillaTabularTests
         string C1 = "a", string C2 = "b", string C3 = "c", string C4 = "d",
         string C5 = "e", string C6 = "f", string C7 = "g");
 
-    private sealed record FilaNumerica(string Codigo, decimal Precio, double Cantidad, long Total, float Peso);
+    private sealed record FilaNumerica(
+        string Codigo, decimal Precio, double Cantidad, long Total, float Peso, decimal MontoGrande);
 
     /// <summary>
-    /// Guardián de formato invariante: fuerza la cultura del hilo a "es-AR" (separador decimal
-    /// coma) para demostrar que el PDF NO hereda la cultura del sistema operativo. Sin formato
-    /// explícito, <c>decimal</c>/<c>double</c> caerían a <c>valor.ToString()</c> con coma; el
-    /// proyecto exige punto (decisión Uruguay, no Argentina, agosto 2026) porque es un documento
-    /// oficial que se archiva.
+    /// Guardián del formato numérico del documento (review final, Crítico 1): el PDF se imprime
+    /// y se archiva al lado de la pantalla de la que salió, así que tiene que decir EXACTAMENTE
+    /// lo mismo -- es-UY, separador de miles "." y decimal ",", igual que
+    /// <c>MonedaConverter</c> ("C2") y <c>CantidadConverter</c> ("0.####") en las grillas. Antes
+    /// de este fix la plantilla formateaba con <c>InvariantCulture</c> y el mismo número salía
+    /// con los separadores INVERTIDOS respecto de la pantalla ("26,400.00" en papel contra
+    /// "26.400,00" en pantalla).
+    ///
+    /// Se sigue forzando la cultura del hilo (acá "en-US", que tiene los separadores al revés
+    /// que es-UY) porque ese era el valor real del test original y no se pierde: lo que se
+    /// afirma es que el formato es FIJO, no que sea el del SO. Con cultura "es-AR" el test no
+    /// probaría nada: es-AR y es-UY usan los mismos separadores, así que un
+    /// <c>ToString()</c> sin cultura explícita pasaría igual.
     /// </summary>
     [Fact]
-    public void Generar_ConCulturaDeHiloDeComaDecimal_FormateaNumerosConPunto()
+    public void Generar_SeaCualSeaLaCulturaDelHilo_FormateaNumerosConLaCulturaDeLaPantalla()
     {
         var culturaOriginal = CultureInfo.CurrentCulture;
         try
         {
-            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("es-AR");
-            var items = new[] { new FilaNumerica("P001", 45.5m, 10.75, 1000L, 3.25f) };
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+            var items = new[] { new FilaNumerica("P001", 45.5m, 10.75, 1000L, 3.25f, 1234567.89m) };
             var plantilla = new PlantillaTabular();
 
             var pdf = plantilla.Generar(
-                items, new[] { "Codigo", "Precio", "Cantidad", "Total", "Peso" }, Metadatos());
+                items,
+                new[] { "Codigo", "Precio", "Cantidad", "Total", "Peso", "MontoGrande" },
+                Metadatos());
 
-            using var documento = PdfDocument.Open(pdf);
-            var texto = string.Join(" ", documento.GetPages().Select(p => p.Text));
-            Assert.Contains("45.50", texto);
-            Assert.Contains("10.75", texto);
+            var texto = ObtenerTextoConEspacios(pdf);
+
+            // Decimales con COMA (es-UY), como en la grilla.
+            Assert.Contains("45,50", texto);
+            Assert.Contains("10,75", texto);
+            Assert.Contains("3,25", texto);
+
+            // Miles con PUNTO (es-UY): sin esto un monto de 7 cifras es ilegible en papel.
+            Assert.Contains("1.234.567,89", texto);
+
+            // Los ENTEROS van sin decimales y sin separador de miles: hay columnas enteras que
+            // son identificadores (EntidadId de Auditoría), donde "1.000" sería incorrecto.
             Assert.Contains("1000", texto);
-            Assert.Contains("3.25", texto);
-            Assert.DoesNotContain("45,50", texto);
-            Assert.DoesNotContain("10,75", texto);
-            Assert.DoesNotContain("3,25", texto);
+
+            // Y nada del formato invariante que este fix vino a dar vuelta.
+            Assert.DoesNotContain("45.50", texto);
+            Assert.DoesNotContain("10.75", texto);
+            Assert.DoesNotContain("3.25", texto);
+            Assert.DoesNotContain("1,234,567.89", texto);
         }
         finally
         {

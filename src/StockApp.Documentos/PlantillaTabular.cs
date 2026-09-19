@@ -23,6 +23,12 @@ public sealed class PlantillaTabular
     private const string FormatoFecha = "dd/MM/yyyy HH:mm:ss";
     private const string FormatoFechaSolo = "dd/MM/yyyy";
 
+    /// <summary>Separador de miles y 2 decimales fijos, igual que la grilla (ver <see cref="FormatearValor"/>).</summary>
+    private const string FormatoNumerico = "N2";
+
+    /// <summary>Ver <see cref="CrearCulturaDocumento"/>.</summary>
+    private static readonly IFormatProvider CulturaDocumento = CrearCulturaDocumento();
+
     /// <summary>
     /// Registra <see cref="ResolvedorFuentes"/> como resolver global de PDFsharp la primera vez
     /// que se toca este tipo. Sin esto, CUALQUIER render de texto revienta con
@@ -166,12 +172,31 @@ public sealed class PlantillaTabular
     /// <summary>
     /// Mismo criterio de fechas que <c>CsvExporter.FormatearValor</c> (bugfix de huso horario:
     /// DateTime se persiste en UTC pero se muestra en hora local; DateOnly NO se convierte,
-    /// representa un día-calendario sin instante). Formato invariante explícito para TODOS los
-    /// tipos numéricos (enteros y de punto flotante): un documento oficial impreso/archivado no
-    /// puede depender de la cultura del hilo/SO que lo generó (decisión del proyecto: decimales
-    /// con punto, ver memoria "Uruguay, no Argentina", municipio uruguayo, agosto 2026). Sin
-    /// esto, <c>valor.ToString()</c> hereda <see cref="CultureInfo.CurrentCulture"/> y un
-    /// <c>double</c>/<c>float</c> saldría con coma bajo culturas como "es-AR".
+    /// representa un día-calendario sin instante).
+    ///
+    /// NUMÉRICOS: cultura FIJA es-UY, la MISMA que usan las grillas de la app vía
+    /// <c>MonedaConverter</c> ("C2", ej. "$ 26.400,00") y <c>CantidadConverter</c> ("0.####",
+    /// ej. "22,5") -- separador de miles "." y decimal ",". El PDF se imprime y se archiva al
+    /// lado de la pantalla de la que salió: si el papel dice "26,400.00" y la pantalla
+    /// "26.400,00", el mismo número se lee distinto en los dos soportes (hallazgo del review
+    /// final, decisión del usuario: manda la pantalla).
+    ///
+    /// La cultura es FIJA, no la del hilo/SO (mismo criterio y mismo fallback manual que los
+    /// dos converters, ver <see cref="CrearCulturaDocumento"/>): un documento oficial no puede
+    /// cambiar de formato según la máquina que lo generó.
+    ///
+    /// Formato ÚNICO "N2" para todo decimal/double/float, sin distinguir moneda de cantidad:
+    /// la plantilla recibe nombres de propiedad y valores, no semántica de negocio (ver el
+    /// comentario de <see cref="Generar{T}"/> sobre el símbolo "$"). Entre los dos formatos de
+    /// la pantalla, el de moneda es el único que sirve para ambos casos: "0.####" no lleva
+    /// separador de miles y rendiría 1234567.89m como "1234567,89" (ilegible en un documento
+    /// contable), mientras que "N2" sobre una cantidad solo agrega ceros de relleno
+    /// ("22,5" en pantalla → "22,50" en papel): mismo número, misma lectura.
+    ///
+    /// Los ENTEROS se formatean sin decimales y sin separador de miles, igual que
+    /// <c>CantidadConverter</c> con enteros ("0.####" no agrupa) -- además hay columnas enteras
+    /// que son IDENTIFICADORES, no cantidades (<c>EntidadId</c> en Auditoría): "1.234" como ID
+    /// sería directamente incorrecto.
     /// </summary>
     private static string FormatearValor(object? valor) => valor switch
     {
@@ -180,14 +205,38 @@ public sealed class PlantillaTabular
             .ToLocalTime()
             .ToString(FormatoFecha, CultureInfo.InvariantCulture),
         DateOnly fecha => fecha.ToString(FormatoFechaSolo, CultureInfo.InvariantCulture),
-        decimal numero => numero.ToString("N2", CultureInfo.InvariantCulture),
-        double numero => numero.ToString("N2", CultureInfo.InvariantCulture),
-        float numero => numero.ToString("N2", CultureInfo.InvariantCulture),
-        long numero => numero.ToString(CultureInfo.InvariantCulture),
-        int numero => numero.ToString(CultureInfo.InvariantCulture),
-        short numero => numero.ToString(CultureInfo.InvariantCulture),
+        decimal numero => numero.ToString(FormatoNumerico, CulturaDocumento),
+        double numero => numero.ToString(FormatoNumerico, CulturaDocumento),
+        float numero => numero.ToString(FormatoNumerico, CulturaDocumento),
+        long numero => numero.ToString(CulturaDocumento),
+        int numero => numero.ToString(CulturaDocumento),
+        short numero => numero.ToString(CulturaDocumento),
         _ => valor.ToString() ?? string.Empty,
     };
+
+    /// <summary>
+    /// Cultura de los números del documento: es-UY, la misma que las grillas. El fallback manual
+    /// está copiado del criterio de <c>MonedaConverter</c>/<c>CantidadConverter</c>: si el
+    /// runtime corre con ICU deshabilitada (<c>InvariantGlobalization</c>), "es-UY" no existe y
+    /// <see cref="CultureInfo.GetCultureInfo"/> tira -- con el <see cref="NumberFormatInfo"/>
+    /// armado a mano el formato sigue siendo el mismo sin depender de que el SO tenga la
+    /// cultura instalada.
+    /// </summary>
+    private static IFormatProvider CrearCulturaDocumento()
+    {
+        try
+        {
+            return CultureInfo.GetCultureInfo("es-UY");
+        }
+        catch (CultureNotFoundException)
+        {
+            return new NumberFormatInfo
+            {
+                NumberDecimalSeparator = ",",
+                NumberGroupSeparator = ".",
+            };
+        }
+    }
 
     private static byte[] Renderizar(Document document)
     {
