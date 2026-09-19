@@ -10,8 +10,10 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Finanzas;
+using StockApp.Application.Interfaces;
 using StockApp.Application.Reportes;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 using StockApp.Presentation.Controls;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Finanzas;
@@ -67,6 +69,12 @@ public class CargaProtegidaEstadoVacioUiTests
             System.IO.Stream contenido, string nombreSugerido, CancellationToken ct = default,
             string? extension = null, string? tipoMime = null)
             => Task.FromResult(false);
+    }
+
+    private sealed class PdfExporterNoOpFake : IPdfExporter
+    {
+        public byte[] Exportar<T>(IEnumerable<T> items, IReadOnlyList<string> columnas, MetadatosDocumento metadatos)
+            => Array.Empty<byte>();
     }
 
     // ── helpers de montaje ──────────────────────────────────────────────────
@@ -128,7 +136,8 @@ public class CargaProtegidaEstadoVacioUiTests
     {
         var vm = new StockCategoriaViewModel(
             new ReporteStockServiceUnauthorizedFake(), new CsvExporterNoOpFake(),
-            new ServicioGuardadoArchivoNoOpFake(), new ConfirmacionServiceFake());
+            new ServicioGuardadoArchivoNoOpFake(), new ConfirmacionServiceFake(),
+            new PdfExporterNoOpFake(), new ServicioAperturaArchivoFake(), new SesionFake(RolUsuario.Admin));
 
         var window = MontarConDataContext(XamlStockCategoriaView, vm);
 
