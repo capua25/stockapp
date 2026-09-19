@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Auditoria;
 using StockApp.Application.Auth;
 using StockApp.Application.Exportacion;
+using StockApp.Application.Interfaces;
 using StockApp.Presentation.Services;
 
 namespace StockApp.Presentation.ViewModels.Reportes;
@@ -42,11 +44,26 @@ public partial class AuditoriaLogViewModel : ViewModelBase
         "Detalle",
     };
 
+    /// <summary>
+    /// Orden EXACTO de columnas para el export PDF (spec 2026-09-18): las de la GRILLA, no las
+    /// del CSV. En esta pantalla coinciden con <see cref="ColumnOrder"/> (mismas 6 columnas),
+    /// pero se mantiene como constante separada a propósito: un cambio futuro en el CSV no debe
+    /// alterar el PDF. Caso especial de esta pantalla: <c>Detalle</c> es texto libre sin tope de
+    /// largo (campo del log de auditoría) -- la plantilla lo envuelve (wrap) sin truncar.
+    /// </summary>
+    public static readonly IReadOnlyList<string> ColumnasPdf = new[]
+    {
+        "Fecha", "NombreUsuario", "Accion", "Entidad", "EntidadId", "Detalle",
+    };
+
     private readonly IAuditoriaQueryService _servicio;
     private readonly ICsvExporter _csvExporter;
     private readonly IServicioGuardadoArchivo _guardado;
     private readonly IConfirmacionService _confirmacion;
     private readonly IUsuarioService _usuarioService;
+    private readonly IPdfExporter _pdfExporter;
+    private readonly IServicioAperturaArchivo _apertura;
+    private readonly ICurrentSession _session;
 
     /// <summary>
     /// PK del usuario filtrado. Antes se tipeaba a mano en un NumericUpDown -- un ID que no se
@@ -83,13 +100,19 @@ public partial class AuditoriaLogViewModel : ViewModelBase
         ICsvExporter csvExporter,
         IServicioGuardadoArchivo guardado,
         IConfirmacionService confirmacion,
-        IUsuarioService usuarioService)
+        IUsuarioService usuarioService,
+        IPdfExporter pdfExporter,
+        IServicioAperturaArchivo apertura,
+        ICurrentSession session)
     {
         _servicio = servicio;
         _csvExporter = csvExporter;
         _guardado = guardado;
         _confirmacion = confirmacion;
         _usuarioService = usuarioService;
+        _pdfExporter = pdfExporter;
+        _apertura = apertura;
+        _session = session;
     }
 
     partial void OnUsuarioFiltroSeleccionadoChanged(OpcionUsuario? value)
@@ -170,6 +193,51 @@ public partial class AuditoriaLogViewModel : ViewModelBase
         {
             var csv = _csvExporter.Exportar(Items, ColumnOrder);
             await _guardado.GuardarTextoAsync(csv, "auditoria.csv");
+        }, _confirmacion);
+    }
+
+    /// <summary>
+    /// Describe en criollo los filtros activos de la búsqueda, para el membrete del PDF (spec
+    /// 2026-09-18). Un PDF que se archiva sin aclarar su universo de datos no es auditable: por
+    /// eso, aun sin filtros, el texto lo dice explícitamente ("Todos"/"Todo el histórico") en vez
+    /// de omitirlos.
+    /// </summary>
+    private string ConstruirDescripcionFiltros()
+    {
+        var usuario = UsuarioFiltroSeleccionado?.Valor is null ? "Todos" : UsuarioFiltroSeleccionado.Nombre;
+        var periodo = FechaDesde is null && FechaHasta is null
+            ? "Todo el histórico"
+            : $"{FechaDesde?.ToString("dd/MM/yyyy") ?? "(sin desde)"} a {FechaHasta?.ToString("dd/MM/yyyy") ?? "(sin hasta)"}";
+        return $"Usuario: {usuario}. Período: {periodo}.";
+    }
+
+    /// <summary>
+    /// Exporta <see cref="Items"/> a PDF con las columnas de la grilla, membrete institucional
+    /// y aviso de volumen si supera 500 filas (spec 2026-09-18). No hace nada si no hay datos
+    /// cargados. Ofrece abrir el PDF con el visor del sistema tras guardarlo.
+    /// </summary>
+    [RelayCommand]
+    private async Task ExportarPdfAsync()
+    {
+        if (Items.Count == 0)
+            return;
+
+        if (!await AvisoVolumenExportacion.ConfirmarAsync(Items.Count, _confirmacion))
+            return;
+
+        await ExportacionPdf.EjecutarAsync(async () =>
+        {
+            var metadatos = new MetadatosDocumento(
+                Titulo: "Log de auditoría",
+                DescripcionFiltros: ConstruirDescripcionFiltros(),
+                UsuarioEmisor: _session.UsuarioActual?.NombreCompleto ?? _session.UsuarioActual?.NombreUsuario ?? "Sistema");
+
+            var pdf = _pdfExporter.Exportar(Items, ColumnasPdf, metadatos);
+            using var stream = new MemoryStream(pdf);
+            var guardado = await _guardado.GuardarBytesAsync(
+                stream, "auditoria.pdf", extension: "pdf", tipoMime: "application/pdf");
+
+            await ExportacionPdf.OfrecerAbrirAsync(guardado, pdf, "auditoria.pdf", _confirmacion, _apertura);
         }, _confirmacion);
     }
 }
