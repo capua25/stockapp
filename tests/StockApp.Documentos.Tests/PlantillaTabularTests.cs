@@ -176,11 +176,17 @@ public class PlantillaTabularTests
     /// el primer run; la garantía real está en la verificación por mutación documentada en el
     /// reporte de la Tarea 5, no en este ciclo rojo/verde.
     ///
-    /// Nota de PdfPig: el texto extraído de una página con wrap puede llegar partido por saltos
-    /// de línea o con espaciado distinto al original en los límites de línea (documentado en el
-    /// spike de la Tarea 0). Por eso se normalizan espacios en blanco antes de comparar y se
-    /// afirma por fragmentos clave (primero, medio, último), nunca por igualdad del string
-    /// completo.
+    /// Nota de PdfPig: el texto extraído de una página con wrap puede llegar con espaciado
+    /// distinto al original en los límites de línea (documentado en el spike de la Tarea 0),
+    /// así que este test NO compara el string completo por igualdad -- afirma por fragmentos
+    /// clave (primero, medio, último). No hace falta normalizar espacios en blanco para este
+    /// caso puntual: cada fragmento clave (<c>palabra001</c>, <c>palabra030</c>, <c>palabra060</c>)
+    /// es un token sin espacios internos, y MigraDoc/PdfPig cortan el wrap ENTRE palabras, nunca
+    /// en medio de una -- verificado empíricamente corriendo el assert sin normalizar antes de
+    /// commitear (ver reporte de la Tarea 5). Si algún test futuro necesita afirmar sobre una
+    /// subcadena que cruza el límite de dos palabras (p. ej. <c>"palabra029 palabra030"</c>), esa
+    /// combinación sí puede fallar por el espaciado que introduce el wrap y ahí sí hace falta
+    /// normalizar antes de comparar.
     /// </summary>
     [Fact]
     public void Generar_ConTextoMuyLargo_ApareceCompletoSinTruncar()
