@@ -56,6 +56,8 @@ public sealed class PlantillaTabular
         section.PageSetup.PageFormat = PageFormat.A4;
         section.PageSetup.Orientation = columnas.Count > 6 ? Orientation.Landscape : Orientation.Portrait;
 
+        AgregarMembrete(section, metadatos);
+
         var tabla = section.AddTable();
         tabla.Borders.Width = 0.5;
 
@@ -79,6 +81,47 @@ public sealed class PlantillaTabular
         }
 
         return Renderizar(document);
+    }
+
+    /// <summary>
+    /// Membrete institucional (Tarea 6): logo + "INTENDENCIA DE CARMELO" + título del reporte +
+    /// descripción de los filtros aplicados. La descripción de filtros NO es decorativa -- un
+    /// PDF que se imprime y se archiva en una administración pública sin aclarar qué universo de
+    /// datos representa (rango de fechas, filtros activos) no es auditable.
+    ///
+    /// Si <see cref="MetadatosDocumento.DescripcionFiltros"/> viene vacío o en blanco, el párrafo
+    /// correspondiente NO se agrega: MigraDoc reserva altura de línea para un párrafo aunque su
+    /// texto sea la cadena vacía, así que agregarlo incondicionalmente dejaría un renglón en
+    /// blanco fantasma entre el título y la tabla de datos (verificado con
+    /// <c>Generar_ConDescripcionFiltrosVacia_NoDejaUnRenglonFantasmaEnElMembrete</c>, que compara
+    /// la posición del encabezado de la tabla con y sin descripción de filtros).
+    /// </summary>
+    private static void AgregarMembrete(Section section, MetadatosDocumento metadatos)
+    {
+        var tablaMembrete = section.AddTable();
+        tablaMembrete.Borders.Visible = false;
+        tablaMembrete.AddColumn(Unit.FromCentimeter(3));
+        tablaMembrete.AddColumn();
+
+        var fila = tablaMembrete.AddRow();
+
+        var logoBase64 = "base64:" + Convert.ToBase64String(RecursosMembrete.ObtenerLogoNegro());
+        var imagen = fila.Cells[0].AddImage(logoBase64);
+        imagen.Width = Unit.FromCentimeter(2.5);
+        imagen.LockAspectRatio = true;
+
+        var celdaTexto = fila.Cells[1];
+        celdaTexto.AddParagraph("INTENDENCIA DE CARMELO").Format.Font.Bold = true;
+        var parrafoTitulo = celdaTexto.AddParagraph(metadatos.Titulo);
+        parrafoTitulo.Format.Font.Size = 14;
+
+        if (!string.IsNullOrWhiteSpace(metadatos.DescripcionFiltros))
+        {
+            var parrafoFiltros = celdaTexto.AddParagraph(metadatos.DescripcionFiltros);
+            parrafoFiltros.Format.Font.Size = 9;
+        }
+
+        section.AddParagraph(); // separación antes de la tabla de datos
     }
 
     private static PropertyInfo[] ResolverPropiedades<T>(IReadOnlyList<string> columnas)

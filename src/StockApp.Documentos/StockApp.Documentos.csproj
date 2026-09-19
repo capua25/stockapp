@@ -32,6 +32,19 @@
     </EmbeddedResource>
   </ItemGroup>
 
+  <!-- Logo institucional embebido para el membrete (ver RecursosMembrete.cs): variante NEGRA
+       (Assets/carmelo-negro.png, copiada de "Carmelo Municipio. Negro PNG.png" en la raíz del
+       repo, renombrada sin espacios) porque el membrete se imprime sobre papel blanco; la
+       variante de color/fondo que usa Presentation (carmelo-original.png, AvaloniaResource) es
+       para pantalla, no para este caso. Vive acá y no en StockApp.Presentation/Assets porque
+       StockApp.Documentos no depende de Avalonia (ver Restricciones globales del plan): el
+       proyecto queda autocontenido y testeable sin levantar infraestructura de Avalonia. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\carmelo-negro.png">
+      <LogicalName>StockApp.Documentos.Assets.carmelo-negro.png</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
   <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
       <_Parameter1>StockApp.Documentos.Tests</_Parameter1>

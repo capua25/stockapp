@@ -206,4 +206,123 @@ public class PlantillaTabularTests
         Assert.Contains("palabra030", texto);
         Assert.Contains("palabra060", texto);
     }
+
+    /// <summary>
+    /// Hallazgo de la Tarea 6, no documentado por el spike de la Tarea 0: <c>Page.Text</c> de
+    /// PdfPig concatena las palabras de la página SIN espacios entre ellas cuando el contenido
+    /// viene de una tabla sin ancho de columna fijo (el caso del membrete) -- el spike y las
+    /// tareas anteriores nunca lo notaron porque todos sus asserts comparaban tokens de una sola
+    /// palabra (p. ej. "palabra030"), donde la ausencia de espacios alrededor es invisible. Acá
+    /// el requisito real es una frase de varias palabras ("INTENDENCIA DE CARMELO", el título,
+    /// la descripción de filtros), así que hace falta reconstruir el texto a partir de
+    /// <c>Page.GetWords()</c> (que sí segmenta palabras correctamente, verificado imprimiendo el
+    /// resultado) y unirlas con espacio explícito.
+    /// </summary>
+    private static string ObtenerTextoConEspacios(byte[] pdf)
+    {
+        using var documento = PdfDocument.Open(pdf);
+        return string.Join(" ", documento.GetPages().SelectMany(p => p.GetWords()).Select(w => w.Text));
+    }
+
+    [Fact]
+    public void Generar_IncluyeElTituloDelMetadato()
+    {
+        var items = new[] { new FilaSimple("P001", "Azúcar") };
+        var plantilla = new PlantillaTabular();
+
+        var pdf = plantilla.Generar(items, new[] { "Codigo", "Nombre" }, Metadatos("Valorización de inventario"));
+
+        var texto = ObtenerTextoConEspacios(pdf);
+        Assert.Contains("Valorización de inventario", texto);
+        Assert.Contains("INTENDENCIA DE CARMELO", texto);
+    }
+
+    [Fact]
+    public void Generar_IncluyeLaDescripcionDeFiltros()
+    {
+        var items = new[] { new FilaSimple("P001", "Azúcar") };
+        var plantilla = new PlantillaTabular();
+        var metadatos = new MetadatosDocumento("Título", "Período: 01/01/2026 a 31/12/2026.", "admin");
+
+        var pdf = plantilla.Generar(items, new[] { "Codigo", "Nombre" }, metadatos);
+
+        var texto = ObtenerTextoConEspacios(pdf);
+        Assert.Contains("Período: 01/01/2026 a 31/12/2026.", texto);
+    }
+
+    [Fact]
+    public void Generar_ElMembreteIncluyeUnaImagen()
+    {
+        var items = new[] { new FilaSimple("P001", "Azúcar") };
+        var plantilla = new PlantillaTabular();
+
+        var pdf = plantilla.Generar(items, new[] { "Codigo", "Nombre" }, Metadatos());
+
+        using var documento = PdfDocument.Open(pdf);
+        var cantidadImagenes = documento.GetPages().Sum(p => p.GetImages().Count());
+        Assert.True(cantidadImagenes >= 1, "El membrete debe incluir el logo.");
+    }
+
+    /// <summary>
+    /// Comportamiento no especificado literalmente por el plan (que solo trae el caso con
+    /// descripción no vacía): con <c>DescripcionFiltros</c> vacío, el membrete NO debe reservar
+    /// un renglón en blanco -- MigraDoc reserva altura de línea para un párrafo aunque su texto
+    /// sea la cadena vacía, así que un <c>AddParagraph(string.Empty)</c> incondicional deja un
+    /// "renglón fantasma" entre el título y la tabla de datos.
+    ///
+    /// No se puede afirmar la ausencia de un renglón vacío comparando texto extraído (una cadena
+    /// vacía no deja rastro en el texto se agregue o no el párrafo). Se afirma por geometría,
+    /// usando <c>Letter</c>/<c>Word.BoundingBox</c> (técnica mencionada pero no ejercitada por el
+    /// spike de la Tarea 0, verificada acá empíricamente; el spike documenta
+    /// <c>Letter.GlyphRectangle</c>, pero esa API está obsoleta en la versión de PdfPig usada por
+    /// el proyecto -- <c>BoundingBox</c> es su reemplazo con la misma semántica de rectángulo): se
+    /// compara la posición vertical del encabezado "Codigo" con y sin descripción de filtros.
+    ///
+    /// El caso "con filtro" usa el contenido mínimo posible ("x", un solo carácter no blanco) en
+    /// vez de una frase real -- deliberado, para aislar el efecto que se quiere probar (que el
+    /// párrafo exista o no) del efecto de cuánto texto tenga. Verificado empíricamente con tres
+    /// mediciones directas del valor numérico de Y antes de fijar este diseño:
+    /// <list type="bullet">
+    /// <item>Con contenido real de una sola línea ("Período: enero a marzo.") la comparación
+    /// funciona, pero por poco margen: ese texto es unas pocas líneas más corto que el peor caso,
+    /// y la mutación (sacar el <c>if</c>) igual deja "sin filtro" por encima de "con filtro" --
+    /// margen insuficiente para detectar la regresión real.</item>
+    /// <item>Con "x" como contenido mínimo de una sola línea, en código real "sin filtro" da
+    /// Y=703.17 (2 líneas: organismo + título) y "con filtro" da Y=692.28 (3 líneas). Mutando el
+    /// código (sacando el <c>if</c>, agregando el párrafo vacío incondicionalmente), "sin filtro"
+    /// también pasa a dar Y=692.28 -- EXACTAMENTE igual a "con filtro" (los dos casos son ahora
+    /// "3 líneas de una sola línea cada una", indistinguibles en altura) -- la aserción de abajo
+    /// se vuelve falsa (igual, no mayor) y el test cae en rojo real. Restaurado tras confirmar.</item>
+    /// </list>
+    /// </summary>
+    [Fact]
+    public void Generar_ConDescripcionFiltrosVacia_NoDejaUnRenglonFantasmaEnElMembrete()
+    {
+        var items = new[] { new FilaSimple("P001", "Azúcar") };
+        var plantilla = new PlantillaTabular();
+        var metadatosConFiltro = new MetadatosDocumento("Título", "x", "admin");
+        var metadatosSinFiltro = new MetadatosDocumento("Título", string.Empty, "admin");
+
+        var pdfConFiltro = plantilla.Generar(items, new[] { "Codigo", "Nombre" }, metadatosConFiltro);
+        var pdfSinFiltro = plantilla.Generar(items, new[] { "Codigo", "Nombre" }, metadatosSinFiltro);
+
+        var yConFiltro = ObtenerYDelEncabezadoCodigo(pdfConFiltro);
+        var ySinFiltro = ObtenerYDelEncabezadoCodigo(pdfSinFiltro);
+
+        Assert.True(
+            ySinFiltro > yConFiltro,
+            $"Sin descripción de filtros, el encabezado debe quedar más arriba (Y mayor). " +
+            $"Con filtro: {yConFiltro}, sin filtro: {ySinFiltro}.");
+    }
+
+    private static double ObtenerYDelEncabezadoCodigo(byte[] pdf)
+    {
+        using var documento = PdfDocument.Open(pdf);
+        var pagina = documento.GetPage(1);
+        // Se busca la PALABRA "Codigo" (no la primera letra "C" de la página): "CARMELO" en el
+        // membrete también empieza con "C" y aparece antes en el documento, así que filtrar por
+        // letra suelta agarraba esa "C" fija en vez del encabezado de la tabla que sí se mueve.
+        var palabraCodigo = pagina.GetWords().First(w => w.Text == "Codigo");
+        return palabraCodigo.BoundingBox.Top;
+    }
 }
