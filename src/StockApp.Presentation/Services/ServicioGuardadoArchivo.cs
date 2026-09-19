@@ -39,19 +39,7 @@ public class ServicioGuardadoArchivo : IServicioGuardadoArchivo
         if (storageProvider is null)
             return false;
 
-        var archivo = await storageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-        {
-            SuggestedFileName = nombreSugerido,
-            DefaultExtension = "csv",
-            FileTypeChoices = new List<FilePickerFileType>
-            {
-                new("Archivo CSV")
-                {
-                    Patterns = new[] { "*.csv" },
-                    MimeTypes = new[] { "text/csv" },
-                },
-            },
-        });
+        var archivo = await storageProvider.SaveFilePickerAsync(ConstruirOpcionesGuardadoTexto(nombreSugerido));
 
         // El usuario canceló el selector.
         if (archivo is null)
@@ -63,6 +51,27 @@ public class ServicioGuardadoArchivo : IServicioGuardadoArchivo
 
         return true;
     }
+
+    /// <summary>
+    /// Construye las opciones del selector nativo para el camino de TEXTO (hoy, únicamente
+    /// CSV). Extraído a un método propio, testeable sin bootstrap de Avalonia (spec 2026-09-18,
+    /// export PDF), para poder guardar por mutación que este camino no cambia de comportamiento
+    /// al agregar <c>extension</c>/<c>tipoMime</c> al camino de BYTES (Task 8).
+    /// </summary>
+    internal static FilePickerSaveOptions ConstruirOpcionesGuardadoTexto(string nombreSugerido) =>
+        new()
+        {
+            SuggestedFileName = nombreSugerido,
+            DefaultExtension = "csv",
+            FileTypeChoices = new List<FilePickerFileType>
+            {
+                new("Archivo CSV")
+                {
+                    Patterns = new[] { "*.csv" },
+                    MimeTypes = new[] { "text/csv" },
+                },
+            },
+        };
 
     /// <inheritdoc />
     public Task<bool> GuardarBytesAsync(
