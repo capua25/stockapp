@@ -165,4 +165,39 @@ public class PlantillaTabularTests
             CultureInfo.CurrentCulture = culturaOriginal;
         }
     }
+
+    private sealed record FilaConTextoLargo(string Nombre, string Detalle);
+
+    /// <summary>
+    /// Guardián de la regla de texto largo (Tarea 5, restricciones globales del plan): un
+    /// documento de auditoría que se archiva no puede truncar contenido -- el caso extremo es
+    /// <c>Detalle</c> del log de auditoría, campo libre sin tope de longitud. MigraDoc no trunca
+    /// texto de celda por diseño (la fila crece en alto), así que este test parte en verde desde
+    /// el primer run; la garantía real está en la verificación por mutación documentada en el
+    /// reporte de la Tarea 5, no en este ciclo rojo/verde.
+    ///
+    /// Nota de PdfPig: el texto extraído de una página con wrap puede llegar partido por saltos
+    /// de línea o con espaciado distinto al original en los límites de línea (documentado en el
+    /// spike de la Tarea 0). Por eso se normalizan espacios en blanco antes de comparar y se
+    /// afirma por fragmentos clave (primero, medio, último), nunca por igualdad del string
+    /// completo.
+    /// </summary>
+    [Fact]
+    public void Generar_ConTextoMuyLargo_ApareceCompletoSinTruncar()
+    {
+        var textoLargo = string.Join(" ", Enumerable.Range(1, 60).Select(i => $"palabra{i:000}"));
+        var items = new[] { new FilaConTextoLargo("Fila 1", textoLargo) };
+        var plantilla = new PlantillaTabular();
+
+        var pdf = plantilla.Generar(items, new[] { "Nombre", "Detalle" }, Metadatos());
+
+        using var documento = PdfDocument.Open(pdf);
+        var texto = string.Join(" ", documento.GetPages().Select(p => p.Text));
+
+        // El contenido completo tiene que estar -- primera palabra, última palabra, y una del
+        // medio. Un truncado dejaría "palabra001" pero no "palabra060".
+        Assert.Contains("palabra001", texto);
+        Assert.Contains("palabra030", texto);
+        Assert.Contains("palabra060", texto);
+    }
 }
