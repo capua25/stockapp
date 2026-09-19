@@ -92,4 +92,38 @@ public class PlantillaTabularTests
         var texto = string.Join(" ", documento.GetPages().Select(p => p.Text));
         Assert.Contains("P001", texto);
     }
+
+    [Fact]
+    public void Generar_ConSeisColumnasOMenos_UsaOrientacionVertical()
+    {
+        var items = new[] { new FilaSimple("P001", "Azúcar") };
+        var plantilla = new PlantillaTabular();
+
+        var pdf = plantilla.Generar(items, new[] { "Codigo", "Nombre" }, Metadatos());
+
+        using var documento = PdfDocument.Open(pdf);
+        var pagina = documento.GetPage(1);
+        Assert.True(pagina.Height > pagina.Width, "6 columnas o menos debe ser A4 vertical.");
+    }
+
+    [Fact]
+    public void Generar_ConMasDeSeisColumnas_UsaOrientacionApaisada()
+    {
+        var items = new[] { new FilaOnceColumnas() };
+        var columnas = new[]
+        {
+            "C1", "C2", "C3", "C4", "C5", "C6", "C7",
+        };
+        var plantilla = new PlantillaTabular();
+
+        var pdf = plantilla.Generar(items, columnas, Metadatos());
+
+        using var documento = PdfDocument.Open(pdf);
+        var pagina = documento.GetPage(1);
+        Assert.True(pagina.Width > pagina.Height, "Más de 6 columnas debe ser A4 apaisado.");
+    }
+
+    private sealed record FilaOnceColumnas(
+        string C1 = "a", string C2 = "b", string C3 = "c", string C4 = "d",
+        string C5 = "e", string C6 = "f", string C7 = "g");
 }

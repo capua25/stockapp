@@ -54,6 +54,7 @@ public sealed class PlantillaTabular
         var document = new Document();
         var section = document.AddSection();
         section.PageSetup.PageFormat = PageFormat.A4;
+        section.PageSetup.Orientation = columnas.Count > 6 ? Orientation.Landscape : Orientation.Portrait;
 
         var tabla = section.AddTable();
         tabla.Borders.Width = 0.5;
