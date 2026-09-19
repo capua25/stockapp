@@ -107,6 +107,11 @@ public class PlantillaTabularTests
         Assert.True(pagina.Height > pagina.Width, "6 columnas o menos debe ser A4 vertical.");
     }
 
+    /// <summary>
+    /// Borde de la regla de ancho: 7 columnas es el primer valor que dispara apaisado. Usa 7 de
+    /// las 11 de <see cref="FilaOnceColumnas"/> a propósito -- el peor caso de 11 columnas lo
+    /// cubre <see cref="Generar_ConOnceColumnas_LaTablaEntraEnElAnchoImprimible"/>.
+    /// </summary>
     [Fact]
     public void Generar_ConMasDeSeisColumnas_UsaOrientacionApaisada()
     {
@@ -124,9 +129,71 @@ public class PlantillaTabularTests
         Assert.True(pagina.Width > pagina.Height, "Más de 6 columnas debe ser A4 apaisado.");
     }
 
+    /// <summary>
+    /// El peor caso de la spec: Gastos, 11 columnas, 4 de ellas de texto largo. El record se
+    /// llamaba <c>FilaOnceColumnas</c> pero declaraba SIETE campos (review final, Crítico 2), así
+    /// que las 11 columnas no se renderizaron nunca en ningún test de la rama -- y con 11
+    /// columnas sin ancho asignado (2,5 cm fijos cada una = 27,5 cm) la tabla se salía del área
+    /// imprimible de un A4 apaisado (24,7 cm). Los valores por defecto imitan el contenido real
+    /// de la grilla de Gastos (proveedor, detalle largo, línea POA, importes de 7 cifras) para
+    /// que el reparto de ancho se ejercite contra longitudes verosímiles, no contra "a", "b", "c".
+    /// </summary>
     private sealed record FilaOnceColumnas(
-        string C1 = "a", string C2 = "b", string C3 = "c", string C4 = "d",
-        string C5 = "e", string C6 = "f", string C7 = "g");
+        string C1 = "01/09/2026",
+        string C2 = "Ferretería del Centro S.R.L.",
+        string C3 = "A-0001234",
+        string C4 = "Compra de materiales varios para el mantenimiento del alumbrado público",
+        string C5 = "Rentas generales",
+        string C6 = "Materiales de construcción",
+        string C7 = "Línea POA 3 — Alumbrado público",
+        string C8 = "1.234.567,89",
+        string C9 = "1.000.000,00",
+        string C10 = "234.567,89",
+        string C11 = "Parcialmente pagado");
+
+    /// <summary>Los dos márgenes laterales del documento, en puntos PDF (2,5 cm, ver PlantillaTabular).</summary>
+    private const double MargenLateralEnPuntos = 2.5 / 2.54 * 72;
+
+    /// <summary>
+    /// GUARDIÁN del reparto de ancho de columnas (review final, Crítico 2): con las 11 columnas
+    /// del peor caso, NINGÚN contenido puede pasar del margen derecho. MigraDoc no hace auto-fit:
+    /// una columna sin <c>Width</c> toma 2,5 cm FIJOS sin mirar el ancho de página, así que
+    /// quitar el cálculo de ancho (volver a <c>tabla.AddColumn()</c> sin argumento) empuja las
+    /// últimas columnas fuera de la hoja y este test se pone rojo -- verificado por mutación, ver
+    /// el reporte del fix.
+    ///
+    /// Se afirma sobre la palabra MÁS A LA DERECHA de la página (no sobre una columna puntual):
+    /// cualquier columna que se desborde la hace fallar, sin que el test tenga que saber cuál.
+    /// La tolerancia de 1 pt es por el redondeo de cm a puntos; el padding interno de celda de
+    /// MigraDoc juega a favor (mete el texto HACIA ADENTRO del borde de la columna), así que no
+    /// hay riesgo de falso verde por ahí.
+    /// </summary>
+    [Fact]
+    public void Generar_ConOnceColumnas_LaTablaEntraEnElAnchoImprimible()
+    {
+        var items = Enumerable.Range(1, 10).Select(_ => new FilaOnceColumnas()).ToList();
+        var columnas = new[]
+        {
+            "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11",
+        };
+        var plantilla = new PlantillaTabular();
+
+        var pdf = plantilla.Generar(items, columnas, Metadatos());
+
+        using var documento = PdfDocument.Open(pdf);
+        foreach (var pagina in documento.GetPages())
+        {
+            var limiteDerecho = pagina.Width - MargenLateralEnPuntos;
+            var masADerecha = pagina.GetWords().MaxBy(w => w.BoundingBox.Right);
+
+            Assert.NotNull(masADerecha);
+            Assert.True(
+                masADerecha.BoundingBox.Right <= limiteDerecho + 1,
+                $"En la página {pagina.Number} el contenido llega a x={masADerecha.BoundingBox.Right:0.00} " +
+                $"y el margen derecho está en x={limiteDerecho:0.00} (ancho de página {pagina.Width:0.00}). " +
+                $"Texto desbordado: '{masADerecha.Text}'.");
+        }
+    }
 
     private sealed record FilaNumerica(
         string Codigo, decimal Precio, double Cantidad, long Total, float Peso, decimal MontoGrande);

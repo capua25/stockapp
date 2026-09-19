@@ -30,6 +30,43 @@ public sealed class PlantillaTabular
     private static readonly IFormatProvider CulturaDocumento = CrearCulturaDocumento();
 
     /// <summary>
+    /// Umbral de la regla de ancho de la spec: hasta esta cantidad de columnas el documento sale
+    /// A4 vertical; a partir de una más, apaisado. Era un literal suelto en
+    /// <see cref="Generar{T}"/> (review final, menor 1).
+    /// </summary>
+    private const int MaximoColumnasEnVertical = 6;
+
+    /// <summary>
+    /// Margen izquierdo y derecho, en centímetros. Se SETEA explícitamente en el
+    /// <see cref="PageSetup"/> (aunque coincide con el default de MigraDoc) porque el reparto de
+    /// ancho de las columnas lo resta del ancho de página: si el default cambiara, el cálculo
+    /// quedaría en silencio desalineado de la página real.
+    /// </summary>
+    private const double MargenLateralCm = 2.5;
+
+    /// <summary>Ancho de la columna del logo en la tabla del membrete (ver <see cref="AgregarMembrete"/>).</summary>
+    private const double AnchoColumnaLogoCm = 3.0;
+
+    /// <summary>
+    /// Cotas del ancho "deseado" de una columna ANTES de normalizar al ancho imprimible (ver
+    /// <see cref="RepartirAnchoDeColumnas"/>). El mínimo evita que una columna de una sola letra
+    /// quede en un hilo; el máximo evita que un único <c>Detalle</c> larguísimo del log de
+    /// auditoría (campo libre sin tope) se lleve la página entera y deje al resto en nada.
+    /// </summary>
+    private const double AnchoMinimoColumnaCm = 1.5;
+
+    private const double AnchoMaximoColumnaCm = 6.0;
+
+    /// <summary>
+    /// Centímetros por carácter usados para estimar el ancho deseado de cada columna. Es una
+    /// aproximación del ancho medio de un carácter de Inter a 10pt (la fuente del documento, ver
+    /// <see cref="ResolvedorFuentes"/>); NO pretende ser exacta, y no hace falta que lo sea: el
+    /// resultado se normaliza proporcionalmente al ancho imprimible, así que lo único que
+    /// importa es la relación entre columnas, no el valor absoluto.
+    /// </summary>
+    private const double AnchoPorCaracterCm = 0.2;
+
+    /// <summary>
     /// Registra <see cref="ResolvedorFuentes"/> como resolver global de PDFsharp la primera vez
     /// que se toca este tipo. Sin esto, CUALQUIER render de texto revienta con
     /// "No appropriate font found" en cualquier plataforma (hallazgo de la Tarea 0).
@@ -57,19 +94,33 @@ public sealed class PlantillaTabular
 
         var propiedades = ResolverPropiedades<T>(columnas);
 
+        // Las filas se materializan YA FORMATEADAS porque se recorren dos veces: una para medir
+        // el contenido y repartir el ancho de las columnas, otra para escribir las celdas.
+        // `items` puede ser un iterador perezoso de un solo uso (Reporte de tareas pasa el
+        // resultado de un método con `yield`), así que enumerarlo dos veces no es una opción.
+        var celdas = items
+            .Select(item => propiedades.Select(p => FormatearValor(p.GetValue(item))).ToArray())
+            .ToList();
+
+        var apaisado = columnas.Count > MaximoColumnasEnVertical;
+
         var document = new Document();
         var section = document.AddSection();
         section.PageSetup.PageFormat = PageFormat.A4;
-        section.PageSetup.Orientation = columnas.Count > 6 ? Orientation.Landscape : Orientation.Portrait;
+        section.PageSetup.Orientation = apaisado ? Orientation.Landscape : Orientation.Portrait;
+        section.PageSetup.LeftMargin = Unit.FromCentimeter(MargenLateralCm);
+        section.PageSetup.RightMargin = Unit.FromCentimeter(MargenLateralCm);
 
-        AgregarMembrete(section, metadatos);
+        var anchoImprimibleCm = CalcularAnchoImprimibleCm(apaisado);
+
+        AgregarMembrete(section, metadatos, anchoImprimibleCm);
         AgregarPie(section, metadatos.UsuarioEmisor);
 
         var tabla = section.AddTable();
         tabla.Borders.Width = 0.5;
 
-        foreach (var _ in columnas)
-            tabla.AddColumn();
+        foreach (var anchoCm in RepartirAnchoDeColumnas(columnas, celdas, anchoImprimibleCm))
+            tabla.AddColumn(Unit.FromCentimeter(anchoCm));
 
         var filaEncabezado = tabla.AddRow();
         filaEncabezado.HeadingFormat = true;
@@ -77,14 +128,11 @@ public sealed class PlantillaTabular
         for (var i = 0; i < columnas.Count; i++)
             filaEncabezado.Cells[i].AddParagraph(columnas[i]);
 
-        foreach (var item in items)
+        foreach (var valores in celdas)
         {
             var fila = tabla.AddRow();
             for (var i = 0; i < columnas.Count; i++)
-            {
-                var valor = propiedades[i].GetValue(item);
-                fila.Cells[i].AddParagraph(FormatearValor(valor));
-            }
+                fila.Cells[i].AddParagraph(valores[i]);
         }
 
         return Renderizar(document);
@@ -103,12 +151,16 @@ public sealed class PlantillaTabular
     /// <c>Generar_ConDescripcionFiltrosVacia_NoDejaUnRenglonFantasmaEnElMembrete</c>, que compara
     /// la posición del encabezado de la tabla con y sin descripción de filtros).
     /// </summary>
-    private static void AgregarMembrete(Section section, MetadatosDocumento metadatos)
+    private static void AgregarMembrete(Section section, MetadatosDocumento metadatos, double anchoImprimibleCm)
     {
         var tablaMembrete = section.AddTable();
         tablaMembrete.Borders.Visible = false;
-        tablaMembrete.AddColumn(Unit.FromCentimeter(3));
-        tablaMembrete.AddColumn();
+        tablaMembrete.AddColumn(Unit.FromCentimeter(AnchoColumnaLogoCm));
+        // La columna del texto se lleva TODO el ancho restante. Sin ancho explícito tomaba el
+        // default de MigraDoc (2,5 cm), así que el bloque "INTENDENCIA DE CARMELO" + título +
+        // filtros quedaba más angosto que el propio logo y envolvía en un chorizo vertical
+        // (review final, Crítico 2).
+        tablaMembrete.AddColumn(Unit.FromCentimeter(anchoImprimibleCm - AnchoColumnaLogoCm));
 
         var fila = tablaMembrete.AddRow();
 
@@ -159,6 +211,67 @@ public sealed class PlantillaTabular
         parrafo.AddPageField();
         parrafo.AddText(" de ");
         parrafo.AddNumPagesField();
+    }
+
+    /// <summary>
+    /// Ancho útil de la página: el ancho del papel menos los dos márgenes laterales. El tamaño
+    /// del papel se pide a MigraDoc (<see cref="PageSetup.GetPageSize"/>) en vez de hardcodear
+    /// 21/29,7 cm, así que si algún día cambia el <see cref="PageFormat"/> del documento el
+    /// reparto de columnas lo sigue solo.
+    /// </summary>
+    private static double CalcularAnchoImprimibleCm(bool apaisado)
+    {
+        PageSetup.GetPageSize(PageFormat.A4, out var anchoVertical, out var altoVertical);
+        var anchoPaginaCm = (apaisado ? altoVertical : anchoVertical).Centimeter;
+        return anchoPaginaCm - (2 * MargenLateralCm);
+    }
+
+    /// <summary>
+    /// Reparte el ancho imprimible entre las columnas (review final, Crítico 2). Antes de esto
+    /// las columnas se agregaban SIN ancho, así que cada una tomaba el default FIJO de MigraDoc
+    /// (2,5 cm) sin mirar el papel: MigraDoc no hace auto-fit como una tabla HTML. Con 11
+    /// columnas (Gastos) la tabla pedía 27,5 cm y el área imprimible de un A4 apaisado son 24,7:
+    /// las últimas columnas se imprimían fuera de la hoja.
+    ///
+    /// El reparto es PROPORCIONAL AL CONTENIDO REAL, no parejo: se estima un ancho "deseado" por
+    /// columna a partir de la cantidad máxima de caracteres que tiene que mostrar (contando su
+    /// encabezado y todas sus celdas), se acota entre
+    /// <see cref="AnchoMinimoColumnaCm"/> y <see cref="AnchoMaximoColumnaCm"/>, y se escala todo
+    /// por un único factor para que la suma dé EXACTAMENTE el ancho imprimible.
+    ///
+    /// Medir el contenido es la única forma CONFIABLE de distinguir una columna ancha de una
+    /// angosta acá: la plantilla no conoce la semántica de negocio de las columnas, y las dos
+    /// alternativas fallan. Por NOMBRE es una heurística frágil (<c>Total</c> es plata en Gastos
+    /// y un conteo de tareas en Reporte de tareas). Por TIPO CLR tampoco alcanza: en Auditoría
+    /// <c>Detalle</c> (texto libre sin tope) y <c>Accion</c> (una palabra) son las dos
+    /// <c>string</c> y quedarían igual de anchas, que es justo el problema que el review marcó.
+    /// Los valores, en cambio, ya los tenemos y no mienten.
+    /// </summary>
+    private static double[] RepartirAnchoDeColumnas(
+        IReadOnlyList<string> columnas,
+        IReadOnlyList<string[]> celdas,
+        double anchoImprimibleCm)
+    {
+        if (columnas.Count == 0)
+            return [];
+
+        var deseados = new double[columnas.Count];
+        for (var i = 0; i < columnas.Count; i++)
+        {
+            var caracteres = columnas[i].Length;
+            foreach (var fila in celdas)
+                caracteres = Math.Max(caracteres, fila[i].Length);
+
+            deseados[i] = Math.Clamp(
+                caracteres * AnchoPorCaracterCm, AnchoMinimoColumnaCm, AnchoMaximoColumnaCm);
+        }
+
+        // La cota inferior garantiza suma > 0 con al menos una columna, así que no hay división
+        // por cero. El factor puede ser > 1 (contenido angosto: la tabla se estira hasta ocupar
+        // el ancho de la hoja, como se espera de un reporte impreso) o < 1 (contenido ancho:
+        // todo se comprime en proporción y el wrap de MigraDoc absorbe el resto sin truncar).
+        var factor = anchoImprimibleCm / deseados.Sum();
+        return [.. deseados.Select(deseado => deseado * factor)];
     }
 
     private static PropertyInfo[] ResolverPropiedades<T>(IReadOnlyList<string> columnas)
