@@ -128,7 +128,7 @@ public class PlantillaTabularTests
         string C1 = "a", string C2 = "b", string C3 = "c", string C4 = "d",
         string C5 = "e", string C6 = "f", string C7 = "g");
 
-    private sealed record FilaNumerica(string Codigo, decimal Precio, double Cantidad, long Total);
+    private sealed record FilaNumerica(string Codigo, decimal Precio, double Cantidad, long Total, float Peso);
 
     /// <summary>
     /// Guardián de formato invariante: fuerza la cultura del hilo a "es-AR" (separador decimal
@@ -144,19 +144,21 @@ public class PlantillaTabularTests
         try
         {
             CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("es-AR");
-            var items = new[] { new FilaNumerica("P001", 45.5m, 10.75, 1000L) };
+            var items = new[] { new FilaNumerica("P001", 45.5m, 10.75, 1000L, 3.25f) };
             var plantilla = new PlantillaTabular();
 
             var pdf = plantilla.Generar(
-                items, new[] { "Codigo", "Precio", "Cantidad", "Total" }, Metadatos());
+                items, new[] { "Codigo", "Precio", "Cantidad", "Total", "Peso" }, Metadatos());
 
             using var documento = PdfDocument.Open(pdf);
             var texto = string.Join(" ", documento.GetPages().Select(p => p.Text));
             Assert.Contains("45.50", texto);
             Assert.Contains("10.75", texto);
             Assert.Contains("1000", texto);
+            Assert.Contains("3.25", texto);
             Assert.DoesNotContain("45,50", texto);
             Assert.DoesNotContain("10,75", texto);
+            Assert.DoesNotContain("3,25", texto);
         }
         finally
         {
