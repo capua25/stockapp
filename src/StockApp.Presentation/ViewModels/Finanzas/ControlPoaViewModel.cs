@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Threading.Tasks;
 using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Finanzas;
+using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
@@ -24,6 +26,9 @@ public partial class ControlPoaViewModel : ViewModelBase
     private readonly ICsvExporter           _csvExporter;
     private readonly IServicioGuardadoArchivo _guardado;
     private readonly IConfirmacionService   _confirmacion;
+    private readonly IPdfExporter _pdfExporter;
+    private readonly IServicioAperturaArchivo _apertura;
+    private readonly ICurrentSession _session;
 
     [ObservableProperty] private int _ejercicio = DateTime.UtcNow.Year;
 
@@ -36,13 +41,17 @@ public partial class ControlPoaViewModel : ViewModelBase
 
     public ControlPoaViewModel(
         IFinanzasVistasService service, INavigationService navigation,
-        ICsvExporter csvExporter, IServicioGuardadoArchivo guardado, IConfirmacionService confirmacion)
+        ICsvExporter csvExporter, IServicioGuardadoArchivo guardado, IConfirmacionService confirmacion,
+        IPdfExporter pdfExporter, IServicioAperturaArchivo apertura, ICurrentSession session)
     {
         _service     = service;
         _navigation  = navigation;
         _csvExporter = csvExporter;
         _guardado    = guardado;
         _confirmacion = confirmacion;
+        _pdfExporter = pdfExporter;
+        _apertura = apertura;
+        _session = session;
 
         FilasView = new DataGridCollectionView(Filas);
     }
@@ -94,6 +103,17 @@ public partial class ControlPoaViewModel : ViewModelBase
     };
 
     /// <summary>
+    /// Orden EXACTO de columnas para el export PDF (spec 2026-09-18): las de la GRILLA, no las
+    /// del CSV -- excluye Ejercicio (ya está en la descripción de filtros del membrete) y
+    /// Sobregirada (se ve por color/badge en la grilla, sobra como columna en papel).
+    /// Deliberadamente separada de ColumnasCsv: un cambio futuro en el CSV no debe alterar el PDF.
+    /// </summary>
+    public static readonly IReadOnlyList<string> ColumnasPdf = new[]
+    {
+        "Nombre", "Programa", "Presupuesto", "Gastado", "Saldo", "PorcentajeEjecucion",
+    };
+
+    /// <summary>
     /// El guardado a disco corre bajo <see cref="ExportacionCsv"/> (bugfix 2026-08-14): un fallo
     /// DESPUÉS de elegir la ubicación (permiso denegado, disco lleno) se informa en vez de
     /// escapar del comando sin observar.
@@ -105,6 +125,36 @@ public partial class ControlPoaViewModel : ViewModelBase
         {
             var contenido = _csvExporter.Exportar(Filas, ColumnasCsv);
             await _guardado.GuardarTextoAsync(contenido, $"control-poa-{Ejercicio}.csv");
+        }, _confirmacion);
+    }
+
+    /// <summary>
+    /// Exporta <see cref="Filas"/> a PDF con las columnas de la grilla, membrete institucional
+    /// y aviso de volumen si supera 500 filas (spec 2026-09-18). No hace nada si no hay datos
+    /// cargados. Ofrece abrir el PDF con el visor del sistema tras guardarlo.
+    /// </summary>
+    [RelayCommand]
+    private async Task ExportarPdfAsync()
+    {
+        if (Filas.Count == 0)
+            return;
+
+        if (!await AvisoVolumenExportacion.ConfirmarAsync(Filas.Count, _confirmacion))
+            return;
+
+        await ExportacionPdf.EjecutarAsync(async () =>
+        {
+            var metadatos = new MetadatosDocumento(
+                Titulo: "Control POA",
+                DescripcionFiltros: $"Ejercicio: {Ejercicio}.",
+                UsuarioEmisor: _session.UsuarioActual?.NombreCompleto ?? _session.UsuarioActual?.NombreUsuario ?? "Sistema");
+
+            var pdf = _pdfExporter.Exportar(Filas, ColumnasPdf, metadatos);
+            using var stream = new MemoryStream(pdf);
+            var guardado = await _guardado.GuardarBytesAsync(
+                stream, $"control-poa-{Ejercicio}.pdf", extension: "pdf", tipoMime: "application/pdf");
+
+            await ExportacionPdf.OfrecerAbrirAsync(guardado, pdf, $"control-poa-{Ejercicio}.pdf", _confirmacion, _apertura);
         }, _confirmacion);
     }
 }
