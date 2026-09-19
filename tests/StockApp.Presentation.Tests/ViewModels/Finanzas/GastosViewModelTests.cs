@@ -58,7 +58,8 @@ public class GastosViewModelTests
                     Mock<IServicioAperturaArchivo> aperturaMock)
         Crear(
             IReadOnlyList<Gasto>? gastos = null, IReadOnlyList<LineaPoa>? lineasPoa = null,
-            RolUsuario rol = RolUsuario.Admin, IEnumerable<string>? permisos = null)
+            RolUsuario rol = RolUsuario.Admin, IEnumerable<string>? permisos = null,
+            UsuarioSesion? usuarioSesion = null)
     {
         var svc = new Mock<IGastoService>();
         svc.Setup(s => s.ListarAsync(It.IsAny<GastoFiltro>()))
@@ -67,7 +68,7 @@ public class GastosViewModelTests
         var session = new Mock<ICurrentSession>();
         session.Setup(s => s.RolActual).Returns(rol);
         session.Setup(s => s.PermisosActuales).Returns(new HashSet<string>(permisos ?? Enumerable.Empty<string>()));
-        session.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(1, "admin", rol, null));
+        session.Setup(s => s.UsuarioActual).Returns(usuarioSesion ?? new UsuarioSesion(1, "admin", rol, null));
 
         var proveedores = new Mock<ICategoriaProveedorService>();
         var proveedoresDisponibles = new List<Proveedor>
@@ -816,6 +817,31 @@ public class GastosViewModelTests
         Assert.NotNull(metadatosCapturados);
         Assert.Equal("Gastos y facturas", metadatosCapturados!.Titulo);
         Assert.Equal("admin", metadatosCapturados.UsuarioEmisor);
+    }
+
+    [Fact]
+    public async Task ExportarPdfCommand_ConNombreCompleto_UsaNombreCompletoComoUsuarioEmisor()
+    {
+        // Tarea 21: el helper Crear() siempre construia UsuarioSesion con NombreCompleto null,
+        // asi que ningun test ejercitaba la rama principal del fallback
+        // (_session.UsuarioActual?.NombreCompleto ?? ... ?? "Sistema") -- solo la de "admin"
+        // (NombreUsuario). Este test cubre la rama que el PDF le muestra a casi todo usuario real.
+        var (vm, _, _, _, guardadoMock, pdfExporterMock, _) = Crear(
+            new List<Gasto> { GastoDe(1, "Factura de luz") },
+            usuarioSesion: new UsuarioSesion(1, "admin", RolUsuario.Admin, "Ana Pérez"));
+        await vm.CargarAsync();
+        MetadatosDocumento? metadatosCapturados = null;
+        pdfExporterMock
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<GastoFila>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()))
+            .Callback<IEnumerable<GastoFila>, IReadOnlyList<string>, MetadatosDocumento>((_, _, m) => metadatosCapturados = m)
+            .Returns(new byte[] { 1 });
+        guardadoMock
+            .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
+            .ReturnsAsync(true);
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        Assert.Equal("Ana Pérez", metadatosCapturados!.UsuarioEmisor);
     }
 
     [Fact]

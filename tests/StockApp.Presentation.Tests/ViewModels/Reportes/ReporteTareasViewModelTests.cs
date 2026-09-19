@@ -249,6 +249,31 @@ public class ReporteTareasViewModelTests
     }
 
     [Fact]
+    public async Task ExportarPdfCommand_ConNombreCompleto_UsaNombreCompletoComoUsuarioEmisor()
+    {
+        // Tarea 21: el helper Crear() siempre construia UsuarioSesion con NombreCompleto null,
+        // asi que ningun test ejercitaba la rama principal del fallback
+        // (_session.UsuarioActual?.NombreCompleto ?? ... ?? "Sistema") -- ni siquiera la de
+        // "admin" (NombreUsuario), este VM no tenia ningun test de UsuarioEmisor.
+        var dto = new ReporteTareasDto(new List<FilaReporteTareas> { Fila("Centro") }, 3);
+        var (vm, _, _, pdfExporterMock, guardadoMock, _, _, sessionMock) = Crear(dto);
+        sessionMock.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(1, "admin", RolUsuario.Admin, "Ana Pérez"));
+        await vm.CargarAsync();
+        MetadatosDocumento? metadatosCapturados = null;
+        pdfExporterMock
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()))
+            .Callback<IEnumerable<FilaReporteTareas>, IReadOnlyList<string>, MetadatosDocumento>((_, _, m) => metadatosCapturados = m)
+            .Returns(new byte[] { 1 });
+        guardadoMock
+            .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
+            .ReturnsAsync(true);
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        Assert.Equal("Ana Pérez", metadatosCapturados!.UsuarioEmisor);
+    }
+
+    [Fact]
     public async Task ExportarPdfCommand_SinItems_NoExporta()
     {
         var (vm, _, _, pdfExporterMock, _, _, _, _) = Crear();
