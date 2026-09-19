@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Exportacion;
+using StockApp.Application.Interfaces;
 using StockApp.Application.Movimientos;
 using StockApp.Application.Reportes;
 using StockApp.Presentation.Services;
@@ -39,11 +41,21 @@ public partial class HistorialPorProductoViewModel : ViewModelBase
         "UsuarioId",
     };
 
+    /// <summary>Orden de la GRILLA (no del CSV, que tiene 12 columnas con IDs internos) --
+    /// 8 columnas dispara apaisado automático (Tarea 4 de la plantilla).</summary>
+    public static readonly IReadOnlyList<string> ColumnasPdf = new[]
+    {
+        "Fecha", "Tipo", "Motivo", "Cantidad", "PrecioUnitario", "StockAnterior", "StockNuevo", "Comentario",
+    };
+
     private readonly IReporteStockService _servicio;
     private readonly ICsvExporter _csvExporter;
     private readonly IServicioGuardadoArchivo _guardado;
     private readonly IConfirmacionService _confirmacion;
     private readonly IProductoService _productoService;
+    private readonly IPdfExporter _pdfExporter;
+    private readonly IServicioAperturaArchivo _apertura;
+    private readonly ICurrentSession _session;
 
     /// <summary>
     /// PK del producto filtrado. Antes se tipeaba a mano en un NumericUpDown -- el ÚNICO
@@ -82,13 +94,19 @@ public partial class HistorialPorProductoViewModel : ViewModelBase
         ICsvExporter csvExporter,
         IServicioGuardadoArchivo guardado,
         IConfirmacionService confirmacion,
-        IProductoService productoService)
+        IProductoService productoService,
+        IPdfExporter pdfExporter,
+        IServicioAperturaArchivo apertura,
+        ICurrentSession session)
     {
         _servicio = servicio;
         _csvExporter = csvExporter;
         _guardado = guardado;
         _confirmacion = confirmacion;
         _productoService = productoService;
+        _pdfExporter = pdfExporter;
+        _apertura = apertura;
+        _session = session;
 
         BuscarProductosAsync = BuscarProductosInternalAsync;
     }
@@ -181,6 +199,50 @@ public partial class HistorialPorProductoViewModel : ViewModelBase
         {
             var csv = _csvExporter.Exportar(Items, ColumnOrder);
             await _guardado.GuardarTextoAsync(csv, "historial-producto.csv");
+        }, _confirmacion);
+    }
+
+    /// <summary>Describe en criollo los filtros activos para el membrete del PDF (spec
+    /// 2026-09-18). Sin producto o sin fechas, lo dice explícitamente: un PDF archivado sin
+    /// aclarar su universo de datos no es auditable.</summary>
+    private string ConstruirDescripcionFiltros()
+    {
+        var producto = ProductoSeleccionado is null
+            ? "(sin producto)"
+            : $"{ProductoSeleccionado.Codigo} - {ProductoSeleccionado.Nombre}";
+        var periodo = FechaDesde is null && FechaHasta is null
+            ? "Todo el histórico"
+            : $"{FechaDesde?.ToString("dd/MM/yyyy") ?? "(sin desde)"} a {FechaHasta?.ToString("dd/MM/yyyy") ?? "(sin hasta)"}";
+        return $"Producto: {producto}. Período: {periodo}.";
+    }
+
+    /// <summary>
+    /// Exporta <see cref="Items"/> a PDF con las columnas de la grilla (A4 apaisado, 8 columnas),
+    /// membrete institucional y aviso de volumen si supera 500 filas (spec 2026-09-18). No hace
+    /// nada si no hay datos cargados. Ofrece abrir el PDF con el visor del sistema tras guardarlo.
+    /// </summary>
+    [RelayCommand]
+    private async Task ExportarPdfAsync()
+    {
+        if (Items.Count == 0)
+            return;
+
+        if (!await AvisoVolumenExportacion.ConfirmarAsync(Items.Count, _confirmacion))
+            return;
+
+        await ExportacionPdf.EjecutarAsync(async () =>
+        {
+            var metadatos = new MetadatosDocumento(
+                Titulo: "Historial por producto",
+                DescripcionFiltros: ConstruirDescripcionFiltros(),
+                UsuarioEmisor: _session.UsuarioActual?.NombreCompleto ?? _session.UsuarioActual?.NombreUsuario ?? "Sistema");
+
+            var pdf = _pdfExporter.Exportar(Items, ColumnasPdf, metadatos);
+            using var stream = new MemoryStream(pdf);
+            var guardado = await _guardado.GuardarBytesAsync(
+                stream, "historial-producto.pdf", extension: "pdf", tipoMime: "application/pdf");
+
+            await ExportacionPdf.OfrecerAbrirAsync(guardado, pdf, "historial-producto.pdf", _confirmacion, _apertura);
         }, _confirmacion);
     }
 }
