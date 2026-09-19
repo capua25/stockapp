@@ -160,7 +160,7 @@ deben leer esto ANTES de asumir vigente el texto de arriba en estos dos puntos p
    ```
    Para tokens sueltos sin espacios internos (`palabra030`, `Codigo`, un código de producto),
    `Page.Text` sigue sirviendo sin cambios — esto NO invalida el punto 3 de "LA DECISIÓN" para
-   ese caso, solo lo acota quando el contenido puede venir de una tabla de layout sin ancho fijo
+   ese caso, solo lo acota cuando el contenido puede venir de una tabla de layout sin ancho fijo
    y la aserción es sobre una frase de varias palabras.
 
 2. **`Letter.GlyphRectangle` está OBSOLETA** en la versión de `PdfPig` que usa este proyecto
