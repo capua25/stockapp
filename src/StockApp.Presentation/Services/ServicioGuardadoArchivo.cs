@@ -65,15 +65,22 @@ public class ServicioGuardadoArchivo : IServicioGuardadoArchivo
     }
 
     /// <inheritdoc />
-    public Task<bool> GuardarBytesAsync(Stream contenido, string nombreSugerido, CancellationToken ct = default)
+    public Task<bool> GuardarBytesAsync(
+        Stream contenido,
+        string nombreSugerido,
+        CancellationToken ct = default,
+        string? extension = null,
+        string? tipoMime = null)
     {
         if (AvaloniaApp.Current is null)
             return Task.FromResult(false);
 
-        return Dispatcher.UIThread.InvokeAsync(() => GuardarBytesInternoAsync(contenido, nombreSugerido, ct));
+        return Dispatcher.UIThread.InvokeAsync(
+            () => GuardarBytesInternoAsync(contenido, nombreSugerido, ct, extension, tipoMime));
     }
 
-    private static async Task<bool> GuardarBytesInternoAsync(Stream contenido, string nombreSugerido, CancellationToken ct)
+    private static async Task<bool> GuardarBytesInternoAsync(
+        Stream contenido, string nombreSugerido, CancellationToken ct, string? extension, string? tipoMime)
     {
         var lifetime = AvaloniaApp.Current?.ApplicationLifetime
             as IClassicDesktopStyleApplicationLifetime;
@@ -82,10 +89,24 @@ public class ServicioGuardadoArchivo : IServicioGuardadoArchivo
         if (storageProvider is null)
             return false;
 
-        var archivo = await storageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        var opciones = new FilePickerSaveOptions { SuggestedFileName = nombreSugerido };
+
+        // Sin extension no se arma ningún filtro (mismo comportamiento que antes de esta firma:
+        // backups/logs guardan cualquier extensión, el selector no debe restringirla).
+        if (extension is not null)
         {
-            SuggestedFileName = nombreSugerido,
-        });
+            opciones.DefaultExtension = extension;
+            opciones.FileTypeChoices = new List<FilePickerFileType>
+            {
+                new($"Archivo {extension.ToUpperInvariant()}")
+                {
+                    Patterns = new[] { $"*.{extension}" },
+                    MimeTypes = tipoMime is null ? null : new[] { tipoMime },
+                },
+            };
+        }
+
+        var archivo = await storageProvider.SaveFilePickerAsync(opciones);
 
         if (archivo is null)
             return false;

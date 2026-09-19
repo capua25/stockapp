@@ -63,7 +63,9 @@ public class CargaProtegidaEstadoVacioUiTests
     private sealed class ServicioGuardadoArchivoNoOpFake : IServicioGuardadoArchivo
     {
         public Task<bool> GuardarTextoAsync(string contenido, string nombreSugerido) => Task.FromResult(false);
-        public Task<bool> GuardarBytesAsync(System.IO.Stream contenido, string nombreSugerido, CancellationToken ct = default)
+        public Task<bool> GuardarBytesAsync(
+            System.IO.Stream contenido, string nombreSugerido, CancellationToken ct = default,
+            string? extension = null, string? tipoMime = null)
             => Task.FromResult(false);
     }
 
