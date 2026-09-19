@@ -14,6 +14,10 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Moq" />
+    <!-- Para abrir y validar el PDF real que genera PdfExporterMigraDoc en
+         Exportacion/ColumnasPdfContraDtosRealesTests.cs (misma técnica que
+         StockApp.Documentos.Tests, ver docs/superpowers/decisions/2026-09-18-spike-pdf-imagenes-y-assert.md). -->
+    <PackageReference Include="PdfPig" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
   </ItemGroup>
