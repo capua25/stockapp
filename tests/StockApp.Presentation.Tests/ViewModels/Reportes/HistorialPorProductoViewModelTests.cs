@@ -182,7 +182,14 @@ public class HistorialPorProductoViewModelTests
         // (ColumnOrder, 12 columnas con IDs internos): dispara A4 apaisado (>6 columnas).
         var esperado = new[]
         {
-            "Fecha", "Tipo", "Motivo", "Cantidad", "PrecioUnitario", "StockAnterior", "StockNuevo", "Comentario",
+            new ColumnaPdf("Fecha", "Fecha"),
+            new ColumnaPdf("Tipo", "Tipo"),
+            new ColumnaPdf("Motivo", "Motivo"),
+            new ColumnaPdf("Cantidad", "Cantidad"),
+            new ColumnaPdf("PrecioUnitario", "P. Unitario"),
+            new ColumnaPdf("StockAnterior", "Stock Ant."),
+            new ColumnaPdf("StockNuevo", "Stock Nuevo"),
+            new ColumnaPdf("Comentario", "Comentario"),
         };
 
         var items = new List<MovimientoHistorialDto> { CrearItem() };
@@ -192,7 +199,7 @@ public class HistorialPorProductoViewModelTests
         pdfExporterMock
             .Setup(e => e.Exportar(
                 It.IsAny<IEnumerable<MovimientoHistorialDto>>(),
-                It.IsAny<IReadOnlyList<string>>(),
+                It.IsAny<IReadOnlyList<ColumnaPdf>>(),
                 It.IsAny<MetadatosDocumento>()))
             .Returns(new byte[] { 9, 9 });
         guardadoMock
@@ -204,7 +211,7 @@ public class HistorialPorProductoViewModelTests
 
         pdfExporterMock.Verify(e => e.Exportar(
             vm.Items,
-            It.Is<IReadOnlyList<string>>(cols => cols.SequenceEqual(esperado)),
+            It.Is<IReadOnlyList<ColumnaPdf>>(cols => cols.SequenceEqual(esperado)),
             It.IsAny<MetadatosDocumento>()),
             Times.Once);
         Assert.Equal(8, HistorialPorProductoViewModel.ColumnasPdf.Count);
@@ -218,7 +225,7 @@ public class HistorialPorProductoViewModelTests
         await vm.ExportarPdfCommand.ExecuteAsync(null);
 
         pdfExporterMock.Verify(e => e.Exportar(
-            It.IsAny<IEnumerable<MovimientoHistorialDto>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()),
+            It.IsAny<IEnumerable<MovimientoHistorialDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()),
             Times.Never);
     }
 
@@ -235,7 +242,7 @@ public class HistorialPorProductoViewModelTests
 
         confirmMock.Verify(c => c.PreguntarAsync(It.IsAny<string>()), Times.Once);
         pdfExporterMock.Verify(e => e.Exportar(
-            It.IsAny<IEnumerable<MovimientoHistorialDto>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()),
+            It.IsAny<IEnumerable<MovimientoHistorialDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()),
             Times.Never);
     }
 
@@ -248,7 +255,7 @@ public class HistorialPorProductoViewModelTests
         await vm.CargarAsync();
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<MovimientoHistorialDto>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<MovimientoHistorialDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
             .Returns(new byte[] { 1 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -270,7 +277,7 @@ public class HistorialPorProductoViewModelTests
         var pdfBytes = new byte[] { 9, 9 };
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<MovimientoHistorialDto>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<MovimientoHistorialDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
             .Returns(pdfBytes);
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -293,7 +300,7 @@ public class HistorialPorProductoViewModelTests
         await vm.CargarAsync();
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<MovimientoHistorialDto>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<MovimientoHistorialDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
             .Returns(new byte[] { 9, 9 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -318,7 +325,7 @@ public class HistorialPorProductoViewModelTests
         sessionMock.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(1, "jperez", RolUsuario.Admin, "Juan Pérez"));
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<MovimientoHistorialDto>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<MovimientoHistorialDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
             .Returns(new byte[] { 9, 9 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -329,7 +336,7 @@ public class HistorialPorProductoViewModelTests
 
         pdfExporterMock.Verify(e => e.Exportar(
             It.IsAny<IEnumerable<MovimientoHistorialDto>>(),
-            It.IsAny<IReadOnlyList<string>>(),
+            It.IsAny<IReadOnlyList<ColumnaPdf>>(),
             It.Is<MetadatosDocumento>(m =>
                 m.Titulo == "Historial por producto" &&
                 m.DescripcionFiltros == "Producto: SKU7 - Azúcar. Período: 01/01/2026 a 31/01/2026." &&
@@ -346,7 +353,7 @@ public class HistorialPorProductoViewModelTests
         await vm.CargarAsync();
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<MovimientoHistorialDto>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<MovimientoHistorialDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
             .Returns(new byte[] { 9, 9 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -357,7 +364,7 @@ public class HistorialPorProductoViewModelTests
 
         pdfExporterMock.Verify(e => e.Exportar(
             It.IsAny<IEnumerable<MovimientoHistorialDto>>(),
-            It.IsAny<IReadOnlyList<string>>(),
+            It.IsAny<IReadOnlyList<ColumnaPdf>>(),
             It.Is<MetadatosDocumento>(m => m.DescripcionFiltros == "Producto: (sin producto). Período: Todo el histórico.")),
             Times.Once);
     }

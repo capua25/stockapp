@@ -37,9 +37,14 @@ public partial class ValorizacionViewModel : ViewModelBase
     /// del CSV -- excluye ProductoId (ID interno de Postgres, no significa nada en papel).
     /// Deliberadamente separada de ColumnOrder: un cambio futuro en el CSV no debe alterar el PDF.
     /// </summary>
-    public static readonly IReadOnlyList<string> ColumnasPdf = new[]
+    public static readonly IReadOnlyList<ColumnaPdf> ColumnasPdf = new[]
     {
-        "Codigo", "Nombre", "Categoria", "StockActual", "PrecioCosto", "ValorCosto",
+        new ColumnaPdf(nameof(ValorizacionItemDto.Codigo), "Código"),
+        new ColumnaPdf(nameof(ValorizacionItemDto.Nombre), "Nombre"),
+        new ColumnaPdf(nameof(ValorizacionItemDto.Categoria), "Categoría"),
+        new ColumnaPdf(nameof(ValorizacionItemDto.StockActual), "Stock"),
+        new ColumnaPdf(nameof(ValorizacionItemDto.PrecioCosto), "P. Costo"),
+        new ColumnaPdf(nameof(ValorizacionItemDto.ValorCosto), "Valor Costo"),
     };
 
     private readonly IReporteStockService _servicio;

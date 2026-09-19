@@ -85,7 +85,7 @@ public sealed class PlantillaTabular
 
     public byte[] Generar<T>(
         IEnumerable<T> items,
-        IReadOnlyList<string> columnas,
+        IReadOnlyList<ColumnaPdf> columnas,
         MetadatosDocumento metadatos)
     {
         ArgumentNullException.ThrowIfNull(items);
@@ -126,7 +126,7 @@ public sealed class PlantillaTabular
         filaEncabezado.HeadingFormat = true;
         filaEncabezado.Format.Font.Bold = true;
         for (var i = 0; i < columnas.Count; i++)
-            filaEncabezado.Cells[i].AddParagraph(columnas[i]);
+            filaEncabezado.Cells[i].AddParagraph(columnas[i].Rotulo);
 
         foreach (var valores in celdas)
         {
@@ -248,7 +248,7 @@ public sealed class PlantillaTabular
     /// Los valores, en cambio, ya los tenemos y no mienten.
     /// </summary>
     private static double[] RepartirAnchoDeColumnas(
-        IReadOnlyList<string> columnas,
+        IReadOnlyList<ColumnaPdf> columnas,
         IReadOnlyList<string[]> celdas,
         double anchoImprimibleCm)
     {
@@ -258,7 +258,7 @@ public sealed class PlantillaTabular
         var deseados = new double[columnas.Count];
         for (var i = 0; i < columnas.Count; i++)
         {
-            var caracteres = columnas[i].Length;
+            var caracteres = columnas[i].Rotulo.Length;
             foreach (var fila in celdas)
                 caracteres = Math.Max(caracteres, fila[i].Length);
 
@@ -274,12 +274,12 @@ public sealed class PlantillaTabular
         return [.. deseados.Select(deseado => deseado * factor)];
     }
 
-    private static PropertyInfo[] ResolverPropiedades<T>(IReadOnlyList<string> columnas)
+    private static PropertyInfo[] ResolverPropiedades<T>(IReadOnlyList<ColumnaPdf> columnas)
         => columnas
-            .Select(nombre =>
-                typeof(T).GetProperty(nombre, BindingFlags.Public | BindingFlags.Instance)
+            .Select(columna =>
+                typeof(T).GetProperty(columna.Propiedad, BindingFlags.Public | BindingFlags.Instance)
                     ?? throw new ArgumentException(
-                        $"La propiedad '{nombre}' no existe en {typeof(T).Name}.", nameof(columnas)))
+                        $"La propiedad '{columna.Propiedad}' no existe en {typeof(T).Name}.", nameof(columnas)))
             .ToArray();
 
     /// <summary>

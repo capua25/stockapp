@@ -158,7 +158,13 @@ public class StockCategoriaViewModelTests
     {
         // Literal, NO StockCategoriaViewModel.ColumnasPdf: comparar la constante contra sí misma
         // sería tautológico. Stock por categoría tiene las mismas 4 columnas en CSV y grilla.
-        var esperado = new[] { "Categoria", "CantidadProductos", "StockTotal", "ValorCosto" };
+        var esperado = new[]
+        {
+            new ColumnaPdf("Categoria", "Categoría"),
+            new ColumnaPdf("CantidadProductos", "Productos"),
+            new ColumnaPdf("StockTotal", "Stock Total"),
+            new ColumnaPdf("ValorCosto", "Valor Costo"),
+        };
 
         var items = new List<StockCategoriaDto> { CrearItem() };
         var (vm, _, _, guardadoMock, _, pdfExporterMock, _, _) = Crear(items);
@@ -166,7 +172,7 @@ public class StockCategoriaViewModelTests
         pdfExporterMock
             .Setup(e => e.Exportar(
                 It.IsAny<IEnumerable<StockCategoriaDto>>(),
-                It.IsAny<IReadOnlyList<string>>(),
+                It.IsAny<IReadOnlyList<ColumnaPdf>>(),
                 It.IsAny<MetadatosDocumento>()))
             .Returns(new byte[] { 9, 9 });
         guardadoMock
@@ -178,7 +184,7 @@ public class StockCategoriaViewModelTests
 
         pdfExporterMock.Verify(e => e.Exportar(
             vm.Items,
-            It.Is<IReadOnlyList<string>>(cols => cols.SequenceEqual(esperado)),
+            It.Is<IReadOnlyList<ColumnaPdf>>(cols => cols.SequenceEqual(esperado)),
             It.IsAny<MetadatosDocumento>()),
             Times.Once);
         guardadoMock.Verify(g => g.GuardarBytesAsync(
@@ -193,7 +199,7 @@ public class StockCategoriaViewModelTests
         await vm.ExportarPdfCommand.ExecuteAsync(null);
 
         pdfExporterMock.Verify(e => e.Exportar(
-            It.IsAny<IEnumerable<StockCategoriaDto>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()),
+            It.IsAny<IEnumerable<StockCategoriaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()),
             Times.Never);
     }
 
@@ -209,7 +215,7 @@ public class StockCategoriaViewModelTests
 
         confirmMock.Verify(c => c.PreguntarAsync(It.IsAny<string>()), Times.Once);
         pdfExporterMock.Verify(e => e.Exportar(
-            It.IsAny<IEnumerable<StockCategoriaDto>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()),
+            It.IsAny<IEnumerable<StockCategoriaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()),
             Times.Never);
     }
 
@@ -221,7 +227,7 @@ public class StockCategoriaViewModelTests
         await vm.BuscarCommand.ExecuteAsync(null);
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<StockCategoriaDto>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<StockCategoriaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
             .Returns(new byte[] { 1 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -242,7 +248,7 @@ public class StockCategoriaViewModelTests
         var pdfBytes = new byte[] { 9, 9 };
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<StockCategoriaDto>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<StockCategoriaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
             .Returns(pdfBytes);
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -264,7 +270,7 @@ public class StockCategoriaViewModelTests
         await vm.BuscarCommand.ExecuteAsync(null);
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<StockCategoriaDto>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<StockCategoriaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
             .Returns(new byte[] { 9, 9 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -286,7 +292,7 @@ public class StockCategoriaViewModelTests
         sessionMock.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(1, "jperez", RolUsuario.Admin, "Juan Pérez"));
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<StockCategoriaDto>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<StockCategoriaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
             .Returns(new byte[] { 9, 9 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -297,7 +303,7 @@ public class StockCategoriaViewModelTests
 
         pdfExporterMock.Verify(e => e.Exportar(
             It.IsAny<IEnumerable<StockCategoriaDto>>(),
-            It.IsAny<IReadOnlyList<string>>(),
+            It.IsAny<IReadOnlyList<ColumnaPdf>>(),
             It.Is<MetadatosDocumento>(m =>
                 m.Titulo == "Stock por categoría" &&
                 m.DescripcionFiltros == "Sin filtros aplicados." &&

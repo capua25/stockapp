@@ -35,9 +35,12 @@ public partial class StockCategoriaViewModel : ViewModelBase
     /// pero se mantiene como constante separada a propósito: un cambio futuro en el CSV no debe
     /// alterar el PDF.
     /// </summary>
-    public static readonly IReadOnlyList<string> ColumnasPdf = new[]
+    public static readonly IReadOnlyList<ColumnaPdf> ColumnasPdf = new[]
     {
-        "Categoria", "CantidadProductos", "StockTotal", "ValorCosto",
+        new ColumnaPdf(nameof(StockCategoriaDto.Categoria), "Categoría"),
+        new ColumnaPdf(nameof(StockCategoriaDto.CantidadProductos), "Productos"),
+        new ColumnaPdf(nameof(StockCategoriaDto.StockTotal), "Stock Total"),
+        new ColumnaPdf(nameof(StockCategoriaDto.ValorCosto), "Valor Costo"),
     };
 
     private readonly IReporteStockService _servicio;

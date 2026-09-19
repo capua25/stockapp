@@ -36,9 +36,12 @@ public partial class MasMovidosViewModel : ViewModelBase
     /// del CSV -- excluye ProductoId (ID interno de Postgres, no significa nada en papel).
     /// Deliberadamente separada de ColumnOrder: un cambio futuro en el CSV no debe alterar el PDF.
     /// </summary>
-    public static readonly IReadOnlyList<string> ColumnasPdf = new[]
+    public static readonly IReadOnlyList<ColumnaPdf> ColumnasPdf = new[]
     {
-        "Codigo", "Nombre", "CantidadMovimientos", "VolumenTotal",
+        new ColumnaPdf(nameof(MasMovidoDto.Codigo), "Código"),
+        new ColumnaPdf(nameof(MasMovidoDto.Nombre), "Nombre"),
+        new ColumnaPdf(nameof(MasMovidoDto.CantidadMovimientos), "Movimientos"),
+        new ColumnaPdf(nameof(MasMovidoDto.VolumenTotal), "Volumen Total"),
     };
 
     private readonly IReporteStockService _servicio;

@@ -43,9 +43,16 @@ public partial class HistorialPorProductoViewModel : ViewModelBase
 
     /// <summary>Orden de la GRILLA (no del CSV, que tiene 12 columnas con IDs internos) --
     /// 8 columnas dispara apaisado automático (Tarea 4 de la plantilla).</summary>
-    public static readonly IReadOnlyList<string> ColumnasPdf = new[]
+    public static readonly IReadOnlyList<ColumnaPdf> ColumnasPdf = new[]
     {
-        "Fecha", "Tipo", "Motivo", "Cantidad", "PrecioUnitario", "StockAnterior", "StockNuevo", "Comentario",
+        new ColumnaPdf(nameof(MovimientoHistorialDto.Fecha), "Fecha"),
+        new ColumnaPdf(nameof(MovimientoHistorialDto.Tipo), "Tipo"),
+        new ColumnaPdf(nameof(MovimientoHistorialDto.Motivo), "Motivo"),
+        new ColumnaPdf(nameof(MovimientoHistorialDto.Cantidad), "Cantidad"),
+        new ColumnaPdf(nameof(MovimientoHistorialDto.PrecioUnitario), "P. Unitario"),
+        new ColumnaPdf(nameof(MovimientoHistorialDto.StockAnterior), "Stock Ant."),
+        new ColumnaPdf(nameof(MovimientoHistorialDto.StockNuevo), "Stock Nuevo"),
+        new ColumnaPdf(nameof(MovimientoHistorialDto.Comentario), "Comentario"),
     };
 
     private readonly IReporteStockService _servicio;

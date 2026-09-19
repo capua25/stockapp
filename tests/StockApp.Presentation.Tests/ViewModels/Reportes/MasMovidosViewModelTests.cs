@@ -227,7 +227,13 @@ public class MasMovidosViewModelTests
         // Literal, NO MasMovidosViewModel.ColumnasPdf: comparar la constante contra sí misma
         // sería tautológico. Estas son las 4 columnas que muestra la grilla, SIN ProductoId (el
         // CSV tiene 5 e incluye el ID interno de Postgres, que no va al PDF).
-        var esperado = new[] { "Codigo", "Nombre", "CantidadMovimientos", "VolumenTotal" };
+        var esperado = new[]
+        {
+            new ColumnaPdf("Codigo", "Código"),
+            new ColumnaPdf("Nombre", "Nombre"),
+            new ColumnaPdf("CantidadMovimientos", "Movimientos"),
+            new ColumnaPdf("VolumenTotal", "Volumen Total"),
+        };
 
         var items = new List<MasMovidoDto> { CrearItem(1) };
         var (vm, _, _, guardadoMock, _, pdfExporterMock, _, _) = Crear(items);
@@ -235,7 +241,7 @@ public class MasMovidosViewModelTests
         pdfExporterMock
             .Setup(e => e.Exportar(
                 It.IsAny<IEnumerable<MasMovidoDto>>(),
-                It.IsAny<IReadOnlyList<string>>(),
+                It.IsAny<IReadOnlyList<ColumnaPdf>>(),
                 It.IsAny<MetadatosDocumento>()))
             .Returns(new byte[] { 9, 9 });
         guardadoMock
@@ -247,7 +253,7 @@ public class MasMovidosViewModelTests
 
         pdfExporterMock.Verify(e => e.Exportar(
             vm.Items,
-            It.Is<IReadOnlyList<string>>(cols => cols.SequenceEqual(esperado)),
+            It.Is<IReadOnlyList<ColumnaPdf>>(cols => cols.SequenceEqual(esperado)),
             It.IsAny<MetadatosDocumento>()),
             Times.Once);
         guardadoMock.Verify(g => g.GuardarBytesAsync(
@@ -262,7 +268,7 @@ public class MasMovidosViewModelTests
         await vm.ExportarPdfCommand.ExecuteAsync(null);
 
         pdfExporterMock.Verify(e => e.Exportar(
-            It.IsAny<IEnumerable<MasMovidoDto>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()),
+            It.IsAny<IEnumerable<MasMovidoDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()),
             Times.Never);
     }
 
@@ -278,7 +284,7 @@ public class MasMovidosViewModelTests
 
         confirmMock.Verify(c => c.PreguntarAsync(It.IsAny<string>()), Times.Once);
         pdfExporterMock.Verify(e => e.Exportar(
-            It.IsAny<IEnumerable<MasMovidoDto>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()),
+            It.IsAny<IEnumerable<MasMovidoDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()),
             Times.Never);
     }
 
@@ -290,7 +296,7 @@ public class MasMovidosViewModelTests
         await vm.BuscarCommand.ExecuteAsync(null);
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<MasMovidoDto>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<MasMovidoDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
             .Returns(new byte[] { 1 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -311,7 +317,7 @@ public class MasMovidosViewModelTests
         var pdfBytes = new byte[] { 9, 9 };
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<MasMovidoDto>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<MasMovidoDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
             .Returns(pdfBytes);
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -333,7 +339,7 @@ public class MasMovidosViewModelTests
         await vm.BuscarCommand.ExecuteAsync(null);
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<MasMovidoDto>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<MasMovidoDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
             .Returns(new byte[] { 9, 9 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -357,8 +363,8 @@ public class MasMovidosViewModelTests
         await vm.BuscarCommand.ExecuteAsync(null);
         MetadatosDocumento? metadatosCapturados = null;
         pdfExporterMock
-            .Setup(e => e.Exportar(It.IsAny<IEnumerable<MasMovidoDto>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()))
-            .Callback<IEnumerable<MasMovidoDto>, IReadOnlyList<string>, MetadatosDocumento>((_, _, m) => metadatosCapturados = m)
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<MasMovidoDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+            .Callback<IEnumerable<MasMovidoDto>, IReadOnlyList<ColumnaPdf>, MetadatosDocumento>((_, _, m) => metadatosCapturados = m)
             .Returns(new byte[] { 1 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "mas-movidos.pdf", It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
@@ -385,8 +391,8 @@ public class MasMovidosViewModelTests
         await vm.BuscarCommand.ExecuteAsync(null);
         MetadatosDocumento? metadatosCapturados = null;
         pdfExporterMock
-            .Setup(e => e.Exportar(It.IsAny<IEnumerable<MasMovidoDto>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()))
-            .Callback<IEnumerable<MasMovidoDto>, IReadOnlyList<string>, MetadatosDocumento>((_, _, m) => metadatosCapturados = m)
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<MasMovidoDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+            .Callback<IEnumerable<MasMovidoDto>, IReadOnlyList<ColumnaPdf>, MetadatosDocumento>((_, _, m) => metadatosCapturados = m)
             .Returns(new byte[] { 1 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "mas-movidos.pdf", It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
@@ -408,7 +414,7 @@ public class MasMovidosViewModelTests
         sessionMock.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(1, "jperez", RolUsuario.Admin, "Juan Pérez"));
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<MasMovidoDto>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<MasMovidoDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
             .Returns(new byte[] { 9, 9 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -419,7 +425,7 @@ public class MasMovidosViewModelTests
 
         pdfExporterMock.Verify(e => e.Exportar(
             It.IsAny<IEnumerable<MasMovidoDto>>(),
-            It.IsAny<IReadOnlyList<string>>(),
+            It.IsAny<IReadOnlyList<ColumnaPdf>>(),
             It.Is<MetadatosDocumento>(m =>
                 m.Titulo == "Productos más movidos" &&
                 m.UsuarioEmisor == "Juan Pérez")),

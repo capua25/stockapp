@@ -51,9 +51,14 @@ public partial class AuditoriaLogViewModel : ViewModelBase
     /// alterar el PDF. Caso especial de esta pantalla: <c>Detalle</c> es texto libre sin tope de
     /// largo (campo del log de auditoría) -- la plantilla lo envuelve (wrap) sin truncar.
     /// </summary>
-    public static readonly IReadOnlyList<string> ColumnasPdf = new[]
+    public static readonly IReadOnlyList<ColumnaPdf> ColumnasPdf = new[]
     {
-        "Fecha", "NombreUsuario", "Accion", "Entidad", "EntidadId", "Detalle",
+        new ColumnaPdf(nameof(AuditoriaItemDto.Fecha), "Fecha"),
+        new ColumnaPdf(nameof(AuditoriaItemDto.NombreUsuario), "Usuario"),
+        new ColumnaPdf(nameof(AuditoriaItemDto.Accion), "Acción"),
+        new ColumnaPdf(nameof(AuditoriaItemDto.Entidad), "Entidad"),
+        new ColumnaPdf(nameof(AuditoriaItemDto.EntidadId), "Entidad ID"),
+        new ColumnaPdf(nameof(AuditoriaItemDto.Detalle), "Detalle"),
     };
 
     private readonly IAuditoriaQueryService _servicio;

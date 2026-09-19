@@ -15,13 +15,22 @@ public class PlantillaTabularTests
     private static MetadatosDocumento Metadatos(string titulo = "Reporte de prueba") =>
         new(titulo, "Sin filtros aplicados.", "admin");
 
+    /// <summary>
+    /// Columnas cuyo rótulo coincide con el nombre de la propiedad, para los tests a los que el
+    /// rótulo les da igual (orientación, wrap, paginación, formato numérico). El caso en que
+    /// rótulo y propiedad DIFIEREN -- que es el punto de <see cref="ColumnaPdf"/> -- lo cubre
+    /// <see cref="Generar_ConRotulosDistintosDelNombreDePropiedad_ImprimeElRotulo"/>.
+    /// </summary>
+    private static ColumnaPdf[] Columnas(params string[] propiedades) =>
+        [.. propiedades.Select(nombre => new ColumnaPdf(nombre, nombre))];
+
     [Fact]
     public void Generar_ConDatos_ElHeaderYLosValoresSonLegibles()
     {
         var items = new[] { new FilaSimple("P001", "Azúcar"), new FilaSimple("P002", "Harina") };
         var plantilla = new PlantillaTabular();
 
-        var pdf = plantilla.Generar(items, new[] { "Codigo", "Nombre" }, Metadatos());
+        var pdf = plantilla.Generar(items, Columnas("Codigo", "Nombre"), Metadatos());
 
         using var documento = PdfDocument.Open(pdf);
         var texto = string.Join(" ", documento.GetPages().Select(p => p.Text));
@@ -39,7 +48,7 @@ public class PlantillaTabularTests
         var items = System.Array.Empty<FilaSimple>();
         var plantilla = new PlantillaTabular();
 
-        var pdf = plantilla.Generar(items, new[] { "Codigo", "Nombre" }, Metadatos());
+        var pdf = plantilla.Generar(items, Columnas("Codigo", "Nombre"), Metadatos());
 
         using var documento = PdfDocument.Open(pdf);
         var texto = string.Join(" ", documento.GetPages().Select(p => p.Text));
@@ -54,9 +63,40 @@ public class PlantillaTabularTests
         var plantilla = new PlantillaTabular();
 
         var ex = Assert.Throws<ArgumentException>(
-            () => plantilla.Generar(items, new[] { "Codigo", "NoExiste" }, Metadatos()));
+            () => plantilla.Generar(items, Columnas("Codigo", "NoExiste"), Metadatos()));
 
         Assert.Contains("NoExiste", ex.Message);
+    }
+
+    /// <summary>
+    /// GUARDIÁN de los rótulos (review final, Importante 3): el encabezado que se imprime es el
+    /// <see cref="ColumnaPdf.Rotulo"/> (el mismo <c>Header</c> que muestra el DataGrid), NO el
+    /// nombre de la propiedad del DTO. Antes la plantilla imprimía el nombre crudo y un reporte
+    /// oficial de la Intendencia salía encabezado con "NombreUsuario" o "PorcentajeEjecucion".
+    ///
+    /// El rótulo lleva tilde y espacio a propósito: es el caso real ("Línea POA", "% Ejecución")
+    /// y además hace imposible que el test pase por casualidad si alguien vuelve a imprimir la
+    /// propiedad.
+    /// </summary>
+    [Fact]
+    public void Generar_ConRotulosDistintosDelNombreDePropiedad_ImprimeElRotulo()
+    {
+        var items = new[] { new FilaSimple("P001", "Azúcar") };
+        var columnas = new[]
+        {
+            new ColumnaPdf(nameof(FilaSimple.Codigo), "Código"),
+            new ColumnaPdf(nameof(FilaSimple.Nombre), "Línea POA"),
+        };
+        var plantilla = new PlantillaTabular();
+
+        var pdf = plantilla.Generar(items, columnas, Metadatos());
+
+        var texto = ObtenerTextoConEspacios(pdf);
+        Assert.Contains("Código", texto);
+        Assert.Contains("Línea POA", texto);
+        Assert.DoesNotContain("Codigo", texto);
+        // El valor de la fila sigue saliendo de la propiedad, no del rótulo.
+        Assert.Contains("P001", texto);
     }
 
     /// <summary>
@@ -71,7 +111,7 @@ public class PlantillaTabularTests
             .ToList();
         var plantilla = new PlantillaTabular();
 
-        var pdf = plantilla.Generar(items, new[] { "Codigo", "Nombre" }, Metadatos());
+        var pdf = plantilla.Generar(items, Columnas("Codigo", "Nombre"), Metadatos());
 
         using var documento = PdfDocument.Open(pdf);
         Assert.True(documento.NumberOfPages >= 2, $"Se esperaban 2+ páginas, hubo {documento.NumberOfPages}.");
@@ -87,7 +127,7 @@ public class PlantillaTabularTests
         IPdfExporter exportador = new PdfExporterMigraDoc();
         var items = new[] { new FilaSimple("P001", "Azúcar") };
 
-        var pdf = exportador.Exportar(items, new[] { "Codigo", "Nombre" }, Metadatos("Título del exportador"));
+        var pdf = exportador.Exportar(items, Columnas("Codigo", "Nombre"), Metadatos("Título del exportador"));
 
         using var documento = PdfDocument.Open(pdf);
         var texto = string.Join(" ", documento.GetPages().Select(p => p.Text));
@@ -100,7 +140,7 @@ public class PlantillaTabularTests
         var items = new[] { new FilaSimple("P001", "Azúcar") };
         var plantilla = new PlantillaTabular();
 
-        var pdf = plantilla.Generar(items, new[] { "Codigo", "Nombre" }, Metadatos());
+        var pdf = plantilla.Generar(items, Columnas("Codigo", "Nombre"), Metadatos());
 
         using var documento = PdfDocument.Open(pdf);
         var pagina = documento.GetPage(1);
@@ -116,10 +156,7 @@ public class PlantillaTabularTests
     public void Generar_ConMasDeSeisColumnas_UsaOrientacionApaisada()
     {
         var items = new[] { new FilaOnceColumnas() };
-        var columnas = new[]
-        {
-            "C1", "C2", "C3", "C4", "C5", "C6", "C7",
-        };
+        var columnas = Columnas("C1", "C2", "C3", "C4", "C5", "C6", "C7");
         var plantilla = new PlantillaTabular();
 
         var pdf = plantilla.Generar(items, columnas, Metadatos());
@@ -172,10 +209,7 @@ public class PlantillaTabularTests
     public void Generar_ConOnceColumnas_LaTablaEntraEnElAnchoImprimible()
     {
         var items = Enumerable.Range(1, 10).Select(_ => new FilaOnceColumnas()).ToList();
-        var columnas = new[]
-        {
-            "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11",
-        };
+        var columnas = Columnas("C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10", "C11");
         var plantilla = new PlantillaTabular();
 
         var pdf = plantilla.Generar(items, columnas, Metadatos());
@@ -225,7 +259,7 @@ public class PlantillaTabularTests
 
             var pdf = plantilla.Generar(
                 items,
-                new[] { "Codigo", "Precio", "Cantidad", "Total", "Peso", "MontoGrande" },
+                Columnas("Codigo", "Precio", "Cantidad", "Total", "Peso", "MontoGrande"),
                 Metadatos());
 
             var texto = ObtenerTextoConEspacios(pdf);
@@ -283,7 +317,7 @@ public class PlantillaTabularTests
         var items = new[] { new FilaConTextoLargo("Fila 1", textoLargo) };
         var plantilla = new PlantillaTabular();
 
-        var pdf = plantilla.Generar(items, new[] { "Nombre", "Detalle" }, Metadatos());
+        var pdf = plantilla.Generar(items, Columnas("Nombre", "Detalle"), Metadatos());
 
         using var documento = PdfDocument.Open(pdf);
         var texto = string.Join(" ", documento.GetPages().Select(p => p.Text));
@@ -318,7 +352,7 @@ public class PlantillaTabularTests
         var items = new[] { new FilaSimple("P001", "Azúcar") };
         var plantilla = new PlantillaTabular();
 
-        var pdf = plantilla.Generar(items, new[] { "Codigo", "Nombre" }, Metadatos("Valorización de inventario"));
+        var pdf = plantilla.Generar(items, Columnas("Codigo", "Nombre"), Metadatos("Valorización de inventario"));
 
         var texto = ObtenerTextoConEspacios(pdf);
         Assert.Contains("Valorización de inventario", texto);
@@ -332,7 +366,7 @@ public class PlantillaTabularTests
         var plantilla = new PlantillaTabular();
         var metadatos = new MetadatosDocumento("Título", "Período: 01/01/2026 a 31/12/2026.", "admin");
 
-        var pdf = plantilla.Generar(items, new[] { "Codigo", "Nombre" }, metadatos);
+        var pdf = plantilla.Generar(items, Columnas("Codigo", "Nombre"), metadatos);
 
         var texto = ObtenerTextoConEspacios(pdf);
         Assert.Contains("Período: 01/01/2026 a 31/12/2026.", texto);
@@ -344,7 +378,7 @@ public class PlantillaTabularTests
         var items = new[] { new FilaSimple("P001", "Azúcar") };
         var plantilla = new PlantillaTabular();
 
-        var pdf = plantilla.Generar(items, new[] { "Codigo", "Nombre" }, Metadatos());
+        var pdf = plantilla.Generar(items, Columnas("Codigo", "Nombre"), Metadatos());
 
         using var documento = PdfDocument.Open(pdf);
         var cantidadImagenes = documento.GetPages().Sum(p => p.GetImages().Count());
@@ -391,8 +425,8 @@ public class PlantillaTabularTests
         var metadatosConFiltro = new MetadatosDocumento("Título", "x", "admin");
         var metadatosSinFiltro = new MetadatosDocumento("Título", string.Empty, "admin");
 
-        var pdfConFiltro = plantilla.Generar(items, new[] { "Codigo", "Nombre" }, metadatosConFiltro);
-        var pdfSinFiltro = plantilla.Generar(items, new[] { "Codigo", "Nombre" }, metadatosSinFiltro);
+        var pdfConFiltro = plantilla.Generar(items, Columnas("Codigo", "Nombre"), metadatosConFiltro);
+        var pdfSinFiltro = plantilla.Generar(items, Columnas("Codigo", "Nombre"), metadatosSinFiltro);
 
         var yConFiltro = ObtenerYDelEncabezadoCodigo(pdfConFiltro);
         var ySinFiltro = ObtenerYDelEncabezadoCodigo(pdfSinFiltro);
@@ -434,7 +468,7 @@ public class PlantillaTabularTests
         var metadatos = new MetadatosDocumento("Título", "Sin filtros aplicados.", "juan.perez");
         var fechaEsperada = DateTime.Now.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
 
-        var pdf = plantilla.Generar(items, new[] { "Codigo", "Nombre" }, metadatos);
+        var pdf = plantilla.Generar(items, Columnas("Codigo", "Nombre"), metadatos);
 
         var texto = ObtenerTextoConEspacios(pdf);
         Assert.Contains("juan.perez", texto);
@@ -460,7 +494,7 @@ public class PlantillaTabularTests
         var plantilla = new PlantillaTabular();
         var metadatos = new MetadatosDocumento("Título", "Sin filtros aplicados.", "juan.perez");
 
-        var pdf = plantilla.Generar(items, new[] { "Codigo", "Nombre" }, metadatos);
+        var pdf = plantilla.Generar(items, Columnas("Codigo", "Nombre"), metadatos);
 
         using var documento = PdfDocument.Open(pdf);
         Assert.True(documento.NumberOfPages >= 2, $"Se esperaban 2+ páginas, hubo {documento.NumberOfPages}.");

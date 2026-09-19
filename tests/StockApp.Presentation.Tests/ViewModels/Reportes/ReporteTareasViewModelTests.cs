@@ -233,7 +233,7 @@ public class ReporteTareasViewModelTests
         var (vm, _, _, pdfExporterMock, guardadoMock, _, _, _) = Crear(dto);
         await vm.CargarAsync();
         pdfExporterMock
-            .Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()))
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
             .Returns(new byte[] { 1 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
@@ -241,10 +241,18 @@ public class ReporteTareasViewModelTests
 
         await vm.ExportarPdfCommand.ExecuteAsync(null);
 
-        var esperado = new[] { "Clasificador", "Pendientes", "EnCurso", "Terminadas", "Canceladas", "Total" };
+        var esperado = new[]
+        {
+            new ColumnaPdf("Clasificador", "Clasificador"),
+            new ColumnaPdf("Pendientes", "Pendientes"),
+            new ColumnaPdf("EnCurso", "En curso"),
+            new ColumnaPdf("Terminadas", "Terminadas"),
+            new ColumnaPdf("Canceladas", "Canceladas"),
+            new ColumnaPdf("Total", "Total"),
+        };
         pdfExporterMock.Verify(e => e.Exportar(
             It.IsAny<IEnumerable<FilaReporteTareas>>(),
-            It.Is<IReadOnlyList<string>>(cols => cols.SequenceEqual(esperado) && cols.Count == 6),
+            It.Is<IReadOnlyList<ColumnaPdf>>(cols => cols.SequenceEqual(esperado) && cols.Count == 6),
             It.IsAny<MetadatosDocumento>()), Times.Once);
     }
 
@@ -261,8 +269,8 @@ public class ReporteTareasViewModelTests
         await vm.CargarAsync();
         MetadatosDocumento? metadatosCapturados = null;
         pdfExporterMock
-            .Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()))
-            .Callback<IEnumerable<FilaReporteTareas>, IReadOnlyList<string>, MetadatosDocumento>((_, _, m) => metadatosCapturados = m)
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+            .Callback<IEnumerable<FilaReporteTareas>, IReadOnlyList<ColumnaPdf>, MetadatosDocumento>((_, _, m) => metadatosCapturados = m)
             .Returns(new byte[] { 1 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
@@ -281,7 +289,7 @@ public class ReporteTareasViewModelTests
         await vm.ExportarPdfCommand.ExecuteAsync(null);
 
         pdfExporterMock.Verify(e => e.Exportar(
-            It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()),
+            It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()),
             Times.Never);
     }
 
@@ -301,8 +309,8 @@ public class ReporteTareasViewModelTests
         await vm.CargarAsync();
         IEnumerable<FilaReporteTareas>? itemsCapturados = null;
         pdfExporterMock
-            .Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()))
-            .Callback<IEnumerable<FilaReporteTareas>, IReadOnlyList<string>, MetadatosDocumento>((items, _, _) => itemsCapturados = items)
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+            .Callback<IEnumerable<FilaReporteTareas>, IReadOnlyList<ColumnaPdf>, MetadatosDocumento>((items, _, _) => itemsCapturados = items)
             .Returns(new byte[] { 1 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
@@ -336,8 +344,8 @@ public class ReporteTareasViewModelTests
         await vm.CargarAsync();
         MetadatosDocumento? metadatosCapturados = null;
         pdfExporterMock
-            .Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()))
-            .Callback<IEnumerable<FilaReporteTareas>, IReadOnlyList<string>, MetadatosDocumento>((_, _, m) => metadatosCapturados = m)
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+            .Callback<IEnumerable<FilaReporteTareas>, IReadOnlyList<ColumnaPdf>, MetadatosDocumento>((_, _, m) => metadatosCapturados = m)
             .Returns(new byte[] { 1 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))

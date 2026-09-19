@@ -165,8 +165,9 @@ public partial class ReporteTareasViewModel : ViewModelBase
 
     // ── Export CSV/PDF (spec 2026-09-18): única pantalla del alcance sin ninguna exportación
     // previa. Columnas FIJAS de la matriz -- el agrupador cambia filas y contenido (y el texto
-    // del Clasificador), nunca las columnas. Mismo orden para CSV y PDF: a diferencia de las
-    // otras 8 pantallas, acá coinciden exactamente porque no hay IDs internos que excluir. ──────
+    // del Clasificador), nunca las columnas. Mismo CONJUNTO y mismo orden para CSV y PDF: a
+    // diferencia de las otras 8 pantallas, acá coinciden exactamente porque no hay IDs internos
+    // que excluir. ─────────────────────────────────────────────────────────────────────────────
 
     public static readonly IReadOnlyList<string> ColumnasCsv = new[]
     {
@@ -175,7 +176,22 @@ public partial class ReporteTareasViewModel : ViewModelBase
         nameof(FilaReporteTareas.Canceladas), nameof(FilaReporteTareas.Total),
     };
 
-    public static readonly IReadOnlyList<string> ColumnasPdf = ColumnasCsv;
+    /// <summary>
+    /// Columnas del PDF, con los rótulos de la grilla. Se declara ENTERA y por separado de
+    /// <see cref="ColumnasCsv"/> aunque el conjunto de propiedades coincida: antes era
+    /// literalmente <c>= ColumnasCsv</c> (la misma referencia), así que tocar el CSV arrastraba
+    /// el PDF sin que nadie lo notara -- las otras 8 pantallas ya las tienen separadas (review
+    /// final, menor 2).
+    /// </summary>
+    public static readonly IReadOnlyList<ColumnaPdf> ColumnasPdf = new[]
+    {
+        new ColumnaPdf(nameof(FilaReporteTareas.Clasificador), "Clasificador"),
+        new ColumnaPdf(nameof(FilaReporteTareas.Pendientes), "Pendientes"),
+        new ColumnaPdf(nameof(FilaReporteTareas.EnCurso), "En curso"),
+        new ColumnaPdf(nameof(FilaReporteTareas.Terminadas), "Terminadas"),
+        new ColumnaPdf(nameof(FilaReporteTareas.Canceladas), "Canceladas"),
+        new ColumnaPdf(nameof(FilaReporteTareas.Total), "Total"),
+    };
 
     /// <summary>
     /// El mismo reporte agrupado por Zona o por Expediente son documentos completamente

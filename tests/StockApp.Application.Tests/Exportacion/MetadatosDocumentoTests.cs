@@ -27,7 +27,7 @@ public class MetadatosDocumentoTests
 
     private sealed class FakePdfExporter : IPdfExporter
     {
-        public byte[] Exportar<T>(IEnumerable<T> items, IReadOnlyList<string> columnas, MetadatosDocumento metadatos)
+        public byte[] Exportar<T>(IEnumerable<T> items, IReadOnlyList<ColumnaPdf> columnas, MetadatosDocumento metadatos)
             => new byte[] { 1, 2, 3 };
     }
 
@@ -38,7 +38,8 @@ public class MetadatosDocumentoTests
         var items = new[] { new FilaDePrueba("x") };
         var metadatos = new MetadatosDocumento("t", "d", "u");
 
-        var resultado = exportador.Exportar(items, new[] { "Nombre" }, metadatos);
+        var resultado = exportador.Exportar(
+            items, new[] { new ColumnaPdf(nameof(FilaDePrueba.Nombre), "Nombre") }, metadatos);
 
         Assert.Equal(new byte[] { 1, 2, 3 }, resultado);
     }

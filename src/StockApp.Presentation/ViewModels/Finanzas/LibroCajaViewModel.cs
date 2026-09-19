@@ -113,10 +113,18 @@ public partial class LibroCajaViewModel : ViewModelBase
     /// pero se mantiene como constante separada a propósito: un cambio futuro en el CSV no debe
     /// alterar el PDF. 10 columnas dispara apaisado automático (Tarea 4 de la plantilla).
     /// </summary>
-    public static readonly IReadOnlyList<string> ColumnasPdf = new[]
+    public static readonly IReadOnlyList<ColumnaPdf> ColumnasPdf = new[]
     {
-        "Fecha", "Tipo", "Concepto", "ProveedorNombre", "NumeroFactura",
-        "FuenteNombre", "RubroNombre", "Ingreso", "Egreso", "SaldoCorrido",
+        new ColumnaPdf(nameof(MovimientoCajaDto.Fecha), "Fecha"),
+        new ColumnaPdf(nameof(MovimientoCajaDto.Tipo), "Tipo"),
+        new ColumnaPdf(nameof(MovimientoCajaDto.Concepto), "Concepto"),
+        new ColumnaPdf(nameof(MovimientoCajaDto.ProveedorNombre), "Proveedor"),
+        new ColumnaPdf(nameof(MovimientoCajaDto.NumeroFactura), "Factura"),
+        new ColumnaPdf(nameof(MovimientoCajaDto.FuenteNombre), "Fuente"),
+        new ColumnaPdf(nameof(MovimientoCajaDto.RubroNombre), "Rubro"),
+        new ColumnaPdf(nameof(MovimientoCajaDto.Ingreso), "Ingreso"),
+        new ColumnaPdf(nameof(MovimientoCajaDto.Egreso), "Egreso"),
+        new ColumnaPdf(nameof(MovimientoCajaDto.SaldoCorrido), "Saldo corrido"),
     };
 
     /// <summary>

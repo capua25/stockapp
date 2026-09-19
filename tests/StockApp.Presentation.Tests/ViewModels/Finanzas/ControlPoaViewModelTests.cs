@@ -149,7 +149,15 @@ public class ControlPoaViewModelTests
         // Literal, NO ControlPoaViewModel.ColumnasPdf: comparar la constante contra sí misma
         // sería tautológico. Estas son las 6 columnas que muestra la grilla, SIN Ejercicio ni
         // Sobregirada (el CSV tiene 8 e incluye ambas).
-        var esperado = new[] { "Nombre", "Programa", "Presupuesto", "Gastado", "Saldo", "PorcentajeEjecucion" };
+        var esperado = new[]
+        {
+            new ColumnaPdf("Nombre", "Línea"),
+            new ColumnaPdf("Programa", "Programa"),
+            new ColumnaPdf("Presupuesto", "Presupuesto"),
+            new ColumnaPdf("Gastado", "Gastado"),
+            new ColumnaPdf("Saldo", "Saldo"),
+            new ColumnaPdf("PorcentajeEjecucion", "% Ejecución"),
+        };
 
         var items = new List<ControlPoaLineaDto> { CrearLinea(1) };
         var (vm, _, _, _, guardadoMock, _, pdfExporterMock, _, _) = Crear(items);
@@ -157,7 +165,7 @@ public class ControlPoaViewModelTests
         pdfExporterMock
             .Setup(e => e.Exportar(
                 It.IsAny<IEnumerable<ControlPoaLineaDto>>(),
-                It.IsAny<IReadOnlyList<string>>(),
+                It.IsAny<IReadOnlyList<ColumnaPdf>>(),
                 It.IsAny<MetadatosDocumento>()))
             .Returns(new byte[] { 9, 9 });
         guardadoMock
@@ -169,7 +177,7 @@ public class ControlPoaViewModelTests
 
         pdfExporterMock.Verify(e => e.Exportar(
             vm.Filas,
-            It.Is<IReadOnlyList<string>>(cols => cols.SequenceEqual(esperado)),
+            It.Is<IReadOnlyList<ColumnaPdf>>(cols => cols.SequenceEqual(esperado)),
             It.IsAny<MetadatosDocumento>()),
             Times.Once);
         guardadoMock.Verify(g => g.GuardarBytesAsync(
@@ -185,7 +193,7 @@ public class ControlPoaViewModelTests
         await vm.ExportarPdfCommand.ExecuteAsync(null);
 
         pdfExporterMock.Verify(e => e.Exportar(
-            It.IsAny<IEnumerable<ControlPoaLineaDto>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()),
+            It.IsAny<IEnumerable<ControlPoaLineaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()),
             Times.Never);
     }
 
@@ -201,7 +209,7 @@ public class ControlPoaViewModelTests
 
         confirmMock.Verify(c => c.PreguntarAsync(It.IsAny<string>()), Times.Once);
         pdfExporterMock.Verify(e => e.Exportar(
-            It.IsAny<IEnumerable<ControlPoaLineaDto>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()),
+            It.IsAny<IEnumerable<ControlPoaLineaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()),
             Times.Never);
     }
 
@@ -213,7 +221,7 @@ public class ControlPoaViewModelTests
         await vm.CargarAsync();
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<ControlPoaLineaDto>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<ControlPoaLineaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
             .Returns(new byte[] { 1 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -234,7 +242,7 @@ public class ControlPoaViewModelTests
         var pdfBytes = new byte[] { 9, 9 };
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<ControlPoaLineaDto>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<ControlPoaLineaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
             .Returns(pdfBytes);
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -256,7 +264,7 @@ public class ControlPoaViewModelTests
         await vm.CargarAsync();
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<ControlPoaLineaDto>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<ControlPoaLineaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
             .Returns(new byte[] { 9, 9 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -279,7 +287,7 @@ public class ControlPoaViewModelTests
         sessionMock.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(1, "jperez", RolUsuario.Admin, "Juan Pérez"));
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<ControlPoaLineaDto>>(), It.IsAny<IReadOnlyList<string>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<ControlPoaLineaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
             .Returns(new byte[] { 9, 9 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -290,7 +298,7 @@ public class ControlPoaViewModelTests
 
         pdfExporterMock.Verify(e => e.Exportar(
             It.IsAny<IEnumerable<ControlPoaLineaDto>>(),
-            It.IsAny<IReadOnlyList<string>>(),
+            It.IsAny<IReadOnlyList<ColumnaPdf>>(),
             It.Is<MetadatosDocumento>(m =>
                 m.Titulo == "Control POA" &&
                 m.DescripcionFiltros == "Ejercicio: 2025." &&

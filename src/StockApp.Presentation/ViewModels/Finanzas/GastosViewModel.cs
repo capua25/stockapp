@@ -438,12 +438,19 @@ public partial class GastosViewModel : ViewModelBase
     /// libre potencialmente largo (Detalle, Proveedor, Fuente, Línea POA) que se envuelven sin
     /// truncar (Tarea 5).
     /// </summary>
-    private static readonly IReadOnlyList<string> ColumnasPdf = new[]
+    public static readonly IReadOnlyList<ColumnaPdf> ColumnasPdf = new[]
     {
-        nameof(GastoFila.Fecha), nameof(GastoFila.ProveedorNombre), nameof(GastoFila.NumeroFactura),
-        nameof(GastoFila.Detalle), nameof(GastoFila.FuenteNombre), nameof(GastoFila.RubroNombre),
-        nameof(GastoFila.LineaPoaNombre), nameof(GastoFila.MontoTotal), nameof(GastoFila.TotalPagado),
-        nameof(GastoFila.Saldo), nameof(GastoFila.Estado),
+        new ColumnaPdf(nameof(GastoFila.Fecha), "Fecha"),
+        new ColumnaPdf(nameof(GastoFila.ProveedorNombre), "Proveedor"),
+        new ColumnaPdf(nameof(GastoFila.NumeroFactura), "Factura"),
+        new ColumnaPdf(nameof(GastoFila.Detalle), "Detalle"),
+        new ColumnaPdf(nameof(GastoFila.FuenteNombre), "Fuente"),
+        new ColumnaPdf(nameof(GastoFila.RubroNombre), "Rubro"),
+        new ColumnaPdf(nameof(GastoFila.LineaPoaNombre), "Línea POA"),
+        new ColumnaPdf(nameof(GastoFila.MontoTotal), "Monto"),
+        new ColumnaPdf(nameof(GastoFila.TotalPagado), "Pagado"),
+        new ColumnaPdf(nameof(GastoFila.Saldo), "Saldo"),
+        new ColumnaPdf(nameof(GastoFila.Estado), "Estado"),
     };
 
     /// <summary>

@@ -16,10 +16,10 @@ public interface IPdfExporter
     /// <typeparam name="T">Tipo de los items a exportar.</typeparam>
     /// <param name="items">Colección de items YA FILTRADA -- la misma que ve la grilla.</param>
     /// <param name="columnas">
-    /// Nombres de las propiedades a exportar, en el orden de la GRILLA (no del CSV). Más de 6
-    /// columnas dispara apaisado automático.
+    /// Propiedades a exportar con su rótulo de encabezado, en el orden de la GRILLA (no del
+    /// CSV). Más de 6 columnas dispara apaisado automático. Ver <see cref="ColumnaPdf"/>.
     /// </param>
     /// <param name="metadatos">Título, descripción de filtros y usuario emisor del membrete.</param>
     /// <returns>El PDF completo como array de bytes.</returns>
-    byte[] Exportar<T>(IEnumerable<T> items, IReadOnlyList<string> columnas, MetadatosDocumento metadatos);
+    byte[] Exportar<T>(IEnumerable<T> items, IReadOnlyList<ColumnaPdf> columnas, MetadatosDocumento metadatos);
 }
