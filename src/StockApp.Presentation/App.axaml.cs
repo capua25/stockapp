@@ -160,7 +160,13 @@ public partial class App : AvaloniaApp
         base.OnFrameworkInitializationCompleted();
     }
 
-    private static ServiceProvider ConfigurarServicios()
+    // internal (no private, fix ronda 1/5 Tarea 9): mismo seam que ConstruirConfiguracion /
+    // ResolverApiBaseUrl / ManejarExcepcionUiThread (ver ResolucionApiBaseUrlTests /
+    // ManejoExcepcionesGlobalesTests) -- deja invocar el armado REAL del contenedor desde un
+    // test en vez de mantener un mirror manual que certifica su propia copia y no el cableado
+    // de producción. Sin cambio de comportamiento: mismo cuerpo, mismo único call site
+    // (OnFrameworkInitializationCompleted).
+    internal static ServiceProvider ConfigurarServicios()
     {
         var services = new ServiceCollection();
 
