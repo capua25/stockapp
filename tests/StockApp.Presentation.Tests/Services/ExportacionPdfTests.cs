@@ -43,7 +43,7 @@ public class ExportacionPdfTests
         var aperturaMock = new Mock<IServicioAperturaArchivo>();
         var contenido = new byte[] { 1, 2, 3 };
 
-        await ExportacionPdf.OfrecerAbrirAsync(contenido, "valorizacion.pdf", confirmMock.Object, aperturaMock.Object);
+        await ExportacionPdf.OfrecerAbrirAsync(seGuardo: true, contenido, "valorizacion.pdf", confirmMock.Object, aperturaMock.Object);
 
         aperturaMock.Verify(a => a.AbrirAsync("valorizacion.pdf", contenido), Times.Once);
     }
@@ -55,8 +55,20 @@ public class ExportacionPdfTests
         confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(false);
         var aperturaMock = new Mock<IServicioAperturaArchivo>();
 
-        await ExportacionPdf.OfrecerAbrirAsync(new byte[] { 1 }, "valorizacion.pdf", confirmMock.Object, aperturaMock.Object);
+        await ExportacionPdf.OfrecerAbrirAsync(seGuardo: true, new byte[] { 1 }, "valorizacion.pdf", confirmMock.Object, aperturaMock.Object);
 
+        aperturaMock.Verify(a => a.AbrirAsync(It.IsAny<string>(), It.IsAny<byte[]>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task OfrecerAbrirAsync_SiElGuardadoSeCancelo_NoPreguntaNiAbreNada()
+    {
+        var confirmMock = new Mock<IConfirmacionService>();
+        var aperturaMock = new Mock<IServicioAperturaArchivo>();
+
+        await ExportacionPdf.OfrecerAbrirAsync(seGuardo: false, new byte[] { 1 }, "valorizacion.pdf", confirmMock.Object, aperturaMock.Object);
+
+        confirmMock.Verify(c => c.PreguntarAsync(It.IsAny<string>()), Times.Never);
         aperturaMock.Verify(a => a.AbrirAsync(It.IsAny<string>(), It.IsAny<byte[]>()), Times.Never);
     }
 
@@ -71,7 +83,7 @@ public class ExportacionPdfTests
             .Setup(a => a.AbrirAsync(It.IsAny<string>(), It.IsAny<byte[]>()))
             .ThrowsAsync(new InvalidOperationException("no hay visor de PDF asociado"));
 
-        await ExportacionPdf.OfrecerAbrirAsync(new byte[] { 1 }, "valorizacion.pdf", confirmMock.Object, aperturaMock.Object);
+        await ExportacionPdf.OfrecerAbrirAsync(seGuardo: true, new byte[] { 1 }, "valorizacion.pdf", confirmMock.Object, aperturaMock.Object);
 
         confirmMock.Verify(
             c => c.InformarAsync(It.Is<string>(m =>
