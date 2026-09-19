@@ -293,6 +293,93 @@ public class ReporteTareasViewModelTests
             Times.Never);
     }
 
+    /// <summary>
+    /// Los cuatro tests que siguen son el set estándar de export PDF que ya tenían las otras 8
+    /// pantallas y a esta le faltaba entero (review final, Importante 4) -- justo la única del
+    /// alcance con lógica propia no compartida (la fila "Total general"). Mismo patrón y mismos
+    /// nombres que los de <c>ControlPoaViewModelTests</c>, para que el set se lea igual en las 9.
+    /// </summary>
+    [Fact]
+    public async Task ExportarPdfCommand_ConMuchasFilas_PreguntaAntesDeExportar()
+    {
+        var filas = Enumerable.Range(1, 600).Select(i => Fila($"Zona {i}")).ToList();
+        var dto = new ReporteTareasDto(filas, filas.Count * 3);
+        var (vm, _, _, pdfExporterMock, _, _, confirmMock, _) = Crear(dto);
+        await vm.CargarAsync();
+        confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(false);
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        confirmMock.Verify(c => c.PreguntarAsync(It.IsAny<string>()), Times.Once);
+        pdfExporterMock.Verify(e => e.Exportar(
+            It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task ExportarPdfCommand_SiFallaGuardarBytesAsync_InformaYNoPropagaLaExcepcion()
+    {
+        var dto = new ReporteTareasDto(new List<FilaReporteTareas> { Fila("Centro") }, 3);
+        var (vm, _, _, pdfExporterMock, guardadoMock, _, confirmMock, _) = Crear(dto);
+        await vm.CargarAsync();
+        pdfExporterMock
+            .Setup(e => e.Exportar(
+                It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+            .Returns(new byte[] { 1 });
+        guardadoMock
+            .Setup(g => g.GuardarBytesAsync(
+                It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<string>(), It.IsAny<string>()))
+            .ThrowsAsync(new IOException("disco lleno"));
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        confirmMock.Verify(c => c.InformarAsync("No se pudo guardar el archivo. disco lleno"), Times.Once);
+    }
+
+    [Fact]
+    public async Task ExportarPdfCommand_GuardadoExitoso_OfreceAbrirElArchivo()
+    {
+        var dto = new ReporteTareasDto(new List<FilaReporteTareas> { Fila("Centro") }, 3);
+        var (vm, _, _, pdfExporterMock, guardadoMock, aperturaMock, confirmMock, _) = Crear(dto);
+        await vm.CargarAsync();
+        var pdfBytes = new byte[] { 9, 9 };
+        pdfExporterMock
+            .Setup(e => e.Exportar(
+                It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+            .Returns(pdfBytes);
+        guardadoMock
+            .Setup(g => g.GuardarBytesAsync(
+                It.IsAny<Stream>(), "reporte-tareas.pdf", It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
+            .ReturnsAsync(true);
+        confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(true);
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        confirmMock.Verify(c => c.PreguntarAsync("PDF guardado. ¿Desea abrirlo ahora?"), Times.Once);
+        aperturaMock.Verify(a => a.AbrirAsync("reporte-tareas.pdf", pdfBytes), Times.Once);
+    }
+
+    [Fact]
+    public async Task ExportarPdfCommand_GuardadoCancelado_NoOfreceAbrir()
+    {
+        var dto = new ReporteTareasDto(new List<FilaReporteTareas> { Fila("Centro") }, 3);
+        var (vm, _, _, pdfExporterMock, guardadoMock, aperturaMock, confirmMock, _) = Crear(dto);
+        await vm.CargarAsync();
+        pdfExporterMock
+            .Setup(e => e.Exportar(
+                It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+            .Returns(new byte[] { 9, 9 });
+        guardadoMock
+            .Setup(g => g.GuardarBytesAsync(
+                It.IsAny<Stream>(), "reporte-tareas.pdf", It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
+            .ReturnsAsync(false);
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        confirmMock.Verify(c => c.PreguntarAsync(It.IsAny<string>()), Times.Never);
+        aperturaMock.Verify(a => a.AbrirAsync(It.IsAny<string>(), It.IsAny<byte[]>()), Times.Never);
+    }
+
     [Fact]
     public async Task ExportarPdfCommand_AgregaFilaDeTotalGeneralAlFinalSinAlterarItems()
     {
