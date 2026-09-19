@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using StockApp.Application.Exportacion;
 using StockApp.Documentos;
@@ -126,4 +127,40 @@ public class PlantillaTabularTests
     private sealed record FilaOnceColumnas(
         string C1 = "a", string C2 = "b", string C3 = "c", string C4 = "d",
         string C5 = "e", string C6 = "f", string C7 = "g");
+
+    private sealed record FilaNumerica(string Codigo, decimal Precio, double Cantidad, long Total);
+
+    /// <summary>
+    /// Guardián de formato invariante: fuerza la cultura del hilo a "es-AR" (separador decimal
+    /// coma) para demostrar que el PDF NO hereda la cultura del sistema operativo. Sin formato
+    /// explícito, <c>decimal</c>/<c>double</c> caerían a <c>valor.ToString()</c> con coma; el
+    /// proyecto exige punto (decisión Uruguay, no Argentina, agosto 2026) porque es un documento
+    /// oficial que se archiva.
+    /// </summary>
+    [Fact]
+    public void Generar_ConCulturaDeHiloDeComaDecimal_FormateaNumerosConPunto()
+    {
+        var culturaOriginal = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("es-AR");
+            var items = new[] { new FilaNumerica("P001", 45.5m, 10.75, 1000L) };
+            var plantilla = new PlantillaTabular();
+
+            var pdf = plantilla.Generar(
+                items, new[] { "Codigo", "Precio", "Cantidad", "Total" }, Metadatos());
+
+            using var documento = PdfDocument.Open(pdf);
+            var texto = string.Join(" ", documento.GetPages().Select(p => p.Text));
+            Assert.Contains("45.50", texto);
+            Assert.Contains("10.75", texto);
+            Assert.Contains("1000", texto);
+            Assert.DoesNotContain("45,50", texto);
+            Assert.DoesNotContain("10,75", texto);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = culturaOriginal;
+        }
+    }
 }

@@ -92,10 +92,12 @@ public sealed class PlantillaTabular
     /// <summary>
     /// Mismo criterio de fechas que <c>CsvExporter.FormatearValor</c> (bugfix de huso horario:
     /// DateTime se persiste en UTC pero se muestra en hora local; DateOnly NO se convierte,
-    /// representa un día-calendario sin instante). Suma formato invariante explícito para
-    /// decimales y enteros: un documento impreso/archivado no puede depender de la cultura del
-    /// SO que lo generó (decisión del proyecto: decimales con punto, ver memoria
-    /// "Uruguay, no Argentina").
+    /// representa un día-calendario sin instante). Formato invariante explícito para TODOS los
+    /// tipos numéricos (enteros y de punto flotante): un documento oficial impreso/archivado no
+    /// puede depender de la cultura del hilo/SO que lo generó (decisión del proyecto: decimales
+    /// con punto, ver memoria "Uruguay, no Argentina", municipio uruguayo, agosto 2026). Sin
+    /// esto, <c>valor.ToString()</c> hereda <see cref="CultureInfo.CurrentCulture"/> y un
+    /// <c>double</c>/<c>float</c> saldría con coma bajo culturas como "es-AR".
     /// </summary>
     private static string FormatearValor(object? valor) => valor switch
     {
@@ -105,7 +107,11 @@ public sealed class PlantillaTabular
             .ToString(FormatoFecha, CultureInfo.InvariantCulture),
         DateOnly fecha => fecha.ToString(FormatoFechaSolo, CultureInfo.InvariantCulture),
         decimal numero => numero.ToString("N2", CultureInfo.InvariantCulture),
+        double numero => numero.ToString("N2", CultureInfo.InvariantCulture),
+        float numero => numero.ToString("N2", CultureInfo.InvariantCulture),
+        long numero => numero.ToString(CultureInfo.InvariantCulture),
         int numero => numero.ToString(CultureInfo.InvariantCulture),
+        short numero => numero.ToString(CultureInfo.InvariantCulture),
         _ => valor.ToString() ?? string.Empty,
     };
 
