@@ -9,6 +9,7 @@ using StockApp.Application.Interfaces;
 using StockApp.Application.Licenciamiento;
 using StockApp.Application.Movimientos;
 using StockApp.Application.Reportes;
+using StockApp.Documentos;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels;
@@ -91,6 +92,7 @@ public class ComposicionDIApiTests
         services.AddSingleton<IServicioEstadoVentana, ServicioEstadoVentana>();
         services.AddSingleton<IServicioPreferenciasSidebar, ServicioPreferenciasSidebar>();
         services.AddTransient<ICsvExporter, CsvExporter>();
+        services.AddTransient<IPdfExporter, PdfExporterMigraDoc>();
 
         // ── ViewModels (los mismos que cubrían los 3 tests reemplazados) ──────
         services.AddTransient<ShellMainViewModel>();
@@ -219,5 +221,15 @@ public class ComposicionDIApiTests
         var sp = CrearContenedor();
 
         Assert.NotNull(sp.GetRequiredService<IServicioEstadoVentana>());
+    }
+
+    [Fact]
+    public void Contenedor_Resuelve_IPdfExporter_ConPdfExporterMigraDoc()
+    {
+        var sp = CrearContenedor();
+
+        var servicio = sp.GetRequiredService<IPdfExporter>();
+
+        Assert.IsType<PdfExporterMigraDoc>(servicio);
     }
 }
