@@ -21,10 +21,26 @@ using Xunit;
 namespace StockApp.Presentation.Tests.DI;
 
 /// <summary>
-/// Red de seguridad del cableado DI API-only (Fase 3b). Espejo de ConfigurarServicios en
-/// App.axaml.cs — reemplaza a los 3 ComposicionDI* de las Fases 4-6, que armaban la cadena
-/// vieja con AppDbContext/repos de Infrastructure. No hace ninguna llamada HTTP real:
-/// solo verifica que el contenedor resuelve toda la cadena sin lanzar.
+/// DEPRECADO en favor de <c>Arranque/ConfigurarServiciosTests.cs</c> (review final, menor 5).
+/// No agregar registros nuevos acá.
+///
+/// Este archivo es un ESPEJO MANUAL de <c>ConfigurarServicios</c> en <c>App.axaml.cs</c>:
+/// construye su propio <see cref="ServiceCollection"/> repitiendo a mano cada línea de registro,
+/// y después verifica que el contenedor resuelve la cadena. Por eso NO CUSTODIA los registros
+/// reales: si alguien BORRA un registro de <c>App.axaml.cs</c>, esta clase sigue verde (resuelve
+/// su propia copia, que todavía lo tiene) y la app arranca rota. Solo detecta el caso contrario
+/// -- que un constructor cambie y el espejo deje de compilar o de resolver.
+///
+/// <c>Arranque/ConfigurarServiciosTests.cs</c> ejercita el <c>ConfigurarServicios</c> REAL, así
+/// que un registro borrado ahí sí se pone rojo. Todo registro nuevo va a ese archivo.
+///
+/// Se conserva mientras tanto porque su scope parcial no está del todo cubierto por el otro y
+/// borrarlo sería perder cobertura sin reemplazo; la nota de acá existe para que el próximo que
+/// agregue un servicio no copie la línea al espejo por inercia, creyendo que eso lo protege.
+///
+/// Historia: red de seguridad del cableado DI API-only (Fase 3b), reemplazó a los 3
+/// ComposicionDI* de las Fases 4-6, que armaban la cadena vieja con AppDbContext/repos de
+/// Infrastructure. No hace ninguna llamada HTTP real.
 /// </summary>
 public class ComposicionDIApiTests
 {
