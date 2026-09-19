@@ -68,6 +68,17 @@ public class GastosViewTests
             string? extension = null, string? tipoMime = null) => Task.FromResult(true);
     }
 
+    // Call-site no anticipado por el brief de la Tarea 19 (solo advertía sobre el helper Crear()
+    // y las 2 construcciones directas de ViewModels.Tests): esta vista de UiTests instancia
+    // GastosViewModel directo. IPdfExporter no tiene un fake compartido project-wide (a
+    // diferencia de IServicioAperturaArchivo/ICurrentSession), mismo patrón local que
+    // LibroCajaViewTests/SignoNegativoBadgeTests/CargaProtegidaEstadoVacioUiTests.
+    private sealed class PdfExporterNoOpFake : IPdfExporter
+    {
+        public byte[] Exportar<T>(IEnumerable<T> items, IReadOnlyList<string> columnas, MetadatosDocumento metadatos)
+            => Array.Empty<byte>();
+    }
+
     private const string Xaml = """
         <Window xmlns="https://github.com/avaloniaui"
                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -89,7 +100,9 @@ public class GastosViewTests
             new NavigationServiceFake(),
             new ConfirmacionServiceFake(),
             new CsvExporterFake(),
-            new ServicioGuardadoArchivoFake());
+            new ServicioGuardadoArchivoFake(),
+            new PdfExporterNoOpFake(),
+            new ServicioAperturaArchivoFake());
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
         window.DataContext = vm;

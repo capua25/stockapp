@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Collections;
@@ -78,6 +79,8 @@ public partial class GastosViewModel : ViewModelBase
     private readonly IConfirmacionService         _confirmacion;
     private readonly ICsvExporter                 _csvExporter;
     private readonly IServicioGuardadoArchivo     _guardado;
+    private readonly IPdfExporter                 _pdfExporter;
+    private readonly IServicioAperturaArchivo     _apertura;
 
     // ── Filtros ───────────────────────────────────────────────────────────────
     [ObservableProperty] private DateTime? _fechaDesde;
@@ -150,7 +153,9 @@ public partial class GastosViewModel : ViewModelBase
         INavigationService navigation,
         IConfirmacionService confirmacion,
         ICsvExporter csvExporter,
-        IServicioGuardadoArchivo guardado)
+        IServicioGuardadoArchivo guardado,
+        IPdfExporter pdfExporter,
+        IServicioAperturaArchivo apertura)
     {
         _service            = service;
         _session            = session;
@@ -162,6 +167,8 @@ public partial class GastosViewModel : ViewModelBase
         _confirmacion       = confirmacion;
         _csvExporter        = csvExporter;
         _guardado           = guardado;
+        _pdfExporter        = pdfExporter;
+        _apertura           = apertura;
 
         FilasView = new DataGridCollectionView(Filas);
     }
@@ -420,6 +427,81 @@ public partial class GastosViewModel : ViewModelBase
         {
             var contenido = _csvExporter.Exportar(Filas, ColumnasCsv);
             await _guardado.GuardarTextoAsync(contenido, $"gastos-{DateTime.Now:yyyyMMdd}.csv");
+        }, _confirmacion);
+    }
+
+    /// <summary>
+    /// Columnas del PDF (spec 2026-09-18): las 11 de la grilla, EN EL MISMO orden que
+    /// <see cref="ColumnasCsv"/> (coinciden en contenido en esta pantalla) pero declaradas como
+    /// constante SEPARADA a propósito — si el CSV cambia mañana, el PDF no debe cambiar solo.
+    /// Peor caso de la spec: apaisado automático (Tarea 4, >6 columnas) con 4 columnas de texto
+    /// libre potencialmente largo (Detalle, Proveedor, Fuente, Línea POA) que se envuelven sin
+    /// truncar (Tarea 5).
+    /// </summary>
+    private static readonly IReadOnlyList<string> ColumnasPdf = new[]
+    {
+        nameof(GastoFila.Fecha), nameof(GastoFila.ProveedorNombre), nameof(GastoFila.NumeroFactura),
+        nameof(GastoFila.Detalle), nameof(GastoFila.FuenteNombre), nameof(GastoFila.RubroNombre),
+        nameof(GastoFila.LineaPoaNombre), nameof(GastoFila.MontoTotal), nameof(GastoFila.TotalPagado),
+        nameof(GastoFila.Saldo), nameof(GastoFila.Estado),
+    };
+
+    /// <summary>
+    /// Describe los filtros ACTIVOS únicamente (spec 2026-09-18): un PDF que dice "Gastos" sin
+    /// aclarar que está filtrado por "Impagos" miente sobre su universo de datos. El filtro de
+    /// Estado se aplica EN MEMORIA (ver <see cref="FiltrarAsync"/>, no llega a
+    /// <see cref="ArmarFiltro"/>), pero igual tiene que figurar acá: es el único filtro de esta
+    /// pantalla que no viaja al servidor.
+    /// </summary>
+    private string ConstruirDescripcionFiltros()
+    {
+        var partes = new List<string>();
+        if (FechaDesde is not null || FechaHasta is not null)
+            partes.Add($"Período: {FechaDesde?.ToString("dd/MM/yyyy") ?? "(sin desde)"} a {FechaHasta?.ToString("dd/MM/yyyy") ?? "(sin hasta)"}");
+        if (ProveedorSeleccionado is not null)
+            partes.Add($"Proveedor: {ProveedorSeleccionado.Nombre}");
+        if (FuenteSeleccionada is not null)
+            partes.Add($"Fuente: {FuenteSeleccionada.Nombre}");
+        if (RubroSeleccionado is not null)
+            partes.Add($"Rubro: {RubroSeleccionado.Nombre}");
+        if (LineaPoaSeleccionada is not null)
+            partes.Add($"Línea POA: {LineaPoaSeleccionada.Nombre}");
+        if (EstadoSeleccionado != EstadoTodos)
+            partes.Add($"Estado: {EstadoSeleccionado}");
+
+        return partes.Count == 0 ? "Sin filtros aplicados." : string.Join(" | ", partes) + ".";
+    }
+
+    /// <summary>
+    /// El guardado a disco corre bajo <see cref="ExportacionPdf"/> (análogo a
+    /// <see cref="ExportacionCsv"/>, bugfix 2026-08-14). Exporta <see cref="Filas"/> (no la
+    /// respuesta cruda del servicio): es la colección que <see cref="FiltrarAsync"/> repuebla ya
+    /// con el filtro de Estado aplicado en memoria — si se exportara otra cosa, el PDF podría
+    /// traer filas que el usuario no está viendo en pantalla.
+    /// </summary>
+    [RelayCommand]
+    private async Task ExportarPdfAsync()
+    {
+        if (Filas.Count == 0)
+            return;
+
+        if (!await AvisoVolumenExportacion.ConfirmarAsync(Filas.Count, _confirmacion))
+            return;
+
+        await ExportacionPdf.EjecutarAsync(async () =>
+        {
+            var metadatos = new MetadatosDocumento(
+                Titulo: "Gastos y facturas",
+                DescripcionFiltros: ConstruirDescripcionFiltros(),
+                UsuarioEmisor: _session.UsuarioActual?.NombreCompleto ?? _session.UsuarioActual?.NombreUsuario ?? "Sistema");
+
+            var pdf = _pdfExporter.Exportar(Filas, ColumnasPdf, metadatos);
+            using var stream = new MemoryStream(pdf);
+            var nombreArchivo = $"gastos-{DateTime.Now:yyyyMMdd}.pdf";
+            var guardado = await _guardado.GuardarBytesAsync(
+                stream, nombreArchivo, extension: "pdf", tipoMime: "application/pdf");
+
+            await ExportacionPdf.OfrecerAbrirAsync(guardado, pdf, nombreArchivo, _confirmacion, _apertura);
         }, _confirmacion);
     }
 }
