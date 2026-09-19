@@ -325,4 +325,74 @@ public class PlantillaTabularTests
         var palabraCodigo = pagina.GetWords().First(w => w.Text == "Codigo");
         return palabraCodigo.BoundingBox.Top;
     }
+
+    /// <summary>
+    /// Guardián del pie de página (Tarea 7): fecha/hora de emisión y usuario emisor tienen que
+    /// aparecer en el texto del documento. La numeración "Pág. X de Y" se verifica con precisión
+    /// (número correcto por página, total real) en
+    /// <see cref="Generar_EnDocumentoDeVariasPaginas_ElPieNumeraCadaPaginaCorrectamente"/> --
+    /// acá alcanza con un documento de una sola página y contenido mínimo.
+    ///
+    /// Fecha: se usa <c>FormatoFecha</c> (la misma constante de <see cref="FormatearValor"/>,
+    /// "dd/MM/yyyy HH:mm:ss") para el pie -- NO se inventa un tercer formato de fecha. Se afirma
+    /// solo por el día (<c>dd/MM/yyyy</c>) para no depender de que el reloj no cruce un segundo
+    /// entre el `DateTime.Now` de este test y el de <c>AgregarPie</c>.
+    /// </summary>
+    [Fact]
+    public void Generar_ElPieIncluyeFechaDeEmisionUsuarioEmisorYNumeracionDePagina()
+    {
+        var items = new[] { new FilaSimple("P001", "Azúcar") };
+        var plantilla = new PlantillaTabular();
+        var metadatos = new MetadatosDocumento("Título", "Sin filtros aplicados.", "juan.perez");
+        var fechaEsperada = DateTime.Now.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+
+        var pdf = plantilla.Generar(items, new[] { "Codigo", "Nombre" }, metadatos);
+
+        var texto = ObtenerTextoConEspacios(pdf);
+        Assert.Contains("juan.perez", texto);
+        Assert.Contains("Pág.", texto);
+        Assert.Contains(fechaEsperada, texto);
+    }
+
+    /// <summary>
+    /// Guardián central del pie de página: en un documento de 2+ páginas, CADA página muestra su
+    /// propio número (la página 2 dice "2", no "1" repetido) y el total coincide con la cantidad
+    /// real de páginas del PDF -- resuelto por MigraDoc en el render vía
+    /// <c>AddPageField</c>/<c>AddNumPagesField</c>, nunca contando páginas a mano antes de
+    /// generar. Se reconstruyen las palabras de cada página con <c>GetWords()</c> (no
+    /// <c>Page.Text</c>, que concatena sin espacios en contenido sin ancho de columna fijo --
+    /// hallazgo de la Tarea 6) y se ubica el patrón "Pág." &lt;número&gt; "de" &lt;total&gt;.
+    /// </summary>
+    [Fact]
+    public void Generar_EnDocumentoDeVariasPaginas_ElPieNumeraCadaPaginaCorrectamente()
+    {
+        var items = Enumerable.Range(1, 80)
+            .Select(i => new FilaSimple($"P{i:0000}", $"Producto número {i}"))
+            .ToList();
+        var plantilla = new PlantillaTabular();
+        var metadatos = new MetadatosDocumento("Título", "Sin filtros aplicados.", "juan.perez");
+
+        var pdf = plantilla.Generar(items, new[] { "Codigo", "Nombre" }, metadatos);
+
+        using var documento = PdfDocument.Open(pdf);
+        Assert.True(documento.NumberOfPages >= 2, $"Se esperaban 2+ páginas, hubo {documento.NumberOfPages}.");
+
+        foreach (var pagina in documento.GetPages())
+        {
+            var palabras = pagina.GetWords().Select(w => w.Text).ToList();
+            Assert.Contains("juan.perez", palabras);
+
+            var indicePag = palabras.IndexOf("Pág.");
+            Assert.True(indicePag >= 0, $"La página {pagina.Number} no tiene pie de página.");
+            Assert.True(indicePag + 3 < palabras.Count, $"El pie de la página {pagina.Number} está incompleto.");
+
+            var numeroDePagina = palabras[indicePag + 1];
+            var separador = palabras[indicePag + 2];
+            var totalDePaginas = palabras[indicePag + 3];
+
+            Assert.Equal("de", separador);
+            Assert.Equal(pagina.Number.ToString(CultureInfo.InvariantCulture), numeroDePagina);
+            Assert.Equal(documento.NumberOfPages.ToString(CultureInfo.InvariantCulture), totalDePaginas);
+        }
+    }
 }

@@ -57,6 +57,7 @@ public sealed class PlantillaTabular
         section.PageSetup.Orientation = columnas.Count > 6 ? Orientation.Landscape : Orientation.Portrait;
 
         AgregarMembrete(section, metadatos);
+        AgregarPie(section, metadatos.UsuarioEmisor);
 
         var tabla = section.AddTable();
         tabla.Borders.Width = 0.5;
@@ -122,6 +123,36 @@ public sealed class PlantillaTabular
         }
 
         section.AddParagraph(); // separación antes de la tabla de datos
+    }
+
+    /// <summary>
+    /// Pie de página (Tarea 7): fecha/hora de emisión, usuario emisor y numeración "Pág. X de Y".
+    /// Trazabilidad de administración pública -- quién emitió el documento, cuándo, y si al
+    /// expediente le falta una hoja (detectable porque el total real de páginas queda impreso).
+    ///
+    /// <c>section.Footers.Primary</c> se repite automáticamente en TODAS las páginas de la
+    /// sección (comportamiento nativo de MigraDoc, igual que <c>HeadingFormat</c> para el
+    /// encabezado de tabla en <see cref="Generar{T}"/>) -- no hace falta agregarlo por página.
+    ///
+    /// El número de página actual y el total se resuelven en el RENDER con
+    /// <see cref="ParagraphElements.AddPageField"/> y
+    /// <see cref="ParagraphElements.AddNumPagesField"/>: la cantidad de páginas no se conoce
+    /// hasta que MigraDoc terminó de paginar el documento completo, así que contarlas a mano acá
+    /// (antes de renderizar) sería imposible sin renderizar dos veces.
+    ///
+    /// La fecha usa <see cref="FormatoFecha"/> (la misma constante que <see cref="FormatearValor"/>
+    /// para <c>DateTime</c>) -- no se introduce un tercer formato de fecha en la plantilla.
+    /// </summary>
+    private static void AgregarPie(Section section, string usuarioEmisor)
+    {
+        var parrafo = section.Footers.Primary.AddParagraph();
+        parrafo.Format.Font.Size = 8;
+        parrafo.AddText(
+            $"Emitido el {DateTime.Now.ToString(FormatoFecha, CultureInfo.InvariantCulture)} " +
+            $"por {usuarioEmisor}   —   Pág. ");
+        parrafo.AddPageField();
+        parrafo.AddText(" de ");
+        parrafo.AddNumPagesField();
     }
 
     private static PropertyInfo[] ResolverPropiedades<T>(IReadOnlyList<string> columnas)
