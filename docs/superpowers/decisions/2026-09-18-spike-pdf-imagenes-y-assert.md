@@ -134,11 +134,42 @@ empíricamente en el spike:
   `Letter`/posición X,Y si se necesita más precisión), no un modelo de "celda de tabla" como
   MigraDoc. No se necesitó ni se probó extracción por columna en este spike; si una tarea
   futura necesita afirmar "la columna X tiene el valor Y" en una tabla con varias columnas de
-  texto, hay que usar la posición (`Letter.GlyphRectangle`) — no probado acá, queda fuera de
-  alcance de la Tarea 0.
+  texto, hay que usar la posición (`Letter.BoundingBox` — ver corrección más abajo) — no
+  probado acá, queda fuera de alcance de la Tarea 0.
 - **Estilos visuales** (fuente usada, negrita, color, tamaño de punto) no se intentó leer ni
   afirmar — PdfPig expone esta información (`Letter.Font`, etc.) pero no se verificó
   empíricamente en este spike porque ninguna tarea del plan lo requiere.
+
+### Correcciones post-spike (halladas en la Tarea 6, no en la Tarea 0)
+
+Estas dos correcciones actualizan afirmaciones de este documento que resultaron incompletas o
+desactualizadas al implementar contenido real (membrete con tabla de layout). Las Tareas 1-20
+deben leer esto ANTES de asumir vigente el texto de arriba en estos dos puntos puntuales:
+
+1. **`Page.Text` concatena palabras SIN espacios cuando el contenido viene de una tabla sin
+   ancho de columna fijo** (el caso del membrete de la Tarea 6, y de cualquier tabla de layout
+   similar). El spike de la Tarea 0 nunca lo notó porque todos sus asserts comparaban tokens de
+   una sola palabra (p. ej. `SPIKE-VALOR-123`, `palabra030`), donde la ausencia de espacios
+   alrededor es invisible. Para afirmar sobre una FRASE de varias palabras (p. ej.
+   `"INTENDENCIA DE CARMELO"`, un título, una descripción de filtros) en contenido de este tipo,
+   `Assert.Contains` sobre `string.Join(" ", doc.GetPages().Select(p => p.Text))` puede fallar
+   aunque el contenido esté completo. La técnica correcta es reconstruir el texto desde
+   `Page.GetWords()` (que sí segmenta palabras correctamente) uniendo con espacio explícito:
+   ```csharp
+   var texto = string.Join(" ", doc.GetPages().SelectMany(p => p.GetWords()).Select(w => w.Text));
+   ```
+   Para tokens sueltos sin espacios internos (`palabra030`, `Codigo`, un código de producto),
+   `Page.Text` sigue sirviendo sin cambios — esto NO invalida el punto 3 de "LA DECISIÓN" para
+   ese caso, solo lo acota quando el contenido puede venir de una tabla de layout sin ancho fijo
+   y la aserción es sobre una frase de varias palabras.
+
+2. **`Letter.GlyphRectangle` está OBSOLETA** en la versión de `PdfPig` que usa este proyecto
+   (warning `CS0618` al compilar código que la referencia) — este documento la mencionaba como
+   vigente en dos lugares. El reemplazo, con la misma semántica de rectángulo de posición, es
+   **`Letter.BoundingBox`** (y, de forma equivalente, `Word.BoundingBox` para palabras completas
+   reconstruidas con `GetWords()`). Verificado empíricamente en la Tarea 6 comparando
+   `Word.BoundingBox.Top` de una palabra puntual entre dos variantes del mismo documento. Todas
+   las referencias a `GlyphRectangle` en este documento deben leerse como `BoundingBox`.
 
 ## LA DECISIÓN (vinculante para las Tareas 1 a 20)
 
@@ -150,7 +181,11 @@ generado, con esta técnica concreta:
 3. Para texto (título, columnas, valores, mensajes): concatenar `p.Text` de todas las páginas
    con `string.Join(" ", doc.GetPages().Select(p => p.Text))` y usar `Assert.Contains` /
    `Assert.DoesNotContain` sobre substrings puntuales — nunca comparar el bloque completo por
-   igualdad exacta.
+   igualdad exacta. **Excepción (ver "Correcciones post-spike" más abajo):** si el contenido
+   viene de una tabla sin ancho de columna fijo y la aserción es sobre una frase de varias
+   palabras, `p.Text` puede concatenar sin espacios — usar
+   `doc.GetPages().SelectMany(p => p.GetWords()).Select(w => w.Text)` unido con espacio en su
+   lugar. Para tokens de una sola palabra, `p.Text` sigue sirviendo sin cambios.
 4. Para cantidad de páginas: `doc.NumberOfPages`.
 5. Para orientación (regla de más de 6 columnas → apaisado): comparar
    `pagina.Width > pagina.Height` en la primera página.
