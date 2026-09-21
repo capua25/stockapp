@@ -12,6 +12,7 @@ using Avalonia.VisualTree;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Finanzas;
+using StockApp.Application.Interfaces;
 using StockApp.Application.Movimientos;
 using StockApp.Application.Reportes;
 using StockApp.Domain.Entities;
@@ -164,7 +165,15 @@ public class SignoNegativoBadgeTests
     private sealed class ServicioGuardadoArchivoFake : IServicioGuardadoArchivo
     {
         public Task<bool> GuardarTextoAsync(string contenido, string nombreSugerido) => Task.FromResult(true);
-        public Task<bool> GuardarBytesAsync(Stream contenido, string nombreSugerido, CancellationToken ct = default) => Task.FromResult(true);
+        public Task<bool> GuardarBytesAsync(
+            Stream contenido, string nombreSugerido, CancellationToken ct = default,
+            string? extension = null, string? tipoMime = null) => Task.FromResult(true);
+    }
+
+    private sealed class PdfExporterNoOpFake : IPdfExporter
+    {
+        public byte[] Exportar<T>(IEnumerable<T> items, IReadOnlyList<ColumnaPdf> columnas, MetadatosDocumento metadatos)
+            => Array.Empty<byte>();
     }
 
     private const string XamlLibroCaja = """
@@ -182,7 +191,10 @@ public class SignoNegativoBadgeTests
             new FinanzasVistasServiceFake(saldoFinal),
             new CsvExporterFake(),
             new ServicioGuardadoArchivoFake(),
-            new ConfirmacionServiceFake());
+            new ConfirmacionServiceFake(),
+            new PdfExporterNoOpFake(),
+            new ServicioAperturaArchivoFake(),
+            new SesionFake(RolUsuario.Admin));
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(XamlLibroCaja, typeof(TestApp).Assembly);
         window.DataContext = vm;

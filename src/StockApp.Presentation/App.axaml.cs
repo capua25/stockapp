@@ -11,6 +11,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using StockApp.ApiClient;
 using StockApp.Configuracion;
+using StockApp.Documentos;
 using StockApp.Application.Actualizaciones;
 using StockApp.Application.Alertas;
 using StockApp.Application.Auditoria;
@@ -159,7 +160,13 @@ public partial class App : AvaloniaApp
         base.OnFrameworkInitializationCompleted();
     }
 
-    private static ServiceProvider ConfigurarServicios()
+    // internal (no private, fix ronda 1/5 Tarea 9): mismo seam que ConstruirConfiguracion /
+    // ResolverApiBaseUrl / ManejarExcepcionUiThread (ver ResolucionApiBaseUrlTests /
+    // ManejoExcepcionesGlobalesTests) -- deja invocar el armado REAL del contenedor desde un
+    // test en vez de mantener un mirror manual que certifica su propia copia y no el cableado
+    // de producción. Sin cambio de comportamiento: mismo cuerpo, mismo único call site
+    // (OnFrameworkInitializationCompleted).
+    internal static ServiceProvider ConfigurarServicios()
     {
         var services = new ServiceCollection();
 
@@ -305,6 +312,10 @@ public partial class App : AvaloniaApp
 
         // ── Inc 6: exportación CSV (vive en Application, sin dependencias de Infra — OQ-2)
         services.AddTransient<ICsvExporter, CsvExporter>();
+
+        // ── Export PDF de tablas (spec 2026-09-18): implementación en StockApp.Documentos
+        // (MigraDoc) -- la única referencia a esa librería en todo Presentation es esta línea.
+        services.AddTransient<IPdfExporter, PdfExporterMigraDoc>();
 
         // ── Inc 6: guardado de archivos (file picker) ─────────────────────────
         // Singleton — sin estado, accede a la ventana principal vía IStorageProvider.

@@ -16,6 +16,7 @@
             <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
                 <Button Classes="primary" Content="Actualizar" Command="{Binding RecargarCommand}" />
                 <Button Classes="secondary" Content="Exportar CSV" Command="{Binding ExportarCsvCommand}" IsVisible="{Binding !VerAnioCompleto}" />
+                <Button Classes="secondary" Content="Exportar PDF" Command="{Binding ExportarPdfCommand}" IsVisible="{Binding !VerAnioCompleto}" />
             </StackPanel>
         </c:HeaderVista>
 

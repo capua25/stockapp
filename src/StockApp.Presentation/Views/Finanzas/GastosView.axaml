@@ -41,6 +41,12 @@
                         <TextBlock Text="Exportar CSV" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
+                <Button Classes="secondary" Command="{Binding ExportarPdfCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <i:Icon Value="mdi-file-pdf-box" />
+                        <TextBlock Text="Exportar PDF" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
             </StackPanel>
         </c:HeaderVista>
 

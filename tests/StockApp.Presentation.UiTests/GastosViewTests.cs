@@ -63,7 +63,20 @@ public class GastosViewTests
     private sealed class ServicioGuardadoArchivoFake : IServicioGuardadoArchivo
     {
         public Task<bool> GuardarTextoAsync(string contenido, string nombreSugerido) => Task.FromResult(true);
-        public Task<bool> GuardarBytesAsync(System.IO.Stream contenido, string nombreSugerido, System.Threading.CancellationToken ct = default) => Task.FromResult(true);
+        public Task<bool> GuardarBytesAsync(
+            System.IO.Stream contenido, string nombreSugerido, System.Threading.CancellationToken ct = default,
+            string? extension = null, string? tipoMime = null) => Task.FromResult(true);
+    }
+
+    // Call-site no anticipado por el brief de la Tarea 19 (solo advertía sobre el helper Crear()
+    // y las 2 construcciones directas de ViewModels.Tests): esta vista de UiTests instancia
+    // GastosViewModel directo. IPdfExporter no tiene un fake compartido project-wide (a
+    // diferencia de IServicioAperturaArchivo/ICurrentSession), mismo patrón local que
+    // LibroCajaViewTests/SignoNegativoBadgeTests/CargaProtegidaEstadoVacioUiTests.
+    private sealed class PdfExporterNoOpFake : IPdfExporter
+    {
+        public byte[] Exportar<T>(IEnumerable<T> items, IReadOnlyList<ColumnaPdf> columnas, MetadatosDocumento metadatos)
+            => Array.Empty<byte>();
     }
 
     private const string Xaml = """
@@ -87,7 +100,9 @@ public class GastosViewTests
             new NavigationServiceFake(),
             new ConfirmacionServiceFake(),
             new CsvExporterFake(),
-            new ServicioGuardadoArchivoFake());
+            new ServicioGuardadoArchivoFake(),
+            new PdfExporterNoOpFake(),
+            new ServicioAperturaArchivoFake());
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
         window.DataContext = vm;

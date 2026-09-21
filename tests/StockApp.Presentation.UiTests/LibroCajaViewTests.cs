@@ -11,6 +11,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Finanzas;
+using StockApp.Domain.Enums;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Finanzas;
 using Xunit;
@@ -52,7 +53,15 @@ public class LibroCajaViewTests
     private sealed class ServicioGuardadoArchivoFake : IServicioGuardadoArchivo
     {
         public Task<bool> GuardarTextoAsync(string contenido, string nombreSugerido) => Task.FromResult(true);
-        public Task<bool> GuardarBytesAsync(Stream contenido, string nombreSugerido, CancellationToken ct = default) => Task.FromResult(true);
+        public Task<bool> GuardarBytesAsync(
+            Stream contenido, string nombreSugerido, CancellationToken ct = default,
+            string? extension = null, string? tipoMime = null) => Task.FromResult(true);
+    }
+
+    private sealed class PdfExporterNoOpFake : IPdfExporter
+    {
+        public byte[] Exportar<T>(IEnumerable<T> items, IReadOnlyList<ColumnaPdf> columnas, MetadatosDocumento metadatos)
+            => Array.Empty<byte>();
     }
 
     private const string Xaml = """
@@ -70,7 +79,10 @@ public class LibroCajaViewTests
             new FinanzasVistasServiceFake(),
             new CsvExporterFake(),
             new ServicioGuardadoArchivoFake(),
-            new ConfirmacionServiceFake());
+            new ConfirmacionServiceFake(),
+            new PdfExporterNoOpFake(),
+            new ServicioAperturaArchivoFake(),
+            new SesionFake(RolUsuario.Admin));
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
         window.DataContext = vm;

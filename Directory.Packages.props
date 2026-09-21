@@ -56,6 +56,16 @@
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
     <PackageVersion Include="Velopack" Version="1.2.0" />
+
+    <!-- Export PDF de tablas (spec 2026-09-18): MigraDoc solo se referencia desde
+         StockApp.Documentos, nunca desde Application ni Api (ver Directory.Packages.props
+         de Central Package Management). Base package, no las variantes -GDI/-WPF: no depende
+         de System.Drawing/GDI+, corre en Linux/macOS (ver spike, Tarea 0). -->
+    <PackageVersion Include="PDFsharp-MigraDoc" Version="6.2.4" />
+    <!-- Solo para tests (StockApp.Documentos.Tests): lee el PDF generado para afirmar sobre su
+         contenido real (título, columnas, cantidad de páginas, orientación) en vez de solo
+         verificar ausencia de excepción. -->
+    <PackageVersion Include="PdfPig" Version="0.1.16" />
   </ItemGroup>
 
 </Project>

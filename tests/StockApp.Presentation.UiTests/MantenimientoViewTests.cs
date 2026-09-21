@@ -59,7 +59,9 @@ public class MantenimientoViewTests
     private sealed class ServicioGuardadoArchivoFake : IServicioGuardadoArchivo
     {
         public Task<bool> GuardarTextoAsync(string contenido, string nombreSugerido) => Task.FromResult(true);
-        public Task<bool> GuardarBytesAsync(Stream contenido, string nombreSugerido, CancellationToken ct = default) => Task.FromResult(true);
+        public Task<bool> GuardarBytesAsync(
+            Stream contenido, string nombreSugerido, CancellationToken ct = default,
+            string? extension = null, string? tipoMime = null) => Task.FromResult(true);
     }
 
     private const string Xaml = """

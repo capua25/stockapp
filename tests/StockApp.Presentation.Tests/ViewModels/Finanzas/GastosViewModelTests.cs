@@ -2,11 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Collections;
 using Moq;
 using StockApp.ApiClient;
 using StockApp.Application.Authorization;
+using StockApp.Application.Auth;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
@@ -51,10 +53,13 @@ public class GastosViewModelTests
                     Mock<IGastoService> svcMock,
                     Mock<INavigationService> navMock,
                     Mock<IConfirmacionService> confirmMock,
-                    Mock<IServicioGuardadoArchivo> guardadoMock)
+                    Mock<IServicioGuardadoArchivo> guardadoMock,
+                    Mock<IPdfExporter> pdfExporterMock,
+                    Mock<IServicioAperturaArchivo> aperturaMock)
         Crear(
             IReadOnlyList<Gasto>? gastos = null, IReadOnlyList<LineaPoa>? lineasPoa = null,
-            RolUsuario rol = RolUsuario.Admin, IEnumerable<string>? permisos = null)
+            RolUsuario rol = RolUsuario.Admin, IEnumerable<string>? permisos = null,
+            UsuarioSesion? usuarioSesion = null)
     {
         var svc = new Mock<IGastoService>();
         svc.Setup(s => s.ListarAsync(It.IsAny<GastoFiltro>()))
@@ -63,6 +68,7 @@ public class GastosViewModelTests
         var session = new Mock<ICurrentSession>();
         session.Setup(s => s.RolActual).Returns(rol);
         session.Setup(s => s.PermisosActuales).Returns(new HashSet<string>(permisos ?? Enumerable.Empty<string>()));
+        session.Setup(s => s.UsuarioActual).Returns(usuarioSesion ?? new UsuarioSesion(1, "admin", rol, null));
 
         var proveedores = new Mock<ICategoriaProveedorService>();
         var proveedoresDisponibles = new List<Proveedor>
@@ -87,11 +93,13 @@ public class GastosViewModelTests
             .Returns("csv");
         var guardado = new Mock<IServicioGuardadoArchivo>();
         guardado.Setup(g => g.GuardarTextoAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync(true);
+        var pdfExporter = new Mock<IPdfExporter>();
+        var apertura = new Mock<IServicioAperturaArchivo>();
 
         var vm = new GastosViewModel(
             svc.Object, session.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
-            nav.Object, confirm.Object, csv.Object, guardado.Object);
-        return (vm, svc, nav, confirm, guardado);
+            nav.Object, confirm.Object, csv.Object, guardado.Object, pdfExporter.Object, apertura.Object);
+        return (vm, svc, nav, confirm, guardado, pdfExporter, apertura);
     }
 
     [Fact]
@@ -107,7 +115,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task CargarAsync_PopulaFilasConEstadoCalculado()
     {
-        var (vm, _, _, _, _) = Crear(new List<Gasto>
+        var (vm, _, _, _, _, _, _) = Crear(new List<Gasto>
         {
             GastoDe(1, "Pendiente de pago"),
             GastoDe(2, "Ya pagado", pagado: true),
@@ -126,7 +134,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task FilasView_EsOrdenable()
     {
-        var (vm, _, _, _, _) = Crear(new List<Gasto>
+        var (vm, _, _, _, _, _, _) = Crear(new List<Gasto>
         {
             GastoDe(1, "Pendiente de pago"),
             GastoDe(2, "Ya pagado", pagado: true),
@@ -142,7 +150,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task FilasView_TrasCargarAsync_ReflejaLosItemsDeFilas()
     {
-        var (vm, _, _, _, _) = Crear(new List<Gasto>
+        var (vm, _, _, _, _, _, _) = Crear(new List<Gasto>
         {
             GastoDe(1, "Pendiente de pago"),
             GastoDe(2, "Ya pagado", pagado: true),
@@ -156,7 +164,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task FiltroDeEstado_FiltraEnMemoria()
     {
-        var (vm, _, _, _, _) = Crear(new List<Gasto>
+        var (vm, _, _, _, _, _, _) = Crear(new List<Gasto>
         {
             GastoDe(1, "Pendiente de pago"),
             GastoDe(2, "Ya pagado", pagado: true),
@@ -173,7 +181,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task FiltrarCommand_PasaLosFiltrosAlServicio()
     {
-        var (vm, svc, _, _, _) = Crear();
+        var (vm, svc, _, _, _, _, _) = Crear();
         await vm.CargarAsync();
         vm.FechaDesde = new DateTime(2026, 7, 1);
         vm.ProveedorSeleccionado = vm.ProveedoresDisponibles[0];
@@ -191,7 +199,7 @@ public class GastosViewModelTests
         // fijando el Date elegido a medianoche UTC, SIN conversión real de huso horario
         // (el dominio de Finanzas no tiene componente horario): Desde = medianoche del
         // día, Hasta = el último tick del día elegido.
-        var (vm, svc, _, _, _) = Crear();
+        var (vm, svc, _, _, _, _, _) = Crear();
         await vm.CargarAsync();
         vm.FechaDesde = new DateTime(2026, 7, 1);
         vm.FechaHasta = new DateTime(2026, 7, 31);
@@ -211,7 +219,7 @@ public class GastosViewModelTests
         // ("850.5000") en vez del formato moneda es-UY que usan las grillas ("$ 850,50").
         var gasto = GastoDe(1, "Para anular");
         gasto.MontoTotal = 850.5000m;
-        var (vm, _, _, confirm, _) = Crear(new List<Gasto> { gasto });
+        var (vm, _, _, confirm, _, _, _) = Crear(new List<Gasto> { gasto });
         await vm.CargarAsync();
         vm.FilaSeleccionada = vm.Filas[0];
 
@@ -224,7 +232,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task AnularCommand_ConConfirmacion_AnulaYRecarga()
     {
-        var (vm, svc, _, _, _) = Crear(new List<Gasto> { GastoDe(1, "Para anular") });
+        var (vm, svc, _, _, _, _, _) = Crear(new List<Gasto> { GastoDe(1, "Para anular") });
         await vm.CargarAsync();
         vm.FilaSeleccionada = vm.Filas[0];
 
@@ -237,7 +245,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task AnularCommand_ErrorDeRegla_SeInformaSinCrashear()
     {
-        var (vm, svc, _, confirm, _) = Crear(new List<Gasto> { GastoDe(1, "Con pagos", pagado: true) });
+        var (vm, svc, _, confirm, _, _, _) = Crear(new List<Gasto> { GastoDe(1, "Con pagos", pagado: true) });
         svc.Setup(s => s.AnularAsync(1))
             .ThrowsAsync(new StockApp.Domain.Exceptions.ReglaDeNegocioException("Tiene pagos activos."));
         await vm.CargarAsync();
@@ -257,7 +265,7 @@ public class GastosViewModelTests
     {
         var gasto = GastoDe(1, "Para anular");
         gasto.TieneMovimientosDeStock = true;
-        var (vm, _, _, confirm, _) = Crear(new List<Gasto> { gasto });
+        var (vm, _, _, confirm, _, _, _) = Crear(new List<Gasto> { gasto });
         await vm.CargarAsync();
         vm.FilaSeleccionada = vm.Filas[0];
 
@@ -274,7 +282,7 @@ public class GastosViewModelTests
         // el dialogo NO debe insinuar que se va a descontar stock.
         var gasto = GastoDe(1, "Para anular");
         gasto.TieneMovimientosDeStock = false;
-        var (vm, _, _, confirm, _) = Crear(new List<Gasto> { gasto });
+        var (vm, _, _, confirm, _, _, _) = Crear(new List<Gasto> { gasto });
         await vm.CargarAsync();
         vm.FilaSeleccionada = vm.Filas[0];
 
@@ -292,7 +300,7 @@ public class GastosViewModelTests
         // a pasar en un solo PreguntarAsync — pago automatico Y descuento de stock juntos.
         var gasto = GastoDe(1, "Factura de luz");
         gasto.TieneMovimientosDeStock = true;
-        var (vm, svc, _, confirm, _) = Crear(new List<Gasto> { gasto });
+        var (vm, svc, _, confirm, _, _, _) = Crear(new List<Gasto> { gasto });
         svc.Setup(s => s.AnularAsync(1, false))
             .ThrowsAsync(new AnulacionRequierePagoAutomaticoConfirmadoException(1, 500m));
         await vm.CargarAsync();
@@ -311,7 +319,7 @@ public class GastosViewModelTests
     {
         var gasto = GastoDe(1, "Factura de luz");
         gasto.TieneMovimientosDeStock = true;
-        var (vm, svc, _, confirm, _) = Crear(new List<Gasto> { gasto });
+        var (vm, svc, _, confirm, _, _, _) = Crear(new List<Gasto> { gasto });
         svc.Setup(s => s.AnularAsync(1, false))
             .ThrowsAsync(new AnulacionRequierePagoAutomaticoConfirmadoException(1, 500m));
         confirm.Setup(c => c.PreguntarAsync(It.Is<string>(
@@ -331,7 +339,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task AnularCommand_PagoAutomatico_OfreceConfirmacionConMontoFormateado()
     {
-        var (vm, svc, _, confirm, _) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
+        var (vm, svc, _, confirm, _, _, _) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
         svc.Setup(s => s.AnularAsync(1, false))
             .ThrowsAsync(new AnulacionRequierePagoAutomaticoConfirmadoException(1, 850.5000m));
         await vm.CargarAsync();
@@ -346,7 +354,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task AnularCommand_PagoAutomatico_AlAceptar_ReintentaConfirmandoYAnula()
     {
-        var (vm, svc, _, confirm, _) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
+        var (vm, svc, _, confirm, _, _, _) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
         svc.Setup(s => s.AnularAsync(1, false))
             .ThrowsAsync(new AnulacionRequierePagoAutomaticoConfirmadoException(1, 500m));
         confirm.Setup(c => c.PreguntarAsync(It.Is<string>(s => s.Contains("pago automatico") || s.Contains("automático"))))
@@ -363,7 +371,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task AnularCommand_PagoAutomatico_AlRechazar_NoReintentaNiAnulaNada()
     {
-        var (vm, svc, _, confirm, _) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
+        var (vm, svc, _, confirm, _, _, _) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
         svc.Setup(s => s.AnularAsync(1, false))
             .ThrowsAsync(new AnulacionRequierePagoAutomaticoConfirmadoException(1, 500m));
         confirm.Setup(c => c.PreguntarAsync(It.Is<string>(s => s.Contains("pago automatico") || s.Contains("automático"))))
@@ -383,7 +391,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task AnularCommand_PagoManual_NoOfreceConfirmacion_MuestraElErrorTalCual()
     {
-        var (vm, svc, _, confirm, _) = Crear(new List<Gasto> { GastoDe(1, "Con pago manual", pagado: true) });
+        var (vm, svc, _, confirm, _, _, _) = Crear(new List<Gasto> { GastoDe(1, "Con pago manual", pagado: true) });
         svc.Setup(s => s.AnularAsync(1, false))
             .ThrowsAsync(new ReglaDeNegocioException(
                 "No se puede anular un gasto con pagos activos: primero anula los pagos."));
@@ -401,7 +409,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task AnularCommand_PagoAutomatico_FalloDeRedEnElReintento_NoQuedaDiciendoQueSeAnulo()
     {
-        var (vm, svc, _, confirm, _) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
+        var (vm, svc, _, confirm, _, _, _) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
         svc.Setup(s => s.AnularAsync(1, false))
             .ThrowsAsync(new AnulacionRequierePagoAutomaticoConfirmadoException(1, 500m));
         svc.Setup(s => s.AnularAsync(1, true))
@@ -422,7 +430,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task NuevoCommand_NavegaAlFormulario()
     {
-        var (vm, _, nav, _, _) = Crear();
+        var (vm, _, nav, _, _, _, _) = Crear();
 
         await vm.NuevoCommand.ExecuteAsync(null);
 
@@ -432,7 +440,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task EditarYPagos_ConSeleccion_NaveganConElGasto()
     {
-        var (vm, _, nav, _, _) = Crear(new List<Gasto> { GastoDe(1, "Editable") });
+        var (vm, _, nav, _, _, _, _) = Crear(new List<Gasto> { GastoDe(1, "Editable") });
         await vm.CargarAsync();
         vm.FilaSeleccionada = vm.Filas[0];
 
@@ -452,7 +460,7 @@ public class GastosViewModelTests
         // un día para atrás porque GastoFila.Fecha era DateTime y CsvExporter convierte TODO
         // DateTime a hora local. Fecha debe ser DateOnly: no hay instante que convertir.
         var fechaUtc = new DateTime(2026, 7, 16, 0, 0, 0, DateTimeKind.Utc);
-        var (vm, _, _, _, _) = Crear(new List<Gasto> { GastoDe(1, "Con fecha límite", fechaUtc: fechaUtc) });
+        var (vm, _, _, _, _, _, _) = Crear(new List<Gasto> { GastoDe(1, "Con fecha límite", fechaUtc: fechaUtc) });
 
         await vm.CargarAsync();
 
@@ -462,7 +470,7 @@ public class GastosViewModelTests
     [Fact]
     public void EditarCommand_SinSeleccion_EstaDeshabilitado()
     {
-        var (vm, _, _, _, _) = Crear();
+        var (vm, _, _, _, _, _, _) = Crear();
 
         Assert.False(vm.EditarCommand.CanExecute(null));
         Assert.False(vm.PagosCommand.CanExecute(null));
@@ -472,7 +480,7 @@ public class GastosViewModelTests
     [Fact]
     public void FiltrarPorLineaPoa_SeteaLineaPoaSeleccionada()
     {
-        var (vm, _, _, _, _) = Crear();
+        var (vm, _, _, _, _, _, _) = Crear();
         var linea = new LineaPoa { Id = 5, Nombre = "Rambla", Programa = "Obras", Ejercicio = 2026 };
 
         vm.FiltrarPorLineaPoa(linea);
@@ -489,7 +497,7 @@ public class GastosViewModelTests
         // combo de la View (bindeado por referencia) se mostraba en "Todas".
         var lineaDeOtraConsulta = new LineaPoa { Id = 5, Nombre = "Rambla", Programa = "Obras", Ejercicio = 2026 };
         var lineaDelCombo = new LineaPoa { Id = 5, Nombre = "Rambla", Programa = "Obras", Ejercicio = 2026 };
-        var (vm, _, _, _, _) = Crear(lineasPoa: new List<LineaPoa> { lineaDelCombo });
+        var (vm, _, _, _, _, _, _) = Crear(lineasPoa: new List<LineaPoa> { lineaDelCombo });
 
         vm.FiltrarPorLineaPoa(lineaDeOtraConsulta);
         await vm.CargarAsync();
@@ -503,7 +511,7 @@ public class GastosViewModelTests
     public async Task CargarAsync_SinFiltroPrevio_LineaPoaSeleccionadaQuedaNull()
     {
         // Flujo normal: abrir Gastos sin venir de Control POA debe seguir mostrando "Todas".
-        var (vm, _, _, _, _) = Crear(lineasPoa: new List<LineaPoa>
+        var (vm, _, _, _, _, _, _) = Crear(lineasPoa: new List<LineaPoa>
         {
             new() { Id = 1, Nombre = "Rambla", Programa = "Obras", Ejercicio = 2026 },
         });
@@ -518,7 +526,7 @@ public class GastosViewModelTests
     [Fact]
     public async Task ExportarCsvCommand_SiFallaGuardarTextoAsync_InformaYNoPropagaLaExcepcion()
     {
-        var (vm, _, _, confirm, guardado) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
+        var (vm, _, _, confirm, guardado, _, _) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
         guardado
             .Setup(g => g.GuardarTextoAsync(It.IsAny<string>(), It.IsAny<string>()))
             .ThrowsAsync(new IOException("disco lleno"));
@@ -538,7 +546,7 @@ public class GastosViewModelTests
     [Fact]
     public void Operador_ConVerFinanzasSinRegistrarPagos_PuedeRegistrarPagos_EsFalse()
     {
-        var (vm, _, _, _, _) = Crear(
+        var (vm, _, _, _, _, _, _) = Crear(
             rol: RolUsuario.Operador, permisos: new[] { Permisos.VerFinanzas });
 
         Assert.False(vm.PuedeRegistrarPagos);
@@ -547,7 +555,7 @@ public class GastosViewModelTests
     [Fact]
     public void Operador_ConRegistrarPagos_PuedeRegistrarPagos_EsTrue()
     {
-        var (vm, _, _, _, _) = Crear(
+        var (vm, _, _, _, _, _, _) = Crear(
             rol: RolUsuario.Operador, permisos: new[] { Permisos.VerFinanzas, Permisos.RegistrarPagos });
 
         Assert.True(vm.PuedeRegistrarPagos);
@@ -556,7 +564,7 @@ public class GastosViewModelTests
     [Fact]
     public void Admin_PuedeRegistrarPagos_EsTrue()
     {
-        var (vm, _, _, _, _) = Crear(rol: RolUsuario.Admin, permisos: Array.Empty<string>());
+        var (vm, _, _, _, _, _, _) = Crear(rol: RolUsuario.Admin, permisos: Array.Empty<string>());
 
         Assert.True(vm.PuedeRegistrarPagos);
     }
@@ -569,7 +577,7 @@ public class GastosViewModelTests
     [Fact]
     public void Operador_ConVerFinanzasSinRegistrarGastos_PuedeRegistrarGastos_EsFalse()
     {
-        var (vm, _, _, _, _) = Crear(
+        var (vm, _, _, _, _, _, _) = Crear(
             rol: RolUsuario.Operador, permisos: new[] { Permisos.VerFinanzas });
 
         Assert.False(vm.PuedeRegistrarGastos);
@@ -578,7 +586,7 @@ public class GastosViewModelTests
     [Fact]
     public void Operador_ConRegistrarGastos_PuedeRegistrarGastos_EsTrue()
     {
-        var (vm, _, _, _, _) = Crear(
+        var (vm, _, _, _, _, _, _) = Crear(
             rol: RolUsuario.Operador, permisos: new[] { Permisos.VerFinanzas, Permisos.RegistrarGastos });
 
         Assert.True(vm.PuedeRegistrarGastos);
@@ -587,7 +595,7 @@ public class GastosViewModelTests
     [Fact]
     public void Admin_PuedeRegistrarGastos_EsTrue()
     {
-        var (vm, _, _, _, _) = Crear(rol: RolUsuario.Admin, permisos: Array.Empty<string>());
+        var (vm, _, _, _, _, _, _) = Crear(rol: RolUsuario.Admin, permisos: Array.Empty<string>());
 
         Assert.True(vm.PuedeRegistrarGastos);
     }
@@ -622,7 +630,8 @@ public class GastosViewModelTests
 
         var vm = new GastosViewModel(
             svc.Object, session.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
-            nav.Object, confirm.Object, csv.Object, guardado.Object);
+            nav.Object, confirm.Object, csv.Object, guardado.Object,
+            new Mock<IPdfExporter>().Object, new Mock<IServicioAperturaArchivo>().Object);
 
         await vm.CargarAsync();
 
@@ -666,10 +675,250 @@ public class GastosViewModelTests
 
         var vm = new GastosViewModel(
             svc.Object, session.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
-            nav.Object, confirm.Object, csv.Object, guardado.Object);
+            nav.Object, confirm.Object, csv.Object, guardado.Object,
+            new Mock<IPdfExporter>().Object, new Mock<IServicioAperturaArchivo>().Object);
 
         await vm.CargarAsync();
 
         confirm.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    // ── Export PDF (spec 2026-09-18): peor caso del diseño, 11 columnas apaisado, 4 de texto
+    // libre (Detalle, Proveedor, Fuente, Línea POA), filtro de Estado APLICADO EN MEMORIA. ──
+
+    private static void ConfigurarPdfYGuardadoExitosos(
+        Mock<IPdfExporter> pdfExporterMock, Mock<IServicioGuardadoArchivo> guardadoMock)
+    {
+        pdfExporterMock
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<GastoFila>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+            .Returns(new byte[] { 1 });
+        guardadoMock
+            .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
+            .ReturnsAsync(true);
+    }
+
+    [Fact]
+    public async Task ExportarPdfCommand_UsaLasOnceColumnasDeLaGrilla()
+    {
+        var (vm, _, _, _, guardadoMock, pdfExporterMock, _) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
+        await vm.CargarAsync();
+        ConfigurarPdfYGuardadoExitosos(pdfExporterMock, guardadoMock);
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        // Lista literal hardcodeada (nunca comparar contra GastosViewModel.ColumnasPdf: sería
+        // tautológico, la mutación del VALOR de la constante nunca pondría el assert en rojo).
+        var esperado = new[]
+        {
+            new ColumnaPdf("Fecha", "Fecha"),
+            new ColumnaPdf("ProveedorNombre", "Proveedor"),
+            new ColumnaPdf("NumeroFactura", "Factura"),
+            new ColumnaPdf("Detalle", "Detalle"),
+            new ColumnaPdf("FuenteNombre", "Fuente"),
+            new ColumnaPdf("RubroNombre", "Rubro"),
+            new ColumnaPdf("LineaPoaNombre", "Línea POA"),
+            new ColumnaPdf("MontoTotal", "Monto"),
+            new ColumnaPdf("TotalPagado", "Pagado"),
+            new ColumnaPdf("Saldo", "Saldo"),
+            new ColumnaPdf("Estado", "Estado"),
+        };
+        pdfExporterMock.Verify(e => e.Exportar(
+            It.IsAny<IEnumerable<GastoFila>>(),
+            It.Is<IReadOnlyList<ColumnaPdf>>(cols => cols.SequenceEqual(esperado) && cols.Count == 11),
+            It.IsAny<MetadatosDocumento>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ExportarPdfCommand_SinFilas_NoExporta()
+    {
+        var (vm, _, _, _, _, pdfExporterMock, _) = Crear();
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        pdfExporterMock.Verify(e => e.Exportar(
+            It.IsAny<IEnumerable<GastoFila>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task ExportarPdfCommand_AvisoDeVolumen_SiCancelaNoExporta()
+    {
+        var muchos = Enumerable.Range(1, 501).Select(i => GastoDe(i, $"Gasto {i}")).ToList();
+        var (vm, _, _, confirmMock, _, pdfExporterMock, _) = Crear(muchos);
+        await vm.CargarAsync();
+        confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(false);
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        confirmMock.Verify(c => c.PreguntarAsync(It.IsAny<string>()), Times.Once);
+        pdfExporterMock.Verify(e => e.Exportar(
+            It.IsAny<IEnumerable<GastoFila>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task ExportarPdfCommand_FallaGuardado_InformaYNoPropaga()
+    {
+        var (vm, _, _, confirmMock, guardadoMock, pdfExporterMock, _) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
+        await vm.CargarAsync();
+        pdfExporterMock
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<GastoFila>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+            .Returns(new byte[] { 1 });
+        guardadoMock
+            .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
+            .ThrowsAsync(new IOException("disco lleno"));
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        confirmMock.Verify(c => c.InformarAsync(It.Is<string>(m => m.Contains("disco lleno"))), Times.Once);
+    }
+
+    [Fact]
+    public async Task ExportarPdfCommand_GuardadoExitoso_OfreceAbrir()
+    {
+        var (vm, _, _, confirmMock, guardadoMock, pdfExporterMock, aperturaMock) =
+            Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
+        await vm.CargarAsync();
+        ConfigurarPdfYGuardadoExitosos(pdfExporterMock, guardadoMock);
+        confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(true);
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        confirmMock.Verify(c => c.PreguntarAsync(It.Is<string>(m => m.Contains("abrirlo"))), Times.Once);
+        aperturaMock.Verify(a => a.AbrirAsync(It.IsAny<string>(), It.IsAny<byte[]>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ExportarPdfCommand_GuardadoCancelado_NoOfreceAbrir()
+    {
+        var (vm, _, _, confirmMock, guardadoMock, pdfExporterMock, aperturaMock) =
+            Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
+        await vm.CargarAsync();
+        pdfExporterMock
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<GastoFila>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+            .Returns(new byte[] { 1 });
+        guardadoMock
+            .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
+            .ReturnsAsync(false);
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        confirmMock.Verify(c => c.PreguntarAsync(It.Is<string>(m => m.Contains("abrirlo"))), Times.Never);
+        aperturaMock.Verify(a => a.AbrirAsync(It.IsAny<string>(), It.IsAny<byte[]>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ExportarPdfCommand_PasaMetadatosConTituloYUsuarioEmisor()
+    {
+        var (vm, _, _, _, guardadoMock, pdfExporterMock, _) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
+        await vm.CargarAsync();
+        MetadatosDocumento? metadatosCapturados = null;
+        pdfExporterMock
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<GastoFila>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+            .Callback<IEnumerable<GastoFila>, IReadOnlyList<ColumnaPdf>, MetadatosDocumento>((_, _, m) => metadatosCapturados = m)
+            .Returns(new byte[] { 1 });
+        guardadoMock
+            .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
+            .ReturnsAsync(true);
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        Assert.NotNull(metadatosCapturados);
+        Assert.Equal("Gastos y facturas", metadatosCapturados!.Titulo);
+        Assert.Equal("admin", metadatosCapturados.UsuarioEmisor);
+    }
+
+    [Fact]
+    public async Task ExportarPdfCommand_ConNombreCompleto_UsaNombreCompletoComoUsuarioEmisor()
+    {
+        // Tarea 21: el helper Crear() siempre construia UsuarioSesion con NombreCompleto null,
+        // asi que ningun test ejercitaba la rama principal del fallback
+        // (_session.UsuarioActual?.NombreCompleto ?? ... ?? "Sistema") -- solo la de "admin"
+        // (NombreUsuario). Este test cubre la rama que el PDF le muestra a casi todo usuario real.
+        var (vm, _, _, _, guardadoMock, pdfExporterMock, _) = Crear(
+            new List<Gasto> { GastoDe(1, "Factura de luz") },
+            usuarioSesion: new UsuarioSesion(1, "admin", RolUsuario.Admin, "Ana Pérez"));
+        await vm.CargarAsync();
+        MetadatosDocumento? metadatosCapturados = null;
+        pdfExporterMock
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<GastoFila>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+            .Callback<IEnumerable<GastoFila>, IReadOnlyList<ColumnaPdf>, MetadatosDocumento>((_, _, m) => metadatosCapturados = m)
+            .Returns(new byte[] { 1 });
+        guardadoMock
+            .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
+            .ReturnsAsync(true);
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        Assert.Equal("Ana Pérez", metadatosCapturados!.UsuarioEmisor);
+    }
+
+    [Fact]
+    public async Task ExportarPdfCommand_LaDescripcionDeFiltrosSoloIncluyeLosFiltrosActivos()
+    {
+        var (vm, _, _, _, guardadoMock, pdfExporterMock, _) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
+        vm.FechaDesde = new DateTime(2026, 1, 1);
+        vm.FechaHasta = new DateTime(2026, 1, 31);
+        await vm.CargarAsync();
+        MetadatosDocumento? metadatosCapturados = null;
+        pdfExporterMock
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<GastoFila>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+            .Callback<IEnumerable<GastoFila>, IReadOnlyList<ColumnaPdf>, MetadatosDocumento>((_, _, m) => metadatosCapturados = m)
+            .Returns(new byte[] { 1 });
+        guardadoMock
+            .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
+            .ReturnsAsync(true);
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        Assert.NotNull(metadatosCapturados);
+        Assert.Contains("01/01/2026", metadatosCapturados!.DescripcionFiltros);
+        Assert.Contains("31/01/2026", metadatosCapturados.DescripcionFiltros);
+        // Sin proveedor/fuente/rubro/línea/estado seleccionados, esas etiquetas NO aparecen.
+        Assert.DoesNotContain("Proveedor:", metadatosCapturados.DescripcionFiltros);
+        Assert.DoesNotContain("Fuente:", metadatosCapturados.DescripcionFiltros);
+        Assert.DoesNotContain("Rubro:", metadatosCapturados.DescripcionFiltros);
+        Assert.DoesNotContain("Línea POA:", metadatosCapturados.DescripcionFiltros);
+        Assert.DoesNotContain("Estado:", metadatosCapturados.DescripcionFiltros);
+    }
+
+    /// <summary>
+    /// Cubre la particularidad crítica de esta pantalla (spec 2026-09-18): <c>Estado</c> es un
+    /// valor CALCULADO (<see cref="Gasto.CalcularEstado"/>) que no existe como columna en la
+    /// base — el filtro de estado se aplica EN MEMORIA sobre <see cref="GastosViewModel.Filas"/>
+    /// dentro de <c>FiltrarAsync</c> (no en el servidor). Si el PDF exportara la respuesta cruda
+    /// del servicio en vez de <c>Filas</c>, este test lo detectaría: con "Pagada" seleccionado,
+    /// solo debe llegar al exportador la fila ya pagada, nunca la pendiente.
+    /// </summary>
+    [Fact]
+    public async Task ExportarPdfCommand_ConEstadoSeleccionado_SoloExportaFilasDeEseEstadoYLoMencionaEnFiltros()
+    {
+        var (vm, _, _, _, guardadoMock, pdfExporterMock, _) = Crear(new List<Gasto>
+        {
+            GastoDe(1, "Pendiente de pago"),
+            GastoDe(2, "Ya pagado", pagado: true),
+        });
+        await vm.CargarAsync();
+        vm.EstadoSeleccionado = "Pagada";
+        await vm.FiltrarCommand.ExecuteAsync(null);
+
+        IEnumerable<GastoFila>? filasCapturadas = null;
+        MetadatosDocumento? metadatosCapturados = null;
+        pdfExporterMock
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<GastoFila>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+            .Callback<IEnumerable<GastoFila>, IReadOnlyList<ColumnaPdf>, MetadatosDocumento>(
+                (items, _, m) => { filasCapturadas = items; metadatosCapturados = m; })
+            .Returns(new byte[] { 1 });
+        guardadoMock
+            .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
+            .ReturnsAsync(true);
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        Assert.NotNull(filasCapturadas);
+        var fila = Assert.Single(filasCapturadas!);
+        Assert.Equal("Pagada", fila.Estado);
+        Assert.NotNull(metadatosCapturados);
+        Assert.Contains("Estado: Pagada", metadatosCapturados!.DescripcionFiltros);
     }
 }

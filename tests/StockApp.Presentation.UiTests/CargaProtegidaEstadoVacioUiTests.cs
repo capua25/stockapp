@@ -10,8 +10,10 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Finanzas;
+using StockApp.Application.Interfaces;
 using StockApp.Application.Reportes;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 using StockApp.Presentation.Controls;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Finanzas;
@@ -63,8 +65,16 @@ public class CargaProtegidaEstadoVacioUiTests
     private sealed class ServicioGuardadoArchivoNoOpFake : IServicioGuardadoArchivo
     {
         public Task<bool> GuardarTextoAsync(string contenido, string nombreSugerido) => Task.FromResult(false);
-        public Task<bool> GuardarBytesAsync(System.IO.Stream contenido, string nombreSugerido, CancellationToken ct = default)
+        public Task<bool> GuardarBytesAsync(
+            System.IO.Stream contenido, string nombreSugerido, CancellationToken ct = default,
+            string? extension = null, string? tipoMime = null)
             => Task.FromResult(false);
+    }
+
+    private sealed class PdfExporterNoOpFake : IPdfExporter
+    {
+        public byte[] Exportar<T>(IEnumerable<T> items, IReadOnlyList<ColumnaPdf> columnas, MetadatosDocumento metadatos)
+            => Array.Empty<byte>();
     }
 
     // ── helpers de montaje ──────────────────────────────────────────────────
@@ -126,7 +136,8 @@ public class CargaProtegidaEstadoVacioUiTests
     {
         var vm = new StockCategoriaViewModel(
             new ReporteStockServiceUnauthorizedFake(), new CsvExporterNoOpFake(),
-            new ServicioGuardadoArchivoNoOpFake(), new ConfirmacionServiceFake());
+            new ServicioGuardadoArchivoNoOpFake(), new ConfirmacionServiceFake(),
+            new PdfExporterNoOpFake(), new ServicioAperturaArchivoFake(), new SesionFake(RolUsuario.Admin));
 
         var window = MontarConDataContext(XamlStockCategoriaView, vm);
 

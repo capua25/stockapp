@@ -1,11 +1,20 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using StockApp.Application.Auth;
+using StockApp.Application.Exportacion;
+using StockApp.Application.Interfaces;
 using StockApp.Application.Reportes;
+using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
+using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Reportes;
 using StockApp.Presentation.Views.Reportes;
 using Xunit;
@@ -43,9 +52,54 @@ public class ReporteTareasCriterioCierreAvisoTests
             Task.FromResult(new ReporteTareasDto(new List<FilaReporteTareas>(), 0));
     }
 
+    // Fakes mínimos no-op para las 6 dependencias nuevas del constructor (spec 2026-09-18):
+    // este proyecto no referencia Moq (a diferencia de Presentation.Tests).
+    private sealed class CsvExporterFake : ICsvExporter
+    {
+        public string Exportar<T>(IEnumerable<T> items, IReadOnlyList<string> columnOrder) => string.Empty;
+    }
+
+    private sealed class PdfExporterFake : IPdfExporter
+    {
+        public byte[] Exportar<T>(IEnumerable<T> items, IReadOnlyList<ColumnaPdf> columnas, MetadatosDocumento metadatos) => Array.Empty<byte>();
+    }
+
+    private sealed class GuardadoFake : IServicioGuardadoArchivo
+    {
+        public Task<bool> GuardarTextoAsync(string contenido, string nombreSugerido) => Task.FromResult(false);
+        public Task<bool> GuardarBytesAsync(
+            Stream contenido, string nombreSugerido, CancellationToken ct = default,
+            string? extension = null, string? tipoMime = null) => Task.FromResult(false);
+    }
+
+    private sealed class AperturaFake : IServicioAperturaArchivo
+    {
+        public Task AbrirAsync(string nombreArchivo, byte[] contenido) => Task.CompletedTask;
+    }
+
+    private sealed class ConfirmacionFake : IConfirmacionService
+    {
+        public Task<bool> PreguntarAsync(string mensaje) => Task.FromResult(false);
+        public Task InformarAsync(string mensaje) => Task.CompletedTask;
+        public Task<string?> PedirTextoAsync(string titulo, string mensaje) => Task.FromResult<string?>(null);
+    }
+
+    private sealed class SessionFake : ICurrentSession
+    {
+        public bool EstaAutenticado => true;
+        public UsuarioSesion? UsuarioActual => new(1, "admin", RolUsuario.Admin, null);
+        public RolUsuario? RolActual => RolUsuario.Admin;
+        public IReadOnlySet<string> PermisosActuales => new HashSet<string>();
+        public void EstablecerPermisos(IReadOnlySet<string> permisos) { }
+        public void IniciarSesion(Usuario usuario) { }
+        public void CerrarSesion() { }
+    }
+
     private static (Window Window, ReporteTareasViewModel Vm) Montar()
     {
-        var vm = new ReporteTareasViewModel(new ReporteTareasServiceFake());
+        var vm = new ReporteTareasViewModel(
+            new ReporteTareasServiceFake(), new CsvExporterFake(), new PdfExporterFake(),
+            new GuardadoFake(), new AperturaFake(), new ConfirmacionFake(), new SessionFake());
         var vista = new ReporteTareasView();
         var window = new Window { Width = 1100, Height = 700, Content = vista };
 

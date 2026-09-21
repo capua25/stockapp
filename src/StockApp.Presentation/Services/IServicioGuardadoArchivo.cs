@@ -28,7 +28,19 @@ public interface IServicioGuardadoArchivo
     /// <param name="nombreSugerido">Nombre de archivo sugerido en el selector.</param>
     /// <param name="ct">Token de cancelación — propagado hasta el CopyToAsync final, para que
     /// cancelar la descarga desde la UI (Task 9) corte la copia a disco, no solo la lectura HTTP.</param>
+    /// <param name="extension">
+    /// Extensión sugerida para el selector nativo (ej. "pdf"), sin punto. Si es <c>null</c>
+    /// (default, usado por backups/logs), el selector no ofrece ningún filtro de tipo — mismo
+    /// comportamiento que antes de esta firma (spec 2026-09-18, export PDF).
+    /// </param>
+    /// <param name="tipoMime">Tipo MIME asociado a <paramref name="extension"/> (ej.
+    /// "application/pdf"). Se ignora si <paramref name="extension"/> es <c>null</c>.</param>
     /// <returns><c>true</c> si el usuario eligió una ubicación y el archivo se guardó; <c>false</c> si canceló el selector.</returns>
     /// <exception cref="OperationCanceledException">Si <paramref name="ct"/> se cancela durante la copia.</exception>
-    Task<bool> GuardarBytesAsync(Stream contenido, string nombreSugerido, CancellationToken ct = default);
+    Task<bool> GuardarBytesAsync(
+        Stream contenido,
+        string nombreSugerido,
+        CancellationToken ct = default,
+        string? extension = null,
+        string? tipoMime = null);
 }

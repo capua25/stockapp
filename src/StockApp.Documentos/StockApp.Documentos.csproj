@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Class library sin Avalonia: acá y solo acá vive MigraDoc (ver Restricciones globales del
+       plan). Referenciada únicamente por StockApp.Presentation; StockApp.Api nunca genera
+       PDFs, el PDF se genera en el cliente desktop. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="PDFsharp-MigraDoc" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\StockApp.Application\StockApp.Application.csproj" />
+  </ItemGroup>
+
+  <!-- Fuente embebida para PdfSharp.Fonts.GlobalFontSettings.FontResolver (ver
+       ResolvedorFuentes.cs): PDFsharp-MigraDoc 6.2.4 no resuelve NINGUNA fuente del sistema
+       operativo en ninguna plataforma (hallazgo de la Tarea 0, no contemplado por el plan
+       original). Inter, SIL Open Font License 1.1; licencia verificada contra el release
+       oficial v4.1 de https://github.com/rsms/inter (LICENSE-Inter.txt en esta carpeta),
+       misma familia tipográfica que ya usa la app vía Avalonia.Fonts.Inter. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Fuentes\Inter-Regular.ttf">
+      <LogicalName>StockApp.Documentos.Fuentes.Inter-Regular.ttf</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Fuentes\Inter-Bold.ttf">
+      <LogicalName>StockApp.Documentos.Fuentes.Inter-Bold.ttf</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <!-- Logo institucional embebido para el membrete (ver RecursosMembrete.cs): variante NEGRA
+       (Assets/carmelo-negro.png, copiada de "Carmelo Municipio. Negro PNG.png" en la raíz del
+       repo, renombrada sin espacios) porque el membrete se imprime sobre papel blanco; la
+       variante de color/fondo que usa Presentation (carmelo-original.png, AvaloniaResource) es
+       para pantalla, no para este caso. Vive acá y no en StockApp.Presentation/Assets porque
+       StockApp.Documentos no depende de Avalonia (ver Restricciones globales del plan): el
+       proyecto queda autocontenido y testeable sin levantar infraestructura de Avalonia. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\carmelo-negro.png">
+      <LogicalName>StockApp.Documentos.Assets.carmelo-negro.png</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>StockApp.Documentos.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+</Project>
