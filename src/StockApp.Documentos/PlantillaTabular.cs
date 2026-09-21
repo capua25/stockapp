@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Reflection;
 using MigraDoc.DocumentObjectModel;
 using MigraDoc.Rendering;
+using PdfSharp.Drawing;
 using PdfSharp.Fonts;
 using StockApp.Application.Exportacion;
 
@@ -48,23 +49,79 @@ public sealed class PlantillaTabular
     private const double AnchoColumnaLogoCm = 3.0;
 
     /// <summary>
-    /// Cotas del ancho "deseado" de una columna ANTES de normalizar al ancho imprimible (ver
-    /// <see cref="RepartirAnchoDeColumnas"/>). El mínimo evita que una columna de una sola letra
-    /// quede en un hilo; el máximo evita que un único <c>Detalle</c> larguísimo del log de
-    /// auditoría (campo libre sin tope) se lleve la página entera y deje al resto en nada.
+    /// Cotas del ancho DESEADO de una columna (ver <see cref="RepartirAnchoDeColumnas"/>). Son
+    /// cotas de lo que la columna PIDE, nunca de lo que se le garantiza: el ancho garantizado es
+    /// siempre su PISO medido (ver <see cref="AnchoDeLaPalabraMasLargaCm"/>).
+    ///
+    /// El mínimo evita que una columna de una sola letra quede en un hilo cuando sobra lugar; el
+    /// máximo evita que un único <c>Detalle</c> larguísimo del log de auditoría (campo libre sin
+    /// tope) se lleve la página entera y deje al resto en nada.
+    ///
+    /// OJO: el mínimo NO se aplica al piso. Ese fue exactamente el bug del 2026-09-21 -- se
+    /// clampeaba el deseado a 1,5 cm y después se escalaba TODO por
+    /// <c>anchoImprimible / suma</c>, así que con un factor de ~0,59 el "mínimo" de 1,5 cm
+    /// terminaba valiendo ~0,9 cm reales en el papel.
     /// </summary>
     private const double AnchoMinimoColumnaCm = 1.5;
 
     private const double AnchoMaximoColumnaCm = 6.0;
 
     /// <summary>
-    /// Centímetros por carácter usados para estimar el ancho deseado de cada columna. Es una
-    /// aproximación del ancho medio de un carácter de Inter a 10pt (la fuente del documento, ver
-    /// <see cref="ResolvedorFuentes"/>); NO pretende ser exacta, y no hace falta que lo sea: el
-    /// resultado se normaliza proporcionalmente al ancho imprimible, así que lo único que
-    /// importa es la relación entre columnas, no el valor absoluto.
+    /// Tamaño de fuente nominal de la tabla de datos, en puntos. Se SETEA explícitamente en la
+    /// tabla (aunque coincide con el default del estilo <c>Normal</c> de MigraDoc) porque
+    /// <see cref="RepartirAnchoDeColumnas"/> mide el texto con este tamaño: si el default
+    /// cambiara, la medición y el render quedarían desalineados en silencio.
     /// </summary>
-    private const double AnchoPorCaracterCm = 0.2;
+    private const double TamanoFuenteNominalPt = 10.0;
+
+    /// <summary>
+    /// Piso del tamaño de fuente para el caso extremo de
+    /// <see cref="RepartirAnchoDeColumnas"/>. Por debajo de ~7 pt una tabla impresa deja de ser
+    /// legible, así que la degradación se corta acá y se prefiere el desborde: nunca truncar.
+    /// </summary>
+    private const double TamanoFuenteMinimoPt = 7.0;
+
+    /// <summary>
+    /// Padding lateral de cada celda, en centímetros. Igual que <see cref="MargenLateralCm"/>,
+    /// se SETEA explícitamente porque el reparto de ancho lo reserva en el cálculo: el texto de
+    /// una celda no dispone del ancho de la columna sino de ese ancho menos dos paddings.
+    /// </summary>
+    private const double PaddingCeldaCm = 0.1;
+
+    /// <summary>Ancho del trazo de los bordes de la tabla, en puntos.</summary>
+    private const double AnchoBordeCeldaPt = 0.5;
+
+    /// <summary>
+    /// Todo lo que una celda le come al ancho de su columna ANTES de que quede lugar para el
+    /// texto: los dos paddings laterales, el borde (MigraDoc descuenta media línea de borde de
+    /// cada lado del área útil de la celda) y una holgura mínima para el redondeo de cm a puntos.
+    ///
+    /// El borde y la holgura NO son un detalle cosmético: sin ellos el piso de la columna queda
+    /// unos 0,5 pt corto y MigraDoc parte palabras que "según la cuenta" entraban justo -- con la
+    /// tabla de Valorización, los códigos de artículo más anchos ("A-0602", "A-0902") salían
+    /// cortados en "A-" / "0602" mientras que los más angostos entraban en un renglón. No es un
+    /// desborde (el guardián de celda seguía verde), pero es una columna partida al pedo.
+    /// </summary>
+    private static double AnchoNoUtilizableDeCeldaCm =>
+        (2 * PaddingCeldaCm) + (AnchoBordeCeldaPt / PuntosPorCm) + HolguraDeRedondeoCm;
+
+    private const double HolguraDeRedondeoCm = 0.01;
+
+    private const double PuntosPorCm = 72.0 / 2.54;
+
+    /// <summary>
+    /// Contexto de medición de texto de PDFsharp. Es <c>[ThreadStatic]</c> porque
+    /// <see cref="XGraphics"/> no es thread-safe y xUnit corre las clases de test de un mismo
+    /// ensamblado en paralelo.
+    /// </summary>
+    [ThreadStatic]
+    private static XGraphics? _contextoDeMedicion;
+
+    [ThreadStatic]
+    private static XFont? _fuenteNormal;
+
+    [ThreadStatic]
+    private static XFont? _fuenteNegrita;
 
     /// <summary>
     /// Registra <see cref="ResolvedorFuentes"/> como resolver global de PDFsharp la primera vez
@@ -116,10 +173,20 @@ public sealed class PlantillaTabular
         AgregarMembrete(section, metadatos, anchoImprimibleCm);
         AgregarPie(section, metadatos.UsuarioEmisor);
 
-        var tabla = section.AddTable();
-        tabla.Borders.Width = 0.5;
+        var reparto = RepartirAnchoDeColumnas(columnas, celdas, anchoImprimibleCm);
 
-        foreach (var anchoCm in RepartirAnchoDeColumnas(columnas, celdas, anchoImprimibleCm))
+        var tabla = section.AddTable();
+        tabla.Borders.Width = AnchoBordeCeldaPt;
+
+        // La familia y el tamaño se fijan acá, no se heredan del estilo `Normal`: son los mismos
+        // con los que `RepartirAnchoDeColumnas` MIDIÓ el texto, y esa correspondencia es la que
+        // sostiene la garantía de que ninguna palabra se sale de su columna.
+        tabla.Format.Font.Name = ResolvedorFuentes.NombreFamilia;
+        tabla.Format.Font.Size = Unit.FromPoint(reparto.TamanoFuentePt);
+        tabla.LeftPadding = Unit.FromCentimeter(PaddingCeldaCm);
+        tabla.RightPadding = Unit.FromCentimeter(PaddingCeldaCm);
+
+        foreach (var anchoCm in reparto.AnchosCm)
             tabla.AddColumn(Unit.FromCentimeter(anchoCm));
 
         var filaEncabezado = tabla.AddRow();
@@ -246,32 +313,166 @@ public sealed class PlantillaTabular
     /// <c>Detalle</c> (texto libre sin tope) y <c>Accion</c> (una palabra) son las dos
     /// <c>string</c> y quedarían igual de anchas, que es justo el problema que el review marcó.
     /// Los valores, en cambio, ya los tenemos y no mienten.
+    ///
+    /// ==================== EL BUG DEL 2026-09-21 Y SU ARREGLO ====================
+    ///
+    /// Repartir TODO en proporción no alcanza, y eso rompía el documento en casi todas las filas
+    /// de Gastos: cuando el contenido de una celda es UNA SOLA PALABRA SIN ESPACIOS (una fecha,
+    /// un número de factura, un nombre de enum, un importe), MigraDoc no tiene dónde cortar la
+    /// línea, así que en vez de envolver IMPRIME EL TEXTO ENCIMA DE LA COLUMNA VECINA
+    /// ("12/01/2Ø26Fₑrretería El Tornillo S.R.L.", "ModificacionPermisosUsuarioUsuario",
+    /// "12.450,0099.600,00"). El piso de <see cref="AnchoMinimoColumnaCm"/> no lo evitaba porque
+    /// se aplicaba sobre el ancho DESEADO, ANTES de escalar: con 11 columnas y 5 de texto libre
+    /// en el techo el factor daba ~0,59 y el piso de 1,5 cm valía ~0,9 cm en el papel.
+    ///
+    /// El reparto de ahora distingue dos cosas distintas por columna, las dos MEDIDAS sobre el
+    /// contenido real (no por nombre de propiedad ni por tipo CLR):
+    ///
+    /// - PISO: el ancho de su palabra más larga. Es lo que MigraDoc no puede partir, así que es
+    ///   lo único que evita el desborde. Toda columna lo tiene garantizado.
+    /// - DESEADO: el ancho de su celda más larga completa, acotado por
+    ///   <see cref="AnchoMinimoColumnaCm"/>/<see cref="AnchoMaximoColumnaCm"/>. Es lo que la
+    ///   columna necesitaría para NO envolver nunca.
+    ///
+    /// Primero se garantizan los pisos; el sobrante se reparte en proporción a la ELASTICIDAD de
+    /// cada columna (deseado - piso). Una columna irreducible (fecha, código, importe) tiene
+    /// elasticidad ~0 y se queda en su piso; una elástica (Detalle, Proveedor, Línea POA) se
+    /// lleva el sobrante y sigue envolviendo prolijo, que es como ya funcionaba bien.
+    ///
+    /// Los anchos se MIDEN con la fuente real (<see cref="MedirAnchoDeTextoCm"/>) en vez de
+    /// estimarse por cantidad de caracteres: la estimación de 0,2 cm por carácter servía cuando
+    /// el resultado se normalizaba en proporción (solo importaba la relación entre columnas),
+    /// pero acá el piso es una GARANTÍA absoluta sobre el papel, y una garantía calculada con un
+    /// promedio no es una garantía ("A-000123" y "llllllll" tienen 8 caracteres y anchos
+    /// distintos).
+    ///
+    /// CASO EXTREMO -- si ni siquiera los pisos entran en la hoja, no hay reparto posible. Se
+    /// baja el tamaño de fuente de la tabla lo justo para que entren (el ancho del texto es
+    /// EXACTAMENTE lineal en el tamaño de fuente, así que el factor se calcula de una y sin
+    /// iterar), con piso en <see cref="TamanoFuenteMinimoPt"/>. Si ni con la fuente mínima
+    /// entran, se reparte en proporción a los pisos y se acepta el desborde como mal menor:
+    /// TRUNCAR no es una opción -- la spec lo prohíbe y lo custodia
+    /// <c>Generar_ConTextoMuyLargo_ApareceCompletoSinTruncar</c>. Entre un documento con texto
+    /// pisado (feo pero completo y verificable contra la pantalla) y uno con datos amputados
+    /// (prolijo y mentiroso) en una administración pública, el feo gana.
     /// </summary>
-    private static double[] RepartirAnchoDeColumnas(
+    private sealed record RepartoDeColumnas(double[] AnchosCm, double TamanoFuentePt);
+
+    private static RepartoDeColumnas RepartirAnchoDeColumnas(
         IReadOnlyList<ColumnaPdf> columnas,
         IReadOnlyList<string[]> celdas,
         double anchoImprimibleCm)
     {
         if (columnas.Count == 0)
-            return [];
+            return new RepartoDeColumnas([], TamanoFuenteNominalPt);
 
-        var deseados = new double[columnas.Count];
+        // Anchos de TEXTO (sin padding) medidos al tamaño nominal. El rótulo se mide en negrita
+        // porque la fila de encabezado se imprime en negrita, y la negrita es más ancha.
+        var pisoDeTextoCm = new double[columnas.Count];
+        var deseadoDeTextoCm = new double[columnas.Count];
+
         for (var i = 0; i < columnas.Count; i++)
         {
-            var caracteres = columnas[i].Rotulo.Length;
-            foreach (var fila in celdas)
-                caracteres = Math.Max(caracteres, fila[i].Length);
+            pisoDeTextoCm[i] = AnchoDeLaPalabraMasLargaCm(columnas[i].Rotulo, negrita: true);
+            deseadoDeTextoCm[i] = MedirAnchoDeTextoCm(columnas[i].Rotulo, negrita: true);
 
-            deseados[i] = Math.Clamp(
-                caracteres * AnchoPorCaracterCm, AnchoMinimoColumnaCm, AnchoMaximoColumnaCm);
+            foreach (var fila in celdas)
+            {
+                pisoDeTextoCm[i] = Math.Max(pisoDeTextoCm[i], AnchoDeLaPalabraMasLargaCm(fila[i], negrita: false));
+                deseadoDeTextoCm[i] = Math.Max(deseadoDeTextoCm[i], MedirAnchoDeTextoCm(fila[i], negrita: false));
+            }
         }
 
-        // La cota inferior garantiza suma > 0 con al menos una columna, así que no hay división
-        // por cero. El factor puede ser > 1 (contenido angosto: la tabla se estira hasta ocupar
-        // el ancho de la hoja, como se espera de un reporte impreso) o < 1 (contenido ancho:
-        // todo se comprime en proporción y el wrap de MigraDoc absorbe el resto sin truncar).
-        var factor = anchoImprimibleCm / deseados.Sum();
-        return [.. deseados.Select(deseado => deseado * factor)];
+        var reservadoPorColumnaCm = AnchoNoUtilizableDeCeldaCm;
+        var anchoDisponibleParaTextoCm = anchoImprimibleCm - (columnas.Count * reservadoPorColumnaCm);
+        var sumaDePisosDeTextoCm = pisoDeTextoCm.Sum();
+
+        var tamanoFuentePt = TamanoFuenteNominalPt;
+        if (sumaDePisosDeTextoCm > anchoDisponibleParaTextoCm && anchoDisponibleParaTextoCm > 0)
+        {
+            tamanoFuentePt = Math.Max(
+                TamanoFuenteMinimoPt,
+                TamanoFuenteNominalPt * (anchoDisponibleParaTextoCm / sumaDePisosDeTextoCm));
+        }
+
+        var escala = tamanoFuentePt / TamanoFuenteNominalPt;
+
+        var piso = new double[columnas.Count];
+        var deseado = new double[columnas.Count];
+        for (var i = 0; i < columnas.Count; i++)
+        {
+            piso[i] = (pisoDeTextoCm[i] * escala) + reservadoPorColumnaCm;
+
+            var pedido = Math.Min(
+                (deseadoDeTextoCm[i] * escala) + reservadoPorColumnaCm, AnchoMaximoColumnaCm);
+            deseado[i] = Math.Max(piso[i], Math.Max(pedido, AnchoMinimoColumnaCm));
+        }
+
+        var sumaDePisos = piso.Sum();
+
+        // Ni con la fuente mínima entran los pisos: se acepta el desborde (ver el comentario del
+        // caso extremo). El `<= 0` es la defensa contra una tabla con todas las columnas vacías.
+        if (sumaDePisos >= anchoImprimibleCm || sumaDePisos <= 0)
+        {
+            var factor = anchoImprimibleCm / (sumaDePisos > 0 ? sumaDePisos : columnas.Count);
+            return new RepartoDeColumnas([.. piso.Select(p => (p > 0 ? p : 1) * factor)], tamanoFuentePt);
+        }
+
+        var sobrante = anchoImprimibleCm - sumaDePisos;
+        double[] elasticidad = [.. Enumerable.Range(0, columnas.Count).Select(i => deseado[i] - piso[i])];
+        var sumaDeElasticidades = elasticidad.Sum();
+
+        // Sin ninguna columna elástica (todo el contenido es de una sola palabra y entra) el
+        // sobrante igual se reparte, en proporción al piso, para que la tabla ocupe el ancho de
+        // la hoja como se espera de un reporte impreso.
+        var pesos = sumaDeElasticidades > 0 ? elasticidad : piso;
+        var sumaDePesos = sumaDeElasticidades > 0 ? sumaDeElasticidades : sumaDePisos;
+
+        return new RepartoDeColumnas(
+            [.. Enumerable.Range(0, columnas.Count).Select(i => piso[i] + (sobrante * (pesos[i] / sumaDePesos)))],
+            tamanoFuentePt);
+    }
+
+    /// <summary>
+    /// Ancho de la palabra más larga de un texto: el PISO de la columna que lo contiene. MigraDoc
+    /// solo corta el renglón en un espacio, así que una palabra más ancha que su columna no
+    /// envuelve -- se imprime encima de la vecina.
+    ///
+    /// Se parte por cualquier espacio en blanco (<c>Split</c> sin separadores), no solo por " ":
+    /// un valor que venga con tabulación o salto de línea también le da a MigraDoc dónde cortar.
+    /// </summary>
+    private static double AnchoDeLaPalabraMasLargaCm(string texto, bool negrita)
+    {
+        if (string.IsNullOrWhiteSpace(texto))
+            return 0;
+
+        var maximo = 0.0;
+        foreach (var palabra in texto.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+            maximo = Math.Max(maximo, MedirAnchoDeTextoCm(palabra, negrita));
+
+        return maximo;
+    }
+
+    /// <summary>
+    /// Ancho real del texto en centímetros, medido con la MISMA fuente con la que se va a
+    /// imprimir (Inter, <see cref="TamanoFuenteNominalPt"/>) en vez de estimarlo por cantidad de
+    /// caracteres. <see cref="ResolvedorFuentes"/> mapea CUALQUIER familia a Inter, así que el
+    /// nombre de familia que se le pase a <see cref="XFont"/> no cambia las métricas; se usa el
+    /// nombre real igual para que el código diga la verdad.
+    /// </summary>
+    private static double MedirAnchoDeTextoCm(string texto, bool negrita)
+    {
+        if (string.IsNullOrEmpty(texto))
+            return 0;
+
+        _contextoDeMedicion ??= XGraphics.CreateMeasureContext(
+            new XSize(1000, 1000), XGraphicsUnit.Point, XPageDirection.Downwards);
+
+        var fuente = negrita
+            ? _fuenteNegrita ??= new XFont(ResolvedorFuentes.NombreFamilia, TamanoFuenteNominalPt, XFontStyleEx.Bold)
+            : _fuenteNormal ??= new XFont(ResolvedorFuentes.NombreFamilia, TamanoFuenteNominalPt, XFontStyleEx.Regular);
+
+        return _contextoDeMedicion.MeasureString(texto, fuente).Width / PuntosPorCm;
     }
 
     private static PropertyInfo[] ResolverPropiedades<T>(IReadOnlyList<ColumnaPdf> columnas)

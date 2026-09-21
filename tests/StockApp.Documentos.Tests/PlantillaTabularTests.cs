@@ -517,4 +517,236 @@ public class PlantillaTabularTests
             Assert.Equal(documento.NumberOfPages.ToString(CultureInfo.InvariantCulture), totalDePaginas);
         }
     }
+
+    // ======================================================================
+    // GUARDIÁN DEL DESBORDE DE CELDA (bug del 2026-09-21)
+    // ======================================================================
+
+    /// <summary>
+    /// Geometría real de la tabla de datos, LEÍDA DEL PDF YA RENDERIZADO. MigraDoc dibuja los
+    /// cuatro bordes de cada celda como trazos independientes, así que los segmentos VERTICALES
+    /// de la página son EXACTAMENTE las divisorias entre columnas, y su extensión vertical es
+    /// exactamente el alto de la tabla (el membrete tiene <c>Borders.Visible = false</c> y el pie
+    /// no dibuja nada, así que ninguno de los dos aporta trazos).
+    ///
+    /// Se leen del papel a propósito, en vez de recalcular el reparto de ancho dentro del test:
+    /// un test que replica el algoritmo que quiere custodiar no custodia nada -- quedaría verde
+    /// contra cualquier reparto, incluso uno roto, porque estaría comparando el algoritmo consigo
+    /// mismo.
+    /// </summary>
+    private sealed record GeometriaDeTabla(double[] Divisorias, double BordeSuperior, double BordeInferior);
+
+    private static GeometriaDeTabla LeerGeometriaDeTabla(UglyToad.PdfPig.Content.Page pagina)
+    {
+        var verticales = pagina.Paths
+            .Select(trazo => trazo.GetBoundingRectangle())
+            .Where(rectangulo => rectangulo.HasValue)
+            .Select(rectangulo => rectangulo!.Value)
+            .Where(rectangulo => Math.Abs(rectangulo.Left - rectangulo.Right) < 0.01 && rectangulo.Height > 0.01)
+            .ToList();
+
+        Assert.True(verticales.Count > 0, $"La página {pagina.Number} no tiene bordes verticales de tabla.");
+
+        double[] divisorias = [.. verticales.Select(r => Math.Round(r.Left, 1)).Distinct().OrderBy(x => x)];
+
+        return new GeometriaDeTabla(divisorias, verticales.Max(r => r.Top), verticales.Min(r => r.Bottom));
+    }
+
+    /// <summary>Tolerancia en puntos PDF: el propio trazo del borde mide 0,5 pt de ancho.</summary>
+    private const double ToleranciaDeBordeEnPuntos = 1.0;
+
+    /// <summary>
+    /// GUARDIÁN DE LA CELDA (bug del 2026-09-21). Distinto de
+    /// <see cref="Generar_ConOnceColumnas_LaTablaEntraEnElAnchoImprimible"/>, que es el guardián
+    /// de la TABLA: aquel mira la palabra más a la derecha de la PÁGINA contra el margen derecho,
+    /// así que queda VERDE aunque todas las celdas se pisen entre sí, porque la suma de los
+    /// anchos sigue cerrando. Verificaba la tabla; el bug estaba en la celda.
+    ///
+    /// Acá se afirma lo que realmente importa en el papel: el trazo de CADA LETRA tiene que caer
+    /// dentro de SU PROPIA columna. La columna de una letra se decide por su CENTRO, así que una
+    /// letra que queda a caballo de una divisoria -- que es lo que pasa siempre que una palabra
+    /// indivisible se desborda sobre la vecina -- cae de un lado por el centro y sobresale del
+    /// otro, y el test se pone rojo.
+    ///
+    /// Se trabaja con LETRAS y no con <c>GetWords()</c> porque la segmentación de palabras de
+    /// PdfPig no es confiable para esto en ninguno de los dos sentidos: con el bug presente FUNDE
+    /// la celda desbordada con la vecina en una sola "palabra" ("12/01/2F0e2r6retería"), y sin el
+    /// bug puede FUNDIR dos celdas contiguas legítimas porque el espacio entre columnas es del
+    /// orden del espacio entre palabras. Las letras no se funden nunca.
+    /// </summary>
+    private static void AfirmarQueNingunaCeldaPisaALaVecina(byte[] pdf, int cantidadDeColumnas)
+    {
+        using var documento = PdfDocument.Open(pdf);
+
+        foreach (var pagina in documento.GetPages())
+        {
+            var geometria = LeerGeometriaDeTabla(pagina);
+
+            Assert.True(
+                geometria.Divisorias.Length == cantidadDeColumnas + 1,
+                $"En la página {pagina.Number} se esperaban {cantidadDeColumnas + 1} divisorias de " +
+                $"columna y se leyeron {geometria.Divisorias.Length}: " +
+                string.Join(", ", geometria.Divisorias.Select(x => x.ToString("0.00", CultureInfo.InvariantCulture))));
+
+            var letrasDeLaTabla = pagina.Letters
+                .Where(letra =>
+                    letra.BoundingBox.Bottom >= geometria.BordeInferior - ToleranciaDeBordeEnPuntos &&
+                    letra.BoundingBox.Top <= geometria.BordeSuperior + ToleranciaDeBordeEnPuntos)
+                .ToList();
+
+            Assert.True(letrasDeLaTabla.Count > 0, $"La página {pagina.Number} no tiene texto dentro de la tabla.");
+
+            foreach (var letra in letrasDeLaTabla)
+            {
+                var caja = letra.BoundingBox;
+                var centro = (caja.Left + caja.Right) / 2;
+
+                var columna = Array.FindLastIndex(geometria.Divisorias, x => x <= centro);
+                Assert.True(
+                    columna >= 0 && columna < cantidadDeColumnas,
+                    $"En la página {pagina.Number} la letra '{letra.Value}' cae fuera de toda columna " +
+                    $"(centro x={centro:0.00}).");
+
+                var bordeIzquierdo = geometria.Divisorias[columna];
+                var bordeDerecho = geometria.Divisorias[columna + 1];
+
+                var seDesborda =
+                    caja.Left < bordeIzquierdo - ToleranciaDeBordeEnPuntos ||
+                    caja.Right > bordeDerecho + ToleranciaDeBordeEnPuntos;
+
+                Assert.True(
+                    !seDesborda,
+                    $"DESBORDE DE CELDA en la página {pagina.Number}, columna {columna + 1} de " +
+                    $"{cantidadDeColumnas} (banda x=[{bordeIzquierdo:0.00}, {bordeDerecho:0.00}]): la letra " +
+                    $"'{letra.Value}' ocupa x=[{caja.Left:0.00}, {caja.Right:0.00}] y se sale sobre la columna " +
+                    $"vecina.{Environment.NewLine}Renglón afectado: \"{ReconstruirRenglon(letrasDeLaTabla, letra)}\".");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Reconstruye el renglón al que pertenece una letra (todas las que comparten línea de base)
+    /// para que el mensaje de error muestre QUÉ se está pisando y no solo una letra suelta.
+    /// </summary>
+    private static string ReconstruirRenglon(
+        IReadOnlyList<UglyToad.PdfPig.Content.Letter> letras,
+        UglyToad.PdfPig.Content.Letter referencia)
+        => string.Concat(letras
+            .Where(l => Math.Abs(l.StartBaseLine.Y - referencia.StartBaseLine.Y) < 1.0)
+            .OrderBy(l => l.BoundingBox.Left)
+            .Select(l => l.Value));
+
+    /// <summary>
+    /// Mirror de la grilla real de Gastos (11 columnas, apaisado): el peor caso de la spec y el
+    /// que disparó el bug. Las columnas Fecha, Factura, los tres importes y Estado son
+    /// IRREDUCIBLES -- su contenido es una sola palabra sin espacios, así que MigraDoc no tiene
+    /// dónde cortar y, si la columna sale más angosta que la palabra, el texto se imprime encima
+    /// de la columna vecina en vez de envolver.
+    /// </summary>
+    private sealed record FilaGastos(
+        string Fecha,
+        string Proveedor,
+        string Factura,
+        string Detalle,
+        string Fuente,
+        string Rubro,
+        string LineaPoa,
+        string Monto,
+        string Pagado,
+        string Saldo,
+        string Estado);
+
+    private static ColumnaPdf[] ColumnasGastos() =>
+    [
+        new(nameof(FilaGastos.Fecha), "Fecha"),
+        new(nameof(FilaGastos.Proveedor), "Proveedor"),
+        new(nameof(FilaGastos.Factura), "Factura"),
+        new(nameof(FilaGastos.Detalle), "Detalle"),
+        new(nameof(FilaGastos.Fuente), "Fuente"),
+        new(nameof(FilaGastos.Rubro), "Rubro"),
+        new(nameof(FilaGastos.LineaPoa), "Línea POA"),
+        new(nameof(FilaGastos.Monto), "Monto"),
+        new(nameof(FilaGastos.Pagado), "Pagado"),
+        new(nameof(FilaGastos.Saldo), "Saldo"),
+        new(nameof(FilaGastos.Estado), "Estado"),
+    ];
+
+    private static FilaGastos[] FilasGastos() =>
+    [
+        new("12/01/2026", "Ferretería El Tornillo S.R.L.", "A-000123",
+            "Materiales para reparación de cordón cuneta en calle Ignacio Barrios entre Uruguay y 19 de Abril",
+            "Rentas Generales", "Mantenimiento de Vialidad Urbana",
+            "Programa de Mejora de Infraestructura Vial y Cordón Cuneta 2026",
+            "284.350,75", "284.350,75", "0,00", "Pagada"),
+        new("20/01/2026", "Corralón San Cono S.A.", "B-004521",
+            "Compra de 40 bolsas de cemento Portland y 2 m3 de arena para bacheo de calzada en barrio Etchevarren",
+            "Fondo de Desarrollo del Interior", "Mantenimiento de Vialidad Urbana",
+            "Programa de Mejora de Infraestructura Vial y Cordón Cuneta 2026",
+            "156.900,00", "0,00", "156.900,00", "Pendiente"),
+        new("03/02/2026", "Distribuidora de Materiales del Litoral S.A.", "A-000988",
+            "Reparación integral del sistema de bombeo de la planta de tratamiento de efluentes cloacales",
+            "Convenio MTOP", "Obras Sanitarias y Saneamiento",
+            "Proyecto de Ampliación de la Red de Saneamiento del Casco Urbano",
+            "1.284.500,50", "600.000,00", "684.500,50", "Parcial"),
+    ];
+
+    /// <summary>
+    /// El caso que reventaba: en el PDF de Gastos la Fecha se imprimía ENCIMA del Proveedor
+    /// ("12/01/2Ø26Fₑrretería El Tornillo S.R.L."), la Factura encima del Detalle y los tres
+    /// importes pegados entre sí ("12.450,0099.600,00"), en casi todas las filas.
+    ///
+    /// Causa raíz: el piso <c>AnchoMinimoColumnaCm</c> se aplicaba sobre el ancho DESEADO, ANTES
+    /// de escalar todo por <c>anchoImprimible / suma</c>. Con 11 columnas y 5 de texto libre en
+    /// el techo, el factor daba ~0,59 y el piso de 1,5 cm terminaba valiendo ~0,9 cm reales: el
+    /// piso no quedaba garantizado en ningún momento DESPUÉS del escalado.
+    /// </summary>
+    [Fact]
+    public void Generar_ConFechasYCodigosSinEspacios_NingunaCeldaSePisaConLaVecina()
+    {
+        var plantilla = new PlantillaTabular();
+
+        var pdf = plantilla.Generar(FilasGastos(), ColumnasGastos(), Metadatos("Gastos y facturas"));
+
+        AfirmarQueNingunaCeldaPisaALaVecina(pdf, cantidadDeColumnas: 11);
+    }
+
+    /// <summary>
+    /// Mirror de la grilla real de Auditoría: el nombre del enum de la acción
+    /// ("ModificacionPermisos") es una sola palabra larguísima que se imprimía encima de Entidad
+    /// ("ModificacionPermisosUsuarioUsuario"), mientras que el Detalle -- texto libre CON
+    /// espacios -- envolvía perfecto. Los dos son <c>string</c>: por eso la clasificación tiene
+    /// que salir de MEDIR el contenido y no del tipo CLR ni del nombre de la propiedad.
+    /// </summary>
+    private sealed record FilaAuditoria(
+        string Fecha, string Usuario, string Accion, string Entidad, string EntidadId, string Detalle);
+
+    [Fact]
+    public void Generar_ConEnumsLargosSinEspacios_NingunaCeldaSePisaConLaVecina()
+    {
+        FilaAuditoria[] filas =
+        [
+            new("12/01/2026 09:14:32", "snunez", "ModificacionPermisos", "Usuario", "1204",
+                "Modificó los permisos del usuario rgomez: se otorgó acceso a Finanzas y se revocó Administracion."),
+            new("12/01/2026 10:02:11", "mcapuano", "CreacionDeMovimiento", "Movimiento", "88431",
+                "Alta de movimiento de egreso de 40 bolsas de cemento Portland con destino al corralón municipal."),
+            new("13/01/2026 08:45:09", "rgomez", "AnulacionDeFactura", "Gasto", "512",
+                "Anulación de la factura B-004521 por error de imputación presupuestal."),
+        ];
+
+        ColumnaPdf[] columnas =
+        [
+            new(nameof(FilaAuditoria.Fecha), "Fecha"),
+            new(nameof(FilaAuditoria.Usuario), "Usuario"),
+            new(nameof(FilaAuditoria.Accion), "Acción"),
+            new(nameof(FilaAuditoria.Entidad), "Entidad"),
+            new(nameof(FilaAuditoria.EntidadId), "Entidad ID"),
+            new(nameof(FilaAuditoria.Detalle), "Detalle"),
+        ];
+
+        var plantilla = new PlantillaTabular();
+
+        var pdf = plantilla.Generar(filas, columnas, Metadatos("Registro de auditoría"));
+
+        AfirmarQueNingunaCeldaPisaALaVecina(pdf, cantidadDeColumnas: 6);
+    }
 }
