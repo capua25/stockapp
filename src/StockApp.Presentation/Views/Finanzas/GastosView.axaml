@@ -137,45 +137,91 @@
         </Border>
 
         <!-- Grilla -->
+        <!-- MinWidth por columna + scroll horizontal (fix/grillas-minwidth-scroll): sin esto, al
+             angostar la ventana Avalonia.Controls.DataGrid comprime columnas arbitrarias hasta el
+             piso global MinColumnWidth=40 (Themes/DataGrid.axaml) en vez de scrollear, y a 40px el
+             padding de celda no deja entrar ni un carácter (header y valor desaparecen por
+             clipping duro). Reproducido a mano a 1300px: colapsaban Proveedor/Detalle (con
+             contenido real adentro) y Estado quedaba en una letra suelta. Proveedor/Detalle/
+             Fuente/Rubro/Línea POA pasan a DataGridTemplateColumn (mismo patrón que
+             ProveedorListView.axaml) porque son nombres libres de catálogo sin cota de longitud;
+             Fecha/Factura/Monto/Pagado/Saldo/Estado son valores acotados (fecha corta, código,
+             importe, enum) y no necesitan trimming, solo un piso que entre la palabra más larga. -->
         <DataGrid ItemsSource="{Binding FilasView}"
                   SelectedItem="{Binding FilaSeleccionada}"
                   IsReadOnly="True"
                   CanUserSortColumns="True"
-                  AutoGenerateColumns="False">
+                  AutoGenerateColumns="False"
+                  ScrollViewer.HorizontalScrollBarVisibility="Auto">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Fecha"
                                     Binding="{Binding Fecha, StringFormat='dd/MM/yyyy', DataType={x:Type vm:GastoFila}}"
-                                    Width="Auto" />
-                <DataGridTextColumn Header="Proveedor"
-                                    Binding="{Binding ProveedorNombre, DataType={x:Type vm:GastoFila}}"
-                                    Width="*" />
+                                    Width="Auto" MinWidth="100" />
+                <DataGridTemplateColumn Header="Proveedor" Width="*" MinWidth="160" SortMemberPath="ProveedorNombre">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate x:DataType="vm:GastoFila">
+                            <TextBlock Text="{Binding ProveedorNombre}"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="{Binding ProveedorNombre}"
+                                       VerticalAlignment="Center" Margin="4,0" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
                 <DataGridTextColumn Header="Factura"
                                     Binding="{Binding NumeroFactura, DataType={x:Type vm:GastoFila}}"
-                                    Width="Auto" />
-                <DataGridTextColumn Header="Detalle"
-                                    Binding="{Binding Detalle, DataType={x:Type vm:GastoFila}}"
-                                    Width="2*" />
-                <DataGridTextColumn Header="Fuente"
-                                    Binding="{Binding FuenteNombre, DataType={x:Type vm:GastoFila}}"
-                                    Width="Auto" />
-                <DataGridTextColumn Header="Rubro"
-                                    Binding="{Binding RubroNombre, DataType={x:Type vm:GastoFila}}"
-                                    Width="Auto" />
-                <DataGridTextColumn Header="Línea POA"
-                                    Binding="{Binding LineaPoaNombre, DataType={x:Type vm:GastoFila}}"
-                                    Width="Auto" />
+                                    Width="Auto" MinWidth="90" />
+                <DataGridTemplateColumn Header="Detalle" Width="2*" MinWidth="160" SortMemberPath="Detalle">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate x:DataType="vm:GastoFila">
+                            <TextBlock Text="{Binding Detalle}"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="{Binding Detalle}"
+                                       VerticalAlignment="Center" Margin="4,0" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="Fuente" Width="Auto" MinWidth="150" SortMemberPath="FuenteNombre">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate x:DataType="vm:GastoFila">
+                            <TextBlock Text="{Binding FuenteNombre}"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="{Binding FuenteNombre}"
+                                       VerticalAlignment="Center" Margin="4,0" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="Rubro" Width="Auto" MinWidth="160" SortMemberPath="RubroNombre">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate x:DataType="vm:GastoFila">
+                            <TextBlock Text="{Binding RubroNombre}"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="{Binding RubroNombre}"
+                                       VerticalAlignment="Center" Margin="4,0" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="Línea POA" Width="Auto" MinWidth="160" SortMemberPath="LineaPoaNombre">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate x:DataType="vm:GastoFila">
+                            <TextBlock Text="{Binding LineaPoaNombre}"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="{Binding LineaPoaNombre}"
+                                       VerticalAlignment="Center" Margin="4,0" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
                 <DataGridTextColumn Header="Monto"
                                     Binding="{Binding MontoTotal, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type vm:GastoFila}}"
-                                    Width="Auto" />
+                                    Width="Auto" MinWidth="100" />
                 <DataGridTextColumn Header="Pagado"
                                     Binding="{Binding TotalPagado, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type vm:GastoFila}}"
-                                    Width="Auto" />
+                                    Width="Auto" MinWidth="100" />
                 <DataGridTextColumn Header="Saldo"
                                     Binding="{Binding Saldo, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type vm:GastoFila}}"
-                                    Width="Auto" />
+                                    Width="Auto" MinWidth="100" />
                 <DataGridTextColumn Header="Estado"
                                     Binding="{Binding Estado, DataType={x:Type vm:GastoFila}}"
-                                    Width="Auto" />
+                                    Width="Auto" MinWidth="90" />
             </DataGrid.Columns>
         </DataGrid>
 

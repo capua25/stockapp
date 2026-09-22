@@ -100,11 +100,19 @@
 
             <TabControl SelectedIndex="{Binding PestanaSeleccionada, Mode=TwoWay}">
                 <TabItem Header="Gastos">
+                    <!-- MinWidth por columna + scroll horizontal (fix/grillas-minwidth-scroll): mismo
+                         bug que GastosView.axaml pero agravado por ser EDITABLE: una celda
+                         comprimida a 40px (piso global de Themes/DataGrid.axaml) ni siquiera deja
+                         ver el candado ni entrar en modo edición con comodidad. El botón "" de
+                         desbloquear (Width="40" fijo) queda deliberadamente SIN MinWidth: no
+                         participa del problema (no tiene texto) y forzarle un piso rompería su
+                         ancho fijo. -->
                     <DataGrid x:Name="GridGastos" ItemsSource="{Binding FilasGastoView}" IsReadOnly="False"
-                              CanUserSortColumns="True" AutoGenerateColumns="False">
+                              CanUserSortColumns="True" AutoGenerateColumns="False"
+                              ScrollViewer.HorizontalScrollBarVisibility="Auto">
                         <DataGrid.Columns>
 
-                            <DataGridTemplateColumn Header="Fecha" Width="Auto" IsReadOnly="False">
+                            <DataGridTemplateColumn Header="Fecha" Width="Auto" MinWidth="100" IsReadOnly="False">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate x:DataType="vm:FilaGastoEditableVm">
                                         <StackPanel Orientation="Horizontal" Spacing="4">
@@ -122,7 +130,7 @@
                                 </DataGridTemplateColumn.CellEditingTemplate>
                             </DataGridTemplateColumn>
 
-                            <DataGridTemplateColumn Header="Proveedor" Width="*" IsReadOnly="False" x:CompileBindings="False">
+                            <DataGridTemplateColumn Header="Proveedor" Width="*" MinWidth="160" IsReadOnly="False" x:CompileBindings="False">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <StackPanel Orientation="Horizontal" Spacing="4">
@@ -154,7 +162,7 @@
                                 </DataGridTemplateColumn.CellEditingTemplate>
                             </DataGridTemplateColumn>
 
-                            <DataGridTemplateColumn Header="Factura" Width="Auto" IsReadOnly="False">
+                            <DataGridTemplateColumn Header="Factura" Width="Auto" MinWidth="90" IsReadOnly="False">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate x:DataType="vm:FilaGastoEditableVm">
                                         <TextBlock Text="{Binding NumeroFactura}" VerticalAlignment="Center" />
@@ -167,7 +175,7 @@
                                 </DataGridTemplateColumn.CellEditingTemplate>
                             </DataGridTemplateColumn>
 
-                            <DataGridTemplateColumn Header="Detalle" Width="2*" IsReadOnly="False">
+                            <DataGridTemplateColumn Header="Detalle" Width="2*" MinWidth="160" IsReadOnly="False">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate x:DataType="vm:FilaGastoEditableVm">
                                         <StackPanel Orientation="Horizontal" Spacing="4">
@@ -183,7 +191,7 @@
                                 </DataGridTemplateColumn.CellEditingTemplate>
                             </DataGridTemplateColumn>
 
-                            <DataGridTemplateColumn Header="Monto" Width="Auto" IsReadOnly="False">
+                            <DataGridTemplateColumn Header="Monto" Width="Auto" MinWidth="100" IsReadOnly="False">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate x:DataType="vm:FilaGastoEditableVm">
                                         <StackPanel Orientation="Horizontal" Spacing="4">
@@ -200,7 +208,7 @@
                                 </DataGridTemplateColumn.CellEditingTemplate>
                             </DataGridTemplateColumn>
 
-                            <DataGridTemplateColumn Header="Fuente" Width="Auto" IsReadOnly="False" x:CompileBindings="False">
+                            <DataGridTemplateColumn Header="Fuente" Width="Auto" MinWidth="150" IsReadOnly="False" x:CompileBindings="False">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <StackPanel Orientation="Horizontal" Spacing="4">
@@ -228,7 +236,7 @@
                                 </DataGridTemplateColumn.CellEditingTemplate>
                             </DataGridTemplateColumn>
 
-                            <DataGridTemplateColumn Header="Rubro" Width="Auto" IsReadOnly="False" x:CompileBindings="False">
+                            <DataGridTemplateColumn Header="Rubro" Width="Auto" MinWidth="160" IsReadOnly="False" x:CompileBindings="False">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <StackPanel Orientation="Horizontal" Spacing="4">
@@ -264,7 +272,7 @@
                                 </DataGridTemplateColumn.CellEditingTemplate>
                             </DataGridTemplateColumn>
 
-                            <DataGridTemplateColumn Header="Condición" Width="Auto" IsReadOnly="False">
+                            <DataGridTemplateColumn Header="Condición" Width="Auto" MinWidth="90" IsReadOnly="False">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate x:DataType="vm:FilaGastoEditableVm">
                                         <TextBlock Text="{Binding Condicion}" VerticalAlignment="Center" />
@@ -277,7 +285,7 @@
                                 </DataGridTemplateColumn.CellEditingTemplate>
                             </DataGridTemplateColumn>
 
-                            <DataGridTemplateColumn Header="Vencimiento" Width="Auto" IsReadOnly="False">
+                            <DataGridTemplateColumn Header="Vencimiento" Width="Auto" MinWidth="100" IsReadOnly="False">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate x:DataType="vm:FilaGastoEditableVm">
                                         <TextBlock Text="{Binding FechaVencimiento, StringFormat='{}{0:dd/MM/yyyy}'}" VerticalAlignment="Center" />
@@ -297,7 +305,7 @@
                                 </DataGridTemplateColumn.CellEditingTemplate>
                             </DataGridTemplateColumn>
 
-                            <DataGridTextColumn Header="Estado" Binding="{Binding Estado, DataType={x:Type vm:FilaGastoEditableVm}}" Width="Auto" IsReadOnly="True" />
+                            <DataGridTextColumn Header="Estado" Binding="{Binding Estado, DataType={x:Type vm:FilaGastoEditableVm}}" Width="Auto" MinWidth="90" IsReadOnly="True" />
 
                             <DataGridTemplateColumn Header="" Width="40" IsReadOnly="True" CellStyleClasses="sin-padding-vertical">
                                 <DataGridTemplateColumn.CellTemplate>
@@ -314,11 +322,14 @@
                     </DataGrid>
                 </TabItem>
                 <TabItem Header="Ingresos">
+                    <!-- MinWidth por columna + scroll horizontal (fix/grillas-minwidth-scroll): ver
+                         nota del mismo fix en el tab Gastos, arriba. -->
                     <DataGrid ItemsSource="{Binding FilasIngresoView}" IsReadOnly="False"
-                              CanUserSortColumns="True" AutoGenerateColumns="False">
+                              CanUserSortColumns="True" AutoGenerateColumns="False"
+                              ScrollViewer.HorizontalScrollBarVisibility="Auto">
                         <DataGrid.Columns>
 
-                            <DataGridTemplateColumn Header="Fecha" Width="Auto" IsReadOnly="False">
+                            <DataGridTemplateColumn Header="Fecha" Width="Auto" MinWidth="100" IsReadOnly="False">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate x:DataType="vm:FilaIngresoEditableVm">
                                         <StackPanel Orientation="Horizontal" Spacing="4">
@@ -336,7 +347,7 @@
                                 </DataGridTemplateColumn.CellEditingTemplate>
                             </DataGridTemplateColumn>
 
-                            <DataGridTemplateColumn Header="Concepto" Width="*" IsReadOnly="False">
+                            <DataGridTemplateColumn Header="Concepto" Width="*" MinWidth="160" IsReadOnly="False">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate x:DataType="vm:FilaIngresoEditableVm">
                                         <StackPanel Orientation="Horizontal" Spacing="4">
@@ -352,7 +363,7 @@
                                 </DataGridTemplateColumn.CellEditingTemplate>
                             </DataGridTemplateColumn>
 
-                            <DataGridTemplateColumn Header="Monto" Width="Auto" IsReadOnly="False">
+                            <DataGridTemplateColumn Header="Monto" Width="Auto" MinWidth="100" IsReadOnly="False">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate x:DataType="vm:FilaIngresoEditableVm">
                                         <StackPanel Orientation="Horizontal" Spacing="4">
@@ -369,7 +380,7 @@
                                 </DataGridTemplateColumn.CellEditingTemplate>
                             </DataGridTemplateColumn>
 
-                            <DataGridTemplateColumn Header="Fuente" Width="Auto" IsReadOnly="False" x:CompileBindings="False">
+                            <DataGridTemplateColumn Header="Fuente" Width="Auto" MinWidth="150" IsReadOnly="False" x:CompileBindings="False">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <StackPanel Orientation="Horizontal" Spacing="4">
@@ -397,7 +408,7 @@
                                 </DataGridTemplateColumn.CellEditingTemplate>
                             </DataGridTemplateColumn>
 
-                            <DataGridTextColumn Header="Estado" Binding="{Binding Estado, DataType={x:Type vm:FilaIngresoEditableVm}}" Width="Auto" IsReadOnly="True" />
+                            <DataGridTextColumn Header="Estado" Binding="{Binding Estado, DataType={x:Type vm:FilaIngresoEditableVm}}" Width="Auto" MinWidth="90" IsReadOnly="True" />
 
                             <DataGridTemplateColumn Header="" Width="40" IsReadOnly="True" CellStyleClasses="sin-padding-vertical">
                                 <DataGridTemplateColumn.CellTemplate>
@@ -414,13 +425,16 @@
                     </DataGrid>
                 </TabItem>
                 <TabItem Header="Líneas POA">
+                    <!-- MinWidth por columna + scroll horizontal (fix/grillas-minwidth-scroll): ver
+                         nota del mismo fix en el tab Gastos, arriba. -->
                     <DataGrid x:Name="GridLineasPoa" ItemsSource="{Binding FilasLineaPoaView}" IsReadOnly="False"
-                              CanUserSortColumns="True" AutoGenerateColumns="False">
+                              CanUserSortColumns="True" AutoGenerateColumns="False"
+                              ScrollViewer.HorizontalScrollBarVisibility="Auto">
                         <DataGrid.Columns>
 
-                            <DataGridTextColumn Header="Hoja" Binding="{Binding Hoja, DataType={x:Type vm:FilaLineaPoaEditableVm}}" Width="*" IsReadOnly="True" />
+                            <DataGridTextColumn Header="Hoja" Binding="{Binding Hoja, DataType={x:Type vm:FilaLineaPoaEditableVm}}" Width="*" MinWidth="90" IsReadOnly="True" />
 
-                            <DataGridTemplateColumn Header="Asignaciones" Width="2*" IsReadOnly="True">
+                            <DataGridTemplateColumn Header="Asignaciones" Width="2*" MinWidth="200" IsReadOnly="True">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate x:DataType="vm:FilaLineaPoaEditableVm">
                                         <ItemsControl ItemsSource="{Binding Asignaciones}">
@@ -441,7 +455,7 @@
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
 
-                            <DataGridTemplateColumn Header="Programa" Width="*" IsReadOnly="False">
+                            <DataGridTemplateColumn Header="Programa" Width="*" MinWidth="160" IsReadOnly="False">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate x:DataType="vm:FilaLineaPoaEditableVm">
                                         <TextBlock Text="{Binding Programa}" VerticalAlignment="Center" IsVisible="{Binding EsNueva}" />
@@ -459,9 +473,9 @@
                                 </DataGridTemplateColumn.CellEditingTemplate>
                             </DataGridTemplateColumn>
 
-                            <DataGridTextColumn Header="Nueva" Binding="{Binding EsNueva, DataType={x:Type vm:FilaLineaPoaEditableVm}}" Width="Auto" IsReadOnly="True" />
+                            <DataGridTextColumn Header="Nueva" Binding="{Binding EsNueva, DataType={x:Type vm:FilaLineaPoaEditableVm}}" Width="Auto" MinWidth="70" IsReadOnly="True" />
 
-                            <DataGridTextColumn Header="Estado" Binding="{Binding Estado, DataType={x:Type vm:FilaLineaPoaEditableVm}}" Width="Auto" IsReadOnly="True" />
+                            <DataGridTextColumn Header="Estado" Binding="{Binding Estado, DataType={x:Type vm:FilaLineaPoaEditableVm}}" Width="Auto" MinWidth="90" IsReadOnly="True" />
 
                         </DataGrid.Columns>
                     </DataGrid>

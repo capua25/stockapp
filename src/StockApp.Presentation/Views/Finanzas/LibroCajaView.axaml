@@ -45,24 +45,70 @@
             </StackPanel>
         </StackPanel>
 
+        <!-- MinWidth por columna + scroll horizontal (fix/grillas-minwidth-scroll): sin esto,
+             Avalonia.Controls.DataGrid comprime columnas arbitrarias hasta el piso global
+             MinColumnWidth=40 (Themes/DataGrid.axaml) en vez de scrollear. Concepto/Proveedor/
+             Fuente/Rubro pasan a DataGridTemplateColumn (texto libre de catálogo, sin cota de
+             longitud); Fecha/Tipo/Factura/Ingreso/Egreso/Saldo corrido son valores acotados. -->
         <DataGrid Grid.Row="2" ItemsSource="{Binding MovimientosView}"
                   IsVisible="{Binding !VerAnioCompleto}"
-                  AutoGenerateColumns="False" CanUserSortColumns="True" IsReadOnly="True">
+                  AutoGenerateColumns="False" CanUserSortColumns="True" IsReadOnly="True"
+                  ScrollViewer.HorizontalScrollBarVisibility="Auto">
             <DataGrid.Columns>
                 <DataGridTextColumn Header="Fecha"
-                                     Binding="{Binding Fecha, StringFormat='dd/MM/yyyy', DataType={x:Type dto:MovimientoCajaDto}}" />
-                <DataGridTextColumn Header="Tipo" Binding="{Binding Tipo, DataType={x:Type dto:MovimientoCajaDto}}" />
-                <DataGridTextColumn Header="Concepto" Binding="{Binding Concepto, DataType={x:Type dto:MovimientoCajaDto}}" Width="*" />
-                <DataGridTextColumn Header="Proveedor" Binding="{Binding ProveedorNombre, DataType={x:Type dto:MovimientoCajaDto}}" />
-                <DataGridTextColumn Header="Factura" Binding="{Binding NumeroFactura, DataType={x:Type dto:MovimientoCajaDto}}" />
-                <DataGridTextColumn Header="Fuente" Binding="{Binding FuenteNombre, DataType={x:Type dto:MovimientoCajaDto}}" />
-                <DataGridTextColumn Header="Rubro" Binding="{Binding RubroNombre, DataType={x:Type dto:MovimientoCajaDto}}" />
+                                     Binding="{Binding Fecha, StringFormat='dd/MM/yyyy', DataType={x:Type dto:MovimientoCajaDto}}"
+                                     MinWidth="100" />
+                <DataGridTextColumn Header="Tipo" Binding="{Binding Tipo, DataType={x:Type dto:MovimientoCajaDto}}" MinWidth="90" />
+                <DataGridTemplateColumn Header="Concepto" Width="*" MinWidth="160" SortMemberPath="Concepto">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate x:DataType="dto:MovimientoCajaDto">
+                            <TextBlock Text="{Binding Concepto}"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="{Binding Concepto}"
+                                       VerticalAlignment="Center" Margin="4,0" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="Proveedor" Width="Auto" MinWidth="150" SortMemberPath="ProveedorNombre">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate x:DataType="dto:MovimientoCajaDto">
+                            <TextBlock Text="{Binding ProveedorNombre}"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="{Binding ProveedorNombre}"
+                                       VerticalAlignment="Center" Margin="4,0" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTextColumn Header="Factura" Binding="{Binding NumeroFactura, DataType={x:Type dto:MovimientoCajaDto}}" MinWidth="90" />
+                <DataGridTemplateColumn Header="Fuente" Width="Auto" MinWidth="150" SortMemberPath="FuenteNombre">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate x:DataType="dto:MovimientoCajaDto">
+                            <TextBlock Text="{Binding FuenteNombre}"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="{Binding FuenteNombre}"
+                                       VerticalAlignment="Center" Margin="4,0" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="Rubro" Width="Auto" MinWidth="160" SortMemberPath="RubroNombre">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate x:DataType="dto:MovimientoCajaDto">
+                            <TextBlock Text="{Binding RubroNombre}"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="{Binding RubroNombre}"
+                                       VerticalAlignment="Center" Margin="4,0" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
                 <DataGridTextColumn Header="Ingreso"
-                                     Binding="{Binding Ingreso, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type dto:MovimientoCajaDto}}" />
+                                     Binding="{Binding Ingreso, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type dto:MovimientoCajaDto}}"
+                                     MinWidth="100" />
                 <DataGridTextColumn Header="Egreso"
-                                     Binding="{Binding Egreso, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type dto:MovimientoCajaDto}}" />
+                                     Binding="{Binding Egreso, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type dto:MovimientoCajaDto}}"
+                                     MinWidth="100" />
                 <DataGridTextColumn Header="Saldo corrido"
-                                     Binding="{Binding SaldoCorrido, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type dto:MovimientoCajaDto}}" />
+                                     Binding="{Binding SaldoCorrido, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type dto:MovimientoCajaDto}}"
+                                     MinWidth="110" />
             </DataGrid.Columns>
         </DataGrid>
 

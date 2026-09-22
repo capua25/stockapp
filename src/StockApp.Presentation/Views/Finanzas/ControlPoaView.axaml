@@ -26,18 +26,43 @@
             </c:CampoFormulario>
         </StackPanel>
 
+        <!-- MinWidth por columna + scroll horizontal (fix/grillas-minwidth-scroll): sin esto,
+             Avalonia.Controls.DataGrid comprime columnas arbitrarias hasta el piso global
+             MinColumnWidth=40 (Themes/DataGrid.axaml) en vez de scrollear. Línea/Programa pasan a
+             MinWidth de texto largo; el resto son importes/porcentaje acotados. -->
         <DataGrid Grid.Row="2" ItemsSource="{Binding FilasView}"
                   SelectedItem="{Binding FilaSeleccionada}"
                   DoubleTapped="OnFilaDobleClick"
-                  AutoGenerateColumns="False" CanUserSortColumns="True" IsReadOnly="True">
+                  AutoGenerateColumns="False" CanUserSortColumns="True" IsReadOnly="True"
+                  ScrollViewer.HorizontalScrollBarVisibility="Auto">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="Línea" Binding="{Binding Nombre, DataType={x:Type dto:ControlPoaLineaDto}}" Width="*" />
-                <DataGridTextColumn Header="Programa" Binding="{Binding Programa, DataType={x:Type dto:ControlPoaLineaDto}}" />
+                <DataGridTemplateColumn Header="Línea" Width="*" MinWidth="160" SortMemberPath="Nombre">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate x:DataType="dto:ControlPoaLineaDto">
+                            <TextBlock Text="{Binding Nombre}"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="{Binding Nombre}"
+                                       VerticalAlignment="Center" Margin="4,0" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+                <DataGridTemplateColumn Header="Programa" Width="Auto" MinWidth="150" SortMemberPath="Programa">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate x:DataType="dto:ControlPoaLineaDto">
+                            <TextBlock Text="{Binding Programa}"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="{Binding Programa}"
+                                       VerticalAlignment="Center" Margin="4,0" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
                 <DataGridTextColumn Header="Presupuesto"
-                                     Binding="{Binding Presupuesto, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type dto:ControlPoaLineaDto}}" />
+                                     Binding="{Binding Presupuesto, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type dto:ControlPoaLineaDto}}"
+                                     MinWidth="100" />
                 <DataGridTextColumn Header="Gastado"
-                                     Binding="{Binding Gastado, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type dto:ControlPoaLineaDto}}" />
-                <DataGridTemplateColumn Header="Saldo">
+                                     Binding="{Binding Gastado, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type dto:ControlPoaLineaDto}}"
+                                     MinWidth="100" />
+                <DataGridTemplateColumn Header="Saldo" MinWidth="130">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate DataType="dto:ControlPoaLineaDto">
                             <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio1}">
@@ -49,7 +74,7 @@
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
-                <DataGridTextColumn Header="% Ejecución" Binding="{Binding PorcentajeEjecucion, DataType={x:Type dto:ControlPoaLineaDto}}" />
+                <DataGridTextColumn Header="% Ejecución" Binding="{Binding PorcentajeEjecucion, DataType={x:Type dto:ControlPoaLineaDto}}" MinWidth="90" />
             </DataGrid.Columns>
         </DataGrid>
 

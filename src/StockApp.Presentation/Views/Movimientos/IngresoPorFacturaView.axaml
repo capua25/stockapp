@@ -180,25 +180,32 @@
                     <DockPanel>
                         <TextBlock DockPanel.Dock="Top" Text="Artículos cargados" Classes="seccion" Margin="0,0,0,8" />
 
+                        <!-- MinWidth por columna + scroll horizontal (fix/grillas-minwidth-scroll):
+                             sin esto, Avalonia.Controls.DataGrid comprime columnas arbitrarias
+                             hasta el piso global MinColumnWidth=40 (Themes/DataGrid.axaml) en vez
+                             de scrollear. El botón "Quitar" tiene texto (a diferencia de los
+                             botones-ícono de NuevaImportacionView) y también necesita su MinWidth
+                             para no clipear. -->
                         <DataGrid ItemsSource="{Binding Renglones}" AutoGenerateColumns="False"
-                                  CanUserSortColumns="False" IsReadOnly="True" MinHeight="220">
+                                  CanUserSortColumns="False" IsReadOnly="True" MinHeight="220"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Auto">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="Producto"
                                     Binding="{Binding NombreMostrado, DataType={x:Type vm:FilaRenglonFacturaVm}}"
-                                    IsReadOnly="True" Width="3*" />
+                                    IsReadOnly="True" Width="3*" MinWidth="160" />
                                 <DataGridTextColumn Header="Cantidad"
                                     Binding="{Binding Cantidad, DataType={x:Type vm:FilaRenglonFacturaVm}, Converter={x:Static conv:DecimalPuntoConverter.Instance}}"
-                                    IsReadOnly="True" Width="Auto" />
+                                    IsReadOnly="True" Width="Auto" MinWidth="90" />
                                 <DataGridTextColumn Header="Precio unitario"
                                     Binding="{Binding PrecioUnitario, DataType={x:Type vm:FilaRenglonFacturaVm}, Converter={x:Static conv:DecimalPuntoConverter.Instance}}"
-                                    IsReadOnly="True" Width="Auto" />
+                                    IsReadOnly="True" Width="Auto" MinWidth="100" />
                                 <DataGridTextColumn Header="Subtotal"
                                     Binding="{Binding Subtotal, DataType={x:Type vm:FilaRenglonFacturaVm}, Converter={x:Static conv:DecimalPuntoConverter.Instance}}"
-                                    IsReadOnly="True" Width="Auto" />
+                                    IsReadOnly="True" Width="Auto" MinWidth="100" />
                                 <DataGridCheckBoxColumn Header="Actualizar precio costo"
                                     Binding="{Binding ActualizarPrecioCosto, DataType={x:Type vm:FilaRenglonFacturaVm}}"
-                                    IsReadOnly="True" Width="Auto" />
-                                <DataGridTemplateColumn Header="" Width="Auto" CellStyleClasses="sin-padding-vertical">
+                                    IsReadOnly="True" Width="Auto" MinWidth="170" />
+                                <DataGridTemplateColumn Header="" Width="Auto" MinWidth="90" CellStyleClasses="sin-padding-vertical">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate x:DataType="vm:FilaRenglonFacturaVm">
                                             <Button Classes="secondary" Content="Quitar"

@@ -44,27 +44,46 @@
         </c:HeaderVista>
 
         <Border Classes="card">
+            <!-- MinWidth por columna + scroll horizontal (fix/grillas-minwidth-scroll): sin esto,
+                 Avalonia.Controls.DataGrid comprime columnas arbitrarias hasta el piso global
+                 MinColumnWidth=40 (Themes/DataGrid.axaml) en vez de scrollear. Concepto/Fuente
+                 pasan a DataGridTemplateColumn (texto libre); Fecha/Monto/Activo son acotados. -->
             <DataGrid ItemsSource="{Binding ItemsView}"
                       SelectedItem="{Binding ItemSeleccionado}"
                       IsReadOnly="True"
                       CanUserSortColumns="True"
-                      AutoGenerateColumns="False">
+                      AutoGenerateColumns="False"
+                      ScrollViewer.HorizontalScrollBarVisibility="Auto">
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="Fecha"
                                         Binding="{Binding Fecha, StringFormat='dd/MM/yyyy', DataType={x:Type e:IngresoCaja}}"
-                                        Width="Auto" />
-                    <DataGridTextColumn Header="Concepto"
-                                        Binding="{Binding Concepto, DataType={x:Type e:IngresoCaja}}"
-                                        Width="2*" />
-                    <DataGridTextColumn Header="Fuente"
-                                        Binding="{Binding FuenteFinanciamiento.Nombre, DataType={x:Type e:IngresoCaja}}"
-                                        Width="*" />
+                                        Width="Auto" MinWidth="100" />
+                    <DataGridTemplateColumn Header="Concepto" Width="2*" MinWidth="160" SortMemberPath="Concepto">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="e:IngresoCaja">
+                                <TextBlock Text="{Binding Concepto}"
+                                           TextTrimming="CharacterEllipsis"
+                                           ToolTip.Tip="{Binding Concepto}"
+                                           VerticalAlignment="Center" Margin="4,0" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="Fuente" Width="*" MinWidth="150" SortMemberPath="FuenteFinanciamiento.Nombre">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate x:DataType="e:IngresoCaja">
+                                <TextBlock Text="{Binding FuenteFinanciamiento.Nombre}"
+                                           TextTrimming="CharacterEllipsis"
+                                           ToolTip.Tip="{Binding FuenteFinanciamiento.Nombre}"
+                                           VerticalAlignment="Center" Margin="4,0" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
                     <DataGridTextColumn Header="Monto"
                                         Binding="{Binding Monto, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type e:IngresoCaja}}"
-                                        Width="Auto" />
+                                        Width="Auto" MinWidth="100" />
                     <DataGridCheckBoxColumn Header="Activo"
                                             Binding="{Binding Activo, DataType={x:Type e:IngresoCaja}}"
-                                            Width="Auto" />
+                                            Width="Auto" MinWidth="70" />
                 </DataGrid.Columns>
             </DataGrid>
         </Border>
