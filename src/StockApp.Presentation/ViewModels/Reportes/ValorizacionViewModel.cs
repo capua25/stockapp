@@ -139,7 +139,12 @@ public partial class ValorizacionViewModel : ViewModelBase
                 DescripcionFiltros: "Sin filtros aplicados.",
                 UsuarioEmisor: _session.UsuarioActual?.NombreCompleto ?? _session.UsuarioActual?.NombreUsuario ?? "Sistema");
 
-            var pdf = _pdfExporter.Exportar(Items, ColumnasPdf, metadatos);
+            var resumen = new ResumenPdf(new[]
+            {
+                new TotalPdf("Total Valor Costo", Totales?.TotalValorCosto ?? 0m),
+            });
+
+            var pdf = _pdfExporter.Exportar(Items, ColumnasPdf, metadatos, resumen);
             using var stream = new MemoryStream(pdf);
             var guardado = await _guardado.GuardarBytesAsync(
                 stream, "valorizacion.pdf", extension: "pdf", tipoMime: "application/pdf");

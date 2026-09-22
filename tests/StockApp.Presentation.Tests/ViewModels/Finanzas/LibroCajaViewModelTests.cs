@@ -195,7 +195,7 @@ public class LibroCajaViewModelTests
         await vm.ExportarPdfCommand.ExecuteAsync(null);
 
         pdfExporterMock.Verify(e => e.Exportar(
-            It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()), Times.Never);
+            It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()), Times.Never);
     }
 
     [Fact]
@@ -210,7 +210,7 @@ public class LibroCajaViewModelTests
         await vm.ExportarPdfCommand.ExecuteAsync(null);
 
         pdfExporterMock.Verify(e => e.Exportar(
-            It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()), Times.Never);
+            It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()), Times.Never);
     }
 
     [Fact]
@@ -242,7 +242,7 @@ public class LibroCajaViewModelTests
         vm.Mes = 7;
         await vm.CargarAsync();
         pdfExporterMock
-            .Setup(e => e.Exportar(It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
             .Returns(new byte[] { 1 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
@@ -253,7 +253,7 @@ public class LibroCajaViewModelTests
         pdfExporterMock.Verify(e => e.Exportar(
             vm.Movimientos,
             It.Is<IReadOnlyList<ColumnaPdf>>(cols => cols.SequenceEqual(esperado) && cols.Count == 10),
-            It.IsAny<MetadatosDocumento>()),
+            It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()),
             Times.Once);
         guardadoMock.Verify(g => g.GuardarBytesAsync(
             It.IsAny<Stream>(), "libro-caja-2026-07.pdf", It.IsAny<CancellationToken>(), "pdf", "application/pdf"), Times.Once);
@@ -273,7 +273,7 @@ public class LibroCajaViewModelTests
 
         confirmMock.Verify(c => c.PreguntarAsync(It.IsAny<string>()), Times.Once);
         pdfExporterMock.Verify(e => e.Exportar(
-            It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()), Times.Never);
+            It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()), Times.Never);
     }
 
     [Fact]
@@ -286,7 +286,7 @@ public class LibroCajaViewModelTests
                 new List<TotalPorClaveDto>(), new List<TotalPorClaveDto>()));
         await vm.CargarAsync();
         pdfExporterMock
-            .Setup(e => e.Exportar(It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
             .Returns(new byte[] { 1 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<string>(), It.IsAny<string>()))
@@ -310,7 +310,7 @@ public class LibroCajaViewModelTests
         await vm.CargarAsync();
         var pdfBytes = new byte[] { 9, 9 };
         pdfExporterMock
-            .Setup(e => e.Exportar(It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
             .Returns(pdfBytes);
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "libro-caja-2026-07.pdf", It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
@@ -335,7 +335,7 @@ public class LibroCajaViewModelTests
         vm.Mes = 7;
         await vm.CargarAsync();
         pdfExporterMock
-            .Setup(e => e.Exportar(It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
             .Returns(new byte[] { 9, 9 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "libro-caja-2026-07.pdf", It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
@@ -360,7 +360,7 @@ public class LibroCajaViewModelTests
         await vm.CargarAsync();
         sessionMock.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(1, "jperez", RolUsuario.Admin, "Juan Pérez"));
         pdfExporterMock
-            .Setup(e => e.Exportar(It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
             .Returns(new byte[] { 9, 9 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "libro-caja-2026-07.pdf", It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
@@ -374,7 +374,58 @@ public class LibroCajaViewModelTests
             It.Is<MetadatosDocumento>(m =>
                 m.Titulo == "Libro caja" &&
                 m.DescripcionFiltros == "Mes: 07/2026." &&
-                m.UsuarioEmisor == "Juan Pérez")),
+                m.UsuarioEmisor == "Juan Pérez"),
+            It.IsAny<ResumenPdf>()),
+            Times.Once);
+    }
+
+    // ── Resumen de totales (spec de totales/resumen, 2026-09-22) ───────────────────────────
+
+    /// <summary>
+    /// Guardián del resumen: antes de esta spec el PDF de Libro Caja exportaba
+    /// <c>Movimientos</c> pelado y los cuatro agregados de la pantalla (saldo inicial, saldo
+    /// final, totales por rubro y por fuente) se perdían en el papel (bug de la auditoría). Se
+    /// verifica el ARGUMENTO REAL del resumen (no <c>It.IsAny&lt;ResumenPdf&gt;()</c>).
+    /// </summary>
+    [Fact]
+    public async Task ExportarPdfCommand_PasaElResumenConSaldosYTotalesPorRubroYFuente()
+    {
+        var (vm, svc, guardadoMock, _, pdfExporterMock, _, _) = Crear();
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(new LibroCajaMesDto(
+                2026, 7, 100m, 400m,
+                new List<MovimientoCajaDto> { CrearMovimiento() },
+                new List<TotalPorClaveDto> { new("Combustibles", 250m) },
+                new List<TotalPorClaveDto> { new("Rentas Generales", 900m) }));
+        await vm.CargarAsync();
+        pdfExporterMock
+            .Setup(e => e.Exportar(
+                It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
+                It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
+            .Returns(new byte[] { 1 });
+        guardadoMock
+            .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
+            .ReturnsAsync(true);
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        pdfExporterMock.Verify(e => e.Exportar(
+            It.IsAny<IEnumerable<MovimientoCajaDto>>(),
+            It.IsAny<IReadOnlyList<ColumnaPdf>>(),
+            It.IsAny<MetadatosDocumento>(),
+            It.Is<ResumenPdf>(r =>
+                r.Totales.Count == 2 &&
+                r.Totales[0].Etiqueta == "Saldo inicial" && Equals(r.Totales[0].Valor, 100m) &&
+                r.Totales[1].Etiqueta == "Saldo final" && Equals(r.Totales[1].Valor, 400m) &&
+                r.Secciones.Count == 2 &&
+                r.Secciones[0].Titulo == "Totales por rubro" &&
+                r.Secciones[0].Filas.Count == 1 &&
+                r.Secciones[0].Filas[0].Etiqueta == "Combustibles" &&
+                Equals(r.Secciones[0].Filas[0].Valor, 250m) &&
+                r.Secciones[1].Titulo == "Totales por fuente" &&
+                r.Secciones[1].Filas.Count == 1 &&
+                r.Secciones[1].Filas[0].Etiqueta == "Rentas Generales" &&
+                Equals(r.Secciones[1].Filas[0].Valor, 900m))),
             Times.Once);
     }
 }

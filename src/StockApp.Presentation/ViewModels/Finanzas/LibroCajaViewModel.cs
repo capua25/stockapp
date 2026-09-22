@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -166,7 +167,23 @@ public partial class LibroCajaViewModel : ViewModelBase
                 DescripcionFiltros: $"Mes: {Mes:00}/{Anio:0000}.",
                 UsuarioEmisor: _session.UsuarioActual?.NombreCompleto ?? _session.UsuarioActual?.NombreUsuario ?? "Sistema");
 
-            var pdf = _pdfExporter.Exportar(Movimientos, ColumnasPdf, metadatos);
+            var resumen = new ResumenPdf(
+                Totales: new[]
+                {
+                    new TotalPdf("Saldo inicial", SaldoInicial),
+                    new TotalPdf("Saldo final", SaldoFinal),
+                },
+                Secciones: new[]
+                {
+                    new SeccionResumenPdf(
+                        "Totales por rubro",
+                        [.. TotalesPorRubro.Select(t => new TotalPdf(t.Clave, t.Total))]),
+                    new SeccionResumenPdf(
+                        "Totales por fuente",
+                        [.. TotalesPorFuente.Select(t => new TotalPdf(t.Clave, t.Total))]),
+                });
+
+            var pdf = _pdfExporter.Exportar(Movimientos, ColumnasPdf, metadatos, resumen);
             using var stream = new MemoryStream(pdf);
             var nombreArchivo = $"libro-caja-{Anio:0000}-{Mes:00}.pdf";
             var guardado = await _guardado.GuardarBytesAsync(

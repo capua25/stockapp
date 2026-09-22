@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -204,31 +203,6 @@ public partial class ReporteTareasViewModel : ViewModelBase
         $"Criterio: {(EsCriterioCreacion ? "Fecha de creación" : "Fecha de cierre")}. " +
         $"Período: {FechaDesde:dd/MM/yyyy} a {FechaHasta:dd/MM/yyyy}.";
 
-    /// <summary>
-    /// Agrega una fila de cierre "Total general" (spec 2026-09-18) SOLO al export PDF, nunca a
-    /// <see cref="Items"/> (la grilla en pantalla no se toca -- D23 sigue vigente para lo que ve
-    /// el usuario). Un reporte estadístico impreso/archivado sin su total general está
-    /// incompleto: el lector no puede verificar que las filas suman lo esperado sin sumar a
-    /// mano. La columna Total de la fila de cierre usa <see cref="TotalGeneral"/> tal cual lo
-    /// calculó el servicio (nunca recalculado acá, D23) -- las cuatro columnas de estado se
-    /// suman de <see cref="Items"/> únicamente para completar la fila visualmente: por el
-    /// invariante de la Decisión 17 (Pendientes+EnCurso+Terminadas+Canceladas == Total en cada
-    /// fila), esa suma coincide exactamente con TotalGeneral.
-    /// </summary>
-    private IEnumerable<FilaReporteTareas> ConstruirFilasConTotalGeneral()
-    {
-        foreach (var fila in Items)
-            yield return fila;
-
-        yield return new FilaReporteTareas(
-            "Total general",
-            Items.Sum(f => f.Pendientes),
-            Items.Sum(f => f.EnCurso),
-            Items.Sum(f => f.Terminadas),
-            Items.Sum(f => f.Canceladas),
-            TotalGeneral);
-    }
-
     [RelayCommand]
     private async Task ExportarCsvAsync()
     {
@@ -258,7 +232,9 @@ public partial class ReporteTareasViewModel : ViewModelBase
                 DescripcionFiltros: ConstruirDescripcionFiltros(),
                 UsuarioEmisor: _session.UsuarioActual?.NombreCompleto ?? _session.UsuarioActual?.NombreUsuario ?? "Sistema");
 
-            var pdf = _pdfExporter.Exportar(ConstruirFilasConTotalGeneral(), ColumnasPdf, metadatos);
+            var resumen = new ResumenPdf(new[] { new TotalPdf("Total general", TotalGeneral) });
+
+            var pdf = _pdfExporter.Exportar(Items, ColumnasPdf, metadatos, resumen);
             using var stream = new MemoryStream(pdf);
             var guardado = await _guardado.GuardarBytesAsync(
                 stream, "reporte-tareas.pdf", extension: "pdf", tipoMime: "application/pdf");

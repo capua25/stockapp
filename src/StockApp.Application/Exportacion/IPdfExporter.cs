@@ -20,6 +20,15 @@ public interface IPdfExporter
     /// CSV). Más de 6 columnas dispara apaisado automático. Ver <see cref="ColumnaPdf"/>.
     /// </param>
     /// <param name="metadatos">Título, descripción de filtros y usuario emisor del membrete.</param>
+    /// <param name="resumen">
+    /// Totales y/o secciones de resumen a imprimir DESPUÉS de la tabla principal (spec de
+    /// totales/resumen, 2026-09-22). <c>null</c> (el default) para las pantallas sin agregados
+    /// reales -- ver <see cref="ResumenPdf"/>.
+    /// </param>
     /// <returns>El PDF completo como array de bytes.</returns>
-    byte[] Exportar<T>(IEnumerable<T> items, IReadOnlyList<ColumnaPdf> columnas, MetadatosDocumento metadatos);
+    byte[] Exportar<T>(
+        IEnumerable<T> items,
+        IReadOnlyList<ColumnaPdf> columnas,
+        MetadatosDocumento metadatos,
+        ResumenPdf? resumen = null);
 }

@@ -749,4 +749,98 @@ public class PlantillaTabularTests
 
         AfirmarQueNingunaCeldaPisaALaVecina(pdf, cantidadDeColumnas: 6);
     }
+
+    // ── Resumen de totales (spec de totales/resumen, 2026-09-22) ───────────────────────────
+
+    /// <summary>
+    /// Guardián del resumen de totales: Valorización, Libro Caja y Reporte de tareas necesitan
+    /// imprimir un cierre después de la tabla principal (antes solo existía el parche de fabricar
+    /// una fila sintética del mismo DTO -- ver <c>ReporteTareasViewModel</c>). Se afirma sobre el
+    /// PDF generado de verdad (PdfPig), no sobre la llamada al método: un test que solo comprueba
+    /// que <c>Generar</c> no explota no prueba que el texto del total aparezca impreso.
+    /// </summary>
+    [Fact]
+    public void Generar_ConResumenDeTotales_ImprimeLaEtiquetaYElValorDespuesDeLaTabla()
+    {
+        var items = new[] { new FilaSimple("P001", "Azúcar") };
+        var resumen = new ResumenPdf(new[] { new TotalPdf("Total Valor Costo", 1234567.89m) });
+        var plantilla = new PlantillaTabular();
+
+        var pdf = plantilla.Generar(items, Columnas("Codigo", "Nombre"), Metadatos(), resumen);
+
+        var texto = ObtenerTextoConEspacios(pdf);
+        Assert.Contains("Total Valor Costo", texto);
+
+        // Mismo formato es-UY que las celdas de la tabla (coma decimal, punto de miles) --
+        // FormatearValor es EL MISMO método, no una segunda ruta de formateo (ver TotalPdf).
+        Assert.Contains("1.234.567,89", texto);
+    }
+
+    /// <summary>
+    /// Un resumen puede tener MÁS de un total suelto (Libro Caja: saldo inicial Y saldo final).
+    /// Los dos tienen que aparecer, en orden.
+    /// </summary>
+    [Fact]
+    public void Generar_ConVariosTotales_ImprimeTodasLasEtiquetasYValores()
+    {
+        var items = new[] { new FilaSimple("P001", "Azúcar") };
+        var resumen = new ResumenPdf(new[]
+        {
+            new TotalPdf("Saldo inicial", 1000.50m),
+            new TotalPdf("Saldo final", 2500.75m),
+        });
+        var plantilla = new PlantillaTabular();
+
+        var pdf = plantilla.Generar(items, Columnas("Codigo", "Nombre"), Metadatos(), resumen);
+
+        var texto = ObtenerTextoConEspacios(pdf);
+        Assert.Contains("Saldo inicial", texto);
+        Assert.Contains("1.000,50", texto);
+        Assert.Contains("Saldo final", texto);
+        Assert.Contains("2.500,75", texto);
+    }
+
+    /// <summary>
+    /// Secciones tituladas (Libro Caja: "Totales por rubro", "Totales por fuente"): mini-tablas
+    /// de pares etiqueta/valor debajo del resumen principal, cada una con su título.
+    /// </summary>
+    [Fact]
+    public void Generar_ConSeccionesDeResumen_ImprimeElTituloYLasFilasDeCadaSeccion()
+    {
+        var items = new[] { new FilaSimple("P001", "Azúcar") };
+        var resumen = new ResumenPdf(
+            Totales: [],
+            Secciones:
+            [
+                new SeccionResumenPdf("Totales por rubro", [new TotalPdf("Combustibles", 250m)]),
+                new SeccionResumenPdf("Totales por fuente", [new TotalPdf("Rentas Generales", 900m)]),
+            ]);
+        var plantilla = new PlantillaTabular();
+
+        var pdf = plantilla.Generar(items, Columnas("Codigo", "Nombre"), Metadatos(), resumen);
+
+        var texto = ObtenerTextoConEspacios(pdf);
+        Assert.Contains("Totales por rubro", texto);
+        Assert.Contains("Combustibles", texto);
+        Assert.Contains("250,00", texto);
+        Assert.Contains("Totales por fuente", texto);
+        Assert.Contains("Rentas Generales", texto);
+        Assert.Contains("900,00", texto);
+    }
+
+    /// <summary>
+    /// Sin resumen (el default de las otras 6 pantallas) el documento sale exactamente igual que
+    /// antes de esta spec -- no aparece ningún texto de cierre fantasma.
+    /// </summary>
+    [Fact]
+    public void Generar_SinResumen_NoImprimeNingunTextoDeCierre()
+    {
+        var items = new[] { new FilaSimple("P001", "Azúcar") };
+        var plantilla = new PlantillaTabular();
+
+        var pdf = plantilla.Generar(items, Columnas("Codigo", "Nombre"), Metadatos());
+
+        var texto = ObtenerTextoConEspacios(pdf);
+        Assert.DoesNotContain("Total", texto);
+    }
 }

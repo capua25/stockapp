@@ -27,7 +27,7 @@ public class MetadatosDocumentoTests
 
     private sealed class FakePdfExporter : IPdfExporter
     {
-        public byte[] Exportar<T>(IEnumerable<T> items, IReadOnlyList<ColumnaPdf> columnas, MetadatosDocumento metadatos)
+        public byte[] Exportar<T>(IEnumerable<T> items, IReadOnlyList<ColumnaPdf> columnas, MetadatosDocumento metadatos, ResumenPdf? resumen = null)
             => new byte[] { 1, 2, 3 };
     }
 

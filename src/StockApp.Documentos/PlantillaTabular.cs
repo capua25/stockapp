@@ -49,6 +49,13 @@ public sealed class PlantillaTabular
     private const double AnchoColumnaLogoCm = 3.0;
 
     /// <summary>
+    /// Ancho de la columna de VALOR en las tablas de resumen (ver <see cref="AgregarResumen"/>):
+    /// totales sueltos y mini-tablas de sección. El valor de un total es siempre corto (un
+    /// importe, un saldo), así que un ancho fijo alcanza y deja el resto para la etiqueta.
+    /// </summary>
+    private const double AnchoColumnaValorResumenCm = 4.0;
+
+    /// <summary>
     /// Cotas del ancho DESEADO de una columna (ver <see cref="RepartirAnchoDeColumnas"/>). Son
     /// cotas de lo que la columna PIDE, nunca de lo que se le garantiza: el ancho garantizado es
     /// siempre su PISO medido (ver <see cref="AnchoDeLaPalabraMasLargaCm"/>).
@@ -143,7 +150,8 @@ public sealed class PlantillaTabular
     public byte[] Generar<T>(
         IEnumerable<T> items,
         IReadOnlyList<ColumnaPdf> columnas,
-        MetadatosDocumento metadatos)
+        MetadatosDocumento metadatos,
+        ResumenPdf? resumen = null)
     {
         ArgumentNullException.ThrowIfNull(items);
         ArgumentNullException.ThrowIfNull(columnas);
@@ -202,7 +210,76 @@ public sealed class PlantillaTabular
                 fila.Cells[i].AddParagraph(valores[i]);
         }
 
+        if (resumen is not null)
+            AgregarResumen(section, resumen, anchoImprimibleCm);
+
         return Renderizar(document);
+    }
+
+    /// <summary>
+    /// Resumen de totales (spec de totales/resumen, 2026-09-22): se imprime DESPUÉS de la tabla
+    /// principal, dentro de la misma sección -- el pie de página (<see cref="AgregarPie"/>) ya
+    /// está seteado como footer de sección y se sigue repitiendo solo, y si el resumen empuja
+    /// contenido a una página nueva, el encabezado de la tabla de datos NO se repite acá (ya
+    /// terminó), que es lo correcto.
+    ///
+    /// Los totales sueltos (<see cref="ResumenPdf.Totales"/>) van con estilo de TOTAL: negrita y
+    /// una línea de cierre arriba de la primera fila, para que se lea como el cierre de la tabla
+    /// de arriba y no como una fila más. Las secciones tituladas van debajo, cada una en su
+    /// propia mini-tabla con borde (agrupa visualmente sus filas) precedida por su título en
+    /// negrita.
+    /// </summary>
+    private static void AgregarResumen(Section section, ResumenPdf resumen, double anchoImprimibleCm)
+    {
+        if (resumen.Totales.Count > 0)
+            AgregarTablaDeTotales(section, resumen.Totales, anchoImprimibleCm);
+
+        foreach (var seccion in resumen.Secciones)
+            AgregarSeccionDeResumen(section, seccion, anchoImprimibleCm);
+    }
+
+    private static void AgregarTablaDeTotales(Section section, IReadOnlyList<TotalPdf> totales, double anchoImprimibleCm)
+    {
+        section.AddParagraph(); // separación de la tabla de datos
+
+        var tabla = section.AddTable();
+        tabla.Borders.Visible = false;
+        tabla.AddColumn(Unit.FromCentimeter(anchoImprimibleCm - AnchoColumnaValorResumenCm));
+        tabla.AddColumn(Unit.FromCentimeter(AnchoColumnaValorResumenCm));
+
+        for (var i = 0; i < totales.Count; i++)
+        {
+            var fila = tabla.AddRow();
+            fila.Format.Font.Bold = true;
+            if (i == 0)
+                fila.Borders.Top.Width = Unit.FromPoint(AnchoBordeCeldaPt);
+
+            fila.Cells[0].AddParagraph(totales[i].Etiqueta);
+            var celdaValor = fila.Cells[1];
+            celdaValor.AddParagraph(FormatearValor(totales[i].Valor));
+            celdaValor.Format.Alignment = ParagraphAlignment.Right;
+        }
+    }
+
+    private static void AgregarSeccionDeResumen(Section section, SeccionResumenPdf seccion, double anchoImprimibleCm)
+    {
+        var titulo = section.AddParagraph(seccion.Titulo);
+        titulo.Format.SpaceBefore = Unit.FromCentimeter(0.4);
+        titulo.Format.Font.Bold = true;
+
+        var tabla = section.AddTable();
+        tabla.Borders.Width = AnchoBordeCeldaPt;
+        tabla.AddColumn(Unit.FromCentimeter(anchoImprimibleCm - AnchoColumnaValorResumenCm));
+        tabla.AddColumn(Unit.FromCentimeter(AnchoColumnaValorResumenCm));
+
+        foreach (var total in seccion.Filas)
+        {
+            var fila = tabla.AddRow();
+            fila.Cells[0].AddParagraph(total.Etiqueta);
+            var celdaValor = fila.Cells[1];
+            celdaValor.AddParagraph(FormatearValor(total.Valor));
+            celdaValor.Format.Alignment = ParagraphAlignment.Right;
+        }
     }
 
     /// <summary>

@@ -94,7 +94,7 @@ public class ExportarPdfBotonesGuardianTests
 
     private sealed class PdfExporterNoOpFake : IPdfExporter
     {
-        public byte[] Exportar<T>(IEnumerable<T> items, IReadOnlyList<ColumnaPdf> columnas, MetadatosDocumento metadatos)
+        public byte[] Exportar<T>(IEnumerable<T> items, IReadOnlyList<ColumnaPdf> columnas, MetadatosDocumento metadatos, ResumenPdf? resumen = null)
             => Array.Empty<byte>();
     }
 

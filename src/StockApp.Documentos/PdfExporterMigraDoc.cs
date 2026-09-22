@@ -11,6 +11,7 @@ public sealed class PdfExporterMigraDoc : IPdfExporter
 {
     private readonly PlantillaTabular _plantilla = new();
 
-    public byte[] Exportar<T>(IEnumerable<T> items, IReadOnlyList<ColumnaPdf> columnas, MetadatosDocumento metadatos)
-        => _plantilla.Generar(items, columnas, metadatos);
+    public byte[] Exportar<T>(
+        IEnumerable<T> items, IReadOnlyList<ColumnaPdf> columnas, MetadatosDocumento metadatos, ResumenPdf? resumen = null)
+        => _plantilla.Generar(items, columnas, metadatos, resumen);
 }

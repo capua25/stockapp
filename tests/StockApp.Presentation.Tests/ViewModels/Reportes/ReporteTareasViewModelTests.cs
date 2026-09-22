@@ -233,7 +233,7 @@ public class ReporteTareasViewModelTests
         var (vm, _, _, pdfExporterMock, guardadoMock, _, _, _) = Crear(dto);
         await vm.CargarAsync();
         pdfExporterMock
-            .Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
             .Returns(new byte[] { 1 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
@@ -253,7 +253,7 @@ public class ReporteTareasViewModelTests
         pdfExporterMock.Verify(e => e.Exportar(
             It.IsAny<IEnumerable<FilaReporteTareas>>(),
             It.Is<IReadOnlyList<ColumnaPdf>>(cols => cols.SequenceEqual(esperado) && cols.Count == 6),
-            It.IsAny<MetadatosDocumento>()), Times.Once);
+            It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()), Times.Once);
     }
 
     [Fact]
@@ -269,8 +269,8 @@ public class ReporteTareasViewModelTests
         await vm.CargarAsync();
         MetadatosDocumento? metadatosCapturados = null;
         pdfExporterMock
-            .Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
-            .Callback<IEnumerable<FilaReporteTareas>, IReadOnlyList<ColumnaPdf>, MetadatosDocumento>((_, _, m) => metadatosCapturados = m)
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
+            .Callback<IEnumerable<FilaReporteTareas>, IReadOnlyList<ColumnaPdf>, MetadatosDocumento, ResumenPdf?>((_, _, m, _) => metadatosCapturados = m)
             .Returns(new byte[] { 1 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
@@ -289,7 +289,7 @@ public class ReporteTareasViewModelTests
         await vm.ExportarPdfCommand.ExecuteAsync(null);
 
         pdfExporterMock.Verify(e => e.Exportar(
-            It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()),
+            It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()),
             Times.Never);
     }
 
@@ -312,7 +312,7 @@ public class ReporteTareasViewModelTests
 
         confirmMock.Verify(c => c.PreguntarAsync(It.IsAny<string>()), Times.Once);
         pdfExporterMock.Verify(e => e.Exportar(
-            It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()),
+            It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()),
             Times.Never);
     }
 
@@ -324,7 +324,7 @@ public class ReporteTareasViewModelTests
         await vm.CargarAsync();
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
             .Returns(new byte[] { 1 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -345,7 +345,7 @@ public class ReporteTareasViewModelTests
         var pdfBytes = new byte[] { 9, 9 };
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
             .Returns(pdfBytes);
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -367,7 +367,7 @@ public class ReporteTareasViewModelTests
         await vm.CargarAsync();
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
             .Returns(new byte[] { 9, 9 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -380,12 +380,17 @@ public class ReporteTareasViewModelTests
         aperturaMock.Verify(a => a.AbrirAsync(It.IsAny<string>(), It.IsAny<byte[]>()), Times.Never);
     }
 
+    /// <summary>
+    /// Migrado al mecanismo genérico de resumen (spec de totales/resumen, 2026-09-22): antes esta
+    /// pantalla fabricaba una fila SINTÉTICA "Total general" del mismo DTO
+    /// (<c>ConstruirFilasConTotalGeneral</c>, ya eliminado) y la mezclaba en la colección que
+    /// recibía el exportador -- un parche, porque esa fila no es un item real y un consumidor
+    /// futuro de <c>Items</c> no tiene forma de distinguirla. Ahora <c>Items</c> viaja TAL CUAL
+    /// (mismo criterio D23 que antes) y el total va aparte, en <see cref="ResumenPdf"/>.
+    /// </summary>
     [Fact]
-    public async Task ExportarPdfCommand_AgregaFilaDeTotalGeneralAlFinalSinAlterarItems()
+    public async Task ExportarPdfCommand_PasaLosItemsSinFilaSinteticaYElTotalGeneralEnElResumen()
     {
-        // TotalGeneral (spec 2026-09-18): un reporte estadístico impreso sin su cierre está
-        // incompleto. Se agrega SOLO al export (PDF), nunca a Items -- la grilla en pantalla no
-        // se toca (D23: el ViewModel no calcula nada sobre lo que ve el usuario).
         var filas = new List<FilaReporteTareas>
         {
             new("Centro", 1, 0, 2, 0, 3),
@@ -396,8 +401,8 @@ public class ReporteTareasViewModelTests
         await vm.CargarAsync();
         IEnumerable<FilaReporteTareas>? itemsCapturados = null;
         pdfExporterMock
-            .Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
-            .Callback<IEnumerable<FilaReporteTareas>, IReadOnlyList<ColumnaPdf>, MetadatosDocumento>((items, _, _) => itemsCapturados = items)
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
+            .Callback<IEnumerable<FilaReporteTareas>, IReadOnlyList<ColumnaPdf>, MetadatosDocumento, ResumenPdf?>((items, _, _, _) => itemsCapturados = items)
             .Returns(new byte[] { 1 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
@@ -405,18 +410,25 @@ public class ReporteTareasViewModelTests
 
         await vm.ExportarPdfCommand.ExecuteAsync(null);
 
+        // Items viaja SIN fila sintética -- las 2 filas reales, ni una más.
         Assert.NotNull(itemsCapturados);
         var lista = itemsCapturados!.ToList();
-        Assert.Equal(3, lista.Count); // 2 filas + 1 de cierre
-        var filaCierre = lista[^1];
-        Assert.Equal("Total general", filaCierre.Clasificador);
-        Assert.Equal(3, filaCierre.Pendientes); // 1 + 2
-        Assert.Equal(1, filaCierre.EnCurso);    // 0 + 1
-        Assert.Equal(2, filaCierre.Terminadas); // 2 + 0
-        Assert.Equal(1, filaCierre.Canceladas); // 0 + 1
-        Assert.Equal(7, filaCierre.Total);      // TotalGeneral, no recalculado
-        // Items (lo que ve la grilla) no se toca.
+        Assert.Equal(2, lista.Count);
+        Assert.Same(vm.Items, itemsCapturados);
+        // La grilla en pantalla tampoco se toca (D23).
         Assert.Equal(2, vm.Items.Count);
+
+        // El total general va en el resumen, con el ARGUMENTO REAL (no It.IsAny<ResumenPdf>()).
+        pdfExporterMock.Verify(e => e.Exportar(
+            It.IsAny<IEnumerable<FilaReporteTareas>>(),
+            It.IsAny<IReadOnlyList<ColumnaPdf>>(),
+            It.IsAny<MetadatosDocumento>(),
+            It.Is<ResumenPdf>(r =>
+                r.Totales.Count == 1 &&
+                r.Totales[0].Etiqueta == "Total general" &&
+                Equals(r.Totales[0].Valor, 7) &&
+                r.Secciones.Count == 0)),
+            Times.Once);
     }
 
     [Fact]
@@ -431,8 +443,8 @@ public class ReporteTareasViewModelTests
         await vm.CargarAsync();
         MetadatosDocumento? metadatosCapturados = null;
         pdfExporterMock
-            .Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
-            .Callback<IEnumerable<FilaReporteTareas>, IReadOnlyList<ColumnaPdf>, MetadatosDocumento>((_, _, m) => metadatosCapturados = m)
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
+            .Callback<IEnumerable<FilaReporteTareas>, IReadOnlyList<ColumnaPdf>, MetadatosDocumento, ResumenPdf?>((_, _, m, _) => metadatosCapturados = m)
             .Returns(new byte[] { 1 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))

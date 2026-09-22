@@ -210,7 +210,7 @@ public class ValorizacionViewModelTests
             .Setup(e => e.Exportar(
                 It.IsAny<IEnumerable<ValorizacionItemDto>>(),
                 It.IsAny<IReadOnlyList<ColumnaPdf>>(),
-                It.IsAny<MetadatosDocumento>()))
+                It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
             .Returns(new byte[] { 9, 9 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -222,7 +222,7 @@ public class ValorizacionViewModelTests
         pdfExporterMock.Verify(e => e.Exportar(
             vm.Items,
             It.Is<IReadOnlyList<ColumnaPdf>>(cols => cols.SequenceEqual(esperado)),
-            It.IsAny<MetadatosDocumento>()),
+            It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()),
             Times.Once);
         guardadoMock.Verify(g => g.GuardarBytesAsync(
             It.IsAny<Stream>(), "valorizacion.pdf", It.IsAny<CancellationToken>(), "pdf", "application/pdf"), Times.Once);
@@ -236,7 +236,7 @@ public class ValorizacionViewModelTests
         await vm.ExportarPdfCommand.ExecuteAsync(null);
 
         pdfExporterMock.Verify(e => e.Exportar(
-            It.IsAny<IEnumerable<ValorizacionItemDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()),
+            It.IsAny<IEnumerable<ValorizacionItemDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()),
             Times.Never);
     }
 
@@ -252,7 +252,7 @@ public class ValorizacionViewModelTests
 
         confirmMock.Verify(c => c.PreguntarAsync(It.IsAny<string>()), Times.Once);
         pdfExporterMock.Verify(e => e.Exportar(
-            It.IsAny<IEnumerable<ValorizacionItemDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()),
+            It.IsAny<IEnumerable<ValorizacionItemDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()),
             Times.Never);
     }
 
@@ -264,7 +264,7 @@ public class ValorizacionViewModelTests
         await vm.BuscarCommand.ExecuteAsync(null);
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<ValorizacionItemDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<ValorizacionItemDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
             .Returns(new byte[] { 1 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -285,7 +285,7 @@ public class ValorizacionViewModelTests
         var pdfBytes = new byte[] { 9, 9 };
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<ValorizacionItemDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<ValorizacionItemDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
             .Returns(pdfBytes);
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -307,7 +307,7 @@ public class ValorizacionViewModelTests
         await vm.BuscarCommand.ExecuteAsync(null);
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<ValorizacionItemDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<ValorizacionItemDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
             .Returns(new byte[] { 9, 9 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -329,7 +329,7 @@ public class ValorizacionViewModelTests
         sessionMock.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(1, "jperez", RolUsuario.Admin, "Juan Pérez"));
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<ValorizacionItemDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<ValorizacionItemDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
             .Returns(new byte[] { 9, 9 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -344,7 +344,48 @@ public class ValorizacionViewModelTests
             It.Is<MetadatosDocumento>(m =>
                 m.Titulo == "Valorización de inventario" &&
                 m.DescripcionFiltros == "Sin filtros aplicados." &&
-                m.UsuarioEmisor == "Juan Pérez")),
+                m.UsuarioEmisor == "Juan Pérez"),
+            It.IsAny<ResumenPdf>()),
+            Times.Once);
+    }
+
+    // ── Resumen de totales (spec de totales/resumen, 2026-09-22) ───────────────────────────
+
+    /// <summary>
+    /// Guardián del resumen: antes de esta spec el PDF de Valorización mostraba
+    /// <see cref="ValorizacionViewModel.Totales"/> en pantalla pero exportaba <c>Items</c> pelado
+    /// (bug de la auditoría) -- el total de la grilla se perdía en el papel. Se verifica el
+    /// ARGUMENTO REAL que recibe el exportador (no <c>It.IsAny&lt;ResumenPdf&gt;()</c>, que
+    /// aceptaría cualquier cosa o directamente <c>null</c> y no probaría nada).
+    /// </summary>
+    [Fact]
+    public async Task ExportarPdfCommand_PasaElResumenConElTotalValorCosto()
+    {
+        var items = new List<ValorizacionItemDto> { CrearItem(1) };
+        var totales = new ValorizacionTotalesDto(TotalValorCosto: 12345.67m);
+        var (vm, _, _, guardadoMock, _, pdfExporterMock, _, _) = Crear(items, totales);
+        await vm.BuscarCommand.ExecuteAsync(null);
+        pdfExporterMock
+            .Setup(e => e.Exportar(
+                It.IsAny<IEnumerable<ValorizacionItemDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
+                It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
+            .Returns(new byte[] { 9, 9 });
+        guardadoMock
+            .Setup(g => g.GuardarBytesAsync(
+                It.IsAny<Stream>(), "valorizacion.pdf", It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
+            .ReturnsAsync(true);
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        pdfExporterMock.Verify(e => e.Exportar(
+            It.IsAny<IEnumerable<ValorizacionItemDto>>(),
+            It.IsAny<IReadOnlyList<ColumnaPdf>>(),
+            It.IsAny<MetadatosDocumento>(),
+            It.Is<ResumenPdf>(r =>
+                r.Totales.Count == 1 &&
+                r.Totales[0].Etiqueta == "Total Valor Costo" &&
+                Equals(r.Totales[0].Valor, 12345.67m) &&
+                r.Secciones.Count == 0)),
             Times.Once);
     }
 }
