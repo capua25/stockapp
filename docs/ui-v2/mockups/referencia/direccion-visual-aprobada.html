@@ -1,0 +1,426 @@
+<!--
+  Origen: .superpowers/brainstorm/82329-1790634625/content/direccion-intermedia.html
+  (brainstorming del 2026-09-28, visual companion de superpowers; variante aprobada: .di-azul; la variante .di-verde fue descartada).
+  REFERENCIA DE DIRECCION aprobada por el usuario, NO es un mockup de pantalla final.
+  Es un fragmento: el frame del visual companion lo envolvia; se renderiza a escala 0.7.
+  Los mockups finales por pantalla viven en docs/ui-v2/mockups/<modulo>/ y usan el CSS generado de tokens.
+  Spec: docs/superpowers/specs/2026-09-28-ui-v2-rediseno-total-design.md
+-->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+
+<style>
+  .cards { display:flex; flex-direction:column; gap:24px; }
+
+  .di-stage {
+    width:896px;
+    height:532px;
+    margin:0 auto;
+    overflow:hidden;
+    border-radius:8px;
+    border:1px solid #E7E5E4;
+    background:#fff;
+  }
+  .di-window {
+    width:1280px;
+    height:760px;
+    transform:scale(0.7);
+    transform-origin: top left;
+    display:flex;
+    font-family:'Inter', sans-serif;
+    background:#F7F7F5;
+    color:#1C1917;
+  }
+  .di-window, .di-window * { box-sizing:border-box; }
+
+  /* --- estructura sidebar --- */
+  .di-sidebar { width:232px; flex:0 0 232px; display:flex; flex-direction:column; padding:16px 12px; background:#FFFFFF; border-right:1px solid #E7E5E4; }
+  .di-brand { padding:4px 8px 12px 8px; }
+  .di-brand-name { font-size:15px; font-weight:700; line-height:18px; color:#1C1917; }
+  .di-brand-sub { font-size:11px; line-height:14px; margin-top:2px; color:#78716C; }
+  .di-nav { flex:1 1 auto; display:flex; flex-direction:column; }
+  .di-group { font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; margin:12px 8px 4px; line-height:16px; color:#A8A29E; }
+  .di-item { display:flex; align-items:center; gap:8px; padding:8px 12px; font-size:12px; font-weight:500; line-height:16px; border-radius:8px; color:#44403C; }
+  .di-item.di-active { border-radius:8px; padding:8px 12px; font-weight:600; }
+  .di-ico { width:16px; height:16px; border-radius:4px; flex:0 0 16px; display:inline-block; background:#E7E5E4; }
+  .di-user { display:flex; align-items:center; gap:8px; padding:8px 8px 4px; border-top:1px solid #E7E5E4; margin-top:8px; }
+  .di-avatar { width:28px; height:28px; border-radius:14px; flex:0 0 28px; display:inline-block; background:#D6D3D1; }
+  .di-user-name { font-size:11px; font-weight:600; line-height:14px; color:#1C1917; }
+  .di-user-role { font-size:10px; line-height:12px; margin-top:2px; color:#78716C; }
+
+  /* --- estructura contenido --- */
+  .di-content { flex:1 1 auto; padding:24px 28px; overflow:hidden; background:#F7F7F5; }
+  .di-topbar { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:16px; }
+  .di-title { font-size:22px; font-weight:600; line-height:26px; color:#1C1917; }
+  .di-subtitle { font-size:13px; line-height:16px; margin-top:4px; color:#57534E; }
+  .di-actions { display:flex; gap:8px; }
+  .di-btn { font-family:inherit; font-size:13px; font-weight:600; height:36px; padding:0 16px; border-radius:8px; border:1px solid transparent; }
+  .di-btn-secondary { background:#FFFFFF; border-color:#D6D3D1; color:#44403C; }
+
+  .di-panel { background:#FFFFFF; border-radius:10px; border:1px solid #E7E5E4; box-shadow:0 1px 2px rgba(0,0,0,0.05); padding:16px; }
+  .di-filters { display:flex; gap:8px; margin-bottom:16px; }
+  .di-search { font-family:inherit; font-size:13px; height:36px; padding:0 12px; border-radius:8px; border:1px solid #D6D3D1; background:#FFFFFF; color:#44403C; flex:0 0 280px; }
+  .di-select { font-size:13px; font-weight:500; height:36px; padding:0 12px; border-radius:8px; border:1px solid #D6D3D1; background:#FFFFFF; color:#44403C; display:flex; align-items:center; }
+  .di-chip { font-size:13px; font-weight:500; height:36px; padding:0 12px; border-radius:999px; border:1px solid #D6D3D1; background:#FFFFFF; color:#57534E; display:flex; align-items:center; }
+
+  .di-grid { border-radius:8px; overflow:hidden; border:1px solid #F0EFED; }
+  .di-row { display:flex; align-items:center; height:40px; border-bottom:1px solid #F0EFED; }
+  .di-row-head { height:36px; background:#FAFAF9; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#78716C; border-bottom:1px solid #F0EFED; }
+  .di-col { padding:0 12px; font-size:13px; color:#44403C; }
+  .di-col-code { width:100px; }
+  .di-col-name { flex:1 1 auto; color:#1C1917; font-weight:500; }
+  .di-col-cat { width:140px; }
+  .di-col-num { width:110px; text-align:right; font-variant-numeric: tabular-nums; }
+  .di-col-unit { width:90px; }
+  .di-col-status { width:110px; text-align:right; }
+  .di-row--alert .di-col-num { color:#B91C1C; }
+  .di-badge { display:inline-block; font-size:12px; font-weight:500; padding:2px 8px; border-radius:999px; }
+  .di-badge--normal { background:#F5F5F4; color:#44403C; }
+  .di-badge--low { background:#FEF3C7; color:#92400E; }
+  .di-badge--out { background:#FEE2E2; color:#991B1B; }
+  .di-gridfoot { font-size:12px; margin-top:12px; color:#78716C; }
+
+  /* =====================================================
+     Acento azul
+     ===================================================== */
+  .di-window.di-azul .di-item.di-active { background:#DBEAFE; color:#1E3A8A; }
+  .di-window.di-azul .di-item.di-active .di-ico { background:#1D4ED8; }
+  .di-window.di-azul .di-btn-primary { background:#1D4ED8; border-color:#1D4ED8; color:#FFFFFF; }
+  .di-window.di-azul .di-btn-primary:hover { background:#1E40AF; border-color:#1E40AF; }
+
+  /* =====================================================
+     Acento verde
+     ===================================================== */
+  .di-window.di-verde .di-item.di-active { background:#DCFCE7; color:#14532D; }
+  .di-window.di-verde .di-item.di-active .di-ico { background:#15803D; }
+  .di-window.di-verde .di-btn-primary { background:#15803D; border-color:#15803D; color:#FFFFFF; }
+  .di-window.di-verde .di-btn-primary:hover { background:#166534; border-color:#166534; }
+</style>
+
+<h2>Intermedio A + B: ¿qué acento?</h2>
+<p class="subtitle">Mismo diseño intermedio en los dos; solo cambia el color de acento. Grilla con fuente de 13px.</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="azul" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="di-stage">
+        <div class="di-window di-azul">
+          <aside class="di-sidebar">
+            <div class="di-brand">
+              <div class="di-brand-name">Gestión Municipal</div>
+              <div class="di-brand-sub">Municipio de Carmelo</div>
+            </div>
+            <nav class="di-nav">
+              <div class="di-item"><span class="di-ico"></span>Inicio</div>
+              <div class="di-group">Inventario</div>
+              <div class="di-item di-active"><span class="di-ico"></span>Artículos</div>
+              <div class="di-item"><span class="di-ico"></span>Categorías</div>
+              <div class="di-item"><span class="di-ico"></span>Proveedores</div>
+              <div class="di-item"><span class="di-ico"></span>Movimientos</div>
+              <div class="di-item"><span class="di-ico"></span>Ingreso por factura</div>
+              <div class="di-group">Finanzas</div>
+              <div class="di-item"><span class="di-ico"></span>Gastos y facturas</div>
+              <div class="di-item"><span class="di-ico"></span>Ingresos</div>
+              <div class="di-item"><span class="di-ico"></span>Libro de caja</div>
+              <div class="di-item"><span class="di-ico"></span>Control POA</div>
+              <div class="di-item"><span class="di-ico"></span>Importación</div>
+              <div class="di-group">Gestión</div>
+              <div class="di-item"><span class="di-ico"></span>Documentos</div>
+              <div class="di-item"><span class="di-ico"></span>Tareas</div>
+              <div class="di-item"><span class="di-ico"></span>Reportes</div>
+              <div class="di-group">Administración</div>
+              <div class="di-item"><span class="di-ico"></span>Usuarios</div>
+              <div class="di-item"><span class="di-ico"></span>Backups</div>
+              <div class="di-item"><span class="di-ico"></span>Configuración</div>
+            </nav>
+            <div class="di-user">
+              <span class="di-avatar"></span>
+              <div>
+                <div class="di-user-name">María Pérez</div>
+                <div class="di-user-role">Administrador</div>
+              </div>
+            </div>
+          </aside>
+          <main class="di-content">
+            <div class="di-topbar">
+              <div>
+                <div class="di-title">Artículos</div>
+                <div class="di-subtitle">412 artículos · 18 con stock bajo</div>
+              </div>
+              <div class="di-actions">
+                <button class="di-btn di-btn-secondary">Exportar</button>
+                <button class="di-btn di-btn-primary">Nuevo artículo</button>
+              </div>
+            </div>
+            <div class="di-panel">
+              <div class="di-filters">
+                <input class="di-search" placeholder="Buscar por código o nombre…" />
+                <div class="di-select">Categoría: Todas</div>
+                <div class="di-chip">Solo stock bajo</div>
+              </div>
+              <div class="di-grid">
+                <div class="di-row di-row-head">
+                  <div class="di-col di-col-code">Código</div>
+                  <div class="di-col di-col-name">Nombre</div>
+                  <div class="di-col di-col-cat">Categoría</div>
+                  <div class="di-col di-col-num">Stock</div>
+                  <div class="di-col di-col-unit">Unidad</div>
+                  <div class="di-col di-col-num">Costo prom.</div>
+                  <div class="di-col di-col-status">Estado</div>
+                </div>
+                <div class="di-row">
+                  <div class="di-col di-col-code">ART-0142</div>
+                  <div class="di-col di-col-name">Cemento portland 50kg</div>
+                  <div class="di-col di-col-cat">Construcción</div>
+                  <div class="di-col di-col-num">320</div>
+                  <div class="di-col di-col-unit">Bolsa</div>
+                  <div class="di-col di-col-num">$ 480,00</div>
+                  <div class="di-col di-col-status"><span class="di-badge di-badge--normal">Normal</span></div>
+                </div>
+                <div class="di-row">
+                  <div class="di-col di-col-code">ART-0198</div>
+                  <div class="di-col di-col-name">Arena gruesa</div>
+                  <div class="di-col di-col-cat">Construcción</div>
+                  <div class="di-col di-col-num">45</div>
+                  <div class="di-col di-col-unit">m³</div>
+                  <div class="di-col di-col-num">$ 890,00</div>
+                  <div class="di-col di-col-status"><span class="di-badge di-badge--normal">Normal</span></div>
+                </div>
+                <div class="di-row">
+                  <div class="di-col di-col-code">ART-0231</div>
+                  <div class="di-col di-col-name">Caño PVC 110mm</div>
+                  <div class="di-col di-col-cat">Plomería</div>
+                  <div class="di-col di-col-num">12</div>
+                  <div class="di-col di-col-unit">Unidad</div>
+                  <div class="di-col di-col-num">$ 650,00</div>
+                  <div class="di-col di-col-status"><span class="di-badge di-badge--low">Stock bajo</span></div>
+                </div>
+                <div class="di-row">
+                  <div class="di-col di-col-code">ART-0305</div>
+                  <div class="di-col di-col-name">Pintura látex blanca 20L</div>
+                  <div class="di-col di-col-cat">Pintura</div>
+                  <div class="di-col di-col-num">6</div>
+                  <div class="di-col di-col-unit">Balde</div>
+                  <div class="di-col di-col-num">$ 2.340,00</div>
+                  <div class="di-col di-col-status"><span class="di-badge di-badge--normal">Normal</span></div>
+                </div>
+                <div class="di-row">
+                  <div class="di-col di-col-code">ART-0356</div>
+                  <div class="di-col di-col-name">Guantes de trabajo</div>
+                  <div class="di-col di-col-cat">Seguridad</div>
+                  <div class="di-col di-col-num">180</div>
+                  <div class="di-col di-col-unit">Par</div>
+                  <div class="di-col di-col-num">$ 95,00</div>
+                  <div class="di-col di-col-status"><span class="di-badge di-badge--normal">Normal</span></div>
+                </div>
+                <div class="di-row">
+                  <div class="di-col di-col-code">ART-0402</div>
+                  <div class="di-col di-col-name">Lámpara LED 30W</div>
+                  <div class="di-col di-col-cat">Electricidad</div>
+                  <div class="di-col di-col-num">8</div>
+                  <div class="di-col di-col-unit">Unidad</div>
+                  <div class="di-col di-col-num">$ 410,00</div>
+                  <div class="di-col di-col-status"><span class="di-badge di-badge--low">Stock bajo</span></div>
+                </div>
+                <div class="di-row">
+                  <div class="di-col di-col-code">ART-0418</div>
+                  <div class="di-col di-col-name">Cable 2x1,5mm</div>
+                  <div class="di-col di-col-cat">Electricidad</div>
+                  <div class="di-col di-col-num">1.250</div>
+                  <div class="di-col di-col-unit">Metro</div>
+                  <div class="di-col di-col-num">$ 38,00</div>
+                  <div class="di-col di-col-status"><span class="di-badge di-badge--normal">Normal</span></div>
+                </div>
+                <div class="di-row di-row--alert">
+                  <div class="di-col di-col-code">ART-0455</div>
+                  <div class="di-col di-col-name">Hipoclorito de sodio 5L</div>
+                  <div class="di-col di-col-cat">Limpieza</div>
+                  <div class="di-col di-col-num">-3</div>
+                  <div class="di-col di-col-unit">Bidón</div>
+                  <div class="di-col di-col-num">$ 210,00</div>
+                  <div class="di-col di-col-status"><span class="di-badge di-badge--out">Sin stock</span></div>
+                </div>
+                <div class="di-row">
+                  <div class="di-col di-col-code">ART-0470</div>
+                  <div class="di-col di-col-name">Bolsas de residuo 80x110</div>
+                  <div class="di-col di-col-cat">Limpieza</div>
+                  <div class="di-col di-col-num">60</div>
+                  <div class="di-col di-col-unit">Paquete</div>
+                  <div class="di-col di-col-num">$ 175,00</div>
+                  <div class="di-col di-col-status"><span class="di-badge di-badge--normal">Normal</span></div>
+                </div>
+              </div>
+              <div class="di-gridfoot">Mostrando 412 artículos</div>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Intermedio · acento azul</h3>
+      <p>Pastilla activa y botón primario en azul institucional sobre la base intermedia.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="verde" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="di-stage">
+        <div class="di-window di-verde">
+          <aside class="di-sidebar">
+            <div class="di-brand">
+              <div class="di-brand-name">Gestión Municipal</div>
+              <div class="di-brand-sub">Municipio de Carmelo</div>
+            </div>
+            <nav class="di-nav">
+              <div class="di-item"><span class="di-ico"></span>Inicio</div>
+              <div class="di-group">Inventario</div>
+              <div class="di-item di-active"><span class="di-ico"></span>Artículos</div>
+              <div class="di-item"><span class="di-ico"></span>Categorías</div>
+              <div class="di-item"><span class="di-ico"></span>Proveedores</div>
+              <div class="di-item"><span class="di-ico"></span>Movimientos</div>
+              <div class="di-item"><span class="di-ico"></span>Ingreso por factura</div>
+              <div class="di-group">Finanzas</div>
+              <div class="di-item"><span class="di-ico"></span>Gastos y facturas</div>
+              <div class="di-item"><span class="di-ico"></span>Ingresos</div>
+              <div class="di-item"><span class="di-ico"></span>Libro de caja</div>
+              <div class="di-item"><span class="di-ico"></span>Control POA</div>
+              <div class="di-item"><span class="di-ico"></span>Importación</div>
+              <div class="di-group">Gestión</div>
+              <div class="di-item"><span class="di-ico"></span>Documentos</div>
+              <div class="di-item"><span class="di-ico"></span>Tareas</div>
+              <div class="di-item"><span class="di-ico"></span>Reportes</div>
+              <div class="di-group">Administración</div>
+              <div class="di-item"><span class="di-ico"></span>Usuarios</div>
+              <div class="di-item"><span class="di-ico"></span>Backups</div>
+              <div class="di-item"><span class="di-ico"></span>Configuración</div>
+            </nav>
+            <div class="di-user">
+              <span class="di-avatar"></span>
+              <div>
+                <div class="di-user-name">María Pérez</div>
+                <div class="di-user-role">Administrador</div>
+              </div>
+            </div>
+          </aside>
+          <main class="di-content">
+            <div class="di-topbar">
+              <div>
+                <div class="di-title">Artículos</div>
+                <div class="di-subtitle">412 artículos · 18 con stock bajo</div>
+              </div>
+              <div class="di-actions">
+                <button class="di-btn di-btn-secondary">Exportar</button>
+                <button class="di-btn di-btn-primary">Nuevo artículo</button>
+              </div>
+            </div>
+            <div class="di-panel">
+              <div class="di-filters">
+                <input class="di-search" placeholder="Buscar por código o nombre…" />
+                <div class="di-select">Categoría: Todas</div>
+                <div class="di-chip">Solo stock bajo</div>
+              </div>
+              <div class="di-grid">
+                <div class="di-row di-row-head">
+                  <div class="di-col di-col-code">Código</div>
+                  <div class="di-col di-col-name">Nombre</div>
+                  <div class="di-col di-col-cat">Categoría</div>
+                  <div class="di-col di-col-num">Stock</div>
+                  <div class="di-col di-col-unit">Unidad</div>
+                  <div class="di-col di-col-num">Costo prom.</div>
+                  <div class="di-col di-col-status">Estado</div>
+                </div>
+                <div class="di-row">
+                  <div class="di-col di-col-code">ART-0142</div>
+                  <div class="di-col di-col-name">Cemento portland 50kg</div>
+                  <div class="di-col di-col-cat">Construcción</div>
+                  <div class="di-col di-col-num">320</div>
+                  <div class="di-col di-col-unit">Bolsa</div>
+                  <div class="di-col di-col-num">$ 480,00</div>
+                  <div class="di-col di-col-status"><span class="di-badge di-badge--normal">Normal</span></div>
+                </div>
+                <div class="di-row">
+                  <div class="di-col di-col-code">ART-0198</div>
+                  <div class="di-col di-col-name">Arena gruesa</div>
+                  <div class="di-col di-col-cat">Construcción</div>
+                  <div class="di-col di-col-num">45</div>
+                  <div class="di-col di-col-unit">m³</div>
+                  <div class="di-col di-col-num">$ 890,00</div>
+                  <div class="di-col di-col-status"><span class="di-badge di-badge--normal">Normal</span></div>
+                </div>
+                <div class="di-row">
+                  <div class="di-col di-col-code">ART-0231</div>
+                  <div class="di-col di-col-name">Caño PVC 110mm</div>
+                  <div class="di-col di-col-cat">Plomería</div>
+                  <div class="di-col di-col-num">12</div>
+                  <div class="di-col di-col-unit">Unidad</div>
+                  <div class="di-col di-col-num">$ 650,00</div>
+                  <div class="di-col di-col-status"><span class="di-badge di-badge--low">Stock bajo</span></div>
+                </div>
+                <div class="di-row">
+                  <div class="di-col di-col-code">ART-0305</div>
+                  <div class="di-col di-col-name">Pintura látex blanca 20L</div>
+                  <div class="di-col di-col-cat">Pintura</div>
+                  <div class="di-col di-col-num">6</div>
+                  <div class="di-col di-col-unit">Balde</div>
+                  <div class="di-col di-col-num">$ 2.340,00</div>
+                  <div class="di-col di-col-status"><span class="di-badge di-badge--normal">Normal</span></div>
+                </div>
+                <div class="di-row">
+                  <div class="di-col di-col-code">ART-0356</div>
+                  <div class="di-col di-col-name">Guantes de trabajo</div>
+                  <div class="di-col di-col-cat">Seguridad</div>
+                  <div class="di-col di-col-num">180</div>
+                  <div class="di-col di-col-unit">Par</div>
+                  <div class="di-col di-col-num">$ 95,00</div>
+                  <div class="di-col di-col-status"><span class="di-badge di-badge--normal">Normal</span></div>
+                </div>
+                <div class="di-row">
+                  <div class="di-col di-col-code">ART-0402</div>
+                  <div class="di-col di-col-name">Lámpara LED 30W</div>
+                  <div class="di-col di-col-cat">Electricidad</div>
+                  <div class="di-col di-col-num">8</div>
+                  <div class="di-col di-col-unit">Unidad</div>
+                  <div class="di-col di-col-num">$ 410,00</div>
+                  <div class="di-col di-col-status"><span class="di-badge di-badge--low">Stock bajo</span></div>
+                </div>
+                <div class="di-row">
+                  <div class="di-col di-col-code">ART-0418</div>
+                  <div class="di-col di-col-name">Cable 2x1,5mm</div>
+                  <div class="di-col di-col-cat">Electricidad</div>
+                  <div class="di-col di-col-num">1.250</div>
+                  <div class="di-col di-col-unit">Metro</div>
+                  <div class="di-col di-col-num">$ 38,00</div>
+                  <div class="di-col di-col-status"><span class="di-badge di-badge--normal">Normal</span></div>
+                </div>
+                <div class="di-row di-row--alert">
+                  <div class="di-col di-col-code">ART-0455</div>
+                  <div class="di-col di-col-name">Hipoclorito de sodio 5L</div>
+                  <div class="di-col di-col-cat">Limpieza</div>
+                  <div class="di-col di-col-num">-3</div>
+                  <div class="di-col di-col-unit">Bidón</div>
+                  <div class="di-col di-col-num">$ 210,00</div>
+                  <div class="di-col di-col-status"><span class="di-badge di-badge--out">Sin stock</span></div>
+                </div>
+                <div class="di-row">
+                  <div class="di-col di-col-code">ART-0470</div>
+                  <div class="di-col di-col-name">Bolsas de residuo 80x110</div>
+                  <div class="di-col di-col-cat">Limpieza</div>
+                  <div class="di-col di-col-num">60</div>
+                  <div class="di-col di-col-unit">Paquete</div>
+                  <div class="di-col di-col-num">$ 175,00</div>
+                  <div class="di-col di-col-status"><span class="di-badge di-badge--normal">Normal</span></div>
+                </div>
+              </div>
+              <div class="di-gridfoot">Mostrando 412 artículos</div>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Intermedio · acento verde</h3>
+      <p>Pastilla activa y botón primario en verde, misma estructura que la variante azul.</p>
+    </div>
+  </div>
+
+</div>

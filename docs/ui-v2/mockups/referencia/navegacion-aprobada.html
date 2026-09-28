@@ -1,0 +1,521 @@
+<!--
+  Origen: .superpowers/brainstorm/82329-1790634625/content/navegacion.html
+  (brainstorming del 2026-09-28, visual companion de superpowers; opcion aprobada: A, sidebar plano reorganizado + consolidacion).
+  REFERENCIA DE DIRECCION aprobada por el usuario, NO es un mockup de pantalla final.
+  Es un fragmento: el frame del visual companion lo envolvia; se renderiza a escala 0.7.
+  Los mockups finales por pantalla viven en docs/ui-v2/mockups/<modulo>/ y usan el CSS generado de tokens.
+  Spec: docs/superpowers/specs/2026-09-28-ui-v2-rediseno-total-design.md
+-->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+
+<style>
+  .cards { display:flex; flex-direction:column; gap:24px; }
+
+  .nv-stage {
+    width:896px;
+    height:532px;
+    margin:0 auto;
+    overflow:hidden;
+    border-radius:8px;
+    border:1px solid #E7E5E4;
+    background:#fff;
+  }
+  .nv-window {
+    width:1280px;
+    height:760px;
+    transform:scale(0.7);
+    transform-origin: top left;
+    display:flex;
+    font-family:'Inter', sans-serif;
+    background:#F7F7F5;
+    color:#1C1917;
+  }
+  .nv-window, .nv-window * { box-sizing:border-box; }
+
+  /* --- sidebar plano (A y C) --- */
+  .nv-sidebar { width:240px; flex:0 0 240px; display:flex; flex-direction:column; padding:16px 12px; background:#FFFFFF; border-right:1px solid #E7E5E4; position:relative; }
+  .nv-brand { padding:4px 8px 12px 8px; }
+  .nv-brand-name { font-size:15px; font-weight:700; line-height:18px; color:#1C1917; }
+  .nv-brand-sub { font-size:12px; line-height:14px; margin-top:2px; color:#78716C; }
+  .nv-nav { flex:1 1 auto; display:flex; flex-direction:column; }
+  .nv-group { font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; margin:12px 8px 4px; line-height:16px; color:#A8A29E; }
+  .nv-item { display:flex; align-items:center; gap:8px; padding:8px 12px; font-size:12px; font-weight:500; line-height:16px; border-radius:8px; color:#44403C; }
+  .nv-item.nv-active { background:#DBEAFE; color:#1E3A8A; font-weight:600; }
+  .nv-item.nv-active .nv-ico { background:#1D4ED8; }
+  .nv-ico { width:16px; height:16px; border-radius:4px; flex:0 0 16px; display:inline-block; background:#E7E5E4; }
+
+  /* --- overflow con scrollbar visual (C) --- */
+  .nv-nav-wrap { flex:1 1 auto; overflow:hidden; position:relative; }
+  .nv-scrollbar { position:absolute; top:0; right:2px; width:4px; height:100%; background:#F0EFED; border-radius:2px; }
+  .nv-scrollbar-thumb { width:4px; height:38%; background:#D6D3D1; border-radius:2px; }
+
+  /* --- pie de usuario (A, B y C) --- */
+  .nv-user { display:flex; align-items:center; gap:8px; padding:8px 4px 4px; border-top:1px solid #E7E5E4; margin-top:8px; }
+  .nv-avatar { width:28px; height:28px; border-radius:14px; flex:0 0 28px; display:flex; align-items:center; justify-content:center; background:#D6D3D1; color:#44403C; font-size:11px; font-weight:600; }
+  .nv-user-info { flex:1 1 auto; min-width:0; }
+  .nv-user-name { font-size:11px; font-weight:600; line-height:14px; color:#1C1917; }
+  .nv-user-role { font-size:10px; line-height:12px; margin-top:2px; color:#78716C; }
+  .nv-logout-btn { width:28px; height:28px; border-radius:8px; border:1px solid #D6D3D1; background:#FFFFFF; display:flex; align-items:center; justify-content:center; flex:0 0 28px; }
+  .nv-version { font-size:11px; line-height:14px; color:#A8A29E; padding:4px 4px 0; }
+
+  /* --- rail de módulos (B) --- */
+  .nv-rail { width:64px; flex:0 0 64px; display:flex; flex-direction:column; align-items:center; padding:16px 0; gap:4px; background:#FFFFFF; border-right:1px solid #E7E5E4; }
+  .nv-rail-item { display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px 4px; border-radius:8px; width:52px; }
+  .nv-rail-ico-wrap { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; background:transparent; }
+  .nv-rail-ico { width:20px; height:20px; border-radius:4px; background:#A8A29E; }
+  .nv-rail-label { font-size:10px; font-weight:500; line-height:12px; color:#78716C; }
+  .nv-rail-item.nv-active .nv-rail-ico-wrap { background:#DBEAFE; }
+  .nv-rail-item.nv-active .nv-rail-ico { background:#1D4ED8; }
+  .nv-rail-item.nv-active .nv-rail-label { color:#1E3A8A; font-weight:600; }
+
+  /* --- panel del módulo (B) --- */
+  .nv-panel-nav { width:208px; flex:0 0 208px; display:flex; flex-direction:column; padding:16px 12px; background:#FBFBFA; border-right:1px solid #E7E5E4; }
+  .nv-panel-nav-body { flex:1 1 auto; display:flex; flex-direction:column; }
+  .nv-panel-title { font-size:15px; font-weight:600; line-height:18px; color:#1C1917; margin:8px 8px 8px; }
+
+  /* --- contenido --- */
+  .nv-content { flex:1 1 auto; padding:24px 28px; overflow:hidden; background:#F7F7F5; }
+  .nv-topbar { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:16px; }
+  .nv-title { font-size:22px; font-weight:600; line-height:26px; color:#1C1917; }
+  .nv-subtitle { font-size:13px; line-height:16px; margin-top:4px; color:#57534E; }
+  .nv-actions { display:flex; gap:8px; }
+  .nv-btn { font-family:inherit; font-size:13px; font-weight:600; height:36px; padding:0 16px; border-radius:8px; border:1px solid transparent; }
+  .nv-btn-secondary { background:#FFFFFF; border-color:#D6D3D1; color:#44403C; }
+  .nv-btn-primary { background:#1D4ED8; border-color:#1D4ED8; color:#FFFFFF; }
+
+  .nv-panel { background:#FFFFFF; border-radius:10px; border:1px solid #E7E5E4; box-shadow:0 1px 2px rgba(0,0,0,0.05); padding:16px; }
+  .nv-filters { display:flex; gap:8px; margin-bottom:16px; }
+  .nv-search { font-family:inherit; font-size:13px; height:36px; padding:0 12px; border-radius:8px; border:1px solid #D6D3D1; background:#FFFFFF; color:#44403C; flex:0 0 280px; }
+  .nv-select { font-size:13px; font-weight:500; height:36px; padding:0 12px; border-radius:8px; border:1px solid #D6D3D1; background:#FFFFFF; color:#44403C; display:flex; align-items:center; }
+  .nv-chip { font-size:13px; font-weight:500; height:36px; padding:0 12px; border-radius:999px; border:1px solid #D6D3D1; background:#FFFFFF; color:#57534E; display:flex; align-items:center; }
+
+  .nv-grid { border-radius:8px; overflow:hidden; border:1px solid #F0EFED; }
+  .nv-row { display:flex; align-items:center; height:40px; border-bottom:1px solid #F0EFED; }
+  .nv-row-head { height:36px; background:#FAFAF9; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#78716C; border-bottom:1px solid #F0EFED; }
+  .nv-col { padding:0 12px; font-size:13px; color:#44403C; }
+  .nv-col-name { flex:1 1 auto; color:#1C1917; font-weight:500; }
+  .nv-col-80 { width:80px; }
+  .nv-col-90 { width:90px; }
+  .nv-col-100 { width:100px; }
+  .nv-col-110 { width:110px; }
+  .nv-col-140 { width:140px; }
+  .nv-col-right { text-align:right; font-variant-numeric: tabular-nums; }
+  .nv-row--alert .nv-col-right { color:#B91C1C; }
+  .nv-gridfoot { font-size:12px; margin-top:12px; color:#78716C; }
+
+  .nv-badge { display:inline-block; font-size:12px; font-weight:500; padding:2px 8px; border-radius:999px; }
+  .nv-badge--normal { background:#F5F5F4; color:#44403C; }
+  .nv-badge--low { background:#FEF3C7; color:#92400E; }
+  .nv-badge--out { background:#FEE2E2; color:#991B1B; }
+  .nv-badge--pagada { background:#DCFCE7; color:#14532D; }
+  .nv-badge--pendiente { background:#FEF3C7; color:#92400E; }
+  .nv-badge--vencida { background:#FEE2E2; color:#991B1B; }
+
+  /* --- grilla hub de reportes (A) --- */
+  .nv-report-grid { display:flex; flex-wrap:wrap; gap:12px; }
+  .nv-report-card { width:calc((100% - 24px)/3); background:#FFFFFF; border:1px solid #E7E5E4; border-radius:10px; padding:16px; display:flex; flex-direction:column; gap:8px; }
+  .nv-report-ico { width:16px; height:16px; border-radius:4px; background:#E7E5E4; }
+  .nv-report-title { font-size:14px; font-weight:600; line-height:18px; color:#1C1917; }
+  .nv-report-desc { font-size:12px; line-height:16px; color:#78716C; }
+</style>
+
+<h2>¿Cómo querés navegar la app?</h2>
+<p class="subtitle">Los tres usan los ítems reales de hoy (vista de un Administrador, que ve todo). Mirá sobre todo el sidebar.</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="nv-stage">
+        <div class="nv-window">
+          <aside class="nv-sidebar">
+            <div class="nv-brand">
+              <div class="nv-brand-name">Gestión Municipal</div>
+              <div class="nv-brand-sub">Municipio de Carmelo</div>
+            </div>
+            <nav class="nv-nav">
+              <div class="nv-item"><span class="nv-ico"></span>Inicio</div>
+              <div class="nv-group">Inventario</div>
+              <div class="nv-item"><span class="nv-ico"></span>Productos</div>
+              <div class="nv-item"><span class="nv-ico"></span>Registrar entrada</div>
+              <div class="nv-item"><span class="nv-ico"></span>Registrar salida</div>
+              <div class="nv-item"><span class="nv-ico"></span>Ingreso por factura</div>
+              <div class="nv-item"><span class="nv-ico"></span>Historial de movimientos</div>
+              <div class="nv-group">Finanzas</div>
+              <div class="nv-item"><span class="nv-ico"></span>Gastos y facturas</div>
+              <div class="nv-item"><span class="nv-ico"></span>Ingresos de caja</div>
+              <div class="nv-item"><span class="nv-ico"></span>Libro caja</div>
+              <div class="nv-item"><span class="nv-ico"></span>Control POA</div>
+              <div class="nv-item"><span class="nv-ico"></span>Calendario de pagos</div>
+              <div class="nv-group">Gestión</div>
+              <div class="nv-item"><span class="nv-ico"></span>Tareas</div>
+              <div class="nv-item"><span class="nv-ico"></span>Documentos</div>
+              <div class="nv-group">Análisis</div>
+              <div class="nv-item nv-active"><span class="nv-ico"></span>Reportes</div>
+              <div class="nv-group">Administración</div>
+              <div class="nv-item"><span class="nv-ico"></span>Catálogos</div>
+              <div class="nv-item"><span class="nv-ico"></span>Usuarios</div>
+              <div class="nv-item"><span class="nv-ico"></span>Mantenimiento</div>
+            </nav>
+            <div class="nv-user">
+              <span class="nv-avatar">MP</span>
+              <div class="nv-user-info">
+                <div class="nv-user-name">María Pérez</div>
+                <div class="nv-user-role">Administrador</div>
+              </div>
+              <button class="nv-logout-btn"><span class="nv-ico"></span></button>
+            </div>
+            <div class="nv-version">v0.4.0</div>
+          </aside>
+          <main class="nv-content">
+            <div class="nv-topbar">
+              <div>
+                <div class="nv-title">Reportes</div>
+                <div class="nv-subtitle">Elegí un reporte</div>
+              </div>
+            </div>
+            <div class="nv-report-grid">
+              <div class="nv-report-card">
+                <span class="nv-report-ico"></span>
+                <div class="nv-report-title">Valorización de inventario</div>
+                <div class="nv-report-desc">Valor total del stock por categoría y fecha.</div>
+              </div>
+              <div class="nv-report-card">
+                <span class="nv-report-ico"></span>
+                <div class="nv-report-title">Stock por categoría</div>
+                <div class="nv-report-desc">Cantidades disponibles agrupadas por categoría.</div>
+              </div>
+              <div class="nv-report-card">
+                <span class="nv-report-ico"></span>
+                <div class="nv-report-title">Historial por producto</div>
+                <div class="nv-report-desc">Movimientos de entrada y salida de un producto.</div>
+              </div>
+              <div class="nv-report-card">
+                <span class="nv-report-ico"></span>
+                <div class="nv-report-title">Productos más movidos</div>
+                <div class="nv-report-desc">Ranking de productos con mayor rotación.</div>
+              </div>
+              <div class="nv-report-card">
+                <span class="nv-report-ico"></span>
+                <div class="nv-report-title">Log de auditoría</div>
+                <div class="nv-report-desc">Registro de cambios y acciones de usuarios.</div>
+              </div>
+              <div class="nv-report-card">
+                <span class="nv-report-ico"></span>
+                <div class="nv-report-title">Estadística de tareas</div>
+                <div class="nv-report-desc">Cumplimiento y demoras de tareas asignadas.</div>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A · Plano reorganizado</h3>
+      <p>~17 ítems siempre visibles. Reportes y tablas maestras pasan a una pantalla cada una (tarjetas / pestañas).</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="nv-stage">
+        <div class="nv-window">
+          <aside class="nv-rail">
+            <div class="nv-rail-item">
+              <div class="nv-rail-ico-wrap"><span class="nv-rail-ico"></span></div>
+              <span class="nv-rail-label">Inicio</span>
+            </div>
+            <div class="nv-rail-item">
+              <div class="nv-rail-ico-wrap"><span class="nv-rail-ico"></span></div>
+              <span class="nv-rail-label">Inventario</span>
+            </div>
+            <div class="nv-rail-item nv-active">
+              <div class="nv-rail-ico-wrap"><span class="nv-rail-ico"></span></div>
+              <span class="nv-rail-label">Finanzas</span>
+            </div>
+            <div class="nv-rail-item">
+              <div class="nv-rail-ico-wrap"><span class="nv-rail-ico"></span></div>
+              <span class="nv-rail-label">Gestión</span>
+            </div>
+            <div class="nv-rail-item">
+              <div class="nv-rail-ico-wrap"><span class="nv-rail-ico"></span></div>
+              <span class="nv-rail-label">Reportes</span>
+            </div>
+            <div class="nv-rail-item">
+              <div class="nv-rail-ico-wrap"><span class="nv-rail-ico"></span></div>
+              <span class="nv-rail-label">Admin</span>
+            </div>
+          </aside>
+          <aside class="nv-panel-nav">
+            <div class="nv-panel-nav-body">
+              <div class="nv-brand">
+                <div class="nv-brand-name">Gestión Municipal</div>
+                <div class="nv-brand-sub">Municipio de Carmelo</div>
+              </div>
+              <div class="nv-panel-title">Finanzas</div>
+              <nav class="nv-nav">
+                <div class="nv-item nv-active"><span class="nv-ico"></span>Gastos y facturas</div>
+                <div class="nv-item"><span class="nv-ico"></span>Ingresos de caja</div>
+                <div class="nv-item"><span class="nv-ico"></span>Libro caja</div>
+                <div class="nv-item"><span class="nv-ico"></span>Control POA</div>
+                <div class="nv-item"><span class="nv-ico"></span>Calendario de pagos</div>
+                <div class="nv-item"><span class="nv-ico"></span>Maestros de finanzas</div>
+              </nav>
+            </div>
+            <div class="nv-user">
+              <span class="nv-avatar">MP</span>
+              <div class="nv-user-info">
+                <div class="nv-user-name">María Pérez</div>
+                <div class="nv-user-role">Administrador</div>
+              </div>
+              <button class="nv-logout-btn"><span class="nv-ico"></span></button>
+            </div>
+            <div class="nv-version">v0.4.0</div>
+          </aside>
+          <main class="nv-content">
+            <div class="nv-topbar">
+              <div>
+                <div class="nv-title">Gastos y facturas</div>
+                <div class="nv-subtitle">124 comprobantes · 2 vencidos</div>
+              </div>
+              <div class="nv-actions">
+                <button class="nv-btn nv-btn-secondary">Exportar</button>
+                <button class="nv-btn nv-btn-primary">Nuevo gasto</button>
+              </div>
+            </div>
+            <div class="nv-panel">
+              <div class="nv-filters">
+                <input class="nv-search" placeholder="Buscar por proveedor o N° factura…" />
+                <div class="nv-select">Rubro: Todos</div>
+                <div class="nv-chip">Solo pendientes</div>
+              </div>
+              <div class="nv-grid">
+                <div class="nv-row nv-row-head">
+                  <div class="nv-col nv-col-80">Fecha</div>
+                  <div class="nv-col nv-col-name">Proveedor</div>
+                  <div class="nv-col nv-col-100">N° factura</div>
+                  <div class="nv-col nv-col-110">Rubro</div>
+                  <div class="nv-col nv-col-110 nv-col-right">Importe</div>
+                  <div class="nv-col nv-col-100 nv-col-right">Estado</div>
+                </div>
+                <div class="nv-row">
+                  <div class="nv-col nv-col-80">03/09/2026</div>
+                  <div class="nv-col nv-col-name">Ferretería Central</div>
+                  <div class="nv-col nv-col-100">F-00234</div>
+                  <div class="nv-col nv-col-110">Mantenimiento</div>
+                  <div class="nv-col nv-col-110 nv-col-right">$ 12.450,00</div>
+                  <div class="nv-col nv-col-100 nv-col-right"><span class="nv-badge nv-badge--pagada">Pagada</span></div>
+                </div>
+                <div class="nv-row">
+                  <div class="nv-col nv-col-80">05/09/2026</div>
+                  <div class="nv-col nv-col-name">Distribuidora Norte</div>
+                  <div class="nv-col nv-col-100">F-00235</div>
+                  <div class="nv-col nv-col-110">Insumos</div>
+                  <div class="nv-col nv-col-110 nv-col-right">$ 8.900,00</div>
+                  <div class="nv-col nv-col-100 nv-col-right"><span class="nv-badge nv-badge--pagada">Pagada</span></div>
+                </div>
+                <div class="nv-row">
+                  <div class="nv-col nv-col-80">10/09/2026</div>
+                  <div class="nv-col nv-col-name">Corralón Este</div>
+                  <div class="nv-col nv-col-100">F-00241</div>
+                  <div class="nv-col nv-col-110">Obras</div>
+                  <div class="nv-col nv-col-110 nv-col-right">$ 34.200,00</div>
+                  <div class="nv-col nv-col-100 nv-col-right"><span class="nv-badge nv-badge--pendiente">Pendiente</span></div>
+                </div>
+                <div class="nv-row">
+                  <div class="nv-col nv-col-80">12/09/2026</div>
+                  <div class="nv-col nv-col-name">Electricidad SRL</div>
+                  <div class="nv-col nv-col-100">F-00248</div>
+                  <div class="nv-col nv-col-110">Servicios</div>
+                  <div class="nv-col nv-col-110 nv-col-right">$ 5.680,00</div>
+                  <div class="nv-col nv-col-100 nv-col-right"><span class="nv-badge nv-badge--pendiente">Pendiente</span></div>
+                </div>
+                <div class="nv-row">
+                  <div class="nv-col nv-col-80">15/09/2026</div>
+                  <div class="nv-col nv-col-name">Papelería Rivas</div>
+                  <div class="nv-col nv-col-100">F-00250</div>
+                  <div class="nv-col nv-col-110">Oficina</div>
+                  <div class="nv-col nv-col-110 nv-col-right">$ 1.320,00</div>
+                  <div class="nv-col nv-col-100 nv-col-right"><span class="nv-badge nv-badge--vencida">Vencida</span></div>
+                </div>
+                <div class="nv-row">
+                  <div class="nv-col nv-col-80">18/09/2026</div>
+                  <div class="nv-col nv-col-name">Combustibles Sur</div>
+                  <div class="nv-col nv-col-100">F-00256</div>
+                  <div class="nv-col nv-col-110">Transporte</div>
+                  <div class="nv-col nv-col-110 nv-col-right">$ 22.900,00</div>
+                  <div class="nv-col nv-col-100 nv-col-right"><span class="nv-badge nv-badge--pagada">Pagada</span></div>
+                </div>
+              </div>
+              <div class="nv-gridfoot">Mostrando 124 comprobantes</div>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B · Rail + panel del módulo</h3>
+      <p>Módulos en una barra de íconos; las pantallas del módulo en un panel al lado. Un click más, menos ruido.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="nv-stage">
+        <div class="nv-window">
+          <aside class="nv-sidebar">
+            <div class="nv-brand">
+              <div class="nv-brand-name">Gestión Municipal</div>
+              <div class="nv-brand-sub">Municipio de Carmelo</div>
+            </div>
+            <div class="nv-nav-wrap">
+              <nav class="nv-nav">
+                <div class="nv-item"><span class="nv-ico"></span>Inicio</div>
+                <div class="nv-group">Inventario</div>
+                <div class="nv-item nv-active"><span class="nv-ico"></span>Productos</div>
+                <div class="nv-item"><span class="nv-ico"></span>Registrar entrada</div>
+                <div class="nv-item"><span class="nv-ico"></span>Registrar salida</div>
+                <div class="nv-item"><span class="nv-ico"></span>Ingreso por factura</div>
+                <div class="nv-item"><span class="nv-ico"></span>Historial de movimientos</div>
+                <div class="nv-group">Finanzas</div>
+                <div class="nv-item"><span class="nv-ico"></span>Gastos y facturas</div>
+                <div class="nv-item"><span class="nv-ico"></span>Ingresos de caja</div>
+                <div class="nv-item"><span class="nv-ico"></span>Libro caja</div>
+                <div class="nv-item"><span class="nv-ico"></span>Control POA</div>
+                <div class="nv-item"><span class="nv-ico"></span>Calendario de pagos</div>
+                <div class="nv-item"><span class="nv-ico"></span>Maestros de finanzas</div>
+                <div class="nv-group">Gestión</div>
+                <div class="nv-item"><span class="nv-ico"></span>Tareas</div>
+                <div class="nv-item"><span class="nv-ico"></span>Documentos</div>
+                <div class="nv-group">Tablas maestras</div>
+                <div class="nv-item"><span class="nv-ico"></span>Categorías</div>
+                <div class="nv-item"><span class="nv-ico"></span>Proveedores</div>
+                <div class="nv-item"><span class="nv-ico"></span>Unidades de medida</div>
+                <div class="nv-item"><span class="nv-ico"></span>Catálogos de tareas</div>
+                <div class="nv-group">Reportes</div>
+                <div class="nv-item"><span class="nv-ico"></span>Valorización de inventario</div>
+                <div class="nv-item"><span class="nv-ico"></span>Stock por categoría</div>
+                <div class="nv-item"><span class="nv-ico"></span>Historial por producto</div>
+                <div class="nv-item"><span class="nv-ico"></span>Productos más movidos</div>
+                <div class="nv-item"><span class="nv-ico"></span>Log de auditoría</div>
+                <div class="nv-item"><span class="nv-ico"></span>Estadística de tareas</div>
+                <div class="nv-group">Administración</div>
+                <div class="nv-item"><span class="nv-ico"></span>Mantenimiento</div>
+                <div class="nv-item"><span class="nv-ico"></span>Usuarios</div>
+              </nav>
+              <div class="nv-scrollbar"><div class="nv-scrollbar-thumb"></div></div>
+            </div>
+            <div class="nv-user">
+              <span class="nv-avatar">MP</span>
+              <div class="nv-user-info">
+                <div class="nv-user-name">María Pérez</div>
+                <div class="nv-user-role">Administrador</div>
+              </div>
+              <button class="nv-logout-btn"><span class="nv-ico"></span></button>
+            </div>
+            <div class="nv-version">v0.4.0</div>
+          </aside>
+          <main class="nv-content">
+            <div class="nv-topbar">
+              <div>
+                <div class="nv-title">Productos</div>
+                <div class="nv-subtitle">412 productos · 18 con stock bajo</div>
+              </div>
+              <div class="nv-actions">
+                <button class="nv-btn nv-btn-secondary">Exportar</button>
+                <button class="nv-btn nv-btn-primary">Nuevo producto</button>
+              </div>
+            </div>
+            <div class="nv-panel">
+              <div class="nv-filters">
+                <input class="nv-search" placeholder="Buscar por código o nombre…" />
+                <div class="nv-select">Categoría: Todas</div>
+                <div class="nv-chip">Solo stock bajo</div>
+              </div>
+              <div class="nv-grid">
+                <div class="nv-row nv-row-head">
+                  <div class="nv-col nv-col-100">Código</div>
+                  <div class="nv-col nv-col-name">Nombre</div>
+                  <div class="nv-col nv-col-140">Categoría</div>
+                  <div class="nv-col nv-col-90 nv-col-right">Stock</div>
+                  <div class="nv-col nv-col-90">Unidad</div>
+                  <div class="nv-col nv-col-110 nv-col-right">Costo prom.</div>
+                  <div class="nv-col nv-col-110 nv-col-right">Estado</div>
+                </div>
+                <div class="nv-row">
+                  <div class="nv-col nv-col-100">PRD-0142</div>
+                  <div class="nv-col nv-col-name">Cemento portland 50kg</div>
+                  <div class="nv-col nv-col-140">Construcción</div>
+                  <div class="nv-col nv-col-90 nv-col-right">320</div>
+                  <div class="nv-col nv-col-90">Bolsa</div>
+                  <div class="nv-col nv-col-110 nv-col-right">$ 480,00</div>
+                  <div class="nv-col nv-col-110 nv-col-right"><span class="nv-badge nv-badge--normal">Normal</span></div>
+                </div>
+                <div class="nv-row">
+                  <div class="nv-col nv-col-100">PRD-0198</div>
+                  <div class="nv-col nv-col-name">Arena gruesa</div>
+                  <div class="nv-col nv-col-140">Construcción</div>
+                  <div class="nv-col nv-col-90 nv-col-right">45</div>
+                  <div class="nv-col nv-col-90">m³</div>
+                  <div class="nv-col nv-col-110 nv-col-right">$ 890,00</div>
+                  <div class="nv-col nv-col-110 nv-col-right"><span class="nv-badge nv-badge--normal">Normal</span></div>
+                </div>
+                <div class="nv-row">
+                  <div class="nv-col nv-col-100">PRD-0231</div>
+                  <div class="nv-col nv-col-name">Caño PVC 110mm</div>
+                  <div class="nv-col nv-col-140">Plomería</div>
+                  <div class="nv-col nv-col-90 nv-col-right">12</div>
+                  <div class="nv-col nv-col-90">Unidad</div>
+                  <div class="nv-col nv-col-110 nv-col-right">$ 650,00</div>
+                  <div class="nv-col nv-col-110 nv-col-right"><span class="nv-badge nv-badge--low">Stock bajo</span></div>
+                </div>
+                <div class="nv-row">
+                  <div class="nv-col nv-col-100">PRD-0305</div>
+                  <div class="nv-col nv-col-name">Pintura látex blanca 20L</div>
+                  <div class="nv-col nv-col-140">Pintura</div>
+                  <div class="nv-col nv-col-90 nv-col-right">6</div>
+                  <div class="nv-col nv-col-90">Balde</div>
+                  <div class="nv-col nv-col-110 nv-col-right">$ 2.340,00</div>
+                  <div class="nv-col nv-col-110 nv-col-right"><span class="nv-badge nv-badge--normal">Normal</span></div>
+                </div>
+                <div class="nv-row">
+                  <div class="nv-col nv-col-100">PRD-0402</div>
+                  <div class="nv-col nv-col-name">Lámpara LED 30W</div>
+                  <div class="nv-col nv-col-140">Electricidad</div>
+                  <div class="nv-col nv-col-90 nv-col-right">8</div>
+                  <div class="nv-col nv-col-90">Unidad</div>
+                  <div class="nv-col nv-col-110 nv-col-right">$ 410,00</div>
+                  <div class="nv-col nv-col-110 nv-col-right"><span class="nv-badge nv-badge--low">Stock bajo</span></div>
+                </div>
+                <div class="nv-row nv-row--alert">
+                  <div class="nv-col nv-col-100">PRD-0455</div>
+                  <div class="nv-col nv-col-name">Hipoclorito de sodio 5L</div>
+                  <div class="nv-col nv-col-140">Limpieza</div>
+                  <div class="nv-col nv-col-90 nv-col-right">-3</div>
+                  <div class="nv-col nv-col-90">Bidón</div>
+                  <div class="nv-col nv-col-110 nv-col-right">$ 210,00</div>
+                  <div class="nv-col nv-col-110 nv-col-right"><span class="nv-badge nv-badge--out">Sin stock</span></div>
+                </div>
+                <div class="nv-row">
+                  <div class="nv-col nv-col-100">PRD-0470</div>
+                  <div class="nv-col nv-col-name">Bolsas de residuo 80x110</div>
+                  <div class="nv-col nv-col-140">Limpieza</div>
+                  <div class="nv-col nv-col-90 nv-col-right">60</div>
+                  <div class="nv-col nv-col-90">Paquete</div>
+                  <div class="nv-col nv-col-110 nv-col-right">$ 175,00</div>
+                  <div class="nv-col nv-col-110 nv-col-right"><span class="nv-badge nv-badge--normal">Normal</span></div>
+                </div>
+              </div>
+              <div class="nv-gridfoot">Mostrando 412 productos</div>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C · Plano, todo a la vista</h3>
+      <p>Las 25 pantallas como ítems directos, sin acordeones. Cero cambios de pantallas, pero no entra sin scroll en 768px de alto.</p>
+    </div>
+  </div>
+
+</div>

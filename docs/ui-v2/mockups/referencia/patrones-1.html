@@ -1,0 +1,558 @@
+<!--
+  Origen: .superpowers/brainstorm/82329-1790634625/content/patrones-1.html
+  (brainstorming del 2026-09-28, visual companion de superpowers; patrones de pantalla aprobados: listado, formulario, Inicio, Login, Catalogos).
+  REFERENCIA DE DIRECCION aprobada por el usuario, NO es un mockup de pantalla final.
+  Es un fragmento: el frame del visual companion lo envolvia; se renderiza a escala 0.7.
+  Los mockups finales por pantalla viven en docs/ui-v2/mockups/<modulo>/ y usan el CSS generado de tokens.
+  Spec: docs/superpowers/specs/2026-09-28-ui-v2-rediseno-total-design.md
+-->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+
+<style>
+  h2.pt-h2 { font-family:'Inter', sans-serif; font-size:22px; font-weight:600; color:#1C1917; margin:0 0 4px; }
+  p.subtitle { font-family:'Inter', sans-serif; font-size:13px; color:#57534E; margin:0 0 24px; line-height:18px; }
+
+  .pt-mockups { display:flex; flex-direction:column; gap:32px; }
+  .mockup-header { font-family:'Inter', sans-serif; font-size:14px; font-weight:600; color:#1C1917; margin-bottom:8px; }
+  .mockup-note { font-family:'Inter', sans-serif; font-size:13px; color:#57534E; line-height:18px; margin:8px 0 0; max-width:896px; }
+
+  .pt-stage { width:896px; height:532px; margin:0; overflow:hidden; border-radius:8px; border:1px solid #E7E5E4; background:#FFFFFF; }
+  .pt-window { width:1280px; height:760px; transform:scale(0.7); transform-origin: top left; display:flex; font-family:'Inter', sans-serif; background:#F7F7F5; color:#1C1917; }
+  .pt-window, .pt-window * { box-sizing:border-box; }
+
+  /* --- sidebar --- */
+  .pt-sidebar { width:240px; flex:0 0 240px; display:flex; flex-direction:column; padding:16px 12px; background:#FFFFFF; border-right:1px solid #E7E5E4; }
+  .pt-brand { padding:4px 8px 12px 8px; }
+  .pt-brand-name { font-size:15px; font-weight:700; line-height:18px; color:#1C1917; }
+  .pt-brand-sub { font-size:12px; line-height:14px; margin-top:2px; color:#78716C; }
+  .pt-nav { flex:1 1 auto; display:flex; flex-direction:column; }
+  .pt-group { font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; margin:12px 8px 4px; line-height:16px; color:#A8A29E; }
+  .pt-item { display:flex; align-items:center; gap:8px; padding:8px 12px; font-size:12px; font-weight:500; line-height:16px; border-radius:8px; color:#44403C; }
+  .pt-item.pt-active { background:#DBEAFE; color:#1E3A8A; font-weight:600; }
+  .pt-item.pt-active .pt-ico { background:#1D4ED8; }
+  .pt-ico { width:16px; height:16px; border-radius:4px; flex:0 0 16px; display:inline-block; background:#E7E5E4; }
+  .pt-user { display:flex; align-items:center; gap:8px; padding:8px 4px 4px; border-top:1px solid #E7E5E4; margin-top:8px; }
+  .pt-avatar { width:28px; height:28px; border-radius:14px; flex:0 0 28px; display:flex; align-items:center; justify-content:center; background:#D6D3D1; color:#44403C; font-size:11px; font-weight:600; }
+  .pt-user-info { flex:1 1 auto; min-width:0; }
+  .pt-user-name { font-size:11px; font-weight:600; line-height:14px; color:#1C1917; }
+  .pt-user-role { font-size:10px; line-height:12px; margin-top:2px; color:#78716C; }
+  .pt-logout-btn { width:28px; height:28px; border-radius:8px; border:1px solid #D6D3D1; background:#FFFFFF; display:flex; align-items:center; justify-content:center; flex:0 0 28px; }
+  .pt-version { font-size:11px; line-height:14px; color:#A8A29E; padding:4px 4px 0; }
+
+  /* --- contenido --- */
+  .pt-content { flex:1 1 auto; padding:24px 28px; overflow:hidden; background:#F7F7F5; }
+  .pt-breadcrumb { font-size:13px; line-height:16px; margin-bottom:8px; color:#78716C; }
+  .pt-breadcrumb-link { color:#1D4ED8; font-weight:500; }
+  .pt-topbar { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:16px; }
+  .pt-title { font-size:22px; font-weight:600; line-height:26px; color:#1C1917; }
+  .pt-subtitle { font-size:13px; line-height:16px; margin-top:4px; color:#57534E; }
+  .pt-actions { display:flex; gap:8px; }
+  .pt-btn { font-family:inherit; font-size:13px; font-weight:600; height:36px; padding:0 16px; border-radius:8px; border:1px solid transparent; display:inline-flex; align-items:center; }
+  .pt-btn-secondary { background:#FFFFFF; border-color:#D6D3D1; color:#44403C; }
+  .pt-btn-primary { background:#1D4ED8; border-color:#1D4ED8; color:#FFFFFF; }
+
+  .pt-card { background:#FFFFFF; border-radius:10px; border:1px solid #E7E5E4; box-shadow:0 1px 2px rgba(0,0,0,0.05); padding:16px; }
+
+  /* --- formulario (mockup 1) --- */
+  .pt-form-card { max-width:760px; padding:24px; }
+  .pt-section-title { font-size:13px; font-weight:600; color:#1C1917; margin:0 0 12px; }
+  .pt-section + .pt-section { margin-top:20px; }
+  .pt-section-sep { height:1px; background:#F0EFED; margin:20px 0; }
+  .pt-field-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .pt-field { display:flex; flex-direction:column; gap:4px; margin-bottom:16px; }
+  .pt-field:last-child { margin-bottom:0; }
+  .pt-label { font-size:12px; font-weight:500; color:#44403C; }
+  .pt-required { color:#DC2626; margin-left:2px; }
+  .pt-input { height:36px; border-radius:8px; border:1px solid #D6D3D1; padding:0 12px; font-size:13px; color:#44403C; background:#FFFFFF; display:flex; align-items:center; }
+  .pt-input.pt-input-error { border-color:#DC2626; }
+  .pt-error-msg { font-size:12px; color:#DC2626; margin-top:4px; }
+  .pt-checkbox-row { display:flex; align-items:center; gap:8px; font-size:13px; color:#44403C; height:36px; }
+  .pt-checkbox-box { width:16px; height:16px; border-radius:4px; border:1px solid #D6D3D1; background:#FFFFFF; flex:0 0 16px; }
+  .pt-card-footer { display:flex; justify-content:flex-end; gap:8px; margin-top:24px; padding-top:16px; border-top:1px solid #F0EFED; }
+
+  /* --- catálogos master-detail (mockup 2) --- */
+  .pt-master-detail { display:flex; gap:16px; align-items:flex-start; }
+  .pt-catalog-list { width:220px; flex:0 0 220px; padding:12px; }
+  .pt-catalog-detail { flex:1 1 auto; }
+  .pt-search { font-family:inherit; font-size:13px; height:36px; padding:0 12px; border-radius:8px; border:1px solid #D6D3D1; background:#FFFFFF; color:#57534E; display:flex; align-items:center; flex:0 0 280px; margin-bottom:16px; }
+  .pt-grid { border-radius:8px; overflow:hidden; border:1px solid #F0EFED; }
+  .pt-row { display:flex; align-items:center; height:40px; border-bottom:1px solid #F0EFED; }
+  .pt-row-head { height:36px; background:#FAFAF9; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#78716C; border-bottom:1px solid #F0EFED; }
+  .pt-col { padding:0 12px; font-size:13px; color:#44403C; }
+  .pt-col-name { flex:1 1 auto; color:#1C1917; font-weight:500; }
+  .pt-col-110 { width:110px; }
+  .pt-badge { display:inline-block; font-size:12px; font-weight:500; padding:2px 8px; border-radius:999px; }
+  .pt-badge-activa { background:#DCFCE7; color:#14532D; }
+  .pt-badge-inactiva { background:#F5F5F4; color:#44403C; }
+  .pt-badge-vencida { background:#FEE2E2; color:#991B1B; }
+  .pt-badge-proxima { background:#FEF3C7; color:#92400E; }
+
+  /* --- dashboard Inicio (mockup 3) --- */
+  .pt-greeting-title { font-size:22px; font-weight:600; line-height:26px; color:#1C1917; }
+  .pt-greeting-date { font-size:13px; line-height:16px; margin-top:4px; color:#57534E; }
+  .pt-kpi-row { display:flex; gap:12px; margin-top:16px; }
+  .pt-kpi-card { flex:1 1 auto; padding:16px; }
+  .pt-kpi-value { font-size:20px; font-weight:600; color:#1C1917; }
+  .pt-kpi-label { font-size:12px; font-weight:500; color:#78716C; margin-top:4px; }
+  .pt-kpi-card.pt-kpi-missing { border-style:dashed; }
+  .pt-kpi-card.pt-kpi-missing .pt-kpi-value { color:#A8A29E; }
+  .pt-columns { display:flex; gap:16px; margin-top:16px; }
+  .pt-col-left { flex:1 1 auto; }
+  .pt-col-right { flex:1 1 auto; }
+  .pt-panel-title { font-size:13px; font-weight:600; color:#1C1917; margin-bottom:12px; }
+  .pt-task-row { display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid #F0EFED; }
+  .pt-task-row:last-child { border-bottom:none; }
+  .pt-task-title { flex:1 1 auto; font-size:13px; color:#1C1917; }
+  .pt-task-date { font-size:12px; color:#78716C; }
+  .pt-quickaccess-grid { display:flex; flex-wrap:wrap; gap:12px; }
+  .pt-quickaccess-card { width:calc((100% - 12px)/2); border:1px solid #E7E5E4; border-radius:8px; padding:16px; display:flex; gap:8px; align-items:flex-start; }
+  .pt-quickaccess-title { font-size:13px; font-weight:600; color:#1C1917; }
+  .pt-quickaccess-desc { font-size:12px; color:#78716C; margin-top:2px; }
+  .pt-banner-warning { background:#FEF3C7; border:1px solid #FDE68A; color:#92400E; border-radius:8px; padding:12px 16px; font-size:13px; line-height:18px; margin-top:16px; }
+
+  /* --- login (mockup 4) --- */
+  .pt-login-page { width:1280px; height:760px; transform:scale(0.7); transform-origin: top left; display:flex; align-items:center; justify-content:center; font-family:'Inter', sans-serif; background:#F7F7F5; color:#1C1917; box-sizing:border-box; }
+  .pt-login-page * { box-sizing:border-box; }
+  .pt-login-card { width:400px; padding:32px; background:#FFFFFF; border-radius:10px; border:1px solid #E7E5E4; box-shadow:0 1px 2px rgba(0,0,0,0.05); }
+  .pt-login-title { font-size:20px; font-weight:600; color:#1C1917; text-align:center; }
+  .pt-login-sub { font-size:12px; color:#78716C; text-align:center; margin-top:2px; }
+  .pt-login-desc { font-size:13px; color:#57534E; text-align:center; margin-top:16px; }
+  .pt-alert-error { background:#FEE2E2; border:1px solid #FCA5A5; color:#991B1B; border-radius:8px; padding:12px; font-size:13px; margin-top:16px; }
+  .pt-login-field { margin-top:16px; }
+  .pt-login-link { font-size:13px; color:#1D4ED8; text-align:center; margin-top:12px; }
+  .pt-login-version { font-size:11px; color:#A8A29E; text-align:center; margin-top:16px; }
+</style>
+
+<h2 class="pt-h2">Patrones de pantalla</h2>
+<p class="subtitle">Cómo se ven los tipos de pantalla con la dirección elegida. Decime qué ajustarías en cada uno.</p>
+
+<div class="pt-mockups">
+
+  <!-- 1. Formulario — Nuevo gasto -->
+  <div class="mockup">
+    <div class="mockup-header">Formulario — Nuevo gasto</div>
+    <div class="pt-stage">
+      <div class="pt-window">
+        <aside class="pt-sidebar">
+          <div class="pt-brand">
+            <div class="pt-brand-name">Gestión Municipal</div>
+            <div class="pt-brand-sub">Municipio de Carmelo</div>
+          </div>
+          <nav class="pt-nav">
+            <div class="pt-item"><span class="pt-ico"></span>Inicio</div>
+            <div class="pt-group">Inventario</div>
+            <div class="pt-item"><span class="pt-ico"></span>Productos</div>
+            <div class="pt-item"><span class="pt-ico"></span>Registrar entrada</div>
+            <div class="pt-item"><span class="pt-ico"></span>Registrar salida</div>
+            <div class="pt-item"><span class="pt-ico"></span>Ingreso por factura</div>
+            <div class="pt-item"><span class="pt-ico"></span>Historial de movimientos</div>
+            <div class="pt-group">Finanzas</div>
+            <div class="pt-item pt-active"><span class="pt-ico"></span>Gastos y facturas</div>
+            <div class="pt-item"><span class="pt-ico"></span>Ingresos de caja</div>
+            <div class="pt-item"><span class="pt-ico"></span>Libro caja</div>
+            <div class="pt-item"><span class="pt-ico"></span>Control POA</div>
+            <div class="pt-item"><span class="pt-ico"></span>Calendario de pagos</div>
+            <div class="pt-group">Gestión</div>
+            <div class="pt-item"><span class="pt-ico"></span>Tareas</div>
+            <div class="pt-item"><span class="pt-ico"></span>Documentos</div>
+            <div class="pt-group">Análisis</div>
+            <div class="pt-item"><span class="pt-ico"></span>Reportes</div>
+            <div class="pt-group">Administración</div>
+            <div class="pt-item"><span class="pt-ico"></span>Catálogos</div>
+            <div class="pt-item"><span class="pt-ico"></span>Usuarios</div>
+            <div class="pt-item"><span class="pt-ico"></span>Mantenimiento</div>
+          </nav>
+          <div class="pt-user">
+            <span class="pt-avatar">MP</span>
+            <div class="pt-user-info">
+              <div class="pt-user-name">María Pérez</div>
+              <div class="pt-user-role">Administrador</div>
+            </div>
+            <button class="pt-logout-btn"><span class="pt-ico"></span></button>
+          </div>
+          <div class="pt-version">v0.4.0</div>
+        </aside>
+        <main class="pt-content">
+          <div class="pt-breadcrumb"><span class="pt-breadcrumb-link">Gastos y facturas</span> / Nuevo gasto</div>
+          <div class="pt-topbar">
+            <div>
+              <div class="pt-title">Nuevo gasto</div>
+            </div>
+          </div>
+
+          <div class="pt-card pt-form-card">
+
+            <div class="pt-section">
+              <div class="pt-section-title">Datos de la factura</div>
+
+              <div class="pt-field">
+                <label class="pt-label">Proveedor<span class="pt-required">*</span></label>
+                <div class="pt-input">Elegí el proveedor</div>
+              </div>
+
+              <div class="pt-field-grid">
+                <div class="pt-field">
+                  <label class="pt-label">Número de factura (opcional)</label>
+                  <div class="pt-input">Ej.: A-0001234</div>
+                </div>
+                <div class="pt-field">
+                  <label class="pt-label">Orden de compra (opcional)</label>
+                  <div class="pt-input">Ej.: OC-77</div>
+                </div>
+              </div>
+
+              <div class="pt-field">
+                <label class="pt-label">Detalle<span class="pt-required">*</span></label>
+                <div class="pt-input">Ej.: Materiales para la rambla</div>
+              </div>
+
+              <div class="pt-field">
+                <label class="pt-label">Destino (opcional)</label>
+                <div class="pt-input">Ej.: Corralón municipal</div>
+              </div>
+
+              <div class="pt-field-grid">
+                <div class="pt-field">
+                  <label class="pt-label">Fecha<span class="pt-required">*</span></label>
+                  <div class="pt-input">dd/mm/aaaa</div>
+                </div>
+                <div class="pt-field">
+                  <label class="pt-label">Monto total<span class="pt-required">*</span></label>
+                  <div class="pt-input pt-input-error">1.500,5X</div>
+                  <div class="pt-error-msg">Ingresá un monto válido (ej.: 1.500,50).</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="pt-section-sep"></div>
+
+            <div class="pt-section">
+              <div class="pt-section-title">Imputación</div>
+
+              <div class="pt-field-grid">
+                <div class="pt-field">
+                  <label class="pt-label">Fuente de financiamiento<span class="pt-required">*</span></label>
+                  <div class="pt-input">Elegí la fuente</div>
+                </div>
+                <div class="pt-field">
+                  <label class="pt-label">Rubro<span class="pt-required">*</span></label>
+                  <div class="pt-input">Elegí el rubro</div>
+                </div>
+              </div>
+
+              <div class="pt-field-grid">
+                <div class="pt-field">
+                  <label class="pt-label">Línea POA (opcional)</label>
+                  <div class="pt-input">Sin línea POA</div>
+                </div>
+                <div class="pt-field">
+                  <label class="pt-label">&nbsp;</label>
+                  <div class="pt-checkbox-row"><span class="pt-checkbox-box"></span>Compra a crédito</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="pt-card-footer">
+              <button class="pt-btn pt-btn-secondary">Cancelar</button>
+              <button class="pt-btn pt-btn-primary">Guardar gasto</button>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+    <p class="mockup-note">Campos y orden tomados de GastoFormView.axaml/GastoFormViewModel: Proveedor, N° factura y Orden de compra (opcionales, así lo dice hoy la etiqueta), Detalle, Destino (opcional), Fecha, Monto total, Fuente de financiamiento, Rubro, Línea POA (opcional) y el checkbox "Compra a crédito" (que hoy revela un campo "Fecha de vencimiento" — lo omití por estar colapsado en este estado). El bloque de Adjuntos NO se muestra: en el código real el panel de adjuntos solo aparece en modo edición (<code>IsVisible="{Binding EsEdicion}"</code>), nunca al crear. El botón real hoy dice solo "Guardar"; acá se probó "Guardar gasto" para más contexto — a confirmar. Un solo primario, como pide el patrón.</p>
+  </div>
+
+  <!-- 2. Catálogos (master-detail) -->
+  <div class="mockup">
+    <div class="mockup-header">Catálogos (master-detail)</div>
+    <div class="pt-stage">
+      <div class="pt-window">
+        <aside class="pt-sidebar">
+          <div class="pt-brand">
+            <div class="pt-brand-name">Gestión Municipal</div>
+            <div class="pt-brand-sub">Municipio de Carmelo</div>
+          </div>
+          <nav class="pt-nav">
+            <div class="pt-item"><span class="pt-ico"></span>Inicio</div>
+            <div class="pt-group">Inventario</div>
+            <div class="pt-item"><span class="pt-ico"></span>Productos</div>
+            <div class="pt-item"><span class="pt-ico"></span>Registrar entrada</div>
+            <div class="pt-item"><span class="pt-ico"></span>Registrar salida</div>
+            <div class="pt-item"><span class="pt-ico"></span>Ingreso por factura</div>
+            <div class="pt-item"><span class="pt-ico"></span>Historial de movimientos</div>
+            <div class="pt-group">Finanzas</div>
+            <div class="pt-item"><span class="pt-ico"></span>Gastos y facturas</div>
+            <div class="pt-item"><span class="pt-ico"></span>Ingresos de caja</div>
+            <div class="pt-item"><span class="pt-ico"></span>Libro caja</div>
+            <div class="pt-item"><span class="pt-ico"></span>Control POA</div>
+            <div class="pt-item"><span class="pt-ico"></span>Calendario de pagos</div>
+            <div class="pt-group">Gestión</div>
+            <div class="pt-item"><span class="pt-ico"></span>Tareas</div>
+            <div class="pt-item"><span class="pt-ico"></span>Documentos</div>
+            <div class="pt-group">Análisis</div>
+            <div class="pt-item"><span class="pt-ico"></span>Reportes</div>
+            <div class="pt-group">Administración</div>
+            <div class="pt-item pt-active"><span class="pt-ico"></span>Catálogos</div>
+            <div class="pt-item"><span class="pt-ico"></span>Usuarios</div>
+            <div class="pt-item"><span class="pt-ico"></span>Mantenimiento</div>
+          </nav>
+          <div class="pt-user">
+            <span class="pt-avatar">MP</span>
+            <div class="pt-user-info">
+              <div class="pt-user-name">María Pérez</div>
+              <div class="pt-user-role">Administrador</div>
+            </div>
+            <button class="pt-logout-btn"><span class="pt-ico"></span></button>
+          </div>
+          <div class="pt-version">v0.4.0</div>
+        </aside>
+        <main class="pt-content">
+          <div class="pt-topbar">
+            <div>
+              <div class="pt-title">Catálogos</div>
+              <div class="pt-subtitle">Tablas maestras del sistema</div>
+            </div>
+          </div>
+
+          <div class="pt-master-detail">
+            <div class="pt-card pt-catalog-list">
+              <div class="pt-group" style="margin-top:0;">Inventario</div>
+              <div class="pt-item pt-active"><span class="pt-ico"></span>Categorías</div>
+              <div class="pt-item"><span class="pt-ico"></span>Proveedores</div>
+              <div class="pt-item"><span class="pt-ico"></span>Unidades de medida</div>
+              <div class="pt-group">Finanzas</div>
+              <div class="pt-item"><span class="pt-ico"></span>Fuentes de financiamiento</div>
+              <div class="pt-item"><span class="pt-ico"></span>Rubros de gasto</div>
+              <div class="pt-item"><span class="pt-ico"></span>Líneas POA</div>
+              <div class="pt-group">Tareas</div>
+              <div class="pt-item"><span class="pt-ico"></span>Zonas</div>
+              <div class="pt-item"><span class="pt-ico"></span>Dimensiones</div>
+              <div class="pt-item"><span class="pt-ico"></span>Organismos responsables</div>
+              <div class="pt-item"><span class="pt-ico"></span>Orígenes de financiamiento</div>
+            </div>
+
+            <div class="pt-card pt-catalog-detail">
+              <div class="pt-topbar" style="margin-bottom:12px;">
+                <div class="pt-title" style="font-size:15px; line-height:18px;">Categorías</div>
+                <div class="pt-actions">
+                  <button class="pt-btn pt-btn-secondary">Editar</button>
+                  <button class="pt-btn pt-btn-secondary">Dar de baja</button>
+                  <button class="pt-btn pt-btn-primary">Nueva categoría</button>
+                </div>
+              </div>
+              <div class="pt-search">Buscar por nombre…</div>
+              <div class="pt-grid">
+                <div class="pt-row pt-row-head">
+                  <div class="pt-col pt-col-name">Nombre</div>
+                  <div class="pt-col pt-col-110">Estado</div>
+                </div>
+                <div class="pt-row">
+                  <div class="pt-col pt-col-name">Materiales de construcción</div>
+                  <div class="pt-col pt-col-110"><span class="pt-badge pt-badge-activa">Activa</span></div>
+                </div>
+                <div class="pt-row">
+                  <div class="pt-col pt-col-name">Electricidad</div>
+                  <div class="pt-col pt-col-110"><span class="pt-badge pt-badge-activa">Activa</span></div>
+                </div>
+                <div class="pt-row">
+                  <div class="pt-col pt-col-name">Plomería</div>
+                  <div class="pt-col pt-col-110"><span class="pt-badge pt-badge-activa">Activa</span></div>
+                </div>
+                <div class="pt-row">
+                  <div class="pt-col pt-col-name">Limpieza</div>
+                  <div class="pt-col pt-col-110"><span class="pt-badge pt-badge-activa">Activa</span></div>
+                </div>
+                <div class="pt-row">
+                  <div class="pt-col pt-col-name">Herramientas fuera de uso</div>
+                  <div class="pt-col pt-col-110"><span class="pt-badge pt-badge-inactiva">Inactiva</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+    <p class="mockup-note">Grupos y nombres tomados de MaestrosFinanzasView.axaml (Fuentes de financiamiento, Rubros de gasto, Líneas POA) y CatalogosTareaView.axaml (Zonas, Dimensiones, Organismos responsables, Orígenes de financiamiento — el tab dice "Dimensiones", no "Dimensiones temáticas"). Categorías/Proveedores/Unidades de medida quedan como se pidió, no los verifiqué en código. Los 3 botones (Editar, Dar de baja, Nueva categoría) y la única columna real (Nombre + badge Activo/Inactivo) vienen de CategoriaListView.axaml, que HOY es un ListBox de una sola columna, no una grilla — la columna "Estado" y el buscador son propuestos por este patrón, no existen todavía.</p>
+  </div>
+
+  <!-- 3. Inicio (dashboard) -->
+  <div class="mockup">
+    <div class="mockup-header">Inicio (dashboard)</div>
+    <div class="pt-stage">
+      <div class="pt-window">
+        <aside class="pt-sidebar">
+          <div class="pt-brand">
+            <div class="pt-brand-name">Gestión Municipal</div>
+            <div class="pt-brand-sub">Municipio de Carmelo</div>
+          </div>
+          <nav class="pt-nav">
+            <div class="pt-item pt-active"><span class="pt-ico"></span>Inicio</div>
+            <div class="pt-group">Inventario</div>
+            <div class="pt-item"><span class="pt-ico"></span>Productos</div>
+            <div class="pt-item"><span class="pt-ico"></span>Registrar entrada</div>
+            <div class="pt-item"><span class="pt-ico"></span>Registrar salida</div>
+            <div class="pt-item"><span class="pt-ico"></span>Ingreso por factura</div>
+            <div class="pt-item"><span class="pt-ico"></span>Historial de movimientos</div>
+            <div class="pt-group">Finanzas</div>
+            <div class="pt-item"><span class="pt-ico"></span>Gastos y facturas</div>
+            <div class="pt-item"><span class="pt-ico"></span>Ingresos de caja</div>
+            <div class="pt-item"><span class="pt-ico"></span>Libro caja</div>
+            <div class="pt-item"><span class="pt-ico"></span>Control POA</div>
+            <div class="pt-item"><span class="pt-ico"></span>Calendario de pagos</div>
+            <div class="pt-group">Gestión</div>
+            <div class="pt-item"><span class="pt-ico"></span>Tareas</div>
+            <div class="pt-item"><span class="pt-ico"></span>Documentos</div>
+            <div class="pt-group">Análisis</div>
+            <div class="pt-item"><span class="pt-ico"></span>Reportes</div>
+            <div class="pt-group">Administración</div>
+            <div class="pt-item"><span class="pt-ico"></span>Catálogos</div>
+            <div class="pt-item"><span class="pt-ico"></span>Usuarios</div>
+            <div class="pt-item"><span class="pt-ico"></span>Mantenimiento</div>
+          </nav>
+          <div class="pt-user">
+            <span class="pt-avatar">MP</span>
+            <div class="pt-user-info">
+              <div class="pt-user-name">María Pérez</div>
+              <div class="pt-user-role">Administrador</div>
+            </div>
+            <button class="pt-logout-btn"><span class="pt-ico"></span></button>
+          </div>
+          <div class="pt-version">v0.4.0</div>
+        </aside>
+        <main class="pt-content">
+          <div class="pt-greeting-title">Buenos días, María</div>
+          <div class="pt-greeting-date">lunes 28 de septiembre de 2026 · Sesión iniciada como Administrador</div>
+
+          <div class="pt-kpi-row">
+            <div class="pt-card pt-kpi-card pt-kpi-missing">
+              <div class="pt-kpi-value">—</div>
+              <div class="pt-kpi-label">Artículos con stock bajo</div>
+            </div>
+            <div class="pt-card pt-kpi-card">
+              <div class="pt-kpi-value">3</div>
+              <div class="pt-kpi-label">Facturas a vencer (7 días)</div>
+            </div>
+            <div class="pt-card pt-kpi-card">
+              <div class="pt-kpi-value">5</div>
+              <div class="pt-kpi-label">Tareas vencidas</div>
+            </div>
+            <div class="pt-card pt-kpi-card">
+              <div class="pt-kpi-value">Hace 2 días</div>
+              <div class="pt-kpi-label">Último backup</div>
+            </div>
+          </div>
+
+          <div class="pt-banner-warning">Backup de la base de datos — el último backup exitoso fue el 20/09/2026 14:32 (hace más de 168 horas).</div>
+
+          <div class="pt-columns">
+            <div class="pt-card pt-col-left">
+              <div class="pt-panel-title">Tareas que requieren atención</div>
+              <div class="pt-task-row">
+                <span class="pt-badge pt-badge-vencida">Vencida</span>
+                <span class="pt-task-title">Reparar bache en Av. 18 de Julio</span>
+                <span class="pt-task-date">hace 2 días</span>
+              </div>
+              <div class="pt-task-row">
+                <span class="pt-badge pt-badge-vencida">Vencida</span>
+                <span class="pt-task-title">Retirar poda zona Rambla</span>
+                <span class="pt-task-date">hace 1 día</span>
+              </div>
+              <div class="pt-task-row">
+                <span class="pt-badge pt-badge-proxima">Próxima</span>
+                <span class="pt-task-title">Inspección de alumbrado público</span>
+                <span class="pt-task-date">en 2 días</span>
+              </div>
+              <div class="pt-task-row">
+                <span class="pt-badge pt-badge-proxima">Próxima</span>
+                <span class="pt-task-title">Mantenimiento plaza Independencia</span>
+                <span class="pt-task-date">en 3 días</span>
+              </div>
+            </div>
+            <div class="pt-card pt-col-right">
+              <div class="pt-panel-title">Accesos rápidos</div>
+              <div class="pt-quickaccess-grid">
+                <div class="pt-quickaccess-card">
+                  <span class="pt-ico"></span>
+                  <div>
+                    <div class="pt-quickaccess-title">Productos</div>
+                    <div class="pt-quickaccess-desc">Ver y administrar el catálogo</div>
+                  </div>
+                </div>
+                <div class="pt-quickaccess-card">
+                  <span class="pt-ico"></span>
+                  <div>
+                    <div class="pt-quickaccess-title">Registrar Entrada</div>
+                    <div class="pt-quickaccess-desc">Cargar entradas de stock</div>
+                  </div>
+                </div>
+                <div class="pt-quickaccess-card">
+                  <span class="pt-ico"></span>
+                  <div>
+                    <div class="pt-quickaccess-title">Registrar Salida</div>
+                    <div class="pt-quickaccess-desc">Cargar salidas de stock</div>
+                  </div>
+                </div>
+                <div class="pt-quickaccess-card">
+                  <span class="pt-ico"></span>
+                  <div>
+                    <div class="pt-quickaccess-title">Historial de movimientos</div>
+                    <div class="pt-quickaccess-desc">Consultar movimientos registrados</div>
+                  </div>
+                </div>
+                <div class="pt-quickaccess-card">
+                  <span class="pt-ico"></span>
+                  <div>
+                    <div class="pt-quickaccess-title">Valorización de inventario</div>
+                    <div class="pt-quickaccess-desc">Ver el valor total del stock</div>
+                  </div>
+                </div>
+                <div class="pt-quickaccess-card">
+                  <span class="pt-ico"></span>
+                  <div>
+                    <div class="pt-quickaccess-title">Log de auditoría</div>
+                    <div class="pt-quickaccess-desc">Revisar la actividad del sistema</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+    <p class="mockup-note">De las 4 tarjetas KPI, 3 tienen dato real en InicioViewModel hoy (CantidadAVencer7Dias, CantidadTareasVencidas, salud de backup vía IBackupsService) pero como texto narrativo dentro de banners, no como tarjetas — "Artículos con stock bajo" NO está expuesto por InicioViewModel y requiere una métrica nueva (marcado con "—"). El panel de tareas y los 6 accesos rápidos (Productos, Registrar Entrada, Registrar Salida, Historial de movimientos, Valorización de inventario, Log de auditoría) son los reales de InicioView.axaml; hoy usan viñeta ●/○ + color en vez de badge Vencida/Próxima, y los accesos rápidos NO tienen ícono — ambos son propuestas de este patrón. El banner amber corresponde al estado "salud de backup desconocida"; el estado "backup vencido confirmado" hoy usa borde rojo, no este banner.</p>
+  </div>
+
+  <!-- 4. Login -->
+  <div class="mockup">
+    <div class="mockup-header">Login</div>
+    <div class="pt-stage">
+      <div class="pt-login-page">
+        <div class="pt-login-card">
+          <div class="pt-login-title">Gestión Municipal</div>
+          <div class="pt-login-sub">Municipio de Carmelo</div>
+          <div class="pt-login-desc">Ingresá tus credenciales para continuar.</div>
+
+          <div class="pt-alert-error">Usuario o contraseña incorrectos.</div>
+
+          <div class="pt-field pt-login-field">
+            <label class="pt-label">Usuario</label>
+            <div class="pt-input">Nombre de usuario</div>
+          </div>
+          <div class="pt-field pt-login-field">
+            <label class="pt-label">Contraseña</label>
+            <div class="pt-input">●●●●●●●●</div>
+          </div>
+
+          <button class="pt-btn pt-btn-primary" style="width:100%; justify-content:center; margin-top:20px;">Entrar</button>
+
+          <div class="pt-login-link">No puedo entrar / resetear Admin</div>
+
+          <div class="pt-login-version">v0.4.0</div>
+        </div>
+      </div>
+    </div>
+    <p class="mockup-note">Campos, botón y link tomados de LoginView.axaml: "Usuario", "Contraseña", botón primario "Entrar" (no "Ingresar") y el link real es "No puedo entrar / resetear Admin". El código hoy solo muestra "Gestión Municipal" como marca (sin la línea "Municipio de Carmelo") y tiene además un aviso ámbar de "Modo de acceso limitado" cuando la licencia está vencida, que no incluí acá para no sumar un tercer estado a la vez. Sin sidebar, como pide el patrón.</p>
+  </div>
+
+</div>
