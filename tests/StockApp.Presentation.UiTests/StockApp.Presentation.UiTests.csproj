@@ -55,4 +55,16 @@
     </Compile>
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- feat(ui-v2): helpers de guardián de includes, compartidos con VisualTests (Task 8) para
+         que ambos bancos comparen su TestApp contra el mismo parseo de App.axaml. Mismo mecanismo
+         de Link que EsperaMonotonica.cs arriba. -->
+    <Compile Include="..\_Compartido\RaizRepo.cs">
+      <Link>Compartido\RaizRepo.cs</Link>
+    </Compile>
+    <Compile Include="..\_Compartido\IncludesDeAppAxaml.cs">
+      <Link>Compartido\IncludesDeAppAxaml.cs</Link>
+    </Compile>
+  </ItemGroup>
+
 </Project>

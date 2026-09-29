@@ -34,6 +34,26 @@ public class TestApp : Avalonia.Application
     // en produccion (que solo construye la Application una vez).
     private static bool _iconProviderRegistrado;
 
+    /// <summary>
+    /// Mismos ResourceInclude que App.axaml, en el mismo orden. Custodiado por
+    /// V2/IncludesAppAxamlTests: agregar un include a App.axaml sin agregarlo acá es un rojo.
+    /// </summary>
+    public static readonly string[] ResourceIncludes =
+    [
+        "avares://GestionMunicipal/Themes/Tokens.axaml",
+        "avares://GestionMunicipal/Themes/V2/Tokens.axaml",
+        "avares://GestionMunicipal/Controls/Componentes.axaml",
+    ];
+
+    /// <summary>Mismos StyleInclude que App.axaml (después del FluentTheme), mismo orden.</summary>
+    public static readonly string[] StyleIncludes =
+    [
+        "avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml",
+        "avares://GestionMunicipal/Themes/Typography.axaml",
+        "avares://GestionMunicipal/Themes/Controls.axaml",
+        "avares://GestionMunicipal/Themes/DataGrid.axaml",
+    ];
+
     public TestApp()
     {
         RequestedThemeVariant = ThemeVariant.Light;
@@ -63,45 +83,26 @@ public class TestApp : Avalonia.Application
         Resources["DataGridCurrencyVisualPrimaryBrush"] = new SolidColorBrush(Colors.Transparent);
         Resources["DataGridFillerColumnGridLinesBrush"] = new SolidColorBrush(Colors.Transparent);
 
-        Resources.MergedDictionaries.Add(new Avalonia.Markup.Xaml.Styling.ResourceInclude(
-            new Uri("avares://StockApp.Presentation.UiTests/"))
+        // Mismo orden exacto que App.axaml: recursos primero (tokens viejos, tokens v2,
+        // ControlTheme de Controls/), después FluentTheme y los StyleInclude (el Fluent.xaml del
+        // DataGrid, el UI Kit viejo y, a partir de la Task 10, los estilos v2 bajo .ui2).
+        foreach (var fuente in ResourceIncludes)
         {
-            Source = new Uri("avares://GestionMunicipal/Themes/Tokens.axaml")
-        });
-
-        // Componentes de Controls/: sus ControlTheme viven aca. Sin este include, un
-        // c:HeaderVista monta sin Template y el arbol visual queda vacio.
-        Resources.MergedDictionaries.Add(new Avalonia.Markup.Xaml.Styling.ResourceInclude(
-            new Uri("avares://StockApp.Presentation.UiTests/"))
-        {
-            Source = new Uri("avares://GestionMunicipal/Controls/Componentes.axaml")
-        });
+            Resources.MergedDictionaries.Add(new ResourceInclude(new Uri("avares://StockApp.Presentation.UiTests/"))
+            {
+                Source = new Uri(fuente)
+            });
+        }
 
         Styles.Add(new FluentTheme());
-        Styles.Add(new StyleInclude(new Uri("avares://StockApp.Presentation.UiTests/"))
-        {
-            Source = new Uri("avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml")
-        });
 
-        // StockApp UI Kit real, mismo orden que App.axaml (despues del FluentTheme, para poder
-        // overridear): Controls.axaml es donde vive la politica de DataValidationErrors.ErrorConverter.
-        Styles.Add(new StyleInclude(new Uri("avares://StockApp.Presentation.UiTests/"))
+        foreach (var fuente in StyleIncludes)
         {
-            Source = new Uri("avares://GestionMunicipal/Themes/Typography.axaml")
-        });
-        Styles.Add(new StyleInclude(new Uri("avares://StockApp.Presentation.UiTests/"))
-        {
-            Source = new Uri("avares://GestionMunicipal/Themes/Controls.axaml")
-        });
-
-        // DESPUES del StyleInclude del Fluent.xaml del DataGrid y de Controls.axaml, mismo orden
-        // exacto que App.axaml. Sin esto, las grillas se testean contra Fluent crudo. El guardian
-        // de este include llega con el estilo real de grilla (tanda 2): hoy no hay nada observable
-        // que distinga cargarlo de no cargarlo.
-        Styles.Add(new StyleInclude(new Uri("avares://StockApp.Presentation.UiTests/"))
-        {
-            Source = new Uri("avares://GestionMunicipal/Themes/DataGrid.axaml")
-        });
+            Styles.Add(new StyleInclude(new Uri("avares://StockApp.Presentation.UiTests/"))
+            {
+                Source = new Uri(fuente)
+            });
+        }
     }
 
     public static AppBuilder BuildAvaloniaApp()
