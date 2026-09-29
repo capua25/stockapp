@@ -14,4 +14,13 @@
     <InternalsVisibleTo Include="StockApp.UiV2.Herramientas.Tests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- AssetLoader de Avalonia necesita una plataforma inicializada para leer los TTF de Inter
+         embebidos (avares://Avalonia.Fonts.Inter/Assets/...): se usa el headless sin render. -->
+    <PackageReference Include="Avalonia.Headless" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+    <!-- Mismo proveedor de íconos que la app (prefijo mdi): el SVG del mockup sale del MISMO path. -->
+    <PackageReference Include="Optris.Icons.Avalonia.MaterialDesign" />
+  </ItemGroup>
+
 </Project>

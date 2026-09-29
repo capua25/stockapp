@@ -1,3 +1,4 @@
+using StockApp.UiV2.Herramientas.Mockups;
 using StockApp.UiV2.Herramientas.Tokens;
 
 namespace StockApp.UiV2.Herramientas;
@@ -34,6 +35,27 @@ public static class Cli
                     return ComandoTokens(verificar: false, salida, error, rutaTokensJson ?? RutasRepo.TokensJson);
                 case ["tokens", "--verificar"]:
                     return ComandoTokens(verificar: true, salida, error, rutaTokensJson ?? RutasRepo.TokensJson);
+                case ["fuentes"]:
+                    foreach (var ruta in ExtractorFuentes.Extraer(RutasRepo.CarpetaFuentes))
+                    {
+                        salida.WriteLine($"Escrito: {Path.GetRelativePath(RutasRepo.Raiz, ruta)}");
+                    }
+
+                    return 0;
+                case ["fuentes", "--verificar"]:
+                {
+                    var diferencias = ExtractorFuentes.Diferencias(RutasRepo.CarpetaFuentes);
+                    foreach (var ruta in diferencias)
+                    {
+                        error.WriteLine($"Distinta de la embebida: {Path.GetRelativePath(RutasRepo.Raiz, ruta)}");
+                    }
+
+                    return diferencias.Count == 0 ? 0 : 1;
+                }
+
+                case ["icono-svg", var clave]:
+                    salida.WriteLine(ExportadorIconos.Svg(clave));
+                    return 0;
                 default:
                     error.WriteLine(Uso);
                     return 2;

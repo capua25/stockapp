@@ -1,0 +1,45 @@
+/* Base de los mockups de la UI v2. Consume las variables de tokens.css (GENERADO).
+   Cada componente de src/StockApp.Presentation/Controls/V2 tiene acá su clase v2-*
+   con la MISMA geometría que su ControlTheme: si cambia uno, cambia el otro en el mismo commit.
+   Solo técnicas que Avalonia replica 1:1 (spec §6.1): colores sólidos, bordes de 1px, radios,
+   una única sombra, Inter local, px enteros. Prohibido: gradientes, blur, transiciones,
+   transparencias apiladas, text-shadow, pseudo-elementos decorativos.
+   Alto de línea: SIEMPRE var(--v2-fuente-<rol>-alto-linea), nunca "normal". tokens.css lo trae
+   calculado como el alto que mide un TextBlock de Avalonia (ceil del alto natural de Inter) o el
+   que fija el token (título de página 26). */
+
+@font-face { font-family: "InterV2"; src: url("fuentes/Inter-Regular.ttf") format("truetype"); font-weight: 400; }
+@font-face { font-family: "InterV2"; src: url("fuentes/Inter-Medium.ttf") format("truetype"); font-weight: 500; }
+@font-face { font-family: "InterV2"; src: url("fuentes/Inter-SemiBold.ttf") format("truetype"); font-weight: 600; }
+@font-face { font-family: "InterV2"; src: url("fuentes/Inter-Bold.ttf") format("truetype"); font-weight: 700; }
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--v2-color-fondo);
+}
+
+body {
+  font-family: "InterV2";
+  font-size: var(--v2-fuente-cuerpo-tamano);
+  line-height: var(--v2-fuente-cuerpo-alto-linea);
+  font-weight: 400;
+  color: var(--v2-color-texto-primario);
+}
+
+/* La ventana de la app: todo mockup va adentro de un .v2-ventana. */
+.v2-ventana {
+  position: relative;
+  width: 1280px;
+  height: 760px;
+  overflow: hidden;
+  background: var(--v2-color-fondo);
+}
+
+.v2-icono { display: block; flex: 0 0 auto; }
+
+/* Columna numérica: derecha + cifras tabulares (spec §2.3). */
+.v2-num { text-align: right; font-variant-numeric: tabular-nums; }
