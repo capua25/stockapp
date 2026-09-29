@@ -1,0 +1,78 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- UI v2 (spec 2026-09-28 §3.3): tema de DataGrid, SOLO dentro de .ui2. Se incluye al final
+         de App.axaml. Themes/DataGrid.axaml (viejo) sigue aplicando y NO se repite acá lo que se
+         conserva: CanUserResizeColumns, MinColumnWidth 40 (fix 3548397 de MinWidth por columna y
+         scroll horizontal) y el apagado del recuadro de foco de celda.
+         Geometría MEDIDA en Avalonia.Controls.DataGrid 12.0.1: la fila mide RowHeight + 1 de
+         PART_BottomGridLine; el header mide ColumnHeaderHeight con el separador de 1 adentro. Por eso
+         RowHeight es 39 (pitch 40 = V2AltoFilaGrilla) y ColumnHeaderHeight es el token (36).
+         Custodiado por UiTests/V2/DataGridV2Tests. -->
+
+    <Style Selector=".ui2 DataGrid">
+        <Setter Property="RowHeight" Value="39" />
+        <Setter Property="ColumnHeaderHeight" Value="{DynamicResource V2AltoHeaderGrilla}" />
+        <Setter Property="Background" Value="{DynamicResource V2SuperficieBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource V2SeparadorGrillaBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{DynamicResource V2RadioControl}" />
+        <Setter Property="GridLinesVisibility" Value="Horizontal" />
+        <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource V2SeparadorGrillaBrush}" />
+        <Setter Property="FontSize" Value="{DynamicResource V2FuenteControlTamano}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoEtiquetaBrush}" />
+    </Style>
+
+    <!-- Sin zebra: pisa DataGridRow:nth-child(2n) del tema viejo. -->
+    <Style Selector=".ui2 DataGridRow, .ui2 DataGridRow:nth-child(2n)">
+        <Setter Property="Background" Value="{DynamicResource V2SuperficieBrush}" />
+    </Style>
+    <Style Selector=".ui2 DataGridRow:pointerover /template/ Rectangle#BackgroundRectangle">
+        <Setter Property="Fill" Value="{DynamicResource V2HeaderGrillaBrush}" />
+        <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector=".ui2 DataGridRow:selected /template/ Rectangle#BackgroundRectangle">
+        <Setter Property="Fill" Value="{DynamicResource V2AcentoSuaveBrush}" />
+        <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <Style Selector=".ui2 DataGridColumnHeader">
+        <Setter Property="FontSize" Value="{DynamicResource V2FuenteHeaderColumnaTamano}" />
+        <Setter Property="FontWeight" Value="{DynamicResource V2FuenteHeaderColumnaPeso}" />
+        <Setter Property="LetterSpacing" Value="{DynamicResource V2FuenteHeaderColumnaEspaciadoLetras}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoTerciarioBrush}" />
+        <Setter Property="Background" Value="{DynamicResource V2HeaderGrillaBrush}" />
+        <Setter Property="Padding" Value="12,0" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="MinHeight" Value="0" />
+    </Style>
+    <Style Selector=".ui2 DataGridColumnHeader /template/ Rectangle#VerticalSeparator">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector=".ui2 DataGrid /template/ Rectangle#PART_ColumnHeadersAndRowsSeparator">
+        <Setter Property="Fill" Value="{DynamicResource V2SeparadorGrillaBrush}" />
+    </Style>
+
+    <Style Selector=".ui2 DataGridCell">
+        <Setter Property="Padding" Value="12,0" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="FontSize" Value="{DynamicResource V2FuenteControlTamano}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoEtiquetaBrush}" />
+    </Style>
+    <!-- El TextBlock que genera DataGridTextColumn (CellTextBlock) trae Margin 12,0,12,0 del tema
+         Fluent (medido: con Padding 12 de celda el texto quedaba a 24 del borde). El padding es uno
+         solo, el de la celda, así las columnas de texto y las de template (Insignia) alinean igual. -->
+    <Style Selector=".ui2 DataGridCell TextBlock#CellTextBlock">
+        <Setter Property="Margin" Value="0" />
+    </Style>
+    <!-- Columna numérica: derecha + cifras tabulares (spec §2.3). TextElement.FontFeatures se
+         hereda al TextBlock de la celda (verificado con render Skia: "1111" pasa de 25 a 34 px). -->
+    <Style Selector=".ui2 DataGridCell.num">
+        <Setter Property="HorizontalContentAlignment" Value="Right" />
+        <Setter Property="TextElement.FontFeatures" Value="+tnum" />
+    </Style>
+    <Style Selector=".ui2 DataGridCell.num TextBlock">
+        <Setter Property="HorizontalAlignment" Value="Right" />
+    </Style>
+
+</Styles>

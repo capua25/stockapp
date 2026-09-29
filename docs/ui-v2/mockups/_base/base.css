@@ -190,3 +190,24 @@ body {
 .v2-vacio-titulo--error { color: var(--v2-color-peligro-texto); }
 .v2-vacio-mensaje { max-width: 360px; font-size: var(--v2-fuente-control-tamano); line-height: var(--v2-fuente-control-alto-linea); color: var(--v2-color-texto-secundario); }
 .v2-vacio-acciones { margin-top: 8px; display: flex; gap: 8px; }
+
+/* DataGrid v2 (Themes/V2/DataGridV2.axaml). Header 36 con su separador adentro; filas de pitch
+   40 con el separador abajo (border-box); celdas con padding 0 12. Los anchos de columna del
+   mockup se copian de la vista: fijas con flex 0 0 Npx, "*" con flex 1 1 0. */
+.v2-grilla { border: 1px solid var(--v2-color-separador-grilla); border-radius: var(--v2-radio-control); overflow: hidden; background: var(--v2-color-superficie); }
+.v2-grilla-header {
+  display: flex; align-items: center; height: var(--v2-alto-header-grilla);
+  background: var(--v2-color-header-grilla); border-bottom: 1px solid var(--v2-color-separador-grilla);
+  font-size: var(--v2-fuente-header-columna-tamano); line-height: var(--v2-fuente-header-columna-alto-linea); font-weight: var(--v2-fuente-header-columna-peso);
+  letter-spacing: var(--v2-fuente-header-columna-espaciado-letras); text-transform: var(--v2-fuente-header-columna-transformacion);
+  color: var(--v2-color-texto-terciario);
+}
+.v2-grilla-fila {
+  display: flex; align-items: center; height: var(--v2-alto-fila-grilla);
+  border-bottom: 1px solid var(--v2-color-separador-grilla); background: var(--v2-color-superficie);
+  font-size: var(--v2-fuente-control-tamano); line-height: var(--v2-fuente-control-alto-linea); color: var(--v2-color-texto-etiqueta);
+}
+/* Celda: flex para centrar vertical igual que VerticalContentAlignment=Center; la numérica
+   alinea a la derecha con justify-content (text-align no aplica a un contenedor flex). */
+.v2-grilla-celda { display: flex; align-items: center; align-self: stretch; padding: 0 12px; white-space: nowrap; overflow: hidden; }
+.v2-grilla-celda.v2-num { justify-content: flex-end; }

@@ -69,3 +69,6 @@ aprobación del usuario.
   contenedor que hospede vistas no migradas.
 - Componentes v2: `xmlns:v2="using:StockApp.Presentation.Controls.V2"`.
 - Tokens v2: claves `V2*` y variables `--v2-*`.
+- Headers de `DataGridColumn` en MAYÚSCULAS (spec §2.3): Avalonia no tiene `text-transform`, así que
+  el `Header` de cada columna se escribe ya en mayúsculas a mano (en el mockup, `--v2-*-transformacion:
+  uppercase` sí lo hace vía CSS).

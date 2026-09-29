@@ -42,5 +42,6 @@
         <!-- UI v2: estilos de controles base bajo .ui2, AL FINAL para pisar a los viejos dentro de
              las vistas migradas. Fuera de .ui2 no matchean nada. -->
         <StyleInclude Source="avares://GestionMunicipal/Themes/V2/ControlesV2.axaml"/>
+        <StyleInclude Source="avares://GestionMunicipal/Themes/V2/DataGridV2.axaml"/>
     </Application.Styles>
 </Application>
