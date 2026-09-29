@@ -1,3 +1,5 @@
+using System.Globalization;
+using StockApp.UiV2.Herramientas.Imagenes;
 using StockApp.UiV2.Herramientas.Mockups;
 using StockApp.UiV2.Herramientas.Tokens;
 
@@ -56,6 +58,14 @@ public static class Cli
                 case ["icono-svg", var clave]:
                     salida.WriteLine(ExportadorIconos.Svg(clave));
                     return 0;
+                case ["comparar-png", var referencia, var candidata, var rutaDiff]:
+                {
+                    var r = ComparadorImagenes.Comparar(referencia, candidata, rutaDiff);
+                    salida.WriteLine(string.Create(CultureInfo.InvariantCulture,
+                        $"Píxeles distintos: {r.PixelesDistintos} ({r.PorcentajeDistinto:0.000}%). Teselas densas: {r.TeselasDensas}. Diff: {rutaDiff}"));
+                    return 0;
+                }
+
                 default:
                     error.WriteLine(Uso);
                     return 2;

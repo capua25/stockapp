@@ -19,6 +19,10 @@
          embebidos (avares://Avalonia.Fonts.Inter/Assets/...): se usa el headless sin render. -->
     <PackageReference Include="Avalonia.Headless" />
     <PackageReference Include="Avalonia.Fonts.Inter" />
+    <!-- SkiaSharp (MIT) para leer y comparar PNG. NO ImageSharp: la Six Labors Split License
+         exige licencia comercial a organizaciones que no son open source, ni non-profit, ni
+         empresas de menos de 1M USD; un municipio no entra en esas categorías. -->
+    <PackageReference Include="Avalonia.Skia" />
     <!-- Mismo proveedor de íconos que la app (prefijo mdi): el SVG del mockup sale del MISMO path. -->
     <PackageReference Include="Optris.Icons.Avalonia.MaterialDesign" />
   </ItemGroup>

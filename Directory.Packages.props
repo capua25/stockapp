@@ -13,6 +13,10 @@
     <PackageVersion Include="Avalonia.Headless" Version="12.0.5" />
     <PackageVersion Include="Avalonia.Headless.XUnit" Version="12.0.5" />
     <PackageVersion Include="Avalonia.Markup.Xaml.Loader" Version="12.0.5" />
+    <!-- UI v2: render headless con métricas reales (VisualTests) y SkiaSharp para el diff de PNG
+         de la herramienta. Trae SkiaSharp 3.119.4 + nativos de Linux alineados con Avalonia: no se
+         referencia SkiaSharp directo para no desalinear su versión de la de Avalonia. -->
+    <PackageVersion Include="Avalonia.Skia" Version="12.0.5" />
     <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.0.5" />
     <PackageVersion Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.1" />
     <PackageVersion Include="Optris.Icons.Avalonia" Version="12.0.7" />
