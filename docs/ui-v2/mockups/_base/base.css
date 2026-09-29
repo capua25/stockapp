@@ -43,3 +43,63 @@ body {
 
 /* Columna numérica: derecha + cifras tabulares (spec §2.3). */
 .v2-num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Tipografía (ControlesV2.axaml, clases de TextBlock) */
+.v2-titulo-pagina { font-size: var(--v2-fuente-titulo-pagina-tamano); font-weight: var(--v2-fuente-titulo-pagina-peso); line-height: var(--v2-fuente-titulo-pagina-alto-linea); color: var(--v2-color-texto-primario); }
+.v2-titulo-seccion { font-size: var(--v2-fuente-titulo-seccion-tamano); line-height: var(--v2-fuente-titulo-seccion-alto-linea); font-weight: var(--v2-fuente-titulo-seccion-peso); color: var(--v2-color-texto-primario); }
+.v2-cuerpo { font-size: var(--v2-fuente-cuerpo-tamano); line-height: var(--v2-fuente-cuerpo-alto-linea); font-weight: var(--v2-fuente-cuerpo-peso); color: var(--v2-color-texto-primario); }
+.v2-texto-secundario { font-size: var(--v2-fuente-control-tamano); line-height: var(--v2-fuente-control-alto-linea); font-weight: var(--v2-fuente-control-peso); color: var(--v2-color-texto-secundario); }
+.v2-subtitulo-formulario { font-size: var(--v2-fuente-subtitulo-formulario-tamano); line-height: var(--v2-fuente-subtitulo-formulario-alto-linea); font-weight: var(--v2-fuente-subtitulo-formulario-peso); color: var(--v2-color-texto-primario); }
+.v2-etiqueta-campo { font-size: var(--v2-fuente-etiqueta-campo-tamano); line-height: var(--v2-fuente-etiqueta-campo-alto-linea); font-weight: var(--v2-fuente-etiqueta-campo-peso); color: var(--v2-color-texto-etiqueta); }
+.v2-pie-conteo { font-size: var(--v2-fuente-pie-conteo-tamano); line-height: var(--v2-fuente-pie-conteo-alto-linea); font-weight: var(--v2-fuente-pie-conteo-peso); color: var(--v2-color-texto-terciario); }
+
+/* Botones (ControlesV2.axaml, Button.primario|secundario|ghost|peligro) */
+.v2-boton {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: var(--v2-alto-control); padding: 0 16px;
+  border: 1px solid transparent; border-radius: var(--v2-radio-control);
+  font-family: inherit; font-size: var(--v2-fuente-boton-tamano); line-height: var(--v2-fuente-boton-alto-linea); font-weight: var(--v2-fuente-boton-peso);
+  white-space: nowrap;
+}
+.v2-boton--primario { background: var(--v2-color-acento); border-color: var(--v2-color-acento); color: var(--v2-color-texto-sobre-acento); }
+.v2-boton--secundario { background: var(--v2-color-superficie); border-color: var(--v2-color-borde-input); color: var(--v2-color-texto-etiqueta); }
+.v2-boton--ghost { background: transparent; border-color: transparent; color: var(--v2-color-texto-etiqueta); }
+.v2-boton--peligro { background: var(--v2-color-superficie); border-color: var(--v2-color-borde-input); color: var(--v2-color-peligro-texto); }
+
+/* Inputs (TextBox, ComboBox, NumericUpDown, CalendarDatePicker, AutoCompleteBox) */
+.v2-input {
+  display: flex; align-items: center; justify-content: space-between;
+  height: var(--v2-alto-control); padding: 0 12px;
+  border: 1px solid var(--v2-color-borde-input); border-radius: var(--v2-radio-control);
+  background: var(--v2-color-superficie);
+  font-size: var(--v2-fuente-control-tamano); line-height: var(--v2-fuente-control-alto-linea); color: var(--v2-color-texto-etiqueta);
+  white-space: nowrap; overflow: hidden;
+}
+.v2-input--error { border-color: var(--v2-color-borde-error); }
+.v2-input-placeholder { color: var(--v2-color-texto-terciario); }
+/* Glifos a la derecha, con la geometría MEDIDA en el render de Avalonia:
+   ComboBox: PathIcon 12x12 de Fluent a 10px del borde exterior derecho. Con borde 1 + padding 12
+   el borde del contenido queda a 13, de ahí el margin-right de -3. Se dibuja con este SVG (mismo
+   path que Fluent, mismo ajuste uniforme):
+     <svg class="v2-glifo-combo" viewBox="19 486 2010 1095"><path fill="currentColor"
+       d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg>
+   CalendarDatePicker: ícono mdi-calendar-blank-outline de 16 centrado en un botón de 20 que
+   Fluent ubica a 4px del borde exterior: borde derecho del ícono a 6px, margin-right de -7.
+     dotnet run --project tools/StockApp.UiV2.Herramientas -- icono-svg mdi-calendar-blank-outline */
+.v2-glifo-combo { display: block; flex: 0 0 12px; width: 12px; height: 12px; margin-right: -3px; color: var(--v2-color-texto-terciario); }
+.v2-glifo-fecha { display: block; flex: 0 0 16px; margin-right: -7px; color: var(--v2-color-texto-terciario); }
+
+/* CheckBox. Geometría MEDIDA en el render de Avalonia: la plantilla Fluent reserva una caja de
+   20x20 (la casilla de 16 va centrada adentro) y el tilde es un Path de 9 x 6.69 en (4.375, 5.82)
+   de esa caja. El texto arranca a 20 + 8 de padding. */
+.v2-casilla-fila { display: flex; align-items: center; gap: 8px; height: var(--v2-alto-control); font-size: var(--v2-fuente-control-tamano); line-height: var(--v2-fuente-control-alto-linea); color: var(--v2-color-texto-etiqueta); }
+.v2-casilla-caja { position: relative; display: flex; align-items: center; justify-content: center; flex: 0 0 20px; width: 20px; height: 20px; }
+.v2-casilla {
+  width: 16px; height: 16px; border: 1px solid var(--v2-color-borde-input);
+  border-radius: var(--v2-radio-casilla); background: var(--v2-color-superficie);
+}
+.v2-casilla--marcada { background: var(--v2-color-acento); border-color: var(--v2-color-acento); }
+/* Tilde: mismo path que CheckMarkPathData de Fluent.
+     <svg class="v2-glifo-check" viewBox="0.012 0.012 17.475 12.988"><path fill="currentColor"
+       d="M5.5 10.586 1.707 6.793A1 1 0 0 0 .293 8.207l4.5 4.5a1 1 0 0 0 1.414 0l11-11A1 1 0 0 0 15.793.293L5.5 10.586Z"/></svg> */
+.v2-glifo-check { position: absolute; left: 4.375px; top: 5.82px; width: 9px; height: 6.69px; color: var(--v2-color-texto-sobre-acento); }

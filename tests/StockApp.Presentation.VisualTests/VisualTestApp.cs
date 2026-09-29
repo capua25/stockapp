@@ -35,6 +35,7 @@ public class VisualTestApp : Avalonia.Application
         "avares://GestionMunicipal/Themes/Typography.axaml",
         "avares://GestionMunicipal/Themes/Controls.axaml",
         "avares://GestionMunicipal/Themes/DataGrid.axaml",
+        "avares://GestionMunicipal/Themes/V2/ControlesV2.axaml",
     ];
 
     public VisualTestApp()

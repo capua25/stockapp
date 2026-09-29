@@ -1,0 +1,274 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:i="https://github.com/projektanker/icons.avalonia">
+
+    <!-- UI v2 (spec 2026-09-28 §3.3): estilos de controles base y tipografía.
+         TODO selector empieza con ".ui2 ": solo aplica dentro de una vista migrada (raíz con
+         Classes="ui2"). Las vistas viejas no se enteran.
+         Se incluye en App.axaml al FINAL: los estilos viejos globales (Button, TextBox,
+         Button.ghost de Themes/Controls.axaml) también matchean adentro de .ui2 y gana el último
+         declarado, así que cada estilo de acá setea TODAS las propiedades que setea su par viejo.
+         Hover, pressed y foco se pintan sobre la parte del template que Fluent pinta
+         (PART_ContentPresenter, PART_BorderElement), no sobre el control: un Setter sobre el
+         control no le gana al estilo de template de Fluent. -->
+
+    <!-- Tipografía -->
+    <Style Selector=".ui2 TextBlock.titulo-pagina">
+        <Setter Property="FontSize" Value="{DynamicResource V2FuenteTituloPaginaTamano}" />
+        <Setter Property="FontWeight" Value="{DynamicResource V2FuenteTituloPaginaPeso}" />
+        <Setter Property="LineHeight" Value="{DynamicResource V2FuenteTituloPaginaAltoLinea}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoPrimarioBrush}" />
+    </Style>
+    <Style Selector=".ui2 TextBlock.titulo-seccion">
+        <Setter Property="FontSize" Value="{DynamicResource V2FuenteTituloSeccionTamano}" />
+        <Setter Property="FontWeight" Value="{DynamicResource V2FuenteTituloSeccionPeso}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoPrimarioBrush}" />
+    </Style>
+    <Style Selector=".ui2 TextBlock.cuerpo">
+        <Setter Property="FontSize" Value="{DynamicResource V2FuenteCuerpoTamano}" />
+        <Setter Property="FontWeight" Value="{DynamicResource V2FuenteCuerpoPeso}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoPrimarioBrush}" />
+    </Style>
+    <Style Selector=".ui2 TextBlock.texto-secundario">
+        <Setter Property="FontSize" Value="{DynamicResource V2FuenteControlTamano}" />
+        <Setter Property="FontWeight" Value="{DynamicResource V2FuenteControlPeso}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoSecundarioBrush}" />
+    </Style>
+    <Style Selector=".ui2 TextBlock.subtitulo-formulario">
+        <Setter Property="FontSize" Value="{DynamicResource V2FuenteSubtituloFormularioTamano}" />
+        <Setter Property="FontWeight" Value="{DynamicResource V2FuenteSubtituloFormularioPeso}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoPrimarioBrush}" />
+    </Style>
+    <Style Selector=".ui2 TextBlock.etiqueta-campo">
+        <Setter Property="FontSize" Value="{DynamicResource V2FuenteEtiquetaCampoTamano}" />
+        <Setter Property="FontWeight" Value="{DynamicResource V2FuenteEtiquetaCampoPeso}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoEtiquetaBrush}" />
+    </Style>
+    <Style Selector=".ui2 TextBlock.pie-conteo">
+        <Setter Property="FontSize" Value="{DynamicResource V2FuentePieConteoTamano}" />
+        <Setter Property="FontWeight" Value="{DynamicResource V2FuentePieConteoPeso}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoTerciarioBrush}" />
+    </Style>
+
+    <!-- Botones: geometría común a las cuatro variantes -->
+    <Style Selector=".ui2 Button.primario, .ui2 Button.secundario, .ui2 Button.ghost, .ui2 Button.peligro">
+        <Setter Property="Height" Value="{DynamicResource V2AltoControl}" />
+        <Setter Property="MinHeight" Value="0" />
+        <Setter Property="Padding" Value="16,0" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{DynamicResource V2RadioControl}" />
+        <Setter Property="FontSize" Value="{DynamicResource V2FuenteBotonTamano}" />
+        <Setter Property="FontWeight" Value="{DynamicResource V2FuenteBotonPeso}" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <Style Selector=".ui2 Button.primario">
+        <Setter Property="Background" Value="{DynamicResource V2AcentoBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource V2AcentoBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoSobreAcentoBrush}" />
+    </Style>
+    <Style Selector=".ui2 Button.primario:pointerover /template/ ContentPresenter#PART_ContentPresenter, .ui2 Button.primario:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource V2AcentoHoverBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource V2AcentoHoverBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoSobreAcentoBrush}" />
+    </Style>
+
+    <Style Selector=".ui2 Button.secundario">
+        <Setter Property="Background" Value="{DynamicResource V2SuperficieBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource V2BordeInputBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoEtiquetaBrush}" />
+    </Style>
+    <Style Selector=".ui2 Button.secundario:pointerover /template/ ContentPresenter#PART_ContentPresenter, .ui2 Button.secundario:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource V2HoverNeutroBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource V2BordeInputBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoEtiquetaBrush}" />
+    </Style>
+
+    <Style Selector=".ui2 Button.ghost">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoEtiquetaBrush}" />
+    </Style>
+    <Style Selector=".ui2 Button.ghost:pointerover /template/ ContentPresenter#PART_ContentPresenter, .ui2 Button.ghost:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource V2HoverNeutroBrush}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoEtiquetaBrush}" />
+    </Style>
+
+    <Style Selector=".ui2 Button.peligro">
+        <Setter Property="Background" Value="{DynamicResource V2SuperficieBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource V2BordeInputBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2PeligroTextoBrush}" />
+    </Style>
+    <Style Selector=".ui2 Button.peligro:pointerover /template/ ContentPresenter#PART_ContentPresenter, .ui2 Button.peligro:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource V2HoverNeutroBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource V2BordeInputBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2PeligroTextoBrush}" />
+    </Style>
+
+    <Style Selector=".ui2 Button.primario:disabled /template/ ContentPresenter#PART_ContentPresenter, .ui2 Button.secundario:disabled /template/ ContentPresenter#PART_ContentPresenter, .ui2 Button.peligro:disabled /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource V2DeshabilitadoFondoBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource V2BordeBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2DeshabilitadoTextoBrush}" />
+    </Style>
+    <Style Selector=".ui2 Button.ghost:disabled /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource V2DeshabilitadoTextoBrush}" />
+    </Style>
+
+    <!-- Inputs: 36 de alto, borde input, radio 8, texto 13 en color etiqueta -->
+    <Style Selector=".ui2 TextBox">
+        <Setter Property="MinHeight" Value="{DynamicResource V2AltoControl}" />
+        <Setter Property="Padding" Value="12,0" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{DynamicResource V2RadioControl}" />
+        <Setter Property="Background" Value="{DynamicResource V2SuperficieBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource V2BordeInputBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoEtiquetaBrush}" />
+        <Setter Property="PlaceholderForeground" Value="{DynamicResource V2TextoTerciarioBrush}" />
+        <Setter Property="FontSize" Value="{DynamicResource V2FuenteControlTamano}" />
+    </Style>
+    <Style Selector=".ui2 TextBox[AcceptsReturn=True]">
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="VerticalContentAlignment" Value="Top" />
+    </Style>
+    <Style Selector=".ui2 TextBox:pointerover /template/ Border#PART_BorderElement">
+        <Setter Property="Background" Value="{DynamicResource V2SuperficieBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource V2BordeInputBrush}" />
+    </Style>
+    <Style Selector=".ui2 TextBox:focus /template/ Border#PART_BorderElement">
+        <Setter Property="Background" Value="{DynamicResource V2SuperficieBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource V2AcentoBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector=".ui2 TextBox:error /template/ Border#PART_BorderElement">
+        <Setter Property="BorderBrush" Value="{DynamicResource V2BordeErrorBrush}" />
+    </Style>
+
+    <!-- Un estilo por tipo, NO un selector múltiple: con ".ui2 ComboBox, .ui2 NumericUpDown" el
+         compilador resuelve las propiedades contra el ancestro común (TemplatedControl) y
+         VerticalContentAlignment no existe ahí.
+         Padding 13 en ComboBox y NumericUpDown: sus plantillas Fluent no descuentan el borde de 1
+         (medido: con Padding 12 el texto arranca en x=12, en TextBox y CalendarDatePicker en x=13).
+         13 = los 12 de diseño + 1 de borde; custodiado por Inputs_TextoEmpiezaA13DelBordeExterior. -->
+    <Style Selector=".ui2 ComboBox">
+        <Setter Property="Height" Value="{DynamicResource V2AltoControl}" />
+        <Setter Property="MinHeight" Value="0" />
+        <Setter Property="Padding" Value="13,0" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{DynamicResource V2RadioControl}" />
+        <Setter Property="Background" Value="{DynamicResource V2SuperficieBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource V2BordeInputBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoEtiquetaBrush}" />
+        <Setter Property="FontSize" Value="{DynamicResource V2FuenteControlTamano}" />
+    </Style>
+    <Style Selector=".ui2 NumericUpDown">
+        <Setter Property="Height" Value="{DynamicResource V2AltoControl}" />
+        <Setter Property="MinHeight" Value="0" />
+        <Setter Property="Padding" Value="13,0" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{DynamicResource V2RadioControl}" />
+        <Setter Property="Background" Value="{DynamicResource V2SuperficieBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource V2BordeInputBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoEtiquetaBrush}" />
+        <Setter Property="FontSize" Value="{DynamicResource V2FuenteControlTamano}" />
+        <Setter Property="ShowButtonSpinner" Value="False" />
+    </Style>
+    <Style Selector=".ui2 CalendarDatePicker">
+        <Setter Property="Height" Value="{DynamicResource V2AltoControl}" />
+        <Setter Property="MinHeight" Value="0" />
+        <Setter Property="Padding" Value="12,0" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{DynamicResource V2RadioControl}" />
+        <Setter Property="Background" Value="{DynamicResource V2SuperficieBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource V2BordeInputBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoEtiquetaBrush}" />
+        <Setter Property="FontSize" Value="{DynamicResource V2FuenteControlTamano}" />
+    </Style>
+    <!-- El botón de calendario de Fluent dibuja el NÚMERO DEL DÍA DE HOY (medido: un TextBlock
+         con la fecha actual dentro de PART_Button): un render que cambia con la fecha no se puede
+         comparar contra un mockup fijo. Se reemplaza su Template por un ícono MDI. Fluent le asigna
+         a PART_Button un Theme, no un Template local, así que este Setter de estilo gana. El ancho
+         20 es el mismo que el botón de Fluent. -->
+    <Style Selector=".ui2 CalendarDatePicker /template/ Button#PART_Button">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Background="Transparent" Width="20">
+                    <i:Icon x:Name="PART_GlifoFecha"
+                            Value="mdi-calendar-blank-outline"
+                            FontSize="16"
+                            Foreground="{DynamicResource V2TextoTerciarioBrush}"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector=".ui2 ComboBox /template/ PathIcon#DropDownGlyph">
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoTerciarioBrush}" />
+    </Style>
+    <!-- El TextBox interno ya está dentro del borde del control: sin esto recibe el MinHeight 36 y
+         el borde de ".ui2 TextBox" y el control termina midiendo 38 con doble borde. -->
+    <Style Selector=".ui2 NumericUpDown /template/ TextBox#PART_TextBox, .ui2 CalendarDatePicker /template/ TextBox#PART_TextBox">
+        <Setter Property="MinHeight" Value="0" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <!-- Desvío del brief (medido, no previsto en la plantilla original): el NumericUpDown.Padding
+         del estilo de arriba NO llega al texto — PART_TextBox es un TextBox real y ".ui2 TextBox"
+         (selector de tipo, más genérico) le fija su propio Padding 12,0, que es el que efectivamente
+         gobierna la posición del texto. CalendarDatePicker en cambio muestra el valor por un
+         ContentPresenter que sí hace TemplateBinding a Padding del control (por eso su caso pasó con
+         12 sin tocar nada acá). Custodiado por Inputs_TextoEmpiezaA13DelBordeExterior. -->
+    <Style Selector=".ui2 NumericUpDown /template/ TextBox#PART_TextBox">
+        <Setter Property="Padding" Value="13,0" />
+    </Style>
+    <Style Selector=".ui2 ComboBox:pointerover /template/ Border#Background">
+        <Setter Property="Background" Value="{DynamicResource V2SuperficieBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource V2BordeInputBrush}" />
+    </Style>
+    <Style Selector=".ui2 ComboBox:focus /template/ Border#Background">
+        <Setter Property="BorderBrush" Value="{DynamicResource V2AcentoBrush}" />
+    </Style>
+    <Style Selector=".ui2 ComboBox:error /template/ Border#Background">
+        <Setter Property="BorderBrush" Value="{DynamicResource V2BordeErrorBrush}" />
+    </Style>
+
+    <Style Selector=".ui2 AutoCompleteBox">
+        <Setter Property="FontSize" Value="{DynamicResource V2FuenteControlTamano}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoEtiquetaBrush}" />
+    </Style>
+
+    <!-- CheckBox: casilla de 16 con radio 4 (mockup .pt-checkbox-box) -->
+    <Style Selector=".ui2 CheckBox">
+        <Setter Property="MinHeight" Value="{DynamicResource V2AltoControl}" />
+        <Setter Property="MinWidth" Value="0" />
+        <Setter Property="Padding" Value="8,0,0,0" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="FontSize" Value="{DynamicResource V2FuenteControlTamano}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoEtiquetaBrush}" />
+    </Style>
+    <Style Selector=".ui2 CheckBox /template/ Border#NormalRectangle, .ui2 CheckBox:pointerover /template/ Border#NormalRectangle">
+        <Setter Property="Width" Value="16" />
+        <Setter Property="Height" Value="16" />
+        <Setter Property="CornerRadius" Value="{DynamicResource V2RadioCasilla}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="BorderBrush" Value="{DynamicResource V2BordeInputBrush}" />
+        <Setter Property="Background" Value="{DynamicResource V2SuperficieBrush}" />
+    </Style>
+    <Style Selector=".ui2 CheckBox:checked /template/ Border#NormalRectangle, .ui2 CheckBox:checked:pointerover /template/ Border#NormalRectangle">
+        <Setter Property="BorderBrush" Value="{DynamicResource V2AcentoBrush}" />
+        <Setter Property="Background" Value="{DynamicResource V2AcentoBrush}" />
+    </Style>
+    <Style Selector=".ui2 CheckBox:checked /template/ Path#CheckGlyph">
+        <Setter Property="Fill" Value="{DynamicResource V2TextoSobreAcentoBrush}" />
+    </Style>
+
+</Styles>

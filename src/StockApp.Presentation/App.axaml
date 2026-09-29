@@ -36,5 +36,9 @@
         <!-- DESPUÉS del StyleInclude del Fluent.xaml del DataGrid (arriba): overridea el
              recuadro de foco de celda. Ver el comentario en DataGrid.axaml. -->
         <StyleInclude Source="avares://GestionMunicipal/Themes/DataGrid.axaml"/>
+
+        <!-- UI v2: estilos de controles base bajo .ui2, AL FINAL para pisar a los viejos dentro de
+             las vistas migradas. Fuera de .ui2 no matchean nada. -->
+        <StyleInclude Source="avares://GestionMunicipal/Themes/V2/ControlesV2.axaml"/>
     </Application.Styles>
 </Application>
