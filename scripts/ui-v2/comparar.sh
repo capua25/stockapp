@@ -16,11 +16,26 @@ fi
 # --blame-hang-timeout: si un render se rompe (p. ej. corre sin UseSkia) el proceso se cuelga
 # en vez de fallar (minor diferido de la Task 8); con esto, dotnet test mata el runner y reporta
 # fallo en vez de colgar el script para siempre.
+# RunConfiguration.TreatNoTestsAsError=true: sin esto, un filtro que no matchea ningún test
+# (p. ej. un typo en el nombre de pantalla) hace que dotnet test devuelva exit 0 igual que si todo
+# hubiera pasado, y el script mostraría el link a un index.html viejo como si fuera un resultado
+# válido. Verificado empíricamente con el SDK instalado (dotnet 10.0.300): exit 1.
 set +e
-dotnet test "$RAIZ/tests/StockApp.Presentation.VisualTests/StockApp.Presentation.VisualTests.csproj" \
-  --filter "$FILTRO" --blame-hang-timeout 5m
+SALIDA="$(dotnet test "$RAIZ/tests/StockApp.Presentation.VisualTests/StockApp.Presentation.VisualTests.csproj" \
+  --filter "$FILTRO" --blame-hang-timeout 5m -- RunConfiguration.TreatNoTestsAsError=true 2>&1)"
 CODIGO=$?
 set -e
 
+echo "$SALIDA"
+
+if [[ "$CODIGO" -ne 0 ]]; then
+  # Comparación de patrón con [[ ]] sobre la variable ya capturada, nunca grep dentro de un pipe
+  # (con set -o pipefail, un grep que no matchea mataría el script).
+  if [[ "$SALIDA" == *"No test matches the given testcase filter"* ]]; then
+    echo "Comparaciones: ningún test coincide con el filtro '$FILTRO'." >&2
+  fi
+  exit "$CODIGO"
+fi
+
 echo "Comparaciones: $RAIZ/artifacts/ui-v2/comparacion/index.html"
-exit "$CODIGO"
+exit 0

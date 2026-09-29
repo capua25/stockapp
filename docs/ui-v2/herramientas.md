@@ -20,6 +20,10 @@ distintos, las teselas densas y el veredicto. Cada pantalla tiene su página con
 diferencias lado a lado (rojo = diferencia fuerte; naranja = diferencia leve de color; contorno
 magenta = tesela densa de 16x16: 25% o más de diferencias fuertes, o 90% o más de leves).
 
+Un filtro que no coincide con ningún test (p. ej. un typo en el nombre de pantalla) hace que el
+script termine con exit distinto de cero y el mensaje "ningún test coincide con el filtro", en vez
+de mostrar el link a un `index.html` viejo como si fuera un resultado válido.
+
 ## Tokens
 
 `docs/ui-v2/tokens.json` es la única fuente. Después de editarlo:
