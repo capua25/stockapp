@@ -1,6 +1,8 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:i="https://github.com/projektanker/icons.avalonia">
+        xmlns:i="https://github.com/projektanker/icons.avalonia"
+        xmlns:col="using:System.Collections"
+        xmlns:sys="using:System">
 
     <!-- UI v2 (spec 2026-09-28 §3.3): estilos de controles base y tipografía.
          TODO selector empieza con ".ui2 ": solo aplica dentro de una vista migrada (raíz con
@@ -284,6 +286,27 @@
     </Style>
     <Style Selector=".ui2 CheckBox:checked /template/ Path#CheckGlyph">
         <Setter Property="Fill" Value="{DynamicResource V2TextoSobreAcentoBrush}" />
+    </Style>
+
+    <!-- Mensaje de error de campo (spec §2.3: 12, color borde error). Solo cambia CÓMO se ve lo
+         que el seam ya produjo: el contenido son los errores de DataValidationErrors.Errors, ya
+         pasados por ErrorValidacionConverter. -->
+    <Style Selector=".ui2 DataValidationErrors">
+        <Setter Property="ErrorTemplate">
+            <DataTemplate x:DataType="col:IEnumerable">
+                <ItemsControl x:Name="PART_ErroresV2" ItemsSource="{Binding}" Margin="0,4,0,0">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="sys:Object">
+                            <TextBlock Text="{Binding}"
+                                       TextWrapping="Wrap"
+                                       FontSize="{DynamicResource V2FuenteErrorCampoTamano}"
+                                       FontWeight="{DynamicResource V2FuenteErrorCampoPeso}"
+                                       Foreground="{DynamicResource V2BordeErrorBrush}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </DataTemplate>
+        </Setter>
     </Style>
 
 </Styles>

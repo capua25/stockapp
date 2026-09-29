@@ -141,3 +141,21 @@ body {
 .v2-encabezado-fila { display: flex; justify-content: space-between; align-items: flex-start; }
 .v2-encabezado-subtitulo { margin-top: 4px; font-size: var(--v2-fuente-control-tamano); line-height: var(--v2-fuente-control-alto-linea); color: var(--v2-color-texto-secundario); }
 .v2-acciones { display: flex; gap: 8px; }
+
+/* CampoFormulario (Controls/V2/CampoFormulario). El mensaje de error va pegado al input
+   (margin-top 4) y NO separado por el gap del campo: en Avalonia es parte del
+   DataValidationErrors del control, no del campo. Estructura:
+   <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Código</span><span class="v2-campo-requerido">*</span></div>
+     <div><div class="v2-input v2-input--error">A-001</div><div class="v2-error-campo">El código ya existe</div></div></div> */
+.v2-campo { display: flex; flex-direction: column; gap: 4px; }
+.v2-campo-etiqueta {
+  display: flex; gap: 4px;
+  font-size: var(--v2-fuente-etiqueta-campo-tamano); line-height: var(--v2-fuente-etiqueta-campo-alto-linea); font-weight: var(--v2-fuente-etiqueta-campo-peso);
+  color: var(--v2-color-texto-etiqueta);
+}
+.v2-campo-requerido { color: var(--v2-color-borde-error); }
+.v2-error-campo {
+  margin-top: 4px;
+  font-size: var(--v2-fuente-error-campo-tamano); line-height: var(--v2-fuente-error-campo-alto-linea); font-weight: var(--v2-fuente-error-campo-peso);
+  color: var(--v2-color-borde-error);
+}

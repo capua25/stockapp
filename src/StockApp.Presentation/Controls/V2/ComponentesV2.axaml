@@ -175,4 +175,28 @@
         </Setter>
     </ControlTheme>
 
+    <ControlTheme x:Key="{x:Type v2:CampoFormulario}" TargetType="v2:CampoFormulario">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <StackPanel Spacing="4">
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <TextBlock x:Name="PART_Etiqueta"
+                                   Text="{TemplateBinding Etiqueta}"
+                                   FontSize="{DynamicResource V2FuenteEtiquetaCampoTamano}"
+                                   FontWeight="{DynamicResource V2FuenteEtiquetaCampoPeso}"
+                                   Foreground="{DynamicResource V2TextoEtiquetaBrush}" />
+                        <TextBlock x:Name="PART_Requerido"
+                                   Text="*"
+                                   FontSize="{DynamicResource V2FuenteEtiquetaCampoTamano}"
+                                   FontWeight="{DynamicResource V2FuenteEtiquetaCampoPeso}"
+                                   Foreground="{DynamicResource V2BordeErrorBrush}"
+                                   IsVisible="{TemplateBinding Requerido}" />
+                    </StackPanel>
+                    <!-- ContentPresenter pelado: NO agregar ErrorTemplate ni envolver el control. -->
+                    <ContentPresenter x:Name="PART_Control" Content="{TemplateBinding Content}" />
+                </StackPanel>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+
 </ResourceDictionary>
