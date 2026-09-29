@@ -268,14 +268,18 @@
                         BorderThickness="{TemplateBinding BorderThickness}"
                         CornerRadius="{TemplateBinding CornerRadius}"
                         Padding="{TemplateBinding Padding}">
-                    <Grid ColumnDefinitions="Auto,8,*">
+                    <!-- Sin Margin.Right fijo en columna aparte: si el ícono queda oculto (sin
+                         clave), no mide y no reserva espacio. Fix F2 (revisión Task 15): antes
+                         una columna intermedia de 8px quedaba reservada aunque no hubiera ícono. -->
+                    <Grid ColumnDefinitions="Auto,*">
                         <!-- Value e IsVisible los asigna TarjetaAcceso.AplicarIcono (ver su comentario). -->
                         <i:Icon x:Name="PART_Icono"
                                 Grid.Column="0"
+                                Margin="0,0,8,0"
                                 FontSize="16"
                                 VerticalAlignment="Top"
                                 Foreground="{DynamicResource V2AcentoBrush}" />
-                        <StackPanel Grid.Column="2">
+                        <StackPanel Grid.Column="1">
                             <TextBlock x:Name="PART_Titulo"
                                        Text="{TemplateBinding Titulo}"
                                        FontSize="{DynamicResource V2FuenteTituloAccesoTamano}"

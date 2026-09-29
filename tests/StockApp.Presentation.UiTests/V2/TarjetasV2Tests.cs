@@ -92,9 +92,57 @@ public class TarjetasV2Tests
     [AvaloniaFact]
     public void TarjetaAcceso_SinIcono_NoLoMuestra()
     {
+        // Fix ronda 1: TarjetaAcceso.AplicarIcono ya no tiene guarda "if (hayIcono)" (su premisa
+        // -que Optris lanza con clave nula- está refutada para Optris.Icons.Avalonia 12.0.7,
+        // ver comentario en el código). Value siempre recibe Icono ?? string.Empty: acá se fija
+        // que con Icono=null el control no lanza y el Value resultante queda vacío.
+        var tarjeta = Buscar<TarjetaAcceso>(Montar("""<v2:TarjetaAcceso x:Name="A" Titulo="Reportes" />"""), "A");
+        var icono = Parte<Icon>(tarjeta, "PART_Icono");
+
+        Assert.False(icono.IsVisible);
+        Assert.Equal(string.Empty, icono.Value);
+    }
+
+    [AvaloniaFact]
+    public void TarjetaAcceso_IconoVacio_NoLoMuestraYNoLanza()
+    {
+        var tarjeta = Buscar<TarjetaAcceso>(Montar("""<v2:TarjetaAcceso x:Name="A" Icono="" Titulo="Reportes" />"""), "A");
+        var icono = Parte<Icon>(tarjeta, "PART_Icono");
+
+        Assert.False(icono.IsVisible);
+        Assert.Equal(string.Empty, icono.Value);
+    }
+
+    [AvaloniaFact]
+    public void TarjetaAcceso_SinIcono_TituloPegadoAlBordeIzquierdoDelContenido()
+    {
+        // Fix ronda 1 (F2): la columna de separación de 8px del Grid no puede quedar reservada
+        // cuando no hay ícono -- si no, el título queda corrido del borde del contenido aunque
+        // el Icon esté oculto.
         var tarjeta = Buscar<TarjetaAcceso>(Montar("""<v2:TarjetaAcceso x:Name="A" Titulo="Reportes" />"""), "A");
 
-        Assert.False(Parte<Icon>(tarjeta, "PART_Icono").IsVisible);
+        Assert.Equal(0, XTituloRelativaAlContenido(tarjeta), 1);
+    }
+
+    [AvaloniaFact]
+    public void TarjetaAcceso_ConIcono_TituloSeparado24DelBordeIzquierdoDelContenido()
+    {
+        // Con ícono la geometría no cambia: 16 (ancho del Icon, FontSize 16) + 8 (separación).
+        var tarjeta = Buscar<TarjetaAcceso>(Montar("""<v2:TarjetaAcceso x:Name="A" Icono="mdi-package-variant" Titulo="Productos" />"""), "A");
+
+        Assert.Equal(24, XTituloRelativaAlContenido(tarjeta), 1);
+    }
+
+    /// <summary>
+    /// X del título relativa al borde interior del contenido: descuenta el BorderThickness Y el
+    /// Padding del PART_Marco, porque TranslatePoint mide desde el borde EXTERIOR del Border.
+    /// </summary>
+    private static double XTituloRelativaAlContenido(TarjetaAcceso tarjeta)
+    {
+        var marco = Parte<Border>(tarjeta, "PART_Marco");
+        var titulo = Parte<TextBlock>(tarjeta, "PART_Titulo");
+        var xTitulo = titulo.TranslatePoint(new Point(0, 0), marco)!.Value.X;
+        return xTitulo - marco.BorderThickness.Left - marco.Padding.Left;
     }
 
     [AvaloniaFact]

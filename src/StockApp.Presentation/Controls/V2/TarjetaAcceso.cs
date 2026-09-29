@@ -62,9 +62,12 @@ public class TarjetaAcceso : Button
     }
 
     /// <summary>
-    /// El Icon de Optris resuelve el ícono en el proveedor apenas cambia Value y lanza con una
-    /// clave nula o vacía (IconImage.HandleValueChanged): por eso Value se asigna desde acá y
-    /// solo si hay clave, en vez de un TemplateBinding directo.
+    /// Se asigna desde código (no TemplateBinding directo) porque además de Value hay que
+    /// sincronizar IsVisible con la presencia de la clave: sin ícono, el Icon queda oculto y no
+    /// ocupa espacio en el Grid del template (columna Auto). Value siempre recibe
+    /// <c>Icono ?? string.Empty</c>: verificado por mutación que Optris.Icons.Avalonia 12.0.7
+    /// (IconProvider.GetIcon) ya maneja clave nula o vacía sin lanzar, así que no hace falta
+    /// una guarda extra acá.
     /// </summary>
     private void AplicarIcono()
     {
@@ -73,11 +76,7 @@ public class TarjetaAcceso : Button
             return;
         }
 
-        var hayIcono = !string.IsNullOrEmpty(Icono);
-        _icono.IsVisible = hayIcono;
-        if (hayIcono)
-        {
-            _icono.Value = Icono!;
-        }
+        _icono.IsVisible = !string.IsNullOrEmpty(Icono);
+        _icono.Value = Icono ?? string.Empty;
     }
 }
