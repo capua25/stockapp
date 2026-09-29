@@ -43,6 +43,7 @@ public class TestApp : Avalonia.Application
         "avares://GestionMunicipal/Themes/Tokens.axaml",
         "avares://GestionMunicipal/Themes/V2/Tokens.axaml",
         "avares://GestionMunicipal/Controls/Componentes.axaml",
+        "avares://GestionMunicipal/Controls/V2/ComponentesV2.axaml",
     ];
 
     /// <summary>Mismos StyleInclude que App.axaml (después del FluentTheme), mismo orden.</summary>

@@ -27,6 +27,7 @@ public class VisualTestApp : Avalonia.Application
         "avares://GestionMunicipal/Themes/Tokens.axaml",
         "avares://GestionMunicipal/Themes/V2/Tokens.axaml",
         "avares://GestionMunicipal/Controls/Componentes.axaml",
+        "avares://GestionMunicipal/Controls/V2/ComponentesV2.axaml",
     ];
 
     public static readonly string[] StyleIncludes =

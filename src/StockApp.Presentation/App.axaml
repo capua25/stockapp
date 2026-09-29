@@ -21,6 +21,8 @@
                      prefijo V2 para convivir con los de arriba hasta la Fase 9. -->
                 <ResourceInclude Source="avares://GestionMunicipal/Themes/V2/Tokens.axaml"/>
                 <ResourceInclude Source="avares://GestionMunicipal/Controls/Componentes.axaml"/>
+                <!-- UI v2: ControlTheme de los componentes de Controls/V2 (tipos nuevos). -->
+                <ResourceInclude Source="avares://GestionMunicipal/Controls/V2/ComponentesV2.axaml"/>
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>

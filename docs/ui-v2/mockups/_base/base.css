@@ -103,3 +103,24 @@ body {
      <svg class="v2-glifo-check" viewBox="0.012 0.012 17.475 12.988"><path fill="currentColor"
        d="M5.5 10.586 1.707 6.793A1 1 0 0 0 .293 8.207l4.5 4.5a1 1 0 0 0 1.414 0l11-11A1 1 0 0 0 15.793.293L5.5 10.586Z"/></svg> */
 .v2-glifo-check { position: absolute; left: 4.375px; top: 5.82px; width: 9px; height: 6.69px; color: var(--v2-color-texto-sobre-acento); }
+
+/* Insignia (Controls/V2/Insignia). Padding 2x8: excepción de la spec §2.2. */
+.v2-insignia {
+  display: inline-flex; align-items: center; flex: 0 0 auto;
+  padding: 2px 8px; border-radius: var(--v2-radio-insignia);
+  font-size: var(--v2-fuente-insignia-tamano); line-height: var(--v2-fuente-insignia-alto-linea); font-weight: var(--v2-fuente-insignia-peso);
+  white-space: nowrap;
+  background: var(--v2-color-insignia-neutro-fondo); color: var(--v2-color-insignia-neutro-texto);
+}
+.v2-insignia--advertencia { background: var(--v2-color-insignia-advertencia-fondo); color: var(--v2-color-insignia-advertencia-texto); }
+.v2-insignia--peligro { background: var(--v2-color-insignia-peligro-fondo); color: var(--v2-color-insignia-peligro-texto); }
+.v2-insignia--exito { background: var(--v2-color-insignia-exito-fondo); color: var(--v2-color-insignia-exito-texto); }
+
+/* Alerta (Controls/V2/Alerta) */
+.v2-alerta {
+  padding: 12px 16px; border: 1px solid; border-radius: var(--v2-radio-control);
+  font-size: var(--v2-fuente-control-tamano); line-height: var(--v2-fuente-control-alto-linea); font-weight: var(--v2-fuente-control-peso);
+}
+.v2-alerta--info { background: var(--v2-color-alerta-info-fondo); border-color: var(--v2-color-alerta-info-borde); color: var(--v2-color-alerta-info-texto); }
+.v2-alerta--advertencia { background: var(--v2-color-alerta-advertencia-fondo); border-color: var(--v2-color-alerta-advertencia-borde); color: var(--v2-color-alerta-advertencia-texto); }
+.v2-alerta--error { background: var(--v2-color-alerta-error-fondo); border-color: var(--v2-color-alerta-error-borde); color: var(--v2-color-alerta-error-texto); }

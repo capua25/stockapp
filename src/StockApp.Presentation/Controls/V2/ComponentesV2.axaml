@@ -1,0 +1,95 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:v2="using:StockApp.Presentation.Controls.V2"
+                    xmlns:i="https://github.com/projektanker/icons.avalonia">
+
+    <!-- UI v2 (spec 2026-09-28 §3.3): ControlTheme de los componentes de Controls/V2.
+         Tipos nuevos: no chocan con los ControlTheme de Controls/Componentes.axaml.
+         Cada template tiene su espejo CSS en docs/ui-v2/mockups/_base/base.css (clases v2-*):
+         si cambia la geometría acá, cambia allá en el mismo commit.
+         Los colores que dependen de la variante van en estilos anidados sobre la parte, nunca
+         como valor local en el template: un valor local del template no lo pisa ningún estilo. -->
+
+    <ControlTheme x:Key="{x:Type v2:Insignia}" TargetType="v2:Insignia">
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <!-- Padding 2x8: única excepción de la spec a la base 4 (§2.2). -->
+                <Border x:Name="PART_Fondo"
+                        CornerRadius="{DynamicResource V2RadioInsignia}"
+                        Padding="8,2">
+                    <TextBlock x:Name="PART_Texto"
+                               Text="{TemplateBinding Texto}"
+                               FontSize="{DynamicResource V2FuenteInsigniaTamano}"
+                               FontWeight="{DynamicResource V2FuenteInsigniaPeso}" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+
+        <Style Selector="^ /template/ Border#PART_Fondo">
+            <Setter Property="Background" Value="{DynamicResource V2InsigniaNeutroFondoBrush}" />
+        </Style>
+        <Style Selector="^ /template/ TextBlock#PART_Texto">
+            <Setter Property="Foreground" Value="{DynamicResource V2InsigniaNeutroTextoBrush}" />
+        </Style>
+        <Style Selector="^[Variante=Advertencia] /template/ Border#PART_Fondo">
+            <Setter Property="Background" Value="{DynamicResource V2InsigniaAdvertenciaFondoBrush}" />
+        </Style>
+        <Style Selector="^[Variante=Advertencia] /template/ TextBlock#PART_Texto">
+            <Setter Property="Foreground" Value="{DynamicResource V2InsigniaAdvertenciaTextoBrush}" />
+        </Style>
+        <Style Selector="^[Variante=Peligro] /template/ Border#PART_Fondo">
+            <Setter Property="Background" Value="{DynamicResource V2InsigniaPeligroFondoBrush}" />
+        </Style>
+        <Style Selector="^[Variante=Peligro] /template/ TextBlock#PART_Texto">
+            <Setter Property="Foreground" Value="{DynamicResource V2InsigniaPeligroTextoBrush}" />
+        </Style>
+        <Style Selector="^[Variante=Exito] /template/ Border#PART_Fondo">
+            <Setter Property="Background" Value="{DynamicResource V2InsigniaExitoFondoBrush}" />
+        </Style>
+        <Style Selector="^[Variante=Exito] /template/ TextBlock#PART_Texto">
+            <Setter Property="Foreground" Value="{DynamicResource V2InsigniaExitoTextoBrush}" />
+        </Style>
+    </ControlTheme>
+
+    <ControlTheme x:Key="{x:Type v2:Alerta}" TargetType="v2:Alerta">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border x:Name="PART_Marco"
+                        BorderThickness="1"
+                        CornerRadius="{DynamicResource V2RadioControl}"
+                        Padding="16,12">
+                    <TextBlock x:Name="PART_Texto"
+                               Text="{TemplateBinding Texto}"
+                               TextWrapping="Wrap"
+                               FontSize="{DynamicResource V2FuenteControlTamano}"
+                               FontWeight="{DynamicResource V2FuenteControlPeso}" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+
+        <Style Selector="^ /template/ Border#PART_Marco">
+            <Setter Property="Background" Value="{DynamicResource V2AlertaInfoFondoBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource V2AlertaInfoBordeBrush}" />
+        </Style>
+        <Style Selector="^ /template/ TextBlock#PART_Texto">
+            <Setter Property="Foreground" Value="{DynamicResource V2AlertaInfoTextoBrush}" />
+        </Style>
+        <Style Selector="^[Variante=Advertencia] /template/ Border#PART_Marco">
+            <Setter Property="Background" Value="{DynamicResource V2AlertaAdvertenciaFondoBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource V2AlertaAdvertenciaBordeBrush}" />
+        </Style>
+        <Style Selector="^[Variante=Advertencia] /template/ TextBlock#PART_Texto">
+            <Setter Property="Foreground" Value="{DynamicResource V2AlertaAdvertenciaTextoBrush}" />
+        </Style>
+        <Style Selector="^[Variante=Error] /template/ Border#PART_Marco">
+            <Setter Property="Background" Value="{DynamicResource V2AlertaErrorFondoBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource V2AlertaErrorBordeBrush}" />
+        </Style>
+        <Style Selector="^[Variante=Error] /template/ TextBlock#PART_Texto">
+            <Setter Property="Foreground" Value="{DynamicResource V2AlertaErrorTextoBrush}" />
+        </Style>
+    </ControlTheme>
+
+</ResourceDictionary>
