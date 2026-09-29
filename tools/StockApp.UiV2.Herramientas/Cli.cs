@@ -20,16 +20,20 @@ public static class Cli
           comparar-png <ref> <cand> <diff>  Compara dos PNG y escribe la imagen de diferencias
         """;
 
-    public static int Ejecutar(string[] args, TextWriter salida, TextWriter error)
+    /// <param name="rutaTokensJson">
+    /// Ruta de tokens.json que usa el comando "tokens". Solo para tests: el default
+    /// (null → RutasRepo.TokensJson) es el único valor que usa la CLI real.
+    /// </param>
+    public static int Ejecutar(string[] args, TextWriter salida, TextWriter error, string? rutaTokensJson = null)
     {
         try
         {
             switch (args)
             {
                 case ["tokens"]:
-                    return ComandoTokens(verificar: false, salida, error);
+                    return ComandoTokens(verificar: false, salida, error, rutaTokensJson ?? RutasRepo.TokensJson);
                 case ["tokens", "--verificar"]:
-                    return ComandoTokens(verificar: true, salida, error);
+                    return ComandoTokens(verificar: true, salida, error, rutaTokensJson ?? RutasRepo.TokensJson);
                 default:
                     error.WriteLine(Uso);
                     return 2;
@@ -49,9 +53,9 @@ public static class Cli
 
     internal static string Normalizar(string texto) => texto.Replace("\r\n", "\n");
 
-    private static int ComandoTokens(bool verificar, TextWriter salida, TextWriter error)
+    private static int ComandoTokens(bool verificar, TextWriter salida, TextWriter error, string rutaTokensJson)
     {
-        var definicion = LectorTokens.LeerArchivo(RutasRepo.TokensJson);
+        var definicion = LectorTokens.LeerArchivo(rutaTokensJson);
         var esperados = new[]
         {
             (Ruta: RutasRepo.TokensAxaml, Contenido: GeneradorTokens.GenerarAxaml(definicion)),
