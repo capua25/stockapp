@@ -92,4 +92,87 @@
         </Style>
     </ControlTheme>
 
+    <ControlTheme x:Key="{x:Type v2:TarjetaContenido}" TargetType="v2:TarjetaContenido">
+        <Setter Property="Padding" Value="16" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border x:Name="PART_Marco"
+                        Background="{DynamicResource V2SuperficieBrush}"
+                        BorderBrush="{DynamicResource V2BordeBrush}"
+                        BorderThickness="1"
+                        CornerRadius="{DynamicResource V2RadioCard}"
+                        BoxShadow="{DynamicResource V2SombraCard}"
+                        Padding="{TemplateBinding Padding}">
+                    <ContentPresenter x:Name="PART_Contenido"
+                                      Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+
+    <!-- Botón con apariencia de link (primer tramo del breadcrumb). Template propio sin fondo ni
+         borde: los estilos globales de Button (viejos) setean Background/Padding que este
+         template no usa, y los v2 solo aplican con clase de variante. -->
+    <ControlTheme x:Key="V2TemaEnlace" TargetType="Button">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <ContentPresenter x:Name="PART_ContentPresenter"
+                                  Background="Transparent"
+                                  Content="{TemplateBinding Content}"
+                                  Foreground="{DynamicResource V2AcentoBrush}"
+                                  FontSize="{DynamicResource V2FuenteEnlaceTamano}"
+                                  FontWeight="{DynamicResource V2FuenteEnlacePeso}" />
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+
+    <ControlTheme x:Key="{x:Type v2:EncabezadoPagina}" TargetType="v2:EncabezadoPagina">
+        <Setter Property="Margin" Value="0,0,0,16" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <StackPanel>
+                    <StackPanel x:Name="PART_Breadcrumb"
+                                Orientation="Horizontal"
+                                Margin="0,0,0,8"
+                                IsVisible="{TemplateBinding BreadcrumbOrigen, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <Button x:Name="PART_BreadcrumbOrigen"
+                                Theme="{StaticResource V2TemaEnlace}"
+                                Content="{TemplateBinding BreadcrumbOrigen}"
+                                Command="{TemplateBinding BreadcrumbComando}" />
+                        <TextBlock x:Name="PART_BreadcrumbSeparador"
+                                   Text=" / "
+                                   FontSize="{DynamicResource V2FuenteControlTamano}"
+                                   Foreground="{DynamicResource V2TextoTerciarioBrush}" />
+                        <TextBlock x:Name="PART_BreadcrumbActual"
+                                   Text="{TemplateBinding BreadcrumbActual}"
+                                   FontSize="{DynamicResource V2FuenteControlTamano}"
+                                   Foreground="{DynamicResource V2TextoTerciarioBrush}" />
+                    </StackPanel>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Grid.Column="0">
+                            <TextBlock x:Name="PART_Titulo"
+                                       Text="{TemplateBinding Titulo}"
+                                       FontSize="{DynamicResource V2FuenteTituloPaginaTamano}"
+                                       FontWeight="{DynamicResource V2FuenteTituloPaginaPeso}"
+                                       LineHeight="{DynamicResource V2FuenteTituloPaginaAltoLinea}"
+                                       Foreground="{DynamicResource V2TextoPrimarioBrush}" />
+                            <TextBlock x:Name="PART_Subtitulo"
+                                       Margin="0,4,0,0"
+                                       Text="{TemplateBinding Subtitulo}"
+                                       FontSize="{DynamicResource V2FuenteControlTamano}"
+                                       Foreground="{DynamicResource V2TextoSecundarioBrush}"
+                                       IsVisible="{TemplateBinding Subtitulo, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                        </StackPanel>
+                        <ContentPresenter x:Name="PART_Acciones"
+                                          Grid.Column="1"
+                                          VerticalAlignment="Top"
+                                          Content="{TemplateBinding Acciones}" />
+                    </Grid>
+                </StackPanel>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+
 </ResourceDictionary>

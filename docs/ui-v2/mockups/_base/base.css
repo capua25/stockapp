@@ -124,3 +124,20 @@ body {
 .v2-alerta--info { background: var(--v2-color-alerta-info-fondo); border-color: var(--v2-color-alerta-info-borde); color: var(--v2-color-alerta-info-texto); }
 .v2-alerta--advertencia { background: var(--v2-color-alerta-advertencia-fondo); border-color: var(--v2-color-alerta-advertencia-borde); color: var(--v2-color-alerta-advertencia-texto); }
 .v2-alerta--error { background: var(--v2-color-alerta-error-fondo); border-color: var(--v2-color-alerta-error-borde); color: var(--v2-color-alerta-error-texto); }
+
+/* TarjetaContenido (Controls/V2/TarjetaContenido). Padding default 16; los formularios usan 24. */
+.v2-tarjeta {
+  background: var(--v2-color-superficie); border: 1px solid var(--v2-color-borde);
+  border-radius: var(--v2-radio-card); box-shadow: var(--v2-sombra-card); padding: 16px;
+}
+
+/* EncabezadoPagina (Controls/V2/EncabezadoPagina) */
+.v2-encabezado { margin-bottom: 16px; }
+.v2-breadcrumb {
+  display: flex; margin-bottom: 8px; white-space: pre;
+  font-size: var(--v2-fuente-control-tamano); line-height: var(--v2-fuente-control-alto-linea); color: var(--v2-color-texto-terciario);
+}
+.v2-breadcrumb-origen { color: var(--v2-color-acento); font-size: var(--v2-fuente-enlace-tamano); line-height: var(--v2-fuente-enlace-alto-linea); font-weight: var(--v2-fuente-enlace-peso); }
+.v2-encabezado-fila { display: flex; justify-content: space-between; align-items: flex-start; }
+.v2-encabezado-subtitulo { margin-top: 4px; font-size: var(--v2-fuente-control-tamano); line-height: var(--v2-fuente-control-alto-linea); color: var(--v2-color-texto-secundario); }
+.v2-acciones { display: flex; gap: 8px; }
