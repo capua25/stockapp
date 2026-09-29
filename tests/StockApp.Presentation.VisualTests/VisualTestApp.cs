@@ -6,6 +6,7 @@ using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
 using Optris.Icons.Avalonia;
 using Optris.Icons.Avalonia.MaterialDesign;
+using StockApp.Presentation;
 
 [assembly: AvaloniaTestApplication(typeof(StockApp.Presentation.VisualTests.VisualTestApp))]
 
@@ -39,6 +40,14 @@ public class VisualTestApp : Avalonia.Application
     public VisualTestApp()
     {
         RequestedThemeVariant = ThemeVariant.Light;
+
+        // F1 (review): App.axaml registra ViewLocator en Application.DataTemplates (única
+        // fuente de verdad, ver App.axaml). Sin este registro, cualquier ContentControl cuyo
+        // Content sea un ViewModel real (MainWindow, ShellMainView, GastoFormView, etc.) renderiza
+        // el placeholder "Not Found: ..." de ViewLocator en vez de la vista real, y ninguna
+        // comparación visual lo detecta. Custodiado por
+        // ViewLocatorTests.ResuelveLaVistaRealParaUnViewModelDeProduccion_NoElPlaceholder.
+        DataTemplates.Add(new ViewLocator());
 
         if (!_iconProviderRegistrado)
         {

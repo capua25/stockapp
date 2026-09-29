@@ -46,9 +46,13 @@ public class RenderizadorVistaTests
     [AvaloniaFact]
     public void TextoSinFontFamilyExplicita_SeMideConInter()
     {
-        // Review Focus 4: WithInterFont() NO fija la familia default en Avalonia 12 (queda
-        // DejaVu Sans en WSL). Inter llega por el Setter de Typography.axaml sobre Window. Si ese
-        // include se pierde, todo el texto del render se mide con otra fuente.
+        // Review Focus F2: este test custodia el RESULTADO (el texto sin FontFamily explícita se
+        // mide como Inter, no como el fallback del SO). Verificado por mutación: con
+        // WithInterFont() + Typography.axaml (Setter de FontFamily sobre Window, UserControl)
+        // presentes, cualquiera de los dos alcanza por sí solo para este resultado en este
+        // proyecto (Skia real + UseHeadlessDrawing=false) — son redundantes entre sí acá. Solo
+        // sacando AMBOS a la vez se mide con el fallback del SO (DejaVu Sans en WSL) y este test
+        // cae en rojo.
         const string texto = "Productos del inventario 1234";
         var sinFamilia = new TextBlock { Text = texto, FontSize = 22 };
         var conInter = new TextBlock { Text = texto, FontSize = 22, FontFamily = new FontFamily("avares://Avalonia.Fonts.Inter/Assets#Inter") };
