@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Render headless con Skia (UseHeadlessDrawing=false): métricas de texto REALES de Inter.
+         Proyecto separado de StockApp.Presentation.UiTests a propósito: AvaloniaTestApplication es
+         uno por ensamblado y pasar UiTests a Skia cambiaría las métricas de todos sus tests. -->
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Skia" />
+    <PackageReference Include="Avalonia.Headless" />
+    <PackageReference Include="Avalonia.Headless.XUnit" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+    <PackageReference Include="Avalonia.Controls.DataGrid" />
+    <PackageReference Include="Optris.Icons.Avalonia" />
+    <PackageReference Include="Optris.Icons.Avalonia.MaterialDesign" />
+    <!-- Mismo par xUnit v3 que StockApp.Presentation.UiTests (ver comentario en su csproj). -->
+    <PackageReference Include="Microsoft.NET.Test.Sdk" VersionOverride="17.12.0" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" VersionOverride="3.1.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\StockApp.Presentation\StockApp.Presentation.csproj" />
+    <!-- Captura de mockups, diff de PNG y página de comparación. -->
+    <ProjectReference Include="..\..\tools\StockApp.UiV2.Herramientas\StockApp.UiV2.Herramientas.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- feat(ui-v2): helpers de guardián de includes, compartidos con UiTests (Task 3) para que
+         ambos bancos comparen su TestApp contra el mismo parseo de App.axaml. Mismo mecanismo de
+         Link que tests\_Compartido\EsperaMonotonica.cs en otros proyectos: el archivo físico vive
+         en tests\_Compartido\, no hay copia local. -->
+    <Compile Include="..\_Compartido\RaizRepo.cs">
+      <Link>Compartido\RaizRepo.cs</Link>
+    </Compile>
+    <Compile Include="..\_Compartido\IncludesDeAppAxaml.cs">
+      <Link>Compartido\IncludesDeAppAxaml.cs</Link>
+    </Compile>
+  </ItemGroup>
+
+</Project>

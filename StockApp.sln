@@ -59,6 +59,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StockApp.UiV2.Herramientas"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StockApp.UiV2.Herramientas.Tests", "tests\StockApp.UiV2.Herramientas.Tests\StockApp.UiV2.Herramientas.Tests.csproj", "{AA568FAD-28AD-4CA2-9D15-F31411B12C52}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "StockApp.Presentation.VisualTests", "tests\StockApp.Presentation.VisualTests\StockApp.Presentation.VisualTests.csproj", "{2FF2FEEA-B843-40F0-AAE4-CD0A823528C6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -369,6 +371,18 @@ Global
 		{AA568FAD-28AD-4CA2-9D15-F31411B12C52}.Release|x64.Build.0 = Release|Any CPU
 		{AA568FAD-28AD-4CA2-9D15-F31411B12C52}.Release|x86.ActiveCfg = Release|Any CPU
 		{AA568FAD-28AD-4CA2-9D15-F31411B12C52}.Release|x86.Build.0 = Release|Any CPU
+		{2FF2FEEA-B843-40F0-AAE4-CD0A823528C6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2FF2FEEA-B843-40F0-AAE4-CD0A823528C6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2FF2FEEA-B843-40F0-AAE4-CD0A823528C6}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{2FF2FEEA-B843-40F0-AAE4-CD0A823528C6}.Debug|x64.Build.0 = Debug|Any CPU
+		{2FF2FEEA-B843-40F0-AAE4-CD0A823528C6}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{2FF2FEEA-B843-40F0-AAE4-CD0A823528C6}.Debug|x86.Build.0 = Debug|Any CPU
+		{2FF2FEEA-B843-40F0-AAE4-CD0A823528C6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2FF2FEEA-B843-40F0-AAE4-CD0A823528C6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2FF2FEEA-B843-40F0-AAE4-CD0A823528C6}.Release|x64.ActiveCfg = Release|Any CPU
+		{2FF2FEEA-B843-40F0-AAE4-CD0A823528C6}.Release|x64.Build.0 = Release|Any CPU
+		{2FF2FEEA-B843-40F0-AAE4-CD0A823528C6}.Release|x86.ActiveCfg = Release|Any CPU
+		{2FF2FEEA-B843-40F0-AAE4-CD0A823528C6}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -399,5 +413,6 @@ Global
 		{279C1D18-524B-4F0F-8C97-34677BBCAD30} = {E17B7D0E-5A3F-4A16-BCB9-E7E1A69B5408}
 		{63E6FCB1-3BE7-4D02-9D10-0CBEB52DBA86} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 		{AA568FAD-28AD-4CA2-9D15-F31411B12C52} = {E17B7D0E-5A3F-4A16-BCB9-E7E1A69B5408}
+		{2FF2FEEA-B843-40F0-AAE4-CD0A823528C6} = {E17B7D0E-5A3F-4A16-BCB9-E7E1A69B5408}
 	EndGlobalSection
 EndGlobal
