@@ -61,6 +61,18 @@ public class PaginaComparacionTests
         Assert.Contains("APROBADA", indice);
     }
 
+    [Fact]
+    public void EscribirIndice_ConCaracteresEspecialesEnElNombreDePantalla_CodificaElHrefComoSegmentoDeUrl()
+    {
+        var nombre = "pantalla#100%raro";
+
+        PaginaComparacion.Escribir(Pantalla(nombre), nombre, new ResultadoComparacion(10, 10, 0, 0), 1, 0);
+
+        var indice = File.ReadAllText(Path.Combine(_raiz, "index.html"));
+
+        Assert.Contains("href=\"pantalla%23100%25raro/index.html\"", indice);
+    }
+
     [Theory]
     [InlineData(0.5, 0, 0.5, 0, true)]
     [InlineData(0.51, 0, 0.5, 0, false)]

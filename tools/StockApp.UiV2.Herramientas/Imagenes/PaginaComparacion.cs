@@ -80,7 +80,7 @@ public static class PaginaComparacion
             var p = JsonSerializer.Deserialize<ResultadoPersistido>(File.ReadAllText(archivo))!;
             var aprobada = p.Porcentaje <= p.UmbralPorcentaje && p.TeselasDensas <= p.TeselasDensasMax;
             var nombre = Path.GetFileName(carpeta);
-            filas.Append($"<tr><td><a href=\"{WebUtility.HtmlEncode(nombre)}/index.html\">{WebUtility.HtmlEncode(p.Pantalla)}</a></td>")
+            filas.Append($"<tr><td><a href=\"{Uri.EscapeDataString(nombre)}/index.html\">{WebUtility.HtmlEncode(p.Pantalla)}</a></td>")
                  .Append($"<td>{F(p.Porcentaje)}%</td><td>{p.TeselasDensas}</td>")
                  .Append($"<td class=\"{(aprobada ? "aprobada" : "rechazada")}\">{(aprobada ? "APROBADA" : "RECHAZADA")}</td></tr>\n");
         }
