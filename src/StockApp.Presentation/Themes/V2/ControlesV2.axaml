@@ -230,6 +230,21 @@
     <Style Selector=".ui2 NumericUpDown /template/ TextBox#PART_TextBox">
         <Setter Property="Padding" Value="13,0" />
     </Style>
+    <!-- Ruling controlador (fix round 1/5, punto ciego del brief): mismo bug que PART_TextBox de
+         arriba, pero en el ComboBox editable (IsEditable="True", 5 usos en NuevaImportacionView).
+         PART_EditableTextBox es un TextBox real (verificado decompilando Avalonia.Themes.Fluent
+         12.0.5 con ilspycmd: "new TextBox()" registrado como "PART_EditableTextBox"), y el selector
+         genérico ".ui2 TextBox" lo alcanza igual que alcanzaba al PART_TextBox de NumericUpDown:
+         sin este reseteo el control mide 38 con doble borde. Mismo Padding 13,0 que
+         ".ui2 ComboBox" por la misma razón que el TextBox de NumericUpDown (el Padding del
+         ComboBox externo no llega al TextBox interno). Custodiado por
+         ComboBoxEditable_SinDobleBordeYAlto36ConTextoA13. -->
+    <Style Selector=".ui2 ComboBox /template/ TextBox#PART_EditableTextBox">
+        <Setter Property="MinHeight" Value="0" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Padding" Value="13,0" />
+    </Style>
     <Style Selector=".ui2 ComboBox:pointerover /template/ Border#Background">
         <Setter Property="Background" Value="{DynamicResource V2SuperficieBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource V2BordeInputBrush}" />

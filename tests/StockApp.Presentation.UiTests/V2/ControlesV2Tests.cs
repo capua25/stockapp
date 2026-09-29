@@ -97,6 +97,23 @@ public class ControlesV2Tests
     }
 
     [AvaloniaFact]
+    public void ComboBoxEditable_SinDobleBordeYAlto36ConTextoA13()
+    {
+        // F1 (review Task 10): PART_EditableTextBox es un TextBox real (verificado decompilando
+        // Avalonia.Themes.Fluent 12.0.5), igual que PART_TextBox de NumericUpDown/CalendarDatePicker;
+        // el selector genérico ".ui2 TextBox" lo alcanza y sin resetearlo un ComboBox editable mide
+        // 38 con doble borde (usado 5 veces en NuevaImportacionView.axaml).
+        var combo = Buscar<ComboBox>(Montar("""<ComboBox x:Name="C" Width="200" IsEditable="True" Text="Tornillo" />"""), "C");
+        var editable = Parte<TextBox>(combo, "PART_EditableTextBox");
+
+        Assert.Equal(36, combo.Bounds.Height);
+        Assert.Equal(new Thickness(0), editable.BorderThickness);
+
+        var texto = editable.GetVisualDescendants().OfType<TextPresenter>().First();
+        Assert.Equal(13, texto.TranslatePoint(new Point(0, 0), combo)!.Value.X);
+    }
+
+    [AvaloniaFact]
     public void CalendarDatePicker_GlifoEsIconoMdiSinElDiaDeHoy()
     {
         var picker = Buscar<CalendarDatePicker>(Montar("""<CalendarDatePicker x:Name="C" />"""), "C");
