@@ -25,6 +25,8 @@
     <PackageReference Include="Avalonia.Skia" />
     <!-- Mismo proveedor de íconos que la app (prefijo mdi): el SVG del mockup sale del MISMO path. -->
     <PackageReference Include="Optris.Icons.Avalonia.MaterialDesign" />
+    <!-- Captura de mockups HTML a PNG con Chromium headless (comandos instalar-navegador / capturar-mockup). -->
+    <PackageReference Include="Microsoft.Playwright" />
   </ItemGroup>
 
 </Project>

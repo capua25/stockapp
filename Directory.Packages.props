@@ -61,6 +61,11 @@
     <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
     <PackageVersion Include="Velopack" Version="1.2.0" />
 
+    <!-- UI v2: captura de los mockups HTML a PNG (tools/StockApp.UiV2.Herramientas). Chromium se
+         instala una vez por máquina con el comando instalar-navegador de esa herramienta; 1.63.0
+         usa Chromium rev 1243. Solo herramientas de desarrollo, nunca la app. -->
+    <PackageVersion Include="Microsoft.Playwright" Version="1.63.0" />
+
     <!-- Export PDF de tablas (spec 2026-09-18): MigraDoc solo se referencia desde
          StockApp.Documentos, nunca desde Application ni Api (ver Directory.Packages.props
          de Central Package Management). Base package, no las variantes -GDI/-WPF: no depende

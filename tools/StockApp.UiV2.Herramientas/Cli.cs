@@ -66,6 +66,15 @@ public static class Cli
                     return 0;
                 }
 
+                case ["instalar-navegador"]:
+                    // Equivale a "playwright install chromium" sin requerir PowerShell (playwright.ps1).
+                    return Microsoft.Playwright.Program.Main(["install", "chromium"]);
+
+                case ["capturar-mockup", var html, var png]:
+                    CapturadorMockup.CapturarAsync(html, png).GetAwaiter().GetResult();
+                    salida.WriteLine($"Escrito: {png}");
+                    return 0;
+
                 default:
                     error.WriteLine(Uso);
                     return 2;
