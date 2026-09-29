@@ -199,4 +199,19 @@
         </Setter>
     </ControlTheme>
 
+    <ControlTheme x:Key="{x:Type v2:BarraFiltros}" TargetType="v2:BarraFiltros">
+        <Setter Property="Margin" Value="0,0,0,16" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBox x:Name="PART_Busqueda"
+                             Width="280"
+                             Text="{Binding TextoBusqueda, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
+                             PlaceholderText="{TemplateBinding MarcaAguaBusqueda}" />
+                    <ContentPresenter x:Name="PART_Filtros" Content="{TemplateBinding Filtros}" />
+                </StackPanel>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+
 </ResourceDictionary>

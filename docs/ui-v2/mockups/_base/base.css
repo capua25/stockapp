@@ -159,3 +159,7 @@ body {
   font-size: var(--v2-fuente-error-campo-tamano); line-height: var(--v2-fuente-error-campo-alto-linea); font-weight: var(--v2-fuente-error-campo-peso);
   color: var(--v2-color-borde-error);
 }
+
+/* BarraFiltros (Controls/V2/BarraFiltros): buscador de 280 + filtros separados 8. */
+.v2-barra-filtros { display: flex; gap: 8px; margin-bottom: 16px; }
+.v2-busqueda { flex: 0 0 280px; width: 280px; }
