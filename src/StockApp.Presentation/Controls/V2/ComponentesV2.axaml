@@ -214,4 +214,128 @@
         </Setter>
     </ControlTheme>
 
+    <ControlTheme x:Key="{x:Type v2:TarjetaMetrica}" TargetType="v2:TarjetaMetrica">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border x:Name="PART_Marco"
+                        Background="{DynamicResource V2SuperficieBrush}"
+                        BorderBrush="{DynamicResource V2BordeBrush}"
+                        BorderThickness="1"
+                        CornerRadius="{DynamicResource V2RadioCard}"
+                        BoxShadow="{DynamicResource V2SombraCard}"
+                        Padding="16">
+                    <StackPanel>
+                        <TextBlock x:Name="PART_Valor"
+                                   Text="{TemplateBinding Valor}"
+                                   FontSize="{DynamicResource V2FuenteValorMetricaTamano}"
+                                   FontWeight="{DynamicResource V2FuenteValorMetricaPeso}"
+                                   Foreground="{DynamicResource V2TextoPrimarioBrush}"
+                                   IsVisible="{TemplateBinding SinDato, Converter={x:Static BoolConverters.Not}}" />
+                        <TextBlock x:Name="PART_SinDato"
+                                   Text="—"
+                                   FontSize="{DynamicResource V2FuenteValorMetricaTamano}"
+                                   FontWeight="{DynamicResource V2FuenteValorMetricaPeso}"
+                                   Foreground="{DynamicResource V2TextoGrupoBrush}"
+                                   IsVisible="{TemplateBinding SinDato}" />
+                        <TextBlock x:Name="PART_Etiqueta"
+                                   Margin="0,4,0,0"
+                                   Text="{TemplateBinding Etiqueta}"
+                                   TextWrapping="Wrap"
+                                   FontSize="{DynamicResource V2FuenteEtiquetaMetricaTamano}"
+                                   FontWeight="{DynamicResource V2FuenteEtiquetaMetricaPeso}"
+                                   Foreground="{DynamicResource V2TextoTerciarioBrush}" />
+                    </StackPanel>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+
+    <!-- Fondo y borde van como Setter del control (no como valor local del template) para que
+         el estado :pointerover los pueda pisar. -->
+    <ControlTheme x:Key="{x:Type v2:TarjetaAcceso}" TargetType="v2:TarjetaAcceso">
+        <Setter Property="Background" Value="{DynamicResource V2SuperficieBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource V2BordeBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="{DynamicResource V2RadioControl}" />
+        <Setter Property="Padding" Value="16" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border x:Name="PART_Marco"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        CornerRadius="{TemplateBinding CornerRadius}"
+                        Padding="{TemplateBinding Padding}">
+                    <Grid ColumnDefinitions="Auto,8,*">
+                        <!-- Value e IsVisible los asigna TarjetaAcceso.AplicarIcono (ver su comentario). -->
+                        <i:Icon x:Name="PART_Icono"
+                                Grid.Column="0"
+                                FontSize="16"
+                                VerticalAlignment="Top"
+                                Foreground="{DynamicResource V2AcentoBrush}" />
+                        <StackPanel Grid.Column="2">
+                            <TextBlock x:Name="PART_Titulo"
+                                       Text="{TemplateBinding Titulo}"
+                                       FontSize="{DynamicResource V2FuenteTituloAccesoTamano}"
+                                       FontWeight="{DynamicResource V2FuenteTituloAccesoPeso}"
+                                       Foreground="{DynamicResource V2TextoPrimarioBrush}" />
+                            <TextBlock x:Name="PART_Descripcion"
+                                       Margin="0,4,0,0"
+                                       Text="{TemplateBinding Descripcion}"
+                                       TextWrapping="Wrap"
+                                       FontSize="{DynamicResource V2FuenteDescripcionAccesoTamano}"
+                                       FontWeight="{DynamicResource V2FuenteDescripcionAccesoPeso}"
+                                       Foreground="{DynamicResource V2TextoTerciarioBrush}"
+                                       IsVisible="{TemplateBinding Descripcion, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+
+        <Style Selector="^:pointerover">
+            <Setter Property="Background" Value="{DynamicResource V2HoverNeutroBrush}" />
+        </Style>
+        <Style Selector="^:pressed">
+            <Setter Property="Background" Value="{DynamicResource V2HoverNeutroBrush}" />
+        </Style>
+    </ControlTheme>
+
+    <ControlTheme x:Key="{x:Type v2:EstadoVacio}" TargetType="v2:EstadoVacio">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <StackPanel HorizontalAlignment="Center" Margin="0,32" Spacing="4">
+                    <TextBlock x:Name="PART_Titulo"
+                               Text="{TemplateBinding Titulo}"
+                               HorizontalAlignment="Center"
+                               FontSize="{DynamicResource V2FuenteTituloSeccionTamano}"
+                               FontWeight="{DynamicResource V2FuenteTituloSeccionPeso}" />
+                    <TextBlock x:Name="PART_Mensaje"
+                               Text="{TemplateBinding Mensaje}"
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap"
+                               MaxWidth="360"
+                               FontSize="{DynamicResource V2FuenteControlTamano}"
+                               Foreground="{DynamicResource V2TextoSecundarioBrush}"
+                               IsVisible="{TemplateBinding Mensaje, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    <ContentPresenter x:Name="PART_Acciones"
+                                      Margin="0,8,0,0"
+                                      HorizontalAlignment="Center"
+                                      Content="{TemplateBinding Acciones}"
+                                      IsVisible="{TemplateBinding Acciones, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                </StackPanel>
+            </ControlTemplate>
+        </Setter>
+
+        <Style Selector="^ /template/ TextBlock#PART_Titulo">
+            <Setter Property="Foreground" Value="{DynamicResource V2TextoPrimarioBrush}" />
+        </Style>
+        <Style Selector="^[EsError=True] /template/ TextBlock#PART_Titulo">
+            <Setter Property="Foreground" Value="{DynamicResource V2PeligroTextoBrush}" />
+        </Style>
+    </ControlTheme>
+
 </ResourceDictionary>

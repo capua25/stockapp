@@ -163,3 +163,30 @@ body {
 /* BarraFiltros (Controls/V2/BarraFiltros): buscador de 280 + filtros separados 8. */
 .v2-barra-filtros { display: flex; gap: 8px; margin-bottom: 16px; }
 .v2-busqueda { flex: 0 0 280px; width: 280px; }
+
+/* TarjetaMetrica (Controls/V2/TarjetaMetrica). Sin dato: "—" en texto grupo, borde sólido
+   (el borde punteado del mockup de referencia no se replica 1:1 en Avalonia, spec §6.1). */
+.v2-metrica {
+  background: var(--v2-color-superficie); border: 1px solid var(--v2-color-borde);
+  border-radius: var(--v2-radio-card); box-shadow: var(--v2-sombra-card); padding: 16px;
+}
+.v2-metrica-valor { font-size: var(--v2-fuente-valor-metrica-tamano); line-height: var(--v2-fuente-valor-metrica-alto-linea); font-weight: var(--v2-fuente-valor-metrica-peso); color: var(--v2-color-texto-primario); }
+.v2-metrica-valor--sin-dato { color: var(--v2-color-texto-grupo); }
+.v2-metrica-etiqueta { margin-top: 4px; font-size: var(--v2-fuente-etiqueta-metrica-tamano); line-height: var(--v2-fuente-etiqueta-metrica-alto-linea); font-weight: var(--v2-fuente-etiqueta-metrica-peso); color: var(--v2-color-texto-terciario); }
+
+/* TarjetaAcceso (Controls/V2/TarjetaAcceso): ícono de 16 en acento, 8 de separación. */
+.v2-acceso {
+  display: flex; gap: 8px; align-items: flex-start; padding: 16px;
+  background: var(--v2-color-superficie); border: 1px solid var(--v2-color-borde);
+  border-radius: var(--v2-radio-control);
+}
+.v2-acceso .v2-icono { color: var(--v2-color-acento); }
+.v2-acceso-titulo { font-size: var(--v2-fuente-titulo-acceso-tamano); line-height: var(--v2-fuente-titulo-acceso-alto-linea); font-weight: var(--v2-fuente-titulo-acceso-peso); color: var(--v2-color-texto-primario); }
+.v2-acceso-descripcion { margin-top: 4px; font-size: var(--v2-fuente-descripcion-acceso-tamano); line-height: var(--v2-fuente-descripcion-acceso-alto-linea); font-weight: var(--v2-fuente-descripcion-acceso-peso); color: var(--v2-color-texto-terciario); }
+
+/* EstadoVacio (Controls/V2/EstadoVacio) */
+.v2-vacio { display: flex; flex-direction: column; align-items: center; gap: 4px; margin: 32px 0; text-align: center; }
+.v2-vacio-titulo { font-size: var(--v2-fuente-titulo-seccion-tamano); line-height: var(--v2-fuente-titulo-seccion-alto-linea); font-weight: var(--v2-fuente-titulo-seccion-peso); color: var(--v2-color-texto-primario); }
+.v2-vacio-titulo--error { color: var(--v2-color-peligro-texto); }
+.v2-vacio-mensaje { max-width: 360px; font-size: var(--v2-fuente-control-tamano); line-height: var(--v2-fuente-control-alto-linea); color: var(--v2-color-texto-secundario); }
+.v2-vacio-acciones { margin-top: 8px; display: flex; gap: 8px; }
