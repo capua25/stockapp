@@ -1,3 +1,5 @@
+using StockApp.UiV2.Herramientas.Tokens;
+
 namespace StockApp.UiV2.Herramientas;
 
 /// <summary>
@@ -24,15 +26,64 @@ public static class Cli
         {
             switch (args)
             {
+                case ["tokens"]:
+                    return ComandoTokens(verificar: false, salida, error);
+                case ["tokens", "--verificar"]:
+                    return ComandoTokens(verificar: true, salida, error);
                 default:
                     error.WriteLine(Uso);
                     return 2;
             }
+        }
+        catch (TokensInvalidosException ex)
+        {
+            error.WriteLine($"tokens.json inválido: {ex.Message}");
+            return 1;
         }
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or FileNotFoundException)
         {
             error.WriteLine(ex.Message);
             return 1;
         }
+    }
+
+    internal static string Normalizar(string texto) => texto.Replace("\r\n", "\n");
+
+    private static int ComandoTokens(bool verificar, TextWriter salida, TextWriter error)
+    {
+        var definicion = LectorTokens.LeerArchivo(RutasRepo.TokensJson);
+        var esperados = new[]
+        {
+            (Ruta: RutasRepo.TokensAxaml, Contenido: GeneradorTokens.GenerarAxaml(definicion)),
+            (Ruta: RutasRepo.TokensCss, Contenido: GeneradorTokens.GenerarCss(definicion)),
+        };
+
+        if (verificar)
+        {
+            var desactualizados = esperados
+                .Where(e => !File.Exists(e.Ruta) || Normalizar(File.ReadAllText(e.Ruta)) != e.Contenido)
+                .Select(e => Path.GetRelativePath(RutasRepo.Raiz, e.Ruta))
+                .ToList();
+            foreach (var ruta in desactualizados)
+            {
+                error.WriteLine($"Desactualizado: {ruta}. Correr el comando tokens.");
+            }
+
+            if (desactualizados.Count == 0)
+            {
+                salida.WriteLine("Tokens generados al día.");
+            }
+
+            return desactualizados.Count == 0 ? 0 : 1;
+        }
+
+        foreach (var (ruta, contenido) in esperados)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(ruta)!);
+            File.WriteAllText(ruta, contenido);
+            salida.WriteLine($"Escrito: {Path.GetRelativePath(RutasRepo.Raiz, ruta)}");
+        }
+
+        return 0;
     }
 }

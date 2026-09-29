@@ -1,0 +1,164 @@
+<!-- ARCHIVO GENERADO. No editar a mano.
+     Fuente: docs/ui-v2/tokens.json. Se regenera con el comando "tokens" de
+     tools/StockApp.UiV2.Herramientas (ver docs/ui-v2/herramientas.md). -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Colores -->
+    <Color x:Key="V2ColorFondo">#F7F7F5</Color>
+    <Color x:Key="V2ColorSuperficie">#FFFFFF</Color>
+    <Color x:Key="V2ColorBorde">#E7E5E4</Color>
+    <Color x:Key="V2ColorBordeInput">#D6D3D1</Color>
+    <Color x:Key="V2ColorSeparadorGrilla">#F0EFED</Color>
+    <Color x:Key="V2ColorHeaderGrilla">#FAFAF9</Color>
+    <Color x:Key="V2ColorAcento">#1D4ED8</Color>
+    <Color x:Key="V2ColorAcentoHover">#1E40AF</Color>
+    <Color x:Key="V2ColorAcentoSuave">#DBEAFE</Color>
+    <Color x:Key="V2ColorAcentoOscuro">#1E3A8A</Color>
+    <Color x:Key="V2ColorTextoPrimario">#1C1917</Color>
+    <Color x:Key="V2ColorTextoSecundario">#57534E</Color>
+    <Color x:Key="V2ColorTextoTerciario">#78716C</Color>
+    <Color x:Key="V2ColorTextoEtiqueta">#44403C</Color>
+    <Color x:Key="V2ColorTextoGrupo">#A8A29E</Color>
+    <Color x:Key="V2ColorPeligroTexto">#B91C1C</Color>
+    <Color x:Key="V2ColorBordeError">#DC2626</Color>
+    <Color x:Key="V2ColorInsigniaNeutroFondo">#F5F5F4</Color>
+    <Color x:Key="V2ColorInsigniaNeutroTexto">#44403C</Color>
+    <Color x:Key="V2ColorInsigniaAdvertenciaFondo">#FEF3C7</Color>
+    <Color x:Key="V2ColorInsigniaAdvertenciaTexto">#92400E</Color>
+    <Color x:Key="V2ColorInsigniaPeligroFondo">#FEE2E2</Color>
+    <Color x:Key="V2ColorInsigniaPeligroTexto">#991B1B</Color>
+    <Color x:Key="V2ColorInsigniaExitoFondo">#DCFCE7</Color>
+    <Color x:Key="V2ColorInsigniaExitoTexto">#14532D</Color>
+    <Color x:Key="V2ColorAlertaAdvertenciaFondo">#FEF3C7</Color>
+    <Color x:Key="V2ColorAlertaAdvertenciaBorde">#FDE68A</Color>
+    <Color x:Key="V2ColorAlertaAdvertenciaTexto">#92400E</Color>
+    <Color x:Key="V2ColorAlertaErrorFondo">#FEE2E2</Color>
+    <Color x:Key="V2ColorAlertaErrorBorde">#FCA5A5</Color>
+    <Color x:Key="V2ColorAlertaErrorTexto">#991B1B</Color>
+    <Color x:Key="V2ColorAlertaInfoFondo">#DBEAFE</Color>
+    <Color x:Key="V2ColorAlertaInfoBorde">#DBEAFE</Color>
+    <Color x:Key="V2ColorAlertaInfoTexto">#1E3A8A</Color>
+    <Color x:Key="V2ColorTextoSobreAcento">#FFFFFF</Color>
+    <Color x:Key="V2ColorHoverNeutro">#F5F5F4</Color>
+    <Color x:Key="V2ColorDeshabilitadoFondo">#F5F5F4</Color>
+    <Color x:Key="V2ColorDeshabilitadoTexto">#A8A29E</Color>
+
+    <!-- Brushes: lo que referencian las vistas y los ControlTheme -->
+    <SolidColorBrush x:Key="V2FondoBrush" Color="#F7F7F5" />
+    <SolidColorBrush x:Key="V2SuperficieBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="V2BordeBrush" Color="#E7E5E4" />
+    <SolidColorBrush x:Key="V2BordeInputBrush" Color="#D6D3D1" />
+    <SolidColorBrush x:Key="V2SeparadorGrillaBrush" Color="#F0EFED" />
+    <SolidColorBrush x:Key="V2HeaderGrillaBrush" Color="#FAFAF9" />
+    <SolidColorBrush x:Key="V2AcentoBrush" Color="#1D4ED8" />
+    <SolidColorBrush x:Key="V2AcentoHoverBrush" Color="#1E40AF" />
+    <SolidColorBrush x:Key="V2AcentoSuaveBrush" Color="#DBEAFE" />
+    <SolidColorBrush x:Key="V2AcentoOscuroBrush" Color="#1E3A8A" />
+    <SolidColorBrush x:Key="V2TextoPrimarioBrush" Color="#1C1917" />
+    <SolidColorBrush x:Key="V2TextoSecundarioBrush" Color="#57534E" />
+    <SolidColorBrush x:Key="V2TextoTerciarioBrush" Color="#78716C" />
+    <SolidColorBrush x:Key="V2TextoEtiquetaBrush" Color="#44403C" />
+    <SolidColorBrush x:Key="V2TextoGrupoBrush" Color="#A8A29E" />
+    <SolidColorBrush x:Key="V2PeligroTextoBrush" Color="#B91C1C" />
+    <SolidColorBrush x:Key="V2BordeErrorBrush" Color="#DC2626" />
+    <SolidColorBrush x:Key="V2InsigniaNeutroFondoBrush" Color="#F5F5F4" />
+    <SolidColorBrush x:Key="V2InsigniaNeutroTextoBrush" Color="#44403C" />
+    <SolidColorBrush x:Key="V2InsigniaAdvertenciaFondoBrush" Color="#FEF3C7" />
+    <SolidColorBrush x:Key="V2InsigniaAdvertenciaTextoBrush" Color="#92400E" />
+    <SolidColorBrush x:Key="V2InsigniaPeligroFondoBrush" Color="#FEE2E2" />
+    <SolidColorBrush x:Key="V2InsigniaPeligroTextoBrush" Color="#991B1B" />
+    <SolidColorBrush x:Key="V2InsigniaExitoFondoBrush" Color="#DCFCE7" />
+    <SolidColorBrush x:Key="V2InsigniaExitoTextoBrush" Color="#14532D" />
+    <SolidColorBrush x:Key="V2AlertaAdvertenciaFondoBrush" Color="#FEF3C7" />
+    <SolidColorBrush x:Key="V2AlertaAdvertenciaBordeBrush" Color="#FDE68A" />
+    <SolidColorBrush x:Key="V2AlertaAdvertenciaTextoBrush" Color="#92400E" />
+    <SolidColorBrush x:Key="V2AlertaErrorFondoBrush" Color="#FEE2E2" />
+    <SolidColorBrush x:Key="V2AlertaErrorBordeBrush" Color="#FCA5A5" />
+    <SolidColorBrush x:Key="V2AlertaErrorTextoBrush" Color="#991B1B" />
+    <SolidColorBrush x:Key="V2AlertaInfoFondoBrush" Color="#DBEAFE" />
+    <SolidColorBrush x:Key="V2AlertaInfoBordeBrush" Color="#DBEAFE" />
+    <SolidColorBrush x:Key="V2AlertaInfoTextoBrush" Color="#1E3A8A" />
+    <SolidColorBrush x:Key="V2TextoSobreAcentoBrush" Color="#FFFFFF" />
+    <SolidColorBrush x:Key="V2HoverNeutroBrush" Color="#F5F5F4" />
+    <SolidColorBrush x:Key="V2DeshabilitadoFondoBrush" Color="#F5F5F4" />
+    <SolidColorBrush x:Key="V2DeshabilitadoTextoBrush" Color="#A8A29E" />
+
+    <!-- Radios -->
+    <CornerRadius x:Key="V2RadioControl">8</CornerRadius>
+    <CornerRadius x:Key="V2RadioCard">10</CornerRadius>
+    <CornerRadius x:Key="V2RadioInsignia">999</CornerRadius>
+    <CornerRadius x:Key="V2RadioCasilla">4</CornerRadius>
+
+    <!-- Alturas -->
+    <x:Double x:Key="V2AltoControl">36</x:Double>
+    <x:Double x:Key="V2AltoFilaGrilla">40</x:Double>
+    <x:Double x:Key="V2AltoHeaderGrilla">36</x:Double>
+    <x:Double x:Key="V2AltoItemSidebar">32</x:Double>
+
+    <!-- Anchos -->
+    <x:Double x:Key="V2AnchoSidebar">240</x:Double>
+    <x:Double x:Key="V2AnchoFormularioMax">760</x:Double>
+    <x:Double x:Key="V2AnchoCardLogin">400</x:Double>
+
+    <!-- Espaciado, base 4 -->
+    <x:Double x:Key="V2Espacio4">4</x:Double>
+    <x:Double x:Key="V2Espacio8">8</x:Double>
+    <x:Double x:Key="V2Espacio12">12</x:Double>
+    <x:Double x:Key="V2Espacio16">16</x:Double>
+    <x:Double x:Key="V2Espacio20">20</x:Double>
+    <x:Double x:Key="V2Espacio24">24</x:Double>
+    <x:Double x:Key="V2Espacio28">28</x:Double>
+    <x:Double x:Key="V2Espacio32">32</x:Double>
+    <x:Double x:Key="V2Espacio40">40</x:Double>
+    <x:Double x:Key="V2Espacio48">48</x:Double>
+
+    <!-- Sombra: la única del sistema -->
+    <BoxShadows x:Key="V2SombraCard">0 1 2 0 #0D000000</BoxShadows>
+
+    <!-- Tipografía -->
+    <x:Double x:Key="V2FuenteTituloPaginaTamano">22</x:Double>
+    <FontWeight x:Key="V2FuenteTituloPaginaPeso">600</FontWeight>
+    <x:Double x:Key="V2FuenteTituloPaginaAltoLinea">26</x:Double>
+    <x:Double x:Key="V2FuenteTituloSeccionTamano">15</x:Double>
+    <FontWeight x:Key="V2FuenteTituloSeccionPeso">600</FontWeight>
+    <x:Double x:Key="V2FuenteMarcaTamano">15</x:Double>
+    <FontWeight x:Key="V2FuenteMarcaPeso">700</FontWeight>
+    <x:Double x:Key="V2FuenteValorMetricaTamano">20</x:Double>
+    <FontWeight x:Key="V2FuenteValorMetricaPeso">600</FontWeight>
+    <x:Double x:Key="V2FuenteTituloLoginTamano">20</x:Double>
+    <FontWeight x:Key="V2FuenteTituloLoginPeso">600</FontWeight>
+    <x:Double x:Key="V2FuenteCuerpoTamano">14</x:Double>
+    <FontWeight x:Key="V2FuenteCuerpoPeso">400</FontWeight>
+    <x:Double x:Key="V2FuenteControlTamano">13</x:Double>
+    <FontWeight x:Key="V2FuenteControlPeso">400</FontWeight>
+    <x:Double x:Key="V2FuenteBotonTamano">13</x:Double>
+    <FontWeight x:Key="V2FuenteBotonPeso">600</FontWeight>
+    <x:Double x:Key="V2FuenteEnlaceTamano">13</x:Double>
+    <FontWeight x:Key="V2FuenteEnlacePeso">500</FontWeight>
+    <x:Double x:Key="V2FuenteSubtituloFormularioTamano">13</x:Double>
+    <FontWeight x:Key="V2FuenteSubtituloFormularioPeso">600</FontWeight>
+    <x:Double x:Key="V2FuenteTituloAccesoTamano">13</x:Double>
+    <FontWeight x:Key="V2FuenteTituloAccesoPeso">600</FontWeight>
+    <x:Double x:Key="V2FuenteEtiquetaCampoTamano">12</x:Double>
+    <FontWeight x:Key="V2FuenteEtiquetaCampoPeso">500</FontWeight>
+    <x:Double x:Key="V2FuenteEtiquetaMetricaTamano">12</x:Double>
+    <FontWeight x:Key="V2FuenteEtiquetaMetricaPeso">500</FontWeight>
+    <x:Double x:Key="V2FuenteDescripcionAccesoTamano">12</x:Double>
+    <FontWeight x:Key="V2FuenteDescripcionAccesoPeso">400</FontWeight>
+    <x:Double x:Key="V2FuentePieConteoTamano">12</x:Double>
+    <FontWeight x:Key="V2FuentePieConteoPeso">400</FontWeight>
+    <x:Double x:Key="V2FuenteItemSidebarTamano">12</x:Double>
+    <FontWeight x:Key="V2FuenteItemSidebarPeso">500</FontWeight>
+    <x:Double x:Key="V2FuenteInsigniaTamano">12</x:Double>
+    <FontWeight x:Key="V2FuenteInsigniaPeso">500</FontWeight>
+    <x:Double x:Key="V2FuenteErrorCampoTamano">12</x:Double>
+    <FontWeight x:Key="V2FuenteErrorCampoPeso">400</FontWeight>
+    <x:Double x:Key="V2FuenteHeaderColumnaTamano">11</x:Double>
+    <FontWeight x:Key="V2FuenteHeaderColumnaPeso">600</FontWeight>
+    <x:Double x:Key="V2FuenteHeaderColumnaEspaciadoLetras">0.6</x:Double>
+    <x:Double x:Key="V2FuenteHeaderSeccionSidebarTamano">11</x:Double>
+    <FontWeight x:Key="V2FuenteHeaderSeccionSidebarPeso">600</FontWeight>
+    <x:Double x:Key="V2FuenteHeaderSeccionSidebarEspaciadoLetras">0.6</x:Double>
+
+</ResourceDictionary>
