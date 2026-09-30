@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Catálogo de componentes (UI v2)</title>
+<link rel="stylesheet" href="../_base/tokens.css">
+<link rel="stylesheet" href="../_base/base.css">
+<style>
+  /* Layout propio de esta pantalla: el mismo Grid que CatalogoComponentesView.axaml. */
+  .contenido { position: absolute; left: 24px; top: 24px; right: 24px; bottom: 24px; display: flex; flex-direction: column; }
+  .columnas { display: flex; gap: 16px; align-items: flex-start; }
+  .izquierda { flex: 0 0 736px; display: flex; flex-direction: column; gap: 16px; }
+  .derecha { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+  .par { display: flex; gap: 12px; }
+  .par > * { flex: 1 1 0; min-width: 0; }
+  .fila-8 { display: flex; gap: 8px; align-items: center; }
+  .pila-12 { display: flex; flex-direction: column; gap: 12px; }
+  .pila-8 { display: flex; flex-direction: column; gap: 8px; }
+  .combo-filtro { flex: 0 0 200px; width: 200px; }
+  .formulario { padding: 24px; }
+  .subtitulo { margin-bottom: 12px; }
+  .campos { display: grid; grid-template-columns: 1fr 1fr; column-gap: 16px; row-gap: 16px; align-items: start; }
+  .abajo { align-self: end; }
+  .pie { margin-top: 12px; }
+  .col-codigo { flex: 0 0 100px; }
+  .col-nombre { flex: 1 1 0; min-width: 0; }
+  .col-costo { flex: 0 0 110px; }
+  .col-stock { flex: 0 0 90px; }
+  .col-estado { flex: 0 0 140px; }
+</style>
+</head>
+<body>
+<div class="v2-ventana">
+  <div class="contenido">
+
+    <div class="v2-encabezado">
+      <div class="v2-breadcrumb"><span class="v2-breadcrumb-origen">Inicio</span><span> / </span><span>Catálogo de componentes</span></div>
+      <div class="v2-encabezado-fila">
+        <div>
+          <div class="v2-titulo-pagina">Catálogo de componentes</div>
+          <div class="v2-encabezado-subtitulo">Tokens y componentes de la UI v2 con datos fijos</div>
+        </div>
+        <div class="v2-acciones">
+          <span class="v2-boton v2-boton--secundario">Cancelar</span>
+          <span class="v2-boton v2-boton--primario">Guardar</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="columnas">
+      <div class="izquierda">
+        <div class="v2-tarjeta">
+          <div class="v2-barra-filtros">
+            <div class="v2-input v2-busqueda"><span class="v2-input-placeholder">Buscar por código o nombre</span></div>
+            <div class="v2-input combo-filtro"><span>Todas las categorías</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div>
+          </div>
+          <div class="v2-grilla">
+            <div class="v2-grilla-header">
+              <div class="v2-grilla-celda col-codigo">CÓDIGO</div>
+              <div class="v2-grilla-celda col-nombre">NOMBRE</div>
+              <div class="v2-grilla-celda col-costo">COSTO</div>
+              <div class="v2-grilla-celda col-stock">STOCK</div>
+              <div class="v2-grilla-celda col-estado">ESTADO</div>
+            </div>
+            <div class="v2-grilla-fila">
+              <div class="v2-grilla-celda col-codigo">A-001</div>
+              <div class="v2-grilla-celda col-nombre">Tornillo 8x40</div>
+              <div class="v2-grilla-celda col-costo v2-num"><span>12.50</span></div>
+              <div class="v2-grilla-celda col-stock v2-num"><span>340</span></div>
+              <div class="v2-grilla-celda col-estado"><span class="v2-insignia v2-insignia--exito">Activo</span></div>
+            </div>
+            <div class="v2-grilla-fila">
+              <div class="v2-grilla-celda col-codigo">A-002</div>
+              <div class="v2-grilla-celda col-nombre">Pintura látex blanca 4 L</div>
+              <div class="v2-grilla-celda col-costo v2-num"><span>1850.00</span></div>
+              <div class="v2-grilla-celda col-stock v2-num"><span>-3</span></div>
+              <div class="v2-grilla-celda col-estado"><span class="v2-insignia v2-insignia--peligro">Stock negativo</span></div>
+            </div>
+            <div class="v2-grilla-fila">
+              <div class="v2-grilla-celda col-codigo">A-003</div>
+              <div class="v2-grilla-celda col-nombre">Guantes de nitrilo</div>
+              <div class="v2-grilla-celda col-costo v2-num"><span>95.00</span></div>
+              <div class="v2-grilla-celda col-stock v2-num"><span>120</span></div>
+              <div class="v2-grilla-celda col-estado"><span class="v2-insignia">Inactivo</span></div>
+            </div>
+          </div>
+          <div class="v2-pie-conteo pie">3 productos</div>
+        </div>
+
+        <div class="v2-tarjeta formulario">
+          <div class="v2-subtitulo-formulario subtitulo">Datos del producto</div>
+          <div class="campos">
+            <div class="v2-campo">
+              <div class="v2-campo-etiqueta"><span>Nombre</span><span class="v2-campo-requerido">*</span></div>
+              <div><div class="v2-input">Tornillo 8x40</div></div>
+            </div>
+            <div class="v2-campo">
+              <div class="v2-campo-etiqueta"><span>Código</span><span class="v2-campo-requerido">*</span></div>
+              <div><div class="v2-input v2-input--error">A-001</div><div class="v2-error-campo">El código ya existe</div></div>
+            </div>
+            <div class="v2-campo">
+              <div class="v2-campo-etiqueta"><span>Categoría</span></div>
+              <div><div class="v2-input"><span>Ferretería</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div>
+            </div>
+            <div class="v2-campo">
+              <div class="v2-campo-etiqueta"><span>Fecha de alta</span></div>
+              <div><div class="v2-input"><span>28/09/2026</span><svg class="v2-icono v2-glifo-fecha" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19 3H18V1H16V3H8V1H6V3H5C3.89 3 3 3.9 3 5V19C3 20.11 3.9 21 5 21H19C20.11 21 21 20.11 21 19V5C21 3.9 20.11 3 19 3M19 19H5V9H19V19M19 7H5V5H19V7Z"/></svg></div></div>
+            </div>
+            <div class="v2-campo">
+              <div class="v2-campo-etiqueta"><span>Stock inicial</span></div>
+              <div><div class="v2-input">340</div></div>
+            </div>
+            <div class="v2-casilla-fila abajo">
+              <div class="v2-casilla-caja">
+                <div class="v2-casilla v2-casilla--marcada"></div>
+                <svg class="v2-glifo-check" viewBox="0.012 0.012 17.475 12.988" aria-hidden="true"><path fill="currentColor" d="M5.5 10.586 1.707 6.793A1 1 0 0 0 .293 8.207l4.5 4.5a1 1 0 0 0 1.414 0l11-11A1 1 0 0 0 15.793.293L5.5 10.586Z"/></svg>
+              </div>
+              <span>Producto activo</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="derecha">
+        <div class="par">
+          <div class="v2-metrica">
+            <div class="v2-metrica-valor">3</div>
+            <div class="v2-metrica-etiqueta">Facturas a vencer (7 días)</div>
+          </div>
+          <div class="v2-metrica">
+            <div class="v2-metrica-valor v2-metrica-valor--sin-dato">—</div>
+            <div class="v2-metrica-etiqueta">Último backup</div>
+          </div>
+        </div>
+
+        <div class="v2-tarjeta pila-12">
+          <div class="v2-titulo-seccion">Insignias y botones</div>
+          <div class="fila-8">
+            <span class="v2-insignia">Inactivo</span>
+            <span class="v2-insignia v2-insignia--advertencia">Próxima</span>
+            <span class="v2-insignia v2-insignia--peligro">Stock negativo</span>
+            <span class="v2-insignia v2-insignia--exito">Activo</span>
+          </div>
+          <div class="fila-8">
+            <span class="v2-boton v2-boton--secundario">Exportar</span>
+            <span class="v2-boton v2-boton--ghost">Limpiar filtros</span>
+            <span class="v2-boton v2-boton--peligro">Eliminar</span>
+          </div>
+        </div>
+
+        <div class="pila-8">
+          <div class="v2-alerta v2-alerta--info">Los cambios se guardan al confirmar.</div>
+          <div class="v2-alerta v2-alerta--advertencia">El último backup tiene más de 7 días.</div>
+          <div class="v2-alerta v2-alerta--error">No se pudo conectar con el servidor.</div>
+        </div>
+
+        <div class="par">
+          <div class="v2-acceso">
+            <svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M2,10.96C1.5,10.68 1.35,10.07 1.63,9.59L3.13,7C3.24,6.8 3.41,6.66 3.6,6.58L11.43,2.18C11.59,2.06 11.79,2 12,2C12.21,2 12.41,2.06 12.57,2.18L20.47,6.62C20.66,6.72 20.82,6.88 20.91,7.08L22.36,9.6C22.64,10.08 22.47,10.69 22,10.96L21,11.54V16.5C21,16.88 20.79,17.21 20.47,17.38L12.57,21.82C12.41,21.94 12.21,22 12,22C11.79,22 11.59,21.94 11.43,21.82L3.53,17.38C3.21,17.21 3,16.88 3,16.5V10.96C2.7,11.13 2.32,11.14 2,10.96M12,4.15V4.15L12,10.85V10.85L17.96,7.5L12,4.15M5,15.91L11,19.29V12.58L5,9.21V15.91M19,15.91V12.69L14,15.59C13.67,15.77 13.3,15.76 13,15.6V19.29L19,15.91M13.85,13.36L20.13,9.73L19.55,8.72L13.27,12.35L13.85,13.36Z"/></svg>
+            <div>
+              <div class="v2-acceso-titulo">Productos</div>
+              <div class="v2-acceso-descripcion">Ver y administrar el catálogo</div>
+            </div>
+          </div>
+          <div class="v2-acceso">
+            <svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9 17H7V10H9V17M13 17H11V7H13V17M17 17H15V13H17V17M19 19H5V5H19V19.1M19 3H5C3.9 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V5C21 3.9 20.1 3 19 3Z"/></svg>
+            <div>
+              <div class="v2-acceso-titulo">Reportes</div>
+              <div class="v2-acceso-descripcion">Valorización y estadísticas</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="v2-tarjeta">
+          <div class="v2-vacio">
+            <div class="v2-vacio-titulo">Sin resultados</div>
+            <div class="v2-vacio-mensaje">No hay productos que coincidan con la búsqueda.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

@@ -6,7 +6,13 @@
    transparencias apiladas, text-shadow, pseudo-elementos decorativos.
    Alto de línea: SIEMPRE var(--v2-fuente-<rol>-alto-linea), nunca "normal". tokens.css lo trae
    calculado como el alto que mide un TextBlock de Avalonia (ceil del alto natural de Inter) o el
-   que fija el token (título de página 26). */
+   que fija el token (título de página 26).
+   Ancho de texto: un TextBlock de Avalonia mide el ceil del ancho del texto (layout rounding) y
+   dibuja el texto pegado a su izquierda; el navegador usa el ancho fraccionario. Donde eso mueve
+   algo (un elemento que abraza su texto, o texto alineado a la derecha) el ancho se redondea
+   igual: width: calc-size(fit-content, round(up, size, 1px)). Medido en el catálogo (Task 17):
+   sin esto cada insignia y cada botón salía 1px más angosto y las cifras de la grilla corridas
+   hasta 1px a la derecha. */
 
 @font-face { font-family: "InterV2"; src: url("fuentes/Inter-Regular.ttf") format("truetype"); font-weight: 400; }
 @font-face { font-family: "InterV2"; src: url("fuentes/Inter-Medium.ttf") format("truetype"); font-weight: 500; }
@@ -41,8 +47,11 @@ body {
 
 .v2-icono { display: block; flex: 0 0 auto; }
 
-/* Columna numérica: derecha + cifras tabulares (spec §2.3). */
+/* Columna numérica: derecha + cifras tabulares (spec §2.3). El valor va en un <span> (el
+   TextBlock de la celda): el ceil del ancho lo corre a la izquierda como en Avalonia.
+     <div class="v2-grilla-celda v2-num"><span>12.50</span></div> */
 .v2-num { text-align: right; font-variant-numeric: tabular-nums; }
+.v2-num > span { width: calc-size(fit-content, round(up, size, 1px)); text-align: left; }
 
 /* Tipografía (ControlesV2.axaml, clases de TextBlock) */
 .v2-titulo-pagina { font-size: var(--v2-fuente-titulo-pagina-tamano); font-weight: var(--v2-fuente-titulo-pagina-peso); line-height: var(--v2-fuente-titulo-pagina-alto-linea); color: var(--v2-color-texto-primario); }
@@ -60,6 +69,7 @@ body {
   border: 1px solid transparent; border-radius: var(--v2-radio-control);
   font-family: inherit; font-size: var(--v2-fuente-boton-tamano); line-height: var(--v2-fuente-boton-alto-linea); font-weight: var(--v2-fuente-boton-peso);
   white-space: nowrap;
+  width: calc-size(fit-content, round(up, size, 1px));
 }
 .v2-boton--primario { background: var(--v2-color-acento); border-color: var(--v2-color-acento); color: var(--v2-color-texto-sobre-acento); }
 .v2-boton--secundario { background: var(--v2-color-superficie); border-color: var(--v2-color-borde-input); color: var(--v2-color-texto-etiqueta); }
@@ -110,6 +120,7 @@ body {
   padding: 2px 8px; border-radius: var(--v2-radio-insignia);
   font-size: var(--v2-fuente-insignia-tamano); line-height: var(--v2-fuente-insignia-alto-linea); font-weight: var(--v2-fuente-insignia-peso);
   white-space: nowrap;
+  width: calc-size(fit-content, round(up, size, 1px));
   background: var(--v2-color-insignia-neutro-fondo); color: var(--v2-color-insignia-neutro-texto);
 }
 .v2-insignia--advertencia { background: var(--v2-color-insignia-advertencia-fondo); color: var(--v2-color-insignia-advertencia-texto); }

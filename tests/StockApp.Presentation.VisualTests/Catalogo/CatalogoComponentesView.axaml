@@ -1,0 +1,143 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
+             xmlns:cat="using:StockApp.Presentation.VisualTests.Catalogo"
+             x:Class="StockApp.Presentation.VisualTests.Catalogo.CatalogoComponentesView"
+             x:DataType="cat:CatalogoComponentesViewModel"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
+
+    <!-- Pantalla de desarrollo de la Fase 0: todos los componentes v2 con datos fijos. Vive en el
+         proyecto de tests visuales, fuera de GestionMunicipal y de la navegación. Su mockup es
+         docs/ui-v2/mockups/componentes/catalogo.html: un cambio de layout acá va con el mismo
+         cambio allá, en el mismo commit. -->
+
+    <Grid Margin="24" RowDefinitions="Auto,*">
+        <v2:EncabezadoPagina Grid.Row="0"
+                             BreadcrumbOrigen="Inicio"
+                             BreadcrumbComando="{Binding VolverCommand}"
+                             BreadcrumbActual="Catálogo de componentes"
+                             Titulo="Catálogo de componentes"
+                             Subtitulo="Tokens y componentes de la UI v2 con datos fijos">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Classes="secundario" Content="Cancelar" />
+                <Button Classes="primario" Content="Guardar" />
+            </StackPanel>
+        </v2:EncabezadoPagina>
+
+        <Grid Grid.Row="1" ColumnDefinitions="736,16,*">
+            <StackPanel Grid.Column="0" Spacing="16">
+                <v2:TarjetaContenido>
+                    <StackPanel>
+                        <v2:BarraFiltros TextoBusqueda="{Binding Busqueda}"
+                                         MarcaAguaBusqueda="Buscar por código o nombre">
+                            <ComboBox Width="200"
+                                      ItemsSource="{Binding Categorias}"
+                                      SelectedItem="{Binding CategoriaFiltro}" />
+                        </v2:BarraFiltros>
+                        <DataGrid Height="158"
+                                  AutoGenerateColumns="False"
+                                  IsReadOnly="True"
+                                  HeadersVisibility="Column"
+                                  ItemsSource="{Binding Productos}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="CÓDIGO" Width="100" x:DataType="cat:ProductoMuestra" Binding="{Binding Codigo}" />
+                                <DataGridTextColumn Header="NOMBRE" Width="*" x:DataType="cat:ProductoMuestra" Binding="{Binding Nombre}" />
+                                <DataGridTextColumn Header="COSTO" Width="110" CellStyleClasses="num" x:DataType="cat:ProductoMuestra" Binding="{Binding Costo}" />
+                                <DataGridTextColumn Header="STOCK" Width="90" CellStyleClasses="num" x:DataType="cat:ProductoMuestra" Binding="{Binding Stock}" />
+                                <DataGridTemplateColumn Header="ESTADO" Width="140">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate x:DataType="cat:ProductoMuestra">
+                                            <v2:Insignia Texto="{Binding Estado}" Variante="{Binding VarianteEstado}" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <TextBlock Classes="pie-conteo" Margin="0,12,0,0" Text="3 productos" />
+                    </StackPanel>
+                </v2:TarjetaContenido>
+
+                <v2:TarjetaContenido Padding="24">
+                    <StackPanel>
+                        <TextBlock Classes="subtitulo-formulario" Margin="0,0,0,12" Text="Datos del producto" />
+                        <Grid ColumnDefinitions="*,16,*" RowDefinitions="Auto,16,Auto,16,Auto">
+                            <v2:CampoFormulario Grid.Row="0" Grid.Column="0" Etiqueta="Nombre" Requerido="True">
+                                <TextBox Text="{Binding Nombre}" />
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario Grid.Row="0" Grid.Column="2" Etiqueta="Código" Requerido="True">
+                                <TextBox x:Name="CampoCodigo" Text="{Binding Codigo}" />
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario Grid.Row="2" Grid.Column="0" Etiqueta="Categoría">
+                                <ComboBox HorizontalAlignment="Stretch"
+                                          ItemsSource="{Binding CategoriasProducto}"
+                                          SelectedItem="{Binding CategoriaSeleccionada}" />
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario Grid.Row="2" Grid.Column="2" Etiqueta="Fecha de alta">
+                                <CalendarDatePicker HorizontalAlignment="Stretch"
+                                                    SelectedDate="{Binding FechaAlta}"
+                                                    SelectedDateFormat="Custom"
+                                                    CustomDateFormatString="dd/MM/yyyy" />
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario Grid.Row="4" Grid.Column="0" Etiqueta="Stock inicial">
+                                <NumericUpDown HorizontalAlignment="Stretch"
+                                               Value="{Binding StockInicial}"
+                                               FormatString="0" />
+                            </v2:CampoFormulario>
+                            <CheckBox Grid.Row="4" Grid.Column="2"
+                                      VerticalAlignment="Bottom"
+                                      Content="Producto activo"
+                                      IsChecked="{Binding Activo}" />
+                        </Grid>
+                    </StackPanel>
+                </v2:TarjetaContenido>
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" Spacing="16">
+                <Grid ColumnDefinitions="*,12,*">
+                    <v2:TarjetaMetrica Grid.Column="0" Valor="3" Etiqueta="Facturas a vencer (7 días)" />
+                    <v2:TarjetaMetrica Grid.Column="2" SinDato="True" Etiqueta="Último backup" />
+                </Grid>
+
+                <v2:TarjetaContenido>
+                    <StackPanel Spacing="12">
+                        <TextBlock Classes="titulo-seccion" Text="Insignias y botones" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <v2:Insignia Texto="Inactivo" Variante="Neutro" />
+                            <v2:Insignia Texto="Próxima" Variante="Advertencia" />
+                            <v2:Insignia Texto="Stock negativo" Variante="Peligro" />
+                            <v2:Insignia Texto="Activo" Variante="Exito" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Classes="secundario" Content="Exportar" />
+                            <Button Classes="ghost" Content="Limpiar filtros" />
+                            <Button Classes="peligro" Content="Eliminar" />
+                        </StackPanel>
+                    </StackPanel>
+                </v2:TarjetaContenido>
+
+                <StackPanel Spacing="8">
+                    <v2:Alerta Variante="Info" Texto="Los cambios se guardan al confirmar." />
+                    <v2:Alerta Variante="Advertencia" Texto="El último backup tiene más de 7 días." />
+                    <v2:Alerta Variante="Error" Texto="No se pudo conectar con el servidor." />
+                </StackPanel>
+
+                <Grid ColumnDefinitions="*,12,*">
+                    <v2:TarjetaAcceso Grid.Column="0"
+                                      Icono="mdi-package-variant"
+                                      Titulo="Productos"
+                                      Descripcion="Ver y administrar el catálogo" />
+                    <v2:TarjetaAcceso Grid.Column="2"
+                                      Icono="mdi-chart-box-outline"
+                                      Titulo="Reportes"
+                                      Descripcion="Valorización y estadísticas" />
+                </Grid>
+
+                <v2:TarjetaContenido>
+                    <v2:EstadoVacio Titulo="Sin resultados"
+                                    Mensaje="No hay productos que coincidan con la búsqueda." />
+                </v2:TarjetaContenido>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>
