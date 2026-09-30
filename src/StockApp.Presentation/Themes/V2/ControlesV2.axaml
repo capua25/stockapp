@@ -134,6 +134,11 @@
         <Setter Property="PlaceholderForeground" Value="{DynamicResource V2TextoTerciarioBrush}" />
         <Setter Property="FontSize" Value="{DynamicResource V2FuenteControlTamano}" />
     </Style>
+    <!-- Fluent dibuja el placeholder con Opacity 0.5 (el terciario salía #BBB8B5, medido en el
+         catálogo). El mockup lo pinta pleno: el color ya es el más tenue de la escala. -->
+    <Style Selector=".ui2 TextBox /template/ TextBlock#PART_Placeholder">
+        <Setter Property="Opacity" Value="1" />
+    </Style>
     <Style Selector=".ui2 TextBox[AcceptsReturn=True]">
         <Setter Property="Padding" Value="12,8" />
         <Setter Property="VerticalContentAlignment" Value="Top" />
@@ -272,6 +277,11 @@
         <Setter Property="FontSize" Value="{DynamicResource V2FuenteControlTamano}" />
         <Setter Property="Foreground" Value="{DynamicResource V2TextoEtiquetaBrush}" />
     </Style>
+    <!-- La plantilla Fluent pone la caja en un Grid de 32 con VerticalAlignment Top: con el alto de
+         36 la casilla quedaba 2px por encima del centro del texto (medido en el catálogo). -->
+    <Style Selector=".ui2 CheckBox /template/ Grid#RootGrid > Grid">
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
     <Style Selector=".ui2 CheckBox /template/ Border#NormalRectangle, .ui2 CheckBox:pointerover /template/ Border#NormalRectangle">
         <Setter Property="Width" Value="16" />
         <Setter Property="Height" Value="16" />
@@ -290,11 +300,13 @@
 
     <!-- Mensaje de error de campo (spec §2.3: 12, color borde error). Solo cambia CÓMO se ve lo
          que el seam ya produjo: el contenido son los errores de DataValidationErrors.Errors, ya
-         pasados por ErrorValidacionConverter. -->
+         pasados por ErrorValidacionConverter. Sin Margin propio: el DataValidationErrors de Fluent
+         ya separa el ErrorTemplate 4 del control (InlineDataValidationContentControl, Margin
+         0,4,0,0); sumarle otro 4 lo dejaba a 8 (medido en el catálogo). -->
     <Style Selector=".ui2 DataValidationErrors">
         <Setter Property="ErrorTemplate">
             <DataTemplate x:DataType="col:IEnumerable">
-                <ItemsControl x:Name="PART_ErroresV2" ItemsSource="{Binding}" Margin="0,4,0,0">
+                <ItemsControl x:Name="PART_ErroresV2" ItemsSource="{Binding}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="sys:Object">
                             <TextBlock Text="{Binding}"

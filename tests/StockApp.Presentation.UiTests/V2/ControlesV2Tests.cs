@@ -161,6 +161,38 @@ public class ControlesV2Tests
     }
 
     [AvaloniaFact]
+    public void TextBox_ConErrores_MensajeA4DelBordeInferior()
+    {
+        // Referencia aprobada (patrones-1 .pt-error-msg) y base.css .v2-error-campo: margin-top 4.
+        // El DataValidationErrors de Fluent ya pone Margin 0,4,0,0 en InlineDataValidationContentControl
+        // (medido en el catálogo, Task 17): un margen propio en el ErrorTemplate lo duplicaba a 8.
+        var ventana = Montar("""<TextBox x:Name="T" />""");
+        var entrada = Buscar<TextBox>(ventana, "T");
+
+        DataValidationErrors.SetErrors(entrada, new object[] { "Campo requerido" });
+        Dispatcher.UIThread.RunJobs();
+        ventana.UpdateLayout();
+
+        var borde = Parte<Border>(entrada, "PART_BorderElement");
+        var mensaje = Assert.Single(ventana.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Campo requerido");
+        var inferiorBorde = borde.TranslatePoint(new Point(0, borde.Bounds.Height), ventana)!.Value.Y;
+        var superiorMensaje = mensaje.TranslatePoint(new Point(0, 0), ventana)!.Value.Y;
+        Assert.Equal(4, superiorMensaje - inferiorBorde);
+    }
+
+    [AvaloniaFact]
+    public void TextBox_Placeholder_OpacoEnTerciario()
+    {
+        // Fluent dibuja PART_Placeholder con Opacity 0.5: el #78716C del token salía #BBB8B5
+        // (medido en el catálogo, Task 17). base.css .v2-input-placeholder es el terciario pleno.
+        var entrada = Buscar<TextBox>(Montar("""<TextBox x:Name="T" PlaceholderText="Buscar" />"""), "T");
+
+        var placeholder = Parte<TextBlock>(entrada, "PART_Placeholder");
+        Assert.Equal(Hex("#78716C"), ColorDe(placeholder.Foreground));
+        Assert.Equal(1, placeholder.Opacity);
+    }
+
+    [AvaloniaFact]
     public void TextBox_DentroDeUi2_ConservaElErrorConverterGlobal()
     {
         // Review Focus 2: el seam de Themes/Controls.axaml tiene que seguir llegando adentro de .ui2.
@@ -178,6 +210,20 @@ public class ControlesV2Tests
         Assert.Equal(16, casilla.Bounds.Height);
         Assert.Equal(new CornerRadius(4), casilla.CornerRadius);
         Assert.Equal(Hex("#D6D3D1"), ColorDe(casilla.BorderBrush));
+    }
+
+    [AvaloniaFact]
+    public void CheckBox_CasillaCentradaEnElAltoDeControl()
+    {
+        // La plantilla Fluent arma la caja en un Grid de 32 con VerticalAlignment Top: con el alto
+        // v2 de 36 la casilla quedaba 2px por encima del centro del texto (medido en el catálogo,
+        // Task 17). base.css .v2-casilla-fila la centra (align-items: center).
+        var ventana = Montar("""<CheckBox x:Name="C" Content="Activo" VerticalAlignment="Top" />""");
+        var check = Buscar<CheckBox>(ventana, "C");
+        var casilla = Parte<Border>(check, "NormalRectangle");
+
+        Assert.Equal(36, check.Bounds.Height);
+        Assert.Equal(10, casilla.TranslatePoint(new Point(0, 0), check)!.Value.Y);
     }
 
     [AvaloniaFact]
