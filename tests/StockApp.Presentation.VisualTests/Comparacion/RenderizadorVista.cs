@@ -13,7 +13,9 @@ namespace StockApp.Presentation.VisualTests.Comparacion;
 /// </summary>
 public static class RenderizadorVista
 {
-    public static void RenderizarAPng(Control vista, object? viewModel, string rutaPng)
+    /// <param name="inspeccionar">Corre con la ventana todavía abierta, después de guardar el PNG:
+    /// al cerrarla la vista se desengancha de los estilos de la ventana y medirla ya no da lo mismo.</param>
+    public static void RenderizarAPng(Control vista, object? viewModel, string rutaPng, Action<Control>? inspeccionar = null)
     {
         if (!Avalonia.Application.Current!.TryGetResource("V2FondoBrush", ThemeVariant.Light, out var fondo)
             || fondo is not IBrush brushFondo)
@@ -52,6 +54,7 @@ public static class RenderizadorVista
 
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(rutaPng))!);
         frame.Save(rutaPng);
+        inspeccionar?.Invoke(vista);
         ventana.Close();
     }
 }

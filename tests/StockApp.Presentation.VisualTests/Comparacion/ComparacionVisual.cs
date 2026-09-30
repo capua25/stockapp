@@ -35,11 +35,16 @@ public static class ComparacionVisual
         // Playwright es async y este código corre en el dispatcher de Avalonia: se captura en el
         // thread pool (sin contexto de sincronización) y se espera. Verificado sin deadlock.
         Task.Run(() => CapturadorMockup.CapturarAsync(rutaHtml, pngMockup)).GetAwaiter().GetResult();
-        RenderizadorVista.RenderizarAPng(vista, viewModel, pngApp);
+        IReadOnlyList<string> recortes = [];
+        RenderizadorVista.RenderizarAPng(vista, viewModel, pngApp, v => recortes = GuardianTextoRecortado.Buscar(v));
 
         var resultado = ComparadorImagenes.Comparar(pngMockup, pngApp, pngDiff);
         var pagina = PaginaComparacion.Escribir(carpeta, pantalla, resultado, umbral, teselasDensasMax);
 
+        // Los píxeles no ven un glifo que falta (spec §6.5): el recorte de texto se verifica aparte.
+        Assert.True(recortes.Count == 0,
+            $"{pantalla}: texto recortado por el layout (la comparación de píxeles no lo detecta):"
+            + Environment.NewLine + string.Join(Environment.NewLine, recortes) + Environment.NewLine + $"Comparación: {pagina}");
         Assert.True(
             PaginaComparacion.Aprobada(resultado, umbral, teselasDensasMax),
             string.Create(CultureInfo.InvariantCulture,
