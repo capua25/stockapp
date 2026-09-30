@@ -1,12 +1,15 @@
 namespace StockApp.Presentation.VisualTests.Comparacion;
 
 /// <summary>
-/// Compuertas de aceptación de una pantalla contra su mockup (spec §6.3). PROVISIONALES:
-/// holgadas para poder construir el catálogo. La calibración con la pantalla
-/// catálogo-de-componentes las reemplaza por los valores medidos y las documenta en la spec §6.5.
+/// Compuertas de aceptación de una pantalla contra su mockup (spec §6.3), calibradas en la
+/// Fase 0 con la pantalla catálogo-de-componentes (spec §6.5, mediciones y regla). No se suben
+/// por pantalla sin aprobación del usuario.
 /// </summary>
 public static class UmbralComparacion
 {
-    public const double PorcentajePorDefecto = 2.0;
-    public const int TeselasDensasPorDefecto = 20;
+    /// <summary>Máximo % de píxeles con diferencia fuerte (delta de canal &gt; 32).</summary>
+    public const double PorcentajePorDefecto = 1.68;
+
+    /// <summary>Máximo de teselas 16x16 densas (≥ 25% fuertes o ≥ 90% leves).</summary>
+    public const int TeselasDensasPorDefecto = 11;
 }

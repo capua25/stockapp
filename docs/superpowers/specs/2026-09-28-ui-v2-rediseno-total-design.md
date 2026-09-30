@@ -66,10 +66,10 @@ Advertencia y Error salen de `patrones-1.html`. Info no aparece en los mockups d
 
 ### 2.2 Forma, sombra y medidas
 
-- **Radios:** 8 (inputs, botones, pastilla activa, alertas), 10 (cards), 999 (insignias).
+- **Radios:** 8 (inputs, botones, pastilla activa, alertas, `TarjetaAcceso` y el borde de la grilla), 10 (`TarjetaContenido` y `TarjetaMetrica`), 999 (insignias). El 8 de `TarjetaAcceso` y de la grilla lo aprobó el usuario el 2026-09-30 mirando el catálogo de componentes.
 - **Sombra de card:** `0 1px 2px rgba(0,0,0,0.05)` — la única sombra del sistema.
 - **Alturas:** input y botón 36; fila de grilla 40; header de grilla 36; ítem de sidebar 32.
-- **Espaciado:** base 4; todo margen, padding y gap es múltiplo de 4. Única excepción: el padding vertical de 2 de la `Insignia` (valor del mockup aprobado).
+- **Espaciado:** base 4; todo margen, padding y gap de DISEÑO es múltiplo de 4. Excepción de diseño: el padding vertical de 2 de la `Insignia` (valor del mockup aprobado). Los valores que compensan la geometría medida de las plantillas de Avalonia (Padding 13, RowHeight 39, márgenes del mockup que no son enteros ni múltiplos de 4) están listados en §6.5.
 - **Anchos fijos:** sidebar 240; card de formulario máx. 760; card de login 400.
 
 ### 2.3 Tipografía
@@ -268,6 +268,52 @@ Requisito central de este rediseño.
 ### 6.4 Verificación orgánica
 
 Obligatoria por módulo, con la app real contra la base: login, navegar, crear y editar. Salvedad: el render headless y Windows pueden diferir en antialiasing; por eso el umbral no es 0 y **la aprobación final es del usuario mirando la app**.
+
+### 6.5 Calibración del umbral (Fase 0)
+
+Medido el 2026-09-30 con la pantalla catálogo-de-componentes (`CatalogoComponentesTests.Catalogo_IgualAlMockup`, `componentes/catalogo.html`), sobre la base `ade444a`.
+
+**Métrica.** Un píxel es distinto fuerte si algún canal RGB difiere en más de 32 (tolerancia de canal) y leve si difiere en más de 4. Se agrupa en teselas de 16×16: una tesela es densa si tiene 25% o más de píxeles fuertes o 90% o más de leves. Las compuertas son el porcentaje de píxeles fuertes y la cantidad de teselas densas. El mockup se captura con Chromium headless (Playwright) con `--font-render-hinting=none`, para que el ancho y la posición de los glifos sean los de Skia.
+
+**Línea de base (3 corridas).** Determinista:
+
+| Corrida | Porcentaje | Teselas densas |
+|---|---|---|
+| 1 | 0.837% | 11 |
+| 2 | 0.837% | 11 |
+| 3 | 0.837% | 11 |
+
+Qué es ese ruido: la geometría es idéntica; el texto de la app sale uniformemente entre 7% y 18% más claro que en Chromium (rasterización de Skia frente a la de Chromium) y eso produce 8 teselas; las otras 3 vienen de centrados subpíxel de menos de 0.5px. El usuario aceptó esa diferencia de tono el 2026-09-30: lo que se exige idéntico es la geometría.
+
+**Defectos chicos (mutando el catálogo, QUITANDO):**
+
+| # | Se quitó | Defecto que representa | Porcentaje | Teselas densas |
+|---|---|---|---|---|
+| M1 | `Classes="primario"` del botón "Guardar" | color equivocado en un control chico | 1.153% | 28 |
+| M2 | `Variante="Peligro"` de la insignia "Stock negativo" | relleno pálido equivocado (delta < 32) | 0.870% | 16 |
+| M3 | `Margin="0,0,0,12"` del subtítulo "Datos del producto" | layout corrido 12px | 2.295% | 92 |
+| M4 | `Spacing="8"` del StackPanel de las alertas | layout corrido 8px en bloques chicos | 2.689% | 262 |
+
+**Regla.**
+
+- Teselas densas máximas = las de la línea de base (el máximo de las tres corridas). Cada mutación tiene que superarlo; si alguna no lo supera, la métrica no la detecta y no se sube el umbral para taparlo.
+- Porcentaje máximo = el mayor entre (base × 2) y (base + 0.05), redondeado hacia arriba a 0.01. Es una red secundaria contra diferencias difusas grandes (fondo equivocado en toda la pantalla); el detector de defectos chicos son las teselas.
+
+**Valores elegidos** (`UmbralComparacion`): `TeselasDensasPorDefecto = 11` y `PorcentajePorDefecto = 1.68` (0.837 × 2 = 1.674 → 1.68). Con ellos el catálogo pasa y M1 a M4 fallan. No se suben por pantalla sin aprobación del usuario.
+
+**Guardián de texto recortado.** Ninguna métrica de píxeles ve un glifo que falta: son 40 a 60 píxeles de tinta, lo mismo que pesa el ruido. En la Task 17 los encabezados "CÓDIG" y "STOC" pasaron la comparación (arreglarlos dejó las teselas en 11 → 11), y bajar el umbral no sirve porque el defecto pesa igual que el ruido. Por eso `CompararConMockup` también recorre los `TextBlock` visibles de la vista renderizada, con la ventana todavía abierta, y falla si alguno pide más lugar del que el layout le asignó (sin restricción de ancho si no hace wrap; con su ancho si hace wrap, comparando el alto). El recorte declarado (`TextTrimming` distinto de `None`) no se reporta. Verificado por mutación: con la plantilla de header de Fluent (que reserva 32px para la flecha de orden) el catálogo queda en 0.843% y 11 teselas —pasaría los píxeles— y el guardián lo rechaza con "CÓDIGO" pide 49 y tiene 44, "STOCK" pide 42 y tiene 34.
+
+**Métrica descartada: caja de la tinta por tesela.** Se evaluó comparar, por tesela, el rectángulo que ocupa la tinta (píxeles que difieren del color de fondo de la tesela) y fallar si algún borde difiere más de 1px. No es robusta a la gamma: dónde termina la tinta depende de qué tan oscuro sale el borde del glifo, que es justamente lo que difiere entre Skia y Chromium. Sobre la línea de base da 19, 35 y 79 teselas falsas con umbral de tinta 48, 96 y 128 (frente a 11 de la métrica de teselas densas).
+
+**Excepciones a "px enteros, múltiplos de 4" (§2.2, §6.1).** No son valores de diseño: compensan la geometría medida de las plantillas de Avalonia para que app y mockup coincidan al píxel.
+
+- `Padding 13` horizontal en ComboBox, NumericUpDown y los TextBox internos de sus plantillas: las plantillas Fluent no descuentan el borde de 1; 13 = los 12 de diseño + 1 de borde (`ControlesV2.axaml`).
+- `RowHeight 39` de la grilla: la fila mide RowHeight + 1 de `PART_BottomGridLine`, así el paso es 40 = `V2AltoFilaGrilla` (`DataGridV2.axaml`).
+- Márgenes del mockup `-3px` (glifo del ComboBox) y `-7px` (ícono del CalendarDatePicker): ubican el glifo donde lo dibuja la plantilla de Fluent (`base.css`).
+- `4.375px` (y `5.82px`, `6.69px`) del tilde del CheckBox: posición y tamaño del Path de Fluent medidos en el render (`base.css`).
+- Ancho de texto redondeado hacia arriba: `width: calc-size(fit-content, round(up, size, 1px))` en `base.css`, porque un TextBlock mide el ceil del ancho del texto. `calc-size()` solo funciona en Chromium: en otro navegador el mockup queda hasta 1px distinto. La comparación siempre usa Chromium.
+
+**Salvedad (§6.4).** El render headless y Windows pueden diferir en antialiasing: la aprobación final es del usuario mirando la app.
 
 ## 7. Fases
 

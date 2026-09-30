@@ -42,6 +42,17 @@ Nunca se editan a mano: `ArchivosGeneradosSincronizadosTests` falla si difieren 
 2. Íconos: `dotnet run --project tools/StockApp.UiV2.Herramientas -- icono-svg mdi-<nombre>` y pegar el SVG.
 3. Solo técnicas de la spec §6.1. Las clases `v2-*` de `base.css` replican la geometría de los
    componentes de `Controls/V2`.
+4. Celdas numéricas de grilla: la celda lleva `v2-num` y el valor va SIEMPRE dentro de un `<span>`
+   (`.v2-num > span`), que hace de TextBlock de la celda:
+
+   ```html
+   <div class="v2-grilla-celda v2-num"><span>12.50</span></div>
+   ```
+
+   `.v2-num` alinea a la derecha con cifras tabulares; el `span` redondea su ancho hacia arriba
+   como Avalonia (el TextBlock mide el ceil del ancho del texto y lo dibuja pegado a su izquierda).
+   Sin el `span` la cifra queda hasta 1px corrida a la derecha. El redondeo usa `calc-size()`, que
+   solo funciona en Chromium (el navegador de la comparación).
 
 ## Test por pantalla
 
@@ -55,6 +66,16 @@ public void Productos_IgualAlMockup() =>
 
 El umbral por defecto es el calibrado en la Fase 0 (spec §6.5). No se sube por pantalla sin
 aprobación del usuario.
+
+Además de los píxeles, `CompararConMockup` falla si algún `TextBlock` visible quedó recortado por
+el layout (pide más lugar del que tiene): un glifo que falta no supera el ruido de píxeles. El
+mensaje lista cada texto con el tamaño que pide y el que tiene. Un texto que se recorta a
+propósito se declara con `TextTrimming` (p. ej. `CharacterEllipsis`) y no se reporta.
+
+Diferencia de tono aceptada: el texto de la app sale entre 7% y 18% más claro que en el mockup
+(rasterización de Skia frente a Chromium) con la geometría idéntica. El usuario la aceptó el
+2026-09-30 y es el grueso del ruido que absorbe el umbral: en la página de comparación se ve como
+naranja y rojo fino en los bordes de los glifos. Lo que se exige igual es la geometría.
 
 ## Otros comandos
 
