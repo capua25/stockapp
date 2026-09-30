@@ -34,6 +34,28 @@ public class UmbralAprobadoTests
             UmbralComparacion.TeselasDensasPorDefecto,
             Aprobado(16, mutacionPalida: "Variante=Peligro quitada de la insignia de Stock: 31 teselas, rojo")));
 
+    [Fact]
+    public void SinAprobacion_PorcentajeMenorAlCalibradoSeAcepta() =>
+        Assert.Equal(0.5, UmbralComparacion.PorcentajeMaximo(0.5, null));
+
+    [Fact]
+    public void Aprobado_SinPorcentaje_UsaElCalibrado() =>
+        Assert.Equal(UmbralComparacion.PorcentajePorDefecto, UmbralComparacion.PorcentajeMaximo(UmbralComparacion.PorcentajePorDefecto, Aprobado(14)));
+
+    [Fact]
+    public void Aprobado_ConPorcentaje_ReemplazaAlCalibrado() =>
+        Assert.Equal(2.5, UmbralComparacion.PorcentajeMaximo(UmbralComparacion.PorcentajePorDefecto, Aprobado(14) with { PorcentajeMaximo = 2.5 }));
+
+    [AvaloniaFact]
+    public void SinAprobacion_PorcentajeMayorAlCalibrado_CompararConMockupFalla()
+    {
+        // umbral: 100 apagaría la red secundaria sin que nadie lo apruebe.
+        var ex = Assert.ThrowsAny<Exception>(() => ComparacionVisual.CompararConMockup(
+            new Canvas(), null, Fixture, umbral: 100));
+
+        Assert.Contains("UmbralAprobado", ex.Message);
+    }
+
     [AvaloniaFact]
     public void SinAprobacion_TeselasMayoresAlCalibrado_CompararConMockupFalla()
     {

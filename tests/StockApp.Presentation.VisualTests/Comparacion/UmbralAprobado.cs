@@ -11,5 +11,12 @@ namespace StockApp.Presentation.VisualTests.Comparacion;
 /// <param name="Motivo">Qué son esas teselas (p. ej. "grilla de 12 filas: tono del texto").</param>
 /// <param name="MutacionPalidaEnRojo">Obligatoria desde <see cref="UmbralComparacion.TeselasMutacionPalidaCatalogo"/>:
 /// la mutación equivalente a M2 corrida en ESTA pantalla y cuántas teselas dio en rojo.</param>
+/// <param name="PorcentajeMaximo">% de píxeles fuertes aprobado, si hace falta superar
+/// <see cref="UmbralComparacion.PorcentajePorDefecto"/>; null deja el calibrado.</param>
 public sealed record UmbralAprobado(
-    int TeselasDeTono, string AprobadoPor, string Fecha, string Motivo, string? MutacionPalidaEnRojo = null);
+    int TeselasDeTono,
+    string AprobadoPor,
+    string Fecha,
+    string Motivo,
+    string? MutacionPalidaEnRojo = null,
+    double? PorcentajeMaximo = null);

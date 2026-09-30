@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Data;
 using Avalonia.Headless.XUnit;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -28,6 +29,53 @@ public class GuardianTextoRecortadoTests
     // menor que el texto. Si se sale, lo recorta un ancestro (breadcrumb de EncabezadoPagina).
     private static Control EnFilaHorizontal(Control texto) =>
         new StackPanel { Orientation = Orientation.Horizontal, Children = { texto } };
+
+    private sealed class Fila(string texto)
+    {
+        public string Texto { get; } = texto;
+    }
+
+    // La grilla v2 scrollea por su cuenta, sin ScrollViewer, y su plantilla recorta
+    // (Border#DataGridBorder con ClipToBounds, DataGridV2.axaml).
+    private static IReadOnlyList<string> RenderizarGrilla(DataGrid grilla, int filas, string texto = "A-001")
+    {
+        grilla.AutoGenerateColumns = false;
+        grilla.ItemsSource = Enumerable.Range(0, filas).Select(_ => new Fila(texto)).ToList();
+        var vista = new UserControl { Classes = { "ui2" }, Content = new StackPanel { HorizontalAlignment = HorizontalAlignment.Left, Children = { grilla } } };
+        IReadOnlyList<string> recortes = [];
+        RenderizadorVista.RenderizarAPng(vista, null,
+            Path.Combine(Directory.CreateTempSubdirectory("guardian-grilla-").FullName, "vista.png"),
+            v => recortes = GuardianTextoRecortado.Buscar(v));
+        return recortes;
+    }
+
+    private static DataGridTextColumn Columna(double ancho) =>
+        new() { Header = "X", Binding = new Binding(nameof(Fila.Texto)), Width = new DataGridLength(ancho) };
+
+    [AvaloniaFact]
+    public void GrillaConMasFilasQueSuAlto_LaFilaParcialNoSeReporta() =>
+        // Se llega scrolleando: el DataGrid es un viewport vertical.
+        Assert.Empty(RenderizarGrilla(new DataGrid { Height = 100, Width = 300, Columns = { Columna(150) } }, filas: 10));
+
+    [AvaloniaFact]
+    public void GrillaConColumnasMasAnchasQueElla_LaColumnaParcialNoSeReporta() =>
+        Assert.Empty(RenderizarGrilla(
+            new DataGrid
+            {
+                Width = 200,
+                Height = 200,
+                HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+                Columns = { Columna(150), Columna(150), Columna(150) },
+            },
+            filas: 2));
+
+    [AvaloniaFact]
+    public void CeldaMasAngostaQueSuTexto_SeReportaAunqueLaGrillaSeaViewport()
+    {
+        var recortes = RenderizarGrilla(new DataGrid { Width = 300, Height = 200, Columns = { Columna(60) } }, filas: 1, texto: Largo);
+
+        Assert.Contains(Largo, Assert.Single(recortes));
+    }
 
     [AvaloniaFact]
     public void TextoQueEntra_NoSeReporta() =>

@@ -69,7 +69,9 @@ aprobación del usuario, y la aprobación queda en el código:
 
 1. Abrir la página de comparación de la pantalla y revisar con el usuario CADA tesela densa
    (contorno magenta): tiene que ser solo tono de texto, sin nada corrido ni de otro color.
-2. Registrar el valor aprobado (pasar un `int` mayor a 11 sin esto falla antes de renderizar):
+2. Registrar el valor aprobado (pasar `teselasDensasMax` mayor a 11 o `umbral` mayor a 1.68 sin
+   esto falla antes de renderizar). Si también hay que superar el porcentaje, se agrega
+   `PorcentajeMaximo: <valor>` al mismo registro:
 
    ```csharp
    ComparacionVisual.CompararConMockup(new ProductoListView(), vm, "inventario/productos.html",
@@ -84,7 +86,8 @@ aprobación del usuario, y la aprobación queda en el código:
 Además de los píxeles, `CompararConMockup` falla si algún `TextBlock` visible no se ve entero:
 pide más lugar del que tiene, o cae fuera de un ancestro con `ClipToBounds` o de la ventana (un
 glifo que falta no supera el ruido de píxeles). El mensaje lista cada texto. El viewport de un
-`ScrollViewer` no cuenta en el eje en que se puede scrollear. `TextTrimming` no exime: si el
+`ScrollViewer` no cuenta en el eje en que se puede scrollear, y lo mismo el `DataGrid` (la última
+fila parcial o una columna fuera de vista no se reportan; una celda angosta con texto largo sí). `TextTrimming` no exime: si el
 mockup usa `text-overflow: ellipsis`, el test declara esos textos en `recortesPermitidos`. Puntos
 ciegos en spec §6.5.
 

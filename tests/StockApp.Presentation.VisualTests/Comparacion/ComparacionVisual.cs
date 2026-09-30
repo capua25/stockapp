@@ -29,6 +29,7 @@ public static class ComparacionVisual
     {
         // Antes de renderizar: un umbral sin aprobación registrada no llega a correr (spec §6.5).
         teselasDensasMax = UmbralComparacion.TeselasMaximas(teselasDensasMax, aprobado);
+        umbral = UmbralComparacion.PorcentajeMaximo(umbral, aprobado);
         var rutaHtml = Path.GetFullPath(Path.Combine(RutasRepo.CarpetaMockups, rutaMockup));
         var pantalla = NombrePantalla(rutaMockup);
         var carpeta = Directory.CreateDirectory(Path.Combine(CarpetaSalida, pantalla)).FullName;

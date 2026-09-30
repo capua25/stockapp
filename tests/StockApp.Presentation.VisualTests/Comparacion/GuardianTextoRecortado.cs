@@ -21,7 +21,8 @@ namespace StockApp.Presentation.VisualTests.Comparacion;
 /// <item>Por un ancestro: el texto tiene todo su lugar (en un StackPanel horizontal el Bounds
 /// siempre coincide con lo que pide) pero cae fuera de un ancestro con ClipToBounds o de la
 /// ventana. El viewport de un ScrollViewer no cuenta en el eje en que se puede scrollear: el texto
-/// sigue alcanzable.</item>
+/// sigue alcanzable. Lo mismo el DataGrid, que scrollea sin ScrollViewer: desde su presentador de
+/// filas o de headers hacia afuera.</item>
 /// </list>
 /// TextTrimming NO exime: un texto con "..." que efectivamente recorta se reporta, salvo que el
 /// test lo permita por su texto (alineado con un mockup que use text-overflow: ellipsis).
@@ -120,6 +121,17 @@ public static class GuardianTextoRecortado
                 // afuera (la ventana incluida) tampoco decide en ese eje.
                 horizontalFijo &= scroll.HorizontalScrollBarVisibility == ScrollBarVisibility.Disabled;
                 verticalFijo &= scroll.VerticalScrollBarVisibility == ScrollBarVisibility.Disabled;
+            }
+
+            if (ancestro is DataGridRowsPresenter or DataGridColumnHeadersPresenter
+                && ancestro.FindAncestorOfType<DataGrid>() is { } grilla)
+            {
+                // El DataGrid scrollea por su cuenta, sin ScrollViewer: desde el presentador de
+                // filas (o de headers) hacia afuera, lo que su plantilla recorta en un eje
+                // desplazable se alcanza scrolleando. Lo de adentro (la celda) se sigue mirando.
+                horizontalFijo &= grilla.HorizontalScrollBarVisibility == ScrollBarVisibility.Disabled;
+                verticalFijo &= ancestro is DataGridColumnHeadersPresenter
+                    || grilla.VerticalScrollBarVisibility == ScrollBarVisibility.Disabled;
             }
 
             if (ancestro.ClipToBounds && ancestro.TransformToVisual(raizVisual) is { } ancestroARaiz

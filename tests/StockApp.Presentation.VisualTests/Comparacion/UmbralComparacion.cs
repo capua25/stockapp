@@ -22,6 +22,33 @@ public static class UmbralComparacion
     public const int TeselasMutacionPalidaCatalogo = 16;
 
     /// <summary>
+    /// El máximo % de píxeles fuertes que aplica: sin aprobación, a lo sumo el calibrado; con
+    /// aprobación, el registrado (o el calibrado si no registra uno).
+    /// </summary>
+    public static double PorcentajeMaximo(double umbral, UmbralAprobado? aprobado)
+    {
+        if (aprobado is null)
+        {
+            if (umbral > PorcentajePorDefecto)
+            {
+                throw new InvalidOperationException(
+                    FormattableString.Invariant($"{umbral}% de píxeles supera el {PorcentajePorDefecto}% calibrado: ")
+                    + "un umbral mayor se pasa como UmbralAprobado (PorcentajeMaximo), con la revisión del usuario "
+                    + "registrada (spec §6.5).");
+            }
+
+            return umbral;
+        }
+
+        if (umbral != PorcentajePorDefecto)
+        {
+            throw new InvalidOperationException("Umbral de porcentaje doble: con UmbralAprobado no se pasa umbral.");
+        }
+
+        return aprobado.PorcentajeMaximo ?? PorcentajePorDefecto;
+    }
+
+    /// <summary>
     /// El máximo de teselas densas que aplica: sin aprobación, a lo sumo el calibrado; con
     /// aprobación, el registrado, validado. Falla (InvalidOperationException) si no se cumple.
     /// </summary>
