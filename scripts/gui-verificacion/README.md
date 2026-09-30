@@ -101,10 +101,22 @@ dotnet run --project src/StockApp.Presentation/StockApp.Presentation.csproj &
 docker start stockapp-pg   # o el comando de creación si no existe el contenedor
 ```
 
-Credenciales de desarrollo: **`admin` / `test1234`**. (Si ya tenías `admin` /
-`test123` seedeado en tu BD local, seguís pudiendo loguearte con esa contraseña
-vieja — el login no revalida la complejidad. Pero un bootstrap nuevo contra una
-BD vacía exige el mínimo actual: 8+ caracteres, con letra y número.)
+Credenciales de desarrollo: **`admin` / `Admin1234`** (verificado contra la BD
+real de `stockapp-pg` el 2026-09-30 — vía `POST /auth/login` directo, sin pasar
+por la GUI). `test1234`/`test123` NO funcionan contra esa BD: son contraseñas
+de un seed anterior que ya no aplica. Si tu BD es nueva (vacía, sin usuarios),
+el bootstrap usa en cambio `Bootstrap:AdminUser`/`Bootstrap:Password` de los
+user-secrets de `StockApp.Api` (`Admin123!` por defecto) — solo se dispara la
+primera vez, contra una BD sin usuarios.
+
+**Gotcha de configuración**: si el desktop apunta a un servidor que no es el
+tuyo (por ejemplo seguís usando `~/.config/GestionMunicipal/conexion.json` de
+una sesión anterior contra un VPS de testing), el login va a fallar con
+"Usuario o contraseña incorrectos" SIN IMPORTAR la contraseña que uses acá,
+porque `conexion.json` tiene precedencia sobre `appsettings.json`
+(`ResolucionConexion.cs`) y la app ni siquiera intenta hablar con
+`localhost`. Revisá ese archivo (o borralo) antes de asumir que la contraseña
+está mal.
 
 ## Calibrar `click.sh` (importante, léelo antes de confiar en clicks a ciegas)
 
