@@ -46,6 +46,38 @@ public class ComparacionVisualTests
         Assert.Contains("index.html", ex.Message);
     }
 
+    // Misma escena con un texto transparente (no cambia un píxel) que recorta con "...".
+    private static Control VistaBloqueConTextoRecortado()
+    {
+        var vista = (Canvas)VistaBloque(0);
+        var recortado = new TextBlock
+        {
+            Text = "Texto recortado a propósito",
+            Width = 40,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            Foreground = Brushes.Transparent,
+        };
+        Canvas.SetLeft(recortado, 600);
+        Canvas.SetTop(recortado, 400);
+        vista.Children.Add(recortado);
+        return vista;
+    }
+
+    [AvaloniaFact]
+    public void TextoRecortadoSinPermitir_FallaAunqueLosPixelesPasen()
+    {
+        var ex = Assert.ThrowsAny<Exception>(
+            () => ComparacionVisual.CompararConMockup(VistaBloqueConTextoRecortado(), null, "_fixtures/bloque.html", umbral: 0.5, teselasDensasMax: 2));
+
+        Assert.Contains("texto recortado", ex.Message);
+        Assert.Contains("Texto recortado a propósito", ex.Message);
+    }
+
+    [AvaloniaFact]
+    public void TextoRecortadoPermitidoPorElTest_Aprueba() =>
+        ComparacionVisual.CompararConMockup(VistaBloqueConTextoRecortado(), null, "_fixtures/bloque.html", umbral: 0.5,
+            teselasDensasMax: 2, recortesPermitidos: ["Texto recortado a propósito"]);
+
     [Theory]
     [InlineData("componentes/catalogo.html", "componentes-catalogo")]
     [InlineData("inventario\\productos.html", "inventario-productos")]

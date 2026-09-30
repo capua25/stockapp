@@ -23,8 +23,12 @@ public static class ComparacionVisual
         object? viewModel,
         string rutaMockup,
         double umbral = UmbralComparacion.PorcentajePorDefecto,
-        int teselasDensasMax = UmbralComparacion.TeselasDensasPorDefecto)
+        int teselasDensasMax = UmbralComparacion.TeselasDensasPorDefecto,
+        UmbralAprobado? aprobado = null,
+        IReadOnlyCollection<string>? recortesPermitidos = null)
     {
+        // Antes de renderizar: un umbral sin aprobación registrada no llega a correr (spec §6.5).
+        teselasDensasMax = UmbralComparacion.TeselasMaximas(teselasDensasMax, aprobado);
         var rutaHtml = Path.GetFullPath(Path.Combine(RutasRepo.CarpetaMockups, rutaMockup));
         var pantalla = NombrePantalla(rutaMockup);
         var carpeta = Directory.CreateDirectory(Path.Combine(CarpetaSalida, pantalla)).FullName;
@@ -36,7 +40,7 @@ public static class ComparacionVisual
         // thread pool (sin contexto de sincronización) y se espera. Verificado sin deadlock.
         Task.Run(() => CapturadorMockup.CapturarAsync(rutaHtml, pngMockup)).GetAwaiter().GetResult();
         IReadOnlyList<string> recortes = [];
-        RenderizadorVista.RenderizarAPng(vista, viewModel, pngApp, v => recortes = GuardianTextoRecortado.Buscar(v));
+        RenderizadorVista.RenderizarAPng(vista, viewModel, pngApp, v => recortes = GuardianTextoRecortado.Buscar(v, recortesPermitidos));
 
         var resultado = ComparadorImagenes.Comparar(pngMockup, pngApp, pngDiff);
         var pagina = PaginaComparacion.Escribir(carpeta, pantalla, resultado, umbral, teselasDensasMax);

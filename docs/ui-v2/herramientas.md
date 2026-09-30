@@ -65,12 +65,28 @@ public void Productos_IgualAlMockup() =>
 ```
 
 El umbral por defecto es el calibrado en la Fase 0 (spec §6.5). No se sube por pantalla sin
-aprobación del usuario.
+aprobación del usuario, y la aprobación queda en el código:
 
-Además de los píxeles, `CompararConMockup` falla si algún `TextBlock` visible quedó recortado por
-el layout (pide más lugar del que tiene): un glifo que falta no supera el ruido de píxeles. El
-mensaje lista cada texto con el tamaño que pide y el que tiene. Un texto que se recorta a
-propósito se declara con `TextTrimming` (p. ej. `CharacterEllipsis`) y no se reporta.
+1. Abrir la página de comparación de la pantalla y revisar con el usuario CADA tesela densa
+   (contorno magenta): tiene que ser solo tono de texto, sin nada corrido ni de otro color.
+2. Registrar el valor aprobado (pasar un `int` mayor a 11 sin esto falla antes de renderizar):
+
+   ```csharp
+   ComparacionVisual.CompararConMockup(new ProductoListView(), vm, "inventario/productos.html",
+       aprobado: new UmbralAprobado(14, "Martin", "2026-10-02", "grilla de 12 filas: 14 teselas, todas tono de texto"));
+   ```
+
+3. Si el valor es 16 o más (lo que dio M2, relleno pálido equivocado, en el catálogo), antes hay
+   que correr en esa pantalla la mutación equivalente a M2 (quitar la variante de color de un
+   relleno pálido), ver el rojo y registrarlo en el último parámetro, `MutacionPalidaEnRojo`
+   (qué se quitó y cuántas teselas dio). Sin eso falla.
+
+Además de los píxeles, `CompararConMockup` falla si algún `TextBlock` visible no se ve entero:
+pide más lugar del que tiene, o cae fuera de un ancestro con `ClipToBounds` o de la ventana (un
+glifo que falta no supera el ruido de píxeles). El mensaje lista cada texto. El viewport de un
+`ScrollViewer` no cuenta en el eje en que se puede scrollear. `TextTrimming` no exime: si el
+mockup usa `text-overflow: ellipsis`, el test declara esos textos en `recortesPermitidos`. Puntos
+ciegos en spec §6.5.
 
 Diferencia de tono aceptada: el texto de la app sale entre 7% y 18% más claro que en el mockup
 (rasterización de Skia frente a Chromium) con la geometría idéntica. El usuario la aceptó el

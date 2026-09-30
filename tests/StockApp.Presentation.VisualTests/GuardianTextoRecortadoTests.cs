@@ -14,15 +14,20 @@ public class GuardianTextoRecortadoTests
 {
     private const string Largo = "Un texto bastante más largo que su contenedor";
 
-    private static IReadOnlyList<string> Renderizar(Control contenido)
+    private static IReadOnlyList<string> Renderizar(Control contenido, IReadOnlyCollection<string>? recortesPermitidos = null)
     {
         var vista = new StackPanel { HorizontalAlignment = HorizontalAlignment.Left, Children = { contenido } };
         IReadOnlyList<string> recortes = [];
         RenderizadorVista.RenderizarAPng(vista, null,
             Path.Combine(Directory.CreateTempSubdirectory("guardian-").FullName, "vista.png"),
-            v => recortes = GuardianTextoRecortado.Buscar(v));
+            v => recortes = GuardianTextoRecortado.Buscar(v, recortesPermitidos));
         return recortes;
     }
+
+    // En un StackPanel horizontal el TextBlock recibe todo el ancho que pide: su Bounds nunca es
+    // menor que el texto. Si se sale, lo recorta un ancestro (breadcrumb de EncabezadoPagina).
+    private static Control EnFilaHorizontal(Control texto) =>
+        new StackPanel { Orientation = Orientation.Horizontal, Children = { texto } };
 
     [AvaloniaFact]
     public void TextoQueEntra_NoSeReporta() =>
@@ -32,6 +37,15 @@ public class GuardianTextoRecortadoTests
     public void TextoSinWrapMasAnchoQueSuLugar_SeReportaConSuTexto()
     {
         var recortes = Renderizar(new Border { Width = 60, Child = new TextBlock { Text = Largo } });
+
+        Assert.Contains(Largo, Assert.Single(recortes));
+    }
+
+    [AvaloniaFact]
+    public void TextoConWidthPropioMenorQueElTexto_SeReporta()
+    {
+        // El Width fijo también limita el Measure del TextBlock: medirlo tal cual pide lo que tiene.
+        var recortes = Renderizar(new TextBlock { Text = Largo, Width = 60 });
 
         Assert.Contains(Largo, Assert.Single(recortes));
     }
@@ -58,11 +72,53 @@ public class GuardianTextoRecortadoTests
         Assert.Empty(Renderizar(new Border { Width = 80, Child = new TextBlock { Text = Largo, TextWrapping = TextWrapping.Wrap } }));
 
     [AvaloniaFact]
-    public void TextoConTrimming_EsRecortableDeclaradoYNoSeReporta() =>
-        Assert.Empty(Renderizar(new Border
+    public void TextoConTrimmingQueRecorta_SinPermitirlo_SeReporta()
+    {
+        var recortes = Renderizar(new Border
         {
             Width = 60,
             Child = new TextBlock { Text = Largo, TextTrimming = TextTrimming.CharacterEllipsis },
+        });
+
+        Assert.Contains(Largo, Assert.Single(recortes));
+    }
+
+    [AvaloniaFact]
+    public void TextoConTrimmingQueRecorta_PermitidoPorElTest_NoSeReporta() =>
+        Assert.Empty(Renderizar(
+            new Border { Width = 60, Child = new TextBlock { Text = Largo, TextTrimming = TextTrimming.CharacterEllipsis } },
+            recortesPermitidos: [Largo]));
+
+    [AvaloniaFact]
+    public void TextoRecortadoPorUnAncestroConClipToBounds_SeReporta()
+    {
+        var recortes = Renderizar(new Border
+        {
+            Width = 60,
+            ClipToBounds = true,
+            Child = EnFilaHorizontal(new TextBlock { Text = Largo }),
+        });
+
+        Assert.Contains(Largo, Assert.Single(recortes));
+    }
+
+    [AvaloniaFact]
+    public void TextoQueSeSaleDeLaVentana_SeReporta()
+    {
+        var recortes = Renderizar(EnFilaHorizontal(new TextBlock { Text = Largo, Margin = new(1200, 0, 0, 0) }));
+
+        Assert.Contains(Largo, Assert.Single(recortes));
+    }
+
+    [AvaloniaFact]
+    public void TextoQueSigueEnUnScrollViewerDesplazable_NoSeReporta() =>
+        // El viewport lo recorta, pero se llega scrolleando: no es texto perdido.
+        Assert.Empty(Renderizar(new ScrollViewer
+        {
+            Width = 60,
+            Height = 40,
+            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+            Content = new TextBlock { Text = Largo },
         }));
 
     [AvaloniaFact]
