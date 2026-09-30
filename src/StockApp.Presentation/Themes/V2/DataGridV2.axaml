@@ -23,6 +23,14 @@
         <Setter Property="Foreground" Value="{DynamicResource V2TextoEtiquetaBrush}" />
     </Style>
 
+    <!-- Esquinas redondeadas también para el contenido: el Grid interno de Fluent recorta a su
+         rectángulo, no al radio, y el separador de la última fila llegaba recto hasta el borde
+         (medido en el catálogo, Task 17). El Border con ClipToBounds recorta al CornerRadius,
+         como overflow: hidden en .v2-grilla. -->
+    <Style Selector=".ui2 DataGrid /template/ Border#DataGridBorder">
+        <Setter Property="ClipToBounds" Value="True" />
+    </Style>
+
     <!-- Sin zebra: pisa DataGridRow:nth-child(2n) del tema viejo. -->
     <Style Selector=".ui2 DataGridRow, .ui2 DataGridRow:nth-child(2n)">
         <Setter Property="Background" Value="{DynamicResource V2SuperficieBrush}" />
@@ -45,6 +53,69 @@
         <Setter Property="Padding" Value="12,0" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="MinHeight" Value="0" />
+    </Style>
+    <!-- Plantilla v2 del header: la misma de Fluent (Avalonia.Controls.DataGrid 12.0.1, mismos
+         nombres de partes, así siguen valiendo los estilos del ControlTheme: :pointerover,
+         :sortascending, :sortdescending, foco) con UN cambio: la columna de la flecha de orden es
+         Auto SIN el MinWidth de 32 (DataGridSortIconMinWidth). Fluent reservaba ese hueco siempre
+         y cortaba el texto de las columnas angostas ("CÓDIG" en la columna de 100 del catálogo,
+         Task 17). Ahora el hueco aparece solo con la columna ordenada: la flecha (visible por
+         :sortascending/:sortdescending) trae su propio Margin izquierdo de 8.
+         La esquina superior izquierda (PART_TopLeftCornerHeader) conserva su plantilla propia. -->
+    <Style Selector=".ui2 DataGridColumnHeader:not(#PART_TopLeftCornerHeader)">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border x:Name="HeaderBorder"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        CornerRadius="{TemplateBinding CornerRadius}">
+                    <Grid Name="PART_ColumnHeaderRoot" ColumnDefinitions="*,Auto">
+                        <Panel Margin="{TemplateBinding Padding}"
+                               HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                               VerticalAlignment="{TemplateBinding VerticalContentAlignment}">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <ContentPresenter x:Name="PART_ContentPresenter"
+                                                  Content="{TemplateBinding Content}"
+                                                  ContentTemplate="{TemplateBinding ContentTemplate}" />
+                                <Path Name="SortIcon"
+                                      IsVisible="False"
+                                      Grid.Column="1"
+                                      Height="12"
+                                      Margin="8,0,0,0"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center"
+                                      Fill="{TemplateBinding Foreground}"
+                                      Stretch="Uniform" />
+                            </Grid>
+                        </Panel>
+                        <Rectangle Name="VerticalSeparator"
+                                   Grid.Column="1"
+                                   Width="1"
+                                   VerticalAlignment="Stretch"
+                                   Fill="{TemplateBinding SeparatorBrush}"
+                                   IsVisible="{TemplateBinding AreSeparatorsVisible}" />
+                        <Grid x:Name="FocusVisual" IsHitTestVisible="False" IsVisible="False">
+                            <Rectangle x:Name="FocusVisualPrimary"
+                                       HorizontalAlignment="Stretch"
+                                       VerticalAlignment="Stretch"
+                                       Fill="Transparent"
+                                       IsHitTestVisible="False"
+                                       Stroke="{DynamicResource DataGridCellFocusVisualPrimaryBrush}"
+                                       StrokeThickness="2" />
+                            <Rectangle x:Name="FocusVisualSecondary"
+                                       Margin="2"
+                                       HorizontalAlignment="Stretch"
+                                       VerticalAlignment="Stretch"
+                                       Fill="Transparent"
+                                       IsHitTestVisible="False"
+                                       Stroke="{DynamicResource DataGridCellFocusVisualSecondaryBrush}"
+                                       StrokeThickness="1" />
+                        </Grid>
+                    </Grid>
+                </Border>
+            </ControlTemplate>
+        </Setter>
     </Style>
     <Style Selector=".ui2 DataGridColumnHeader /template/ Rectangle#VerticalSeparator">
         <Setter Property="IsVisible" Value="False" />

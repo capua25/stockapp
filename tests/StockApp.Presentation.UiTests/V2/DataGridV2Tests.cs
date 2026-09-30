@@ -1,5 +1,6 @@
 using System.Linq;
 using Avalonia;
+using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Controls.Shapes;
@@ -135,5 +136,70 @@ public class DataGridV2Tests
         // que esté oculta.
         Assert.NotEmpty(separadores);
         Assert.All(separadores, s => Assert.False(ArbolVisual.EsVisibleEnArbol(s)));
+    }
+    private const string GrillaOrdenable = """
+        <DataGrid x:Name="G" AutoGenerateColumns="False" Height="200" CanUserSortColumns="True" IsReadOnly="True">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="CÓDIGO" Binding="{ReflectionBinding Nombre}" Width="100" />
+                <DataGridTextColumn Header="VALOR" Binding="{ReflectionBinding Valor}" Width="*" />
+            </DataGrid.Columns>
+        </DataGrid>
+        """;
+
+    private static (Window Ventana, DataGrid Grilla) MontarGrillaOrdenable()
+    {
+        var ventana = Montar(GrillaOrdenable);
+        var grilla = Buscar<DataGrid>(ventana, "G");
+        grilla.ItemsSource = new DataGridCollectionView(new[] { new ItemPrueba("tres", 3), new ItemPrueba("uno", 1), new ItemPrueba("dos", 2) });
+        Dispatcher.UIThread.RunJobs();
+        ventana.UpdateLayout();
+        return (ventana, grilla);
+    }
+
+    private static DataGridColumnHeader HeaderDe(DataGrid grilla, string texto) =>
+        grilla.GetVisualDescendants().OfType<DataGridColumnHeader>().First(h => Equals(h.Content, texto));
+
+    [AvaloniaFact]
+    public void Header_SinOrden_ElTextoUsaTodoElAnchoMenosElPadding()
+    {
+        // Fluent reserva SIEMPRE 32 px (DataGridSortIconMinWidth) para la flecha de orden: en la
+        // columna CÓDIGO de 100 del catálogo el texto tenía 44 px y salía "CÓDIG" (Task 17, F1).
+        // En v2 el hueco existe solo con la columna ordenada; sin orden, el texto tiene 100 - 24.
+        var (_, grilla) = MontarGrillaOrdenable();
+        var header = HeaderDe(grilla, "CÓDIGO");
+        var contenido = Parte<Control>(header, "PART_ContentPresenter");
+
+        Assert.Equal(100, header.Bounds.Width);
+        Assert.Equal(76, contenido.Bounds.Width);
+    }
+
+    [AvaloniaFact]
+    public void Header_ClickOrdenaYMuestraLaFlecha()
+    {
+        // Historia de sort roto en Avalonia 12 (DataGridSortClickTests): click real de puntero.
+        var (ventana, grilla) = MontarGrillaOrdenable();
+        var header = HeaderDe(grilla, "CÓDIGO");
+
+        Clic(ventana, header);
+        ventana.UpdateLayout();
+
+        var nombres = ((System.Collections.IEnumerable)grilla.ItemsSource!).Cast<ItemPrueba>().Select(i => i.Nombre).ToArray();
+        Assert.Equal(new[] { "dos", "tres", "uno" }, nombres);
+        var flecha = Parte<Avalonia.Controls.Shapes.Path>(header, "SortIcon");
+        Assert.True(flecha.IsVisible);
+        Assert.True(flecha.Bounds.Width > 0);
+        Assert.True(Parte<Control>(header, "PART_ContentPresenter").Bounds.Width < 76);
+    }
+    [AvaloniaFact]
+    public void EsquinaSuperiorIzquierda_ConservaSuPlantillaPropia()
+    {
+        // La plantilla v2 del header no pisa la de PART_TopLeftCornerHeader (ControlTheme
+        // DataGridTopLeftColumnHeader), visible cuando la grilla muestra encabezados de fila.
+        var grilla = MontarGrilla();
+        grilla.HeadersVisibility = DataGridHeadersVisibility.All;
+        Dispatcher.UIThread.RunJobs();
+        var esquina = grilla.GetVisualDescendants().OfType<DataGridColumnHeader>().First(h => h.Name == "PART_TopLeftCornerHeader");
+
+        Assert.Contains(esquina.GetVisualDescendants(), v => v is Grid { Name: "TopLeftHeaderRoot" });
     }
 }
