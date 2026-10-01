@@ -27,11 +27,5 @@ public static class ErrorValidacionConverter
     public static readonly Func<object, object> Instance = Convertir;
 
     private static object Convertir(object error)
-        => error switch
-        {
-            // Mensaje de dominio de FormatoEsUy (ej. "Usá coma para los decimales: 5,4"): pasa tal cual.
-            EntradaNumericaInvalidaException e => e.Message,
-            Exception => MensajeGenerico,
-            _ => error,
-        };
+        => error is Exception ? MensajeGenerico : error;
 }

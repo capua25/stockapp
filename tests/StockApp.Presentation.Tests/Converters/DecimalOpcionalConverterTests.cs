@@ -55,7 +55,7 @@ public class DecimalOpcionalConverterTests
 
         var notificacion = Assert.IsType<BindingNotification>(resultado);
         Assert.Equal(BindingErrorType.Error, notificacion.ErrorType);
-        Assert.IsType<EntradaNumericaInvalidaException>(notificacion.Error);
+        Assert.IsType<FormatException>(notificacion.Error);
     }
 
     [Fact]
@@ -116,7 +116,7 @@ public class DecimalOpcionalConverterTests
         var resultado = Sut.ConvertBack("850.50", typeof(decimal?), null, CultureInfo.InvariantCulture);
 
         var notificacion = Assert.IsType<BindingNotification>(resultado);
-        var error = Assert.IsType<EntradaNumericaInvalidaException>(notificacion.Error);
+        var error = Assert.IsType<FormatException>(notificacion.Error);
         Assert.Equal("Usá coma para los decimales: 850,50", error.Message);
     }
 

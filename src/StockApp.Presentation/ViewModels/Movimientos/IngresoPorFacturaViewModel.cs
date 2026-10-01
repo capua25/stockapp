@@ -1,7 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -16,6 +15,8 @@ using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Finanzas;
+using StockApp.Domain.Formato;
+using StockApp.Presentation.Helpers;
 
 namespace StockApp.Presentation.ViewModels.Movimientos;
 
@@ -39,17 +40,6 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
     private readonly AdjuntosPanelViewModel       _adjuntosPanel;
 
     public AdjuntosPanelViewModel AdjuntosPanel => _adjuntosPanel;
-
-    private static readonly IFormatProvider CulturaMonto = CrearCulturaMonto();
-
-    private static IFormatProvider CrearCulturaMonto()
-    {
-        try { return CultureInfo.GetCultureInfo("es-UY"); }
-        catch (CultureNotFoundException)
-        {
-            return new NumberFormatInfo { NumberDecimalSeparator = ",", NumberGroupSeparator = "." };
-        }
-    }
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
@@ -223,7 +213,9 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
     private void RecalcularTotales()
     {
         SumaRenglones = Renglones.Sum(r => r.Cantidad * r.PrecioUnitario);
-        decimal.TryParse(MontoTotalTexto, NumberStyles.Number, CulturaMonto, out var monto);
+        // Un monto mal escrito (ej. "5.4") cuenta como 0 en la diferencia, igual que vacío: nunca
+        // se lee el punto como miles. El rechazo con mensaje claro ocurre al guardar.
+        FormatoEsUy.TryParseDecimal(MontoTotalTexto, out var monto, out _);
         DiferenciaConTotal = monto - SumaRenglones;
     }
 
@@ -381,9 +373,9 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
     {
         MensajeError = null;
 
-        if (!decimal.TryParse(MontoTotalTexto, NumberStyles.Number, CulturaMonto, out var monto))
+        if (!FormatoEsUy.TryParseDecimal(MontoTotalTexto, out var monto, out var errorMonto))
         {
-            MensajeError = "El monto total no es un número válido.";
+            MensajeError = MensajeNumeroInvalido.Armar("El monto total no es un número válido.", errorMonto);
             return;
         }
 

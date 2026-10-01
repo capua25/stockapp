@@ -61,7 +61,7 @@ public class DecimalConverterTests
 
         var notificacion = Assert.IsType<BindingNotification>(resultado);
         Assert.Equal(BindingErrorType.Error, notificacion.ErrorType);
-        var error = Assert.IsType<EntradaNumericaInvalidaException>(notificacion.Error);
+        var error = Assert.IsType<FormatException>(notificacion.Error);
         Assert.Equal(mensaje, error.Message);
     }
 
@@ -74,7 +74,7 @@ public class DecimalConverterTests
         var resultado = Sut.ConvertBack(texto, typeof(decimal), null, CultureInfo.InvariantCulture);
 
         var notificacion = Assert.IsType<BindingNotification>(resultado);
-        var error = Assert.IsType<EntradaNumericaInvalidaException>(notificacion.Error);
+        var error = Assert.IsType<FormatException>(notificacion.Error);
         Assert.Equal("El valor ingresado no puede estar vacío.", error.Message);
     }
 
@@ -84,7 +84,7 @@ public class DecimalConverterTests
         var resultado = Sut.ConvertBack("abc", typeof(decimal), null, CultureInfo.InvariantCulture);
 
         var notificacion = Assert.IsType<BindingNotification>(resultado);
-        Assert.IsType<EntradaNumericaInvalidaException>(notificacion.Error);
+        Assert.IsType<FormatException>(notificacion.Error);
     }
 
     [Fact]

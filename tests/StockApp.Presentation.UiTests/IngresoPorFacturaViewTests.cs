@@ -149,7 +149,7 @@ public class IngresoPorFacturaViewTests
 
     /// <summary>
     /// Flujo completo de carga vía clicks/tipeo reales: elegir producto en el combo de la zona de
-    /// carga, tipear cantidad y precio (pasando por el DecimalPuntoConverter real), y clickear
+    /// carga, tipear cantidad y precio (pasando por el DecimalConverter real, es-UY), y clickear
     /// "Agregar artículo". Reutilizado por los tests que solo necesitan un renglón cargado sin
     /// repetir la secuencia entera.
     /// </summary>
@@ -194,7 +194,7 @@ public class IngresoPorFacturaViewTests
     /// NOMBRE legible del producto -- no record.ToString() (mismo tipo de bug de "ToString() en
     /// vez del nombre" que el commit 4825caf corrigió para NuevaImportacionView con
     /// TextSearch.TextBinding). Además, item 3 del encargo "carga por formulario": tipear
-    /// cantidad/precio con el DecimalPuntoConverter real y clickear "Agregar artículo" agrega la fila a
+    /// cantidad/precio con el DecimalConverter real (es-UY) y clickear "Agregar artículo" agrega la fila a
     /// la grilla de solo lectura, y limpia la zona de carga.
     /// </summary>
     [AvaloniaFact]
@@ -217,7 +217,7 @@ public class IngresoPorFacturaViewTests
         Assert.DoesNotContain(textoVisible, t => t is not null && t.Contains("ProductoDto"));
 
         Tipear(CajaPorPlaceholder(window, "Cantidad"), "2");
-        Tipear(CajaPorPlaceholder(window, "Precio unitario"), "10.50");
+        Tipear(CajaPorPlaceholder(window, "Precio unitario"), "10,50");   // es-UY (decisión 2026-10-01)
 
         Assert.Equal(2m, vm.CantidadEnCarga);
         Assert.Equal(10.50m, vm.PrecioUnitarioEnCarga);
@@ -459,13 +459,10 @@ public class IngresoPorFacturaViewTests
     // ── Total: recálculo con decimales no redondos ──
 
     /// <summary>
-    /// Item 6 del encargo. IngresoPorFacturaLocaleDecimalTests.cs ya documentó y probó, byte a
-    /// byte, la cultura fija (Invariant, punto decimal) del DecimalPuntoConverter (independiente de
-    /// esta vista). Este test
-    /// ejercita el mismo camino de código a través de la ZONA DE CARGA real (Cantidad/Precio
-    /// unitario con DecimalPuntoConverter, tipeo real, botón "Agregar artículo") y confirma el
-    /// recálculo de SumaRenglones/DiferenciaConTotal con valores no redondos y el redondeo a 2
-    /// decimales que el StringFormat='{}{0:N2}' del axaml aplica en pantalla.
+    /// Item 6 del encargo: tipeo real en la ZONA DE CARGA (Cantidad/Precio unitario con el
+    /// DecimalConverter es-UY, botón "Agregar artículo") con decimales no redondos, recálculo de
+    /// SumaRenglones y el texto que se ve en pantalla: es-UY con 2 decimales vía MonedaConverter
+    /// (antes era un StringFormat='{0:N2}' que dependía de la cultura ambiente del proceso).
     /// </summary>
     [AvaloniaFact]
     public void CargarArticuloConDecimalesNoRedondosPorLaZonaDeCarga_RecalculaElTotalConRedondeo()
@@ -473,21 +470,15 @@ public class IngresoPorFacturaViewTests
         var producto = Producto(1, "Pala punta cuadrada");
         var (window, vm, _, _) = Montar(productos: new[] { producto });
 
-        CargarArticuloPorClicksReales(window, producto, "3", "12.35");
+        CargarArticuloPorClicksReales(window, producto, "3", "12,35");
 
         var fila = Assert.Single(vm.Renglones);
         Assert.Equal(37.05m, fila.Subtotal);
         Assert.Equal(37.05m, vm.SumaRenglones);
 
-        // El TextBlock de "Suma de renglones" usa StringFormat='{}{0:N2}' PLANO (sin
-        // ConverterCulture fija, a diferencia de DecimalPuntoConverter en la zona de carga) -- el
-        // separador decimal depende de CultureInfo.CurrentCulture del proceso que corre la suite.
-        // Lo que importa verificar acá es el REDONDEO a 2 decimales (N2), no un separador puntual,
-        // por eso el texto esperado se arma con la misma cultura ambiente.
-        var textoEsperado = 37.05m.ToString("N2", System.Globalization.CultureInfo.CurrentCulture);
         var totalTextBlock = window.GetVisualDescendants().OfType<TextBlock>()
-            .Single(t => ReferenceEquals(t.DataContext, vm) && Equals(t.Text, textoEsperado));
-        Assert.Equal(textoEsperado, totalTextBlock.Text);
+            .Single(t => ReferenceEquals(t.DataContext, vm) && Equals(t.Text, "$ 37,05"));
+        Assert.True(ArbolVisual.EsVisibleEnArbol(totalTextBlock));
     }
 
     // ── Validaciones de la zona de carga (item 2 del encargo): la fila NO entra a la grilla y el
@@ -540,7 +531,7 @@ public class IngresoPorFacturaViewTests
         comboProducto.SelectedItem = producto;
         Dispatcher.UIThread.RunJobs();
 
-        // DecimalPuntoConverter permite signo (NumberStyles.AllowLeadingSign): "-3" parsea a -3m.
+        // DecimalConverter (FormatoEsUy) permite signo: "-3" parsea a -3m.
         Tipear(CajaPorPlaceholder(window, "Cantidad"), "-3");
         Tipear(CajaPorPlaceholder(window, "Precio unitario"), "10");
         Clickear(window, BotonPorTexto(window, "Agregar artículo"));
@@ -685,40 +676,26 @@ public class IngresoPorFacturaViewTests
         Assert.True(ArbolVisual.EsVisibleEnArbol(mensajeVisible));
     }
 
-    // ── Cultura decimal de la ZONA DE CARGA (encargo 2026-08-21, hueco 1) ──
+    // ── Formato es-UY de la ZONA DE CARGA, la grilla y los totales (decisión 2026-10-01) ──
     //
-    // IngresoPorFacturaLocaleDecimalTests.cs quedó custodiando un XAML SINTÉTICO ("montar
-    // producto propio, independiente de la vista") que dejó de ser donde vive el riesgo:
-    // Cantidad y Precio unitario se mudaron de las celdas del DataGrid a los TextBox reales de
-    // la zona de carga (ver el comentario de esa clase y el Border "Cargar artículo" del axaml).
-    // El riesgo de cultura (es-UY: coma decimal, DecimalPuntoConverter) se mudó con ellos, y ese test
-    // nunca mira los controles reales. Por eso la cobertura nueva va ACÁ, en
-    // IngresoPorFacturaViewTests.cs, que ya monta la vista real vía Montar() y ya tiene los
-    // helpers (CajaPorPlaceholder, ComboPorItemsSource) para tocar los controles reales de la
-    // zona de carga -- extender el archivo sintético hubiera seguido probando el binding
-    // equivocado. La cobertura vieja NO se borra: sigue custodiando el binding crudo (sin
-    // converter) que usaba la vieja celda de DataGrid, un caso que ya no ocurre en esta vista
-    // pero documenta el bug de fondo para cualquier otra grilla editable del proyecto.
+    // El único formato numérico de la app es es-UY (coma decimal, punto de miles). Ingreso por
+    // factura venía con PUNTO (DecimalPuntoConverter, decisión del 2026-08-24, superada), así que
+    // los operadores tienen la costumbre de tipear "5.4": ese caso TIENE que rechazarse con un
+    // mensaje claro, nunca leerse como 54. La cultura AMBIENTE se fuerza hostil (en-US, donde el
+    // punto sí es decimal) para que el resultado no dependa de la máquina que corre la suite.
 
-    /// <summary>
-    /// Tipea con PUNTO decimal (formato único que <see cref="StockApp.Presentation.Converters.DecimalPuntoConverter"/>
-    /// exige desde el fix "todo va con punto" del 2026-08-24) bajo una cultura AMBIENTE hostil
-    /// (es-UY: coma = decimal, punto = separador de miles). Antes de ese fix este mismo test
-    /// tipeaba con COMA (es-UY, formato viejo del converter) bajo cultura ambiente en-US -- se
-    /// invirtió a propósito: prueba lo mismo (que el converter ignora la cultura ambiente y usa
-    /// su propio formato fijo), pero con el formato nuevo. Si los TextBox reales de
-    /// "Cantidad"/"Precio unitario" en la zona de carga no tuvieran el converter cableado, el
-    /// binding caería en el converter por defecto de Avalonia con la cultura AMBIENTE (es-UY) y
-    /// <c>NumberStyles.Number</c> (incluye AllowThousands) -- que interpretaría el punto como
-    /// separador de miles. Cubre los 3 puntos del encargo: Cantidad, Precio unitario, y el
-    /// Subtotal de la fila resultante en la grilla.
-    /// </summary>
-    [AvaloniaFact]
-    public void ClickReal_ZonaDeCarga_PuntoDecimal_CulturaAmbienteHostilEsUy_LlegaCorrectoAlViewModelYElSubtotalDeLaGrillaEsCorrecto()
+    private static T ConCulturaAmbiente<T>(string cultura, Func<T> accion)
     {
-        var culturaOriginal = Thread.CurrentThread.CurrentCulture;
-        Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo("es-UY");
-        try
+        var original = Thread.CurrentThread.CurrentCulture;
+        Thread.CurrentThread.CurrentCulture = CultureInfo.GetCultureInfo(cultura);
+        try { return accion(); }
+        finally { Thread.CurrentThread.CurrentCulture = original; }
+    }
+
+    [AvaloniaFact]
+    public void ClickReal_ZonaDeCarga_ComaDecimal_CulturaAmbienteHostilEnUs_LlegaCorrectoAlViewModelYLaGrillaMuestraComa()
+    {
+        ConCulturaAmbiente("en-US", () =>
         {
             var producto = Producto(1, "Pala punta cuadrada");
             var (window, vm, _, _) = Montar(productos: new[] { producto });
@@ -727,28 +704,79 @@ public class IngresoPorFacturaViewTests
             comboProducto.SelectedItem = producto;
             Dispatcher.UIThread.RunJobs();
 
-            Tipear(CajaPorPlaceholder(window, "Cantidad"), "3.5");
-            Tipear(CajaPorPlaceholder(window, "Precio unitario"), "12.35");
+            Tipear(CajaPorPlaceholder(window, "Cantidad"), "3,5");
+            Tipear(CajaPorPlaceholder(window, "Precio unitario"), "1.200,4");
 
-            // Ni truncado (3/12), ni interpretado como miles (3500/1235), ni dividido por 100.
             Assert.Equal(3.5m, vm.CantidadEnCarga);
-            Assert.Equal(12.35m, vm.PrecioUnitarioEnCarga);
+            Assert.Equal(1200.4m, vm.PrecioUnitarioEnCarga);
 
             Clickear(window, BotonPorTexto(window, "Agregar artículo"));
 
             var fila = Assert.Single(vm.Renglones);
-            Assert.Equal(3.5m, fila.Cantidad);
-            Assert.Equal(12.35m, fila.PrecioUnitario);
-            Assert.Equal(43.225m, fila.Subtotal);
+            Assert.Equal(4201.4m, fila.Subtotal);
 
             var filaEnGrilla = window.GetVisualDescendants().OfType<DataGridRow>()
                 .Single(r => ReferenceEquals(r.DataContext, fila));
-            Assert.Equal(43.225m, ((FilaRenglonFacturaVm)filaEnGrilla.DataContext!).Subtotal);
-        }
-        finally
+            var textos = filaEnGrilla.GetVisualDescendants().OfType<TextBlock>()
+                .Where(tb => ReferenceEquals(tb.DataContext, fila))
+                .Select(tb => tb.Text)
+                .ToList();
+            Assert.Contains("3,5", textos);
+            Assert.Contains("1.200,4", textos);
+            Assert.Contains("4.201,4", textos);
+
+            // Totales debajo de la grilla: es-UY con 2 decimales.
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(),
+                t => ReferenceEquals(t.DataContext, vm) && t.Text == "$ 4.201,40");
+            return 0;
+        });
+    }
+
+    [AvaloniaFact]
+    public void ClickReal_ZonaDeCarga_PuntoDecimal_SeRechazaConMensajeClaroYNoSeLeeComoMiles()
+    {
+        ConCulturaAmbiente("en-US", () =>
         {
-            Thread.CurrentThread.CurrentCulture = culturaOriginal;
-        }
+            var producto = Producto(1, "Pala punta cuadrada");
+            var (window, vm, _, _) = Montar(productos: new[] { producto });
+
+            var cajaPrecio = CajaPorPlaceholder(window, "Precio unitario");
+            Tipear(cajaPrecio, "7");
+            Tipear(cajaPrecio, "5.4");
+
+            Assert.Equal(7m, vm.PrecioUnitarioEnCarga);   // ni 54 ni 5,4: queda el valor anterior
+            Assert.True(DataValidationErrors.GetHasErrors(cajaPrecio));
+            var errores = DataValidationErrors.GetErrors(cajaPrecio)!.Cast<object>().ToList();
+            Assert.Contains("Usá coma para los decimales: 5,4", errores);
+            return 0;
+        });
+    }
+
+    /// <summary>Los dos precios de la confirmación de cambio de precio (antes {0:N2} con la
+    /// cultura ambiente) también salen en es-UY.</summary>
+    [AvaloniaFact]
+    public void ConfirmacionDeCambioDePrecio_MuestraLosPreciosEnEsUy()
+    {
+        ConCulturaAmbiente("en-US", () =>
+        {
+            var producto = Producto(1, "Pala punta cuadrada");
+            var (window, vm, _, _) = Montar(productos: new[] { producto });
+
+            vm.CambiosDePrecio.Add(new ItemConfirmacionPrecioVm
+            {
+                Fila = new FilaRenglonFacturaVm(),
+                ProductoNombre = producto.Nombre,
+                PrecioActual = 1500.5m,
+                PrecioNuevo = 2000m,
+            });
+            vm.MostrandoConfirmacionPrecios = true;
+            Dispatcher.UIThread.RunJobs();
+
+            var textos = window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
+            Assert.Contains("$ 1.500,50", textos);
+            Assert.Contains("$ 2.000,00", textos);
+            return 0;
+        });
     }
 
     // ── Salida del modo "producto nuevo" en la zona de carga (encargo 2026-08-21, hueco 2) ──

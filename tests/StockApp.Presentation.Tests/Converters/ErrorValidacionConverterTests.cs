@@ -39,16 +39,4 @@ public class ErrorValidacionConverterTests
 
         Assert.Same(mensajeDominio, resultado);
     }
-
-    /// <summary>El rechazo de un número mal escrito (ej. "5.4" → "Usá coma para los decimales: 5,4")
-    /// es un mensaje de DOMINIO armado por FormatoEsUy, no una excepción cruda de .NET: tiene que
-    /// llegar tal cual al operador, si no el genérico "Ingresá un número válido." le esconde el porqué.</summary>
-    [Fact]
-    public void EntradaNumericaInvalida_PasaConSuMensajeDeDominio()
-    {
-        var resultado = ErrorValidacionConverter.Instance(
-            new EntradaNumericaInvalidaException("Usá coma para los decimales: 5,4"));
-
-        Assert.Equal("Usá coma para los decimales: 5,4", resultado);
-    }
 }

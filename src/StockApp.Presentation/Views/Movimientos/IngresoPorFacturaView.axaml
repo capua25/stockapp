@@ -152,12 +152,12 @@
                             </StackPanel>
                             <StackPanel Grid.Column="2" Spacing="4">
                                 <TextBlock Text="Cantidad" />
-                                <TextBox Text="{Binding CantidadEnCarga, Converter={x:Static conv:DecimalPuntoConverter.Instance}}"
+                                <TextBox Text="{Binding CantidadEnCarga, Converter={x:Static conv:DecimalConverter.Instance}}" beh:EntradaNumericaBehavior.EsDecimal="True"
                                          PlaceholderText="Cantidad" />
                             </StackPanel>
                             <StackPanel Grid.Column="4" Spacing="4">
                                 <TextBlock Text="Precio unitario" />
-                                <TextBox Text="{Binding PrecioUnitarioEnCarga, Converter={x:Static conv:DecimalPuntoConverter.Instance}}"
+                                <TextBox Text="{Binding PrecioUnitarioEnCarga, Converter={x:Static conv:DecimalConverter.Instance}}" beh:EntradaNumericaBehavior.EsDecimal="True"
                                          PlaceholderText="Precio unitario" />
                             </StackPanel>
                             <StackPanel Grid.Column="6" Spacing="4" VerticalAlignment="Bottom">
@@ -194,13 +194,13 @@
                                     Binding="{Binding NombreMostrado, DataType={x:Type vm:FilaRenglonFacturaVm}}"
                                     IsReadOnly="True" Width="3*" MinWidth="160" />
                                 <DataGridTextColumn Header="Cantidad"
-                                    Binding="{Binding Cantidad, DataType={x:Type vm:FilaRenglonFacturaVm}, Converter={x:Static conv:DecimalPuntoConverter.Instance}}"
+                                    Binding="{Binding Cantidad, DataType={x:Type vm:FilaRenglonFacturaVm}, Converter={x:Static conv:DecimalConverter.Instance}}"
                                     IsReadOnly="True" Width="Auto" MinWidth="90" />
                                 <DataGridTextColumn Header="Precio unitario"
-                                    Binding="{Binding PrecioUnitario, DataType={x:Type vm:FilaRenglonFacturaVm}, Converter={x:Static conv:DecimalPuntoConverter.Instance}}"
+                                    Binding="{Binding PrecioUnitario, DataType={x:Type vm:FilaRenglonFacturaVm}, Converter={x:Static conv:DecimalConverter.Instance}}"
                                     IsReadOnly="True" Width="Auto" MinWidth="100" />
                                 <DataGridTextColumn Header="Subtotal"
-                                    Binding="{Binding Subtotal, DataType={x:Type vm:FilaRenglonFacturaVm}, Converter={x:Static conv:DecimalPuntoConverter.Instance}}"
+                                    Binding="{Binding Subtotal, DataType={x:Type vm:FilaRenglonFacturaVm}, Converter={x:Static conv:DecimalConverter.Instance}}"
                                     IsReadOnly="True" Width="Auto" MinWidth="100" />
                                 <DataGridCheckBoxColumn Header="Actualizar precio costo"
                                     Binding="{Binding ActualizarPrecioCosto, DataType={x:Type vm:FilaRenglonFacturaVm}}"
@@ -223,7 +223,7 @@
                     <Grid ColumnDefinitions="*,*,*">
                         <StackPanel Grid.Column="0" Spacing="4">
                             <TextBlock Text="Suma de renglones" />
-                            <TextBlock Text="{Binding SumaRenglones, StringFormat='{}{0:N2}'}" FontWeight="Bold" />
+                            <TextBlock Text="{Binding SumaRenglones, Converter={x:Static conv:MonedaConverter.Instance}}" FontWeight="Bold" />
                         </StackPanel>
                         <StackPanel Grid.Column="1" Spacing="4">
                             <TextBlock Text="Total de factura" />
@@ -231,7 +231,7 @@
                         </StackPanel>
                         <StackPanel Grid.Column="2" Spacing="4">
                             <TextBlock Text="Diferencia" />
-                            <TextBlock Text="{Binding DiferenciaConTotal, StringFormat='{}{0:N2}'}"
+                            <TextBlock Text="{Binding DiferenciaConTotal, Converter={x:Static conv:MonedaConverter.Instance}}"
                                        FontWeight="Bold" Foreground="OrangeRed" />
                         </StackPanel>
                     </Grid>
@@ -304,8 +304,8 @@
                                 <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,4">
                                     <CheckBox Grid.Column="0" IsChecked="{Binding Confirmado}" />
                                     <TextBlock Grid.Column="1" Text="{Binding ProductoNombre}" VerticalAlignment="Center" />
-                                    <TextBlock Grid.Column="2" Text="{Binding PrecioActual, StringFormat='{}{0:N2}'}" Margin="8,0" />
-                                    <TextBlock Grid.Column="3" Text="{Binding PrecioNuevo, StringFormat='{}{0:N2}'}" FontWeight="Bold" />
+                                    <TextBlock Grid.Column="2" Text="{Binding PrecioActual, Converter={x:Static conv:MonedaConverter.Instance}}" Margin="8,0" />
+                                    <TextBlock Grid.Column="3" Text="{Binding PrecioNuevo, Converter={x:Static conv:MonedaConverter.Instance}}" FontWeight="Bold" />
                                 </Grid>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>

@@ -534,4 +534,44 @@ public class IngresoPorFacturaViewModelTests
 
         Assert.Contains(nameof(FilaRenglonFacturaVm.NombreMostrado), notificados);
     }
+
+    // ── Formato es-UY (decisión 2026-10-01): MontoTotalTexto con parseo seguro ──
+
+    [Fact]
+    public async Task Guardar_MontoTotalConPuntoDecimal_SeRechazaConMensajeClaroSinRegistrar()
+    {
+        var (vm, svc, _) = Crear();
+        await InicializarYCompletarCabeceraAsync(vm);
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 10m);
+        vm.MontoTotalTexto = "5.4";   // con NumberStyles.Number + es-UY se leía como 54
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        Assert.Equal("El monto total no es un número válido. Usá coma para los decimales: 5,4", vm.MensajeError);
+        svc.Verify(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CambiarMontoTotalTexto_ConMilesConPunto_CalculaLaDiferenciaCorrecta()
+    {
+        var (vm, _, _) = Crear();
+        await InicializarYCompletarCabeceraAsync(vm);
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 10m, precioUnitario: 150m);   // subtotal 1500
+
+        vm.MontoTotalTexto = "1.500,50";
+
+        Assert.Equal(0.50m, vm.DiferenciaConTotal);
+    }
+
+    [Fact]
+    public async Task CambiarMontoTotalTexto_PuntoDecimal_NoSeLeeComoMiles()
+    {
+        var (vm, _, _) = Crear();
+        await InicializarYCompletarCabeceraAsync(vm);
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 5m);
+
+        vm.MontoTotalTexto = "5.4";   // inválido: antes daba diferencia 49 (54 - 5)
+
+        Assert.Equal(-5m, vm.DiferenciaConTotal);
+    }
 }

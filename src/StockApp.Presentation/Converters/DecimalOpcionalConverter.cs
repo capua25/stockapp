@@ -41,7 +41,7 @@ public sealed class DecimalOpcionalConverter : IValueConverter
             return resultado;
 
         return new BindingNotification(
-            new EntradaNumericaInvalidaException(error!),
+            new FormatException(error),
             BindingErrorType.Error);
     }
 }
