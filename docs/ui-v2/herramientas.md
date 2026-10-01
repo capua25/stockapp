@@ -80,8 +80,9 @@ aprobación del usuario, y la aprobación queda en el código:
 
 3. Si el valor es 16 o más (lo que dio M2, relleno pálido equivocado, en el catálogo), antes hay
    que correr en esa pantalla la mutación equivalente a M2 (quitar la variante de color de un
-   relleno pálido), ver el rojo y registrarlo en el último parámetro, `MutacionPalidaEnRojo`
-   (qué se quitó y cuántas teselas dio). Sin eso falla.
+   relleno pálido), ver el rojo y registrarlo en el quinto parámetro, `MutacionPalidaEnRojo`
+   (qué se quitó y cuántas teselas dio). Sin eso falla. (El último parámetro es `PorcentajeMaximo`,
+   del paso 2.)
 
 Además de los píxeles, `CompararConMockup` falla si algún `TextBlock` visible no se ve entero:
 pide más lugar del que tiene, o cae fuera de un ancestro con `ClipToBounds` o de la ventana (un

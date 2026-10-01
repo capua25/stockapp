@@ -106,17 +106,20 @@ real de `stockapp-pg` el 2026-09-30 — vía `POST /auth/login` directo, sin pas
 por la GUI). `test1234`/`test123` NO funcionan contra esa BD: son contraseñas
 de un seed anterior que ya no aplica. Si tu BD es nueva (vacía, sin usuarios),
 el bootstrap usa en cambio `Bootstrap:AdminUser`/`Bootstrap:Password` de los
-user-secrets de `StockApp.Api` (`Admin123!` por defecto) — solo se dispara la
-primera vez, contra una BD sin usuarios.
+user-secrets de `StockApp.Api` — son locales de cada máquina (no hay un valor
+"por defecto" universal: es el que cada quien haya configurado ahí con
+`dotnet user-secrets`) — y solo se dispara la primera vez, contra una BD sin
+usuarios.
 
 **Gotcha de configuración**: si el desktop apunta a un servidor que no es el
 tuyo (por ejemplo seguís usando `~/.config/GestionMunicipal/conexion.json` de
-una sesión anterior contra un VPS de testing), el login va a fallar con
-"Usuario o contraseña incorrectos" SIN IMPORTAR la contraseña que uses acá,
-porque `conexion.json` tiene precedencia sobre `appsettings.json`
-(`ResolucionConexion.cs`) y la app ni siquiera intenta hablar con
-`localhost`. Revisá ese archivo (o borralo) antes de asumir que la contraseña
-está mal.
+una sesión anterior contra un VPS de testing), el login intenta autenticar
+CONTRA ESE OTRO SERVIDOR, no contra tu `localhost`, porque `conexion.json`
+tiene precedencia sobre `appsettings.json` (`ResolucionConexion.cs`). Si ese
+servidor no tiene el usuario/contraseña que estás probando (o tiene otros
+distintos), vas a ver "Usuario o contraseña incorrectos" aunque esas
+credenciales sean correctas en tu base local. Revisá ese archivo (o borralo)
+antes de asumir que la contraseña está mal.
 
 ## Calibrar `click.sh` (importante, léelo antes de confiar en clicks a ciegas)
 

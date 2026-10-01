@@ -66,7 +66,7 @@ Advertencia y Error salen de `patrones-1.html`. Info no aparece en los mockups d
 
 ### 2.2 Forma, sombra y medidas
 
-- **Radios:** 8 (inputs, botones, pastilla activa, alertas, `TarjetaAcceso` y el borde de la grilla), 10 (`TarjetaContenido` y `TarjetaMetrica`), 999 (insignias). El 8 de `TarjetaAcceso` y de la grilla lo aprobó el usuario el 2026-09-30 mirando el catálogo de componentes.
+- **Radios:** 8 (inputs, botones, pastilla activa, alertas, `TarjetaAcceso` y el borde de la grilla), 10 (`TarjetaContenido` y `TarjetaMetrica`), 999 (insignias), 4 (casilla del `CheckBox`). El 8 de `TarjetaAcceso` y de la grilla lo aprobó el usuario el 2026-09-30 mirando el catálogo de componentes.
 - **Sombra de card:** `0 1px 2px rgba(0,0,0,0.05)` — la única sombra del sistema.
 - **Alturas:** input y botón 36; fila de grilla 40; header de grilla 36; ítem de sidebar 32.
 - **Espaciado:** base 4; todo margen, padding y gap de DISEÑO es múltiplo de 4. Excepción de diseño: el padding vertical de 2 de la `Insignia` (valor del mockup aprobado). Los valores que compensan la geometría medida de las plantillas de Avalonia (Padding 13, RowHeight 39, márgenes del mockup que no son enteros ni múltiplos de 4) están listados en §6.5.
