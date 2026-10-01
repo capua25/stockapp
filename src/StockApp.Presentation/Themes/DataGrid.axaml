@@ -98,6 +98,11 @@
              ~198. El behavior lleva las Auto a su ancho natural tomando de las columnas * de
              cualquier posición, y respeta los arrastres del usuario. Va acá, en el estilo de TODA
              DataGrid, para que las grillas nuevas lo hereden sin que nadie se acuerde.
+             También pone el PISO de las columnas *: 160px (PisoProporcionalPorDefecto), no los 40
+             de MinColumnWidth. Varias PCs del municipio son de 1366x768 y, sin el sidebar, el
+             Historial no entra: Producto y Comentario caían a 40px. Con el piso, si no entra todo
+             las * quedan en 160 y aparece el scroll horizontal. Por columna: un MinWidth mayor
+             manda; b:DataGridColumnasAutoBehavior.PisoProporcional cambia el piso de esa columna.
              Guardián: DataGridColumnasAutoAjusteTests. -->
         <Setter Property="b:DataGridColumnasAutoBehavior.AjustarColumnasAuto" Value="True" />
     </Style>

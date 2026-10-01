@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using Avalonia;
 using Avalonia.Controls;
@@ -39,10 +40,20 @@ namespace StockApp.Presentation.Behaviors;
 /// <item>Si eso más el mínimo de las <c>*</c> entra en el ancho de la grilla ("modo encaja"), las
 /// <c>*</c> se reparten el resto según su peso DECLARADO (el camino de Resize también les
 /// deforma el peso).</item>
-/// <item>Si no entra ("modo desborde"), las <c>*</c> pasan a ancho fijo en su mínimo, que es
-/// donde las deja la grilla sola en ese caso. Sin columnas <c>*</c>, la grilla deja de apretar y
-/// lo que no entra se ve con el scroll horizontal. Cuando vuelve a entrar, recuperan su peso.</item>
+/// <item>Si no entra ("modo desborde"), las <c>*</c> pasan a ancho fijo en su piso. Sin columnas
+/// <c>*</c>, la grilla deja de apretar y lo que no entra se ve con el scroll horizontal. Cuando
+/// vuelve a entrar, recuperan su peso.</item>
 /// </list>
+/// <para><b>Piso de las <c>*</c>.</b> El mínimo de una columna <c>*</c> no es el
+/// <c>MinColumnWidth</c> de 40 de la grilla sino <see cref="PisoProporcionalPorDefecto"/> (160):
+/// en una PC de 1366x768, sin el sidebar, el Historial no entra y Producto/Comentario quedaban en
+/// 40px, ilegibles. El piso efectivo es el MÁXIMO entre <see cref="PisoProporcionalProperty"/> y
+/// el mínimo propio de la columna (su <c>MinWidth</c>, o el de la grilla), acotado por su
+/// <c>MaxWidth</c>: un <c>MinWidth</c> mayor manda, y para bajar el piso de una columna puntual se
+/// declara el attached. "Entra" = las no proporcionales en su objetivo más las <c>*</c> en su piso
+/// caben en el ancho disponible; si no, las <c>*</c> quedan en el piso y la grilla scrollea, por
+/// angosta que sea. El piso es solo del reparto automático: el usuario puede seguir arrastrando
+/// una <c>*</c> por debajo (el redimensionado de la grilla usa su <c>MinWidth</c>).</para>
 /// <para>Los anchos se asignan por el ÚNICO camino público que no pasa por <c>Resize</c>: un
 /// cambio de <c>Width</c> que cambia <c>IsStar</c> se aplica tal cual
 /// (<c>SetWidthInternalNoCallback</c>). Por eso cada asignación es un ida y vuelta (Star ↔ el
@@ -71,6 +82,21 @@ public static class DataGridColumnasAutoBehavior
 {
     public static readonly AttachedProperty<bool> AjustarColumnasAutoProperty =
         AvaloniaProperty.RegisterAttached<DataGrid, DataGrid, bool>("AjustarColumnasAuto");
+
+    /// <summary>Piso por defecto de una columna <c>*</c>: ver <see cref="PisoProporcionalProperty"/>.</summary>
+    public const double PisoProporcionalPorDefecto = 160;
+
+    /// <summary>
+    /// Piso de una columna proporcional (<c>*</c>) en el reparto automático. Default
+    /// <see cref="PisoProporcionalPorDefecto"/>; el efectivo es el máximo entre este valor y el
+    /// mínimo propio de la columna. Declararlo en una columna puntual solo hace falta para BAJARLO.
+    /// </summary>
+    public static readonly AttachedProperty<double> PisoProporcionalProperty =
+        AvaloniaProperty.RegisterAttached<DataGridColumn, DataGridColumn, double>("PisoProporcional", PisoProporcionalPorDefecto);
+
+    public static double GetPisoProporcional(DataGridColumn columna) => columna.GetValue(PisoProporcionalProperty);
+
+    public static void SetPisoProporcional(DataGridColumn columna, double value) => columna.SetValue(PisoProporcionalProperty, value);
 
     /// <summary>Tolerancia en píxeles: diferencias menores son redondeo de layout.</summary>
     private const double Tolerancia = 0.5;
@@ -154,11 +180,17 @@ public static class DataGridColumnasAutoBehavior
 
     // ── Reparto ───────────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Espejo de <c>DataGridColumn.ActualMinWidth</c> (interno).</summary>
+    /// <summary>
+    /// Espejo de <c>DataGridColumn.ActualMinWidth</c> (interno). Para una columna <c>*</c> es su
+    /// piso: el máximo entre ese mínimo y <see cref="PisoProporcionalProperty"/>.
+    /// </summary>
     private static double Minimo(DataGrid grid, DataGridColumn c, bool esEstrella)
     {
         var minimo = c.MinWidth > 0 ? c.MinWidth : grid.MinColumnWidth;
-        return esEstrella ? Math.Max(0.001, minimo) : minimo;
+        if (!esEstrella)
+            return minimo;
+        var piso = Math.Max(minimo, GetPisoProporcional(c));
+        return Math.Max(0.001, Math.Min(c.MaxWidth, piso));
     }
 
     /// <summary>El ancho que tiene que tener una columna no proporcional, o null si no aplica.</summary>
@@ -179,16 +211,39 @@ public static class DataGridColumnasAutoBehavior
     }
 
     /// <summary>
-    /// Ancho disponible para las columnas (el <c>CellsWidth</c> interno de la grilla).
-    /// Mientras las * siguen siendo *, la grilla las estira para que la suma de columnas sea
-    /// EXACTAMENTE ese ancho: se usa esa suma, así el reparto calculado coincide al píxel con el
-    /// de la grilla y no hay nada que pelear (con escalado de pantalla, el ancho del presentador
-    /// de filas puede diferir por redondeo). En modo desborde (las * pasadas a ancho fijo) la
-    /// suma ya no dice nada y se usa el ancho del presentador de filas, solo para decidir si se
-    /// vuelve a "encaja".
+    /// <c>DataGrid.CellsWidth</c> (interno en DataGrid 12.0.1): el ancho del último measure del
+    /// presentador de filas, que es contra lo que la propia grilla estira las <c>*</c> y decide
+    /// el scroll horizontal. Null si una versión futura lo renombra (ver
+    /// <see cref="AnchoDisponible"/>).
+    /// </summary>
+    private static readonly PropertyInfo? CellsWidth =
+        typeof(DataGrid).GetProperty("CellsWidth", BindingFlags.Instance | BindingFlags.NonPublic);
+
+    /// <summary>Si el behavior puede leer el ancho disponible de la grilla (guardián de actualizaciones).</summary>
+    internal static bool PuedeLeerCellsWidth => CellsWidth?.PropertyType == typeof(double);
+
+    /// <summary>
+    /// Ancho disponible para las columnas: el <c>CellsWidth</c> interno de la grilla.
+    ///
+    /// <para><b>Anti-oscilación en la transición encaja/desborde.</b> La decisión tiene que
+    /// medir lo MISMO en los dos modos. Antes, en desborde, se usaba el ancho del presentador de
+    /// filas, pero en el <c>LayoutUpdated</c> que sigue a un achique de ventana ese
+    /// <c>Bounds</c> todavía es el viejo mientras que el measure ya bajó <c>CellsWidth</c>
+    /// (medido: ventana de 1774 a 1764, presentador 1458 y CellsWidth 1448). Justo en el umbral eso daba "desborde" medido con el ancho nuevo y
+    /// "encaja" medido con el viejo, alternando hasta agotar
+    /// <see cref="MaxReparacionesSeguidas"/> y dejando las * bajo el piso. <c>CellsWidth</c> es
+    /// el mismo número en los dos modos (con las * como *, la grilla las estira para que la suma
+    /// sea exactamente ese ancho).</para>
+    ///
+    /// <para>Si una versión futura de DataGrid no expone <c>CellsWidth</c>, se vuelve a la
+    /// aproximación anterior: la suma de columnas con las * como *, o el presentador de filas en
+    /// desborde (con el riesgo de oscilación acotado por la guarda anti-loop).</para>
     /// </summary>
     private static double? AnchoDisponible(DataGrid grid, Estado estado, List<DataGridColumn> visibles, List<DataGridColumn> estrellas)
     {
+        if (PuedeLeerCellsWidth && CellsWidth!.GetValue(grid) is double cells)
+            return cells > 0 && !double.IsInfinity(cells) ? cells : null;
+
         if (estrellas.All(c => c.Width.IsStar))
             return visibles.Sum(c => c.ActualWidth);
 

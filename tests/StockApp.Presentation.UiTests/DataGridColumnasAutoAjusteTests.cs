@@ -10,6 +10,7 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.LogicalTree;
+using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using StockApp.Application.Catalogo;
@@ -17,6 +18,7 @@ using StockApp.Application.Movimientos;
 using StockApp.Application.Reportes;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Behaviors;
+using StockApp.Presentation.ViewModels;
 using StockApp.Presentation.Views.Catalogo;
 using StockApp.Presentation.Views.Movimientos;
 using StockApp.Presentation.Views.Reportes;
@@ -244,7 +246,9 @@ public class DataGridColumnasAutoAjusteTests
     [AvaloniaFact]
     public void A_ColumnaAutoArrastradaMasAngosta_NoVuelveASuAnchoNaturalAlRecargar()
     {
-        var (window, grid) = Montar(new MovimientoHistorialView(), 1300);
+        // 1700: todo entra. Con el piso de 160 en Producto/Comentario, a 1300 el Historial
+        // desborda y el separador de Usuario queda fuera de la vista (no hay dónde arrastrar).
+        var (window, grid) = Montar(new MovimientoHistorialView(), 1700);
         Cargar(grid, HistorialReal());
         var usuarioNatural = Columna(grid, "Usuario").ActualWidth;
 
@@ -395,8 +399,9 @@ public class DataGridColumnasAutoAjusteTests
     [AvaloniaFact]
     public void E_ColumnasProporcionalesYFijas_NoSeRompen()
     {
-        // 1500: todo entra (a 1300 el Historial ya desborda por 1px y pasa a scroll horizontal).
-        var (window, grid) = Montar(new MovimientoHistorialView(), 1500);
+        // 1700: todo entra. Con el piso de 160 en las proporcionales, el Historial desborda por
+        // debajo de ~1540 (antes del piso, por debajo de ~1300).
+        var (window, grid) = Montar(new MovimientoHistorialView(), 1700);
         Cargar(grid, HistorialReal());
 
         Assert.Equal(220, Columna(grid, "Stock nuevo").ActualWidth, 1);
@@ -409,6 +414,273 @@ public class DataGridColumnasAutoAjusteTests
 
         // Sin hueco ni desborde: las columnas ocupan exactamente el ancho de la grilla.
         Assert.True(ScrollHorizontal(grid) is not { IsVisible: true }, "no tiene que aparecer scroll horizontal cuando todo entra");
+    }
+
+    // ── (g) Piso de las columnas proporcionales: PCs de 1366x768 ───────────────────────────────
+
+    private const double Piso = DataGridColumnasAutoBehavior.PisoProporcionalPorDefecto;
+
+    private const string XamlShell = """
+        <Window xmlns="https://github.com/avaloniaui"
+                xmlns:vistas="clr-namespace:StockApp.Presentation.Views;assembly=GestionMunicipal">
+            <vistas:ShellMainView />
+        </Window>
+        """;
+
+    /// <summary>
+    /// Monta la vista DENTRO del shell real (sidebar incluido) en una ventana de
+    /// <paramref name="anchoVentana"/>x<paramref name="altoVentana"/>: el ancho que le queda a la
+    /// vista es el que tiene en una PC del municipio, no un número supuesto.
+    /// </summary>
+    private static (Window Window, DataGrid Grid) MontarEnShell(
+        Control vista, double anchoVentana, double altoVentana, Action<DataGrid>? antesDeMostrar = null)
+    {
+        var vm = new ShellMainViewModel(
+            new SesionFake(RolUsuario.Admin), new NavigationServiceFake(), new InfoAppFake(),
+            new ConfirmacionServiceFake(), new AuthServiceFake(), new PreferenciasSidebarFake());
+        var window = AvaloniaRuntimeXamlLoader.Parse<Window>(XamlShell, typeof(TestApp).Assembly);
+        window.Width = anchoVentana;
+        window.Height = altoVentana;
+        window.DataContext = vm;
+
+        var grid = vista.GetLogicalDescendants().OfType<DataGrid>().Single();
+        antesDeMostrar?.Invoke(grid);
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        // La región de contenido del shell (ContentControl bindeado a CurrentContent).
+        var region = window.GetVisualDescendants().OfType<ContentControl>()
+            .Single(c => Grid.GetColumn(c) == 1 && c.GetVisualParent() is Grid g && g.ColumnDefinitions.Count == 2);
+        region.Content = vista;
+        Dispatcher.UIThread.RunJobs();
+        return (window, grid);
+    }
+
+    private static void Reportar(string titulo, Window window, DataGrid grid)
+    {
+        var vista = grid.FindAncestorOfType<UserControl>();
+        TestContext.Current.TestOutputHelper?.WriteLine(
+            $"{titulo}: vista={vista?.Bounds.Width:F1}px grilla={grid.Bounds.Width:F1}px scrollH={(ScrollHorizontal(grid)?.IsVisible == true ? "sí" : "no")} | {Describir(Anchos(grid))}");
+    }
+
+    private static void AssertEstrellasEnPiso(DataGrid grid, string etapa, params string[] estrellas)
+    {
+        var bajoPiso = estrellas
+            .Select(h => (h, Ancho: Columna(grid, h).ActualWidth))
+            .Where(t => t.Ancho < Piso - 0.5)
+            .Select(t => $"{t.h}={t.Ancho:F1}")
+            .ToList();
+        Assert.True(bajoPiso.Count == 0, $"[{etapa}] proporcionales bajo el piso de {Piso}px: {string.Join(", ", bajoPiso)}. Anchos: {Describir(Anchos(grid))}");
+    }
+
+    /// <summary>
+    /// Legible: el texto de cada celda realizada tiene al menos el ancho útil de una columna en el
+    /// piso (160 menos el padding de la celda y el margen del TextBlock = 128px, ~20 caracteres).
+    /// Un nombre más largo se recorta con elipsis, como en cualquier proporcional; a 40px no se
+    /// leía ni el comienzo.
+    /// </summary>
+    private static void AssertLegible(DataGrid grid, Window window, string etapa, params string[] headers)
+    {
+        foreach (var header in headers)
+        {
+            var headerCell = grid.GetVisualDescendants().OfType<DataGridColumnHeader>().First(h => Equals(h.Content, header));
+            var centroX = headerCell.TranslatePoint(new Point(headerCell.Bounds.Width / 2, 0), window)!.Value.X;
+            var textos = grid.GetVisualDescendants().OfType<DataGridCell>()
+                .Where(c => c.IsEffectivelyVisible && ContieneX(c, window, centroX))
+                .SelectMany(c => c.GetVisualDescendants().OfType<TextBlock>())
+                .Where(tb => tb.IsEffectivelyVisible && !string.IsNullOrEmpty(tb.Text))
+                .ToList();
+            Assert.NotEmpty(textos);
+            var angostos = textos.Where(tb => tb.Bounds.Width < 128 - 0.5)
+                .Select(tb => $"'{tb.Text}' en {tb.Bounds.Width:F1}px").ToList();
+            Assert.True(angostos.Count == 0, $"[{etapa}] {header} ilegible: {string.Join("; ", angostos)}");
+        }
+    }
+
+    /// <summary>Scroll horizontal si y solo si las columnas no entran en la grilla.</summary>
+    private static void AssertScrollSiDesborda(DataGrid grid, string etapa)
+    {
+        var filas = grid.GetVisualDescendants().OfType<DataGridRowsPresenter>().Single();
+        var total = grid.Columns.Where(c => c.IsVisible).Sum(c => c.ActualWidth);
+        var hayScroll = ScrollHorizontal(grid) is { IsVisible: true };
+        Assert.True(hayScroll == total > filas.Bounds.Width + 0.5,
+            $"[{etapa}] columnas={total:F1}px, filas={filas.Bounds.Width:F1}px, scroll horizontal={(hayScroll ? "sí" : "no")}");
+    }
+
+    [AvaloniaFact]
+    public void G_HistorialEnShellA1366_ProductoYComentarioNoBajanDelPiso_YScrollea()
+    {
+        var (window, grid) = MontarEnShell(new MovimientoHistorialView(), 1366, 768);
+        Cargar(grid, HistorialReal());
+        Reportar("Historial 1366", window, grid);
+
+        AssertEstrellasEnPiso(grid, "carga", "Producto", "Comentario");
+        AssertLegible(grid, window, "carga", "Producto", "Comentario");
+        AssertSinRecorte(grid, window, "carga", "Usuario", "Tipo", "Fecha", "Motivo", "Cantidad", "Precio");
+        Assert.Equal(220, Columna(grid, "Stock nuevo").ActualWidth, 1);
+        Assert.True(ScrollHorizontal(grid) is { IsVisible: true }, "a 1366 el Historial no entra: tiene que haber scroll horizontal");
+        AssertScrollSiDesborda(grid, "carga");
+    }
+
+    [AvaloniaFact]
+    public void G_ValorizacionEnShellA1366_NombreYCategoriaNoBajanDelPiso()
+    {
+        var (window, grid) = MontarEnShell(new ValorizacionView(), 1366, 768);
+        Cargar(grid, ValorizacionReal());
+        Reportar("Valorización 1366", window, grid);
+
+        AssertEstrellasEnPiso(grid, "carga", "Nombre", "Categoría");
+        AssertSinRecorte(grid, window, "carga", "Categoría", "P. Costo", "Valor Costo", "Código");
+        Assert.Equal(220, Columna(grid, "Stock").ActualWidth, 1);
+        AssertScrollSiDesborda(grid, "carga");
+    }
+
+    [AvaloniaFact]
+    public void G_ProductosEnShellA1366_NombreYCategoriaNoBajanDelPiso()
+    {
+        var (window, grid) = MontarEnShell(new ProductoListView(), 1366, 768);
+        Cargar(grid, Enumerable.Range(1, 30).Select(i => Producto(i, i == 3 ? -99999.5m : i)).ToList());
+        Reportar("Productos 1366", window, grid);
+
+        AssertEstrellasEnPiso(grid, "carga", "Nombre", "Categoría");
+        AssertSinRecorte(grid, window, "carga", "Nombre", "Código", "Costo", "Unidad");
+        Assert.Equal(220, Columna(grid, "Stock").ActualWidth, 1);
+        AssertBadgeNoPisaElNumero(grid, window, "Stock", "carga");
+        AssertScrollSiDesborda(grid, "carga");
+    }
+
+    public static TheoryData<string> VistasConProporcionales => new() { "Historial", "Valorización", "Productos" };
+
+    private static (Control Vista, System.Collections.IEnumerable Datos) VistaYDatos(string nombre) => nombre switch
+    {
+        "Historial" => (new MovimientoHistorialView(), HistorialReal()),
+        "Valorización" => (new ValorizacionView(), ValorizacionReal()),
+        _ => (new ProductoListView(), Enumerable.Range(1, 30).Select(i => Producto(i, i)).ToList()),
+    };
+
+    [AvaloniaTheory]
+    [MemberData(nameof(VistasConProporcionales))]
+    public void G_A1920_ElPisoNoCambiaNadaRespectoDeSinPiso(string nombre)
+    {
+        // Referencia: la misma vista con el piso en 0 en todas las columnas, o sea, el reparto de
+        // antes del piso (el mínimo vuelve a ser MinWidth/MinColumnWidth).
+        var (vistaRef, datosRef) = VistaYDatos(nombre);
+        var (windowRef, gridRef) = MontarEnShell(vistaRef, 1920, 1080,
+            g => { foreach (var c in g.Columns) DataGridColumnasAutoBehavior.SetPisoProporcional(c, 0); });
+        Cargar(gridRef, datosRef);
+        var sinPiso = Anchos(gridRef);
+        Reportar($"{nombre} 1920 sin piso", windowRef, gridRef);
+        windowRef.Close();
+
+        var (vista, datos) = VistaYDatos(nombre);
+        var (window, grid) = MontarEnShell(vista, 1920, 1080);
+        Cargar(grid, datos);
+        Reportar($"{nombre} 1920 con piso", window, grid);
+
+        Assert.True(Anchos(grid).All(kv => Math.Abs(kv.Value - sinPiso[kv.Key]) < 0.5),
+            $"a 1920 el piso cambió el reparto: sin piso {Describir(sinPiso)} / con piso {Describir(Anchos(grid))}");
+        Assert.True(ScrollHorizontal(grid) is not { IsVisible: true }, "a 1920 todo entra: no tiene que haber scroll horizontal");
+    }
+
+    [AvaloniaFact]
+    public void G_PisoDeclaradoPorColumna_MinWidthMayorGana_YElAttachedLoBaja()
+    {
+        // MinWidth propio MAYOR al piso: manda el MinWidth. Attached más bajo en la otra: manda el
+        // attached (el piso efectivo es el máximo entre el attached y el MinWidth declarado).
+        var (window, grid) = MontarEnShell(new MovimientoHistorialView(), 1366, 768, g =>
+        {
+            Columna(g, "Comentario").MinWidth = 250;
+            DataGridColumnasAutoBehavior.SetPisoProporcional(Columna(g, "Producto"), 100);
+        });
+        Cargar(grid, HistorialReal());
+        Reportar("Historial 1366 con pisos puntuales", window, grid);
+
+        Assert.True(ScrollHorizontal(grid) is { IsVisible: true }, "precondición: desborda");
+        Assert.Equal(250, Columna(grid, "Comentario").ActualWidth, 1);
+        Assert.Equal(100, Columna(grid, "Producto").ActualWidth, 1);
+    }
+
+    [Fact]
+    public void G_LaGrillaExponeCellsWidth_ElAnchoQueUsaLaDecisionEncajaDesborde()
+    {
+        // Si una actualización de Avalonia.Controls.DataGrid renombra el CellsWidth interno, el
+        // behavior vuelve a la aproximación vieja, que oscila en el umbral del piso. Este test
+        // avisa antes de que lo note un usuario.
+        Assert.True(DataGridColumnasAutoBehavior.PuedeLeerCellsWidth,
+            "DataGrid ya no expone el CellsWidth interno: revisar DataGridColumnasAutoBehavior.AnchoDisponible");
+    }
+
+    [AvaloniaFact(Timeout = 60000)]
+    public void G_VentanaQueCruzaElUmbralDelPisoDePixelEnPixel_NoOscilaNiSalta()
+    {
+        // Busca el ancho de ventana en el que el Historial pasa de "encaja" a "desborde" con el
+        // piso, y lo cruza de a un píxel en las dos direcciones. En cada ancho: la grilla queda
+        // quieta (más pasadas de layout no mueven nada), sin reparar sin fin, y ordenar no salta.
+        var (window, grid) = MontarEnShell(new MovimientoHistorialView(), 1366, 768);
+        Cargar(grid, HistorialReal());
+
+        var pasadas = 0;
+        grid.LayoutUpdated += (_, _) => pasadas++;
+
+        double? umbral = null;
+        for (var ancho = 1366.0; ancho <= 1900 && umbral is null; ancho += 8)
+        {
+            window.Width = ancho;
+            Dispatcher.UIThread.RunJobs();
+            if (ScrollHorizontal(grid) is not { IsVisible: true })
+                umbral = ancho;
+        }
+        Assert.True(umbral is not null, "precondición: con la ventana ancha el Historial entra");
+
+        var anchos = Enumerable.Range(-10, 21).Select(d => umbral!.Value + d)
+            .Concat(Enumerable.Range(-10, 21).Select(d => umbral!.Value - d));
+        foreach (var ancho in anchos)
+        {
+            window.Width = ancho;
+            pasadas = 0;
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(pasadas < 30, $"a {ancho}px el layout no se aquieta: {pasadas} pasadas");
+
+            var antes = Anchos(grid);
+            for (var i = 0; i < 3; i++)
+            {
+                grid.InvalidateMeasure();
+                Dispatcher.UIThread.RunJobs();
+            }
+            Assert.True(Anchos(grid).All(kv => Math.Abs(kv.Value - antes[kv.Key]) < 0.5),
+                $"oscila a {ancho}px: {Describir(antes)} / {Describir(Anchos(grid))}");
+            AssertEstrellasEnPiso(grid, $"{ancho}px", "Producto", "Comentario");
+            AssertScrollSiDesborda(grid, $"{ancho}px");
+
+            ClickearHeader(window, grid, "Usuario");
+            Assert.True(Anchos(grid).All(kv => Math.Abs(kv.Value - antes[kv.Key]) < 0.5),
+                $"ordenar a {ancho}px hizo saltar el layout: {Describir(antes)} / {Describir(Anchos(grid))}");
+        }
+    }
+
+    [AvaloniaFact]
+    public void G_A1366_OrdenarYScrollearHorizontal_NoMueveLosAnchos()
+    {
+        var (window, grid) = MontarEnShell(new MovimientoHistorialView(), 1366, 768);
+        Cargar(grid, HistorialReal());
+        var inicial = Anchos(grid);
+
+        var scroll = ScrollHorizontal(grid);
+        Assert.True(scroll is { IsVisible: true }, "precondición: desborda");
+        var primera = grid.ItemsSource!.Cast<object>().First();
+        foreach (var header in new[] { "Producto", "Usuario", "Comentario", "Fecha" })
+        {
+            ClickearHeader(window, grid, header);
+            grid.ScrollIntoView(primera, Columna(grid, "Comentario"));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(scroll!.Value > 0, $"precondición: el scroll horizontal se movió al final (valor {scroll.Value:F1})");
+            grid.ScrollIntoView(primera, Columna(grid, "Fecha"));
+            Dispatcher.UIThread.RunJobs();
+            var ahora = Anchos(grid);
+            Assert.True(ahora.All(kv => Math.Abs(kv.Value - inicial[kv.Key]) < 0.5),
+                $"ordenar por '{header}' y scrollear movió los anchos: {Describir(inicial)} / {Describir(ahora)}");
+        }
+        AssertEstrellasEnPiso(grid, "tras ordenar y scrollear", "Producto", "Comentario");
     }
 
     // ── (f) Rendimiento ────────────────────────────────────────────────────────────────────────
