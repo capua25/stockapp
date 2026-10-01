@@ -10,18 +10,36 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-28-ui-v2-rediseno-total-design.md` (§2, §4.1, §4.4, §5.4, §5.5, §6, §7 fila "1 Shell y acceso", §8, §9). Herramienta: `docs/ui-v2/herramientas.md`. Plan y ledger de la Fase 0: `docs/superpowers/plans/2026-09-28-ui-v2-fase-0-fundaciones.md`, `.superpowers/sdd/2026-09-28-ui-v2-fase-0-fundaciones/progress.md`.
 
-## Preguntas abiertas (respuesta del usuario ANTES de ejecutar)
+## Decisiones del usuario (2026-10-01)
 
-La spec deja estos puntos abiertos o en conflicto. El plan está escrito con la opción marcada como **(plan)**, pero no se ejecuta la task afectada sin la respuesta.
+El usuario resolvió las seis preguntas abiertas del borrador. P1 a P4 confirman la opción que el plan proponía; P5 y P6 la CAMBIAN: la marca de agua del logo se CONSERVA en el Login y la línea "Municipio de Carmelo" se AGREGA bajo la marca. Ninguna task espera una respuesta: las que decían "Depende de: respuesta a P…" ya están escritas con la decisión.
 
-| # | Pregunta | Por qué está abierta | Opción del plan | Tasks afectadas |
-|---|---|---|---|---|
-| P1 | ¿Cómo queda el sidebar de la Fase 1 si el hub de Reportes (Fase 6) y Catálogos (Fase 7) todavía no existen? | §4.1 pide ítems "Reportes" y "Catálogos" únicos, pero §7 pone esas pantallas en las Fases 6 y 7. Un ítem sin pantalla no navega a nada. | **(plan) A — sidebar transitorio:** las 5 secciones de la spec, pero ANÁLISIS lista los 6 reportes y ADMINISTRACIÓN lista Categorías, Proveedores, Unidades de medida, Catálogos de tareas y Maestros de finanzas (más Usuarios y Mantenimiento) hasta que las Fases 6 y 7 los consoliden. B: adelantar a la Fase 1 el hub de Reportes (6 `TarjetaAcceso`, chico) y dejar Catálogos transitorio. C: adelantar ambos. | 6, 10, 11 |
-| P2 | ¿`ReclasificarTareaDialog` entra en la Fase 1 o en la 5? | §7 Fase 1 dice "4 diálogos" y §5.5 "los 4 diálogos `Window`", pero §7 Fase 5 lista "diálogo de reclasificar". Además hospeda `ClasificacionTareaPanelView` (Fase 5): con `ui2` en su raíz los estilos v2 se filtrarían a un panel no migrado. | **(plan) Fase 5**, junto con su panel. La Fase 1 migra los 3 diálogos genéricos (Confirmación, Mensaje, PedirTexto). | 8, 15 |
-| P3 | ¿AccesoLimitado se compara contra mockup en la Fase 1? | La vista hospeda `MantenimientoView` entera (Fase 7). Un mockup de la pantalla completa tendría que copiar el aspecto viejo de Mantenimiento. | **(plan)** en la Fase 1 se migra solo el aviso (como `Alerta` advertencia, `ui2` en su contenedor) con test de UI; la comparación de la pantalla entera va en la Fase 7, cuando Mantenimiento ya es v2. | 14 |
-| P4 | El sidebar de un Administrador no entra en 760 de alto. ¿Barra de scroll visible o no? | 17 ítems + 5 headers + marca + pie miden ~850 con la spec final (~980 con la opción A de P1); el área de navegación disponible es ~620. La spec no dice qué pasa al desbordar. | **(plan)** navegación en `ScrollViewer` con `VerticalScrollBarVisibility="Auto"`, marca arriba y pie abajo fijos. Si la barra auto-oculta de Fluent deja una franja visible en el render, el mockup la replica con la geometría medida (Task 11, Step 6). Alternativa: `Hidden` (scrollea con la rueda, sin barra). | 6, 11 |
-| P5 | ¿Se conserva la marca de agua del logo de Carmelo en el Login? | Aprobada y mergeada el 2026-07-10, pero el patrón de Login aprobado (`patrones-1.html`) no la tiene, y una imagen con opacidad 0.28 escalada no se replica 1:1 entre Skia y Chromium (§6.1). | **(plan)** se quita. Si se conserva: el mockup lleva la misma imagen con `opacity: 0.28`, y casi seguro hace falta un `UmbralAprobado` para esa pantalla. | 7, 12 |
-| P6 | ¿Se agrega la línea "Municipio de Carmelo" bajo la marca (sidebar y Login)? | Los dos mockups de referencia la muestran; el código actual no la tiene y la spec no la menciona. | **(plan)** no se agrega (se conservan los textos reales). | 6, 7, 11, 12 |
+| # | Decisión | Cómo queda en el plan | Tasks |
+|---|---|---|---|
+| P1 | **Sidebar transitorio (opción A).** ANÁLISIS lista los 6 reportes; ADMINISTRACIÓN lista los catálogos actuales (Categorías, Proveedores, Unidades de medida, Catálogos de tareas, Maestros de finanzas) más Usuarios y Mantenimiento, hasta que las Fases 6 y 7 los consoliden. | Sin cambios respecto del borrador. Los VM transitorios se reescriben en las Fases 6 y 7 (ver Riesgos). | 6, 10, 11 |
+| P2 | **`ReclasificarTareaDialog` queda para la Fase 5**, junto con su panel. La Fase 1 migra los 3 diálogos genéricos (Confirmación, Mensaje, PedirTexto). | Sin cambios. | 8, 15 |
+| P3 | **AccesoLimitado: en la Fase 1 solo se migra el aviso.** La comparación de la pantalla completa va en la Fase 7, cuando Mantenimiento ya sea v2. | Sin cambios. | 14 |
+| P4 | **Scroll del sidebar del Administrador con barra `Auto`.** | Sin cambios: `ScrollViewer` con `VerticalScrollBarVisibility="Auto"`, marca arriba y pie abajo fijos; si Fluent deja una franja visible, el mockup la replica (Task 11, Step 6). La alternativa `Hidden` queda descartada. | 6, 11 |
+| P5 | **Se MANTIENE la marca de agua del logo de Carmelo en el Login** (aprobada y mergeada a main el 2026-07-10). Es lo contrario de lo que proponía el borrador. | El mockup del Login (Task 7) la incluye y `LoginView` v2 la conserva (Task 12). Valores reales verificados en `LoginView.axaml`: `Image` de `avares://GestionMunicipal/Assets/carmelo-original.png` (PNG 2804×1448), `Stretch="Uniform"`, centrada, `Opacity` 0.28 por `Style Selector="Image.marca-agua"` (Priority=Style, no LocalValue) y `RenderTransform="scale(0.85)"`, primer hijo del `Grid` (detrás de la card). La comparación de píxeles la EXCLUYE y un test aparte la custodia: ver "Estrategia de comparación de la marca de agua (P5)". | 7, 12, 17 |
+| P6 | **Se AGREGA la línea "Municipio de Carmelo" bajo la marca**, como en los mockups de referencia (`navegacion-aprobada.html`, `patrones-1.html`). | Clase tipográfica nueva `marca-subtitulo` (12/400 texto terciario `#78716C`, igual que `usuario-rol`; Task 5). En el sidebar va bajo "Gestión Municipal" (margen superior 2); en el Login va bajo el título (margen superior 2) y antes de "Ingresá tus credenciales…" (que conserva su margen de 16). Solo en shell y Login: `patrones-1.html` no la muestra en Reset ni en BloqueoLicencia. | 5, 6, 7, 11, 12 |
+
+### Estrategia de comparación de la marca de agua (P5)
+
+El problema. Una imagen de 2804×1448 con `Uniform` en 1280×760 mide 1280×661; con `scale(0.85)` queda de 1088×562, centrada (x 96–1184, y 99–661). Skia y Chromium la remuestrean con filtros distintos y mezclan la opacidad 0.28 con distinta gamma: la diferencia es leve (más de 4 de canal) pero cubre unos 1088×562 px, del orden de 2.400 teselas de 16×16. Es una estimación: la Task 12 Step 6 la mide y la registra en el `progress.md` (con la marca visible, solo como evidencia, sin commitear el resultado).
+
+Lo que se descarta, con la regla de la spec §6.5:
+
+- **Subir el umbral global:** prohibido (regla 1 de "Umbral por pantalla").
+- **`UmbralAprobado` para el Login:** 16 o más teselas exige `MutacionPalidaEnRojo` (regla 3), y un umbral de miles de teselas dejaría pasar M1 a M4 (28 a 262 teselas, tabla de la calibración): la pantalla quedaría ciega a cualquier defecto de color o layout. Además la regla 2 pide que el usuario revise CADA tesela densa, y miles no se revisan.
+
+Lo que se hace (la más estricta que respeta §6.5): **la marca de agua se excluye de AMBOS renders de la comparación de píxeles y se custodia aparte.**
+
+1. Las tres comparaciones del Login (`login`, `login-error`, `login-acceso-limitado`) corren con los valores calibrados (11 teselas, 1.68%), sin `UmbralAprobado`, sobre la pantalla SIN marca de agua en la app y en el mockup: el resto de la pantalla (card, textos, alertas, botones) conserva la sensibilidad de siempre.
+2. Cómo se oculta, sin mover un píxel de layout: en el mockup, `visibility: hidden` sobre `.marca-agua` (parámetro nuevo `ocultarSelectores` de `CapturadorMockup` y `ocultarEnMockup` de `ComparacionVisual`, Task 12 Step 1; falla si el selector no encuentra nada, para que un typo no compare con el logo puesto); en la app, el test pone `IsVisible = false` en `Image#MarcaAgua` antes de renderizar.
+3. `LoginMarcaAguaTests` (Task 12 Step 3) custodia la marca: que existe y es la imagen correcta, que su opacidad efectiva es 0.28 y su escala 0.85, `Stretch` `Uniform`, centrada y DETRÁS de la card, que una captura con y sin marca difiere solo dentro de la región esperada (1088×562 centrada, 2 px de tolerancia) y que esa diferencia no supera lo que permite una opacidad de 0.28 (delta máximo de canal 72) ni es nula. Otro test lee `login.html` y exige que el mockup declare los mismos 0.28 y 0.85, para que app y mockup no diverjan sin que nada lo vea.
+4. El usuario ve la marca con el logo puesto: al aprobar los mockups (Task 7 Step 7), en la página de comparación (el `app.png` y el `mockup.png` salen sin marca; el procedimiento de la Task 12 Step 6 le pide mirar además la captura de la app SIN ocultar) y en la verificación orgánica (Task 17 Step 4).
+
+Riesgo residual, aceptado: la posición exacta de la marca entre Skia y Chromium no se compara píxel a píxel. Lo acotan el test de la región y de la escala, el valor idéntico en el mockup y la revisión visual del usuario; no se compensa con umbral.
 
 ## Decisiones que se confirman al aprobar cada mockup (Tasks 6 a 9)
 
@@ -47,7 +65,7 @@ No bloquean el arranque: son detalles visuales que la spec no fija y que el usua
 - Anchos fijos: sidebar 240; card de formulario máx. 760; card de login 400.
 - Tipografía: marca 15/700 · título de login 20/600 · título de sección 15/600 · cuerpo 14/400 · texto de controles 13 · etiqueta de campo 12/500 · ítem de sidebar 12/500 (activo en acento oscuro) · header de sección del sidebar 11/600 MAYÚSCULAS letter-spacing 0.6 en texto grupo.
 - Sidebar (§4.1): 240, fondo blanco con borde derecho, secciones SIEMPRE visibles (sin acordeones), ítem activo en pastilla acento suave con texto acento oscuro e ícono acento. Cada ítem conserva su gate actual (`Puede*`/`EsAdmin`, AND compuestos incluidos). El header de una sección se oculta si no tiene ítems visibles. La revocación en caliente se mantiene. Importación sigue apagada (`ImportacionHabilitada=false`): el ítem existe pero queda oculto. Pie: avatar con iniciales, nombre y rol, cerrar sesión (con la confirmación actual) y versión.
-- Pantallas fuera del shell (§5.4): card centrada de 400 sobre fondo app, marca, textos reales ("Entrar", "No puedo entrar / resetear Admin"), `Alerta` de error y TODOS los estados actuales, incluido el aviso de "Modo de acceso limitado".
+- Pantallas fuera del shell (§5.4): card centrada de 400 sobre fondo app, marca, textos reales ("Entrar", "No puedo entrar / resetear Admin"), la línea "Municipio de Carmelo" bajo la marca del shell y del Login (P6), la marca de agua del logo en el Login (P5, se conserva), `Alerta` de error y TODOS los estados actuales, incluido el aviso de "Modo de acceso limitado".
 - Diálogos y overlays (§5.5): mismo sistema (tokens, botones, `Alerta`). Los diálogos siguen sin bindings: acceso por `x:Name`. Los overlays se rediseñan visualmente sin cambiar su lógica (§4.5).
 - Textos reales: ningún texto visible cambia salvo los que la spec renombra en el sidebar (§4.1: "Registrar entrada", "Registrar salida", "Documentos") y los títulos de sección.
 - No cambian: `ViewLocator`, `INavigationService`, el wiring de `DataContextChanged`, el seam `ErrorConverter`, la lógica de permisos, los `Window` de diálogo y su acceso por `x:Name`. No se renombran ni se mueven vistas. Los ViewModels quedan intactos salvo lo mínimo: secciones del sidebar y datos del usuario en el pie (§3).
@@ -55,7 +73,7 @@ No bloquean el arranque: son detalles visuales que la spec no fija y que el usua
 - Dentro de una vista v2, todo `TextBlock` lleva una clase tipográfica v2 o sus propiedades tipográficas como valor local desde recursos `V2*`: si no, hereda la tipografía vieja global de `Themes/Typography.axaml`.
 - Componentes v2: `xmlns:v2="using:StockApp.Presentation.Controls.V2"`; tokens `V2*`; variables CSS `--v2-*`. Cada clase `v2-*` de `base.css` replica la geometría de su `ControlTheme`/estilo: si cambia uno, cambia el otro en el mismo commit.
 - Mockups (§6.1): `docs/ui-v2/mockups/<modulo>/<pantalla>.html`, 1280×760, `../_base/tokens.css` + `../_base/base.css`, todo dentro de `<div class="v2-ventana">`, datos fijos idénticos a los del ViewModel del test. Solo colores sólidos, bordes de 1px, radios, una `BoxShadow`, Inter, px enteros. Prohibido: gradientes, blur, transparencias apiladas, transiciones, pseudo-elementos decorativos, `text-shadow`. Se aprueban por módulo, ANTES del XAML.
-- Umbral (§6.5): `CompararConMockup` con los valores calibrados (11 teselas, 1.68%). Uno mayor solo con `UmbralAprobado` registrado tras revisar CADA tesela densa con el usuario; 16 o más exige además `MutacionPalidaEnRojo`. Nunca se sube para tapar un defecto.
+- Umbral (§6.5): `CompararConMockup` con los valores calibrados (11 teselas, 1.68%). Uno mayor solo con `UmbralAprobado` registrado tras revisar CADA tesela densa con el usuario; 16 o más exige además `MutacionPalidaEnRojo`. Nunca se sube para tapar un defecto. La marca de agua del Login no es excepción: se excluye de la comparación y se custodia con su propio test (ver "Estrategia de comparación de la marca de agua (P5)"), no con un umbral.
 - Diferencia de tono aceptada (2026-09-30): el texto de la app sale 7-18% más claro que en Chromium. Lo que se exige idéntico es la geometría.
 - Los comentarios de `.axaml` NO pueden contener `--` (AVLN1001, cascadea a MSB4025).
 - En vistas con `x:DataType`, un binding mal escrito es error de build: compilar con la solución tras cada cambio de XAML.
@@ -137,6 +155,9 @@ No bloquean el arranque: son detalles visuales que la spec no fija y que el usua
 | `src/StockApp.Presentation/Themes/V2/ControlesV2.axaml` | Clases `marca`, `header-seccion-sidebar`, `titulo-login`, `avatar`, `usuario-nombre`, `usuario-rol`, `version`; `Button.ghost.icono`. |
 | `docs/ui-v2/mockups/_base/base.css` | Espejo CSS de todo lo anterior + `.v2-enlace`, `.v2-boton--deshabilitado`. |
 | `src/StockApp.Presentation/ViewModels/ShellMainViewModel.cs` | Secciones v2 (P1) y datos del pie. |
+| `tools/StockApp.UiV2.Herramientas/Mockups/CapturadorMockup.cs`, `tests/StockApp.UiV2.Herramientas.Tests/CapturadorMockupTests.cs` | Parámetro `ocultarSelectores` (marca de agua del Login, P5). |
+| `tests/StockApp.Presentation.VisualTests/Comparacion/ComparacionVisual.cs` | Parámetro `ocultarEnMockup` (P5). |
+| `tests/StockApp.Presentation.VisualTests/Pantallas/Acceso/LoginMarcaAguaTests.cs` | Custodia de la marca de agua del Login: opacidad, escala, región y valores del mockup (P5). |
 | `tests/StockApp.Presentation.Tests/ViewModels/ShellMainViewModelGruposTests.cs` | Títulos y composición de secciones nuevas. |
 | `src/StockApp.Presentation/Views/ShellMainView.axaml` | Sidebar v2. |
 | `src/StockApp.Presentation/Views/LoginView.axaml`, `ResetAdminView.axaml`, `BloqueoLicenciaView.axaml`, `AccesoLimitadoView.axaml` | XAML v2 (code-behind sin cambios). |
@@ -857,9 +878,9 @@ git commit -m "fix(ui-v2): el breadcrumb baja de línea en vez de recortar un no
 - Consumes: tokens `V2AltoItemSidebar`, `V2RadioControl`, `V2FuenteItemSidebar*`, `V2FuenteHeaderSeccionSidebar*`, `V2FuenteMarca*`, `V2FuenteTituloLogin*`, `V2FuentePieConteo*`, brushes `V2*`; helpers `MontajeV2` (`Montar`, `Buscar`, `Parte`, `ColorDe`, `Hex`, `Clic`) y `ComandoContador` (Fase 0).
 - Produces:
   - `public class ItemSidebar : Button` en `StockApp.Presentation.Controls.V2`, `StyleKeyOverride => typeof(ItemSidebar)`, con `StyledProperty<string?> Icono`, `StyledProperty<string?> Titulo`, `StyledProperty<bool> EstaActivo` (pseudoclase `:activo`). Partes: `Border#PART_Fondo`, `Icon#PART_Icono`, `TextBlock#PART_Titulo`.
-  - Clases de `TextBlock` bajo `.ui2`: `marca` (15/700 primario), `header-seccion-sidebar` (11/600, `LetterSpacing` 0.6, texto grupo), `titulo-login` (20/600 primario), `avatar` (11/600 etiqueta), `usuario-nombre` (12/500 primario), `usuario-rol` (12/400 terciario), `version` (12/400 texto grupo).
+  - Clases de `TextBlock` bajo `.ui2`: `marca` (15/700 primario), `marca-subtitulo` (12/400 texto terciario, P6), `header-seccion-sidebar` (11/600, `LetterSpacing` 0.6, texto grupo), `titulo-login` (20/600 primario), `avatar` (11/600 etiqueta), `usuario-nombre` (12/500 primario), `usuario-rol` (12/400 terciario), `version` (12/400 texto grupo).
   - Estilo `.ui2 Button.ghost.icono`: 32×32, padding 0, contenido centrado.
-  - CSS: `.v2-sidebar`, `.v2-sidebar-nav`, `.v2-marca`, `.v2-header-seccion-sidebar`, `.v2-item-sidebar`, `.v2-item-sidebar--activo`, `.v2-sidebar-pie`, `.v2-avatar`, `.v2-usuario`, `.v2-usuario-nombre`, `.v2-usuario-rol`, `.v2-version`, `.v2-titulo-login`, `.v2-enlace`, `.v2-boton--icono`, `.v2-boton--deshabilitado`.
+  - CSS: `.v2-sidebar`, `.v2-sidebar-nav`, `.v2-marca`, `.v2-marca-subtitulo`, `.v2-header-seccion-sidebar`, `.v2-item-sidebar`, `.v2-item-sidebar--activo`, `.v2-sidebar-pie`, `.v2-avatar`, `.v2-usuario`, `.v2-usuario-nombre`, `.v2-usuario-rol`, `.v2-version`, `.v2-titulo-login`, `.v2-enlace`, `.v2-boton--icono`, `.v2-boton--deshabilitado`.
 
 - [ ] **Step 1: Escribir los tests (rojo)**
 
@@ -979,6 +1000,7 @@ public class TipografiaShellV2Tests
 {
     [AvaloniaTheory]
     [InlineData("marca", 15, 700, "#1C1917")]
+    [InlineData("marca-subtitulo", 12, 400, "#78716C")]
     [InlineData("header-seccion-sidebar", 11, 600, "#A8A29E")]
     [InlineData("titulo-login", 20, 600, "#1C1917")]
     [InlineData("avatar", 11, 600, "#44403C")]
@@ -1180,6 +1202,12 @@ Debajo del estilo `.ui2 TextBlock.pie-conteo`:
         <Setter Property="FontWeight" Value="{DynamicResource V2FuenteMarcaPeso}" />
         <Setter Property="Foreground" Value="{DynamicResource V2TextoPrimarioBrush}" />
     </Style>
+    <!-- Línea "Municipio de Carmelo" bajo la marca (P6): mismo tamaño, peso y color que usuario-rol. -->
+    <Style Selector=".ui2 TextBlock.marca-subtitulo">
+        <Setter Property="FontSize" Value="{DynamicResource V2FuentePieConteoTamano}" />
+        <Setter Property="FontWeight" Value="{DynamicResource V2FuentePieConteoPeso}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoTerciarioBrush}" />
+    </Style>
     <Style Selector=".ui2 TextBlock.header-seccion-sidebar">
         <Setter Property="FontSize" Value="{DynamicResource V2FuenteHeaderSeccionSidebarTamano}" />
         <Setter Property="FontWeight" Value="{DynamicResource V2FuenteHeaderSeccionSidebarPeso}" />
@@ -1240,6 +1268,7 @@ Agregar al final:
 
 /* Tipografía del shell y del acceso (ControlesV2.axaml, TextBlock.marca, etc.) */
 .v2-marca { font-size: var(--v2-fuente-marca-tamano); line-height: var(--v2-fuente-marca-alto-linea); font-weight: var(--v2-fuente-marca-peso); color: var(--v2-color-texto-primario); }
+.v2-marca-subtitulo { font-size: var(--v2-fuente-pie-conteo-tamano); line-height: var(--v2-fuente-pie-conteo-alto-linea); font-weight: var(--v2-fuente-pie-conteo-peso); color: var(--v2-color-texto-terciario); }
 .v2-titulo-login { font-size: var(--v2-fuente-titulo-login-tamano); line-height: var(--v2-fuente-titulo-login-alto-linea); font-weight: var(--v2-fuente-titulo-login-peso); color: var(--v2-color-texto-primario); }
 .v2-header-seccion-sidebar {
   font-size: var(--v2-fuente-header-seccion-sidebar-tamano); line-height: var(--v2-fuente-header-seccion-sidebar-alto-linea);
@@ -1257,7 +1286,8 @@ Agregar al final:
   display: flex; flex-direction: column; padding: 16px 12px;
   background: var(--v2-color-superficie); border-right: 1px solid var(--v2-color-borde);
 }
-.v2-sidebar > .v2-marca { margin: 4px 8px 12px; }
+.v2-sidebar > .v2-marca { margin: 4px 8px 0; }
+.v2-sidebar > .v2-marca-subtitulo { margin: 2px 8px 12px; }
 .v2-sidebar-nav { flex: 1 1 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 .v2-sidebar-nav > .v2-header-seccion-sidebar { margin: 12px 8px 4px; }
 /* ItemSidebar (Controls/V2/ItemSidebar): alto 32, radio 8, padding 0 12, ícono 16 + 8. */
@@ -1287,7 +1317,7 @@ Verificar que todas las variables usadas existen en `tokens.css` (`grep -o -- '-
 - [ ] **Step 5: Verde**
 
 Run: `dotnet build StockApp.sln` y `dotnet test tests/StockApp.Presentation.UiTests/StockApp.Presentation.UiTests.csproj --filter "FullyQualifiedName~V2"`
-Expected: PASS (los 6 de `ItemSidebarTests`, los 10 de `TipografiaShellV2Tests` y el resto de `V2/`). Luego `dotnet test tests/StockApp.Presentation.VisualTests/StockApp.Presentation.VisualTests.csproj`: PASS (el catálogo no cambió).
+Expected: PASS (los 6 de `ItemSidebarTests`, los 11 de `TipografiaShellV2Tests` y el resto de `V2/`). Luego `dotnet test tests/StockApp.Presentation.VisualTests/StockApp.Presentation.VisualTests.csproj`: PASS (el catálogo no cambió).
 
 - [ ] **Step 6: Mutación quitando**
 
@@ -1332,7 +1362,7 @@ Datos fijos que comparten mockups y tests (las clases `Datos*` del Bloque C usan
 
 ### Task 6: Mockups del shell (sidebar de Administrador y de Operador con permisos mixtos)
 
-**Depende de:** respuesta a P1 (composición de ANÁLISIS y ADMINISTRACIÓN), P4 (scroll) y P6 (línea "Municipio de Carmelo"). Escrito con las opciones (plan).
+**Decisiones aplicadas:** P1 (sidebar transitorio: composición de ANÁLISIS y ADMINISTRACIÓN), P4 (scroll `Auto`) y P6 (línea "Municipio de Carmelo" bajo la marca).
 
 **Files:**
 - Create: `docs/ui-v2/mockups/shell/sidebar-admin.html`
@@ -1354,12 +1384,13 @@ Datos fijos que comparten mockups y tests (las clases `Datos*` del Bloque C usan
 <link rel="stylesheet" href="../_base/base.css">
 </head>
 <body>
-<!-- Datos: DatosShell.Admin() (Task 11). Sidebar transitorio de la opción A de P1: ANÁLISIS y
+<!-- Datos: DatosShell.Admin() (Task 11). Sidebar transitorio (P1, decidido): ANÁLISIS y
      ADMINISTRACIÓN listan los ítems actuales hasta las Fases 6 y 7. El Administrador no entra en
      760: la navegación se corta abajo (ScrollViewer, P4). Contenido vacío: CurrentContent = null. -->
 <div class="v2-ventana">
   <aside class="v2-sidebar">
     <div class="v2-marca">Gestión Municipal</div>
+    <div class="v2-marca-subtitulo">Municipio de Carmelo</div>
     <nav class="v2-sidebar-nav">
       <div class="v2-item-sidebar">{{mdi-home}}<span>Inicio</span></div>
       <div class="v2-header-seccion-sidebar">INVENTARIO</div>
@@ -1427,6 +1458,7 @@ Mismo `<head>` y estructura. Solo lo que el Operador mixto ve (Ingreso por factu
 <div class="v2-ventana">
   <aside class="v2-sidebar">
     <div class="v2-marca">Gestión Municipal</div>
+    <div class="v2-marca-subtitulo">Municipio de Carmelo</div>
     <nav class="v2-sidebar-nav">
       <div class="v2-item-sidebar">{{mdi-home}}<span>Inicio</span></div>
       <div class="v2-header-seccion-sidebar">INVENTARIO</div>
@@ -1505,7 +1537,7 @@ Si la aprobación cambió `base.css` o un componente, sus archivos y tests van e
 
 ### Task 7: Mockups de las pantallas de acceso (Login, Reset, BloqueoLicencia)
 
-**Depende de:** respuesta a P5 (marca de agua) y P6. Escrito con las opciones (plan). AccesoLimitado no tiene mockup en esta fase (P3).
+**Decisiones aplicadas:** P5 (la marca de agua del logo SE CONSERVA: los tres mockups del Login la llevan, `Reset` y `BloqueoLicencia` no, como en la app) y P6 (línea "Municipio de Carmelo" bajo el título del Login). AccesoLimitado no tiene mockup en esta fase (P3).
 
 **Files:**
 - Create: `docs/ui-v2/mockups/acceso/login.html`
@@ -1515,7 +1547,7 @@ Si la aprobación cambió `base.css` o un componente, sus archivos y tests van e
 - Create: `docs/ui-v2/mockups/acceso/bloqueo-licencia.html`
 
 **Interfaces:**
-- Consumes: `base.css` (Task 5: `.v2-titulo-login`, `.v2-enlace`, `.v2-version`, `.v2-boton--deshabilitado`; Fase 0: `.v2-tarjeta`, `.v2-campo`, `.v2-input`, `.v2-alerta`, `.v2-boton`).
+- Consumes: `base.css` (Task 5: `.v2-titulo-login`, `.v2-marca-subtitulo`, `.v2-enlace`, `.v2-version`, `.v2-boton--deshabilitado`; Fase 0: `.v2-tarjeta`, `.v2-campo`, `.v2-input`, `.v2-alerta`, `.v2-boton`).
 - Produces: pantallas `acceso-login`, `acceso-login-error`, `acceso-login-acceso-limitado`, `acceso-reset`, `acceso-bloqueo-licencia` para `AccesoComparacionTests` (Tasks 12 y 13). Geometría común: card de 400 (`--v2-ancho-card-login`) con padding 32, centrada; separación de 16 entre bloques, 20 antes del botón principal del Login y 12 antes de un enlace.
 
 - [ ] **Step 1: `login.html`** (estado inicial: campos vacíos, "Entrar" deshabilitado como en la app)
@@ -1532,8 +1564,14 @@ Si la aprobación cambió `base.css` o un componente, sus archivos y tests van e
   /* Layout propio de las pantallas fuera del shell: el mismo que LoginView.axaml (card de 400
      centrada, padding 32, bloques separados por Margin). */
   .v2-ventana { display: flex; align-items: center; justify-content: center; }
-  .tarjeta-acceso { width: var(--v2-ancho-card-login); padding: 32px; display: flex; flex-direction: column; }
+  .tarjeta-acceso { position: relative; z-index: 1; width: var(--v2-ancho-card-login); padding: 32px; display: flex; flex-direction: column; }
+  /* Marca de agua del logo (P5): el mismo logo, escala y opacidad que LoginView.axaml
+     (Image.marca-agua: Stretch Uniform, centrada, Opacity 0.28, scale(0.85)), detrás de la card.
+     La comparación de píxeles la oculta con visibility:hidden (ocultarEnMockup, Task 12);
+     LoginMarcaAguaTests exige que estos valores sigan siendo 0.28 y 0.85. */
+  .marca-agua { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0.28; transform: scale(0.85); }
   .centro { text-align: center; }
+  .mt-2 { margin-top: 2px; }
   .mt-12 { margin-top: 12px; }
   .mt-16 { margin-top: 16px; }
   .mt-20 { margin-top: 20px; }
@@ -1544,8 +1582,10 @@ Si la aprobación cambió `base.css` o un componente, sus archivos y tests van e
 <body>
 <!-- Datos: DatosAcceso.Login() (Task 12). -->
 <div class="v2-ventana">
+  <img class="marca-agua" src="../../../../src/StockApp.Presentation/Assets/carmelo-original.png" alt="">
   <div class="v2-tarjeta tarjeta-acceso">
     <div class="v2-titulo-login centro">Gestión Municipal</div>
+    <div class="v2-marca-subtitulo centro mt-2">Municipio de Carmelo</div>
     <div class="v2-texto-secundario centro mt-16">Ingresá tus credenciales para continuar.</div>
     <div class="v2-campo mt-16">
       <div class="v2-campo-etiqueta"><span>Usuario</span></div>
@@ -1566,14 +1606,16 @@ Si la aprobación cambió `base.css` o un componente, sus archivos y tests van e
 
 - [ ] **Step 2: `login-error.html`**
 
-Igual a `login.html` (mismo `<head>` y `<style>`; `<title>Acceso: Login con error (UI v2)</title>`), con dos diferencias dentro de la card: después del texto secundario, la alerta; y el usuario tipeado.
+Igual a `login.html` (mismo `<head>` y `<style>`, incluida la marca de agua y la línea "Municipio de Carmelo"; `<title>Acceso: Login con error (UI v2)</title>`), con dos diferencias dentro de la card: después del texto secundario, la alerta; y el usuario tipeado.
 
 ```html
 <!-- Datos: DatosAcceso.Login(usuario: "mperez", error: "Usuario o contraseña incorrectos.") (Task 12).
      La contraseña queda vacía a propósito: el glifo de PasswordChar no está en los mockups. -->
 <div class="v2-ventana">
+  <img class="marca-agua" src="../../../../src/StockApp.Presentation/Assets/carmelo-original.png" alt="">
   <div class="v2-tarjeta tarjeta-acceso">
     <div class="v2-titulo-login centro">Gestión Municipal</div>
+    <div class="v2-marca-subtitulo centro mt-2">Municipio de Carmelo</div>
     <div class="v2-texto-secundario centro mt-16">Ingresá tus credenciales para continuar.</div>
     <div class="v2-alerta v2-alerta--error mt-16">Usuario o contraseña incorrectos.</div>
     <div class="v2-campo mt-16">
@@ -1593,13 +1635,15 @@ Igual a `login.html` (mismo `<head>` y `<style>`; `<title>Acceso: Login con erro
 
 - [ ] **Step 3: `login-acceso-limitado.html`**
 
-Igual a `login.html` (`<title>Acceso: Login en modo de acceso limitado (UI v2)</title>`), con la alerta de advertencia después del texto secundario:
+Igual a `login.html` (con la marca de agua y la línea "Municipio de Carmelo"; `<title>Acceso: Login en modo de acceso limitado (UI v2)</title>`), con la alerta de advertencia después del texto secundario:
 
 ```html
 <!-- Datos: DatosAcceso.Login(soloAccesoLimitado: true) (Task 12). -->
 <div class="v2-ventana">
+  <img class="marca-agua" src="../../../../src/StockApp.Presentation/Assets/carmelo-original.png" alt="">
   <div class="v2-tarjeta tarjeta-acceso">
     <div class="v2-titulo-login centro">Gestión Municipal</div>
+    <div class="v2-marca-subtitulo centro mt-2">Municipio de Carmelo</div>
     <div class="v2-texto-secundario centro mt-16">Ingresá tus credenciales para continuar.</div>
     <div class="v2-alerta v2-alerta--advertencia mt-16">Modo de acceso limitado: la licencia está vencida. Solo vas a poder descargar backups.</div>
     <div class="v2-campo mt-16">
@@ -1733,11 +1777,11 @@ done
 dotnet test tests/StockApp.UiV2.Herramientas.Tests/StockApp.UiV2.Herramientas.Tests.csproj --filter "FullyQualifiedName~MockupsDelRepo_RespetanLaConvencion"
 ```
 
-Expected: cinco PNG sin error; convención en verde. Chequear a ojo: card centrada, ningún texto real cambiado (comparar contra los `.axaml` actuales de `LoginView`, `ResetAdminView` y `BloqueoLicenciaView`).
+Expected: cinco PNG sin error; convención en verde. Chequear a ojo: card centrada, el logo detrás de la card (se ve alrededor y NO sobre la card), la línea "Municipio de Carmelo" bajo el título, ningún texto real cambiado (comparar contra los `.axaml` actuales de `LoginView`, `ResetAdminView` y `BloqueoLicenciaView`).
 
 - [ ] **Step 7: GATE — aprobación del usuario**
 
-PARAR. Presentar los cinco mockups con las decisiones de "Login y pantallas fuera del shell" de la lista de arriba (enlaces en vez de botones ghost, código en Inter, éxito del Reset como `Alerta` info, "Entrar" deshabilitado) y la respuesta a P5/P6. No seguir sin "aprobado". Registrar en el `progress.md`: `Mockups acceso: aprobados por <quién> <fecha>; cambios: …`.
+PARAR. Presentar los cinco mockups con las decisiones de "Login y pantallas fuera del shell" de la lista de arriba (enlaces en vez de botones ghost, código en Inter, éxito del Reset como `Alerta` info, "Entrar" deshabilitado) y las decisiones P5/P6 ya tomadas (marca de agua conservada, con el logo visible en los tres mockups del Login, y la línea "Municipio de Carmelo"): pedirle que confirme que el logo se ve como en la app actual. Para la comparación de píxeles el logo se oculta (Task 12), pero ESTOS mockups lo llevan puesto: es lo que el usuario aprueba. No seguir sin "aprobado". Registrar en el `progress.md`: `Mockups acceso: aprobados por <quién> <fecha>; cambios: …`.
 
 - [ ] **Step 8: Commit**
 
@@ -1748,7 +1792,7 @@ git commit -m "docs(ui-v2): mockups aprobados de Login, Reset y activación de l
 
 ### Task 8: Mockups de los diálogos (Confirmación, Mensaje, PedirTexto)
 
-**Depende de:** P2 (con la opción del plan, `ReclasificarTareaDialog` queda para la Fase 5).
+**Decisión aplicada:** P2 (`ReclasificarTareaDialog` queda para la Fase 5).
 
 **Files:**
 - Create: `docs/ui-v2/mockups/dialogos/confirmacion.html`
@@ -1857,7 +1901,7 @@ Expected: tres PNG sin error.
 
 - [ ] **Step 5: GATE — aprobación del usuario**
 
-PARAR. Presentar los tres mockups con las decisiones de "Diálogos" y la respuesta a P2. Aclarar que la barra de título del sistema no forma parte de la comparación. Registrar en `progress.md`: `Mockups diálogos: aprobados por <quién> <fecha>; cambios: …`.
+PARAR. Presentar los tres mockups con las decisiones de "Diálogos" y la decisión P2 (Reclasificar queda para la Fase 5). Aclarar que la barra de título del sistema no forma parte de la comparación. Registrar en `progress.md`: `Mockups diálogos: aprobados por <quién> <fecha>; cambios: …`.
 
 - [ ] **Step 6: Commit**
 
@@ -2025,7 +2069,7 @@ Ciclo de cada task (spec §7): test de comparación y tests de UI en rojo → XA
 
 ### Task 10: `ShellMainViewModel`: secciones v2 y datos del usuario para el pie
 
-**Depende de:** P1 (el plan implementa la opción A, transitoria).
+**Decisión aplicada:** P1 (sidebar transitorio).
 
 **Files:**
 - Modify: `src/StockApp.Presentation/ViewModels/ShellMainViewModel.cs` (constructor: lista `Grupos`; propiedades nuevas)
@@ -2138,7 +2182,7 @@ En `ShellMainViewModelGruposTests.cs`:
             vm.Grupos.Select(g => g.Titulo));
     }
 
-    // Spec §4.1 (orden y textos) con la opción A de P1: ANÁLISIS y ADMINISTRACIÓN transitorias
+    // Spec §4.1 (orden y textos) con P1 (sidebar transitorio): ANÁLISIS y ADMINISTRACIÓN transitorias
     // hasta el hub de Reportes (Fase 6) y Catálogos (Fase 7).
     [Theory]
     [InlineData("INVENTARIO", "Productos|Registrar entrada|Registrar salida|Ingreso por factura|Historial de movimientos")]
@@ -2210,7 +2254,7 @@ Expected: FAIL (títulos viejos; tras compilar el Step 1 en rojo de compilación
 En `ShellMainViewModel`, reemplazar la inicialización de `Grupos` en el constructor por:
 
 ```csharp
-        // Secciones v2 (spec §4.1, Fase 1). Opción A de P1: ANÁLISIS y ADMINISTRACIÓN listan los
+        // Secciones v2 (spec §4.1, Fase 1). P1 (sidebar transitorio): ANÁLISIS y ADMINISTRACIÓN listan los
         // ítems actuales hasta que el hub de Reportes (Fase 6) y Catálogos (Fase 7) los consoliden.
         // Títulos en mayúsculas literales: Avalonia no tiene text-transform. Cada ítem conserva su
         // gate (Seccion, Comando y evaluador sin cambios).
@@ -2317,7 +2361,7 @@ git commit -m "feat(ui-v2): secciones del sidebar v2 y datos del usuario para el
 
 ### Task 11: `ShellMainView` v2 (sidebar) con su comparación
 
-**Depende de:** Tasks 5, 6 (mockups aprobados) y 10. P4.
+**Depende de:** Tasks 5, 6 (mockups aprobados) y 10. **Decisiones aplicadas:** P4 (barra `Auto`) y P6 (línea "Municipio de Carmelo").
 
 **Files:**
 - Modify: `src/StockApp.Presentation/Views/ShellMainView.axaml` (reescritura completa; el code-behind no cambia)
@@ -2519,6 +2563,19 @@ public class ShellMainViewV2Tests
     }
 
     [AvaloniaFact]
+    public void Marca_LlevaLaLineaMunicipioDeCarmelo()
+    {
+        // P6: la línea va bajo "Gestión Municipal" y con la clase tipográfica del subtítulo.
+        var (ventana, _, _) = Montar(Admin, []);
+
+        var textos = ventana.GetVisualDescendants().OfType<TextBlock>().ToList();
+        var marca = textos.Single(t => t.Classes.Contains("marca"));
+        var subtitulo = Assert.Single(textos, t => t.Classes.Contains("marca-subtitulo"));
+        Assert.Equal("Municipio de Carmelo", subtitulo.Text);
+        Assert.True(subtitulo.TranslatePoint(default, ventana)!.Value.Y > marca.TranslatePoint(default, ventana)!.Value.Y);
+    }
+
+    [AvaloniaFact]
     public void CerrarSesion_UsaElComandoConConfirmacionDelVm()
     {
         var (ventana, vm, _) = Montar(Admin, []);
@@ -2594,7 +2651,12 @@ Reemplazar `src/StockApp.Presentation/Views/ShellMainView.axaml` entero por:
                 Padding="12,16">
             <DockPanel>
 
-                <TextBlock DockPanel.Dock="Top" Classes="marca" Text="Gestión Municipal" Margin="8,4,8,12" />
+                <!-- Marca + línea "Municipio de Carmelo" (P6). Espejo CSS: .v2-marca (margin 4 8 0) y
+                     .v2-marca-subtitulo (margin 2 8 12). -->
+                <StackPanel DockPanel.Dock="Top" Margin="8,4,8,12">
+                    <TextBlock Classes="marca" Text="Gestión Municipal" />
+                    <TextBlock Classes="marca-subtitulo" Text="Municipio de Carmelo" Margin="0,2,0,0" />
+                </StackPanel>
 
                 <!-- DockPanel: el primer Bottom queda más abajo. Versión al pie, el usuario arriba de ella. -->
                 <TextBlock DockPanel.Dock="Bottom" Classes="version" Text="{Binding VersionTexto}" Margin="4,4,4,0" />
@@ -2633,7 +2695,7 @@ Reemplazar `src/StockApp.Presentation/Views/ShellMainView.axaml` entero por:
                 </Border>
 
                 <!-- Secciones siempre visibles, sin acordeones (§4.1): EstaExpandido no se usa. Un
-                     Administrador no entra en 760 de alto: la navegación scrollea (P4). -->
+                     Administrador no entra en 760 de alto: la navegación scrollea (P4, barra Auto). -->
                 <ScrollViewer x:Name="Navegacion"
                               VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled">
@@ -2691,8 +2753,7 @@ Expected: las dos pantallas APROBADAS (11 teselas o menos, 1.68% o menos) y sin 
 - [ ] **Step 6: P4 — la barra de scroll del Administrador**
 
 En `artifacts/ui-v2/comparacion/shell-sidebar-admin/app.png`, mirar el borde derecho de la navegación (x ≈ 220-228). Si la barra auto-oculta de Fluent dibuja algo y el mockup no, la comparación lo marca como teselas densas en esa franja:
-- Con P4 = "Auto" (plan): medir la franja en el PNG (ancho, color, posición, alto del pulgar) y replicarla en `sidebar-admin.html` con un `<div>` absoluto de color sólido dentro de `.v2-sidebar-nav` (colores sólidos y px enteros, §6.1). Volver a presentar ESE cambio al usuario antes de commitear (es un cambio del mockup aprobado).
-- Con P4 = "Hidden": cambiar `VerticalScrollBarVisibility="Hidden"` en el XAML (scrollea con la rueda, sin barra) y re-correr.
+- P4 = "Auto" (decidido): medir la franja en el PNG (ancho, color, posición, alto del pulgar) y replicarla en `sidebar-admin.html` con un `<div>` absoluto de color sólido dentro de `.v2-sidebar-nav` (colores sólidos y px enteros, §6.1). Volver a presentar ESE cambio al usuario antes de commitear (es un cambio del mockup aprobado).
 Si no hay diferencia en esa franja, no hacer nada y anotarlo en el reporte.
 
 - [ ] **Step 7: Mutación quitando**
@@ -2704,6 +2765,8 @@ cp src/StockApp.Presentation/Views/ShellMainView.axaml "$SCRATCH/ShellMainView.a
 (a) Quitar `IsVisible="{Binding EsVisible}"` del `StackPanel` de la sección → rojo en `OperadorMixto_SeccionesSinItemsVisibles_OcultanSuHeader`, `RevocacionEnCaliente_…` y en `SidebarOperadorMixto_IgualAlMockup` (aparecen headers vacíos). Restaurar con `cp`.
 (b) Quitar `EstaActivo="{Binding EstaActivo}"` del `ItemSidebar` de la plantilla de ítems → rojo en `Navegar_MarcaActivoSoloElItemDeLaSeccion` y en las dos comparaciones (sin pastilla). Restaurar con `cp`.
 (c) Mover `Classes="ui2"` del `Border` del sidebar al `Grid` raíz (es QUITARLO del Border y ponerlo donde la convención lo prohíbe: la mutación reproduce el bug de fuga, no agrega un efecto destructivo) → rojo en `ContenidoHospedado_NoTieneAncestroUi2` y `Ui2_VaEnElSidebarYNoEnLaRaiz`. Restaurar con `cp`.
+
+(d) Quitar el `TextBlock Classes="marca-subtitulo"` → rojo en `Marca_LlevaLaLineaMunicipioDeCarmelo` y en las dos comparaciones (falta la línea del mockup). Restaurar con `cp`.
 
 Si una mutación de XAML no da rojo: `dotnet build-server shutdown` + `rm -rf src/StockApp.Presentation/obj src/StockApp.Presentation/bin` y los de los proyectos de test, y repetir.
 
@@ -2718,20 +2781,88 @@ Si el Step 6 cambió el mockup, agregar `docs/ui-v2/mockups/shell/sidebar-admin.
 
 ### Task 12: `LoginView` v2 con sus tres estados comparados
 
-**Depende de:** Tasks 1, 5, 7 (mockups aprobados). P5, P6.
+**Depende de:** Tasks 1, 5, 7 (mockups aprobados). **Decisiones aplicadas:** P5 (se conserva la marca de agua; se excluye de la comparación de píxeles y se custodia aparte: ver "Estrategia de comparación de la marca de agua (P5)") y P6 (línea "Municipio de Carmelo" bajo el título).
 
 **Files:**
 - Modify: `src/StockApp.Presentation/Views/LoginView.axaml` (reescritura; `LoginView.axaml.cs` NO cambia: conserva `OnCampoKeyDown`)
 - Create: `tests/StockApp.Presentation.VisualTests/Pantallas/Acceso/DatosAcceso.cs`
 - Create: `tests/StockApp.Presentation.VisualTests/Pantallas/Acceso/AccesoComparacionTests.cs`
 - Create: `tests/StockApp.Presentation.UiTests/V2/LoginViewV2Tests.cs`
+- Create: `tests/StockApp.Presentation.VisualTests/Pantallas/Acceso/LoginMarcaAguaTests.cs`
+- Modify: `tools/StockApp.UiV2.Herramientas/Mockups/CapturadorMockup.cs` y `tests/StockApp.UiV2.Herramientas.Tests/CapturadorMockupTests.cs` (`ocultarSelectores`)
+- Modify: `tests/StockApp.Presentation.VisualTests/Comparacion/ComparacionVisual.cs` (`ocultarEnMockup`)
 - Modify: `tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs`
 
 **Interfaces:**
 - Consumes: `LoginViewModel(IAuthService, ShellViewModel, IInfoApp, bool soloAccesoLimitado = false)` con `NombreUsuario`, `Contrasena`, `MensajeError`, `SoloAccesoLimitado`, `VersionTexto`, `EntrarCommand`, `ResetearAdminCommand`; `ShellViewModel(IAuthService, ILicenciaService, IResetAdminService, INavigationService, CoordinadorActualizacion, IUiDispatcher, IInfoApp, Func<MantenimientoViewModel>? = null)`; `TarjetaContenido`, `Alerta`, `CampoFormulario`, `V2TemaEnlace`; mockups `acceso/login*.html`.
-- Produces: `DatosAcceso.Login(bool soloAccesoLimitado = false, string? usuario = null, string? error = null)` (y en la Task 13, `Reset()` y `BloqueoLicencia()`); partes nombradas del Login `AvisoAccesoLimitado`, `AlertaError` (Alerta), `CampoUsuario`, `CampoContrasena` (TextBox), `BotonEntrar`, `EnlaceReset` (Button). Lista `GuardianDePatronTests.VistasMigradasAV2`.
+- Produces: `DatosAcceso.Login(bool soloAccesoLimitado = false, string? usuario = null, string? error = null)` (y en la Task 13, `Reset()` y `BloqueoLicencia()`); partes nombradas del Login `MarcaAgua` (Image), `AvisoAccesoLimitado`, `AlertaError` (Alerta), `CampoUsuario`, `CampoContrasena` (TextBox), `BotonEntrar`, `EnlaceReset` (Button). `CapturadorMockup.CapturarAsync(rutaHtml, rutaPng, IReadOnlyCollection<string>? ocultarSelectores = null)` y `ComparacionVisual.CompararConMockup(..., IReadOnlyCollection<string>? ocultarEnMockup = null)`. Lista `GuardianDePatronTests.VistasMigradasAV2`.
 
-- [ ] **Step 1: Datos fijos**
+- [ ] **Step 1: Herramienta: ocultar elementos del mockup en la comparación (P5)**
+
+La marca de agua se excluye de ambos renders (ver "Estrategia de comparación de la marca de agua (P5)"). El mockup la oculta con `visibility: hidden` (el layout no se mueve) y la herramienta falla si el selector no coincide con nada.
+
+En `tests/StockApp.UiV2.Herramientas.Tests/CapturadorMockupTests.cs`, agregar (rojo primero; reutilizan el helper `Html`):
+
+```csharp
+    [Fact]
+    public async Task OcultarSelectores_ElElementoNoSeDibujaYElRestoQuedaDondeEstaba()
+    {
+        var html = Html(
+            "<div class=\"oculto\"></div><div class=\"visible\"></div>",
+            ".oculto{position:absolute;left:100px;top:100px;width:200px;height:100px;background:var(--v2-color-acento)}"
+            + ".visible{position:absolute;left:400px;top:100px;width:200px;height:100px;background:var(--v2-color-acento)}");
+        var png = Path.Combine(_carpeta, "oculto.png");
+
+        await CapturadorMockup.CapturarAsync(html, png, [".oculto"]);
+
+        using var imagen = SKBitmap.Decode(png);
+        Assert.Equal(SKColor.Parse("#F7F7F5"), imagen.GetPixel(150, 150));
+        Assert.Equal(SKColor.Parse("#1D4ED8"), imagen.GetPixel(450, 150));
+    }
+
+    [Fact]
+    public async Task OcultarSelectores_SinCoincidencias_Lanza()
+    {
+        var html = Html("<p>Nada que ocultar</p>");
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => CapturadorMockup.CapturarAsync(html, Path.Combine(_carpeta, "x.png"), [".marca-agua"]));
+
+        Assert.Contains(".marca-agua", ex.Message);
+    }
+```
+
+Run: `dotnet test tests/StockApp.UiV2.Herramientas.Tests/StockApp.UiV2.Herramientas.Tests.csproj --filter "FullyQualifiedName~CapturadorMockupTests"`
+Expected: FAIL (compilación: `CapturarAsync` no recibe el tercer parámetro).
+
+En `tools/StockApp.UiV2.Herramientas/Mockups/CapturadorMockup.cs`: la firma pasa a `CapturarAsync(string rutaHtml, string rutaPng, IReadOnlyCollection<string>? ocultarSelectores = null)` (el `Cli.cs` la llama con dos argumentos y no cambia) y, entre el chequeo de desbordes y la captura, se agrega:
+
+```csharp
+            if (ocultarSelectores is { Count: > 0 })
+            {
+                foreach (var selector in ocultarSelectores)
+                {
+                    // Un selector con typo compararía contra el mockup CON el elemento: falla fuerte.
+                    if (await pagina.Locator(selector).CountAsync() == 0)
+                    {
+                        throw new InvalidOperationException(
+                            $"{Path.GetFileName(rutaHtml)}: el selector a ocultar '{selector}' no coincide con ningún elemento.");
+                    }
+                }
+
+                await pagina.AddStyleTagAsync(new PageAddStyleTagOptions
+                {
+                    Content = string.Join("\n", ocultarSelectores.Select(s => $"{s} {{ visibility: hidden !important; }}")),
+                });
+            }
+```
+
+En `tests/StockApp.Presentation.VisualTests/Comparacion/ComparacionVisual.cs`: agregar el parámetro `IReadOnlyCollection<string>? ocultarEnMockup = null` al final de la firma (después de `recortesPermitidos`), documentarlo ("elementos del mockup que NO se comparan por píxeles y que el test custodia aparte; hoy solo la marca de agua del Login, P5") y pasarlo: `CapturadorMockup.CapturarAsync(rutaHtml, pngMockup, ocultarEnMockup)`.
+
+Run: `dotnet test tests/StockApp.UiV2.Herramientas.Tests/StockApp.UiV2.Herramientas.Tests.csproj`
+Expected: PASS (los dos nuevos y el resto de la herramienta).
+
+- [ ] **Step 2: Datos fijos**
 
 `tests/StockApp.Presentation.VisualTests/Pantallas/Acceso/DatosAcceso.cs`:
 
@@ -2778,11 +2909,12 @@ public static class DatosAcceso
 }
 ```
 
-- [ ] **Step 2: Tests (rojo)**
+- [ ] **Step 3: Tests (rojo)**
 
 `tests/StockApp.Presentation.VisualTests/Pantallas/Acceso/AccesoComparacionTests.cs`:
 
 ```csharp
+using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using StockApp.Presentation.Views;
 using StockApp.Presentation.VisualTests.Comparacion;
@@ -2792,20 +2924,154 @@ namespace StockApp.Presentation.VisualTests.Pantallas.Acceso;
 [Trait("Categoria", "ComparacionVisual")]
 public class AccesoComparacionTests
 {
+    // P5: la marca de agua (opacidad 0.28 + escala 0.85 de un PNG) no se replica igual entre Skia y
+    // Chromium, y un UmbralAprobado para ella dejaría ciega a toda la pantalla (spec §6.5). Se oculta
+    // en AMBOS renders y la custodia LoginMarcaAguaTests. Valores calibrados, sin UmbralAprobado.
+    private static readonly string[] OcultarMarcaAgua = [".marca-agua"];
+
+    private static LoginView LoginSinMarcaAgua()
+    {
+        var vista = new LoginView();
+        vista.FindControl<Image>("MarcaAgua")!.IsVisible = false;
+        return vista;
+    }
+
     [AvaloniaFact]
     public void Login_IgualAlMockup() =>
-        ComparacionVisual.CompararConMockup(new LoginView(), DatosAcceso.Login(), "acceso/login.html");
+        ComparacionVisual.CompararConMockup(LoginSinMarcaAgua(), DatosAcceso.Login(), "acceso/login.html", ocultarEnMockup: OcultarMarcaAgua);
 
     [AvaloniaFact]
     public void LoginConError_IgualAlMockup() =>
-        ComparacionVisual.CompararConMockup(new LoginView(),
-            DatosAcceso.Login(usuario: "mperez", error: "Usuario o contraseña incorrectos."), "acceso/login-error.html");
+        ComparacionVisual.CompararConMockup(LoginSinMarcaAgua(),
+            DatosAcceso.Login(usuario: "mperez", error: "Usuario o contraseña incorrectos."), "acceso/login-error.html",
+            ocultarEnMockup: OcultarMarcaAgua);
 
     [AvaloniaFact]
     public void LoginAccesoLimitado_IgualAlMockup() =>
-        ComparacionVisual.CompararConMockup(new LoginView(), DatosAcceso.Login(soloAccesoLimitado: true), "acceso/login-acceso-limitado.html");
+        ComparacionVisual.CompararConMockup(LoginSinMarcaAgua(), DatosAcceso.Login(soloAccesoLimitado: true), "acceso/login-acceso-limitado.html",
+            ocultarEnMockup: OcultarMarcaAgua);
 }
 ```
+
+`tests/StockApp.Presentation.VisualTests/Pantallas/Acceso/LoginMarcaAguaTests.cs` (la custodia de lo que la comparación de píxeles no ve; está en VisualTests porque necesita el render Skia):
+
+```csharp
+using System.Globalization;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Headless.XUnit;
+using Avalonia.Media;
+using SkiaSharp;
+using StockApp.Presentation.Views;
+using StockApp.Presentation.VisualTests.Comparacion;
+using StockApp.UiV2.Herramientas;
+
+namespace StockApp.Presentation.VisualTests.Pantallas.Acceso;
+
+/// <summary>
+/// Marca de agua del logo de Carmelo en el Login (P5, aprobada y mergeada a main el 2026-07-10).
+/// La comparación de píxeles la oculta (AccesoComparacionTests); este es el único guardián de que
+/// sigue estando, con su opacidad, su escala y su lugar.
+/// </summary>
+[Trait("Categoria", "ComparacionVisual")]
+public class LoginMarcaAguaTests
+{
+    private const double OpacidadAprobada = 0.28;
+    private const double EscalaAprobada = 0.85;
+
+    private static string Png(string nombre) => Path.Combine(ComparacionVisual.CarpetaSalida, "acceso-login-marca-agua", nombre);
+
+    private static Image Marca(LoginView vista) =>
+        vista.FindControl<Image>("MarcaAgua") ?? throw new InvalidOperationException("LoginView perdió Image#MarcaAgua.");
+
+    [AvaloniaFact]
+    public void Marca_ConservaFuenteOpacidadEscalaYLugar_YSoloDifiereDentroDeSuRegion()
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Png("x"))!);
+        Size fuente = default;
+
+        // Con la marca (la ventana abierta: los Style de la vista solo aplican montada).
+        RenderizadorVista.RenderizarAPng(new LoginView(), DatosAcceso.Login(), Png("con.png"), v =>
+        {
+            var marca = Marca((LoginView)v);
+            Assert.NotNull(marca.Source);
+            fuente = marca.Source!.Size;
+            Assert.Equal(new Size(2804, 1448), fuente);
+            Assert.Equal(OpacidadAprobada, marca.Opacity, 3);
+            var transformacion = Assert.IsAssignableFrom<ITransform>(marca.RenderTransform).Value;
+            Assert.Equal(EscalaAprobada, transformacion.M11, 3);
+            Assert.Equal(EscalaAprobada, transformacion.M22, 3);
+            Assert.Equal(Stretch.Uniform, marca.Stretch);
+            Assert.Equal(HorizontalAlignment.Center, marca.HorizontalAlignment);
+            Assert.Equal(VerticalAlignment.Center, marca.VerticalAlignment);
+            // Detrás de la card: el ScrollViewer con la card viene DESPUÉS en el Grid.
+            var panel = Assert.IsAssignableFrom<Panel>(marca.Parent);
+            Assert.True(panel.Children.IndexOf(marca) < panel.Children.IndexOf(panel.Children.OfType<ScrollViewer>().Single()));
+        });
+
+        // Sin la marca: la diferencia entre las dos capturas ES la marca.
+        var vistaSin = new LoginView();
+        Marca(vistaSin).IsVisible = false;
+        RenderizadorVista.RenderizarAPng(vistaSin, DatosAcceso.Login(), Png("sin.png"));
+
+        var (cantidad, deltaMaximo, caja) = Diferencias(Png("con.png"), Png("sin.png"));
+
+        // Región esperada: Uniform en 1280x760, por la escala aprobada, centrada (+-2 px).
+        var uniforme = Math.Min(Lienzo.Ancho / fuente.Width, Lienzo.Alto / fuente.Height);
+        var ancho = fuente.Width * uniforme * EscalaAprobada;
+        var alto = fuente.Height * uniforme * EscalaAprobada;
+        var esperada = new Rect((Lienzo.Ancho - ancho) / 2, (Lienzo.Alto - alto) / 2, ancho, alto).Inflate(2);
+        Assert.True(cantidad > 1000, $"La marca casi no se ve: {cantidad} píxeles difieren.");
+        Assert.True(esperada.Contains(caja), $"La marca se dibuja fuera de su región: {caja} no está en {esperada}.");
+        // Con opacidad 0.28 ningún canal puede moverse más de 0.28 * 255 = 71.4 respecto del fondo.
+        Assert.InRange(deltaMaximo, 8, 72);
+    }
+
+    [Theory]
+    [InlineData("login")]
+    [InlineData("login-error")]
+    [InlineData("login-acceso-limitado")]
+    public void Mockup_DeclaraLaMismaMarcaDeAguaQueLaApp(string mockup)
+    {
+        var html = File.ReadAllText(Path.Combine(RutasRepo.CarpetaMockups, "acceso", mockup + ".html"));
+
+        Assert.Contains("carmelo-original.png", html);
+        Assert.Contains("opacity: " + OpacidadAprobada.ToString(CultureInfo.InvariantCulture), html);
+        Assert.Contains("scale(" + EscalaAprobada.ToString(CultureInfo.InvariantCulture) + ")", html);
+    }
+
+    private static (int Cantidad, int DeltaMaximo, Rect Caja) Diferencias(string rutaA, string rutaB)
+    {
+        using var a = SKBitmap.Decode(rutaA);
+        using var b = SKBitmap.Decode(rutaB);
+        int cantidad = 0, delta = 0, minX = int.MaxValue, minY = int.MaxValue, maxX = -1, maxY = -1;
+        for (var y = 0; y < a.Height; y++)
+        {
+            for (var x = 0; x < a.Width; x++)
+            {
+                var pa = a.GetPixel(x, y);
+                var pb = b.GetPixel(x, y);
+                var d = Math.Max(Math.Abs(pa.Red - pb.Red), Math.Max(Math.Abs(pa.Green - pb.Green), Math.Abs(pa.Blue - pb.Blue)));
+                if (d == 0)
+                {
+                    continue;
+                }
+
+                cantidad++;
+                delta = Math.Max(delta, d);
+                minX = Math.Min(minX, x);
+                minY = Math.Min(minY, y);
+                maxX = Math.Max(maxX, x);
+                maxY = Math.Max(maxY, y);
+            }
+        }
+
+        return (cantidad, delta, cantidad == 0 ? default : new Rect(minX, minY, maxX - minX + 1, maxY - minY + 1));
+    }
+}
+```
+
+Los umbrales del test (`> 1000` píxeles, delta entre 8 y 72) son cotas, no valores medidos: en el Step 6 se corre el test, se anotan los valores reales (cantidad, delta máximo, caja) en el `progress.md` y, si una cota no tiene sentido para el logo real, se ajusta a una que siga fallando con opacidad 0, con opacidad 1 y con la marca fuera de lugar (las mutaciones (d) a (g) del Step 7 lo prueban).
 
 `tests/StockApp.Presentation.UiTests/V2/LoginViewV2Tests.cs`:
 
@@ -2880,6 +3146,27 @@ public class LoginViewV2Tests
     public void Raiz_TieneUi2() =>
         Assert.Contains("ui2", Montar().Ventana.GetVisualDescendants().OfType<StockApp.Presentation.Views.LoginView>().Single().Classes);
 
+    [AvaloniaFact]
+    public void Marca_LlevaLaLineaMunicipioDeCarmeloBajoElTitulo()
+    {
+        // P6: bajo "Gestión Municipal" y antes de "Ingresá tus credenciales…".
+        var ventana = Montar().Ventana;
+
+        var textos = ventana.GetVisualDescendants().OfType<TextBlock>().ToList();
+        var titulo = textos.Single(t => t.Classes.Contains("titulo-login"));
+        var subtitulo = Assert.Single(textos, t => t.Classes.Contains("marca-subtitulo"));
+        Assert.Equal("Municipio de Carmelo", subtitulo.Text);
+        var yTitulo = titulo.TranslatePoint(default, ventana)!.Value.Y;
+        var yInstruccion = textos.Single(t => t.Text == "Ingresá tus credenciales para continuar.").TranslatePoint(default, ventana)!.Value.Y;
+        var ySubtitulo = subtitulo.TranslatePoint(default, ventana)!.Value.Y;
+        Assert.InRange(ySubtitulo, yTitulo + 1, yInstruccion - 1);
+    }
+
+    [AvaloniaFact]
+    public void MarcaDeAgua_ExisteDetrasDeLaCard() =>
+        // El detalle (opacidad, escala, región) lo custodia LoginMarcaAguaTests; acá, que la parte exista.
+        Assert.NotNull(Nombrado<Image>(Montar().Ventana, "MarcaAgua").Source);
+
     [AvaloniaTheory]
     [InlineData("CampoUsuario")]
     [InlineData("CampoContrasena")]
@@ -2942,10 +3229,10 @@ public class LoginViewV2Tests
 }
 ```
 
-Run: `dotnet test tests/StockApp.Presentation.UiTests/StockApp.Presentation.UiTests.csproj --filter "FullyQualifiedName~LoginViewV2Tests"` y `dotnet test tests/StockApp.Presentation.VisualTests/StockApp.Presentation.VisualTests.csproj --filter "FullyQualifiedName~AccesoComparacionTests"`
-Expected: FAIL (no existen las partes nombradas; la raíz no tiene `ui2`; las comparaciones fallan contra el Login viejo). `Enter_EnUnCampo_EjecutaEntrar` puede fallar solo por no encontrar `CampoUsuario`.
+Run: `dotnet test tests/StockApp.Presentation.UiTests/StockApp.Presentation.UiTests.csproj --filter "FullyQualifiedName~LoginViewV2Tests"` y `dotnet test tests/StockApp.Presentation.VisualTests/StockApp.Presentation.VisualTests.csproj --filter "FullyQualifiedName~AccesoComparacionTests|FullyQualifiedName~LoginMarcaAguaTests"`
+Expected: FAIL (no existen las partes nombradas ni `MarcaAgua`/`marca-subtitulo`; la raíz no tiene `ui2`; las comparaciones fallan contra el Login viejo). `Enter_EnUnCampo_EjecutaEntrar` puede fallar solo por no encontrar `CampoUsuario`.
 
-- [ ] **Step 3: El XAML**
+- [ ] **Step 4: El XAML**
 
 Reemplazar `LoginView.axaml` entero por:
 
@@ -2962,8 +3249,28 @@ Reemplazar `LoginView.axaml` entero por:
              Classes="ui2"
              Background="{DynamicResource V2FondoBrush}">
 
+    <UserControl.Styles>
+        <!-- Marca de agua del logo del municipio (P5): efecto de marca fijo aprobado y mergeado a main
+             el 2026-07-10 (commits 4bb3222 + 8ee5f32). Se define por Style (Priority=Style, no
+             LocalValue), igual que antes y que Image.fondo-difuminado de InicioView, para no chocar con
+             el guardián de opacidades literales. Su custodia es LoginMarcaAguaTests. -->
+        <Style Selector="Image.marca-agua">
+            <Setter Property="Opacity" Value="0.28" />
+        </Style>
+    </UserControl.Styles>
+
     <!-- UI v2 (spec §5.4). Espejo: docs/ui-v2/mockups/acceso/login*.html. Card de 400 centrada;
-         el ScrollViewer evita recortar en una ventana más baja que la card (MinHeight 300). -->
+         el ScrollViewer evita recortar en una ventana más baja que la card (MinHeight 300).
+         El logo va primero en el Grid: detrás de la card. -->
+    <Grid>
+    <Image x:Name="MarcaAgua"
+           Source="avares://GestionMunicipal/Assets/carmelo-original.png"
+           Classes="marca-agua"
+           Stretch="Uniform"
+           HorizontalAlignment="Center"
+           VerticalAlignment="Center"
+           RenderTransform="scale(0.85)" />
+
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <v2:TarjetaContenido Width="{DynamicResource V2AnchoCardLogin}"
                              Padding="32"
@@ -2972,6 +3279,9 @@ Reemplazar `LoginView.axaml` entero por:
             <StackPanel>
 
                 <TextBlock Classes="titulo-login" Text="Gestión Municipal" HorizontalAlignment="Center" />
+
+                <!-- P6: la línea del mockup de referencia (patrones-1.html), margen superior 2. -->
+                <TextBlock Classes="marca-subtitulo" Text="Municipio de Carmelo" HorizontalAlignment="Center" Margin="0,2,0,0" />
 
                 <TextBlock Classes="texto-secundario"
                            Text="Ingresá tus credenciales para continuar."
@@ -3030,13 +3340,13 @@ Reemplazar `LoginView.axaml` entero por:
             </StackPanel>
         </v2:TarjetaContenido>
     </ScrollViewer>
+    </Grid>
 
 </UserControl>
 ```
 
-Con P5 = "se conserva": agregar, como primer hijo de un `Grid` que envuelva al `ScrollViewer`, la `Image` de `avares://GestionMunicipal/Assets/carmelo-original.png` con su `Style Selector="Image.marca-agua"` (Opacity 0.28, `RenderTransform="scale(0.85)"`) tal como estaba, y en el mockup la misma imagen con `opacity: 0.28; transform: scale(0.85)`; esa pantalla casi seguro necesita `UmbralAprobado` (procedimiento de spec §6.5 con el usuario).
 
-- [ ] **Step 4: `GuardianDePatronTests`**
+- [ ] **Step 5: `GuardianDePatronTests`**
 
 En `tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs`:
 
@@ -3058,14 +3368,16 @@ En `tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs`:
 
 3. En `Guardian_CubreTodasLasVistasDelEnsamblado`, agregar `.Concat(VistasMigradasAV2)` después de `.Concat(VistasFueraDelGuardian)`, y en el `<summary>` del test mencionar la quinta lista.
 
-- [ ] **Step 5: Verde**
+- [ ] **Step 6: Verde**
 
-Run: `dotnet build StockApp.sln`, `dotnet test tests/StockApp.Presentation.UiTests/StockApp.Presentation.UiTests.csproj` (suite UI completa: `GuardianDePatronTests`, `BrandingGestionMunicipalTests` —"Gestión Municipal" sigue visible— y los nuevos) y `scripts/ui-v2/comparar.sh Login`.
-Expected: PASS; las tres pantallas de Login APROBADAS, sin recortes (el guardián ahora mira los `TextBox`: el placeholder y "mperez" entran). Revisar las tres páginas de comparación.
+Run: `dotnet build StockApp.sln`, `dotnet test tests/StockApp.Presentation.UiTests/StockApp.Presentation.UiTests.csproj` (suite UI completa: `GuardianDePatronTests`, `BrandingGestionMunicipalTests` —"Gestión Municipal" sigue visible— y los nuevos), `dotnet test tests/StockApp.Presentation.VisualTests/StockApp.Presentation.VisualTests.csproj --filter "FullyQualifiedName~LoginMarcaAguaTests"` y `scripts/ui-v2/comparar.sh Login`.
+Expected: PASS; las tres pantallas de Login APROBADAS con los valores calibrados (11 teselas, 1.68%, SIN `UmbralAprobado`), sin recortes (el guardián ahora mira los `TextBox`: el placeholder y "mperez" entran). Revisar las tres páginas de comparación (su `app.png` y su `mockup.png` salen SIN logo, por diseño).
+
+Medición de respaldo, que no se commitea: correr una vez un test temporal idéntico a `Login_IgualAlMockup` pero SIN `ocultarEnMockup` y SIN `IsVisible = false`, anotar en el `progress.md` `Marca de agua visible: X% / N teselas densas (no comparable, motivo de la exclusión)` y borrar el test temporal. Guardar además la captura de la app con la marca visible (`artifacts/ui-v2/comparacion/acceso-login-marca-agua/con.png`, la deja `LoginMarcaAguaTests`) y pedirle al usuario que la mire junto al mockup `login.html` (que lleva el logo puesto): ahí revisa posición y tono de la marca, que la comparación de píxeles no ve. Anotar en el `progress.md` los valores reales del test (píxeles que difieren, delta máximo, caja) y ajustar las cotas si hace falta (ver el Step 3).
 
 Si la card no queda centrada en vertical dentro del `ScrollViewer` (la comparación lo muestra como bloque corrido): envolver la `TarjetaContenido` en un `Grid` con `MinHeight` igual al alto del viewport (`MinHeight="{Binding $parent[ScrollViewer].Viewport.Height}"`) y la card con `VerticalAlignment="Center"` adentro; re-correr.
 
-- [ ] **Step 6: Mutación quitando**
+- [ ] **Step 7: Mutación quitando**
 
 ```bash
 cp src/StockApp.Presentation/Views/LoginView.axaml "$SCRATCH/LoginView.axaml.bak"
@@ -3074,12 +3386,16 @@ cp src/StockApp.Presentation/Views/LoginView.axaml "$SCRATCH/LoginView.axaml.bak
 (a) Quitar `KeyDown="OnCampoKeyDown"` del `CampoContrasena` → rojo en `Enter_EnUnCampo_EjecutaEntrar("CampoContrasena")`. Restaurar con `cp`.
 (b) Quitar `IsVisible="{Binding SoloAccesoLimitado}"` → rojo en `AvisoDeAccesoLimitado_SoloEnEseModo(false)` y en `Login_IgualAlMockup` (aparece la alerta). Restaurar con `cp`.
 (c) Quitar `Classes="ui2"` de la raíz → rojo en `Raiz_TieneUi2` y en las tres comparaciones. Restaurar con `cp`.
+(d) Quitar el `<Setter Property="Opacity" Value="0.28" />` del `Style` de la marca (la imagen queda a opacidad 1) → rojo en `Marca_ConservaFuenteOpacidadEscalaYLugar_YSoloDifiereDentroDeSuRegion`. Restaurar con `cp`.
+(e) Quitar `RenderTransform="scale(0.85)"` → rojo en el mismo test (escala y región). Restaurar con `cp`. En el mockup: quitar `transform: scale(0.85);` de `.marca-agua` de `login.html` (backup con `cp`) → rojo en `Mockup_DeclaraLaMismaMarcaDeAguaQueLaApp("login")`. Restaurar con `cp`.
+(f) Quitar el `TextBlock Classes="marca-subtitulo"` → rojo en `Marca_LlevaLaLineaMunicipioDeCarmeloBajoElTitulo` y en las tres comparaciones. Restaurar con `cp`.
+(g) Quitar el `Image x:Name="MarcaAgua"` entero → rojo en `MarcaDeAgua_ExisteDetrasDeLaCard` y en `LoginMarcaAguaTests` (y deja de compilar la comparación por el `FindControl` nulo: es el comportamiento buscado). Restaurar con `cp`.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add src/StockApp.Presentation/Views/LoginView.axaml tests/StockApp.Presentation.VisualTests/Pantallas/Acceso/ tests/StockApp.Presentation.UiTests/V2/LoginViewV2Tests.cs tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs
-git commit -m "feat(ui-v2): Login v2 con sus tres estados comparados contra el mockup"
+git add src/StockApp.Presentation/Views/LoginView.axaml tools/StockApp.UiV2.Herramientas/Mockups/CapturadorMockup.cs tests/StockApp.UiV2.Herramientas.Tests/CapturadorMockupTests.cs tests/StockApp.Presentation.VisualTests/Comparacion/ComparacionVisual.cs tests/StockApp.Presentation.VisualTests/Pantallas/Acceso/ tests/StockApp.Presentation.UiTests/V2/LoginViewV2Tests.cs tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs
+git commit -m "feat(ui-v2): Login v2 con sus tres estados comparados y la marca de agua custodiada aparte"
 ```
 
 ### Task 13: `ResetAdminView` y `BloqueoLicenciaView` v2
@@ -3471,7 +3787,7 @@ git commit -m "feat(ui-v2): Reset de Admin y activación de licencia v2, compara
 
 ### Task 14: `AccesoLimitadoView`: aviso v2 sin filtrar estilos a Mantenimiento
 
-**Depende de:** P3 (el plan migra solo el aviso; la comparación de la pantalla entera va en la Fase 7).
+**Decisión aplicada:** P3 (en la Fase 1 solo se migra el aviso; la comparación de la pantalla entera va en la Fase 7).
 
 **Files:**
 - Modify: `src/StockApp.Presentation/Views/AccesoLimitadoView.axaml`
@@ -3552,7 +3868,7 @@ git commit -m "feat(ui-v2): aviso de acceso limitado como Alerta v2 sin tocar Ma
 
 ### Task 15: Diálogos v2 (Confirmación, Mensaje, PedirTexto)
 
-**Depende de:** Task 8 (mockups aprobados). P2 (Reclasificar queda para la Fase 5).
+**Depende de:** Task 8 (mockups aprobados). **Decisión aplicada:** P2 (Reclasificar queda para la Fase 5).
 
 **Files:**
 - Modify: `src/StockApp.Presentation/Views/Dialogs/ConfirmacionDialog.axaml`, `MensajeDialog.axaml`, `PedirTextoDialog.axaml` (code-behind sin cambios)
@@ -4073,7 +4389,7 @@ Preparación (memoria del proyecto y ledger de la Fase 0):
 - WSLg tiene que estar levantado (en la Fase 0 la sesión RDP de WSLg se cayó y bloqueó el cierre). Herramientas: `scripts/gui-verificacion/` (xdotool sin root; capturas con PowerShell, la ventana se llama "Gestión Municipal").
 
 Recorrido, capturando cada pantalla:
-1. Login: campos vacíos ("Entrar" deshabilitado), credencial equivocada (alerta de error), Enter en Contraseña con la credencial correcta (entra).
+1. Login: campos vacíos ("Entrar" deshabilitado), credencial equivocada (alerta de error), Enter en Contraseña con la credencial correcta (entra). Con el logo de Carmelo semitransparente detrás de la card (P5: la comparación de píxeles no lo ve, acá lo mira el usuario) y la línea "Municipio de Carmelo" bajo el título (P6); en el sidebar, la misma línea bajo "Gestión Municipal".
 2. Sidebar como Administrador: las 5 secciones; navegar a CADA ítem visible y ver que la pastilla activa acompaña; que la navegación scrollea hasta "Mantenimiento"; que las vistas de contenido (no migradas) se ven IGUAL que antes. Para esto último, comparar Productos e Inicio contra las capturas "antes" de la Fase 0 con `dotnet run --project tools/StockApp.UiV2.Herramientas -- comparar-png <antes.png> <despues.png> <diff.png>` sobre el área de contenido (la columna de la derecha cambia de ancho de 232 a 240: recortar ambas capturas a la misma región de contenido antes de comparar).
 3. Crear y editar un producto desde el shell nuevo (pantallas viejas hospedadas: confirma que el `ContentControl` y la navegación no cambiaron).
 4. Usuario con permisos mixtos: con Administración → Usuarios, crear (o reutilizar) un Operador con `GestionarProductos`, `RegistrarMovimientos`, `VerFinanzas` y `GestionarTareas`; entrar con él y ver solo INVENTARIO (sin "Ingreso por factura"), FINANZAS y GESTIÓN (sin "Documentos").
@@ -4116,8 +4432,8 @@ No se pushea ni se mergea.
 
 | Riesgo | Mitigación en el plan |
 |---|---|
-| El sidebar de Administrador desborda 760 y la barra de scroll de Fluent puede dibujarse distinta que en el mockup. | P4 + Task 11 Step 6 (medir y replicar, o `Hidden`). |
-| La card centrada dentro de un `ScrollViewer` puede quedar arriba en vez de centrada. | Task 12 Step 5 trae la corrección (Grid con `MinHeight` del viewport). |
+| El sidebar de Administrador desborda 760 y la barra de scroll de Fluent puede dibujarse distinta que en el mockup. | P4 (barra `Auto`, decidido) + Task 11 Step 6 (medir la franja y replicarla en el mockup). |
+| La card centrada dentro de un `ScrollViewer` puede quedar arriba en vez de centrada. | Task 12 Step 6 trae la corrección (Grid con `MinHeight` del viewport). |
 | Texto centrado verticalmente en alturas impares (ítem de 32 con línea de 15) puede caer en medio píxel distinto entre Skia y Chromium. | Es el mismo ruido de centrado subpíxel que la calibración ya absorbe (spec §6.5); si suma teselas densas, se iguala con un margen entero en ambos lados, no con umbral. |
 | Mockups aprobados que luego no se pueden igualar en Avalonia (p. ej. la barra de scroll). | Todo cambio de un mockup aprobado vuelve al usuario antes del commit (Task 11 Step 6, Task 17 Step 5). |
 | Fuga de estilos `.ui2` a vistas viejas a través del shell o de AccesoLimitado. | Review Focus 1; tests con mutación en Tasks 11 y 14; verificación orgánica Task 17 Step 4.2. |
@@ -4126,4 +4442,5 @@ No se pushea ni se mergea.
 | El guardián más estricto (Tasks 1-2) puede hacer fallar el catálogo de la Fase 0. | Tasks 1-4 corren `Catalogo_IgualAlMockup`; si falla por un recorte real, se arregla el catálogo y su mockup, no el guardián. |
 | `.axaml` stale en `obj/` durante mutaciones (pasó en la Fase 0, Task 16). | Global Constraints: `dotnet build-server shutdown` + `rm -rf` de `obj/bin`. |
 | WSLg caído o `conexion.json` apuntando al VPS bloquean la verificación orgánica (pasó en la Fase 0). | Task 17 Step 4: preparación explícita y PARAR con evidencia si el entorno falla. |
-| Los VM transitorios de P1 (opción A) se reescriben en las Fases 6 y 7. | Aceptado: es el costo de no tener ítems que no navegan; si el usuario elige B o C, cambian las Tasks 6, 10 y 11. |
+| Los VM transitorios de P1 se reescriben en las Fases 6 y 7. | Aceptado por el usuario (P1): es el costo de no tener ítems que no navegan. |
+| La marca de agua del Login queda fuera de la comparación de píxeles (P5). | `LoginMarcaAguaTests` (Task 12 Step 3) custodia opacidad, escala, región y la paridad de valores con el mockup; el usuario la ve en la aprobación de mockups (Task 7) y en la verificación orgánica (Task 17 Step 4). No se compensa con umbral (spec §6.5). |
