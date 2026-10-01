@@ -101,7 +101,7 @@ dotnet run --project src/StockApp.Presentation/StockApp.Presentation.csproj &
 docker start stockapp-pg   # o el comando de creación si no existe el contenedor
 ```
 
-Credenciales de desarrollo: **`admin` / `test1234`**. (Si ya tenías `admin` /
+Credenciales de desarrollo: **`admin` / `Admin1234`**. (Si ya tenías `admin` /
 `test123` seedeado en tu BD local, seguís pudiendo loguearte con esa contraseña
 vieja — el login no revalida la complejidad. Pero un bootstrap nuevo contra una
 BD vacía exige el mínimo actual: 8+ caracteres, con letra y número.)
