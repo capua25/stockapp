@@ -12,10 +12,30 @@ namespace StockApp.UiV2.Herramientas.Mockups;
 /// esa clase trae "overflow:hidden" de base.css — sin ese segundo chequeo, un hijo que se pasa
 /// de la caja de ".v2-ventana" queda recortado en silencio en el PNG en vez de hacer fallar la
 /// captura (overflow:hidden no propaga el desborde al documento).
+/// Chromium headless igual intenta abrir DISPLAY/WAYLAND_DISPLAY si el proceso los heredó
+/// (para el compositor). En WSL, si WSLg quedó caído, el socket de /tmp/.X11-unix sigue
+/// existiendo pero no responde: el launch no falla, pero ScreenshotAsync se cuelga hasta el
+/// timeout de 30s con un TimeoutException que no menciona DISPLAY para nada. Por eso se lanza
+/// con un entorno explícito sin esas dos variables (Env reemplaza process.env entero, no lo
+/// mergea: hay que copiar el resto a mano).
 /// </summary>
 public static class CapturadorMockup
 {
     public static readonly IReadOnlyList<string> ArgumentosChromium = ["--font-render-hinting=none"];
+
+    private static readonly IReadOnlyList<string> VariablesDeDisplay = ["DISPLAY", "WAYLAND_DISPLAY"];
+
+    /// <summary>
+    /// Copia el entorno del proceso actual sin DISPLAY/WAYLAND_DISPLAY, para que Chromium
+    /// headless no intente conectarse a un servidor gráfico que puede estar caído (ver
+    /// comentario de la clase). BrowserTypeLaunchOptions.Env, si se especifica, reemplaza
+    /// process.env por completo en vez de mergearlo.
+    /// </summary>
+    internal static Dictionary<string, string> EntornoSinDisplay() =>
+        Environment.GetEnvironmentVariables()
+            .Cast<System.Collections.DictionaryEntry>()
+            .Where(e => e.Key is string clave && !VariablesDeDisplay.Contains(clave, StringComparer.Ordinal))
+            .ToDictionary(e => (string)e.Key!, e => e.Value?.ToString() ?? string.Empty);
 
     private const string ScriptFuentes = """
         async () => {
@@ -51,7 +71,11 @@ public static class CapturadorMockup
         IBrowser navegador;
         try
         {
-            navegador = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions { Args = ArgumentosChromium });
+            navegador = await playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
+            {
+                Args = ArgumentosChromium,
+                Env = EntornoSinDisplay(),
+            });
         }
         catch (PlaywrightException ex) when (ex.Message.Contains("Executable doesn't exist", StringComparison.Ordinal))
         {

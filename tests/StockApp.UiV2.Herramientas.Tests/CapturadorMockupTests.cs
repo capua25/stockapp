@@ -99,6 +99,33 @@ public class CapturadorMockupTests
         Assert.Contains("desborda", ex.Message);
     }
 
+    /// <summary>
+    /// I1 (revisión final): si el proceso hereda un DISPLAY que no responde (WSLg caído, socket
+    /// de /tmp/.X11-unix presente pero sin servidor detrás), Chromium headless se cuelga en
+    /// ScreenshotAsync hasta el timeout de 30s con un TimeoutException que no menciona DISPLAY.
+    /// El fix lanza Chromium con un entorno sin DISPLAY/WAYLAND_DISPLAY, así que la captura tiene
+    /// que completarse igual aunque DISPLAY apunte a un servidor inexistente.
+    /// </summary>
+    [Fact]
+    public async Task DisplayInexistente_NoCuelgaLaCaptura()
+    {
+        var displayOriginal = Environment.GetEnvironmentVariable("DISPLAY");
+        Environment.SetEnvironmentVariable("DISPLAY", ":255");
+        try
+        {
+            var html = Html("<p class=\"t\">Texto con Inter</p>");
+            var png = Path.Combine(_carpeta, "display.png");
+
+            await CapturadorMockup.CapturarAsync(html, png);
+
+            Assert.True(File.Exists(png));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("DISPLAY", displayOriginal);
+        }
+    }
+
     [Fact]
     public async Task HtmlInexistente_LanzaFileNotFound() =>
         await Assert.ThrowsAsync<FileNotFoundException>(
