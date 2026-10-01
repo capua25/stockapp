@@ -211,4 +211,57 @@ public class NuevaImportacionGastosGridTests
         window.Close();
         Dispatcher.UIThread.RunJobs();
     }
+
+    // ── Formato es-UY (decisión 2026-10-01) ──────────────────────────────────
+
+    private static GastoAnalizadoDto GastoConMonto(decimal? monto) => GastoBase("ACME SA", "F-1", "Rentas") with { Monto = monto };
+
+    [AvaloniaFact]
+    public async Task CeldaMonto_SeMuestraEnEsUy()
+    {
+        var original = System.Threading.Thread.CurrentThread.CurrentCulture;
+        System.Threading.Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var (window, _, vm) = await MontarEnPasoRevisarAsync(GastoConMonto(1500.5m));
+            var fila = vm.FilasGasto[0];
+
+            var textos = window.GetVisualDescendants().OfType<TextBlock>()
+                .Where(t => ReferenceEquals(t.DataContext, fila)).Select(t => t.Text).ToList();
+            Assert.Contains("$ 1.500,50", textos);
+            window.Close();
+            Dispatcher.UIThread.RunJobs();
+        }
+        finally
+        {
+            System.Threading.Thread.CurrentThread.CurrentCulture = original;
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task CeldaMontoFaltante_PuntoDecimal_SeRechazaConMensajeClaro_YComaSeAcepta()
+    {
+        var (window, grid, vm) = await MontarEnPasoRevisarAsync(GastoConMonto(null));
+        var fila = vm.FilasGasto[0];
+
+        grid.SelectedItem = fila;
+        grid.CurrentColumn = grid.Columns.First(c => Equals(c.Header, "Monto"));
+        Dispatcher.UIThread.RunJobs();
+        grid.BeginEdit();
+        Dispatcher.UIThread.RunJobs();
+        var caja = window.GetVisualDescendants().OfType<TextBox>()
+            .First(t => ReferenceEquals(t.DataContext, fila) && t.IsEnabled && t.TemplatedParent is null);
+
+        caja.Text = "5.4";
+        Dispatcher.UIThread.RunJobs();
+        Assert.Null(fila.Monto);
+        Assert.Contains("Usá coma para los decimales: 5,4", DataValidationErrors.GetErrors(caja)!.Cast<object>());
+
+        caja.Text = "1.500,50";
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1500.50m, fila.Monto);
+
+        window.Close();
+        Dispatcher.UIThread.RunJobs();
+    }
 }

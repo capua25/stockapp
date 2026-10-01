@@ -95,4 +95,33 @@ public class MovimientoFormControlValidacionTests
         Assert.DoesNotContain("Exception", mensaje.ToString());
         Assert.DoesNotContain("System.", mensaje.ToString());
     }
+
+    // ── Formato es-UY (decisión 2026-10-01) ──────────────────────────────────
+
+    [AvaloniaFact]
+    public void PrecioUnitario_PuntoDecimal_SeRechazaConMensajeClaro()
+    {
+        var (_, precioBox, vm) = Montar();
+        precioBox.Text = "10";
+        Dispatcher.UIThread.RunJobs();
+
+        precioBox.Text = "5.4";
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(10m, vm.PrecioUnitario);
+        var mensaje = Assert.Single(DataValidationErrors.GetErrors(precioBox)!.Cast<object>());
+        Assert.Equal("Usá coma para los decimales: 5,4", mensaje);
+    }
+
+    [AvaloniaFact]
+    public void PrecioUnitario_MilesConPuntoYComaDecimal_SeAcepta()
+    {
+        var (_, precioBox, vm) = Montar();
+
+        precioBox.Text = "1.500,50";
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(1500.50m, vm.PrecioUnitario);
+        Assert.False(DataValidationErrors.GetHasErrors(precioBox));
+    }
 }

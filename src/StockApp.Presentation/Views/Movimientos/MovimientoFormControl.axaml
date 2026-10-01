@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:beh="using:StockApp.Presentation.Behaviors"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Movimientos"
              xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:c="using:StockApp.Presentation.Controls"
@@ -29,7 +30,8 @@
                 </c:CampoFormulario>
 
                 <c:CampoFormulario Etiqueta="Cantidad" Requerido="True">
-                    <TextBox Text="{Binding Cantidad}"
+                    <TextBox Text="{Binding Cantidad, Converter={x:Static conv:DecimalConverter.Instance}}"
+                             beh:EntradaNumericaBehavior.EsDecimal="True"
                              PlaceholderText="Ingresá la cantidad" />
                 </c:CampoFormulario>
 
@@ -52,6 +54,7 @@
                 <c:CampoFormulario Etiqueta="Precio unitario">
                     <TextBox Name="PrecioUnitarioBox"
                              Text="{Binding PrecioUnitario, Converter={x:Static conv:DecimalOpcionalConverter.Instance}}"
+                             beh:EntradaNumericaBehavior.EsDecimal="True"
                              PlaceholderText="Opcional" />
                 </c:CampoFormulario>
 

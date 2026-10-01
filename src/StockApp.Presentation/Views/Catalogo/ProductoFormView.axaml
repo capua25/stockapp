@@ -1,5 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:beh="using:StockApp.Presentation.Behaviors"
+             xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Catalogo"
              xmlns:c="using:StockApp.Presentation.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -43,7 +45,8 @@
                 </c:CampoFormulario>
 
                 <c:CampoFormulario Etiqueta="Precio costo">
-                    <TextBox Text="{Binding PrecioCosto}" />
+                    <TextBox Text="{Binding PrecioCosto, Converter={x:Static conv:DecimalConverter.Instance}}"
+                             beh:EntradaNumericaBehavior.EsDecimal="True" />
                 </c:CampoFormulario>
 
                 <c:CampoFormulario Etiqueta="Unidad de medida">
