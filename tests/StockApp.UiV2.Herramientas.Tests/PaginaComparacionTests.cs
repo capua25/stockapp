@@ -82,4 +82,88 @@ public class PaginaComparacionTests
         var distintos = (int)Math.Round(porcentaje * 10_000 / 100);
         Assert.Equal(esperado, PaginaComparacion.Aprobada(new ResultadoComparacion(100, 100, distintos, teselas), umbral, maximo));
     }
+
+    /// <summary>
+    /// I2 (revisión final): los píxeles no ven un glifo recortado (spec §6.5) — el guardián de
+    /// texto es aparte. Antes de este fix, Escribir/Aprobada solo miraban píxeles, así que una
+    /// pantalla con texto recortado pero píxeles dentro del umbral quedaba persistida como
+    /// APROBADA en resultado.json, la página y el índice, aunque el test terminara en rojo por el
+    /// Assert del guardián (ComparacionVisual.cs:50).
+    /// </summary>
+    [Fact]
+    public void Aprobada_ConRecortes_EsFalsaAunqueLosPixelesEstenBien() =>
+        Assert.False(PaginaComparacion.Aprobada(
+            new ResultadoComparacion(100, 100, 0, 0), umbralPorcentaje: 1.0, teselasDensasMax: 2,
+            recortes: ["Texto recortado"]));
+
+    [Fact]
+    public void Escribir_ConRecortes_MuestraRechazadaYListaLosRecortes()
+    {
+        var carpeta = Pantalla("con-recorte");
+
+        var html = File.ReadAllText(PaginaComparacion.Escribir(
+            carpeta, "con-recorte", new ResultadoComparacion(100, 100, 0, 0), 1.0, 2,
+            recortes: ["Texto recortado a propósito"]));
+
+        Assert.Contains("RECHAZADA", html);
+        Assert.DoesNotContain("APROBADA", html);
+        Assert.Contains(System.Net.WebUtility.HtmlEncode("Texto recortado a propósito"), html);
+    }
+
+    [Fact]
+    public void Escribir_ConRecortes_PersisteLosRecortesEnElJson()
+    {
+        var carpeta = Pantalla("con-recorte-json");
+
+        PaginaComparacion.Escribir(
+            carpeta, "con-recorte-json", new ResultadoComparacion(100, 100, 0, 0), 1.0, 2,
+            recortes: ["Texto recortado a propósito"]);
+
+        var persistido = JsonSerializer.Deserialize<PaginaComparacion.ResultadoPersistido>(
+            File.ReadAllText(Path.Combine(carpeta, "resultado.json")))!;
+        Assert.Equal(["Texto recortado a propósito"], persistido.Recortes);
+    }
+
+    [Fact]
+    public void Escribir_ConRecortes_ElIndiceTambienDiceRechazada()
+    {
+        PaginaComparacion.Escribir(
+            Pantalla("con-recorte-indice"), "con-recorte-indice", new ResultadoComparacion(100, 100, 0, 0), 1.0, 2,
+            recortes: ["Texto recortado a propósito"]);
+
+        var indice = File.ReadAllText(Path.Combine(_raiz, "index.html"));
+
+        Assert.Contains("RECHAZADA", indice);
+    }
+
+    /// <summary>
+    /// I2b (revisión final): si CapturadorMockup.CapturarAsync lanza (mockup borrado, fuente sin
+    /// cargar, etc.), ComparacionVisual nunca llega a llamar a Escribir — pero el resultado.json
+    /// de la corrida anterior (aprobada) seguía ahí, y EscribirIndice lo listaba como vigente.
+    /// BorrarResultadoAnterior es lo que ComparacionVisual llama ANTES de intentar capturar.
+    /// </summary>
+    [Fact]
+    public void BorrarResultadoAnterior_QuitaLaPantallaDelIndice()
+    {
+        var carpeta = Pantalla("transitoria");
+        PaginaComparacion.Escribir(carpeta, "transitoria", new ResultadoComparacion(100, 100, 0, 0), 1.0, 2);
+        Assert.True(File.Exists(Path.Combine(carpeta, PaginaComparacion.ArchivoResultado)));
+        Assert.Contains("transitoria", File.ReadAllText(Path.Combine(_raiz, "index.html")));
+
+        PaginaComparacion.BorrarResultadoAnterior(carpeta);
+
+        Assert.False(File.Exists(Path.Combine(carpeta, PaginaComparacion.ArchivoResultado)));
+        Assert.False(File.Exists(Path.Combine(carpeta, "index.html")));
+        Assert.DoesNotContain("transitoria", File.ReadAllText(Path.Combine(_raiz, "index.html")));
+    }
+
+    [Fact]
+    public void BorrarResultadoAnterior_SinCorridaPrevia_NoFalla()
+    {
+        var carpeta = Pantalla("nunca-corrio");
+
+        PaginaComparacion.BorrarResultadoAnterior(carpeta);
+
+        Assert.False(File.Exists(Path.Combine(carpeta, PaginaComparacion.ArchivoResultado)));
+    }
 }

@@ -13,17 +13,52 @@ public static class PaginaComparacion
 {
     public const string ArchivoResultado = "resultado.json";
 
+    /// <summary>
+    /// Recortes tiene Equals/GetHashCode a mano: el record generado compara IReadOnlyList&lt;string&gt;
+    /// por referencia (List&lt;T&gt; no tiene igualdad estructural), y eso rompía la comparación por
+    /// valor de dos resultados con la misma lista de recortes pero instancias distintas.
+    /// </summary>
     public sealed record ResultadoPersistido(
-        string Pantalla, int PixelesDistintos, double Porcentaje, int TeselasDensas, double UmbralPorcentaje, int TeselasDensasMax);
+        string Pantalla, int PixelesDistintos, double Porcentaje, int TeselasDensas, double UmbralPorcentaje,
+        int TeselasDensasMax, IReadOnlyList<string>? Recortes = null)
+    {
+        public IReadOnlyList<string> Recortes { get; init; } = Recortes ?? [];
 
-    public static bool Aprobada(ResultadoComparacion r, double umbralPorcentaje, int teselasDensasMax) =>
-        r.PorcentajeDistinto <= umbralPorcentaje && r.TeselasDensas <= teselasDensasMax;
+        public bool Equals(ResultadoPersistido? other) =>
+            other is not null
+            && Pantalla == other.Pantalla
+            && PixelesDistintos == other.PixelesDistintos
+            && Porcentaje.Equals(other.Porcentaje)
+            && TeselasDensas == other.TeselasDensas
+            && UmbralPorcentaje.Equals(other.UmbralPorcentaje)
+            && TeselasDensasMax == other.TeselasDensasMax
+            && Recortes.SequenceEqual(other.Recortes);
+
+        public override int GetHashCode() =>
+            HashCode.Combine(Pantalla, PixelesDistintos, Porcentaje, TeselasDensas, UmbralPorcentaje, TeselasDensasMax);
+    }
+
+    /// <summary>
+    /// I2 (revisión final): los píxeles no ven un glifo recortado (spec §6.5) — si hay algún
+    /// recorte de texto, la pantalla queda RECHAZADA sin importar qué tan bien midan los píxeles.
+    /// </summary>
+    public static bool Aprobada(
+        ResultadoComparacion r, double umbralPorcentaje, int teselasDensasMax, IReadOnlyCollection<string>? recortes = null) =>
+        (recortes is null || recortes.Count == 0)
+        && r.PorcentajeDistinto <= umbralPorcentaje
+        && r.TeselasDensas <= teselasDensasMax;
 
     public static string Escribir(
-        string carpetaPantalla, string pantalla, ResultadoComparacion r, double umbralPorcentaje, int teselasDensasMax)
+        string carpetaPantalla, string pantalla, ResultadoComparacion r, double umbralPorcentaje, int teselasDensasMax,
+        IReadOnlyCollection<string>? recortes = null)
     {
-        var aprobada = Aprobada(r, umbralPorcentaje, teselasDensasMax);
+        recortes ??= [];
+        var aprobada = Aprobada(r, umbralPorcentaje, teselasDensasMax, recortes);
         var titulo = WebUtility.HtmlEncode(pantalla);
+        var seccionRecortes = recortes.Count == 0
+            ? ""
+            : "<p class=\"rechazada\">Texto recortado por el layout (la comparación de píxeles no lo detecta):</p><ul>"
+              + string.Concat(recortes.Select(t => $"<li>{WebUtility.HtmlEncode(t)}</li>")) + "</ul>";
         var html = $$"""
             <!doctype html>
             <html lang="es">
@@ -45,6 +80,7 @@ public static class PaginaComparacion
             <p class="{{(aprobada ? "aprobada" : "rechazada")}}">{{(aprobada ? "APROBADA" : "RECHAZADA")}}</p>
             <p>Píxeles distintos: {{r.PixelesDistintos}} de {{r.Ancho * r.Alto}} ({{F(r.PorcentajeDistinto)}}%, umbral {{F(umbralPorcentaje)}}%).
                Teselas densas: {{r.TeselasDensas}} (máximo {{teselasDensasMax}}).</p>
+            {{seccionRecortes}}
             <p><a href="../index.html">Todas las pantallas</a>. Click en una imagen para verla a tamaño real.
                En el diff: rojo = diferencia fuerte, naranja = diferencia leve de color, contorno magenta = tesela densa.</p>
             <div class="fila">
@@ -61,9 +97,37 @@ public static class PaginaComparacion
         File.WriteAllText(
             Path.Combine(carpetaPantalla, ArchivoResultado),
             JsonSerializer.Serialize(new ResultadoPersistido(
-                pantalla, r.PixelesDistintos, r.PorcentajeDistinto, r.TeselasDensas, umbralPorcentaje, teselasDensasMax)));
+                pantalla, r.PixelesDistintos, r.PorcentajeDistinto, r.TeselasDensas, umbralPorcentaje, teselasDensasMax,
+                recortes.ToList())));
         EscribirIndice(Path.GetDirectoryName(Path.GetFullPath(carpetaPantalla))!);
         return rutaPagina;
+    }
+
+    /// <summary>
+    /// I2b (revisión final): ComparacionVisual llama esto ANTES de intentar capturar. Si
+    /// CapturadorMockup.CapturarAsync lanza, el código nunca llega a Escribir — sin este borrado
+    /// previo, el resultado.json (y la fila del índice) de la corrida anterior seguían vigentes y
+    /// una pantalla rota podía quedar listada como APROBADA indefinidamente.
+    /// </summary>
+    public static void BorrarResultadoAnterior(string carpetaPantalla)
+    {
+        var archivoResultado = Path.Combine(carpetaPantalla, ArchivoResultado);
+        var archivoPagina = Path.Combine(carpetaPantalla, "index.html");
+        var huboAlgoQueBorrar = File.Exists(archivoResultado) || File.Exists(archivoPagina);
+        if (File.Exists(archivoResultado))
+        {
+            File.Delete(archivoResultado);
+        }
+
+        if (File.Exists(archivoPagina))
+        {
+            File.Delete(archivoPagina);
+        }
+
+        if (huboAlgoQueBorrar)
+        {
+            EscribirIndice(Path.GetDirectoryName(Path.GetFullPath(carpetaPantalla))!);
+        }
     }
 
     private static void EscribirIndice(string carpetaRaiz)
@@ -78,7 +142,7 @@ public static class PaginaComparacion
             }
 
             var p = JsonSerializer.Deserialize<ResultadoPersistido>(File.ReadAllText(archivo))!;
-            var aprobada = p.Porcentaje <= p.UmbralPorcentaje && p.TeselasDensas <= p.TeselasDensasMax;
+            var aprobada = p.Recortes.Count == 0 && p.Porcentaje <= p.UmbralPorcentaje && p.TeselasDensas <= p.TeselasDensasMax;
             var nombre = Path.GetFileName(carpeta);
             filas.Append($"<tr><td><a href=\"{Uri.EscapeDataString(nombre)}/index.html\">{WebUtility.HtmlEncode(p.Pantalla)}</a></td>")
                  .Append($"<td>{F(p.Porcentaje)}%</td><td>{p.TeselasDensas}</td>")

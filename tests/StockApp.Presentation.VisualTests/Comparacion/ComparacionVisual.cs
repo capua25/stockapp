@@ -33,6 +33,9 @@ public static class ComparacionVisual
         var rutaHtml = Path.GetFullPath(Path.Combine(RutasRepo.CarpetaMockups, rutaMockup));
         var pantalla = NombrePantalla(rutaMockup);
         var carpeta = Directory.CreateDirectory(Path.Combine(CarpetaSalida, pantalla)).FullName;
+        // I2b (revisión final): si la captura de abajo lanza, esta llamada evita que quede vigente
+        // el resultado.json (y la fila del índice) de una corrida anterior aprobada.
+        PaginaComparacion.BorrarResultadoAnterior(carpeta);
         var pngMockup = Path.Combine(carpeta, "mockup.png");
         var pngApp = Path.Combine(carpeta, "app.png");
         var pngDiff = Path.Combine(carpeta, "diff.png");
@@ -44,14 +47,16 @@ public static class ComparacionVisual
         RenderizadorVista.RenderizarAPng(vista, viewModel, pngApp, v => recortes = GuardianTextoRecortado.Buscar(v, recortesPermitidos));
 
         var resultado = ComparadorImagenes.Comparar(pngMockup, pngApp, pngDiff);
-        var pagina = PaginaComparacion.Escribir(carpeta, pantalla, resultado, umbral, teselasDensasMax);
+        // I2a (revisión final): Escribir ahora recibe los recortes, así que la página/resultado.json
+        // ya nacen RECHAZADA cuando hay texto recortado, en vez de un veredicto que solo mira píxeles.
+        var pagina = PaginaComparacion.Escribir(carpeta, pantalla, resultado, umbral, teselasDensasMax, recortes);
 
         // Los píxeles no ven un glifo que falta (spec §6.5): el recorte de texto se verifica aparte.
         Assert.True(recortes.Count == 0,
             $"{pantalla}: texto recortado por el layout (la comparación de píxeles no lo detecta):"
             + Environment.NewLine + string.Join(Environment.NewLine, recortes) + Environment.NewLine + $"Comparación: {pagina}");
         Assert.True(
-            PaginaComparacion.Aprobada(resultado, umbral, teselasDensasMax),
+            PaginaComparacion.Aprobada(resultado, umbral, teselasDensasMax, recortes),
             string.Create(CultureInfo.InvariantCulture,
                 $"{pantalla}: {resultado.PorcentajeDistinto:0.000}% de píxeles distintos (umbral {umbral:0.000}%) y "
                 + $"{resultado.TeselasDensas} teselas densas (máximo {teselasDensasMax}). Comparación: {pagina}"));

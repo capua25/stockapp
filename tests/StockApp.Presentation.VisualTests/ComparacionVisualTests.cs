@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using StockApp.Presentation.VisualTests.Comparacion;
+using StockApp.UiV2.Herramientas;
 
 namespace StockApp.Presentation.VisualTests;
 
@@ -83,4 +84,41 @@ public class ComparacionVisualTests
     [InlineData("inventario\\productos.html", "inventario-productos")]
     public void NombrePantalla_UneModuloYPantalla(string ruta, string esperado) =>
         Assert.Equal(esperado, ComparacionVisual.NombrePantalla(ruta));
+
+    /// <summary>
+    /// I2b (revisión final): un mockup que existía y se borró (o cualquier otra causa de que
+    /// CapturadorMockup.CapturarAsync lance) no puede dejar vigente el resultado.json aprobado de
+    /// la corrida anterior — ni en la carpeta de la pantalla ni en el índice general.
+    /// </summary>
+    [AvaloniaFact]
+    public void CapturaQueLanza_NoDejaUnResultadoViejoEnElIndice()
+    {
+        var carpetaHtml = Directory.CreateTempSubdirectory("mockup-transitorio-").FullName;
+        var rutaHtml = Path.Combine(carpetaHtml, "transitorio.html");
+        var enlaces = $"<link rel=\"stylesheet\" href=\"{new Uri(RutasRepo.TokensCss).AbsoluteUri}\">"
+            + $"<link rel=\"stylesheet\" href=\"{new Uri(Path.Combine(RutasRepo.CarpetaBaseMockups, "base.css")).AbsoluteUri}\">";
+        const string estiloBloque =
+            ".b{position:absolute;left:100px;top:100px;width:200px;height:100px;background:var(--v2-color-acento)}";
+        File.WriteAllText(rutaHtml,
+            $"<!doctype html><html><head><meta charset=\"utf-8\">{enlaces}<style>{estiloBloque}</style></head>"
+            + "<body><div class=\"v2-ventana\"><div class=\"b\"></div></div></body></html>");
+
+        // Primera corrida: mockup y vista con el mismo bloque de color, aprueba y deja resultado.json.
+        ComparacionVisual.CompararConMockup(VistaBloque(0), null, rutaHtml);
+
+        var pantalla = ComparacionVisual.NombrePantalla(rutaHtml);
+        var carpeta = Path.Combine(ComparacionVisual.CarpetaSalida, pantalla);
+        var resultadoJson = Path.Combine(carpeta, "resultado.json");
+        Assert.True(File.Exists(resultadoJson));
+        var indiceRaiz = Path.GetDirectoryName(Path.GetFullPath(carpeta))!;
+        Assert.Contains(Uri.EscapeDataString(pantalla), File.ReadAllText(Path.Combine(indiceRaiz, "index.html")));
+
+        // Se borra el mockup: la segunda corrida no puede capturar y CapturarAsync lanza.
+        File.Delete(rutaHtml);
+
+        Assert.ThrowsAny<Exception>(() => ComparacionVisual.CompararConMockup(VistaBloque(0), null, rutaHtml));
+
+        Assert.False(File.Exists(resultadoJson));
+        Assert.DoesNotContain(Uri.EscapeDataString(pantalla), File.ReadAllText(Path.Combine(indiceRaiz, "index.html")));
+    }
 }
