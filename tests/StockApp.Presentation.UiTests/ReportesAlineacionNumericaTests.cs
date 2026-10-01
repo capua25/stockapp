@@ -1,7 +1,8 @@
+using System;
 using System.Linq;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
-using Avalonia.Layout;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using StockApp.Application.Reportes;
@@ -54,7 +55,18 @@ public class ReportesAlineacionNumericaTests
 
         Assert.True(celdasNum.Count > 0,
             "No se realizó ninguna DataGridCell.num: sin celdas no hay nada que custodiar.");
+        // Se mide el EFECTO (el número termina contra el borde derecho de la celda y no está
+        // estirado), no el mecanismo: DataGridCell.num ya NO usa HorizontalContentAlignment=Right
+        // (ver DataGridCeldaNumericaOrdenTests y Themes/DataGrid.axaml), alinea el TextBlock.
         Assert.All(celdasNum, c =>
-            Assert.Equal(HorizontalAlignment.Right, c.HorizontalContentAlignment));
+        {
+            var tb = c.GetVisualDescendants().OfType<TextBlock>().Single();
+            var anchoTexto = tb.DesiredSize.Width - tb.Margin.Left - tb.Margin.Right;
+            var bordeDerecho = tb.TranslatePoint(new Point(tb.Bounds.Width, 0), c)!.Value.X;
+            Assert.True(Math.Abs(tb.Bounds.Width - anchoTexto) < 0.5,
+                $"'{tb.Text}' está estirado ({tb.Bounds.Width:F1}px para un texto de {anchoTexto:F1}px): no queda a la derecha.");
+            Assert.True(Math.Abs(bordeDerecho - (c.Bounds.Width - c.Padding.Right - tb.Margin.Right)) < 0.5,
+                $"'{tb.Text}' termina en x={bordeDerecho:F1} y el borde derecho útil de la celda es x={c.Bounds.Width - c.Padding.Right - tb.Margin.Right:F1}.");
+        });
     }
 }

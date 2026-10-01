@@ -129,10 +129,16 @@
     </Style>
 
     <!-- Celda numerica. Hoy este estilo esta COPIADO 7 veces en vistas sueltas; la
-         tanda 10 borra esas copias y se apoya en este. -->
-    <Style Selector="DataGridCell.num">
-        <Setter Property="HorizontalContentAlignment" Value="Right" />
-    </Style>
+         tanda 10 borra esas copias y se apoya en este.
+         La alineación a la derecha la hace SOLO el TextBlock. NO pongas
+         HorizontalContentAlignment="Right" en DataGridCell.num: el template de la celda lo pasa
+         como HorizontalAlignment del ContentPresenter, que queda ajustado al contenido, y al
+         ordenar (celdas recicladas) el número perdía el último carácter ("75" -> "7"). El
+         DesiredSize del presenter cambia durante el measure de la grilla sin invalidar su
+         arrange, y Layoutable.Arrange se saltea porque recibe el mismo rectángulo: el presenter
+         conserva el ancho del valor anterior. Con el presenter estirado, su rectángulo no
+         depende del texto y el TextBlock, que sí se invalida al cambiar el texto, se re-alinea
+         solo. Guardián: DataGridCeldaNumericaOrdenTests. -->
     <Style Selector="DataGridCell.num TextBlock">
         <Setter Property="HorizontalAlignment" Value="Right" />
     </Style>
