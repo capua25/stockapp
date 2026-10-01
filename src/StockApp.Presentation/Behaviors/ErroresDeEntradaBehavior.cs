@@ -34,6 +34,17 @@ public static class ErroresDeEntradaBehavior
     public static readonly AttachedProperty<bool> ReportarProperty =
         AvaloniaProperty.RegisterAttached<Control, Control, bool>("Reportar");
 
+    /// <summary>
+    /// Sobre un <see cref="DataGrid"/> (global vía Themes/DataGrid.axaml): si la celda en edición
+    /// tiene un campo en rojo, el commit se CANCELA y la celda sigue en edición. Sin esto, terminar
+    /// la edición (Enter, Tab, click en otra fila) descartaba el editor: la fila quedaba con el
+    /// valor ANTERIOR, el error desaparecía de pantalla y el comando de confirmar se rehabilitaba
+    /// (verificado con NuevaImportacionView: commit=True, Monto viejo, PuedeConfirmar=True).
+    /// Escape (cancelar la edición) sigue funcionando: vuelve al valor anterior a la vista.
+    /// </summary>
+    public static readonly AttachedProperty<bool> RetenerEdicionInvalidaProperty =
+        AvaloniaProperty.RegisterAttached<DataGrid, DataGrid, bool>("RetenerEdicionInvalida");
+
     /// <summary>Dueño al que el control reportó su error (para poder retirarlo aunque cambie el árbol).</summary>
     private static readonly AttachedProperty<IConErroresDeEntrada?> DuenioProperty =
         AvaloniaProperty.RegisterAttached<Control, Control, IConErroresDeEntrada?>("DuenioErroresDeEntrada");
@@ -43,6 +54,12 @@ public static class ErroresDeEntradaBehavior
     static ErroresDeEntradaBehavior()
     {
         ReportarProperty.Changed.AddClassHandler<Control>(OnReportarChanged);
+        RetenerEdicionInvalidaProperty.Changed.AddClassHandler<DataGrid>((grilla, e) =>
+        {
+            grilla.CellEditEnding -= AlTerminarEdicionDeCelda;
+            if (e.GetNewValue<bool>())
+                grilla.CellEditEnding += AlTerminarEdicionDeCelda;
+        });
         DataValidationErrors.HasErrorsProperty.Changed.AddClassHandler<Control>((control, _) =>
         {
             if (GetReportar(control))
@@ -53,6 +70,18 @@ public static class ErroresDeEntradaBehavior
     public static bool GetReportar(Control control) => control.GetValue(ReportarProperty);
 
     public static void SetReportar(Control control, bool value) => control.SetValue(ReportarProperty, value);
+
+    public static bool GetRetenerEdicionInvalida(DataGrid grilla) => grilla.GetValue(RetenerEdicionInvalidaProperty);
+
+    public static void SetRetenerEdicionInvalida(DataGrid grilla, bool value) => grilla.SetValue(RetenerEdicionInvalidaProperty, value);
+
+    private static void AlTerminarEdicionDeCelda(object? sender, DataGridCellEditEndingEventArgs e)
+    {
+        if (e.EditAction == DataGridEditAction.Commit
+            && e.EditingElement is Control editor
+            && editor.GetSelfAndVisualDescendants().OfType<Control>().Any(DataValidationErrors.GetHasErrors))
+            e.Cancel = true;
+    }
 
     private static void OnReportarChanged(Control control, AvaloniaPropertyChangedEventArgs e)
     {

@@ -54,6 +54,10 @@
          ════════════════════════════════════════════════════════════════════ -->
 
     <Style Selector="DataGrid">
+        <!-- Integridad de datos (bug 2026-10-01): una celda con texto inválido (ej. "5.4") no
+             termina su edición; si no, la fila se quedaba con el valor anterior en silencio.
+             Ver ErroresDeEntradaBehavior.RetenerEdicionInvalida. -->
+        <Setter Property="(b:ErroresDeEntradaBehavior.RetenerEdicionInvalida)" Value="True" />
         <Setter Property="RowHeight" Value="36" />
         <Setter Property="Background" Value="{DynamicResource SuperficieBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource BordeBrush}" />

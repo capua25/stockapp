@@ -310,4 +310,42 @@ public class NuevaImportacionGastosGridTests
         window.Close();
         Dispatcher.UIThread.RunJobs();
     }
+
+    /// <summary>
+    /// La grilla no puede "tragarse" el texto inválido: sin esto, terminar la edición (Enter,
+    /// Tab, click en otra fila) descartaba el editor en rojo, la fila quedaba con el monto
+    /// ANTERIOR, el error desaparecía y Confirmar se volvía a habilitar (verificado: commit=True,
+    /// Monto=1000, PuedeConfirmar=True). Ahora el commit se cancela y la celda sigue en edición.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task CeldaMonto_TextoInvalido_TerminarLaEdicion_NoDescartaElErrorNiHabilitaConfirmar()
+    {
+        var (window, grid, vm) = await MontarEnPasoRevisarAsync(GastoConMonto(1000m));
+        var fila = vm.FilasGasto[0];
+        fila.DesbloquearCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        var caja = EditarMonto(window, grid, fila);
+        caja.Text = "1000.5";
+        Dispatcher.UIThread.RunJobs();
+
+        var commit = grid.CommitEdit();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(commit);
+        Assert.True(DataValidationErrors.GetHasErrors(caja));
+        Assert.True(ArbolVisual.EsVisibleEnArbol(caja));
+        Assert.False(vm.PuedeConfirmar);
+        Assert.False(vm.ConfirmarCommand.CanExecute(null));
+
+        caja.Text = "1000,5";
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(grid.CommitEdit());
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(1000.5m, fila.Monto);
+        Assert.True(vm.PuedeConfirmar);
+
+        window.Close();
+        Dispatcher.UIThread.RunJobs();
+    }
 }
