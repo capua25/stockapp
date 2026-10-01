@@ -64,7 +64,7 @@ public class TestApp : Avalonia.Application
         // Registro del proveedor de íconos (mismo que Program.cs en producción): sin esto,
         // cualquier <i:Icon Value="mdi-..."/> (usado por ej. en NuevaImportacionView.axaml para el
         // candado de celda bloqueada) tira KeyNotFoundException "No IIconProvider with prefix
-        // matching..." al construir el layout de la celda — Task 7 F5d E2.
+        // matching..." al construir el layout de la celda.
         if (!_iconProviderRegistrado)
         {
             IconProvider.Current.Register<MaterialDesignIconProvider>();
@@ -88,7 +88,8 @@ public class TestApp : Avalonia.Application
 
         // Mismo orden exacto que App.axaml: recursos primero (tokens viejos, tokens v2,
         // ControlTheme de Controls/), después FluentTheme y los StyleInclude (el Fluent.xaml del
-        // DataGrid, el UI Kit viejo y, a partir de la Task 10, los estilos v2 bajo .ui2).
+        // DataGrid, el UI Kit viejo y, al final, los estilos v2 bajo ".ui2": tienen que cargar
+        // después del UI Kit viejo para poder overridearlo por selector de clase).
         foreach (var fuente in ResourceIncludes)
         {
             Resources.MergedDictionaries.Add(new ResourceInclude(new Uri("avares://StockApp.Presentation.UiTests/"))
