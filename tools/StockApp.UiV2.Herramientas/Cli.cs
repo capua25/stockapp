@@ -1,4 +1,5 @@
 using System.Globalization;
+using Microsoft.Playwright;
 using StockApp.UiV2.Herramientas.Imagenes;
 using StockApp.UiV2.Herramientas.Mockups;
 using StockApp.UiV2.Herramientas.Tokens;
@@ -86,6 +87,17 @@ public static class Cli
             return 1;
         }
         catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or FileNotFoundException)
+        {
+            error.WriteLine(ex.Message);
+            return 1;
+        }
+        // M4 (revisión final): "capturar-mockup" puede fallar directo contra Playwright sin pasar
+        // por el catch de CapturadorMockup (p. ej. un fallo del navegador que no matchea el
+        // mensaje "Executable doesn't exist"). OJO: TimeoutException de Playwright .NET es
+        // System.TimeoutException, NO una subclase de PlaywrightException (verificado contra
+        // Microsoft.Playwright 1.63.0: la propia documentación XML del paquete lo declara así, y
+        // CapturadorMockupTests lo reproduce con ese tipo exacto) — hay que capturar los dos.
+        catch (Exception ex) when (ex is PlaywrightException or TimeoutException)
         {
             error.WriteLine(ex.Message);
             return 1;
