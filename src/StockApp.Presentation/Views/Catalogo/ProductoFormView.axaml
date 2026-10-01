@@ -81,7 +81,8 @@
                            TextWrapping="Wrap" />
 
                 <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
-                    <Button Classes="primary" Content="Guardar" Command="{Binding GuardarCommand}" />
+                    <Button Classes="primary" Content="Guardar" Command="{Binding GuardarCommand}"
+                           ToolTip.Tip="{Binding MotivoBloqueoPorErrores}" ToolTip.ShowOnDisabled="True" />
                     <Button Classes="secondary" Content="Cancelar" Command="{Binding CancelarCommand}" />
                 </StackPanel>
 

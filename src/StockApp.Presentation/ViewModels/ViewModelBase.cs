@@ -4,10 +4,47 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace StockApp.Presentation.ViewModels;
 
-public abstract class ViewModelBase : ObservableObject
+public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
 {
+    /// <summary>Explicación del botón de guardar deshabilitado por <see cref="HayErroresDeEntrada"/>.</summary>
+    public const string MensajeErroresDeEntrada = "Corregí los campos marcados en rojo para poder guardar.";
+
+    private bool _hayErroresDeEntrada;
     private bool _sinPermiso;
     private string? _mensajeSinPermiso;
+
+    /// <summary>
+    /// True mientras algún campo de la vista tiene un error de entrada que vive SOLO en la View
+    /// (texto que el converter rechaza, ej. "5.4"): ese texto nunca llegó a la propiedad del
+    /// ViewModel, que conserva el valor ANTERIOR. Lo escribe
+    /// <see cref="StockApp.Presentation.Behaviors.ErroresDeEntradaBehavior"/> (global en el tema
+    /// para todo TextBox). Todo comando de guardar/confirmar debe sumar
+    /// <c>&amp;&amp; !HayErroresDeEntrada</c> a su CanExecute y notificarse en
+    /// <see cref="AlCambiarErroresDeEntrada"/>; si no, guarda en silencio el valor viejo (bug de
+    /// integridad 2026-10-01).
+    /// </summary>
+    public bool HayErroresDeEntrada
+    {
+        get => _hayErroresDeEntrada;
+        set
+        {
+            if (!SetProperty(ref _hayErroresDeEntrada, value))
+                return;
+
+            OnPropertyChanged(nameof(MotivoBloqueoPorErrores));
+            AlCambiarErroresDeEntrada();
+        }
+    }
+
+    /// <summary>Tooltip del botón de guardar: <see cref="MensajeErroresDeEntrada"/> mientras
+    /// <see cref="HayErroresDeEntrada"/>; null (sin tooltip) si no.</summary>
+    public string? MotivoBloqueoPorErrores => HayErroresDeEntrada ? MensajeErroresDeEntrada : null;
+
+    /// <summary>Hook para que el ViewModel concreto re-evalúe el CanExecute de sus comandos de
+    /// guardar/confirmar (ej. <c>GuardarCommand.NotifyCanExecuteChanged()</c>).</summary>
+    protected virtual void AlCambiarErroresDeEntrada()
+    {
+    }
 
     /// <summary>
     /// True cuando la última carga protegida por <see cref="EjecutarCargaProtegidaAsync"/> fue

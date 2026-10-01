@@ -164,7 +164,15 @@ public partial class ProductoFormViewModel : ViewModelBase
     private bool PuedeGuardar()
         => !string.IsNullOrWhiteSpace(Codigo)
         && !string.IsNullOrWhiteSpace(Nombre)
-        && UnidadMedidaSeleccionada is not null;
+        && UnidadMedidaSeleccionada is not null
+        && !HayErroresDeEntrada;
+
+    /// <summary>Un campo en rojo (texto que no llegó al ViewModel) bloquea Guardar: ver
+    /// <see cref="ViewModelBase.HayErroresDeEntrada"/>.</summary>
+    protected override void AlCambiarErroresDeEntrada()
+    {
+        GuardarCommand.NotifyCanExecuteChanged();
+    }
 
     /// <summary>
     /// Bifurca entre alta y modificación según <see cref="EsEdicion"/>. Ninguna excepción de

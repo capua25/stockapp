@@ -103,7 +103,14 @@ public abstract partial class MovimientoRegistroViewModelBase : ViewModelBase
     }
 
     private bool PuedeRegistrar()
-        => ProductoSeleccionado != null && Cantidad > 0;
+        => ProductoSeleccionado != null && Cantidad > 0 && !HayErroresDeEntrada;
+
+    /// <summary>Un campo en rojo (texto que no llegó al ViewModel) bloquea Registrar: ver
+    /// <see cref="ViewModelBase.HayErroresDeEntrada"/>.</summary>
+    protected override void AlCambiarErroresDeEntrada()
+    {
+        RegistrarCommand.NotifyCanExecuteChanged();
+    }
 
     [RelayCommand(CanExecute = nameof(PuedeRegistrar))]
     private async Task RegistrarAsync()

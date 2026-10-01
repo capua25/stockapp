@@ -14,6 +14,7 @@ using Avalonia.VisualTree;
 using StockApp.Application.Catalogo;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Presentation.ViewModels;
 using StockApp.Presentation.ViewModels.Movimientos;
 using Xunit;
 
@@ -838,5 +839,94 @@ public class IngresoPorFacturaViewTests
         Assert.Null(fila.ProductoNuevoNombre);
         Assert.Null(fila.ProductoNuevoCodigo);
         Assert.Equal(productoExistente.Nombre, fila.NombreMostrado);
+    }
+
+    // ── Guardar/Agregar bloqueados con errores de entrada (bug de integridad 2026-10-01) ──
+    // Un TextBox con texto inválido nunca llega al ViewModel: sin bloqueo, "Agregar artículo"
+    // usaba la cantidad/precio ANTERIOR. Mecanismo compartido: ErroresDeEntradaBehavior +
+    // ViewModelBase.HayErroresDeEntrada (ver GuardarBloqueadoConErroresDeEntradaTests).
+
+    private static (Window Window, IngresoPorFacturaViewModel Vm, IngresoPorFacturaServiceFake Servicio, ProductoDto Producto) MontarListoParaGuardar()
+    {
+        var proveedor = new Proveedor { Id = 1, Nombre = "PRUEBA GUARDAR proveedor", Activo = true };
+        var fuente = new FuenteFinanciamiento { Id = 1, Nombre = "Rentas Generales", Activo = true };
+        var rubro = new RubroGasto { Id = 1, Codigo = 10, Nombre = "Materiales", Activo = true };
+        var producto = Producto(1, "PRUEBA GUARDAR pala");
+        var (window, vm, servicio, _) = Montar(
+            proveedores: new[] { proveedor }, fuentes: new[] { fuente }, rubros: new[] { rubro },
+            productos: new[] { producto });
+
+        vm.ProveedorSeleccionado = proveedor;
+        vm.FuenteSeleccionada = fuente;
+        vm.RubroSeleccionado = rubro;
+        vm.Detalle = "PRUEBA GUARDAR";
+        vm.MontoTotalTexto = "100,00";
+        CargarArticuloPorClicksReales(window, producto, "1", "100");
+        Assert.Single(vm.Renglones);
+        return (window, vm, servicio, producto);
+    }
+
+    [AvaloniaTheory]
+    [InlineData("Cantidad")]
+    [InlineData("Precio unitario")]
+    public void ZonaDeCarga_TextoInvalido_DeshabilitaAgregarYGuardar_YAlCorregirSeHabilitan(string campo)
+    {
+        var (window, vm, _, producto) = MontarListoParaGuardar();
+        var agregar = BotonPorCommand(window, vm.AgregarArticuloCommand);
+        var guardar = BotonPorCommand(window, vm.GuardarCommand);
+        ComboPorItemsSource(window, vm.ProductosDisponibles).SelectedItem = producto;
+        Tipear(CajaPorPlaceholder(window, "Cantidad"), "2");
+        Tipear(CajaPorPlaceholder(window, "Precio unitario"), "10");
+        Assert.True(agregar.IsEffectivelyEnabled);
+        Assert.True(guardar.IsEffectivelyEnabled);
+
+        var caja = CajaPorPlaceholder(window, campo);
+        Tipear(caja, "5.4");
+
+        Assert.False(agregar.IsEffectivelyEnabled);
+        Assert.False(guardar.IsEffectivelyEnabled);
+        Assert.False(vm.AgregarArticuloCommand.CanExecute(null));
+        Assert.False(vm.GuardarCommand.CanExecute(null));
+        Assert.Equal(ViewModelBase.MensajeErroresDeEntrada, ToolTip.GetTip(agregar));
+        Assert.Equal(ViewModelBase.MensajeErroresDeEntrada, ToolTip.GetTip(guardar));
+        Assert.True(ToolTip.GetShowOnDisabled(agregar));
+        Assert.True(ToolTip.GetShowOnDisabled(guardar));
+
+        Tipear(caja, "5,4");
+
+        Assert.True(agregar.IsEffectivelyEnabled);
+        Assert.True(guardar.IsEffectivelyEnabled);
+    }
+
+    [AvaloniaFact]
+    public void ZonaDeCarga_CantidadInvalida_ClickEnAgregar_NoAgregaConLaCantidadVieja()
+    {
+        var (window, vm, _, producto) = MontarListoParaGuardar();
+        ComboPorItemsSource(window, vm.ProductosDisponibles).SelectedItem = producto;
+        var cantidad = CajaPorPlaceholder(window, "Cantidad");
+        Tipear(cantidad, "3");
+        Tipear(CajaPorPlaceholder(window, "Precio unitario"), "10");
+
+        Tipear(cantidad, "3.5");
+        Clickear(window, BotonPorTexto(window, "Agregar artículo"));
+
+        Assert.Single(vm.Renglones);   // solo el cargado en el montaje: NO se agregó uno con 3
+
+        Tipear(cantidad, "3,5");
+        Clickear(window, BotonPorTexto(window, "Agregar artículo"));
+
+        Assert.Equal(2, vm.Renglones.Count);
+        Assert.Equal(3.5m, vm.Renglones[1].Cantidad);
+    }
+
+    [AvaloniaFact]
+    public void ZonaDeCarga_CantidadInvalida_ClickEnGuardar_NoGuarda()
+    {
+        var (window, vm, servicio, _) = MontarListoParaGuardar();
+
+        Tipear(CajaPorPlaceholder(window, "Cantidad"), "5.4");
+        Clickear(window, BotonPorCommand(window, vm.GuardarCommand));
+
+        Assert.Empty(servicio.Registrados);
     }
 }

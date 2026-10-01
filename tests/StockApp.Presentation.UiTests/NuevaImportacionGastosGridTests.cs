@@ -264,4 +264,50 @@ public class NuevaImportacionGastosGridTests
         window.Close();
         Dispatcher.UIThread.RunJobs();
     }
+
+    // ── Confirmar bloqueado con errores de entrada (bug de integridad 2026-10-01) ──
+    // La celda de Monto en edición con texto inválido nunca llega a la fila: sin bloqueo,
+    // Confirmar importaba el monto ANTERIOR. Ver GuardarBloqueadoConErroresDeEntradaTests.
+
+    private static TextBox EditarMonto(Window window, DataGrid grid, FilaGastoEditableVm fila)
+    {
+        grid.SelectedItem = fila;
+        grid.CurrentColumn = grid.Columns.First(c => Equals(c.Header, "Monto"));
+        Dispatcher.UIThread.RunJobs();
+        grid.BeginEdit();
+        Dispatcher.UIThread.RunJobs();
+        return window.GetVisualDescendants().OfType<TextBox>()
+            .First(t => ReferenceEquals(t.DataContext, fila) && t.IsEnabled && t.TemplatedParent is null);
+    }
+
+    [AvaloniaFact]
+    public async Task CeldaMonto_TextoInvalido_DeshabilitaConfirmar_YExplicaPorQue_YAlCorregirSeHabilita()
+    {
+        var (window, grid, vm) = await MontarEnPasoRevisarAsync(GastoConMonto(1000m));
+        var fila = vm.FilasGasto[0];
+        var confirmar = window.GetVisualDescendants().OfType<Button>().First(b => ReferenceEquals(b.Command, vm.ConfirmarCommand));
+        Assert.True(confirmar.IsEffectivelyEnabled);
+        fila.DesbloquearCommand.Execute(null);   // el monto que vino de la planilla arranca con candado
+        Dispatcher.UIThread.RunJobs();
+
+        var caja = EditarMonto(window, grid, fila);
+        caja.Text = "1000.5";
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(1000m, fila.Monto);
+        Assert.False(confirmar.IsEffectivelyEnabled);
+        Assert.False(vm.ConfirmarCommand.CanExecute(null));
+        Assert.False(vm.PuedeConfirmar);
+        Assert.Contains(StockApp.Presentation.ViewModels.ViewModelBase.MensajeErroresDeEntrada, vm.MensajeConfirmarBloqueado);
+
+        caja.Text = "1000,5";
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(1000.5m, fila.Monto);
+        Assert.True(confirmar.IsEffectivelyEnabled);
+        Assert.Null(vm.MensajeConfirmarBloqueado);
+
+        window.Close();
+        Dispatcher.UIThread.RunJobs();
+    }
 }

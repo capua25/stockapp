@@ -74,6 +74,8 @@
                 <Button Classes="primary"
                         Content="Registrar"
                         Command="{Binding RegistrarCommand}"
+                        ToolTip.Tip="{Binding MotivoBloqueoPorErrores}"
+                        ToolTip.ShowOnDisabled="True"
                         HorizontalAlignment="Stretch"
                         HorizontalContentAlignment="Center" />
 
