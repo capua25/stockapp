@@ -1,5 +1,6 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:b="using:StockApp.Presentation.Behaviors">
 
     <!-- ════════════════════════════════════════════════════════════════════
          StockApp UI Kit — Override del DataGrid: matar el recuadro de foco.
@@ -86,6 +87,15 @@
              grilla (DataGridColumn.ActualMinWidth: _minWidth ?? OwningGrid?.MinColumnWidth). -->
         <Setter Property="CanUserResizeColumns" Value="True" />
         <Setter Property="MinColumnWidth" Value="40" />
+
+        <!-- Con el resize habilitado, DataGrid 12.0.1 trata el crecimiento de una columna Auto
+             (los datos llegan después de armar la grilla vacía) como un resize que solo le saca
+             ancho a las columnas de su DERECHA: "Usuario" quedaba cortado y la Stock de 220 en
+             ~198. El behavior lleva las Auto a su ancho natural tomando de las columnas * de
+             cualquier posición, y respeta los arrastres del usuario. Va acá, en el estilo de TODA
+             DataGrid, para que las grillas nuevas lo hereden sin que nadie se acuerde.
+             Guardián: DataGridColumnasAutoAjusteTests. -->
+        <Setter Property="b:DataGridColumnasAutoBehavior.AjustarColumnasAuto" Value="True" />
     </Style>
 
     <!-- Fondo alternado: Avalonia.Controls.DataGrid 12.0.1 NO tiene la propiedad
