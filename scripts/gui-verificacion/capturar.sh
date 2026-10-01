@@ -1,160 +1,112 @@
 #!/usr/bin/env bash
-# Captura de pantalla para verificación visual de la GUI (Avalonia) bajo WSLg.
+# Captura de pantalla de UNA VENTANA IDENTIFICADA de la app (Avalonia) bajo WSLg.
 #
-# GOTCHA CRÍTICO (ver README.md): las herramientas X11 clásicas (scrot, xwd,
-# import, XGetImage sobre la ventana o el root window) devuelven pantalla
-# NEGRA para ventanas de WSLg, porque WSLg compone vía RDP hacia el lado
-# Windows y esos píxeles nunca llegan al root pixmap de X11 aunque
-# `xwininfo` reporte la ventana como IsViewable con geometría correcta.
-# Por eso esta captura se hace 100% desde el lado Windows, vía
-# powershell.exe + System.Drawing.Graphics.CopyFromScreen.
+# REGLA (2026-10-01, incidente de privacidad): este script NUNCA captura el escritorio. Antes,
+# si no encontraba la ventana, caía a capturar todos los monitores del usuario (que tenía una
+# videollamada abierta) y salía con 0. Ese modo fue ELIMINADO. Ahora, si la ventana no se
+# encuentra, no es la que está al frente, o su rectángulo es sospechoso: exit != 0, ningún PNG,
+# mensaje claro a stderr. Detalle de códigos de salida en lib-ventana.sh y README.md.
+#
+# GOTCHA CRÍTICO (ver README.md): las herramientas X11 clásicas (scrot, xwd, import, XGetImage
+# sobre la ventana o el root window) devuelven pantalla NEGRA para ventanas de WSLg, porque WSLg
+# compone vía RDP hacia el lado Windows. Por eso esta captura se hace desde el lado Windows, vía
+# powershell.exe + System.Drawing.Graphics.CopyFromScreen, recortando SOLO el rectángulo de la
+# ventana confirmada.
 #
 # Uso:
-#   ./capturar.sh <ruta-salida.png> [substring-del-titulo-de-ventana]
+#   ./capturar.sh <ruta-salida.png> [substring-del-titulo-de-ventana=Municipal]
 #
-# Si se pasa un título (ej. "Municipal" -- la ventana de la app se llama
-# "Gestión Municipal"; "StockApp" NO matchea), el script busca esa ventana con
-# Get-Process, la restaura si está minimizada y la trae al frente antes de
-# capturar solo su rectángulo. Si no se pasa título, o no se encuentra la
-# ventana, captura el escritorio virtual completo (todos los monitores) y
-# lo avisa con una ADVERTENCIA a stderr (puede exponer otras ventanas/monitores).
+# La ventana de la app se llama "Gestión Municipal"; "StockApp" NO matchea. Popups de la app
+# (ComboBox / AutoCompleteBox abiertos): se capturan el rectángulo de la ventana principal si el
+# popup en primer plano es de la MISMA app (ver lib-ventana.sh).
 set -euo pipefail
 
+GUI_TAG="capturar"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib-ventana.sh
+source "$SCRIPT_DIR/lib-ventana.sh"
+
 if [[ $# -lt 1 ]]; then
-    echo "Uso: $0 <ruta-salida.png> [substring-del-titulo-de-ventana]" >&2
-    exit 1
+    echo "Uso: $0 <ruta-salida.png> [substring-del-titulo-de-ventana=Municipal]" >&2
+    exit "$EXIT_USO"
 fi
 
 OUTPUT_PATH="$(realpath -m "$1")"
-WINDOW_TITLE="${2:-}"
+WINDOW_TITLE="${2-Municipal}"
 OUTPUT_DIR="$(dirname "$OUTPUT_PATH")"
-mkdir -p "$OUTPUT_DIR"
 
-if ! command -v powershell.exe >/dev/null 2>&1; then
-    echo "ERROR: no se encontró powershell.exe en el PATH. Este script requiere WSL con interop habilitado hacia Windows." >&2
-    exit 1
-fi
+gui_validar_titulo "$WINDOW_TITLE"
+gui_exigir_powershell
 
+# Un PNG viejo en la ruta de salida podría confundirse con una captura nueva si esta falla.
+rm -f "$OUTPUT_PATH"
+
+gui_cargar_xdotool   # opcional: solo habilita aceptar popups de la misma app
+gui_preparar "$WINDOW_TITLE"
+
+RECT_W=$((GUI_R - GUI_L))
+RECT_H=$((GUI_B - GUI_T))
+AUX=$GUI_FG_ES_AUX
+HOST_SEGURO="${GUI_HOST_PROC//[^A-Za-z0-9._-]/}"
+MARGEN="${GUI_MARGEN_SOMBRA:-32}"
+gui_es_entero "$MARGEN" && (( MARGEN >= 0 )) || gui_abortar "$EXIT_USO" "GUI_MARGEN_SOMBRA debe ser un entero >= 0."
 WIN_TMP_NAME="stockapp-shot-$$-$(date +%s).png"
 
-log() { echo "[capturar] $*" >&2; }
+gui_log "Capturando \"$GUI_TITULO_REAL\" (hwnd $GUI_HWND, ${RECT_W}x${RECT_H} en $GUI_L,$GUI_T)..."
 
-log "Capturando vía powershell.exe (System.Drawing.CopyFromScreen)..."
+rc=0
+SALIDA="$(gui_ps "$PS_OP_CAPTURAR" \
+    "\$hwnd = [IntPtr]$GUI_HWND" "\$winpid = $GUI_WINPID" "\$hostProc = '$HOST_SEGURO'" "\$aux = $AUX" \
+    "\$rl = $GUI_L" "\$rt = $GUI_T" "\$rw = $RECT_W" "\$rh = $RECT_H" "\$margen = $MARGEN" "\$nombre = '$WIN_TMP_NAME'")" || rc=$?
 
-# El script de PowerShell:
-# 1. Si se pidió un título, busca el proceso por MainWindowTitle, lo restaura
-#    (ShowWindow SW_RESTORE=9, por si arrancó minimizado -- gotcha documentado
-#    en el README) y lo trae al frente (SetForegroundWindow), y captura SOLO
-#    su rectángulo (GetWindowRect).
-# 2. Si no hay título o no se encontró la ventana, captura
-#    SystemInformation::VirtualScreen (TODOS los monitores, no solo el
-#    primario -- necesario porque en hosts multi-monitor la app puede estar
-#    en un monitor secundario con coordenadas negativas).
-powershell.exe -NoProfile -NonInteractive -Command "
-Add-Type -AssemblyName System.Windows.Forms
-Add-Type -AssemblyName System.Drawing
-Add-Type @'
-using System;
-using System.Runtime.InteropServices;
-public class Win32Capture {
-    [DllImport(\"user32.dll\")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-    [DllImport(\"user32.dll\")] public static extern bool SetForegroundWindow(IntPtr hWnd);
-    [DllImport(\"user32.dll\")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
-    public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
-}
-'@
+case "$rc" in
+    0) ;;
+    4) gui_abortar "$EXIT_RECT" "el rectángulo de la ventana cambió entre la verificación y la captura." ;;
+    5) gui_pista_recuperacion; gui_abortar "$EXIT_PRIMER_PLANO" "la ventana dejó de estar en primer plano justo antes de capturar." ;;
+    *) gui_abortar "$EXIT_INTEROP" "powershell.exe falló al capturar (exit $rc)." ;;
+esac
 
-\$title = '$WINDOW_TITLE'
-\$rectFound = \$false
-\$x = 0; \$y = 0; \$w = 0; \$h = 0
-
-if (\$title -ne '') {
-    \$proc = Get-Process | Where-Object { \$_.MainWindowTitle -like \"*\$title*\" -and \$_.MainWindowHandle -ne 0 } | Select-Object -First 1
-    if (\$proc) {
-        [Win32Capture]::ShowWindow(\$proc.MainWindowHandle, 9) | Out-Null
-        Start-Sleep -Milliseconds 300
-        [Win32Capture]::SetForegroundWindow(\$proc.MainWindowHandle) | Out-Null
-        Start-Sleep -Milliseconds 300
-        \$rect = New-Object Win32Capture+RECT
-        [Win32Capture]::GetWindowRect(\$proc.MainWindowHandle, [ref]\$rect) | Out-Null
-        if (\$rect.Right -gt \$rect.Left -and \$rect.Bottom -gt \$rect.Top) {
-            \$x = \$rect.Left; \$y = \$rect.Top
-            \$w = \$rect.Right - \$rect.Left; \$h = \$rect.Bottom - \$rect.Top
-            \$rectFound = \$true
-        }
-    }
-}
-
-if (-not \$rectFound) {
-    \$vs = [System.Windows.Forms.SystemInformation]::VirtualScreen
-    \$x = \$vs.X; \$y = \$vs.Y; \$w = \$vs.Width; \$h = \$vs.Height
-    Write-Output 'CAPTURAR_FALLBACK_ESCRITORIO'
-}
-
-\$bmp = New-Object System.Drawing.Bitmap(\$w, \$h)
-\$g = [System.Drawing.Graphics]::FromImage(\$bmp)
-\$g.CopyFromScreen(\$x, \$y, 0, 0, \$bmp.Size)
-\$dest = Join-Path \$env:TEMP '$WIN_TMP_NAME'
-\$bmp.Save(\$dest, [System.Drawing.Imaging.ImageFormat]::Png)
-\$g.Dispose(); \$bmp.Dispose()
-Write-Output \$dest
-" > /tmp/capturar-winpath-$$.txt 2>&1
-
-if grep -q 'CAPTURAR_FALLBACK_ESCRITORIO' /tmp/capturar-winpath-$$.txt; then
-    if [[ -n "$WINDOW_TITLE" ]]; then
-        echo "[capturar] ADVERTENCIA: no se encontró ninguna ventana que matchee \"$WINDOW_TITLE\"; se capturó el ESCRITORIO COMPLETO (todos los monitores), que puede exponer contenido ajeno a la app. La ventana de la app se llama \"Gestión Municipal\": pasá \"Municipal\" como título." >&2
-    else
-        echo "[capturar] ADVERTENCIA: sin título de ventana se captura el ESCRITORIO COMPLETO (todos los monitores), que puede exponer contenido ajeno a la app. Pasá \"Municipal\" como título." >&2
-    fi
-fi
-WIN_PATH="$(tail -n1 /tmp/capturar-winpath-$$.txt | tr -d '\r')"
-rm -f /tmp/capturar-winpath-$$.txt
-
+WIN_PATH="$(printf '%s\n' "$SALIDA" | tail -n1)"
 if [[ -z "$WIN_PATH" ]]; then
-    echo "ERROR: powershell.exe no devolvió una ruta de archivo. Revisá el interop WSL<->Windows." >&2
-    exit 1
+    gui_abortar "$EXIT_INTEROP" "powershell.exe no devolvió una ruta de archivo. Revisá el interop WSL<->Windows."
 fi
 
 WSL_SRC_PATH="$(wslpath -u "$WIN_PATH" 2>/dev/null || true)"
 if [[ -z "$WSL_SRC_PATH" || ! -f "$WSL_SRC_PATH" ]]; then
-    echo "ERROR: no se pudo resolver/leer el PNG generado en Windows ($WIN_PATH)." >&2
-    exit 1
+    gui_abortar "$EXIT_INTEROP" "no se pudo resolver/leer el PNG generado en Windows ($WIN_PATH)."
 fi
 
+mkdir -p "$OUTPUT_DIR"
 cp "$WSL_SRC_PATH" "$OUTPUT_PATH"
 rm -f "$WSL_SRC_PATH"
 
 if [[ ! -s "$OUTPUT_PATH" ]]; then
-    echo "ERROR: el PNG resultante está vacío ($OUTPUT_PATH)." >&2
-    exit 1
+    rm -f "$OUTPUT_PATH"
+    gui_abortar "$EXIT_INTEROP" "el PNG resultante está vacío."
 fi
 
-# Chequeo simple anti-pantalla-negra: si PIL está disponible, calculamos el
-# rango de valores de píxeles. Una imagen completamente negra (o de un solo
-# color) tiene rango 0 -- eso es exactamente el síntoma del bug de scrot/X11
-# que este script evita, así que si aparece acá con powershell es señal de
-# que algo más está mal (ventana no encontrada, pantalla apagada, etc.).
+# Chequeo simple anti-pantalla-negra: si PIL está disponible, calculamos el rango de valores de
+# píxeles. Una imagen de un solo color es el síntoma del bug de scrot/X11 (o de una ventana que
+# no estaba pintada). Sale con 7 (NO con 2: 2 es "ventana no encontrada").
+PIL_STATUS=0
 if python3 -c "import PIL" >/dev/null 2>&1; then
-    python3 - "$OUTPUT_PATH" <<'PYEOF'
+    python3 - "$OUTPUT_PATH" <<'PYEOF' || PIL_STATUS=7
 import sys
 from PIL import Image
 
 path = sys.argv[1]
 img = Image.open(path).convert("L")
-extrema = img.getextrema()
-lo, hi = extrema
+lo, hi = img.getextrema()
 if hi - lo < 3:
     print(f"[capturar] ADVERTENCIA: la imagen parece de un solo color (rango {lo}-{hi}). "
           f"Podria ser pantalla negra/vacia. Revisala con la herramienta Read antes de confiar en ella.", file=sys.stderr)
-    sys.exit(2)
+    sys.exit(1)
 print(f"[capturar] OK: imagen con contenido variado (rango de luminancia {lo}-{hi}).", file=sys.stderr)
 PYEOF
-    PIL_STATUS=$?
 else
     echo "[capturar] python3-PIL no disponible: no se pudo chequear automáticamente que la imagen no sea negra." >&2
     echo "[capturar] Verificación manual: abrí $OUTPUT_PATH con la herramienta Read y confirmá a ojo que se ve la app." >&2
-    PIL_STATUS=0
 fi
 
-log "Guardado en $OUTPUT_PATH"
-exit $PIL_STATUS
+gui_log "Guardado en $OUTPUT_PATH"
+exit "$PIL_STATUS"

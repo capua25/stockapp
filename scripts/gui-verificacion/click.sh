@@ -23,73 +23,75 @@
 # perder el foreground entre una captura y la siguiente, aun cuando xdotool
 # la sigue viendo "mapeada" en X11 con geometría normal -- los clicks
 # entonces caen sobre lo que sea que esté realmente en pantalla, no sobre
-# la app. Por eso este script SIEMPRE restaura + trae al frente la ventana
-# (vía powershell.exe, igual que capturar.sh) inmediatamente antes de cada
-# click.
+# la app. Por eso este script restaura + trae al frente la ventana
+# (vía powershell.exe, igual que capturar.sh) antes de cada click.
+#
+# FAIL-CLOSED (2026-10-01, incidente de privacidad): el click solo se manda si
+#   1. la ventana existe, es única y su rectángulo es razonable;
+#   2. es la ventana en primer plano (handle exacto, o un popup de la MISMA
+#      app: ver lib-ventana.sh);
+#   3. el punto cae DENTRO del rectángulo de la ventana (un click fuera se
+#      rechaza);
+#   4. esa verificación (gui_confirmar, al final de gui_preparar) se hace
+#      inmediatamente antes de enviar; mousemove + click salen en UNA sola
+#      invocación de xdotool, sin hueco entre ambos.
+# Si cualquiera falla: exit != 0 SIN mover el mouse ni clickear. Códigos de
+# salida en lib-ventana.sh / README.md.
 #
 # Uso:
 #   ./click.sh <x-imagen> <y-imagen> [titulo-ventana=Municipal] [boton=1]
 #   CLICK_OFFSET_X=38 CLICK_OFFSET_Y=59 ./click.sh <x> <y>
 set -euo pipefail
 
+GUI_TAG="click"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TOOLKIT_DIR="${TOOLKIT_DIR:-/tmp/x11tools}"
-ENV_FILE="$TOOLKIT_DIR/env.sh"
+# shellcheck source=lib-ventana.sh
+source "$SCRIPT_DIR/lib-ventana.sh"
 
 if [[ $# -lt 2 ]]; then
     echo "Uso: $0 <x-imagen> <y-imagen> [titulo-ventana=Municipal] [boton=1]" >&2
-    exit 1
+    exit "$EXIT_USO"
 fi
 
 IMG_X="$1"
 IMG_Y="$2"
-WINDOW_TITLE="${3:-Municipal}"
+WINDOW_TITLE="${3-Municipal}"
 BOTON="${4:-1}"
 OFFSET_X="${CLICK_OFFSET_X:-38}"
 OFFSET_Y="${CLICK_OFFSET_Y:-59}"
 
-log() { echo "[click] $*" >&2; }
+for v in "$IMG_X" "$IMG_Y" "$OFFSET_X" "$OFFSET_Y" "$BOTON"; do
+    gui_es_entero "$v" || gui_abortar "$EXIT_USO" "argumento no numérico: \"$v\"."
+done
 
-if [[ ! -f "$ENV_FILE" ]]; then
-    log "xdotool no está preparado todavía, corriendo setup-toolkit.sh..."
-    "$SCRIPT_DIR/setup-toolkit.sh" >/dev/null
+gui_validar_titulo "$WINDOW_TITLE"
+gui_exigir_powershell
+gui_cargar_xdotool instalar
+[[ -n "$GUI_XDOTOOL" ]] || gui_abortar "$EXIT_USO" "no hay xdotool disponible (setup-toolkit.sh falló)."
+
+gui_log "Verificando y trayendo al frente la ventana que matchea \"$WINDOW_TITLE\"..."
+gui_preparar "$WINDOW_TITLE"
+
+if [[ -z "$GUI_X11_ID" ]]; then
+    gui_abortar "$EXIT_NO_ENCONTRADA" "xdotool no encontró UNA ventana X11 inequívoca que matchee \"$WINDOW_TITLE\"$( ((GUI_X11_AMBIGUO)) && echo " (hay varias de procesos distintos)")."
 fi
-# shellcheck source=/dev/null
-source "$ENV_FILE"
 
-if ! command -v powershell.exe >/dev/null 2>&1; then
-    echo "ERROR: no se encontró powershell.exe en el PATH." >&2
-    exit 1
-fi
-
-log "Restaurando y trayendo al frente la ventana que matchea \"$WINDOW_TITLE\"..."
-powershell.exe -NoProfile -NonInteractive -Command "
-Add-Type @'
-using System;
-using System.Runtime.InteropServices;
-public class Win32ClickFocus {
-    [DllImport(\"user32.dll\")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-    [DllImport(\"user32.dll\")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+# El punto se mide sobre una captura de la ventana: tiene que caer dentro de su rectángulo.
+verificar_punto_en_ventana() {
+    local w=$((GUI_R - GUI_L)) h=$((GUI_B - GUI_T))
+    if (( IMG_X < 0 || IMG_Y < 0 || IMG_X >= w || IMG_Y >= h )); then
+        gui_abortar "$EXIT_RECT" "el punto ($IMG_X,$IMG_Y) está FUERA de la ventana (${w}x${h}). Medí las coordenadas sobre una captura de capturar.sh."
+    fi
 }
-'@
-\$proc = Get-Process | Where-Object { \$_.MainWindowTitle -like '*$WINDOW_TITLE*' -and \$_.MainWindowHandle -ne 0 } | Select-Object -First 1
-if (-not \$proc) { Write-Error \"No se encontro ventana con titulo '*$WINDOW_TITLE*'\"; exit 1 }
-[Win32ClickFocus]::ShowWindow(\$proc.MainWindowHandle, 9) | Out-Null
-Start-Sleep -Milliseconds 200
-[Win32ClickFocus]::SetForegroundWindow(\$proc.MainWindowHandle) | Out-Null
-" >/dev/null
-
-WINDOW_ID="$("$XDOTOOL_BIN" search --name "$WINDOW_TITLE" | head -1)"
-if [[ -z "$WINDOW_ID" ]]; then
-    echo "ERROR: xdotool no encontró ninguna ventana X11 que matchee \"$WINDOW_TITLE\"." >&2
-    exit 1
-fi
+verificar_punto_en_ventana
 
 CLIENT_X=$((IMG_X - OFFSET_X))
 CLIENT_Y=$((IMG_Y - OFFSET_Y))
+if (( CLIENT_X < 0 || CLIENT_Y < 0 )); then
+    gui_abortar "$EXIT_RECT" "el punto ($IMG_X,$IMG_Y) cae sobre el borde/barra de título (offset $OFFSET_X,$OFFSET_Y), fuera del área de cliente."
+fi
 
-log "Ventana X11 id=$WINDOW_ID. Click en relativo ($CLIENT_X,$CLIENT_Y) = imagen ($IMG_X,$IMG_Y) - offset ($OFFSET_X,$OFFSET_Y), botón $BOTON."
+gui_log "Ventana X11 id=$GUI_X11_ID. Click en relativo ($CLIENT_X,$CLIENT_Y) = imagen ($IMG_X,$IMG_Y) - offset ($OFFSET_X,$OFFSET_Y), botón $BOTON."
 
-"$XDOTOOL_BIN" mousemove --window "$WINDOW_ID" "$CLIENT_X" "$CLIENT_Y"
-sleep 0.15
-"$XDOTOOL_BIN" click "$BOTON"
+# mousemove + pausa + click en UNA sola invocación (sin hueco entre ambos).
+"$GUI_XDOTOOL" mousemove --window "$GUI_X11_ID" "$CLIENT_X" "$CLIENT_Y" sleep 0.15 click "$BOTON"
