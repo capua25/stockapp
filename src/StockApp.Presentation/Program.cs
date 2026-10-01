@@ -34,6 +34,9 @@ sealed class Program
             // En dev (sin instalar vía Velopack) esta llamada simplemente retorna.
             VelopackApp.Build().Run();
 
+            // Formato numérico es-UY para todo el proceso (decisión 2026-10-01).
+            CulturaApp.Aplicar();
+
             BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
         }
         catch (Exception ex)
