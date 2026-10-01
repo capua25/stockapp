@@ -77,18 +77,28 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Stock" Width="Auto" MinWidth="100" SortMemberPath="StockActual">
+                        <DataGridTemplateColumn Header="Stock" Width="170" MinWidth="100" SortMemberPath="StockActual">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:ProductoDto">
-                                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio1}"
-                                                Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
-                                                HorizontalAlignment="Right" VerticalAlignment="Center" Margin="4,0">
+                                    <!-- Columna de ANCHO FIJO (170) + badge y número en UNA sola celda de Grid
+                                         (badge pegado a la izquierda, número a la derecha). Antes era una
+                                         columna Auto con un StackPanel Right que se ajustaba al contenido:
+                                         la grilla recicla las celdas al ordenar por encabezado, y cuando una
+                                         celda que mostraba un stock negativo (badge visible) pasa a mostrar
+                                         uno positivo (badge oculto), el contenedor conservaba el arreglo del
+                                         valor anterior y el número quedaba corrido o recortado (22 se veía
+                                         como "2"). Con ancho fijo y sin tamaño que dependa de la visibilidad
+                                         del badge, no hay nada que re-medir. 170 = badge "Stock negativo"
+                                         (~86) + número de hasta 5 dígitos + padding de celda y margen. -->
+                                    <Grid Margin="4,0" VerticalAlignment="Center"
+                                          Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}">
                                         <c:BadgeEstado Texto="Stock negativo" Tono="Peligro"
+                                                       HorizontalAlignment="Left"
                                                        IsVisible="{Binding StockActual, Converter={x:Static conv:EsNegativoConverter.Instance}}" />
                                         <TextBlock Text="{Binding StockActual, Converter={x:Static conv:CantidadConverter.Instance}}"
                                                    Foreground="{Binding StockActual, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}"
-                                                   VerticalAlignment="Center" />
-                                    </StackPanel>
+                                                   HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                    </Grid>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
