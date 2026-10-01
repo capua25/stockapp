@@ -57,8 +57,8 @@ siempre por PowerShell `System.Windows.Forms.SendKeys::SendWait`.
 |---|---|
 | `setup-toolkit.sh` | Deja `xdotool` funcional (extraído de su `.deb` sin root). Idempotente. |
 | `capturar.sh <salida.png> [titulo-ventana]` | Screenshot vía PowerShell. Sin título: escritorio completo (ver advertencia abajo). Con título: recorta solo esa ventana. |
-| `click.sh <x> <y> [titulo=StockApp] [boton=1]` | Click en coordenadas medidas sobre una captura de `capturar.sh` **con título** (mismo sistema de coordenadas). Restaura/enfoca la ventana antes de clickear. |
-| `escribir.sh "texto" [titulo=StockApp]` | Tipea texto vía SendKeys, un carácter por vez. |
+| `click.sh <x> <y> [titulo=Municipal] [boton=1]` | Click en coordenadas medidas sobre una captura de `capturar.sh` **con título** (mismo sistema de coordenadas). Restaura/enfoca la ventana antes de clickear. |
+| `escribir.sh "texto" [titulo=Municipal]` | Tipea texto vía SendKeys, un carácter por vez. |
 
 ### Uso típico
 
@@ -67,18 +67,18 @@ siempre por PowerShell `System.Windows.Forms.SendKeys::SendWait`.
 ./scripts/gui-verificacion/setup-toolkit.sh
 
 # Capturar la ventana de la app (recomendado: SIEMPRE con título):
-./scripts/gui-verificacion/capturar.sh /tmp/shots/01-login.png StockApp
+./scripts/gui-verificacion/capturar.sh /tmp/shots/01-login.png Municipal
 # → mirala con la herramienta Read. Confirmá que se ve la app, no negro.
 
 # Click en un campo (coordenadas medidas sobre esa MISMA imagen):
-./scripts/gui-verificacion/click.sh 1079 565 StockApp
+./scripts/gui-verificacion/click.sh 1079 565 Municipal
 
 # Tipear en el campo recién clickeado:
-./scripts/gui-verificacion/escribir.sh "admin" StockApp
+./scripts/gui-verificacion/escribir.sh "admin" Municipal
 
 # Screenshot de verificación ANTES de avanzar (clave: confirmar antes de
 # tipear la contraseña o de submitear un formulario):
-./scripts/gui-verificacion/capturar.sh /tmp/shots/02-usuario.png StockApp
+./scripts/gui-verificacion/capturar.sh /tmp/shots/02-usuario.png Municipal
 ```
 
 **Regla de oro: nunca encadenes 3+ acciones sin un screenshot intermedio.**
@@ -123,15 +123,15 @@ ventana. Pero es un dato empírico de UNA sesión, no una garantía).
 
 ### Receta de calibración (si los clicks no caen donde deberían)
 
-1. `capturar.sh /tmp/cal.png StockApp` y mirá la imagen.
+1. `capturar.sh /tmp/cal.png Municipal` y mirá la imagen.
 2. Elegí un ítem de navegación grande y fácil de verificar (ej. "Inicio" en
    el sidebar) — medí su coordenada (x,y) en la imagen.
-3. `click.sh <x> <y> StockApp` y volvé a capturar. Si navegó a Inicio,
+3. `click.sh <x> <y> Municipal` y volvé a capturar. Si navegó a Inicio,
    el offset default sirve. Si no:
 4. Probá offsets candidatos con las variables de entorno:
    ```bash
    CLICK_OFFSET_X=<candidato_x> CLICK_OFFSET_Y=<candidato_y> \
-     ./click.sh <x> <y> StockApp
+     ./click.sh <x> <y> Municipal
    ```
    Un borde típico de WM está entre 0-50px; una barra de título entre
    20-60px. Iterá capturando después de cada intento.
@@ -141,11 +141,18 @@ ventana. Pero es un dato empírico de UNA sesión, no una garantía).
 
 ## Otros gotchas documentados (de esta sesión y de anteriores)
 
+- **El título de la ventana es "Gestión Municipal", NO "StockApp".** Pasá
+  `Municipal` (el match es por substring, `-like "*titulo*"`). Con un título
+  que no matchea, `capturar.sh` cae a una captura del escritorio completo
+  (expone todos los monitores del usuario); ahora lo avisa con una
+  `ADVERTENCIA` a stderr, pero igual sale con código 0 y deja el PNG, así
+  que leé el stderr. `click.sh` y `escribir.sh` en cambio fallan con error.
+
 - **La ventana puede aparecer MINIMIZADA en el lado Windows** aunque
   `xdotool` la vea "mapeada" en X11 con geometría normal (sentinel Win32
   `Left=-32000`). Pasa sobre todo si hay actividad real y concurrente en la
   máquina Windows (alguien usando la compu para otra cosa mientras corre la
-  verificación) — el foreground/focus de StockApp se pierde solo. Por eso
+  verificación) — el foreground/focus de la app se pierde solo. Por eso
   `capturar.sh` y `click.sh` SIEMPRE restauran (`ShowWindow` SW_RESTORE) y
   traen al frente (`SetForegroundWindow`) la ventana antes de actuar. Si
   igual ves contenido raro en una captura, repetí — probablemente perdió el

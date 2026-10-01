@@ -28,7 +28,7 @@ if [[ $# -lt 1 ]]; then
 fi
 
 TEXTO="$1"
-WINDOW_TITLE="${2:-StockApp}"
+WINDOW_TITLE="${2:-Municipal}"
 DELAY_MS="${ESCRIBIR_DELAY_MS:-300}"
 
 if ! command -v powershell.exe >/dev/null 2>&1; then
