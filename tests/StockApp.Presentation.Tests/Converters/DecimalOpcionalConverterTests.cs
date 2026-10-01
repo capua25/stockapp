@@ -55,7 +55,7 @@ public class DecimalOpcionalConverterTests
 
         var notificacion = Assert.IsType<BindingNotification>(resultado);
         Assert.Equal(BindingErrorType.Error, notificacion.ErrorType);
-        Assert.IsType<FormatException>(notificacion.Error);
+        Assert.IsType<EntradaNumericaInvalidaException>(notificacion.Error);
     }
 
     [Fact]
@@ -105,5 +105,34 @@ public class DecimalOpcionalConverterTests
         var reparsead = Sut.ConvertBack(texto, typeof(decimal?), null, CultureInfo.InvariantCulture);
 
         Assert.Equal(850.50m, reparsead);
+    }
+
+    /// <summary>Decisión 2026-10-01: es-UY en toda la app. "850.50" ya no es un decimal válido:
+    /// se rechaza con un mensaje que sugiere la forma correcta (antes solo se garantizaba que no
+    /// se leyera como 85050).</summary>
+    [Fact]
+    public void ConvertBack_PuntoDecimal_SeRechazaConMensajeClaro()
+    {
+        var resultado = Sut.ConvertBack("850.50", typeof(decimal?), null, CultureInfo.InvariantCulture);
+
+        var notificacion = Assert.IsType<BindingNotification>(resultado);
+        var error = Assert.IsType<EntradaNumericaInvalidaException>(notificacion.Error);
+        Assert.Equal("Usá coma para los decimales: 850,50", error.Message);
+    }
+
+    [Fact]
+    public void ConvertBack_MilesConPunto_DevuelveElDecimalCorrecto()
+    {
+        var resultado = Sut.ConvertBack("1.500,50", typeof(decimal?), null, CultureInfo.GetCultureInfo("en-US"));
+
+        Assert.Equal(1500.50m, resultado);
+    }
+
+    [Fact]
+    public void Convert_DecimalConEscala_SeMuestraEsUySinCerosDeRelleno()
+    {
+        var resultado = Sut.Convert(1500.5000m, typeof(string), null, CultureInfo.GetCultureInfo("en-US"));
+
+        Assert.Equal("1.500,5", resultado);
     }
 }

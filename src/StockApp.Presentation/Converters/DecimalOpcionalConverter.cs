@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using Avalonia.Data;
 using Avalonia.Data.Converters;
+using StockApp.Domain.Formato;
 
 namespace StockApp.Presentation.Converters;
 
@@ -17,25 +18,18 @@ namespace StockApp.Presentation.Converters;
 /// aplicación" y puede interrumpir el pipeline de binding). Expuesto como instancia estática,
 /// igual que <see cref="ColeccionVaciaConverter"/>.
 ///
-/// Cultura FIJA es-UY (NO se usa la <paramref name="culture"/> que pasa el binding): la app
-/// no fija ningún <see cref="CultureInfo"/> global (mismo criterio que <see cref="MonedaConverter"/>
-/// y <see cref="StockApp.Presentation.ViewModels.Finanzas.LineaPoaFormViewModel.CulturaMonto"/>),
-/// así que depender de la cultura ambiente/del binding hacía que "850,50" se interpretara con
-/// <see cref="CultureInfo.InvariantCulture"/> en máquinas no es-*, y <see cref="NumberStyles.Number"/>
-/// (que incluye <see cref="NumberStyles.AllowThousands"/>) descartaba la coma como separador de
-/// miles — bug real: "850,50" se guardó como 85050. Fix: cultura fija + <c>AllowDecimalPoint |
-/// AllowLeadingSign</c> (SIN <c>AllowThousands</c>), igual que el fix de MontoTexto en
-/// LineaPoaFormViewModel. Si "es-UY" no está disponible en el runtime se cae a un
-/// <see cref="NumberFormatInfo"/> armado a mano con los mismos separadores.
+/// Formato único es-UY de <see cref="FormatoEsUy"/> (decisión 2026-10-01; NO se usa la
+/// <paramref name="culture"/> que pasa el binding): se muestra "1.500,5" y se parsea con el
+/// parseo SEGURO, que rechaza "5.4"/"850.50" con un mensaje que sugiere la forma correcta en
+/// vez de leer el punto como miles. Historia: "850,50" llegó a guardarse como 85050 cuando el
+/// parseo dependía de la cultura del binding con <see cref="NumberStyles.Number"/>.
 /// </summary>
 public sealed class DecimalOpcionalConverter : IValueConverter
 {
     public static readonly DecimalOpcionalConverter Instance = new();
 
-    private static readonly IFormatProvider CulturaFija = CrearCultura();
-
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-        => value is decimal d ? d.ToString(CulturaFija) : string.Empty;
+        => value is decimal d ? FormatoEsUy.Cantidad(d) : string.Empty;
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
@@ -43,31 +37,11 @@ public sealed class DecimalOpcionalConverter : IValueConverter
         if (string.IsNullOrWhiteSpace(texto))
             return null;
 
-        if (decimal.TryParse(
-                texto,
-                NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign,
-                CulturaFija,
-                out var resultado))
+        if (FormatoEsUy.TryParseDecimal(texto, out var resultado, out var error))
             return resultado;
 
         return new BindingNotification(
-            new FormatException("El valor ingresado no es un número válido."),
+            new EntradaNumericaInvalidaException(error!),
             BindingErrorType.Error);
-    }
-
-    private static IFormatProvider CrearCultura()
-    {
-        try
-        {
-            return CultureInfo.GetCultureInfo("es-UY");
-        }
-        catch (CultureNotFoundException)
-        {
-            return new NumberFormatInfo
-            {
-                NumberDecimalSeparator = ",",
-                NumberGroupSeparator = ".",
-            };
-        }
     }
 }

@@ -70,4 +70,22 @@ public class MonedaConverterTests
         Assert.Throws<NotSupportedException>(
             () => Sut.ConvertBack("$ 26.400,00", typeof(decimal), null, CultureInfo.InvariantCulture));
     }
+
+    /// <summary>Guardián del consumidor: con la cultura del hilo en en-US el monto sigue en es-UY.</summary>
+    [Fact]
+    public void Convert_CulturaDelHiloEnUs_SigueSiendoEsUy()
+    {
+        var original = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+
+            Assert.Equal("$ 26.400,00", Sut.Convert(26400m, typeof(string), null, CultureInfo.GetCultureInfo("en-US")));
+            Assert.Equal("$ 26.400,00", MonedaConverter.Formatear(26400m));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = original;
+        }
+    }
 }
