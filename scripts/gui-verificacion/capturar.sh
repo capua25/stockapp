@@ -12,10 +12,12 @@
 # Uso:
 #   ./capturar.sh <ruta-salida.png> [substring-del-titulo-de-ventana]
 #
-# Si se pasa un título (ej. "StockApp"), el script busca esa ventana con
+# Si se pasa un título (ej. "Municipal" -- la ventana de la app se llama
+# "Gestión Municipal"; "StockApp" NO matchea), el script busca esa ventana con
 # Get-Process, la restaura si está minimizada y la trae al frente antes de
 # capturar solo su rectángulo. Si no se pasa título, o no se encuentra la
-# ventana, captura el escritorio virtual completo (todos los monitores).
+# ventana, captura el escritorio virtual completo (todos los monitores) y
+# lo avisa con una ADVERTENCIA a stderr (puede exponer otras ventanas/monitores).
 set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
@@ -86,6 +88,7 @@ if (\$title -ne '') {
 if (-not \$rectFound) {
     \$vs = [System.Windows.Forms.SystemInformation]::VirtualScreen
     \$x = \$vs.X; \$y = \$vs.Y; \$w = \$vs.Width; \$h = \$vs.Height
+    Write-Output 'CAPTURAR_FALLBACK_ESCRITORIO'
 }
 
 \$bmp = New-Object System.Drawing.Bitmap(\$w, \$h)
@@ -97,6 +100,13 @@ if (-not \$rectFound) {
 Write-Output \$dest
 " > /tmp/capturar-winpath-$$.txt 2>&1
 
+if grep -q 'CAPTURAR_FALLBACK_ESCRITORIO' /tmp/capturar-winpath-$$.txt; then
+    if [[ -n "$WINDOW_TITLE" ]]; then
+        echo "[capturar] ADVERTENCIA: no se encontró ninguna ventana que matchee \"$WINDOW_TITLE\"; se capturó el ESCRITORIO COMPLETO (todos los monitores), que puede exponer contenido ajeno a la app. La ventana de la app se llama \"Gestión Municipal\": pasá \"Municipal\" como título." >&2
+    else
+        echo "[capturar] ADVERTENCIA: sin título de ventana se captura el ESCRITORIO COMPLETO (todos los monitores), que puede exponer contenido ajeno a la app. Pasá \"Municipal\" como título." >&2
+    fi
+fi
 WIN_PATH="$(tail -n1 /tmp/capturar-winpath-$$.txt | tr -d '\r')"
 rm -f /tmp/capturar-winpath-$$.txt
 

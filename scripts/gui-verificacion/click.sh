@@ -28,7 +28,7 @@
 # click.
 #
 # Uso:
-#   ./click.sh <x-imagen> <y-imagen> [titulo-ventana=StockApp] [boton=1]
+#   ./click.sh <x-imagen> <y-imagen> [titulo-ventana=Municipal] [boton=1]
 #   CLICK_OFFSET_X=38 CLICK_OFFSET_Y=59 ./click.sh <x> <y>
 set -euo pipefail
 
@@ -37,13 +37,13 @@ TOOLKIT_DIR="${TOOLKIT_DIR:-/tmp/x11tools}"
 ENV_FILE="$TOOLKIT_DIR/env.sh"
 
 if [[ $# -lt 2 ]]; then
-    echo "Uso: $0 <x-imagen> <y-imagen> [titulo-ventana=StockApp] [boton=1]" >&2
+    echo "Uso: $0 <x-imagen> <y-imagen> [titulo-ventana=Municipal] [boton=1]" >&2
     exit 1
 fi
 
 IMG_X="$1"
 IMG_Y="$2"
-WINDOW_TITLE="${3:-StockApp}"
+WINDOW_TITLE="${3:-Municipal}"
 BOTON="${4:-1}"
 OFFSET_X="${CLICK_OFFSET_X:-38}"
 OFFSET_Y="${CLICK_OFFSET_Y:-59}"
