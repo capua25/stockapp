@@ -77,10 +77,10 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Stock" Width="170" MinWidth="100" SortMemberPath="StockActual">
+                        <DataGridTemplateColumn Header="Stock" Width="220" MinWidth="100" SortMemberPath="StockActual">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:ProductoDto">
-                                    <!-- Columna de ANCHO FIJO (170) + badge y número en UNA sola celda de Grid
+                                    <!-- Columna de ANCHO FIJO (220) + badge y número en UNA sola celda de Grid
                                          (badge pegado a la izquierda, número a la derecha). Antes era una
                                          columna Auto con un StackPanel Right que se ajustaba al contenido:
                                          la grilla recicla las celdas al ordenar por encabezado, y cuando una
@@ -88,8 +88,10 @@
                                          uno positivo (badge oculto), el contenedor conservaba el arreglo del
                                          valor anterior y el número quedaba corrido o recortado (22 se veía
                                          como "2"). Con ancho fijo y sin tamaño que dependa de la visibilidad
-                                         del badge, no hay nada que re-medir. 170 = badge "Stock negativo"
-                                         (~86) + número de hasta 5 dígitos + padding de celda y margen. -->
+                                         del badge, no hay nada que re-medir. 220 = peor caso "-99999,5": badge
+                                         "Stock negativo" (102) + número (62) + padding de celda y margen, igual
+                                         que las otras 4 grillas con badge; con 170 el badge pisaba 41px al número
+                                         (ProductoListViewStockOrdenTests). -->
                                     <Grid Margin="4,0" VerticalAlignment="Center"
                                           Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}">
                                         <c:BadgeEstado Texto="Stock negativo" Tono="Peligro"

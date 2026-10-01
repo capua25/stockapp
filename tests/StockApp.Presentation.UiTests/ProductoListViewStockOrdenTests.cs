@@ -41,7 +41,7 @@ public class ProductoListViewStockOrdenTests
     public void Ordenar_PorCostoYPorStock_MantieneAlineadosYSinRecorteLosNumerosDeStock()
     {
         var vista = new ProductoListView();
-        var window = new Window { Width = 1700, Height = 900, Content = vista };
+        var window = new Window { Width = 1700, Height = 1600, Content = vista };
         window.Show();
         Dispatcher.UIThread.RunJobs();
 
@@ -50,19 +50,24 @@ public class ProductoListViewStockOrdenTests
         // Un producto con stock NEGATIVO arriba (badge visible) y el resto positivo, con stocks de
         // 1 y 2 dígitos y costos en distinto orden que el stock: al reordenar, las celdas recicladas
         // pasan de badge visible a oculto y de un ancho de número a otro.
-        var stocks = new decimal[] { -5, 22, 8, 60, 45, 30, 9, 45, 18, 6, 5, 35, 28, 3, 40, 50, 0, 25, 4, 14, 20, 12 };
-        var costos = new decimal[] { 1, 1200, 350, 900, 500, 500, 250, 800, 600, 1500, 400, 550, 1800, 2500, 300, 450, 123, 700, 1600, 3800, 900, 200 };
+        // El último (-99999,5) es el PEOR CASO que el ancho fijo de la columna tiene que absorber
+        // con el badge visible (ver GrillaStockHelpers.Stocks): con 170 el badge pisaba al número.
+        var stocks = new decimal[] { -5, 22, 8, 60, 45, 30, 9, 45, 18, 6, 5, 35, 28, 3, 40, 50, 0, 25, 4, 14, 20, 12, -99999.5m };
+        var costos = new decimal[] { 1, 1200, 350, 900, 500, 500, 250, 800, 600, 1500, 400, 550, 1800, 2500, 300, 450, 123, 700, 1600, 3800, 900, 200, 77 };
         grid.ItemsSource = new DataGridCollectionView(
             stocks.Select((s, i) => ProductoDe(i + 1, costos[i], s)).ToList());
         Dispatcher.UIThread.RunJobs();
         AssertNumerosAlineadosYSinRecorte(grid, window, "Stock", "inicial");
+        AssertBadgeNoPisaElNumero(grid, window, "Stock", "inicial");
 
         // Pasos del reporte: dos clicks en "Costo" (descendente), y también por "Stock".
         ClickearHeader(window, grid, "Costo");
         ClickearHeader(window, grid, "Costo");
         AssertNumerosAlineadosYSinRecorte(grid, window, "Stock", "Costo descendente");
+        AssertBadgeNoPisaElNumero(grid, window, "Stock", "Costo descendente");
 
         ClickearHeader(window, grid, "Stock");
         AssertNumerosAlineadosYSinRecorte(grid, window, "Stock", "Stock ascendente");
+        AssertBadgeNoPisaElNumero(grid, window, "Stock", "Stock ascendente");
     }
 }
