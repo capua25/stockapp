@@ -244,4 +244,47 @@ public class PagosGastoViewModelTests
 
         Assert.True(vm.PuedeRegistrarPagos);
     }
+
+    // ── Formato es-UY (decisión 2026-10-01): parseo seguro y mensajes ────────
+
+    [Fact]
+    public async Task RegistrarPago_MontoConPuntoDecimal_SeRechazaConMensajeClaro()
+    {
+        var (vm, svc, _, _, _) = Crear();
+        vm.CargarParaGasto(GastoConPago());
+        await vm.InicializarAsync();
+        vm.MontoTexto = "12.34";   // con NumberStyles.Number + es-UY se registraba como 1234
+
+        await vm.RegistrarPagoCommand.ExecuteAsync(null);
+
+        Assert.Equal("El monto del pago no es un número válido. Usá coma para los decimales: 12,34", vm.MensajeError);
+        svc.Verify(s => s.RegistrarPagoAsync(It.IsAny<PagoGasto>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RegistrarPago_MilesConPunto_RegistraElValorCorrecto()
+    {
+        var (vm, svc, _, _, _) = Crear();
+        vm.CargarParaGasto(GastoConPago());
+        await vm.InicializarAsync();
+        vm.MontoTexto = "1.500,50";
+
+        await vm.RegistrarPagoCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.RegistrarPagoAsync(It.Is<PagoGasto>(p => p.Monto == 1500.50m)), Times.Once);
+    }
+
+    [Fact]
+    public async Task AnularPago_MensajeDeConfirmacion_MuestraElMontoEnEsUy()
+    {
+        var (vm, _, _, confirm, _) = Crear();
+        var gasto = GastoConPago();
+        gasto.Pagos[0].Monto = 1400.5m;
+        vm.CargarParaGasto(gasto);
+        await vm.InicializarAsync();
+
+        await vm.AnularPagoCommand.ExecuteAsync(gasto.Pagos[0]);
+
+        confirm.Verify(c => c.PreguntarAsync(It.Is<string>(m => m.Contains("1.400,50"))), Times.Once);
+    }
 }

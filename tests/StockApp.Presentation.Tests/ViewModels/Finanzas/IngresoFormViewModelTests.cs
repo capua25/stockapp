@@ -214,4 +214,19 @@ public class IngresoFormViewModelTests
 
         Assert.True(vm.PuedeRegistrarIngresos);
     }
+
+    // ── Formato es-UY (decisión 2026-10-01): parseo seguro ───────────────────
+
+    [Fact]
+    public async Task Guardar_MontoConPuntoDecimal_SeRechazaConMensajeClaroSinLlamarAlServicio()
+    {
+        var (vm, svc, _) = Crear();
+        await CompletarFormularioValidoAsync(vm);
+        vm.MontoTexto = "1.5";   // con NumberStyles.Number + es-UY se guardaba como 15
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        Assert.Equal("El monto no es un número válido. Usá coma para los decimales: 1,5", vm.MensajeError);
+        svc.Verify(s => s.AltaAsync(It.IsAny<IngresoCaja>()), Times.Never);
+    }
 }

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -10,6 +9,8 @@ using StockApp.Application.Finanzas;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
+using StockApp.Domain.Formato;
+using StockApp.Presentation.Helpers;
 
 namespace StockApp.Presentation.ViewModels.Finanzas;
 
@@ -37,31 +38,6 @@ public partial class LineaPoaFormViewModel : ViewModelBase
 
     private int _idEdicion;
     private LineaPoa? _lineaParaEditar;
-
-    /// <summary>
-    /// Cultura FIJA es-UY para parsear/formatear MontoTexto (misma razón que
-    /// <see cref="Converters.MonedaConverter"/>: la app no fija ninguna cultura global,
-    /// así que depender de la cultura ambiente haría que "1500.50" se interprete distinto
-    /// según la máquina — o, peor, parsee silenciosamente como 150050). Mismo fallback
-    /// manual si "es-UY" no está disponible en el runtime.
-    /// </summary>
-    private static readonly IFormatProvider CulturaMonto = CrearCulturaMonto();
-
-    private static IFormatProvider CrearCulturaMonto()
-    {
-        try
-        {
-            return CultureInfo.GetCultureInfo("es-UY");
-        }
-        catch (CultureNotFoundException)
-        {
-            return new NumberFormatInfo
-            {
-                NumberDecimalSeparator = ",",
-                NumberGroupSeparator = ".",
-            };
-        }
-    }
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
@@ -139,7 +115,7 @@ public partial class LineaPoaFormViewModel : ViewModelBase
                     Asignaciones.Add(new AsignacionItemViewModel
                     {
                         FuenteSeleccionada = fuente,
-                        MontoTexto = a.Monto.ToString("0.####", CulturaMonto),
+                        MontoTexto = FormatoEsUy.Cantidad(a.Monto),
                     });
                 }
             }
@@ -169,14 +145,12 @@ public partial class LineaPoaFormViewModel : ViewModelBase
         var asignaciones = new List<AsignacionPresupuestal>();
         foreach (var fila in Asignaciones)
         {
+            string? errorMonto = null;
             if (fila.FuenteSeleccionada is null
-                || !decimal.TryParse(
-                    fila.MontoTexto,
-                    NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign,
-                    CulturaMonto,
-                    out var monto))
+                || !FormatoEsUy.TryParseDecimal(fila.MontoTexto, out var monto, out errorMonto))
             {
-                MensajeError = "Cada asignación necesita una fuente de financiamiento y un monto válido.";
+                MensajeError = MensajeNumeroInvalido.Armar(
+                    "Cada asignación necesita una fuente de financiamiento y un monto válido.", errorMonto);
                 return;
             }
 
