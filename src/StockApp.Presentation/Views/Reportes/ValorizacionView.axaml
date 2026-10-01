@@ -53,16 +53,24 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Stock" Width="Auto" MinWidth="100" SortMemberPath="StockActual">
+                        <DataGridTemplateColumn Header="Stock" Width="220" MinWidth="100" SortMemberPath="StockActual">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:ValorizacionItemDto">
-                                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio1}"
-                                                VerticalAlignment="Center" HorizontalAlignment="Right" Margin="4,0">
+                                    <!-- Columna de ANCHO FIJO (220) + badge y número en UNA sola celda de Grid (badge
+                                         a la izquierda, número a la derecha). Con una columna Auto y un StackPanel
+                                         Right, la grilla recicla las celdas al ordenar y una celda que pasa de
+                                         stock negativo (badge visible) a positivo (oculto) conserva el arreglo
+                                         del valor anterior: número corrido o recortado (ver ProductoListView y
+                                         ReportesStockOrdenTests). 220 = peor caso "-99999,5": badge (102) +
+                                         número (62) + margen y padding de celda. -->
+                                    <Grid Margin="4,0" VerticalAlignment="Center">
                                         <c:BadgeEstado Texto="Stock negativo" Tono="Peligro"
+                                                       HorizontalAlignment="Left"
                                                        IsVisible="{Binding StockActual, Converter={x:Static conv:EsNegativoConverter.Instance}}" />
                                         <TextBlock Text="{Binding StockActual, Converter={x:Static conv:CantidadConverter.Instance}}"
-                                                   Foreground="{Binding StockActual, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}" />
-                                    </StackPanel>
+                                                   Foreground="{Binding StockActual, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}"
+                                                   HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                    </Grid>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>

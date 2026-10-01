@@ -1,17 +1,15 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Collections;
 using Avalonia.Controls;
-using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
-using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using StockApp.Application.Catalogo;
 using StockApp.Presentation.Views.Catalogo;
 using Xunit;
+using static StockApp.Presentation.UiTests.GrillaStockHelpers;
 
 namespace StockApp.Presentation.UiTests;
 
@@ -39,47 +37,6 @@ public class ProductoListViewStockOrdenTests
         UnidadMedidaNombre: "Unidad", PrecioCosto: costo, StockActual: stock,
         StockMinimo: 0m, Activo: true, FechaAlta: DateTime.UtcNow);
 
-    private static void ClickearHeader(Window window, DataGrid grid, string headerTexto)
-    {
-        Dispatcher.UIThread.RunJobs();
-        var header = grid.GetVisualDescendants().OfType<DataGridColumnHeader>()
-            .First(h => Equals(h.Content, headerTexto));
-        var centro = header.TranslatePoint(new Point(header.Bounds.Width / 2, header.Bounds.Height / 2), window)!.Value;
-        window.MouseMove(centro);
-        window.MouseDown(centro, MouseButton.Left);
-        window.MouseUp(centro, MouseButton.Left);
-        Dispatcher.UIThread.RunJobs();
-    }
-
-    /// <summary>Un TextBlock por celda de Stock (el del número, que es el último del template).</summary>
-    private static List<TextBlock> NumerosDeStock(DataGrid grid)
-        => grid.GetVisualDescendants().OfType<DataGridCell>()
-            .Where(c => c.Content is Grid or StackPanel)
-            .Select(c => c.GetVisualDescendants().OfType<TextBlock>().Last())
-            .ToList();
-
-    private static void AssertNumerosAlineadosYSinRecorte(DataGrid grid, Window window, string etapa)
-    {
-        var numeros = NumerosDeStock(grid);
-        Assert.NotEmpty(numeros);
-
-        var recortados = numeros
-            .Where(tb => tb.Bounds.Width < tb.DesiredSize.Width - 0.5)
-            .Select(tb => $"'{tb.Text}' mide {tb.Bounds.Width:F1}px y necesita {tb.DesiredSize.Width:F1}px")
-            .ToList();
-        Assert.True(recortados.Count == 0, $"[{etapa}] números recortados: {string.Join("; ", recortados)}");
-
-        var bordesDerechos = numeros
-            .Select(tb => (Texto: tb.Text, X: tb.TranslatePoint(new Point(tb.Bounds.Width, 0), window)!.Value.X))
-            .ToList();
-        var esperado = bordesDerechos.Max(b => b.X);
-        var corridos = bordesDerechos
-            .Where(b => Math.Abs(b.X - esperado) > 0.5)
-            .Select(b => $"'{b.Texto}' termina en x={b.X:F0} (el resto en x={esperado:F0})")
-            .ToList();
-        Assert.True(corridos.Count == 0, $"[{etapa}] números mal alineados: {string.Join("; ", corridos)}");
-    }
-
     [AvaloniaFact]
     public void Ordenar_PorCostoYPorStock_MantieneAlineadosYSinRecorteLosNumerosDeStock()
     {
@@ -98,14 +55,14 @@ public class ProductoListViewStockOrdenTests
         grid.ItemsSource = new DataGridCollectionView(
             stocks.Select((s, i) => ProductoDe(i + 1, costos[i], s)).ToList());
         Dispatcher.UIThread.RunJobs();
-        AssertNumerosAlineadosYSinRecorte(grid, window, "inicial");
+        AssertNumerosAlineadosYSinRecorte(grid, window, "Stock", "inicial");
 
         // Pasos del reporte: dos clicks en "Costo" (descendente), y también por "Stock".
         ClickearHeader(window, grid, "Costo");
         ClickearHeader(window, grid, "Costo");
-        AssertNumerosAlineadosYSinRecorte(grid, window, "Costo descendente");
+        AssertNumerosAlineadosYSinRecorte(grid, window, "Stock", "Costo descendente");
 
         ClickearHeader(window, grid, "Stock");
-        AssertNumerosAlineadosYSinRecorte(grid, window, "Stock ascendente");
+        AssertNumerosAlineadosYSinRecorte(grid, window, "Stock", "Stock ascendente");
     }
 }
