@@ -264,4 +264,20 @@ public abstract class MovimientoRegistroViewModelTestsBase
 
         Assert.Null(excepcion);
     }
+
+    [Fact]
+    public async Task RegistrarAsync_StockInsuficiente_PreguntaConElStockResultanteEnEsUy()
+    {
+        var (vm, svcMock, _, _, confirmMock) = Crear();
+        vm.ProductoSeleccionado = CrearProductoDto(1, "Azúcar", stockActual: 3m);
+        vm.Cantidad = 1500.25m;
+        svcMock
+            .Setup(s => s.RegistrarAsync(It.IsAny<RegistrarMovimientoDto>(), false))
+            .ThrowsAsync(new StockInsuficienteException(productoId: 1, stockActual: 3.0000m, cantidadSolicitada: 1500.25m));
+        confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(false);
+
+        await vm.RegistrarCommand.ExecuteAsync(null);
+
+        confirmMock.Verify(c => c.PreguntarAsync("El stock quedará en -1.497,25. ¿Confirmar la salida igual?"), Times.Once);
+    }
 }

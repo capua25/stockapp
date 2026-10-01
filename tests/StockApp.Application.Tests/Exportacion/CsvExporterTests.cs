@@ -190,4 +190,34 @@ public class CsvExporterTests
 
         Assert.Contains("Gasto,16/07/2026\r\n", resultado);
     }
+
+    // ── Formato es-UY (decisión 2026-10-01): el CSV ya no depende de la cultura del SO ──
+
+    private sealed record FilaNumerica(string Codigo, decimal Monto, decimal Cantidad, int Id, double Peso);
+
+    [Theory]
+    [InlineData("en-US")]
+    [InlineData("")]   // Invariant
+    public void Exportar_Numeros_EnEsUySeaCualSeaLaCulturaDelHilo(string cultura)
+    {
+        var original = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = cultura.Length == 0
+                ? CultureInfo.InvariantCulture
+                : CultureInfo.GetCultureInfo(cultura);
+            var items = new[] { new FilaNumerica("P1", 1500.5m, 0.125m, 1234, 3.25) };
+
+            var resultado = _exporter.Exportar(items, new[] { "Codigo", "Monto", "Cantidad", "Id", "Peso" });
+
+            // Coma decimal y punto de miles; el campo con coma va entre comillas (RFC 4180).
+            // Sin ceros de relleno ni pérdida de decimales (0,125 no se redondea). Los enteros
+            // van sin separador de miles: hay columnas enteras que son identificadores.
+            Assert.Contains("P1,\"1.500,5\",\"0,125\",1234,\"3,25\"\r\n", resultado);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = original;
+        }
+    }
 }

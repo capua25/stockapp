@@ -11,6 +11,7 @@ using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
+using StockApp.Domain.Formato;
 
 namespace StockApp.Presentation.ViewModels.Movimientos;
 
@@ -124,7 +125,7 @@ public abstract partial class MovimientoRegistroViewModelBase : ViewModelBase
         }
         catch (StockInsuficienteException ex)
         {
-            var mensaje = $"El stock quedará en {ex.StockResultante}. ¿Confirmar la salida igual?";
+            var mensaje = $"El stock quedará en {FormatoEsUy.Cantidad(ex.StockResultante)}. ¿Confirmar la salida igual?";
             var confirmar = await Confirmacion.PreguntarAsync(mensaje);
 
             if (confirmar)

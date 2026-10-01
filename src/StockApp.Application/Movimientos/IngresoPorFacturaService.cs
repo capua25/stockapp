@@ -4,6 +4,7 @@ using StockApp.Application.Reportes;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
+using StockApp.Domain.Formato;
 
 namespace StockApp.Application.Movimientos;
 
@@ -248,7 +249,7 @@ public class IngresoPorFacturaService : IIngresoPorFacturaService
         if (resultado.Estado == ResultadoAnulacionIngresoEstado.StockInsuficiente)
         {
             var detalleFaltantes = string.Join("; ", resultado.Faltantes.Select(f =>
-                $"{f.ProductoNombre}: stock {f.StockActual}, necesita {f.CantidadNecesaria}"));
+                $"{f.ProductoNombre}: stock {FormatoEsUy.Cantidad(f.StockActual)}, necesita {FormatoEsUy.Cantidad(f.CantidadNecesaria)}"));
             throw new ReglaDeNegocioException(
                 $"No se puede anular: stock insuficiente en {resultado.Faltantes.Count} producto(s). {detalleFaltantes}");
         }

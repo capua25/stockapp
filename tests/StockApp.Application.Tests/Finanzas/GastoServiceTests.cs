@@ -303,6 +303,23 @@ public class GastoServiceTests
     }
 
     [Fact]
+    public async Task ModificarAsync_MontoMenorALoPagado_MensajeConMontoEnEsUy()
+    {
+        var m = Crear();
+        var original = GastoValido();
+        original.Id = 1;
+        original.Pagos.Add(new PagoGasto { GastoId = 1, Fecha = Hoy, Monto = 1800.5000m });
+        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+        var editado = GastoValido();
+        editado.Id = 1;
+        editado.MontoTotal = 500m;
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.ModificarAsync(editado));
+
+        Assert.Contains("($ 1.800,50)", ex.Message);
+    }
+
+    [Fact]
     public async Task ModificarAsync_CambiaDetalleYMonto_ActualizaYAudita()
     {
         var m = Crear();
@@ -529,11 +546,12 @@ public class GastoServiceTests
         m.MovRepo.Setup(r => r.AnularIngresoPorFacturaAtomicoAsync(1, It.IsAny<int>(), It.IsAny<string>()))
             .ReturnsAsync(new ResultadoAnulacionIngreso(
                 ResultadoAnulacionIngresoEstado.StockInsuficiente,
-                new List<ItemFaltanteStock> { new(5, "Cemento", 2m, 10m) }));
+                new List<ItemFaltanteStock> { new(5, "Cemento", 2.0000m, 10.0000m) }));
 
         var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.AnularAsync(1));
 
         Assert.Contains("Cemento", ex.Message);
+        Assert.Contains("Cemento: stock 2, necesita 10", ex.Message);
         m.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Gasto>()), Times.Never);
     }
 

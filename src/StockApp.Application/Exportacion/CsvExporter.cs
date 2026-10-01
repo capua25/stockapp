@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Reflection;
 using System.Text;
+using StockApp.Domain.Formato;
 
 namespace StockApp.Application.Exportacion;
 
@@ -52,6 +53,7 @@ public sealed class CsvExporter : ICsvExporter
     }
 
     private const string FormatoFechaSolo = "dd/MM/yyyy";
+    private const string FormatoDecimalCsv = "#,##0.####";
 
     /// <summary>
     /// Formatea el valor de una celda. Casos especiales:
@@ -66,6 +68,11 @@ public sealed class CsvExporter : ICsvExporter
     ///   instante que convertir, y hacerlo (vía un <see cref="DateTime"/> intermedio) corría el
     ///   día un día para atrás en husos negativos (mismo bug que motivó sacar
     ///   FechaUtcALocalConverter de las grillas de Finanzas).
+    /// - Números: es-UY de <see cref="FormatoEsUy"/> (decisión 2026-10-01), NO la cultura del SO
+    ///   (antes <c>valor.ToString()</c> sacaba "1500.5000" o "1500,5000" según la máquina).
+    ///   Decimales sin ceros de relleno y sin redondear a 2 (el CSV es dato, no papel: 0,125 se
+    ///   conserva); el campo queda entre comillas por la coma decimal (RFC 4180). Enteros sin
+    ///   separador de miles, porque hay columnas enteras que son identificadores.
     /// </summary>
     private static string FormatearValor(object? valor)
         => valor switch
@@ -75,6 +82,12 @@ public sealed class CsvExporter : ICsvExporter
                 .ToLocalTime()
                 .ToString(FormatoFecha, CultureInfo.InvariantCulture),
             DateOnly fecha => fecha.ToString(FormatoFechaSolo, CultureInfo.InvariantCulture),
+            decimal numero => FormatoEsUy.Cantidad(numero),
+            double numero => numero.ToString(FormatoDecimalCsv, FormatoEsUy.Formato),
+            float numero => numero.ToString(FormatoDecimalCsv, FormatoEsUy.Formato),
+            long numero => numero.ToString(FormatoEsUy.Formato),
+            int numero => numero.ToString(FormatoEsUy.Formato),
+            short numero => numero.ToString(FormatoEsUy.Formato),
             _ => valor.ToString() ?? "",
         };
 

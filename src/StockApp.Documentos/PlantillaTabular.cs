@@ -5,6 +5,7 @@ using MigraDoc.Rendering;
 using PdfSharp.Drawing;
 using PdfSharp.Fonts;
 using StockApp.Application.Exportacion;
+using StockApp.Domain.Formato;
 
 namespace StockApp.Documentos;
 
@@ -27,8 +28,8 @@ public sealed class PlantillaTabular
     /// <summary>Separador de miles y 2 decimales fijos, igual que la grilla (ver <see cref="FormatearValor"/>).</summary>
     private const string FormatoNumerico = "N2";
 
-    /// <summary>Ver <see cref="CrearCulturaDocumento"/>.</summary>
-    private static readonly IFormatProvider CulturaDocumento = CrearCulturaDocumento();
+    /// <summary>Formato numérico único es-UY de la app (<see cref="FormatoEsUy"/>).</summary>
+    private static readonly IFormatProvider CulturaDocumento = FormatoEsUy.Formato;
 
     /// <summary>
     /// Umbral de la regla de ancho de la spec: hasta esta cantidad de columnas el documento sale
@@ -572,8 +573,8 @@ public sealed class PlantillaTabular
     /// "26.400,00", el mismo número se lee distinto en los dos soportes (hallazgo del review
     /// final, decisión del usuario: manda la pantalla).
     ///
-    /// La cultura es FIJA, no la del hilo/SO (mismo criterio y mismo fallback manual que los
-    /// dos converters, ver <see cref="CrearCulturaDocumento"/>): un documento oficial no puede
+    /// La cultura es FIJA, no la del hilo/SO (mismo punto de verdad que los
+    /// converters, ver <see cref="FormatoEsUy"/>): un documento oficial no puede
     /// cambiar de formato según la máquina que lo generó.
     ///
     /// Formato ÚNICO "N2" para todo decimal/double/float, sin distinguir moneda de cantidad:
@@ -604,30 +605,6 @@ public sealed class PlantillaTabular
         short numero => numero.ToString(CulturaDocumento),
         _ => valor.ToString() ?? string.Empty,
     };
-
-    /// <summary>
-    /// Cultura de los números del documento: es-UY, la misma que las grillas. El fallback manual
-    /// está copiado del criterio de <c>MonedaConverter</c>/<c>CantidadConverter</c>: si el
-    /// runtime corre con ICU deshabilitada (<c>InvariantGlobalization</c>), "es-UY" no existe y
-    /// <see cref="CultureInfo.GetCultureInfo"/> tira -- con el <see cref="NumberFormatInfo"/>
-    /// armado a mano el formato sigue siendo el mismo sin depender de que el SO tenga la
-    /// cultura instalada.
-    /// </summary>
-    private static IFormatProvider CrearCulturaDocumento()
-    {
-        try
-        {
-            return CultureInfo.GetCultureInfo("es-UY");
-        }
-        catch (CultureNotFoundException)
-        {
-            return new NumberFormatInfo
-            {
-                NumberDecimalSeparator = ",",
-                NumberGroupSeparator = ".",
-            };
-        }
-    }
 
     private static byte[] Renderizar(Document document)
     {

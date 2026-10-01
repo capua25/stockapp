@@ -4,6 +4,7 @@ using StockApp.Application.Reportes;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
+using StockApp.Domain.Formato;
 
 namespace StockApp.Application.Finanzas;
 
@@ -97,7 +98,7 @@ public class GastoService : IGastoService
 
         if (gasto.MontoTotal < original.TotalPagado)
             throw new ReglaDeNegocioException(
-                $"El monto total no puede quedar por debajo de lo ya pagado ({original.TotalPagado}).");
+                $"El monto total no puede quedar por debajo de lo ya pagado ({FormatoEsUy.Moneda(original.TotalPagado)}).");
 
         // F5c: NumeroOrden es parte de la clave de unicidad (Proveedor, Factura, Orden), así que
         // un cambio de SOLO el orden (factura y proveedor iguales) también puede generar una
@@ -199,7 +200,7 @@ public class GastoService : IGastoService
             if (resultado.Estado == ResultadoAnulacionIngresoEstado.StockInsuficiente)
             {
                 var detalleFaltantes = string.Join("; ", resultado.Faltantes.Select(f =>
-                    $"{f.ProductoNombre}: stock {f.StockActual}, necesita {f.CantidadNecesaria}"));
+                    $"{f.ProductoNombre}: stock {FormatoEsUy.Cantidad(f.StockActual)}, necesita {FormatoEsUy.Cantidad(f.CantidadNecesaria)}"));
                 throw new ReglaDeNegocioException(
                     $"No se puede anular: stock insuficiente en {resultado.Faltantes.Count} producto(s). {detalleFaltantes}");
             }

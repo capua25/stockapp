@@ -1,3 +1,5 @@
+using StockApp.Domain.Formato;
+
 namespace StockApp.Domain.Exceptions;
 
 /// <summary>
@@ -13,8 +15,8 @@ public class StockInsuficienteException : ReglaDeNegocioException
 
     public StockInsuficienteException(int productoId, decimal stockActual, decimal cantidadSolicitada)
         : base($"Stock insuficiente para el producto {productoId}: "
-               + $"tenés {stockActual} unidades pero solicitaste {cantidadSolicitada}. "
-               + $"El stock resultante sería {stockActual - cantidadSolicitada}.")
+               + $"tenés {FormatoEsUy.Cantidad(stockActual)} unidades pero solicitaste {FormatoEsUy.Cantidad(cantidadSolicitada)}. "
+               + $"El stock resultante sería {FormatoEsUy.Cantidad(stockActual - cantidadSolicitada)}.")
     {
         ProductoId         = productoId;
         StockActual        = stockActual;
