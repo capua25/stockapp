@@ -1,6 +1,5 @@
 using System;
 using System.Collections.ObjectModel;
-using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -12,6 +11,8 @@ using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
+using StockApp.Domain.Formato;
+using StockApp.Presentation.Helpers;
 
 namespace StockApp.Presentation.ViewModels.Finanzas;
 
@@ -25,24 +26,6 @@ public partial class IngresoFormViewModel : ViewModelBase
 
     private int _idEdicion;
     private IngresoCaja? _ingresoParaEditar;
-
-    private static readonly IFormatProvider CulturaMonto = CrearCulturaMonto();
-
-    private static IFormatProvider CrearCulturaMonto()
-    {
-        try
-        {
-            return CultureInfo.GetCultureInfo("es-UY");
-        }
-        catch (CultureNotFoundException)
-        {
-            return new NumberFormatInfo
-            {
-                NumberDecimalSeparator = ",",
-                NumberGroupSeparator = ".",
-            };
-        }
-    }
 
     [ObservableProperty] private DateTime? _fechaSeleccionada = DateTime.Today;
 
@@ -101,7 +84,7 @@ public partial class IngresoFormViewModel : ViewModelBase
         _ingresoParaEditar = ingreso;
         FechaSeleccionada  = ingreso.Fecha;
         Concepto           = ingreso.Concepto;
-        MontoTexto         = ingreso.Monto.ToString("N2", CulturaMonto);
+        MontoTexto         = FormatoEsUy.Decimal(ingreso.Monto);
         EsEdicion          = true;
     }
 
@@ -147,9 +130,9 @@ public partial class IngresoFormViewModel : ViewModelBase
     {
         MensajeError = null;
 
-        if (!decimal.TryParse(MontoTexto, NumberStyles.Number, CulturaMonto, out var monto))
+        if (!FormatoEsUy.TryParseDecimal(MontoTexto, out var monto, out var errorMonto))
         {
-            MensajeError = "El monto no es un número válido.";
+            MensajeError = MensajeNumeroInvalido.Armar("El monto no es un número válido.", errorMonto);
             return;
         }
         if (FechaSeleccionada is null)

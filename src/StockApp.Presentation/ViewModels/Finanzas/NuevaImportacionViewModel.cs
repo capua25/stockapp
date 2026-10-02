@@ -92,7 +92,7 @@ public partial class NuevaImportacionViewModel : ViewModelBase
     /// (Resumen.Errores==0 && ContarFilasIncompletas()==0), ahora redundante: los campos que antes
     /// dejaban a una fila "incompleta" o en EstadoFila.Error son exactamente los que [Required]
     /// valida en las filas VM.</summary>
-    public bool PuedeConfirmar => !HayFilasConErrores();
+    public bool PuedeConfirmar => !HayFilasConErrores() && !HayErroresDeEntrada;
 
     private bool HayFilasConErrores() =>
         FilasGasto.Any(f => f.HasErrors) || FilasIngreso.Any(f => f.HasErrors) || FilasLineaPoa.Any(f => f.HasErrors)
@@ -108,9 +108,13 @@ public partial class NuevaImportacionViewModel : ViewModelBase
                 + FilasIngreso.Count(f => f.HasErrors)
                 + FilasLineaPoa.Count(f => f.HasErrors)
                 + RubrosNuevos.Count(r => r.HasErrors);
-            return conErrores == 0
+            var filas = conErrores == 0
                 ? null
                 : $"Hay {conErrores} fila(s) con errores de validación pendientes.";
+            // Celda en edición con texto inválido (ej. "5.4"): la fila conserva el valor anterior.
+            return HayErroresDeEntrada
+                ? (filas is null ? MensajeErroresDeEntrada : $"{filas} {MensajeErroresDeEntrada}")
+                : filas;
         }
     }
 
@@ -254,6 +258,8 @@ public partial class NuevaImportacionViewModel : ViewModelBase
     /// <summary>Se dispara cuando cualquier fila (Gasto/Ingreso/LineaPoa) cambia su estado de
     /// validación — el gating de Confirmar depende de HasErrors de TODAS las filas, no sólo de la
     /// que cambió, así que se recalculan las dos propiedades computadas completas.</summary>
+    protected override void AlCambiarErroresDeEntrada() => NotificarGatingCambio();
+
     private void NotificarGatingCambio()
     {
         OnPropertyChanged(nameof(PuedeConfirmar));

@@ -171,7 +171,7 @@ public class LineaPoaFormViewModelTests
         Assert.Equal("2026", vm.EjercicioTexto);
         var fila = Assert.Single(vm.Asignaciones);
         Assert.Equal(2, fila.FuenteSeleccionada!.Id);
-        Assert.Equal("50000", fila.MontoTexto);
+        Assert.Equal("50.000", fila.MontoTexto);   // es-UY con punto de miles (decisión 2026-10-01)
 
         vm.Nombre = "COMPOSTERAS II";
         await vm.GuardarCommand.ExecuteAsync(null);
@@ -252,5 +252,64 @@ public class LineaPoaFormViewModelTests
 
         svcMock.Verify(s => s.ModificarAsync(It.Is<LineaPoa>(l =>
             l.Asignaciones.Count == 1 && l.Asignaciones[0].Monto == 1500.50m)), Times.Once);
+    }
+
+    // ── Formato es-UY (decisión 2026-10-01): parseo seguro ───────────────────
+
+    [Fact]
+    public async Task GuardarCommand_MontoConMilesConPunto_GuardaElValorCorrecto()
+    {
+        var (vm, svcMock, _, _) = Crear();
+        await vm.InicializarAsync();
+        vm.Nombre = "COMPOSTERAS";
+        vm.Programa = "Ambiente";
+        vm.EjercicioTexto = "2026";
+        vm.Asignaciones[0].FuenteSeleccionada = vm.FuentesDisponibles[0];
+        vm.Asignaciones[0].MontoTexto = "1.500,50";
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svcMock.Verify(s => s.AltaAsync(It.Is<LineaPoa>(l =>
+            l.Asignaciones.Count == 1 && l.Asignaciones[0].Monto == 1500.50m)), Times.Once);
+    }
+
+    [Fact]
+    public async Task GuardarCommand_MontoConPuntoDecimal_MensajeSugiereLaComa()
+    {
+        var (vm, svcMock, _, _) = Crear();
+        await vm.InicializarAsync();
+        vm.Nombre = "COMPOSTERAS";
+        vm.Programa = "Ambiente";
+        vm.EjercicioTexto = "2026";
+        vm.Asignaciones[0].FuenteSeleccionada = vm.FuentesDisponibles[0];
+        vm.Asignaciones[0].MontoTexto = "5.4";
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        Assert.Equal(
+            "Cada asignación necesita una fuente de financiamiento y un monto válido. Usá coma para los decimales: 5,4",
+            vm.MensajeError);
+        svcMock.Verify(s => s.AltaAsync(It.IsAny<LineaPoa>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CargarParaEditar_MontoConMiles_SeMuestraEnEsUy()
+    {
+        var (vm, _, _, _) = Crear();
+        vm.CargarParaEditar(new LineaPoa
+        {
+            Id = 4, Nombre = "COMPOSTERAS", Programa = "Ambiente", Ejercicio = 2026, Activo = true,
+            Asignaciones =
+            {
+                new AsignacionPresupuestal
+                {
+                    Id = 10, LineaPoaId = 4, FuenteFinanciamientoId = 2, Monto = 150000.5m,
+                    FuenteFinanciamiento = new FuenteFinanciamiento { Id = 2, Nombre = "Literal C" },
+                },
+            },
+        });
+        await vm.InicializarAsync();
+
+        Assert.Equal("150.000,5", vm.Asignaciones[0].MontoTexto);
     }
 }

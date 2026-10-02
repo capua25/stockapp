@@ -33,9 +33,8 @@ namespace StockApp.Presentation.UiTests;
 /// <see cref="StockApp.Presentation.Converters.DecimalConverter"/>, que fija cultura es-UY) y
 /// "Subtotal" se mostraba "27.0" (punto, porque esa columna NO tenía converter y caía en el
 /// binding default bajo la cultura ambiente del hilo, distinta de es-UY en esta máquina).
-/// Decisión del usuario: unificar TODA la grilla con PUNTO. Fix: converter nuevo
-/// <see cref="StockApp.Presentation.Converters.DecimalPuntoConverter"/> (cultura invariante,
-/// punto), cableado en Cantidad/Precio unitario/Subtotal de la grilla y en Cantidad/Precio
+/// Decisión del usuario (2026-08-24): unificar TODA la grilla con PUNTO. Fix: converter nuevo
+/// <c>DecimalPuntoConverter</c> (cultura invariante, punto), cableado en Cantidad/Precio unitario/Subtotal de la grilla y en Cantidad/Precio
 /// unitario de la zona de carga (los campos que alimentan esas columnas). En su momento se dejó
 /// deliberadamente sin tocar <c>DecimalConverter</c> (coma/es-UY) porque su único consumidor era
 /// <c>NuevoProductoPrecioVenta</c> ("Precio de venta" del alta rápida de producto) — territorio de
@@ -43,6 +42,9 @@ namespace StockApp.Presentation.UiTests;
 /// <c>Producto.PrecioVenta</c> (decisión de producto: el cliente no vende); al desaparecer el
 /// campo, <c>DecimalConverter</c> quedó sin ningún consumidor y se borró junto con este comentario
 /// histórico, que se conserva solo para documentar la secuencia.
+/// Decisión vigente desde el 2026-10-01: es-UY en TODA la app. <c>DecimalPuntoConverter</c> se
+/// borró y la grilla usa <see cref="StockApp.Presentation.Converters.DecimalConverter"/> (nuevo,
+/// sobre FormatoEsUy).
 /// </summary>
 public class IngresoPorFacturaGrillaRenglonesTests
 {
@@ -120,26 +122,22 @@ public class IngresoPorFacturaGrillaRenglonesTests
     }
 
     /// <summary>
-    /// BUG 2. Antes del fix: "PrecioUnitario" renderiza "5,4" (coma, vía <c>DecimalConverter</c>,
-    /// que fija es-UY) y "Subtotal" renderiza "27.0" (punto: esa columna NO tenía converter y
-    /// caía en el binding default de Avalonia bajo la cultura AMBIENTE del hilo) -- inconsistentes
-    /// en la MISMA fila. Después del fix ambos deben usar PUNTO y ninguno debe tener coma.
+    /// BUG 2 (historia): en la MISMA fila "Precio unitario" salía con coma y "Subtotal" con punto
+    /// (esa columna no tenía converter y caía en la cultura AMBIENTE). Se unificó con punto el
+    /// 2026-08-24; la decisión del 2026-10-01 lo deja en es-UY para toda la app. Las tres
+    /// columnas tienen que verse es-UY y consistentes entre sí.
     ///
-    /// Cultura AMBIENTE fijada EXPLÍCITAMENTE a es-UY (coma): sin esto, el test sería un falso
-    /// negativo ante la mutación "sacar el converter de Subtotal" en esta máquina, donde la
-    /// cultura ambiente del proceso que corre la suite YA formatea con punto por default --
-    /// mutar y sacar el converter igual daría "27.0" por casualidad del entorno, no porque el
-    /// fix esté funcionando. Con es-UY forzada, sin converter el binding default cae en coma
-    /// ("27,0") -- ahí sí la mutación se ve.
+    /// Cultura AMBIENTE forzada a en-US (punto decimal): si alguna columna perdiera su converter,
+    /// caería en el binding default con esa cultura y saldría con punto — la mutación se ve.
     /// </summary>
     [AvaloniaFact]
-    public void Cantidad_PrecioUnitario_Y_Subtotal_SeRenderizanConPuntoYSinComas_EnLaMismaFila()
+    public void Cantidad_PrecioUnitario_Y_Subtotal_SeRenderizanEnEsUy_EnLaMismaFila()
     {
         var culturaOriginal = Thread.CurrentThread.CurrentCulture;
-        Thread.CurrentThread.CurrentCulture = ObtenerCulturaEsUyOEsAr();
+        Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.GetCultureInfo("en-US");
         try
         {
-            var (window, _, fila) = MontarConUnRenglon(cantidad: 5m, precioUnitario: 5.4m);
+            var (window, _, fila) = MontarConUnRenglon(cantidad: 5m, precioUnitario: 5.45m);
 
             var row = window.GetVisualDescendants().OfType<DataGridRow>().Single(r => ReferenceEquals(r.DataContext, fila));
             var textos = row.GetVisualDescendants().OfType<TextBlock>()
@@ -147,18 +145,10 @@ public class IngresoPorFacturaGrillaRenglonesTests
                 .Select(tb => tb.Text)
                 .ToList();
 
-            // Producto/Cantidad/PrecioUnitario/Subtotal, en orden de columna (ver comentario de
-            // MontarConUnRenglon). Verificado explícitamente por contenido en vez de solo por
-            // índice, para no depender ciegamente del orden de recorrido del árbol visual.
-            var textoCantidad = Assert.Single(textos, t => t == "5");
-            var textoPrecio = Assert.Single(textos, t => t is not null && (t.StartsWith("5,", StringComparison.Ordinal) || t.StartsWith("5.", StringComparison.Ordinal)));
-            var textoSubtotal = Assert.Single(textos, t => t is not null && (t.StartsWith("27,", StringComparison.Ordinal) || t.StartsWith("27.", StringComparison.Ordinal)));
-
-            Assert.Equal("5.4", textoPrecio);
-            Assert.Equal("27.0", textoSubtotal);
-            Assert.DoesNotContain(",", textoCantidad);
-            Assert.DoesNotContain(",", textoPrecio);
-            Assert.DoesNotContain(",", textoSubtotal);
+            Assert.Contains("5", textos);
+            Assert.Contains("5,45", textos);
+            Assert.Contains("27,25", textos);
+            Assert.DoesNotContain(textos, t => t is not null && t.Contains('.'));
 
             window.Close();
             Dispatcher.UIThread.RunJobs();
@@ -167,15 +157,6 @@ public class IngresoPorFacturaGrillaRenglonesTests
         {
             Thread.CurrentThread.CurrentCulture = culturaOriginal;
         }
-    }
-
-    /// <summary>Mismo criterio de cultura fallback que MonedaConverter/CantidadConverter/etc.:
-    /// si "es-UY" no está instalada en el runtime, se usa "es-AR" (mismos separadores) como
-    /// segunda opción antes de fallar el test por un motivo ajeno al bug bajo prueba.</summary>
-    private static System.Globalization.CultureInfo ObtenerCulturaEsUyOEsAr()
-    {
-        try { return System.Globalization.CultureInfo.GetCultureInfo("es-UY"); }
-        catch (System.Globalization.CultureNotFoundException) { return System.Globalization.CultureInfo.GetCultureInfo("es-AR"); }
     }
 
     /// <summary>

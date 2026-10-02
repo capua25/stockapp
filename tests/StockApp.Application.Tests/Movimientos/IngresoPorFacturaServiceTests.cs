@@ -372,10 +372,11 @@ public class IngresoPorFacturaServiceTests
         movRepo.Setup(m => m.AnularIngresoPorFacturaAtomicoAsync(7, It.IsAny<int>(), It.IsAny<string>()))
             .ReturnsAsync(new ResultadoAnulacionIngreso(
                 ResultadoAnulacionIngresoEstado.StockInsuficiente,
-                new List<ItemFaltanteStock> { new(1, "Producto X", 2m, 5m) }));
+                new List<ItemFaltanteStock> { new(1, "Producto X", 1200.5000m, 1500.2500m) }));
 
         var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(() => svc.AnularLoteAsync(7));
         Assert.Contains("Producto X", ex.Message);
+        Assert.Contains("Producto X: stock 1.200,5, necesita 1.500,25", ex.Message);
     }
 
     [Fact]

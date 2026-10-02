@@ -1,3 +1,5 @@
+using StockApp.Domain.Formato;
+
 namespace StockApp.Domain.Exceptions;
 
 /// <summary>
@@ -17,7 +19,7 @@ public class AnulacionRequierePagoAutomaticoConfirmadoException : ReglaDeNegocio
     public decimal MontoPagoAutomatico { get; }
 
     public AnulacionRequierePagoAutomaticoConfirmadoException(int gastoId, decimal montoPagoAutomatico)
-        : base($"El gasto {gastoId} tiene un pago automático de contado activo por {montoPagoAutomatico}: " +
+        : base($"El gasto {gastoId} tiene un pago automático de contado activo por {FormatoEsUy.Moneda(montoPagoAutomatico)}: " +
                "anularlo también va a eliminar ese pago. Confirmá la anulación para continuar.")
     {
         GastoId             = gastoId;

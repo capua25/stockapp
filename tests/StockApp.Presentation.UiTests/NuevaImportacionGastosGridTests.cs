@@ -211,4 +211,141 @@ public class NuevaImportacionGastosGridTests
         window.Close();
         Dispatcher.UIThread.RunJobs();
     }
+
+    // ── Formato es-UY (decisión 2026-10-01) ──────────────────────────────────
+
+    private static GastoAnalizadoDto GastoConMonto(decimal? monto) => GastoBase("ACME SA", "F-1", "Rentas") with { Monto = monto };
+
+    [AvaloniaFact]
+    public async Task CeldaMonto_SeMuestraEnEsUy()
+    {
+        var original = System.Threading.Thread.CurrentThread.CurrentCulture;
+        System.Threading.Thread.CurrentThread.CurrentCulture = System.Globalization.CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var (window, _, vm) = await MontarEnPasoRevisarAsync(GastoConMonto(1500.5m));
+            var fila = vm.FilasGasto[0];
+
+            var textos = window.GetVisualDescendants().OfType<TextBlock>()
+                .Where(t => ReferenceEquals(t.DataContext, fila)).Select(t => t.Text).ToList();
+            Assert.Contains("$ 1.500,50", textos);
+            window.Close();
+            Dispatcher.UIThread.RunJobs();
+        }
+        finally
+        {
+            System.Threading.Thread.CurrentThread.CurrentCulture = original;
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task CeldaMontoFaltante_PuntoDecimal_SeRechazaConMensajeClaro_YComaSeAcepta()
+    {
+        var (window, grid, vm) = await MontarEnPasoRevisarAsync(GastoConMonto(null));
+        var fila = vm.FilasGasto[0];
+
+        grid.SelectedItem = fila;
+        grid.CurrentColumn = grid.Columns.First(c => Equals(c.Header, "Monto"));
+        Dispatcher.UIThread.RunJobs();
+        grid.BeginEdit();
+        Dispatcher.UIThread.RunJobs();
+        var caja = window.GetVisualDescendants().OfType<TextBox>()
+            .First(t => ReferenceEquals(t.DataContext, fila) && t.IsEnabled && t.TemplatedParent is null);
+
+        caja.Text = "5.4";
+        Dispatcher.UIThread.RunJobs();
+        Assert.Null(fila.Monto);
+        Assert.Contains("Usá coma para los decimales: 5,4", DataValidationErrors.GetErrors(caja)!.Cast<object>());
+
+        caja.Text = "1.500,50";
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1500.50m, fila.Monto);
+
+        window.Close();
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    // ── Confirmar bloqueado con errores de entrada (bug de integridad 2026-10-01) ──
+    // La celda de Monto en edición con texto inválido nunca llega a la fila: sin bloqueo,
+    // Confirmar importaba el monto ANTERIOR. Ver GuardarBloqueadoConErroresDeEntradaTests.
+
+    private static TextBox EditarMonto(Window window, DataGrid grid, FilaGastoEditableVm fila)
+    {
+        grid.SelectedItem = fila;
+        grid.CurrentColumn = grid.Columns.First(c => Equals(c.Header, "Monto"));
+        Dispatcher.UIThread.RunJobs();
+        grid.BeginEdit();
+        Dispatcher.UIThread.RunJobs();
+        return window.GetVisualDescendants().OfType<TextBox>()
+            .First(t => ReferenceEquals(t.DataContext, fila) && t.IsEnabled && t.TemplatedParent is null);
+    }
+
+    [AvaloniaFact]
+    public async Task CeldaMonto_TextoInvalido_DeshabilitaConfirmar_YExplicaPorQue_YAlCorregirSeHabilita()
+    {
+        var (window, grid, vm) = await MontarEnPasoRevisarAsync(GastoConMonto(1000m));
+        var fila = vm.FilasGasto[0];
+        var confirmar = window.GetVisualDescendants().OfType<Button>().First(b => ReferenceEquals(b.Command, vm.ConfirmarCommand));
+        Assert.True(confirmar.IsEffectivelyEnabled);
+        fila.DesbloquearCommand.Execute(null);   // el monto que vino de la planilla arranca con candado
+        Dispatcher.UIThread.RunJobs();
+
+        var caja = EditarMonto(window, grid, fila);
+        caja.Text = "1000.5";
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(1000m, fila.Monto);
+        Assert.False(confirmar.IsEffectivelyEnabled);
+        Assert.False(vm.ConfirmarCommand.CanExecute(null));
+        Assert.False(vm.PuedeConfirmar);
+        Assert.Contains(StockApp.Presentation.ViewModels.ViewModelBase.MensajeErroresDeEntrada, vm.MensajeConfirmarBloqueado);
+
+        caja.Text = "1000,5";
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(1000.5m, fila.Monto);
+        Assert.True(confirmar.IsEffectivelyEnabled);
+        Assert.Null(vm.MensajeConfirmarBloqueado);
+
+        window.Close();
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    /// <summary>
+    /// La grilla no puede "tragarse" el texto inválido: sin esto, terminar la edición (Enter,
+    /// Tab, click en otra fila) descartaba el editor en rojo, la fila quedaba con el monto
+    /// ANTERIOR, el error desaparecía y Confirmar se volvía a habilitar (verificado: commit=True,
+    /// Monto=1000, PuedeConfirmar=True). Ahora el commit se cancela y la celda sigue en edición.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task CeldaMonto_TextoInvalido_TerminarLaEdicion_NoDescartaElErrorNiHabilitaConfirmar()
+    {
+        var (window, grid, vm) = await MontarEnPasoRevisarAsync(GastoConMonto(1000m));
+        var fila = vm.FilasGasto[0];
+        fila.DesbloquearCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        var caja = EditarMonto(window, grid, fila);
+        caja.Text = "1000.5";
+        Dispatcher.UIThread.RunJobs();
+
+        var commit = grid.CommitEdit();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(commit);
+        Assert.True(DataValidationErrors.GetHasErrors(caja));
+        Assert.True(ArbolVisual.EsVisibleEnArbol(caja));
+        Assert.False(vm.PuedeConfirmar);
+        Assert.False(vm.ConfirmarCommand.CanExecute(null));
+
+        caja.Text = "1000,5";
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(grid.CommitEdit());
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(1000.5m, fila.Monto);
+        Assert.True(vm.PuedeConfirmar);
+
+        window.Close();
+        Dispatcher.UIThread.RunJobs();
+    }
 }

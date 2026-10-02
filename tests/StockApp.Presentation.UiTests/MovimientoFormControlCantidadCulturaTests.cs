@@ -13,27 +13,15 @@ using Xunit;
 namespace StockApp.Presentation.UiTests;
 
 /// <summary>
-/// TEST DE FIJACIÓN DE COMPORTAMIENTO (no reproduce un bug) — documenta ejecutablemente por qué
-/// el campo "Cantidad" de <c>MovimientoFormControl.axaml:34</c> (<c>Text="{Binding Cantidad}"</c>,
-/// <c>decimal</c> NO nullable, SIN converter) NO necesita <see cref="StockApp.Presentation.Converters.DecimalConverter"/>,
-/// a diferencia de las columnas homónimas de <c>IngresoPorFacturaView.axaml</c> que sí lo tienen.
+/// Campo "Cantidad" de <c>MovimientoFormControl.axaml</c> (Registrar Entrada/Salida), con la View
+/// real, bajo cultura ambiente es-UY/es-AR forzada.
 ///
-/// Investigación (sesión de locale-decimales, 2026-08-05): se sospechó que este <c>TextBox</c>
-/// sufría el mismo bug ya arreglado en <c>IngresoPorFacturaView.axaml</c> — "1.200" guardándose
-/// silenciosamente como 1200 en vez de 1,2 bajo cultura ambiente es-UY. Se armó un test A/B
-/// cableando <c>DecimalConverter</c> a este binding y sacándolo: el resultado fue IDÉNTICO,
-/// byte a byte, con y sin converter. Causa raíz (ver docstring de
-/// <see cref="StockApp.Presentation.Converters.DecimalConverter"/>): el bug de
-/// <c>NumberStyles.Number</c> (que incluye <c>AllowThousands</c>) es específico del codepath
-/// <c>DataGridBoundColumn.GenerateEditingElement</c> → <c>Convert.ChangeType</c>. Un
-/// <c>TextBox</c> plano fuera de un <c>DataGrid</c>, como este, cae en
-/// <c>DefaultValueConverter</c> → <c>TypeUtilities.TryConvert</c>, que para <c>decimal</c> usa
-/// <c>NumberStyles.Float</c> — SIN <c>AllowThousands</c> — así que "1.200"/"12.35" ya se
-/// rechazan (no se corrompen) sin necesidad de ningún converter de dominio.
-///
-/// SI ALGÚN DÍA este campo pasa a ser una celda de <c>DataGridTextColumn</c> (o cualquier otro
-/// binding cambia de codepath), este test HAY QUE revisarlo — el traspaso de codepath es
-/// exactamente lo que reintroduce el bug (ver docstring de DecimalConverter.cs).
+/// Historia: el 2026-08-05 este archivo FIJABA que el <c>TextBox</c> no necesitaba converter (el
+/// binding crudo usa <c>NumberStyles.Float</c>, sin AllowThousands, así que "1.200"/"12.35" se
+/// rechazaban con el genérico). Decisión vigente desde el 2026-10-01: es-UY en TODA la app con
+/// parseo seguro único (<see cref="StockApp.Domain.Formato.FormatoEsUy"/>), así que el campo pasa
+/// por <see cref="StockApp.Presentation.Converters.DecimalConverter"/>: "1.200" es mil doscientos
+/// (punto de miles válido) y "12.35"/"5.4" se rechazan con un mensaje que sugiere la coma.
 /// </summary>
 public class MovimientoFormControlCantidadCulturaTests
 {
@@ -97,20 +85,10 @@ public class MovimientoFormControlCantidadCulturaTests
         }
     }
 
-    /// <summary>
-    /// FIJA el comportamiento seguro (NumberStyles.Float, sin AllowThousands): "1.200" — el caso
-    /// que SÍ corrompía datos en la celda de <c>DataGridTextColumn</c> de
-    /// <c>IngresoPorFacturaView.axaml</c> antes del fix — en este <c>TextBox</c> plano NUNCA se
-    /// interpreta como separador de miles. El punto no coincide con el separador decimal de
-    /// es-UY (","), así que el parseo falla de forma visible: el valor anterior se conserva y
-    /// <c>DataValidationErrors.HasErrors</c> queda en <c>True</c> con el mensaje de dominio
-    /// genérico (saneado globalmente por <see cref="StockApp.Presentation.Converters.ErrorValidacionConverter"/>).
-    /// Si esta aserción alguna vez falla con <c>vm.Cantidad == 1200m</c>, es señal de que el
-    /// codepath de este binding cambió (por ejemplo, a una celda de DataGrid) y SÍ hay que
-    /// cablear <see cref="StockApp.Presentation.Converters.DecimalConverter"/> acá.
-    /// </summary>
+    /// <summary>"1.200" tiene agrupación de miles válida en es-UY: es 1200 (antes, con el binding
+    /// crudo, se rechazaba). Cambio de expectativa por la decisión del 2026-10-01.</summary>
     [AvaloniaFact]
-    public void Cantidad_PuntoComoMiles_CulturaAmbienteEsUy_NuncaSeInterpretaComoMiles()
+    public void Cantidad_PuntoComoMiles_CulturaAmbienteEsUy_SeLeeComoMiles()
     {
         var culturaOriginal = Thread.CurrentThread.CurrentCulture;
         Thread.CurrentThread.CurrentCulture = ObtenerCulturaEsUyOEsAr();
@@ -122,9 +100,8 @@ public class MovimientoFormControlCantidadCulturaTests
             cantidadBox.Text = "1.200";
             Dispatcher.UIThread.RunJobs();
 
-            Assert.NotEqual(1200m, vm.Cantidad);
-            Assert.Equal(99m, vm.Cantidad);
-            Assert.True(DataValidationErrors.GetHasErrors(cantidadBox));
+            Assert.Equal(1200m, vm.Cantidad);
+            Assert.False(DataValidationErrors.GetHasErrors(cantidadBox));
         }
         finally
         {
@@ -151,6 +128,8 @@ public class MovimientoFormControlCantidadCulturaTests
             Assert.NotEqual(1235m, vm.Cantidad);
             Assert.Equal(99m, vm.Cantidad);
             Assert.True(DataValidationErrors.GetHasErrors(cantidadBox));
+            Assert.Contains("Usá coma para los decimales: 12,35",
+                DataValidationErrors.GetErrors(cantidadBox)!.Cast<object>());
         }
         finally
         {

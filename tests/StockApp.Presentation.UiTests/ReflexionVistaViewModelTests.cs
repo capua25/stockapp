@@ -231,6 +231,8 @@ public class ReflexionVistaViewModelTests
         var candidatos = ExtraerPrimerSegmentoDeBindings(axaml);
 
         var validos = PropiedadesPublicasDeclaradas(typeof(IngresoPorFacturaViewModel))
+            // Heredadas de ViewModelBase (DeclaredOnly no las ve), ej. MotivoBloqueoPorErrores.
+            .Concat(PropiedadesPublicasDeclaradas(typeof(ViewModelBase)))
             .Concat(PropiedadesPublicasDeclaradas(typeof(FilaRenglonFacturaVm)))
             .Concat(PropiedadesPublicasDeclaradas(typeof(ItemConfirmacionPrecioVm)))
             .Concat(PropiedadesPublicasDeclaradas(typeof(Proveedor)))

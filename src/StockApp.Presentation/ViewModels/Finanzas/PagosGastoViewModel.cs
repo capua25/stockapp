@@ -1,6 +1,5 @@
 using System;
 using System.Collections.ObjectModel;
-using System.Globalization;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -12,6 +11,8 @@ using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
+using StockApp.Domain.Formato;
+using StockApp.Presentation.Helpers;
 
 namespace StockApp.Presentation.ViewModels.Finanzas;
 
@@ -49,25 +50,6 @@ public partial class PagosGastoViewModel : ViewModelBase
 
     private int _gastoId;
     private Action _volver;
-
-    /// <summary>Cultura FIJA es-UY (patrón MonedaConverter).</summary>
-    private static readonly IFormatProvider CulturaMonto = CrearCulturaMonto();
-
-    private static IFormatProvider CrearCulturaMonto()
-    {
-        try
-        {
-            return CultureInfo.GetCultureInfo("es-UY");
-        }
-        catch (CultureNotFoundException)
-        {
-            return new NumberFormatInfo
-            {
-                NumberDecimalSeparator = ",",
-                NumberGroupSeparator = ".",
-            };
-        }
-    }
 
     [ObservableProperty] private string _tituloGasto = string.Empty;
     [ObservableProperty] private decimal _montoTotal;
@@ -167,9 +149,9 @@ public partial class PagosGastoViewModel : ViewModelBase
     {
         MensajeError = null;
 
-        if (!decimal.TryParse(MontoTexto, NumberStyles.Number, CulturaMonto, out var monto))
+        if (!FormatoEsUy.TryParseDecimal(MontoTexto, out var monto, out var errorMonto))
         {
-            MensajeError = "El monto del pago no es un número válido.";
+            MensajeError = MensajeNumeroInvalido.Armar("El monto del pago no es un número válido.", errorMonto);
             return;
         }
         if (FechaSeleccionada is null)
@@ -203,7 +185,7 @@ public partial class PagosGastoViewModel : ViewModelBase
     private async Task AnularPagoAsync(PagoGasto pago)
     {
         var confirmar = await _confirmacion.PreguntarAsync(
-            $"¿Confirma anular el pago de {pago.Monto.ToString("N2", CulturaMonto)} del {pago.Fecha:dd/MM/yyyy}?");
+            $"¿Confirma anular el pago de {FormatoEsUy.Decimal(pago.Monto)} del {pago.Fecha:dd/MM/yyyy}?");
         if (!confirmar) return;
 
         try

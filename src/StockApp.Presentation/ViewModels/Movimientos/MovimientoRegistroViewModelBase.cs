@@ -11,6 +11,7 @@ using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
+using StockApp.Domain.Formato;
 
 namespace StockApp.Presentation.ViewModels.Movimientos;
 
@@ -102,7 +103,14 @@ public abstract partial class MovimientoRegistroViewModelBase : ViewModelBase
     }
 
     private bool PuedeRegistrar()
-        => ProductoSeleccionado != null && Cantidad > 0;
+        => ProductoSeleccionado != null && Cantidad > 0 && !HayErroresDeEntrada;
+
+    /// <summary>Un campo en rojo (texto que no llegó al ViewModel) bloquea Registrar: ver
+    /// <see cref="ViewModelBase.HayErroresDeEntrada"/>.</summary>
+    protected override void AlCambiarErroresDeEntrada()
+    {
+        RegistrarCommand.NotifyCanExecuteChanged();
+    }
 
     [RelayCommand(CanExecute = nameof(PuedeRegistrar))]
     private async Task RegistrarAsync()
@@ -124,7 +132,7 @@ public abstract partial class MovimientoRegistroViewModelBase : ViewModelBase
         }
         catch (StockInsuficienteException ex)
         {
-            var mensaje = $"El stock quedará en {ex.StockResultante}. ¿Confirmar la salida igual?";
+            var mensaje = $"El stock quedará en {FormatoEsUy.Cantidad(ex.StockResultante)}. ¿Confirmar la salida igual?";
             var confirmar = await Confirmacion.PreguntarAsync(mensaje);
 
             if (confirmar)

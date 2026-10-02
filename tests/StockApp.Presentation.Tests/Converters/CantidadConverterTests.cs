@@ -75,4 +75,13 @@ public class CantidadConverterTests
         Assert.Throws<NotSupportedException>(
             () => Sut.ConvertBack("22", typeof(decimal), null, CultureInfo.InvariantCulture));
     }
+
+    /// <summary>Decisión 2026-10-01: es-UY en toda la app, con punto de miles.</summary>
+    [Fact]
+    public void Convert_ConMiles_UsaPuntoDeMiles()
+    {
+        var resultado = Sut.Convert(1500.5m, typeof(string), null, CultureInfo.GetCultureInfo("en-US"));
+
+        Assert.Equal("1.500,5", resultado);
+    }
 }

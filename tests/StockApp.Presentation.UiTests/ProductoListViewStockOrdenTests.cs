@@ -1,17 +1,15 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Collections;
 using Avalonia.Controls;
-using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
-using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using StockApp.Application.Catalogo;
 using StockApp.Presentation.Views.Catalogo;
 using Xunit;
+using static StockApp.Presentation.UiTests.GrillaStockHelpers;
 
 namespace StockApp.Presentation.UiTests;
 
@@ -39,52 +37,11 @@ public class ProductoListViewStockOrdenTests
         UnidadMedidaNombre: "Unidad", PrecioCosto: costo, StockActual: stock,
         StockMinimo: 0m, Activo: true, FechaAlta: DateTime.UtcNow);
 
-    private static void ClickearHeader(Window window, DataGrid grid, string headerTexto)
-    {
-        Dispatcher.UIThread.RunJobs();
-        var header = grid.GetVisualDescendants().OfType<DataGridColumnHeader>()
-            .First(h => Equals(h.Content, headerTexto));
-        var centro = header.TranslatePoint(new Point(header.Bounds.Width / 2, header.Bounds.Height / 2), window)!.Value;
-        window.MouseMove(centro);
-        window.MouseDown(centro, MouseButton.Left);
-        window.MouseUp(centro, MouseButton.Left);
-        Dispatcher.UIThread.RunJobs();
-    }
-
-    /// <summary>Un TextBlock por celda de Stock (el del número, que es el último del template).</summary>
-    private static List<TextBlock> NumerosDeStock(DataGrid grid)
-        => grid.GetVisualDescendants().OfType<DataGridCell>()
-            .Where(c => c.Content is Grid or StackPanel)
-            .Select(c => c.GetVisualDescendants().OfType<TextBlock>().Last())
-            .ToList();
-
-    private static void AssertNumerosAlineadosYSinRecorte(DataGrid grid, Window window, string etapa)
-    {
-        var numeros = NumerosDeStock(grid);
-        Assert.NotEmpty(numeros);
-
-        var recortados = numeros
-            .Where(tb => tb.Bounds.Width < tb.DesiredSize.Width - 0.5)
-            .Select(tb => $"'{tb.Text}' mide {tb.Bounds.Width:F1}px y necesita {tb.DesiredSize.Width:F1}px")
-            .ToList();
-        Assert.True(recortados.Count == 0, $"[{etapa}] números recortados: {string.Join("; ", recortados)}");
-
-        var bordesDerechos = numeros
-            .Select(tb => (Texto: tb.Text, X: tb.TranslatePoint(new Point(tb.Bounds.Width, 0), window)!.Value.X))
-            .ToList();
-        var esperado = bordesDerechos.Max(b => b.X);
-        var corridos = bordesDerechos
-            .Where(b => Math.Abs(b.X - esperado) > 0.5)
-            .Select(b => $"'{b.Texto}' termina en x={b.X:F0} (el resto en x={esperado:F0})")
-            .ToList();
-        Assert.True(corridos.Count == 0, $"[{etapa}] números mal alineados: {string.Join("; ", corridos)}");
-    }
-
     [AvaloniaFact]
     public void Ordenar_PorCostoYPorStock_MantieneAlineadosYSinRecorteLosNumerosDeStock()
     {
         var vista = new ProductoListView();
-        var window = new Window { Width = 1700, Height = 900, Content = vista };
+        var window = new Window { Width = 1700, Height = 1600, Content = vista };
         window.Show();
         Dispatcher.UIThread.RunJobs();
 
@@ -93,19 +50,24 @@ public class ProductoListViewStockOrdenTests
         // Un producto con stock NEGATIVO arriba (badge visible) y el resto positivo, con stocks de
         // 1 y 2 dígitos y costos en distinto orden que el stock: al reordenar, las celdas recicladas
         // pasan de badge visible a oculto y de un ancho de número a otro.
-        var stocks = new decimal[] { -5, 22, 8, 60, 45, 30, 9, 45, 18, 6, 5, 35, 28, 3, 40, 50, 0, 25, 4, 14, 20, 12 };
-        var costos = new decimal[] { 1, 1200, 350, 900, 500, 500, 250, 800, 600, 1500, 400, 550, 1800, 2500, 300, 450, 123, 700, 1600, 3800, 900, 200 };
+        // El último (-99999,5) es el PEOR CASO que el ancho fijo de la columna tiene que absorber
+        // con el badge visible (ver GrillaStockHelpers.Stocks): con 170 el badge pisaba al número.
+        var stocks = new decimal[] { -5, 22, 8, 60, 45, 30, 9, 45, 18, 6, 5, 35, 28, 3, 40, 50, 0, 25, 4, 14, 20, 12, -99999.5m };
+        var costos = new decimal[] { 1, 1200, 350, 900, 500, 500, 250, 800, 600, 1500, 400, 550, 1800, 2500, 300, 450, 123, 700, 1600, 3800, 900, 200, 77 };
         grid.ItemsSource = new DataGridCollectionView(
             stocks.Select((s, i) => ProductoDe(i + 1, costos[i], s)).ToList());
         Dispatcher.UIThread.RunJobs();
-        AssertNumerosAlineadosYSinRecorte(grid, window, "inicial");
+        AssertNumerosAlineadosYSinRecorte(grid, window, "Stock", "inicial");
+        AssertBadgeNoPisaElNumero(grid, window, "Stock", "inicial");
 
         // Pasos del reporte: dos clicks en "Costo" (descendente), y también por "Stock".
         ClickearHeader(window, grid, "Costo");
         ClickearHeader(window, grid, "Costo");
-        AssertNumerosAlineadosYSinRecorte(grid, window, "Costo descendente");
+        AssertNumerosAlineadosYSinRecorte(grid, window, "Stock", "Costo descendente");
+        AssertBadgeNoPisaElNumero(grid, window, "Stock", "Costo descendente");
 
         ClickearHeader(window, grid, "Stock");
-        AssertNumerosAlineadosYSinRecorte(grid, window, "Stock ascendente");
+        AssertNumerosAlineadosYSinRecorte(grid, window, "Stock", "Stock ascendente");
+        AssertBadgeNoPisaElNumero(grid, window, "Stock", "Stock ascendente");
     }
 }

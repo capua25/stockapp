@@ -1,5 +1,6 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:b="using:StockApp.Presentation.Behaviors">
 
     <!-- ════════════════════════════════════════════════════════════════════
          StockApp UI Kit — Override del DataGrid: matar el recuadro de foco.
@@ -53,6 +54,10 @@
          ════════════════════════════════════════════════════════════════════ -->
 
     <Style Selector="DataGrid">
+        <!-- Integridad de datos (bug 2026-10-01): una celda con texto inválido (ej. "5.4") no
+             termina su edición; si no, la fila se quedaba con el valor anterior en silencio.
+             Ver ErroresDeEntradaBehavior.RetenerEdicionInvalida. -->
+        <Setter Property="(b:ErroresDeEntradaBehavior.RetenerEdicionInvalida)" Value="True" />
         <Setter Property="RowHeight" Value="36" />
         <Setter Property="Background" Value="{DynamicResource SuperficieBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource BordeBrush}" />
@@ -86,6 +91,20 @@
              grilla (DataGridColumn.ActualMinWidth: _minWidth ?? OwningGrid?.MinColumnWidth). -->
         <Setter Property="CanUserResizeColumns" Value="True" />
         <Setter Property="MinColumnWidth" Value="40" />
+
+        <!-- Con el resize habilitado, DataGrid 12.0.1 trata el crecimiento de una columna Auto
+             (los datos llegan después de armar la grilla vacía) como un resize que solo le saca
+             ancho a las columnas de su DERECHA: "Usuario" quedaba cortado y la Stock de 220 en
+             ~198. El behavior lleva las Auto a su ancho natural tomando de las columnas * de
+             cualquier posición, y respeta los arrastres del usuario. Va acá, en el estilo de TODA
+             DataGrid, para que las grillas nuevas lo hereden sin que nadie se acuerde.
+             También pone el PISO de las columnas *: 160px (PisoProporcionalPorDefecto), no los 40
+             de MinColumnWidth. Varias PCs del municipio son de 1366x768 y, sin el sidebar, el
+             Historial no entra: Producto y Comentario caían a 40px. Con el piso, si no entra todo
+             las * quedan en 160 y aparece el scroll horizontal. Por columna: un MinWidth mayor
+             manda; b:DataGridColumnasAutoBehavior.PisoProporcional cambia el piso de esa columna.
+             Guardián: DataGridColumnasAutoAjusteTests. -->
+        <Setter Property="b:DataGridColumnasAutoBehavior.AjustarColumnasAuto" Value="True" />
     </Style>
 
     <!-- Fondo alternado: Avalonia.Controls.DataGrid 12.0.1 NO tiene la propiedad
@@ -129,10 +148,16 @@
     </Style>
 
     <!-- Celda numerica. Hoy este estilo esta COPIADO 7 veces en vistas sueltas; la
-         tanda 10 borra esas copias y se apoya en este. -->
-    <Style Selector="DataGridCell.num">
-        <Setter Property="HorizontalContentAlignment" Value="Right" />
-    </Style>
+         tanda 10 borra esas copias y se apoya en este.
+         La alineación a la derecha la hace SOLO el TextBlock. NO pongas
+         HorizontalContentAlignment="Right" en DataGridCell.num: el template de la celda lo pasa
+         como HorizontalAlignment del ContentPresenter, que queda ajustado al contenido, y al
+         ordenar (celdas recicladas) el número perdía el último carácter ("75" -> "7"). El
+         DesiredSize del presenter cambia durante el measure de la grilla sin invalidar su
+         arrange, y Layoutable.Arrange se saltea porque recibe el mismo rectángulo: el presenter
+         conserva el ancho del valor anterior. Con el presenter estirado, su rectángulo no
+         depende del texto y el TextBlock, que sí se invalida al cambiar el texto, se re-alinea
+         solo. Guardián: DataGridCeldaNumericaOrdenTests. -->
     <Style Selector="DataGridCell.num TextBlock">
         <Setter Property="HorizontalAlignment" Value="Right" />
     </Style>

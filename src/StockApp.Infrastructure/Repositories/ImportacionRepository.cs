@@ -1,4 +1,3 @@
-using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using StockApp.Application.Finanzas;
@@ -7,6 +6,7 @@ using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
 using StockApp.Infrastructure.Persistence;
+using StockApp.Domain.Formato;
 
 namespace StockApp.Infrastructure.Repositories;
 
@@ -915,6 +915,7 @@ public class ImportacionRepository : IImportacionRepository
     /// <summary>Formatea un monto para el reporte de conflictos sin arrastrar la escala interna
     /// del decimal (Postgres/EF devuelven MontoTotal con la escala fija de la columna, 18,4:
     /// 500m llega como 500.0000m) — sin este formateo, "500.0000" vs "550" se leería como un
-    /// campo distinto todavía más confuso de lo que ya es.</summary>
-    private static string FormatearMonto(decimal monto) => monto.ToString("0.####", CultureInfo.InvariantCulture);
+    /// campo distinto todavía más confuso de lo que ya es. Se muestra al operador en el reporte
+    /// de conflictos, así que va en es-UY (decisión 2026-10-01): "1.500,5", no "1500.5".</summary>
+    private static string FormatearMonto(decimal monto) => FormatoEsUy.Cantidad(monto);
 }
