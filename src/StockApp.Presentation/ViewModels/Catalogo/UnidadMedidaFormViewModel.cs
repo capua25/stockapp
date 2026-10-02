@@ -53,7 +53,8 @@ public partial class UnidadMedidaFormViewModel : ViewModelBase
         => !string.IsNullOrWhiteSpace(Nombre)
         && !string.IsNullOrWhiteSpace(Abreviatura);
 
-    [RelayCommand(CanExecute = nameof(PuedeGuardar))]
+    public IAsyncRelayCommand GuardarCommand => field ??= ComandoDeGuardado(GuardarAsync, PuedeGuardar);
+
     private async Task GuardarAsync()
     {
         MensajeError = null;

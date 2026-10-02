@@ -80,7 +80,8 @@ public partial class ValorizacionViewModel : ViewModelBase
     }
 
     /// <summary>Obtiene la valorización del inventario y puebla <see cref="Items"/> y <see cref="Totales"/>.</summary>
-    [RelayCommand]
+    public IAsyncRelayCommand BuscarCommand => field ??= ComandoDeGuardado(BuscarAsync);
+
     private async Task BuscarAsync() => await CargarAsync();
 
     /// <summary>

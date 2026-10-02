@@ -119,7 +119,8 @@ public partial class ProductoListViewModel : ViewModelBase
         await EjecutarBusquedaAsync();
     }
 
-    [RelayCommand]
+    public IAsyncRelayCommand BuscarCommand => field ??= ComandoDeGuardado(BuscarAsync);
+
     private async Task BuscarAsync() => await EjecutarBusquedaAsync();
 
     /// <summary>

@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Data;
 using Avalonia.VisualTree;
 using StockApp.Presentation.ViewModels;
 
@@ -25,9 +27,9 @@ namespace StockApp.Presentation.Behaviors;
 /// de controles en error POR dueño y se publica <c>HayErroresDeEntrada = conjunto no vacío</c>.
 /// El ViewModel lo consulta en el CanExecute de su comando de guardar.
 ///
-/// Una vista nueva lo hereda sin tocar XAML; el ViewModel solo suma
-/// <c>&amp;&amp; !HayErroresDeEntrada</c> a su CanExecute y notifica el comando en
-/// <see cref="ViewModelBase"/>.<c>AlCambiarErroresDeEntrada</c>.
+/// Una vista nueva lo hereda sin tocar XAML; el ViewModel crea su comando de guardar con
+/// <see cref="ViewModelBase"/>.<c>ComandoDeGuardado(...)</c>, que compone el bloqueo solo, y el
+/// botón recibe el tooltip del bloqueo vía <see cref="ExplicarBloqueoProperty"/> (global en el tema).
 /// </summary>
 public static class ErroresDeEntradaBehavior
 {
@@ -45,6 +47,17 @@ public static class ErroresDeEntradaBehavior
     public static readonly AttachedProperty<bool> RetenerEdicionInvalidaProperty =
         AvaloniaProperty.RegisterAttached<DataGrid, DataGrid, bool>("RetenerEdicionInvalida");
 
+    /// <summary>
+    /// Sobre un <see cref="Button"/> (global vía Themes/Controls.axaml): si su Command es un comando
+    /// de guardado del ViewModel dueño (<see cref="ViewModelBase.EsComandoDeGuardado"/>), el botón
+    /// muestra <see cref="ViewModelBase.MotivoBloqueoPorErrores"/> como tooltip, también
+    /// deshabilitado. Prioridad de estilo: un <c>ToolTip.Tip</c> puesto en el XAML del botón gana.
+    /// </summary>
+    public static readonly AttachedProperty<bool> ExplicarBloqueoProperty =
+        AvaloniaProperty.RegisterAttached<Button, Button, bool>("ExplicarBloqueo");
+
+    private static readonly ConditionalWeakTable<Button, IDisposable> TooltipsEnganchados = new();
+
     /// <summary>Dueño al que el control reportó su error (para poder retirarlo aunque cambie el árbol).</summary>
     private static readonly AttachedProperty<IConErroresDeEntrada?> DuenioProperty =
         AvaloniaProperty.RegisterAttached<Control, Control, IConErroresDeEntrada?>("DuenioErroresDeEntrada");
@@ -60,6 +73,19 @@ public static class ErroresDeEntradaBehavior
             if (e.GetNewValue<bool>())
                 grilla.CellEditEnding += AlTerminarEdicionDeCelda;
         });
+        ExplicarBloqueoProperty.Changed.AddClassHandler<Button>((boton, e) =>
+        {
+            boton.AttachedToVisualTree -= AlEntrarBoton;
+            boton.DetachedFromVisualTree -= AlSalirBoton;
+            boton.PropertyChanged -= AlCambiarBoton;
+            Desenganchar(boton);
+            if (!e.GetNewValue<bool>())
+                return;
+            boton.AttachedToVisualTree += AlEntrarBoton;
+            boton.DetachedFromVisualTree += AlSalirBoton;
+            boton.PropertyChanged += AlCambiarBoton;
+            EngancharTooltip(boton);
+        });
         DataValidationErrors.HasErrorsProperty.Changed.AddClassHandler<Control>((control, _) =>
         {
             if (GetReportar(control))
@@ -71,6 +97,10 @@ public static class ErroresDeEntradaBehavior
 
     public static void SetReportar(Control control, bool value) => control.SetValue(ReportarProperty, value);
 
+    public static bool GetExplicarBloqueo(Button boton) => boton.GetValue(ExplicarBloqueoProperty);
+
+    public static void SetExplicarBloqueo(Button boton, bool value) => boton.SetValue(ExplicarBloqueoProperty, value);
+
     public static bool GetRetenerEdicionInvalida(DataGrid grilla) => grilla.GetValue(RetenerEdicionInvalidaProperty);
 
     public static void SetRetenerEdicionInvalida(DataGrid grilla, bool value) => grilla.SetValue(RetenerEdicionInvalidaProperty, value);
@@ -81,6 +111,47 @@ public static class ErroresDeEntradaBehavior
             && e.EditingElement is Control editor
             && editor.GetSelfAndVisualDescendants().OfType<Control>().Any(DataValidationErrors.GetHasErrors))
             e.Cancel = true;
+    }
+
+    private static void AlEntrarBoton(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        if (sender is Button boton)
+            EngancharTooltip(boton);
+    }
+
+    private static void AlSalirBoton(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        if (sender is Button boton)
+            Desenganchar(boton);
+    }
+
+    private static void AlCambiarBoton(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (sender is Button boton
+            && (e.Property == Button.CommandProperty || e.Property == StyledElement.DataContextProperty))
+            EngancharTooltip(boton);
+    }
+
+    private static void EngancharTooltip(Button boton)
+    {
+        Desenganchar(boton);
+        if (TopLevel.GetTopLevel(boton) is null
+            || BuscarDuenio(boton) is not ViewModelBase duenio
+            || !duenio.EsComandoDeGuardado(boton.Command))
+            return;
+
+        var motivo = new MotivoBloqueoObservable(duenio);
+        var tip = boton.Bind(ToolTip.TipProperty, motivo, BindingPriority.Style);
+        var mostrar = boton.Bind(ToolTip.ShowOnDisabledProperty, new Constante<bool>(true), BindingPriority.Style);
+        TooltipsEnganchados.AddOrUpdate(boton, new Desenganche(tip, mostrar, motivo));
+    }
+
+    private static void Desenganchar(Button boton)
+    {
+        if (!TooltipsEnganchados.TryGetValue(boton, out var enganche))
+            return;
+        TooltipsEnganchados.Remove(boton);
+        enganche.Dispose();
     }
 
     private static void OnReportarChanged(Control control, AvaloniaPropertyChangedEventArgs e)
@@ -153,4 +224,62 @@ public static class ErroresDeEntradaBehavior
             .Select(e => e.DataContext)
             .OfType<IConErroresDeEntrada>()
             .FirstOrDefault();
+
+    /// <summary><see cref="ViewModelBase.MotivoBloqueoPorErrores"/> como observable (para enlazarlo
+    /// con prioridad de estilo, que deja ganar a un tooltip local del XAML).</summary>
+    private sealed class MotivoBloqueoObservable : IObservable<object?>, IDisposable
+    {
+        private readonly ViewModelBase _duenio;
+        private readonly List<IObserver<object?>> _observadores = new();
+
+        public MotivoBloqueoObservable(ViewModelBase duenio)
+        {
+            _duenio = duenio;
+            _duenio.PropertyChanged += AlCambiar;
+        }
+
+        public IDisposable Subscribe(IObserver<object?> observador)
+        {
+            _observadores.Add(observador);
+            observador.OnNext(_duenio.MotivoBloqueoPorErrores);
+            return new Desenganche(new Accion(() => _observadores.Remove(observador)));
+        }
+
+        private void AlCambiar(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName != nameof(ViewModelBase.MotivoBloqueoPorErrores))
+                return;
+            foreach (var observador in _observadores.ToList())
+                observador.OnNext(_duenio.MotivoBloqueoPorErrores);
+        }
+
+        public void Dispose()
+        {
+            _duenio.PropertyChanged -= AlCambiar;
+            _observadores.Clear();
+        }
+    }
+
+    private sealed class Constante<T>(T valor) : IObservable<T>
+    {
+        public IDisposable Subscribe(IObserver<T> observador)
+        {
+            observador.OnNext(valor);
+            return new Desenganche();
+        }
+    }
+
+    private sealed class Accion(Action accion) : IDisposable
+    {
+        public void Dispose() => accion();
+    }
+
+    private sealed class Desenganche(params IDisposable?[] partes) : IDisposable
+    {
+        public void Dispose()
+        {
+            foreach (var parte in partes)
+                parte?.Dispose();
+        }
+    }
 }

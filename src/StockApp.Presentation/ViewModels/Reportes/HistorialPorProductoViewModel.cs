@@ -144,7 +144,8 @@ public partial class HistorialPorProductoViewModel : ViewModelBase
     private bool PuedeBuscar() => ProductoSeleccionado is not null;
 
     /// <summary>Consulta el historial del producto filtrado y puebla <see cref="Items"/>.</summary>
-    [RelayCommand(CanExecute = nameof(PuedeBuscar))]
+    public IAsyncRelayCommand BuscarCommand => field ??= ComandoDeGuardado(BuscarAsync, PuedeBuscar);
+
     private async Task BuscarAsync() => await CargarAsync();
 
     /// <summary>

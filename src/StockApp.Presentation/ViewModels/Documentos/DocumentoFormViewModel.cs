@@ -233,7 +233,8 @@ public partial class DocumentoFormViewModel : ViewModelBase
     private bool PuedeGuardar() => !string.IsNullOrWhiteSpace(Numero) && !string.IsNullOrWhiteSpace(Descripcion)
         && FechaEmisionSeleccionada.HasValue;
 
-    [RelayCommand(CanExecute = nameof(PuedeGuardar))]
+    public IAsyncRelayCommand GuardarCommand => field ??= ComandoDeGuardado(GuardarAsync, PuedeGuardar);
+
     private async Task GuardarAsync()
     {
         MensajeError = null;
@@ -255,7 +256,8 @@ public partial class DocumentoFormViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand(CanExecute = nameof(PuedeGuardar))]
+    public IAsyncRelayCommand GuardarEdicionCommand => field ??= ComandoDeGuardado(GuardarEdicionAsync, PuedeGuardar);
+
     private async Task GuardarEdicionAsync()
     {
         if (_documento is null) return;
@@ -325,7 +327,8 @@ public partial class DocumentoFormViewModel : ViewModelBase
 
     private bool PuedeAgregarNota() => !string.IsNullOrWhiteSpace(NuevaNotaTexto);
 
-    [RelayCommand(CanExecute = nameof(PuedeAgregarNota))]
+    public IAsyncRelayCommand AgregarNotaCommand => field ??= ComandoDeGuardado(AgregarNotaAsync, PuedeAgregarNota);
+
     private async Task AgregarNotaAsync()
     {
         if (_documento is null) return;

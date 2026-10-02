@@ -211,7 +211,8 @@ public partial class PanelPermisosViewModel : ViewModelBase
     /// lado servidor.</summary>
     private bool PuedeGuardar() => MensajeError is null && PuedeEditar;
 
-    [RelayCommand(CanExecute = nameof(PuedeGuardar))]
+    public IAsyncRelayCommand GuardarCommand => field ??= ComandoDeGuardado(GuardarAsync, PuedeGuardar);
+
     private async Task GuardarAsync()
     {
         if (_padre?.UsuarioSeleccionado is null) return;

@@ -77,7 +77,8 @@ public partial class UsuariosAdminViewModel : ViewModelBase
         }, "No tenés permiso para administrar usuarios.");
     }
 
-    [RelayCommand]
+    public IAsyncRelayCommand AltaCommand => field ??= ComandoDeGuardado(AltaAsync);
+
     private async Task AltaAsync()
     {
         MensajeError = null;

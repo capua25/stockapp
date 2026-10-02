@@ -230,7 +230,8 @@ public partial class GastoFormViewModel : ViewModelBase
            && !string.IsNullOrWhiteSpace(Detalle)
            && !string.IsNullOrWhiteSpace(MontoTexto);
 
-    [RelayCommand(CanExecute = nameof(PuedeGuardar))]
+    public IAsyncRelayCommand GuardarCommand => field ??= ComandoDeGuardado(GuardarAsync, PuedeGuardar);
+
     private async Task GuardarAsync()
     {
         MensajeError = null;

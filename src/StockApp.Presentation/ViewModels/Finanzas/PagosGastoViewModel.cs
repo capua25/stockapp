@@ -144,7 +144,8 @@ public partial class PagosGastoViewModel : ViewModelBase
 
     private bool PuedeRegistrar() => !string.IsNullOrWhiteSpace(MontoTexto);
 
-    [RelayCommand(CanExecute = nameof(PuedeRegistrar))]
+    public IAsyncRelayCommand RegistrarPagoCommand => field ??= ComandoDeGuardado(RegistrarPagoAsync, PuedeRegistrar);
+
     private async Task RegistrarPagoAsync()
     {
         MensajeError = null;

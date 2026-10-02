@@ -73,7 +73,8 @@
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
                         <TextBlock Text="Ejercicio" VerticalAlignment="Center" />
-                        <NumericUpDown Value="{Binding Ejercicio}" Minimum="2000" Maximum="2100" FormatString="0" Width="140" />
+                        <NumericUpDown Value="{Binding Ejercicio}" Minimum="2000" Maximum="2100" FormatString="0" Width="140"
+                                       beh:NumericUpDownValidacionBehavior.Que="año" />
                     </StackPanel>
                     <CheckBox Content="Forzar (re-importar un ejercicio ya importado)" IsChecked="{Binding Forzar}" />
                     <Button Classes="primary" Content="Analizar" Command="{Binding AnalizarCommand}" />

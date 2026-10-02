@@ -137,7 +137,8 @@ public partial class LineaPoaFormViewModel : ViewModelBase
            && int.TryParse(EjercicioTexto, out var ejercicio)
            && ejercicio > 0;
 
-    [RelayCommand(CanExecute = nameof(PuedeGuardar))]
+    public IAsyncRelayCommand GuardarCommand => field ??= ComandoDeGuardado(GuardarAsync, PuedeGuardar);
+
     private async Task GuardarAsync()
     {
         MensajeError = null;

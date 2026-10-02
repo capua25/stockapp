@@ -292,7 +292,8 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
             Items.Add(item);
     }
 
-    [RelayCommand]
+    public IAsyncRelayCommand BuscarCommand => field ??= ComandoDeGuardado(BuscarAsync);
+
     private async Task BuscarAsync()
     {
         var filtro = new HistorialMovimientoFiltro(

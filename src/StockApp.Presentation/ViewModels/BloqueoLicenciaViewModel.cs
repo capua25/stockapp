@@ -62,7 +62,8 @@ public partial class BloqueoLicenciaViewModel : ViewModelBase
     private bool PuedeActivar()
         => !string.IsNullOrWhiteSpace(LicenciaPegada) && !OperacionEnCurso;
 
-    [RelayCommand(CanExecute = nameof(PuedeActivar))]
+    public IAsyncRelayCommand ActivarCommand => field ??= ComandoDeGuardado(ActivarAsync, PuedeActivar);
+
     private async Task ActivarAsync()
     {
         OperacionEnCurso = true;

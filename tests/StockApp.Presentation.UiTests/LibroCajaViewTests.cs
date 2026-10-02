@@ -116,4 +116,32 @@ public class LibroCajaViewTests
 
         Assert.True(etiqueta.IsVisible);
     }
+
+    /// <summary>Bug de integridad 2026-10-01: "13" en Mes no marcaba nada, el ViewModel seguía con
+    /// el mes anterior y Actualizar consultaba ese mes viejo. Ver NumericUpDownValidacionBehavior.</summary>
+    [AvaloniaTheory]
+    [InlineData("13")]
+    [InlineData("abc")]
+    public void Mes_Invalido_MarcaElError_BloqueaActualizar_YNoVuelveAlValorAnterior(string texto)
+    {
+        var window = Montar();
+        var vm = (LibroCajaViewModel)window.DataContext!;
+        var mesAnterior = vm.Mes;
+        var actualizar = NumericUpDownPrueba.BotonPorCommand(window, vm.RecargarCommand);
+        var mes = window.GetVisualDescendants().OfType<NumericUpDown>().Single(n => n.Maximum == 12);
+        Assert.True(actualizar.IsEffectivelyEnabled);
+
+        NumericUpDownPrueba.Tipear(mes, texto);
+
+        NumericUpDownPrueba.AssertErrorVisible(mes, "Ingresá un mes válido, entre 1 y 12.");
+        NumericUpDownPrueba.AssertBloqueadoConTooltip(actualizar);
+        Assert.Equal(mesAnterior, vm.Mes);
+
+        var anio = window.GetVisualDescendants().OfType<NumericUpDown>().Single(n => n.Maximum == 2100);
+        NumericUpDownPrueba.Interno(anio).Focus();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(texto, NumericUpDownPrueba.Interno(mes).Text);
+        NumericUpDownPrueba.AssertBloqueadoConTooltip(actualizar);
+    }
 }

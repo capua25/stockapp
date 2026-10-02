@@ -1,6 +1,10 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
+using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 
 namespace StockApp.Presentation.ViewModels;
 
@@ -15,13 +19,13 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
 
     /// <summary>
     /// True mientras algún campo de la vista tiene un error de entrada que vive SOLO en la View
-    /// (texto que el converter rechaza, ej. "5.4"): ese texto nunca llegó a la propiedad del
-    /// ViewModel, que conserva el valor ANTERIOR. Lo escribe
-    /// <see cref="StockApp.Presentation.Behaviors.ErroresDeEntradaBehavior"/> (global en el tema
-    /// para todo TextBox). Todo comando de guardar/confirmar debe sumar
-    /// <c>&amp;&amp; !HayErroresDeEntrada</c> a su CanExecute y notificarse en
-    /// <see cref="AlCambiarErroresDeEntrada"/>; si no, guarda en silencio el valor viejo (bug de
-    /// integridad 2026-10-01).
+    /// (texto que el converter rechaza, ej. "5.4", o un NumericUpDown con "20a5"): ese texto
+    /// nunca llegó a la propiedad del ViewModel, que conserva el valor ANTERIOR. Lo escribe
+    /// <see cref="StockApp.Presentation.Behaviors.ErroresDeEntradaBehavior"/> (global en el tema).
+    /// REGLA: todo comando de guardar/confirmar (o de filtrar con lo tipeado) se crea con
+    /// <see cref="ComandoDeGuardado(Func{Task}, Func{bool}?)"/>, que compone <c>!HayErroresDeEntrada</c>
+    /// en su CanExecute y lo re-notifica solo; si no, guarda en silencio el valor viejo (bug de
+    /// integridad 2026-10-01). Lo vigila <c>ComandosDeGuardadoGuardianTests</c> (Presentation.Tests).
     /// </summary>
     public bool HayErroresDeEntrada
     {
@@ -32,16 +36,46 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
                 return;
 
             OnPropertyChanged(nameof(MotivoBloqueoPorErrores));
+            foreach (var comando in _comandosDeGuardado)
+                comando.NotifyCanExecuteChanged();
             AlCambiarErroresDeEntrada();
         }
+    }
+
+    private readonly List<IRelayCommand> _comandosDeGuardado = new();
+
+    /// <summary>Comandos creados con <see cref="ComandoDeGuardado(Func{Task}, Func{bool}?)"/>: los
+    /// que se bloquean con <see cref="HayErroresDeEntrada"/>. El tema los usa para ponerle al botón
+    /// el tooltip <see cref="MotivoBloqueoPorErrores"/>.</summary>
+    public bool EsComandoDeGuardado(ICommand? comando)
+        => comando is not null && _comandosDeGuardado.Any(c => ReferenceEquals(c, comando));
+
+    /// <summary>
+    /// Único camino para crear un comando de guardar/confirmar (o de filtrar con lo tipeado): su
+    /// CanExecute es <c>!HayErroresDeEntrada &amp;&amp; puede()</c> y se re-notifica cada vez que
+    /// cambia <see cref="HayErroresDeEntrada"/>, sin cableado en el ViewModel concreto. Mismo
+    /// comportamiento que el <c>[RelayCommand(CanExecute = ...)]</c> que reemplaza (sin ejecuciones
+    /// concurrentes). Uso: <c>public IAsyncRelayCommand GuardarCommand =&gt; field ??= ComandoDeGuardado(GuardarAsync, PuedeGuardar);</c>
+    /// </summary>
+    protected IAsyncRelayCommand ComandoDeGuardado(Func<Task> ejecutar, Func<bool>? puede = null)
+        => Registrar(new AsyncRelayCommand(ejecutar, () => !HayErroresDeEntrada && (puede?.Invoke() ?? true)));
+
+    /// <inheritdoc cref="ComandoDeGuardado(Func{Task}, Func{bool}?)"/>
+    protected IRelayCommand ComandoDeGuardado(Action ejecutar, Func<bool>? puede = null)
+        => Registrar(new RelayCommand(ejecutar, () => !HayErroresDeEntrada && (puede?.Invoke() ?? true)));
+
+    private T Registrar<T>(T comando) where T : IRelayCommand
+    {
+        _comandosDeGuardado.Add(comando);
+        return comando;
     }
 
     /// <summary>Tooltip del botón de guardar: <see cref="MensajeErroresDeEntrada"/> mientras
     /// <see cref="HayErroresDeEntrada"/>; null (sin tooltip) si no.</summary>
     public string? MotivoBloqueoPorErrores => HayErroresDeEntrada ? MensajeErroresDeEntrada : null;
 
-    /// <summary>Hook para que el ViewModel concreto re-evalúe el CanExecute de sus comandos de
-    /// guardar/confirmar (ej. <c>GuardarCommand.NotifyCanExecuteChanged()</c>).</summary>
+    /// <summary>Hook para lo que NO es un comando (los de <see cref="ComandoDeGuardado(Func{Task}, Func{bool}?)"/>
+    /// ya se re-notifican solos): ej. un mensaje que explica el bloqueo.</summary>
     protected virtual void AlCambiarErroresDeEntrada()
     {
     }

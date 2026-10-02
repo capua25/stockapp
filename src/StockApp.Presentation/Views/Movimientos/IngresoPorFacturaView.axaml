@@ -170,7 +170,7 @@
 
                         <StackPanel Orientation="Horizontal" Spacing="12">
                             <Button Content="Producto nuevo" Command="{Binding AbrirAltaProductoCommand}" />
-                            <Button Content="Agregar artículo" Command="{Binding AgregarArticuloCommand}" ToolTip.Tip="{Binding MotivoBloqueoPorErrores}" ToolTip.ShowOnDisabled="True" />
+                            <Button Content="Agregar artículo" Command="{Binding AgregarArticuloCommand}" />
                         </StackPanel>
                     </StackPanel>
                 </Border>
@@ -242,7 +242,7 @@
                            Margin="0,0,0,12" />
 
                 <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="12">
-                    <Button Content="Guardar" Command="{Binding GuardarCommand}" Classes.primary="{Binding GuardarEsAccionPrincipal}" ToolTip.Tip="{Binding MotivoBloqueoPorErrores}" ToolTip.ShowOnDisabled="True" />
+                    <Button Content="Guardar" Command="{Binding GuardarCommand}" Classes.primary="{Binding GuardarEsAccionPrincipal}" />
                     <Button Content="Cancelar" Command="{Binding CancelarCommand}" />
                 </StackPanel>
 

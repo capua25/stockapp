@@ -286,7 +286,8 @@ public partial class MantenimientoViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    public IAsyncRelayCommand GuardarAlertasCommand => field ??= ComandoDeGuardado(GuardarAlertasAsync);
+
     private async Task GuardarAlertasAsync()
     {
         // El gate de ErrorAlCargarAlertas también vive acá, no solo en el IsEnabled del XAML: un
@@ -309,7 +310,8 @@ public partial class MantenimientoViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    public IAsyncRelayCommand ProbarAlertasCommand => field ??= ComandoDeGuardado(ProbarAlertasAsync);
+
     private async Task ProbarAlertasAsync()
     {
         if (!PuedeProbarAlertas) return;

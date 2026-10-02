@@ -150,7 +150,8 @@ public partial class AuditoriaLogViewModel : ViewModelBase
     }
 
     /// <summary>Consulta el log de auditoría filtrado y puebla <see cref="Items"/>.</summary>
-    [RelayCommand]
+    public IAsyncRelayCommand BuscarCommand => field ??= ComandoDeGuardado(BuscarAsync);
+
     private async Task BuscarAsync() => await CargarAsync();
 
     /// <summary>

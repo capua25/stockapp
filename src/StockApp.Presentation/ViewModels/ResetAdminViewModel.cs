@@ -83,7 +83,8 @@ public partial class ResetAdminViewModel : ViewModelBase
         && !string.IsNullOrWhiteSpace(NuevaContrasena)
         && !OperacionEnCurso;
 
-    [RelayCommand(CanExecute = nameof(PuedeResetear))]
+    public IAsyncRelayCommand ResetearCommand => field ??= ComandoDeGuardado(ResetearAsync, PuedeResetear);
+
     private async Task ResetearAsync()
     {
         OperacionEnCurso = true;

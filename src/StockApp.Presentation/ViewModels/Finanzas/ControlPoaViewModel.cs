@@ -78,7 +78,8 @@ public partial class ControlPoaViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    public IAsyncRelayCommand RecargarCommand => field ??= ComandoDeGuardado(RecargarAsync);
+
     private async Task RecargarAsync() => await CargarAsync();
 
     private bool TieneSeleccion() => FilaSeleccionada is not null;
