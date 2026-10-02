@@ -1,6 +1,7 @@
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Data;
@@ -14,7 +15,7 @@ namespace StockApp.Presentation.VisualTests.Comparacion;
 /// Guardián semántico de la comparación visual (spec §6.5): un TextBlock visible cuyo texto no se
 /// ve entero ("CÓDIG" por "CÓDIGO", Task 17). Un glifo que falta son ~40-60 píxeles de tinta: pesa
 /// lo mismo que el ruido de antialiasing y ninguna métrica de píxeles lo detecta sin rechazar
-/// también el ruido. Dos formas de recorte:
+/// también el ruido. Tres formas de recorte:
 /// <list type="number">
 /// <item>Propio: el tamaño que el texto pide (sin restricción de ancho con NoWrap; con el ancho
 /// asignado si hace wrap) supera el que le asignó el layout.</item>
@@ -23,6 +24,8 @@ namespace StockApp.Presentation.VisualTests.Comparacion;
 /// ventana. El viewport de un ScrollViewer no cuenta en el eje en que se puede scrollear: el texto
 /// sigue alcanzable. Lo mismo el DataGrid, que scrollea sin ScrollViewer: desde su presentador de
 /// filas o de headers hacia afuera.</item>
+/// <item>Valor de un TextBox: el TextPresenter mide su TextLayout; el ScrollViewer interno del
+/// TextBox no relaja ejes.</item>
 /// </list>
 /// TextTrimming NO exime: un texto con "..." que efectivamente recorta se reporta, salvo que el
 /// test lo permita por su texto (alineado con un mockup que use text-overflow: ellipsis).
@@ -39,8 +42,9 @@ public static class GuardianTextoRecortado
         var recortes = new List<string>();
         foreach (var texto in raiz.GetVisualDescendants().OfType<TextBlock>().ToList())
         {
-            if (!texto.IsEffectivelyVisible || string.IsNullOrEmpty(texto.Text)
-                || recortesPermitidos?.Contains(texto.Text) == true)
+            var contenido = ContenidoDe(texto);
+            if (!texto.IsEffectivelyVisible || string.IsNullOrEmpty(contenido)
+                || recortesPermitidos?.Contains(contenido) == true)
             {
                 continue;
             }
@@ -55,21 +59,51 @@ public static class GuardianTextoRecortado
             if (pedido.Width > asignado.Width + Tolerancia || pedido.Height > asignado.Height + Tolerancia)
             {
                 recortes.Add(string.Create(CultureInfo.InvariantCulture,
-                    $"\"{texto.Text}\" pide {pedido.Width:0.#}x{pedido.Height:0.#} y tiene {asignado.Width:0.#}x{asignado.Height:0.#}"));
+                    $"\"{contenido}\" pide {pedido.Width:0.#}x{pedido.Height:0.#} y tiene {asignado.Width:0.#}x{asignado.Height:0.#}"));
                 continue;
             }
 
             var recortador = BuscarRecortador(texto, RectDelTexto(texto, pedido));
             if (recortador is not null)
             {
-                recortes.Add($"\"{texto.Text}\" queda fuera de {recortador}");
+                recortes.Add($"\"{contenido}\" queda fuera de {recortador}");
+            }
+        }
+
+        // Spec §6.5: el valor de un TextBox (y del TextBox interno de NumericUpDown,
+        // CalendarDatePicker o un ComboBox editable) lo dibuja un TextPresenter, no un TextBlock.
+        foreach (var presentador in raiz.GetVisualDescendants().OfType<TextPresenter>().ToList())
+        {
+            var valor = presentador.Text;
+            if (!presentador.IsEffectivelyVisible || string.IsNullOrEmpty(valor)
+                || recortesPermitidos?.Contains(valor) == true)
+            {
+                continue;
+            }
+
+            // Nunca se escribe una contraseña en un mensaje de test.
+            var etiqueta = presentador.PasswordChar != default ? "(contraseña)" : valor;
+            var layout = presentador.TextLayout;
+            var rect = new Rect(0, 0, layout.WidthIncludingTrailingWhitespace, layout.Height);
+            var recortador = BuscarRecortador(presentador, rect);
+            if (recortador is not null)
+            {
+                recortes.Add($"valor \"{etiqueta}\" queda fuera de {recortador}");
             }
         }
 
         return recortes;
     }
 
-    // Un Width o MaxWidth fijo en el TextBlock también limita su Measure: el texto pediría lo que
+    // Un TextBlock con Inlines tiene Text nulo: el contenido visible es la concatenación de sus Run.
+    private static string? ContenidoDe(TextBlock texto) =>
+        !string.IsNullOrEmpty(texto.Text)
+            ? texto.Text
+            : texto.Inlines is { Count: > 0 } inlines
+                ? string.Concat(inlines.OfType<Run>().Select(r => r.Text))
+                : null;
+
+    // Un Width, MaxWidth o MaxLines fijo en el TextBlock también limita su Measure: el texto pediría lo que
     // tiene y un recorte quedaría invisible. Se mide sin ellos (prioridad Animation, por encima de
     // valores locales y estilos) y se restauran al terminar.
     private static Size MedirSinTamanoFijo(TextBlock texto, Size disponible)
@@ -78,6 +112,7 @@ public static class GuardianTextoRecortado
         using var anchoMax = texto.SetValue(Layoutable.MaxWidthProperty, double.PositiveInfinity, BindingPriority.Animation);
         using var alto = texto.SetValue(Layoutable.HeightProperty, double.NaN, BindingPriority.Animation);
         using var altoMax = texto.SetValue(Layoutable.MaxHeightProperty, double.PositiveInfinity, BindingPriority.Animation);
+        using var lineas = texto.SetValue(TextBlock.MaxLinesProperty, 0, BindingPriority.Animation);
         texto.Measure(disponible);
         return texto.DesiredSize;
     }
@@ -97,7 +132,7 @@ public static class GuardianTextoRecortado
         return new Rect(x, 0, ancho, Math.Min(pedido.Height, asignado.Height));
     }
 
-    private static string? BuscarRecortador(TextBlock texto, Rect rectLocal)
+    private static string? BuscarRecortador(Visual texto, Rect rectLocal)
     {
         var raizVisual = TopLevel.GetTopLevel(texto);
         if (raizVisual is null || texto.TransformToVisual(raizVisual) is not { } aRaiz)
@@ -115,10 +150,12 @@ public static class GuardianTextoRecortado
                 break;
             }
 
-            if (ancestro is ScrollContentPresenter { TemplatedParent: ScrollViewer scroll })
+            if (ancestro is ScrollContentPresenter { TemplatedParent: ScrollViewer scroll }
+                && scroll.TemplatedParent is not TextBox)
             {
                 // Lo que el viewport recorta en un eje desplazable se alcanza scrolleando; lo de
-                // afuera (la ventana incluida) tampoco decide en ese eje.
+                // afuera (la ventana incluida) tampoco decide en ese eje. El ScrollViewer de un
+                // TextBox no cuenta: sigue al cursor, no se usa para leer el valor.
                 horizontalFijo &= scroll.HorizontalScrollBarVisibility == ScrollBarVisibility.Disabled;
                 verticalFijo &= scroll.VerticalScrollBarVisibility == ScrollBarVisibility.Disabled;
             }

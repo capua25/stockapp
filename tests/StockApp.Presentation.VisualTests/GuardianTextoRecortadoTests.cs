@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Data;
 using Avalonia.Headless.XUnit;
 using Avalonia.Layout;
@@ -174,4 +175,70 @@ public class GuardianTextoRecortadoTests
         // El TextBlock no se oculta él mismo (medirlo daría 0): lo oculta un ancestro, así que
         // nunca se arregló y su Bounds es 0 aunque pida lugar.
         Assert.Empty(Renderizar(new Border { Width = 60, IsVisible = false, Child = new TextBlock { Text = Largo } }));
+
+    [AvaloniaFact]
+    public void TextBoxConValorQueNoEntra_SeReporta()
+    {
+        // Spec §6.5, punto ciego: el valor lo dibuja un TextPresenter, no un TextBlock.
+        var recortes = Renderizar(new TextBox { Width = 120, Text = Largo });
+
+        Assert.Contains(Largo, Assert.Single(recortes));
+    }
+
+    [AvaloniaFact]
+    public void TextBoxConValorQueEntra_NoSeReporta() =>
+        Assert.Empty(Renderizar(new TextBox { Width = 300, Text = "A-001" }));
+
+    [AvaloniaFact]
+    public void TextBoxConPlaceholderQueNoEntra_SeReporta()
+    {
+        var recortes = Renderizar(new TextBox { Width = 120, PlaceholderText = Largo });
+
+        Assert.Contains(Largo, Assert.Single(recortes));
+    }
+
+    [AvaloniaFact]
+    public void ContrasenaQueNoEntra_SeReportaSinMostrarElValor()
+    {
+        const string secreto = "unaContraseniaBastanteLarga123";
+        var recortes = Renderizar(new TextBox { Width = 80, PasswordChar = '*', Text = secreto });
+
+        var recorte = Assert.Single(recortes);
+        Assert.Contains("(contraseña)", recorte);
+        Assert.DoesNotContain(secreto, recorte);
+    }
+
+    [AvaloniaFact]
+    public void NumericUpDownConValorQueNoEntra_SeReporta()
+    {
+        // El TextBox interno del NumericUpDown también dibuja con TextPresenter.
+        // Se asierta sin separador decimal: depende de la cultura del proceso (la app es es-UY).
+        var recortes = Renderizar(new NumericUpDown { Width = 90, Value = 123456789.12m, FormatString = "0.00" });
+
+        Assert.Contains(recortes, r => r.Contains("123456789"));
+    }
+
+    [AvaloniaFact]
+    public void TextoConInlinesYTextNulo_QueNoEntra_SeReporta()
+    {
+        var texto = new TextBlock { Width = 60 };
+        texto.Inlines = new InlineCollection { new Run(Largo) };
+
+        var recortes = Renderizar(texto);
+
+        Assert.Contains(Largo, Assert.Single(recortes));
+    }
+
+    [AvaloniaFact]
+    public void TextoConMaxLinesQueCortaLineas_SeReporta()
+    {
+        // MaxLines limita también el Measure: sin anularlo, el texto pide lo que tiene.
+        var recortes = Renderizar(new TextBlock { Width = 120, TextWrapping = TextWrapping.Wrap, MaxLines = 1, Text = Largo });
+
+        Assert.Contains(Largo, Assert.Single(recortes));
+    }
+
+    [AvaloniaFact]
+    public void TextoConMaxLinesQueAlcanza_NoSeReporta() =>
+        Assert.Empty(Renderizar(new TextBlock { Width = 120, TextWrapping = TextWrapping.Wrap, MaxLines = 3, Text = "Corto" }));
 }
