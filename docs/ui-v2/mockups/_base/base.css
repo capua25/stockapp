@@ -243,7 +243,7 @@ body {
   font-weight: var(--v2-fuente-header-seccion-sidebar-peso); letter-spacing: var(--v2-fuente-header-seccion-sidebar-espaciado-letras);
   text-transform: var(--v2-fuente-header-seccion-sidebar-transformacion); color: var(--v2-color-texto-grupo);
 }
-.v2-usuario-nombre { font-size: var(--v2-fuente-item-sidebar-tamano); line-height: var(--v2-fuente-item-sidebar-alto-linea); font-weight: var(--v2-fuente-item-sidebar-peso); color: var(--v2-color-texto-primario); white-space: nowrap; }
+.v2-usuario-nombre { font-size: var(--v2-fuente-item-sidebar-tamano); line-height: var(--v2-fuente-item-sidebar-alto-linea); font-weight: var(--v2-fuente-item-sidebar-peso); color: var(--v2-color-texto-primario); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .v2-usuario-rol { font-size: var(--v2-fuente-pie-conteo-tamano); line-height: var(--v2-fuente-pie-conteo-alto-linea); font-weight: var(--v2-fuente-pie-conteo-peso); color: var(--v2-color-texto-terciario); white-space: nowrap; }
 .v2-version { font-size: var(--v2-fuente-pie-conteo-tamano); line-height: var(--v2-fuente-pie-conteo-alto-linea); font-weight: var(--v2-fuente-pie-conteo-peso); color: var(--v2-color-texto-grupo); }
 

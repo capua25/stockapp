@@ -337,6 +337,7 @@
                         <TextBlock x:Name="PART_Titulo"
                                    Grid.Column="1"
                                    VerticalAlignment="Center"
+                                   Margin="0,1,0,0"
                                    Text="{TemplateBinding Titulo}"
                                    FontSize="{DynamicResource V2FuenteItemSidebarTamano}"
                                    FontWeight="{DynamicResource V2FuenteItemSidebarPeso}" />

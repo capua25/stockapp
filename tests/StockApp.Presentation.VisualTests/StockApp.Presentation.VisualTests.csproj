@@ -23,6 +23,7 @@
     <PackageReference Include="Avalonia.Controls.DataGrid" />
     <PackageReference Include="Optris.Icons.Avalonia" />
     <PackageReference Include="Optris.Icons.Avalonia.MaterialDesign" />
+    <PackageReference Include="Moq" />
     <!-- Mismo par xUnit v3 que StockApp.Presentation.UiTests (ver comentario en su csproj). -->
     <PackageReference Include="Microsoft.NET.Test.Sdk" VersionOverride="17.12.0" />
     <PackageReference Include="xunit.v3" />
