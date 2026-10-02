@@ -328,6 +328,9 @@ Cubre también el valor de `TextBox`, `NumericUpDown`, `CalendarDatePicker` y `C
 - `RowHeight 39` de la grilla: la fila mide RowHeight + 1 de `PART_BottomGridLine`, así el paso es 40 = `V2AltoFilaGrilla` (`DataGridV2.axaml`).
 - Márgenes del mockup `-3px` (glifo del ComboBox) y `-7px` (ícono del CalendarDatePicker): ubican el glifo donde lo dibuja la plantilla de Fluent (`base.css`).
 - `4.375px` (y `5.82px`, `6.69px`) del tilde del CheckBox: posición y tamaño del Path de Fluent medidos en el render (`base.css`).
+- `Margin="0,1,0,0"` en `PART_Titulo` de `ItemSidebar`: compensa 1px de baseline de Skia contra Chromium (`ComponentesV2.axaml`).
+- `Margin="0,1,0,0"` en la `TarjetaContenido` del Login: con alto de card impar el centrado da medio píxel, Avalonia redondea al par y Chromium hacia arriba; el píxel extra los alinea. Depende de la paridad del alto de la card: si un estado cambia de alto, se vuelve a medir (`LoginView.axaml`).
+- `LineHeight` 16 (token `V2FuenteControlAltoLinea`) en `PART_Texto` de la `Alerta`: el natural de Avalonia son ~15px y el mockup usa 16, por lo que la segunda línea de una alerta envuelta salía 1px más arriba (`ComponentesV2.axaml`).
 - Ancho de texto redondeado hacia arriba: `width: calc-size(fit-content, round(up, size, 1px))` en `base.css`, porque un TextBlock mide el ceil del ancho del texto. `calc-size()` solo funciona en Chromium: en otro navegador el mockup queda hasta 1px distinto. La comparación siempre usa Chromium.
 
 **Salvedad (§6.4).** El render headless y Windows pueden diferir en antialiasing: la aprobación final es del usuario mirando la app.

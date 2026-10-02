@@ -53,7 +53,7 @@ public static class ComparacionVisual
 
         // Playwright es async y este código corre en el dispatcher de Avalonia: se captura en el
         // thread pool (sin contexto de sincronización) y se espera. Verificado sin deadlock.
-        Task.Run(() => CapturadorMockup.CapturarAsync(rutaHtml, pngMockup, tamano, ocultarEnMockup)).GetAwaiter().GetResult();
+        Task.Run(() => CapturadorMockup.CapturarAsync(rutaHtml, pngMockup, tamano: tamano, ocultarSelectores: ocultarEnMockup)).GetAwaiter().GetResult();
         IReadOnlyList<string> recortes = [];
         RenderizadorVista.RenderizarAPng(vista, viewModel, pngApp, v => recortes = GuardianTextoRecortado.Buscar(v, recortesPermitidos),
             tamano);

@@ -109,6 +109,22 @@ public class LoginViewV2Tests
         Assert.Equal("Usuario o contraseña incorrectos.", vm.MensajeError);
     }
 
+    [AvaloniaTheory]
+    [InlineData("CampoUsuario")]
+    [InlineData("CampoContrasena")]
+    public void Enter_EnUnCampo_ConIsDefaultEncendido_NoIntentaDosVeces(string campo)
+    {
+        // OnCampoKeyDown marca e.Handled: sin eso el Enter burbujea y el botón por defecto dispara un segundo login.
+        var (ventana, vm, auth) = Montar();
+        vm.NombreUsuario = "mperez";
+        vm.Contrasena = "secreto1";
+        Assert.True(Nombrado<Button>(ventana, "BotonEntrar").IsDefault);
+
+        Enter(Nombrado<TextBox>(ventana, campo));
+
+        Assert.Equal(1, auth.Intentos);
+    }
+
     [AvaloniaFact]
     public void ErrorDeLogin_SeMuestraEnLaAlertaDeError()
     {

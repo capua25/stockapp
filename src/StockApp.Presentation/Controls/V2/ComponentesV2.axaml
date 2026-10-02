@@ -64,6 +64,7 @@
                                Text="{TemplateBinding Texto}"
                                TextWrapping="Wrap"
                                FontSize="{DynamicResource V2FuenteControlTamano}"
+                               LineHeight="{DynamicResource V2FuenteControlAltoLinea}"
                                FontWeight="{DynamicResource V2FuenteControlPeso}" />
                 </Border>
             </ControlTemplate>
@@ -334,6 +335,7 @@
                                 Margin="0,0,8,0"
                                 FontSize="16"
                                 VerticalAlignment="Center" />
+                        <!-- Margin 0,1,0,0: compensa 1 px de baseline entre Skia y Chromium (spec 6.5). -->
                         <TextBlock x:Name="PART_Titulo"
                                    Grid.Column="1"
                                    VerticalAlignment="Center"

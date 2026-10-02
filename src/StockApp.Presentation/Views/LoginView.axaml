@@ -41,7 +41,9 @@
                 <!-- Margin 0,1,0,0: compensación medida (spec 6.5). Con una card de alto impar, centrarla en la
                      ventana da un medio píxel: Avalonia redondea al par (152,5 a 152) y Chromium hacia arriba
                      (a 153), y todas las cajas del Login quedaban 1 px más arriba que en el mockup. El píxel
-                     extra deja el total par y la card cae donde la dibuja el mockup. -->
+                     extra deja el total par y la card cae donde la dibuja el mockup. Depende de la paridad
+                     del alto de la card (hoy impar en los estados con alerta, par en el base): si un estado
+                     cambia de alto, volver a medir las seis comparaciones. -->
                 <StackPanel>
 
                     <!-- Los textos centrados usan TextAlignment y no HorizontalAlignment: Avalonia redondea a píxel
