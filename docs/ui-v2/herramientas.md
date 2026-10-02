@@ -117,6 +117,14 @@ Diferencia de tono aceptada: el texto de la app sale entre 7% y 18% más claro q
 2026-09-30 y es el grueso del ruido que absorbe el umbral: en la página de comparación se ve como
 naranja y rojo fino en los bordes de los glifos. Lo que se exige igual es la geometría.
 
+Diálogos (`Window`): el contenido va en un `Border x:Name="Contenido" Classes="ui2"` (no en el
+`Window`), y el test compara su área cliente con `ContenidoDeDialogo.Extraer(dialogo)` (y su
+gemelo `_1366x768`, como toda pantalla):
+
+    ComparacionVisual.CompararConMockup(ContenidoDeDialogo.Extraer(new ConfirmacionDialog("…")), null, "dialogos/confirmacion.html");
+
+El mockup es el área cliente (sin barra de título) con el ancho del `Window`, centrada sobre fondo app.
+
 ## Otros comandos
 
 - `tokens --verificar`, `fuentes`, `fuentes --verificar`

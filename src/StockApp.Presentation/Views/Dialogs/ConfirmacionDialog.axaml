@@ -9,31 +9,22 @@
         SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         CanResize="False"
-        ShowInTaskbar="False">
+        ShowInTaskbar="False"
+        Background="{DynamicResource V2SuperficieBrush}">
 
-    <Border Padding="{DynamicResource MargenVista}">
-        <StackPanel Spacing="{DynamicResource Espacio5}">
+    <!-- UI v2 (spec §5.5). ui2 en el Border raíz y no en el Window: así la comparación visual puede
+         extraer el contenido (ContenidoDeDialogo). Sin bindings: el code-behind lee los x:Name. -->
+    <Border x:Name="Contenido"
+            Classes="ui2"
+            Background="{DynamicResource V2SuperficieBrush}"
+            Padding="24">
+        <StackPanel Spacing="24">
 
-            <TextBlock x:Name="MensajeText"
-                       TextWrapping="Wrap"
-                       Classes="body" />
+            <TextBlock x:Name="MensajeText" Classes="cuerpo" TextWrapping="Wrap" />
 
-            <StackPanel Orientation="Horizontal"
-                        HorizontalAlignment="Right"
-                        Spacing="{DynamicResource Espacio2}">
-
-                <Button x:Name="CancelarButton"
-                        Content="Cancelar"
-                        Classes="secondary"
-                        Width="100"
-                        Click="OnCancelarClick" />
-
-                <Button x:Name="ConfirmarButton"
-                        Content="Sí, continuar"
-                        Classes="primary"
-                        Width="110"
-                        Click="OnConfirmarClick" />
-
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                <Button x:Name="CancelarButton" Classes="secundario" Content="Cancelar" Click="OnCancelarClick" />
+                <Button x:Name="ConfirmarButton" Classes="primario" Content="Sí, continuar" Click="OnConfirmarClick" />
             </StackPanel>
 
         </StackPanel>
