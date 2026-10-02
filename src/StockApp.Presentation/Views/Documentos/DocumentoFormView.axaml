@@ -35,7 +35,8 @@
 
                         <c:CampoFormulario Etiqueta="Año">
                             <NumericUpDown Value="{Binding AnioSeleccionado}" Minimum="2000" Maximum="2100"
-                                           FormatString="0" IsEnabled="{Binding PuedeEditarCampos}" HorizontalAlignment="Left" Width="140" />
+                                           FormatString="0" IsEnabled="{Binding PuedeEditarCampos}" HorizontalAlignment="Left" Width="140"
+                                           beh:NumericUpDownValidacionBehavior.Que="año" />
                         </c:CampoFormulario>
 
                         <c:CampoFormulario Etiqueta="Tipo">

@@ -224,6 +224,12 @@
         <Setter Property="CornerRadius" Value="{DynamicResource RadioBase}" />
         <Setter Property="Padding" Value="10,8" />
         <Setter Property="Foreground" Value="{DynamicResource TextoPrimarioBrush}" />
+        <!-- Integridad de datos (bug 2026-10-01): un texto inválido ("20a5", un año fuera de
+             Minimum/Maximum) no llega al ViewModel y NumericUpDown no marcaba nada; al perder el
+             foco volvía en silencio al valor anterior. NumericUpDownValidacionBehavior marca el
+             error y retiene el texto; Reportar lo publica para bloquear Guardar/Buscar. -->
+        <Setter Property="(beh:NumericUpDownValidacionBehavior.Validar)" Value="True" />
+        <Setter Property="(beh:ErroresDeEntradaBehavior.Reportar)" Value="True" />
     </Style>
 
     <!-- ── ComboBox (global, sin clase requerida) ───────────────────────────── -->
