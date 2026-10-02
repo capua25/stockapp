@@ -52,6 +52,50 @@
         <Setter Property="Foreground" Value="{DynamicResource V2TextoTerciarioBrush}" />
     </Style>
 
+    <!-- Shell y pantallas de acceso (Fase 1). Espejo CSS en base.css (.v2-marca, etc.). -->
+    <Style Selector=".ui2 TextBlock.marca">
+        <Setter Property="FontSize" Value="{DynamicResource V2FuenteMarcaTamano}" />
+        <Setter Property="FontWeight" Value="{DynamicResource V2FuenteMarcaPeso}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoPrimarioBrush}" />
+    </Style>
+    <!-- Línea "Municipio de Carmelo" bajo la marca (P6): mismo tamaño, peso y color que usuario-rol. -->
+    <Style Selector=".ui2 TextBlock.marca-subtitulo">
+        <Setter Property="FontSize" Value="{DynamicResource V2FuentePieConteoTamano}" />
+        <Setter Property="FontWeight" Value="{DynamicResource V2FuentePieConteoPeso}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoTerciarioBrush}" />
+    </Style>
+    <Style Selector=".ui2 TextBlock.header-seccion-sidebar">
+        <Setter Property="FontSize" Value="{DynamicResource V2FuenteHeaderSeccionSidebarTamano}" />
+        <Setter Property="FontWeight" Value="{DynamicResource V2FuenteHeaderSeccionSidebarPeso}" />
+        <Setter Property="LetterSpacing" Value="{DynamicResource V2FuenteHeaderSeccionSidebarEspaciadoLetras}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoGrupoBrush}" />
+    </Style>
+    <Style Selector=".ui2 TextBlock.titulo-login">
+        <Setter Property="FontSize" Value="{DynamicResource V2FuenteTituloLoginTamano}" />
+        <Setter Property="FontWeight" Value="{DynamicResource V2FuenteTituloLoginPeso}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoPrimarioBrush}" />
+    </Style>
+    <Style Selector=".ui2 TextBlock.avatar">
+        <Setter Property="FontSize" Value="{DynamicResource V2FuenteHeaderSeccionSidebarTamano}" />
+        <Setter Property="FontWeight" Value="{DynamicResource V2FuenteHeaderSeccionSidebarPeso}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoEtiquetaBrush}" />
+    </Style>
+    <Style Selector=".ui2 TextBlock.usuario-nombre">
+        <Setter Property="FontSize" Value="{DynamicResource V2FuenteItemSidebarTamano}" />
+        <Setter Property="FontWeight" Value="{DynamicResource V2FuenteItemSidebarPeso}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoPrimarioBrush}" />
+    </Style>
+    <Style Selector=".ui2 TextBlock.usuario-rol">
+        <Setter Property="FontSize" Value="{DynamicResource V2FuentePieConteoTamano}" />
+        <Setter Property="FontWeight" Value="{DynamicResource V2FuentePieConteoPeso}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoTerciarioBrush}" />
+    </Style>
+    <Style Selector=".ui2 TextBlock.version">
+        <Setter Property="FontSize" Value="{DynamicResource V2FuentePieConteoTamano}" />
+        <Setter Property="FontWeight" Value="{DynamicResource V2FuentePieConteoPeso}" />
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoGrupoBrush}" />
+    </Style>
+
     <!-- Botones: geometría común a las cuatro variantes -->
     <Style Selector=".ui2 Button.primario, .ui2 Button.secundario, .ui2 Button.ghost, .ui2 Button.peligro">
         <Setter Property="Height" Value="{DynamicResource V2AltoControl}" />
@@ -97,6 +141,13 @@
         <Setter Property="Background" Value="{DynamicResource V2HoverNeutroBrush}" />
         <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="Foreground" Value="{DynamicResource V2TextoEtiquetaBrush}" />
+    </Style>
+
+    <!-- Ghost de solo ícono (cerrar sesión del pie del sidebar). Espejo CSS: modificador de icono de .v2-boton en base.css. -->
+    <Style Selector=".ui2 Button.ghost.icono">
+        <Setter Property="Width" Value="32" />
+        <Setter Property="Height" Value="32" />
+        <Setter Property="Padding" Value="0" />
     </Style>
 
     <Style Selector=".ui2 Button.peligro">

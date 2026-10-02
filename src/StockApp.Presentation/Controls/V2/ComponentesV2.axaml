@@ -317,6 +317,58 @@
         </Style>
     </ControlTheme>
 
+    <!-- Ítem del sidebar (spec §4.1). Espejo CSS: .v2-item-sidebar en base.css. -->
+    <ControlTheme x:Key="{x:Type v2:ItemSidebar}" TargetType="v2:ItemSidebar">
+        <Setter Property="Height" Value="{DynamicResource V2AltoItemSidebar}" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border x:Name="PART_Fondo"
+                        CornerRadius="{DynamicResource V2RadioControl}"
+                        Padding="12,0">
+                    <Grid ColumnDefinitions="Auto,*">
+                        <!-- Value lo asigna ItemSidebar.AplicarIcono. -->
+                        <i:Icon x:Name="PART_Icono"
+                                Grid.Column="0"
+                                Margin="0,0,8,0"
+                                FontSize="16"
+                                VerticalAlignment="Center" />
+                        <TextBlock x:Name="PART_Titulo"
+                                   Grid.Column="1"
+                                   VerticalAlignment="Center"
+                                   Text="{TemplateBinding Titulo}"
+                                   FontSize="{DynamicResource V2FuenteItemSidebarTamano}"
+                                   FontWeight="{DynamicResource V2FuenteItemSidebarPeso}" />
+                    </Grid>
+                </Border>
+            </ControlTemplate>
+        </Setter>
+
+        <Style Selector="^ /template/ Border#PART_Fondo">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="^ /template/ TextBlock#PART_Titulo">
+            <Setter Property="Foreground" Value="{DynamicResource V2TextoEtiquetaBrush}" />
+        </Style>
+        <Style Selector="^ /template/ i|Icon#PART_Icono">
+            <Setter Property="Foreground" Value="{DynamicResource V2TextoTerciarioBrush}" />
+        </Style>
+        <Style Selector="^:pointerover /template/ Border#PART_Fondo">
+            <Setter Property="Background" Value="{DynamicResource V2HoverNeutroBrush}" />
+        </Style>
+        <!-- Después de :pointerover: activo con el mouse encima sigue en la pastilla activa. -->
+        <Style Selector="^:activo /template/ Border#PART_Fondo">
+            <Setter Property="Background" Value="{DynamicResource V2AcentoSuaveBrush}" />
+        </Style>
+        <Style Selector="^:activo /template/ TextBlock#PART_Titulo">
+            <Setter Property="Foreground" Value="{DynamicResource V2AcentoOscuroBrush}" />
+        </Style>
+        <Style Selector="^:activo /template/ i|Icon#PART_Icono">
+            <Setter Property="Foreground" Value="{DynamicResource V2AcentoBrush}" />
+        </Style>
+    </ControlTheme>
+
     <ControlTheme x:Key="{x:Type v2:EstadoVacio}" TargetType="v2:EstadoVacio">
         <Setter Property="Template">
             <ControlTemplate>
