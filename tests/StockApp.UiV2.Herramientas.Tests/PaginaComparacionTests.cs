@@ -166,4 +166,28 @@ public class PaginaComparacionTests
 
         Assert.False(File.Exists(Path.Combine(carpeta, PaginaComparacion.ArchivoResultado)));
     }
+
+    /// <summary>
+    /// Task 5b: el índice agrupa por pantalla y tamaño. El orden ordinal de las carpetas pondría
+    /// "acceso-login-error" entre "acceso-login" y "acceso-login@1366x768"; agrupado, los dos
+    /// tamaños de una pantalla quedan juntos, primero el estándar.
+    /// </summary>
+    [Fact]
+    public void Indice_AgrupaCadaPantallaConSusDosTamanos()
+    {
+        var r = new ResultadoComparacion(1280, 760, 0, 0);
+        foreach (var nombre in new[] { "acceso-login@1366x768", "acceso-login-error", "acceso-login" })
+        {
+            PaginaComparacion.Escribir(Pantalla(nombre), nombre, r, 0.5, 0);
+        }
+
+        var indice = File.ReadAllText(Path.Combine(_raiz, "index.html"));
+
+        Assert.Contains("<th>Tamaño</th>", indice);
+        var login = indice.IndexOf("\">acceso-login</a></td><td>1280x760</td>", StringComparison.Ordinal);
+        var login1366 = indice.IndexOf("\">acceso-login</a></td><td>1366x768</td>", StringComparison.Ordinal);
+        var error = indice.IndexOf("\">acceso-login-error</a></td><td>1280x760</td>", StringComparison.Ordinal);
+        Assert.True(login >= 0 && login1366 >= 0 && error >= 0, indice);
+        Assert.True(login < login1366 && login1366 < error, indice);
+    }
 }

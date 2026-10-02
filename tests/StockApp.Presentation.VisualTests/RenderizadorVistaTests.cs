@@ -32,6 +32,26 @@ public class RenderizadorVistaTests
         Assert.Equal(SKColor.Parse("#F7F7F5"), imagen.GetPixel(10, 10));
     }
 
+    /// <summary>
+    /// Task 5b (a): con TamanoLienzo.Municipio el PNG mide 1366x768 y la vista ocupa todo ese
+    /// lienzo (el bloque está entre x=1280 y x=1366, fuera del lienzo estándar).
+    /// </summary>
+    [AvaloniaFact]
+    public void TamanoMunicipio_PngDe1366x768ConLaVistaEnTodoElLienzo()
+    {
+        var bloque = new Border { Width = 40, Height = 20, Background = new SolidColorBrush(Color.Parse("#1D4ED8")) };
+        Canvas.SetLeft(bloque, 1300);
+        Canvas.SetTop(bloque, 740);
+        var png = Path.Combine(_carpeta, "municipio.png");
+
+        RenderizadorVista.RenderizarAPng(new Canvas { Children = { bloque } }, null, png, tamano: TamanoLienzo.Municipio);
+
+        using var imagen = SKBitmap.Decode(png);
+        Assert.Equal(1366, imagen.Width);
+        Assert.Equal(768, imagen.Height);
+        Assert.Equal(SKColor.Parse("#1D4ED8"), imagen.GetPixel(1320, 750));
+    }
+
     [AvaloniaFact]
     public void AsignaElViewModelComoDataContextDeLaVista()
     {

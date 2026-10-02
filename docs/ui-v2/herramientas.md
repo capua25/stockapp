@@ -13,10 +13,12 @@ Instala el Chromium que usa Microsoft.Playwright 1.63.0 (rev 1243) en `~/.cache/
 ```bash
 scripts/ui-v2/comparar.sh            # todas las pantallas
 scripts/ui-v2/comparar.sh Productos  # solo los tests cuyo nombre contiene "Productos"
+scripts/ui-v2/comparar.sh 1366x768   # solo las corridas a 1366x768 (los gemelos _1366x768)
 ```
 
-Abre `artifacts/ui-v2/comparacion/index.html`: una fila por pantalla con el porcentaje de píxeles
-distintos, las teselas densas y el veredicto. Cada pantalla tiene su página con mockup, app y
+Abre `artifacts/ui-v2/comparacion/index.html`: una fila por pantalla y tamaño (1280x760 y
+1366x768, agrupadas por pantalla, el estándar primero) con el porcentaje de píxeles distintos, las
+teselas densas y el veredicto. Cada pantalla tiene su página con mockup, app y
 diferencias lado a lado (rojo = diferencia fuerte; naranja = diferencia leve de color; contorno
 magenta = tesela densa de 16x16: 25% o más de diferencias fuertes, o 90% o más de leves).
 
@@ -38,7 +40,11 @@ Nunca se editan a mano: `ArchivosGeneradosSincronizadosTests` falla si difieren 
 ## Mockup de una pantalla
 
 1. `docs/ui-v2/mockups/<modulo>/<pantalla>.html`, con `../_base/tokens.css` y `../_base/base.css`,
-   todo adentro de `<div class="v2-ventana">` (1280x760), datos fijos.
+   todo adentro de `<div class="v2-ventana">`, datos fijos. El mismo HTML se aprueba a 1280x760 y a
+   1366x768: `.v2-ventana` mide `var(--v2-ventana-ancho, 1280px)` x `var(--v2-ventana-alto, 760px)`
+   y el capturador define esas variables según el tamaño pedido. Abierto a mano en el navegador
+   mide 1280x760. Lo que tenga ancho fijo adentro no se estira solo: a 1366 se ajusta pantalla por
+   pantalla al aprobar el mockup.
 2. Íconos: `dotnet run --project tools/StockApp.UiV2.Herramientas -- icono-svg mdi-<nombre>` y pegar el SVG.
 3. Solo técnicas de la spec §6.1. Las clases `v2-*` de `base.css` replican la geometría de los
    componentes de `Controls/V2`.
@@ -65,7 +71,19 @@ En `tests/StockApp.Presentation.VisualTests`, con `[Trait("Categoria", "Comparac
 [AvaloniaFact]
 public void Productos_IgualAlMockup() =>
     ComparacionVisual.CompararConMockup(new ProductoListView(), vmConLosMismosDatosDelMockup, "inventario/productos.html");
+
+[AvaloniaFact]
+public void Productos_IgualAlMockup_1366x768() =>
+    ComparacionVisual.CompararConMockup(new ProductoListView(), vmConLosMismosDatosDelMockup, "inventario/productos.html",
+        tamano: TamanoLienzo.Municipio);
 ```
+
+Toda pantalla tiene los dos tests, con el MISMO umbral (spec §6.1/§6.2: varias PCs del municipio
+son de 1366x768). `tamano` es opcional (sin él, `TamanoLienzo.Estandar`, 1280x760) y se pasa
+siempre con argumento nombrado. La corrida a 1366x768 deja su página en
+`artifacts/ui-v2/comparacion/<pantalla>@1366x768/` y no pisa la del tamaño estándar. Si una
+pantalla pasa a 1280x760 y no a 1366x768, se diagnostica (¿un ancho fijo en el mockup?); el umbral
+no se sube para 1366.
 
 El umbral por defecto es el calibrado en la Fase 0 (spec §6.5). No se sube por pantalla sin
 aprobación del usuario, y la aprobación queda en el código:
@@ -102,7 +120,8 @@ naranja y rojo fino en los bordes de los glifos. Lo que se exige igual es la geo
 ## Otros comandos
 
 - `tokens --verificar`, `fuentes`, `fuentes --verificar`
-- `capturar-mockup <html> <png>`: captura suelta de un mockup.
+- `capturar-mockup <html> <png> [--tamano 1366x768]`: captura suelta de un mockup, a 1280x760 o al
+  tamaño pedido (`1280x760` o `1366x768`; otro valor sale con código 2 y lista los válidos).
 - `comparar-png <referencia> <candidata> <diff>`: diff suelto de dos PNG del mismo tamaño (sirve
   para comparar capturas de la app real antes y después).
 

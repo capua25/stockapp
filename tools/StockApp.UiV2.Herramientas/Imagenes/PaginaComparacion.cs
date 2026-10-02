@@ -130,10 +130,22 @@ public static class PaginaComparacion
         }
     }
 
+    /// <summary>
+    /// Task 5b: una fila por pantalla y tamaño, agrupadas por pantalla (estándar primero). El
+    /// tamaño sale del sufijo de la carpeta ("&lt;pantalla&gt;@1366x768", ver
+    /// <see cref="TamanoLienzo.SufijoPantalla"/>); sin sufijo es el estándar. El orden ordinal de las
+    /// carpetas no alcanza: "login-error" caería entre "login" y "login@1366x768".
+    /// </summary>
     private static void EscribirIndice(string carpetaRaiz)
     {
         var filas = new StringBuilder();
-        foreach (var carpeta in Directory.GetDirectories(carpetaRaiz).OrderBy(d => d, StringComparer.Ordinal))
+        var carpetas = Directory.GetDirectories(carpetaRaiz)
+            .Select(d => (Carpeta: d, Partes: Path.GetFileName(d).Split('@', 2)))
+            .Select(x => (x.Carpeta, Pantalla: x.Partes[0], Tamano: x.Partes.Length == 2 ? x.Partes[1] : TamanoLienzo.Estandar.ToString()))
+            .OrderBy(x => x.Pantalla, StringComparer.Ordinal)
+            .ThenBy(x => x.Tamano == TamanoLienzo.Estandar.ToString() ? 0 : 1)
+            .ThenBy(x => x.Tamano, StringComparer.Ordinal);
+        foreach (var (carpeta, pantalla, tamano) in carpetas)
         {
             var archivo = Path.Combine(carpeta, ArchivoResultado);
             if (!File.Exists(archivo))
@@ -144,7 +156,8 @@ public static class PaginaComparacion
             var p = JsonSerializer.Deserialize<ResultadoPersistido>(File.ReadAllText(archivo))!;
             var aprobada = p.Recortes.Count == 0 && p.Porcentaje <= p.UmbralPorcentaje && p.TeselasDensas <= p.TeselasDensasMax;
             var nombre = Path.GetFileName(carpeta);
-            filas.Append($"<tr><td><a href=\"{Uri.EscapeDataString(nombre)}/index.html\">{WebUtility.HtmlEncode(p.Pantalla)}</a></td>")
+            filas.Append($"<tr><td><a href=\"{Uri.EscapeDataString(nombre)}/index.html\">{WebUtility.HtmlEncode(pantalla)}</a></td>")
+                 .Append($"<td>{WebUtility.HtmlEncode(tamano)}</td>")
                  .Append($"<td>{F(p.Porcentaje)}%</td><td>{p.TeselasDensas}</td>")
                  .Append($"<td class=\"{(aprobada ? "aprobada" : "rechazada")}\">{(aprobada ? "APROBADA" : "RECHAZADA")}</td></tr>\n");
         }
@@ -165,7 +178,7 @@ public static class PaginaComparacion
             <body>
             <h1>Comparaciones UI v2</h1>
             <table>
-            <tr><th>Pantalla</th><th>Píxeles distintos</th><th>Teselas densas</th><th>Veredicto</th></tr>
+            <tr><th>Pantalla</th><th>Tamaño</th><th>Píxeles distintos</th><th>Teselas densas</th><th>Veredicto</th></tr>
             {{filas}}</table>
             </body>
             </html>

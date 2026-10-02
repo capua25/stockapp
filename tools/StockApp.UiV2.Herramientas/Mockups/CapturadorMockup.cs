@@ -3,12 +3,16 @@ using Microsoft.Playwright;
 namespace StockApp.UiV2.Herramientas.Mockups;
 
 /// <summary>
-/// Captura un mockup HTML a PNG de 1280x760 con Chromium de Playwright, escala 1.
+/// Captura un mockup HTML a PNG con Chromium de Playwright, escala 1, al tamaño pedido
+/// (<see cref="TamanoLienzo.Estandar"/> 1280x760 por defecto, o <see cref="TamanoLienzo.Municipio"/>
+/// 1366x768). El mismo HTML sirve para los dos: el viewport sale del tamaño y ".v2-ventana" toma
+/// su ancho y alto de las variables --v2-ventana-ancho/--v2-ventana-alto, que el capturador define
+/// en :root antes de medir (base.css las usa con 1280px/760px como valor por defecto).
 /// --font-render-hinting=none: sin él, Chromium en Linux ensancha el texto por hinting
 /// (medido: ~2% a 13px) y la comparación contra Skia se llena de ruido.
 /// Antes de capturar fuerza la carga de TODAS las @font-face y falla si alguna no cargó o si el
 /// contenido desborda el lienzo. El desborde se mide en dos lugares: el documento entero (una
-/// ventana que se agranda a sí misma más allá de 1280x760) Y ".v2-ventana" puntualmente, porque
+/// ventana que se agranda a sí misma más allá del tamaño pedido) Y ".v2-ventana" puntualmente, porque
 /// esa clase trae "overflow:hidden" de base.css — sin ese segundo chequeo, un hijo que se pasa
 /// de la caja de ".v2-ventana" queda recortado en silencio en el PNG en vez de hacer fallar la
 /// captura (overflow:hidden no propaga el desborde al documento).
@@ -60,8 +64,10 @@ public static class CapturadorMockup
         }
         """;
 
-    public static async Task CapturarAsync(string rutaHtml, string rutaPng)
+    /// <param name="tamano">Tamaño del lienzo; null es <see cref="TamanoLienzo.Estandar"/>.</param>
+    public static async Task CapturarAsync(string rutaHtml, string rutaPng, TamanoLienzo? tamano = null)
     {
+        var lienzo = tamano ?? TamanoLienzo.Estandar;
         if (!File.Exists(rutaHtml))
         {
             throw new FileNotFoundException("No existe el mockup.", rutaHtml);
@@ -88,10 +94,14 @@ public static class CapturadorMockup
         {
             var pagina = await navegador.NewPageAsync(new BrowserNewPageOptions
             {
-                ViewportSize = new ViewportSize { Width = Lienzo.Ancho, Height = Lienzo.Alto },
+                ViewportSize = new ViewportSize { Width = lienzo.Ancho, Height = lienzo.Alto },
                 DeviceScaleFactor = 1,
             });
             await pagina.GotoAsync(new Uri(Path.GetFullPath(rutaHtml)).AbsoluteUri);
+            await pagina.AddStyleTagAsync(new PageAddStyleTagOptions
+            {
+                Content = $":root {{ --v2-ventana-ancho: {lienzo.Ancho}px; --v2-ventana-alto: {lienzo.Alto}px; }}",
+            });
 
             var estados = await pagina.EvaluateAsync<string[]>(ScriptFuentes);
             if (estados.Length == 0)
@@ -111,7 +121,7 @@ public static class CapturadorMockup
             if (problemas.Length > 0)
             {
                 throw new InvalidOperationException(
-                    $"{Path.GetFileName(rutaHtml)} desborda el lienzo: {string.Join("; ", problemas)}.");
+                    $"{Path.GetFileName(rutaHtml)} desborda el lienzo de {lienzo}: {string.Join("; ", problemas)}.");
             }
 
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(rutaPng))!);

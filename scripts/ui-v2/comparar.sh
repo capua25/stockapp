@@ -3,6 +3,10 @@
 # artifacts/ui-v2/comparacion/ (ignorado por git). Uso:
 #   scripts/ui-v2/comparar.sh              todas las pantallas
 #   scripts/ui-v2/comparar.sh Catalogo     solo los tests cuyo nombre contiene "Catalogo"
+#                                          (los dos tamaños: Catalogo_IgualAlMockup y su gemelo _1366x768)
+#   scripts/ui-v2/comparar.sh 1366x768     solo las corridas a 1366x768
+# Cada pantalla se compara a 1280x760 y a 1366x768 con el mismo umbral; la corrida a 1366x768 deja
+# su página en <pantalla>@1366x768/ y el índice agrupa las filas por pantalla y tamaño.
 # Requisito una vez por máquina:
 #   dotnet run --project tools/StockApp.UiV2.Herramientas -- instalar-navegador
 set -euo pipefail
@@ -37,5 +41,5 @@ if [[ "$CODIGO" -ne 0 ]]; then
   exit "$CODIGO"
 fi
 
-echo "Comparaciones: $RAIZ/artifacts/ui-v2/comparacion/index.html"
+echo "Comparaciones (por pantalla y tamaño): $RAIZ/artifacts/ui-v2/comparacion/index.html"
 exit 0

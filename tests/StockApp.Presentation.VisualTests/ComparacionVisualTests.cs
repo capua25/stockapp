@@ -86,6 +86,19 @@ public class ComparacionVisualTests
         Assert.Equal(esperado, ComparacionVisual.NombrePantalla(ruta));
 
     /// <summary>
+    /// Task 5b: la corrida a 1366x768 deja su página en otra carpeta (sufijo "@1366x768") y no pisa
+    /// la del tamaño estándar; pasar el estándar explícito es lo mismo que no pasar nada.
+    /// </summary>
+    [Fact]
+    public void NombrePantalla_ConTamano_LlevaElSufijoSoloFueraDelEstandar()
+    {
+        Assert.Equal("componentes-catalogo@1366x768",
+            ComparacionVisual.NombrePantalla("componentes/catalogo.html", TamanoLienzo.Municipio));
+        Assert.Equal("componentes-catalogo",
+            ComparacionVisual.NombrePantalla("componentes/catalogo.html", TamanoLienzo.Estandar));
+    }
+
+    /// <summary>
     /// I2b (revisión final): un mockup que existía y se borró (o cualquier otra causa de que
     /// CapturadorMockup.CapturarAsync lance) no puede dejar vigente el resultado.json aprobado de
     /// la corrida anterior — ni en la carpeta de la pantalla ni en el índice general.

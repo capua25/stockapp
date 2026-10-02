@@ -79,4 +79,42 @@ public class CliTests
         Assert.Equal(1, codigo);
         Assert.Contains(referenciaInexistente, error.ToString());
     }
+
+    /// <summary>
+    /// Task 5b: "capturar-mockup ... --tamano 1366x768" captura al tamaño del municipio. El HTML
+    /// se escribe en una carpeta temporal (ningún test escribe en el repo).
+    /// </summary>
+    [Fact]
+    public void Ejecutar_CapturarMockupConTamano1366x768_EscribeUnPngDeEseTamano()
+    {
+        var carpeta = Directory.CreateTempSubdirectory("cli-capturar-").FullName;
+        var html = Path.Combine(carpeta, "m.html");
+        File.WriteAllText(html,
+            "<!doctype html><html><head><meta charset=\"utf-8\">"
+            + $"<link rel=\"stylesheet\" href=\"{new Uri(RutasRepo.TokensCss).AbsoluteUri}\">"
+            + $"<link rel=\"stylesheet\" href=\"{new Uri(Path.Combine(RutasRepo.CarpetaBaseMockups, "base.css")).AbsoluteUri}\">"
+            + "</head><body><div class=\"v2-ventana\"></div></body></html>");
+        var png = Path.Combine(carpeta, "m.png");
+        var error = new StringWriter();
+
+        var codigo = Cli.Ejecutar(["capturar-mockup", html, png, "--tamano", "1366x768"], new StringWriter(), error);
+
+        Assert.True(codigo == 0, error.ToString());
+        using var imagen = SKBitmap.Decode(png);
+        Assert.Equal(1366, imagen.Width);
+        Assert.Equal(768, imagen.Height);
+    }
+
+    [Fact]
+    public void Ejecutar_CapturarMockupConTamanoDesconocido_Devuelve2YListaLosValidos()
+    {
+        var error = new StringWriter();
+
+        var codigo = Cli.Ejecutar(["capturar-mockup", "a.html", "a.png", "--tamano", "1920x1080"], new StringWriter(), error);
+
+        Assert.Equal(2, codigo);
+        Assert.Contains("1920x1080", error.ToString());
+        Assert.Contains("1280x760", error.ToString());
+        Assert.Contains("1366x768", error.ToString());
+    }
 }

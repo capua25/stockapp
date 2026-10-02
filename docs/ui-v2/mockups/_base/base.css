@@ -36,11 +36,13 @@ body {
   color: var(--v2-color-texto-primario);
 }
 
-/* La ventana de la app: todo mockup va adentro de un .v2-ventana. */
+/* La ventana de la app: todo mockup va adentro de un .v2-ventana. El capturador define
+   --v2-ventana-ancho/--v2-ventana-alto según el tamaño pedido (1280x760 o 1366x768), así el
+   mismo HTML sirve para los dos; sin ellas (abierto a mano en el navegador) mide 1280x760. */
 .v2-ventana {
   position: relative;
-  width: 1280px;
-  height: 760px;
+  width: var(--v2-ventana-ancho, 1280px);
+  height: var(--v2-ventana-alto, 760px);
   overflow: hidden;
   background: var(--v2-color-fondo);
 }

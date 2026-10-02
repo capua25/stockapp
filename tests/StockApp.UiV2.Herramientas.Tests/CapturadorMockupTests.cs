@@ -44,6 +44,52 @@ public class CapturadorMockupTests
         Assert.Equal(SKColor.Parse("#F7F7F5"), imagen.GetPixel(10, 10));
     }
 
+    /// <summary>
+    /// Task 5b (a/b): a 1366x768 el PNG mide eso y ".v2-ventana" se estira al tamaño pedido. El
+    /// bloque cae entre x=1280 y x=1366: a 1280x760 ese mismo HTML desbordaría la ventana.
+    /// </summary>
+    [Fact]
+    public async Task TamanoMunicipio_PngDe1366x768ConLaVentanaDeEseAncho()
+    {
+        var html = Html(
+            "<div class=\"b\"></div>",
+            ".b{position:absolute;left:1300px;top:740px;width:40px;height:20px;background:var(--v2-color-acento)}");
+        var png = Path.Combine(_carpeta, "municipio.png");
+
+        await CapturadorMockup.CapturarAsync(html, png, TamanoLienzo.Municipio);
+
+        using var imagen = SKBitmap.Decode(png);
+        Assert.Equal(1366, imagen.Width);
+        Assert.Equal(768, imagen.Height);
+        Assert.Equal(SKColor.Parse("#1D4ED8"), imagen.GetPixel(1320, 750));
+    }
+
+    /// <summary>Task 5b (b): el chequeo de desborde mide contra 1366x768, no contra 1280x760.</summary>
+    [Fact]
+    public async Task TamanoMunicipio_ContenidoQueSaleDe1366_Lanza()
+    {
+        var html = Html("<div class=\"ancho\"></div>", ".ancho{width:1400px;height:10px}");
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => CapturadorMockup.CapturarAsync(html, Path.Combine(_carpeta, "x.png"), TamanoLienzo.Municipio));
+
+        Assert.Contains("desborda", ex.Message);
+        Assert.Contains("1366x768", ex.Message);
+    }
+
+    /// <summary>Task 5b (b): lo mismo en alto: 768 entra a 1366x768 y no a 1280x760.</summary>
+    [Fact]
+    public async Task TamanoMunicipio_ContenidoDe768DeAlto_NoLanzaYAlEstandarSi()
+    {
+        var html = Html("<div class=\"alto\"></div>", ".alto{width:10px;height:768px}");
+
+        await CapturadorMockup.CapturarAsync(html, Path.Combine(_carpeta, "alto.png"), TamanoLienzo.Municipio);
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => CapturadorMockup.CapturarAsync(html, Path.Combine(_carpeta, "alto-estandar.png")));
+
+        Assert.Contains("desborda", ex.Message);
+    }
+
     [Fact]
     public async Task MockupSinFontFace_Lanza()
     {

@@ -4,6 +4,7 @@ using Avalonia.VisualTree;
 using StockApp.Presentation.Controls.V2;
 using StockApp.Presentation.VisualTests.Catalogo;
 using StockApp.Presentation.VisualTests.Comparacion;
+using StockApp.UiV2.Herramientas;
 
 namespace StockApp.Presentation.VisualTests;
 
@@ -17,6 +18,15 @@ public class CatalogoComponentesTests
     [AvaloniaFact]
     public void Catalogo_IgualAlMockup() =>
         ComparacionVisual.CompararConMockup(new CatalogoComponentesView(), new CatalogoComponentesViewModel(), "componentes/catalogo.html");
+
+    /// <summary>
+    /// Task 5b, Step 4: calibración de cordura a 1366x768 con el MISMO umbral (spec §6.2). Si no
+    /// pasa, se diagnostica; nunca se sube el umbral.
+    /// </summary>
+    [AvaloniaFact]
+    public void Catalogo_IgualAlMockup_1366x768() =>
+        ComparacionVisual.CompararConMockup(new CatalogoComponentesView(), new CatalogoComponentesViewModel(), "componentes/catalogo.html",
+            tamano: TamanoLienzo.Municipio);
 
     [AvaloniaFact]
     public void Catalogo_MuestraCadaComponenteYControlV2()

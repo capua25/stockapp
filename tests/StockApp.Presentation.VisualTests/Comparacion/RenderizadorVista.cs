@@ -8,15 +8,18 @@ using StockApp.UiV2.Herramientas;
 namespace StockApp.Presentation.VisualTests.Comparacion;
 
 /// <summary>
-/// Renderiza una vista real a PNG de 1280x760 con Skia. Requiere correr dentro de un
+/// Renderiza una vista real a PNG con Skia, al tamaño pedido (1280x760 por defecto, o 1366x768). Requiere correr dentro de un
 /// [AvaloniaFact] de este proyecto (VisualTestApp: UseSkia + UseHeadlessDrawing=false).
 /// </summary>
 public static class RenderizadorVista
 {
     /// <param name="inspeccionar">Corre con la ventana todavía abierta, después de guardar el PNG:
     /// al cerrarla la vista se desengancha de los estilos de la ventana y medirla ya no da lo mismo.</param>
-    public static void RenderizarAPng(Control vista, object? viewModel, string rutaPng, Action<Control>? inspeccionar = null)
+    /// <param name="tamano">Tamaño de la ventana; null es <see cref="TamanoLienzo.Estandar"/>.</param>
+    public static void RenderizarAPng(Control vista, object? viewModel, string rutaPng, Action<Control>? inspeccionar = null,
+        TamanoLienzo? tamano = null)
     {
+        var lienzo = tamano ?? TamanoLienzo.Estandar;
         if (!Avalonia.Application.Current!.TryGetResource("V2FondoBrush", ThemeVariant.Light, out var fondo)
             || fondo is not IBrush brushFondo)
         {
@@ -30,8 +33,8 @@ public static class RenderizadorVista
 
         var ventana = new Window
         {
-            Width = Lienzo.Ancho,
-            Height = Lienzo.Alto,
+            Width = lienzo.Ancho,
+            Height = lienzo.Alto,
             SizeToContent = SizeToContent.Manual,
             Background = brushFondo,
             Content = vista,
@@ -46,10 +49,10 @@ public static class RenderizadorVista
 
         var frame = ventana.CaptureRenderedFrame()
             ?? throw new InvalidOperationException("El render headless no produjo frame: revisar UseSkia y UseHeadlessDrawing=false.");
-        if (frame.PixelSize.Width != Lienzo.Ancho || frame.PixelSize.Height != Lienzo.Alto)
+        if (frame.PixelSize.Width != lienzo.Ancho || frame.PixelSize.Height != lienzo.Alto)
         {
             throw new InvalidOperationException(
-                $"Frame de {frame.PixelSize.Width}x{frame.PixelSize.Height}, se esperaba {Lienzo.Ancho}x{Lienzo.Alto}.");
+                $"Frame de {frame.PixelSize.Width}x{frame.PixelSize.Height}, se esperaba {lienzo}.");
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(rutaPng))!);

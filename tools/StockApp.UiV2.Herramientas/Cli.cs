@@ -20,7 +20,8 @@ public static class Cli
           fuentes [--verificar]             Copia los TTF de Inter embebidos en Avalonia.Fonts.Inter a mockups/_base/fuentes
           icono-svg <clave-mdi>             Imprime el SVG inline de un ícono MDI (p. ej. mdi-package-variant)
           instalar-navegador                Instala el Chromium de Playwright (una vez por máquina)
-          capturar-mockup <html> <png>      Captura un mockup HTML a PNG de 1280x760
+          capturar-mockup <html> <png> [--tamano 1366x768]
+                                            Captura un mockup HTML a PNG de 1280x760 (o del tamaño pedido)
           comparar-png <ref> <cand> <diff>  Compara dos PNG y escribe la imagen de diferencias
         """;
 
@@ -75,6 +76,20 @@ public static class Cli
                     CapturadorMockup.CapturarAsync(html, png).GetAwaiter().GetResult();
                     salida.WriteLine($"Escrito: {png}");
                     return 0;
+
+                case ["capturar-mockup", var html, var png, "--tamano", var textoTamano]:
+                {
+                    if (!TamanoLienzo.TryParsear(textoTamano, out var tamano))
+                    {
+                        error.WriteLine(
+                            $"Tamaño desconocido: {textoTamano}. Válidos: {string.Join(", ", TamanoLienzo.Conocidos)}.");
+                        return 2;
+                    }
+
+                    CapturadorMockup.CapturarAsync(html, png, tamano).GetAwaiter().GetResult();
+                    salida.WriteLine($"Escrito: {png}");
+                    return 0;
+                }
 
                 default:
                     error.WriteLine(Uso);
