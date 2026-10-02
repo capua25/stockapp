@@ -53,7 +53,7 @@ Varias PCs del municipio tienen pantalla de **1366×768** (engram #2679, topic `
 | **1366 con el sidebar v2** | **240** | **1126** |
 | 1280 (tamaño de los mockups) | 240 | 1040 |
 
-**Riesgo anotado.** El sidebar v2 le saca 8 px más a cada vista que el actual (1126 contra 1134). Las grillas ya trabajan en modo desborde a ese ancho (el Historial de movimientos no entra con el piso de 160 de las columnas `*` y muestra scroll horizontal), así que cada píxel cuenta. Ni esta fase ni la spec reducen el sidebar: lo que se hace es medir y reportar (Task 11, Step 5b). Si el usuario quiere recuperar los 8 px, la decisión es suya y toca la spec (§2.2, §4.1) y los tokens, no un ajuste de esta fase.
+**Decisión del usuario (2026-10-02): el sidebar queda en 240, no es una pregunta abierta** (spec §2.2). El sidebar v2 le saca 8 px más a cada vista que el actual (1126 contra 1134); las grillas que desbordan resuelven con scroll horizontal y el piso de 160 de las columnas proporcionales. Las grillas ya trabajan en modo desborde a ese ancho (el Historial de movimientos no entra con el piso de 160 de las columnas `*` y muestra scroll horizontal), así que cada píxel cuenta. Ni esta fase ni la spec reducen el sidebar: lo que se hace es medir y reportar (Task 11, Step 5b), no reabrir la decisión.
 
 **Alto.** 768 es el alto de la PANTALLA: la ventana maximizada tiene menos de client area (barra de tareas y barra de título). El sidebar del Administrador ya no entraba en 760 (decisión P4: `ScrollViewer` con barra `Auto`, marca arriba y pie abajo fijos); a 768 de pantalla entra menos todavía. Hay que verlo bien con la barra `Auto` a ese alto (Task 11, Step 5b y Task 17, Step 4).
 
@@ -117,7 +117,7 @@ Reglas que esta fase fija y que las demás copian tal cual. Las tres primeras vi
 
 1. **Resolución 1366×768.** Todo mockup se genera y aprueba a 1280×760 y a 1366×768. Toda comparación (`CompararConMockup`) corre en ambos tamaños. Toda verificación orgánica incluye una ventana de 1366×768. Cada task de pantalla con grilla reporta cuánto ancho le queda a la vista a 1366 (1126 con el sidebar de 240) y si la grilla entra o desborda. La grilla con desborde a 1366 es válida (scroll horizontal), pero se muestra al usuario en el mockup.
 2. **Formato es-UY.** Todo número, importe y fecha de una vista v2 se formatea con `FormatoEsUy` (`src/StockApp.Domain/Formato/FormatoEsUy.cs`) y sus converters (`DecimalConverter`; el `DecimalPuntoConverter` se borró). Nunca un `StringFormat` suelto en el XAML. La cultura la aplica `CulturaApp.Aplicar()` en `Program.Main`; los tests que dependen de formato no fuerzan una cultura que no difiera de la real (forzar es-AR para probar independencia de es-UY no prueba nada). Los campos numéricos de entrada llevan `EntradaNumericaBehavior`.
-3. **Errores de entrada.** `ErroresDeEntradaBehavior` se aplica por el estilo global de `TextBox` (`Themes/Controls.axaml`) y lo hereda `.ui2 TextBox`; los estilos v2 no pueden pisarlo. Todo comando de guardar o confirmar suma `!HayErroresDeEntrada` a su `CanExecute` (`ViewModelBase`), y el botón lleva `ToolTip.Tip="{Binding MotivoBloqueoPorErrores}" ToolTip.ShowOnDisabled="True"`. Una vista con formulario sin ese par de bindings no se da por migrada.
+3. **Errores de entrada.** `ErroresDeEntradaBehavior` se aplica por los estilos globales de `TextBox` y `NumericUpDown` (`Themes/Controls.axaml`) y lo heredan `.ui2 TextBox` y `.ui2 NumericUpDown`; los estilos v2 no pueden pisarlo. Todo comando de guardado, confirmación o filtro se crea con `ComandoDeGuardado(ejecutar, puede)` de `ViewModelBase`: compone `!HayErroresDeEntrada` y se re-notifica solo, así que NO se escribe `&& !HayErroresDeEntrada` a mano en el `CanExecute`. El tooltip del bloqueo lo pone el tema (el estilo global de `Button` activa `ErroresDeEntradaBehavior.ExplicarBloqueo`): el botón NO lleva `ToolTip.Tip="{Binding MotivoBloqueoPorErrores}"` ni `ToolTip.ShowOnDisabled` a mano. Un `NumericUpDown` v2 hereda `NumericUpDownValidacionBehavior` del estilo global (texto inválido como "20a5" marca el error y retiene el texto); no se repite en la vista. Lo vigilan `ComandosDeGuardadoGuardianTests` (Presentation.Tests) y `ControlesV2ConvencionesGlobalesTests` (UiTests/V2, comprueba que un botón `primario` y un `NumericUpDown` dentro de `.ui2` siguen recibiendo los setters globales). **Cuidado con la clase del botón:** el guardián descubre los botones de acción principal por `Classes="primary"` (la clase vieja); un botón v2 `Classes="primario"` queda invisible para él hasta que el guardián la reconozca (Task 12, Step 3b). Una vista migrada cuyo botón de acción principal no esté cubierto por el guardián no se da por migrada.
 4. **Grillas.** Las `DataGrid` heredan del tema global (`Themes/DataGrid.axaml`) el reajuste de columnas Auto (`DataGridColumnasAutoBehavior`), el piso de 160 en las columnas `*` y la retención de edición inválida (`RetenerEdicionInvalida`). No se declaran anchos de peor caso ni se repiten esos setters en la vista. El estilo `.ui2 DataGridCell.num` NO pone `HorizontalContentAlignment` (la derecha la hace el TextBlock): reponerlo recorta el último carácter al ordenar. Guardianes: `DataGridV2ConBehaviorsGlobalesTests` y `DataGridV2Tests.CeldaNum_ALaDerechaConCifrasTabulares`.
 5. **Toolkit GUI.** `scripts/gui-verificacion/` es fail-closed: nunca captura el escritorio ni manda input sin una ventana confirmada, y falla con códigos de salida distintos de 0 (tabla en su README). Riesgo para la verificación orgánica: un popup de Avalonia (ComboBox, AutoCompleteBox) que se despliega fuera de la ventana no se puede clickear con `click.sh` (el click se acota al rectángulo de la ventana principal); hay que usar el teclado dentro del combo. Cerrar siempre el popup con `Escape` antes de capturar. Esto pesa a 1366×768, donde un desplegable cerca del borde inferior sobresale con más facilidad.
 
@@ -2817,7 +2817,7 @@ Expected: las dos pantallas APROBADAS (11 teselas o menos, 1.68% o menos) y sin 
 - [ ] **Step 5b: 1366×768 (resolución real de las PCs)**
 
 Run: `scripts/ui-v2/comparar.sh Sidebar` incluye ya los dos tamaños (Task 5b). Expected: las cuatro comparaciones (admin y operador, a 1280×760 y a 1366×768) APROBADAS con el mismo umbral, sin texto recortado. Además, registrar en el `progress.md`, con números medidos y no de memoria:
-- Ancho que le deja el sidebar a las vistas a 1366: esperado 1366 − 240 = **1126** (la spec fija 240; el sidebar actual deja 1134). Anotarlo como riesgo para las grillas, que a 1366 ya desbordan (Historial de movimientos).
+- Ancho que le deja el sidebar a las vistas a 1366: esperado 1366 − 240 = **1126** (la spec fija 240; el sidebar actual deja 1134). Decisión del usuario (2026-10-02): el sidebar queda en 240; solo se reporta el ancho, no se reabre. Las grillas que a 1366 ya desbordan (Historial de movimientos) resuelven con scroll horizontal y el piso de 160.
 - El sidebar del Administrador a 768 de alto: la barra `Auto` (P4) se ve bien, la marca y el pie quedan fijos, el pulgar de la barra no tapa ningún texto y el último ítem ("Mantenimiento") es alcanzable scrolleando. Mirar `artifacts/ui-v2/comparacion/shell-sidebar-admin@1366x768/app.png`.
 - El nombre de usuario largo del pie sigue recortándose con `TextTrimming` y no empuja el botón de cerrar sesión.
 
@@ -2863,6 +2863,7 @@ Si el Step 6 cambió el mockup, agregar `docs/ui-v2/mockups/shell/sidebar-admin.
 - Modify: `tools/StockApp.UiV2.Herramientas/Mockups/CapturadorMockup.cs` y `tests/StockApp.UiV2.Herramientas.Tests/CapturadorMockupTests.cs` (`ocultarSelectores`)
 - Modify: `tests/StockApp.Presentation.VisualTests/Comparacion/ComparacionVisual.cs` (`ocultarEnMockup`)
 - Modify: `tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs`
+- Modify: `tests/StockApp.Presentation.Tests/ViewModels/ComandosDeGuardadoGuardianTests.cs` (el guardián reconoce `Classes="primario"`; Step 3b)
 
 **Interfaces:**
 - Consumes: `LoginViewModel(IAuthService, ShellViewModel, IInfoApp, bool soloAccesoLimitado = false)` con `NombreUsuario`, `Contrasena`, `MensajeError`, `SoloAccesoLimitado`, `VersionTexto`, `EntrarCommand`, `ResetearAdminCommand`; `ShellViewModel(IAuthService, ILicenciaService, IResetAdminService, INavigationService, CoordinadorActualizacion, IUiDispatcher, IInfoApp, Func<MantenimientoViewModel>? = null)`; `TarjetaContenido`, `Alerta`, `CampoFormulario`, `V2TemaEnlace`; mockups `acceso/login*.html`.
@@ -3297,15 +3298,45 @@ public class LoginViewV2Tests
         Assert.Equal("No puedo entrar / resetear Admin", reset.Content);
         Assert.Same(vm.ResetearAdminCommand, reset.Command);
     }
+
+    [AvaloniaFact]
+    public void BotonEntrar_ConUnCampoEnRojo_QuedaBloqueadoYElTemaExplicaElMotivo()
+    {
+        // Convención 3: EntrarCommand es un ComandoDeGuardado; el estilo global de Button (que .ui2
+        // no pisa) pone el tooltip. La vista NO declara ToolTip.Tip ni IsEnabled a mano.
+        var (ventana, vm, _) = Montar();
+        var entrar = Nombrado<Button>(ventana, "BotonEntrar");
+
+        vm.HayErroresDeEntrada = true;
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(entrar.IsEffectivelyEnabled);
+        Assert.Equal(ViewModelBase.MensajeErroresDeEntrada, ToolTip.GetTip(entrar));
+    }
 }
 ```
 
 Run: `dotnet test tests/StockApp.Presentation.UiTests/StockApp.Presentation.UiTests.csproj --filter "FullyQualifiedName~LoginViewV2Tests"` y `dotnet test tests/StockApp.Presentation.VisualTests/StockApp.Presentation.VisualTests.csproj --filter "FullyQualifiedName~AccesoComparacionTests|FullyQualifiedName~LoginMarcaAguaTests"`
 Expected: FAIL (no existen las partes nombradas ni `MarcaAgua`/`marca-subtitulo`; la raíz no tiene `ui2`; las comparaciones fallan contra el Login viejo). `Enter_EnUnCampo_EjecutaEntrar` puede fallar solo por no encontrar `CampoUsuario`.
 
+- [ ] **Step 3b: El guardián de comandos de guardado reconoce el botón `primario`**
+
+`ComandosDeGuardadoGuardianTests.EsPrimario` descubre las acciones principales por `Classes="primary"`. El Login v2 usa `Classes="primario"`: sin este paso, `LoginViewModel.EntrarCommand` deja de ser candidato (también por la vía del nombre: "Entrar" no es un verbo de confirmación) y el guardián deja de custodiarlo EN SILENCIO. Es una ampliación, no un relajamiento: no se toca ninguna exención ni ninguna aserción existente (la Task 13 suma aserciones nuevas).
+
+En `tests/StockApp.Presentation.Tests/ViewModels/ComandosDeGuardadoGuardianTests.cs`, reemplazar el regex:
+
+```csharp
+    private static readonly Regex EsPrimario = new(@"Classes=""[^""]*\b(primary|primario)\b|Classes\.(primary|primario)=", RegexOptions.Compiled);
+```
+
+y actualizar el `<summary>` ("... `Classes=\"primary\"` o `Classes=\"primario\"` (clase del sistema v2) ...").
+
+Run: `dotnet test tests/StockApp.Presentation.Tests/StockApp.Presentation.Tests.csproj --filter "FullyQualifiedName~ComandosDeGuardadoGuardianTests"`
+Expected: PASS (las vistas siguen en `primary`; nada cambia todavía). La prueba de que sirve viene en el Step 7 (h).
+
 - [ ] **Step 4: El XAML**
 
-Reemplazar `LoginView.axaml` entero por:
+Reemplazar `LoginView.axaml` entero por (el `BotonEntrar` bindea `EntrarCommand`, que ya es un `ComandoDeGuardado`: NO lleva `ToolTip.Tip`, `ToolTip.ShowOnDisabled` ni `IsEnabled` a mano; el tema lo hace; los `TextBox` heredan `Reportar` del estilo global):
 
 ```xml
 <UserControl xmlns="https://github.com/avaloniaui"
@@ -3461,11 +3492,13 @@ cp src/StockApp.Presentation/Views/LoginView.axaml "$SCRATCH/LoginView.axaml.bak
 (e) Quitar `RenderTransform="scale(0.85)"` → rojo en el mismo test (escala y región). Restaurar con `cp`. En el mockup: quitar `transform: scale(0.85);` de `.marca-agua` de `login.html` (backup con `cp`) → rojo en `Mockup_DeclaraLaMismaMarcaDeAguaQueLaApp("login")`. Restaurar con `cp`.
 (f) Quitar el `TextBlock Classes="marca-subtitulo"` → rojo en `Marca_LlevaLaLineaMunicipioDeCarmeloBajoElTitulo` y en las tres comparaciones. Restaurar con `cp`.
 (g) Quitar el `Image x:Name="MarcaAgua"` entero → rojo en `MarcaDeAgua_ExisteDetrasDeLaCard` y en `LoginMarcaAguaTests` (y deja de compilar la comparación por el `FindControl` nulo: es el comportamiento buscado). Restaurar con `cp`.
+(h) Guardián de `primario` (Step 3b): `cp tests/StockApp.Presentation.Tests/ViewModels/ComandosDeGuardadoGuardianTests.cs "$SCRATCH/ComandosDeGuardadoGuardianTests.cs.bak"`, volver el regex `EsPrimario` a solo `primary` → rojo en `Descubrimiento_EncuentraCandidatosPorNombreYPorBotonPrimario` (`LoginViewModel.EntrarCommand` ya no aparece en `primarios`, porque `LoginView` es `primario`) (y desaparece el caso de Login de la teoría, que ya no lo prueba nadie). Restaurar con `cp`.
+(i) Tema: en `Themes/Controls.axaml`, quitar el `Setter` de `ErroresDeEntradaBehavior.ExplicarBloqueo` del estilo global de `Button` (backup con `cp`) → rojo en `BotonEntrar_ConUnCampoEnRojo_QuedaBloqueadoYElTemaExplicaElMotivo` y en `ControlesV2ConvencionesGlobalesTests`. Restaurar con `cp`.
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add src/StockApp.Presentation/Views/LoginView.axaml tools/StockApp.UiV2.Herramientas/Mockups/CapturadorMockup.cs tests/StockApp.UiV2.Herramientas.Tests/CapturadorMockupTests.cs tests/StockApp.Presentation.VisualTests/Comparacion/ComparacionVisual.cs tests/StockApp.Presentation.VisualTests/Pantallas/Acceso/ tests/StockApp.Presentation.UiTests/V2/LoginViewV2Tests.cs tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs
+git add src/StockApp.Presentation/Views/LoginView.axaml tools/StockApp.UiV2.Herramientas/Mockups/CapturadorMockup.cs tests/StockApp.UiV2.Herramientas.Tests/CapturadorMockupTests.cs tests/StockApp.Presentation.VisualTests/Comparacion/ComparacionVisual.cs tests/StockApp.Presentation.VisualTests/Pantallas/Acceso/ tests/StockApp.Presentation.UiTests/V2/LoginViewV2Tests.cs tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs tests/StockApp.Presentation.Tests/ViewModels/ComandosDeGuardadoGuardianTests.cs
 git commit -m "feat(ui-v2): Login v2 con sus tres estados comparados y la marca de agua custodiada aparte"
 ```
 
@@ -3480,6 +3513,7 @@ git commit -m "feat(ui-v2): Login v2 con sus tres estados comparados y la marca 
 - Modify: `tests/StockApp.Presentation.VisualTests/Pantallas/Acceso/AccesoComparacionTests.cs`
 - Create: `tests/StockApp.Presentation.UiTests/V2/ResetYLicenciaV2Tests.cs`
 - Modify: `tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs`
+- Modify: `tests/StockApp.Presentation.Tests/ViewModels/ComandosDeGuardadoGuardianTests.cs` (aserciones de `Resetear` y `Activar`; Step 4)
 
 **Interfaces:**
 - Consumes: `ResetAdminViewModel(IResetAdminService)` con `CodigoMaquina`, `Desafio`, `TokenPegado`, `NuevaContrasena`, `MensajeError`, `Completado`, `PedirDesafioCommand`, `ResetearCommand`, `VolverCommand`; `BloqueoLicenciaViewModel(ILicenciaService)` con `CodigoMaquina`, `LicenciaPegada`, `MensajeError`, `ActivarCommand`, `IrALoginAccesoLimitadoCommand`; `ILicenciaService.ObtenerEstadoAsync()` → `EstadoLicenciaDto(bool Activada, string CodigoMaquina)`; mockups `acceso/reset.html` y `acceso/bloqueo-licencia.html`.
@@ -3832,7 +3866,16 @@ Reemplazar entero por:
 
 - [ ] **Step 4: `GuardianDePatronTests`**
 
-Sacar `typeof(ResetAdminView)` y `typeof(BloqueoLicenciaView)` de `VistasCentradasSinSidebar` y agregarlos a `VistasMigradasAV2`. `VistasCentradasSinSidebar` queda vacía: xUnit falla un `[MemberData]` sin filas ("No data found"), así que borrar también la lista y el test `VistaCentrada_TieneCardConPaddingHolgado`, y sacar `.Concat(VistasCentradasSinSidebar…)` de `Guardian_CubreTodasLasVistasDelEnsamblado` (actualizar su `<summary>`).
+Sacar `typeof(ResetAdminView)` y `typeof(BloqueoLicenciaView)` de `VistasCentradasSinSidebar` y agregarlos a `VistasMigradasAV2`.
+
+Además, en `tests/StockApp.Presentation.Tests/ViewModels/ComandosDeGuardadoGuardianTests.cs`, en `Descubrimiento_EncuentraCandidatosPorNombreYPorBotonPrimario`, junto a la aserción de `LoginViewModel.EntrarCommand`, sumar:
+
+```csharp
+        Assert.Contains("ResetAdminViewModel.ResetearCommand", primarios);
+        Assert.Contains("BloqueoLicenciaViewModel.ActivarCommand", primarios);
+```
+
+Las dos vistas pasan de `primary` a `primario` en esta task; con el regex ampliado en la Task 12 (Step 3b) siguen siendo candidatas del guardián, y estas aserciones lo fijan (sin ellas, un regex que vuelva a perder `primario` solo se notaría por el Login). No se toca ninguna exención. En el XAML de las dos vistas, `ResetearCommand` y `ActivarCommand` son `ComandoDeGuardado`: los botones NO llevan `ToolTip.Tip`, `ToolTip.ShowOnDisabled` ni `IsEnabled` a mano; los `TextBox` (`TokenPegado`, `NuevaContrasena`, `LicenciaPegada`) heredan `Reportar` del estilo global. `VistasCentradasSinSidebar` queda vacía: xUnit falla un `[MemberData]` sin filas ("No data found"), así que borrar también la lista y el test `VistaCentrada_TieneCardConPaddingHolgado`, y sacar `.Concat(VistasCentradasSinSidebar…)` de `Guardian_CubreTodasLasVistasDelEnsamblado` (actualizar su `<summary>`).
 
 - [ ] **Step 5: Verde**
 
@@ -3848,11 +3891,12 @@ cp src/StockApp.Presentation/Views/ResetAdminView.axaml "$SCRATCH/ResetAdminView
 
 (a) Quitar el bloque `DataContextChanged += …;` del constructor de `BloqueoLicenciaView.axaml.cs` → rojo en `Bloqueo_AlAsignarElVm_CargaElCodigoDeMaquina` y en `BloqueoLicencia_IgualAlMockup` (sin código). Restaurar con `cp`.
 (b) Quitar `IsVisible="{Binding Completado}"` de `AlertaCompletado` → rojo en `Reset_Completado_MuestraElAvisoDeExito` (visible desde el inicio) y en `Reset_IgualAlMockup`. Restaurar con `cp`.
+(c) Guardián de `primario`: `cp tests/StockApp.Presentation.Tests/ViewModels/ComandosDeGuardadoGuardianTests.cs "$SCRATCH/ComandosDeGuardadoGuardianTests.cs.bak"`, volver el regex `EsPrimario` a solo `primary` → rojo en `Descubrimiento_EncuentraCandidatosPorNombreYPorBotonPrimario` (`ResetearCommand` y `ActivarCommand` ya no aparecen en `primarios`). Restaurar con `cp`.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/StockApp.Presentation/Views/ResetAdminView.axaml src/StockApp.Presentation/Views/BloqueoLicenciaView.axaml tests/StockApp.Presentation.VisualTests/Pantallas/Acceso/ tests/StockApp.Presentation.UiTests/V2/ResetYLicenciaV2Tests.cs tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs
+git add src/StockApp.Presentation/Views/ResetAdminView.axaml src/StockApp.Presentation/Views/BloqueoLicenciaView.axaml tests/StockApp.Presentation.VisualTests/Pantallas/Acceso/ tests/StockApp.Presentation.UiTests/V2/ResetYLicenciaV2Tests.cs tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs tests/StockApp.Presentation.Tests/ViewModels/ComandosDeGuardadoGuardianTests.cs
 git commit -m "feat(ui-v2): Reset de Admin y activación de licencia v2, comparados contra el mockup"
 ```
 
@@ -3950,6 +3994,7 @@ git commit -m "feat(ui-v2): aviso de acceso limitado como Alerta v2 sin tocar Ma
 
 **Interfaces:**
 - Consumes: constructores `ConfirmacionDialog(string)`, `MensajeDialog(string)`, `PedirTextoDialog(string titulo, string mensaje)`; `x:Name` que lee el code-behind: `MensajeText`, `TextoTextBox`, `ConfirmarButton`, `CancelarButton`, `AceptarButton`.
+- **Convención 3 (errores de entrada), decisión explícita:** los tres diálogos NO usan `ComandoDeGuardado`. Verificado en `ComandosDeGuardadoGuardianTests` y `ErroresDeEntradaBehavior`: (1) los botones Confirmar/Aceptar de los diálogos cierran con `Click="OnConfirmarClick"`/`OnAceptarClick` (code-behind), sin `Command=`, y el guardián solo descubre botones con `Command="{Binding X}"`; (2) los diálogos son `Window` sin ViewModel: ningún ancestro tiene un `DataContext` `IConErroresDeEntrada`, así que el `TextBox` de PedirTexto no tiene dueño al que reportar y no existe `HayErroresDeEntrada` que bloquear; (3) el `TextoTextBox` no tiene converter ni binding de entrada que pueda rechazar texto, ningún `NumericUpDown`, y un motivo vacío lo resuelve el code-behind actual (no se cambia aquí). Por eso no hay exención que agregar al guardián: caen fuera de su alcance por construcción. Si un diálogo futuro gana un ViewModel o un campo con validación, su Aceptar pasa a ser un `ComandoDeGuardado` con `Command=`, y entra al guardián solo. En el XAML de esta task los botones NO llevan `ToolTip` de bloqueo a mano. Ningún diálogo de la Fase 1 usa `NumericUpDown`.
 - Produces: en los tres diálogos, el contenido del `Window` es un `Border x:Name="Contenido"` con `Classes="ui2"`. `public static Control ContenidoDeDialogo.Extraer(Window dialogo)`: desengancha ese contenido y lo devuelve dentro de un `Border` centrado con el ancho del diálogo.
 
 - [ ] **Step 1: Helper y tests (rojo)**
@@ -4508,7 +4553,7 @@ No se pushea ni se mergea.
 | El sidebar de Administrador desborda 760 y la barra de scroll de Fluent puede dibujarse distinta que en el mockup. | P4 (barra `Auto`, decidido) + Task 11 Step 6 (medir la franja y replicarla en el mockup). |
 | La card centrada dentro de un `ScrollViewer` puede quedar arriba en vez de centrada. | Task 12 Step 6 trae la corrección (Grid con `MinHeight` del viewport). |
 | Texto centrado verticalmente en alturas impares (ítem de 32 con línea de 15) puede caer en medio píxel distinto entre Skia y Chromium. | Es el mismo ruido de centrado subpíxel que la calibración ya absorbe (spec §6.5); si suma teselas densas, se iguala con un margen entero en ambos lados, no con umbral. |
-| El sidebar v2 (240) deja 1126 px de vista a 1366 (el actual dejaba 1134): 8 px menos para grillas que a ese ancho ya trabajan en desborde (Historial). | Task 11 Step 5b lo mide y lo reporta; no se achica el sidebar en esta fase (spec §2.2, §4.1). Si el usuario quiere recuperar los 8 px, es una decisión de spec. |
+| El sidebar v2 (240) deja 1126 px de vista a 1366 (el actual dejaba 1134). **Decisión tomada por el usuario (2026-10-02), no es una pregunta abierta:** el sidebar queda en 240 (spec §2.2); a 1366 deja 8 px menos que el actual (232). Las grillas que desbordan resuelven con scroll horizontal y el piso de 160 de las columnas proporcionales. | Task 11 Step 5b mide y reporta el ancho (1126) por trazabilidad, no para reabrir la decisión. No se achica el sidebar en ninguna fase. |
 | El sidebar del Administrador a 768 de alto (client area menor) muestra menos ítems antes de scrollear. | P4 (barra `Auto`) + Task 11 Step 5b y Task 17 Step 4 a 1366×768. |
 | La herramienta está cableada a 1280×760: sin Task 5b no hay comparación a 1366×768. | Task 5b, antes de los mockups. |
 | El umbral (11 teselas, 1.68%) se calibró a 1280×760; a 1366×768 hay ~8% más de píxeles y puede sumar teselas de borde. | Task 5b Step 4 lo prueba con el catálogo; si no pasa, se diagnostica y se reporta, nunca se sube. |
