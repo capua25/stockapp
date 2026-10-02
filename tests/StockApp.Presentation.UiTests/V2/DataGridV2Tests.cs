@@ -85,7 +85,10 @@ public class DataGridV2Tests
         Assert.NotEmpty(celdas);
         Assert.All(celdas, c =>
         {
-            Assert.Equal(HorizontalAlignment.Right, c.HorizontalContentAlignment);
+            // La derecha la hace el TextBlock, NO el HorizontalContentAlignment de la celda (recorta al ordenar).
+            Assert.NotEqual(HorizontalAlignment.Right, c.HorizontalContentAlignment);
+            Assert.All(c.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Name == "CellTextBlock"),
+                t => Assert.Equal(HorizontalAlignment.Right, t.HorizontalAlignment));
             var rasgos = c.GetValue(TextElement.FontFeaturesProperty);
             Assert.NotNull(rasgos);
             Assert.Contains(rasgos!, f => f.ToString().Contains("tnum"));

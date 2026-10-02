@@ -137,9 +137,12 @@
         <Setter Property="Margin" Value="0" />
     </Style>
     <!-- Columna numérica: derecha + cifras tabulares (spec §2.3). TextElement.FontFeatures se
-         hereda al TextBlock de la celda (verificado con render Skia: "1111" pasa de 25 a 34 px). -->
+         hereda al TextBlock de la celda (verificado con render Skia: "1111" pasa de 25 a 34 px).
+         La alineación a la derecha la hace SOLO el TextBlock (selector de abajo). NO pongas
+         HorizontalContentAlignment=Right acá: ajusta el ContentPresenter al contenido y, al
+         ordenar (celdas recicladas), el número pierde el último carácter. Ver Themes/DataGrid.axaml
+         y DataGridCeldaNumericaOrdenTests. Guardián: DataGridV2ConBehaviorsGlobalesTests. -->
     <Style Selector=".ui2 DataGridCell.num">
-        <Setter Property="HorizontalContentAlignment" Value="Right" />
         <Setter Property="TextElement.FontFeatures" Value="+tnum" />
     </Style>
     <Style Selector=".ui2 DataGridCell.num TextBlock">
