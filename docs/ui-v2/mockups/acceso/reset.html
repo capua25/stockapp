@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Acceso: Recuperar acceso de Admin (UI v2)</title>
+<link rel="stylesheet" href="../_base/tokens.css">
+<link rel="stylesheet" href="../_base/base.css">
+<style>
+  .v2-ventana { display: flex; align-items: center; justify-content: center; }
+  .tarjeta-acceso { width: var(--v2-ancho-card-login); padding: 32px; display: flex; flex-direction: column; }
+  .centro { text-align: center; }
+  .mt-12 { margin-top: 12px; }
+  .mt-16 { margin-top: 16px; }
+  .boton-completo { display: flex; width: 100%; }
+  .enlace-centrado { align-self: center; }
+  /* Código + "Copiar": Grid *,Auto con el botón a 8. El código en Inter con cifras tabulares. */
+  .fila-codigo { display: flex; align-items: center; gap: 8px; }
+  .codigo {
+    flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums;
+    font-size: var(--v2-fuente-control-tamano); line-height: var(--v2-fuente-control-alto-linea); color: var(--v2-color-texto-etiqueta);
+  }
+  /* TextBox AcceptsReturn de 88: padding 8x12, texto arriba (ControlesV2.axaml). */
+  .multilinea { height: 88px; align-items: flex-start; padding: 8px 12px; }
+</style>
+</head>
+<body>
+<!-- Datos: DatosAcceso.Reset() (Task 13). -->
+<div class="v2-ventana">
+  <div class="v2-tarjeta tarjeta-acceso">
+    <div class="v2-titulo-login centro">Recuperar acceso de Admin</div>
+    <span class="v2-boton v2-boton--secundario boton-completo mt-16">1) Generar código de recuperación</span>
+    <div class="v2-campo mt-16">
+      <div class="v2-campo-etiqueta"><span>Código de máquina</span></div>
+      <div class="fila-codigo"><span class="codigo">7F3A-91C2-4D8E-B605</span><span class="v2-boton v2-boton--secundario">Copiar</span></div>
+    </div>
+    <div class="v2-campo mt-16">
+      <div class="v2-campo-etiqueta"><span>Desafío</span></div>
+      <div class="fila-codigo"><span class="codigo">K4PZ-8QWN-2M7R</span><span class="v2-boton v2-boton--secundario">Copiar</span></div>
+    </div>
+    <div class="v2-campo mt-16">
+      <div class="v2-campo-etiqueta"><span>Token de reset (del proveedor)</span></div>
+      <div class="v2-input multilinea"><span class="v2-input-placeholder">Pegá el token firmado</span></div>
+    </div>
+    <div class="v2-campo mt-16">
+      <div class="v2-campo-etiqueta"><span>Nueva contraseña de Admin</span></div>
+      <div class="v2-input"><span class="v2-input-placeholder">Nueva contraseña</span></div>
+    </div>
+    <span class="v2-boton v2-boton--primario v2-boton--deshabilitado boton-completo mt-16">2) Resetear Admin</span>
+    <span class="v2-boton v2-boton--ghost boton-completo mt-16">Volver al login</span>
+  </div>
+</div>
+</body>
+</html>

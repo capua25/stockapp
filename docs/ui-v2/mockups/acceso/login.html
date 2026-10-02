@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Acceso: Login (UI v2)</title>
+<link rel="stylesheet" href="../_base/tokens.css">
+<link rel="stylesheet" href="../_base/base.css">
+<style>
+  /* Layout propio de las pantallas fuera del shell: el mismo que LoginView.axaml (card de 400
+     centrada, padding 32, bloques separados por Margin). */
+  .v2-ventana { display: flex; align-items: center; justify-content: center; }
+  .tarjeta-acceso { position: relative; z-index: 1; width: var(--v2-ancho-card-login); padding: 32px; display: flex; flex-direction: column; }
+  /* Marca de agua del logo (P5): el mismo logo, escala y opacidad que LoginView.axaml
+     (Image.marca-agua: Stretch Uniform, centrada, Opacity 0.28, scale(0.85)), detrás de la card.
+     La comparación de píxeles la oculta con visibility:hidden (ocultarEnMockup, Task 12);
+     LoginMarcaAguaTests exige que estos valores sigan siendo 0.28 y 0.85. */
+  .marca-agua { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0.28; transform: scale(0.85); }
+  .centro { text-align: center; }
+  .mt-2 { margin-top: 2px; }
+  .mt-12 { margin-top: 12px; }
+  .mt-16 { margin-top: 16px; }
+  .mt-20 { margin-top: 20px; }
+  .boton-completo { display: flex; width: 100%; }
+  .enlace-centrado { align-self: center; }
+</style>
+</head>
+<body>
+<!-- Datos: DatosAcceso.Login() (Task 12). -->
+<div class="v2-ventana">
+  <img class="marca-agua" src="../../../../src/StockApp.Presentation/Assets/carmelo-original.png" alt="">
+  <div class="v2-tarjeta tarjeta-acceso">
+    <div class="v2-titulo-login centro">Gestión Municipal</div>
+    <div class="v2-marca-subtitulo centro mt-2">Municipio de Carmelo</div>
+    <div class="v2-texto-secundario centro mt-16">Ingresá tus credenciales para continuar.</div>
+    <div class="v2-campo mt-16">
+      <div class="v2-campo-etiqueta"><span>Usuario</span></div>
+      <div class="v2-input"><span class="v2-input-placeholder">Nombre de usuario</span></div>
+    </div>
+    <div class="v2-campo mt-16">
+      <div class="v2-campo-etiqueta"><span>Contraseña</span></div>
+      <div class="v2-input"><span class="v2-input-placeholder">Contraseña</span></div>
+    </div>
+    <span class="v2-boton v2-boton--primario v2-boton--deshabilitado boton-completo mt-20">Entrar</span>
+    <span class="v2-enlace enlace-centrado mt-12">No puedo entrar / resetear Admin</span>
+    <div class="v2-version centro mt-16">v0.4.0</div>
+  </div>
+</div>
+</body>
+</html>
