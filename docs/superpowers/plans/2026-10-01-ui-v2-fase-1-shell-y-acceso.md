@@ -41,6 +41,30 @@ Lo que se hace (la más estricta que respeta §6.5): **la marca de agua se exclu
 
 Riesgo residual, aceptado: la posición exacta de la marca entre Skia y Chromium no se compara píxel a píxel. Lo acotan el test de la región y de la escala, el valor idéntico en el mockup y la revisión visual del usuario; no se compensa con umbral.
 
+## Resolución real de las PCs del municipio: 1366×768 (dato del usuario, 2026-10-01)
+
+Varias PCs del municipio tienen pantalla de **1366×768** (engram #2679, topic `contexto/resolucion-pcs-municipio`). Es un ancho real de uso, no un caso borde: el plan lo trata como tamaño de aceptación de primera clase junto con 1280×760.
+
+**Cuánto ancho le queda a las vistas.** La spec fija el sidebar v2 en **240** (§2.2 y §4.1; el `Border` de 240 incluye su borde derecho de 1). El sidebar actual mide 232.
+
+| Ventana | Sidebar | Ancho para la vista |
+|---|---|---|
+| 1366 con el sidebar actual | 232 | 1134 |
+| **1366 con el sidebar v2** | **240** | **1126** |
+| 1280 (tamaño de los mockups) | 240 | 1040 |
+
+**Riesgo anotado.** El sidebar v2 le saca 8 px más a cada vista que el actual (1126 contra 1134). Las grillas ya trabajan en modo desborde a ese ancho (el Historial de movimientos no entra con el piso de 160 de las columnas `*` y muestra scroll horizontal), así que cada píxel cuenta. Ni esta fase ni la spec reducen el sidebar: lo que se hace es medir y reportar (Task 11, Step 5b). Si el usuario quiere recuperar los 8 px, la decisión es suya y toca la spec (§2.2, §4.1) y los tokens, no un ajuste de esta fase.
+
+**Alto.** 768 es el alto de la PANTALLA: la ventana maximizada tiene menos de client area (barra de tareas y barra de título). El sidebar del Administrador ya no entraba en 760 (decisión P4: `ScrollViewer` con barra `Auto`, marca arriba y pie abajo fijos); a 768 de pantalla entra menos todavía. Hay que verlo bien con la barra `Auto` a ese alto (Task 11, Step 5b y Task 17, Step 4).
+
+**Qué cambia en el plan.**
+
+1. La herramienta hoy está cableada a 1280×760 (`Lienzo.cs`, `CapturadorMockup`, `RenderizadorVista`, `.v2-ventana` en `base.css`): Task 5b la parametriza.
+2. Todo mockup se genera y se aprueba a 1280×760 Y a 1366×768 (Tasks 6 a 9, Step de captura y GATE).
+3. Toda comparación contra mockup corre en ambos tamaños (Tasks 11 a 16).
+4. Toda verificación orgánica incluye una ventana de 1366×768 (Task 17, Step 4).
+5. La regla queda escrita para las Fases 2 a 7 en "Convenciones que heredan las fases siguientes".
+
 ## Decisiones que se confirman al aprobar cada mockup (Tasks 6 a 9)
 
 No bloquean el arranque: son detalles visuales que la spec no fija y que el usuario resuelve mirando el mockup. Si cambia alguno, se ajusta el mockup Y el componente/estilo en la misma task del mockup, antes de la task de XAML.
@@ -72,8 +96,9 @@ No bloquean el arranque: son detalles visuales que la spec no fija y que el usua
 - `Classes="ui2"` en la RAÍZ de cada vista migrada y NUNCA en un contenedor que hospede vistas no migradas: en `ShellMainView` va en el `Border` del sidebar (no en el `Grid` raíz, que contiene el `ContentControl` de contenido); en `AccesoLimitadoView` va en el contenedor del aviso (no en la raíz, que hospeda `MantenimientoView`); en los diálogos va en el `Border` raíz del contenido (para poder extraerlo en la comparación); `MainWindow` no lo lleva.
 - Dentro de una vista v2, todo `TextBlock` lleva una clase tipográfica v2 o sus propiedades tipográficas como valor local desde recursos `V2*`: si no, hereda la tipografía vieja global de `Themes/Typography.axaml`.
 - Componentes v2: `xmlns:v2="using:StockApp.Presentation.Controls.V2"`; tokens `V2*`; variables CSS `--v2-*`. Cada clase `v2-*` de `base.css` replica la geometría de su `ControlTheme`/estilo: si cambia uno, cambia el otro en el mismo commit.
-- Mockups (§6.1): `docs/ui-v2/mockups/<modulo>/<pantalla>.html`, 1280×760, `../_base/tokens.css` + `../_base/base.css`, todo dentro de `<div class="v2-ventana">`, datos fijos idénticos a los del ViewModel del test. Solo colores sólidos, bordes de 1px, radios, una `BoxShadow`, Inter, px enteros. Prohibido: gradientes, blur, transparencias apiladas, transiciones, pseudo-elementos decorativos, `text-shadow`. Se aprueban por módulo, ANTES del XAML.
+- Mockups (§6.1): `docs/ui-v2/mockups/<modulo>/<pantalla>.html`, 1280×760 Y 1366×768 (mismo HTML, el tamaño de la ventana lo fija el capturador: Task 5b), `../_base/tokens.css` + `../_base/base.css`, todo dentro de `<div class="v2-ventana">`, datos fijos idénticos a los del ViewModel del test. Solo colores sólidos, bordes de 1px, radios, una `BoxShadow`, Inter, px enteros. Prohibido: gradientes, blur, transparencias apiladas, transiciones, pseudo-elementos decorativos, `text-shadow`. Se aprueban por módulo, ANTES del XAML.
 - Umbral (§6.5): `CompararConMockup` con los valores calibrados (11 teselas, 1.68%). Uno mayor solo con `UmbralAprobado` registrado tras revisar CADA tesela densa con el usuario; 16 o más exige además `MutacionPalidaEnRojo`. Nunca se sube para tapar un defecto. La marca de agua del Login no es excepción: se excluye de la comparación y se custodia con su propio test (ver "Estrategia de comparación de la marca de agua (P5)"), no con un umbral.
+- Resolución (2026-10-01): varias PCs del municipio son de 1366×768. Toda comparación contra mockup y toda verificación orgánica incluyen 1366×768 además de 1280×760. El umbral calibrado (11 teselas, 1.68%) es el MISMO a ambos tamaños: si 1366×768 no pasa, se diagnostica (nunca se sube) y se reporta al usuario por el procedimiento de spec §6.5.
 - Diferencia de tono aceptada (2026-09-30): el texto de la app sale 7-18% más claro que en Chromium. Lo que se exige idéntico es la geometría.
 - Los comentarios de `.axaml` NO pueden contener `--` (AVLN1001, cascadea a MSB4025).
 - En vistas con `x:DataType`, un binding mal escrito es error de build: compilar con la solución tras cada cambio de XAML.
@@ -85,6 +110,16 @@ No bloquean el arranque: son detalles visuales que la spec no fija y que el usua
 - Versiones de paquetes SOLO en `Directory.Packages.props`.
 - La ventana de la app se llama "Gestión Municipal" (la buscan los scripts de `scripts/gui-verificacion/`).
 - Commits: conventional commits en español, SIN `Co-Authored-By` ni atribución de IA. No se pushea. Merge a `main` UNA sola vez al final de todas las fases (no en esta).
+
+## Convenciones que heredan las fases siguientes (2 a 7)
+
+Reglas que esta fase fija y que las demás copian tal cual. Las tres primeras vienen de lo que entró a `main` el 2026-10-01 y que toda vista v2 tiene que respetar (el merge de `main` a `feat/ui-v2` del mismo día las trajo).
+
+1. **Resolución 1366×768.** Todo mockup se genera y aprueba a 1280×760 y a 1366×768. Toda comparación (`CompararConMockup`) corre en ambos tamaños. Toda verificación orgánica incluye una ventana de 1366×768. Cada task de pantalla con grilla reporta cuánto ancho le queda a la vista a 1366 (1126 con el sidebar de 240) y si la grilla entra o desborda. La grilla con desborde a 1366 es válida (scroll horizontal), pero se muestra al usuario en el mockup.
+2. **Formato es-UY.** Todo número, importe y fecha de una vista v2 se formatea con `FormatoEsUy` (`src/StockApp.Domain/Formato/FormatoEsUy.cs`) y sus converters (`DecimalConverter`; el `DecimalPuntoConverter` se borró). Nunca un `StringFormat` suelto en el XAML. La cultura la aplica `CulturaApp.Aplicar()` en `Program.Main`; los tests que dependen de formato no fuerzan una cultura que no difiera de la real (forzar es-AR para probar independencia de es-UY no prueba nada). Los campos numéricos de entrada llevan `EntradaNumericaBehavior`.
+3. **Errores de entrada.** `ErroresDeEntradaBehavior` se aplica por el estilo global de `TextBox` (`Themes/Controls.axaml`) y lo hereda `.ui2 TextBox`; los estilos v2 no pueden pisarlo. Todo comando de guardar o confirmar suma `!HayErroresDeEntrada` a su `CanExecute` (`ViewModelBase`), y el botón lleva `ToolTip.Tip="{Binding MotivoBloqueoPorErrores}" ToolTip.ShowOnDisabled="True"`. Una vista con formulario sin ese par de bindings no se da por migrada.
+4. **Grillas.** Las `DataGrid` heredan del tema global (`Themes/DataGrid.axaml`) el reajuste de columnas Auto (`DataGridColumnasAutoBehavior`), el piso de 160 en las columnas `*` y la retención de edición inválida (`RetenerEdicionInvalida`). No se declaran anchos de peor caso ni se repiten esos setters en la vista. El estilo `.ui2 DataGridCell.num` NO pone `HorizontalContentAlignment` (la derecha la hace el TextBlock): reponerlo recorta el último carácter al ordenar. Guardianes: `DataGridV2ConBehaviorsGlobalesTests` y `DataGridV2Tests.CeldaNum_ALaDerechaConCifrasTabulares`.
+5. **Toolkit GUI.** `scripts/gui-verificacion/` es fail-closed: nunca captura el escritorio ni manda input sin una ventana confirmada, y falla con códigos de salida distintos de 0 (tabla en su README). Riesgo para la verificación orgánica: un popup de Avalonia (ComboBox, AutoCompleteBox) que se despliega fuera de la ventana no se puede clickear con `click.sh` (el click se acota al rectángulo de la ventana principal); hay que usar el teclado dentro del combo. Cerrar siempre el popup con `Escape` antes de capturar. Esto pesa a 1366×768, donde un desplegable cerca del borde inferior sobresale con más facilidad.
 
 ## Review Focus
 
@@ -1341,6 +1376,31 @@ git commit -m "feat(ui-v2): ItemSidebar, tipografías del shell y del acceso, bo
 
 ---
 
+### Task 5b: La herramienta de comparación admite 1366×768
+
+**Por qué.** Varias PCs del municipio son de 1366×768 (ver "Resolución real de las PCs"). `Lienzo.Ancho`/`Lienzo.Alto` están cableados a 1280×760 en el capturador de mockups, en el renderizador de vistas y en `.v2-ventana` de `base.css`. Sin esta task, las Tasks 6 a 16 no pueden comparar a 1366.
+
+**Files:**
+- Modify: `tools/StockApp.UiV2.Herramientas/Lienzo.cs` (un tipo `TamanoLienzo(Ancho, Alto)` con dos valores: `Estandar` 1280×760 y `Municipio` 1366×768; `Ancho`/`Alto` actuales quedan como alias de `Estandar` para no romper llamadores)
+- Modify: `tools/StockApp.UiV2.Herramientas/Mockups/CapturadorMockup.cs` (parámetro `TamanoLienzo`; el viewport y la altura/ancho de `.v2-ventana` salen del tamaño; el chequeo de desborde usa el mismo tamaño)
+- Modify: `tools/StockApp.UiV2.Herramientas/Cli.cs` (`capturar-mockup <html> <png> [--tamano 1366x768]`)
+- Modify: `docs/ui-v2/mockups/_base/base.css` (`.v2-ventana`: `width: var(--v2-ventana-ancho, 1280px); height: var(--v2-ventana-alto, 760px);`; el capturador define las dos variables con `AddStyleTag`, así el mismo HTML sirve para ambos tamaños. Cada clase `v2-*` replica la geometría de su estilo, por lo que un mockup con un ancho fijo adentro no se estira solo: se ajusta pantalla por pantalla al aprobarlo)
+- Modify: `tests/StockApp.Presentation.VisualTests/Comparacion/RenderizadorVista.cs` y `ComparacionVisual.cs` (parámetro opcional `TamanoLienzo? tamano = null`; sin él, 1280×760; la carpeta de salida y el nombre de la pantalla llevan el sufijo `@1366x768` para no pisar la corrida estándar)
+- Modify: `scripts/ui-v2/comparar.sh` (el índice agrupa por pantalla y tamaño)
+- Modify: `docs/ui-v2/herramientas.md` (documentar `--tamano` y el sufijo)
+- Create: tests en `tests/StockApp.UiV2.Herramientas.Tests/` y `tests/StockApp.Presentation.VisualTests/RenderizadorVistaTests.cs` (casos 1366×768)
+
+**Interfaces:**
+- Consumes: la herramienta de la Fase 0 tal como quedó (leer `Lienzo.cs`, `CapturadorMockup.cs`, `RenderizadorVista.cs`, `ComparacionVisual.cs` antes de tocar nada).
+- Produces: `capturar-mockup --tamano 1366x768`; `ComparacionVisual.CompararConMockup(..., tamano: TamanoLienzo.Municipio)`; PNG de salida de 1366×768.
+
+- [ ] **Step 1: Tests en rojo.** (a) `RenderizadorVista` con `TamanoLienzo.Municipio` devuelve un PNG de 1366×768 y falla con un mensaje claro si el frame no mide eso (hoy lo chequea contra `Lienzo.Ancho/Alto`). (b) `CapturadorMockup` con 1366×768 produce un PNG de 1366×768 de un HTML mínimo con `.v2-ventana`, y el chequeo de desborde falla si algo sale de ESE tamaño (no de 1280×760). (c) El tamaño por defecto sigue dando 1280×760 (regresión). Correr: `dotnet test tests/StockApp.UiV2.Herramientas.Tests/StockApp.UiV2.Herramientas.Tests.csproj` y `dotnet test tests/StockApp.Presentation.VisualTests/StockApp.Presentation.VisualTests.csproj --filter "FullyQualifiedName~RenderizadorVista"`. Expected: rojo.
+- [ ] **Step 2: Implementar** lo de Files, mínimo. No cambiar el comportamiento a 1280×760.
+- [ ] **Step 3: Verde y regresión.** Los mismos tests en verde y `Catalogo_IgualAlMockup` de la Fase 0 sin tocar (sigue a 1280×760, mismo umbral).
+- [ ] **Step 4: Catálogo a 1366×768 (calibración de cordura).** Correr `Catalogo_IgualAlMockup` también a 1366×768. Si pasa con el umbral actual, anotarlo en el `progress.md`. Si no pasa, NO subir el umbral: diagnosticar (¿una clase `v2-*` con ancho fijo? ¿una tesela de borde?) y reportar al usuario por el procedimiento de spec §6.5 antes de seguir con la Task 6.
+- [ ] **Step 5: Mutación quitando.** Backup con `cp` de `CapturadorMockup.cs`; hacer que ignore el tamaño pedido (quitar el uso de `TamanoLienzo` del viewport) → rojo en el test (b); restaurar con `cp`.
+- [ ] **Step 6: Commit.** `git commit -m "feat(ui-v2): la herramienta de comparación admite 1366x768"`
+
 ## Bloque B — Mockups por módulo y aprobación del usuario (GATE antes del XAML)
 
 Spec §6.1 y §7: "mockups de sus pantallas → aprobación del usuario → XAML". Cada task de este bloque termina en un GATE: el ejecutor PARA, presenta los mockups al usuario y no sigue hasta tener la aprobación explícita del módulo. Si el usuario pide cambios, se aplican en el mockup (y, si tocan un componente o una clase de `base.css`, también en su `ControlTheme`/estilo de la Task 5, con sus tests) dentro de la misma task, y se vuelve a presentar.
@@ -1516,15 +1576,16 @@ Expected: el `grep -c` imprime `0` para cada archivo. Si `icono-svg` sale con ex
 ```bash
 for p in sidebar-admin sidebar-operador; do
   dotnet run --project tools/StockApp.UiV2.Herramientas -- capturar-mockup docs/ui-v2/mockups/shell/$p.html artifacts/ui-v2/mockups/shell-$p.png
+  dotnet run --project tools/StockApp.UiV2.Herramientas -- capturar-mockup docs/ui-v2/mockups/shell/$p.html artifacts/ui-v2/mockups/shell-$p@1366x768.png --tamano 1366x768
 done
 dotnet test tests/StockApp.UiV2.Herramientas.Tests/StockApp.UiV2.Herramientas.Tests.csproj --filter "FullyQualifiedName~MockupsDelRepo_RespetanLaConvencion"
 ```
 
-Expected: dos PNG de 1280×760 sin error de fuentes ni de desborde (el capturador falla si Inter no cargó o si algo se sale de la ventana); el test de convención en verde. Abrir los PNG y chequear a ojo contra spec §4.1: pastilla activa, headers en gris claro, pie con borde superior.
+Expected: dos PNG de 1280×760 y dos de 1366×768 (a 768 de alto, el Administrador desborda más: la navegación se corta antes y el pie queda fijo abajo) sin error de fuentes ni de desborde (el capturador falla si Inter no cargó o si algo se sale de la ventana); el test de convención en verde. Abrir los PNG y chequear a ojo contra spec §4.1: pastilla activa, headers en gris claro, pie con borde superior.
 
 - [ ] **Step 5: GATE — aprobación del usuario**
 
-PARAR. Presentar al usuario los dos HTML (abrirlos en un navegador Chromium/Edge: `calc-size()` solo funciona ahí) o los PNG de `artifacts/ui-v2/mockups/`, junto con la lista de "Decisiones que se confirman al aprobar cada mockup" que corresponden al sidebar. No seguir hasta tener "aprobado" explícito. Registrar en `.superpowers/sdd/2026-10-01-ui-v2-fase-1-shell-y-acceso/progress.md` (crearlo si no existe): `Mockups shell: aprobados por <quién> <yyyy-MM-dd>; cambios: <lista o "ninguno">`.
+PARAR. Presentar al usuario los dos HTML (abrirlos en un navegador Chromium/Edge: `calc-size()` solo funciona ahí) o los PNG de `artifacts/ui-v2/mockups/` (LOS DOS TAMAÑOS: 1280×760 y 1366×768; el usuario aprueba ambos), junto con la lista de "Decisiones que se confirman al aprobar cada mockup" que corresponden al sidebar. No seguir hasta tener "aprobado" explícito. Registrar en `.superpowers/sdd/2026-10-01-ui-v2-fase-1-shell-y-acceso/progress.md` (crearlo si no existe): `Mockups shell: aprobados por <quién> <yyyy-MM-dd>; cambios: <lista o "ninguno">`.
 
 - [ ] **Step 6: Commit**
 
@@ -1773,6 +1834,7 @@ Antes de escribirlo, verificar en `BloqueoLicenciaViewModel.cs` el `CanExecute` 
 ```bash
 for p in login login-error login-acceso-limitado reset bloqueo-licencia; do
   dotnet run --project tools/StockApp.UiV2.Herramientas -- capturar-mockup docs/ui-v2/mockups/acceso/$p.html artifacts/ui-v2/mockups/acceso-$p.png
+  dotnet run --project tools/StockApp.UiV2.Herramientas -- capturar-mockup docs/ui-v2/mockups/acceso/$p.html artifacts/ui-v2/mockups/acceso-$p@1366x768.png --tamano 1366x768
 done
 dotnet test tests/StockApp.UiV2.Herramientas.Tests/StockApp.UiV2.Herramientas.Tests.csproj --filter "FullyQualifiedName~MockupsDelRepo_RespetanLaConvencion"
 ```
@@ -1781,7 +1843,7 @@ Expected: cinco PNG sin error; convención en verde. Chequear a ojo: card centra
 
 - [ ] **Step 7: GATE — aprobación del usuario**
 
-PARAR. Presentar los cinco mockups con las decisiones de "Login y pantallas fuera del shell" de la lista de arriba (enlaces en vez de botones ghost, código en Inter, éxito del Reset como `Alerta` info, "Entrar" deshabilitado) y las decisiones P5/P6 ya tomadas (marca de agua conservada, con el logo visible en los tres mockups del Login, y la línea "Municipio de Carmelo"): pedirle que confirme que el logo se ve como en la app actual. Para la comparación de píxeles el logo se oculta (Task 12), pero ESTOS mockups lo llevan puesto: es lo que el usuario aprueba. No seguir sin "aprobado". Registrar en el `progress.md`: `Mockups acceso: aprobados por <quién> <fecha>; cambios: …`.
+PARAR. Presentar los cinco mockups (a 1280×760 Y a 1366×768; el usuario aprueba ambos tamaños) con las decisiones de "Login y pantallas fuera del shell" de la lista de arriba (enlaces en vez de botones ghost, código en Inter, éxito del Reset como `Alerta` info, "Entrar" deshabilitado) y las decisiones P5/P6 ya tomadas (marca de agua conservada, con el logo visible en los tres mockups del Login, y la línea "Municipio de Carmelo"): pedirle que confirme que el logo se ve como en la app actual. Para la comparación de píxeles el logo se oculta (Task 12), pero ESTOS mockups lo llevan puesto: es lo que el usuario aprueba. No seguir sin "aprobado". Registrar en el `progress.md`: `Mockups acceso: aprobados por <quién> <fecha>; cambios: …`.
 
 - [ ] **Step 8: Commit**
 
@@ -1894,6 +1956,7 @@ Mismo `<head>` y `<style>` (`<title>Diálogo: mensaje (UI v2)</title>`):
 ```bash
 for p in confirmacion mensaje pedir-texto; do
   dotnet run --project tools/StockApp.UiV2.Herramientas -- capturar-mockup docs/ui-v2/mockups/dialogos/$p.html artifacts/ui-v2/mockups/dialogos-$p.png
+  dotnet run --project tools/StockApp.UiV2.Herramientas -- capturar-mockup docs/ui-v2/mockups/dialogos/$p.html artifacts/ui-v2/mockups/dialogos-$p@1366x768.png --tamano 1366x768
 done
 ```
 
@@ -1901,7 +1964,7 @@ Expected: tres PNG sin error.
 
 - [ ] **Step 5: GATE — aprobación del usuario**
 
-PARAR. Presentar los tres mockups con las decisiones de "Diálogos" y la decisión P2 (Reclasificar queda para la Fase 5). Aclarar que la barra de título del sistema no forma parte de la comparación. Registrar en `progress.md`: `Mockups diálogos: aprobados por <quién> <fecha>; cambios: …`.
+PARAR. Presentar los tres mockups (a 1280×760 Y a 1366×768; el usuario aprueba ambos tamaños) con las decisiones de "Diálogos" y la decisión P2 (Reclasificar queda para la Fase 5). Aclarar que la barra de título del sistema no forma parte de la comparación. Registrar en `progress.md`: `Mockups diálogos: aprobados por <quién> <fecha>; cambios: …`.
 
 - [ ] **Step 6: Commit**
 
@@ -2045,6 +2108,7 @@ Mismo `<head>` y `<style>` que `modal.html` (`<title>Actualización: bloqueo cr�
 ```bash
 for p in banner modal bloqueo modo-degradado; do
   dotnet run --project tools/StockApp.UiV2.Herramientas -- capturar-mockup docs/ui-v2/mockups/actualizaciones/$p.html artifacts/ui-v2/mockups/actualizaciones-$p.png
+  dotnet run --project tools/StockApp.UiV2.Herramientas -- capturar-mockup docs/ui-v2/mockups/actualizaciones/$p.html artifacts/ui-v2/mockups/actualizaciones-$p@1366x768.png --tamano 1366x768
 done
 ```
 
@@ -2052,7 +2116,7 @@ Expected: cuatro PNG sin error.
 
 - [ ] **Step 6: GATE — aprobación del usuario**
 
-PARAR. Presentar los cuatro mockups con las decisiones de "Overlays" (incluida la de los textos sin tilde). Aclarar que en la app el overlay se dibuja encima del Login o del shell, sin fondo propio (no cambia su lógica, §4.5). Registrar en `progress.md`: `Mockups actualizaciones: aprobados por <quién> <fecha>; cambios: …`.
+PARAR. Presentar los cuatro mockups (a 1280×760 Y a 1366×768; el usuario aprueba ambos tamaños) con las decisiones de "Overlays" (incluida la de los textos sin tilde). Aclarar que en la app el overlay se dibuja encima del Login o del shell, sin fondo propio (no cambia su lógica, §4.5). Registrar en `progress.md`: `Mockups actualizaciones: aprobados por <quién> <fecha>; cambios: …`.
 
 - [ ] **Step 7: Commit**
 
@@ -2749,6 +2813,13 @@ Expected: PASS de los 9 nuevos y de TODOS los de `ShellMainViewGatesTests` sin m
 
 Run: `scripts/ui-v2/comparar.sh Sidebar`
 Expected: las dos pantallas APROBADAS (11 teselas o menos, 1.68% o menos) y sin texto recortado. Abrir `artifacts/ui-v2/comparacion/index.html` y revisar cada página: el rojo/naranja solo en bordes de glifos.
+
+- [ ] **Step 5b: 1366×768 (resolución real de las PCs)**
+
+Run: `scripts/ui-v2/comparar.sh Sidebar` incluye ya los dos tamaños (Task 5b). Expected: las cuatro comparaciones (admin y operador, a 1280×760 y a 1366×768) APROBADAS con el mismo umbral, sin texto recortado. Además, registrar en el `progress.md`, con números medidos y no de memoria:
+- Ancho que le deja el sidebar a las vistas a 1366: esperado 1366 − 240 = **1126** (la spec fija 240; el sidebar actual deja 1134). Anotarlo como riesgo para las grillas, que a 1366 ya desbordan (Historial de movimientos).
+- El sidebar del Administrador a 768 de alto: la barra `Auto` (P4) se ve bien, la marca y el pie quedan fijos, el pulgar de la barra no tapa ningún texto y el último ítem ("Mantenimiento") es alcanzable scrolleando. Mirar `artifacts/ui-v2/comparacion/shell-sidebar-admin@1366x768/app.png`.
+- El nombre de usuario largo del pie sigue recortándose con `TextTrimming` y no empuja el botón de cerrar sesión.
 
 - [ ] **Step 6: P4 — la barra de scroll del Administrador**
 
@@ -4378,7 +4449,7 @@ Expected: ambos con exit 0 (esta fase no cambia `tokens.json`).
 scripts/ui-v2/comparar.sh
 ```
 
-Expected: TODAS las filas de `artifacts/ui-v2/comparacion/index.html` APROBADAS (catálogo de la Fase 0 + 2 shell + 5 acceso + 3 diálogos + 4 actualizaciones = 15 pantallas), ninguna con `UmbralAprobado` salvo las que el usuario haya aprobado explícitamente por el procedimiento de spec §6.5.
+Expected: TODAS las filas de `artifacts/ui-v2/comparacion/index.html` APROBADAS, a 1280×760 y a 1366×768 (catálogo de la Fase 0 + 2 shell + 5 acceso + 3 diálogos + 4 actualizaciones = 15 pantallas, 30 filas con los dos tamaños), ninguna con `UmbralAprobado` salvo las que el usuario haya aprobado explícitamente por el procedimiento de spec §6.5.
 
 - [ ] **Step 4: Verificación orgánica (spec §6.4) — app real contra la base**
 
@@ -4388,9 +4459,11 @@ Preparación (memoria del proyecto y ledger de la Fase 0):
 - Credencial de desarrollo: `admin` / `Admin1234`.
 - WSLg tiene que estar levantado (en la Fase 0 la sesión RDP de WSLg se cayó y bloqueó el cierre). Herramientas: `scripts/gui-verificacion/` (xdotool sin root; capturas con PowerShell, la ventana se llama "Gestión Municipal").
 
+Tamaños: el recorrido completo se hace con la ventana a **1366×768** (resolución real de varias PCs del municipio) y los pasos 1, 2 y 6 se repiten además al tamaño por defecto de la ventana. A 1366×768, mirar en cada paso: (a) que ninguna pantalla recorte texto ni deje un control fuera de la ventana; (b) que el sidebar del Administrador scrollee con la barra `Auto` y el pie quede visible (a 768 de pantalla, el client area maximizado es menor: medirlo y anotarlo); (c) cuánto ancho le queda a la vista de contenido (1126) y si Productos e Inicio (no migradas) siguen usables. Con el toolkit fail-closed (README de `scripts/gui-verificacion/`): si un popup se despliega fuera de la ventana, usar el teclado y cerrarlo con `Escape` antes de capturar.
+
 Recorrido, capturando cada pantalla:
 1. Login: campos vacíos ("Entrar" deshabilitado), credencial equivocada (alerta de error), Enter en Contraseña con la credencial correcta (entra). Con el logo de Carmelo semitransparente detrás de la card (P5: la comparación de píxeles no lo ve, acá lo mira el usuario) y la línea "Municipio de Carmelo" bajo el título (P6); en el sidebar, la misma línea bajo "Gestión Municipal".
-2. Sidebar como Administrador: las 5 secciones; navegar a CADA ítem visible y ver que la pastilla activa acompaña; que la navegación scrollea hasta "Mantenimiento"; que las vistas de contenido (no migradas) se ven IGUAL que antes. Para esto último, comparar Productos e Inicio contra las capturas "antes" de la Fase 0 con `dotnet run --project tools/StockApp.UiV2.Herramientas -- comparar-png <antes.png> <despues.png> <diff.png>` sobre el área de contenido (la columna de la derecha cambia de ancho de 232 a 240: recortar ambas capturas a la misma región de contenido antes de comparar).
+2. Sidebar como Administrador: las 5 secciones; navegar a CADA ítem visible y ver que la pastilla activa acompaña; que la navegación scrollea hasta "Mantenimiento"; que las vistas de contenido (no migradas) se ven IGUAL que antes. Para esto último, comparar Productos e Inicio contra las capturas "antes" de la Fase 0 con `dotnet run --project tools/StockApp.UiV2.Herramientas -- comparar-png <antes.png> <despues.png> <diff.png>` sobre el área de contenido (la columna de la derecha cambia de ancho de 232 a 240, o sea de 1134 a 1126 a 1366: recortar ambas capturas a la misma región de contenido antes de comparar).
 3. Crear y editar un producto desde el shell nuevo (pantallas viejas hospedadas: confirma que el `ContentControl` y la navegación no cambiaron).
 4. Usuario con permisos mixtos: con Administración → Usuarios, crear (o reutilizar) un Operador con `GestionarProductos`, `RegistrarMovimientos`, `VerFinanzas` y `GestionarTareas`; entrar con él y ver solo INVENTARIO (sin "Ingreso por factura"), FINANZAS y GESTIÓN (sin "Documentos").
 5. Revocación en caliente: con el Operador logueado, desde otra sesión de Administrador sacarle `GestionarTareas`; en el Operador navegar a otra pantalla y ver desaparecer "Tareas" y el header "GESTIÓN".
@@ -4435,6 +4508,10 @@ No se pushea ni se mergea.
 | El sidebar de Administrador desborda 760 y la barra de scroll de Fluent puede dibujarse distinta que en el mockup. | P4 (barra `Auto`, decidido) + Task 11 Step 6 (medir la franja y replicarla en el mockup). |
 | La card centrada dentro de un `ScrollViewer` puede quedar arriba en vez de centrada. | Task 12 Step 6 trae la corrección (Grid con `MinHeight` del viewport). |
 | Texto centrado verticalmente en alturas impares (ítem de 32 con línea de 15) puede caer en medio píxel distinto entre Skia y Chromium. | Es el mismo ruido de centrado subpíxel que la calibración ya absorbe (spec §6.5); si suma teselas densas, se iguala con un margen entero en ambos lados, no con umbral. |
+| El sidebar v2 (240) deja 1126 px de vista a 1366 (el actual dejaba 1134): 8 px menos para grillas que a ese ancho ya trabajan en desborde (Historial). | Task 11 Step 5b lo mide y lo reporta; no se achica el sidebar en esta fase (spec §2.2, §4.1). Si el usuario quiere recuperar los 8 px, es una decisión de spec. |
+| El sidebar del Administrador a 768 de alto (client area menor) muestra menos ítems antes de scrollear. | P4 (barra `Auto`) + Task 11 Step 5b y Task 17 Step 4 a 1366×768. |
+| La herramienta está cableada a 1280×760: sin Task 5b no hay comparación a 1366×768. | Task 5b, antes de los mockups. |
+| El umbral (11 teselas, 1.68%) se calibró a 1280×760; a 1366×768 hay ~8% más de píxeles y puede sumar teselas de borde. | Task 5b Step 4 lo prueba con el catálogo; si no pasa, se diagnostica y se reporta, nunca se sube. |
 | Mockups aprobados que luego no se pueden igualar en Avalonia (p. ej. la barra de scroll). | Todo cambio de un mockup aprobado vuelve al usuario antes del commit (Task 11 Step 6, Task 17 Step 5). |
 | Fuga de estilos `.ui2` a vistas viejas a través del shell o de AccesoLimitado. | Review Focus 1; tests con mutación en Tasks 11 y 14; verificación orgánica Task 17 Step 4.2. |
 | `GuardianDePatronTests` queda con listas vacías al migrar (xUnit falla `MemberData` sin filas). | Tasks 13 y 16 borran la lista y su test cuando se vacía. |
