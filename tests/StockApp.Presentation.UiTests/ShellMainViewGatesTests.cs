@@ -299,8 +299,8 @@ public class ShellMainViewGatesTests
     // ── Importación apagada (2026-09-04) ────────────────────────────────────────
 
     /// <summary>
-    /// Guardián de "invisible": ShellMainViewModel.ImportacionHabilitada = false apaga el único
-    /// ítem del grupo "Importación" aunque el usuario sea Admin (el gate real sigue siendo
+    /// Guardián de "invisible": ShellMainViewModel.ImportacionHabilitada = false apaga el
+    /// ítem Importación (dentro de ADMINISTRACIÓN) aunque el usuario sea Admin (el gate real sigue siendo
     /// EsAdmin && ImportacionHabilitada). Si se reactiva la constante, este test debe pasar a
     /// Assert.True.
     /// </summary>
@@ -313,33 +313,36 @@ public class ShellMainViewGatesTests
     }
 
     /// <summary>
-    /// Con el único ítem del grupo oculto, GrupoNavegacion.EsVisible ("algún hijo visible") cae
-    /// solo -- el grupo entero desaparece del sidebar sin tocar GrupoNavegacion.
+    /// Importación existe como ítem de ADMINISTRACIÓN (spec §4.1) pero queda fuera de ItemsVisibles
+    /// para Admin, mientras la sección sigue visible por sus otros ítems.
     /// </summary>
     [AvaloniaFact]
-    public void Admin_NoVeElGrupoImportacion_PorqueEstaDeshabilitada()
+    public void Admin_ConImportacionDeshabilitada_ElItemExistePeroNoEstaEnItemsVisibles()
     {
         var (_, vm) = Montar(RolUsuario.Admin);
+        var administracion = vm.Grupos.Single(g => g.Titulo == "ADMINISTRACIÓN");
 
-        Assert.False(vm.Grupos.First(g => g.Titulo == "Importación").EsVisible);
+        Assert.Contains(administracion.Items, i => i.Seccion == "Importacion");
+        Assert.DoesNotContain(administracion.ItemsVisibles, i => i.Seccion == "Importacion");
+        Assert.True(administracion.EsVisible);
     }
 
     // ── Task 5.3, Step 4: gates de grupo ──────────────────────────────────────────
 
     [AvaloniaFact]
-    public void OperadorConSoloGestionarMaestrosFinanzas_VeElGrupoFinanzasCONSuTitulo()
+    public void OperadorConSoloGestionarMaestrosFinanzas_VeMaestrosYSuSeccionAdministracionCONSuTitulo()
     {
-        // Bug preexistente que la tanda 5 arregla: el header "Finanzas" estaba gateado por
-        // PuedeVerFinanzas mientras Maestros va por PuedeGestionarMaestrosFinanzas, asi que este
-        // operador veia el boton colgando suelto, sin titulo de seccion arriba.
+        // El header de la sección va por "algún ítem visible": este operador, con SOLO este permiso,
+        // ve Maestros de finanzas (ahora en ADMINISTRACIÓN) y su sección, no el botón suelto.
         var (window, vm) = Montar(RolUsuario.Operador, Permisos.GestionarMaestrosFinanzas);
 
-        var grupoFinanzas = vm.Grupos.First(g => g.Titulo == "Finanzas");
+        var administracion = vm.Grupos.Single(g => g.Titulo == "ADMINISTRACIÓN");
 
-        Assert.True(grupoFinanzas.EsVisible);
-        Assert.Single(grupoFinanzas.ItemsVisibles);
+        Assert.True(administracion.EsVisible);
+        Assert.Equal("MaestrosFinanzas", Assert.Single(administracion.ItemsVisibles).Seccion);
         Assert.True(EsVisible(window, vm.NavMaestrosFinanzasCommand));
         Assert.False(EsVisible(window, vm.NavGastosCommand));
+        Assert.False(vm.Grupos.Single(g => g.Titulo == "FINANZAS").EsVisible);
     }
 
     [AvaloniaFact]
@@ -351,12 +354,20 @@ public class ShellMainViewGatesTests
     }
 
     [AvaloniaFact]
-    public void OperadorConTODOSLosPermisos_NO_VeLosGruposAdminOnly()
+    public void OperadorConTODOSLosPermisos_VeAdministracionPorSusCatalogos_PeroNingunItemSoloDeAdmin()
     {
-        var (_, vm) = Montar(RolUsuario.Operador, Permisos.Todos.ToArray());
+        var (window, vm) = Montar(RolUsuario.Operador, Permisos.Todos.ToArray());
+        var administracion = vm.Grupos.Single(g => g.Titulo == "ADMINISTRACIÓN");
 
-        Assert.False(vm.Grupos.First(g => g.Titulo == "Importación").EsVisible);
-        Assert.False(vm.Grupos.First(g => g.Titulo == "Administración").EsVisible);
+        // La sección se ve por los ítems que sí le corresponden por permiso...
+        Assert.True(administracion.EsVisible);
+        Assert.Contains(administracion.ItemsVisibles, i => i.Seccion == "Categorias");
+        Assert.Contains(administracion.ItemsVisibles, i => i.Seccion == "MaestrosFinanzas");
+        // ...pero ningún ítem estructuralmente Admin-only.
+        Assert.DoesNotContain(administracion.ItemsVisibles, i => i.Seccion is "Usuarios" or "Mantenimiento" or "Importacion");
+        Assert.False(EsVisible(window, vm.NavUsuariosCommand));
+        Assert.False(EsVisible(window, vm.NavMantenimientoCommand));
+        Assert.False(EsVisible(window, vm.NavImportacionCommand));
     }
 
     // ── Ruling 6: revocación en caliente ─────────────────────────────────────────
