@@ -70,7 +70,8 @@ Advertencia y Error salen de `patrones-1.html`. Info no aparece en los mockups d
 - **Sombra de card:** `0 1px 2px rgba(0,0,0,0.05)` — la única sombra del sistema.
 - **Alturas:** input y botón 36; fila de grilla 40; header de grilla 36; ítem de sidebar 32.
 - **Espaciado:** base 4; todo margen, padding y gap de DISEÑO es múltiplo de 4. Excepción de diseño: el padding vertical de 2 de la `Insignia` (valor del mockup aprobado). Los valores que compensan la geometría medida de las plantillas de Avalonia (Padding 13, RowHeight 39, márgenes del mockup que no son enteros ni múltiplos de 4) están listados en §6.5.
-- **Anchos fijos:** sidebar 240; card de formulario máx. 760; card de login 400.
+- **Anchos fijos:** sidebar 240; card de formulario máx. 760; card de login 400. A 1366 el sidebar de 240 le deja 1126 px a la vista de contenido.
+- **Sidebar en 240 (decisión del usuario, 2026-10-02):** el sidebar queda en 240 aunque a 1366 deja 8 px menos que el sidebar actual (232); las grillas que desbordan resuelven con scroll horizontal y el piso de 160 de las columnas proporcionales.
 
 ### 2.3 Tipografía
 
@@ -245,7 +246,7 @@ Requisito central de este rediseño.
 ### 6.1 Un mockup por pantalla
 
 - Uno por pantalla: ~55 de contenido, más shell, pantallas de acceso, diálogos y overlays.
-- Contenido real y datos de ejemplo fijos, a **1280×760**.
+- Contenido real y datos de ejemplo fijos, a **1280×760 y a 1366×768**. Varias PCs del municipio tienen pantalla de 1366×768; es un tamaño de uso real, no un caso borde.
 - Ubicación: `docs/ui-v2/mockups/<modulo>/<pantalla>.html`, usando el CSS generado de tokens.
 - **Solo técnicas que Avalonia replica 1:1:** colores sólidos, bordes de 1px, radios, una única `BoxShadow`, Inter, px enteros, múltiplos de 4.
 - **Prohibido:** gradientes, blur, transparencias apiladas, transiciones, pseudo-elementos decorativos, `text-shadow`.
@@ -253,10 +254,12 @@ Requisito central de este rediseño.
 
 ### 6.2 Herramienta de comparación (se construye en Fase 0)
 
-1. Render headless de la vista Avalonia real a 1280×760 (Avalonia.Headless con Skia, captura de frame), con un ViewModel cargado con **los mismos datos fijos del mockup** → PNG.
-2. Captura del mockup con Playwright al mismo tamaño → PNG.
+1. Render headless de la vista Avalonia real a 1280×760 y a 1366×768 (Avalonia.Headless con Skia, captura de frame), con un ViewModel cargado con **los mismos datos fijos del mockup** → PNG.
+2. Captura del mockup con Playwright al mismo tamaño (a cada uno de los dos) → PNG.
 3. Página de comparación por pantalla: ambas imágenes lado a lado más una imagen de diferencias resaltadas.
 4. Reporte de porcentaje de píxeles distintos.
+
+La comparación corre a ambos tamaños con el mismo umbral (no se relaja para 1366).
 
 ### 6.3 Aceptación
 
@@ -267,7 +270,7 @@ Requisito central de este rediseño.
 
 ### 6.4 Verificación orgánica
 
-Obligatoria por módulo, con la app real contra la base: login, navegar, crear y editar. Salvedad: el render headless y Windows pueden diferir en antialiasing; por eso el umbral no es 0 y **la aprobación final es del usuario mirando la app**.
+Obligatoria por módulo, con la app real contra la base: login, navegar, crear y editar. Salvedad: el render headless y Windows pueden diferir en antialiasing; por eso el umbral no es 0 y **la aprobación final es del usuario mirando la app**. La verificación orgánica incluye una ventana de 1366×768.
 
 ### 6.5 Calibración del umbral (Fase 0)
 
