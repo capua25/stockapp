@@ -65,7 +65,10 @@ public static class CapturadorMockup
         """;
 
     /// <param name="tamano">Tamaño del lienzo; null es <see cref="TamanoLienzo.Estandar"/>.</param>
-    public static async Task CapturarAsync(string rutaHtml, string rutaPng, TamanoLienzo? tamano = null)
+    /// <param name="ocultarSelectores">Elementos que NO se comparan por píxeles (visibility:hidden: el layout no se
+    /// mueve); hoy solo la marca de agua del Login (P5). Un selector sin coincidencias lanza.</param>
+    public static async Task CapturarAsync(string rutaHtml, string rutaPng, TamanoLienzo? tamano = null,
+        IReadOnlyCollection<string>? ocultarSelectores = null)
     {
         var lienzo = tamano ?? TamanoLienzo.Estandar;
         if (!File.Exists(rutaHtml))
@@ -122,6 +125,24 @@ public static class CapturadorMockup
             {
                 throw new InvalidOperationException(
                     $"{Path.GetFileName(rutaHtml)} desborda el lienzo de {lienzo}: {string.Join("; ", problemas)}.");
+            }
+
+            if (ocultarSelectores is { Count: > 0 })
+            {
+                foreach (var selector in ocultarSelectores)
+                {
+                    // Un selector con typo compararía contra el mockup CON el elemento: falla fuerte.
+                    if (await pagina.Locator(selector).CountAsync() == 0)
+                    {
+                        throw new InvalidOperationException(
+                            $"{Path.GetFileName(rutaHtml)}: el selector a ocultar '{selector}' no coincide con ningún elemento.");
+                    }
+                }
+
+                await pagina.AddStyleTagAsync(new PageAddStyleTagOptions
+                {
+                    Content = string.Join("\n", ocultarSelectores.Select(s => $"{s} {{ visibility: hidden !important; }}")),
+                });
             }
 
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(rutaPng))!);

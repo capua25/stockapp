@@ -25,6 +25,8 @@ public static class ComparacionVisual
 {
     public static string CarpetaSalida => Path.Combine(RutasRepo.Raiz, "artifacts", "ui-v2", "comparacion");
 
+    /// <param name="ocultarEnMockup">Elementos del mockup que NO se comparan por píxeles y que el test custodia
+    /// aparte; hoy solo la marca de agua del Login (P5). Se pasa siempre con argumento nombrado.</param>
     public static ResultadoComparacion CompararConMockup(
         Control vista,
         object? viewModel,
@@ -33,7 +35,8 @@ public static class ComparacionVisual
         int teselasDensasMax = UmbralComparacion.TeselasDensasPorDefecto,
         UmbralAprobado? aprobado = null,
         IReadOnlyCollection<string>? recortesPermitidos = null,
-        TamanoLienzo? tamano = null)
+        TamanoLienzo? tamano = null,
+        IReadOnlyCollection<string>? ocultarEnMockup = null)
     {
         // Antes de renderizar: un umbral sin aprobación registrada no llega a correr (spec §6.5).
         teselasDensasMax = UmbralComparacion.TeselasMaximas(teselasDensasMax, aprobado);
@@ -50,7 +53,7 @@ public static class ComparacionVisual
 
         // Playwright es async y este código corre en el dispatcher de Avalonia: se captura en el
         // thread pool (sin contexto de sincronización) y se espera. Verificado sin deadlock.
-        Task.Run(() => CapturadorMockup.CapturarAsync(rutaHtml, pngMockup, tamano)).GetAwaiter().GetResult();
+        Task.Run(() => CapturadorMockup.CapturarAsync(rutaHtml, pngMockup, tamano, ocultarEnMockup)).GetAwaiter().GetResult();
         IReadOnlyList<string> recortes = [];
         RenderizadorVista.RenderizarAPng(vista, viewModel, pngApp, v => recortes = GuardianTextoRecortado.Buscar(v, recortesPermitidos),
             tamano);

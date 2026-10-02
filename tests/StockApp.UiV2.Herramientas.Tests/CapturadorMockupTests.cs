@@ -44,6 +44,33 @@ public class CapturadorMockupTests
         Assert.Equal(SKColor.Parse("#F7F7F5"), imagen.GetPixel(10, 10));
     }
 
+    [Fact]
+    public async Task OcultarSelectores_ElElementoNoSeDibujaYElRestoQuedaDondeEstaba()
+    {
+        var html = Html(
+            "<div class=\"oculto\"></div><div class=\"visible\"></div>",
+            ".oculto{position:absolute;left:100px;top:100px;width:200px;height:100px;background:var(--v2-color-acento)}"
+            + ".visible{position:absolute;left:400px;top:100px;width:200px;height:100px;background:var(--v2-color-acento)}");
+        var png = Path.Combine(_carpeta, "oculto.png");
+
+        await CapturadorMockup.CapturarAsync(html, png, ocultarSelectores: [".oculto"]);
+
+        using var imagen = SKBitmap.Decode(png);
+        Assert.Equal(SKColor.Parse("#F7F7F5"), imagen.GetPixel(150, 150));
+        Assert.Equal(SKColor.Parse("#1D4ED8"), imagen.GetPixel(450, 150));
+    }
+
+    [Fact]
+    public async Task OcultarSelectores_SinCoincidencias_Lanza()
+    {
+        var html = Html("<p>Nada que ocultar</p>");
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => CapturadorMockup.CapturarAsync(html, Path.Combine(_carpeta, "x.png"), ocultarSelectores: [".marca-agua"]));
+
+        Assert.Contains(".marca-agua", ex.Message);
+    }
+
     /// <summary>
     /// Task 5b (a/b): a 1366x768 el PNG mide eso y ".v2-ventana" se estira al tamaño pedido. El
     /// bloque cae entre x=1280 y x=1366: a 1280x760 ese mismo HTML desbordaría la ventana.

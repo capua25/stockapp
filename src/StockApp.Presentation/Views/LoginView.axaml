@@ -1,102 +1,113 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels"
-             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="300"
+             mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="760"
              x:Class="StockApp.Presentation.Views.LoginView"
              x:DataType="vm:LoginViewModel"
-             Background="{DynamicResource FondoBrush}">
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
 
     <UserControl.Styles>
-        <!-- Marca de agua del logo del municipio: NO es Opacity decorativa gateada por conversor
-             de dominio, es un efecto de marca fijo aprobado y mergeado a main el 2026-07-10
-             (commits 4bb3222 + 8ee5f32). Se define via Style (Priority=Style, no LocalValue) para
-             no chocar con Vista_NoTieneOpacidadesLiterales — ese guardian filtra por
-             BindingPriority.LocalValue, que es exactamente lo que distingue un Setter de Style
-             (chrome) de un Opacity puesto a mano en el control. Mismo mecanismo que
-             Image.fondo-difuminado de InicioView (Ruling B-11): no cambia un pixel, mantiene a
-             LoginView dentro del invariante generico del guardian, sin exencion ni test dedicado. -->
+        <!-- Marca de agua del logo del municipio (P5): efecto de marca fijo aprobado y mergeado a main
+             el 2026-07-10 (commits 4bb3222 + 8ee5f32). Se define por Style (Priority=Style, no
+             LocalValue), igual que antes y que Image.fondo-difuminado de InicioView, para no chocar con
+             el guardián de opacidades literales. Su custodia es LoginMarcaAguaTests. -->
         <Style Selector="Image.marca-agua">
             <Setter Property="Opacity" Value="0.28" />
         </Style>
     </UserControl.Styles>
 
+    <!-- UI v2 (spec §5.4). Espejo: docs/ui-v2/mockups/acceso/login*.html. Card de 400 centrada;
+         el ScrollViewer evita recortar en una ventana más baja que la card (MinHeight 300).
+         El logo va primero en el Grid: detrás de la card. -->
     <Grid>
-
-        <Image Source="avares://GestionMunicipal/Assets/carmelo-original.png"
+        <Image x:Name="MarcaAgua"
+               Source="avares://GestionMunicipal/Assets/carmelo-original.png"
                Classes="marca-agua"
                Stretch="Uniform"
                HorizontalAlignment="Center"
                VerticalAlignment="Center"
                RenderTransform="scale(0.85)" />
 
-        <Border Classes="card" Padding="{DynamicResource PaddingHolgado}" HorizontalAlignment="Center" VerticalAlignment="Center" Width="360">
-            <StackPanel Spacing="{DynamicResource Espacio4}">
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <v2:TarjetaContenido Width="{DynamicResource V2AnchoCardLogin}"
+                                 Padding="32"
+                                 HorizontalAlignment="Center"
+                                 VerticalAlignment="Center"
+                                 Margin="0,1,0,0">
+                <!-- Margin 0,1,0,0: compensación medida (spec 6.5). Con una card de alto impar, centrarla en la
+                     ventana da un medio píxel: Avalonia redondea al par (152,5 a 152) y Chromium hacia arriba
+                     (a 153), y todas las cajas del Login quedaban 1 px más arriba que en el mockup. El píxel
+                     extra deja el total par y la card cae donde la dibuja el mockup. -->
+                <StackPanel>
 
-                <TextBlock Text="Gestión Municipal"
-                           Classes="titulo-vista"
-                           HorizontalAlignment="Center"
-                           Margin="0,0,0,8" />
+                    <!-- Los textos centrados usan TextAlignment y no HorizontalAlignment: Avalonia redondea a píxel
+                         entero el origen de un TextBlock centrado y Chromium centra con origen fraccionario;
+                         con TextAlignment el glifo cae en la misma fracción (pasó de 24 a 4 teselas densas). -->
+                    <TextBlock Classes="titulo-login" Text="Gestión Municipal" TextAlignment="Center" />
 
-                <TextBlock Text="Ingresá tus credenciales para continuar."
-                           Classes="body"
-                           Foreground="{DynamicResource TextoSecundarioBrush}"
-                           HorizontalAlignment="Center" />
+                    <!-- P6: la línea del mockup de referencia (patrones-1.html), margen superior 2. -->
+                    <TextBlock Classes="marca-subtitulo" Text="Municipio de Carmelo" TextAlignment="Center" Margin="0,2,0,0" />
 
-                <!-- Modo acceso limitado (FIX 1, re-review final E1): avisa que este login,
-                     al autenticar, va a Mantenimiento (solo backups) y no al sistema completo. -->
-                <TextBlock Text="Modo de acceso limitado: la licencia está vencida. Solo vas a poder descargar backups."
-                           HorizontalAlignment="Center"
-                           TextWrapping="Wrap"
-                           Foreground="{DynamicResource WarningBrush}"
-                           IsVisible="{Binding SoloAccesoLimitado}" />
+                    <TextBlock Classes="texto-secundario"
+                               Text="Ingresá tus credenciales para continuar."
+                               TextAlignment="Center"
+                               TextWrapping="Wrap"
+                               Margin="0,16,0,0" />
 
-                <!-- Usuario -->
-                <c:CampoFormulario Etiqueta="Usuario">
-                    <TextBox Text="{Binding NombreUsuario}"
-                             PlaceholderText="Nombre de usuario"
-                             KeyDown="OnCampoKeyDown" />
-                </c:CampoFormulario>
+                    <!-- Modo acceso limitado (FIX 1, re-review final E1): al autenticar va a
+                         Mantenimiento (solo backups) y no al sistema completo. -->
+                    <v2:Alerta x:Name="AvisoAccesoLimitado"
+                               Variante="Advertencia"
+                               Margin="0,16,0,0"
+                               Texto="Modo de acceso limitado: la licencia está vencida. Solo vas a poder descargar backups."
+                               IsVisible="{Binding SoloAccesoLimitado}" />
 
-                <!-- Contraseña -->
-                <c:CampoFormulario Etiqueta="Contraseña">
-                    <TextBox Text="{Binding Contrasena}"
-                             PasswordChar="●"
-                             PlaceholderText="Contraseña"
-                             KeyDown="OnCampoKeyDown" />
-                </c:CampoFormulario>
+                    <v2:Alerta x:Name="AlertaError"
+                               Variante="Error"
+                               Margin="0,16,0,0"
+                               Texto="{Binding MensajeError}"
+                               IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
-                <!-- Mensaje de error -->
-                <TextBlock Text="{Binding MensajeError}"
-                           Foreground="{DynamicResource DangerBrush}"
-                           IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                           TextWrapping="Wrap" />
+                    <v2:CampoFormulario Etiqueta="Usuario" Margin="0,16,0,0">
+                        <TextBox x:Name="CampoUsuario"
+                                 Text="{Binding NombreUsuario}"
+                                 PlaceholderText="Nombre de usuario"
+                                 KeyDown="OnCampoKeyDown" />
+                    </v2:CampoFormulario>
 
-                <!-- Botón -->
-                <Button Content="Entrar"
-                        Classes="primary"
-                        Command="{Binding EntrarCommand}"
-                        IsDefault="True"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Center" />
+                    <v2:CampoFormulario Etiqueta="Contraseña" Margin="0,16,0,0">
+                        <TextBox x:Name="CampoContrasena"
+                                 Text="{Binding Contrasena}"
+                                 PasswordChar="●"
+                                 PlaceholderText="Contraseña"
+                                 KeyDown="OnCampoKeyDown" />
+                    </v2:CampoFormulario>
 
-                <!-- Reset de Admin (Inc 7 Fase B): link discreto para el flujo de recuperación -->
-                <Button Content="No puedo entrar / resetear Admin"
-                        Classes="ghost"
-                        Command="{Binding ResetearAdminCommand}"
-                        HorizontalAlignment="Center" />
+                    <Button x:Name="BotonEntrar"
+                            Classes="primario"
+                            Content="Entrar"
+                            Command="{Binding EntrarCommand}"
+                            IsDefault="True"
+                            HorizontalAlignment="Stretch"
+                            Margin="0,20,0,0" />
 
-                <!-- Versión de la app: discreta, al pie del formulario -->
-                <TextBlock Text="{Binding VersionTexto}"
-                           Classes="micro"
-                           HorizontalAlignment="Center"
-                           Margin="0,16,0,0" />
+                    <!-- Reset de Admin (Inc 7 Fase B): link discreto al flujo de recuperación. -->
+                    <Button x:Name="EnlaceReset"
+                            Theme="{StaticResource V2TemaEnlace}"
+                            Content="No puedo entrar / resetear Admin"
+                            Command="{Binding ResetearAdminCommand}"
+                            HorizontalAlignment="Center"
+                            Margin="0,12,0,0" />
 
-            </StackPanel>
-        </Border>
+                    <TextBlock Classes="version" Text="{Binding VersionTexto}" TextAlignment="Center" Margin="0,16,0,0" />
 
+                </StackPanel>
+            </v2:TarjetaContenido>
+        </ScrollViewer>
     </Grid>
 
 </UserControl>

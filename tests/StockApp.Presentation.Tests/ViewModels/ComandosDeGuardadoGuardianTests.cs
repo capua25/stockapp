@@ -28,7 +28,7 @@ namespace StockApp.Presentation.Tests.ViewModels;
 /// QUÉ ES un comando de guardado (no depende solo del nombre):
 ///   1. por NOMBRE: una propiedad ICommand pública cuyo nombre empieza con un verbo de
 ///      confirmación (<see cref="VerbosDeConfirmacion"/>), o
-///   2. por la VISTA: el Command de todo botón <c>Classes="primary"</c> de una vista (la acción
+///   2. por la VISTA: el Command de todo botón <c>Classes="primary"</c> o <c>Classes="primario"</c> (clase del sistema v2) de una vista (la acción
 ///      principal de la pantalla), descubierto leyendo los .axaml reales.
 /// Los que NO deben bloquearse (navegación, abrir un selector de archivo) se eximen en
 /// <see cref="Eximidos"/> con su razón.
@@ -154,7 +154,7 @@ public class ComandosDeGuardadoGuardianTests
 
     private static readonly Regex DataTypeRaiz = new(@"x:DataType=""(?:\w+:)?(?<tipo>\w+)""", RegexOptions.Compiled);
     private static readonly Regex Boton = new(@"<Button\b[^>]*>", RegexOptions.Compiled | RegexOptions.Singleline);
-    private static readonly Regex EsPrimario = new(@"Classes=""[^""]*\bprimary\b|Classes\.primary=", RegexOptions.Compiled);
+    private static readonly Regex EsPrimario = new(@"Classes=""[^""]*\b(primary|primario)\b|Classes\.(primary|primario)=", RegexOptions.Compiled);
     private static readonly Regex CommandBinding = new(@"Command=""\{Binding (?<cmd>\w+)\}""", RegexOptions.Compiled);
 
     /// <summary>(tipo de ViewModel, comando) de cada botón primario de las vistas reales.</summary>

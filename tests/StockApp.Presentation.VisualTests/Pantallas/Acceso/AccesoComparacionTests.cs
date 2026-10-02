@@ -1,0 +1,53 @@
+using Avalonia.Controls;
+using Avalonia.Headless.XUnit;
+using StockApp.Presentation.Views;
+using StockApp.Presentation.VisualTests.Comparacion;
+using StockApp.UiV2.Herramientas;
+
+namespace StockApp.Presentation.VisualTests.Pantallas.Acceso;
+
+[Trait("Categoria", "ComparacionVisual")]
+public class AccesoComparacionTests
+{
+    // P5: la marca de agua (opacidad 0.28 + escala 0.85 de un PNG) no se replica igual entre Skia y
+    // Chromium, y un UmbralAprobado para ella dejaría ciega a toda la pantalla (spec §6.5). Se oculta
+    // en AMBOS renders y la custodia LoginMarcaAguaTests. Valores calibrados, sin UmbralAprobado.
+    private static readonly string[] OcultarMarcaAgua = [".marca-agua"];
+
+    private static LoginView LoginSinMarcaAgua()
+    {
+        var vista = new LoginView();
+        vista.FindControl<Image>("MarcaAgua")!.IsVisible = false;
+        return vista;
+    }
+
+    private static void Comparar(Avalonia.Controls.Control vista, object vm, string mockup, TamanoLienzo? tamano = null) =>
+        ComparacionVisual.CompararConMockup(vista, vm, mockup, tamano: tamano, ocultarEnMockup: OcultarMarcaAgua);
+
+    [AvaloniaFact]
+    public void Login_IgualAlMockup() =>
+        Comparar(LoginSinMarcaAgua(), DatosAcceso.Login(), "acceso/login.html");
+
+    [AvaloniaFact]
+    public void Login_IgualAlMockup_1366x768() =>
+        Comparar(LoginSinMarcaAgua(), DatosAcceso.Login(), "acceso/login.html", TamanoLienzo.Municipio);
+
+    [AvaloniaFact]
+    public void LoginConError_IgualAlMockup() =>
+        Comparar(LoginSinMarcaAgua(), DatosAcceso.Login(usuario: "mperez", error: "Usuario o contraseña incorrectos."),
+            "acceso/login-error.html");
+
+    [AvaloniaFact]
+    public void LoginConError_IgualAlMockup_1366x768() =>
+        Comparar(LoginSinMarcaAgua(), DatosAcceso.Login(usuario: "mperez", error: "Usuario o contraseña incorrectos."),
+            "acceso/login-error.html", TamanoLienzo.Municipio);
+
+    [AvaloniaFact]
+    public void LoginAccesoLimitado_IgualAlMockup() =>
+        Comparar(LoginSinMarcaAgua(), DatosAcceso.Login(soloAccesoLimitado: true), "acceso/login-acceso-limitado.html");
+
+    [AvaloniaFact]
+    public void LoginAccesoLimitado_IgualAlMockup_1366x768() =>
+        Comparar(LoginSinMarcaAgua(), DatosAcceso.Login(soloAccesoLimitado: true), "acceso/login-acceso-limitado.html",
+            TamanoLienzo.Municipio);
+}

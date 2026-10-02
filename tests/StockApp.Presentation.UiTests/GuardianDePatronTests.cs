@@ -185,7 +185,6 @@ public class GuardianDePatronTests
     /// </summary>
     public static readonly TheoryData<Type> VistasCentradasSinSidebar = new()
     {
-        typeof(LoginView),
         typeof(ResetAdminView),
         typeof(BloqueoLicenciaView),
     };
@@ -225,12 +224,23 @@ public class GuardianDePatronTests
     };
 
     /// <summary>
-    /// Con cuatro listas (InlineData, VistasDeLaTanda, VistasEmbebidas y VistasCentradasSinSidebar)
-    /// la trampa que el plan de B2 identifico con dos listas se triplica: agregar una vista a una
+    /// Vistas reescritas con el sistema v2 (spec 2026-09-28): los patrones P0-P9 de este guardián ya
+    /// no les aplican (por ejemplo, P6 exige Border.card con padding 48 y la card v2 es
+    /// TarjetaContenido con 32). Las custodian su comparación contra el mockup (VisualTests) y sus
+    /// tests de UiTests/V2. La Fase 9 reemplaza este guardián entero (spec §8.2).
+    /// </summary>
+    public static readonly HashSet<Type> VistasMigradasAV2 = new()
+    {
+        typeof(LoginView),
+    };
+
+    /// <summary>
+    /// Con cinco listas (InlineData, VistasDeLaTanda, VistasEmbebidas, VistasCentradasSinSidebar y
+    /// VistasMigradasAV2) la trampa que el plan de B2 identifico con dos listas se multiplica: agregar una vista a una
     /// lista y olvidarla en otra no falla nada, simplemente deja invariantes sin correr. Este test
     /// enumera por reflexion todos los Control publicos, no abstractos, de los namespaces de
     /// vistas del ensamblado StockApp.Presentation y exige que cada uno este en alguna de las
-    /// cuatro listas del guardian o en VistasFueraDelGuardian.
+    /// cinco listas del guardian o en VistasFueraDelGuardian.
     ///
     /// El predicado de namespace excluye deliberadamente StockApp.Presentation.Controls (los 5
     /// TemplatedControl del design system: BadgeEstado, CampoFormulario, EstadoVacio, HeaderVista,
@@ -251,6 +261,7 @@ public class GuardianDePatronTests
             .Concat(VistasEmbebidas.Select(r => r.Data))
             .Concat(VistasCentradasSinSidebar.Select(r => r.Data))
             .Concat(VistasFueraDelGuardian)
+            .Concat(VistasMigradasAV2)
             .ToHashSet();
 
         var huerfanas = todas.Where(t => !cubiertas.Contains(t)).ToList();
