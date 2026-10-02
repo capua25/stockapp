@@ -100,7 +100,7 @@ public class ReflexionVistaViewModelTests
             nameof(NuevaImportacionViewModel.FilasGasto),
             "FilasIngreso",
             "FilasLineaPoa",
-            // Gating via [RelayCommand(CanExecute = nameof(PuedeConfirmar))] sobre ConfirmarCommand:
+            // Gating via ComandoDeGuardado(ConfirmarAsync, () => PuedeConfirmar) sobre ConfirmarCommand:
             // Button.IsEnabled se deriva automaticamente del Command, no necesita un binding propio
             // -- el mensaje visible para el usuario es MensajeConfirmarBloqueado (esa SI esta bindeada).
             nameof(NuevaImportacionViewModel.PuedeConfirmar),

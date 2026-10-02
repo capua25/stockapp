@@ -73,7 +73,8 @@ public partial class StockCategoriaViewModel : ViewModelBase
     }
 
     /// <summary>Obtiene el resumen de stock por categoría y puebla <see cref="Items"/>.</summary>
-    [RelayCommand]
+    public IAsyncRelayCommand BuscarCommand => field ??= ComandoDeGuardado(BuscarAsync);
+
     private async Task BuscarAsync() => await CargarAsync();
 
     /// <summary>

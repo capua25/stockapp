@@ -79,7 +79,8 @@ public partial class CalendarioPagosViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    public IAsyncRelayCommand RecargarCommand => field ??= ComandoDeGuardado(RecargarAsync);
+
     private async Task RecargarAsync() => await CargarAsync();
 
     [RelayCommand]

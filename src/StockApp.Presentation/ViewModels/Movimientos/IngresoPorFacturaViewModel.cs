@@ -252,7 +252,8 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
     /// carga en AgregarArticuloCommand. Confirmar acá solo deja la zona de carga en "modo producto
     /// nuevo" (EsProductoNuevoEnCarga), mostrando el nombre en vez del ComboBox de producto.
     /// </summary>
-    [RelayCommand]
+    public IRelayCommand ConfirmarAltaProductoCommand => field ??= ComandoDeGuardado(ConfirmarAltaProducto);
+
     private void ConfirmarAltaProducto()
     {
         if (string.IsNullOrWhiteSpace(NuevoProductoCodigo)
@@ -296,7 +297,8 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
     /// carga y pide el foco de vuelta al ComboBox de producto -- la pantalla existe para cargar N
     /// artículos rápido, sin tocar el mouse entre uno y el siguiente.
     /// </summary>
-    [RelayCommand(CanExecute = nameof(PuedeAgregarArticulo))]
+    public IRelayCommand AgregarArticuloCommand => field ??= ComandoDeGuardado(AgregarArticulo);
+
     private void AgregarArticulo()
     {
         MensajeErrorCarga = null;
@@ -366,22 +368,10 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
            && FuenteSeleccionada is not null
            && RubroSeleccionado is not null
            && !string.IsNullOrWhiteSpace(Detalle)
-           && !string.IsNullOrWhiteSpace(MontoTotalTexto)
-           && !HayErroresDeEntrada;
+           && !string.IsNullOrWhiteSpace(MontoTotalTexto);
 
-    /// <summary>Con la cantidad o el precio de la zona de carga en rojo, el ViewModel tiene el
-    /// valor ANTERIOR: agregar el artículo cargaría ese valor viejo.</summary>
-    private bool PuedeAgregarArticulo() => !HayErroresDeEntrada;
+    public IAsyncRelayCommand GuardarCommand => field ??= ComandoDeGuardado(GuardarAsync, PuedeGuardar);
 
-    /// <summary>Un campo en rojo (texto que no llegó al ViewModel) bloquea Agregar artículo y Guardar: ver
-    /// <see cref="ViewModelBase.HayErroresDeEntrada"/>.</summary>
-    protected override void AlCambiarErroresDeEntrada()
-    {
-        AgregarArticuloCommand.NotifyCanExecuteChanged();
-        GuardarCommand.NotifyCanExecuteChanged();
-    }
-
-    [RelayCommand(CanExecute = nameof(PuedeGuardar))]
     private async Task GuardarAsync()
     {
         MensajeError = null;
@@ -415,7 +405,8 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
         await GuardarInternoAsync(monto);
     }
 
-    [RelayCommand]
+    public IAsyncRelayCommand ConfirmarPreciosYGuardarCommand => field ??= ComandoDeGuardado(ConfirmarPreciosYGuardarAsync);
+
     private async Task ConfirmarPreciosYGuardarAsync()
     {
         foreach (var item in CambiosDePrecio)

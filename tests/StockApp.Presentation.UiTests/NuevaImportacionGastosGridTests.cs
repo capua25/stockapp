@@ -299,6 +299,9 @@ public class NuevaImportacionGastosGridTests
         Assert.False(vm.ConfirmarCommand.CanExecute(null));
         Assert.False(vm.PuedeConfirmar);
         Assert.Contains(StockApp.Presentation.ViewModels.ViewModelBase.MensajeErroresDeEntrada, vm.MensajeConfirmarBloqueado);
+        // El botón explica el bloqueo por sí mismo (tema: ErroresDeEntradaBehavior.ExplicarBloqueo).
+        Assert.Equal(StockApp.Presentation.ViewModels.ViewModelBase.MensajeErroresDeEntrada, ToolTip.GetTip(confirmar));
+        Assert.True(ToolTip.GetShowOnDisabled(confirmar));
 
         caja.Text = "1000,5";
         Dispatcher.UIThread.RunJobs();

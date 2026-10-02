@@ -193,7 +193,8 @@ public partial class NuevaImportacionViewModel : ViewModelBase
 
     private bool PuedeAnalizar() => _gastosContenido is not null && _poaContenido is not null;
 
-    [RelayCommand(CanExecute = nameof(PuedeAnalizar))]
+    public IAsyncRelayCommand AnalizarCommand => field ??= ComandoDeGuardado(AnalizarAsync, PuedeAnalizar);
+
     private async Task AnalizarAsync()
     {
         try
@@ -281,7 +282,8 @@ public partial class NuevaImportacionViewModel : ViewModelBase
             nuevos.Add(normalizado);
     }
 
-    [RelayCommand(CanExecute = nameof(PuedeConfirmar))]
+    public IAsyncRelayCommand ConfirmarCommand => field ??= ComandoDeGuardado(ConfirmarAsync, () => PuedeConfirmar);
+
     private async Task ConfirmarAsync()
     {
         if (_analisis is null) return;

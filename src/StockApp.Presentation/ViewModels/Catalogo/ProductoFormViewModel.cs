@@ -164,15 +164,7 @@ public partial class ProductoFormViewModel : ViewModelBase
     private bool PuedeGuardar()
         => !string.IsNullOrWhiteSpace(Codigo)
         && !string.IsNullOrWhiteSpace(Nombre)
-        && UnidadMedidaSeleccionada is not null
-        && !HayErroresDeEntrada;
-
-    /// <summary>Un campo en rojo (texto que no llegó al ViewModel) bloquea Guardar: ver
-    /// <see cref="ViewModelBase.HayErroresDeEntrada"/>.</summary>
-    protected override void AlCambiarErroresDeEntrada()
-    {
-        GuardarCommand.NotifyCanExecuteChanged();
-    }
+        && UnidadMedidaSeleccionada is not null;
 
     /// <summary>
     /// Bifurca entre alta y modificación según <see cref="EsEdicion"/>. Ninguna excepción de
@@ -181,7 +173,8 @@ public partial class ProductoFormViewModel : ViewModelBase
     /// captura y se muestra amigable en <see cref="MensajeError"/>, igual que el resto de los
     /// formularios de catálogo (CategoriaFormViewModel/ProveedorFormViewModel).
     /// </summary>
-    [RelayCommand(CanExecute = nameof(PuedeGuardar))]
+    public IAsyncRelayCommand GuardarCommand => field ??= ComandoDeGuardado(GuardarAsync, PuedeGuardar);
+
     private async Task GuardarAsync()
     {
         MensajeError = null;

@@ -52,7 +52,8 @@ public partial class RubroGastoFormViewModel : ViewModelBase
            && int.TryParse(CodigoTexto, out var codigo)
            && codigo > 0;
 
-    [RelayCommand(CanExecute = nameof(PuedeGuardar))]
+    public IAsyncRelayCommand GuardarCommand => field ??= ComandoDeGuardado(GuardarAsync, PuedeGuardar);
+
     private async Task GuardarAsync()
     {
         MensajeError = null;

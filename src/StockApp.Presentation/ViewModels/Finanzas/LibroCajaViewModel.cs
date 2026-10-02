@@ -97,7 +97,8 @@ public partial class LibroCajaViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    public IAsyncRelayCommand RecargarCommand => field ??= ComandoDeGuardado(RecargarAsync);
+
     private async Task RecargarAsync() => await CargarAsync();
 
     private static readonly IReadOnlyList<string> ColumnasCsv = new[]

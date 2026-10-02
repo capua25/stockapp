@@ -125,7 +125,8 @@ public partial class IngresoFormViewModel : ViewModelBase
            && FuenteSeleccionada is not null
            && !string.IsNullOrWhiteSpace(MontoTexto);
 
-    [RelayCommand(CanExecute = nameof(PuedeGuardar))]
+    public IAsyncRelayCommand GuardarCommand => field ??= ComandoDeGuardado(GuardarAsync, PuedeGuardar);
+
     private async Task GuardarAsync()
     {
         MensajeError = null;

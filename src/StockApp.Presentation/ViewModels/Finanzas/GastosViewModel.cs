@@ -254,7 +254,8 @@ public partial class GastosViewModel : ViewModelBase
         RubroGastoId: RubroSeleccionado?.Id,
         LineaPoaId: LineaPoaSeleccionada?.Id);
 
-    [RelayCommand]
+    public IAsyncRelayCommand FiltrarCommand => field ??= ComandoDeGuardado(FiltrarAsync);
+
     private async Task FiltrarAsync()
     {
         try

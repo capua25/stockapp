@@ -212,7 +212,8 @@ public partial class DocumentoListViewModel : ViewModelBase
     /// invocan AbrirHistorialCommand y los tests -- para exponer un ICommand bindeable que
     /// siempre vuelve a consultar al servidor con el filtro actual.
     /// </summary>
-    [RelayCommand]
+    public IAsyncRelayCommand BuscarHistorialCommand => field ??= ComandoDeGuardado(BuscarHistorial);
+
     private async Task BuscarHistorial() => await CargarHistorialAsync();
 
     /// <summary>
@@ -220,7 +221,8 @@ public partial class DocumentoListViewModel : ViewModelBase
     /// tenían disparador propio -- el único punto de recarga era DataContextChanged, que corre
     /// una sola vez al entrar a la pantalla. Molde: BuscarHistorialCommand.
     /// </summary>
-    [RelayCommand]
+    public IAsyncRelayCommand BuscarActivosCommand => field ??= ComandoDeGuardado(BuscarActivos);
+
     private async Task BuscarActivos() => await CargarAsync();
 
     [RelayCommand]

@@ -169,7 +169,8 @@ public partial class TareaFormViewModel : ViewModelBase
 
     private bool PuedeGuardar() => !string.IsNullOrWhiteSpace(Titulo);
 
-    [RelayCommand(CanExecute = nameof(PuedeGuardar))]
+    public IAsyncRelayCommand GuardarCommand => field ??= ComandoDeGuardado(GuardarAsync, PuedeGuardar);
+
     private async Task GuardarAsync()
     {
         MensajeError = null;
@@ -203,7 +204,8 @@ public partial class TareaFormViewModel : ViewModelBase
 
     private bool PuedeAgregarNota() => !string.IsNullOrWhiteSpace(NuevaNotaTexto);
 
-    [RelayCommand(CanExecute = nameof(PuedeAgregarNota))]
+    public IAsyncRelayCommand AgregarNotaCommand => field ??= ComandoDeGuardado(AgregarNotaAsync, PuedeAgregarNota);
+
     private async Task AgregarNotaAsync()
     {
         MensajeError = null;

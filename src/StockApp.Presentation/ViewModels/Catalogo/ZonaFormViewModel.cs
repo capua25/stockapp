@@ -46,7 +46,8 @@ public partial class ZonaFormViewModel : ViewModelBase
 
     private bool PuedeGuardar() => !string.IsNullOrWhiteSpace(Nombre);
 
-    [RelayCommand(CanExecute = nameof(PuedeGuardar))]
+    public IAsyncRelayCommand GuardarCommand => field ??= ComandoDeGuardado(GuardarAsync, PuedeGuardar);
+
     private async Task GuardarAsync()
     {
         MensajeError = null;

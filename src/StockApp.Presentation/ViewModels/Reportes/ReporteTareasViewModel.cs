@@ -113,7 +113,8 @@ public partial class ReporteTareasViewModel : ViewModelBase
     }
 
     /// <summary>Dispara la búsqueda del reporte y puebla <see cref="Items"/>/<see cref="TotalGeneral"/>.</summary>
-    [RelayCommand]
+    public IAsyncRelayCommand BuscarCommand => field ??= ComandoDeGuardado(BuscarAsync);
+
     private async Task BuscarAsync() => await CargarAsync();
 
     /// <summary>

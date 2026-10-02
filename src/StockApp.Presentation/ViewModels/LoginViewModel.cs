@@ -67,7 +67,8 @@ public partial class LoginViewModel : ViewModelBase
         && !string.IsNullOrWhiteSpace(Contrasena)
         && !OperacionEnCurso;
 
-    [RelayCommand(CanExecute = nameof(PuedeEntrar))]
+    public IAsyncRelayCommand EntrarCommand => field ??= ComandoDeGuardado(EntrarAsync, PuedeEntrar);
+
     private async Task EntrarAsync()
     {
         OperacionEnCurso = true;

@@ -86,7 +86,8 @@ public partial class MasMovidosViewModel : ViewModelBase
     }
 
     /// <summary>Consulta los productos más movidos del período y puebla <see cref="Items"/>.</summary>
-    [RelayCommand]
+    public IAsyncRelayCommand BuscarCommand => field ??= ComandoDeGuardado(BuscarAsync);
+
     private async Task BuscarAsync() => await CargarAsync();
 
     /// <summary>
