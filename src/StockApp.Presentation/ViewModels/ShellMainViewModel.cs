@@ -157,6 +157,34 @@ public partial class ShellMainViewModel : ViewModelBase
     /// </summary>
     public string VersionTexto => $"v{_infoApp.Version}";
 
+    /// <summary>Nombre del pie del sidebar (spec §4.1): el nombre completo, o el de usuario si no hay.</summary>
+    public string NombreUsuarioVisible =>
+        _session.UsuarioActual is not { } usuario
+            ? string.Empty
+            : string.IsNullOrWhiteSpace(usuario.NombreCompleto) ? usuario.NombreUsuario : usuario.NombreCompleto.Trim();
+
+    /// <summary>Rol del pie del sidebar, en texto.</summary>
+    public string RolTexto => _session.RolActual switch
+    {
+        RolUsuario.Admin => "Administrador",
+        RolUsuario.Operador => "Operador",
+        _ => string.Empty,
+    };
+
+    /// <summary>Iniciales del avatar del pie del sidebar.</summary>
+    public string Iniciales => CalcularIniciales(NombreUsuarioVisible);
+
+    internal static string CalcularIniciales(string nombre)
+    {
+        var palabras = nombre.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return palabras.Length switch
+        {
+            0 => string.Empty,
+            1 => palabras[0][..Math.Min(2, palabras[0].Length)].ToUpperInvariant(),
+            _ => string.Concat(char.ToUpperInvariant(palabras[0][0]), char.ToUpperInvariant(palabras[^1][0])),
+        };
+    }
+
     /// <summary>
     /// ViewModel activo en la región de contenido. Se actualiza cuando el INavigationService
     /// notifica un cambio via el evento Cambiado.
@@ -171,9 +199,8 @@ public partial class ShellMainViewModel : ViewModelBase
     public ItemNavegacion ItemInicio { get; }
 
     /// <summary>
-    /// Los 8 grupos colapsables del sidebar (Tanda 5). Títulos e íconos son literales copiados
-    /// de ShellMainView.axaml — la única etiqueta nueva es "Movimientos" (ver spec, excepción
-    /// explícita al Global Constraint de copy).
+    /// Las 5 secciones del sidebar v2 (spec §4.1). El XAML v2 las muestra siempre abiertas:
+    /// <c>EstaExpandido</c> y <c>AlternarGrupo</c> quedan sin uso en la vista hasta la Fase 9 (limpieza).
     /// </summary>
     public IReadOnlyList<GrupoNavegacion> Grupos { get; }
 
@@ -218,45 +245,34 @@ public partial class ShellMainViewModel : ViewModelBase
 
         ItemInicio = new ItemNavegacion("Inicio", "mdi-home", NavInicioCommand, "Inicio", true);
 
+        // Secciones v2 (spec §4.1, Fase 1). P1 (sidebar transitorio): ANÁLISIS y ADMINISTRACIÓN listan los
+        // ítems actuales hasta que el hub de Reportes (Fase 6) y Catálogos (Fase 7) los consoliden.
+        // Títulos en mayúsculas literales: Avalonia no tiene text-transform. Cada ítem conserva su
+        // gate (Seccion, Comando y evaluador sin cambios).
         Grupos = new List<GrupoNavegacion>
         {
-            new GrupoNavegacion("Movimientos", new List<ItemNavegacion>
+            new GrupoNavegacion("INVENTARIO", new List<ItemNavegacion>
             {
                 CrearItem("Productos", "mdi-package-variant", NavProductosCommand, "Productos", () => PuedeGestionarProductos),
-                CrearItem("Registrar Entrada", "mdi-tray-arrow-down", NavRegistrarEntradaCommand, "RegistrarEntrada", () => PuedeRegistrarEntradaSalida),
+                CrearItem("Registrar entrada", "mdi-tray-arrow-down", NavRegistrarEntradaCommand, "RegistrarEntrada", () => PuedeRegistrarEntradaSalida),
+                CrearItem("Registrar salida", "mdi-tray-arrow-up", NavRegistrarSalidaCommand, "RegistrarSalida", () => PuedeRegistrarEntradaSalida),
                 CrearItem("Ingreso por factura", "mdi-receipt-text-plus", NavIngresoPorFacturaCommand, "IngresoPorFactura", () => PuedeIngresarPorFactura),
-                CrearItem("Registrar Salida", "mdi-tray-arrow-up", NavRegistrarSalidaCommand, "RegistrarSalida", () => PuedeRegistrarEntradaSalida),
                 CrearItem("Historial de movimientos", "mdi-history", NavHistorialMovimientosCommand, "HistorialMovimientos", () => PuedeRegistrarMovimientos),
             }),
-            new GrupoNavegacion("Tareas", new List<ItemNavegacion>
-            {
-                CrearItem("Tareas", "mdi-checkbox-marked-outline", NavTareasCommand, "Tareas", () => PuedeGestionarTareas),
-            }),
-            new GrupoNavegacion("Documentos", new List<ItemNavegacion>
-            {
-                CrearItem("Documentos administrativos", "mdi-file-cabinet", NavDocumentosCommand, "Documentos", () => PuedeGestionarDocumentos),
-            }),
-            new GrupoNavegacion("Finanzas", new List<ItemNavegacion>
+            new GrupoNavegacion("FINANZAS", new List<ItemNavegacion>
             {
                 CrearItem("Gastos y facturas", "mdi-receipt-text", NavGastosCommand, "Gastos", () => PuedeVerFinanzas),
                 CrearItem("Ingresos de caja", "mdi-cash-plus", NavIngresosCommand, "Ingresos", () => PuedeVerFinanzas),
-                CrearItem("Maestros de finanzas", "mdi-cash-multiple", NavMaestrosFinanzasCommand, "MaestrosFinanzas", () => PuedeGestionarMaestrosFinanzas),
                 CrearItem("Libro caja", "mdi-book-open-variant", NavLibroCajaCommand, "LibroCaja", () => PuedeVerFinanzas),
                 CrearItem("Control POA", "mdi-chart-donut", NavControlPoaCommand, "ControlPoa", () => PuedeVerFinanzas),
                 CrearItem("Calendario de pagos", "mdi-calendar-clock", NavCalendarioPagosCommand, "CalendarioPagos", () => PuedeVerFinanzas),
             }),
-            new GrupoNavegacion("Importación", new List<ItemNavegacion>
+            new GrupoNavegacion("GESTIÓN", new List<ItemNavegacion>
             {
-                CrearItem("Importar planillas", "mdi-file-upload", NavImportacionCommand, "Importacion", () => EsAdmin && ImportacionHabilitada),
+                CrearItem("Tareas", "mdi-checkbox-marked-outline", NavTareasCommand, "Tareas", () => PuedeGestionarTareas),
+                CrearItem("Documentos", "mdi-file-cabinet", NavDocumentosCommand, "Documentos", () => PuedeGestionarDocumentos),
             }),
-            new GrupoNavegacion("Tablas maestras", new List<ItemNavegacion>
-            {
-                CrearItem("Categorías", "mdi-shape", NavCategoriasCommand, "Categorias", () => PuedeGestionarTablasMaestras),
-                CrearItem("Proveedores", "mdi-truck", NavProveedoresCommand, "Proveedores", () => PuedeGestionarTablasMaestras),
-                CrearItem("Unidades de medida", "mdi-ruler", NavUnidadesMedidaCommand, "UnidadesMedida", () => PuedeGestionarTablasMaestras),
-                CrearItem("Catálogos de tareas", "mdi-tag-multiple", NavCatalogosTareaCommand, "CatalogosTarea", () => PuedeGestionarTablasMaestras),
-            }),
-            new GrupoNavegacion("Reportes", new List<ItemNavegacion>
+            new GrupoNavegacion("ANÁLISIS", new List<ItemNavegacion>
             {
                 CrearItem("Valorización de inventario", "mdi-currency-usd", NavValorizacionCommand, "Valorizacion", () => PuedeVerReportes),
                 CrearItem("Stock por categoría", "mdi-chart-pie", NavStockCategoriaCommand, "StockCategoria", () => PuedeVerReportes),
@@ -265,10 +281,16 @@ public partial class ShellMainViewModel : ViewModelBase
                 CrearItem("Log de auditoría", "mdi-shield-search", NavAuditoriaLogCommand, "AuditoriaLog", () => PuedeVerReportes),
                 CrearItem("Estadística de tareas", "mdi-chart-bar", NavReporteTareasCommand, "ReporteTareas", () => PuedeVerReportes),
             }),
-            new GrupoNavegacion("Administración", new List<ItemNavegacion>
+            new GrupoNavegacion("ADMINISTRACIÓN", new List<ItemNavegacion>
             {
-                CrearItem("Mantenimiento", "mdi-database-cog", NavMantenimientoCommand, "Mantenimiento", () => EsAdmin),
+                CrearItem("Categorías", "mdi-shape", NavCategoriasCommand, "Categorias", () => PuedeGestionarTablasMaestras),
+                CrearItem("Proveedores", "mdi-truck", NavProveedoresCommand, "Proveedores", () => PuedeGestionarTablasMaestras),
+                CrearItem("Unidades de medida", "mdi-ruler", NavUnidadesMedidaCommand, "UnidadesMedida", () => PuedeGestionarTablasMaestras),
+                CrearItem("Catálogos de tareas", "mdi-tag-multiple", NavCatalogosTareaCommand, "CatalogosTarea", () => PuedeGestionarTablasMaestras),
+                CrearItem("Maestros de finanzas", "mdi-cash-multiple", NavMaestrosFinanzasCommand, "MaestrosFinanzas", () => PuedeGestionarMaestrosFinanzas),
                 CrearItem("Usuarios", "mdi-account-cog", NavUsuariosCommand, "Usuarios", () => EsAdmin),
+                CrearItem("Mantenimiento", "mdi-database-cog", NavMantenimientoCommand, "Mantenimiento", () => EsAdmin),
+                CrearItem("Importar planillas", "mdi-file-upload", NavImportacionCommand, "Importacion", () => EsAdmin && ImportacionHabilitada),
             }),
         };
 
