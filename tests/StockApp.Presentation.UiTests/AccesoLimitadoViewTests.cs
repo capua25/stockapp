@@ -8,9 +8,11 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using StockApp.Application.Backups;
+using StockApp.Presentation.Controls.V2;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels;
 using StockApp.Presentation.ViewModels.Administracion;
+using StockApp.Presentation.Views.Administracion;
 using Xunit;
 
 namespace StockApp.Presentation.UiTests;
@@ -105,5 +107,29 @@ public class AccesoLimitadoViewTests
             .FirstOrDefault(t => t.Text == "Todavía no hay backups registrados.");
         Assert.NotNull(texto);
         Assert.True(texto!.IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void Aviso_EsUnaAlertaDeAdvertenciaV2ConElTextoReal()
+    {
+        var (window, _) = Montar(System.Array.Empty<CorridaBackupDto>());
+
+        var alerta = window.GetVisualDescendants().OfType<Alerta>().Single();
+        Assert.Equal(VarianteAlerta.Advertencia, alerta.Variante);
+        Assert.Equal(
+            "Modo de acceso limitado: la licencia está vencida. Solo podés descargar backups; para operar el sistema, activá la licencia.",
+            alerta.Texto);
+        Assert.True(alerta.GetVisualAncestors().OfType<Border>().Any(b => b.Name == "AvisoAccesoLimitado" && b.Classes.Contains("ui2")));
+    }
+
+    [AvaloniaFact]
+    public void MantenimientoHospedado_NoTieneAncestroUi2()
+    {
+        // Review Focus 1: MantenimientoView se migra en la Fase 7; hasta entonces no puede tomar
+        // los estilos .ui2 por herencia del contenedor.
+        var (window, _) = Montar(System.Array.Empty<CorridaBackupDto>());
+
+        var mantenimiento = window.GetVisualDescendants().OfType<MantenimientoView>().Single();
+        Assert.DoesNotContain(mantenimiento.GetSelfAndVisualAncestors().OfType<StyledElement>(), e => e.Classes.Contains("ui2"));
     }
 }

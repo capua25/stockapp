@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
              xmlns:admin="using:StockApp.Presentation.Views.Administracion"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -15,10 +16,14 @@
          Productos/Finanzas/Reportes con la licencia vencida. -->
     <DockPanel>
 
-        <Border DockPanel.Dock="Top" Classes="card" Margin="16,16,16,0">
-            <TextBlock Text="Modo de acceso limitado: la licencia está vencida. Solo podés descargar backups; para operar el sistema, activá la licencia."
-                       TextWrapping="Wrap"
-                       Foreground="{DynamicResource WarningBrush}" />
+        <!-- UI v2 (Fase 1, P3): solo el aviso. Classes="ui2" va en este Border y NO en la raíz:
+             MantenimientoView (Fase 7) no puede heredar los estilos v2. -->
+        <Border x:Name="AvisoAccesoLimitado"
+                DockPanel.Dock="Top"
+                Classes="ui2"
+                Margin="16,16,16,0">
+            <v2:Alerta Variante="Advertencia"
+                       Texto="Modo de acceso limitado: la licencia está vencida. Solo podés descargar backups; para operar el sistema, activá la licencia." />
         </Border>
 
         <admin:MantenimientoView DataContext="{Binding Mantenimiento}" />
