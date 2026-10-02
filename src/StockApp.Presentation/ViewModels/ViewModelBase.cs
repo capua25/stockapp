@@ -7,7 +7,7 @@ namespace StockApp.Presentation.ViewModels;
 public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
 {
     /// <summary>Explicación del botón de guardar deshabilitado por <see cref="HayErroresDeEntrada"/>.</summary>
-    public const string MensajeErroresDeEntrada = "Corregí los campos marcados en rojo para poder guardar.";
+    public const string MensajeErroresDeEntrada = "Corregí los campos marcados en rojo para continuar.";
 
     private bool _hayErroresDeEntrada;
     private bool _sinPermiso;

@@ -143,6 +143,23 @@ public class GuardarBloqueadoConErroresDeEntradaTests
         Assert.Equal(5.4m, alta.PrecioCosto);
     }
 
+    [AvaloniaFact]
+    public void Producto_GuardarDeshabilitado_AlPasarElMouse_AbreElTooltipConElMotivo()
+    {
+        var (window, vm, _) = MontarProducto();
+        var guardar = BotonPorCommand(window, vm.GuardarCommand);
+        Tipear(CajaDeCampo(window, "Precio costo"), "5.4");
+        ToolTip.SetShowDelay(guardar, 0);   // sin esperar el timer de 400 ms
+        var centro = new Point(guardar.Bounds.Width / 2, guardar.Bounds.Height / 2);
+        var p = guardar.TranslatePoint(centro, window)!.Value;
+        window.MouseMove(new Point(1, 1));
+        Dispatcher.UIThread.RunJobs();
+        window.MouseMove(p);
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(guardar.IsEffectivelyEnabled);
+        Assert.True(ToolTip.GetIsOpen(guardar));
+    }
+
     // ── Registrar Entrada / Salida (MovimientoFormControl compartido) ───────
 
     private static ProductoDto Producto(int id, string nombre) => new(
