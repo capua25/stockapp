@@ -54,6 +54,9 @@ Nunca se editan a mano: `ArchivosGeneradosSincronizadosTests` falla si difieren 
    Sin el `span` la cifra queda hasta 1px corrida a la derecha. El redondeo usa `calc-size()`, que
    solo funciona en Chromium (el navegador de la comparación).
 
+   La convención la custodia `VerificadorConvencionesTests.MockupsDelRepo_RespetanLaConvencion` (todos
+   los HTML de `docs/ui-v2/mockups/` salvo `referencia/`).
+
 ## Test por pantalla
 
 En `tests/StockApp.Presentation.VisualTests`, con `[Trait("Categoria", "ComparacionVisual")]`:
