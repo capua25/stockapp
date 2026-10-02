@@ -107,6 +107,31 @@ public class RenderizadorVistaTests
         Assert.Equal(GeneradorTokens.AltoLineaCss(estilo, tokens.FactorAltoLinea), texto.Bounds.Height);
     }
 
+    public static TheoryData<string> RolesConAltoDeLineaFijo => new(
+        LectorTokens.LeerArchivo(RutasRepo.TokensJson).Tipografia
+            .Where(t => t.Estilo.AltoLinea is not null)
+            .Select(t => t.Nombre));
+
+    [AvaloniaTheory]
+    [MemberData(nameof(RolesConAltoDeLineaFijo))]
+    public void AltoDeLinea_DeCadaRolConAltoFijo_LlegaAlRecursoYAlRender(string rol)
+    {
+        // Hermana de la teoría de arriba: los roles con altoLinea explícito no se miden por su natural. El
+        // recurso V2Fuente<Rol>AltoLinea tiene que existir (lo emite el generador) y, aplicado como LineHeight,
+        // dar el alto que el CSS de los mockups usa.
+        var tokens = LectorTokens.LeerArchivo(RutasRepo.TokensJson);
+        var estilo = tokens.Tipografia.Single(t => t.Nombre == rol).Estilo;
+        Assert.True(Avalonia.Application.Current!.TryGetResource($"V2Fuente{rol}AltoLinea", null, out var recurso),
+            $"Falta el recurso V2Fuente{rol}AltoLinea.");
+        var altoLinea = Assert.IsType<double>(recurso);
+        var texto = new TextBlock { Text = "Ág 123", FontSize = estilo.Tamano, FontWeight = (FontWeight)estilo.Peso, LineHeight = altoLinea };
+        var ventana = new Window { Content = new StackPanel { Children = { texto } } };
+        ventana.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(GeneradorTokens.AltoLineaCss(estilo, tokens.FactorAltoLinea), texto.Bounds.Height);
+    }
+
     [AvaloniaFact]
     public void RenderizaUnaVistaReal_TodosLosPixelesDelPngSonOpacos()
     {

@@ -77,4 +77,18 @@ public class InsigniaAlertaTests
         Assert.Equal(13, texto.FontSize);
         Assert.Equal(TextWrapping.Wrap, texto.TextWrapping);
     }
+
+    [AvaloniaFact]
+    public void Alerta_TextoEnvuelto_LasLineasVanACadaAltoDeLineaDeControl()
+    {
+        // El mockup usa line-height 16 (V2FuenteControlAltoLinea). Sin LineHeight en PART_Texto Avalonia usa el
+        // natural (~15px) y la segunda línea queda 1px más arriba que en el mockup.
+        var alerta = Buscar<Alerta>(
+            Montar("""<v2:Alerta x:Name="A" Width="180" Texto="Modo de acceso limitado: la licencia está vencida." />"""), "A");
+        var texto = Parte<TextBlock>(alerta, "PART_Texto");
+
+        Assert.Equal(16, texto.LineHeight);
+        Assert.True(texto.Bounds.Height >= 32, $"El texto no envolvió: alto {texto.Bounds.Height}.");
+        Assert.Equal(0, texto.Bounds.Height % 16);
+    }
 }
