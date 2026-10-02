@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Actualización: modo degradado (UI v2)</title>
+<link rel="stylesheet" href="../_base/tokens.css">
+<link rel="stylesheet" href="../_base/base.css">
+<style>
+  /* Banner rojo permanente: franja de error arriba, padding 12x24, texto 13/600. */
+  .degradado {
+    position: absolute; left: 0; right: 0; top: 0; padding: 12px 24px;
+    background: var(--v2-color-alerta-error-fondo); border-bottom: 1px solid var(--v2-color-alerta-error-borde);
+    font-size: var(--v2-fuente-subtitulo-formulario-tamano); line-height: var(--v2-fuente-subtitulo-formulario-alto-linea);
+    font-weight: var(--v2-fuente-subtitulo-formulario-peso); color: var(--v2-color-alerta-error-texto);
+  }
+</style>
+</head>
+<body>
+<!-- Datos: DatosActualizaciones.ModoDegradado() (Task 16). Texto real. -->
+<div class="v2-ventana">
+  <div class="degradado">MODO DEGRADADO — Actualizacion critica no descargada. Reintentara al reiniciar.</div>
+</div>
+</body>
+</html>

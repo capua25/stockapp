@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Actualización: modal posponible (UI v2)</title>
+<link rel="stylesheet" href="../_base/tokens.css">
+<link rel="stylesheet" href="../_base/base.css">
+<style>
+  /* ActualizacionModalView: TarjetaContenido de 480, padding 24, 16 entre bloques. */
+  .v2-ventana { display: flex; align-items: center; justify-content: center; }
+  .modal { width: 480px; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+  .acciones { display: flex; justify-content: flex-end; gap: 8px; }
+</style>
+</head>
+<body>
+<!-- Datos: DatosActualizaciones.Modal() (Task 16). -->
+<div class="v2-ventana">
+  <div class="v2-tarjeta modal">
+    <div class="v2-titulo-seccion">Actualización disponible</div>
+    <div class="v2-texto-secundario">Esta versión corrige el cálculo del Libro caja y mejora la exportación a PDF.</div>
+    <div class="acciones">
+      <span class="v2-boton v2-boton--secundario">Posponer</span>
+      <span class="v2-boton v2-boton--primario">Actualizar ahora</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>
