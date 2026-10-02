@@ -177,19 +177,6 @@ public class GuardianDePatronTests
     };
 
     /// <summary>
-    /// P6 (Ruling B-32): pantallas centradas sin sidebar (Login, ResetAdmin, BloqueoLicencia). NO
-    /// llevan HeaderVista -- su ControlTheme alinea el titulo a la izquierda con slot de acciones a
-    /// la derecha, y estas tres tienen el titulo CENTRADO dentro de una card sin acciones. Tampoco
-    /// tienen margen exterior: el respiro lo da el Padding de la card sobre el FondoBrush de la
-    /// ventana. El invariante propio es ese padding.
-    /// </summary>
-    public static readonly TheoryData<Type> VistasCentradasSinSidebar = new()
-    {
-        typeof(ResetAdminView),
-        typeof(BloqueoLicenciaView),
-    };
-
-    /// <summary>
     /// Vistas que no pueden entrar a ninguna lista del guardian, con su razon y con quien las
     /// custodia en su lugar (Task 13.4). Es una lista de EXCLUSION explicita: el test de
     /// cobertura de abajo exige que toda vista del ensamblado este en alguna lista o en esta.
@@ -232,15 +219,17 @@ public class GuardianDePatronTests
     public static readonly HashSet<Type> VistasMigradasAV2 = new()
     {
         typeof(LoginView),
+        typeof(ResetAdminView),
+        typeof(BloqueoLicenciaView),
     };
 
     /// <summary>
-    /// Con cinco listas (InlineData, VistasDeLaTanda, VistasEmbebidas, VistasCentradasSinSidebar y
+    /// Con cuatro listas (InlineData, VistasDeLaTanda, VistasEmbebidas y
     /// VistasMigradasAV2) la trampa que el plan de B2 identifico con dos listas se multiplica: agregar una vista a una
     /// lista y olvidarla en otra no falla nada, simplemente deja invariantes sin correr. Este test
     /// enumera por reflexion todos los Control publicos, no abstractos, de los namespaces de
     /// vistas del ensamblado StockApp.Presentation y exige que cada uno este en alguna de las
-    /// cinco listas del guardian o en VistasFueraDelGuardian.
+    /// listas del guardian o en VistasFueraDelGuardian.
     ///
     /// El predicado de namespace excluye deliberadamente StockApp.Presentation.Controls (los 5
     /// TemplatedControl del design system: BadgeEstado, CampoFormulario, EstadoVacio, HeaderVista,
@@ -259,7 +248,6 @@ public class GuardianDePatronTests
 
         var cubiertas = VistasDeLaTanda.Select(r => r.Data)
             .Concat(VistasEmbebidas.Select(r => r.Data))
-            .Concat(VistasCentradasSinSidebar.Select(r => r.Data))
             .Concat(VistasFueraDelGuardian)
             .Concat(VistasMigradasAV2)
             .ToHashSet();
@@ -268,18 +256,6 @@ public class GuardianDePatronTests
         Assert.True(huerfanas.Count == 0,
             "Vista(s) sin ninguna lista del guardian ni exclusion documentada: "
             + string.Join(", ", huerfanas.Select(t => t.Name)));
-    }
-
-    [AvaloniaTheory]
-    [MemberData(nameof(VistasCentradasSinSidebar))]
-    public void VistaCentrada_TieneCardConPaddingHolgado(Type tipoVista)
-    {
-        var vista = PatronHelpers.Montar(tipoVista);
-        var card = vista.GetVisualDescendants().OfType<Border>()
-            .FirstOrDefault(b => b.Classes.Contains("card"));
-
-        Assert.True(card is not null, $"{tipoVista.Name} no tiene ninguna Border.card en su arbol.");
-        Assert.Equal(new Thickness(48), card!.Padding);
     }
 
     [AvaloniaTheory]
@@ -315,7 +291,6 @@ public class GuardianDePatronTests
     [AvaloniaTheory]
     [MemberData(nameof(VistasDeLaTanda))]
     [MemberData(nameof(VistasEmbebidas))]
-    [MemberData(nameof(VistasCentradasSinSidebar))]
     public void Vista_NoTieneOpacidadesLiterales(Type tipoVista)
     {
         var vista = PatronHelpers.Montar(tipoVista);
@@ -374,7 +349,6 @@ public class GuardianDePatronTests
     [AvaloniaTheory]
     [MemberData(nameof(VistasDeLaTanda))]
     [MemberData(nameof(VistasEmbebidas))]
-    [MemberData(nameof(VistasCentradasSinSidebar))]
     public void Vista_NoTieneUnSegundoBotonPrimario(Type tipoVista)
     {
         if (VistasExentasPorEmbeberUnWizardP8.Contains(tipoVista))

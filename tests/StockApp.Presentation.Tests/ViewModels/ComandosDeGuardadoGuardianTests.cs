@@ -261,6 +261,8 @@ public class ComandosDeGuardadoGuardianTests
         // Solo por la vista (el nombre no es un verbo de confirmación):
         Assert.Contains("LoginViewModel.EntrarCommand", primarios);
         Assert.Contains("LoginViewModel.EntrarCommand", candidatos);
+        Assert.Contains("ResetAdminViewModel.ResetearCommand", primarios);
+        Assert.Contains("BloqueoLicenciaViewModel.ActivarCommand", primarios);
         Assert.DoesNotContain(primarios, p => p.EndsWith(".NuevoCommand", StringComparison.Ordinal));
     }
 

@@ -50,4 +50,22 @@ public class AccesoComparacionTests
     public void LoginAccesoLimitado_IgualAlMockup_1366x768() =>
         Comparar(LoginSinMarcaAgua(), DatosAcceso.Login(soloAccesoLimitado: true), "acceso/login-acceso-limitado.html",
             TamanoLienzo.Municipio);
+
+    [AvaloniaFact]
+    public void Reset_IgualAlMockup() =>
+        ComparacionVisual.CompararConMockup(new ResetAdminView(), DatosAcceso.Reset(), "acceso/reset.html");
+
+    [AvaloniaFact]
+    public void Reset_IgualAlMockup_1366x768() =>
+        ComparacionVisual.CompararConMockup(new ResetAdminView(), DatosAcceso.Reset(), "acceso/reset.html",
+            tamano: TamanoLienzo.Municipio);
+
+    [AvaloniaFact]
+    public void BloqueoLicencia_IgualAlMockup() =>
+        ComparacionVisual.CompararConMockup(new BloqueoLicenciaView(), DatosAcceso.BloqueoLicencia(), "acceso/bloqueo-licencia.html");
+
+    [AvaloniaFact]
+    public void BloqueoLicencia_IgualAlMockup_1366x768() =>
+        ComparacionVisual.CompararConMockup(new BloqueoLicenciaView(), DatosAcceso.BloqueoLicencia(), "acceso/bloqueo-licencia.html",
+            tamano: TamanoLienzo.Municipio);
 }

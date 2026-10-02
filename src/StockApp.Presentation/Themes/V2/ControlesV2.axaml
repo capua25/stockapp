@@ -34,6 +34,7 @@
     <Style Selector=".ui2 TextBlock.texto-secundario">
         <Setter Property="FontSize" Value="{DynamicResource V2FuenteControlTamano}" />
         <Setter Property="FontWeight" Value="{DynamicResource V2FuenteControlPeso}" />
+        <Setter Property="LineHeight" Value="{DynamicResource V2FuenteControlAltoLinea}" />
         <Setter Property="Foreground" Value="{DynamicResource V2TextoSecundarioBrush}" />
     </Style>
     <Style Selector=".ui2 TextBlock.subtitulo-formulario">

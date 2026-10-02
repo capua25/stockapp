@@ -33,6 +33,23 @@ public static class DatosAcceso
         return vm;
     }
 
+    public static ResetAdminViewModel Reset()
+    {
+        var vm = new ResetAdminViewModel(Mock.Of<IResetAdminService>());
+        vm.CodigoMaquina = CodigoMaquina;
+        vm.Desafio = Desafio;
+        return vm;
+    }
+
+    // El código lo carga el DataContextChanged de BloqueoLicenciaView (CargarEstadoAsync): si la
+    // vista perdiera ese wiring, el mockup no coincide.
+    public static BloqueoLicenciaViewModel BloqueoLicencia()
+    {
+        var licencia = new Mock<ILicenciaService>();
+        licencia.Setup(l => l.ObtenerEstadoAsync()).ReturnsAsync(new EstadoLicenciaDto(false, CodigoMaquina));
+        return new BloqueoLicenciaViewModel(licencia.Object);
+    }
+
     // LoginViewModel exige un ShellViewModel; ninguno de sus servicios se usa al renderizar.
     private static ShellViewModel Shell() =>
         new(Mock.Of<IAuthService>(), Mock.Of<ILicenciaService>(), Mock.Of<IResetAdminService>(), Mock.Of<INavigationService>(),

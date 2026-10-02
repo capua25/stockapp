@@ -1,107 +1,115 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels"
-             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="420" d:DesignHeight="560"
+             mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="760"
              x:Class="StockApp.Presentation.Views.ResetAdminView"
              x:DataType="vm:ResetAdminViewModel"
-             Background="{DynamicResource FondoBrush}">
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
 
-    <Grid>
+    <!-- UI v2 (spec §5.4). Espejo: docs/ui-v2/mockups/acceso/reset.html. -->
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <v2:TarjetaContenido Width="{DynamicResource V2AnchoCardLogin}"
+                             Padding="32"
+                             HorizontalAlignment="Center"
+                             VerticalAlignment="Center"
+                             Margin="0,1,0,0">
+                <!-- Margin 0,1,0,0: compensación medida (spec 6.5). La card tiene alto impar; centrarla da
+                     medio píxel, Avalonia redondea distinto de Chromium y la card caía 1 px más arriba que
+                     en el mockup (75 teselas sin el margen, 16 con él antes de corregir la etiqueta larga). Depende de la paridad del alto: si cambia, volver a medir. -->
+            <StackPanel Spacing="16">
 
-        <Border Classes="card" Padding="{DynamicResource PaddingHolgado}" HorizontalAlignment="Center" VerticalAlignment="Center" Width="420">
-            <StackPanel Spacing="{DynamicResource Espacio4}">
+                <!-- Textos centrados con TextAlignment y no HorizontalAlignment (spec 6.5). -->
+                <TextBlock Classes="titulo-login" Text="Recuperar acceso de Admin" TextAlignment="Center" />
 
-                <TextBlock Text="Recuperar acceso de Admin"
-                           Classes="titulo-vista"
-                           HorizontalAlignment="Center"
-                           Margin="0,0,0,8" />
-
-                <Button Content="1) Generar código de recuperación"
-                        Classes="secondary"
+                <!-- La etiqueta va en un TextBlock con TextAlignment Center y el botón estirado: como
+                     Content de tipo string, Avalonia redondea el origen del texto centrado y esta etiqueta
+                     larga en negrita pasaba de 16 a 3 teselas densas al corregirlo. -->
+                <Button Classes="secundario"
                         Command="{Binding PedirDesafioCommand}"
                         HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Center" />
+                        HorizontalContentAlignment="Stretch">
+                    <TextBlock Text="1) Generar código de recuperación" TextAlignment="Center" />
+                </Button>
 
-                <!-- Código de máquina -->
-                <c:CampoFormulario Etiqueta="Código de máquina">
+                <v2:CampoFormulario Etiqueta="Código de máquina">
                     <Grid ColumnDefinitions="*,Auto">
                         <SelectableTextBlock Grid.Column="0"
-                                              Text="{Binding CodigoMaquina}"
-                                              FontFamily="Consolas,monospace"
-                                              VerticalAlignment="Center"
-                                              TextWrapping="Wrap" />
+                                             Text="{Binding CodigoMaquina}"
+                                             TextWrapping="Wrap"
+                                             VerticalAlignment="Center"
+                                             FontFeatures="+tnum"
+                                             FontSize="{DynamicResource V2FuenteControlTamano}"
+                                             LineHeight="{DynamicResource V2FuenteControlAltoLinea}"
+                                             Foreground="{DynamicResource V2TextoEtiquetaBrush}" />
                         <Button Grid.Column="1"
+                                Classes="secundario"
                                 Content="Copiar"
-                                Classes="secondary compacto"
                                 Margin="8,0,0,0"
                                 VerticalAlignment="Center"
                                 Click="CopiarCodigoMaquina_Click" />
                     </Grid>
-                </c:CampoFormulario>
+                </v2:CampoFormulario>
 
-                <!-- Desafío -->
-                <c:CampoFormulario Etiqueta="Desafío">
+                <v2:CampoFormulario Etiqueta="Desafío">
                     <Grid ColumnDefinitions="*,Auto">
                         <SelectableTextBlock Grid.Column="0"
-                                              Text="{Binding Desafio}"
-                                              FontFamily="Consolas,monospace"
-                                              VerticalAlignment="Center"
-                                              TextWrapping="Wrap" />
+                                             Text="{Binding Desafio}"
+                                             TextWrapping="Wrap"
+                                             VerticalAlignment="Center"
+                                             FontFeatures="+tnum"
+                                             FontSize="{DynamicResource V2FuenteControlTamano}"
+                                             LineHeight="{DynamicResource V2FuenteControlAltoLinea}"
+                                             Foreground="{DynamicResource V2TextoEtiquetaBrush}" />
                         <Button Grid.Column="1"
+                                Classes="secundario"
                                 Content="Copiar"
-                                Classes="secondary compacto"
                                 Margin="8,0,0,0"
                                 VerticalAlignment="Center"
                                 Click="CopiarDesafio_Click" />
                     </Grid>
-                </c:CampoFormulario>
+                </v2:CampoFormulario>
 
-                <!-- Token de reset -->
-                <c:CampoFormulario Etiqueta="Token de reset (del proveedor)">
+                <v2:CampoFormulario Etiqueta="Token de reset (del proveedor)">
                     <TextBox Text="{Binding TokenPegado}"
                              AcceptsReturn="True"
-                             Height="90"
+                             TextWrapping="Wrap"
+                             Height="88"
                              PlaceholderText="Pegá el token firmado" />
-                </c:CampoFormulario>
+                </v2:CampoFormulario>
 
-                <!-- Nueva contraseña -->
-                <c:CampoFormulario Etiqueta="Nueva contraseña de Admin">
+                <v2:CampoFormulario Etiqueta="Nueva contraseña de Admin">
                     <TextBox Text="{Binding NuevaContrasena}"
                              PasswordChar="●"
                              PlaceholderText="Nueva contraseña" />
-                </c:CampoFormulario>
+                </v2:CampoFormulario>
 
-                <Button Content="2) Resetear Admin"
-                        Classes="primary"
+                <Button Classes="primario"
+                        Content="2) Resetear Admin"
                         Command="{Binding ResetearCommand}"
                         IsDefault="True"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Center" />
+                        HorizontalAlignment="Stretch" />
 
-                <!-- Mensaje de éxito -->
-                <TextBlock Text="Listo. Volvé al login e ingresá con la nueva contraseña."
-                           Foreground="{DynamicResource SuccessBrush}"
-                           IsVisible="{Binding Completado}"
-                           TextWrapping="Wrap" />
+                <v2:Alerta x:Name="AlertaCompletado"
+                           Variante="Info"
+                           Texto="Listo. Volvé al login e ingresá con la nueva contraseña."
+                           IsVisible="{Binding Completado}" />
 
-                <!-- Mensaje de error -->
-                <TextBlock Text="{Binding MensajeError}"
-                           Foreground="{DynamicResource DangerBrush}"
-                           IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                           TextWrapping="Wrap" />
+                <v2:Alerta x:Name="AlertaError"
+                           Variante="Error"
+                           Texto="{Binding MensajeError}"
+                           IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
-                <Button Content="Volver al login"
-                        Classes="ghost"
+                <Button Classes="ghost"
+                        Content="Volver al login"
                         Command="{Binding VolverCommand}"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Center" />
+                        HorizontalAlignment="Stretch" />
 
             </StackPanel>
-        </Border>
-
-    </Grid>
+        </v2:TarjetaContenido>
+    </ScrollViewer>
 
 </UserControl>
