@@ -241,4 +241,57 @@ public class GuardianTextoRecortadoTests
     [AvaloniaFact]
     public void TextoConMaxLinesQueAlcanza_NoSeReporta() =>
         Assert.Empty(Renderizar(new TextBlock { Width = 120, TextWrapping = TextWrapping.Wrap, MaxLines = 3, Text = "Corto" }));
+
+    [AvaloniaFact]
+    public void GrillaMasAltaQueLaVentanaSinScrollViewer_SeReporta()
+    {
+        // Ledger Fase 0, Task 18: el relajamiento del DataGrid seguía vigente en la ventana, así
+        // que las filas que caen debajo de los 760 px (inalcanzables: nada scrollea la página)
+        // no se reportaban.
+        var recortes = RenderizarGrilla(new DataGrid { Height = 1000, Width = 300, Columns = { Columna(150) } }, filas: 40);
+
+        // Lo reporta el UserControl raíz (ClipToBounds, del tamaño de la ventana) antes de llegar
+        // a la ventana misma: lo que importa es que ya no se exime por ser viewport.
+        Assert.NotEmpty(recortes);
+        Assert.All(recortes, r => Assert.Contains("queda fuera de", r));
+    }
+
+    [AvaloniaFact]
+    public void ScrollViewerQueSeSaleDeLaVentana_SeReporta()
+    {
+        var recortes = Renderizar(new ScrollViewer
+        {
+            Height = 1000,
+            Width = 300,
+            VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+            Content = new StackPanel { Children = { new Border { Height = 900 }, new TextBlock { Text = "Debajo de la ventana" } } },
+        });
+
+        Assert.Contains(recortes, r => r.Contains("Debajo de la ventana") && r.Contains("la ventana"));
+    }
+
+    [AvaloniaFact]
+    public void GrillaAltaDentroDeUnScrollViewerQueEntra_NoSeReporta()
+    {
+        // El ScrollViewer de afuera sí se alcanza entero: la grilla se lee scrolleando la página.
+        var grilla = new DataGrid
+        {
+            Height = 1000,
+            Width = 300,
+            AutoGenerateColumns = false,
+            Columns = { Columna(150) },
+            ItemsSource = Enumerable.Range(0, 40).Select(_ => new Fila("A-001")).ToList(),
+        };
+        var vista = new UserControl
+        {
+            Classes = { "ui2" },
+            Content = new ScrollViewer { Height = 400, Width = 320, HorizontalAlignment = HorizontalAlignment.Left, Content = grilla },
+        };
+        IReadOnlyList<string> recortes = [];
+        RenderizadorVista.RenderizarAPng(vista, null,
+            Path.Combine(Directory.CreateTempSubdirectory("guardian-anidado-").FullName, "vista.png"),
+            v => recortes = GuardianTextoRecortado.Buscar(v));
+
+        Assert.Empty(recortes);
+    }
 }

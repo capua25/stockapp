@@ -22,7 +22,8 @@ namespace StockApp.Presentation.VisualTests.Comparacion;
 /// <item>Por un ancestro: el texto tiene todo su lugar (en un StackPanel horizontal el Bounds
 /// siempre coincide con lo que pide) pero cae fuera de un ancestro con ClipToBounds o de la
 /// ventana. El viewport de un ScrollViewer no cuenta en el eje en que se puede scrollear: el texto
-/// sigue alcanzable. Lo mismo el DataGrid, que scrollea sin ScrollViewer: desde su presentador de
+/// sigue alcanzable, pero desde ahí hacia afuera se controla la caja del viewport, que sí tiene que
+/// verse entera. Lo mismo el DataGrid, que scrollea sin ScrollViewer: desde su presentador de
 /// filas o de headers hacia afuera.</item>
 /// <item>Valor de un TextBox: el TextPresenter mide su TextLayout; el ScrollViewer interno del
 /// TextBox no relaja ejes.</item>
@@ -140,9 +141,10 @@ public static class GuardianTextoRecortado
             return null;
         }
 
+        // rect: lo que tiene que verse entero. Empieza siendo el texto; al cruzar un viewport
+        // desplazable pasa a ser la caja del viewport en ese eje (el texto se alcanza scrolleando,
+        // pero solo a través de ese viewport, que sí tiene que verse entero hacia afuera).
         var rect = rectLocal.TransformToAABB(aRaiz);
-        var horizontalFijo = true;
-        var verticalFijo = true;
         foreach (var ancestro in texto.GetVisualAncestors())
         {
             if (ancestro == raizVisual)
@@ -150,35 +152,50 @@ public static class GuardianTextoRecortado
                 break;
             }
 
-            if (ancestro is ScrollContentPresenter { TemplatedParent: ScrollViewer scroll }
-                && scroll.TemplatedParent is not TextBox)
-            {
-                // Lo que el viewport recorta en un eje desplazable se alcanza scrolleando; lo de
-                // afuera (la ventana incluida) tampoco decide en ese eje. El ScrollViewer de un
-                // TextBox no cuenta: sigue al cursor, no se usa para leer el valor.
-                horizontalFijo &= scroll.HorizontalScrollBarVisibility == ScrollBarVisibility.Disabled;
-                verticalFijo &= scroll.VerticalScrollBarVisibility == ScrollBarVisibility.Disabled;
-            }
+            var (desplazaH, desplazaV) = EjesDesplazables(ancestro);
+            var caja = ancestro.TransformToVisual(raizVisual) is { } ancestroARaiz
+                ? new Rect(ancestro.Bounds.Size).TransformToAABB(ancestroARaiz)
+                : (Rect?)null;
 
-            if (ancestro is DataGridRowsPresenter or DataGridColumnHeadersPresenter
-                && ancestro.FindAncestorOfType<DataGrid>() is { } grilla)
-            {
-                // El DataGrid scrollea por su cuenta, sin ScrollViewer: desde el presentador de
-                // filas (o de headers) hacia afuera, lo que su plantilla recorta en un eje
-                // desplazable se alcanza scrolleando. Lo de adentro (la celda) se sigue mirando.
-                horizontalFijo &= grilla.HorizontalScrollBarVisibility == ScrollBarVisibility.Disabled;
-                verticalFijo &= ancestro is DataGridColumnHeadersPresenter
-                    || grilla.VerticalScrollBarVisibility == ScrollBarVisibility.Disabled;
-            }
-
-            if (ancestro.ClipToBounds && ancestro.TransformToVisual(raizVisual) is { } ancestroARaiz
-                && !Contiene(new Rect(ancestro.Bounds.Size).TransformToAABB(ancestroARaiz), rect, horizontalFijo, verticalFijo))
+            if (ancestro.ClipToBounds && caja is { } recorte && !Contiene(recorte, rect, !desplazaH, !desplazaV))
             {
                 return ancestro.GetType().Name + (string.IsNullOrEmpty((ancestro as Control)?.Name) ? "" : "#" + ((Control)ancestro).Name);
             }
+
+            if ((desplazaH || desplazaV) && caja is { } viewport)
+            {
+                rect = new Rect(
+                    desplazaH ? viewport.Left : rect.Left,
+                    desplazaV ? viewport.Top : rect.Top,
+                    desplazaH ? viewport.Width : rect.Width,
+                    desplazaV ? viewport.Height : rect.Height);
+            }
         }
 
-        return Contiene(new Rect(raizVisual.ClientSize), rect, horizontalFijo, verticalFijo) ? null : "la ventana";
+        return Contiene(new Rect(raizVisual.ClientSize), rect, true, true) ? null : "la ventana";
+    }
+
+    // Ejes en que este ancestro es un viewport que el usuario scrollea.
+    private static (bool Horizontal, bool Vertical) EjesDesplazables(Visual ancestro)
+    {
+        if (ancestro is ScrollContentPresenter { TemplatedParent: ScrollViewer scroll }
+            && scroll.TemplatedParent is not TextBox)
+        {
+            // El ScrollViewer de un TextBox sigue al cursor, no se usa para leer el valor (Task 1).
+            return (scroll.HorizontalScrollBarVisibility != ScrollBarVisibility.Disabled,
+                    scroll.VerticalScrollBarVisibility != ScrollBarVisibility.Disabled);
+        }
+
+        if (ancestro is DataGridRowsPresenter or DataGridColumnHeadersPresenter
+            && ancestro.FindAncestorOfType<DataGrid>() is { } grilla)
+        {
+            // El DataGrid scrollea por su cuenta, sin ScrollViewer: desde su presentador de filas
+            // (o de headers, solo horizontal) hacia afuera. Lo de adentro (la celda) se sigue mirando.
+            return (grilla.HorizontalScrollBarVisibility != ScrollBarVisibility.Disabled,
+                    ancestro is DataGridRowsPresenter && grilla.VerticalScrollBarVisibility != ScrollBarVisibility.Disabled);
+        }
+
+        return (false, false);
     }
 
     private static bool Contiene(Rect caja, Rect rect, bool horizontal, bool vertical) =>
