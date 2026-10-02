@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Diálogo: confirmación (UI v2)</title>
+<link rel="stylesheet" href="../_base/tokens.css">
+<link rel="stylesheet" href="../_base/base.css">
+<style>
+  /* Área cliente del Window (Width=360): Border raíz con padding 24 sobre superficie. La barra de
+     título es del sistema operativo y no se compara. */
+  .v2-ventana { display: flex; align-items: center; justify-content: center; }
+  .dialogo { width: 360px; padding: 24px; background: var(--v2-color-superficie); display: flex; flex-direction: column; gap: 24px; }
+  .botones { display: flex; justify-content: flex-end; gap: 8px; }
+</style>
+</head>
+<body>
+<!-- Datos: new ConfirmacionDialog("¿Cerrar la sesión?"), el mensaje real de cerrar sesión (Task 15). -->
+<div class="v2-ventana">
+  <div class="dialogo">
+    <div class="v2-cuerpo">¿Cerrar la sesión?</div>
+    <div class="botones">
+      <span class="v2-boton v2-boton--secundario">Cancelar</span>
+      <span class="v2-boton v2-boton--primario">Sí, continuar</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

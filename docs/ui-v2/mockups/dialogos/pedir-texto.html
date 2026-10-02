@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Diálogo: pedir texto (UI v2)</title>
+<link rel="stylesheet" href="../_base/tokens.css">
+<link rel="stylesheet" href="../_base/base.css">
+<style>
+  /* Área cliente del Window (Width=400): Border raíz con padding 24 sobre superficie. La barra de
+     título es del sistema operativo y no se compara. */
+  .v2-ventana { display: flex; align-items: center; justify-content: center; }
+  .dialogo { width: 400px; padding: 24px; background: var(--v2-color-superficie); display: flex; flex-direction: column; gap: 16px; }
+  .multilinea { height: 80px; align-items: flex-start; padding: 8px 12px; }
+  .botones { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<!-- Datos: new PedirTextoDialog("Anular documento", "Ingresá el motivo de la anulación:"), los textos reales de DocumentoFormViewModel (Task 15). -->
+<div class="v2-ventana">
+  <div class="dialogo">
+    <div class="v2-cuerpo">Ingresá el motivo de la anulación:</div>
+    <div class="v2-input multilinea"><span class="v2-input-placeholder">Escriba el motivo</span></div>
+    <div class="botones">
+      <span class="v2-boton v2-boton--secundario">Cancelar</span>
+      <span class="v2-boton v2-boton--primario">Aceptar</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>
