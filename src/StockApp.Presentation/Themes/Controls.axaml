@@ -24,6 +24,10 @@
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="{DynamicResource RadioBase}" />
         <Setter Property="Padding" Value="16,8" />
+        <!-- Integridad de datos (bug 2026-10-01): un botón cuyo Command es un comando de guardado
+             (ViewModelBase.ComandoDeGuardado) explica por qué está deshabilitado mientras hay un
+             campo en rojo. Ver ErroresDeEntradaBehavior.ExplicarBloqueo. -->
+        <Setter Property="(beh:ErroresDeEntradaBehavior.ExplicarBloqueo)" Value="True" />
     </Style>
     <Style Selector="Button:pointerover">
         <Setter Property="Background" Value="{DynamicResource BrandSuaveBrush}" />
