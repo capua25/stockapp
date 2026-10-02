@@ -67,7 +67,7 @@ public class TarjetaContenidoEncabezadoTests
     {
         var encabezado = Buscar<EncabezadoPagina>(Montar("""<v2:EncabezadoPagina x:Name="E" Titulo="Productos" />"""), "E");
 
-        Assert.False(Parte<StackPanel>(encabezado, "PART_Breadcrumb").IsVisible);
+        Assert.False(Parte<Grid>(encabezado, "PART_Breadcrumb").IsVisible);
         Assert.False(Parte<TextBlock>(encabezado, "PART_Subtitulo").IsVisible);
     }
 

@@ -133,23 +133,33 @@
         <Setter Property="Template">
             <ControlTemplate>
                 <StackPanel>
-                    <StackPanel x:Name="PART_Breadcrumb"
-                                Orientation="Horizontal"
-                                Margin="0,0,0,8"
-                                IsVisible="{TemplateBinding BreadcrumbOrigen, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                    <!-- Grid y no StackPanel horizontal: en un StackPanel el tramo actual recibe todo
+                         el ancho que pide y un nombre largo se sale de la card. En la columna * baja
+                         de línea (Fase 1, Task 4). base.css .v2-breadcrumb lo replica. -->
+                    <Grid x:Name="PART_Breadcrumb"
+                          ColumnDefinitions="Auto,Auto,*"
+                          Margin="0,0,0,8"
+                          IsVisible="{TemplateBinding BreadcrumbOrigen, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
                         <Button x:Name="PART_BreadcrumbOrigen"
+                                Grid.Column="0"
+                                VerticalAlignment="Top"
                                 Theme="{StaticResource V2TemaEnlace}"
                                 Content="{TemplateBinding BreadcrumbOrigen}"
                                 Command="{TemplateBinding BreadcrumbComando}" />
                         <TextBlock x:Name="PART_BreadcrumbSeparador"
+                                   Grid.Column="1"
+                                   VerticalAlignment="Top"
                                    Text=" / "
                                    FontSize="{DynamicResource V2FuenteControlTamano}"
                                    Foreground="{DynamicResource V2TextoTerciarioBrush}" />
                         <TextBlock x:Name="PART_BreadcrumbActual"
+                                   Grid.Column="2"
+                                   VerticalAlignment="Top"
+                                   TextWrapping="Wrap"
                                    Text="{TemplateBinding BreadcrumbActual}"
                                    FontSize="{DynamicResource V2FuenteControlTamano}"
                                    Foreground="{DynamicResource V2TextoTerciarioBrush}" />
-                    </StackPanel>
+                    </Grid>
                     <Grid ColumnDefinitions="*,Auto">
                         <StackPanel Grid.Column="0">
                             <TextBlock x:Name="PART_Titulo"
