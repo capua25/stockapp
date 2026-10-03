@@ -64,6 +64,10 @@ public class ComandosDeGuardadoGuardianTests
             "reinicia el asistente; descartar lo tipeado no debe bloquearse por un campo en rojo",
         [("ActualizacionBloqueoViewModel", "AplicarYReiniciarCommand")] =
             "aplica una actualización ya descargada; la pantalla no tiene ningún campo tipeado",
+        [("ActualizacionBannerViewModel", "ActualizarAlReiniciarCommand")] =
+            "sin campos tipeados",
+        [("ActualizacionModalViewModel", "ActualizarAhoraCommand")] =
+            "sin campos tipeados",
     };
 
     /// <summary>Botones primarios que son NAVEGACIÓN ("Nuevo ..." abre el formulario vacío): no
@@ -146,7 +150,7 @@ public class ComandosDeGuardadoGuardianTests
 
     private static string DirViews([CallerFilePath] string archivo = "")
         => Path.GetFullPath(Path.Combine(Path.GetDirectoryName(archivo)!, "..", "..", "..",
-            "src", "StockApp.Presentation", "Views"));
+            "src", "StockApp.Presentation"));
 
     private static readonly Type[] TiposDeViewModel = typeof(ViewModelBase).Assembly.GetTypes()
         .Where(t => typeof(ViewModelBase).IsAssignableFrom(t) && !t.IsAbstract && !t.IsGenericTypeDefinition)
@@ -161,7 +165,9 @@ public class ComandosDeGuardadoGuardianTests
     public static IReadOnlyList<(Type Vm, string Comando)> BotonesPrimarios()
     {
         var resultado = new List<(Type, string)>();
-        foreach (var archivo in Directory.GetFiles(DirViews(), "*.axaml", SearchOption.AllDirectories))
+        foreach (var archivo in Directory.GetFiles(DirViews(), "*.axaml", SearchOption.AllDirectories)
+                     .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
+                                 && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")))
         {
             var texto = File.ReadAllText(archivo);
             var nombreVm = DataTypeRaiz.Match(texto) is { Success: true } m
