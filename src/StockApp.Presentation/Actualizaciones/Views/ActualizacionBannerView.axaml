@@ -5,11 +5,15 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="56"
              x:Class="StockApp.Presentation.Actualizaciones.Views.ActualizacionBannerView"
+             Classes="ui2"
              x:DataType="vm:ActualizacionBannerViewModel">
 
-    <!-- Franja superior discreta (severity: normal). No bloquea, ancho completo. -->
-    <Border Background="{DynamicResource InfoSuaveBrush}" BorderBrush="{DynamicResource InfoBrush}" BorderThickness="0,0,0,2"
-            Padding="16,8"
+    <!-- UI v2 (spec §5.5). Franja superior discreta (severity normal), no bloquea. Espejo:
+         docs/ui-v2/mockups/actualizaciones/banner.html. -->
+    <Border Background="{DynamicResource V2AlertaInfoFondoBrush}"
+            BorderBrush="{DynamicResource V2AlertaInfoBordeBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="24,0"
             Height="56"
             HorizontalAlignment="Stretch"
             VerticalAlignment="Top">
@@ -17,18 +21,13 @@
             <TextBlock Grid.Column="0"
                        Text="{Binding Titulo}"
                        VerticalAlignment="Center"
-                       FontWeight="SemiBold"
-                       Classes="body" />
-
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="{DynamicResource Espacio3}" VerticalAlignment="Center">
-                <Button Content="Más tarde"
-                        Command="{Binding PosponerCommand}"
-                        IsVisible="{Binding EsPosponible}"
-                        Classes="ghost" />
-                <Button Content="Actualizar ahora"
-                        Command="{Binding ActualizarAlReiniciarCommand}"
-                        IsEnabled="{Binding !OperacionEnCurso}"
-                        Classes="primary" />
+                       FontSize="{DynamicResource V2FuenteSubtituloFormularioTamano}"
+                       FontWeight="{DynamicResource V2FuenteSubtituloFormularioPeso}"
+                       Foreground="{DynamicResource V2AlertaInfoTextoBrush}" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <Button Classes="ghost" Content="Más tarde" Command="{Binding PosponerCommand}" IsVisible="{Binding EsPosponible}" />
+                <Button Classes="primario" Content="Actualizar ahora" Command="{Binding ActualizarAlReiniciarCommand}"
+                        IsEnabled="{Binding !OperacionEnCurso}" />
             </StackPanel>
         </Grid>
     </Border>

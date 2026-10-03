@@ -171,9 +171,6 @@ public class GuardianDePatronTests
         typeof(AdjuntosDocumentoPanelView),
         typeof(ClasificacionTareaPanelView),
         typeof(AccesoLimitadoView),
-        typeof(ActualizacionBannerView),
-        typeof(ActualizacionModalView),
-        typeof(ActualizacionBloqueoView),
     };
 
     /// <summary>
@@ -221,6 +218,9 @@ public class GuardianDePatronTests
         typeof(LoginView),
         typeof(ResetAdminView),
         typeof(BloqueoLicenciaView),
+        typeof(ActualizacionBannerView),
+        typeof(ActualizacionModalView),
+        typeof(ActualizacionBloqueoView),
     };
 
     /// <summary>

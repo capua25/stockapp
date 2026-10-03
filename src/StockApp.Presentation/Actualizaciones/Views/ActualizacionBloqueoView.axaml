@@ -1,52 +1,46 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
              xmlns:vm="using:StockApp.Presentation.Actualizaciones"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="500" d:DesignHeight="350"
              x:Class="StockApp.Presentation.Actualizaciones.Views.ActualizacionBloqueoView"
+             Classes="ui2"
              x:DataType="vm:ActualizacionBloqueoViewModel">
 
-    <!-- Overlay rojo bloqueante (severity: critical). Sin opción de posponer. -->
-    <!-- EsModoDegradado=false → bloqueo normal; EsModoDegradado=true → banner permanente. -->
+    <!-- UI v2 (spec §5.5). EsModoDegradado=false: bloqueo crítico (sin posponer).
+         EsModoDegradado=true: franja de error permanente. Espejos: actualizaciones/bloqueo.html y
+         actualizaciones/modo-degradado.html. Textos reales sin tilde, sin cambios. -->
     <Grid>
 
-        <!-- BloqueoCritico: overlay modal -->
-        <Border IsVisible="{Binding !EsModoDegradado}"
-                Background="{DynamicResource DangerSuaveBrush}" BorderBrush="{DynamicResource DangerBrush}" BorderThickness="2"
-                CornerRadius="{DynamicResource RadioBase}" Padding="{DynamicResource MargenVista}" HorizontalAlignment="Center" VerticalAlignment="Center"
-                Width="480">
-            <StackPanel Spacing="{DynamicResource Espacio4}">
-
-                <TextBlock Text="Actualizacion critica requerida"
-                           Classes="seccion"
-                           FontWeight="Bold"
-                           Foreground="{DynamicResource DangerPressedBrush}" />
-
-                <TextBlock Text="{Binding TextoMarkdown}"
-                           TextWrapping="Wrap"
-                           Classes="body" />
-
-                <Button Content="Aplicar y reiniciar"
-                        Command="{Binding AplicarYReiniciarCommand}"
-                        Classes="danger"
+        <v2:TarjetaContenido x:Name="TarjetaBloqueo"
+                             IsVisible="{Binding !EsModoDegradado}"
+                             Width="480"
+                             Padding="24"
+                             HorizontalAlignment="Center"
+                             VerticalAlignment="Center">
+            <StackPanel Spacing="16">
+                <TextBlock Classes="titulo-seccion" Text="Actualizacion critica requerida"
+                           Foreground="{DynamicResource V2PeligroTextoBrush}" />
+                <TextBlock Classes="texto-secundario" Text="{Binding TextoMarkdown}" TextWrapping="Wrap" />
+                <Button Classes="primario" Content="Aplicar y reiniciar" Command="{Binding AplicarYReiniciarCommand}"
                         HorizontalAlignment="Right" />
-
             </StackPanel>
-        </Border>
+        </v2:TarjetaContenido>
 
-        <!-- ModoDegradado: banner rojo permanente no-cerrable en la parte superior -->
-        <Border IsVisible="{Binding EsModoDegradado}"
-                Background="{DynamicResource DangerPressedBrush}"
-                Padding="12,6"
+        <Border x:Name="BannerDegradado"
+                IsVisible="{Binding EsModoDegradado}"
+                Background="{DynamicResource V2AlertaErrorFondoBrush}"
+                BorderBrush="{DynamicResource V2AlertaErrorBordeBrush}"
+                BorderThickness="0,0,0,1"
+                Padding="24,12"
                 VerticalAlignment="Top">
-            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}" VerticalAlignment="Center">
-                <TextBlock Text="MODO DEGRADADO — Actualizacion critica no descargada. Reintentara al reiniciar."
-                           Foreground="{DynamicResource SuperficieBrush}"
-                           FontWeight="Bold"
-                           VerticalAlignment="Center"
-                           TextWrapping="Wrap" />
-            </StackPanel>
+            <TextBlock Text="MODO DEGRADADO — Actualizacion critica no descargada. Reintentara al reiniciar."
+                       TextWrapping="Wrap"
+                       FontSize="{DynamicResource V2FuenteSubtituloFormularioTamano}"
+                       FontWeight="{DynamicResource V2FuenteSubtituloFormularioPeso}"
+                       Foreground="{DynamicResource V2AlertaErrorTextoBrush}" />
         </Border>
 
     </Grid>
