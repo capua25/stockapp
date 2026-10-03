@@ -1,7 +1,7 @@
 # StockApp — UI v2: rediseño total de la interfaz
 
 **Fecha:** 2026-09-28
-**Estado:** aprobado por el usuario, pendiente de plan de implementación (Fase 0)
+**Estado:** aprobado por el usuario; Fase 0 y Fase 1 implementadas en feat/ui-v2, Fase 1 pendiente de aprobación del usuario (merge a main al final de todas las fases)
 **Rama:** `feat/ui-v2` (worktree propio)
 **Alcance:** todas las vistas de `src/StockApp.Presentation/` (shell, ~55 de contenido, pantallas fuera del shell, 4 diálogos, 3 overlays de actualización)
 **Mockups de referencia:** `docs/ui-v2/mockups/referencia/` — `direccion-visual-aprobada.html` (variante `.di-azul`), `navegacion-aprobada.html` (opción A), `patrones-1.html`
