@@ -152,10 +152,13 @@ public class MovimientoStockServiceTests
         Assert.Equal(0m, resultado.PrecioUnitario);
     }
 
-    [Fact]
-    public async Task RegistrarAsync_UsoOConsumoConPrecio_IgnoraElPrecioYGuardaCero()
+    [Theory]
+    [InlineData(MotivoMovimiento.UsoOConsumo)]
+    [InlineData(MotivoMovimiento.Merma)]
+    [InlineData(MotivoMovimiento.Ajuste)]
+    public async Task RegistrarAsync_SalidaConPrecio_IgnoraElPrecioYGuardaCero(MotivoMovimiento motivo)
     {
-        // Decisión: el precio no aplica a Uso o consumo, así que se descarta en vez de rechazar
+        // Decisión: en una Salida el precio no aplica nunca, así que se descarta en vez de rechazar
         // (un cliente viejo que lo mande no debe romper; el dato guardado queda siempre en 0).
         var (svc, repo, _, _) = Crear();
         repo.Setup(r => r.ObtenerProductoAsync(1)).ReturnsAsync(ProductoActivo());
@@ -164,10 +167,27 @@ public class MovimientoStockServiceTests
             .Callback<RegistroAtomicoArgs>(a => capturado = a)
             .ReturnsAsync(new ResultadoRegistro(ResultadoRegistroEstado.Ok, 1, 15m));
 
-        var resultado = await svc.RegistrarAsync(DtoSalida());   // DtoSalida lleva precio 100
+        var dto = new RegistrarMovimientoDto(1, TipoMovimiento.Salida, motivo, 5m, 100m, null);
+        var resultado = await svc.RegistrarAsync(dto);
 
         Assert.Equal(0m, capturado!.Movimiento.PrecioUnitario);
         Assert.Equal(0m, resultado.PrecioUnitario);
+    }
+
+    [Fact]
+    public async Task RegistrarAsync_EntradaAjusteConPrecio_GuardaElPrecio()
+    {
+        var (svc, repo, _, _) = Crear();
+        repo.Setup(r => r.ObtenerProductoAsync(1)).ReturnsAsync(ProductoActivo());
+        RegistroAtomicoArgs? capturado = null;
+        repo.Setup(r => r.RegistrarMovimientoAtomicoAsync(It.IsAny<RegistroAtomicoArgs>()))
+            .Callback<RegistroAtomicoArgs>(a => capturado = a)
+            .ReturnsAsync(new ResultadoRegistro(ResultadoRegistroEstado.Ok, 1, 15m));
+
+        var dto = new RegistrarMovimientoDto(1, TipoMovimiento.Entrada, MotivoMovimiento.Ajuste, 5m, 40m, null);
+        await svc.RegistrarAsync(dto);
+
+        Assert.Equal(40m, capturado!.Movimiento.PrecioUnitario);
     }
 
     [Theory]

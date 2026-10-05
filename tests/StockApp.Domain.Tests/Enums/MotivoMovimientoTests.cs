@@ -29,21 +29,28 @@ public class MotivoMovimientoTests
     public void Nombre_DevuelveElTextoVisible(MotivoMovimiento motivo, string esperado)
         => Assert.Equal(esperado, motivo.Nombre());
 
+    // Tabla tipo × motivo (incluye combinaciones inválidas, que el servicio rechaza antes).
     [Theory]
-    [InlineData(MotivoMovimiento.Compra, true)]
-    [InlineData(MotivoMovimiento.UsoOConsumo, false)]
-    [InlineData(MotivoMovimiento.Ajuste, false)]
-    [InlineData(MotivoMovimiento.Merma, false)]
-    public void PrecioEsObligatorio_SoloParaCompra(MotivoMovimiento motivo, bool esperado)
-        => Assert.Equal(esperado, motivo.PrecioEsObligatorio());
+    [InlineData(TipoMovimiento.Entrada, MotivoMovimiento.Compra, true)]
+    [InlineData(TipoMovimiento.Entrada, MotivoMovimiento.Ajuste, false)]
+    [InlineData(TipoMovimiento.Entrada, MotivoMovimiento.Merma, false)]
+    [InlineData(TipoMovimiento.Entrada, MotivoMovimiento.UsoOConsumo, false)]
+    [InlineData(TipoMovimiento.Salida, MotivoMovimiento.Compra, false)]
+    [InlineData(TipoMovimiento.Salida, MotivoMovimiento.Ajuste, false)]
+    [InlineData(TipoMovimiento.Salida, MotivoMovimiento.Merma, false)]
+    [InlineData(TipoMovimiento.Salida, MotivoMovimiento.UsoOConsumo, false)]
+    public void PrecioEsObligatorio_SoloEntradaPorCompra(TipoMovimiento tipo, MotivoMovimiento motivo, bool esperado)
+        => Assert.Equal(esperado, motivo.PrecioEsObligatorio(tipo));
 
     [Theory]
-    [InlineData(MotivoMovimiento.Compra, true)]
-    [InlineData(MotivoMovimiento.UsoOConsumo, false)]
-    [InlineData(MotivoMovimiento.Ajuste, true)]
-    [InlineData(MotivoMovimiento.Merma, true)]
-    public void PrecioAplica_TodosMenosUsoOConsumo(MotivoMovimiento motivo, bool esperado)
-        => Assert.Equal(esperado, motivo.PrecioAplica());
+    [InlineData(TipoMovimiento.Entrada, MotivoMovimiento.Compra, true)]
+    [InlineData(TipoMovimiento.Entrada, MotivoMovimiento.Ajuste, true)]
+    [InlineData(TipoMovimiento.Salida, MotivoMovimiento.Compra, false)]
+    [InlineData(TipoMovimiento.Salida, MotivoMovimiento.Ajuste, false)]
+    [InlineData(TipoMovimiento.Salida, MotivoMovimiento.Merma, false)]
+    [InlineData(TipoMovimiento.Salida, MotivoMovimiento.UsoOConsumo, false)]
+    public void PrecioAplica_SoloEnEntradas(TipoMovimiento tipo, MotivoMovimiento motivo, bool esperado)
+        => Assert.Equal(esperado, motivo.PrecioAplica(tipo));
 
     [Fact]
     public void Nombre_CubreTodosLosMiembros_SinCaerAlToString()

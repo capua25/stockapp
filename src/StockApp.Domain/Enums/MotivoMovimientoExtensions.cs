@@ -14,16 +14,18 @@ public static class MotivoMovimientoExtensions
     };
 
     /// <summary>
-    /// El precio unitario es OBLIGATORIO (&gt; 0) solo para Compra: es el único motivo con un
-    /// valor de adquisición. Para Ajuste y Merma es opcional.
+    /// El precio unitario es OBLIGATORIO (&gt; 0) solo en una ENTRADA por Compra: es el único
+    /// caso con un valor de adquisición. En Entrada por Ajuste es opcional; en Salida no aplica.
     /// </summary>
-    public static bool PrecioEsObligatorio(this MotivoMovimiento motivo)
-        => motivo == MotivoMovimiento.Compra;
+    public static bool PrecioEsObligatorio(this MotivoMovimiento motivo, TipoMovimiento tipo)
+        => motivo.PrecioAplica(tipo) && motivo == MotivoMovimiento.Compra;
 
     /// <summary>
-    /// El precio aplica a todos los motivos salvo Uso o consumo, donde ni se pide ni se guarda
-    /// (el municipio no vende ni valoriza el consumo interno).
+    /// El precio unitario aplica solo a las ENTRADAS. En una SALIDA no aplica nunca, sea cual
+    /// sea el motivo (Uso o consumo, Merma, Ajuste): ni se pide ni se guarda (el municipio no
+    /// vende ni valoriza lo que sale; la valorización usa Producto.PrecioCosto). Ajuste es válido
+    /// en ambos sentidos, por eso la regla depende de tipo + motivo y no solo del motivo.
     /// </summary>
-    public static bool PrecioAplica(this MotivoMovimiento motivo)
-        => motivo != MotivoMovimiento.UsoOConsumo;
+    public static bool PrecioAplica(this MotivoMovimiento motivo, TipoMovimiento tipo)
+        => tipo == TipoMovimiento.Entrada;
 }

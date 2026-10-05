@@ -12,8 +12,9 @@ using Xunit;
 namespace StockApp.Presentation.Tests.ViewModels.Movimientos;
 
 /// <summary>
-/// Regla de precio por motivo en el formulario de movimiento: obligatorio (> 0) solo para
-/// Compra, oculto (y vacío) para Uso o consumo, opcional para Ajuste y Merma.
+/// Regla de precio por tipo + motivo en el formulario de movimiento: en ENTRADA obligatorio
+/// (> 0) para Compra y opcional para Ajuste; en SALIDA nunca aplica (oculto y vacío) sea cual sea
+/// el motivo.
 /// </summary>
 public class RegistroPrecioPorMotivoTests
 {
@@ -52,16 +53,16 @@ public class RegistroPrecioPorMotivoTests
     }
 
     [Theory]
-    [InlineData(MotivoMovimiento.UsoOConsumo, false)]
-    [InlineData(MotivoMovimiento.Merma, true)]
-    [InlineData(MotivoMovimiento.Ajuste, true)]
-    public void Salida_Visibilidad_SegunMotivo(MotivoMovimiento motivo, bool visible)
+    [InlineData(MotivoMovimiento.UsoOConsumo)]
+    [InlineData(MotivoMovimiento.Merma)]
+    [InlineData(MotivoMovimiento.Ajuste)]
+    public void Salida_ElPrecioNuncaAplica_ParaNingunMotivo(MotivoMovimiento motivo)
     {
         var vm = Salida();
         vm.Motivo = motivo;
 
-        Assert.Equal(visible, vm.PrecioVisible);
-        if (visible) Assert.Equal("Opcional", vm.PrecioPlaceholder);
+        Assert.False(vm.PrecioVisible);
+        Assert.False(vm.PrecioObligatorio);
     }
 
     [Fact]
@@ -92,25 +93,24 @@ public class RegistroPrecioPorMotivoTests
     // ── limpieza del precio al ocultarse ─────────────────────────────────────
 
     [Fact]
-    public void ElegirUsoOConsumo_LimpiaElPrecioCargado()
+    public void Salida_CambiarMotivo_LimpiaElPrecioCargado()
     {
         var vm = Salida();
         vm.Motivo = MotivoMovimiento.Merma;
         vm.PrecioUnitario = 25m;
 
-        vm.Motivo = MotivoMovimiento.UsoOConsumo;
+        vm.Motivo = MotivoMovimiento.Ajuste;
 
         Assert.Null(vm.PrecioUnitario);
     }
 
     [Fact]
-    public void ElegirMerma_ConservaElPrecioCargado()
+    public void Entrada_CambiarDeCompraAAjuste_ConservaElPrecioCargado()
     {
-        var vm = Salida();
-        vm.Motivo = MotivoMovimiento.Ajuste;
+        var vm = Entrada();
         vm.PrecioUnitario = 25m;
 
-        vm.Motivo = MotivoMovimiento.Merma;
+        vm.Motivo = MotivoMovimiento.Ajuste;
 
         Assert.Equal(25m, vm.PrecioUnitario);
     }
@@ -144,23 +144,24 @@ public class RegistroPrecioPorMotivoTests
         Assert.True(vm.RegistrarCommand.CanExecute(null));
     }
 
-    [Fact]
-    public void UsoOConsumo_NoExigePrecio()
+    [Theory]
+    [InlineData(MotivoMovimiento.UsoOConsumo)]
+    [InlineData(MotivoMovimiento.Merma)]
+    [InlineData(MotivoMovimiento.Ajuste)]
+    public void Salida_NoExigePrecio_ParaNingunMotivo(MotivoMovimiento motivo)
     {
         var vm = Salida();
-        vm.Motivo = MotivoMovimiento.UsoOConsumo;
+        vm.Motivo = motivo;
         Completar(vm);
 
         Assert.True(vm.RegistrarCommand.CanExecute(null));
     }
 
-    [Theory]
-    [InlineData(MotivoMovimiento.Merma)]
-    [InlineData(MotivoMovimiento.Ajuste)]
-    public void AjusteYMerma_NoExigenPrecio(MotivoMovimiento motivo)
+    [Fact]
+    public void EntradaAjuste_NoExigePrecio()
     {
-        var vm = Salida();
-        vm.Motivo = motivo;
+        var vm = Entrada();
+        vm.Motivo = MotivoMovimiento.Ajuste;
         Completar(vm);
 
         Assert.True(vm.RegistrarCommand.CanExecute(null));

@@ -13,8 +13,8 @@ namespace StockApp.Presentation.UiTests;
 
 /// <summary>
 /// Gate de visibilidad del XAML (no lo custodia un test de ViewModel): con la View real, el
-/// campo de precio se oculta con Uso o consumo, y su placeholder dice "Obligatorio" con
-/// Compra y "Opcional" con Ajuste/Merma.
+/// campo de precio no se muestra NUNCA en una Salida (ningún motivo), y en Entrada su
+/// placeholder dice "Obligatorio" con Compra y "Opcional" con Ajuste.
 /// </summary>
 public class MovimientoFormControlPrecioPorMotivoTests
 {
@@ -71,24 +71,18 @@ public class MovimientoFormControlPrecioPorMotivoTests
         new MovimientoStockServiceFake(), new ProductoServiceFake(),
         new NavigationServiceFake(), new ConfirmacionServiceFake());
 
-    [AvaloniaFact]
-    public void UsoOConsumo_OcultaElCampoDePrecio()
-    {
-        var (precio, _) = Montar(Salida());   // Salida arranca en Uso o consumo
-
-        Assert.False(precio.EstaVisible);
-    }
-
-    [AvaloniaFact]
-    public void Merma_MuestraElPrecioComoOpcional()
+    [AvaloniaTheory]
+    [InlineData(MotivoMovimiento.UsoOConsumo)]
+    [InlineData(MotivoMovimiento.Merma)]
+    [InlineData(MotivoMovimiento.Ajuste)]
+    public void Salida_NuncaMuestraElCampoDePrecio(MotivoMovimiento motivo)
     {
         var (precio, vm) = Montar(Salida());
 
-        vm.Motivo = MotivoMovimiento.Merma;
+        vm.Motivo = motivo;
         Dispatcher.UIThread.RunJobs();
 
-        Assert.True(precio.EstaVisible);
-        Assert.Equal("Opcional", precio.Placeholder);
+        Assert.False(precio.EstaVisible);
     }
 
     [AvaloniaFact]
@@ -112,19 +106,14 @@ public class MovimientoFormControlPrecioPorMotivoTests
     }
 
     [AvaloniaFact]
-    public void Salida_PasarAUsoOConsumoDesdeMerma_OcultaYVaciaElPrecio()
+    public void Entrada_Ajuste_MuestraElPrecioComoOpcional()
     {
-        var (precio, vm) = Montar(Salida());
-        vm.Motivo = MotivoMovimiento.Merma;
-        Dispatcher.UIThread.RunJobs();
-        precio.Caja!.Text = "12";
-        Dispatcher.UIThread.RunJobs();
-        Assert.Equal(12m, vm.PrecioUnitario);
+        var (precio, vm) = Montar(Entrada());
 
-        vm.Motivo = MotivoMovimiento.UsoOConsumo;
+        vm.Motivo = MotivoMovimiento.Ajuste;
         Dispatcher.UIThread.RunJobs();
 
-        Assert.False(precio.EstaVisible);
-        Assert.Null(vm.PrecioUnitario);
+        Assert.True(precio.EstaVisible);
+        Assert.Equal("Opcional", precio.Placeholder);
     }
 }
