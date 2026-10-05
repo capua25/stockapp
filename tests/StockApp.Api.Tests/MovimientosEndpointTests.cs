@@ -75,7 +75,7 @@ public class MovimientosEndpointTests : ApiTestBase
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var response = await client.PostAsJsonAsync("/movimientos",
-            new RegistrarMovimientoRequest(producto.Id, TipoMovimiento.Salida, MotivoMovimiento.Venta, 10m, 20m, null));
+            new RegistrarMovimientoRequest(producto.Id, TipoMovimiento.Salida, MotivoMovimiento.UsoOConsumo, 10m, 20m, null));
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
 
@@ -104,7 +104,7 @@ public class MovimientosEndpointTests : ApiTestBase
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenOperador());
 
         var response = await client.PostAsJsonAsync("/movimientos",
-            new RegistrarMovimientoRequest(producto.Id, TipoMovimiento.Salida, MotivoMovimiento.Venta, 10m, 20m, null, Forzar: true));
+            new RegistrarMovimientoRequest(producto.Id, TipoMovimiento.Salida, MotivoMovimiento.UsoOConsumo, 10m, 20m, null, Forzar: true));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
@@ -161,7 +161,7 @@ public class MovimientosEndpointTests : ApiTestBase
 
         // Registrar una Salida
         await client.PostAsJsonAsync("/movimientos",
-            new RegistrarMovimientoRequest(producto.Id, TipoMovimiento.Salida, MotivoMovimiento.Venta, 2m, 15m, null));
+            new RegistrarMovimientoRequest(producto.Id, TipoMovimiento.Salida, MotivoMovimiento.UsoOConsumo, 2m, 15m, null));
 
         var response = await client.GetAsync($"/movimientos/historial?tipo=Entrada");
 

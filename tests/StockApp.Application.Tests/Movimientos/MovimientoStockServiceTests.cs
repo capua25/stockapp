@@ -45,7 +45,7 @@ public class MovimientoStockServiceTests
                                    cantidad, 100m, null);
 
     private static RegistrarMovimientoDto DtoSalida(int productoId = 1, decimal cantidad = 5m) =>
-        new RegistrarMovimientoDto(productoId, TipoMovimiento.Salida, MotivoMovimiento.Venta,
+        new RegistrarMovimientoDto(productoId, TipoMovimiento.Salida, MotivoMovimiento.UsoOConsumo,
                                    cantidad, 100m, null);
 
     // ── B3: Autorización fail-closed ─────────────────────────────────────────
@@ -108,7 +108,7 @@ public class MovimientoStockServiceTests
     }
 
     [Theory]
-    [InlineData(TipoMovimiento.Entrada, MotivoMovimiento.Venta)]   // Entrada+Venta → inválido
+    [InlineData(TipoMovimiento.Entrada, MotivoMovimiento.UsoOConsumo)]   // Entrada+UsoOConsumo → inválido
     [InlineData(TipoMovimiento.Entrada, MotivoMovimiento.Merma)]   // Entrada+Merma → inválido
     [InlineData(TipoMovimiento.Salida,  MotivoMovimiento.Compra)]  // Salida+Compra → inválido
     public async Task RegistrarAsync_TipoMotivoIncompatible_LanzaArgumentException(
@@ -123,7 +123,7 @@ public class MovimientoStockServiceTests
 
     [Theory]
     [InlineData(TipoMovimiento.Entrada, MotivoMovimiento.Compra)]  // Compra requiere precio
-    [InlineData(TipoMovimiento.Salida,  MotivoMovimiento.Venta)]   // Venta requiere precio
+    [InlineData(TipoMovimiento.Salida,  MotivoMovimiento.UsoOConsumo)]   // UsoOConsumo requiere precio (hasta el arreglo 2)
     public async Task RegistrarAsync_CompraVentaSinPrecio_LanzaArgumentException(
         TipoMovimiento tipo, MotivoMovimiento motivo)
     {

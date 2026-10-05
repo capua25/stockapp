@@ -47,7 +47,7 @@ public partial class HistorialPorProductoViewModel : ViewModelBase
     {
         new ColumnaPdf(nameof(MovimientoHistorialDto.Fecha), "Fecha"),
         new ColumnaPdf(nameof(MovimientoHistorialDto.Tipo), "Tipo"),
-        new ColumnaPdf(nameof(MovimientoHistorialDto.Motivo), "Motivo"),
+        new ColumnaPdf(nameof(MovimientoHistorialDto.MotivoNombre), "Motivo"),
         new ColumnaPdf(nameof(MovimientoHistorialDto.Cantidad), "Cantidad"),
         new ColumnaPdf(nameof(MovimientoHistorialDto.PrecioUnitario), "P. Unitario"),
         new ColumnaPdf(nameof(MovimientoHistorialDto.StockAnterior), "Stock Ant."),

@@ -99,7 +99,7 @@ public class MovimientoStockRepositoryTests : PostgresRepositoryTestBase
         Context.MovimientosStock.AddRange(
             new MovimientoStock { ProductoId = producto.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Cantidad = 10m, PrecioUnitario = 5m, Fecha = DateTime.UtcNow, Motivo = MotivoMovimiento.Compra },
             new MovimientoStock { ProductoId = producto.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Cantidad = 5m,  PrecioUnitario = 5m, Fecha = DateTime.UtcNow, Motivo = MotivoMovimiento.Compra },
-            new MovimientoStock { ProductoId = producto.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Salida,  Cantidad = 3m,  PrecioUnitario = 5m, Fecha = DateTime.UtcNow, Motivo = MotivoMovimiento.Venta  }
+            new MovimientoStock { ProductoId = producto.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Salida,  Cantidad = 3m,  PrecioUnitario = 5m, Fecha = DateTime.UtcNow, Motivo = MotivoMovimiento.UsoOConsumo  }
         );
         await Context.SaveChangesAsync();
         Context.ChangeTracker.Clear();
@@ -268,7 +268,7 @@ public class MovimientoStockRepositoryTests : PostgresRepositoryTestBase
         var movimiento = new MovimientoStock
         {
             ProductoId = producto.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Salida,
-            Cantidad = 10m, PrecioUnitario = 5m, Fecha = DateTime.UtcNow, Motivo = MotivoMovimiento.Venta
+            Cantidad = 10m, PrecioUnitario = 5m, Fecha = DateTime.UtcNow, Motivo = MotivoMovimiento.UsoOConsumo
         };
         var args = new RegistroAtomicoArgs(
             Movimiento: movimiento, ProductoId: producto.Id, Tipo: TipoMovimiento.Salida,
@@ -322,7 +322,7 @@ public class MovimientoStockRepositoryTests : PostgresRepositoryTestBase
         var movimiento = new MovimientoStock
         {
             ProductoId = 99999, UsuarioId = 1, Tipo = TipoMovimiento.Salida,
-            Cantidad = 10m, PrecioUnitario = 5m, Fecha = DateTime.UtcNow, Motivo = MotivoMovimiento.Venta
+            Cantidad = 10m, PrecioUnitario = 5m, Fecha = DateTime.UtcNow, Motivo = MotivoMovimiento.UsoOConsumo
         };
         var args = new RegistroAtomicoArgs(
             Movimiento: movimiento, ProductoId: 99999, Tipo: TipoMovimiento.Salida,
@@ -379,7 +379,7 @@ public class MovimientoStockRepositoryTests : PostgresRepositoryTestBase
         Context.MovimientosStock.AddRange(
             // p1: 2 entradas, 1 salida
             new MovimientoStock { ProductoId = p1.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Cantidad = 10m, PrecioUnitario = 5m, Fecha = base1,               Motivo = MotivoMovimiento.Compra },
-            new MovimientoStock { ProductoId = p1.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Salida,  Cantidad = 3m,  PrecioUnitario = 8m, Fecha = base1.AddDays(1),    Motivo = MotivoMovimiento.Venta  },
+            new MovimientoStock { ProductoId = p1.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Salida,  Cantidad = 3m,  PrecioUnitario = 8m, Fecha = base1.AddDays(1),    Motivo = MotivoMovimiento.UsoOConsumo  },
             new MovimientoStock { ProductoId = p1.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Cantidad = 5m,  PrecioUnitario = 5m, Fecha = base1.AddDays(2),    Motivo = MotivoMovimiento.Compra },
             // p2: 1 entrada
             new MovimientoStock { ProductoId = p2.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Cantidad = 20m, PrecioUnitario = 3m, Fecha = base1.AddDays(3),    Motivo = MotivoMovimiento.Compra }
@@ -667,7 +667,7 @@ public class MovimientoStockRepositoryTests : PostgresRepositoryTestBase
             // entrada 10: 0 -> 10
             new MovimientoStock { ProductoId = p.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Cantidad = 10m, PrecioUnitario = 5m, Fecha = t0,               Motivo = MotivoMovimiento.Compra },
             // salida 3: 10 -> 7
-            new MovimientoStock { ProductoId = p.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Salida,  Cantidad = 3m,  PrecioUnitario = 5m, Fecha = t0.AddDays(1),    Motivo = MotivoMovimiento.Venta  },
+            new MovimientoStock { ProductoId = p.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Salida,  Cantidad = 3m,  PrecioUnitario = 5m, Fecha = t0.AddDays(1),    Motivo = MotivoMovimiento.UsoOConsumo  },
             // entrada 5: 7 -> 12
             new MovimientoStock { ProductoId = p.Id, UsuarioId = usuario.Id, Tipo = TipoMovimiento.Entrada, Cantidad = 5m,  PrecioUnitario = 5m, Fecha = t0.AddDays(2),    Motivo = MotivoMovimiento.Compra }
         );

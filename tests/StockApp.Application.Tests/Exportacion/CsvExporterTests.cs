@@ -1,5 +1,6 @@
 using System.Globalization;
 using StockApp.Application.Exportacion;
+using StockApp.Domain.Enums;
 using Xunit;
 
 namespace StockApp.Application.Tests.Exportacion;
@@ -15,6 +16,18 @@ public class CsvExporterTests
     private readonly ICsvExporter _exporter = new CsvExporter();
 
     private sealed record Fila(string Nombre, string Detalle);
+
+    private sealed record FilaConMotivo(MotivoMovimiento Motivo);
+
+    [Fact]
+    public void Exportar_MotivoMovimiento_UsaElTextoVisible()
+    {
+        var resultado = _exporter.Exportar(
+            new[] { new FilaConMotivo(MotivoMovimiento.UsoOConsumo) }, new[] { "Motivo" });
+
+        Assert.Contains("Uso o consumo\r\n", resultado);
+        Assert.DoesNotContain("UsoOConsumo", resultado);
+    }
 
     [Fact]
     public void Exportar_CampoSimple_SinComillas()

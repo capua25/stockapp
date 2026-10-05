@@ -353,20 +353,20 @@ public static class Program
         ["COD-0008"] = [new(85, TipoMovimiento.Entrada, MotivoMovimiento.Compra, 40m, null)],
 
         // Dos movimientos (Entrada + Salida) que cuadran al stock final
-        ["COD-0009"] = [new(60, TipoMovimiento.Entrada, MotivoMovimiento.Compra, 18m, null), new(40, TipoMovimiento.Salida, MotivoMovimiento.Venta, 15m, "Venta mostrador")],
-        ["COD-0010"] = [new(17, TipoMovimiento.Entrada, MotivoMovimiento.Compra, 70m, "Compra a proveedor"), new(8, TipoMovimiento.Salida, MotivoMovimiento.Venta, 20m, null)],
-        ["COD-0011"] = [new(12, TipoMovimiento.Entrada, MotivoMovimiento.Compra, 30m, null), new(5, TipoMovimiento.Salida, MotivoMovimiento.Venta, 18m, "Venta mostrador")],
+        ["COD-0009"] = [new(60, TipoMovimiento.Entrada, MotivoMovimiento.Compra, 18m, null), new(40, TipoMovimiento.Salida, MotivoMovimiento.UsoOConsumo, 15m, "Venta mostrador")],
+        ["COD-0010"] = [new(17, TipoMovimiento.Entrada, MotivoMovimiento.Compra, 70m, "Compra a proveedor"), new(8, TipoMovimiento.Salida, MotivoMovimiento.UsoOConsumo, 20m, null)],
+        ["COD-0011"] = [new(12, TipoMovimiento.Entrada, MotivoMovimiento.Compra, 30m, null), new(5, TipoMovimiento.Salida, MotivoMovimiento.UsoOConsumo, 18m, "Venta mostrador")],
         ["COD-0012"] = [new(40, TipoMovimiento.Entrada, MotivoMovimiento.Compra, 30m, null), new(20, TipoMovimiento.Salida, MotivoMovimiento.Ajuste, 16m, "Ajuste de inventario tras conteo físico")],
-        ["COD-0013"] = [new(8, TipoMovimiento.Entrada, MotivoMovimiento.Compra, 40m, "Compra a proveedor"), new(3, TipoMovimiento.Salida, MotivoMovimiento.Venta, 15m, null)],
-        ["COD-0014"] = [new(3, TipoMovimiento.Entrada, MotivoMovimiento.Compra, 16m, null), new(1, TipoMovimiento.Salida, MotivoMovimiento.Venta, 10m, "Venta mostrador")],
-        ["COD-0015"] = [new(45, TipoMovimiento.Entrada, MotivoMovimiento.Compra, 55m, "Compra a proveedor"), new(25, TipoMovimiento.Salida, MotivoMovimiento.Venta, 20m, null)],
-        ["COD-0016"] = [new(30, TipoMovimiento.Entrada, MotivoMovimiento.Compra, 45m, null), new(15, TipoMovimiento.Salida, MotivoMovimiento.Venta, 17m, "Venta mostrador")],
+        ["COD-0013"] = [new(8, TipoMovimiento.Entrada, MotivoMovimiento.Compra, 40m, "Compra a proveedor"), new(3, TipoMovimiento.Salida, MotivoMovimiento.UsoOConsumo, 15m, null)],
+        ["COD-0014"] = [new(3, TipoMovimiento.Entrada, MotivoMovimiento.Compra, 16m, null), new(1, TipoMovimiento.Salida, MotivoMovimiento.UsoOConsumo, 10m, "Venta mostrador")],
+        ["COD-0015"] = [new(45, TipoMovimiento.Entrada, MotivoMovimiento.Compra, 55m, "Compra a proveedor"), new(25, TipoMovimiento.Salida, MotivoMovimiento.UsoOConsumo, 20m, null)],
+        ["COD-0016"] = [new(30, TipoMovimiento.Entrada, MotivoMovimiento.Compra, 45m, null), new(15, TipoMovimiento.Salida, MotivoMovimiento.UsoOConsumo, 17m, "Venta mostrador")],
         ["COD-0017"] = [new(21, TipoMovimiento.Entrada, MotivoMovimiento.Compra, 16m, null), new(10, TipoMovimiento.Salida, MotivoMovimiento.Merma, 12m, "Producto vencido dado de baja")],
-        ["COD-0018"] = [new(55, TipoMovimiento.Entrada, MotivoMovimiento.Compra, 38m, "Compra a proveedor"), new(30, TipoMovimiento.Salida, MotivoMovimiento.Venta, 18m, null)],
+        ["COD-0018"] = [new(55, TipoMovimiento.Entrada, MotivoMovimiento.Compra, 38m, "Compra a proveedor"), new(30, TipoMovimiento.Salida, MotivoMovimiento.UsoOConsumo, 18m, null)],
 
         // Tres movimientos (Entrada + Salida-Venta + Salida-Merma)
-        ["COD-0019"] = [new(70, TipoMovimiento.Entrada, MotivoMovimiento.Compra, 75m, "Compra a proveedor"), new(45, TipoMovimiento.Salida, MotivoMovimiento.Venta, 20m, null), new(20, TipoMovimiento.Salida, MotivoMovimiento.Merma, 10m, "Producto dañado en depósito")],
-        ["COD-0020"] = [new(88, TipoMovimiento.Entrada, MotivoMovimiento.Compra, 32m, null), new(50, TipoMovimiento.Salida, MotivoMovimiento.Venta, 15m, "Venta mostrador"), new(15, TipoMovimiento.Salida, MotivoMovimiento.Merma, 8m, "Producto dañado en depósito")],
+        ["COD-0019"] = [new(70, TipoMovimiento.Entrada, MotivoMovimiento.Compra, 75m, "Compra a proveedor"), new(45, TipoMovimiento.Salida, MotivoMovimiento.UsoOConsumo, 20m, null), new(20, TipoMovimiento.Salida, MotivoMovimiento.Merma, 10m, "Producto dañado en depósito")],
+        ["COD-0020"] = [new(88, TipoMovimiento.Entrada, MotivoMovimiento.Compra, 32m, null), new(50, TipoMovimiento.Salida, MotivoMovimiento.UsoOConsumo, 15m, "Venta mostrador"), new(15, TipoMovimiento.Salida, MotivoMovimiento.Merma, 8m, "Producto dañado en depósito")],
     };
 
     private static async Task SembrarMovimientosAsync(
@@ -398,7 +398,7 @@ public static class Program
             foreach (var mov in plan)
             {
                 // PrecioVenta se eliminó del dominio (el cliente no vende); todo movimiento,
-                // incluido MotivoMovimiento.Venta (fuera de alcance, no se toca el enum), usa
+                // incluido MotivoMovimiento.UsoOConsumo (fuera de alcance, no se toca el enum), usa
                 // PrecioCosto como precio unitario.
                 var precioUnitario = producto.PrecioCosto;
 

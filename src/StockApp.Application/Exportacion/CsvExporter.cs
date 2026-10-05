@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Reflection;
 using System.Text;
+using StockApp.Domain.Enums;
 using StockApp.Domain.Formato;
 
 namespace StockApp.Application.Exportacion;
@@ -88,6 +89,7 @@ public sealed class CsvExporter : ICsvExporter
             long numero => numero.ToString(FormatoEsUy.Formato),
             int numero => numero.ToString(FormatoEsUy.Formato),
             short numero => numero.ToString(FormatoEsUy.Formato),
+            MotivoMovimiento motivo => motivo.Nombre(),
             _ => valor.ToString() ?? "",
         };
 

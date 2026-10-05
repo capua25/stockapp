@@ -50,7 +50,7 @@ public class MovimientoStockConcurrenciaTests : PostgresRepositoryTestBase
             var mov = new MovimientoStock
             {
                 ProductoId = productoId, UsuarioId = usuarioId, Tipo = TipoMovimiento.Salida,
-                Cantidad = 8m, PrecioUnitario = 5m, Fecha = DateTime.UtcNow, Motivo = MotivoMovimiento.Venta
+                Cantidad = 8m, PrecioUnitario = 5m, Fecha = DateTime.UtcNow, Motivo = MotivoMovimiento.UsoOConsumo
             };
             var args = new RegistroAtomicoArgs(
                 Movimiento: mov, ProductoId: productoId, Tipo: TipoMovimiento.Salida,
