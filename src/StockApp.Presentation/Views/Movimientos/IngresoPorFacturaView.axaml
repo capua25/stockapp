@@ -19,7 +19,7 @@
              VERTICAL de la celda (deja el horizontal) para que el botón tenga los 36px enteros
              y su propio padding se resuelva adentro (medido: TextBlock pasa de 2px a 18px). -->
         <Style Selector="DataGridCell.sin-padding-vertical">
-            <Setter Property="Padding" Value="12,0" />
+            <Setter Property="Padding" Value="12,0,4,0" />
         </Style>
     </UserControl.Styles>
 

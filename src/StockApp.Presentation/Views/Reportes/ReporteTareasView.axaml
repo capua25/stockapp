@@ -94,7 +94,7 @@
                                     <TextBlock Text="{Binding Clasificador}"
                                                TextTrimming="CharacterEllipsis"
                                                ToolTip.Tip="{Binding Clasificador}"
-                                               VerticalAlignment="Center" Margin="4,0" />
+                                               VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>

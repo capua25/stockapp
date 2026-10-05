@@ -90,7 +90,7 @@
                                     <TextBlock Text="{Binding Detalle}"
                                                TextTrimming="CharacterEllipsis"
                                                ToolTip.Tip="{Binding Detalle}"
-                                               VerticalAlignment="Center" Margin="4,0" />
+                                               VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>

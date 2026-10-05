@@ -36,7 +36,7 @@
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate x:DataType="dto:ImportacionHistorialDto">
                             <TextBlock Text="{Binding Revertida, Converter={x:Static conv:EstadoRevertidaConverter.Instance}}"
-                                       VerticalAlignment="Center" Margin="4,0" />
+                                       VerticalAlignment="Center" />
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>

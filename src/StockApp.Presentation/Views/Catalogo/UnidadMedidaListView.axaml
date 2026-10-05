@@ -52,7 +52,7 @@
                                                Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
                                                TextTrimming="CharacterEllipsis"
                                                ToolTip.Tip="{Binding Nombre}"
-                                               VerticalAlignment="Center" Margin="4,0" />
+                                               VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
@@ -62,7 +62,7 @@
                                     <TextBlock Text="{Binding Abreviatura}"
                                                Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
                                                Foreground="{DynamicResource TextoTerciarioBrush}"
-                                               VerticalAlignment="Center" Margin="4,0" />
+                                               VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>

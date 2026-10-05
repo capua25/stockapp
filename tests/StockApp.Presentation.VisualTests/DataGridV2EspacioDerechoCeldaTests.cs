@@ -12,6 +12,11 @@ using Avalonia.VisualTree;
 namespace StockApp.Presentation.VisualTests;
 
 /// <summary>
+/// SOLO TEMA V2 (Themes/V2/DataGridV2.axaml, estilos bajo <c>.ui2</c>). La grilla es sintética y se
+/// envuelve en <c>.ui2</c> a mano: hoy ninguna vista real de la app está bajo esa clase (la región
+/// de contenido del shell no la tiene), así que este test NO custodia lo que ve el usuario. Lo
+/// que ve el usuario (Themes/DataGrid.axaml) lo custodian GrillaEspacioDerechoVistaRealTests y
+/// UiTests/GrillasEspacioDerechoBarridoTests. Se conserva para cuando las vistas migren a v2.
 /// Guardián del "espacio horrible" a la derecha del texto de las celdas del tema v2: el texto
 /// que no entra en una columna angosta quedaba cortado ~12 px ANTES del borde derecho de la celda
 /// (el padding derecho simétrico de 12 se descontaba del lugar del texto). Se mide con render Skia

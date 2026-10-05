@@ -39,7 +39,7 @@
                                     <TextBlock Text="{Binding Nombre}"
                                                TextTrimming="CharacterEllipsis"
                                                ToolTip.Tip="{Binding Nombre}"
-                                               VerticalAlignment="Center" Margin="4,0" />
+                                               VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
@@ -49,7 +49,7 @@
                                     <TextBlock Text="{Binding Categoria}"
                                                TextTrimming="CharacterEllipsis"
                                                ToolTip.Tip="{Binding Categoria}"
-                                               VerticalAlignment="Center" Margin="4,0" />
+                                               VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
@@ -63,7 +63,7 @@
                                          del valor anterior: número corrido o recortado (ver ProductoListView y
                                          ReportesStockOrdenTests). 220 = peor caso "-99999,5": badge (102) +
                                          número (62) + margen y padding de celda. -->
-                                    <Grid Margin="4,0" VerticalAlignment="Center">
+                                    <Grid VerticalAlignment="Center">
                                         <c:BadgeEstado Texto="Stock negativo" Tono="Peligro"
                                                        HorizontalAlignment="Left"
                                                        IsVisible="{Binding StockActual, Converter={x:Static conv:EsNegativoConverter.Instance}}" />

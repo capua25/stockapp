@@ -137,7 +137,7 @@
                                     <TextBlock Text="{Binding ProductoNombre}"
                                                TextTrimming="CharacterEllipsis"
                                                ToolTip.Tip="{Binding ProductoNombre}"
-                                               VerticalAlignment="Center" Margin="4,0" />
+                                               VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
@@ -154,7 +154,7 @@
                                 <DataTemplate x:DataType="dto:MovimientoHistorialDto">
                                     <TextBlock Text="{Binding StockAnterior, Converter={x:Static conv:CantidadConverter.Instance}}"
                                                Foreground="{Binding StockAnterior, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}"
-                                               VerticalAlignment="Center" HorizontalAlignment="Right" Margin="4,0" />
+                                               VerticalAlignment="Center" HorizontalAlignment="Right" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
@@ -170,7 +170,7 @@
                                          220 = medido con el peor caso "-99999,5": badge "Stock negativo" (102) + número (62)
                                          + margen y padding de celda, que con 200 dejaba al badge pisando
                                          11px al número. -->
-                                    <Grid Margin="4,0" VerticalAlignment="Center">
+                                    <Grid VerticalAlignment="Center">
                                         <c:BadgeEstado Texto="Stock negativo" Tono="Peligro"
                                                        HorizontalAlignment="Left"
                                                        IsVisible="{Binding StockNuevo, Converter={x:Static conv:EsNegativoConverter.Instance}}" />
@@ -188,7 +188,7 @@
                                     <TextBlock Text="{Binding Comentario}"
                                                TextTrimming="CharacterEllipsis"
                                                ToolTip.Tip="{Binding Comentario}"
-                                               VerticalAlignment="Center" Margin="4,0" />
+                                               VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>

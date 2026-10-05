@@ -44,7 +44,7 @@
                             <TextBlock Text="{Binding Nombre}"
                                        TextTrimming="CharacterEllipsis"
                                        ToolTip.Tip="{Binding Nombre}"
-                                       VerticalAlignment="Center" Margin="4,0" />
+                                       VerticalAlignment="Center" />
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
@@ -54,7 +54,7 @@
                             <TextBlock Text="{Binding Programa}"
                                        TextTrimming="CharacterEllipsis"
                                        ToolTip.Tip="{Binding Programa}"
-                                       VerticalAlignment="Center" Margin="4,0" />
+                                       VerticalAlignment="Center" />
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>

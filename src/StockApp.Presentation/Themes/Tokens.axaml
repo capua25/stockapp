@@ -29,6 +29,10 @@
     <Thickness x:Key="MargenVista">24</Thickness>
     <Thickness x:Key="PaddingCard">16</Thickness>
     <Thickness x:Key="PaddingCelda">12,8</Thickness>
+    <!-- Padding de celda y header de DataGrid: PaddingCelda con 4 a la derecha (no 12). Con 12, el
+         texto que no entra en la columna se cortaba 12 px antes del borde y quedaba un hueco
+         ("Prueba U…" + espacio vacío). Ver Themes/DataGrid.axaml y GrillasEspacioDerechoBarridoTests. -->
+    <Thickness x:Key="PaddingCeldaGrilla">12,8,4,8</Thickness>
     <!-- Ruling B-2 (Fase B): Padding compacto de barras de accion (~20 vistas). La tanda 5 ya
          se comio esta deuda con Padding="8" literal en ShellMainView.axaml; sin este token la
          Fase B la repite 20 veces mas y convierte una deuda puntual en un patron. -->

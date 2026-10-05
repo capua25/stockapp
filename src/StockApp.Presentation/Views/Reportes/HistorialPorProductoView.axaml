@@ -91,7 +91,7 @@
                                 <DataTemplate x:DataType="dto:MovimientoHistorialDto">
                                     <TextBlock Text="{Binding StockAnterior, Converter={x:Static conv:CantidadConverter.Instance}}"
                                                Foreground="{Binding StockAnterior, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}"
-                                               VerticalAlignment="Center" HorizontalAlignment="Right" Margin="4,0" />
+                                               VerticalAlignment="Center" HorizontalAlignment="Right" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
@@ -105,7 +105,7 @@
                                          del valor anterior: número corrido o recortado (ver ProductoListView y
                                          ReportesStockOrdenTests). 220 = peor caso "-99999,5": badge (102) +
                                          número (62) + margen y padding de celda. -->
-                                    <Grid Margin="4,0" VerticalAlignment="Center">
+                                    <Grid VerticalAlignment="Center">
                                         <c:BadgeEstado Texto="Stock negativo" Tono="Peligro"
                                                        HorizontalAlignment="Left"
                                                        IsVisible="{Binding StockNuevo, Converter={x:Static conv:EsNegativoConverter.Instance}}" />
@@ -122,7 +122,7 @@
                                     <TextBlock Text="{Binding Comentario}"
                                                TextTrimming="CharacterEllipsis"
                                                ToolTip.Tip="{Binding Comentario}"
-                                               VerticalAlignment="Center" Margin="4,0" />
+                                               VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>

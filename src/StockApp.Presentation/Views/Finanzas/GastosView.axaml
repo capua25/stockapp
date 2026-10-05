@@ -163,7 +163,7 @@
                             <TextBlock Text="{Binding ProveedorNombre}"
                                        TextTrimming="CharacterEllipsis"
                                        ToolTip.Tip="{Binding ProveedorNombre}"
-                                       VerticalAlignment="Center" Margin="4,0" />
+                                       VerticalAlignment="Center" />
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
@@ -176,7 +176,7 @@
                             <TextBlock Text="{Binding Detalle}"
                                        TextTrimming="CharacterEllipsis"
                                        ToolTip.Tip="{Binding Detalle}"
-                                       VerticalAlignment="Center" Margin="4,0" />
+                                       VerticalAlignment="Center" />
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
@@ -186,7 +186,7 @@
                             <TextBlock Text="{Binding FuenteNombre}"
                                        TextTrimming="CharacterEllipsis"
                                        ToolTip.Tip="{Binding FuenteNombre}"
-                                       VerticalAlignment="Center" Margin="4,0" />
+                                       VerticalAlignment="Center" />
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
@@ -196,7 +196,7 @@
                             <TextBlock Text="{Binding RubroNombre}"
                                        TextTrimming="CharacterEllipsis"
                                        ToolTip.Tip="{Binding RubroNombre}"
-                                       VerticalAlignment="Center" Margin="4,0" />
+                                       VerticalAlignment="Center" />
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
@@ -206,7 +206,7 @@
                             <TextBlock Text="{Binding LineaPoaNombre}"
                                        TextTrimming="CharacterEllipsis"
                                        ToolTip.Tip="{Binding LineaPoaNombre}"
-                                       VerticalAlignment="Center" Margin="4,0" />
+                                       VerticalAlignment="Center" />
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>

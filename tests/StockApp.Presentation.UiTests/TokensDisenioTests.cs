@@ -57,6 +57,12 @@ public class TokensDisenioTests
     }
 
     [AvaloniaFact]
+    public void PaddingCeldaGrilla_Es12Izquierda4Derecha8Vertical()
+    {
+        Assert.Equal(new Thickness(12, 8, 4, 8), Assert.IsType<Thickness>(Recurso("PaddingCeldaGrilla")));
+    }
+
+    [AvaloniaFact]
     public void PaddingCompacto_Es8EnLosCuatroLados()
     {
         // Ruling B-2 de la Fase B: faltaba un Thickness de 8 para las barras de accion de

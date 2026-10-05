@@ -53,7 +53,7 @@
                                 <DataTemplate x:DataType="dto:ProductoDto">
                                     <TextBlock Text="{Binding Codigo}"
                                                Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
-                                               VerticalAlignment="Center" Margin="4,0" />
+                                               VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
@@ -64,7 +64,7 @@
                                                Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
                                                TextTrimming="CharacterEllipsis"
                                                ToolTip.Tip="{Binding Nombre}"
-                                               VerticalAlignment="Center" Margin="4,0" />
+                                               VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
@@ -73,7 +73,7 @@
                                 <DataTemplate x:DataType="dto:ProductoDto">
                                     <TextBlock Text="{Binding PrecioCosto, Converter={x:Static conv:MonedaConverter.Instance}}"
                                                Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
-                                               HorizontalAlignment="Right" VerticalAlignment="Center" Margin="4,0" />
+                                               HorizontalAlignment="Right" VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
@@ -92,7 +92,7 @@
                                          "Stock negativo" (102) + número (62) + padding de celda y margen, igual
                                          que las otras 4 grillas con badge; con 170 el badge pisaba 41px al número
                                          (ProductoListViewStockOrdenTests). -->
-                                    <Grid Margin="4,0" VerticalAlignment="Center"
+                                    <Grid VerticalAlignment="Center"
                                           Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}">
                                         <c:BadgeEstado Texto="Stock negativo" Tono="Peligro"
                                                        HorizontalAlignment="Left"
@@ -109,7 +109,7 @@
                                 <DataTemplate x:DataType="dto:ProductoDto">
                                     <TextBlock Text="{Binding UnidadMedidaNombre}"
                                                Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
-                                               VerticalAlignment="Center" Margin="4,0" />
+                                               VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
@@ -120,7 +120,7 @@
                                                Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
                                                TextTrimming="CharacterEllipsis"
                                                ToolTip.Tip="{Binding CategoriaNombre, TargetNullValue='—'}"
-                                               VerticalAlignment="Center" Margin="4,0" />
+                                               VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>

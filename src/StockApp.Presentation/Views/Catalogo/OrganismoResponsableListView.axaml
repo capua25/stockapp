@@ -47,7 +47,7 @@
                                            Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
                                            TextTrimming="CharacterEllipsis"
                                            ToolTip.Tip="{Binding Nombre}"
-                                           VerticalAlignment="Center" Margin="4,0" />
+                                           VerticalAlignment="Center" />
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>

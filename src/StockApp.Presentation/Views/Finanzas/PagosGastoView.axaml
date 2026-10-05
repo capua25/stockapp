@@ -23,7 +23,7 @@
              36px enteros y su propio padding se resuelva adentro (medido: el ícono pasa de 2px
              a 13px de alto). -->
         <Style Selector="DataGridCell.sin-padding-vertical">
-            <Setter Property="Padding" Value="12,0" />
+            <Setter Property="Padding" Value="12,0,4,0" />
         </Style>
     </UserControl.Styles>
 
@@ -134,7 +134,7 @@
                         <DataGridTemplateColumn.CellTemplate>
                             <DataTemplate x:DataType="e:PagoGasto">
                                 <TextBlock Text="{Binding Fecha, StringFormat='dd/MM/yyyy'}"
-                                           VerticalAlignment="Center" Margin="4,0" />
+                                           VerticalAlignment="Center" />
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
@@ -143,7 +143,7 @@
                             <DataTemplate x:DataType="e:PagoGasto">
                                 <TextBlock Text="{Binding Monto, Converter={x:Static conv:MonedaConverter.Instance}}"
                                            FontWeight="SemiBold"
-                                           VerticalAlignment="Center" Margin="4,0" />
+                                           VerticalAlignment="Center" />
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>
@@ -154,7 +154,7 @@
                                            Foreground="{DynamicResource TextoTerciarioBrush}"
                                            TextTrimming="CharacterEllipsis"
                                            ToolTip.Tip="{Binding Nota}"
-                                           VerticalAlignment="Center" Margin="4,0" />
+                                           VerticalAlignment="Center" />
                             </DataTemplate>
                         </DataGridTemplateColumn.CellTemplate>
                     </DataGridTemplateColumn>

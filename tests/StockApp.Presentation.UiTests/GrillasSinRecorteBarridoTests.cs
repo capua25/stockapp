@@ -41,9 +41,9 @@ namespace StockApp.Presentation.UiTests;
 /// </summary>
 public class GrillasSinRecorteBarridoTests
 {
-    private const double SidebarPx = 232;
+    internal const double SidebarPx = 232;
 
-    private sealed record Escenario(string Nombre, Func<Control> Vista, Func<DataGrid, IEnumerable<object>> Datos);
+    internal sealed record Escenario(string Nombre, Func<Control> Vista, Func<DataGrid, IEnumerable<object>> Datos);
 
     // ── Datos con los peores textos realistas ──────────────────────────────────────────────────
 
@@ -63,7 +63,7 @@ public class GrillasSinRecorteBarridoTests
 
     private static IEnumerable<T> Muchos<T>(Func<int, T> fabrica, int n = 30) => Enumerable.Range(0, n).Select(fabrica);
 
-    private static readonly Escenario[] Escenarios =
+    internal static readonly Escenario[] Escenarios =
     {
         new("Valorización", () => new ValorizacionView(), _ => Muchos<object>(i =>
             new ValorizacionItemDto(i, $"C{i:000}", $"Producto valorizado {i}", "Ferretería",
@@ -121,7 +121,7 @@ public class GrillasSinRecorteBarridoTests
 
     // ── Montaje ────────────────────────────────────────────────────────────────────────────────
 
-    private static (Window Window, DataGrid Grid, HashSet<DataGridColumn> Proporcionales) Montar(Control vista, double ancho)
+    internal static (Window Window, DataGrid Grid, HashSet<DataGridColumn> Proporcionales) Montar(Control vista, double ancho)
     {
         var grid = vista.GetLogicalDescendants().OfType<DataGrid>().First();
         // Antes del primer layout: DataGrid reasigna el Width de las columnas * cuando una Auto crece.
@@ -132,7 +132,7 @@ public class GrillasSinRecorteBarridoTests
         return (window, grid, proporcionales);
     }
 
-    private static void Cargar(DataGrid grid, IEnumerable<object> items)
+    internal static void Cargar(DataGrid grid, IEnumerable<object> items)
     {
         var tipo = items.First().GetType();
         var lista = (System.Collections.IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(tipo))!;
@@ -214,7 +214,7 @@ public class GrillasSinRecorteBarridoTests
     }
 
     /// <summary>DataGridColumnHeader.OwningColumn es interno: se deduce por el índice visual del header.</summary>
-    private static DataGridColumn? HeaderDeColumna(DataGrid grid, DataGridColumnHeader header)
+    internal static DataGridColumn? HeaderDeColumna(DataGrid grid, DataGridColumnHeader header)
     {
         var propio = header.GetType().GetProperty("OwningColumn",
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
