@@ -102,6 +102,42 @@ public class CategoriaServiceTests
     }
 
     [Fact]
+    public async Task BajaLogicaAsync_ConProductosActivos_LanzaReglaDeNegocio_SinDarDeBajaNiAuditar()
+    {
+        var c = new Categoria { Id = 2, Nombre = "Carnes", Activo = true };
+        var (svc, repo, _, _, audit) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(2)).ReturnsAsync(c);
+        repo.Setup(r => r.TieneProductosActivosAsync(2)).ReturnsAsync(true);
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(() => svc.BajaLogicaAsync(2));
+
+        Assert.Equal("No se puede dar de baja la categoría: tiene productos asociados.", ex.Message);
+        Assert.True(c.Activo);
+        repo.Verify(r => r.ActualizarAsync(It.IsAny<Categoria>()), Times.Never);
+        audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), It.IsAny<AccionAuditada>(),
+            It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task BajaLogicaAsync_SinProductosActivos_DaDeBaja()
+    {
+        // Sin productos, o solo con productos inactivos: el repo responde false y la baja procede.
+        var c = new Categoria { Id = 2, Nombre = "Carnes", Activo = true };
+        var (svc, repo, _, _, audit) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(2)).ReturnsAsync(c);
+        repo.Setup(r => r.TieneProductosActivosAsync(2)).ReturnsAsync(false);
+
+        await svc.BajaLogicaAsync(2);
+
+        Assert.False(c.Activo);
+        repo.Verify(r => r.ActualizarAsync(c), Times.Once);
+        audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), AccionAuditada.BajaCategoria,
+            "Categoria", 2, It.IsAny<string>()), Times.Once);
+    }
+
+    [Fact]
     public async Task BajaLogicaAsync_YaInactiva_LanzaInvalidOperation()
     {
         var c = new Categoria { Id = 2, Nombre = "Carnes", Activo = false };

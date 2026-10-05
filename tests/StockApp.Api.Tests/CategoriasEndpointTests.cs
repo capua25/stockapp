@@ -145,6 +145,31 @@ public class CategoriasEndpointTests : ApiTestBase
     }
 
     [Fact]
+    public async Task DeleteCategorias_ConProductosActivos_Devuelve409_YNoDaDeBaja()
+    {
+        await using var ctx = Factory.CrearContexto();
+        await DatosDePrueba.SeedUsuarioAsync(ctx, "admin.test", "Secreta123!", RolUsuario.Admin);
+        var categoria = new Categoria { Nombre = "Con Productos", Activo = true };
+        ctx.Categorias.Add(categoria);
+        await ctx.SaveChangesAsync();
+        var producto = await DatosDePrueba.SeedProductoConStockAsync(ctx, "SKU-CAT1", "Prod de categoría", 1m);
+        producto.CategoriaId = categoria.Id;
+        await ctx.SaveChangesAsync();
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var response = await client.DeleteAsync($"/categorias/{categoria.Id}");
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Contains("No se puede dar de baja la categoría: tiene productos asociados.",
+            await response.Content.ReadAsStringAsync());
+        await using var verificacion = Factory.CrearContexto();
+        var actual = await verificacion.Categorias.SingleAsync(c => c.Id == categoria.Id);
+        Assert.True(actual.Activo);
+    }
+
+    [Fact]
     public async Task GetCategoriasActivas_ConTokenOperador_Devuelve200()
     {
         await using var ctx = Factory.CrearContexto();
