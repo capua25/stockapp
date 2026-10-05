@@ -67,21 +67,21 @@ public abstract partial class MovimientoRegistroViewModelBase : ViewModelBase
     public abstract string Titulo { get; }
 
     /// <summary>
-    /// El campo de precio solo se muestra si el motivo lo admite (regla única en
-    /// <see cref="MotivoMovimientoExtensions.PrecioAplica"/>): con Uso o consumo se oculta.
+    /// El campo de precio solo se muestra si aplica (regla única en
+    /// <see cref="MotivoMovimientoExtensions.PrecioAplica"/>): en una Salida nunca.
     /// </summary>
-    public bool PrecioVisible => Motivo.PrecioAplica();
+    public bool PrecioVisible => Motivo.PrecioAplica(Tipo);
 
     /// <summary>Marca el campo como requerido (solo Compra).</summary>
-    public bool PrecioObligatorio => Motivo.PrecioEsObligatorio();
+    public bool PrecioObligatorio => Motivo.PrecioEsObligatorio(Tipo);
 
     /// <summary>"Obligatorio" para Compra, "Opcional" para el resto de los motivos que lo muestran.</summary>
-    public string PrecioPlaceholder => Motivo.PrecioEsObligatorio() ? "Obligatorio" : "Opcional";
+    public string PrecioPlaceholder => Motivo.PrecioEsObligatorio(Tipo) ? "Obligatorio" : "Opcional";
 
     /// <summary>Al ocultarse el precio se descarta lo que hubiera cargado: no debe viajar oculto.</summary>
     partial void OnMotivoChanged(MotivoMovimiento value)
     {
-        if (!value.PrecioAplica())
+        if (!value.PrecioAplica(Tipo))
             PrecioUnitario = null;
     }
 
@@ -129,7 +129,7 @@ public abstract partial class MovimientoRegistroViewModelBase : ViewModelBase
     private bool PuedeRegistrar()
         => ProductoSeleccionado != null
            && Cantidad > 0
-           && (!Motivo.PrecioEsObligatorio() || PrecioUnitario is > 0);
+           && (!Motivo.PrecioEsObligatorio(Tipo) || PrecioUnitario is > 0);
 
     public IAsyncRelayCommand RegistrarCommand => field ??= ComandoDeGuardado(RegistrarAsync, PuedeRegistrar);
 

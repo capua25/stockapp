@@ -47,7 +47,7 @@
                     </ComboBox>
                 </c:CampoFormulario>
 
-                <!-- PrecioUnitario es decimal? (obligatorio solo para Compra, oculto para Uso o consumo,
+                <!-- PrecioUnitario es decimal? (obligatorio solo en Entrada por Compra, oculto en toda Salida,
                      la regla vive en MotivoMovimientoExtensions): el conversor default de Avalonia
                      no mapea "" a null y explota con InvalidCastException al vaciar el campo
                      (bug real reproducido en tests). DecimalOpcionalConverter trata "" como
