@@ -204,6 +204,8 @@ public class GuardarBloqueadoConErroresDeEntradaTests
         var (window, vm, _) = MontarMovimiento(salida);
         var registrar = BotonPorCommand(window, vm.RegistrarCommand);
         var cantidad = CajaDeCampo(window, "Cantidad");
+        if (!salida)
+            Tipear(CajaDeCampo(window, "Precio unitario"), "10");   // Compra exige precio > 0
         Tipear(cantidad, "3");
         Assert.True(registrar.IsEffectivelyEnabled);
 
@@ -230,7 +232,11 @@ public class GuardarBloqueadoConErroresDeEntradaTests
         Tipear(precio, "12.50");
         Assert.False(registrar.IsEffectivelyEnabled);
 
+        // Compra exige precio > 0: vaciarlo tampoco habilita; uno válido (coma) sí.
         Tipear(precio, "");
+        Assert.False(registrar.IsEffectivelyEnabled);
+
+        Tipear(precio, "12,50");
         Assert.True(registrar.IsEffectivelyEnabled);
     }
 
@@ -239,6 +245,7 @@ public class GuardarBloqueadoConErroresDeEntradaTests
     {
         var (window, vm, servicio) = MontarMovimiento();
         var cantidad = CajaDeCampo(window, "Cantidad");
+        Tipear(CajaDeCampo(window, "Precio unitario"), "10");   // Compra exige precio > 0
         Tipear(cantidad, "3");
 
         Tipear(cantidad, "5.4");

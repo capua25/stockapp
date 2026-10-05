@@ -107,6 +107,12 @@ public class CategoriaService : ICategoriaService
         if (!categoria.Activo)
             throw new ReglaDeNegocioException($"La categoría {id} ya está inactiva.");
 
+        // Una categoría con productos ACTIVOS no se da de baja (dejaría productos vivos colgando de
+        // una categoría que ya no se ofrece). Los productos inactivos no bloquean.
+        if (await _repo.TieneProductosActivosAsync(id))
+            throw new ReglaDeNegocioException(
+                "No se puede dar de baja la categoría: tiene productos asociados.");
+
         categoria.Activo = false;
         await _repo.ActualizarAsync(categoria);
 

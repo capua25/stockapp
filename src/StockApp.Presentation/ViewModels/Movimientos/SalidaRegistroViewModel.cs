@@ -9,12 +9,12 @@ namespace StockApp.Presentation.ViewModels.Movimientos;
 
 /// <summary>
 /// Formulario de registro de SALIDA de stock: tipo fijo <see cref="TipoMovimiento.Salida"/>,
-/// motivos habilitados restringidos a Venta, Merma y Ajuste.
+/// motivos habilitados restringidos a Uso o consumo, Merma y Ajuste.
 /// </summary>
 public sealed partial class SalidaRegistroViewModel : MovimientoRegistroViewModelBase
 {
     private static readonly IReadOnlyList<MotivoMovimiento> _motivosDisponibles =
-        new[] { MotivoMovimiento.Venta, MotivoMovimiento.Merma, MotivoMovimiento.Ajuste };
+        new[] { MotivoMovimiento.UsoOConsumo, MotivoMovimiento.Merma, MotivoMovimiento.Ajuste };
 
     public override TipoMovimiento Tipo => TipoMovimiento.Salida;
 

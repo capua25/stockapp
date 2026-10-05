@@ -184,7 +184,7 @@ public class HistorialPorProductoViewModelTests
         {
             new ColumnaPdf("Fecha", "Fecha"),
             new ColumnaPdf("Tipo", "Tipo"),
-            new ColumnaPdf("Motivo", "Motivo"),
+            new ColumnaPdf("MotivoNombre", "Motivo"),
             new ColumnaPdf("Cantidad", "Cantidad"),
             new ColumnaPdf("PrecioUnitario", "P. Unitario"),
             new ColumnaPdf("StockAnterior", "Stock Ant."),

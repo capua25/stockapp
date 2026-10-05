@@ -12,7 +12,7 @@ namespace StockApp.ApiClient.Tests;
 public class MovimientoStockApiClientTests
 {
     private static RegistrarMovimientoDto Salida(decimal cantidad = 8m) => new(
-        ProductoId: 7, Tipo: TipoMovimiento.Salida, Motivo: MotivoMovimiento.Venta,
+        ProductoId: 7, Tipo: TipoMovimiento.Salida, Motivo: MotivoMovimiento.UsoOConsumo,
         Cantidad: cantidad, PrecioUnitario: 40m, Comentario: null);
 
     [Fact]

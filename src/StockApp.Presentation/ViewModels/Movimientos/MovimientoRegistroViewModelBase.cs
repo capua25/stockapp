@@ -39,9 +39,14 @@ public abstract partial class MovimientoRegistroViewModelBase : ViewModelBase
     protected decimal _cantidad;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PrecioVisible))]
+    [NotifyPropertyChangedFor(nameof(PrecioPlaceholder))]
+    [NotifyPropertyChangedFor(nameof(PrecioObligatorio))]
+    [NotifyCanExecuteChangedFor(nameof(RegistrarCommand))]
     protected MotivoMovimiento _motivo;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RegistrarCommand))]
     protected decimal? _precioUnitario;
 
     [ObservableProperty]
@@ -60,6 +65,25 @@ public abstract partial class MovimientoRegistroViewModelBase : ViewModelBase
 
     /// <summary>Título de la pantalla, mostrado en el encabezado del formulario.</summary>
     public abstract string Titulo { get; }
+
+    /// <summary>
+    /// El campo de precio solo se muestra si el motivo lo admite (regla única en
+    /// <see cref="MotivoMovimientoExtensions.PrecioAplica"/>): con Uso o consumo se oculta.
+    /// </summary>
+    public bool PrecioVisible => Motivo.PrecioAplica();
+
+    /// <summary>Marca el campo como requerido (solo Compra).</summary>
+    public bool PrecioObligatorio => Motivo.PrecioEsObligatorio();
+
+    /// <summary>"Obligatorio" para Compra, "Opcional" para el resto de los motivos que lo muestran.</summary>
+    public string PrecioPlaceholder => Motivo.PrecioEsObligatorio() ? "Obligatorio" : "Opcional";
+
+    /// <summary>Al ocultarse el precio se descarta lo que hubiera cargado: no debe viajar oculto.</summary>
+    partial void OnMotivoChanged(MotivoMovimiento value)
+    {
+        if (!value.PrecioAplica())
+            PrecioUnitario = null;
+    }
 
     protected MovimientoRegistroViewModelBase(
         IMovimientoStockService service,
@@ -103,7 +127,9 @@ public abstract partial class MovimientoRegistroViewModelBase : ViewModelBase
     }
 
     private bool PuedeRegistrar()
-        => ProductoSeleccionado != null && Cantidad > 0;
+        => ProductoSeleccionado != null
+           && Cantidad > 0
+           && (!Motivo.PrecioEsObligatorio() || PrecioUnitario is > 0);
 
     public IAsyncRelayCommand RegistrarCommand => field ??= ComandoDeGuardado(RegistrarAsync, PuedeRegistrar);
 

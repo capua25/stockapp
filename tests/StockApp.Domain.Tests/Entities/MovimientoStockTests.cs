@@ -34,7 +34,7 @@ public class MovimientoStockTests
             Cantidad = 3.5m,
             PrecioUnitario = 750m,
             Fecha = DateTime.UtcNow,
-            Motivo = MotivoMovimiento.Venta
+            Motivo = MotivoMovimiento.UsoOConsumo
         };
 
         Assert.True(movimiento.Cantidad > 0);

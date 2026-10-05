@@ -45,11 +45,13 @@ public class MovimientoStockService : IMovimientoStockService
 
         ValidarTipoMotivo(dto.Tipo, dto.Motivo);
 
-        if (dto.Motivo is MotivoMovimiento.Compra or MotivoMovimiento.Venta
-            && (dto.PrecioUnitario is null or <= 0))
+        if (dto.Motivo.PrecioEsObligatorio() && dto.PrecioUnitario is (null or <= 0))
             throw new ArgumentException(
-                $"El precio unitario es obligatorio y debe ser mayor que cero para el motivo '{dto.Motivo}'.",
+                $"El precio unitario es obligatorio y debe ser mayor que cero para el motivo '{dto.Motivo.Nombre()}'.",
                 nameof(dto.PrecioUnitario));
+
+        // El precio no aplica a Uso o consumo: se descarta (no se rechaza) y se guarda 0.
+        var precio = dto.Motivo.PrecioAplica() ? dto.PrecioUnitario ?? 0m : 0m;
 
         // B5: existencia y estado del producto
         var producto = await _repo.ObtenerProductoAsync(dto.ProductoId)
@@ -72,12 +74,12 @@ public class MovimientoStockService : IMovimientoStockService
             Tipo          = dto.Tipo,
             Motivo        = dto.Motivo,
             Cantidad      = dto.Cantidad,
-            PrecioUnitario = dto.PrecioUnitario ?? 0m,
+            PrecioUnitario = precio,
             Fecha         = DateTime.UtcNow,
             Comentario    = dto.Comentario
         };
 
-        var detalle = $"ProductoId={dto.ProductoId}; Tipo={dto.Tipo}; Motivo={dto.Motivo}; " +
+        var detalle = $"ProductoId={dto.ProductoId}; Tipo={dto.Tipo}; Motivo={dto.Motivo.Nombre()}; " +
                       $"Cantidad={dto.Cantidad}; StockAnterior={stockAnterior}; StockNuevo={stockNuevo}";
 
         var args = new RegistroAtomicoArgs(
@@ -104,7 +106,7 @@ public class MovimientoStockService : IMovimientoStockService
             Tipo:          dto.Tipo,
             Motivo:        dto.Motivo,
             Cantidad:      dto.Cantidad,
-            PrecioUnitario: dto.PrecioUnitario ?? 0m,
+            PrecioUnitario: precio,
             StockAnterior: resultado.StockResultante - delta,
             StockNuevo:    resultado.StockResultante,
             Fecha:         movimiento.Fecha);
@@ -160,7 +162,7 @@ public class MovimientoStockService : IMovimientoStockService
 
     /// <summary>
     /// Tabla validada (decisión firme #582):
-    /// Compra  → Entrada; Venta → Salida; Merma → Salida; Ajuste → Entrada | Salida.
+    /// Compra  → Entrada; UsoOConsumo → Salida; Merma → Salida; Ajuste → Entrada | Salida.
     /// </summary>
     private static void ValidarTipoMotivo(TipoMovimiento tipo, MotivoMovimiento motivo)
     {
@@ -168,7 +170,7 @@ public class MovimientoStockService : IMovimientoStockService
         {
             (TipoMovimiento.Entrada, MotivoMovimiento.Compra)  => true,
             (TipoMovimiento.Entrada, MotivoMovimiento.Ajuste)  => true,
-            (TipoMovimiento.Salida,  MotivoMovimiento.Venta)   => true,
+            (TipoMovimiento.Salida,  MotivoMovimiento.UsoOConsumo)   => true,
             (TipoMovimiento.Salida,  MotivoMovimiento.Merma)   => true,
             (TipoMovimiento.Salida,  MotivoMovimiento.Ajuste)  => true,
             _ => false
@@ -177,6 +179,6 @@ public class MovimientoStockService : IMovimientoStockService
         if (!valido)
             throw new ArgumentException(
                 $"La combinación Tipo='{tipo}' con Motivo='{motivo}' no es válida. " +
-                "Combinaciones permitidas: Entrada+{Compra,Ajuste}, Salida+{Venta,Merma,Ajuste}.");
+                "Combinaciones permitidas: Entrada+{Compra,Ajuste}, Salida+{UsoOConsumo,Merma,Ajuste}.");
     }
 }

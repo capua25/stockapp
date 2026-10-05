@@ -28,6 +28,9 @@ public class CategoriaRepository : ICategoriaRepository
             : _ctx.Categorias.AnyAsync(c => c.Nombre.ToLower() == normalizado);
     }
 
+    public Task<bool> TieneProductosActivosAsync(int categoriaId)
+        => _ctx.Productos.AnyAsync(p => p.CategoriaId == categoriaId && p.Activo);
+
     public async Task<int> AgregarAsync(Categoria categoria)
     {
         _ctx.Categorias.Add(categoria);

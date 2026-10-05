@@ -36,6 +36,72 @@ public class CategoriaRepositoryTests : PostgresRepositoryTestBase
         Assert.True(found.Activo);
     }
 
+    // ── TieneProductosActivosAsync ────────────────────────────────────────────
+
+    private async Task<int> SeedProductoAsync(Categoria? categoria, bool activo, string codigo)
+    {
+        var um = await Context.UnidadesMedida.FirstOrDefaultAsync(u => u.Abreviatura == "u");
+        if (um is null)
+        {
+            um = new UnidadMedida { Nombre = "Unidad", Abreviatura = "u" };
+            Context.UnidadesMedida.Add(um);
+            await Context.SaveChangesAsync();
+        }
+
+        var producto = new Producto
+        {
+            Codigo = codigo, Nombre = $"Prod {codigo}", UnidadMedidaId = um.Id,
+            CategoriaId = categoria?.Id, PrecioCosto = 10m, Activo = activo, FechaAlta = DateTime.UtcNow
+        };
+        Context.Productos.Add(producto);
+        await Context.SaveChangesAsync();
+        return producto.Id;
+    }
+
+    [Fact]
+    public async Task TieneProductosActivosAsync_ConProductoActivo_DevuelveTrue()
+    {
+        var cat = NuevaCategoria("ConActivo");
+        await _repo.AgregarAsync(cat);
+        await SeedProductoAsync(cat, activo: true, "P-1");
+        Context.ChangeTracker.Clear();
+
+        Assert.True(await _repo.TieneProductosActivosAsync(cat.Id));
+    }
+
+    [Fact]
+    public async Task TieneProductosActivosAsync_SoloProductosInactivos_DevuelveFalse()
+    {
+        var cat = NuevaCategoria("SoloInactivos");
+        await _repo.AgregarAsync(cat);
+        await SeedProductoAsync(cat, activo: false, "P-2");
+        Context.ChangeTracker.Clear();
+
+        Assert.False(await _repo.TieneProductosActivosAsync(cat.Id));
+    }
+
+    [Fact]
+    public async Task TieneProductosActivosAsync_SinProductos_DevuelveFalse()
+    {
+        var cat = NuevaCategoria("Vacia");
+        await _repo.AgregarAsync(cat);
+
+        Assert.False(await _repo.TieneProductosActivosAsync(cat.Id));
+    }
+
+    [Fact]
+    public async Task TieneProductosActivosAsync_ProductoActivoDeOtraCategoria_NoCuenta()
+    {
+        var cat = NuevaCategoria("Propia");
+        var otra = NuevaCategoria("Otra");
+        await _repo.AgregarAsync(cat);
+        await _repo.AgregarAsync(otra);
+        await SeedProductoAsync(otra, activo: true, "P-3");
+        Context.ChangeTracker.Clear();
+
+        Assert.False(await _repo.TieneProductosActivosAsync(cat.Id));
+    }
+
     // ── ListarTodasAsync ──────────────────────────────────────────────────────
 
     [Fact]

@@ -92,6 +92,7 @@ public abstract class MovimientoRegistroViewModelTestsBase
         var (vm, _, _, _, _) = Crear();
         vm.ProductoSeleccionado = CrearProductoDto(1, "Azúcar");
         vm.Cantidad = 10m;
+        vm.PrecioUnitario = 10m;   // Compra (default de Entrada) exige precio; en Salida no incide
 
         Assert.True(vm.RegistrarCommand.CanExecute(null));
     }

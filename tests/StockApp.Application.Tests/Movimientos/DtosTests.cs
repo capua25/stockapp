@@ -95,6 +95,17 @@ public class DtosTests
         Assert.Equal(hasta, filtro.FechaHasta);
     }
 
+    [Theory]
+    [InlineData(MotivoMovimiento.UsoOConsumo, "Uso o consumo")]
+    [InlineData(MotivoMovimiento.Compra, "Compra")]
+    public void MovimientoHistorialDto_MotivoNombre_UsaElTextoVisible(MotivoMovimiento motivo, string esperado)
+    {
+        var dto = new MovimientoHistorialDto(
+            1, 1, "P", TipoMovimiento.Salida, motivo, 1m, 0m, 1m, 0m, null, DateTime.UtcNow, 1, "Admin");
+
+        Assert.Equal(esperado, dto.MotivoNombre);
+    }
+
     [Fact]
     public void MovimientoHistorialDto_PropiedadesAccesibles()
     {
@@ -104,7 +115,7 @@ public class DtosTests
             ProductoId: 3,
             ProductoNombre: "Fideos 500g",
             Tipo: TipoMovimiento.Salida,
-            Motivo: MotivoMovimiento.Venta,
+            Motivo: MotivoMovimiento.UsoOConsumo,
             Cantidad: 2m,
             PrecioUnitario: 200m,
             StockAnterior: 20m,
@@ -118,7 +129,7 @@ public class DtosTests
         Assert.Equal(3, dto.ProductoId);
         Assert.Equal("Fideos 500g", dto.ProductoNombre);
         Assert.Equal(TipoMovimiento.Salida, dto.Tipo);
-        Assert.Equal(MotivoMovimiento.Venta, dto.Motivo);
+        Assert.Equal(MotivoMovimiento.UsoOConsumo, dto.Motivo);
         Assert.Equal(2m, dto.Cantidad);
         Assert.Equal(200m, dto.PrecioUnitario);
         Assert.Equal(20m, dto.StockAnterior);

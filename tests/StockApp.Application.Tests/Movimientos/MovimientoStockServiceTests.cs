@@ -45,7 +45,7 @@ public class MovimientoStockServiceTests
                                    cantidad, 100m, null);
 
     private static RegistrarMovimientoDto DtoSalida(int productoId = 1, decimal cantidad = 5m) =>
-        new RegistrarMovimientoDto(productoId, TipoMovimiento.Salida, MotivoMovimiento.Venta,
+        new RegistrarMovimientoDto(productoId, TipoMovimiento.Salida, MotivoMovimiento.UsoOConsumo,
                                    cantidad, 100m, null);
 
     // ── B3: Autorización fail-closed ─────────────────────────────────────────
@@ -108,7 +108,7 @@ public class MovimientoStockServiceTests
     }
 
     [Theory]
-    [InlineData(TipoMovimiento.Entrada, MotivoMovimiento.Venta)]   // Entrada+Venta → inválido
+    [InlineData(TipoMovimiento.Entrada, MotivoMovimiento.UsoOConsumo)]   // Entrada+UsoOConsumo → inválido
     [InlineData(TipoMovimiento.Entrada, MotivoMovimiento.Merma)]   // Entrada+Merma → inválido
     [InlineData(TipoMovimiento.Salida,  MotivoMovimiento.Compra)]  // Salida+Compra → inválido
     public async Task RegistrarAsync_TipoMotivoIncompatible_LanzaArgumentException(
@@ -122,23 +122,60 @@ public class MovimientoStockServiceTests
     }
 
     [Theory]
-    [InlineData(TipoMovimiento.Entrada, MotivoMovimiento.Compra)]  // Compra requiere precio
-    [InlineData(TipoMovimiento.Salida,  MotivoMovimiento.Venta)]   // Venta requiere precio
-    public async Task RegistrarAsync_CompraVentaSinPrecio_LanzaArgumentException(
-        TipoMovimiento tipo, MotivoMovimiento motivo)
+    [InlineData(null)]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task RegistrarAsync_CompraSinPrecioValido_LanzaArgumentException(int? precio)
     {
         var (svc, repo, _, _) = Crear();
-        var dto = new RegistrarMovimientoDto(1, tipo, motivo, 5m, null, null);
+        var dto = new RegistrarMovimientoDto(1, TipoMovimiento.Entrada, MotivoMovimiento.Compra,
+                                             5m, precio, null);
 
         await Assert.ThrowsAsync<ArgumentException>(() => svc.RegistrarAsync(dto));
         repo.Verify(r => r.ObtenerProductoAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RegistrarAsync_UsoOConsumoSinPrecio_Registra_Y_GuardaPrecioCero()
+    {
+        var (svc, repo, _, _) = Crear();
+        repo.Setup(r => r.ObtenerProductoAsync(1)).ReturnsAsync(ProductoActivo());
+        RegistroAtomicoArgs? capturado = null;
+        repo.Setup(r => r.RegistrarMovimientoAtomicoAsync(It.IsAny<RegistroAtomicoArgs>()))
+            .Callback<RegistroAtomicoArgs>(a => capturado = a)
+            .ReturnsAsync(new ResultadoRegistro(ResultadoRegistroEstado.Ok, 1, 15m));
+
+        var dto = new RegistrarMovimientoDto(1, TipoMovimiento.Salida, MotivoMovimiento.UsoOConsumo, 5m, null, null);
+        var resultado = await svc.RegistrarAsync(dto);
+
+        Assert.Equal(0m, capturado!.Movimiento.PrecioUnitario);
+        Assert.Equal(0m, resultado.PrecioUnitario);
+    }
+
+    [Fact]
+    public async Task RegistrarAsync_UsoOConsumoConPrecio_IgnoraElPrecioYGuardaCero()
+    {
+        // Decisión: el precio no aplica a Uso o consumo, así que se descarta en vez de rechazar
+        // (un cliente viejo que lo mande no debe romper; el dato guardado queda siempre en 0).
+        var (svc, repo, _, _) = Crear();
+        repo.Setup(r => r.ObtenerProductoAsync(1)).ReturnsAsync(ProductoActivo());
+        RegistroAtomicoArgs? capturado = null;
+        repo.Setup(r => r.RegistrarMovimientoAtomicoAsync(It.IsAny<RegistroAtomicoArgs>()))
+            .Callback<RegistroAtomicoArgs>(a => capturado = a)
+            .ReturnsAsync(new ResultadoRegistro(ResultadoRegistroEstado.Ok, 1, 15m));
+
+        var resultado = await svc.RegistrarAsync(DtoSalida());   // DtoSalida lleva precio 100
+
+        Assert.Equal(0m, capturado!.Movimiento.PrecioUnitario);
+        Assert.Equal(0m, resultado.PrecioUnitario);
     }
 
     [Theory]
     [InlineData(TipoMovimiento.Entrada, MotivoMovimiento.Ajuste)]
     [InlineData(TipoMovimiento.Salida,  MotivoMovimiento.Ajuste)]
     [InlineData(TipoMovimiento.Salida,  MotivoMovimiento.Merma)]
-    public async Task RegistrarAsync_AjusteMermaSinPrecio_NoPasaValidacionPrecioYSigueAlProducto(
+    [InlineData(TipoMovimiento.Salida,  MotivoMovimiento.UsoOConsumo)]
+    public async Task RegistrarAsync_AjusteMermaUsoSinPrecio_NoPasaValidacionPrecioYSigueAlProducto(
         TipoMovimiento tipo, MotivoMovimiento motivo)
     {
         var (svc, repo, _, _) = Crear();

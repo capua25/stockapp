@@ -79,7 +79,7 @@
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha, Converter={x:Static conv:FechaUtcALocalConverter.Instance}, StringFormat='dd/MM/yyyy HH:mm'}" Width="Auto" />
                         <DataGridTextColumn Header="Tipo" Binding="{Binding Tipo}" Width="Auto" />
-                        <DataGridTextColumn Header="Motivo" Binding="{Binding Motivo}" Width="Auto" />
+                        <DataGridTextColumn Header="Motivo" Binding="{Binding MotivoNombre, DataType={x:Type dto:MovimientoHistorialDto}}" Width="Auto" />
                         <DataGridTextColumn Header="Cantidad"
                                              Binding="{Binding Cantidad, Converter={x:Static conv:CantidadConverter.Instance}}"
                                              Width="Auto" MinWidth="100" CellStyleClasses="num" />

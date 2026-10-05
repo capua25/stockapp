@@ -34,18 +34,18 @@ public class SalidaRegistroViewModelTests : MovimientoRegistroViewModelTestsBase
     }
 
     [Fact]
-    public void MotivosDisponibles_VentaMermaAjuste()
+    public void MotivosDisponibles_UsoOConsumoMermaAjuste()
     {
         var vm = CrearVmConcreto();
 
-        Assert.Equal(new[] { MotivoMovimiento.Venta, MotivoMovimiento.Merma, MotivoMovimiento.Ajuste }, vm.MotivosDisponibles);
+        Assert.Equal(new[] { MotivoMovimiento.UsoOConsumo, MotivoMovimiento.Merma, MotivoMovimiento.Ajuste }, vm.MotivosDisponibles);
     }
 
     [Fact]
-    public void Motivo_PorDefecto_EsVenta()
+    public void Motivo_PorDefecto_EsUsoOConsumo()
     {
         var vm = CrearVmConcreto();
 
-        Assert.Equal(MotivoMovimiento.Venta, vm.Motivo);
+        Assert.Equal(MotivoMovimiento.UsoOConsumo, vm.Motivo);
     }
 }

@@ -50,7 +50,7 @@ public record MovimientoHistorialDto(
     public string TipoNombre => Tipo.ToString();
 
     /// <summary>Texto del motivo de movimiento, para mostrar y ordenar alfabéticamente en el DataGrid.</summary>
-    public string MotivoNombre => Motivo.ToString();
+    public string MotivoNombre => Motivo.Nombre();
 }
 
 /// <summary>Resultado del recálculo de stock (RS-08).</summary>
