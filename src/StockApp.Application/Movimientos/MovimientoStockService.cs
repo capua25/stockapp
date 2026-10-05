@@ -45,11 +45,13 @@ public class MovimientoStockService : IMovimientoStockService
 
         ValidarTipoMotivo(dto.Tipo, dto.Motivo);
 
-        if (dto.Motivo is MotivoMovimiento.Compra or MotivoMovimiento.UsoOConsumo
-            && (dto.PrecioUnitario is null or <= 0))
+        if (dto.Motivo.PrecioEsObligatorio() && dto.PrecioUnitario is (null or <= 0))
             throw new ArgumentException(
-                $"El precio unitario es obligatorio y debe ser mayor que cero para el motivo '{dto.Motivo}'.",
+                $"El precio unitario es obligatorio y debe ser mayor que cero para el motivo '{dto.Motivo.Nombre()}'.",
                 nameof(dto.PrecioUnitario));
+
+        // El precio no aplica a Uso o consumo: se descarta (no se rechaza) y se guarda 0.
+        var precio = dto.Motivo.PrecioAplica() ? dto.PrecioUnitario ?? 0m : 0m;
 
         // B5: existencia y estado del producto
         var producto = await _repo.ObtenerProductoAsync(dto.ProductoId)
@@ -72,7 +74,7 @@ public class MovimientoStockService : IMovimientoStockService
             Tipo          = dto.Tipo,
             Motivo        = dto.Motivo,
             Cantidad      = dto.Cantidad,
-            PrecioUnitario = dto.PrecioUnitario ?? 0m,
+            PrecioUnitario = precio,
             Fecha         = DateTime.UtcNow,
             Comentario    = dto.Comentario
         };
@@ -104,7 +106,7 @@ public class MovimientoStockService : IMovimientoStockService
             Tipo:          dto.Tipo,
             Motivo:        dto.Motivo,
             Cantidad:      dto.Cantidad,
-            PrecioUnitario: dto.PrecioUnitario ?? 0m,
+            PrecioUnitario: precio,
             StockAnterior: resultado.StockResultante - delta,
             StockNuevo:    resultado.StockResultante,
             Fecha:         movimiento.Fecha);

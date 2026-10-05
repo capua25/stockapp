@@ -29,6 +29,22 @@ public class MotivoMovimientoTests
     public void Nombre_DevuelveElTextoVisible(MotivoMovimiento motivo, string esperado)
         => Assert.Equal(esperado, motivo.Nombre());
 
+    [Theory]
+    [InlineData(MotivoMovimiento.Compra, true)]
+    [InlineData(MotivoMovimiento.UsoOConsumo, false)]
+    [InlineData(MotivoMovimiento.Ajuste, false)]
+    [InlineData(MotivoMovimiento.Merma, false)]
+    public void PrecioEsObligatorio_SoloParaCompra(MotivoMovimiento motivo, bool esperado)
+        => Assert.Equal(esperado, motivo.PrecioEsObligatorio());
+
+    [Theory]
+    [InlineData(MotivoMovimiento.Compra, true)]
+    [InlineData(MotivoMovimiento.UsoOConsumo, false)]
+    [InlineData(MotivoMovimiento.Ajuste, true)]
+    [InlineData(MotivoMovimiento.Merma, true)]
+    public void PrecioAplica_TodosMenosUsoOConsumo(MotivoMovimiento motivo, bool esperado)
+        => Assert.Equal(esperado, motivo.PrecioAplica());
+
     [Fact]
     public void Nombre_CubreTodosLosMiembros_SinCaerAlToString()
     {

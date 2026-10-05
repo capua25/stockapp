@@ -47,7 +47,8 @@
                     </ComboBox>
                 </c:CampoFormulario>
 
-                <!-- PrecioUnitario es decimal? (opcional): el conversor default de Avalonia
+                <!-- PrecioUnitario es decimal? (obligatorio solo para Compra, oculto para Uso o consumo,
+                     la regla vive en MotivoMovimientoExtensions): el conversor default de Avalonia
                      no mapea "" a null y explota con InvalidCastException al vaciar el campo
                      (bug real reproducido en tests). DecimalOpcionalConverter trata "" como
                      null y, si el texto no es numérico, devuelve un BindingNotification en
@@ -57,11 +58,13 @@
                      t.Name == "PrecioUnitarioBox" sobre window.GetVisualDescendants(), y el
                      TextBox sigue en el mismo NameScope porque CampoFormulario lo proyecta por
                      ContentPresenter, no por template propio. -->
-                <c:CampoFormulario Etiqueta="Precio unitario">
+                <c:CampoFormulario Etiqueta="Precio unitario"
+                                   Requerido="{Binding PrecioObligatorio}"
+                                   IsVisible="{Binding PrecioVisible}">
                     <TextBox Name="PrecioUnitarioBox"
                              Text="{Binding PrecioUnitario, Converter={x:Static conv:DecimalOpcionalConverter.Instance}}"
                              beh:EntradaNumericaBehavior.EsDecimal="True"
-                             PlaceholderText="Opcional" />
+                             PlaceholderText="{Binding PrecioPlaceholder}" />
                 </c:CampoFormulario>
 
                 <c:CampoFormulario Etiqueta="Comentario">

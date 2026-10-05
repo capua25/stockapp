@@ -62,6 +62,40 @@ public class MovimientosEndpointTests : ApiTestBase
     }
 
     [Fact]
+    public async Task PostMovimientos_CompraSinPrecio_Devuelve400()
+    {
+        await using var ctx = Factory.CrearContexto();
+        await DatosDePrueba.SeedUsuarioAsync(ctx, "admin.test", "Secreta123!", RolUsuario.Admin);
+        await DatosDePrueba.SeedUsuarioAsync(ctx, "operador.test", "Secreta123!", RolUsuario.Operador);
+        var producto = await DatosDePrueba.SeedProductoConStockAsync(ctx, "SKU-M0", "Producto Mov 0", 10m);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenOperador());
+
+        var response = await client.PostAsJsonAsync("/movimientos",
+            new RegistrarMovimientoRequest(producto.Id, TipoMovimiento.Entrada, MotivoMovimiento.Compra, 5m, null, null));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostMovimientos_UsoOConsumoSinPrecio_Devuelve201()
+    {
+        await using var ctx = Factory.CrearContexto();
+        await DatosDePrueba.SeedUsuarioAsync(ctx, "admin.test", "Secreta123!", RolUsuario.Admin);
+        await DatosDePrueba.SeedUsuarioAsync(ctx, "operador.test", "Secreta123!", RolUsuario.Operador);
+        var producto = await DatosDePrueba.SeedProductoConStockAsync(ctx, "SKU-M0B", "Producto Mov 0B", 10m);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenOperador());
+
+        var response = await client.PostAsJsonAsync("/movimientos",
+            new RegistrarMovimientoRequest(producto.Id, TipoMovimiento.Salida, MotivoMovimiento.UsoOConsumo, 2m, null, null));
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+    }
+
+    [Fact]
     public async Task PostMovimientos_SalidaMayorAlStock_SinForzar_Devuelve409()
     {
         await using var ctx = Factory.CrearContexto();

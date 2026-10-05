@@ -12,4 +12,18 @@ public static class MotivoMovimientoExtensions
         MotivoMovimiento.UsoOConsumo => "Uso o consumo",
         _ => motivo.ToString(),
     };
+
+    /// <summary>
+    /// El precio unitario es OBLIGATORIO (&gt; 0) solo para Compra: es el único motivo con un
+    /// valor de adquisición. Para Ajuste y Merma es opcional.
+    /// </summary>
+    public static bool PrecioEsObligatorio(this MotivoMovimiento motivo)
+        => motivo == MotivoMovimiento.Compra;
+
+    /// <summary>
+    /// El precio aplica a todos los motivos salvo Uso o consumo, donde ni se pide ni se guarda
+    /// (el municipio no vende ni valoriza el consumo interno).
+    /// </summary>
+    public static bool PrecioAplica(this MotivoMovimiento motivo)
+        => motivo != MotivoMovimiento.UsoOConsumo;
 }
