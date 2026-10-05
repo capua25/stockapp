@@ -96,13 +96,13 @@ public class DataGridV2Tests
     }
 
     [AvaloniaFact]
-    public void Celda_Fuente13ColorEtiquetaPadding12()
+    public void Celda_Fuente13ColorEtiquetaPadding12Izquierda4Derecha()
     {
         var celda = MontarGrilla().GetVisualDescendants().OfType<DataGridCell>().First();
 
         Assert.Equal(13, celda.FontSize);
         Assert.Equal(Hex("#44403C"), ColorDe(celda.Foreground));
-        Assert.Equal(new Thickness(12, 0), celda.Padding);
+        Assert.Equal(new Thickness(12, 0, 4, 0), celda.Padding);
     }
 
     [AvaloniaFact]
@@ -167,13 +167,13 @@ public class DataGridV2Tests
     {
         // Fluent reserva SIEMPRE 32 px (DataGridSortIconMinWidth) para la flecha de orden: en la
         // columna CÓDIGO de 100 del catálogo el texto tenía 44 px y salía "CÓDIG" (Task 17, F1).
-        // En v2 el hueco existe solo con la columna ordenada; sin orden, el texto tiene 100 - 24.
+        // En v2 el hueco existe solo con la columna ordenada; sin orden, el texto tiene 100 - 16 (padding 12 + 4).
         var (_, grilla) = MontarGrillaOrdenable();
         var header = HeaderDe(grilla, "CÓDIGO");
         var contenido = Parte<Control>(header, "PART_ContentPresenter");
 
         Assert.Equal(100, header.Bounds.Width);
-        Assert.Equal(76, contenido.Bounds.Width);
+        Assert.Equal(84, contenido.Bounds.Width);
     }
 
     [AvaloniaFact]

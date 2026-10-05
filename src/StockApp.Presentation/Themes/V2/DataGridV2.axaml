@@ -50,7 +50,10 @@
         <Setter Property="LetterSpacing" Value="{DynamicResource V2FuenteHeaderColumnaEspaciadoLetras}" />
         <Setter Property="Foreground" Value="{DynamicResource V2TextoTerciarioBrush}" />
         <Setter Property="Background" Value="{DynamicResource V2HeaderGrillaBrush}" />
-        <Setter Property="Padding" Value="12,0" />
+        <!-- Padding derecho 4 (no 12): ver el comentario de ".ui2 DataGridCell" más abajo. El header
+             usa el mismo que la celda para que una columna .num alineada a la derecha quede
+             alineada con su título. -->
+        <Setter Property="Padding" Value="12,0,4,0" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="MinHeight" Value="0" />
     </Style>
@@ -124,8 +127,12 @@
         <Setter Property="Fill" Value="{DynamicResource V2SeparadorGrillaBrush}" />
     </Style>
 
+    <!-- Padding 12 a la izquierda y 4 a la derecha: con 12 simétrico, el texto que no entra en una
+         columna angosta (ej. una hora "21:57") se cortaba 12 px antes del borde derecho y quedaba un
+         hueco feo (medido con render Skia: 13 px entre la última tinta y el borde de la celda;
+         ver DataGridV2EspacioDerechoCeldaTests). Mockup: .v2-grilla-celda en _base/base.css. -->
     <Style Selector=".ui2 DataGridCell">
-        <Setter Property="Padding" Value="12,0" />
+        <Setter Property="Padding" Value="12,0,4,0" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="FontSize" Value="{DynamicResource V2FuenteControlTamano}" />
         <Setter Property="Foreground" Value="{DynamicResource V2TextoEtiquetaBrush}" />
