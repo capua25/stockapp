@@ -17,19 +17,23 @@ Todos los comandos se corren desde la raíz del worktree: `/home/capua25/workspa
 | # | Decisión | Cómo queda en el plan | Tasks |
 |---|---|---|---|
 | U1 | **Alcance de la Fase 2:** `InicioView` completa (§5.3) + la deuda menor de la Fase 1. | Bloques A a D. | todas |
-| U2 | **Inicio MANTIENE el logo del municipio de fondo**, con el mismo tratamiento que se aprobó en el Login v2 (P5 de la Fase 1): `Image` `carmelo-original.png`, `Stretch="Uniform"`, centrada, `Opacity` 0.28 por `Style Selector="Image.marca-agua"` (Priority=Style), `RenderTransform="scale(0.85)"`, detrás del contenido. | Igual que el Login: se excluye de la comparación de píxeles en ambos renders y la custodia un test aparte (`InicioMarcaAguaTests`, Task 11). Los mockups la incluyen. | 8, 11, 14 |
+| U2 | **Inicio MANTIENE el logo del municipio de fondo**, con el mismo tratamiento que se aprobó en el Login v2 (P5 de la Fase 1): `Image` `carmelo-original.png`, `Stretch="Uniform"`, centrada, `Opacity` 0.28 por `Style Selector="Image.marca-agua"` (Priority=Style), `RenderTransform="scale(0.85)"`, detrás del contenido. | Igual que el Login: se excluye de la comparación de píxeles en ambos renders. **Sin test dedicado que la custodie (U9).** Los mockups la incluyen; el usuario la mira en la verificación orgánica (Task 14). | 8, 11, 14 |
 | U3 | **Toda la deuda menor de la Fase 1 entra en esta fase, salvo Importación.** | Un task (o un grupo que un revisor no rechazaría por separado) por ítem, con guardián y mutación donde aplica. Tabla "Dónde quedó cada ítem de la deuda menor". | 1–6, 9, 12, 13 |
 | U4 | **Importación NO se toca (corrección del usuario, 2026-10-06):** queda apagada. El ítem "Sin guardián propio de `EsAdmin` en Importación" sale del plan: ninguna task, ningún test que fuerce `ImportacionHabilitada`, ningún cambio en código de Importación. | Listado en "Fuera de alcance" como deuda que sigue ABIERTA mientras Importación esté apagada. En la spec queda marcado así (Task 14). | 14 |
 | U5 | **Al terminar:** se actualiza la sección Estado de la spec y la deuda menor queda cerrada/marcada. | Task 14, Step 6. | 14 |
+| U6 | **CONFIRMADA (2026-10-06): layout apilado** (D1), no dos columnas. | Encabezado, métricas, alertas, panel de tareas a ancho completo, accesos en 3 columnas a ancho completo. D1 deja de ser pregunta abierta. | 8, 11 |
+| U7 | **CONFIRMADO (2026-10-06): el texto "N facturas por vencer esta semana" NO aparece en Inicio** (D4). | Ningún mockup lo muestra; la vista v2 no bindea `TextoAVencer7Dias`; lo custodia `InicioViewV2Tests.ConFacturasPorVencer_NoMuestraElTextoDeLaSemana` (Task 11). D4 deja de ser pregunta abierta. | 8, 11 |
+| U8 | **CONFIRMADO (2026-10-06): ejecución con superpowers:subagent-driven-development.** | Un subagente por task con su brief; los GATE (Tasks 8, 9, 13 Step 3 si cambia un mockup, 14) paran y vuelven al usuario. | todas |
+| U9 | **CONFIRMADO (2026-10-06): el logo de fondo de Inicio NO tiene test propio** (el usuario: "no importa"). | Se eliminan `InicioMarcaAguaTests`, `DiferenciaDePixeles` (solo existía para compartirla con esa custodia; `LoginMarcaAguaTests` no se toca), la medición de respaldo del logo, sus mutaciones y el riesgo de recalibrar cotas. El logo SIGUE en `InicioView.axaml` y en los mockups, y la comparación lo sigue ocultando en ambos renders. | 11, 14 |
 
 ## Decisiones que se confirman al aprobar los mockups (Tasks 8 y 9)
 
-No bloquean el arranque: son decisiones del plan que la spec no fija y que el usuario resuelve mirando el mockup. Si cambia alguna, se ajusta el mockup Y lo que corresponda (componente, `base.css`, ViewModel) en la misma task del mockup, antes del XAML.
+No bloquean el arranque: son decisiones del plan que la spec no fija y que el usuario resuelve mirando el mockup. **D1 y D4 ya están CONFIRMADAS por el usuario (2026-10-06, U6 y U7): no se vuelven a preguntar en el GATE.** Si cambia alguna de las demás, se ajusta el mockup Y lo que corresponda (componente, `base.css`, ViewModel) en la misma task del mockup, antes del XAML.
 
-- **D1 — Disposición apilada, no en dos columnas.** `patrones-1.html` pone el panel de tareas y los accesos rápidos lado a lado, con los accesos en 2 columnas. Medido sobre el layout v2: a 1280 la columna derecha deja 219 px por tarjeta y 161 px para el título, y "Valorización de inventario" (13/600, ~175 px) no entra (`TarjetaAcceso.PART_Titulo` no envuelve; el guardián de recorte lo rechazaría). El plan apila: encabezado, fila de métricas, alertas, panel de tareas a ancho completo y accesos rápidos en 3 columnas a ancho completo.
+- **D1 — Disposición apilada, no en dos columnas. CONFIRMADA por el usuario (2026-10-06).** `patrones-1.html` pone el panel de tareas y los accesos rápidos lado a lado, con los accesos en 2 columnas. Medido sobre el layout v2: a 1280 la columna derecha deja 219 px por tarjeta y 161 px para el título, y "Valorización de inventario" (13/600, ~175 px) no entra (`TarjetaAcceso.PART_Titulo` no envuelve; el guardián de recorte lo rechazaría). El plan apila: encabezado, fila de métricas, alertas, panel de tareas a ancho completo y accesos rápidos en 3 columnas a ancho completo.
 - **D2 — Textos reales.** El título es el saludo real (`¡Bienvenido, María Pérez!`), no el "Buenos días, María" del mockup de referencia. El subtítulo junta fecha y rol: `martes 6 de octubre de 2026 · Sesión iniciada como Administrador` (hoy "Sesión iniciada como {0}" va solo). Etiquetas de métricas: "Facturas a vencer en 7 días" (texto de la spec §5.3), "Tareas vencidas", "Último backup".
 - **D3 — "Ver calendario de pagos"** pasa al slot de acciones del `EncabezadoPagina`, como botón `secundario`, visible con `VerFinanzas` o Admin (hoy está dentro de la card de vencimientos y solo aparece si hay vencimientos).
-- **D4 — Facturas vencidas.** La métrica muestra las a vencer en 7 días; las vencidas pasan a una `Alerta` de advertencia con el texto real del VM (`1 factura vencida` / `N facturas vencidas`). El texto "N facturas por vencer esta semana" deja de mostrarse: lo reemplaza la métrica.
+- **D4 — Facturas vencidas. CONFIRMADA por el usuario (2026-10-06): "N facturas por vencer esta semana" no aparece en Inicio.** La métrica muestra las a vencer en 7 días; las vencidas pasan a una `Alerta` de advertencia con el texto real del VM (`1 factura vencida` / `N facturas vencidas`). El texto "N facturas por vencer esta semana" deja de mostrarse: lo reemplaza la métrica.
 - **D5 — Panel de tareas.** Sin los subtítulos "VENCIDAS (n)" / "PRÓXIMAS A VENCER (n)": la `Insignia` de cada fila (Vencida = peligro, Próxima = advertencia) los reemplaza. Se conserva el texto real de días (`-2 días`, `-1 día`, `hoy`, `3 días`); se quita la flecha "→" de cada fila. Filas separadas por una línea `#F0EFED` arriba de cada una (componente `V2TemaFilaPanel`). El enlace "Ver todas las tareas →" queda abajo a la derecha.
 - **D6 — Métrica sin dato.** Si el servicio falla, la métrica muestra "—" en texto grupo (estado sin dato de `TarjetaMetrica`), nunca un "0" que afirme algo falso. "Último backup" muestra fecha y hora (`04/10/2026 14:32`); sin ningún backup registrado, "—".
 - **D7 — Márgenes y separaciones.** Padding de página 24 arriba/abajo y 28 a los costados (`patrones-1.html`), 16 entre bloques, 12 entre métricas y entre accesos.
@@ -106,7 +110,7 @@ Las cinco de la Fase 1 siguen vigentes (1366×768, formato es-UY, errores de ent
 | Comparación de Inicio | Shell real + `CurrentContent` = `InicioViewModel` (lo resuelve `ViewLocator`, registrado en `VisualTestApp`), sidebar y marca de agua ocultos en ambos renders con un hook nuevo `prepararApp` (corre después del primer layout, antes de capturar). | `VisualTestApp.cs` L53 (`DataTemplates.Add(new ViewLocator())`); `ShellMainView.axaml` L17 (`Border x:Name="Sidebar"`), L105 (`ContentControl` sin `ui2`); `RenderizadorVista.RenderizarAPng` L100-143 (hoy no hay hook previo a la captura). |
 | Columnas de tarjetas | `GrillaUniformeV2` propio en vez de `UniformGrid`. | Decompilado de `Avalonia.Controls.Primitives.UniformGrid` 12.0.5 (`ilspycmd`): `ArrangeOverride` redondea el ancho de celda (`RoundLayoutValue(num3)`) y ubica la celda i en `i * (num3 + columnSpacing)`. A 1366 la fila de métricas tiene 1070 de ancho (1126 menos 2×28): celda 348,67 redondeada a 349, celdas en 0–349, 361–710 y 722–1071 (se pasa 1 px del borde). Chromium redondea cada borde: 0–349, 361–709, 721–1070. |
 | Fila de tareas | `ControlTheme x:Key="V2TemaFilaPanel" TargetType="Button"` con plantilla propia; el fondo se pinta en una parte (`Border#PART_Fila`) con estilos anidados y el presentador NO se llama `PART_ContentPresenter`. | `Themes/Controls.axaml` L20-39: el estilo global `Button` setea `Background`, `Padding` y `:pointerover`; `ComponentesV2.axaml` L115-130 (`V2TemaEnlace`) ya documenta el mismo problema. |
-| Marca de agua de Inicio | Misma estrategia que el Login: excluida de la comparación de píxeles (en la app `Image#MarcaAgua.IsVisible = false`; en el mockup `.marca-agua`) y custodiada por `InicioMarcaAguaTests` (fuente 2804×1448, opacidad 0.28, escala 0.85, `Uniform`, centrada en el ÁREA DE CONTENIDO, detrás del `ScrollViewer`, diferencia solo dentro de su región, delta ≤ 72). | `LoginMarcaAguaTests.cs`; plan Fase 1 "Estrategia de comparación de la marca de agua (P5)". |
+| Marca de agua de Inicio | Excluida de la comparación de píxeles como en el Login (en la app `Image#MarcaAgua.IsVisible = false`; en el mockup `.marca-agua`). Sin test dedicado (U9, decisión del usuario 2026-10-06): la ve el usuario en el mockup y en la verificación orgánica. | Plan Fase 1 "Estrategia de comparación de la marca de agua (P5)"; U9. |
 | `GuardianDePatronTests` | `InicioView` sale de `VistasDeLaTanda` y de la fila `[InlineData(typeof(InicioView), null, "INICIO")]` y entra a `VistasMigradasAV2`. | `GuardianDePatronTests.cs` L49, L109, L216-224. |
 | Tests existentes de Inicio | `InicioViewTests` e `InicioPanelTareasTests` se adaptan (no se borran): los `Border` con nombre pasan a `Alerta`/`TarjetaContenido` con nombres nuevos; el test de wrap del título de "Valorización de inventario" se reemplaza por uno de textos/íconos, porque el recorte lo custodia el guardián de cada comparación a los dos tamaños. | `InicioViewTests.cs` L104-105, L164-165, L255-285; `InicioPanelTareasTests.cs` L127-153. |
 
@@ -124,8 +128,6 @@ Las cinco de la Fase 1 siguen vigentes (1366×768, formato es-UY, errores de ent
 | `docs/ui-v2/mockups/acceso/reset-completado.html`, `reset-error.html` | Reset con sus dos alertas (deuda: paridad del margen). |
 | `tests/StockApp.Presentation.VisualTests/Pantallas/Inicio/DatosInicio.cs` | VM fijos de los mockups de Inicio (reloj fijo, servicios con Moq). |
 | `tests/StockApp.Presentation.VisualTests/Pantallas/Inicio/InicioComparacionTests.cs` | 4 estados × 2 tamaños. |
-| `tests/StockApp.Presentation.VisualTests/Pantallas/Inicio/InicioMarcaAguaTests.cs` | Custodia del logo de fondo de Inicio. |
-| `tests/StockApp.Presentation.VisualTests/Comparacion/DiferenciaDePixeles.cs` | Medición compartida por las dos custodias de marca de agua. |
 | `tests/StockApp.Presentation.UiTests/V2/InicioViewV2Tests.cs` | `ui2`, gates de métricas con usuarios mixtos, revocación en caliente, botón de calendario, accesos con AND. |
 | `tests/StockApp.Presentation.Tests/ViewModels/InicioViewModelMetricasTests.cs` | KPIs, sin dato, reloj, notificación de gates. |
 
@@ -146,7 +148,7 @@ Las cinco de la Fase 1 siguen vigentes (1366×768, formato es-UY, errores de ent
 | `src/StockApp.Presentation/Views/InicioView.axaml` | Reescritura v2 (code-behind sin cambios). |
 | `tests/StockApp.Presentation.VisualTests/Comparacion/RenderizadorVista.cs`, `ComparacionVisual.cs`, `RenderizadorVistaTests.cs` | Hook `preparar`/`prepararApp`. |
 | `tests/StockApp.Presentation.VisualTests/Pantallas/Shell/DatosShell.cs` | `Crear` público con contenido. |
-| `tests/StockApp.Presentation.VisualTests/Pantallas/Acceso/DatosAcceso.cs`, `AccesoComparacionTests.cs`, `LoginMarcaAguaTests.cs` | Reset con alertas; Login usa `DiferenciaDePixeles`. |
+| `tests/StockApp.Presentation.VisualTests/Pantallas/Acceso/DatosAcceso.cs`, `AccesoComparacionTests.cs` | Reset con alertas. |
 | `src/StockApp.Presentation/Views/ResetAdminView.axaml` | Solo si la medición de la Task 12 lo pide (compensación por estado). |
 | `tests/StockApp.Presentation.UiTests/InicioViewTests.cs`, `InicioPanelTareasTests.cs`, `ReflexionVistaViewModelTests.cs` | Adaptación a la vista v2. |
 | `docs/superpowers/specs/2026-09-28-ui-v2-rediseno-total-design.md` | §6.5 (compensaciones y guardián), deuda cerrada, Estado. |
@@ -1179,7 +1181,7 @@ El `<head>` es el mismo en los cuatro (cambia solo el `<title>`):
   .contenido { position: absolute; left: var(--v2-ancho-sidebar); top: 0; right: 0; bottom: 0; overflow: hidden; }
   /* Marca de agua del logo (U2): igual que el Login (P5) e InicioView.axaml (Image.marca-agua: Stretch
      Uniform, centrada en el área de contenido, Opacity 0.28, scale(0.85)), detrás del contenido. La
-     comparación la oculta (ocultarEnMockup); InicioMarcaAguaTests exige estos 0.28 y 0.85. */
+     comparación la oculta (ocultarEnMockup); sin test propio (U9): la mira el usuario. */
   .marca-agua { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0.28; transform: scale(0.85); }
   /* StackPanel Margin 28,24 Spacing 16 de InicioView.axaml. */
   .pagina { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 16px; padding: 24px 28px; }
@@ -1413,7 +1415,7 @@ Expected: 8 PNG sin error de fuentes, de desborde ni de `.v2-ventana` (Task 2); 
 
 - [ ] **Step 7: GATE — aprobación del usuario**
 
-PARAR. Presentar al usuario los cuatro HTML (abrirlos en Chromium/Edge: `calc-size()` solo funciona ahí) o los 8 PNG de `artifacts/ui-v2/mockups/` (LOS DOS TAMAÑOS), junto con la lista D1 a D8 de "Decisiones que se confirman al aprobar los mockups". Señalarle explícitamente: el logo de fondo (U2), la disposición apilada (D1), "Ver calendario de pagos" arriba a la derecha (D3), la alerta de facturas vencidas (D4) y las métricas sin dato (D6). No seguir hasta tener "aprobado" explícito. Registrar en `.superpowers/sdd/2026-10-06-ui-v2-fase-2-inicio/progress.md` (crearlo si no existe): `Mockups Inicio: aprobados por <quién> <yyyy-MM-dd>; cambios: <lista o "ninguno">`.
+PARAR. Presentar al usuario los cuatro HTML (abrirlos en Chromium/Edge: `calc-size()` solo funciona ahí) o los 8 PNG de `artifacts/ui-v2/mockups/` (LOS DOS TAMAÑOS), junto con la lista D2, D3 y D5 a D8 de "Decisiones que se confirman al aprobar los mockups" (D1 y D4 ya están confirmadas: U6 y U7; no se vuelven a preguntar, pero el mockup tiene que reflejarlas: apilado y sin "N facturas por vencer esta semana"). Señalarle explícitamente: el logo de fondo (U2), "Ver calendario de pagos" arriba a la derecha (D3), la alerta de facturas vencidas y las métricas sin dato (D6). No seguir hasta tener "aprobado" explícito. Registrar en `.superpowers/sdd/2026-10-06-ui-v2-fase-2-inicio/progress.md` (crearlo si no existe): `Mockups Inicio: aprobados por <quién> <yyyy-MM-dd>; cambios: <lista o "ninguno">`.
 
 - [ ] **Step 8: Commit**
 
@@ -1982,7 +1984,7 @@ git commit -m "feat(inicio): métricas con estado sin dato, fecha del día y rel
 
 (Si hubo que agregar el `PackageReference` de DI, el `.csproj` de tests va en el mismo commit.)
 
-### Task 11: `InicioView` v2 con sus cuatro estados comparados y el logo custodiado aparte
+### Task 11: `InicioView` v2 con sus cuatro estados comparados
 
 **Depende de:** Tasks 7, 8 (mockups aprobados) y 10.
 
@@ -1990,10 +1992,8 @@ git commit -m "feat(inicio): métricas con estado sin dato, fecha del día y rel
 - Modify: `tests/StockApp.Presentation.VisualTests/Comparacion/RenderizadorVista.cs` (hook `preparar`)
 - Modify: `tests/StockApp.Presentation.VisualTests/Comparacion/ComparacionVisual.cs` (`prepararApp`)
 - Modify: `tests/StockApp.Presentation.VisualTests/RenderizadorVistaTests.cs`
-- Create: `tests/StockApp.Presentation.VisualTests/Comparacion/DiferenciaDePixeles.cs`
-- Modify: `tests/StockApp.Presentation.VisualTests/Pantallas/Acceso/LoginMarcaAguaTests.cs` (usa `DiferenciaDePixeles`)
 - Modify: `tests/StockApp.Presentation.VisualTests/Pantallas/Shell/DatosShell.cs`
-- Create: `tests/StockApp.Presentation.VisualTests/Pantallas/Inicio/DatosInicio.cs`, `InicioComparacionTests.cs`, `InicioMarcaAguaTests.cs`
+- Create: `tests/StockApp.Presentation.VisualTests/Pantallas/Inicio/DatosInicio.cs`, `InicioComparacionTests.cs`
 - Modify: `src/StockApp.Presentation/Views/InicioView.axaml` (reescritura; `InicioView.axaml.cs` NO cambia: conserva el `DataContextChanged` → `CargarAsync`)
 - Create: `tests/StockApp.Presentation.UiTests/V2/InicioViewV2Tests.cs`
 - Modify: `tests/StockApp.Presentation.UiTests/InicioViewTests.cs`, `InicioPanelTareasTests.cs`, `ReflexionVistaViewModelTests.cs`, `GuardianDePatronTests.cs`
@@ -2001,7 +2001,7 @@ git commit -m "feat(inicio): métricas con estado sin dato, fecha del día y rel
 
 **Interfaces:**
 - Consumes: `GrillaUniformeV2`, `V2TemaFilaPanel`, `TarjetaMetrica(Valor, Etiqueta, SinDato)`, `TarjetaAcceso(Icono, Titulo, Descripcion)`, `Insignia(Texto, Variante)`, `Alerta(Texto, Variante)`, `EncabezadoPagina(Titulo, Subtitulo, Acciones)`, `TarjetaContenido`; propiedades del VM de la Task 10; `ShellMainViewModel.CurrentContent`, `SeccionActiva`.
-- Produces: `RenderizadorVista.RenderizarAPng(Control vista, object? viewModel, string rutaPng, Action<Control>? inspeccionar = null, TamanoLienzo? tamano = null, Action<Control>? preparar = null)`; `ComparacionVisual.CompararConMockup(..., IReadOnlyCollection<string>? ocultarEnMockup = null, Action<Control>? prepararApp = null)`; `DiferenciaDePixeles.Medir(string rutaA, string rutaB) : (int Cantidad, int DeltaMaximo, Rect Caja)`; `DatosShell.Crear(UsuarioSesion, string[] permisos, string seccionActiva, ViewModelBase? contenido = null)`; `DatosInicio.Admin()`, `OperadorMixto()`, `OperadorSinFinanzasNiTareas()`, `AdminSinDatos()` (todas `ShellMainViewModel`); `InicioComparacionTests.OcultarSidebarYMarcaDeAgua(Control)`; partes nombradas de `InicioView`: `MarcaAgua` (Image), `Encabezado`, `BotonCalendarioPagos`, `FilaMetricas` (GrillaUniformeV2), `MetricaFacturasAVencer`, `MetricaTareasVencidas`, `MetricaUltimoBackup`, `AlertaBackupVencido`, `AlertaBackupDesconocido`, `AlertaFacturasVencidas`, `PanelTareas`, `ListaTareasVencidas`, `ListaTareasProximas`, `EnlaceVerTodasLasTareas`, `PanelAccesosRapidos`, `BotonAccesoProductos`, `BotonAccesoRegistrarEntrada`, `BotonAccesoRegistrarSalida`, `BotonAccesoHistorialMovimientos`, `BotonAccesoValorizacion`, `BotonAccesoAuditoria`.
+- Produces: `RenderizadorVista.RenderizarAPng(Control vista, object? viewModel, string rutaPng, Action<Control>? inspeccionar = null, TamanoLienzo? tamano = null, Action<Control>? preparar = null)`; `ComparacionVisual.CompararConMockup(..., IReadOnlyCollection<string>? ocultarEnMockup = null, Action<Control>? prepararApp = null)`; `DatosShell.Crear(UsuarioSesion, string[] permisos, string seccionActiva, ViewModelBase? contenido = null)`; `DatosInicio.Admin()`, `OperadorMixto()`, `OperadorSinFinanzasNiTareas()`, `AdminSinDatos()` (todas `ShellMainViewModel`); `InicioComparacionTests.OcultarSidebarYMarcaDeAgua(Control)`; partes nombradas de `InicioView`: `MarcaAgua` (Image), `Encabezado`, `BotonCalendarioPagos`, `FilaMetricas` (GrillaUniformeV2), `MetricaFacturasAVencer`, `MetricaTareasVencidas`, `MetricaUltimoBackup`, `AlertaBackupVencido`, `AlertaBackupDesconocido`, `AlertaFacturasVencidas`, `PanelTareas`, `ListaTareasVencidas`, `ListaTareasProximas`, `EnlaceVerTodasLasTareas`, `PanelAccesosRapidos`, `BotonAccesoProductos`, `BotonAccesoRegistrarEntrada`, `BotonAccesoRegistrarSalida`, `BotonAccesoHistorialMovimientos`, `BotonAccesoValorizacion`, `BotonAccesoAuditoria`.
 
 - [ ] **Step 1: Herramienta: hook `preparar` (rojo → verde)**
 
@@ -2043,59 +2043,7 @@ En `ComparacionVisual.CompararConMockup`: agregar `Action<Control>? prepararApp 
 
 Run: el filtro y `--filter "Categoria=ComparacionVisual"`. Expected: PASS (nadie más usa `preparar`).
 
-- [ ] **Step 2: Medición compartida de la marca de agua**
-
-`tests/StockApp.Presentation.VisualTests/Comparacion/DiferenciaDePixeles.cs`:
-
-```csharp
-using Avalonia;
-using SkiaSharp;
-
-namespace StockApp.Presentation.VisualTests.Comparacion;
-
-/// <summary>
-/// Diferencia exacta entre dos capturas del mismo tamaño: cuántos píxeles cambian, el mayor delta de canal y
-/// la caja que los contiene. La usan las custodias de marca de agua (Login e Inicio): con y sin la marca, la
-/// diferencia ES la marca.
-/// </summary>
-public static class DiferenciaDePixeles
-{
-    public static (int Cantidad, int DeltaMaximo, Rect Caja) Medir(string rutaA, string rutaB)
-    {
-        using var a = SKBitmap.Decode(rutaA);
-        using var b = SKBitmap.Decode(rutaB);
-        int cantidad = 0, delta = 0, minX = int.MaxValue, minY = int.MaxValue, maxX = -1, maxY = -1;
-        for (var y = 0; y < a.Height; y++)
-        {
-            for (var x = 0; x < a.Width; x++)
-            {
-                var pa = a.GetPixel(x, y);
-                var pb = b.GetPixel(x, y);
-                var d = Math.Max(Math.Abs(pa.Red - pb.Red), Math.Max(Math.Abs(pa.Green - pb.Green), Math.Abs(pa.Blue - pb.Blue)));
-                if (d == 0)
-                {
-                    continue;
-                }
-
-                cantidad++;
-                delta = Math.Max(delta, d);
-                minX = Math.Min(minX, x);
-                minY = Math.Min(minY, y);
-                maxX = Math.Max(maxX, x);
-                maxY = Math.Max(maxY, y);
-            }
-        }
-
-        return (cantidad, delta, cantidad == 0 ? default : new Rect(minX, minY, maxX - minX + 1, maxY - minY + 1));
-    }
-}
-```
-
-En `LoginMarcaAguaTests.cs`: borrar el método privado `Diferencias` (L91-118) y reemplazar su llamada (L61) por `var (cantidad, deltaMaximo, caja) = DiferenciaDePixeles.Medir(Png("con.png"), Png("sin.png"));`; quitar `using SkiaSharp;` si queda sin uso.
-
-Run: `dotnet test tests/StockApp.Presentation.VisualTests/StockApp.Presentation.VisualTests.csproj --filter "FullyQualifiedName~LoginMarcaAguaTests"` → PASS (mismo cálculo, otro lugar).
-
-- [ ] **Step 3: Datos fijos**
+- [ ] **Step 2: Datos fijos**
 
 En `DatosShell.cs`, reemplazar `private static ShellMainViewModel Crear(UsuarioSesion usuario, string[] permisos, string seccionActiva)` por la versión pública con contenido:
 
@@ -2252,7 +2200,7 @@ public static class DatosInicio
 }
 ```
 
-- [ ] **Step 4: Comparaciones y custodia del logo (rojo)**
+- [ ] **Step 3: Comparaciones (rojo)**
 
 `tests/StockApp.Presentation.VisualTests/Pantallas/Inicio/InicioComparacionTests.cs`:
 
@@ -2271,8 +2219,8 @@ namespace StockApp.Presentation.VisualTests.Pantallas.Inicio;
 public class InicioComparacionTests
 {
     // Pantalla de contenido (convención 6): shell real, Inicio resuelto por ViewLocator. El sidebar ya tiene su
-    // comparación (ShellComparacionTests) y la marca de agua su custodia (InicioMarcaAguaTests): se ocultan en
-    // AMBOS renders sin mover el layout. Valores calibrados (11 teselas, 1.68%), sin UmbralAprobado.
+    // comparación (ShellComparacionTests) y la marca de agua no se compara (sin test propio por decisión del
+    // usuario, U9): se ocultan en AMBOS renders sin mover el layout. Valores calibrados (11 teselas, 1.68%), sin UmbralAprobado.
     private static readonly string[] OcultarEnMockup = [".v2-sidebar", ".marca-agua"];
 
     public static void OcultarSidebarYMarcaDeAgua(Control vista)
@@ -2318,110 +2266,10 @@ public class InicioComparacionTests
 }
 ```
 
-`tests/StockApp.Presentation.VisualTests/Pantallas/Inicio/InicioMarcaAguaTests.cs`:
-
-```csharp
-using System.Globalization;
-using System.Text.RegularExpressions;
-using Avalonia;
-using Avalonia.Controls;
-using Avalonia.Headless.XUnit;
-using Avalonia.Layout;
-using Avalonia.Media;
-using Avalonia.VisualTree;
-using StockApp.Presentation.Views;
-using StockApp.Presentation.VisualTests.Comparacion;
-using StockApp.UiV2.Herramientas;
-
-namespace StockApp.Presentation.VisualTests.Pantallas.Inicio;
-
-/// <summary>
-/// Logo de Carmelo de fondo en Inicio (decisión del usuario, 2026-10-06): mismo tratamiento que el Login
-/// (P5). La comparación de píxeles lo oculta (InicioComparacionTests); este es el único guardián de que sigue
-/// estando, con su opacidad, su escala y su lugar: centrado en el ÁREA DE CONTENIDO, no en la ventana.
-/// </summary>
-[Trait("Categoria", "ComparacionVisual")]
-public class InicioMarcaAguaTests
-{
-    private const double OpacidadAprobada = 0.28;
-    private const double EscalaAprobada = 0.85;
-
-    private static string Png(string nombre) => Path.Combine(ComparacionVisual.CarpetaSalida, "inicio-marca-agua", nombre);
-
-    private static Image Marca(InicioView vista) =>
-        vista.FindControl<Image>("MarcaAgua") ?? throw new InvalidOperationException("InicioView perdió Image#MarcaAgua.");
-
-    private static void OcultarSidebar(Control vista) => ((ShellMainView)vista).FindControl<Border>("Sidebar")!.IsVisible = false;
-
-    [AvaloniaFact]
-    public void Marca_ConservaFuenteOpacidadEscalaYLugar_YSoloDifiereDentroDeSuRegion()
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(Png("x"))!);
-        Size fuente = default;
-        Rect area = default;
-
-        RenderizadorVista.RenderizarAPng(new ShellMainView(), DatosInicio.Admin(), Png("con.png"), v =>
-        {
-            var inicio = v.GetVisualDescendants().OfType<InicioView>().Single();
-            var marca = Marca(inicio);
-            Assert.NotNull(marca.Source);
-            fuente = marca.Source!.Size;
-            Assert.Equal(new Size(2804, 1448), fuente);
-            Assert.Equal(OpacidadAprobada, marca.Opacity, 3);
-            var transformacion = Assert.IsAssignableFrom<ITransform>(marca.RenderTransform).Value;
-            Assert.Equal(EscalaAprobada, transformacion.M11, 3);
-            Assert.Equal(EscalaAprobada, transformacion.M22, 3);
-            Assert.Equal(Stretch.Uniform, marca.Stretch);
-            Assert.Equal(HorizontalAlignment.Center, marca.HorizontalAlignment);
-            Assert.Equal(VerticalAlignment.Center, marca.VerticalAlignment);
-            // Detrás del contenido: el ScrollViewer viene DESPUÉS en el Grid raíz.
-            var panel = Assert.IsAssignableFrom<Panel>(marca.Parent);
-            Assert.True(panel.Children.IndexOf(marca) < panel.Children.IndexOf(panel.Children.OfType<ScrollViewer>().Single()));
-            var origen = inicio.TranslatePoint(default, TopLevel.GetTopLevel(inicio)!)!.Value;
-            area = new Rect(origen, inicio.Bounds.Size);
-        }, preparar: OcultarSidebar);
-
-        RenderizadorVista.RenderizarAPng(new ShellMainView(), DatosInicio.Admin(), Png("sin.png"),
-            preparar: InicioComparacionTests.OcultarSidebarYMarcaDeAgua);
-
-        var (cantidad, deltaMaximo, caja) = DiferenciaDePixeles.Medir(Png("con.png"), Png("sin.png"));
-
-        // Región: Uniform en el área de contenido (1040x760 a 1280), por la escala aprobada, centrada (+-2 px).
-        var uniforme = Math.Min(area.Width / fuente.Width, area.Height / fuente.Height);
-        var ancho = fuente.Width * uniforme * EscalaAprobada;
-        var alto = fuente.Height * uniforme * EscalaAprobada;
-        var esperada = new Rect(area.X + (area.Width - ancho) / 2, area.Y + (area.Height - alto) / 2, ancho, alto).Inflate(2);
-        Assert.True(cantidad > 1000, $"La marca casi no se ve: {cantidad} píxeles difieren.");
-        Assert.True(esperada.Contains(caja), $"La marca se dibuja fuera de su región: {caja} no está en {esperada}.");
-        // Con opacidad 0.28 ningún canal puede moverse más de 0.28 * 255 = 71.4 respecto del fondo.
-        Assert.InRange(deltaMaximo, 8, 72);
-    }
-
-    [Theory]
-    [InlineData("inicio-admin")]
-    [InlineData("inicio-operador")]
-    [InlineData("inicio-operador-sin-finanzas")]
-    [InlineData("inicio-admin-sin-datos")]
-    public void Mockup_DeclaraLaMismaMarcaDeAguaQueLaApp(string mockup)
-    {
-        var html = File.ReadAllText(Path.Combine(RutasRepo.CarpetaMockups, "inicio", mockup + ".html"));
-
-        Assert.Contains("carmelo-original.png", html);
-        // Dentro de la regla, no en cualquier parte: el comentario también menciona 0.28 y scale(0.85).
-        var regla = Regex.Match(html, @"\.marca-agua\s*\{(?<cuerpo>[^}]*)\}");
-        Assert.True(regla.Success, "El mockup perdió la regla .marca-agua.");
-        Assert.Contains("opacity: " + OpacidadAprobada.ToString(CultureInfo.InvariantCulture), regla.Groups["cuerpo"].Value);
-        Assert.Contains("scale(" + EscalaAprobada.ToString(CultureInfo.InvariantCulture) + ")", regla.Groups["cuerpo"].Value);
-    }
-}
-```
-
-Las cotas (`> 1000` píxeles, delta entre 8 y 72) son las del Login; con las tarjetas blancas tapando buena parte del logo, la cantidad puede bajar. En el Step 9 se anotan los valores reales; si una cota no tiene sentido, se ajusta a una que siga fallando con opacidad 1, con la marca fuera de lugar y sin la marca (mutaciones (d) a (f) del Step 10).
-
-Run: `dotnet test tests/StockApp.Presentation.VisualTests/StockApp.Presentation.VisualTests.csproj --filter "FullyQualifiedName~InicioComparacionTests|FullyQualifiedName~InicioMarcaAguaTests"`
+Run: `dotnet test tests/StockApp.Presentation.VisualTests/StockApp.Presentation.VisualTests.csproj --filter "FullyQualifiedName~InicioComparacionTests"`
 Expected: FAIL (la vista vieja no tiene `MarcaAgua`: el `FindControl` devuelve null y `OcultarSidebarYMarcaDeAgua` lanza; las comparaciones no coinciden).
 
-- [ ] **Step 5: UiTests de la vista v2 (rojo)**
+- [ ] **Step 4: UiTests de la vista v2 (rojo)**
 
 `tests/StockApp.Presentation.UiTests/V2/InicioViewV2Tests.cs`:
 
@@ -2630,13 +2478,30 @@ public class InicioViewV2Tests
             Assert.Equal(icono, acceso.Icono);
         }
     }
+
+    [AvaloniaFact]
+    public void ConFacturasPorVencer_NoMuestraElTextoDeLaSemana()
+    {
+        // U7 (decisión del usuario 2026-10-06, D4): "N facturas por vencer esta semana" no aparece en Inicio;
+        // lo reemplaza la métrica. Control: el VM SIGUE produciendo ese texto (se borra en la Fase 9), así que
+        // su ausencia en el árbol visual (plantillas incluidas) prueba que la vista no lo muestra. Con la vista
+        // vieja este test da rojo: la card de vencimientos lo bindeaba.
+        var (ventana, vm) = Montar(Operador, [Permisos.VerFinanzas]);
+
+        Assert.Equal("2 facturas por vencer esta semana", vm.TextoAVencer7Dias);
+        var textos = ventana.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToList();
+        Assert.DoesNotContain(textos, t => t.Contains("por vencer esta semana"));
+        Assert.Equal("2", Nombrado<TarjetaMetrica>(ventana, "MetricaFacturasAVencer").Valor);
+    }
 }
 ```
 
-Run: `dotnet test tests/StockApp.Presentation.UiTests/StockApp.Presentation.UiTests.csproj --filter "FullyQualifiedName~InicioViewV2Tests"`
-Expected: FAIL (no existen las partes nombradas ni `ui2` en la raíz).
+`ConFacturasPorVencer_NoMuestraElTextoDeLaSemana` custodia algo que se viola AGREGANDO (volver a bindear el texto), así que no tiene mutación quitando: su prueba de que mira lo correcto es el rojo contra la vista vieja de este mismo Step (pegarlo en el reporte).
 
-- [ ] **Step 6: El XAML**
+Run: `dotnet test tests/StockApp.Presentation.UiTests/StockApp.Presentation.UiTests.csproj --filter "FullyQualifiedName~InicioViewV2Tests"`
+Expected: FAIL (no existen las partes nombradas ni `ui2` en la raíz; `ConFacturasPorVencer_NoMuestraElTextoDeLaSemana` falla en el `DoesNotContain`: la vista vieja bindea `TextoAVencer7Dias`).
+
+- [ ] **Step 5: El XAML**
 
 Reemplazar `src/StockApp.Presentation/Views/InicioView.axaml` entero por:
 
@@ -2657,7 +2522,7 @@ Reemplazar `src/StockApp.Presentation/Views/InicioView.axaml` entero por:
     <UserControl.Styles>
         <!-- Marca de agua del logo del municipio (decisión del usuario 2026-10-06): mismo tratamiento aprobado
              que el Login v2 (P5 de la Fase 1). Por Style (Priority=Style, no LocalValue) para no chocar con el
-             guardián de opacidades literales. Su custodia es InicioMarcaAguaTests. -->
+             guardián de opacidades literales. Sin test propio (U9): la comparación la oculta y la mira el usuario. -->
         <Style Selector="Image.marca-agua">
             <Setter Property="Opacity" Value="0.28" />
         </Style>
@@ -2851,7 +2716,7 @@ Reemplazar `src/StockApp.Presentation/Views/InicioView.axaml` entero por:
 </UserControl>
 ```
 
-- [ ] **Step 7: Tests existentes, guardián de patrón y reflexión**
+- [ ] **Step 6: Tests existentes, guardián de patrón y reflexión**
 
 `tests/StockApp.Presentation.UiTests/InicioViewTests.cs`:
 1. Reemplazar `BuscarBorderPorNombre` (L104-105) por `private static Control BuscarPorNombre(Window window, string nombre) => window.GetVisualDescendants().OfType<Control>().First(c => c.Name == nombre);` y actualizar el comentario de L98-103 ("los avisos son `Alerta` con nombre propio desde la UI v2").
@@ -2947,18 +2812,14 @@ Reemplazar `src/StockApp.Presentation/Views/InicioView.axaml` entero por:
 2. Sacar `typeof(InicioView),` de `VistasDeLaTanda` (L109).
 3. Agregar `typeof(InicioView),` a `VistasMigradasAV2` (L216-224).
 
-- [ ] **Step 8: Verde**
+- [ ] **Step 7: Verde**
 
 Run: `dotnet build StockApp.sln`, `dotnet test tests/StockApp.Presentation.UiTests/StockApp.Presentation.UiTests.csproj`, `dotnet test tests/StockApp.Presentation.Tests/StockApp.Presentation.Tests.csproj` y `scripts/ui-v2/comparar.sh Inicio`.
-Expected: 0 errores de build (los compiled bindings validan cada `{Binding}` contra `InicioViewModel`/`TareaFila`); UiTests y VM en verde (incluidos `InicioViewV2Tests`, `InicioViewTests`, `InicioPanelTareasTests`, `ReflexionVistaViewModelTests`, `GuardianDePatronTests`, `VistaV2_NoTieneOpacidadesLiterales(InicioView)`); las 8 comparaciones de Inicio APROBADAS con los valores calibrados (11 teselas, 1.68%, SIN `UmbralAprobado`) y sin recortes; `InicioMarcaAguaTests` en verde.
+Expected: 0 errores de build (los compiled bindings validan cada `{Binding}` contra `InicioViewModel`/`TareaFila`); UiTests y VM en verde (incluidos `InicioViewV2Tests`, `InicioViewTests`, `InicioPanelTareasTests`, `ReflexionVistaViewModelTests`, `GuardianDePatronTests`, `VistaV2_NoTieneOpacidadesLiterales(InicioView)`); las 8 comparaciones de Inicio APROBADAS con los valores calibrados (11 teselas, 1.68%, SIN `UmbralAprobado`) y sin recortes.
 
 Si una comparación a 1366×768 no pasa: abrir su página, mirar las teselas densas (contorno magenta) y diagnosticar con el script del Step 2 de la Task 13. Causas esperables y su arreglo (nunca subir el umbral): (1) la tercera columna corrida 1 px → un borde redondeado distinto en `GrillaUniformeV2` (comparar contra la regla `round(i*(celda+gap))`); (2) un medio píxel de centrado vertical de texto → compensación entera en ambos lados, anotada en §6.5; (3) el contenido no entra en 760 y aparece un pulgar de scroll en la vista → replicarlo en el mockup (como el del sidebar, Task 9) y volver al usuario con el cambio.
 
-- [ ] **Step 9: Medición de respaldo del logo**
-
-Anotar en el ledger los valores reales de `InicioMarcaAguaTests` (píxeles que difieren, delta máximo, caja) y, una sola vez, correr un test temporal idéntico a `Admin_IgualAlMockup` pero sin `.marca-agua` en `OcultarEnMockup` ni el `IsVisible = false` del logo: `Marca de agua visible en Inicio: X% / N teselas densas (no comparable: motivo de la exclusión)`. Borrar el test temporal. Guardar `artifacts/ui-v2/comparacion/inicio-marca-agua/con.png` para mostrárselo al usuario junto al mockup en la Task 14.
-
-- [ ] **Step 10: Mutación quitando**
+- [ ] **Step 8: Mutación quitando**
 
 ```bash
 cp src/StockApp.Presentation/Views/InicioView.axaml "$SCRATCH/InicioView.axaml.bak"
@@ -2969,24 +2830,22 @@ Cada una: quitar, `git diff --no-index "$SCRATCH/InicioView.axaml.bak" src/Stock
 (a) Quitar `IsVisible="{Binding PuedeVerTareas}"` de `MetricaTareasVencidas` → rojo en `OperadorSoloConVerFinanzas_VeSoloFacturas`.
 (b) Quitar `IsVisible="{Binding EsAdmin}"` de `MetricaUltimoBackup` → rojo en `OperadorMixto_VeFacturasYTareasPeroNoElBackup` y en `OperadorMixto_IgualAlMockup` (aparece la tercera métrica).
 (c) Quitar `IsVisible="{Binding MostrarFilaMetricas}"` de `FilaMetricas` → rojo en `OperadorSinFinanzasNiTareas_NoMuestraLaFilaDeMetricas` (la grilla vacía queda "visible" con alto 0).
-(d) Quitar el `<Setter Property="Opacity" Value="0.28" />` del estilo de la marca → rojo en `Marca_ConservaFuenteOpacidadEscalaYLugar…`.
-(e) Quitar `RenderTransform="scale(0.85)"` → rojo en el mismo test (escala y región). En el mockup: quitar `transform: scale(0.85);` de `.marca-agua` de `inicio-admin.html` (backup con `cp`) → rojo en `Mockup_DeclaraLaMismaMarcaDeAguaQueLaApp("inicio-admin")`. Restaurar.
-(f) Quitar el `Image x:Name="MarcaAgua"` entero → rojo en `InicioMarcaAguaTests` y en las comparaciones (`OcultarSidebarYMarcaDeAgua` no encuentra la imagen: es el comportamiento buscado, fail-closed).
-(g) Quitar `Variante="Error"` de `AlertaBackupVencido` → rojo en `Montar_AdminConBackupVencido_MuestraLaAlertaDeError` y en `Admin_IgualAlMockup` (la alerta pasa a info).
-(h) Quitar `Classes="ui2"` de la raíz → rojo en `Raiz_TieneUi2` y en las 8 comparaciones.
-(i) Quitar `Theme="{StaticResource V2TemaFilaPanel}"` de la fila de vencidas → rojo en `Admin_IgualAlMockup` (la fila toma la plantilla de `Button` de Fluent y el estilo global).
-(j) En el VM (`cp src/StockApp.Presentation/ViewModels/InicioViewModel.cs "$SCRATCH/InicioViewModel.cs.bak"`), quitar `OnPropertyChanged(nameof(PuedeVerCalendarioPagos));` de `RefrescarPermisosAsync` → rojo en `RevocacionEnCaliente_OcultaLaMetricaYLaOtraOcupaLaFila`. Restaurar.
-(k) En `InicioComparacionTests`, quitar `".v2-sidebar", ` de `OcultarEnMockup` → rojo en las 8 comparaciones (el sidebar del mockup aparece contra el fondo de la app): prueba que la exclusión es simétrica y necesaria. Restaurar.
+(d) Quitar el `Image x:Name="MarcaAgua"` entero → rojo en las 8 comparaciones (`OcultarSidebarYMarcaDeAgua` no encuentra la imagen y lanza: fail-closed, la comparación no corre sobre una vista que perdió la parte que excluye). No es un guardián del logo (U9): solo prueba que la exclusión no queda colgando.
+(e) Quitar `Variante="Error"` de `AlertaBackupVencido` → rojo en `Montar_AdminConBackupVencido_MuestraLaAlertaDeError` y en `Admin_IgualAlMockup` (la alerta pasa a info).
+(f) Quitar `Classes="ui2"` de la raíz → rojo en `Raiz_TieneUi2` y en las 8 comparaciones.
+(g) Quitar `Theme="{StaticResource V2TemaFilaPanel}"` de la fila de vencidas → rojo en `Admin_IgualAlMockup` (la fila toma la plantilla de `Button` de Fluent y el estilo global).
+(h) En el VM (`cp src/StockApp.Presentation/ViewModels/InicioViewModel.cs "$SCRATCH/InicioViewModel.cs.bak"`), quitar `OnPropertyChanged(nameof(PuedeVerCalendarioPagos));` de `RefrescarPermisosAsync` → rojo en `RevocacionEnCaliente_OcultaLaMetricaYLaOtraOcupaLaFila`. Restaurar.
+(i) En `InicioComparacionTests`, quitar `".v2-sidebar", ` de `OcultarEnMockup` → rojo en las 8 comparaciones (el sidebar del mockup aparece contra el fondo de la app): prueba que la exclusión es simétrica y necesaria. Restaurar.
 
-- [ ] **Step 11: Documentación**
+- [ ] **Step 9: Documentación**
 
 `docs/ui-v2/herramientas.md`, sección "Test por pantalla": documentar `prepararApp` y las convenciones 6 y 8 (texto de "Convenciones que heredan las fases siguientes"), con el ejemplo de `InicioComparacionTests.Comparar`.
 
-- [ ] **Step 12: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
 git add src/StockApp.Presentation/Views/InicioView.axaml tests/StockApp.Presentation.VisualTests/Comparacion/ tests/StockApp.Presentation.VisualTests/RenderizadorVistaTests.cs tests/StockApp.Presentation.VisualTests/Pantallas/ tests/StockApp.Presentation.UiTests/V2/InicioViewV2Tests.cs tests/StockApp.Presentation.UiTests/InicioViewTests.cs tests/StockApp.Presentation.UiTests/InicioPanelTareasTests.cs tests/StockApp.Presentation.UiTests/ReflexionVistaViewModelTests.cs tests/StockApp.Presentation.UiTests/GuardianDePatronTests.cs docs/ui-v2/herramientas.md
-git commit -m "feat(ui-v2): Inicio v2 con métricas, panel de tareas y accesos comparados, y el logo custodiado aparte"
+git commit -m "feat(ui-v2): Inicio v2 con métricas, panel de tareas y accesos comparados"
 ```
 
 ### Task 12: Reset con sus alertas: comparación de los dos estados y compensación según la paridad
@@ -3242,7 +3101,7 @@ Si algún paso no se puede hacer por el entorno (WSLg caído, contenedor que no 
 
 - [ ] **Step 5: Aprobación final del usuario**
 
-PARAR. Presentar: el `index.html` de comparación, las capturas de la verificación orgánica, `artifacts/ui-v2/comparacion/inicio-marca-agua/con.png` junto al mockup `inicio-admin.html` (el logo que la comparación no ve) y la lista de cambios respecto de los mockups aprobados (si hubo). La aprobación final es del usuario mirando la app (spec §6.4). Registrar en el ledger: `Fase 2: aprobada por <quién> <fecha>`.
+PARAR. Presentar: el `index.html` de comparación, las capturas de la verificación orgánica (la del Administrador en Inicio, junto al mockup `inicio-admin.html`, muestra el logo que la comparación no ve; U9: sin test propio) y la lista de cambios respecto de los mockups aprobados (si hubo). La aprobación final es del usuario mirando la app (spec §6.4). Registrar en el ledger: `Fase 2: aprobada por <quién> <fecha>`.
 
 - [ ] **Step 6: Spec**
 
@@ -3284,10 +3143,9 @@ No se pushea ni se mergea.
 
 | Riesgo | Mitigación en el plan |
 |---|---|
-| A 1366 el ancho útil de la fila (1070 tras el padding de 28) no se divide en 3 columnas enteras; con `UniformGrid` la tercera tarjeta se corre 1 px. | `GrillaUniformeV2` (Task 7) redondea cada borde como Chromium; la diferencia restante es tono de texto en posición subpíxel (absorbida por la calibración). Si suma teselas, Task 11 Step 8 da el diagnóstico; nunca se sube el umbral. |
+| A 1366 el ancho útil de la fila (1070 tras el padding de 28) no se divide en 3 columnas enteras; con `UniformGrid` la tercera tarjeta se corre 1 px. | `GrillaUniformeV2` (Task 7) redondea cada borde como Chromium; la diferencia restante es tono de texto en posición subpíxel (absorbida por la calibración). Si suma teselas, Task 11 Step 7 da el diagnóstico; nunca se sube el umbral. |
 | Chromium trunca el track `1fr` a 1/64 de píxel y en un borde que cae justo en ,5 puede redondear distinto que `Math.Round`. | Probabilidad baja con los anchos de esta fase (medido a mano: ningún borde cae en ,5); si aparece, una tesela de borde en la comparación lo muestra y se ajusta `MidpointRounding`. |
-| El Administrador no entra en 760 de alto (estimado ~731) y aparece un pulgar de scroll en Inicio que el mockup no tiene. | Task 8 Step 6 lo revisa al capturar; Task 11 Step 8 indica replicarlo en el mockup y volver al usuario. |
-| El logo queda casi tapado por las tarjetas y `InicioMarcaAguaTests` mide pocos píxeles. | Task 11 Step 9 anota los valores reales y ajusta las cotas manteniendo los rojos de las mutaciones (d) a (f). |
+| El Administrador no entra en 760 de alto (estimado ~731) y aparece un pulgar de scroll en Inicio que el mockup no tiene. | Task 8 Step 6 lo revisa al capturar; Task 11 Step 7 indica replicarlo en el mockup y volver al usuario. |
 | Copiar el `<aside>` del sidebar en cada mockup de contenido lo desactualiza si el sidebar cambia. | La comparación lo oculta (convención 6): un sidebar desactualizado en un mockup de contenido no rompe nada; el sidebar se compara solo en `ShellComparacionTests`. Al aprobar, el usuario ve el sidebar real en la verificación orgánica. |
 | `TimeProvider` opcional y la DI: si se registrara algún `TimeProvider` en el contenedor, Inicio lo tomaría. | Hoy no hay ninguno registrado (`App.axaml.cs`); `Contenedor_ResuelveElVmSinRegistrarUnReloj` (Task 10) prueba la resolución. Registrar `TimeProvider.System` explícito sería equivalente. |
 | Las teselas de tono de `Mensaje`/`Modal` no tienen corrección posible. | Task 13 lo deja escrito con números y con el procedimiento de diagnóstico para cuando un cambio de render las ponga en rojo; no se toca el umbral. |
