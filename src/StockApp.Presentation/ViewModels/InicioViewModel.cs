@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -183,6 +184,15 @@ public partial class InicioViewModel : ViewModelBase
 
     // ── Panel "Tareas que requieren atención" (spec 2026-08-06) ────────────────
 
+    /// <summary>
+    /// Filas que muestra el panel entre las dos listas: primero las vencidas y después las próximas, en el
+    /// orden de PanelVencimientosTareas.Agrupar; el resto queda en "Ver todas las tareas". Con más filas,
+    /// Inicio necesitaba scroll a 1366x768 y los accesos rápidos quedaban bajo el pliegue.
+    /// </summary>
+    public const int TopeFilasPanelTareas = 4;
+
+    /// <summary>Filas visibles del panel (hasta <see cref="TopeFilasPanelTareas"/> entre las dos listas).
+    /// Los conteos completos están en CantidadTareasVencidas y CantidadTareasProximasAVencer.</summary>
     public ObservableCollection<TareaFila> TareasVencidas { get; } = new();
     public ObservableCollection<TareaFila> TareasProximasAVencer { get; } = new();
 
@@ -296,13 +306,13 @@ public partial class InicioViewModel : ViewModelBase
                     tareas, rol, usuarioActualId, _reloj.GetUtcNow().UtcDateTime, _reloj.LocalTimeZone);
 
                 TareasVencidas.Clear();
-                foreach (var fila in vencidas) TareasVencidas.Add(fila);
+                foreach (var fila in vencidas.Take(TopeFilasPanelTareas)) TareasVencidas.Add(fila);
 
                 TareasProximasAVencer.Clear();
-                foreach (var fila in proximas) TareasProximasAVencer.Add(fila);
+                foreach (var fila in proximas.Take(TopeFilasPanelTareas - TareasVencidas.Count)) TareasProximasAVencer.Add(fila);
 
-                CantidadTareasVencidas = TareasVencidas.Count;
-                CantidadTareasProximasAVencer = TareasProximasAVencer.Count;
+                CantidadTareasVencidas = vencidas.Count;
+                CantidadTareasProximasAVencer = proximas.Count;
                 TareasVencidasSinDato = false;
             }
             catch (Exception)

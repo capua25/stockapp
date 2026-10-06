@@ -490,6 +490,51 @@ public class InicioViewModelTests
     }
 
     [Fact]
+    public async Task CargarAsync_ConSieteVencidas_ExponeSoloCuatroFilasYConservaElConteo()
+    {
+        var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
+        var tareas = Enumerable.Range(1, 7)
+            .Select(i => TareaCon(i, $"Vencida {i}", HoyLocal().AddDays(-i)))
+            .Append(TareaCon(8, "Por vencer", HoyLocal().AddDays(2)))
+            .ToList();
+        var (vm, _, _, _, _) = Crear(usuario, tareas: tareas);
+
+        await vm.CargarAsync();
+
+        // Tope de 4 filas: las más vencidas primero (mismo orden que el listado completo); el resto, en
+        // "Ver todas las tareas". La métrica sigue contando las 7.
+        Assert.Equal(InicioViewModel.TopeFilasPanelTareas, vm.TareasVencidas.Count);
+        Assert.Equal(new[] { "Vencida 7", "Vencida 6", "Vencida 5", "Vencida 4" }, vm.TareasVencidas.Select(f => f.Titulo));
+        Assert.Empty(vm.TareasProximasAVencer);
+        Assert.Equal(7, vm.CantidadTareasVencidas);
+        Assert.Equal("7", vm.ValorTareasVencidas);
+        Assert.True(vm.MostrarPanelTareas);
+    }
+
+    [Fact]
+    public async Task CargarAsync_ConVencidasYProximasDeMasDelTope_CompletaConProximasHastaCuatro()
+    {
+        var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
+        var tareas = new List<Tarea>
+        {
+            TareaCon(1, "Vencida 1", HoyLocal().AddDays(-1)),
+            TareaCon(2, "Vencida 3", HoyLocal().AddDays(-3)),
+            TareaCon(3, "Vencida 2", HoyLocal().AddDays(-2)),
+            TareaCon(4, "Próxima 1", HoyLocal().AddDays(1)),
+            TareaCon(5, "Próxima 3", HoyLocal().AddDays(3)),
+            TareaCon(6, "Próxima 2", HoyLocal().AddDays(2)),
+        };
+        var (vm, _, _, _, _) = Crear(usuario, tareas: tareas);
+
+        await vm.CargarAsync();
+
+        Assert.Equal(new[] { "Vencida 3", "Vencida 2", "Vencida 1" }, vm.TareasVencidas.Select(f => f.Titulo));
+        Assert.Equal(new[] { "Próxima 1" }, vm.TareasProximasAVencer.Select(f => f.Titulo));
+        Assert.Equal(3, vm.CantidadTareasVencidas);
+        Assert.Equal(3, vm.CantidadTareasProximasAVencer);
+    }
+
+    [Fact]
     public async Task CargarAsync_SinTareasQueRequieranAtencion_NoMuestraElPanel()
     {
         var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");

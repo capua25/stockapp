@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Markup.Xaml;
@@ -12,6 +13,7 @@ using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
 using StockApp.Application.Backups;
 using StockApp.Application.Finanzas;
+using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Controls.V2;
 using StockApp.Presentation.ViewModels;
@@ -48,6 +50,19 @@ public class InicioViewV2Tests : IDisposable
             Task.FromResult(new CalendarioPagosDto([Factura], [Factura, Factura], [], []));
     }
 
+    /// <summary>Como el mockup de Administrador: 3 facturas a vencer y ninguna vencida (sin AlertaFacturasVencidas).</summary>
+    private sealed class FinanzasSinVencidasFake : IFinanzasVistasService
+    {
+        private static readonly FacturaCalendarioDto Factura = new(1, "Proveedor", "A-0001", 1000m, new DateOnly(2026, 10, 9), "Pendiente");
+
+        public Task<LibroCajaMesDto> ObtenerLibroCajaMesAsync(int anio, int mes) => throw new NotSupportedException();
+        public Task<LibroCajaAnualDto> ObtenerLibroCajaAnualAsync(int anio) => throw new NotSupportedException();
+        public Task<IReadOnlyList<ControlPoaLineaDto>> ObtenerControlPoaAsync(int ejercicio) => throw new NotSupportedException();
+
+        public Task<CalendarioPagosDto> ObtenerCalendarioPagosAsync(DateTime? fechaReferencia = null) =>
+            Task.FromResult(new CalendarioPagosDto([], [Factura, Factura, Factura], [], []));
+    }
+
     private sealed class BackupsFake : IBackupsService
     {
         public Task<IReadOnlyList<CorridaBackupDto>> ListarAsync(CancellationToken ct = default) => throw new NotSupportedException();
@@ -69,12 +84,19 @@ public class InicioViewV2Tests : IDisposable
     private static readonly UsuarioSesion Operador = new(2, "jrodriguez", RolUsuario.Operador, "Juan Rodríguez");
     private static readonly UsuarioSesion Admin = new(1, "mperez", RolUsuario.Admin, "María Pérez");
 
-    private (Window Ventana, InicioViewModel Vm) Montar(UsuarioSesion usuario, string[] permisos, IAuthService? auth = null)
+    private (Window Ventana, InicioViewModel Vm) Montar(UsuarioSesion usuario, string[] permisos, IAuthService? auth = null,
+        List<Tarea>? tareas = null, Size? tamano = null, IFinanzasVistasService? finanzas = null)
     {
         var sesion = new SesionFake(usuario, permisos);
-        var vm = new InicioViewModel(sesion, new NavigationServiceFake(), new FinanzasFake(), new BackupsFake(),
-            new TareaServiceFake(), auth ?? new AuthServiceFake());
+        var vm = new InicioViewModel(sesion, new NavigationServiceFake(), finanzas ?? new FinanzasFake(), new BackupsFake(),
+            new TareaServiceFake(tareas), auth ?? new AuthServiceFake());
         var ventana = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
+        if (tamano is { } t)
+        {
+            ventana.Width = t.Width;
+            ventana.Height = t.Height;
+        }
+
         _ventanas.Add(ventana);
         ventana.DataContext = vm;
         ventana.Show();
@@ -255,5 +277,40 @@ public class InicioViewV2Tests : IDisposable
         var textos = ventana.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToList();
         Assert.DoesNotContain(textos, t => t.Contains("por vencer esta semana"));
         Assert.Equal("2", Nombrado<TarjetaMetrica>(ventana, "MetricaFacturasAVencer").Valor);
+    }
+    /// <summary>"Hoy" del calendario local etiquetado UTC, como persiste FechaLimite (ver InicioPanelTareasTests).</summary>
+    private static DateTime HoyLocal() =>
+        DateTime.SpecifyKind(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.Local).Date, DateTimeKind.Utc);
+
+    /// <summary>
+    /// Área de contenido del shell (ventana menos el sidebar de 240) a 1280x760 y a 1366x768. Con 7 tareas
+    /// vencidas (lo que encontró la verificación orgánica) Inicio necesitaba scroll y los accesos quedaban bajo
+    /// el pliegue: el panel muestra 4 filas y el resto queda en "Ver todas las tareas". Admin con los datos del
+    /// mockup aprobado (tres métricas, la alerta de backup vencido de BackupsFake, sin facturas vencidas); no es
+    /// un gate.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(1040, 760)]
+    [InlineData(1126, 768)]
+    public void ConSieteTareasVencidas_MuestraCuatroFilasYNoNecesitaScroll(double ancho, double alto)
+    {
+        var tareas = Enumerable.Range(1, 7)
+            .Select(i => new Tarea
+            {
+                Id = i, Titulo = $"Tarea vencida {i}", Estado = EstadoTarea.Pendiente, Prioridad = PrioridadTarea.Media,
+                CreadaPorUsuarioId = 1, FechaCreacion = DateTime.UtcNow, FechaLimite = HoyLocal().AddDays(-i),
+            })
+            .ToList();
+
+        var (ventana, _) = Montar(Admin, [], tareas: tareas, tamano: new Size(ancho, alto),
+            finanzas: new FinanzasSinVencidasFake());
+
+        var filas = Nombrado<ItemsControl>(ventana, "ListaTareasVencidas").GetVisualDescendants().OfType<Button>().ToList();
+        Assert.Equal(4, filas.Count);
+        Assert.Equal("7", Nombrado<TarjetaMetrica>(ventana, "MetricaTareasVencidas").Valor);
+        Assert.True(SeVe(ventana, "EnlaceVerTodasLasTareas"));
+        var desplazamiento = Nombrado<ScrollViewer>(ventana, "Desplazamiento");
+        Assert.True(desplazamiento.Extent.Height <= desplazamiento.Viewport.Height,
+            $"Inicio necesita scroll: contenido {desplazamiento.Extent.Height} px en {desplazamiento.Viewport.Height} px");
     }
 }
