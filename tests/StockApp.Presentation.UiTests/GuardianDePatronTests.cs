@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
@@ -301,6 +304,62 @@ public class GuardianDePatronTests
             + string.Join(", ", literales.Select(c => c.GetType().Name)));
     }
 
+    /// <summary>
+    /// Deuda de la Fase 1: una vista que se migra a v2 sale de VistasDeLaTanda y perdía este chequeo. El
+    /// cromo del shell (sidebar v2) también: ShellMainView está fuera del guardián P0-P9, pero se puede montar.
+    /// </summary>
+    public static TheoryData<Type> VistasV2Montables =>
+        new(VistasMigradasAV2.Append(typeof(ShellMainView)).OrderBy(t => t.Name));
+
+    [AvaloniaTheory]
+    [MemberData(nameof(VistasV2Montables))]
+    public void VistaV2_NoTieneOpacidadesLiterales(Type tipoVista)
+    {
+        var vista = PatronHelpers.Montar(tipoVista);
+        var literales = PatronHelpers.OpacidadesLiteralesDe(vista);
+
+        Assert.True(literales.Count == 0,
+            $"{tipoVista.Name} (v2) tiene {literales.Count} control(es) con Opacity literal: "
+            + string.Join(", ", literales.Select(c => c.GetType().Name)));
+    }
+
+    /// <summary>
+    /// Los diálogos son Window: PatronHelpers.Montar no puede montarlos (ver VistasFueraDelGuardian). Se lee
+    /// su .axaml: un atributo Opacity="…" en un elemento es un literal; un Setter (Property="Opacity") no.
+    /// </summary>
+    private static readonly Regex OpacidadLiteralEnXaml = new(@"<[A-Za-z][\w:.]*\b[^>]*\sOpacity\s*=\s*""", RegexOptions.Compiled);
+
+    public static TheoryData<string> DialogosV2 => new()
+    {
+        "StockApp.Presentation/Views/Dialogs/ConfirmacionDialog.axaml",
+        "StockApp.Presentation/Views/Dialogs/MensajeDialog.axaml",
+        "StockApp.Presentation/Views/Dialogs/PedirTextoDialog.axaml",
+    };
+
+    [Theory]
+    [MemberData(nameof(DialogosV2))]
+    public void DialogoV2_NoTieneOpacidadLiteralEnSuXaml(string rutaDesdeSrc)
+    {
+        var xaml = LeerDesdeSrc(rutaDesdeSrc);
+
+        Assert.DoesNotMatch(OpacidadLiteralEnXaml, xaml);
+    }
+
+    [Fact]
+    public void DetectorDeOpacidadLiteral_VeUnAtributoYNoUnSetter()
+    {
+        // Control positivo del detector: sin esto, un regex roto deja verde DialogoV2_NoTieneOpacidadLiteralEnSuXaml.
+        Assert.Matches(OpacidadLiteralEnXaml, """<Border x:Name="Fondo" Opacity="0.5" />""");
+        Assert.Matches(OpacidadLiteralEnXaml, "<TextBlock\n    Text=\"x\"\n    Opacity=\"0.6\" />");
+        Assert.DoesNotMatch(OpacidadLiteralEnXaml, """<Setter Property="Opacity" Value="0.28" />""");
+    }
+
+    private static string LeerDesdeSrc(string rutaDesdeSrc, [CallerFilePath] string archivoDeEsteTest = "")
+    {
+        var ruta = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(archivoDeEsteTest)!, "..", "..", "src", rutaDesdeSrc));
+        Assert.True(File.Exists(ruta), $"No existe {ruta}");
+        return File.ReadAllText(ruta);
+    }
     /// <summary>
     /// GAP DE PLAN encontrado al ejecutar la Task 8.1 (el plan esperaba "exactamente 2 fallos
     /// nuevos" en el Step 2 de esa task; hubo un tercero real). <see cref="ImportacionView"/>
