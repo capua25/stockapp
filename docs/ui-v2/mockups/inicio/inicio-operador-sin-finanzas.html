@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Inicio: Operador sin finanzas ni tareas (UI v2)</title>
+<link rel="stylesheet" href="../_base/tokens.css">
+<link rel="stylesheet" href="../_base/base.css">
+<style>
+  /* Área de contenido del shell: a la derecha del sidebar de 240 (ShellMainView, Grid 240,*). */
+  .contenido { position: absolute; left: var(--v2-ancho-sidebar); top: 0; right: 0; bottom: 0; overflow: hidden; }
+  /* Marca de agua del logo (U2): igual que el Login (P5) e InicioView.axaml (Image.marca-agua: Stretch
+     Uniform, centrada en el área de contenido, Opacity 0.28, scale(0.85)), detrás del contenido. La
+     comparación la oculta (ocultarEnMockup); sin test propio (U9): la mira el usuario. */
+  .marca-agua { position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0.28; transform: scale(0.85); }
+  /* StackPanel Margin 28,24 Spacing 16 de InicioView.axaml. */
+  .pagina { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 16px; padding: 24px 28px; }
+  .pagina > .v2-encabezado { margin-bottom: 0; }
+  .metricas-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 12px; }
+  .metricas-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
+  .accesos { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .panel { display: flex; flex-direction: column; }
+  .panel-titulo { margin-bottom: 12px; }
+  .fila-titulo { flex: 1 1 0; min-width: 0; margin-left: 8px; font-size: var(--v2-fuente-control-tamano); line-height: var(--v2-fuente-control-alto-linea); color: var(--v2-color-texto-primario); }
+  .fila-dias { margin-left: 8px; }
+  .ver-todas { align-self: flex-end; margin-top: 12px; }
+</style>
+</head>
+<body>
+<!-- Datos: DatosInicio.OperadorSinFinanzasNiTareas() (Task 11): GestionarProductos y VerReportes. Sin fila
+     de métricas (ningún gate se cumple), sin alertas, sin panel de tareas y sin "Ver calendario de pagos".
+     Sidebar: Productos (INVENTARIO); ANÁLISIS sin "Historial por producto" (exige además RegistrarMovimientos). -->
+<div class="v2-ventana">
+  <aside class="v2-sidebar">
+    <div class="v2-marca">Gestión Municipal</div>
+    <div class="v2-marca-subtitulo">Municipio de Carmelo</div>
+    <nav class="v2-sidebar-nav">
+      <div class="v2-item-sidebar v2-item-sidebar--activo"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z"/></svg><span>Inicio</span></div>
+      <div class="v2-header-seccion-sidebar">INVENTARIO</div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M2,10.96C1.5,10.68 1.35,10.07 1.63,9.59L3.13,7C3.24,6.8 3.41,6.66 3.6,6.58L11.43,2.18C11.59,2.06 11.79,2 12,2C12.21,2 12.41,2.06 12.57,2.18L20.47,6.62C20.66,6.72 20.82,6.88 20.91,7.08L22.36,9.6C22.64,10.08 22.47,10.69 22,10.96L21,11.54V16.5C21,16.88 20.79,17.21 20.47,17.38L12.57,21.82C12.41,21.94 12.21,22 12,22C11.79,22 11.59,21.94 11.43,21.82L3.53,17.38C3.21,17.21 3,16.88 3,16.5V10.96C2.7,11.13 2.32,11.14 2,10.96M12,4.15V4.15L12,10.85V10.85L17.96,7.5L12,4.15M5,15.91L11,19.29V12.58L5,9.21V15.91M19,15.91V12.69L14,15.59C13.67,15.77 13.3,15.76 13,15.6V19.29L19,15.91M13.85,13.36L20.13,9.73L19.55,8.72L13.27,12.35L13.85,13.36Z"/></svg><span>Productos</span></div>
+      <div class="v2-header-seccion-sidebar">ANÁLISIS</div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7,15H9C9,16.08 10.37,17 12,17C13.63,17 15,16.08 15,15C15,13.9 13.96,13.5 11.76,12.97C9.64,12.44 7,11.78 7,9C7,7.21 8.47,5.69 10.5,5.18V3H13.5V5.18C15.53,5.69 17,7.21 17,9H15C15,7.92 13.63,7 12,7C10.37,7 9,7.92 9,9C9,10.1 10.04,10.5 12.24,11.03C14.36,11.56 17,12.22 17,15C17,16.79 15.53,18.31 13.5,18.82V21H10.5V18.82C8.47,18.31 7,16.79 7,15Z"/></svg><span>Valorización de inventario</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11,2V22C5.9,21.5 2,17.2 2,12C2,6.8 5.9,2.5 11,2M13,2V11H22C21.5,6.2 17.8,2.5 13,2M13,13V22C17.7,21.5 21.5,17.8 22,13H13Z"/></svg><span>Stock por categoría</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16,6L18.29,8.29L13.41,13.17L9.41,9.17L2,16.59L3.41,18L9.41,12L13.41,16L19.71,9.71L22,12V6H16Z"/></svg><span>Productos más movidos</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12,9A3,3 0 0,1 15,12A3,3 0 0,1 12,15A3,3 0 0,1 9,12A3,3 0 0,1 12,9M17.86,19.31C16.23,21.22 14.28,22.45 12,23C9.44,22.39 7.3,20.93 5.58,18.63C3.86,16.34 3,13.8 3,11V5L12,1L21,5V11C21,13.39 20.36,15.61 19.08,17.67L16.17,14.76C16.69,13.97 17,13 17,12A5,5 0 0,0 12,7A5,5 0 0,0 7,12A5,5 0 0,0 12,17C13,17 13.97,16.69 14.76,16.17L17.86,19.31Z"/></svg><span>Log de auditoría</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M22,21H2V3H4V19H6V10H10V19H12V6H16V19H18V14H22V21Z"/></svg><span>Estadística de tareas</span></div>
+    </nav>
+    <div class="v2-sidebar-pie">
+      <div class="v2-avatar">LS</div>
+      <div class="v2-usuario">
+        <div class="v2-usuario-nombre">Laura Silva</div>
+        <div class="v2-usuario-rol">Operador</div>
+      </div>
+      <span class="v2-boton v2-boton--ghost v2-boton--icono"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M17 7L15.59 8.41L18.17 11H8V13H18.17L15.59 15.58L17 17L22 12M4 5H12V3H4C2.9 3 2 3.9 2 5V19C2 20.1 2.9 21 4 21H12V19H4V5Z"/></svg></span>
+    </div>
+    <div class="v2-version">v0.4.0</div>
+  </aside>
+  <div class="contenido">
+    <img class="marca-agua" src="../../../../src/StockApp.Presentation/Assets/carmelo-original.png" alt="">
+    <div class="pagina">
+      <div class="v2-encabezado">
+        <div class="v2-encabezado-fila">
+          <div>
+            <div class="v2-titulo-pagina">¡Bienvenido, Laura Silva!</div>
+            <div class="v2-encabezado-subtitulo">martes 6 de octubre de 2026 · Sesión iniciada como Operador</div>
+          </div>
+        </div>
+      </div>
+      <div class="v2-tarjeta">
+        <div class="v2-titulo-seccion panel-titulo">Accesos rápidos</div>
+        <div class="v2-grilla-uniforme accesos">
+          <div class="v2-acceso"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M2,10.96C1.5,10.68 1.35,10.07 1.63,9.59L3.13,7C3.24,6.8 3.41,6.66 3.6,6.58L11.43,2.18C11.59,2.06 11.79,2 12,2C12.21,2 12.41,2.06 12.57,2.18L20.47,6.62C20.66,6.72 20.82,6.88 20.91,7.08L22.36,9.6C22.64,10.08 22.47,10.69 22,10.96L21,11.54V16.5C21,16.88 20.79,17.21 20.47,17.38L12.57,21.82C12.41,21.94 12.21,22 12,22C11.79,22 11.59,21.94 11.43,21.82L3.53,17.38C3.21,17.21 3,16.88 3,16.5V10.96C2.7,11.13 2.32,11.14 2,10.96M12,4.15V4.15L12,10.85V10.85L17.96,7.5L12,4.15M5,15.91L11,19.29V12.58L5,9.21V15.91M19,15.91V12.69L14,15.59C13.67,15.77 13.3,15.76 13,15.6V19.29L19,15.91M13.85,13.36L20.13,9.73L19.55,8.72L13.27,12.35L13.85,13.36Z"/></svg><div><div class="v2-acceso-titulo">Productos</div><div class="v2-acceso-descripcion">Ver y administrar el catálogo</div></div></div>
+          <div class="v2-acceso"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7,15H9C9,16.08 10.37,17 12,17C13.63,17 15,16.08 15,15C15,13.9 13.96,13.5 11.76,12.97C9.64,12.44 7,11.78 7,9C7,7.21 8.47,5.69 10.5,5.18V3H13.5V5.18C15.53,5.69 17,7.21 17,9H15C15,7.92 13.63,7 12,7C10.37,7 9,7.92 9,9C9,10.1 10.04,10.5 12.24,11.03C14.36,11.56 17,12.22 17,15C17,16.79 15.53,18.31 13.5,18.82V21H10.5V18.82C8.47,18.31 7,16.79 7,15Z"/></svg><div><div class="v2-acceso-titulo">Valorización de inventario</div><div class="v2-acceso-descripcion">Ver el valor total del stock</div></div></div>
+          <div class="v2-acceso"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12,9A3,3 0 0,1 15,12A3,3 0 0,1 12,15A3,3 0 0,1 9,12A3,3 0 0,1 12,9M17.86,19.31C16.23,21.22 14.28,22.45 12,23C9.44,22.39 7.3,20.93 5.58,18.63C3.86,16.34 3,13.8 3,11V5L12,1L21,5V11C21,13.39 20.36,15.61 19.08,17.67L16.17,14.76C16.69,13.97 17,13 17,12A5,5 0 0,0 12,7A5,5 0 0,0 7,12A5,5 0 0,0 12,17C13,17 13.97,16.69 14.76,16.17L17.86,19.31Z"/></svg><div><div class="v2-acceso-titulo">Log de auditoría</div><div class="v2-acceso-descripcion">Revisar la actividad del sistema</div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
