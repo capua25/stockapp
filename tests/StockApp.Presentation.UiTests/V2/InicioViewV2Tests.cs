@@ -278,6 +278,7 @@ public class InicioViewV2Tests : IDisposable
         Assert.DoesNotContain(textos, t => t.Contains("por vencer esta semana"));
         Assert.Equal("2", Nombrado<TarjetaMetrica>(ventana, "MetricaFacturasAVencer").Valor);
     }
+
     /// <summary>"Hoy" del calendario local etiquetado UTC, como persiste FechaLimite (ver InicioPanelTareasTests).</summary>
     private static DateTime HoyLocal() =>
         DateTime.SpecifyKind(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.Local).Date, DateTimeKind.Utc);
@@ -313,6 +314,7 @@ public class InicioViewV2Tests : IDisposable
         Assert.True(desplazamiento.Extent.Height <= desplazamiento.Viewport.Height,
             $"Inicio necesita scroll: contenido {desplazamiento.Extent.Height} px en {desplazamiento.Viewport.Height} px");
     }
+
     /// <summary>
     /// Peor caso aceptado por el usuario (2026-10-06, opción A): Admin con DOS alertas (backup vencido de
     /// BackupsFake y facturas vencidas de FinanzasFake) y 7 tareas vencidas. Con el tope de 4 filas el contenido

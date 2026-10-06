@@ -2,9 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 using Moq;
 using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
+using StockApp.Application.Catalogo;
+using StockApp.Application.Exportacion;
+using StockApp.Application.Finanzas;
+using StockApp.Application.Movimientos;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
@@ -84,36 +89,85 @@ public class ShellMainSeccionActivaTests
         Assert.Equal(seccion, item.Seccion);
     }
 
-    [Fact]
-    public void RegistrarEntradaOSalida_AlTerminarVaAlHistorial_MarcaHistorial()
+    /// <summary>
+    /// Navegación real con las pantallas de origen construidas de verdad (sus comandos navegan con este mismo
+    /// servicio); el resto, sin construir.
+    /// </summary>
+    private static NavigationService NavegacionConOrigenesReales(Mock<IMovimientoStockService> movimientos)
     {
-        // MovimientoRegistroViewModelBase navega al historial después de registrar (decisión del usuario
-        // 2026-10-06: el sidebar marca la pantalla mostrada por cualquier camino).
-        var navegacion = NavegacionReal();
+        NavigationService? navegacion = null;
+        navegacion = new NavigationService(tipo =>
+        {
+            if (tipo == typeof(EntradaRegistroViewModel))
+                return new EntradaRegistroViewModel(movimientos.Object, Mock.Of<IProductoService>(), navegacion!, Mock.Of<IConfirmacionService>());
+            if (tipo == typeof(SalidaRegistroViewModel))
+                return new SalidaRegistroViewModel(movimientos.Object, Mock.Of<IProductoService>(), navegacion!, Mock.Of<IConfirmacionService>());
+            if (tipo == typeof(ControlPoaViewModel))
+            {
+                var vistas = new Mock<IFinanzasVistasService>();
+                vistas.Setup(v => v.ObtenerControlPoaAsync(It.IsAny<int>()))
+                    .ReturnsAsync(new List<ControlPoaLineaDto> { new(1, "Rambla", "Obras", 2026, 1000m, 400m, 600m, 40m, false) });
+                return new ControlPoaViewModel(vistas.Object, navegacion!, Mock.Of<ICsvExporter>(), Mock.Of<IServicioGuardadoArchivo>(),
+                    Mock.Of<IConfirmacionService>(), Mock.Of<IPdfExporter>(), Mock.Of<IServicioAperturaArchivo>(), Mock.Of<ICurrentSession>());
+            }
+            if (tipo == typeof(GastosViewModel))
+                return new GastosViewModel(Mock.Of<IGastoService>(), Mock.Of<ICurrentSession>(), Mock.Of<IProveedorService>(),
+                    Mock.Of<IFuenteFinanciamientoService>(), Mock.Of<IRubroGastoService>(), Mock.Of<ILineaPoaService>(), navegacion!,
+                    Mock.Of<IConfirmacionService>(), Mock.Of<ICsvExporter>(), Mock.Of<IServicioGuardadoArchivo>(),
+                    Mock.Of<IPdfExporter>(), Mock.Of<IServicioAperturaArchivo>());
+            return RuntimeHelpers.GetUninitializedObject(tipo);
+        });
+        return navegacion;
+    }
+
+    private static ProductoDto Producto() => new(
+        Id: 1, Codigo: "SKU1", CodigoBarras: null, Nombre: "Azúcar", Descripcion: null, CategoriaId: null, CategoriaNombre: null,
+        ProveedorId: null, UnidadMedidaId: 1, UnidadMedidaNombre: "Unidad", PrecioCosto: 0m, StockActual: 10m, StockMinimo: 0m,
+        Activo: true, FechaAlta: default);
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task RegistrarEntradaOSalida_AlGuardarVaAlHistorial_MarcaHistorial(bool entrada)
+    {
+        // Decisión del usuario 2026-10-06: el sidebar marca la pantalla mostrada por cualquier camino. Al
+        // registrar, MovimientoRegistroViewModelBase navega al historial.
+        var movimientos = new Mock<IMovimientoStockService>();
+        movimientos.Setup(m => m.RegistrarAsync(It.IsAny<RegistrarMovimientoDto>(), false))
+            .ReturnsAsync((RegistrarMovimientoDto d, bool _) =>
+                new MovimientoRegistradoDto(1, d.ProductoId, d.Tipo, d.Motivo, d.Cantidad, 0m, 10m, 15m, DateTime.UtcNow));
+        var navegacion = NavegacionConOrigenesReales(movimientos);
         var vm = Crear(navegacion, RolUsuario.Admin);
+        (entrada ? vm.NavRegistrarEntradaCommand : vm.NavRegistrarSalidaCommand).Execute(null);
+        Assert.Equal(entrada ? "RegistrarEntrada" : "RegistrarSalida", vm.SeccionActiva);
+        var registro = Assert.IsAssignableFrom<MovimientoRegistroViewModelBase>(navegacion.Actual);
+        if (entrada)
+            registro.Motivo = MotivoMovimiento.Ajuste; // sin el paso opcional "Asociar factura" de las compras
+        registro.ProductoSeleccionado = Producto();
+        registro.Cantidad = 5m;
 
-        vm.NavRegistrarEntradaCommand.Execute(null);
-        Assert.Equal("RegistrarEntrada", vm.SeccionActiva);
-        navegacion.Navegar<MovimientoHistorialViewModel>();
-        Assert.Equal("HistorialMovimientos", vm.SeccionActiva);
+        await registro.RegistrarCommand.ExecuteAsync(null);
 
-        vm.NavRegistrarSalidaCommand.Execute(null);
-        Assert.Equal("RegistrarSalida", vm.SeccionActiva);
-        navegacion.Navegar<MovimientoHistorialViewModel>();
+        Assert.Null(registro.MensajeError);
+        Assert.IsType<MovimientoHistorialViewModel>(navegacion.Actual);
         Assert.Equal("HistorialMovimientos", vm.SeccionActiva);
     }
 
     [Fact]
-    public void ControlPoa_AbreLosGastosDeUnaLinea_MarcaGastos()
+    public async Task ControlPoa_AbrirLosGastosDeUnaLinea_MarcaGastos()
     {
-        // ControlPoaViewModel navega a Gastos filtrado por línea POA (Navegar con inicializador).
-        var navegacion = NavegacionReal();
+        // ControlPoaViewModel abre Gastos filtrado por la línea seleccionada.
+        var navegacion = NavegacionConOrigenesReales(new Mock<IMovimientoStockService>());
         var vm = Crear(navegacion, RolUsuario.Admin);
         vm.NavControlPoaCommand.Execute(null);
         Assert.Equal("ControlPoa", vm.SeccionActiva);
+        var controlPoa = Assert.IsType<ControlPoaViewModel>(navegacion.Actual);
+        await controlPoa.CargarAsync();
+        controlPoa.FilaSeleccionada = controlPoa.Filas[0];
 
-        navegacion.Navegar<GastosViewModel>(_ => { });
+        controlPoa.AbrirGastosDeLaLineaCommand.Execute(null);
 
+        Assert.Equal(1, Assert.IsType<GastosViewModel>(navegacion.Actual).LineaPoaSeleccionada?.Id);
         Assert.Equal("Gastos", vm.SeccionActiva);
     }
 
