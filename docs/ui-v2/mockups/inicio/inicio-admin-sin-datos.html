@@ -15,13 +15,17 @@
   /* StackPanel Margin 28,24 Spacing 16 de InicioView.axaml. */
   .pagina { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 16px; padding: 24px 28px; }
   .pagina > .v2-encabezado { margin-bottom: 0; }
-  .metricas-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 12px; }
+  /* Compensación B (spec §6.5): columnas de ancho entero con los bordes de GrillaUniformeV2 (cada borde
+     redondeado por separado); la del medio absorbe el resto. Con repeat(3, 1fr) el texto de las columnas
+     2 y 3 caía en x fraccionaria y la app lo dibuja en x entera. */
+  .metricas-3 { grid-template-columns: round(nearest, calc((100% - 24px) / 3), 1px) minmax(0, 1fr) round(nearest, calc((100% - 24px) / 3), 1px); column-gap: 12px; }
   .metricas-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 12px; }
-  .accesos { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .accesos { grid-template-columns: round(nearest, calc((100% - 24px) / 3), 1px) minmax(0, 1fr) round(nearest, calc((100% - 24px) / 3), 1px); gap: 12px; }
   .panel { display: flex; flex-direction: column; }
   .panel-titulo { margin-bottom: 12px; }
   .fila-titulo { flex: 1 1 0; min-width: 0; margin-left: 8px; font-size: var(--v2-fuente-control-tamano); line-height: var(--v2-fuente-control-alto-linea); color: var(--v2-color-texto-primario); }
-  .fila-dias { margin-left: 8px; }
+  /* Compensación A (spec §6.5): texto alineado a la derecha, ancho redondeado hacia arriba como el TextBlock (base.css). */
+  .fila-dias { margin-left: 8px; width: calc-size(fit-content, round(up, size, 1px)); }
   .ver-todas { align-self: flex-end; margin-top: 12px; }
 </style>
 </head>

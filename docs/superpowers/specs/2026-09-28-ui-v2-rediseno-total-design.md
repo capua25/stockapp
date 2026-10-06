@@ -286,7 +286,7 @@ Medido el 2026-09-30 con la pantalla catálogo-de-componentes (`CatalogoComponen
 | 2 | 0.837% | 11 |
 | 3 | 0.837% | 11 |
 
-Qué es ese ruido: la geometría es idéntica; el texto de la app sale uniformemente entre 7% y 18% más claro que en Chromium (rasterización de Skia frente a la de Chromium) y eso produce 8 teselas; las otras 3 vienen de centrados subpíxel de menos de 0.5px. El usuario aceptó esa diferencia de tono el 2026-09-30: lo que se exige idéntico es la geometría.
+Qué es ese ruido: la geometría es idéntica; el texto de la app sale uniformemente entre 7% y 18% más claro que en Chromium (rasterización de Skia frente a la de Chromium) y eso produce 8 teselas; las otras 3 vienen de centrados subpíxel de menos de 0.5px. El usuario aceptó esa diferencia de tono el 2026-09-30: lo que se exige idéntico es la geometría. Ese 7–18% se midió sobre el catálogo, que no tiene texto de peso 400 en color primario. Medido en la Fase 2 (Task 11, proporción de tinta app/mockup para el mismo estilo): el texto 400 sobre `#1C1917` (13 a 14 px) sale entre 23,5% y 26% más claro, tanto en las filas de tarea de Inicio (0,740 a 0,765) como en el cuerpo 14/400 del diálogo de confirmación aprobado en la Fase 1 (0,755). Para un mismo estilo la proporción se repite con dos decimales entre pantallas: título de página 22/600 0,891; título de sección 15/600 0,83; título de acceso 13/600 0,82; texto terciario 12/400 0,93; alerta 13/400 sobre fondo de color 0,78 a 0,79.
 
 **Defectos chicos (mutando el catálogo, QUITANDO):**
 
@@ -337,6 +337,10 @@ Cubre también el valor de `TextBox`, `NumericUpDown`, `CalendarDatePicker` y `C
 - `LineHeight` 16 (token `V2FuenteControlAltoLinea`) en `PART_Texto` de la `Alerta`: el natural de Avalonia son ~15px y el mockup usa 16, por lo que la segunda línea de una alerta envuelta salía 1px más arriba (`ComponentesV2.axaml`).
 - Pulgar de scroll del sidebar del Administrador en `sidebar-admin.html` (`.v2-sidebar-pulgar`): `#7A7A7A`, 2 px en x 223, desde y 84, 352 px de alto a 760 y 362 a 768 (media query). Es el indicador de Fluent medido en el render, no un token (Fase 2, Task 9).
 - Ancho de texto redondeado hacia arriba: `width: calc-size(fit-content, round(up, size, 1px))` en `base.css`, porque un TextBlock mide el ceil del ancho del texto. `calc-size()` solo funciona en Chromium: en otro navegador el mockup queda hasta 1px distinto. La comparación siempre usa Chromium.
+- Mockups de Inicio (`docs/ui-v2/mockups/inicio/*.html`), aprobadas por el usuario el 2026-10-06, sin cambio visible:
+  - A. `.fila-dias` lleva `width: calc-size(fit-content, round(up, size, 1px))` (el ancho redondeado de arriba): sin él, "-2 días" salía corrido 1 px y "3 días" 0,76 px respecto de la app, alineados a la derecha.
+  - B. `.accesos` y `.metricas-3` usan `round(nearest, calc((100% - 24px) / 3), 1px) minmax(0, 1fr) round(nearest, calc((100% - 24px) / 3), 1px)` en vez de `repeat(3, minmax(0, 1fr))`: columnas de ancho entero con los bordes de `GrillaUniformeV2` (cada borde redondeado por separado; 309/308/309 a 1280 en accesos, 349/348/349 a 1366 en métricas). Con `1fr` el texto de las columnas 2 y 3 caía en x fraccionaria (±1/3 px) y la app lo dibuja en x entera. `.metricas-2` no lo necesita: (984 − 12) / 2 y (1070 − 12) / 2 son enteros.
+  - Con A y B: Admin 56→40 (1280) y 67→46 (1366), Operador mixto 24→20 y 26→20, Administrador sin datos 40→28 y 49→32, Operador sin finanzas 10→9 y 11→9 teselas densas.
 
 **Salvedad (§6.4).** El render headless y Windows pueden diferir en antialiasing: la aprobación final es del usuario mirando la app.
 

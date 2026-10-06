@@ -115,9 +115,11 @@ glifo que falta no supera el ruido de píxeles). El mensaje lista cada texto. El
 fila parcial o una columna fuera de vista no se reportan; una celda angosta con texto largo sí). `TextTrimming` no exime: si el
 mockup usa `text-overflow: ellipsis`, el test declara esos textos en `recortesPermitidos`. También mira el valor y el placeholder de los `TextBox` (incluidos los internos de `NumericUpDown`, `CalendarDatePicker` y `ComboBox` editable), los `TextBlock` con `Inlines` y los cortados por `MaxLines`. Un `TextBox` multilínea relaja el eje vertical (se lee scrolleando); ya no hace falta `recortesPermitidos` para un motivo largo en un campo de alto fijo.
 
-Diferencia de tono aceptada: el texto de la app sale entre 7% y 18% más claro que en el mockup
-(rasterización de Skia frente a Chromium) con la geometría idéntica. El usuario la aceptó el
-2026-09-30 y es el grueso del ruido que absorbe el umbral: en la página de comparación se ve como
+Diferencia de tono aceptada: el texto de la app sale más claro que en el mockup (rasterización de
+Skia frente a Chromium) con la geometría idéntica: entre 7% y 18% en el catálogo (títulos 600 y
+texto secundario), y entre 23,5% y 26% en texto 400 sobre `#1C1917` de 13 a 14 px (filas de tarea de
+Inicio, cuerpo del diálogo de confirmación de la Fase 1; spec §6.5). El usuario aceptó la del
+catálogo el 2026-09-30 y la del diálogo al aprobar la Fase 1 (2026-10-05). Es el grueso del ruido que absorbe el umbral: en la página de comparación se ve como
 naranja y rojo fino en los bordes de los glifos. Lo que se exige igual es la geometría.
 
 Diálogos (`Window`): el contenido va en un `Border x:Name="Contenido" Classes="ui2"` (no en el
