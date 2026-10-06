@@ -89,6 +89,7 @@ public class InsigniaAlertaTests
 
         Assert.Equal(16, texto.LineHeight);
         Assert.True(texto.Bounds.Height >= 32, $"El texto no envolvió: alto {texto.Bounds.Height}.");
-        Assert.Equal(0, texto.Bounds.Height % 16);
+        Assert.True(EsMultiploDeLinea(texto.Bounds.Height, 16, LayoutHelper.GetLayoutScale(texto)),
+            $"La alerta envuelta mide {texto.Bounds.Height}, no un múltiplo de 16.");
     }
 }

@@ -58,4 +58,15 @@ internal static class MontajeV2
         ventana.MouseUp(centro, MouseButton.Left);
         Dispatcher.UIThread.RunJobs();
     }
+
+    /// <summary>
+    /// ¿El alto es un número entero (al menos 1) de líneas? Tolerancia de medio píxel de dispositivo: el
+    /// layout rounding redondea el alto total a píxeles de dispositivo, así que a 133 % dos líneas de 16
+    /// miden 32,33 DIP. Un "alto % 16 == 0" sobre double daba falso rojo con escalado fraccional.
+    /// </summary>
+    public static bool EsMultiploDeLinea(double alto, double altoLinea, double escala = 1.0)
+    {
+        var lineas = Math.Round(alto / altoLinea);
+        return lineas >= 1 && Math.Abs(alto - lineas * altoLinea) <= 0.5 / escala + 1e-6;
+    }
 }
