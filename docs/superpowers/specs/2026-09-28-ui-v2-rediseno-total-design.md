@@ -1,7 +1,7 @@
 # StockApp — UI v2: rediseño total de la interfaz
 
 **Fecha:** 2026-09-28
-**Estado:** aprobado por el usuario; Fase 0 y Fase 1 implementadas en feat/ui-v2, Fase 1 pendiente de aprobación del usuario (merge a main al final de todas las fases)
+**Estado:** aprobado por el usuario; Fase 0 y Fase 1 implementadas en feat/ui-v2; Fase 1 APROBADA por el usuario el 2026-10-05 (merge a main al final de todas las fases)
 **Rama:** `feat/ui-v2` (worktree propio)
 **Alcance:** todas las vistas de `src/StockApp.Presentation/` (shell, ~55 de contenido, pantallas fuera del shell, 4 diálogos, 3 overlays de actualización)
 **Mockups de referencia:** `docs/ui-v2/mockups/referencia/` — `direccion-visual-aprobada.html` (variante `.di-azul`), `navegacion-aprobada.html` (opción A), `patrones-1.html`
@@ -355,6 +355,19 @@ Ciclo de cada fase: mockups de sus pantallas → aprobación del usuario → XAM
 | 7 Administración | Catálogos master-detail con los 11 catálogos, Usuarios, Mantenimiento |
 | 8 Importación | wizard `NuevaImportacionView` + historial; apagada, verificable solo por comparación; unidad de riesgo propia |
 | 9 Limpieza | borrar estilos y componentes viejos, reemplazar `GuardianDePatronTests` por el guardián del sistema nuevo, auditoría de residuos |
+
+**Estado de la Fase 1 (aprobada el 2026-10-05).** El usuario aprobó la Fase 1 tras probar flujos reales a 1366×768: crear y editar artículo, entrada y salida, anular documento, baja de categoría y cerrar sesión. Arreglos surgidos de esa prueba: placeholder de precio de entrada (`2a5e661`, main), motivo Venta pasa a Uso o consumo (`ff91f33`, main), baja de categoría bloqueada con productos activos (`ee461b8`, main), la salida nunca muestra precio (`d858221`, main), y el hueco a la derecha en celdas y headers de las 22 grillas del tema viejo (`c808334`, feat/ui-v2; el `961dc7e` previo no tenía efecto porque el contenido no está dentro de `.ui2`).
+
+**Deuda menor de la Fase 1 (no bloquea):**
+- Sin guardián propio de `EsAdmin` en Importación (hoy lo tapa `ImportacionHabilitada=false`); resolver al reactivarla (Fase 8).
+- Las comparaciones de píxeles no custodian el gate `IsVisible=EsVisible` del sidebar ni la ubicación de `ui2` (lo custodian los UiTests).
+- Pulgar de scroll de Fluent (2 px) en el sidebar del Administrador que el mockup no tiene (P4); dentro del umbral.
+- `Mensaje_IgualAlMockup` (umbral 12 aprobado), `Modal_IgualAlMockup` y `LoginAccesoLimitado_IgualAlMockup_1366x768` pasan sin margen (tono de rasterizador); frágiles ante cambios de render.
+- Margin `0,1,0,0` de la card de Reset es estático: con `AlertaCompletado`/`AlertaError` visibles cambia la paridad del alto (sin mockup de esos estados).
+- `V2FuenteTituloPaginaAltoLinea` sin test de control real equivalente al de la Alerta; `% 16` sobre double puede dar falso rojo con escalado fraccional.
+- Guardián de recorte: cobertura "la ventana" del presentador de filas de DataGrid sin cubrir; TextBox multilínea de altura fija con valor largo se reporta aunque scrollee (usar `recortesPermitidos` si aparece); `.v2-ventana` sin chequeo fail-closed de que mida el lienzo.
+- Sin chequeo de `Opacity` literal en vistas migradas a v2.
+- Cosméticos: comentario de `GrupoNavegacion.cs:11-14` menciona Finanzas/Maestros; comentario de `ControlesV2.axaml` dice `.v2-boton` (real `.v2-boton--icono`); `reset.html` declara `.mt-12` y `.enlace-centrado` sin uso.
 
 **Integración:** merge periódico de `main` hacia `feat/ui-v2`. El merge a `main` se hace **una sola vez, al final**, con `--ff-only` + push (convención del repo). No se integra por fase: dejaría la app mitad vieja y mitad nueva.
 
