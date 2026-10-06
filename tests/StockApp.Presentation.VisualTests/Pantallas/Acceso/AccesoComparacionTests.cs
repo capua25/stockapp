@@ -60,6 +60,27 @@ public class AccesoComparacionTests
         ComparacionVisual.CompararConMockup(new ResetAdminView(), DatosAcceso.Reset(), "acceso/reset.html",
             tamano: TamanoLienzo.Municipio);
 
+    // Deuda de la Fase 1: el Margin 0,1,0,0 de la card del Reset depende de la paridad de su alto; estos dos
+    // estados la cambian (o no) al mostrar una alerta.
+    [AvaloniaFact]
+    public void ResetCompletado_IgualAlMockup() =>
+        ComparacionVisual.CompararConMockup(new ResetAdminView(), DatosAcceso.Reset(completado: true), "acceso/reset-completado.html");
+
+    [AvaloniaFact]
+    public void ResetCompletado_IgualAlMockup_1366x768() =>
+        ComparacionVisual.CompararConMockup(new ResetAdminView(), DatosAcceso.Reset(completado: true), "acceso/reset-completado.html",
+            tamano: TamanoLienzo.Municipio);
+
+    [AvaloniaFact]
+    public void ResetConError_IgualAlMockup() =>
+        ComparacionVisual.CompararConMockup(new ResetAdminView(), DatosAcceso.Reset(error: "No se pudo resetear el Admin."),
+            "acceso/reset-error.html");
+
+    [AvaloniaFact]
+    public void ResetConError_IgualAlMockup_1366x768() =>
+        ComparacionVisual.CompararConMockup(new ResetAdminView(), DatosAcceso.Reset(error: "No se pudo resetear el Admin."),
+            "acceso/reset-error.html", tamano: TamanoLienzo.Municipio);
+
     [AvaloniaFact]
     public void BloqueoLicencia_IgualAlMockup() =>
         ComparacionVisual.CompararConMockup(new BloqueoLicenciaView(), DatosAcceso.BloqueoLicencia(), "acceso/bloqueo-licencia.html");

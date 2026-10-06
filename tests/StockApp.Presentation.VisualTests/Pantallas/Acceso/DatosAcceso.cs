@@ -33,11 +33,13 @@ public static class DatosAcceso
         return vm;
     }
 
-    public static ResetAdminViewModel Reset()
+    public static ResetAdminViewModel Reset(bool completado = false, string? error = null)
     {
         var vm = new ResetAdminViewModel(Mock.Of<IResetAdminService>());
         vm.CodigoMaquina = CodigoMaquina;
         vm.Desafio = Desafio;
+        vm.Completado = completado;
+        vm.MensajeError = error;
         return vm;
     }
 
