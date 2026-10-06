@@ -852,11 +852,15 @@ public class GrillaUniformeV2Tests
         // Como grid-auto-rows: auto. Fila 1: 60 de alto; fila 2 arranca en 60 + 12.
         var celdas = Celdas(Montar("""
             <v2:GrillaUniformeV2 x:Name="G" Width="960" Columnas="3" Espaciado="12">
-                <Border Height="40" /><Border Height="60" /><Border Height="50" /><Border Height="30" />
+                <Border Height="40" VerticalAlignment="Top" /><Border Height="60" VerticalAlignment="Top" />
+                <Border Height="50" VerticalAlignment="Top" /><Border Height="30" VerticalAlignment="Top" />
             </v2:GrillaUniformeV2>
             """, ancho: 1100));
 
-        Assert.Equal(new Rect(0, 0, 312, 60), celdas[0]);
+        // Pre-flight: con Height fijo y VerticalAlignment Stretch, Avalonia CENTRA el Border en el slot de 60
+        // (quedaría en y 10); Top lo deja arriba, como CSS con un alto explícito. Las tarjetas reales no
+        // fijan alto: se estiran a la fila.
+        Assert.Equal(new Rect(0, 0, 312, 40), celdas[0]);
         Assert.Equal(new Rect(324, 0, 312, 60), celdas[1]);
         Assert.Equal(new Rect(0, 72, 312, 30), celdas[3]);
     }
@@ -1136,6 +1140,12 @@ git commit -m "feat(ui-v2): grilla uniforme con bordes como Chromium y fila clic
 
 ## Bloque B — Mockups y aprobación del usuario (GATE antes del XAML)
 
+Los GATE y los datos fijos compartidos están dentro de las Tasks 8 y 9 (para que cada brief los lleve).
+
+### Task 8: Mockups de Inicio (Administrador, Operador mixto, Operador sin finanzas ni tareas, Administrador sin datos)
+
+**Decisiones aplicadas:** U2 (logo de fondo), D1 a D8 (D1 y D4 ya confirmadas por el usuario: U6, U7).
+
 Spec §6.1 y §7: "mockups de sus pantallas → aprobación del usuario → XAML". Cada task termina en un GATE: el ejecutor PARA, presenta los mockups y no sigue hasta tener la aprobación explícita. Si el usuario pide cambios, se aplican en el mockup (y en su componente/estilo/VM con sus tests, si corresponde) dentro de la misma task y se vuelve a presentar.
 
 Datos fijos que comparten mockups y tests (`DatosInicio`, Task 11, usa EXACTAMENTE estos valores):
@@ -1151,10 +1161,6 @@ Datos fijos que comparten mockups y tests (`DatosInicio`, Task 11, usa EXACTAMEN
 | Admin sin datos | los tres servicios fallan (`HttpRequestException("API caída")`) |
 
 Íconos: los HTML se escriben con marcadores `{{mdi-<clave>}}` y se reemplazan con la salida de `icono-svg` (paso "Insertar íconos").
-
-### Task 8: Mockups de Inicio (Administrador, Operador mixto, Operador sin finanzas ni tareas, Administrador sin datos)
-
-**Decisiones aplicadas:** U2 (logo de fondo), D1 a D8.
 
 **Files:**
 - Create: `docs/ui-v2/mockups/inicio/inicio-admin.html`
@@ -2616,6 +2622,7 @@ Reemplazar `src/StockApp.Presentation/Views/InicioView.axaml` entero por:
                                                        VerticalAlignment="Center"
                                                        Text="{Binding Titulo}"
                                                        FontSize="{DynamicResource V2FuenteControlTamano}"
+                                                       LineHeight="{DynamicResource V2FuenteControlAltoLinea}"
                                                        Foreground="{DynamicResource V2TextoPrimarioBrush}" />
                                             <TextBlock Grid.Column="2"
                                                        Classes="pie-conteo"
@@ -2643,6 +2650,7 @@ Reemplazar `src/StockApp.Presentation/Views/InicioView.axaml` entero por:
                                                        VerticalAlignment="Center"
                                                        Text="{Binding Titulo}"
                                                        FontSize="{DynamicResource V2FuenteControlTamano}"
+                                                       LineHeight="{DynamicResource V2FuenteControlAltoLinea}"
                                                        Foreground="{DynamicResource V2TextoPrimarioBrush}" />
                                             <TextBlock Grid.Column="2"
                                                        Classes="pie-conteo"
