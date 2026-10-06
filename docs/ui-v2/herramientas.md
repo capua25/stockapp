@@ -45,6 +45,9 @@ Nunca se editan a mano: `ArchivosGeneradosSincronizadosTests` falla si difieren 
    y el capturador define esas variables según el tamaño pedido. Abierto a mano en el navegador
    mide 1280x760. Lo que tenga ancho fijo adentro no se estira solo: a 1366 se ajusta pantalla por
    pantalla al aprobar el mockup.
+   La captura exige exactamente un `<div class="v2-ventana">` que mida el lienzo pedido (1280×760 o
+   1366×768) en (0,0); si falta, si hay dos o si un estilo de la página le pisa el ancho o le pone
+   margen, falla.
 2. Íconos: `dotnet run --project tools/StockApp.UiV2.Herramientas -- icono-svg mdi-<nombre>` y pegar el SVG.
 3. Solo técnicas de la spec §6.1. Las clases `v2-*` de `base.css` replican la geometría de los
    componentes de `Controls/V2`.

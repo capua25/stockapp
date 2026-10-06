@@ -16,6 +16,9 @@ namespace StockApp.UiV2.Herramientas.Mockups;
 /// esa clase trae "overflow:hidden" de base.css — sin ese segundo chequeo, un hijo que se pasa
 /// de la caja de ".v2-ventana" queda recortado en silencio en el PNG en vez de hacer fallar la
 /// captura (overflow:hidden no propaga el desborde al documento).
+/// Además exige exactamente un ".v2-ventana" que mida el lienzo pedido en el origen: un mockup sin ella,
+/// con dos, o con un ancho o un margen pisado se rechaza en vez de capturarse corrido (deuda de la
+/// Fase 1, Fase 2 Task 2).
 /// Chromium headless igual intenta abrir DISPLAY/WAYLAND_DISPLAY si el proceso los heredó
 /// (para el compositor). En WSL, si WSLg quedó caído, el socket de /tmp/.X11-unix sigue
 /// existiendo pero no responde: el launch no falla, pero ScreenshotAsync se cuelga hasta el
@@ -50,14 +53,23 @@ public static class CapturadorMockup
         """;
 
     private const string ScriptDesbordes = """
-        () => {
+        (lienzo) => {
           const problemas = [];
           const raiz = document.documentElement;
           if (raiz.scrollWidth > raiz.clientWidth || raiz.scrollHeight > raiz.clientHeight) {
             problemas.push(`documento ${raiz.scrollWidth}x${raiz.scrollHeight} > ${raiz.clientWidth}x${raiz.clientHeight}`);
           }
-          const ventana = document.querySelector(".v2-ventana");
-          if (ventana && (ventana.scrollWidth > ventana.clientWidth || ventana.scrollHeight > ventana.clientHeight)) {
+          const ventanas = document.querySelectorAll(".v2-ventana");
+          if (ventanas.length !== 1) {
+            problemas.push(`hay ${ventanas.length} .v2-ventana (tiene que haber exactamente una)`);
+            return problemas;
+          }
+          const ventana = ventanas[0];
+          const caja = ventana.getBoundingClientRect();
+          if (caja.x !== 0 || caja.y !== 0 || caja.width !== lienzo.ancho || caja.height !== lienzo.alto) {
+            problemas.push(`.v2-ventana mide ${caja.width}x${caja.height} en (${caja.x},${caja.y}), se esperaba ${lienzo.ancho}x${lienzo.alto} en (0,0)`);
+          }
+          if (ventana.scrollWidth > ventana.clientWidth || ventana.scrollHeight > ventana.clientHeight) {
             problemas.push(`.v2-ventana ${ventana.scrollWidth}x${ventana.scrollHeight} > ${ventana.clientWidth}x${ventana.clientHeight}`);
           }
           return problemas;
@@ -120,7 +132,7 @@ public static class CapturadorMockup
                     $"{Path.GetFileName(rutaHtml)}: fuentes sin cargar ({string.Join(", ", sinCargar)}).");
             }
 
-            var problemas = await pagina.EvaluateAsync<string[]>(ScriptDesbordes);
+            var problemas = await pagina.EvaluateAsync<string[]>(ScriptDesbordes, new { ancho = lienzo.Ancho, alto = lienzo.Alto });
             if (problemas.Length > 0)
             {
                 throw new InvalidOperationException(

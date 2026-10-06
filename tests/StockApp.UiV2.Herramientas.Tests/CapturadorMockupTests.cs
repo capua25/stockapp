@@ -118,6 +118,66 @@ public class CapturadorMockupTests
     }
 
     [Fact]
+    public async Task SinVentana_Lanza()
+    {
+        var ruta = Path.Combine(_carpeta, "sin-ventana.html");
+        File.WriteAllText(ruta,
+            "<!doctype html><html><head><meta charset=\"utf-8\">"
+            + $"<link rel=\"stylesheet\" href=\"{Uri(RutasRepo.TokensCss)}\">"
+            + $"<link rel=\"stylesheet\" href=\"{Uri(Path.Combine(RutasRepo.CarpetaBaseMockups, "base.css"))}\">"
+            + "</head><body><p>Sin ventana</p></body></html>");
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => CapturadorMockup.CapturarAsync(ruta, Path.Combine(_carpeta, "x.png")));
+
+        Assert.Contains("hay 0 .v2-ventana", ex.Message);
+    }
+
+    [Fact]
+    public async Task DosVentanas_Lanza()
+    {
+        var html = Html("<div class=\"v2-ventana\"></div>");
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => CapturadorMockup.CapturarAsync(html, Path.Combine(_carpeta, "x.png")));
+
+        Assert.Contains("hay 2 .v2-ventana", ex.Message);
+    }
+
+    [Fact]
+    public async Task VentanaMasAngostaQueElLienzo_Lanza()
+    {
+        var html = Html("<p>Texto</p>", ".v2-ventana{width:1000px}");
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => CapturadorMockup.CapturarAsync(html, Path.Combine(_carpeta, "x.png")));
+
+        Assert.Contains(".v2-ventana mide 1000x760 en (0,0), se esperaba 1280x760 en (0,0)", ex.Message);
+    }
+
+    [Fact]
+    public async Task VentanaCorridaDelOrigen_Lanza()
+    {
+        var html = Html("<p>Texto</p>", ".v2-ventana{margin-left:8px;width:1272px}");
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => CapturadorMockup.CapturarAsync(html, Path.Combine(_carpeta, "x.png")));
+
+        Assert.Contains(".v2-ventana mide 1272x760 en (8,0)", ex.Message);
+    }
+
+    [Fact]
+    public async Task VentanaAlTamanoMunicipio_NoLanza()
+    {
+        var html = Html("<p>Texto</p>");
+        var png = Path.Combine(_carpeta, "municipio.png");
+
+        await CapturadorMockup.CapturarAsync(html, png, TamanoLienzo.Municipio);
+
+        Assert.True(File.Exists(png));
+    }
+
+    [Fact]
     public async Task MockupSinFontFace_Lanza()
     {
         var html = Html("<p>Sin base.css</p>", conBase: false);
@@ -141,15 +201,22 @@ public class CapturadorMockupTests
         Assert.Contains("Rota", ex.Message);
     }
 
+    /// <summary>
+    /// Custodia el chequeo de "el documento desborda" por sí solo: ".v2-ventana" queda midiendo
+    /// el lienzo (no dispara el chequeo de medida) y lo que se pasa es un pseudo-elemento de
+    /// body, FUERA de la ventana. Se afirma el detalle "documento 1400x" porque el mensaje
+    /// general ya contiene "desborda" aunque falle otro chequeo.
+    /// </summary>
     [Fact]
     public async Task ContenidoQueDesborda_Lanza()
     {
-        var html = Html("<div class=\"ancho\"></div>", "body{overflow:visible}.v2-ventana{width:1400px}.ancho{width:1400px;height:10px}");
+        var html = Html("<p>Texto</p>", "body{overflow:visible}body::after{content:\"\";position:absolute;left:0;top:0;width:1400px;height:10px}");
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => CapturadorMockup.CapturarAsync(html, Path.Combine(_carpeta, "x.png")));
 
-        Assert.Contains("desborda", ex.Message);
+        Assert.Contains("documento 1400x", ex.Message);
+        Assert.DoesNotContain(".v2-ventana mide", ex.Message);
     }
 
     /// <summary>
