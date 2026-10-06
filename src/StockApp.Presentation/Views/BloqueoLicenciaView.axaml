@@ -62,11 +62,13 @@
                            Texto="{Binding MensajeError}"
                            IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
+                <!-- Botón estirado: HorizontalContentAlignment Stretch y el texto lo centra el TextAlignment del estilo (spec 6.5). -->
                 <Button Classes="primario"
                         Content="Activar"
                         Command="{Binding ActivarCommand}"
                         IsDefault="True"
                         HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Stretch"
                         Margin="0,16,0,0" />
 
                 <!-- Modo acceso limitado (FIX 1, re-review final E1): único camino a los backups

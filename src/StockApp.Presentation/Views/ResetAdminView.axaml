@@ -87,11 +87,13 @@
                              PlaceholderText="Nueva contraseña" />
                 </v2:CampoFormulario>
 
+                <!-- Botón estirado: HorizontalContentAlignment Stretch y el texto lo centra el TextAlignment del estilo (spec 6.5). -->
                 <Button Classes="primario"
                         Content="2) Resetear Admin"
                         Command="{Binding ResetearCommand}"
                         IsDefault="True"
-                        HorizontalAlignment="Stretch" />
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Stretch" />
 
                 <v2:Alerta x:Name="AlertaCompletado"
                            Variante="Info"
@@ -103,10 +105,12 @@
                            Texto="{Binding MensajeError}"
                            IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
+                <!-- Botón estirado: HorizontalContentAlignment Stretch y el texto lo centra el TextAlignment del estilo (spec 6.5). -->
                 <Button Classes="ghost"
                         Content="Volver al login"
                         Command="{Binding VolverCommand}"
-                        HorizontalAlignment="Stretch" />
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Stretch" />
 
             </StackPanel>
         </v2:TarjetaContenido>

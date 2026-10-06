@@ -89,12 +89,16 @@
                                  KeyDown="OnCampoKeyDown" />
                     </v2:CampoFormulario>
 
+                    <!-- Botón estirado: el contenido también se estira y el texto se centra con el TextAlignment
+                         del estilo, como lo centra Chromium (spec 6.5); centrado por HorizontalContentAlignment
+                         el origen se redondeaba y "Entrar" quedaba 0,8 px a la izquierda. -->
                     <Button x:Name="BotonEntrar"
                             Classes="primario"
                             Content="Entrar"
                             Command="{Binding EntrarCommand}"
                             IsDefault="True"
                             HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Stretch"
                             Margin="0,20,0,0" />
 
                     <!-- Reset de Admin (Inc 7 Fase B): link discreto al flujo de recuperación. -->

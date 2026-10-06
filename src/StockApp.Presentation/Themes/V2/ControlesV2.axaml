@@ -108,6 +108,11 @@
         <Setter Property="FontWeight" Value="{DynamicResource V2FuenteBotonPeso}" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
+        <!-- Compensación medida (spec 6.5): el TextBlock del contenido mide el ancho del texto redondeado
+             hacia arriba y Chromium centra el texto con su ancho fraccionario; con TextAlignment Center el
+             glifo cae en la misma fracción (antes quedaba hasta 0,45 px a la izquierda). Un botón estirado
+             necesita además HorizontalContentAlignment Stretch. -->
+        <Setter Property="TextBlock.TextAlignment" Value="Center" />
         <Setter Property="Opacity" Value="1" />
     </Style>
 
