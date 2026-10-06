@@ -4,7 +4,10 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Primitives;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Xunit;
 using static StockApp.Presentation.UiTests.V2.MontajeV2;
 
@@ -51,5 +54,70 @@ public class FilaPanelV2Tests
         Dispatcher.UIThread.RunJobs();
 
         Assert.Equal(Hex("#F5F5F4"), ColorDe(Parte<Border>(fila, "PART_Fila").Background));
+    }
+    // Foco de teclado: el lenguaje de foco v2 es el borde de acento de 1 px (TextBox y ComboBox :focus). La fila
+    // lo dibuja en PART_Foco, encima del marco, para no mover el contenido; el FocusAdorner de Fluent (doble
+    // rectángulo negro y blanco) se apaga para no dibujar dos anillos.
+    private const string DosFilas = """
+        <Button x:Name="F" Theme="{StaticResource V2TemaFilaPanel}">
+            <TextBlock Text="Reparar bache en Av. 18 de Julio" Height="19" />
+        </Button>
+        <Button x:Name="G" Theme="{StaticResource V2TemaFilaPanel}">
+            <TextBlock Text="Retirar poda zona Rambla" Height="19" />
+        </Button>
+        """;
+
+    [AvaloniaFact]
+    public void Fila_ConFocoDeTeclado_MuestraElAnilloDeAcentoSinMoverElContenido()
+    {
+        var ventana = Montar(DosFilas);
+        try
+        {
+            var fila = Buscar<Button>(ventana, "F");
+            var contenidoAntes = Parte<ContentPresenter>(fila, "PART_Contenido").Bounds;
+            var anillo = Parte<Border>(fila, "PART_Foco");
+            Assert.False(anillo.IsVisible);
+
+            ventana.KeyPressQwerty(PhysicalKey.Tab, RawInputModifiers.None);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.True(fila.IsFocused);
+            Assert.True(anillo.IsVisible);
+            Assert.Equal(new Thickness(1), anillo.BorderThickness);
+            Assert.Equal(Hex("#1D4ED8"), ColorDe(anillo.BorderBrush));
+            Assert.Equal(Parte<Border>(fila, "PART_Fila").Bounds.Size, anillo.Bounds.Size);
+            Assert.Equal(contenidoAntes, Parte<ContentPresenter>(fila, "PART_Contenido").Bounds);
+            Assert.Empty(AdornerLayer.GetAdornerLayer(fila)!.Children);
+
+            ventana.KeyPressQwerty(PhysicalKey.Tab, RawInputModifiers.None);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.True(Buscar<Button>(ventana, "G").IsFocused);
+            Assert.False(anillo.IsVisible);
+            Assert.True(Parte<Border>(Buscar<Button>(ventana, "G"), "PART_Foco").IsVisible);
+        }
+        finally
+        {
+            ventana.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public void Fila_ConFocoPorClick_NoMuestraElAnillo()
+    {
+        var ventana = Montar(Fila);
+        try
+        {
+            var fila = Buscar<Button>(ventana, "F");
+
+            Clic(ventana, fila);
+
+            Assert.True(fila.IsFocused);
+            Assert.False(Parte<Border>(fila, "PART_Foco").IsVisible);
+        }
+        finally
+        {
+            ventana.Close();
+        }
     }
 }

@@ -416,17 +416,28 @@
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="HorizontalAlignment" Value="Stretch" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <!-- Foco de teclado con el lenguaje v2 (borde de acento de 1 px, como TextBox y ComboBox :focus) en
+             PART_Foco; sin el FocusAdorner de Fluent no hay dos anillos. -->
+        <Setter Property="FocusAdorner" Value="{x:Null}" />
         <Setter Property="Template">
             <ControlTemplate>
-                <Border x:Name="PART_Fila"
-                        BorderBrush="{DynamicResource V2SeparadorGrillaBrush}"
-                        BorderThickness="0,1,0,0"
-                        Padding="0,8">
-                    <ContentPresenter x:Name="PART_Contenido"
-                                      Content="{TemplateBinding Content}"
-                                      ContentTemplate="{TemplateBinding ContentTemplate}"
-                                      HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}" />
-                </Border>
+                <Panel>
+                    <Border x:Name="PART_Fila"
+                            BorderBrush="{DynamicResource V2SeparadorGrillaBrush}"
+                            BorderThickness="0,1,0,0"
+                            Padding="0,8">
+                        <ContentPresenter x:Name="PART_Contenido"
+                                          Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}" />
+                    </Border>
+                    <!-- Encima del marco y sin ocupar lugar: el anillo no mueve el contenido. -->
+                    <Border x:Name="PART_Foco"
+                            BorderBrush="{DynamicResource V2AcentoBrush}"
+                            BorderThickness="1"
+                            IsHitTestVisible="False"
+                            IsVisible="False" />
+                </Panel>
             </ControlTemplate>
         </Setter>
 
@@ -435,6 +446,9 @@
         </Style>
         <Style Selector="^:pointerover /template/ Border#PART_Fila">
             <Setter Property="Background" Value="{DynamicResource V2HoverNeutroBrush}" />
+        </Style>
+        <Style Selector="^:focus-visible /template/ Border#PART_Foco">
+            <Setter Property="IsVisible" Value="True" />
         </Style>
     </ControlTheme>
 
