@@ -60,8 +60,8 @@ public class AccesoComparacionTests
         ComparacionVisual.CompararConMockup(new ResetAdminView(), DatosAcceso.Reset(), "acceso/reset.html",
             tamano: TamanoLienzo.Municipio);
 
-    // Deuda de la Fase 1: el Margin 0,1,0,0 de la card del Reset depende de la paridad de su alto; estos dos
-    // estados la cambian (o no) al mostrar una alerta.
+    // Deuda de la Fase 1: el Margin 0,1,0,0 de la card del Reset es necesario con alto impar, y la card es impar
+    // en los tres estados. Con estas alturas de ventana no mueve nada en los estados con alerta: solo lo custodia Reset_IgualAlMockup.
     [AvaloniaFact]
     public void ResetCompletado_IgualAlMockup() =>
         ComparacionVisual.CompararConMockup(new ResetAdminView(), DatosAcceso.Reset(completado: true), "acceso/reset-completado.html");
