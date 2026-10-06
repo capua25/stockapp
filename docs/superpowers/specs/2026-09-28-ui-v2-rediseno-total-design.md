@@ -1,7 +1,7 @@
 # StockApp — UI v2: rediseño total de la interfaz
 
 **Fecha:** 2026-09-28
-**Estado:** aprobado por el usuario; Fase 0 y Fase 1 implementadas en feat/ui-v2; Fase 1 APROBADA por el usuario el 2026-10-05 (merge a main al final de todas las fases)
+**Estado:** aprobado por el usuario; Fases 0, 1 y 2 implementadas en feat/ui-v2; Fase 1 APROBADA por el usuario el 2026-10-05; Fase 2 APROBADA por el usuario el 2026-10-06 (merge a main al final de todas las fases)
 **Rama:** `feat/ui-v2` (worktree propio)
 **Alcance:** todas las vistas de `src/StockApp.Presentation/` (shell, ~55 de contenido, pantallas fuera del shell, 4 diálogos, 3 overlays de actualización)
 **Mockups de referencia:** `docs/ui-v2/mockups/referencia/` — `direccion-visual-aprobada.html` (variante `.di-azul`), `navegacion-aprobada.html` (opción A), `patrones-1.html`
@@ -369,6 +369,13 @@ Ciclo de cada fase: mockups de sus pantallas → aprobación del usuario → XAM
 - Con dos alertas a la vez (backup vencido y facturas vencidas, Administrador) Inicio necesita scroll y se acepta: 28 px a 1280×760 y 20 px a 1366×768 con el tope de 4 filas. Lo fija `InicioViewV2Tests.ConDosAlertasYSieteTareas_ElScrollNoPasaDelLimiteYLosAccesosSeAlcanzan`; si el contenido crece, da rojo.
 - Foco de teclado de la fila de panel (`V2TemaFilaPanel`): borde de acento de 1 px (`PART_Foco`, `:focus-visible`), como TextBox y ComboBox con foco, sin el FocusAdorner de Fluent. Aprobado sobre capturas headless.
 - El sidebar marca la sección de la pantalla mostrada por cualquier camino (sidebar, accesos y filas de Inicio, login, Entrada/Salida → Historial, Control POA → Gastos): la deriva `ShellMainViewModel` de la navegación real; una pantalla sin ítem propio conserva la sección.
+
+**Estado de la Fase 2 (aprobada el 2026-10-06).** El usuario aprobó la Fase 2 (Inicio y deuda menor de la Fase 1) tras probar en la app real: operador sin finanzas (`f2sinfin`), Reset con token inválido, cerrar sesión y tamaño por defecto ("esta bien"). Arreglo surgido de la prueba: "Guardar permisos" alcanzable a 1366×768 con scroll en el panel (`c145c11`, main; mergeado a feat/ui-v2 en `5f3bf8c`). Las decisiones del usuario están arriba.
+
+**Deuda abierta tras la Fase 2:**
+- `EsAdmin` de Importación sin guardián propio mientras `ImportacionHabilitada=false` (Fase 8).
+- `capturar.sh` no es fail-closed con WSLg caído: devolvió exit 0 capturando ventanas del escritorio del usuario. Fuera de alcance de esta fase.
+- Minors diferidos del ledger sin cerrar: `TextoAVencer7Dias` sigue en el VM de Inicio (borrar en Fase 9); en OperadorMixto una sola insignia "Vencida" pálida no se detecta (límite de la métrica); umbrales de Inicio sin margen (un cambio de rasterizador los pone en rojo, intencional); `Mensaje_IgualAlMockup_1366x768` sin margen (11 de 11, tono); pulgar del sidebar a re-medir en las Fases 6 y 7; `ContextMenu`/`MenuFlyout` sin corte de la herencia del centrado (hoy no se usan); lista `DialogosV2` manual en `GuardianDePatronTests`; `CargarAsync` de Inicio sin cancelación (preexistente).
 
 **Deuda menor de la Fase 1 (no bloquea):**
 - Sin guardián propio de `EsAdmin` en Importación (hoy lo tapa `ImportacionHabilitada=false`); resolver al reactivarla (Fase 8).
