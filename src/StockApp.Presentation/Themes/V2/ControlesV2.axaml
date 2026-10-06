@@ -112,9 +112,19 @@
              hacia arriba y Chromium centra el texto con su ancho fraccionario; con TextAlignment Center el
              glifo cae en la misma fracción (antes quedaba hasta 0,45 px a la izquierda). Un botón estirado
              necesita además HorizontalContentAlignment Stretch. Es heredable: lo recibe todo TextBlock
-             descendiente del botón, también el de su ToolTip o Flyout. -->
+             descendiente del botón; al ToolTip y al Flyout se lo cortan los estilos de abajo. -->
         <Setter Property="TextBlock.TextAlignment" Value="Center" />
         <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <!-- El TextAlignment Center de arriba se hereda también al ToolTip y al Flyout de un botón v2 (el tooltip
+         estándar de bloqueo del guardado salía envuelto y centrado). Start es el default: estos estilos cortan
+         la herencia sin cambiar nada en el resto de la app. Van sin .ui2 porque el popup no cuelga de .ui2. -->
+    <Style Selector="ToolTip">
+        <Setter Property="TextBlock.TextAlignment" Value="Start" />
+    </Style>
+    <Style Selector="FlyoutPresenter">
+        <Setter Property="TextBlock.TextAlignment" Value="Start" />
     </Style>
 
     <Style Selector=".ui2 Button.primario">

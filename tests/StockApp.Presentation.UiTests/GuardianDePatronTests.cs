@@ -406,6 +406,48 @@ public class GuardianDePatronTests
         Assert.Equal(Avalonia.Media.TextAlignment.Center, texto.TextAlignment);
     }
 
+    /// <summary>
+    /// El TextAlignment Center del estilo de botones v2 es heredable y llegaba al ToolTip y al Flyout del botón (el
+    /// tooltip estándar de bloqueo del guardado salía envuelto y centrado). ControlesV2.axaml lo corta con estilos
+    /// ToolTip y FlyoutPresenter en Start; esto lo custodia con los popups abiertos.
+    /// </summary>
+    [AvaloniaFact]
+    public void BotonV2_ToolTipYFlyoutNoHeredanElCentrado()
+    {
+        var textoTip = new TextBlock { Text = "Corregí los campos marcados en rojo para continuar.", TextWrapping = Avalonia.Media.TextWrapping.Wrap };
+        var textoFlyout = new TextBlock { Text = "Texto de un flyout de varias palabras", TextWrapping = Avalonia.Media.TextWrapping.Wrap };
+        var flyout = new Flyout { Content = textoFlyout };
+        var boton = new Button { Content = "Guardar", Flyout = flyout };
+        boton.Classes.Add("primario");
+        ToolTip.SetTip(boton, textoTip);
+        var raiz = new StackPanel { Children = { boton } };
+        raiz.Classes.Add("ui2");
+        var window = new Window { Width = 600, Height = 400, Content = raiz };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        try
+        {
+            ToolTip.SetIsOpen(boton, true);
+            Dispatcher.UIThread.RunJobs();
+            flyout.ShowAt(boton);
+            Dispatcher.UIThread.RunJobs();
+
+            var textoDelBoton = boton.GetVisualDescendants().OfType<TextBlock>().Single();
+            Assert.Equal(Avalonia.Media.TextAlignment.Center, textoDelBoton.TextAlignment);
+            Assert.NotNull(TopLevel.GetTopLevel(textoTip));
+            Assert.Equal(Avalonia.Media.TextAlignment.Start, textoTip.TextAlignment);
+            Assert.NotNull(TopLevel.GetTopLevel(textoFlyout));
+            Assert.Equal(Avalonia.Media.TextAlignment.Start, textoFlyout.TextAlignment);
+        }
+        finally
+        {
+            flyout.Hide();
+            ToolTip.SetIsOpen(boton, false);
+            window.Close();
+        }
+    }
+
     private const string XamlFixtureOpacidades = """
         <Window xmlns="https://github.com/avaloniaui"
                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
