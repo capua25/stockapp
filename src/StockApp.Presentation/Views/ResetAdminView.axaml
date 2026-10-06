@@ -25,14 +25,15 @@
                 <!-- Textos centrados con TextAlignment y no HorizontalAlignment (spec 6.5). -->
                 <TextBlock Classes="titulo-login" Text="Recuperar acceso de Admin" TextAlignment="Center" />
 
-                <!-- La etiqueta va en un TextBlock con TextAlignment Center y el botón estirado: como
-                     Content de tipo string, Avalonia redondea el origen del texto centrado y esta etiqueta
-                     larga en negrita pasaba de 16 a 3 teselas densas al corregirlo. -->
+                <!-- Botón estirado: HorizontalContentAlignment Stretch y el texto lo centra el TextAlignment
+                     heredado del estilo de botones (spec 6.5). Con el contenido centrado, Avalonia redondeaba
+                     el origen del texto y esta etiqueta larga en negrita pasaba de 16 a 3 teselas densas al
+                     corregirlo. -->
                 <Button Classes="secundario"
                         Command="{Binding PedirDesafioCommand}"
                         HorizontalAlignment="Stretch"
                         HorizontalContentAlignment="Stretch">
-                    <TextBlock Text="1) Generar código de recuperación" TextAlignment="Center" />
+                    <TextBlock Text="1) Generar código de recuperación" />
                 </Button>
 
                 <v2:CampoFormulario Etiqueta="Código de máquina">

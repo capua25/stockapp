@@ -362,6 +362,50 @@ public class GuardianDePatronTests
             + string.Join(", ", literales.Select(c => c.GetType().Name)));
     }
 
+    private static readonly string[] ClasesDeBotonV2 = { "primario", "secundario", "ghost", "peligro" };
+
+    /// <summary>
+    /// Compensación de spec 6.5: el estilo de los botones v2 centra el texto con TextAlignment, y un botón estirado
+    /// tiene que estirar también su contenido; con el contenido centrado por HorizontalContentAlignment el origen del
+    /// texto se redondea y queda corrido respecto del mockup (medido: hasta 0,8 px, y el Reset con error llegaba al
+    /// máximo de teselas). No se pone en el estilo común porque con contenido no textual (ícono, ícono y texto)
+    /// estirarlo lo alinea a la izquierda. Los diálogos son Window y no entran en VistasV2Montables; hoy no tienen
+    /// botones estirados. El sidebar del shell (lo que solo existe con ViewModel) tampoco: no tiene botones v2 estirados.
+    /// </summary>
+    [AvaloniaTheory]
+    [MemberData(nameof(VistasV2Montables))]
+    public void VistaV2_BotonEstiradoEstiraSuContenido(Type tipoVista)
+    {
+        var vista = PatronHelpers.Montar(tipoVista);
+
+        var sinEstirar = vista.GetVisualDescendants().OfType<Button>()
+            .Where(b => ClasesDeBotonV2.Any(b.Classes.Contains))
+            .Where(b => b.HorizontalAlignment == Avalonia.Layout.HorizontalAlignment.Stretch)
+            .Where(b => b.HorizontalContentAlignment != Avalonia.Layout.HorizontalAlignment.Stretch)
+            .Select(b => b.Name ?? b.Content?.ToString() ?? "(sin nombre)")
+            .ToList();
+
+        Assert.True(sinEstirar.Count == 0,
+            $"{tipoVista.Name} tiene botón(es) v2 estirado(s) sin HorizontalContentAlignment=\"Stretch\": "
+            + string.Join(", ", sinEstirar));
+    }
+
+    /// <summary>
+    /// Custodia el Setter TextBlock.TextAlignment=Center del estilo común de botones v2 (spec 6.5): el TextBlock que
+    /// el ContentPresenter crea para un Content string tiene que centrar el texto, como lo centra Chromium.
+    /// </summary>
+    [AvaloniaFact]
+    public void EstiloBotonV2_CentraElTextoConTextAlignment()
+    {
+        var vista = PatronHelpers.Montar(typeof(LoginView));
+        var entrar = vista.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "BotonEntrar");
+
+        var texto = entrar.GetVisualDescendants().OfType<TextBlock>().Single();
+
+        Assert.Equal("Entrar", texto.Text);
+        Assert.Equal(Avalonia.Media.TextAlignment.Center, texto.TextAlignment);
+    }
+
     private const string XamlFixtureOpacidades = """
         <Window xmlns="https://github.com/avaloniaui"
                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
