@@ -294,4 +294,66 @@ public class GuardianTextoRecortadoTests
 
         Assert.Empty(recortes);
     }
+
+    [AvaloniaFact]
+    public void TextBoxMultilineaDeAltoFijoConValorLargo_NoSeReporta()
+    {
+        // Deuda de la Fase 1: un TextBox multilínea SÍ se lee scrolleando en vertical (motivo de anulación,
+        // token del Reset). Su ScrollViewer relaja el eje vertical; el valor que no entra no es un recorte.
+        var valor = string.Join("\n", Enumerable.Range(1, 12).Select(i => $"Línea {i} del motivo"));
+
+        Assert.Empty(Renderizar(new TextBox
+        {
+            Width = 240, Height = 88, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Text = valor,
+        }));
+    }
+
+    [AvaloniaFact]
+    public void TextBoxMultilineaSinWrapConUnaLineaMasAnchaQueElControl_SeReporta()
+    {
+        // El eje horizontal NO se relaja: sin wrap, la línea larga queda cortada a la derecha y nadie la lee.
+        var recortes = Renderizar(new TextBox
+        {
+            Width = 120, Height = 88, AcceptsReturn = true, TextWrapping = TextWrapping.NoWrap, Text = Largo,
+        });
+
+        Assert.Contains(recortes, r => r.Contains(Largo));
+    }
+
+    [AvaloniaFact]
+    public void TextBoxMultilineaQueSeSaleDeLaVentana_SeReporta()
+    {
+        // Relajar el eje vertical no exime a la caja del TextBox: si ella misma cae fuera de la ventana, se reporta.
+        var valor = string.Join("\n", Enumerable.Range(1, 80).Select(i => $"Línea {i}"));
+        var recortes = Renderizar(new TextBox
+        {
+            Width = 240, Height = 1000, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Text = valor,
+        });
+
+        Assert.Contains(recortes, r => r.Contains("la ventana"));
+    }
+
+    [AvaloniaFact]
+    public void GrillaQueSeSaleDeLaVentanaSinAncestrosQueRecorten_LaReportaLaVentana()
+    {
+        // Deuda de la Fase 1: GrillaMasAltaQueLaVentanaSinScrollViewer_SeReporta la reporta el UserControl
+        // raíz (ClipToBounds), así que el último chequeo, contra la ventana, nunca corría desde el
+        // presentador de filas. Con una raíz que no recorta (un Panel) lo decide ese chequeo.
+        var grilla = new DataGrid
+        {
+            Height = 1000,
+            Width = 300,
+            AutoGenerateColumns = false,
+            Columns = { Columna(150) },
+            ItemsSource = Enumerable.Range(0, 40).Select(_ => new Fila("A-001")).ToList(),
+        };
+        var vista = new StackPanel { Classes = { "ui2" }, HorizontalAlignment = HorizontalAlignment.Left, Children = { grilla } };
+        IReadOnlyList<string> recortes = [];
+        RenderizadorVista.RenderizarAPng(vista, null,
+            Path.Combine(Directory.CreateTempSubdirectory("guardian-ventana-").FullName, "vista.png"),
+            v => recortes = GuardianTextoRecortado.Buscar(v));
+
+        Assert.NotEmpty(recortes);
+        Assert.All(recortes, r => Assert.EndsWith("queda fuera de la ventana", r));
+    }
 }

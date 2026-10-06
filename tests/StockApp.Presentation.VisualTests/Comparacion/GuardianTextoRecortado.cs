@@ -25,8 +25,8 @@ namespace StockApp.Presentation.VisualTests.Comparacion;
 /// sigue alcanzable, pero desde ahí hacia afuera se controla la caja del viewport, que sí tiene que
 /// verse entera. Lo mismo el DataGrid, que scrollea sin ScrollViewer: desde su presentador de
 /// filas o de headers hacia afuera.</item>
-/// <item>Valor de un TextBox: el TextPresenter mide su TextLayout; el ScrollViewer interno del
-/// TextBox no relaja ejes.</item>
+/// <item>Valor de un TextBox: el TextPresenter mide su TextLayout; el ScrollViewer interno de un TextBox
+/// de una línea no relaja ejes; el de uno multilínea (AcceptsReturn o con wrap) relaja solo el vertical.</item>
 /// </list>
 /// TextTrimming NO exime: un texto con "..." que efectivamente recorta se reporta, salvo que el
 /// test lo permita por su texto (alineado con un mockup que use text-overflow: ellipsis).
@@ -178,10 +178,17 @@ public static class GuardianTextoRecortado
     // Ejes en que este ancestro es un viewport que el usuario scrollea.
     private static (bool Horizontal, bool Vertical) EjesDesplazables(Visual ancestro)
     {
-        if (ancestro is ScrollContentPresenter { TemplatedParent: ScrollViewer scroll }
-            && scroll.TemplatedParent is not TextBox)
+        if (ancestro is ScrollContentPresenter { TemplatedParent: ScrollViewer scroll })
         {
-            // El ScrollViewer de un TextBox sigue al cursor, no se usa para leer el valor (Task 1).
+            if (scroll.TemplatedParent is TextBox caja)
+            {
+                // Un TextBox de una línea sigue al cursor: nadie lo scrollea para leer el valor (Fase 1,
+                // Task 1). Uno multilínea sí se lee scrolleando en vertical (deuda de la Fase 1, Fase 2
+                // Task 1); en horizontal sigue sin relajarse.
+                var multilinea = caja.AcceptsReturn || caja.TextWrapping != TextWrapping.NoWrap;
+                return (false, multilinea && scroll.VerticalScrollBarVisibility != ScrollBarVisibility.Disabled);
+            }
+
             return (scroll.HorizontalScrollBarVisibility != ScrollBarVisibility.Disabled,
                     scroll.VerticalScrollBarVisibility != ScrollBarVisibility.Disabled);
         }

@@ -110,7 +110,7 @@ pide más lugar del que tiene, o cae fuera de un ancestro con `ClipToBounds` o d
 glifo que falta no supera el ruido de píxeles). El mensaje lista cada texto. El viewport de un
 `ScrollViewer` no cuenta en el eje en que se puede scrollear, y lo mismo el `DataGrid` (la última
 fila parcial o una columna fuera de vista no se reportan; una celda angosta con texto largo sí). `TextTrimming` no exime: si el
-mockup usa `text-overflow: ellipsis`, el test declara esos textos en `recortesPermitidos`. También mira el valor y el placeholder de los `TextBox` (incluidos los internos de `NumericUpDown`, `CalendarDatePicker` y `ComboBox` editable), los `TextBlock` con `Inlines` y los cortados por `MaxLines`.
+mockup usa `text-overflow: ellipsis`, el test declara esos textos en `recortesPermitidos`. También mira el valor y el placeholder de los `TextBox` (incluidos los internos de `NumericUpDown`, `CalendarDatePicker` y `ComboBox` editable), los `TextBlock` con `Inlines` y los cortados por `MaxLines`. Un `TextBox` multilínea relaja el eje vertical (se lee scrolleando); ya no hace falta `recortesPermitidos` para un motivo largo en un campo de alto fijo.
 
 Diferencia de tono aceptada: el texto de la app sale entre 7% y 18% más claro que en el mockup
 (rasterización de Skia frente a Chromium) con la geometría idéntica. El usuario la aceptó el
