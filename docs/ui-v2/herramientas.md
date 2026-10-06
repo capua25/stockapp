@@ -145,3 +145,6 @@ El mockup es el área cliente (sin barra de título) con el ancho del `Window`, 
 - Headers de `DataGridColumn` en MAYÚSCULAS (spec §2.3): Avalonia no tiene `text-transform`, así que
   el `Header` de cada columna se escribe ya en mayúsculas a mano (en el mockup, `--v2-*-transformacion:
   uppercase` sí lo hace vía CSS).
+- Gates y ubicación de `ui2` se custodian en `StockApp.Presentation.UiTests` con la View real, no con la
+  comparación de píxeles: un header de sección o un `ui2` mal ubicado pueden no cambiar ningún píxel del
+  estado comparado.
