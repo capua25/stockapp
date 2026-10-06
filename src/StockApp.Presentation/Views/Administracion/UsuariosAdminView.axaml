@@ -67,6 +67,11 @@
             <Border Grid.Column="1"
                     Classes="card"
                     IsEnabled="{Binding UsuarioSeleccionado, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <!-- Bugfix 1366x768: el panel de permisos mide mas que el alto util y la
+                     tarjeta lo desbordaba sin scroll, dejando Guardar permisos inalcanzable.
+                     El ScrollViewer va DENTRO de la tarjeta (local a esta vista): el area de
+                     contenido del shell no scrollea y las vistas con grilla propia no cambian. -->
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel Spacing="{DynamicResource Espacio3}">
                     <TextBlock Text="{Binding UsuarioSeleccionado.NombreUsuario}" Classes="seccion" />
 
@@ -155,6 +160,7 @@
                         </StackPanel>
                     </Border>
                 </StackPanel>
+                </ScrollViewer>
             </Border>
         </Grid>
     </DockPanel>
