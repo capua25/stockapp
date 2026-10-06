@@ -278,3 +278,11 @@ body {
 }
 .v2-usuario { flex: 1 1 0; min-width: 0; }
 .v2-sidebar > .v2-version { padding: 4px 4px 0; }
+
+/* GrillaUniformeV2 (Controls/V2/GrillaUniformeV2): cada página fija grid-template-columns:
+   repeat(N, minmax(0, 1fr)) y el gap. Chromium redondea cada borde de celda por separado; la grilla
+   de Avalonia hace lo mismo. Cada fila mide lo que su ítem más alto. */
+.v2-grilla-uniforme { display: grid; grid-auto-rows: auto; align-items: stretch; }
+
+/* Fila clickeable de panel (ComponentesV2.axaml, V2TemaFilaPanel): separador arriba, padding 8 vertical. */
+.v2-fila-panel { display: flex; align-items: center; padding: 8px 0; border-top: 1px solid var(--v2-color-separador-grilla); }

@@ -148,3 +148,8 @@ El mockup es el área cliente (sin barra de título) con el ancho del `Window`, 
 - Gates y ubicación de `ui2` se custodian en `StockApp.Presentation.UiTests` con la View real, no con la
   comparación de píxeles: un header de sección de más agrega píxeles pero queda
   bajo el umbral calibrado, y un `ui2` mal ubicado puede no cambiar ningún píxel del estado comparado.
+- Tarjetas en columnas iguales: `GrillaUniformeV2` (y `.v2-grilla-uniforme` en `base.css`), nunca
+  `UniformGrid`: `UniformGrid` redondea el ANCHO de la celda y acumula el error (a 1366 la tercera
+  tarjeta se corre 1 px y se pasa 1 px del borde); `GrillaUniformeV2` redondea cada borde por separado,
+  como el pixel snapping de Chromium, y salta los hijos invisibles (gates).
+- Fila clickeable de panel: `V2TemaFilaPanel` (`Theme` de `Button`), con su espejo `.v2-fila-panel`.

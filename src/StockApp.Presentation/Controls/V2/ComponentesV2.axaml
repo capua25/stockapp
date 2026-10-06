@@ -407,4 +407,35 @@
         </Style>
     </ControlTheme>
 
+    <!-- Fila clickeable de un panel (Inicio, "Tareas que requieren atención"). Espejo CSS: .v2-fila-panel.
+         Separador de grilla arriba, padding vertical 8. Plantilla propia y fondo en una parte: el estilo global
+         de Button (Themes/Controls.axaml) setea Background, Padding y :pointerover sobre el control, que esta
+         plantilla no usa. El presentador NO se llama PART_ContentPresenter para que ningún estilo de Fluent ni
+         global lo alcance. -->
+    <ControlTheme x:Key="V2TemaFilaPanel" TargetType="Button">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="HorizontalAlignment" Value="Stretch" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border x:Name="PART_Fila"
+                        BorderBrush="{DynamicResource V2SeparadorGrillaBrush}"
+                        BorderThickness="0,1,0,0"
+                        Padding="0,8">
+                    <ContentPresenter x:Name="PART_Contenido"
+                                      Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}"
+                                      HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+
+        <Style Selector="^ /template/ Border#PART_Fila">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="^:pointerover /template/ Border#PART_Fila">
+            <Setter Property="Background" Value="{DynamicResource V2HoverNeutroBrush}" />
+        </Style>
+    </ControlTheme>
+
 </ResourceDictionary>
