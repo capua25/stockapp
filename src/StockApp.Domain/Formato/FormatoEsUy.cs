@@ -56,6 +56,21 @@ public static partial class FormatoEsUy
     /// <summary>Número con 2 decimales fijos y miles, sin símbolo: 26400m → "26.400,00".</summary>
     public static string Decimal(decimal valor) => valor.ToString("N2", Formato);
 
+    private static readonly string[] DiasSemana = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
+
+    private static readonly string[] Meses =
+        ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "setiembre", "octubre", "noviembre", "diciembre"];
+
+    /// <summary>
+    /// Fecha larga en castellano, sin depender de ICU ni de la cultura del hilo: 2026-10-06 → "martes 6 de
+    /// octubre de 2026" (subtítulo de Inicio). "setiembre" es la forma usual en Uruguay.
+    /// </summary>
+    public static string FechaLarga(DateOnly fecha) =>
+        $"{DiasSemana[(int)fecha.DayOfWeek]} {fecha.Day} de {Meses[fecha.Month - 1]} de {fecha.Year}";
+
+    /// <summary>Fecha y hora de 24 h, invariante: 2026-10-04 14:32 → "04/10/2026 14:32".</summary>
+    public static string FechaHora(DateTime fecha) => fecha.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture);
+
     /// <summary>
     /// Parseo SEGURO de un número tipeado en es-UY. A diferencia de <c>NumberStyles.Number</c>
     /// con una cultura es-*, que es laxo con los grupos de miles ("5.4" → 54, "1.5" → 15, sin

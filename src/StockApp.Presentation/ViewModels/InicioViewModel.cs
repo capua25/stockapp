@@ -1,6 +1,5 @@
 using System;
 using System.Collections.ObjectModel;
-using System.Globalization;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -11,7 +10,7 @@ using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
 using StockApp.Application.Tareas;
 using StockApp.Domain.Enums;
-using StockApp.Presentation.Converters;
+using StockApp.Domain.Formato;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Catalogo;
@@ -36,6 +35,7 @@ public partial class InicioViewModel : ViewModelBase
     private readonly IBackupsService        _backups;
     private readonly ITareaService          _tareas;
     private readonly IAuthService           _authService;
+    private readonly TimeProvider           _reloj;
 
     /// <summary>
     /// Task del refresco de permisos disparado por <see cref="CargarAsync"/> (review Ronda 1,
@@ -116,14 +116,37 @@ public partial class InicioViewModel : ViewModelBase
     public bool PuedeVerTareas =>
         _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.GestionarTareas);
 
+    /// <summary>Subtítulo de Inicio v2 (spec §5.3, "saludo y fecha"): fecha de hoy según el reloj y rol.</summary>
+    public string Subtitulo =>
+        $"{FormatoEsUy.FechaLarga(DateOnly.FromDateTime(_reloj.GetLocalNow().DateTime))} · Sesión iniciada como {RolTexto}";
+
+    /// <summary>
+    /// Fila de TarjetaMetrica de Inicio v2: visible si al menos una métrica cumple su gate (spec §5.3). Se
+    /// deriva de los mismos Puede*/EsAdmin que cada tarjeta, igual que PuedeVerAccesosRapidos.
+    /// </summary>
+    public bool MostrarFilaMetricas => PuedeVerCalendarioPagos || PuedeVerTareas || EsAdmin;
+
+    // Métricas de Inicio v2. "SinDato" arranca en true: hasta que la consulta termina bien la tarjeta muestra
+    // "—", nunca un 0 que afirme algo.
+    [ObservableProperty] private bool _facturasAVencerSinDato = true;
+    [ObservableProperty] private bool _tareasVencidasSinDato = true;
+    [ObservableProperty] private bool _ultimoBackupSinDato = true;
+    [ObservableProperty] private string? _valorUltimoBackup;
+
+    public string ValorFacturasAVencer => FormatoEsUy.Cantidad(CantidadAVencer7Dias);
+    public string ValorTareasVencidas => FormatoEsUy.Cantidad(CantidadTareasVencidas);
+    public bool HayFacturasVencidas => CantidadVencidas > 0;
+
     [ObservableProperty] private bool _mostrarAvisoVencimientos;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(TextoVencidas))]
+    [NotifyPropertyChangedFor(nameof(HayFacturasVencidas))]
     private int _cantidadVencidas;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(TextoAVencer7Dias))]
+    [NotifyPropertyChangedFor(nameof(ValorFacturasAVencer))]
     private int _cantidadAVencer7Dias;
 
     public string TextoVencidas =>
@@ -167,6 +190,7 @@ public partial class InicioViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(MostrarPanelTareas))]
     [NotifyPropertyChangedFor(nameof(MostrarSeccionTareasVencidas))]
     [NotifyPropertyChangedFor(nameof(TituloVencidas))]
+    [NotifyPropertyChangedFor(nameof(ValorTareasVencidas))]
     private int _cantidadTareasVencidas;
 
     [ObservableProperty]
@@ -187,10 +211,14 @@ public partial class InicioViewModel : ViewModelBase
     public string TituloVencidas => $"VENCIDAS ({CantidadTareasVencidas})";
     public string TituloProximasAVencer => $"PRÓXIMAS A VENCER ({CantidadTareasProximasAVencer})";
 
+    /// <param name="reloj">
+    /// Fecha del subtítulo, días de las tareas y hora del último backup; null = TimeProvider.System, que es
+    /// lo que usa la DI.
+    /// </param>
     public InicioViewModel(
         ICurrentSession session, INavigationService navigation,
         IFinanzasVistasService finanzasVistas, IBackupsService backups, ITareaService tareas,
-        IAuthService authService)
+        IAuthService authService, TimeProvider? reloj = null)
     {
         _session        = session;
         _navigation     = navigation;
@@ -198,6 +226,7 @@ public partial class InicioViewModel : ViewModelBase
         _backups        = backups;
         _tareas         = tareas;
         _authService    = authService;
+        _reloj          = reloj ?? TimeProvider.System;
     }
 
     /// <summary>
@@ -230,15 +259,18 @@ public partial class InicioViewModel : ViewModelBase
                 CantidadVencidas = calendario.Vencidas.Count;
                 CantidadAVencer7Dias = calendario.AVencer7Dias.Count;
                 MostrarAvisoVencimientos = CantidadVencidas > 0 || CantidadAVencer7Dias > 0;
+                FacturasAVencerSinDato = false;
             }
             catch (Exception)
             {
                 MostrarAvisoVencimientos = false;
+                FacturasAVencerSinDato = true;
             }
         }
         else
         {
             MostrarAvisoVencimientos = false;
+            FacturasAVencerSinDato = true;
         }
 
         // Panel "Tareas que requieren atención" (spec 2026-08-06): try/catch propio, igual
@@ -254,7 +286,8 @@ public partial class InicioViewModel : ViewModelBase
                 var rol = _session.RolActual ?? RolUsuario.Operador;
                 var usuarioActualId = _session.UsuarioActual?.Id ?? 0;
 
-                var (vencidas, proximas) = PanelVencimientosTareas.Agrupar(tareas, rol, usuarioActualId);
+                var (vencidas, proximas) = PanelVencimientosTareas.Agrupar(
+                    tareas, rol, usuarioActualId, _reloj.GetUtcNow().UtcDateTime, _reloj.LocalTimeZone);
 
                 TareasVencidas.Clear();
                 foreach (var fila in vencidas) TareasVencidas.Add(fila);
@@ -264,6 +297,7 @@ public partial class InicioViewModel : ViewModelBase
 
                 CantidadTareasVencidas = TareasVencidas.Count;
                 CantidadTareasProximasAVencer = TareasProximasAVencer.Count;
+                TareasVencidasSinDato = false;
             }
             catch (Exception)
             {
@@ -271,6 +305,7 @@ public partial class InicioViewModel : ViewModelBase
                 TareasProximasAVencer.Clear();
                 CantidadTareasVencidas = 0;
                 CantidadTareasProximasAVencer = 0;
+                TareasVencidasSinDato = true;
             }
         }
         else
@@ -279,6 +314,7 @@ public partial class InicioViewModel : ViewModelBase
             TareasProximasAVencer.Clear();
             CantidadTareasVencidas = 0;
             CantidadTareasProximasAVencer = 0;
+            TareasVencidasSinDato = true;
         }
 
         if (!EsAdmin)
@@ -297,15 +333,19 @@ public partial class InicioViewModel : ViewModelBase
             // solo, sin quedar mintiendo en silencio (pre-flight scan, corregido).
             if (salud.UltimoExitoEn is DateTime ultimo)
             {
-                // Hora LOCAL, no UTC cruda: mismo patrón que MantenimientoView.axaml
-                // (FechaUtcALocalConverter) — un backup mostraba distinta hora según la pantalla.
-                var local = (DateTime)FechaUtcALocalConverter.Instance.Convert(
-                    ultimo, typeof(DateTime), null, CultureInfo.InvariantCulture)!;
+                // Hora LOCAL según el reloj (con TimeProvider.System es TimeZoneInfo.Local, el mismo criterio
+                // que FechaUtcALocalConverter de MantenimientoView: un backup no muestra distinta hora según la
+                // pantalla). Con un reloj fijo, la hora no depende de la máquina.
+                var local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(ultimo, DateTimeKind.Utc), _reloj.LocalTimeZone);
+                ValorUltimoBackup = FormatoEsUy.FechaHora(local);
+                UltimoBackupSinDato = false;
                 TextoAvisoBackup =
-                    $"El último backup exitoso fue el {local:dd/MM/yyyy HH:mm} (hace más de {salud.UmbralHoras} horas).";
+                    $"El último backup exitoso fue el {FormatoEsUy.FechaHora(local)} (hace más de {salud.UmbralHoras} horas).";
             }
             else
             {
+                ValorUltimoBackup = null;
+                UltimoBackupSinDato = true;
                 TextoAvisoBackup = "Todavía no se registró ningún backup exitoso.";
             }
         }
@@ -316,6 +356,8 @@ public partial class InicioViewModel : ViewModelBase
             // está vencido ni que está al día.
             MostrarAvisoBackup = true;
             AvisoBackupEsDesconocido = true;
+            ValorUltimoBackup = null;
+            UltimoBackupSinDato = true;
             TextoAvisoBackup = "No se pudo verificar el estado del backup.";
         }
     }
@@ -336,6 +378,10 @@ public partial class InicioViewModel : ViewModelBase
         OnPropertyChanged(nameof(PuedeRegistrarMovimientos));
         OnPropertyChanged(nameof(PuedeRegistrarEntradaSalida));
         OnPropertyChanged(nameof(PuedeVerAccesosRapidos));
+        // Gates de las métricas de Inicio v2: sin esto una métrica revocada en caliente sigue visible.
+        OnPropertyChanged(nameof(PuedeVerCalendarioPagos));
+        OnPropertyChanged(nameof(PuedeVerTareas));
+        OnPropertyChanged(nameof(MostrarFilaMetricas));
     }
 
     // ── accesos rápidos: comunes (Admin + Operador) ───────────────────────────

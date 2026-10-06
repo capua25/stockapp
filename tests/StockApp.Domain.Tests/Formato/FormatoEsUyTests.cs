@@ -210,4 +210,31 @@ public class FormatoEsUyTests
             Assert.Equal(valor.ToString("N2", icu), FormatoEsUy.Decimal(valor));
         }
     }
+
+    // ── Fechas (Fase 2 de la UI v2: subtítulo de Inicio y último backup) ──────
+
+    [Theory]
+    [InlineData(2026, 10, 6, "martes 6 de octubre de 2026")]
+    [InlineData(2026, 1, 1, "jueves 1 de enero de 2026")]
+    [InlineData(2030, 3, 15, "viernes 15 de marzo de 2030")]
+    [InlineData(2026, 10, 4, "domingo 4 de octubre de 2026")]
+    public void FechaLarga_NombresEnCastellanoEnMinuscula(int anio, int mes, int dia, string esperado) =>
+        Assert.Equal(esperado, FormatoEsUy.FechaLarga(new DateOnly(anio, mes, dia)));
+
+    [Fact]
+    public void FechaLargaYFechaHora_NoDependenDeLaCulturaDelHilo()
+    {
+        // en-US difiere de es-UY en nombres y en orden: si la salida dependiera de la cultura, cambiaría.
+        var anterior = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = new CultureInfo("en-US");
+        try
+        {
+            Assert.Equal("martes 6 de octubre de 2026", FormatoEsUy.FechaLarga(new DateOnly(2026, 10, 6)));
+            Assert.Equal("04/10/2026 14:32", FormatoEsUy.FechaHora(new DateTime(2026, 10, 4, 14, 32, 0)));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = anterior;
+        }
+    }
 }
