@@ -279,10 +279,26 @@ body {
 .v2-usuario { flex: 1 1 0; min-width: 0; }
 .v2-sidebar > .v2-version { padding: 4px 4px 0; }
 
-/* GrillaUniformeV2 (Controls/V2/GrillaUniformeV2): cada página fija grid-template-columns:
-   repeat(N, minmax(0, 1fr)) y el gap. Chromium redondea cada borde de celda por separado; la grilla
-   de Avalonia hace lo mismo. Cada fila mide lo que su ítem más alto. */
-.v2-grilla-uniforme { display: grid; grid-auto-rows: auto; align-items: stretch; }
+/* GrillaUniformeV2 (Controls/V2/GrillaUniformeV2): la grilla de Avalonia redondea cada borde de celda
+   por separado (bordes en round(k * celda) + k * espaciado, celda = (ancho - (N - 1) * espaciado) / N).
+   repeat(N, minmax(0, 1fr)) NO es su espejo: deja bordes en x fraccionaria y el texto de las columnas
+   interiores cae corrido 1/3 px (spec §6.5, compensación B). La receta es columnas de ancho entero
+   round(nearest, k * celda, 1px) - round(nearest, (k - 1) * celda, 1px), con la del medio absorbiendo
+   el resto (con N = 3 la última es round(celda): celda es múltiplo de 1/3 px y nunca empata en .5):
+   .v2-grilla-uniforme--2 y --3 la traen lista (Columnas="2"/"3", o 0 con 2/3 hijos visibles).
+   La página fija --v2-grilla-espaciado (Espaciado; 0 por defecto, como en Avalonia). Para otro N se
+   arma igual: N - 1 columnas round(...) restadas y una minmax(0, 1fr). Cada fila mide lo que su ítem
+   más alto. */
+.v2-grilla-uniforme {
+  --v2-grilla-espaciado: 0px;
+  --v2-grilla-celda: calc((100% - (var(--v2-grilla-columnas) - 1) * var(--v2-grilla-espaciado)) / var(--v2-grilla-columnas));
+  display: grid; grid-auto-rows: auto; align-items: stretch; gap: var(--v2-grilla-espaciado);
+}
+.v2-grilla-uniforme--2 { --v2-grilla-columnas: 2; grid-template-columns: round(nearest, var(--v2-grilla-celda), 1px) minmax(0, 1fr); }
+.v2-grilla-uniforme--3 {
+  --v2-grilla-columnas: 3;
+  grid-template-columns: round(nearest, var(--v2-grilla-celda), 1px) minmax(0, 1fr) round(nearest, var(--v2-grilla-celda), 1px);
+}
 
 /* Fila clickeable de panel (ComponentesV2.axaml, V2TemaFilaPanel): separador arriba, padding 8 vertical. */
 .v2-fila-panel { display: flex; align-items: center; padding: 8px 0; border-top: 1px solid var(--v2-color-separador-grilla); }

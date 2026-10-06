@@ -180,8 +180,13 @@ la zona de la máquina.
 - Gates y ubicación de `ui2` se custodian en `StockApp.Presentation.UiTests` con la View real, no con la
   comparación de píxeles: un header de sección de más agrega píxeles pero queda
   bajo el umbral calibrado, y un `ui2` mal ubicado puede no cambiar ningún píxel del estado comparado.
-- Tarjetas en columnas iguales: `GrillaUniformeV2` (y `.v2-grilla-uniforme` en `base.css`), nunca
-  `UniformGrid`: `UniformGrid` redondea el ANCHO de la celda y acumula el error (a 1366 la tercera
-  tarjeta se corre 1 px y se pasa 1 px del borde); `GrillaUniformeV2` redondea cada borde por separado,
-  como el pixel snapping de Chromium, y salta los hijos invisibles (gates).
+- Tarjetas en columnas iguales: `GrillaUniformeV2`, nunca `UniformGrid`: `UniformGrid` redondea el
+  ANCHO de la celda y acumula el error (a 1366 la tercera tarjeta se corre 1 px y se pasa 1 px del
+  borde); `GrillaUniformeV2` redondea cada borde por separado y salta los hijos invisibles (gates).
+  Espejo en el mockup: `class="v2-grilla-uniforme v2-grilla-uniforme--3"` (o `--2`) de `base.css` y
+  `--v2-grilla-espaciado` igual al `Espaciado` (`var(--v2-espacio-12)`). Esas clases ya traen la receta
+  correcta: columnas de ancho entero `round(nearest, k * celda, 1px) - round(nearest, (k - 1) * celda, 1px)`
+  y la del medio `minmax(0, 1fr)` (spec §6.5, compensación B). NO usar `repeat(N, minmax(0, 1fr))`:
+  deja los bordes interiores en x fraccionaria y el texto de esas columnas no coincide con la app.
+  Para otro N, armar la misma receta en una clase nueva de `base.css`.
 - Fila clickeable de panel: `V2TemaFilaPanel` (`Theme` de `Button`), con su espejo `.v2-fila-panel`.

@@ -8,10 +8,13 @@ namespace StockApp.Presentation.Controls.V2;
 
 /// <summary>
 /// N columnas iguales separadas por <see cref="Espaciado"/> (fila de métricas de Inicio, accesos rápidos,
-/// tarjetas del hub de Reportes). Espejo CSS: .v2-grilla-uniforme con grid-template-columns:
-/// repeat(N, minmax(0, 1fr)). Cada borde de celda se redondea por separado, como el pixel snapping de
-/// Chromium; UniformGrid redondea el ancho y acumula el error (Fase 2, decisiones de diseño). Los hijos
-/// invisibles no ocupan columna. Cada fila mide lo que su ítem más alto, como grid-auto-rows: auto.
+/// tarjetas del hub de Reportes). Cada borde de celda se redondea por separado; UniformGrid redondea el
+/// ancho y acumula el error (Fase 2, decisiones de diseño). Espejo CSS: .v2-grilla-uniforme más
+/// .v2-grilla-uniforme--2 / --3 de base.css (columnas de ancho entero round(nearest, k * celda, 1px)
+/// menos round(nearest, (k - 1) * celda, 1px), la del medio minmax(0, 1fr)), con --v2-grilla-espaciado
+/// igual a <see cref="Espaciado"/>. repeat(N, minmax(0, 1fr)) NO es el espejo: deja los bordes interiores
+/// en x fraccionaria (spec §6.5, compensación B). Los hijos invisibles no ocupan columna. Cada fila mide
+/// lo que su ítem más alto, como grid-auto-rows: auto.
 /// </summary>
 public class GrillaUniformeV2 : Panel
 {
