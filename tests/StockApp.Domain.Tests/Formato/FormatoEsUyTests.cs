@@ -218,8 +218,25 @@ public class FormatoEsUyTests
     [InlineData(2026, 1, 1, "jueves 1 de enero de 2026")]
     [InlineData(2030, 3, 15, "viernes 15 de marzo de 2030")]
     [InlineData(2026, 10, 4, "domingo 4 de octubre de 2026")]
+    // Los 12 meses ("setiembre", no "septiembre") y los 7 días, con tilde.
+    [InlineData(2026, 2, 2, "lunes 2 de febrero de 2026")]
+    [InlineData(2026, 4, 1, "miércoles 1 de abril de 2026")]
+    [InlineData(2026, 5, 2, "sábado 2 de mayo de 2026")]
+    [InlineData(2026, 6, 4, "jueves 4 de junio de 2026")]
+    [InlineData(2026, 7, 3, "viernes 3 de julio de 2026")]
+    [InlineData(2026, 8, 4, "martes 4 de agosto de 2026")]
+    [InlineData(2026, 9, 15, "martes 15 de setiembre de 2026")]
+    [InlineData(2026, 11, 1, "domingo 1 de noviembre de 2026")]
+    [InlineData(2026, 12, 25, "viernes 25 de diciembre de 2026")]
     public void FechaLarga_NombresEnCastellanoEnMinuscula(int anio, int mes, int dia, string esperado) =>
         Assert.Equal(esperado, FormatoEsUy.FechaLarga(new DateOnly(anio, mes, dia)));
+
+    [Theory]
+    [InlineData(2026, 10, 4, 9, 5, "04/10/2026 09:05")]
+    [InlineData(2026, 10, 4, 0, 0, "04/10/2026 00:00")]
+    [InlineData(2026, 10, 4, 14, 32, "04/10/2026 14:32")]
+    public void FechaHora_DosDigitosEnHoraYMinutos(int anio, int mes, int dia, int h, int m, string esperado) =>
+        Assert.Equal(esperado, FormatoEsUy.FechaHora(new DateTime(anio, mes, dia, h, m, 0)));
 
     [Fact]
     public void FechaLargaYFechaHora_NoDependenDeLaCulturaDelHilo()
@@ -230,6 +247,9 @@ public class FormatoEsUyTests
         try
         {
             Assert.Equal("martes 6 de octubre de 2026", FormatoEsUy.FechaLarga(new DateOnly(2026, 10, 6)));
+            Assert.Equal("04/10/2026 14:32", FormatoEsUy.FechaHora(new DateTime(2026, 10, 4, 14, 32, 0)));
+            // de-DE usa "." como separador de fecha: sin InvariantCulture la salida sería "04.10.2026 14:32".
+            CultureInfo.CurrentCulture = new CultureInfo("de-DE");
             Assert.Equal("04/10/2026 14:32", FormatoEsUy.FechaHora(new DateTime(2026, 10, 4, 14, 32, 0)));
         }
         finally

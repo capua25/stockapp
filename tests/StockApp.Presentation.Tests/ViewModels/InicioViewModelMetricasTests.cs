@@ -20,11 +20,15 @@ namespace StockApp.Presentation.Tests.ViewModels;
 /// </summary>
 public class InicioViewModelMetricasTests
 {
-    private sealed class RelojFijo(DateTimeOffset ahora) : TimeProvider
+    private sealed class RelojFijo(DateTimeOffset ahora, TimeZoneInfo? zona = null) : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => ahora;
-        public override TimeZoneInfo LocalTimeZone => TimeZoneInfo.Utc;
+        public override TimeZoneInfo LocalTimeZone => zona ?? TimeZoneInfo.Utc;
     }
+
+    // Montevideo: UTC-3 fijo, creado a mano para no depender de la base de zonas del SO.
+    private static readonly TimeZoneInfo Montevideo =
+        TimeZoneInfo.CreateCustomTimeZone("Montevideo-test", TimeSpan.FromHours(-3), "Montevideo", "Montevideo");
 
     // 2030: lejos del reloj real, así un VM que lea DateTime.UtcNow no puede coincidir por casualidad.
     private static readonly DateTimeOffset Ahora = new(2030, 3, 15, 13, 0, 0, TimeSpan.Zero);
@@ -51,7 +55,11 @@ public class InicioViewModelMetricasTests
         Mock<ICurrentSession> Sesion, Mock<IFinanzasVistasService> Finanzas, Mock<ITareaService> Tareas,
         Mock<IBackupsService> Backups, Mock<IAuthService> Auth);
 
-    private static (InicioViewModel Vm, Servicios S) Crear(UsuarioSesion usuario, params string[] permisos)
+    private static (InicioViewModel Vm, Servicios S) Crear(UsuarioSesion usuario, params string[] permisos) =>
+        CrearConReloj(new RelojFijo(Ahora), usuario, permisos);
+
+    private static (InicioViewModel Vm, Servicios S) CrearConReloj(
+        TimeProvider reloj, UsuarioSesion usuario, params string[] permisos)
     {
         var s = new Servicios(new(), new(), new(), new(), new());
         s.Sesion.Setup(x => x.UsuarioActual).Returns(usuario);
@@ -63,7 +71,7 @@ public class InicioViewModelMetricasTests
             .ReturnsAsync(new SaludBackupDto(Ahora.UtcDateTime.AddHours(-1), false, 26));
         s.Auth.Setup(x => x.ObtenerPermisosPropiosAsync()).ReturnsAsync((IReadOnlySet<string>)new HashSet<string>(permisos));
         var vm = new InicioViewModel(s.Sesion.Object, Mock.Of<INavigationService>(), s.Finanzas.Object, s.Backups.Object,
-            s.Tareas.Object, s.Auth.Object, new RelojFijo(Ahora));
+            s.Tareas.Object, s.Auth.Object, reloj);
         return (vm, s);
     }
 
@@ -141,6 +149,40 @@ public class InicioViewModelMetricasTests
         Assert.False(vm.UltimoBackupSinDato);
         Assert.Equal("13/03/2030 14:32", vm.ValorUltimoBackup);
         Assert.Equal("El último backup exitoso fue el 13/03/2030 14:32 (hace más de 26 horas).", vm.TextoAvisoBackup);
+    }
+
+    [Fact]
+    public async Task RecargaFallidaTrasCargaExitosa_NoDejaAlertaDeVencidasJuntoAlSinDato()
+    {
+        var (vm, s) = Crear(Operador, Permisos.VerFinanzas);
+        s.Finanzas.Setup(x => x.ObtenerCalendarioPagosAsync(It.IsAny<DateTime?>())).ReturnsAsync(Calendario(2, 3));
+        await vm.CargarAsync();
+        Assert.True(vm.HayFacturasVencidas);
+
+        s.Finanzas.Setup(x => x.ObtenerCalendarioPagosAsync(It.IsAny<DateTime?>())).ThrowsAsync(new HttpRequestException("API caída"));
+        await vm.CargarAsync();
+
+        Assert.True(vm.FacturasAVencerSinDato);
+        Assert.False(vm.HayFacturasVencidas);
+        Assert.Equal(0, vm.CantidadVencidas);
+    }
+
+    [Theory]
+    [InlineData(DateTimeKind.Unspecified)]
+    [InlineData(DateTimeKind.Utc)]
+    public async Task ZonaNoUtc_BackupYSubtituloSeConvierteUnaVezYCambianDeDiaCercaDeMedianoche(DateTimeKind kind)
+    {
+        // 15/03/2030 02:00 UTC = 14/03/2030 23:00 en UTC-3; backup 15/03 01:30 UTC = 14/03 22:30 local.
+        var reloj = new RelojFijo(new DateTimeOffset(2030, 3, 15, 2, 0, 0, TimeSpan.Zero), Montevideo);
+        var (vm, s) = CrearConReloj(reloj, Admin);
+        s.Backups.Setup(x => x.ObtenerSaludAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new SaludBackupDto(new DateTime(2030, 3, 15, 1, 30, 0, kind), true, 26));
+
+        await vm.CargarAsync();
+
+        Assert.Equal("jueves 14 de marzo de 2030 · Sesión iniciada como Administrador", vm.Subtitulo);
+        Assert.Equal("14/03/2030 22:30", vm.ValorUltimoBackup);
+        Assert.Equal("El último backup exitoso fue el 14/03/2030 22:30 (hace más de 26 horas).", vm.TextoAvisoBackup);
     }
 
     [Fact]

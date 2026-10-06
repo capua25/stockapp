@@ -264,12 +264,18 @@ public partial class InicioViewModel : ViewModelBase
             catch (Exception)
             {
                 MostrarAvisoVencimientos = false;
+                // Una recarga fallida tras una exitosa no puede dejar la alerta de vencidas (ni el valor)
+                // del dato viejo junto al "—".
+                CantidadVencidas = 0;
+                CantidadAVencer7Dias = 0;
                 FacturasAVencerSinDato = true;
             }
         }
         else
         {
             MostrarAvisoVencimientos = false;
+            CantidadVencidas = 0;
+            CantidadAVencer7Dias = 0;
             FacturasAVencerSinDato = true;
         }
 
