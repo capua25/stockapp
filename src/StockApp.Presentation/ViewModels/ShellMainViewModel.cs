@@ -332,12 +332,55 @@ public partial class ShellMainViewModel : ViewModelBase
         if (!ReferenceEquals(_navigation.Actual, this))
             CurrentContent = _navigation.Actual;
 
+        // El sidebar sigue a la navegación real, venga de donde venga (accesos y filas de Inicio, el login):
+        // la pantalla de cada ítem marca su sección; una pantalla sin ítem propio (un formulario abierto desde
+        // su listado) conserva la sección que ya estaba.
+        if (_navigation.Actual is { } actual && SeccionPorPantalla.TryGetValue(actual.GetType(), out var seccion))
+            SeccionActiva = seccion;
+
         // Refresco de permisos al navegar (spec decisión 7): best-effort, en segundo plano —
         // si el Admin revocó un permiso mientras la sesión seguía abierta, el menú se actualiza
         // sin esperar a la próxima acción que dispare un 403 (Task 15). No bloquea la
         // navegación: si la API está caída, el usuario sigue navegando con el cache viejo.
         _tareaRefrescoPermisos = RefrescarPermisosAsync();
     }
+
+    /// <summary>
+    /// Pantalla de cada ítem del sidebar → su <see cref="ItemNavegacion.Seccion"/> (la misma que asigna su
+    /// comando NavXxx). TareaFormViewModel marca Tareas: Inicio abre el detalle de una tarea directo desde el
+    /// panel. Custodiada por ShellMainSeccionActivaTests.CadaItemDelSidebar_SuPantallaMarcaSuSeccion.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<Type, string> SeccionPorPantalla = new Dictionary<Type, string>
+    {
+        [typeof(InicioViewModel)] = "Inicio",
+        [typeof(ProductoListViewModel)] = "Productos",
+        [typeof(EntradaRegistroViewModel)] = "RegistrarEntrada",
+        [typeof(SalidaRegistroViewModel)] = "RegistrarSalida",
+        [typeof(IngresoPorFacturaViewModel)] = "IngresoPorFactura",
+        [typeof(MovimientoHistorialViewModel)] = "HistorialMovimientos",
+        [typeof(GastosViewModel)] = "Gastos",
+        [typeof(IngresosViewModel)] = "Ingresos",
+        [typeof(LibroCajaViewModel)] = "LibroCaja",
+        [typeof(ControlPoaViewModel)] = "ControlPoa",
+        [typeof(CalendarioPagosViewModel)] = "CalendarioPagos",
+        [typeof(TareaListViewModel)] = "Tareas",
+        [typeof(TareaFormViewModel)] = "Tareas",
+        [typeof(DocumentoListViewModel)] = "Documentos",
+        [typeof(ValorizacionViewModel)] = "Valorizacion",
+        [typeof(StockCategoriaViewModel)] = "StockCategoria",
+        [typeof(HistorialPorProductoViewModel)] = "HistorialPorProducto",
+        [typeof(MasMovidosViewModel)] = "MasMovidos",
+        [typeof(AuditoriaLogViewModel)] = "AuditoriaLog",
+        [typeof(ReporteTareasViewModel)] = "ReporteTareas",
+        [typeof(CategoriaListViewModel)] = "Categorias",
+        [typeof(ProveedorListViewModel)] = "Proveedores",
+        [typeof(UnidadMedidaListViewModel)] = "UnidadesMedida",
+        [typeof(CatalogosTareaViewModel)] = "CatalogosTarea",
+        [typeof(MaestrosFinanzasViewModel)] = "MaestrosFinanzas",
+        [typeof(UsuariosAdminViewModel)] = "Usuarios",
+        [typeof(MantenimientoViewModel)] = "Mantenimiento",
+        [typeof(ImportacionViewModel)] = "Importacion",
+    };
 
     /// <summary>
     /// Espera el refresco best-effort y luego notifica las 7 propiedades Puede* (pre-flight,
@@ -400,7 +443,8 @@ public partial class ShellMainViewModel : ViewModelBase
     /// <summary>
     /// Nombre lógico de la sección actualmente activa en el sidebar (ej. "Productos").
     /// Se usa desde ShellMainView.axaml para resaltar el ítem de navegación seleccionado
-    /// (Classes.active + ObjectConverters.Equal). Null hasta la primera navegación.
+    /// (Classes.active + ObjectConverters.Equal). Null hasta la primera navegación; la asignan los comandos
+    /// NavXxx y, para cualquier navegación, <see cref="OnNavegacionCambiada"/>.
     /// </summary>
     [ObservableProperty]
     private string? _seccionActiva;
