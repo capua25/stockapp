@@ -153,7 +153,7 @@ public class RenderizadorVistaTests
     {
         // Las pantallas de contenido ocultan el sidebar y la marca de agua DESPUÉS del primer layout (la vista
         // de contenido la crea ViewLocator) y ANTES de la captura (Fase 2, convención 6).
-        var ruta = Path.Combine(Directory.CreateTempSubdirectory("preparar-").FullName, "vista.png");
+        var ruta = Path.Combine(_carpeta, "preparar.png");
         var vista = new Border { Background = Brushes.White };
 
         RenderizadorVista.RenderizarAPng(vista, null, ruta, preparar: v => ((Border)v).Background = Brushes.Red);

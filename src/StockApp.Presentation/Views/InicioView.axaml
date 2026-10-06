@@ -109,6 +109,7 @@
                                                        Text="{Binding Titulo}"
                                                        TextWrapping="Wrap"
                                                        FontSize="{DynamicResource V2FuenteControlTamano}"
+                                                       FontWeight="{DynamicResource V2FuenteControlPeso}"
                                                        LineHeight="{DynamicResource V2FuenteControlAltoLinea}"
                                                        Foreground="{DynamicResource V2TextoPrimarioBrush}" />
                                             <TextBlock Grid.Column="2"
@@ -138,6 +139,7 @@
                                                        Text="{Binding Titulo}"
                                                        TextWrapping="Wrap"
                                                        FontSize="{DynamicResource V2FuenteControlTamano}"
+                                                       FontWeight="{DynamicResource V2FuenteControlPeso}"
                                                        LineHeight="{DynamicResource V2FuenteControlAltoLinea}"
                                                        Foreground="{DynamicResource V2TextoPrimarioBrush}" />
                                             <TextBlock Grid.Column="2"

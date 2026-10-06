@@ -26,7 +26,8 @@ public static class ComparacionVisual
     public static string CarpetaSalida => Path.Combine(RutasRepo.Raiz, "artifacts", "ui-v2", "comparacion");
 
     /// <param name="ocultarEnMockup">Elementos del mockup que NO se comparan por píxeles y que el test custodia
-    /// aparte; hoy solo la marca de agua del Login (P5). Se pasa siempre con argumento nombrado.</param>
+    /// aparte o en su propia comparación: la marca de agua del Login (P5) y, en las pantallas de contenido, el
+    /// sidebar y la marca de agua de Inicio. Se pasa siempre con argumento nombrado.</param>
     /// <param name="prepararApp">Se aplica a la vista de la app antes de capturar (RenderizadorVista, preparar); en pantallas de contenido oculta el sidebar y la marca de agua. Se pasa siempre con argumento nombrado.</param>
     public static ResultadoComparacion CompararConMockup(
         Control vista,
