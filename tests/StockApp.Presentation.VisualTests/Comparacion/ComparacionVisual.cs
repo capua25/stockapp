@@ -27,6 +27,7 @@ public static class ComparacionVisual
 
     /// <param name="ocultarEnMockup">Elementos del mockup que NO se comparan por píxeles y que el test custodia
     /// aparte; hoy solo la marca de agua del Login (P5). Se pasa siempre con argumento nombrado.</param>
+    /// <param name="prepararApp">Se aplica a la vista de la app antes de capturar (RenderizadorVista, preparar); en pantallas de contenido oculta el sidebar y la marca de agua. Se pasa siempre con argumento nombrado.</param>
     public static ResultadoComparacion CompararConMockup(
         Control vista,
         object? viewModel,
@@ -36,7 +37,8 @@ public static class ComparacionVisual
         UmbralAprobado? aprobado = null,
         IReadOnlyCollection<string>? recortesPermitidos = null,
         TamanoLienzo? tamano = null,
-        IReadOnlyCollection<string>? ocultarEnMockup = null)
+        IReadOnlyCollection<string>? ocultarEnMockup = null,
+        Action<Control>? prepararApp = null)
     {
         // Antes de renderizar: un umbral sin aprobación registrada no llega a correr (spec §6.5).
         teselasDensasMax = UmbralComparacion.TeselasMaximas(teselasDensasMax, aprobado);
@@ -56,7 +58,7 @@ public static class ComparacionVisual
         Task.Run(() => CapturadorMockup.CapturarAsync(rutaHtml, pngMockup, tamano: tamano, ocultarSelectores: ocultarEnMockup)).GetAwaiter().GetResult();
         IReadOnlyList<string> recortes = [];
         RenderizadorVista.RenderizarAPng(vista, viewModel, pngApp, v => recortes = GuardianTextoRecortado.Buscar(v, recortesPermitidos),
-            tamano);
+            tamano, prepararApp);
 
         var resultado = ComparadorImagenes.Comparar(pngMockup, pngApp, pngDiff);
         // I2a (revisión final): Escribir ahora recibe los recortes, así que la página/resultado.json

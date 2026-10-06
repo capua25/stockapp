@@ -128,6 +128,36 @@ gemelo `_1366x768`, como toda pantalla):
 
 El mockup es el área cliente (sin barra de título) con el ancho del `Window`, centrada sobre fondo app.
 
+Pantallas de contenido (Inicio y las que vienen): se comparan DENTRO del shell real. El test
+renderiza `ShellMainView` con `CurrentContent` = el VM de la pantalla (lo resuelve `ViewLocator`,
+como en la app; `DatosShell.Crear(usuario, permisos, seccionActiva, contenido)`) y oculta el
+sidebar en AMBOS renders: en la app con `prepararApp` (`Border#Sidebar.IsVisible = false`, la
+columna de 240 queda en fondo app) y en el mockup con `ocultarEnMockup: [".v2-sidebar"]`
+(`visibility: hidden`). El sidebar se compara en `ShellComparacionTests`; el mockup de cada pantalla
+igual lo dibuja, para que el usuario apruebe la pantalla entera. `prepararApp` corre con la ventana
+abierta después del primer layout y antes de capturar (`RenderizadorVista.RenderizarAPng`,
+parámetro `preparar`), y se pasa siempre con argumento nombrado. Si la parte que oculta no existe,
+lanza: la comparación no corre sobre una vista que perdió lo que excluye.
+
+    private static readonly string[] OcultarEnMockup = [".v2-sidebar", ".marca-agua"];
+
+    public static void OcultarSidebarYMarcaDeAgua(Control vista)
+    {
+        var shell = (ShellMainView)vista;
+        shell.FindControl<Border>("Sidebar")!.IsVisible = false;
+        var inicio = shell.GetVisualDescendants().OfType<InicioView>().Single();
+        inicio.FindControl<Image>("MarcaAgua")!.IsVisible = false;
+    }
+
+    private static void Comparar(ShellMainViewModel vm, string mockup, TamanoLienzo? tamano = null) =>
+        ComparacionVisual.CompararConMockup(new ShellMainView(), vm, mockup, tamano: tamano,
+            ocultarEnMockup: OcultarEnMockup, prepararApp: OcultarSidebarYMarcaDeAgua);
+
+Fechas en mockups con reloj inyectable: un VM que muestra "hoy" recibe un `TimeProvider` opcional
+(default `TimeProvider.System`); los datos fijos de los tests le pasan un reloj fijo con zona UTC
+(`DatosInicio.Ahora`, martes 6 de octubre de 2026 13:00), así la pantalla no cambia con el día ni con
+la zona de la máquina.
+
 ## Otros comandos
 
 - `tokens --verificar`, `fuentes`, `fuentes --verificar`

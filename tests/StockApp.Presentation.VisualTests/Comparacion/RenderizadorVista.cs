@@ -16,8 +16,9 @@ public static class RenderizadorVista
     /// <param name="inspeccionar">Corre con la ventana todavía abierta, después de guardar el PNG:
     /// al cerrarla la vista se desengancha de los estilos de la ventana y medirla ya no da lo mismo.</param>
     /// <param name="tamano">Tamaño de la ventana; null es <see cref="TamanoLienzo.Estandar"/>.</param>
+    /// <param name="preparar">Corre con la ventana abierta después del primer layout y antes de capturar: para ocultar partes que la comparación excluye (sidebar, marca de agua).</param>
     public static void RenderizarAPng(Control vista, object? viewModel, string rutaPng, Action<Control>? inspeccionar = null,
-        TamanoLienzo? tamano = null)
+        TamanoLienzo? tamano = null, Action<Control>? preparar = null)
     {
         var lienzo = tamano ?? TamanoLienzo.Estandar;
         if (!Avalonia.Application.Current!.TryGetResource("V2FondoBrush", ThemeVariant.Light, out var fondo)
@@ -44,6 +45,7 @@ public static class RenderizadorVista
         // Dos vueltas: la primera procesa Loaded (donde algunas vistas cargan o setean estado) y
         // la segunda el layout que eso invalida. Sin la segunda, el frame puede salir sin ese cambio.
         Dispatcher.UIThread.RunJobs();
+        preparar?.Invoke(vista);
         ventana.UpdateLayout();
         Dispatcher.UIThread.RunJobs();
 

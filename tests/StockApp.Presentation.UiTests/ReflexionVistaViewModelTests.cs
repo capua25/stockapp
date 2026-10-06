@@ -147,26 +147,20 @@ public class ReflexionVistaViewModelTests
 
         var exclusiones = new HashSet<string>
         {
-            // Consumidas solo indirectamente vía TituloVencidas/TituloProximasAVencer (esas SI
-            // están bindeadas como texto de encabezado de cada sección) -- no necesitan un
-            // binding propio en el axaml.
-            nameof(InicioViewModel.CantidadTareasVencidas),
-            nameof(InicioViewModel.CantidadTareasProximasAVencer),
-            // Gaps preexistentes (no introducidos por el panel de tareas, esta es la primera vez
-            // que InicioViewModel entra a esta red de seguridad): helpers consumidos solo
-            // indirectamente por otra propiedad que SI está bindeada -- mismo criterio que
-            // TareaFormViewModel.EsAdmin más abajo. NombreUsuario alimenta Saludo (bindeada);
-            // MostrarAvisoBackup/AvisoBackupEsDesconocido alimentan MostrarAvisoBackupProblema y
-            // MostrarAvisoBackupDesconocido (ambas bindeadas, cada una en su Border propio).
-            nameof(InicioViewModel.NombreUsuario),
-            nameof(InicioViewModel.MostrarAvisoBackup),
-            nameof(InicioViewModel.AvisoBackupEsDesconocido),
-            // Task 14 (spec 2026-08-10): los dos accesos rápidos que usaban
-            // {Binding EsAdmin} directamente ahora usan {Binding PuedeVerReportes} (gating por
-            // permiso configurable, no por rol). EsAdmin sigue consumido indirectamente vía
-            // RolTexto (bindeada en el header de bienvenida) -- mismo criterio que las
-            // exclusiones de arriba.
-            nameof(InicioViewModel.EsAdmin),
+            // Helpers consumidos indirectamente por otra propiedad bindeada:
+            nameof(InicioViewModel.NombreUsuario),            // → Saludo
+            nameof(InicioViewModel.RolTexto),                 // → Subtitulo (UI v2)
+            nameof(InicioViewModel.CantidadVencidas),         // → HayFacturasVencidas y TextoVencidas
+            nameof(InicioViewModel.CantidadAVencer7Dias),     // → ValorFacturasAVencer
+            nameof(InicioViewModel.CantidadTareasVencidas),   // → ValorTareasVencidas, MostrarPanelTareas
+            nameof(InicioViewModel.CantidadTareasProximasAVencer), // → MostrarPanelTareas
+            nameof(InicioViewModel.MostrarAvisoBackup),       // → MostrarAvisoBackupProblema/Desconocido
+            nameof(InicioViewModel.AvisoBackupEsDesconocido), // → idem
+            // Sin consumidor en la vista v2 (Fase 2, decisiones D4 y D5); se borran en la Fase 9 (limpieza):
+            nameof(InicioViewModel.MostrarAvisoVencimientos),
+            nameof(InicioViewModel.TextoAVencer7Dias),
+            nameof(InicioViewModel.TituloVencidas),
+            nameof(InicioViewModel.TituloProximasAVencer),
         };
         AssertTodasExpuestas(axaml, miembros, exclusiones);
     }

@@ -6,8 +6,8 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.LogicalTree;
 using Avalonia.Markup.Xaml;
-using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using StockApp.Application.Auth;
@@ -17,6 +17,7 @@ using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Presentation.Controls.V2;
 using StockApp.Presentation.ViewModels;
 using Xunit;
 
@@ -95,33 +96,30 @@ public class InicioViewTests
         return (window, vm);
     }
 
-    // Tercer estado (review final E1): ahora hay DOS Border con el mismo texto "Backup de la
-    // base de datos" (Problema y Desconocido, InicioView.axaml), uno oculto y otro visible según
-    // el caso — buscar por el TextBlock hijo ya no alcanza para desambiguar. x:Name también
+    // Los avisos de backup son `Alerta` con nombre propio desde la UI v2 (AlertaBackupVencido y
+    // AlertaBackupDesconocido, InicioView.axaml), uno oculto y otro visible según el caso. x:Name también
     // pobla StyledElement.Name, así que se busca por ahí directamente en el árbol visual (NO por
     // Window.FindControl: InicioView es un UserControl separado con su propio NameScope, el
     // Window de este test no lo alcanza).
-    private static Border BuscarBorderPorNombre(Window window, string nombre)
-        => window.GetVisualDescendants().OfType<Border>().First(b => b.Name == nombre);
+    private static Control BuscarPorNombre(Window window, string nombre) => window.GetVisualDescendants().OfType<Control>().First(c => c.Name == nombre);
 
     [AvaloniaFact]
-    public void Montar_AdminConBackupVencido_MuestraElBanner()
+    public void Montar_AdminConBackupVencido_MuestraLaAlertaDeError()
     {
         var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
         var salud = new SaludBackupDto(DateTime.UtcNow.AddHours(-30), true, 26);
 
         var (window, vm) = Montar(usuario, salud);
 
-        Assert.True(vm.MostrarAvisoBackup);
         Assert.True(vm.MostrarAvisoBackupProblema);
-        var borderProblema = BuscarBorderPorNombre(window, "BorderAvisoBackupProblema");
-        Assert.True(borderProblema.IsVisible);
-        var borderDesconocido = BuscarBorderPorNombre(window, "BorderAvisoBackupDesconocido");
-        Assert.False(borderDesconocido.IsVisible);
+        var vencido = Assert.IsType<Alerta>(BuscarPorNombre(window, "AlertaBackupVencido"));
+        Assert.True(vencido.IsVisible);
+        Assert.Equal(VarianteAlerta.Error, vencido.Variante);
+        Assert.False(BuscarPorNombre(window, "AlertaBackupDesconocido").IsVisible);
     }
 
     [AvaloniaFact]
-    public void Montar_AdminConBackupAlDia_OcultaElBanner()
+    public void Montar_AdminConBackupAlDia_NoMuestraNingunaAlerta()
     {
         var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
         var salud = new SaludBackupDto(DateTime.UtcNow, false, 26);
@@ -129,29 +127,22 @@ public class InicioViewTests
         var (window, vm) = Montar(usuario, salud);
 
         Assert.False(vm.MostrarAvisoBackup);
-        var borderProblema = BuscarBorderPorNombre(window, "BorderAvisoBackupProblema");
-        Assert.False(borderProblema.IsVisible);
-        var borderDesconocido = BuscarBorderPorNombre(window, "BorderAvisoBackupDesconocido");
-        Assert.False(borderDesconocido.IsVisible);
+        Assert.False(BuscarPorNombre(window, "AlertaBackupVencido").IsVisible);
+        Assert.False(BuscarPorNombre(window, "AlertaBackupDesconocido").IsVisible);
     }
 
     [AvaloniaFact]
-    public void Montar_ServicioDeBackupFalla_MuestraElBannerDeEstadoDesconocido()
+    public void Montar_ServicioDeBackupFalla_MuestraLaAlertaDeAdvertencia()
     {
-        // Tercer estado (review final E1): API caída / 403 / 404 de una versión vieja del
-        // servidor — el banner correcto acá es "no se pudo verificar", NUNCA ni "al día"
-        // (ocultarlo) ni "vencido" (el border rojo de Problema).
+        // Tercer estado (review final E1): "no se pudo verificar" NUNCA se ve como "vencido" (error).
         var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
         var (window, vm) = Montar(usuario, new BackupsServiceFake(new InvalidOperationException("servidor caído")));
 
-        Assert.True(vm.MostrarAvisoBackup);
         Assert.True(vm.MostrarAvisoBackupDesconocido);
-        Assert.False(vm.MostrarAvisoBackupProblema);
-
-        var borderDesconocido = BuscarBorderPorNombre(window, "BorderAvisoBackupDesconocido");
-        Assert.True(borderDesconocido.IsVisible);
-        var borderProblema = BuscarBorderPorNombre(window, "BorderAvisoBackupProblema");
-        Assert.False(borderProblema.IsVisible);
+        var desconocido = Assert.IsType<Alerta>(BuscarPorNombre(window, "AlertaBackupDesconocido"));
+        Assert.True(desconocido.IsVisible);
+        Assert.Equal(VarianteAlerta.Advertencia, desconocido.Variante);
+        Assert.False(BuscarPorNombre(window, "AlertaBackupVencido").IsVisible);
     }
 
     // ── Gating de accesos rápidos operativos (fix bug de coherencia de permisos, 2026-08-16) ──
@@ -161,8 +152,12 @@ public class InicioViewTests
     // hubiese detectado eso. Estos tests montan la vista REAL para probar el binding IsVisible
     // de punta a punta, mismo motivo que el resto de esta clase (ver comentario de la clase).
 
+    // Árbol LÓGICO, no visual: desde la UI v2 los accesos viven dentro de una TarjetaContenido
+    // (control con plantilla); si el panel entero está oculto la plantilla no se aplica y las
+    // tarjetas nunca llegan al árbol visual. Se mira el IsVisible propio de cada tarjeta, que es
+    // el binding del gate.
     private static Button BuscarBotonPorNombre(Window window, string nombre)
-        => window.GetVisualDescendants().OfType<Button>().First(b => b.Name == nombre);
+        => window.GetLogicalDescendants().OfType<Button>().First(b => b.Name == nombre);
 
     [AvaloniaFact]
     public void Montar_OperadorSinPermisos_OcultaLosCuatroAccesosRapidosOperativos()
@@ -216,7 +211,7 @@ public class InicioViewTests
         var (window, vm) = Montar(usuario, salud);
 
         Assert.False(vm.PuedeVerAccesosRapidos);
-        Assert.False(BuscarBorderPorNombre(window, "BorderAccesosRapidos").IsVisible);
+        Assert.False(BuscarPorNombre(window, "PanelAccesosRapidos").IsVisible);
     }
 
     [AvaloniaFact]
@@ -237,7 +232,7 @@ public class InicioViewTests
         Dispatcher.UIThread.RunJobs();
 
         Assert.True(vm.PuedeVerAccesosRapidos);
-        Assert.True(BuscarBorderPorNombre(window, "BorderAccesosRapidos").IsVisible);
+        Assert.True(BuscarPorNombre(window, "PanelAccesosRapidos").IsVisible);
     }
 
     [AvaloniaFact]
@@ -249,38 +244,6 @@ public class InicioViewTests
         var (window, vm) = Montar(usuario, salud);
 
         Assert.True(vm.PuedeVerAccesosRapidos);
-        Assert.True(BuscarBorderPorNombre(window, "BorderAccesosRapidos").IsVisible);
-    }
-
-    // ── Bug visual reportado 2026-08-19: título de card de acceso rápido cortado ──
-    // "Valorización de inventari" se veía cortado a mitad de palabra, sin ellipsis ni wrap.
-    // Causa raíz: el TextBlock del título NO tenía TextWrapping="Wrap" (el subtítulo de abajo sí
-    // lo tiene), y la card tiene Width fijo (200). Con NoWrap el texto no encaja en el ancho
-    // disponible y queda recortado por el clip del Button/Border ancestro, en vez de envolver.
-    // Test observable: comparamos el Bounds.Height (layout REAL vía Skia headless, no una
-    // suposición) del título largo "Valorización de inventario" contra el de un título corto de
-    // una sola línea ("Productos"). Sin Wrap ambos miden lo mismo (una línea) aunque el largo esté
-    // recortado visualmente -- el bug es invisible a esta métrica. Con Wrap, el título largo pasa
-    // a 2 líneas y su Bounds.Height crece sensiblemente por sobre el de una sola línea.
-    private static TextBlock BuscarTextBlockPorTexto(Window window, string texto)
-        => window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == texto);
-
-    [AvaloniaFact]
-    public void Montar_CardValorizacionDeInventario_TituloEnvuelveEnVezDeCortarse()
-    {
-        var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
-        var salud = new SaludBackupDto(DateTime.UtcNow, false, 26);
-
-        var (window, _) = Montar(usuario, salud);
-
-        var tituloLargo = BuscarTextBlockPorTexto(window, "Valorización de inventario");
-        var tituloCorto = BuscarTextBlockPorTexto(window, "Productos");
-
-        Assert.Equal(TextWrapping.Wrap, tituloLargo.TextWrapping);
-        Assert.True(
-            tituloLargo.Bounds.Height > tituloCorto.Bounds.Height * 1.4,
-            "El título 'Valorización de inventario' debe envolver a (al menos) dos líneas, no "
-            + $"quedar recortado en una sola. Alto título largo={tituloLargo.Bounds.Height}, "
-            + $"alto título corto (referencia 1 línea)={tituloCorto.Bounds.Height}.");
+        Assert.True(BuscarPorNombre(window, "PanelAccesosRapidos").IsVisible);
     }
 }

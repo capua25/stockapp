@@ -53,7 +53,6 @@ public class GuardianDePatronTests
     [InlineData(typeof(MovimientoHistorialView), "Historial de movimientos", "MOVIMIENTOS")]
     [InlineData(typeof(ProductoFormView), null, null)]
     [InlineData(typeof(MovimientoFormControl), null, null)]
-    [InlineData(typeof(InicioView), null, "INICIO")]
     [InlineData(typeof(EntradaRegistroView), null, null)]
     [InlineData(typeof(SalidaRegistroView), null, null)]
     [InlineData(typeof(IngresoPorFacturaView), "Ingreso de stock por factura", "MOVIMIENTOS")]
@@ -113,7 +112,6 @@ public class GuardianDePatronTests
         typeof(MovimientoHistorialView),
         typeof(ProductoFormView),
         typeof(MovimientoFormControl),
-        typeof(InicioView),
         typeof(EntradaRegistroView),
         typeof(SalidaRegistroView),
         typeof(IngresoPorFacturaView),
@@ -228,6 +226,7 @@ public class GuardianDePatronTests
         typeof(ActualizacionBannerView),
         typeof(ActualizacionModalView),
         typeof(ActualizacionBloqueoView),
+        typeof(InicioView),
     };
 
     /// <summary>

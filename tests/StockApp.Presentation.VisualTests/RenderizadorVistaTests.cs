@@ -147,4 +147,18 @@ public class RenderizadorVistaTests
         using var imagen = SKBitmap.Decode(png);
         Assert.All(imagen.Pixels, pixel => Assert.Equal(255, pixel.Alpha));
     }
+
+    [AvaloniaFact]
+    public void Preparar_CorreAntesDeCapturar()
+    {
+        // Las pantallas de contenido ocultan el sidebar y la marca de agua DESPUÉS del primer layout (la vista
+        // de contenido la crea ViewLocator) y ANTES de la captura (Fase 2, convención 6).
+        var ruta = Path.Combine(Directory.CreateTempSubdirectory("preparar-").FullName, "vista.png");
+        var vista = new Border { Background = Brushes.White };
+
+        RenderizadorVista.RenderizarAPng(vista, null, ruta, preparar: v => ((Border)v).Background = Brushes.Red);
+
+        using var imagen = SKBitmap.Decode(ruta);
+        Assert.Equal(new SKColor(255, 0, 0), imagen.GetPixel(640, 380));
+    }
 }

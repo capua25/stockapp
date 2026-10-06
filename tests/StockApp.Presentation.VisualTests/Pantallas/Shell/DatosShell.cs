@@ -23,7 +23,11 @@ public static class DatosShell
             [Permisos.GestionarProductos, Permisos.RegistrarMovimientos, Permisos.VerFinanzas, Permisos.GestionarTareas],
             "Gastos");
 
-    private static ShellMainViewModel Crear(UsuarioSesion usuario, string[] permisos, string seccionActiva)
+    /// <summary>
+    /// Shell con sesión fija. <paramref name="contenido"/>: el VM de la pantalla de contenido (lo resuelve
+    /// ViewLocator, como en la app); null deja el área de contenido en fondo app (comparación del sidebar).
+    /// </summary>
+    public static ShellMainViewModel Crear(UsuarioSesion usuario, string[] permisos, string seccionActiva, ViewModelBase? contenido = null)
     {
         var sesion = new Mock<ICurrentSession>();
         sesion.Setup(s => s.UsuarioActual).Returns(usuario);
@@ -32,6 +36,7 @@ public static class DatosShell
         var vm = new ShellMainViewModel(sesion.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(i => i.Version == "0.4.0"),
             Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>(), Mock.Of<IServicioPreferenciasSidebar>());
         vm.SeccionActiva = seccionActiva;
+        vm.CurrentContent = contenido;
         return vm;
     }
 }

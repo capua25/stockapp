@@ -2,322 +2,211 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels"
              xmlns:tareasvm="using:StockApp.Presentation.ViewModels.Tareas"
-             xmlns:convA="using:Avalonia.Data.Converters"
-             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
              x:Class="StockApp.Presentation.Views.InicioView"
-             x:DataType="vm:InicioViewModel">
+             x:DataType="vm:InicioViewModel"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
 
     <UserControl.Styles>
-        <!-- Watermark del fondo: NO es "Opacity decorativa" gateada por conversor de dominio,
-             es un efecto de marca fijo. Se define via Style (Priority=Style, no LocalValue)
-             para no chocar con GuardianDePatronTests.Vista_NoTieneOpacidadesLiterales (Ruling
-             B-8, tanda 6): ese guardian filtra por BindingPriority.LocalValue, que es exactamente
-             lo que distingue un Setter de Style/ControlTheme (chrome de FluentTheme) de un
-             Opacity puesto a mano en el control. -->
-        <Style Selector="Image.fondo-difuminado">
+        <!-- Marca de agua del logo del municipio (decisión del usuario 2026-10-06): mismo tratamiento aprobado
+             que el Login v2 (P5 de la Fase 1). Por Style (Priority=Style, no LocalValue) para no chocar con el
+             guardián de opacidades literales. Sin test propio (U9): la comparación la oculta y la mira el usuario. -->
+        <Style Selector="Image.marca-agua">
             <Setter Property="Opacity" Value="0.28" />
         </Style>
     </UserControl.Styles>
 
+    <!-- UI v2 (spec §5.3). Espejo: docs/ui-v2/mockups/inicio/*.html. El logo va primero en el Grid: detrás
+         del contenido. Cada bloque conserva su gate actual; la fila de métricas se oculta entera si ninguna
+         métrica cumple el suyo. -->
     <Grid>
-
-        <Image Source="avares://GestionMunicipal/Assets/carmelo-original.png"
-               Classes="fondo-difuminado"
+        <Image x:Name="MarcaAgua"
+               Source="avares://GestionMunicipal/Assets/carmelo-original.png"
+               Classes="marca-agua"
                Stretch="Uniform"
                HorizontalAlignment="Center"
                VerticalAlignment="Center"
                RenderTransform="scale(0.85)" />
 
-        <ScrollViewer>
-            <StackPanel Margin="{DynamicResource MargenVista}" Spacing="20">
+        <ScrollViewer x:Name="Desplazamiento" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="28,24" Spacing="{DynamicResource V2Espacio16}">
 
-            <!-- Encabezado -->
-            <c:HeaderVista Eyebrow="INICIO"
-                           Titulo="{Binding Saludo}"
-                           Resumen="{Binding RolTexto, StringFormat='Sesión iniciada como {0}'}" />
+                <v2:EncabezadoPagina x:Name="Encabezado" Titulo="{Binding Saludo}" Subtitulo="{Binding Subtitulo}" Margin="0">
+                    <Button x:Name="BotonCalendarioPagos"
+                            Classes="secundario"
+                            Content="Ver calendario de pagos"
+                            Command="{Binding IrACalendarioPagosCommand}"
+                            IsVisible="{Binding PuedeVerCalendarioPagos}" />
+                </v2:EncabezadoPagina>
 
-            <!-- Aviso de vencimientos: gateado por PuedeVerCalendarioPagos ademas de
-                 MostrarAvisoVencimientos. El fix del bug 2026-08-15 evita la LLAMADA a
-                 /finanzas/calendario-pagos sin VerFinanzas, pero el panel tambien debe
-                 desaparecer explicitamente (no solo quedar en cero por la falta de datos). -->
-            <Border Classes="card">
-                <Border.IsVisible>
-                    <MultiBinding Converter="{x:Static convA:BoolConverters.And}">
-                        <Binding Path="PuedeVerCalendarioPagos" />
-                        <Binding Path="MostrarAvisoVencimientos" />
-                    </MultiBinding>
-                </Border.IsVisible>
-                <StackPanel Spacing="8">
-                    <TextBlock Text="Vencimientos de facturas" Classes="seccion" Foreground="{DynamicResource DangerBrush}" />
-                    <TextBlock Text="{Binding TextoVencidas}"
-                               IsVisible="{Binding CantidadVencidas}" />
-                    <TextBlock Text="{Binding TextoAVencer7Dias}"
-                               IsVisible="{Binding CantidadAVencer7Dias}" />
-                    <Button Content="Ver calendario de pagos" Command="{Binding IrACalendarioPagosCommand}" />
-                </StackPanel>
-            </Border>
+                <!-- Métricas (spec §5.3): cada una SOLO con su gate. Sin dato = "—", nunca un 0 inventado. -->
+                <v2:GrillaUniformeV2 x:Name="FilaMetricas" Espaciado="{DynamicResource V2Espacio12}" IsVisible="{Binding MostrarFilaMetricas}">
+                    <v2:TarjetaMetrica x:Name="MetricaFacturasAVencer"
+                                       Valor="{Binding ValorFacturasAVencer}"
+                                       Etiqueta="Facturas a vencer en 7 días"
+                                       SinDato="{Binding FacturasAVencerSinDato}"
+                                       IsVisible="{Binding PuedeVerCalendarioPagos}" />
+                    <v2:TarjetaMetrica x:Name="MetricaTareasVencidas"
+                                       Valor="{Binding ValorTareasVencidas}"
+                                       Etiqueta="Tareas vencidas"
+                                       SinDato="{Binding TareasVencidasSinDato}"
+                                       IsVisible="{Binding PuedeVerTareas}" />
+                    <v2:TarjetaMetrica x:Name="MetricaUltimoBackup"
+                                       Valor="{Binding ValorUltimoBackup}"
+                                       Etiqueta="Último backup"
+                                       SinDato="{Binding UltimoBackupSinDato}"
+                                       IsVisible="{Binding EsAdmin}" />
+                </v2:GrillaUniformeV2>
 
-            <!-- Panel "Tareas que requieren atención" (spec 2026-08-06): oculto por completo
-                 cuando no hay ninguna tarea vencida ni próxima a vencer (MostrarPanelTareas),
-                 nunca un cartel vacío. Cada fila es un Button entero (no solo un "Ver" aparte):
-                 toda la fila es clickeable y navega al detalle vía VerTareaCommand. Gateado
-                 ademas por PuedeVerTareas (fix del bug 2026-08-15): sin Permisos.GestionarTareas
-                 el panel tambien debe desaparecer explicitamente, no solo quedar en cero. -->
-            <Border Classes="card" x:Name="BorderPanelTareas">
-                <Border.IsVisible>
-                    <MultiBinding Converter="{x:Static convA:BoolConverters.And}">
-                        <Binding Path="PuedeVerTareas" />
-                        <Binding Path="MostrarPanelTareas" />
-                    </MultiBinding>
-                </Border.IsVisible>
-                <StackPanel Spacing="12">
-                    <TextBlock Text="Tareas que requieren atención" Classes="seccion" />
+                <!-- Backup: vencido (error) y no se pudo verificar (advertencia) se distinguen (review final E1). -->
+                <v2:Alerta x:Name="AlertaBackupVencido"
+                           Variante="Error"
+                           Texto="{Binding TextoAvisoBackup}"
+                           IsVisible="{Binding MostrarAvisoBackupProblema}" />
+                <v2:Alerta x:Name="AlertaBackupDesconocido"
+                           Variante="Advertencia"
+                           Texto="{Binding TextoAvisoBackup}"
+                           IsVisible="{Binding MostrarAvisoBackupDesconocido}" />
 
-                    <StackPanel Spacing="8" IsVisible="{Binding MostrarSeccionTareasVencidas}">
-                        <TextBlock Text="{Binding TituloVencidas}"
-                                   FontWeight="SemiBold"
-                                   Foreground="{DynamicResource DangerBrush}" />
-                        <ItemsControl ItemsSource="{Binding TareasVencidas}">
+                <v2:Alerta x:Name="AlertaFacturasVencidas" Variante="Advertencia" Texto="{Binding TextoVencidas}">
+                    <v2:Alerta.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="PuedeVerCalendarioPagos" />
+                            <Binding Path="HayFacturasVencidas" />
+                        </MultiBinding>
+                    </v2:Alerta.IsVisible>
+                </v2:Alerta>
+
+                <!-- Panel de tareas (spec 2026-08-06): oculto si no hay nada que mostrar o sin GestionarTareas. Cada
+                     fila es un Button entero que navega al detalle. -->
+                <v2:TarjetaContenido x:Name="PanelTareas">
+                    <v2:TarjetaContenido.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="PuedeVerTareas" />
+                            <Binding Path="MostrarPanelTareas" />
+                        </MultiBinding>
+                    </v2:TarjetaContenido.IsVisible>
+                    <StackPanel>
+                        <TextBlock Classes="titulo-seccion" Text="Tareas que requieren atención" Margin="0,0,0,12" />
+
+                        <ItemsControl x:Name="ListaTareasVencidas"
+                                      ItemsSource="{Binding TareasVencidas}"
+                                      IsVisible="{Binding MostrarSeccionTareasVencidas}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="tareasvm:TareaFila">
-                                    <Button Classes="ghost"
-                                            HorizontalAlignment="Stretch"
-                                            HorizontalContentAlignment="Stretch"
+                                    <Button Theme="{StaticResource V2TemaFilaPanel}"
                                             Command="{Binding $parent[UserControl].((vm:InicioViewModel)DataContext).VerTareaCommand}"
                                             CommandParameter="{Binding}">
-                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto">
-                                            <TextBlock Grid.Column="0" Text="●"
-                                                       Foreground="{DynamicResource DangerBrush}"
-                                                       Margin="0,0,8,0" />
-                                            <TextBlock Grid.Column="1" Text="{Binding Titulo}" />
-                                            <TextBlock Grid.Column="2" Text="{Binding TextoDiasParaVencer}"
-                                                       Foreground="{DynamicResource DangerBrush}"
-                                                       Margin="8,0" />
-                                            <TextBlock Grid.Column="3" Text="→" Foreground="{DynamicResource TextoTerciarioBrush}" />
+                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                            <v2:Insignia Grid.Column="0" Texto="Vencida" Variante="Peligro" />
+                                            <TextBlock Grid.Column="1"
+                                                       Margin="8,0,0,0"
+                                                       VerticalAlignment="Center"
+                                                       Text="{Binding Titulo}"
+                                                       TextWrapping="Wrap"
+                                                       FontSize="{DynamicResource V2FuenteControlTamano}"
+                                                       LineHeight="{DynamicResource V2FuenteControlAltoLinea}"
+                                                       Foreground="{DynamicResource V2TextoPrimarioBrush}" />
+                                            <TextBlock Grid.Column="2"
+                                                       Classes="pie-conteo"
+                                                       Margin="8,0,0,0"
+                                                       VerticalAlignment="Center"
+                                                       Text="{Binding TextoDiasParaVencer}" />
                                         </Grid>
                                     </Button>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
-                    </StackPanel>
 
-                    <StackPanel Spacing="8" IsVisible="{Binding MostrarSeccionTareasProximasAVencer}">
-                        <TextBlock Text="{Binding TituloProximasAVencer}" FontWeight="SemiBold" />
-                        <ItemsControl ItemsSource="{Binding TareasProximasAVencer}">
+                        <ItemsControl x:Name="ListaTareasProximas"
+                                      ItemsSource="{Binding TareasProximasAVencer}"
+                                      IsVisible="{Binding MostrarSeccionTareasProximasAVencer}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate x:DataType="tareasvm:TareaFila">
-                                    <Button Classes="ghost"
-                                            HorizontalAlignment="Stretch"
-                                            HorizontalContentAlignment="Stretch"
+                                    <Button Theme="{StaticResource V2TemaFilaPanel}"
                                             Command="{Binding $parent[UserControl].((vm:InicioViewModel)DataContext).VerTareaCommand}"
                                             CommandParameter="{Binding}">
-                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto">
-                                            <TextBlock Grid.Column="0" Text="○" Margin="0,0,8,0" Foreground="{DynamicResource TextoTerciarioBrush}" />
-                                            <TextBlock Grid.Column="1" Text="{Binding Titulo}" />
-                                            <TextBlock Grid.Column="2" Text="{Binding TextoDiasParaVencer}"
-                                                       Margin="8,0" Foreground="{DynamicResource TextoTerciarioBrush}" />
-                                            <TextBlock Grid.Column="3" Text="→" Foreground="{DynamicResource TextoTerciarioBrush}" />
+                                        <Grid ColumnDefinitions="Auto,*,Auto">
+                                            <v2:Insignia Grid.Column="0" Texto="Próxima" Variante="Advertencia" />
+                                            <TextBlock Grid.Column="1"
+                                                       Margin="8,0,0,0"
+                                                       VerticalAlignment="Center"
+                                                       Text="{Binding Titulo}"
+                                                       TextWrapping="Wrap"
+                                                       FontSize="{DynamicResource V2FuenteControlTamano}"
+                                                       LineHeight="{DynamicResource V2FuenteControlAltoLinea}"
+                                                       Foreground="{DynamicResource V2TextoPrimarioBrush}" />
+                                            <TextBlock Grid.Column="2"
+                                                       Classes="pie-conteo"
+                                                       Margin="8,0,0,0"
+                                                       VerticalAlignment="Center"
+                                                       Text="{Binding TextoDiasParaVencer}" />
                                         </Grid>
                                     </Button>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+
+                        <Button x:Name="EnlaceVerTodasLasTareas"
+                                Theme="{StaticResource V2TemaEnlace}"
+                                Content="Ver todas las tareas →"
+                                Command="{Binding VerTodasLasTareasCommand}"
+                                HorizontalAlignment="Right"
+                                Margin="0,12,0,0" />
                     </StackPanel>
+                </v2:TarjetaContenido>
 
-                    <Button Classes="ghost"
-                            Content="Ver todas las tareas →"
-                            HorizontalAlignment="Right"
-                            Command="{Binding VerTodasLasTareasCommand}" />
-                </StackPanel>
-            </Border>
+                <!-- Accesos rápidos: los 6 actuales con sus gates (fix 2026-08-16 y 2026-08-17). -->
+                <v2:TarjetaContenido x:Name="PanelAccesosRapidos" IsVisible="{Binding PuedeVerAccesosRapidos}">
+                    <StackPanel>
+                        <TextBlock Classes="titulo-seccion" Text="Accesos rápidos" Margin="0,0,0,12" />
+                        <v2:GrillaUniformeV2 Columnas="3" Espaciado="{DynamicResource V2Espacio12}">
+                            <v2:TarjetaAcceso x:Name="BotonAccesoProductos"
+                                              Icono="mdi-package-variant"
+                                              Titulo="Productos"
+                                              Descripcion="Ver y administrar el catálogo"
+                                              Command="{Binding IrAProductosCommand}"
+                                              IsVisible="{Binding PuedeGestionarProductos}" />
+                            <v2:TarjetaAcceso x:Name="BotonAccesoRegistrarEntrada"
+                                              Icono="mdi-tray-arrow-down"
+                                              Titulo="Registrar Entrada"
+                                              Descripcion="Cargar entradas de stock"
+                                              Command="{Binding IrARegistrarEntradaCommand}"
+                                              IsVisible="{Binding PuedeRegistrarEntradaSalida}" />
+                            <v2:TarjetaAcceso x:Name="BotonAccesoRegistrarSalida"
+                                              Icono="mdi-tray-arrow-up"
+                                              Titulo="Registrar Salida"
+                                              Descripcion="Cargar salidas de stock"
+                                              Command="{Binding IrARegistrarSalidaCommand}"
+                                              IsVisible="{Binding PuedeRegistrarEntradaSalida}" />
+                            <v2:TarjetaAcceso x:Name="BotonAccesoHistorialMovimientos"
+                                              Icono="mdi-history"
+                                              Titulo="Historial de movimientos"
+                                              Descripcion="Consultar movimientos registrados"
+                                              Command="{Binding IrAHistorialMovimientosCommand}"
+                                              IsVisible="{Binding PuedeRegistrarMovimientos}" />
+                            <v2:TarjetaAcceso x:Name="BotonAccesoValorizacion"
+                                              Icono="mdi-currency-usd"
+                                              Titulo="Valorización de inventario"
+                                              Descripcion="Ver el valor total del stock"
+                                              Command="{Binding IrAValorizacionCommand}"
+                                              IsVisible="{Binding PuedeVerReportes}" />
+                            <v2:TarjetaAcceso x:Name="BotonAccesoAuditoria"
+                                              Icono="mdi-shield-search"
+                                              Titulo="Log de auditoría"
+                                              Descripcion="Revisar la actividad del sistema"
+                                              Command="{Binding IrAAuditoriaCommand}"
+                                              IsVisible="{Binding PuedeVerReportes}" />
+                        </v2:GrillaUniformeV2>
+                    </StackPanel>
+                </v2:TarjetaContenido>
 
-            <!-- Aviso de salud de backup: condición de FALLA/RIESGO (no informativa como
-                 vencimientos), por eso usa borde DangerBrush además del título en rojo — debe
-                 leerse como más urgente que el aviso de vencimientos de arriba. -->
-            <Border Classes="card"
-                    x:Name="BorderAvisoBackupProblema"
-                    BorderBrush="{DynamicResource DangerBrush}"
-                    BorderThickness="1"
-                    IsVisible="{Binding MostrarAvisoBackupProblema}">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="Backup de la base de datos" Classes="seccion" Foreground="{DynamicResource DangerBrush}" />
-                    <TextBlock Text="{Binding TextoAvisoBackup}"
-                               TextWrapping="Wrap" />
-                </StackPanel>
-            </Border>
-
-            <!-- Tercer estado (review final E1): no se pudo VERIFICAR la salud del backup (API
-                 caída, 403, 404 por una versión vieja del servidor, cambio de forma del JSON) —
-                 NO es lo mismo que "backup vencido" (arriba, rojo) ni que "backup al día"
-                 (sin aviso). Usa WarningBrush (ámbar) para no confundirse visualmente con una
-                 falla confirmada: nunca hay que ocultar en silencio un fallo de consulta. -->
-            <Border Classes="card"
-                    x:Name="BorderAvisoBackupDesconocido"
-                    BorderBrush="{DynamicResource WarningBrush}"
-                    BorderThickness="1"
-                    IsVisible="{Binding MostrarAvisoBackupDesconocido}">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="Backup de la base de datos" Classes="seccion" Foreground="{DynamicResource WarningBrush}" />
-                    <TextBlock Text="{Binding TextoAvisoBackup}"
-                               TextWrapping="Wrap" />
-                </StackPanel>
-            </Border>
-
-            <!-- Accesos rápidos: gateado por PuedeVerAccesosRapidos (fix bug cosmético
-                 2026-08-17). Antes el card y el título quedaban visibles y vacíos cuando ninguna
-                 de las 6 tarjetas de abajo pasaba su propio IsVisible (ej. opfinanzas, que solo
-                 tiene VerFinanzas). -->
-            <Border Classes="card"
-                    x:Name="BorderAccesosRapidos"
-                    IsVisible="{Binding PuedeVerAccesosRapidos}">
-                <StackPanel Spacing="12">
-
-                    <TextBlock Text="Accesos rápidos"
-                               Classes="seccion" />
-
-                    <WrapPanel>
-
-                        <Button x:Name="BotonAccesoProductos"
-                                Command="{Binding IrAProductosCommand}"
-                                IsVisible="{Binding PuedeGestionarProductos}"
-                                Width="200"
-                                MinHeight="104"
-                                Background="{DynamicResource FondoBrush}"
-                                BorderBrush="{DynamicResource BordeBrush}"
-                                BorderThickness="1"
-                                CornerRadius="6"
-                                Margin="0,0,12,12"
-                                Padding="16">
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Productos"
-                                           FontWeight="SemiBold"
-                                           TextWrapping="Wrap" />
-                                <TextBlock Text="Ver y administrar el catálogo"
-                                           Classes="caption"
-                                           TextWrapping="Wrap"
-                                           Foreground="{DynamicResource TextoTerciarioBrush}" />
-                            </StackPanel>
-                        </Button>
-
-                        <Button x:Name="BotonAccesoRegistrarEntrada"
-                                Command="{Binding IrARegistrarEntradaCommand}"
-                                IsVisible="{Binding PuedeRegistrarEntradaSalida}"
-                                Width="200"
-                                MinHeight="104"
-                                Background="{DynamicResource FondoBrush}"
-                                BorderBrush="{DynamicResource BordeBrush}"
-                                BorderThickness="1"
-                                CornerRadius="6"
-                                Margin="0,0,12,12"
-                                Padding="16">
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Registrar Entrada"
-                                           FontWeight="SemiBold"
-                                           TextWrapping="Wrap" />
-                                <TextBlock Text="Cargar entradas de stock"
-                                           Classes="caption"
-                                           TextWrapping="Wrap"
-                                           Foreground="{DynamicResource TextoTerciarioBrush}" />
-                            </StackPanel>
-                        </Button>
-
-                        <Button x:Name="BotonAccesoRegistrarSalida"
-                                Command="{Binding IrARegistrarSalidaCommand}"
-                                IsVisible="{Binding PuedeRegistrarEntradaSalida}"
-                                Width="200"
-                                MinHeight="104"
-                                Background="{DynamicResource FondoBrush}"
-                                BorderBrush="{DynamicResource BordeBrush}"
-                                BorderThickness="1"
-                                CornerRadius="6"
-                                Margin="0,0,12,12"
-                                Padding="16">
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Registrar Salida"
-                                           FontWeight="SemiBold"
-                                           TextWrapping="Wrap" />
-                                <TextBlock Text="Cargar salidas de stock"
-                                           Classes="caption"
-                                           TextWrapping="Wrap"
-                                           Foreground="{DynamicResource TextoTerciarioBrush}" />
-                            </StackPanel>
-                        </Button>
-
-                        <Button x:Name="BotonAccesoHistorialMovimientos"
-                                Command="{Binding IrAHistorialMovimientosCommand}"
-                                IsVisible="{Binding PuedeRegistrarMovimientos}"
-                                Width="200"
-                                MinHeight="104"
-                                Background="{DynamicResource FondoBrush}"
-                                BorderBrush="{DynamicResource BordeBrush}"
-                                BorderThickness="1"
-                                CornerRadius="6"
-                                Margin="0,0,12,12"
-                                Padding="16">
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Historial de movimientos"
-                                           FontWeight="SemiBold"
-                                           TextWrapping="Wrap" />
-                                <TextBlock Text="Consultar movimientos registrados"
-                                           Classes="caption"
-                                           TextWrapping="Wrap"
-                                           Foreground="{DynamicResource TextoTerciarioBrush}" />
-                            </StackPanel>
-                        </Button>
-
-                        <Button Command="{Binding IrAValorizacionCommand}"
-                                IsVisible="{Binding PuedeVerReportes}"
-                                Width="200"
-                                MinHeight="104"
-                                Background="{DynamicResource FondoBrush}"
-                                BorderBrush="{DynamicResource BordeBrush}"
-                                BorderThickness="1"
-                                CornerRadius="6"
-                                Margin="0,0,12,12"
-                                Padding="16">
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Valorización de inventario"
-                                           FontWeight="SemiBold"
-                                           TextWrapping="Wrap" />
-                                <TextBlock Text="Ver el valor total del stock"
-                                           Classes="caption"
-                                           TextWrapping="Wrap"
-                                           Foreground="{DynamicResource TextoTerciarioBrush}" />
-                            </StackPanel>
-                        </Button>
-
-                        <Button Command="{Binding IrAAuditoriaCommand}"
-                                IsVisible="{Binding PuedeVerReportes}"
-                                Width="200"
-                                MinHeight="104"
-                                Background="{DynamicResource FondoBrush}"
-                                BorderBrush="{DynamicResource BordeBrush}"
-                                BorderThickness="1"
-                                CornerRadius="6"
-                                Margin="0,0,12,12"
-                                Padding="16">
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="Log de auditoría"
-                                           FontWeight="SemiBold"
-                                           TextWrapping="Wrap" />
-                                <TextBlock Text="Revisar la actividad del sistema"
-                                           Classes="caption"
-                                           TextWrapping="Wrap"
-                                           Foreground="{DynamicResource TextoTerciarioBrush}" />
-                            </StackPanel>
-                        </Button>
-
-                    </WrapPanel>
-
-                </StackPanel>
-            </Border>
-
-        </StackPanel>
+            </StackPanel>
         </ScrollViewer>
-
     </Grid>
 
 </UserControl>

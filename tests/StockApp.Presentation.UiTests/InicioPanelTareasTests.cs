@@ -18,6 +18,7 @@ using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Presentation.Controls.V2;
 using StockApp.Presentation.ViewModels;
 using StockApp.Presentation.ViewModels.Tareas;
 using Xunit;
@@ -127,8 +128,7 @@ public class InicioPanelTareasTests
         Dispatcher.UIThread.RunJobs();
     }
 
-    private static Border BuscarBorderPorNombre(Window window, string nombre)
-        => window.GetVisualDescendants().OfType<Border>().First(b => b.Name == nombre);
+    private static Control BuscarPorNombre(Window window, string nombre) => window.GetVisualDescendants().OfType<Control>().First(c => c.Name == nombre);
 
     [AvaloniaFact]
     public void Montar_ConTareasVencidasYProximas_MuestraElPanelConLasFilasCorrectas()
@@ -142,15 +142,17 @@ public class InicioPanelTareasTests
         };
         var (window, _, _) = Montar(usuario, tareas);
 
-        var border = BuscarBorderPorNombre(window, "BorderPanelTareas");
+        var border = BuscarPorNombre(window, "PanelTareas");
         Assert.True(border.IsVisible);
 
         var textos = window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
         Assert.Contains("Reponer stock depósito B", textos);
         Assert.Contains("Controlar vencimientos", textos);
         Assert.Contains("Inventario estantería 4", textos);
-        Assert.Contains("VENCIDAS (2)", textos);
-        Assert.Contains("PRÓXIMAS A VENCER (1)", textos);
+        // D5: la Insignia de cada fila reemplaza los subtítulos "VENCIDAS (n)" / "PRÓXIMAS A VENCER (n)".
+        var insignias = window.GetVisualDescendants().OfType<Insignia>().ToList();
+        Assert.Equal(2, insignias.Count(i => i.Texto == "Vencida" && i.Variante == VarianteInsignia.Peligro));
+        Assert.Equal(1, insignias.Count(i => i.Texto == "Próxima" && i.Variante == VarianteInsignia.Advertencia));
     }
 
     /// <summary>
@@ -164,7 +166,7 @@ public class InicioPanelTareasTests
         var (window, vm, _) = Montar(usuario, new List<Tarea>());
 
         Assert.False(vm.MostrarPanelTareas);
-        var border = BuscarBorderPorNombre(window, "BorderPanelTareas");
+        var border = BuscarPorNombre(window, "PanelTareas");
         Assert.False(ArbolVisual.EsVisibleEnArbol(border));
     }
 
@@ -201,6 +203,30 @@ public class InicioPanelTareasTests
         navegacion.UltimoInicializadorTareaForm!(formVm);
 
         Assert.Equal("Reponer stock depósito B", formVm.Titulo);
+    }
+
+    /// <summary>
+    /// UI v2: la fila es un Button con V2TemaFilaPanel. Un click en una zona sin texto (franja del
+    /// padding superior, a la derecha del título) igual tiene que navegar: toda la fila es el
+    /// objetivo, no solo los glifos.
+    /// </summary>
+    [AvaloniaFact]
+    public void ClickReal_EnZonaVaciaDeLaFila_NavegaIgual()
+    {
+        var usuario = new UsuarioSesion(1, "admin", RolUsuario.Admin, "Administrador General");
+        var tareas = new List<Tarea> { TareaCon(1, "Corta", HoyLocal().AddDays(-1)) };
+        var (window, _, navegacion) = Montar(usuario, tareas);
+
+        var filaBoton = window.GetVisualDescendants().OfType<Button>()
+            .First(b => b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "Corta"));
+        Dispatcher.UIThread.RunJobs();
+        var punto = filaBoton.TranslatePoint(new Point(filaBoton.Bounds.Width * 0.75, 3), window)!.Value;
+        window.MouseMove(punto);
+        window.MouseDown(punto, MouseButton.Left);
+        window.MouseUp(punto, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(typeof(TareaFormViewModel), navegacion.UltimoTipoNavegado);
     }
 
     [AvaloniaFact]
