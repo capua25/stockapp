@@ -313,4 +313,39 @@ public class InicioViewV2Tests : IDisposable
         Assert.True(desplazamiento.Extent.Height <= desplazamiento.Viewport.Height,
             $"Inicio necesita scroll: contenido {desplazamiento.Extent.Height} px en {desplazamiento.Viewport.Height} px");
     }
+    /// <summary>
+    /// Peor caso aceptado por el usuario (2026-10-06, opción A): Admin con DOS alertas (backup vencido de
+    /// BackupsFake y facturas vencidas de FinanzasFake) y 7 tareas vencidas. Con el tope de 4 filas el contenido
+    /// mide 788 px: excede el área visible en 28 px a 1280x760 y en 20 px a 1366x768, y los accesos rápidos se
+    /// alcanzan con el scroll de la página. Medido; un crecimiento del contenido lo pone en rojo.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(1040, 760, 28)]
+    [InlineData(1126, 768, 20)]
+    public void ConDosAlertasYSieteTareas_ElScrollNoPasaDelLimiteYLosAccesosSeAlcanzan(double ancho, double alto, double excesoMaximo)
+    {
+        var tareas = Enumerable.Range(1, 7)
+            .Select(i => new Tarea
+            {
+                Id = i, Titulo = $"Tarea vencida {i}", Estado = EstadoTarea.Pendiente, Prioridad = PrioridadTarea.Media,
+                CreadaPorUsuarioId = 1, FechaCreacion = DateTime.UtcNow, FechaLimite = HoyLocal().AddDays(-i),
+            })
+            .ToList();
+
+        var (ventana, _) = Montar(Admin, [], tareas: tareas, tamano: new Size(ancho, alto));
+
+        Assert.True(SeVe(ventana, "AlertaBackupVencido")); // precondición: las dos alertas a la vez
+        Assert.True(SeVe(ventana, "AlertaFacturasVencidas"));
+        var desplazamiento = Nombrado<ScrollViewer>(ventana, "Desplazamiento");
+        var exceso = desplazamiento.Extent.Height - desplazamiento.Viewport.Height;
+        Assert.True(exceso <= excesoMaximo,
+            $"Inicio excede el área visible en {exceso} px (límite aceptado: {excesoMaximo} px)");
+
+        desplazamiento.ScrollToEnd();
+        Dispatcher.UIThread.RunJobs();
+        var ultimoAcceso = Nombrado<Control>(ventana, "BotonAccesoAuditoria");
+        var abajo = ultimoAcceso.TranslatePoint(new Point(0, ultimoAcceso.Bounds.Height), desplazamiento)!.Value.Y;
+        Assert.True(abajo <= desplazamiento.Viewport.Height,
+            $"El último acceso termina en y={abajo}, fuera del área visible de {desplazamiento.Viewport.Height} px");
+    }
 }

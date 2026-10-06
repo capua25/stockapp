@@ -85,6 +85,39 @@ public class ShellMainSeccionActivaTests
     }
 
     [Fact]
+    public void RegistrarEntradaOSalida_AlTerminarVaAlHistorial_MarcaHistorial()
+    {
+        // MovimientoRegistroViewModelBase navega al historial después de registrar (decisión del usuario
+        // 2026-10-06: el sidebar marca la pantalla mostrada por cualquier camino).
+        var navegacion = NavegacionReal();
+        var vm = Crear(navegacion, RolUsuario.Admin);
+
+        vm.NavRegistrarEntradaCommand.Execute(null);
+        Assert.Equal("RegistrarEntrada", vm.SeccionActiva);
+        navegacion.Navegar<MovimientoHistorialViewModel>();
+        Assert.Equal("HistorialMovimientos", vm.SeccionActiva);
+
+        vm.NavRegistrarSalidaCommand.Execute(null);
+        Assert.Equal("RegistrarSalida", vm.SeccionActiva);
+        navegacion.Navegar<MovimientoHistorialViewModel>();
+        Assert.Equal("HistorialMovimientos", vm.SeccionActiva);
+    }
+
+    [Fact]
+    public void ControlPoa_AbreLosGastosDeUnaLinea_MarcaGastos()
+    {
+        // ControlPoaViewModel navega a Gastos filtrado por línea POA (Navegar con inicializador).
+        var navegacion = NavegacionReal();
+        var vm = Crear(navegacion, RolUsuario.Admin);
+        vm.NavControlPoaCommand.Execute(null);
+        Assert.Equal("ControlPoa", vm.SeccionActiva);
+
+        navegacion.Navegar<GastosViewModel>(_ => { });
+
+        Assert.Equal("Gastos", vm.SeccionActiva);
+    }
+
+    [Fact]
     public void NavegarAUnaPantallaSinItemPropio_ConservaLaSeccion()
     {
         // Un formulario abierto desde un listado (Productos → ProductoForm) sigue marcando el listado.

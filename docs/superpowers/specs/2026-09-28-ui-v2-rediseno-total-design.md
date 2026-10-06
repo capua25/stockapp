@@ -364,6 +364,12 @@ Ciclo de cada fase: mockups de sus pantallas → aprobación del usuario → XAM
 
 **Estado de la Fase 1 (aprobada el 2026-10-05).** El usuario aprobó la Fase 1 tras probar flujos reales a 1366×768: crear y editar artículo, entrada y salida, anular documento, baja de categoría y cerrar sesión. Arreglos surgidos de esa prueba: placeholder de precio de entrada (`2a5e661`, main), motivo Venta pasa a Uso o consumo (`ff91f33`, main), baja de categoría bloqueada con productos activos (`ee461b8`, main), la salida nunca muestra precio (`d858221`, main), y el hueco a la derecha en celdas y headers de las 22 grillas del tema viejo (`c808334`, feat/ui-v2; el `961dc7e` previo no tenía efecto porque el contenido no está dentro de `.ui2`).
 
+**Decisiones del usuario de la Fase 2 (2026-10-06, tras la verificación orgánica):**
+- Panel "Tareas que requieren atención" de Inicio con tope de 4 filas (vencidas primero, después próximas) y el resto en "Ver todas las tareas"; las métricas siguen contando el total.
+- Con dos alertas a la vez (backup vencido y facturas vencidas, Administrador) Inicio necesita scroll y se acepta: 28 px a 1280×760 y 20 px a 1366×768 con el tope de 4 filas. Lo fija `InicioViewV2Tests.ConDosAlertasYSieteTareas_ElScrollNoPasaDelLimiteYLosAccesosSeAlcanzan`; si el contenido crece, da rojo.
+- Foco de teclado de la fila de panel (`V2TemaFilaPanel`): borde de acento de 1 px (`PART_Foco`, `:focus-visible`), como TextBox y ComboBox con foco, sin el FocusAdorner de Fluent. Aprobado sobre capturas headless.
+- El sidebar marca la sección de la pantalla mostrada por cualquier camino (sidebar, accesos y filas de Inicio, login, Entrada/Salida → Historial, Control POA → Gastos): la deriva `ShellMainViewModel` de la navegación real; una pantalla sin ítem propio conserva la sección.
+
 **Deuda menor de la Fase 1 (no bloquea):**
 - Sin guardián propio de `EsAdmin` en Importación (hoy lo tapa `ImportacionHabilitada=false`); resolver al reactivarla (Fase 8).
 - ~~Las comparaciones de píxeles no custodian el gate `IsVisible=EsVisible` del sidebar ni la ubicación de `ui2`.~~ Cerrada (Fase 2, Task 5): la custodia es de los UiTests, que montan la `ShellMainView` real, y se probó por mutación:
