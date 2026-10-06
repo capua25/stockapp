@@ -5,6 +5,14 @@
 <title>Shell: sidebar de Administrador (UI v2)</title>
 <link rel="stylesheet" href="../_base/tokens.css">
 <link rel="stylesheet" href="../_base/base.css">
+<style>
+  /* Pulgar de scroll de Fluent (P4, barra Auto): el ScrollViewer de la navegación del Administrador
+     desborda y Fluent dibuja un indicador sólido de 2 px. Medido en el render (Fase 2, Task 9): x 223-224
+     del sidebar, desde y 84, 352 px de alto a 760 y 362 px a 768 (crece con el viewport). Color de Fluent,
+     no un token: es una compensación medida (spec §6.5), no un valor de diseño. */
+  .v2-sidebar-pulgar { position: absolute; left: 223px; top: 84px; width: 2px; height: 352px; background: #7A7A7A; }
+  @media (min-height: 768px) { .v2-sidebar-pulgar { height: 362px; } }
+</style>
 </head>
 <body>
 <!-- Datos: DatosShell.Admin() (Task 11). Sidebar transitorio (P1, decidido): ANÁLISIS y
@@ -56,6 +64,7 @@
       <span class="v2-boton v2-boton--ghost v2-boton--icono"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M17 7L15.59 8.41L18.17 11H8V13H18.17L15.59 15.58L17 17L22 12M4 5H12V3H4C2.9 3 2 3.9 2 5V19C2 20.1 2.9 21 4 21H12V19H4V5Z"/></svg></span>
     </div>
     <div class="v2-version">v0.4.0</div>
+    <div class="v2-sidebar-pulgar"></div>
   </aside>
 </div>
 </body>

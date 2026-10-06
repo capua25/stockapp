@@ -335,6 +335,7 @@ Cubre también el valor de `TextBox`, `NumericUpDown`, `CalendarDatePicker` y `C
 - La etiqueta "1) Generar código de recuperación" de `ResetAdminView` va en un `TextBlock` con `TextAlignment="Center"` dentro de un botón estirado: como `Content` string centrado, el origen del texto se redondeaba (16 teselas contra 3).
 - `LineHeight` = `V2FuenteControlAltoLinea` (16) en `TextBlock.texto-secundario` (`ControlesV2.axaml`): sin él, el párrafo envuelto de `BloqueoLicenciaView` salía a 15 px de interlineado y las líneas 2 y 3 caían 1 px arriba (26 teselas contra 10).
 - `LineHeight` 16 (token `V2FuenteControlAltoLinea`) en `PART_Texto` de la `Alerta`: el natural de Avalonia son ~15px y el mockup usa 16, por lo que la segunda línea de una alerta envuelta salía 1px más arriba (`ComponentesV2.axaml`).
+- Pulgar de scroll del sidebar del Administrador en `sidebar-admin.html` (`.v2-sidebar-pulgar`): `#7A7A7A`, 2 px en x 223, desde y 84, 352 px de alto a 760 y 362 a 768 (media query). Es el indicador de Fluent medido en el render, no un token (Fase 2, Task 9).
 - Ancho de texto redondeado hacia arriba: `width: calc-size(fit-content, round(up, size, 1px))` en `base.css`, porque un TextBlock mide el ceil del ancho del texto. `calc-size()` solo funciona en Chromium: en otro navegador el mockup queda hasta 1px distinto. La comparación siempre usa Chromium.
 
 **Salvedad (§6.4).** El render headless y Windows pueden diferir en antialiasing: la aprobación final es del usuario mirando la app.
@@ -364,7 +365,7 @@ Ciclo de cada fase: mockups de sus pantallas → aprobación del usuario → XAM
   - (a) Sin el gate del header: rojo en `ShellMainViewV2Tests.OperadorMixto_SeccionesSinItemsVisibles_OcultanSuHeader` y `RevocacionEnCaliente_OcultaElHeaderDeLaSeccionQueSeVacia`. `SidebarOperadorMixto_IgualAlMockup` (y su variante 1366x768) quedan verdes: es un LÍMITE del umbral, no un diseño. Los 2 headers de sección de más agregan píxeles, pero un header (texto chico, gris claro) queda bajo el umbral calibrado (11 teselas densas / 1,68 %). Ningún cambio de umbral o de mockup debe asumir que la comparación custodia headers de sección: el gate del header lo custodian solo esos 2 UiTests.
   - (b) Sin `ui2` en el sidebar: rojo en `Ui2_VaEnElSidebarYNoEnLaRaiz` y en las cuatro comparaciones del shell.
   - (c) Con `ui2` movido a la raíz: rojo en `ContenidoHospedado_NoTieneAncestroUi2` y `Ui2_VaEnElSidebarYNoEnLaRaiz`; las comparaciones del shell quedan verdes (no lo ven, por diseño: mueven la clase, no los píxeles del estado comparado).
-- Pulgar de scroll de Fluent (2 px) en el sidebar del Administrador que el mockup no tiene (P4); dentro del umbral.
+- ~~Pulgar de scroll de Fluent (2 px) en el sidebar del Administrador que el mockup no tiene (P4); dentro del umbral.~~ Cerrada (Fase 2, Task 9): el mockup lo replica.
 - `Mensaje_IgualAlMockup` (umbral 12 aprobado), `Modal_IgualAlMockup` y `LoginAccesoLimitado_IgualAlMockup_1366x768` pasan sin margen (tono de rasterizador); frágiles ante cambios de render.
 - Margin `0,1,0,0` de la card de Reset es estático: con `AlertaCompletado`/`AlertaError` visibles cambia la paridad del alto (sin mockup de esos estados).
 - `V2FuenteTituloPaginaAltoLinea` sin test de control real equivalente al de la Alerta; `% 16` sobre double puede dar falso rojo con escalado fraccional.
