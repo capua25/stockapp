@@ -144,7 +144,8 @@
         <Setter Property="Foreground" Value="{DynamicResource V2TextoEtiquetaBrush}" />
     </Style>
 
-    <!-- Ghost de solo ícono (cerrar sesión del pie del sidebar). Espejo CSS: modificador de icono de .v2-boton en base.css. -->
+    <!-- Ghost de solo ícono (cerrar sesión del pie del sidebar). Espejo CSS: el modificador de ícono de v2-boton
+         en base.css (su nombre lleva doble guion y un comentario XAML no puede contenerlo). -->
     <Style Selector=".ui2 Button.ghost.icono">
         <Setter Property="Width" Value="32" />
         <Setter Property="Height" Value="32" />
