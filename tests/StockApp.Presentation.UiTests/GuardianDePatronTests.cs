@@ -7,8 +7,12 @@ using System.Text.RegularExpressions;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Markup.Xaml;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
+using StockApp.Domain.Enums;
 using StockApp.Presentation.Actualizaciones.Views;
+using StockApp.Presentation.ViewModels;
 using StockApp.Presentation.Views;
 using StockApp.Presentation.Views.Administracion;
 using StockApp.Presentation.Views.Catalogo;
@@ -307,6 +311,12 @@ public class GuardianDePatronTests
     /// <summary>
     /// Deuda de la Fase 1: una vista que se migra a v2 sale de VistasDeLaTanda y perdía este chequeo. El
     /// cromo del shell (sidebar v2) también: ShellMainView está fuera del guardián P0-P9, pero se puede montar.
+    ///
+    /// Cobertura PARCIAL, por diseño: PatronHelpers.Montar no asigna DataContext, así que lo que solo existe con un
+    /// ViewModel (plantillas de celda de DataGrid, ItemTemplates, contenido tras bindings) no se realiza y no se
+    /// mide. Para ShellMainView, que sin VM no dibuja el sidebar completo, lo cubre aparte
+    /// ShellV2ConViewModel_NoTieneOpacidadesLiterales. Un literal dentro de una plantilla de otra vista migrada
+    /// queda fuera de este chequeo.
     /// </summary>
     public static TheoryData<Type> VistasV2Montables =>
         new(VistasMigradasAV2.Append(typeof(ShellMainView)).OrderBy(t => t.Name));
@@ -321,6 +331,67 @@ public class GuardianDePatronTests
         Assert.True(literales.Count == 0,
             $"{tipoVista.Name} (v2) tiene {literales.Count} control(es) con Opacity literal: "
             + string.Join(", ", literales.Select(c => c.GetType().Name)));
+    }
+
+    /// <summary>
+    /// Complemento de <see cref="VistaV2_NoTieneOpacidadesLiterales"/> para el shell: con un ShellMainViewModel real
+    /// (fakes de sesión/navegación, grupos expandidos) se realiza el sidebar completo y sus ItemTemplates.
+    /// </summary>
+    [AvaloniaFact]
+    public void ShellV2ConViewModel_NoTieneOpacidadesLiterales()
+    {
+        var vm = new ShellMainViewModel(
+            new SesionFake(RolUsuario.Admin, Array.Empty<string>()),
+            new NavigationServiceFake(),
+            new InfoAppFake(),
+            new ConfirmacionServiceFake(),
+            new AuthServiceFake(),
+            new PreferenciasSidebarFake());
+        foreach (var grupo in vm.Grupos)
+            grupo.EstaExpandido = true;
+
+        var vista = new ShellMainView();
+        var window = new Window { Width = 1200, Height = 900, DataContext = vm, Content = vista };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
+
+        var literales = PatronHelpers.OpacidadesLiteralesDe(vista);
+
+        Assert.True(literales.Count == 0,
+            $"ShellMainView (v2, con ViewModel) tiene {literales.Count} control(es) con Opacity literal: "
+            + string.Join(", ", literales.Select(c => c.GetType().Name)));
+    }
+
+    private const string XamlFixtureOpacidades = """
+        <Window xmlns="https://github.com/avaloniaui"
+                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                Width="300" Height="200">
+            <StackPanel>
+                <StackPanel.Styles>
+                    <Style Selector="Border.por-estilo">
+                        <Setter Property="Opacity" Value="0.28" />
+                    </Style>
+                </StackPanel.Styles>
+                <Border x:Name="Literal" Width="20" Height="20" Opacity="0.5" />
+                <Border x:Name="PorEstilo" Classes="por-estilo" Width="20" Height="20" />
+                <Border x:Name="Normal" Width="20" Height="20" />
+            </StackPanel>
+        </Window>
+        """;
+
+    [AvaloniaFact]
+    public void OpacidadesLiteralesDe_DevuelveSoloElLiteralYNoElQueVieneDeUnStyle()
+    {
+        // Mismo camino que una vista real: XAML cargado en runtime, atributo vs Setter de Style.
+        var window = AvaloniaRuntimeXamlLoader.Parse<Window>(XamlFixtureOpacidades, typeof(TestApp).Assembly);
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var literales = PatronHelpers.OpacidadesLiteralesDe((Control)window.Content!);
+
+        var unico = Assert.Single(literales);
+        Assert.Equal("Literal", unico.Name);
     }
 
     /// <summary>
