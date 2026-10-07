@@ -376,6 +376,7 @@ Ciclo de cada fase: mockups de sus pantallas → aprobación del usuario → XAM
 - `EsAdmin` de Importación sin guardián propio mientras `ImportacionHabilitada=false` (Fase 8).
 - `capturar.sh` no es fail-closed con WSLg caído: devolvió exit 0 capturando ventanas del escritorio del usuario. Fuera de alcance de esta fase.
 - Minors diferidos del ledger sin cerrar: `TextoAVencer7Dias` sigue en el VM de Inicio (borrar en Fase 9); en OperadorMixto una sola insignia "Vencida" pálida no se detecta (límite de la métrica); umbrales de Inicio sin margen (un cambio de rasterizador los pone en rojo, intencional); `Mensaje_IgualAlMockup_1366x768` sin margen (11 de 11, tono); pulgar del sidebar a re-medir en las Fases 6 y 7; `ContextMenu`/`MenuFlyout` sin corte de la herencia del centrado (hoy no se usan); lista `DialogosV2` manual en `GuardianDePatronTests`; `CargarAsync` de Inicio sin cancelación (preexistente).
+- Sidebar del shell v2 corta el último ítem a 1366x768 (detectado en mockups de Fase 3a, 2026-10-07); el usuario lo difirió: no se arregla en 3a.
 
 **Deuda menor de la Fase 1 (no bloquea):**
 - Sin guardián propio de `EsAdmin` en Importación (hoy lo tapa `ImportacionHabilitada=false`); resolver al reactivarla (Fase 8).
