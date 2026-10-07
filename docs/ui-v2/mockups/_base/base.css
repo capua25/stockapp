@@ -308,3 +308,6 @@ body {
 .v2-grilla-fila--inactiva .v2-grilla-celda { color: var(--v2-color-texto-terciario); }
 /* Número negativo en celda (DataGridV2.axaml, TextBlock.negativo): peligro texto. Gana sobre la fila inactiva. */
 .v2-grilla-celda .v2-texto-peligro { color: var(--v2-color-peligro-texto); }
+
+/* TextBox deshabilitado (ControlesV2.axaml, .ui2 TextBox:disabled): tokens de deshabilitado, los mismos del botón. */
+.v2-input--deshabilitado { background: var(--v2-color-deshabilitado-fondo); border-color: var(--v2-color-borde); color: var(--v2-color-deshabilitado-texto); }
