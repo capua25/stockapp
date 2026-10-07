@@ -294,4 +294,28 @@ public class ProductoListViewV2Tests
         Assert.Equal("cemento", m.Vm.FiltroBusqueda);
         Assert.Equal("Nombre, SKU o código de barras", caja.PlaceholderText);
     }
+
+    [AvaloniaFact]
+    public void Scroll_HastaLaPrimeraFilaInactiva_NoMueveNingunaColumna()
+    {
+        // 30 productos activos con textos cortos y, al final (fuera de pantalla al inicio), uno inactivo y uno con
+        // stock negativo: la grilla mide solo las filas realizadas y una Auto crece cuando aparece una fila más ancha.
+        var productos = Enumerable.Range(1, 30).Select(i => P(i, $"Producto {i}", i)).ToList();
+        productos.Add(P(31, "Carretilla reforzada", 4m, activo: false));
+        productos.Add(P(32, "Pala de punta", -7m));
+        var m = Montar(productos.ToArray());
+        var grilla = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla");
+        Assert.DoesNotContain(grilla.GetVisualDescendants().OfType<DataGridRow>(), r => ReferenceEquals(r.DataContext, productos[30]));
+
+        var antes = grilla.Columns.Select(c => c.ActualWidth).ToArray();
+        grilla.ScrollIntoView(productos[31], null);
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Contains(grilla.GetVisualDescendants().OfType<DataGridRow>(), r => ReferenceEquals(r.DataContext, productos[30]));
+        var despues = grilla.Columns.Select(c => c.ActualWidth).ToArray();
+        for (var i = 0; i < antes.Length; i++)
+            Assert.True(Math.Abs(antes[i] - despues[i]) <= 0.5,
+                $"La columna {grilla.Columns[i].Header} pasó de {antes[i]} a {despues[i]} al aparecer la fila inactiva.");
+    }
 }

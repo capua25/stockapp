@@ -54,7 +54,9 @@
 
                 <!-- Columnas de plantilla para marcar cada TextBlock con Classes.inactivo (texto terciario por
                      token, nunca Opacity). SortMemberPath conserva el orden por click en el encabezado.
-                     MinWidth por columna y scroll horizontal Auto: fix 3548397. -->
+                     MinWidth por columna y scroll horizontal Auto: fix 3548397.
+                     ESTADO fija 78 (lo que mide la insignia "Inactivo"): en Auto crecía de golpe al scrollear hasta
+                     la primera fila inactiva y movía ~12 px a las demás columnas. -->
                 <DataGrid x:Name="Grilla"
                           ItemsSource="{Binding ItemsView}"
                           SelectedItem="{Binding ItemSeleccionado}"
@@ -130,7 +132,7 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="ESTADO" Width="Auto" CanUserSort="False">
+                        <DataGridTemplateColumn Header="ESTADO" Width="78" CanUserSort="False">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:ProductoDto">
                                     <v2:Insignia Texto="Inactivo" Variante="Neutro" IsVisible="{Binding !Activo}" />
