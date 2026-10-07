@@ -380,7 +380,8 @@
                                Text="{TemplateBinding Titulo}"
                                HorizontalAlignment="Center"
                                FontSize="{DynamicResource V2FuenteTituloSeccionTamano}"
-                               FontWeight="{DynamicResource V2FuenteTituloSeccionPeso}" />
+                               FontWeight="{DynamicResource V2FuenteTituloSeccionPeso}"
+                               LineHeight="{DynamicResource V2FuenteTituloSeccionAltoLinea}" />
                     <TextBlock x:Name="PART_Mensaje"
                                Text="{TemplateBinding Mensaje}"
                                HorizontalAlignment="Center"

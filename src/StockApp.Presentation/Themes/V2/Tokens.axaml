@@ -120,6 +120,7 @@
     <x:Double x:Key="V2FuenteTituloPaginaTamano">22</x:Double>
     <FontWeight x:Key="V2FuenteTituloPaginaPeso">600</FontWeight>
     <x:Double x:Key="V2FuenteTituloPaginaAltoLinea">26</x:Double>
+    <x:Double x:Key="V2FuenteTituloSeccionAltoLinea">19</x:Double>
     <x:Double x:Key="V2FuenteTituloSeccionTamano">15</x:Double>
     <FontWeight x:Key="V2FuenteTituloSeccionPeso">600</FontWeight>
     <x:Double x:Key="V2FuenteMarcaTamano">15</x:Double>
