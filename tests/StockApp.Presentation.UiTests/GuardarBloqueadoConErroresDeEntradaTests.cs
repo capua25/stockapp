@@ -58,8 +58,11 @@ public class GuardarBloqueadoConErroresDeEntradaTests
         Dispatcher.UIThread.RunJobs();
     }
 
+    // CampoFormulario viejo (Entrada/Salida, todavía en el tema viejo) o v2 (Productos): mientras convivan, los dos.
     private static TextBox CajaDeCampo(Window window, string etiqueta)
-        => window.GetVisualDescendants().OfType<CampoFormulario>().Single(c => c.Etiqueta == etiqueta)
+        => window.GetVisualDescendants().OfType<Control>()
+            .Single(c => (c as CampoFormulario)?.Etiqueta == etiqueta
+                         || (c as StockApp.Presentation.Controls.V2.CampoFormulario)?.Etiqueta == etiqueta)
             .GetVisualDescendants().OfType<TextBox>().First();
 
     private static Button BotonPorCommand(Window window, object comando)

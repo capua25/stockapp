@@ -39,7 +39,7 @@ namespace StockApp.Presentation.UiTests;
 /// guardian nuevo cada vez.
 ///
 /// Titulo/Eyebrow en null: para las vistas cuyo HeaderVista toma el titulo de un binding a VM
-/// (P3: ProductoFormView, MovimientoFormControl) o que no
+/// (P3: MovimientoFormControl) o que no
 /// llevan HeaderVista propio (P5: EntradaRegistroView/SalidaRegistroView, heredan el de
 /// MovimientoFormControl), PatronHelpers.Montar no asigna ViewModel, asi que el texto no se
 /// puede verificar literal en este banco de pruebas. Se deja en null y el test solo exige que
@@ -50,7 +50,6 @@ public class GuardianDePatronTests
 {
     [AvaloniaTheory]
     [InlineData(typeof(MovimientoHistorialView), "Historial de movimientos", "MOVIMIENTOS")]
-    [InlineData(typeof(ProductoFormView), null, null)]
     [InlineData(typeof(MovimientoFormControl), null, null)]
     [InlineData(typeof(EntradaRegistroView), null, null)]
     [InlineData(typeof(SalidaRegistroView), null, null)]
@@ -108,7 +107,6 @@ public class GuardianDePatronTests
     public static readonly TheoryData<Type> VistasDeLaTanda = new()
     {
         typeof(MovimientoHistorialView),
-        typeof(ProductoFormView),
         typeof(MovimientoFormControl),
         typeof(EntradaRegistroView),
         typeof(SalidaRegistroView),
@@ -226,6 +224,7 @@ public class GuardianDePatronTests
         typeof(ActualizacionBloqueoView),
         typeof(InicioView),
         typeof(ProductoListView),
+        typeof(ProductoFormView),
     };
 
     /// <summary>

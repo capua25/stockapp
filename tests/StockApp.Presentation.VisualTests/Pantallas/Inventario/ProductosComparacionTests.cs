@@ -36,4 +36,32 @@ public class ProductosComparacionTests
     [AvaloniaFact]
     public void ProductosVacio_IgualAlMockup_1366x768() =>
         Comparar(DatosProductos.SinProductos(), "inventario/productos-vacio.html", TamanoLienzo.Municipio);
+
+    [AvaloniaFact]
+    public void ProductoNuevo_IgualAlMockup() => Comparar(DatosProductos.Nuevo(), "inventario/producto-nuevo.html");
+
+    [AvaloniaFact]
+    public void ProductoNuevo_IgualAlMockup_1366x768() =>
+        Comparar(DatosProductos.Nuevo(), "inventario/producto-nuevo.html", TamanoLienzo.Municipio);
+
+    [AvaloniaFact]
+    public void ProductoEditar_IgualAlMockup() => Comparar(DatosProductos.Editar(), "inventario/producto-editar.html");
+
+    [AvaloniaFact]
+    public void ProductoEditar_IgualAlMockup_1366x768() =>
+        Comparar(DatosProductos.Editar(), "inventario/producto-editar.html", TamanoLienzo.Municipio);
+
+    [AvaloniaFact]
+    public void ProductoError_IgualAlMockup() => Comparar(DatosProductos.ConError(), "inventario/producto-error.html");
+
+    [AvaloniaFact]
+    public void ProductoError_IgualAlMockup_1366x768() =>
+        Comparar(DatosProductos.ConError(), "inventario/producto-error.html", TamanoLienzo.Municipio);
+
+    [AvaloniaFact]
+    public void ProductoSinPermiso_IgualAlMockup() => Comparar(DatosProductos.SinPermiso(), "inventario/producto-sin-permiso.html");
+
+    [AvaloniaFact]
+    public void ProductoSinPermiso_IgualAlMockup_1366x768() =>
+        Comparar(DatosProductos.SinPermiso(), "inventario/producto-sin-permiso.html", TamanoLienzo.Municipio);
 }

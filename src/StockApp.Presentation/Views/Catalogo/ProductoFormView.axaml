@@ -3,97 +3,125 @@
              xmlns:beh="using:StockApp.Presentation.Behaviors"
              xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Catalogo"
-             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:ent="using:StockApp.Domain.Entities"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="500" d:DesignHeight="450"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
              x:Class="StockApp.Presentation.Views.Catalogo.ProductoFormView"
-             x:DataType="vm:ProductoFormViewModel">
+             x:DataType="vm:ProductoFormViewModel"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
 
-    <Grid>
-    <ScrollViewer>
-        <Border Classes="card" Padding="{DynamicResource MargenVista}" Margin="{DynamicResource MargenVista}"
-                MaxWidth="480">
-            <StackPanel Spacing="{DynamicResource Espacio3}">
+    <!-- UI v2 (spec §4.4 y §5.2). Espejo: docs/ui-v2/mockups/inventario/producto-*.html. El breadcrumb vuelve
+         con CancelarCommand (sin back-stack, no guarda). Sin permiso, el estado reemplaza a la card. -->
+    <ScrollViewer x:Name="Desplazamiento" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="28,24">
 
-                <c:HeaderVista Titulo="{Binding Titulo}" />
+            <v2:EncabezadoPagina x:Name="Encabezado"
+                                 Titulo="{Binding Titulo}"
+                                 BreadcrumbOrigen="Productos"
+                                 BreadcrumbComando="{Binding CancelarCommand}"
+                                 BreadcrumbActual="{Binding Titulo}" />
 
-                <c:CampoFormulario Etiqueta="SKU" Requerido="True">
-                    <!-- En modo edición el SKU no es editable: ProductoService.ModificarAsync
-                         ignora cambios al Código (no lo reasigna sobre la entidad original),
-                         así que permitir tipearlo confundiría al usuario sin efecto real. -->
-                    <TextBox Text="{Binding Codigo}"
-                             IsEnabled="{Binding !EsEdicion}"
-                             PlaceholderText="Ej: P001" />
-                </c:CampoFormulario>
+            <!-- Margin top -16: el mockup apila el margen inferior del encabezado (16) y el superior del estado
+                 (32) y CSS los colapsa en 32; Avalonia los suma (48), así que se descuenta el de abajo del
+                 encabezado. UseLayoutRounding False: mismo caso y arreglo que EstadoSinProductos de
+                 ProductoListView (el estado va centrado y el ancho del título es fraccionario). -->
+            <v2:EstadoVacio x:Name="EstadoSinPermiso"
+                            Margin="0,-16,0,0"
+                            UseLayoutRounding="False"
+                            Titulo="Sin permiso"
+                            Mensaje="{Binding MensajeSinPermiso}"
+                            EsError="True"
+                            IsVisible="{Binding SinPermiso}" />
 
-                <c:CampoFormulario Etiqueta="Nombre" Requerido="True">
-                    <TextBox Text="{Binding Nombre}"
-                             PlaceholderText="Nombre del producto" />
-                </c:CampoFormulario>
+            <!-- Columna * con MaxWidth 760: la card mide 760 a la izquierda (con HorizontalAlignment Left y
+                 MaxWidth en la card mediría solo lo que pide su contenido). UseLayoutRounding False en la
+                 grilla: con el redondeo Avalonia infla en 1 px una columna acotada por MaxWidth (760 sale
+                 761); la card lo recupera para su contenido. -->
+            <Grid x:Name="ColumnaFormulario" UseLayoutRounding="False" IsVisible="{Binding !SinPermiso}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" MaxWidth="{StaticResource V2AnchoFormularioMax}" />
+                </Grid.ColumnDefinitions>
 
-                <c:CampoFormulario Etiqueta="Código de barras">
-                    <TextBox Text="{Binding CodigoBarras}"
-                             PlaceholderText="EAN (opcional)" />
-                </c:CampoFormulario>
+                <v2:TarjetaContenido x:Name="Tarjeta" Padding="24" UseLayoutRounding="True">
+                    <StackPanel>
+                        <TextBlock Classes="subtitulo-formulario" Text="Datos del producto" Margin="0,0,0,12" />
+                        <Grid ColumnDefinitions="*,16,*" RowDefinitions="Auto,16,Auto,16,Auto">
+                            <!-- En edición el SKU no es editable: ProductoService.ModificarAsync no reasigna
+                                 el código, así que tipearlo no tendría efecto. -->
+                            <v2:CampoFormulario x:Name="CampoSku" Grid.Row="0" Grid.Column="0" Etiqueta="SKU" Requerido="True">
+                                <TextBox Text="{Binding Codigo}" IsEnabled="{Binding !EsEdicion}" PlaceholderText="Ej: P001" />
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario x:Name="CampoCodigoBarras" Grid.Row="0" Grid.Column="2" Etiqueta="Código de barras">
+                                <TextBox Text="{Binding CodigoBarras}" PlaceholderText="EAN (opcional)" />
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario x:Name="CampoNombre" Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Etiqueta="Nombre" Requerido="True">
+                                <TextBox Text="{Binding Nombre}" PlaceholderText="Nombre del producto" />
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario x:Name="CampoDescripcion" Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="3" Etiqueta="Descripción">
+                                <TextBox Text="{Binding Descripcion}"
+                                         PlaceholderText="Descripción opcional"
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         Height="88" />
+                            </v2:CampoFormulario>
+                        </Grid>
 
-                <c:CampoFormulario Etiqueta="Descripción">
-                    <TextBox Text="{Binding Descripcion}"
-                             PlaceholderText="Descripción opcional"
-                             AcceptsReturn="True"
-                             Height="60" />
-                </c:CampoFormulario>
+                        <Border Height="1" Margin="0,20" Background="{DynamicResource V2SeparadorGrillaBrush}" />
 
-                <c:CampoFormulario Etiqueta="Precio costo">
-                    <TextBox Text="{Binding PrecioCosto, Converter={x:Static conv:DecimalConverter.Instance}}"
-                             beh:EntradaNumericaBehavior.EsDecimal="True" />
-                </c:CampoFormulario>
+                        <TextBlock Classes="subtitulo-formulario" Text="Costo y clasificación" Margin="0,0,0,12" />
+                        <Grid ColumnDefinitions="*,16,*" RowDefinitions="Auto,16,Auto">
+                            <v2:CampoFormulario x:Name="CampoPrecioCosto" Grid.Row="0" Grid.Column="0" Etiqueta="Precio costo">
+                                <TextBox Text="{Binding PrecioCosto, Converter={x:Static conv:DecimalConverter.Instance}}"
+                                         beh:EntradaNumericaBehavior.EsDecimal="True" />
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario x:Name="CampoUnidad" Grid.Row="0" Grid.Column="2" Etiqueta="Unidad de medida">
+                                <ComboBox ItemsSource="{Binding UnidadesMedida}"
+                                          SelectedItem="{Binding UnidadMedidaSeleccionada}"
+                                          HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="ent:UnidadMedida">
+                                            <TextBlock Text="{Binding Nombre}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario x:Name="CampoCategoria" Grid.Row="2" Grid.Column="0" Etiqueta="Categoría">
+                                <ComboBox ItemsSource="{Binding Categorias}"
+                                          SelectedItem="{Binding CategoriaSeleccionada}"
+                                          PlaceholderText="Sin categoría"
+                                          HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="ent:Categoria">
+                                            <TextBlock Text="{Binding Nombre}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </v2:CampoFormulario>
+                        </Grid>
 
-                <c:CampoFormulario Etiqueta="Unidad de medida">
-                    <ComboBox ItemsSource="{Binding UnidadesMedida}"
-                              SelectedItem="{Binding UnidadMedidaSeleccionada}"
-                              HorizontalAlignment="Stretch">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding Nombre}" />
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
-                </c:CampoFormulario>
+                        <v2:Alerta x:Name="AlertaError"
+                                   Margin="0,8,0,0"
+                                   Variante="Error"
+                                   Texto="{Binding MensajeError}"
+                                   IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
-                <c:CampoFormulario Etiqueta="Categoría">
-                    <ComboBox ItemsSource="{Binding Categorias}"
-                              SelectedItem="{Binding CategoriaSeleccionada}"
-                              PlaceholderText="Sin categoría"
-                              HorizontalAlignment="Stretch">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding Nombre}" />
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
-                </c:CampoFormulario>
-
-                <!-- Mensaje de error -->
-                <TextBlock Text="{Binding MensajeError}"
-                           Foreground="{DynamicResource DangerBrush}"
-                           IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                           TextWrapping="Wrap" />
-
-                <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
-                    <Button Classes="primary" Content="Guardar" Command="{Binding GuardarCommand}" />
-                    <Button Classes="secondary" Content="Cancelar" Command="{Binding CancelarCommand}" />
-                </StackPanel>
-
-            </StackPanel>
-        </Border>
+                        <Border x:Name="PieFormulario"
+                                Margin="0,20,0,0"
+                                Padding="0,16,0,0"
+                                BorderThickness="0,1,0,0"
+                                BorderBrush="{DynamicResource V2SeparadorGrillaBrush}">
+                            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                                <Button x:Name="BotonCancelar" Classes="secundario" Content="Cancelar" Command="{Binding CancelarCommand}" />
+                                <Button x:Name="BotonGuardar" Classes="primario" Content="Guardar" Command="{Binding GuardarCommand}" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </v2:TarjetaContenido>
+            </Grid>
+        </StackPanel>
     </ScrollViewer>
-
-        <!-- bugfix "pantalla muda ante un 403": ver ViewModelBase.EjecutarCargaProtegidaAsync. -->
-        <c:EstadoVacio Titulo="Sin permiso"
-                       Mensaje="{Binding MensajeSinPermiso}"
-                       EsError="True"
-                       IsVisible="{Binding SinPermiso}" />
-    </Grid>
 
 </UserControl>

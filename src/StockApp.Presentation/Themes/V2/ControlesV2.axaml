@@ -235,6 +235,15 @@
     <Style Selector=".ui2 TextBox:error /template/ Border#PART_BorderElement">
         <Setter Property="BorderBrush" Value="{DynamicResource V2BordeErrorBrush}" />
     </Style>
+    <!-- TextBox deshabilitado (el SKU en edición): los mismos tokens de deshabilitado que los botones, en vez
+         del deshabilitado de Fluent. Espejo: la variante deshabilitada de .v2-input en base.css. -->
+    <Style Selector=".ui2 TextBox:disabled /template/ Border#PART_BorderElement">
+        <Setter Property="Background" Value="{DynamicResource V2DeshabilitadoFondoBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource V2BordeBrush}" />
+    </Style>
+    <Style Selector=".ui2 TextBox:disabled">
+        <Setter Property="Foreground" Value="{DynamicResource V2DeshabilitadoTextoBrush}" />
+    </Style>
 
     <!-- Un estilo por tipo, NO un selector múltiple: con ".ui2 ComboBox, .ui2 NumericUpDown" el
          compilador resuelve las propiedades contra el ancestro común (TemplatedControl) y

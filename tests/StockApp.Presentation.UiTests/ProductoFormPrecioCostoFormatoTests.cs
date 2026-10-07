@@ -7,7 +7,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using StockApp.Domain.Entities;
-using StockApp.Presentation.Controls;
+using StockApp.Presentation.Controls.V2;
 using StockApp.Presentation.ViewModels.Catalogo;
 using StockApp.Presentation.Views.Catalogo;
 using Xunit;

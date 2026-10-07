@@ -137,9 +137,11 @@ public class CatalogoFormAnchoYCancelarTests
     private static Control PanelDelFormularioDe(Control vista)
         => (Control)CardDe(vista).Child!;
 
+    // "secondary" en los formularios del tema viejo, "secundario" en los v2 (ProductoFormView).
     private static Button? BotonCancelar(Control vista)
         => vista.GetVisualDescendants().OfType<Button>()
-            .FirstOrDefault(b => b.Classes.Contains("secondary") && (b.Content as string) == "Cancelar");
+            .FirstOrDefault(b => (b.Classes.Contains("secondary") || b.Classes.Contains("secundario"))
+                                 && (b.Content as string) == "Cancelar");
 
     /// <summary>
     /// Custodia el ancho: el panel del formulario debe estar alineado a la izquierda (no
@@ -197,7 +199,7 @@ public class CatalogoFormAnchoYCancelarTests
             var boton = BotonCancelar(vista);
             if (boton is null)
             {
-                errores.Add($"{nombre}: no tiene un Button Classes=\"secondary\" Content=\"Cancelar\".");
+                errores.Add($"{nombre}: no tiene un Button Classes=\"secondary\" (o \"secundario\") Content=\"Cancelar\".");
                 continue;
             }
 
