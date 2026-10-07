@@ -41,9 +41,10 @@
                            IsVisible="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.HayElementos}}" />
 
                 <!-- UseLayoutRounding False: el estado vacío va centrado y el ancho del título es fraccionario;
-                     Avalonia redondeaba su origen a píxel entero y Chromium no (16 teselas densas contra 11,
+                     Avalonia redondea su origen a píxel entero y Chromium no (16 teselas densas contra 11,
                      con 1 px de corrimiento en las letras). Mismo caso y mismo arreglo que el enlace de
-                     BloqueoLicenciaView. -->
+                     BloqueoLicenciaView. Va por instancia y no en el ControlTheme de v2:EstadoVacio: en la
+                     instancia del catálogo de componentes mueve el texto 1 px en vertical (8 a 20 teselas). -->
                 <v2:EstadoVacio x:Name="EstadoSinProductos"
                                 UseLayoutRounding="False"
                                 DockPanel.Dock="Top"

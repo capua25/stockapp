@@ -63,7 +63,7 @@ public class ProductoListViewV2Tests
     private static readonly ProductoDto InactivoNegativo = P(4, "Pala de punta", -7m, activo: false);
 
     private sealed record Montaje(Window Ventana, ProductoListView Vista, ProductoListViewModel Vm, ProductosFake Servicio,
-        NavigationRecorderFake Navegacion, ConfirmacionServiceFake Confirmacion);
+        NavigationRecorderFake Navegacion);
 
     private static Montaje Montar(params ProductoDto[] productos)
     {
@@ -76,7 +76,7 @@ public class ProductoListViewV2Tests
         ventana.Show();
         Dispatcher.UIThread.RunJobs();
         Dispatcher.UIThread.RunJobs(); // deja completar el await CargarAsync() del DataContextChanged
-        return new Montaje(ventana, vista, vm, servicio, navegacion, confirmacion);
+        return new Montaje(ventana, vista, vm, servicio, navegacion);
     }
 
     private static void Clickear(Window ventana, Control control)

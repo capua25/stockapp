@@ -150,7 +150,7 @@
          ordenar (celdas recicladas), el número pierde el último carácter. Ver Themes/DataGrid.axaml
          y DataGridCeldaNumericaOrdenTests. Guardián: DataGridV2ConBehaviorsGlobalesTests. -->
     <Style Selector=".ui2 DataGridCell.num">
-        <Setter Property="TextElement.FontFeatures" Value="+tnum" />
+        <Setter Property="TextElement.FontFeatures" Value="+tnum,-calt" />
     </Style>
     <Style Selector=".ui2 DataGridCell.num TextBlock">
         <Setter Property="HorizontalAlignment" Value="Right" />

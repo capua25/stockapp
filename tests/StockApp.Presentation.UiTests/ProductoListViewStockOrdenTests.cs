@@ -19,12 +19,14 @@ namespace StockApp.Presentation.UiTests;
 /// izquierda o recortado (22 aparecía como "2").
 ///
 /// Causa raíz: la celda de Stock llevaba un StackPanel con HorizontalAlignment="Right" (ajustado
-/// al contenido) con la insignia "Stock negativo" (Insignia v2) + el número. La DataGrid recicla las celdas al
-/// reordenar; cuando una celda que mostraba un stock negativo (insignia visible) pasa a mostrar uno
-/// positivo (insignia oculta), el contenedor conservaba el arreglo calculado para el valor anterior.
+/// al contenido) con el badge "Stock negativo" + el número. La DataGrid recicla las celdas al
+/// reordenar; cuando una celda que mostraba un stock negativo (badge visible) pasa a mostrar uno
+/// positivo (badge oculto), el contenedor conservaba el arreglo calculado para el valor anterior.
 /// El árbol visual queda con tamaños inconsistentes, así que el guardián no mira el valor de
 /// una celda aislada sino el invariante: TODOS los números de la columna terminan en el mismo X
 /// y ninguno queda recortado, después de cada ordenamiento.
+///
+/// (El badge era BadgeEstado; hoy la vista usa la Insignia v2 y el guardián cuenta ambos.)
 ///
 /// Se monta la View real y se ordena con click real de puntero (mismo mecanismo que
 /// <see cref="DataGridSortClickTests"/>).

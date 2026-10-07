@@ -23,6 +23,10 @@
 
 html, body {
   margin: 0;
+  /* Sin alternativas contextuales (calt) en toda la UI v2: Inter cambia la "x" entre dígitos por "×" y
+     el usuario tiene que ver lo que tipeó. Espejo: Style ".ui2" con TextElement.FontFeatures="-calt"
+     en Themes/V2/ControlesV2.axaml. Se hereda a todo el texto. */
+  font-feature-settings: "calt" 0;
   padding: 0;
   overflow: hidden;
   background: var(--v2-color-fondo);

@@ -14,6 +14,15 @@
          (PART_ContentPresenter, PART_BorderElement), no sobre el control: un Setter sobre el
          control no le gana al estilo de template de Fluent. -->
 
+    <!-- Sin alternativas contextuales (calt) en toda la UI v2: Inter cambia la "x" entre dígitos por "×"
+         ("2x1,5" se leía "2×1,5") y el usuario tiene que ver lo que tipeó. TextElement.FontFeatures es
+         una propiedad heredable: se setea una sola vez en la raíz .ui2 y llega a TextBlock, TextBox,
+         botones y celdas. Quien setee FontFeatures por su cuenta (cifras tabulares) REEMPLAZA la
+         colección entera y tiene que repetir -calt. Mockups: base.css. Guardián: SinCaltV2Tests. -->
+    <Style Selector=":is(Control).ui2">
+        <Setter Property="TextElement.FontFeatures" Value="-calt" />
+    </Style>
+
     <!-- Tipografía -->
     <Style Selector=".ui2 TextBlock.titulo-pagina">
         <Setter Property="FontSize" Value="{DynamicResource V2FuenteTituloPaginaTamano}" />
@@ -122,9 +131,11 @@
          la herencia sin cambiar nada en el resto de la app. Van sin .ui2 porque el popup no cuelga de .ui2. -->
     <Style Selector="ToolTip">
         <Setter Property="TextBlock.TextAlignment" Value="Start" />
+        <Setter Property="TextElement.FontFeatures" Value="-calt" />
     </Style>
     <Style Selector="FlyoutPresenter">
         <Setter Property="TextBlock.TextAlignment" Value="Start" />
+        <Setter Property="TextElement.FontFeatures" Value="-calt" />
     </Style>
 
     <Style Selector=".ui2 Button.primario">

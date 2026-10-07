@@ -42,7 +42,7 @@
                                              Text="{Binding CodigoMaquina}"
                                              TextWrapping="Wrap"
                                              VerticalAlignment="Center"
-                                             FontFeatures="+tnum"
+                                             FontFeatures="+tnum,-calt"
                                              FontSize="{DynamicResource V2FuenteControlTamano}"
                                              LineHeight="{DynamicResource V2FuenteControlAltoLinea}"
                                              Foreground="{DynamicResource V2TextoEtiquetaBrush}" />
@@ -61,7 +61,7 @@
                                              Text="{Binding Desafio}"
                                              TextWrapping="Wrap"
                                              VerticalAlignment="Center"
-                                             FontFeatures="+tnum"
+                                             FontFeatures="+tnum,-calt"
                                              FontSize="{DynamicResource V2FuenteControlTamano}"
                                              LineHeight="{DynamicResource V2FuenteControlAltoLinea}"
                                              Foreground="{DynamicResource V2TextoEtiquetaBrush}" />

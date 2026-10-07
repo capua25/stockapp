@@ -15,7 +15,7 @@
   .pie { margin-top: 12px; }
   /* Anchos de columna medidos en headless con el tema v2 y estos datos (Auto), o los de la vista (220, *, 2*).
      Iguales a 1280 y a 1366: COSTO queda en su mínimo de 100 y CATEGORÍA en el piso de 160 de las
-     columnas *; NOMBRE (2*) se lleva el resto (213 a 1280, 299 a 1366). */
+     columnas *; NOMBRE (2*) se lleva el resto (212 a 1280, 298 a 1366, con ESTADO en 78). */
   .col-codigo { flex: 0 0 81px; }
   .col-nombre { flex: 2 1 0; min-width: 0; }
   .col-costo { flex: 0 0 100px; }
@@ -25,8 +25,6 @@
   .col-estado { flex: 0 0 78px; }
   /* Celda de Stock: Grid con la insignia a la izquierda y el número a la derecha (no es .v2-num: lleva
      dos elementos); cifras tabulares y ancho del número redondeado hacia arriba como un TextBlock. */
-  /* Inter de Chromium cambia "x" entre dígitos por "×" (calt); Avalonia no aplica calt: se apaga acá. */
-  .v2-grilla-celda { font-feature-settings: "calt" 0; }
   .celda-stock { font-variant-numeric: tabular-nums; }
   .celda-stock > .valor { margin-left: auto; width: calc-size(fit-content, round(up, size, 1px)); }
 </style>
