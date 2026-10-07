@@ -302,3 +302,9 @@ body {
 
 /* Fila clickeable de panel (ComponentesV2.axaml, V2TemaFilaPanel): separador arriba, padding 8 vertical. */
 .v2-fila-panel { display: flex; align-items: center; padding: 8px 0; border-top: 1px solid var(--v2-color-separador-grilla); }
+
+/* Fila inactiva (DataGridV2.axaml, TextBlock.inactivo): el texto de cada celda pasa a terciario por token,
+   sin opacidad; la insignia conserva su color (lo fija .v2-insignia). */
+.v2-grilla-fila--inactiva .v2-grilla-celda { color: var(--v2-color-texto-terciario); }
+/* Número negativo en celda (DataGridV2.axaml, TextBlock.negativo): peligro texto. Gana sobre la fila inactiva. */
+.v2-grilla-celda .v2-texto-peligro { color: var(--v2-color-peligro-texto); }
