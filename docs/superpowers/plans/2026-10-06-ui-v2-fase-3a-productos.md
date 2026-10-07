@@ -18,7 +18,7 @@ Todos los comandos se corren desde la raíz del worktree: `/home/capua25/workspa
 |---|---|---|---|
 | U1 | **La Fase 3 se parte en tres:** 3a Productos (listado + formulario), 3b Entrada/Salida + `MovimientoFormControl`, 3c Ingreso por factura + Historial de movimientos. Cada una con su ciclo mockups → GATE → XAML → comparación → verificación orgánica → aprobación. **Este plan cubre SOLO 3a.** | `MovimientoFormControl`, `EntradaRegistroView`, `SalidaRegistroView`, `IngresoPorFacturaView` y `MovimientoHistorialView` no se tocan (siguen en el tema viejo y en `VistasDeLaTanda`). | todas |
 | U2 | **Lo que la spec no fija del diseño lo propone el mockup aplicando §5.1/§5.2 y lo decide el usuario en el GATE.** | Lista D1 a D18 de "Decisiones que se confirman al aprobar los mockups". Si cambia alguna, se ajusta el mockup y lo que dependa de él (anchos, textos, tests escritos en este plan) en la misma task del mockup, antes del XAML. | 2, 3 |
-| U3 | **Producto inactivo = `Insignia` "Inactiva" + texto de la fila en color terciario por token. Se elimina el uso de `Opacity` por celda (`ActivoOpacidadConverter`) en la vista migrada.** | Clase `inactivo` en cada `TextBlock` de celda (`DataGridV2.axaml`: `Foreground` = `V2TextoTerciarioBrush`); la insignia conserva su color pleno. `ActivoOpacidadConverter` NO se borra (lo usan otras vistas del tema viejo). Test por efecto con la View real: `ProductoInactivo_TextoTerciarioInsigniaPlenaYSinOpacidad`. | 4 |
+| U3 | **Producto inactivo = `Insignia` "Inactivo" + texto de la fila en color terciario por token. Se elimina el uso de `Opacity` por celda (`ActivoOpacidadConverter`) en la vista migrada.** | Clase `inactivo` en cada `TextBlock` de celda (`DataGridV2.axaml`: `Foreground` = `V2TextoTerciarioBrush`); la insignia conserva su color pleno. `ActivoOpacidadConverter` NO se borra (lo usan otras vistas del tema viejo). Test por efecto con la View real: `ProductoInactivo_TextoTerciarioInsigniaPlenaYSinOpacidad`. | 4 |
 | U4 | **Grillas densas: datos de mockup realistas; si las teselas densas pasan de 11, se presenta CADA tesela al usuario y se usa `UmbralAprobado` solo con su OK. Nunca subir umbrales sin aprobación.** | Doce productos con nombres, unidades y categorías reales de un depósito municipal (Task 1). Procedimiento de umbral con GATE dentro de las Tasks 4 y 5 (Step "Umbral"). | 1, 4, 5 |
 | U5 | **Sin deuda extra en 3a:** NO entran `capturar.sh` fail-closed, ni un guardián de `Opacity` literal, ni una task separada de preparación de `DataGridV2`. Lo que `DataGridV2` necesite para Productos (columna de insignia, selección de fila, scroll horizontal con `MinWidth`, texto atenuado de inactivos) va dentro de las tasks de la pantalla. | Las clases `inactivo`/`negativo` y su espejo CSS entran en la Task 4; el `TextBox` deshabilitado, en la Task 5. Ver "Fuera de alcance". | 4, 5 |
 | U6 | **El patrón de modal v2 (para Ingreso por factura) queda para 3c.** | Fuera de alcance. La confirmación de baja de Productos sigue usando `IConfirmacionService` (diálogo `ConfirmacionDialog`, ya v2 desde la Fase 1). | — |
@@ -38,7 +38,7 @@ No bloquean el arranque: son propuestas del plan sobre lo que la spec no fija (U
 - **D5 — Estado vacío:** `EstadoVacio` "No hay productos para mostrar" / "Probá con otra búsqueda o creá uno con Nuevo." en lugar de la grilla y del pie; el mismo texto para catálogo vacío y búsqueda sin resultados (el VM no distingue los casos y no se toca).
 - **D6 — Columnas.** Las 7 actuales en el orden actual, headers en MAYÚSCULAS (CÓDIGO, NOMBRE, COSTO, STOCK, UNIDAD, CATEGORÍA, ESTADO) y los anchos actuales (Código `Auto`, Nombre `2*`, Costo `Auto` mín. 100, Stock 220, Unidad `Auto`, Categoría `*`, Estado `Auto`). Los `Auto` se miden en headless (Task 1) y el mockup copia los píxeles. Estimado: a 1280 y a 1366 la grilla entra sin scroll horizontal; Categoría queda en su piso de 160.
 - **D7 — Stock negativo en la celda de Stock** (insignia a la izquierda, número a la derecha), como hoy, no en la columna Estado. Un producto inactivo con stock negativo conserva el número en rojo.
-- **D8 — Inactivo:** insignia neutra **"Inactiva"** (texto real actual; alternativa "Inactivo", que concuerda con "producto") + texto de la fila en terciario `#78716C`. La insignia no se atenúa.
+- **D8 — Inactivo:** insignia neutra **"Inactivo"** (decidido por el usuario en el GATE de la Task 2, 2026-10-07; el texto actual era "Inactiva") + texto de la fila en terciario `#78716C`. La insignia no se atenúa.
 - **D9 — La grilla ocupa todo el alto de la card**; el mockup muestra 12 filas sin scroll vertical (a 1280×760 entran 12) y ninguna fila seleccionada (por eso "Editar" y "Eliminar" se ven deshabilitados).
 - **D10 — Listado sin permiso: queda como hoy.** `CargarAsync` traga el `UnauthorizedAccessException` y el aviso global lo da `App` ("Tus permisos cambiaron..."). Sin estado propio ni mockup (cambiarlo exigiría tocar el VM).
 - **D11 — Sin subtítulo ni eyebrow** en el encabezado del listado: título "Productos"; el conteo va en el pie. Hoy hay eyebrow "CATÁLOGO".
@@ -105,7 +105,7 @@ Siguen vigentes las cinco de la Fase 1 (1366×768, formato es-UY, errores de ent
 
 ## Review Focus
 
-1. **Producto inactivo que se ve activo, o con la insignia atenuada.** Con la migración el inactivo deja `Opacity` 0,55 por celda; si la clase `inactivo` no se aplica, el inactivo se ve igual que uno activo; si alguien vuelve a atenuar la fila, la insignia "Inactiva" queda ilegible. Esperado: todas las celdas de texto del inactivo en `#78716C`, ninguna `Opacity` < 1 entre la celda y la grilla, la insignia con su color pleno. Test: `ProductoListViewV2Tests.ProductoInactivo_TextoTerciarioInsigniaPlenaYSinOpacidad` (Task 4) y la comparación `Productos_IgualAlMockup`.
+1. **Producto inactivo que se ve activo, o con la insignia atenuada.** Con la migración el inactivo deja `Opacity` 0,55 por celda; si la clase `inactivo` no se aplica, el inactivo se ve igual que uno activo; si alguien vuelve a atenuar la fila, la insignia "Inactivo" queda ilegible. Esperado: todas las celdas de texto del inactivo en `#78716C`, ninguna `Opacity` < 1 entre la celda y la grilla, la insignia con su color pleno. Test: `ProductoListViewV2Tests.ProductoInactivo_TextoTerciarioInsigniaPlenaYSinOpacidad` (Task 4) y la comparación `Productos_IgualAlMockup`.
 2. **Stock negativo en el rojo equivocado o tapado por la insignia tras ordenar.** `SignoNegativoBrushConverter` pinta `#DC2626`, no el `#B91C1C` de la spec; y al ordenar por COSTO o STOCK las celdas recicladas pueden dejar el número corrido o pisado por la insignia. Esperado: número `#B91C1C` (también en un inactivo), insignia peligro solo en la fila negativa, números alineados y sin recorte tras cada orden. Tests: `StockNegativo_InsigniaPeligroYNumeroEnPeligroTexto`, `InactivoConStockNegativo_ElNumeroSigueEnRojo` (Task 4) y `ProductoListViewStockOrdenTests` adaptado (headers en mayúsculas, `Insignia`).
 3. **Editar o Eliminar sobre un inactivo o sin selección.** La regla vive en el VM (`PuedeOperarSobreSeleccionado`); si el XAML bindea otro comando o pierde el `Command`, el botón queda habilitado o muerto. Esperado: deshabilitados sin selección y con un inactivo; habilitados con un activo; el click real de "Eliminar" pide confirmación y da de baja ESE producto; "Editar" abre el formulario con ESE producto. Tests: `EditarYEliminar_SinSeleccion_Deshabilitados`, `EditarYEliminar_ConInactivoSeleccionado_Deshabilitados`, `Eliminar_ClickReal_ConfirmaYDaDeBajaElSeleccionado`, `Editar_ClickReal_AbreElFormularioConElSeleccionado` (Task 4).
 4. **Lista vacía o búsqueda sin resultados que deja una grilla vacía muda, o un pie que miente.** Con `Items.Clear()` el estado tiene que aparecer, y al volver los datos tiene que irse. Esperado: sin productos, `EstadoVacio` visible y grilla y pie ocultos; al llegar datos, grilla visible y pie "N productos" con miles es-UY. Tests: `ListaVacia_MuestraEstadoVacio_YAlLlegarDatosVuelveLaGrilla`, `PieDeConteo_SingularYPluralConMilesEsUy` (Task 4), `ConteoConverterTests` y la comparación `ProductosVacio_IgualAlMockup`.
@@ -488,7 +488,7 @@ public class MedicionColumnasProductosScratch(ITestOutputHelper salida)
                 <DataGridTextColumn Header="CATEGORÍA" Width="*" Binding="{ReflectionBinding Categoria}" />
                 <DataGridTemplateColumn Header="ESTADO" Width="Auto">
                     <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate><v2:Insignia Texto="Inactiva" /></DataTemplate>
+                        <DataTemplate><v2:Insignia Texto="Inactivo" /></DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
             </DataGrid.Columns>
@@ -657,7 +657,7 @@ Fila con stock negativo (LIM-0455):
             <div class="v2-grilla-celda col-stock celda-stock"><span class="v2-insignia v2-insignia--peligro">Stock negativo</span><span class="valor v2-texto-peligro">-3</span></div>
 ```
 
-Fila inactiva (HER-0560): `<div class="v2-grilla-fila v2-grilla-fila--inactiva">` y en Estado `<span class="v2-insignia">Inactiva</span>`. Sin categoría (HER-0512): la celda dice `—`.
+Fila inactiva (HER-0560): `<div class="v2-grilla-fila v2-grilla-fila--inactiva">` y en Estado `<span class="v2-insignia">Inactivo</span>`. Sin categoría (HER-0512): la celda dice `—`.
 
 - [ ] **Step 3: `productos-vacio.html`**
 
@@ -687,7 +687,7 @@ Expected: 4 PNG sin error de fuentes, desborde ni `.v2-ventana`; el `grep` impri
 
 - [ ] **Step 5: GATE — aprobación del usuario**
 
-PARAR. Presentar los dos HTML (abrirlos en Chromium/Edge: `calc-size()` solo funciona ahí) o los 4 PNG (LOS DOS TAMAÑOS), con la lista D1 a D11 y los anchos medidos (si la grilla entra o desborda a cada tamaño; convención 1). Señalar explícitamente: el placeholder acortado (D2) y la etiqueta "Buscar" que se va (D3), "Editar"/"Eliminar" deshabilitados sin selección (D1, D9), la insignia "Inactiva" con la fila en gris y sin opacidad (U3, D8), el número negativo en `#B91C1C` (U8). No seguir sin "aprobado" explícito. Si el usuario cambia una D#, aplicarla en el mockup (y en `base.css` si toca geometría) y volver a presentar. Registrar en el ledger: `Mockups listado: aprobados por <quién> <yyyy-MM-dd>; cambios: <lista o "ninguno">`, y las D# cambiadas con su nuevo valor (las Tasks 4 y 5 las leen de ahí).
+PARAR. Presentar los dos HTML (abrirlos en Chromium/Edge: `calc-size()` solo funciona ahí) o los 4 PNG (LOS DOS TAMAÑOS), con la lista D1 a D11 y los anchos medidos (si la grilla entra o desborda a cada tamaño; convención 1). Señalar explícitamente: el placeholder acortado (D2) y la etiqueta "Buscar" que se va (D3), "Editar"/"Eliminar" deshabilitados sin selección (D1, D9), la insignia "Inactivo" con la fila en gris y sin opacidad (U3, D8), el número negativo en `#B91C1C` (U8). No seguir sin "aprobado" explícito. Si el usuario cambia una D#, aplicarla en el mockup (y en `base.css` si toca geometría) y volver a presentar. Registrar en el ledger: `Mockups listado: aprobados por <quién> <yyyy-MM-dd>; cambios: <lista o "ninguno">`, y las D# cambiadas con su nuevo valor (las Tasks 4 y 5 las leen de ahí).
 
 - [ ] **Step 6: Commit**
 
@@ -861,6 +861,8 @@ git commit -m "docs(ui-v2): mockups aprobados del formulario de Productos (nuevo
 ## Bloque C — XAML y comparaciones (cada task arranca solo con sus mockups aprobados)
 
 ### Task 4: `ProductoListView` v2 con sus dos estados comparados
+
+> **Origen del texto de la insignia (verificado 2026-10-07):** "Inactiva" está escrito a mano en `src/StockApp.Presentation/Views/Catalogo/ProductoListView.axaml` (línea 130, `<c:BadgeEstado Texto="Inactiva" ./>`); NO sale de un converter ni de un recurso compartido. Otras vistas (Categorías, Zonas, Proveedores, etc.) tienen su propio literal y NO se tocan. En esta task se reescribe la vista con `<v2:Insignia Texto="Inactivo" />` (D8 aprobada); los tests y snippets de abajo ya dicen "Inactivo".
 
 **Depende de:** Tasks 1 y 2 (mockups aprobados; leer en el ledger las D# que cambiaron y ajustar los textos de este Step antes de escribir).
 
@@ -1131,7 +1133,7 @@ public class ProductoListViewV2Tests
         Assert.All(textos, t => Assert.Equal(Terciario, ColorDe(t)));
         Assert.All(TextosDeCeldas(Fila(m, Activo)), t => Assert.Equal(Etiqueta, ColorDe(t)));
 
-        var insignia = fila.GetVisualDescendants().OfType<Insignia>().Single(i => i.Texto == "Inactiva");
+        var insignia = fila.GetVisualDescendants().OfType<Insignia>().Single(i => i.Texto == "Inactivo");
         Assert.True(ArbolVisual.EsVisibleEnArbol(insignia));
         Assert.Equal(VarianteInsignia.Neutro, insignia.Variante);
 
@@ -1294,7 +1296,7 @@ Antes de `</Styles>` (después del bloque `.ui2 DataGridCell.num TextBlock`):
 
 ```xml
     <!-- Fila inactiva: el texto de la celda pasa a terciario por token, sin Opacity (con Opacity la insignia
-         "Inactiva" de la misma fila quedaba atenuada y casi ilegible). La vista marca cada TextBlock de celda
+         "Inactivo" de la misma fila quedaba atenuada y casi ilegible). La vista marca cada TextBlock de celda
          con Classes.inactivo bindeado a !Activo; la Insignia pinta su texto en su plantilla, sin la clase.
          Espejo: .v2-grilla-fila--inactiva en base.css. -->
     <Style Selector=".ui2 DataGridCell TextBlock.inactivo">
@@ -1442,7 +1444,7 @@ Reemplazar `src/StockApp.Presentation/Views/Catalogo/ProductoListView.axaml` ent
                         <DataGridTemplateColumn Header="ESTADO" Width="Auto" CanUserSort="False">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:ProductoDto">
-                                    <v2:Insignia Texto="Inactiva" Variante="Neutro" IsVisible="{Binding !Activo}" />
+                                    <v2:Insignia Texto="Inactivo" Variante="Neutro" IsVisible="{Binding !Activo}" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
@@ -1553,7 +1555,7 @@ public class ProductosComparacionTests
 Run: `dotnet build StockApp.sln`, `dotnet test tests/StockApp.Presentation.UiTests/StockApp.Presentation.UiTests.csproj`, `dotnet test tests/StockApp.Presentation.Tests/StockApp.Presentation.Tests.csproj` y `scripts/ui-v2/comparar.sh Productos`.
 Expected: UiTests y VM en verde (incluidos `ProductoListViewV2Tests`, `ProductoListViewStockOrdenTests`, `DataGridColumnasAutoAjusteTests`, `SignoNegativoBadgeTests`, `EtiquetadoDeCamposTests`, `GrillasSinRecorteBarridoTests`, `GuardianDePatronTests` con `VistaV2_NoTieneOpacidadesLiterales(ProductoListView)`, `ComandosDeGuardadoGuardianTests`, `CargaProtegidaSinPermisoGuardianTests`); las 4 comparaciones de `ProductosComparacionTests` APROBADAS con los valores calibrados y sin recortes, o el Step 8.
 
-Si una comparación no pasa: abrir su página y diagnosticar ANTES de pensar en umbral (sección "Herramientas de diagnóstico"). Causas esperables: (1) una columna `Auto` con otro ancho → re-medir `ActualWidth` en la app (un `Assert.Fail` temporal con los anchos en `ProductoListViewV2Tests`, que no se commitea) y corregir el mockup (convención 14); (2) la última fila o el pie corridos 1 px por alto impar de la card → compensación entera documentada en §6.5; (3) la insignia "Stock negativo" o "Inactiva" con otra posición vertical → comparar con `catalogo.html`, que ya aprobó una insignia en celda. Nunca subir el umbral para tapar geometría.
+Si una comparación no pasa: abrir su página y diagnosticar ANTES de pensar en umbral (sección "Herramientas de diagnóstico"). Causas esperables: (1) una columna `Auto` con otro ancho → re-medir `ActualWidth` en la app (un `Assert.Fail` temporal con los anchos en `ProductoListViewV2Tests`, que no se commitea) y corregir el mockup (convención 14); (2) la última fila o el pie corridos 1 px por alto impar de la card → compensación entera documentada en §6.5; (3) la insignia "Stock negativo" o "Inactivo" con otra posición vertical → comparar con `catalogo.html`, que ya aprobó una insignia en celda. Nunca subir el umbral para tapar geometría.
 
 - [ ] **Step 8: Umbral (solo si, con la geometría ya idéntica, las teselas densas pasan de 11) — GATE**
 
@@ -2153,7 +2155,7 @@ Preparación:
 
 Todo con la ventana a **1366×768**; los pasos 1 y 2 se repiten al tamaño por defecto. Capturar cada pantalla.
 
-1. Administrador → Productos: grilla con los productos reales, headers en mayúsculas, pie "N productos". Un inactivo (si no hay, dar de baja uno de prueba en el paso 4) en gris con "Inactiva" legible; un stock negativo (si existe) con la insignia y el número rojo oscuro. Ordenar por COSTO (dos clicks) y por STOCK: números alineados y sin cortar.
+1. Administrador → Productos: grilla con los productos reales, headers en mayúsculas, pie "N productos". Un inactivo (si no hay, dar de baja uno de prueba en el paso 4) en gris con "Inactivo" legible; un stock negativo (si existe) con la insignia y el número rojo oscuro. Ordenar por COSTO (dos clicks) y por STOCK: números alineados y sin cortar.
 2. Buscar algo que no exista: estado vacío; borrar la búsqueda: vuelve la grilla. Seleccionar un activo: "Editar" y "Eliminar" se habilitan; seleccionar un inactivo: se deshabilitan.
 3. "Nuevo": breadcrumb "Productos / Nuevo producto", card de 760 a la izquierda, SKU y Nombre con asterisco, "Unidad" preseleccionada. Escribir "5.4" en Precio costo: error del campo y "Guardar" bloqueado con tooltip; corregir a "5,4". Crear un producto de prueba ("PRUEBA UI V2 3a") y guardar: vuelve al listado y aparece.
 4. Editarlo: "Editar producto", SKU gris no editable, datos precargados (unidad y categoría elegidas). Cambiar el nombre y guardar. Volver a entrar y salir con el breadcrumb "Productos": no guarda nada. Darlo de baja con "Eliminar" (confirmación): queda inactivo en gris.

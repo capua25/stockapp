@@ -25,6 +25,8 @@
   .col-estado { flex: 0 0 77px; }
   /* Celda de Stock: Grid con la insignia a la izquierda y el número a la derecha (no es .v2-num: lleva
      dos elementos); cifras tabulares y ancho del número redondeado hacia arriba como un TextBlock. */
+  /* Inter de Chromium cambia "x" entre dígitos por "×" (calt); Avalonia no aplica calt: se apaga acá. */
+  .v2-grilla-celda { font-feature-settings: "calt" 0; }
   .celda-stock { font-variant-numeric: tabular-nums; }
   .celda-stock > .valor { margin-left: auto; width: calc-size(fit-content, round(up, size, 1px)); }
 </style>
