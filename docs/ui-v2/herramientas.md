@@ -160,6 +160,20 @@ Fechas en mockups con reloj inyectable: un VM que muestra "hoy" recibe un `TimeP
 (`DatosInicio.Ahora`, martes 6 de octubre de 2026 13:00), así la pantalla no cambia con el día ni con
 la zona de la máquina.
 
+Ejemplo de la Fase 3a (Productos, shell real con solo el sidebar oculto; `ProductosComparacionTests`):
+
+    private static readonly string[] OcultarEnMockup = [".v2-sidebar"];
+
+    public static void OcultarSidebar(Control vista) =>
+        ((ShellMainView)vista).FindControl<Border>("Sidebar")!.IsVisible = false;
+
+    private static void Comparar(ShellMainViewModel vm, string mockup, TamanoLienzo? tamano = null, UmbralAprobado? aprobado = null) =>
+        ComparacionVisual.CompararConMockup(new ShellMainView(), vm, mockup, tamano: tamano, aprobado: aprobado,
+            ocultarEnMockup: OcultarEnMockup, prepararApp: OcultarSidebar);
+
+    [AvaloniaFact]
+    public void Productos_IgualAlMockup() => Comparar(DatosProductos.ConProductos(), "inventario/productos.html");
+
 ## Otros comandos
 
 - `tokens --verificar`, `fuentes`, `fuentes --verificar`
@@ -190,3 +204,9 @@ la zona de la máquina.
   deja los bordes interiores en x fraccionaria y el texto de esas columnas no coincide con la app.
   Para otro N, armar la misma receta en una clase nueva de `base.css`.
 - Fila clickeable de panel: `V2TemaFilaPanel` (`Theme` de `Button`), con su espejo `.v2-fila-panel`.
+- Convenciones que agrega la Fase 3a (Productos) y heredan las fases siguientes:
+  10. **Listado v2.** `EncabezadoPagina` (acciones secundarias y UN primario a la derecha) + `TarjetaContenido` con `BarraFiltros`, grilla que ocupa el resto del alto y pie de conteo. El conteo es `{Binding Items.Count, Converter={x:Static conv:ConteoConverter.Instance}, ConverterParameter='singular|plural'}`; el estado vacío y la visibilidad de grilla y pie usan `ConteoConverter.EsCero` / `ConteoConverter.HayElementos` sobre `Items.Count`. Bindear la COLECCIÓN entera (o `ColeccionVaciaConverter`) no se re-evalúa al hacer `Clear`/`Add`; `Count` sí, porque `ObservableCollection` lo notifica.
+  11. **Fila inactiva y número negativo por token, nunca por `Opacity`.** Cada `TextBlock` de celda lleva `Classes.inactivo="{Binding !Activo}"` (texto terciario) y la columna de estado una `Insignia` neutra ("Inactivo", masculino); un número negativo lleva `Classes.negativo` (`#B91C1C`), que gana sobre `inactivo`. `SignoNegativoBrushConverter` y `ActivoOpacidadConverter` son del tema viejo: no se usan en vistas v2. Espejo: `.v2-grilla-fila--inactiva` y `.v2-texto-peligro` en `base.css`. La celda compuesta insignia + número (Stock) no lleva `v2-num` en el mockup: su `.valor` replica el ancho redondeado con `calc-size` y `tabular-nums` (la regla del único `<span>` existe por ese redondeo).
+  12. **Formulario v2.** Breadcrumb al comando de vuelta que el VM ya expone (en Productos, `CancelarCommand`; en otros, `Volver`), card de máx. 760 a la izquierda (`Grid` con una columna `*` de `MaxWidth` 760), padding 24, secciones con `subtitulo-formulario` y separador de 1 px `#F0EFED` con 20 de margen, `Alerta` error (con 8 de margen superior y 20 el pie, variante compactada) para el error de guardado, pie con borde superior y botones a la derecha (Cancelar `secundario`, Guardar `primario`). El estado sin permiso reemplaza la card, no se superpone. `TextBox` deshabilitado con los tokens de deshabilitado.
+  13. **Tests heredados que buscaban tipos del sistema viejo** (`BadgeEstado`, `Controls.CampoFormulario`, `Classes="secondary"`, headers en minúscula) se adaptan para aceptar AMBOS sistemas mientras convivan (Fase 9 limpia): `GrillaStockHelpers`, `GuardarBloqueadoConErroresDeEntradaTests.CajaDeCampo`, `CatalogoFormAnchoYCancelarTests.BotonCancelar`. Nunca se borra un test heredado sin reemplazarlo por uno que custodie lo mismo sobre la View v2.
+  14. **Columnas `Auto` en el mockup:** se miden en headless con el tema v2 y los datos fijos ANTES de escribir el mockup, y el mockup las copia como `flex: 0 0 Npx`. Si tras el XAML la comparación muestra una columna corrida, se re-mide y se corrige el mockup (un cambio ≤ 4 px no visible al ojo se anota; uno mayor vuelve al usuario). Una columna `Auto` crece cuando entra en pantalla (virtualización) una fila más ancha y mueve a las demás: si su contenido es un conjunto cerrado y conocido (la insignia "Inactivo" de ESTADO = 78) se fija el ancho medido, y un UiTest con la View real scrollea hasta esa fila y exige que ningún ancho cambie (`ProductoListViewV2Tests.Scroll_HastaLaPrimeraFilaInactiva_NoMueveNingunaColumna`). Las `Auto` de contenido libre (CÓDIGO, COSTO, UNIDAD) no se fijan: truncarían datos reales.
