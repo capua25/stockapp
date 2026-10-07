@@ -80,7 +80,7 @@ Inter, ya embebida vía `Avalonia.Fonts.Inter`. Cifras tabulares y alineadas a l
 | Rol | Tamaño / peso | Color |
 |---|---|---|
 | Título de página | 22 / 600, alto de línea 26 | primario |
-| Título de sección (card, panel, detalle de catálogo) | 15 / 600 | primario |
+| Título de sección (card, panel, detalle de catálogo) | 15 / 600, alto de línea 19 | primario |
 | Marca en sidebar | 15 / 700 | primario |
 | Valor de TarjetaMetrica | 20 / 600 | primario |
 | Título de login | 20 / 600 | primario |
@@ -95,6 +95,8 @@ Inter, ya embebida vía `Avalonia.Fonts.Inter`. Cifras tabulares y alineadas a l
 | Header de sección del sidebar | 11 / 600, MAYÚSCULAS, letter-spacing 0.6 | grupo |
 
 **Grillas sin zebra**: filas blancas separadas por `#F0EFED`.
+
+**`calt` de Inter apagado en toda la UI v2 (decisión del usuario, 2026-10-07).** Avalonia aplica la ligadura contextual de Inter (`2x1,5` se leía `2×1,5`), así que la UI v2 va con `FontFeatures` `-calt` (app: una sola vez en `:is(Control).ui2`, heredable, y repetido donde la colección se reemplaza; mockups: `font-feature-settings` de `html, body` en `base.css`). Alcanza también a todo `ToolTip` y `FlyoutPresenter` de la app, incluidos los de las vistas viejas, porque esos estilos van sin `.ui2` (inocuo). Ver la compensación equivalente en §6.5.
 
 **Precedencia:** los valores de esta sección son los tokens canónicos. Los mockups de referencia se aprobaron como dirección y pueden diferir en detalles (letter-spacing en `em`, tamaños puntuales); los mockups por pantalla de cada fase se construyen con el CSS generado de estos tokens, así que ahí no hay conflicto posible.
 
@@ -340,9 +342,10 @@ Cubre también el valor de `TextBox`, `NumericUpDown`, `CalendarDatePicker` y `C
   - `Margin="0,-16,0,0"` en `EstadoSinPermiso` de `ProductoFormView`: el mockup apila el margen inferior del encabezado (16) y el superior del estado (32) y CSS los colapsa en 32; Avalonia los suma (48), así que se descuenta el de abajo del encabezado.
   - `UseLayoutRounding="False"` por instancia en `EstadoSinProductos` (`ProductoListView`) y `EstadoSinPermiso` (`ProductoFormView`): el estado va centrado y el ancho del título es fraccionario; Avalonia redondea su origen a píxel entero y Chromium no (16 teselas densas contra 11). Mismo caso que el enlace de `BloqueoLicenciaView`. En `ColumnaFormulario` del formulario también (con el redondeo una columna acotada por `MaxWidth` sale 761 en vez de 760). Va por instancia y no en el `ControlTheme` de `EstadoVacio`: en la instancia del catálogo mueve el texto 1 px en vertical (8 a 20 teselas).
   - `LineHeight` 19 (token `V2FuenteTituloSeccionAltoLinea`, ahora en `tokens.json`) en `PART_Titulo` de `EstadoVacio`: el mockup usa 19 y el natural de Avalonia para 15/600 no coincide.
-  - Anchos de columnas `Auto` de la grilla de Productos, medidos en headless con el tema v2 y las 12 filas de los datos fijos (no son valores de diseño): CÓDIGO 81, COSTO 100 (su `MinWidth`), UNIDAD 97 y ESTADO 78, iguales a 1280 y 1366; STOCK 220 fijo; NOMBRE (2*) 212 y 298 y CATEGORÍA (*) en su piso de 160. ESTADO además se fija en 78 en la app: en `Auto` crecía ~12 px al scrollear hasta la primera fila "Inactivo" y movía las demás columnas (`Scroll_HastaLaPrimeraFilaInactiva_NoMueveNingunaColumna`).
+  - Anchos de columnas `Auto` de la grilla de Productos, medidos en headless con el tema v2 y las 12 filas de los datos fijos (no son valores de diseño): CÓDIGO 81, COSTO 100 (su `MinWidth`), UNIDAD 97 y ESTADO 78, iguales a 1280 y 1366; STOCK 220 fijo; NOMBRE (2*) 212 y 298 y CATEGORÍA (*) en su piso de 160. ESTADO además se fija en 78 en la app: en `Auto` crecía 13 px al scrollear hasta la primera fila "Inactivo" y movía las demás columnas (`Scroll_HastaLaPrimeraFilaInactiva_NoMueveNingunaColumna`).
   - Celda de Stock con insignia + número: `.valor` con `calc-size(fit-content, round(up, size, 1px))` y `tabular-nums`, sin `v2-num` (ver convención 11 de `herramientas.md`).
 - Pulgar de scroll del sidebar del Administrador en `sidebar-admin.html` (`.v2-sidebar-pulgar`): `#7A7A7A`, 2 px en x 223, desde y 84, 352 px de alto a 760 y 362 a 768 (media query). Es el indicador de Fluent medido en el render, no un token (Fase 2, Task 9).
+- `calt` de Inter apagado en la app y en los mockups: ver §2.3 (decisión del usuario, 2026-10-07).
 - Ancho de texto redondeado hacia arriba: `width: calc-size(fit-content, round(up, size, 1px))` en `base.css`, porque un TextBlock mide el ceil del ancho del texto. `calc-size()` solo funciona en Chromium: en otro navegador el mockup queda hasta 1px distinto. La comparación siempre usa Chromium.
 - Mockups de Inicio (`docs/ui-v2/mockups/inicio/*.html`), aprobadas por el usuario el 2026-10-06, sin cambio visible:
   - A. `.fila-dias` lleva `width: calc-size(fit-content, round(up, size, 1px))` (el ancho redondeado de arriba): sin él, "-2 días" salía corrido 1 px y "3 días" 0,76 px respecto de la app, alineados a la derecha.
@@ -383,13 +386,15 @@ Ciclo de cada fase: mockups de sus pantallas → aprobación del usuario → XAM
 **Estado de la Fase 3a (aprobada el 2026-10-07).** Listado y formulario de Productos v2, comparados en 6 estados a los dos tamaños (12 filas aprobadas con el umbral por defecto, máximo 7 teselas densas); inactivos por token sin `Opacity` y stock negativo en `#B91C1C`; verificación orgánica a 1366×768 y 1280×760 con Administrador, operador mixto (`catalogo.productos` + `movimientos.registrar`, sin finanzas ni reportes) y un operador sin `catalogo.productos` (no ve Productos ni en el sidebar ni en Inicio). Decisiones del usuario: D1 a D11 (listado) y D12 a D18 (formulario) aprobadas; insignia "Inactivo" en masculino (D8); `calt` de Inter apagado en TODA la UI v2 (app y mockups) porque Avalonia sí aplica la ligadura (`2x1,5` se leía `2×1,5`); variante con error del formulario compactada (alerta con 8 de margen superior y pie con 20, Nuevo/Editar suben 4 px); ESTADO con ancho fijo de 78 para que las columnas no salten al scrollear hasta la primera fila inactiva; el sidebar que corta el último ítem a 1366×768 queda diferido. En formularios sin `Volver` el breadcrumb usa el comando de vuelta que el VM ya expone (`CancelarCommand` en Productos), en vez del evento `Volver` de §4.4: la navegación es idéntica y los ViewModels quedan intactos. Arreglo del cierre: el alto de línea 19 del título de sección vivía a mano en `Tokens.axaml` y no en `tokens.json` (rompía `tokens --verificar`).
 
 **Deuda abierta tras la Fase 3a:**
+- Sidebar del shell v2 corta el último ítem a 1366x768 (detectado en mockups de Fase 3a, 2026-10-07); el usuario lo difirió: no se arregla en 3a.
+- Mientras corre la carga inicial (y tras un 403 silenciado en `CargarAsync`) el listado de Productos muestra el estado vacío "No hay productos para mostrar… creá uno con Nuevo", porque `EstadoSinProductos` depende solo de `Items.Count == 0`; afirma algo falso durante la carga. Arreglarlo pide un flag de carga en el ViewModel, que choca con "VMs intactos" (§3). Decidir el patrón ANTES de la 3b: se repite en cada listado.
 - `GrillasSinRecorteBarridoTests` mide con el sidebar viejo de 232 (`SidebarPx`); el v2 mide 240 (8 px menos para la vista).
 - `SignoNegativoBrushConverter` y `ActivoOpacidadConverter` siguen en las vistas del tema viejo (se borran en la Fase 9 cuando no quede ninguna).
 - El buscador de Productos conserva el texto tras "Eliminar" aunque el listado se recarga completo (preexistente, del ViewModel).
 - "Registrar entrada/salida" del sidebar exige también `catalogo.productos` además de `movimientos.registrar`: un usuario con solo `movimientos.registrar` no ve la entrada (preexistente).
 - `UseLayoutRounding="False"` va por instancia en `EstadoVacio` (no en su `ControlTheme`, que movería el catálogo de 8 a 20 teselas): evaluar una clase opt-in si 3b o 3c lo repiten.
 - WSLg pierde el foco de teclado tras un diálogo modal de la app y `escribir.sh`/`click.sh` igual salen con exit 0 (el `-` llegó a salir como `/`): el toolkit no es fail-closed en este caso; reiniciar el desktop lo arregla.
-- Las columnas `Auto` de contenido libre (CÓDIGO, COSTO, UNIDAD) siguen creciendo al scrollear hasta una fila con un valor más ancho (medido: 65→140, 100→115, 63→97); no se fijan porque truncarían datos reales. Solo se fijó ESTADO, cuyo contenido es cerrado.
+- Las columnas `Auto` de contenido libre (CÓDIGO, COSTO, UNIDAD) siguen creciendo al scrollear hasta una fila con un valor más ancho (medido: 65→140, 100→115, 63→97); no se fijan porque truncarían datos reales. Solo se fijó ESTADO, cuyo contenido es cerrado. Decisión del usuario (2026-10-07): se resuelve con UN criterio común para todas las grillas al migrar la 3b y la 3c; no se parchea solo Productos.
 - `tokens --verificar` y `UiV2.Herramientas.Tests` no estaban en la lista de pruebas de las reviews por task: un token editado a mano en `Tokens.axaml` solo se detectó en la suite completa de cierre.
 - Minors diferidos del ledger de la Fase 3a sin cerrar (comentarios y helpers de test duplicados, tests que solo custodian por UiTest el estilo `.inactivo`, `DatosProductosTests` solo con la tabla de productos).
 
@@ -397,7 +402,6 @@ Ciclo de cada fase: mockups de sus pantallas → aprobación del usuario → XAM
 - `EsAdmin` de Importación sin guardián propio mientras `ImportacionHabilitada=false` (Fase 8).
 - `capturar.sh` no es fail-closed con WSLg caído: devolvió exit 0 capturando ventanas del escritorio del usuario. Fuera de alcance de esta fase.
 - Minors diferidos del ledger sin cerrar: `TextoAVencer7Dias` sigue en el VM de Inicio (borrar en Fase 9); en OperadorMixto una sola insignia "Vencida" pálida no se detecta (límite de la métrica); umbrales de Inicio sin margen (un cambio de rasterizador los pone en rojo, intencional); `Mensaje_IgualAlMockup_1366x768` sin margen (11 de 11, tono); pulgar del sidebar a re-medir en las Fases 6 y 7; `ContextMenu`/`MenuFlyout` sin corte de la herencia del centrado (hoy no se usan); lista `DialogosV2` manual en `GuardianDePatronTests`; `CargarAsync` de Inicio sin cancelación (preexistente).
-- Sidebar del shell v2 corta el último ítem a 1366x768 (detectado en mockups de Fase 3a, 2026-10-07); el usuario lo difirió: no se arregla en 3a.
 
 **Deuda menor de la Fase 1 (no bloquea):**
 - Sin guardián propio de `EsAdmin` en Importación (hoy lo tapa `ImportacionHabilitada=false`); resolver al reactivarla (Fase 8).

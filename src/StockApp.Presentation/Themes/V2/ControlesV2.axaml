@@ -6,7 +6,8 @@
 
     <!-- UI v2 (spec 2026-09-28 §3.3): estilos de controles base y tipografía.
          TODO selector empieza con ".ui2 ": solo aplica dentro de una vista migrada (raíz con
-         Classes="ui2"). Las vistas viejas no se enteran.
+         Classes="ui2"). Las vistas viejas no se enteran, salvo por los estilos de ToolTip y
+         FlyoutPresenter (más abajo), que van sin .ui2 porque el popup no cuelga de .ui2.
          Se incluye en App.axaml al FINAL: los estilos viejos globales (Button, TextBox,
          Button.ghost de Themes/Controls.axaml) también matchean adentro de .ui2 y gana el último
          declarado, así que cada estilo de acá setea TODAS las propiedades que setea su par viejo.
@@ -128,7 +129,9 @@
 
     <!-- El TextAlignment Center de arriba se hereda también al ToolTip y al Flyout de un botón v2 (el tooltip
          estándar de bloqueo del guardado salía envuelto y centrado). Start es el default: estos estilos cortan
-         la herencia sin cambiar nada en el resto de la app. Van sin .ui2 porque el popup no cuelga de .ui2. -->
+         la herencia sin cambiar el alineado en el resto de la app. Van sin .ui2 porque el popup no cuelga de .ui2.
+         Por la misma razón el -calt (decisión del usuario 2026-10-07: calt de Inter apagado en toda la UI v2)
+         alcanza a TODO ToolTip y FlyoutPresenter de la app, también los de las vistas viejas. Es inocuo. -->
     <Style Selector="ToolTip">
         <Setter Property="TextBlock.TextAlignment" Value="Start" />
         <Setter Property="TextElement.FontFeatures" Value="-calt" />

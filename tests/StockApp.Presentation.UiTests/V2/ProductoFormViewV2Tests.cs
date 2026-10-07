@@ -165,6 +165,7 @@ public class ProductoFormViewV2Tests
         var borde = sku.GetVisualDescendants().OfType<Border>().First(b => b.Name == "PART_BorderElement");
         Assert.Equal(Color.Parse("#F5F5F4"), Assert.IsAssignableFrom<ISolidColorBrush>(borde.Background).Color);
         Assert.Equal(Color.Parse("#E7E5E4"), Assert.IsAssignableFrom<ISolidColorBrush>(borde.BorderBrush).Color);
+        Assert.Equal(Color.Parse("#A8A29E"), Assert.IsAssignableFrom<ISolidColorBrush>(sku.Foreground).Color);
 
         var alta = Montar();
         Assert.True(MontajeV2.Parte<CampoFormulario>(alta.Vista, "CampoSku").GetVisualDescendants().OfType<TextBox>().First().IsEffectivelyEnabled);

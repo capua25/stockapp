@@ -24,7 +24,8 @@ namespace StockApp.Presentation.UiTests;
 /// <see cref="BotonCancelar_ExisteVisibleConComandoResueltoYNavegaAlListado"/> también cubre
 /// ProductoFormView y ProveedorFormView (<see cref="CasosSoloCancelar"/>): a esas dos NO les
 /// faltaba el ancho, solo el botón Cancelar -- por eso no entran al banco <see cref="Casos"/> que
-/// también alimenta <see cref="Card_NoQuedaAngostaNiCentrada"/>.
+/// también alimenta <see cref="Card_NoQuedaAngostaNiCentrada"/>. (ProductoFormView ya es una vista
+/// v2: su ancho de 760 lo fija la columna * de ColumnaFormulario, no el Border.card.)
 ///
 /// El patrón de referencia (ya resuelto en el repo) es FuenteFinanciamientoFormView.axaml: el card
 /// NO lleva MaxWidth/HorizontalAlignment (queda VerticalAlignment="Top" nomás); el StackPanel
@@ -92,11 +93,12 @@ public class CatalogoFormAnchoYCancelarTests
     };
 
     /// <summary>
-    /// ProductoFormView y ProveedorFormView YA tenían el ancho correcto (MaxWidth 480/460 puesto
-    /// directamente en el Border.card, sin HorizontalAlignment=Center) -- no sufren el bug de
+    /// ProductoFormView y ProveedorFormView YA tenían el ancho correcto -- no sufren el bug de
     /// "angosta y centrada" que persigue <see cref="Card_NoQuedaAngostaNiCentrada"/>, así que NO se
-    /// agregan a <see cref="Casos"/> (ese test fallaría sin motivo: su StackPanel interno no lleva
-    /// MaxWidth/HorizontalAlignment propios, la propiedad vive en el Border). Solo les faltaba el
+    /// agregan a <see cref="Casos"/> (ese test fallaría sin motivo: la propiedad no vive en su
+    /// StackPanel interno). ProveedorFormView lo logra con MaxWidth 460 en el Border.card; ProductoFormView
+    /// (v2) con una columna * de MaxWidth 760 en el Grid ColumnaFormulario, y su ancho lo custodian las
+    /// comparaciones contra el mockup. Solo les faltaba el
     /// botón Cancelar, por eso arman un segundo banco de casos que <em>solo</em> alimenta
     /// <see cref="BotonCancelar_ExisteVisibleConComandoResueltoYNavegaAlListado"/>.
     /// </summary>
