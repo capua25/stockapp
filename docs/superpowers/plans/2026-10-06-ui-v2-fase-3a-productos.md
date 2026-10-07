@@ -740,7 +740,7 @@ Glifo del combo: copiar el `<svg class="v2-glifo-combo" …>…</svg>` tal cual 
   .completo { grid-column: 1 / 3; }
   .multilinea { height: 88px; align-items: flex-start; padding: 8px 12px; }
   .separador { height: 1px; background: var(--v2-color-separador-grilla); margin: 20px 0; }
-  .pie-formulario { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--v2-color-separador-grilla); }
+  .pie-formulario { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--v2-color-separador-grilla); }
 </style>
 </head>
 <body>
@@ -821,7 +821,7 @@ Cada uno es el archivo completo del Step 2 (escrito entero, no por diferencia) c
         <div class="v2-alerta v2-alerta--error alerta-error">Ya existe un producto con el código 'MAT-0142'.</div>
 ```
 
-con `.alerta-error { margin-top: 16px; }` en el `<style>`.
+con `.alerta-error { margin-top: 8px; }` en el `<style>` (GATE 2026-10-07: compactado para que la variante con error entre sin scroll; el pie pasa a margin-top 20).
 
 `producto-sin-permiso.html` — `<title>Inventario: Producto sin permiso (UI v2)</title>`, comentario `<!-- Datos: DatosProductos.SinPermiso(): la carga de datos respondió 403; el estado reemplaza a la card y el breadcrumb sigue disponible. -->`, breadcrumb y título "Nuevo producto", y en lugar de la `v2-tarjeta formulario`:
 
@@ -1983,13 +1983,13 @@ Reemplazar `src/StockApp.Presentation/Views/Catalogo/ProductoFormView.axaml` ent
                         </Grid>
 
                         <v2:Alerta x:Name="AlertaError"
-                                   Margin="0,16,0,0"
+                                   Margin="0,8,0,0"
                                    Variante="Error"
                                    Texto="{Binding MensajeError}"
                                    IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
                         <Border x:Name="PieFormulario"
-                                Margin="0,24,0,0"
+                                Margin="0,20,0,0"
                                 Padding="0,16,0,0"
                                 BorderThickness="0,1,0,0"
                                 BorderBrush="{DynamicResource V2SeparadorGrillaBrush}">
