@@ -155,5 +155,18 @@
     <Style Selector=".ui2 DataGridCell.num TextBlock">
         <Setter Property="HorizontalAlignment" Value="Right" />
     </Style>
+    <!-- Fila inactiva: el texto de la celda pasa a terciario por token, sin Opacity (con Opacity la insignia
+         "Inactivo" de la misma fila quedaba atenuada y casi ilegible). La vista marca cada TextBlock de celda
+         con Classes.inactivo bindeado a !Activo; la Insignia pinta su texto en su plantilla, sin la clase.
+         Espejo: el modificador inactiva de .v2-grilla-fila en base.css. -->
+    <Style Selector=".ui2 DataGridCell TextBlock.inactivo">
+        <Setter Property="Foreground" Value="{DynamicResource V2TextoTerciarioBrush}" />
+    </Style>
+    <!-- Número negativo (stock): peligro texto #B91C1C de la spec, no el DangerBrush viejo. Va DESPUÉS de
+         .inactivo a propósito: a igual especificidad gana el último, así un inactivo con stock negativo
+         sigue en rojo. Espejo: .v2-texto-peligro en base.css. -->
+    <Style Selector=".ui2 DataGridCell TextBlock.negativo">
+        <Setter Property="Foreground" Value="{DynamicResource V2PeligroTextoBrush}" />
+    </Style>
 
 </Styles>

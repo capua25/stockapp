@@ -3,140 +3,143 @@
              xmlns:vm="using:StockApp.Presentation.ViewModels.Catalogo"
              xmlns:dto="using:StockApp.Application.Catalogo"
              xmlns:conv="using:StockApp.Presentation.Converters"
-             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="700" d:DesignHeight="500"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
              x:Class="StockApp.Presentation.Views.Catalogo.ProductoListView"
-             x:DataType="vm:ProductoListViewModel">
+             x:DataType="vm:ProductoListViewModel"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
 
-    <DockPanel Margin="{DynamicResource MargenVista}">
+    <!-- UI v2 (spec §5.1). Espejo: docs/ui-v2/mockups/inventario/productos.html y productos-vacio.html.
+         Editar y Eliminar se habilitan solo con un producto activo seleccionado (regla del VM). -->
+    <DockPanel Margin="28,24">
 
-        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="CATÁLOGO" Titulo="Productos">
-            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
-                <Button Classes="secondary" Content="Buscar" Command="{Binding BuscarCommand}" />
-                <Button Classes="secondary" Content="Editar" Command="{Binding EditarCommand}" />
-                <Button Classes="secondary" Content="Eliminar" Command="{Binding BajaCommand}" />
-                <Button Classes="primary" Content="Nuevo" Command="{Binding NuevoCommand}" />
+        <v2:EncabezadoPagina x:Name="Encabezado" DockPanel.Dock="Top" Titulo="Productos">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button x:Name="BotonEditar" Classes="secundario" Content="Editar" Command="{Binding EditarCommand}" />
+                <Button x:Name="BotonEliminar" Classes="peligro" Content="Eliminar" Command="{Binding BajaCommand}" />
+                <Button x:Name="BotonNuevo" Classes="primario" Content="Nuevo" Command="{Binding NuevoCommand}" />
             </StackPanel>
-        </c:HeaderVista>
+        </v2:EncabezadoPagina>
 
-        <Border Classes="card">
+        <v2:TarjetaContenido x:Name="Tarjeta">
             <DockPanel>
+                <v2:BarraFiltros x:Name="Filtros"
+                                 DockPanel.Dock="Top"
+                                 TextoBusqueda="{Binding FiltroBusqueda}"
+                                 MarcaAguaBusqueda="Nombre, SKU o código de barras">
+                    <Button x:Name="BotonBuscar" Classes="secundario" Content="Buscar" Command="{Binding BuscarCommand}" />
+                </v2:BarraFiltros>
 
-                <!-- Filtro de busqueda de la grilla (no es accion de vista: se queda en la card).
-                     Etiquetado con CampoFormulario por consistencia: el mismo caso de uso (filtro
-                     de texto arriba de un listado) ya lleva Etiqueta="Buscar" en
-                     DocumentoListView, y acá no hay ícono de lupa que lo explique solo. -->
-                <c:CampoFormulario DockPanel.Dock="Top" Etiqueta="Buscar" Margin="0,0,0,12">
-                    <TextBox Text="{Binding FiltroBusqueda}"
-                             PlaceholderText="Buscar por nombre, SKU o código de barras..." />
-                </c:CampoFormulario>
+                <TextBlock x:Name="PieConteo"
+                           DockPanel.Dock="Bottom"
+                           Classes="pie-conteo"
+                           Margin="0,12,0,0"
+                           Text="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.Instance}, ConverterParameter='producto|productos'}"
+                           IsVisible="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.HayElementos}}" />
 
-                <!-- Listado. Columnas como DataGridTemplateColumn (no DataGridTextColumn) para
-                     poder atenuar el contenido de cada celda de datos con ActivoOpacidadConverter
-                     y, a la vez, dejar la columna "Estado" (badge "Inactiva") a opacidad plena:
-                     la opacidad en Avalonia es multiplicativa por el árbol visual, así que un
-                     badge atenuado por herencia desde una fila entera no sería legible — por eso
-                     se atenúa celda por celda en vez de la DataGridRow completa. SortMemberPath
-                     mantiene el ordenamiento por click en encabezados (CanUserSortColumns). -->
-                <DataGrid ItemsSource="{Binding ItemsView}"
+                <!-- UseLayoutRounding False: el estado vacío va centrado y el ancho del título es fraccionario;
+                     Avalonia redondeaba su origen a píxel entero y Chromium no (16 teselas densas contra 11,
+                     con 1 px de corrimiento en las letras). Mismo caso y mismo arreglo que el enlace de
+                     BloqueoLicenciaView. -->
+                <v2:EstadoVacio x:Name="EstadoSinProductos"
+                                UseLayoutRounding="False"
+                                DockPanel.Dock="Top"
+                                Titulo="No hay productos para mostrar"
+                                Mensaje="Probá con otra búsqueda o creá uno con Nuevo."
+                                IsVisible="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.EsCero}}" />
+
+                <!-- Columnas de plantilla para marcar cada TextBlock con Classes.inactivo (texto terciario por
+                     token, nunca Opacity). SortMemberPath conserva el orden por click en el encabezado.
+                     MinWidth por columna y scroll horizontal Auto: fix 3548397. -->
+                <DataGrid x:Name="Grilla"
+                          ItemsSource="{Binding ItemsView}"
                           SelectedItem="{Binding ItemSeleccionado}"
                           IsReadOnly="True"
                           CanUserSortColumns="True"
                           CanUserResizeColumns="True"
-                          GridLinesVisibility="Horizontal"
-                          ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                          IsVisible="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.HayElementos}}">
                     <DataGrid.Columns>
-                        <DataGridTemplateColumn Header="Código" Width="Auto" SortMemberPath="Codigo">
+                        <DataGridTemplateColumn Header="CÓDIGO" Width="Auto" SortMemberPath="Codigo">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:ProductoDto">
-                                    <TextBlock Text="{Binding Codigo}"
-                                               Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
-                                               VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding Codigo}" Classes.inactivo="{Binding !Activo}" VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Nombre" Width="2*" SortMemberPath="Nombre">
+                        <DataGridTemplateColumn Header="NOMBRE" Width="2*" SortMemberPath="Nombre">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:ProductoDto">
                                     <TextBlock Text="{Binding Nombre}"
-                                               Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
+                                               Classes.inactivo="{Binding !Activo}"
                                                TextTrimming="CharacterEllipsis"
                                                ToolTip.Tip="{Binding Nombre}"
                                                VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Costo" Width="Auto" MinWidth="100" SortMemberPath="PrecioCosto">
+                        <DataGridTemplateColumn Header="COSTO" Width="Auto" MinWidth="100" CellStyleClasses="num" SortMemberPath="PrecioCosto">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:ProductoDto">
                                     <TextBlock Text="{Binding PrecioCosto, Converter={x:Static conv:MonedaConverter.Instance}}"
-                                               Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
-                                               HorizontalAlignment="Right" VerticalAlignment="Center" />
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Stock" Width="220" MinWidth="100" SortMemberPath="StockActual">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate x:DataType="dto:ProductoDto">
-                                    <!-- Columna de ANCHO FIJO (220) + badge y número en UNA sola celda de Grid
-                                         (badge pegado a la izquierda, número a la derecha). Antes era una
-                                         columna Auto con un StackPanel Right que se ajustaba al contenido:
-                                         la grilla recicla las celdas al ordenar por encabezado, y cuando una
-                                         celda que mostraba un stock negativo (badge visible) pasa a mostrar
-                                         uno positivo (badge oculto), el contenedor conservaba el arreglo del
-                                         valor anterior y el número quedaba corrido o recortado (22 se veía
-                                         como "2"). Con ancho fijo y sin tamaño que dependa de la visibilidad
-                                         del badge, no hay nada que re-medir. 220 = peor caso "-99999,5": badge
-                                         "Stock negativo" (102) + número (62) + padding de celda y margen, igual
-                                         que las otras 4 grillas con badge; con 170 el badge pisaba 41px al número
-                                         (ProductoListViewStockOrdenTests). -->
-                                    <Grid VerticalAlignment="Center"
-                                          Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}">
-                                        <c:BadgeEstado Texto="Stock negativo" Tono="Peligro"
-                                                       HorizontalAlignment="Left"
-                                                       IsVisible="{Binding StockActual, Converter={x:Static conv:EsNegativoConverter.Instance}}" />
-                                        <TextBlock Text="{Binding StockActual, Converter={x:Static conv:CantidadConverter.Instance}}"
-                                                   Foreground="{Binding StockActual, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}"
-                                                   HorizontalAlignment="Right" VerticalAlignment="Center" />
-                                    </Grid>
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Unidad" Width="Auto" SortMemberPath="UnidadMedidaNombre">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate x:DataType="dto:ProductoDto">
-                                    <TextBlock Text="{Binding UnidadMedidaNombre}"
-                                               Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
+                                               Classes.inactivo="{Binding !Activo}"
                                                VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Categoría" Width="*" SortMemberPath="CategoriaNombre">
+                        <DataGridTemplateColumn Header="STOCK" Width="220" MinWidth="100" CellStyleClasses="num" SortMemberPath="StockActual">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:ProductoDto">
+                                    <!-- Ancho FIJO 220 y una sola Grid con la insignia a la izquierda y el número a
+                                         la derecha: la grilla recicla las celdas al ordenar y un contenedor que
+                                         dependía de la visibilidad de la insignia dejaba el número corrido o
+                                         recortado (22 se veía "2"). 220 = peor caso "-99999,5" con la insignia. -->
+                                    <Grid VerticalAlignment="Center">
+                                        <v2:Insignia Texto="Stock negativo"
+                                                     Variante="Peligro"
+                                                     HorizontalAlignment="Left"
+                                                     IsVisible="{Binding StockActual, Converter={x:Static conv:EsNegativoConverter.Instance}}" />
+                                        <TextBlock Text="{Binding StockActual, Converter={x:Static conv:CantidadConverter.Instance}}"
+                                                   Classes.inactivo="{Binding !Activo}"
+                                                   Classes.negativo="{Binding StockActual, Converter={x:Static conv:EsNegativoConverter.Instance}}"
+                                                   HorizontalAlignment="Right"
+                                                   VerticalAlignment="Center" />
+                                    </Grid>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="UNIDAD" Width="Auto" SortMemberPath="UnidadMedidaNombre">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:ProductoDto">
+                                    <TextBlock Text="{Binding UnidadMedidaNombre}" Classes.inactivo="{Binding !Activo}" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="CATEGORÍA" Width="*" SortMemberPath="CategoriaNombre">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:ProductoDto">
                                     <TextBlock Text="{Binding CategoriaNombre, TargetNullValue='—'}"
-                                               Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}"
+                                               Classes.inactivo="{Binding !Activo}"
                                                TextTrimming="CharacterEllipsis"
                                                ToolTip.Tip="{Binding CategoriaNombre, TargetNullValue='—'}"
                                                VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Estado" Width="Auto" CanUserSort="False">
+                        <DataGridTemplateColumn Header="ESTADO" Width="Auto" CanUserSort="False">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:ProductoDto">
-                                    <c:BadgeEstado Texto="Inactiva" Tono="Neutro" IsVisible="{Binding !Activo}" />
+                                    <v2:Insignia Texto="Inactivo" Variante="Neutro" IsVisible="{Binding !Activo}" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
                     </DataGrid.Columns>
                 </DataGrid>
-
             </DockPanel>
-        </Border>
-
+        </v2:TarjetaContenido>
     </DockPanel>
 
 </UserControl>

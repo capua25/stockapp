@@ -49,7 +49,6 @@ namespace StockApp.Presentation.UiTests;
 public class GuardianDePatronTests
 {
     [AvaloniaTheory]
-    [InlineData(typeof(ProductoListView), "Productos", "CATÁLOGO")]
     [InlineData(typeof(MovimientoHistorialView), "Historial de movimientos", "MOVIMIENTOS")]
     [InlineData(typeof(ProductoFormView), null, null)]
     [InlineData(typeof(MovimientoFormControl), null, null)]
@@ -108,7 +107,6 @@ public class GuardianDePatronTests
 
     public static readonly TheoryData<Type> VistasDeLaTanda = new()
     {
-        typeof(ProductoListView),
         typeof(MovimientoHistorialView),
         typeof(ProductoFormView),
         typeof(MovimientoFormControl),
@@ -227,6 +225,7 @@ public class GuardianDePatronTests
         typeof(ActualizacionModalView),
         typeof(ActualizacionBloqueoView),
         typeof(InicioView),
+        typeof(ProductoListView),
     };
 
     /// <summary>

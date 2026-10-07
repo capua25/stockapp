@@ -217,9 +217,9 @@ public class DataGridColumnasAutoAjusteTests
         var (window, grid) = Montar(new ProductoListView(), ancho);
         Cargar(grid, Enumerable.Range(1, 30).Select(i => Producto(i, i == 3 ? -99999.5m : i)).ToList());
 
-        Assert.Equal(220, Columna(grid, "Stock").ActualWidth, 1);
-        AssertSinRecorte(grid, window, "carga", "Código", "Costo", "Unidad");
-        AssertBadgeNoPisaElNumero(grid, window, "Stock", "carga");
+        Assert.Equal(220, Columna(grid, "STOCK").ActualWidth, 1);
+        AssertSinRecorte(grid, window, "carga", "CÓDIGO", "COSTO", "UNIDAD");
+        AssertBadgeNoPisaElNumero(grid, window, "STOCK", "carga");
     }
 
     // ── (a) Respeta el redimensionado manual ───────────────────────────────────────────────────
@@ -542,10 +542,10 @@ public class DataGridColumnasAutoAjusteTests
         Cargar(grid, Enumerable.Range(1, 30).Select(i => Producto(i, i == 3 ? -99999.5m : i)).ToList());
         Reportar("Productos 1366", window, grid);
 
-        AssertEstrellasEnPiso(grid, "carga", "Nombre", "Categoría");
-        AssertSinRecorte(grid, window, "carga", "Nombre", "Código", "Costo", "Unidad");
-        Assert.Equal(220, Columna(grid, "Stock").ActualWidth, 1);
-        AssertBadgeNoPisaElNumero(grid, window, "Stock", "carga");
+        AssertEstrellasEnPiso(grid, "carga", "NOMBRE", "CATEGORÍA");
+        AssertSinRecorte(grid, window, "carga", "NOMBRE", "CÓDIGO", "COSTO", "UNIDAD");
+        Assert.Equal(220, Columna(grid, "STOCK").ActualWidth, 1);
+        AssertBadgeNoPisaElNumero(grid, window, "STOCK", "carga");
         AssertScrollSiDesborda(grid, "carga");
     }
 

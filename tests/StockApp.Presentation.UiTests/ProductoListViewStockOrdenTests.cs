@@ -15,13 +15,13 @@ namespace StockApp.Presentation.UiTests;
 
 /// <summary>
 /// Regresión (bug en producción): al ordenar la grilla de Productos por click en el encabezado
-/// ("Costo" desc, "Stock") la columna Stock se dibujaba mal: el número quedaba corrido a la
+/// ("COSTO" desc, "STOCK") la columna Stock se dibujaba mal: el número quedaba corrido a la
 /// izquierda o recortado (22 aparecía como "2").
 ///
 /// Causa raíz: la celda de Stock llevaba un StackPanel con HorizontalAlignment="Right" (ajustado
-/// al contenido) con el badge "Stock negativo" + el número. La DataGrid recicla las celdas al
-/// reordenar; cuando una celda que mostraba un stock negativo (badge visible) pasa a mostrar uno
-/// positivo (badge oculto), el contenedor conservaba el arreglo calculado para el valor anterior.
+/// al contenido) con la insignia "Stock negativo" (Insignia v2) + el número. La DataGrid recicla las celdas al
+/// reordenar; cuando una celda que mostraba un stock negativo (insignia visible) pasa a mostrar uno
+/// positivo (insignia oculta), el contenedor conservaba el arreglo calculado para el valor anterior.
 /// El árbol visual queda con tamaños inconsistentes, así que el guardián no mira el valor de
 /// una celda aislada sino el invariante: TODOS los números de la columna terminan en el mismo X
 /// y ninguno queda recortado, después de cada ordenamiento.
@@ -57,17 +57,17 @@ public class ProductoListViewStockOrdenTests
         grid.ItemsSource = new DataGridCollectionView(
             stocks.Select((s, i) => ProductoDe(i + 1, costos[i], s)).ToList());
         Dispatcher.UIThread.RunJobs();
-        AssertNumerosAlineadosYSinRecorte(grid, window, "Stock", "inicial");
-        AssertBadgeNoPisaElNumero(grid, window, "Stock", "inicial");
+        AssertNumerosAlineadosYSinRecorte(grid, window, "STOCK", "inicial");
+        AssertBadgeNoPisaElNumero(grid, window, "STOCK", "inicial");
 
-        // Pasos del reporte: dos clicks en "Costo" (descendente), y también por "Stock".
-        ClickearHeader(window, grid, "Costo");
-        ClickearHeader(window, grid, "Costo");
-        AssertNumerosAlineadosYSinRecorte(grid, window, "Stock", "Costo descendente");
-        AssertBadgeNoPisaElNumero(grid, window, "Stock", "Costo descendente");
+        // Pasos del reporte: dos clicks en "COSTO" (descendente), y también por "STOCK".
+        ClickearHeader(window, grid, "COSTO");
+        ClickearHeader(window, grid, "COSTO");
+        AssertNumerosAlineadosYSinRecorte(grid, window, "STOCK", "Costo descendente");
+        AssertBadgeNoPisaElNumero(grid, window, "STOCK", "Costo descendente");
 
-        ClickearHeader(window, grid, "Stock");
-        AssertNumerosAlineadosYSinRecorte(grid, window, "Stock", "Stock ascendente");
-        AssertBadgeNoPisaElNumero(grid, window, "Stock", "Stock ascendente");
+        ClickearHeader(window, grid, "STOCK");
+        AssertNumerosAlineadosYSinRecorte(grid, window, "STOCK", "Stock ascendente");
+        AssertBadgeNoPisaElNumero(grid, window, "STOCK", "Stock ascendente");
     }
 }

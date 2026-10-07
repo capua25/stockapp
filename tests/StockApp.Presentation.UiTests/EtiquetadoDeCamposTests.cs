@@ -68,20 +68,15 @@ public class EtiquetadoDeCamposTests
     }
 
     /// <summary>
-    /// ProductoListView: el filtro de búsqueda de la grilla solo tenía placeholder. A diferencia
-    /// de un buscador con lupa que "se explica solo", acá no hay ícono — es un TextBox pelado — y
-    /// el mismo caso de uso (filtro de texto arriba de un listado) SÍ está etiquetado "Buscar" en
-    /// DocumentoListView con el mismo patrón CampoFormulario. Se etiqueta igual acá por
-    /// consistencia dentro de la misma app.
+    /// ProductoListView (UI v2): el buscador vive en v2:BarraFiltros, que no tiene etiqueta (patrón de listado
+    /// aprobado); lo que explica el campo es la marca de agua, así que no puede faltar.
     /// </summary>
     [Fact]
-    public void ProductoListView_FiltroBusqueda_TieneEtiquetaCampoFormulario()
+    public void ProductoListView_Busqueda_EnBarraFiltrosConMarcaDeAgua()
     {
         var axaml = LeerAxaml("StockApp.Presentation/Views/Catalogo/ProductoListView.axaml");
-        Assert.True(TieneCampoFormularioCon(axaml, "Buscar"),
-            "El TextBox de FiltroBusqueda en ProductoListView debe estar envuelto en "
-            + "c:CampoFormulario Etiqueta=\"Buscar\", igual que el filtro equivalente de "
-            + "DocumentoListView.");
+        Assert.Matches(@"<v2:BarraFiltros\b[^>]*\bMarcaAguaBusqueda=""[^""]+""", axaml);
+        Assert.Matches(@"<v2:BarraFiltros\b[^>]*\bTextoBusqueda=""\{Binding FiltroBusqueda\}""", axaml);
     }
 
     /// <summary>

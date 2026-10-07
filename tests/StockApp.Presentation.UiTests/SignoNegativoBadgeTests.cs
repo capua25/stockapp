@@ -69,9 +69,12 @@ public class SignoNegativoBadgeTests
         };
         Dispatcher.UIThread.RunJobs();
 
-        var badges = BadgesConTexto(window, "Stock negativo");
+        // Productos es v2: la palabra la pone una Insignia peligro (las demás vistas siguen con BadgeEstado).
+        var insignias = window.GetVisualDescendants().OfType<StockApp.Presentation.Controls.V2.Insignia>()
+            .Where(i => i.Texto == "Stock negativo").ToList();
 
-        Assert.Single(badges, b => b.IsVisible);
+        var visible = Assert.Single(insignias, i => i.IsVisible);
+        Assert.Equal(StockApp.Presentation.Controls.V2.VarianteInsignia.Peligro, visible.Variante);
     }
 
     private static ProductoDto ProductoDe(int id, string nombre, decimal stockActual) => new(

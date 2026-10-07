@@ -137,10 +137,18 @@ internal sealed class NavigationRecorderFake : INavigationService
     /// </summary>
     public Action<TareaFormViewModel>? UltimoInicializadorTareaForm { get; private set; }
 
+    /// <summary>
+    /// Inicializador de la última navegación con overload (cualquier ViewModel): permite ejecutarlo contra un
+    /// ViewModel real y confirmar que se navegó con el dato correcto (por ejemplo, "Editar" con el producto
+    /// seleccionado), no solo al tipo correcto.
+    /// </summary>
+    public Delegate? UltimoInicializador { get; private set; }
+
     public void Navegar<TVm>() where TVm : ViewModelBase => UltimoTipoNavegado = typeof(TVm);
 
     public void Navegar<TVm>(Action<TVm> inicializar) where TVm : ViewModelBase
     {
+        UltimoInicializador = inicializar;
         UltimoTipoNavegado = typeof(TVm);
         if (inicializar is Action<TareaFormViewModel> accionTareaForm)
             UltimoInicializadorTareaForm = accionTareaForm;
