@@ -13,10 +13,12 @@
   .pagina > .v2-tarjeta { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
   .pagina .v2-grilla { flex: 1 1 0; min-height: 0; }
   .pie { margin-top: 12px; }
-  /* Anchos de columna medidos en headless con el tema v2 y estos datos (Auto), o los de la vista (220, *, 2*).
-     Iguales a 1280 y a 1366: COSTO queda en su mínimo de 100 y CATEGORÍA en el piso de 160 de las
-     columnas *; NOMBRE (2*) se lleva el resto (212 a 1280, 298 a 1366, con ESTADO en 78). */
-  .col-codigo { flex: 0 0 81px; }
+  /* Anchos medidos en headless con el tema v2, estos datos y las columnas que miden su contenido (CÓDIGO, COSTO,
+     UNIDAD); STOCK y ESTADO fijos; NOMBRE y CATEGORÍA proporcionales. Iguales a 1280 y a 1366: CÓDIGO crece de
+     81 a 85 por la reserva de la flecha de orden, COSTO queda en su mínimo
+     de 100 y CATEGORÍA en el piso de 160 de las columnas *; NOMBRE (2*) se lleva el resto (208 a 1280, 294 a 1366,
+     con ESTADO en 78). */
+  .col-codigo { flex: 0 0 85px; }
   .col-nombre { flex: 2 1 0; min-width: 0; }
   .col-costo { flex: 0 0 100px; }
   .col-stock { flex: 0 0 220px; }
