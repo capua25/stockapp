@@ -38,6 +38,38 @@ public class ProductosComparacionTests
         Comparar(DatosProductos.SinProductos(), "inventario/productos-vacio.html", TamanoLienzo.Municipio);
 
     [AvaloniaFact]
+    public void ProductosCargando_IgualAlMockup() => Comparar(DatosProductos.Cargando(), "inventario/productos-cargando.html");
+
+    [AvaloniaFact]
+    public void ProductosCargando_IgualAlMockup_1366x768() =>
+        Comparar(DatosProductos.Cargando(), "inventario/productos-cargando.html", TamanoLienzo.Municipio);
+
+    [AvaloniaFact]
+    public void ProductosSinPermiso_IgualAlMockup() => Comparar(DatosProductos.SinPermisoListado(), "inventario/productos-sin-permiso.html");
+
+    [AvaloniaFact]
+    public void ProductosSinPermiso_IgualAlMockup_1366x768() =>
+        Comparar(DatosProductos.SinPermisoListado(), "inventario/productos-sin-permiso.html", TamanoLienzo.Municipio);
+
+    // Cortes a propósito, con elipsis y tooltip, que el mockup también corta: la unidad larga (UNIDAD cede al espacio
+    // libre) y los nombres que no entran en NOMBRE, que con UNIDAD cediendo queda en su piso de 160.
+    private static readonly string[] CortesDelMockup =
+    [
+        DatosProductos.UnidadLarga, "Cemento portland 50 kg", "Pintura látex blanca 20 L", "Hipoclorito de sodio 5 L",
+        "Bolsas de residuo 80x110",
+    ];
+
+    [AvaloniaFact]
+    public void ProductosCeldaCortada_IgualAlMockup() =>
+        ComparacionVisual.CompararConMockup(new ShellMainView(), DatosProductos.ConCeldaCortada(), "inventario/productos-celda-cortada.html",
+            ocultarEnMockup: OcultarEnMockup, prepararApp: OcultarSidebar, recortesPermitidos: CortesDelMockup);
+
+    [AvaloniaFact]
+    public void ProductosCeldaCortada_IgualAlMockup_1366x768() =>
+        ComparacionVisual.CompararConMockup(new ShellMainView(), DatosProductos.ConCeldaCortada(), "inventario/productos-celda-cortada.html",
+            tamano: TamanoLienzo.Municipio, ocultarEnMockup: OcultarEnMockup, prepararApp: OcultarSidebar, recortesPermitidos: CortesDelMockup);
+
+    [AvaloniaFact]
     public void ProductoNuevo_IgualAlMockup() => Comparar(DatosProductos.Nuevo(), "inventario/producto-nuevo.html");
 
     [AvaloniaFact]

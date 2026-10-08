@@ -17,6 +17,7 @@ using StockApp.Application.Catalogo;
 using StockApp.Application.Movimientos;
 using StockApp.Application.Reportes;
 using StockApp.Domain.Enums;
+using StockApp.Presentation.Behaviors;
 using StockApp.Presentation.ViewModels.Finanzas;
 using StockApp.Presentation.ViewModels.Movimientos;
 using StockApp.Presentation.Views.Catalogo;
@@ -31,8 +32,8 @@ namespace StockApp.Presentation.UiTests;
 /// Barrido: ninguna columna que NO sea proporcional (<c>Auto</c> o de ancho fijo) deja un header,
 /// un texto o un botón recortado, en las Views reales montadas con datos de prueba.
 ///
-/// Los anchos son los de la vista real dentro del shell: ventana menos el sidebar de 232px.
-/// 1366 (la resolución típica de las PC municipales) -> 1134; 1920 -> 1688. Las columnas
+/// Los anchos son los de la vista real dentro del shell: ventana menos el sidebar v2 de 240px.
+/// 1366 (la resolución típica de las PC municipales) -> 1126; 1920 -> 1680. Las columnas
 /// proporcionales (<c>*</c>) quedan fuera a propósito: su MinWidth lo decide el usuario.
 ///
 /// El invariante se mide por el EFECTO: el TextBlock arreglado más angosto que su ancho natural
@@ -41,7 +42,7 @@ namespace StockApp.Presentation.UiTests;
 /// </summary>
 public class GrillasSinRecorteBarridoTests
 {
-    internal const double SidebarPx = 232;
+    internal const double SidebarPx = 240;
 
     internal sealed record Escenario(string Nombre, Func<Control> Vista, Func<DataGrid, IEnumerable<object>> Datos);
 
@@ -80,6 +81,9 @@ public class GrillasSinRecorteBarridoTests
         new("Reporte de tareas", () => new ReporteTareasView(), _ => Muchos<object>(i =>
             new FilaReporteTareas("Dirección de Obras y Servicios Públicos", 12345, 12345, 12345, 12345, 49380))),
         new("Productos", () => new ProductoListView(), _ => Muchos<object>(i => Producto(i, i == 0 ? -99999.5m : 10 + i))),
+        // Una unidad más larga que el espacio de su columna: se corta con elipsis y tooltip a propósito (no es recorte).
+        new("Productos (unidad que pasa el tope)", () => new ProductoListView(), _ => Muchos<object>(i =>
+            Producto(i, 10 + i) with { UnidadMedidaNombre = i == 0 ? "Metro cúbico puesto en obra con flete incluido" : "Metro cuadrado" })),
         new("Ingreso por factura (renglones)", () => new IngresoPorFacturaView(), _ => Muchos<object>(i =>
             new FilaRenglonFacturaVm
             {
@@ -194,6 +198,7 @@ public class GrillasSinRecorteBarridoTests
                              .Where(t => t.IsEffectivelyVisible && !string.IsNullOrEmpty(t.Text)
                                          && t.TextWrapping == Avalonia.Media.TextWrapping.NoWrap))
                 {
+                    if (EsCorteAdmitido(grid, col, tb)) continue;
                     if (tb.Bounds.Width < AnchoNatural(tb) - 0.5)
                         fallas.Add($"{nombre} [celda]: '{tb.Text}' mide {tb.Bounds.Width:F1}px y necesita {AnchoNatural(tb):F1}px");
                 }
@@ -212,6 +217,20 @@ public class GrillasSinRecorteBarridoTests
         }
         return (fallas.Distinct().ToList(), inspeccionadas);
     }
+
+    /// <summary>
+    /// Columna medida (ColumnaAuto) que CEDIÓ al espacio libre de la grilla (ocupa menos de lo que midió) o que
+    /// midió el tope: el texto que no entra se corta con elipsis y se lee entero en el tooltip, que abre solo si
+    /// está cortado. Es el criterio común de columnas Auto, no un recorte. Una medida que ni cedió ni llegó al tope
+    /// tiene que mostrar su texto entero: si lo corta, es un error de medición y el barrido lo marca.
+    /// </summary>
+    private static bool EsCorteAdmitido(DataGrid grid, DataGridColumn col, TextBlock tb) =>
+        ColumnaAuto.GetMedir(col)
+        && DataGridColumnasAutoBehavior.AnchoMedido(grid, col) is { } medido
+        && (col.ActualWidth < medido - 0.5 || medido >= ColumnaAuto.GetTope(col) - 0.5)
+        && tb.TextTrimming != Avalonia.Media.TextTrimming.None
+        && TooltipSiSeCorta.GetActivo(tb)
+        && Equals(ToolTip.GetTip(tb), tb.Text);
 
     /// <summary>DataGridColumnHeader.OwningColumn es interno: se deduce por el índice visual del header.</summary>
     internal static DataGridColumn? HeaderDeColumna(DataGrid grid, DataGridColumnHeader header)

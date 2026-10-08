@@ -410,7 +410,7 @@
 
     <!-- Indicador de carga (espejo: .v2-cargando en base.css). UseLayoutRounding False en el tema: el texto va
          centrado y su ancho es fraccionario; Avalonia redondea el origen y Chromium no (mismo caso que
-         EstadoVacio, que lo lleva por instancia porque en el catálogo de componentes movía su línea base). -->
+         EstadoVacio, que lo lleva por instancia en cada vista). -->
     <ControlTheme x:Key="{x:Type v2:EstadoCargando}" TargetType="v2:EstadoCargando">
         <Setter Property="UseLayoutRounding" Value="False" />
         <Setter Property="Template">

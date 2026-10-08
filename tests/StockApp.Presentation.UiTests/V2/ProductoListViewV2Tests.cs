@@ -5,14 +5,18 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Layout;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using StockApp.Application.Catalogo;
 using StockApp.Domain.Entities;
+using StockApp.Presentation.Behaviors;
 using StockApp.Presentation.Controls.V2;
 using StockApp.Presentation.ViewModels.Catalogo;
 using StockApp.Presentation.Views.Catalogo;
@@ -34,6 +38,8 @@ public class ProductoListViewV2Tests
     {
         public List<ProductoDto> Lista { get; set; } = new();
         public List<int> Bajas { get; } = new();
+        public TaskCompletionSource<IReadOnlyList<ProductoDto>>? Pendiente { get; set; }
+        public Exception? Falla { get; set; }
 
         public Task<int> AltaAsync(Producto producto) => throw new NotSupportedException();
         public Task ModificarAsync(Producto producto) => throw new NotSupportedException();
@@ -46,11 +52,15 @@ public class ProductoListViewV2Tests
         }
 
         public Task<IReadOnlyList<ProductoDto>> BuscarAsync(string? sku, string? codigoBarras, string? nombre) =>
-            Task.FromResult<IReadOnlyList<ProductoDto>>(Lista.ToList());
+            Responder(Lista.ToList());
 
         public Task<IReadOnlyList<ProductoDto>> BuscarPorTextoAsync(string? texto) =>
-            Task.FromResult<IReadOnlyList<ProductoDto>>(Lista
-                .Where(p => string.IsNullOrEmpty(texto) || p.Nombre.Contains(texto, StringComparison.OrdinalIgnoreCase)).ToList());
+            Responder(Lista.Where(p => string.IsNullOrEmpty(texto) || p.Nombre.Contains(texto, StringComparison.OrdinalIgnoreCase)).ToList());
+
+        private Task<IReadOnlyList<ProductoDto>> Responder(List<ProductoDto> resultado) =>
+            Falla is not null ? Task.FromException<IReadOnlyList<ProductoDto>>(Falla)
+            : Pendiente is not null ? Pendiente.Task
+            : Task.FromResult<IReadOnlyList<ProductoDto>>(resultado);
     }
 
     private static ProductoDto P(int id, string nombre, decimal stock, bool activo = true) => new(
@@ -65,14 +75,15 @@ public class ProductoListViewV2Tests
     private sealed record Montaje(Window Ventana, ProductoListView Vista, ProductoListViewModel Vm, ProductosFake Servicio,
         NavigationRecorderFake Navegacion);
 
-    private static Montaje Montar(params ProductoDto[] productos)
+    private static Montaje Montar(params ProductoDto[] productos) => Montar(new ProductosFake { Lista = productos.ToList() });
+
+    /// <summary>Monta la vista con el servicio ya configurado. 1040 es el ancho de la vista a 1280 con el sidebar de 240.</summary>
+    private static Montaje Montar(ProductosFake servicio, double ancho = 1040)
     {
-        var servicio = new ProductosFake { Lista = productos.ToList() };
         var navegacion = new NavigationRecorderFake();
-        var confirmacion = new ConfirmacionServiceFake();
-        var vm = new ProductoListViewModel(servicio, navegacion, confirmacion);
+        var vm = new ProductoListViewModel(servicio, navegacion, new ConfirmacionServiceFake());
         var vista = new ProductoListView { DataContext = vm };
-        var ventana = new Window { Width = 1040, Height = 760, Content = vista };
+        var ventana = new Window { Width = ancho, Height = 760, Content = vista };
         ventana.Show();
         Dispatcher.UIThread.RunJobs();
         Dispatcher.UIThread.RunJobs(); // deja completar el await CargarAsync() del DataContextChanged
@@ -99,6 +110,32 @@ public class ProductoListViewV2Tests
             .ToList();
 
     private static Color ColorDe(TextBlock t) => Assert.IsAssignableFrom<ISolidColorBrush>(t.Foreground).Color;
+
+    /// <summary>
+    /// La parte se busca en el árbol lógico: dentro de una card que nunca se mostró el template no se aplica y su
+    /// contenido no llega al árbol visual. Visible es estar en el árbol visual sin ningún ancestro oculto.
+    /// </summary>
+    private static bool Visible(Montaje m, string nombre)
+    {
+        var parte = m.Vista.GetLogicalDescendants().OfType<Control>().First(c => c.Name == nombre);
+        return TopLevel.GetTopLevel(parte) is not null && ArbolVisual.EsVisibleEnArbol(parte);
+    }
+
+    private static DataGridColumn Columna(DataGrid grilla, string header) => grilla.Columns.Single(c => Equals(c.Header, header));
+
+    /// <summary>El TextBlock de la celda de <paramref name="item"/> que está bajo el header de la columna.</summary>
+    private static TextBlock CeldaDe(DataGrid grilla, object item, string header)
+    {
+        var h = grilla.GetVisualDescendants().OfType<DataGridColumnHeader>().Single(x => Equals(x.Content, header));
+        var centro = h.TranslatePoint(new Point(h.Bounds.Width / 2, 0), grilla)!.Value.X;
+        var fila = grilla.GetVisualDescendants().OfType<DataGridRow>().Single(r => ReferenceEquals(r.DataContext, item));
+        var celda = fila.GetVisualDescendants().OfType<DataGridCell>().Single(c =>
+        {
+            var x0 = c.TranslatePoint(default, grilla)!.Value.X;
+            return x0 <= centro && centro <= x0 + c.Bounds.Width;
+        });
+        return celda.GetVisualDescendants().OfType<TextBlock>().First(t => t.IsEffectivelyVisible && t.FindAncestorOfType<Insignia>() is null);
+    }
 
     [AvaloniaFact]
     public void Raiz_TieneUi2YUsaLosComponentesV2()
@@ -262,6 +299,7 @@ public class ProductoListViewV2Tests
         Assert.True(ArbolVisual.EsVisibleEnArbol(MontajeV2.Parte<EstadoVacio>(m.Vista, "EstadoSinProductos")));
         Assert.False(ArbolVisual.EsVisibleEnArbol(MontajeV2.Parte<DataGrid>(m.Vista, "Grilla")));
         Assert.False(ArbolVisual.EsVisibleEnArbol(MontajeV2.Parte<TextBlock>(m.Vista, "PieConteo")));
+        Assert.False(Visible(m, "IndicadorCarga"));
 
         m.Servicio.Lista = [Activo, Negativo];
         Clickear(m.Ventana, MontajeV2.Parte<Button>(m.Vista, "BotonBuscar"));
@@ -317,5 +355,187 @@ public class ProductoListViewV2Tests
         for (var i = 0; i < antes.Length; i++)
             Assert.True(Math.Abs(antes[i] - despues[i]) <= 0.5,
                 $"La columna {grilla.Columns[i].Header} pasó de {antes[i]} a {despues[i]} al aparecer la fila inactiva.");
+    }
+
+    [AvaloniaFact]
+    public void Cargando_SinFilas_MuestraElIndicadorYNiElVacioNiLaGrilla()
+    {
+        var m = Montar(new ProductosFake { Pendiente = new TaskCompletionSource<IReadOnlyList<ProductoDto>>() });
+
+        Assert.True(m.Vm.Cargando);
+        Assert.True(Visible(m, "IndicadorCarga"));
+        Assert.Equal("Cargando productos…", MontajeV2.Parte<EstadoCargando>(m.Vista, "IndicadorCarga").Texto);
+        Assert.False(Visible(m, "EstadoSinProductos"));
+        Assert.False(Visible(m, "Grilla"));
+        Assert.False(Visible(m, "PieConteo"));
+        Assert.False(Visible(m, "EstadoSinPermiso"));
+    }
+
+    [AvaloniaFact]
+    public void AlTerminarLaCargaSinProductos_ElIndicadorDaPasoAlEstadoVacio()
+    {
+        var pendiente = new TaskCompletionSource<IReadOnlyList<ProductoDto>>();
+        var m = Montar(new ProductosFake { Pendiente = pendiente });
+
+        pendiente.SetResult([]);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(Visible(m, "IndicadorCarga"));
+        Assert.True(Visible(m, "EstadoSinProductos"));
+    }
+
+    [AvaloniaFact]
+    public void Recarga_ConFilasEnPantalla_NoMuestraElIndicadorYLaGrillaSigue()
+    {
+        var m = Montar(Activo, Negativo);
+        m.Servicio.Pendiente = new TaskCompletionSource<IReadOnlyList<ProductoDto>>();
+
+        Clickear(m.Ventana, MontajeV2.Parte<Button>(m.Vista, "BotonBuscar"));
+
+        Assert.True(m.Vm.Cargando);
+        Assert.False(Visible(m, "IndicadorCarga"));
+        Assert.True(Visible(m, "Grilla"));
+    }
+
+    [AvaloniaFact]
+    public void SinPermiso_EnLaCarga_MuestraSinPermisoEnLugarDeLaCardYNuncaElVacio()
+    {
+        var m = Montar(new ProductosFake { Falla = new UnauthorizedAccessException("403") });
+
+        Assert.True(Visible(m, "EstadoSinPermiso"));
+        var estado = MontajeV2.Parte<EstadoVacio>(m.Vista, "EstadoSinPermiso");
+        Assert.True(estado.EsError);
+        Assert.Equal("Sin permiso", estado.Titulo);
+        Assert.Equal(ProductoListViewModel.MensajeSinPermisoListado, estado.Mensaje);
+        Assert.False(Visible(m, "Tarjeta"));
+        Assert.False(Visible(m, "EstadoSinProductos"));
+        Assert.False(Visible(m, "IndicadorCarga"));
+    }
+
+    [AvaloniaFact]
+    public void SinPermiso_EnUnaBusqueda_ReemplazaLaGrillaPorSinPermiso()
+    {
+        var m = Montar(Activo);
+        m.Servicio.Falla = new UnauthorizedAccessException("403");
+
+        Clickear(m.Ventana, MontajeV2.Parte<Button>(m.Vista, "BotonBuscar"));
+
+        Assert.True(Visible(m, "EstadoSinPermiso"));
+        Assert.False(Visible(m, "Tarjeta"));
+    }
+
+    [AvaloniaFact]
+    public void Scroll_MasDeMilFilas_HastaElFinal_NoMueveNingunaColumna()
+    {
+        // 1200 productos; los valores más anchos de CÓDIGO, COSTO y UNIDAD están en la ÚLTIMA fila, fuera de pantalla.
+        // Los tres entran juntos en el espacio libre de la grilla a 1040 (104 + 123 + 97 de 332): ninguna columna
+        // cede, así que ninguno puede quedar cortado. Un código más largo haría ceder a CÓDIGO con elipsis (el tope
+        // se adapta al espacio libre) y ese corte sería el admitido, no un error de medición.
+        var productos = Enumerable.Range(1, 1199).Select(i => P(i, $"Producto {i}", i)).ToList();
+        productos.Add(new ProductoDto(1200, "MAT-0001234", null, "Último", null, 1, "Construcción", null, 1,
+            "Metro cúbico", 98765432.10m, 3m, 0m, true, new DateTime(2026, 3, 2, 12, 0, 0, DateTimeKind.Utc)));
+        var m = Montar(productos.ToArray());
+        var grilla = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla");
+        var antes = grilla.Columns.Select(c => c.ActualWidth).ToArray();
+
+        grilla.ScrollIntoView(productos[^1], null);
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Contains(grilla.GetVisualDescendants().OfType<DataGridRow>(), r => ReferenceEquals(r.DataContext, productos[^1]));
+        var despues = grilla.Columns.Select(c => c.ActualWidth).ToArray();
+        for (var i = 0; i < antes.Length; i++)
+            Assert.True(Math.Abs(antes[i] - despues[i]) <= 0.5,
+                $"La columna {grilla.Columns[i].Header} pasó de {antes[i]} a {despues[i]} al llegar a la fila 1200.");
+        foreach (var header in new[] { "CÓDIGO", "COSTO", "UNIDAD" })
+            Assert.False(TooltipSiSeCorta.EstaCortado(CeldaDe(grilla, productos[^1], header)), $"{header} quedó cortado sin pasar el tope.");
+    }
+
+    [AvaloniaFact]
+    public void Ordenar_PorCadaColumna_NoMueveAnchosNiCortaElTitulo()
+    {
+        var m = Montar(Activo, Negativo, Inactivo, InactivoNegativo);
+        var grilla = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla");
+        var antes = grilla.Columns.Select(c => c.ActualWidth).ToArray();
+
+        foreach (var header in grilla.GetVisualDescendants().OfType<DataGridColumnHeader>().Where(h => h.Content is string s && s != "ESTADO").ToList())
+        {
+            Clickear(m.Ventana, header);
+            var titulo = header.GetVisualDescendants().OfType<TextBlock>().First(t => !string.IsNullOrEmpty(t.Text));
+            Assert.True(titulo.Bounds.Width >= GrillasSinRecorteBarridoTests.AnchoNatural(titulo) - 0.5, $"{titulo.Text} ordenado quedó cortado.");
+            Assert.Equal(antes, grilla.Columns.Select(c => c.ActualWidth).ToArray());
+        }
+    }
+
+    [AvaloniaFact]
+    public void Paridad_ElTextoMedidoEsElTextoPintado()
+    {
+        var m = Montar(Activo, Negativo, Inactivo, InactivoNegativo);
+        var grilla = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla");
+
+        foreach (var p in new[] { Activo, Negativo, Inactivo, InactivoNegativo })
+            foreach (var header in new[] { "CÓDIGO", "COSTO", "UNIDAD" })
+                Assert.Equal(CeldaDe(grilla, p, header).Text, ColumnaAuto.Texto(Columna(grilla, header), p));
+    }
+
+    [AvaloniaFact]
+    public void CeldaCortada_MuestraElipsisYTooltip_YLasQueEntranNo()
+    {
+        var largo = P(5, "Arena gruesa", 45m) with { UnidadMedidaNombre = "Metro cúbico puesto en obra con flete incluido" };
+        var corto = P(6, "Pala", 10m);
+        var m = Montar(Activo, largo, corto);
+        var grilla = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla");
+
+        // Ventana de 1040 (la vista a 1280 sin el sidebar): UNIDAD pide 240 y cede al espacio libre (145).
+        Assert.Equal(145, Columna(grilla, "UNIDAD").ActualWidth, 1);
+        Assert.DoesNotContain(grilla.GetVisualDescendants().OfType<ScrollBar>(),
+            s => s.Orientation == Orientation.Horizontal && s.IsEffectivelyVisible);
+        var cortada = CeldaDe(grilla, largo, "UNIDAD");
+        Assert.True(TooltipSiSeCorta.EstaCortado(cortada));
+        Assert.False(TooltipSiSeCortaTests.SeCancela(cortada));
+        Assert.Equal(largo.UnidadMedidaNombre, ToolTip.GetTip(cortada));
+        foreach (var header in new[] { "CÓDIGO", "NOMBRE", "COSTO", "UNIDAD", "CATEGORÍA" })
+            Assert.True(TooltipSiSeCortaTests.SeCancela(CeldaDe(grilla, corto, header)), $"{header} de una celda que entra abre tooltip.");
+
+        // Con UNIDAD cediendo, NOMBRE queda en su piso de 160 y un nombre largo también se corta: elipsis y tooltip.
+        Assert.Equal(160, Columna(grilla, "NOMBRE").ActualWidth, 1);
+        var nombre = CeldaDe(grilla, Activo, "NOMBRE");
+        Assert.True(TooltipSiSeCorta.EstaCortado(nombre));
+        Assert.False(TooltipSiSeCortaTests.SeCancela(nombre));
+        Assert.Equal(Activo.Nombre, ToolTip.GetTip(nombre));
+    }
+
+    [AvaloniaTheory]
+    [InlineData(1040, 145)]
+    [InlineData(1126, 231)]
+    public void CeldaCortada_LaGrillaNoScrollea_YUnidadTomaElEspacioLibre(double ancho, double unidad)
+    {
+        // La vista a 1280 y a 1366 sin el sidebar de 240, con los datos del mockup de la celda cortada.
+        var m = Montar(new ProductosFake { Lista = ColumnaAutoTopeAdaptableTests.ConCeldaCortada() }, ancho);
+        var grilla = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla");
+
+        Assert.Equal(unidad, Columna(grilla, "UNIDAD").ActualWidth, 1);
+        Assert.Equal(160, Columna(grilla, "NOMBRE").ActualWidth, 1);
+        Assert.Equal(160, Columna(grilla, "CATEGORÍA").ActualWidth, 1);
+        Assert.DoesNotContain(grilla.GetVisualDescendants().OfType<ScrollBar>(),
+            s => s.Orientation == Orientation.Horizontal && s.IsEffectivelyVisible);
+    }
+
+    [AvaloniaTheory]
+    [InlineData(1040)]
+    [InlineData(1126)]
+    public void DatosDelMockup_LaGrillaNoScrollea_YNingunaCeldaSeCorta(double ancho)
+    {
+        // Los productos del mockup de Productos a 1280 y a 1366 sin el sidebar: a 1280 las columnas suman exactamente
+        // el ancho interno de la grilla (948), así que un píxel de más en una medida ya daría scroll horizontal.
+        var productos = ColumnaAutoTopeAdaptableTests.Productos();
+        var m = Montar(new ProductosFake { Lista = productos }, ancho);
+        var grilla = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla");
+
+        Assert.DoesNotContain(grilla.GetVisualDescendants().OfType<ScrollBar>(),
+            s => s.Orientation == Orientation.Horizontal && s.IsEffectivelyVisible);
+        foreach (var p in productos)
+            foreach (var header in new[] { "CÓDIGO", "NOMBRE", "COSTO", "UNIDAD", "CATEGORÍA" })
+                Assert.False(TooltipSiSeCorta.EstaCortado(CeldaDe(grilla, p, header)), $"{header} de {p.Nombre} quedó cortado.");
     }
 }

@@ -45,7 +45,7 @@ public class ColumnaAutoTopeAdaptableTests
         new(id, codigo, null, nombre, null, categoria is null ? null : 1, categoria, null, 1, unidad, costo, stock, 0m, activo, Alta);
 
     /// <summary>Los productos del mockup de Productos.</summary>
-    private static List<ProductoDto> Productos() =>
+    internal static List<ProductoDto> Productos() =>
     [
         P(1, "MAT-0142", "Cemento portland 50 kg", 480m, 320m, "Bolsa", "Construcción"),
         P(2, "MAT-0198", "Arena gruesa", 890m, 45m, "Metro cúbico", "Construcción"),
@@ -62,7 +62,7 @@ public class ColumnaAutoTopeAdaptableTests
     ];
 
     /// <summary>Los mismos, con la unidad de "Arena gruesa" más larga que el tope.</summary>
-    private static List<ProductoDto> ConCeldaCortada() =>
+    internal static List<ProductoDto> ConCeldaCortada() =>
         Productos().Select(p => p.Nombre == "Arena gruesa" ? p with { UnidadMedidaNombre = UnidadLarga } : p).ToList();
 
     private sealed record Montaje(Window Ventana, DataGrid Grilla);

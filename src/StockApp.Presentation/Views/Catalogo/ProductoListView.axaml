@@ -4,6 +4,7 @@
              xmlns:dto="using:StockApp.Application.Catalogo"
              xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:v2="using:StockApp.Presentation.Controls.V2"
+             xmlns:b="using:StockApp.Presentation.Behaviors"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
@@ -13,7 +14,9 @@
              Background="{DynamicResource V2FondoBrush}">
 
     <!-- UI v2 (spec §5.1). Espejo: docs/ui-v2/mockups/inventario/productos.html y productos-vacio.html.
-         Editar y Eliminar se habilitan solo con un producto activo seleccionado (regla del VM). -->
+         Editar y Eliminar se habilitan solo con un producto activo seleccionado (regla del VM).
+         Mientras carga sin filas: EstadoCargando; tras un 403: Sin permiso en lugar de la card; el vacío solo con
+         la carga terminada. CÓDIGO, COSTO y UNIDAD miden su contenido sobre todas las filas (ColumnaAuto). -->
     <DockPanel Margin="28,24">
 
         <v2:EncabezadoPagina x:Name="Encabezado" DockPanel.Dock="Top" Titulo="Productos">
@@ -24,7 +27,17 @@
             </StackPanel>
         </v2:EncabezadoPagina>
 
-        <v2:TarjetaContenido x:Name="Tarjeta">
+        <!-- Sin permiso (403 en la carga o en una búsqueda): reemplaza a la card, como en el formulario. El margen
+             del encabezado y el del estado se suman igual en el mockup (.pagina es flex: no colapsa). -->
+        <v2:EstadoVacio x:Name="EstadoSinPermiso"
+                        DockPanel.Dock="Top"
+                        UseLayoutRounding="False"
+                        Titulo="Sin permiso"
+                        Mensaje="{Binding MensajeSinPermiso}"
+                        EsError="True"
+                        IsVisible="{Binding SinPermiso}" />
+
+        <v2:TarjetaContenido x:Name="Tarjeta" IsVisible="{Binding !SinPermiso}">
             <DockPanel>
                 <v2:BarraFiltros x:Name="Filtros"
                                  DockPanel.Dock="Top"
@@ -40,23 +53,41 @@
                            Text="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.Instance}, ConverterParameter='producto|productos'}"
                            IsVisible="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.HayElementos}}" />
 
+                <!-- Cargando y todavía sin filas: dice que carga en vez de afirmar que no hay productos. Con filas en
+                     pantalla (una búsqueda o una recarga) la grilla queda hasta que llegan los resultados. -->
+                <v2:EstadoCargando x:Name="IndicadorCarga" DockPanel.Dock="Top" Texto="Cargando productos…">
+                    <v2:EstadoCargando.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Cargando" />
+                            <Binding Path="Items.Count" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                        </MultiBinding>
+                    </v2:EstadoCargando.IsVisible>
+                </v2:EstadoCargando>
+
                 <!-- UseLayoutRounding False: el estado vacío va centrado y el ancho del título es fraccionario;
                      Avalonia redondea su origen a píxel entero y Chromium no (16 teselas densas contra 11,
                      con 1 px de corrimiento en las letras). Mismo caso y mismo arreglo que el enlace de
-                     BloqueoLicenciaView. Va por instancia y no en el ControlTheme de v2:EstadoVacio: en la
-                     instancia del catálogo de componentes mueve el texto 1 px en vertical (8 a 20 teselas). -->
+                     BloqueoLicenciaView. Va por instancia, como en EstadoSinPermiso y en el formulario. -->
                 <v2:EstadoVacio x:Name="EstadoSinProductos"
                                 UseLayoutRounding="False"
                                 DockPanel.Dock="Top"
                                 Titulo="No hay productos para mostrar"
-                                Mensaje="Probá con otra búsqueda o creá uno con Nuevo."
-                                IsVisible="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.EsCero}}" />
+                                Mensaje="Probá con otra búsqueda o creá uno con Nuevo.">
+                    <v2:EstadoVacio.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Cargando" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinPermiso" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="Items.Count" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                        </MultiBinding>
+                    </v2:EstadoVacio.IsVisible>
+                </v2:EstadoVacio>
 
                 <!-- Columnas de plantilla para marcar cada TextBlock con Classes.inactivo (texto terciario por
                      token, nunca Opacity). SortMemberPath conserva el orden por click en el encabezado.
                      MinWidth por columna y scroll horizontal Auto: fix 3548397.
-                     ESTADO fija 78 (lo que mide la insignia "Inactivo"): en Auto crecía de golpe al scrollear hasta
-                     la primera fila inactiva y movía 13 px a las demás columnas. -->
+                     CÓDIGO, COSTO y UNIDAD miden su texto sobre TODAS las filas al cargar (b:ColumnaAuto), con un
+                     tope; lo que lo pasa se corta con elipsis y se lee en el tooltip, que solo abre si el texto está
+                     cortado. ESTADO fija 78 (la insignia es un conjunto cerrado) y STOCK 220. -->
                 <DataGrid x:Name="Grilla"
                           ItemsSource="{Binding ItemsView}"
                           SelectedItem="{Binding ItemSeleccionado}"
@@ -66,10 +97,15 @@
                           ScrollViewer.HorizontalScrollBarVisibility="Auto"
                           IsVisible="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.HayElementos}}">
                     <DataGrid.Columns>
-                        <DataGridTemplateColumn Header="CÓDIGO" Width="Auto" SortMemberPath="Codigo">
+                        <DataGridTemplateColumn Header="CÓDIGO" Width="Auto" SortMemberPath="Codigo" b:ColumnaAuto.Medir="True">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:ProductoDto">
-                                    <TextBlock Text="{Binding Codigo}" Classes.inactivo="{Binding !Activo}" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding Codigo}"
+                                               Classes.inactivo="{Binding !Activo}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding Codigo}"
+                                               b:TooltipSiSeCorta.Activo="True"
+                                               VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
@@ -80,15 +116,20 @@
                                                Classes.inactivo="{Binding !Activo}"
                                                TextTrimming="CharacterEllipsis"
                                                ToolTip.Tip="{Binding Nombre}"
+                                               b:TooltipSiSeCorta.Activo="True"
                                                VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="COSTO" Width="Auto" MinWidth="100" CellStyleClasses="num" SortMemberPath="PrecioCosto">
+                        <DataGridTemplateColumn Header="COSTO" Width="Auto" MinWidth="100" CellStyleClasses="num" SortMemberPath="PrecioCosto"
+                                                b:ColumnaAuto.Medir="True" b:ColumnaAuto.Conversor="{x:Static conv:MonedaConverter.Instance}">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:ProductoDto">
                                     <TextBlock Text="{Binding PrecioCosto, Converter={x:Static conv:MonedaConverter.Instance}}"
                                                Classes.inactivo="{Binding !Activo}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding PrecioCosto, Converter={x:Static conv:MonedaConverter.Instance}}"
+                                               b:TooltipSiSeCorta.Activo="True"
                                                VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
@@ -114,10 +155,15 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="UNIDAD" Width="Auto" SortMemberPath="UnidadMedidaNombre">
+                        <DataGridTemplateColumn Header="UNIDAD" Width="Auto" SortMemberPath="UnidadMedidaNombre" b:ColumnaAuto.Medir="True">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:ProductoDto">
-                                    <TextBlock Text="{Binding UnidadMedidaNombre}" Classes.inactivo="{Binding !Activo}" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding UnidadMedidaNombre}"
+                                               Classes.inactivo="{Binding !Activo}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding UnidadMedidaNombre}"
+                                               b:TooltipSiSeCorta.Activo="True"
+                                               VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
@@ -128,6 +174,7 @@
                                                Classes.inactivo="{Binding !Activo}"
                                                TextTrimming="CharacterEllipsis"
                                                ToolTip.Tip="{Binding CategoriaNombre, TargetNullValue='—'}"
+                                               b:TooltipSiSeCorta.Activo="True"
                                                VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>

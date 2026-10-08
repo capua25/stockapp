@@ -59,7 +59,9 @@ public class SignoNegativoBadgeTests
     public void Montar_ProductoListViewConStockNegativo_MuestraBadgeStockNegativoSoloEnLaFilaNegativa()
     {
         var vista = new ProductoListView();
-        var window = MontarEnVentana(vista);
+        // Sin DataContext todo IsVisible enlazado queda visible (sin permiso, cargando y vacío a la vez, unos 270 px
+        // sobre la grilla): con 500 de alto la grilla no tiene lugar para realizar filas.
+        var window = MontarEnVentana(vista, height: 900);
 
         var grilla = vista.GetVisualDescendants().OfType<DataGrid>().Single();
         grilla.ItemsSource = new[]
