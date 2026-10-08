@@ -38,21 +38,14 @@ namespace StockApp.Presentation.UiTests;
 /// Las tandas 7-12 agregan sus propias filas a las mismas InlineData en vez de escribir un
 /// guardian nuevo cada vez.
 ///
-/// Titulo/Eyebrow en null: para las vistas cuyo HeaderVista toma el titulo de un binding a VM
-/// (P3: MovimientoFormControl) o que no
-/// llevan HeaderVista propio (P5: EntradaRegistroView/SalidaRegistroView, heredan el de
-/// MovimientoFormControl), PatronHelpers.Montar no asigna ViewModel, asi que el texto no se
-/// puede verificar literal en este banco de pruebas. Se deja en null y el test solo exige que
-/// el HeaderVista exista (o, en el caso P5, que el heredado de MovimientoFormControl llegue al
-/// arbol visual una vez que la Task 6.4/6.5 lo agregue).
+/// Titulo/Eyebrow en null: para las vistas cuyo HeaderVista toma el titulo de un binding a VM,
+/// PatronHelpers.Montar no asigna ViewModel, asi que el texto no se puede verificar literal en este
+/// banco de pruebas. Se deja en null y el test solo exige que el HeaderVista exista.
 /// </summary>
 public class GuardianDePatronTests
 {
     [AvaloniaTheory]
     [InlineData(typeof(MovimientoHistorialView), "Historial de movimientos", "MOVIMIENTOS")]
-    [InlineData(typeof(MovimientoFormControl), null, null)]
-    [InlineData(typeof(EntradaRegistroView), null, null)]
-    [InlineData(typeof(SalidaRegistroView), null, null)]
     [InlineData(typeof(IngresoPorFacturaView), "Ingreso de stock por factura", "MOVIMIENTOS")]
     [InlineData(typeof(CategoriaListView), "Categorías", "CATÁLOGO")]
     [InlineData(typeof(ProveedorListView), "Proveedores", "CATÁLOGO")]
@@ -107,9 +100,6 @@ public class GuardianDePatronTests
     public static readonly TheoryData<Type> VistasDeLaTanda = new()
     {
         typeof(MovimientoHistorialView),
-        typeof(MovimientoFormControl),
-        typeof(EntradaRegistroView),
-        typeof(SalidaRegistroView),
         typeof(IngresoPorFacturaView),
         typeof(CategoriaListView),
         typeof(ProveedorListView),
@@ -225,6 +215,9 @@ public class GuardianDePatronTests
         typeof(InicioView),
         typeof(ProductoListView),
         typeof(ProductoFormView),
+        typeof(MovimientoFormControl),
+        typeof(EntradaRegistroView),
+        typeof(SalidaRegistroView),
     };
 
     /// <summary>

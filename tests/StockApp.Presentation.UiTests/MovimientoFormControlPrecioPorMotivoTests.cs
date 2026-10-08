@@ -5,7 +5,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using StockApp.Domain.Enums;
-using StockApp.Presentation.Controls;
+using StockApp.Presentation.Controls.V2;
 using StockApp.Presentation.ViewModels.Movimientos;
 using Xunit;
 

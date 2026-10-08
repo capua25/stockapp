@@ -3,91 +3,117 @@
              xmlns:beh="using:StockApp.Presentation.Behaviors"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Movimientos"
              xmlns:conv="using:StockApp.Presentation.Converters"
-             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:cat="using:StockApp.Application.Catalogo"
+             xmlns:enums="using:StockApp.Domain.Enums"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="500" d:DesignHeight="450"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
              x:Class="StockApp.Presentation.Views.Movimientos.MovimientoFormControl"
-             x:DataType="vm:MovimientoRegistroViewModelBase">
+             x:DataType="vm:MovimientoRegistroViewModelBase"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
 
-    <ScrollViewer>
-        <Border Classes="card" Padding="{DynamicResource MargenVista}" Margin="{DynamicResource MargenVista}"
-                MaxWidth="480">
-            <StackPanel Spacing="{DynamicResource Espacio3}">
+    <!-- UI v2 (spec §5.2), compartido por Registrar Entrada y Registrar Salida. Espejo:
+         docs/ui-v2/mockups/inventario/entrada-*.html y salida-uso.html. Es pantalla del sidebar, no un alta
+         que vuelve a un listado: sin breadcrumb, y solo el botón que el ViewModel expone. -->
+    <ScrollViewer x:Name="Desplazamiento" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="28,24">
 
-                <c:HeaderVista Titulo="{Binding Titulo}" />
+            <v2:EncabezadoPagina x:Name="Encabezado" Titulo="{Binding Titulo}" />
 
-                <c:CampoFormulario Etiqueta="Producto" Requerido="True">
-                    <ComboBox ItemsSource="{Binding Productos}"
-                              SelectedItem="{Binding ProductoSeleccionado}"
-                              HorizontalAlignment="Stretch">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding Nombre}" />
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
-                </c:CampoFormulario>
+            <!-- Columna * con MaxWidth 760: la card mide 760 a la izquierda. UseLayoutRounding False en la
+                 grilla: con el redondeo Avalonia infla en 1 px una columna acotada por MaxWidth (760 sale 761);
+                 la card lo recupera para su contenido. -->
+            <Grid x:Name="ColumnaFormulario" UseLayoutRounding="False">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" MaxWidth="{StaticResource V2AnchoFormularioMax}" />
+                </Grid.ColumnDefinitions>
 
-                <c:CampoFormulario Etiqueta="Cantidad" Requerido="True">
-                    <TextBox Text="{Binding Cantidad, Converter={x:Static conv:DecimalConverter.Instance}}"
-                             beh:EntradaNumericaBehavior.EsDecimal="True"
-                             PlaceholderText="Ingresá la cantidad" />
-                </c:CampoFormulario>
+                <v2:TarjetaContenido x:Name="Tarjeta" Padding="24" UseLayoutRounding="True">
+                    <StackPanel>
+                        <!-- El 16 entre filas va en el Margin superior de cada campo y no en filas separadoras:
+                             cuando el precio no aplica (toda Salida) su fila desaparece entera, sin hueco doble. -->
+                        <Grid ColumnDefinitions="*,16,*" RowDefinitions="Auto,Auto,Auto,Auto">
+                            <v2:CampoFormulario x:Name="CampoProducto" Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3"
+                                                Etiqueta="Producto" Requerido="True">
+                                <ComboBox x:Name="ComboProducto"
+                                          ItemsSource="{Binding Productos}"
+                                          SelectedItem="{Binding ProductoSeleccionado}"
+                                          PlaceholderText="Elegí un producto"
+                                          HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="cat:ProductoDto">
+                                            <TextBlock Text="{Binding Nombre}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </v2:CampoFormulario>
 
-                <c:CampoFormulario Etiqueta="Motivo">
-                    <ComboBox ItemsSource="{Binding MotivosDisponibles}"
-                              SelectedItem="{Binding Motivo}"
-                              HorizontalAlignment="Stretch">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding ., Converter={x:Static conv:MotivoMovimientoConverter.Instance}}" />
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
-                </c:CampoFormulario>
+                            <v2:CampoFormulario x:Name="CampoCantidad" Grid.Row="1" Grid.Column="0" Margin="0,16,0,0"
+                                                Etiqueta="Cantidad" Requerido="True">
+                                <TextBox Text="{Binding Cantidad, Converter={x:Static conv:DecimalConverter.Instance}}"
+                                         beh:EntradaNumericaBehavior.EsDecimal="True"
+                                         PlaceholderText="Ingresá la cantidad" />
+                            </v2:CampoFormulario>
 
-                <!-- PrecioUnitario es decimal? (obligatorio solo en Entrada por Compra, oculto en toda Salida,
-                     la regla vive en MotivoMovimientoExtensions): el conversor default de Avalonia
-                     no mapea "" a null y explota con InvalidCastException al vaciar el campo
-                     (bug real reproducido en tests). DecimalOpcionalConverter trata "" como
-                     null y, si el texto no es numérico, devuelve un BindingNotification en
-                     vez de lanzar (ver Converters/DecimalOpcionalConverter.cs).
-                     x:Name="PrecioUnitarioBox" queda en el TextBox, NUNCA se mueve al
-                     CampoFormulario (Task 6.4): MovimientoFormControlValidacionTests busca
-                     t.Name == "PrecioUnitarioBox" sobre window.GetVisualDescendants(), y el
-                     TextBox sigue en el mismo NameScope porque CampoFormulario lo proyecta por
-                     ContentPresenter, no por template propio. -->
-                <c:CampoFormulario Etiqueta="Precio unitario"
-                                   Requerido="{Binding PrecioObligatorio}"
-                                   IsVisible="{Binding PrecioVisible}">
-                    <TextBox Name="PrecioUnitarioBox"
-                             Text="{Binding PrecioUnitario, Converter={x:Static conv:DecimalOpcionalConverter.Instance}}"
-                             beh:EntradaNumericaBehavior.EsDecimal="True"
-                             PlaceholderText="{Binding PrecioPlaceholder}" />
-                </c:CampoFormulario>
+                            <v2:CampoFormulario x:Name="CampoMotivo" Grid.Row="1" Grid.Column="2" Margin="0,16,0,0"
+                                                Etiqueta="Motivo">
+                                <ComboBox x:Name="ComboMotivo"
+                                          ItemsSource="{Binding MotivosDisponibles}"
+                                          SelectedItem="{Binding Motivo}"
+                                          HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="enums:MotivoMovimiento">
+                                            <TextBlock Text="{Binding ., Converter={x:Static conv:MotivoMovimientoConverter.Instance}}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </v2:CampoFormulario>
 
-                <c:CampoFormulario Etiqueta="Comentario">
-                    <TextBox Text="{Binding Comentario}"
-                             PlaceholderText="Comentario opcional"
-                             AcceptsReturn="True"
-                             Height="60" />
-                </c:CampoFormulario>
+                            <!-- PrecioUnitario es decimal? y solo aplica a una Entrada (obligatorio en Compra; la regla
+                                 vive en MotivoMovimientoExtensions). DecimalOpcionalConverter trata "" como null: el
+                                 conversor default explota con InvalidCastException al vaciar el campo. El nombre
+                                 PrecioUnitarioBox queda en el TextBox: lo buscan los tests por Name. -->
+                            <v2:CampoFormulario x:Name="CampoPrecio" Grid.Row="2" Grid.Column="0" Margin="0,16,0,0"
+                                                Etiqueta="Precio unitario"
+                                                Requerido="{Binding PrecioObligatorio}"
+                                                IsVisible="{Binding PrecioVisible}">
+                                <TextBox x:Name="PrecioUnitarioBox"
+                                         Text="{Binding PrecioUnitario, Converter={x:Static conv:DecimalOpcionalConverter.Instance}}"
+                                         beh:EntradaNumericaBehavior.EsDecimal="True"
+                                         PlaceholderText="{Binding PrecioPlaceholder}" />
+                            </v2:CampoFormulario>
 
-                <!-- Mensaje de error -->
-                <TextBlock Text="{Binding MensajeError}"
-                           Foreground="{DynamicResource DangerBrush}"
-                           IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                           TextWrapping="Wrap" />
+                            <v2:CampoFormulario x:Name="CampoComentario" Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="3"
+                                                Margin="0,16,0,0" Etiqueta="Comentario">
+                                <TextBox Text="{Binding Comentario}"
+                                         PlaceholderText="Comentario opcional"
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         Height="88" />
+                            </v2:CampoFormulario>
+                        </Grid>
 
-                <Button Classes="primary"
-                        Content="Registrar"
-                        Command="{Binding RegistrarCommand}"
-                        HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Center" />
+                        <v2:Alerta x:Name="AlertaError"
+                                   Margin="0,8,0,0"
+                                   Variante="Error"
+                                   Texto="{Binding MensajeError}"
+                                   IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
-            </StackPanel>
-        </Border>
+                        <Border x:Name="PieFormulario"
+                                Margin="0,20,0,0"
+                                Padding="0,16,0,0"
+                                BorderThickness="0,1,0,0"
+                                BorderBrush="{DynamicResource V2SeparadorGrillaBrush}">
+                            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                                <Button x:Name="BotonRegistrar" Classes="primario" Content="Registrar" Command="{Binding RegistrarCommand}" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </v2:TarjetaContenido>
+            </Grid>
+        </StackPanel>
     </ScrollViewer>
 
 </UserControl>

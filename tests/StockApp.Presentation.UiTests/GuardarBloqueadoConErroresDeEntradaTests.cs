@@ -13,7 +13,6 @@ using StockApp.Application.Catalogo;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
-using StockApp.Presentation.Controls;
 using StockApp.Presentation.ViewModels;
 using StockApp.Presentation.ViewModels.Catalogo;
 using StockApp.Presentation.ViewModels.Movimientos;
@@ -58,11 +57,10 @@ public class GuardarBloqueadoConErroresDeEntradaTests
         Dispatcher.UIThread.RunJobs();
     }
 
-    // CampoFormulario viejo (Entrada/Salida, todavía en el tema viejo) o v2 (Productos): mientras convivan, los dos.
+    // ProductoFormView y MovimientoFormControl ya son v2.
     private static TextBox CajaDeCampo(Window window, string etiqueta)
-        => window.GetVisualDescendants().OfType<Control>()
-            .Single(c => (c as CampoFormulario)?.Etiqueta == etiqueta
-                         || (c as StockApp.Presentation.Controls.V2.CampoFormulario)?.Etiqueta == etiqueta)
+        => window.GetVisualDescendants().OfType<StockApp.Presentation.Controls.V2.CampoFormulario>()
+            .Single(c => c.Etiqueta == etiqueta)
             .GetVisualDescendants().OfType<TextBox>().First();
 
     private static Button BotonPorCommand(Window window, object comando)
