@@ -46,7 +46,8 @@ public sealed partial class EntradaRegistroViewModel : MovimientoRegistroViewMod
         }
 
         var asociar = await Confirmacion.PreguntarAsync(
-            "Entrada registrada. ¿Desea asociar una factura de proveedor a esta entrada?");
+            "Entrada registrada. ¿Desea asociar una factura de proveedor a esta entrada?",
+            "No, continuar", "Sí, adjuntar factura");
         if (!asociar)
         {
             await base.AlRegistradoAsync(registrado);

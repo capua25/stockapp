@@ -48,7 +48,7 @@ public class EntradaRegistroFacturaTests
 
         var nav = new Mock<INavigationService>();
         var confirm = new Mock<IConfirmacionService>();
-        confirm.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(aceptaAsociar);
+        confirm.Setup(c => c.PreguntarAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync(aceptaAsociar);
 
         var vm = new EntradaRegistroViewModel(svc.Object, productos.Object, nav.Object, confirm.Object);
         return (vm, svc, nav, confirm);
@@ -70,7 +70,8 @@ public class EntradaRegistroFacturaTests
 
         await RegistrarCompraAsync(vm);
 
-        confirm.Verify(c => c.PreguntarAsync(It.Is<string>(s => s.Contains("factura"))), Times.Once);
+        confirm.Verify(c => c.PreguntarAsync(
+            It.Is<string>(s => s.Contains("factura")), "No, continuar", "Sí, adjuntar factura"), Times.Once);
         nav.Verify(n => n.Navegar<GastoFormViewModel>(
             It.IsAny<Action<GastoFormViewModel>>()), Times.Once);
         nav.Verify(n => n.Navegar<MovimientoHistorialViewModel>(), Times.Never);
@@ -102,6 +103,7 @@ public class EntradaRegistroFacturaTests
         await vm.RegistrarCommand.ExecuteAsync(null);
 
         confirm.Verify(c => c.PreguntarAsync(It.IsAny<string>()), Times.Never);
+        confirm.Verify(c => c.PreguntarAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
         nav.Verify(n => n.Navegar<MovimientoHistorialViewModel>(), Times.Once);
     }
 }

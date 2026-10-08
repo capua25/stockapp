@@ -16,6 +16,17 @@ public interface IConfirmacionService
     Task<bool> PreguntarAsync(string mensaje);
 
     /// <summary>
+    /// Igual que <see cref="PreguntarAsync(string)"/> pero con el texto de cada botón: sirve cuando
+    /// "Cancelar" confunde porque la operación ya se hizo (ej. entrada registrada, ¿asociar factura?).
+    /// La implementación por defecto ignora los textos y delega, así los fakes que solo
+    /// implementan la versión de un parámetro siguen compilando; ConfirmacionService la redefine.
+    /// </summary>
+    /// <param name="mensaje">Texto del mensaje a mostrar.</param>
+    /// <param name="textoNegativo">Texto del botón que devuelve false.</param>
+    /// <param name="textoAfirmativo">Texto del botón que devuelve true.</param>
+    Task<bool> PreguntarAsync(string mensaje, string textoNegativo, string textoAfirmativo) => PreguntarAsync(mensaje);
+
+    /// <summary>
     /// Muestra un mensaje informativo de una sola acción (sin opción de cancelar/confirmar)
     /// y espera a que el usuario lo cierre. Es el mecanismo único para informar errores
     /// amigables tanto desde los comandos de los ViewModels (ej. baja lógica de una entidad

@@ -13,17 +13,23 @@ namespace StockApp.Presentation.Services;
 public class ConfirmacionService : IConfirmacionService
 {
     /// <inheritdoc />
-    public Task<bool> PreguntarAsync(string mensaje)
+    public Task<bool> PreguntarAsync(string mensaje) => PreguntarCore(mensaje, null, null);
+
+    /// <inheritdoc />
+    public Task<bool> PreguntarAsync(string mensaje, string textoNegativo, string textoAfirmativo)
+        => PreguntarCore(mensaje, textoNegativo, textoAfirmativo);
+
+    private static Task<bool> PreguntarCore(string mensaje, string? textoNegativo, string? textoAfirmativo)
     {
         // Si no hay aplicación Avalonia inicializada (ej: tests headless), rechazar de forma segura.
         if (AvaloniaApp.Current is null)
             return Task.FromResult(false);
 
         // Garantizamos ejecución en el hilo de UI (Dispatcher.UIThread).
-        return Dispatcher.UIThread.InvokeAsync(() => MostrarDialogoAsync(mensaje));
+        return Dispatcher.UIThread.InvokeAsync(() => MostrarDialogoAsync(mensaje, textoNegativo, textoAfirmativo));
     }
 
-    private static async Task<bool> MostrarDialogoAsync(string mensaje)
+    private static async Task<bool> MostrarDialogoAsync(string mensaje, string? textoNegativo, string? textoAfirmativo)
     {
         var lifetime = AvaloniaApp.Current?.ApplicationLifetime
             as IClassicDesktopStyleApplicationLifetime;
@@ -36,7 +42,7 @@ public class ConfirmacionService : IConfirmacionService
             return false;
         }
 
-        var dialog = new ConfirmacionDialog(mensaje);
+        var dialog = new ConfirmacionDialog(mensaje, textoNegativo, textoAfirmativo);
         var resultado = await dialog.ShowDialog<bool>(owner);
         return resultado;
     }
