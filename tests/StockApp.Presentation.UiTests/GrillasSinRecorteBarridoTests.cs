@@ -144,7 +144,7 @@ public class GrillasSinRecorteBarridoTests
 
     // ── Detección de recortes ──────────────────────────────────────────────────────────────────
 
-    private static double AnchoNatural(TextBlock tb)
+    internal static double AnchoNatural(TextBlock tb)
     {
         var gemelo = new TextBlock
         {

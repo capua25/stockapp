@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -76,6 +77,8 @@ namespace StockApp.Presentation.Behaviors;
 /// <item>(d) Recargas, filtro y orden: <c>Width.DesiredValue</c> de una Auto nunca baja en la
 /// grilla, así que las columnas no se achican de golpe ni saltan al ordenar.</item>
 /// <item>(e) Las <c>*</c> conservan su peso declarado y las de ancho fijo su ancho.</item>
+/// <item>(f) Columnas que miden su contenido (<see cref="ColumnaAuto"/>): al cambiar los datos se miden sobre
+/// TODA la fuente y quedan en píxeles antes del reparto; respetan el arrastre del usuario igual que el resto.</item>
 /// </list>
 /// </summary>
 public static class DataGridColumnasAutoBehavior
@@ -117,6 +120,12 @@ public static class DataGridColumnasAutoBehavior
         public int ReparacionesSeguidas;
         public bool Reparando;
         public WeakReference<DataGridRowsPresenter>? Filas;
+        /// <summary>Los datos cambiaron y hay columnas que miden su contenido (ColumnaAuto) por medir.</summary>
+        public bool MedicionPendiente = true;
+        public INotifyCollectionChanged? Fuente;
+        public NotifyCollectionChangedEventHandler? AlCambiarFuente;
+        /// <summary>Último ancho medido por columna: el ancho medido solo crece mientras vive la grilla.</summary>
+        public readonly Dictionary<DataGridColumn, double> AnchosMedidos = new();
     }
 
     private static readonly ConditionalWeakTable<DataGrid, Estado> Estados = new();
@@ -124,6 +133,7 @@ public static class DataGridColumnasAutoBehavior
     static DataGridColumnasAutoBehavior()
     {
         AjustarColumnasAutoProperty.Changed.AddClassHandler<DataGrid>(OnAjustarColumnasAutoChanged);
+        DataGrid.ItemsSourceProperty.Changed.AddClassHandler<DataGrid>((grid, _) => ObservarFuente(grid));
     }
 
     public static bool GetAjustarColumnasAuto(DataGrid grid) => grid.GetValue(AjustarColumnasAutoProperty);
@@ -132,6 +142,8 @@ public static class DataGridColumnasAutoBehavior
 
     private static void OnAjustarColumnasAutoChanged(DataGrid grid, AvaloniaPropertyChangedEventArgs e)
     {
+        if (Estados.TryGetValue(grid, out var previo) && previo.Fuente is not null && previo.AlCambiarFuente is not null)
+            previo.Fuente.CollectionChanged -= previo.AlCambiarFuente;
         grid.LayoutUpdated -= OnLayoutUpdated;
         grid.RemoveHandler(InputElement.PointerPressedEvent, OnPointerPressed);
         grid.RemoveHandler(InputElement.PointerReleasedEvent, OnPointerReleased);
@@ -146,6 +158,7 @@ public static class DataGridColumnasAutoBehavior
         grid.AddHandler(InputElement.PointerPressedEvent, OnPointerPressed, RoutingStrategies.Tunnel, handledEventsToo: true);
         grid.AddHandler(InputElement.PointerReleasedEvent, OnPointerReleased, RoutingStrategies.Bubble, handledEventsToo: true);
         grid.AddHandler(InputElement.PointerCaptureLostEvent, OnPointerCaptureLost, RoutingStrategies.Bubble, handledEventsToo: true);
+        ObservarFuente(grid);
     }
 
     // ── (a) Detección del redimensionado manual ───────────────────────────────────────────────
@@ -176,6 +189,72 @@ public static class DataGridColumnasAutoBehavior
         estado.AnchosAlApretar = null;
         if (grid.Columns.Any(c => !anchos.TryGetValue(c, out var antes) || antes != c.Width))
             estado.UsuarioRedimensiono = true;
+    }
+
+    // ── Columnas que miden su contenido (ColumnaAuto) ─────────────────────────────────────────
+
+    /// <summary>
+    /// Escucha la fuente actual: cualquier cambio (carga, Clear y Add de a uno, filtro u orden de un
+    /// DataGridCollectionView, que re-emite los de su fuente) deja la medición pendiente. Los Clear y Add de
+    /// una carga se coalescen solos: se mide una vez, en la pasada de layout siguiente.
+    /// </summary>
+    private static void ObservarFuente(DataGrid grid)
+    {
+        if (!Estados.TryGetValue(grid, out var estado))
+            return;
+        if (estado.Fuente is not null && estado.AlCambiarFuente is not null)
+            estado.Fuente.CollectionChanged -= estado.AlCambiarFuente;
+        estado.AlCambiarFuente ??= (_, _) =>
+        {
+            estado.MedicionPendiente = true;
+            grid.InvalidateMeasure();
+        };
+        estado.Fuente = grid.ItemsSource as INotifyCollectionChanged;
+        if (estado.Fuente is not null)
+            estado.Fuente.CollectionChanged += estado.AlCambiarFuente;
+        estado.MedicionPendiente = true;
+        grid.InvalidateMeasure();
+    }
+
+    /// <summary>
+    /// Fija en píxeles el ancho de cada columna marcada con ColumnaAuto.Medir. Grilla vacía: no se toca nada.
+    /// Sin header o celda realizados todavía: queda pendiente para la pasada siguiente. Con ancho en píxeles,
+    /// el reparto de abajo la trata como una columna fija.
+    /// </summary>
+    private static void MedirColumnas(DataGrid grid, Estado estado)
+    {
+        var marcadas = grid.Columns.Where(c => c.IsVisible && ColumnaAuto.GetMedir(c)).ToList();
+        var items = marcadas.Count == 0 ? [] : ColumnaAuto.Items(grid.ItemsSource);
+        if (items.Count == 0)
+        {
+            estado.MedicionPendiente = false;
+            return;
+        }
+
+        var anchos = new Dictionary<DataGridColumn, double>();
+        foreach (var c in marcadas)
+        {
+            var ancho = ColumnaAuto.Medir(grid, c, items);
+            if (ancho is null)
+                return;
+            anchos[c] = Math.Max(ancho.Value, estado.AnchosMedidos.GetValueOrDefault(c));
+        }
+
+        estado.MedicionPendiente = false;
+        estado.Reparando = true;
+        try
+        {
+            foreach (var (c, ancho) in anchos)
+            {
+                estado.AnchosMedidos[c] = ancho;
+                if (!c.Width.IsAbsolute || Math.Abs(c.Width.Value - ancho) > Tolerancia)
+                    Asignar(c, new DataGridLength(ancho, DataGridLengthUnitType.Pixel));
+            }
+        }
+        finally
+        {
+            estado.Reparando = false;
+        }
     }
 
     // ── Reparto ───────────────────────────────────────────────────────────────────────────────
@@ -294,6 +373,9 @@ public static class DataGridColumnasAutoBehavior
             return;
         if (!grid.IsEffectivelyVisible || (grid.HeadersVisibility & DataGridHeadersVisibility.Row) != 0)
             return;
+
+        if (estado.MedicionPendiente)
+            MedirColumnas(grid, estado);
 
         var visibles = grid.Columns.Where(c => c.IsVisible).ToList();
         foreach (var c in visibles.Where(c => c.Width.IsStar && !estado.PesosDeclarados.ContainsKey(c)))
