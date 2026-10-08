@@ -96,6 +96,32 @@ public class MantenimientoViewModelTests
         Assert.False(vm.Cargando);
     }
 
+    /// <summary>
+    /// MostrarListaVacia depende de Cargando, que vive en ViewModelBase: sin la re-notificación, un binding
+    /// leería el valor una sola vez y "Todavía no hay backups" quedaría visible durante toda la carga
+    /// (o quedaría oculto después de una carga vacía). Se observa lo que ve un suscriptor, no el getter.
+    /// </summary>
+    [Fact]
+    public async Task CargarAsync_CambiaCargando_NotificaMostrarListaVaciaConElValorNuevo()
+    {
+        var pendiente = new TaskCompletionSource<IReadOnlyList<CorridaBackupDto>>();
+        var (vm, backupsMock, _, _, _) = Crear();
+        backupsMock.Setup(b => b.ListarAsync(It.IsAny<CancellationToken>())).Returns(pendiente.Task);
+        var observados = new List<bool>();
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MantenimientoViewModel.MostrarListaVacia))
+                observados.Add(vm.MostrarListaVacia);
+        };
+
+        var tarea = vm.CargarAsync();
+        Assert.Equal(new[] { false }, observados);
+
+        pendiente.SetResult(new List<CorridaBackupDto>());
+        await tarea;
+        Assert.Equal(new[] { false, true }, observados);
+    }
+
     [Fact]
     public async Task CargarAsync_ElServicioFalla_InformaElErrorYNoRompe()
     {
