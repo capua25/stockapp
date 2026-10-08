@@ -16,6 +16,7 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
     private bool _hayErroresDeEntrada;
     private bool _sinPermiso;
     private string? _mensajeSinPermiso;
+    private int _cargasEnCurso;
 
     /// <summary>
     /// True mientras algún campo de la vista tiene un error de entrada que vive SOLO en la View
@@ -104,6 +105,29 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
         private set => SetProperty(ref _mensajeSinPermiso, value);
     }
 
+    /// <summary>
+    /// True mientras corre al menos una carga (las de <see cref="EjecutarCargaProtegidaAsync"/> y las que un
+    /// ViewModel marque con <see cref="EmpezarCarga"/>/<see cref="TerminarCarga"/>). Es un contador y no un
+    /// bool: una búsqueda con debounce y una recarga pueden superponerse, y la primera en terminar no puede
+    /// apagar el estado de la otra. La vista lo usa para decir "Cargando…" en vez de afirmar "no hay datos"
+    /// antes de tenerlos. Notifica solo cuando cambia de valor.
+    /// </summary>
+    public bool Cargando => _cargasEnCurso > 0;
+
+    /// <summary>Marca el inicio de una carga (ver <see cref="Cargando"/>). Cada llamada pide su <see cref="TerminarCarga"/>.</summary>
+    protected void EmpezarCarga()
+    {
+        if (++_cargasEnCurso == 1)
+            OnPropertyChanged(nameof(Cargando));
+    }
+
+    /// <summary>Marca el fin de una carga empezada con <see cref="EmpezarCarga"/>; va en un finally.</summary>
+    protected void TerminarCarga()
+    {
+        if (_cargasEnCurso > 0 && --_cargasEnCurso == 0)
+            OnPropertyChanged(nameof(Cargando));
+    }
+
     /// <summary>Marca el estado "sin permiso" (ver <see cref="SinPermiso"/>) con el mensaje que la
     /// vista va a mostrar en EstadoVacio. Expuesto protected para el caso puntual de
     /// HistorialImportacionesViewModel.CargarAsync, que ya tenía su propio catch con filtro
@@ -143,9 +167,12 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
     /// aviso global ya existe, y agregar uno acá da DOS modales (ese bug ya se arregló una vez).
     /// Cualquier excepción que NO sea UnauthorizedAccessException se repropaga tal cual: esto no
     /// es un catch-all que se trague bugs reales.
+    ///
+    /// También prende <see cref="Cargando"/> mientras corre (se apaga en el finally, falle o no).
     /// </summary>
     protected async Task EjecutarCargaProtegidaAsync(Func<Task> cargar, string mensajeSinPermiso)
     {
+        EmpezarCarga();
         LimpiarSinPermiso();
         try
         {
@@ -154,6 +181,10 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
         catch (UnauthorizedAccessException)
         {
             MarcarSinPermiso(mensajeSinPermiso);
+        }
+        finally
+        {
+            TerminarCarga();
         }
     }
 }

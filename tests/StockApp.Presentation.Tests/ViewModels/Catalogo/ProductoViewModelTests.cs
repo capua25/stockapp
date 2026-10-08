@@ -52,6 +52,88 @@ public class ProductoListViewModelTests
         return (vm, svcMock, navMock, confirmMock);
     }
 
+    [Fact]
+    public async Task CargarAsync_MientrasEsperaAlServicio_CargandoEsTrue_YAlTerminarFalse()
+    {
+        var pendiente = new TaskCompletionSource<IReadOnlyList<ProductoDto>>();
+        var svc = new Mock<IProductoService>();
+        svc.Setup(s => s.BuscarAsync(null, null, null)).Returns(pendiente.Task);
+        var vm = new ProductoListViewModel(svc.Object, Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>());
+
+        var carga = vm.CargarAsync();
+        Assert.True(vm.Cargando);
+        Assert.Empty(vm.Items);
+
+        pendiente.SetResult(new List<ProductoDto> { CrearProductoDto(1, "P001", "Uno") });
+        await carga;
+        Assert.False(vm.Cargando);
+        Assert.Single(vm.Items);
+    }
+
+    [Fact]
+    public async Task CargarAsync_SiElServicioLanzaUnauthorized_MarcaSinPermisoConElMensajeDelListado()
+    {
+        var svc = new Mock<IProductoService>();
+        svc.Setup(s => s.BuscarAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .ThrowsAsync(new UnauthorizedAccessException());
+        var vm = new ProductoListViewModel(svc.Object, Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>());
+
+        await vm.CargarAsync();
+
+        Assert.True(vm.SinPermiso);
+        Assert.Equal(ProductoListViewModel.MensajeSinPermisoListado, vm.MensajeSinPermiso);
+        Assert.False(vm.Cargando);
+    }
+
+    [Fact]
+    public async Task Buscar_SiElServicioLanzaUnauthorized_NoPropagaYMarcaSinPermiso()
+    {
+        var (vm, svcMock, _, _) = Crear();
+        svcMock.Setup(s => s.BuscarPorTextoAsync(It.IsAny<string?>())).ThrowsAsync(new UnauthorizedAccessException());
+
+        var ex = await Record.ExceptionAsync(() => vm.BuscarCommand.ExecuteAsync(null));
+
+        Assert.Null(ex);
+        Assert.True(vm.SinPermiso);
+        Assert.False(vm.Cargando);
+    }
+
+    [Fact]
+    public async Task Buscar_ExitosaDespuesDeUn403_LimpiaSinPermiso()
+    {
+        var (vm, svcMock, _, _) = Crear();
+        svcMock.SetupSequence(s => s.BuscarPorTextoAsync(It.IsAny<string?>()))
+            .ThrowsAsync(new UnauthorizedAccessException())
+            .ReturnsAsync(new List<ProductoDto> { CrearProductoDto(1, "P001", "Uno") });
+
+        await vm.BuscarCommand.ExecuteAsync(null);
+        await vm.BuscarCommand.ExecuteAsync(null);
+
+        Assert.False(vm.SinPermiso);
+        Assert.Single(vm.Items);
+    }
+
+    [Fact]
+    public async Task BusquedaYCargaSuperpuestas_CargandoSigueHastaQueTerminanAmbas()
+    {
+        var carga = new TaskCompletionSource<IReadOnlyList<ProductoDto>>();
+        var busqueda = new TaskCompletionSource<IReadOnlyList<ProductoDto>>();
+        var svc = new Mock<IProductoService>();
+        svc.Setup(s => s.BuscarAsync(null, null, null)).Returns(carga.Task);
+        svc.Setup(s => s.BuscarPorTextoAsync(It.IsAny<string?>())).Returns(busqueda.Task);
+        var vm = new ProductoListViewModel(svc.Object, Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>());
+
+        var t1 = vm.CargarAsync();
+        var t2 = vm.BuscarCommand.ExecuteAsync(null);
+        busqueda.SetResult(new List<ProductoDto>());
+        await t2;
+        Assert.True(vm.Cargando);
+
+        carga.SetResult(new List<ProductoDto>());
+        await t1;
+        Assert.False(vm.Cargando);
+    }
+
     // ── D3.1 tests ────────────────────────────────────────────────────────────
 
     [Fact]

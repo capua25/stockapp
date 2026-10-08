@@ -21,6 +21,9 @@ public partial class ProductoListViewModel : ViewModelBase
     /// <summary>Espera de debounce antes de disparar la búsqueda automática mientras se escribe.</summary>
     private const int DebounceMs = 300;
 
+    /// <summary>Texto del estado "Sin permiso" del listado cuando el servidor rechaza la carga o la búsqueda (403).</summary>
+    public const string MensajeSinPermisoListado = "No tenés permiso para ver los productos.";
+
     private readonly IProductoService     _service;
     private readonly INavigationService   _navigation;
     private readonly IConfirmacionService _confirmacion;
@@ -66,26 +69,20 @@ public partial class ProductoListViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Red de contención (bugfix 2026-08-16, auditoría): CargarAsync la dispara la View
-    /// (DataContextChanged) fire-and-forget -- un UnauthorizedAccessException que escapa acá
-    /// escala a Dispatcher.UIThread.UnhandledException (App.axaml.cs), que muestra el genérico
-    /// "Ocurrió un error inesperado" y lo loguea a crash.log como si fuera un bug real. Un 403 ya
-    /// se avisó ANTES de llegar acá: AuthTokenHandler dispara ApiSession.AccesoRevocado apenas ve
-    /// el 403 en la respuesta HTTP, y App.axaml.cs ya informa "Tus permisos cambiaron...". Mismo
-    /// criterio que GastosViewModel.CargarAsync (Finanzas): silencioso, para no duplicar el aviso.
+    /// La dispara la View (DataContextChanged) fire-and-forget. Va por EjecutarCargaProtegidaAsync: un 403
+    /// (UnauthorizedAccessException) deja SinPermiso en true en vez de escapar al manejador global, y mientras
+    /// espera al servicio Cargando está en true, así la vista no afirma "no hay productos" antes de tenerlos.
+    /// El aviso global del 403 ya lo da AuthTokenHandler + App.axaml.cs: acá no se agrega otro.
     /// </summary>
     public async Task CargarAsync()
     {
-        try
+        await EjecutarCargaProtegidaAsync(async () =>
         {
             var resultados = await _service.BuscarAsync(null, null, null);
             Items.Clear();
             foreach (var p in resultados)
                 Items.Add(p);
-        }
-        catch (UnauthorizedAccessException)
-        {
-        }
+        }, MensajeSinPermisoListado);
     }
 
     /// <summary>
@@ -124,15 +121,19 @@ public partial class ProductoListViewModel : ViewModelBase
     private async Task BuscarAsync() => await EjecutarBusquedaAsync();
 
     /// <summary>
-    /// Búsqueda por término único: matchea por Nombre, SKU o código de barras (lógica OR).
-    /// Reusada tanto por el comando del botón como por el debounce automático.
+    /// Búsqueda por término único: matchea por Nombre, SKU o código de barras (lógica OR). Reusada por el
+    /// comando del botón y por el debounce automático. Mismo camino protegido que la carga: un 403 en una
+    /// búsqueda marca SinPermiso y no escapa; Items no se vacía hasta tener los resultados.
     /// </summary>
     private async Task EjecutarBusquedaAsync()
     {
-        var resultados = await _service.BuscarPorTextoAsync(FiltroBusqueda);
-        Items.Clear();
-        foreach (var p in resultados)
-            Items.Add(p);
+        await EjecutarCargaProtegidaAsync(async () =>
+        {
+            var resultados = await _service.BuscarPorTextoAsync(FiltroBusqueda);
+            Items.Clear();
+            foreach (var p in resultados)
+                Items.Add(p);
+        }, MensajeSinPermisoListado);
     }
 
     [RelayCommand]

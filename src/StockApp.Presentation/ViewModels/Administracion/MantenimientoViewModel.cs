@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -42,14 +43,6 @@ public partial class MantenimientoViewModel : ViewModelBase
     /// que el segundo click ni siquiera salga.</summary>
     [ObservableProperty]
     private bool _iniciandoBackup;
-
-    // MostrarListaVacia solo se recalcula cuando cambia Cargando, no Corridas.CollectionChanged
-    // directamente: CargarAsync() mutila Corridas (Clear/Add) de forma síncrona, ANTES de que el
-    // finally ponga Cargando en false, así que cuando el binding se re-evalúa el conteo ya está
-    // definitivo. Evita colgar un handler de CollectionChanged para un caso que ya está cubierto.
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(MostrarListaVacia))]
-    private bool _cargando;
 
     /// <summary>
     /// Estado vacío explícito (review final E1): sin esto, una instalación nueva sin backups
@@ -121,9 +114,22 @@ public partial class MantenimientoViewModel : ViewModelBase
         _alertas = alertas;
     }
 
+    /// <summary>
+    /// <see cref="MostrarListaVacia"/> depende de <see cref="ViewModelBase.Cargando"/>, que vive en la base:
+    /// se re-notifica acá. Solo se recalcula al cambiar Cargando (no con Corridas.CollectionChanged):
+    /// CargarAsync llena Corridas de forma síncrona ANTES del finally que termina la carga, así que cuando el
+    /// binding se re-evalúa el conteo ya es el definitivo.
+    /// </summary>
+    protected override void OnPropertyChanged(PropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+        if (e.PropertyName == nameof(Cargando))
+            OnPropertyChanged(nameof(MostrarListaVacia));
+    }
+
     public async Task CargarAsync()
     {
-        Cargando = true;
+        EmpezarCarga();
         ErrorAlCargar = false;
         try
         {
@@ -139,7 +145,7 @@ public partial class MantenimientoViewModel : ViewModelBase
         }
         finally
         {
-            Cargando = false;
+            TerminarCarga();
         }
 
         await CargarResumenLogsAsync();

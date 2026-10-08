@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using StockApp.Presentation.ViewModels;
 using Xunit;
@@ -102,5 +103,80 @@ public class ViewModelBaseCargaProtegidaTests
 
         Assert.False(vm.SinPermiso);
         Assert.Null(vm.MensajeSinPermiso);
+    }
+
+    [Fact]
+    public async Task Cargando_EsTrueMientrasCorreLaCarga_YFalseAlTerminar()
+    {
+        var vm = new VmDePrueba();
+        var pendiente = new TaskCompletionSource();
+
+        var carga = vm.EjecutarAsync(() => pendiente.Task, "x");
+        Assert.True(vm.Cargando);
+
+        pendiente.SetResult();
+        await carga;
+        Assert.False(vm.Cargando);
+    }
+
+    [Fact]
+    public async Task DosCargasSuperpuestas_LaPrimeraEnTerminarNoApagaElFlag()
+    {
+        var vm = new VmDePrueba();
+        var a = new TaskCompletionSource();
+        var b = new TaskCompletionSource();
+
+        var cargaA = vm.EjecutarAsync(() => a.Task, "x");
+        var cargaB = vm.EjecutarAsync(() => b.Task, "x");
+        b.SetResult();
+        await cargaB;
+        Assert.True(vm.Cargando);
+
+        a.SetResult();
+        await cargaA;
+        Assert.False(vm.Cargando);
+    }
+
+    [Fact]
+    public async Task Cargando_SeApagaAunqueLaCargaLanceOtraExcepcion()
+    {
+        var vm = new VmDePrueba();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            vm.EjecutarAsync(() => throw new InvalidOperationException("bug"), "x"));
+
+        Assert.False(vm.Cargando);
+    }
+
+    [Fact]
+    public async Task Cargando_SeApagaTrasUn403_YQuedaSinPermiso()
+    {
+        var vm = new VmDePrueba();
+
+        await vm.EjecutarAsync(() => throw new UnauthorizedAccessException(), "No tenés permiso.");
+
+        Assert.False(vm.Cargando);
+        Assert.True(vm.SinPermiso);
+    }
+
+    [Fact]
+    public async Task Cargando_NotificaSoloEnLasTransiciones()
+    {
+        var vm = new VmDePrueba();
+        var cambios = new List<bool>();
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ViewModelBase.Cargando)) cambios.Add(vm.Cargando);
+        };
+        var a = new TaskCompletionSource();
+        var b = new TaskCompletionSource();
+
+        var cargaA = vm.EjecutarAsync(() => a.Task, "x");
+        var cargaB = vm.EjecutarAsync(() => b.Task, "x");
+        a.SetResult();
+        b.SetResult();
+        await Task.WhenAll(cargaA, cargaB);
+
+        Assert.Equal(new[] { true, false }, cambios);
     }
 }
