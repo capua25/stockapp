@@ -76,6 +76,31 @@ public static class DatosProductos
         return new ProductoListViewModel(servicio.Object, Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>());
     }
 
+    /// <summary>Unidad más larga que el tope de las columnas medidas (240): se corta con elipsis.</summary>
+    public const string UnidadLarga = "Metro cúbico puesto en obra con flete incluido";
+
+    /// <summary>Los 12 productos con la unidad de "Arena gruesa" (fila 2) más larga que el tope.</summary>
+    public static readonly IReadOnlyList<ProductoDto> ProductosConUnidadLarga =
+        Productos.Select(p => p.Nombre == "Arena gruesa" ? p with { UnidadMedidaNombre = UnidadLarga } : p).ToList();
+
+    /// <summary>La carga queda esperando al servidor: el listado está en "Cargando productos…".</summary>
+    public static ProductoListViewModel ListadoQueNoTermina()
+    {
+        var servicio = new Mock<IProductoService>();
+        servicio.Setup(s => s.BuscarAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .Returns(new TaskCompletionSource<IReadOnlyList<ProductoDto>>().Task);
+        return new ProductoListViewModel(servicio.Object, Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>());
+    }
+
+    /// <summary>La carga responde 403 (UnauthorizedAccessException, como ApiErrores).</summary>
+    public static ProductoListViewModel ListadoSinPermiso()
+    {
+        var servicio = new Mock<IProductoService>();
+        servicio.Setup(s => s.BuscarAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .ThrowsAsync(new UnauthorizedAccessException("403"));
+        return new ProductoListViewModel(servicio.Object, Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>());
+    }
+
     /// <summary>sinPermiso: la carga de unidades responde 403 (UnauthorizedAccessException), como ApiErrores.</summary>
     public static ProductoFormViewModel Formulario(bool sinPermiso = false)
     {
@@ -122,4 +147,10 @@ public static class DatosProductos
     }
 
     public static ShellMainViewModel SinPermiso() => EnShell(Formulario(sinPermiso: true));
+
+    public static ShellMainViewModel Cargando() => EnShell(ListadoQueNoTermina());
+
+    public static ShellMainViewModel SinPermisoListado() => EnShell(ListadoSinPermiso());
+
+    public static ShellMainViewModel ConCeldaCortada() => EnShell(Listado(ProductosConUnidadLarga));
 }

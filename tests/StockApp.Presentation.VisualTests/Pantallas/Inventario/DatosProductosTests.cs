@@ -32,4 +32,40 @@ public class DatosProductosTests
 
         Assert.Equal(esperado, real);
     }
+
+    [Fact]
+    public void ProductosConUnidadLarga_SoloCambiaLaUnidadDeArenaGruesa()
+    {
+        var cambiadas = DatosProductos.ProductosConUnidadLarga
+            .Zip(DatosProductos.Productos, (nuevo, viejo) => (nuevo, viejo))
+            .Where(p => p.nuevo != p.viejo)
+            .ToList();
+
+        var (n, v) = Assert.Single(cambiadas);
+        Assert.Equal("Arena gruesa", n.Nombre);
+        Assert.Equal(v with { UnidadMedidaNombre = "Metro cúbico puesto en obra con flete incluido" }, n);
+        Assert.Equal(DatosProductos.UnidadLarga, n.UnidadMedidaNombre);
+    }
+
+    [Fact]
+    public async Task SinPermisoListado_LaCargaMarcaSinPermisoConElMensajeDelListado()
+    {
+        var vm = (StockApp.Presentation.ViewModels.Catalogo.ProductoListViewModel)DatosProductos.SinPermisoListado().CurrentContent!;
+
+        await vm.CargarAsync();
+
+        Assert.True(vm.SinPermiso);
+        Assert.Equal(StockApp.Presentation.ViewModels.Catalogo.ProductoListViewModel.MensajeSinPermisoListado, vm.MensajeSinPermiso);
+    }
+
+    [Fact]
+    public void Cargando_LaCargaNoTermina()
+    {
+        var vm = (StockApp.Presentation.ViewModels.Catalogo.ProductoListViewModel)DatosProductos.Cargando().CurrentContent!;
+
+        var carga = vm.CargarAsync();
+
+        Assert.False(carga.IsCompleted);
+        Assert.True(vm.Cargando);
+    }
 }
