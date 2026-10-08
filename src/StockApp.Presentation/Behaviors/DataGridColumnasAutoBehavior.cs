@@ -128,8 +128,10 @@ public static class DataGridColumnasAutoBehavior
         public readonly Dictionary<DataGridColumn, double> AnchosMedidos = new();
         /// <summary>Veces que se recorrió la fuente entera para medir (lo que cuesta O(filas)).</summary>
         public int RecorridosDeLaFuente;
-        /// <summary>Pasadas seguidas con alguna columna marcada sin poder medirse, desde el último cambio de datos.</summary>
+        /// <summary>Pasadas seguidas con alguna columna marcada que no se puede medir nunca, desde el último cambio de datos.</summary>
         public int IntentosDeMedicion;
+        /// <summary>Columnas ya medidas desde el último cambio de datos: un reintento no las vuelve a medir.</summary>
+        public readonly HashSet<DataGridColumn> MedidasDesdeElCambio = new();
     }
 
     private static readonly ConditionalWeakTable<DataGrid, Estado> Estados = new();
@@ -138,8 +140,9 @@ public static class DataGridColumnasAutoBehavior
     internal static int RecorridosDeLaFuente(DataGrid grid) => Estados.TryGetValue(grid, out var e) ? e.RecorridosDeLaFuente : 0;
 
     /// <summary>
-    /// Pasadas de layout seguidas en las que una columna marcada puede quedar sin medir (sin header o celda
-    /// realizados) antes de dejar de reintentar hasta el próximo cambio de datos.
+    /// Pasadas de layout seguidas en las que se reintenta una columna marcada que no se puede medir nunca (Header
+    /// vacío o repetido, plantilla sin TextBlock) antes de dejarla hasta el próximo cambio de datos. Una que
+    /// todavía no está realizada (sin header o celda) no gasta intentos: espera sin recorrer la fuente.
     /// </summary>
     internal const int MaxIntentosDeMedicion = 8;
 
@@ -229,21 +232,23 @@ public static class DataGridColumnasAutoBehavior
     {
         estado.MedicionPendiente = true;
         estado.IntentosDeMedicion = 0;
+        estado.MedidasDesdeElCambio.Clear();
         grid.InvalidateMeasure();
     }
 
     /// <summary>
     /// Fija en píxeles el ancho de cada columna Auto marcada con ColumnaAuto.Medir (una fija o * marcada conserva
-    /// su ancho; las ya medidas quedaron en píxeles). Grilla vacía: no se toca nada. Una columna sin header o
-    /// celda medibles no frena a las demás y se reintenta en las pasadas siguientes, hasta
-    /// <see cref="MaxIntentosDeMedicion"/>: si nunca se puede medir (Header vacío o repetido, plantilla sin
-    /// TextBlock) la fuente no se vuelve a recorrer en cada layout. Con ancho en píxeles, el reparto de abajo la
-    /// trata como una columna fija.
+    /// su ancho; las ya medidas quedaron en píxeles). Grilla vacía: no se toca nada. Una columna que no se puede
+    /// medir no frena a las demás y se reintenta en las pasadas siguientes, sin volver a medir las que ya se
+    /// midieron: si todavía no está realizada, hasta que lo esté; si no se puede medir nunca (Header vacío o
+    /// repetido, plantilla sin TextBlock), hasta <see cref="MaxIntentosDeMedicion"/>. Con ancho en píxeles, el
+    /// reparto de abajo la trata como una columna fija.
     /// </summary>
     private static void MedirColumnas(DataGrid grid, Estado estado)
     {
         var marcadas = grid.Columns
             .Where(c => c.IsVisible && ColumnaAuto.GetMedir(c) && (c.Width.IsAuto || estado.AnchosMedidos.ContainsKey(c)))
+            .Where(c => !estado.MedidasDesdeElCambio.Contains(c))
             .ToList();
         if (marcadas.Count == 0 || !ColumnaAuto.HayFilas(grid.ItemsSource))
         {
@@ -263,19 +268,26 @@ public static class DataGridColumnasAutoBehavior
         }
 
         var anchos = new Dictionary<DataGridColumn, double>();
-        var faltan = false;
+        var sinRealizar = false;
+        var noMedibles = false;
         foreach (var c in marcadas)
         {
-            var ancho = ColumnaAuto.Medir(grid, c, Filas);
+            var ancho = ColumnaAuto.Medir(grid, c, Filas, out var nuncaMedible);
             if (ancho is null)
             {
-                faltan = true;
+                if (nuncaMedible)
+                    noMedibles = true;
+                else
+                    sinRealizar = true;
                 continue;
             }
             anchos[c] = Math.Max(ancho.Value, estado.AnchosMedidos.GetValueOrDefault(c));
+            estado.MedidasDesdeElCambio.Add(c);
         }
 
-        estado.MedicionPendiente = faltan && ++estado.IntentosDeMedicion < MaxIntentosDeMedicion;
+        if (noMedibles)
+            estado.IntentosDeMedicion++;
+        estado.MedicionPendiente = sinRealizar || (noMedibles && estado.IntentosDeMedicion < MaxIntentosDeMedicion);
         estado.Reparando = true;
         try
         {

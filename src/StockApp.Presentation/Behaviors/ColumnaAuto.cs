@@ -114,19 +114,33 @@ public static class ColumnaAuto
     }
 
     /// <summary>
-    /// Ancho de la columna para las filas que devuelve <paramref name="items"/>, o null si no hay un header con
-    /// título y una celda realizados de esa columna de donde copiar la tipografía (primera pasada, Header vacío o
-    /// repetido, plantilla sin TextBlock). Las filas se piden recién cuando hay con qué medirlas.
+    /// Ancho de la columna para las filas que devuelve <paramref name="items"/>, o null si todavía no se puede medir.
+    /// <paramref name="nuncaMedible"/> distingue el porqué: true si con esta configuración no se va a poder medir
+    /// nunca (Header vacío o no textual, Header repetido entre las columnas visibles, plantilla sin TextBlock
+    /// visible); false si falta que la grilla realice el header o una celda de esa columna (primera pasada, grilla de
+    /// alto 0). Las filas se piden recién cuando hay con qué medirlas.
     /// </summary>
-    internal static double? Medir(DataGrid grid, DataGridColumn columna, Func<IReadOnlyList<object>> items)
+    internal static double? Medir(DataGrid grid, DataGridColumn columna, Func<IReadOnlyList<object>> items, out bool nuncaMedible)
     {
+        // Con el Header repetido no hay cómo saber cuál de los headers (y la celda debajo) es el de esta columna:
+        // se mediría con la tipografía y el padding de la otra.
+        nuncaMedible = grid.Columns.Count(c => c.IsVisible && Equals(c.Header, columna.Header)) > 1;
+        if (nuncaMedible)
+            return null;
+
         var header = grid.GetVisualDescendants().OfType<DataGridColumnHeader>()
             .FirstOrDefault(h => h.IsEffectivelyVisible && h.Bounds.Width > 0 && Equals(h.Content, columna.Header));
         var celda = header is null ? null : CeldaBajo(grid, header);
-        var textoCelda = celda?.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault(t => t.IsEffectivelyVisible);
-        var textoHeader = header?.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault(t => !string.IsNullOrEmpty(t.Text));
-        if (header is null || celda is null || textoCelda is null || textoHeader is null)
+        if (header is null || celda is null)
             return null;
+
+        var textoCelda = celda.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault(t => t.IsEffectivelyVisible);
+        var textoHeader = header.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault(t => !string.IsNullOrEmpty(t.Text));
+        if (textoCelda is null || textoHeader is null)
+        {
+            nuncaMedible = true;
+            return null;
+        }
 
         var sonda = Sonda(textoCelda);
         var texto = Evaluador(columna);

@@ -281,7 +281,42 @@ public class ColumnaAutoTests
         Assert.True(m.Costo.ActualWidth >= 150 - 0.5, $"COSTO mide {m.Costo.ActualWidth:F1}");
     }
 
+    private static List<ProductoDto> CincoMilFilas() =>
+        Enumerable.Range(1, 5000).Select(i => P(i, $"MAT-{i:00000}", 1000m + i, i % 7 == 0 ? "Metro cúbico" : "Unidad")).ToList();
+
     [AvaloniaFact]
+    public void CincoMilFilas_UnaCargaRecorreLaFuenteUnaVez_YOrdenarOFiltrarNinguna()
+    {
+        // El costo de medir es O(filas) por recorrido: se cuenta, no se cronometra.
+        var m = Montar([]);
+        Assert.Equal(0, DataGridColumnasAutoBehavior.RecorridosDeLaFuente(m.Grilla));
+
+        Recargar(m, CincoMilFilas());
+        Assert.True(m.Codigo.Width.IsAbsolute, "precondición: la carga se midió");
+        Assert.Equal(1, DataGridColumnasAutoBehavior.RecorridosDeLaFuente(m.Grilla));
+
+        ClickEnHeader(m, "CÓDIGO");
+        var vista = (DataGridCollectionView)m.Grilla.ItemsSource!;
+        vista.Filter = o => ((ProductoDto)o).Id % 2 == 0;
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Single(vista.SortDescriptions);
+        Assert.Equal(2500, vista.Count);
+        Assert.Equal(1, DataGridColumnasAutoBehavior.RecorridosDeLaFuente(m.Grilla));
+
+        Recargar(m, CincoMilFilas());
+        Assert.Equal(2, DataGridColumnasAutoBehavior.RecorridosDeLaFuente(m.Grilla));
+        m.Ventana.Close();
+    }
+
+    /// <summary>
+    /// Informativo: el reloj de una corrida compartida es ruido. Se calientan los dos caminos y se compara el mínimo
+    /// de 3 cargas de cada uno; lo que bloquea es el conteo de recorridos de
+    /// <see cref="CincoMilFilas_UnaCargaRecorreLaFuenteUnaVez_YOrdenarOFiltrarNinguna"/>. Se excluye con
+    /// <c>--filter "Categoria!=Perf"</c>.
+    /// </summary>
+    [AvaloniaFact]
+    [Trait("Categoria", "Perf")]
     public void CincoMilFilas_MedirNoAgregaCostoPerceptible()
     {
         static long Cargar(bool medir, List<ProductoDto> items)
@@ -295,12 +330,14 @@ public class ColumnaAutoTests
             return sw.ElapsedMilliseconds;
         }
 
-        var items = Enumerable.Range(1, 5000).Select(i => P(i, $"MAT-{i:00000}", 1000m + i, i % 7 == 0 ? "Metro cúbico" : "Unidad")).ToList();
-        Cargar(true, items); // calentamiento (JIT)
-        var sin = Cargar(false, items);
-        var con = Cargar(true, items);
+        var items = CincoMilFilas();
+        Cargar(false, items); // calentamiento (JIT) de los dos caminos
+        Cargar(true, items);
+        var sin = Enumerable.Range(0, 3).Select(_ => Cargar(false, items)).Min();
+        var con = Enumerable.Range(0, 3).Select(_ => Cargar(true, items)).Min();
+        TestContext.Current.TestOutputHelper?.WriteLine($"5000 filas (mínimo de 3): con medición {con} ms, sin {sin} ms");
 
-        Assert.True(con <= sin * 1.5 + 400, $"5000 filas: con medición {con} ms vs sin {sin} ms");
+        Assert.True(con <= sin * 1.5 + 400, $"5000 filas (mínimo de 3): con medición {con} ms vs sin {sin} ms");
     }
 
     [AvaloniaFact]
@@ -370,10 +407,102 @@ public class ColumnaAutoTests
                 Dispatcher.UIThread.RunJobs();
             }
         }
+        // Los reintentos de la que no se puede medir no vuelven a medir las ya medidas: un solo recorrido.
         Pasadas();
-        var recorridos = DataGridColumnasAutoBehavior.RecorridosDeLaFuente(m.Grilla);
-        Assert.InRange(recorridos, 1, DataGridColumnasAutoBehavior.MaxIntentosDeMedicion);
+        Assert.Equal(1, DataGridColumnasAutoBehavior.RecorridosDeLaFuente(m.Grilla));
         Pasadas();
-        Assert.Equal(recorridos, DataGridColumnasAutoBehavior.RecorridosDeLaFuente(m.Grilla));
+        Assert.Equal(1, DataGridColumnasAutoBehavior.RecorridosDeLaFuente(m.Grilla));
+    }
+
+    [AvaloniaFact]
+    public void HeaderRepetido_NoSeMideConElHeaderNiLaCeldaDeLaOtraColumna()
+    {
+        // Otra "UNIDAD" a la izquierda, numérica (.num: +tnum) y con otro contenido: el primer header "UNIDAD" que
+        // aparece y la celda debajo son los de ella, no los de la columna marcada.
+        var m = Montar(Enumerable.Range(1, 10).Select(i => P(i, $"MAT-{i:0000}", unidad: "Kilogramo")), configurar: g =>
+        {
+            var otra = ColumnaDeTexto("UNIDAD", "PrecioCosto", MonedaConverter.Instance);
+            otra.CellStyleClasses.Add("num");
+            g.Columns.Insert(0, otra);
+        });
+
+        Assert.True(m.Codigo.Width.IsAbsolute, "precondición: las demás columnas marcadas se midieron");
+        Assert.True(m.Unidad.Width.IsAuto, $"UNIDAD se midió con el header repetido: {m.Unidad.Width.Value:F1}");
+        Assert.Null(ColumnaAuto.Medir(m.Grilla, m.Unidad, () => ColumnaAuto.Items(m.Grilla.ItemsSource), out var nuncaMedible));
+        Assert.True(nuncaMedible, "Un Header repetido no se arregla esperando otra pasada.");
+    }
+
+    [AvaloniaFact]
+    public void HeaderNulo_NoSeMideNunca()
+    {
+        // Su header se realiza pero sin texto del que copiar la tipografía: si contara como "todavía sin realizar"
+        // quedaría pendiente para siempre.
+        DataGridTemplateColumn sinHeader = null!;
+        var m = Montar(Enumerable.Range(1, 10).Select(i => P(i, $"MAT-{i:0000}")), configurar: g =>
+        {
+            sinHeader = ColumnaDeTexto("", "CategoriaNombre");
+            sinHeader.Header = null;
+            ColumnaAuto.SetMedir(sinHeader, true);
+            g.Columns.Insert(0, sinHeader);
+        });
+
+        Assert.Null(ColumnaAuto.Medir(m.Grilla, sinHeader, () => ColumnaAuto.Items(m.Grilla.ItemsSource), out var nuncaMedible));
+        Assert.True(nuncaMedible, "Un Header nulo no se arregla esperando otra pasada.");
+    }
+
+    private static void PasadasDeLayout(Montaje m, int cuantas)
+    {
+        for (var pasada = 0; pasada < cuantas; pasada++)
+        {
+            m.Grilla.InvalidateMeasure();
+            Dispatcher.UIThread.RunJobs();
+        }
+    }
+
+    private static double AnchoConLaTipografiaDe(TextBlock celda, string texto) => AnchoNatural(new TextBlock
+    {
+        Text = texto, FontFamily = celda.FontFamily, FontSize = celda.FontSize, FontWeight = celda.FontWeight,
+        FontStyle = celda.FontStyle, LetterSpacing = celda.LetterSpacing, FontFeatures = celda.FontFeatures,
+    });
+
+    [AvaloniaFact]
+    public void ColumnaMarcadaFueraDeLaVistaHorizontal_SeMideSinScrollear()
+    {
+        // La DataGrid 12.0.1 realiza los headers y las celdas de todas las columnas, también las que quedan fuera
+        // de la vista horizontal: estar fuera de la vista no deja a una columna sin medir.
+        const string largo = "Kilogramo por metro lineal";
+        var items = Enumerable.Range(1, 30).Select(i => P(i, $"MAT-{i:0000}", unidad: i == 30 ? largo : "Par")).ToList();
+        var m = Montar(items, ancho: 600, configurar: g =>
+        {
+            for (var i = 0; i < 3; i++)
+                g.Columns.Insert(0, new DataGridTextColumn { Header = $"FIJA {i}", Width = new DataGridLength(250), Binding = new Binding("Nombre") });
+        });
+
+        var header = Header(m.Grilla, "UNIDAD");
+        Assert.True(header.TranslatePoint(default, m.Grilla)!.Value.X > m.Grilla.Bounds.Width, "precondición: UNIDAD está fuera de la vista");
+        Assert.True(m.Unidad.Width.IsAbsolute, $"UNIDAD no se midió: {m.Unidad.Width.UnitType}");
+        Assert.Equal(Math.Ceiling(AnchoConLaTipografiaDe(CeldaBajoHeader(m.Grilla, items[0], "UNIDAD"), largo) + 16), m.Unidad.Width.Value, 1);
+    }
+
+    [AvaloniaFact]
+    public void ColumnaMarcadaTodaviaSinRealizar_SeMideAlRealizarse_AunqueHayanPasadoMasPasadasQueElTope()
+    {
+        // Grilla visible pero de alto 0: hay headers y ninguna fila realizada, así que todavía no hay celda de la que
+        // copiar la tipografía. No es "no medible nunca": tiene que esperar sin gastar los intentos.
+        const string largo = "Kilogramo por metro lineal";
+        var items = Enumerable.Range(1, 30).Select(i => P(i, $"MAT-{i:0000}", unidad: i == 30 ? largo : "Par")).ToList();
+        var m = Montar(items, configurar: g => g.Height = 0);
+        Assert.True(m.Grilla.IsEffectivelyVisible, "precondición: la grilla está visible");
+        Assert.True(m.Unidad.Width.IsAuto, $"precondición: sin filas realizadas UNIDAD no se pudo medir ({m.Unidad.Width.UnitType})");
+
+        PasadasDeLayout(m, 2 * DataGridColumnasAutoBehavior.MaxIntentosDeMedicion);
+        Assert.Equal(0, DataGridColumnasAutoBehavior.RecorridosDeLaFuente(m.Grilla));
+        m.Grilla.Height = 300;
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(m.Unidad.Width.IsAbsolute, $"UNIDAD no se midió al realizarse: {m.Unidad.Width.UnitType}");
+        Assert.Equal(Math.Ceiling(AnchoConLaTipografiaDe(CeldaBajoHeader(m.Grilla, items[0], "UNIDAD"), largo) + 16), m.Unidad.Width.Value, 1);
+        Assert.Equal(1, DataGridColumnasAutoBehavior.RecorridosDeLaFuente(m.Grilla));
     }
 }
