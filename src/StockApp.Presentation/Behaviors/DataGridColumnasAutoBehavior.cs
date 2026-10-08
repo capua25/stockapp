@@ -80,6 +80,22 @@ namespace StockApp.Presentation.Behaviors;
 /// <item>(f) Columnas que miden su contenido (<see cref="ColumnaAuto"/>): al cambiar los datos se miden sobre
 /// TODA la fuente y quedan en píxeles antes del reparto; respetan el arrastre del usuario igual que el resto.</item>
 /// </list>
+///
+/// <para><b>Tope adaptable de las columnas medidas.</b> Una columna medida pide su ancho medido (con el tope de
+/// <see cref="ColumnaAuto"/>), pero no empuja a las demás fuera del borde: si lo que piden todas no entra, cede
+/// hasta lo que quede libre y su texto se corta con elipsis. El orden en que se cede el espacio:</para>
+/// <list type="number">
+/// <item>Las <c>*</c> bajan de su parte proporcional hasta su piso (el reparto de siempre).</item>
+/// <item>Las columnas medidas bajan desde su ancho medido, de la más ancha a la más angosta (se nivelan hacia
+/// abajo: la más ancha suele deberse a un solo valor largo, y un código o un importe cortos quedan enteros),
+/// hasta el ancho de su título con la flecha de orden. Más angosta, el header se corta y la columna deja de
+/// decir qué muestra.</item>
+/// <item>Si ni así entra (ventana muy angosta para las fijas, los títulos y los pisos), las <c>*</c> NO bajan de
+/// su piso: con una proporcional de 40 px el nombre no se lee. Queda el modo desborde de arriba, con scroll.</item>
+/// </list>
+/// <para>El ancho cedido depende solo de lo medido (que cambia con los datos) y del ancho de la grilla, nunca
+/// del reparto actual: se recalcula al cambiar el ancho de la grilla y no se mueve al scrollear, ordenar ni
+/// filtrar. Sin columnas <c>*</c> también se cede, para que una grilla así no scrollee por una columna medida.</para>
 /// </summary>
 public static class DataGridColumnasAutoBehavior
 {
@@ -126,6 +142,8 @@ public static class DataGridColumnasAutoBehavior
         public NotifyCollectionChangedEventHandler? AlCambiarFuente;
         /// <summary>Último ancho medido por columna: el ancho medido solo crece mientras vive la grilla.</summary>
         public readonly Dictionary<DataGridColumn, double> AnchosMedidos = new();
+        /// <summary>Hasta dónde puede ceder cada columna medida si no hay lugar (su título con la flecha de orden).</summary>
+        public readonly Dictionary<DataGridColumn, double> PisosMedidos = new();
         /// <summary>Veces que se recorrió la fuente entera para medir (lo que cuesta O(filas)).</summary>
         public int RecorridosDeLaFuente;
         /// <summary>Pasadas seguidas con alguna columna marcada que no se puede medir nunca, desde el último cambio de datos.</summary>
@@ -138,6 +156,10 @@ public static class DataGridColumnasAutoBehavior
 
     /// <summary>Cuántas veces el behavior recorrió la fuente de <paramref name="grid"/> para medir sus columnas.</summary>
     internal static int RecorridosDeLaFuente(DataGrid grid) => Estados.TryGetValue(grid, out var e) ? e.RecorridosDeLaFuente : 0;
+
+    /// <summary>El ancho que midió <paramref name="columna"/> (lo que pide), aunque haya cedido por falta de lugar; null si no se midió.</summary>
+    internal static double? AnchoMedido(DataGrid grid, DataGridColumn columna) =>
+        Estados.TryGetValue(grid, out var e) && e.AnchosMedidos.TryGetValue(columna, out var ancho) ? ancho : null;
 
     /// <summary>
     /// Pasadas de layout seguidas en las que se reintenta una columna marcada que no se puede medir nunca (Header
@@ -268,12 +290,13 @@ public static class DataGridColumnasAutoBehavior
         }
 
         var anchos = new Dictionary<DataGridColumn, double>();
+        var pisos = new Dictionary<DataGridColumn, double>();
         var sinRealizar = false;
         var noMedibles = false;
         foreach (var c in marcadas)
         {
-            var ancho = ColumnaAuto.Medir(grid, c, Filas, out var nuncaMedible);
-            if (ancho is null)
+            var medida = ColumnaAuto.Medir(grid, c, Filas, out var nuncaMedible);
+            if (medida is null)
             {
                 if (nuncaMedible)
                     noMedibles = true;
@@ -281,7 +304,8 @@ public static class DataGridColumnasAutoBehavior
                     sinRealizar = true;
                 continue;
             }
-            anchos[c] = Math.Max(ancho.Value, estado.AnchosMedidos.GetValueOrDefault(c));
+            anchos[c] = Math.Max(medida.Value.Ancho, estado.AnchosMedidos.GetValueOrDefault(c));
+            pisos[c] = Math.Min(anchos[c], medida.Value.Piso);
             estado.MedidasDesdeElCambio.Add(c);
         }
 
@@ -294,6 +318,7 @@ public static class DataGridColumnasAutoBehavior
             foreach (var (c, ancho) in anchos)
             {
                 estado.AnchosMedidos[c] = ancho;
+                estado.PisosMedidos[c] = pisos[c];
                 if (!c.Width.IsAbsolute || Math.Abs(c.Width.Value - ancho) > Tolerancia)
                     Asignar(c, new DataGridLength(ancho, DataGridLengthUnitType.Pixel));
             }
@@ -412,6 +437,40 @@ public static class DataGridColumnasAutoBehavior
         }
     }
 
+    /// <summary>Las columnas medidas que el reparto maneja: en píxeles por la medición y no proporcionales.</summary>
+    private static List<DataGridColumn> Medidas(Estado estado, List<DataGridColumn> visibles, List<DataGridColumn> estrellas) =>
+        visibles.Where(c => !estrellas.Contains(c) && c.Width.IsAbsolute && estado.AnchosMedidos.ContainsKey(c)).ToList();
+
+    /// <summary>
+    /// Achica las columnas medidas de <paramref name="objetivos"/> para que entren en <paramref name="lugar"/> (el
+    /// ancho de la grilla menos las demás no proporcionales y el piso de las *): las nivela hacia abajo, de la más
+    /// ancha a la más angosta, sin bajar ninguna de su piso. El nivel es el mayor entero que entra, así el
+    /// píxel fraccionario que sobra va a las *. Si con todas en su piso tampoco entra, quedan en el piso.
+    /// </summary>
+    private static void CederMedidas(Estado estado, Dictionary<DataGridColumn, double> objetivos, List<DataGridColumn> medidas, double lugar)
+    {
+        if (medidas.Count == 0 || medidas.Sum(c => objetivos[c]) <= lugar + Tolerancia)
+            return;
+
+        var pedidos = medidas.ToDictionary(c => c, c => objetivos[c]);
+        var pisos = medidas.ToDictionary(c => c, c => Math.Min(pedidos[c], estado.PisosMedidos.GetValueOrDefault(c, pedidos[c])));
+        double Total(double nivel) => medidas.Sum(c => Math.Max(pisos[c], Math.Min(pedidos[c], nivel)));
+
+        // Total crece con el nivel: el mayor nivel entero que entra, por bisección.
+        var bajo = 0.0;
+        var alto = Math.Ceiling(pedidos.Values.Max());
+        while (alto - bajo > 1)
+        {
+            var medio = Math.Floor((bajo + alto) / 2);
+            if (Total(medio) <= lugar + Tolerancia)
+                bajo = medio;
+            else
+                alto = medio;
+        }
+        foreach (var c in medidas)
+            objetivos[c] = Math.Max(pisos[c], Math.Min(pedidos[c], bajo));
+    }
+
     private static void OnLayoutUpdated(object? sender, EventArgs e)
     {
         if (sender is not DataGrid grid || !Estados.TryGetValue(grid, out var estado))
@@ -429,8 +488,10 @@ public static class DataGridColumnasAutoBehavior
             estado.PesosDeclarados[c] = c.Width.Value;
 
         var estrellas = visibles.Where(c => estado.PesosDeclarados.ContainsKey(c) && estado.PesosDeclarados[c] > 0).ToList();
-        // Sin columnas * no hay camino de Resize limitado: el crecimiento Auto ya funciona solo.
-        if (estrellas.Count == 0)
+        var medidas = Medidas(estado, visibles, estrellas);
+        // Sin columnas * no hay camino de Resize limitado: el crecimiento Auto ya funciona solo. Solo queda que
+        // las columnas medidas cedan si no entran.
+        if (estrellas.Count == 0 && medidas.Count == 0)
             return;
 
         var disponible = AnchoDisponible(grid, estado, visibles, estrellas);
@@ -440,21 +501,28 @@ public static class DataGridColumnasAutoBehavior
         var objetivos = new Dictionary<DataGridColumn, double>();
         foreach (var c in visibles.Where(c => !estrellas.Contains(c)))
         {
-            var objetivo = Objetivo(grid, c);
+            var objetivo = medidas.Contains(c) ? Math.Min(c.MaxWidth, estado.AnchosMedidos[c]) : Objetivo(grid, c);
             if (objetivo is null)
                 return; // Todavía sin medir: la grilla no terminó su primera pasada.
             objetivos[c] = objetivo.Value;
         }
 
         var minimosEstrellas = estrellas.Sum(c => Minimo(grid, c, esEstrella: true));
+        var otras = objetivos.Where(kv => !medidas.Contains(kv.Key)).Sum(kv => kv.Value);
+        CederMedidas(estado, objetivos, medidas, disponible.Value - otras - minimosEstrellas);
         var encaja = objetivos.Values.Sum() + minimosEstrellas <= disponible.Value + Tolerancia;
 
         var anchosEstrellas = encaja
             ? RepartirEstrellas(grid, estrellas, estado.PesosDeclarados, disponible.Value - objetivos.Values.Sum())
             : estrellas.ToDictionary(c => c, c => Minimo(grid, c, esEstrella: true));
+        // Sin * el resto de las columnas sigue como la grilla las deja: solo se asignan las medidas.
+        if (estrellas.Count == 0)
+            foreach (var c in objetivos.Keys.Except(medidas).ToList())
+                objetivos.Remove(c);
 
         var enEquilibrio =
-            objetivos.All(kv => Math.Abs(kv.Key.ActualWidth - kv.Value) <= Tolerancia)
+            objetivos.All(kv => Math.Abs(kv.Key.ActualWidth - kv.Value) <= Tolerancia
+                && (!medidas.Contains(kv.Key) || Math.Abs(kv.Key.Width.Value - kv.Value) <= Tolerancia))
             && estrellas.All(c =>
                 Math.Abs(c.ActualWidth - anchosEstrellas[c]) <= Tolerancia
                 && (encaja
@@ -476,7 +544,9 @@ public static class DataGridColumnasAutoBehavior
             foreach (var (c, objetivo) in objetivos)
             {
                 var w = c.Width;
-                Asignar(c, new DataGridLength(w.Value, w.UnitType, objetivo, objetivo));
+                Asignar(c, medidas.Contains(c)
+                    ? new DataGridLength(objetivo, DataGridLengthUnitType.Pixel, objetivo, objetivo)
+                    : new DataGridLength(w.Value, w.UnitType, objetivo, objetivo));
             }
             foreach (var c in estrellas)
             {

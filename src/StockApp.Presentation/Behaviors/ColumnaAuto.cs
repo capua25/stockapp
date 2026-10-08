@@ -20,8 +20,10 @@ namespace StockApp.Presentation.Behaviors;
 ///
 /// <para>Ancho = el mayor entre el texto más ancho de la fuente más el padding de la celda, y el título más el
 /// padding del header más <see cref="ReservaOrden"/> (así ordenar no corta el título); redondeado hacia arriba,
-/// nunca menor que el MinWidth de la columna ni mayor que <see cref="TopeProperty"/>. Lo que pasa el tope se
-/// corta con elipsis (TextTrimming en la celda) y se lee en el tooltip (<see cref="TooltipSiSeCorta"/>).</para>
+/// nunca menor que el MinWidth de la columna ni mayor que <see cref="TopeProperty"/>. Ese es el ancho que la
+/// columna pide; <see cref="DataGridColumnasAutoBehavior"/> se lo da si entra en la grilla y, si no, la achica
+/// hasta lo que quede libre (nunca por debajo del título). Lo que no entra se corta con elipsis (TextTrimming en
+/// la celda) y se lee en el tooltip (<see cref="TooltipSiSeCorta"/>).</para>
 ///
 /// <para>El texto de cada fila es el mismo que pinta la celda: una DataGridTextColumn usa su Binding; una de
 /// plantilla, <see cref="RutaProperty"/> (por defecto su SortMemberPath) con <see cref="ConversorProperty"/>,
@@ -31,7 +33,7 @@ namespace StockApp.Presentation.Behaviors;
 /// </summary>
 public static class ColumnaAuto
 {
-    /// <summary>Tope por defecto de una columna medida: más que esto se corta con elipsis.</summary>
+    /// <summary>Tope por defecto de una columna medida: más que esto se corta con elipsis aunque haya lugar.</summary>
     public const double TopePorDefecto = 240;
 
     /// <summary>Lugar para la flecha de orden del header v2: margen 8 + glifo 12 (Themes/V2/DataGridV2.axaml).</summary>
@@ -113,14 +115,18 @@ public static class ColumnaAuto
         };
     }
 
+    /// <summary>Lo que mide una columna: el ancho que pide (contenido o título, acotado por el tope) y el mínimo al que
+    /// puede ceder si no hay lugar (el título con la reserva de la flecha: más angosta, el header se corta).</summary>
+    internal readonly record struct Medida(double Ancho, double Piso);
+
     /// <summary>
-    /// Ancho de la columna para las filas que devuelve <paramref name="items"/>, o null si todavía no se puede medir.
+    /// Medida de la columna para las filas que devuelve <paramref name="items"/>, o null si todavía no se puede medir.
     /// <paramref name="nuncaMedible"/> distingue el porqué: true si con esta configuración no se va a poder medir
     /// nunca (Header vacío o no textual, Header repetido entre las columnas visibles, plantilla sin TextBlock
     /// visible); false si falta que la grilla realice el header o una celda de esa columna (primera pasada, grilla de
     /// alto 0). Las filas se piden recién cuando hay con qué medirlas.
     /// </summary>
-    internal static double? Medir(DataGrid grid, DataGridColumn columna, Func<IReadOnlyList<object>> items, out bool nuncaMedible)
+    internal static Medida? Medir(DataGrid grid, DataGridColumn columna, Func<IReadOnlyList<object>> items, out bool nuncaMedible)
     {
         // Con el Header repetido no hay cómo saber cuál de los headers (y la celda debajo) es el de esta columna:
         // se mediría con la tipografía y el padding de la otra.
@@ -163,8 +169,8 @@ public static class ColumnaAuto
         var titulo = sondaHeader.DesiredSize.Width + header.Padding.Left + header.Padding.Right + ReservaOrden;
 
         var minimo = columna.MinWidth > 0 ? columna.MinWidth : grid.MinColumnWidth;
-        var ancho = Math.Min(GetTope(columna), Math.Ceiling(Math.Max(contenido, titulo)));
-        return Math.Max(minimo, ancho);
+        var ancho = Math.Max(minimo, Math.Min(GetTope(columna), Math.Ceiling(Math.Max(contenido, titulo))));
+        return new Medida(ancho, Math.Min(ancho, Math.Max(minimo, Math.Ceiling(titulo))));
     }
 
     /// <summary>La primera celda realizada que está debajo del centro del header (DataGridCell.OwningColumn es interno).</summary>

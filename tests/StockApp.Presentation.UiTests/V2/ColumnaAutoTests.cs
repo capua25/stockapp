@@ -481,7 +481,9 @@ public class ColumnaAutoTests
         var header = Header(m.Grilla, "UNIDAD");
         Assert.True(header.TranslatePoint(default, m.Grilla)!.Value.X > m.Grilla.Bounds.Width, "precondición: UNIDAD está fuera de la vista");
         Assert.True(m.Unidad.Width.IsAbsolute, $"UNIDAD no se midió: {m.Unidad.Width.UnitType}");
-        Assert.Equal(Math.Ceiling(AnchoConLaTipografiaDe(CeldaBajoHeader(m.Grilla, items[0], "UNIDAD"), largo) + 16), m.Unidad.Width.Value, 1);
+        // Lo que midió, no lo que ocupa: con las fijas desbordando la grilla, la columna cede hasta su título.
+        Assert.Equal(Math.Ceiling(AnchoConLaTipografiaDe(CeldaBajoHeader(m.Grilla, items[0], "UNIDAD"), largo) + 16),
+            DataGridColumnasAutoBehavior.AnchoMedido(m.Grilla, m.Unidad)!.Value, 1);
     }
 
     [AvaloniaFact]
