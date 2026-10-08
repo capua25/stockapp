@@ -408,6 +408,24 @@
         </Style>
     </ControlTheme>
 
+    <!-- Indicador de carga (espejo: .v2-cargando en base.css). UseLayoutRounding False en el tema: el texto va
+         centrado y su ancho es fraccionario; Avalonia redondea el origen y Chromium no (mismo caso que
+         EstadoVacio, que lo lleva por instancia porque en el catálogo de componentes movía su línea base). -->
+    <ControlTheme x:Key="{x:Type v2:EstadoCargando}" TargetType="v2:EstadoCargando">
+        <Setter Property="UseLayoutRounding" Value="False" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <TextBlock x:Name="PART_Texto"
+                           Text="{TemplateBinding Texto}"
+                           HorizontalAlignment="Center"
+                           Margin="0,32"
+                           FontSize="{DynamicResource V2FuenteControlTamano}"
+                           LineHeight="{DynamicResource V2FuenteControlAltoLinea}"
+                           Foreground="{DynamicResource V2TextoSecundarioBrush}" />
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+
     <!-- Fila clickeable de un panel (Inicio, "Tareas que requieren atención"). Espejo CSS: .v2-fila-panel.
          Separador de grilla arriba, padding vertical 8. Plantilla propia y fondo en una parte: el estilo global
          de Button (Themes/Controls.axaml) setea Background, Padding y :pointerover sobre el control, que esta
