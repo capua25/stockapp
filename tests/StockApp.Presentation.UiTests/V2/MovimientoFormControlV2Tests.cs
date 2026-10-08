@@ -5,12 +5,14 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
+using Avalonia.Controls.Presenters;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using StockApp.ApiClient;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Enums;
@@ -73,7 +75,7 @@ public class MovimientoFormControlV2Tests
     private sealed record Montaje(Window Ventana, UserControl Vista, MovimientoRegistroViewModelBase Vm,
         MovimientosGuionado Servicio, NavigationRecorderFake Navegacion, ConfirmacionGuionada Confirmacion);
 
-    private static Montaje Montar(bool salida = false, ConfirmacionGuionada? confirmacion = null)
+    private static Montaje Montar(bool salida = false, ConfirmacionGuionada? confirmacion = null, double ancho = 1040, double alto = 760)
     {
         var servicio = new MovimientosGuionado();
         var navegacion = new NavigationRecorderFake();
@@ -94,7 +96,7 @@ public class MovimientoFormControlV2Tests
             vista = new EntradaRegistroView { DataContext = e };
         }
 
-        var ventana = new Window { Width = 1040, Height = 760, Content = vista };
+        var ventana = new Window { Width = ancho, Height = alto, Content = vista };
         ventana.Show();
         Dispatcher.UIThread.RunJobs();
         Dispatcher.UIThread.RunJobs(); // deja completar el await InicializarAsync() del DataContextChanged
@@ -208,10 +210,12 @@ public class MovimientoFormControlV2Tests
         Assert.Equal(new string?[] { "Producto", "Cantidad" }, Requeridos(Montar(salida: true)));
     }
 
-    [AvaloniaFact]
-    public void Pie_RegistrarEsElUnicoPrimarioYQuedaALaDerecha()
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Pie_RegistrarEsElUnicoPrimarioYQuedaALaDerecha(bool salida)
     {
-        var m = Montar();
+        var m = Montar(salida);
         var registrar = MontajeV2.Parte<Button>(m.Vista, "BotonRegistrar");
         var tarjeta = EnVentana(m.Ventana, MontajeV2.Parte<TarjetaContenido>(m.Vista, "Tarjeta"));
 
@@ -340,5 +344,49 @@ public class MovimientoFormControlV2Tests
 
         Assert.NotNull(rasgos);
         Assert.Contains(rasgos!, f => f.Tag == "calt" && f.Value == 0);
+    }
+
+    [AvaloniaFact]
+    public void Comentario_Largo_EnvuelveDentroDeLaCajaYNoSeSaleDelAncho()
+    {
+        var m = Montar();
+        m.Vm.Comentario = string.Concat(Enumerable.Repeat("Remito 0042-00001234 entregado por el proveedor en la barraca. ", 4));
+        Dispatcher.UIThread.RunJobs();
+        var caja = MontajeV2.Parte<CampoFormulario>(m.Vista, "CampoComentario").GetVisualDescendants().OfType<TextBox>().First();
+        var presentador = caja.GetVisualDescendants().OfType<TextPresenter>().First();
+
+        Assert.True(presentador.Bounds.Width <= caja.Bounds.Width,
+            $"El texto no envolvió: el presentador mide {presentador.Bounds.Width} px en una caja de {caja.Bounds.Width} px.");
+        Assert.True(presentador.Bounds.Height >= 32, $"El texto ocupa una sola línea: alto {presentador.Bounds.Height}.");
+    }
+
+    [AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Cantidad_AlEntrarMuestraCeroYNoElPlaceholder(bool salida)
+    {
+        var m = Montar(salida);
+        var caja = MontajeV2.Parte<CampoFormulario>(m.Vista, "CampoCantidad").GetVisualDescendants().OfType<TextBox>().First();
+
+        Assert.Equal("0", caja.Text);
+        Assert.Equal("Ingresá la cantidad", caja.PlaceholderText); // sigue ahí, pero el "0" lo tapa (D8)
+    }
+
+    /// <summary>Estado más alto de la entrada (Compra con precio, comentario y la alerta de error de dos líneas) dentro del área del shell.</summary>
+    [AvaloniaTheory]
+    [InlineData(1040, 760)]
+    [InlineData(1126, 768)]
+    public void EntradaConErrorYPrecio_NoNecesitaScroll(double ancho, double alto)
+    {
+        var m = Montar(ancho: ancho, alto: alto);
+        Completar(m, "Cemento portland 50 kg", 40m, MotivoMovimiento.Compra, precio: 480m);
+        m.Vm.Comentario = "Remito 0042-00001234";
+        m.Vm.MensajeError = ServidorNoDisponibleException.MensajePorDefecto;
+        Dispatcher.UIThread.RunJobs();
+
+        var desplazamiento = MontajeV2.Parte<ScrollViewer>(m.Vista, "Desplazamiento");
+        Assert.True(ArbolVisual.EsVisibleEnArbol(MontajeV2.Parte<Alerta>(m.Vista, "AlertaError")));
+        Assert.True(desplazamiento.Extent.Height <= desplazamiento.Viewport.Height,
+            $"Registrar entrada necesita scroll: contenido {desplazamiento.Extent.Height} px en {desplazamiento.Viewport.Height} px");
     }
 }
