@@ -346,6 +346,8 @@ public class ColumnaAutoTopeAdaptableTests
         Assert.True(grilla.Columns.Sum(c => c.ActualWidth) <= AnchoInterno(grilla) + 0.5, $"No entra: {Describir(grilla)}");
         Assert.False(HayScrollHorizontal(grilla), $"Hay scroll horizontal: {Describir(grilla)}");
     }
+    // Pin de comportamiento: expresa la intencion de la regla defensiva (sin columnas proporcionales solo se asignan las medidas).
+    // Ninguna mutacion de esa regla lo pone en rojo; no custodia, documenta.
     [AvaloniaFact]
     public void SinColumnasProporcionales_LasAutoQueNoSeMidenSiguenCreciendoSolasAlScrollear()
     {
@@ -380,6 +382,8 @@ public class ColumnaAutoTopeAdaptableTests
         Assert.True(grilla.Columns.Sum(c => c.ActualWidth) <= AnchoInterno(grilla) + 0.5, $"No entra: {Describir(grilla)}");
     }
 
+    // Pin de comportamiento: expresa la intencion de la clausula Width.Value del equilibrio.
+    // Ninguna mutacion de esa regla lo pone en rojo; no custodia, documenta.
     [AvaloniaFact]
     public void RecargaConUnaUnidadMasLarga_NingunaPasadaDeLayoutDesborda()
     {
