@@ -65,7 +65,7 @@
                 </v2:EstadoCargando>
 
                 <!-- UseLayoutRounding False: el estado vacío va centrado y el ancho del título es fraccionario;
-                     Avalonia redondea su origen a píxel entero y Chromium no (16 teselas densas contra 11,
+                     Avalonia redondea su origen a píxel entero y Chromium no (sin el arreglo: 16 teselas densas a 1280 y 14 a 1366, contra un máximo de 11; con él, 5,
                      con 1 px de corrimiento en las letras). Mismo caso y mismo arreglo que el enlace de
                      BloqueoLicenciaView. Va por instancia, como en EstadoSinPermiso y en el formulario. -->
                 <v2:EstadoVacio x:Name="EstadoSinProductos"

@@ -452,6 +452,37 @@ public class ProductoListViewV2Tests
     }
 
     [AvaloniaFact]
+    public void Scroll_MasDeMilFilas_ConUnCodigoQueNoEntra_NoSaltaYElCorteEsElAdmitido()
+    {
+        // Núcleo de U2: el código más largo está en la ÚLTIMA fila, fuera de pantalla, y no entra junto con COSTO y
+        // UNIDAD en el espacio libre (1040): CÓDIGO cede. La columna ya nació con ese ancho (medida sobre todas las
+        // filas) y no se mueve al llegar a la fila; ahí el corte es el admitido: elipsis y tooltip con el código entero.
+        var productos = Enumerable.Range(1, 1199).Select(i => P(i, $"Producto {i}", i)).ToList();
+        productos.Add(new ProductoDto(1200, "MAT-CONSTRUCCION-0001", null, "Último", null, 1, "Construcción", null, 1,
+            "Metro cúbico", 98765432.10m, 3m, 0m, true, new DateTime(2026, 3, 2, 12, 0, 0, DateTimeKind.Utc)));
+        var m = Montar(productos.ToArray());
+        var grilla = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla");
+        var antes = grilla.Columns.Select(c => c.ActualWidth).ToArray();
+        // La fila larga no está realizada y CÓDIGO ya cedió al espacio libre (116); medida solo sobre lo realizado
+        // ("C-001") quedaría en su mínimo y saltaría al llegar a la fila.
+        Assert.Equal(116, Columna(grilla, "CÓDIGO").ActualWidth, 1);
+
+        grilla.ScrollIntoView(productos[^1], null);
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Contains(grilla.GetVisualDescendants().OfType<DataGridRow>(), r => ReferenceEquals(r.DataContext, productos[^1]));
+        var despues = grilla.Columns.Select(c => c.ActualWidth).ToArray();
+        for (var i = 0; i < antes.Length; i++)
+            Assert.True(Math.Abs(antes[i] - despues[i]) <= 0.5,
+                $"La columna {grilla.Columns[i].Header} pasó de {antes[i]} a {despues[i]} al llegar a la fila 1200.");
+        var codigo = CeldaDe(grilla, productos[^1], "CÓDIGO");
+        Assert.True(TooltipSiSeCorta.EstaCortado(codigo));
+        Assert.False(TooltipSiSeCortaTests.SeCancela(codigo));
+        Assert.Equal("MAT-CONSTRUCCION-0001", ToolTip.GetTip(codigo));
+    }
+
+    [AvaloniaFact]
     public void Ordenar_PorCadaColumna_NoMueveAnchosNiCortaElTitulo()
     {
         var m = Montar(Activo, Negativo, Inactivo, InactivoNegativo);
