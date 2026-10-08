@@ -126,9 +126,22 @@ public static class DataGridColumnasAutoBehavior
         public NotifyCollectionChangedEventHandler? AlCambiarFuente;
         /// <summary>Último ancho medido por columna: el ancho medido solo crece mientras vive la grilla.</summary>
         public readonly Dictionary<DataGridColumn, double> AnchosMedidos = new();
+        /// <summary>Veces que se recorrió la fuente entera para medir (lo que cuesta O(filas)).</summary>
+        public int RecorridosDeLaFuente;
+        /// <summary>Pasadas seguidas con alguna columna marcada sin poder medirse, desde el último cambio de datos.</summary>
+        public int IntentosDeMedicion;
     }
 
     private static readonly ConditionalWeakTable<DataGrid, Estado> Estados = new();
+
+    /// <summary>Cuántas veces el behavior recorrió la fuente de <paramref name="grid"/> para medir sus columnas.</summary>
+    internal static int RecorridosDeLaFuente(DataGrid grid) => Estados.TryGetValue(grid, out var e) ? e.RecorridosDeLaFuente : 0;
+
+    /// <summary>
+    /// Pasadas de layout seguidas en las que una columna marcada puede quedar sin medir (sin header o celda
+    /// realizados) antes de dejar de reintentar hasta el próximo cambio de datos.
+    /// </summary>
+    internal const int MaxIntentosDeMedicion = 8;
 
     static DataGridColumnasAutoBehavior()
     {
@@ -194,9 +207,10 @@ public static class DataGridColumnasAutoBehavior
     // ── Columnas que miden su contenido (ColumnaAuto) ─────────────────────────────────────────
 
     /// <summary>
-    /// Escucha la fuente actual: cualquier cambio (carga, Clear y Add de a uno, filtro u orden de un
-    /// DataGridCollectionView, que re-emite los de su fuente) deja la medición pendiente. Los Clear y Add de
-    /// una carga se coalescen solos: se mide una vez, en la pasada de layout siguiente.
+    /// Escucha la colección que se mide (<see cref="ColumnaAuto.Fuente"/>): de un DataGridCollectionView, su
+    /// SourceCollection y no la vista, que re-emite como Reset cada orden y cada filtro aunque las filas medidas
+    /// sean las mismas. Una carga, un Clear o un Add dejan la medición pendiente; los Clear y Add de una carga se
+    /// coalescen solos: se mide una vez, en la pasada de layout siguiente.
     /// </summary>
     private static void ObservarFuente(DataGrid grid)
     {
@@ -204,43 +218,64 @@ public static class DataGridColumnasAutoBehavior
             return;
         if (estado.Fuente is not null && estado.AlCambiarFuente is not null)
             estado.Fuente.CollectionChanged -= estado.AlCambiarFuente;
-        estado.AlCambiarFuente ??= (_, _) =>
-        {
-            estado.MedicionPendiente = true;
-            grid.InvalidateMeasure();
-        };
-        estado.Fuente = grid.ItemsSource as INotifyCollectionChanged;
+        estado.AlCambiarFuente ??= (_, _) => PedirMedicion(grid, estado);
+        estado.Fuente = ColumnaAuto.Fuente(grid.ItemsSource) as INotifyCollectionChanged;
         if (estado.Fuente is not null)
             estado.Fuente.CollectionChanged += estado.AlCambiarFuente;
+        PedirMedicion(grid, estado);
+    }
+
+    private static void PedirMedicion(DataGrid grid, Estado estado)
+    {
         estado.MedicionPendiente = true;
+        estado.IntentosDeMedicion = 0;
         grid.InvalidateMeasure();
     }
 
     /// <summary>
-    /// Fija en píxeles el ancho de cada columna marcada con ColumnaAuto.Medir. Grilla vacía: no se toca nada.
-    /// Sin header o celda realizados todavía: queda pendiente para la pasada siguiente. Con ancho en píxeles,
-    /// el reparto de abajo la trata como una columna fija.
+    /// Fija en píxeles el ancho de cada columna Auto marcada con ColumnaAuto.Medir (una fija o * marcada conserva
+    /// su ancho; las ya medidas quedaron en píxeles). Grilla vacía: no se toca nada. Una columna sin header o
+    /// celda medibles no frena a las demás y se reintenta en las pasadas siguientes, hasta
+    /// <see cref="MaxIntentosDeMedicion"/>: si nunca se puede medir (Header vacío o repetido, plantilla sin
+    /// TextBlock) la fuente no se vuelve a recorrer en cada layout. Con ancho en píxeles, el reparto de abajo la
+    /// trata como una columna fija.
     /// </summary>
     private static void MedirColumnas(DataGrid grid, Estado estado)
     {
-        var marcadas = grid.Columns.Where(c => c.IsVisible && ColumnaAuto.GetMedir(c)).ToList();
-        var items = marcadas.Count == 0 ? [] : ColumnaAuto.Items(grid.ItemsSource);
-        if (items.Count == 0)
+        var marcadas = grid.Columns
+            .Where(c => c.IsVisible && ColumnaAuto.GetMedir(c) && (c.Width.IsAuto || estado.AnchosMedidos.ContainsKey(c)))
+            .ToList();
+        if (marcadas.Count == 0 || !ColumnaAuto.HayFilas(grid.ItemsSource))
         {
             estado.MedicionPendiente = false;
             return;
         }
 
+        IReadOnlyList<object>? items = null;
+        IReadOnlyList<object> Filas()
+        {
+            if (items is null)
+            {
+                estado.RecorridosDeLaFuente++;
+                items = ColumnaAuto.Items(grid.ItemsSource);
+            }
+            return items;
+        }
+
         var anchos = new Dictionary<DataGridColumn, double>();
+        var faltan = false;
         foreach (var c in marcadas)
         {
-            var ancho = ColumnaAuto.Medir(grid, c, items);
+            var ancho = ColumnaAuto.Medir(grid, c, Filas);
             if (ancho is null)
-                return;
+            {
+                faltan = true;
+                continue;
+            }
             anchos[c] = Math.Max(ancho.Value, estado.AnchosMedidos.GetValueOrDefault(c));
         }
 
-        estado.MedicionPendiente = false;
+        estado.MedicionPendiente = faltan && ++estado.IntentosDeMedicion < MaxIntentosDeMedicion;
         estado.Reparando = true;
         try
         {

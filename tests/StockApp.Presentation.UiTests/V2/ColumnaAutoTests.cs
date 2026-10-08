@@ -51,7 +51,7 @@ public class ColumnaAutoTests
     };
 
     /// <summary>Grilla de 300 de alto (virtualiza: ~6 filas realizadas) dentro de un scope .ui2, con una columna * como Productos.</summary>
-    private static Montaje Montar(IEnumerable<ProductoDto> items, double ancho = 1000)
+    private static Montaje Montar(IEnumerable<ProductoDto> items, double ancho = 1000, Action<DataGrid>? configurar = null)
     {
         var codigo = ColumnaDeTexto("CÓDIGO", "Codigo");
         ColumnaAuto.SetMedir(codigo, true);
@@ -69,6 +69,7 @@ public class ColumnaAutoTests
         foreach (var c in new DataGridColumn[] { codigo, nombre, costo, unidad, sinMedir })
             grilla.Columns.Add(c);
         grilla.ItemsSource = new DataGridCollectionView(new ObservableCollection<ProductoDto>(items));
+        configurar?.Invoke(grilla);
 
         var ventana = new Window { Width = ancho, Height = 400, Content = new UserControl { Classes = { "ui2" }, Content = grilla } };
         ventana.Show();
@@ -110,6 +111,16 @@ public class ColumnaAutoTests
                 return x0 <= centro && centro <= x0 + c.Bounds.Width;
             });
         return celda.GetVisualDescendants().OfType<TextBlock>().First();
+    }
+
+    private static void ClickEnHeader(Montaje m, string titulo)
+    {
+        var header = Header(m.Grilla, titulo);
+        var centro = header.TranslatePoint(new Point(header.Bounds.Width / 2, header.Bounds.Height / 2), m.Ventana)!.Value;
+        m.Ventana.MouseDown(centro, MouseButton.Left);
+        m.Ventana.MouseUp(centro, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
     }
 
     private static double[] Anchos(DataGrid grilla) => grilla.Columns.Select(c => c.ActualWidth).ToArray();
@@ -263,6 +274,10 @@ public class ColumnaAutoTests
 
         Recargar(m, [P(2, "C2", 1m)]);
 
+        // El ActualWidth solo no alcanza: la DataGrid ya lo acota a su MinWidth aunque el ancho asignado sea menor.
+        // Se mira el Width en píxeles que fijó la medición.
+        Assert.True(m.Costo.Width.IsAbsolute, $"COSTO no se midió: {m.Costo.Width.UnitType}");
+        Assert.True(m.Costo.Width.Value >= 150, $"La medición le asignó {m.Costo.Width.Value:F1} con MinWidth 150");
         Assert.True(m.Costo.ActualWidth >= 150 - 0.5, $"COSTO mide {m.Costo.ActualWidth:F1}");
     }
 
@@ -286,5 +301,79 @@ public class ColumnaAutoTests
         var con = Cargar(true, items);
 
         Assert.True(con <= sin * 1.5 + 400, $"5000 filas: con medición {con} ms vs sin {sin} ms");
+    }
+
+    [AvaloniaFact]
+    public void OrdenarYFiltrar_NoVuelvenARecorrerLaFuente_YAgregarAEllaSi()
+    {
+        var m = Montar(Enumerable.Range(1, 50).Select(i => P(i, $"C-{i}")));
+        var vista = (DataGridCollectionView)m.Grilla.ItemsSource!;
+        var antes = DataGridColumnasAutoBehavior.RecorridosDeLaFuente(m.Grilla);
+        Assert.True(antes > 0, "precondición: la carga inicial se midió");
+
+        ClickEnHeader(m, "CÓDIGO");
+        Assert.Single(vista.SortDescriptions);
+        Assert.Equal(antes, DataGridColumnasAutoBehavior.RecorridosDeLaFuente(m.Grilla));
+
+        vista.Filter = o => ((ProductoDto)o).Id % 2 == 0;
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(25, vista.Count);
+        Assert.Equal(antes, DataGridColumnasAutoBehavior.RecorridosDeLaFuente(m.Grilla));
+
+        // Fila nueva que el filtro oculta: igual se mide, porque se mide la fuente entera.
+        var ancho = m.Codigo.ActualWidth;
+        Fuente(m).Add(P(51, "MAT-CONSTRUCCION-REFORZADA-0051"));
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(DataGridColumnasAutoBehavior.RecorridosDeLaFuente(m.Grilla) > antes, "Agregar a la fuente no volvió a medir.");
+        Assert.True(m.Codigo.ActualWidth > ancho + 10, $"No creció: {ancho:F1} -> {m.Codigo.ActualWidth:F1}");
+    }
+
+    [AvaloniaFact]
+    public void ColumnaMarcadaConAnchoFijoOEstrella_ConservaSuAncho()
+    {
+        var m = Montar(Enumerable.Range(1, 10).Select(i => P(i, $"MAT-CONSTRUCCION-{i:0000}")), configurar: g =>
+        {
+            var categoria = g.Columns.Single(c => Equals(c.Header, "CATEGORÍA"));
+            categoria.Width = new DataGridLength(50);
+            ColumnaAuto.SetMedir(categoria, true);
+            ColumnaAuto.SetMedir(g.Columns.Single(c => Equals(c.Header, "NOMBRE")), true);
+        });
+        var nombre = m.Grilla.Columns.Single(c => Equals(c.Header, "NOMBRE"));
+
+        Assert.True(m.Codigo.Width.IsAbsolute, "precondición: las Auto marcadas se midieron");
+        Assert.True(m.SinMedir.Width.IsAbsolute && m.SinMedir.Width.Value == 50,
+            $"CATEGORÍA fija en 50 quedó en {m.SinMedir.Width.Value:F1} {m.SinMedir.Width.UnitType}");
+        Assert.Equal(50, m.SinMedir.ActualWidth, 1);
+        Assert.True(nombre.Width.IsStar, $"NOMBRE dejó de ser *: {nombre.Width}");
+    }
+
+    [AvaloniaFact]
+    public void ColumnaMarcadaQueNoSePuedeMedir_NoQuedaPendienteNiFrenaALasSiguientes()
+    {
+        // Header vacío: no hay título del que copiar la tipografía, así que esa columna nunca se puede medir.
+        var m = Montar(Enumerable.Range(1, 30).Select(i => P(i, $"MAT-{i:0000}")), configurar: g =>
+        {
+            var sinTitulo = ColumnaDeTexto("", "CategoriaNombre");
+            ColumnaAuto.SetMedir(sinTitulo, true);
+            g.Columns.Insert(0, sinTitulo);
+        });
+
+        Assert.True(m.Codigo.Width.IsAbsolute, "CÓDIGO, a la derecha de la que no se puede medir, quedó sin medir.");
+
+        void Pasadas()
+        {
+            for (var pasada = 0; pasada < 2 * DataGridColumnasAutoBehavior.MaxIntentosDeMedicion; pasada++)
+            {
+                m.Grilla.InvalidateMeasure();
+                Dispatcher.UIThread.RunJobs();
+            }
+        }
+        Pasadas();
+        var recorridos = DataGridColumnasAutoBehavior.RecorridosDeLaFuente(m.Grilla);
+        Assert.InRange(recorridos, 1, DataGridColumnasAutoBehavior.MaxIntentosDeMedicion);
+        Pasadas();
+        Assert.Equal(recorridos, DataGridColumnasAutoBehavior.RecorridosDeLaFuente(m.Grilla));
     }
 }

@@ -58,10 +58,19 @@ public static class ColumnaAuto
     public static double GetTope(DataGridColumn c) => c.GetValue(TopeProperty);
     public static void SetTope(DataGridColumn c, double v) => c.SetValue(TopeProperty, v);
 
+    /// <summary>La colección que se mide: la SourceCollection de un DataGridCollectionView (sin su filtro ni su
+    /// orden), o la fuente tal cual.</summary>
+    internal static IEnumerable? Fuente(IEnumerable? itemsSource) =>
+        itemsSource is DataGridCollectionView vista ? vista.SourceCollection : itemsSource;
+
+    /// <summary>Si la fuente tiene alguna fila, sin recorrerla entera.</summary>
+    internal static bool HayFilas(IEnumerable? itemsSource) =>
+        Fuente(itemsSource)?.Cast<object?>().Any(o => o is not null) == true;
+
     /// <summary>Todas las filas de la fuente, sin el filtro de un DataGridCollectionView.</summary>
-    internal static IReadOnlyList<object> Items(IEnumerable? fuente)
+    internal static IReadOnlyList<object> Items(IEnumerable? itemsSource)
     {
-        var todas = fuente is DataGridCollectionView vista ? vista.SourceCollection : fuente;
+        var todas = Fuente(itemsSource);
         return todas is null ? [] : todas.Cast<object?>().Where(o => o is not null).Select(o => o!).ToList();
     }
 
@@ -105,10 +114,11 @@ public static class ColumnaAuto
     }
 
     /// <summary>
-    /// Ancho de la columna para estas filas, o null si todavía no hay un header y una celda realizados de esa
-    /// columna de donde copiar la tipografía (grilla oculta o primera pasada): se reintenta en la siguiente.
+    /// Ancho de la columna para las filas que devuelve <paramref name="items"/>, o null si no hay un header con
+    /// título y una celda realizados de esa columna de donde copiar la tipografía (primera pasada, Header vacío o
+    /// repetido, plantilla sin TextBlock). Las filas se piden recién cuando hay con qué medirlas.
     /// </summary>
-    internal static double? Medir(DataGrid grid, DataGridColumn columna, IReadOnlyList<object> items)
+    internal static double? Medir(DataGrid grid, DataGridColumn columna, Func<IReadOnlyList<object>> items)
     {
         var header = grid.GetVisualDescendants().OfType<DataGridColumnHeader>()
             .FirstOrDefault(h => h.IsEffectivelyVisible && h.Bounds.Width > 0 && Equals(h.Content, columna.Header));
@@ -122,7 +132,7 @@ public static class ColumnaAuto
         var texto = Evaluador(columna);
         var vistos = new HashSet<string>(StringComparer.Ordinal);
         var maximo = 0.0;
-        foreach (var item in items)
+        foreach (var item in items())
         {
             var t = texto(item);
             if (!vistos.Add(t))
