@@ -87,6 +87,7 @@ public static class DatosProductos
     public static ProductoListViewModel ListadoQueNoTermina()
     {
         var servicio = new Mock<IProductoService>();
+        // Nunca se completa, a propósito: el estado "cargando" queda congelado para la comparación con el mockup.
         servicio.Setup(s => s.BuscarAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
             .Returns(new TaskCompletionSource<IReadOnlyList<ProductoDto>>().Task);
         return new ProductoListViewModel(servicio.Object, Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>());

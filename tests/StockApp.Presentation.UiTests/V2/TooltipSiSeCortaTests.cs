@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
-using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
 using StockApp.Presentation.Behaviors;
@@ -22,12 +21,19 @@ public class TooltipSiSeCortaTests
         return tb;
     }
 
-    /// <summary>Dispara la apertura del tooltip de <paramref name="tb"/> y devuelve si algún manejador la canceló.</summary>
+    /// <summary>
+    /// Abre el tooltip de <paramref name="tb"/> por el camino de Avalonia (ToolTip.IsOpen, el mismo que usa el
+    /// ToolTipService al hacer hover: levanta ToolTipOpeningEvent y, si un manejador lo cancela, lo vuelve a
+    /// cerrar) y devuelve si quedó cerrado. Lo deja cerrado al terminar.
+    /// </summary>
     internal static bool SeCancela(TextBlock tb)
     {
-        var e = new CancelRoutedEventArgs(ToolTip.ToolTipOpeningEvent, tb);
-        tb.RaiseEvent(e);
-        return e.Cancel;
+        ToolTip.SetIsOpen(tb, true);
+        Dispatcher.UIThread.RunJobs();
+        var abierto = ToolTip.GetIsOpen(tb);
+        ToolTip.SetIsOpen(tb, false);
+        Dispatcher.UIThread.RunJobs();
+        return !abierto;
     }
 
     [AvaloniaFact]
