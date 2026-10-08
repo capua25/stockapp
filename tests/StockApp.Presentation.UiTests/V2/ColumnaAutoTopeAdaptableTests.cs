@@ -217,6 +217,8 @@ public class ColumnaAutoTopeAdaptableTests
             Assert.True(unidad.ActualWidth >= anterior - 0.5, $"A {ancho} UNIDAD bajó de {anterior:F1} a {unidad.ActualWidth:F1}.");
             Assert.True(unidad.ActualWidth <= ColumnaAuto.TopePorDefecto + 0.5, $"A {ancho} UNIDAD pasó el tope: {unidad.ActualWidth:F1}.");
             Assert.True(m.Grilla.Columns.Sum(c => c.ActualWidth) <= AnchoInterno(m.Grilla) + 0.5, $"A {ancho} no entra: {Describir(m.Grilla)}");
+            // El reparto termina en equilibrio, no porque la guarda anti-loop se rindió.
+            Assert.Equal(0, DataGridColumnasAutoBehavior.ReparacionesSeguidas(m.Grilla));
             anterior = unidad.ActualWidth;
         }
         Assert.Equal(ColumnaAuto.TopePorDefecto, unidad.ActualWidth, 1);
@@ -256,6 +258,7 @@ public class ColumnaAutoTopeAdaptableTests
         ((DataGridCollectionView)m.Grilla.ItemsSource!).Filter = o => ((ProductoDto)o).Id % 2 == 0;
         Pasadas();
         Assert.False(HayScrollHorizontal(m.Grilla), $"Al filtrar apareció scroll horizontal: {Describir(m.Grilla)}");
+        Assert.Equal(antes, Anchos(m.Grilla));
     }
 
     [AvaloniaTheory]
@@ -342,5 +345,89 @@ public class ColumnaAutoTopeAdaptableTests
         Assert.True(unidad.ActualWidth < ColumnaAuto.TopePorDefecto, $"UNIDAD no cedió: {Describir(grilla)}");
         Assert.True(grilla.Columns.Sum(c => c.ActualWidth) <= AnchoInterno(grilla) + 0.5, $"No entra: {Describir(grilla)}");
         Assert.False(HayScrollHorizontal(grilla), $"Hay scroll horizontal: {Describir(grilla)}");
+    }
+    [AvaloniaFact]
+    public void SinColumnasProporcionales_LasAutoQueNoSeMidenSiguenCreciendoSolasAlScrollear()
+    {
+        // Sin *, el reparto solo toca las medidas: una Auto sin medir crece como siempre cuando aparece una fila
+        // más ancha al scrollear, y la medida le cede el lugar.
+        var codigo = Columna("CÓDIGO", DataGridLength.Auto, "Codigo");
+        ColumnaAuto.SetMedir(codigo, true);
+        var unidad = Columna("UNIDAD", DataGridLength.Auto, "UnidadMedidaNombre");
+        ColumnaAuto.SetMedir(unidad, true);
+        var categoria = Columna("CATEGORÍA", DataGridLength.Auto, "CategoriaNombre");
+        var items = ConCeldaCortada();
+        items.AddRange(Enumerable.Range(100, 200).Select(i => P(i, $"MAT-{i:0000}", $"Producto {i}", 10m, i, "Unidad", "Pintura")));
+        var ancha = P(999, "MAT-0999", "Último", 10m, 1, "Unidad", "Construcción y mantenimiento");
+        items.Add(ancha);
+        var grilla = new DataGrid { IsReadOnly = true, CanUserResizeColumns = true, Height = 300 };
+        grilla.Columns.Add(codigo);
+        grilla.Columns.Add(new DataGridTextColumn { Header = "STOCK", Width = new DataGridLength(220), Binding = new Binding("StockActual") });
+        grilla.Columns.Add(unidad);
+        grilla.Columns.Add(categoria);
+        grilla.ItemsSource = new DataGridCollectionView(new ObservableCollection<ProductoDto>(items));
+        var ventana = new Window { Width = 700, Height = 400, Content = new UserControl { Classes = { "ui2" }, Content = grilla } };
+        ventana.Show();
+        Pasadas();
+        var antes = categoria.ActualWidth;
+
+        grilla.ScrollIntoView(ancha, null);
+        Pasadas();
+        TestContext.Current.TestOutputHelper?.WriteLine($"antes CATEGORÍA={antes:F1}; después {Describir(grilla)} reparaciones={DataGridColumnasAutoBehavior.ReparacionesSeguidas(grilla)}");
+
+        Assert.True(categoria.ActualWidth > antes + 10, $"CATEGORÍA no creció: {antes:F1} -> {Describir(grilla)}");
+        Assert.True(categoria.Width.IsAuto, $"CATEGORÍA dejó de ser Auto: {categoria.Width}");
+        Assert.True(grilla.Columns.Sum(c => c.ActualWidth) <= AnchoInterno(grilla) + 0.5, $"No entra: {Describir(grilla)}");
+    }
+
+    [AvaloniaFact]
+    public void RecargaConUnaUnidadMasLarga_NingunaPasadaDeLayoutDesborda()
+    {
+        // La medición nueva asigna el ancho medido en píxeles y en la misma pasada el reparto lo vuelve a ceder: la
+        // grilla no llega a medirse nunca con la columna en su ancho medido.
+        var items = ConCeldaCortada();
+        var m = Montar(items, Grilla1280);
+        var maximo = 0.0;
+        void AlActualizar(object? s, EventArgs e) => maximo = Math.Max(maximo, m.Grilla.Columns.Sum(c => c.ActualWidth) - AnchoInterno(m.Grilla));
+        m.Grilla.LayoutUpdated += AlActualizar;
+
+        var fuente = (ObservableCollection<ProductoDto>)((DataGridCollectionView)m.Grilla.ItemsSource!).SourceCollection;
+        fuente.Add(P(50, "MAT-0050", "Ripio", 10m, 1, UnidadLarga + " y descarga", "Construcción"));
+        Pasadas();
+        m.Grilla.LayoutUpdated -= AlActualizar;
+
+        Assert.True(maximo <= 0.5, $"Una pasada desbordó {maximo:F1} px: {Describir(m.Grilla)}");
+        Assert.Equal(0, DataGridColumnasAutoBehavior.ReparacionesSeguidas(m.Grilla));
+    }
+    [AvaloniaFact]
+    public void UsuarioArrastraUnaColumnaQueCedio_NiRecargarNiCambiarElAnchoLaPisan()
+    {
+        var m = Montar(ConCeldaCortada(), Grilla1366);
+        var unidad = Col(m.Grilla, "UNIDAD");
+        Assert.Equal(231, unidad.ActualWidth, 1);
+
+        // Achicarla 60 px arrastrando el separador derecho de su header.
+        var header = m.Grilla.GetVisualDescendants().OfType<DataGridColumnHeader>().Single(h => Equals(h.Content, "UNIDAD"));
+        var borde = header.TranslatePoint(new Point(header.Bounds.Width - 2, header.Bounds.Height / 2), m.Ventana)!.Value;
+        m.Ventana.MouseMove(borde);
+        m.Ventana.MouseDown(borde, MouseButton.Left);
+        for (var paso = 1; paso <= 5; paso++)
+        {
+            m.Ventana.MouseMove(borde - new Point(60 * paso / 5.0, 0), RawInputModifiers.LeftMouseButton);
+            Dispatcher.UIThread.RunJobs();
+        }
+        m.Ventana.MouseUp(borde - new Point(60, 0), MouseButton.Left);
+        Pasadas();
+        var arrastrado = unidad.ActualWidth;
+        Assert.True(arrastrado < 231 - 30, $"precondición: el arrastre la achicó ({Describir(m.Grilla)})");
+
+        var fuente = (ObservableCollection<ProductoDto>)((DataGridCollectionView)m.Grilla.ItemsSource!).SourceCollection;
+        fuente.Add(P(50, "MAT-0050", "Ripio", 10m, 1, UnidadLarga + " y descarga", "Construcción"));
+        Pasadas();
+        Assert.Equal(arrastrado, unidad.ActualWidth, 1);
+
+        m.Ventana.Width = Grilla1280;
+        Pasadas();
+        Assert.Equal(arrastrado, unidad.ActualWidth, 1);
     }
 }

@@ -484,6 +484,10 @@ public class ColumnaAutoTests
         // Lo que midió, no lo que ocupa: con las fijas desbordando la grilla, la columna cede hasta su título.
         Assert.Equal(Math.Ceiling(AnchoConLaTipografiaDe(CeldaBajoHeader(m.Grilla, items[0], "UNIDAD"), largo) + 16),
             DataGridColumnasAutoBehavior.AnchoMedido(m.Grilla, m.Unidad)!.Value, 1);
+        // Lo que ocupa: su título con la reserva de la flecha de orden.
+        var titulo = header.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "UNIDAD");
+        Assert.Equal(Math.Ceiling(AnchoNatural(titulo) + header.Padding.Left + header.Padding.Right + ColumnaAuto.ReservaOrden),
+            m.Unidad.ActualWidth, 1);
     }
 
     [AvaloniaFact]

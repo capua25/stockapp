@@ -157,6 +157,9 @@ public static class DataGridColumnasAutoBehavior
     /// <summary>Cuántas veces el behavior recorrió la fuente de <paramref name="grid"/> para medir sus columnas.</summary>
     internal static int RecorridosDeLaFuente(DataGrid grid) => Estados.TryGetValue(grid, out var e) ? e.RecorridosDeLaFuente : 0;
 
+    /// <summary>Reparaciones seguidas sin una pasada en equilibrio en el medio: 0 si la última pasada encontró el reparto en su lugar.</summary>
+    internal static int ReparacionesSeguidas(DataGrid grid) => Estados.TryGetValue(grid, out var e) ? e.ReparacionesSeguidas : 0;
+
     /// <summary>El ancho que midió <paramref name="columna"/> (lo que pide), aunque haya cedido por falta de lugar; null si no se midió.</summary>
     internal static double? AnchoMedido(DataGrid grid, DataGridColumn columna) =>
         Estados.TryGetValue(grid, out var e) && e.AnchosMedidos.TryGetValue(columna, out var ancho) ? ancho : null;
@@ -388,13 +391,19 @@ public static class DataGridColumnasAutoBehavior
     ///
     /// <para>Si una versión futura de DataGrid no expone <c>CellsWidth</c>, se vuelve a la
     /// aproximación anterior: la suma de columnas con las * como *, o el presentador de filas en
-    /// desborde (con el riesgo de oscilación acotado por la guarda anti-loop).</para>
+    /// desborde (con el riesgo de oscilación acotado por la guarda anti-loop). Sin columnas * esa
+    /// aproximación no sirve (la suma de columnas es lo que hay que comparar, no el lugar): se
+    /// devuelve null y en esa grilla las columnas medidas no ceden. No se avisa en ejecución: el
+    /// aviso es el test que exige <see cref="PuedeLeerCellsWidth"/>, que se pone rojo al actualizar
+    /// DataGrid antes de que lo note un usuario.</para>
     /// </summary>
     private static double? AnchoDisponible(DataGrid grid, Estado estado, List<DataGridColumn> visibles, List<DataGridColumn> estrellas)
     {
         if (PuedeLeerCellsWidth && CellsWidth!.GetValue(grid) is double cells)
             return cells > 0 && !double.IsInfinity(cells) ? cells : null;
 
+        if (estrellas.Count == 0)
+            return null;
         if (estrellas.All(c => c.Width.IsStar))
             return visibles.Sum(c => c.ActualWidth);
 
