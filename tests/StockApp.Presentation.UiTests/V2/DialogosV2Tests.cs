@@ -66,12 +66,14 @@ public class DialogosV2Tests
 
         Assert.Equal("No, continuar", negativo.Content);
         Assert.Equal("Sí, adjuntar factura", afirmativo.Content);
-        // Sin recorte: cada botón mide al menos lo que pide su texto y la fila entra en el ancho útil del diálogo.
+        // Sin recorte: el texto, medido SIN restricción, entra en el ancho que el botón le deja (Bounds ya viene acotado, no sirve).
         foreach (var b in new[] { negativo, afirmativo })
         {
             var texto = b.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == (string)b.Content!);
-            Assert.True(texto.Bounds.Width + b.Padding.Left + b.Padding.Right <= b.Bounds.Width + 0.5,
-                $"{b.Content}: el texto mide {texto.Bounds.Width} px en un botón de {b.Bounds.Width} px.");
+            texto.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            var util = b.Bounds.Width - b.Padding.Left - b.Padding.Right - b.BorderThickness.Left - b.BorderThickness.Right;
+            Assert.True(texto.DesiredSize.Width <= util + 0.5,
+                $"{b.Content}: el texto pide {texto.DesiredSize.Width} px y el botón le deja {util} px.");
         }
         var contenido = (Border)dialogo.Content!;
         foreach (var b in new[] { negativo, afirmativo })

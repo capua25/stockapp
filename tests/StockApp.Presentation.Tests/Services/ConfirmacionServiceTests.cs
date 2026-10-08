@@ -33,6 +33,16 @@ public class ConfirmacionServiceTests
     }
 
     [Fact]
+    public async Task ConfirmacionService_PreguntarAsync_ConTextosPropios_SinAppAvalonia_DevuelveFalse()
+    {
+        var svc = new ConfirmacionService();
+
+        var resultado = await svc.PreguntarAsync("¿Asociar factura?", "No, continuar", "Sí, adjuntar factura");
+
+        Assert.False(resultado);
+    }
+
+    [Fact]
     public async Task IConfirmacionService_InformarAsync_EsMockeable()
     {
         var mock = new Mock<IConfirmacionService>();

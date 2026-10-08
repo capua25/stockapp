@@ -56,10 +56,17 @@ public class MovimientoFormControlV2Tests
         private readonly Queue<bool> _respuestas;
         public ConfirmacionGuionada(params bool[] respuestas) => _respuestas = new Queue<bool>(respuestas);
         public List<string> Preguntas { get; } = new();
+        public List<(string Mensaje, string Negativo, string Afirmativo)> PreguntasConTextos { get; } = new();
 
         public Task<bool> PreguntarAsync(string mensaje)
         {
             Preguntas.Add(mensaje);
+            return Task.FromResult(_respuestas.Dequeue());
+        }
+
+        public Task<bool> PreguntarAsync(string mensaje, string textoNegativo, string textoAfirmativo)
+        {
+            PreguntasConTextos.Add((mensaje, textoNegativo, textoAfirmativo));
             return Task.FromResult(_respuestas.Dequeue());
         }
 
@@ -277,7 +284,9 @@ public class MovimientoFormControlV2Tests
 
         Clickear(m.Ventana, MontajeV2.Parte<Button>(m.Vista, "BotonRegistrar"));
 
-        Assert.Equal("Entrada registrada. ¿Desea asociar una factura de proveedor a esta entrada?", Assert.Single(m.Confirmacion.Preguntas));
+        Assert.Empty(m.Confirmacion.Preguntas);
+        Assert.Equal(("Entrada registrada. ¿Desea asociar una factura de proveedor a esta entrada?", "No, continuar", "Sí, adjuntar factura"),
+            Assert.Single(m.Confirmacion.PreguntasConTextos));
         Assert.Equal(480m, Assert.Single(m.Servicio.Llamadas).Dto.PrecioUnitario);
         Assert.Equal(typeof(GastoFormViewModel), m.Navegacion.UltimoTipoNavegado);
         Assert.IsType<Action<GastoFormViewModel>>(m.Navegacion.UltimoInicializador);
