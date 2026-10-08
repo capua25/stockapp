@@ -1924,13 +1924,15 @@ En `GrillasSinRecorteBarridoTests.cs`:
 
 ```csharp
     /// <summary>
-    /// Columna cuyo ancho decidió el componente (ColumnaAuto medida por DataGridColumnasAutoBehavior): llega al
-    /// tope o cede al espacio libre de la grilla, y el texto que no entra se corta con elipsis y se lee entero en el
-    /// tooltip, que abre solo si está cortado. Es el criterio común de columnas Auto, no un recorte.
+    /// Columna medida (ColumnaAuto) que CEDIÓ al espacio libre de la grilla (ocupa menos de lo que midió) o que
+    /// midió el tope: el texto que no entra se corta con elipsis y se lee entero en el tooltip, que abre solo si
+    /// está cortado. Es el criterio común de columnas Auto, no un recorte. Una medida que ni cedió ni llegó al tope
+    /// tiene que mostrar su texto entero: si lo corta, es un error de medición y el barrido lo marca.
     /// </summary>
     private static bool EsCorteAdmitido(DataGrid grid, DataGridColumn col, TextBlock tb) =>
         ColumnaAuto.GetMedir(col)
-        && DataGridColumnasAutoBehavior.AnchoMedido(grid, col) is not null
+        && DataGridColumnasAutoBehavior.AnchoMedido(grid, col) is { } medido
+        && (col.ActualWidth < medido - 0.5 || medido >= ColumnaAuto.GetTope(col) - 0.5)
         && tb.TextTrimming != Avalonia.Media.TextTrimming.None
         && TooltipSiSeCorta.GetActivo(tb)
         && Equals(ToolTip.GetTip(tb), tb.Text);
@@ -1991,6 +1993,7 @@ Correr el filtro "Regresión de grillas" de "Comandos de verificación". Expecte
 - (m) Quitar `b:TooltipSiSeCorta.Activo="True"` del `TextBlock` de CÓDIGO → rojo en `CeldaCortada_MuestraElipsis…` (la celda de CÓDIGO que entra abre tooltip). Restaurar.
 - (n) Quitar `b:ColumnaAuto.Conversor="…"` de COSTO → rojo en `Paridad_ElTextoMedidoEsElTextoPintado`. Restaurar.
 - (o) En `GrillasSinRecorteBarridoTests`, quitar `if (EsCorteAdmitido(grid, col, tb)) continue;` → rojo en el escenario "Productos (unidad que pasa el tope)". Restaurar.
+- (p) En `ColumnaAuto.Medir`, quitar `celda.Padding.Left + celda.Padding.Right` del ancho del contenido → la columna mide 16 px de menos, no cede ni llega al tope y su texto se corta: rojo en el barrido en el escenario "Productos" (la excepción NO la exime). Restaurar.
 
 `dotnet build StockApp.sln` después de cada restauración y `git diff --no-index` vacío.
 
