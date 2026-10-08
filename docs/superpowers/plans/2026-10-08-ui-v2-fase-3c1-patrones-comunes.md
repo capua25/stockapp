@@ -27,7 +27,7 @@ Todos los comandos se corren desde la raíz del worktree: `/home/capua25/workspa
 - **D2 — El indicador solo aparece si no hay filas para mostrar** (`Cargando && Items.Count == 0`). Una recarga o una búsqueda con filas en pantalla deja la grilla como está hasta que llegan los resultados (el VM no vacía `Items` hasta tenerlos). Alternativa: mostrarlo en cada carga (ocultaría la grilla en cada búsqueda con debounce: parpadeo con cada tecla).
 - **D3 — Sin permiso en el listado: `EstadoVacio` "Sin permiso" (`EsError`) con "No tenés permiso para ver los productos.", que REEMPLAZA la card** (misma regla que la convención 12 para el formulario y `producto-sin-permiso.html`); el encabezado queda con sus botones según las reglas del VM. Alternativa: dentro de la card, debajo de la barra de búsqueda (dejaría un buscador que solo puede dar 403).
 - **D4 — El formulario de Productos no muestra indicador de carga.** `ProductoFormViewModel` ya usa `EjecutarCargaProtegidaAsync`, así que su `Cargando` también se prende, pero el formulario no afirma nada falso mientras carga (los combos se llenan en milisegundos y la card ya está). Alternativa: indicador sobre la card (otro mockup y otro estado comparado).
-- **D5 — Tope de 240 px por columna medida.** Consecuencia medida en la Task 4 Step 1 (anotar el número real): en Productos a 1280 la grilla tiene ~950 px; con UNIDAD en el tope, las columnas no proporcionales suman ~719 y las dos `*` piden su piso de 160 (320): no entra y la grilla pasa a scroll horizontal con NOMBRE y CATEGORÍA en 160. Con datos reales de hoy (UNIDAD 97) no pasa. Alternativa: tope 160 (más elipsis, menos scroll). Un solo valor para todas las grillas (U2).
+- **D5 — Tope ADAPTABLE de las columnas medidas (REEMPLAZADO por el usuario en el GATE de la Task 4, 2026-10-08).** Ancho = min(max(contenido, título + reserva), 240, espacio libre que deja el resto de la grilla): la grilla NUNCA scrollea en horizontal ni corta una columna en el borde por una columna medida; lo que no entra se corta con elipsis + `TooltipSiSeCorta`. Lo implementa `DataGridColumnasAutoBehavior` en el reparto (no `ColumnaAuto.Medir`, que sigue devolviendo lo que la columna pide), recalculado al cambiar el ancho de la grilla y nunca al scrollear, ordenar ni filtrar (depende solo de lo medido y del ancho, no del reparto actual: sin loops). **Orden de cesión:** (1) las `*` bajan de su parte proporcional a su piso (160); (2) las medidas bajan desde su ancho medido nivelándose hacia abajo, la más ancha primero (CÓDIGO y COSTO cortos quedan enteros), hasta el ancho de su título + reserva de la flecha; (3) si ni así entra, las `*` NO bajan del piso (a 40 px el nombre no se lee, regla ya aprobada) y queda el scroll: en Productos eso pasa recién con la grilla por debajo de ~788 px internos (las fijas 298 + títulos de CÓDIGO 85, COSTO 100 y UNIDAD ~85 + pisos 320), lejos de 1280 y 1366. Sin columnas `*`, las medidas ceden igual. Medido en headless sobre la vista real con `ConCeldaCortada`: UNIDAD 145 a 1280 (grilla 948 interna) y 231 a 1366 (1034), NOMBRE y CATEGORÍA 160, suma = ancho interno, sin scroll. Con los datos de siempre no cambia nada (UNIDAD 97). El 240 sigue siendo el tope con lugar de sobra (`ColumnaAuto.TopePorDefecto`). Tests: `ColumnaAutoTopeAdaptableTests` (UiTests). Reemplaza al "tope fijo de 240 con scroll" que mostraba el mockup del GATE.
 - **D6 — El ancho reserva lugar para la flecha de orden del header** (20 = 8 de margen + 12 del glifo, `DataGridV2.axaml` `Path#SortIcon`): ordenar por click no corta el título ni mueve columnas. Costo: una columna cuyo título es más ancho que su contenido crece hasta 20 px respecto de hoy (CÓDIGO de Productos: 81 → ~86; `productos.html` cambia). Alternativa: sin reserva (ordenar por esa columna corta el título o le tapa la flecha).
 - **D7 — El ancho medido solo crece mientras vive la grilla.** Una búsqueda que devuelve filas más angostas no achica columnas (no saltan mientras se tipea); una con un valor más ancho las agranda. Al volver a entrar a la pantalla (grilla nueva) se mide de cero. Alternativa: re-medir libre (las columnas se achican y agrandan con cada búsqueda).
 - **D8 — Tooltip solo cuando el texto se corta, en las cinco columnas de texto de Productos** (CÓDIGO, NOMBRE, COSTO, UNIDAD, CATEGORÍA). NOMBRE y CATEGORÍA hoy muestran tooltip siempre: dejan de mostrarlo cuando el texto entra. Alternativa: solo en las tres medidas (dos criterios en la misma grilla).
@@ -68,7 +68,7 @@ Todos los comandos se corren desde la raíz del worktree: `/home/capua25/workspa
 ## Convenciones que agrega esta fase (para `herramientas.md`, Task 7)
 
 18. **Estado de carga de un listado v2.** Toda carga que llena el listado pasa por `ViewModelBase.EjecutarCargaProtegidaAsync` (prende `Cargando`, marca `SinPermiso` ante un 403). La vista muestra `v2:EstadoCargando` con `Cargando && Count == 0`, el `EstadoVacio` de "no hay" SOLO con `!Cargando && !SinPermiso && Count == 0` (`MultiBinding` con `BoolConverters.And`: cada parte notifica sola, sin propiedades calculadas en el VM) y el `EstadoVacio` "Sin permiso" (`EsError`) en lugar de la card. Espejo: `.v2-cargando` en `base.css`.
-19. **Columnas `Auto` de contenido libre (U2).** `Width="Auto"` + `b:ColumnaAuto.Medir="True"` (`Ruta` por defecto = `SortMemberPath`; `b:ColumnaAuto.Conversor` = el MISMO conversor de la celda; una `DataGridTextColumn` usa su `Binding`). El ancho = `ceil(max(texto más ancho de TODA la fuente + padding de celda, título + padding + 20 de la flecha))`, acotado por `MinWidth` y por el tope (240, D5), solo crece mientras vive la grilla y cede ante un arrastre del usuario. El `TextBlock` de la celda lleva `TextTrimming="CharacterEllipsis"`, `ToolTip.Tip` con el mismo texto y `b:TooltipSiSeCorta.Activo="True"`. Columnas con insignia (STOCK, ESTADO) y las `*` no se miden: quedan fijas o proporcionales. Un UiTest de la vista scrollea más de 1000 filas y exige que ninguna columna se mueva, y otro exige que el texto medido sea el texto pintado (paridad).
+19. **Columnas `Auto` de contenido libre (U2).** `Width="Auto"` + `b:ColumnaAuto.Medir="True"` (`Ruta` por defecto = `SortMemberPath`; `b:ColumnaAuto.Conversor` = el MISMO conversor de la celda; una `DataGridTextColumn` usa su `Binding`). El ancho = `ceil(max(texto más ancho de TODA la fuente + padding de celda, título + padding + 20 de la flecha))`, acotado por `MinWidth` y por el tope (240), solo crece mientras vive la grilla y cede ante un arrastre del usuario. Si lo que piden las columnas no entra, cada medida cede hasta el espacio libre (tope adaptable, D5): primero las `*` bajan a su piso, después las medidas se nivelan hacia abajo hasta su título; la grilla no scrollea por una columna medida. El `TextBlock` de la celda lleva `TextTrimming="CharacterEllipsis"`, `ToolTip.Tip` con el mismo texto y `b:TooltipSiSeCorta.Activo="True"`. Columnas con insignia (STOCK, ESTADO) y las `*` no se miden: quedan fijas o proporcionales. Un UiTest de la vista scrollea más de 1000 filas y exige que ninguna columna se mueva, y otro exige que el texto medido sea el texto pintado (paridad).
 20. **Tooltip solo si se corta:** `b:TooltipSiSeCorta.Activo="True"` sobre un `TextBlock` con `TextTrimming` y `ToolTip.Tip`; cancela la apertura si ninguna línea está cortada (`TextLine.HasCollapsed`).
 
 ## Review Focus
@@ -76,7 +76,7 @@ Todos los comandos se corren desde la raíz del worktree: `/home/capua25/workspa
 1. **"No hay productos para mostrar" aparece mientras carga o después de un 403.** Es exactamente lo que U1 prohíbe: el usuario cree que el catálogo está vacío. Esperado: durante la carga sin filas, "Cargando productos…" (ni vacío ni grilla); tras un 403 en la carga o en una búsqueda, "Sin permiso" en lugar de la card; el vacío solo cuando la carga terminó bien y no hay filas. Tests: `Cargando_SinFilas_MuestraElIndicadorYNiElVacioNiLaGrilla`, `SinPermiso_EnLaCarga_MuestraSinPermisoEnLugarDeLaCardYNuncaElVacio`, `SinPermiso_EnUnaBusqueda_...` (Task 6) y los de VM de la Task 1.
 2. **Dos cargas superpuestas (búsqueda con debounce + recarga tras Eliminar) dejan `Cargando` pegado en true o lo apagan antes de tiempo.** Esperado: el indicador sigue mientras quede alguna carga en curso y se va cuando terminan todas, también si una falla con otra excepción. Tests: `DosCargasSuperpuestas_LaPrimeraEnTerminarNoApagaElFlag`, `Cargando_SeApagaAunqueLaCargaLanceOtraExcepcion` (Task 1), `BusquedaYCargaSuperpuestas_CargandoSigueHastaQueTerminanAmbas` (Task 1).
 3. **Una columna se mueve al scrollear un catálogo grande u ordenar.** Era la deuda de la 3a (CÓDIGO 65→140, COSTO 100→115, UNIDAD 63→97). Esperado: con 1200 productos y el valor más ancho en la última fila, ningún ancho cambia al scrollear hasta el final ni al ordenar por cada columna, y el título ordenado no se corta. Tests: `Scroll_MasDeMilFilas_HastaElFinal_NoMueveNingunaColumna`, `Ordenar_PorCadaColumna_NoMueveAnchosNiCortaElTitulo` (Task 6), `ConMilFilas_...` y `Ordenar_ElTituloYLaFlechaEntran...` (Task 2).
-4. **Un valor más largo que el tope rompe la grilla o se pierde.** Esperado: la columna queda en 240, la celda muestra el texto cortado con "…", el tooltip muestra el texto completo, y las celdas que entran no muestran tooltip. Tests: `TextoMasLargoQueElTope_...` (Task 2), `CeldaCortadaPorElTope_...` (Task 6), la comparación `ProductosCeldaCortada_IgualAlMockup` y la excepción del barrido (Task 6).
+4. **Un valor más largo que el tope o que el espacio libre rompe la grilla o se pierde.** Esperado: la columna queda en min(240, espacio libre) (Productos con la celda cortada: UNIDAD 145 a 1280 y 231 a 1366), sin scroll horizontal, la celda muestra el texto cortado con "…", el tooltip muestra el texto completo, y las celdas que entran no muestran tooltip. Tests: `TextoMasLargoQueElTope_...` (Task 2), `ColumnaAutoTopeAdaptableTests` (D5), `CeldaCortada_...` (Task 6), la comparación `ProductosCeldaCortada_IgualAlMockup` y la excepción del barrido (Task 6).
 5. **El usuario arrastra una columna medida y una recarga se la vuelve a cambiar.** Esperado: después de un arrastre, ningún dato nuevo mueve esa grilla (mismo criterio que el behavior: los anchos pasan a ser del usuario). Test: `UsuarioArrastraLaColumna_UnaRecargaConDatosMasAnchosNoLaMueve` (Task 2).
 
 ---
@@ -95,7 +95,7 @@ Todos los comandos se corren desde la raíz del worktree: `/home/capua25/workspa
 | Cómo se asigna el ancho | Por el `Asignar` del behavior (L372-377: ida y vuelta por `Star` para no pasar por `DataGridColumn.Resize`, que le saca ancho a las columnas de la derecha). Con `Width` en píxeles el behavior la trata como fija (`Objetivo` = `Width.Value`, L201-202), igual que STOCK (220) y ESTADO (78). | archivo citado. |
 | Header y flecha de orden | El header v2 tiene padding `12,0,4,0` y la flecha es un `Path` de alto 12 con margen izquierdo 8, visible solo con la columna ordenada (`DataGridV2.axaml` L56, L84-92). La reserva fija 20 (D6). | archivo citado. |
 | Tooltip solo si se corta | `ToolTip.AddToolTipOpeningHandler` (evento cancelable de Avalonia 12.0.5) + `TextBlock.TextLayout.TextLines.Any(l => l.HasCollapsed)`; se cancela si no hay corte. No hace falta escuchar cambios de texto ni de tamaño (las celdas se reciclan): se decide al abrir. | `Avalonia.Controls.xml` (`ToolTip.ToolTipOpeningEvent`), `Avalonia.Base.xml` (`TextLine.HasCollapsed`). |
-| Barrido de recortes vs U2 | `GrillasSinRecorteBarridoTests` exige que ningún texto de una columna no proporcional quede más angosto que su ancho natural; con U2 un valor más largo que el tope SE CORTA a propósito. El barrido gana una excepción acotada (columna medida, en el tope, `TextTrimming`, `TooltipSiSeCorta` y `ToolTip.Tip` igual al texto) y un escenario que la ejercita. El barrido asigna `ItemsSource` directo (L136-144): el componente tiene que reaccionar a un `ItemsSource` nuevo, no solo al de la VM. | `GrillasSinRecorteBarridoTests.cs` L44, L136-208, L229-233; `GrillasEspacioDerechoBarridoTests.cs` L52. |
+| Barrido de recortes vs U2 | `GrillasSinRecorteBarridoTests` exige que ningún texto de una columna no proporcional quede más angosto que su ancho natural; con U2 un valor más largo que el tope o que el espacio libre (D5) SE CORTA a propósito. El barrido gana una excepción acotada (columna medida, más angosta que lo que midió, `TextTrimming`, `TooltipSiSeCorta` y `ToolTip.Tip` igual al texto) y un escenario que la ejercita. El barrido asigna `ItemsSource` directo (L136-144): el componente tiene que reaccionar a un `ItemsSource` nuevo, no solo al de la VM. | `GrillasSinRecorteBarridoTests.cs` L44, L136-208, L229-233; `GrillasEspacioDerechoBarridoTests.cs` L52. |
 | COSTO con `MinWidth="100"` | Se conserva (fix 3548397): el ancho medido nunca baja del `MinWidth` de la columna. | `ProductoListView.axaml` L87. |
 | Anchos actuales del mockup | `productos.html` L19-25: CÓDIGO 81, COSTO 100, STOCK 220, UNIDAD 97, CATEGORÍA 160, ESTADO 78. Con D6, CÓDIGO cambia (su título + 36 supera a "MAT-0142" + 16). Se re-mide en la Task 4 Step 1. | archivo citado. |
 | Test del vacío heredado | `ListaVacia_MuestraEstadoVacio_YAlLlegarDatosVuelveLaGrilla` (L258) sigue valiendo (su fake responde sincrónico: la carga terminó cuando se mira). Gana un assert de que el indicador no está. | `ProductoListViewV2Tests.cs` L258-273. |
@@ -1803,13 +1803,16 @@ y la existente `Montar(params ProductoDto[] productos)` pasa a `=> Montar(new Pr
     }
 
     [AvaloniaFact]
-    public void CeldaCortadaPorElTope_MuestraElipsisYTooltip_YLasQueEntranNo()
+    public void CeldaCortada_MuestraElipsisYTooltip_YLasQueEntranNo()
     {
         var largo = P(5, "Arena gruesa", 45m) with { UnidadMedidaNombre = "Metro cúbico puesto en obra con flete incluido" };
         var m = Montar(Activo, largo);
         var grilla = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla");
 
-        Assert.Equal(ColumnaAuto.TopePorDefecto, Columna(grilla, "UNIDAD").ActualWidth, 1);
+        // Ventana de 1040 (la vista a 1280 sin el sidebar): UNIDAD pide 240 y cede al espacio libre (145).
+        Assert.Equal(145, Columna(grilla, "UNIDAD").ActualWidth, 1);
+        Assert.DoesNotContain(grilla.GetVisualDescendants().OfType<ScrollBar>(),
+            s => s.Orientation == Orientation.Horizontal && s.IsEffectivelyVisible);
         var cortada = CeldaDe(grilla, largo, "UNIDAD");
         Assert.True(TooltipSiSeCorta.EstaCortado(cortada));
         Assert.False(TooltipSeCancela(cortada));
@@ -1817,7 +1820,25 @@ y la existente `Montar(params ProductoDto[] productos)` pasa a `=> Montar(new Pr
         foreach (var header in new[] { "CÓDIGO", "NOMBRE", "COSTO", "UNIDAD", "CATEGORÍA" })
             Assert.True(TooltipSeCancela(CeldaDe(grilla, Activo, header)), $"{header} de una celda que entra abre tooltip.");
     }
+
+    [AvaloniaTheory]
+    [InlineData(1040, 145)]
+    [InlineData(1126, 231)]
+    public void CeldaCortada_LaGrillaNoScrollea_YUnidadTomaElEspacioLibre(double ancho, double unidad)
+    {
+        // La vista a 1280 y a 1366 sin el sidebar de 240, con los datos del mockup de la celda cortada.
+        var m = Montar(DatosProductosV2.ProductosConUnidadLarga.ToArray(), ancho);
+        var grilla = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla");
+
+        Assert.Equal(unidad, Columna(grilla, "UNIDAD").ActualWidth, 1);
+        Assert.Equal(160, Columna(grilla, "NOMBRE").ActualWidth, 1);
+        Assert.Equal(160, Columna(grilla, "CATEGORÍA").ActualWidth, 1);
+        Assert.DoesNotContain(grilla.GetVisualDescendants().OfType<ScrollBar>(),
+            s => s.Orientation == Orientation.Horizontal && s.IsEffectivelyVisible);
+    }
 ```
+
+(`Montar` gana un parámetro opcional `double ancho = 1040` para la ventana; `DatosProductosV2.ProductosConUnidadLarga` son los 12 productos de `DatosProductos.ConCeldaCortada()` copiados en UiTests, que no referencia VisualTests: copiar la lista de `ColumnaAutoTopeAdaptableTests.ConCeldaCortada()`.)
 
 5. En `ListaVacia_MuestraEstadoVacio_YAlLlegarDatosVuelveLaGrilla`, después del primer bloque de asserts: `Assert.False(Visible(m, "IndicadorCarga"));`.
 
@@ -1894,21 +1915,22 @@ En `GrillasSinRecorteBarridoTests.cs`:
 2. En `Escenarios`, después de "Productos" (L82):
 
 ```csharp
-        // Una unidad más larga que el tope de su columna: se corta con elipsis y tooltip a propósito (no es recorte).
+        // Una unidad más larga que el espacio de su columna: se corta con elipsis y tooltip a propósito (no es recorte).
         new("Productos (unidad que pasa el tope)", () => new ProductoListView(), _ => Muchos<object>(i =>
             Producto(i, 10 + i) with { UnidadMedidaNombre = i == 0 ? "Metro cúbico puesto en obra con flete incluido" : "Metro cuadrado" })),
 ```
 
-3. En `Recortes`, dentro del `foreach (var tb in celda…)`, antes del `if (tb.Bounds.Width < …)`: `if (EsCorteAdmitido(col, tb)) continue;` y el método:
+3. En `Recortes`, dentro del `foreach (var tb in celda…)`, antes del `if (tb.Bounds.Width < …)`: `if (EsCorteAdmitido(grid, col, tb)) continue;` y el método:
 
 ```csharp
     /// <summary>
-    /// Columna que mide su contenido (ColumnaAuto) y llegó a su tope: el texto se corta con elipsis y se lee
-    /// entero en el tooltip, que abre solo si está cortado. Es el criterio común de columnas Auto, no un recorte.
+    /// Columna cuyo ancho decidió el componente (ColumnaAuto medida por DataGridColumnasAutoBehavior): llega al
+    /// tope o cede al espacio libre de la grilla, y el texto que no entra se corta con elipsis y se lee entero en el
+    /// tooltip, que abre solo si está cortado. Es el criterio común de columnas Auto, no un recorte.
     /// </summary>
-    private static bool EsCorteAdmitido(DataGridColumn col, TextBlock tb) =>
+    private static bool EsCorteAdmitido(DataGrid grid, DataGridColumn col, TextBlock tb) =>
         ColumnaAuto.GetMedir(col)
-        && Math.Abs(col.ActualWidth - ColumnaAuto.GetTope(col)) <= 0.5
+        && DataGridColumnasAutoBehavior.AnchoMedido(grid, col) is not null
         && tb.TextTrimming != Avalonia.Media.TextTrimming.None
         && TooltipSiSeCorta.GetActivo(tb)
         && Equals(ToolTip.GetTip(tb), tb.Text);
@@ -1938,7 +1960,7 @@ En `ProductosComparacionTests.cs`, después de `ProductosVacio_IgualAlMockup_136
     public void ProductosSinPermiso_IgualAlMockup_1366x768() =>
         Comparar(DatosProductos.SinPermisoListado(), "inventario/productos-sin-permiso.html", TamanoLienzo.Municipio);
 
-    // La unidad cortada con elipsis es a propósito (tope de la columna): se declara como recorte permitido.
+    // La unidad cortada con elipsis es a propósito (la columna cede al espacio libre): se declara como recorte permitido.
     private static readonly string[] UnidadCortada = [DatosProductos.UnidadLarga];
 
     [AvaloniaFact]
@@ -1963,12 +1985,12 @@ Correr el filtro "Regresión de grillas" de "Comandos de verificación". Expecte
 
 - [ ] **Step 6: Mutaciones sobre la View real (QUITANDO)**
 
-- (j) Quitar `b:ColumnaAuto.Medir="True"` de UNIDAD → rojo en `Scroll_MasDeMilFilas_…` y `CeldaCortadaPorElTope_…`. Pegar. Restaurar.
+- (j) Quitar `b:ColumnaAuto.Medir="True"` de UNIDAD → rojo en `Scroll_MasDeMilFilas_…`, `CeldaCortada_MuestraElipsis…` y `CeldaCortada_LaGrillaNoScrollea_…`. Pegar. Restaurar.
 - (k) Quitar `<Binding Path="Cargando" Converter="{x:Static BoolConverters.Not}" />` del `MultiBinding` de `EstadoSinProductos` → rojo en `Cargando_SinFilas_…` (el vacío aparece durante la carga). Restaurar.
 - (l) Quitar `IsVisible="{Binding !SinPermiso}"` de `Tarjeta` → rojo en `SinPermiso_EnLaCarga_…` y `SinPermiso_EnUnaBusqueda_…`. Restaurar.
-- (m) Quitar `b:TooltipSiSeCorta.Activo="True"` del `TextBlock` de CÓDIGO → rojo en `CeldaCortadaPorElTope_…` (la celda de CÓDIGO que entra abre tooltip). Restaurar.
+- (m) Quitar `b:TooltipSiSeCorta.Activo="True"` del `TextBlock` de CÓDIGO → rojo en `CeldaCortada_MuestraElipsis…` (la celda de CÓDIGO que entra abre tooltip). Restaurar.
 - (n) Quitar `b:ColumnaAuto.Conversor="…"` de COSTO → rojo en `Paridad_ElTextoMedidoEsElTextoPintado`. Restaurar.
-- (o) En `GrillasSinRecorteBarridoTests`, quitar `if (EsCorteAdmitido(col, tb)) continue;` → rojo en el escenario "Productos (unidad que pasa el tope)". Restaurar.
+- (o) En `GrillasSinRecorteBarridoTests`, quitar `if (EsCorteAdmitido(grid, col, tb)) continue;` → rojo en el escenario "Productos (unidad que pasa el tope)". Restaurar.
 
 `dotnet build StockApp.sln` después de cada restauración y `git diff --no-index` vacío.
 
@@ -2046,7 +2068,7 @@ PARAR. Presentar: el `index.html` (filas de Productos), las capturas de la verif
 Spec:
 1. Línea `**Estado:**`: agregar "; Fase 3c-1 (patrones comunes + Productos) APROBADA por el usuario el <fecha>" antes de "(merge a main al final de todas las fases)", y "3c-1" a la lista de fases implementadas.
 2. §7: en "**Fase 3 partida en 3a, 3b y 3c**", agregar: "La 3c se parte a su vez en 3c-1 (patrones comunes de carga y de columnas `Auto`, aplicados a Productos), 3c-2 (Historial de movimientos) y 3c-3 (Ingreso por factura y el patrón de modal v2) (decisión del usuario, 2026-10-08)."
-3. §7, después de "Estado de la Fase 3b": "**Estado de la Fase 3c-1 (aprobada el <fecha>).** Estado de carga (`ViewModelBase.Cargando`, `v2:EstadoCargando`) y estado sin permiso en el listado de Productos; columnas `Auto` de contenido libre medidas sobre todas las filas (`ColumnaAuto`, tope <tope>, reserva de la flecha de orden, solo crecen mientras vive la grilla) con tooltip solo si se corta (`TooltipSiSeCorta`). Comparado en <N> filas a los dos tamaños (<máximo de teselas densas>). Verificación orgánica a 1366×768 y 1280×760: carga lenta (API pausada), catálogo de <n> productos, 403 en caliente, arrastre. Decisiones del usuario: <D1 a D13 aprobadas o cambiadas>; excepción U1 a §3 (ya asentada en §3)."
+3. §7, después de "Estado de la Fase 3b": "**Estado de la Fase 3c-1 (aprobada el <fecha>).** Estado de carga (`ViewModelBase.Cargando`, `v2:EstadoCargando`) y estado sin permiso en el listado de Productos; columnas `Auto` de contenido libre medidas sobre todas las filas (`ColumnaAuto`, tope adaptable min(240, espacio libre) sin scroll horizontal, reserva de la flecha de orden, solo crecen mientras vive la grilla) con tooltip solo si se corta (`TooltipSiSeCorta`). Comparado en <N> filas a los dos tamaños (<máximo de teselas densas>). Verificación orgánica a 1366×768 y 1280×760: carga lenta (API pausada), catálogo de <n> productos, 403 en caliente, arrastre. Decisiones del usuario: <D1 a D13 aprobadas o cambiadas>; excepción U1 a §3 (ya asentada en §3)."
 4. "Deuda abierta tras la Fase 3a": tachar con `~~…~~` y agregar "Cerrada (Fase 3c-1): …" en: el estado vacío durante la carga/403 (cerrada por U1); las columnas `Auto` de contenido libre (cerrada por U2, con el test de 1200 filas); `GrillasSinRecorteBarridoTests` con `SidebarPx` 232 (cerrada por R1, o "sigue abierta" con el motivo si R1 se paró); `UseLayoutRounding="False"` por instancia en `EstadoVacio` (evaluada: el control nuevo lo lleva en su tema; `EstadoVacio` sigue por instancia para no mover el catálogo).
 5. Agregar "**Deuda abierta tras la Fase 3c-1:**" con lo que haya surgido; como mínimo: los ~20 ViewModels con `catch (UnauthorizedAccessException)` propio (no usan el helper: no tienen `Cargando`; cada uno se migra al llegar su listado); la carrera de resultados de dos búsquedas superpuestas (la más vieja puede pisar a la más nueva; preexistente, el contador solo arregla el flag); el formulario de Productos sin indicador (D4); cualquier `UmbralAprobado` registrado (pantalla y número); la suscripción del behavior a la fuente que retiene la grilla mientras viva la colección del VM (si la review la marca).
 
@@ -2074,7 +2096,7 @@ No se pushea ni se mergea.
 | La sonda mide con otra tipografía que la celda (sin `-calt`, sin `+tnum`) y la columna queda 1-2 px corta: elipsis donde no debería. | La sonda copia `FontFeatures` y el resto del `TextBlock` de una celda realizada; datos con "2x1,5" y `$ 98.765.432,10` en `ConMilFilas_…`; `Paridad_…` en grilla de test y en la vista; los asserts de "no cortado" en `Scroll_MasDeMilFilas_…`. |
 | Medir 5000+ filas en el hilo de UI congela la pantalla al cargar. | Dedupe por texto, una sola sonda reusada, `CincoMilFilas_MedirNoAgregaCostoPerceptible`; si da rojo se PARA y se consulta (Task 2 Step 3), sin subir el margen a ciegas. |
 | La medición pelea con el reparto del behavior viejo (loop de layout) o lo hace pasar por `DataGridColumn.Resize`. | Un solo `LayoutUpdated`: se mide antes del reparto, dentro de `Reparando`, con el mismo `Asignar` (ida y vuelta por `Star`); en píxeles la columna es "fija" para el reparto; regresión completa de `DataGridColumnasAutoAjusteTests` (incluida la guarda anti-loop) en las Tasks 2 y 6. |
-| El tope deja a Productos en scroll horizontal cuando una UNIDAD lo alcanza a 1280 (columnas no proporcionales ~719 + pisos 320 > ~950). | Medido en la Task 4 Step 1 y mostrado en el GATE como consecuencia de D5, con la alternativa de 160; el mockup `productos-celda-cortada` lo dibuja si pasa. |
+| El tope deja a Productos en scroll horizontal cuando una UNIDAD lo alcanza a 1280 (columnas no proporcionales ~719 + pisos 320 > ~950). | RESUELTO por D5 (tope adaptable, GATE 2026-10-08): la columna medida cede al espacio libre (UNIDAD 145 a 1280, 231 a 1366) y el mockup `productos-celda-cortada` ya no tiene scroll. Queda scroll solo si ni con las medidas en su título entran las fijas y los pisos (Productos: grilla interna < ~788). |
 | La reserva de la flecha cambia el ancho de CÓDIGO y la comparación de `productos.html` aprobada en 3a pasa a rojo. | `productos.html` se re-mide en la Task 4 con el componente y se re-aprueba en el GATE (D6). |
 | La elipsis corta en un carácter distinto en Avalonia y en Chromium (teselas densas en `productos-celda-cortada`). | `recortesPermitidos` para el texto; diagnóstico con `teselas.py`/`tinta.py` y decisión del usuario por tesela; nunca subir el umbral sin su OK. |
 | El barrido de recortes contradice U2 (un corte en el tope es a propósito) o, con `SidebarPx` 240, destapa recortes reales en vistas viejas. | Excepción acotada con su escenario y mutación (o); R1: si se pone rojo una vista que no es Productos, se PARA y se consulta. |

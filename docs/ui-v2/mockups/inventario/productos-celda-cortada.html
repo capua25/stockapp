@@ -13,24 +13,19 @@
   .pagina > .v2-tarjeta { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
   .pagina .v2-grilla { flex: 1 1 0; min-height: 0; }
   .pie { margin-top: 12px; }
-  /* Anchos medidos en headless con la celda de UNIDAD cortada: UNIDAD en el tope de 240, NOMBRE y CATEGORÍA en el
-     piso de 160 de las columnas *, CÓDIGO 85, COSTO 100, STOCK 220 y ESTADO 78. Suman 1043 y la grilla mide 950
-     a 1280 y 1036 a 1366 (948 y 1034 dentro del borde): desborda 95 y 9 px, y el contenido se corta en el borde
-     derecho (a 1280 ESTADO queda fuera de vista). */
+  /* Anchos medidos en headless con la celda de UNIDAD cortada. La unidad larga pide el tope de 240, pero la
+     columna cede hasta el espacio que dejan las demás: NOMBRE y CATEGORÍA en el piso de 160 de las columnas *,
+     CÓDIGO 85, COSTO 100, STOCK 220 y ESTADO 78 suman 803. La grilla mide 950 a 1280 y 1036 a 1366 (948 y 1034
+     dentro del borde): UNIDAD queda en 145 y en 231, la suma es exactamente el ancho interno y no hay scroll
+     horizontal. */
   .col-codigo { flex: 0 0 85px; }
   .col-nombre { flex: 0 0 160px; }
   .col-costo { flex: 0 0 100px; }
   .col-stock { flex: 0 0 220px; }
-  .col-unidad { flex: 0 0 240px; }
+  .col-unidad { flex: 0 0 145px; }
+  @media (min-width: 1366px) { .col-unidad { flex-basis: 231px; } }
   .col-categoria { flex: 0 0 160px; }
   .col-estado { flex: 0 0 78px; }
-  /* Barra de scroll horizontal de la grilla (Fluent, medida en la captura de la app): franja de 16 px abajo, y el
-     pulgar de 2 px de alto y color #7A7A7A, 2 px sobre el borde inferior, que arranca 16 px adentro (el lugar de
-     la flecha, oculta) y mide (ancho interno - 32) x (ancho interno / ancho del contenido) = 833 px a 1280 y
-     994 a 1366, con el contenido en la posición inicial. */
-  .v2-grilla { position: relative; }
-  .scroll-h { position: absolute; left: 16px; bottom: 2px; width: 833px; height: 2px; background: #7a7a7a; }
-  @media (min-width: 1366px) { .scroll-h { width: 994px; } }
   /* Celda de Stock: Grid con la insignia a la izquierda y el número a la derecha (no es .v2-num: lleva
      dos elementos); cifras tabulares y ancho del número redondeado hacia arriba como un TextBlock. */
   .celda-stock { font-variant-numeric: tabular-nums; }
@@ -38,7 +33,7 @@
 </style>
 </head>
 <body>
-<!-- Datos: DatosProductos.ConCeldaCortada(): la unidad de Arena gruesa pasa el tope de 240; la columna queda en el tope y la celda corta con elipsis. -->
+<!-- Datos: DatosProductos.ConCeldaCortada(): la unidad de Arena gruesa pasa el tope de 240; la columna cede al espacio libre y la celda corta con elipsis. -->
 <div class="v2-ventana">
   <aside class="v2-sidebar">
     <div class="v2-marca">Gestión Municipal</div>
@@ -221,7 +216,6 @@
             <div class="v2-grilla-celda col-categoria">Herramientas</div>
             <div class="v2-grilla-celda col-estado"><span class="v2-insignia">Inactivo</span></div>
           </div>
-          <div class="scroll-h"></div>
         </div>
         <div class="v2-pie-conteo pie">12 productos</div>
       </div>
