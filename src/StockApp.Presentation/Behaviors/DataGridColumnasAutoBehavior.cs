@@ -468,7 +468,8 @@ public static class DataGridColumnasAutoBehavior
     /// ancho de la grilla menos las demás no proporcionales y el piso de las *): las nivela hacia abajo, de la más
     /// ancha a la más angosta, sin bajar ninguna de su piso. El nivel es el mayor entero que entra, así el
     /// píxel fraccionario que sobra va a las *. Si con todas en su piso tampoco entra, quedan en el piso y quien la llama
-    /// las devuelve a su ancho medido (igual va a haber scroll: cortarlas no evita nada).
+    /// las devuelve a su ancho medido (igual va a haber scroll: cortarlas no evita nada). Las marcadas con
+    /// <see cref="ColumnaAuto.NoCedeProperty"/> no entran acá: quien la llama las descuenta del lugar con su ancho medido.
     /// </summary>
     private static void CederMedidas(Estado estado, Dictionary<DataGridColumn, double> objetivos, List<DataGridColumn> medidas, double lugar)
     {
@@ -533,8 +534,10 @@ public static class DataGridColumnasAutoBehavior
         }
 
         var minimosEstrellas = estrellas.Sum(c => Minimo(grid, c, esEstrella: true));
-        var otras = objetivos.Where(kv => !medidas.Contains(kv.Key)).Sum(kv => kv.Value);
-        CederMedidas(estado, objetivos, medidas, disponible.Value - otras - minimosEstrellas);
+        // Las que no ceden (formato cerrado) cuentan con su ancho medido, como una columna fija.
+        var cedibles = medidas.Where(c => !ColumnaAuto.GetNoCede(c)).ToList();
+        var otras = objetivos.Where(kv => !cedibles.Contains(kv.Key)).Sum(kv => kv.Value);
+        CederMedidas(estado, objetivos, cedibles, disponible.Value - otras - minimosEstrellas);
         var encaja = objetivos.Values.Sum() + minimosEstrellas <= disponible.Value + Tolerancia;
         // Si ni con las medidas en su título y las * en su piso entra, igual va a haber scroll: cortar una medida no
         // evita nada, así que vuelve a su ancho medido y se lee entera.

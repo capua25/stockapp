@@ -51,6 +51,14 @@ public static class ColumnaAuto
     public static readonly AttachedProperty<double> TopeProperty =
         AvaloniaProperty.RegisterAttached<DataGridColumn, DataGridColumn, double>("Tope", TopePorDefecto);
 
+    /// <summary>
+    /// Columna de formato cerrado (una fecha, por ejemplo) que nunca cede al espacio libre: queda en su ancho medido
+    /// porque cortada no se lee ("07/10/20…"). Cuando las medidas no entran, el lugar sale de las demás; si ni así
+    /// entra, hay scroll. Un ancho arrastrado por el usuario sigue mandando.
+    /// </summary>
+    public static readonly AttachedProperty<bool> NoCedeProperty =
+        AvaloniaProperty.RegisterAttached<DataGridColumn, DataGridColumn, bool>("NoCede");
+
     public static bool GetMedir(DataGridColumn c) => c.GetValue(MedirProperty);
     public static void SetMedir(DataGridColumn c, bool v) => c.SetValue(MedirProperty, v);
     public static string? GetRuta(DataGridColumn c) => c.GetValue(RutaProperty);
@@ -59,6 +67,8 @@ public static class ColumnaAuto
     public static void SetConversor(DataGridColumn c, IValueConverter? v) => c.SetValue(ConversorProperty, v);
     public static double GetTope(DataGridColumn c) => c.GetValue(TopeProperty);
     public static void SetTope(DataGridColumn c, double v) => c.SetValue(TopeProperty, v);
+    public static bool GetNoCede(DataGridColumn c) => c.GetValue(NoCedeProperty);
+    public static void SetNoCede(DataGridColumn c, bool v) => c.SetValue(NoCedeProperty, v);
 
     /// <summary>La colección que se mide: la SourceCollection de un DataGridCollectionView (sin su filtro ni su
     /// orden), o la fuente tal cual.</summary>

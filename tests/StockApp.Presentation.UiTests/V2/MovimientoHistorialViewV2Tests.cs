@@ -450,12 +450,37 @@ public class MovimientoHistorialViewV2Tests
         var m = Montar(new HistorialFake { Lista = movimientos.ToList() }, ancho);
         var grilla = Grilla(m);
 
+        // Antes de scrollear: STOCK NUEVO (y la insignia) entra entera en la parte visible de la grilla.
+        var stockNuevo = grilla.GetVisualDescendants().OfType<DataGridColumnHeader>().Single(h => Equals(h.Content, "STOCK NUEVO"));
+        var bordeDerecho = stockNuevo.TranslatePoint(new Point(stockNuevo.Bounds.Width, 0), grilla)!.Value.X;
+        Assert.True(bordeDerecho <= grilla.Bounds.Width - 1, $"STOCK NUEVO termina en x={bordeDerecho} y la grilla se ve hasta {grilla.Bounds.Width - 1}.");
+
         foreach (var mov in movimientos)
             foreach (var header in Medidas)
                 Assert.False(TooltipSiSeCorta.EstaCortado(CeldaDe(grilla, mov, header)), $"{header} de {mov.ProductoNombre} quedó cortado.");
         Assert.Equal(160, Columna(grilla, "PRODUCTO").ActualWidth, 1);
         Assert.Equal(160, Columna(grilla, "COMENTARIO").ActualWidth, 1);
         Assert.True(HayScrollHorizontal(grilla));
+    }
+
+    [AvaloniaFact]
+    public void CediendoEntra_FechaQuedaEnSuAnchoMedido_YCedeOtraMedida()
+    {
+        // 1350 de vista: con las medidas en su ancho no entra, pero cediendo sí (sin scroll). FECHA es de formato
+        // cerrado: nunca cede (un "07/10/20…" no se lee); el lugar sale de las demás medidas.
+        var movimientos = Varios();
+        var m = Montar(new HistorialFake { Lista = movimientos.ToList() }, ancho: 1350);
+        var grilla = Grilla(m);
+        var fecha = Columna(grilla, "FECHA");
+
+        Assert.False(HayScrollHorizontal(grilla), "Precondición: a 1350 cediendo entra.");
+        Assert.Equal(DataGridColumnasAutoBehavior.AnchoMedido(grilla, fecha)!.Value, fecha.ActualWidth, 1);
+        foreach (var mov in movimientos)
+            Assert.False(TooltipSiSeCorta.EstaCortado(CeldaDe(grilla, mov, "FECHA")), $"FECHA de {mov.ProductoNombre} quedó cortada.");
+        var cedidas = Medidas.Where(h => h != "FECHA")
+            .Where(h => Columna(grilla, h).ActualWidth < DataGridColumnasAutoBehavior.AnchoMedido(grilla, Columna(grilla, h))!.Value - 0.5)
+            .ToList();
+        Assert.NotEmpty(cedidas);
     }
 
     [AvaloniaFact]

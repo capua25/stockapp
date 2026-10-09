@@ -146,9 +146,11 @@
                           IsVisible="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.HayElementos}}">
                     <DataGrid.Columns>
                         <!-- FECHA como plantilla con un conversor a texto: la medición y el corte necesitan el texto
-                             pintado, que un StringFormat sobre la fecha no le da a ColumnaAuto. Ordena por la fecha. -->
+                             pintado, que un StringFormat sobre la fecha no le da a ColumnaAuto. Ordena por la fecha.
+                             NoCede: formato cerrado, cortada no se lee; si falta lugar ceden las otras medidas. -->
                         <DataGridTemplateColumn Header="FECHA" Width="Auto" SortMemberPath="Fecha"
-                                                b:ColumnaAuto.Medir="True" b:ColumnaAuto.Conversor="{x:Static conv:FechaHoraLocalConverter.Instance}">
+                                                b:ColumnaAuto.Medir="True" b:ColumnaAuto.NoCede="True"
+                                                b:ColumnaAuto.Conversor="{x:Static conv:FechaHoraLocalConverter.Instance}">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:MovimientoHistorialDto">
                                     <TextBlock Text="{Binding Fecha, Converter={x:Static conv:FechaHoraLocalConverter.Instance}}"
