@@ -118,21 +118,25 @@ public class DataGridColumnasAutoAjusteTests
 
     /// <summary>
     /// Textos de la columna (encabezado + celdas realizadas) cuyo TextBlock quedó arreglado más
-    /// angosto que su ancho natural, o sea, recortados. En una columna medida (ColumnaAuto) que cedió al
-    /// espacio libre o llegó al tope, la celda cortada con elipsis y tooltip es el corte admitido del
-    /// criterio común (el mismo de GrillasSinRecorteBarridoTests), no un recorte.
+    /// angosto que su ancho natural, o sea, recortados. En una columna medida (ColumnaAuto) que llegó al
+    /// tope, o que cedió al espacio libre SIN scroll horizontal, la celda cortada con elipsis y tooltip es
+    /// el corte admitido del criterio común (el de GrillasSinRecorteBarridoTests), no un recorte. Con scroll
+    /// no hay corte por ceder: las medidas vuelven a su ancho medido y se leen enteras.
     /// </summary>
     private static List<string> TextosRecortados(DataGrid grid, Window window, string header)
     {
         var headerCell = grid.GetVisualDescendants().OfType<DataGridColumnHeader>().First(h => Equals(h.Content, header));
         var centroX = headerCell.TranslatePoint(new Point(headerCell.Bounds.Width / 2, 0), window)!.Value.X;
         var columna = Columna(grid, header);
+        var conScroll = ScrollHorizontal(grid) is { IsVisible: true };
+        var llegoAlTope = DataGridColumnasAutoBehavior.AnchoMedido(grid, columna) is { } medido
+            && medido >= ColumnaAuto.GetTope(columna) - 0.5;
 
         var textos = headerCell.GetVisualDescendants().OfType<TextBlock>()
             .Concat(grid.GetVisualDescendants().OfType<DataGridCell>()
                 .Where(c => c.IsEffectivelyVisible && ContieneX(c, window, centroX))
                 .SelectMany(c => c.GetVisualDescendants().OfType<TextBlock>())
-                .Where(tb => !GrillasSinRecorteBarridoTests.EsCorteAdmitido(grid, columna, tb)))
+                .Where(tb => !(GrillasSinRecorteBarridoTests.EsCorteAdmitido(grid, columna, tb) && (llegoAlTope || !conScroll))))
             .Where(tb => tb.IsEffectivelyVisible && !string.IsNullOrEmpty(tb.Text));
 
         return textos

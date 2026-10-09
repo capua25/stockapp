@@ -222,12 +222,13 @@ public class GrillasSinRecorteBarridoTests
     /// Columna medida (ColumnaAuto) que CEDIÓ al espacio libre de la grilla (ocupa menos de lo que midió) o que
     /// midió el tope: el texto que no entra se corta con elipsis y se lee entero en el tooltip, que abre solo si
     /// está cortado. Es el criterio común de columnas Auto, no un recorte. Una medida que ni cedió ni llegó al tope
-    /// tiene que mostrar su texto entero: si lo corta, es un error de medición y el barrido lo marca.
+    /// tiene que mostrar su texto entero: si lo corta, es un error de medición y el barrido lo marca. Una que no cede
+    /// (ColumnaAuto.NoCede) nunca tiene un corte admitido por ceder.
     /// </summary>
     internal static bool EsCorteAdmitido(DataGrid grid, DataGridColumn col, TextBlock tb) =>
         ColumnaAuto.GetMedir(col)
         && DataGridColumnasAutoBehavior.AnchoMedido(grid, col) is { } medido
-        && (col.ActualWidth < medido - 0.5 || medido >= ColumnaAuto.GetTope(col) - 0.5)
+        && ((col.ActualWidth < medido - 0.5 && !ColumnaAuto.GetNoCede(col)) || medido >= ColumnaAuto.GetTope(col) - 0.5)
         && tb.TextTrimming != Avalonia.Media.TextTrimming.None
         && TooltipSiSeCorta.GetActivo(tb)
         && Equals(ToolTip.GetTip(tb), tb.Text);

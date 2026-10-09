@@ -43,6 +43,9 @@ public class GrillaEspacioDerechoVistaRealTests
         // es la última columna y la única *: se estira hasta el borde de la grilla (a 1000 de ventana mide 139
         // y nada se corta; por debajo de unos 920 ya no entra y la grilla scrollea, con la columna saliendo
         // del área visible). A 925 queda en unos 64 px, sin scroll, y el título y la celda se cortan.
+        // Frágil: esos ~64 px son lo que dejan las demás columnas; si cambia el ancho de cualquiera, la precondición
+        // de corte de abajo falla y hay que recalcular la ventana. Cuando HistorialPorProductoView pase a v2 (sin
+        // Themes/DataGrid.axaml), este guardián del tema viejo se tiene que mudar a otra vista que siga en él.
         var comentario = vista.GetLogicalDescendants().OfType<DataGrid>().First().Columns.First(c => c.Header as string == "Comentario");
         DataGridColumnasAutoBehavior.SetPisoProporcional(comentario, AnchoComentario);
         var ventana = new Window { Width = 925, Height = 600, Content = vista };
