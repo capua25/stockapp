@@ -63,9 +63,11 @@ namespace StockApp.Presentation.Behaviors;
 ///
 /// <para><b>Robustez.</b></para>
 /// <list type="bullet">
-/// <item>(a) Redimensionado manual: si el usuario arrastra un separador de esa grilla (se detecta
-/// comparando los anchos al apretar y al soltar el puntero sobre un encabezado), el behavior no
-/// vuelve a tocar esa grilla: los anchos pasan a ser del usuario.</item>
+/// <item>(a) Redimensionado manual: si el usuario arrastra un separador (se detecta comparando los anchos al
+/// apretar y al soltar el puntero sobre un encabezado), esa columna queda fija en el ancho que le dio: no se vuelve a
+/// medir ni cede, y persiste ante recargas, búsquedas y cambios de ventana. El arrastre de la grilla aprieta además a
+/// las columnas de su derecha (las <c>*</c> hasta 40 px); el reparto sigue corriendo alrededor de la arrastrada y las
+/// devuelve a su piso, y si ya no entra queda el scroll horizontal en vez de una columna recortada.</item>
 /// <item>(b) Sin loops: el reparto calculado es un punto fijo (aplicarlo deja la grilla en el
 /// mismo estado que lo pidió) y la decisión encaja/desborde depende solo de anchos naturales,
 /// mínimos y ancho de la grilla, no del reparto actual. Si algo externo igual peleara con el
@@ -131,7 +133,8 @@ public static class DataGridColumnasAutoBehavior
     {
         /// <summary>Peso declarado de cada columna <c>*</c>, tomado la primera vez que se la ve.</summary>
         public readonly Dictionary<DataGridColumn, double> PesosDeclarados = new();
-        public bool UsuarioRedimensiono;
+        /// <summary>Ancho que el usuario le dio arrastrando el separador a cada columna: queda fijo y el resto se reparte alrededor.</summary>
+        public readonly Dictionary<DataGridColumn, double> AnchosUsuario = new();
         public Dictionary<DataGridColumn, DataGridLength>? AnchosAlApretar;
         public int ReparacionesSeguidas;
         public bool Reparando;
@@ -228,8 +231,16 @@ public static class DataGridColumnasAutoBehavior
         // userInitiated: true dentro del PointerMoved).
         var anchos = estado.AnchosAlApretar;
         estado.AnchosAlApretar = null;
-        if (grid.Columns.Any(c => !anchos.TryGetValue(c, out var antes) || antes != c.Width))
-            estado.UsuarioRedimensiono = true;
+        var cambiadas = grid.Columns.Where(c => !anchos.TryGetValue(c, out var antes) || antes != c.Width).ToList();
+        if (cambiadas.Count == 0)
+            return;
+
+        // El arrastre de un separador agranda o achica UNA columna y, de rebote, aprieta a las de su derecha (a las * hasta
+        // su MinWidth de 40, por debajo del piso): la arrastrada es la cambiada de menor DisplayIndex. Su ancho queda
+        // fijo; el reparto de la pasada siguiente vuelve a poner a las demás donde corresponde.
+        var arrastrada = cambiadas.MinBy(c => c.DisplayIndex)!;
+        estado.AnchosUsuario[arrastrada] = arrastrada.ActualWidth;
+        grid.InvalidateMeasure();
     }
 
     // ── Columnas que miden su contenido (ColumnaAuto) ─────────────────────────────────────────
@@ -273,7 +284,7 @@ public static class DataGridColumnasAutoBehavior
     {
         var marcadas = grid.Columns
             .Where(c => c.IsVisible && ColumnaAuto.GetMedir(c) && (c.Width.IsAuto || estado.AnchosMedidos.ContainsKey(c)))
-            .Where(c => !estado.MedidasDesdeElCambio.Contains(c))
+            .Where(c => !estado.MedidasDesdeElCambio.Contains(c) && !estado.AnchosUsuario.ContainsKey(c))
             .ToList();
         if (marcadas.Count == 0 || !ColumnaAuto.HayFilas(grid.ItemsSource))
         {
@@ -448,7 +459,7 @@ public static class DataGridColumnasAutoBehavior
 
     /// <summary>Las columnas medidas que el reparto maneja: en píxeles por la medición y no proporcionales.</summary>
     private static List<DataGridColumn> Medidas(Estado estado, List<DataGridColumn> visibles, List<DataGridColumn> estrellas) =>
-        visibles.Where(c => !estrellas.Contains(c) && c.Width.IsAbsolute && estado.AnchosMedidos.ContainsKey(c)).ToList();
+        visibles.Where(c => !estrellas.Contains(c) && !estado.AnchosUsuario.ContainsKey(c) && c.Width.IsAbsolute && estado.AnchosMedidos.ContainsKey(c)).ToList();
 
     /// <summary>
     /// Achica las columnas medidas de <paramref name="objetivos"/> para que entren en <paramref name="lugar"/> (el
@@ -484,7 +495,7 @@ public static class DataGridColumnasAutoBehavior
     {
         if (sender is not DataGrid grid || !Estados.TryGetValue(grid, out var estado))
             return;
-        if (estado.Reparando || estado.UsuarioRedimensiono || estado.AnchosAlApretar is not null)
+        if (estado.Reparando || estado.AnchosAlApretar is not null)
             return;
         if (!grid.IsEffectivelyVisible || (grid.HeadersVisibility & DataGridHeadersVisibility.Row) != 0)
             return;
@@ -496,7 +507,8 @@ public static class DataGridColumnasAutoBehavior
         foreach (var c in visibles.Where(c => c.Width.IsStar && !estado.PesosDeclarados.ContainsKey(c)))
             estado.PesosDeclarados[c] = c.Width.Value;
 
-        var estrellas = visibles.Where(c => estado.PesosDeclarados.ContainsKey(c) && estado.PesosDeclarados[c] > 0).ToList();
+        var estrellas = visibles.Where(c => estado.PesosDeclarados.ContainsKey(c) && estado.PesosDeclarados[c] > 0
+            && !estado.AnchosUsuario.ContainsKey(c)).ToList();
         var medidas = Medidas(estado, visibles, estrellas);
         // Sin columnas * no hay camino de Resize limitado: el crecimiento Auto ya funciona solo. Solo queda que
         // las columnas medidas cedan si no entran.
@@ -510,7 +522,8 @@ public static class DataGridColumnasAutoBehavior
         var objetivos = new Dictionary<DataGridColumn, double>();
         foreach (var c in visibles.Where(c => !estrellas.Contains(c)))
         {
-            var objetivo = medidas.Contains(c) ? Math.Min(c.MaxWidth, estado.AnchosMedidos[c]) : Objetivo(grid, c);
+            var objetivo = estado.AnchosUsuario.TryGetValue(c, out var delUsuario) ? delUsuario
+                : medidas.Contains(c) ? Math.Min(c.MaxWidth, estado.AnchosMedidos[c]) : Objetivo(grid, c);
             if (objetivo is null)
                 return; // Todavía sin medir: la grilla no terminó su primera pasada.
             objetivos[c] = objetivo.Value;
@@ -529,9 +542,10 @@ public static class DataGridColumnasAutoBehavior
             foreach (var c in objetivos.Keys.Except(medidas).ToList())
                 objetivos.Remove(c);
 
+        bool EnPixeles(DataGridColumn c) => medidas.Contains(c) || estado.AnchosUsuario.ContainsKey(c);
         var enEquilibrio =
             objetivos.All(kv => Math.Abs(kv.Key.ActualWidth - kv.Value) <= Tolerancia
-                && (!medidas.Contains(kv.Key) || Math.Abs(kv.Key.Width.Value - kv.Value) <= Tolerancia))
+                && (!EnPixeles(kv.Key) || (kv.Key.Width.IsAbsolute && Math.Abs(kv.Key.Width.Value - kv.Value) <= Tolerancia)))
             && estrellas.All(c =>
                 Math.Abs(c.ActualWidth - anchosEstrellas[c]) <= Tolerancia
                 && (encaja
@@ -553,7 +567,7 @@ public static class DataGridColumnasAutoBehavior
             foreach (var (c, objetivo) in objetivos)
             {
                 var w = c.Width;
-                Asignar(c, medidas.Contains(c)
+                Asignar(c, EnPixeles(c)
                     ? new DataGridLength(objetivo, DataGridLengthUnitType.Pixel, objetivo, objetivo)
                     : new DataGridLength(w.Value, w.UnitType, objetivo, objetivo));
             }

@@ -575,6 +575,84 @@ public class ProductoListViewV2Tests
                 Assert.False(TooltipSiSeCorta.EstaCortado(CeldaDe(grilla, p, header)), $"{header} de {p.Nombre} quedó cortado.");
     }
 
+    // ── Arrastre manual del separador (bug B4, 2026-10-09) ─────────────────────────────────────────────
+
+    private static void ArrastrarSeparador(Montaje m, string header, double dx)
+    {
+        var grilla = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla");
+        var cabecera = grilla.GetVisualDescendants().OfType<DataGridColumnHeader>().Single(h => Equals(h.Content, header));
+        var borde = cabecera.TranslatePoint(new Point(cabecera.Bounds.Width - 2, cabecera.Bounds.Height / 2), m.Ventana)!.Value;
+        m.Ventana.MouseMove(borde);
+        m.Ventana.MouseDown(borde, MouseButton.Left);
+        for (var paso = 1; paso <= 5; paso++)
+        {
+            m.Ventana.MouseMove(borde + new Point(dx * paso / 5, 0), RawInputModifiers.LeftMouseButton);
+            Dispatcher.UIThread.RunJobs();
+        }
+        m.Ventana.MouseUp(borde + new Point(dx, 0), MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    private static bool HayScrollHorizontal(DataGrid grilla) =>
+        grilla.GetVisualDescendants().OfType<ScrollBar>().Any(s => s.Orientation == Orientation.Horizontal && s.IsEffectivelyVisible);
+
+    private static string Anchos(DataGrid grilla) =>
+        string.Join(", ", grilla.Columns.Select(c => $"{c.Header}={c.ActualWidth:F1}"));
+
+    [AvaloniaTheory]
+    [InlineData("UNIDAD", 80)]
+    [InlineData("CÓDIGO", 80)]
+    public void ArrastrarUnaColumnaMedida_LasEstrellasNoBajanDeSuPiso_YSiNoEntraHayScroll(string header, double dx)
+    {
+        // 1040 = la vista a 1280 con el sidebar. Con los datos del mockup las columnas suman justo el ancho interno
+        // (948): agrandar una medida 80 px no entra y el scroll horizontal es lo que corresponde, no apretar a CATEGORÍA.
+        var m = Montar(new ProductosFake { Lista = ColumnaAutoTopeAdaptableTests.Productos() });
+        var grilla = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla");
+        var antes = Columna(grilla, header).ActualWidth;
+
+        ArrastrarSeparador(m, header, dx);
+
+        Assert.Equal(antes + dx, Columna(grilla, header).ActualWidth, 1);
+        Assert.Equal(160, Columna(grilla, "NOMBRE").ActualWidth, 1);
+        Assert.Equal(160, Columna(grilla, "CATEGORÍA").ActualWidth, 1);
+        Assert.Equal(220, Columna(grilla, "STOCK").ActualWidth, 1);
+        Assert.True(HayScrollHorizontal(grilla), $"No entra y no hay scroll horizontal: {Anchos(grilla)}");
+    }
+
+    [AvaloniaFact]
+    public void ArrastrarNombre_CategoriaNoBajaDeSuPiso_YHayScroll()
+    {
+        var m = Montar(new ProductosFake { Lista = ColumnaAutoTopeAdaptableTests.Productos() });
+        var grilla = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla");
+        var antes = Columna(grilla, "NOMBRE").ActualWidth;
+
+        ArrastrarSeparador(m, "NOMBRE", 60);
+
+        Assert.Equal(antes + 60, Columna(grilla, "NOMBRE").ActualWidth, 1);
+        Assert.Equal(160, Columna(grilla, "CATEGORÍA").ActualWidth, 1);
+        Assert.Equal(100, Columna(grilla, "COSTO").ActualWidth, 1);
+        Assert.True(HayScrollHorizontal(grilla), $"No entra y no hay scroll horizontal: {Anchos(grilla)}");
+    }
+
+    [AvaloniaFact]
+    public void ArrastrarUnidad_ElAnchoArrastradoPersisteAlBuscar_YLasEstrellasSiguenEnSuPiso()
+    {
+        var m = Montar(new ProductosFake { Lista = ColumnaAutoTopeAdaptableTests.Productos() });
+        var grilla = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla");
+        ArrastrarSeparador(m, "UNIDAD", 80);
+        var arrastrada = Columna(grilla, "UNIDAD").ActualWidth;
+
+        m.Vm.FiltroBusqueda = "Pintura";
+        m.Vm.BuscarCommand.Execute(null);
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(arrastrada, Columna(grilla, "UNIDAD").ActualWidth, 1);
+        Assert.Equal(160, Columna(grilla, "NOMBRE").ActualWidth, 1);
+        Assert.Equal(160, Columna(grilla, "CATEGORÍA").ActualWidth, 1);
+    }
+
     // ── Gate de Nuevo / Editar / Eliminar por catalogo.productos (bug B3, 2026-10-09) ──────────────────
     // Operador de permisos mixtos: Admin cortocircuita el gate y no probaría nada.
 
