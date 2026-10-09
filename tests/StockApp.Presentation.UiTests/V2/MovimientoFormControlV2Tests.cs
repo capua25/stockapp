@@ -98,7 +98,7 @@ public class MovimientoFormControlV2Tests
         }
         else
         {
-            var e = new EntradaRegistroViewModel(servicio, productos, navegacion, conf);
+            var e = new EntradaRegistroViewModel(servicio, productos, navegacion, conf, new SesionFake(StockApp.Domain.Enums.RolUsuario.Operador, StockApp.Application.Authorization.Permisos.RegistrarGastos));
             vm = e;
             vista = new EntradaRegistroView { DataContext = e };
         }

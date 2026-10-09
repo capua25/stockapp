@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Moq;
+using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
+using StockApp.Application.Interfaces;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
@@ -28,7 +30,8 @@ public class EntradaRegistroFacturaTests
                     Mock<IMovimientoStockService> svcMock,
                     Mock<INavigationService> navMock,
                     Mock<IConfirmacionService> confirmMock)
-        Crear(bool aceptaAsociar)
+        Crear(bool aceptaAsociar, RolUsuario rol = RolUsuario.Operador,
+              params string[] permisos)
     {
         var svc = new Mock<IMovimientoStockService>();
         svc.Setup(s => s.RegistrarAsync(It.IsAny<RegistrarMovimientoDto>(), It.IsAny<bool>()))
@@ -50,7 +53,13 @@ public class EntradaRegistroFacturaTests
         var confirm = new Mock<IConfirmacionService>();
         confirm.Setup(c => c.PreguntarAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync(aceptaAsociar);
 
-        var vm = new EntradaRegistroViewModel(svc.Object, productos.Object, nav.Object, confirm.Object);
+        // Operador con finanzas.gastos por defecto: Admin cortocircuita el chequeo y no probaría el gate.
+        var sesion = new Mock<ICurrentSession>();
+        sesion.SetupGet(x => x.RolActual).Returns(rol);
+        sesion.SetupGet(x => x.PermisosActuales).Returns(
+            new HashSet<string>(permisos.Length == 0 ? new[] { Permisos.RegistrarGastos } : permisos));
+
+        var vm = new EntradaRegistroViewModel(svc.Object, productos.Object, nav.Object, confirm.Object, sesion.Object);
         return (vm, svc, nav, confirm);
     }
 
@@ -105,5 +114,48 @@ public class EntradaRegistroFacturaTests
         confirm.Verify(c => c.PreguntarAsync(It.IsAny<string>()), Times.Never);
         confirm.Verify(c => c.PreguntarAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
         nav.Verify(n => n.Navegar<MovimientoHistorialViewModel>(), Times.Once);
+    }
+
+    // Bug 2026-10-09 (verificación orgánica): un operador con movimientos.registrar pero SIN
+    // finanzas.gastos aceptaba "asociar factura" y caía en un form de gasto inutilizable (combos
+    // vacíos, solo Cancelar) y de ahí a Gastos y facturas, fuera de su sidebar. A quien no puede
+    // registrar gastos no se le hace la pregunta: sigue como con "No, continuar".
+    [Fact]
+    public async Task Compra_SinPermisoDeGastos_NoPreguntaYSigueAlHistorial()
+    {
+        // Permisos mixtos: movimientos y catálogo sí, finanzas no (el caso f3c1mixto).
+        var (vm, _, nav, confirm) = Crear(aceptaAsociar: true, RolUsuario.Operador,
+            Permisos.RegistrarMovimientos, Permisos.GestionarProductos);
+
+        await RegistrarCompraAsync(vm);
+
+        confirm.Verify(c => c.PreguntarAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        nav.Verify(n => n.Navegar<MovimientoHistorialViewModel>(), Times.Once);
+        nav.Verify(n => n.Navegar<GastoFormViewModel>(
+            It.IsAny<Action<GastoFormViewModel>>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Compra_SoloVerFinanzasSinRegistrarGastos_NoPregunta()
+    {
+        var (vm, _, nav, confirm) = Crear(aceptaAsociar: true, RolUsuario.Operador,
+            Permisos.VerFinanzas);
+
+        await RegistrarCompraAsync(vm);
+
+        confirm.Verify(c => c.PreguntarAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        nav.Verify(n => n.Navegar<MovimientoHistorialViewModel>(), Times.Once);
+    }
+
+    [Fact]
+    public async Task Compra_AdminSinPermisosExplicitos_SigueRecibiendoLaPregunta()
+    {
+        var (vm, _, nav, confirm) = Crear(aceptaAsociar: true, RolUsuario.Admin, "otro.permiso");
+
+        await RegistrarCompraAsync(vm);
+
+        confirm.Verify(c => c.PreguntarAsync(It.IsAny<string>(), "No, continuar", "Sí, adjuntar factura"), Times.Once);
+        nav.Verify(n => n.Navegar<GastoFormViewModel>(
+            It.IsAny<Action<GastoFormViewModel>>()), Times.Once);
     }
 }

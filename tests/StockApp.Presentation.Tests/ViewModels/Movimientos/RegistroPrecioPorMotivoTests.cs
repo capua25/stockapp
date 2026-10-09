@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using Moq;
 using StockApp.Application.Catalogo;
+using StockApp.Application.Interfaces;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
@@ -26,7 +27,8 @@ public class RegistroPrecioPorMotivoTests
 
     private static EntradaRegistroViewModel Entrada() => new(
         Mock.Of<IMovimientoStockService>(), Mock.Of<IProductoService>(),
-        Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>());
+        Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>(),
+        Mock.Of<ICurrentSession>());
 
     private static SalidaRegistroViewModel Salida() => new(
         Mock.Of<IMovimientoStockService>(), Mock.Of<IProductoService>(),

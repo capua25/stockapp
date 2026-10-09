@@ -48,7 +48,8 @@ public class MovimientoFormControlCantidadCulturaTests
             new MovimientoStockServiceFake(),
             new ProductoServiceFake(),
             new NavigationServiceFake(),
-            new ConfirmacionServiceFake());
+            new ConfirmacionServiceFake(),
+            new SesionFake(StockApp.Domain.Enums.RolUsuario.Operador));
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
         window.DataContext = vm;

@@ -182,7 +182,7 @@ public class GuardarBloqueadoConErroresDeEntradaTests
         }
         else
         {
-            var evm = new EntradaRegistroViewModel(servicio, productos, new NavigationServiceFake(), new ConfirmacionServiceFake());
+            var evm = new EntradaRegistroViewModel(servicio, productos, new NavigationServiceFake(), new ConfirmacionServiceFake(), new SesionFake(StockApp.Domain.Enums.RolUsuario.Operador));
             vm = evm;
             vista = new EntradaRegistroView { DataContext = evm };
         }

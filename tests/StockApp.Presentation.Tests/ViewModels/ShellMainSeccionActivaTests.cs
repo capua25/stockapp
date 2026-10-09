@@ -99,7 +99,7 @@ public class ShellMainSeccionActivaTests
         navegacion = new NavigationService(tipo =>
         {
             if (tipo == typeof(EntradaRegistroViewModel))
-                return new EntradaRegistroViewModel(movimientos.Object, Mock.Of<IProductoService>(), navegacion!, Mock.Of<IConfirmacionService>());
+                return new EntradaRegistroViewModel(movimientos.Object, Mock.Of<IProductoService>(), navegacion!, Mock.Of<IConfirmacionService>(), Mock.Of<ICurrentSession>());
             if (tipo == typeof(SalidaRegistroViewModel))
                 return new SalidaRegistroViewModel(movimientos.Object, Mock.Of<IProductoService>(), navegacion!, Mock.Of<IConfirmacionService>());
             if (tipo == typeof(ControlPoaViewModel))

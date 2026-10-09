@@ -1,5 +1,8 @@
+using System.Collections.Generic;
 using Moq;
+using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
+using StockApp.Application.Interfaces;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
@@ -16,14 +19,25 @@ public class EntradaRegistroViewModelTests : MovimientoRegistroViewModelTestsBas
         IProductoService productoService,
         INavigationService navigation,
         IConfirmacionService confirmacion)
-        => new EntradaRegistroViewModel(service, productoService, navigation, confirmacion);
+        => new EntradaRegistroViewModel(service, productoService, navigation, confirmacion, SesionConGastos());
+
+    /// <summary>Operador con finanzas.gastos (no Admin: Admin cortocircuita el gate). Mock.Of deja
+    /// PermisosActuales en null y reventaría al preguntar por la factura.</summary>
+    private static ICurrentSession SesionConGastos()
+    {
+        var sesion = new Mock<ICurrentSession>();
+        sesion.SetupGet(x => x.RolActual).Returns(RolUsuario.Operador);
+        sesion.SetupGet(x => x.PermisosActuales).Returns(new HashSet<string> { Permisos.RegistrarGastos });
+        return sesion.Object;
+    }
 
     private static EntradaRegistroViewModel CrearVmConcreto()
         => new EntradaRegistroViewModel(
             Mock.Of<IMovimientoStockService>(),
             Mock.Of<IProductoService>(),
             Mock.Of<INavigationService>(),
-            Mock.Of<IConfirmacionService>());
+            Mock.Of<IConfirmacionService>(),
+            SesionConGastos());
 
     [Fact]
     public void Tipo_EsEntrada()

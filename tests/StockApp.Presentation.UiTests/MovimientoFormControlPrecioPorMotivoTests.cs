@@ -69,7 +69,8 @@ public class MovimientoFormControlPrecioPorMotivoTests
 
     private static EntradaRegistroViewModel Entrada() => new(
         new MovimientoStockServiceFake(), new ProductoServiceFake(),
-        new NavigationServiceFake(), new ConfirmacionServiceFake());
+        new NavigationServiceFake(), new ConfirmacionServiceFake(),
+        new SesionFake(StockApp.Domain.Enums.RolUsuario.Operador));
 
     [AvaloniaTheory]
     [InlineData(MotivoMovimiento.UsoOConsumo)]

@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
+using StockApp.Application.Interfaces;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
@@ -27,19 +29,33 @@ public sealed partial class EntradaRegistroViewModel : MovimientoRegistroViewMod
 
     public override string Titulo => "Registrar Entrada";
 
+    private readonly ICurrentSession _session;
+
     public EntradaRegistroViewModel(
         IMovimientoStockService service,
         IProductoService productoService,
         INavigationService navigation,
-        IConfirmacionService confirmacion)
+        IConfirmacionService confirmacion,
+        ICurrentSession session)
         : base(service, productoService, navigation, confirmacion)
     {
+        _session = session;
         Motivo = MotivosDisponibles[0];
     }
 
+    /// <summary>
+    /// Misma condición que <c>GastoFormViewModel.PuedeRegistrarGastos</c> (el form de gasto exige
+    /// RegistrarGastos para guardar, y RegistrarGastos implica VerFinanzas para sus combos): sin
+    /// ella el form "Asociar factura" queda inutilizable (combos vacíos, solo Cancelar), así que
+    /// ni se ofrece (bug 2026-10-09).
+    /// </summary>
+    private bool PuedeRegistrarGastos =>
+        _session.RolActual == RolUsuario.Admin ||
+        _session.PermisosActuales.Contains(Permisos.RegistrarGastos);
+
     protected override async Task AlRegistradoAsync(MovimientoRegistradoDto registrado)
     {
-        if (registrado.Motivo != MotivoMovimiento.Compra)
+        if (registrado.Motivo != MotivoMovimiento.Compra || !PuedeRegistrarGastos)
         {
             await base.AlRegistradoAsync(registrado);
             return;

@@ -1,6 +1,7 @@
 using Moq;
 using StockApp.ApiClient;
 using StockApp.Application.Catalogo;
+using StockApp.Application.Interfaces;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
@@ -48,7 +49,7 @@ public static class DatosMovimientos
         var movimientos = Mock.Of<IMovimientoStockService>();
         return salida
             ? new SalidaRegistroViewModel(movimientos, productos.Object, Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>())
-            : new EntradaRegistroViewModel(movimientos, productos.Object, Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>());
+            : new EntradaRegistroViewModel(movimientos, productos.Object, Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>(), Mock.Of<ICurrentSession>());
     }
 
     public static void Aplicar(MovimientoRegistroViewModelBase vm, Estado estado)
