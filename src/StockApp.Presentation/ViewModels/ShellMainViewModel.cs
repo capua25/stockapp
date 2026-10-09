@@ -395,6 +395,16 @@ public partial class ShellMainViewModel : ViewModelBase
         await RefrescoPermisos.DispararBestEffortAsync(
             () => _authService.ObtenerPermisosPropiosAsync(), nameof(ShellMainViewModel));
 
+        NotificarPermisos();
+    }
+
+    /// <summary>
+    /// Notifica las Puede* y recalcula la visibilidad del sidebar contra los permisos que hay HOY
+    /// en <see cref="ICurrentSession.PermisosActuales"/>. Lo comparten el refresco al navegar
+    /// (<see cref="RefrescarPermisosAsync"/>) y <see cref="NotificarPermisosActualizados"/>.
+    /// </summary>
+    private void NotificarPermisos()
+    {
         OnPropertyChanged(nameof(PuedeGestionarProductos));
         OnPropertyChanged(nameof(PuedeRegistrarMovimientos));
         OnPropertyChanged(nameof(PuedeGestionarTareas));
@@ -407,6 +417,21 @@ public partial class ShellMainViewModel : ViewModelBase
         OnPropertyChanged(nameof(PuedeRegistrarEntradaSalida));
         OnPropertyChanged(nameof(PuedeVerHistorialPorProducto));
         RecalcularVisibilidad();
+    }
+
+    /// <summary>
+    /// Bug B3 (2026-10-09): un 403 refresca el cache de permisos (App.axaml.cs, vía
+    /// ManejadorAccesoRevocado) pero nadie avisaba al shell: el sidebar y el botón de la pantalla
+    /// abierta quedaban con los permisos viejos hasta la próxima navegación. Lo llama la composition
+    /// root, EN EL HILO DE UI, después de ese refresco. Sin suscripciones: no hay nada que
+    /// desuscribir cuando el shell se recrea en el re-login. Solo reenvía a la pantalla abierta acá y
+    /// no en el refresco al navegar, que corre en segundo plano y cuya pantalla acaba de crearse con
+    /// los permisos vigentes.
+    /// </summary>
+    public void NotificarPermisosActualizados()
+    {
+        NotificarPermisos();
+        CurrentContent?.NotificarPermisosActualizados();
     }
 
     /// <summary>

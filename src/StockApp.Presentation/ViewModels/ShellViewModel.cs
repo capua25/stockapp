@@ -320,6 +320,16 @@ public partial class ShellViewModel : ViewModelBase
             shellMain.Desconectar();
     }
 
+    /// <summary>
+    /// Avisa al shell principal activo (si lo hay) que los permisos cambiaron en caliente. Lo llama
+    /// App.axaml.cs tras el refresco por un 403 (bug B3). Sin shell principal (login, bloqueo) no hace nada.
+    /// </summary>
+    public void NotificarPermisosActualizados()
+    {
+        if (CurrentViewModel is ShellMainViewModel shellMain)
+            shellMain.NotificarPermisosActualizados();
+    }
+
     public void MostrarContenidoPrincipal()
     {
         // Navega al shell principal con menú lateral, que a su vez usa INavigationService

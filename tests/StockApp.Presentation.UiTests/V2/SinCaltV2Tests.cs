@@ -55,7 +55,7 @@ public class SinCaltV2Tests
     public void TextoDeCeldasDeUnaVistaV2_TieneCaltApagado_YLasCifrasTabularesSiguen()
     {
         var servicio = new ProductosFake { Lista = [P(1, "Cable 2x1,5 mm", 12m)] };
-        var vista = new ProductoListView { DataContext = new ProductoListViewModel(servicio, new NavigationRecorderFake(), new ConfirmacionServiceFake()) };
+        var vista = new ProductoListView { DataContext = new ProductoListViewModel(servicio, new NavigationRecorderFake(), new ConfirmacionServiceFake(), new SesionFake(StockApp.Domain.Enums.RolUsuario.Operador, StockApp.Application.Authorization.Permisos.GestionarProductos)) };
         var ventana = new Window { Width = 1040, Height = 760, Content = vista };
         ventana.Show();
         Dispatcher.UIThread.RunJobs();

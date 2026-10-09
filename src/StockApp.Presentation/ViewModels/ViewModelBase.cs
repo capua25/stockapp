@@ -128,6 +128,16 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
             OnPropertyChanged(nameof(Cargando));
     }
 
+    /// <summary>
+    /// Hook: los permisos del usuario cambiaron en caliente (un 403 refrescó el cache). Lo invoca
+    /// <see cref="ShellMainViewModel.NotificarPermisosActualizados"/> sobre la pantalla abierta. Las
+    /// pantallas con una <c>Puede*</c> calculada sobre ICurrentSession (que no notifica) lo
+    /// sobreescriben para re-notificarla; el resto no necesita nada.
+    /// </summary>
+    public virtual void NotificarPermisosActualizados()
+    {
+    }
+
     /// <summary>Marca el estado "sin permiso" (ver <see cref="SinPermiso"/>) con el mensaje que la
     /// vista va a mostrar en EstadoVacio. Expuesto protected para el caso puntual de
     /// HistorialImportacionesViewModel.CargarAsync, que ya tenía su propio catch con filtro

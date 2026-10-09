@@ -14,16 +14,20 @@
              Background="{DynamicResource V2FondoBrush}">
 
     <!-- UI v2 (spec §5.1). Espejo: docs/ui-v2/mockups/inventario/productos.html y productos-vacio.html.
-         Editar y Eliminar se habilitan solo con un producto activo seleccionado (regla del VM).
+         Editar y Eliminar se habilitan solo con un producto activo seleccionado (regla del VM). Los tres botones se ven solo con
+         catalogo.productos (PuedeGestionarProductos, bug B3), como el resto de las pantallas: IsVisible, no IsEnabled.
          Mientras carga sin filas: EstadoCargando; tras un 403: Sin permiso en lugar de la card; el vacío solo con
          la carga terminada. CÓDIGO, COSTO y UNIDAD miden su contenido sobre todas las filas (ColumnaAuto). -->
     <DockPanel Margin="28,24">
 
         <v2:EncabezadoPagina x:Name="Encabezado" DockPanel.Dock="Top" Titulo="Productos">
             <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button x:Name="BotonEditar" Classes="secundario" Content="Editar" Command="{Binding EditarCommand}" />
-                <Button x:Name="BotonEliminar" Classes="peligro" Content="Eliminar" Command="{Binding BajaCommand}" />
-                <Button x:Name="BotonNuevo" Classes="primario" Content="Nuevo" Command="{Binding NuevoCommand}" />
+                <Button x:Name="BotonEditar" Classes="secundario" Content="Editar" Command="{Binding EditarCommand}"
+                        IsVisible="{Binding PuedeGestionarProductos}" />
+                <Button x:Name="BotonEliminar" Classes="peligro" Content="Eliminar" Command="{Binding BajaCommand}"
+                        IsVisible="{Binding PuedeGestionarProductos}" />
+                <Button x:Name="BotonNuevo" Classes="primario" Content="Nuevo" Command="{Binding NuevoCommand}"
+                        IsVisible="{Binding PuedeGestionarProductos}" />
             </StackPanel>
         </v2:EncabezadoPagina>
 

@@ -124,18 +124,11 @@ public partial class App : AvaloniaApp
             // verdadero (el 403 ya probó que no tiene acceso). Por eso el refresco ahora corre
             // ANTES de mostrar el aviso (antes se mostraba primero): el contenido del mensaje
             // depende de su resultado.
-            apiSession.AccesoRevocado += () => uiDispatcher.Post(async () =>
-            {
-                var authService = _serviceProvider!.GetRequiredService<IAuthService>();
-
-                var permisosAntes = apiSession.PermisosActuales;
-                await RefrescoPermisos.DispararBestEffortAsync(
-                    () => authService.ObtenerPermisosPropiosAsync(), "AccesoRevocado");
-                var mensaje = AvisoAccesoRevocado.Resolver(permisosAntes, apiSession.PermisosActuales);
-
-                var confirmacion = _serviceProvider!.GetRequiredService<IConfirmacionService>();
-                await confirmacion.InformarAsync(mensaje);
-            });
+            apiSession.AccesoRevocado += () => uiDispatcher.Post(async () => await ManejadorAccesoRevocado.ManejarAsync(
+                apiSession,
+                _serviceProvider!.GetRequiredService<IAuthService>(),
+                _serviceProvider!.GetRequiredService<IConfirmacionService>(),
+                shell.NotificarPermisosActualizados));
 
             // Inicializa el shell (decide login / primer arranque) ANTES de asignar el
             // DataContext, y en el thread pool, para no deadlockear el UI thread ni disparar

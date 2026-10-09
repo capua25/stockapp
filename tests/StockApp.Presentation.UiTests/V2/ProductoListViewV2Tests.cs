@@ -14,9 +14,14 @@ using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 using StockApp.Presentation.Behaviors;
+using StockApp.Presentation.Services;
+using StockApp.Presentation.ViewModels;
+using Avalonia.Markup.Xaml;
 using StockApp.Presentation.Controls.V2;
 using StockApp.Presentation.ViewModels.Catalogo;
 using StockApp.Presentation.Views.Catalogo;
@@ -78,10 +83,10 @@ public class ProductoListViewV2Tests
     private static Montaje Montar(params ProductoDto[] productos) => Montar(new ProductosFake { Lista = productos.ToList() });
 
     /// <summary>Monta la vista con el servicio ya configurado. 1040 es el ancho de la vista a 1280 con el sidebar de 240.</summary>
-    private static Montaje Montar(ProductosFake servicio, double ancho = 1040)
+    private static Montaje Montar(ProductosFake servicio, double ancho = 1040, SesionFake? sesion = null)
     {
         var navegacion = new NavigationRecorderFake();
-        var vm = new ProductoListViewModel(servicio, navegacion, new ConfirmacionServiceFake());
+        var vm = new ProductoListViewModel(servicio, navegacion, new ConfirmacionServiceFake(), sesion ?? new SesionFake(RolUsuario.Operador, Permisos.GestionarProductos));
         var vista = new ProductoListView { DataContext = vm };
         var ventana = new Window { Width = ancho, Height = 760, Content = vista };
         ventana.Show();
@@ -568,5 +573,82 @@ public class ProductoListViewV2Tests
         foreach (var p in productos)
             foreach (var header in new[] { "CÓDIGO", "NOMBRE", "COSTO", "UNIDAD", "CATEGORÍA" })
                 Assert.False(TooltipSiSeCorta.EstaCortado(CeldaDe(grilla, p, header)), $"{header} de {p.Nombre} quedó cortado.");
+    }
+
+    // ── Gate de Nuevo / Editar / Eliminar por catalogo.productos (bug B3, 2026-10-09) ──────────────────
+    // Operador de permisos mixtos: Admin cortocircuita el gate y no probaría nada.
+
+    private static bool VisibleBoton(Montaje m, string nombre) =>
+        ArbolVisual.EsVisibleEnArbol(MontajeV2.Parte<Button>(m.Vista, nombre));
+
+    private static SesionFake Mixto(params string[] permisos) => new(RolUsuario.Operador, permisos);
+
+    [AvaloniaFact]
+    public void ConGestionarProductos_ElListadoMuestraNuevoEditarYEliminar()
+    {
+        var m = Montar(new ProductosFake { Lista = { Activo } }, sesion: Mixto(Permisos.GestionarProductos, Permisos.VerReportes));
+
+        Assert.True(VisibleBoton(m, "BotonNuevo"));
+        Assert.True(VisibleBoton(m, "BotonEditar"));
+        Assert.True(VisibleBoton(m, "BotonEliminar"));
+    }
+
+    [AvaloniaFact]
+    public void SinGestionarProductos_ElListadoOcultaNuevoEditarYEliminar()
+    {
+        var m = Montar(new ProductosFake { Lista = { Activo } }, sesion: Mixto(Permisos.VerReportes));
+
+        Assert.False(VisibleBoton(m, "BotonNuevo"));
+        Assert.False(VisibleBoton(m, "BotonEditar"));
+        Assert.False(VisibleBoton(m, "BotonEliminar"));
+    }
+
+    [AvaloniaFact]
+    public void RevocarGestionarProductos_EnCaliente_OcultaLosBotonesSinRecrearLaVista()
+    {
+        var sesion = Mixto(Permisos.GestionarProductos, Permisos.VerReportes);
+        var m = Montar(new ProductosFake { Lista = { Activo } }, sesion: sesion);
+        Assert.True(VisibleBoton(m, "BotonNuevo"), "Precondición: con el permiso, Nuevo se ve.");
+
+        sesion.EstablecerPermisos(new HashSet<string> { Permisos.VerReportes });
+        m.Vm.NotificarPermisosActualizados();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(VisibleBoton(m, "BotonNuevo"));
+        Assert.False(VisibleBoton(m, "BotonEditar"));
+        Assert.False(VisibleBoton(m, "BotonEliminar"));
+    }
+
+    [AvaloniaFact]
+    public async Task Un403_ConLaPantallaDeProductosAbierta_OcultaElBotonNuevoDesdeElShell()
+    {
+        var sesion = Mixto(Permisos.GestionarProductos, Permisos.VerReportes);
+        var tras = new HashSet<string> { Permisos.VerReportes };
+        var shellVm = new ShellMainViewModel(
+            sesion, new NavigationServiceFake(), new InfoAppFake(), new ConfirmacionServiceFake(),
+            new AuthServiceFake(sesion, tras), new PreferenciasSidebarFake());
+        var productos = new ProductoListViewModel(new ProductosFake { Lista = { Activo } }, new NavigationRecorderFake(),
+            new ConfirmacionServiceFake(), sesion);
+        shellVm.CurrentContent = productos;
+
+        var ventana = AvaloniaRuntimeXamlLoader.Parse<Window>("""
+            <Window xmlns="https://github.com/avaloniaui"
+                    xmlns:vistas="clr-namespace:StockApp.Presentation.Views;assembly=GestionMunicipal"
+                    Width="1280" Height="760"><vistas:ShellMainView /></Window>
+            """, typeof(TestApp).Assembly);
+        ventana.DataTemplates.Add(new ViewLocator());
+        ventana.DataContext = shellVm;
+        ventana.Show();
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
+
+        Control Nuevo() => ventana.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "BotonNuevo");
+        Assert.True(ArbolVisual.EsVisibleEnArbol(Nuevo()), "Precondición: con el permiso, Nuevo se ve.");
+
+        await ManejadorAccesoRevocado.ManejarAsync(sesion, new AuthServiceFake(sesion, tras),
+            new ConfirmacionServiceFake(), shellVm.NotificarPermisosActualizados);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(ArbolVisual.EsVisibleEnArbol(Nuevo()));
     }
 }

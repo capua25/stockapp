@@ -6,7 +6,10 @@ using System.Threading.Tasks;
 using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
+using StockApp.Application.Interfaces;
+using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
@@ -27,6 +30,7 @@ public partial class ProductoListViewModel : ViewModelBase
     private readonly IProductoService     _service;
     private readonly INavigationService   _navigation;
     private readonly IConfirmacionService _confirmacion;
+    private readonly ICurrentSession      _session;
 
     private CancellationTokenSource? _debounceCts;
 
@@ -45,6 +49,19 @@ public partial class ProductoListViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(EditarCommand))]
     private ProductoDto? _itemSeleccionado;
 
+    /// <summary>
+    /// Gate de Nuevo / Editar / Eliminar (bug B3, 2026-10-09): mismo criterio que el sidebar y el
+    /// servidor (Admin siempre; Operador con <see cref="Permisos.GestionarProductos"/>), con
+    /// IsVisible en la vista como el resto de las pantallas. Es un getter sobre ICurrentSession,
+    /// que no notifica: <see cref="NotificarPermisosActualizados"/> lo re-notifica cuando un 403
+    /// refresca los permisos con la pantalla abierta.
+    /// </summary>
+    public bool PuedeGestionarProductos =>
+        _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.GestionarProductos);
+
+    /// <inheritdoc />
+    public override void NotificarPermisosActualizados() => OnPropertyChanged(nameof(PuedeGestionarProductos));
+
     public ObservableCollection<ProductoDto> Items { get; } = new();
 
     /// <summary>
@@ -59,11 +76,13 @@ public partial class ProductoListViewModel : ViewModelBase
     public ProductoListViewModel(
         IProductoService     service,
         INavigationService   navigation,
-        IConfirmacionService confirmacion)
+        IConfirmacionService confirmacion,
+        ICurrentSession      session)
     {
         _service      = service;
         _navigation   = navigation;
         _confirmacion = confirmacion;
+        _session      = session;
 
         ItemsView = new DataGridCollectionView(Items);
     }

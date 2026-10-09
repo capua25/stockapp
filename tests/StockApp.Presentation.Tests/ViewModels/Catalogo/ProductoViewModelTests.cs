@@ -48,7 +48,7 @@ public class ProductoListViewModelTests
         confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(true);
         confirmMock.Setup(c => c.InformarAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
 
-        var vm = new ProductoListViewModel(svcMock.Object, navMock.Object, confirmMock.Object);
+        var vm = new ProductoListViewModel(svcMock.Object, navMock.Object, confirmMock.Object, Mock.Of<StockApp.Application.Interfaces.ICurrentSession>());
         return (vm, svcMock, navMock, confirmMock);
     }
 
@@ -58,7 +58,7 @@ public class ProductoListViewModelTests
         var pendiente = new TaskCompletionSource<IReadOnlyList<ProductoDto>>();
         var svc = new Mock<IProductoService>();
         svc.Setup(s => s.BuscarAsync(null, null, null)).Returns(pendiente.Task);
-        var vm = new ProductoListViewModel(svc.Object, Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>());
+        var vm = new ProductoListViewModel(svc.Object, Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>(), Mock.Of<StockApp.Application.Interfaces.ICurrentSession>());
 
         var carga = vm.CargarAsync();
         Assert.True(vm.Cargando);
@@ -76,7 +76,7 @@ public class ProductoListViewModelTests
         var svc = new Mock<IProductoService>();
         svc.Setup(s => s.BuscarAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
             .ThrowsAsync(new UnauthorizedAccessException());
-        var vm = new ProductoListViewModel(svc.Object, Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>());
+        var vm = new ProductoListViewModel(svc.Object, Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>(), Mock.Of<StockApp.Application.Interfaces.ICurrentSession>());
 
         await vm.CargarAsync();
 
@@ -121,7 +121,7 @@ public class ProductoListViewModelTests
         var svc = new Mock<IProductoService>();
         svc.Setup(s => s.BuscarAsync(null, null, null)).Returns(carga.Task);
         svc.Setup(s => s.BuscarPorTextoAsync(It.IsAny<string?>())).Returns(busqueda.Task);
-        var vm = new ProductoListViewModel(svc.Object, Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>());
+        var vm = new ProductoListViewModel(svc.Object, Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>(), Mock.Of<StockApp.Application.Interfaces.ICurrentSession>());
 
         var t1 = vm.CargarAsync();
         var t2 = vm.BuscarCommand.ExecuteAsync(null);
@@ -170,7 +170,7 @@ public class ProductoListViewModelTests
             .ThrowsAsync(new UnauthorizedAccessException());
         var navMock = new Mock<INavigationService>();
         var confirmMock = new Mock<IConfirmacionService>();
-        var vm = new ProductoListViewModel(svcMock.Object, navMock.Object, confirmMock.Object);
+        var vm = new ProductoListViewModel(svcMock.Object, navMock.Object, confirmMock.Object, Mock.Of<StockApp.Application.Interfaces.ICurrentSession>());
 
         var ex = await Record.ExceptionAsync(() => vm.CargarAsync());
 
