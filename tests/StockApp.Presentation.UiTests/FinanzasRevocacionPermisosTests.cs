@@ -27,10 +27,11 @@ namespace StockApp.Presentation.UiTests;
 /// con SesionFake real: IngresosViewModel.PuedeRegistrarIngresos es una propiedad calculada sin
 /// [ObservableProperty] ni OnPropertyChanged propio -- a diferencia de ShellMainViewModel (que
 /// SI escucha IAuthService y dispara OnPropertyChanged por cada gate tras un evento de
-/// navegacion), estos VM de pantalla son AddTransient y, segun su propio comentario de clase,
-/// deliberadamente "no se refrescan en caliente: se recrean en cada navegacion, asi que ya toman
-/// el ICurrentSession vigente en ese momento". Pedirle a la MISMA instancia que se redibuje solos
-/// hubiera sido custodiar un comportamiento que la vista nunca prometio tener.
+/// navegacion), estos VM de pantalla son AddTransient y su refresco llega solo por
+/// NotificarPermisosActualizados, que el shell invoca sobre la pantalla abierta tras un 403
+/// (ManejadorAccesoRevocado). EstablecerPermisos en el fake no dispara nada, asi que pedirle a la
+/// MISMA instancia que se redibuje con solo cambiar el permiso hubiera sido custodiar un
+/// comportamiento que este test no ejercita.
 ///
 /// Este test prueba las dos cosas que SI son ciertas y que SI dependian del fake no-op:
 /// 1. El gate del VM (`PuedeRegistrarIngresos`) recalcula al toque en la MISMA instancia apenas

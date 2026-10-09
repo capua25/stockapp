@@ -41,8 +41,10 @@ public partial class PagosGastoViewModel : ViewModelBase
     /// CalendarioPagosView, sin gatear) — el gating va acá porque acá vive la ACCIÓN, cubriendo
     /// ambos caminos de navegación por definición. Mismo patrón que
     /// GastosViewModel.PuedeRegistrarPagos / DocumentoFormViewModel.PuedeAnular: se OCULTA
-    /// (IsVisible), nunca se deshabilita. Sin refresco en caliente: PagosGastoViewModel se
-    /// registra AddTransient y se recrea en cada navegación, toma el ICurrentSession vigente.
+    /// (IsVisible), nunca se deshabilita. Un 403 dispara ManejadorAccesoRevocado: la base notifica
+    /// todos los bindings de la pantalla abierta (ViewModelBase.NotificarPermisosActualizados) y el
+    /// gate se oculta sin navegar. PagosGastoViewModel se registra AddTransient y se recrea en cada
+    /// navegación, toma el ICurrentSession vigente.
     /// </summary>
     public bool PuedeRegistrarPagos =>
         _session.RolActual == RolUsuario.Admin ||

@@ -59,8 +59,10 @@ public partial class IngresoFormViewModel : ViewModelBase
     /// recién al guardar se comía un 403. Se OCULTA (no se deshabilita), mismo patrón que
     /// GastosViewModel.PuedeRegistrarPagos y DocumentoFormViewModel.PuedeAnular/PuedeReabrir:
     /// IsVisible="{Binding Puede*}" en los botones de acción de pantalla del repo, nunca
-    /// IsEnabled. No se refresca en caliente: IngresoFormViewModel se registra AddTransient y
-    /// se recrea en cada navegación a la pantalla.
+    /// IsEnabled. Un 403 dispara ManejadorAccesoRevocado: la base notifica todos los bindings de
+    /// la pantalla abierta (ViewModelBase.NotificarPermisosActualizados) y el gate se oculta sin
+    /// navegar. IngresoFormViewModel se registra AddTransient y se recrea en cada navegación a la
+    /// pantalla.
     /// </summary>
     public bool PuedeRegistrarIngresos =>
         _session.RolActual == RolUsuario.Admin ||

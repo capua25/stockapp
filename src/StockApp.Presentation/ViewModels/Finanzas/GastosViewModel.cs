@@ -124,11 +124,12 @@ public partial class GastosViewModel : ViewModelBase
     /// llenaba el formulario de PagosGastoView y recién al guardar se comía un 403. Se OCULTA
     /// (no se deshabilita) siguiendo el mismo patrón que DocumentoFormViewModel.PuedeAnular/
     /// PuedeReabrir y TareaListViewModel.Puede*: IsVisible="{Binding Puede*}" en todos los
-    /// botones de acción de pantalla del repo, nunca IsEnabled. No se refresca en caliente
-    /// (a diferencia de ShellMainViewModel/InicioViewModel, que son singletons de larga vida):
+    /// botones de acción de pantalla del repo, nunca IsEnabled. Un 403 dispara
+    /// ManejadorAccesoRevocado: la base notifica todos los bindings de la pantalla abierta
+    /// (ViewModelBase.NotificarPermisosActualizados) y el gate se oculta sin navegar.
     /// GastosViewModel se registra AddTransient y se recrea en cada navegación a la pantalla,
     /// así que ya toma el ICurrentSession vigente en ese momento — mismo criterio que
-    /// DocumentoFormViewModel.EsAdmin, que tampoco tiene mecanismo de refresco.
+    /// DocumentoFormViewModel.EsAdmin.
     /// </summary>
     public bool PuedeRegistrarPagos =>
         _session.RolActual == RolUsuario.Admin ||

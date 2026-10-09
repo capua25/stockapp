@@ -34,8 +34,10 @@ public partial class CalendarioPagosViewModel : ViewModelBase
     /// Esto es coherencia de navegación: evita que un link de esta pantalla (que solo exige
     /// Permisos.VerFinanzas) ofrezca algo inalcanzable. Se OCULTA (no se deshabilita), mismo
     /// patrón que GastosViewModel.PuedeRegistrarPagos: IsVisible="{Binding Puede*}", nunca
-    /// IsEnabled. No se refresca en caliente: CalendarioPagosViewModel se registra AddTransient
-    /// y se recrea en cada navegación a la pantalla.
+    /// IsEnabled. Un 403 dispara ManejadorAccesoRevocado: la base notifica todos los bindings de
+    /// la pantalla abierta (ViewModelBase.NotificarPermisosActualizados) y el gate se oculta sin
+    /// navegar. CalendarioPagosViewModel se registra AddTransient y se recrea en cada navegación a
+    /// la pantalla.
     /// </summary>
     public bool PuedeRegistrarPagos =>
         _session.RolActual == RolUsuario.Admin ||
