@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Diálogo: recalcular stock (UI v2)</title>
+<link rel="stylesheet" href="../_base/tokens.css">
+<link rel="stylesheet" href="../_base/base.css">
+<style>
+  /* Área cliente del Window (Width=400): Border raíz con padding 24 sobre superficie. La barra de
+     título ("Recalcular stock") es del sistema operativo y no se compara. */
+  .v2-ventana { display: flex; align-items: center; justify-content: center; }
+  .dialogo { width: 400px; padding: 24px; background: var(--v2-color-superficie); display: flex; flex-direction: column; gap: 16px; }
+  .botones { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<!-- Datos: new RecalcularStockDialog(buscador) recién abierto (D10): sin producto elegido, "Recalcular" deshabilitado.
+     El desplegable del AutoCompleteBox no se mockea (D12). -->
+<div class="v2-ventana">
+  <div class="dialogo">
+    <div class="v2-cuerpo">Elegí el producto. Su stock se recalcula a partir de todos sus movimientos.</div>
+    <div class="v2-input"><span class="v2-input-placeholder">Buscar producto…</span></div>
+    <div class="botones">
+      <span class="v2-boton v2-boton--secundario">Cancelar</span>
+      <span class="v2-boton v2-boton--primario v2-boton--deshabilitado">Recalcular</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

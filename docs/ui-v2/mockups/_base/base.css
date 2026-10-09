@@ -321,3 +321,12 @@ body {
 /* Celda cortada por el tope de su columna (TextBlock con TextTrimming CharacterEllipsis): la celda es flex, así
    que la elipsis va en un span hijo que puede encogerse. */
 .v2-celda-cortada { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Barra de filtros sin buscador, con campos etiquetados (BarraFiltros MostrarBusqueda False + CampoFormulario):
+   fila con separación 8 y el botón alineado con el borde inferior de los controles. */
+.v2-barra-campos { display: flex; gap: 8px; align-items: flex-end; margin-bottom: 16px; }
+/* Barra de scroll horizontal de la grilla cuando las columnas no entran: es el ScrollBar de Fluent en reposo
+   (sin tema v2 propio), medido en la captura headless de la app: un pulgar de 2 de alto, #7A7A7A, sin radio,
+   en una franja de 16 debajo de las filas (12 arriba y 2 abajo) que arranca a 16 del borde interior izquierdo
+   (el botón de línea, invisible). El largo es (ancho interior - 32) x ancho interior / suma de columnas,
+   redondeado hacia arriba: lo fija cada página. */
+.v2-grilla-scroll-h { flex: 0 0 auto; height: 2px; margin: 12px 0 2px 16px; background: #7A7A7A; border-radius: 0; }
