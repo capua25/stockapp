@@ -2060,7 +2060,7 @@ Todo a **1366×768**; los pasos 1, 2 y 4 se repiten a 1280×760. Capturar cada p
 
 Si un paso no se puede hacer por el entorno (WSLg caído o ventana congelada, contenedor o API que no arrancan), PARAR y avisar con la evidencia (stderr, `docker ps -a`), sin declarar la fase cerrada. Si el usuario necesita la PC, se pausa y se retoma cuando diga.
 
-- [ ] **Step 3: Aprobación final del usuario**
+- [x] **Step 3: Aprobación final del usuario**
 
 PARAR. Presentar: el `index.html` (filas de Productos), las capturas de la verificación orgánica junto a los mockups, los rojos de las mutaciones (a) a (o) y los cambios respecto de los mockups aprobados (si hubo). La aprobación final es del usuario mirando la app (spec §6.4). Registrar en el ledger: `Fase 3c-1: aprobada por <quién> <fecha>`.
 
