@@ -358,21 +358,6 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
     private bool PuedeEjecutarRecalcular() => ProductoIdParaRecalcular is not null;
 
     /// <summary>
-    /// ProductoIdParaRecalcular se tipea a mano en un campo libre, sin relación con el filtro
-    /// activo de la grilla — si ese producto no está en el resultado filtrado (caso normal),
-    /// CargarAsync no cambia una sola fila y el click queda sin ninguna señal (reporte de uso
-    /// real). Mismo mecanismo que PanelPermisosViewModel.GuardarAsync: informa éxito y error
-    /// puntual vía IConfirmacionService.InformarAsync. Recarga con los filtros vigentes: la grilla
-    /// tiene que seguir mostrando lo que dicen los filtros.
-    /// </summary>
-    /// <remarks>
-    /// Bugfix 2026-08-16 (hermano de InicializarAsync, encontrado al barrer la clase): el gate
-    /// de entrada previo (<see cref="PuedeRecalcularStock"/>) es el chequeo PRINCIPAL — evita
-    /// generar el 403 que dispararía el modal incondicional de AuthTokenHandler. El catch de
-    /// UnauthorizedAccessException se CONSERVA como red de contención (el permiso puede
-    /// revocarse entre el chequeo y la llamada), no como mecanismo principal.
-    /// </remarks>
-    /// <summary>
     /// "Recalcular stock" del encabezado: abre el diálogo con el buscador de producto (el mismo de siempre) y, si el
     /// usuario elige uno, recalcula con RecalcularCommand. Sin el permiso no abre nada (el botón ya está oculto; esto
     /// cubre una ejecución directa del comando).
@@ -389,6 +374,21 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
         await RecalcularCommand.ExecuteAsync(null);
     }
 
+    /// <summary>
+    /// ProductoIdParaRecalcular se tipea a mano en un campo libre, sin relación con el filtro
+    /// activo de la grilla — si ese producto no está en el resultado filtrado (caso normal),
+    /// CargarAsync no cambia una sola fila y el click queda sin ninguna señal (reporte de uso
+    /// real). Mismo mecanismo que PanelPermisosViewModel.GuardarAsync: informa éxito y error
+    /// puntual vía IConfirmacionService.InformarAsync. Recarga con los filtros vigentes: la grilla
+    /// tiene que seguir mostrando lo que dicen los filtros.
+    /// </summary>
+    /// <remarks>
+    /// Bugfix 2026-08-16 (hermano de InicializarAsync, encontrado al barrer la clase): el gate
+    /// de entrada previo (<see cref="PuedeRecalcularStock"/>) es el chequeo PRINCIPAL — evita
+    /// generar el 403 que dispararía el modal incondicional de AuthTokenHandler. El catch de
+    /// UnauthorizedAccessException se CONSERVA como red de contención (el permiso puede
+    /// revocarse entre el chequeo y la llamada), no como mecanismo principal.
+    /// </remarks>
     [RelayCommand(CanExecute = nameof(PuedeEjecutarRecalcular))]
     private async Task RecalcularAsync()
     {

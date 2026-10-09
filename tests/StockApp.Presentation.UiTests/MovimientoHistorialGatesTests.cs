@@ -56,6 +56,12 @@ public class MovimientoHistorialGatesTests
             => throw new NotSupportedException("No usado en este banco de pruebas.");
     }
 
+    private sealed class RecalcularStockDialogFake : IRecalcularStockDialogService
+    {
+        public Task<ProductoDto?> ElegirProductoAsync(Func<string?, CancellationToken, Task<IEnumerable<object>>> buscar)
+            => Task.FromResult<ProductoDto?>(null);
+    }
+
     /// <summary>
     /// IProductoService configurable para forzar el camino "403 real" de una búsqueda del
     /// filtro. BuscarAsync (el overload de 3 parámetros, usado por la precarga VIEJA) lanza
@@ -63,12 +69,6 @@ public class MovimientoHistorialGatesTests
     /// cambio futuro la reintroduce sin querer, este fake explota en vez de devolver
     /// silenciosamente una lista vacía y dejar pasar la regresión.
     /// </summary>
-    private sealed class RecalcularStockDialogFake : IRecalcularStockDialogService
-    {
-        public Task<ProductoDto?> ElegirProductoAsync(Func<string?, CancellationToken, Task<IEnumerable<object>>> buscar)
-            => Task.FromResult<ProductoDto?>(null);
-    }
-
     private sealed class ProductoServiceHistorialFake : IProductoService
     {
         private readonly bool _lanzar403;

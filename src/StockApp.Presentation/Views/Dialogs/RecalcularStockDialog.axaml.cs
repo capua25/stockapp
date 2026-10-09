@@ -24,12 +24,21 @@ public partial class RecalcularStockDialog : Window
     public RecalcularStockDialog(Func<string?, CancellationToken, Task<IEnumerable<object>>> buscar) : this()
     {
         BuscadorProducto.AsyncPopulator = buscar;
-        BuscadorProducto.SelectionChanged += (_, _) =>
-            RecalcularButton.IsEnabled = BuscadorProducto.SelectedItem is ProductoDto;
+        BuscadorProducto.SelectionChanged += (_, _) => ActualizarRecalcular();
+        BuscadorProducto.TextChanged += (_, _) => ActualizarRecalcular();
     }
 
+    /// <summary>
+    /// El AutoCompleteBox conserva SelectedItem aunque el usuario edite el texto: "Recalcular" solo vale mientras el
+    /// texto siga siendo el nombre del producto elegido, para no recalcular uno distinto del que se ve.
+    /// </summary>
+    private ProductoDto? ProductoVigente()
+        => BuscadorProducto.SelectedItem is ProductoDto p && BuscadorProducto.Text == p.Nombre ? p : null;
+
+    private void ActualizarRecalcular() => RecalcularButton.IsEnabled = ProductoVigente() is not null;
+
     private void OnRecalcularClick(object? sender, RoutedEventArgs e)
-        => Close(BuscadorProducto.SelectedItem as ProductoDto);
+        => Close(ProductoVigente());
 
     private void OnCancelarClick(object? sender, RoutedEventArgs e)
         => Close(null);

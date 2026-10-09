@@ -706,7 +706,7 @@ public class MovimientoHistorialViewModelTests
 
     /// <summary>
     /// BuscarCommand no admite ejecuciones concurrentes y Buscar no tiene debounce, así que el único camino real
-    /// que lanza una consulta DESPUÉS de una búsqueda pendiente es Recalcular (que recarga con CargarAsync) o la
+    /// que lanza una consulta DESPUÉS de una búsqueda pendiente es Recalcular (que recarga con BuscarAsync, con los filtros vigentes) o la
     /// carga inicial. Acá la búsqueda filtrada sale primero y tarda; el recálculo recarga y vuelve antes: cuando
     /// la búsqueda por fin responde, es la vieja y no puede pisar la lista (guarda de BuscarAsync).
     /// </summary>
@@ -785,7 +785,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public async Task BuscarProductos_Un403_DevuelveVacioSinPropagar()
     {
-        var (vm, _, _, productos, _, _) = Crear();
+        var (vm, _, _, productos, _, _) = Crear(rol: RolUsuario.Operador, permisos: [Permisos.RegistrarMovimientos, Permisos.RecalcularStock]);
         productos.Setup(p => p.BuscarPorTextoAsync(It.IsAny<string?>())).ThrowsAsync(new UnauthorizedAccessException("403"));
 
         var resultado = await vm.BuscarProductosAsync("cem", CancellationToken.None);

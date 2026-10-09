@@ -63,6 +63,22 @@ public class RecalcularStockDialogTests
     }
 
     [AvaloniaFact]
+    public void EditarElTextoDespuesDeElegir_DeshabilitaRecalcular()
+    {
+        var dialogo = new RecalcularStockDialog(SinResultados);
+        Abrir<ProductoDto?>(dialogo);
+        var buscador = dialogo.FindControl<AutoCompleteBox>("BuscadorProducto")!;
+        buscador.SelectedItem = P(42, "Cemento portland 50 kg");
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(dialogo.FindControl<Button>("RecalcularButton")!.IsEffectivelyEnabled);
+
+        buscador.Text = "Arena";
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(dialogo.FindControl<Button>("RecalcularButton")!.IsEffectivelyEnabled);
+    }
+
+    [AvaloniaFact]
     public void Cancelar_DevuelveNull()
     {
         var dialogo = new RecalcularStockDialog(SinResultados);
