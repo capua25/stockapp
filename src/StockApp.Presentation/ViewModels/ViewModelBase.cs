@@ -129,14 +129,13 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
     }
 
     /// <summary>
-    /// Hook: los permisos del usuario cambiaron en caliente (un 403 refrescó el cache). Lo invoca
+    /// Los permisos del usuario cambiaron en caliente (un 403 refrescó el cache). Lo invoca
     /// <see cref="ShellMainViewModel.NotificarPermisosActualizados"/> sobre la pantalla abierta. Las
-    /// pantallas con una <c>Puede*</c> calculada sobre ICurrentSession (que no notifica) lo
-    /// sobreescriben para re-notificarla; el resto no necesita nada.
+    /// <c>Puede*</c> calculadas sobre ICurrentSession (que no notifica) no tienen forma de enterarse
+    /// solas, así que la base notifica TODAS las propiedades (<c>string.Empty</c> = "cambió todo", lo
+    /// que hace que los bindings re-lean el VM): ninguna pantalla necesita un override propio.
     /// </summary>
-    public virtual void NotificarPermisosActualizados()
-    {
-    }
+    public virtual void NotificarPermisosActualizados() => OnPropertyChanged(string.Empty);
 
     /// <summary>Marca el estado "sin permiso" (ver <see cref="SinPermiso"/>) con el mensaje que la
     /// vista va a mostrar en EstadoVacio. Expuesto protected para el caso puntual de

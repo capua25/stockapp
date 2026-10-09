@@ -53,14 +53,11 @@ public partial class ProductoListViewModel : ViewModelBase
     /// Gate de Nuevo / Editar / Eliminar (bug B3, 2026-10-09): mismo criterio que el sidebar y el
     /// servidor (Admin siempre; Operador con <see cref="Permisos.GestionarProductos"/>), con
     /// IsVisible en la vista como el resto de las pantallas. Es un getter sobre ICurrentSession,
-    /// que no notifica: <see cref="NotificarPermisosActualizados"/> lo re-notifica cuando un 403
-    /// refresca los permisos con la pantalla abierta.
+    /// que no notifica: <see cref="ViewModelBase.NotificarPermisosActualizados"/> (la base notifica
+    /// todo) lo re-evalúa cuando un 403 refresca los permisos con la pantalla abierta.
     /// </summary>
     public bool PuedeGestionarProductos =>
         _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.GestionarProductos);
-
-    /// <inheritdoc />
-    public override void NotificarPermisosActualizados() => OnPropertyChanged(nameof(PuedeGestionarProductos));
 
     public ObservableCollection<ProductoDto> Items { get; } = new();
 
