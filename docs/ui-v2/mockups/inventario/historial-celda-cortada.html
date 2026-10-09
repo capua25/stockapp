@@ -23,15 +23,15 @@
      en mayúsculas: FECHA, TIPO, MOTIVO, CANTIDAD, PRECIO, STOCK ANT. y USUARIO miden su contenido (ColumnaAuto);
      STOCK NUEVO fija 220; PRODUCTO (2*) y COMENTARIO (3*) en su piso de 160. Iguales a 1280 y a 1366. Ni cediendo
      entran (suma de los títulos 1148 contra 948 y 1034 internos), así que las medidas quedan en su ancho medido
-     (D5): suma 1397, USUARIO en el tope de 240. */
+     (D5): suma 1397. Orden D4a (aprobado en el GATE): STOCK NUEVO termina en 785, entero en la vista a 1280 y 1366, USUARIO en el tope de 240. */
   .col-fecha { flex: 0 0 130px; }
   .col-producto { flex: 0 0 160px; }
   .col-tipo { flex: 0 0 65px; }
-  .col-motivo { flex: 0 0 112px; }
   .col-cantidad { flex: 0 0 100px; }
-  .col-precio { flex: 0 0 100px; }
   .col-stock-ant { flex: 0 0 110px; }
   .col-stock-nuevo { flex: 0 0 220px; }
+  .col-motivo { flex: 0 0 112px; }
+  .col-precio { flex: 0 0 100px; }
   .col-usuario { flex: 0 0 240px; }
   .col-comentario { flex: 0 0 160px; }
   /* Celda de STOCK NUEVO: como STOCK de productos.html (insignia a la izquierda, número a la derecha). */
@@ -127,11 +127,11 @@
             <div class="v2-grilla-celda col-fecha">FECHA</div>
             <div class="v2-grilla-celda col-producto">PRODUCTO</div>
             <div class="v2-grilla-celda col-tipo">TIPO</div>
-            <div class="v2-grilla-celda col-motivo">MOTIVO</div>
             <div class="v2-grilla-celda col-cantidad">CANTIDAD</div>
-            <div class="v2-grilla-celda col-precio">PRECIO</div>
             <div class="v2-grilla-celda col-stock-ant">STOCK ANT.</div>
             <div class="v2-grilla-celda col-stock-nuevo">STOCK NUEVO</div>
+            <div class="v2-grilla-celda col-motivo">MOTIVO</div>
+            <div class="v2-grilla-celda col-precio">PRECIO</div>
             <div class="v2-grilla-celda col-usuario">USUARIO</div>
             <div class="v2-grilla-celda col-comentario">COMENTARIO</div>
           </div>
@@ -140,11 +140,11 @@
             <div class="v2-grilla-celda col-fecha">07/10/2026 14:35</div>
             <div class="v2-grilla-celda col-producto"><span class="v2-celda-cortada">Cemento portland 50 kg</span></div>
             <div class="v2-grilla-celda col-tipo">Entrada</div>
-            <div class="v2-grilla-celda col-motivo">Compra</div>
             <div class="v2-grilla-celda col-cantidad v2-num"><span>40</span></div>
-            <div class="v2-grilla-celda col-precio v2-num"><span>$ 480,00</span></div>
             <div class="v2-grilla-celda col-stock-ant v2-num"><span>280</span></div>
             <div class="v2-grilla-celda col-stock-nuevo celda-stock"><span class="valor">320</span></div>
+            <div class="v2-grilla-celda col-motivo">Compra</div>
+            <div class="v2-grilla-celda col-precio v2-num"><span>$ 480,00</span></div>
             <div class="v2-grilla-celda col-usuario">María Pérez</div>
             <div class="v2-grilla-celda col-comentario"><span class="v2-celda-cortada">Remito 0042-00001234</span></div>
           </div>
@@ -152,11 +152,11 @@
             <div class="v2-grilla-celda col-fecha">06/10/2026 09:10</div>
             <div class="v2-grilla-celda col-producto"><span class="v2-celda-cortada">Cable 2x1,5 mm</span></div>
             <div class="v2-grilla-celda col-tipo">Salida</div>
-            <div class="v2-grilla-celda col-motivo">Uso o consumo</div>
             <div class="v2-grilla-celda col-cantidad v2-num"><span>25,5</span></div>
-            <div class="v2-grilla-celda col-precio v2-num"><span>—</span></div>
             <div class="v2-grilla-celda col-stock-ant v2-num"><span>1.275,5</span></div>
             <div class="v2-grilla-celda col-stock-nuevo celda-stock"><span class="valor">1.250</span></div>
+            <div class="v2-grilla-celda col-motivo">Uso o consumo</div>
+            <div class="v2-grilla-celda col-precio v2-num"><span>—</span></div>
             <div class="v2-grilla-celda col-usuario">Operador de Depósito Central</div>
             <div class="v2-grilla-celda col-comentario"><span class="v2-celda-cortada">Alumbrado de la plaza</span></div>
           </div>
@@ -164,11 +164,11 @@
             <div class="v2-grilla-celda col-fecha">03/10/2026 11:00</div>
             <div class="v2-grilla-celda col-producto"><span class="v2-celda-cortada">Caño de PVC reforzado de 110 mm por 4 metros con junta elástica</span></div>
             <div class="v2-grilla-celda col-tipo">Entrada</div>
-            <div class="v2-grilla-celda col-motivo">Compra</div>
             <div class="v2-grilla-celda col-cantidad v2-num"><span>12</span></div>
-            <div class="v2-grilla-celda col-precio v2-num"><span>$ 650,00</span></div>
             <div class="v2-grilla-celda col-stock-ant v2-num"><span>0</span></div>
             <div class="v2-grilla-celda col-stock-nuevo celda-stock"><span class="valor">12</span></div>
+            <div class="v2-grilla-celda col-motivo">Compra</div>
+            <div class="v2-grilla-celda col-precio v2-num"><span>$ 650,00</span></div>
             <div class="v2-grilla-celda col-usuario"><span class="v2-celda-cortada">Operador de Depósito Central de Obras Públicas</span></div>
             <div class="v2-grilla-celda col-comentario"></div>
           </div>
@@ -176,11 +176,11 @@
             <div class="v2-grilla-celda col-fecha">01/10/2026 16:45</div>
             <div class="v2-grilla-celda col-producto"><span class="v2-celda-cortada">Pintura látex blanca 20 L</span></div>
             <div class="v2-grilla-celda col-tipo">Entrada</div>
-            <div class="v2-grilla-celda col-motivo">Ajuste</div>
             <div class="v2-grilla-celda col-cantidad v2-num"><span>2</span></div>
-            <div class="v2-grilla-celda col-precio v2-num"><span>—</span></div>
             <div class="v2-grilla-celda col-stock-ant v2-num"><span>4</span></div>
             <div class="v2-grilla-celda col-stock-nuevo celda-stock"><span class="valor">6</span></div>
+            <div class="v2-grilla-celda col-motivo">Ajuste</div>
+            <div class="v2-grilla-celda col-precio v2-num"><span>—</span></div>
             <div class="v2-grilla-celda col-usuario">María Pérez</div>
             <div class="v2-grilla-celda col-comentario"><span class="v2-celda-cortada">Diferencia de conteo del inventario de setiembre.</span></div>
           </div>
@@ -188,11 +188,11 @@
             <div class="v2-grilla-celda col-fecha">30/09/2026 08:20</div>
             <div class="v2-grilla-celda col-producto"><span class="v2-celda-cortada">Hipoclorito de sodio 5 L</span></div>
             <div class="v2-grilla-celda col-tipo">Salida</div>
-            <div class="v2-grilla-celda col-motivo">Uso o consumo</div>
             <div class="v2-grilla-celda col-cantidad v2-num"><span>5</span></div>
-            <div class="v2-grilla-celda col-precio v2-num"><span>—</span></div>
             <div class="v2-grilla-celda col-stock-ant v2-num"><span>2</span></div>
             <div class="v2-grilla-celda col-stock-nuevo celda-stock"><span class="v2-insignia v2-insignia--peligro">Stock negativo</span><span class="valor v2-texto-peligro">-3</span></div>
+            <div class="v2-grilla-celda col-motivo">Uso o consumo</div>
+            <div class="v2-grilla-celda col-precio v2-num"><span>—</span></div>
             <div class="v2-grilla-celda col-usuario">Operador de Depósito Central</div>
             <div class="v2-grilla-celda col-comentario"><span class="v2-celda-cortada">Limpieza del gimnasio municipal</span></div>
           </div>
@@ -200,11 +200,11 @@
             <div class="v2-grilla-celda col-fecha">26/09/2026 10:15</div>
             <div class="v2-grilla-celda col-producto"><span class="v2-celda-cortada">Guantes de trabajo</span></div>
             <div class="v2-grilla-celda col-tipo">Entrada</div>
-            <div class="v2-grilla-celda col-motivo">Compra</div>
             <div class="v2-grilla-celda col-cantidad v2-num"><span>100</span></div>
-            <div class="v2-grilla-celda col-precio v2-num"><span>$ 95,00</span></div>
             <div class="v2-grilla-celda col-stock-ant v2-num"><span>80</span></div>
             <div class="v2-grilla-celda col-stock-nuevo celda-stock"><span class="valor">180</span></div>
+            <div class="v2-grilla-celda col-motivo">Compra</div>
+            <div class="v2-grilla-celda col-precio v2-num"><span>$ 95,00</span></div>
             <div class="v2-grilla-celda col-usuario">María Pérez</div>
             <div class="v2-grilla-celda col-comentario"></div>
           </div>
@@ -212,11 +212,11 @@
             <div class="v2-grilla-celda col-fecha">24/09/2026 15:05</div>
             <div class="v2-grilla-celda col-producto"><span class="v2-celda-cortada">Lámpara LED 30 W</span></div>
             <div class="v2-grilla-celda col-tipo">Salida</div>
-            <div class="v2-grilla-celda col-motivo">Uso o consumo</div>
             <div class="v2-grilla-celda col-cantidad v2-num"><span>4</span></div>
-            <div class="v2-grilla-celda col-precio v2-num"><span>—</span></div>
             <div class="v2-grilla-celda col-stock-ant v2-num"><span>12</span></div>
             <div class="v2-grilla-celda col-stock-nuevo celda-stock"><span class="valor">8</span></div>
+            <div class="v2-grilla-celda col-motivo">Uso o consumo</div>
+            <div class="v2-grilla-celda col-precio v2-num"><span>—</span></div>
             <div class="v2-grilla-celda col-usuario">Operador de Depósito Central</div>
             <div class="v2-grilla-celda col-comentario"><span class="v2-celda-cortada">Reparación del alumbrado de la plaza Independencia y del pasaje peatonal frente a la escuela 12.</span></div>
           </div>
@@ -224,11 +224,11 @@
             <div class="v2-grilla-celda col-fecha">19/09/2026 12:30</div>
             <div class="v2-grilla-celda col-producto"><span class="v2-celda-cortada">Bolsas de residuo 80x110</span></div>
             <div class="v2-grilla-celda col-tipo">Salida</div>
-            <div class="v2-grilla-celda col-motivo">Merma</div>
             <div class="v2-grilla-celda col-cantidad v2-num"><span>10</span></div>
-            <div class="v2-grilla-celda col-precio v2-num"><span>—</span></div>
             <div class="v2-grilla-celda col-stock-ant v2-num"><span>70</span></div>
             <div class="v2-grilla-celda col-stock-nuevo celda-stock"><span class="valor">60</span></div>
+            <div class="v2-grilla-celda col-motivo">Merma</div>
+            <div class="v2-grilla-celda col-precio v2-num"><span>—</span></div>
             <div class="v2-grilla-celda col-usuario">Operador de Depósito Central</div>
             <div class="v2-grilla-celda col-comentario"><span class="v2-celda-cortada">Bolsas rotas en el depósito</span></div>
           </div>
@@ -236,11 +236,11 @@
             <div class="v2-grilla-celda col-fecha">15/09/2026 09:00</div>
             <div class="v2-grilla-celda col-producto"><span class="v2-celda-cortada">Pintura vial amarilla 4 L</span></div>
             <div class="v2-grilla-celda col-tipo">Entrada</div>
-            <div class="v2-grilla-celda col-motivo">Compra</div>
             <div class="v2-grilla-celda col-cantidad v2-num"><span>22,5</span></div>
-            <div class="v2-grilla-celda col-precio v2-num"><span>$ 1.890,50</span></div>
             <div class="v2-grilla-celda col-stock-ant v2-num"><span>0</span></div>
             <div class="v2-grilla-celda col-stock-nuevo celda-stock"><span class="valor">22,5</span></div>
+            <div class="v2-grilla-celda col-motivo">Compra</div>
+            <div class="v2-grilla-celda col-precio v2-num"><span>$ 1.890,50</span></div>
             <div class="v2-grilla-celda col-usuario">María Pérez</div>
             <div class="v2-grilla-celda col-comentario"></div>
           </div>
@@ -248,11 +248,11 @@
             <div class="v2-grilla-celda col-fecha">10/09/2026 13:40</div>
             <div class="v2-grilla-celda col-producto"><span class="v2-celda-cortada">Arena gruesa</span></div>
             <div class="v2-grilla-celda col-tipo">Entrada</div>
-            <div class="v2-grilla-celda col-motivo">Compra</div>
             <div class="v2-grilla-celda col-cantidad v2-num"><span>45</span></div>
-            <div class="v2-grilla-celda col-precio v2-num"><span>$ 890,00</span></div>
             <div class="v2-grilla-celda col-stock-ant v2-num"><span>0</span></div>
             <div class="v2-grilla-celda col-stock-nuevo celda-stock"><span class="valor">45</span></div>
+            <div class="v2-grilla-celda col-motivo">Compra</div>
+            <div class="v2-grilla-celda col-precio v2-num"><span>$ 890,00</span></div>
             <div class="v2-grilla-celda col-usuario">María Pérez</div>
             <div class="v2-grilla-celda col-comentario"><span class="v2-celda-cortada">Remito 0042-00001190</span></div>
           </div>
@@ -260,11 +260,11 @@
             <div class="v2-grilla-celda col-fecha">04/09/2026 11:25</div>
             <div class="v2-grilla-celda col-producto"><span class="v2-celda-cortada">Pala de punta</span></div>
             <div class="v2-grilla-celda col-tipo">Entrada</div>
-            <div class="v2-grilla-celda col-motivo">Ajuste</div>
             <div class="v2-grilla-celda col-cantidad v2-num"><span>2</span></div>
-            <div class="v2-grilla-celda col-precio v2-num"><span>—</span></div>
             <div class="v2-grilla-celda col-stock-ant v2-num"><span>12</span></div>
             <div class="v2-grilla-celda col-stock-nuevo celda-stock"><span class="valor">14</span></div>
+            <div class="v2-grilla-celda col-motivo">Ajuste</div>
+            <div class="v2-grilla-celda col-precio v2-num"><span>—</span></div>
             <div class="v2-grilla-celda col-usuario">María Pérez</div>
             <div class="v2-grilla-celda col-comentario"></div>
           </div>
@@ -272,11 +272,11 @@
             <div class="v2-grilla-celda col-fecha">01/09/2026 08:00</div>
             <div class="v2-grilla-celda col-producto"><span class="v2-celda-cortada">Carretilla reforzada</span></div>
             <div class="v2-grilla-celda col-tipo">Entrada</div>
-            <div class="v2-grilla-celda col-motivo">Compra</div>
             <div class="v2-grilla-celda col-cantidad v2-num"><span>1</span></div>
-            <div class="v2-grilla-celda col-precio v2-num"><span>$ 3.200,00</span></div>
             <div class="v2-grilla-celda col-stock-ant v2-num"><span>0</span></div>
             <div class="v2-grilla-celda col-stock-nuevo celda-stock"><span class="valor">1</span></div>
+            <div class="v2-grilla-celda col-motivo">Compra</div>
+            <div class="v2-grilla-celda col-precio v2-num"><span>$ 3.200,00</span></div>
             <div class="v2-grilla-celda col-usuario">María Pérez</div>
             <div class="v2-grilla-celda col-comentario"></div>
           </div>
