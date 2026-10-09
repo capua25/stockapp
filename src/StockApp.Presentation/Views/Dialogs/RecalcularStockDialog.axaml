@@ -1,0 +1,46 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:cat="clr-namespace:StockApp.Application.Catalogo;assembly=StockApp.Application"
+        mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="220"
+        x:Class="StockApp.Presentation.Views.Dialogs.RecalcularStockDialog"
+        Title="Recalcular stock"
+        Width="400"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        ShowInTaskbar="False"
+        Background="{DynamicResource V2SuperficieBrush}">
+
+    <!-- UI v2 (spec §5.5). Ver ConfirmacionDialog.axaml. El buscador lo pone el VM (RecalcularStockDialogService). -->
+    <Border x:Name="Contenido"
+            Classes="ui2"
+            Background="{DynamicResource V2SuperficieBrush}"
+            Padding="24">
+        <StackPanel Spacing="16">
+
+            <TextBlock x:Name="MensajeText" Classes="cuerpo" TextWrapping="Wrap"
+                       Text="Elegí el producto. Su stock se recalcula a partir de todos sus movimientos." />
+
+            <AutoCompleteBox x:Name="BuscadorProducto"
+                             PlaceholderText="Buscar producto…"
+                             ValueMemberBinding="{Binding Nombre, DataType={x:Type cat:ProductoDto}}"
+                             FilterMode="None"
+                             MinimumPopulateDelay="0:0:0.3">
+                <AutoCompleteBox.ItemTemplate>
+                    <DataTemplate x:DataType="cat:ProductoDto">
+                        <TextBlock Text="{Binding Nombre}" />
+                    </DataTemplate>
+                </AutoCompleteBox.ItemTemplate>
+            </AutoCompleteBox>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,8,0,0">
+                <Button x:Name="CancelarButton" Classes="secundario" Content="Cancelar" Click="OnCancelarClick" />
+                <Button x:Name="RecalcularButton" Classes="primario" Content="Recalcular" IsEnabled="False" Click="OnRecalcularClick" />
+            </StackPanel>
+
+        </StackPanel>
+    </Border>
+
+</Window>

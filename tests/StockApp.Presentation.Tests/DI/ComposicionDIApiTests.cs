@@ -104,6 +104,7 @@ public class ComposicionDIApiTests
             new NavigationService(t => sp.GetRequiredService(t)));
         services.AddSingleton<IInfoApp, InfoApp>();
         services.AddSingleton<IConfirmacionService, ConfirmacionService>();
+        services.AddSingleton<IRecalcularStockDialogService, RecalcularStockDialogService>();
         services.AddSingleton<IServicioGuardadoArchivo, ServicioGuardadoArchivo>();
         services.AddSingleton<IServicioEstadoVentana, ServicioEstadoVentana>();
         services.AddSingleton<IServicioPreferenciasSidebar, ServicioPreferenciasSidebar>();

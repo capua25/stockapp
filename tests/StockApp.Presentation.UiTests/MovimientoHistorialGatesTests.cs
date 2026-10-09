@@ -10,7 +10,9 @@ using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Enums;
+using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Movimientos;
+using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -61,6 +63,12 @@ public class MovimientoHistorialGatesTests
     /// cambio futuro la reintroduce sin querer, este fake explota en vez de devolver
     /// silenciosamente una lista vacía y dejar pasar la regresión.
     /// </summary>
+    private sealed class RecalcularStockDialogFake : IRecalcularStockDialogService
+    {
+        public Task<ProductoDto?> ElegirProductoAsync(Func<string?, CancellationToken, Task<IEnumerable<object>>> buscar)
+            => Task.FromResult<ProductoDto?>(null);
+    }
+
     private sealed class ProductoServiceHistorialFake : IProductoService
     {
         private readonly bool _lanzar403;
@@ -106,7 +114,8 @@ public class MovimientoHistorialGatesTests
             new NavigationServiceFake(),
             new ProductoServiceHistorialFake(lanzar403AlBuscarPorTexto),
             new ConfirmacionServiceFake(),
-            new SesionFake(rol, permisos));
+            new SesionFake(rol, permisos),
+            new RecalcularStockDialogFake());
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
         window.DataContext = vm;

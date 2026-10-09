@@ -68,7 +68,7 @@ public static class DatosHistorial
         sesion.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
         sesion.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
         return new MovimientoHistorialViewModel(servicio.Object, Mock.Of<INavigationService>(), Mock.Of<IProductoService>(),
-            Mock.Of<IConfirmacionService>(), sesion.Object);
+            Mock.Of<IConfirmacionService>(), sesion.Object, Mock.Of<IRecalcularStockDialogService>());
     }
 
     private static ShellMainViewModel EnShell(ViewModelBase contenido) =>

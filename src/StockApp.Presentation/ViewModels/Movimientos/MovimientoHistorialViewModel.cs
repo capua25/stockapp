@@ -34,6 +34,7 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
     private readonly IProductoService        _productoService;
     private readonly IConfirmacionService    _confirmacion;
     private readonly ICurrentSession         _session;
+    private readonly IRecalcularStockDialogService _dialogoRecalcular;
 
     /// <summary>Texto del estado "Sin permiso" cuando el servidor rechaza la carga o la búsqueda del historial (403).</summary>
     public const string MensajeSinPermisoHistorial = "No tenés permiso para ver el historial de movimientos.";
@@ -149,12 +150,9 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
     /// sobre Codigo/CodigoBarras/Nombre). El catálogo se estima en 100-1000 productos en
     /// producción, así que NO se precarga completo — el propio AutoCompleteBox ya trae debounce
     /// (MinimumPopulateDelay) y cancela búsquedas obsoletas vía el CancellationToken que recibe.
-    /// Sin catch de UnauthorizedAccessException acá: este campo lo gatea
-    /// <see cref="PuedeRecalcularStock"/> (Permisos.RecalcularStock), un permiso INDEPENDIENTE
-    /// de GestionarProductos (que exige BuscarPorTextoAsync) -- si alguna vez se necesita
-    /// manejar ese 403 puntual, tiene que ser un mecanismo propio, no compartir el catch de
-    /// <see cref="BuscarProductosParaFiltroAsync"/> (que apaga <see cref="PuedeFiltrarPorProducto"/>,
-    /// un flag de un campo completamente distinto).
+    /// Un 403 (quien tiene stock.recalcular puede no tener catalogo.productos, que exige la búsqueda) devuelve la
+    /// lista vacía: el aviso global del 403 ya lo explica y una excepción quedaría sin observar dentro del
+    /// AutoCompleteBox. No toca <see cref="PuedeFiltrarPorProducto"/> (otro campo).
     /// </summary>
     public Func<string?, CancellationToken, Task<IEnumerable<object>>> BuscarProductosAsync { get; }
 
@@ -173,13 +171,15 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
         INavigationService navigation,
         IProductoService productoService,
         IConfirmacionService confirmacion,
-        ICurrentSession session)
+        ICurrentSession session,
+        IRecalcularStockDialogService dialogoRecalcular)
     {
         _service         = service;
         _navigation      = navigation;
         _productoService = productoService;
         _confirmacion    = confirmacion;
         _session         = session;
+        _dialogoRecalcular = dialogoRecalcular;
 
         ItemsView = new DataGridCollectionView(Items);
 
@@ -208,8 +208,15 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
 
     private async Task<IEnumerable<object>> BuscarProductosInternalAsync(string? texto, CancellationToken ct)
     {
-        var resultados = await _productoService.BuscarPorTextoAsync(texto);
-        return resultados;
+        try
+        {
+            var resultados = await _productoService.BuscarPorTextoAsync(texto);
+            return resultados;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Array.Empty<object>();
+        }
     }
 
     /// <summary>
@@ -355,7 +362,8 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
     /// activo de la grilla — si ese producto no está en el resultado filtrado (caso normal),
     /// CargarAsync no cambia una sola fila y el click queda sin ninguna señal (reporte de uso
     /// real). Mismo mecanismo que PanelPermisosViewModel.GuardarAsync: informa éxito y error
-    /// puntual vía IConfirmacionService.InformarAsync.
+    /// puntual vía IConfirmacionService.InformarAsync. Recarga con los filtros vigentes: la grilla
+    /// tiene que seguir mostrando lo que dicen los filtros.
     /// </summary>
     /// <remarks>
     /// Bugfix 2026-08-16 (hermano de InicializarAsync, encontrado al barrer la clase): el gate
@@ -364,6 +372,23 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
     /// UnauthorizedAccessException se CONSERVA como red de contención (el permiso puede
     /// revocarse entre el chequeo y la llamada), no como mecanismo principal.
     /// </remarks>
+    /// <summary>
+    /// "Recalcular stock" del encabezado: abre el diálogo con el buscador de producto (el mismo de siempre) y, si el
+    /// usuario elige uno, recalcula con RecalcularCommand. Sin el permiso no abre nada (el botón ya está oculto; esto
+    /// cubre una ejecución directa del comando).
+    /// </summary>
+    [RelayCommand]
+    private async Task AbrirRecalcularAsync()
+    {
+        if (!PuedeRecalcularStock)
+            return;
+        var producto = await _dialogoRecalcular.ElegirProductoAsync(BuscarProductosAsync);
+        if (producto is null)
+            return;
+        ProductoSeleccionadoParaRecalcular = producto;
+        await RecalcularCommand.ExecuteAsync(null);
+    }
+
     [RelayCommand(CanExecute = nameof(PuedeEjecutarRecalcular))]
     private async Task RecalcularAsync()
     {
@@ -373,7 +398,7 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
         try
         {
             await _service.RecalcularStockAsync(ProductoIdParaRecalcular.Value);
-            await CargarAsync();
+            await BuscarAsync();
             await _confirmacion.InformarAsync("Stock recalculado.");
         }
         catch (UnauthorizedAccessException)

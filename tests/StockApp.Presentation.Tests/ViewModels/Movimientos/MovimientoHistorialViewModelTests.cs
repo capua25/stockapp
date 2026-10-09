@@ -51,7 +51,8 @@ public class MovimientoHistorialViewModelTests
         Mock<IMovimientoStockService> svcMock,
         Mock<INavigationService> navMock,
         Mock<IProductoService> productoSvcMock,
-        Mock<IConfirmacionService> confirmacionMock)
+        Mock<IConfirmacionService> confirmacionMock,
+        Mock<IRecalcularStockDialogService> dialogoRecalcularMock)
         Crear(
             IReadOnlyList<MovimientoHistorialDto>? items = null,
             RolUsuario rol = RolUsuario.Admin,
@@ -76,9 +77,15 @@ public class MovimientoHistorialViewModelTests
         sessionMock.Setup(s => s.RolActual).Returns(rol);
         sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>(permisos ?? Enumerable.Empty<string>()));
 
+        var dialogoRecalcularMock = new Mock<IRecalcularStockDialogService>();
+        dialogoRecalcularMock
+            .Setup(d => d.ElegirProductoAsync(It.IsAny<Func<string?, CancellationToken, Task<IEnumerable<object>>>>()))
+            .ReturnsAsync((ProductoDto?)null);
+
         var vm = new MovimientoHistorialViewModel(
-            svcMock.Object, navMock.Object, productoSvcMock.Object, confirmacionMock.Object, sessionMock.Object);
-        return (vm, svcMock, navMock, productoSvcMock, confirmacionMock);
+            svcMock.Object, navMock.Object, productoSvcMock.Object, confirmacionMock.Object, sessionMock.Object,
+            dialogoRecalcularMock.Object);
+        return (vm, svcMock, navMock, productoSvcMock, confirmacionMock, dialogoRecalcularMock);
     }
 
     // ── D4 tests ──────────────────────────────────────────────────────────────
@@ -87,7 +94,7 @@ public class MovimientoHistorialViewModelTests
     public async Task CargarAsync_PopulaItems()
     {
         var lista = new List<MovimientoHistorialDto> { CrearDto(1), CrearDto(2) };
-        var (vm, svcMock, _, _, _) = Crear(lista);
+        var (vm, svcMock, _, _, _, _) = Crear(lista);
 
         await vm.CargarAsync();
 
@@ -98,7 +105,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public async Task CargarAsync_SinResultados_ItemsVacio()
     {
-        var (vm, _, _, _, _) = Crear(new List<MovimientoHistorialDto>());
+        var (vm, _, _, _, _, _) = Crear(new List<MovimientoHistorialDto>());
 
         await vm.CargarAsync();
 
@@ -108,7 +115,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public async Task BuscarAsync_ConFiltros_DelegaAlServiceConFiltrosConstruidos()
     {
-        var (vm, svcMock, _, _, _) = Crear();
+        var (vm, svcMock, _, _, _, _) = Crear();
         vm.FiltroProductoId = 5;
         vm.FiltroTipo = TipoMovimiento.Salida;
         var fechaDesdeLocal = new DateTime(2026, 1, 1);
@@ -139,7 +146,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public async Task BuscarAsync_ConFechaLocal_ConvierteAUtcAntesDeDelegarAlService()
     {
-        var (vm, svcMock, _, _, _) = Crear();
+        var (vm, svcMock, _, _, _, _) = Crear();
         var fechaLocal = new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Unspecified);
         vm.FechaDesde = fechaLocal;
 
@@ -153,7 +160,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public async Task BuscarAsync_SinFiltros_DelegaFiltroVacio()
     {
-        var (vm, svcMock, _, _, _) = Crear();
+        var (vm, svcMock, _, _, _, _) = Crear();
 
         await vm.BuscarCommand.ExecuteAsync(null);
 
@@ -168,7 +175,7 @@ public class MovimientoHistorialViewModelTests
     public async Task RecalcularAsync_LlamaRecalcularStockAsync_YActualizaLista()
     {
         var lista = new List<MovimientoHistorialDto> { CrearDto(1) };
-        var (vm, svcMock, _, _, _) = Crear(lista);
+        var (vm, svcMock, _, _, _, _) = Crear(lista);
         vm.ProductoIdParaRecalcular = 1;
 
         svcMock
@@ -189,7 +196,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public async Task RecalcularAsync_SinProductoSeleccionado_NoLlamaServicio()
     {
-        var (vm, svcMock, _, _, _) = Crear();
+        var (vm, svcMock, _, _, _, _) = Crear();
         vm.ProductoIdParaRecalcular = null;
 
         await vm.RecalcularCommand.ExecuteAsync(null);
@@ -212,7 +219,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public async Task RecalcularAsync_SinPermisoRecalcularStock_NoInvocaServicio()
     {
-        var (vm, svcMock, _, _, _) = Crear(
+        var (vm, svcMock, _, _, _, _) = Crear(
             rol: RolUsuario.Operador,
             permisos: new[] { Permisos.RegistrarMovimientos });
         vm.ProductoIdParaRecalcular = 1;
@@ -225,7 +232,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public void PuedeRecalcularStock_SinPermiso_EsFalse()
     {
-        var (vm, _, _, _, _) = Crear(
+        var (vm, _, _, _, _, _) = Crear(
             rol: RolUsuario.Operador,
             permisos: new[] { Permisos.RegistrarMovimientos });
 
@@ -235,7 +242,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public void PuedeRecalcularStock_ConPermiso_EsTrue()
     {
-        var (vm, _, _, _, _) = Crear(
+        var (vm, _, _, _, _, _) = Crear(
             rol: RolUsuario.Operador,
             permisos: new[] { Permisos.RegistrarMovimientos, Permisos.RecalcularStock });
 
@@ -252,7 +259,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public async Task RecalcularAsync_Exito_InformaConfirmacion()
     {
-        var (vm, svcMock, _, _, confirmacionMock) = Crear();
+        var (vm, svcMock, _, _, confirmacionMock, _) = Crear();
         vm.ProductoIdParaRecalcular = 1;
         svcMock
             .Setup(s => s.RecalcularStockAsync(1))
@@ -276,7 +283,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public async Task RecalcularAsync_ServicioLanzaEntidadNoEncontrada_InformaErrorYNoPropaga()
     {
-        var (vm, svcMock, _, _, confirmacionMock) = Crear();
+        var (vm, svcMock, _, _, confirmacionMock, _) = Crear();
         vm.ProductoIdParaRecalcular = 999;
         svcMock
             .Setup(s => s.RecalcularStockAsync(999))
@@ -300,7 +307,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public async Task InicializarAsync_ConPermiso_NoPreseleccionaProductoYFiltroQuedaEnTodos()
     {
-        var (vm, _, _, _, _) = Crear();
+        var (vm, _, _, _, _, _) = Crear();
 
         await vm.InicializarAsync();
 
@@ -313,7 +320,7 @@ public class MovimientoHistorialViewModelTests
     public async Task InicializarAsync_TambienCargaHistorial()
     {
         var lista = new List<MovimientoHistorialDto> { CrearDto(1) };
-        var (vm, svcMock, _, _, _) = Crear(items: lista);
+        var (vm, svcMock, _, _, _, _) = Crear(items: lista);
 
         await vm.InicializarAsync();
 
@@ -329,7 +336,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public async Task InicializarAsync_SiElHistorialLanzaUnauthorized_NoPropagaYDejaSinPermiso()
     {
-        var (vm, svcMock, _, _, _) = Crear();
+        var (vm, svcMock, _, _, _, _) = Crear();
         svcMock.Setup(s => s.ObtenerHistorialAsync(It.IsAny<HistorialMovimientoFiltro>()))
             .ThrowsAsync(new UnauthorizedAccessException());
 
@@ -355,7 +362,7 @@ public class MovimientoHistorialViewModelTests
     public async Task InicializarAsync_SinGestionarProductos_NoInvocaProductoService()
     {
         var lista = new List<MovimientoHistorialDto> { CrearDto(1) };
-        var (vm, svcMock, _, productoSvcMock, _) = Crear(
+        var (vm, svcMock, _, productoSvcMock, _, _) = Crear(
             items: lista,
             rol: RolUsuario.Operador,
             permisos: new[] { Permisos.RegistrarMovimientos });
@@ -384,7 +391,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public async Task InicializarAsync_ConGestionarProductos_NoConsultaAlServicioYPuedeFiltrarQuedaEnTrue()
     {
-        var (vm, _, _, productoSvcMock, _) = Crear(
+        var (vm, _, _, productoSvcMock, _, _) = Crear(
             rol: RolUsuario.Operador,
             permisos: new[] { Permisos.RegistrarMovimientos, Permisos.GestionarProductos });
 
@@ -406,7 +413,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public async Task BuscarProductosParaFiltroAsync_ServidorRechaza403_OcultaFiltroYNoPropaga()
     {
-        var (vm, _, _, productoSvcMock, _) = Crear(
+        var (vm, _, _, productoSvcMock, _, _) = Crear(
             rol: RolUsuario.Operador,
             permisos: new[] { Permisos.RegistrarMovimientos, Permisos.GestionarProductos });
         productoSvcMock
@@ -423,7 +430,7 @@ public class MovimientoHistorialViewModelTests
     public async Task BuscarProductosParaFiltroAsync_DelegaEnProductoServiceBuscarPorTextoAsync()
     {
         var productos = new List<ProductoDto> { CrearProducto(1, "Azúcar") };
-        var (vm, _, _, productoSvcMock, _) = Crear();
+        var (vm, _, _, productoSvcMock, _, _) = Crear();
         productoSvcMock
             .Setup(s => s.BuscarPorTextoAsync("azu"))
             .ReturnsAsync(productos);
@@ -437,7 +444,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public void ProductoFiltroSeleccionado_AlAsignarProductoReal_DerivaFiltroProductoId()
     {
-        var (vm, _, _, _, _) = Crear();
+        var (vm, _, _, _, _, _) = Crear();
         var producto = CrearProducto(7, "Azúcar");
 
         vm.ProductoFiltroSeleccionado = producto;
@@ -454,7 +461,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public void ProductoFiltroSeleccionado_AlLimpiarSeleccion_FiltroProductoIdVuelveANull()
     {
-        var (vm, _, _, _, _) = Crear();
+        var (vm, _, _, _, _, _) = Crear();
         vm.ProductoFiltroSeleccionado = CrearProducto(7, "Azúcar");
 
         vm.ProductoFiltroSeleccionado = null;
@@ -465,7 +472,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public void TipoFiltroSeleccionado_PorDefecto_EsTodos()
     {
-        var (vm, _, _, _, _) = Crear();
+        var (vm, _, _, _, _, _) = Crear();
 
         Assert.Null(vm.TipoFiltroSeleccionado!.Valor);
         Assert.Null(vm.FiltroTipo);
@@ -474,7 +481,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public void TipoFiltroSeleccionado_AlAsignarSalida_DerivaFiltroTipo()
     {
-        var (vm, _, _, _, _) = Crear();
+        var (vm, _, _, _, _, _) = Crear();
         var opcionSalida = vm.TiposDisponibles.Single(o => o.Valor == TipoMovimiento.Salida);
 
         vm.TipoFiltroSeleccionado = opcionSalida;
@@ -488,7 +495,7 @@ public class MovimientoHistorialViewModelTests
     public async Task ItemsView_EsOrdenable()
     {
         var lista = new List<MovimientoHistorialDto> { CrearDto(1), CrearDto(2) };
-        var (vm, _, _, _, _) = Crear(lista);
+        var (vm, _, _, _, _, _) = Crear(lista);
 
         await vm.CargarAsync();
 
@@ -506,7 +513,7 @@ public class MovimientoHistorialViewModelTests
             CrearDto(2) with { Fecha = new DateTime(2026, 1, 10) },
             CrearDto(3) with { Fecha = new DateTime(2026, 3, 20) },
         };
-        var (vm, _, _, _, _) = Crear(desordenados);
+        var (vm, _, _, _, _, _) = Crear(desordenados);
         await vm.CargarAsync();
 
         vm.ItemsView.SortDescriptions.Add(
@@ -522,7 +529,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public async Task Items_TrasRecarga_SeReflejanEnItemsView()
     {
-        var (vm, svcMock, _, _, _) = Crear(new List<MovimientoHistorialDto> { CrearDto(1) });
+        var (vm, svcMock, _, _, _, _) = Crear(new List<MovimientoHistorialDto> { CrearDto(1) });
         await vm.CargarAsync();
         Assert.Single(vm.ItemsView.Cast<MovimientoHistorialDto>());
 
@@ -547,7 +554,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public void RecalcularCommand_CanExecute_SinProductoSeleccionado_EsFalse()
     {
-        var (vm, _, _, _, _) = Crear();
+        var (vm, _, _, _, _, _) = Crear();
 
         Assert.False(vm.RecalcularCommand.CanExecute(null));
     }
@@ -555,7 +562,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public void RecalcularCommand_CanExecute_ConProductoIdParaRecalcularSeteado_EsTrue()
     {
-        var (vm, _, _, _, _) = Crear();
+        var (vm, _, _, _, _, _) = Crear();
 
         vm.ProductoIdParaRecalcular = 5;
 
@@ -565,7 +572,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public void ProductoSeleccionadoParaRecalcular_AlAsignarProducto_DerivaProductoIdParaRecalcular()
     {
-        var (vm, _, _, _, _) = Crear();
+        var (vm, _, _, _, _, _) = Crear();
         var producto = CrearProducto(9, "Harina");
 
         vm.ProductoSeleccionadoParaRecalcular = producto;
@@ -576,7 +583,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public void ProductoSeleccionadoParaRecalcular_AlAsignarNull_ProductoIdParaRecalcularVuelveANull()
     {
-        var (vm, _, _, _, _) = Crear();
+        var (vm, _, _, _, _, _) = Crear();
         vm.ProductoSeleccionadoParaRecalcular = CrearProducto(9, "Harina");
 
         vm.ProductoSeleccionadoParaRecalcular = null;
@@ -587,7 +594,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public void ProductoSeleccionadoParaRecalcular_AlAsignarProducto_HabilitaRecalcularCommand()
     {
-        var (vm, _, _, _, _) = Crear();
+        var (vm, _, _, _, _, _) = Crear();
 
         vm.ProductoSeleccionadoParaRecalcular = CrearProducto(9, "Harina");
 
@@ -598,7 +605,7 @@ public class MovimientoHistorialViewModelTests
     public async Task BuscarProductosAsync_DelegaEnProductoServiceBuscarPorTextoAsync()
     {
         var productos = new List<ProductoDto> { CrearProducto(1, "Azúcar") };
-        var (vm, _, _, productoSvcMock, _) = Crear();
+        var (vm, _, _, productoSvcMock, _, _) = Crear();
         productoSvcMock
             .Setup(s => s.BuscarPorTextoAsync("azu"))
             .ReturnsAsync(productos);
@@ -614,7 +621,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public async Task Buscar_SiElServicioLanzaUnauthorized_NoPropagaYMarcaSinPermiso()
     {
-        var (vm, svcMock, _, _, _) = Crear();
+        var (vm, svcMock, _, _, _, _) = Crear();
         svcMock.Setup(s => s.ObtenerHistorialAsync(It.IsAny<HistorialMovimientoFiltro>()))
             .ThrowsAsync(new UnauthorizedAccessException("403"));
 
@@ -629,7 +636,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public async Task Buscar_MientrasEsperaAlServicio_CargandoEsTrue()
     {
-        var (vm, svcMock, _, _, _) = Crear();
+        var (vm, svcMock, _, _, _, _) = Crear();
         var pendiente = new TaskCompletionSource<IReadOnlyList<MovimientoHistorialDto>>();
         svcMock.Setup(s => s.ObtenerHistorialAsync(It.IsAny<HistorialMovimientoFiltro>())).Returns(pendiente.Task);
 
@@ -645,7 +652,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public async Task CargaYBusquedaSuperpuestas_LaBusquedaNuevaGanaAunqueLaCargaVuelvaDespues()
     {
-        var (vm, svcMock, _, _, _) = Crear();
+        var (vm, svcMock, _, _, _, _) = Crear();
         var completa = new TaskCompletionSource<IReadOnlyList<MovimientoHistorialDto>>();
         var filtrada = new TaskCompletionSource<IReadOnlyList<MovimientoHistorialDto>>();
         svcMock.Setup(s => s.ObtenerHistorialAsync(It.Is<HistorialMovimientoFiltro>(f => f.Tipo == null))).Returns(completa.Task);
@@ -666,7 +673,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public async Task Un403DeUnaConsultaVieja_NoTapaLosResultadosDeLaNueva()
     {
-        var (vm, svcMock, _, _, _) = Crear();
+        var (vm, svcMock, _, _, _, _) = Crear();
         var completa = new TaskCompletionSource<IReadOnlyList<MovimientoHistorialDto>>();
         svcMock.Setup(s => s.ObtenerHistorialAsync(It.Is<HistorialMovimientoFiltro>(f => f.Tipo == null))).Returns(completa.Task);
         svcMock.Setup(s => s.ObtenerHistorialAsync(It.Is<HistorialMovimientoFiltro>(f => f.Tipo == TipoMovimiento.Salida)))
@@ -688,7 +695,7 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public async Task InicializarAsync_Un403_UsaElMensajeDelHistorial()
     {
-        var (vm, svcMock, _, _, _) = Crear();
+        var (vm, svcMock, _, _, _, _) = Crear();
         svcMock.Setup(s => s.ObtenerHistorialAsync(It.IsAny<HistorialMovimientoFiltro>()))
             .ThrowsAsync(new UnauthorizedAccessException("403"));
 
@@ -706,10 +713,12 @@ public class MovimientoHistorialViewModelTests
     [Fact]
     public async Task DosBusquedasEnOrdenInverso_GanaLaUltimaPedida()
     {
-        var (vm, svcMock, _, _, _) = Crear();
+        var (vm, svcMock, _, _, _, _) = Crear();
         var filtrada = new TaskCompletionSource<IReadOnlyList<MovimientoHistorialDto>>();
-        svcMock.Setup(s => s.ObtenerHistorialAsync(It.Is<HistorialMovimientoFiltro>(f => f.Tipo == TipoMovimiento.Salida))).Returns(filtrada.Task);
-        svcMock.Setup(s => s.ObtenerHistorialAsync(It.Is<HistorialMovimientoFiltro>(f => f.Tipo == null)))
+        // La primera consulta con el filtro vigente (la búsqueda) queda colgada; la segunda (la recarga que
+        // dispara el recálculo, con los MISMOS filtros) responde enseguida.
+        svcMock.SetupSequence(s => s.ObtenerHistorialAsync(It.Is<HistorialMovimientoFiltro>(f => f.Tipo == TipoMovimiento.Salida)))
+            .Returns(filtrada.Task)
             .ReturnsAsync(new List<MovimientoHistorialDto> { CrearDto(1), CrearDto(2) });
         svcMock.Setup(s => s.RecalcularStockAsync(1)).ReturnsAsync(new RecalculoResultadoDto(1, 0m, 0m, 0));
         vm.ProductoIdParaRecalcular = 1;
@@ -723,5 +732,64 @@ public class MovimientoHistorialViewModelTests
 
         Assert.Equal(new[] { 1, 2 }, vm.Items.Select(i => i.MovimientoId));
         Assert.False(vm.Cargando);
+    }
+
+    [Fact]
+    public async Task AbrirRecalcular_EligeUnProducto_RecalculaEseYRecargaConLosFiltros()
+    {
+        var (vm, svcMock, _, _, confirmacion, dialogo) = Crear(permisos: [Permisos.RegistrarMovimientos, Permisos.RecalcularStock], rol: RolUsuario.Operador);
+        dialogo.Setup(d => d.ElegirProductoAsync(It.IsAny<Func<string?, CancellationToken, Task<IEnumerable<object>>>>()))
+            .ReturnsAsync(CrearProducto(42, "Cemento portland 50 kg"));
+        svcMock.Setup(s => s.RecalcularStockAsync(42)).ReturnsAsync(new RecalculoResultadoDto(42, 10m, 12m, 3));
+        vm.TipoFiltroSeleccionado = vm.TiposDisponibles.Single(t => t.Valor == TipoMovimiento.Salida);
+
+        await vm.AbrirRecalcularCommand.ExecuteAsync(null);
+
+        svcMock.Verify(s => s.RecalcularStockAsync(42), Times.Once);
+        svcMock.Verify(s => s.ObtenerHistorialAsync(It.Is<HistorialMovimientoFiltro>(f => f.Tipo == TipoMovimiento.Salida)), Times.Once);
+        confirmacion.Verify(c => c.InformarAsync("Stock recalculado."), Times.Once);
+    }
+
+    [Fact]
+    public async Task AbrirRecalcular_Cancela_NoRecalcula()
+    {
+        var (vm, svcMock, _, _, _, dialogo) = Crear();
+        dialogo.Setup(d => d.ElegirProductoAsync(It.IsAny<Func<string?, CancellationToken, Task<IEnumerable<object>>>>()))
+            .ReturnsAsync((ProductoDto?)null);
+
+        await vm.AbrirRecalcularCommand.ExecuteAsync(null);
+
+        svcMock.Verify(s => s.RecalcularStockAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AbrirRecalcular_SinPermiso_NoAbreElDialogo()
+    {
+        var (vm, _, _, _, _, dialogo) = Crear(rol: RolUsuario.Operador, permisos: [Permisos.RegistrarMovimientos]);
+
+        await vm.AbrirRecalcularCommand.ExecuteAsync(null);
+
+        dialogo.Verify(d => d.ElegirProductoAsync(It.IsAny<Func<string?, CancellationToken, Task<IEnumerable<object>>>>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AbrirRecalcular_PasaElBuscadorDelVm()
+    {
+        var (vm, _, _, _, _, dialogo) = Crear(permisos: [Permisos.RegistrarMovimientos, Permisos.RecalcularStock], rol: RolUsuario.Operador);
+
+        await vm.AbrirRecalcularCommand.ExecuteAsync(null);
+
+        dialogo.Verify(d => d.ElegirProductoAsync(vm.BuscarProductosAsync), Times.Once);
+    }
+
+    [Fact]
+    public async Task BuscarProductos_Un403_DevuelveVacioSinPropagar()
+    {
+        var (vm, _, _, productos, _, _) = Crear();
+        productos.Setup(p => p.BuscarPorTextoAsync(It.IsAny<string?>())).ThrowsAsync(new UnauthorizedAccessException("403"));
+
+        var resultado = await vm.BuscarProductosAsync("cem", CancellationToken.None);
+
+        Assert.Empty(resultado);
     }
 }

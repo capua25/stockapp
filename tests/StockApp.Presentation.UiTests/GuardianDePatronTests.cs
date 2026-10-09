@@ -189,6 +189,7 @@ public class GuardianDePatronTests
         typeof(ConfirmacionDialog),
         typeof(MensajeDialog),
         typeof(PedirTextoDialog),
+        typeof(RecalcularStockDialog),
         typeof(ReclasificarTareaDialog),
         // Window host de la app -- tambien queda fuera de Montar por la misma razon (Window).
         // Revisada en la Task 13.1: no tiene ningun literal visual que custodiar.
@@ -481,6 +482,7 @@ public class GuardianDePatronTests
         "StockApp.Presentation/Views/Dialogs/ConfirmacionDialog.axaml",
         "StockApp.Presentation/Views/Dialogs/MensajeDialog.axaml",
         "StockApp.Presentation/Views/Dialogs/PedirTextoDialog.axaml",
+        "StockApp.Presentation/Views/Dialogs/RecalcularStockDialog.axaml",
     };
 
     [Theory]

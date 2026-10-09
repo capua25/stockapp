@@ -18,6 +18,9 @@ public class DialogosComparacionTests
     private static Control PedirTexto() =>
         ContenidoDeDialogo.Extraer(new PedirTextoDialog("Anular documento", "Ingresá el motivo de la anulación:"));
 
+    private static Control RecalcularStock() =>
+        ContenidoDeDialogo.Extraer(new RecalcularStockDialog((_, _) => Task.FromResult<IEnumerable<object>>(Array.Empty<object>())));
+
     [AvaloniaFact]
     public void Confirmacion_IgualAlMockup() =>
         ComparacionVisual.CompararConMockup(Confirmacion(), null, "dialogos/confirmacion.html");
@@ -41,4 +44,12 @@ public class DialogosComparacionTests
     [AvaloniaFact]
     public void PedirTexto_IgualAlMockup_1366x768() =>
         ComparacionVisual.CompararConMockup(PedirTexto(), null, "dialogos/pedir-texto.html", tamano: TamanoLienzo.Municipio);
+
+    [AvaloniaFact]
+    public void RecalcularStock_IgualAlMockup() =>
+        ComparacionVisual.CompararConMockup(RecalcularStock(), null, "dialogos/recalcular-stock.html");
+
+    [AvaloniaFact]
+    public void RecalcularStock_IgualAlMockup_1366x768() =>
+        ComparacionVisual.CompararConMockup(RecalcularStock(), null, "dialogos/recalcular-stock.html", tamano: TamanoLienzo.Municipio);
 }
