@@ -15,8 +15,8 @@ namespace StockApp.Presentation.UiTests;
 
 /// <summary>
 /// Misma regresión que <see cref="ProductoListViewStockOrdenTests"/> (causa raíz ahí) sobre la
-/// grilla de Historial de movimientos: "Stock ant." y "Stock nuevo". "Stock nuevo" lleva el badge
-/// "Stock negativo" de visibilidad condicional; "Stock ant." es un número suelto (se custodia
+/// grilla de Historial de movimientos: "STOCK ANT." y "STOCK NUEVO". "STOCK NUEVO" lleva el badge
+/// "Stock negativo" de visibilidad condicional; "STOCK ANT." es un número suelto (se custodia
 /// igual porque comparte el ordenamiento y el reciclaje de celdas).
 /// </summary>
 public class MovimientoHistorialViewStockOrdenTests
@@ -42,24 +42,24 @@ public class MovimientoHistorialViewStockOrdenTests
             Stocks.Select((s, i) => MovimientoDe(i + 1, cantidades[i], Stocks[(i + 7) % Stocks.Length], s)).ToList());
         Dispatcher.UIThread.RunJobs();
 
-        foreach (var columna in new[] { "Stock ant.", "Stock nuevo" })
+        foreach (var columna in new[] { "STOCK ANT.", "STOCK NUEVO" })
             AssertNumerosAlineadosYSinRecorte(grid, window, columna, "inicial");
-        AssertBadgeNoPisaElNumero(grid, window, "Stock nuevo", "inicial");
+        AssertBadgeNoPisaElNumero(grid, window, "STOCK NUEVO", "inicial");
 
-        ClickearHeader(window, grid, "Cantidad");
-        ClickearHeader(window, grid, "Cantidad");
-        foreach (var columna in new[] { "Stock ant.", "Stock nuevo" })
-            AssertNumerosAlineadosYSinRecorte(grid, window, columna, "Cantidad descendente");
+        ClickearHeader(window, grid, "CANTIDAD");
+        ClickearHeader(window, grid, "CANTIDAD");
+        foreach (var columna in new[] { "STOCK ANT.", "STOCK NUEVO" })
+            AssertNumerosAlineadosYSinRecorte(grid, window, columna, "CANTIDAD descendente");
 
-        foreach (var ordenar in new[] { "Stock nuevo", "Stock ant." })
+        foreach (var ordenar in new[] { "STOCK NUEVO", "STOCK ANT." })
         {
             ClickearHeader(window, grid, ordenar);
-            foreach (var columna in new[] { "Stock ant.", "Stock nuevo" })
+            foreach (var columna in new[] { "STOCK ANT.", "STOCK NUEVO" })
                 AssertNumerosAlineadosYSinRecorte(grid, window, columna, $"{ordenar} ascendente");
             ClickearHeader(window, grid, ordenar);
-            foreach (var columna in new[] { "Stock ant.", "Stock nuevo" })
+            foreach (var columna in new[] { "STOCK ANT.", "STOCK NUEVO" })
                 AssertNumerosAlineadosYSinRecorte(grid, window, columna, $"{ordenar} descendente");
-            AssertBadgeNoPisaElNumero(grid, window, "Stock nuevo", $"{ordenar} descendente");
+            AssertBadgeNoPisaElNumero(grid, window, "STOCK NUEVO", $"{ordenar} descendente");
         }
     }
 }

@@ -224,7 +224,7 @@ public class GrillasSinRecorteBarridoTests
     /// está cortado. Es el criterio común de columnas Auto, no un recorte. Una medida que ni cedió ni llegó al tope
     /// tiene que mostrar su texto entero: si lo corta, es un error de medición y el barrido lo marca.
     /// </summary>
-    private static bool EsCorteAdmitido(DataGrid grid, DataGridColumn col, TextBlock tb) =>
+    internal static bool EsCorteAdmitido(DataGrid grid, DataGridColumn col, TextBlock tb) =>
         ColumnaAuto.GetMedir(col)
         && DataGridColumnasAutoBehavior.AnchoMedido(grid, col) is { } medido
         && (col.ActualWidth < medido - 0.5 || medido >= ColumnaAuto.GetTope(col) - 0.5)

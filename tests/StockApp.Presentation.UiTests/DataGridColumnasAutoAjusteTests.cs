@@ -118,17 +118,21 @@ public class DataGridColumnasAutoAjusteTests
 
     /// <summary>
     /// Textos de la columna (encabezado + celdas realizadas) cuyo TextBlock quedó arreglado más
-    /// angosto que su ancho natural, o sea, recortados.
+    /// angosto que su ancho natural, o sea, recortados. En una columna medida (ColumnaAuto) que cedió al
+    /// espacio libre o llegó al tope, la celda cortada con elipsis y tooltip es el corte admitido del
+    /// criterio común (el mismo de GrillasSinRecorteBarridoTests), no un recorte.
     /// </summary>
     private static List<string> TextosRecortados(DataGrid grid, Window window, string header)
     {
         var headerCell = grid.GetVisualDescendants().OfType<DataGridColumnHeader>().First(h => Equals(h.Content, header));
         var centroX = headerCell.TranslatePoint(new Point(headerCell.Bounds.Width / 2, 0), window)!.Value.X;
+        var columna = Columna(grid, header);
 
         var textos = headerCell.GetVisualDescendants().OfType<TextBlock>()
             .Concat(grid.GetVisualDescendants().OfType<DataGridCell>()
                 .Where(c => c.IsEffectivelyVisible && ContieneX(c, window, centroX))
-                .SelectMany(c => c.GetVisualDescendants().OfType<TextBlock>()))
+                .SelectMany(c => c.GetVisualDescendants().OfType<TextBlock>())
+                .Where(tb => !GrillasSinRecorteBarridoTests.EsCorteAdmitido(grid, columna, tb)))
             .Where(tb => tb.IsEffectivelyVisible && !string.IsNullOrEmpty(tb.Text));
 
         return textos
@@ -193,8 +197,8 @@ public class DataGridColumnasAutoAjusteTests
         var (window, grid) = Montar(new MovimientoHistorialView(), ancho);
         Cargar(grid, HistorialReal());
 
-        AssertSinRecorte(grid, window, "carga", "Usuario", "Tipo", "Fecha", "Motivo", "Cantidad", "Precio");
-        Assert.Equal(220, Columna(grid, "Stock nuevo").ActualWidth, 1);
+        AssertSinRecorte(grid, window, "carga", "USUARIO", "TIPO", "FECHA", "MOTIVO", "CANTIDAD", "PRECIO");
+        Assert.Equal(220, Columna(grid, "STOCK NUEVO").ActualWidth, 1);
     }
 
     [AvaloniaTheory]
@@ -230,17 +234,17 @@ public class DataGridColumnasAutoAjusteTests
         var (window, grid) = Montar(new MovimientoHistorialView(), 1300);
         Cargar(grid, HistorialReal());
 
-        // El usuario agranda la columna proporcional "Producto": eso aprieta a las de su derecha.
-        ArrastrarSeparador(window, grid, "Producto", 160);
+        // El usuario agranda la columna proporcional "PRODUCTO": eso aprieta a las de su derecha.
+        ArrastrarSeparador(window, grid, "PRODUCTO", 160);
         var despuesDelArrastre = Anchos(grid);
-        Assert.True(despuesDelArrastre["Producto"] > 0, "precondición");
+        Assert.True(despuesDelArrastre["PRODUCTO"] > 0, "precondición");
 
         // Recarga (refresco) con los mismos datos y con datos más anchos.
         Cargar(grid, HistorialReal());
-        Assert.Equal(despuesDelArrastre["Producto"], Columna(grid, "Producto").ActualWidth, 1);
+        Assert.Equal(despuesDelArrastre["PRODUCTO"], Columna(grid, "PRODUCTO").ActualWidth, 1);
 
         Cargar(grid, HistorialReal().Select(m => m with { UsuarioNombre = "Encargada de Depósito Municipal Norte" }).ToList());
-        Assert.Equal(despuesDelArrastre["Producto"], Columna(grid, "Producto").ActualWidth, 1);
+        Assert.Equal(despuesDelArrastre["PRODUCTO"], Columna(grid, "PRODUCTO").ActualWidth, 1);
     }
 
     [AvaloniaFact]
@@ -250,14 +254,14 @@ public class DataGridColumnasAutoAjusteTests
         // desborda y el separador de Usuario queda fuera de la vista (no hay dónde arrastrar).
         var (window, grid) = Montar(new MovimientoHistorialView(), 1700);
         Cargar(grid, HistorialReal());
-        var usuarioNatural = Columna(grid, "Usuario").ActualWidth;
+        var usuarioNatural = Columna(grid, "USUARIO").ActualWidth;
 
-        ArrastrarSeparador(window, grid, "Usuario", -60);
-        var usuarioArrastrado = Columna(grid, "Usuario").ActualWidth;
+        ArrastrarSeparador(window, grid, "USUARIO", -60);
+        var usuarioArrastrado = Columna(grid, "USUARIO").ActualWidth;
         Assert.True(usuarioArrastrado < usuarioNatural - 30, $"precondición: el arrastre achicó Usuario ({usuarioNatural:F1} -> {usuarioArrastrado:F1})");
 
         Cargar(grid, HistorialReal());
-        Assert.Equal(usuarioArrastrado, Columna(grid, "Usuario").ActualWidth, 1);
+        Assert.Equal(usuarioArrastrado, Columna(grid, "USUARIO").ActualWidth, 1);
     }
 
     // ── (b) Sin loops: si no entra, resultado estable ──────────────────────────────────────────
@@ -298,8 +302,8 @@ public class DataGridColumnasAutoAjusteTests
 
         // Lo que no entra se ve con el scroll horizontal: las Auto quedan enteras y la fija en 220.
         Assert.True(ScrollHorizontal(grid) is { IsVisible: true }, "no entra todo: tiene que aparecer el scroll horizontal");
-        AssertSinRecorte(grid, window, "desborde", "Usuario", "Tipo", "Fecha", "Motivo", "Cantidad", "Precio");
-        Assert.Equal(220, Columna(grid, "Stock nuevo").ActualWidth, 1);
+        AssertSinRecorte(grid, window, "desborde", "USUARIO", "TIPO", "FECHA", "MOTIVO", "CANTIDAD", "PRECIO");
+        Assert.Equal(220, Columna(grid, "STOCK NUEVO").ActualWidth, 1);
     }
 
     [AvaloniaFact(Timeout = 60000)]
@@ -309,10 +313,10 @@ public class DataGridColumnasAutoAjusteTests
         Cargar(grid, HistorialReal());
 
         // Un actor externo que, después de cada pasada de layout, le vuelve a poner otro peso a
-        // "Producto". El behavior lo corrige, el actor lo pisa, y así. Sin la guarda, eso es un
+        // "PRODUCTO". El behavior lo corrige, el actor lo pisa, y así. Sin la guarda, eso es un
         // loop de layout infinito (Avalonia corta con "Infinite layout loop detected" o la UI se
         // cuelga); con la guarda, el behavior se rinde y la grilla queda quieta.
-        var producto = Columna(grid, "Producto");
+        var producto = Columna(grid, "PRODUCTO");
         var pisadas = 0;
         grid.LayoutUpdated += (_, _) =>
         {
@@ -342,8 +346,8 @@ public class DataGridColumnasAutoAjusteTests
                 $"oscila a {ancho}px: {Describir(antes)} / {Describir(Anchos(grid))}");
         }
 
-        AssertSinRecorte(grid, window, "de vuelta a 1300", "Usuario", "Tipo");
-        Assert.Equal(220, Columna(grid, "Stock nuevo").ActualWidth, 1);
+        AssertSinRecorte(grid, window, "de vuelta a 1300", "USUARIO", "TIPO");
+        Assert.Equal(220, Columna(grid, "STOCK NUEVO").ActualWidth, 1);
     }
 
     // ── (c) Filas que aparecen al hacer scroll ─────────────────────────────────────────────────
@@ -362,8 +366,8 @@ public class DataGridColumnasAutoAjusteTests
         Dispatcher.UIThread.RunJobs();
 
         Assert.Contains(grid.GetVisualDescendants().OfType<TextBlock>(), tb => tb.Text == ancha.UsuarioNombre && tb.IsEffectivelyVisible);
-        AssertSinRecorte(grid, window, "tras scroll", "Usuario", "Tipo", "Fecha");
-        Assert.Equal(220, Columna(grid, "Stock nuevo").ActualWidth, 1);
+        AssertSinRecorte(grid, window, "tras scroll", "USUARIO", "TIPO", "FECHA");
+        Assert.Equal(220, Columna(grid, "STOCK NUEVO").ActualWidth, 1);
     }
 
     // ── (d) Recargas, filtro y ordenamiento: sin achicar ni saltar ─────────────────────────────
@@ -375,7 +379,7 @@ public class DataGridColumnasAutoAjusteTests
         Cargar(grid, HistorialReal());
         var inicial = Anchos(grid);
 
-        foreach (var header in new[] { "Usuario", "Usuario", "Tipo", "Cantidad", "Fecha", "Usuario" })
+        foreach (var header in new[] { "USUARIO", "USUARIO", "TIPO", "CANTIDAD", "FECHA", "USUARIO" })
         {
             ClickearHeader(window, grid, header);
             var ahora = Anchos(grid);
@@ -391,7 +395,7 @@ public class DataGridColumnasAutoAjusteTests
 
         // Refresco con los datos completos: vuelve a lo mismo, sin saltos.
         Cargar(grid, HistorialReal());
-        AssertSinRecorte(grid, window, "refresco", "Usuario", "Tipo");
+        AssertSinRecorte(grid, window, "refresco", "USUARIO", "TIPO");
     }
 
     // ── (e) Columnas * y fijas ─────────────────────────────────────────────────────────────────
@@ -404,11 +408,11 @@ public class DataGridColumnasAutoAjusteTests
         var (window, grid) = Montar(new MovimientoHistorialView(), 1700);
         Cargar(grid, HistorialReal());
 
-        Assert.Equal(220, Columna(grid, "Stock nuevo").ActualWidth, 1);
+        Assert.Equal(220, Columna(grid, "STOCK NUEVO").ActualWidth, 1);
 
         // Las proporcionales llenan el resto y conservan la proporción 2:3 entre sí.
-        var producto = Columna(grid, "Producto").ActualWidth;
-        var comentario = Columna(grid, "Comentario").ActualWidth;
+        var producto = Columna(grid, "PRODUCTO").ActualWidth;
+        var comentario = Columna(grid, "COMENTARIO").ActualWidth;
         Assert.True(producto > 40 && comentario > 40, $"Producto={producto:F1} Comentario={comentario:F1}");
         Assert.Equal(1.5, comentario / producto, 2);
 
@@ -514,10 +518,10 @@ public class DataGridColumnasAutoAjusteTests
         Cargar(grid, HistorialReal());
         Reportar("Historial 1366", window, grid);
 
-        AssertEstrellasEnPiso(grid, "carga", "Producto", "Comentario");
-        AssertLegible(grid, window, "carga", "Producto", "Comentario");
-        AssertSinRecorte(grid, window, "carga", "Usuario", "Tipo", "Fecha", "Motivo", "Cantidad", "Precio");
-        Assert.Equal(220, Columna(grid, "Stock nuevo").ActualWidth, 1);
+        AssertEstrellasEnPiso(grid, "carga", "PRODUCTO", "COMENTARIO");
+        AssertLegible(grid, window, "carga", "PRODUCTO", "COMENTARIO");
+        AssertSinRecorte(grid, window, "carga", "USUARIO", "TIPO", "FECHA", "MOTIVO", "CANTIDAD", "PRECIO");
+        Assert.Equal(220, Columna(grid, "STOCK NUEVO").ActualWidth, 1);
         Assert.True(ScrollHorizontal(grid) is { IsVisible: true }, "a 1366 el Historial no entra: tiene que haber scroll horizontal");
         AssertScrollSiDesborda(grid, "carga");
     }
@@ -589,15 +593,15 @@ public class DataGridColumnasAutoAjusteTests
         // attached (el piso efectivo es el máximo entre el attached y el MinWidth declarado).
         var (window, grid) = MontarEnShell(new MovimientoHistorialView(), 1366, 768, g =>
         {
-            Columna(g, "Comentario").MinWidth = 250;
-            DataGridColumnasAutoBehavior.SetPisoProporcional(Columna(g, "Producto"), 100);
+            Columna(g, "COMENTARIO").MinWidth = 250;
+            DataGridColumnasAutoBehavior.SetPisoProporcional(Columna(g, "PRODUCTO"), 100);
         });
         Cargar(grid, HistorialReal());
         Reportar("Historial 1366 con pisos puntuales", window, grid);
 
         Assert.True(ScrollHorizontal(grid) is { IsVisible: true }, "precondición: desborda");
-        Assert.Equal(250, Columna(grid, "Comentario").ActualWidth, 1);
-        Assert.Equal(100, Columna(grid, "Producto").ActualWidth, 1);
+        Assert.Equal(250, Columna(grid, "COMENTARIO").ActualWidth, 1);
+        Assert.Equal(100, Columna(grid, "PRODUCTO").ActualWidth, 1);
     }
 
     [Fact]
@@ -649,10 +653,10 @@ public class DataGridColumnasAutoAjusteTests
             }
             Assert.True(Anchos(grid).All(kv => Math.Abs(kv.Value - antes[kv.Key]) < 0.5),
                 $"oscila a {ancho}px: {Describir(antes)} / {Describir(Anchos(grid))}");
-            AssertEstrellasEnPiso(grid, $"{ancho}px", "Producto", "Comentario");
+            AssertEstrellasEnPiso(grid, $"{ancho}px", "PRODUCTO", "COMENTARIO");
             AssertScrollSiDesborda(grid, $"{ancho}px");
 
-            ClickearHeader(window, grid, "Usuario");
+            ClickearHeader(window, grid, "USUARIO");
             Assert.True(Anchos(grid).All(kv => Math.Abs(kv.Value - antes[kv.Key]) < 0.5),
                 $"ordenar a {ancho}px hizo saltar el layout: {Describir(antes)} / {Describir(Anchos(grid))}");
         }
@@ -668,19 +672,19 @@ public class DataGridColumnasAutoAjusteTests
         var scroll = ScrollHorizontal(grid);
         Assert.True(scroll is { IsVisible: true }, "precondición: desborda");
         var primera = grid.ItemsSource!.Cast<object>().First();
-        foreach (var header in new[] { "Producto", "Usuario", "Comentario", "Fecha" })
+        foreach (var header in new[] { "PRODUCTO", "USUARIO", "COMENTARIO", "FECHA" })
         {
             ClickearHeader(window, grid, header);
-            grid.ScrollIntoView(primera, Columna(grid, "Comentario"));
+            grid.ScrollIntoView(primera, Columna(grid, "COMENTARIO"));
             Dispatcher.UIThread.RunJobs();
             Assert.True(scroll!.Value > 0, $"precondición: el scroll horizontal se movió al final (valor {scroll.Value:F1})");
-            grid.ScrollIntoView(primera, Columna(grid, "Fecha"));
+            grid.ScrollIntoView(primera, Columna(grid, "FECHA"));
             Dispatcher.UIThread.RunJobs();
             var ahora = Anchos(grid);
             Assert.True(ahora.All(kv => Math.Abs(kv.Value - inicial[kv.Key]) < 0.5),
                 $"ordenar por '{header}' y scrollear movió los anchos: {Describir(inicial)} / {Describir(ahora)}");
         }
-        AssertEstrellasEnPiso(grid, "tras ordenar y scrollear", "Producto", "Comentario");
+        AssertEstrellasEnPiso(grid, "tras ordenar y scrollear", "PRODUCTO", "COMENTARIO");
     }
 
     // ── (f) Rendimiento ────────────────────────────────────────────────────────────────────────

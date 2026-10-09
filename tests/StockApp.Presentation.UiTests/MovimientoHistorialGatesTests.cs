@@ -10,6 +10,7 @@ using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Enums;
+using StockApp.Presentation.Controls.V2;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Movimientos;
 using System.Threading;
@@ -36,6 +37,9 @@ namespace StockApp.Presentation.UiTests;
 /// - PuedeRecalcularStock: computada, `_session.RolActual == Admin || PermisosActuales.Contains(
 ///   Permisos.RecalcularStock)`. Rol Operador con permisos explicitos (nunca Admin: cortocircuita
 ///   el OR antes de mirar el permiso real).
+///
+/// En la vista v2 quedan dos IsVisible: el del campo "Producto" de la barra y el del botón "Recalcular stock" del
+/// encabezado. El campo "Producto a recalcular:" se mudó al diálogo de Recalcular stock, que solo abre ese botón.
 /// </summary>
 public class MovimientoHistorialGatesTests
 {
@@ -126,8 +130,12 @@ public class MovimientoHistorialGatesTests
         return (window, vm);
     }
 
-    private static TextBlock TextoPorContenido(Window window, string texto)
-        => window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == texto);
+    /// <summary>
+    /// El filtro "Producto" de la barra v2 es un CampoFormulario con esa etiqueta: se ubica por la etiqueta y no por
+    /// el TextBlock, que no existe mientras el campo nunca se mostró (la plantilla no se aplica a un control oculto).
+    /// </summary>
+    private static CampoFormulario CampoPorEtiqueta(Window window, string etiqueta)
+        => window.GetVisualDescendants().OfType<CampoFormulario>().First(c => c.Etiqueta == etiqueta);
 
     private static Button BotonPorContenido(Window window, string texto)
         => window.GetVisualDescendants().OfType<Button>().First(b => b.Content as string == texto);
@@ -142,7 +150,7 @@ public class MovimientoHistorialGatesTests
             [Permisos.RegistrarMovimientos, Permisos.GestionarProductos],
             lanzar403AlBuscarPorTexto: false);
 
-        var etiqueta = TextoPorContenido(window, "Producto");
+        var etiqueta = CampoPorEtiqueta(window, "Producto");
 
         Assert.True(ArbolVisual.EsVisibleEnArbol(etiqueta));
     }
@@ -154,7 +162,7 @@ public class MovimientoHistorialGatesTests
             RolUsuario.Operador,
             [Permisos.RegistrarMovimientos]);
 
-        var etiqueta = TextoPorContenido(window, "Producto");
+        var etiqueta = CampoPorEtiqueta(window, "Producto");
 
         Assert.False(ArbolVisual.EsVisibleEnArbol(etiqueta));
     }
@@ -177,7 +185,7 @@ public class MovimientoHistorialGatesTests
             [Permisos.RegistrarMovimientos, Permisos.GestionarProductos],
             lanzar403AlBuscarPorTexto: true);
 
-        var etiqueta = TextoPorContenido(window, "Producto");
+        var etiqueta = CampoPorEtiqueta(window, "Producto");
         Assert.True(ArbolVisual.EsVisibleEnArbol(etiqueta), "arranca visible: chequeo optimista de sesion, sin HTTP");
 
         await vm.BuscarProductosParaFiltroAsync("azu", System.Threading.CancellationToken.None);
@@ -186,33 +194,33 @@ public class MovimientoHistorialGatesTests
         Assert.False(ArbolVisual.EsVisibleEnArbol(etiqueta), "se oculta reactivamente tras el 403 real de la busqueda");
     }
 
-    // ---- PuedeRecalcularStock (:86 boton, :92 campo) ----
+    // ---- PuedeRecalcularStock ----
+    // El campo "Producto a recalcular:" se mudó al diálogo de Recalcular stock (el encabezado v2 deja solo el botón):
+    // su gate es el del botón, y el VM no abre el diálogo sin el permiso (AbrirRecalcular_SinPermiso_NoAbreElDialogo).
 
+    /// <summary>Con stock.recalcular (Operador de permisos mixtos), el botón "Recalcular stock" del encabezado se ve.</summary>
     [AvaloniaFact]
-    public void PuedeRecalcularStock_ConPermiso_BotonYCampoVisibles()
+    public void PuedeRecalcularStock_ConPermiso_BotonVisible()
     {
         var (window, _) = Montar(
             RolUsuario.Operador,
             [Permisos.RegistrarMovimientos, Permisos.RecalcularStock]);
 
         var boton = BotonPorContenido(window, "Recalcular stock");
-        var etiquetaCampo = TextoPorContenido(window, "Producto a recalcular:");
 
         Assert.True(ArbolVisual.EsVisibleEnArbol(boton));
-        Assert.True(ArbolVisual.EsVisibleEnArbol(etiquetaCampo));
     }
 
+    /// <summary>Sin stock.recalcular, el botón "Recalcular stock" queda oculto (IsVisible, no IsEnabled).</summary>
     [AvaloniaFact]
-    public void PuedeRecalcularStock_SinPermiso_BotonYCampoOcultos()
+    public void PuedeRecalcularStock_SinPermiso_BotonOculto()
     {
         var (window, _) = Montar(
             RolUsuario.Operador,
             [Permisos.RegistrarMovimientos]);
 
         var boton = BotonPorContenido(window, "Recalcular stock");
-        var etiquetaCampo = TextoPorContenido(window, "Producto a recalcular:");
 
         Assert.False(ArbolVisual.EsVisibleEnArbol(boton));
-        Assert.False(ArbolVisual.EsVisibleEnArbol(etiquetaCampo));
     }
 }

@@ -87,7 +87,7 @@ public class DataGridCeldaNumericaOrdenTests
         grid.ItemsSource = new DataGridCollectionView(Enumerable.Range(0, Cantidades.Length).Select(MovimientoDe).ToList());
         Dispatcher.UIThread.RunJobs();
 
-        OrdenarYVerificar(window, grid, "Cantidad", "Cantidad", "Precio", "Precio", "Tipo", "Tipo");
+        OrdenarYVerificar(window, grid, "CANTIDAD", "CANTIDAD", "PRECIO", "PRECIO", "TIPO", "TIPO");
     }
 
     [AvaloniaFact]

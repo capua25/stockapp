@@ -236,7 +236,9 @@ public class SignoNegativoBadgeTests
     public void Montar_MovimientoHistorialViewConStockNuevoNegativo_MuestraBadgeStockNegativoSoloEnLaFilaNegativa()
     {
         var vista = new MovimientoHistorialView();
-        var window = MontarEnVentana(vista);
+        // Sin DataContext todo IsVisible enlazado queda visible (sin permiso, cargando y vacío a la vez, sobre la
+        // grilla): con 500 de alto la grilla no tiene lugar para realizar filas.
+        var window = MontarEnVentana(vista, height: 900);
 
         var grilla = vista.GetVisualDescendants().OfType<DataGrid>().Single();
         grilla.ItemsSource = new[]
@@ -246,9 +248,12 @@ public class SignoNegativoBadgeTests
         };
         Dispatcher.UIThread.RunJobs();
 
-        var badges = BadgesConTexto(window, "Stock negativo");
+        // Historial es v2: la palabra la pone una Insignia peligro, como en Productos.
+        var insignias = window.GetVisualDescendants().OfType<StockApp.Presentation.Controls.V2.Insignia>()
+            .Where(i => i.Texto == "Stock negativo").ToList();
 
-        Assert.Single(badges, b => b.IsVisible);
+        var visible = Assert.Single(insignias, i => i.IsVisible);
+        Assert.Equal(StockApp.Presentation.Controls.V2.VarianteInsignia.Peligro, visible.Variante);
     }
 
     private static MovimientoHistorialDto MovimientoHistorialDe(int id, decimal stockNuevo) => new(
