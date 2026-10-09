@@ -608,4 +608,120 @@ public class MovimientoHistorialViewModelTests
         Assert.Single(resultado);
         productoSvcMock.Verify(s => s.BuscarPorTextoAsync("azu"), Times.Once);
     }
+
+    // ── 3c-2: búsqueda protegida y turnos ────────────────────────────────────
+
+    [Fact]
+    public async Task Buscar_SiElServicioLanzaUnauthorized_NoPropagaYMarcaSinPermiso()
+    {
+        var (vm, svcMock, _, _, _) = Crear();
+        svcMock.Setup(s => s.ObtenerHistorialAsync(It.IsAny<HistorialMovimientoFiltro>()))
+            .ThrowsAsync(new UnauthorizedAccessException("403"));
+
+        var ex = await Record.ExceptionAsync(() => vm.BuscarCommand.ExecuteAsync(null));
+
+        Assert.Null(ex);
+        Assert.True(vm.SinPermiso);
+        Assert.Equal(MovimientoHistorialViewModel.MensajeSinPermisoHistorial, vm.MensajeSinPermiso);
+        Assert.False(vm.Cargando);
+    }
+
+    [Fact]
+    public async Task Buscar_MientrasEsperaAlServicio_CargandoEsTrue()
+    {
+        var (vm, svcMock, _, _, _) = Crear();
+        var pendiente = new TaskCompletionSource<IReadOnlyList<MovimientoHistorialDto>>();
+        svcMock.Setup(s => s.ObtenerHistorialAsync(It.IsAny<HistorialMovimientoFiltro>())).Returns(pendiente.Task);
+
+        var t = vm.BuscarCommand.ExecuteAsync(null);
+        Assert.True(vm.Cargando);
+
+        pendiente.SetResult(new List<MovimientoHistorialDto> { CrearDto(1) });
+        await t;
+        Assert.False(vm.Cargando);
+        Assert.Single(vm.Items);
+    }
+
+    [Fact]
+    public async Task CargaYBusquedaSuperpuestas_LaBusquedaNuevaGanaAunqueLaCargaVuelvaDespues()
+    {
+        var (vm, svcMock, _, _, _) = Crear();
+        var completa = new TaskCompletionSource<IReadOnlyList<MovimientoHistorialDto>>();
+        var filtrada = new TaskCompletionSource<IReadOnlyList<MovimientoHistorialDto>>();
+        svcMock.Setup(s => s.ObtenerHistorialAsync(It.Is<HistorialMovimientoFiltro>(f => f.Tipo == null))).Returns(completa.Task);
+        svcMock.Setup(s => s.ObtenerHistorialAsync(It.Is<HistorialMovimientoFiltro>(f => f.Tipo == TipoMovimiento.Salida))).Returns(filtrada.Task);
+
+        var carga = vm.InicializarAsync();
+        vm.TipoFiltroSeleccionado = vm.TiposDisponibles.Single(t => t.Valor == TipoMovimiento.Salida);
+        var busqueda = vm.BuscarCommand.ExecuteAsync(null);
+        filtrada.SetResult(new List<MovimientoHistorialDto> { CrearDto(7) });
+        await busqueda;
+        completa.SetResult(new List<MovimientoHistorialDto> { CrearDto(1), CrearDto(2), CrearDto(3) });
+        await carga;
+
+        Assert.Equal(new[] { 7 }, vm.Items.Select(i => i.MovimientoId));
+        Assert.False(vm.Cargando);
+    }
+
+    [Fact]
+    public async Task Un403DeUnaConsultaVieja_NoTapaLosResultadosDeLaNueva()
+    {
+        var (vm, svcMock, _, _, _) = Crear();
+        var completa = new TaskCompletionSource<IReadOnlyList<MovimientoHistorialDto>>();
+        svcMock.Setup(s => s.ObtenerHistorialAsync(It.Is<HistorialMovimientoFiltro>(f => f.Tipo == null))).Returns(completa.Task);
+        svcMock.Setup(s => s.ObtenerHistorialAsync(It.Is<HistorialMovimientoFiltro>(f => f.Tipo == TipoMovimiento.Salida)))
+            .ReturnsAsync(new List<MovimientoHistorialDto> { CrearDto(7) });
+
+        var carga = vm.InicializarAsync();
+        vm.TipoFiltroSeleccionado = vm.TiposDisponibles.Single(t => t.Valor == TipoMovimiento.Salida);
+        await vm.BuscarCommand.ExecuteAsync(null);
+        completa.SetException(new UnauthorizedAccessException("403"));
+        await carga;
+
+        Assert.False(vm.SinPermiso);
+        Assert.Single(vm.Items);
+    }
+
+    /// <summary>
+    /// Fija la constante del mensaje (no reproduce un bug: el texto era el mismo antes, inline).
+    /// </summary>
+    [Fact]
+    public async Task InicializarAsync_Un403_UsaElMensajeDelHistorial()
+    {
+        var (vm, svcMock, _, _, _) = Crear();
+        svcMock.Setup(s => s.ObtenerHistorialAsync(It.IsAny<HistorialMovimientoFiltro>()))
+            .ThrowsAsync(new UnauthorizedAccessException("403"));
+
+        await vm.InicializarAsync();
+
+        Assert.Equal(MovimientoHistorialViewModel.MensajeSinPermisoHistorial, vm.MensajeSinPermiso);
+    }
+
+    /// <summary>
+    /// BuscarCommand no admite ejecuciones concurrentes y Buscar no tiene debounce, así que el único camino real
+    /// que lanza una consulta DESPUÉS de una búsqueda pendiente es Recalcular (que recarga con CargarAsync) o la
+    /// carga inicial. Acá la búsqueda filtrada sale primero y tarda; el recálculo recarga y vuelve antes: cuando
+    /// la búsqueda por fin responde, es la vieja y no puede pisar la lista (guarda de BuscarAsync).
+    /// </summary>
+    [Fact]
+    public async Task DosBusquedasEnOrdenInverso_GanaLaUltimaPedida()
+    {
+        var (vm, svcMock, _, _, _) = Crear();
+        var filtrada = new TaskCompletionSource<IReadOnlyList<MovimientoHistorialDto>>();
+        svcMock.Setup(s => s.ObtenerHistorialAsync(It.Is<HistorialMovimientoFiltro>(f => f.Tipo == TipoMovimiento.Salida))).Returns(filtrada.Task);
+        svcMock.Setup(s => s.ObtenerHistorialAsync(It.Is<HistorialMovimientoFiltro>(f => f.Tipo == null)))
+            .ReturnsAsync(new List<MovimientoHistorialDto> { CrearDto(1), CrearDto(2) });
+        svcMock.Setup(s => s.RecalcularStockAsync(1)).ReturnsAsync(new RecalculoResultadoDto(1, 0m, 0m, 0));
+        vm.ProductoIdParaRecalcular = 1;
+        vm.TipoFiltroSeleccionado = vm.TiposDisponibles.Single(t => t.Valor == TipoMovimiento.Salida);
+
+        var busqueda = vm.BuscarCommand.ExecuteAsync(null);
+        await vm.RecalcularCommand.ExecuteAsync(null);
+        Assert.Equal(new[] { 1, 2 }, vm.Items.Select(i => i.MovimientoId));
+        filtrada.SetResult(new List<MovimientoHistorialDto> { CrearDto(9) });
+        await busqueda;
+
+        Assert.Equal(new[] { 1, 2 }, vm.Items.Select(i => i.MovimientoId));
+        Assert.False(vm.Cargando);
+    }
 }

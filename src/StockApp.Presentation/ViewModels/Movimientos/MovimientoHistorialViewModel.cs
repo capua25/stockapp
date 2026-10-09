@@ -35,6 +35,11 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
     private readonly IConfirmacionService    _confirmacion;
     private readonly ICurrentSession         _session;
 
+    /// <summary>Texto del estado "Sin permiso" cuando el servidor rechaza la carga o la búsqueda del historial (403).</summary>
+    public const string MensajeSinPermisoHistorial = "No tenés permiso para ver el historial de movimientos.";
+
+    private readonly ConsultaVigente _consultas = new();
+
     [ObservableProperty]
     private int? _filtroProductoId;
 
@@ -277,23 +282,31 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
 
         PuedeFiltrarPorProducto = puedeVerProductos;
 
-        // Fix (bugfix "pantalla muda ante un 403"): InicializarAsync llamaba a CargarAsync() sin
-        // que NINGUNO de los dos atrapara UnauthorizedAccessException -- caso real que motivó que
-        // el guardián siga la cadena de llamadas locales, no solo el método de entrada.
-        await EjecutarCargaProtegidaAsync(CargarAsync, "No tenés permiso para ver el historial de movimientos.");
+        // CargarAsync va por EjecutarCargaProtegidaAsync (fix "pantalla muda ante un 403"): el guardián sigue esta llamada local.
+        await CargarAsync();
     }
 
+    /// <summary>
+    /// Historial completo, sin filtros. Protegida (un 403 deja SinPermiso en vez de escapar) y con turno: si
+    /// mientras espera el usuario busca, gana la búsqueda (ver ConsultaVigente).
+    /// </summary>
     public async Task CargarAsync()
     {
-        var filtro = new HistorialMovimientoFiltro();
-        var resultados = await _service.ObtenerHistorialAsync(filtro);
-        Items.Clear();
-        foreach (var item in resultados)
-            Items.Add(item);
+        var turno = _consultas.Empezar();
+        await EjecutarCargaProtegidaAsync(async () =>
+        {
+            var resultados = await _service.ObtenerHistorialAsync(new HistorialMovimientoFiltro());
+            if (!turno.EsLaUltima)
+                return;
+            Items.Clear();
+            foreach (var item in resultados)
+                Items.Add(item);
+        }, MensajeSinPermisoHistorial, turno);
     }
 
     public IAsyncRelayCommand BuscarCommand => field ??= ComandoDeGuardado(BuscarAsync);
 
+    /// <summary>Historial con los filtros vigentes. Mismo camino protegido y con turno que la carga.</summary>
     private async Task BuscarAsync()
     {
         var filtro = new HistorialMovimientoFiltro(
@@ -302,10 +315,16 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
             FechaDesde: ALocalAUtc(FechaDesde),
             FechaHasta: ALocalAUtc(FechaHasta));
 
-        var resultados = await _service.ObtenerHistorialAsync(filtro);
-        Items.Clear();
-        foreach (var item in resultados)
-            Items.Add(item);
+        var turno = _consultas.Empezar();
+        await EjecutarCargaProtegidaAsync(async () =>
+        {
+            var resultados = await _service.ObtenerHistorialAsync(filtro);
+            if (!turno.EsLaUltima)
+                return;
+            Items.Clear();
+            foreach (var item in resultados)
+                Items.Add(item);
+        }, MensajeSinPermisoHistorial, turno);
     }
 
     /// <summary>
