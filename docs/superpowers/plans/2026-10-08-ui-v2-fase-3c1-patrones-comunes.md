@@ -2028,7 +2028,7 @@ git commit -m "feat(ui-v2): Productos con estado de carga, sin permiso y columna
 - Consumes: todo lo anterior.
 - Produces: la Fase 3c-1 cerrada en `feat/ui-v2` (sin merge a `main`).
 
-- [ ] **Step 1: Build, suite, herramientas y comparación de toda la UI v2**
+- [x] **Step 1: Build, suite, herramientas y comparación de toda la UI v2**
 
 ```bash
 dotnet build StockApp.sln
@@ -2040,7 +2040,7 @@ scripts/ui-v2/comparar.sh
 
 Expected: 0 errores; todo verde salvo los falsos conocidos de fixtures `.ods` (confirmar por nombre); los dos `--verificar` exit 0; TODAS las filas de `artifacts/ui-v2/comparacion/index.html` APROBADAS a los dos tamaños (las de las Fases 0 a 3b sin cambios: esta fase no tocó estilos compartidos salvo el `ControlTheme` nuevo; si una se mueve, diagnosticarla). Anotar el total de tests en el ledger.
 
-- [ ] **Step 2: Verificación orgánica (spec §6.4) — app real contra la base**
+- [x] **Step 2: Verificación orgánica (spec §6.4) — app real contra la base**
 
 Preparación:
 - `docker start stockapp-pg` (y dejarlo andando al terminar); API levantada (anotar su URL, p. ej. `http://localhost:5043`, y confirmarla contra `~/.config/GestionMunicipal/conexion.json`); credencial de desarrollo `admin` / `Admin1234`.
@@ -2064,7 +2064,7 @@ Si un paso no se puede hacer por el entorno (WSLg caído o ventana congelada, co
 
 PARAR. Presentar: el `index.html` (filas de Productos), las capturas de la verificación orgánica junto a los mockups, los rojos de las mutaciones (a) a (o) y los cambios respecto de los mockups aprobados (si hubo). La aprobación final es del usuario mirando la app (spec §6.4). Registrar en el ledger: `Fase 3c-1: aprobada por <quién> <fecha>`.
 
-- [ ] **Step 4: `herramientas.md` y spec**
+- [x] **Step 4: `herramientas.md` y spec**
 
 `docs/ui-v2/herramientas.md`, sección "Convenciones de la convivencia (hasta la Fase 9)", después de la 17: "Convenciones que agrega la Fase 3c-1 (patrones comunes)" con la 18, 19 y 20 de este plan (con las D# como quedaron aprobadas: tope, reserva, monotonía, indicador). En la 14, reemplazar la última oración ("Las `Auto` de contenido libre (CÓDIGO, COSTO, UNIDAD) no se fijan: truncarían datos reales.") por: "Las `Auto` de contenido libre miden su contenido sobre todas las filas (convención 19); en el mockup se copia el ancho que mide el componente con los datos fijos."
 
