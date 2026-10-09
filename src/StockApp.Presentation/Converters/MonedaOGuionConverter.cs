@@ -6,7 +6,7 @@ using StockApp.Domain.Formato;
 namespace StockApp.Presentation.Converters;
 
 /// <summary>
-/// Monto → texto para una columna de precio que no siempre aplica (D7, PRECIO del Historial v2): 0 → "—" (salida o
+/// Monto → texto para una columna de precio que no siempre aplica (PRECIO del Historial de movimientos): 0 → "—" (salida o
 /// ajuste sin precio); cualquier otro <c>decimal</c> → <see cref="FormatoEsUy.Moneda"/>, igual que
 /// <see cref="MonedaConverter"/>. null → "". Solo de LECTURA: <see cref="ConvertBack"/> lanza.
 /// </summary>

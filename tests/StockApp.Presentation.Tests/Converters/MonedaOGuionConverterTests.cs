@@ -5,7 +5,7 @@ using Xunit;
 namespace StockApp.Presentation.Tests.Converters;
 
 /// <summary>
-/// <see cref="MonedaOGuionConverter"/> (D7): un precio 0 — salida o ajuste sin precio — se muestra "—"; cualquier otro
+/// <see cref="MonedaOGuionConverter"/>: un precio 0 — salida o ajuste sin precio — se muestra "—"; cualquier otro
 /// monto, con el formato es-UY de <see cref="MonedaConverter"/>.
 /// </summary>
 public class MonedaOGuionConverterTests

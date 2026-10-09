@@ -485,7 +485,7 @@ public class ColumnaAutoTests
         var medido = Math.Ceiling(AnchoConLaTipografiaDe(CeldaBajoHeader(m.Grilla, items[0], "UNIDAD"), largo) + 16);
         Assert.Equal(medido, DataGridColumnasAutoBehavior.AnchoMedido(m.Grilla, m.Unidad)!.Value, 1);
         // Lo que ocupa: con las fijas desbordando la grilla hay scroll de todos modos, así que no cede a su título y
-        // queda en su ancho medido (D5 de la 3c-2; antes cedía hasta el título con la flecha de orden).
+        // queda en su ancho medido: cortarla no evitaría el scroll.
         Assert.Equal(medido, m.Unidad.ActualWidth, 1);
     }
 

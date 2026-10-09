@@ -467,7 +467,8 @@ public static class DataGridColumnasAutoBehavior
     /// Achica las columnas medidas de <paramref name="objetivos"/> para que entren en <paramref name="lugar"/> (el
     /// ancho de la grilla menos las demás no proporcionales y el piso de las *): las nivela hacia abajo, de la más
     /// ancha a la más angosta, sin bajar ninguna de su piso. El nivel es el mayor entero que entra, así el
-    /// píxel fraccionario que sobra va a las *. Si con todas en su piso tampoco entra, quedan en el piso.
+    /// píxel fraccionario que sobra va a las *. Si con todas en su piso tampoco entra, quedan en el piso y quien la llama
+    /// las devuelve a su ancho medido (igual va a haber scroll: cortarlas no evita nada).
     /// </summary>
     private static void CederMedidas(Estado estado, Dictionary<DataGridColumn, double> objetivos, List<DataGridColumn> medidas, double lugar)
     {

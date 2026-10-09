@@ -136,6 +136,20 @@ public class ColumnaAutoTopeAdaptableTests
     private static double AnchoInterno(DataGrid grilla) =>
         (double)typeof(DataGrid).GetProperty("CellsWidth", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(grilla)!;
 
+    /// <summary>El ancho mínimo de una columna medida: su título entero más la reserva de la flecha de orden.</summary>
+    private static double PisoDeTitulo(DataGrid grilla, string titulo)
+    {
+        var header = grilla.GetVisualDescendants().OfType<DataGridColumnHeader>().Single(h => Equals(h.Content, titulo));
+        var texto = header.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == titulo);
+        var natural = new TextBlock
+        {
+            Text = texto.Text, FontFamily = texto.FontFamily, FontSize = texto.FontSize, FontWeight = texto.FontWeight,
+            LetterSpacing = texto.LetterSpacing, FontFeatures = texto.FontFeatures,
+        };
+        natural.Measure(Size.Infinity);
+        return Math.Ceiling(header.Padding.Left + natural.DesiredSize.Width + header.Padding.Right + ColumnaAuto.ReservaOrden);
+    }
+
     private static bool HayScrollHorizontal(DataGrid grilla) =>
         grilla.GetVisualDescendants().OfType<ScrollBar>().Any(s => s.Orientation == Orientation.Horizontal && s.IsEffectivelyVisible);
 
@@ -301,7 +315,7 @@ public class ColumnaAutoTopeAdaptableTests
     public void TanAngostaQueNiCediendoEntra_LasMedidasVuelvenASuAnchoMedido_LasEstrellasQuedanEnSuPiso_YHayScroll()
     {
         // Lo último que cede es el piso de las *: debajo, NOMBRE no se lee. Y si ni con las medidas en su título entra,
-        // igual hay scroll: cortar una medida no evita nada, así que vuelven a su ancho medido (D5 de la 3c-2).
+        // igual hay scroll: cortar una medida no evita nada, así que vuelven a su ancho medido.
         var items = ConCeldaCortada();
         var m = Montar(items, 700);
         TestContext.Current.TestOutputHelper?.WriteLine(Describir(m.Grilla));
@@ -320,6 +334,27 @@ public class ColumnaAutoTopeAdaptableTests
             Assert.False(TooltipSiSeCorta.EstaCortado(CeldaBajoHeader(m.Grilla, item, "CÓDIGO")),
                 $"Con scroll, una columna medida no se corta ({item.Codigo}): {Describir(m.Grilla)}");
         Assert.True(HayScrollHorizontal(m.Grilla), $"Sin scroll con las columnas desbordando: {Describir(m.Grilla)}");
+    }
+
+    [AvaloniaFact]
+    public void EntraJustoConLasMedidasEnSuPiso_UnidadQuedaEnSuTituloConLaFlecha_YNoHayScroll()
+    {
+        // Franja donde todo entra solo con las medidas en su piso: STOCK 220 + ESTADO 78 + las dos * en 160 = 618, más
+        // CÓDIGO 85 (lo que mide), COSTO 100 (su MinWidth) y UNIDAD 83 (su título con la flecha) = 886 = el ancho
+        // interno (la ventana de 888 menos el borde de 2). Nivelar sin piso dejaría a UNIDAD más angosta que su
+        // título y a COSTO bajo su mínimo, que la grilla respeta igual: desbordaría.
+        var m = Montar(ConCeldaCortada(), 888);
+        TestContext.Current.TestOutputHelper?.WriteLine(Describir(m.Grilla));
+
+        Assert.Equal(886, AnchoInterno(m.Grilla), 1);
+        Assert.Equal(83, PisoDeTitulo(m.Grilla, "UNIDAD"));
+        Assert.Equal(85, Col(m.Grilla, "CÓDIGO").ActualWidth, 1);
+        Assert.Equal(100, Col(m.Grilla, "COSTO").ActualWidth, 1);
+        Assert.Equal(83, Col(m.Grilla, "UNIDAD").ActualWidth, 1);
+        Assert.Equal(DataGridColumnasAutoBehavior.PisoProporcionalPorDefecto, Col(m.Grilla, "NOMBRE").ActualWidth, 1);
+        Assert.Equal(DataGridColumnasAutoBehavior.PisoProporcionalPorDefecto, Col(m.Grilla, "CATEGORÍA").ActualWidth, 1);
+        Assert.True(m.Grilla.Columns.Sum(c => c.ActualWidth) <= AnchoInterno(m.Grilla) + 0.5, $"No entra: {Describir(m.Grilla)}");
+        Assert.False(HayScrollHorizontal(m.Grilla), $"Hay scroll y todo entraba: {Describir(m.Grilla)}");
     }
 
     [AvaloniaFact]
