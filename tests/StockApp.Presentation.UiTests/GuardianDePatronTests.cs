@@ -501,6 +501,32 @@ public class GuardianDePatronTests
         Assert.DoesNotMatch(OpacidadLiteralEnXaml, """<Setter Property="Opacity" Value="0.28" />""");
     }
 
+    private static readonly Regex PiezaDelTemaViejo =
+        new(@"SignoNegativoBrushConverter|ActivoOpacidadConverter|<c:BadgeEstado\b|<c:HeaderVista\b|<c:EstadoVacio\b", RegexOptions.Compiled);
+
+    /// <summary>Ruta desde src del .axaml de una vista: el namespace StockApp.Presentation.X.Y es la carpeta X/Y.</summary>
+    private static string RutaAxaml(Type vista) =>
+        "StockApp.Presentation/" + vista.Namespace!["StockApp.Presentation.".Length..].Replace('.', '/') + "/" + vista.Name + ".axaml";
+
+    public static TheoryData<Type> VistasV2ConAxaml => new(VistasMigradasAV2.OrderBy(t => t.Name));
+
+    /// <summary>
+    /// Una vista v2 no usa los conversores ni los controles del tema viejo (convención 11): se lee el TEXTO del
+    /// .axaml, así cuenta también lo que vive en plantillas de celda, que el montaje sin ViewModel no realiza.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(VistasV2ConAxaml))]
+    public void VistaV2_NoUsaPiezasDelTemaViejo(Type vista) =>
+        Assert.DoesNotMatch(PiezaDelTemaViejo, LeerDesdeSrc(RutaAxaml(vista)));
+
+    [Fact]
+    public void DetectorDePiezasViejas_VeElConversorYElControl()
+    {
+        Assert.Matches(PiezaDelTemaViejo, """<TextBlock Foreground="{Binding X, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}" />""");
+        Assert.Matches(PiezaDelTemaViejo, """<c:BadgeEstado Texto="Stock negativo" />""");
+        Assert.DoesNotMatch(PiezaDelTemaViejo, """<v2:Insignia Texto="Stock negativo" />""");
+    }
+
     private static string LeerDesdeSrc(string rutaDesdeSrc, [CallerFilePath] string archivoDeEsteTest = "")
     {
         var ruta = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(archivoDeEsteTest)!, "..", "..", "src", rutaDesdeSrc));

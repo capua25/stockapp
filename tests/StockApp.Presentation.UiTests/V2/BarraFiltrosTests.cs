@@ -60,4 +60,25 @@ public class BarraFiltrosTests
 
         Assert.Equal(288, categoria.TranslatePoint(new Point(0, 0), barra)!.Value.X);
     }
+
+    [AvaloniaFact]
+    public void SinBusqueda_NoMuestraElBuscadorYLosFiltrosArrancanALaIzquierda()
+    {
+        var ventana = Montar("""
+            <v2:BarraFiltros x:Name="Barra" MostrarBusqueda="False"><Button x:Name="Filtro" Content="Buscar" /></v2:BarraFiltros>
+            """, ancho: 800);
+        var barra = Buscar<BarraFiltros>(ventana, "Barra");
+
+        Assert.False(Parte<TextBox>(barra, "PART_Busqueda").IsVisible);
+        var filtro = Buscar<Button>(ventana, "Filtro");
+        Assert.Equal(0, filtro.TranslatePoint(default, barra)!.Value.X, 0.5);
+    }
+
+    [AvaloniaFact]
+    public void PorDefecto_MuestraElBuscador()
+    {
+        var ventana = Montar("""<v2:BarraFiltros x:Name="Barra" />""");
+
+        Assert.True(Parte<TextBox>(Buscar<BarraFiltros>(ventana, "Barra"), "PART_Busqueda").IsVisible);
+    }
 }

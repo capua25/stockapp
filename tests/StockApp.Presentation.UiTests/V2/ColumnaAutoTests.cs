@@ -481,13 +481,12 @@ public class ColumnaAutoTests
         var header = Header(m.Grilla, "UNIDAD");
         Assert.True(header.TranslatePoint(default, m.Grilla)!.Value.X > m.Grilla.Bounds.Width, "precondición: UNIDAD está fuera de la vista");
         Assert.True(m.Unidad.Width.IsAbsolute, $"UNIDAD no se midió: {m.Unidad.Width.UnitType}");
-        // Lo que midió, no lo que ocupa: con las fijas desbordando la grilla, la columna cede hasta su título.
-        Assert.Equal(Math.Ceiling(AnchoConLaTipografiaDe(CeldaBajoHeader(m.Grilla, items[0], "UNIDAD"), largo) + 16),
-            DataGridColumnasAutoBehavior.AnchoMedido(m.Grilla, m.Unidad)!.Value, 1);
-        // Lo que ocupa: su título con la reserva de la flecha de orden.
-        var titulo = header.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "UNIDAD");
-        Assert.Equal(Math.Ceiling(AnchoNatural(titulo) + header.Padding.Left + header.Padding.Right + ColumnaAuto.ReservaOrden),
-            m.Unidad.ActualWidth, 1);
+        // Lo que midió: el valor más largo, aunque su celda esté fuera de la vista.
+        var medido = Math.Ceiling(AnchoConLaTipografiaDe(CeldaBajoHeader(m.Grilla, items[0], "UNIDAD"), largo) + 16);
+        Assert.Equal(medido, DataGridColumnasAutoBehavior.AnchoMedido(m.Grilla, m.Unidad)!.Value, 1);
+        // Lo que ocupa: con las fijas desbordando la grilla hay scroll de todos modos, así que no cede a su título y
+        // queda en su ancho medido (D5 de la 3c-2; antes cedía hasta el título con la flecha de orden).
+        Assert.Equal(medido, m.Unidad.ActualWidth, 1);
     }
 
     [AvaloniaFact]

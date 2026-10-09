@@ -216,6 +216,7 @@
             <ControlTemplate>
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <TextBox x:Name="PART_Busqueda"
+                             IsVisible="{TemplateBinding MostrarBusqueda}"
                              Width="280"
                              Text="{Binding TextoBusqueda, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
                              PlaceholderText="{TemplateBinding MarcaAguaBusqueda}" />

@@ -298,30 +298,27 @@ public class ColumnaAutoTopeAdaptableTests
     }
 
     [AvaloniaFact]
-    public void TanAngostaQueNiCediendoEntra_LasMedidasNoCortanSuTitulo_LasEstrellasQuedanEnSuPiso_YHayScroll()
+    public void TanAngostaQueNiCediendoEntra_LasMedidasVuelvenASuAnchoMedido_LasEstrellasQuedanEnSuPiso_YHayScroll()
     {
-        // Lo último que cede es el piso de las *: debajo, NOMBRE no se lee. Las medidas se detienen en su título.
-        var m = Montar(ConCeldaCortada(), 700);
+        // Lo último que cede es el piso de las *: debajo, NOMBRE no se lee. Y si ni con las medidas en su título entra,
+        // igual hay scroll: cortar una medida no evita nada, así que vuelven a su ancho medido (D5 de la 3c-2).
+        var items = ConCeldaCortada();
+        var m = Montar(items, 700);
         TestContext.Current.TestOutputHelper?.WriteLine(Describir(m.Grilla));
 
         Assert.Equal(DataGridColumnasAutoBehavior.PisoProporcionalPorDefecto, Col(m.Grilla, "NOMBRE").ActualWidth, 1);
         Assert.Equal(DataGridColumnasAutoBehavior.PisoProporcionalPorDefecto, Col(m.Grilla, "CATEGORÍA").ActualWidth, 1);
-        Assert.True(Col(m.Grilla, "UNIDAD").ActualWidth < 145, $"UNIDAD no cedió todo lo que podía: {Describir(m.Grilla)}");
         foreach (var titulo in new[] { "CÓDIGO", "COSTO", "UNIDAD" })
         {
-            var header = m.Grilla.GetVisualDescendants().OfType<DataGridColumnHeader>().Single(h => Equals(h.Content, titulo));
-            var texto = header.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == titulo);
-            var natural = new TextBlock
-            {
-                Text = texto.Text, FontFamily = texto.FontFamily, FontSize = texto.FontSize, FontWeight = texto.FontWeight,
-                LetterSpacing = texto.LetterSpacing, FontFeatures = texto.FontFeatures,
-            };
-            natural.Measure(Size.Infinity);
-            Assert.True(texto.Bounds.Width >= natural.DesiredSize.Width - 0.5,
-                $"El título {titulo} quedó cortado ({texto.Bounds.Width:F1} de {natural.DesiredSize.Width:F1}): {Describir(m.Grilla)}");
-            Assert.True(header.Bounds.Width >= header.Padding.Left + natural.DesiredSize.Width + header.Padding.Right + ColumnaAuto.ReservaOrden - 0.5,
-                $"{titulo} no deja lugar para la flecha de orden: {Describir(m.Grilla)}");
+            var col = Col(m.Grilla, titulo);
+            var medido = DataGridColumnasAutoBehavior.AnchoMedido(m.Grilla, col);
+            Assert.True(medido is not null, $"{titulo} no se midió");
+            Assert.Equal(medido!.Value, col.ActualWidth, 1);
         }
+        // Todos los códigos, así está incluido el más largo (el que fija el ancho medido).
+        foreach (var item in items)
+            Assert.False(TooltipSiSeCorta.EstaCortado(CeldaBajoHeader(m.Grilla, item, "CÓDIGO")),
+                $"Con scroll, una columna medida no se corta ({item.Codigo}): {Describir(m.Grilla)}");
         Assert.True(HayScrollHorizontal(m.Grilla), $"Sin scroll con las columnas desbordando: {Describir(m.Grilla)}");
     }
 

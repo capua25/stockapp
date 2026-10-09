@@ -93,7 +93,9 @@ namespace StockApp.Presentation.Behaviors;
 /// hasta el ancho de su título con la flecha de orden. Más angosta, el header se corta y la columna deja de
 /// decir qué muestra.</item>
 /// <item>Si ni así entra (ventana muy angosta para las fijas, los títulos y los pisos), las <c>*</c> NO bajan de
-/// su piso: con una proporcional de 40 px el nombre no se lee. Queda el modo desborde de arriba, con scroll.</item>
+/// su piso (con una proporcional de 40 px el nombre no se lee) y las medidas VUELVEN a su ancho medido: con scroll de
+/// todos modos, cortarlas no gana nada y deja fechas e importes ilegibles. Queda el modo desborde de arriba, con
+/// scroll.</item>
 /// </list>
 /// <para>El ancho cedido depende solo de lo medido (que cambia con los datos) y del ancho de la grilla, nunca
 /// del reparto actual: se recalcula al cambiar el ancho de la grilla y no se mueve al scrollear, ordenar ni
@@ -533,6 +535,11 @@ public static class DataGridColumnasAutoBehavior
         var otras = objetivos.Where(kv => !medidas.Contains(kv.Key)).Sum(kv => kv.Value);
         CederMedidas(estado, objetivos, medidas, disponible.Value - otras - minimosEstrellas);
         var encaja = objetivos.Values.Sum() + minimosEstrellas <= disponible.Value + Tolerancia;
+        // Si ni con las medidas en su título y las * en su piso entra, igual va a haber scroll: cortar una medida no
+        // evita nada, así que vuelve a su ancho medido y se lee entera.
+        if (!encaja)
+            foreach (var c in medidas)
+                objetivos[c] = Math.Min(c.MaxWidth, estado.AnchosMedidos[c]);
 
         var anchosEstrellas = encaja
             ? RepartirEstrellas(grid, estrellas, estado.PesosDeclarados, disponible.Value - objetivos.Values.Sum())

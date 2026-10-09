@@ -20,6 +20,9 @@ public class BarraFiltros : TemplatedControl
     public static readonly StyledProperty<object?> FiltrosProperty =
         AvaloniaProperty.Register<BarraFiltros, object?>(nameof(Filtros));
 
+    public static readonly StyledProperty<bool> MostrarBusquedaProperty =
+        AvaloniaProperty.Register<BarraFiltros, bool>(nameof(MostrarBusqueda), defaultValue: true);
+
     public string? TextoBusqueda
     {
         get => GetValue(TextoBusquedaProperty);
@@ -30,6 +33,16 @@ public class BarraFiltros : TemplatedControl
     {
         get => GetValue(MarcaAguaBusquedaProperty);
         set => SetValue(MarcaAguaBusquedaProperty, value);
+    }
+
+    /// <summary>
+    /// false oculta el buscador y los filtros arrancan a la izquierda (Historial: filtra con controles propios, sin
+    /// búsqueda libre). Por defecto true.
+    /// </summary>
+    public bool MostrarBusqueda
+    {
+        get => GetValue(MostrarBusquedaProperty);
+        set => SetValue(MostrarBusquedaProperty, value);
     }
 
     /// <summary>Filtros a la derecha del buscador (ComboBox, chips), separados 8.</summary>
