@@ -32,6 +32,17 @@
 
                 <v2:TarjetaContenido x:Name="Tarjeta" Padding="24" UseLayoutRounding="True">
                     <StackPanel>
+                        <!-- Servidor caído al cargar el catálogo (bug 2026-10-09): sin esto el combo de Producto
+                             quedaba vacío para siempre. Avisa y deja reintentar sin salir del form. -->
+                        <StackPanel x:Name="ErrorCargaProductos" Margin="0,0,0,16" Spacing="8"
+                                    IsVisible="{Binding HayErrorCargaProductos}">
+                            <v2:Alerta x:Name="AlertaErrorCargaProductos"
+                                       Variante="Error"
+                                       Texto="{Binding ErrorCargaProductos}" />
+                            <Button x:Name="BotonReintentarProductos" Classes="secundario" HorizontalAlignment="Left"
+                                    Content="Reintentar" Command="{Binding ReintentarCargaProductosCommand}" />
+                        </StackPanel>
+
                         <!-- El 16 entre filas va en el Margin superior de cada campo y no en filas separadoras:
                              cuando el precio no aplica (toda Salida) su fila desaparece entera, sin hueco doble. -->
                         <Grid ColumnDefinitions="*,16,*" RowDefinitions="Auto,Auto,Auto,Auto">

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using StockApp.ApiClient;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Enums;
@@ -54,6 +55,14 @@ public abstract partial class MovimientoRegistroViewModelBase : ViewModelBase
 
     [ObservableProperty]
     protected string? _mensajeError;
+
+    /// <summary>Mensaje de la última carga de productos fallida por servidor caído; null si la
+    /// carga anduvo. La vista lo muestra con el botón Reintentar (<see cref="ReintentarCargaProductosCommand"/>).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HayErrorCargaProductos))]
+    private string? _errorCargaProductos;
+
+    public bool HayErrorCargaProductos => ErrorCargaProductos is not null;
 
     public ObservableCollection<ProductoDto> Productos { get; } = new();
 
@@ -111,6 +120,15 @@ public abstract partial class MovimientoRegistroViewModelBase : ViewModelBase
             Productos.Clear();
             foreach (var p in productos.Where(p => p.Activo))
                 Productos.Add(p);
+            ErrorCargaProductos = null;
+        }
+        catch (ServidorNoDisponibleException ex)
+        {
+            // Bug 2026-10-09: la excepción escapaba al fire-and-forget de la View, salía el modal
+            // global y el combo quedaba vacío sin forma de reintentar (esta carga corre una sola
+            // vez, en DataContextChanged). Ahora queda un estado bindeable + Reintentar, y el
+            // usuario no pierde lo que ya cargó en el form.
+            ErrorCargaProductos = ex.Message;
         }
         catch (UnauthorizedAccessException)
         {
@@ -125,6 +143,10 @@ public abstract partial class MovimientoRegistroViewModelBase : ViewModelBase
             // aviso.
         }
     }
+
+    /// <summary>Vuelve a pedir el catálogo de productos tras una caída del servidor (botón Reintentar).</summary>
+    [RelayCommand]
+    private Task ReintentarCargaProductosAsync() => InicializarAsync();
 
     private bool PuedeRegistrar()
         => ProductoSeleccionado != null

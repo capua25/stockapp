@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Moq;
+using StockApp.ApiClient;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Exceptions;
@@ -280,5 +281,57 @@ public abstract class MovimientoRegistroViewModelTestsBase
         await vm.RegistrarCommand.ExecuteAsync(null);
 
         confirmMock.Verify(c => c.PreguntarAsync("El stock quedará en -1.497,25. ¿Confirmar la salida igual?"), Times.Once);
+    }
+
+    // ── Carga de productos con el servidor caído (bug 2026-10-09) ─────────────
+
+    // Con la API caída al abrir el form, el combo quedaba vacío para siempre: InicializarAsync
+    // solo corre una vez (DataContextChanged) y no había forma de reintentar sin salir del form.
+    [Fact]
+    public async Task InicializarAsync_ServidorCaido_NoLanzaYExponeElErrorDeCarga()
+    {
+        var (vm, _, productoMock, _, _) = Crear();
+        productoMock
+            .Setup(s => s.BuscarAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .ThrowsAsync(new ServidorNoDisponibleException());
+
+        await vm.InicializarAsync();
+
+        Assert.Empty(vm.Productos);
+        Assert.Equal(ServidorNoDisponibleException.MensajePorDefecto, vm.ErrorCargaProductos);
+        Assert.True(vm.HayErrorCargaProductos);
+    }
+
+    [Fact]
+    public async Task ReintentarCargaProductos_TrasUnaCaida_CargaElCatalogoYLimpiaElError()
+    {
+        var (vm, _, productoMock, _, _) = Crear();
+        productoMock
+            .SetupSequence(s => s.BuscarAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .ThrowsAsync(new ServidorNoDisponibleException())
+            .ReturnsAsync(new List<ProductoDto> { CrearProductoDto(1, "Cemento") });
+        await vm.InicializarAsync();
+        Assert.Empty(vm.Productos);
+
+        await vm.ReintentarCargaProductosCommand.ExecuteAsync(null);
+
+        Assert.Single(vm.Productos);
+        Assert.Null(vm.ErrorCargaProductos);
+        Assert.False(vm.HayErrorCargaProductos);
+    }
+
+    [Fact]
+    public async Task ReintentarCargaProductos_SiSigueCaido_MantieneElErrorSinLanzar()
+    {
+        var (vm, _, productoMock, _, _) = Crear();
+        productoMock
+            .Setup(s => s.BuscarAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .ThrowsAsync(new ServidorNoDisponibleException());
+        await vm.InicializarAsync();
+
+        await vm.ReintentarCargaProductosCommand.ExecuteAsync(null);
+
+        Assert.Empty(vm.Productos);
+        Assert.True(vm.HayErrorCargaProductos);
     }
 }
