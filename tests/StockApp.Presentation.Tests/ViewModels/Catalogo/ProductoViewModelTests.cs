@@ -481,6 +481,75 @@ public class ProductoListViewModelTests
         Assert.Equal("P005", formVm.Codigo);
         Assert.Equal("Prueba", formVm.Nombre);
     }
+
+    // ── Consultas superpuestas: solo la última pedida actualiza la grilla (ConsultaVigente) ──
+
+    [Fact]
+    public async Task CargaYBusquedaSuperpuestas_LaBusquedaNuevaGanaAunqueLaCargaVuelvaDespues()
+    {
+        var carga = new TaskCompletionSource<IReadOnlyList<ProductoDto>>();
+        var busqueda = new TaskCompletionSource<IReadOnlyList<ProductoDto>>();
+        var svc = new Mock<IProductoService>();
+        svc.Setup(s => s.BuscarAsync(null, null, null)).Returns(carga.Task);
+        svc.Setup(s => s.BuscarPorTextoAsync(It.IsAny<string?>())).Returns(busqueda.Task);
+        var vm = new ProductoListViewModel(svc.Object, Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>(),
+            Mock.Of<StockApp.Application.Interfaces.ICurrentSession>());
+
+        var t1 = vm.CargarAsync();
+        var t2 = vm.BuscarCommand.ExecuteAsync(null);
+        busqueda.SetResult(new List<ProductoDto> { CrearProductoDto(9, "P009", "Buscado") });
+        await t2;
+        carga.SetResult(new List<ProductoDto> { CrearProductoDto(1, "P001", "Uno"), CrearProductoDto(2, "P002", "Dos") });
+        await t1;
+
+        Assert.Equal(new[] { 9 }, vm.Items.Select(p => p.Id));
+        Assert.False(vm.Cargando);
+    }
+
+    [Fact]
+    public async Task Un403DeUnaConsultaVieja_NoTapaLosResultadosDeLaNueva()
+    {
+        var carga = new TaskCompletionSource<IReadOnlyList<ProductoDto>>();
+        var svc = new Mock<IProductoService>();
+        svc.Setup(s => s.BuscarAsync(null, null, null)).Returns(carga.Task);
+        svc.Setup(s => s.BuscarPorTextoAsync(It.IsAny<string?>()))
+            .ReturnsAsync(new List<ProductoDto> { CrearProductoDto(9, "P009", "Buscado") });
+        var vm = new ProductoListViewModel(svc.Object, Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>(),
+            Mock.Of<StockApp.Application.Interfaces.ICurrentSession>());
+
+        var t1 = vm.CargarAsync();
+        await vm.BuscarCommand.ExecuteAsync(null);
+        carga.SetException(new UnauthorizedAccessException("403"));
+        await t1;
+
+        Assert.False(vm.SinPermiso);
+        Assert.Single(vm.Items);
+    }
+
+    [Fact]
+    public async Task DosBusquedasEnOrdenInverso_GanaLaUltimaPedida()
+    {
+        var primera = new TaskCompletionSource<IReadOnlyList<ProductoDto>>();
+        var segunda = new TaskCompletionSource<IReadOnlyList<ProductoDto>>();
+        var svc = new Mock<IProductoService>();
+        svc.Setup(s => s.BuscarPorTextoAsync("ce")).Returns(primera.Task);
+        svc.Setup(s => s.BuscarPorTextoAsync("cemento")).Returns(segunda.Task);
+        var vm = new ProductoListViewModel(svc.Object, Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>(),
+            Mock.Of<StockApp.Application.Interfaces.ICurrentSession>());
+
+        // BuscarCommand no admite ejecuciones concurrentes: la segunda búsqueda sale por el debounce (como al tipear).
+        vm.FiltroBusqueda = "ce";
+        var t1 = vm.BuscarCommand.ExecuteAsync(null);
+        segunda.SetResult(new List<ProductoDto> { CrearProductoDto(1, "P001", "Cemento portland") });
+        vm.FiltroBusqueda = "cemento";
+        var t2 = vm._tareaDebounce;
+        await t2;
+        primera.SetResult(new List<ProductoDto> { CrearProductoDto(1, "P001", "Cemento portland"), CrearProductoDto(2, "P002", "Cerámica") });
+        await t1;
+        await vm._tareaDebounce;
+
+        Assert.Equal(new[] { 1 }, vm.Items.Select(p => p.Id));
+    }
 }
 
 public class ProductoFormViewModelTests

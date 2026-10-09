@@ -33,6 +33,7 @@ public partial class ProductoListViewModel : ViewModelBase
     private readonly ICurrentSession      _session;
 
     private CancellationTokenSource? _debounceCts;
+    private readonly ConsultaVigente _consultas = new();
 
     /// <summary>
     /// Tarea del debounce disparada por cada cambio de <see cref="FiltroBusqueda"/>. Expuesta
@@ -89,16 +90,21 @@ public partial class ProductoListViewModel : ViewModelBase
     /// (UnauthorizedAccessException) deja SinPermiso en true en vez de escapar al manejador global, y mientras
     /// espera al servicio Cargando está en true, así la vista no afirma "no hay productos" antes de tenerlos.
     /// El aviso global del 403 ya lo da AuthTokenHandler + App.axaml.cs: acá no se agrega otro.
+    /// Pide su turno antes de consultar: si mientras espera empezó otra consulta (búsqueda, recarga), su resultado
+    /// se descarta (ver ConsultaVigente).
     /// </summary>
     public async Task CargarAsync()
     {
+        var turno = _consultas.Empezar();
         await EjecutarCargaProtegidaAsync(async () =>
         {
             var resultados = await _service.BuscarAsync(null, null, null);
+            if (!turno.EsLaUltima)
+                return;
             Items.Clear();
             foreach (var p in resultados)
                 Items.Add(p);
-        }, MensajeSinPermisoListado);
+        }, MensajeSinPermisoListado, turno);
     }
 
     /// <summary>
@@ -140,16 +146,21 @@ public partial class ProductoListViewModel : ViewModelBase
     /// Búsqueda por término único: matchea por Nombre, SKU o código de barras (lógica OR). Reusada por el
     /// comando del botón y por el debounce automático. Mismo camino protegido que la carga: un 403 en una
     /// búsqueda marca SinPermiso y no escapa; Items no se vacía hasta tener los resultados.
+    /// Pide su turno antes de consultar: si mientras espera empezó otra consulta (búsqueda, recarga), su resultado
+    /// se descarta (ver ConsultaVigente).
     /// </summary>
     private async Task EjecutarBusquedaAsync()
     {
+        var turno = _consultas.Empezar();
         await EjecutarCargaProtegidaAsync(async () =>
         {
             var resultados = await _service.BuscarPorTextoAsync(FiltroBusqueda);
+            if (!turno.EsLaUltima)
+                return;
             Items.Clear();
             foreach (var p in resultados)
                 Items.Add(p);
-        }, MensajeSinPermisoListado);
+        }, MensajeSinPermisoListado, turno);
     }
 
     [RelayCommand]

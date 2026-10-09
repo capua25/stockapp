@@ -21,6 +21,9 @@ public class ViewModelBaseCargaProtegidaTests
     {
         public Task EjecutarAsync(Func<Task> cargar, string mensaje) =>
             EjecutarCargaProtegidaAsync(cargar, mensaje);
+
+        public Task EjecutarAsync(Func<Task> cargar, string mensaje, ConsultaVigente.Turno turno) =>
+            EjecutarCargaProtegidaAsync(cargar, mensaje, turno);
     }
 
     [Fact]
@@ -178,5 +181,44 @@ public class ViewModelBaseCargaProtegidaTests
         await Task.WhenAll(cargaA, cargaB);
 
         Assert.Equal(new[] { true, false }, cambios);
+    }
+
+    [Fact]
+    public async Task ConTurno_Un403DeUnaConsultaVieja_NoMarcaSinPermiso()
+    {
+        var vm = new VmDePrueba();
+        var consultas = new ConsultaVigente();
+        var vieja = consultas.Empezar();
+        consultas.Empezar();
+
+        await vm.EjecutarAsync(() => throw new UnauthorizedAccessException(), "x", vieja);
+
+        Assert.False(vm.SinPermiso);
+        Assert.False(vm.Cargando);
+    }
+
+    [Fact]
+    public async Task ConTurno_Un403DeLaUltima_MarcaSinPermiso()
+    {
+        var vm = new VmDePrueba();
+        var turno = new ConsultaVigente().Empezar();
+
+        await vm.EjecutarAsync(() => throw new UnauthorizedAccessException(), "No tenés permiso.", turno);
+
+        Assert.True(vm.SinPermiso);
+        Assert.Equal("No tenés permiso.", vm.MensajeSinPermiso);
+    }
+
+    [Fact]
+    public async Task ConTurno_OtraExcepcion_SePropagaAunqueLaConsultaSeaVieja()
+    {
+        var vm = new VmDePrueba();
+        var consultas = new ConsultaVigente();
+        var vieja = consultas.Empezar();
+        consultas.Empezar();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            vm.EjecutarAsync(() => throw new InvalidOperationException("bug"), "x", vieja));
+        Assert.False(vm.Cargando);
     }
 }

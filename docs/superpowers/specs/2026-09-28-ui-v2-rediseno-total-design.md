@@ -103,7 +103,7 @@ Inter, ya embebida vía `Avalonia.Fonts.Inter`. Cifras tabulares y alineadas a l
 ## 3. Enfoque: reescritura en el lugar por módulos, mockups como contrato
 
 - Rama `feat/ui-v2` en worktree propio.
-- **Se reescribe el XAML de cada vista en su mismo archivo.** Los ViewModels quedan intactos salvo lo mínimo: hub de Reportes, Catálogos, KPIs de Inicio y datos del usuario en el pie del sidebar; y el estado de carga (decisión del usuario 2026-10-08, Fase 3c-1): `ViewModelBase` expone `Cargando` (contador de cargas en curso, prendido por `EjecutarCargaProtegidaAsync`) y cada listado que se migra pasa su carga por ese helper, para no mostrar el estado vacío durante la carga ni tras un 403.
+- **Se reescribe el XAML de cada vista en su mismo archivo.** Los ViewModels quedan intactos salvo lo mínimo: hub de Reportes, Catálogos, KPIs de Inicio y datos del usuario en el pie del sidebar; y el estado de carga (decisión del usuario 2026-10-08, Fase 3c-1): `ViewModelBase` expone `Cargando` (contador de cargas en curso, prendido por `EjecutarCargaProtegidaAsync`) y cada listado que se migra pasa su carga por ese helper, para no mostrar el estado vacío durante la carga ni tras un 403; y la carrera de consultas (decisión del usuario 2026-10-09, Fase 3c-2): cada listado que se migra pide un turno a `ConsultaVigente` antes de consultar y descarta un resultado que ya no es el último (Productos e Historial).
 - **No cambian:** `ViewLocator`, `INavigationService`, el wiring de `DataContextChanged` en code-behind (44 vistas), el seam de validación `ErrorConverter`, la lógica de permisos.
 - Los compiled bindings (`x:DataType`) son la red del compilador: un binding roto en la reescritura es error de build, no un null silencioso.
 

@@ -82,7 +82,7 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
     }
 
     /// <summary>
-    /// True cuando la última carga protegida por <see cref="EjecutarCargaProtegidaAsync"/> fue
+    /// True cuando la última carga protegida por <see cref="EjecutarCargaProtegidaAsync(Func{Task}, string)"/> fue
     /// rechazada por falta de permiso (403/401 del servidor, ver
     /// StockApp.ApiClient.ApiErrores.AsegurarExitoAsync — nacimiento único de
     /// UnauthorizedAccessException). La vista bindea esto (junto con
@@ -106,7 +106,7 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
     }
 
     /// <summary>
-    /// True mientras corre al menos una carga (las de <see cref="EjecutarCargaProtegidaAsync"/> y las que un
+    /// True mientras corre al menos una carga (las de <see cref="EjecutarCargaProtegidaAsync(Func{Task}, string)"/> y las que un
     /// ViewModel marque con <see cref="EmpezarCarga"/>/<see cref="TerminarCarga"/>). Es un contador y no un
     /// bool: una búsqueda con debounce y una recarga pueden superponerse, y la primera en terminar no puede
     /// apagar el estado de la otra. La vista lo usa para decir "Cargando…" en vez de afirmar "no hay datos"
@@ -141,7 +141,7 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
     /// vista va a mostrar en EstadoVacio. Expuesto protected para el caso puntual de
     /// HistorialImportacionesViewModel.CargarAsync, que ya tenía su propio catch con filtro
     /// <c>when</c> antes de este fix y solo necesitaba ampliarlo (no envolver todo el método con
-    /// <see cref="EjecutarCargaProtegidaAsync"/>, que hubiera dejado dos mecanismos de protección
+    /// <see cref="EjecutarCargaProtegidaAsync(Func{Task}, string)"/>, que hubiera dejado dos mecanismos de protección
     /// compitiendo en el mismo método).</summary>
     protected void MarcarSinPermiso(string mensaje)
     {
@@ -195,5 +195,26 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
         {
             TerminarCarga();
         }
+    }
+
+    /// <summary>
+    /// Igual que <see cref="EjecutarCargaProtegidaAsync(Func{Task}, string)"/> para una consulta que reemplaza el
+    /// contenido de un listado (ver <see cref="ConsultaVigente"/>): un 403 de una consulta que ya no es la última se
+    /// descarta (si no, "Sin permiso" taparía los resultados buenos de la consulta nueva; el aviso global del 403
+    /// ya salió por AuthTokenHandler). El que llama sigue siendo responsable de no aplicar un resultado viejo:
+    /// después del await al servicio, <c>if (!turno.EsLaUltima) return;</c>.
+    /// </summary>
+    protected async Task EjecutarCargaProtegidaAsync(Func<Task> cargar, string mensajeSinPermiso, ConsultaVigente.Turno turno)
+    {
+        await EjecutarCargaProtegidaAsync(async () =>
+        {
+            try
+            {
+                await cargar();
+            }
+            catch (UnauthorizedAccessException) when (!turno.EsLaUltima)
+            {
+            }
+        }, mensajeSinPermiso);
     }
 }
