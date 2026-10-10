@@ -114,7 +114,7 @@ public class ProductoListViewModelTests
     }
 
     [Fact]
-    public async Task BusquedaYCargaSuperpuestas_CargandoSigueHastaQueTerminanAmbas()
+    public async Task BusquedaYCargaSuperpuestas_CargandoSigueSoloHastaQueTerminaLaVigente()
     {
         var carga = new TaskCompletionSource<IReadOnlyList<ProductoDto>>();
         var busqueda = new TaskCompletionSource<IReadOnlyList<ProductoDto>>();
@@ -127,7 +127,8 @@ public class ProductoListViewModelTests
         var t2 = vm.BuscarCommand.ExecuteAsync(null);
         busqueda.SetResult(new List<ProductoDto>());
         await t2;
-        Assert.True(vm.Cargando);
+        // Solo la última consulta decide: la búsqueda terminó, la carga vieja colgada ya no mantiene el "Cargando".
+        Assert.False(vm.Cargando);
 
         carga.SetResult(new List<ProductoDto>());
         await t1;

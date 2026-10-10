@@ -46,6 +46,8 @@ public class ProductoListViewV2Tests
         public List<int> Bajas { get; } = new();
         public TaskCompletionSource<IReadOnlyList<ProductoDto>>? Pendiente { get; set; }
         public Exception? Falla { get; set; }
+        /// <summary>Respuestas en orden de llamada; mientras haya, ganan sobre Falla/Pendiente/Lista.</summary>
+        public Queue<Task<IReadOnlyList<ProductoDto>>> Respuestas { get; } = new();
 
         public Task<int> AltaAsync(Producto producto) => throw new NotSupportedException();
         public Task ModificarAsync(Producto producto) => throw new NotSupportedException();
@@ -64,7 +66,8 @@ public class ProductoListViewV2Tests
             Responder(Lista.Where(p => string.IsNullOrEmpty(texto) || p.Nombre.Contains(texto, StringComparison.OrdinalIgnoreCase)).ToList());
 
         private Task<IReadOnlyList<ProductoDto>> Responder(List<ProductoDto> resultado) =>
-            Falla is not null ? Task.FromException<IReadOnlyList<ProductoDto>>(Falla)
+            Respuestas.Count > 0 ? Respuestas.Dequeue()
+            : Falla is not null ? Task.FromException<IReadOnlyList<ProductoDto>>(Falla)
             : Pendiente is not null ? Pendiente.Task
             : Task.FromResult<IReadOnlyList<ProductoDto>>(resultado);
     }
@@ -479,6 +482,36 @@ public class ProductoListViewV2Tests
         Assert.False(Visible(m, "EstadoSinConexion"));
         Assert.True(Visible(m, "Grilla"));
         Assert.Equal("2 productos", MontajeV2.Parte<TextBlock>(m.Vista, "PieConteo").Text);
+    }
+
+    private Montaje MontarConCargaInicialColgada(Task<IReadOnlyList<ProductoDto>> busqueda)
+    {
+        var servicio = new ProductosFake();
+        servicio.Respuestas.Enqueue(new TaskCompletionSource<IReadOnlyList<ProductoDto>>().Task);
+        servicio.Respuestas.Enqueue(busqueda);
+        var m = Montar(servicio);
+        Clickear(m.Ventana, MontajeV2.Parte<Button>(m.Vista, "BotonBuscar"));
+        Dispatcher.UIThread.RunJobs();
+        return m;
+    }
+
+    [AvaloniaFact]
+    public void BusquedaQueFallaRapidoConLaCargaInicialColgada_MuestraElErrorYNoElIndicadorDeCarga()
+    {
+        var m = MontarConCargaInicialColgada(Task.FromException<IReadOnlyList<ProductoDto>>(SinServidor()));
+
+        Assert.True(Visible(m, "EstadoSinConexion"));
+        Assert.False(Visible(m, "IndicadorCarga"));
+        Assert.False(m.Vm.Cargando);
+    }
+
+    [AvaloniaFact]
+    public void BusquedaSinFilasConLaCargaInicialColgada_DiceNoHayProductosYNoCargando()
+    {
+        var m = MontarConCargaInicialColgada(Task.FromResult<IReadOnlyList<ProductoDto>>([]));
+
+        Assert.False(Visible(m, "IndicadorCarga"));
+        Assert.True(Visible(m, "EstadoSinProductos"));
     }
 
     [AvaloniaFact]

@@ -20,6 +20,7 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
     private bool _sinConexion;
     private Func<Task>? _cargaParaReintentar;
     private int _cargasEnCurso;
+    private readonly List<ConsultaVigente.Turno> _cargasConTurnoEnCurso = new();
 
     /// <summary>
     /// True mientras algún campo de la vista tiene un error de entrada que vive SOLO en la View
@@ -141,14 +142,36 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
     /// bool: una búsqueda con debounce y una recarga pueden superponerse, y la primera en terminar no puede
     /// apagar el estado de la otra. La vista lo usa para decir "Cargando…" en vez de afirmar "no hay datos"
     /// antes de tenerlos. Notifica solo cuando cambia de valor.
+    /// Las consultas con turno (<see cref="ConsultaVigente"/>) no suman al contador: "solo la última consulta
+    /// decide", así que una vieja colgada no mantiene prendido el "Cargando…" cuando la vigente ya terminó
+    /// (ver <see cref="EmpezarCargaConTurno"/>).
     /// </summary>
-    public bool Cargando => _cargasEnCurso > 0;
+    public bool Cargando => _cargasEnCurso > 0 || _cargasConTurnoEnCurso.Exists(t => t.EsLaUltima);
 
     /// <summary>Marca el inicio de una carga (ver <see cref="Cargando"/>). Cada llamada pide su <see cref="TerminarCarga"/>.</summary>
     protected void EmpezarCarga()
     {
         if (++_cargasEnCurso == 1)
             OnPropertyChanged(nameof(Cargando));
+    }
+
+    /// <summary>
+    /// Inicio de una consulta con turno: <see cref="Cargando"/> la cuenta solo mientras sea la VIGENTE. Cada consulta
+    /// nueva reemplaza a las anteriores: las viejas, aunque sigan colgadas, ya no importan (su resultado se descarta).
+    /// </summary>
+    private void EmpezarCargaConTurno(ConsultaVigente.Turno turno)
+    {
+        var antes = Cargando;
+        _cargasConTurnoEnCurso.Add(turno);
+        if (antes != Cargando) OnPropertyChanged(nameof(Cargando));
+    }
+
+    /// <summary>Fin de una consulta con turno: una vieja que termina no toca el estado de la que sigue en curso.</summary>
+    private void TerminarCargaConTurno(ConsultaVigente.Turno turno)
+    {
+        var antes = Cargando;
+        _cargasConTurnoEnCurso.Remove(turno);
+        if (antes != Cargando) OnPropertyChanged(nameof(Cargando));
     }
 
     /// <summary>Marca el fin de una carga empezada con <see cref="EmpezarCarga"/>; va en un finally.</summary>
@@ -211,9 +234,12 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
     ///
     /// También prende <see cref="Cargando"/> mientras corre (se apaga en el finally, falle o no).
     /// </summary>
-    protected async Task EjecutarCargaProtegidaAsync(Func<Task> cargar, string mensajeSinPermiso)
+    protected Task EjecutarCargaProtegidaAsync(Func<Task> cargar, string mensajeSinPermiso) =>
+        EjecutarCargaCoreAsync(cargar, mensajeSinPermiso, turno: null);
+
+    private async Task EjecutarCargaCoreAsync(Func<Task> cargar, string mensajeSinPermiso, ConsultaVigente.Turno? turno)
     {
-        EmpezarCarga();
+        if (turno is { } t0) EmpezarCargaConTurno(t0); else EmpezarCarga();
         LimpiarSinPermiso();
         SinConexion = false;
         try
@@ -226,12 +252,12 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
         }
         catch (ServidorNoDisponibleException) when (AvisaSinConexionEnLinea)
         {
-            _cargaParaReintentar = () => EjecutarCargaProtegidaAsync(cargar, mensajeSinPermiso);
+            _cargaParaReintentar = () => EjecutarCargaCoreAsync(cargar, mensajeSinPermiso, turno: null);
             SinConexion = true;
         }
         finally
         {
-            TerminarCarga();
+            if (turno is { } t) TerminarCargaConTurno(t); else TerminarCarga();
         }
     }
 
@@ -244,7 +270,7 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
     /// </summary>
     protected async Task EjecutarCargaProtegidaAsync(Func<Task> cargar, string mensajeSinPermiso, ConsultaVigente.Turno turno)
     {
-        await EjecutarCargaProtegidaAsync(async () =>
+        await EjecutarCargaCoreAsync(async () =>
         {
             try
             {
@@ -254,6 +280,6 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
                 && (ex is UnauthorizedAccessException || (ex is ServidorNoDisponibleException && AvisaSinConexionEnLinea)))
             {
             }
-        }, mensajeSinPermiso);
+        }, mensajeSinPermiso, turno);
     }
 }

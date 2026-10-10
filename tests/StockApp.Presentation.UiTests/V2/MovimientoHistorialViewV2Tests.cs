@@ -414,6 +414,44 @@ public class MovimientoHistorialViewV2Tests
         Assert.Equal("1 movimiento", MontajeV2.Parte<TextBlock>(m.Vista, "PieConteo").Text);
     }
 
+    /// <summary>La carga inicial queda colgada y el usuario busca Salida: la búsqueda responde lo que diga
+    /// <paramref name="busqueda"/>. Devuelve el montaje con la carga inicial todavía pendiente.</summary>
+    private Montaje MontarConCargaInicialColgadaYBusqueda(Func<Task<IReadOnlyList<MovimientoHistorialDto>>> busqueda)
+    {
+        var cargaInicial = new TaskCompletionSource<IReadOnlyList<MovimientoHistorialDto>>();
+        var m = Montar(new HistorialFake { PorFiltro = f => f.Tipo is null ? cargaInicial.Task : busqueda() });
+
+        var combo = m.Vista.GetVisualDescendants().OfType<ComboBox>().Single();
+        combo.SelectedItem = m.Vm.TiposDisponibles.Single(t => t.Valor == TipoMovimiento.Salida);
+        Dispatcher.UIThread.RunJobs();
+        Clickear(m.Ventana, MontajeV2.Parte<Button>(m.Vista, "BotonBuscar"));
+        Dispatcher.UIThread.RunJobs();
+        return m;
+    }
+
+    [AvaloniaFact]
+    public void BusquedaQueFallaRapidoConLaCargaInicialColgada_MuestraElErrorYNoElIndicadorDeCarga()
+    {
+        // Solo la última consulta decide: la carga vieja sigue colgada, pero la que el usuario espera (la búsqueda)
+        // ya terminó con error. Cargando + "No se pudo conectar" a la vez es contradictorio.
+        var m = MontarConCargaInicialColgadaYBusqueda(() =>
+            Task.FromException<IReadOnlyList<MovimientoHistorialDto>>(SinServidor()));
+
+        Assert.True(Visible(m, "EstadoSinConexion"));
+        Assert.False(Visible(m, "IndicadorCarga"));
+        Assert.False(m.Vm.Cargando);
+    }
+
+    [AvaloniaFact]
+    public void BusquedaSinFilasConLaCargaInicialColgada_DiceNoHayMovimientosYNoCargando()
+    {
+        var m = MontarConCargaInicialColgadaYBusqueda(() =>
+            Task.FromResult<IReadOnlyList<MovimientoHistorialDto>>([]));
+
+        Assert.False(Visible(m, "IndicadorCarga"));
+        Assert.True(Visible(m, "EstadoSinMovimientos"));
+    }
+
     [AvaloniaFact]
     public void ServidorCaido_RevocarRecalcularEnCaliente_OcultaElBotonYElErrorQueda()
     {
