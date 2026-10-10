@@ -23,6 +23,20 @@ public class DatosHistorialTests
     }
 
     [Fact]
+    public void Movimientos_FijanLosSaldosAnteriorYNuevoDeCadaFila()
+    {
+        // Los saldos que muestran los mockups: STOCK ANT. y STOCK NUEVO de cada movimiento, de la fila 112 a la 101.
+        var esperados = new (int Id, decimal Anterior, decimal Nuevo)[]
+        {
+            (112, 280m, 320m), (111, 1275.5m, 1250m), (110, 0m, 12m), (109, 4m, 6m),
+            (108, 2m, -3m), (107, 80m, 180m), (106, 12m, 8m), (105, 70m, 60m),
+            (104, 0m, 22.5m), (103, 0m, 45m), (102, 12m, 14m), (101, 0m, 1m),
+        };
+
+        Assert.Equal(esperados, DatosHistorial.Movimientos.Select(x => (x.MovimientoId, x.StockAnterior, x.StockNuevo)).ToArray());
+    }
+
+    [Fact]
     public void Fecha_EsUnaHoraLocalFija_EnCualquierHuso()
     {
         var utc = DatosHistorial.Fecha(10, 7, 14, 35);
