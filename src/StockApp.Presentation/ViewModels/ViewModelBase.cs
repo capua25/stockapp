@@ -137,7 +137,14 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
     /// <see cref="SinConexion"/>). Sin una carga fallida no hace nada.</summary>
     public IAsyncRelayCommand ReintentarCargaCommand => field ??= new AsyncRelayCommand(ReintentarCargaAsync);
 
-    private Task ReintentarCargaAsync() => _cargaParaReintentar?.Invoke() ?? Task.CompletedTask;
+    private Task ReintentarCargaAsync() => _cargaParaReintentar is { } cargaFallida ? ReintentarAsync(cargaFallida) : Task.CompletedTask;
+
+    /// <summary>
+    /// Qué hace "Reintentar" cuando hay una carga fallida pendiente. Por defecto repite esa carga tal cual. Un listado con
+    /// filtros lo sobrescribe para buscar con el filtro que está en pantalla en ese momento (convención 18), no con el
+    /// que tenía la consulta que falló.
+    /// </summary>
+    protected virtual Task ReintentarAsync(Func<Task> cargaFallida) => cargaFallida();
 
     /// <summary>Mensaje para <c>EstadoVacio.Mensaje</c> cuando <see cref="SinPermiso"/> es true.</summary>
     public string? MensajeSinPermiso

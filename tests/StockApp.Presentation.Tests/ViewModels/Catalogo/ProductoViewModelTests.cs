@@ -267,6 +267,27 @@ public class ProductoListViewModelTests
     }
 
     [Fact]
+    public async Task Reintentar_TrasFallarConElTextoA_BuscaConElTextoActualB()
+    {
+        var (vm, svcMock, _, _) = Crear();
+        svcMock.Setup(s => s.BuscarPorTextoAsync(It.IsAny<string?>())).ThrowsAsync(SinServidor());
+        vm.FiltroBusqueda = "cemento";
+        await vm._tareaDebounce;
+        vm.FiltroBusqueda = "pintura";
+        await vm._tareaDebounce;
+        Assert.True(vm.SinConexion);
+
+        var consultas = new List<string?>();
+        svcMock.Setup(s => s.BuscarPorTextoAsync(It.IsAny<string?>()))
+            .Callback<string?>(t => consultas.Add(t))
+            .ReturnsAsync(new List<ProductoDto>());
+        await vm.ReintentarCargaCommand.ExecuteAsync(null);
+
+        Assert.Equal(new string?[] { "pintura" }, consultas);
+        Assert.False(vm.SinConexion);
+    }
+
+    [Fact]
     public async Task NuevoCommand_NavegaAProductoFormViewModel()
     {
         var (vm, _, navMock, _) = Crear();

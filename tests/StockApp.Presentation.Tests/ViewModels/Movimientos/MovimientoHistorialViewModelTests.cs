@@ -879,6 +879,37 @@ public class MovimientoHistorialViewModelTests
 
     // ── Deuda 3c-2: Reintentar busca con el filtro que está en pantalla ──
 
-    // ── Deuda 3c-2: la recarga tras Recalcular respeta HayErroresDeEntrada ──
+    [Fact]
+    public async Task Reintentar_TrasFallarConElFiltroA_BuscaConElFiltroActualB()
+    {
+        var (vm, svcMock, _, _, _, _) = Crear();
+        vm.FiltroTipo = TipoMovimiento.Entrada;
+        svcMock.Setup(s => s.ObtenerHistorialAsync(It.IsAny<HistorialMovimientoFiltro>())).ThrowsAsync(SinServidor());
+        await vm.BuscarCommand.ExecuteAsync(null);
+        Assert.True(vm.SinConexion);
 
+        vm.FiltroTipo = TipoMovimiento.Salida;
+        svcMock.Setup(s => s.ObtenerHistorialAsync(It.IsAny<HistorialMovimientoFiltro>()))
+            .ReturnsAsync(new List<MovimientoHistorialDto> { CrearDto(1) });
+        await vm.ReintentarCargaCommand.ExecuteAsync(null);
+
+        svcMock.Verify(s => s.ObtenerHistorialAsync(It.Is<HistorialMovimientoFiltro>(f => f.Tipo == TipoMovimiento.Salida)), Times.Once);
+        Assert.False(vm.SinConexion);
+        Assert.Single(vm.Items);
+    }
+
+    [Fact]
+    public async Task Reintentar_TrasFallarLaCargaInicial_BuscaConElFiltroDePantalla()
+    {
+        var (vm, svcMock, _, _, _, _) = Crear();
+        svcMock.Setup(s => s.ObtenerHistorialAsync(It.IsAny<HistorialMovimientoFiltro>())).ThrowsAsync(SinServidor());
+        await vm.CargarAsync();
+
+        vm.FiltroTipo = TipoMovimiento.Salida;
+        svcMock.Setup(s => s.ObtenerHistorialAsync(It.IsAny<HistorialMovimientoFiltro>()))
+            .ReturnsAsync(new List<MovimientoHistorialDto>());
+        await vm.ReintentarCargaCommand.ExecuteAsync(null);
+
+        svcMock.Verify(s => s.ObtenerHistorialAsync(It.Is<HistorialMovimientoFiltro>(f => f.Tipo == TipoMovimiento.Salida)), Times.Once);
+    }
 }
