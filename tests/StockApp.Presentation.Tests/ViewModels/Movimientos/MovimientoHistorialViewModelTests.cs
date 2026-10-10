@@ -912,4 +912,21 @@ public class MovimientoHistorialViewModelTests
 
         svcMock.Verify(s => s.ObtenerHistorialAsync(It.Is<HistorialMovimientoFiltro>(f => f.Tipo == TipoMovimiento.Salida)), Times.Once);
     }
+
+    // ── Deuda 3c-2: la recarga tras Recalcular respeta HayErroresDeEntrada ──
+
+    [Fact]
+    public async Task Recalcular_ConErroresDeEntradaEnElFiltro_NoRecargaConUnFiltroInvalido()
+    {
+        var (vm, svcMock, _, _, confirmacion, _) = Crear(permisos: [Permisos.RegistrarMovimientos, Permisos.RecalcularStock], rol: RolUsuario.Operador);
+        vm.ProductoIdParaRecalcular = 1;
+        svcMock.Setup(s => s.RecalcularStockAsync(1)).ReturnsAsync(new RecalculoResultadoDto(1, 0m, 0m, 0));
+        vm.HayErroresDeEntrada = true;
+
+        await vm.RecalcularCommand.ExecuteAsync(null);
+
+        svcMock.Verify(s => s.RecalcularStockAsync(1), Times.Once);
+        svcMock.Verify(s => s.ObtenerHistorialAsync(It.IsAny<HistorialMovimientoFiltro>()), Times.Never);
+        confirmacion.Verify(c => c.InformarAsync("Stock recalculado."), Times.Once);
+    }
 }

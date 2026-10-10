@@ -422,7 +422,10 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
         try
         {
             await _service.RecalcularStockAsync(ProductoIdParaRecalcular.Value);
-            await BuscarAsync();
+            // Mismo criterio que BuscarCommand (ComandoDeGuardado): con errores de entrada en el filtro el VM tiene
+            // un valor viejo, y recargar con él mostraría una grilla que no es la que dicen los campos.
+            if (!HayErroresDeEntrada)
+                await BuscarAsync();
             await _confirmacion.InformarAsync("Stock recalculado.");
         }
         catch (UnauthorizedAccessException)
