@@ -47,8 +47,12 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
     /// <summary>Sin servidor el listado queda vacío: el reintento no puede mostrar filas de la consulta anterior.</summary>
     protected override void AlPerderConexion() => Items.Clear();
 
-    /// <summary>Reintentar busca con el filtro que está en pantalla en ese momento, no con el de la consulta que falló.</summary>
-    protected override Task ReintentarAsync(Func<Task> cargaFallida) => BuscarAsync();
+    /// <summary>
+    /// Reintentar busca con el filtro que está en pantalla en ese momento, no con el de la consulta que falló. Con errores
+    /// de entrada en el filtro no busca (igual que <see cref="BuscarCommand"/> y la recarga tras Recalcular): el VM
+    /// tiene el valor anterior del campo inválido y buscaría con un filtro que no es el que dicen los campos.
+    /// </summary>
+    protected override Task ReintentarAsync(Func<Task> cargaFallida) => HayErroresDeEntrada ? Task.CompletedTask : BuscarAsync();
 
     [ObservableProperty]
     private int? _filtroProductoId;

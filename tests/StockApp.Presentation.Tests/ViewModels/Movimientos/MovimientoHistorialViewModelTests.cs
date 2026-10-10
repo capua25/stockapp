@@ -913,6 +913,22 @@ public class MovimientoHistorialViewModelTests
         svcMock.Verify(s => s.ObtenerHistorialAsync(It.Is<HistorialMovimientoFiltro>(f => f.Tipo == TipoMovimiento.Salida)), Times.Once);
     }
 
+    [Fact]
+    public async Task Reintentar_ConErroresDeEntradaEnElFiltro_NoBuscaConElValorViejo()
+    {
+        var (vm, svcMock, _, _, _, _) = Crear();
+        svcMock.Setup(s => s.ObtenerHistorialAsync(It.IsAny<HistorialMovimientoFiltro>())).ThrowsAsync(SinServidor());
+        await vm.CargarAsync();
+        Assert.True(vm.SinConexion);
+        svcMock.Invocations.Clear();
+
+        vm.HayErroresDeEntrada = true; // un campo del filtro tiene texto inválido: el VM conserva el valor anterior
+        await vm.ReintentarCargaCommand.ExecuteAsync(null);
+
+        svcMock.Verify(s => s.ObtenerHistorialAsync(It.IsAny<HistorialMovimientoFiltro>()), Times.Never);
+        Assert.True(vm.SinConexion);
+    }
+
     // ── Deuda 3c-2: la recarga tras Recalcular respeta HayErroresDeEntrada ──
 
     [Fact]
