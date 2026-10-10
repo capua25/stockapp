@@ -37,7 +37,8 @@ public class AccesoRevocadoPantallasFinanzasTests
         public Task AnularAsync(int id, bool confirmarAnulacionDePagoAutomatico = false) => throw new NotSupportedException();
         public Task<Gasto> ObtenerPorIdAsync(int id) => throw new NotSupportedException();
         public Task<Gasto?> ObtenerPorProveedorYFacturaAsync(int proveedorId, string numeroFactura, string? numeroOrden) => throw new NotSupportedException();
-        public Task<IReadOnlyList<Gasto>> ListarAsync(GastoFiltro filtro) => Task.FromResult<IReadOnlyList<Gasto>>(Array.Empty<Gasto>());
+        public Task<IReadOnlyList<Gasto>> ListarAsync(GastoFiltro filtro) => Task.FromResult<IReadOnlyList<Gasto>>(
+            new[] { new Gasto { Id = 1, Detalle = "Factura vieja", Fecha = DateTime.UtcNow, MontoTotal = 1000m } });
         public Task<int> RegistrarPagoAsync(PagoGasto pago) => throw new NotSupportedException();
         public Task AnularPagoAsync(int gastoId, int pagoId) => throw new NotSupportedException();
         public Task AsociarMovimientosAsync(int gastoId, IReadOnlyList<int> movimientoIds) => throw new NotSupportedException();
@@ -62,10 +63,12 @@ public class AccesoRevocadoPantallasFinanzasTests
     }
 
     private static (Window Ventana, ShellMainViewModel Shell, SesionFake Sesion, HashSet<string> Tras) MontarShell(
-        Func<SesionFake, ViewModelBase> pantalla)
+        Func<SesionFake, ViewModelBase> pantalla,
+        string[]? permisosAntes = null, string[]? permisosTras = null)
     {
-        var sesion = new SesionFake(RolUsuario.Operador, new[] { Permisos.VerFinanzas, Permisos.RegistrarGastos });
-        var tras = new HashSet<string> { Permisos.VerFinanzas }; // el servidor ya no trae finanzas.gastos
+        var sesion = new SesionFake(RolUsuario.Operador, permisosAntes ?? new[] { Permisos.VerFinanzas, Permisos.RegistrarGastos });
+        // por defecto el servidor ya no trae finanzas.gastos
+        var tras = new HashSet<string>(permisosTras ?? new[] { Permisos.VerFinanzas });
         var shell = new ShellMainViewModel(
             sesion, new NavigationServiceFake(), new InfoAppFake(), new ConfirmacionServiceFake(),
             new AuthServiceFake(sesion, tras), new PreferenciasSidebarFake());
@@ -152,5 +155,57 @@ public class AccesoRevocadoPantallasFinanzasTests
         Assert.Contains("1.500,50", textos);
         Assert.Contains("Materiales de obra", textos);
         Assert.Contains("A-0001234", textos);
+    }
+
+    private static GastosViewModel NuevoGastosVm(SesionFake s) => new(
+        new GastoServiceFake(), s,
+        new ProveedorServiceFake(Array.Empty<Proveedor>()),
+        new FuenteFinanciamientoServiceFake(Array.Empty<FuenteFinanciamiento>()),
+        new RubroGastoServiceFake(Array.Empty<RubroGasto>()),
+        new LineaPoaServiceFake(Array.Empty<LineaPoa>()),
+        new NavigationServiceFake(), new ConfirmacionServiceFake(),
+        new CsvFake(), new GuardadoFake(), new PdfFake(), new ServicioAperturaArchivoFake());
+
+    private static Button BotonConComando(Window ventana, System.Windows.Input.ICommand comando)
+        => ventana.GetVisualDescendants().OfType<Button>().First(b => ReferenceEquals(b.Command, comando));
+
+    /// <summary>
+    /// Deuda 3c-2 (decisión 2026-10-10): Exportar CSV/PDF serializan en el cliente las filas ya
+    /// cargadas; tras un 403 que quita finanzas.ver los botones se ocultan y la grilla se vacía.
+    /// Operador de permisos mixtos (Admin cortocircuita el gate). Se conserva RegistrarGastos para
+    /// probar que el gate es específico: "Nuevo gasto" sigue visible.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Un403_QueQuitaVerFinanzas_OcultaExportarYVaciaLaGrilla()
+    {
+        GastosViewModel? vm = null;
+        var (ventana, shell, sesion, tras) = MontarShell(
+            s => vm = NuevoGastosVm(s),
+            permisosAntes: new[] { Permisos.VerFinanzas, Permisos.RegistrarGastos },
+            permisosTras: new[] { Permisos.RegistrarGastos });
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(1, vm!.Filas.Count);
+        Assert.True(ArbolVisual.EsVisibleEnArbol(BotonConComando(ventana, vm.ExportarCsvCommand)), "Precondición: con finanzas.ver, Exportar CSV se ve.");
+        Assert.True(ArbolVisual.EsVisibleEnArbol(BotonConComando(ventana, vm.ExportarPdfCommand)), "Precondición: con finanzas.ver, Exportar PDF se ve.");
+
+        await Disparar403(ventana, shell, sesion, tras);
+
+        Assert.False(ArbolVisual.EsVisibleEnArbol(BotonConComando(ventana, vm.ExportarCsvCommand)));
+        Assert.False(ArbolVisual.EsVisibleEnArbol(BotonConComando(ventana, vm.ExportarPdfCommand)));
+        Assert.Empty(vm.Filas);
+        Assert.True(ArbolVisual.EsVisibleEnArbol(Boton(ventana, "Nuevo gasto")), "El gate es específico: RegistrarGastos sigue.");
+    }
+
+    [AvaloniaFact]
+    public void SinVerFinanzas_DesdeElMontaje_ExportarNoSeVe()
+    {
+        GastosViewModel? vm = null;
+        var (ventana, _, _, _) = MontarShell(
+            s => vm = NuevoGastosVm(s),
+            permisosAntes: new[] { Permisos.RegistrarGastos });
+
+        Assert.False(ArbolVisual.EsVisibleEnArbol(BotonConComando(ventana, vm!.ExportarCsvCommand)));
+        Assert.False(ArbolVisual.EsVisibleEnArbol(BotonConComando(ventana, vm.ExportarPdfCommand)));
     }
 }

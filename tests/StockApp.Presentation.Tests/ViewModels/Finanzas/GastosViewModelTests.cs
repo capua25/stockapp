@@ -67,7 +67,7 @@ public class GastosViewModelTests
 
         var session = new Mock<ICurrentSession>();
         session.Setup(s => s.RolActual).Returns(rol);
-        session.Setup(s => s.PermisosActuales).Returns(new HashSet<string>(permisos ?? Enumerable.Empty<string>()));
+        session.Setup(s => s.PermisosActuales).Returns(permisos as HashSet<string> ?? new HashSet<string>(permisos ?? Enumerable.Empty<string>()));
         session.Setup(s => s.UsuarioActual).Returns(usuarioSesion ?? new UsuarioSesion(1, "admin", rol, null));
 
         var proveedores = new Mock<ICategoriaProveedorService>();
@@ -920,5 +920,70 @@ public class GastosViewModelTests
         Assert.Equal("Pagada", fila.Estado);
         Assert.NotNull(metadatosCapturados);
         Assert.Contains("Estado: Pagada", metadatosCapturados!.DescripcionFiltros);
+    }
+
+    // ── Deuda 3c-2: Exportar tras un 403 de finanzas ──────────────────────────────
+
+    [Fact]
+    public async Task FiltrarCommand_Un403_VaciaLaGrillaYNoPropaga()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear(new List<Gasto> { GastoDe(1, "Vieja") });
+        await vm.CargarAsync();
+        Assert.Single(vm.Filas);
+        svc.Setup(s => s.ListarAsync(It.IsAny<GastoFiltro>())).ThrowsAsync(new UnauthorizedAccessException());
+
+        await vm.FiltrarCommand.ExecuteAsync(null);
+
+        Assert.Empty(vm.Filas);
+    }
+
+    [Fact]
+    public async Task CargarAsync_Un403_VaciaLaGrilla()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear(new List<Gasto> { GastoDe(1, "Vieja") });
+        await vm.CargarAsync();
+        svc.Setup(s => s.ListarAsync(It.IsAny<GastoFiltro>())).ThrowsAsync(new UnauthorizedAccessException());
+
+        await vm.CargarAsync();
+
+        Assert.Empty(vm.Filas);
+    }
+
+    [Fact]
+    public void Exportar_SinVerFinanzas_NoSePuedeEjecutar()
+    {
+        var (vm, _, _, _, _, _, _) = Crear(rol: RolUsuario.Operador, permisos: new[] { Permisos.RegistrarGastos });
+
+        Assert.False(vm.PuedeVerFinanzas);
+        Assert.False(vm.ExportarCsvCommand.CanExecute(null));
+        Assert.False(vm.ExportarPdfCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void Exportar_ConVerFinanzas_SePuedeEjecutar()
+    {
+        var (vm, _, _, _, _, _, _) = Crear(rol: RolUsuario.Operador, permisos: new[] { Permisos.VerFinanzas });
+
+        Assert.True(vm.PuedeVerFinanzas);
+        Assert.True(vm.ExportarCsvCommand.CanExecute(null));
+        Assert.True(vm.ExportarPdfCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task NotificarPermisosActualizados_TrasPerderVerFinanzas_VaciaFilasYDeshabilitaExportar()
+    {
+        var permisos = new HashSet<string> { Permisos.VerFinanzas };
+        var (vm, _, _, _, _, _, _) = Crear(
+            new List<Gasto> { GastoDe(1, "Vieja") }, rol: RolUsuario.Operador, permisos: permisos);
+        await vm.CargarAsync();
+        Assert.Single(vm.Filas);
+        Assert.True(vm.ExportarCsvCommand.CanExecute(null));
+
+        permisos.Remove(Permisos.VerFinanzas);
+        vm.NotificarPermisosActualizados();
+
+        Assert.Empty(vm.Filas);
+        Assert.False(vm.ExportarCsvCommand.CanExecute(null));
+        Assert.False(vm.ExportarPdfCommand.CanExecute(null));
     }
 }

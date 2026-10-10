@@ -144,6 +144,17 @@ public partial class GastosViewModel : ViewModelBase
         _session.RolActual == RolUsuario.Admin ||
         _session.PermisosActuales.Contains(Permisos.RegistrarGastos);
 
+    /// <summary>
+    /// Gatea Exportar CSV / PDF (deuda 3c-2, decisión 2026-10-10): el export serializa en el cliente
+    /// las <see cref="Filas"/> ya cargadas, sin llamar al servidor; sin <c>Permisos.VerFinanzas</c>
+    /// esas filas no deberían poder salir de la pantalla. Se OCULTA (IsVisible) y además el comando
+    /// no se puede ejecutar (CanExecute). Mismo patrón y misma revocación en caliente que
+    /// <see cref="PuedeRegistrarGastos"/> (convención 21).
+    /// </summary>
+    public bool PuedeVerFinanzas =>
+        _session.RolActual == RolUsuario.Admin ||
+        _session.PermisosActuales.Contains(Permisos.VerFinanzas);
+
     public GastosViewModel(
         IGastoService service,
         ICurrentSession session,
@@ -238,7 +249,23 @@ public partial class GastosViewModel : ViewModelBase
             // ya informa "Tus permisos cambiaron...". Mismo criterio que
             // MovimientoHistorialViewModel.RecalcularAsync: silencioso, para no duplicar el
             // aviso.
+            // Deuda 3c-2: la grilla no puede conservar las filas viejas (ni exportarlas).
+            Filas.Clear();
         }
+    }
+
+    /// <summary>
+    /// Un 403 refrescó los permisos en caliente (convención 21): además de re-leer los <c>Puede*</c>
+    /// (base), se reevalúa el CanExecute de Exportar y, si ya no hay <c>VerFinanzas</c>, se vacía
+    /// la grilla. Deuda 3c-2: sin esto la fila vieja quedaba en pantalla y exportable.
+    /// </summary>
+    public override void NotificarPermisosActualizados()
+    {
+        if (!PuedeVerFinanzas)
+            Filas.Clear();
+        ExportarCsvCommand.NotifyCanExecuteChanged();
+        ExportarPdfCommand.NotifyCanExecuteChanged();
+        base.NotificarPermisosActualizados();
     }
 
     private GastoFiltro ArmarFiltro() => new(
@@ -271,6 +298,12 @@ public partial class GastosViewModel : ViewModelBase
             Filas.Clear();
             foreach (var fila in filas)
                 Filas.Add(fila);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // El aviso global del 403 ya salió (AuthTokenHandler -> ApiSession.AccesoRevocado);
+            // acá solo se vacía la grilla para no dejar la fila vieja a la vista ni exportable.
+            Filas.Clear();
         }
         catch (Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException)
         {
@@ -422,7 +455,7 @@ public partial class GastosViewModel : ViewModelBase
     /// DESPUÉS de elegir la ubicación (permiso denegado, disco lleno) se informa en vez de
     /// escapar del comando sin observar.
     /// </summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(PuedeVerFinanzas))]
     private async Task ExportarCsvAsync()
     {
         await ExportacionCsv.EjecutarAsync(async () =>
@@ -488,7 +521,7 @@ public partial class GastosViewModel : ViewModelBase
     /// con el filtro de Estado aplicado en memoria — si se exportara otra cosa, el PDF podría
     /// traer filas que el usuario no está viendo en pantalla.
     /// </summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(PuedeVerFinanzas))]
     private async Task ExportarPdfAsync()
     {
         if (Filas.Count == 0)
