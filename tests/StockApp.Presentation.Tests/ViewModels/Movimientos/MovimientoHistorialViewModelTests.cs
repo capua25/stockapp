@@ -79,7 +79,7 @@ public class MovimientoHistorialViewModelTests
 
         var dialogoRecalcularMock = new Mock<IRecalcularStockDialogService>();
         dialogoRecalcularMock
-            .Setup(d => d.ElegirProductoAsync(It.IsAny<Func<string?, CancellationToken, Task<IEnumerable<object>>>>()))
+            .Setup(d => d.ElegirProductoAsync(It.IsAny<Func<string?, CancellationToken, Task<IEnumerable<object>>>>(), It.IsAny<Func<bool>>()))
             .ReturnsAsync((ProductoDto?)null);
 
         var vm = new MovimientoHistorialViewModel(
@@ -738,7 +738,7 @@ public class MovimientoHistorialViewModelTests
     public async Task AbrirRecalcular_EligeUnProducto_RecalculaEseYRecargaConLosFiltros()
     {
         var (vm, svcMock, _, _, confirmacion, dialogo) = Crear(permisos: [Permisos.RegistrarMovimientos, Permisos.RecalcularStock], rol: RolUsuario.Operador);
-        dialogo.Setup(d => d.ElegirProductoAsync(It.IsAny<Func<string?, CancellationToken, Task<IEnumerable<object>>>>()))
+        dialogo.Setup(d => d.ElegirProductoAsync(It.IsAny<Func<string?, CancellationToken, Task<IEnumerable<object>>>>(), It.IsAny<Func<bool>>()))
             .ReturnsAsync(CrearProducto(42, "Cemento portland 50 kg"));
         svcMock.Setup(s => s.RecalcularStockAsync(42)).ReturnsAsync(new RecalculoResultadoDto(42, 10m, 12m, 3));
         vm.TipoFiltroSeleccionado = vm.TiposDisponibles.Single(t => t.Valor == TipoMovimiento.Salida);
@@ -754,7 +754,7 @@ public class MovimientoHistorialViewModelTests
     public async Task AbrirRecalcular_Cancela_NoRecalcula()
     {
         var (vm, svcMock, _, _, _, dialogo) = Crear();
-        dialogo.Setup(d => d.ElegirProductoAsync(It.IsAny<Func<string?, CancellationToken, Task<IEnumerable<object>>>>()))
+        dialogo.Setup(d => d.ElegirProductoAsync(It.IsAny<Func<string?, CancellationToken, Task<IEnumerable<object>>>>(), It.IsAny<Func<bool>>()))
             .ReturnsAsync((ProductoDto?)null);
 
         await vm.AbrirRecalcularCommand.ExecuteAsync(null);
@@ -769,7 +769,7 @@ public class MovimientoHistorialViewModelTests
 
         await vm.AbrirRecalcularCommand.ExecuteAsync(null);
 
-        dialogo.Verify(d => d.ElegirProductoAsync(It.IsAny<Func<string?, CancellationToken, Task<IEnumerable<object>>>>()), Times.Never);
+        dialogo.Verify(d => d.ElegirProductoAsync(It.IsAny<Func<string?, CancellationToken, Task<IEnumerable<object>>>>(), It.IsAny<Func<bool>>()), Times.Never);
     }
 
     [Fact]
@@ -779,7 +779,7 @@ public class MovimientoHistorialViewModelTests
 
         await vm.AbrirRecalcularCommand.ExecuteAsync(null);
 
-        dialogo.Verify(d => d.ElegirProductoAsync(vm.BuscarProductosAsync), Times.Once);
+        dialogo.Verify(d => d.ElegirProductoAsync(vm.BuscarProductosAsync, It.IsAny<Func<bool>>()), Times.Once);
     }
 
     [Fact]
@@ -791,5 +791,37 @@ public class MovimientoHistorialViewModelTests
         var resultado = await vm.BuscarProductosAsync("cem", CancellationToken.None);
 
         Assert.Empty(resultado);
+    }
+
+    // ── Deuda D14 (3c-2): un 403 del buscador de Recalcular no se repite por tecla ──
+
+    [Fact]
+    public async Task BuscarProductos_PrimerYUn403_MarcaSinPermisoYLasBusquedasSiguientesNoLlamanALaApi()
+    {
+        var (vm, _, _, productos, _, _) = Crear(rol: RolUsuario.Operador, permisos: [Permisos.RegistrarMovimientos, Permisos.RecalcularStock]);
+        productos.Setup(p => p.BuscarPorTextoAsync(It.IsAny<string?>())).ThrowsAsync(new UnauthorizedAccessException("403"));
+        Assert.False(vm.BuscadorRecalcularSinPermiso);
+
+        foreach (var texto in new[] { "c", "ce", "cem", "ceme", "cemen" })
+            Assert.Empty(await vm.BuscarProductosAsync(texto, CancellationToken.None));
+
+        Assert.True(vm.BuscadorRecalcularSinPermiso);
+        productos.Verify(p => p.BuscarPorTextoAsync(It.IsAny<string?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task AbrirRecalcular_TrasUnSinPermiso_ReabreConElBuscadorHabilitadoParaReintentar()
+    {
+        var (vm, _, _, productos, _, dialogo) = Crear(rol: RolUsuario.Operador, permisos: [Permisos.RegistrarMovimientos, Permisos.RecalcularStock]);
+        productos.SetupSequence(p => p.BuscarPorTextoAsync(It.IsAny<string?>()))
+            .ThrowsAsync(new UnauthorizedAccessException("403"))
+            .ReturnsAsync(new List<ProductoDto> { CrearProducto(1, "Cemento") });
+        await vm.BuscarProductosAsync("cem", CancellationToken.None);
+        Assert.True(vm.BuscadorRecalcularSinPermiso);
+
+        await vm.AbrirRecalcularCommand.ExecuteAsync(null);
+
+        Assert.False(vm.BuscadorRecalcularSinPermiso);
+        Assert.Single(await vm.BuscarProductosAsync("cem", CancellationToken.None));
     }
 }

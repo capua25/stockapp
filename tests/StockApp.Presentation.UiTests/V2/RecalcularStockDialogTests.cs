@@ -3,6 +3,12 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using StockApp.Application.Authorization;
+using StockApp.Application.Movimientos;
+using StockApp.Domain.Enums;
+using StockApp.Presentation.Controls.V2;
+using StockApp.Presentation.Services;
+using StockApp.Presentation.ViewModels.Movimientos;
 using StockApp.Application.Catalogo;
 using StockApp.Presentation.Views.Dialogs;
 using Xunit;
@@ -112,5 +118,82 @@ public class RecalcularStockDialogTests
             var borde = b.TranslatePoint(new Point(b.Bounds.Width, 0), dialogo)!.Value.X;
             Assert.True(borde <= dialogo.Width - 24 + 0.5, $"{nombre} termina en {borde:F1}");
         }
+    }
+
+    // ── Deuda D14 (3c-2): sin catalogo.productos el buscador se deshabilita con un aviso en línea ──
+
+    [AvaloniaFact]
+    public async Task UnaBusquedaSinPermiso_DeshabilitaElBuscadorYMuestraElAvisoEnLinea()
+    {
+        var sinPermiso = false;
+        var dialogo = new RecalcularStockDialog(
+            (_, _) => { sinPermiso = true; return Task.FromResult<IEnumerable<object>>(Array.Empty<object>()); },
+            () => sinPermiso);
+        Abrir<ProductoDto?>(dialogo);
+        var buscador = dialogo.FindControl<AutoCompleteBox>("BuscadorProducto")!;
+        var aviso = dialogo.FindControl<Alerta>("AvisoSinPermiso")!;
+        Assert.True(buscador.IsEffectivelyEnabled, "Precondición: el buscador arranca habilitado.");
+        Assert.False(ArbolVisual.EsVisibleEnArbol(aviso), "Precondición: sin 403 no hay aviso.");
+
+        await buscador.AsyncPopulator!("cem", CancellationToken.None);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(buscador.IsEffectivelyEnabled);
+        Assert.True(ArbolVisual.EsVisibleEnArbol(aviso));
+        Assert.Equal("No tenés permiso para buscar productos.", aviso.Texto);
+        Assert.Equal(VarianteAlerta.Advertencia, aviso.Variante);
+        Assert.False(dialogo.FindControl<Button>("RecalcularButton")!.IsEffectivelyEnabled);
+    }
+
+    private sealed class MovimientoServiceFake : IMovimientoStockService
+    {
+        public Task<MovimientoRegistradoDto> RegistrarAsync(RegistrarMovimientoDto dto, bool forzar = false) => throw new NotSupportedException();
+        public Task<IReadOnlyList<MovimientoHistorialDto>> ObtenerHistorialAsync(HistorialMovimientoFiltro filtro)
+            => Task.FromResult<IReadOnlyList<MovimientoHistorialDto>>(Array.Empty<MovimientoHistorialDto>());
+        public Task<RecalculoResultadoDto> RecalcularStockAsync(int productoId) => throw new NotSupportedException();
+    }
+
+    /// <summary>Cuenta las llamadas de búsqueda: cada una que recibe 403 es, en la app real, un Aviso modal global
+    /// (AuthTokenHandler dispara ApiSession.AccesoRevocado ante CUALQUIER 403).</summary>
+    private sealed class ProductoServiceSin403Contador : IProductoService
+    {
+        public int Llamadas { get; private set; }
+        public Task<int> AltaAsync(StockApp.Domain.Entities.Producto producto) => throw new NotSupportedException();
+        public Task ModificarAsync(StockApp.Domain.Entities.Producto producto) => throw new NotSupportedException();
+        public Task BajaLogicaAsync(int id) => throw new NotSupportedException();
+        public Task CambiarPrecioAsync(int id, decimal precioCosto) => throw new NotSupportedException();
+        public Task<IReadOnlyList<ProductoDto>> BuscarAsync(string? sku, string? codigoBarras, string? nombre) => throw new NotSupportedException();
+        public Task<IReadOnlyList<ProductoDto>> BuscarPorTextoAsync(string? texto)
+        {
+            Llamadas++;
+            return Task.FromException<IReadOnlyList<ProductoDto>>(new UnauthorizedAccessException());
+        }
+    }
+
+    private sealed class DialogoNoUsadoFake : IRecalcularStockDialogService
+    {
+        public Task<ProductoDto?> ElegirProductoAsync(Func<string?, CancellationToken, Task<IEnumerable<object>>> buscar, Func<bool> sinPermiso)
+            => Task.FromResult<ProductoDto?>(null);
+    }
+
+    [AvaloniaFact]
+    public async Task VariasTeclasSinPermiso_HacenUnaSolaLlamadaYPorLoTantoUnSoloAvisoGlobal()
+    {
+        var productos = new ProductoServiceSin403Contador();
+        var vm = new MovimientoHistorialViewModel(
+            new MovimientoServiceFake(), new NavigationServiceFake(), productos, new ConfirmacionServiceFake(),
+            new SesionFake(RolUsuario.Operador, Permisos.RegistrarMovimientos, Permisos.RecalcularStock),
+            new DialogoNoUsadoFake());
+        var dialogo = new RecalcularStockDialog(vm.BuscarProductosAsync, () => vm.BuscadorRecalcularSinPermiso);
+        Abrir<ProductoDto?>(dialogo);
+        var buscador = dialogo.FindControl<AutoCompleteBox>("BuscadorProducto")!;
+
+        foreach (var texto in new[] { "c", "ce", "cem", "ceme", "cemen", "cement" })
+            await buscador.AsyncPopulator!(texto, CancellationToken.None);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(1, productos.Llamadas);
+        Assert.False(buscador.IsEffectivelyEnabled);
+        Assert.True(ArbolVisual.EsVisibleEnArbol(dialogo.FindControl<Alerta>("AvisoSinPermiso")!));
     }
 }

@@ -62,7 +62,7 @@ public class MovimientoHistorialGatesTests
 
     private sealed class RecalcularStockDialogFake : IRecalcularStockDialogService
     {
-        public Task<ProductoDto?> ElegirProductoAsync(Func<string?, CancellationToken, Task<IEnumerable<object>>> buscar)
+        public Task<ProductoDto?> ElegirProductoAsync(Func<string?, CancellationToken, Task<IEnumerable<object>>> buscar, Func<bool> sinPermiso)
             => Task.FromResult<ProductoDto?>(null);
     }
 

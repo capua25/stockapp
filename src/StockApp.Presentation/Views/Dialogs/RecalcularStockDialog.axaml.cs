@@ -21,9 +21,16 @@ public partial class RecalcularStockDialog : Window
     }
 
     /// <summary>Crea el diálogo con el delegado que alimenta el buscador (<c>AutoCompleteBox.AsyncPopulator</c>).</summary>
-    public RecalcularStockDialog(Func<string?, CancellationToken, Task<IEnumerable<object>>> buscar) : this()
+    public RecalcularStockDialog(
+        Func<string?, CancellationToken, Task<IEnumerable<object>>> buscar, Func<bool>? sinPermiso = null) : this()
     {
-        BuscadorProducto.AsyncPopulator = buscar;
+        BuscadorProducto.AsyncPopulator = sinPermiso is null ? buscar : async (texto, ct) =>
+        {
+            var resultados = await buscar(texto, ct);
+            if (sinPermiso())
+                MostrarSinPermiso();
+            return resultados;
+        };
         BuscadorProducto.SelectionChanged += (_, _) => ActualizarRecalcular();
         BuscadorProducto.TextChanged += (_, _) => ActualizarRecalcular();
     }
@@ -35,7 +42,15 @@ public partial class RecalcularStockDialog : Window
     private ProductoDto? ProductoVigente()
         => BuscadorProducto.SelectedItem is ProductoDto p && BuscadorProducto.Text == p.Nombre ? p : null;
 
-    private void ActualizarRecalcular() => RecalcularButton.IsEnabled = ProductoVigente() is not null;
+    /// <summary>El servidor rechazó la búsqueda con un 403: se deshabilita el buscador y el aviso en línea explica por qué.</summary>
+    private void MostrarSinPermiso()
+    {
+        BuscadorProducto.IsEnabled = false;
+        AvisoSinPermiso.IsVisible = true;
+        ActualizarRecalcular();
+    }
+
+    private void ActualizarRecalcular() => RecalcularButton.IsEnabled = !AvisoSinPermiso.IsVisible && ProductoVigente() is not null;
 
     private void OnRecalcularClick(object? sender, RoutedEventArgs e)
         => Close(ProductoVigente());

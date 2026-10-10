@@ -209,8 +209,21 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
     partial void OnProductoSeleccionadoParaRecalcularChanged(ProductoDto? value)
         => ProductoIdParaRecalcular = value?.Id;
 
+    /// <summary>True tras el primer 403 del buscador del diálogo Recalcular (ver <see cref="BuscarProductosInternalAsync"/>).</summary>
+    public bool BuscadorRecalcularSinPermiso { get; private set; }
+
+    /// <summary>
+    /// Buscador del diálogo Recalcular. Deuda D14 (3c-2): quien tiene stock.recalcular sin catalogo.productos recibía
+    /// un 403 de GET /productos por tecla, y cada 403 abre el Aviso global (AuthTokenHandler dispara
+    /// ApiSession.AccesoRevocado ante cualquier 403, en el transporte). Ahora el PRIMER 403 marca
+    /// <see cref="BuscadorRecalcularSinPermiso"/> (el diálogo deshabilita el buscador y lo explica en línea) y las
+    /// búsquedas siguientes devuelven vacío SIN llamar a la API: queda un solo Aviso global, el del primer 403.
+    /// </summary>
     private async Task<IEnumerable<object>> BuscarProductosInternalAsync(string? texto, CancellationToken ct)
     {
+        if (BuscadorRecalcularSinPermiso)
+            return Array.Empty<object>();
+
         try
         {
             var resultados = await _productoService.BuscarPorTextoAsync(texto);
@@ -218,6 +231,7 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
         }
         catch (UnauthorizedAccessException)
         {
+            BuscadorRecalcularSinPermiso = true;
             return Array.Empty<object>();
         }
     }
@@ -370,7 +384,8 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
     {
         if (!PuedeRecalcularStock)
             return;
-        var producto = await _dialogoRecalcular.ElegirProductoAsync(BuscarProductosAsync);
+        BuscadorRecalcularSinPermiso = false; // cada apertura reintenta: el permiso pudo restituirse
+        var producto = await _dialogoRecalcular.ElegirProductoAsync(BuscarProductosAsync, () => BuscadorRecalcularSinPermiso);
         if (producto is null)
             return;
         ProductoSeleccionadoParaRecalcular = producto;

@@ -82,7 +82,7 @@ public class MovimientoHistorialViewV2Tests
     {
         public int Llamadas { get; private set; }
 
-        public Task<ProductoDto?> ElegirProductoAsync(Func<string?, CancellationToken, Task<IEnumerable<object>>> buscar)
+        public Task<ProductoDto?> ElegirProductoAsync(Func<string?, CancellationToken, Task<IEnumerable<object>>> buscar, Func<bool> sinPermiso)
         {
             Llamadas++;
             return Task.FromResult<ProductoDto?>(null);

@@ -16,20 +16,22 @@ namespace StockApp.Presentation.Services;
 /// </summary>
 public class RecalcularStockDialogService : IRecalcularStockDialogService
 {
-    public Task<ProductoDto?> ElegirProductoAsync(Func<string?, CancellationToken, Task<IEnumerable<object>>> buscar)
+    public Task<ProductoDto?> ElegirProductoAsync(
+        Func<string?, CancellationToken, Task<IEnumerable<object>>> buscar, Func<bool> sinPermiso)
     {
         if (AvaloniaApp.Current is null)
             return Task.FromResult<ProductoDto?>(null);
 
-        return Dispatcher.UIThread.InvokeAsync(() => MostrarDialogoAsync(buscar));
+        return Dispatcher.UIThread.InvokeAsync(() => MostrarDialogoAsync(buscar, sinPermiso));
     }
 
-    private static async Task<ProductoDto?> MostrarDialogoAsync(Func<string?, CancellationToken, Task<IEnumerable<object>>> buscar)
+    private static async Task<ProductoDto?> MostrarDialogoAsync(
+        Func<string?, CancellationToken, Task<IEnumerable<object>>> buscar, Func<bool> sinPermiso)
     {
         var lifetime = AvaloniaApp.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime;
         var owner = lifetime?.MainWindow;
         if (owner is null) return null;
 
-        return await new RecalcularStockDialog(buscar).ShowDialog<ProductoDto?>(owner);
+        return await new RecalcularStockDialog(buscar, sinPermiso).ShowDialog<ProductoDto?>(owner);
     }
 }
