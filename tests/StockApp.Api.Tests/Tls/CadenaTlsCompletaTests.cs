@@ -75,6 +75,19 @@ namespace StockApp.Api.Tests.Tls;
 /// </summary>
 public sealed class CadenaTlsCompletaTests : IDisposable
 {
+    // Causa del flaky: cada certificado leía DateTimeOffset.UtcNow por su cuenta, y X509 guarda las fechas truncadas
+    // a segundos. Si la creación de la cadena cruzaba un cambio de segundo, el NotAfter pedido para un hijo
+    // (now+5 años) quedaba 1 s DESPUÉS del NotAfter ya truncado de su emisor, y CertificateRequest.Create lanzaba
+    // ArgumentException ("notAfter is later than issuerCertificate.NotAfter"). Un único instante, truncado a
+    // segundos, compartido por todos los certificados: las ventanas de los hijos nunca exceden la del emisor.
+    private static readonly DateTimeOffset Ahora = TruncadoASegundos(DateTimeOffset.UtcNow);
+    private static readonly DateTimeOffset ValidoDesde = Ahora.AddDays(-1);
+    private static readonly DateTimeOffset ValidoHastaCa = Ahora.AddYears(5);
+    private static readonly DateTimeOffset ValidoHastaHoja = Ahora.AddYears(1);
+
+    private static DateTimeOffset TruncadoASegundos(DateTimeOffset t) =>
+        new(t.Ticks - t.Ticks % TimeSpan.TicksPerSecond, t.Offset);
+
     private X509Certificate2? _midRootInstaladoEnStoreDeUsuario;
 
     public void Dispose()
@@ -229,7 +242,7 @@ public sealed class CadenaTlsCompletaTests : IDisposable
         req.CertificateExtensions.Add(new X509BasicConstraintsExtension(true, true, pathLen, true));
         req.CertificateExtensions.Add(new X509KeyUsageExtension(
             X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, true));
-        return req.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(5));
+        return req.CreateSelfSigned(ValidoDesde, ValidoHastaCa);
     }
 
     private static X509Certificate2 FirmadaPorCa(string cn, ECDsa key, X509Certificate2 caConClavePrivada, int pathLen)
@@ -239,7 +252,7 @@ public sealed class CadenaTlsCompletaTests : IDisposable
         req.CertificateExtensions.Add(new X509KeyUsageExtension(
             X509KeyUsageFlags.KeyCertSign | X509KeyUsageFlags.CrlSign, true));
 
-        return req.Create(caConClavePrivada, DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(5),
+        return req.Create(caConClavePrivada, ValidoDesde, ValidoHastaCa,
             RandomNumberGenerator.GetBytes(8));
     }
 
@@ -255,7 +268,7 @@ public sealed class CadenaTlsCompletaTests : IDisposable
         sanBuilder.AddDnsName(cn);
         req.CertificateExtensions.Add(sanBuilder.Build());
 
-        return req.Create(caConClavePrivada, DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddYears(1),
+        return req.Create(caConClavePrivada, ValidoDesde, ValidoHastaHoja,
             RandomNumberGenerator.GetBytes(8));
     }
 }
