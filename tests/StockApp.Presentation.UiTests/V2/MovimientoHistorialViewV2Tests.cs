@@ -190,6 +190,31 @@ public class MovimientoHistorialViewV2Tests
         return celda.GetVisualDescendants().OfType<TextBlock>().First(t => t.IsEffectivelyVisible && t.FindAncestorOfType<Insignia>() is null);
     }
 
+    /// <summary>
+    /// Bombea el dispatcher hasta que la grilla asentó la búsqueda: hay filas, todas muestran movimientos de
+    /// <paramref name="idsEsperados"/> (ya se re-bindearon) y el texto y el ancho de cada celda no cambiaron entre dos
+    /// bombeos seguidos. Reemplaza al doble RunJobs fijo, que dependía de cuántas pasadas necesitara el scheduler.
+    /// Con tope: si nunca asienta, falla con un mensaje en vez de colgarse.
+    /// </summary>
+    private static void BombearHastaAsentar(DataGrid grilla, IReadOnlySet<int> idsEsperados, int maxPasadas = 200)
+    {
+        string Instantanea() => string.Join("|", grilla.GetVisualDescendants().OfType<DataGridRow>().Where(r => r.IsVisible)
+            .SelectMany(r => r.GetVisualDescendants().OfType<TextBlock>().Select(t => $"{(r.DataContext as MovimientoHistorialDto)?.MovimientoId}:{t.Text}:{t.Bounds.Width:F1}")));
+        bool Rebindeada() => grilla.GetVisualDescendants().OfType<DataGridRow>().Where(r => r.IsVisible).ToList() is { Count: > 0 } filas
+            && filas.All(r => r.DataContext is MovimientoHistorialDto d && idsEsperados.Contains(d.MovimientoId));
+
+        var anterior = "";
+        for (var i = 0; i < maxPasadas; i++)
+        {
+            Dispatcher.UIThread.RunJobs();
+            var actual = Instantanea();
+            if (Rebindeada() && actual == anterior)
+                return;
+            anterior = actual;
+        }
+        throw new TimeoutException($"La grilla no asentó tras {maxPasadas} pasadas del dispatcher.");
+    }
+
     private static Color ColorDe(TextBlock t) => Assert.IsAssignableFrom<ISolidColorBrush>(t.Foreground).Color;
 
     private static bool HayScrollHorizontal(DataGrid grilla) =>
@@ -628,8 +653,8 @@ public class MovimientoHistorialViewV2Tests
         {
             m.Servicio.Lista = SalidasConCantidadesCortas(semilla);
             await m.Vm.BuscarCommand.ExecuteAsync(null);
-            Dispatcher.UIThread.RunJobs();
-            Dispatcher.UIThread.RunJobs();
+            var ids = m.Servicio.Lista.Select(x => x.MovimientoId).ToHashSet();
+            BombearHastaAsentar(Grilla(m), ids);
         }
 
         var grilla = Grilla(m);
