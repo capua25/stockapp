@@ -607,7 +607,10 @@ public class ProductoListViewModelTests
         svc.Setup(s => s.BuscarPorTextoAsync("ce")).Returns(primera.Task);
         svc.Setup(s => s.BuscarPorTextoAsync("cemento")).Returns(segunda.Task);
         var vm = new ProductoListViewModel(svc.Object, Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>(),
-            Mock.Of<StockApp.Application.Interfaces.ICurrentSession>());
+            Mock.Of<StockApp.Application.Interfaces.ICurrentSession>())
+        {
+            EsperaDebounce = TimeSpan.Zero, // el orden lo fijan los TaskCompletionSource, no el reloj
+        };
 
         // BuscarCommand no admite ejecuciones concurrentes: la segunda búsqueda sale por el debounce (como al tipear).
         vm.FiltroBusqueda = "ce";

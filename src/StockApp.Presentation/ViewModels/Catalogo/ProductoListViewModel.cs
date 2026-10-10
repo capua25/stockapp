@@ -22,7 +22,10 @@ namespace StockApp.Presentation.ViewModels.Catalogo;
 public partial class ProductoListViewModel : ViewModelBase
 {
     /// <summary>Espera de debounce antes de disparar la búsqueda automática mientras se escribe.</summary>
-    private const int DebounceMs = 300;
+    private static readonly TimeSpan DebouncePorDefecto = TimeSpan.FromMilliseconds(300);
+
+    /// <summary>Espera real del debounce; los tests que no miden el tiempo la bajan a cero para no depender del reloj.</summary>
+    internal TimeSpan EsperaDebounce { get; set; } = DebouncePorDefecto;
 
     /// <summary>Texto del estado "Sin permiso" del listado cuando el servidor rechaza la carga o la búsqueda (403).</summary>
     public const string MensajeSinPermisoListado = "No tenés permiso para ver los productos.";
@@ -130,7 +133,7 @@ public partial class ProductoListViewModel : ViewModelBase
     {
         try
         {
-            await Task.Delay(DebounceMs, ct);
+            await Task.Delay(EsperaDebounce, ct);
         }
         catch (OperationCanceledException)
         {

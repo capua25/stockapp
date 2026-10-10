@@ -712,7 +712,7 @@ public class MovimientoHistorialViewModelTests
     /// la búsqueda por fin responde, es la vieja y no puede pisar la lista (guarda de BuscarAsync).
     /// </summary>
     [Fact]
-    public async Task DosBusquedasEnOrdenInverso_GanaLaUltimaPedida()
+    public async Task RecargaTrasRecalcularMientrasHayUnaBusquedaPendiente_LaBusquedaVieja_NoPisaLaLista()
     {
         var (vm, svcMock, _, _, _, _) = Crear();
         var filtrada = new TaskCompletionSource<IReadOnlyList<MovimientoHistorialDto>>();
