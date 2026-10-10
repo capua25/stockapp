@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
@@ -540,6 +541,48 @@ public class MovimientoHistorialViewV2Tests
                 $"La columna {grilla.Columns[i].Header} pasó de {antes[i]} a {despues[i]} al llegar a la fila 1200.");
         foreach (var header in new[] { "FECHA", "CANTIDAD", "PRECIO", "STOCK ANT.", "USUARIO" })
             Assert.False(TooltipSiSeCorta.EstaCortado(CeldaDe(grilla, movimientos[^1], header)), $"{header} de la fila 1200 quedó cortado.");
+    }
+
+    /// <summary>55 salidas del mismo producto con cantidades cortas (1 a 20, cero a dos decimales), como las de la
+    /// verificación orgánica. La semilla fija hace la lista reproducible.</summary>
+    private static List<MovimientoHistorialDto> SalidasConCantidadesCortas(int semilla)
+    {
+        var azar = new Random(semilla);
+        return Enumerable.Range(1, 55).Select(i =>
+        {
+            var cantidad = Math.Round((decimal)(azar.NextDouble() * 19 + 1), azar.Next(0, 3));
+            var anterior = 100000m + Math.Round((decimal)(azar.NextDouble() * 600), 2);
+            return M(1000 * semilla + i, "Producto de prueba con nombre largo", TipoMovimiento.Salida, MotivoMovimiento.UsoOConsumo,
+                cantidad, 0m, anterior, anterior - cantidad, null, Fecha(10, 9, 20, 37));
+        }).ToList();
+    }
+
+    [AvaloniaFact]
+    public async Task Buscar_ConLaGrillaOrdenadaYFilasRecicladas_NingunaCantidadQuedaCortada()
+    {
+        // Verificación orgánica: tras Buscar con la grilla ordenada, una celda de CANTIDAD mostró "1…" en lugar de
+        // "10,11" con la columna en su ancho (100, sobra lugar). La grilla re-bindea las filas recicladas varias veces
+        // en la misma búsqueda; el TextBlock alineado a la derecha quedaba con el ancho del número anterior.
+        var m = Montar(new HistorialFake { Lista = SalidasConCantidadesCortas(4) }, ancho: 1126);
+        m.Vm.ItemsView.SortDescriptions.Add(DataGridSortDescription.FromPath(nameof(MovimientoHistorialDto.Cantidad)));
+        Dispatcher.UIThread.RunJobs();
+
+        foreach (var semilla in new[] { 104, 204 })
+        {
+            m.Servicio.Lista = SalidasConCantidadesCortas(semilla);
+            await m.Vm.BuscarCommand.ExecuteAsync(null);
+            Dispatcher.UIThread.RunJobs();
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        var grilla = Grilla(m);
+        var cantidad = Columna(grilla, "CANTIDAD");
+        var celdas = grilla.GetVisualDescendants().OfType<DataGridRow>().Where(r => r.IsVisible)
+            .Select(r => CeldaDe(grilla, r.DataContext!, "CANTIDAD")).ToList();
+        Assert.NotEmpty(celdas);
+        var cortadas = celdas.Where(TooltipSiSeCorta.EstaCortado).Select(t => $"'{t.Text}' en {t.Bounds.Width:F0} px").ToList();
+        Assert.True(cortadas.Count == 0,
+            $"Con CANTIDAD en {cantidad.ActualWidth:F0} px ninguna cantidad corta puede cortarse: {string.Join(", ", cortadas)}");
     }
 
     [AvaloniaFact]
