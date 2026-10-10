@@ -245,6 +245,9 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
         try
         {
             await cargar();
+            // La carga vigente terminó bien: ya no hay nada que reintentar y el closure (con lo que captura) se suelta.
+            if (turno is not { EsLaUltima: false })
+                _cargaParaReintentar = null;
         }
         catch (UnauthorizedAccessException)
         {

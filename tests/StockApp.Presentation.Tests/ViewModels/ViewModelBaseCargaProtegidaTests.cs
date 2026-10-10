@@ -357,4 +357,63 @@ public class ViewModelBaseCargaProtegidaTests
         Assert.True(vm.SinPermiso);
         Assert.False(vm.SinConexion);
     }
+
+    [Fact]
+    public async Task ReintentarCarga_TrasUnExito_NoVuelveACorrerLaCargaVieja()
+    {
+        var vm = new VmConErrorEnLinea();
+        var llamadas = 0;
+        await vm.EjecutarAsync(() =>
+        {
+            if (++llamadas == 1)
+                throw SinServidor();
+            return Task.CompletedTask;
+        });
+        await vm.ReintentarCargaCommand.ExecuteAsync(null);
+        Assert.Equal(2, llamadas);
+
+        await vm.ReintentarCargaCommand.ExecuteAsync(null);
+
+        Assert.Equal(2, llamadas);
+    }
+
+    [Fact]
+    public async Task ReintentarCarga_TrasUnaCargaNuevaExitosa_NoCorreLaQueFallo()
+    {
+        var vm = new VmConErrorEnLinea();
+        var falladas = 0;
+        await vm.EjecutarAsync(() =>
+        {
+            falladas++;
+            throw SinServidor();
+        });
+        await vm.EjecutarAsync(() => Task.CompletedTask);
+
+        await vm.ReintentarCargaCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, falladas);
+    }
+
+    [Fact]
+    public async Task ReintentarCarga_SiTerminoBienUnaConsultaVieja_ConservaLaDeLaVigenteQueFallo()
+    {
+        var vm = new VmConErrorEnLinea();
+        var consultas = new ConsultaVigente();
+        var vieja = consultas.Empezar();
+        var colgada = new TaskCompletionSource();
+        var cargaVieja = vm.EjecutarAsync(() => colgada.Task, vieja);
+        var nueva = consultas.Empezar();
+        var intentos = 0;
+        await vm.EjecutarAsync(() =>
+        {
+            intentos++;
+            throw SinServidor();
+        }, nueva);
+
+        colgada.SetResult();
+        await cargaVieja;
+        await vm.ReintentarCargaCommand.ExecuteAsync(null);
+
+        Assert.Equal(2, intentos);
+    }
 }
