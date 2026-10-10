@@ -14,6 +14,7 @@ using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using StockApp.ApiClient;
 using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
 using StockApp.Domain.Entities;
@@ -427,6 +428,87 @@ public class ProductoListViewV2Tests
 
         Assert.True(Visible(m, "EstadoSinPermiso"));
         Assert.False(Visible(m, "Tarjeta"));
+    }
+
+    /// <summary>Lo que lanza el ApiClient real con la API pausada: HttpClient.Timeout vence (TaskCanceledException) y
+    /// ApiErrores.EnviarAsync lo envuelve.</summary>
+    private static ServidorNoDisponibleException SinServidor() => new(new TaskCanceledException());
+
+    [AvaloniaFact]
+    public void ServidorCaido_EnLaCarga_MuestraElErrorConReintentarEnLaCardYNuncaElVacio()
+    {
+        var registro = new List<Exception>();
+        void Atrapar(object? _, DispatcherUnhandledExceptionEventArgs e)
+        {
+            registro.Add(e.Exception);
+            e.Handled = true;
+        }
+
+        Montaje m;
+        Dispatcher.UIThread.UnhandledException += Atrapar;
+        try
+        {
+            m = Montar(new ProductosFake { Falla = SinServidor() });
+        }
+        finally
+        {
+            Dispatcher.UIThread.UnhandledException -= Atrapar;
+        }
+
+        Assert.Empty(registro); // sin modal global: el aviso en línea lo reemplaza
+        Assert.True(Visible(m, "EstadoSinConexion"));
+        var estado = MontajeV2.Parte<EstadoVacio>(m.Vista, "EstadoSinConexion");
+        Assert.True(estado.EsError);
+        Assert.Equal("No se pudo conectar con el servidor", estado.Titulo);
+        Assert.True(VisibleBoton(m, "BotonReintentar"));
+        Assert.True(Visible(m, "Tarjeta"));
+        Assert.False(Visible(m, "EstadoSinProductos"));
+        Assert.False(Visible(m, "IndicadorCarga"));
+        Assert.False(Visible(m, "EstadoSinPermiso"));
+    }
+
+    [AvaloniaFact]
+    public void ServidorCaido_ReintentarConElServidorDeVuelta_MuestraLaGrilla()
+    {
+        var m = Montar(new ProductosFake { Falla = SinServidor(), Lista = { Activo, Negativo } });
+        m.Servicio.Falla = null;
+
+        Clickear(m.Ventana, MontajeV2.Parte<Button>(m.Vista, "BotonReintentar"));
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(Visible(m, "EstadoSinConexion"));
+        Assert.True(Visible(m, "Grilla"));
+        Assert.Equal("2 productos", MontajeV2.Parte<TextBlock>(m.Vista, "PieConteo").Text);
+    }
+
+    [AvaloniaFact]
+    public void ServidorCaido_EnUnaBusqueda_ReemplazaLaGrillaPorElError()
+    {
+        var m = Montar(Activo);
+        m.Servicio.Falla = SinServidor();
+
+        Clickear(m.Ventana, MontajeV2.Parte<Button>(m.Vista, "BotonBuscar"));
+
+        Assert.True(Visible(m, "EstadoSinConexion"));
+        Assert.False(Visible(m, "Grilla"));
+        Assert.False(Visible(m, "PieConteo"));
+        Assert.False(Visible(m, "EstadoSinProductos"));
+    }
+
+    [AvaloniaFact]
+    public void ServidorCaido_RevocarGestionarProductosEnCaliente_OcultaLosBotonesYElErrorQueda()
+    {
+        var sesion = new SesionFake(RolUsuario.Operador, Permisos.GestionarProductos, Permisos.RegistrarMovimientos);
+        var m = Montar(new ProductosFake { Falla = SinServidor() }, sesion: sesion);
+        Assert.True(VisibleBoton(m, "BotonNuevo"), "Precondición: con el permiso, Nuevo se ve.");
+
+        sesion.EstablecerPermisos(new HashSet<string> { Permisos.RegistrarMovimientos });
+        m.Vm.NotificarPermisosActualizados();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(VisibleBoton(m, "BotonNuevo"));
+        Assert.True(Visible(m, "EstadoSinConexion"));
+        Assert.False(Visible(m, "EstadoSinProductos"));
     }
 
     [AvaloniaFact]

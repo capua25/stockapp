@@ -15,6 +15,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using StockApp.ApiClient;
 using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Movimientos;
@@ -304,6 +305,128 @@ public class MovimientoHistorialViewV2Tests
 
         Assert.True(Visible(m, "EstadoSinPermiso"));
         Assert.False(Visible(m, "Tarjeta"));
+    }
+
+    /// <summary>Lo que lanza el ApiClient real con la API pausada: HttpClient.Timeout vence (TaskCanceledException) y
+    /// ApiErrores.EnviarAsync lo envuelve.</summary>
+    private static ServidorNoDisponibleException SinServidor() => new(new TaskCanceledException());
+
+    [AvaloniaFact]
+    public void ServidorCaido_EnLaCarga_MuestraElErrorConReintentarEnLaCardYNuncaElVacio()
+    {
+        var m = Montar(new HistorialFake { Falla = SinServidor() });
+
+        Assert.True(m.Vm.SinConexion);
+        Assert.True(Visible(m, "EstadoSinConexion"));
+        var estado = MontajeV2.Parte<EstadoVacio>(m.Vista, "EstadoSinConexion");
+        Assert.True(estado.EsError);
+        Assert.Equal("No se pudo conectar con el servidor", estado.Titulo);
+        Assert.True(Visible(m, "BotonReintentar"));
+        Assert.True(Visible(m, "Tarjeta"));
+        Assert.True(Visible(m, "Filtros"));
+        Assert.False(Visible(m, "EstadoSinMovimientos"));
+        Assert.False(Visible(m, "IndicadorCarga"));
+        Assert.False(Visible(m, "EstadoSinPermiso"));
+    }
+
+    [AvaloniaFact]
+    public void ServidorCaido_EnLaCarga_NoDisparaElAvisoGlobalNiAfirmaQueNoHay()
+    {
+        var registro = new List<Exception>();
+        void Atrapar(object? _, DispatcherUnhandledExceptionEventArgs e)
+        {
+            registro.Add(e.Exception);
+            e.Handled = true;
+        }
+
+        Montaje m;
+        Dispatcher.UIThread.UnhandledException += Atrapar;
+        try
+        {
+            m = Montar(new HistorialFake { Falla = SinServidor() });
+            Dispatcher.UIThread.RunJobs();
+        }
+        finally
+        {
+            Dispatcher.UIThread.UnhandledException -= Atrapar;
+        }
+
+        Assert.False(Visible(m, "EstadoSinMovimientos"), "Sin servidor no se puede afirmar que no hay movimientos.");
+        Assert.Empty(registro);
+    }
+
+    [AvaloniaFact]
+    public void ServidorCaido_ReintentarConElServidorDeVuelta_MuestraLaGrilla()
+    {
+        var m = Montar(new HistorialFake { Falla = SinServidor(), Lista = { Compra, Negativo } });
+        m.Servicio.Falla = null;
+
+        Clickear(m.Ventana, MontajeV2.Parte<Button>(m.Vista, "BotonReintentar"));
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(m.Vm.SinConexion);
+        Assert.False(Visible(m, "EstadoSinConexion"));
+        Assert.True(Visible(m, "Grilla"));
+        Assert.Equal("2 movimientos", MontajeV2.Parte<TextBlock>(m.Vista, "PieConteo").Text);
+    }
+
+    [AvaloniaFact]
+    public void ServidorCaido_EnUnaBusqueda_ReemplazaLaGrillaPorElError()
+    {
+        var m = Montar(Compra);
+        m.Servicio.Falla = SinServidor();
+
+        Clickear(m.Ventana, MontajeV2.Parte<Button>(m.Vista, "BotonBuscar"));
+
+        Assert.True(Visible(m, "EstadoSinConexion"));
+        Assert.False(Visible(m, "Grilla"));
+        Assert.False(Visible(m, "PieConteo"));
+        Assert.False(Visible(m, "EstadoSinMovimientos"));
+    }
+
+    [AvaloniaFact]
+    public void CargaInicialQueFallaDespuesDeQueLaBusquedaRespondio_NoPisaLaGrilla()
+    {
+        // La carga inicial queda colgada; el usuario busca y la búsqueda responde; recién después la carga vieja
+        // falla por timeout. El error es de una consulta que ya no importa: la grilla queda con la búsqueda.
+        var cargaInicial = new TaskCompletionSource<IReadOnlyList<MovimientoHistorialDto>>();
+        var servicio = new HistorialFake
+        {
+            PorFiltro = f => f.Tipo is null
+                ? cargaInicial.Task
+                : Task.FromResult<IReadOnlyList<MovimientoHistorialDto>>([SalidaSinPrecio]),
+        };
+        var m = Montar(servicio);
+
+        var combo = m.Vista.GetVisualDescendants().OfType<ComboBox>().Single();
+        combo.SelectedItem = m.Vm.TiposDisponibles.Single(t => t.Valor == TipoMovimiento.Salida);
+        Dispatcher.UIThread.RunJobs();
+        Clickear(m.Ventana, MontajeV2.Parte<Button>(m.Vista, "BotonBuscar"));
+
+        cargaInicial.SetException(SinServidor());
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(m.Vm.SinConexion);
+        Assert.False(Visible(m, "EstadoSinConexion"));
+        Assert.True(Visible(m, "Grilla"));
+        Assert.Equal("1 movimiento", MontajeV2.Parte<TextBlock>(m.Vista, "PieConteo").Text);
+    }
+
+    [AvaloniaFact]
+    public void ServidorCaido_RevocarRecalcularEnCaliente_OcultaElBotonYElErrorQueda()
+    {
+        var sesion = Mixto(Permisos.RegistrarMovimientos, Permisos.RecalcularStock);
+        var m = Montar(new HistorialFake { Falla = SinServidor() }, sesion: sesion);
+        Assert.True(Visible(m, "BotonRecalcular"), "Precondición: con el permiso, Recalcular stock se ve.");
+
+        sesion.EstablecerPermisos(new HashSet<string> { Permisos.RegistrarMovimientos });
+        m.Vm.NotificarPermisosActualizados();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(Visible(m, "BotonRecalcular"));
+        Assert.True(Visible(m, "EstadoSinConexion"));
+        Assert.False(Visible(m, "EstadoSinMovimientos"));
     }
 
     [AvaloniaFact]

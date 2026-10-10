@@ -41,6 +41,9 @@ public partial class MovimientoHistorialViewModel : ViewModelBase
 
     private readonly ConsultaVigente _consultas = new();
 
+    /// <summary>La vista muestra "No se pudo conectar con el servidor" con Reintentar en la card (ver <see cref="ViewModelBase.SinConexion"/>).</summary>
+    protected override bool AvisaSinConexionEnLinea => true;
+
     [ObservableProperty]
     private int? _filtroProductoId;
 

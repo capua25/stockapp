@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using StockApp.ApiClient;
 using StockApp.Presentation.ViewModels;
 using Xunit;
 
@@ -25,6 +26,20 @@ public class ViewModelBaseCargaProtegidaTests
         public Task EjecutarAsync(Func<Task> cargar, string mensaje, ConsultaVigente.Turno turno) =>
             EjecutarCargaProtegidaAsync(cargar, mensaje, turno);
     }
+
+    /// <summary>Un listado cuya vista muestra el error de conexión en línea (opta por el estado SinConexion).</summary>
+    private sealed class VmConErrorEnLinea : ViewModelBase
+    {
+        protected override bool AvisaSinConexionEnLinea => true;
+
+        public Task EjecutarAsync(Func<Task> cargar) => EjecutarCargaProtegidaAsync(cargar, "x");
+
+        public Task EjecutarAsync(Func<Task> cargar, ConsultaVigente.Turno turno) =>
+            EjecutarCargaProtegidaAsync(cargar, "x", turno);
+    }
+
+    /// <summary>Lo que lanza el ApiClient real con la API caída o pausada (ApiErrores.EnviarAsync).</summary>
+    private static ServidorNoDisponibleException SinServidor() => new(new TaskCanceledException());
 
     [Fact]
     public async Task SiElDelegadoLanzaUnauthorized_NoPropagaLaExcepcion()
@@ -220,5 +235,126 @@ public class ViewModelBaseCargaProtegidaTests
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             vm.EjecutarAsync(() => throw new InvalidOperationException("bug"), "x", vieja));
         Assert.False(vm.Cargando);
+    }
+
+    [Fact]
+    public async Task SinOptarPorElErrorEnLinea_ElServidorCaidoSePropagaComoAntes()
+    {
+        // Vistas que todavía no muestran el estado (sistema viejo): sin el modal global quedarían mudas.
+        var vm = new VmDePrueba();
+
+        var ex = await Record.ExceptionAsync(() => vm.EjecutarAsync(() => throw SinServidor(), "x"));
+
+        Assert.IsType<ServidorNoDisponibleException>(ex);
+        Assert.False(vm.SinConexion);
+        Assert.False(vm.Cargando);
+    }
+
+    [Fact]
+    public async Task ConErrorEnLinea_ServidorCaido_NoPropagaYMarcaSinConexion()
+    {
+        var vm = new VmConErrorEnLinea();
+
+        var ex = await Record.ExceptionAsync(() => vm.EjecutarAsync(() => throw SinServidor()));
+
+        Assert.Null(ex);
+        Assert.True(vm.SinConexion);
+        Assert.False(vm.SinPermiso);
+        Assert.False(vm.Cargando);
+    }
+
+    [Fact]
+    public async Task ConErrorEnLinea_OtraExcepcion_SePropagaTalCual()
+    {
+        var vm = new VmConErrorEnLinea();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => vm.EjecutarAsync(() => throw new InvalidOperationException("bug")));
+        Assert.False(vm.SinConexion);
+    }
+
+    [Fact]
+    public async Task ConErrorEnLinea_UnaCargaNuevaLimpiaSinConexionAlEmpezar()
+    {
+        var vm = new VmConErrorEnLinea();
+        await vm.EjecutarAsync(() => throw SinServidor());
+        var pendiente = new TaskCompletionSource();
+
+        var carga = vm.EjecutarAsync(() => pendiente.Task);
+
+        Assert.False(vm.SinConexion);
+        Assert.True(vm.Cargando);
+        pendiente.SetResult();
+        await carga;
+    }
+
+    [Fact]
+    public async Task ReintentarCarga_VuelveACorrerLaCargaQueFallo_YLimpiaElError()
+    {
+        var vm = new VmConErrorEnLinea();
+        var llamadas = 0;
+        await vm.EjecutarAsync(() =>
+        {
+            if (++llamadas == 1)
+                throw SinServidor();
+            return Task.CompletedTask;
+        });
+        Assert.True(vm.SinConexion);
+
+        await vm.ReintentarCargaCommand.ExecuteAsync(null);
+
+        Assert.Equal(2, llamadas);
+        Assert.False(vm.SinConexion);
+    }
+
+    [Fact]
+    public async Task ReintentarCarga_SiVuelveAFallar_SigueSinConexion()
+    {
+        var vm = new VmConErrorEnLinea();
+        await vm.EjecutarAsync(() => throw SinServidor());
+
+        await vm.ReintentarCargaCommand.ExecuteAsync(null);
+
+        Assert.True(vm.SinConexion);
+        Assert.False(vm.Cargando);
+    }
+
+    [Fact]
+    public async Task ConTurno_ElFalloDeConexionDeUnaConsultaVieja_NoPisaALaNuevaQueYaRespondio()
+    {
+        var vm = new VmConErrorEnLinea();
+        var consultas = new ConsultaVigente();
+        var vieja = consultas.Empezar();
+        var colgada = new TaskCompletionSource();
+        var cargaVieja = vm.EjecutarAsync(() => colgada.Task, vieja);
+        var nueva = consultas.Empezar();
+        await vm.EjecutarAsync(() => Task.CompletedTask, nueva);
+
+        colgada.SetException(SinServidor());
+        await cargaVieja;
+
+        Assert.False(vm.SinConexion);
+        Assert.False(vm.Cargando);
+    }
+
+    [Fact]
+    public async Task ConTurno_ElFalloDeConexionDeLaUltima_MarcaSinConexion()
+    {
+        var vm = new VmConErrorEnLinea();
+        var turno = new ConsultaVigente().Empezar();
+
+        await vm.EjecutarAsync(() => throw SinServidor(), turno);
+
+        Assert.True(vm.SinConexion);
+    }
+
+    [Fact]
+    public async Task ConErrorEnLinea_Un403SigueMarcandoSinPermisoYNoSinConexion()
+    {
+        var vm = new VmConErrorEnLinea();
+
+        await vm.EjecutarAsync(() => throw new UnauthorizedAccessException());
+
+        Assert.True(vm.SinPermiso);
+        Assert.False(vm.SinConexion);
     }
 }

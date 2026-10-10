@@ -17,7 +17,8 @@
     <!-- UI v2 (spec §5.1). Espejo: docs/ui-v2/mockups/inventario/historial*.html.
          Encabezado con una sola acción, "Recalcular stock" (secundario: la pantalla no tiene acción principal), oculta
          sin stock.recalcular; abre el diálogo con el buscador de producto. Mientras carga sin filas: EstadoCargando;
-         tras un 403 en la carga o en Buscar: Sin permiso en lugar de la card; el vacío solo con la carga terminada. -->
+         tras un 403 en la carga o en Buscar: Sin permiso en lugar de la card; sin servidor: el error con Reintentar dentro
+         de la card; el vacío solo con la carga terminada y sin error. -->
     <DockPanel Margin="28,24">
 
         <v2:EncabezadoPagina x:Name="Encabezado" DockPanel.Dock="Top" Titulo="Historial de movimientos">
@@ -100,8 +101,14 @@
                            DockPanel.Dock="Bottom"
                            Classes="pie-conteo"
                            Margin="0,12,0,0"
-                           Text="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.Instance}, ConverterParameter='movimiento|movimientos'}"
-                           IsVisible="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.HayElementos}}" />
+                           Text="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.Instance}, ConverterParameter='movimiento|movimientos'}">
+                    <TextBlock.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Items.Count" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                        </MultiBinding>
+                    </TextBlock.IsVisible>
+                </TextBlock>
 
                 <!-- Cargando y todavía sin filas: dice que carga en vez de afirmar que no hay movimientos. Con filas en
                      pantalla (una búsqueda) la grilla queda hasta que llegan los resultados. -->
@@ -114,6 +121,21 @@
                     </v2:EstadoCargando.IsVisible>
                 </v2:EstadoCargando>
 
+                <!-- Servidor caído o sin respuesta en la carga o en una búsqueda: no se puede afirmar que no hay
+                     movimientos. Reemplaza al vacío y a la grilla (que mostraría filas de otra consulta) dentro de la card,
+                     con los filtros a mano; Reintentar repite la consulta que falló. Sin modal global: este aviso lo
+                     reemplaza. -->
+                <v2:EstadoVacio x:Name="EstadoSinConexion"
+                                UseLayoutRounding="False"
+                                DockPanel.Dock="Top"
+                                Titulo="No se pudo conectar con el servidor"
+                                Mensaje="Verificá que el servidor esté encendido y accesible en la red, y volvé a intentar."
+                                EsError="True"
+                                IsVisible="{Binding SinConexion}">
+                    <Button x:Name="BotonReintentar" Classes="secundario" Content="Reintentar"
+                            Command="{Binding ReintentarCargaCommand}" />
+                </v2:EstadoVacio>
+
                 <!-- UseLayoutRounding False: el estado vacío va centrado y el ancho del título es fraccionario; Avalonia
                      redondea su origen a píxel entero y Chromium no (mismo arreglo que en Productos). -->
                 <v2:EstadoVacio x:Name="EstadoSinMovimientos"
@@ -125,6 +147,7 @@
                         <MultiBinding Converter="{x:Static BoolConverters.And}">
                             <Binding Path="Cargando" Converter="{x:Static BoolConverters.Not}" />
                             <Binding Path="SinPermiso" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
                             <Binding Path="Items.Count" Converter="{x:Static conv:ConteoConverter.EsCero}" />
                         </MultiBinding>
                     </v2:EstadoVacio.IsVisible>
@@ -142,8 +165,13 @@
                           IsReadOnly="True"
                           CanUserSortColumns="True"
                           CanUserResizeColumns="True"
-                          ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                          IsVisible="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.HayElementos}}">
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                    <DataGrid.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Items.Count" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                        </MultiBinding>
+                    </DataGrid.IsVisible>
                     <DataGrid.Columns>
                         <!-- FECHA como plantilla con un conversor a texto: la medición y el corte necesitan el texto
                              pintado, que un StringFormat sobre la fecha no le da a ColumnaAuto. Ordena por la fecha.

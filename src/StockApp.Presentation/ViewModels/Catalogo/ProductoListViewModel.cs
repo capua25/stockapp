@@ -35,6 +35,9 @@ public partial class ProductoListViewModel : ViewModelBase
     private CancellationTokenSource? _debounceCts;
     private readonly ConsultaVigente _consultas = new();
 
+    /// <summary>La vista muestra "No se pudo conectar con el servidor" con Reintentar en la card (ver <see cref="ViewModelBase.SinConexion"/>).</summary>
+    protected override bool AvisaSinConexionEnLinea => true;
+
     /// <summary>
     /// Tarea del debounce disparada por cada cambio de <see cref="FiltroBusqueda"/>. Expuesta
     /// como internal para que los tests puedan awaitarla de forma determinista, igual que el

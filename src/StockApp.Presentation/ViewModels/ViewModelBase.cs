@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using StockApp.ApiClient;
 
 namespace StockApp.Presentation.ViewModels;
 
@@ -16,6 +17,8 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
     private bool _hayErroresDeEntrada;
     private bool _sinPermiso;
     private string? _mensajeSinPermiso;
+    private bool _sinConexion;
+    private Func<Task>? _cargaParaReintentar;
     private int _cargasEnCurso;
 
     /// <summary>
@@ -98,6 +101,33 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
         private set => SetProperty(ref _sinPermiso, value);
     }
 
+    /// <summary>
+    /// True cuando la última carga protegida por <see cref="EjecutarCargaProtegidaAsync(Func{Task}, string)"/> no
+    /// llegó al servidor (<see cref="ServidorNoDisponibleException"/>: conexión rechazada, host inalcanzable o
+    /// timeout). Sin esto, el listado quedaba vacío y la vista afirmaba "no hay datos" cuando en realidad no se
+    /// pudo consultar. La vista muestra en la card un EstadoVacio de error con un botón
+    /// <see cref="ReintentarCargaCommand"/>, que reemplaza al modal global (ese caso ya no escapa). Solo lo marcan
+    /// los ViewModels cuya vista lo muestra (<see cref="AvisaSinConexionEnLinea"/>).
+    /// </summary>
+    public bool SinConexion
+    {
+        get => _sinConexion;
+        private set => SetProperty(ref _sinConexion, value);
+    }
+
+    /// <summary>
+    /// True si la vista muestra <see cref="SinConexion"/> en línea con "Reintentar". En false (por defecto) un
+    /// servidor caído en la carga protegida se repropaga como siempre y lo informa el modal global: una vista que no
+    /// muestra el estado quedaría muda con la excepción tragada.
+    /// </summary>
+    protected virtual bool AvisaSinConexionEnLinea => false;
+
+    /// <summary>Vuelve a correr la carga protegida que falló por servidor caído (botón "Reintentar" del estado
+    /// <see cref="SinConexion"/>). Sin una carga fallida no hace nada.</summary>
+    public IAsyncRelayCommand ReintentarCargaCommand => field ??= new AsyncRelayCommand(ReintentarCargaAsync);
+
+    private Task ReintentarCargaAsync() => _cargaParaReintentar?.Invoke() ?? Task.CompletedTask;
+
     /// <summary>Mensaje para <c>EstadoVacio.Mensaje</c> cuando <see cref="SinPermiso"/> es true.</summary>
     public string? MensajeSinPermiso
     {
@@ -174,8 +204,10 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
     /// (<see cref="SinPermiso"/>/<see cref="MensajeSinPermiso"/>) para que la vista muestre el
     /// control EstadoVacio. NO dispara ningún modal/toast/IConfirmacionService.InformarAsync — el
     /// aviso global ya existe, y agregar uno acá da DOS modales (ese bug ya se arregló una vez).
-    /// Cualquier excepción que NO sea UnauthorizedAccessException se repropaga tal cual: esto no
-    /// es un catch-all que se trague bugs reales.
+    /// Si el ViewModel opta por <see cref="AvisaSinConexionEnLinea"/>, atrapa además
+    /// <see cref="ServidorNoDisponibleException"/> y deja <see cref="SinConexion"/> en true con la carga lista para
+    /// <see cref="ReintentarCargaCommand"/>, también sin modal (el aviso en línea lo reemplaza). Cualquier otra
+    /// excepción se repropaga tal cual: esto no es un catch-all que se trague bugs reales.
     ///
     /// También prende <see cref="Cargando"/> mientras corre (se apaga en el finally, falle o no).
     /// </summary>
@@ -183,6 +215,7 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
     {
         EmpezarCarga();
         LimpiarSinPermiso();
+        SinConexion = false;
         try
         {
             await cargar();
@@ -190,6 +223,11 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
         catch (UnauthorizedAccessException)
         {
             MarcarSinPermiso(mensajeSinPermiso);
+        }
+        catch (ServidorNoDisponibleException) when (AvisaSinConexionEnLinea)
+        {
+            _cargaParaReintentar = () => EjecutarCargaProtegidaAsync(cargar, mensajeSinPermiso);
+            SinConexion = true;
         }
         finally
         {
@@ -199,10 +237,10 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
 
     /// <summary>
     /// Igual que <see cref="EjecutarCargaProtegidaAsync(Func{Task}, string)"/> para una consulta que reemplaza el
-    /// contenido de un listado (ver <see cref="ConsultaVigente"/>): un 403 de una consulta que ya no es la última se
-    /// descarta (si no, "Sin permiso" taparía los resultados buenos de la consulta nueva; el aviso global del 403
-    /// ya salió por AuthTokenHandler). El que llama sigue siendo responsable de no aplicar un resultado viejo:
-    /// después del await al servicio, <c>if (!turno.EsLaUltima) return;</c>.
+    /// contenido de un listado (ver <see cref="ConsultaVigente"/>): un 403 o un servidor caído de una consulta que ya
+    /// no es la última se descartan (si no, "Sin permiso" o "No se pudo conectar" taparían los resultados buenos de
+    /// la consulta nueva; el aviso global del 403 ya salió por AuthTokenHandler). El que llama sigue siendo
+    /// responsable de no aplicar un resultado viejo: después del await al servicio, <c>if (!turno.EsLaUltima) return;</c>.
     /// </summary>
     protected async Task EjecutarCargaProtegidaAsync(Func<Task> cargar, string mensajeSinPermiso, ConsultaVigente.Turno turno)
     {
@@ -212,7 +250,8 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
             {
                 await cargar();
             }
-            catch (UnauthorizedAccessException) when (!turno.EsLaUltima)
+            catch (Exception ex) when (!turno.EsLaUltima
+                && (ex is UnauthorizedAccessException || (ex is ServidorNoDisponibleException && AvisaSinConexionEnLinea)))
             {
             }
         }, mensajeSinPermiso);

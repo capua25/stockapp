@@ -16,8 +16,8 @@
     <!-- UI v2 (spec §5.1). Espejo: docs/ui-v2/mockups/inventario/productos.html y productos-vacio.html.
          Editar y Eliminar se habilitan solo con un producto activo seleccionado (regla del VM). Los tres botones se ven solo con
          catalogo.productos (PuedeGestionarProductos, bug B3), como el resto de las pantallas: IsVisible, no IsEnabled.
-         Mientras carga sin filas: EstadoCargando; tras un 403: Sin permiso en lugar de la card; el vacío solo con
-         la carga terminada. CÓDIGO, COSTO y UNIDAD miden su contenido sobre todas las filas (ColumnaAuto). -->
+         Mientras carga sin filas: EstadoCargando; tras un 403: Sin permiso en lugar de la card; sin servidor: el error
+         con Reintentar dentro de la card; el vacío solo con la carga terminada y sin error. CÓDIGO, COSTO y UNIDAD miden su contenido sobre todas las filas (ColumnaAuto). -->
     <DockPanel Margin="28,24">
 
         <v2:EncabezadoPagina x:Name="Encabezado" DockPanel.Dock="Top" Titulo="Productos">
@@ -54,8 +54,14 @@
                            DockPanel.Dock="Bottom"
                            Classes="pie-conteo"
                            Margin="0,12,0,0"
-                           Text="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.Instance}, ConverterParameter='producto|productos'}"
-                           IsVisible="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.HayElementos}}" />
+                           Text="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.Instance}, ConverterParameter='producto|productos'}">
+                    <TextBlock.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Items.Count" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                        </MultiBinding>
+                    </TextBlock.IsVisible>
+                </TextBlock>
 
                 <!-- Cargando y todavía sin filas: dice que carga en vez de afirmar que no hay productos. Con filas en
                      pantalla (una búsqueda o una recarga) la grilla queda hasta que llegan los resultados. -->
@@ -67,6 +73,21 @@
                         </MultiBinding>
                     </v2:EstadoCargando.IsVisible>
                 </v2:EstadoCargando>
+
+                <!-- Servidor caído o sin respuesta en la carga o en una búsqueda: no se puede afirmar que no hay
+                     productos. Reemplaza al vacío y a la grilla (que mostraría filas de otra consulta) dentro de la card,
+                     con los filtros a mano; Reintentar repite la consulta que falló. Sin modal global: este aviso lo
+                     reemplaza. -->
+                <v2:EstadoVacio x:Name="EstadoSinConexion"
+                                UseLayoutRounding="False"
+                                DockPanel.Dock="Top"
+                                Titulo="No se pudo conectar con el servidor"
+                                Mensaje="Verificá que el servidor esté encendido y accesible en la red, y volvé a intentar."
+                                EsError="True"
+                                IsVisible="{Binding SinConexion}">
+                    <Button x:Name="BotonReintentar" Classes="secundario" Content="Reintentar"
+                            Command="{Binding ReintentarCargaCommand}" />
+                </v2:EstadoVacio>
 
                 <!-- UseLayoutRounding False: el estado vacío va centrado y el ancho del título es fraccionario;
                      Avalonia redondea su origen a píxel entero y Chromium no (sin el arreglo: 16 teselas densas a 1280 y 14 a 1366, contra un máximo de 11; con él, 5,
@@ -81,6 +102,7 @@
                         <MultiBinding Converter="{x:Static BoolConverters.And}">
                             <Binding Path="Cargando" Converter="{x:Static BoolConverters.Not}" />
                             <Binding Path="SinPermiso" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
                             <Binding Path="Items.Count" Converter="{x:Static conv:ConteoConverter.EsCero}" />
                         </MultiBinding>
                     </v2:EstadoVacio.IsVisible>
@@ -98,8 +120,13 @@
                           IsReadOnly="True"
                           CanUserSortColumns="True"
                           CanUserResizeColumns="True"
-                          ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                          IsVisible="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.HayElementos}}">
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                    <DataGrid.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Items.Count" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                        </MultiBinding>
+                    </DataGrid.IsVisible>
                     <DataGrid.Columns>
                         <DataGridTemplateColumn Header="CÓDIGO" Width="Auto" SortMemberPath="Codigo" b:ColumnaAuto.Medir="True">
                             <DataGridTemplateColumn.CellTemplate>
