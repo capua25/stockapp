@@ -1414,7 +1414,7 @@ git commit -m "feat(ui-v2): historial de movimientos v2 con carga, sin permiso, 
 - Consumes: todo lo anterior.
 - Produces: la Fase 3c-2 cerrada en `feat/ui-v2` (sin push ni merge).
 
-- [ ] **Step 1: Build, suite, herramientas y comparación de toda la UI v2**
+- [x] **Step 1: Build, suite, herramientas y comparación de toda la UI v2**
 
 ```bash
 dotnet build StockApp.sln
@@ -1426,7 +1426,7 @@ scripts/ui-v2/comparar.sh
 
 Expected: 0 errores; todo verde salvo los falsos conocidos de fixtures `.ods` (confirmar por nombre); total ≥ 5350 + los nuevos (anotarlo); los dos `--verificar` exit 0; TODAS las filas de `index.html` APROBADAS a los dos tamaños (las de fases anteriores sin cambios; si una se mueve, diagnosticarla: D5 y `MostrarBusqueda` no deberían mover ninguna).
 
-- [ ] **Step 2: Verificación orgánica (spec §6.4) — app real contra la base local**
+- [x] **Step 2: Verificación orgánica (spec §6.4) — app real contra la base local**
 
 Preparación:
 - `docker start stockapp-pg` (queda andando al terminar); API del worktree levantada (anotar la URL, p. ej. `http://localhost:5043`, y confirmarla contra `~/.config/GestionMunicipal/conexion.json`); `admin` / `Admin1234`.
@@ -1446,11 +1446,13 @@ Todo a **1366×768**; los pasos 1 a 4 se repiten a 1280×760. Capturar cada pant
 
 Si un paso no se puede hacer por el entorno, PARAR y avisar con la evidencia (stderr, `docker ps -a`), sin declarar la fase cerrada. Si el usuario necesita la PC, se pausa.
 
-- [ ] **Step 3: Aprobación final del usuario**
+- [x] **Step 3: Aprobación final del usuario**
 
 PARAR. Presentar: `index.html` (filas de Historial y del diálogo), las capturas de la verificación orgánica junto a los mockups, los rojos de las mutaciones (a) a (v), el tiempo de carga medido y los cambios respecto de los mockups aprobados. Registrar: `Fase 3c-2: aprobada por <quién> <fecha>`.
 
-- [ ] **Step 4: `herramientas.md` y spec**
+  Registrado: **Fase 3c-2: aprobada por el usuario el 2026-10-10** (verificación orgánica 5 de 5 OK a 1280×760, tras el 1366×768 del 2026-10-09).
+
+- [x] **Step 4: `herramientas.md` y spec**
 
 `herramientas.md`, después de la 22: "Convenciones que agrega la Fase 3c-2 (Historial de movimientos)" con la 23 y la 24 de este plan, y las frases nuevas en la 10 y la 19 (como quedaron aprobadas).
 
