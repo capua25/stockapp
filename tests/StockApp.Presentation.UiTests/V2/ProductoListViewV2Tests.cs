@@ -484,6 +484,25 @@ public class ProductoListViewV2Tests
         Assert.Equal("2 productos", MontajeV2.Parte<TextBlock>(m.Vista, "PieConteo").Text);
     }
 
+    [AvaloniaFact]
+    public void ServidorCaido_DuranteElReintento_LaGrillaNoMuestraLasFilasDeLaConsultaAnterior()
+    {
+        var m = Montar(Activo, Negativo);
+        Assert.True(Visible(m, "Grilla"), "Precondición: la consulta anterior mostró filas.");
+        m.Servicio.Falla = SinServidor();
+        Clickear(m.Ventana, MontajeV2.Parte<Button>(m.Vista, "BotonBuscar"));
+        Assert.True(Visible(m, "EstadoSinConexion"));
+        m.Servicio.Falla = null;
+        m.Servicio.Pendiente = new TaskCompletionSource<IReadOnlyList<ProductoDto>>();
+
+        Clickear(m.Ventana, MontajeV2.Parte<Button>(m.Vista, "BotonReintentar"));
+
+        Assert.True(m.Vm.Cargando);
+        Assert.Empty(m.Vm.Items);
+        Assert.False(Visible(m, "Grilla"), "Durante el reintento no puede verse la grilla con filas viejas.");
+        Assert.True(Visible(m, "IndicadorCarga"));
+    }
+
     private Montaje MontarConCargaInicialColgada(Task<IReadOnlyList<ProductoDto>> busqueda)
     {
         var servicio = new ProductosFake();

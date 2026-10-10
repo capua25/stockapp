@@ -386,6 +386,25 @@ public class MovimientoHistorialViewV2Tests
     }
 
     [AvaloniaFact]
+    public void ServidorCaido_DuranteElReintento_LaGrillaNoMuestraLasFilasDeLaConsultaAnterior()
+    {
+        var m = Montar(Compra, Negativo);
+        Assert.True(Visible(m, "Grilla"), "Precondición: la consulta anterior mostró filas.");
+        m.Servicio.Falla = SinServidor();
+        Clickear(m.Ventana, MontajeV2.Parte<Button>(m.Vista, "BotonBuscar"));
+        Assert.True(Visible(m, "EstadoSinConexion"));
+        m.Servicio.Falla = null;
+        m.Servicio.Pendiente = new TaskCompletionSource<IReadOnlyList<MovimientoHistorialDto>>();
+
+        Clickear(m.Ventana, MontajeV2.Parte<Button>(m.Vista, "BotonReintentar"));
+
+        Assert.True(m.Vm.Cargando);
+        Assert.Empty(m.Vm.Items);
+        Assert.False(Visible(m, "Grilla"), "Durante el reintento no puede verse la grilla con filas viejas.");
+        Assert.True(Visible(m, "IndicadorCarga"));
+    }
+
+    [AvaloniaFact]
     public void CargaInicialQueFallaDespuesDeQueLaBusquedaRespondio_NoPisaLaGrilla()
     {
         // La carga inicial queda colgada; el usuario busca y la búsqueda responde; recién después la carga vieja

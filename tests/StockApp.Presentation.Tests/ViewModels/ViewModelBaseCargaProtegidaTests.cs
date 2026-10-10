@@ -32,6 +32,10 @@ public class ViewModelBaseCargaProtegidaTests
     {
         protected override bool AvisaSinConexionEnLinea => true;
 
+        public int ConexionPerdida { get; private set; }
+
+        protected override void AlPerderConexion() => ConexionPerdida++;
+
         public Task EjecutarAsync(Func<Task> cargar) => EjecutarCargaProtegidaAsync(cargar, "x");
 
         public Task EjecutarAsync(Func<Task> cargar, ConsultaVigente.Turno turno) =>
@@ -415,5 +419,24 @@ public class ViewModelBaseCargaProtegidaTests
         await vm.ReintentarCargaCommand.ExecuteAsync(null);
 
         Assert.Equal(2, intentos);
+    }
+
+    [Fact]
+    public async Task AlPerderConexion_SeLlamaSoloSiFalloLaConsultaVigente()
+    {
+        var vm = new VmConErrorEnLinea();
+        var consultas = new ConsultaVigente();
+        var vieja = consultas.Empezar();
+        var colgada = new TaskCompletionSource();
+        var cargaVieja = vm.EjecutarAsync(() => colgada.Task, vieja);
+        var nueva = consultas.Empezar();
+        await vm.EjecutarAsync(() => Task.CompletedTask, nueva);
+
+        colgada.SetException(SinServidor());
+        await cargaVieja;
+        Assert.Equal(0, vm.ConexionPerdida);
+
+        await vm.EjecutarAsync(() => throw SinServidor(), consultas.Empezar());
+        Assert.Equal(1, vm.ConexionPerdida);
     }
 }

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Collections;
 using Moq;
+using StockApp.ApiClient;
 using StockApp.Application.Catalogo;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Exceptions;
@@ -214,6 +215,55 @@ public class ProductoListViewModelTests
         svcMock.Verify(s => s.BuscarPorTextoAsync("aceite"), Times.Once);
         svcMock.Verify(s => s.BuscarPorTextoAsync("ace"), Times.Never);
         svcMock.Verify(s => s.BuscarPorTextoAsync(It.IsAny<string?>()), Times.Once);
+    }
+
+    private static ServidorNoDisponibleException SinServidor() => new(new TaskCanceledException());
+
+    [Fact]
+    public async Task Buscar_SinConexion_VaciaLaGrillaParaNoMostrarFilasDeLaConsultaAnterior()
+    {
+        var (vm, svcMock, _, _) = Crear(new List<ProductoDto> { CrearProductoDto(1, "P001", "Uno"), CrearProductoDto(2, "P002", "Dos") });
+        await vm.CargarAsync();
+        Assert.Equal(2, vm.Items.Count);
+        svcMock.Setup(s => s.BuscarPorTextoAsync(It.IsAny<string?>())).ThrowsAsync(SinServidor());
+
+        await vm.BuscarCommand.ExecuteAsync(null);
+
+        Assert.True(vm.SinConexion);
+        Assert.Empty(vm.Items);
+    }
+
+    [Fact]
+    public async Task Cargar_SinConexion_VaciaLaGrilla()
+    {
+        var (vm, svcMock, _, _) = Crear(new List<ProductoDto> { CrearProductoDto(1, "P001", "Uno") });
+        await vm.CargarAsync();
+        svcMock.Setup(s => s.BuscarAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>())).ThrowsAsync(SinServidor());
+
+        await vm.CargarAsync();
+
+        Assert.Empty(vm.Items);
+    }
+
+    [Fact]
+    public async Task Buscar_SinConexionDeUnaConsultaVieja_NoVaciaLaGrillaDeLaNueva()
+    {
+        var (vm, svcMock, _, _) = Crear();
+        var vieja = new TaskCompletionSource<IReadOnlyList<ProductoDto>>();
+        var nueva = new TaskCompletionSource<IReadOnlyList<ProductoDto>>();
+        svcMock.SetupSequence(s => s.BuscarPorTextoAsync(It.IsAny<string?>()))
+            .Returns(vieja.Task)
+            .Returns(nueva.Task);
+        var busquedaVieja = vm.BuscarCommand.ExecuteAsync(null);
+        var busquedaNueva = vm.BuscarCommand.ExecuteAsync(null);
+        nueva.SetResult(new List<ProductoDto> { CrearProductoDto(7, "P007", "Siete") });
+        await busquedaNueva;
+
+        vieja.SetException(SinServidor());
+        await busquedaVieja;
+
+        Assert.False(vm.SinConexion);
+        Assert.Single(vm.Items);
     }
 
     [Fact]

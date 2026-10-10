@@ -123,6 +123,16 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
     /// </summary>
     protected virtual bool AvisaSinConexionEnLinea => false;
 
+    /// <summary>
+    /// Se llama cuando la consulta vigente queda en <see cref="SinConexion"/> (una consulta vieja que falla no llega
+    /// acá: convención 23). El VM dueño de un listado lo sobrescribe para vaciarlo: si no, al reintentar
+    /// (<see cref="SinConexion"/> vuelve a false hasta ~15 s de timeout) la grilla mostraría las filas de la consulta anterior.
+    /// La base no conoce el listado, por eso es un gancho y no el vaciado en sí.
+    /// </summary>
+    protected virtual void AlPerderConexion()
+    {
+    }
+
     /// <summary>Vuelve a correr la carga protegida que falló por servidor caído (botón "Reintentar" del estado
     /// <see cref="SinConexion"/>). Sin una carga fallida no hace nada.</summary>
     public IAsyncRelayCommand ReintentarCargaCommand => field ??= new AsyncRelayCommand(ReintentarCargaAsync);
@@ -257,6 +267,7 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
         {
             _cargaParaReintentar = () => EjecutarCargaCoreAsync(cargar, mensajeSinPermiso, turno: null);
             SinConexion = true;
+            AlPerderConexion();
         }
         finally
         {

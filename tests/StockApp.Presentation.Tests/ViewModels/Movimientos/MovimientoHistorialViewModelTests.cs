@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Collections;
 using Moq;
+using StockApp.ApiClient;
 using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Interfaces;
@@ -824,4 +825,60 @@ public class MovimientoHistorialViewModelTests
         Assert.False(vm.BuscadorRecalcularSinPermiso);
         Assert.Single(await vm.BuscarProductosAsync("cem", CancellationToken.None));
     }
+
+    // ── Deuda 3c-2: sin conexión vacía la grilla (la de la consulta vigente, no la de una vieja) ──
+
+    private static ServidorNoDisponibleException SinServidor() => new(new TaskCanceledException());
+
+    [Fact]
+    public async Task Buscar_SinConexion_VaciaLaGrillaParaNoMostrarFilasDeLaConsultaAnterior()
+    {
+        var (vm, svcMock, _, _, _, _) = Crear(new List<MovimientoHistorialDto> { CrearDto(1), CrearDto(2) });
+        await vm.CargarAsync();
+        Assert.Equal(2, vm.Items.Count);
+        svcMock.Setup(s => s.ObtenerHistorialAsync(It.IsAny<HistorialMovimientoFiltro>())).ThrowsAsync(SinServidor());
+
+        await vm.BuscarCommand.ExecuteAsync(null);
+
+        Assert.True(vm.SinConexion);
+        Assert.Empty(vm.Items);
+    }
+
+    [Fact]
+    public async Task Cargar_SinConexion_VaciaLaGrilla()
+    {
+        var (vm, svcMock, _, _, _, _) = Crear(new List<MovimientoHistorialDto> { CrearDto(1) });
+        await vm.CargarAsync();
+        svcMock.Setup(s => s.ObtenerHistorialAsync(It.IsAny<HistorialMovimientoFiltro>())).ThrowsAsync(SinServidor());
+
+        await vm.CargarAsync();
+
+        Assert.Empty(vm.Items);
+    }
+
+    [Fact]
+    public async Task Buscar_SinConexionDeUnaConsultaVieja_NoVaciaLaGrillaDeLaNueva()
+    {
+        var (vm, svcMock, _, _, _, _) = Crear();
+        var vieja = new TaskCompletionSource<IReadOnlyList<MovimientoHistorialDto>>();
+        var nueva = new TaskCompletionSource<IReadOnlyList<MovimientoHistorialDto>>();
+        svcMock.SetupSequence(s => s.ObtenerHistorialAsync(It.IsAny<HistorialMovimientoFiltro>()))
+            .Returns(vieja.Task)
+            .Returns(nueva.Task);
+        var busquedaVieja = vm.BuscarCommand.ExecuteAsync(null);
+        var busquedaNueva = vm.BuscarCommand.ExecuteAsync(null);
+        nueva.SetResult(new List<MovimientoHistorialDto> { CrearDto(7) });
+        await busquedaNueva;
+
+        vieja.SetException(SinServidor());
+        await busquedaVieja;
+
+        Assert.False(vm.SinConexion);
+        Assert.Single(vm.Items);
+    }
+
+    // ── Deuda 3c-2: Reintentar busca con el filtro que está en pantalla ──
+
+    // ── Deuda 3c-2: la recarga tras Recalcular respeta HayErroresDeEntrada ──
+
 }
