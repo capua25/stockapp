@@ -244,6 +244,25 @@ public class ControlesV2Tests
         // Marcado y deshabilitado: la casilla conserva el deshabilitado, no el azul de acento.
         var marcada = Parte<Border>(Buscar<CheckBox>(ventana, "TildeMarcado"), "NormalRectangle");
         Assert.Equal(Hex("#F5F5F4"), ColorDe(marcada.Background));
+        Assert.Equal(Hex("#E7E5E4"), ColorDe(marcada.BorderBrush));
+        Assert.Equal(Hex("#A8A29E"), ColorDe(Parte<Avalonia.Controls.Shapes.Path>(Buscar<CheckBox>(ventana, "TildeMarcado"), "CheckGlyph").Fill));
+    }
+
+    [AvaloniaFact]
+    public void CalendarDatePicker_Deshabilitado_UsaLosTokensDeDeshabilitadoV2()
+    {
+        // Fluent lo pinta con ^:disabled sobre Border#Background y Button#PART_Button; .ui2 no tiene :disabled.
+        var ventana = Montar("""
+            <CalendarDatePicker x:Name="Fecha" Width="200" IsEnabled="False" SelectedDate="2026-10-11" />
+            """);
+        var fecha = Buscar<CalendarDatePicker>(ventana, "Fecha");
+
+        Assert.Equal(Hex("#F5F5F4"), ColorDe(Parte<Border>(fecha, "Background").Background));
+        Assert.Equal(Hex("#E7E5E4"), ColorDe(Parte<Border>(fecha, "Background").BorderBrush));
+        // El texto visible lo dibuja el TextPresenter del TextBox interno, no la propiedad del control.
+        Assert.False(string.IsNullOrEmpty(Parte<TextBox>(fecha, "PART_TextBox").Text));
+        Assert.Equal(Hex("#A8A29E"), ColorDe(fecha.GetVisualDescendants().OfType<TextPresenter>().First().Foreground));
+        Assert.Equal(Hex("#A8A29E"), ColorDe(Parte<Icon>(fecha, "PART_GlifoFecha").Foreground));
     }
 
     [AvaloniaFact]

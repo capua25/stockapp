@@ -335,6 +335,16 @@
             </ControlTemplate>
         </Setter>
     </Style>
+    <!-- CalendarDatePicker deshabilitado: Fluent lo pinta con ^:disabled sobre Border#Background y sobre
+         Button#PART_Button; sin estos estilos queda en su gris (fondo #33000000) y el glifo conserva el color
+         fijo de la plantilla. El texto ya lo cubre el TextBox deshabilitado. Mismos tokens que el ComboBox. -->
+    <Style Selector=".ui2 CalendarDatePicker:disabled /template/ Border#Background">
+        <Setter Property="Background" Value="{DynamicResource V2DeshabilitadoFondoBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource V2BordeBrush}" />
+    </Style>
+    <Style Selector=".ui2 CalendarDatePicker:disabled /template/ Button#PART_Button i|Icon#PART_GlifoFecha">
+        <Setter Property="Foreground" Value="{DynamicResource V2DeshabilitadoTextoBrush}" />
+    </Style>
     <Style Selector=".ui2 ComboBox /template/ PathIcon#DropDownGlyph">
         <Setter Property="Foreground" Value="{DynamicResource V2TextoTerciarioBrush}" />
     </Style>
