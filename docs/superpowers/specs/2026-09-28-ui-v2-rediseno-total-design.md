@@ -1,7 +1,7 @@
 # StockApp — UI v2: rediseño total de la interfaz
 
 **Fecha:** 2026-09-28
-**Estado:** aprobado por el usuario; Fases 0, 1, 2, 3a, 3b, 3c-1 y 3c-2 implementadas en feat/ui-v2; Fase 1 APROBADA por el usuario el 2026-10-05; Fase 2 APROBADA por el usuario el 2026-10-06; Fase 3a (Productos) APROBADA por el usuario el 2026-10-07; Fase 3b (Entrada/Salida) APROBADA por el usuario el 2026-10-08, con la verificación orgánica parcial; Fase 3c-1 (patrones comunes + Productos) APROBADA por el usuario el 2026-10-09; Fase 3c-2 (Historial de movimientos) APROBADA por el usuario el 2026-10-10 (merge a main al final de todas las fases)
+**Estado:** aprobado por el usuario; Fases 0, 1, 2, 3a, 3b, 3c-1 y 3c-2 implementadas en feat/ui-v2; Fase 1 APROBADA por el usuario el 2026-10-05; Fase 2 APROBADA por el usuario el 2026-10-06; Fase 3a (Productos) APROBADA por el usuario el 2026-10-07; Fase 3b (Entrada/Salida) APROBADA por el usuario el 2026-10-08, con la verificación orgánica parcial; Fase 3c-1 (patrones comunes + Productos) APROBADA por el usuario el 2026-10-09; Fase 3c-2 (Historial de movimientos) APROBADA por el usuario el 2026-10-10; Fase 3c-3 (Ingreso por factura y patrón de modal v2) con diseño aprobado por el usuario el 2026-10-11 (merge a main al final de todas las fases)
 **Rama:** `feat/ui-v2` (worktree propio)
 **Alcance:** todas las vistas de `src/StockApp.Presentation/` (shell, ~55 de contenido, pantallas fuera del shell, 4 diálogos, 3 overlays de actualización)
 **Mockups de referencia:** `docs/ui-v2/mockups/referencia/` — `direccion-visual-aprobada.html` (variante `.di-azul`), `navegacion-aprobada.html` (opción A), `patrones-1.html`
@@ -103,7 +103,7 @@ Inter, ya embebida vía `Avalonia.Fonts.Inter`. Cifras tabulares y alineadas a l
 ## 3. Enfoque: reescritura en el lugar por módulos, mockups como contrato
 
 - Rama `feat/ui-v2` en worktree propio.
-- **Se reescribe el XAML de cada vista en su mismo archivo.** Los ViewModels quedan intactos salvo lo mínimo: hub de Reportes, Catálogos, KPIs de Inicio y datos del usuario en el pie del sidebar; y el estado de carga (decisión del usuario 2026-10-08, Fase 3c-1): `ViewModelBase` expone `Cargando` (contador de cargas en curso, prendido por `EjecutarCargaProtegidaAsync`) y cada listado que se migra pasa su carga por ese helper, para no mostrar el estado vacío durante la carga ni tras un 403; y la carrera de consultas (decisión del usuario 2026-10-09, Fase 3c-2): cada listado que se migra pide un turno a `ConsultaVigente` antes de consultar y descarta un resultado que ya no es el último (Productos e Historial); y el diálogo de Recalcular stock (decisión del usuario 2026-10-09, Fase 3c-2): `MovimientoHistorialViewModel` recibe `IRecalcularStockDialogService` y expone `AbrirRecalcularCommand`, que reusa el `RecalcularCommand` de siempre.
+- **Se reescribe el XAML de cada vista en su mismo archivo.** Los ViewModels quedan intactos salvo lo mínimo: hub de Reportes, Catálogos, KPIs de Inicio y datos del usuario en el pie del sidebar; y el estado de carga (decisión del usuario 2026-10-08, Fase 3c-1): `ViewModelBase` expone `Cargando` (contador de cargas en curso, prendido por `EjecutarCargaProtegidaAsync`) y cada listado que se migra pasa su carga por ese helper, para no mostrar el estado vacío durante la carga ni tras un 403; y la carrera de consultas (decisión del usuario 2026-10-09, Fase 3c-2): cada listado que se migra pide un turno a `ConsultaVigente` antes de consultar y descarta un resultado que ya no es el último (Productos e Historial); y el diálogo de Recalcular stock (decisión del usuario 2026-10-09, Fase 3c-2): `MovimientoHistorialViewModel` recibe `IRecalcularStockDialogService` y expone `AbrirRecalcularCommand`, que reusa el `RecalcularCommand` de siempre; y el patrón de modal v2 (decisión del usuario 2026-10-11, Fase 3c-3): `IngresoPorFacturaViewModel` recibe `IAltaProductoRapidaDialogService` e `IConfirmacionPreciosDialogService`, pierde los flags de los overlays (`MostrandoAltaProducto`, `MostrandoConfirmacionPrecios`, `GuardarEsAccionPrincipal`) y sus comandos Confirmar/Cancelar, y `AbrirAltaProducto` y `GuardarAsync` esperan al servicio.
 - **No cambian:** `ViewLocator`, `INavigationService`, el wiring de `DataContextChanged` en code-behind (44 vistas), el seam de validación `ErrorConverter`, la lógica de permisos.
 - Los compiled bindings (`x:DataType`) son la red del compilador: un binding roto en la reescritura es error de build, no un null silencioso.
 
@@ -363,7 +363,7 @@ Ciclo de cada fase: mockups de sus pantallas → aprobación del usuario → XAM
 | 0 Fundaciones | `tokens.json` + generador, herramienta de comparación, componentes, pantalla catálogo-de-componentes comparada (calibra el umbral) |
 | 1 Shell y acceso | sidebar, Login, Reset, BloqueoLicencia, AccesoLimitado, 4 diálogos, 3 overlays |
 | 2 Inicio | KPIs, panel de tareas, accesos rápidos |
-| 3 Inventario | Productos (listado y formulario), Entrada / Salida + `MovimientoFormControl`, Ingreso por factura, Historial de movimientos |
+| 3 Inventario | Productos (listado y formulario), Entrada / Salida + `MovimientoFormControl`, Ingreso por factura, Historial de movimientos (3a, 3b, 3c-1 y 3c-2 aprobadas; 3c-3 Ingreso por factura y patrón de modal v2: diseño aprobado 2026-10-11) |
 | 4 Finanzas | Gastos + formulario, Pagos, Adjuntos, Ingresos + formulario, Libro caja, Control POA, Calendario de pagos |
 | 5 Gestión | Tareas (listado, formulario, clasificación, diálogo de reclasificar), Documentos (listado, formulario, adjuntos) |
 | 6 Reportes | hub + los 6 reportes |
@@ -390,6 +390,111 @@ Ciclo de cada fase: mockups de sus pantallas → aprobación del usuario → XAM
 **Estado de la Fase 3c-1 (aprobada el 2026-10-09).** Estado de carga (`ViewModelBase.Cargando`, `v2:EstadoCargando`) y estado sin permiso en el listado de Productos; columnas `Auto` de contenido libre medidas sobre todas las filas (`ColumnaAuto`, tope adaptable `min(medido, 240, espacio libre)` sin scroll horizontal salvo con la ventana menor a ~1218 px, reserva de 20 px de la flecha de orden, solo crecen mientras vive la grilla, ceden primero las `*` y después las medidas) con tooltip solo si se corta (`TooltipSiSeCorta`). Productos comparado en 18 estados a los dos tamaños; `scripts/ui-v2/comparar.sh` dio 81/81 aprobadas y la suite 5327 verde a la altura del commit 9b29aa5 (anterior a los fixes de abajo). Verificación orgánica a 1366×768 y 1280×760 (Administrador y operador mixto `catalogo.productos` + `movimientos.registrar`): carga lenta con la API pausada ("Cargando productos…" sin vacío ni grilla), catálogo de 1000 productos de prueba (scroll de punta a punta y orden por CÓDIGO, COSTO y UNIDAD sin que ninguna columna cambie de ancho), código largo cortado con elipsis y tooltip completo (sin tooltip si entra), búsqueda, 403 con "Sin permiso" en lugar de la card. Decisiones del usuario: mockups de Productos cargando, sin permiso y celda cortada aprobados el 2026-10-08 (D1 a D4, D6, D7, D8 y D13); **D5 reemplazado por el tope adaptable** `min(240, espacio libre)` con la regla "nunca scroll por una columna medida"; excepción U1 a §3 (ya asentada en §3). **Fixes posteriores a la verificación orgánica** (cada uno con test y verificado en la app): B1 (`ca56a8b`) si el servidor no responde al abrir Registrar entrada o Registrar salida, el combo de Producto ya no queda vacío para siempre con un modal: hay una `Alerta` de error en línea con el botón "Reintentar"; B2 (`36c269f`) la pregunta "¿Desea asociar una factura?" solo se hace a un Administrador o a quien tenga `finanzas.gastos` (la misma condición que `GastoFormViewModel.PuedeRegistrarGastos`), sin ella la entrada sigue como "No, continuar"; B3 (`050d4ca`) un 403 refresca el sidebar y la pantalla abierta en caliente vía `ManejadorAccesoRevocado`, y Nuevo, Editar y Eliminar de Productos quedan gateados por `PuedeGestionarProductos`; B4 (`73ea027`) la columna que el usuario arrastra guarda el ancho que le dio y el reparto sigue vigente alrededor de ella (las `*` no quedan bajo su piso; si no entra, scroll horizontal en vez de una columna recortada). **Decisiones del usuario que no se reabren:** (1) "Cancelar" del formulario de factura abierto desde una entrada sigue yendo a "Gastos y facturas" (se deja así); (2) los encabezados de las columnas numéricas quedan alineados a la izquierda, como en el mockup aprobado (B5 descartado).
 
 **Estado de la Fase 3c-2 (aprobada el 2026-10-10).** Historial de movimientos v2 (listado §5.1 con barra de filtros etiquetada sin buscador libre, 10 columnas con scroll horizontal a 1280 y 1366, 7 medidas, STOCK NUEVO con insignia y stock negativo en rojo, PRECIO "—" cuando no aplica, estados de carga, vacío y sin permiso), diálogo v2 de Recalcular stock (Window del patrón de la Fase 1 con buscador de producto, no el modal de la 3c-3), carrera de consultas cerrada con `ConsultaVigente` en Historial y Productos, y las medidas vuelven a su ancho cuando igual hay scroll (cambia la regla de la 3c-1 para ese caso; FECHA no cede nunca, `ColumnaAuto.NoCede`). Dos fixes surgidos de la verificación orgánica: `8e0a671` un listado con el servidor caído muestra "No se pudo conectar con el servidor" con Reintentar dentro de la card en vez de "No hay" (`SinConexion` en `ViewModelBase`, opt-in por VM: Historial y Productos) y `a6ed0e1` una celda numérica reciclada ya no queda cortada con el ancho del número anterior (el `TextBlock` reusaba un `TextLayout` de un texto intermedio). Comparado a los dos tamaños (82 filas APROBADAS en `index.html` en el cierre de la Task 8, 0 rechazadas; suite 5460/5460 en `a6ed0e1`). Verificación orgánica con la app real: a 1366×768 (cargando, volumen de 1501 movimientos, columnas estables al scrollear y ordenar, tooltips, diálogo de Recalcular) y a 1280×760 (5 de 5 OK: "Sin permiso", diálogo con 403 del catálogo, convención 21 en Gastos, orden por FECHA, CANTIDAD y USUARIO, `SinConexion` con Reintentar y celda reciclada). Decisiones del usuario: D1 a D15 aprobadas en el GATE de la Task 4 (D4 opción a: orden FECHA, PRODUCTO, TIPO, CANTIDAD, STOCK ANT., STOCK NUEVO, MOTIVO, PRECIO, USUARIO, COMENTARIO); FECHA no cede (2026-10-09); excepciones a §3 (U1 y U3 de la 3c-2, ya asentadas en §3) y a §8.1 (`MovimientoHistorialGatesTests`, ruling H2, arriba). Tiempo de carga medido: la API responde `GET /movimientos/historial` en 12 ms (542 KB, 1556 movimientos); la UI ya mostraba la grilla dentro de la latencia de click más captura (~7 s), sin poder medirse más fino con el toolkit.
+
+**Diseño de la Fase 3c-3 (aprobado por el usuario el 2026-10-11).** Ingreso por factura v2 y el patrón de modal v2. Alcance: SOLO visual y patrón de modal; sin cambios funcionales. Plan (se escribe después de este diseño): `docs/superpowers/plans/2026-10-11-ui-v2-fase-3c3-ingreso-factura.md`.
+
+*Sección 1. Patrón de modal v2: Window.*
+- Los dos overlays de `IngresoPorFacturaView` pasan a ser diálogos `Window` v2 con servicio, como `RecalcularStockDialog`. Hoy son `Border` con fondo `#AA000000` e `IsVisible` ligado a `MostrandoAltaProducto` / `MostrandoConfirmacionPrecios` (`IngresoPorFacturaView.axaml` ~L269-320).
+- Estructura común de los diálogos:
+  - `Window` con `WindowStartupLocation="CenterOwner"`, `CanResize="False"`, `ShowInTaskbar="False"` y `SizeToContent="Height"`.
+  - Contenido en `Border x:Name="Contenido" Classes="ui2"`.
+  - Sin bindings, con acceso por `x:Name` (§5.5, convención 24).
+  - Servicio con el mecanismo de `RecalcularStockDialogService`: `ShowDialog` con owner `MainWindow` y valor seguro si no hay `App`.
+- `AltaProductoRapidaDialog`:
+  - Campos: Código, Nombre, Categoría (opcional, igual que hoy) y Unidad de medida.
+  - El VM le pasa las categorías y unidades ya cargadas (`CategoriasDisponibles`, `UnidadesMedidaDisponibles`).
+  - Devuelve `ProductoNuevoDto?` (null = cancelar).
+  - Validación igual que hoy: no confirma si falta código, nombre o unidad.
+  - Agregado: una `Alerta` en línea que marca los campos faltantes.
+- `ConfirmacionPreciosDialog`:
+  - Lista los productos con cambio de precio: tilde, nombre, precio actual y nuevo, en es-UY.
+  - Devuelve la lista con los tildes, o null si se cancela.
+- En los dos: Escape cancela y Enter confirma (`IsCancel` / `IsDefault`), y el foco queda dentro de la `Window`. Esto cierra un hueco que existe hoy: los overlays no atrapan el foco ni responden al teclado.
+- Servicios nuevos: `IAltaProductoRapidaDialogService` e `IConfirmacionPreciosDialogService`.
+- Cambios en `IngresoPorFacturaViewModel` (excepción a "VMs intactos", asentada en §3):
+  - Se quitan `MostrandoAltaProducto`, `MostrandoConfirmacionPrecios`, los comandos Confirmar/Cancelar de los overlays (`ConfirmarAltaProductoCommand`, `CancelarAltaProductoCommand`, `ConfirmarPreciosYGuardarCommand`, `CancelarConfirmacionPreciosCommand`) y `GuardarEsAccionPrincipal`.
+  - `AbrirAltaProducto` y `GuardarAsync` esperan al servicio.
+- Mockups: `docs/ui-v2/mockups/dialogos/alta-producto.html` y `docs/ui-v2/mockups/dialogos/confirmacion-precios.html`.
+- Convención 25 nueva (`docs/ui-v2/herramientas.md`): todo modal v2 es una `Window` con servicio y quedan prohibidos los overlays en pantalla. La custodia `GuardianDePatronTests`: nada de `#AA000000` ni bindings `Mostrando*` a `IsVisible`.
+
+*Sección 2. Pantalla v2.*
+- Layout: `DockPanel` con un PIE FIJO abajo, fuera del scroll, como pide la spec funcional (`docs/superpowers/specs/2026-07-31-ingreso-por-factura-design.md`: "un pie fijo con suma de renglones, total de factura y diferencia"). Hoy el pie es una card dentro del `ScrollViewer`.
+- Encabezado como la 3b: sin breadcrumb (hereda D1: es una pantalla del sidebar), con título "Ingreso por factura" y una frase.
+- Tiene TRES secciones con título, así que NO hereda D3 (cumple §5.2):
+  1. **"Datos de la factura"**, con los mismos campos de hoy:
+     - Fila 1: Proveedor, N.º factura y Orden de compra.
+     - Fila 2: Fecha, Detalle y Destino.
+     - Fila 3: Fuente de financiamiento, Rubro de gasto y Línea POA.
+     - Fila 4: "Compra a crédito", que muestra el vencimiento.
+     - Los opcionales se marcan con el patrón de etiqueta v2.
+  2. **"Cargar artículo"**, en una fila:
+     - Producto (`ComboBox`, o el nombre del producto nuevo + "Cambiar").
+     - Cantidad y Precio, con `EntradaNumericaBehavior`.
+     - "Actualizar precio costo".
+     - "Producto nuevo" (secundario) y "Agregar artículo" (primario de la sección).
+     - El error de carga va en una `Alerta` en línea, y el foco vuelve al producto tras agregar.
+  3. **"Artículos cargados"**:
+     - Grilla v2 de solo lectura (convenciones 18 y 19) con `ColumnaAuto` en Cantidad, Precio y Subtotal (a la derecha) y Producto en `*`.
+     - Indicador "Actualizar precio costo" y "Quitar" como botón fantasma (`ghost`).
+     - Vacío: "Todavía no cargaste artículos".
+- Pie fijo:
+  - Suma de renglones, Total de factura (el `TextBox` editable existente, `MontoTotalTexto`) y Diferencia.
+  - La diferencia es neutra si da 0. Si no, usa el color de advertencia v2, que reemplaza el `OrangeRed` literal de hoy, y no bloquea el guardado.
+  - A la derecha, Cancelar (secundario) y Guardar (primario).
+  - El error general va en una `Alerta` arriba del pie.
+- Después de guardar:
+  - El formulario queda deshabilitado.
+  - Aparece la card v2 "Adjuntá la factura", que envuelve `AdjuntosPanelView` v1. Es una EXCEPCIÓN documentada hasta la Fase 4, donde `AdjuntosPanelView` se migra una sola vez para todas sus pantallas.
+  - El pie muestra solo "Finalizar".
+- Comportamiento SIN CAMBIOS:
+  - Navegación: Cancelar y Finalizar van a Gastos y facturas.
+  - Validaciones, `PuedeGuardar`, carga por `DataContextChanged` y gate del sidebar.
+- Mockups en `docs/ui-v2/mockups/inventario/`: estados vacío, con renglones, con diferencia y guardado, a 1280 y 1366.
+
+*Sección 3. Tests, verificación y deuda.*
+- Tests de diálogos en `Presentation.UiTests/V2`:
+  - Escape cancela y Enter confirma.
+  - El alta no confirma si falta un campo, y la `Alerta` es visible.
+  - Precios en es-UY.
+  - Un solo primario.
+  - Sin recorte (`DialogosV2Tests`).
+  - Comparación con mockups vía `ContenidoDeDialogo.Extraer`.
+- ViewModel: los tests de los flags se reescriben contra servicios fake:
+  - Alta cancelada: la carga queda intacta.
+  - Alta confirmada: queda como producto nuevo en carga.
+  - Precios cancelados: no guarda.
+  - Precios confirmados: aplica los tildes y guarda.
+  - Error del servicio tras confirmar.
+- Pantalla:
+  - Los tests de click real se adaptan.
+  - El pie es visible con 50 renglones a 1280×760.
+  - La diferencia cambia de estilo si no da 0.
+  - Comparación con mockups a 1280 y 1366.
+- Guardianes:
+  - Ingreso por factura entra a la lista v2 (`VistasMigradasAV2`).
+  - Convención 25.
+  - Se actualiza `GuardianDePatronTests:48` (hoy `[InlineData(typeof(IngresoPorFacturaView), "Ingreso de stock por factura", "MOVIMIENTOS")]`), por el título y el eyebrow.
+- Verificación por mutación de las reglas clave: `IsCancel`, `IsDefault`, la validación del alta y el pie fuera del scroll.
+- Verificación orgánica en WSLg a 1280:
+  - Una factura con un producto existente y uno nuevo, más un cambio de precio.
+  - Los diálogos con teclado.
+  - Muchos renglones, para ver el pie.
+  - Guardar y adjuntar un PDF.
+  - Confirmar en Gastos y facturas.
+  - Backup de la DB antes y limpieza de los datos de prueba al final.
+- Deuda anotada, que NO se resuelve en la 3c-3:
+  - Categoría obligatoria según la spec funcional (`productoNuevo.categoriaId` sin `?`), pero opcional en el código (`ProductoNuevoDto.CategoriaId` es `int?`).
+  - Anulación del lote sin botón, aunque la spec funcional la incluye en la v1.
+  - Selector de producto como `ComboBox` con todo el catálogo; evaluar `AutoCompleteBox` como en Recalcular.
+  - `AdjuntosPanelView` v1 hasta la Fase 4.
+- Entregables: esta sección, la convención 25 en `docs/ui-v2/herramientas.md` y después el plan `docs/superpowers/plans/2026-10-11-ui-v2-fase-3c3-ingreso-factura.md`.
+
+*Desvíos y aclaraciones respecto de secciones previas (auto-revisión del diseño):*
+- **Dos primarios en la pantalla (desvío de §3.3 y §5.2, "un solo botón primario"):** "Agregar artículo" es el primario de la sección "Cargar artículo" y "Guardar" el del pie. Justificación: la pantalla tiene dos acciones de distinta escala que se repiten con frecuencia distinta (agregar un renglón muchas veces, guardar la factura una vez) y cada una es la acción principal de su zona; decisión del usuario del 2026-10-11. Un test de "un solo primario" de esta pantalla debe contar por zona (sección de carga y pie), no por vista. Los diálogos sí tienen un solo primario.
+- **Grilla de campos de 3 por fila y la fila única de "Cargar artículo" (desvío de §5.2, "grilla de 2 columnas"):** la cabecera de la factura tiene 10 campos agrupados de a tres por afinidad (identificación, fecha y destino, imputación presupuestal) y la carga de un artículo es una sola acción en línea. El ancho de la card lo fijan los mockups de la fase.
+- **Sin breadcrumb:** hereda D1 de la 3b (desvío ya aprobado de §4.4: es una pantalla del sidebar, no un alta que vuelve a un listado).
+- **Los 3 overlays de actualización de la Fase 1 (§4.5, §5.5) no caen bajo la convención 25:** son del shell (`CoordinadorActualizacion`), no un modal de una pantalla, y no usan `#AA000000` ni bindings `Mostrando*`. La convención 25 rige para los modales de pantalla.
+- **§5.5 habla de "4 diálogos `Window`"**: con Recalcular stock (3c-2) y los dos de esta fase son 7; todos siguen sin bindings.
 
 **Deuda abierta tras la Fase 3a:**
 - Sidebar del shell v2 corta el último ítem a 1366x768 (detectado en mockups de Fase 3a, 2026-10-07); el usuario lo difirió: no se arregla en 3a.
