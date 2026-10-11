@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Diálogo: cambios de precio de costo (UI v2)</title>
+<link rel="stylesheet" href="../_base/tokens.css">
+<link rel="stylesheet" href="../_base/base.css">
+<style>
+  /* Área cliente del Window (Width=520, título "Cambios de precio de costo"): Border raíz con padding 24 sobre
+     superficie, StackPanel con 16 de separación. La barra de título es del sistema operativo y no se compara. */
+  .v2-ventana { display: flex; align-items: center; justify-content: center; }
+  .dialogo { width: 520px; padding: 24px; background: var(--v2-color-superficie); display: flex; flex-direction: column; gap: 16px; }
+  /* Lista (ScrollViewer de alto máximo 320; con 3 cambios no scrollea): Grid *,16,Auto,16,Auto. Encabezados
+     etiqueta-campo; por fila un CheckBox con el nombre (ajusta línea) y los dos precios a la derecha, con 8 arriba.
+     Los precios con la tipografía del texto del tilde (control, texto etiqueta) y cifras tabulares, como la columna numérica de la grilla. */
+  .lista { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; column-gap: 16px; align-items: center; }
+  /* Columnas Auto: el ceil del texto más ancho (layout rounding de Avalonia); el TextBlock se alinea a la derecha
+     y dibuja el texto pegado a su izquierda. */
+  .lista .encabezado-derecha { text-align: left; justify-self: end; width: calc-size(fit-content, round(up, size, 1px)); }
+  .lista .fila { margin-top: 8px; }
+  .lista .precio { justify-self: end; margin-top: 8px; font-size: var(--v2-fuente-control-tamano); line-height: var(--v2-fuente-control-alto-linea); color: var(--v2-color-texto-etiqueta); }
+  .botones { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<!-- Datos: new ConfirmacionPreciosDialog con tres cambios (Cemento portland 50 kg 480 → 510 tildado, Arena gruesa
+     890 → 920, Cable 2x1,5 mm 38 → 41,5), como en ConfirmacionPreciosDialogTests. -->
+<div class="v2-ventana">
+  <div class="dialogo">
+    <div class="v2-cuerpo">Estos productos se cargaron con un precio distinto del costo actual. Tildá los que querés actualizar.</div>
+    <div class="lista">
+      <div class="v2-etiqueta-campo">Producto</div>
+      <div class="v2-etiqueta-campo encabezado-derecha">Precio actual</div>
+      <div class="v2-etiqueta-campo encabezado-derecha">Precio nuevo</div>
+      <div class="v2-casilla-fila fila"><div class="v2-casilla-caja"><div class="v2-casilla v2-casilla--marcada"></div><svg class="v2-glifo-check" viewBox="0.012 0.012 17.475 12.988" aria-hidden="true"><path fill="currentColor" d="M5.5 10.586 1.707 6.793A1 1 0 0 0 .293 8.207l4.5 4.5a1 1 0 0 0 1.414 0l11-11A1 1 0 0 0 15.793.293L5.5 10.586Z"/></svg></div><span>Cemento portland 50 kg</span></div>
+      <div class="precio v2-num"><span>$ 480,00</span></div>
+      <div class="precio v2-num"><span>$ 510,00</span></div>
+      <div class="v2-casilla-fila fila"><div class="v2-casilla-caja"><div class="v2-casilla"></div></div><span>Arena gruesa</span></div>
+      <div class="precio v2-num"><span>$ 890,00</span></div>
+      <div class="precio v2-num"><span>$ 920,00</span></div>
+      <div class="v2-casilla-fila fila"><div class="v2-casilla-caja"><div class="v2-casilla"></div></div><span>Cable 2x1,5 mm</span></div>
+      <div class="precio v2-num"><span>$ 38,00</span></div>
+      <div class="precio v2-num"><span>$ 41,50</span></div>
+    </div>
+    <div class="botones">
+      <span class="v2-boton v2-boton--secundario">Cancelar</span>
+      <span class="v2-boton v2-boton--primario">Confirmar y guardar</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

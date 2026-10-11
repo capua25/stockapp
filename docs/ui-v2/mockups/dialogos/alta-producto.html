@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Diálogo: producto nuevo (UI v2)</title>
+<link rel="stylesheet" href="../_base/tokens.css">
+<link rel="stylesheet" href="../_base/base.css">
+<style>
+  /* Área cliente del Window (Width=440, título "Producto nuevo"): Border raíz con padding 24 sobre superficie,
+     StackPanel con 16 de separación. La barra de título es del sistema operativo y no se compara. */
+  .v2-ventana { display: flex; align-items: center; justify-content: center; }
+  .dialogo { width: 440px; padding: 24px; background: var(--v2-color-superficie); display: flex; flex-direction: column; gap: 16px; }
+  /* Grid *,16,*: Código y Nombre a todo el ancho, Categoría | Unidad de medida (188 cada una), 16 entre filas. */
+  .campos { display: grid; grid-template-columns: 188px 188px; column-gap: 16px; row-gap: 16px; }
+  .completo { grid-column: 1 / 3; }
+  .botones { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<!-- Datos: new AltaProductoRapidaDialog(DatosProductos.Categorias, DatosProductos.Unidades) recién abierto: todo vacío, alerta oculta. Los desplegables no se mockean. -->
+<div class="v2-ventana">
+  <div class="dialogo">
+    <div class="v2-cuerpo">El producto se da de alta junto con la factura, al guardar.</div>
+    <div class="campos">
+      <div class="v2-campo completo"><div class="v2-campo-etiqueta"><span>Código</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input"><span class="v2-input-placeholder">Ej.: MAT-0601</span></div></div></div>
+      <div class="v2-campo completo"><div class="v2-campo-etiqueta"><span>Nombre</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input"><span class="v2-input-placeholder">Ej.: Carretilla de obra 90 L</span></div></div></div>
+      <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Categoría</span></div><div><div class="v2-input"><span class="v2-input-placeholder">Sin categoría</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div></div>
+      <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Unidad de medida</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input"><span class="v2-input-placeholder">Elegí la unidad</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div></div>
+    </div>
+    <div class="botones">
+      <span class="v2-boton v2-boton--secundario">Cancelar</span>
+      <span class="v2-boton v2-boton--primario">Confirmar</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

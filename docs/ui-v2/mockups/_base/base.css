@@ -330,3 +330,7 @@ body {
    (el botón de línea, invisible). El largo es (ancho interior - 32) x ancho interior / suma de columnas,
    redondeado hacia arriba: lo fija cada página. */
 .v2-grilla-scroll-h { flex: 0 0 auto; height: 2px; margin: 12px 0 2px 16px; background: #7A7A7A; border-radius: 0; }
+
+/* Valor en advertencia (Diferencia del pie de Ingreso por factura): mismo texto que la familia advertencia de la
+   insignia y la alerta. Espejo de .ui2 TextBlock.advertencia. */
+.v2-texto-advertencia { color: var(--v2-color-insignia-advertencia-texto); }
