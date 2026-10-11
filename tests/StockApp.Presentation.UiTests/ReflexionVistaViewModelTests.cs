@@ -131,6 +131,15 @@ public class ReflexionVistaViewModelTests
             // producto / marcar credito) -- se documenta como observacion en el informe, no como
             // bloqueante, porque no promete nada distinto al usuario.
             nameof(IngresoPorFacturaViewModel.GastoIdCreado),
+            // Pasan al diálogo de alta o al de precios por su servicio (convención 25: modal de pantalla como Window
+            // sin bindings), no tienen control propio en la vista. CambiosDePrecio lo recibe el diálogo de precios;
+            // NuevoProductoCodigo y la categoría y unidad del alta van al renglón al agregar.
+            nameof(IngresoPorFacturaViewModel.NuevoProductoCodigo),
+            nameof(IngresoPorFacturaViewModel.NuevaCategoriaSeleccionada),
+            nameof(IngresoPorFacturaViewModel.NuevaUnidadSeleccionada),
+            nameof(IngresoPorFacturaViewModel.CategoriasDisponibles),
+            nameof(IngresoPorFacturaViewModel.UnidadesMedidaDisponibles),
+            nameof(IngresoPorFacturaViewModel.CambiosDePrecio),
         };
         AssertTodasExpuestas(axaml, miembros, exclusiones);
     }

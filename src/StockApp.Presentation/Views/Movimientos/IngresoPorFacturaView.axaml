@@ -153,6 +153,7 @@
                             <StackPanel Grid.Column="2" Spacing="4">
                                 <TextBlock Text="Cantidad" />
                                 <TextBox Text="{Binding CantidadEnCarga, Converter={x:Static conv:DecimalConverter.Instance}}" beh:EntradaNumericaBehavior.EsDecimal="True"
+                                         beh:FocoBehavior.SolicitarFoco="{Binding SolicitarFocoEnCantidad, Mode=TwoWay}"
                                          PlaceholderText="Cantidad" />
                             </StackPanel>
                             <StackPanel Grid.Column="4" Spacing="4">
@@ -242,7 +243,7 @@
                            Margin="0,0,0,12" />
 
                 <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="12">
-                    <Button Content="Guardar" Command="{Binding GuardarCommand}" Classes.primary="{Binding GuardarEsAccionPrincipal}" />
+                    <Button Content="Guardar" Command="{Binding GuardarCommand}" Classes.primary="{Binding !GuardadoExitoso}" />
                     <Button Content="Cancelar" Command="{Binding CancelarCommand}" />
                 </StackPanel>
 
@@ -265,58 +266,6 @@
             </Border>
         </StackPanel>
         </ScrollViewer>
-
-        <!-- Overlay: alta rápida de producto (Task 9) -->
-        <Border IsVisible="{Binding MostrandoAltaProducto}" Background="#AA000000">
-            <Border Classes="card" MaxWidth="420" HorizontalAlignment="Center" VerticalAlignment="Center">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="Producto nuevo" Classes="seccion" />
-                    <TextBlock Text="Código" /><TextBox Text="{Binding NuevoProductoCodigo}" />
-                    <TextBlock Text="Nombre" /><TextBox Text="{Binding NuevoProductoNombre}" />
-                    <TextBlock Text="Categoría (opcional)" />
-                    <ComboBox ItemsSource="{Binding CategoriasDisponibles}" SelectedItem="{Binding NuevaCategoriaSeleccionada}">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate><TextBlock Text="{Binding Nombre}" /></DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
-                    <TextBlock Text="Unidad de medida" />
-                    <ComboBox ItemsSource="{Binding UnidadesMedidaDisponibles}" SelectedItem="{Binding NuevaUnidadSeleccionada}">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate><TextBlock Text="{Binding Nombre}" /></DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
-                    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-                        <Button Content="Cancelar" Command="{Binding CancelarAltaProductoCommand}" />
-                        <Button Content="Confirmar" Command="{Binding ConfirmarAltaProductoCommand}" Classes.primary="{Binding MostrandoAltaProducto}" />
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-        </Border>
-
-        <!-- Overlay: confirmación de cambios de precio de costo (Task 9) -->
-        <Border IsVisible="{Binding MostrandoConfirmacionPrecios}" Background="#AA000000">
-            <Border Classes="card" MaxWidth="520" HorizontalAlignment="Center" VerticalAlignment="Center">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="Cambios de precio de costo detectados" Classes="seccion" />
-                    <ItemsControl ItemsSource="{Binding CambiosDePrecio}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="vm:ItemConfirmacionPrecioVm">
-                                <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,4">
-                                    <CheckBox Grid.Column="0" IsChecked="{Binding Confirmado}" />
-                                    <TextBlock Grid.Column="1" Text="{Binding ProductoNombre}" VerticalAlignment="Center" />
-                                    <TextBlock Grid.Column="2" Text="{Binding PrecioActual, Converter={x:Static conv:MonedaConverter.Instance}}" Margin="8,0" />
-                                    <TextBlock Grid.Column="3" Text="{Binding PrecioNuevo, Converter={x:Static conv:MonedaConverter.Instance}}" FontWeight="Bold" />
-                                </Grid>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-                        <Button Content="Cancelar" Command="{Binding CancelarConfirmacionPreciosCommand}" />
-                        <Button Content="Confirmar y guardar" Command="{Binding ConfirmarPreciosYGuardarCommand}" Classes.primary="{Binding MostrandoConfirmacionPrecios}" />
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-        </Border>
 
     </Grid>
 

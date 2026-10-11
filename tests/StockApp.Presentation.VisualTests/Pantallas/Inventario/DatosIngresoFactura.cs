@@ -104,7 +104,8 @@ public static class DatosIngresoFactura
 
         return new IngresoPorFacturaViewModel(servicio.Object, productos.Object, categorias.Object, unidades.Object,
             proveedores.Object, fuentes.Object, rubros.Object, lineas.Object, Mock.Of<INavigationService>(),
-            Mock.Of<IConfirmacionService>(), panel);
+            Mock.Of<IConfirmacionService>(), panel,
+            Mock.Of<IAltaProductoRapidaDialogService>(), Mock.Of<IConfirmacionPreciosDialogService>());
     }
 
     public static void Aplicar(IngresoPorFacturaViewModel vm, Estado estado)

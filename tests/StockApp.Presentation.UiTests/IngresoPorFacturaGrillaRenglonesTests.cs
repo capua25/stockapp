@@ -81,7 +81,8 @@ public class IngresoPorFacturaGrillaRenglonesTests
 
         var vm = new IngresoPorFacturaViewModel(
             servicio, productoService, categoriaService, unidadService, proveedorService,
-            fuenteService, rubroService, lineaService, nav, confirmacion, adjuntosPanel);
+            fuenteService, rubroService, lineaService, nav, confirmacion, adjuntosPanel,
+            new AltaProductoRapidaDialogServiceFake(), new ConfirmacionPreciosDialogServiceFake());
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
         window.DataContext = vm;

@@ -12,6 +12,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using StockApp.Application.Catalogo;
+using StockApp.Application.Movimientos;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.ViewModels;
@@ -60,7 +61,9 @@ public class IngresoPorFacturaViewTests
         IReadOnlyList<LineaPoa>? lineas = null,
         IReadOnlyList<ProductoDto>? productos = null,
         IReadOnlyList<Categoria>? categorias = null,
-        IReadOnlyList<UnidadMedida>? unidades = null)
+        IReadOnlyList<UnidadMedida>? unidades = null,
+        AltaProductoRapidaDialogServiceFake? alta = null,
+        ConfirmacionPreciosDialogServiceFake? precios = null)
     {
         var servicio = new IngresoPorFacturaServiceFake();
         var productoService = new ProductoServiceIngresoFake(productos ?? Array.Empty<ProductoDto>());
@@ -78,7 +81,8 @@ public class IngresoPorFacturaViewTests
 
         var vm = new IngresoPorFacturaViewModel(
             servicio, productoService, categoriaService, unidadService, proveedorService,
-            fuenteService, rubroService, lineaService, nav, confirmacion, adjuntosPanel);
+            fuenteService, rubroService, lineaService, nav, confirmacion, adjuntosPanel,
+            alta ?? new AltaProductoRapidaDialogServiceFake(), precios ?? new ConfirmacionPreciosDialogServiceFake());
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
         window.DataContext = vm;
@@ -133,20 +137,6 @@ public class IngresoPorFacturaViewTests
         caja.Text = texto;
         Dispatcher.UIThread.RunJobs();
     }
-
-    /// <summary>Código/Nombre son los únicos TextBox de AUTOR sin Watermark/
-    /// PlaceholderText del árbol (todos los del formulario de cabecera y la zona de carga SÍ
-    /// tienen uno) -- TemplatedParent == null descarta el PART_EditableTextBox interno que todo
-    /// ComboBox trae en su template por default (existe en el árbol visual aunque
-    /// IsEditable="False", nunca se ve ni se usa). Factorizado a un solo lugar (en vez de
-    /// duplicarlo por test) para no multiplicar el warning CS0618 de leer TextBox.Watermark
-    /// (obsoleto) -- ver el comentario de PlaceholderText en la vista real.</summary>
-    private static List<TextBox> CamposDelOverlayDeAltaDeProducto(Window window)
-        => window.GetVisualDescendants().OfType<TextBox>()
-            .Where(t => string.IsNullOrEmpty(t.Watermark) && string.IsNullOrEmpty(t.PlaceholderText))
-            .Where(t => t.TemplatedParent is null)
-            .Where(t => t.FindAncestorOfType<CalendarDatePicker>() is null)
-            .ToList();
 
     /// <summary>
     /// Flujo completo de carga vía clicks/tipeo reales: elegir producto en el combo de la zona de
@@ -343,23 +333,12 @@ public class IngresoPorFacturaViewTests
     public void ClickReal_ProductoNuevoDesdeLaZonaDeCarga_AlConfirmarYAgregar_LaGrillaMuestraElNombreLegible()
     {
         var unidad = new UnidadMedida { Id = 1, Nombre = "Unidad", Abreviatura = "u", Activo = true };
-        var (window, vm, _, _) = Montar(unidades: new[] { unidad });
+        var alta = new AltaProductoRapidaDialogServiceFake { Respuesta = new ProductoNuevoDto("COD-NUEVO-1", "Carretilla reforzada", null, 1) };
+        var (window, vm, _, _) = Montar(unidades: new[] { unidad }, alta: alta);
 
         Clickear(window, BotonPorTexto(window, "Producto nuevo"));
-        Assert.True(vm.MostrandoAltaProducto);
+        Assert.Equal(1, alta.Llamadas);
 
-        var camposDelOverlay = CamposDelOverlayDeAltaDeProducto(window);
-        Assert.Equal(2, camposDelOverlay.Count);
-        Tipear(camposDelOverlay[0], "COD-NUEVO-1");
-        Tipear(camposDelOverlay[1], "Carretilla reforzada");
-
-        var comboUnidad = ComboPorItemsSource(window, vm.UnidadesMedidaDisponibles);
-        comboUnidad.SelectedItem = unidad;
-        Dispatcher.UIThread.RunJobs();
-
-        Clickear(window, BotonPorCommand(window, vm.ConfirmarAltaProductoCommand));
-
-        Assert.False(vm.MostrandoAltaProducto);
         Assert.True(vm.EsProductoNuevoEnCarga);
         Assert.Equal("Carretilla reforzada", vm.NuevoProductoNombre);
 
@@ -389,17 +368,16 @@ public class IngresoPorFacturaViewTests
     }
 
     [AvaloniaFact]
-    public void ClickReal_CancelarAltaProducto_NoModificaLaZonaDeCargaYCierraElOverlay()
+    public void ClickReal_AltaCancelada_NoModificaLaZonaDeCarga()
     {
-        var (window, vm, _, _) = Montar();
+        var alta = new AltaProductoRapidaDialogServiceFake { Respuesta = null };
+        var (window, vm, _, _) = Montar(alta: alta);
 
         Clickear(window, BotonPorTexto(window, "Producto nuevo"));
-        Assert.True(vm.MostrandoAltaProducto);
 
-        Clickear(window, BotonPorCommand(window, vm.CancelarAltaProductoCommand));
-
-        Assert.False(vm.MostrandoAltaProducto);
+        Assert.Equal(1, alta.Llamadas);
         Assert.False(vm.EsProductoNuevoEnCarga);
+        Assert.True(ArbolVisual.EsVisibleEnArbol(ComboPorItemsSource(window, vm.ProductosDisponibles)));
     }
 
     // ── Renglones: agregar (por la zona de carga) y quitar con clicks reales ──
@@ -634,7 +612,7 @@ public class IngresoPorFacturaViewTests
 
     /// <summary>
     /// Misma adaptación que el test anterior, pero preservando ADEMÁS la secuencia de la
-    /// confirmación de cambio de precio de costo antes de llegar al servicio (precio 50 != costo
+    /// confirmación de cambio de precio de costo (fake que tilda todo) antes de llegar al servicio (precio 50 != costo
     /// 100 del producto, dispara el overlay igual que el escenario original con precio -5).
     /// </summary>
     [AvaloniaFact]
@@ -644,9 +622,10 @@ public class IngresoPorFacturaViewTests
         var fuente = new FuenteFinanciamiento { Id = 1, Nombre = "Rentas Generales", Activo = true };
         var rubro = new RubroGasto { Id = 1, Codigo = 10, Nombre = "Materiales", Activo = true };
         var producto = Producto(1, "Pala punta cuadrada"); // PrecioCosto = 100m
+        var precios = new ConfirmacionPreciosDialogServiceFake { Responder = l => l.Select(_ => true).ToList() };
         var (window, vm, servicio, _) = Montar(
             proveedores: new[] { proveedor }, fuentes: new[] { fuente }, rubros: new[] { rubro },
-            productos: new[] { producto });
+            productos: new[] { producto }, precios: precios);
 
         vm.ProveedorSeleccionado = proveedor;
         vm.FuenteSeleccionada = fuente;
@@ -664,8 +643,7 @@ public class IngresoPorFacturaViewTests
         Clickear(window, BotonPorTexto(window, "Guardar"));
         Dispatcher.UIThread.RunJobs();
 
-        Assert.True(vm.MostrandoConfirmacionPrecios);
-        Clickear(window, BotonPorCommand(window, vm.ConfirmarPreciosYGuardarCommand));
+        Assert.Equal(1, precios.Llamadas);
         Dispatcher.UIThread.RunJobs();
 
         Assert.False(vm.GuardadoExitoso);
@@ -753,33 +731,6 @@ public class IngresoPorFacturaViewTests
         });
     }
 
-    /// <summary>Los dos precios de la confirmación de cambio de precio (antes {0:N2} con la
-    /// cultura ambiente) también salen en es-UY.</summary>
-    [AvaloniaFact]
-    public void ConfirmacionDeCambioDePrecio_MuestraLosPreciosEnEsUy()
-    {
-        ConCulturaAmbiente("en-US", () =>
-        {
-            var producto = Producto(1, "Pala punta cuadrada");
-            var (window, vm, _, _) = Montar(productos: new[] { producto });
-
-            vm.CambiosDePrecio.Add(new ItemConfirmacionPrecioVm
-            {
-                Fila = new FilaRenglonFacturaVm(),
-                ProductoNombre = producto.Nombre,
-                PrecioActual = 1500.5m,
-                PrecioNuevo = 2000m,
-            });
-            vm.MostrandoConfirmacionPrecios = true;
-            Dispatcher.UIThread.RunJobs();
-
-            var textos = window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
-            Assert.Contains("$ 1.500,50", textos);
-            Assert.Contains("$ 2.000,00", textos);
-            return 0;
-        });
-    }
-
     // ── Salida del modo "producto nuevo" en la zona de carga (encargo 2026-08-21, hueco 2) ──
 
     /// <summary>
@@ -797,21 +748,11 @@ public class IngresoPorFacturaViewTests
     {
         var unidad = new UnidadMedida { Id = 1, Nombre = "Unidad", Abreviatura = "u", Activo = true };
         var productoExistente = Producto(2, "Rastrillo de jardín");
-        var (window, vm, _, _) = Montar(unidades: new[] { unidad }, productos: new[] { productoExistente });
+        var alta = new AltaProductoRapidaDialogServiceFake { Respuesta = new ProductoNuevoDto("COD-NUEVO-1", "Carretilla reforzada", null, 1) };
+        var (window, vm, _, _) = Montar(unidades: new[] { unidad }, productos: new[] { productoExistente }, alta: alta);
 
         Clickear(window, BotonPorTexto(window, "Producto nuevo"));
-        Assert.True(vm.MostrandoAltaProducto);
-
-        var camposDelOverlay = CamposDelOverlayDeAltaDeProducto(window);
-        Assert.Equal(2, camposDelOverlay.Count);
-        Tipear(camposDelOverlay[0], "COD-NUEVO-1");
-        Tipear(camposDelOverlay[1], "Carretilla reforzada");
-
-        var comboUnidad = ComboPorItemsSource(window, vm.UnidadesMedidaDisponibles);
-        comboUnidad.SelectedItem = unidad;
-        Dispatcher.UIThread.RunJobs();
-
-        Clickear(window, BotonPorCommand(window, vm.ConfirmarAltaProductoCommand));
+        Assert.Equal(1, alta.Llamadas);
 
         Assert.True(vm.EsProductoNuevoEnCarga);
         var comboProductoOculto = ComboPorItemsSource(window, vm.ProductosDisponibles);

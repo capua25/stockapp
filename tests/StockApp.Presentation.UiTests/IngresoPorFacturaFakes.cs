@@ -9,6 +9,7 @@ using StockApp.Application.Movimientos;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Services;
+using StockApp.Presentation.ViewModels.Movimientos;
 
 namespace StockApp.Presentation.UiTests;
 
@@ -121,4 +122,38 @@ internal sealed class ServicioAperturaArchivoFake : IServicioAperturaArchivo
 internal sealed class AuthorizationServiceFake : IAuthorizationService
 {
     public void Verificar(ICurrentSession sesion, string accion) { }
+}
+
+/// <summary>Alta rápida sin ventana: devuelve <see cref="Respuesta"/> (null = el usuario canceló) y registra lo recibido.</summary>
+internal sealed class AltaProductoRapidaDialogServiceFake : IAltaProductoRapidaDialogService
+{
+    public ProductoNuevoDto? Respuesta { get; set; }
+    public int Llamadas { get; private set; }
+    public IReadOnlyList<Categoria>? CategoriasRecibidas { get; private set; }
+    public IReadOnlyList<UnidadMedida>? UnidadesRecibidas { get; private set; }
+
+    public Task<ProductoNuevoDto?> PedirProductoNuevoAsync(IReadOnlyList<Categoria> categorias, IReadOnlyList<UnidadMedida> unidades)
+    {
+        Llamadas++;
+        CategoriasRecibidas = categorias;
+        UnidadesRecibidas = unidades;
+        return Task.FromResult(Respuesta);
+    }
+}
+
+/// <summary>Confirmación de precios sin ventana: responde con <see cref="Responder"/> o deja la confirmación "abierta"
+/// con <see cref="Pendiente"/>.</summary>
+internal sealed class ConfirmacionPreciosDialogServiceFake : IConfirmacionPreciosDialogService
+{
+    public Func<IReadOnlyList<ItemConfirmacionPrecioVm>, IReadOnlyList<bool>?> Responder { get; set; } = _ => null;
+    public TaskCompletionSource<IReadOnlyList<bool>?>? Pendiente { get; set; }
+    public int Llamadas { get; private set; }
+    public IReadOnlyList<ItemConfirmacionPrecioVm>? Recibidos { get; private set; }
+
+    public Task<IReadOnlyList<bool>?> ConfirmarCambiosAsync(IReadOnlyList<ItemConfirmacionPrecioVm> cambios)
+    {
+        Llamadas++;
+        Recibidos = cambios;
+        return Pendiente?.Task ?? Task.FromResult(Responder(cambios));
+    }
 }

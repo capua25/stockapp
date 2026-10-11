@@ -38,6 +38,8 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
     private readonly INavigationService           _navigation;
     private readonly IConfirmacionService         _confirmacion;
     private readonly AdjuntosPanelViewModel       _adjuntosPanel;
+    private readonly IAltaProductoRapidaDialogService   _dialogoAlta;
+    private readonly IConfirmacionPreciosDialogService  _dialogoPrecios;
 
     public AdjuntosPanelViewModel AdjuntosPanel => _adjuntosPanel;
 
@@ -74,7 +76,6 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
-    [NotifyPropertyChangedFor(nameof(GuardarEsAccionPrincipal))]
     private bool _guardadoExitoso;
 
     [ObservableProperty] private decimal _sumaRenglones;
@@ -103,30 +104,13 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
     /// devolver el foco al ComboBox de producto apenas se agrega un artículo con éxito.</summary>
     [ObservableProperty] private bool _solicitarFocoEnProductoCombo;
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(GuardarEsAccionPrincipal))]
-    private bool _mostrandoAltaProducto;
+    /// <summary>Mismo "pulso" que SolicitarFocoEnProductoCombo: tras confirmar el alta de un producto nuevo, el foco va
+    /// a Cantidad para seguir con el teclado (cantidad, precio y Enter agregan el renglón).</summary>
+    [ObservableProperty] private bool _solicitarFocoEnCantidad;
     [ObservableProperty] private string? _nuevoProductoCodigo;
     [ObservableProperty] private string? _nuevoProductoNombre;
     [ObservableProperty] private Categoria? _nuevaCategoriaSeleccionada;
     [ObservableProperty] private UnidadMedida? _nuevaUnidadSeleccionada;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(GuardarEsAccionPrincipal))]
-    private bool _mostrandoConfirmacionPrecios;
-    private decimal _montoConfirmadoPendiente;
-
-    /// <summary>
-    /// Jerarquia de botones (Task 6.7, refactor visual): "Guardar" es la unica accion primaria
-    /// mientras el formulario esta activo. Se apaga (Classes.primary en la vista) apenas hay OTRA
-    /// accion primaria compitiendo por atencion en la misma pantalla -- "Finalizar" tras guardar,
-    /// o el CTA del overlay modal de alta de producto / confirmacion de precios. Sin esto,
-    /// GuardadoExitoso=true dejaba "Guardar" (deshabilitado pero visible) Y "Finalizar" primarios
-    /// a la vez, y cada overlay dejaba su propio boton primario compitiendo con "Guardar" de fondo
-    /// (el backdrop semitransparente lo oculta VISUALMENTE, pero sigue IsVisible=true en el arbol).
-    /// </summary>
-    public bool GuardarEsAccionPrincipal
-        => !GuardadoExitoso && !MostrandoAltaProducto && !MostrandoConfirmacionPrecios;
 
     public ObservableCollection<ItemConfirmacionPrecioVm> CambiosDePrecio { get; } = new();
 
@@ -141,7 +125,9 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
         ILineaPoaService lineaService,
         INavigationService navigation,
         IConfirmacionService confirmacion,
-        AdjuntosPanelViewModel adjuntosPanel)
+        AdjuntosPanelViewModel adjuntosPanel,
+        IAltaProductoRapidaDialogService dialogoAlta,
+        IConfirmacionPreciosDialogService dialogoPrecios)
     {
         _service             = service;
         _productoService     = productoService;
@@ -154,6 +140,8 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
         _navigation          = navigation;
         _confirmacion        = confirmacion;
         _adjuntosPanel       = adjuntosPanel;
+        _dialogoAlta         = dialogoAlta;
+        _dialogoPrecios      = dialogoPrecios;
     }
 
     /// <summary>Carga los combos. La dispara la View (DataContextChanged) — sin preselección
@@ -236,44 +224,34 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
         GuardarCommand.NotifyCanExecuteChanged();
     }
 
-    [RelayCommand]
-    private void AbrirAltaProducto()
-    {
-        NuevoProductoCodigo = null;
-        NuevoProductoNombre = null;
-        NuevaCategoriaSeleccionada = null;
-        NuevaUnidadSeleccionada = null;
-        MostrandoAltaProducto = true;
-    }
-
     /// <summary>
-    /// A diferencia del alta en línea original (que escribía directo sobre una fila ya agregada a
-    /// la grilla), acá NO hay fila todavía -- el renglón recién se crea al confirmar la zona de
-    /// carga en AgregarArticuloCommand. Confirmar acá solo deja la zona de carga en "modo producto
-    /// nuevo" (EsProductoNuevoEnCarga), mostrando el nombre en vez del ComboBox de producto.
+    /// "Producto nuevo": pide los datos en el diálogo de alta rápida con las categorías y unidades ya cargadas. Si se
+    /// confirma, la zona de carga pasa a "modo producto nuevo" (el renglón se crea recién con AgregarArticuloCommand,
+    /// que lee NuevaCategoriaSeleccionada y NuevaUnidadSeleccionada) y el foco va a Cantidad. Si se cancela, la zona de
+    /// carga queda exactamente como estaba.
     /// </summary>
-    public IRelayCommand ConfirmarAltaProductoCommand => field ??= ComandoDeGuardado(ConfirmarAltaProducto);
-
-    private void ConfirmarAltaProducto()
+    [RelayCommand]
+    private async Task AbrirAltaProductoAsync()
     {
-        if (string.IsNullOrWhiteSpace(NuevoProductoCodigo)
-            || string.IsNullOrWhiteSpace(NuevoProductoNombre) || NuevaUnidadSeleccionada is null)
+        var nuevo = await _dialogoAlta.PedirProductoNuevoAsync(CategoriasDisponibles.ToList(), UnidadesMedidaDisponibles.ToList());
+        if (nuevo is null)
             return;
 
+        NuevoProductoCodigo = nuevo.Codigo;
+        NuevoProductoNombre = nuevo.Nombre;
+        NuevaCategoriaSeleccionada = CategoriasDisponibles.FirstOrDefault(c => c.Id == nuevo.CategoriaId);
+        NuevaUnidadSeleccionada = UnidadesMedidaDisponibles.First(u => u.Id == nuevo.UnidadMedidaId);
         EsProductoNuevoEnCarga = true;
         ProductoEnCarga = null;
-        MostrandoAltaProducto = false;
+        SolicitarFocoEnCantidad = true;
     }
-
-    [RelayCommand]
-    private void CancelarAltaProducto() => MostrandoAltaProducto = false;
 
     /// <summary>
     /// Salida del "callejón sin salida" hallado en la verificación visual (2026-08-21): tras
     /// confirmar un producto nuevo, EsProductoNuevoEnCarga quedaba en true para siempre -- el
     /// ComboBox de productos existentes se ocultaba (ver axaml) y no había forma de volver atrás
-    /// sin agregar la fila. "Cancelar" del overlay de alta NO sirve acá: ese botón actúa ANTES de
-    /// confirmar (ver CancelarAltaProducto), y el atasco ocurre DESPUÉS. Este comando descarta el
+    /// sin agregar la fila. Cancelar el diálogo de alta no sirve acá: actúa ANTES de
+    /// confirmar, y el atasco ocurre DESPUÉS. Este comando descarta el
     /// modo "producto nuevo" y limpia TODOS los campos de alta -- no solo EsProductoNuevoEnCarga
     /// -- para que no quede residuo que se cuele en el próximo AgregarArticuloCommand.
     /// </summary>
@@ -397,27 +375,19 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
 
         if (CambiosDePrecio.Count > 0)
         {
-            _montoConfirmadoPendiente = monto;
-            MostrandoConfirmacionPrecios = true;
-            return;
+            // Mientras el diálogo está abierto, GuardarCommand sigue en ejecución y no se puede volver a disparar.
+            var tildes = await _dialogoPrecios.ConfirmarCambiosAsync(CambiosDePrecio.ToList());
+            if (tildes is null)
+                return;
+            for (var i = 0; i < CambiosDePrecio.Count; i++)
+            {
+                CambiosDePrecio[i].Confirmado = tildes[i];
+                CambiosDePrecio[i].Fila.ActualizarPrecioCosto = tildes[i];
+            }
         }
 
         await GuardarInternoAsync(monto);
     }
-
-    public IAsyncRelayCommand ConfirmarPreciosYGuardarCommand => field ??= ComandoDeGuardado(ConfirmarPreciosYGuardarAsync);
-
-    private async Task ConfirmarPreciosYGuardarAsync()
-    {
-        foreach (var item in CambiosDePrecio)
-            item.Fila.ActualizarPrecioCosto = item.Confirmado;
-
-        MostrandoConfirmacionPrecios = false;
-        await GuardarInternoAsync(_montoConfirmadoPendiente);
-    }
-
-    [RelayCommand]
-    private void CancelarConfirmacionPrecios() => MostrandoConfirmacionPrecios = false;
 
     private async Task GuardarInternoAsync(decimal monto)
     {

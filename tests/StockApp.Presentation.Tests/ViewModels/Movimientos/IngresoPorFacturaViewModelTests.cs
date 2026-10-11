@@ -22,6 +22,21 @@ public class IngresoPorFacturaViewModelTests
                     Mock<INavigationService> navMock)
         Crear()
     {
+        var (vm, svc, nav, _, _) = CrearConDialogos();
+        return (vm, svc, nav);
+    }
+
+    /// <summary>
+    /// Los diálogos de alta y de precios se piden a servicios (convención 25): por defecto los dos devuelven null
+    /// (cancelan). Un test que necesita otra respuesta hace Setup sobre el mock que devuelve.
+    /// </summary>
+    private static (IngresoPorFacturaViewModel vm,
+                    Mock<IIngresoPorFacturaService> svcMock,
+                    Mock<INavigationService> navMock,
+                    Mock<IAltaProductoRapidaDialogService> altaMock,
+                    Mock<IConfirmacionPreciosDialogService> preciosMock)
+        CrearConDialogos()
+    {
         var svc = new Mock<IIngresoPorFacturaService>();
         var productos = new Mock<IProductoService>();
         productos.Setup(p => p.BuscarAsync(null, null, null)).ReturnsAsync(new List<ProductoDto>
@@ -29,7 +44,7 @@ public class IngresoPorFacturaViewModelTests
             new(1, "SKU1", null, "Producto Uno", null, null, null, null, 1, "Unidad", 10m, 5m, 0m, true, DateTime.UtcNow),
         });
         var categorias = new Mock<ICategoriaService>();
-        categorias.Setup(c => c.ListarActivasAsync()).ReturnsAsync(new List<Categoria>());
+        categorias.Setup(c => c.ListarActivasAsync()).ReturnsAsync(new List<Categoria> { new() { Id = 3, Nombre = "Herramientas", Activo = true } });
         var unidades = new Mock<IUnidadMedidaService>();
         unidades.Setup(u => u.ListarActivasAsync()).ReturnsAsync(new List<UnidadMedida>
         {
@@ -71,12 +86,19 @@ public class IngresoPorFacturaViewModelTests
             confirm.Object,
             new Mock<ICurrentSession>().Object);
 
+        var alta = new Mock<IAltaProductoRapidaDialogService>();
+        alta.Setup(a => a.PedirProductoNuevoAsync(It.IsAny<IReadOnlyList<Categoria>>(), It.IsAny<IReadOnlyList<UnidadMedida>>()))
+            .ReturnsAsync((ProductoNuevoDto?)null);
+        var precios = new Mock<IConfirmacionPreciosDialogService>();
+        precios.Setup(p => p.ConfirmarCambiosAsync(It.IsAny<IReadOnlyList<ItemConfirmacionPrecioVm>>()))
+            .ReturnsAsync((IReadOnlyList<bool>?)null);
+
         var vm = new IngresoPorFacturaViewModel(
             svc.Object, productos.Object, categorias.Object, unidades.Object,
             proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
-            nav.Object, confirm.Object, adjuntosPanel);
+            nav.Object, confirm.Object, adjuntosPanel, alta.Object, precios.Object);
 
-        return (vm, svc, nav);
+        return (vm, svc, nav, alta, precios);
     }
 
     private static async Task InicializarYCompletarCabeceraAsync(IngresoPorFacturaViewModel vm)
@@ -237,7 +259,8 @@ public class IngresoPorFacturaViewModelTests
         var vm = new IngresoPorFacturaViewModel(
             svc.Object, productos.Object, categorias.Object, unidades.Object,
             proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
-            nav.Object, confirm.Object, adjuntosPanel);
+            nav.Object, confirm.Object, adjuntosPanel,
+            Mock.Of<IAltaProductoRapidaDialogService>(), Mock.Of<IConfirmacionPreciosDialogService>());
 
         await vm.InicializarAsync();
 
@@ -269,7 +292,8 @@ public class IngresoPorFacturaViewModelTests
         var vm = new IngresoPorFacturaViewModel(
             svc.Object, productos.Object, categorias.Object, unidades.Object,
             proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
-            nav.Object, confirm.Object, adjuntosPanel);
+            nav.Object, confirm.Object, adjuntosPanel,
+            Mock.Of<IAltaProductoRapidaDialogService>(), Mock.Of<IConfirmacionPreciosDialogService>());
 
         var excepcion = await Record.ExceptionAsync(() => vm.InicializarAsync());
 
@@ -380,113 +404,233 @@ public class IngresoPorFacturaViewModelTests
         Assert.Null(vm.GastoIdCreado);
     }
 
-    /// <summary>
-    /// Adaptado al nuevo flujo (encargo "carga por formulario"): el alta en línea ya NO escribe
-    /// directo sobre una fila ya agregada a la grilla (AbrirAltaProductoCommand ya no toma un
-    /// parámetro FilaRenglonFacturaVm). Ahora "Producto nuevo" dejar la ZONA DE CARGA en modo
-    /// producto nuevo (EsProductoNuevoEnCarga), y recién AgregarArticuloCommand crea el renglón.
-    /// La garantía que este test custodia sigue siendo la misma: cargar un producto nuevo NO
-    /// descarta los renglones ya agregados antes.
-    /// </summary>
+    [Fact]
+    public async Task AbrirAltaProducto_PasaLasCategoriasYUnidadesYaCargadas()
+    {
+        var (vm, _, _, alta, _) = CrearConDialogos();
+        await vm.InicializarAsync();
+
+        await vm.AbrirAltaProductoCommand.ExecuteAsync(null);
+
+        alta.Verify(a => a.PedirProductoNuevoAsync(
+            It.Is<IReadOnlyList<Categoria>>(c => c.SequenceEqual(vm.CategoriasDisponibles)),
+            It.Is<IReadOnlyList<UnidadMedida>>(u => u.SequenceEqual(vm.UnidadesMedidaDisponibles))), Times.Once);
+    }
+
+    [Fact]
+    public async Task AbrirAltaProducto_Cancelada_LaZonaDeCargaQuedaIntacta()
+    {
+        var (vm, _, _, _, _) = CrearConDialogos();
+        await vm.InicializarAsync();
+        vm.ProductoEnCarga = vm.ProductosDisponibles[0];
+        vm.CantidadEnCarga = 3m;
+        vm.PrecioUnitarioEnCarga = 12m;
+
+        await vm.AbrirAltaProductoCommand.ExecuteAsync(null);
+
+        Assert.Same(vm.ProductosDisponibles[0], vm.ProductoEnCarga);
+        Assert.False(vm.EsProductoNuevoEnCarga);
+        Assert.Null(vm.NuevoProductoCodigo);
+        Assert.Equal(3m, vm.CantidadEnCarga);
+        Assert.False(vm.SolicitarFocoEnCantidad);
+    }
+
+    [Fact]
+    public async Task AbrirAltaProducto_Confirmada_QuedaComoProductoNuevoEnCargaYPideElFocoEnCantidad()
+    {
+        var (vm, _, _, alta, _) = CrearConDialogos();
+        await vm.InicializarAsync();
+        vm.ProductoEnCarga = vm.ProductosDisponibles[0];
+        alta.Setup(a => a.PedirProductoNuevoAsync(It.IsAny<IReadOnlyList<Categoria>>(), It.IsAny<IReadOnlyList<UnidadMedida>>()))
+            .ReturnsAsync(new ProductoNuevoDto("MAT-0601", "Carretilla de obra 90 L", 3, 1));
+
+        await vm.AbrirAltaProductoCommand.ExecuteAsync(null);
+
+        Assert.True(vm.EsProductoNuevoEnCarga);
+        Assert.Null(vm.ProductoEnCarga);
+        Assert.Equal("MAT-0601", vm.NuevoProductoCodigo);
+        Assert.Equal("Carretilla de obra 90 L", vm.NuevoProductoNombre);
+        Assert.Equal(3, vm.NuevaCategoriaSeleccionada!.Id);
+        Assert.Equal(1, vm.NuevaUnidadSeleccionada!.Id);
+        Assert.True(vm.SolicitarFocoEnCantidad);
+    }
+
     [Fact]
     public async Task AltaEnLinea_NoDescartaLosRenglonesYaCargados()
     {
-        var (vm, _, _) = Crear();
+        var (vm, _, _, alta, _) = CrearConDialogos();
         await InicializarYCompletarCabeceraAsync(vm);
-
         AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 2m, precioUnitario: 30m);
+        alta.Setup(a => a.PedirProductoNuevoAsync(It.IsAny<IReadOnlyList<Categoria>>(), It.IsAny<IReadOnlyList<UnidadMedida>>()))
+            .ReturnsAsync(new ProductoNuevoDto("SKU-INLINE", "Producto cargado en línea", null, 1));
 
-        vm.AbrirAltaProductoCommand.Execute(null);
-        vm.NuevoProductoCodigo = "SKU-INLINE";
-        vm.NuevoProductoNombre = "Producto cargado en línea";
-        vm.NuevaUnidadSeleccionada = vm.UnidadesMedidaDisponibles[0];
-        vm.ConfirmarAltaProductoCommand.Execute(null);
-
-        Assert.True(vm.EsProductoNuevoEnCarga);
+        await vm.AbrirAltaProductoCommand.ExecuteAsync(null);
         vm.CantidadEnCarga = 1m;
         vm.PrecioUnitarioEnCarga = 40m;
         vm.AgregarArticuloCommand.Execute(null);
 
         Assert.Equal(2, vm.Renglones.Count);
-        Assert.False(vm.MostrandoAltaProducto);
-        // el renglón cargado antes queda intacto
         Assert.Equal(2m, vm.Renglones[0].Cantidad);
         Assert.Equal(30m, vm.Renglones[0].PrecioUnitario);
-        // el renglón nuevo queda marcado como producto nuevo
         var filaNueva = vm.Renglones[1];
         Assert.True(filaNueva.EsProductoNuevo);
         Assert.Equal("SKU-INLINE", filaNueva.ProductoNuevoCodigo);
         Assert.Equal("Producto cargado en línea", filaNueva.ProductoNuevoNombre);
-        // la zona de carga queda limpia después de agregar (vuelve a modo "producto existente")
+        Assert.Null(filaNueva.ProductoNuevoCategoriaId);
+        Assert.Equal(1, filaNueva.ProductoNuevoUnidadMedidaId);
         Assert.False(vm.EsProductoNuevoEnCarga);
     }
 
     [Fact]
     public async Task Guardar_ListaSoloLosProductosCuyoPrecioCostoDifiere()
     {
-        var (vm, svc, _) = Crear();
+        var (vm, svc, _, _, precios) = CrearConDialogos();
         await InicializarYCompletarCabeceraAsync(vm);
-
-        // Renglon 1: mismo precio que PrecioCosto del producto (10m) → NO entra en la confirmación.
         AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 10m);
-
-        // Renglon 2: precio distinto (15m != 10m) → SÍ entra en la confirmación.
         AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 15m);
 
         await vm.GuardarCommand.ExecuteAsync(null);
 
-        Assert.True(vm.MostrandoConfirmacionPrecios);
-        var cambio = Assert.Single(vm.CambiosDePrecio);
-        Assert.Equal(10m, cambio.PrecioActual);
-        Assert.Equal(15m, cambio.PrecioNuevo);
+        precios.Verify(p => p.ConfirmarCambiosAsync(It.Is<IReadOnlyList<ItemConfirmacionPrecioVm>>(
+            l => l.Count == 1 && l[0].PrecioActual == 10m && l[0].PrecioNuevo == 15m)), Times.Once);
         svc.Verify(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()), Times.Never);
     }
 
     [Fact]
-    public async Task ConfirmarPreciosYGuardar_SoloAplicaLosTildados()
+    public async Task Guardar_PreciosConfirmados_AplicaLosTildesYGuarda()
     {
-        var (vm, svc, _) = Crear();
+        var (vm, svc, _, _, precios) = CrearConDialogos();
         svc.Setup(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()))
             .ReturnsAsync(new IngresoPorFacturaResultadoDto(1, new List<int> { 1, 2 }, 35m, 0m));
+        precios.Setup(p => p.ConfirmarCambiosAsync(It.IsAny<IReadOnlyList<ItemConfirmacionPrecioVm>>()))
+            .ReturnsAsync(new[] { true, false });
         await InicializarYCompletarCabeceraAsync(vm);
-
-        // Renglon 1: precio distinto (15m != 10m), el usuario SÍ confirma la actualización.
         AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 15m);
-
-        // Renglon 2: precio distinto (20m != 10m), el usuario NO confirma la actualización.
         AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 20m);
 
         await vm.GuardarCommand.ExecuteAsync(null);
 
-        Assert.Equal(2, vm.CambiosDePrecio.Count);
-        vm.CambiosDePrecio[0].Confirmado = true;
-        vm.CambiosDePrecio[1].Confirmado = false;
-
-        await vm.ConfirmarPreciosYGuardarCommand.ExecuteAsync(null);
-
         Assert.True(vm.Renglones[0].ActualizarPrecioCosto);
         Assert.False(vm.Renglones[1].ActualizarPrecioCosto);
+        Assert.True(vm.CambiosDePrecio[0].Confirmado);
         svc.Verify(s => s.RegistrarAsync(It.Is<IngresoPorFacturaDto>(
             d => d.Renglones[0].ActualizarPrecioCosto && !d.Renglones[1].ActualizarPrecioCosto)), Times.Once);
+        Assert.True(vm.GuardadoExitoso);
     }
 
     [Fact]
-    public async Task Guardar_SinCambiosDePrecio_NoMuestraConfirmacionYGuardaDirecto()
+    public async Task Guardar_PreciosCancelados_NoGuardaYConservaTodo()
     {
-        var (vm, svc, _) = Crear();
+        var (vm, svc, _, _, _) = CrearConDialogos();
+        await InicializarYCompletarCabeceraAsync(vm);
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 15m);
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()), Times.Never);
+        Assert.False(vm.GuardadoExitoso);
+        Assert.Single(vm.Renglones);
+        Assert.Null(vm.MensajeError);
+        Assert.True(vm.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task Guardar_SinCambiosDePrecio_NoPreguntaYGuardaDirecto()
+    {
+        var (vm, svc, _, _, precios) = CrearConDialogos();
         svc.Setup(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()))
             .ReturnsAsync(new IngresoPorFacturaResultadoDto(1, new List<int> { 1 }, 10m, 0m));
         await InicializarYCompletarCabeceraAsync(vm);
-
-        // Mismo precio que PrecioCosto del producto (10m) → ningún renglón entra en la confirmación.
         AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 10m);
 
         await vm.GuardarCommand.ExecuteAsync(null);
 
-        Assert.False(vm.MostrandoConfirmacionPrecios);
-        Assert.Empty(vm.CambiosDePrecio);
+        precios.Verify(p => p.ConfirmarCambiosAsync(It.IsAny<IReadOnlyList<ItemConfirmacionPrecioVm>>()), Times.Never);
         Assert.True(vm.GuardadoExitoso);
         svc.Verify(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Guardar_MientrasLaConfirmacionEstaAbierta_NoSePuedeVolverAGuardar()
+    {
+        var (vm, svc, _, _, precios) = CrearConDialogos();
+        svc.Setup(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()))
+            .ReturnsAsync(new IngresoPorFacturaResultadoDto(1, new List<int> { 1 }, 15m, 0m));
+        var abierta = new TaskCompletionSource<IReadOnlyList<bool>?>();
+        precios.Setup(p => p.ConfirmarCambiosAsync(It.IsAny<IReadOnlyList<ItemConfirmacionPrecioVm>>())).Returns(abierta.Task);
+        await InicializarYCompletarCabeceraAsync(vm);
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 15m);
+
+        var primero = vm.GuardarCommand.ExecuteAsync(null);
+
+        Assert.False(vm.GuardarCommand.CanExecute(null), "Con la confirmación abierta, Guardar sigue habilitado.");
+        abierta.SetResult(new[] { true });
+        await primero;
+        precios.Verify(p => p.ConfirmarCambiosAsync(It.IsAny<IReadOnlyList<ItemConfirmacionPrecioVm>>()), Times.Once);
+        svc.Verify(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Guardar_ProductoNuevoYCambioDePrecio_ConfirmaSoloElExistenteYElDtoLlevaLosDos()
+    {
+        var (vm, svc, _, alta, precios) = CrearConDialogos();
+        svc.Setup(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()))
+            .ReturnsAsync(new IngresoPorFacturaResultadoDto(1, new List<int> { 1, 2 }, 95m, 0m));
+        alta.Setup(a => a.PedirProductoNuevoAsync(It.IsAny<IReadOnlyList<Categoria>>(), It.IsAny<IReadOnlyList<UnidadMedida>>()))
+            .ReturnsAsync(new ProductoNuevoDto("MAT-0601", "Carretilla de obra 90 L", 3, 1));
+        precios.Setup(p => p.ConfirmarCambiosAsync(It.IsAny<IReadOnlyList<ItemConfirmacionPrecioVm>>()))
+            .ReturnsAsync(new[] { true });
+        await InicializarYCompletarCabeceraAsync(vm);
+        await vm.AbrirAltaProductoCommand.ExecuteAsync(null);
+        vm.CantidadEnCarga = 2m;
+        vm.PrecioUnitarioEnCarga = 40m;
+        vm.AgregarArticuloCommand.Execute(null);
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 15m);
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        precios.Verify(p => p.ConfirmarCambiosAsync(It.Is<IReadOnlyList<ItemConfirmacionPrecioVm>>(
+            l => l.Count == 1 && l[0].ProductoNombre == "Producto Uno")), Times.Once);
+        svc.Verify(s => s.RegistrarAsync(It.Is<IngresoPorFacturaDto>(d =>
+            d.Renglones.Count == 2
+            && d.Renglones[0].ProductoNuevo == new ProductoNuevoDto("MAT-0601", "Carretilla de obra 90 L", 3, 1)
+            && !d.Renglones[0].ActualizarPrecioCosto
+            && d.Renglones[1].ProductoId == 1 && d.Renglones[1].ActualizarPrecioCosto)), Times.Once);
+    }
+
+    [Fact]
+    public async Task Guardar_ServidorCaidoTrasConfirmar_MuestraElErrorYConservaTodo()
+    {
+        var (vm, svc, _, _, precios) = CrearConDialogos();
+        svc.Setup(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>())).ThrowsAsync(new ServidorNoDisponibleException());
+        precios.Setup(p => p.ConfirmarCambiosAsync(It.IsAny<IReadOnlyList<ItemConfirmacionPrecioVm>>())).ReturnsAsync(new[] { true });
+        await InicializarYCompletarCabeceraAsync(vm);
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 15m);
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        Assert.Equal(ServidorNoDisponibleException.MensajePorDefecto, vm.MensajeError);
+        Assert.False(vm.GuardadoExitoso);
+        Assert.Null(vm.GastoIdCreado);
+        Assert.Single(vm.Renglones);
+        Assert.True(vm.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task Guardar_403TrasConfirmar_MuestraElMensajeDeSesion()
+    {
+        var (vm, svc, _, _, precios) = CrearConDialogos();
+        svc.Setup(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>())).ThrowsAsync(new UnauthorizedAccessException("403"));
+        precios.Setup(p => p.ConfirmarCambiosAsync(It.IsAny<IReadOnlyList<ItemConfirmacionPrecioVm>>())).ReturnsAsync(new[] { false });
+        await InicializarYCompletarCabeceraAsync(vm);
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 15m);
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        Assert.Equal("La sesión expiró o no tiene permiso para registrar esta factura. Vuelva a iniciar sesión e intente de nuevo.",
+            vm.MensajeError);
+        Assert.False(vm.GuardadoExitoso);
+        Assert.Single(vm.Renglones);
     }
 
     [Fact]
