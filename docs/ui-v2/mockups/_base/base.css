@@ -315,6 +315,14 @@ body {
 
 /* TextBox deshabilitado (ControlesV2.axaml, .ui2 TextBox:disabled): tokens de deshabilitado, los mismos del botón. */
 .v2-input--deshabilitado { background: var(--v2-color-deshabilitado-fondo); border-color: var(--v2-color-borde); color: var(--v2-color-deshabilitado-texto); }
+/* ComboBox deshabilitado (ControlesV2.axaml, .ui2 ComboBox:disabled): fondo, borde y texto como el TextBox deshabilitado,
+   y el glifo de la flecha en el color de deshabilitado en vez del terciario. */
+.v2-input--deshabilitado .v2-glifo-combo { color: var(--v2-color-deshabilitado-texto); }
+/* CheckBox deshabilitado (ControlesV2.axaml, .ui2 CheckBox:disabled): texto en deshabilitado; la casilla, marcada o no,
+   con fondo de deshabilitado y borde estándar. */
+.v2-casilla-fila--deshabilitada { color: var(--v2-color-deshabilitado-texto); }
+.v2-casilla-fila--deshabilitada .v2-casilla, .v2-casilla-fila--deshabilitada .v2-casilla--marcada { background: var(--v2-color-deshabilitado-fondo); border-color: var(--v2-color-borde); }
+.v2-casilla-fila--deshabilitada .v2-glifo-check { color: var(--v2-color-deshabilitado-texto); }
 /* Indicador de carga (Controls/V2/ComponentesV2.axaml, v2:EstadoCargando): texto secundario centrado en el
    lugar del estado vacío, con su mismo margen vertical. Sin animación. */
 .v2-cargando { margin: 32px 0; text-align: center; font-size: var(--v2-fuente-control-tamano); line-height: var(--v2-fuente-control-alto-linea); color: var(--v2-color-texto-secundario); }

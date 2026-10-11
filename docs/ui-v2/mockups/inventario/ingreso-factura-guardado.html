@@ -55,11 +55,9 @@
   .pulgar { position: absolute; right: 2px; width: 2px; background: #7A7A7A; }
 
   /* Después de guardar la card queda deshabilitada (IsEnabled=!GuardadoExitoso). Inputs y botones con los colores
-     de deshabilitado de base.css; el ComboBox y el CheckBox con los mismos tokens (estilo v2 nuevo: sin él caen en el
+     de deshabilitado de base.css; el ComboBox y el CheckBox con los mismos tokens (estilos de base.css; sin ellos caen en el
      gris de Fluent). Quitar (ghost) solo cambia el color del texto; la grilla y la insignia no cambian. */
-  .casilla-deshabilitada { color: var(--v2-color-deshabilitado-texto); }
-  .casilla-deshabilitada .v2-casilla { background: var(--v2-color-deshabilitado-fondo); border-color: var(--v2-color-borde); }
-  .input-deshabilitado .v2-glifo-combo, .input-deshabilitado .v2-glifo-fecha { color: var(--v2-color-deshabilitado-texto); }
+  .input-deshabilitado .v2-glifo-fecha { color: var(--v2-color-deshabilitado-texto); }
   .quitar-deshabilitado { color: var(--v2-color-deshabilitado-texto); }
   /* Card "Adjuntá la factura": el interior (AdjuntosPanelView v1) no se compara; se reserva su alto MEDIDO (120). */
   .tarjeta-adjuntos { margin-top: 16px; padding: 24px; }
@@ -142,7 +140,7 @@
             <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Fuente de financiamiento</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input v2-input--deshabilitado input-deshabilitado"><span>Fondo de Desarrollo del Interior</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div></div>
             <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Rubro de gasto</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input v2-input--deshabilitado input-deshabilitado"><span>Materiales de construcción</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div></div>
             <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Línea POA</span></div><div><div class="v2-input v2-input--deshabilitado input-deshabilitado"><span>Mantenimiento de espacios públicos</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div></div>
-            <div class="v2-casilla-fila casilla-deshabilitada"><div class="v2-casilla-caja"><div class="v2-casilla"></div></div><span>Compra a crédito</span></div>
+            <div class="v2-casilla-fila v2-casilla-fila--deshabilitada"><div class="v2-casilla-caja"><div class="v2-casilla"></div></div><span>Compra a crédito</span></div>
           </div>
           <div class="separador"></div>
           <div class="v2-subtitulo-formulario subtitulo">Cargar artículo</div>
@@ -151,7 +149,7 @@
             <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Cantidad</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input v2-input--deshabilitado"><span>0</span></div></div></div>
             <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Precio unitario</span></div><div><div class="v2-input v2-input--deshabilitado"><span>0</span></div></div></div>
             <span class="v2-boton v2-boton--secundario v2-boton--deshabilitado">Agregar artículo</span>
-            <div class="fila-carga-linea2"><div class="v2-casilla-fila casilla-deshabilitada"><div class="v2-casilla-caja"><div class="v2-casilla"></div></div><span>Actualizar precio costo</span></div><span class="v2-boton v2-boton--secundario v2-boton--deshabilitado">Producto nuevo</span></div>
+            <div class="fila-carga-linea2"><div class="v2-casilla-fila v2-casilla-fila--deshabilitada"><div class="v2-casilla-caja"><div class="v2-casilla"></div></div><span>Actualizar precio costo</span></div><span class="v2-boton v2-boton--secundario v2-boton--deshabilitado">Producto nuevo</span></div>
           </div>
           <div class="separador"></div>
           <div class="v2-subtitulo-formulario subtitulo">Artículos cargados</div>

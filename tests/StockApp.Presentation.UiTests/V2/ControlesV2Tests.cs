@@ -202,6 +202,47 @@ public class ControlesV2Tests
     }
 
     [AvaloniaFact]
+    public void Advertencia_GanaSobreTituloDeSeccion()
+    {
+        var ventana = Montar("""
+            <StackPanel>
+              <TextBlock x:Name="Neutro" Classes="titulo-seccion" Text="$ 0,00" />
+              <TextBlock x:Name="Aviso" Classes="titulo-seccion advertencia" Text="$ 60,00" />
+            </StackPanel>
+            """);
+
+        Assert.Equal(Hex("#1C1917"), ColorDe(Buscar<TextBlock>(ventana, "Neutro").Foreground));
+        Assert.Equal(Hex("#92400E"), ColorDe(Buscar<TextBlock>(ventana, "Aviso").Foreground));
+    }
+
+    [AvaloniaFact]
+    public void ComboBoxYCheckBox_Deshabilitados_UsanLosTokensDeDeshabilitadoV2()
+    {
+        // H2: sin estos estilos caen en el gris de Fluent (#CCCCCC el combo, #9F9F9F el texto del tilde).
+        var ventana = Montar("""
+            <StackPanel>
+              <ComboBox x:Name="Combo" Width="200" IsEnabled="False" SelectedIndex="0"><ComboBoxItem>Tornillo</ComboBoxItem></ComboBox>
+              <CheckBox x:Name="Tilde" IsEnabled="False" Content="Compra a crédito" />
+              <CheckBox x:Name="TildeMarcado" IsEnabled="False" IsChecked="True" Content="Marcado" />
+            </StackPanel>
+            """);
+        var combo = Buscar<ComboBox>(ventana, "Combo");
+        var tilde = Buscar<CheckBox>(ventana, "Tilde");
+        var casilla = Parte<Border>(tilde, "NormalRectangle");
+
+        Assert.Equal(Hex("#F5F5F4"), ColorDe(Parte<Border>(combo, "Background").Background));
+        Assert.Equal(Hex("#E7E5E4"), ColorDe(Parte<Border>(combo, "Background").BorderBrush));
+        Assert.Equal(Hex("#A8A29E"), ColorDe(combo.Foreground));
+        Assert.Equal(Hex("#A8A29E"), ColorDe(Parte<PathIcon>(combo, "DropDownGlyph").Foreground));
+        Assert.Equal(Hex("#A8A29E"), ColorDe(tilde.Foreground));
+        Assert.Equal(Hex("#F5F5F4"), ColorDe(casilla.Background));
+        Assert.Equal(Hex("#E7E5E4"), ColorDe(casilla.BorderBrush));
+        // Marcado y deshabilitado: la casilla conserva el deshabilitado, no el azul de acento.
+        var marcada = Parte<Border>(Buscar<CheckBox>(ventana, "TildeMarcado"), "NormalRectangle");
+        Assert.Equal(Hex("#F5F5F4"), ColorDe(marcada.Background));
+    }
+
+    [AvaloniaFact]
     public void CheckBox_Casilla16Radio4BordeInput()
     {
         var casilla = Parte<Border>(Buscar<CheckBox>(Montar("""<CheckBox x:Name="C" Content="Activo" />"""), "C"), "NormalRectangle");

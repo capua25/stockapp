@@ -36,6 +36,11 @@
         <Setter Property="FontWeight" Value="{DynamicResource V2FuenteTituloSeccionPeso}" />
         <Setter Property="Foreground" Value="{DynamicResource V2TextoPrimarioBrush}" />
     </Style>
+    <!-- Valor en advertencia (Diferencia del pie de Ingreso por factura). Va después de titulo-seccion: a igual
+         especificidad gana el último. Mismo texto que la familia advertencia de la insignia y la alerta. -->
+    <Style Selector=".ui2 TextBlock.advertencia">
+        <Setter Property="Foreground" Value="{DynamicResource V2InsigniaAdvertenciaTextoBrush}" />
+    </Style>
     <Style Selector=".ui2 TextBlock.cuerpo">
         <Setter Property="FontSize" Value="{DynamicResource V2FuenteCuerpoTamano}" />
         <Setter Property="FontWeight" Value="{DynamicResource V2FuenteCuerpoPeso}" />
@@ -272,6 +277,15 @@
     <Style Selector=".ui2 ComboBox /template/ TextBlock#PlaceholderTextBlock">
         <Setter Property="Opacity" Value="1" />
     </Style>
+    <!-- ComboBox deshabilitado (H2): los mismos tokens que el TextBox deshabilitado, en vez del gris de Fluent
+         (fondo #33000000, texto #9F9F9F). Espejo: la variante deshabilitada de .v2-input y su glifo en base.css. -->
+    <Style Selector=".ui2 ComboBox:disabled">
+        <Setter Property="Foreground" Value="{DynamicResource V2DeshabilitadoTextoBrush}" />
+    </Style>
+    <Style Selector=".ui2 ComboBox:disabled /template/ Border#Background">
+        <Setter Property="Background" Value="{DynamicResource V2DeshabilitadoFondoBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource V2BordeBrush}" />
+    </Style>
     <Style Selector=".ui2 NumericUpDown">
         <Setter Property="Height" Value="{DynamicResource V2AltoControl}" />
         <Setter Property="MinHeight" Value="0" />
@@ -318,6 +332,9 @@
     </Style>
     <Style Selector=".ui2 ComboBox /template/ PathIcon#DropDownGlyph">
         <Setter Property="Foreground" Value="{DynamicResource V2TextoTerciarioBrush}" />
+    </Style>
+    <Style Selector=".ui2 ComboBox:disabled /template/ PathIcon#DropDownGlyph">
+        <Setter Property="Foreground" Value="{DynamicResource V2DeshabilitadoTextoBrush}" />
     </Style>
     <!-- El TextBox interno ya está dentro del borde del control: sin esto recibe el MinHeight 36 y
          el borde de ".ui2 TextBox" y el control termina midiendo 38 con doble borde. -->
@@ -394,6 +411,18 @@
     </Style>
     <Style Selector=".ui2 CheckBox:checked /template/ Path#CheckGlyph">
         <Setter Property="Fill" Value="{DynamicResource V2TextoSobreAcentoBrush}" />
+    </Style>
+    <!-- CheckBox deshabilitado (H2): texto y casilla con los tokens de deshabilitado; marcada o no, la casilla no
+         conserva el azul de acento. Espejo: la variante deshabilitada de .v2-casilla-fila en base.css. -->
+    <Style Selector=".ui2 CheckBox:disabled">
+        <Setter Property="Foreground" Value="{DynamicResource V2DeshabilitadoTextoBrush}" />
+    </Style>
+    <Style Selector=".ui2 CheckBox:disabled /template/ Border#NormalRectangle, .ui2 CheckBox:disabled:checked /template/ Border#NormalRectangle">
+        <Setter Property="Background" Value="{DynamicResource V2DeshabilitadoFondoBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource V2BordeBrush}" />
+    </Style>
+    <Style Selector=".ui2 CheckBox:disabled:checked /template/ Path#CheckGlyph">
+        <Setter Property="Fill" Value="{DynamicResource V2DeshabilitadoTextoBrush}" />
     </Style>
 
     <!-- Mensaje de error de campo (spec §2.3: 12, color borde error). Solo cambia CÓMO se ve lo
