@@ -290,6 +290,7 @@ public partial class App : AvaloniaApp
         services.AddSingleton<IConfirmacionService, ConfirmacionService>();
         services.AddSingleton<IClasificacionTareaDialogService, ClasificacionTareaDialogService>();
         services.AddSingleton<IRecalcularStockDialogService, RecalcularStockDialogService>();
+        services.AddSingleton<IAltaProductoRapidaDialogService, AltaProductoRapidaDialogService>();
 
         // ── Marshaling al UI thread para asignaciones desde background (ej: overlay
         // de actualización en ShellViewModel) ─────────────────────────────────────

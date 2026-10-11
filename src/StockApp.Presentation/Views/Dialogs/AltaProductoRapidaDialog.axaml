@@ -1,0 +1,65 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:v2="using:StockApp.Presentation.Controls.V2"
+        xmlns:ent="clr-namespace:StockApp.Domain.Entities;assembly=StockApp.Domain"
+        mc:Ignorable="d" d:DesignWidth="440" d:DesignHeight="360"
+        x:Class="StockApp.Presentation.Views.Dialogs.AltaProductoRapidaDialog"
+        Title="Producto nuevo"
+        Width="440"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        ShowInTaskbar="False"
+        Background="{DynamicResource V2SuperficieBrush}">
+
+    <!-- UI v2 (spec §5.5). Modal de pantalla como Window con servicio, nunca un overlay sobre la vista. Sin bindings:
+         el servicio le pasa las categorías y unidades que la pantalla ya cargó. Escape cancela y Enter confirma. -->
+    <Border x:Name="Contenido"
+            Classes="ui2"
+            Background="{DynamicResource V2SuperficieBrush}"
+            Padding="24">
+        <StackPanel Spacing="16">
+
+            <TextBlock x:Name="MensajeText" Classes="cuerpo" TextWrapping="Wrap"
+                       Text="El producto se da de alta junto con la factura, al guardar." />
+
+            <Grid ColumnDefinitions="*,16,*" RowDefinitions="Auto,Auto,Auto">
+                <v2:CampoFormulario Grid.Row="0" Grid.ColumnSpan="3" Etiqueta="Código" Requerido="True">
+                    <TextBox x:Name="CodigoTextBox" PlaceholderText="Ej.: MAT-0601" />
+                </v2:CampoFormulario>
+                <v2:CampoFormulario Grid.Row="1" Grid.ColumnSpan="3" Margin="0,16,0,0" Etiqueta="Nombre" Requerido="True">
+                    <TextBox x:Name="NombreTextBox" PlaceholderText="Ej.: Carretilla de obra 90 L" />
+                </v2:CampoFormulario>
+                <v2:CampoFormulario Grid.Row="2" Grid.Column="0" Margin="0,16,0,0" Etiqueta="Categoría">
+                    <ComboBox x:Name="CategoriaCombo" PlaceholderText="Sin categoría" HorizontalAlignment="Stretch">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="ent:Categoria">
+                                <TextBlock Text="{Binding Nombre}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </v2:CampoFormulario>
+                <v2:CampoFormulario Grid.Row="2" Grid.Column="2" Margin="0,16,0,0" Etiqueta="Unidad de medida" Requerido="True">
+                    <ComboBox x:Name="UnidadCombo" PlaceholderText="Elegí la unidad" HorizontalAlignment="Stretch">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="ent:UnidadMedida">
+                                <TextBlock Text="{Binding Nombre}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </v2:CampoFormulario>
+            </Grid>
+
+            <v2:Alerta x:Name="AlertaFaltantes" Variante="Error" IsVisible="False" />
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,8,0,0">
+                <Button x:Name="CancelarButton" Classes="secundario" Content="Cancelar" IsCancel="True" Click="OnCancelarClick" />
+                <Button x:Name="ConfirmarButton" Classes="primario" Content="Confirmar" IsDefault="True" Click="OnConfirmarClick" />
+            </StackPanel>
+
+        </StackPanel>
+    </Border>
+
+</Window>

@@ -1,7 +1,9 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Interactivity;
 using StockApp.Presentation.Views.Dialogs;
 using StockApp.Presentation.VisualTests.Comparacion;
+using StockApp.Presentation.VisualTests.Pantallas.Inventario;
 using StockApp.UiV2.Herramientas;
 
 namespace StockApp.Presentation.VisualTests.Pantallas.Dialogos;
@@ -20,6 +22,17 @@ public class DialogosComparacionTests
 
     private static Control RecalcularStock() =>
         ContenidoDeDialogo.Extraer(new RecalcularStockDialog((_, _) => Task.FromResult<IEnumerable<object>>(Array.Empty<object>())));
+
+    private static Control AltaProducto() =>
+        ContenidoDeDialogo.Extraer(new AltaProductoRapidaDialog(DatosProductos.Categorias, DatosProductos.Unidades));
+
+    private static Control AltaProductoFaltantes()
+    {
+        var dialogo = new AltaProductoRapidaDialog(DatosProductos.Categorias, DatosProductos.Unidades);
+        dialogo.FindControl<TextBox>("CodigoTextBox")!.Text = "MAT-0601";
+        dialogo.FindControl<Button>("ConfirmarButton")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        return ContenidoDeDialogo.Extraer(dialogo);
+    }
 
     [AvaloniaFact]
     public void Confirmacion_IgualAlMockup() =>
@@ -52,4 +65,20 @@ public class DialogosComparacionTests
     [AvaloniaFact]
     public void RecalcularStock_IgualAlMockup_1366x768() =>
         ComparacionVisual.CompararConMockup(RecalcularStock(), null, "dialogos/recalcular-stock.html", tamano: TamanoLienzo.Municipio);
+
+    [AvaloniaFact]
+    public void AltaProducto_IgualAlMockup() =>
+        ComparacionVisual.CompararConMockup(AltaProducto(), null, "dialogos/alta-producto.html");
+
+    [AvaloniaFact]
+    public void AltaProducto_IgualAlMockup_1366x768() =>
+        ComparacionVisual.CompararConMockup(AltaProducto(), null, "dialogos/alta-producto.html", tamano: TamanoLienzo.Municipio);
+
+    [AvaloniaFact]
+    public void AltaProductoFaltantes_IgualAlMockup() =>
+        ComparacionVisual.CompararConMockup(AltaProductoFaltantes(), null, "dialogos/alta-producto-faltantes.html");
+
+    [AvaloniaFact]
+    public void AltaProductoFaltantes_IgualAlMockup_1366x768() =>
+        ComparacionVisual.CompararConMockup(AltaProductoFaltantes(), null, "dialogos/alta-producto-faltantes.html", tamano: TamanoLienzo.Municipio);
 }

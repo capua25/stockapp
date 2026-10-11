@@ -264,7 +264,13 @@
         <Setter Property="Background" Value="{DynamicResource V2SuperficieBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource V2BordeInputBrush}" />
         <Setter Property="Foreground" Value="{DynamicResource V2TextoEtiquetaBrush}" />
+        <Setter Property="PlaceholderForeground" Value="{DynamicResource V2TextoTerciarioBrush}" />
         <Setter Property="FontSize" Value="{DynamicResource V2FuenteControlTamano}" />
+    </Style>
+    <!-- Igual que el TextBox: el placeholder del ComboBox sale con Opacity 0.5 y el mockup lo pinta pleno en
+         el color terciario (medido en el diálogo de alta de producto: #BBB8B5 contra #73706D). -->
+    <Style Selector=".ui2 ComboBox /template/ TextBlock#PlaceholderTextBlock">
+        <Setter Property="Opacity" Value="1" />
     </Style>
     <Style Selector=".ui2 NumericUpDown">
         <Setter Property="Height" Value="{DynamicResource V2AltoControl}" />
