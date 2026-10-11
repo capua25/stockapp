@@ -3437,7 +3437,7 @@ Todo a **1280×760**; los pasos 1 y 4 se repiten a 1366×768. Capturar cada pant
 
 Si un paso no se puede hacer por el entorno (WSLg caído o congelado, contenedor o API que no arrancan), PARAR y avisar con la evidencia (stderr, `docker ps -a`, md5 de las capturas), sin declarar la fase cerrada. Si el usuario necesita la PC, se pausa.
 
-- [ ] **Step 3: Aprobación final del usuario**
+- [x] **Step 3: Aprobación final del usuario** (aprobada por el usuario el 2026-10-11)
 
 PARAR. Presentar: `index.html` (las 8 filas de la pantalla y las 6 de los diálogos), las capturas de la verificación orgánica junto a los mockups, los rojos de las mutaciones (a) a (ab), los tests heredados reemplazados (con su reemplazo) y los cambios respecto de los mockups aprobados. Registrar en el ledger: `Fase 3c-3: aprobada por <quién> <fecha>`.
 

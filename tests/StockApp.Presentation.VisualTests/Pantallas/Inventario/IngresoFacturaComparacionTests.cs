@@ -38,7 +38,7 @@ public class IngresoFacturaComparacionTests
     /// </summary>
     private static UmbralAprobado AprobacionNegritas(int teselas) => new(
         teselas,
-        "controlador SDD (decisiones delegadas por el usuario el 2026-10-11)",
+        "Martin",
         "2026-10-11",
         "Antialias Skia vs Chromium en negritas a 1280: todas las teselas densas con desplazamiento 0,0 (tono), en el título, " +
         "\"Datos de la factura\", \"Cargar artículo\" y los valores del pie; tinta app/mockup estable 0,80-0,94 con los mismos " +

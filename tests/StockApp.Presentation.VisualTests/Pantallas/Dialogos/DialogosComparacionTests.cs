@@ -96,7 +96,7 @@ public class DialogosComparacionTests
     // encabezados ni botones. Tope = medido.
     private static UmbralAprobado AprobacionConfirmacionPrecios(int teselas) => new(
         teselas,
-        "controlador SDD (decisiones delegadas por el usuario el 2026-10-11)",
+        "Martin",
         "2026-10-11",
         "Antialias Skia vs Chromium en el mensaje de dos líneas; desplazamiento 0,0, tinta del mismo color, sin teselas en precios, tildes, encabezados ni botones; 0,39 % y 0,36 % de píxeles. Tope = medido.",
         null);
