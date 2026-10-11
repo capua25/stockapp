@@ -91,11 +91,23 @@ public class DialogosComparacionTests
     public void AltaProductoFaltantes_IgualAlMockup_1366x768() =>
         ComparacionVisual.CompararConMockup(AltaProductoFaltantes(), null, "dialogos/alta-producto-faltantes.html", tamano: TamanoLienzo.Municipio);
 
+    // Aprobación puntual (no sube el umbral global): el mensaje de dos líneas largas de 14 px da teselas por antialias
+    // Skia vs Chromium. Medido: 12 a 1280 y 15 a 1366, desplazamiento 0,0, misma tinta, ninguna en precios, tildes,
+    // encabezados ni botones. Tope = medido + 1.
+    private static UmbralAprobado AprobacionConfirmacionPrecios(int teselas) => new(
+        teselas,
+        "controlador SDD (decisiones delegadas por el usuario el 2026-10-11)",
+        "2026-10-11",
+        "Antialias Skia vs Chromium en el mensaje de dos líneas; desplazamiento 0,0, tinta del mismo color, sin teselas en precios, tildes, encabezados ni botones; 0,39 % y 0,36 % de píxeles.",
+        teselas >= 16 ? "Botón Confirmar y guardar con relleno pálido #DBEAFE: 37 teselas a 1366 (máximo 16) y 42 a 1280 (máximo 13), rojo (2026-10-11)." : null);
+
     [AvaloniaFact]
     public void ConfirmacionPrecios_IgualAlMockup() =>
-        ComparacionVisual.CompararConMockup(ConfirmacionPrecios(), null, "dialogos/confirmacion-precios.html");
+        ComparacionVisual.CompararConMockup(ConfirmacionPrecios(), null, "dialogos/confirmacion-precios.html",
+            aprobado: AprobacionConfirmacionPrecios(13));
 
     [AvaloniaFact]
     public void ConfirmacionPrecios_IgualAlMockup_1366x768() =>
-        ComparacionVisual.CompararConMockup(ConfirmacionPrecios(), null, "dialogos/confirmacion-precios.html", tamano: TamanoLienzo.Municipio);
+        ComparacionVisual.CompararConMockup(ConfirmacionPrecios(), null, "dialogos/confirmacion-precios.html", tamano: TamanoLienzo.Municipio,
+            aprobado: AprobacionConfirmacionPrecios(16));
 }
