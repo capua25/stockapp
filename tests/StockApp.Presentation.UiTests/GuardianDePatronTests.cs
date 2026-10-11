@@ -531,6 +531,46 @@ public class GuardianDePatronTests
         Assert.DoesNotMatch(PiezaDelTemaViejo, """<v2:Insignia Texto="Stock negativo" />""");
     }
 
+    /// <summary>
+    /// Convención 25: un modal de pantalla es una Window con servicio, nunca una capa semitransparente sobre la vista
+    /// ligada a un flag Mostrando* del ViewModel (no atrapa el foco ni responde a Escape y Enter). Se barre el TEXTO de
+    /// todos los .axaml de Views, no solo los v2: un overlay nuevo en una vista vieja también se rechaza.
+    /// </summary>
+    private static readonly Regex OverlayDeModal =
+        new(@"#AA000000|(\{Binding\s+!?|Path="")Mostrando\w*", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    [Fact]
+    public void NingunaVista_TieneOverlaysDeModal()
+    {
+        var views = DirectorioViews();
+        var ofensores = OverlaysEn(views);
+
+        Assert.True(Directory.EnumerateFiles(views, "*.axaml", SearchOption.AllDirectories).Count() > 40,
+            "El barrido no encontró las vistas: el guardián no custodiaría nada.");
+        Assert.True(ofensores.Count == 0, "Overlay de modal en: " + string.Join(", ", ofensores)
+            + ". Un modal de pantalla es una Window con servicio (convención 25 de docs/ui-v2/herramientas.md).");
+    }
+
+    [Fact]
+    public void DetectorDeOverlays_VeElFondoYElFlagYNoUnBindingComun()
+    {
+        Assert.Matches(OverlayDeModal, """<Border IsVisible="{Binding MostrandoAltaProducto}" Background="#AA000000">""");
+        Assert.Matches(OverlayDeModal, """<Border Background="#aa000000" />""");
+        Assert.Matches(OverlayDeModal, """<Border IsVisible="{Binding !MostrandoConfirmacionPrecios}">""");
+        Assert.Matches(OverlayDeModal, """<Binding Path="MostrandoAlgo" />""");
+        Assert.DoesNotMatch(OverlayDeModal, """<Border IsVisible="{Binding GuardadoExitoso}">""");
+        Assert.DoesNotMatch(OverlayDeModal, """<Border Background="{DynamicResource V2FondoBrush}" />""");
+    }
+
+    private static List<string> OverlaysEn(string directorio) =>
+        Directory.EnumerateFiles(directorio, "*.axaml", SearchOption.AllDirectories)
+            .Where(a => OverlayDeModal.IsMatch(File.ReadAllText(a)))
+            .Select(a => Path.GetFileName(a)!)
+            .ToList();
+
+    private static string DirectorioViews([CallerFilePath] string archivoDeEsteTest = "") =>
+        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(archivoDeEsteTest)!, "..", "..", "src", "StockApp.Presentation", "Views"));
+
     private static string LeerDesdeSrc(string rutaDesdeSrc, [CallerFilePath] string archivoDeEsteTest = "")
     {
         var ruta = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(archivoDeEsteTest)!, "..", "..", "src", rutaDesdeSrc));
