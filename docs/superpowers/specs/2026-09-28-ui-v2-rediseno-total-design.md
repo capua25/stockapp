@@ -367,7 +367,7 @@ Ciclo de cada fase: mockups de sus pantallas → aprobación del usuario → XAM
 | 1 Shell y acceso | sidebar, Login, Reset, BloqueoLicencia, AccesoLimitado, 4 diálogos, 3 overlays |
 | 2 Inicio | KPIs, panel de tareas, accesos rápidos |
 | 3 Inventario | Productos (listado y formulario), Entrada / Salida + `MovimientoFormControl`, Ingreso por factura, Historial de movimientos (3a, 3b, 3c-1 y 3c-2 aprobadas; 3c-3 Ingreso por factura y patrón de modal v2: 3c-3 aprobada por el usuario el 2026-10-11) |
-| 4 Finanzas | Gastos + formulario, Pagos, Adjuntos, Ingresos + formulario, Libro caja, Control POA, Calendario de pagos |
+| 4 Finanzas | Gastos + formulario, Pagos, Adjuntos, Ingresos + formulario, Libro caja, Control POA, Calendario de pagos. Se divide en subfases (aprobado por el usuario el 2026-10-11): 4a AdjuntosPanelView + Calendario de pagos + Control POA; 4b Ingresos de caja + formulario; 4c Libro caja; 4d Gastos y facturas + formulario; 4e Pagos del gasto (la 4e depende de la 4a y la 4d) |
 | 5 Gestión | Tareas (listado, formulario, clasificación, diálogo de reclasificar), Documentos (listado, formulario, adjuntos) |
 | 6 Reportes | hub + los 6 reportes |
 | 7 Administración | Catálogos master-detail con los 11 catálogos, Usuarios, Mantenimiento |
@@ -507,6 +507,60 @@ Revisado y aprobado por el usuario el 2026-10-11 (decisiones del GATE, rulings y
 - **Sin breadcrumb:** hereda D1 de la 3b (desvío ya aprobado de §4.4: es una pantalla del sidebar, no un alta que vuelve a un listado).
 - **Los 3 overlays de actualización de la Fase 1 (§4.5, §5.5) no caen bajo la convención 25:** son del shell (`CoordinadorActualizacion`), no un modal de una pantalla, y no usan `#AA000000` ni bindings `Mostrando*`. La convención 25 rige para los modales de pantalla.
 - **§5.5 habla de "4 diálogos `Window`"**: con Recalcular stock (3c-2) y los dos de esta fase son 7; todos siguen sin bindings.
+
+**Diseño de la Fase 4a (aprobado por el usuario el 2026-10-11).** `AdjuntosPanelView`, Calendario de pagos y Control POA en v2, más los estados de pantalla de las convenciones 18, 22 y 23. Alcance: migración visual de las tres vistas y las excepciones E1 a E4 de abajo; sin cambios de API ni de datos. Plan: pendiente, se escribe a continuación.
+
+*Subfases de la Fase 4 (aprobado por el usuario el 2026-10-11).* 4a `AdjuntosPanelView` + Calendario de pagos + Control POA; 4b Ingresos de caja + formulario; 4c Libro caja; 4d Gastos y facturas + formulario; 4e Pagos del gasto. La 4e depende de la 4a y de la 4d. Cada una con su ciclo completo (§7).
+
+*Excepciones declaradas a "VMs intactos" (§3).*
+- **E1.** `CalendarioPagosViewModel` y `ControlPoaViewModel` ganan `Cargando`, `SinConexion` con Reintentar y estado vacío, usando `ConsultaVigente`, `ReintentarAsync` y `AlPerderConexion` de `ViewModelBase`. Hoy no usan nada de eso: el `catch (UnauthorizedAccessException)` es silencioso y una caída sale por el modal global.
+- **E2.** `ControlPoaViewModel`: cambiar Ejercicio recarga solo, con una espera debounce inyectable (como `EsperaDebounce` de Productos). `RecargarCommand` sale del encabezado.
+- **E3.** `AdjuntosPanelViewModel.QuitarCommand` pide confirmación con `IConfirmacionService`. Hoy borra sin preguntar (es baja lógica).
+- **E4.** Adjuntos muestra el tamaño legible en es-UY ("1,2 MB", "850 KB") con un converter. Hoy es "{0:N0} B".
+
+*Sección 1. Calendario de pagos (opción A).*
+- `EncabezadoPagina` "Calendario de pagos" con "Actualizar" SECUNDARIO. Se mantiene: la vista depende de la fecha de hoy y no tiene filtros.
+- Cuatro `TarjetaContenido` apiladas dentro de un scroll, con el contador en el título: "Vencidas · N", "A vencer en 7 días · N", "A vencer en 30 días · N" y "Pagos recientes · N".
+- Grilla v2 compacta SIN orden por click: la lista ya viene ordenada por vencimiento.
+- Facturas (Vencidas, 7 y 30 días): PROVEEDOR · FACTURA · VENCE (dd/MM/yyyy) · SALDO (numérico, `MonedaConverter` / `FormatoEsUy`) · acción "Registrar pago" (secundario, `RegistrarPagoCommand`; la columna se oculta con `IsVisible` sin `PuedeRegistrarPagos`). En Vencidas, VENCE va en tono peligro por token.
+- Pagos recientes: PROVEEDOR · FECHA (dd/MM/yyyy; hoy sale sin formato) · MONTO.
+- Vacío por sección: "No hay facturas vencidas", "No hay facturas que venzan en los próximos 7 días", "No hay facturas que venzan en los próximos 30 días" y "No hay pagos en los últimos 7 días".
+- Antes no se mostraban la fecha de vencimiento ni el número de factura aunque `FacturaCalendarioDto` ya los trae: no hay cambio de API.
+- Estados de pantalla (E1): cargando, sin conexión con Reintentar y vacío, según las convenciones 18, 22 y 23.
+
+*Sección 2. Control POA (opción A).*
+- Encabezado con Exportar CSV y Exportar PDF (custodiados por `ExportarPdfBotonesGuardianTests` y `ColumnasPdfContraDtosRealesTests`, sin cambios).
+- `BarraFiltros` con `CampoFormulario` Ejercicio (`NumericUpDown`, 2020 a 2100) que recarga solo (E2).
+- Grilla: LÍNEA · PROGRAMA · PRESUPUESTO · GASTADO · SALDO · % EJECUCIÓN.
+- % EJECUCIÓN en es-UY ("47,30 %") más una barra fina de progreso en la celda: tono normal hasta 100 y tono peligro por encima de 100.
+- Saldo negativo: `Insignia` "Sobreejecutado" (tono peligro) y el número con el token de negativo. Quedan prohibidos `Opacity`, `SignoNegativoBrushConverter` y `BadgeEstado` (hoy la vista usa `BadgeEstado` y `SignoNegativoBrushConverter`).
+- El doble click sigue abriendo Gastos filtrado por la línea (`AbrirGastosDeLaLineaCommand`).
+- Estados de pantalla (E1): cargando, sin conexión con Reintentar y vacío.
+
+*Sección 3. Panel de adjuntos (opción A).*
+- La raíz lleva `Classes="ui2"`, así que se ve v2 también dentro de los hosts v1 `GastoFormView` y `PagosGastoView` hasta la 4d y la 4e. Es la excepción INVERSA a la de la 3c-3 (allá un panel v1 dentro de una card v2) y es TEMPORAL: se cierra cuando esos hosts migren.
+- Encabezado: título de sección "Adjuntos" y "Agregar", que se oculta con `IsVisible` sin `PuedeModificar` (antes quedaba deshabilitado).
+- Lista compacta: ícono por tipo (PDF o imagen) · nombre (elipsis y tooltip solo si se corta, convención 20) · tamaño legible (E4) · fecha dd/MM/yyyy · "Ver" (siempre visible) · "Quitar" (oculto sin `PuedeModificar`; pide confirmación, E3).
+- Vacío: "Sin adjuntos. PDF, JPG o PNG hasta 10 MB."
+- Los errores siguen por `IConfirmacionService.InformarAsync`. La inicialización no cambia: el host llama `InicializarAsync`.
+
+*Sección 4. Tests, verificación y deuda.*
+- **Comportamiento SIN CAMBIOS:** datos de `FinanzasVistasService`; gates base (`VerFinanzas`); navegación Registrar pago → `PagosGastoViewModel` con `ConfigurarVolver`; exportes CSV y PDF y el aviso de volumen mayor a 500; validación de adjuntos (magic bytes, 10 MB); Ver por archivo temporal.
+- **Mockups** (`docs/ui-v2/mockups/`):
+  - `finanzas/calendario-pagos.html`, `-cargando`, `-vacio` y `-sin-conexion`.
+  - `finanzas/control-poa.html`, `-cargando`, `-vacio`, `-sin-conexion` y `-sobreejecutado`.
+  - `finanzas/adjuntos-vacio.html`.
+  - `inventario/ingreso-factura-guardado.html` pasa a dibujar el panel real (se quita `.panel-adjuntos-v1`).
+- **Guardianes:** las tres vistas pasan a `VistasMigradasAV2` (salen de `VistasDeLaTanda` y `VistasEmbebidas` en `GuardianDePatronTests`).
+- **Comparación visual** por mockup a 1280×760 y 1366×768 con el mismo umbral. Se quita la exclusión `.panel-adjuntos-v1` / `DatosIngresoFactura.OcultarPanelAdjuntosV1` de `IngresoFacturaComparacionTests`.
+- **Tests de ViewModel con fakes:** recarga por cambio de ejercicio con debounce; confirmación al quitar (aceptar y cancelar); la consulta vigente gana (convención 23); sin conexión y reintentar.
+- **Tests de gates en `Presentation.UiTests`** con la View real y un usuario de permisos MIXTOS (no Admin: Admin cortocircuita el gate): la columna "Registrar pago" del Calendario y Agregar / Quitar de Adjuntos.
+- `SignoNegativoBadgeTests` se adapta a `Insignia` (convención 13). Se mantienen `AccesoRevocadoPantallasFinanzasTests` y `FinanzasRevocacionPermisosTests`.
+- **Verificación por mutación, quitando (nunca agregando) las reglas clave:** el gate de la acción, la confirmación al quitar y el tono peligro de la barra por encima de 100; cada una tiene que dar rojo.
+- **Verificación orgánica** a 1280 con backup previo de la DB local (contenedor `stockapp-pg`).
+- **Deuda anotada, que NO se resuelve en la 4a:**
+  - Revisado en el código: `CalendarioPagosViewModel.PuedeRegistrarPagos` es un getter sobre la sesión y un 403 lo refresca en caliente (`NotificarPermisosActualizados`), así que esa parte no es deuda. Lo que sí queda: `AdjuntosPanelViewModel.PuedeModificar` se calcula una sola vez en `InicializarAsync` y no se refresca al revocar permisos con el panel abierto (preexistente).
+  - Los hosts `GastoFormView` y `PagosGastoView` siguen v1 hasta la 4d y la 4e.
 
 **Deuda abierta tras la Fase 3a:**
 - Sidebar del shell v2 corta el último ítem a 1366x768 (detectado en mockups de Fase 3a, 2026-10-07); el usuario lo difirió: no se arregla en 3a.
