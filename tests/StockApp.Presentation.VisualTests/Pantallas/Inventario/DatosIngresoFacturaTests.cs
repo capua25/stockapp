@@ -40,6 +40,36 @@ public class DatosIngresoFacturaTests
     }
 
     [Fact]
+    public async Task ConDiferencia_ElErrorDeCargaEsElQueDaElVmConCantidadCero()
+    {
+        var vm = DatosIngresoFactura.Vm();
+        await vm.InicializarAsync();
+        vm.ProductoEnCarga = vm.ProductosDisponibles[0];
+        vm.CantidadEnCarga = 0m;
+        vm.PrecioUnitarioEnCarga = 480m;
+
+        vm.AgregarArticuloCommand.Execute(null);
+
+        Assert.Equal(DatosIngresoFactura.ConDiferencia.ErrorCarga, vm.MensajeErrorCarga);
+    }
+
+    [Fact]
+    public async Task ConDiferencia_LaFilaDeCargaQuedaVaciaConElError()
+    {
+        var vm = DatosIngresoFactura.Vm();
+        await vm.InicializarAsync();
+
+        DatosIngresoFactura.Aplicar(vm, DatosIngresoFactura.ConDiferencia);
+
+        Assert.Null(vm.ProductoEnCarga);
+        Assert.False(vm.EsProductoNuevoEnCarga);
+        Assert.Equal(0m, vm.CantidadEnCarga);
+        Assert.Equal(0m, vm.PrecioUnitarioEnCarga);
+        Assert.False(vm.ActualizarPrecioCostoEnCarga);
+        Assert.Equal(DatosIngresoFactura.ConDiferencia.ErrorCarga, vm.MensajeErrorCarga);
+    }
+
+    [Fact]
     public async Task Guardado_QuedaGuardadoSinPedirConfirmacionDePrecios()
     {
         var vm = DatosIngresoFactura.Vm();

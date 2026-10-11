@@ -105,18 +105,18 @@ public class IngresoPorFacturaGrillaRenglonesTests
     }
 
     /// <summary>
-    /// BUG 1. Antes del fix, este assert falla con Classes=[] (el botón real de la vista no
-    /// lleva ninguna clase del UI Kit) -- ver mutación documentada en el reporte de la tarea.
+    /// BUG 1. Antes del fix el botón real de la vista no llevaba ninguna clase y salía con el aspecto por
+    /// defecto. En v2 Quitar es ghost, el mismo patrón que los Quitar de las otras grillas v2.
     /// </summary>
     [AvaloniaFact]
-    public void BotonQuitar_TieneClaseSecondaryDelUiKit_MismoPatronQueLosOtrosBotonesQuitarDeLaApp()
+    public void BotonQuitar_EsGhostDelSistemaV2_MismoPatronQueLosOtrosBotonesQuitarDeLaApp()
     {
         var (window, _, fila) = MontarConUnRenglon(cantidad: 5m, precioUnitario: 5.4m);
 
         var botonQuitar = window.GetVisualDescendants().OfType<Button>()
             .Single(b => Equals(b.Content, "Quitar") && ReferenceEquals(b.DataContext, fila));
 
-        Assert.Contains("secondary", botonQuitar.Classes);
+        Assert.Contains("ghost", botonQuitar.Classes);
 
         window.Close();
         Dispatcher.UIThread.RunJobs();
@@ -147,8 +147,9 @@ public class IngresoPorFacturaGrillaRenglonesTests
                 .ToList();
 
             Assert.Contains("5", textos);
-            Assert.Contains("5,45", textos);
-            Assert.Contains("27,25", textos);
+            // Precio y subtotal son importes: van en moneda, con "$" (cambio visual de la v2).
+            Assert.Contains("$ 5,45", textos);
+            Assert.Contains("$ 27,25", textos);
             Assert.DoesNotContain(textos, t => t is not null && t.Contains('.'));
 
             window.Close();

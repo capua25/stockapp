@@ -45,7 +45,6 @@ namespace StockApp.Presentation.UiTests;
 public class GuardianDePatronTests
 {
     [AvaloniaTheory]
-    [InlineData(typeof(IngresoPorFacturaView), "Ingreso de stock por factura", "MOVIMIENTOS")]
     [InlineData(typeof(CategoriaListView), "Categorías", "CATÁLOGO")]
     [InlineData(typeof(ProveedorListView), "Proveedores", "CATÁLOGO")]
     [InlineData(typeof(UnidadMedidaListView), "Unidades de medida", "CATÁLOGO")]
@@ -98,7 +97,6 @@ public class GuardianDePatronTests
 
     public static readonly TheoryData<Type> VistasDeLaTanda = new()
     {
-        typeof(IngresoPorFacturaView),
         typeof(CategoriaListView),
         typeof(ProveedorListView),
         typeof(UnidadMedidaListView),
@@ -220,6 +218,7 @@ public class GuardianDePatronTests
         typeof(EntradaRegistroView),
         typeof(SalidaRegistroView),
         typeof(MovimientoHistorialView),
+        typeof(IngresoPorFacturaView),
     };
 
     /// <summary>

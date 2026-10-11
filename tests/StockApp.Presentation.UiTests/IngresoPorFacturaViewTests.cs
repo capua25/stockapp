@@ -264,7 +264,9 @@ public class IngresoPorFacturaViewTests
 
         var checkCredito = window.GetVisualDescendants().OfType<CheckBox>()
             .Single(c => Equals(c.Content, "Compra a crédito"));
-        var fechaVencimiento = window.GetVisualDescendants().OfType<CalendarDatePicker>().ElementAt(1);
+        // v2: el vencimiento es un CampoFormulario oculto; su CalendarDatePicker no entra al árbol visual hasta que
+        // el campo se muestra, así que la visibilidad se afirma sobre el campo.
+        var fechaVencimiento = window.GetVisualDescendants().OfType<Control>().Single(c => c.Name == "CampoVencimiento");
 
         Assert.False(vm.EsCredito);
         Assert.False(ArbolVisual.EsVisibleEnArbol(fechaVencimiento)); // Contado: el panel de vencimiento arranca oculto.
@@ -701,10 +703,11 @@ public class IngresoPorFacturaViewTests
                 .Select(tb => tb.Text)
                 .ToList();
             Assert.Contains("3,5", textos);
-            Assert.Contains("1.200,4", textos);
-            Assert.Contains("4.201,4", textos);
+            // v2: precio y subtotal en moneda ("$" y dos decimales); la coma decimal sigue siendo lo que se custodia.
+            Assert.Contains("$ 1.200,40", textos);
+            Assert.Contains("$ 4.201,40", textos);
 
-            // Totales debajo de la grilla: es-UY con 2 decimales.
+            // Suma de renglones en el pie: es-UY con 2 decimales.
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(),
                 t => ReferenceEquals(t.DataContext, vm) && t.Text == "$ 4.201,40");
             return 0;

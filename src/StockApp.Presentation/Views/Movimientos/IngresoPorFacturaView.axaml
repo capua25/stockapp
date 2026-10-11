@@ -3,213 +3,231 @@
              xmlns:vm="using:StockApp.Presentation.ViewModels.Movimientos"
              xmlns:beh="using:StockApp.Presentation.Behaviors"
              xmlns:conv="using:StockApp.Presentation.Converters"
-             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:cat="using:StockApp.Application.Catalogo"
+             xmlns:ent="using:StockApp.Domain.Entities"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="760"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
              x:Class="StockApp.Presentation.Views.Movimientos.IngresoPorFacturaView"
-             x:DataType="vm:IngresoPorFacturaViewModel">
+             x:DataType="vm:IngresoPorFacturaViewModel"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
 
-    <UserControl.Styles>
-        <!-- Fix "botón sin texto visible en celda de DataGrid": Themes/DataGrid.axaml fija
-             RowHeight=36 y DataGridCell.Padding=PaddingCelda (12,8) -> 36-16=20px útiles en la
-             celda. Un Button (Padding 16,8 + BorderThickness 1 en Controls.axaml) necesita
-             ~36px para su contenido; no entra, y el TextBlock interno queda aplastado a 2px
-             (medido). Bajar el padding del botón no alcanza. Esta clase saca el padding
-             VERTICAL de la celda (deja el horizontal) para que el botón tenga los 36px enteros
-             y su propio padding se resuelva adentro (medido: TextBlock pasa de 2px a 18px). -->
-        <Style Selector="DataGridCell.sin-padding-vertical">
-            <Setter Property="Padding" Value="12,0,4,0" />
-        </Style>
-    </UserControl.Styles>
+    <!-- UI v2 (spec §5.2). Espejo: docs/ui-v2/mockups/inventario/ingreso-factura*.html. Pantalla del sidebar: sin
+         breadcrumb. El pie con los totales y Guardar queda FIJO abajo, fuera del scroll, igual que el error general:
+         con muchos renglones siguen a la vista. Un solo primario (Guardar) y ningún botón por defecto: Enter en la
+         fila de carga agrega el artículo y nunca guarda. Los modales (alta rápida, confirmación de precios) son
+         ventanas que abren servicios, no capas sobre esta vista. -->
+    <Grid x:Name="Raiz" RowDefinitions="*,Auto,Auto">
 
-    <Grid>
-        <ScrollViewer>
-        <StackPanel Spacing="16">
-            <DockPanel Margin="{DynamicResource MargenVista}" IsEnabled="{Binding !GuardadoExitoso}">
+        <ScrollViewer x:Name="Desplazamiento" Grid.Row="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="28,24">
 
-                <c:HeaderVista DockPanel.Dock="Top" Eyebrow="MOVIMIENTOS" Titulo="Ingreso de stock por factura" />
+                <v2:EncabezadoPagina x:Name="Encabezado"
+                                     Titulo="Ingreso por factura"
+                                     Subtitulo="Cargá la factura del proveedor y los artículos que entran al stock." />
 
-                <Border Classes="card" DockPanel.Dock="Top" Margin="0,0,0,16">
-                    <StackPanel Spacing="12">
-                        <TextBlock Text="Proveedor" />
-                        <ComboBox ItemsSource="{Binding ProveedoresDisponibles}"
-                                  SelectedItem="{Binding ProveedorSeleccionado}"
-                                  PlaceholderText="Elegí el proveedor" HorizontalAlignment="Stretch">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate><TextBlock Text="{Binding Nombre}" /></DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
+                <v2:TarjetaContenido x:Name="Tarjeta" Padding="24" IsEnabled="{Binding !GuardadoExitoso}">
+                    <StackPanel>
 
-                        <Grid ColumnDefinitions="*,12,*">
-                            <StackPanel Grid.Column="0" Spacing="4">
-                                <TextBlock Text="Número de factura (opcional)" />
-                                <TextBox Text="{Binding NumeroFactura}" Watermark="Ej.: A-0001234" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="2" Spacing="4">
-                                <TextBlock Text="Orden de compra (opcional)" />
-                                <TextBox Text="{Binding NumeroOrden}" Watermark="Ej.: OC-77" />
-                            </StackPanel>
-                        </Grid>
-
-                        <TextBlock Text="Detalle" />
-                        <TextBox Text="{Binding Detalle}" Watermark="Ej.: Materiales para la rambla" />
-
-                        <TextBlock Text="Destino (opcional)" />
-                        <TextBox Text="{Binding Destino}" Watermark="Ej.: Corralón municipal" />
-
-                        <Grid ColumnDefinitions="*,12,*">
-                            <StackPanel Grid.Column="0" Spacing="4">
-                                <TextBlock Text="Fecha" />
-                                <CalendarDatePicker SelectedDate="{Binding FechaSeleccionada}"
-                                                    PlaceholderText="dd/mm/aaaa" SelectedDateFormat="Custom"
-                                                    CustomDateFormatString="dd/MM/yyyy"
-                                                    beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="2" Spacing="4">
-                                <TextBlock Text="Fuente de financiamiento" />
-                                <ComboBox ItemsSource="{Binding FuentesDisponibles}"
-                                          SelectedItem="{Binding FuenteSeleccionada}"
-                                          PlaceholderText="Elegí la fuente" HorizontalAlignment="Stretch">
+                        <TextBlock Classes="subtitulo-formulario" Text="Datos de la factura" Margin="0,0,0,12" />
+                        <!-- Tres por fila, por afinidad: identificación, fecha y destino, imputación presupuestal. El 16
+                             entre filas va en el Margin superior de cada campo: el vencimiento aparece y desaparece sin
+                             dejar hueco. -->
+                        <Grid ColumnDefinitions="*,16,*,16,*" RowDefinitions="Auto,Auto,Auto,Auto">
+                            <v2:CampoFormulario x:Name="CampoProveedor" Grid.Row="0" Grid.Column="0" Etiqueta="Proveedor" Requerido="True">
+                                <ComboBox ItemsSource="{Binding ProveedoresDisponibles}" SelectedItem="{Binding ProveedorSeleccionado}"
+                                          PlaceholderText="Elegí el proveedor" HorizontalAlignment="Stretch">
                                     <ComboBox.ItemTemplate>
-                                        <DataTemplate><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                                        <DataTemplate x:DataType="ent:Proveedor"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
                                     </ComboBox.ItemTemplate>
                                 </ComboBox>
-                            </StackPanel>
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario x:Name="CampoNumeroFactura" Grid.Row="0" Grid.Column="2" Etiqueta="N.º factura">
+                                <TextBox Text="{Binding NumeroFactura}" PlaceholderText="Ej.: A-0001234" />
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario x:Name="CampoOrdenCompra" Grid.Row="0" Grid.Column="4" Etiqueta="Orden de compra">
+                                <TextBox Text="{Binding NumeroOrden}" PlaceholderText="Ej.: OC-77" />
+                            </v2:CampoFormulario>
+
+                            <v2:CampoFormulario x:Name="CampoFecha" Grid.Row="1" Grid.Column="0" Margin="0,16,0,0" Etiqueta="Fecha">
+                                <CalendarDatePicker SelectedDate="{Binding FechaSeleccionada}" HorizontalAlignment="Stretch"
+                                                    PlaceholderText="dd/mm/aaaa" SelectedDateFormat="Custom" CustomDateFormatString="dd/MM/yyyy"
+                                                    beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario x:Name="CampoDetalle" Grid.Row="1" Grid.Column="2" Margin="0,16,0,0" Etiqueta="Detalle" Requerido="True">
+                                <TextBox Text="{Binding Detalle}" PlaceholderText="Ej.: Materiales para la rambla" />
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario x:Name="CampoDestino" Grid.Row="1" Grid.Column="4" Margin="0,16,0,0" Etiqueta="Destino">
+                                <TextBox Text="{Binding Destino}" PlaceholderText="Ej.: Corralón municipal" />
+                            </v2:CampoFormulario>
+
+                            <v2:CampoFormulario x:Name="CampoFuente" Grid.Row="2" Grid.Column="0" Margin="0,16,0,0" Etiqueta="Fuente de financiamiento" Requerido="True">
+                                <ComboBox ItemsSource="{Binding FuentesDisponibles}" SelectedItem="{Binding FuenteSeleccionada}"
+                                          PlaceholderText="Elegí la fuente" HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="ent:FuenteFinanciamiento"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario x:Name="CampoRubro" Grid.Row="2" Grid.Column="2" Margin="0,16,0,0" Etiqueta="Rubro de gasto" Requerido="True">
+                                <ComboBox ItemsSource="{Binding RubrosDisponibles}" SelectedItem="{Binding RubroSeleccionado}"
+                                          PlaceholderText="Elegí el rubro" HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="ent:RubroGasto"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario x:Name="CampoLineaPoa" Grid.Row="2" Grid.Column="4" Margin="0,16,0,0" Etiqueta="Línea POA">
+                                <ComboBox ItemsSource="{Binding LineasPoaDisponibles}" SelectedItem="{Binding LineaPoaSeleccionada}"
+                                          PlaceholderText="Sin línea POA" HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="ent:LineaPoa"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </v2:CampoFormulario>
+
+                            <CheckBox x:Name="CheckCredito" Grid.Row="3" Grid.Column="0" Margin="0,16,0,0" VerticalAlignment="Bottom"
+                                      IsChecked="{Binding EsCredito}" Content="Compra a crédito" />
+                            <v2:CampoFormulario x:Name="CampoVencimiento" Grid.Row="3" Grid.Column="2" Margin="0,16,0,0"
+                                                Etiqueta="Fecha de vencimiento" IsVisible="{Binding EsCredito}">
+                                <CalendarDatePicker SelectedDate="{Binding FechaVencimientoSeleccionada}" HorizontalAlignment="Stretch"
+                                                    PlaceholderText="dd/mm/aaaa" SelectedDateFormat="Custom" CustomDateFormatString="dd/MM/yyyy"
+                                                    beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
+                            </v2:CampoFormulario>
                         </Grid>
 
-                        <TextBlock Text="Rubro de gasto" />
-                        <ComboBox ItemsSource="{Binding RubrosDisponibles}"
-                                  SelectedItem="{Binding RubroSeleccionado}"
-                                  PlaceholderText="Elegí el rubro" HorizontalAlignment="Stretch">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate><TextBlock Text="{Binding Nombre}" /></DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
+                        <Border Height="1" Margin="0,20" Background="{DynamicResource V2SeparadorGrillaBrush}" />
 
-                        <TextBlock Text="Línea POA (opcional)" />
-                        <ComboBox ItemsSource="{Binding LineasPoaDisponibles}"
-                                  SelectedItem="{Binding LineaPoaSeleccionada}"
-                                  PlaceholderText="Sin línea POA" HorizontalAlignment="Stretch">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate><TextBlock Text="{Binding Nombre}" /></DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-
-                        <CheckBox IsChecked="{Binding EsCredito}" Content="Compra a crédito" />
-                        <StackPanel Spacing="4" IsVisible="{Binding EsCredito}">
-                            <TextBlock Text="Fecha de vencimiento" />
-                            <CalendarDatePicker SelectedDate="{Binding FechaVencimientoSeleccionada}"
-                                                PlaceholderText="dd/mm/aaaa" SelectedDateFormat="Custom"
-                                                CustomDateFormatString="dd/MM/yyyy"
-                                                beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
-
-                <!-- Zona de carga: reemplaza la edición inline de renglones. Se completan los
-                     campos ACÁ y "Agregar artículo" valida (mismas reglas que
-                     IngresoPorFacturaService.RegistrarAsync) e inserta la fila en la grilla de
-                     solo lectura de abajo. Tras agregar, la zona se limpia y el foco vuelve al
-                     ComboBox de producto (FocoBehavior) para poder cargar el siguiente artículo
-                     sin tocar el mouse. -->
-                <Border Classes="card" DockPanel.Dock="Top" Margin="0,0,0,16">
-                    <StackPanel Spacing="12">
-                        <TextBlock Text="Cargar artículo" Classes="seccion" />
-
-                        <Grid ColumnDefinitions="3*,12,*,12,*,12,Auto">
-                            <StackPanel Grid.Column="0" Spacing="4">
-                                <TextBlock Text="Producto" />
-                                <!-- Mismo truco que la vieja celda de la grilla: cuando la zona de
-                                     carga está en modo "producto nuevo" (EsProductoNuevoEnCarga),
-                                     el ComboBox se oculta y se muestra el nombre en su lugar,
-                                     así nunca puede pisar ni contradecir los datos cargados en el
-                                     diálogo de alta rápida. -->
-                                <Grid ColumnDefinitions="*,Auto">
-                                    <ComboBox Grid.Column="0" Grid.ColumnSpan="2"
+                        <TextBlock Classes="subtitulo-formulario" Text="Cargar artículo" Margin="0,0,0,12" />
+                        <!-- Enter en Producto (con un producto elegido), Cantidad o Precio agrega el artículo: la pantalla
+                             existe para cargar muchos renglones seguidos con el teclado. Tras agregar, el foco vuelve al
+                             producto; tras el alta de un producto nuevo, a Cantidad. En modo producto nuevo el combo se
+                             reemplaza por el nombre, así no puede contradecir lo cargado en el alta. Dos líneas: en una
+                             sola fila Producto quedaba demasiado angosto a 1280. El tilde y Producto nuevo van en la
+                             segunda; Agregar artículo se declara al final para que el Tab siga el orden de la carga
+                             aunque se dibuje arriba a la derecha. -->
+                        <Grid x:Name="FilaCarga" ColumnDefinitions="*,12,120,12,140,12,Auto" RowDefinitions="Auto,12,Auto">
+                            <v2:CampoFormulario x:Name="CampoProducto" Grid.Column="0" Etiqueta="Producto" Requerido="True">
+                                <Panel>
+                                    <ComboBox x:Name="ComboProducto"
                                               IsVisible="{Binding !EsProductoNuevoEnCarga}"
                                               ItemsSource="{Binding ProductosDisponibles}"
                                               SelectedItem="{Binding ProductoEnCarga}"
                                               PlaceholderText="Elegí el producto"
                                               HorizontalAlignment="Stretch"
-                                              beh:FocoBehavior.SolicitarFoco="{Binding SolicitarFocoEnProductoCombo, Mode=TwoWay}">
+                                              beh:FocoBehavior.SolicitarFoco="{Binding SolicitarFocoEnProductoCombo, Mode=TwoWay}"
+                                              beh:EnterEjecutaComando.Comando="{Binding AgregarArticuloCommand}">
                                         <ComboBox.ItemTemplate>
-                                            <DataTemplate>
-                                                <TextBlock Text="{Binding Nombre}" />
-                                            </DataTemplate>
+                                            <DataTemplate x:DataType="cat:ProductoDto"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
                                         </ComboBox.ItemTemplate>
                                     </ComboBox>
-                                    <TextBlock Grid.Column="0" IsVisible="{Binding EsProductoNuevoEnCarga}"
-                                               Text="{Binding NuevoProductoNombre}"
-                                               VerticalAlignment="Center" FontStyle="Italic" />
-                                    <!-- Salida del modo "producto nuevo" (hueco hallado en la verificación
-                                         visual): sin este botón, tras confirmar el alta rápida no había forma
-                                         de volver a elegir un producto existente sin agregar la fila. -->
-                                    <Button Grid.Column="1" IsVisible="{Binding EsProductoNuevoEnCarga}"
-                                            Content="Cambiar" Command="{Binding DescartarProductoNuevoEnCargaCommand}"
-                                            ToolTip.Tip="Descartar este producto nuevo y volver a elegir uno existente" />
-                                </Grid>
-                            </StackPanel>
-                            <StackPanel Grid.Column="2" Spacing="4">
-                                <TextBlock Text="Cantidad" />
-                                <TextBox Text="{Binding CantidadEnCarga, Converter={x:Static conv:DecimalConverter.Instance}}" beh:EntradaNumericaBehavior.EsDecimal="True"
+                                    <Grid x:Name="ProductoNuevoEnCarga" ColumnDefinitions="*,8,Auto" IsVisible="{Binding EsProductoNuevoEnCarga}">
+                                        <TextBlock Grid.Column="0" Classes="cuerpo" Text="{Binding NuevoProductoNombre}"
+                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                   ToolTip.Tip="{Binding NuevoProductoNombre}" beh:TooltipSiSeCorta.Activo="True" />
+                                        <Button x:Name="BotonCambiarProducto" Grid.Column="2" Classes="ghost" Content="Cambiar"
+                                                Command="{Binding DescartarProductoNuevoEnCargaCommand}"
+                                                ToolTip.Tip="Descartar este producto nuevo y volver a elegir uno existente" />
+                                    </Grid>
+                                </Panel>
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario x:Name="CampoCantidad" Grid.Column="2" Etiqueta="Cantidad" Requerido="True">
+                                <TextBox x:Name="CantidadEnCarga"
+                                         Text="{Binding CantidadEnCarga, Converter={x:Static conv:DecimalConverter.Instance}}"
+                                         beh:EntradaNumericaBehavior.EsDecimal="True"
+                                         PlaceholderText="Cantidad"
                                          beh:FocoBehavior.SolicitarFoco="{Binding SolicitarFocoEnCantidad, Mode=TwoWay}"
-                                         PlaceholderText="Cantidad" />
+                                         beh:EnterEjecutaComando.Comando="{Binding AgregarArticuloCommand}" />
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario x:Name="CampoPrecio" Grid.Column="4" Etiqueta="Precio unitario">
+                                <TextBox x:Name="PrecioEnCarga"
+                                         Text="{Binding PrecioUnitarioEnCarga, Converter={x:Static conv:DecimalConverter.Instance}}"
+                                         beh:EntradaNumericaBehavior.EsDecimal="True"
+                                         PlaceholderText="Precio unitario"
+                                         beh:EnterEjecutaComando.Comando="{Binding AgregarArticuloCommand}" />
+                            </v2:CampoFormulario>
+                            <StackPanel Grid.Row="2" Grid.ColumnSpan="7" Orientation="Horizontal" Spacing="16">
+                                <CheckBox x:Name="CheckActualizarPrecio" VerticalAlignment="Center"
+                                          IsChecked="{Binding ActualizarPrecioCostoEnCarga}" Content="Actualizar precio costo" />
+                                <Button x:Name="BotonProductoNuevo" VerticalAlignment="Center" Classes="secundario"
+                                        Content="Producto nuevo" Command="{Binding AbrirAltaProductoCommand}" />
                             </StackPanel>
-                            <StackPanel Grid.Column="4" Spacing="4">
-                                <TextBlock Text="Precio unitario" />
-                                <TextBox Text="{Binding PrecioUnitarioEnCarga, Converter={x:Static conv:DecimalConverter.Instance}}" beh:EntradaNumericaBehavior.EsDecimal="True"
-                                         PlaceholderText="Precio unitario" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="6" Spacing="4" VerticalAlignment="Bottom">
-                                <CheckBox IsChecked="{Binding ActualizarPrecioCostoEnCarga}" Content="Actualizar precio costo" />
-                            </StackPanel>
+                            <Button x:Name="BotonAgregar" Grid.Column="6" VerticalAlignment="Bottom" Classes="secundario"
+                                    Content="Agregar artículo" Command="{Binding AgregarArticuloCommand}" />
                         </Grid>
 
-                        <TextBlock Text="{Binding MensajeErrorCarga}" Foreground="{DynamicResource DangerBrush}"
+                        <v2:Alerta x:Name="AlertaErrorCarga" Margin="0,8,0,0" Variante="Error"
+                                   Texto="{Binding MensajeErrorCarga}"
                                    IsVisible="{Binding MensajeErrorCarga, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
-                        <StackPanel Orientation="Horizontal" Spacing="12">
-                            <Button Content="Producto nuevo" Command="{Binding AbrirAltaProductoCommand}" />
-                            <Button Content="Agregar artículo" Command="{Binding AgregarArticuloCommand}" />
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
+                        <Border Height="1" Margin="0,20" Background="{DynamicResource V2SeparadorGrillaBrush}" />
 
-                <!-- Grilla de renglones cargados: SOLO LECTURA (la carga se hace arriba). -->
-                <Border Classes="card" DockPanel.Dock="Top" Margin="0,0,0,16">
-                    <DockPanel>
-                        <TextBlock DockPanel.Dock="Top" Text="Artículos cargados" Classes="seccion" Margin="0,0,0,8" />
+                        <TextBlock Classes="subtitulo-formulario" Text="Artículos cargados" Margin="0,0,0,12" />
 
-                        <!-- MinWidth por columna + scroll horizontal (fix/grillas-minwidth-scroll):
-                             sin esto, Avalonia.Controls.DataGrid comprime columnas arbitrarias
-                             hasta el piso global MinColumnWidth=40 (Themes/DataGrid.axaml) en vez
-                             de scrollear. El botón "Quitar" tiene texto (a diferencia de los
-                             botones-ícono de NuevaImportacionView) y también necesita su MinWidth
-                             para no clipear. -->
-                        <DataGrid ItemsSource="{Binding Renglones}" AutoGenerateColumns="False"
-                                  CanUserSortColumns="False" IsReadOnly="True" MinHeight="220"
-                                  ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                        <v2:EstadoVacio x:Name="EstadoSinRenglones"
+                                        UseLayoutRounding="False"
+                                        Titulo="Todavía no cargaste artículos"
+                                        Mensaje="Elegí un producto, completá la cantidad y el precio, y apretá Enter."
+                                        IsVisible="{Binding Renglones.Count, Converter={x:Static conv:ConteoConverter.EsCero}}" />
+
+                        <!-- Solo lectura: la carga se hace arriba. Crece con los renglones (scrollea la página, el pie
+                             queda fijo). CANTIDAD, PRECIO UNITARIO y SUBTOTAL miden su texto sobre todas las filas con el
+                             mismo conversor de la celda. La columna de Quitar conserva sin-padding-vertical: el guardián
+                             de botones en celdas la exige y en v2 la celda ya no tiene padding vertical. -->
+                        <DataGrid x:Name="GrillaRenglones"
+                                  ItemsSource="{Binding Renglones}"
+                                  IsReadOnly="True"
+                                  CanUserSortColumns="False"
+                                  CanUserResizeColumns="True"
+                                  IsVisible="{Binding Renglones.Count, Converter={x:Static conv:ConteoConverter.HayElementos}}">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="Producto"
-                                    Binding="{Binding NombreMostrado, DataType={x:Type vm:FilaRenglonFacturaVm}}"
-                                    IsReadOnly="True" Width="3*" MinWidth="160" />
-                                <DataGridTextColumn Header="Cantidad"
-                                    Binding="{Binding Cantidad, DataType={x:Type vm:FilaRenglonFacturaVm}, Converter={x:Static conv:DecimalConverter.Instance}}"
-                                    IsReadOnly="True" Width="Auto" MinWidth="90" />
-                                <DataGridTextColumn Header="Precio unitario"
-                                    Binding="{Binding PrecioUnitario, DataType={x:Type vm:FilaRenglonFacturaVm}, Converter={x:Static conv:DecimalConverter.Instance}}"
-                                    IsReadOnly="True" Width="Auto" MinWidth="100" />
-                                <DataGridTextColumn Header="Subtotal"
-                                    Binding="{Binding Subtotal, DataType={x:Type vm:FilaRenglonFacturaVm}, Converter={x:Static conv:DecimalConverter.Instance}}"
-                                    IsReadOnly="True" Width="Auto" MinWidth="100" />
-                                <DataGridCheckBoxColumn Header="Actualizar precio costo"
-                                    Binding="{Binding ActualizarPrecioCosto, DataType={x:Type vm:FilaRenglonFacturaVm}}"
-                                    IsReadOnly="True" Width="Auto" MinWidth="170" />
-                                <DataGridTemplateColumn Header="" Width="Auto" MinWidth="90" CellStyleClasses="sin-padding-vertical">
+                                <DataGridTemplateColumn Header="PRODUCTO" Width="*" MinWidth="160">
                                     <DataGridTemplateColumn.CellTemplate>
                                         <DataTemplate x:DataType="vm:FilaRenglonFacturaVm">
-                                            <Button Classes="secondary" Content="Quitar"
+                                            <TextBlock Text="{Binding NombreMostrado}" VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding NombreMostrado}"
+                                                       beh:TooltipSiSeCorta.Activo="True" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="CANTIDAD" Width="Auto" CellStyleClasses="num" SortMemberPath="Cantidad"
+                                                        beh:ColumnaAuto.Medir="True" beh:ColumnaAuto.Conversor="{x:Static conv:CantidadConverter.Instance}">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate x:DataType="vm:FilaRenglonFacturaVm">
+                                            <TextBlock Text="{Binding Cantidad, Converter={x:Static conv:CantidadConverter.Instance}}" VerticalAlignment="Center" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="PRECIO UNITARIO" Width="Auto" CellStyleClasses="num" SortMemberPath="PrecioUnitario"
+                                                        beh:ColumnaAuto.Medir="True" beh:ColumnaAuto.Conversor="{x:Static conv:MonedaConverter.Instance}">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate x:DataType="vm:FilaRenglonFacturaVm">
+                                            <TextBlock Text="{Binding PrecioUnitario, Converter={x:Static conv:MonedaConverter.Instance}}" VerticalAlignment="Center" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="SUBTOTAL" Width="Auto" CellStyleClasses="num" SortMemberPath="Subtotal"
+                                                        beh:ColumnaAuto.Medir="True" beh:ColumnaAuto.Conversor="{x:Static conv:MonedaConverter.Instance}">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate x:DataType="vm:FilaRenglonFacturaVm">
+                                            <TextBlock Text="{Binding Subtotal, Converter={x:Static conv:MonedaConverter.Instance}}" VerticalAlignment="Center" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="ACT. COSTO" Width="120">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate x:DataType="vm:FilaRenglonFacturaVm">
+                                            <v2:Insignia Texto="Sí" Variante="Neutro" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                                         IsVisible="{Binding ActualizarPrecioCosto}" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Width="Auto" MinWidth="96" CellStyleClasses="sin-padding-vertical">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate x:DataType="vm:FilaRenglonFacturaVm">
+                                            <Button Classes="ghost" Content="Quitar" VerticalAlignment="Center"
                                                     Command="{Binding $parent[UserControl].((vm:IngresoPorFacturaViewModel)DataContext).QuitarRenglonCommand}"
                                                     CommandParameter="{Binding}" />
                                         </DataTemplate>
@@ -217,55 +235,62 @@
                                 </DataGridTemplateColumn>
                             </DataGrid.Columns>
                         </DataGrid>
-                    </DockPanel>
-                </Border>
 
-                <Border Classes="card" DockPanel.Dock="Top" Margin="0,0,0,16">
-                    <Grid ColumnDefinitions="*,*,*">
-                        <StackPanel Grid.Column="0" Spacing="4">
-                            <TextBlock Text="Suma de renglones" />
-                            <TextBlock Text="{Binding SumaRenglones, Converter={x:Static conv:MonedaConverter.Instance}}" FontWeight="Bold" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="1" Spacing="4">
-                            <TextBlock Text="Total de factura" />
-                            <TextBox Text="{Binding MontoTotalTexto}" Watermark="0,00" />
-                        </StackPanel>
-                        <StackPanel Grid.Column="2" Spacing="4">
-                            <TextBlock Text="Diferencia" />
-                            <TextBlock Text="{Binding DiferenciaConTotal, Converter={x:Static conv:MonedaConverter.Instance}}"
-                                       FontWeight="Bold" Foreground="OrangeRed" />
-                        </StackPanel>
-                    </Grid>
-                </Border>
+                    </StackPanel>
+                </v2:TarjetaContenido>
 
-                <TextBlock DockPanel.Dock="Top" Text="{Binding MensajeError}" Foreground="{DynamicResource DangerBrush}"
-                           IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                           Margin="0,0,0,12" />
+                <!-- Después de guardar: el formulario queda deshabilitado y esta card aparece al final, a la vista.
+                     AdjuntosPanelView sigue en el tema viejo hasta que se migra una vez para todas sus pantallas. -->
+                <v2:TarjetaContenido x:Name="TarjetaAdjuntos" Padding="24" Margin="0,16,0,0"
+                                     IsVisible="{Binding GuardadoExitoso}"
+                                     beh:TraerALaVista.AlMostrarse="True">
+                    <StackPanel>
+                        <TextBlock Classes="subtitulo-formulario" Text="Adjuntá la factura" Margin="0,0,0,4" />
+                        <TextBlock Classes="texto-secundario" TextWrapping="Wrap" Margin="0,0,0,12"
+                                   Text="La factura quedó guardada. Adjuntá el PDF o la foto si corresponde." />
+                        <ContentControl x:Name="PanelAdjuntos" Content="{Binding AdjuntosPanel}" />
+                    </StackPanel>
+                </v2:TarjetaContenido>
 
-                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="12">
-                    <Button Content="Guardar" Command="{Binding GuardarCommand}" Classes.primary="{Binding !GuardadoExitoso}" />
-                    <Button Content="Cancelar" Command="{Binding CancelarCommand}" />
-                </StackPanel>
-
-            </DockPanel>
-
-            <!-- Post-guardado: adjuntar el PDF vía una SEGUNDA llamada (spec, Task 10). El
-                 formulario de arriba queda deshabilitado (IsEnabled=!GuardadoExitoso) — la
-                 única salida de acá en más es "Finalizar". El panel de adjuntos se REUSA vía
-                 ContentControl + ViewLocator (mismo patrón que GastoFormView), en vez de
-                 reimplementar su ItemsControl acá adentro. -->
-            <Border Classes="card" Margin="24,0,24,24" IsVisible="{Binding GuardadoExitoso}">
-                <StackPanel Spacing="12">
-                    <TextBlock Text="Factura guardada. Adjuntá el PDF si corresponde." Classes="seccion" />
-
-                    <ContentControl Content="{Binding AdjuntosPanel}" />
-
-                    <Button Content="Finalizar" Command="{Binding FinalizarCommand}" Classes.primary="{Binding GuardadoExitoso}"
-                            HorizontalAlignment="Right" />
-                </StackPanel>
-            </Border>
-        </StackPanel>
+            </StackPanel>
         </ScrollViewer>
+
+        <v2:Alerta x:Name="AlertaError" Grid.Row="1" Margin="28,0,28,12" Variante="Error"
+                   Texto="{Binding MensajeError}"
+                   IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+        <Border x:Name="Pie" Grid.Row="2"
+                Background="{DynamicResource V2SuperficieBrush}"
+                BorderBrush="{DynamicResource V2BordeBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="28,16">
+            <Grid ColumnDefinitions="Auto,32,Auto,32,Auto,*,Auto">
+                <StackPanel Grid.Column="0" Spacing="4" VerticalAlignment="Center">
+                    <TextBlock Classes="etiqueta-campo" Text="Suma de renglones" />
+                    <TextBlock x:Name="ValorSuma" Classes="titulo-seccion"
+                               Text="{Binding SumaRenglones, Converter={x:Static conv:MonedaConverter.Instance}}" />
+                </StackPanel>
+                <v2:CampoFormulario x:Name="CampoTotal" Grid.Column="2" Etiqueta="Total de factura" Requerido="True"
+                                    IsEnabled="{Binding !GuardadoExitoso}">
+                    <TextBox x:Name="TotalFactura" Width="160" Text="{Binding MontoTotalTexto}" PlaceholderText="0,00" />
+                </v2:CampoFormulario>
+                <StackPanel Grid.Column="4" Spacing="4" VerticalAlignment="Center">
+                    <TextBlock Classes="etiqueta-campo" Text="Diferencia" />
+                    <!-- Neutra si da cero; si no, advertencia. No bloquea el guardado. -->
+                    <TextBlock x:Name="ValorDiferencia" Classes="titulo-seccion"
+                               Classes.advertencia="{Binding DiferenciaConTotal, Converter={x:Static conv:DistintoDeCeroConverter.Instance}}"
+                               Text="{Binding DiferenciaConTotal, Converter={x:Static conv:MonedaConverter.Instance}}" />
+                </StackPanel>
+                <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button x:Name="BotonCancelar" Classes="secundario" Content="Cancelar"
+                            Command="{Binding CancelarCommand}" IsVisible="{Binding !GuardadoExitoso}" />
+                    <Button x:Name="BotonGuardar" Classes="primario" Content="Guardar"
+                            Command="{Binding GuardarCommand}" IsVisible="{Binding !GuardadoExitoso}" />
+                    <Button x:Name="BotonFinalizar" Classes="primario" Content="Finalizar"
+                            Command="{Binding FinalizarCommand}" IsVisible="{Binding GuardadoExitoso}" />
+                </StackPanel>
+            </Grid>
+        </Border>
 
     </Grid>
 
