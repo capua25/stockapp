@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
+using StockApp.Presentation.ViewModels.Movimientos;
 using StockApp.Presentation.Views.Dialogs;
 using StockApp.Presentation.VisualTests.Comparacion;
 using StockApp.Presentation.VisualTests.Pantallas.Inventario;
@@ -33,6 +34,14 @@ public class DialogosComparacionTests
         dialogo.FindControl<Button>("ConfirmarButton")!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         return ContenidoDeDialogo.Extraer(dialogo);
     }
+
+    private static Control ConfirmacionPrecios() =>
+        ContenidoDeDialogo.Extraer(new ConfirmacionPreciosDialog(
+        [
+            new ItemConfirmacionPrecioVm { Fila = new FilaRenglonFacturaVm(), ProductoNombre = "Cemento portland 50 kg", PrecioActual = 480m, PrecioNuevo = 510m, Confirmado = true },
+            new ItemConfirmacionPrecioVm { Fila = new FilaRenglonFacturaVm(), ProductoNombre = "Arena gruesa", PrecioActual = 890m, PrecioNuevo = 920m },
+            new ItemConfirmacionPrecioVm { Fila = new FilaRenglonFacturaVm(), ProductoNombre = "Cable 2x1,5 mm", PrecioActual = 38m, PrecioNuevo = 41.5m },
+        ]));
 
     [AvaloniaFact]
     public void Confirmacion_IgualAlMockup() =>
@@ -81,4 +90,12 @@ public class DialogosComparacionTests
     [AvaloniaFact]
     public void AltaProductoFaltantes_IgualAlMockup_1366x768() =>
         ComparacionVisual.CompararConMockup(AltaProductoFaltantes(), null, "dialogos/alta-producto-faltantes.html", tamano: TamanoLienzo.Municipio);
+
+    [AvaloniaFact]
+    public void ConfirmacionPrecios_IgualAlMockup() =>
+        ComparacionVisual.CompararConMockup(ConfirmacionPrecios(), null, "dialogos/confirmacion-precios.html");
+
+    [AvaloniaFact]
+    public void ConfirmacionPrecios_IgualAlMockup_1366x768() =>
+        ComparacionVisual.CompararConMockup(ConfirmacionPrecios(), null, "dialogos/confirmacion-precios.html", tamano: TamanoLienzo.Municipio);
 }

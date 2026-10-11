@@ -15,10 +15,10 @@
      Los precios con la tipografía del texto del tilde (control, texto etiqueta) y cifras tabulares, como la columna numérica de la grilla. */
   .lista { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; column-gap: 16px; align-items: center; }
   /* Columnas Auto: el ceil del texto más ancho (layout rounding de Avalonia); el TextBlock se alinea a la derecha
-     y dibuja el texto pegado a su izquierda. */
+     y dibuja el texto pegado a su izquierda; los precios también (la tinta de los más cortos queda hasta 1 px a la izquierda del más ancho: medido en la app). */
   .lista .encabezado-derecha { text-align: left; justify-self: end; width: calc-size(fit-content, round(up, size, 1px)); }
   .lista .fila { margin-top: 8px; }
-  .lista .precio { justify-self: end; margin-top: 8px; font-size: var(--v2-fuente-control-tamano); line-height: var(--v2-fuente-control-alto-linea); color: var(--v2-color-texto-etiqueta); }
+  .lista .precio { justify-self: end; text-align: left; width: calc-size(fit-content, round(up, size, 1px)); margin-top: 8px; font-size: var(--v2-fuente-control-tamano); line-height: var(--v2-fuente-control-alto-linea); color: var(--v2-color-texto-etiqueta); }
   .botones { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
 </style>
 </head>

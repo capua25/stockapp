@@ -1,0 +1,52 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="520" d:DesignHeight="360"
+        x:Class="StockApp.Presentation.Views.Dialogs.ConfirmacionPreciosDialog"
+        Title="Cambios de precio de costo"
+        Width="520"
+        SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        ShowInTaskbar="False"
+        Background="{DynamicResource V2SuperficieBrush}">
+
+    <!-- UI v2 (spec §5.5). Modal de pantalla como Window con servicio. Sin bindings: las filas se arman en el
+         code-behind con los cambios que recibe. La lista tiene tope de alto: con muchos cambios scrollea y los
+         botones siguen a la vista. -->
+    <Border x:Name="Contenido"
+            Classes="ui2"
+            Background="{DynamicResource V2SuperficieBrush}"
+            Padding="24">
+        <Border.Styles>
+            <!-- D10: los precios llevan la tipografía del texto del tilde (tamaño de control, texto etiqueta) con
+                 cifras tabulares, como la columna numérica de la grilla. -->
+            <Style Selector="TextBlock.precio">
+                <Setter Property="FontSize" Value="{DynamicResource V2FuenteControlTamano}" />
+                <Setter Property="Foreground" Value="{DynamicResource V2TextoEtiquetaBrush}" />
+                <Setter Property="FontFeatures" Value="+tnum,-calt" />
+            </Style>
+        </Border.Styles>
+        <StackPanel Spacing="16">
+
+            <TextBlock x:Name="MensajeText" Classes="cuerpo" TextWrapping="Wrap"
+                       Text="Estos productos se cargaron con un precio distinto del costo actual. Tildá los que querés actualizar." />
+
+            <ScrollViewer x:Name="Lista" MaxHeight="320" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <Grid x:Name="Filas" ColumnDefinitions="*,16,Auto,16,Auto" RowDefinitions="Auto">
+                    <TextBlock Grid.Column="0" Classes="etiqueta-campo" Text="Producto" />
+                    <TextBlock Grid.Column="2" Classes="etiqueta-campo" Text="Precio actual" HorizontalAlignment="Right" />
+                    <TextBlock Grid.Column="4" Classes="etiqueta-campo" Text="Precio nuevo" HorizontalAlignment="Right" />
+                </Grid>
+            </ScrollViewer>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,8,0,0">
+                <Button x:Name="CancelarButton" Classes="secundario" Content="Cancelar" IsCancel="True" Click="OnCancelarClick" />
+                <Button x:Name="ConfirmarButton" Classes="primario" Content="Confirmar y guardar" IsDefault="True" Click="OnConfirmarClick" />
+            </StackPanel>
+
+        </StackPanel>
+    </Border>
+
+</Window>
