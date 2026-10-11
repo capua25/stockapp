@@ -20,7 +20,7 @@
             Background="{DynamicResource V2SuperficieBrush}"
             Padding="24">
         <Border.Styles>
-            <!-- D10: los precios llevan la tipografía del texto del tilde (tamaño de control, texto etiqueta) con
+            <!-- Los precios llevan la tipografía del texto del tilde (tamaño de control, texto etiqueta) con
                  cifras tabulares, como la columna numérica de la grilla. -->
             <Style Selector="TextBlock.precio">
                 <Setter Property="FontSize" Value="{DynamicResource V2FuenteControlTamano}" />
