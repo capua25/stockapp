@@ -277,9 +277,14 @@
     <Style Selector=".ui2 ComboBox /template/ TextBlock#PlaceholderTextBlock">
         <Setter Property="Opacity" Value="1" />
     </Style>
-    <!-- ComboBox deshabilitado (H2): los mismos tokens que el TextBox deshabilitado, en vez del gris de Fluent
+    <!-- ComboBox deshabilitado: los mismos tokens que el TextBox deshabilitado, en vez del gris de Fluent
          (fondo #33000000, texto #9F9F9F). Espejo: la variante deshabilitada de .v2-input y su glifo en base.css. -->
     <Style Selector=".ui2 ComboBox:disabled">
+        <Setter Property="Foreground" Value="{DynamicResource V2DeshabilitadoTextoBrush}" />
+    </Style>
+    <!-- El texto de la selección se pinta en el ContentControl de la plantilla, que en Fluent trae su propio gris
+         de deshabilitado: la propiedad Foreground del ComboBox no llega hasta ahí. -->
+    <Style Selector=".ui2 ComboBox:disabled /template/ ContentControl#ContentPresenter">
         <Setter Property="Foreground" Value="{DynamicResource V2DeshabilitadoTextoBrush}" />
     </Style>
     <Style Selector=".ui2 ComboBox:disabled /template/ Border#Background">
@@ -412,7 +417,7 @@
     <Style Selector=".ui2 CheckBox:checked /template/ Path#CheckGlyph">
         <Setter Property="Fill" Value="{DynamicResource V2TextoSobreAcentoBrush}" />
     </Style>
-    <!-- CheckBox deshabilitado (H2): texto y casilla con los tokens de deshabilitado; marcada o no, la casilla no
+    <!-- CheckBox deshabilitado: texto y casilla con los tokens de deshabilitado; marcada o no, la casilla no
          conserva el azul de acento. Espejo: la variante deshabilitada de .v2-casilla-fila en base.css. -->
     <Style Selector=".ui2 CheckBox:disabled">
         <Setter Property="Foreground" Value="{DynamicResource V2DeshabilitadoTextoBrush}" />

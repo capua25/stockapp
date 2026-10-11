@@ -218,7 +218,7 @@ public class ControlesV2Tests
     [AvaloniaFact]
     public void ComboBoxYCheckBox_Deshabilitados_UsanLosTokensDeDeshabilitadoV2()
     {
-        // H2: sin estos estilos caen en el gris de Fluent (#CCCCCC el combo, #9F9F9F el texto del tilde).
+        // Sin estos estilos caen en el gris de Fluent (#CCCCCC el combo, #9F9F9F el texto del tilde).
         var ventana = Montar("""
             <StackPanel>
               <ComboBox x:Name="Combo" Width="200" IsEnabled="False" SelectedIndex="0"><ComboBoxItem>Tornillo</ComboBoxItem></ComboBox>
@@ -233,6 +233,10 @@ public class ControlesV2Tests
         Assert.Equal(Hex("#F5F5F4"), ColorDe(Parte<Border>(combo, "Background").Background));
         Assert.Equal(Hex("#E7E5E4"), ColorDe(Parte<Border>(combo, "Background").BorderBrush));
         Assert.Equal(Hex("#A8A29E"), ColorDe(combo.Foreground));
+        // Lo que se ve es el texto de la selección dentro de la plantilla, no la propiedad del control.
+        var texto = combo.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "Tornillo");
+        Assert.Equal(Hex("#A8A29E"), ColorDe(texto.Foreground));
+        Assert.Equal(Hex("#A8A29E"), ColorDe(texto.GetVisualAncestors().OfType<ContentPresenter>().First().Foreground));
         Assert.Equal(Hex("#A8A29E"), ColorDe(Parte<PathIcon>(combo, "DropDownGlyph").Foreground));
         Assert.Equal(Hex("#A8A29E"), ColorDe(tilde.Foreground));
         Assert.Equal(Hex("#F5F5F4"), ColorDe(casilla.Background));
