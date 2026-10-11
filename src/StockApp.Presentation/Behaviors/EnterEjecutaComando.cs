@@ -7,8 +7,10 @@ using Avalonia.Interactivity;
 namespace StockApp.Presentation.Behaviors;
 
 /// <summary>
-/// Enter dentro de un campo ejecuta un comando: en Ingreso por factura, Enter en la fila de carga agrega el artículo
-/// para cargar muchos renglones seguidos sin el mouse. Va en túnel: un ComboBox cerrado abre su desplegable con Enter
+/// Enter dentro de un campo ejecuta un comando, desde XAML o desde el code-behind. Ejemplos: en Ingreso por factura,
+/// Enter en la fila de carga agrega el artículo para cargar muchos renglones seguidos sin el mouse; en el alta rápida
+/// de producto, Enter en un combo con valor confirma el diálogo (el botón IsDefault solo no llega: el combo se come
+/// el Enter). Va en túnel: un ComboBox cerrado abre su desplegable con Enter
 /// y marca el evento antes de que lo vea un manejador de burbuja. En un ComboBox solo actúa con un ítem elegido y el
 /// desplegable cerrado (vacío, Enter abre el desplegable como siempre; abierto, Enter elige el ítem). Ejecuta solo si
 /// el comando puede (un campo en rojo lo bloquea igual que al botón) y marca el Enter como manejado, así no llega a

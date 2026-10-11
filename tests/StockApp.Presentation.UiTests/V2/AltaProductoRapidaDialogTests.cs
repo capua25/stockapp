@@ -180,6 +180,60 @@ public class AltaProductoRapidaDialogTests
     }
 
     [AvaloniaFact]
+    public void Enter_EnUnidadConValorYCerrada_Confirma()
+    {
+        var (d, resultado) = Abrir();
+        Completar(d, "MAT-0601", "Carretilla de obra 90 L", 3, 1);
+        var unidad = Parte<ComboBox>(d, "UnidadCombo");
+
+        Tecla(d, unidad, PhysicalKey.Enter);
+
+        Assert.False(unidad.IsDropDownOpen);
+        Assert.True(resultado.IsCompleted, "Enter en Unidad con valor no confirmó: el combo se comió la tecla.");
+        Assert.Equal(new ProductoNuevoDto("MAT-0601", "Carretilla de obra 90 L", 3, 1), resultado.Result);
+    }
+
+    [AvaloniaFact]
+    public void Enter_EnUnidadConValorYFaltantes_NoCierraYMuestraLaAlerta()
+    {
+        var (d, resultado) = Abrir();
+        Completar(d, "", "Carretilla", null, 1);
+
+        Tecla(d, Parte<ComboBox>(d, "UnidadCombo"), PhysicalKey.Enter);
+
+        Assert.False(resultado.IsCompleted);
+        var alerta = Parte<Alerta>(d, "AlertaFaltantes");
+        Assert.True(alerta.IsVisible);
+        Assert.Equal("Falta completar: Código.", alerta.Texto);
+    }
+
+    [AvaloniaFact]
+    public void Enter_EnUnidadVacia_AbreElDesplegableYNoCierra()
+    {
+        var (d, resultado) = Abrir();
+        Completar(d, "MAT-0601", "Carretilla", null, null);
+        var unidad = Parte<ComboBox>(d, "UnidadCombo");
+
+        Tecla(d, unidad, PhysicalKey.Enter);
+
+        Assert.True(unidad.IsDropDownOpen);
+        Assert.False(resultado.IsCompleted);
+        Assert.False(Parte<Alerta>(d, "AlertaFaltantes").IsVisible);
+    }
+
+    [AvaloniaFact]
+    public void Enter_EnCategoriaConValor_Confirma()
+    {
+        var (d, resultado) = Abrir();
+        Completar(d, "MAT-0601", "Carretilla de obra 90 L", 3, 1);
+
+        Tecla(d, Parte<ComboBox>(d, "CategoriaCombo"), PhysicalKey.Enter);
+
+        Assert.True(resultado.IsCompleted);
+        Assert.Equal(3, resultado.Result!.CategoriaId);
+    }
+
+    [AvaloniaFact]
     public void Abre_ConElFocoEnCodigo()
     {
         var (d, _) = Abrir();

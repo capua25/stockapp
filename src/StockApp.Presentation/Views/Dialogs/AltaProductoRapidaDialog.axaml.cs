@@ -2,8 +2,10 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Entities;
+using StockApp.Presentation.Behaviors;
 
 namespace StockApp.Presentation.Views.Dialogs;
 
@@ -25,6 +27,11 @@ public partial class AltaProductoRapidaDialog : Window
         CategoriaCombo.ItemsSource = categorias;
         UnidadCombo.ItemsSource = unidades;
         Opened += (_, _) => CodigoTextBox.Focus();
+        // Un botón IsDefault no alcanza con un ComboBox: cerrado con un valor se come el Enter para abrir el
+        // desplegable. Con valor y cerrado, Enter confirma; vacío lo abre como siempre.
+        var confirmar = new RelayCommand(Confirmar);
+        EnterEjecutaComando.SetComando(UnidadCombo, confirmar);
+        EnterEjecutaComando.SetComando(CategoriaCombo, confirmar);
     }
 
     /// <summary>"Falta completar: Código, Nombre y Unidad de medida." con los que falten, en el orden de los campos.</summary>
@@ -45,7 +52,9 @@ public partial class AltaProductoRapidaDialog : Window
         return faltantes;
     }
 
-    private void OnConfirmarClick(object? sender, RoutedEventArgs e)
+    private void OnConfirmarClick(object? sender, RoutedEventArgs e) => Confirmar();
+
+    private void Confirmar()
     {
         var faltantes = Faltantes();
         if (faltantes.Count > 0)
