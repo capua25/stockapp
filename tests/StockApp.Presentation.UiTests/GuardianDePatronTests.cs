@@ -537,7 +537,8 @@ public class GuardianDePatronTests
     /// todos los .axaml de Views, no solo los v2: un overlay nuevo en una vista vieja también se rechaza.
     /// </summary>
     private static readonly Regex OverlayDeModal =
-        new(@"#AA000000|(\{Binding\s+!?|Path="")Mostrando\w*", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        new(@"#(?!FF)[0-9A-Fa-f]{2}000000|\{(Compiled|Reflection)?Binding\s+(Path\s*=\s*)?!?Mostrando|Path=""Mostrando",
+            RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     [Fact]
     public void NingunaVista_TieneOverlaysDeModal()
@@ -558,6 +559,11 @@ public class GuardianDePatronTests
         Assert.Matches(OverlayDeModal, """<Border Background="#aa000000" />""");
         Assert.Matches(OverlayDeModal, """<Border IsVisible="{Binding !MostrandoConfirmacionPrecios}">""");
         Assert.Matches(OverlayDeModal, """<Binding Path="MostrandoAlgo" />""");
+        Assert.Matches(OverlayDeModal, """<Border Background="#80000000" />""");
+        Assert.Matches(OverlayDeModal, """<Border Background="#99000000" />""");
+        Assert.Matches(OverlayDeModal, """<Border IsVisible="{Binding Path=MostrandoX}">""");
+        Assert.Matches(OverlayDeModal, """<Border IsVisible="{CompiledBinding MostrandoX}">""");
+        Assert.DoesNotMatch(OverlayDeModal, """<Border Background="#FF000000" />""");
         Assert.DoesNotMatch(OverlayDeModal, """<Border IsVisible="{Binding GuardadoExitoso}">""");
         Assert.DoesNotMatch(OverlayDeModal, """<Border Background="{DynamicResource V2FondoBrush}" />""");
     }
