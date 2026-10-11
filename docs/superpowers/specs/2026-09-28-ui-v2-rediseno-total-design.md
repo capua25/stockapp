@@ -431,7 +431,8 @@ Ciclo de cada fase: mockups de sus pantallas → aprobación del usuario → XAM
      - Producto (`ComboBox`, o el nombre del producto nuevo + "Cambiar").
      - Cantidad y Precio, con `EntradaNumericaBehavior`.
      - "Actualizar precio costo".
-     - "Producto nuevo" (secundario) y "Agregar artículo" (primario de la sección).
+     - "Producto nuevo" (secundario) y "Agregar artículo" (secundario; decisión del usuario del 2026-10-11, ver los desvíos).
+     - Enter dentro de la fila de carga dispara "Agregar artículo": en Cantidad, en Precio y en Producto cuando tiene un valor. Enter nunca dispara Guardar ni envía el formulario: la pantalla no tiene botón con `IsDefault` y el Enter de la fila se consume ahí. En Producto vacío, Enter conserva lo nativo del `ComboBox` (abre el desplegable) y no agrega ni muestra el error de carga; con el desplegable abierto, Enter elige el ítem y no agrega. En Cantidad o Precio con Producto vacío, Enter ejecuta "Agregar artículo", que valida igual que el botón ("Debe seleccionar un producto o cargar uno nuevo.").
      - El error de carga va en una `Alerta` en línea, y el foco vuelve al producto tras agregar.
   3. **"Artículos cargados"**:
      - Grilla v2 de solo lectura (convenciones 18 y 19) con `ColumnaAuto` en Cantidad, Precio y Subtotal (a la derecha) y Producto en `*`.
@@ -440,7 +441,7 @@ Ciclo de cada fase: mockups de sus pantallas → aprobación del usuario → XAM
 - Pie fijo:
   - Suma de renglones, Total de factura (el `TextBox` editable existente, `MontoTotalTexto`) y Diferencia.
   - La diferencia es neutra si da 0. Si no, usa el color de advertencia v2, que reemplaza el `OrangeRed` literal de hoy, y no bloquea el guardado.
-  - A la derecha, Cancelar (secundario) y Guardar (primario).
+  - A la derecha, Cancelar (secundario) y Guardar (primario, el ÚNICO primario de la pantalla).
   - El error general va en una `Alerta` arriba del pie.
 - Después de guardar:
   - El formulario queda deshabilitado.
@@ -469,12 +470,14 @@ Ciclo de cada fase: mockups de sus pantallas → aprobación del usuario → XAM
   - Los tests de click real se adaptan.
   - El pie es visible con 50 renglones a 1280×760.
   - La diferencia cambia de estilo si no da 0.
+  - Un solo primario en la VISTA entera (Guardar), igual que cualquier formulario v2; "Agregar artículo" y "Producto nuevo" son secundarios.
+  - Enter en Cantidad, en Precio y en Producto con valor agrega el renglón; Enter en Producto vacío o con el desplegable abierto no agrega ni muestra error; Enter en la fila de carga nunca ejecuta Guardar.
   - Comparación con mockups a 1280 y 1366.
 - Guardianes:
   - Ingreso por factura entra a la lista v2 (`VistasMigradasAV2`).
   - Convención 25.
   - Se actualiza `GuardianDePatronTests:48` (hoy `[InlineData(typeof(IngresoPorFacturaView), "Ingreso de stock por factura", "MOVIMIENTOS")]`), por el título y el eyebrow.
-- Verificación por mutación de las reglas clave: `IsCancel`, `IsDefault`, la validación del alta y el pie fuera del scroll.
+- Verificación por mutación de las reglas clave: `IsCancel`, `IsDefault`, la validación del alta, el pie fuera del scroll y Enter en la fila de carga → Agregar artículo.
 - Verificación orgánica en WSLg a 1280:
   - Una factura con un producto existente y uno nuevo, más un cambio de precio.
   - Los diálogos con teclado.
@@ -490,7 +493,7 @@ Ciclo de cada fase: mockups de sus pantallas → aprobación del usuario → XAM
 - Entregables: esta sección, la convención 25 en `docs/ui-v2/herramientas.md` y después el plan `docs/superpowers/plans/2026-10-11-ui-v2-fase-3c3-ingreso-factura.md`.
 
 *Desvíos y aclaraciones respecto de secciones previas (auto-revisión del diseño):*
-- **Dos primarios en la pantalla (desvío de §3.3 y §5.2, "un solo botón primario"):** "Agregar artículo" es el primario de la sección "Cargar artículo" y "Guardar" el del pie. Justificación: la pantalla tiene dos acciones de distinta escala que se repiten con frecuencia distinta (agregar un renglón muchas veces, guardar la factura una vez) y cada una es la acción principal de su zona; decisión del usuario del 2026-10-11. Un test de "un solo primario" de esta pantalla debe contar por zona (sección de carga y pie), no por vista. Los diálogos sí tienen un solo primario.
+- **Un solo primario, sin desvío (decisión del usuario del 2026-10-11, reemplaza el desvío de "dos primarios" de la primera versión de este diseño):** "Agregar artículo" es SECUNDARIO y el único primario de la pantalla es Guardar, así que la pantalla cumple §3.3 y §5.2. La acción frecuente (agregar un renglón muchas veces) se resuelve con el teclado: Enter dentro de la fila de carga (Cantidad, Precio, y Producto cuando tiene valor) dispara "Agregar artículo". Enter no dispara Guardar ni envía el formulario por accidente: ningún botón de la pantalla lleva `IsDefault`, el Enter de la fila se marca como manejado, y en Producto vacío conserva lo nativo del `ComboBox` sin agregar. El test de "un solo primario" cuenta sobre la vista entera, como en cualquier formulario v2. Los diálogos también tienen un solo primario.
 - **Grilla de campos de 3 por fila y la fila única de "Cargar artículo" (desvío de §5.2, "grilla de 2 columnas"):** la cabecera de la factura tiene 10 campos agrupados de a tres por afinidad (identificación, fecha y destino, imputación presupuestal) y la carga de un artículo es una sola acción en línea. El ancho de la card lo fijan los mockups de la fase.
 - **Sin breadcrumb:** hereda D1 de la 3b (desvío ya aprobado de §4.4: es una pantalla del sidebar, no un alta que vuelve a un listado).
 - **Los 3 overlays de actualización de la Fase 1 (§4.5, §5.5) no caen bajo la convención 25:** son del shell (`CoordinadorActualizacion`), no un modal de una pantalla, y no usan `#AA000000` ni bindings `Mostrando*`. La convención 25 rige para los modales de pantalla.
