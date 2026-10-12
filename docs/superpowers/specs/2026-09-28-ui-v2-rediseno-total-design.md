@@ -508,7 +508,7 @@ Revisado y aprobado por el usuario el 2026-10-11 (decisiones del GATE, rulings y
 - **Los 3 overlays de actualización de la Fase 1 (§4.5, §5.5) no caen bajo la convención 25:** son del shell (`CoordinadorActualizacion`), no un modal de una pantalla, y no usan `#AA000000` ni bindings `Mostrando*`. La convención 25 rige para los modales de pantalla.
 - **§5.5 habla de "4 diálogos `Window`"**: con Recalcular stock (3c-2) y los dos de esta fase son 7; todos siguen sin bindings.
 
-**Diseño de la Fase 4a (aprobado por el usuario el 2026-10-11).** `AdjuntosPanelView`, Calendario de pagos y Control POA en v2, más los estados de pantalla de las convenciones 18, 22 y 23. Alcance: migración visual de las tres vistas y las excepciones E1 a E4 de abajo; sin cambios de API ni de datos. Plan: pendiente, se escribe a continuación.
+**Diseño de la Fase 4a (aprobado por el usuario el 2026-10-11).** `AdjuntosPanelView`, Calendario de pagos y Control POA en v2, más los estados de pantalla de las convenciones 18, 22 y 23. Alcance: migración visual de las tres vistas y las excepciones E1 a E5 de abajo; sin cambios de API ni de datos. Plan: `docs/superpowers/plans/2026-10-11-ui-v2-fase-4a-adjuntos-calendario-poa.md`.
 
 *Subfases de la Fase 4 (aprobado por el usuario el 2026-10-11).* 4a `AdjuntosPanelView` + Calendario de pagos + Control POA; 4b Ingresos de caja + formulario; 4c Libro caja; 4d Gastos y facturas + formulario; 4e Pagos del gasto. La 4e depende de la 4a y de la 4d. Cada una con su ciclo completo (§7).
 
@@ -517,6 +517,7 @@ Revisado y aprobado por el usuario el 2026-10-11 (decisiones del GATE, rulings y
 - **E2.** `ControlPoaViewModel`: cambiar Ejercicio recarga solo, con una espera debounce inyectable (como `EsperaDebounce` de Productos). `RecargarCommand` sale del encabezado.
 - **E3.** `AdjuntosPanelViewModel.QuitarCommand` pide confirmación con `IConfirmacionService`. Hoy borra sin preguntar (es baja lógica).
 - **E4.** Adjuntos muestra el tamaño legible en es-UY ("1,2 MB", "850 KB") con un converter. Hoy es "{0:N0} B".
+- **E5 (decisión del usuario, 2026-10-11).** `AdjuntosPanelViewModel.PuedeModificar` se refresca al revocar permisos con el panel abierto, como los demás gates (convención 21). Hoy se calcula una sola vez en `InicializarAsync` y queda viejo. Pasa a ser un getter sobre la sesión (con el permiso que corresponde a gasto o a pago, fijado en `InicializarAsync`), y los tres hosts (`GastoFormViewModel`, `PagosGastoViewModel` e `IngresoPorFacturaViewModel`) reenvían `NotificarPermisosActualizados` al panel. Sin el reenvío, el `OnPropertyChanged(string.Empty)` del host relee `AdjuntosPanel`, que es la misma instancia, y los bindings del panel no se reevalúan. Se custodia con un test en `Presentation.UiTests` con la View real dentro de `ShellMainView`, un 403 real (`ManejadorAccesoRevocado`) y un Operador de permisos MIXTOS (nunca Admin), más la mutación que quita el reenvío.
 
 *Sección 1. Calendario de pagos (opción A).*
 - `EncabezadoPagina` "Calendario de pagos" con "Actualizar" SECUNDARIO. Se mantiene: la vista depende de la fecha de hoy y no tiene filtros.
@@ -554,12 +555,12 @@ Revisado y aprobado por el usuario el 2026-10-11 (decisiones del GATE, rulings y
 - **Guardianes:** las tres vistas pasan a `VistasMigradasAV2` (salen de `VistasDeLaTanda` y `VistasEmbebidas` en `GuardianDePatronTests`).
 - **Comparación visual** por mockup a 1280×760 y 1366×768 con el mismo umbral. Se quita la exclusión `.panel-adjuntos-v1` / `DatosIngresoFactura.OcultarPanelAdjuntosV1` de `IngresoFacturaComparacionTests`.
 - **Tests de ViewModel con fakes:** recarga por cambio de ejercicio con debounce; confirmación al quitar (aceptar y cancelar); la consulta vigente gana (convención 23); sin conexión y reintentar.
-- **Tests de gates en `Presentation.UiTests`** con la View real y un usuario de permisos MIXTOS (no Admin: Admin cortocircuita el gate): la columna "Registrar pago" del Calendario y Agregar / Quitar de Adjuntos.
+- **Tests de gates en `Presentation.UiTests`** con la View real y un usuario de permisos MIXTOS (no Admin: Admin cortocircuita el gate): la columna "Registrar pago" del Calendario y Agregar / Quitar de Adjuntos, los dos también tras un 403 con la pantalla abierta (E5 para Adjuntos).
 - `SignoNegativoBadgeTests` se adapta a `Insignia` (convención 13). Se mantienen `AccesoRevocadoPantallasFinanzasTests` y `FinanzasRevocacionPermisosTests`.
-- **Verificación por mutación, quitando (nunca agregando) las reglas clave:** el gate de la acción, la confirmación al quitar y el tono peligro de la barra por encima de 100; cada una tiene que dar rojo.
+- **Verificación por mutación, quitando (nunca agregando) las reglas clave:** el gate de la acción, la confirmación al quitar, el tono peligro de la barra por encima de 100 y el reenvío de `NotificarPermisosActualizados` al panel de adjuntos (E5); cada una tiene que dar rojo.
 - **Verificación orgánica** a 1280 con backup previo de la DB local (contenedor `stockapp-pg`).
 - **Deuda anotada, que NO se resuelve en la 4a:**
-  - Revisado en el código: `CalendarioPagosViewModel.PuedeRegistrarPagos` es un getter sobre la sesión y un 403 lo refresca en caliente (`NotificarPermisosActualizados`), así que esa parte no es deuda. Lo que sí queda: `AdjuntosPanelViewModel.PuedeModificar` se calcula una sola vez en `InicializarAsync` y no se refresca al revocar permisos con el panel abierto (preexistente).
+  - Revisado en el código: `CalendarioPagosViewModel.PuedeRegistrarPagos` es un getter sobre la sesión y un 403 lo refresca en caliente (`NotificarPermisosActualizados`), así que esa parte no es deuda. El refresco de `AdjuntosPanelViewModel.PuedeModificar` dejó de ser deuda: entra en la 4a como E5 (decisión del usuario, 2026-10-11).
   - Los hosts `GastoFormView` y `PagosGastoView` siguen v1 hasta la 4d y la 4e.
 
 **Deuda abierta tras la Fase 3a:**
