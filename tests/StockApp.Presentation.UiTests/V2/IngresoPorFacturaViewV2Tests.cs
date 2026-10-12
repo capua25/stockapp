@@ -9,6 +9,7 @@ using Avalonia.VisualTree;
 using StockApp.ApiClient;
 using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
+using StockApp.Application.Finanzas;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
@@ -37,11 +38,15 @@ public class IngresoPorFacturaViewV2Tests
         IngresoPorFacturaServiceFake Servicio, AltaProductoRapidaDialogServiceFake Alta, ConfirmacionPreciosDialogServiceFake Precios,
         NavigationRecorderFake Nav);
 
-    private static Montaje Montar(double ancho = 1040, double alto = 760)
+    private static Montaje Montar(double ancho = 1040, double alto = 760, IAdjuntoService? adjuntosServicio = null,
+        IServicioSeleccionArchivo? seleccion = null)
     {
-        var (vm, servicio, alta, precios, nav) = CrearVm();
+        var (vm, servicio, alta, precios, nav) = CrearVm(adjuntosServicio, seleccion);
         var vista = new IngresoPorFacturaView();
         var ventana = new Window { Width = ancho, Height = alto, Content = vista };
+        // Con un servicio de adjuntos propio el test usa el panel: el ViewLocator lo materializa como en la app.
+        if (adjuntosServicio is not null)
+            ventana.DataTemplates.Add(new ViewLocator());
         ventana.Show();
         vista.DataContext = vm;
         Dispatcher.UIThread.RunJobs();
@@ -50,14 +55,15 @@ public class IngresoPorFacturaViewV2Tests
     }
 
     private static (IngresoPorFacturaViewModel Vm, IngresoPorFacturaServiceFake Servicio, AltaProductoRapidaDialogServiceFake Alta,
-        ConfirmacionPreciosDialogServiceFake Precios, NavigationRecorderFake Nav) CrearVm()
+        ConfirmacionPreciosDialogServiceFake Precios, NavigationRecorderFake Nav) CrearVm(
+        IAdjuntoService? adjuntosServicio = null, IServicioSeleccionArchivo? seleccion = null)
     {
         var servicio = new IngresoPorFacturaServiceFake();
         var alta = new AltaProductoRapidaDialogServiceFake();
         var precios = new ConfirmacionPreciosDialogServiceFake();
         var confirmacion = new ConfirmacionServiceFake();
         var nav = new NavigationRecorderFake();
-        var adjuntos = new AdjuntosPanelViewModel(new AdjuntoServiceFake(), new ServicioSeleccionArchivoFake(),
+        var adjuntos = new AdjuntosPanelViewModel(adjuntosServicio ?? new AdjuntoServiceFake(), seleccion ?? new ServicioSeleccionArchivoFake(),
             new ServicioAperturaArchivoFake(), confirmacion, new SesionFake(RolUsuario.Admin));
         var vm = new IngresoPorFacturaViewModel(servicio,
             new ProductoServiceIngresoFake(new[] { P(1, "Cemento portland 50 kg", 480m), P(2, "Arena gruesa", 890m) }),
@@ -414,6 +420,57 @@ public class IngresoPorFacturaViewV2Tests
         var card = N<TarjetaContenido>(m, "TarjetaAdjuntos");
         var arriba = Arriba(card, scroll);
         Assert.True(arriba >= -0.5 && arriba < scroll.Viewport.Height, $"La card de adjuntos quedó en y={arriba:F0}, fuera de la vista.");
+    }
+
+    /// <summary>Agregar guarda el archivo y lo devuelve en el listado siguiente, como el servidor.</summary>
+    private sealed class AdjuntosQueAgregaFake : IAdjuntoService
+    {
+        private readonly List<AdjuntoDto> _items = new();
+
+        public Task<AdjuntoDto> AgregarAGastoAsync(int gastoId, string nombreArchivo, byte[] contenido)
+        {
+            var dto = new AdjuntoDto(_items.Count + 1, nombreArchivo, "application/pdf", contenido.Length, gastoId, null,
+                new DateTime(2026, 10, 6, 13, 0, 0, DateTimeKind.Utc));
+            _items.Add(dto);
+            return Task.FromResult(dto);
+        }
+
+        public Task<AdjuntoDto> AgregarAPagoAsync(int pagoGastoId, string nombreArchivo, byte[] contenido) => throw new NotSupportedException();
+        public Task<IReadOnlyList<AdjuntoDto>> ListarPorGastoAsync(int gastoId) => Task.FromResult<IReadOnlyList<AdjuntoDto>>(_items.ToList());
+        public Task<IReadOnlyList<AdjuntoDto>> ListarPorPagoAsync(int pagoGastoId) => throw new NotSupportedException();
+        public Task<AdjuntoContenidoDto> ObtenerContenidoAsync(int adjuntoId) => throw new NotSupportedException();
+        public Task QuitarAsync(int adjuntoId) => throw new NotSupportedException();
+    }
+
+    private sealed class SeleccionUnPdfFake : IServicioSeleccionArchivo
+    {
+        public Task<(string NombreArchivo, byte[] Contenido)?> SeleccionarArchivoAsync()
+            => Task.FromResult<(string NombreArchivo, byte[] Contenido)?>(("factura-0004398.pdf", new byte[2048]));
+
+        public Task<(string NombreArchivo, byte[] Contenido)?> SeleccionarArchivoOdsAsync() => throw new NotSupportedException();
+    }
+
+    [AvaloniaFact]
+    public void Guardado_TrasAgregarUnAdjunto_LaCardEnteraSigueALaVista()
+    {
+        var m = Montar(adjuntosServicio: new AdjuntosQueAgregaFake(), seleccion: new SeleccionUnPdfFake());
+        CompletarCabecera(m.Vm);
+        Renglones(m.Vm, 30);
+        var scroll = N<ScrollViewer>(m, "Desplazamiento");
+        Clickear(m, N<Button>(m, "BotonGuardar"));
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
+        var card = N<TarjetaContenido>(m, "TarjetaAdjuntos");
+        var agregar = card.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "BotonAgregar");
+
+        Clickear(m, agregar);
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Contains(card.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "factura-0004398.pdf");
+        var abajo = Abajo(card, scroll);
+        Assert.True(abajo <= scroll.Viewport.Height + 0.5,
+            $"La card de adjuntos termina en y={abajo:F0} y la vista en {scroll.Viewport.Height:F0}: la fila nueva quedó tapada por el pie.");
     }
 
     [AvaloniaFact]
