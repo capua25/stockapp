@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using Avalonia.Collections;
@@ -10,6 +13,7 @@ using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
+using StockApp.Domain.Formato;
 using StockApp.Presentation.Converters;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
@@ -43,6 +47,52 @@ public partial class IngresosViewModel : ViewModelBase
     /// </summary>
     public DataGridCollectionView ItemsView { get; }
 
+    /// <summary>Opciones del combo de estado del listado: "Activos" (por defecto) o "Todos".</summary>
+    public static IReadOnlyList<string> OpcionesEstado { get; } = ["Activos", "Todos"];
+
+    /// <summary>Texto del buscador: "contiene" sobre el concepto, sin mayúsculas ni tildes. Filtra en memoria (la API
+    /// devuelve el listado entero), así que no hay debounce.</summary>
+    [ObservableProperty]
+    private string? _textoBusqueda;
+
+    /// <summary>False (por defecto): solo los ingresos activos. True: también los dados de baja.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EstadoSeleccionado))]
+    private bool _mostrarInactivos;
+
+    /// <summary>La opción del combo, traducida a <see cref="MostrarInactivos"/>.</summary>
+    public string EstadoSeleccionado
+    {
+        get => MostrarInactivos ? "Todos" : "Activos";
+        set => MostrarInactivos = value == "Todos";
+    }
+
+    private int _cantidadVisible;
+    private int _cantidadDadosDeBaja;
+    private decimal _totalActivos;
+
+    /// <summary>Filas que deja ver el filtro.</summary>
+    public int CantidadVisible { get => _cantidadVisible; private set => SetProperty(ref _cantidadVisible, value); }
+
+    /// <summary>De las filas visibles, cuántas están dadas de baja.</summary>
+    public int CantidadDadosDeBaja { get => _cantidadDadosDeBaja; private set => SetProperty(ref _cantidadDadosDeBaja, value); }
+
+    /// <summary>Suma de los montos de las filas visibles ACTIVAS: un ingreso dado de baja no es plata que entró.</summary>
+    public decimal TotalActivos { get => _totalActivos; private set => SetProperty(ref _totalActivos, value); }
+
+    /// <summary>Pie del listado: "8 ingresos · 2 dados de baja · Total $ 6.610.730,55"; el tramo del medio solo si hay alguno.</summary>
+    public string TextoPie
+    {
+        get
+        {
+            var ingresos = $"{FormatoEsUy.Cantidad(CantidadVisible)} {(CantidadVisible == 1 ? "ingreso" : "ingresos")}";
+            var bajas = CantidadDadosDeBaja == 0
+                ? string.Empty
+                : $" · {FormatoEsUy.Cantidad(CantidadDadosDeBaja)} {(CantidadDadosDeBaja == 1 ? "dado de baja" : "dados de baja")}";
+            return $"{ingresos}{bajas} · Total {FormatoEsUy.Moneda(TotalActivos)}";
+        }
+    }
+
     /// <summary>
     /// Gatea los botones "Editar" y "Dar de baja" (bugfix 2026-08-15): antes no tenían ningún
     /// gating — basta con Permisos.VerFinanzas para entrar a esta pantalla, pero
@@ -72,7 +122,43 @@ public partial class IngresosViewModel : ViewModelBase
         _navigation   = navigation;
         _confirmacion = confirmacion;
 
-        ItemsView = new DataGridCollectionView(Items);
+        ItemsView = new DataGridCollectionView(Items) { Filter = EsVisible };
+        Items.CollectionChanged += (_, _) => RecalcularPie();
+    }
+
+    /// <summary>Predicado del filtro: la grilla y el pie usan el mismo, así lo que se cuenta es lo que se ve.</summary>
+    internal bool EsVisible(object item) =>
+        item is IngresoCaja ingreso && (MostrarInactivos || ingreso.Activo) && CoincideConcepto(ingreso.Concepto);
+
+    private bool CoincideConcepto(string concepto)
+    {
+        var busqueda = TextoBusqueda?.Trim();
+        return string.IsNullOrEmpty(busqueda)
+            || CultureInfo.InvariantCulture.CompareInfo.IndexOf(concepto, busqueda,
+                CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace) >= 0;
+    }
+
+    partial void OnTextoBusquedaChanged(string? value) => AplicarFiltro();
+
+    partial void OnMostrarInactivosChanged(bool value) => AplicarFiltro();
+
+    /// <summary>Re-filtra la grilla y el pie. Si el filtro esconde la fila seleccionada, la selección se limpia: Editar y
+    /// Dar de baja no pueden actuar sobre una fila que no se ve.</summary>
+    private void AplicarFiltro()
+    {
+        ItemsView.Refresh();
+        if (ItemSeleccionado is { } seleccionado && !EsVisible(seleccionado))
+            ItemSeleccionado = null;
+        RecalcularPie();
+    }
+
+    private void RecalcularPie()
+    {
+        var visibles = Items.Where(EsVisible).ToList();
+        CantidadVisible = visibles.Count;
+        CantidadDadosDeBaja = visibles.Count(i => !i.Activo);
+        TotalActivos = visibles.Where(i => i.Activo).Sum(i => i.Monto);
+        OnPropertyChanged(nameof(TextoPie));
     }
 
     /// <summary>Texto del estado "Sin permiso" cuando el servidor rechaza la carga (403).</summary>

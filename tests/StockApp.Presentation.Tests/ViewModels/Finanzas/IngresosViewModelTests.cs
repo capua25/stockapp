@@ -176,6 +176,136 @@ public class IngresosViewModelTests
         Assert.Null(excepcion);
     }
 
+    private static async Task<IngresosViewModel> CargadoConAsync(params IngresoCaja[] ingresos)
+    {
+        var (vm, _, _, _) = Crear(ingresos.ToList());
+        await vm.CargarAsync();
+        return vm;
+    }
+
+    private static List<int> Visibles(IngresosViewModel vm) => vm.ItemsView.Cast<IngresoCaja>().Select(i => i.Id).ToList();
+
+    [Fact]
+    public async Task PorDefecto_MuestraSoloActivos()
+    {
+        var vm = await CargadoConAsync(IngresoDe(1, "Partida", 1000m), IngresoDe(2, "Multa duplicada", 300m, activo: false));
+
+        Assert.False(vm.MostrarInactivos);
+        Assert.Equal("Activos", vm.EstadoSeleccionado);
+        Assert.Equal(new[] { 1 }, Visibles(vm));
+    }
+
+    [Fact]
+    public async Task EstadoTodos_MuestraTambienLosDadosDeBaja()
+    {
+        var vm = await CargadoConAsync(IngresoDe(1, "Partida", 1000m), IngresoDe(2, "Multa duplicada", 300m, activo: false));
+
+        vm.EstadoSeleccionado = "Todos";
+
+        Assert.True(vm.MostrarInactivos);
+        Assert.Equal(new[] { 1, 2 }, Visibles(vm));
+    }
+
+    [Fact]
+    public async Task Busqueda_PorConcepto_SinDistinguirMayusculasNiTildes()
+    {
+        var vm = await CargadoConAsync(IngresoDe(1, "Préstamo BROU obras", 2000m), IngresoDe(2, "Multas de tránsito", 300m));
+
+        vm.TextoBusqueda = "  prestamo ";
+
+        Assert.Equal(new[] { 1 }, Visibles(vm));
+    }
+
+    [Fact]
+    public async Task Pie_SumaSoloLosActivosVisibles()
+    {
+        var vm = await CargadoConAsync(IngresoDe(1, "Partida", 1000m), IngresoDe(2, "Multas", 250m),
+            IngresoDe(3, "Multa duplicada", 5000m, activo: false));
+
+        vm.MostrarInactivos = true;
+
+        Assert.Equal(3, vm.CantidadVisible);
+        Assert.Equal(1, vm.CantidadDadosDeBaja);
+        Assert.Equal(1250m, vm.TotalActivos);
+        Assert.Equal("3 ingresos · 1 dado de baja · Total $ 1.250,00", vm.TextoPie);
+    }
+
+    [Fact]
+    public async Task Pie_SinDadosDeBajaVisibles_NoLosMenciona()
+    {
+        var vm = await CargadoConAsync(IngresoDe(1, "Partida", 1000m), IngresoDe(2, "Multas", 250m),
+            IngresoDe(3, "Multa duplicada", 5000m, activo: false));
+
+        Assert.Equal("2 ingresos · Total $ 1.250,00", vm.TextoPie);
+    }
+
+    [Fact]
+    public async Task Pie_ConBusqueda_SoloCuentaLoQueSeVe()
+    {
+        var vm = await CargadoConAsync(IngresoDe(1, "Partida FIGM", 1000m), IngresoDe(2, "Multas", 250m));
+
+        vm.TextoBusqueda = "figm";
+
+        Assert.Equal("1 ingreso · Total $ 1.000,00", vm.TextoPie);
+    }
+
+    [Fact]
+    public async Task Pie_SeRecalculaAlRecargar()
+    {
+        var (vm, svc, _, _) = Crear(new List<IngresoCaja> { IngresoDe(1, "Partida", 1000m) });
+        await vm.CargarAsync();
+        svc.Setup(s => s.ListarTodosAsync()).ReturnsAsync(new List<IngresoCaja>
+        {
+            IngresoDe(1, "Partida", 1000m, activo: false), IngresoDe(2, "Multas", 40m),
+        });
+
+        await vm.CargarAsync();
+
+        Assert.Equal(1, vm.CantidadVisible);
+        Assert.Equal(40m, vm.TotalActivos);
+    }
+
+    [Fact]
+    public async Task Pie_Notifica_CantidadVisibleYTextoPie()
+    {
+        var vm = await CargadoConAsync(IngresoDe(1, "Partida", 1000m), IngresoDe(2, "Multas", 250m));
+        var notificadas = new List<string?>();
+        vm.PropertyChanged += (_, e) => notificadas.Add(e.PropertyName);
+
+        vm.TextoBusqueda = "multas";
+
+        Assert.Contains(nameof(IngresosViewModel.CantidadVisible), notificadas);
+        Assert.Contains(nameof(IngresosViewModel.TextoPie), notificadas);
+    }
+
+    [Fact]
+    public async Task FiltroQueOcultaLaSeleccion_LimpiaLaSeleccion()
+    {
+        var inactivo = IngresoDe(2, "Multa duplicada", 300m, activo: false);
+        var activo = IngresoDe(1, "Partida", 1000m);
+        var vm = await CargadoConAsync(activo, inactivo);
+        vm.ItemSeleccionado = activo;
+        Assert.True(vm.BajaCommand.CanExecute(null));
+
+        vm.TextoBusqueda = "multa";
+
+        Assert.Null(vm.ItemSeleccionado);
+        Assert.False(vm.EditarCommand.CanExecute(null));
+        Assert.False(vm.BajaCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task FiltroQueNoOcultaLaSeleccion_LaConserva()
+    {
+        var activo = IngresoDe(1, "Partida", 1000m);
+        var vm = await CargadoConAsync(activo, IngresoDe(2, "Multas", 40m));
+        vm.ItemSeleccionado = activo;
+
+        vm.TextoBusqueda = "part";
+
+        Assert.Same(activo, vm.ItemSeleccionado);
+    }
+
     // ── ItemsView: fix de ordenamiento por click en encabezados (Avalonia 12, regresión #21129) ──
 
     [Fact]
