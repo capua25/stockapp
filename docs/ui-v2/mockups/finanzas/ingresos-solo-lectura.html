@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Finanzas: Ingresos de caja solo lectura (UI v2)</title>
+<link rel="stylesheet" href="../_base/tokens.css">
+<link rel="stylesheet" href="../_base/base.css">
+<style>
+  /* Área de contenido del shell: a la derecha del sidebar de 240 (ShellMainView, Grid 240,*). */
+  .contenido { position: absolute; left: var(--v2-ancho-sidebar); top: 0; right: 0; bottom: 0; overflow: hidden; }
+  /* DockPanel Margin 28,24 de la vista: encabezado arriba, card con el resto del alto. */
+  .pagina { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 24px 28px; }
+  .pagina > .v2-tarjeta { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+  /* Combo Activos / Todos sin etiqueta, 140 de ancho, 8 después del buscador de 280 (BarraFiltros). */
+  .combo-estado { flex: 0 0 140px; width: 140px; }
+  /* La grilla ocupa el resto del alto de la card; el pie va 12 abajo. */
+  .pagina .v2-grilla { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+  .v2-grilla-header { flex: 0 0 auto; }
+  .filas { flex: 1 1 0; min-height: 0; overflow: hidden; }
+  .pie { margin-top: 12px; }
+  /* Anchos medidos en headless con el tema v2 y estos datos (los ocho ingresos): FECHA 90 (ColumnaAuto con
+     FechaCortaConverter, no cede), FUENTE 123 (ColumnaAuto) y MONTO 115 (ColumnaAuto con MonedaConverter). CONCEPTO (*)
+     el resto: 620 a 1280 y 706 a 1366, muy por encima de su piso de 240 (sin scroll horizontal). */
+  .col-fecha { flex: 0 0 90px; }
+  .col-concepto { flex: 1 1 0; min-width: 0; }
+  .col-fuente { flex: 0 0 123px; }
+  .col-monto { flex: 0 0 115px; }
+  /* Insignia Inactivo 8 a la derecha del concepto (Grid *,Auto alineada a la izquierda dentro de la celda). */
+  .insignia-inactivo { margin-left: 8px; }
+</style>
+</head>
+<body>
+<!-- Datos: DatosIngresos.SoloLectura(): operador con finanzas.ver y sin finanzas.ingresos; los tres botones se ocultan y queda la insignia Solo lectura arriba a la derecha (alineada arriba como las acciones). El sidebar muestra lo que ve ese operador. El sidebar está para aprobar la pantalla entera; la comparación lo oculta. -->
+<div class="v2-ventana">
+  <aside class="v2-sidebar">
+    <div class="v2-marca">Gestión Municipal</div>
+    <div class="v2-marca-subtitulo">Municipio de Carmelo</div>
+    <nav class="v2-sidebar-nav">
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z"/></svg><span>Inicio</span></div>
+      <div class="v2-header-seccion-sidebar">FINANZAS</div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3,22L4.5,20.5L6,22L7.5,20.5L9,22L10.5,20.5L12,22L13.5,20.5L15,22L16.5,20.5L18,22L19.5,20.5L21,22V2L19.5,3.5L18,2L16.5,3.5L15,2L13.5,3.5L12,2L10.5,3.5L9,2L7.5,3.5L6,2L4.5,3.5L3,2M18,9H6V7H18M18,13H6V11H18M18,17H6V15H18V17Z"/></svg><span>Gastos y facturas</span></div>
+      <div class="v2-item-sidebar v2-item-sidebar--activo"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M15 15V17H18V20H20V17H23V15H20V12H18V15M14.97 11.61C14.85 10.28 13.59 8.97 12 9C10.3 9.03 9 10.3 9 12C9 13.7 10.3 14.94 12 15C12.38 15 12.77 14.92 13.14 14.77C13.41 13.67 13.86 12.63 14.97 11.61M13 16H7C7 14.9 6.11 14 5 14V10C6.11 10 7 9.11 7 8H17C17 9.11 17.9 10 19 10V10.06C19.67 10.06 20.34 10.18 21 10.4V6H3V18H13.32C13.1 17.33 13 16.66 13 16Z"/></svg><span>Ingresos de caja</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 21.5C10.65 20.65 8.2 20 6.5 20C4.85 20 3.15 20.3 1.75 21.05C1.65 21.1 1.6 21.1 1.5 21.1C1.25 21.1 1 20.85 1 20.6V6C1.6 5.55 2.25 5.25 3 5C4.11 4.65 5.33 4.5 6.5 4.5C8.45 4.5 10.55 4.9 12 6C13.45 4.9 15.55 4.5 17.5 4.5C18.67 4.5 19.89 4.65 21 5C21.75 5.25 22.4 5.55 23 6V20.6C23 20.85 22.75 21.1 22.5 21.1C22.4 21.1 22.35 21.1 22.25 21.05C20.85 20.3 19.15 20 17.5 20C15.8 20 13.35 20.65 12 21.5M12 8V19.5C13.35 18.65 15.8 18 17.5 18C18.7 18 19.9 18.15 21 18.5V7C19.9 6.65 18.7 6.5 17.5 6.5C15.8 6.5 13.35 7.15 12 8M13 11.5C14.11 10.82 15.6 10.5 17.5 10.5C18.41 10.5 19.26 10.59 20 10.78V9.23C19.13 9.08 18.29 9 17.5 9C15.73 9 14.23 9.28 13 9.84V11.5M17.5 11.67C15.79 11.67 14.29 11.93 13 12.46V14.15C14.11 13.5 15.6 13.16 17.5 13.16C18.54 13.16 19.38 13.24 20 13.4V11.9C19.13 11.74 18.29 11.67 17.5 11.67M20 14.57C19.13 14.41 18.29 14.33 17.5 14.33C15.67 14.33 14.17 14.6 13 15.13V16.82C14.11 16.16 15.6 15.83 17.5 15.83C18.54 15.83 19.38 15.91 20 16.07V14.57Z"/></svg><span>Libro caja</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13,2.05V5.08C16.39,5.57 19,8.47 19,12C19,12.9 18.82,13.75 18.5,14.54L21.12,16.07C21.68,14.83 22,13.45 22,12C22,6.82 18.05,2.55 13,2.05M12,19A7,7 0 0,1 5,12C5,8.47 7.61,5.57 11,5.08V2.05C5.94,2.55 2,6.81 2,12A10,10 0 0,0 12,22C15.3,22 18.23,20.39 20.05,17.91L17.45,16.38C16.17,18 14.21,19 12,19Z"/></svg><span>Control POA</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M15,13H16.5V15.82L18.94,17.23L18.19,18.53L15,16.69V13M19,8H5V19H9.67C9.24,18.09 9,17.07 9,16A7,7 0 0,1 16,9C17.07,9 18.09,9.24 19,9.67V8M5,21C3.89,21 3,20.1 3,19V5C3,3.89 3.89,3 5,3H6V1H8V3H16V1H18V3H19A2,2 0 0,1 21,5V11.1C22.24,12.36 23,14.09 23,16A7,7 0 0,1 16,23C14.09,23 12.36,22.24 11.1,21H5M16,11.15A4.85,4.85 0 0,0 11.15,16C11.15,18.68 13.32,20.85 16,20.85A4.85,4.85 0 0,0 20.85,16C20.85,13.32 18.68,11.15 16,11.15Z"/></svg><span>Calendario de pagos</span></div>
+    </nav>
+    <div class="v2-sidebar-pie">
+      <div class="v2-avatar">JR</div>
+      <div class="v2-usuario">
+        <div class="v2-usuario-nombre">Juan Rodríguez</div>
+        <div class="v2-usuario-rol">Operador</div>
+      </div>
+      <span class="v2-boton v2-boton--ghost v2-boton--icono"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M17 7L15.59 8.41L18.17 11H8V13H18.17L15.59 15.58L17 17L22 12M4 5H12V3H4C2.9 3 2 3.9 2 5V19C2 20.1 2.9 21 4 21H12V19H4V5Z"/></svg></span>
+    </div>
+    <div class="v2-version">v0.4.0</div>
+  </aside>
+  <div class="contenido">
+    <div class="pagina">
+      <div class="v2-encabezado">
+        <div class="v2-encabezado-fila">
+          <div><div class="v2-titulo-pagina">Ingresos de caja</div><div class="v2-encabezado-subtitulo">Partidas, multas, préstamos y demás entradas de la caja municipal.</div></div>
+          <div class="v2-acciones">
+            <span class="v2-insignia">Solo lectura</span>
+          </div>
+        </div>
+      </div>
+      <div class="v2-tarjeta">
+        <div class="v2-barra-filtros">
+          <div class="v2-input v2-busqueda"><span class="v2-input-placeholder">Buscar por concepto…</span></div>
+          <div class="v2-input combo-estado"><span>Activos</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div>
+        </div>
+        <div class="v2-grilla">
+          <div class="v2-grilla-header">
+            <div class="v2-grilla-celda col-fecha">FECHA</div>
+            <div class="v2-grilla-celda col-concepto">CONCEPTO</div>
+            <div class="v2-grilla-celda col-fuente">FUENTE</div>
+            <div class="v2-grilla-celda col-monto">MONTO</div>
+          </div>
+          <div class="filas">
+            <div class="v2-grilla-fila">
+              <div class="v2-grilla-celda col-fecha">06/10/2026</div>
+              <div class="v2-grilla-celda col-concepto"><span class="v2-celda-cortada">Partida mensual FIGM octubre</span></div>
+              <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">FIGM Literal B</span></div>
+              <div class="v2-grilla-celda col-monto v2-num"><span>$ 1.250.000,00</span></div>
+            </div>
+            <div class="v2-grilla-fila">
+              <div class="v2-grilla-celda col-fecha">02/10/2026</div>
+              <div class="v2-grilla-celda col-concepto"><span class="v2-celda-cortada">Multas de tránsito setiembre</span></div>
+              <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">Rentas generales</span></div>
+              <div class="v2-grilla-celda col-monto v2-num"><span>$ 48.300,00</span></div>
+            </div>
+            <div class="v2-grilla-fila">
+              <div class="v2-grilla-celda col-fecha">15/09/2026</div>
+              <div class="v2-grilla-celda col-concepto"><span class="v2-celda-cortada">Préstamo BROU obras de pluviales</span></div>
+              <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">Préstamo BROU</span></div>
+              <div class="v2-grilla-celda col-monto v2-num"><span>$ 2.000.000,00</span></div>
+            </div>
+            <div class="v2-grilla-fila">
+              <div class="v2-grilla-celda col-fecha">05/09/2026</div>
+              <div class="v2-grilla-celda col-concepto"><span class="v2-celda-cortada">Partida mensual FIGM setiembre</span></div>
+              <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">FIGM Literal B</span></div>
+              <div class="v2-grilla-celda col-monto v2-num"><span>$ 1.250.000,00</span></div>
+            </div>
+            <div class="v2-grilla-fila">
+              <div class="v2-grilla-celda col-fecha">05/08/2026</div>
+              <div class="v2-grilla-celda col-concepto"><span class="v2-celda-cortada">Partida mensual FIGM agosto</span></div>
+              <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">FIGM Literal B</span></div>
+              <div class="v2-grilla-celda col-monto v2-num"><span>$ 1.250.000,00</span></div>
+            </div>
+            <div class="v2-grilla-fila">
+              <div class="v2-grilla-celda col-fecha">02/01/2026</div>
+              <div class="v2-grilla-celda col-concepto"><span class="v2-celda-cortada">Saldo inicial del ejercicio</span></div>
+              <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">Rentas generales</span></div>
+              <div class="v2-grilla-celda col-monto v2-num"><span>$ 812.430,55</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="v2-pie-conteo pie">6 ingresos · Total $ 6.610.730,55</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

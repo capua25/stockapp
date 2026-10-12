@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Finanzas: Ingresos de caja sin resultados (UI v2)</title>
+<link rel="stylesheet" href="../_base/tokens.css">
+<link rel="stylesheet" href="../_base/base.css">
+<style>
+  /* Área de contenido del shell: a la derecha del sidebar de 240 (ShellMainView, Grid 240,*). */
+  .contenido { position: absolute; left: var(--v2-ancho-sidebar); top: 0; right: 0; bottom: 0; overflow: hidden; }
+  /* DockPanel Margin 28,24 de la vista: encabezado arriba, card con el resto del alto. */
+  .pagina { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 24px 28px; }
+  .pagina > .v2-tarjeta { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+  /* Combo Activos / Todos sin etiqueta, 140 de ancho, 8 después del buscador de 280 (BarraFiltros). */
+  .combo-estado { flex: 0 0 140px; width: 140px; }
+  /* La grilla ocupa el resto del alto de la card; el pie va 12 abajo. */
+  .pagina .v2-grilla { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+  .v2-grilla-header { flex: 0 0 auto; }
+  .filas { flex: 1 1 0; min-height: 0; overflow: hidden; }
+  .pie { margin-top: 12px; }
+  /* Anchos medidos en headless con el tema v2 y estos datos (los ocho ingresos): FECHA 90 (ColumnaAuto con
+     FechaCortaConverter, no cede), FUENTE 123 (ColumnaAuto) y MONTO 115 (ColumnaAuto con MonedaConverter). CONCEPTO (*)
+     el resto: 620 a 1280 y 706 a 1366, muy por encima de su piso de 240 (sin scroll horizontal). */
+  .col-fecha { flex: 0 0 90px; }
+  .col-concepto { flex: 1 1 0; min-width: 0; }
+  .col-fuente { flex: 0 0 123px; }
+  .col-monto { flex: 0 0 115px; }
+  /* Insignia Inactivo 8 a la derecha del concepto (Grid *,Auto alineada a la izquierda dentro de la celda). */
+  .insignia-inactivo { margin-left: 8px; }
+</style>
+</head>
+<body>
+<!-- Datos: DatosIngresos.SinResultados(): hay ingresos pero ninguno contiene "donación"; sin grilla ni pie. El sidebar está para aprobar la pantalla entera; la comparación lo oculta. -->
+<div class="v2-ventana">
+  <aside class="v2-sidebar">
+    <div class="v2-marca">Gestión Municipal</div>
+    <div class="v2-marca-subtitulo">Municipio de Carmelo</div>
+    <nav class="v2-sidebar-nav">
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z"/></svg><span>Inicio</span></div>
+      <div class="v2-header-seccion-sidebar">INVENTARIO</div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M2,10.96C1.5,10.68 1.35,10.07 1.63,9.59L3.13,7C3.24,6.8 3.41,6.66 3.6,6.58L11.43,2.18C11.59,2.06 11.79,2 12,2C12.21,2 12.41,2.06 12.57,2.18L20.47,6.62C20.66,6.72 20.82,6.88 20.91,7.08L22.36,9.6C22.64,10.08 22.47,10.69 22,10.96L21,11.54V16.5C21,16.88 20.79,17.21 20.47,17.38L12.57,21.82C12.41,21.94 12.21,22 12,22C11.79,22 11.59,21.94 11.43,21.82L3.53,17.38C3.21,17.21 3,16.88 3,16.5V10.96C2.7,11.13 2.32,11.14 2,10.96M12,4.15V4.15L12,10.85V10.85L17.96,7.5L12,4.15M5,15.91L11,19.29V12.58L5,9.21V15.91M19,15.91V12.69L14,15.59C13.67,15.77 13.3,15.76 13,15.6V19.29L19,15.91M13.85,13.36L20.13,9.73L19.55,8.72L13.27,12.35L13.85,13.36Z"/></svg><span>Productos</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M2 12H4V17H20V12H22V17C22 18.11 21.11 19 20 19H4C2.9 19 2 18.11 2 17V12M12 15L17.55 9.54L16.13 8.13L13 11.25V2H11V11.25L7.88 8.13L6.46 9.55L12 15Z"/></svg><span>Registrar entrada</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M2 12H4V17H20V12H22V17C22 18.11 21.11 19 20 19H4C2.9 19 2 18.11 2 17V12M12 2L6.46 7.46L7.88 8.88L11 5.75V15H13V5.75L16.13 8.88L17.55 7.45L12 2Z"/></svg><span>Registrar salida</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18 15V18H15V20H18V23H20V20H23V18H20V15H18M19.5 3.5L18 2L16.5 3.5L15 2L13.5 3.5L12 2L10.5 3.5L9 2L7.5 3.5L6 2L4.5 3.5L3 2V22L4.5 20.5L6 22L7.5 20.5L9 22L10.5 20.5L12 22L13.26 20.74C13.09 20.18 13 19.59 13 19C13 18.32 13.12 17.64 13.34 17H6V15H14.53C15.67 13.73 17.29 13 19 13C19.68 13 20.36 13.12 21 13.34V2L19.5 3.5M18 13H6V11H18V13M18 9H6V7H18V9Z"/></svg><span>Ingreso por factura</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13.5,8H12V13L16.28,15.54L17,14.33L13.5,12.25V8M13,3A9,9 0 0,0 4,12H1L4.96,16.03L9,12H6A7,7 0 0,1 13,5A7,7 0 0,1 20,12A7,7 0 0,1 13,19C11.07,19 9.32,18.21 8.06,16.94L6.64,18.36C8.27,20 10.5,21 13,21A9,9 0 0,0 22,12A9,9 0 0,0 13,3"/></svg><span>Historial de movimientos</span></div>
+      <div class="v2-header-seccion-sidebar">FINANZAS</div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3,22L4.5,20.5L6,22L7.5,20.5L9,22L10.5,20.5L12,22L13.5,20.5L15,22L16.5,20.5L18,22L19.5,20.5L21,22V2L19.5,3.5L18,2L16.5,3.5L15,2L13.5,3.5L12,2L10.5,3.5L9,2L7.5,3.5L6,2L4.5,3.5L3,2M18,9H6V7H18M18,13H6V11H18M18,17H6V15H18V17Z"/></svg><span>Gastos y facturas</span></div>
+      <div class="v2-item-sidebar v2-item-sidebar--activo"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M15 15V17H18V20H20V17H23V15H20V12H18V15M14.97 11.61C14.85 10.28 13.59 8.97 12 9C10.3 9.03 9 10.3 9 12C9 13.7 10.3 14.94 12 15C12.38 15 12.77 14.92 13.14 14.77C13.41 13.67 13.86 12.63 14.97 11.61M13 16H7C7 14.9 6.11 14 5 14V10C6.11 10 7 9.11 7 8H17C17 9.11 17.9 10 19 10V10.06C19.67 10.06 20.34 10.18 21 10.4V6H3V18H13.32C13.1 17.33 13 16.66 13 16Z"/></svg><span>Ingresos de caja</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 21.5C10.65 20.65 8.2 20 6.5 20C4.85 20 3.15 20.3 1.75 21.05C1.65 21.1 1.6 21.1 1.5 21.1C1.25 21.1 1 20.85 1 20.6V6C1.6 5.55 2.25 5.25 3 5C4.11 4.65 5.33 4.5 6.5 4.5C8.45 4.5 10.55 4.9 12 6C13.45 4.9 15.55 4.5 17.5 4.5C18.67 4.5 19.89 4.65 21 5C21.75 5.25 22.4 5.55 23 6V20.6C23 20.85 22.75 21.1 22.5 21.1C22.4 21.1 22.35 21.1 22.25 21.05C20.85 20.3 19.15 20 17.5 20C15.8 20 13.35 20.65 12 21.5M12 8V19.5C13.35 18.65 15.8 18 17.5 18C18.7 18 19.9 18.15 21 18.5V7C19.9 6.65 18.7 6.5 17.5 6.5C15.8 6.5 13.35 7.15 12 8M13 11.5C14.11 10.82 15.6 10.5 17.5 10.5C18.41 10.5 19.26 10.59 20 10.78V9.23C19.13 9.08 18.29 9 17.5 9C15.73 9 14.23 9.28 13 9.84V11.5M17.5 11.67C15.79 11.67 14.29 11.93 13 12.46V14.15C14.11 13.5 15.6 13.16 17.5 13.16C18.54 13.16 19.38 13.24 20 13.4V11.9C19.13 11.74 18.29 11.67 17.5 11.67M20 14.57C19.13 14.41 18.29 14.33 17.5 14.33C15.67 14.33 14.17 14.6 13 15.13V16.82C14.11 16.16 15.6 15.83 17.5 15.83C18.54 15.83 19.38 15.91 20 16.07V14.57Z"/></svg><span>Libro caja</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13,2.05V5.08C16.39,5.57 19,8.47 19,12C19,12.9 18.82,13.75 18.5,14.54L21.12,16.07C21.68,14.83 22,13.45 22,12C22,6.82 18.05,2.55 13,2.05M12,19A7,7 0 0,1 5,12C5,8.47 7.61,5.57 11,5.08V2.05C5.94,2.55 2,6.81 2,12A10,10 0 0,0 12,22C15.3,22 18.23,20.39 20.05,17.91L17.45,16.38C16.17,18 14.21,19 12,19Z"/></svg><span>Control POA</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M15,13H16.5V15.82L18.94,17.23L18.19,18.53L15,16.69V13M19,8H5V19H9.67C9.24,18.09 9,17.07 9,16A7,7 0 0,1 16,9C17.07,9 18.09,9.24 19,9.67V8M5,21C3.89,21 3,20.1 3,19V5C3,3.89 3.89,3 5,3H6V1H8V3H16V1H18V3H19A2,2 0 0,1 21,5V11.1C22.24,12.36 23,14.09 23,16A7,7 0 0,1 16,23C14.09,23 12.36,22.24 11.1,21H5M16,11.15A4.85,4.85 0 0,0 11.15,16C11.15,18.68 13.32,20.85 16,20.85A4.85,4.85 0 0,0 20.85,16C20.85,13.32 18.68,11.15 16,11.15Z"/></svg><span>Calendario de pagos</span></div>
+      <div class="v2-header-seccion-sidebar">GESTIÓN</div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19,19H5V5H15V3H5C3.89,3 3,3.89 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V11H19M7.91,10.08L6.5,11.5L11,16L21,6L19.59,4.58L11,13.17L7.91,10.08Z"/></svg><span>Tareas</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M14,8H10V6H14V8M20,4V20C20,21.11 19.11,22 18,22H6C4.89,22 4,21.11 4,20V4A2,2 0 0,1 6,2H18C19.11,2 20,2.9 20,4M18,13H6V20H18V13M18,4H6V11H18V4M14,15H10V17H14V15Z"/></svg><span>Documentos</span></div>
+      <div class="v2-header-seccion-sidebar">ANÁLISIS</div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7,15H9C9,16.08 10.37,17 12,17C13.63,17 15,16.08 15,15C15,13.9 13.96,13.5 11.76,12.97C9.64,12.44 7,11.78 7,9C7,7.21 8.47,5.69 10.5,5.18V3H13.5V5.18C15.53,5.69 17,7.21 17,9H15C15,7.92 13.63,7 12,7C10.37,7 9,7.92 9,9C9,10.1 10.04,10.5 12.24,11.03C14.36,11.56 17,12.22 17,15C17,16.79 15.53,18.31 13.5,18.82V21H10.5V18.82C8.47,18.31 7,16.79 7,15Z"/></svg><span>Valorización de inventario</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11,2V22C5.9,21.5 2,17.2 2,12C2,6.8 5.9,2.5 11,2M13,2V11H22C21.5,6.2 17.8,2.5 13,2M13,13V22C17.7,21.5 21.5,17.8 22,13H13Z"/></svg><span>Stock por categoría</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13,9H18.5L13,3.5V9M6,2H14L20,8V20A2,2 0 0,1 18,22H6C4.89,22 4,21.1 4,20V4C4,2.89 4.89,2 6,2M15,18V16H6V18H15M18,14V12H6V14H18Z"/></svg><span>Historial por producto</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16,6L18.29,8.29L13.41,13.17L9.41,9.17L2,16.59L3.41,18L9.41,12L13.41,16L19.71,9.71L22,12V6H16Z"/></svg><span>Productos más movidos</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12,9A3,3 0 0,1 15,12A3,3 0 0,1 12,15A3,3 0 0,1 9,12A3,3 0 0,1 12,9M17.86,19.31C16.23,21.22 14.28,22.45 12,23C9.44,22.39 7.3,20.93 5.58,18.63C3.86,16.34 3,13.8 3,11V5L12,1L21,5V11C21,13.39 20.36,15.61 19.08,17.67L16.17,14.76C16.69,13.97 17,13 17,12A5,5 0 0,0 12,7A5,5 0 0,0 7,12A5,5 0 0,0 12,17C13,17 13.97,16.69 14.76,16.17L17.86,19.31Z"/></svg><span>Log de auditoría</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M22,21H2V3H4V19H6V10H10V19H12V6H16V19H18V14H22V21Z"/></svg><span>Estadística de tareas</span></div>
+      <div class="v2-header-seccion-sidebar">ADMINISTRACIÓN</div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11,13.5V21.5H3V13.5H11M12,2L17.5,11H6.5L12,2M17.5,13C20,13 22,15 22,17.5C22,20 20,22 17.5,22C15,22 13,20 13,17.5C13,15 15,13 17.5,13Z"/></svg><span>Categorías</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18,18.5A1.5,1.5 0 0,1 16.5,17A1.5,1.5 0 0,1 18,15.5A1.5,1.5 0 0,1 19.5,17A1.5,1.5 0 0,1 18,18.5M19.5,9.5L21.46,12H17V9.5M6,18.5A1.5,1.5 0 0,1 4.5,17A1.5,1.5 0 0,1 6,15.5A1.5,1.5 0 0,1 7.5,17A1.5,1.5 0 0,1 6,18.5M20,8H17V4H3C1.89,4 1,4.89 1,6V17H3A3,3 0 0,0 6,20A3,3 0 0,0 9,17H15A3,3 0 0,0 18,20A3,3 0 0,0 21,17H23V12L20,8Z"/></svg><span>Proveedores</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M1.39,18.36L3.16,16.6L4.58,18L5.64,16.95L4.22,15.54L5.64,14.12L8.11,16.6L9.17,15.54L6.7,13.06L8.11,11.65L9.53,13.06L10.59,12L9.17,10.59L10.59,9.17L13.06,11.65L14.12,10.59L11.65,8.11L13.06,6.7L14.47,8.11L15.54,7.05L14.12,5.64L15.54,4.22L18,6.7L19.07,5.64L16.6,3.16L18.36,1.39L22.61,5.64L5.64,22.61L1.39,18.36Z"/></svg><span>Unidades de medida</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5.5,9A1.5,1.5 0 0,0 7,7.5A1.5,1.5 0 0,0 5.5,6A1.5,1.5 0 0,0 4,7.5A1.5,1.5 0 0,0 5.5,9M17.41,11.58C17.77,11.94 18,12.44 18,13C18,13.55 17.78,14.05 17.41,14.41L12.41,19.41C12.05,19.77 11.55,20 11,20C10.45,20 9.95,19.78 9.58,19.41L2.59,12.42C2.22,12.05 2,11.55 2,11V6C2,4.89 2.89,4 4,4H9C9.55,4 10.05,4.22 10.41,4.58L17.41,11.58M13.54,5.71L14.54,4.71L21.41,11.58C21.78,11.94 22,12.45 22,13C22,13.55 21.78,14.05 21.42,14.41L16.04,19.79L15.04,18.79L20.75,13L13.54,5.71Z"/></svg><span>Catálogos de tareas</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5,6H23V18H5V6M14,9A3,3 0 0,1 17,12A3,3 0 0,1 14,15A3,3 0 0,1 11,12A3,3 0 0,1 14,9M9,8A2,2 0 0,1 7,10V14A2,2 0 0,1 9,16H19A2,2 0 0,1 21,14V10A2,2 0 0,1 19,8H9M1,10H3V20H19V22H1V10Z"/></svg><span>Maestros de finanzas</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10 4A4 4 0 0 0 6 8A4 4 0 0 0 10 12A4 4 0 0 0 14 8A4 4 0 0 0 10 4M17 12C16.87 12 16.76 12.09 16.74 12.21L16.55 13.53C16.25 13.66 15.96 13.82 15.7 14L14.46 13.5C14.35 13.5 14.22 13.5 14.15 13.63L13.15 15.36C13.09 15.47 13.11 15.6 13.21 15.68L14.27 16.5C14.25 16.67 14.24 16.83 14.24 17C14.24 17.17 14.25 17.33 14.27 17.5L13.21 18.32C13.12 18.4 13.09 18.53 13.15 18.64L14.15 20.37C14.21 20.5 14.34 20.5 14.46 20.5L15.7 20C15.96 20.18 16.24 20.35 16.55 20.47L16.74 21.79C16.76 21.91 16.86 22 17 22H19C19.11 22 19.22 21.91 19.24 21.79L19.43 20.47C19.73 20.34 20 20.18 20.27 20L21.5 20.5C21.63 20.5 21.76 20.5 21.83 20.37L22.83 18.64C22.89 18.53 22.86 18.4 22.77 18.32L21.7 17.5C21.72 17.33 21.74 17.17 21.74 17C21.74 16.83 21.73 16.67 21.7 16.5L22.76 15.68C22.85 15.6 22.88 15.47 22.82 15.36L21.82 13.63C21.76 13.5 21.63 13.5 21.5 13.5L20.27 14C20 13.82 19.73 13.65 19.42 13.53L19.23 12.21C19.22 12.09 19.11 12 19 12H17M10 14C5.58 14 2 15.79 2 18V20H11.68A7 7 0 0 1 11 17A7 7 0 0 1 11.64 14.09C11.11 14.03 10.56 14 10 14M18 15.5C18.83 15.5 19.5 16.17 19.5 17C19.5 17.83 18.83 18.5 18 18.5C17.16 18.5 16.5 17.83 16.5 17C16.5 16.17 17.17 15.5 18 15.5Z"/></svg><span>Usuarios</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 7C4 4.79 7.58 3 12 3S20 4.79 20 7 16.42 11 12 11 4 9.21 4 7M12.08 18L12 18C7.58 18 4 16.21 4 14V17C4 19.21 7.58 21 12 21C12.1 21 12.2 21 12.29 21C12.11 20.36 12 19.69 12 19C12 18.66 12.03 18.33 12.08 18M20 12.08C20 12.05 20 12.03 20 12V9C20 11.21 16.42 13 12 13S4 11.21 4 9V12C4 14.21 7.58 16 12 16C12.23 16 12.46 16 12.69 16C13.82 13.63 16.22 12 19 12C19.34 12 19.67 12.03 20 12.08M23.8 20.4C23.9 20.4 23.9 20.5 23.8 20.6L22.8 22.3C22.7 22.4 22.6 22.4 22.5 22.4L21.3 22C21 22.2 20.8 22.3 20.5 22.5L20.3 23.8C20.3 23.9 20.2 24 20.1 24H18.1C18 24 17.9 23.9 17.8 23.8L17.6 22.5C17.3 22.4 17 22.2 16.8 22L15.6 22.5C15.5 22.5 15.4 22.5 15.3 22.4L14.3 20.7C14.2 20.6 14.3 20.5 14.4 20.4L15.5 19.6V18.6L14.4 17.8C14.3 17.7 14.3 17.6 14.3 17.5L15.3 15.8C15.4 15.7 15.5 15.7 15.6 15.7L16.8 16.2C17.1 16 17.3 15.9 17.6 15.7L17.8 14.4C17.8 14.3 17.9 14.2 18.1 14.2H20.1C20.2 14.2 20.3 14.3 20.3 14.4L20.5 15.7C20.8 15.8 21.1 16 21.4 16.2L22.6 15.7C22.7 15.7 22.9 15.7 22.9 15.8L23.9 17.5C24 17.6 23.9 17.7 23.8 17.8L22.7 18.6V19.6L23.8 20.4M20.5 19C20.5 18.2 19.8 17.5 19 17.5S17.5 18.2 17.5 19 18.2 20.5 19 20.5 20.5 19.8 20.5 19Z"/></svg><span>Mantenimiento</span></div>
+    </nav>
+    <div class="v2-sidebar-pie">
+      <div class="v2-avatar">MP</div>
+      <div class="v2-usuario">
+        <div class="v2-usuario-nombre">María Pérez</div>
+        <div class="v2-usuario-rol">Administrador</div>
+      </div>
+      <span class="v2-boton v2-boton--ghost v2-boton--icono"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M17 7L15.59 8.41L18.17 11H8V13H18.17L15.59 15.58L17 17L22 12M4 5H12V3H4C2.9 3 2 3.9 2 5V19C2 20.1 2.9 21 4 21H12V19H4V5Z"/></svg></span>
+    </div>
+    <div class="v2-version">v0.4.0</div>
+  </aside>
+  <div class="contenido">
+    <div class="pagina">
+      <div class="v2-encabezado">
+        <div class="v2-encabezado-fila">
+          <div><div class="v2-titulo-pagina">Ingresos de caja</div><div class="v2-encabezado-subtitulo">Partidas, multas, préstamos y demás entradas de la caja municipal.</div></div>
+          <div class="v2-acciones">
+            <span class="v2-boton v2-boton--secundario v2-boton--deshabilitado">Editar</span>
+            <span class="v2-boton v2-boton--secundario v2-boton--deshabilitado">Dar de baja</span>
+            <span class="v2-boton v2-boton--primario">Nuevo ingreso</span>
+          </div>
+        </div>
+      </div>
+      <div class="v2-tarjeta">
+        <div class="v2-barra-filtros">
+          <div class="v2-input v2-busqueda"><span>donación</span></div>
+          <div class="v2-input combo-estado"><span>Activos</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div>
+        </div>
+        <div class="v2-vacio">
+          <div class="v2-vacio-titulo">Ningún ingreso coincide con la búsqueda</div>
+          <div class="v2-vacio-mensaje">Probá con otro concepto o elegí Todos.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
