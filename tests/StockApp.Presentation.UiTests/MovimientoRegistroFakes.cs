@@ -60,12 +60,17 @@ internal sealed class NavigationServiceFake : INavigationService
 
     public event Action? Cambiado;
 
+    /// <summary>Tipo del último ViewModel al que se navegó, para los tests que verifican el destino de un gesto.</summary>
+    public Type? UltimoDestino { get; private set; }
+
     public void Navegar<TVm>() where TVm : ViewModelBase
     {
+        UltimoDestino = typeof(TVm);
     }
 
     public void Navegar<TVm>(Action<TVm> inicializar) where TVm : ViewModelBase
     {
+        UltimoDestino = typeof(TVm);
     }
 
     /// <summary>

@@ -4,80 +4,152 @@
              xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
              xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:dto="using:StockApp.Application.Finanzas"
-             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
              x:Class="StockApp.Presentation.Views.Finanzas.ControlPoaView"
-             x:DataType="vm:ControlPoaViewModel">
+             x:DataType="vm:ControlPoaViewModel"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
 
-    <Grid RowDefinitions="Auto,Auto,*" Margin="{DynamicResource MargenVista}">
+    <!-- UI v2. Espejo: docs/ui-v2/mockups/finanzas/control-poa*.html. Sin Actualizar: cambiar el
+         Ejercicio recarga sola. Carga, vacío y sin servidor dentro de la card con el filtro a mano; tras un 403, Sin permiso
+         en lugar de la card. Saldo negativo: insignia Sobreejecutado y número por token, nunca opacidad. Doble click en una
+         fila abre sus facturas (code-behind). -->
+    <DockPanel Margin="28,24">
 
-        <c:HeaderVista Grid.Row="0" Eyebrow="FINANZAS" Titulo="Control POA">
-            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
-                <Button Classes="secondary" Content="Exportar CSV" Command="{Binding ExportarCsvCommand}" />
-                <Button Classes="secondary" Content="Exportar PDF" Command="{Binding ExportarPdfCommand}" />
+        <v2:EncabezadoPagina x:Name="Encabezado" DockPanel.Dock="Top" Titulo="Control POA"
+                             Subtitulo="Ejecución del presupuesto por línea. Doble click en una línea abre sus facturas.">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button x:Name="BotonExportarCsv" Classes="secundario" Content="Exportar CSV" Command="{Binding ExportarCsvCommand}" />
+                <Button x:Name="BotonExportarPdf" Classes="secundario" Content="Exportar PDF" Command="{Binding ExportarPdfCommand}" />
             </StackPanel>
-        </c:HeaderVista>
+        </v2:EncabezadoPagina>
 
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="12" Margin="0,12">
-            <c:CampoFormulario Etiqueta="Ejercicio">
-                <NumericUpDown Value="{Binding Ejercicio}" Minimum="2020" Maximum="2100" FormatString="0" Width="120"
-                               beh:NumericUpDownValidacionBehavior.Que="año" />
-            </c:CampoFormulario>
-        </StackPanel>
+        <v2:EstadoVacio x:Name="EstadoSinPermiso" DockPanel.Dock="Top" UseLayoutRounding="False"
+                        Titulo="Sin permiso" Mensaje="{Binding MensajeSinPermiso}" EsError="True"
+                        IsVisible="{Binding SinPermiso}" />
 
-        <!-- MinWidth por columna + scroll horizontal (fix/grillas-minwidth-scroll): sin esto,
-             Avalonia.Controls.DataGrid comprime columnas arbitrarias hasta el piso global
-             MinColumnWidth=40 (Themes/DataGrid.axaml) en vez de scrollear. Línea/Programa pasan a
-             MinWidth de texto largo; el resto son importes/porcentaje acotados. -->
-        <DataGrid Grid.Row="2" ItemsSource="{Binding FilasView}"
-                  SelectedItem="{Binding FilaSeleccionada}"
-                  DoubleTapped="OnFilaDobleClick"
-                  AutoGenerateColumns="False" CanUserSortColumns="True" IsReadOnly="True"
-                  ScrollViewer.HorizontalScrollBarVisibility="Auto">
-            <DataGrid.Columns>
-                <DataGridTemplateColumn Header="Línea" Width="*" MinWidth="160" SortMemberPath="Nombre">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate x:DataType="dto:ControlPoaLineaDto">
-                            <TextBlock Text="{Binding Nombre}"
-                                       TextTrimming="CharacterEllipsis"
-                                       ToolTip.Tip="{Binding Nombre}"
-                                       VerticalAlignment="Center" />
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="Programa" Width="Auto" MinWidth="150" SortMemberPath="Programa">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate x:DataType="dto:ControlPoaLineaDto">
-                            <TextBlock Text="{Binding Programa}"
-                                       TextTrimming="CharacterEllipsis"
-                                       ToolTip.Tip="{Binding Programa}"
-                                       VerticalAlignment="Center" />
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-                <DataGridTextColumn Header="Presupuesto"
-                                     Binding="{Binding Presupuesto, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type dto:ControlPoaLineaDto}}"
-                                     MinWidth="100" />
-                <DataGridTextColumn Header="Gastado"
-                                     Binding="{Binding Gastado, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type dto:ControlPoaLineaDto}}"
-                                     MinWidth="100" />
-                <DataGridTemplateColumn Header="Saldo" MinWidth="130">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate DataType="dto:ControlPoaLineaDto">
-                            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio1}">
-                                <c:BadgeEstado Texto="Sobreejecutado" Tono="Peligro"
-                                               IsVisible="{Binding Saldo, Converter={x:Static conv:EsNegativoConverter.Instance}}" />
-                                <TextBlock Text="{Binding Saldo, Converter={x:Static conv:MonedaConverter.Instance}}"
-                                           Foreground="{Binding Saldo, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}" />
-                            </StackPanel>
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-                <DataGridTextColumn Header="% Ejecución" Binding="{Binding PorcentajeEjecucion, DataType={x:Type dto:ControlPoaLineaDto}}" MinWidth="90" />
-            </DataGrid.Columns>
-        </DataGrid>
+        <v2:TarjetaContenido x:Name="Tarjeta" IsVisible="{Binding !SinPermiso}">
+            <DockPanel>
+                <v2:BarraFiltros x:Name="Filtros" DockPanel.Dock="Top" MostrarBusqueda="False">
+                    <v2:CampoFormulario x:Name="CampoEjercicio" Etiqueta="Ejercicio">
+                        <NumericUpDown Value="{Binding Ejercicio}" Minimum="2020" Maximum="2100" FormatString="0" Width="120"
+                                       beh:NumericUpDownValidacionBehavior.Que="año" />
+                    </v2:CampoFormulario>
+                </v2:BarraFiltros>
 
-    </Grid>
+                <TextBlock x:Name="PieConteo" DockPanel.Dock="Bottom" Classes="pie-conteo" Margin="0,12,0,0"
+                           Text="{Binding Filas.Count, Converter={x:Static conv:ConteoConverter.Instance}, ConverterParameter='línea|líneas'}">
+                    <TextBlock.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Filas.Count" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                        </MultiBinding>
+                    </TextBlock.IsVisible>
+                </TextBlock>
+
+                <v2:EstadoCargando x:Name="IndicadorCarga" DockPanel.Dock="Top" Texto="Cargando el control POA…">
+                    <v2:EstadoCargando.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Cargando" />
+                            <Binding Path="Filas.Count" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                        </MultiBinding>
+                    </v2:EstadoCargando.IsVisible>
+                </v2:EstadoCargando>
+
+                <v2:EstadoVacio x:Name="EstadoSinConexion" DockPanel.Dock="Top" UseLayoutRounding="False"
+                                Titulo="No se pudo conectar con el servidor"
+                                Mensaje="Verificá que el servidor esté encendido y accesible en la red, y volvé a intentar."
+                                EsError="True" IsVisible="{Binding SinConexion}">
+                    <Button x:Name="BotonReintentar" Classes="secundario" Content="Reintentar" Command="{Binding ReintentarCargaCommand}" />
+                </v2:EstadoVacio>
+
+                <v2:EstadoVacio x:Name="EstadoSinLineas" DockPanel.Dock="Top" UseLayoutRounding="False"
+                                Titulo="No hay líneas POA en este ejercicio" Mensaje="Probá con otro ejercicio.">
+                    <v2:EstadoVacio.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Cargando" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinPermiso" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="Filas.Count" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                        </MultiBinding>
+                    </v2:EstadoVacio.IsVisible>
+                </v2:EstadoVacio>
+
+                <DataGrid x:Name="Grilla" ItemsSource="{Binding FilasView}" SelectedItem="{Binding FilaSeleccionada}"
+                          DoubleTapped="OnFilaDobleClick" IsReadOnly="True" CanUserSortColumns="True" CanUserResizeColumns="True"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                    <DataGrid.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Filas.Count" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                        </MultiBinding>
+                    </DataGrid.IsVisible>
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="LÍNEA" Width="*" MinWidth="200" SortMemberPath="Nombre">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:ControlPoaLineaDto">
+                                    <TextBlock Text="{Binding Nombre}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Nombre}"
+                                               beh:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="PROGRAMA" Width="Auto" SortMemberPath="Programa" beh:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:ControlPoaLineaDto">
+                                    <TextBlock Text="{Binding Programa}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Programa}"
+                                               beh:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="PRESUPUESTO" Width="Auto" CellStyleClasses="num" SortMemberPath="Presupuesto"
+                                                beh:ColumnaAuto.Medir="True" beh:ColumnaAuto.Conversor="{x:Static conv:MonedaConverter.Instance}">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:ControlPoaLineaDto">
+                                    <TextBlock Text="{Binding Presupuesto, Converter={x:Static conv:MonedaConverter.Instance}}" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="GASTADO" Width="Auto" CellStyleClasses="num" SortMemberPath="Gastado"
+                                                beh:ColumnaAuto.Medir="True" beh:ColumnaAuto.Conversor="{x:Static conv:MonedaConverter.Instance}">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:ControlPoaLineaDto">
+                                    <TextBlock Text="{Binding Gastado, Converter={x:Static conv:MonedaConverter.Instance}}" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <!-- Ancho fijo medido con el peor caso (insignia + saldo negativo de 8 cifras): una sola Grid con la
+                             insignia a la izquierda y el número a la derecha, como STOCK NUEVO del historial (la grilla recicla
+                             celdas al ordenar). -->
+                        <DataGridTemplateColumn Header="SALDO" Width="244" CellStyleClasses="num" SortMemberPath="Saldo">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:ControlPoaLineaDto">
+                                    <Grid VerticalAlignment="Center">
+                                        <v2:Insignia Texto="Sobreejecutado" Variante="Peligro" HorizontalAlignment="Left"
+                                                     IsVisible="{Binding Saldo, Converter={x:Static conv:EsNegativoConverter.Instance}}" />
+                                        <TextBlock Text="{Binding Saldo, Converter={x:Static conv:MonedaConverter.Instance}}"
+                                                   Classes.negativo="{Binding Saldo, Converter={x:Static conv:EsNegativoConverter.Instance}}"
+                                                   HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                    </Grid>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="% EJECUCIÓN" Width="148" CellStyleClasses="num" SortMemberPath="PorcentajeEjecucion">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:ControlPoaLineaDto">
+                                    <Grid VerticalAlignment="Center">
+                                        <v2:BarraEjecucion Porcentaje="{Binding PorcentajeEjecucion}" HorizontalAlignment="Left" />
+                                        <TextBlock Text="{Binding PorcentajeEjecucion, Converter={x:Static conv:PorcentajeConverter.Instance}}"
+                                                   HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                    </Grid>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </DockPanel>
+        </v2:TarjetaContenido>
+    </DockPanel>
 </UserControl>

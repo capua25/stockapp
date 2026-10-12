@@ -268,7 +268,9 @@ public class SignoNegativoBadgeTests
     public void Montar_ControlPoaViewConSaldoNegativo_MuestraBadgeSobreejecutadoSoloEnLaFilaNegativa()
     {
         var vista = new ControlPoaView();
-        var window = MontarEnVentana(vista);
+        // Sin DataContext todo IsVisible enlazado queda visible (carga, vacío y sin conexión a la vez, sobre la grilla):
+        // con 500 de alto la grilla no tiene lugar para realizar filas.
+        var window = MontarEnVentana(vista, height: 900);
 
         var grilla = vista.GetVisualDescendants().OfType<DataGrid>().Single();
         grilla.ItemsSource = new[]
@@ -278,9 +280,12 @@ public class SignoNegativoBadgeTests
         };
         Dispatcher.UIThread.RunJobs();
 
-        var badges = BadgesConTexto(window, "Sobreejecutado");
+        // Control POA es v2: la palabra la pone una Insignia peligro.
+        var insignias = window.GetVisualDescendants().OfType<StockApp.Presentation.Controls.V2.Insignia>()
+            .Where(i => i.Texto == "Sobreejecutado").ToList();
 
-        Assert.Single(badges, b => b.IsVisible);
+        var visible = Assert.Single(insignias, i => i.IsVisible);
+        Assert.Equal(StockApp.Presentation.Controls.V2.VarianteInsignia.Peligro, visible.Variante);
     }
 
     private static ControlPoaLineaDto ControlPoaLineaDe(int id, decimal saldo) => new(

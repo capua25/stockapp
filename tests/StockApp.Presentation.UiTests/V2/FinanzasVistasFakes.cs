@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using StockApp.Application.Exportacion;
 using StockApp.Application.Finanzas;
+using StockApp.Application.Interfaces;
+using StockApp.Presentation.Services;
 using StockApp.Domain.Entities;
 
 namespace StockApp.Presentation.UiTests.V2;
@@ -46,4 +49,23 @@ internal sealed class GastoServiceSinUsoFake : IGastoService
     public Task<int> RegistrarPagoAsync(PagoGasto pago) => throw new NotSupportedException();
     public Task AnularPagoAsync(int gastoId, int pagoId) => throw new NotSupportedException();
     public Task AsociarMovimientosAsync(int gastoId, IReadOnlyList<int> movimientoIds) => throw new NotSupportedException();
+}
+
+/// <summary>Exportadores y guardado que la vista no ejercita: si algo los llama, el test se entera.</summary>
+internal sealed class CsvExporterSinUsoFake : ICsvExporter
+{
+    public string Exportar<T>(IEnumerable<T> items, IReadOnlyList<string> columnOrder) => throw new NotSupportedException();
+}
+
+internal sealed class GuardadoSinUsoFake : IServicioGuardadoArchivo
+{
+    public Task<bool> GuardarTextoAsync(string contenido, string nombreSugerido) => throw new NotSupportedException();
+    public Task<bool> GuardarBytesAsync(System.IO.Stream contenido, string nombreSugerido, System.Threading.CancellationToken ct = default,
+        string? extension = null, string? tipoMime = null) => throw new NotSupportedException();
+}
+
+internal sealed class PdfExporterSinUsoFake : IPdfExporter
+{
+    public byte[] Exportar<T>(IEnumerable<T> items, IReadOnlyList<ColumnaPdf> columnas, MetadatosDocumento metadatos, ResumenPdf? resumen = null)
+        => throw new NotSupportedException();
 }

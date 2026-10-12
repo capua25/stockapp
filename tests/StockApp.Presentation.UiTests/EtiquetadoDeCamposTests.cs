@@ -27,7 +27,7 @@ public class EtiquetadoDeCamposTests
     }
 
     private static bool TieneCampoFormularioCon(string axaml, string etiqueta) =>
-        Regex.IsMatch(axaml, $@"<c:CampoFormulario\b[^>]*Etiqueta=""{Regex.Escape(etiqueta)}""");
+        Regex.IsMatch(axaml, $@"<(?:c|v2):CampoFormulario\b[^>]*Etiqueta=""{Regex.Escape(etiqueta)}""");
 
     private static bool TieneTextBlockCaptionCon(string axaml, string texto) =>
         Regex.IsMatch(axaml,
