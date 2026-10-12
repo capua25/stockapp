@@ -175,6 +175,8 @@ public class AccesoRevocadoPantallasFinanzasTests
 
         Assert.False(Disponible(BotonDelPanel(ventana, "Agregar")));
         Assert.False(Disponible(BotonDelPanel(ventana, "Quitar")));
+        Assert.False(ArbolVisual.EsVisibleEnArbol(BotonDelPanel(ventana, "Agregar")), "El panel v2 oculta (no deshabilita) sin permiso.");
+        Assert.False(ArbolVisual.EsVisibleEnArbol(BotonDelPanel(ventana, "Quitar")));
     }
 
     [AvaloniaFact]

@@ -79,7 +79,14 @@ internal sealed class NavigationServiceFake : INavigationService
 
 internal sealed class ConfirmacionServiceFake : IConfirmacionService
 {
-    public Task<bool> PreguntarAsync(string mensaje) => Task.FromResult(true);
+    /// <summary>Espía de las preguntas de confirmación, en el orden en que se hicieron. La respuesta sigue siendo que sí.</summary>
+    public List<string> Preguntas { get; } = new();
+
+    public Task<bool> PreguntarAsync(string mensaje)
+    {
+        Preguntas.Add(mensaje);
+        return Task.FromResult(true);
+    }
 
     /// <summary>
     /// Espía (fix/integridad-referencial, Minor 10 del review adversarial): antes InformarAsync

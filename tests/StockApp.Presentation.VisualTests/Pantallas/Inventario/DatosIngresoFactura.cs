@@ -156,15 +156,6 @@ public static class DatosIngresoFactura
             vm.GuardarCommand.ExecuteAsync(null).GetAwaiter().GetResult();
     }
 
-    /// <summary>El interior de AdjuntosPanelView sigue en el tema viejo y no se compara: se vuelve transparente sin
-    /// cambiar el layout (el mockup lo reserva con el mismo alto y visibility: hidden).</summary>
-    public static void OcultarPanelAdjuntosV1(Control vista)
-    {
-        var panel = vista.GetVisualDescendants().OfType<StockApp.Presentation.Views.Finanzas.AdjuntosPanelView>().SingleOrDefault()
-            ?? throw new InvalidOperationException("No hay AdjuntosPanelView: la comparación correría sobre una vista que perdió lo que excluye.");
-        panel.Opacity = 0;
-    }
-
     public static (ShellMainViewModel Shell, IngresoPorFacturaViewModel Vm) EnShell()
     {
         var vm = Vm();

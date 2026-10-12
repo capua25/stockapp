@@ -154,7 +154,6 @@ public class GuardianDePatronTests
         typeof(OrigenFinanciamientoListView),
         typeof(HistorialImportacionesView),
         typeof(NuevaImportacionView),
-        typeof(AdjuntosPanelView),
         typeof(AdjuntosDocumentoPanelView),
         typeof(ClasificacionTareaPanelView),
         typeof(AccesoLimitadoView),
@@ -206,6 +205,7 @@ public class GuardianDePatronTests
     public static readonly HashSet<Type> VistasMigradasAV2 = new()
     {
         typeof(LoginView),
+        typeof(AdjuntosPanelView),
         typeof(ResetAdminView),
         typeof(BloqueoLicenciaView),
         typeof(ActualizacionBannerView),

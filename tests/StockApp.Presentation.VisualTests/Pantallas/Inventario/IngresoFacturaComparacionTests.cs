@@ -15,9 +15,8 @@ public class IngresoFacturaComparacionTests
     private static void Comparar(DatosIngresoFactura.Estado estado, string mockup, TamanoLienzo? tamano = null, UmbralAprobado? aprobado = null)
     {
         var (shell, vm) = DatosIngresoFactura.EnShell();
-        string[] ocultar = estado.Guardado ? [".v2-sidebar", ".panel-adjuntos-v1"] : [".v2-sidebar"];
         ComparacionVisual.CompararConMockup(new ShellMainView(), shell, mockup, tamano: tamano, aprobado: aprobado,
-            ocultarEnMockup: ocultar,
+            ocultarEnMockup: [".v2-sidebar"],
             prepararApp: vista =>
             {
                 ProductosComparacionTests.OcultarSidebar(vista);
@@ -27,7 +26,6 @@ public class IngresoFacturaComparacionTests
                     // La card de adjuntos recién se hizo visible: su ContentControl resuelve AdjuntosPanelView en el
                     // próximo layout.
                     vista.UpdateLayout();
-                    DatosIngresoFactura.OcultarPanelAdjuntosV1(vista);
                 }
             });
     }
