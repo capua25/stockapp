@@ -5,7 +5,8 @@
 #   scripts/ui-v2/comparar.sh Catalogo     solo los tests cuyo nombre contiene "Catalogo"
 #                                          (los dos tamaños: Catalogo_IgualAlMockup y su gemelo _1366x768)
 #   scripts/ui-v2/comparar.sh 1366x768     solo las corridas a 1366x768
-# Cada pantalla se compara a 1280x760 y a 1366x768 con el mismo umbral; la corrida a 1366x768 deja
+# Cada pantalla se compara a 1280x760 y a 1366x768 con el mismo umbral por defecto (un UmbralAprobado es
+# por tamaño, ver herramientas.md); la corrida a 1366x768 deja
 # su página en <pantalla>@1366x768/ y el índice agrupa las filas por pantalla y tamaño.
 # Requisito una vez por máquina:
 #   dotnet run --project tools/StockApp.UiV2.Herramientas -- instalar-navegador

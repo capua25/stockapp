@@ -15,7 +15,8 @@ public class ControlPoaComparacionTests
     private static readonly string[] CorteDelMockupA1280 = ["Mantenimiento de espacios públicos"];
 
     // El único cambio entre la fila normal y la sobreejecutada es la barra de 64 x 6 que pasa a peligro: con el tope
-    // por defecto (11 teselas) la diferencia cabe sobrada. Con 2 (la comparación mide 1) el tono de la barra se custodia.
+    // por defecto (11 teselas) la diferencia cabe sobrada. Con 3 (la comparación mide 1; queda margen de antialias) el tono
+    // de la barra se custodia: sin el relleno de peligro da 4 o más.
     private const int TeselasConLaBarraCustodiada = 3;
 
     private static void Comparar(ShellMainViewModel vm, string mockup, TamanoLienzo? tamano = null, string[]? recortesPermitidos = null,

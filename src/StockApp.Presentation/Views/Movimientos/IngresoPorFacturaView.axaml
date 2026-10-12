@@ -239,8 +239,9 @@
                     </StackPanel>
                 </v2:TarjetaContenido>
 
-                <!-- Después de guardar: el formulario queda deshabilitado y esta card aparece al final, a la vista.
-                     AdjuntosPanelView sigue en el tema viejo hasta que se migra una vez para todas sus pantallas. -->
+                <!-- Después de guardar: el formulario queda deshabilitado y esta card aparece al final, a la vista, y vuelve a
+                     la vista cuando crece con cada adjunto. El panel es AdjuntosPanelView v2, el mismo de los formularios de
+                     gasto y de pagos. -->
                 <v2:TarjetaContenido x:Name="TarjetaAdjuntos" Padding="24" Margin="0,16,0,0"
                                      IsVisible="{Binding GuardadoExitoso}"
                                      beh:TraerALaVista.AlMostrarse="True">
