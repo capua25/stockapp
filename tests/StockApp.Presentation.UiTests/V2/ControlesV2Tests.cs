@@ -124,6 +124,38 @@ public class ControlesV2Tests
     }
 
     [AvaloniaFact]
+    public void CalendarDatePicker_ConError_ElMensajeVaDebajoDeLaCaja_YLaCajaConservaSuAlto()
+    {
+        // En Fluent el DataValidationErrors está DENTRO de la plantilla: con el alto 36 en el control, el mensaje tenía
+        // que entrar en esos 36 y la caja quedaba aplastada (formulario de ingreso con la fecha vacía). La caja es el
+        // LayoutRoot de la plantilla (fondo, borde, texto y glifo); el mensaje, el ErrorTemplate v2.
+        var ventana = Montar("""<CalendarDatePicker x:Name="C" Width="300" />""");
+        var picker = Buscar<CalendarDatePicker>(ventana, "C");
+        DataValidationErrors.SetError(picker, new Avalonia.Data.DataValidationException("La fecha del ingreso es obligatoria."));
+        Dispatcher.UIThread.RunJobs();
+
+        var caja = Parte<Panel>(picker, "LayoutRoot");
+        var mensaje = picker.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "La fecha del ingreso es obligatoria.");
+        var arribaCaja = caja.TranslatePoint(new Point(0, 0), ventana)!.Value.Y;
+        var arribaMensaje = mensaje.TranslatePoint(new Point(0, 0), ventana)!.Value.Y;
+
+        Assert.Equal(36, caja.Bounds.Height);
+        Assert.True(arribaMensaje >= arribaCaja + caja.Bounds.Height,
+            $"el mensaje empieza en {arribaMensaje} y la caja termina en {arribaCaja + caja.Bounds.Height}");
+        Assert.True(picker.Bounds.Height >= caja.Bounds.Height + mensaje.Bounds.Height,
+            $"el control mide {picker.Bounds.Height}: no entra caja {caja.Bounds.Height} + mensaje {mensaje.Bounds.Height}");
+    }
+
+    [AvaloniaFact]
+    public void CalendarDatePicker_SinError_ElControlYLaCajaMiden36()
+    {
+        var picker = Buscar<CalendarDatePicker>(Montar("""<CalendarDatePicker x:Name="C" Width="300" />"""), "C");
+
+        Assert.Equal(36, picker.Bounds.Height);
+        Assert.Equal(36, Parte<Panel>(picker, "LayoutRoot").Bounds.Height);
+    }
+
+    [AvaloniaFact]
     public void TextBox_BordeInputRadio8Fuente13TextoEtiqueta()
     {
         var entrada = Buscar<TextBox>(Montar("""<TextBox x:Name="T" Text="Tornillo" />"""), "T");

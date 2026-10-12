@@ -310,8 +310,10 @@
         <Setter Property="Height" Value="{DynamicResource V2AltoControl}" />
         <Setter Property="MinHeight" Value="0" />
     </Style>
+    <!-- Igual que NumericUpDown: el alto 36 va en la caja (LayoutRoot de la plantilla: fondo, borde, texto y glifo) y no
+         en el control, porque el DataValidationErrors de Fluent está dentro de la plantilla. Con Height en el control el
+         mensaje de error tenía que entrar en los mismos 36 y aplastaba la caja; así crece hacia abajo, como el TextBox. -->
     <Style Selector=".ui2 CalendarDatePicker">
-        <Setter Property="Height" Value="{DynamicResource V2AltoControl}" />
         <Setter Property="MinHeight" Value="0" />
         <Setter Property="Padding" Value="12,0" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -321,6 +323,9 @@
         <Setter Property="BorderBrush" Value="{DynamicResource V2BordeInputBrush}" />
         <Setter Property="Foreground" Value="{DynamicResource V2TextoEtiquetaBrush}" />
         <Setter Property="FontSize" Value="{DynamicResource V2FuenteControlTamano}" />
+    </Style>
+    <Style Selector=".ui2 CalendarDatePicker /template/ Panel#LayoutRoot">
+        <Setter Property="Height" Value="{DynamicResource V2AltoControl}" />
     </Style>
     <!-- El botón de calendario de Fluent dibuja el NÚMERO DEL DÍA DE HOY (medido: un TextBlock
          con la fecha actual dentro de PART_Button): un render que cambia con la fecha no se puede
