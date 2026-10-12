@@ -3,6 +3,7 @@ using Moq;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using StockApp.ApiClient;
 using StockApp.Application.Auth;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Finanzas;
@@ -27,7 +28,7 @@ public class ControlPoaViewModelTests
         Mock<IPdfExporter> pdfExporterMock,
         Mock<IServicioAperturaArchivo> aperturaMock,
         Mock<ICurrentSession> sessionMock)
-        Crear(IReadOnlyList<ControlPoaLineaDto>? lineas = null)
+        Crear(IReadOnlyList<ControlPoaLineaDto>? lineas = null, TimeProvider? reloj = null)
     {
         var svc = new Mock<IFinanzasVistasService>();
         svc.Setup(s => s.ObtenerControlPoaAsync(It.IsAny<int>())).ReturnsAsync(lineas ?? new List<ControlPoaLineaDto>());
@@ -46,8 +47,134 @@ public class ControlPoaViewModelTests
 
         var vm = new ControlPoaViewModel(
             svc.Object, nav.Object, csv.Object, guardado.Object, confirm.Object,
-            pdfExporter.Object, apertura.Object, session.Object);
+            pdfExporter.Object, apertura.Object, session.Object, reloj);
         return (vm, svc, nav, csv, guardado, confirm, pdfExporter, apertura, session);
+    }
+
+    private sealed class RelojFijo(DateTimeOffset ahora) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => ahora;
+    }
+
+    private static readonly TimeProvider Octubre2026 = new RelojFijo(new DateTimeOffset(2026, 10, 6, 13, 0, 0, TimeSpan.Zero));
+
+    private static ControlPoaLineaDto Linea(int id, int ejercicio) =>
+        new(id, $"Línea {id}", "Obras", ejercicio, 1000m, 400m, 600m, 40m, false);
+
+    [Fact]
+    public void EjercicioInicial_SaleDelReloj_YNoConsulta()
+    {
+        var (vm, svc, _, _, _, _, _, _, _) = Crear(reloj: Octubre2026);
+
+        Assert.Equal(2026, vm.Ejercicio);
+        svc.Verify(s => s.ObtenerControlPoaAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CambiarEjercicio_RecargaSoloConElEjercicioNuevo()
+    {
+        var (vm, svc, _, _, _, _, _, _, _) = Crear(reloj: Octubre2026);
+        vm.EsperaDebounce = TimeSpan.Zero;
+        svc.Setup(s => s.ObtenerControlPoaAsync(2025)).ReturnsAsync(new List<ControlPoaLineaDto> { Linea(1, 2025) });
+
+        vm.Ejercicio = 2025;
+        await vm._tareaDebounce;
+
+        svc.Verify(s => s.ObtenerControlPoaAsync(2025), Times.Once);
+        Assert.Equal(2025, Assert.Single(vm.Filas).Ejercicio);
+    }
+
+    [Fact]
+    public async Task CambiosRapidos_SoloConsultaElUltimoEjercicio()
+    {
+        var (vm, svc, _, _, _, _, _, _, _) = Crear(reloj: Octubre2026);
+        vm.EsperaDebounce = TimeSpan.FromMilliseconds(50);
+
+        vm.Ejercicio = 2024;
+        vm.Ejercicio = 2025;
+        await vm._tareaDebounce;
+
+        svc.Verify(s => s.ObtenerControlPoaAsync(2024), Times.Never);
+        svc.Verify(s => s.ObtenerControlPoaAsync(2025), Times.Once);
+    }
+
+    [Fact]
+    public async Task ConsultaVieja_QueTerminaDespues_NoPisaLaNueva()
+    {
+        var (vm, svc, _, _, _, _, _, _, _) = Crear(reloj: Octubre2026);
+        var vieja = new TaskCompletionSource<IReadOnlyList<ControlPoaLineaDto>>();
+        var nueva = new TaskCompletionSource<IReadOnlyList<ControlPoaLineaDto>>();
+        svc.Setup(s => s.ObtenerControlPoaAsync(2026)).Returns(vieja.Task);
+        svc.Setup(s => s.ObtenerControlPoaAsync(2025)).Returns(nueva.Task);
+        vm.EsperaDebounce = TimeSpan.Zero;
+
+        var primera = vm.CargarAsync();
+        vm.Ejercicio = 2025;
+        nueva.SetResult(new List<ControlPoaLineaDto> { Linea(2, 2025) });
+        await vm._tareaDebounce;
+        vieja.SetResult(new List<ControlPoaLineaDto> { Linea(1, 2026) });
+        await primera;
+
+        Assert.Equal(2025, Assert.Single(vm.Filas).Ejercicio);
+    }
+
+    [Fact]
+    public async Task CargarAsync_MientrasEspera_CargandoEsTrue()
+    {
+        var (vm, svc, _, _, _, _, _, _, _) = Crear(reloj: Octubre2026);
+        var pendiente = new TaskCompletionSource<IReadOnlyList<ControlPoaLineaDto>>();
+        svc.Setup(s => s.ObtenerControlPoaAsync(2026)).Returns(pendiente.Task);
+
+        var carga = vm.CargarAsync();
+        Assert.True(vm.Cargando);
+        pendiente.SetResult(new List<ControlPoaLineaDto>());
+        await carga;
+
+        Assert.False(vm.Cargando);
+    }
+
+    [Fact]
+    public async Task CargarAsync_403_MarcaSinPermisoConSuMensaje()
+    {
+        var (vm, svc, _, _, _, _, _, _, _) = Crear(reloj: Octubre2026);
+        svc.Setup(s => s.ObtenerControlPoaAsync(2026)).ThrowsAsync(new UnauthorizedAccessException("403"));
+
+        await vm.CargarAsync();
+
+        Assert.True(vm.SinPermiso);
+        Assert.Equal(ControlPoaViewModel.MensajeSinPermisoControlPoa, vm.MensajeSinPermiso);
+    }
+
+    [Fact]
+    public async Task ServidorCaido_MarcaSinConexionYVaciaLasFilas()
+    {
+        var (vm, svc, _, _, _, _, _, _, _) = Crear(reloj: Octubre2026);
+        svc.SetupSequence(s => s.ObtenerControlPoaAsync(2026))
+            .ReturnsAsync(new List<ControlPoaLineaDto> { Linea(1, 2026) })
+            .ThrowsAsync(new ServidorNoDisponibleException());
+        await vm.CargarAsync();
+
+        await vm.CargarAsync();
+
+        Assert.True(vm.SinConexion);
+        Assert.Empty(vm.Filas);
+    }
+
+    [Fact]
+    public async Task Reintentar_ConsultaElEjercicioQueEstaEnPantalla()
+    {
+        var (vm, svc, _, _, _, _, _, _, _) = Crear(reloj: Octubre2026);
+        svc.Setup(s => s.ObtenerControlPoaAsync(2026)).ThrowsAsync(new ServidorNoDisponibleException());
+        svc.Setup(s => s.ObtenerControlPoaAsync(2025)).ReturnsAsync(new List<ControlPoaLineaDto> { Linea(1, 2025) });
+        await vm.CargarAsync();
+        vm.EsperaDebounce = Timeout.InfiniteTimeSpan;   // el cambio queda en pantalla sin que el debounce lo consulte
+        vm.Ejercicio = 2025;
+
+        await vm.ReintentarCargaCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.ObtenerControlPoaAsync(2025), Times.Once);
+        Assert.False(vm.SinConexion);
+        Assert.Equal(2025, Assert.Single(vm.Filas).Ejercicio);
     }
 
     [Fact]

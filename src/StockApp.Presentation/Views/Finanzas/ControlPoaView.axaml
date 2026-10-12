@@ -15,7 +15,6 @@
 
         <c:HeaderVista Grid.Row="0" Eyebrow="FINANZAS" Titulo="Control POA">
             <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
-                <Button Classes="primary" Content="Actualizar" Command="{Binding RecargarCommand}" />
                 <Button Classes="secondary" Content="Exportar CSV" Command="{Binding ExportarCsvCommand}" />
                 <Button Classes="secondary" Content="Exportar PDF" Command="{Binding ExportarPdfCommand}" />
             </StackPanel>

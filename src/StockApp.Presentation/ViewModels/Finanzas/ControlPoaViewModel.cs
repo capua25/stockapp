@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -30,7 +31,7 @@ public partial class ControlPoaViewModel : ViewModelBase
     private readonly IServicioAperturaArchivo _apertura;
     private readonly ICurrentSession _session;
 
-    [ObservableProperty] private int _ejercicio = DateTime.UtcNow.Year;
+    [ObservableProperty] private int _ejercicio;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(AbrirGastosDeLaLineaCommand))]
@@ -42,8 +43,13 @@ public partial class ControlPoaViewModel : ViewModelBase
     public ControlPoaViewModel(
         IFinanzasVistasService service, INavigationService navigation,
         ICsvExporter csvExporter, IServicioGuardadoArchivo guardado, IConfirmacionService confirmacion,
-        IPdfExporter pdfExporter, IServicioAperturaArchivo apertura, ICurrentSession session)
+        IPdfExporter pdfExporter, IServicioAperturaArchivo apertura, ICurrentSession session,
+        TimeProvider? reloj = null)
     {
+        // El año arranca del reloj (inyectable para los datos fijos de los mockups). Se escribe el campo: no dispara la
+        // recarga de OnEjercicioChanged, la primera carga la pide la vista.
+        _ejercicio = (reloj ?? TimeProvider.System).GetUtcNow().Year;
+
         _service     = service;
         _navigation  = navigation;
         _csvExporter = csvExporter;
@@ -56,31 +62,75 @@ public partial class ControlPoaViewModel : ViewModelBase
         FilasView = new DataGridCollectionView(Filas);
     }
 
+    /// <summary>Espera antes de recargar al cambiar el Ejercicio con las flechas o tipeando: un año de 4 cifras son
+    /// 4 cambios y solo el último tiene que ir al servidor.</summary>
+    private static readonly TimeSpan DebouncePorDefecto = TimeSpan.FromMilliseconds(300);
+
+    /// <summary>Espera real del debounce; los tests que no miden el tiempo la bajan a cero.</summary>
+    internal TimeSpan EsperaDebounce { get; set; } = DebouncePorDefecto;
+
+    /// <summary>Tarea del último debounce, para que los tests la esperen de forma determinista (patrón de Productos).</summary>
+    internal Task _tareaDebounce = Task.CompletedTask;
+
+    private CancellationTokenSource? _debounceCts;
+    private readonly ConsultaVigente _consultas = new();
+
+    /// <summary>Texto del estado "Sin permiso" cuando el servidor rechaza la carga (403).</summary>
+    public const string MensajeSinPermisoControlPoa = "No tenés permiso para ver el control POA.";
+
+    protected override bool AvisaSinConexionEnLinea => true;
+
+    /// <summary>Sin servidor la grilla queda vacía: el reintento no puede mostrar las líneas de otra consulta.</summary>
+    protected override void AlPerderConexion() => Filas.Clear();
+
+    /// <summary>Reintentar consulta el Ejercicio que está en pantalla, no el de la consulta que falló.</summary>
+    protected override Task ReintentarAsync(Func<Task> cargaFallida) => CargarAsync();
+
+    /// <summary>
+    /// La dispara la View (DataContextChanged) y el cambio de Ejercicio. Protegida (403 → SinPermiso, servidor caído →
+    /// SinConexion, Cargando mientras espera) y con turno: si mientras espera empezó otra carga, su resultado se descarta.
+    /// </summary>
     public async Task CargarAsync()
     {
-        try
+        var turno = _consultas.Empezar();
+        var ejercicio = Ejercicio;
+        await EjecutarCargaProtegidaAsync(async () =>
         {
-            var lineas = await _service.ObtenerControlPoaAsync(Ejercicio);
+            var lineas = await _service.ObtenerControlPoaAsync(ejercicio);
+            if (!turno.EsLaUltima)
+                return;
             Filas.Clear();
             foreach (var l in lineas)
                 Filas.Add(l);
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Red de contención (bugfix 2026-08-15): CargarAsync la dispara la View
-            // (DataContextChanged) fire-and-forget — una excepción no atrapada acá escala a
-            // Dispatcher.UIThread.UnhandledException (App.axaml.cs), que loguea a crash.log y
-            // muestra el genérico "Ocurrió un error inesperado" como si fuera un bug real. Un
-            // 403 ya se avisó ANTES de llegar acá: AuthTokenHandler dispara
-            // ApiSession.AccesoRevocado apenas ve el 403 en la respuesta HTTP, y App.axaml.cs
-            // ya informa "Tus permisos cambiaron...". Mismo criterio que
-            // GastosViewModel.CargarAsync (ec0696c): silencioso, para no duplicar el aviso.
-        }
+        }, MensajeSinPermisoControlPoa, turno);
     }
 
-    public IAsyncRelayCommand RecargarCommand => field ??= ComandoDeGuardado(RecargarAsync);
+    /// <summary>Cambiar el Ejercicio recarga sola tras la espera; un cambio nuevo cancela la espera anterior. Un texto
+    /// inválido en el NumericUpDown no llega acá (Ejercicio conserva el valor), así que no recarga con el año viejo.</summary>
+    partial void OnEjercicioChanged(int value)
+    {
+        _debounceCts?.Cancel();
+        _debounceCts?.Dispose();
+        _debounceCts = new CancellationTokenSource();
+        _tareaDebounce = DebounceCargarAsync(_debounceCts.Token);
+    }
 
-    private async Task RecargarAsync() => await CargarAsync();
+    private async Task DebounceCargarAsync(CancellationToken ct)
+    {
+        try
+        {
+            await Task.Delay(EsperaDebounce, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        if (ct.IsCancellationRequested)
+            return;
+
+        await CargarAsync();
+    }
 
     private bool TieneSeleccion() => FilaSeleccionada is not null;
 
