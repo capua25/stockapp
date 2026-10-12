@@ -19,6 +19,7 @@ public class BarraEjecucionTests
     [InlineData(100, 64)]
     [InlineData(114.3, 64)]
     [InlineData(0, 0)]
+    [InlineData(-5, 0)]
     public void Geometria_64x6_YRellenoProporcionalConTopeEnCien(decimal porcentaje, double ancho)
     {
         var barra = Montar(porcentaje);
