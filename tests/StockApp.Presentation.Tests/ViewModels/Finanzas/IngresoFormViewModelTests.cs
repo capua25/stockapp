@@ -1,4 +1,5 @@
 using System;
+using System.ComponentModel;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -181,7 +182,8 @@ public class IngresoFormViewModelTests
 
         await vm.GuardarCommand.ExecuteAsync(null);
 
-        Assert.NotNull(vm.MensajeError);
+        Assert.NotNull(vm.ErrorDe(nameof(IngresoFormViewModel.MontoTexto)));
+        Assert.Null(vm.MensajeError);
         svc.Verify(s => s.AltaAsync(It.IsAny<IngresoCaja>()), Times.Never);
     }
 
@@ -293,7 +295,161 @@ public class IngresoFormViewModelTests
 
         await vm.GuardarCommand.ExecuteAsync(null);
 
-        Assert.Equal("El monto no es un número válido. Usá coma para los decimales: 1,5", vm.MensajeError);
+        Assert.Equal("El monto no es un número válido. Usá coma para los decimales: 1,5",
+            vm.ErrorDe(nameof(IngresoFormViewModel.MontoTexto)));
         svc.Verify(s => s.AltaAsync(It.IsAny<IngresoCaja>()), Times.Never);
+    }
+
+    private static readonly string[] Campos =
+    {
+        nameof(IngresoFormViewModel.FechaSeleccionada), nameof(IngresoFormViewModel.MontoTexto),
+        nameof(IngresoFormViewModel.Concepto), nameof(IngresoFormViewModel.FuenteSeleccionada),
+    };
+
+    [Fact]
+    public async Task AlAbrir_NingunCampoTieneError()
+    {
+        var (vm, _, _) = Crear();
+
+        await vm.InicializarAsync();
+
+        Assert.All(Campos, c => Assert.Null(vm.ErrorDe(c)));
+        Assert.All(Campos, c => Assert.Empty(vm.GetErrors(c).Cast<object>()));
+        Assert.False(vm.HasErrors);
+    }
+
+    [Fact]
+    public async Task Edicion_ConDatosCargados_SinErrores()
+    {
+        var (vm, _, _) = Crear();
+        vm.CargarParaEditar(new IngresoCaja
+        {
+            Id = 5, Fecha = new DateTime(2026, 10, 2, 0, 0, 0, DateTimeKind.Utc), Concepto = "Multas",
+            FuenteFinanciamientoId = 2, Monto = 48_300m,
+        });
+
+        await vm.InicializarAsync();
+
+        Assert.All(Campos, c => Assert.Null(vm.ErrorDe(c)));
+    }
+
+    [Fact]
+    public async Task ConceptoBorradoTrasEscribir_MuestraSuError()
+    {
+        var (vm, _, _) = Crear();
+        await vm.InicializarAsync();
+
+        vm.Concepto = "x";
+        vm.Concepto = "";
+
+        Assert.Equal(IngresoFormViewModel.MensajeConceptoObligatorio, vm.ErrorDe(nameof(IngresoFormViewModel.Concepto)));
+        Assert.True(vm.HasErrors);
+    }
+
+    [Fact]
+    public async Task MarcarTocado_SinCambiarElValor_MuestraElErrorYLoNotifica()
+    {
+        var (vm, _, _) = Crear();
+        await vm.InicializarAsync();
+        var notificados = new List<string?>();
+        vm.ErrorsChanged += (_, e) => notificados.Add(e.PropertyName);
+
+        vm.MarcarTocado(nameof(IngresoFormViewModel.Concepto));
+
+        Assert.Equal(IngresoFormViewModel.MensajeConceptoObligatorio, vm.ErrorDe(nameof(IngresoFormViewModel.Concepto)));
+        Assert.Equal(new[] { IngresoFormViewModel.MensajeConceptoObligatorio },
+            vm.GetErrors(nameof(IngresoFormViewModel.Concepto)).Cast<string>());
+        Assert.Equal(new[] { nameof(IngresoFormViewModel.Concepto) }, notificados);
+    }
+
+    [Fact]
+    public async Task MontoInvalido_ErrorDelCampoConElDetalleEsUy()
+    {
+        var (vm, _, _) = Crear();
+        await vm.InicializarAsync();
+
+        vm.MontoTexto = "1.5";
+
+        Assert.Equal("El monto no es un número válido. Usá coma para los decimales: 1,5",
+            vm.ErrorDe(nameof(IngresoFormViewModel.MontoTexto)));
+    }
+
+    [Fact]
+    public async Task MontoBorrado_EsObligatorio()
+    {
+        var (vm, _, _) = Crear();
+        await vm.InicializarAsync();
+
+        vm.MontoTexto = "10";
+        vm.MontoTexto = "  ";
+
+        Assert.Equal(IngresoFormViewModel.MensajeMontoObligatorio, vm.ErrorDe(nameof(IngresoFormViewModel.MontoTexto)));
+    }
+
+    [Fact]
+    public async Task FechaBorrada_EsObligatoria_YGuardarSeDeshabilita()
+    {
+        var (vm, _, _) = Crear();
+        await CompletarFormularioValidoAsync(vm);
+
+        vm.FechaSeleccionada = null;
+
+        Assert.Equal(IngresoFormViewModel.MensajeFechaObligatoria, vm.ErrorDe(nameof(IngresoFormViewModel.FechaSeleccionada)));
+        Assert.False(vm.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task CorregirElMonto_QuitaElError()
+    {
+        var (vm, _, _) = Crear();
+        await CompletarFormularioValidoAsync(vm);
+        vm.MontoTexto = "1.5";
+
+        vm.MontoTexto = "1,5";
+
+        Assert.Null(vm.ErrorDe(nameof(IngresoFormViewModel.MontoTexto)));
+        Assert.True(vm.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task GuardarCommand_DeshabilitadoConMontoInvalido()
+    {
+        var (vm, _, _) = Crear();
+        await CompletarFormularioValidoAsync(vm);
+
+        vm.MontoTexto = "abc";
+
+        Assert.False(vm.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task IntentarGuardarConCamposVacios_TocaTodosYNoLlamaAlServicio()
+    {
+        var (vm, svc, _) = Crear();
+        await vm.InicializarAsync();
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        Assert.Equal(IngresoFormViewModel.MensajeConceptoObligatorio, vm.ErrorDe(nameof(IngresoFormViewModel.Concepto)));
+        Assert.Equal(IngresoFormViewModel.MensajeMontoObligatorio, vm.ErrorDe(nameof(IngresoFormViewModel.MontoTexto)));
+        Assert.Equal(IngresoFormViewModel.MensajeFuenteObligatoria, vm.ErrorDe(nameof(IngresoFormViewModel.FuenteSeleccionada)));
+        Assert.Null(vm.ErrorDe(nameof(IngresoFormViewModel.FechaSeleccionada)));   // arranca en hoy
+        Assert.Null(vm.MensajeError);
+        svc.Verify(s => s.AltaAsync(It.IsAny<IngresoCaja>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ErrorDelServidor_VaALaAlertaYNoAUnCampo()
+    {
+        var (vm, svc, _) = Crear();
+        svc.Setup(s => s.AltaAsync(It.IsAny<IngresoCaja>()))
+            .ThrowsAsync(new ArgumentException("El monto del ingreso debe ser mayor a cero."));
+        await CompletarFormularioValidoAsync(vm);
+        vm.MontoTexto = "0,00";
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        Assert.Equal("El monto del ingreso debe ser mayor a cero.", vm.MensajeError);
+        Assert.Null(vm.ErrorDe(nameof(IngresoFormViewModel.MontoTexto)));
     }
 }

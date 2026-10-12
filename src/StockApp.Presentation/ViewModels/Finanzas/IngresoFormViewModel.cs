@@ -1,4 +1,7 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.ComponentModel;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
@@ -17,7 +20,7 @@ using StockApp.Presentation.Helpers;
 namespace StockApp.Presentation.ViewModels.Finanzas;
 
 /// <summary>Formulario de alta / edición de un ingreso de caja. Montos con cultura FIJA es-UY.</summary>
-public partial class IngresoFormViewModel : ViewModelBase
+public partial class IngresoFormViewModel : ViewModelBase, INotifyDataErrorInfo
 {
     private readonly IIngresoCajaService          _service;
     private readonly IFuenteFinanciamientoService _fuentesService;
@@ -27,7 +30,9 @@ public partial class IngresoFormViewModel : ViewModelBase
     private int _idEdicion;
     private IngresoCaja? _ingresoParaEditar;
 
-    [ObservableProperty] private DateTime? _fechaSeleccionada = DateTime.Today;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
+    private DateTime? _fechaSeleccionada = DateTime.Today;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
@@ -50,6 +55,68 @@ public partial class IngresoFormViewModel : ViewModelBase
     public string Titulo => EsEdicion ? "Editar ingreso" : "Nuevo ingreso";
 
     public ObservableCollection<FuenteFinanciamiento> FuentesDisponibles { get; } = new();
+
+    public const string MensajeFechaObligatoria = "La fecha del ingreso es obligatoria.";
+    public const string MensajeMontoObligatorio = "El monto es obligatorio.";
+    public const string MensajeConceptoObligatorio = "El concepto es obligatorio.";
+    public const string MensajeFuenteObligatoria = "Elegí la fuente de financiamiento.";
+
+    /// <summary>Propiedades bindeadas que se validan en el cliente. ErrorsChanged se levanta con estos nombres: son los
+    /// que el binding de cada control le pregunta a GetErrors.</summary>
+    private static readonly string[] CamposValidados =
+        [nameof(FechaSeleccionada), nameof(MontoTexto), nameof(Concepto), nameof(FuenteSeleccionada)];
+
+    /// <summary>Campos que el usuario ya tocó (cambió el valor, salió del campo o intentó guardar). Un campo sin tocar
+    /// no muestra su error: el formulario recién abierto no aparece en rojo.</summary>
+    private readonly HashSet<string> _tocados = new();
+
+    public event EventHandler<DataErrorsChangedEventArgs>? ErrorsChanged;
+
+    public bool HasErrors => CamposValidados.Any(c => ErrorDe(c) is not null);
+
+    /// <summary>El error que la vista muestra debajo del campo: el de su regla, solo si el campo está tocado.</summary>
+    public string? ErrorDe(string propiedad) => _tocados.Contains(propiedad) ? ReglaDe(propiedad) : null;
+
+    public IEnumerable GetErrors(string? propertyName)
+        => propertyName is not null && ErrorDe(propertyName) is { } error ? new[] { error } : Array.Empty<string>();
+
+    /// <summary>Marca el campo como tocado sin cambiar su valor (la vista lo llama al salir de Concepto o de Monto).</summary>
+    public void MarcarTocado(string propiedad)
+    {
+        if (_tocados.Add(propiedad))
+            ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(propiedad));
+    }
+
+    private void AlCambiarCampo(string propiedad)
+    {
+        _tocados.Add(propiedad);
+        ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(propiedad));
+    }
+
+    partial void OnFechaSeleccionadaChanged(DateTime? value) => AlCambiarCampo(nameof(FechaSeleccionada));
+    partial void OnMontoTextoChanged(string value) => AlCambiarCampo(nameof(MontoTexto));
+    partial void OnConceptoChanged(string value) => AlCambiarCampo(nameof(Concepto));
+    partial void OnFuenteSeleccionadaChanged(FuenteFinanciamiento? value) => AlCambiarCampo(nameof(FuenteSeleccionada));
+
+    /// <summary>Reglas del cliente (las mismas de antes: fecha, monto numérico es-UY, concepto y fuente obligatorios).
+    /// "El monto debe ser mayor a cero" es del servidor y sale por la Alerta de error.</summary>
+    private string? ReglaDe(string propiedad) => propiedad switch
+    {
+        nameof(FechaSeleccionada) => FechaSeleccionada is null ? MensajeFechaObligatoria : null,
+        nameof(MontoTexto) => ReglaDelMonto(),
+        nameof(Concepto) => string.IsNullOrWhiteSpace(Concepto) ? MensajeConceptoObligatorio : null,
+        nameof(FuenteSeleccionada) => FuenteSeleccionada is null ? MensajeFuenteObligatoria : null,
+        _ => null,
+    };
+
+    private string? ReglaDelMonto()
+    {
+        if (string.IsNullOrWhiteSpace(MontoTexto))
+            return MensajeMontoObligatorio;
+        return FormatoEsUy.TryParseDecimal(MontoTexto, out _, out var detalle)
+            ? null
+            : MensajeNumeroInvalido.Armar("El monto no es un número válido.", detalle);
+    }
 
     /// <summary>
     /// Gatea el botón "Guardar" (bugfix 2026-08-15): antes no tenía ningún gating — se llega
@@ -122,11 +189,9 @@ public partial class IngresoFormViewModel : ViewModelBase
         GuardarCommand.NotifyCanExecuteChanged();
     }
 
-    private bool PuedeGuardar()
-        => !SinPermiso
-           && !string.IsNullOrWhiteSpace(Concepto)
-           && FuenteSeleccionada is not null
-           && !string.IsNullOrWhiteSpace(MontoTexto);
+    /// <summary>Guardar se habilita con todas las reglas del cliente cumplidas (estén o no tocados los campos) y con
+    /// permiso.</summary>
+    private bool PuedeGuardar() => !SinPermiso && CamposValidados.All(c => ReglaDe(c) is null);
 
     public IAsyncRelayCommand GuardarCommand => field ??= ComandoDeGuardado(GuardarAsync, PuedeGuardar);
 
@@ -134,21 +199,17 @@ public partial class IngresoFormViewModel : ViewModelBase
     {
         MensajeError = null;
 
-        if (!FormatoEsUy.TryParseDecimal(MontoTexto, out var monto, out var errorMonto))
-        {
-            MensajeError = MensajeNumeroInvalido.Armar("El monto no es un número válido.", errorMonto);
+        foreach (var campo in CamposValidados)
+            MarcarTocado(campo);
+        if (CamposValidados.Any(c => ReglaDe(c) is not null))
             return;
-        }
-        if (FechaSeleccionada is null)
-        {
-            MensajeError = "La fecha del ingreso es obligatoria.";
-            return;
-        }
+
+        FormatoEsUy.TryParseDecimal(MontoTexto, out var monto, out _);
 
         var ingreso = new IngresoCaja
         {
             Id = EsEdicion ? _idEdicion : 0,
-            Fecha = DateTime.SpecifyKind(FechaSeleccionada.Value.Date, DateTimeKind.Utc),
+            Fecha = DateTime.SpecifyKind(FechaSeleccionada!.Value.Date, DateTimeKind.Utc),
             Concepto = Concepto,
             FuenteFinanciamientoId = FuenteSeleccionada!.Id,
             Monto = monto,
