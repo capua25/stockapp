@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Collections;
 using Moq;
+using StockApp.ApiClient;
 using StockApp.Application.Authorization;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
@@ -50,6 +51,92 @@ public class IngresosViewModelTests
 
         var vm = new IngresosViewModel(svc.Object, session.Object, nav.Object, confirm.Object);
         return (vm, svc, nav, confirm);
+    }
+
+    private static IngresoCaja IngresoDe(int id, string concepto, decimal monto, bool activo = true) => new()
+    {
+        Id = id, Fecha = new DateTime(2026, 10, 6, 0, 0, 0, DateTimeKind.Utc), Concepto = concepto,
+        FuenteFinanciamientoId = 2,
+        FuenteFinanciamiento = new FuenteFinanciamiento { Id = 2, Nombre = "Literal B" },
+        Monto = monto, Activo = activo,
+    };
+
+    [Fact]
+    public async Task CargarAsync_MientrasEspera_CargandoEsTrue_YAlTerminarFalse()
+    {
+        var (vm, svc, _, _) = Crear();
+        var pendiente = new TaskCompletionSource<IReadOnlyList<IngresoCaja>>();
+        svc.Setup(s => s.ListarTodosAsync()).Returns(pendiente.Task);
+
+        var carga = vm.CargarAsync();
+        Assert.True(vm.Cargando);
+
+        pendiente.SetResult(new List<IngresoCaja> { IngresoDe(1, "Partida FIGM", 1000m) });
+        await carga;
+
+        Assert.False(vm.Cargando);
+        Assert.Single(vm.Items);
+    }
+
+    [Fact]
+    public async Task CargarAsync_403_MarcaSinPermisoConSuMensaje()
+    {
+        var (vm, svc, _, _) = Crear();
+        svc.Setup(s => s.ListarTodosAsync()).ThrowsAsync(new UnauthorizedAccessException("403"));
+
+        await vm.CargarAsync();
+
+        Assert.True(vm.SinPermiso);
+        Assert.Equal(IngresosViewModel.MensajeSinPermisoIngresos, vm.MensajeSinPermiso);
+    }
+
+    [Fact]
+    public async Task ServidorCaido_TrasUnaCargaBuena_MarcaSinConexionYVaciaItems()
+    {
+        var (vm, svc, _, _) = Crear();
+        svc.SetupSequence(s => s.ListarTodosAsync())
+            .ReturnsAsync(new List<IngresoCaja> { IngresoDe(1, "Partida FIGM", 1000m) })
+            .ThrowsAsync(new ServidorNoDisponibleException());
+        await vm.CargarAsync();
+
+        await vm.CargarAsync();
+
+        Assert.True(vm.SinConexion);
+        Assert.Empty(vm.Items);
+    }
+
+    [Fact]
+    public async Task Reintentar_TrasUnaCaida_VuelveACargar()
+    {
+        var (vm, svc, _, _) = Crear();
+        svc.SetupSequence(s => s.ListarTodosAsync())
+            .ThrowsAsync(new ServidorNoDisponibleException())
+            .ReturnsAsync(new List<IngresoCaja> { IngresoDe(1, "Partida FIGM", 1000m), IngresoDe(2, "Multas", 200m) });
+        await vm.CargarAsync();
+        Assert.True(vm.SinConexion);
+
+        await vm.ReintentarCargaCommand.ExecuteAsync(null);
+
+        Assert.False(vm.SinConexion);
+        Assert.Equal(2, vm.Items.Count);
+    }
+
+    [Fact]
+    public async Task ConsultaVieja_QueTerminaDespues_NoPisaLaNueva()
+    {
+        var (vm, svc, _, _) = Crear();
+        var vieja = new TaskCompletionSource<IReadOnlyList<IngresoCaja>>();
+        var nueva = new TaskCompletionSource<IReadOnlyList<IngresoCaja>>();
+        svc.SetupSequence(s => s.ListarTodosAsync()).Returns(vieja.Task).Returns(nueva.Task);
+
+        var primera = vm.CargarAsync();
+        var segunda = vm.CargarAsync();
+        nueva.SetResult(new List<IngresoCaja> { IngresoDe(1, "Nueva", 1m), IngresoDe(2, "Nueva 2", 2m) });
+        await segunda;
+        vieja.SetResult(new List<IngresoCaja> { IngresoDe(9, "Vieja", 9m) });
+        await primera;
+
+        Assert.Equal(new[] { 1, 2 }, vm.Items.Select(i => i.Id));
     }
 
     [Fact]

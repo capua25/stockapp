@@ -75,29 +75,41 @@ public partial class IngresosViewModel : ViewModelBase
         ItemsView = new DataGridCollectionView(Items);
     }
 
+    /// <summary>Texto del estado "Sin permiso" cuando el servidor rechaza la carga (403).</summary>
+    public const string MensajeSinPermisoIngresos = "No tenés permiso para ver los ingresos de caja.";
+
+    private readonly ConsultaVigente _consultas = new();
+
+    /// <summary>La vista muestra "No se pudo conectar con el servidor" con Reintentar (ver <see cref="ViewModelBase.SinConexion"/>).</summary>
+    protected override bool AvisaSinConexionEnLinea => true;
+
+    /// <summary>Sin servidor el listado queda vacío: el reintento no puede mostrar las filas de la consulta anterior.</summary>
+    protected override void AlPerderConexion() => Items.Clear();
+
+    /// <summary>
+    /// La dispara la View (DataContextChanged) y la recarga tras dar de baja. Va por EjecutarCargaProtegidaAsync: un 403
+    /// deja SinPermiso (el aviso global ya lo dio AuthTokenHandler), un servidor caído deja SinConexion en vez del modal
+    /// global, y mientras espera Cargando está en true. Pide turno: si mientras espera empezó otra carga, su resultado
+    /// se descarta (ConsultaVigente).
+    /// </summary>
     public async Task CargarAsync()
     {
+        var turno = _consultas.Empezar();
         try
         {
-            var resultados = await _service.ListarTodosAsync();
-            Items.Clear();
-            foreach (var ingreso in resultados)
-                Items.Add(ingreso);
+            await EjecutarCargaProtegidaAsync(async () =>
+            {
+                var resultados = await _service.ListarTodosAsync();
+                if (!turno.EsLaUltima)
+                    return;
+                Items.Clear();
+                foreach (var ingreso in resultados)
+                    Items.Add(ingreso);
+            }, MensajeSinPermisoIngresos, turno);
         }
         catch (Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException)
         {
             await _confirmacion.InformarAsync(ex.Message);
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Red de contención (bugfix 2026-08-15): CargarAsync la dispara la View
-            // (DataContextChanged) fire-and-forget — una excepción no atrapada acá escala a
-            // Dispatcher.UIThread.UnhandledException (App.axaml.cs), que loguea a crash.log y
-            // muestra el genérico "Ocurrió un error inesperado" como si fuera un bug real. Un
-            // 403 ya se avisó ANTES de llegar acá: AuthTokenHandler dispara
-            // ApiSession.AccesoRevocado apenas ve el 403 en la respuesta HTTP, y App.axaml.cs
-            // ya informa "Tus permisos cambiaron...". Mismo criterio que
-            // GastosViewModel.CargarAsync (ec0696c): silencioso, para no duplicar el aviso.
         }
     }
 
