@@ -1,110 +1,321 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
+             xmlns:dto="using:StockApp.Application.Finanzas"
              xmlns:conv="using:StockApp.Presentation.Converters"
-             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
+             xmlns:b="using:StockApp.Presentation.Behaviors"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="800"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
              x:Class="StockApp.Presentation.Views.Finanzas.CalendarioPagosView"
-             x:DataType="vm:CalendarioPagosViewModel">
+             x:DataType="vm:CalendarioPagosViewModel"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
 
-    <ScrollViewer>
-        <StackPanel Margin="{DynamicResource MargenVista}" Spacing="{DynamicResource Espacio5}">
+    <!-- UI v2. Espejo: docs/ui-v2/mockups/finanzas/calendario-pagos*.html. Todo scrollea junto, encabezado incluido (la
+         barra queda en el borde de la ventana). Cuatro cards apiladas con el contador en el título; grillas sin orden
+         por click (la lista viene ordenada por vencimiento). Mientras carga sin datos, una sola card con el indicador;
+         sin servidor, una card con Reintentar; tras un 403, Sin permiso en lugar de todo. FACTURA, VENCE y SALDO llevan
+         el mismo piso en las tres grillas de facturas para que las columnas queden alineadas entre cards aunque una
+         lista sea corta. La columna Registrar pago la oculta el code-behind (una columna de DataGrid no recibe el
+         DataContext). -->
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="28,24">
 
-            <c:HeaderVista Eyebrow="FINANZAS" Titulo="Calendario de pagos">
-                <Button Classes="primary" Content="Actualizar" Command="{Binding RecargarCommand}" />
-            </c:HeaderVista>
+            <v2:EncabezadoPagina x:Name="Encabezado" Titulo="Calendario de pagos"
+                                 Subtitulo="Facturas por vencimiento y pagos de los últimos 7 días.">
+                <Button x:Name="BotonActualizar" Classes="secundario" Content="Actualizar" Command="{Binding RecargarCommand}" />
+            </v2:EncabezadoPagina>
 
-            <!-- Los tres botones "Registrar pago" (Vencidas / A vencer 7 dias / A vencer 30
-                 dias) estan gateados por PuedeRegistrarPagos (bugfix 2026-08-15): coherencia de
-                 navegacion, no seguridad. PagosGastoView, el destino, ya gatea la accion por su
-                 cuenta con Permisos.RegistrarPagos. -->
-            <Border Classes="card">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="Vencidas" Classes="seccion" Foreground="{DynamicResource DangerBrush}" />
-                    <ItemsControl ItemsSource="{Binding Vencidas}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,4">
-                                    <TextBlock Grid.Column="0"
-                                               Text="{Binding ProveedorNombre}" />
-                                    <TextBlock Grid.Column="1"
-                                               Text="{Binding SaldoPendiente, Converter={x:Static conv:MonedaConverter.Instance}}"
-                                               Margin="0,0,12,0" />
-                                    <Button Grid.Column="2" Classes="secondary" Content="Registrar pago"
-                                            Command="{Binding $parent[UserControl].((vm:CalendarioPagosViewModel)DataContext).RegistrarPagoCommand}"
-                                            CommandParameter="{Binding}"
-                                            IsVisible="{Binding $parent[UserControl].((vm:CalendarioPagosViewModel)DataContext).PuedeRegistrarPagos}" />
-                                </Grid>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
+            <v2:EstadoVacio x:Name="EstadoSinPermiso" UseLayoutRounding="False"
+                            Titulo="Sin permiso" Mensaje="{Binding MensajeSinPermiso}" EsError="True"
+                            IsVisible="{Binding SinPermiso}" />
+
+            <StackPanel Spacing="16" IsVisible="{Binding !SinPermiso}">
+
+                <v2:TarjetaContenido x:Name="TarjetaCargando">
+                    <v2:TarjetaContenido.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Cargando" />
+                            <Binding Path="Vencidas.Count" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                            <Binding Path="AVencer7Dias.Count" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                            <Binding Path="AVencer30Dias.Count" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                            <Binding Path="PagosRecientes.Count" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                        </MultiBinding>
+                    </v2:TarjetaContenido.IsVisible>
+                    <v2:EstadoCargando Texto="Cargando el calendario de pagos…" />
+                </v2:TarjetaContenido>
+
+                <v2:TarjetaContenido x:Name="TarjetaSinConexion" IsVisible="{Binding SinConexion}">
+                    <v2:EstadoVacio UseLayoutRounding="False"
+                                    Titulo="No se pudo conectar con el servidor"
+                                    Mensaje="Verificá que el servidor esté encendido y accesible en la red, y volvé a intentar."
+                                    EsError="True">
+                        <Button x:Name="BotonReintentar" Classes="secundario" Content="Reintentar"
+                                Command="{Binding ReintentarCargaCommand}" />
+                    </v2:EstadoVacio>
+                </v2:TarjetaContenido>
+
+                <!-- Fuera de las cards mientras carga sin datos o sin servidor. Con datos en pantalla, Actualizar las deja. -->
+                <StackPanel Spacing="16" IsVisible="{Binding !SinConexion}">
+                    <StackPanel x:Name="Secciones" Spacing="16">
+                        <StackPanel.IsVisible>
+                            <MultiBinding Converter="{x:Static BoolConverters.Or}">
+                                <Binding Path="!Cargando" />
+                                <Binding Path="Vencidas.Count" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                                <Binding Path="AVencer7Dias.Count" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                                <Binding Path="AVencer30Dias.Count" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                                <Binding Path="PagosRecientes.Count" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            </MultiBinding>
+                        </StackPanel.IsVisible>
+
+                        <v2:TarjetaContenido>
+                            <StackPanel>
+                                <TextBlock x:Name="TituloVencidas" Classes="titulo-seccion" Margin="0,0,0,12"
+                                           Text="{Binding Vencidas.Count, StringFormat='Vencidas · {0}'}" />
+                                <TextBlock x:Name="VaciasVencidas" Classes="texto-secundario" Text="No hay facturas vencidas">
+                                    <TextBlock.IsVisible>
+                                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                            <Binding Path="!Cargando" />
+                                            <Binding Path="Vencidas.Count" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                                        </MultiBinding>
+                                    </TextBlock.IsVisible>
+                                </TextBlock>
+                                <DataGrid x:Name="GrillaVencidas" ItemsSource="{Binding Vencidas}" IsReadOnly="True" CanUserSortColumns="False"
+                                          IsVisible="{Binding Vencidas.Count, Converter={x:Static conv:ConteoConverter.HayElementos}}">
+                                    <DataGrid.Columns>
+                                        <DataGridTemplateColumn Header="PROVEEDOR" Width="*" MinWidth="200">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate x:DataType="dto:FacturaCalendarioDto">
+                                                    <TextBlock Text="{Binding ProveedorNombre}" TextTrimming="CharacterEllipsis"
+                                                               ToolTip.Tip="{Binding ProveedorNombre}" b:TooltipSiSeCorta.Activo="True"
+                                                               VerticalAlignment="Center" />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Header="FACTURA" Width="Auto" MinWidth="92" SortMemberPath="NumeroFactura" b:ColumnaAuto.Medir="True">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate x:DataType="dto:FacturaCalendarioDto">
+                                                    <TextBlock Text="{Binding NumeroFactura, TargetNullValue='—'}" VerticalAlignment="Center" />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Header="VENCE" Width="Auto" MinWidth="90" SortMemberPath="FechaVencimiento"
+                                                                b:ColumnaAuto.Medir="True" b:ColumnaAuto.NoCede="True"
+                                                                b:ColumnaAuto.Conversor="{x:Static conv:FechaCortaConverter.Instance}">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate x:DataType="dto:FacturaCalendarioDto">
+                                                    <TextBlock Classes="negativo" VerticalAlignment="Center"
+                                                               Text="{Binding FechaVencimiento, Converter={x:Static conv:FechaCortaConverter.Instance}}" />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Header="SALDO" Width="Auto" MinWidth="95" CellStyleClasses="num" SortMemberPath="SaldoPendiente"
+                                                                b:ColumnaAuto.Medir="True" b:ColumnaAuto.Conversor="{x:Static conv:MonedaConverter.Instance}">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate x:DataType="dto:FacturaCalendarioDto">
+                                                    <TextBlock VerticalAlignment="Center"
+                                                               Text="{Binding SaldoPendiente, Converter={x:Static conv:MonedaConverter.Instance}}" />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Width="Auto" CellStyleClasses="sin-padding-vertical">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate x:DataType="dto:FacturaCalendarioDto">
+                                                    <Button Classes="secundario" Content="Registrar pago" VerticalAlignment="Center"
+                                                            Command="{Binding $parent[UserControl].((vm:CalendarioPagosViewModel)DataContext).RegistrarPagoCommand}"
+                                                            CommandParameter="{Binding}"
+                                                            IsVisible="{Binding $parent[UserControl].((vm:CalendarioPagosViewModel)DataContext).PuedeRegistrarPagos}" />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </StackPanel>
+                        </v2:TarjetaContenido>
+
+                        <!-- 7 y 30 días: las columnas de Vencidas sin el tono de peligro en VENCE. -->
+                        <v2:TarjetaContenido>
+                            <StackPanel>
+                                <TextBlock x:Name="Titulo7Dias" Classes="titulo-seccion" Margin="0,0,0,12"
+                                           Text="{Binding AVencer7Dias.Count, StringFormat='A vencer en 7 días · {0}'}" />
+                                <TextBlock x:Name="Vacias7Dias" Classes="texto-secundario" Text="No hay facturas que venzan en los próximos 7 días">
+                                    <TextBlock.IsVisible>
+                                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                            <Binding Path="!Cargando" />
+                                            <Binding Path="AVencer7Dias.Count" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                                        </MultiBinding>
+                                    </TextBlock.IsVisible>
+                                </TextBlock>
+                                <DataGrid x:Name="Grilla7Dias" ItemsSource="{Binding AVencer7Dias}" IsReadOnly="True" CanUserSortColumns="False"
+                                          IsVisible="{Binding AVencer7Dias.Count, Converter={x:Static conv:ConteoConverter.HayElementos}}">
+                                    <DataGrid.Columns>
+                                        <DataGridTemplateColumn Header="PROVEEDOR" Width="*" MinWidth="200">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate x:DataType="dto:FacturaCalendarioDto">
+                                                    <TextBlock Text="{Binding ProveedorNombre}" TextTrimming="CharacterEllipsis"
+                                                               ToolTip.Tip="{Binding ProveedorNombre}" b:TooltipSiSeCorta.Activo="True"
+                                                               VerticalAlignment="Center" />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Header="FACTURA" Width="Auto" MinWidth="92" SortMemberPath="NumeroFactura" b:ColumnaAuto.Medir="True">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate x:DataType="dto:FacturaCalendarioDto">
+                                                    <TextBlock Text="{Binding NumeroFactura, TargetNullValue='—'}" VerticalAlignment="Center" />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Header="VENCE" Width="Auto" MinWidth="90" SortMemberPath="FechaVencimiento"
+                                                                b:ColumnaAuto.Medir="True" b:ColumnaAuto.NoCede="True"
+                                                                b:ColumnaAuto.Conversor="{x:Static conv:FechaCortaConverter.Instance}">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate x:DataType="dto:FacturaCalendarioDto">
+                                                    <TextBlock VerticalAlignment="Center"
+                                                               Text="{Binding FechaVencimiento, Converter={x:Static conv:FechaCortaConverter.Instance}}" />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Header="SALDO" Width="Auto" MinWidth="95" CellStyleClasses="num" SortMemberPath="SaldoPendiente"
+                                                                b:ColumnaAuto.Medir="True" b:ColumnaAuto.Conversor="{x:Static conv:MonedaConverter.Instance}">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate x:DataType="dto:FacturaCalendarioDto">
+                                                    <TextBlock VerticalAlignment="Center"
+                                                               Text="{Binding SaldoPendiente, Converter={x:Static conv:MonedaConverter.Instance}}" />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Width="Auto" CellStyleClasses="sin-padding-vertical">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate x:DataType="dto:FacturaCalendarioDto">
+                                                    <Button Classes="secundario" Content="Registrar pago" VerticalAlignment="Center"
+                                                            Command="{Binding $parent[UserControl].((vm:CalendarioPagosViewModel)DataContext).RegistrarPagoCommand}"
+                                                            CommandParameter="{Binding}"
+                                                            IsVisible="{Binding $parent[UserControl].((vm:CalendarioPagosViewModel)DataContext).PuedeRegistrarPagos}" />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </StackPanel>
+                        </v2:TarjetaContenido>
+
+                        <v2:TarjetaContenido>
+                            <StackPanel>
+                                <TextBlock x:Name="Titulo30Dias" Classes="titulo-seccion" Margin="0,0,0,12"
+                                           Text="{Binding AVencer30Dias.Count, StringFormat='A vencer en 30 días · {0}'}" />
+                                <TextBlock x:Name="Vacias30Dias" Classes="texto-secundario" Text="No hay facturas que venzan en los próximos 30 días">
+                                    <TextBlock.IsVisible>
+                                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                            <Binding Path="!Cargando" />
+                                            <Binding Path="AVencer30Dias.Count" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                                        </MultiBinding>
+                                    </TextBlock.IsVisible>
+                                </TextBlock>
+                                <DataGrid x:Name="Grilla30Dias" ItemsSource="{Binding AVencer30Dias}" IsReadOnly="True" CanUserSortColumns="False"
+                                          IsVisible="{Binding AVencer30Dias.Count, Converter={x:Static conv:ConteoConverter.HayElementos}}">
+                                    <DataGrid.Columns>
+                                        <DataGridTemplateColumn Header="PROVEEDOR" Width="*" MinWidth="200">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate x:DataType="dto:FacturaCalendarioDto">
+                                                    <TextBlock Text="{Binding ProveedorNombre}" TextTrimming="CharacterEllipsis"
+                                                               ToolTip.Tip="{Binding ProveedorNombre}" b:TooltipSiSeCorta.Activo="True"
+                                                               VerticalAlignment="Center" />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Header="FACTURA" Width="Auto" MinWidth="92" SortMemberPath="NumeroFactura" b:ColumnaAuto.Medir="True">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate x:DataType="dto:FacturaCalendarioDto">
+                                                    <TextBlock Text="{Binding NumeroFactura, TargetNullValue='—'}" VerticalAlignment="Center" />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Header="VENCE" Width="Auto" MinWidth="90" SortMemberPath="FechaVencimiento"
+                                                                b:ColumnaAuto.Medir="True" b:ColumnaAuto.NoCede="True"
+                                                                b:ColumnaAuto.Conversor="{x:Static conv:FechaCortaConverter.Instance}">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate x:DataType="dto:FacturaCalendarioDto">
+                                                    <TextBlock VerticalAlignment="Center"
+                                                               Text="{Binding FechaVencimiento, Converter={x:Static conv:FechaCortaConverter.Instance}}" />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Header="SALDO" Width="Auto" MinWidth="95" CellStyleClasses="num" SortMemberPath="SaldoPendiente"
+                                                                b:ColumnaAuto.Medir="True" b:ColumnaAuto.Conversor="{x:Static conv:MonedaConverter.Instance}">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate x:DataType="dto:FacturaCalendarioDto">
+                                                    <TextBlock VerticalAlignment="Center"
+                                                               Text="{Binding SaldoPendiente, Converter={x:Static conv:MonedaConverter.Instance}}" />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Width="Auto" CellStyleClasses="sin-padding-vertical">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate x:DataType="dto:FacturaCalendarioDto">
+                                                    <Button Classes="secundario" Content="Registrar pago" VerticalAlignment="Center"
+                                                            Command="{Binding $parent[UserControl].((vm:CalendarioPagosViewModel)DataContext).RegistrarPagoCommand}"
+                                                            CommandParameter="{Binding}"
+                                                            IsVisible="{Binding $parent[UserControl].((vm:CalendarioPagosViewModel)DataContext).PuedeRegistrarPagos}" />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </StackPanel>
+                        </v2:TarjetaContenido>
+
+                        <v2:TarjetaContenido>
+                            <StackPanel>
+                                <TextBlock x:Name="TituloPagos" Classes="titulo-seccion" Margin="0,0,0,12"
+                                           Text="{Binding PagosRecientes.Count, StringFormat='Pagos recientes · {0}'}" />
+                                <TextBlock x:Name="VaciosPagos" Classes="texto-secundario" Text="No hay pagos en los últimos 7 días">
+                                    <TextBlock.IsVisible>
+                                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                            <Binding Path="!Cargando" />
+                                            <Binding Path="PagosRecientes.Count" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                                        </MultiBinding>
+                                    </TextBlock.IsVisible>
+                                </TextBlock>
+                                <DataGrid x:Name="GrillaPagos" ItemsSource="{Binding PagosRecientes}" IsReadOnly="True" CanUserSortColumns="False"
+                                          IsVisible="{Binding PagosRecientes.Count, Converter={x:Static conv:ConteoConverter.HayElementos}}">
+                                    <DataGrid.Columns>
+                                        <DataGridTemplateColumn Header="PROVEEDOR" Width="*" MinWidth="200">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate x:DataType="dto:PagoRecienteDto">
+                                                    <TextBlock Text="{Binding ProveedorNombre}" TextTrimming="CharacterEllipsis"
+                                                               ToolTip.Tip="{Binding ProveedorNombre}" b:TooltipSiSeCorta.Activo="True"
+                                                               VerticalAlignment="Center" />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Header="FECHA" Width="Auto" SortMemberPath="FechaPago"
+                                                                b:ColumnaAuto.Medir="True" b:ColumnaAuto.NoCede="True"
+                                                                b:ColumnaAuto.Conversor="{x:Static conv:FechaCortaConverter.Instance}">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate x:DataType="dto:PagoRecienteDto">
+                                                    <TextBlock VerticalAlignment="Center"
+                                                               Text="{Binding FechaPago, Converter={x:Static conv:FechaCortaConverter.Instance}}" />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                        <DataGridTemplateColumn Header="MONTO" Width="Auto" CellStyleClasses="num" SortMemberPath="Monto"
+                                                                b:ColumnaAuto.Medir="True" b:ColumnaAuto.Conversor="{x:Static conv:MonedaConverter.Instance}">
+                                            <DataGridTemplateColumn.CellTemplate>
+                                                <DataTemplate x:DataType="dto:PagoRecienteDto">
+                                                    <TextBlock VerticalAlignment="Center"
+                                                               Text="{Binding Monto, Converter={x:Static conv:MonedaConverter.Instance}}" />
+                                                </DataTemplate>
+                                            </DataGridTemplateColumn.CellTemplate>
+                                        </DataGridTemplateColumn>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </StackPanel>
+                        </v2:TarjetaContenido>
+                    </StackPanel>
                 </StackPanel>
-            </Border>
-
-            <Border Classes="card">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="A vencer en 7 días" Classes="seccion" />
-                    <ItemsControl ItemsSource="{Binding AVencer7Dias}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,4">
-                                    <TextBlock Grid.Column="0" Text="{Binding ProveedorNombre}" />
-                                    <TextBlock Grid.Column="1"
-                                               Text="{Binding SaldoPendiente, Converter={x:Static conv:MonedaConverter.Instance}}"
-                                               Margin="0,0,12,0" />
-                                    <Button Grid.Column="2" Classes="secondary" Content="Registrar pago"
-                                            Command="{Binding $parent[UserControl].((vm:CalendarioPagosViewModel)DataContext).RegistrarPagoCommand}"
-                                            CommandParameter="{Binding}"
-                                            IsVisible="{Binding $parent[UserControl].((vm:CalendarioPagosViewModel)DataContext).PuedeRegistrarPagos}" />
-                                </Grid>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
-            </Border>
-
-            <Border Classes="card">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="A vencer en 30 días" Classes="seccion" />
-                    <ItemsControl ItemsSource="{Binding AVencer30Dias}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,4">
-                                    <TextBlock Grid.Column="0" Text="{Binding ProveedorNombre}" />
-                                    <TextBlock Grid.Column="1"
-                                               Text="{Binding SaldoPendiente, Converter={x:Static conv:MonedaConverter.Instance}}"
-                                               Margin="0,0,12,0" />
-                                    <Button Grid.Column="2" Classes="secondary" Content="Registrar pago"
-                                            Command="{Binding $parent[UserControl].((vm:CalendarioPagosViewModel)DataContext).RegistrarPagoCommand}"
-                                            CommandParameter="{Binding}"
-                                            IsVisible="{Binding $parent[UserControl].((vm:CalendarioPagosViewModel)DataContext).PuedeRegistrarPagos}" />
-                                </Grid>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
-            </Border>
-
-            <Border Classes="card">
-                <StackPanel Spacing="8">
-                    <TextBlock Text="Pagos recientes" Classes="seccion" />
-                    <ItemsControl ItemsSource="{Binding PagosRecientes}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,4">
-                                    <TextBlock Grid.Column="0" Text="{Binding ProveedorNombre}" />
-                                    <TextBlock Grid.Column="1" Text="{Binding FechaPago}" Margin="0,0,12,0" />
-                                    <TextBlock Grid.Column="2"
-                                               Text="{Binding Monto, Converter={x:Static conv:MonedaConverter.Instance}}" />
-                                </Grid>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
-            </Border>
-
+            </StackPanel>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

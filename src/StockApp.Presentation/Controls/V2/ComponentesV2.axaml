@@ -390,6 +390,7 @@
                                TextWrapping="Wrap"
                                MaxWidth="360"
                                FontSize="{DynamicResource V2FuenteControlTamano}"
+                               LineHeight="{DynamicResource V2FuenteControlAltoLinea}"
                                Foreground="{DynamicResource V2TextoSecundarioBrush}"
                                IsVisible="{TemplateBinding Mensaje, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                     <ContentPresenter x:Name="PART_Acciones"
