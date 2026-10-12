@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -53,32 +54,48 @@ public partial class CalendarioPagosViewModel : ViewModelBase
         _navigation   = navigation;
     }
 
+    /// <summary>Texto del estado "Sin permiso" cuando el servidor rechaza la carga (403).</summary>
+    public const string MensajeSinPermisoCalendario = "No tenés permiso para ver el calendario de pagos.";
+
+    private readonly ConsultaVigente _consultas = new();
+
+    /// <summary>La vista muestra "No se pudo conectar con el servidor" con Reintentar (ver <see cref="ViewModelBase.SinConexion"/>).</summary>
+    protected override bool AvisaSinConexionEnLinea => true;
+
+    /// <summary>Sin servidor no se muestra el calendario anterior: al reintentar, las secciones no pueden quedar con datos viejos.</summary>
+    protected override void AlPerderConexion()
+    {
+        Vencidas.Clear();
+        AVencer7Dias.Clear();
+        AVencer30Dias.Clear();
+        PagosRecientes.Clear();
+    }
+
+    /// <summary>
+    /// La dispara la View (DataContextChanged) y "Actualizar". Va por EjecutarCargaProtegidaAsync: un 403 deja SinPermiso
+    /// (el aviso global ya lo dio AuthTokenHandler), un servidor caído deja SinConexion en vez del modal global, y mientras
+    /// espera Cargando está en true. Pide turno: si mientras espera empezó otra carga, su resultado se descarta.
+    /// </summary>
     public async Task CargarAsync()
     {
-        try
+        var turno = _consultas.Empezar();
+        await EjecutarCargaProtegidaAsync(async () =>
         {
             var calendario = await _service.ObtenerCalendarioPagosAsync();
+            if (!turno.EsLaUltima)
+                return;
+            Reemplazar(Vencidas, calendario.Vencidas);
+            Reemplazar(AVencer7Dias, calendario.AVencer7Dias);
+            Reemplazar(AVencer30Dias, calendario.AVencer30Dias);
+            Reemplazar(PagosRecientes, calendario.PagosRecientes);
+        }, MensajeSinPermisoCalendario, turno);
+    }
 
-            Vencidas.Clear();
-            foreach (var f in calendario.Vencidas) Vencidas.Add(f);
-            AVencer7Dias.Clear();
-            foreach (var f in calendario.AVencer7Dias) AVencer7Dias.Add(f);
-            AVencer30Dias.Clear();
-            foreach (var f in calendario.AVencer30Dias) AVencer30Dias.Add(f);
-            PagosRecientes.Clear();
-            foreach (var p in calendario.PagosRecientes) PagosRecientes.Add(p);
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Red de contención (bugfix 2026-08-15): CargarAsync la dispara la View
-            // (DataContextChanged) fire-and-forget — una excepción no atrapada acá escala a
-            // Dispatcher.UIThread.UnhandledException (App.axaml.cs), que loguea a crash.log y
-            // muestra el genérico "Ocurrió un error inesperado" como si fuera un bug real. Un
-            // 403 ya se avisó ANTES de llegar acá: AuthTokenHandler dispara
-            // ApiSession.AccesoRevocado apenas ve el 403 en la respuesta HTTP, y App.axaml.cs
-            // ya informa "Tus permisos cambiaron...". Mismo criterio que
-            // GastosViewModel.CargarAsync (ec0696c): silencioso, para no duplicar el aviso.
-        }
+    private static void Reemplazar<T>(ObservableCollection<T> destino, IEnumerable<T> origen)
+    {
+        destino.Clear();
+        foreach (var item in origen)
+            destino.Add(item);
     }
 
     public IAsyncRelayCommand RecargarCommand => field ??= ComandoDeGuardado(RecargarAsync);

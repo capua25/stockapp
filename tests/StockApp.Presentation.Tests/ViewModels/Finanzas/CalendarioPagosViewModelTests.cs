@@ -1,4 +1,5 @@
 using Moq;
+using StockApp.ApiClient;
 using StockApp.Application.Authorization;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
@@ -158,5 +159,91 @@ public class CalendarioPagosViewModelTests
         var (vm, _, _, _) = Crear(rol: RolUsuario.Admin, permisos: Array.Empty<string>());
 
         Assert.True(vm.PuedeRegistrarPagos);
+    }
+
+    private static CalendarioPagosDto Calendario(int vencidas) => new(
+        Enumerable.Range(1, vencidas).Select(i => new FacturaCalendarioDto(i, $"Proveedor {i}", $"A-{i:0000}", 100m * i,
+            new DateOnly(2026, 9, 28), "Pendiente")).ToList(),
+        new List<FacturaCalendarioDto>(), new List<FacturaCalendarioDto>(), new List<PagoRecienteDto>());
+
+    [Fact]
+    public async Task CargarAsync_MientrasEspera_CargandoEsTrue_YAlTerminarFalse()
+    {
+        var (vm, svc, _, _) = Crear();
+        var pendiente = new TaskCompletionSource<CalendarioPagosDto>();
+        svc.Setup(s => s.ObtenerCalendarioPagosAsync(null)).Returns(pendiente.Task);
+
+        var carga = vm.CargarAsync();
+        Assert.True(vm.Cargando);
+
+        pendiente.SetResult(Calendario(2));
+        await carga;
+
+        Assert.False(vm.Cargando);
+        Assert.Equal(2, vm.Vencidas.Count);
+    }
+
+    [Fact]
+    public async Task CargarAsync_403_MarcaSinPermisoConSuMensaje()
+    {
+        var (vm, svc, _, _) = Crear();
+        svc.Setup(s => s.ObtenerCalendarioPagosAsync(null)).ThrowsAsync(new UnauthorizedAccessException("403"));
+
+        await vm.CargarAsync();
+
+        Assert.True(vm.SinPermiso);
+        Assert.Equal(CalendarioPagosViewModel.MensajeSinPermisoCalendario, vm.MensajeSinPermiso);
+    }
+
+    [Fact]
+    public async Task ServidorCaido_TrasUnaCargaBuena_MarcaSinConexionYVaciaLasSecciones()
+    {
+        var (vm, svc, _, _) = Crear();
+        svc.SetupSequence(s => s.ObtenerCalendarioPagosAsync(null))
+            .ReturnsAsync(Calendario(2))
+            .ThrowsAsync(new ServidorNoDisponibleException());
+        await vm.CargarAsync();
+
+        await vm.RecargarCommand.ExecuteAsync(null);
+
+        Assert.True(vm.SinConexion);
+        Assert.Empty(vm.Vencidas);
+        Assert.Empty(vm.AVencer7Dias);
+        Assert.Empty(vm.AVencer30Dias);
+        Assert.Empty(vm.PagosRecientes);
+    }
+
+    [Fact]
+    public async Task Reintentar_TrasUnaCaida_VuelveACargar()
+    {
+        var (vm, svc, _, _) = Crear();
+        svc.SetupSequence(s => s.ObtenerCalendarioPagosAsync(null))
+            .ThrowsAsync(new ServidorNoDisponibleException())
+            .ReturnsAsync(Calendario(3));
+        await vm.CargarAsync();
+        Assert.True(vm.SinConexion);
+
+        await vm.ReintentarCargaCommand.ExecuteAsync(null);
+
+        Assert.False(vm.SinConexion);
+        Assert.Equal(3, vm.Vencidas.Count);
+    }
+
+    [Fact]
+    public async Task ConsultaVieja_QueTerminaDespues_NoPisaLaNueva()
+    {
+        var (vm, svc, _, _) = Crear();
+        var vieja = new TaskCompletionSource<CalendarioPagosDto>();
+        var nueva = new TaskCompletionSource<CalendarioPagosDto>();
+        svc.SetupSequence(s => s.ObtenerCalendarioPagosAsync(null)).Returns(vieja.Task).Returns(nueva.Task);
+
+        var primera = vm.CargarAsync();
+        var segunda = vm.CargarAsync();
+        nueva.SetResult(Calendario(3));
+        await segunda;
+        vieja.SetResult(Calendario(1));
+        await primera;
+
+        Assert.Equal(3, vm.Vencidas.Count);
     }
 }
