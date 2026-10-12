@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Moq;
+using StockApp.ApiClient;
 using StockApp.Application.Authorization;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
@@ -48,6 +49,72 @@ public class IngresoFormViewModelTests
         vm.FuenteSeleccionada = vm.FuentesDisponibles[0];
         vm.Concepto = "Partida mensual";
         vm.MontoTexto = "1.500,50";   // es-UY: miles con punto, decimales con coma
+    }
+
+    private static IngresoFormViewModel ConFuentesQueFallan(Exception falla)
+    {
+        var fuentes = new Mock<IFuenteFinanciamientoService>();
+        fuentes.Setup(f => f.ListarActivasAsync()).ThrowsAsync(falla);
+        var session = new Mock<ICurrentSession>();
+        session.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
+        session.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+        return new IngresoFormViewModel(Mock.Of<IIngresoCajaService>(), fuentes.Object, session.Object, Mock.Of<INavigationService>());
+    }
+
+    [Fact]
+    public async Task InicializarAsync_403_MarcaSinPermisoConElMensajeDelFormulario()
+    {
+        var vm = ConFuentesQueFallan(new UnauthorizedAccessException("403"));
+
+        await vm.InicializarAsync();
+
+        Assert.True(vm.SinPermiso);
+        Assert.Equal(IngresoFormViewModel.MensajeSinPermisoFormulario, vm.MensajeSinPermiso);
+    }
+
+    [Fact]
+    public void MensajeSinPermisoFormulario_EsElTextoAcordado()
+    {
+        Assert.Equal("Ya no tenés permiso para ver finanzas, así que no se puede registrar el ingreso.",
+            IngresoFormViewModel.MensajeSinPermisoFormulario);
+    }
+
+    [Fact]
+    public async Task InicializarAsync_403_GuardarQuedaDeshabilitadoAunqueLosCamposEstenCompletos()
+    {
+        var vm = ConFuentesQueFallan(new UnauthorizedAccessException("403"));
+        var notificado = false;
+        vm.GuardarCommand.CanExecuteChanged += (_, _) => notificado = true;
+
+        await vm.InicializarAsync();
+
+        // Solo cuenta la notificación de InicializarAsync: con la carga fallida ningún setter de campo corrió todavía.
+        Assert.True(notificado);
+
+        vm.FuenteSeleccionada = new FuenteFinanciamiento { Id = 2, Nombre = "Literal B", Activo = true };
+        vm.Concepto = "Partida mensual";
+        vm.MontoTexto = "1.500,50";
+
+        Assert.False(vm.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task InicializarAsync_Exitosa_NoMarcaSinPermiso()
+    {
+        var (vm, _, _) = Crear();
+
+        await CompletarFormularioValidoAsync(vm);
+
+        Assert.False(vm.SinPermiso);
+        Assert.True(vm.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task InicializarAsync_ServidorCaido_SigueSaliendoAlAvisoGlobal()
+    {
+        var vm = ConFuentesQueFallan(new ServidorNoDisponibleException());
+
+        await Assert.ThrowsAsync<ServidorNoDisponibleException>(() => vm.InicializarAsync());
     }
 
     [Fact]

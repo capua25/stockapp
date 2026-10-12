@@ -90,9 +90,19 @@ public partial class IngresoFormViewModel : ViewModelBase
         EsEdicion          = true;
     }
 
+    /// <summary>Alerta del formulario cuando el servidor rechaza la carga de las fuentes (403): esa consulta exige
+    /// finanzas.ver, así que llega acá quien perdió el acceso a finanzas con el formulario abierto.</summary>
+    public const string MensajeSinPermisoFormulario =
+        "Ya no tenés permiso para ver finanzas, así que no se puede registrar el ingreso.";
+
+    /// <summary>
+    /// La dispara la View (DataContextChanged). Va por EjecutarCargaProtegidaAsync: un 403 deja SinPermiso, que la vista
+    /// muestra en una Alerta y que deshabilita Guardar (el aviso global del 403 ya lo dio AuthTokenHandler). Un servidor
+    /// caído sigue saliendo por el aviso global, como antes.
+    /// </summary>
     public async Task InicializarAsync()
     {
-        try
+        await EjecutarCargaProtegidaAsync(async () =>
         {
             var fuentes = await _fuentesService.ListarActivasAsync();
             FuentesDisponibles.Clear();
@@ -108,22 +118,13 @@ public partial class IngresoFormViewModel : ViewModelBase
                     && FuentesDisponibles.All(f => f.Id != FuenteSeleccionada.Id))
                     FuentesDisponibles.Add(FuenteSeleccionada);
             }
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Red de contención (bugfix 2026-08-15): InicializarAsync la dispara la View
-            // (DataContextChanged) fire-and-forget — una excepción no atrapada acá escala a
-            // Dispatcher.UIThread.UnhandledException (App.axaml.cs), que loguea a crash.log y
-            // muestra el genérico "Ocurrió un error inesperado" como si fuera un bug real. Un
-            // 403 ya se avisó ANTES de llegar acá: AuthTokenHandler dispara
-            // ApiSession.AccesoRevocado apenas ve el 403 en la respuesta HTTP, y App.axaml.cs
-            // ya informa "Tus permisos cambiaron...". Mismo criterio que
-            // GastosViewModel.CargarAsync (ec0696c): silencioso, para no duplicar el aviso.
-        }
+        }, MensajeSinPermisoFormulario);
+        GuardarCommand.NotifyCanExecuteChanged();
     }
 
     private bool PuedeGuardar()
-        => !string.IsNullOrWhiteSpace(Concepto)
+        => !SinPermiso
+           && !string.IsNullOrWhiteSpace(Concepto)
            && FuenteSeleccionada is not null
            && !string.IsNullOrWhiteSpace(MontoTexto);
 
