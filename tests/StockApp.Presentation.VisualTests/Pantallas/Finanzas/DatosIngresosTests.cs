@@ -50,4 +50,28 @@ public class DatosIngresosTests
         Assert.Equal("48.300,00", vm.MontoTexto);
         Assert.Equal("Editar ingreso", vm.Titulo);
     }
+
+    [Fact]
+    public async Task ErrorDelServidor_FormularioCompletoConFuente_YGuardarHabilitado()
+    {
+        // El servidor solo rechaza lo que el cliente dejó guardar: el mockup muestra el formulario completo.
+        var vm = (IngresoFormViewModel)DatosIngresos.ConErrorDelServidor().CurrentContent!;
+        await vm.InicializarAsync();
+
+        Assert.Equal("FIGM Literal B", vm.FuenteSeleccionada?.Nombre);
+        Assert.Equal("El monto del ingreso debe ser mayor a cero.", vm.MensajeError);
+        Assert.True(vm.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task SinPermisoAlInicializar_AlertaDelFormularioYGuardarDeshabilitado()
+    {
+        var vm = (IngresoFormViewModel)DatosIngresos.SinPermisoAlInicializar().CurrentContent!;
+        await vm.InicializarAsync();
+
+        Assert.True(vm.SinPermiso);
+        Assert.Equal(IngresoFormViewModel.MensajeSinPermisoFormulario, vm.MensajeSinPermiso);
+        Assert.Equal(new DateTime(2026, 10, 6), vm.FechaSeleccionada);
+        Assert.False(vm.GuardarCommand.CanExecute(null));
+    }
 }

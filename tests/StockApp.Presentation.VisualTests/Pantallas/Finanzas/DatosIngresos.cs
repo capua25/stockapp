@@ -64,10 +64,13 @@ public static class DatosIngresos
     }
 
     /// <summary>Formulario con las tres fuentes y la fecha del alta fija (el VM arranca en "hoy").</summary>
-    public static IngresoFormViewModel Formulario()
+    public static IngresoFormViewModel Formulario(bool fuentesConPermiso = true)
     {
         var fuentes = new Mock<IFuenteFinanciamientoService>();
-        fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(Fuentes);
+        if (fuentesConPermiso)
+            fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(Fuentes);
+        else
+            fuentes.Setup(f => f.ListarActivasAsync()).ThrowsAsync(new UnauthorizedAccessException());
         var vm = new IngresoFormViewModel(Mock.Of<IIngresoCajaService>(), fuentes.Object, Sesion(soloLectura: false), Mock.Of<INavigationService>())
         {
             FechaSeleccionada = new DateTime(2026, 10, 6),
@@ -120,13 +123,19 @@ public static class DatosIngresos
         return EnShell(vm);
     }
 
-    /// <summary>La regla del servidor ("mayor a cero") sale en la Alerta de error arriba del pie.</summary>
+    /// <summary>La regla del servidor ("mayor a cero") sale en la Alerta de error arriba del pie. El formulario está
+    /// completo y Guardar habilitado: el servidor solo rechaza lo que el cliente dejó guardar.</summary>
     public static ShellMainViewModel ConErrorDelServidor()
     {
         var vm = Formulario();
         vm.Concepto = "Partida mensual FIGM octubre";
         vm.MontoTexto = "0,00";
+        vm.FuenteSeleccionada = Fuentes[0];
         vm.MensajeError = "El monto del ingreso debe ser mayor a cero.";
         return EnShell(vm);
     }
+
+    /// <summary>Se perdió finanzas.ver con el formulario abierto: la carga de fuentes responde 403, la Alerta lo dice y
+    /// Guardar queda deshabilitado (los campos siguen a la vista).</summary>
+    public static ShellMainViewModel SinPermisoAlInicializar() => EnShell(Formulario(fuentesConPermiso: false));
 }
