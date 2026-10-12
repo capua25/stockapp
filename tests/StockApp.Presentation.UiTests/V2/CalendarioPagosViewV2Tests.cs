@@ -2,6 +2,8 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using Avalonia;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
@@ -49,6 +51,27 @@ public class CalendarioPagosViewV2Tests
     private static bool Visible(Control c) => ArbolVisual.EsVisibleEnArbol(c);
     private static DataGrid[] GrillasDeFacturas(Montaje m) =>
         [Control<DataGrid>(m, "GrillaVencidas"), Control<DataGrid>(m, "Grilla7Dias"), Control<DataGrid>(m, "Grilla30Dias")];
+
+    [AvaloniaFact]
+    public void RuedaSobreUnaGrillaDeFacturas_ScrollealaPagina()
+    {
+        // Las grillas no tienen scroll propio (crecen con sus filas): la rueda sobre ellas tiene que llegar al
+        // ScrollViewer de la página, si no el usuario queda atrapado con el puntero encima de una tabla.
+        var vencidas = Enumerable.Range(1, 40)
+            .Select(i => new FacturaCalendarioDto(200 + i, $"Proveedor {i}", $"A-{i:0000}", 1_000m + i, new DateOnly(2026, 9, 1), "Pendiente"))
+            .ToArray();
+        var m = Montar(new FinanzasVistasFake { Calendario = Datos with { Vencidas = vencidas } });
+        var pagina = m.Vista.GetVisualDescendants().OfType<ScrollViewer>().First();
+        var grilla = Control<DataGrid>(m, "GrillaVencidas");
+        Assert.True(pagina.Extent.Height > pagina.Viewport.Height, "la página tiene que poder scrollear para que el test tenga sentido");
+        Assert.Equal(0, pagina.Offset.Y);
+        var centro = grilla.TranslatePoint(new Point(grilla.Bounds.Width / 2, 60), m.Ventana)!.Value;
+
+        m.Ventana.MouseWheel(centro, new Vector(0, -3));
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(pagina.Offset.Y > 0, $"la rueda sobre la grilla no scrolleó la página (Offset.Y = {pagina.Offset.Y})");
+    }
 
     [AvaloniaFact]
     public void Raiz_TieneUi2_EncabezadoConTitulo_YActualizarSecundario()
