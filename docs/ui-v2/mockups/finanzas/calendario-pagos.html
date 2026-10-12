@@ -8,10 +8,10 @@
 <style>
   /* Área de contenido del shell: a la derecha del sidebar de 240 (ShellMainView, Grid 240,*). */
   .contenido { position: absolute; left: var(--v2-ancho-sidebar); top: 0; right: 0; bottom: 0; overflow: hidden; }
-  /* DockPanel Margin 28,24 de la vista: encabezado arriba y el ScrollViewer con las cards en el resto del alto
-     (lo que no entra queda abajo, cortado, como en el ScrollViewer). */
-  .pagina { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 24px 28px; }
-  .desplazamiento { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; }
+  /* La vista entera es un ScrollViewer: encabezado y cards scrollean juntos (StackPanel Margin 28,24 adentro); lo
+     que no entra queda abajo, cortado en el borde de la ventana, como en el ScrollViewer. */
+  .desplazamiento { position: absolute; inset: 0; overflow: hidden; }
+  .pagina { padding: 24px 28px; }
   /* StackPanel Spacing 16 con las cards; en cada card el título (titulo-seccion) va 12 arriba de la grilla. */
   .pila { display: flex; flex-direction: column; gap: 16px; }
   .titulo-card { margin-bottom: 12px; }
@@ -26,15 +26,15 @@
   .col-accion { flex: 0 0 143px; }
   .col-fecha { flex: 0 0 88px; }
   .col-monto { flex: 0 0 95px; }
-  /* Pulgar de la barra vertical del ScrollViewer de las cards (Fluent en reposo, sin tema v2): 2 px #7A7A7A a 2 px del
-     borde derecho del scroll (pisa el borde de la card), desde 16 abajo de su borde superior; largo medido en el render
-     de la app: (alto visible - 32) x alto visible / alto del contenido (740), 543 a 1280 y 557 a 1366. */
-  .pulgar { position: absolute; right: 2px; top: 16px; width: 2px; height: 543px; background: #7A7A7A; }
-  @media (min-width: 1366px) { .pulgar { height: 557px; } }
+  /* Pulgar de la barra vertical del ScrollViewer de la vista (Fluent en reposo, sin tema v2): 2 px #7A7A7A a 2 px del
+     borde derecho de la ventana, desde 16 abajo del borde superior; largo medido en el render de la app:
+     (alto visible - 32) x alto visible / alto del contenido (850), 651 a 1280 y 665 a 1366. */
+  .pulgar { position: absolute; right: 2px; top: 16px; width: 2px; height: 651px; background: #7A7A7A; }
+  @media (min-width: 1366px) { .pulgar { height: 665px; } }
 </style>
 </head>
 <body>
-<!-- Datos: DatosCalendario.ConDatos(): Calendario con dos vencidas (una sin número de factura: "—"), una a 7 días, dos a 30 días y dos pagos recientes; hoy 06/10/2026. Usuario Admin: se ve "Registrar pago". El contenido pasa del alto: se corta abajo y el ScrollViewer muestra su pulgar. El sidebar está para aprobar la pantalla entera; la comparación lo oculta (tiene la suya). -->
+<!-- Datos: DatosCalendario.ConDatos(): Calendario con dos vencidas (una sin número de factura: "—"), una a 7 días, dos a 30 días y dos pagos recientes; hoy 06/10/2026. Usuario Admin: se ve "Registrar pago". El contenido pasa del alto: la página entera (encabezado incluido) scrollea; se corta en el borde de la ventana y el ScrollViewer muestra su pulgar. El sidebar está para aprobar la pantalla entera; la comparación lo oculta (tiene la suya). -->
 <div class="v2-ventana">
   <aside class="v2-sidebar">
     <div class="v2-marca">Gestión Municipal</div>
@@ -83,6 +83,7 @@
     <div class="v2-version">v0.4.0</div>
   </aside>
   <div class="contenido">
+    <div class="desplazamiento">
     <div class="pagina">
       <div class="v2-encabezado">
         <div class="v2-encabezado-fila">
@@ -92,7 +93,6 @@
           </div>
         </div>
       </div>
-      <div class="desplazamiento">
         <div class="pila">
           <div class="v2-tarjeta">
             <div class="v2-titulo-seccion titulo-card">Vencidas · 2</div>
@@ -186,9 +186,9 @@
             </div>
           </div>
         </div>
-        <div class="pulgar"></div>
-      </div>
     </div>
+    </div>
+    <div class="pulgar"></div>
   </div>
 </div>
 </body>
