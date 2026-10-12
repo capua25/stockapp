@@ -42,6 +42,16 @@ public class IngresoFacturaComparacionTests
         "\"Datos de la factura\", \"Cargar artículo\" y los valores del pie; tinta app/mockup estable 0,80-0,94 con los mismos " +
         "bordes; 0,69 % y 0,70 % de píxeles. A 1366 las mismas pantallas quedan en 9.");
 
+    /// <summary>Ingreso por factura guardado a 1280: 19 teselas, todas tono (desplazamiento 0,0). Además de las negritas de
+    /// las otras pantallas, el nombre del adjunto. A 1366 queda en 3 con el umbral por defecto.</summary>
+    private static readonly UmbralAprobado AprobacionGuardado = new(
+        19,
+        "Martin",
+        "2026-10-11",
+        "Diferencia de tono de fuente Skia vs navegador en negritas del título, los subtítulos, el nombre del adjunto y el pie; " +
+        "0 teselas de geometría (corrimiento 0,0 en las 19) y el panel de adjuntos alineado con el mockup.",
+        "Tarjeta sin su relleno V2Superficie (queda el fondo de la app, #F7F7F5 contra #FFFFFF): 1160 teselas a 1280 y 1250 a 1366");
+
     [AvaloniaFact]
     public void IngresoFactura_IgualAlMockup() => Comparar(DatosIngresoFactura.Vacio, "inventario/ingreso-factura.html");
 
@@ -66,7 +76,7 @@ public class IngresoFacturaComparacionTests
         Comparar(DatosIngresoFactura.ConDiferencia, "inventario/ingreso-factura-diferencia.html", TamanoLienzo.Municipio);
 
     [AvaloniaFact]
-    public void IngresoFacturaGuardado_IgualAlMockup() => Comparar(DatosIngresoFactura.Guardado, "inventario/ingreso-factura-guardado.html");
+    public void IngresoFacturaGuardado_IgualAlMockup() => Comparar(DatosIngresoFactura.Guardado, "inventario/ingreso-factura-guardado.html", aprobado: AprobacionGuardado);
 
     [AvaloniaFact]
     public void IngresoFacturaGuardado_IgualAlMockup_1366x768() =>
