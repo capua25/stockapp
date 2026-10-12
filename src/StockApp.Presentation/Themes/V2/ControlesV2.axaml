@@ -291,8 +291,10 @@
         <Setter Property="Background" Value="{DynamicResource V2DeshabilitadoFondoBrush}" />
         <Setter Property="BorderBrush" Value="{DynamicResource V2BordeBrush}" />
     </Style>
+    <!-- El alto 36 va en la caja (ButtonSpinner) y no en el NumericUpDown: en Fluent el DataValidationErrors está
+         DENTRO de la plantilla, así que con Height en el control el mensaje de error tenía que entrar en los mismos 36
+         y achicaba y tapaba la caja. Así el control crece hacia abajo con el mensaje, como el TextBox. -->
     <Style Selector=".ui2 NumericUpDown">
-        <Setter Property="Height" Value="{DynamicResource V2AltoControl}" />
         <Setter Property="MinHeight" Value="0" />
         <Setter Property="Padding" Value="13,0" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
@@ -303,6 +305,10 @@
         <Setter Property="Foreground" Value="{DynamicResource V2TextoEtiquetaBrush}" />
         <Setter Property="FontSize" Value="{DynamicResource V2FuenteControlTamano}" />
         <Setter Property="ShowButtonSpinner" Value="False" />
+    </Style>
+    <Style Selector=".ui2 NumericUpDown /template/ ButtonSpinner">
+        <Setter Property="Height" Value="{DynamicResource V2AltoControl}" />
+        <Setter Property="MinHeight" Value="0" />
     </Style>
     <Style Selector=".ui2 CalendarDatePicker">
         <Setter Property="Height" Value="{DynamicResource V2AltoControl}" />

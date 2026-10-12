@@ -189,6 +189,46 @@ public class ControlPoaViewV2Tests
     }
 
     [AvaloniaFact]
+    public async Task EjercicioInvalido_ElMensajeVaDebajoDeLaCaja_YLaCajaConservaSuAlto()
+    {
+        var m = Montar(new FinanzasVistasFake { Lineas = [Normal] });
+        var campo = Control<CampoFormulario>(m, "CampoEjercicio").GetVisualDescendants().OfType<NumericUpDown>().Single();
+        var texto = campo.GetVisualDescendants().OfType<TextBox>().First(t => t.TemplatedParent == campo);
+
+        texto.Focus();
+        Dispatcher.UIThread.RunJobs();
+        texto.Text = "20a5";
+        Dispatcher.UIThread.RunJobs();
+        Control<Button>(m, "BotonExportarCsv").Focus();
+        Dispatcher.UIThread.RunJobs();
+        await m.Vm._tareaDebounce;
+        Dispatcher.UIThread.RunJobs();
+
+        // La caja es el ButtonSpinner de la plantilla (el que dibuja borde y fondo); el mensaje, el ErrorTemplate.
+        var caja = campo.GetVisualDescendants().OfType<ButtonSpinner>().Single();
+        var mensaje = campo.GetVisualDescendants().OfType<TextBlock>()
+            .Single(t => t.Text == "Ingresá un año válido, entre 2020 y 2100.");
+        var arribaCaja = caja.TranslatePoint(new Point(0, 0), m.Ventana)!.Value.Y;
+        var arribaMensaje = mensaje.TranslatePoint(new Point(0, 0), m.Ventana)!.Value.Y;
+
+        Assert.Equal(36, caja.Bounds.Height);
+        Assert.True(arribaMensaje >= arribaCaja + caja.Bounds.Height,
+            $"el mensaje empieza en {arribaMensaje} y la caja termina en {arribaCaja + caja.Bounds.Height}");
+        Assert.True(campo.Bounds.Height >= caja.Bounds.Height + mensaje.Bounds.Height,
+            $"el control mide {campo.Bounds.Height}: no entra caja {caja.Bounds.Height} + mensaje {mensaje.Bounds.Height}");
+    }
+
+    [AvaloniaFact]
+    public void EjercicioValido_LaCajaMide36_SinMensaje()
+    {
+        var m = Montar(new FinanzasVistasFake { Lineas = [Normal] });
+        var campo = Control<CampoFormulario>(m, "CampoEjercicio").GetVisualDescendants().OfType<NumericUpDown>().Single();
+
+        Assert.Equal(36, campo.Bounds.Height);
+        Assert.Equal(36, campo.GetVisualDescendants().OfType<ButtonSpinner>().Single().Bounds.Height);
+    }
+
+    [AvaloniaFact]
     public void DobleClickEnUnaFila_AbreGastosDeEsaLinea()
     {
         var m = Montar(new FinanzasVistasFake { Lineas = [Normal] });
