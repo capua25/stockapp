@@ -432,4 +432,70 @@ public class ControlPoaViewModelTests
                 m.UsuarioEmisor == "Juan Pérez")),
             Times.Once);
     }
+
+    // ── Exportes: 100% cliente, serializan Filas; no pueden salir con filas de otra consulta ──
+
+    [Fact]
+    public async Task Exportar_ConSinPermiso_NoSePuedeEjecutar()
+    {
+        var (vm, svc, _, _, _, _, _, _, _) = Crear(new List<ControlPoaLineaDto> { CrearLinea(1) });
+        await vm.CargarAsync();
+        Assert.True(vm.ExportarCsvCommand.CanExecute(null));
+        Assert.True(vm.ExportarPdfCommand.CanExecute(null));
+
+        svc.Setup(s => s.ObtenerControlPoaAsync(It.IsAny<int>())).ThrowsAsync(new UnauthorizedAccessException("403"));
+        await vm.CargarAsync();
+
+        Assert.True(vm.SinPermiso);
+        Assert.NotEmpty(vm.Filas);
+        Assert.False(vm.ExportarCsvCommand.CanExecute(null));
+        Assert.False(vm.ExportarPdfCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task Exportar_MientrasCarga_NoSePuedeEjecutar_YVuelveAlTerminar()
+    {
+        var (vm, svc, _, _, _, _, _, _, _) = Crear(new List<ControlPoaLineaDto> { CrearLinea(1) });
+        await vm.CargarAsync();
+        var pendiente = new TaskCompletionSource<IReadOnlyList<ControlPoaLineaDto>>();
+        svc.Setup(s => s.ObtenerControlPoaAsync(It.IsAny<int>())).Returns(pendiente.Task);
+
+        var carga = vm.CargarAsync();
+
+        Assert.True(vm.Cargando);
+        Assert.False(vm.ExportarCsvCommand.CanExecute(null));
+        Assert.False(vm.ExportarPdfCommand.CanExecute(null));
+
+        pendiente.SetResult(new List<ControlPoaLineaDto> { CrearLinea(2) });
+        await carga;
+
+        Assert.True(vm.ExportarCsvCommand.CanExecute(null));
+        Assert.True(vm.ExportarPdfCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task Exportar_TrasCambiarElEjercicioSinRecargar_RotulaConElEjercicioDeLasFilasCargadas()
+    {
+        var (vm, svc, _, _, guardadoMock, _, pdfExporterMock, _, _) = Crear(new List<ControlPoaLineaDto> { CrearLinea(1) });
+        vm.EsperaDebounce = TimeSpan.FromMinutes(10);
+        vm.Ejercicio = 2025;
+        await vm.CargarAsync();
+        var cargado = vm.Ejercicio;
+        vm.Ejercicio = cargado - 1; // el debounce todavía no recargó: en pantalla siguen las filas de `cargado`
+        pdfExporterMock
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<ControlPoaLineaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+            .Returns(new byte[] { 9 });
+        guardadoMock
+            .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
+            .ReturnsAsync(true);
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+        await vm.ExportarCsvCommand.ExecuteAsync(null);
+
+        pdfExporterMock.Verify(e => e.Exportar(It.IsAny<IEnumerable<ControlPoaLineaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
+            It.Is<MetadatosDocumento>(m => m.DescripcionFiltros == $"Ejercicio: {cargado}.")), Times.Once);
+        guardadoMock.Verify(g => g.GuardarBytesAsync(It.IsAny<Stream>(), $"control-poa-{cargado}.pdf",
+            It.IsAny<CancellationToken>(), "pdf", "application/pdf"), Times.Once);
+        guardadoMock.Verify(g => g.GuardarTextoAsync(It.IsAny<string>(), $"control-poa-{cargado}.csv"), Times.Once);
+    }
 }

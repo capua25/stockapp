@@ -152,6 +152,39 @@ public class ControlPoaViewV2Tests
     }
 
     [AvaloniaFact]
+    public void Un403_OcultaLosExportes_YNoSePuedenEjecutar_ConUnOperadorDePermisosMixtos()
+    {
+        var m = Montar(new FinanzasVistasFake { Lineas = [Normal] });
+        Assert.True(Visible(Control<Button>(m, "BotonExportarCsv")));
+        Assert.True(Control<Button>(m, "BotonExportarPdf").IsEffectivelyEnabled);
+
+        m.Servicio.FallaPoa = new UnauthorizedAccessException("403");
+        _ = m.Vm.CargarAsync();
+        Dispatcher.UIThread.RunJobs();
+
+        // Las filas viejas siguen en memoria y los exportes serializan en el cliente: no pueden salir.
+        Assert.NotEmpty(m.Vm.Filas);
+        Assert.False(Visible(Control<Button>(m, "BotonExportarCsv")));
+        Assert.False(Visible(Control<Button>(m, "BotonExportarPdf")));
+        Assert.False(m.Vm.ExportarCsvCommand.CanExecute(null));
+        Assert.False(m.Vm.ExportarPdfCommand.CanExecute(null));
+    }
+
+    [AvaloniaFact]
+    public void MientrasCarga_LosExportesQuedanDeshabilitados()
+    {
+        var m = Montar(new FinanzasVistasFake { Lineas = [Normal] });
+        m.Servicio.PendientePoa = new TaskCompletionSource<IReadOnlyList<ControlPoaLineaDto>>();
+        _ = m.Vm.CargarAsync();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(m.Vm.Cargando);
+        Assert.True(Visible(Control<Button>(m, "BotonExportarCsv")));
+        Assert.False(Control<Button>(m, "BotonExportarCsv").IsEffectivelyEnabled);
+        Assert.False(Control<Button>(m, "BotonExportarPdf").IsEffectivelyEnabled);
+    }
+
+    [AvaloniaFact]
     public async Task CambiarEjercicioEnElCampo_RecargaConEseAnio()
     {
         var m = Montar(new FinanzasVistasFake { Lineas = [Normal] });

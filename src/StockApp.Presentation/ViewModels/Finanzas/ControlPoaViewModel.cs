@@ -37,6 +37,10 @@ public partial class ControlPoaViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(AbrirGastosDeLaLineaCommand))]
     private ControlPoaLineaDto? _filaSeleccionada;
 
+    /// <summary>Ejercicio de la última carga que llegó a <see cref="Filas"/>: es el que describe lo que hay en pantalla y
+    /// lo que sale en los exportes (el campo <see cref="Ejercicio"/> puede ir por delante mientras espera el debounce).</summary>
+    private int _ejercicioCargado;
+
     public ObservableCollection<ControlPoaLineaDto> Filas { get; } = new();
     public DataGridCollectionView FilasView { get; }
 
@@ -49,6 +53,7 @@ public partial class ControlPoaViewModel : ViewModelBase
         // El año arranca del reloj (inyectable para los datos fijos de los mockups). Se escribe el campo: no dispara la
         // recarga de OnEjercicioChanged, la primera carga la pide la vista.
         _ejercicio = (reloj ?? TimeProvider.System).GetUtcNow().Year;
+        _ejercicioCargado = _ejercicio;
 
         _service     = service;
         _navigation  = navigation;
@@ -102,6 +107,7 @@ public partial class ControlPoaViewModel : ViewModelBase
             Filas.Clear();
             foreach (var l in lineas)
                 Filas.Add(l);
+            _ejercicioCargado = ejercicio;
         }, MensajeSinPermisoControlPoa, turno);
     }
 
@@ -130,6 +136,24 @@ public partial class ControlPoaViewModel : ViewModelBase
             return;
 
         await CargarAsync();
+    }
+
+    /// <summary>
+    /// El export serializa en el cliente las <see cref="Filas"/> ya cargadas, sin llamar al servidor: tras un 403 esas
+    /// filas siguen en memoria y mientras carga pueden ser de otra consulta. Sin permiso o cargando no se puede exportar
+    /// (mismo criterio que Gastos).
+    /// </summary>
+    public bool PuedeExportar => !SinPermiso && !Cargando;
+
+    protected override void OnPropertyChanged(System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+        if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName is nameof(SinPermiso) or nameof(Cargando))
+        {
+            OnPropertyChanged(nameof(PuedeExportar));
+            ExportarCsvCommand.NotifyCanExecuteChanged();
+            ExportarPdfCommand.NotifyCanExecuteChanged();
+        }
     }
 
     private bool TieneSeleccion() => FilaSeleccionada is not null;
@@ -174,13 +198,13 @@ public partial class ControlPoaViewModel : ViewModelBase
     /// DESPUÉS de elegir la ubicación (permiso denegado, disco lleno) se informa en vez de
     /// escapar del comando sin observar.
     /// </summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(PuedeExportar))]
     private async Task ExportarCsvAsync()
     {
         await ExportacionCsv.EjecutarAsync(async () =>
         {
             var contenido = _csvExporter.Exportar(Filas, ColumnasCsv);
-            await _guardado.GuardarTextoAsync(contenido, $"control-poa-{Ejercicio}.csv");
+            await _guardado.GuardarTextoAsync(contenido, $"control-poa-{_ejercicioCargado}.csv");
         }, _confirmacion);
     }
 
@@ -189,7 +213,7 @@ public partial class ControlPoaViewModel : ViewModelBase
     /// y aviso de volumen si supera 500 filas (spec 2026-09-18). No hace nada si no hay datos
     /// cargados. Ofrece abrir el PDF con el visor del sistema tras guardarlo.
     /// </summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(PuedeExportar))]
     private async Task ExportarPdfAsync()
     {
         if (Filas.Count == 0)
@@ -202,15 +226,15 @@ public partial class ControlPoaViewModel : ViewModelBase
         {
             var metadatos = new MetadatosDocumento(
                 Titulo: "Control POA",
-                DescripcionFiltros: $"Ejercicio: {Ejercicio}.",
+                DescripcionFiltros: $"Ejercicio: {_ejercicioCargado}.",
                 UsuarioEmisor: _session.UsuarioActual?.NombreCompleto ?? _session.UsuarioActual?.NombreUsuario ?? "Sistema");
 
             var pdf = _pdfExporter.Exportar(Filas, ColumnasPdf, metadatos);
             using var stream = new MemoryStream(pdf);
             var guardado = await _guardado.GuardarBytesAsync(
-                stream, $"control-poa-{Ejercicio}.pdf", extension: "pdf", tipoMime: "application/pdf");
+                stream, $"control-poa-{_ejercicioCargado}.pdf", extension: "pdf", tipoMime: "application/pdf");
 
-            await ExportacionPdf.OfrecerAbrirAsync(guardado, pdf, $"control-poa-{Ejercicio}.pdf", _confirmacion, _apertura);
+            await ExportacionPdf.OfrecerAbrirAsync(guardado, pdf, $"control-poa-{_ejercicioCargado}.pdf", _confirmacion, _apertura);
         }, _confirmacion);
     }
 }
