@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Finanzas: Panel de adjuntos vacío (UI v2)</title>
+<link rel="stylesheet" href="../_base/tokens.css">
+<link rel="stylesheet" href="../_base/base.css">
+<style>
+  /* El panel no es una pantalla: va en una card de 760 con padding 24 en (28, 24) sobre fondo app, el mismo marco que
+     arma DatosAdjuntos.EnTarjeta para la comparación. */
+  .marco { position: absolute; left: 28px; top: 24px; width: 760px; padding: 24px; }
+  /* Encabezado del panel: Grid *,Auto con 8 abajo; el título centrado en el alto del botón. */
+  .panel-encabezado { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 8px; }
+  /* El título (19 de alto) va centrado en el alto del botón (36): Avalonia redondea el corrimiento de 8,5 a 8 (al par);
+     Chromium lo dejaría en 8,5. */
+  .panel-encabezado > .v2-titulo-seccion { margin-top: 8px; }
+</style>
+</head>
+<body>
+<!-- Datos: DatosAdjuntos.VmVacio(): gasto 4521 sin adjuntos, usuario Admin (puede agregar). Sin adjuntos el panel muestra
+     una línea con los formatos y el tope en lugar de la lista. -->
+<div class="v2-ventana">
+  <div class="v2-tarjeta marco">
+    <div class="panel-encabezado">
+      <div class="v2-titulo-seccion">Adjuntos</div>
+      <span class="v2-boton v2-boton--secundario">Agregar</span>
+    </div>
+    <div class="v2-texto-secundario">Sin adjuntos. PDF, JPG o PNG hasta 10 MB.</div>
+  </div>
+</div>
+</body>
+</html>

@@ -342,3 +342,9 @@ body {
 /* Valor en advertencia (Diferencia del pie de Ingreso por factura): mismo texto que la familia advertencia de la
    insignia y la alerta. Espejo de .ui2 TextBlock.advertencia. */
 .v2-texto-advertencia { color: var(--v2-color-insignia-advertencia-texto); }
+
+/* Barra de ejecución de Control POA (espejo de v2:BarraEjecucion): pista de 64 x 6, radio 3, relleno a la izquierda con
+   el ancho round(64 * min(%, 100) / 100) escrito en el HTML; por encima de 100 % el relleno usa el texto de peligro. */
+.v2-barra-ejecucion { position: relative; width: 64px; height: 6px; border-radius: 3px; background: var(--v2-color-borde); overflow: hidden; }
+.v2-barra-ejecucion > span { position: absolute; left: 0; top: 0; height: 6px; border-radius: 3px; background: var(--v2-color-acento); }
+.v2-barra-ejecucion--excedida > span { background: var(--v2-color-peligro-texto); }
