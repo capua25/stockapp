@@ -41,6 +41,17 @@ public partial class GastoFormViewModel : ViewModelBase
     public AdjuntosPanelViewModel AdjuntosPanel => _adjuntosPanel;
 
     /// <summary>
+    /// Un 403 refrescó los permisos con la pantalla abierta: además de los Puede* propios (base), se reenvía al panel de
+    /// adjuntos. El shell solo avisa a la pantalla abierta, y el OnPropertyChanged(string.Empty) de la base relee
+    /// AdjuntosPanel (la misma instancia), así que los gates del panel no se re-evaluarían.
+    /// </summary>
+    public override void NotificarPermisosActualizados()
+    {
+        base.NotificarPermisosActualizados();
+        _adjuntosPanel.NotificarPermisosActualizados();
+    }
+
+    /// <summary>
     /// Gatea el botón "Guardar" (bugfix 2026-08-15): no tenía NINGÚN gating por permiso.
     /// GastoService.AltaAsync/ModificarAsync exigen Permisos.RegistrarGastos sin condición — se
     /// llega a este formulario desde GastosView ("Nuevo gasto"/"Editar"), que solo exige

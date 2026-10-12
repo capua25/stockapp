@@ -471,4 +471,16 @@ public class GastoFormViewModelTests
         Assert.Equal("El monto total no es un número válido. Usá coma para los decimales: 5,4", vm.MensajeError);
         svc.Verify(s => s.AltaAsync(It.IsAny<Gasto>(), It.IsAny<IReadOnlyList<int>?>()), Times.Never);
     }
+
+    [Fact]
+    public void NotificarPermisosActualizados_ReenviaAlPanelDeAdjuntos()
+    {
+        var (vm, _, _, _) = Crear();
+        var avisos = new List<string?>();
+        vm.AdjuntosPanel.PropertyChanged += (_, e) => avisos.Add(e.PropertyName);
+
+        vm.NotificarPermisosActualizados();
+
+        Assert.Contains(avisos, n => string.IsNullOrEmpty(n) || n == nameof(AdjuntosPanelViewModel.PuedeModificar));
+    }
 }

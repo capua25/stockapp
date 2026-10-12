@@ -33,6 +33,17 @@ public partial class PagosGastoViewModel : ViewModelBase
     public AdjuntosPanelViewModel AdjuntosPanel => _adjuntosPanel;
 
     /// <summary>
+    /// Un 403 refrescó los permisos con la pantalla abierta: además de los Puede* propios (base), se reenvía al panel de
+    /// adjuntos. El shell solo avisa a la pantalla abierta, y el OnPropertyChanged(string.Empty) de la base relee
+    /// AdjuntosPanel (la misma instancia), así que los gates del panel no se re-evaluarían.
+    /// </summary>
+    public override void NotificarPermisosActualizados()
+    {
+        base.NotificarPermisosActualizados();
+        _adjuntosPanel.NotificarPermisosActualizados();
+    }
+
+    /// <summary>
     /// Gatea "Registrar pago" y "Anular pago" (bugfix 2026-08-15): ninguno de los dos tenía
     /// gating por permiso — GastoService.RegistrarPagoAsync/AnularPagoAsync exigen
     /// Permisos.RegistrarPagos sin condición, así que un Operador con VerFinanzas (alcanza para

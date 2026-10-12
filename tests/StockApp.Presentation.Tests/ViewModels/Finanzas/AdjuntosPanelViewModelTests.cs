@@ -88,12 +88,92 @@ public class AdjuntosPanelViewModelTests
         _adjuntos.SetupSequence(a => a.ListarPorGastoAsync(5))
             .ReturnsAsync(new List<AdjuntoDto> { item })
             .ReturnsAsync(new List<AdjuntoDto>());
+        _confirmacion.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(true);
         await _vm.InicializarAsync(5, null);
 
         await _vm.QuitarCommand.ExecuteAsync(item);
 
         _adjuntos.Verify(a => a.QuitarAsync(1), Times.Once);
         Assert.Empty(_vm.Items);
+    }
+
+    [Fact]
+    public async Task QuitarAsync_PreguntaConElNombreDelArchivo()
+    {
+        var item = new AdjuntoDto(1, "factura-A-0004521.pdf", "application/pdf", 2, 5, null, DateTime.UtcNow);
+        _adjuntos.Setup(a => a.ListarPorGastoAsync(5)).ReturnsAsync(new List<AdjuntoDto> { item });
+        _confirmacion.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(true);
+        await _vm.InicializarAsync(5, null);
+
+        await _vm.QuitarCommand.ExecuteAsync(item);
+
+        _confirmacion.Verify(c => c.PreguntarAsync("¿Quitar el adjunto \"factura-A-0004521.pdf\"?"), Times.Once);
+        Assert.Equal("¿Quitar el adjunto \"factura-A-0004521.pdf\"?", AdjuntosPanelViewModel.MensajeConfirmarQuitar("factura-A-0004521.pdf"));
+    }
+
+    [Fact]
+    public async Task QuitarAsync_Cancelado_NoQuitaNiRecarga()
+    {
+        var item = new AdjuntoDto(1, "a.pdf", "application/pdf", 2, 5, null, DateTime.UtcNow);
+        _adjuntos.Setup(a => a.ListarPorGastoAsync(5)).ReturnsAsync(new List<AdjuntoDto> { item });
+        _confirmacion.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(false);
+        await _vm.InicializarAsync(5, null);
+
+        await _vm.QuitarCommand.ExecuteAsync(item);
+
+        _adjuntos.Verify(a => a.QuitarAsync(It.IsAny<int>()), Times.Never);
+        _adjuntos.Verify(a => a.ListarPorGastoAsync(5), Times.Once); // solo la carga inicial
+        Assert.Single(_vm.Items);
+    }
+
+    [Fact]
+    public async Task PuedeModificar_SeRecalculaConLosPermisosActuales_SinVolverAInicializar()
+    {
+        var permisos = new HashSet<string> { Permisos.RegistrarGastos };
+        _session.Setup(s => s.RolActual).Returns(RolUsuario.Operador);
+        _session.Setup(s => s.PermisosActuales).Returns(() => permisos);
+        _adjuntos.Setup(a => a.ListarPorGastoAsync(5)).ReturnsAsync(new List<AdjuntoDto>());
+        await _vm.InicializarAsync(5, null);
+        Assert.True(_vm.PuedeModificar);
+
+        permisos.Remove(Permisos.RegistrarGastos);
+
+        Assert.False(_vm.PuedeModificar);
+    }
+
+    [Fact]
+    public async Task PuedeModificar_PanelDeGasto_NoDependeDelPermisoDePagos()
+    {
+        var permisos = new HashSet<string> { Permisos.RegistrarGastos, Permisos.RegistrarPagos };
+        _session.Setup(s => s.RolActual).Returns(RolUsuario.Operador);
+        _session.Setup(s => s.PermisosActuales).Returns(() => permisos);
+        _adjuntos.Setup(a => a.ListarPorGastoAsync(5)).ReturnsAsync(new List<AdjuntoDto>());
+        await _vm.InicializarAsync(5, null);
+
+        permisos.Remove(Permisos.RegistrarPagos);
+
+        Assert.True(_vm.PuedeModificar);
+    }
+
+    [Fact]
+    public void PuedeModificar_AntesDeInicializar_EsFalse_AunSiendoAdmin()
+    {
+        _session.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
+
+        Assert.False(_vm.PuedeModificar);
+    }
+
+    [Fact]
+    public async Task InicializarAsync_AvisaElCambioDePuedeModificar()
+    {
+        _session.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
+        _adjuntos.Setup(a => a.ListarPorGastoAsync(5)).ReturnsAsync(new List<AdjuntoDto>());
+        var avisos = new List<string?>();
+        _vm.PropertyChanged += (_, e) => avisos.Add(e.PropertyName);
+
+        await _vm.InicializarAsync(5, null);
+
+        Assert.Contains(nameof(AdjuntosPanelViewModel.PuedeModificar), avisos);
     }
 
     [Fact]

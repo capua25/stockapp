@@ -718,4 +718,16 @@ public class IngresoPorFacturaViewModelTests
 
         Assert.Equal(-5m, vm.DiferenciaConTotal);
     }
+
+    [Fact]
+    public void NotificarPermisosActualizados_ReenviaAlPanelDeAdjuntos()
+    {
+        var (vm, _, _, _, _) = CrearConDialogos();
+        var avisos = new List<string?>();
+        vm.AdjuntosPanel.PropertyChanged += (_, e) => avisos.Add(e.PropertyName);
+
+        vm.NotificarPermisosActualizados();
+
+        Assert.Contains(avisos, n => string.IsNullOrEmpty(n) || n == nameof(AdjuntosPanelViewModel.PuedeModificar));
+    }
 }

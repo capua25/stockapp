@@ -287,4 +287,16 @@ public class PagosGastoViewModelTests
 
         confirm.Verify(c => c.PreguntarAsync(It.Is<string>(m => m.Contains("1.400,50"))), Times.Once);
     }
+
+    [Fact]
+    public void NotificarPermisosActualizados_ReenviaAlPanelDeAdjuntos()
+    {
+        var (vm, _, _, _, _) = Crear();
+        var avisos = new List<string?>();
+        vm.AdjuntosPanel.PropertyChanged += (_, e) => avisos.Add(e.PropertyName);
+
+        vm.NotificarPermisosActualizados();
+
+        Assert.Contains(avisos, n => string.IsNullOrEmpty(n) || n == nameof(AdjuntosPanelViewModel.PuedeModificar));
+    }
 }

@@ -30,8 +30,20 @@ public partial class AdjuntosPanelViewModel : ViewModelBase
 
     public ObservableCollection<AdjuntoDto> Items { get; } = new();
 
-    [ObservableProperty]
-    private bool _puedeModificar;
+    /// <summary>Permiso que habilita Agregar y Quitar: el de gastos para el panel de una factura, el de pagos para el
+    /// de un pago. Null hasta <see cref="InicializarAsync"/>.</summary>
+    private string? _permisoParaModificar;
+
+    /// <summary>
+    /// Gate de Agregar y Quitar. Getter sobre la sesión (no un valor calculado una vez): un 403 que cambia los permisos
+    /// con el panel abierto lo re-evalúa por <see cref="ViewModelBase.NotificarPermisosActualizados"/>, que el host le
+    /// reenvía (el panel no es la pantalla abierta: el shell solo le avisa al host).
+    /// </summary>
+    public bool PuedeModificar =>
+        _permisoParaModificar is { } permiso
+        && (_session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(permiso));
+
+    public static string MensajeConfirmarQuitar(string nombreArchivo) => $"¿Quitar el adjunto \"{nombreArchivo}\"?";
 
     public AdjuntosPanelViewModel(
         IAdjuntoService adjuntos,
@@ -52,8 +64,8 @@ public partial class AdjuntosPanelViewModel : ViewModelBase
         _gastoId = gastoId;
         _pagoGastoId = pagoGastoId;
 
-        var accion = gastoId is int ? Permisos.RegistrarGastos : Permisos.RegistrarPagos;
-        PuedeModificar = _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(accion);
+        _permisoParaModificar = gastoId is int ? Permisos.RegistrarGastos : Permisos.RegistrarPagos;
+        OnPropertyChanged(nameof(PuedeModificar));
 
         await RecargarAsync();
     }
@@ -116,9 +128,13 @@ public partial class AdjuntosPanelViewModel : ViewModelBase
         }
     }
 
+    /// <summary>Pide confirmación antes de quitar: es una baja lógica, pero el adjunto deja de verse en la factura.</summary>
     [RelayCommand]
     private async Task QuitarAsync(AdjuntoDto item)
     {
+        if (!await _confirmacion.PreguntarAsync(MensajeConfirmarQuitar(item.NombreArchivo)))
+            return;
+
         try
         {
             await _adjuntos.QuitarAsync(item.Id);

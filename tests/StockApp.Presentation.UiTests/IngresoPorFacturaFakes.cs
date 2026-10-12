@@ -106,12 +106,22 @@ internal sealed class UnidadMedidaServiceFake : IUnidadMedidaService
 /// InicializarAsync(gastoId, null) tras un guardado exitoso.</summary>
 internal sealed class AdjuntoServiceFake : IAdjuntoService
 {
+    /// <summary>Lo que devuelven los listados (por gasto y por pago). Vacía por defecto.</summary>
+    public List<AdjuntoDto> Items { get; } = new();
+    public List<int> Quitados { get; } = new();
+
     public Task<AdjuntoDto> AgregarAGastoAsync(int gastoId, string nombreArchivo, byte[] contenido) => throw new NotSupportedException("No usado en este banco de pruebas.");
     public Task<AdjuntoDto> AgregarAPagoAsync(int pagoGastoId, string nombreArchivo, byte[] contenido) => throw new NotSupportedException("No usado en este banco de pruebas.");
-    public Task<IReadOnlyList<AdjuntoDto>> ListarPorGastoAsync(int gastoId) => Task.FromResult<IReadOnlyList<AdjuntoDto>>(Array.Empty<AdjuntoDto>());
-    public Task<IReadOnlyList<AdjuntoDto>> ListarPorPagoAsync(int pagoGastoId) => Task.FromResult<IReadOnlyList<AdjuntoDto>>(Array.Empty<AdjuntoDto>());
+    public Task<IReadOnlyList<AdjuntoDto>> ListarPorGastoAsync(int gastoId) => Task.FromResult<IReadOnlyList<AdjuntoDto>>(Items.ToList());
+    public Task<IReadOnlyList<AdjuntoDto>> ListarPorPagoAsync(int pagoGastoId) => Task.FromResult<IReadOnlyList<AdjuntoDto>>(Items.ToList());
     public Task<AdjuntoContenidoDto> ObtenerContenidoAsync(int adjuntoId) => throw new NotSupportedException("No usado en este banco de pruebas.");
-    public Task QuitarAsync(int adjuntoId) => throw new NotSupportedException("No usado en este banco de pruebas.");
+
+    public Task QuitarAsync(int adjuntoId)
+    {
+        Quitados.Add(adjuntoId);
+        Items.RemoveAll(a => a.Id == adjuntoId);
+        return Task.CompletedTask;
+    }
 }
 
 internal sealed class ServicioAperturaArchivoFake : IServicioAperturaArchivo

@@ -157,6 +157,68 @@ public class AccesoRevocadoPantallasFinanzasTests
         Assert.Contains("A-0001234", textos);
     }
 
+    /// <summary>
+    /// El panel de adjuntos es un VM hijo del formulario. El 403 llega al formulario (pantalla abierta) y el formulario
+    /// tiene que reenviarlo al panel: su OnPropertyChanged(string.Empty) relee AdjuntosPanel, que es la misma instancia,
+    /// y los bindings del panel no se reevalúan. "Disponible" = visible y habilitado: el panel viejo deshabilitaba y el v2
+    /// oculta. Operador de permisos mixtos: Admin cortocircuita el gate.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Un403_ConLaFacturaEnEdicion_AgregarYQuitarAdjuntoDejanDeEstarDisponibles()
+    {
+        var (ventana, shell, sesion, tras) = MontarShell(FormularioEnEdicionConUnAdjunto);
+
+        Assert.True(Disponible(BotonDelPanel(ventana, "Agregar")), "Precondición: con finanzas.gastos, Agregar adjunto está disponible.");
+        Assert.True(Disponible(BotonDelPanel(ventana, "Quitar")), "Precondición: con finanzas.gastos, Quitar adjunto está disponible.");
+
+        await Disparar403(ventana, shell, sesion, tras);
+
+        Assert.False(Disponible(BotonDelPanel(ventana, "Agregar")));
+        Assert.False(Disponible(BotonDelPanel(ventana, "Quitar")));
+    }
+
+    [AvaloniaFact]
+    public async Task Un403_QueQuitaPagos_NoTocaElPanelDeAdjuntosDeUnGasto()
+    {
+        var (ventana, shell, sesion, tras) = MontarShell(FormularioEnEdicionConUnAdjunto,
+            permisosAntes: new[] { Permisos.VerFinanzas, Permisos.RegistrarGastos, Permisos.RegistrarPagos },
+            permisosTras: new[] { Permisos.VerFinanzas, Permisos.RegistrarGastos });
+
+        await Disparar403(ventana, shell, sesion, tras);
+
+        Assert.True(Disponible(BotonDelPanel(ventana, "Agregar")), "El panel de un gasto depende de finanzas.gastos, no de finanzas.pagos.");
+        Assert.True(Disponible(BotonDelPanel(ventana, "Quitar")));
+    }
+
+    private static GastoFormViewModel FormularioEnEdicionConUnAdjunto(SesionFake s)
+    {
+        var servicioAdjuntos = new AdjuntoServiceFake();
+        servicioAdjuntos.Items.Add(new AdjuntoDto(1, "factura-A-0001234.pdf", "application/pdf", 182_400, 42, null,
+            new DateTime(2026, 10, 6, 15, 20, 0, DateTimeKind.Utc)));
+        var adjuntos = new AdjuntosPanelViewModel(
+            servicioAdjuntos, new ServicioSeleccionArchivoFake(),
+            new ServicioAperturaArchivoFake(), new ConfirmacionServiceFake(), s);
+        var form = new GastoFormViewModel(
+            new GastoServiceFake(), s,
+            new ProveedorServiceFake(Array.Empty<Proveedor>()),
+            new FuenteFinanciamientoServiceFake(Array.Empty<FuenteFinanciamiento>()),
+            new RubroGastoServiceFake(Array.Empty<RubroGasto>()),
+            new LineaPoaServiceFake(Array.Empty<LineaPoa>()),
+            new NavigationServiceFake(), new ConfirmacionServiceFake(), adjuntos);
+        form.CargarParaEditar(new Gasto
+        {
+            Id = 42, ProveedorId = 1, Detalle = "Materiales de obra", Fecha = DateTime.UtcNow,
+            MontoTotal = 100m, FuenteFinanciamientoId = 1, RubroGastoId = 1,
+        });
+        return form;
+    }
+
+    private static Button BotonDelPanel(Window ventana, string texto) =>
+        ventana.GetVisualDescendants().OfType<StockApp.Presentation.Views.Finanzas.AdjuntosPanelView>().Single()
+            .GetVisualDescendants().OfType<Button>().First(b => (b.Content as string) == texto);
+
+    private static bool Disponible(Button boton) => boton.IsEffectivelyEnabled && ArbolVisual.EsVisibleEnArbol(boton);
+
     private static GastosViewModel NuevoGastosVm(SesionFake s) => new(
         new GastoServiceFake(), s,
         new ProveedorServiceFake(Array.Empty<Proveedor>()),
