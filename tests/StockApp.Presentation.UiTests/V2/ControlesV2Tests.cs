@@ -147,6 +147,21 @@ public class ControlesV2Tests
     }
 
     [AvaloniaFact]
+    public void TextBoxAlineadoALaDerecha_ConError_ElMensajeArrancaALaIzquierda()
+    {
+        // TextAlignment es heredable: el monto de un formulario se alinea a la derecha y su mensaje de error lo
+        // heredaba, quedando pegado al borde derecho en vez de debajo del inicio de la caja como el resto.
+        var ventana = Montar("""<TextBox x:Name="T" Width="300" TextAlignment="Right" />""");
+        var caja = Buscar<TextBox>(ventana, "T");
+        DataValidationErrors.SetError(caja, new Avalonia.Data.DataValidationException("El monto es obligatorio."));
+        Dispatcher.UIThread.RunJobs();
+
+        var mensaje = caja.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "El monto es obligatorio.");
+
+        Assert.Equal(0, mensaje.TextLayout.HitTestTextPosition(0).X, 0.5);
+    }
+
+    [AvaloniaFact]
     public void CalendarDatePicker_SinError_ElControlYLaCajaMiden36()
     {
         var picker = Buscar<CalendarDatePicker>(Montar("""<CalendarDatePicker x:Name="C" Width="300" />"""), "C");

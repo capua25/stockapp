@@ -455,7 +455,8 @@
          que el seam ya produjo: el contenido son los errores de DataValidationErrors.Errors, ya
          pasados por ErrorValidacionConverter. Sin Margin propio: el DataValidationErrors de Fluent
          ya separa el ErrorTemplate 4 del control (InlineDataValidationContentControl, Margin
-         0,4,0,0); sumarle otro 4 lo dejaba a 8 (medido en el catálogo). -->
+         0,4,0,0); sumarle otro 4 lo dejaba a 8 (medido en el catálogo). TextAlignment Left fijo: es heredable y el
+         mensaje de una caja alineada a la derecha (un monto) quedaba pegado al borde derecho. -->
     <Style Selector=".ui2 DataValidationErrors">
         <Setter Property="ErrorTemplate">
             <DataTemplate x:DataType="col:IEnumerable">
@@ -464,6 +465,7 @@
                         <DataTemplate x:DataType="sys:Object">
                             <TextBlock Text="{Binding}"
                                        TextWrapping="Wrap"
+                                       TextAlignment="Left"
                                        FontSize="{DynamicResource V2FuenteErrorCampoTamano}"
                                        FontWeight="{DynamicResource V2FuenteErrorCampoPeso}"
                                        Foreground="{DynamicResource V2BordeErrorBrush}" />
