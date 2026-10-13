@@ -1,70 +1,95 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
              xmlns:beh="using:StockApp.Presentation.Behaviors"
-             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
+             xmlns:e="using:StockApp.Domain.Entities"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="640" d:DesignHeight="520"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
              x:Class="StockApp.Presentation.Views.Finanzas.IngresoFormView"
-             x:DataType="vm:IngresoFormViewModel">
+             x:DataType="vm:IngresoFormViewModel"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
 
-    <DockPanel Margin="{DynamicResource MargenVista}">
+    <!-- UI v2 (formulario §5.2, patrón ProductoFormView). Espejo: docs/ui-v2/mockups/finanzas/ingreso-*.html. El
+         breadcrumb vuelve con CancelarCommand (no guarda). Los errores de cada campo los dibuja el DataValidationErrors
+         del control (el VM los publica por INotifyDataErrorInfo, solo con el campo tocado: nada en rojo al abrir); el
+         error del servidor y el 403 de la carga de fuentes van en una Alerta arriba del pie. Guardar se oculta sin
+         finanzas.ingresos. -->
+    <ScrollViewer x:Name="Desplazamiento" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="28,24">
 
-        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="FINANZAS" Titulo="{Binding Titulo}" />
+            <v2:EncabezadoPagina x:Name="Encabezado"
+                                 Titulo="{Binding Titulo}"
+                                 BreadcrumbOrigen="Ingresos de caja"
+                                 BreadcrumbComando="{Binding CancelarCommand}"
+                                 BreadcrumbActual="{Binding Titulo}" />
 
-        <Border Classes="card" VerticalAlignment="Top">
-            <StackPanel Spacing="{DynamicResource Espacio3}" MaxWidth="480" HorizontalAlignment="Left">
+            <!-- Columna * con MaxWidth 760: la card mide 760 a la izquierda. UseLayoutRounding False en la grilla: con el
+                 redondeo Avalonia infla en 1 px una columna acotada por MaxWidth; la card lo recupera. -->
+            <Grid x:Name="ColumnaFormulario" UseLayoutRounding="False">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" MaxWidth="{StaticResource V2AnchoFormularioMax}" />
+                </Grid.ColumnDefinitions>
 
-                <c:CampoFormulario Etiqueta="Fecha">
-                    <CalendarDatePicker SelectedDate="{Binding FechaSeleccionada}"
-                                        PlaceholderText="dd/mm/aaaa"
-                                        SelectedDateFormat="Custom"
-                                        CustomDateFormatString="dd/MM/yyyy"
-                                        beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
-                </c:CampoFormulario>
+                <v2:TarjetaContenido x:Name="Tarjeta" Padding="24" UseLayoutRounding="True">
+                    <StackPanel>
+                        <TextBlock Classes="subtitulo-formulario" Text="Datos del ingreso" Margin="0,0,0,12" />
+                        <Grid ColumnDefinitions="*,16,*" RowDefinitions="Auto,16,Auto,16,Auto">
+                            <v2:CampoFormulario x:Name="CampoFecha" Grid.Row="0" Grid.Column="0" Etiqueta="Fecha" Requerido="True">
+                                <CalendarDatePicker x:Name="SelectorFecha"
+                                                    SelectedDate="{Binding FechaSeleccionada}"
+                                                    PlaceholderText="dd/mm/aaaa"
+                                                    SelectedDateFormat="Custom"
+                                                    CustomDateFormatString="dd/MM/yyyy"
+                                                    HorizontalAlignment="Stretch"
+                                                    beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario x:Name="CampoMonto" Grid.Row="0" Grid.Column="2" Etiqueta="Monto" Requerido="True">
+                                <TextBox x:Name="CajaMonto" Text="{Binding MontoTexto}" PlaceholderText="0,00" TextAlignment="Right" />
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario x:Name="CampoConcepto" Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3"
+                                                Etiqueta="Concepto" Requerido="True">
+                                <TextBox x:Name="CajaConcepto" Text="{Binding Concepto}" PlaceholderText="Ej.: Partida mensual FIGM julio" />
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario x:Name="CampoFuente" Grid.Row="4" Grid.Column="0"
+                                                Etiqueta="Fuente de financiamiento" Requerido="True">
+                                <ComboBox x:Name="ComboFuente"
+                                          ItemsSource="{Binding FuentesDisponibles}"
+                                          SelectedItem="{Binding FuenteSeleccionada}"
+                                          PlaceholderText="Elegí la fuente"
+                                          HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="e:FuenteFinanciamiento">
+                                            <TextBlock Text="{Binding Nombre}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </v2:CampoFormulario>
+                        </Grid>
 
-                <c:CampoFormulario Etiqueta="Concepto">
-                    <TextBox Text="{Binding Concepto}" Watermark="Ej.: Partida mensual FIGM julio" />
-                </c:CampoFormulario>
+                        <!-- La carga de fuentes respondió 403: se perdió finanzas.ver con el formulario abierto. Los campos
+                             quedan a la vista y Guardar deshabilitado (el VM lo bloquea). -->
+                        <v2:Alerta x:Name="AlertaSinPermiso" Margin="0,8,0,0" Variante="Error"
+                                   Texto="{Binding MensajeSinPermiso}" IsVisible="{Binding SinPermiso}" />
 
-                <c:CampoFormulario Etiqueta="Fuente de financiamiento">
-                    <ComboBox ItemsSource="{Binding FuentesDisponibles}"
-                              SelectedItem="{Binding FuenteSeleccionada}"
-                              PlaceholderText="Elegí la fuente"
-                              HorizontalAlignment="Stretch">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding Nombre}" />
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
-                </c:CampoFormulario>
+                        <v2:Alerta x:Name="AlertaError" Margin="0,8,0,0" Variante="Error"
+                                   Texto="{Binding MensajeError}"
+                                   IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
-                <c:CampoFormulario Etiqueta="Monto">
-                    <TextBox Text="{Binding MontoTexto}" Watermark="Ej.: 250.000,00" MaxWidth="200"
-                             HorizontalAlignment="Left" />
-                </c:CampoFormulario>
-
-                <TextBlock Text="{Binding MensajeError}"
-                           Foreground="{DynamicResource DangerBrush}"
-                           TextWrapping="Wrap"
-                           IsVisible="{Binding MensajeError, Converter={x:Static ObjectConverters.IsNotNull}}" />
-
-                <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
-                    <!-- Guardar: gateado por PuedeRegistrarIngresos (bugfix 2026-08-15) - antes
-                         sin gating, un Operador con VerFinanzas (alcanza para entrar a esta
-                         pantalla via IngresosView) pero sin RegistrarIngresos llenaba el
-                         formulario y recien al guardar se comia un 403
-                         (IngresoCajaService.AltaAsync/ModificarAsync). -->
-                    <Button Classes="primary" Content="Guardar" Command="{Binding GuardarCommand}"
-                            IsVisible="{Binding PuedeRegistrarIngresos}" />
-                    <Button Classes="secondary" Content="Cancelar" Command="{Binding CancelarCommand}" />
-                </StackPanel>
-
-            </StackPanel>
-        </Border>
-
-    </DockPanel>
+                        <Border x:Name="PieFormulario" Margin="0,20,0,0" Padding="0,16,0,0" BorderThickness="0,1,0,0"
+                                BorderBrush="{DynamicResource V2SeparadorGrillaBrush}">
+                            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                                <Button x:Name="BotonCancelar" Classes="secundario" Content="Cancelar" Command="{Binding CancelarCommand}" />
+                                <Button x:Name="BotonGuardar" Classes="primario" Content="Guardar" Command="{Binding GuardarCommand}"
+                                        IsVisible="{Binding PuedeRegistrarIngresos}" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </v2:TarjetaContenido>
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
 
 </UserControl>
