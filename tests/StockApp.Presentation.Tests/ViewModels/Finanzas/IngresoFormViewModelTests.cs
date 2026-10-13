@@ -452,4 +452,21 @@ public class IngresoFormViewModelTests
         Assert.Equal("El monto del ingreso debe ser mayor a cero.", vm.MensajeError);
         Assert.Null(vm.ErrorDe(nameof(IngresoFormViewModel.MontoTexto)));
     }
+
+    [Fact]
+    public void ConceptoTocadoYCorregido_LevantaErrorsChangedYQuedaSinErrores()
+    {
+        var (vm, _, _) = Crear();
+        vm.MarcarTocado(nameof(IngresoFormViewModel.Concepto));
+        Assert.Single(vm.GetErrors(nameof(IngresoFormViewModel.Concepto)).Cast<object>());
+        var avisos = new List<string?>();
+        vm.ErrorsChanged += (_, e) => avisos.Add(e.PropertyName);
+
+        vm.Concepto = "Multas de tránsito";
+
+        // INotifyDataErrorInfo exige avisar cuando cambian los errores de la propiedad: un consumidor que no relee
+        // GetErrors con cada PropertyChanged dejaría el error pintado.
+        Assert.Contains(nameof(IngresoFormViewModel.Concepto), avisos);
+        Assert.Empty(vm.GetErrors(nameof(IngresoFormViewModel.Concepto)).Cast<object>());
+    }
 }

@@ -276,6 +276,84 @@ public class IngresoFormViewV2Tests
     }
 
     [AvaloniaFact]
+    public void ListaDeFuentesAbierta_NavegarConFlechaAbajo_NoMarcaLaFuenteEnRojo()
+    {
+        var m = Montar();
+        var combo = Parte<ComboBox>(m, "ComboFuente");
+        Clickear(m.Ventana, combo);
+        Assert.True(combo.IsDropDownOpen, "Precondición: el click abre la lista.");
+
+        m.Ventana.KeyPress(Key.Down, RawInputModifiers.None, PhysicalKey.ArrowDown, null);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(combo.IsDropDownOpen, "Precondición: la lista sigue abierta.");
+        Assert.IsType<ComboBoxItem>(TopLevel.GetTopLevel(combo.ContainerFromIndex(0))?.FocusManager?.GetFocusedElement());
+        Assert.Null(m.Vm.ErrorDe(nameof(IngresoFormViewModel.FuenteSeleccionada)));
+        Assert.Empty(Errores(combo));
+    }
+
+    [AvaloniaFact]
+    public void ElegirLaFuenteConElMouse_NoParpadeaElErrorEntreElPressYElRelease()
+    {
+        var m = Montar();
+        var combo = Parte<ComboBox>(m, "ComboFuente");
+        Clickear(m.Ventana, combo);
+        var item = Assert.IsAssignableFrom<Control>(combo.ContainerFromIndex(0));
+        var raiz = TopLevel.GetTopLevel(item)!;
+        var p = item.TranslatePoint(new Point(item.Bounds.Width / 2, item.Bounds.Height / 2), raiz)!.Value;
+
+        raiz.MouseMove(p);
+        raiz.MouseDown(p, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Null(m.Vm.ErrorDe(nameof(IngresoFormViewModel.FuenteSeleccionada)));
+        Assert.Empty(Errores(combo));
+
+        raiz.MouseUp(p, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Same(Figm, m.Vm.FuenteSeleccionada);
+        Assert.Empty(Errores(combo));
+    }
+
+    [AvaloniaFact]
+    public void ListaAbiertaYCerradaConEscape_SinElegir_AlSalirDelComboQuedaEnRojo()
+    {
+        var m = Montar();
+        var combo = Parte<ComboBox>(m, "ComboFuente");
+        Clickear(m.Ventana, combo);
+        m.Ventana.KeyPress(Key.Down, RawInputModifiers.None, PhysicalKey.ArrowDown, null);
+        Dispatcher.UIThread.RunJobs();
+
+        TopLevel.GetTopLevel(combo.ContainerFromIndex(0))!.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(combo.IsDropDownOpen, "Precondición: Escape cierra la lista.");
+        Parte<TextBox>(m, "CajaConcepto").Focus();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(new[] { IngresoFormViewModel.MensajeFuenteObligatoria }, Errores(combo));
+    }
+
+    [AvaloniaFact]
+    public void ListaConElFocoAdentro_SeCierraYElFocoQuedaAfuera_SinElegir_QuedaEnRojo()
+    {
+        var m = Montar();
+        var combo = Parte<ComboBox>(m, "ComboFuente");
+        Clickear(m.Ventana, combo);
+        m.Ventana.KeyPress(Key.Down, RawInputModifiers.None, PhysicalKey.ArrowDown, null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(combo.IsKeyboardFocusWithin, "Precondición: el foco está en la lista (otra raíz).");
+
+        // El foco nunca vuelve al combo: el cierre es el único momento en que se ve que el usuario se fue sin elegir.
+        Parte<TextBox>(m, "CajaConcepto").Focus();
+        combo.IsDropDownOpen = false;
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(combo.IsKeyboardFocusWithin, "Precondición: el foco quedó afuera del combo.");
+        Assert.Equal(new[] { IngresoFormViewModel.MensajeFuenteObligatoria }, Errores(combo));
+    }
+
+    [AvaloniaFact]
     public void SalirDeLaFecha_LaMarcaComoTocada()
     {
         var m = Montar();
