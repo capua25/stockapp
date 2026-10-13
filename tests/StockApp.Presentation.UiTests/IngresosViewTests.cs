@@ -13,6 +13,7 @@ using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Presentation.Controls.V2;
 using StockApp.Presentation.ViewModels.Finanzas;
 using Xunit;
 
@@ -63,11 +64,14 @@ public class IngresosViewTests
         return (window, vm);
     }
 
+    /// <summary>El botón del encabezado: con la lista vacía hay otro "Nuevo ingreso", el del estado vacío.</summary>
     private static Button BuscarBotonPorTexto(Window window, string texto)
-        => window.GetVisualDescendants().OfType<Button>().First(b => (b.Content as string) == texto);
+        => window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "BotonNuevo" && (b.Content as string) == texto);
 
-    private static TextBlock BuscarTextoPorContenido(Window window, string texto)
-        => window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == texto);
+    /// <summary>La insignia con ese texto: el TextBlock interno de una insignia oculta sigue con IsVisible true, así que
+    /// la visibilidad se mira en el árbol con <see cref="ArbolVisual.EsVisibleEnArbol"/>.</summary>
+    private static Insignia BuscarTextoPorContenido(Window window, string texto)
+        => window.GetVisualDescendants().OfType<Insignia>().Single(i => i.Texto == texto);
 
     [AvaloniaFact]
     public void Montar_OperadorSinRegistrarIngresos_OcultaNuevoIngreso()
@@ -98,7 +102,7 @@ public class IngresosViewTests
         var (window, vm) = Montar(RolUsuario.Operador, new HashSet<string> { Permisos.VerFinanzas });
 
         Assert.False(vm.PuedeRegistrarIngresos);
-        Assert.True(BuscarTextoPorContenido(window, "Solo lectura").IsVisible);
+        Assert.True(ArbolVisual.EsVisibleEnArbol(BuscarTextoPorContenido(window, "Solo lectura")));
     }
 
     [AvaloniaFact]
@@ -108,7 +112,7 @@ public class IngresosViewTests
             RolUsuario.Operador, new HashSet<string> { Permisos.VerFinanzas, Permisos.RegistrarIngresos });
 
         Assert.True(vm.PuedeRegistrarIngresos);
-        Assert.False(BuscarTextoPorContenido(window, "Solo lectura").IsVisible);
+        Assert.False(ArbolVisual.EsVisibleEnArbol(BuscarTextoPorContenido(window, "Solo lectura")));
     }
 
     [AvaloniaFact]
@@ -117,6 +121,6 @@ public class IngresosViewTests
         var (window, vm) = Montar(RolUsuario.Admin, new HashSet<string>());
 
         Assert.True(vm.PuedeRegistrarIngresos);
-        Assert.False(BuscarTextoPorContenido(window, "Solo lectura").IsVisible);
+        Assert.False(ArbolVisual.EsVisibleEnArbol(BuscarTextoPorContenido(window, "Solo lectura")));
     }
 }

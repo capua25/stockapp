@@ -64,7 +64,6 @@ public class GuardianDePatronTests
     [InlineData(typeof(LineaPoaFormView), null, "FINANZAS")]
     [InlineData(typeof(GastoFormView), null, "FINANZAS")]
     [InlineData(typeof(GastosView), "Gastos y facturas", "FINANZAS")]
-    [InlineData(typeof(IngresosView), "Ingresos de caja", "FINANZAS")]
     [InlineData(typeof(LibroCajaView), "Libro caja", "FINANZAS")]
     [InlineData(typeof(PagosGastoView), "Pagos de la factura", "FINANZAS")]
     [InlineData(typeof(DocumentoListView), "Documentos administrativos", "DOCUMENTOS")]
@@ -114,7 +113,6 @@ public class GuardianDePatronTests
         typeof(LineaPoaFormView),
         typeof(GastoFormView),
         typeof(GastosView),
-        typeof(IngresosView),
         typeof(LibroCajaView),
         typeof(PagosGastoView),
         typeof(DocumentoListView),
@@ -217,6 +215,7 @@ public class GuardianDePatronTests
         typeof(SalidaRegistroView),
         typeof(MovimientoHistorialView),
         typeof(IngresoPorFacturaView),
+        typeof(IngresosView),
     };
 
     /// <summary>

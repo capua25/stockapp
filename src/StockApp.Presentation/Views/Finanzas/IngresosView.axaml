@@ -3,91 +3,175 @@
              xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
              xmlns:e="using:StockApp.Domain.Entities"
              xmlns:conv="using:StockApp.Presentation.Converters"
-             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
+             xmlns:b="using:StockApp.Presentation.Behaviors"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
              x:Class="StockApp.Presentation.Views.Finanzas.IngresosView"
-             x:DataType="vm:IngresosViewModel">
+             x:DataType="vm:IngresosViewModel"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
 
-    <DockPanel Margin="{DynamicResource MargenVista}">
+    <!-- UI v2 (listado §5.1). Espejo: docs/ui-v2/mockups/finanzas/ingresos*.html. Editar y Dar de baja actúan sobre la
+         fila seleccionada y solo si está activa; doble click en una fila equivale a Editar (code-behind). Sin
+         finanzas.ingresos los tres botones se ocultan y aparece Solo lectura. El filtro corre en memoria (la API devuelve
+         todo): el pie cuenta lo visible y el total suma solo los activos. Cargando, sin servidor y los dos vacíos dentro
+         de la card con los filtros a mano; tras un 403, Sin permiso en lugar de la card. -->
+    <DockPanel Margin="28,24">
 
-        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="FINANZAS" Titulo="Ingresos de caja">
-            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
-                <!-- Nuevo ingreso: gateado por PuedeRegistrarIngresos (bugfix 2026-08-15) - antes sin
-                     gating, un Operador con VerFinanzas (alcanza para entrar a esta pantalla) pero sin
-                     RegistrarIngresos veia el boton habilitado: abria IngresoFormView, llenaba el
-                     formulario completo... y no habia boton "Guardar" (ese SI esta gateado por
-                     PuedeRegistrarIngresos en IngresoFormView), una puerta a una habitacion sin
-                     salida. -->
-                <Button Classes="primary" Content="Nuevo ingreso" Command="{Binding NuevoCommand}"
+        <v2:EncabezadoPagina x:Name="Encabezado" DockPanel.Dock="Top" Titulo="Ingresos de caja"
+                             Subtitulo="Partidas, multas, préstamos y demás entradas de la caja municipal.">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <v2:Insignia x:Name="InsigniaSoloLectura" Texto="Solo lectura" Variante="Neutro" VerticalAlignment="Center"
+                             IsVisible="{Binding !PuedeRegistrarIngresos}" />
+                <Button x:Name="BotonEditar" Classes="secundario" Content="Editar" Command="{Binding EditarCommand}"
                         IsVisible="{Binding PuedeRegistrarIngresos}" />
-                <!-- Editar / Dar de baja: gateados por PuedeRegistrarIngresos (bugfix 2026-08-15)
-                     - antes sin gating, un Operador con VerFinanzas (alcanza para entrar a esta
-                     pantalla) pero sin RegistrarIngresos podia editar o pedir la baja y recien ahi
-                     se comia un 403 (IngresoCajaService.ModificarAsync/BajaLogicaAsync). -->
-                <Button Classes="secondary" Content="Editar" Command="{Binding EditarCommand}"
+                <Button x:Name="BotonBaja" Classes="secundario" Content="Dar de baja" Command="{Binding BajaCommand}"
                         IsVisible="{Binding PuedeRegistrarIngresos}" />
-                <Button Classes="secondary" Content="Dar de baja" Command="{Binding BajaCommand}"
+                <Button x:Name="BotonNuevo" Classes="primario" Content="Nuevo ingreso" Command="{Binding NuevoCommand}"
                         IsVisible="{Binding PuedeRegistrarIngresos}" />
-                <!-- Indicador "Solo lectura" (bugfix 2026-08-16): con los tres botones de arriba
-                     ocultos por PuedeRegistrarIngresos, un Operador con solo VerFinanzas se quedaba
-                     con titulo y grilla y NINGUN indicio de por que no puede hacer nada - se lee
-                     como pantalla rota en vez de "sin permiso". Negacion directa en el binding
-                     (patron ya usado en DocumentoFormView.axaml IsVisible="{Binding !EsNuevoDocumento}"),
-                     sin propiedad derivada ni converter. Classes="caption" es el estilo de texto
-                     secundario ya definido en Typography.axaml (TextoSecundarioBrush), el mismo que
-                     usan los textos de ayuda de DocumentoFormView/TareaFormView. -->
-                <TextBlock Text="Solo lectura" Classes="caption" VerticalAlignment="Center"
-                           IsVisible="{Binding !PuedeRegistrarIngresos}" />
             </StackPanel>
-        </c:HeaderVista>
+        </v2:EncabezadoPagina>
 
-        <Border Classes="card">
-            <!-- MinWidth por columna + scroll horizontal (fix/grillas-minwidth-scroll): sin esto,
-                 Avalonia.Controls.DataGrid comprime columnas arbitrarias hasta el piso global
-                 MinColumnWidth=40 (Themes/DataGrid.axaml) en vez de scrollear. Concepto/Fuente
-                 pasan a DataGridTemplateColumn (texto libre); Fecha/Monto/Activo son acotados. -->
-            <DataGrid ItemsSource="{Binding ItemsView}"
-                      SelectedItem="{Binding ItemSeleccionado}"
-                      IsReadOnly="True"
-                      CanUserSortColumns="True"
-                      AutoGenerateColumns="False"
-                      ScrollViewer.HorizontalScrollBarVisibility="Auto">
-                <DataGrid.Columns>
-                    <DataGridTextColumn Header="Fecha"
-                                        Binding="{Binding Fecha, StringFormat='dd/MM/yyyy', DataType={x:Type e:IngresoCaja}}"
-                                        Width="Auto" MinWidth="100" />
-                    <DataGridTemplateColumn Header="Concepto" Width="2*" MinWidth="160" SortMemberPath="Concepto">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate x:DataType="e:IngresoCaja">
-                                <TextBlock Text="{Binding Concepto}"
-                                           TextTrimming="CharacterEllipsis"
-                                           ToolTip.Tip="{Binding Concepto}"
-                                           VerticalAlignment="Center" />
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                    <DataGridTemplateColumn Header="Fuente" Width="*" MinWidth="150" SortMemberPath="FuenteFinanciamiento.Nombre">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate x:DataType="e:IngresoCaja">
-                                <TextBlock Text="{Binding FuenteFinanciamiento.Nombre}"
-                                           TextTrimming="CharacterEllipsis"
-                                           ToolTip.Tip="{Binding FuenteFinanciamiento.Nombre}"
-                                           VerticalAlignment="Center" />
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                    <DataGridTextColumn Header="Monto"
-                                        Binding="{Binding Monto, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type e:IngresoCaja}}"
-                                        Width="Auto" MinWidth="100" />
-                    <DataGridCheckBoxColumn Header="Activo"
-                                            Binding="{Binding Activo, DataType={x:Type e:IngresoCaja}}"
-                                            Width="Auto" MinWidth="70" />
-                </DataGrid.Columns>
-            </DataGrid>
-        </Border>
+        <v2:EstadoVacio x:Name="EstadoSinPermiso" DockPanel.Dock="Top" UseLayoutRounding="False"
+                        Titulo="Sin permiso" Mensaje="{Binding MensajeSinPermiso}" EsError="True"
+                        IsVisible="{Binding SinPermiso}" />
 
+        <v2:TarjetaContenido x:Name="Tarjeta" IsVisible="{Binding !SinPermiso}">
+            <DockPanel>
+                <v2:BarraFiltros x:Name="Filtros" DockPanel.Dock="Top"
+                                 TextoBusqueda="{Binding TextoBusqueda}"
+                                 MarcaAguaBusqueda="Buscar por concepto…">
+                    <ComboBox x:Name="ComboEstado" Width="140"
+                              ItemsSource="{x:Static vm:IngresosViewModel.OpcionesEstado}"
+                              SelectedItem="{Binding EstadoSeleccionado}" />
+                </v2:BarraFiltros>
+
+                <TextBlock x:Name="PieConteo" DockPanel.Dock="Bottom" Classes="pie-conteo" Margin="0,12,0,0"
+                           Text="{Binding TextoPie}">
+                    <TextBlock.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="CantidadVisible" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                        </MultiBinding>
+                    </TextBlock.IsVisible>
+                </TextBlock>
+
+                <v2:EstadoCargando x:Name="IndicadorCarga" DockPanel.Dock="Top" Texto="Cargando ingresos…">
+                    <v2:EstadoCargando.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Cargando" />
+                            <Binding Path="Items.Count" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                        </MultiBinding>
+                    </v2:EstadoCargando.IsVisible>
+                </v2:EstadoCargando>
+
+                <v2:EstadoVacio x:Name="EstadoSinConexion" DockPanel.Dock="Top" UseLayoutRounding="False"
+                                Titulo="No se pudo conectar con el servidor"
+                                Mensaje="Verificá que el servidor esté encendido y accesible en la red, y volvé a intentar."
+                                EsError="True" IsVisible="{Binding SinConexion}">
+                    <Button x:Name="BotonReintentar" Classes="secundario" Content="Reintentar" Command="{Binding ReintentarCargaCommand}" />
+                </v2:EstadoVacio>
+
+                <!-- Sin datos: el botón es secundario porque el primario de la vista ya está en el encabezado. -->
+                <v2:EstadoVacio x:Name="EstadoSinIngresos" DockPanel.Dock="Top" UseLayoutRounding="False"
+                                Titulo="Todavía no hay ingresos"
+                                Mensaje="Cuando se registre un ingreso, va a aparecer acá.">
+                    <v2:EstadoVacio.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Cargando" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinPermiso" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="Items.Count" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                        </MultiBinding>
+                    </v2:EstadoVacio.IsVisible>
+                    <Button x:Name="BotonNuevoVacio" Classes="secundario" Content="Nuevo ingreso" Command="{Binding NuevoCommand}"
+                            IsVisible="{Binding PuedeRegistrarIngresos}" />
+                </v2:EstadoVacio>
+
+                <!-- Hay ingresos pero el filtro no deja ver ninguno (también con Activos y una lista de solo dados de baja). -->
+                <v2:EstadoVacio x:Name="EstadoSinResultados" DockPanel.Dock="Top" UseLayoutRounding="False"
+                                Titulo="Ningún ingreso coincide con la búsqueda"
+                                Mensaje="Probá con otro concepto o elegí Todos.">
+                    <v2:EstadoVacio.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Cargando" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="Items.Count" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            <Binding Path="CantidadVisible" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                        </MultiBinding>
+                    </v2:EstadoVacio.IsVisible>
+                </v2:EstadoVacio>
+
+                <!-- Plantillas para marcar cada TextBlock con Classes.inactivo (texto terciario por token, nunca Opacity).
+                     FECHA, FUENTE y MONTO miden su contenido sobre todas las filas, sin tope: las tres juntas y CONCEPTO
+                     en su piso de 240 entran sin scroll a 1280. CONCEPTO es la columna proporcional: lleva la insignia
+                     Inactivo pegada al texto, que ColumnaAuto no sabría medir. La fecha es calendario y de solo lectura
+                     (plantilla con binding OneWay): FechaCortaConverter no la pasa a hora local. -->
+                <DataGrid x:Name="Grilla" ItemsSource="{Binding ItemsView}" SelectedItem="{Binding ItemSeleccionado}"
+                          DoubleTapped="OnFilaDobleClick" IsReadOnly="True" CanUserSortColumns="True" CanUserResizeColumns="True"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                    <DataGrid.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="CantidadVisible" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                        </MultiBinding>
+                    </DataGrid.IsVisible>
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="FECHA" Width="Auto" SortMemberPath="Fecha"
+                                                b:ColumnaAuto.Medir="True" b:ColumnaAuto.NoCede="True"
+                                                b:ColumnaAuto.Conversor="{x:Static conv:FechaCortaConverter.Instance}">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="e:IngresoCaja">
+                                    <TextBlock Text="{Binding Fecha, Converter={x:Static conv:FechaCortaConverter.Instance}}"
+                                               Classes.inactivo="{Binding !Activo}" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="CONCEPTO" Width="*" MinWidth="240" SortMemberPath="Concepto">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="e:IngresoCaja">
+                                    <!-- Grid a la izquierda con la columna * y la insignia Auto: el texto mide lo que pide
+                                         y la insignia queda 8 px después; si no entra, el texto se corta y la insignia se ve.
+                                         El texto va alineado a la izquierda como su Grid: no ocupa el ancho de la celda,
+                                         termina donde termina el concepto. -->
+                                    <Grid ColumnDefinitions="*,Auto" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                        <TextBlock Grid.Column="0" Text="{Binding Concepto}" Classes.inactivo="{Binding !Activo}"
+                                                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Concepto}"
+                                                   b:TooltipSiSeCorta.Activo="True" HorizontalAlignment="Left"
+                                                   VerticalAlignment="Center" />
+                                        <v2:Insignia Grid.Column="1" Margin="8,0,0,0" Texto="Inactivo" Variante="Neutro"
+                                                     IsVisible="{Binding !Activo}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="FUENTE" Width="Auto" SortMemberPath="FuenteFinanciamiento.Nombre"
+                                                b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="e:IngresoCaja">
+                                    <TextBlock Text="{Binding FuenteFinanciamiento.Nombre, FallbackValue='—', TargetNullValue='—'}"
+                                               Classes.inactivo="{Binding !Activo}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding FuenteFinanciamiento.Nombre, FallbackValue='—', TargetNullValue='—'}"
+                                               b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="MONTO" Width="Auto" CellStyleClasses="num" SortMemberPath="Monto"
+                                                b:ColumnaAuto.Medir="True" b:ColumnaAuto.Conversor="{x:Static conv:MonedaConverter.Instance}">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="e:IngresoCaja">
+                                    <TextBlock Text="{Binding Monto, Converter={x:Static conv:MonedaConverter.Instance}}"
+                                               Classes.inactivo="{Binding !Activo}" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </DockPanel>
+        </v2:TarjetaContenido>
     </DockPanel>
 
 </UserControl>
