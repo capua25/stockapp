@@ -1,8 +1,8 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -13,9 +13,9 @@ using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
-using StockApp.Presentation.Navigation;
 using StockApp.Domain.Formato;
 using StockApp.Presentation.Helpers;
+using StockApp.Presentation.Navigation;
 
 namespace StockApp.Presentation.ViewModels.Finanzas;
 
