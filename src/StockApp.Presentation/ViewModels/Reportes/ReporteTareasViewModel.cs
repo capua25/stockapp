@@ -25,7 +25,6 @@ public sealed record OpcionAgrupador(string Nombre, AgrupadorTareas Valor);
 public partial class ReporteTareasViewModel : ViewModelBase
 {
     private readonly IReporteTareasService _servicio;
-    private readonly ICsvExporter _csvExporter;
     private readonly IPdfExporter _pdfExporter;
     private readonly IServicioGuardadoArchivo _guardado;
     private readonly IServicioAperturaArchivo _apertura;
@@ -82,7 +81,6 @@ public partial class ReporteTareasViewModel : ViewModelBase
 
     public ReporteTareasViewModel(
         IReporteTareasService servicio,
-        ICsvExporter csvExporter,
         IPdfExporter pdfExporter,
         IServicioGuardadoArchivo guardado,
         IServicioAperturaArchivo apertura,
@@ -90,7 +88,6 @@ public partial class ReporteTareasViewModel : ViewModelBase
         ICurrentSession session)
     {
         _servicio = servicio;
-        _csvExporter = csvExporter;
         _pdfExporter = pdfExporter;
         _guardado = guardado;
         _apertura = apertura;
@@ -163,25 +160,12 @@ public partial class ReporteTareasViewModel : ViewModelBase
     private static DateTime ALocalAUtc(DateTime fechaLocal)
         => DateTime.SpecifyKind(fechaLocal, DateTimeKind.Local).ToUniversalTime();
 
-    // ── Export CSV/PDF (spec 2026-09-18): única pantalla del alcance sin ninguna exportación
+    // ── Export PDF (spec 2026-09-18): única pantalla del alcance sin ninguna exportación
     // previa. Columnas FIJAS de la matriz -- el agrupador cambia filas y contenido (y el texto
-    // del Clasificador), nunca las columnas. Mismo CONJUNTO y mismo orden para CSV y PDF: a
-    // diferencia de las otras 8 pantallas, acá coinciden exactamente porque no hay IDs internos
-    // que excluir. ─────────────────────────────────────────────────────────────────────────────
-
-    public static readonly IReadOnlyList<string> ColumnasCsv = new[]
-    {
-        nameof(FilaReporteTareas.Clasificador), nameof(FilaReporteTareas.Pendientes),
-        nameof(FilaReporteTareas.EnCurso), nameof(FilaReporteTareas.Terminadas),
-        nameof(FilaReporteTareas.Canceladas), nameof(FilaReporteTareas.Total),
-    };
+    // del Clasificador), nunca las columnas. ──────────────────────────────────────────────────
 
     /// <summary>
-    /// Columnas del PDF, con los rótulos de la grilla. Se declara ENTERA y por separado de
-    /// <see cref="ColumnasCsv"/> aunque el conjunto de propiedades coincida: antes era
-    /// literalmente <c>= ColumnasCsv</c> (la misma referencia), así que tocar el CSV arrastraba
-    /// el PDF sin que nadie lo notara -- las otras 8 pantallas ya las tienen separadas (review
-    /// final, menor 2).
+    /// Columnas del PDF, con los rótulos de la grilla.
     /// </summary>
     public static readonly IReadOnlyList<ColumnaPdf> ColumnasPdf = new[]
     {
@@ -203,19 +187,6 @@ public partial class ReporteTareasViewModel : ViewModelBase
         $"Agrupado por: {AgrupadorSeleccionado.Nombre}. " +
         $"Criterio: {(EsCriterioCreacion ? "Fecha de creación" : "Fecha de cierre")}. " +
         $"Período: {FechaDesde:dd/MM/yyyy} a {FechaHasta:dd/MM/yyyy}.";
-
-    [RelayCommand]
-    private async Task ExportarCsvAsync()
-    {
-        if (Items.Count == 0)
-            return;
-
-        await ExportacionCsv.EjecutarAsync(async () =>
-        {
-            var csv = _csvExporter.Exportar(Items, ColumnasCsv);
-            await _guardado.GuardarTextoAsync(csv, "reporte-tareas.csv");
-        }, _confirmacion);
-    }
 
     [RelayCommand]
     private async Task ExportarPdfAsync()

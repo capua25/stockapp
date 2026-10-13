@@ -41,7 +41,7 @@ public class ControlPoaViewV2Tests
     private static Montaje Montar(FinanzasVistasFake servicio, double ancho = 1040)
     {
         var navegacion = new NavigationServiceFake();
-        var vm = new ControlPoaViewModel(servicio, navegacion, new CsvExporterSinUsoFake(), new GuardadoSinUsoFake(),
+        var vm = new ControlPoaViewModel(servicio, navegacion, new GuardadoSinUsoFake(),
             new ConfirmacionServiceFake(), new PdfExporterSinUsoFake(), new ServicioAperturaArchivoFake(),
             new SesionFake(RolUsuario.Operador, StockApp.Application.Authorization.Permisos.VerFinanzas), new RelojFijo())
         { EsperaDebounce = TimeSpan.Zero };
@@ -62,7 +62,6 @@ public class ControlPoaViewV2Tests
 
         Assert.Contains("ui2", m.Vista.Classes);
         Assert.Equal("Control POA", Control<EncabezadoPagina>(m, "Encabezado").Titulo);
-        Assert.Contains("secundario", Control<Button>(m, "BotonExportarCsv").Classes);
         Assert.Contains("secundario", Control<Button>(m, "BotonExportarPdf").Classes);
         Assert.Same(m.Vm.ExportarPdfCommand, Control<Button>(m, "BotonExportarPdf").Command);
         Assert.DoesNotContain(m.Vista.GetVisualDescendants().OfType<Button>(), b => (b.Content as string) == "Actualizar");
@@ -155,7 +154,7 @@ public class ControlPoaViewV2Tests
     public void Un403_OcultaLosExportes_YNoSePuedenEjecutar_ConUnOperadorDePermisosMixtos()
     {
         var m = Montar(new FinanzasVistasFake { Lineas = [Normal] });
-        Assert.True(Visible(Control<Button>(m, "BotonExportarCsv")));
+        Assert.True(Visible(Control<Button>(m, "BotonExportarPdf")));
         Assert.True(Control<Button>(m, "BotonExportarPdf").IsEffectivelyEnabled);
 
         m.Servicio.FallaPoa = new UnauthorizedAccessException("403");
@@ -164,9 +163,7 @@ public class ControlPoaViewV2Tests
 
         // Las filas viejas siguen en memoria y los exportes serializan en el cliente: no pueden salir.
         Assert.NotEmpty(m.Vm.Filas);
-        Assert.False(Visible(Control<Button>(m, "BotonExportarCsv")));
         Assert.False(Visible(Control<Button>(m, "BotonExportarPdf")));
-        Assert.False(m.Vm.ExportarCsvCommand.CanExecute(null));
         Assert.False(m.Vm.ExportarPdfCommand.CanExecute(null));
     }
 
@@ -179,8 +176,7 @@ public class ControlPoaViewV2Tests
         Dispatcher.UIThread.RunJobs();
 
         Assert.True(m.Vm.Cargando);
-        Assert.True(Visible(Control<Button>(m, "BotonExportarCsv")));
-        Assert.False(Control<Button>(m, "BotonExportarCsv").IsEffectivelyEnabled);
+        Assert.True(Visible(Control<Button>(m, "BotonExportarPdf")));
         Assert.False(Control<Button>(m, "BotonExportarPdf").IsEffectivelyEnabled);
     }
 
@@ -208,7 +204,7 @@ public class ControlPoaViewV2Tests
         Dispatcher.UIThread.RunJobs();
         texto.Text = "20a5";
         Dispatcher.UIThread.RunJobs();
-        Control<Button>(m, "BotonExportarCsv").Focus();
+        Control<Button>(m, "BotonExportarPdf").Focus();
         Dispatcher.UIThread.RunJobs();
         await m.Vm._tareaDebounce;
         Dispatcher.UIThread.RunJobs();
@@ -232,7 +228,7 @@ public class ControlPoaViewV2Tests
         Dispatcher.UIThread.RunJobs();
         texto.Text = "20a5";
         Dispatcher.UIThread.RunJobs();
-        Control<Button>(m, "BotonExportarCsv").Focus();
+        Control<Button>(m, "BotonExportarPdf").Focus();
         Dispatcher.UIThread.RunJobs();
         await m.Vm._tareaDebounce;
         Dispatcher.UIThread.RunJobs();

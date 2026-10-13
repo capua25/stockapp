@@ -22,8 +22,6 @@
         <v2:EncabezadoPagina x:Name="Encabezado" DockPanel.Dock="Top" Titulo="Control POA"
                              Subtitulo="Ejecución del presupuesto por línea. Doble click en una línea abre sus facturas.">
             <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button x:Name="BotonExportarCsv" Classes="secundario" Content="Exportar CSV" Command="{Binding ExportarCsvCommand}"
-                        IsVisible="{Binding !SinPermiso}" />
                 <Button x:Name="BotonExportarPdf" Classes="secundario" Content="Exportar PDF" Command="{Binding ExportarPdfCommand}"
                         IsVisible="{Binding !SinPermiso}" />
             </StackPanel>

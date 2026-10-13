@@ -18,62 +18,6 @@ namespace StockApp.Presentation.Services;
 public class ServicioGuardadoArchivo : IServicioGuardadoArchivo
 {
     /// <inheritdoc />
-    public Task<bool> GuardarTextoAsync(string contenido, string nombreSugerido)
-    {
-        // Si no hay aplicación Avalonia inicializada (ej: tests headless), no se guarda nada.
-        if (AvaloniaApp.Current is null)
-            return Task.FromResult(false);
-
-        // Garantizamos ejecución en el hilo de UI (Dispatcher.UIThread).
-        return Dispatcher.UIThread.InvokeAsync(() => GuardarInternoAsync(contenido, nombreSugerido));
-    }
-
-    private static async Task<bool> GuardarInternoAsync(string contenido, string nombreSugerido)
-    {
-        var lifetime = AvaloniaApp.Current?.ApplicationLifetime
-            as IClassicDesktopStyleApplicationLifetime;
-
-        // La MainWindow es un TopLevel y expone StorageProvider.
-        var storageProvider = lifetime?.MainWindow?.StorageProvider;
-
-        if (storageProvider is null)
-            return false;
-
-        var archivo = await storageProvider.SaveFilePickerAsync(ConstruirOpcionesGuardadoTexto(nombreSugerido));
-
-        // El usuario canceló el selector.
-        if (archivo is null)
-            return false;
-
-        await using var stream = await archivo.OpenWriteAsync();
-        await using var writer = new StreamWriter(stream);
-        await writer.WriteAsync(contenido);
-
-        return true;
-    }
-
-    /// <summary>
-    /// Construye las opciones del selector nativo para el camino de TEXTO (hoy, únicamente
-    /// CSV). Extraído a un método propio, testeable sin bootstrap de Avalonia (spec 2026-09-18,
-    /// export PDF), para poder guardar por mutación que este camino no cambia de comportamiento
-    /// al agregar <c>extension</c>/<c>tipoMime</c> al camino de BYTES (Task 8).
-    /// </summary>
-    internal static FilePickerSaveOptions ConstruirOpcionesGuardadoTexto(string nombreSugerido) =>
-        new()
-        {
-            SuggestedFileName = nombreSugerido,
-            DefaultExtension = "csv",
-            FileTypeChoices = new List<FilePickerFileType>
-            {
-                new("Archivo CSV")
-                {
-                    Patterns = new[] { "*.csv" },
-                    MimeTypes = new[] { "text/csv" },
-                },
-            },
-        };
-
-    /// <inheritdoc />
     public Task<bool> GuardarBytesAsync(
         Stream contenido,
         string nombreSugerido,

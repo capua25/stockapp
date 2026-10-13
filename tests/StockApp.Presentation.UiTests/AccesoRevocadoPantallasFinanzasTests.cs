@@ -44,14 +44,8 @@ public class AccesoRevocadoPantallasFinanzasTests
         public Task AsociarMovimientosAsync(int gastoId, IReadOnlyList<int> movimientoIds) => throw new NotSupportedException();
     }
 
-    private sealed class CsvFake : ICsvExporter
-    {
-        public string Exportar<T>(IEnumerable<T> items, IReadOnlyList<string> columnOrder) => "csv";
-    }
-
     private sealed class GuardadoFake : IServicioGuardadoArchivo
     {
-        public Task<bool> GuardarTextoAsync(string contenido, string nombreSugerido) => Task.FromResult(true);
         public Task<bool> GuardarBytesAsync(System.IO.Stream contenido, string nombreSugerido,
             System.Threading.CancellationToken ct = default, string? extension = null, string? tipoMime = null) => Task.FromResult(true);
     }
@@ -108,7 +102,7 @@ public class AccesoRevocadoPantallasFinanzasTests
             new RubroGastoServiceFake(Array.Empty<RubroGasto>()),
             new LineaPoaServiceFake(Array.Empty<LineaPoa>()),
             new NavigationServiceFake(), new ConfirmacionServiceFake(),
-            new CsvFake(), new GuardadoFake(), new PdfFake(), new ServicioAperturaArchivoFake()));
+            new GuardadoFake(), new PdfFake(), new ServicioAperturaArchivoFake()));
 
         Assert.True(Boton(ventana, "Nuevo gasto").IsVisible, "Precondición: con finanzas.gastos, Nuevo se ve.");
         Assert.True(Boton(ventana, "Anular").IsVisible);
@@ -228,14 +222,14 @@ public class AccesoRevocadoPantallasFinanzasTests
         new RubroGastoServiceFake(Array.Empty<RubroGasto>()),
         new LineaPoaServiceFake(Array.Empty<LineaPoa>()),
         new NavigationServiceFake(), new ConfirmacionServiceFake(),
-        new CsvFake(), new GuardadoFake(), new PdfFake(), new ServicioAperturaArchivoFake());
+        new GuardadoFake(), new PdfFake(), new ServicioAperturaArchivoFake());
 
     private static Button BotonConComando(Window ventana, System.Windows.Input.ICommand comando)
         => ventana.GetVisualDescendants().OfType<Button>().First(b => ReferenceEquals(b.Command, comando));
 
     /// <summary>
-    /// Deuda 3c-2 (decisión 2026-10-10): Exportar CSV/PDF serializan en el cliente las filas ya
-    /// cargadas; tras un 403 que quita finanzas.ver los botones se ocultan y la grilla se vacía.
+    /// Deuda 3c-2 (decisión 2026-10-10): Exportar PDF serializa en el cliente las filas ya
+    /// cargadas; tras un 403 que quita finanzas.ver el botón se oculta y la grilla se vacía.
     /// Operador de permisos mixtos (Admin cortocircuita el gate). Se conserva RegistrarGastos para
     /// probar que el gate es específico: "Nuevo gasto" sigue visible.
     /// </summary>
@@ -250,12 +244,10 @@ public class AccesoRevocadoPantallasFinanzasTests
         Dispatcher.UIThread.RunJobs();
 
         Assert.Equal(1, vm!.Filas.Count);
-        Assert.True(ArbolVisual.EsVisibleEnArbol(BotonConComando(ventana, vm.ExportarCsvCommand)), "Precondición: con finanzas.ver, Exportar CSV se ve.");
         Assert.True(ArbolVisual.EsVisibleEnArbol(BotonConComando(ventana, vm.ExportarPdfCommand)), "Precondición: con finanzas.ver, Exportar PDF se ve.");
 
         await Disparar403(ventana, shell, sesion, tras);
 
-        Assert.False(ArbolVisual.EsVisibleEnArbol(BotonConComando(ventana, vm.ExportarCsvCommand)));
         Assert.False(ArbolVisual.EsVisibleEnArbol(BotonConComando(ventana, vm.ExportarPdfCommand)));
         Assert.Empty(vm.Filas);
         Assert.True(ArbolVisual.EsVisibleEnArbol(Boton(ventana, "Nuevo gasto")), "El gate es específico: RegistrarGastos sigue.");
@@ -269,7 +261,6 @@ public class AccesoRevocadoPantallasFinanzasTests
             s => vm = NuevoGastosVm(s),
             permisosAntes: new[] { Permisos.RegistrarGastos });
 
-        Assert.False(ArbolVisual.EsVisibleEnArbol(BotonConComando(ventana, vm!.ExportarCsvCommand)));
-        Assert.False(ArbolVisual.EsVisibleEnArbol(BotonConComando(ventana, vm.ExportarPdfCommand)));
+        Assert.False(ArbolVisual.EsVisibleEnArbol(BotonConComando(ventana, vm!.ExportarPdfCommand)));
     }
 }

@@ -19,8 +19,5 @@ namespace StockApp.Application.Exportacion;
 /// "NombreUsuario", "PorcentajeEjecucion" o "LineaPoaNombre" en la cabecera (review final,
 /// Importante 3). La spec pide "exactamente las columnas que el usuario ve en pantalla": el
 /// conjunto de columnas ya estaba bien, faltaban los rótulos.
-///
-/// Esto NO aplica al export CSV, que sigue usando sus propias constantes con nombres de
-/// propiedad: un CSV se abre en una planilla y se procesa, no se archiva impreso.
 /// </remarks>
 public sealed record ColumnaPdf(string Propiedad, string Rotulo);

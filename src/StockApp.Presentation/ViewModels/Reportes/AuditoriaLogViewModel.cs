@@ -26,29 +26,13 @@ public sealed record OpcionUsuario(string Nombre, UsuarioDto? Valor);
 /// <summary>
 /// ViewModel del reporte de Log de Auditoría (Inc 6). Consulta el historial de
 /// acciones auditadas filtrado por usuario y rango de fechas vía
-/// <see cref="IAuditoriaQueryService"/> y permite exportarlo a CSV.
+/// <see cref="IAuditoriaQueryService"/> y permite exportarlo a PDF.
 /// </summary>
 public partial class AuditoriaLogViewModel : ViewModelBase
 {
     /// <summary>
-    /// Orden EXACTO de columnas para la exportación CSV. Coincide con las propiedades
-    /// de <see cref="AuditoriaItemDto"/>.
-    /// </summary>
-    public static readonly IReadOnlyList<string> ColumnOrder = new[]
-    {
-        "Fecha",
-        "NombreUsuario",
-        "Accion",
-        "Entidad",
-        "EntidadId",
-        "Detalle",
-    };
-
-    /// <summary>
-    /// Orden EXACTO de columnas para el export PDF (spec 2026-09-18): las de la GRILLA, no las
-    /// del CSV. En esta pantalla coinciden con <see cref="ColumnOrder"/> (mismas 6 columnas),
-    /// pero se mantiene como constante separada a propósito: un cambio futuro en el CSV no debe
-    /// alterar el PDF. Caso especial de esta pantalla: <c>Detalle</c> es texto libre sin tope de
+    /// Orden EXACTO de columnas para el export PDF (spec 2026-09-18): las de la GRILLA.
+    /// Caso especial de esta pantalla: <c>Detalle</c> es texto libre sin tope de
     /// largo (campo del log de auditoría) -- la plantilla lo envuelve (wrap) sin truncar.
     /// </summary>
     public static readonly IReadOnlyList<ColumnaPdf> ColumnasPdf = new[]
@@ -62,7 +46,6 @@ public partial class AuditoriaLogViewModel : ViewModelBase
     };
 
     private readonly IAuditoriaQueryService _servicio;
-    private readonly ICsvExporter _csvExporter;
     private readonly IServicioGuardadoArchivo _guardado;
     private readonly IConfirmacionService _confirmacion;
     private readonly IUsuarioService _usuarioService;
@@ -102,7 +85,6 @@ public partial class AuditoriaLogViewModel : ViewModelBase
 
     public AuditoriaLogViewModel(
         IAuditoriaQueryService servicio,
-        ICsvExporter csvExporter,
         IServicioGuardadoArchivo guardado,
         IConfirmacionService confirmacion,
         IUsuarioService usuarioService,
@@ -111,7 +93,6 @@ public partial class AuditoriaLogViewModel : ViewModelBase
         ICurrentSession session)
     {
         _servicio = servicio;
-        _csvExporter = csvExporter;
         _guardado = guardado;
         _confirmacion = confirmacion;
         _usuarioService = usuarioService;
@@ -182,25 +163,6 @@ public partial class AuditoriaLogViewModel : ViewModelBase
         => fechaLocal.HasValue
             ? DateTime.SpecifyKind(fechaLocal.Value, DateTimeKind.Local).ToUniversalTime()
             : null;
-
-    /// <summary>
-    /// Exporta <see cref="Items"/> a CSV con el orden de columnas fijo y delega el guardado.
-    /// No hace nada si no hay datos cargados. El guardado a disco corre bajo
-    /// <see cref="ExportacionCsv"/> (bugfix 2026-08-14): un fallo DESPUÉS de elegir la ubicación
-    /// (permiso denegado, disco lleno) se informa en vez de escapar del comando sin observar.
-    /// </summary>
-    [RelayCommand]
-    private async Task ExportarAsync()
-    {
-        if (Items.Count == 0)
-            return;
-
-        await ExportacionCsv.EjecutarAsync(async () =>
-        {
-            var csv = _csvExporter.Exportar(Items, ColumnOrder);
-            await _guardado.GuardarTextoAsync(csv, "auditoria.csv");
-        }, _confirmacion);
-    }
 
     /// <summary>
     /// Describe en criollo los filtros activos de la búsqueda, para el membrete del PDF (spec

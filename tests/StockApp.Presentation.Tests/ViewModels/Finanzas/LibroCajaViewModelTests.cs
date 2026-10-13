@@ -26,11 +26,7 @@ public class LibroCajaViewModelTests
         Crear()
     {
         var svc = new Mock<IFinanzasVistasService>();
-        var csv = new Mock<ICsvExporter>();
-        csv.Setup(c => c.Exportar(It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<string>>()))
-            .Returns("csv");
         var guardado = new Mock<IServicioGuardadoArchivo>();
-        guardado.Setup(g => g.GuardarTextoAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync(true);
         var confirm = new Mock<IConfirmacionService>();
         confirm.Setup(c => c.InformarAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
         var pdfExporter = new Mock<IPdfExporter>();
@@ -39,7 +35,7 @@ public class LibroCajaViewModelTests
         session.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(1, "admin", RolUsuario.Admin, null));
 
         var vm = new LibroCajaViewModel(
-            svc.Object, csv.Object, guardado.Object, confirm.Object, pdfExporter.Object, apertura.Object, session.Object);
+            svc.Object, guardado.Object, confirm.Object, pdfExporter.Object, apertura.Object, session.Object);
         return (vm, svc, guardado, confirm, pdfExporter, apertura, session);
     }
 
@@ -145,39 +141,6 @@ public class LibroCajaViewModelTests
         Assert.True(vm.MovimientosView.CanSort);
     }
 
-    [Fact]
-    public async Task ExportarCsvAsync_LlamaAlExportadorYAlGuardado()
-    {
-        var (vm, svc, _, _, _, _, _) = Crear();
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()))
-            .ReturnsAsync(new LibroCajaMesDto(
-                2026, 7, 0m, 0m, new List<MovimientoCajaDto>(), new List<TotalPorClaveDto>(), new List<TotalPorClaveDto>()));
-        await vm.CargarAsync();
-
-        await vm.ExportarCsvCommand.ExecuteAsync(null);
-
-        Assert.True(true); // el mock no lanza: cubre el camino feliz de Exportar + GuardarTextoAsync
-    }
-
-    // ── bugfix 2026-08-14: falla silenciosa al guardar el CSV ──────────────────
-
-    [Fact]
-    public async Task ExportarCsvCommand_SiFallaGuardarTextoAsync_InformaYNoPropagaLaExcepcion()
-    {
-        var (vm, svc, guardado, confirm, _, _, _) = Crear();
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()))
-            .ReturnsAsync(new LibroCajaMesDto(
-                2026, 7, 0m, 0m, new List<MovimientoCajaDto>(), new List<TotalPorClaveDto>(), new List<TotalPorClaveDto>()));
-        guardado
-            .Setup(g => g.GuardarTextoAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .ThrowsAsync(new IOException("disco lleno"));
-        await vm.CargarAsync();
-
-        await vm.ExportarCsvCommand.ExecuteAsync(null);
-
-        confirm.Verify(c => c.InformarAsync("No se pudo guardar el archivo. disco lleno"), Times.Once);
-    }
-
     // ── export PDF (spec 2026-09-18) ────────────────────────────────────────
 
     private static MovimientoCajaDto CrearMovimiento()
@@ -217,7 +180,7 @@ public class LibroCajaViewModelTests
     public async Task ExportarPdfCommand_ConMes_UsaLasDiezColumnasDeLaGrilla()
     {
         // Literal, NO LibroCajaViewModel.ColumnasPdf: comparar la constante contra sí misma sería
-        // tautológico. CSV y grilla coinciden (10 columnas) -- dispara A4 apaisado (>6 columnas).
+        // tautológico. Son 10 columnas -- dispara A4 apaisado (>6 columnas).
         var esperado = new[]
         {
             new ColumnaPdf("Fecha", "Fecha"),

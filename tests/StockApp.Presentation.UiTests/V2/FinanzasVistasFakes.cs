@@ -51,15 +51,9 @@ internal sealed class GastoServiceSinUsoFake : IGastoService
     public Task AsociarMovimientosAsync(int gastoId, IReadOnlyList<int> movimientoIds) => throw new NotSupportedException();
 }
 
-/// <summary>Exportadores y guardado que la vista no ejercita: si algo los llama, el test se entera.</summary>
-internal sealed class CsvExporterSinUsoFake : ICsvExporter
-{
-    public string Exportar<T>(IEnumerable<T> items, IReadOnlyList<string> columnOrder) => throw new NotSupportedException();
-}
-
+/// <summary>Guardado que la vista no ejercita: si algo los llama, el test se entera.</summary>
 internal sealed class GuardadoSinUsoFake : IServicioGuardadoArchivo
 {
-    public Task<bool> GuardarTextoAsync(string contenido, string nombreSugerido) => throw new NotSupportedException();
     public Task<bool> GuardarBytesAsync(System.IO.Stream contenido, string nombreSugerido, System.Threading.CancellationToken ct = default,
         string? extension = null, string? tipoMime = null) => throw new NotSupportedException();
 }

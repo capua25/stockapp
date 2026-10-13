@@ -22,7 +22,6 @@ public class ControlPoaViewModelTests
         ControlPoaViewModel vm,
         Mock<IFinanzasVistasService> svcMock,
         Mock<INavigationService> navMock,
-        Mock<ICsvExporter> csvMock,
         Mock<IServicioGuardadoArchivo> guardadoMock,
         Mock<IConfirmacionService> confirmMock,
         Mock<IPdfExporter> pdfExporterMock,
@@ -33,11 +32,7 @@ public class ControlPoaViewModelTests
         var svc = new Mock<IFinanzasVistasService>();
         svc.Setup(s => s.ObtenerControlPoaAsync(It.IsAny<int>())).ReturnsAsync(lineas ?? new List<ControlPoaLineaDto>());
         var nav = new Mock<INavigationService>();
-        var csv = new Mock<ICsvExporter>();
-        csv.Setup(c => c.Exportar(It.IsAny<IEnumerable<ControlPoaLineaDto>>(), It.IsAny<IReadOnlyList<string>>()))
-            .Returns("csv");
         var guardado = new Mock<IServicioGuardadoArchivo>();
-        guardado.Setup(g => g.GuardarTextoAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync(true);
         var confirm = new Mock<IConfirmacionService>();
         confirm.Setup(c => c.InformarAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
         var pdfExporter = new Mock<IPdfExporter>();
@@ -46,9 +41,9 @@ public class ControlPoaViewModelTests
         session.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(1, "admin", RolUsuario.Admin, null));
 
         var vm = new ControlPoaViewModel(
-            svc.Object, nav.Object, csv.Object, guardado.Object, confirm.Object,
+            svc.Object, nav.Object, guardado.Object, confirm.Object,
             pdfExporter.Object, apertura.Object, session.Object, reloj);
-        return (vm, svc, nav, csv, guardado, confirm, pdfExporter, apertura, session);
+        return (vm, svc, nav, guardado, confirm, pdfExporter, apertura, session);
     }
 
     private sealed class RelojFijo(DateTimeOffset ahora) : TimeProvider
@@ -64,7 +59,7 @@ public class ControlPoaViewModelTests
     [Fact]
     public void EjercicioInicial_SaleDelReloj_YNoConsulta()
     {
-        var (vm, svc, _, _, _, _, _, _, _) = Crear(reloj: Octubre2026);
+        var (vm, svc, _, _, _, _, _, _) = Crear(reloj: Octubre2026);
 
         Assert.Equal(2026, vm.Ejercicio);
         svc.Verify(s => s.ObtenerControlPoaAsync(It.IsAny<int>()), Times.Never);
@@ -73,7 +68,7 @@ public class ControlPoaViewModelTests
     [Fact]
     public async Task CambiarEjercicio_RecargaSoloConElEjercicioNuevo()
     {
-        var (vm, svc, _, _, _, _, _, _, _) = Crear(reloj: Octubre2026);
+        var (vm, svc, _, _, _, _, _, _) = Crear(reloj: Octubre2026);
         vm.EsperaDebounce = TimeSpan.Zero;
         svc.Setup(s => s.ObtenerControlPoaAsync(2025)).ReturnsAsync(new List<ControlPoaLineaDto> { Linea(1, 2025) });
 
@@ -87,7 +82,7 @@ public class ControlPoaViewModelTests
     [Fact]
     public async Task CambiosRapidos_SoloConsultaElUltimoEjercicio()
     {
-        var (vm, svc, _, _, _, _, _, _, _) = Crear(reloj: Octubre2026);
+        var (vm, svc, _, _, _, _, _, _) = Crear(reloj: Octubre2026);
         vm.EsperaDebounce = TimeSpan.FromMilliseconds(50);
 
         vm.Ejercicio = 2024;
@@ -101,7 +96,7 @@ public class ControlPoaViewModelTests
     [Fact]
     public async Task ConsultaVieja_QueTerminaDespues_NoPisaLaNueva()
     {
-        var (vm, svc, _, _, _, _, _, _, _) = Crear(reloj: Octubre2026);
+        var (vm, svc, _, _, _, _, _, _) = Crear(reloj: Octubre2026);
         var vieja = new TaskCompletionSource<IReadOnlyList<ControlPoaLineaDto>>();
         var nueva = new TaskCompletionSource<IReadOnlyList<ControlPoaLineaDto>>();
         svc.Setup(s => s.ObtenerControlPoaAsync(2026)).Returns(vieja.Task);
@@ -121,7 +116,7 @@ public class ControlPoaViewModelTests
     [Fact]
     public async Task CargarAsync_MientrasEspera_CargandoEsTrue()
     {
-        var (vm, svc, _, _, _, _, _, _, _) = Crear(reloj: Octubre2026);
+        var (vm, svc, _, _, _, _, _, _) = Crear(reloj: Octubre2026);
         var pendiente = new TaskCompletionSource<IReadOnlyList<ControlPoaLineaDto>>();
         svc.Setup(s => s.ObtenerControlPoaAsync(2026)).Returns(pendiente.Task);
 
@@ -136,7 +131,7 @@ public class ControlPoaViewModelTests
     [Fact]
     public async Task CargarAsync_403_MarcaSinPermisoConSuMensaje()
     {
-        var (vm, svc, _, _, _, _, _, _, _) = Crear(reloj: Octubre2026);
+        var (vm, svc, _, _, _, _, _, _) = Crear(reloj: Octubre2026);
         svc.Setup(s => s.ObtenerControlPoaAsync(2026)).ThrowsAsync(new UnauthorizedAccessException("403"));
 
         await vm.CargarAsync();
@@ -148,7 +143,7 @@ public class ControlPoaViewModelTests
     [Fact]
     public async Task ServidorCaido_MarcaSinConexionYVaciaLasFilas()
     {
-        var (vm, svc, _, _, _, _, _, _, _) = Crear(reloj: Octubre2026);
+        var (vm, svc, _, _, _, _, _, _) = Crear(reloj: Octubre2026);
         svc.SetupSequence(s => s.ObtenerControlPoaAsync(2026))
             .ReturnsAsync(new List<ControlPoaLineaDto> { Linea(1, 2026) })
             .ThrowsAsync(new ServidorNoDisponibleException());
@@ -163,7 +158,7 @@ public class ControlPoaViewModelTests
     [Fact]
     public async Task Reintentar_ConsultaElEjercicioQueEstaEnPantalla()
     {
-        var (vm, svc, _, _, _, _, _, _, _) = Crear(reloj: Octubre2026);
+        var (vm, svc, _, _, _, _, _, _) = Crear(reloj: Octubre2026);
         svc.Setup(s => s.ObtenerControlPoaAsync(2026)).ThrowsAsync(new ServidorNoDisponibleException());
         svc.Setup(s => s.ObtenerControlPoaAsync(2025)).ReturnsAsync(new List<ControlPoaLineaDto> { Linea(1, 2025) });
         await vm.CargarAsync();
@@ -180,7 +175,7 @@ public class ControlPoaViewModelTests
     [Fact]
     public async Task CargarAsync_PopulaLasFilas()
     {
-        var (vm, _, _, _, _, _, _, _, _) = Crear(new List<ControlPoaLineaDto>
+        var (vm, _, _, _, _, _, _, _) = Crear(new List<ControlPoaLineaDto>
         {
             new(1, "Rambla", "Obras", 2026, 1000m, 400m, 600m, 40m, false),
             new(2, "Prensa", "Comunicación", 2026, 1000m, 8915m, -7915m, 891.5m, true),
@@ -204,7 +199,6 @@ public class ControlPoaViewModelTests
         var svc = new Mock<IFinanzasVistasService>();
         svc.Setup(s => s.ObtenerControlPoaAsync(It.IsAny<int>())).ThrowsAsync(new UnauthorizedAccessException());
         var nav = new Mock<INavigationService>();
-        var csv = new Mock<ICsvExporter>();
         var guardado = new Mock<IServicioGuardadoArchivo>();
         var confirm = new Mock<IConfirmacionService>();
         var pdfExporter = new Mock<IPdfExporter>();
@@ -212,7 +206,7 @@ public class ControlPoaViewModelTests
         var session = new Mock<ICurrentSession>();
 
         var vm = new ControlPoaViewModel(
-            svc.Object, nav.Object, csv.Object, guardado.Object, confirm.Object,
+            svc.Object, nav.Object, guardado.Object, confirm.Object,
             pdfExporter.Object, apertura.Object, session.Object);
 
         var excepcion = await Record.ExceptionAsync(() => vm.CargarAsync());
@@ -223,7 +217,7 @@ public class ControlPoaViewModelTests
     [Fact]
     public async Task FilasView_EsOrdenable()
     {
-        var (vm, _, _, _, _, _, _, _, _) = Crear();
+        var (vm, _, _, _, _, _, _, _) = Crear();
 
         await vm.CargarAsync();
 
@@ -234,7 +228,7 @@ public class ControlPoaViewModelTests
     [Fact]
     public async Task AbrirGastosDeLaLinea_NavegaAGastosViewModelFiltrado()
     {
-        var (vm, _, nav, _, _, _, _, _, _) = Crear(new List<ControlPoaLineaDto>
+        var (vm, _, nav, _, _, _, _, _) = Crear(new List<ControlPoaLineaDto>
         {
             new(1, "Rambla", "Obras", 2026, 1000m, 400m, 600m, 40m, false),
         });
@@ -244,25 +238,6 @@ public class ControlPoaViewModelTests
         vm.AbrirGastosDeLaLineaCommand.Execute(null);
 
         nav.Verify(n => n.Navegar(It.IsAny<Action<GastosViewModel>>()), Times.Once);
-    }
-
-    // ── bugfix 2026-08-14: falla silenciosa al guardar el CSV ──────────────────
-
-    [Fact]
-    public async Task ExportarCsvCommand_SiFallaGuardarTextoAsync_InformaYNoPropagaLaExcepcion()
-    {
-        var (vm, _, _, _, guardado, confirm, _, _, _) = Crear(new List<ControlPoaLineaDto>
-        {
-            new(1, "Rambla", "Obras", 2026, 1000m, 400m, 600m, 40m, false),
-        });
-        guardado
-            .Setup(g => g.GuardarTextoAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .ThrowsAsync(new IOException("disco lleno"));
-        await vm.CargarAsync();
-
-        await vm.ExportarCsvCommand.ExecuteAsync(null);
-
-        confirm.Verify(c => c.InformarAsync("No se pudo guardar el archivo. disco lleno"), Times.Once);
     }
 
     // ── Export PDF (spec 2026-09-18) ────────────────────────────────────────
@@ -275,7 +250,7 @@ public class ControlPoaViewModelTests
     {
         // Literal, NO ControlPoaViewModel.ColumnasPdf: comparar la constante contra sí misma
         // sería tautológico. Estas son las 6 columnas que muestra la grilla, SIN Ejercicio ni
-        // Sobregirada (el CSV tiene 8 e incluye ambas).
+        // Sobregirada.
         var esperado = new[]
         {
             new ColumnaPdf("Nombre", "Línea"),
@@ -287,7 +262,7 @@ public class ControlPoaViewModelTests
         };
 
         var items = new List<ControlPoaLineaDto> { CrearLinea(1) };
-        var (vm, _, _, _, guardadoMock, _, pdfExporterMock, _, _) = Crear(items);
+        var (vm, _, _, guardadoMock, _, pdfExporterMock, _, _) = Crear(items);
         await vm.CargarAsync();
         pdfExporterMock
             .Setup(e => e.Exportar(
@@ -314,7 +289,7 @@ public class ControlPoaViewModelTests
     [Fact]
     public async Task ExportarPdfCommand_SinFilas_NoExporta()
     {
-        var (vm, _, _, _, _, _, pdfExporterMock, _, _) = Crear(new List<ControlPoaLineaDto>());
+        var (vm, _, _, _, _, pdfExporterMock, _, _) = Crear(new List<ControlPoaLineaDto>());
         await vm.CargarAsync();
 
         await vm.ExportarPdfCommand.ExecuteAsync(null);
@@ -328,7 +303,7 @@ public class ControlPoaViewModelTests
     public async Task ExportarPdfCommand_ConMuchasFilas_PreguntaAntesDeExportar()
     {
         var items = Enumerable.Range(1, 600).Select(CrearLinea).ToList();
-        var (vm, _, _, _, guardadoMock, confirmMock, pdfExporterMock, _, _) = Crear(items);
+        var (vm, _, _, guardadoMock, confirmMock, pdfExporterMock, _, _) = Crear(items);
         await vm.CargarAsync();
         confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(false);
 
@@ -344,7 +319,7 @@ public class ControlPoaViewModelTests
     public async Task ExportarPdfCommand_SiFallaGuardarBytesAsync_InformaYNoPropagaLaExcepcion()
     {
         var items = new List<ControlPoaLineaDto> { CrearLinea(1) };
-        var (vm, _, _, _, guardadoMock, confirmMock, pdfExporterMock, _, _) = Crear(items);
+        var (vm, _, _, guardadoMock, confirmMock, pdfExporterMock, _, _) = Crear(items);
         await vm.CargarAsync();
         pdfExporterMock
             .Setup(e => e.Exportar(
@@ -364,7 +339,7 @@ public class ControlPoaViewModelTests
     public async Task ExportarPdfCommand_GuardadoExitoso_OfreceAbrirElArchivo()
     {
         var items = new List<ControlPoaLineaDto> { CrearLinea(1) };
-        var (vm, _, _, _, guardadoMock, confirmMock, pdfExporterMock, aperturaMock, _) = Crear(items);
+        var (vm, _, _, guardadoMock, confirmMock, pdfExporterMock, aperturaMock, _) = Crear(items);
         await vm.CargarAsync();
         var pdfBytes = new byte[] { 9, 9 };
         pdfExporterMock
@@ -387,7 +362,7 @@ public class ControlPoaViewModelTests
     public async Task ExportarPdfCommand_GuardadoCancelado_NoOfreceAbrir()
     {
         var items = new List<ControlPoaLineaDto> { CrearLinea(1) };
-        var (vm, _, _, _, guardadoMock, confirmMock, pdfExporterMock, aperturaMock, _) = Crear(items);
+        var (vm, _, _, guardadoMock, confirmMock, pdfExporterMock, aperturaMock, _) = Crear(items);
         await vm.CargarAsync();
         pdfExporterMock
             .Setup(e => e.Exportar(
@@ -408,7 +383,7 @@ public class ControlPoaViewModelTests
     public async Task ExportarPdfCommand_PasaMetadatosConTituloEjercicioYUsuarioEmisor()
     {
         var items = new List<ControlPoaLineaDto> { CrearLinea(1) };
-        var (vm, _, _, _, guardadoMock, _, pdfExporterMock, _, sessionMock) = Crear(items);
+        var (vm, _, _, guardadoMock, _, pdfExporterMock, _, sessionMock) = Crear(items);
         vm.Ejercicio = 2025;
         await vm.CargarAsync();
         sessionMock.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(1, "jperez", RolUsuario.Admin, "Juan Pérez"));
@@ -438,9 +413,8 @@ public class ControlPoaViewModelTests
     [Fact]
     public async Task Exportar_ConSinPermiso_NoSePuedeEjecutar()
     {
-        var (vm, svc, _, _, _, _, _, _, _) = Crear(new List<ControlPoaLineaDto> { CrearLinea(1) });
+        var (vm, svc, _, _, _, _, _, _) = Crear(new List<ControlPoaLineaDto> { CrearLinea(1) });
         await vm.CargarAsync();
-        Assert.True(vm.ExportarCsvCommand.CanExecute(null));
         Assert.True(vm.ExportarPdfCommand.CanExecute(null));
 
         svc.Setup(s => s.ObtenerControlPoaAsync(It.IsAny<int>())).ThrowsAsync(new UnauthorizedAccessException("403"));
@@ -448,14 +422,13 @@ public class ControlPoaViewModelTests
 
         Assert.True(vm.SinPermiso);
         Assert.NotEmpty(vm.Filas);
-        Assert.False(vm.ExportarCsvCommand.CanExecute(null));
         Assert.False(vm.ExportarPdfCommand.CanExecute(null));
     }
 
     [Fact]
     public async Task Exportar_MientrasCarga_NoSePuedeEjecutar_YVuelveAlTerminar()
     {
-        var (vm, svc, _, _, _, _, _, _, _) = Crear(new List<ControlPoaLineaDto> { CrearLinea(1) });
+        var (vm, svc, _, _, _, _, _, _) = Crear(new List<ControlPoaLineaDto> { CrearLinea(1) });
         await vm.CargarAsync();
         var pendiente = new TaskCompletionSource<IReadOnlyList<ControlPoaLineaDto>>();
         svc.Setup(s => s.ObtenerControlPoaAsync(It.IsAny<int>())).Returns(pendiente.Task);
@@ -463,20 +436,18 @@ public class ControlPoaViewModelTests
         var carga = vm.CargarAsync();
 
         Assert.True(vm.Cargando);
-        Assert.False(vm.ExportarCsvCommand.CanExecute(null));
         Assert.False(vm.ExportarPdfCommand.CanExecute(null));
 
         pendiente.SetResult(new List<ControlPoaLineaDto> { CrearLinea(2) });
         await carga;
 
-        Assert.True(vm.ExportarCsvCommand.CanExecute(null));
         Assert.True(vm.ExportarPdfCommand.CanExecute(null));
     }
 
     [Fact]
     public async Task Exportar_TrasCambiarElEjercicioSinRecargar_RotulaConElEjercicioDeLasFilasCargadas()
     {
-        var (vm, svc, _, _, guardadoMock, _, pdfExporterMock, _, _) = Crear(new List<ControlPoaLineaDto> { CrearLinea(1) });
+        var (vm, svc, _, guardadoMock, _, pdfExporterMock, _, _) = Crear(new List<ControlPoaLineaDto> { CrearLinea(1) });
         vm.EsperaDebounce = TimeSpan.FromMinutes(10);
         vm.Ejercicio = 2025;
         await vm.CargarAsync();
@@ -490,12 +461,10 @@ public class ControlPoaViewModelTests
             .ReturnsAsync(true);
 
         await vm.ExportarPdfCommand.ExecuteAsync(null);
-        await vm.ExportarCsvCommand.ExecuteAsync(null);
 
         pdfExporterMock.Verify(e => e.Exportar(It.IsAny<IEnumerable<ControlPoaLineaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
             It.Is<MetadatosDocumento>(m => m.DescripcionFiltros == $"Ejercicio: {cargado}.")), Times.Once);
         guardadoMock.Verify(g => g.GuardarBytesAsync(It.IsAny<Stream>(), $"control-poa-{cargado}.pdf",
             It.IsAny<CancellationToken>(), "pdf", "application/pdf"), Times.Once);
-        guardadoMock.Verify(g => g.GuardarTextoAsync(It.IsAny<string>(), $"control-poa-{cargado}.csv"), Times.Once);
     }
 }

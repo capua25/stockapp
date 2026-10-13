@@ -562,7 +562,7 @@ public sealed class PlantillaTabular
             .ToArray();
 
     /// <summary>
-    /// Mismo criterio de fechas que <c>CsvExporter.FormatearValor</c> (bugfix de huso horario:
+    /// Criterio de fechas (bugfix de huso horario:
     /// DateTime se persiste en UTC pero se muestra en hora local; DateOnly NO se convierte,
     /// representa un día-calendario sin instante).
     ///

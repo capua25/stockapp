@@ -5,11 +5,11 @@ namespace StockApp.Domain.Formato;
 
 /// <summary>
 /// ÚNICO punto de verdad del formato numérico de la app (decisión del 2026-10-01, no
-/// configurable): es-UY en pantalla, PDF, CSV, mensajes y entrada de datos — coma decimal y
+/// configurable): es-UY en pantalla, PDF, mensajes y entrada de datos — coma decimal y
 /// punto de miles (ej. <c>$ 26.400,00</c>). El cliente es un municipio de Uruguay.
 ///
 /// Vive en Domain porque es la capa más baja que comparten TODOS los consumidores: Application
-/// (CSV, mensajes de servicios), Infrastructure (mensajes de repositorios), Documentos (PDF),
+/// (mensajes de servicios), Infrastructure (mensajes de repositorios), Documentos (PDF),
 /// Presentation (converters, ViewModels, cultura del arranque) y las excepciones de dominio.
 ///
 /// El <see cref="NumberFormatInfo"/> se arma A MANO: no depende de ICU (la Api corre con

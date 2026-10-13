@@ -54,11 +54,6 @@ public class ReporteTareasCriterioCierreAvisoTests
 
     // Fakes mínimos no-op para las 6 dependencias nuevas del constructor (spec 2026-09-18):
     // este proyecto no referencia Moq (a diferencia de Presentation.Tests).
-    private sealed class CsvExporterFake : ICsvExporter
-    {
-        public string Exportar<T>(IEnumerable<T> items, IReadOnlyList<string> columnOrder) => string.Empty;
-    }
-
     private sealed class PdfExporterFake : IPdfExporter
     {
         public byte[] Exportar<T>(IEnumerable<T> items, IReadOnlyList<ColumnaPdf> columnas, MetadatosDocumento metadatos, ResumenPdf? resumen = null) => Array.Empty<byte>();
@@ -66,7 +61,6 @@ public class ReporteTareasCriterioCierreAvisoTests
 
     private sealed class GuardadoFake : IServicioGuardadoArchivo
     {
-        public Task<bool> GuardarTextoAsync(string contenido, string nombreSugerido) => Task.FromResult(false);
         public Task<bool> GuardarBytesAsync(
             Stream contenido, string nombreSugerido, CancellationToken ct = default,
             string? extension = null, string? tipoMime = null) => Task.FromResult(false);
@@ -98,7 +92,7 @@ public class ReporteTareasCriterioCierreAvisoTests
     private static (Window Window, ReporteTareasViewModel Vm) Montar()
     {
         var vm = new ReporteTareasViewModel(
-            new ReporteTareasServiceFake(), new CsvExporterFake(), new PdfExporterFake(),
+            new ReporteTareasServiceFake(), new PdfExporterFake(),
             new GuardadoFake(), new AperturaFake(), new ConfirmacionFake(), new SessionFake());
         var vista = new ReporteTareasView();
         var window = new Window { Width = 1100, Height = 700, Content = vista };

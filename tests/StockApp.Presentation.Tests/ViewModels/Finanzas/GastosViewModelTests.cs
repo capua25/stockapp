@@ -88,17 +88,13 @@ public class GastosViewModelTests
         var confirm = new Mock<IConfirmacionService>();
         confirm.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(true);
         confirm.Setup(c => c.InformarAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
-        var csv = new Mock<ICsvExporter>();
-        csv.Setup(c => c.Exportar(It.IsAny<IEnumerable<GastoFila>>(), It.IsAny<IReadOnlyList<string>>()))
-            .Returns("csv");
         var guardado = new Mock<IServicioGuardadoArchivo>();
-        guardado.Setup(g => g.GuardarTextoAsync(It.IsAny<string>(), It.IsAny<string>())).ReturnsAsync(true);
         var pdfExporter = new Mock<IPdfExporter>();
         var apertura = new Mock<IServicioAperturaArchivo>();
 
         var vm = new GastosViewModel(
             svc.Object, session.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
-            nav.Object, confirm.Object, csv.Object, guardado.Object, pdfExporter.Object, apertura.Object);
+            nav.Object, confirm.Object, guardado.Object, pdfExporter.Object, apertura.Object);
         return (vm, svc, nav, confirm, guardado, pdfExporter, apertura);
     }
 
@@ -456,8 +452,8 @@ public class GastosViewModelTests
     [Fact]
     public async Task GastoFila_Fecha_EsDateOnly_SinConversionDeHusoHorario()
     {
-        // Bug real (verificación orgánica Fase 2): el export CSV mostraba la fecha corrida
-        // un día para atrás porque GastoFila.Fecha era DateTime y CsvExporter convierte TODO
+        // Bug real (verificación orgánica Fase 2): el export mostraba la fecha corrida
+        // un día para atrás porque GastoFila.Fecha era DateTime y el export convertía TODO
         // DateTime a hora local. Fecha debe ser DateOnly: no hay instante que convertir.
         var fechaUtc = new DateTime(2026, 7, 16, 0, 0, 0, DateTimeKind.Utc);
         var (vm, _, _, _, _, _, _) = Crear(new List<Gasto> { GastoDe(1, "Con fecha límite", fechaUtc: fechaUtc) });
@@ -519,22 +515,6 @@ public class GastosViewModelTests
         await vm.CargarAsync();
 
         Assert.Null(vm.LineaPoaSeleccionada);
-    }
-
-    // ── bugfix 2026-08-14: falla silenciosa al guardar el CSV ──────────────────
-
-    [Fact]
-    public async Task ExportarCsvCommand_SiFallaGuardarTextoAsync_InformaYNoPropagaLaExcepcion()
-    {
-        var (vm, _, _, confirm, guardado, _, _) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
-        guardado
-            .Setup(g => g.GuardarTextoAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .ThrowsAsync(new IOException("disco lleno"));
-        await vm.CargarAsync();
-
-        await vm.ExportarCsvCommand.ExecuteAsync(null);
-
-        confirm.Verify(c => c.InformarAsync("No se pudo guardar el archivo. disco lleno"), Times.Once);
     }
 
     // ── PuedeRegistrarPagos: gating del botón "Pagos" (bugfix 2026-08-15) ──────────────────
@@ -625,12 +605,11 @@ public class GastosViewModelTests
         lineas.Setup(l => l.ListarActivasAsync()).ReturnsAsync(new List<LineaPoa>());
         var nav = new Mock<INavigationService>();
         var confirm = new Mock<IConfirmacionService>();
-        var csv = new Mock<ICsvExporter>();
         var guardado = new Mock<IServicioGuardadoArchivo>();
 
         var vm = new GastosViewModel(
             svc.Object, session.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
-            nav.Object, confirm.Object, csv.Object, guardado.Object,
+            nav.Object, confirm.Object, guardado.Object,
             new Mock<IPdfExporter>().Object, new Mock<IServicioAperturaArchivo>().Object);
 
         await vm.CargarAsync();
@@ -670,12 +649,11 @@ public class GastosViewModelTests
         lineas.Setup(l => l.ListarActivasAsync()).ReturnsAsync(new List<LineaPoa>());
         var nav = new Mock<INavigationService>();
         var confirm = new Mock<IConfirmacionService>();
-        var csv = new Mock<ICsvExporter>();
         var guardado = new Mock<IServicioGuardadoArchivo>();
 
         var vm = new GastosViewModel(
             svc.Object, session.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
-            nav.Object, confirm.Object, csv.Object, guardado.Object,
+            nav.Object, confirm.Object, guardado.Object,
             new Mock<IPdfExporter>().Object, new Mock<IServicioAperturaArchivo>().Object);
 
         await vm.CargarAsync();
@@ -955,7 +933,6 @@ public class GastosViewModelTests
         var (vm, _, _, _, _, _, _) = Crear(rol: RolUsuario.Operador, permisos: new[] { Permisos.RegistrarGastos });
 
         Assert.False(vm.PuedeVerFinanzas);
-        Assert.False(vm.ExportarCsvCommand.CanExecute(null));
         Assert.False(vm.ExportarPdfCommand.CanExecute(null));
     }
 
@@ -965,7 +942,6 @@ public class GastosViewModelTests
         var (vm, _, _, _, _, _, _) = Crear(rol: RolUsuario.Operador, permisos: new[] { Permisos.VerFinanzas });
 
         Assert.True(vm.PuedeVerFinanzas);
-        Assert.True(vm.ExportarCsvCommand.CanExecute(null));
         Assert.True(vm.ExportarPdfCommand.CanExecute(null));
     }
 
@@ -977,13 +953,11 @@ public class GastosViewModelTests
             new List<Gasto> { GastoDe(1, "Vieja") }, rol: RolUsuario.Operador, permisos: permisos);
         await vm.CargarAsync();
         Assert.Single(vm.Filas);
-        Assert.True(vm.ExportarCsvCommand.CanExecute(null));
 
         permisos.Remove(Permisos.VerFinanzas);
         vm.NotificarPermisosActualizados();
 
         Assert.Empty(vm.Filas);
-        Assert.False(vm.ExportarCsvCommand.CanExecute(null));
         Assert.False(vm.ExportarPdfCommand.CanExecute(null));
     }
 }

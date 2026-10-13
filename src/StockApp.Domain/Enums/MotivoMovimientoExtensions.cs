@@ -1,7 +1,7 @@
 namespace StockApp.Domain.Enums;
 
 /// <summary>
-/// Texto visible del motivo (único lugar: combo, grillas, PDF, CSV) y regla de precio por
+/// Texto visible del motivo (único lugar: combo, grillas, PDF) y regla de precio por
 /// motivo (única fuente para el servicio y para el ViewModel del formulario).
 /// </summary>
 public static class MotivoMovimientoExtensions

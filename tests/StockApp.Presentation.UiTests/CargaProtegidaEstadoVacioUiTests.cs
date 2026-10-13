@@ -57,14 +57,8 @@ public class CargaProtegidaEstadoVacioUiTests
             int productoId, DateTime? desde, DateTime? hasta) => throw new NotSupportedException();
     }
 
-    private sealed class CsvExporterNoOpFake : ICsvExporter
-    {
-        public string Exportar<T>(IEnumerable<T> items, IReadOnlyList<string> columnOrder) => string.Empty;
-    }
-
     private sealed class ServicioGuardadoArchivoNoOpFake : IServicioGuardadoArchivo
     {
-        public Task<bool> GuardarTextoAsync(string contenido, string nombreSugerido) => Task.FromResult(false);
         public Task<bool> GuardarBytesAsync(
             System.IO.Stream contenido, string nombreSugerido, CancellationToken ct = default,
             string? extension = null, string? tipoMime = null)
@@ -135,8 +129,7 @@ public class CargaProtegidaEstadoVacioUiTests
     public void StockCategoriaView_SiSinPermiso_MuestraEstadoVacioConMensajeYEsError()
     {
         var vm = new StockCategoriaViewModel(
-            new ReporteStockServiceUnauthorizedFake(), new CsvExporterNoOpFake(),
-            new ServicioGuardadoArchivoNoOpFake(), new ConfirmacionServiceFake(),
+            new ReporteStockServiceUnauthorizedFake(), new ServicioGuardadoArchivoNoOpFake(), new ConfirmacionServiceFake(),
             new PdfExporterNoOpFake(), new ServicioAperturaArchivoFake(), new SesionFake(RolUsuario.Admin));
 
         var window = MontarConDataContext(XamlStockCategoriaView, vm);

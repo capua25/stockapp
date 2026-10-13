@@ -107,13 +107,13 @@ public class ShellMainSeccionActivaTests
                 var vistas = new Mock<IFinanzasVistasService>();
                 vistas.Setup(v => v.ObtenerControlPoaAsync(It.IsAny<int>()))
                     .ReturnsAsync(new List<ControlPoaLineaDto> { new(1, "Rambla", "Obras", 2026, 1000m, 400m, 600m, 40m, false) });
-                return new ControlPoaViewModel(vistas.Object, navegacion!, Mock.Of<ICsvExporter>(), Mock.Of<IServicioGuardadoArchivo>(),
+                return new ControlPoaViewModel(vistas.Object, navegacion!, Mock.Of<IServicioGuardadoArchivo>(),
                     Mock.Of<IConfirmacionService>(), Mock.Of<IPdfExporter>(), Mock.Of<IServicioAperturaArchivo>(), Mock.Of<ICurrentSession>());
             }
             if (tipo == typeof(GastosViewModel))
                 return new GastosViewModel(Mock.Of<IGastoService>(), Mock.Of<ICurrentSession>(), Mock.Of<IProveedorService>(),
                     Mock.Of<IFuenteFinanciamientoService>(), Mock.Of<IRubroGastoService>(), Mock.Of<ILineaPoaService>(), navegacion!,
-                    Mock.Of<IConfirmacionService>(), Mock.Of<ICsvExporter>(), Mock.Of<IServicioGuardadoArchivo>(),
+                    Mock.Of<IConfirmacionService>(), Mock.Of<IServicioGuardadoArchivo>(),
                     Mock.Of<IPdfExporter>(), Mock.Of<IServicioAperturaArchivo>());
             return RuntimeHelpers.GetUninitializedObject(tipo);
         });

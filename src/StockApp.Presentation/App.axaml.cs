@@ -306,9 +306,6 @@ public partial class App : AvaloniaApp
         // RefrescoPermisos en OnFrameworkInitializationCompleted.
         services.AddSingleton<IRegistroFallos, RegistroFallosArchivo>();
 
-        // ── Inc 6: exportación CSV (vive en Application, sin dependencias de Infra — OQ-2)
-        services.AddTransient<ICsvExporter, CsvExporter>();
-
         // ── Export PDF de tablas (spec 2026-09-18): implementación en StockApp.Documentos
         // (MigraDoc) -- la única referencia a esa librería en todo Presentation es esta línea.
         services.AddTransient<IPdfExporter, PdfExporterMigraDoc>();

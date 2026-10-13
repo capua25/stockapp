@@ -29,7 +29,6 @@ public class StockCategoriaViewModelTests
     private static (
         StockCategoriaViewModel vm,
         Mock<IReporteStockService> servicioMock,
-        Mock<ICsvExporter> exporterMock,
         Mock<IServicioGuardadoArchivo> guardadoMock,
         Mock<IConfirmacionService> confirmMock,
         Mock<IPdfExporter> pdfExporterMock,
@@ -38,7 +37,6 @@ public class StockCategoriaViewModelTests
         Crear(IReadOnlyList<StockCategoriaDto>? items = null)
     {
         var servicioMock = new Mock<IReporteStockService>();
-        var exporterMock = new Mock<ICsvExporter>();
         var guardadoMock = new Mock<IServicioGuardadoArchivo>();
         var confirmMock = new Mock<IConfirmacionService>();
         var pdfExporterMock = new Mock<IPdfExporter>();
@@ -52,9 +50,9 @@ public class StockCategoriaViewModelTests
             .ReturnsAsync(items ?? new List<StockCategoriaDto>());
 
         var vm = new StockCategoriaViewModel(
-            servicioMock.Object, exporterMock.Object, guardadoMock.Object, confirmMock.Object,
+            servicioMock.Object, guardadoMock.Object, confirmMock.Object,
             pdfExporterMock.Object, aperturaMock.Object, sessionMock.Object);
-        return (vm, servicioMock, exporterMock, guardadoMock, confirmMock, pdfExporterMock, aperturaMock, sessionMock);
+        return (vm, servicioMock, guardadoMock, confirmMock, pdfExporterMock, aperturaMock, sessionMock);
     }
 
     // ── tests ──────────────────────────────────────────────────────────────
@@ -64,7 +62,7 @@ public class StockCategoriaViewModelTests
     [Fact]
     public async Task CargarAsync_SiElServicioLanzaUnauthorized_NoPropagaYDejaSinPermiso()
     {
-        var (vm, servicioMock, _, _, _, _, _, _) = Crear();
+        var (vm, servicioMock, _, _, _, _, _) = Crear();
         servicioMock.Setup(s => s.ObtenerStockPorCategoriaAsync()).ThrowsAsync(new UnauthorizedAccessException());
 
         var ex = await Record.ExceptionAsync(() => vm.CargarAsync());
@@ -78,7 +76,7 @@ public class StockCategoriaViewModelTests
     public async Task BuscarCommand_LlamaObtenerStockPorCategoriaAsync_YPopulaItems()
     {
         var items = new List<StockCategoriaDto> { CrearItem("Almacén"), CrearItem("Bebidas") };
-        var (vm, servicioMock, _, _, _, _, _, _) = Crear(items);
+        var (vm, servicioMock, _, _, _, _, _) = Crear(items);
 
         await vm.BuscarCommand.ExecuteAsync(null);
 
@@ -91,7 +89,7 @@ public class StockCategoriaViewModelTests
     public async Task CargarAsync_LlamaObtenerStockPorCategoriaAsync_YPopulaItems()
     {
         var items = new List<StockCategoriaDto> { CrearItem("Almacén"), CrearItem("Bebidas") };
-        var (vm, servicioMock, _, _, _, _, _, _) = Crear(items);
+        var (vm, servicioMock, _, _, _, _, _) = Crear(items);
 
         await vm.CargarAsync();
 
@@ -100,64 +98,13 @@ public class StockCategoriaViewModelTests
         Assert.Same(items, vm.Items);
     }
 
-    [Fact]
-    public async Task ExportarCommand_LlamaExportarConItems()
-    {
-        var items = new List<StockCategoriaDto> { CrearItem() };
-        var (vm, _, exporterMock, guardadoMock, _, _, _, _) = Crear(items);
-
-        var esperado = new[]
-        {
-            "Categoria", "CantidadProductos", "StockTotal", "ValorCosto"
-        };
-
-        const string csvResultante = "csv-generado";
-        exporterMock
-            .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<StockCategoriaDto>>(),
-                It.IsAny<IReadOnlyList<string>>()))
-            .Returns(csvResultante);
-
-        await vm.BuscarCommand.ExecuteAsync(null);
-        await vm.ExportarCommand.ExecuteAsync(null);
-
-        exporterMock.Verify(e => e.Exportar(
-            vm.Items,
-            It.Is<IReadOnlyList<string>>(c => c.SequenceEqual(esperado))),
-            Times.Once);
-
-        guardadoMock.Verify(g => g.GuardarTextoAsync(csvResultante, "stock-categoria.csv"), Times.Once);
-    }
-
-    // ── bugfix 2026-08-14: falla silenciosa al guardar el CSV ──────────────────
-
-    [Fact]
-    public async Task ExportarCommand_SiFallaGuardarTextoAsync_InformaYNoPropagaLaExcepcion()
-    {
-        var items = new List<StockCategoriaDto> { CrearItem() };
-        var (vm, _, exporterMock, guardadoMock, confirmMock, _, _, _) = Crear(items);
-        exporterMock
-            .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<StockCategoriaDto>>(),
-                It.IsAny<IReadOnlyList<string>>()))
-            .Returns("csv-generado");
-        guardadoMock
-            .Setup(g => g.GuardarTextoAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .ThrowsAsync(new IOException("disco lleno"));
-
-        await vm.BuscarCommand.ExecuteAsync(null);
-        await vm.ExportarCommand.ExecuteAsync(null);
-
-        confirmMock.Verify(c => c.InformarAsync("No se pudo guardar el archivo. disco lleno"), Times.Once);
-    }
-
     // ── Export PDF (spec 2026-09-18) ────────────────────────────────────────
 
     [Fact]
     public async Task ExportarPdfCommand_LlamaAlExportadorConLasColumnasDeLaGrilla()
     {
         // Literal, NO StockCategoriaViewModel.ColumnasPdf: comparar la constante contra sí misma
-        // sería tautológico. Stock por categoría tiene las mismas 4 columnas en CSV y grilla.
+        // sería tautológico. Stock por categoría tiene 4 columnas.
         var esperado = new[]
         {
             new ColumnaPdf("Categoria", "Categoría"),
@@ -167,7 +114,7 @@ public class StockCategoriaViewModelTests
         };
 
         var items = new List<StockCategoriaDto> { CrearItem() };
-        var (vm, _, _, guardadoMock, _, pdfExporterMock, _, _) = Crear(items);
+        var (vm, _, guardadoMock, _, pdfExporterMock, _, _) = Crear(items);
         await vm.BuscarCommand.ExecuteAsync(null);
         pdfExporterMock
             .Setup(e => e.Exportar(
@@ -194,7 +141,7 @@ public class StockCategoriaViewModelTests
     [Fact]
     public async Task ExportarPdfCommand_SinItems_NoExporta()
     {
-        var (vm, _, _, _, _, pdfExporterMock, _, _) = Crear(new List<StockCategoriaDto>());
+        var (vm, _, _, _, pdfExporterMock, _, _) = Crear(new List<StockCategoriaDto>());
 
         await vm.ExportarPdfCommand.ExecuteAsync(null);
 
@@ -207,7 +154,7 @@ public class StockCategoriaViewModelTests
     public async Task ExportarPdfCommand_ConMuchasFilas_PreguntaAntesDeExportar()
     {
         var items = Enumerable.Range(1, 600).Select(i => CrearItem($"Categoria{i}")).ToList();
-        var (vm, _, _, guardadoMock, confirmMock, pdfExporterMock, _, _) = Crear(items);
+        var (vm, _, guardadoMock, confirmMock, pdfExporterMock, _, _) = Crear(items);
         await vm.BuscarCommand.ExecuteAsync(null);
         confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(false);
 
@@ -223,7 +170,7 @@ public class StockCategoriaViewModelTests
     public async Task ExportarPdfCommand_SiFallaGuardarBytesAsync_InformaYNoPropagaLaExcepcion()
     {
         var items = new List<StockCategoriaDto> { CrearItem() };
-        var (vm, _, _, guardadoMock, confirmMock, pdfExporterMock, _, _) = Crear(items);
+        var (vm, _, guardadoMock, confirmMock, pdfExporterMock, _, _) = Crear(items);
         await vm.BuscarCommand.ExecuteAsync(null);
         pdfExporterMock
             .Setup(e => e.Exportar(
@@ -243,7 +190,7 @@ public class StockCategoriaViewModelTests
     public async Task ExportarPdfCommand_GuardadoExitoso_OfreceAbrirElArchivo()
     {
         var items = new List<StockCategoriaDto> { CrearItem() };
-        var (vm, _, _, guardadoMock, confirmMock, pdfExporterMock, aperturaMock, _) = Crear(items);
+        var (vm, _, guardadoMock, confirmMock, pdfExporterMock, aperturaMock, _) = Crear(items);
         await vm.BuscarCommand.ExecuteAsync(null);
         var pdfBytes = new byte[] { 9, 9 };
         pdfExporterMock
@@ -266,7 +213,7 @@ public class StockCategoriaViewModelTests
     public async Task ExportarPdfCommand_GuardadoCancelado_NoOfreceAbrir()
     {
         var items = new List<StockCategoriaDto> { CrearItem() };
-        var (vm, _, _, guardadoMock, confirmMock, pdfExporterMock, aperturaMock, _) = Crear(items);
+        var (vm, _, guardadoMock, confirmMock, pdfExporterMock, aperturaMock, _) = Crear(items);
         await vm.BuscarCommand.ExecuteAsync(null);
         pdfExporterMock
             .Setup(e => e.Exportar(
@@ -287,7 +234,7 @@ public class StockCategoriaViewModelTests
     public async Task ExportarPdfCommand_PasaMetadatosConTituloFiltrosYUsuarioEmisor()
     {
         var items = new List<StockCategoriaDto> { CrearItem() };
-        var (vm, _, _, guardadoMock, _, pdfExporterMock, _, sessionMock) = Crear(items);
+        var (vm, _, guardadoMock, _, pdfExporterMock, _, sessionMock) = Crear(items);
         await vm.BuscarCommand.ExecuteAsync(null);
         sessionMock.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(1, "jperez", RolUsuario.Admin, "Juan Pérez"));
         pdfExporterMock

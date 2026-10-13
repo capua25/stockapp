@@ -17,31 +17,11 @@ namespace StockApp.Presentation.ViewModels.Reportes;
 /// <summary>
 /// ViewModel del reporte de Historial por Producto (Inc 6). Consulta el historial
 /// de movimientos de un producto filtrado por rango de fechas vía
-/// <see cref="IReporteStockService"/> y permite exportarlo a CSV.
+/// <see cref="IReporteStockService"/> y permite exportarlo a PDF.
 /// </summary>
 public partial class HistorialPorProductoViewModel : ViewModelBase
 {
-    /// <summary>
-    /// Orden EXACTO de columnas para la exportación CSV. Coincide con las propiedades
-    /// de <see cref="MovimientoHistorialDto"/>.
-    /// </summary>
-    public static readonly IReadOnlyList<string> ColumnOrder = new[]
-    {
-        "MovimientoId",
-        "ProductoId",
-        "ProductoNombre",
-        "Tipo",
-        "Motivo",
-        "Cantidad",
-        "PrecioUnitario",
-        "StockAnterior",
-        "StockNuevo",
-        "Comentario",
-        "Fecha",
-        "UsuarioId",
-    };
-
-    /// <summary>Orden de la GRILLA (no del CSV, que tiene 12 columnas con IDs internos) --
+    /// <summary>Orden de la GRILLA --
     /// 8 columnas dispara apaisado automático (Tarea 4 de la plantilla).</summary>
     public static readonly IReadOnlyList<ColumnaPdf> ColumnasPdf = new[]
     {
@@ -56,7 +36,6 @@ public partial class HistorialPorProductoViewModel : ViewModelBase
     };
 
     private readonly IReporteStockService _servicio;
-    private readonly ICsvExporter _csvExporter;
     private readonly IServicioGuardadoArchivo _guardado;
     private readonly IConfirmacionService _confirmacion;
     private readonly IProductoService _productoService;
@@ -98,7 +77,6 @@ public partial class HistorialPorProductoViewModel : ViewModelBase
 
     public HistorialPorProductoViewModel(
         IReporteStockService servicio,
-        ICsvExporter csvExporter,
         IServicioGuardadoArchivo guardado,
         IConfirmacionService confirmacion,
         IProductoService productoService,
@@ -107,7 +85,6 @@ public partial class HistorialPorProductoViewModel : ViewModelBase
         ICurrentSession session)
     {
         _servicio = servicio;
-        _csvExporter = csvExporter;
         _guardado = guardado;
         _confirmacion = confirmacion;
         _productoService = productoService;
@@ -190,25 +167,6 @@ public partial class HistorialPorProductoViewModel : ViewModelBase
         => fechaLocal.HasValue
             ? DateTime.SpecifyKind(fechaLocal.Value, DateTimeKind.Local).ToUniversalTime()
             : null;
-
-    /// <summary>
-    /// Exporta <see cref="Items"/> a CSV con el orden de columnas fijo y delega el guardado.
-    /// No hace nada si no hay datos cargados. El guardado a disco corre bajo
-    /// <see cref="ExportacionCsv"/> (bugfix 2026-08-14): un fallo DESPUÉS de elegir la ubicación
-    /// (permiso denegado, disco lleno) se informa en vez de escapar del comando sin observar.
-    /// </summary>
-    [RelayCommand]
-    private async Task ExportarAsync()
-    {
-        if (Items.Count == 0)
-            return;
-
-        await ExportacionCsv.EjecutarAsync(async () =>
-        {
-            var csv = _csvExporter.Exportar(Items, ColumnOrder);
-            await _guardado.GuardarTextoAsync(csv, "historial-producto.csv");
-        }, _confirmacion);
-    }
 
     /// <summary>Describe en criollo los filtros activos para el membrete del PDF (spec
     /// 2026-09-18). Sin producto o sin fechas, lo dice explícitamente: un PDF archivado sin

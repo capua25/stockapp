@@ -48,7 +48,6 @@ public class HistorialPorProductoViewModelTests
     private static (
         HistorialPorProductoViewModel vm,
         Mock<IReporteStockService> servicioMock,
-        Mock<ICsvExporter> exporterMock,
         Mock<IServicioGuardadoArchivo> guardadoMock,
         Mock<IConfirmacionService> confirmMock,
         Mock<IProductoService> productoSvcMock,
@@ -58,7 +57,6 @@ public class HistorialPorProductoViewModelTests
         Crear(IReadOnlyList<MovimientoHistorialDto>? items = null)
     {
         var servicioMock = new Mock<IReporteStockService>();
-        var exporterMock = new Mock<ICsvExporter>();
         var guardadoMock = new Mock<IServicioGuardadoArchivo>();
         var confirmMock = new Mock<IConfirmacionService>();
         var productoSvcMock = new Mock<IProductoService>();
@@ -74,9 +72,9 @@ public class HistorialPorProductoViewModelTests
             .ReturnsAsync(items ?? new List<MovimientoHistorialDto>());
 
         var vm = new HistorialPorProductoViewModel(
-            servicioMock.Object, exporterMock.Object, guardadoMock.Object, confirmMock.Object,
+            servicioMock.Object, guardadoMock.Object, confirmMock.Object,
             productoSvcMock.Object, pdfExporterMock.Object, aperturaMock.Object, sessionMock.Object);
-        return (vm, servicioMock, exporterMock, guardadoMock, confirmMock, productoSvcMock, pdfExporterMock, aperturaMock, sessionMock);
+        return (vm, servicioMock, guardadoMock, confirmMock, productoSvcMock, pdfExporterMock, aperturaMock, sessionMock);
     }
 
     // ── tests ──────────────────────────────────────────────────────────────
@@ -85,7 +83,7 @@ public class HistorialPorProductoViewModelTests
     public async Task BuscarCommand_LlamaObtenerHistorialPorProductoAsync_ConParametros()
     {
         var items = new List<MovimientoHistorialDto> { CrearItem(1), CrearItem(2) };
-        var (vm, servicioMock, _, _, _, _, _, _, _) = Crear(items);
+        var (vm, servicioMock, _, _, _, _, _, _) = Crear(items);
 
         var desde = new DateTime(2026, 1, 1);
         var hasta = new DateTime(2026, 1, 31);
@@ -114,7 +112,7 @@ public class HistorialPorProductoViewModelTests
     [Fact]
     public async Task BuscarCommand_ConFechaLocal_ConvierteAUtcAntesDeDelegarAlServicio()
     {
-        var (vm, servicioMock, _, _, _, _, _, _, _) = Crear();
+        var (vm, servicioMock, _, _, _, _, _, _) = Crear();
         var fechaLocal = new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Unspecified);
         vm.ProductoId = 7;
         vm.FechaDesde = fechaLocal;
@@ -130,7 +128,7 @@ public class HistorialPorProductoViewModelTests
     public async Task CargarAsync_LlamaObtenerHistorialPorProductoAsync_YPopulaItems()
     {
         var items = new List<MovimientoHistorialDto> { CrearItem(1), CrearItem(2) };
-        var (vm, servicioMock, _, _, _, _, _, _, _) = Crear(items);
+        var (vm, servicioMock, _, _, _, _, _, _) = Crear(items);
         vm.ProductoId = 7;
 
         await vm.CargarAsync();
@@ -141,45 +139,14 @@ public class HistorialPorProductoViewModelTests
         Assert.Same(items, vm.Items);
     }
 
-    [Fact]
-    public async Task ExportarCommand_LlamaExportarConItems()
-    {
-        var items = new List<MovimientoHistorialDto> { CrearItem() };
-        var (vm, _, exporterMock, guardadoMock, _, _, _, _, _) = Crear(items);
-
-        var esperado = new[]
-        {
-            "MovimientoId", "ProductoId", "ProductoNombre", "Tipo", "Motivo",
-            "Cantidad", "PrecioUnitario", "StockAnterior", "StockNuevo",
-            "Comentario", "Fecha", "UsuarioId"
-        };
-
-        const string csvResultante = "csv-generado";
-        exporterMock
-            .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<MovimientoHistorialDto>>(),
-                It.IsAny<IReadOnlyList<string>>()))
-            .Returns(csvResultante);
-
-        await vm.BuscarCommand.ExecuteAsync(null);
-        await vm.ExportarCommand.ExecuteAsync(null);
-
-        exporterMock.Verify(e => e.Exportar(
-            vm.Items,
-            It.Is<IReadOnlyList<string>>(c => c.SequenceEqual(esperado))),
-            Times.Once);
-
-        guardadoMock.Verify(g => g.GuardarTextoAsync(csvResultante, "historial-producto.csv"), Times.Once);
-    }
-
     // ── export PDF (spec 2026-09-18) ────────────────────────────────────────
 
     [Fact]
-    public async Task ExportarPdfCommand_UsaElOrdenDeColumnasDeLaGrilla_NoElDelCsv()
+    public async Task ExportarPdfCommand_UsaElOrdenDeColumnasDeLaGrilla()
     {
         // Literal, NO HistorialPorProductoViewModel.ColumnasPdf: comparar la constante contra sí
-        // misma sería tautológico. El orden es el de la GRILLA (8 columnas), no el del CSV
-        // (ColumnOrder, 12 columnas con IDs internos): dispara A4 apaisado (>6 columnas).
+        // misma sería tautológico. El orden es el de la GRILLA (8 columnas, sin IDs internos):
+        // dispara A4 apaisado (>6 columnas).
         var esperado = new[]
         {
             new ColumnaPdf("Fecha", "Fecha"),
@@ -193,7 +160,7 @@ public class HistorialPorProductoViewModelTests
         };
 
         var items = new List<MovimientoHistorialDto> { CrearItem() };
-        var (vm, _, _, guardadoMock, _, _, pdfExporterMock, _, _) = Crear(items);
+        var (vm, _, guardadoMock, _, _, pdfExporterMock, _, _) = Crear(items);
         vm.ProductoId = 7;
         await vm.CargarAsync();
         pdfExporterMock
@@ -220,7 +187,7 @@ public class HistorialPorProductoViewModelTests
     [Fact]
     public async Task ExportarPdfCommand_SinItems_NoExporta()
     {
-        var (vm, _, _, _, _, _, pdfExporterMock, _, _) = Crear(new List<MovimientoHistorialDto>());
+        var (vm, _, _, _, _, pdfExporterMock, _, _) = Crear(new List<MovimientoHistorialDto>());
 
         await vm.ExportarPdfCommand.ExecuteAsync(null);
 
@@ -233,7 +200,7 @@ public class HistorialPorProductoViewModelTests
     public async Task ExportarPdfCommand_ConMuchasFilas_PreguntaAntesDeExportar()
     {
         var items = Enumerable.Range(1, 600).Select(CrearItem).ToList();
-        var (vm, _, _, guardadoMock, confirmMock, _, pdfExporterMock, _, _) = Crear(items);
+        var (vm, _, guardadoMock, confirmMock, _, pdfExporterMock, _, _) = Crear(items);
         vm.ProductoId = 7;
         await vm.CargarAsync();
         confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(false);
@@ -250,7 +217,7 @@ public class HistorialPorProductoViewModelTests
     public async Task ExportarPdfCommand_SiFallaGuardarBytesAsync_InformaYNoPropagaLaExcepcion()
     {
         var items = new List<MovimientoHistorialDto> { CrearItem() };
-        var (vm, _, _, guardadoMock, confirmMock, _, pdfExporterMock, _, _) = Crear(items);
+        var (vm, _, guardadoMock, confirmMock, _, pdfExporterMock, _, _) = Crear(items);
         vm.ProductoId = 7;
         await vm.CargarAsync();
         pdfExporterMock
@@ -271,7 +238,7 @@ public class HistorialPorProductoViewModelTests
     public async Task ExportarPdfCommand_GuardadoExitoso_OfreceAbrirElArchivo()
     {
         var items = new List<MovimientoHistorialDto> { CrearItem() };
-        var (vm, _, _, guardadoMock, confirmMock, _, pdfExporterMock, aperturaMock, _) = Crear(items);
+        var (vm, _, guardadoMock, confirmMock, _, pdfExporterMock, aperturaMock, _) = Crear(items);
         vm.ProductoId = 7;
         await vm.CargarAsync();
         var pdfBytes = new byte[] { 9, 9 };
@@ -295,7 +262,7 @@ public class HistorialPorProductoViewModelTests
     public async Task ExportarPdfCommand_GuardadoCancelado_NoOfreceAbrir()
     {
         var items = new List<MovimientoHistorialDto> { CrearItem() };
-        var (vm, _, _, guardadoMock, confirmMock, _, pdfExporterMock, aperturaMock, _) = Crear(items);
+        var (vm, _, guardadoMock, confirmMock, _, pdfExporterMock, aperturaMock, _) = Crear(items);
         vm.ProductoId = 7;
         await vm.CargarAsync();
         pdfExporterMock
@@ -317,7 +284,7 @@ public class HistorialPorProductoViewModelTests
     public async Task ExportarPdfCommand_PasaMetadatosConTituloFiltrosYUsuarioEmisor()
     {
         var items = new List<MovimientoHistorialDto> { CrearItem() };
-        var (vm, _, _, guardadoMock, _, _, pdfExporterMock, _, sessionMock) = Crear(items);
+        var (vm, _, guardadoMock, _, _, pdfExporterMock, _, sessionMock) = Crear(items);
         vm.ProductoSeleccionado = CrearProducto(7, "Azúcar");
         vm.FechaDesde = new DateTime(2026, 1, 1);
         vm.FechaHasta = new DateTime(2026, 1, 31);
@@ -348,7 +315,7 @@ public class HistorialPorProductoViewModelTests
     public async Task ExportarPdfCommand_SinFiltros_DescripcionDiceSinProductoYTodoElHistorico()
     {
         var items = new List<MovimientoHistorialDto> { CrearItem() };
-        var (vm, _, _, guardadoMock, _, _, pdfExporterMock, _, _) = Crear(items);
+        var (vm, _, guardadoMock, _, _, pdfExporterMock, _, _) = Crear(items);
         vm.ProductoId = 7;
         await vm.CargarAsync();
         pdfExporterMock
@@ -372,7 +339,7 @@ public class HistorialPorProductoViewModelTests
     [Fact]
     public async Task BuscarCommand_ConRangoInvertido_NoLlamaAlServicioYSeteaMensajeError()
     {
-        var (vm, servicioMock, _, _, _, _, _, _, _) = Crear();
+        var (vm, servicioMock, _, _, _, _, _, _) = Crear();
 
         vm.FechaDesde = new DateTime(2026, 2, 1);
         vm.FechaHasta = new DateTime(2026, 1, 1);
@@ -387,7 +354,7 @@ public class HistorialPorProductoViewModelTests
     [Fact]
     public async Task BuscarCommand_ConRangoValido_LimpiaMensajeError()
     {
-        var (vm, servicioMock, _, _, _, _, _, _, _) = Crear();
+        var (vm, servicioMock, _, _, _, _, _, _) = Crear();
 
         vm.FechaDesde = new DateTime(2026, 1, 1);
         vm.FechaHasta = new DateTime(2026, 1, 31);
@@ -397,28 +364,6 @@ public class HistorialPorProductoViewModelTests
         Assert.True(string.IsNullOrEmpty(vm.MensajeError));
         servicioMock.Verify(s => s.ObtenerHistorialPorProductoAsync(
             It.IsAny<int>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>()), Times.Once);
-    }
-
-    // ── bugfix 2026-08-14: falla silenciosa al guardar el CSV ──────────────────
-
-    [Fact]
-    public async Task ExportarCommand_SiFallaGuardarTextoAsync_InformaYNoPropagaLaExcepcion()
-    {
-        var items = new List<MovimientoHistorialDto> { CrearItem() };
-        var (vm, _, exporterMock, guardadoMock, confirmMock, _, _, _, _) = Crear(items);
-        exporterMock
-            .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<MovimientoHistorialDto>>(),
-                It.IsAny<IReadOnlyList<string>>()))
-            .Returns("csv-generado");
-        guardadoMock
-            .Setup(g => g.GuardarTextoAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .ThrowsAsync(new IOException("disco lleno"));
-
-        await vm.BuscarCommand.ExecuteAsync(null);
-        await vm.ExportarCommand.ExecuteAsync(null);
-
-        confirmMock.Verify(c => c.InformarAsync("No se pudo guardar el archivo. disco lleno"), Times.Once);
     }
 
     // ── bugfix 2026-08-16 (auditoría, fix bug de coherencia de permisos): red de contención ──
@@ -437,7 +382,6 @@ public class HistorialPorProductoViewModelTests
             .Setup(s => s.ObtenerHistorialPorProductoAsync(
                 It.IsAny<int>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>()))
             .ThrowsAsync(new UnauthorizedAccessException());
-        var exporterMock = new Mock<ICsvExporter>();
         var guardadoMock = new Mock<IServicioGuardadoArchivo>();
         var confirmMock = new Mock<IConfirmacionService>();
         var productoSvcMock = new Mock<IProductoService>();
@@ -446,7 +390,7 @@ public class HistorialPorProductoViewModelTests
         var sessionMock = new Mock<ICurrentSession>();
 
         var vm = new HistorialPorProductoViewModel(
-            servicioMock.Object, exporterMock.Object, guardadoMock.Object, confirmMock.Object,
+            servicioMock.Object, guardadoMock.Object, confirmMock.Object,
             productoSvcMock.Object, pdfExporterMock.Object, aperturaMock.Object, sessionMock.Object);
 
         var ex = await Record.ExceptionAsync(() => vm.CargarAsync());
@@ -463,7 +407,7 @@ public class HistorialPorProductoViewModelTests
     [Fact]
     public void BuscarCommand_CanExecute_SinProductoSeleccionado_EsFalse()
     {
-        var (vm, _, _, _, _, _, _, _, _) = Crear();
+        var (vm, _, _, _, _, _, _, _) = Crear();
 
         Assert.False(vm.BuscarCommand.CanExecute(null));
     }
@@ -471,7 +415,7 @@ public class HistorialPorProductoViewModelTests
     [Fact]
     public void BuscarCommand_CanExecute_ConProductoSeleccionado_EsTrue()
     {
-        var (vm, _, _, _, _, _, _, _, _) = Crear();
+        var (vm, _, _, _, _, _, _, _) = Crear();
 
         vm.ProductoSeleccionado = CrearProducto(7, "Azúcar");
 
@@ -481,7 +425,7 @@ public class HistorialPorProductoViewModelTests
     [Fact]
     public void ProductoSeleccionado_AlAsignarProducto_DerivaProductoId()
     {
-        var (vm, _, _, _, _, _, _, _, _) = Crear();
+        var (vm, _, _, _, _, _, _, _) = Crear();
 
         vm.ProductoSeleccionado = CrearProducto(7, "Azúcar");
 
@@ -491,7 +435,7 @@ public class HistorialPorProductoViewModelTests
     [Fact]
     public void ProductoSeleccionado_AlAsignarNull_ProductoIdVuelveACero()
     {
-        var (vm, _, _, _, _, _, _, _, _) = Crear();
+        var (vm, _, _, _, _, _, _, _) = Crear();
         vm.ProductoSeleccionado = CrearProducto(7, "Azúcar");
 
         vm.ProductoSeleccionado = null;
@@ -503,7 +447,7 @@ public class HistorialPorProductoViewModelTests
     public async Task BuscarProductosAsync_DelegaEnProductoServiceBuscarPorTextoAsync()
     {
         var productos = new List<ProductoDto> { CrearProducto(1, "Azúcar") };
-        var (vm, _, _, _, _, productoSvcMock, _, _, _) = Crear();
+        var (vm, _, _, _, productoSvcMock, _, _, _) = Crear();
         productoSvcMock
             .Setup(s => s.BuscarPorTextoAsync("azu"))
             .ReturnsAsync(productos);

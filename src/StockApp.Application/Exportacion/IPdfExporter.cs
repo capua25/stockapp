@@ -1,8 +1,7 @@
 namespace StockApp.Application.Exportacion;
 
 /// <summary>
-/// Exportador PDF genérico para tablas (spec 2026-09-18). Análogo a <see cref="ICsvExporter"/>
-/// pero con membrete institucional, encabezado de tabla repetido por página, apaisado
+/// Exportador PDF genérico para tablas (spec 2026-09-18). Con membrete institucional, encabezado de tabla repetido por página, apaisado
 /// automático en tablas anchas y wrap de texto sin truncar. La implementación real
 /// (<c>PdfExporterMigraDoc</c>) vive en StockApp.Documentos -- este contrato vive en
 /// Application, sin paquetes externos, porque tanto el desktop como (potencialmente) otros
@@ -16,8 +15,8 @@ public interface IPdfExporter
     /// <typeparam name="T">Tipo de los items a exportar.</typeparam>
     /// <param name="items">Colección de items YA FILTRADA -- la misma que ve la grilla.</param>
     /// <param name="columnas">
-    /// Propiedades a exportar con su rótulo de encabezado, en el orden de la GRILLA (no del
-    /// CSV). Más de 6 columnas dispara apaisado automático. Ver <see cref="ColumnaPdf"/>.
+    /// Propiedades a exportar con su rótulo de encabezado, en el orden de la GRILLA.
+    /// Más de 6 columnas dispara apaisado automático. Ver <see cref="ColumnaPdf"/>.
     /// </param>
     /// <param name="metadatos">Título, descripción de filtros y usuario emisor del membrete.</param>
     /// <param name="resumen">

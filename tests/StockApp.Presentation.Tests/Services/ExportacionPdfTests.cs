@@ -7,7 +7,7 @@ using Xunit;
 namespace StockApp.Presentation.Tests.Services;
 
 /// <summary>
-/// Análogo a ExportacionCsv (bugfix 2026-08-14): centraliza el try/catch de guardado a disco
+/// Bugfix 2026-08-14: centraliza el try/catch de guardado a disco
 /// para que un fallo DESPUÉS de elegir la ubicación (permiso denegado, disco lleno) se informe
 /// en vez de escapar del comando sin observar.
 /// </summary>

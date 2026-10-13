@@ -37,7 +37,6 @@ public class AuditoriaLogViewModelTests
     private static (
         AuditoriaLogViewModel vm,
         Mock<IAuditoriaQueryService> servicioMock,
-        Mock<ICsvExporter> exporterMock,
         Mock<IServicioGuardadoArchivo> guardadoMock,
         Mock<IConfirmacionService> confirmMock,
         Mock<IUsuarioService> usuarioSvcMock,
@@ -47,7 +46,6 @@ public class AuditoriaLogViewModelTests
         Crear(IReadOnlyList<AuditoriaItemDto>? items = null, IReadOnlyList<UsuarioDto>? usuarios = null)
     {
         var servicioMock = new Mock<IAuditoriaQueryService>();
-        var exporterMock = new Mock<ICsvExporter>();
         var guardadoMock = new Mock<IServicioGuardadoArchivo>();
         var confirmMock = new Mock<IConfirmacionService>();
         var usuarioSvcMock = new Mock<IUsuarioService>();
@@ -67,9 +65,9 @@ public class AuditoriaLogViewModelTests
             .ReturnsAsync(usuarios ?? new List<UsuarioDto>());
 
         var vm = new AuditoriaLogViewModel(
-            servicioMock.Object, exporterMock.Object, guardadoMock.Object, confirmMock.Object,
+            servicioMock.Object, guardadoMock.Object, confirmMock.Object,
             usuarioSvcMock.Object, pdfExporterMock.Object, aperturaMock.Object, sessionMock.Object);
-        return (vm, servicioMock, exporterMock, guardadoMock, confirmMock, usuarioSvcMock, pdfExporterMock, aperturaMock, sessionMock);
+        return (vm, servicioMock, guardadoMock, confirmMock, usuarioSvcMock, pdfExporterMock, aperturaMock, sessionMock);
     }
 
     // ── tests ──────────────────────────────────────────────────────────────
@@ -78,7 +76,7 @@ public class AuditoriaLogViewModelTests
     public async Task BuscarCommand_LlamaObtenerLogAsync_ConFiltros()
     {
         var items = new List<AuditoriaItemDto> { CrearItem(1), CrearItem(2) };
-        var (vm, servicioMock, _, _, _, _, _, _, _) = Crear(items);
+        var (vm, servicioMock, _, _, _, _, _, _) = Crear(items);
 
         var desde = new DateTime(2026, 1, 1);
         var hasta = new DateTime(2026, 1, 31);
@@ -106,7 +104,7 @@ public class AuditoriaLogViewModelTests
     [Fact]
     public async Task BuscarCommand_ConFechaLocal_ConvierteAUtcAntesDeDelegarAlServicio()
     {
-        var (vm, servicioMock, _, _, _, _, _, _, _) = Crear();
+        var (vm, servicioMock, _, _, _, _, _, _) = Crear();
         var fechaLocal = new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Unspecified);
         vm.FechaDesde = fechaLocal;
 
@@ -120,7 +118,7 @@ public class AuditoriaLogViewModelTests
     public async Task CargarAsync_LlamaObtenerLogAsync_YPopulaItems()
     {
         var items = new List<AuditoriaItemDto> { CrearItem(1), CrearItem(2) };
-        var (vm, servicioMock, _, _, _, _, _, _, _) = Crear(items);
+        var (vm, servicioMock, _, _, _, _, _, _) = Crear(items);
 
         await vm.CargarAsync();
 
@@ -130,42 +128,13 @@ public class AuditoriaLogViewModelTests
         Assert.Same(items, vm.Items);
     }
 
-    [Fact]
-    public async Task ExportarCommand_LlamaExportarConItems()
-    {
-        var items = new List<AuditoriaItemDto> { CrearItem() };
-        var (vm, _, exporterMock, guardadoMock, _, _, _, _, _) = Crear(items);
-
-        var esperado = new[]
-        {
-            "Fecha", "NombreUsuario", "Accion", "Entidad", "EntidadId", "Detalle"
-        };
-
-        const string csvResultante = "csv-generado";
-        exporterMock
-            .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<AuditoriaItemDto>>(),
-                It.IsAny<IReadOnlyList<string>>()))
-            .Returns(csvResultante);
-
-        await vm.BuscarCommand.ExecuteAsync(null);
-        await vm.ExportarCommand.ExecuteAsync(null);
-
-        exporterMock.Verify(e => e.Exportar(
-            vm.Items,
-            It.Is<IReadOnlyList<string>>(c => c.SequenceEqual(esperado))),
-            Times.Once);
-
-        guardadoMock.Verify(g => g.GuardarTextoAsync(csvResultante, "auditoria.csv"), Times.Once);
-    }
-
     // ── export PDF (spec 2026-09-18) ────────────────────────────────────────
 
     [Fact]
     public async Task ExportarPdfCommand_LlamaAlExportadorConLasColumnasDeLaGrilla()
     {
         // Literal, NO AuditoriaLogViewModel.ColumnasPdf: comparar la constante contra sí misma
-        // sería tautológico. En esta pantalla CSV y grilla coinciden (6 columnas).
+        // sería tautológico. Son 6 columnas.
         var esperado = new[]
         {
             new ColumnaPdf("Fecha", "Fecha"),
@@ -177,7 +146,7 @@ public class AuditoriaLogViewModelTests
         };
 
         var items = new List<AuditoriaItemDto> { CrearItem() };
-        var (vm, _, _, guardadoMock, _, _, pdfExporterMock, _, _) = Crear(items);
+        var (vm, _, guardadoMock, _, _, pdfExporterMock, _, _) = Crear(items);
         await vm.BuscarCommand.ExecuteAsync(null);
         pdfExporterMock
             .Setup(e => e.Exportar(
@@ -204,7 +173,7 @@ public class AuditoriaLogViewModelTests
     [Fact]
     public async Task ExportarPdfCommand_SinItems_NoExporta()
     {
-        var (vm, _, _, _, _, _, pdfExporterMock, _, _) = Crear(new List<AuditoriaItemDto>());
+        var (vm, _, _, _, _, pdfExporterMock, _, _) = Crear(new List<AuditoriaItemDto>());
 
         await vm.ExportarPdfCommand.ExecuteAsync(null);
 
@@ -217,7 +186,7 @@ public class AuditoriaLogViewModelTests
     public async Task ExportarPdfCommand_ConMuchasFilas_PreguntaAntesDeExportar()
     {
         var items = Enumerable.Range(1, 600).Select(i => CrearItem(i)).ToList();
-        var (vm, _, _, guardadoMock, confirmMock, _, pdfExporterMock, _, _) = Crear(items);
+        var (vm, _, guardadoMock, confirmMock, _, pdfExporterMock, _, _) = Crear(items);
         await vm.BuscarCommand.ExecuteAsync(null);
         confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(false);
 
@@ -233,7 +202,7 @@ public class AuditoriaLogViewModelTests
     public async Task ExportarPdfCommand_SiFallaGuardarBytesAsync_InformaYNoPropagaLaExcepcion()
     {
         var items = new List<AuditoriaItemDto> { CrearItem() };
-        var (vm, _, _, guardadoMock, confirmMock, _, pdfExporterMock, _, _) = Crear(items);
+        var (vm, _, guardadoMock, confirmMock, _, pdfExporterMock, _, _) = Crear(items);
         await vm.BuscarCommand.ExecuteAsync(null);
         pdfExporterMock
             .Setup(e => e.Exportar(
@@ -253,7 +222,7 @@ public class AuditoriaLogViewModelTests
     public async Task ExportarPdfCommand_GuardadoExitoso_OfreceAbrirElArchivo()
     {
         var items = new List<AuditoriaItemDto> { CrearItem() };
-        var (vm, _, _, guardadoMock, confirmMock, _, pdfExporterMock, aperturaMock, _) = Crear(items);
+        var (vm, _, guardadoMock, confirmMock, _, pdfExporterMock, aperturaMock, _) = Crear(items);
         await vm.BuscarCommand.ExecuteAsync(null);
         var pdfBytes = new byte[] { 9, 9 };
         pdfExporterMock
@@ -276,7 +245,7 @@ public class AuditoriaLogViewModelTests
     public async Task ExportarPdfCommand_GuardadoCancelado_NoOfreceAbrir()
     {
         var items = new List<AuditoriaItemDto> { CrearItem() };
-        var (vm, _, _, guardadoMock, confirmMock, _, pdfExporterMock, aperturaMock, _) = Crear(items);
+        var (vm, _, guardadoMock, confirmMock, _, pdfExporterMock, aperturaMock, _) = Crear(items);
         await vm.BuscarCommand.ExecuteAsync(null);
         pdfExporterMock
             .Setup(e => e.Exportar(
@@ -297,7 +266,7 @@ public class AuditoriaLogViewModelTests
     public async Task ExportarPdfCommand_PasaMetadatosConTituloFiltrosYUsuarioEmisor()
     {
         var items = new List<AuditoriaItemDto> { CrearItem() };
-        var (vm, _, _, guardadoMock, _, _, pdfExporterMock, _, sessionMock) = Crear(items);
+        var (vm, _, guardadoMock, _, _, pdfExporterMock, _, sessionMock) = Crear(items);
         vm.FechaDesde = new DateTime(2026, 1, 1);
         vm.FechaHasta = new DateTime(2026, 1, 31);
         vm.UsuarioFiltroSeleccionado = new OpcionUsuario("ana", CrearUsuario(3, "ana"));
@@ -328,7 +297,7 @@ public class AuditoriaLogViewModelTests
     public async Task ExportarPdfCommand_SinFiltros_DescripcionDiceTodosYTodoElHistorico()
     {
         var items = new List<AuditoriaItemDto> { CrearItem() };
-        var (vm, _, _, guardadoMock, _, _, pdfExporterMock, _, _) = Crear(items);
+        var (vm, _, guardadoMock, _, _, pdfExporterMock, _, _) = Crear(items);
         await vm.BuscarCommand.ExecuteAsync(null);
         pdfExporterMock
             .Setup(e => e.Exportar(
@@ -362,7 +331,7 @@ public class AuditoriaLogViewModelTests
         {
             new(DateTime.UtcNow, "admin", AccionAuditada.CambioPrecio, "Producto", 1, detalleLargo),
         };
-        var (vm, _, _, guardadoMock, _, _, pdfExporterMock, _, _) = Crear(items);
+        var (vm, _, guardadoMock, _, _, pdfExporterMock, _, _) = Crear(items);
         await vm.BuscarCommand.ExecuteAsync(null);
         pdfExporterMock
             .Setup(e => e.Exportar(It.IsAny<IEnumerable<AuditoriaItemDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
@@ -385,7 +354,7 @@ public class AuditoriaLogViewModelTests
     [Fact]
     public async Task BuscarCommand_ConRangoInvertido_NoLlamaAlServicioYSeteaMensajeError()
     {
-        var (vm, servicioMock, _, _, _, _, _, _, _) = Crear();
+        var (vm, servicioMock, _, _, _, _, _, _) = Crear();
 
         vm.FechaDesde = new DateTime(2026, 2, 1);
         vm.FechaHasta = new DateTime(2026, 1, 1);
@@ -400,7 +369,7 @@ public class AuditoriaLogViewModelTests
     [Fact]
     public async Task BuscarCommand_ConRangoValido_LimpiaMensajeError()
     {
-        var (vm, servicioMock, _, _, _, _, _, _, _) = Crear();
+        var (vm, servicioMock, _, _, _, _, _, _) = Crear();
 
         vm.FechaDesde = new DateTime(2026, 1, 1);
         vm.FechaHasta = new DateTime(2026, 1, 31);
@@ -410,28 +379,6 @@ public class AuditoriaLogViewModelTests
         Assert.True(string.IsNullOrEmpty(vm.MensajeError));
         servicioMock.Verify(s => s.ObtenerLogAsync(
             It.IsAny<int?>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>()), Times.Once);
-    }
-
-    // ── bugfix 2026-08-14: falla silenciosa al guardar el CSV ──────────────────
-
-    [Fact]
-    public async Task ExportarCommand_SiFallaGuardarTextoAsync_InformaYNoPropagaLaExcepcion()
-    {
-        var items = new List<AuditoriaItemDto> { CrearItem() };
-        var (vm, _, exporterMock, guardadoMock, confirmMock, _, _, _, _) = Crear(items);
-        exporterMock
-            .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<AuditoriaItemDto>>(),
-                It.IsAny<IReadOnlyList<string>>()))
-            .Returns("csv-generado");
-        guardadoMock
-            .Setup(g => g.GuardarTextoAsync(It.IsAny<string>(), It.IsAny<string>()))
-            .ThrowsAsync(new IOException("disco lleno"));
-
-        await vm.BuscarCommand.ExecuteAsync(null);
-        await vm.ExportarCommand.ExecuteAsync(null);
-
-        confirmMock.Verify(c => c.InformarAsync("No se pudo guardar el archivo. disco lleno"), Times.Once);
     }
 
     // ── Bloque "ID imposible de completar" (2026-08-19): NumericUpDown → AutoCompleteBox ──
@@ -449,7 +396,7 @@ public class AuditoriaLogViewModelTests
     public async Task InicializarAsync_PopulaOpcionTodosYUsuarios()
     {
         var usuarios = new List<UsuarioDto> { CrearUsuario(1, "ana"), CrearUsuario(2, "beto") };
-        var (vm, _, _, _, _, usuarioSvcMock, _, _, _) = Crear(usuarios: usuarios);
+        var (vm, _, _, _, usuarioSvcMock, _, _, _) = Crear(usuarios: usuarios);
 
         await vm.InicializarAsync();
 
@@ -464,7 +411,7 @@ public class AuditoriaLogViewModelTests
     [Fact]
     public async Task InicializarAsync_PreseleccionaOpcionTodos()
     {
-        var (vm, _, _, _, _, _, _, _, _) = Crear();
+        var (vm, _, _, _, _, _, _, _) = Crear();
 
         await vm.InicializarAsync();
 
@@ -477,7 +424,7 @@ public class AuditoriaLogViewModelTests
     public async Task InicializarAsync_TambienCargaElLog()
     {
         var items = new List<AuditoriaItemDto> { CrearItem(1) };
-        var (vm, servicioMock, _, _, _, _, _, _, _) = Crear(items: items);
+        var (vm, servicioMock, _, _, _, _, _, _) = Crear(items: items);
 
         await vm.InicializarAsync();
 
@@ -492,7 +439,7 @@ public class AuditoriaLogViewModelTests
     [Fact]
     public async Task InicializarAsync_SiListarUsuariosLanzaUnauthorized_NoPropagaYDejaSinPermiso()
     {
-        var (vm, _, _, _, _, usuarioSvcMock, _, _, _) = Crear();
+        var (vm, _, _, _, usuarioSvcMock, _, _, _) = Crear();
         usuarioSvcMock.Setup(s => s.ListarAsync()).ThrowsAsync(new UnauthorizedAccessException());
 
         var ex = await Record.ExceptionAsync(() => vm.InicializarAsync());
@@ -505,7 +452,7 @@ public class AuditoriaLogViewModelTests
     [Fact]
     public void UsuarioFiltroSeleccionado_AlAsignarUsuarioReal_DerivaUsuarioId()
     {
-        var (vm, _, _, _, _, _, _, _, _) = Crear();
+        var (vm, _, _, _, _, _, _, _) = Crear();
         var usuario = CrearUsuario(7, "cami");
 
         vm.UsuarioFiltroSeleccionado = new OpcionUsuario(usuario.NombreUsuario, usuario);
@@ -516,7 +463,7 @@ public class AuditoriaLogViewModelTests
     [Fact]
     public void UsuarioFiltroSeleccionado_AlSeleccionarTodos_UsuarioIdVuelveANull()
     {
-        var (vm, _, _, _, _, _, _, _, _) = Crear();
+        var (vm, _, _, _, _, _, _, _) = Crear();
         vm.UsuarioFiltroSeleccionado = new OpcionUsuario("cami", CrearUsuario(7, "cami"));
 
         vm.UsuarioFiltroSeleccionado = new OpcionUsuario("Todos", null);
@@ -527,7 +474,7 @@ public class AuditoriaLogViewModelTests
     [Fact]
     public void UsuarioFiltroSeleccionado_AlAsignarNull_UsuarioIdVuelveANull()
     {
-        var (vm, _, _, _, _, _, _, _, _) = Crear();
+        var (vm, _, _, _, _, _, _, _) = Crear();
         vm.UsuarioFiltroSeleccionado = new OpcionUsuario("cami", CrearUsuario(7, "cami"));
 
         vm.UsuarioFiltroSeleccionado = null;

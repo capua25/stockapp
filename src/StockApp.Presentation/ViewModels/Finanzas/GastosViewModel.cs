@@ -25,7 +25,7 @@ namespace StockApp.Presentation.ViewModels.Finanzas;
 /// <summary>
 /// Fila de solo lectura de la grilla de gastos: aplana las navs y materializa el estado
 /// CALCULADO (con la fecha de referencia del momento de la carga). También define las
-/// columnas del export CSV.
+/// columnas del export PDF.
 /// </summary>
 public sealed class GastoFila
 {
@@ -42,9 +42,9 @@ public sealed class GastoFila
     /// <summary>
     /// <see cref="Gasto.Fecha"/> es un valor date-only (medianoche UTC), NO un instante real.
     /// Se expone como <see cref="DateOnly"/> (no <see cref="DateTime"/>) a propósito: así el
-    /// export CSV (<see cref="CsvExporter"/>) no lo confunde con un timestamp real y lo
+    /// export PDF no lo confunde con un timestamp real y lo
     /// convierte a hora local, corriendo el día para atrás en husos negativos (bug real:
-    /// grilla 16/07/2026 → CSV "15/07/2026 21:00:00"). Mismo criterio que sacó
+    /// grilla 16/07/2026 → export "15/07/2026 21:00:00"). Mismo criterio que sacó
     /// FechaUtcALocalConverter del binding de esta columna en GastosView.axaml.
     /// </summary>
     public DateOnly Fecha => DateOnly.FromDateTime(Gasto.Fecha);
@@ -62,7 +62,7 @@ public sealed class GastoFila
 
 /// <summary>
 /// Pantalla "Gastos y facturas" (spec §7.1): grilla con filtros combinables y acciones
-/// Nuevo / Editar / Pagos / Anular + export CSV. El filtro de estado se aplica EN MEMORIA
+/// Nuevo / Editar / Pagos / Anular + export PDF. El filtro de estado se aplica EN MEMORIA
 /// (el estado es calculado, el servidor no puede filtrarlo en SQL sin materializarlo).
 /// </summary>
 public partial class GastosViewModel : ViewModelBase
@@ -77,7 +77,6 @@ public partial class GastosViewModel : ViewModelBase
     private readonly ILineaPoaService             _lineasService;
     private readonly INavigationService           _navigation;
     private readonly IConfirmacionService         _confirmacion;
-    private readonly ICsvExporter                 _csvExporter;
     private readonly IServicioGuardadoArchivo     _guardado;
     private readonly IPdfExporter                 _pdfExporter;
     private readonly IServicioAperturaArchivo     _apertura;
@@ -145,7 +144,7 @@ public partial class GastosViewModel : ViewModelBase
         _session.PermisosActuales.Contains(Permisos.RegistrarGastos);
 
     /// <summary>
-    /// Gatea Exportar CSV / PDF (deuda 3c-2, decisión 2026-10-10): el export serializa en el cliente
+    /// Gatea Exportar PDF (deuda 3c-2, decisión 2026-10-10): el export serializa en el cliente
     /// las <see cref="Filas"/> ya cargadas, sin llamar al servidor; sin <c>Permisos.VerFinanzas</c>
     /// esas filas no deberían poder salir de la pantalla. Se OCULTA (IsVisible) y además el comando
     /// no se puede ejecutar (CanExecute). Mismo patrón y misma revocación en caliente que
@@ -164,7 +163,6 @@ public partial class GastosViewModel : ViewModelBase
         ILineaPoaService lineasService,
         INavigationService navigation,
         IConfirmacionService confirmacion,
-        ICsvExporter csvExporter,
         IServicioGuardadoArchivo guardado,
         IPdfExporter pdfExporter,
         IServicioAperturaArchivo apertura)
@@ -177,7 +175,6 @@ public partial class GastosViewModel : ViewModelBase
         _lineasService      = lineasService;
         _navigation         = navigation;
         _confirmacion       = confirmacion;
-        _csvExporter        = csvExporter;
         _guardado           = guardado;
         _pdfExporter        = pdfExporter;
         _apertura           = apertura;
@@ -263,7 +260,6 @@ public partial class GastosViewModel : ViewModelBase
     {
         if (!PuedeVerFinanzas)
             Filas.Clear();
-        ExportarCsvCommand.NotifyCanExecuteChanged();
         ExportarPdfCommand.NotifyCanExecuteChanged();
         base.NotificarPermisosActualizados();
     }
@@ -442,33 +438,8 @@ public partial class GastosViewModel : ViewModelBase
         }
     }
 
-    private static readonly IReadOnlyList<string> ColumnasCsv = new[]
-    {
-        nameof(GastoFila.Fecha), nameof(GastoFila.ProveedorNombre), nameof(GastoFila.NumeroFactura),
-        nameof(GastoFila.Detalle), nameof(GastoFila.FuenteNombre), nameof(GastoFila.RubroNombre),
-        nameof(GastoFila.LineaPoaNombre), nameof(GastoFila.MontoTotal), nameof(GastoFila.TotalPagado),
-        nameof(GastoFila.Saldo), nameof(GastoFila.Estado),
-    };
-
     /// <summary>
-    /// El guardado a disco corre bajo <see cref="ExportacionCsv"/> (bugfix 2026-08-14): un fallo
-    /// DESPUÉS de elegir la ubicación (permiso denegado, disco lleno) se informa en vez de
-    /// escapar del comando sin observar.
-    /// </summary>
-    [RelayCommand(CanExecute = nameof(PuedeVerFinanzas))]
-    private async Task ExportarCsvAsync()
-    {
-        await ExportacionCsv.EjecutarAsync(async () =>
-        {
-            var contenido = _csvExporter.Exportar(Filas, ColumnasCsv);
-            await _guardado.GuardarTextoAsync(contenido, $"gastos-{DateTime.Now:yyyyMMdd}.csv");
-        }, _confirmacion);
-    }
-
-    /// <summary>
-    /// Columnas del PDF (spec 2026-09-18): las 11 de la grilla, EN EL MISMO orden que
-    /// <see cref="ColumnasCsv"/> (coinciden en contenido en esta pantalla) pero declaradas como
-    /// constante SEPARADA a propósito — si el CSV cambia mañana, el PDF no debe cambiar solo.
+    /// Columnas del PDF (spec 2026-09-18): las 11 de la grilla.
     /// Peor caso de la spec: apaisado automático (Tarea 4, >6 columnas) con 4 columnas de texto
     /// libre potencialmente largo (Detalle, Proveedor, Fuente, Línea POA) que se envuelven sin
     /// truncar (Tarea 5).
@@ -515,8 +486,8 @@ public partial class GastosViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// El guardado a disco corre bajo <see cref="ExportacionPdf"/> (análogo a
-    /// <see cref="ExportacionCsv"/>, bugfix 2026-08-14). Exporta <see cref="Filas"/> (no la
+    /// El guardado a disco corre bajo <see cref="ExportacionPdf"/> (bugfix 2026-08-14).
+    /// Exporta <see cref="Filas"/> (no la
     /// respuesta cruda del servicio): es la colección que <see cref="FiltrarAsync"/> repuebla ya
     /// con el filtro de Estado aplicado en memoria — si se exportara otra cosa, el PDF podría
     /// traer filas que el usuario no está viendo en pantalla.

@@ -108,7 +108,6 @@ public class ComposicionDIApiTests
         services.AddSingleton<IServicioGuardadoArchivo, ServicioGuardadoArchivo>();
         services.AddSingleton<IServicioEstadoVentana, ServicioEstadoVentana>();
         services.AddSingleton<IServicioPreferenciasSidebar, ServicioPreferenciasSidebar>();
-        services.AddTransient<ICsvExporter, CsvExporter>();
         services.AddTransient<IPdfExporter, PdfExporterMigraDoc>();
         services.AddSingleton<IServicioAperturaArchivo, ServicioAperturaArchivo>();
 

@@ -29,7 +29,7 @@ namespace StockApp.Presentation.UiTests;
 
 /// <summary>
 /// Tarea 21 (agregada fuera del plan original): las Tareas 12-20 sumaron 9 botones "Exportar
-/// PDF" (más "Exportar CSV" nuevo en ReporteTareas) a 9 vistas .axaml, y NINGUNO tenía un solo
+/// PDF" a 9 vistas .axaml, y NINGUNO tenía un solo
 /// test que lo custodiara. Antecedente ya documentado en el proyecto (ver
 /// <c>ReporteTareasCriterioCierreAvisoTests</c> y el hallazgo de "un test de VM no custodia un
 /// gate de UI"): un test de ViewModel prueba la propiedad/comando, no lo que el XAML hace con
@@ -41,13 +41,13 @@ namespace StockApp.Presentation.UiTests;
 /// proyecto no lo referencia) y afirma DOS cosas, no una:
 ///   1. El botón existe y está visible en el árbol visual montado.
 ///   2. Su <c>Command</c> es, por REFERENCIA, el comando correcto del ViewModel
-///      (<c>vm.ExportarPdfCommand</c> / <c>vm.ExportarCsvCommand</c>) -- no alcanza con "hay un
+///      (<c>vm.ExportarPdfCommand</c>) -- no alcanza con "hay un
 ///      botón con ese texto": un botón sin comando bindeado (o bindeado al comando equivocado)
 ///      pasaría igual un test que solo mirara el texto.
 ///
-/// Decisión de diseño: 10 <c>[AvaloniaFact]</c> separados (uno por botón) en vez de un
+/// Decisión de diseño: 9 <c>[AvaloniaFact]</c> separados (uno por botón) en vez de un
 /// <c>[Theory]</c> parametrizado. Cada vista arma su ViewModel con una constelación distinta de
-/// fakes (7, 8 o 12 parámetros según la pantalla) -- forzar eso a una fábrica genérica
+/// fakes (6, 7 u 11 parámetros según la pantalla) -- forzar eso a una fábrica genérica
 /// (<c>Func&lt;(Window, ICommand)&gt;</c> por caso) hubiese escondido la construcción real detrás
 /// de indirección sin ahorrar una sola línea de fake. Con métodos separados, el nombre del test
 /// que se pone rojo ES el reporte de qué vista se rompió; agrupar todo en un solo archivo (como
@@ -87,11 +87,6 @@ public class ExportarPdfBotonesGuardianTests
             => Task.FromResult<IReadOnlyList<MovimientoHistorialDto>>(Array.Empty<MovimientoHistorialDto>());
     }
 
-    private sealed class CsvExporterFake : ICsvExporter
-    {
-        public string Exportar<T>(IEnumerable<T> items, IReadOnlyList<string> columnOrder) => "csv";
-    }
-
     private sealed class PdfExporterNoOpFake : IPdfExporter
     {
         public byte[] Exportar<T>(IEnumerable<T> items, IReadOnlyList<ColumnaPdf> columnas, MetadatosDocumento metadatos, ResumenPdf? resumen = null)
@@ -100,7 +95,6 @@ public class ExportarPdfBotonesGuardianTests
 
     private sealed class GuardadoFake : IServicioGuardadoArchivo
     {
-        public Task<bool> GuardarTextoAsync(string contenido, string nombreSugerido) => Task.FromResult(false);
         public Task<bool> GuardarBytesAsync(
             Stream contenido, string nombreSugerido, CancellationToken ct = default,
             string? extension = null, string? tipoMime = null) => Task.FromResult(false);
@@ -111,7 +105,7 @@ public class ExportarPdfBotonesGuardianTests
     private static (Window Window, ValorizacionViewModel Vm) MontarValorizacion()
     {
         var vm = new ValorizacionViewModel(
-            new ReporteStockServiceFake(), new CsvExporterFake(), new GuardadoFake(),
+            new ReporteStockServiceFake(), new GuardadoFake(),
             new ConfirmacionServiceFake(), new PdfExporterNoOpFake(), new ServicioAperturaArchivoFake(),
             new SesionFake(RolUsuario.Admin));
 
@@ -141,7 +135,7 @@ public class ExportarPdfBotonesGuardianTests
     private static (Window Window, StockCategoriaViewModel Vm) MontarStockCategoria()
     {
         var vm = new StockCategoriaViewModel(
-            new ReporteStockServiceFake(), new CsvExporterFake(), new GuardadoFake(),
+            new ReporteStockServiceFake(), new GuardadoFake(),
             new ConfirmacionServiceFake(), new PdfExporterNoOpFake(), new ServicioAperturaArchivoFake(),
             new SesionFake(RolUsuario.Admin));
 
@@ -171,7 +165,7 @@ public class ExportarPdfBotonesGuardianTests
     private static (Window Window, MasMovidosViewModel Vm) MontarMasMovidos()
     {
         var vm = new MasMovidosViewModel(
-            new ReporteStockServiceFake(), new CsvExporterFake(), new GuardadoFake(),
+            new ReporteStockServiceFake(), new GuardadoFake(),
             new ConfirmacionServiceFake(), new PdfExporterNoOpFake(), new ServicioAperturaArchivoFake(),
             new SesionFake(RolUsuario.Admin));
 
@@ -213,7 +207,7 @@ public class ExportarPdfBotonesGuardianTests
     private static (Window Window, HistorialPorProductoViewModel Vm) MontarHistorialPorProducto()
     {
         var vm = new HistorialPorProductoViewModel(
-            new ReporteStockServiceFake(), new CsvExporterFake(), new GuardadoFake(),
+            new ReporteStockServiceFake(), new GuardadoFake(),
             new ConfirmacionServiceFake(), new ProductoServiceFake(), new PdfExporterNoOpFake(),
             new ServicioAperturaArchivoFake(), new SesionFake(RolUsuario.Admin));
 
@@ -263,7 +257,7 @@ public class ExportarPdfBotonesGuardianTests
     private static (Window Window, AuditoriaLogViewModel Vm) MontarAuditoriaLog()
     {
         var vm = new AuditoriaLogViewModel(
-            new AuditoriaQueryServiceFake(), new CsvExporterFake(), new GuardadoFake(),
+            new AuditoriaQueryServiceFake(), new GuardadoFake(),
             new ConfirmacionServiceFake(), new UsuarioServiceFake(), new PdfExporterNoOpFake(),
             new ServicioAperturaArchivoFake(), new SesionFake(RolUsuario.Admin));
 
@@ -288,7 +282,7 @@ public class ExportarPdfBotonesGuardianTests
         Assert.Same(vm.ExportarPdfCommand, boton.Command);
     }
 
-    // ---- ReporteTareasView (única pantalla con DOS botones nuevos: CSV y PDF) ----
+    // ---- ReporteTareasView ----
 
     private sealed class ReporteTareasServiceFake : IReporteTareasService
     {
@@ -299,7 +293,7 @@ public class ExportarPdfBotonesGuardianTests
     private static (Window Window, ReporteTareasViewModel Vm) MontarReporteTareas()
     {
         var vm = new ReporteTareasViewModel(
-            new ReporteTareasServiceFake(), new CsvExporterFake(), new PdfExporterNoOpFake(),
+            new ReporteTareasServiceFake(), new PdfExporterNoOpFake(),
             new GuardadoFake(), new ServicioAperturaArchivoFake(), new ConfirmacionServiceFake(),
             new SesionFake(RolUsuario.Admin));
 
@@ -311,17 +305,6 @@ public class ExportarPdfBotonesGuardianTests
         Dispatcher.UIThread.RunJobs();
 
         return (window, vm);
-    }
-
-    [AvaloniaFact]
-    public void Montar_ReporteTareasView_BotonExportarCsv_ExisteYEstaBindeadoAlComando()
-    {
-        var (window, vm) = MontarReporteTareas();
-
-        var boton = BuscarBotonExportarPorTexto(window, "Exportar CSV");
-
-        Assert.True(boton.IsVisible);
-        Assert.Same(vm.ExportarCsvCommand, boton.Command);
     }
 
     [AvaloniaFact]
@@ -337,10 +320,9 @@ public class ExportarPdfBotonesGuardianTests
 
     // ==================================================================================
     // Finanzas: GastosView, LibroCajaView, ControlPoaView -- cada una con su propia forma
-    // de constructor (12, 7 y 8 parámetros respectivamente). Fakes locales, sin compartir con
+    // de constructor (11, 6 y 7 parámetros respectivamente). Fakes locales, sin compartir con
     // GastosViewTests.cs/LibroCajaViewTests.cs (mismo criterio ya usado en el proyecto: cada
-    // archivo trae su propia copia chica de ICsvExporter/IPdfExporter/servicio de dominio, ver
-    // CsvExporterFake repetido en 5 archivos distintos de esta carpeta).
+    // archivo trae su propia copia chica de IPdfExporter/servicio de dominio).
     // ==================================================================================
 
     // ---- GastosView ----
@@ -378,7 +360,6 @@ public class ExportarPdfBotonesGuardianTests
             new LineaPoaServiceFake(Array.Empty<LineaPoa>()),
             new NavigationServiceFake(),
             new ConfirmacionServiceFake(),
-            new CsvExporterFake(),
             new GuardadoFake(),
             new PdfExporterNoOpFake(),
             new ServicioAperturaArchivoFake());
@@ -427,7 +408,6 @@ public class ExportarPdfBotonesGuardianTests
     {
         var vm = new LibroCajaViewModel(
             new FinanzasVistasServiceFake(),
-            new CsvExporterFake(),
             new GuardadoFake(),
             new ConfirmacionServiceFake(),
             new PdfExporterNoOpFake(),
@@ -462,7 +442,6 @@ public class ExportarPdfBotonesGuardianTests
         var vm = new ControlPoaViewModel(
             new FinanzasVistasServiceFake(),
             new NavigationServiceFake(),
-            new CsvExporterFake(),
             new GuardadoFake(),
             new ConfirmacionServiceFake(),
             new PdfExporterNoOpFake(),

@@ -65,14 +65,8 @@ public class GastosViewColumnasAnchoTests
             => throw new NotSupportedException("No usado en este banco de pruebas.");
     }
 
-    private sealed class CsvExporterFake : ICsvExporter
-    {
-        public string Exportar<T>(IEnumerable<T> items, IReadOnlyList<string> columnOrder) => "csv";
-    }
-
     private sealed class ServicioGuardadoArchivoFake : IServicioGuardadoArchivo
     {
-        public Task<bool> GuardarTextoAsync(string contenido, string nombreSugerido) => Task.FromResult(true);
         public Task<bool> GuardarBytesAsync(
             System.IO.Stream contenido, string nombreSugerido, System.Threading.CancellationToken ct = default,
             string? extension = null, string? tipoMime = null) => Task.FromResult(true);
@@ -127,7 +121,6 @@ public class GastosViewColumnasAnchoTests
             new LineaPoaServiceFake(Array.Empty<LineaPoa>()),
             new NavigationServiceFake(),
             new ConfirmacionServiceFake(),
-            new CsvExporterFake(),
             new ServicioGuardadoArchivoFake(),
             new PdfExporterNoOpFake(),
             new ServicioAperturaArchivoFake());

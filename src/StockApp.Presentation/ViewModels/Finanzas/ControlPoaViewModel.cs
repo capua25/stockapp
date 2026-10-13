@@ -24,7 +24,6 @@ public partial class ControlPoaViewModel : ViewModelBase
 {
     private readonly IFinanzasVistasService _service;
     private readonly INavigationService     _navigation;
-    private readonly ICsvExporter           _csvExporter;
     private readonly IServicioGuardadoArchivo _guardado;
     private readonly IConfirmacionService   _confirmacion;
     private readonly IPdfExporter _pdfExporter;
@@ -46,7 +45,7 @@ public partial class ControlPoaViewModel : ViewModelBase
 
     public ControlPoaViewModel(
         IFinanzasVistasService service, INavigationService navigation,
-        ICsvExporter csvExporter, IServicioGuardadoArchivo guardado, IConfirmacionService confirmacion,
+        IServicioGuardadoArchivo guardado, IConfirmacionService confirmacion,
         IPdfExporter pdfExporter, IServicioAperturaArchivo apertura, ICurrentSession session,
         TimeProvider? reloj = null)
     {
@@ -57,7 +56,6 @@ public partial class ControlPoaViewModel : ViewModelBase
 
         _service     = service;
         _navigation  = navigation;
-        _csvExporter = csvExporter;
         _guardado    = guardado;
         _confirmacion = confirmacion;
         _pdfExporter = pdfExporter;
@@ -151,7 +149,6 @@ public partial class ControlPoaViewModel : ViewModelBase
         if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName is nameof(SinPermiso) or nameof(Cargando))
         {
             OnPropertyChanged(nameof(PuedeExportar));
-            ExportarCsvCommand.NotifyCanExecuteChanged();
             ExportarPdfCommand.NotifyCanExecuteChanged();
         }
     }
@@ -170,18 +167,10 @@ public partial class ControlPoaViewModel : ViewModelBase
         _navigation.Navegar<GastosViewModel>(vm => vm.FiltrarPorLineaPoa(linea));
     }
 
-    private static readonly IReadOnlyList<string> ColumnasCsv = new[]
-    {
-        nameof(ControlPoaLineaDto.Nombre), nameof(ControlPoaLineaDto.Programa), nameof(ControlPoaLineaDto.Ejercicio),
-        nameof(ControlPoaLineaDto.Presupuesto), nameof(ControlPoaLineaDto.Gastado), nameof(ControlPoaLineaDto.Saldo),
-        nameof(ControlPoaLineaDto.PorcentajeEjecucion), nameof(ControlPoaLineaDto.Sobregirada),
-    };
-
     /// <summary>
-    /// Orden EXACTO de columnas para el export PDF (spec 2026-09-18): las de la GRILLA, no las
-    /// del CSV -- excluye Ejercicio (ya está en la descripción de filtros del membrete) y
+    /// Orden EXACTO de columnas para el export PDF (spec 2026-09-18): las de la GRILLA --
+    /// excluye Ejercicio (ya está en la descripción de filtros del membrete) y
     /// Sobregirada (se ve por color/badge en la grilla, sobra como columna en papel).
-    /// Deliberadamente separada de ColumnasCsv: un cambio futuro en el CSV no debe alterar el PDF.
     /// </summary>
     public static readonly IReadOnlyList<ColumnaPdf> ColumnasPdf = new[]
     {
@@ -192,21 +181,6 @@ public partial class ControlPoaViewModel : ViewModelBase
         new ColumnaPdf(nameof(ControlPoaLineaDto.Saldo), "Saldo"),
         new ColumnaPdf(nameof(ControlPoaLineaDto.PorcentajeEjecucion), "% Ejecución"),
     };
-
-    /// <summary>
-    /// El guardado a disco corre bajo <see cref="ExportacionCsv"/> (bugfix 2026-08-14): un fallo
-    /// DESPUÉS de elegir la ubicación (permiso denegado, disco lleno) se informa en vez de
-    /// escapar del comando sin observar.
-    /// </summary>
-    [RelayCommand(CanExecute = nameof(PuedeExportar))]
-    private async Task ExportarCsvAsync()
-    {
-        await ExportacionCsv.EjecutarAsync(async () =>
-        {
-            var contenido = _csvExporter.Exportar(Filas, ColumnasCsv);
-            await _guardado.GuardarTextoAsync(contenido, $"control-poa-{_ejercicioCargado}.csv");
-        }, _confirmacion);
-    }
 
     /// <summary>
     /// Exporta <see cref="Filas"/> a PDF con las columnas de la grilla, membrete institucional

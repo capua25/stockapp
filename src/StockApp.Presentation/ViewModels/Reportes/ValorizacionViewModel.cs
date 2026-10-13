@@ -13,29 +13,13 @@ namespace StockApp.Presentation.ViewModels.Reportes;
 /// <summary>
 /// ViewModel del reporte de Valorización de Inventario (Inc 6).
 /// Obtiene la valorización desde <see cref="IReporteStockService"/> y permite
-/// exportar el resultado a CSV con un orden de columnas fijo.
+/// exportar el resultado a PDF.
 /// </summary>
 public partial class ValorizacionViewModel : ViewModelBase
 {
     /// <summary>
-    /// Orden EXACTO de columnas para la exportación CSV. Coincide con las propiedades
-    /// de <see cref="ValorizacionItemDto"/>. Reutilizado por el exportador.
-    /// </summary>
-    public static readonly IReadOnlyList<string> ColumnOrder = new[]
-    {
-        "ProductoId",
-        "Codigo",
-        "Nombre",
-        "Categoria",
-        "StockActual",
-        "PrecioCosto",
-        "ValorCosto",
-    };
-
-    /// <summary>
-    /// Orden EXACTO de columnas para el export PDF (spec 2026-09-18): las de la GRILLA, no las
-    /// del CSV -- excluye ProductoId (ID interno de Postgres, no significa nada en papel).
-    /// Deliberadamente separada de ColumnOrder: un cambio futuro en el CSV no debe alterar el PDF.
+    /// Orden EXACTO de columnas para el export PDF (spec 2026-09-18): las de la GRILLA --
+    /// excluye ProductoId (ID interno de Postgres, no significa nada en papel).
     /// </summary>
     public static readonly IReadOnlyList<ColumnaPdf> ColumnasPdf = new[]
     {
@@ -48,7 +32,6 @@ public partial class ValorizacionViewModel : ViewModelBase
     };
 
     private readonly IReporteStockService _servicio;
-    private readonly ICsvExporter _csvExporter;
     private readonly IServicioGuardadoArchivo _guardado;
     private readonly IConfirmacionService _confirmacion;
     private readonly IPdfExporter _pdfExporter;
@@ -63,7 +46,6 @@ public partial class ValorizacionViewModel : ViewModelBase
 
     public ValorizacionViewModel(
         IReporteStockService servicio,
-        ICsvExporter csvExporter,
         IServicioGuardadoArchivo guardado,
         IConfirmacionService confirmacion,
         IPdfExporter pdfExporter,
@@ -71,7 +53,6 @@ public partial class ValorizacionViewModel : ViewModelBase
         ICurrentSession session)
     {
         _servicio = servicio;
-        _csvExporter = csvExporter;
         _guardado = guardado;
         _confirmacion = confirmacion;
         _pdfExporter = pdfExporter;
@@ -98,25 +79,6 @@ public partial class ValorizacionViewModel : ViewModelBase
             Items = resultado.Items;
             Totales = resultado.Totales;
         }, "No tenés permiso para ver el reporte de valorización de inventario.");
-    }
-
-    /// <summary>
-    /// Exporta <see cref="Items"/> a CSV con el orden de columnas fijo y delega el guardado del archivo.
-    /// No hace nada si no hay datos cargados. El guardado a disco corre bajo
-    /// <see cref="ExportacionCsv"/> (bugfix 2026-08-14): un fallo DESPUÉS de elegir la ubicación
-    /// (permiso denegado, disco lleno) se informa en vez de escapar del comando sin observar.
-    /// </summary>
-    [RelayCommand]
-    private async Task ExportarAsync()
-    {
-        if (Items.Count == 0)
-            return;
-
-        await ExportacionCsv.EjecutarAsync(async () =>
-        {
-            var csv = _csvExporter.Exportar(Items, ColumnOrder);
-            await _guardado.GuardarTextoAsync(csv, "valorizacion.csv");
-        }, _confirmacion);
     }
 
     /// <summary>

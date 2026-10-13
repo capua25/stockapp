@@ -41,8 +41,7 @@ public static class DatosControlPoa
         var sesion = new Mock<ICurrentSession>();
         sesion.Setup(s => s.RolActual).Returns(DatosProductos.UsuarioAdmin.Rol);
         sesion.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
-        return new ControlPoaViewModel(servicio.Object, Mock.Of<INavigationService>(), Mock.Of<ICsvExporter>(),
-            Mock.Of<IServicioGuardadoArchivo>(), Mock.Of<IConfirmacionService>(), Mock.Of<IPdfExporter>(),
+        return new ControlPoaViewModel(servicio.Object, Mock.Of<INavigationService>(), Mock.Of<IServicioGuardadoArchivo>(), Mock.Of<IConfirmacionService>(), Mock.Of<IPdfExporter>(),
             Mock.Of<IServicioAperturaArchivo>(), sesion.Object, Reloj);
     }
 

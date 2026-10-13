@@ -21,7 +21,6 @@ namespace StockApp.Presentation.ViewModels.Finanzas;
 public partial class LibroCajaViewModel : ViewModelBase
 {
     private readonly IFinanzasVistasService _service;
-    private readonly ICsvExporter           _csvExporter;
     private readonly IServicioGuardadoArchivo _guardado;
     private readonly IConfirmacionService   _confirmacion;
     private readonly IPdfExporter _pdfExporter;
@@ -43,12 +42,11 @@ public partial class LibroCajaViewModel : ViewModelBase
     public ObservableCollection<TotalPorClaveDto> TotalesPorFuente { get; } = new();
 
     public LibroCajaViewModel(
-        IFinanzasVistasService service, ICsvExporter csvExporter, IServicioGuardadoArchivo guardado,
+        IFinanzasVistasService service, IServicioGuardadoArchivo guardado,
         IConfirmacionService confirmacion, IPdfExporter pdfExporter, IServicioAperturaArchivo apertura,
         ICurrentSession session)
     {
         _service     = service;
-        _csvExporter = csvExporter;
         _guardado    = guardado;
         _confirmacion = confirmacion;
         _pdfExporter = pdfExporter;
@@ -101,19 +99,9 @@ public partial class LibroCajaViewModel : ViewModelBase
 
     private async Task RecargarAsync() => await CargarAsync();
 
-    private static readonly IReadOnlyList<string> ColumnasCsv = new[]
-    {
-        nameof(MovimientoCajaDto.Fecha), nameof(MovimientoCajaDto.Tipo), nameof(MovimientoCajaDto.Concepto),
-        nameof(MovimientoCajaDto.ProveedorNombre), nameof(MovimientoCajaDto.NumeroFactura),
-        nameof(MovimientoCajaDto.FuenteNombre), nameof(MovimientoCajaDto.RubroNombre),
-        nameof(MovimientoCajaDto.Ingreso), nameof(MovimientoCajaDto.Egreso), nameof(MovimientoCajaDto.SaldoCorrido),
-    };
-
     /// <summary>
-    /// Orden EXACTO de columnas para el export PDF (spec 2026-09-18): las de la GRILLA, no las
-    /// del CSV. En esta pantalla coinciden con <see cref="ColumnasCsv"/> (mismas 10 columnas),
-    /// pero se mantiene como constante separada a propósito: un cambio futuro en el CSV no debe
-    /// alterar el PDF. 10 columnas dispara apaisado automático (Tarea 4 de la plantilla).
+    /// Orden EXACTO de columnas para el export PDF (spec 2026-09-18): las de la GRILLA.
+    /// 10 columnas dispara apaisado automático (Tarea 4 de la plantilla).
     /// </summary>
     public static readonly IReadOnlyList<ColumnaPdf> ColumnasPdf = new[]
     {
@@ -130,26 +118,11 @@ public partial class LibroCajaViewModel : ViewModelBase
     };
 
     /// <summary>
-    /// El guardado a disco corre bajo <see cref="ExportacionCsv"/> (bugfix 2026-08-14): un fallo
-    /// DESPUÉS de elegir la ubicación (permiso denegado, disco lleno) se informa en vez de
-    /// escapar del comando sin observar.
-    /// </summary>
-    [RelayCommand]
-    private async Task ExportarCsvAsync()
-    {
-        await ExportacionCsv.EjecutarAsync(async () =>
-        {
-            var contenido = _csvExporter.Exportar(Movimientos, ColumnasCsv);
-            await _guardado.GuardarTextoAsync(contenido, $"libro-caja-{Anio:0000}-{Mes:00}.csv");
-        }, _confirmacion);
-    }
-
-    /// <summary>
     /// Exporta <see cref="Movimientos"/> a PDF con las columnas de la grilla (A4 apaisado, 10
     /// columnas), membrete institucional y aviso de volumen si supera 500 filas (spec
     /// 2026-09-18). No hace nada si no hay datos cargados, o si la vista está en modo "año
-    /// completo" (Movimientos queda vacío en ese modo -- mismo criterio que ExportarCsvCommand,
-    /// que también se oculta con <c>IsVisible="{Binding !VerAnioCompleto}"</c> en el XAML).
+    /// completo" (Movimientos queda vacío en ese modo -- el botón
+    /// también se oculta con <c>IsVisible="{Binding !VerAnioCompleto}"</c> en el XAML).
     /// Ofrece abrir el PDF con el visor del sistema tras guardarlo.
     /// </summary>
     [RelayCommand]

@@ -35,13 +35,6 @@
                      sin condicion. -->
                 <Button Classes="secondary" Content="Anular" Command="{Binding AnularCommand}"
                         IsVisible="{Binding PuedeRegistrarGastos}" />
-                <Button Classes="secondary" Command="{Binding ExportarCsvCommand}"
-                        IsVisible="{Binding PuedeVerFinanzas}">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <i:Icon Value="mdi-file-export" />
-                        <TextBlock Text="Exportar CSV" VerticalAlignment="Center" />
-                    </StackPanel>
-                </Button>
                 <Button Classes="secondary" Command="{Binding ExportarPdfCommand}"
                         IsVisible="{Binding PuedeVerFinanzas}">
                     <StackPanel Orientation="Horizontal" Spacing="6">
