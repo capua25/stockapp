@@ -375,7 +375,7 @@ Ciclo de cada fase: mockups de sus pantallas → aprobación del usuario → XAM
 | 1 Shell y acceso | sidebar, Login, Reset, BloqueoLicencia, AccesoLimitado, 4 diálogos, 3 overlays |
 | 2 Inicio | KPIs, panel de tareas, accesos rápidos |
 | 3 Inventario | Productos (listado y formulario), Entrada / Salida + `MovimientoFormControl`, Ingreso por factura, Historial de movimientos (3a, 3b, 3c-1 y 3c-2 aprobadas; 3c-3 Ingreso por factura y patrón de modal v2: 3c-3 aprobada por el usuario el 2026-10-11) |
-| 4 Finanzas | Gastos + formulario, Pagos, Adjuntos, Ingresos + formulario, Libro caja, Control POA, Calendario de pagos. Se divide en subfases (aprobado por el usuario el 2026-10-11): 4a AdjuntosPanelView + Calendario de pagos + Control POA; 4b Ingresos de caja + formulario; 4c Libro caja; 4d Gastos y facturas + formulario; 4e Pagos del gasto (la 4e depende de la 4a y la 4d). 4a aprobada por el usuario el 2026-10-12; 4b aprobada por el usuario el 2026-10-12 |
+| 4 Finanzas | Gastos + formulario, Pagos, Adjuntos, Ingresos + formulario, Libro caja, Control POA, Calendario de pagos. Se divide en subfases (aprobado por el usuario el 2026-10-11): 4a AdjuntosPanelView + Calendario de pagos + Control POA; 4b Ingresos de caja + formulario; 4c Libro caja; 4d Gastos y facturas + formulario; 4e Pagos del gasto (la 4e depende de la 4a y la 4d). 4a aprobada por el usuario el 2026-10-12; 4b aprobada por el usuario el 2026-10-12; 4c: diseño aprobado por el usuario el 2026-10-13 |
 | 5 Gestión | Tareas (listado, formulario, clasificación, diálogo de reclasificar), Documentos (listado, formulario, adjuntos) |
 | 6 Reportes | hub + los 6 reportes |
 | 7 Administración | Catálogos master-detail con los 11 catálogos, Usuarios, Mantenimiento |
@@ -639,6 +639,44 @@ Revisado y aprobado por el usuario el 2026-10-11 (decisiones del GATE, rulings y
 - **Deuda anotada, que NO se resuelve en la 4b:**
   - Al anular un gasto su adjunto queda activo (hallado el 2026-10-12 al limpiar los datos de la 4a). Va a la 4d, junto con el ancho del formulario v1 de Gasto.
   - El doble Aviso en un 403 de adjuntos sigue preexistente (ver la deuda de la 4a).
+
+**Diseño de la Fase 4c (aprobado por el usuario el 2026-10-13).** Libro caja (`LibroCajaView`) en v2. Alcance: paridad funcional con la v1 más las convenciones v2 (carga, recarga y estados de pantalla) y las excepciones E1 a E6 de abajo, más un exporte PDF también en el modo año completo. Sin CSV (la exportación CSV se eliminó de toda la app el 2026-10-13). Sin cambios de API ni de DTOs: `GET /finanzas/libro-caja?anio=&mes=` (sin `mes` devuelve el año completo), permiso `finanzas.ver`, sin acciones de escritura. El plan se escribe a continuación de este diseño.
+
+*Excepciones declaradas a "VMs intactos" (§3).*
+- **E1.** `LibroCajaViewModel` carga con `EjecutarCargaProtegidaAsync` + `ConsultaVigente` de `ViewModelBase` (convenciones 18 y 23), con `Cargando`, `SinConexion` con `EstadoVacio` y Reintentar, y `SinPermiso`. Hoy no hay estado de carga, el 403 se traga en silencio y una caída sale por el modal global. El 403 deja de silenciarse: la pantalla muestra el estado sin permiso como las demás v2, sin duplicar el aviso global de permisos cambiados.
+- **E2.** Recarga automática al cambiar Año, Mes o modo (Mes | Año completo), con la misma espera debounce inyectable y la misma validación de año que Control POA (precedente de la 4a, E2). "Actualizar" se mantiene como refresco manual.
+- **E3.** El modo se expresa como un selector de dos opciones Mes | Año completo (reemplaza el `CheckBox` "Año completo"). En Año completo el campo Mes se OCULTA (`IsVisible`), no se deshabilita.
+- **E4.** Saldo inicial y saldo final siguen visibles en ambos modos. Un saldo negativo lleva el token de negativo más una `Insignia` de tono peligro (patrón "Sobreejecutado" de Control POA). La ubicación de los saldos (hoy en la fila de filtros) se define en los mockups del GATE 1.
+- **E5.** Neto mensual negativo (modo año): número con el token de negativo más `Insignia` de tono peligro; sale `BadgeEstado`.
+- **E6.** Exportar PDF pasa a ser el único exporte y queda habilitado en ambos modos. Modo mes: el PDF mensual actual. Modo año: PDF anual NUEVO, método nuevo en el VM (ver Sección 2).
+
+*Sección 1. Pantalla.*
+- `EncabezadoPagina` "Libro caja" con "Actualizar" (secundario) y "Exportar PDF" (secundario). Es una pantalla de consulta sin acción primaria.
+- `BarraFiltros`: `CampoFormulario` Año (`NumericUpDown`), selector de modo Mes | Año completo y `CampoFormulario` Mes (visible solo en modo Mes). Cambiar cualquiera recarga solo (E2).
+- Modo mes: una `TarjetaContenido` con la grilla de movimientos y, debajo, los totales por rubro y por fuente, cada bloque en su `TarjetaContenido`. Pie de conteo de movimientos (convención 10).
+- Grilla del mes: las mismas 10 columnas de la v1 (Fecha, Tipo, Concepto, Proveedor, Factura, Fuente, Rubro, Ingreso, Egreso, Saldo corrido). Proveedor, Fuente y Rubro con `ColumnaAuto` y `TooltipSiSeCorta` (convención 20); Ingreso, Egreso y Saldo corrido alineados a la derecha con formato es-UY. Saldo corrido negativo con el token de negativo.
+- Modo año: una `TarjetaContenido` con los totales por mes (Mes, Ingresos, Egresos, Neto; E5) y otra con los totales por rubro. Pie de conteo (convención 10).
+- Estados de pantalla (E1): Cargando; Sin conexión (`EstadoVacio` con Reintentar dentro de la card, convención 18); Sin permiso (`finanzas.ver`); Vacío (sin movimientos en el período).
+- Prohibidos en la vista v2: `Opacity`, `SignoNegativoBrushConverter` y `BadgeEstado` (hoy la vista usa `SignoNegativoBrushConverter` y `BadgeEstado`).
+- Controles: sin controles nuevos salvo que los mockups revelen un patrón repetido; se evalúa en el GATE 1.
+
+*Sección 2. PDF anual (E6).*
+- Un solo PDF vertical `libro-caja-AAAA.pdf` con el mismo `PlantillaTabular` y `ResumenPdf` del PDF mensual.
+- Arriba, el resumen con el saldo inicial y el saldo final del año. Luego la tabla de totales por mes con el déficit marcado y la tabla de totales por rubro.
+- Los totales por fuente NO van en el anual.
+- El exporte queda deshabilitado con `Cargando`, `SinPermiso` o sin datos. Las columnas del anual las cubre `ColumnasPdfContraDtosRealesTests` contra los DTOs reales (`LibroCajaAnualDto`, `TotalMensualDto`, `TotalPorClaveDto`).
+
+*Sección 3. Tests, verificación y deuda.*
+- **Comportamiento SIN CAMBIOS:** datos de `FinanzasVistasService` y de los DTOs (`LibroCajaMesDto`, `LibroCajaAnualDto`, `MovimientoCajaDto`, `TotalPorClaveDto`, `TotalMensualDto`); gate base `VerFinanzas`; PDF mensual.
+- **Fuera de alcance:** API y DTOs, filtros de texto, edición de movimientos y totales por fuente en el modo anual.
+- **Mockups** (`docs/ui-v2/mockups/finanzas/`), con HTML y PNG a 1280×760 y 1366×768: mes con datos (saldo positivo), mes con saldo negativo, año completo con déficit, sin resultados, cargando, sin conexión y sin permiso. Los `DatosLibroCaja` fijos van en `VisualTests/Pantallas/Finanzas/`. Nada de XAML antes del GATE 1.
+- **Tests de ViewModel con fakes** por cada E1 a E6: estados Cargando, Sin conexión, Sin permiso y consulta vigente (incluido el descarte de la respuesta vieja al cambiar rápido de mes); recarga con debounce y validación de año; modo y saldos; PDF mensual y anual.
+- **Tests en `Presentation.UiTests` con la View real:** gates de visibilidad por modo (campo Mes, bloques de cada modo) y habilitación del PDF según estado. Se adaptan `LibroCajaViewTests`, `SignoNegativoBadgeTests` (a `Insignia`, convención 13), `NumericUpDownVistasRealesTests`, `GrillasSinRecorteBarridoTests` y `ExportarPdfBotonesGuardianTests`.
+- **Comparación visual** por mockup a 1280×760 y 1366×768, con el mismo umbral.
+- **Guardianes:** `LibroCajaView` pasa a `VistasMigradasAV2` en `GuardianDePatronTests`.
+- **Verificación por mutación, quitando (nunca agregando) las reglas clave:** el `IsVisible` del campo Mes, la recarga al cambiar el modo, el estado `SinPermiso`, el descarte de la consulta vieja y la habilitación del PDF anual; cada una tiene que dar rojo.
+- **Verificación orgánica (GATE 2)** a 1280 y 1366 con backup previo de la DB local (contenedor `stockapp-pg`).
+- **Bloques del plan:** A, ViewModels (carga y recarga, modo y saldos, PDF anual); B, datos, mockups y GATE 1; C, vista v2; D, guardianes, mutaciones, GATE 2 orgánico, documentación y review.
 
 **Deuda abierta tras la Fase 3a:**
 - Sidebar del shell v2 corta el último ítem a 1366x768 (detectado en mockups de Fase 3a, 2026-10-07); el usuario lo difirió: no se arregla en 3a.
