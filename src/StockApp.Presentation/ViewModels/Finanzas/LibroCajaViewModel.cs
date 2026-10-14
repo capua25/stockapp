@@ -186,9 +186,11 @@ public partial class LibroCajaViewModel : ViewModelBase
             if (anual)
             {
                 var libroAnual = await _service.ObtenerLibroCajaAnualAsync(anio);
+                // El año no trae saldos: el inicial del año es el inicial de enero (sin cambiar la API).
+                var enero = await _service.ObtenerLibroCajaMesAsync(anio, 1);
                 if (!turno.EsLaUltima)
                     return;
-                AplicarAnual(libroAnual);
+                AplicarAnual(libroAnual, enero.SaldoInicial);
                 return;
             }
 
@@ -214,9 +216,13 @@ public partial class LibroCajaViewModel : ViewModelBase
         SinMovimientosEnElPeriodo = libro.Movimientos.Count == 0;
     }
 
-    private void AplicarAnual(LibroCajaAnualDto libro)
+    /// <summary>El saldo final del año es el inicial más los netos de los doce meses: la misma cuenta del saldo corrido
+    /// que hace el servidor mes a mes.</summary>
+    private void AplicarAnual(LibroCajaAnualDto libro, decimal saldoInicialDelAnio)
     {
         LimpiarPeriodo();
+        SaldoInicial = saldoInicialDelAnio;
+        SaldoFinal = saldoInicialDelAnio + libro.TotalesPorMes.Sum(t => t.Neto);
         LibroAnual = libro;
         MesesConMovimientos = libro.TotalesPorMes.Count(t => t.Ingresos != 0m || t.Egresos != 0m);
         SinMovimientosEnElPeriodo = libro.TotalesPorMes.All(t => t.Ingresos == 0m && t.Egresos == 0m);
@@ -230,6 +236,8 @@ public partial class LibroCajaViewModel : ViewModelBase
         TotalesPorFuente.Clear();
         LibroMes = null;
         LibroAnual = null;
+        SaldoInicial = 0m;
+        SaldoFinal = 0m;
         MesesConMovimientos = 0;
         SinMovimientosEnElPeriodo = false;
     }
