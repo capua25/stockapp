@@ -146,6 +146,36 @@ public class ColumnasPdfContraDtosRealesTests
                 "Materiales de construcción", 0m, 1234567.89m, -1234567.89m));
 
     [Fact]
+    public void LibroCajaAnual_ColumnasPdf_ResuelvenContraElDtoRealYGeneranPdf() =>
+        VerificarPantalla(
+            LibroCajaViewModel.ColumnasPdfAnual,
+            new TotalMensualDto(3, 1250000m, 1322750m, -72750m));
+
+    /// <summary>El PDF anual con su resumen REAL (no un mock): vertical (4 columnas), con los saldos, los meses en
+    /// déficit y los totales por rubro, y sin totales por fuente (spec, sección 2).</summary>
+    [Fact]
+    public void LibroCajaAnual_ConSuResumen_SaleVerticalConSaldosDeficitYRubros_SinFuentes()
+    {
+        var anual = new LibroCajaAnualDto(2026,
+            [new TotalMensualDto(1, 1250000m, 980200m, 269800m), new TotalMensualDto(3, 1250000m, 1322750m, -72750m)],
+            [new TotalPorClaveDto("Obras viales", 2302950m)]);
+        IPdfExporter exportador = new PdfExporterMigraDoc();
+
+        var pdf = exportador.Exportar(anual.TotalesPorMes, LibroCajaViewModel.ColumnasPdfAnual, Metadatos,
+            LibroCajaViewModel.ArmarResumenAnual(anual, 812430.55m, 1009480.55m));
+
+        using var documento = PdfDocument.Open(pdf);
+        var primera = documento.GetPage(1);
+        Assert.True(primera.Height > primera.Width, "el PDF anual tiene que salir vertical");
+        var palabras = string.Join(" ", documento.GetPages().SelectMany(p => p.GetWords()).Select(w => w.Text));
+        Assert.Contains("Saldo inicial", palabras);
+        Assert.Contains("Meses con déficit", palabras);
+        Assert.Contains("Marzo", palabras);
+        Assert.Contains("Totales por rubro", palabras);
+        Assert.DoesNotContain("fuente", palabras);
+    }
+
+    [Fact]
     public void ControlPoa_ColumnasPdf_ResuelvenContraElDtoRealYGeneranPdf() =>
         VerificarPantalla(
             ControlPoaViewModel.ColumnasPdf,

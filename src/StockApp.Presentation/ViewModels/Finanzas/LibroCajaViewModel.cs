@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -11,6 +12,7 @@ using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
+using StockApp.Presentation.Converters;
 using StockApp.Presentation.Services;
 
 namespace StockApp.Presentation.ViewModels.Finanzas;
@@ -264,20 +266,59 @@ public partial class LibroCajaViewModel : ViewModelBase
         new ColumnaPdf(nameof(MovimientoCajaDto.SaldoCorrido), "Saldo corrido"),
     };
 
+    /// <summary>Columnas del PDF anual: las de la grilla de totales por mes, sobre el DTO real (4 columnas: sale vertical).
+    /// El mes va como número; el déficit se marca con el signo del neto y con la sección "Meses con déficit".</summary>
+    public static readonly IReadOnlyList<ColumnaPdf> ColumnasPdfAnual = new[]
+    {
+        new ColumnaPdf(nameof(TotalMensualDto.Mes), "Mes"),
+        new ColumnaPdf(nameof(TotalMensualDto.Ingresos), "Ingresos"),
+        new ColumnaPdf(nameof(TotalMensualDto.Egresos), "Egresos"),
+        new ColumnaPdf(nameof(TotalMensualDto.Neto), "Neto"),
+    };
+
     /// <summary>
-    /// Exporta <see cref="Movimientos"/> a PDF con las columnas de la grilla (A4 apaisado, 10
-    /// columnas), membrete institucional y aviso de volumen si supera 500 filas (spec
-    /// 2026-09-18). No hace nada si no hay datos cargados, o si la vista está en modo "año
-    /// completo" (Movimientos queda vacío en ese modo -- el botón
-    /// también se oculta con <c>IsVisible="{Binding !VerAnioCompleto}"</c> en el XAML).
-    /// Ofrece abrir el PDF con el visor del sistema tras guardarlo.
+    /// El exporte serializa en el cliente el período CARGADO: sin permiso, mientras carga o sin movimientos no hay nada
+    /// confiable que exportar.
     /// </summary>
-    [RelayCommand]
+    public bool PuedeExportar =>
+        !SinPermiso && !Cargando && (LibroMes is not null || LibroAnual is not null) && !SinMovimientosEnElPeriodo;
+
+    protected override void OnPropertyChanged(PropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+        if (string.IsNullOrEmpty(e.PropertyName)
+            || e.PropertyName is nameof(SinPermiso) or nameof(Cargando) or nameof(LibroMes) or nameof(LibroAnual)
+                or nameof(SinMovimientosEnElPeriodo))
+        {
+            OnPropertyChanged(nameof(PuedeExportar));
+            ExportarPdfCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    private string Emisor() =>
+        _session.UsuarioActual?.NombreCompleto ?? _session.UsuarioActual?.NombreUsuario ?? "Sistema";
+
+    /// <summary>
+    /// Exporta el período CARGADO (no el de los filtros, que pueden ir por delante mientras espera la recarga): con el
+    /// año completo, el PDF anual; con un mes, el PDF mensual de siempre (A4 apaisado, 10 columnas, aviso de volumen
+    /// por encima de 500 filas). Ofrece abrir el PDF con el visor del sistema tras guardarlo.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(PuedeExportar))]
     private async Task ExportarPdfAsync()
     {
-        if (VerAnioCompleto || Movimientos.Count == 0)
+        if (SinMovimientosEnElPeriodo)
             return;
+        if (LibroAnual is { } anual)
+        {
+            await ExportarAnioAsync(anual);
+            return;
+        }
+        if (LibroMes is { } mes)
+            await ExportarMesAsync(mes);
+    }
 
+    private async Task ExportarMesAsync(LibroCajaMesDto mes)
+    {
         if (!await AvisoVolumenExportacion.ConfirmarAsync(Movimientos.Count, _confirmacion))
             return;
 
@@ -285,8 +326,8 @@ public partial class LibroCajaViewModel : ViewModelBase
         {
             var metadatos = new MetadatosDocumento(
                 Titulo: "Libro caja",
-                DescripcionFiltros: $"Mes: {Mes:00}/{Anio:0000}.",
-                UsuarioEmisor: _session.UsuarioActual?.NombreCompleto ?? _session.UsuarioActual?.NombreUsuario ?? "Sistema");
+                DescripcionFiltros: $"Mes: {mes.Mes:00}/{mes.Anio:0000}.",
+                UsuarioEmisor: Emisor());
 
             var resumen = new ResumenPdf(
                 Totales: new[]
@@ -305,12 +346,51 @@ public partial class LibroCajaViewModel : ViewModelBase
                 });
 
             var pdf = _pdfExporter.Exportar(Movimientos, ColumnasPdf, metadatos, resumen);
-            using var stream = new MemoryStream(pdf);
-            var nombreArchivo = $"libro-caja-{Anio:0000}-{Mes:00}.pdf";
-            var guardado = await _guardado.GuardarBytesAsync(
-                stream, nombreArchivo, extension: "pdf", tipoMime: "application/pdf");
-
-            await ExportacionPdf.OfrecerAbrirAsync(guardado, pdf, nombreArchivo, _confirmacion, _apertura);
+            await GuardarYOfrecerAbrirAsync(pdf, $"libro-caja-{mes.Anio:0000}-{mes.Mes:00}.pdf");
         }, _confirmacion);
+    }
+
+    /// <summary>PDF anual: la tabla de totales por mes y, después (la plantilla imprime el resumen después de la tabla),
+    /// los saldos del año, los meses en déficit y los totales por rubro. Sin totales por fuente.</summary>
+    private async Task ExportarAnioAsync(LibroCajaAnualDto anual)
+    {
+        await ExportacionPdf.EjecutarAsync(async () =>
+        {
+            var metadatos = new MetadatosDocumento(
+                Titulo: "Libro caja",
+                DescripcionFiltros: $"Año completo: {anual.Anio:0000}.",
+                UsuarioEmisor: Emisor());
+
+            var pdf = _pdfExporter.Exportar(anual.TotalesPorMes, ColumnasPdfAnual, metadatos,
+                ArmarResumenAnual(anual, SaldoInicial, SaldoFinal));
+            await GuardarYOfrecerAbrirAsync(pdf, $"libro-caja-{anual.Anio:0000}.pdf");
+        }, _confirmacion);
+    }
+
+    private async Task GuardarYOfrecerAbrirAsync(byte[] pdf, string nombreArchivo)
+    {
+        using var stream = new MemoryStream(pdf);
+        var guardado = await _guardado.GuardarBytesAsync(
+            stream, nombreArchivo, extension: "pdf", tipoMime: "application/pdf");
+
+        await ExportacionPdf.OfrecerAbrirAsync(guardado, pdf, nombreArchivo, _confirmacion, _apertura);
+    }
+
+    /// <summary>Resumen del PDF anual. "Meses con déficit" solo si hay alguno (la plantilla no marca filas de la tabla).</summary>
+    internal static ResumenPdf ArmarResumenAnual(LibroCajaAnualDto anual, decimal saldoInicial, decimal saldoFinal)
+    {
+        var secciones = new List<SeccionResumenPdf>();
+        var deficit = anual.TotalesPorMes
+            .Where(t => t.Neto < 0m)
+            .Select(t => new TotalPdf(NombreMesConverter.Nombre(t.Mes), t.Neto))
+            .ToList();
+        if (deficit.Count > 0)
+            secciones.Add(new SeccionResumenPdf("Meses con déficit", deficit));
+        secciones.Add(new SeccionResumenPdf(
+            "Totales por rubro", [.. anual.TotalesPorRubro.Select(t => new TotalPdf(t.Clave, t.Total))]));
+
+        return new ResumenPdf(
+            Totales: [new TotalPdf("Saldo inicial", saldoInicial), new TotalPdf("Saldo final", saldoFinal)],
+            Secciones: secciones);
     }
 }

@@ -639,12 +639,12 @@ public class LibroCajaViewModelTests
         => new(new DateOnly(2026, 7, 5), "Ingreso", "Partida", null, null, "Literal B", null, 500m, 0m, 500m);
 
     [Fact]
-    public async Task ExportarPdfCommand_ConAnioCompleto_NoExporta()
+    public async Task ExportarPdfCommand_ConAnioCompletoSinMovimientos_NoExporta()
     {
         var (vm, svc, _, _, pdfExporterMock, _, _) = Crear();
         ConEnero(svc);
         svc.Setup(s => s.ObtenerLibroCajaAnualAsync(It.IsAny<int>()))
-            .ReturnsAsync(new LibroCajaAnualDto(2026, new List<TotalMensualDto>(), new List<TotalPorClaveDto>()));
+            .ReturnsAsync(new LibroCajaAnualDto(2026, DoceMeses(), new List<TotalPorClaveDto>()));
         vm.VerAnioCompleto = true;
         await vm.CargarAsync();
 
@@ -652,6 +652,201 @@ public class LibroCajaViewModelTests
 
         pdfExporterMock.Verify(e => e.Exportar(
             It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()), Times.Never);
+        pdfExporterMock.Verify(e => e.Exportar(
+            It.IsAny<IEnumerable<TotalMensualDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()), Times.Never);
+    }
+
+    private static LibroCajaAnualDto Anio2026ConDeficit() => new(2026,
+        DoceMeses(
+            new TotalMensualDto(1, 1_250_000m, 980_200m, 269_800m),
+            new TotalMensualDto(3, 1_250_000m, 1_322_750m, -72_750m)),
+        new List<TotalPorClaveDto> { new("Obras viales", 2_302_950m) });
+
+    private static async Task<(LibroCajaViewModel vm, Mock<IFinanzasVistasService> svc, Mock<IServicioGuardadoArchivo> guardado,
+        Mock<IPdfExporter> pdf)> AnualCargadoAsync(LibroCajaAnualDto anual)
+    {
+        var (vm, svc, guardado, _, pdf, _, _) = Crear(Octubre2026);
+        ConEnero(svc, saldoInicial: 812_430.55m);
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(2026)).ReturnsAsync(anual);
+        vm.VerAnioCompleto = true;
+        await vm.CargarAsync();
+        pdf.Setup(e => e.Exportar(It.IsAny<IEnumerable<TotalMensualDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
+            It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>())).Returns(new byte[] { 1 });
+        guardado.Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
+            .ReturnsAsync(true);
+        return (vm, svc, guardado, pdf);
+    }
+
+    [Fact]
+    public async Task ExportarPdf_Anual_CuatroColumnasDelDtoReal_TituloYNombreDelAnio()
+    {
+        var esperado = new[]
+        {
+            new ColumnaPdf("Mes", "Mes"), new ColumnaPdf("Ingresos", "Ingresos"),
+            new ColumnaPdf("Egresos", "Egresos"), new ColumnaPdf("Neto", "Neto"),
+        };
+        var anual = Anio2026ConDeficit();
+        var (vm, _, guardado, pdf) = await AnualCargadoAsync(anual);
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        pdf.Verify(e => e.Exportar(
+            anual.TotalesPorMes,
+            It.Is<IReadOnlyList<ColumnaPdf>>(c => c.SequenceEqual(esperado)),
+            It.Is<MetadatosDocumento>(m => m.Titulo == "Libro caja" && m.DescripcionFiltros == "Año completo: 2026."),
+            It.IsAny<ResumenPdf>()), Times.Once);
+        guardado.Verify(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "libro-caja-2026.pdf", It.IsAny<CancellationToken>(),
+            "pdf", "application/pdf"), Times.Once);
+        pdf.Verify(e => e.Exportar(It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
+            It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ExportarPdf_Anual_ResumenConSaldosDelAnio_MesesConDeficit_YRubros_SinFuentes()
+    {
+        var (vm, _, _, pdf) = await AnualCargadoAsync(Anio2026ConDeficit());
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        pdf.Verify(e => e.Exportar(It.IsAny<IEnumerable<TotalMensualDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
+            It.IsAny<MetadatosDocumento>(),
+            It.Is<ResumenPdf>(r =>
+                r.Totales.Count == 2
+                && r.Totales[0].Etiqueta == "Saldo inicial" && Equals(r.Totales[0].Valor, 812_430.55m)
+                && r.Totales[1].Etiqueta == "Saldo final" && Equals(r.Totales[1].Valor, 1_009_480.55m)
+                && r.Secciones.Count == 2
+                && r.Secciones[0].Titulo == "Meses con déficit"
+                && r.Secciones[0].Filas.Count == 1
+                && r.Secciones[0].Filas[0].Etiqueta == "Marzo" && Equals(r.Secciones[0].Filas[0].Valor, -72_750m)
+                && r.Secciones[1].Titulo == "Totales por rubro"
+                && r.Secciones[1].Filas[0].Etiqueta == "Obras viales"
+                && r.Secciones.All(s => s.Titulo != "Totales por fuente"))), Times.Once);
+    }
+
+    [Fact]
+    public void ResumenAnual_SinDeficit_NoAgregaLaSeccion()
+    {
+        var anual = new LibroCajaAnualDto(2026, DoceMeses(new TotalMensualDto(1, 10m, 5m, 5m)), new List<TotalPorClaveDto>());
+
+        var resumen = LibroCajaViewModel.ArmarResumenAnual(anual, 0m, 5m);
+
+        Assert.Equal(new[] { "Totales por rubro" }, resumen.Secciones.Select(s => s.Titulo));
+    }
+
+    [Fact]
+    public void Exportar_SinNadaCargado_NoSePuede()
+    {
+        var (vm, _, _, _, _, _, _) = Crear(Octubre2026);
+
+        Assert.False(vm.ExportarPdfCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task Exportar_MesSinMovimientos_NoSePuede()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(MesDe(2026, 10, 10m, 10m));
+
+        await vm.CargarAsync();
+
+        Assert.False(vm.ExportarPdfCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task Exportar_AnioSinMovimientos_NoSePuede()
+    {
+        var (vm, _, _, _) = await AnualCargadoAsync(new LibroCajaAnualDto(2026, DoceMeses(), new List<TotalPorClaveDto>()));
+
+        Assert.False(vm.ExportarPdfCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task Exportar_AnioConMovimientos_SePuede()
+    {
+        var (vm, _, _, _) = await AnualCargadoAsync(Anio2026ConDeficit());
+
+        Assert.True(vm.ExportarPdfCommand.CanExecute(null));
+        Assert.True(vm.PuedeExportar);
+    }
+
+    [Fact]
+    public async Task Exportar_ConSinPermiso_NoSePuede()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(MesDe(2026, 10, 0m, 5m, Mov(1, 5m, 0m, 5m)));
+        await vm.CargarAsync();
+        Assert.True(vm.ExportarPdfCommand.CanExecute(null));
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).ThrowsAsync(new UnauthorizedAccessException("403"));
+
+        await vm.CargarAsync();
+
+        Assert.True(vm.SinPermiso);
+        Assert.NotNull(vm.LibroMes);   // un 403 no limpia lo cargado: lo que bloquea es SinPermiso
+        Assert.False(vm.ExportarPdfCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task Exportar_MientrasCarga_NoSePuede_YAlTerminarNotificaYVuelve()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(MesDe(2026, 10, 0m, 5m, Mov(1, 5m, 0m, 5m)));
+        await vm.CargarAsync();
+        var pendiente = new TaskCompletionSource<LibroCajaMesDto>();
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).Returns(pendiente.Task);
+        var avisos = 0;
+        vm.ExportarPdfCommand.CanExecuteChanged += (_, _) => avisos++;
+
+        var carga = vm.CargarAsync();
+        Assert.False(vm.ExportarPdfCommand.CanExecute(null));
+        var avisosAlEmpezar = avisos;
+
+        pendiente.SetResult(MesDe(2026, 10, 0m, 5m, Mov(1, 5m, 0m, 5m)));
+        await carga;
+
+        Assert.True(avisosAlEmpezar > 0);
+        Assert.True(avisos > avisosAlEmpezar);
+        Assert.True(vm.ExportarPdfCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task ExportarPdf_ConMesCambiadoSinRecargar_ExportaElMesCargado()
+    {
+        var (vm, svc, guardado, _, pdf, _, _) = Crear(Octubre2026);
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(2026, 9)).ReturnsAsync(MesDe(2026, 9, 0m, 5m, Mov(1, 5m, 0m, 5m)));
+        vm.Mes = 9;
+        await vm.CargarAsync();
+        vm.Mes = 10;   // el debounce infinito deja octubre en el filtro y setiembre en pantalla
+        pdf.Setup(e => e.Exportar(It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
+            It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>())).Returns(new byte[] { 1 });
+        guardado.Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
+            .ReturnsAsync(true);
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        pdf.Verify(e => e.Exportar(It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
+            It.Is<MetadatosDocumento>(m => m.DescripcionFiltros == "Mes: 09/2026."), It.IsAny<ResumenPdf>()), Times.Once);
+        guardado.Verify(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "libro-caja-2026-09.pdf", It.IsAny<CancellationToken>(),
+            "pdf", "application/pdf"), Times.Once);
+    }
+
+    [Fact]
+    public async Task ExportarPdf_RecienPasadoAAnioSinRecargar_ExportaElMesCargado()
+    {
+        var (vm, svc, guardado, _, pdf, _, _) = Crear(Octubre2026);
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(2026, 10)).ReturnsAsync(MesDe(2026, 10, 0m, 5m, Mov(1, 5m, 0m, 5m)));
+        await vm.CargarAsync();
+        vm.VerAnioCompleto = true;   // sin recargar: en pantalla sigue octubre
+        pdf.Setup(e => e.Exportar(It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
+            It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>())).Returns(new byte[] { 1 });
+        guardado.Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
+            .ReturnsAsync(true);
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        guardado.Verify(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "libro-caja-2026-10.pdf", It.IsAny<CancellationToken>(),
+            "pdf", "application/pdf"), Times.Once);
+        pdf.Verify(e => e.Exportar(It.IsAny<IEnumerable<TotalMensualDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
+            It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()), Times.Never);
     }
 
     [Fact]
