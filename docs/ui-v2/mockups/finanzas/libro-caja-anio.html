@@ -30,12 +30,12 @@
   .saldos { display: flex; gap: 24px; }
   .saldo { display: flex; flex-direction: column; gap: 4px; }
   .saldo-valor { display: flex; align-items: center; gap: 8px; }
-  /* Totales por mes: MES medido (ColumnaAuto con NombreMesConverter, "Setiembre" el más ancho) 83; NETO fijo 172 =
-     ceil4(insignia "Déficit" 54 + 8 + "-$ 165.900,00" 93 + padding 16); INGRESOS y EGRESOS (*) el resto, mitad cada una:
-     346,5 a 1280 y 389,5 a 1366. */
-  .col-mes { flex: 0 0 83px; }
-  .col-ingresos, .col-egresos { flex: 1 1 0; min-width: 0; }
-  .col-neto { flex: 0 0 172px; }
+  /* Totales por mes: importes con ancho fijo para el peor caso de 8 cifras, como SALDO de Control POA. NETO 192 =
+     ceil4(insignia "Déficit" 54 + 8 + "-$ 12.345.678,90" 113 + padding 16); INGRESOS y EGRESOS 124 = ceil4("$ 12.345.678,90"
+     ~107 + 16). MES (*) el resto: 508 a 1280 y 594 a 1366 (el nombre más ancho, "Setiembre", mide 67). */
+  .col-mes { flex: 1 1 0; min-width: 0; }
+  .col-ingresos, .col-egresos { flex: 0 0 124px; }
+  .col-neto { flex: 0 0 192px; }
   /* NETO: una Grid por celda con la insignia a la izquierda y el número a la derecha, como SALDO de Control POA. */
   .celda-compuesta { font-variant-numeric: tabular-nums; }
   .celda-compuesta > .valor { margin-left: auto; width: calc-size(fit-content, round(up, size, 1px)); }

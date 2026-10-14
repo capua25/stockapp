@@ -70,6 +70,15 @@ La spec pide cosas que el código actual no permite tal como están escritas. El
 
 ## Decisiones que se confirman al aprobar los mockups (Task 6, GATE 1)
 
+> **GATE 1 aprobado por Martin el 2026-10-14** (AprobadoPor: Martin, Fecha: 2026-10-14). D1 a D17 como se presentaron, con las resoluciones de la medición de abajo; mandan sobre el texto de D7, D9 y el XAML de las Tasks 8 y 9. Mockups: 7 pantallas, 14 PNG (`cdf0991` y el commit de cierre de la Task 6).
+> - **Q-NOCEDE:** INGRESO, EGRESO y SALDO CORRIDO llevan `ColumnaAuto.NoCede` además de FECHA (con solo FECHA, a 1366 las medidas cedían y cortaban los importes: INGRESO 90 de 115, EGRESO 85 de 103). Scroll horizontal a 1280 y 1366 con los anchos medidos.
+> - **Q-ORDEN:** grilla del mes en el orden FECHA · TIPO · CONCEPTO · INGRESO · EGRESO · SALDO CORRIDO · PROVEEDOR · FACTURA · FUENTE · RUBRO (SALDO CORRIDO termina en 706: entero en la vista a los dos tamaños).
+> - **Q-ALTO:** `MaxHeight="518"` en la grilla de movimientos (header 36 + 12 filas de 40 + borde 2).
+> - **Q-FILTROS:** `Margin="0"` en la `BarraFiltros` de la card de filtros (con el margen del tema la card quedaba con 32 abajo y los saldos 16 por debajo de los inputs).
+> - **Q-NETO:** NETO de ancho fijo 192 = ceil4(insignia "Déficit" 54 + 8 + "-$ 12.345.678,90" 113 + 16), el criterio de 8 cifras de SALDO de Control POA.
+> - **Q-ANIO:** INGRESOS y EGRESOS del año con ancho fijo 124 (peor caso de 8 cifras "$ 12.345.678,90" + 16, redondeado a 4) en vez de `*`; MES pasa a `*` (absorbe el resto).
+> - **Q-PDF:** opción (a), equivale a P3-B solo para la columna Mes: un record de presentación en el VM con el nombre del mes para las filas del PDF anual (y `ColumnasPdfContraDtosRealesTests` lo valida); `ColumnaPdf` y `PlantillaTabular` NO se tocan. Lo implementa otra task.
+
 - **D1. Encabezado:** `EncabezadoPagina` sin breadcrumb (pantalla del sidebar), `Titulo="Libro caja"`, `Subtitulo="Ingresos y egresos de la caja municipal, con el saldo día por día."`; a la derecha "Actualizar" y "Exportar PDF", los dos `secundario`, en ese orden.
 - **D2. Filtros:** una `TarjetaContenido` propia arriba (los filtros valen para todas las cards), con `BarraFiltros MostrarBusqueda="False"` y tres `CampoFormulario`: "Año" (`NumericUpDown` 120 de ancho, 2020 a 2100, `NumericUpDownValidacionBehavior.Que="año"`), "Período" (`ComboBox` 160 con "Mes" y "Año completo") y "Mes" (`NumericUpDown` 100, 1 a 12, `Que="mes"`), este último solo en modo Mes (E3, `IsVisible`).
 - **D3. Selector de modo:** un `ComboBox` de dos opciones (patrón Activos/Todos de la 4b, `OpcionesModo` estática + `ModoSeleccionado` que traduce a `VerAnioCompleto`). Alternativa: un control segmentado nuevo, que la spec solo admite si el mockup revela un patrón repetido (no lo hay: es la primera pantalla con modos).
