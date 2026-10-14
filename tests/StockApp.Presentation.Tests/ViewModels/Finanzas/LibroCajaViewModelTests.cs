@@ -653,7 +653,7 @@ public class LibroCajaViewModelTests
         pdfExporterMock.Verify(e => e.Exportar(
             It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()), Times.Never);
         pdfExporterMock.Verify(e => e.Exportar(
-            It.IsAny<IEnumerable<TotalMensualDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()), Times.Never);
+            It.IsAny<IEnumerable<FilaPdfMensual>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()), Times.Never);
     }
 
     private static LibroCajaAnualDto Anio2026ConDeficit() => new(2026,
@@ -670,7 +670,7 @@ public class LibroCajaViewModelTests
         svc.Setup(s => s.ObtenerLibroCajaAnualAsync(2026)).ReturnsAsync(anual);
         vm.VerAnioCompleto = true;
         await vm.CargarAsync();
-        pdf.Setup(e => e.Exportar(It.IsAny<IEnumerable<TotalMensualDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
+        pdf.Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaPdfMensual>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
             It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>())).Returns(new byte[] { 1 });
         guardado.Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
             .ReturnsAsync(true);
@@ -678,7 +678,7 @@ public class LibroCajaViewModelTests
     }
 
     [Fact]
-    public async Task ExportarPdf_Anual_CuatroColumnasDelDtoReal_TituloYNombreDelAnio()
+    public async Task ExportarPdf_Anual_CuatroColumnas_MesConNombre_TituloYNombreDelAnio()
     {
         var esperado = new[]
         {
@@ -691,7 +691,10 @@ public class LibroCajaViewModelTests
         await vm.ExportarPdfCommand.ExecuteAsync(null);
 
         pdf.Verify(e => e.Exportar(
-            anual.TotalesPorMes,
+            It.Is<IEnumerable<FilaPdfMensual>>(f => f.Count() == 12
+                && f.First().Equals(new FilaPdfMensual("Enero", 1_250_000m, 980_200m, 269_800m))
+                && f.ElementAt(2).Equals(new FilaPdfMensual("Marzo", 1_250_000m, 1_322_750m, -72_750m))
+                && f.ElementAt(8).Mes == "Setiembre"),
             It.Is<IReadOnlyList<ColumnaPdf>>(c => c.SequenceEqual(esperado)),
             It.Is<MetadatosDocumento>(m => m.Titulo == "Libro caja" && m.DescripcionFiltros == "Año completo: 2026."),
             It.IsAny<ResumenPdf>()), Times.Once);
@@ -708,7 +711,7 @@ public class LibroCajaViewModelTests
 
         await vm.ExportarPdfCommand.ExecuteAsync(null);
 
-        pdf.Verify(e => e.Exportar(It.IsAny<IEnumerable<TotalMensualDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
+        pdf.Verify(e => e.Exportar(It.IsAny<IEnumerable<FilaPdfMensual>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
             It.IsAny<MetadatosDocumento>(),
             It.Is<ResumenPdf>(r =>
                 r.Totales.Count == 2
@@ -845,7 +848,7 @@ public class LibroCajaViewModelTests
 
         guardado.Verify(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "libro-caja-2026-10.pdf", It.IsAny<CancellationToken>(),
             "pdf", "application/pdf"), Times.Once);
-        pdf.Verify(e => e.Exportar(It.IsAny<IEnumerable<TotalMensualDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
+        pdf.Verify(e => e.Exportar(It.IsAny<IEnumerable<FilaPdfMensual>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
             It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()), Times.Never);
     }
 

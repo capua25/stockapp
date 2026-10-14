@@ -266,14 +266,15 @@ public partial class LibroCajaViewModel : ViewModelBase
         new ColumnaPdf(nameof(MovimientoCajaDto.SaldoCorrido), "Saldo corrido"),
     };
 
-    /// <summary>Columnas del PDF anual: las de la grilla de totales por mes, sobre el DTO real (4 columnas: sale vertical).
-    /// El mes va como número; el déficit se marca con el signo del neto y con la sección "Meses con déficit".</summary>
+    /// <summary>Columnas del PDF anual: las de la grilla de totales por mes, sobre la fila de presentación
+    /// <see cref="FilaPdfMensual"/> (4 columnas: sale vertical). El mes va con su nombre; el déficit se marca con el
+    /// signo del neto y con la sección "Meses con déficit".</summary>
     public static readonly IReadOnlyList<ColumnaPdf> ColumnasPdfAnual = new[]
     {
-        new ColumnaPdf(nameof(TotalMensualDto.Mes), "Mes"),
-        new ColumnaPdf(nameof(TotalMensualDto.Ingresos), "Ingresos"),
-        new ColumnaPdf(nameof(TotalMensualDto.Egresos), "Egresos"),
-        new ColumnaPdf(nameof(TotalMensualDto.Neto), "Neto"),
+        new ColumnaPdf(nameof(FilaPdfMensual.Mes), "Mes"),
+        new ColumnaPdf(nameof(FilaPdfMensual.Ingresos), "Ingresos"),
+        new ColumnaPdf(nameof(FilaPdfMensual.Egresos), "Egresos"),
+        new ColumnaPdf(nameof(FilaPdfMensual.Neto), "Neto"),
     };
 
     /// <summary>
@@ -361,7 +362,7 @@ public partial class LibroCajaViewModel : ViewModelBase
                 DescripcionFiltros: $"Año completo: {anual.Anio:0000}.",
                 UsuarioEmisor: Emisor());
 
-            var pdf = _pdfExporter.Exportar(anual.TotalesPorMes, ColumnasPdfAnual, metadatos,
+            var pdf = _pdfExporter.Exportar(ArmarFilasPdfAnual(anual.TotalesPorMes), ColumnasPdfAnual, metadatos,
                 ArmarResumenAnual(anual, SaldoInicial, SaldoFinal));
             await GuardarYOfrecerAbrirAsync(pdf, $"libro-caja-{anual.Anio:0000}.pdf");
         }, _confirmacion);
@@ -375,6 +376,11 @@ public partial class LibroCajaViewModel : ViewModelBase
 
         await ExportacionPdf.OfrecerAbrirAsync(guardado, pdf, nombreArchivo, _confirmacion, _apertura);
     }
+
+    /// <summary>Filas de la tabla del PDF anual: el mes con su nombre (la plantilla imprime el valor tal cual); el neto
+    /// conserva su signo.</summary>
+    internal static IReadOnlyList<FilaPdfMensual> ArmarFilasPdfAnual(IEnumerable<TotalMensualDto> totalesPorMes) =>
+        [.. totalesPorMes.Select(t => new FilaPdfMensual(NombreMesConverter.Nombre(t.Mes), t.Ingresos, t.Egresos, t.Neto))];
 
     /// <summary>Resumen del PDF anual. "Meses con déficit" solo si hay alguno (la plantilla no marca filas de la tabla).</summary>
     internal static ResumenPdf ArmarResumenAnual(LibroCajaAnualDto anual, decimal saldoInicial, decimal saldoFinal)
@@ -394,3 +400,7 @@ public partial class LibroCajaViewModel : ViewModelBase
             Secciones: secciones);
     }
 }
+
+/// <summary>Fila de presentación de la tabla del PDF anual: igual que <see cref="TotalMensualDto"/> pero con el mes
+/// como nombre ("Marzo") en vez de número.</summary>
+public sealed record FilaPdfMensual(string Mes, decimal Ingresos, decimal Egresos, decimal Neto);

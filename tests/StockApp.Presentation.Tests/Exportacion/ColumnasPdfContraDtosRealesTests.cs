@@ -149,7 +149,7 @@ public class ColumnasPdfContraDtosRealesTests
     public void LibroCajaAnual_ColumnasPdf_ResuelvenContraElDtoRealYGeneranPdf() =>
         VerificarPantalla(
             LibroCajaViewModel.ColumnasPdfAnual,
-            new TotalMensualDto(3, 1250000m, 1322750m, -72750m));
+            new FilaPdfMensual("Marzo", 1250000m, 1322750m, -72750m));
 
     /// <summary>El PDF anual con su resumen REAL (no un mock): vertical (4 columnas), con los saldos, los meses en
     /// déficit y los totales por rubro, y sin totales por fuente (spec, sección 2).</summary>
@@ -173,6 +173,25 @@ public class ColumnasPdfContraDtosRealesTests
         Assert.Contains("Marzo", palabras);
         Assert.Contains("Totales por rubro", palabras);
         Assert.DoesNotContain("fuente", palabras);
+    }
+
+    /// <summary>La TABLA (no la sección de déficit) lleva el nombre del mes: Enero es superávit, así que solo puede
+    /// aparecer en el PDF si la fila de la tabla trae el nombre; con el número saldría "1".</summary>
+    [Fact]
+    public void LibroCajaAnual_FilasDeLaTabla_LlevanElNombreDelMes()
+    {
+        var filas = LibroCajaViewModel.ArmarFilasPdfAnual(
+            [new TotalMensualDto(1, 1250000m, 980200m, 269800m), new TotalMensualDto(9, 10m, 40m, -30m)]);
+
+        Assert.Equal("Enero", filas[0].Mes);
+        Assert.Equal("Setiembre", filas[1].Mes);
+        Assert.Equal(-30m, filas[1].Neto);
+
+        var pdf = new PdfExporterMigraDoc().Exportar(filas, LibroCajaViewModel.ColumnasPdfAnual, Metadatos);
+        using var documento = PdfDocument.Open(pdf);
+        var palabras = documento.GetPages().SelectMany(p => p.GetWords()).Select(w => w.Text).ToList();
+        Assert.Contains("Enero", palabras);
+        Assert.Contains("Setiembre", palabras);
     }
 
     [Fact]
