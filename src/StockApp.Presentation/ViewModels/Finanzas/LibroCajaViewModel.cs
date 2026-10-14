@@ -15,8 +15,10 @@ using StockApp.Presentation.Services;
 namespace StockApp.Presentation.ViewModels.Finanzas;
 
 /// <summary>
-/// Pantalla "Libro caja" (spec §7.3): selector de mes + toggle "Año completo", grilla
-/// cronológica con saldo corrido, paneles de totales por rubro/fuente.
+/// Pantalla "Libro caja": un mes (movimientos con saldo corrido, totales por rubro y por fuente) o el año completo
+/// (totales por mes y por rubro). Lo que la pantalla muestra y lo que se exporta es el período CARGADO
+/// (<see cref="LibroMes"/> o <see cref="LibroAnual"/>), no los filtros: mientras una recarga espera, los filtros pueden
+/// ir por delante.
 /// </summary>
 public partial class LibroCajaViewModel : ViewModelBase
 {
@@ -34,6 +36,30 @@ public partial class LibroCajaViewModel : ViewModelBase
     [ObservableProperty] private decimal _saldoInicial;
     [ObservableProperty] private decimal _saldoFinal;
     [ObservableProperty] private LibroCajaAnualDto? _libroAnual;
+
+    /// <summary>El mes cargado (null si lo cargado es el año completo o si no hay nada cargado).</summary>
+    [ObservableProperty] private LibroCajaMesDto? _libroMes;
+
+    private bool _sinMovimientosEnElPeriodo;
+    private int _mesesConMovimientos;
+
+    /// <summary>
+    /// True si el período cargado no tiene ningún movimiento: el mes sin filas o el año con los doce meses en cero (el
+    /// servidor devuelve siempre los doce, así que un "Count == 0" no sirve). False sin nada cargado: eso es Cargando o
+    /// Sin conexión, no un vacío.
+    /// </summary>
+    public bool SinMovimientosEnElPeriodo
+    {
+        get => _sinMovimientosEnElPeriodo;
+        private set => SetProperty(ref _sinMovimientosEnElPeriodo, value);
+    }
+
+    /// <summary>Meses del año cargado con algún ingreso o egreso (pie de la grilla de totales por mes).</summary>
+    public int MesesConMovimientos
+    {
+        get => _mesesConMovimientos;
+        private set => SetProperty(ref _mesesConMovimientos, value);
+    }
 
     public ObservableCollection<MovimientoCajaDto> Movimientos { get; } = new();
     public DataGridCollectionView MovimientosView { get; }
@@ -56,43 +82,83 @@ public partial class LibroCajaViewModel : ViewModelBase
         MovimientosView = new DataGridCollectionView(Movimientos);
     }
 
-    /// <summary>Carga el libro caja del mes/año seleccionado, o el año completo si VerAnioCompleto.</summary>
+    /// <summary>Texto del estado "Sin permiso" cuando el servidor rechaza la carga (403).</summary>
+    public const string MensajeSinPermisoLibroCaja = "No tenés permiso para ver el libro caja.";
+
+    private readonly ConsultaVigente _consultas = new();
+
+    /// <summary>La vista muestra "No se pudo conectar con el servidor" con Reintentar (ver <see cref="ViewModelBase.SinConexion"/>).</summary>
+    protected override bool AvisaSinConexionEnLinea => true;
+
+    /// <summary>Sin servidor no queda nada cargado: el reintento no puede mostrar el período de otra consulta.</summary>
+    protected override void AlPerderConexion() => LimpiarPeriodo();
+
+    /// <summary>Reintentar consulta el año, el mes y el modo que están en pantalla, no los de la consulta que falló.</summary>
+    protected override Task ReintentarAsync(Func<Task> cargaFallida) => CargarAsync();
+
+    /// <summary>
+    /// La dispara la View (DataContextChanged), Actualizar y el cambio de año, mes o modo. Protegida: un 403 deja
+    /// SinPermiso (el aviso global ya lo dio AuthTokenHandler), un servidor caído deja SinConexion en vez del modal
+    /// global, y mientras espera Cargando está en true. Pide turno: si mientras espera empezó otra carga (del mismo modo
+    /// o del otro), su resultado se descarta.
+    /// </summary>
     public async Task CargarAsync()
+    {
+        var turno = _consultas.Empezar();
+        var anio = Anio;
+        var mes = Mes;
+        var anual = VerAnioCompleto;
+        await EjecutarCargaProtegidaAsync(async () =>
+        {
+            if (anual)
+            {
+                var libroAnual = await _service.ObtenerLibroCajaAnualAsync(anio);
+                if (!turno.EsLaUltima)
+                    return;
+                AplicarAnual(libroAnual);
+                return;
+            }
+
+            var libroMes = await _service.ObtenerLibroCajaMesAsync(anio, mes);
+            if (!turno.EsLaUltima)
+                return;
+            AplicarMes(libroMes);
+        }, MensajeSinPermisoLibroCaja, turno);
+    }
+
+    private void AplicarMes(LibroCajaMesDto libro)
+    {
+        LimpiarPeriodo();
+        SaldoInicial = libro.SaldoInicial;
+        SaldoFinal = libro.SaldoFinal;
+        foreach (var mov in libro.Movimientos)
+            Movimientos.Add(mov);
+        foreach (var t in libro.TotalesPorRubro)
+            TotalesPorRubro.Add(t);
+        foreach (var t in libro.TotalesPorFuente)
+            TotalesPorFuente.Add(t);
+        LibroMes = libro;
+        SinMovimientosEnElPeriodo = libro.Movimientos.Count == 0;
+    }
+
+    private void AplicarAnual(LibroCajaAnualDto libro)
+    {
+        LimpiarPeriodo();
+        LibroAnual = libro;
+        MesesConMovimientos = libro.TotalesPorMes.Count(t => t.Ingresos != 0m || t.Egresos != 0m);
+        SinMovimientosEnElPeriodo = libro.TotalesPorMes.All(t => t.Ingresos == 0m && t.Egresos == 0m);
+    }
+
+    /// <summary>Saca de pantalla el período cargado (el de un modo o el del otro).</summary>
+    private void LimpiarPeriodo()
     {
         Movimientos.Clear();
         TotalesPorRubro.Clear();
         TotalesPorFuente.Clear();
+        LibroMes = null;
         LibroAnual = null;
-
-        try
-        {
-            if (VerAnioCompleto)
-            {
-                LibroAnual = await _service.ObtenerLibroCajaAnualAsync(Anio);
-                return;
-            }
-
-            var libro = await _service.ObtenerLibroCajaMesAsync(Anio, Mes);
-            SaldoInicial = libro.SaldoInicial;
-            SaldoFinal = libro.SaldoFinal;
-            foreach (var mov in libro.Movimientos)
-                Movimientos.Add(mov);
-            foreach (var t in libro.TotalesPorRubro)
-                TotalesPorRubro.Add(t);
-            foreach (var t in libro.TotalesPorFuente)
-                TotalesPorFuente.Add(t);
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Red de contención (bugfix 2026-08-15): CargarAsync la dispara la View
-            // (DataContextChanged) fire-and-forget — una excepción no atrapada acá escala a
-            // Dispatcher.UIThread.UnhandledException (App.axaml.cs), que loguea a crash.log y
-            // muestra el genérico "Ocurrió un error inesperado" como si fuera un bug real. Un
-            // 403 ya se avisó ANTES de llegar acá: AuthTokenHandler dispara
-            // ApiSession.AccesoRevocado apenas ve el 403 en la respuesta HTTP, y App.axaml.cs
-            // ya informa "Tus permisos cambiaron...". Mismo criterio que
-            // GastosViewModel.CargarAsync (ec0696c): silencioso, para no duplicar el aviso.
-        }
+        MesesConMovimientos = 0;
+        SinMovimientosEnElPeriodo = false;
     }
 
     public IAsyncRelayCommand RecargarCommand => field ??= ComandoDeGuardado(RecargarAsync);

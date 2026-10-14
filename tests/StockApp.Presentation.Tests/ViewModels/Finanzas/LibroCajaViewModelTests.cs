@@ -2,6 +2,7 @@ using Avalonia.Collections;
 using Moq;
 using System.IO;
 using System.Threading;
+using StockApp.ApiClient;
 using StockApp.Application.Auth;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Finanzas;
@@ -37,6 +38,236 @@ public class LibroCajaViewModelTests
         var vm = new LibroCajaViewModel(
             svc.Object, guardado.Object, confirm.Object, pdfExporter.Object, apertura.Object, session.Object);
         return (vm, svc, guardado, confirm, pdfExporter, apertura, session);
+    }
+
+    private static MovimientoCajaDto Mov(int dia, decimal ingreso, decimal egreso, decimal corrido) =>
+        new(new DateOnly(2026, 10, dia), ingreso > 0m ? "Ingreso" : "Egreso", $"Movimiento {dia}",
+            null, null, null, null, ingreso, egreso, corrido);
+
+    private static LibroCajaMesDto MesDe(int anio, int mes, decimal saldoInicial, decimal saldoFinal, params MovimientoCajaDto[] movimientos) =>
+        new(anio, mes, saldoInicial, saldoFinal, movimientos, new List<TotalPorClaveDto>(), new List<TotalPorClaveDto>());
+
+    private static LibroCajaAnualDto AnioDe(int anio, params TotalMensualDto[] meses) =>
+        new(anio, meses, new List<TotalPorClaveDto>());
+
+    private static TotalMensualDto[] DoceMeses(params TotalMensualDto[] conMovimiento) =>
+        Enumerable.Range(1, 12)
+            .Select(m => conMovimiento.FirstOrDefault(t => t.Mes == m) ?? new TotalMensualDto(m, 0m, 0m, 0m))
+            .ToArray();
+
+    [Fact]
+    public async Task CargarAsync_MientrasEspera_CargandoEsTrue_YAlTerminarFalse()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear();
+        var pendiente = new TaskCompletionSource<LibroCajaMesDto>();
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).Returns(pendiente.Task);
+
+        var carga = vm.CargarAsync();
+        Assert.True(vm.Cargando);
+
+        pendiente.SetResult(MesDe(2026, 10, 0m, 0m));
+        await carga;
+
+        Assert.False(vm.Cargando);
+    }
+
+    [Fact]
+    public async Task CargarAsync_403_MarcaSinPermisoConSuMensaje()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear();
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()))
+            .ThrowsAsync(new UnauthorizedAccessException("403"));
+
+        await vm.CargarAsync();
+
+        Assert.True(vm.SinPermiso);
+        Assert.Equal(LibroCajaViewModel.MensajeSinPermisoLibroCaja, vm.MensajeSinPermiso);
+    }
+
+    [Fact]
+    public async Task ServidorCaido_TrasUnaCargaBuena_MarcaSinConexionYVaciaLoCargado()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear();
+        svc.SetupSequence(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()))
+            .ReturnsAsync(MesDe(2026, 10, 0m, 500m, Mov(1, 500m, 0m, 500m)))
+            .ThrowsAsync(new ServidorNoDisponibleException());
+        await vm.CargarAsync();
+
+        await vm.CargarAsync();
+
+        Assert.True(vm.SinConexion);
+        Assert.Empty(vm.Movimientos);
+        Assert.Null(vm.LibroMes);
+        Assert.Null(vm.LibroAnual);
+        Assert.False(vm.SinMovimientosEnElPeriodo);
+    }
+
+    [Fact]
+    public async Task Reintentar_TrasUnaCaida_VuelveACargar()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear();
+        svc.SetupSequence(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()))
+            .ThrowsAsync(new ServidorNoDisponibleException())
+            .ReturnsAsync(MesDe(2026, 10, 0m, 500m, Mov(1, 500m, 0m, 500m)));
+        await vm.CargarAsync();
+        Assert.True(vm.SinConexion);
+
+        await vm.ReintentarCargaCommand.ExecuteAsync(null);
+
+        Assert.False(vm.SinConexion);
+        Assert.Single(vm.Movimientos);
+    }
+
+    [Fact]
+    public async Task ConsultaVieja_QueTerminaDespues_NoPisaLaNueva()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear();
+        var vieja = new TaskCompletionSource<LibroCajaMesDto>();
+        var nueva = new TaskCompletionSource<LibroCajaMesDto>();
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(2026, 9)).Returns(vieja.Task);
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(2026, 10)).Returns(nueva.Task);
+        vm.Anio = 2026;
+        vm.Mes = 9;
+
+        var primera = vm.CargarAsync();
+        vm.Mes = 10;
+        var segunda = vm.CargarAsync();
+        nueva.SetResult(MesDe(2026, 10, 0m, 10m, Mov(2, 10m, 0m, 10m)));
+        await segunda;
+        vieja.SetResult(MesDe(2026, 9, 0m, 99m, Mov(9, 99m, 0m, 99m)));
+        await primera;
+
+        Assert.Equal(10, vm.LibroMes!.Mes);
+        Assert.Equal(new DateOnly(2026, 10, 2), Assert.Single(vm.Movimientos).Fecha);
+    }
+
+    [Fact]
+    public async Task RespuestaMensualVieja_TrasPasarAAnio_NoPisaElAnual()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear();
+        var mensual = new TaskCompletionSource<LibroCajaMesDto>();
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(2026, 10)).Returns(mensual.Task);
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(2026))
+            .ReturnsAsync(AnioDe(2026, DoceMeses(new TotalMensualDto(3, 100m, 0m, 100m))));
+        vm.Anio = 2026;
+        vm.Mes = 10;
+
+        var primera = vm.CargarAsync();
+        vm.VerAnioCompleto = true;
+        await vm.CargarAsync();
+        mensual.SetResult(MesDe(2026, 10, 0m, 10m, Mov(2, 10m, 0m, 10m)));
+        await primera;
+
+        Assert.NotNull(vm.LibroAnual);
+        Assert.Null(vm.LibroMes);
+        Assert.Empty(vm.Movimientos);
+    }
+
+    [Fact]
+    public async Task RespuestaAnualVieja_TrasVolverAMes_NoPisaElMes()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear();
+        var anual = new TaskCompletionSource<LibroCajaAnualDto>();
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(2026)).Returns(anual.Task);
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(2026, 10)).ReturnsAsync(MesDe(2026, 10, 0m, 10m, Mov(2, 10m, 0m, 10m)));
+        vm.Anio = 2026;
+        vm.Mes = 10;
+        vm.VerAnioCompleto = true;
+
+        var primera = vm.CargarAsync();
+        vm.VerAnioCompleto = false;
+        await vm.CargarAsync();
+        anual.SetResult(AnioDe(2026, DoceMeses(new TotalMensualDto(3, 100m, 0m, 100m))));
+        await primera;
+
+        Assert.NotNull(vm.LibroMes);
+        Assert.Null(vm.LibroAnual);
+        Assert.Single(vm.Movimientos);
+    }
+
+    [Fact]
+    public async Task CargarAnual_TrasUnMes_QuitaLoDelMes()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear();
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(new LibroCajaMesDto(
+            2026, 10, 0m, 10m, new List<MovimientoCajaDto> { Mov(2, 10m, 0m, 10m) },
+            new List<TotalPorClaveDto> { new("Combustibles", 5m) }, new List<TotalPorClaveDto> { new("Rentas", 10m) }));
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(It.IsAny<int>()))
+            .ReturnsAsync(AnioDe(2026, DoceMeses(new TotalMensualDto(3, 100m, 0m, 100m))));
+        await vm.CargarAsync();
+
+        vm.VerAnioCompleto = true;
+        await vm.CargarAsync();
+
+        Assert.Null(vm.LibroMes);
+        Assert.NotNull(vm.LibroAnual);
+        Assert.Empty(vm.Movimientos);
+        Assert.Empty(vm.TotalesPorRubro);
+        Assert.Empty(vm.TotalesPorFuente);
+    }
+
+    [Fact]
+    public void SinNadaCargado_NoEsSinMovimientos()
+    {
+        var (vm, _, _, _, _, _, _) = Crear();
+
+        Assert.False(vm.SinMovimientosEnElPeriodo);
+        Assert.Null(vm.LibroMes);
+        Assert.Null(vm.LibroAnual);
+    }
+
+    [Fact]
+    public async Task Mes_SinMovimientos_EsSinMovimientosEnElPeriodo()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear();
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(MesDe(2026, 10, 300m, 300m));
+
+        await vm.CargarAsync();
+
+        Assert.True(vm.SinMovimientosEnElPeriodo);
+        Assert.Equal(300m, vm.SaldoFinal);
+    }
+
+    [Fact]
+    public async Task Anual_DoceMesesEnCero_EsSinMovimientos()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear();
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(It.IsAny<int>())).ReturnsAsync(AnioDe(2026, DoceMeses()));
+        vm.VerAnioCompleto = true;
+
+        await vm.CargarAsync();
+
+        Assert.Equal(12, vm.LibroAnual!.TotalesPorMes.Count);
+        Assert.True(vm.SinMovimientosEnElPeriodo);
+        Assert.Equal(0, vm.MesesConMovimientos);
+    }
+
+    [Fact]
+    public async Task Anual_SoloEgresosEnTodoElAnio_NoEsSinMovimientos()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear();
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(It.IsAny<int>()))
+            .ReturnsAsync(AnioDe(2026, DoceMeses(new TotalMensualDto(3, 0m, 250m, -250m))));
+        vm.VerAnioCompleto = true;
+
+        await vm.CargarAsync();
+
+        Assert.False(vm.SinMovimientosEnElPeriodo);
+        Assert.Equal(1, vm.MesesConMovimientos);
+    }
+
+    [Fact]
+    public async Task Anual_MesSoloConEgresos_NoEsSinMovimientos_YCuentaComoMesConMovimientos()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear();
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(It.IsAny<int>())).ReturnsAsync(AnioDe(2026, DoceMeses(
+            new TotalMensualDto(3, 0m, 250m, -250m), new TotalMensualDto(7, 1000m, 0m, 1000m))));
+        vm.VerAnioCompleto = true;
+
+        await vm.CargarAsync();
+
+        Assert.False(vm.SinMovimientosEnElPeriodo);
+        Assert.Equal(2, vm.MesesConMovimientos);
     }
 
     [Fact]
