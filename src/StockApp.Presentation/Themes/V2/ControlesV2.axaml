@@ -67,6 +67,12 @@
         <Setter Property="FontWeight" Value="{DynamicResource V2FuentePieConteoPeso}" />
         <Setter Property="Foreground" Value="{DynamicResource V2TextoTerciarioBrush}" />
     </Style>
+    <!-- Número negativo fuera de una grilla (saldos del libro caja): peligro texto por token, nunca opacidad. Va después
+         de los estilos de texto (titulo-seccion, cuerpo, texto-secundario, pie-conteo): a igual especificidad gana el
+         último. Dentro de una celda lo pinta DataGridV2.axaml con el mismo color. Espejo: .v2-texto-peligro en base.css. -->
+    <Style Selector=".ui2 TextBlock.negativo">
+        <Setter Property="Foreground" Value="{DynamicResource V2PeligroTextoBrush}" />
+    </Style>
 
     <!-- Shell y pantallas de acceso (Fase 1). Espejo CSS en base.css (.v2-marca, etc.). -->
     <Style Selector=".ui2 TextBlock.marca">
