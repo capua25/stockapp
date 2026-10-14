@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -29,9 +30,12 @@ public partial class LibroCajaViewModel : ViewModelBase
     private readonly IServicioAperturaArchivo _apertura;
     private readonly ICurrentSession _session;
 
-    [ObservableProperty] private int _anio = DateTime.UtcNow.Year;
-    [ObservableProperty] private int _mes = DateTime.UtcNow.Month;
-    [ObservableProperty] private bool _verAnioCompleto;
+    [ObservableProperty] private int _anio;
+    [ObservableProperty] private int _mes;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ModoSeleccionado))]
+    private bool _verAnioCompleto;
 
     [ObservableProperty] private decimal _saldoInicial;
     [ObservableProperty] private decimal _saldoFinal;
@@ -70,8 +74,14 @@ public partial class LibroCajaViewModel : ViewModelBase
     public LibroCajaViewModel(
         IFinanzasVistasService service, IServicioGuardadoArchivo guardado,
         IConfirmacionService confirmacion, IPdfExporter pdfExporter, IServicioAperturaArchivo apertura,
-        ICurrentSession session)
+        ICurrentSession session, TimeProvider? reloj = null)
     {
+        // Año y mes arrancan de la fecha LOCAL: en Uruguay, de 21 a 24 del último día del mes la hora UTC ya es del mes
+        // siguiente. Se escriben los campos: no disparan la recarga, la primera carga la pide la vista.
+        var hoy = (reloj ?? TimeProvider.System).GetLocalNow();
+        _anio = hoy.Year;
+        _mes = hoy.Month;
+
         _service     = service;
         _guardado    = guardado;
         _confirmacion = confirmacion;
@@ -80,6 +90,69 @@ public partial class LibroCajaViewModel : ViewModelBase
         _session = session;
 
         MovimientosView = new DataGridCollectionView(Movimientos);
+    }
+
+    public const string ModoMes = "Mes";
+    public const string ModoAnioCompleto = "Año completo";
+
+    /// <summary>Opciones del selector de período.</summary>
+    public static IReadOnlyList<string> OpcionesModo { get; } = [ModoMes, ModoAnioCompleto];
+
+    /// <summary>La opción del selector, traducida a <see cref="VerAnioCompleto"/>.</summary>
+    public string ModoSeleccionado
+    {
+        get => VerAnioCompleto ? ModoAnioCompleto : ModoMes;
+        set => VerAnioCompleto = value == ModoAnioCompleto;
+    }
+
+    /// <summary>Espera antes de recargar al cambiar año, mes o modo: un año de 4 cifras son 4 cambios y solo el último
+    /// tiene que ir al servidor.</summary>
+    private static readonly TimeSpan DebouncePorDefecto = TimeSpan.FromMilliseconds(300);
+
+    /// <summary>Espera real del debounce; los tests que no miden el tiempo la bajan a cero.</summary>
+    internal TimeSpan EsperaDebounce { get; set; } = DebouncePorDefecto;
+
+    /// <summary>Tarea del último debounce, para que los tests la esperen de forma determinista.</summary>
+    internal Task _tareaDebounce = Task.CompletedTask;
+
+    private CancellationTokenSource? _debounceCts;
+
+    partial void OnAnioChanged(int value) => ProgramarRecarga();
+
+    /// <summary>En año completo el mes no cambia la consulta: no recarga.</summary>
+    partial void OnMesChanged(int value)
+    {
+        if (!VerAnioCompleto)
+            ProgramarRecarga();
+    }
+
+    partial void OnVerAnioCompletoChanged(bool value) => ProgramarRecarga();
+
+    /// <summary>Un cambio nuevo cancela la espera anterior. Un texto inválido en un NumericUpDown no llega acá (el VM
+    /// conserva el valor), así que no recarga con el valor viejo.</summary>
+    private void ProgramarRecarga()
+    {
+        _debounceCts?.Cancel();
+        _debounceCts?.Dispose();
+        _debounceCts = new CancellationTokenSource();
+        _tareaDebounce = DebounceCargarAsync(_debounceCts.Token);
+    }
+
+    private async Task DebounceCargarAsync(CancellationToken ct)
+    {
+        try
+        {
+            await Task.Delay(EsperaDebounce, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        if (ct.IsCancellationRequested)
+            return;
+
+        await CargarAsync();
     }
 
     /// <summary>Texto del estado "Sin permiso" cuando el servidor rechaza la carga (403).</summary>

@@ -295,6 +295,8 @@ public class ComandosDeGuardadoGuardianTests
             instancia = SesionAdmin();
         else if (tipo == typeof(string))
             instancia = string.Empty;
+        else if (tipo == typeof(TimeProvider))
+            instancia = TimeProvider.System;   // abstracta: un mock devuelve LocalTimeZone null y GetLocalNow() revienta
         else if (tipo.IsValueType)
             instancia = Activator.CreateInstance(tipo)!;
         else if (typeof(Delegate).IsAssignableFrom(tipo))

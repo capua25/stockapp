@@ -24,7 +24,7 @@ public class LibroCajaViewModelTests
         Mock<IPdfExporter> pdfExporterMock,
         Mock<IServicioAperturaArchivo> aperturaMock,
         Mock<ICurrentSession> sessionMock)
-        Crear()
+        Crear(TimeProvider? reloj = null)
     {
         var svc = new Mock<IFinanzasVistasService>();
         var guardado = new Mock<IServicioGuardadoArchivo>();
@@ -36,7 +36,8 @@ public class LibroCajaViewModelTests
         session.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(1, "admin", RolUsuario.Admin, null));
 
         var vm = new LibroCajaViewModel(
-            svc.Object, guardado.Object, confirm.Object, pdfExporter.Object, apertura.Object, session.Object);
+            svc.Object, guardado.Object, confirm.Object, pdfExporter.Object, apertura.Object, session.Object, reloj);
+        vm.EsperaDebounce = Timeout.InfiniteTimeSpan;
         return (vm, svc, guardado, confirm, pdfExporter, apertura, session);
     }
 
@@ -54,6 +55,157 @@ public class LibroCajaViewModelTests
         Enumerable.Range(1, 12)
             .Select(m => conMovimiento.FirstOrDefault(t => t.Mes == m) ?? new TotalMensualDto(m, 0m, 0m, 0m))
             .ToArray();
+
+    private sealed class RelojFijo(DateTimeOffset ahora, TimeZoneInfo? zona = null) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => ahora;
+        public override TimeZoneInfo LocalTimeZone => zona ?? TimeZoneInfo.Utc;
+    }
+
+    private static readonly TimeProvider Octubre2026 = new RelojFijo(new DateTimeOffset(2026, 10, 6, 13, 0, 0, TimeSpan.Zero));
+
+    [Fact]
+    public void AnioYMesIniciales_SalenDelReloj_YNoConsulta()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
+
+        Assert.Equal(2026, vm.Anio);
+        Assert.Equal(10, vm.Mes);
+        svc.Verify(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public void MesInicial_SaleDeLaHoraLocal_NoDeLaUtc()
+    {
+        // 31/10 a las 22:00 en Uruguay (UTC-3) ya es 01/11 en UTC: el libro tiene que abrir octubre.
+        var uruguay = TimeZoneInfo.CreateCustomTimeZone("UY-3", TimeSpan.FromHours(-3), "UY-3", "UY-3");
+        var reloj = new RelojFijo(new DateTimeOffset(2026, 11, 1, 1, 0, 0, TimeSpan.Zero), uruguay);
+
+        var (vm, _, _, _, _, _, _) = Crear(reloj);
+
+        Assert.Equal(2026, vm.Anio);
+        Assert.Equal(10, vm.Mes);
+    }
+
+    [Fact]
+    public async Task CambiarMes_RecargaSoloConElMesNuevo()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
+        vm.EsperaDebounce = TimeSpan.Zero;
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(2026, 9)).ReturnsAsync(MesDe(2026, 9, 0m, 0m));
+
+        vm.Mes = 9;
+        await vm._tareaDebounce;
+
+        svc.Verify(s => s.ObtenerLibroCajaMesAsync(2026, 9), Times.Once);
+        Assert.Equal(9, vm.LibroMes!.Mes);
+    }
+
+    [Fact]
+    public async Task CambiarAnio_EnModoMes_RecargaEseMesDelAnioNuevo()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
+        vm.EsperaDebounce = TimeSpan.Zero;
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(2025, 10)).ReturnsAsync(MesDe(2025, 10, 0m, 0m));
+
+        vm.Anio = 2025;
+        await vm._tareaDebounce;
+
+        svc.Verify(s => s.ObtenerLibroCajaMesAsync(2025, 10), Times.Once);
+    }
+
+    [Fact]
+    public async Task PasarAAnioCompleto_RecargaElAnual()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
+        vm.EsperaDebounce = TimeSpan.Zero;
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(MesDe(2026, 1, 0m, 0m));
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(2026)).ReturnsAsync(AnioDe(2026, DoceMeses()));
+
+        vm.ModoSeleccionado = LibroCajaViewModel.ModoAnioCompleto;
+        await vm._tareaDebounce;
+
+        Assert.True(vm.VerAnioCompleto);
+        svc.Verify(s => s.ObtenerLibroCajaAnualAsync(2026), Times.Once);
+        Assert.NotNull(vm.LibroAnual);
+    }
+
+    [Fact]
+    public async Task CambiarAnio_EnAnioCompleto_RecargaElAnualDeEseAnio()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(MesDe(2025, 1, 0m, 0m));
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(It.IsAny<int>())).ReturnsAsync(AnioDe(2025, DoceMeses()));
+        vm.VerAnioCompleto = true;
+        vm.EsperaDebounce = TimeSpan.Zero;
+
+        vm.Anio = 2025;
+        await vm._tareaDebounce;
+
+        svc.Verify(s => s.ObtenerLibroCajaAnualAsync(2025), Times.Once);
+    }
+
+    [Fact]
+    public async Task CambiarMes_EnAnioCompleto_NoRecarga()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
+        vm.VerAnioCompleto = true;
+        vm._tareaDebounce = Task.CompletedTask;   // pasar a año completo dejó un debounce infinito pendiente: no es lo que se mide
+        vm.EsperaDebounce = TimeSpan.Zero;
+
+        vm.Mes = 3;
+        await vm._tareaDebounce;
+
+        svc.Verify(s => s.ObtenerLibroCajaAnualAsync(It.IsAny<int>()), Times.Never);
+        svc.Verify(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CambiosRapidos_SoloConsultaElUltimo()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
+        vm.EsperaDebounce = TimeSpan.FromMilliseconds(50);
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(MesDe(2026, 8, 0m, 0m));
+
+        vm.Mes = 9;
+        vm.Mes = 8;
+        await vm._tareaDebounce;
+
+        svc.Verify(s => s.ObtenerLibroCajaMesAsync(2026, 9), Times.Never);
+        svc.Verify(s => s.ObtenerLibroCajaMesAsync(2026, 8), Times.Once);
+    }
+
+    [Fact]
+    public void ModoSeleccionado_TraduceAVerAnioCompleto_YLoNotifica()
+    {
+        var (vm, _, _, _, _, _, _) = Crear(Octubre2026);
+        var notificadas = new List<string?>();
+        vm.PropertyChanged += (_, e) => notificadas.Add(e.PropertyName);
+
+        Assert.Equal(new[] { "Mes", "Año completo" }, LibroCajaViewModel.OpcionesModo);
+        Assert.Equal(LibroCajaViewModel.ModoMes, vm.ModoSeleccionado);
+
+        vm.VerAnioCompleto = true;
+
+        Assert.Equal(LibroCajaViewModel.ModoAnioCompleto, vm.ModoSeleccionado);
+        Assert.Contains(nameof(LibroCajaViewModel.ModoSeleccionado), notificadas);
+    }
+
+    [Fact]
+    public async Task Reintentar_ConsultaElPeriodoQueEstaEnPantalla()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(2026, 10)).ThrowsAsync(new ServidorNoDisponibleException());
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(2026, 9)).ReturnsAsync(MesDe(2026, 9, 0m, 0m));
+        await vm.CargarAsync();
+        vm.Mes = 9;   // el debounce infinito deja el cambio en pantalla sin consultarlo
+
+        await vm.ReintentarCargaCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.ObtenerLibroCajaMesAsync(2026, 9), Times.Once);
+        Assert.False(vm.SinConexion);
+        Assert.Equal(9, vm.LibroMes!.Mes);
+    }
 
     [Fact]
     public async Task CargarAsync_MientrasEspera_CargandoEsTrue_YAlTerminarFalse()
