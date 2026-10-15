@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Moq;
+using StockApp.ApiClient;
 using StockApp.Application.Authorization;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
@@ -23,7 +24,8 @@ public class GastoFormViewModelTests
                     Mock<IGastoService> svcMock,
                     Mock<INavigationService> navMock,
                     Mock<IConfirmacionService> confirmMock)
-        Crear(RolUsuario rol = RolUsuario.Admin, IEnumerable<string>? permisos = null)
+        Crear(RolUsuario rol = RolUsuario.Admin, IEnumerable<string>? permisos = null,
+               Func<Task<IReadOnlyList<Proveedor>>>? proveedoresActivos = null)
     {
         var svc = new Mock<IGastoService>();
         svc.Setup(s => s.AltaAsync(It.IsAny<Gasto>(), It.IsAny<IReadOnlyList<int>?>()))
@@ -39,10 +41,11 @@ public class GastoFormViewModelTests
         });
         // ListarActivasAsync, no ListarTodosAsync (bugfix 2026-08-15, mismo criterio que
         // GastosViewModel/ec429d5): el servidor ya filtra a Activo=true, sin filtro repetido acá.
-        proveedores.Setup(p => p.ListarActivasAsync()).ReturnsAsync(new List<Proveedor>
-        {
-            new() { Id = 1, Nombre = "Barraca X", Activo = true },
-        });
+        proveedores.Setup(p => p.ListarActivasAsync())
+            .Returns(proveedoresActivos ?? (() => Task.FromResult<IReadOnlyList<Proveedor>>(new List<Proveedor>
+            {
+                new() { Id = 1, Nombre = "Barraca X", Activo = true },
+            })));
         var fuentes = new Mock<IFuenteFinanciamientoService>();
         fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>
         {
@@ -482,5 +485,85 @@ public class GastoFormViewModelTests
         vm.NotificarPermisosActualizados();
 
         Assert.Contains(avisos, n => string.IsNullOrEmpty(n) || n == nameof(AdjuntosPanelViewModel.PuedeModificar));
+    }
+
+    // ── Carga inicial: sin conexión y sin permiso ───────────────────────────────
+
+    private static Func<Task<IReadOnlyList<Proveedor>>> FallaUnaVez(Exception falla)
+    {
+        var intentos = 0;
+        return () => ++intentos == 1
+            ? Task.FromException<IReadOnlyList<Proveedor>>(falla)
+            : Task.FromResult<IReadOnlyList<Proveedor>>(new List<Proveedor> { new() { Id = 1, Nombre = "Barraca X", Activo = true } });
+    }
+
+    [Fact]
+    public async Task InicializarAsync_ServidorCaido_MarcaSinConexion_SinModalNiExcepcion()
+    {
+        var (vm, _, _, confirm) = Crear(proveedoresActivos: FallaUnaVez(new ServidorNoDisponibleException()));
+
+        var excepcion = await Record.ExceptionAsync(() => vm.InicializarAsync());
+
+        Assert.Null(excepcion);
+        Assert.True(vm.SinConexion);
+        confirm.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Reintentar_TrasLaCaida_CargaLosCombos()
+    {
+        var (vm, _, _, _) = Crear(proveedoresActivos: FallaUnaVez(new ServidorNoDisponibleException()));
+        await vm.InicializarAsync();
+
+        await vm.ReintentarCargaCommand.ExecuteAsync(null);
+
+        Assert.False(vm.SinConexion);
+        Assert.Single(vm.ProveedoresDisponibles);
+        Assert.Single(vm.FuentesDisponibles);
+        Assert.Single(vm.RubrosDisponibles);
+    }
+
+    [Fact]
+    public async Task Reintentar_EnEdicion_ResuelveLasSeleccionesDelGasto()
+    {
+        var (vm, _, _, _) = Crear(proveedoresActivos: FallaUnaVez(new ServidorNoDisponibleException()));
+        vm.CargarParaEditar(new Gasto
+        {
+            Id = 9, ProveedorId = 1, Detalle = "Histórico", Fecha = DateTime.UtcNow, MontoTotal = 2000m,
+            FuenteFinanciamientoId = 2, RubroGastoId = 3, CondicionPago = CondicionPago.Contado,
+        });
+        await vm.InicializarAsync();
+
+        await vm.ReintentarCargaCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, vm.ProveedorSeleccionado?.Id);
+        Assert.Equal(2, vm.FuenteSeleccionada?.Id);
+        Assert.Equal(3, vm.RubroSeleccionado?.Id);
+    }
+
+    [Fact]
+    public async Task InicializarAsync_403_MarcaSinPermisoConSuMensaje()
+    {
+        var (vm, _, _, confirm) = Crear(proveedoresActivos: FallaUnaVez(new UnauthorizedAccessException("403")));
+
+        await vm.InicializarAsync();
+
+        Assert.True(vm.SinPermiso);
+        Assert.Equal(GastoFormViewModel.MensajeSinPermisoFormulario, vm.MensajeSinPermiso);
+        confirm.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task InicializarAsync_MientrasEspera_CargandoEsTrue()
+    {
+        var pendiente = new TaskCompletionSource<IReadOnlyList<Proveedor>>();
+        var (vm, _, _, _) = Crear(proveedoresActivos: () => pendiente.Task);
+
+        var carga = vm.InicializarAsync();
+        Assert.True(vm.Cargando);
+
+        pendiente.SetResult(new List<Proveedor>());
+        await carga;
+        Assert.False(vm.Cargando);
     }
 }
