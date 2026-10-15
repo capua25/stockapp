@@ -59,6 +59,7 @@ siempre por PowerShell `System.Windows.Forms.SendKeys::SendWait`.
 | `capturar.sh <salida.png> [titulo=Municipal]` | Screenshot de **una ventana identificada** vía PowerShell. NUNCA captura el escritorio (ver "Fail-closed"). |
 | `click.sh <x> <y> [titulo=Municipal] [boton=1]` | Click en coordenadas medidas sobre una captura de `capturar.sh` (mismo sistema de coordenadas). Solo si la ventana está confirmada al frente y el punto cae dentro de ella. |
 | `escribir.sh "texto" [titulo=Municipal]` | Tipea texto vía SendKeys, un carácter por vez, verificando el primer plano antes de CADA carácter. |
+| `capturar-x11.py <window-id> <salida.png>` | Captura una ventana X11 (popups que WSLg no compone) leyendo el servidor X; ver "Popups no compuestos". |
 | `lib-ventana.sh` | Librería que sourcean los tres de arriba (no se ejecuta): enumeración de ventanas, verificaciones, códigos de salida. |
 
 ## Fail-closed: el toolkit nunca captura el escritorio ni manda input sin una ventana confirmada
@@ -128,6 +129,22 @@ Límites: el click se acota al rectángulo de la ventana principal; un desplegab
 ella no se puede clickear con `click.sh` (usá el teclado dentro del combo). `escribir.sh` decide una
 sola vez, al arrancar, si tolera un popup al frente; si durante el tecleo otra app **de WSLg** toma
 el foco, el chequeo de Windows no lo distingue (misma `msrdc`).
+
+### Popups no compuestos por WSLg (calendario, ComboBox)
+
+WSLg NO compone los popups de Avalonia a la captura de Windows: `capturar.sh` muestra la app sin el
+popup abierto (verificado en la Fase 4c, 2026-10-15, con el calendario de `IngresoFormView`). Para
+verlos hay que leer el pixmap directo del servidor X:
+
+```bash
+xdotool search --pid <PID de la app>            # lista la ventana principal y la del popup
+python3 scripts/gui-verificacion/capturar-x11.py <window-id-del-popup> popup.png
+```
+
+- Requiere `python3` con `python-xlib` y `Pillow`.
+- La geometría que reporta `xdotool getwindowgeometry` de un popup viene corrida: offset de
+  (-38, -64) en WSLg. Restalo antes de calcular un click dentro del popup.
+- Si la captura sale de un solo color, el script falla (exit distinto de 0): no la uses.
 
 ### Riesgo residual (leelo)
 
