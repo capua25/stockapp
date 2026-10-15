@@ -101,12 +101,12 @@ public class CargaProtegidaSinPermisoGuardianTests
     /// <summary>
     /// Extrae el cuerpo (con llaves) de la primera declaración de <paramref name="metodo"/> en
     /// <paramref name="fuenteSinComentarios"/>: busca "nombreMetodo(...)" seguido de "{" (una
-    /// invocación real termina en ";", nunca en "{", así que esto no confunde declaración con
-    /// llamada) y balancea llaves desde ahí.
+    /// invocación real termina en ";", nunca en "{"; los parámetros no pueden cruzar un ";" ni una llave, así que
+    /// <c>=> Metodo();</c> no se confunde con una firma cuyo ")" + "{" quede más adelante) y balancea llaves desde ahí.
     /// </summary>
-    private static string? ExtraerCuerpoDeMetodo(string fuenteSinComentarios, string metodo)
+    internal static string? ExtraerCuerpoDeMetodo(string fuenteSinComentarios, string metodo)
     {
-        var firma = new Regex($@"\b{Regex.Escape(metodo)}\s*\([^{{}}]*\)\s*\{{", RegexOptions.Compiled);
+        var firma = new Regex($@"\b{Regex.Escape(metodo)}\s*\([^{{}};]*\)\s*\{{", RegexOptions.Compiled);
         var m = firma.Match(fuenteSinComentarios);
         if (!m.Success) return null;
 
@@ -243,6 +243,29 @@ public class CargaProtegidaSinPermisoGuardianTests
 
         Assert.True(fallos.Count == 0,
             "Punto(s) de carga SIN protección contra UnauthorizedAccessException:\n" + string.Join("\n", fallos));
+    }
+
+    /// <summary>
+    /// Regresión (Fase 4d, 3d0ed4d): una INVOCACIÓN sin llaves antes de la declaración
+    /// (<c>=> CargarAsync();</c>) no puede confundirse con la firma: el cuerpo extraído tiene que ser
+    /// el del método declarado, no el de uno posterior cuyo ")" + "{" quedó al alcance del regex.
+    /// </summary>
+    [Fact]
+    public void ExtraerCuerpoDeMetodo_IgnoraInvocacionesAntesDeLaDeclaracion()
+    {
+        const string fuente = """
+            class Vm {
+                protected override Task ReintentarAsync(Func<Task> f) => CargarAsync();
+                public void Otro() { var x = 1; }
+                public async Task CargarAsync() { await EjecutarCargaProtegidaAsync(() => Task.CompletedTask, "m"); }
+            }
+            """;
+
+        var cuerpo = ExtraerCuerpoDeMetodo(fuente, "CargarAsync");
+
+        Assert.NotNull(cuerpo);
+        Assert.Contains("EjecutarCargaProtegidaAsync", cuerpo);
+        Assert.DoesNotContain("var x", cuerpo);
     }
 
     /// <summary>
