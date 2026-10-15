@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -89,6 +90,41 @@ public partial class GastosViewModel : ViewModelBase
 
     /// <summary>Los combos de los filtros se piden una sola vez: Reintentar los vuelve a pedir solo si fallaron.</summary>
     private bool _combosCargados;
+
+    /// <summary>Una consulta al servidor: su filtro y cómo se describe en el PDF. Se arma al empezar la consulta.</summary>
+    private sealed record ConsultaGastos(GastoFiltro Filtro, IReadOnlyList<string> Descripcion);
+
+    /// <summary>La consulta cuyo resultado está en pantalla (los filtros pueden ir por delante mientras espera una recarga).</summary>
+    private ConsultaGastos? _consultaCargada;
+
+    private int _cantidadVisible;
+
+    /// <summary>Filas que deja ver el filtro de Estado (pie y vacío "sin resultados").</summary>
+    public int CantidadVisible
+    {
+        get => _cantidadVisible;
+        private set => SetProperty(ref _cantidadVisible, value);
+    }
+
+    /// <summary>True si lo que se ve está filtrado: algún filtro de la consulta cargada o un Estado distinto de "Todos".
+    /// Elige entre "Todavía no hay gastos" y "Ningún gasto coincide con los filtros".</summary>
+    public bool HayFiltrosAplicados => (_consultaCargada?.Descripcion.Count ?? 0) > 0 || EstadoSeleccionado != EstadoTodos;
+
+    /// <summary>
+    /// El export serializa en el cliente las filas ya cargadas: sin finanzas.ver no salen de la pantalla, tras un 403 son
+    /// de una consulta rechazada y mientras carga pueden ser de otra consulta.
+    /// </summary>
+    public bool PuedeExportar => PuedeVerFinanzas && !SinPermiso && !Cargando;
+
+    protected override void OnPropertyChanged(PropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+        if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName is nameof(SinPermiso) or nameof(Cargando))
+        {
+            OnPropertyChanged(nameof(PuedeExportar));
+            ExportarPdfCommand.NotifyCanExecuteChanged();
+        }
+    }
 
     // ── Filtros ───────────────────────────────────────────────────────────────
     [ObservableProperty] private DateTime? _fechaDesde;
@@ -198,7 +234,8 @@ public partial class GastosViewModel : ViewModelBase
         _pdfExporter        = pdfExporter;
         _apertura           = apertura;
 
-        FilasView = new DataGridCollectionView(Filas);
+        FilasView = new DataGridCollectionView(Filas) { Filter = EsVisible };
+        Filas.CollectionChanged += (_, _) => RecalcularVisibles();
     }
 
     /// <summary>
@@ -207,6 +244,45 @@ public partial class GastosViewModel : ViewModelBase
     /// lee LineaPoaSeleccionada.Id sin depender de que ya esté en LineasPoaDisponibles.
     /// </summary>
     public void FiltrarPorLineaPoa(LineaPoa linea) => LineaPoaSeleccionada = linea;
+
+    /// <summary>Predicado del filtro de Estado: la grilla, el pie y el PDF usan el mismo, así lo que se cuenta y lo que se
+    /// exporta es lo que se ve.</summary>
+    internal bool EsVisible(object item) =>
+        item is GastoFila fila && (EstadoSeleccionado == EstadoTodos || fila.Estado == EstadoSeleccionado);
+
+    /// <summary>Estado no viaja al servidor (es calculado): refiltra al instante, sin consulta y sin espera.</summary>
+    partial void OnEstadoSeleccionadoChanged(string value) => AplicarFiltroEstado();
+
+    /// <summary>Si el filtro esconde la fila seleccionada, la selección se limpia: Editar, Pagos y Anular no actúan sobre
+    /// una fila que no se ve.</summary>
+    private void AplicarFiltroEstado()
+    {
+        FilasView.Refresh();
+        if (FilaSeleccionada is { } seleccionada && !EsVisible(seleccionada))
+            FilaSeleccionada = null;
+        RecalcularVisibles();
+        OnPropertyChanged(nameof(HayFiltrosAplicados));
+    }
+
+    private void RecalcularVisibles() => CantidadVisible = Filas.Count(f => EsVisible(f));
+
+    /// <summary>Arma la consulta con los filtros de pantalla y su descripción para el PDF (solo los activos: un PDF que no
+    /// dice que está filtrado miente sobre su universo).</summary>
+    private ConsultaGastos CapturarConsulta()
+    {
+        var partes = new List<string>();
+        if (FechaDesde is not null || FechaHasta is not null)
+            partes.Add($"Período: {FechaDesde?.ToString("dd/MM/yyyy") ?? "(sin desde)"} a {FechaHasta?.ToString("dd/MM/yyyy") ?? "(sin hasta)"}");
+        if (ProveedorSeleccionado is not null)
+            partes.Add($"Proveedor: {ProveedorSeleccionado.Nombre}");
+        if (FuenteSeleccionada is not null)
+            partes.Add($"Fuente: {FuenteSeleccionada.Nombre}");
+        if (RubroSeleccionado is not null)
+            partes.Add($"Rubro: {RubroSeleccionado.Nombre}");
+        if (LineaPoaSeleccionada is not null)
+            partes.Add($"Línea POA: {LineaPoaSeleccionada.Nombre}");
+        return new ConsultaGastos(ArmarFiltro(), partes);
+    }
 
     /// <summary>
     /// Combos de los filtros (una sola vez) y listado. La dispara la View (DataContextChanged) y Reintentar. Protegida: un
@@ -226,7 +302,7 @@ public partial class GastosViewModel : ViewModelBase
                     await CargarCombosAsync();
                     _combosCargados = true;
                 }
-                await ListarYAplicarAsync(ArmarFiltro(), turno);
+                await ListarYAplicarAsync(CapturarConsulta(), turno);
             }, MensajeSinPermisoGastos, turno);
         }
         catch (Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException)
@@ -308,10 +384,10 @@ public partial class GastosViewModel : ViewModelBase
     private async Task RecargarAsync()
     {
         var turno = _consultas.Empezar();
-        var filtro = ArmarFiltro();
+        var consulta = CapturarConsulta();
         try
         {
-            await EjecutarCargaProtegidaAsync(() => ListarYAplicarAsync(filtro, turno), MensajeSinPermisoGastos, turno);
+            await EjecutarCargaProtegidaAsync(() => ListarYAplicarAsync(consulta, turno), MensajeSinPermisoGastos, turno);
         }
         catch (Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException)
         {
@@ -320,20 +396,18 @@ public partial class GastosViewModel : ViewModelBase
         VaciarTrasUn403(turno);
     }
 
-    private async Task ListarYAplicarAsync(GastoFiltro filtro, ConsultaVigente.Turno turno)
+    private async Task ListarYAplicarAsync(ConsultaGastos consulta, ConsultaVigente.Turno turno)
     {
-        var gastos = await _service.ListarAsync(filtro);
+        var gastos = await _service.ListarAsync(consulta.Filtro);
         if (!turno.EsLaUltima)
             return;
 
         var ahora = DateTime.UtcNow;
-        var filas = gastos.Select(g => new GastoFila(g, ahora));
-        if (EstadoSeleccionado != EstadoTodos)
-            filas = filas.Where(f => f.Estado == EstadoSeleccionado);
-
         Filas.Clear();
-        foreach (var fila in filas)
-            Filas.Add(fila);
+        foreach (var gasto in gastos)
+            Filas.Add(new GastoFila(gasto, ahora));
+        _consultaCargada = consulta;
+        OnPropertyChanged(nameof(HayFiltrosAplicados));
     }
 
     /// <summary>Tras un 403 de la consulta vigente la grilla no conserva filas viejas (ni exportables).</summary>
@@ -496,25 +570,12 @@ public partial class GastosViewModel : ViewModelBase
     };
 
     /// <summary>
-    /// Describe los filtros ACTIVOS únicamente (spec 2026-09-18): un PDF que dice "Gastos" sin
-    /// aclarar que está filtrado por "Impagos" miente sobre su universo de datos. El filtro de
-    /// Estado se aplica EN MEMORIA (ver <see cref="RecargarAsync"/>, no llega a
-    /// <see cref="ArmarFiltro"/>), pero igual tiene que figurar acá: es el único filtro de esta
-    /// pantalla que no viaja al servidor.
+    /// Describe los filtros del resultado EN PANTALLA: los de la consulta cargada (no los que el usuario cambió y todavía
+    /// no recargaron) más el Estado vigente, que filtra en memoria y no viaja al servidor.
     /// </summary>
     private string ConstruirDescripcionFiltros()
     {
-        var partes = new List<string>();
-        if (FechaDesde is not null || FechaHasta is not null)
-            partes.Add($"Período: {FechaDesde?.ToString("dd/MM/yyyy") ?? "(sin desde)"} a {FechaHasta?.ToString("dd/MM/yyyy") ?? "(sin hasta)"}");
-        if (ProveedorSeleccionado is not null)
-            partes.Add($"Proveedor: {ProveedorSeleccionado.Nombre}");
-        if (FuenteSeleccionada is not null)
-            partes.Add($"Fuente: {FuenteSeleccionada.Nombre}");
-        if (RubroSeleccionado is not null)
-            partes.Add($"Rubro: {RubroSeleccionado.Nombre}");
-        if (LineaPoaSeleccionada is not null)
-            partes.Add($"Línea POA: {LineaPoaSeleccionada.Nombre}");
+        var partes = new List<string>(_consultaCargada?.Descripcion ?? []);
         if (EstadoSeleccionado != EstadoTodos)
             partes.Add($"Estado: {EstadoSeleccionado}");
 
@@ -523,18 +584,17 @@ public partial class GastosViewModel : ViewModelBase
 
     /// <summary>
     /// El guardado a disco corre bajo <see cref="ExportacionPdf"/> (bugfix 2026-08-14).
-    /// Exporta <see cref="Filas"/> (no la
-    /// respuesta cruda del servicio): es la colección que <see cref="RecargarAsync"/> repuebla ya
-    /// con el filtro de Estado aplicado en memoria — si se exportara otra cosa, el PDF podría
-    /// traer filas que el usuario no está viendo en pantalla.
+    /// Exporta las filas VISIBLES (las que pasan <see cref="EsVisible"/>), no <see cref="Filas"/>: con un Estado elegido,
+    /// el PDF no puede traer filas que el usuario no está viendo.
     /// </summary>
-    [RelayCommand(CanExecute = nameof(PuedeVerFinanzas))]
+    [RelayCommand(CanExecute = nameof(PuedeExportar))]
     private async Task ExportarPdfAsync()
     {
-        if (Filas.Count == 0)
+        var visibles = Filas.Where(f => EsVisible(f)).ToList();
+        if (visibles.Count == 0)
             return;
 
-        if (!await AvisoVolumenExportacion.ConfirmarAsync(Filas.Count, _confirmacion))
+        if (!await AvisoVolumenExportacion.ConfirmarAsync(visibles.Count, _confirmacion))
             return;
 
         await ExportacionPdf.EjecutarAsync(async () =>
@@ -544,7 +604,7 @@ public partial class GastosViewModel : ViewModelBase
                 DescripcionFiltros: ConstruirDescripcionFiltros(),
                 UsuarioEmisor: _session.UsuarioActual?.NombreCompleto ?? _session.UsuarioActual?.NombreUsuario ?? "Sistema");
 
-            var pdf = _pdfExporter.Exportar(Filas, ColumnasPdf, metadatos);
+            var pdf = _pdfExporter.Exportar(visibles, ColumnasPdf, metadatos);
             using var stream = new MemoryStream(pdf);
             var nombreArchivo = $"gastos-{DateTime.Now:yyyyMMdd}.pdf";
             var guardado = await _guardado.GuardarBytesAsync(

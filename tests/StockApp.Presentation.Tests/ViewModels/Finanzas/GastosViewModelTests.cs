@@ -170,9 +170,8 @@ public class GastosViewModelTests
         await vm.CargarAsync();
 
         vm.EstadoSeleccionado = "Pagada";
-        await vm.FiltrarCommand.ExecuteAsync(null);
 
-        var fila = Assert.Single(vm.Filas);
+        var fila = Assert.Single(vm.FilasView.Cast<GastoFila>());
         Assert.Equal("Pagada", fila.Estado);
     }
 
@@ -865,8 +864,8 @@ public class GastosViewModelTests
     /// <summary>
     /// Cubre la particularidad crítica de esta pantalla (spec 2026-09-18): <c>Estado</c> es un
     /// valor CALCULADO (<see cref="Gasto.CalcularEstado"/>) que no existe como columna en la
-    /// base — el filtro de estado se aplica EN MEMORIA sobre <see cref="GastosViewModel.Filas"/>
-    /// dentro de <c>FiltrarAsync</c> (no en el servidor). Si el PDF exportara la respuesta cruda
+    /// base — el filtro de estado se aplica EN MEMORIA con el predicado <c>EsVisible</c>
+    /// (no en el servidor). Si el PDF exportara la respuesta cruda
     /// del servicio en vez de <c>Filas</c>, este test lo detectaría: con "Pagada" seleccionado,
     /// solo debe llegar al exportador la fila ya pagada, nunca la pendiente.
     /// </summary>
@@ -880,7 +879,6 @@ public class GastosViewModelTests
         });
         await vm.CargarAsync();
         vm.EstadoSeleccionado = "Pagada";
-        await vm.FiltrarCommand.ExecuteAsync(null);
 
         IEnumerable<GastoFila>? filasCapturadas = null;
         MetadatosDocumento? metadatosCapturados = null;
@@ -1095,5 +1093,137 @@ public class GastosViewModelTests
         Assert.True(vm.SinPermiso);
         Assert.Equal(GastosViewModel.MensajeSinPermisoGastos, vm.MensajeSinPermiso);
         Assert.Empty(vm.Filas);
+    }
+
+    // ── Estado en el cliente, pie, vacíos y PDF de lo cargado ────────────────────
+
+    private static List<GastoFila> Visibles(GastosViewModel vm) => vm.FilasView.Cast<GastoFila>().ToList();
+
+    private static List<Gasto> PendienteYPagada() => new() { GastoDe(1, "Pendiente de pago"), GastoDe(2, "Ya pagado", pagado: true) };
+
+    [Fact]
+    public async Task Estado_RefiltraAlInstante_SinConsultarAlServidor()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear(PendienteYPagada());
+        await vm.CargarAsync();
+
+        vm.EstadoSeleccionado = "Pagada";
+
+        Assert.Equal("Pagada", Assert.Single(Visibles(vm)).Estado);
+        Assert.Equal(2, vm.Filas.Count);
+        Assert.Equal(1, vm.CantidadVisible);
+        svc.Verify(s => s.ListarAsync(It.IsAny<GastoFiltro>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task CantidadVisible_TrasCargar_CuentaTodas()
+    {
+        var (vm, _, _, _, _, _, _) = Crear(PendienteYPagada());
+
+        await vm.CargarAsync();
+
+        Assert.Equal(2, vm.CantidadVisible);
+    }
+
+    [Fact]
+    public async Task Estado_QueOcultaLaFilaSeleccionada_LimpiaLaSeleccion()
+    {
+        var (vm, _, _, _, _, _, _) = Crear(PendienteYPagada());
+        await vm.CargarAsync();
+        vm.FilaSeleccionada = vm.Filas.Single(f => f.Estado == "Pendiente");
+
+        vm.EstadoSeleccionado = "Pagada";
+
+        Assert.Null(vm.FilaSeleccionada);
+        Assert.False(vm.EditarCommand.CanExecute(null));
+        Assert.False(vm.AnularCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task Estado_QueDejaVerLaFilaSeleccionada_LaConserva()
+    {
+        var (vm, _, _, _, _, _, _) = Crear(PendienteYPagada());
+        await vm.CargarAsync();
+        var pagada = vm.Filas.Single(f => f.Estado == "Pagada");
+        vm.FilaSeleccionada = pagada;
+
+        vm.EstadoSeleccionado = "Pagada";
+
+        Assert.Same(pagada, vm.FilaSeleccionada);
+    }
+
+    [Fact]
+    public async Task HayFiltrosAplicados_SinFiltrosEsFalse_ConEstadoEsTrue()
+    {
+        var (vm, _, _, _, _, _, _) = Crear(PendienteYPagada());
+        await vm.CargarAsync();
+        Assert.False(vm.HayFiltrosAplicados);
+
+        vm.EstadoSeleccionado = "Vencida";
+
+        Assert.True(vm.HayFiltrosAplicados);
+        Assert.Equal(0, vm.CantidadVisible);
+    }
+
+    [Fact]
+    public async Task HayFiltrosAplicados_ConUnFiltroDeServidorCargado_EsTrue()
+    {
+        var (vm, _, _, _, _, _, _) = Crear();
+        vm.FechaDesde = new DateTime(2026, 11, 1);
+
+        await vm.CargarAsync();
+
+        Assert.True(vm.HayFiltrosAplicados);
+    }
+
+    private static void CapturarExporte(Mock<IPdfExporter> pdf, Mock<IServicioGuardadoArchivo> guardado,
+        Action<IEnumerable<GastoFila>, MetadatosDocumento> capturar)
+    {
+        pdf.Setup(e => e.Exportar(It.IsAny<IEnumerable<GastoFila>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+            .Callback<IEnumerable<GastoFila>, IReadOnlyList<ColumnaPdf>, MetadatosDocumento, ResumenPdf?>((items, _, m, _) => capturar(items, m))
+            .Returns(new byte[] { 1 });
+        guardado.Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
+            .ReturnsAsync(true);
+    }
+
+    /// <summary>Un filtro cambiado que todavía no recargó no figura en el PDF: el PDF rotula lo que se ve.</summary>
+    [Fact]
+    public async Task ExportarPdf_ConFiltroCambiadoSinRecargar_RotulaLoCargado()
+    {
+        var (vm, _, _, _, guardado, pdf, _) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
+        await vm.CargarAsync();
+        vm.ProveedorSeleccionado = vm.ProveedoresDisponibles[0];
+        MetadatosDocumento? metadatos = null;
+        CapturarExporte(pdf, guardado, (_, m) => metadatos = m);
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        Assert.Equal("Sin filtros aplicados.", metadatos!.DescripcionFiltros);
+    }
+
+    [Fact]
+    public async Task ExportarPdf_MientrasCarga_NoSePuedeEjecutar()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear();
+        var pendiente = new TaskCompletionSource<IReadOnlyList<Gasto>>();
+        svc.Setup(s => s.ListarAsync(It.IsAny<GastoFiltro>())).Returns(pendiente.Task);
+
+        var carga = vm.CargarAsync();
+        Assert.False(vm.ExportarPdfCommand.CanExecute(null));
+
+        pendiente.SetResult(new List<Gasto> { GastoDe(1, "Uno") });
+        await carga;
+        Assert.True(vm.ExportarPdfCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task ExportarPdf_ConSinPermiso_NoSePuedeEjecutar()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear();
+        svc.Setup(s => s.ListarAsync(It.IsAny<GastoFiltro>())).ThrowsAsync(new UnauthorizedAccessException("403"));
+
+        await vm.CargarAsync();
+
+        Assert.False(vm.ExportarPdfCommand.CanExecute(null));
     }
 }
