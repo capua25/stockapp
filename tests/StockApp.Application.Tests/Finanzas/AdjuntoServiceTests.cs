@@ -99,6 +99,33 @@ public class AdjuntoServiceTests
     }
 
     [Fact]
+    public async Task AgregarAGastoAsync_GastoAnulado_LanzaReglaDeNegocio()
+    {
+        _gastos.Setup(g => g.ObtenerPorIdAsync(7)).ReturnsAsync(new Gasto { Id = 7, Activo = false });
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => _service.AgregarAGastoAsync(7, "factura.pdf", BytesPdf));
+
+        Assert.Equal("No se puede adjuntar a un gasto anulado.", ex.Message);
+        _adjuntos.Verify(r => r.AgregarAsync(It.IsAny<Adjunto>(), It.IsAny<byte[]>()), Times.Never);
+        _audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), It.IsAny<AccionAuditada>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>()),
+            Times.Never);
+    }
+
+    /// <summary>La regla va antes de validar el archivo: a un gasto anulado no se le adjunta nada, sea cual sea el archivo.</summary>
+    [Fact]
+    public async Task AgregarAGastoAsync_GastoAnuladoYArchivoInvalido_RechazaPorAnulado()
+    {
+        _gastos.Setup(g => g.ObtenerPorIdAsync(7)).ReturnsAsync(new Gasto { Id = 7, Activo = false });
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => _service.AgregarAGastoAsync(7, "archivo.exe", new byte[] { 0x00, 0x01, 0x02 }));
+
+        Assert.Equal("No se puede adjuntar a un gasto anulado.", ex.Message);
+    }
+
+    [Fact]
     public async Task AgregarAPagoAsync_VerificaPermisoRegistrarPagos()
     {
         _adjuntos.Setup(r => r.AgregarAsync(It.IsAny<Adjunto>(), It.IsAny<byte[]>())).ReturnsAsync(11);

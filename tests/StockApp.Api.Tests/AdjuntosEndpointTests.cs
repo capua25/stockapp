@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using StockApp.Api.Auth;
 using StockApp.Api.Tests.Fixtures;
@@ -35,7 +36,7 @@ public class AdjuntosEndpointTests : ApiTestBase
     /// auditoría de Adjunto exige por FK Restrict a Usuarios — mismo patrón que
     /// GastosEndpointTests.SeedMaestrosAsync.
     /// </summary>
-    private async Task<int> SembrarGastoAsync()
+    private async Task<int> SembrarGastoAsync(bool activo = true)
     {
         using var ctx = Factory.CrearContexto();
         await DatosDePrueba.SeedUsuarioAsync(ctx, "admin.test", "Secreta123!", RolUsuario.Admin);
@@ -54,6 +55,7 @@ public class AdjuntosEndpointTests : ApiTestBase
             ProveedorId = proveedor.Id, Detalle = "Test", Fecha = DateTime.UtcNow,
             MontoTotal = 100m, FuenteFinanciamientoId = fuente.Id, RubroGastoId = rubro.Id,
             CondicionPago = CondicionPago.Contado,
+            Activo = activo,
         };
         ctx.Gastos.Add(gasto);
         await ctx.SaveChangesAsync();
@@ -118,6 +120,20 @@ public class AdjuntosEndpointTests : ApiTestBase
             $"/finanzas/gastos/{gastoId}/adjuntos", ArmarMultipart(new byte[] { 0x00, 0x01 }, "malware.exe"));
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostAdjuntoGasto_GastoAnulado_Devuelve409()
+    {
+        var gastoId = await SembrarGastoAsync(activo: false);
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var response = await client.PostAsync(
+            $"/finanzas/gastos/{gastoId}/adjuntos", ArmarMultipart(BytesPdf, "factura.pdf"));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("No se puede adjuntar a un gasto anulado.", doc.RootElement.GetProperty("detail").GetString());
     }
 
     [Fact]

@@ -35,6 +35,9 @@ public class AdjuntoService : IAdjuntoService
         var gasto = await _gastos.ObtenerPorIdAsync(gastoId)
             ?? throw new EntidadNoEncontradaException($"No existe el gasto {gastoId}.");
 
+        if (!gasto.Activo)
+            throw new ReglaDeNegocioException("No se puede adjuntar a un gasto anulado.");
+
         AdjuntoValidador.Validar(contenido, nombreArchivo);
 
         var adjunto = new Adjunto

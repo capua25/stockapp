@@ -3,6 +3,7 @@ using StockApp.Application.Authorization;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Finanzas;
 using Xunit;
@@ -233,5 +234,21 @@ public class AdjuntosPanelViewModelTests
 
         _confirmacion.Verify(c => c.InformarAsync("error de red"), Times.Once);
         Assert.Empty(_vm.Items);
+    }
+
+    /// <summary>El 409 de adjuntar a un gasto anulado llega como ReglaDeNegocioException con el detail del servidor
+    /// (ApiErrores) y sale por el mismo aviso que cualquier error del panel.</summary>
+    [Fact]
+    public async Task AgregarAsync_GastoAnuladoRechazadoPorElServidor_InformaElMensaje()
+    {
+        _seleccion.Setup(s => s.SeleccionarArchivoAsync()).ReturnsAsync(("factura.pdf", new byte[] { 1, 2 }));
+        _adjuntos.Setup(a => a.AgregarAGastoAsync(5, "factura.pdf", It.IsAny<byte[]>()))
+            .ThrowsAsync(new ReglaDeNegocioException("No se puede adjuntar a un gasto anulado."));
+        _adjuntos.Setup(a => a.ListarPorGastoAsync(5)).ReturnsAsync(new List<AdjuntoDto>());
+        await _vm.InicializarAsync(5, null);
+
+        await _vm.AgregarCommand.ExecuteAsync(null);
+
+        _confirmacion.Verify(c => c.InformarAsync("No se puede adjuntar a un gasto anulado."), Times.Once);
     }
 }
