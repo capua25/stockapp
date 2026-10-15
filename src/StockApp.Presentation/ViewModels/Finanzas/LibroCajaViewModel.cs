@@ -307,7 +307,8 @@ public partial class LibroCajaViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(PuedeExportar))]
     private async Task ExportarPdfAsync()
     {
-        if (SinMovimientosEnElPeriodo)
+        // ExecuteAsync directo no consulta CanExecute: la regla completa se repite acá.
+        if (!PuedeExportar)
             return;
         if (LibroAnual is { } anual)
         {

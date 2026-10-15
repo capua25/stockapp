@@ -868,6 +868,42 @@ public class LibroCajaViewModelTests
     }
 
     [Fact]
+    public async Task ExportarPdfCommand_EjecutadoDirectoMientrasCarga_NoExporta()
+    {
+        var (vm, svc, _, _, pdfExporterMock, _, _) = Crear(Octubre2026);
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(MesDe(2026, 10, 0m, 5m, Mov(1, 5m, 0m, 5m)));
+        await vm.CargarAsync();
+        var pendiente = new TaskCompletionSource<LibroCajaMesDto>();
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).Returns(pendiente.Task);
+        var carga = vm.CargarAsync();
+        Assert.True(vm.Cargando);
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);   // ExecuteAsync directo no consulta CanExecute
+
+        pendiente.SetResult(MesDe(2026, 10, 0m, 5m, Mov(1, 5m, 0m, 5m)));
+        await carga;
+        pdfExporterMock.Verify(e => e.Exportar(
+            It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ExportarPdfCommand_EjecutadoDirectoConSinPermiso_NoExporta()
+    {
+        var (vm, svc, _, _, pdfExporterMock, _, _) = Crear(Octubre2026);
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(MesDe(2026, 10, 0m, 5m, Mov(1, 5m, 0m, 5m)));
+        await vm.CargarAsync();
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).ThrowsAsync(new UnauthorizedAccessException("403"));
+        await vm.CargarAsync();
+        Assert.True(vm.SinPermiso);
+        Assert.NotNull(vm.LibroMes);
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        pdfExporterMock.Verify(e => e.Exportar(
+            It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()), Times.Never);
+    }
+
+    [Fact]
     public async Task ExportarPdfCommand_ConMes_UsaLasDiezColumnasDeLaGrilla()
     {
         // Literal, NO LibroCajaViewModel.ColumnasPdf: comparar la constante contra sí misma sería
