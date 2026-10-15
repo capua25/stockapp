@@ -287,6 +287,91 @@
                     </v2:GrillaUniformeV2>
                 </StackPanel>
 
+                <StackPanel x:Name="BloquesAnio" Spacing="16">
+                    <StackPanel.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="LibroAnual" Converter="{x:Static ObjectConverters.IsNotNull}" />
+                            <Binding Path="!SinMovimientosEnElPeriodo" />
+                        </MultiBinding>
+                    </StackPanel.IsVisible>
+
+                    <v2:TarjetaContenido x:Name="TarjetaMeses">
+                        <StackPanel>
+                            <TextBlock Classes="titulo-seccion" Margin="0,0,0,12" Text="Totales por mes" />
+                            <!-- Los doce meses, también los que están en cero. Importes de ancho fijo para el peor caso de 8 cifras
+                                 (GATE 1, Q-ANIO y Q-NETO): INGRESOS y EGRESOS 124 = ceil4("$ 12.345.678,90" 107 + 16); NETO 192 =
+                                 ceil4(insignia "Déficit" 54 + 8 + "-$ 12.345.678,90" 113 + 16), con la insignia a la izquierda y el
+                                 número a la derecha, como SALDO de Control POA. MES toma el resto y ordena por número. -->
+                            <DataGrid x:Name="GrillaMeses" ItemsSource="{Binding LibroAnual.TotalesPorMes}" IsReadOnly="True" CanUserSortColumns="True">
+                                <DataGrid.Columns>
+                                    <DataGridTemplateColumn Header="MES" Width="*" SortMemberPath="Mes">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate x:DataType="dto:TotalMensualDto">
+                                                <TextBlock Text="{Binding Mes, Converter={x:Static conv:NombreMesConverter.Instance}}" VerticalAlignment="Center" />
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTemplateColumn Header="INGRESOS" Width="124" CellStyleClasses="num" SortMemberPath="Ingresos">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate x:DataType="dto:TotalMensualDto">
+                                                <TextBlock Text="{Binding Ingresos, Converter={x:Static conv:MonedaConverter.Instance}}" VerticalAlignment="Center" />
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTemplateColumn Header="EGRESOS" Width="124" CellStyleClasses="num" SortMemberPath="Egresos">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate x:DataType="dto:TotalMensualDto">
+                                                <TextBlock Text="{Binding Egresos, Converter={x:Static conv:MonedaConverter.Instance}}" VerticalAlignment="Center" />
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTemplateColumn Header="NETO" Width="192" CellStyleClasses="num" SortMemberPath="Neto">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate x:DataType="dto:TotalMensualDto">
+                                                <Grid VerticalAlignment="Center">
+                                                    <v2:Insignia Texto="Déficit" Variante="Peligro" HorizontalAlignment="Left"
+                                                                 IsVisible="{Binding Neto, Converter={x:Static conv:EsNegativoConverter.Instance}}" />
+                                                    <TextBlock Text="{Binding Neto, Converter={x:Static conv:MonedaConverter.Instance}}"
+                                                               Classes.negativo="{Binding Neto, Converter={x:Static conv:EsNegativoConverter.Instance}}"
+                                                               HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                                </Grid>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                            <TextBlock x:Name="PieConteoMeses" Classes="pie-conteo" Margin="0,12,0,0"
+                                       Text="{Binding MesesConMovimientos, Converter={x:Static conv:ConteoConverter.Instance}, ConverterParameter='mes con movimientos|meses con movimientos'}" />
+                        </StackPanel>
+                    </v2:TarjetaContenido>
+
+                    <v2:TarjetaContenido x:Name="TarjetaRubrosAnio">
+                        <StackPanel>
+                            <TextBlock Classes="titulo-seccion" Margin="0,0,0,12" Text="Totales por rubro" />
+                            <DataGrid x:Name="GrillaRubrosAnio" ItemsSource="{Binding LibroAnual.TotalesPorRubro}" IsReadOnly="True" CanUserSortColumns="True">
+                                <DataGrid.Columns>
+                                    <DataGridTemplateColumn Header="RUBRO" Width="*" SortMemberPath="Clave">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate x:DataType="dto:TotalPorClaveDto">
+                                                <TextBlock Text="{Binding Clave}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Clave}"
+                                                           beh:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                    <DataGridTemplateColumn Header="TOTAL" Width="Auto" CellStyleClasses="num" SortMemberPath="Total"
+                                                            beh:ColumnaAuto.Medir="True" beh:ColumnaAuto.Conversor="{x:Static conv:MonedaConverter.Instance}">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate x:DataType="dto:TotalPorClaveDto">
+                                                <TextBlock Text="{Binding Total, Converter={x:Static conv:MonedaConverter.Instance}}" VerticalAlignment="Center" />
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </StackPanel>
+                    </v2:TarjetaContenido>
+                </StackPanel>
+
             </StackPanel>
         </StackPanel>
     </ScrollViewer>

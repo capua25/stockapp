@@ -64,4 +64,6 @@ public class LibroCajaComparacionTests
     [AvaloniaFact] public void LibroCajaSinConexion_IgualAlMockup_1366x768() => Comparar(DatosLibroCaja.SinConexion(), "finanzas/libro-caja-sin-conexion.html", TamanoLienzo.Municipio);
     [AvaloniaFact] public void LibroCajaSinPermiso_IgualAlMockup() => Comparar(DatosLibroCaja.SinPermiso(), "finanzas/libro-caja-sin-permiso.html");
     [AvaloniaFact] public void LibroCajaSinPermiso_IgualAlMockup_1366x768() => Comparar(DatosLibroCaja.SinPermiso(), "finanzas/libro-caja-sin-permiso.html", TamanoLienzo.Municipio);
+    [AvaloniaFact] public void LibroCajaAnio_IgualAlMockup() => Comparar(DatosLibroCaja.AnioCompleto(), "finanzas/libro-caja-anio.html");
+    [AvaloniaFact] public void LibroCajaAnio_IgualAlMockup_1366x768() => Comparar(DatosLibroCaja.AnioCompleto(), "finanzas/libro-caja-anio.html", TamanoLienzo.Municipio);
 }
