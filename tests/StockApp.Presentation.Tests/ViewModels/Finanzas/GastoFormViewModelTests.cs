@@ -940,4 +940,87 @@ public class GastoFormViewModelTests
         Assert.Equal("La condición de pago no se cambia: anulá el gasto y cargalo de nuevo",
             GastoFormViewModel.TextoCondicionPagoFija);
     }
+
+    // ── R9: la solo lectura vive en el VM (no solo en la vista) ──────────────────
+
+    [Fact]
+    public async Task GastoAnulado_NoSePuedeGuardar_PeroElActivoIgualSi()
+    {
+        var (activo, _, _, _) = Crear();
+        activo.CargarParaEditar(GastoExistente());
+        await activo.InicializarAsync();
+        var (anulado, _, _, _) = Crear();
+        anulado.CargarParaEditar(GastoExistente(activo: false));
+        await anulado.InicializarAsync();
+
+        Assert.True(activo.GuardarCommand.CanExecute(null));
+        Assert.False(anulado.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task SinRegistrarGastos_NoSePuedeGuardar()
+    {
+        var (vm, _, _, _) = Crear(RolUsuario.Operador, new[] { Permisos.VerFinanzas });
+        await CompletarFormularioValidoAsync(vm);
+
+        Assert.False(vm.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task RevocarRegistrarGastosEnCaliente_DeshabilitaGuardarYAvisa()
+    {
+        var permisos = new HashSet<string> { Permisos.VerFinanzas, Permisos.RegistrarGastos };
+        var (vm, _, _, _) = Crear(RolUsuario.Operador, permisos);
+        await CompletarFormularioValidoAsync(vm);
+        Assert.True(vm.GuardarCommand.CanExecute(null));
+        var avisos = 0;
+        vm.GuardarCommand.CanExecuteChanged += (_, _) => avisos++;
+
+        permisos.Remove(Permisos.RegistrarGastos);
+        vm.NotificarPermisosActualizados();
+
+        Assert.True(avisos > 0);
+        Assert.False(vm.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void CargarUnAnulado_AvisaQueGuardarCambio()
+    {
+        var (vm, _, _, _) = Crear();
+        var gasto = GastoExistente();
+        vm.CargarParaEditar(gasto);   // mismo objeto: solo cambia EsAnulado (la Fecha es UtcNow y diferiría)
+        var avisos = 0;
+        vm.GuardarCommand.CanExecuteChanged += (_, _) => avisos++;
+
+        gasto.Activo = false;
+        vm.CargarParaEditar(gasto);
+
+        Assert.True(avisos > 0);
+    }
+
+    [Fact]
+    public void SoloLectura_LaCondicionDePagoNoSeCambia()
+    {
+        var (sinPermiso, _, _, _) = Crear(RolUsuario.Operador, new[] { Permisos.VerFinanzas });
+        var (anulado, _, _, _) = Crear();
+        anulado.CargarParaEditar(GastoExistente(activo: false));
+
+        Assert.False(sinPermiso.PuedeCambiarCondicionPago);
+        Assert.False(anulado.PuedeCambiarCondicionPago);
+    }
+
+    [Fact]
+    public void CargarUnAnulado_AvisaQueLaCondicionDePagoCambio()
+    {
+        var (vm, _, _, _) = Crear();
+        var gasto = GastoExistente();
+        vm.CargarParaEditar(gasto);   // EsEdicion ya true: aísla la notificación de EsAnulado
+        var avisos = new List<string?>();
+        vm.PropertyChanged += (_, e) => avisos.Add(e.PropertyName);
+
+        gasto.Activo = false;
+        vm.CargarParaEditar(gasto);
+
+        Assert.Contains(nameof(GastoFormViewModel.PuedeCambiarCondicionPago), avisos);
+    }
 }

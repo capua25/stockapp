@@ -50,6 +50,7 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
     public override void NotificarPermisosActualizados()
     {
         base.NotificarPermisosActualizados();
+        GuardarCommand.NotifyCanExecuteChanged();   // la base notifica propiedades, no comandos
         _adjuntosPanel.NotificarPermisosActualizados();
     }
 
@@ -75,7 +76,7 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
 
     /// <summary>La condición de pago de un gasto registrado no cambia (el servidor lo rechaza): en edición el tilde queda
     /// deshabilitado; en alta y "desde entrada" se elige.</summary>
-    public bool PuedeCambiarCondicionPago => !EsEdicion;
+    public bool PuedeCambiarCondicionPago => !EsEdicion && !SoloLectura;
 
     /// <summary>Explicación debajo del tilde deshabilitado en edición.</summary>
     public const string TextoCondicionPagoFija = "La condición de pago no se cambia: anulá el gasto y cargalo de nuevo";
@@ -134,6 +135,8 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SoloLectura))]
     [NotifyPropertyChangedFor(nameof(MostrarSeccionAdjuntos))]
+    [NotifyPropertyChangedFor(nameof(PuedeCambiarCondicionPago))]
+    [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
     private bool _esAnulado;
 
     public string Titulo => EsEdicion
@@ -348,7 +351,7 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
 
     /// <summary>Guardar se habilita con todas las reglas del cliente cumplidas (estén o no tocados los campos) y con los
     /// datos de finanzas a la vista.</summary>
-    private bool PuedeGuardar() => !SinPermiso && CamposValidados.All(c => ReglaDe(c) is null);
+    private bool PuedeGuardar() => !SinPermiso && !SoloLectura && CamposValidados.All(c => ReglaDe(c) is null);
 
     public IAsyncRelayCommand GuardarCommand => field ??= ComandoDeGuardado(GuardarAsync, PuedeGuardar);
 
