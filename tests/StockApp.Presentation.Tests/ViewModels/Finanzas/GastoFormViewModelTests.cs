@@ -753,4 +753,75 @@ public class GastoFormViewModelTests
         Assert.Equal("Elegí el rubro.", GastoFormViewModel.MensajeRubroObligatorio);
         Assert.Equal("Un gasto a crédito exige fecha de vencimiento.", GastoFormViewModel.MensajeVencimientoObligatorio);
     }
+
+    // ── Guardar avisa cuando cambia lo que decide su CanExecute (CanExecute(null) lo recalcula siempre: no lo prueba) ──
+
+    [Fact]
+    public async Task CambiarLaFecha_AvisaQueGuardarCambio()
+    {
+        var (vm, _, _, _) = Crear();
+        await CompletarFormularioValidoAsync(vm);
+        var avisos = 0;
+        vm.GuardarCommand.CanExecuteChanged += (_, _) => avisos++;
+
+        vm.FechaSeleccionada = null;
+
+        Assert.True(avisos > 0);
+    }
+
+    [Fact]
+    public async Task TildarOQuitarCredito_AvisaQueGuardarCambio()
+    {
+        var (vm, _, _, _) = Crear();
+        await CompletarFormularioValidoAsync(vm);
+        var avisos = 0;
+        vm.GuardarCommand.CanExecuteChanged += (_, _) => avisos++;
+
+        vm.EsCredito = true;
+
+        Assert.True(avisos > 0);
+    }
+
+    [Fact]
+    public async Task CambiarElVencimiento_AvisaQueGuardarCambio()
+    {
+        var (vm, _, _, _) = Crear();
+        await CompletarFormularioValidoAsync(vm);
+        vm.EsCredito = true;
+        var avisos = 0;
+        vm.GuardarCommand.CanExecuteChanged += (_, _) => avisos++;
+
+        vm.FechaVencimientoSeleccionada = DateTime.Today.AddDays(5);
+
+        Assert.True(avisos > 0);
+    }
+
+    [Fact]
+    public async Task DestildarCredito_SinVencimiento_AvisaQueGuardarSeHabilito()
+    {
+        var (vm, _, _, _) = Crear();
+        await CompletarFormularioValidoAsync(vm);
+        vm.EsCredito = true;
+        var avisos = 0;
+        vm.GuardarCommand.CanExecuteChanged += (_, _) => avisos++;
+
+        vm.EsCredito = false;
+
+        Assert.True(avisos > 0);
+        Assert.True(vm.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task MarcarTocadoDosVeces_AvisaUnaSolaVez()
+    {
+        var (vm, _, _, _) = Crear();
+        await vm.InicializarAsync();
+        var avisos = new List<string?>();
+        vm.ErrorsChanged += (_, e) => avisos.Add(e.PropertyName);
+
+        vm.MarcarTocado(nameof(GastoFormViewModel.Detalle));
+        vm.MarcarTocado(nameof(GastoFormViewModel.Detalle));
+
+        Assert.Single(avisos);
+    }
 }
