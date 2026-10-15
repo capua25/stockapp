@@ -469,6 +469,10 @@ public partial class GastosViewModel : ViewModelBase
 
     private bool TieneSeleccion() => FilaSeleccionada is not null;
 
+    /// <summary>Un gasto ya anulado no se vuelve a anular (el servidor respondería "ya está anulado"); Editar sí lo abre,
+    /// en solo lectura.</summary>
+    private bool PuedeAnular() => FilaSeleccionada is { Gasto.Activo: true };
+
     [RelayCommand(CanExecute = nameof(TieneSeleccion))]
     private async Task EditarAsync()
     {
@@ -487,7 +491,7 @@ public partial class GastosViewModel : ViewModelBase
             _navigation.Navegar<PagosGastoViewModel>(vm => vm.CargarParaGasto(gasto)));
     }
 
-    [RelayCommand(CanExecute = nameof(TieneSeleccion))]
+    [RelayCommand(CanExecute = nameof(PuedeAnular))]
     private async Task AnularAsync()
     {
         if (FilaSeleccionada is null) return;

@@ -1393,4 +1393,31 @@ public class GastosViewModelTests
         svc.Verify(s => s.ListarAsync(It.IsAny<GastoFiltro>()), Times.Once);   // solo la carga inicial
         Assert.Equal(2, vm.Filas.Count);                                       // las filas cargadas no se tocan
     }
+
+    // ── Anular sobre una fila anulada ───────────────────────────────────────────
+
+    [Fact]
+    public async Task Anular_SobreUnaFilaAnulada_EstaDeshabilitado_YEditarNo()
+    {
+        var (vm, _, _, _, _, _, _) = Crear(new List<Gasto> { GastoDe(1, "Anulado", activo: false) });
+        await vm.CargarAsync();
+
+        vm.FilaSeleccionada = vm.Filas[0];
+
+        Assert.Equal("Anulada", vm.FilaSeleccionada.Estado);
+        Assert.False(vm.AnularCommand.CanExecute(null));
+        Assert.True(vm.EditarCommand.CanExecute(null));
+    }
+
+    // Caracterización (R4): nace verde y ninguna mutación lo pone en rojo; documenta el comportamiento previo.
+    [Fact]
+    public async Task Anular_SobreUnaFilaActiva_EstaHabilitado()
+    {
+        var (vm, _, _, _, _, _, _) = Crear(new List<Gasto> { GastoDe(1, "Activo") });
+        await vm.CargarAsync();
+
+        vm.FilaSeleccionada = vm.Filas[0];
+
+        Assert.True(vm.AnularCommand.CanExecute(null));
+    }
 }
