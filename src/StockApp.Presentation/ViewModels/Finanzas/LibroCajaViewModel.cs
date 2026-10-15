@@ -117,7 +117,6 @@ public partial class LibroCajaViewModel : ViewModelBase
     /// <summary>Tarea del último debounce, para que los tests la esperen de forma determinista.</summary>
     internal Task _tareaDebounce = Task.CompletedTask;
 
-    private CancellationTokenSource? _debounceCts;
 
     partial void OnAnioChanged(int value) => ProgramarRecarga();
 
@@ -130,32 +129,12 @@ public partial class LibroCajaViewModel : ViewModelBase
 
     partial void OnVerAnioCompletoChanged(bool value) => ProgramarRecarga();
 
+    /// <summary>Debounce de año, mes y modo: de una ráfaga de cambios solo el último va al servidor.</summary>
+    private RecargaConDebounce Recarga => field ??= new RecargaConDebounce(() => EsperaDebounce);
+
     /// <summary>Un cambio nuevo cancela la espera anterior. Un texto inválido en un NumericUpDown no llega acá (el VM
     /// conserva el valor), así que no recarga con el valor viejo.</summary>
-    private void ProgramarRecarga()
-    {
-        _debounceCts?.Cancel();
-        _debounceCts?.Dispose();
-        _debounceCts = new CancellationTokenSource();
-        _tareaDebounce = DebounceCargarAsync(_debounceCts.Token);
-    }
-
-    private async Task DebounceCargarAsync(CancellationToken ct)
-    {
-        try
-        {
-            await Task.Delay(EsperaDebounce, ct);
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
-
-        if (ct.IsCancellationRequested)
-            return;
-
-        await CargarAsync();
-    }
+    private void ProgramarRecarga() => _tareaDebounce = Recarga.Programar(CargarAsync);
 
     /// <summary>Texto del estado "Sin permiso" cuando el servidor rechaza la carga (403).</summary>
     public const string MensajeSinPermisoLibroCaja = "No tenés permiso para ver el libro caja.";

@@ -35,7 +35,6 @@ public partial class ProductoListViewModel : ViewModelBase
     private readonly IConfirmacionService _confirmacion;
     private readonly ICurrentSession      _session;
 
-    private CancellationTokenSource? _debounceCts;
     private readonly ConsultaVigente _consultas = new();
 
     /// <summary>La vista muestra "No se pudo conectar con el servidor" con Reintentar en la card (ver <see cref="ViewModelBase.SinConexion"/>).</summary>
@@ -116,36 +115,14 @@ public partial class ProductoListViewModel : ViewModelBase
         }, MensajeSinPermisoListado, turno);
     }
 
+    /// <summary>Debounce de la búsqueda automática: de una ráfaga de teclas solo la última va al servidor.</summary>
+    private RecargaConDebounce Recarga => field ??= new RecargaConDebounce(() => EsperaDebounce);
+
     /// <summary>
-    /// Dispara la búsqueda automática con debounce cada vez que cambia el filtro, para no
-    /// golpear el servicio en cada tecla. Cancela la búsqueda en curso (si la hay) antes de
-    /// programar la nueva espera.
+    /// Dispara la búsqueda automática con debounce cada vez que cambia el filtro, para no golpear el servicio en cada
+    /// tecla. Un cambio nuevo cancela la espera anterior. El botón Buscar consulta sin debounce.
     /// </summary>
-    partial void OnFiltroBusquedaChanged(string? value)
-    {
-        _debounceCts?.Cancel();
-        _debounceCts?.Dispose();
-        _debounceCts = new CancellationTokenSource();
-        _tareaDebounce = DebounceBuscarAsync(_debounceCts.Token);
-    }
-
-    private async Task DebounceBuscarAsync(CancellationToken ct)
-    {
-        try
-        {
-            await Task.Delay(EsperaDebounce, ct);
-        }
-        catch (OperationCanceledException)
-        {
-            // Búsqueda obsoleta: se tipeó de nuevo antes de que venza la espera, se descarta.
-            return;
-        }
-
-        if (ct.IsCancellationRequested)
-            return;
-
-        await EjecutarBusquedaAsync();
-    }
+    partial void OnFiltroBusquedaChanged(string? value) => _tareaDebounce = Recarga.Programar(EjecutarBusquedaAsync);
 
     public IAsyncRelayCommand BuscarCommand => field ??= ComandoDeGuardado(BuscarAsync);
 

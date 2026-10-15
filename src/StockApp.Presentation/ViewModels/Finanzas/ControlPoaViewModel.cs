@@ -75,7 +75,6 @@ public partial class ControlPoaViewModel : ViewModelBase
     /// <summary>Tarea del último debounce, para que los tests la esperen de forma determinista (patrón de Productos).</summary>
     internal Task _tareaDebounce = Task.CompletedTask;
 
-    private CancellationTokenSource? _debounceCts;
     private readonly ConsultaVigente _consultas = new();
 
     /// <summary>Texto del estado "Sin permiso" cuando el servidor rechaza la carga (403).</summary>
@@ -109,32 +108,12 @@ public partial class ControlPoaViewModel : ViewModelBase
         }, MensajeSinPermisoControlPoa, turno);
     }
 
+    /// <summary>Debounce del Ejercicio: de una ráfaga de cambios solo el último va al servidor.</summary>
+    private RecargaConDebounce Recarga => field ??= new RecargaConDebounce(() => EsperaDebounce);
+
     /// <summary>Cambiar el Ejercicio recarga sola tras la espera; un cambio nuevo cancela la espera anterior. Un texto
     /// inválido en el NumericUpDown no llega acá (Ejercicio conserva el valor), así que no recarga con el año viejo.</summary>
-    partial void OnEjercicioChanged(int value)
-    {
-        _debounceCts?.Cancel();
-        _debounceCts?.Dispose();
-        _debounceCts = new CancellationTokenSource();
-        _tareaDebounce = DebounceCargarAsync(_debounceCts.Token);
-    }
-
-    private async Task DebounceCargarAsync(CancellationToken ct)
-    {
-        try
-        {
-            await Task.Delay(EsperaDebounce, ct);
-        }
-        catch (OperationCanceledException)
-        {
-            return;
-        }
-
-        if (ct.IsCancellationRequested)
-            return;
-
-        await CargarAsync();
-    }
+    partial void OnEjercicioChanged(int value) => _tareaDebounce = Recarga.Programar(CargarAsync);
 
     /// <summary>
     /// El export serializa en el cliente las <see cref="Filas"/> ya cargadas, sin llamar al servidor: tras un 403 esas
