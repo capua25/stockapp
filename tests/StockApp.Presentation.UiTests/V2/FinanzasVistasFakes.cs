@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Finanzas;
@@ -34,8 +35,31 @@ internal sealed class FinanzasVistasFake : IFinanzasVistasService
             : Task.FromResult<IReadOnlyList<ControlPoaLineaDto>>(Lineas.ToArray());
     }
 
-    public Task<LibroCajaMesDto> ObtenerLibroCajaMesAsync(int anio, int mes) => throw new NotSupportedException();
-    public Task<LibroCajaAnualDto> ObtenerLibroCajaAnualAsync(int anio) => throw new NotSupportedException();
+    public Dictionary<(int Anio, int Mes), LibroCajaMesDto> Meses { get; } = new();
+    public Dictionary<int, LibroCajaAnualDto> Anios { get; } = new();
+    public TaskCompletionSource<LibroCajaMesDto>? PendienteMes { get; set; }
+    public Exception? FallaLibroCaja { get; set; }
+
+    /// <summary>Consultas de libro caja en orden: "2026-10" para un mes, "2026" para un año.</summary>
+    public List<string> ConsultasLibroCaja { get; } = new();
+
+    /// <summary>Sin datos cargados para ese mes responde un mes vacío, como el servidor.</summary>
+    public Task<LibroCajaMesDto> ObtenerLibroCajaMesAsync(int anio, int mes)
+    {
+        ConsultasLibroCaja.Add($"{anio}-{mes:00}");
+        return FallaLibroCaja is not null ? Task.FromException<LibroCajaMesDto>(FallaLibroCaja)
+            : PendienteMes is not null ? PendienteMes.Task
+            : Task.FromResult(Meses.TryGetValue((anio, mes), out var libro) ? libro : new LibroCajaMesDto(anio, mes, 0m, 0m, [], [], []));
+    }
+
+    /// <summary>Sin datos cargados para ese año responde los 12 meses en cero, como el servidor.</summary>
+    public Task<LibroCajaAnualDto> ObtenerLibroCajaAnualAsync(int anio)
+    {
+        ConsultasLibroCaja.Add($"{anio}");
+        return FallaLibroCaja is not null ? Task.FromException<LibroCajaAnualDto>(FallaLibroCaja)
+            : Task.FromResult(Anios.TryGetValue(anio, out var libro) ? libro
+                : new LibroCajaAnualDto(anio, Enumerable.Range(1, 12).Select(m => new TotalMensualDto(m, 0m, 0m, 0m)).ToList(), []));
+    }
 }
 
 internal sealed class GastoServiceSinUsoFake : IGastoService

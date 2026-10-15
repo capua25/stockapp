@@ -139,7 +139,7 @@ public class SignoNegativoBadgeTests
         CreadaPorUsuarioId = 1, FechaCreacion = DateTime.UtcNow, FechaLimite = fechaLimite,
     };
 
-    // ---- Finanzas: LibroCajaView, sitio SaldoFinal (:39, barra de filtros) ----
+    // ---- Finanzas: LibroCajaView, saldo final ----
 
     private sealed class FinanzasVistasServiceFake : IFinanzasVistasService
     {
@@ -208,9 +208,12 @@ public class SignoNegativoBadgeTests
     {
         var window = MontarLibroCaja(saldoFinal: -100m);
 
-        var badges = BadgesConTexto(window, "Saldo negativo");
+        // Libro caja es v2: la palabra la pone una Insignia peligro.
+        var insignias = window.GetVisualDescendants().OfType<StockApp.Presentation.Controls.V2.Insignia>()
+            .Where(i => i.Texto == "Saldo negativo").ToList();
 
-        Assert.Single(badges, b => b.IsVisible);
+        var visible = Assert.Single(insignias, ArbolVisual.EsVisibleEnArbol);
+        Assert.Equal(StockApp.Presentation.Controls.V2.VarianteInsignia.Peligro, visible.Variante);
     }
 
     [AvaloniaFact]
@@ -218,9 +221,11 @@ public class SignoNegativoBadgeTests
     {
         var window = MontarLibroCaja(saldoFinal: 100m);
 
-        var badges = BadgesConTexto(window, "Saldo negativo");
+        var insignias = window.GetVisualDescendants().OfType<StockApp.Presentation.Controls.V2.Insignia>()
+            .Where(i => i.Texto == "Saldo negativo").ToList();
 
-        Assert.DoesNotContain(badges, b => b.IsVisible);
+        Assert.NotEmpty(insignias);
+        Assert.DoesNotContain(insignias, ArbolVisual.EsVisibleEnArbol);
     }
 
     // ---- Movimientos: MovimientoHistorialView, sitio StockNuevo (:165) ----

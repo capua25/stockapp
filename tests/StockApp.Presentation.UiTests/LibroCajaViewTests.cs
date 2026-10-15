@@ -23,8 +23,8 @@ namespace StockApp.Presentation.UiTests;
 /// sin Moq porque este proyecto no lo referencia) para custodiar el bugfix 2026-08-19: los dos
 /// NumericUpDown iniciales de la barra de filtros (bindeados a Anio y Mes en LibroCajaViewModel)
 /// no tenían ninguna etiqueta -- el usuario reportó que tenía que "asumir" qué eran. Este test
-/// verifica que existan los TextBlock Classes="caption" con el texto correcto encima de cada
-/// campo, siguiendo el mismo patrón que MovimientoHistorialView (filtros "Tipo"/"Desde"/"Hasta").
+/// verifica que cada NumericUpDown esté dentro de un CampoFormulario v2 con la etiqueta correcta
+/// (en la v1 era un TextBlock Classes="caption" encima del campo).
 /// </summary>
 public class LibroCajaViewTests
 {
@@ -86,18 +86,20 @@ public class LibroCajaViewTests
         return window;
     }
 
-    private static TextBlock BuscarEtiquetaCaptionPorTexto(Window window, string texto)
-        => window.GetVisualDescendants().OfType<TextBlock>()
-            .First(t => t.Classes.Contains("caption") && t.Text == texto);
+    /// <summary>v2: la etiqueta la pone el CampoFormulario que envuelve al NumericUpDown (antes, un TextBlock caption).</summary>
+    private static StockApp.Presentation.Controls.V2.CampoFormulario BuscarCampoPorEtiqueta(Window window, string texto)
+        => window.GetVisualDescendants().OfType<StockApp.Presentation.Controls.V2.CampoFormulario>()
+            .First(c => c.Etiqueta == texto);
 
     [AvaloniaFact]
     public void Montar_MuestraEtiquetaAnioSobreElCampo()
     {
         var window = Montar();
 
-        var etiqueta = BuscarEtiquetaCaptionPorTexto(window, "Año");
+        var campo = BuscarCampoPorEtiqueta(window, "Año");
 
-        Assert.True(etiqueta.IsVisible);
+        Assert.True(ArbolVisual.EsVisibleEnArbol(campo));
+        Assert.Contains(campo.GetVisualDescendants().OfType<NumericUpDown>(), n => ArbolVisual.EsVisibleEnArbol(n));
     }
 
     [AvaloniaFact]
@@ -105,9 +107,10 @@ public class LibroCajaViewTests
     {
         var window = Montar();
 
-        var etiqueta = BuscarEtiquetaCaptionPorTexto(window, "Mes");
+        var campo = BuscarCampoPorEtiqueta(window, "Mes");
 
-        Assert.True(etiqueta.IsVisible);
+        Assert.True(ArbolVisual.EsVisibleEnArbol(campo));
+        Assert.Contains(campo.GetVisualDescendants().OfType<NumericUpDown>(), n => ArbolVisual.EsVisibleEnArbol(n));
     }
 
     /// <summary>Bug de integridad 2026-10-01: "13" en Mes no marcaba nada, el ViewModel seguía con
