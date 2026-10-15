@@ -1371,4 +1371,26 @@ public class GastosViewModelTests
     {
         Assert.Null(typeof(GastosViewModel).GetProperty("FiltrarCommand"));
     }
+
+    [Fact]
+    public async Task CambiarEstado_RefiltraAlInstanteYNoConsultaAlServidor()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear(new List<Gasto>
+        {
+            GastoDe(1, "Pendiente de pago"),
+            GastoDe(2, "Ya pagado", pagado: true),
+        });
+        await vm.CargarAsync();
+        vm.EsperaDebounce = TimeSpan.FromMilliseconds(20);   // si Estado programara una recarga, vence dentro del test
+
+        vm.EstadoSeleccionado = "Pagada";
+        Assert.Equal("Pagada", Assert.Single(vm.FilasView.Cast<GastoFila>()).Estado);   // al instante
+        vm.EstadoSeleccionado = "Pendiente";
+        Assert.Equal("Pendiente", Assert.Single(vm.FilasView.Cast<GastoFila>()).Estado);
+        await vm._tareaDebounce;
+        await Task.Delay(100);
+
+        svc.Verify(s => s.ListarAsync(It.IsAny<GastoFiltro>()), Times.Once);   // solo la carga inicial
+        Assert.Equal(2, vm.Filas.Count);                                       // las filas cargadas no se tocan
+    }
 }
