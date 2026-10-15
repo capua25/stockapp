@@ -1,5 +1,7 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 using Moq;
@@ -218,7 +220,8 @@ public class GastoFormViewModelTests
 
         await vm.GuardarCommand.ExecuteAsync(null);
 
-        Assert.NotNull(vm.MensajeError);
+        Assert.NotNull(vm.ErrorDe(nameof(GastoFormViewModel.MontoTexto)));
+        Assert.Null(vm.MensajeError);
         svc.Verify(s => s.AltaAsync(It.IsAny<Gasto>(), It.IsAny<IReadOnlyList<int>?>()), Times.Never);
     }
 
@@ -471,7 +474,8 @@ public class GastoFormViewModelTests
 
         await vm.GuardarCommand.ExecuteAsync(null);
 
-        Assert.Equal("El monto total no es un número válido. Usá coma para los decimales: 5,4", vm.MensajeError);
+        Assert.Equal("El monto total no es un número válido. Usá coma para los decimales: 5,4", vm.ErrorDe(nameof(GastoFormViewModel.MontoTexto)));
+        Assert.Null(vm.MensajeError);
         svc.Verify(s => s.AltaAsync(It.IsAny<Gasto>(), It.IsAny<IReadOnlyList<int>?>()), Times.Never);
     }
 
@@ -565,5 +569,188 @@ public class GastoFormViewModelTests
         pendiente.SetResult(new List<Proveedor>());
         await carga;
         Assert.False(vm.Cargando);
+    }
+
+    // ── Errores por campo ───────────────────────────────────────────────────────
+
+    private static readonly string[] Campos =
+    [
+        nameof(GastoFormViewModel.ProveedorSeleccionado), nameof(GastoFormViewModel.FechaSeleccionada),
+        nameof(GastoFormViewModel.Detalle), nameof(GastoFormViewModel.MontoTexto),
+        nameof(GastoFormViewModel.FuenteSeleccionada), nameof(GastoFormViewModel.RubroSeleccionado),
+        nameof(GastoFormViewModel.FechaVencimientoSeleccionada),
+    ];
+
+    [Fact]
+    public async Task AlAbrir_NingunCampoTieneError()
+    {
+        var (vm, _, _, _) = Crear();
+
+        await vm.InicializarAsync();
+
+        Assert.False(vm.HasErrors);
+        Assert.All(Campos, c => Assert.Empty(vm.GetErrors(c).Cast<object>()));
+    }
+
+    [Fact]
+    public async Task TocarDetalleVacio_MuestraSuError()
+    {
+        var (vm, _, _, _) = Crear();
+        await vm.InicializarAsync();
+
+        vm.MarcarTocado(nameof(GastoFormViewModel.Detalle));
+
+        Assert.Equal(GastoFormViewModel.MensajeDetalleObligatorio, vm.ErrorDe(nameof(GastoFormViewModel.Detalle)));
+        Assert.Equal(new[] { GastoFormViewModel.MensajeDetalleObligatorio },
+            vm.GetErrors(nameof(GastoFormViewModel.Detalle)).Cast<string>());
+        Assert.True(vm.HasErrors);
+    }
+
+    [Fact]
+    public async Task CambiarUnCampo_LevantaErrorsChangedConElNombreDeLaPropiedadBindeada()
+    {
+        var (vm, _, _, _) = Crear();
+        await vm.InicializarAsync();
+        var avisos = new List<string?>();
+        vm.ErrorsChanged += (_, e) => avisos.Add(e.PropertyName);
+
+        vm.MontoTexto = "abc";
+
+        Assert.Contains(nameof(GastoFormViewModel.MontoTexto), avisos);
+        Assert.StartsWith("El monto total no es un número válido.", vm.ErrorDe(nameof(GastoFormViewModel.MontoTexto)));
+    }
+
+    public static TheoryData<string> CamposObligatorios => new()
+    {
+        nameof(GastoFormViewModel.ProveedorSeleccionado), nameof(GastoFormViewModel.FechaSeleccionada),
+        nameof(GastoFormViewModel.Detalle), nameof(GastoFormViewModel.MontoTexto),
+        nameof(GastoFormViewModel.FuenteSeleccionada), nameof(GastoFormViewModel.RubroSeleccionado),
+    };
+
+    private static void Vaciar(GastoFormViewModel vm, string campo)
+    {
+        switch (campo)
+        {
+            case nameof(GastoFormViewModel.ProveedorSeleccionado): vm.ProveedorSeleccionado = null; break;
+            case nameof(GastoFormViewModel.FechaSeleccionada): vm.FechaSeleccionada = null; break;
+            case nameof(GastoFormViewModel.Detalle): vm.Detalle = "  "; break;
+            case nameof(GastoFormViewModel.MontoTexto): vm.MontoTexto = ""; break;
+            case nameof(GastoFormViewModel.FuenteSeleccionada): vm.FuenteSeleccionada = null; break;
+            case nameof(GastoFormViewModel.RubroSeleccionado): vm.RubroSeleccionado = null; break;
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(CamposObligatorios))]
+    public async Task UnCampoObligatorioVacio_GuardarDeshabilitado_YSuErrorVisible(string campo)
+    {
+        var (vm, _, _, _) = Crear();
+        await CompletarFormularioValidoAsync(vm);
+        Assert.True(vm.GuardarCommand.CanExecute(null));
+
+        Vaciar(vm, campo);
+
+        Assert.False(vm.GuardarCommand.CanExecute(null));
+        Assert.NotNull(vm.ErrorDe(campo));
+    }
+
+    [Fact]
+    public async Task MontoIlegible_GuardarDeshabilitado()
+    {
+        var (vm, _, _, _) = Crear();
+        await CompletarFormularioValidoAsync(vm);
+
+        vm.MontoTexto = "5.4";
+
+        Assert.False(vm.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task Credito_SinVencimiento_GuardarDeshabilitado_YElErrorDelVencimiento()
+    {
+        var (vm, _, _, _) = Crear();
+        await CompletarFormularioValidoAsync(vm);
+
+        vm.EsCredito = true;
+        vm.MarcarTocado(nameof(GastoFormViewModel.FechaVencimientoSeleccionada));
+
+        Assert.False(vm.GuardarCommand.CanExecute(null));
+        Assert.Equal(GastoFormViewModel.MensajeVencimientoObligatorio,
+            vm.ErrorDe(nameof(GastoFormViewModel.FechaVencimientoSeleccionada)));
+    }
+
+    [Fact]
+    public async Task DestildarCredito_SinVencimiento_GuardarSeHabilita()
+    {
+        var (vm, _, _, _) = Crear();
+        await CompletarFormularioValidoAsync(vm);
+        vm.EsCredito = true;
+        vm.MarcarTocado(nameof(GastoFormViewModel.FechaVencimientoSeleccionada));
+        var avisos = new List<string?>();
+        vm.ErrorsChanged += (_, e) => avisos.Add(e.PropertyName);
+
+        vm.EsCredito = false;
+
+        Assert.True(vm.GuardarCommand.CanExecute(null));
+        Assert.Null(vm.ErrorDe(nameof(GastoFormViewModel.FechaVencimientoSeleccionada)));
+        Assert.Contains(nameof(GastoFormViewModel.FechaVencimientoSeleccionada), avisos);
+    }
+
+    [Fact]
+    public async Task Contado_SinVencimiento_NoEsError()
+    {
+        var (vm, _, _, _) = Crear();
+        await CompletarFormularioValidoAsync(vm);
+
+        vm.MarcarTocado(nameof(GastoFormViewModel.FechaVencimientoSeleccionada));
+
+        Assert.Null(vm.ErrorDe(nameof(GastoFormViewModel.FechaVencimientoSeleccionada)));
+        Assert.True(vm.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task IntentarGuardarIncompleto_MarcaTodosLosCampos_SinLlamarAlServicio()
+    {
+        var (vm, svc, _, _) = Crear();
+        await vm.InicializarAsync();
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        Assert.Equal(GastoFormViewModel.MensajeProveedorObligatorio, vm.ErrorDe(nameof(GastoFormViewModel.ProveedorSeleccionado)));
+        Assert.Equal(GastoFormViewModel.MensajeDetalleObligatorio, vm.ErrorDe(nameof(GastoFormViewModel.Detalle)));
+        Assert.Equal(GastoFormViewModel.MensajeMontoObligatorio, vm.ErrorDe(nameof(GastoFormViewModel.MontoTexto)));
+        Assert.Equal(GastoFormViewModel.MensajeFuenteObligatoria, vm.ErrorDe(nameof(GastoFormViewModel.FuenteSeleccionada)));
+        Assert.Equal(GastoFormViewModel.MensajeRubroObligatorio, vm.ErrorDe(nameof(GastoFormViewModel.RubroSeleccionado)));
+        Assert.Null(vm.MensajeError);
+        svc.Verify(s => s.AltaAsync(It.IsAny<Gasto>(), It.IsAny<IReadOnlyList<int>?>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Edicion_ConTodoCargado_NingunCampoEnRojo()
+    {
+        var (vm, _, _, _) = Crear();
+        vm.CargarParaEditar(new Gasto
+        {
+            Id = 9, ProveedorId = 1, NumeroFactura = "A-9", Detalle = "Histórico", Fecha = DateTime.UtcNow, MontoTotal = 2000m,
+            FuenteFinanciamientoId = 2, RubroGastoId = 3, CondicionPago = CondicionPago.Credito,
+            FechaVencimiento = DateTime.UtcNow.AddDays(10),
+        });
+
+        await vm.InicializarAsync();
+
+        Assert.False(vm.HasErrors);
+        Assert.True(vm.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void MensajesDeLosCampos_SonLosAprobados()
+    {
+        Assert.Equal("Elegí el proveedor.", GastoFormViewModel.MensajeProveedorObligatorio);
+        Assert.Equal("La fecha del gasto es obligatoria.", GastoFormViewModel.MensajeFechaObligatoria);
+        Assert.Equal("El detalle es obligatorio.", GastoFormViewModel.MensajeDetalleObligatorio);
+        Assert.Equal("El monto total es obligatorio.", GastoFormViewModel.MensajeMontoObligatorio);
+        Assert.Equal("Elegí la fuente de financiamiento.", GastoFormViewModel.MensajeFuenteObligatoria);
+        Assert.Equal("Elegí el rubro.", GastoFormViewModel.MensajeRubroObligatorio);
+        Assert.Equal("Un gasto a crédito exige fecha de vencimiento.", GastoFormViewModel.MensajeVencimientoObligatorio);
     }
 }

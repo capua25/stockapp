@@ -1,6 +1,8 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -26,7 +28,7 @@ namespace StockApp.Presentation.ViewModels.Finanzas;
 /// real puede traer fletes o redondeos — y el movimiento queda vinculado al guardar; si la
 /// factura ya existe para ese proveedor, ofrece asociar los movimientos a la existente).
 /// </summary>
-public partial class GastoFormViewModel : ViewModelBase
+public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
 {
     private readonly IGastoService                _service;
     private readonly ICurrentSession              _session;
@@ -78,7 +80,9 @@ public partial class GastoFormViewModel : ViewModelBase
 
     [ObservableProperty] private string? _destino;
 
-    [ObservableProperty] private DateTime? _fechaSeleccionada = DateTime.Today;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
+    private DateTime? _fechaSeleccionada = DateTime.Today;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
@@ -94,8 +98,13 @@ public partial class GastoFormViewModel : ViewModelBase
 
     [ObservableProperty] private LineaPoa? _lineaPoaSeleccionada;
 
-    [ObservableProperty] private bool _esCredito;
-    [ObservableProperty] private DateTime? _fechaVencimientoSeleccionada;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
+    private bool _esCredito;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
+    private DateTime? _fechaVencimientoSeleccionada;
 
     [ObservableProperty] private string? _mensajeError;
 
@@ -111,6 +120,87 @@ public partial class GastoFormViewModel : ViewModelBase
     public ObservableCollection<FuenteFinanciamiento> FuentesDisponibles { get; } = new();
     public ObservableCollection<RubroGasto> RubrosDisponibles { get; } = new();
     public ObservableCollection<LineaPoa> LineasPoaDisponibles { get; } = new();
+
+    public const string MensajeProveedorObligatorio = "Elegí el proveedor.";
+    public const string MensajeFechaObligatoria = "La fecha del gasto es obligatoria.";
+    public const string MensajeDetalleObligatorio = "El detalle es obligatorio.";
+    public const string MensajeMontoObligatorio = "El monto total es obligatorio.";
+    public const string MensajeFuenteObligatoria = "Elegí la fuente de financiamiento.";
+    public const string MensajeRubroObligatorio = "Elegí el rubro.";
+    public const string MensajeVencimientoObligatorio = "Un gasto a crédito exige fecha de vencimiento.";
+
+    /// <summary>Propiedades bindeadas que se validan en el cliente. ErrorsChanged se levanta con estos nombres: son los
+    /// que el binding de cada control le pregunta a GetErrors.</summary>
+    private static readonly string[] CamposValidados =
+    [
+        nameof(ProveedorSeleccionado), nameof(FechaSeleccionada), nameof(Detalle), nameof(MontoTexto),
+        nameof(FuenteSeleccionada), nameof(RubroSeleccionado), nameof(FechaVencimientoSeleccionada),
+    ];
+
+    /// <summary>Campos que el usuario ya tocó (cambió el valor, salió del campo o intentó guardar). Un campo sin tocar no
+    /// muestra su error: el formulario recién abierto no aparece en rojo.</summary>
+    private readonly HashSet<string> _tocados = new();
+
+    public event EventHandler<DataErrorsChangedEventArgs>? ErrorsChanged;
+
+    public bool HasErrors => CamposValidados.Any(c => ErrorDe(c) is not null);
+
+    /// <summary>El error que la vista muestra debajo del campo: el de su regla, solo si el campo está tocado.</summary>
+    public string? ErrorDe(string propiedad) => _tocados.Contains(propiedad) ? ReglaDe(propiedad) : null;
+
+    public IEnumerable GetErrors(string? propertyName)
+        => propertyName is not null && ErrorDe(propertyName) is { } error ? new[] { error } : Array.Empty<string>();
+
+    /// <summary>Marca el campo como tocado sin cambiar su valor (la vista lo llama al salir de un campo).</summary>
+    public void MarcarTocado(string propiedad)
+    {
+        if (_tocados.Add(propiedad))
+            ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(propiedad));
+    }
+
+    private void AlCambiarCampo(string propiedad)
+    {
+        _tocados.Add(propiedad);
+        ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(propiedad));
+    }
+
+    partial void OnProveedorSeleccionadoChanged(Proveedor? value) => AlCambiarCampo(nameof(ProveedorSeleccionado));
+    partial void OnFechaSeleccionadaChanged(DateTime? value) => AlCambiarCampo(nameof(FechaSeleccionada));
+    partial void OnDetalleChanged(string value) => AlCambiarCampo(nameof(Detalle));
+    partial void OnMontoTextoChanged(string value) => AlCambiarCampo(nameof(MontoTexto));
+    partial void OnFuenteSeleccionadaChanged(FuenteFinanciamiento? value) => AlCambiarCampo(nameof(FuenteSeleccionada));
+    partial void OnRubroSeleccionadoChanged(RubroGasto? value) => AlCambiarCampo(nameof(RubroSeleccionado));
+    partial void OnFechaVencimientoSeleccionadaChanged(DateTime? value) => AlCambiarCampo(nameof(FechaVencimientoSeleccionada));
+
+    /// <summary>El vencimiento solo es regla a crédito: tildar o destildar cambia su error sin tocar el campo.</summary>
+    partial void OnEsCreditoChanged(bool value) =>
+        ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(nameof(FechaVencimientoSeleccionada)));
+
+    /// <summary>
+    /// Reglas del cliente, las de antes: proveedor, fuente y rubro elegidos; detalle y monto no vacíos; monto numérico en
+    /// es-UY; fecha obligatoria; vencimiento obligatorio solo a crédito. "El monto debe ser mayor a cero", los maestros dados
+    /// de baja, la factura duplicada y el cambio de condición de pago son del servidor y salen por la Alerta de error.
+    /// </summary>
+    private string? ReglaDe(string propiedad) => propiedad switch
+    {
+        nameof(ProveedorSeleccionado) => ProveedorSeleccionado is null ? MensajeProveedorObligatorio : null,
+        nameof(FechaSeleccionada) => FechaSeleccionada is null ? MensajeFechaObligatoria : null,
+        nameof(Detalle) => string.IsNullOrWhiteSpace(Detalle) ? MensajeDetalleObligatorio : null,
+        nameof(MontoTexto) => ReglaDelMonto(),
+        nameof(FuenteSeleccionada) => FuenteSeleccionada is null ? MensajeFuenteObligatoria : null,
+        nameof(RubroSeleccionado) => RubroSeleccionado is null ? MensajeRubroObligatorio : null,
+        nameof(FechaVencimientoSeleccionada) => EsCredito && FechaVencimientoSeleccionada is null ? MensajeVencimientoObligatorio : null,
+        _ => null,
+    };
+
+    private string? ReglaDelMonto()
+    {
+        if (string.IsNullOrWhiteSpace(MontoTexto))
+            return MensajeMontoObligatorio;
+        return FormatoEsUy.TryParseDecimal(MontoTexto, out _, out var detalle)
+            ? null
+            : MensajeNumeroInvalido.Armar("El monto total no es un número válido.", detalle);
+    }
 
     public GastoFormViewModel(
         IGastoService service,
@@ -231,12 +321,9 @@ public partial class GastoFormViewModel : ViewModelBase
         return item;
     }
 
-    private bool PuedeGuardar()
-        => ProveedorSeleccionado is not null
-           && FuenteSeleccionada is not null
-           && RubroSeleccionado is not null
-           && !string.IsNullOrWhiteSpace(Detalle)
-           && !string.IsNullOrWhiteSpace(MontoTexto);
+    /// <summary>Guardar se habilita con todas las reglas del cliente cumplidas (estén o no tocados los campos) y con los
+    /// datos de finanzas a la vista.</summary>
+    private bool PuedeGuardar() => !SinPermiso && CamposValidados.All(c => ReglaDe(c) is null);
 
     public IAsyncRelayCommand GuardarCommand => field ??= ComandoDeGuardado(GuardarAsync, PuedeGuardar);
 
@@ -244,22 +331,12 @@ public partial class GastoFormViewModel : ViewModelBase
     {
         MensajeError = null;
 
-        if (!FormatoEsUy.TryParseDecimal(MontoTexto, out var monto, out var errorMonto))
-        {
-            MensajeError = MensajeNumeroInvalido.Armar("El monto total no es un número válido.", errorMonto);
+        foreach (var campo in CamposValidados)
+            MarcarTocado(campo);
+        if (CamposValidados.Any(c => ReglaDe(c) is not null))
             return;
-        }
 
-        if (FechaSeleccionada is null)
-        {
-            MensajeError = "La fecha del gasto es obligatoria.";
-            return;
-        }
-        if (EsCredito && FechaVencimientoSeleccionada is null)
-        {
-            MensajeError = "Un gasto a crédito exige fecha de vencimiento.";
-            return;
-        }
+        FormatoEsUy.TryParseDecimal(MontoTexto, out var monto, out _);
 
         var gasto = new Gasto
         {
@@ -269,7 +346,7 @@ public partial class GastoFormViewModel : ViewModelBase
             NumeroOrden = string.IsNullOrWhiteSpace(NumeroOrden) ? null : NumeroOrden!.Trim(),
             Detalle = Detalle,
             Destino = string.IsNullOrWhiteSpace(Destino) ? null : Destino,
-            Fecha = DateTime.SpecifyKind(FechaSeleccionada.Value.Date, DateTimeKind.Utc),
+            Fecha = DateTime.SpecifyKind(FechaSeleccionada!.Value.Date, DateTimeKind.Utc),
             MontoTotal = monto,
             FuenteFinanciamientoId = FuenteSeleccionada!.Id,
             RubroGastoId = RubroSeleccionado!.Id,
