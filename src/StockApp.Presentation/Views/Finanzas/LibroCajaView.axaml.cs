@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using System.Globalization;
 using Avalonia.Controls;
-using StockApp.Presentation.Behaviors;
 using StockApp.Presentation.ViewModels.Finanzas;
 
 namespace StockApp.Presentation.Views.Finanzas;
@@ -33,8 +32,8 @@ public partial class LibroCajaView : UserControl
 
     /// <summary>
     /// En Año completo el campo Mes se oculta, pero un control oculto sigue en el árbol: si quedó con un texto inválido,
-    /// su error seguiría bloqueando Actualizar sin que se vea por qué (Review Focus 4, D13). Al ocultarlo se apaga su
-    /// validación (que retira el error) y vuelve a mostrar el mes del ViewModel; al volver a Mes se prende de nuevo.
+    /// su error bloquearía Actualizar sin que se vea por qué (Review Focus 4, D13). Reponer el mes del ViewModel en
+    /// el Text alcanza: el behavior de validación limpia el error al cambiar el texto.
     /// </summary>
     private void AlCambiarVm(object? sender, PropertyChangedEventArgs e)
     {
@@ -42,13 +41,6 @@ public partial class LibroCajaView : UserControl
             return;
 
         if (vm.VerAnioCompleto)
-        {
-            NumericUpDownValidacionBehavior.SetValidar(SelectorMes, false);
             SelectorMes.Text = vm.Mes.ToString(CultureInfo.InvariantCulture);
-        }
-        else
-        {
-            NumericUpDownValidacionBehavior.SetValidar(SelectorMes, true);
-        }
     }
 }

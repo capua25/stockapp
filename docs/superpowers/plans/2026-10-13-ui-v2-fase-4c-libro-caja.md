@@ -122,7 +122,7 @@ La spec pide cosas que el código actual no permite tal como están escritas. El
 | `ColumnasPdfContraDtosRealesTests` | NO cubre hoy el anual (solo `LibroCaja_ColumnasPdf_…` sobre `MovimientoCajaDto`, L139-145): la Task 4 agrega `LibroCajaAnual_ColumnasPdf_…` contra `TotalMensualDto` y un PDF real con el resumen anual (vertical, sin "Totales por fuente"). | `ColumnasPdfContraDtosRealesTests.cs` L139-152. |
 | Nombre del mes | `NombreMesConverter` (nuevo, con `Nombre(int)` estático): lo usan la columna MES y la sección "Meses con déficit" del PDF. "Setiembre", como en Uruguay. | P3; D9. |
 | Texto negativo fuera de la grilla | Hoy `.negativo` solo existe dentro de una celda (`DataGridV2.axaml` L174-176; `.v2-grilla-celda .v2-texto-peligro` en `base.css` L314): un saldo fuera de la grilla con `Classes.negativo` NO se pinta. La Task 7 agrega `.ui2 TextBlock.negativo` en `ControlesV2.axaml` después de los estilos de texto (L65-69) y su espejo en `base.css`. | `DataGridV2.axaml`, `ControlesV2.axaml`, `base.css`. |
-| Mes inválido oculto | `IsVisible=False` no saca al control del árbol: `ErroresDeEntradaBehavior` sigue contando su error (`ErroresDeEntradaBehavior.cs` L14-33). El code-behind apaga `NumericUpDownValidacionBehavior.Validar` en el campo Mes al pasar a Año completo (su `Changed` llama `Limpiar`, que hace `DataValidationErrors.ClearErrors`, L167-173) y repone el texto del VM; al volver a Mes lo prende. | `NumericUpDownValidacionBehavior.cs` L41-56, L167-173; `Themes/Controls.axaml` L231. |
+| Mes inválido oculto | `IsVisible=False` no saca al control del árbol: `ErroresDeEntradaBehavior` sigue contando su error (`ErroresDeEntradaBehavior.cs` L14-33). El code-behind repone el texto del VM en el campo Mes al pasar a Año completo: el cambio de `Text` dispara el `Changed` del behavior, que llama `Limpiar` (`DataValidationErrors.ClearErrors`, L167-173). No hace falta apagar `Validar` (Task 10 lo borró: su mutación quedaba verde). | `NumericUpDownValidacionBehavior.cs` L41-56, L167-173; `Themes/Controls.axaml` L231. |
 | Datos fijos en modo año | `VisualTests` no ve los `internal` del VM (`InternalsVisibleTo` solo a `Presentation.Tests` y `Presentation.UiTests`): `DatosLibroCaja.AnioCompleto()` setea `ModoSeleccionado` y el debounce de 300 ms recarga lo mismo (el `Moq` responde igual), sin cambiar el render. | `StockApp.Presentation.csproj` L34-43. |
 | Guardianes de la vista vieja | `LibroCajaView` sale de la `InlineData` del `HeaderVista` (L66) y de `VistasDeLaTanda` (L114) y entra a `VistasMigradasAV2` (L197-218); la reemplaza `Raiz_TieneUi2_EncabezadoConTitulo_ActualizarYExportarSecundarios_SinPrimario` (convención 13). | `GuardianDePatronTests.cs`. |
 | Tests heredados que tocan Libro caja | `LibroCajaViewModelTests` (Crear L18-40; anuales L97-128 y L149-162), `LibroCajaViewTests` (etiquetas por `Classes="caption"`, L89-111), `SignoNegativoBadgeTests` (L142-223, `BadgeEstado` "Saldo negativo"), `GuardianDePatronTests` (L66, L114), `GrillasSinRecorteBarridoTests` (escenario "Libro de caja (movimientos)", L118-121: la grilla de movimientos tiene que seguir siendo la PRIMERA `DataGrid` del árbol lógico), `ExportarPdfBotonesGuardianTests` (L388-436: afirma `IsVisible` y `Command`; con el mes vacío el botón queda visible y deshabilitado, sigue verde), `ColumnasPdfContraDtosRealesTests` (se extiende). Sin cambio, solo regresión: `NumericUpDownVistasRealesTests` (solo un comentario en L69 apunta a `LibroCajaViewTests`), `ShellMainViewGatesTests` (L148, el ítem del sidebar), `AccesoRevocadoPantallasFinanzasTests` (no toca Libro caja). | grep `LibroCaja` en `tests/`. |
@@ -2936,8 +2936,8 @@ public partial class LibroCajaView : UserControl
 
     /// <summary>
     /// En Año completo el campo Mes se oculta, pero un control oculto sigue en el árbol: si quedó con un texto inválido,
-    /// su error seguiría bloqueando Actualizar sin que se vea por qué. Al ocultarlo se apaga su validación (que retira el
-    /// error) y vuelve a mostrar el mes del ViewModel; al volver a Mes se prende de nuevo.
+    /// su error seguiría bloqueando Actualizar sin que se vea por qué. Reponer el mes del ViewModel en el Text alcanza:
+    /// el behavior de validación limpia el error al cambiar el texto.
     /// </summary>
     private void AlCambiarVm(object? sender, PropertyChangedEventArgs e)
     {
@@ -2945,14 +2945,7 @@ public partial class LibroCajaView : UserControl
             return;
 
         if (_vm.VerAnioCompleto)
-        {
-            NumericUpDownValidacionBehavior.SetValidar(SelectorMes, false);
             SelectorMes.Text = _vm.Mes.ToString(CultureInfo.InvariantCulture);
-        }
-        else
-        {
-            NumericUpDownValidacionBehavior.SetValidar(SelectorMes, true);
-        }
     }
 }
 ```
@@ -2981,7 +2974,7 @@ Run: `scripts/ui-v2/comparar.sh LibroCaja`. Expected: 14 filas APROBADAS (mismo 
 - [ ] **Step 5: Mutaciones (QUITANDO)**
 
 - (v) Quitar `IsVisible="{Binding !VerAnioCompleto}"` de `CampoMes` → rojo `PasarAAnioCompleto_OcultaElCampoMes_…`. Pegar. Restaurar. (Spec: "el `IsVisible` del campo Mes".)
-- (w) Quitar la línea `NumericUpDownValidacionBehavior.SetValidar(SelectorMes, false);` → rojo `MesInvalido_AlPasarAAnioCompleto_NoBloqueaActualizar`. Restaurar.
+- (w) Quitar la asignación `SelectorMes.Text = vm.Mes…` (el par `SetValidar` se borró en la Task 10: su mutación quedaba verde) → rojo `MesInvalido_AlPasarAAnioCompleto_NoBloqueaActualizar`. Restaurar.
 - (x) Quitar `IsVisible="{Binding Neto, …}"` de la insignia "Déficit" → rojo `AnioCompleto_GrillaPorMesConNombre_YDeficit…` (doce insignias visibles). Restaurar.
 - (y) Quitar `Classes.negativo="{Binding Neto, …}"` del `TextBlock` de NETO → rojo el mismo test. Restaurar.
 - (z) Quitar la línea `<Binding Path="!SinMovimientosEnElPeriodo" />` del `MultiBinding` de `BloquesAnio` → rojo `AnioCompletoSinMovimientos_VacioYExportarDeshabilitado`. Restaurar.
@@ -3120,7 +3113,7 @@ Review de todo el rango `<commit de este plan>..HEAD` (skill de ejecución: revi
 |---|---|
 | Una respuesta vieja de otro modo deja la pantalla incoherente (selector en un modo, bloques del otro). | Un solo turno para los dos modos; `RespuestaMensualVieja_…` y `RespuestaAnualVieja_…` (Task 1), mutación (a). |
 | El PDF rotula o serializa un período distinto del que se ve. | Exporta desde `LibroMes`/`LibroAnual`; `ExportarPdf_ConMesCambiadoSinRecargar_…` y `ExportarPdf_RecienPasadoAAnio…` (Task 4). |
-| El campo Mes oculto con un texto inválido bloquea Actualizar. | Code-behind que apaga su validación al ocultarlo; `MesInvalido_AlPasarAAnioCompleto_…` (Task 9), mutación (w); si no alcanza, PARAR (tocaría un behavior global). |
+| El campo Mes oculto con un texto inválido bloquea Actualizar. | Code-behind que repone el Text del Mes al ocultarlo (el cambio de texto limpia el error); `MesInvalido_AlPasarAAnioCompleto_…` (Task 9), mutación (w); si no alcanza, PARAR (tocaría un behavior global). |
 | El estilo `.negativo` global cambia otras vistas. | Va bajo `.ui2` y con el mismo color que la regla de la celda; comparación completa de la Task 10; `TextoNegativoV2Tests` (sin scope no pinta). |
 | La grilla del mes dentro de una página que scrollea realiza todas las filas (un mes con cientos de movimientos). | `MaxHeight` medido; `Grilla_ConSeiscientosMovimientos_NoRealizaTodasLasFilas` (Task 8), mutación (t). |
 | 10 columnas no entran a 1280/1366 y una medida se corta. | Medición en la Task 6, `ColumnaAuto` (convención 19), scroll horizontal (precedente Historial), `GrillasSinRecorteBarridoTests`. |
