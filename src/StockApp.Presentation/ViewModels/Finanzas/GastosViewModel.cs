@@ -69,6 +69,10 @@ public partial class GastosViewModel : ViewModelBase
 {
     public const string EstadoTodos = "Todos";
 
+    /// <summary>Texto del estado "Sin permiso" del listado: el servidor rechazó la consulta (403) o se perdió finanzas.ver
+    /// con la pantalla abierta.</summary>
+    public const string MensajeSinPermisoGastos = "No tenés permiso para ver los gastos.";
+
     private readonly IGastoService                _service;
     private readonly ICurrentSession              _session;
     private readonly IProveedorService            _proveedoresService;
@@ -80,6 +84,11 @@ public partial class GastosViewModel : ViewModelBase
     private readonly IServicioGuardadoArchivo     _guardado;
     private readonly IPdfExporter                 _pdfExporter;
     private readonly IServicioAperturaArchivo     _apertura;
+
+    private readonly ConsultaVigente _consultas = new();
+
+    /// <summary>Los combos de los filtros se piden una sola vez: Reintentar los vuelve a pedir solo si fallaron.</summary>
+    private bool _combosCargados;
 
     // ── Filtros ───────────────────────────────────────────────────────────────
     [ObservableProperty] private DateTime? _fechaDesde;
@@ -103,7 +112,7 @@ public partial class GastosViewModel : ViewModelBase
     /// del DataGrid. Necesaria por una regresión de Avalonia 12 (AvaloniaUI/Avalonia#21129):
     /// bindear el DataGrid directo a una ObservableCollection con CanUserSortColumns="True"
     /// ya no ordena. Se crea una única vez envolviendo Filas, así los Clear/Add de
-    /// CargarAsync/FiltrarAsync se reflejan automáticamente vía INotifyCollectionChanged.
+    /// CargarAsync/RecargarAsync se reflejan automáticamente vía INotifyCollectionChanged.
     /// </summary>
     public DataGridCollectionView FilasView { get; }
 
@@ -154,6 +163,16 @@ public partial class GastosViewModel : ViewModelBase
         _session.RolActual == RolUsuario.Admin ||
         _session.PermisosActuales.Contains(Permisos.VerFinanzas);
 
+    /// <summary>La vista muestra "No se pudo conectar con el servidor" con Reintentar dentro de la card.</summary>
+    protected override bool AvisaSinConexionEnLinea => true;
+
+    /// <summary>Sin servidor la grilla queda vacía: el reintento no puede mostrar las facturas de otra consulta.</summary>
+    protected override void AlPerderConexion() => Filas.Clear();
+
+    /// <summary>Reintentar consulta con los filtros que están en pantalla (y pide los combos si fallaron), no con los de
+    /// la consulta que falló.</summary>
+    protected override Task ReintentarAsync(Func<Task> cargaFallida) => CargarAsync();
+
     public GastosViewModel(
         IGastoService service,
         ICurrentSession session,
@@ -189,77 +208,81 @@ public partial class GastosViewModel : ViewModelBase
     /// </summary>
     public void FiltrarPorLineaPoa(LineaPoa linea) => LineaPoaSeleccionada = linea;
 
-    /// <summary>Carga combos de filtros + primer listado. La dispara la View (DataContextChanged).</summary>
+    /// <summary>
+    /// Combos de los filtros (una sola vez) y listado. La dispara la View (DataContextChanged) y Reintentar. Protegida: un
+    /// 403 deja SinPermiso (el aviso global ya lo dio AuthTokenHandler), un servidor caído deja SinConexion en vez del
+    /// modal global y mientras espera Cargando está en true. Con turno: si mientras espera empezó otra consulta, su
+    /// resultado se descarta.
+    /// </summary>
     public async Task CargarAsync()
     {
+        var turno = _consultas.Empezar();
         try
         {
-            // ListarActivasAsync, no ListarTodosAsync (bugfix 2026-08-15): el servidor exige
-            // GestionarTablasMaestras para ListarTodosAsync, pero un Operador de Finanzas solo
-            // tiene VerFinanzas — se comía un 403 al abrir esta pantalla. Mismo criterio que
-            // los otros tres combos de este método (fuentes/rubros/líneas POA): ya vienen
-            // filtrados a Activo=true del lado del servidor, sin filtro repetido acá.
-            var proveedores = await _proveedoresService.ListarActivasAsync();
-            ProveedoresDisponibles.Clear();
-            foreach (var p in proveedores)
-                ProveedoresDisponibles.Add(p);
-
-            var fuentes = await _fuentesService.ListarActivasAsync();
-            FuentesDisponibles.Clear();
-            foreach (var f in fuentes)
-                FuentesDisponibles.Add(f);
-
-            var rubros = await _rubrosService.ListarActivosAsync();
-            RubrosDisponibles.Clear();
-            foreach (var r in rubros)
-                RubrosDisponibles.Add(r);
-
-            var lineas = await _lineasService.ListarActivasAsync();
-            LineasPoaDisponibles.Clear();
-            foreach (var l in lineas)
-                LineasPoaDisponibles.Add(l);
-
-            // Bug real (verificación orgánica F4): si ya había una línea POA preseleccionada
-            // (FiltrarPorLineaPoa, navegación desde Control POA), la instancia viene de otra
-            // consulta y el ComboBox matchea SelectedItem por referencia, no por Id — sin este
-            // remap el filtro de datos queda correcto pero el combo se muestra en "Todas".
-            if (LineaPoaSeleccionada is not null)
+            await EjecutarCargaProtegidaAsync(async () =>
             {
-                LineaPoaSeleccionada = LineasPoaDisponibles
-                    .FirstOrDefault(l => l.Id == LineaPoaSeleccionada.Id) ?? LineaPoaSeleccionada;
-            }
-
-            await FiltrarAsync();
+                if (!_combosCargados)
+                {
+                    await CargarCombosAsync();
+                    _combosCargados = true;
+                }
+                await ListarYAplicarAsync(ArmarFiltro(), turno);
+            }, MensajeSinPermisoGastos, turno);
         }
         catch (Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException)
         {
             await _confirmacion.InformarAsync(ex.Message);
         }
-        catch (UnauthorizedAccessException)
+        VaciarTrasUn403(turno);
+    }
+
+    private async Task CargarCombosAsync()
+    {
+        // ListarActivasAsync, no ListarTodosAsync (bugfix 2026-08-15): el servidor exige GestionarTablasMaestras para
+        // ListarTodosAsync, pero un Operador de Finanzas solo tiene VerFinanzas. Los cuatro vienen filtrados a Activo=true
+        // del lado del servidor.
+        var proveedores = await _proveedoresService.ListarActivasAsync();
+        ProveedoresDisponibles.Clear();
+        foreach (var p in proveedores)
+            ProveedoresDisponibles.Add(p);
+
+        var fuentes = await _fuentesService.ListarActivasAsync();
+        FuentesDisponibles.Clear();
+        foreach (var f in fuentes)
+            FuentesDisponibles.Add(f);
+
+        var rubros = await _rubrosService.ListarActivosAsync();
+        RubrosDisponibles.Clear();
+        foreach (var r in rubros)
+            RubrosDisponibles.Add(r);
+
+        var lineas = await _lineasService.ListarActivasAsync();
+        LineasPoaDisponibles.Clear();
+        foreach (var l in lineas)
+            LineasPoaDisponibles.Add(l);
+
+        // Bug real (verificación orgánica F4): la línea POA preseleccionada (FiltrarPorLineaPoa, desde Control POA) viene
+        // de otra consulta y el ComboBox matchea SelectedItem por referencia, no por Id: sin este remap el filtro de datos
+        // queda bien pero el combo se muestra en "Todas".
+        if (LineaPoaSeleccionada is not null)
         {
-            // Red de contención (bugfix 2026-08-15): CargarAsync la dispara la View
-            // (DataContextChanged) fire-and-forget — una excepción no atrapada acá escala a
-            // Dispatcher.UIThread.UnhandledException (App.axaml.cs), que loguea a crash.log y
-            // muestra el genérico "Ocurrió un error inesperado" como si fuera un bug real. Un
-            // 403 ya se avisó ANTES de llegar acá: AuthTokenHandler dispara
-            // ApiSession.AccesoRevocado apenas ve el 403 en la respuesta HTTP, y App.axaml.cs
-            // ya informa "Tus permisos cambiaron...". Mismo criterio que
-            // MovimientoHistorialViewModel.RecalcularAsync: silencioso, para no duplicar el
-            // aviso.
-            // Deuda 3c-2: la grilla no puede conservar las filas viejas (ni exportarlas).
-            Filas.Clear();
+            LineaPoaSeleccionada = LineasPoaDisponibles
+                .FirstOrDefault(l => l.Id == LineaPoaSeleccionada.Id) ?? LineaPoaSeleccionada;
         }
     }
 
     /// <summary>
-    /// Un 403 refrescó los permisos en caliente (convención 21): además de re-leer los <c>Puede*</c>
-    /// (base), se reevalúa el CanExecute de Exportar y, si ya no hay <c>VerFinanzas</c>, se vacía
-    /// la grilla. Deuda 3c-2: sin esto la fila vieja quedaba en pantalla y exportable.
+    /// Un 403 refrescó los permisos en caliente (convención 21): además de re-leer los <c>Puede*</c> (base), se reevalúa
+    /// Exportar y, si ya no hay <c>VerFinanzas</c>, se vacía la grilla y la pantalla pasa a "Sin permiso" (si no, la grilla
+    /// vacía diría "Todavía no hay gastos").
     /// </summary>
     public override void NotificarPermisosActualizados()
     {
         if (!PuedeVerFinanzas)
+        {
             Filas.Clear();
+            MarcarSinPermiso(MensajeSinPermisoGastos);
+        }
         ExportarPdfCommand.NotifyCanExecuteChanged();
         base.NotificarPermisosActualizados();
     }
@@ -278,33 +301,46 @@ public partial class GastosViewModel : ViewModelBase
         RubroGastoId: RubroSeleccionado?.Id,
         LineaPoaId: LineaPoaSeleccionada?.Id);
 
-    public IAsyncRelayCommand FiltrarCommand => field ??= ComandoDeGuardado(FiltrarAsync);
+    public IAsyncRelayCommand FiltrarCommand => field ??= ComandoDeGuardado(RecargarAsync);
 
-    private async Task FiltrarAsync()
+    /// <summary>Recarga el listado con los filtros que están en pantalla (tras Anular y por cambio de filtro). Misma
+    /// protección y mismo turno que la carga.</summary>
+    private async Task RecargarAsync()
     {
+        var turno = _consultas.Empezar();
+        var filtro = ArmarFiltro();
         try
         {
-            var gastos = await _service.ListarAsync(ArmarFiltro());
-            var ahora = DateTime.UtcNow;
-
-            var filas = gastos.Select(g => new GastoFila(g, ahora));
-            if (EstadoSeleccionado != EstadoTodos)
-                filas = filas.Where(f => f.Estado == EstadoSeleccionado);
-
-            Filas.Clear();
-            foreach (var fila in filas)
-                Filas.Add(fila);
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // El aviso global del 403 ya salió (AuthTokenHandler -> ApiSession.AccesoRevocado);
-            // acá solo se vacía la grilla para no dejar la fila vieja a la vista ni exportable.
-            Filas.Clear();
+            await EjecutarCargaProtegidaAsync(() => ListarYAplicarAsync(filtro, turno), MensajeSinPermisoGastos, turno);
         }
         catch (Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException)
         {
             await _confirmacion.InformarAsync(ex.Message);
         }
+        VaciarTrasUn403(turno);
+    }
+
+    private async Task ListarYAplicarAsync(GastoFiltro filtro, ConsultaVigente.Turno turno)
+    {
+        var gastos = await _service.ListarAsync(filtro);
+        if (!turno.EsLaUltima)
+            return;
+
+        var ahora = DateTime.UtcNow;
+        var filas = gastos.Select(g => new GastoFila(g, ahora));
+        if (EstadoSeleccionado != EstadoTodos)
+            filas = filas.Where(f => f.Estado == EstadoSeleccionado);
+
+        Filas.Clear();
+        foreach (var fila in filas)
+            Filas.Add(fila);
+    }
+
+    /// <summary>Tras un 403 de la consulta vigente la grilla no conserva filas viejas (ni exportables).</summary>
+    private void VaciarTrasUn403(ConsultaVigente.Turno turno)
+    {
+        if (SinPermiso && turno.EsLaUltima)
+            Filas.Clear();
     }
 
     [RelayCommand]
@@ -317,7 +353,7 @@ public partial class GastosViewModel : ViewModelBase
         RubroSeleccionado = null;
         LineaPoaSeleccionada = null;
         EstadoSeleccionado = EstadoTodos;
-        await FiltrarAsync();
+        await RecargarAsync();
     }
 
     [RelayCommand]
@@ -368,7 +404,7 @@ public partial class GastosViewModel : ViewModelBase
         try
         {
             await _service.AnularAsync(id);
-            await FiltrarAsync();
+            await RecargarAsync();
         }
         catch (AnulacionRequierePagoAutomaticoConfirmadoException ex)
         {
@@ -408,7 +444,7 @@ public partial class GastosViewModel : ViewModelBase
         try
         {
             await _service.AnularAsync(id, confirmarAnulacionDePagoAutomatico: true);
-            await FiltrarAsync();
+            await RecargarAsync();
         }
         catch (Exception ex2) when (ex2 is ReglaDeNegocioException or EntidadNoEncontradaException)
         {
@@ -421,7 +457,7 @@ public partial class GastosViewModel : ViewModelBase
             // capturada acá NO llega al handler global de App.axaml.cs (que solo cubre
             // Dispatcher.UIThread.UnhandledException), termina en
             // TaskScheduler.UnobservedTaskException → crash.log, sin avisar al operador. Sin
-            // este catch, FiltrarAsync() nunca corre pero la UI queda muda — exactamente la
+            // este catch, RecargarAsync() nunca corre pero la UI queda muda — exactamente la
             // falla silenciosa de sesión expirada que ya hubo en este proyecto.
             await _confirmacion.InformarAsync(ex2.Message);
         }
@@ -462,7 +498,7 @@ public partial class GastosViewModel : ViewModelBase
     /// <summary>
     /// Describe los filtros ACTIVOS únicamente (spec 2026-09-18): un PDF que dice "Gastos" sin
     /// aclarar que está filtrado por "Impagos" miente sobre su universo de datos. El filtro de
-    /// Estado se aplica EN MEMORIA (ver <see cref="FiltrarAsync"/>, no llega a
+    /// Estado se aplica EN MEMORIA (ver <see cref="RecargarAsync"/>, no llega a
     /// <see cref="ArmarFiltro"/>), pero igual tiene que figurar acá: es el único filtro de esta
     /// pantalla que no viaja al servidor.
     /// </summary>
@@ -488,7 +524,7 @@ public partial class GastosViewModel : ViewModelBase
     /// <summary>
     /// El guardado a disco corre bajo <see cref="ExportacionPdf"/> (bugfix 2026-08-14).
     /// Exporta <see cref="Filas"/> (no la
-    /// respuesta cruda del servicio): es la colección que <see cref="FiltrarAsync"/> repuebla ya
+    /// respuesta cruda del servicio): es la colección que <see cref="RecargarAsync"/> repuebla ya
     /// con el filtro de Estado aplicado en memoria — si se exportara otra cosa, el PDF podría
     /// traer filas que el usuario no está viendo en pantalla.
     /// </summary>

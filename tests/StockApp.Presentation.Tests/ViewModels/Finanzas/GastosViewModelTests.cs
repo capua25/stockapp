@@ -59,7 +59,8 @@ public class GastosViewModelTests
         Crear(
             IReadOnlyList<Gasto>? gastos = null, IReadOnlyList<LineaPoa>? lineasPoa = null,
             RolUsuario rol = RolUsuario.Admin, IEnumerable<string>? permisos = null,
-            UsuarioSesion? usuarioSesion = null)
+            UsuarioSesion? usuarioSesion = null,
+            Func<Task<IReadOnlyList<Proveedor>>>? proveedoresActivos = null)
     {
         var svc = new Mock<IGastoService>();
         svc.Setup(s => s.ListarAsync(It.IsAny<GastoFiltro>()))
@@ -76,7 +77,8 @@ public class GastosViewModelTests
             new() { Id = 1, Nombre = "Barraca X", Activo = true },
         };
         proveedores.Setup(p => p.ListarTodosAsync()).ReturnsAsync(proveedoresDisponibles);
-        proveedores.Setup(p => p.ListarActivasAsync()).ReturnsAsync(proveedoresDisponibles);
+        proveedores.Setup(p => p.ListarActivasAsync())
+            .Returns(proveedoresActivos ?? (() => Task.FromResult<IReadOnlyList<Proveedor>>(proveedoresDisponibles)));
         var fuentes = new Mock<IFuenteFinanciamientoService>();
         fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>());
         var rubros = new Mock<IRubroGastoService>();
@@ -959,5 +961,139 @@ public class GastosViewModelTests
 
         Assert.Empty(vm.Filas);
         Assert.False(vm.ExportarPdfCommand.CanExecute(null));
+    }
+
+    // ── Carga protegida, consulta vigente y estados de pantalla ──────────────────
+
+    [Fact]
+    public async Task CargarAsync_MientrasEspera_CargandoEsTrue_YAlTerminarFalse()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear();
+        var pendiente = new TaskCompletionSource<IReadOnlyList<Gasto>>();
+        svc.Setup(s => s.ListarAsync(It.IsAny<GastoFiltro>())).Returns(pendiente.Task);
+
+        var carga = vm.CargarAsync();
+        Assert.True(vm.Cargando);
+
+        pendiente.SetResult(new List<Gasto> { GastoDe(1, "Uno") });
+        await carga;
+
+        Assert.False(vm.Cargando);
+        Assert.Single(vm.Filas);
+    }
+
+    [Fact]
+    public async Task CargarAsync_403EnElListado_MarcaSinPermisoConSuMensaje_SinOtroAviso()
+    {
+        var (vm, svc, _, confirm, _, _, _) = Crear();
+        svc.Setup(s => s.ListarAsync(It.IsAny<GastoFiltro>())).ThrowsAsync(new UnauthorizedAccessException("403"));
+
+        await vm.CargarAsync();
+
+        Assert.True(vm.SinPermiso);
+        Assert.Equal(GastosViewModel.MensajeSinPermisoGastos, vm.MensajeSinPermiso);
+        confirm.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CargarAsync_403EnLosCombos_MarcaSinPermiso_YNoConsultaElListado()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear(
+            proveedoresActivos: () => Task.FromException<IReadOnlyList<Proveedor>>(new UnauthorizedAccessException("403")));
+
+        await vm.CargarAsync();
+
+        Assert.True(vm.SinPermiso);
+        svc.Verify(s => s.ListarAsync(It.IsAny<GastoFiltro>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ServidorCaido_TrasUnaCargaBuena_MarcaSinConexionYVaciaLaGrilla()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear(new List<Gasto> { GastoDe(1, "Uno") });
+        await vm.CargarAsync();
+        Assert.Single(vm.Filas);
+        svc.Setup(s => s.ListarAsync(It.IsAny<GastoFiltro>())).ThrowsAsync(new ServidorNoDisponibleException());
+
+        await vm.CargarAsync();
+
+        Assert.True(vm.SinConexion);
+        Assert.Empty(vm.Filas);
+    }
+
+    [Fact]
+    public async Task SinConexionAlCargarLosCombos_Reintentar_CargaLosCombosYElListado()
+    {
+        var intentos = 0;
+        var (vm, _, _, _, _, _, _) = Crear(new List<Gasto> { GastoDe(1, "Uno") },
+            proveedoresActivos: () => ++intentos == 1
+                ? Task.FromException<IReadOnlyList<Proveedor>>(new ServidorNoDisponibleException())
+                : Task.FromResult<IReadOnlyList<Proveedor>>(new List<Proveedor> { new() { Id = 1, Nombre = "Barraca X", Activo = true } }));
+        await vm.CargarAsync();
+        Assert.True(vm.SinConexion);
+        Assert.Empty(vm.ProveedoresDisponibles);
+
+        await vm.ReintentarCargaCommand.ExecuteAsync(null);
+
+        Assert.False(vm.SinConexion);
+        Assert.Single(vm.ProveedoresDisponibles);
+        Assert.Single(vm.Filas);
+    }
+
+    [Fact]
+    public async Task Reintentar_TrasUnaCaidaDelListado_ConsultaConLosFiltrosDePantalla()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear();
+        svc.SetupSequence(s => s.ListarAsync(It.IsAny<GastoFiltro>()))
+            .ThrowsAsync(new ServidorNoDisponibleException())
+            .ReturnsAsync(new List<Gasto> { GastoDe(1, "Uno") });
+        await vm.FiltrarCommand.ExecuteAsync(null);
+        Assert.True(vm.SinConexion);
+        vm.FechaDesde = new DateTime(2026, 7, 1);
+
+        await vm.ReintentarCargaCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.ListarAsync(It.Is<GastoFiltro>(f =>
+            f.FechaDesde == new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc))), Times.Once);
+        Assert.False(vm.SinConexion);
+        Assert.Single(vm.Filas);
+    }
+
+    [Fact]
+    public async Task ConsultaVieja_QueTerminaDespues_NoPisaLaNueva()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear();
+        var vieja = new TaskCompletionSource<IReadOnlyList<Gasto>>();
+        var nueva = new TaskCompletionSource<IReadOnlyList<Gasto>>();
+        svc.SetupSequence(s => s.ListarAsync(It.IsAny<GastoFiltro>()))
+            .Returns(vieja.Task)
+            .Returns(nueva.Task);
+
+        var primera = vm.CargarAsync();
+        var segunda = vm.CargarAsync();
+        nueva.SetResult(new List<Gasto> { GastoDe(2, "Nueva") });
+        await segunda;
+        vieja.SetResult(new List<Gasto> { GastoDe(1, "Vieja") });
+        await primera;
+
+        Assert.Equal("Nueva", Assert.Single(vm.Filas).Detalle);
+    }
+
+    /// <summary>Un 403 que no vino del listado (p. ej. de Anular) quitó finanzas.ver: la pantalla no puede quedar
+    /// diciendo "Todavía no hay gastos" con la grilla vaciada.</summary>
+    [Fact]
+    public async Task NotificarPermisosActualizados_TrasPerderVerFinanzas_MarcaSinPermiso()
+    {
+        var permisos = new HashSet<string> { Permisos.VerFinanzas };
+        var (vm, _, _, _, _, _, _) = Crear(
+            new List<Gasto> { GastoDe(1, "Vieja") }, rol: RolUsuario.Operador, permisos: permisos);
+        await vm.CargarAsync();
+
+        permisos.Remove(Permisos.VerFinanzas);
+        vm.NotificarPermisosActualizados();
+
+        Assert.True(vm.SinPermiso);
+        Assert.Equal(GastosViewModel.MensajeSinPermisoGastos, vm.MensajeSinPermiso);
+        Assert.Empty(vm.Filas);
     }
 }
