@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
@@ -66,5 +67,14 @@ public class ArbolVisualHelpersTests
     {
         var window = Montar();
         Assert.False(ArbolVisual.EsVisibleEnArbol(Buscar(window, "OcultoElMismo")));
+    }
+
+    // Un control null es "no se encontró" (x:Name faltante o mal escrito), NO "existe pero oculto".
+    // Devolver true (o false en silencio) esconde el error: la aserción pasa por la razón equivocada.
+    [Fact]
+    public void EsVisibleEnArbol_ControlNull_FallaFuerteDiciendoQueNoSeEncontro()
+    {
+        var ex = Assert.Throws<ArgumentNullException>(() => ArbolVisual.EsVisibleEnArbol(null!));
+        Assert.Contains("no se encontró", ex.Message);
     }
 }
