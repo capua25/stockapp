@@ -125,7 +125,6 @@
                     </StackPanel>
                 </WrapPanel>
                 <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
-                    <Button Classes="secondary" Content="Filtrar" Command="{Binding FiltrarCommand}" />
                     <Button Classes="secondary" Content="Limpiar" Command="{Binding LimpiarFiltrosCommand}" />
                 </StackPanel>
             </StackPanel>

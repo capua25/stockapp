@@ -106,6 +106,25 @@ public partial class GastosViewModel : ViewModelBase
         private set => SetProperty(ref _cantidadVisible, value);
     }
 
+    /// <summary>Espera antes de recargar al cambiar un filtro: varios cambios seguidos (Limpiar repone siete) consultan
+    /// una sola vez, con los últimos valores.</summary>
+    private static readonly TimeSpan DebouncePorDefecto = TimeSpan.FromMilliseconds(300);
+
+    /// <summary>Espera real del debounce; los tests que no miden el tiempo la bajan a cero.</summary>
+    internal TimeSpan EsperaDebounce { get; set; } = DebouncePorDefecto;
+
+    /// <summary>Tarea del último debounce, para que los tests la esperen de forma determinista.</summary>
+    internal Task _tareaDebounce = Task.CompletedTask;
+
+    private RecargaConDebounce Recarga => field ??= new RecargaConDebounce(() => EsperaDebounce);
+
+    /// <summary>
+    /// False hasta que la carga inicial cargó y remapeó los combos: la preselección de <see cref="FiltrarPorLineaPoa"/> y
+    /// el remapeo de la línea POA no programan una segunda consulta. Se arma antes de pedir el listado inicial: un filtro
+    /// que el usuario cambia mientras espera ese listado programa su recarga y gana por turno.
+    /// </summary>
+    private bool _recargaArmada;
+
     /// <summary>True si lo que se ve está filtrado: algún filtro de la consulta cargada o un Estado distinto de "Todos".
     /// Elige entre "Todavía no hay gastos" y "Ningún gasto coincide con los filtros".</summary>
     public bool HayFiltrosAplicados => (_consultaCargada?.Descripcion.Count ?? 0) > 0 || EstadoSeleccionado != EstadoTodos;
@@ -253,6 +272,20 @@ public partial class GastosViewModel : ViewModelBase
     /// <summary>Estado no viaja al servidor (es calculado): refiltra al instante, sin consulta y sin espera.</summary>
     partial void OnEstadoSeleccionadoChanged(string value) => AplicarFiltroEstado();
 
+    partial void OnFechaDesdeChanged(DateTime? value) => ProgramarRecarga();
+    partial void OnFechaHastaChanged(DateTime? value) => ProgramarRecarga();
+    partial void OnProveedorSeleccionadoChanged(Proveedor? value) => ProgramarRecarga();
+    partial void OnFuenteSeleccionadaChanged(FuenteFinanciamiento? value) => ProgramarRecarga();
+    partial void OnRubroSeleccionadoChanged(RubroGasto? value) => ProgramarRecarga();
+    partial void OnLineaPoaSeleccionadaChanged(LineaPoa? value) => ProgramarRecarga();
+
+    /// <summary>Los seis filtros que viajan al servidor recargan solos tras la espera; un cambio nuevo cancela la anterior.</summary>
+    private void ProgramarRecarga()
+    {
+        if (_recargaArmada)
+            _tareaDebounce = Recarga.Programar(RecargarAsync);
+    }
+
     /// <summary>Si el filtro esconde la fila seleccionada, la selección se limpia: Editar, Pagos y Anular no actúan sobre
     /// una fila que no se ve.</summary>
     private void AplicarFiltroEstado()
@@ -302,6 +335,7 @@ public partial class GastosViewModel : ViewModelBase
                     await CargarCombosAsync();
                     _combosCargados = true;
                 }
+                _recargaArmada = true;
                 await ListarYAplicarAsync(CapturarConsulta(), turno);
             }, MensajeSinPermisoGastos, turno);
         }
@@ -377,9 +411,7 @@ public partial class GastosViewModel : ViewModelBase
         RubroGastoId: RubroSeleccionado?.Id,
         LineaPoaId: LineaPoaSeleccionada?.Id);
 
-    public IAsyncRelayCommand FiltrarCommand => field ??= ComandoDeGuardado(RecargarAsync);
-
-    /// <summary>Recarga el listado con los filtros que están en pantalla (tras Anular y por cambio de filtro). Misma
+    /// <summary>Recarga el listado con los filtros que están en pantalla (por cambio de filtro y tras Anular). Misma
     /// protección y mismo turno que la carga.</summary>
     private async Task RecargarAsync()
     {
@@ -417,8 +449,10 @@ public partial class GastosViewModel : ViewModelBase
             Filas.Clear();
     }
 
+    /// <summary>Repone los siete filtros. No consulta por su cuenta: los cambios de los filtros de servidor se juntan en
+    /// una sola recarga por el debounce, y Estado refiltra en memoria.</summary>
     [RelayCommand]
-    private async Task LimpiarFiltrosAsync()
+    private void LimpiarFiltros()
     {
         FechaDesde = null;
         FechaHasta = null;
@@ -427,7 +461,6 @@ public partial class GastosViewModel : ViewModelBase
         RubroSeleccionado = null;
         LineaPoaSeleccionada = null;
         EstadoSeleccionado = EstadoTodos;
-        await RecargarAsync();
     }
 
     [RelayCommand]

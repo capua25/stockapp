@@ -97,6 +97,7 @@ public class GastosViewModelTests
         var vm = new GastosViewModel(
             svc.Object, session.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
             nav.Object, confirm.Object, guardado.Object, pdfExporter.Object, apertura.Object);
+        vm.EsperaDebounce = Timeout.InfiniteTimeSpan;   // un filtro que un test cambia no consulta solo; el que lo mide baja la espera
         return (vm, svc, nav, confirm, guardado, pdfExporter, apertura);
     }
 
@@ -176,21 +177,23 @@ public class GastosViewModelTests
     }
 
     [Fact]
-    public async Task FiltrarCommand_PasaLosFiltrosAlServicio()
+    public async Task CambiarFiltros_PasaLosFiltrosAlServicio()
     {
         var (vm, svc, _, _, _, _, _) = Crear();
         await vm.CargarAsync();
-        vm.FechaDesde = new DateTime(2026, 7, 1);
-        vm.ProveedorSeleccionado = vm.ProveedoresDisponibles[0];
+        vm.EsperaDebounce = TimeSpan.Zero;
 
-        await vm.FiltrarCommand.ExecuteAsync(null);
+        vm.FechaDesde = new DateTime(2026, 7, 1);
+        await vm._tareaDebounce;
+        vm.ProveedorSeleccionado = vm.ProveedoresDisponibles[0];
+        await vm._tareaDebounce;
 
         svc.Verify(s => s.ListarAsync(It.Is<GastoFiltro>(f =>
             f.ProveedorId == 1 && f.FechaDesde != null)), Times.AtLeastOnce);
     }
 
     [Fact]
-    public async Task FiltrarCommand_FechaDesdeYHasta_SinCorrimientoDeDia()
+    public async Task CambiarFechas_SinCorrimientoDeDia()
     {
         // CalendarDatePicker bindea DateTime? (no DateTimeOffset?). El filtro se arma
         // fijando el Date elegido a medianoche UTC, SIN conversión real de huso horario
@@ -198,10 +201,11 @@ public class GastosViewModelTests
         // día, Hasta = el último tick del día elegido.
         var (vm, svc, _, _, _, _, _) = Crear();
         await vm.CargarAsync();
+        vm.EsperaDebounce = TimeSpan.Zero;
         vm.FechaDesde = new DateTime(2026, 7, 1);
+        await vm._tareaDebounce;
         vm.FechaHasta = new DateTime(2026, 7, 31);
-
-        await vm.FiltrarCommand.ExecuteAsync(null);
+        await vm._tareaDebounce;
 
         svc.Verify(s => s.ListarAsync(It.Is<GastoFiltro>(f =>
             f.FechaDesde == new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc)
@@ -903,16 +907,19 @@ public class GastosViewModelTests
     // ── Deuda 3c-2: Exportar tras un 403 de finanzas ──────────────────────────────
 
     [Fact]
-    public async Task FiltrarCommand_Un403_VaciaLaGrillaYNoPropaga()
+    public async Task RecargaPorFiltro_Un403_VaciaLaGrillaYMarcaSinPermiso()
     {
         var (vm, svc, _, _, _, _, _) = Crear(new List<Gasto> { GastoDe(1, "Vieja") });
         await vm.CargarAsync();
         Assert.Single(vm.Filas);
         svc.Setup(s => s.ListarAsync(It.IsAny<GastoFiltro>())).ThrowsAsync(new UnauthorizedAccessException());
+        vm.EsperaDebounce = TimeSpan.Zero;
 
-        await vm.FiltrarCommand.ExecuteAsync(null);
+        vm.FechaDesde = new DateTime(2026, 7, 1);
+        await vm._tareaDebounce;
 
         Assert.Empty(vm.Filas);
+        Assert.True(vm.SinPermiso);
     }
 
     [Fact]
@@ -1043,10 +1050,15 @@ public class GastosViewModelTests
     {
         var (vm, svc, _, _, _, _, _) = Crear();
         svc.SetupSequence(s => s.ListarAsync(It.IsAny<GastoFiltro>()))
-            .ThrowsAsync(new ServidorNoDisponibleException())
-            .ReturnsAsync(new List<Gasto> { GastoDe(1, "Uno") });
-        await vm.FiltrarCommand.ExecuteAsync(null);
+            .ReturnsAsync(new List<Gasto>())                           // carga inicial
+            .ThrowsAsync(new ServidorNoDisponibleException())          // recarga por filtro (Junio): cae
+            .ReturnsAsync(new List<Gasto> { GastoDe(1, "Uno") });      // Reintentar
+        await vm.CargarAsync();
+        vm.EsperaDebounce = TimeSpan.Zero;
+        vm.FechaDesde = new DateTime(2026, 6, 1);
+        await vm._tareaDebounce;
         Assert.True(vm.SinConexion);
+        vm.EsperaDebounce = Timeout.InfiniteTimeSpan;                  // el filtro nuevo queda en pantalla sin consultar
         vm.FechaDesde = new DateTime(2026, 7, 1);
 
         await vm.ReintentarCargaCommand.ExecuteAsync(null);
@@ -1225,5 +1237,138 @@ public class GastosViewModelTests
         await vm.CargarAsync();
 
         Assert.False(vm.ExportarPdfCommand.CanExecute(null));
+    }
+
+    // ── Recarga automática por cambio de filtro ─────────────────────────────────
+
+    public static TheoryData<string> FiltrosDeServidor => new() { "Desde", "Hasta", "Proveedor", "Fuente", "Rubro", "LineaPoa" };
+
+    private static void Cambiar(GastosViewModel vm, string filtro)
+    {
+        switch (filtro)
+        {
+            case "Desde": vm.FechaDesde = new DateTime(2026, 7, 1); break;
+            case "Hasta": vm.FechaHasta = new DateTime(2026, 7, 31); break;
+            case "Proveedor": vm.ProveedorSeleccionado = new Proveedor { Id = 1, Nombre = "Barraca X", Activo = true }; break;
+            case "Fuente": vm.FuenteSeleccionada = new FuenteFinanciamiento { Id = 2, Nombre = "Literal B", Activo = true }; break;
+            case "Rubro": vm.RubroSeleccionado = new RubroGasto { Id = 3, Codigo = 3, Nombre = "Materiales", Activo = true }; break;
+            case "LineaPoa": vm.LineaPoaSeleccionada = new LineaPoa { Id = 5, Nombre = "PRENSA", Programa = "Com", Ejercicio = 2026, Activo = true }; break;
+        }
+    }
+
+    private static bool LoTrae(GastoFiltro f, string filtro) => filtro switch
+    {
+        "Desde" => f.FechaDesde == new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc),
+        "Hasta" => f.FechaHasta == new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc).AddTicks(-1),
+        "Proveedor" => f.ProveedorId == 1,
+        "Fuente" => f.FuenteFinanciamientoId == 2,
+        "Rubro" => f.RubroGastoId == 3,
+        "LineaPoa" => f.LineaPoaId == 5,
+        _ => false,
+    };
+
+    [Theory]
+    [MemberData(nameof(FiltrosDeServidor))]
+    public async Task CambiarUnFiltroDeServidor_RecargaSolaConEseFiltro(string filtro)
+    {
+        var (vm, svc, _, _, _, _, _) = Crear();
+        await vm.CargarAsync();
+        vm.EsperaDebounce = TimeSpan.Zero;
+
+        Cambiar(vm, filtro);
+        await vm._tareaDebounce;
+
+        svc.Verify(s => s.ListarAsync(It.Is<GastoFiltro>(f => LoTrae(f, filtro))), Times.Once);
+    }
+
+    [Fact]
+    public async Task CambiosRapidos_SoloConsultaElUltimo()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear();
+        await vm.CargarAsync();
+        vm.EsperaDebounce = TimeSpan.FromMilliseconds(50);
+
+        vm.FechaDesde = new DateTime(2026, 7, 1);
+        vm.FechaDesde = new DateTime(2026, 7, 2);
+        vm.FechaDesde = new DateTime(2026, 7, 3);
+        await vm._tareaDebounce;
+
+        svc.Verify(s => s.ListarAsync(It.IsAny<GastoFiltro>()), Times.Exactly(2));   // la carga inicial y la última
+        svc.Verify(s => s.ListarAsync(It.Is<GastoFiltro>(f =>
+            f.FechaDesde == new DateTime(2026, 7, 3, 0, 0, 0, DateTimeKind.Utc))), Times.Once);
+    }
+
+    [Fact]
+    public async Task Limpiar_JuntaLosCambiosEnUnaSolaRecargaSinFiltros()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear();
+        vm.FechaDesde = new DateTime(2026, 7, 1);
+        vm.FechaHasta = new DateTime(2026, 7, 31);
+        vm.ProveedorSeleccionado = new Proveedor { Id = 1, Nombre = "Barraca X", Activo = true };
+        vm.EstadoSeleccionado = "Pagada";
+        await vm.CargarAsync();                    // los filtros puestos antes de la carga no programan nada
+        vm.EsperaDebounce = TimeSpan.FromMilliseconds(50);
+
+        vm.LimpiarFiltrosCommand.Execute(null);
+        await vm._tareaDebounce;
+
+        svc.Verify(s => s.ListarAsync(It.IsAny<GastoFiltro>()), Times.Exactly(2));
+        svc.Verify(s => s.ListarAsync(It.Is<GastoFiltro>(f => f.Equals(new GastoFiltro()))), Times.Once);
+        Assert.Equal(GastosViewModel.EstadoTodos, vm.EstadoSeleccionado);
+        Assert.False(vm.HayFiltrosAplicados);
+    }
+
+    [Fact]
+    public async Task Limpiar_SinFiltrosPuestos_NoConsulta()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear();
+        await vm.CargarAsync();
+        vm.EsperaDebounce = TimeSpan.Zero;
+
+        vm.LimpiarFiltrosCommand.Execute(null);
+        await vm._tareaDebounce;
+
+        svc.Verify(s => s.ListarAsync(It.IsAny<GastoFiltro>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task FiltrarPorLineaPoa_YLaCargaInicial_ConsultanUnaSolaVez()
+    {
+        var lineaDelCombo = new LineaPoa { Id = 5, Nombre = "Rambla", Programa = "Obras", Ejercicio = 2026 };
+        var (vm, svc, _, _, _, _, _) = Crear(lineasPoa: new List<LineaPoa> { lineaDelCombo });
+        vm.EsperaDebounce = TimeSpan.Zero;
+
+        vm.FiltrarPorLineaPoa(new LineaPoa { Id = 5, Nombre = "Rambla", Programa = "Obras", Ejercicio = 2026 });
+        await vm.CargarAsync();
+        await vm._tareaDebounce;
+
+        svc.Verify(s => s.ListarAsync(It.IsAny<GastoFiltro>()), Times.Once);
+        svc.Verify(s => s.ListarAsync(It.Is<GastoFiltro>(f => f.LineaPoaId == 5)), Times.Once);
+        Assert.Same(lineaDelCombo, vm.LineaPoaSeleccionada);
+    }
+
+    [Fact]
+    public async Task FiltroCambiadoDuranteLaCargaInicial_LaRespuestaInicialNoPisaLaDelFiltro()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear();
+        var inicial = new TaskCompletionSource<IReadOnlyList<Gasto>>();
+        svc.Setup(s => s.ListarAsync(It.Is<GastoFiltro>(f => f.FechaDesde == null))).Returns(inicial.Task);
+        svc.Setup(s => s.ListarAsync(It.Is<GastoFiltro>(f => f.FechaDesde != null)))
+            .ReturnsAsync(new List<Gasto> { GastoDe(2, "Del filtro") });
+        vm.EsperaDebounce = TimeSpan.Zero;
+
+        var carga = vm.CargarAsync();
+        vm.FechaDesde = new DateTime(2026, 7, 1);
+        await vm._tareaDebounce;
+        inicial.SetResult(new List<Gasto> { GastoDe(1, "De la carga inicial") });
+        await carga;
+
+        Assert.Equal("Del filtro", Assert.Single(vm.Filas).Detalle);
+    }
+
+    [Fact]
+    public void SinBotonFiltrar_LaRecargaEsAutomatica()
+    {
+        Assert.Null(typeof(GastosViewModel).GetProperty("FiltrarCommand"));
     }
 }
