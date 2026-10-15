@@ -351,6 +351,7 @@ public class LibroCajaViewV2Tests
         Assert.True(Visible(Control<Button>(m, "BotonExportarPdf")));
         Assert.True(m.Vm.PuedeExportar);
         Assert.True(Control<Button>(m, "BotonExportarPdf").IsEffectivelyEnabled);
+        Assert.False(Visible(Control<TarjetaContenido>(m, "TarjetaSinConexion")));
 
         servicio.PendienteMes = new TaskCompletionSource<LibroCajaMesDto>();
         _ = m.Vm.CargarAsync();
