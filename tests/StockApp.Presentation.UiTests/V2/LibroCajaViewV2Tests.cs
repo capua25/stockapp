@@ -73,8 +73,8 @@ public class LibroCajaViewV2Tests
         return new Montaje(ventana, vista, vm, servicio);
     }
 
-    /// <summary>Falla si el control no existe: <see cref="ArbolVisual.EsVisibleEnArbol"/> de un null da true, así que un
-    /// x:Name que falta pasaría por visible.</summary>
+    /// <summary>Falla si el control no existe: <see cref="ArbolVisual.EsVisibleEnArbol"/> de un null tira ArgumentNullException (desde 89202a4),
+    /// pero acá se falla antes con un mensaje que nombra el x:Name que falta.</summary>
     private static T Control<T>(Montaje m, string nombre) where T : Control =>
         m.Vista.FindControl<T>(nombre) ?? throw new Xunit.Sdk.XunitException($"La vista no tiene un {typeof(T).Name} \"{nombre}\".");
     private static bool Visible(Control c) => ArbolVisual.EsVisibleEnArbol(c);
