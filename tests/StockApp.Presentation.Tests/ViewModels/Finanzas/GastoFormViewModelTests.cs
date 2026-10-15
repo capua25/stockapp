@@ -71,7 +71,7 @@ public class GastoFormViewModelTests
 
         var session = new Mock<ICurrentSession>();
         session.Setup(s => s.RolActual).Returns(rol);
-        session.Setup(s => s.PermisosActuales).Returns(new HashSet<string>(permisos ?? Enumerable.Empty<string>()));
+        session.Setup(s => s.PermisosActuales).Returns(permisos as HashSet<string> ?? new HashSet<string>(permisos ?? Enumerable.Empty<string>()));
 
         var adjuntosPanel = new AdjuntosPanelViewModel(
             new Mock<IAdjuntoService>().Object,
@@ -823,5 +823,121 @@ public class GastoFormViewModelTests
         vm.MarcarTocado(nameof(GastoFormViewModel.Detalle));
 
         Assert.Single(avisos);
+    }
+
+    // ── Solo lectura, gasto anulado y condición de pago ─────────────────────────
+
+    private static Gasto GastoExistente(bool activo = true, CondicionPago condicion = CondicionPago.Contado) => new()
+    {
+        Id = 9, ProveedorId = 1, Detalle = "Histórico", Fecha = DateTime.UtcNow, MontoTotal = 2000m,
+        FuenteFinanciamientoId = 2, RubroGastoId = 3, CondicionPago = condicion,
+        FechaVencimiento = condicion == CondicionPago.Credito ? DateTime.UtcNow.AddDays(10) : null, Activo = activo,
+    };
+
+    [Fact]
+    public void ConPermiso_NoEsSoloLectura()
+    {
+        var (vm, _, _, _) = Crear(RolUsuario.Operador, new[] { Permisos.VerFinanzas, Permisos.RegistrarGastos });
+
+        Assert.False(vm.SoloLectura);
+    }
+
+    [Fact]
+    public void SinRegistrarGastos_EsSoloLectura()
+    {
+        var (vm, _, _, _) = Crear(RolUsuario.Operador, new[] { Permisos.VerFinanzas });
+
+        Assert.True(vm.SoloLectura);
+    }
+
+    [Fact]
+    public void GastoAnulado_EsSoloLecturaAunConPermiso_YOcultaAdjuntos()
+    {
+        var (vm, _, _, _) = Crear();
+
+        vm.CargarParaEditar(GastoExistente(activo: false));
+
+        Assert.True(vm.EsAnulado);
+        Assert.True(vm.SoloLectura);
+        Assert.False(vm.MostrarSeccionAdjuntos);
+    }
+
+    [Fact]
+    public void GastoActivo_MuestraAdjuntos_YNoEsSoloLectura()
+    {
+        var (vm, _, _, _) = Crear();
+
+        vm.CargarParaEditar(GastoExistente());
+
+        Assert.False(vm.EsAnulado);
+        Assert.False(vm.SoloLectura);
+        Assert.True(vm.MostrarSeccionAdjuntos);
+    }
+
+    [Fact]
+    public void CargarParaEditarUnAnulado_AvisaSoloLecturaYAdjuntos()
+    {
+        var (vm, _, _, _) = Crear();
+        var avisos = new List<string?>();
+        vm.PropertyChanged += (_, e) => avisos.Add(e.PropertyName);
+
+        vm.CargarParaEditar(GastoExistente(activo: false));
+
+        Assert.Contains(nameof(GastoFormViewModel.SoloLectura), avisos);
+        Assert.Contains(nameof(GastoFormViewModel.MostrarSeccionAdjuntos), avisos);
+    }
+
+    [Fact]
+    public void SoloLectura_SeReevaluaConLosPermisosActuales_SinReabrir()
+    {
+        var permisos = new HashSet<string> { Permisos.VerFinanzas, Permisos.RegistrarGastos };
+        var (vm, _, _, _) = Crear(RolUsuario.Operador, permisos);
+        Assert.False(vm.SoloLectura);
+
+        permisos.Remove(Permisos.RegistrarGastos);
+
+        Assert.True(vm.SoloLectura);
+    }
+
+    [Fact]
+    public void Edicion_LaCondicionDePagoNoSeCambia()
+    {
+        var (vm, _, _, _) = Crear();
+
+        vm.CargarParaEditar(GastoExistente(condicion: CondicionPago.Credito));
+
+        Assert.False(vm.PuedeCambiarCondicionPago);
+        Assert.True(vm.EsCredito);
+    }
+
+    [Fact]
+    public void CargarParaEditar_AvisaQueLaCondicionDePagoYaNoSeCambia()
+    {
+        var (vm, _, _, _) = Crear();
+        var avisos = new List<string?>();
+        vm.PropertyChanged += (_, e) => avisos.Add(e.PropertyName);
+
+        vm.CargarParaEditar(GastoExistente());
+
+        Assert.Contains(nameof(GastoFormViewModel.PuedeCambiarCondicionPago), avisos);
+    }
+
+    [Fact]
+    public void AltaYDesdeEntrada_LaCondicionDePagoSeElige()
+    {
+        var (alta, _, _, _) = Crear();
+        var (desdeEntrada, _, _, _) = Crear();
+
+        desdeEntrada.CargarDesdeEntrada(movimientoId: 61, montoSugerido: 1500m);
+
+        Assert.True(alta.PuedeCambiarCondicionPago);
+        Assert.True(desdeEntrada.PuedeCambiarCondicionPago);
+    }
+
+    [Fact]
+    public void TextoDeLaCondicionFija_EsElAprobado()
+    {
+        Assert.Equal("La condición de pago no se cambia: anulá el gasto y cargalo de nuevo",
+            GastoFormViewModel.TextoCondicionPagoFija);
     }
 }

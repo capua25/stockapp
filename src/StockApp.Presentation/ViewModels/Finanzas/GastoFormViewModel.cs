@@ -63,6 +63,23 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
         _session.RolActual == RolUsuario.Admin ||
         _session.PermisosActuales.Contains(Permisos.RegistrarGastos);
 
+    /// <summary>
+    /// Formulario de solo lectura: sin permiso de registrar gastos o con el gasto anulado (el servidor no deja modificar un
+    /// gasto anulado). Getter sobre la sesión: la revocación en caliente lo re-evalúa (la base notifica todo).
+    /// </summary>
+    public bool SoloLectura => !PuedeRegistrarGastos || EsAnulado;
+
+    /// <summary>La sección Adjuntos no se muestra con el gasto anulado: su adjunto queda en la base, sin baja, pero no se
+    /// ve ni se puede agregar otro (el servidor además lo rechaza).</summary>
+    public bool MostrarSeccionAdjuntos => !EsAnulado;
+
+    /// <summary>La condición de pago de un gasto registrado no cambia (el servidor lo rechaza): en edición el tilde queda
+    /// deshabilitado; en alta y "desde entrada" se elige.</summary>
+    public bool PuedeCambiarCondicionPago => !EsEdicion;
+
+    /// <summary>Explicación debajo del tilde deshabilitado en edición.</summary>
+    public const string TextoCondicionPagoFija = "La condición de pago no se cambia: anulá el gasto y cargalo de nuevo";
+
     private int _idEdicion;
     private Gasto? _gastoParaEditar;
     private int? _movimientoVinculado;   // modo "desde entrada de stock"
@@ -110,7 +127,14 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Titulo))]
+    [NotifyPropertyChangedFor(nameof(PuedeCambiarCondicionPago))]
     private bool _esEdicion;
+
+    /// <summary>El gasto que se editó está anulado (Activo == false): el formulario lo muestra en solo lectura.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SoloLectura))]
+    [NotifyPropertyChangedFor(nameof(MostrarSeccionAdjuntos))]
+    private bool _esAnulado;
 
     public string Titulo => EsEdicion
         ? "Editar gasto"
@@ -237,6 +261,7 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
         MontoTexto       = FormatoEsUy.Decimal(gasto.MontoTotal);
         EsCredito        = gasto.CondicionPago == CondicionPago.Credito;
         FechaVencimientoSeleccionada = gasto.FechaVencimiento;
+        EsAnulado        = !gasto.Activo;
         EsEdicion        = true;
 
         // Fire-and-forget consciente: el panel de adjuntos se carga async sin bloquear
