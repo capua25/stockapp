@@ -1,136 +1,211 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
              xmlns:beh="using:StockApp.Presentation.Behaviors"
-             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
+             xmlns:e="using:StockApp.Domain.Entities"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="760" d:DesignHeight="760"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
              x:Class="StockApp.Presentation.Views.Finanzas.GastoFormView"
-             x:DataType="vm:GastoFormViewModel">
+             x:DataType="vm:GastoFormViewModel"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
 
-    <ScrollViewer>
-        <DockPanel Margin="{DynamicResource MargenVista}">
+    <!-- UI v2 (formulario §5.2, patrón IngresoFormView con el pie fijo de Ingreso por factura). Espejo:
+         docs/ui-v2/mockups/finanzas/gasto-*.html. El breadcrumb vuelve con CancelarCommand en los tres modos. Los errores
+         de cada campo los dibuja el DataValidationErrors del control (solo con el campo tocado: nada en rojo al abrir); el
+         error del servidor va en la Alerta de arriba del pie, que queda fijo fuera del scroll con Cancelar y Guardar. Sin
+         finanzas.gastos o con el gasto anulado, solo lectura: campos deshabilitados, Guardar oculto e insignias; con el
+         gasto anulado además se oculta Adjuntos. El tilde A crédito no se cambia en una edición. Sin servidor al abrir,
+         Alerta con Reintentar dentro de la card; tras un 403, Sin permiso en lugar de la card. -->
+    <Grid x:Name="Raiz" RowDefinitions="*,Auto,Auto">
 
-            <c:HeaderVista DockPanel.Dock="Top" Eyebrow="FINANZAS" Titulo="{Binding Titulo}" />
+        <ScrollViewer x:Name="Desplazamiento" Grid.Row="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="28,24">
 
-            <Border Classes="card" VerticalAlignment="Top">
-                <StackPanel Spacing="{DynamicResource Espacio3}" MaxWidth="620" HorizontalAlignment="Left">
+                <!-- Encabezado en la misma columna de 760 que la card y el pie: las insignias terminan en el borde de la card. -->
+                <Grid x:Name="ColumnaEncabezado" UseLayoutRounding="False">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" MaxWidth="{StaticResource V2AnchoFormularioMax}" />
+                    </Grid.ColumnDefinitions>
+                    <v2:EncabezadoPagina x:Name="Encabezado" UseLayoutRounding="True"
+                                         Titulo="{Binding Titulo}"
+                                         BreadcrumbOrigen="Gastos y facturas"
+                                         BreadcrumbComando="{Binding CancelarCommand}"
+                                         BreadcrumbActual="{Binding Titulo}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <v2:Insignia x:Name="InsigniaAnulado" Texto="Anulado" Variante="Neutro" VerticalAlignment="Center"
+                                         IsVisible="{Binding EsAnulado}" />
+                            <v2:Insignia x:Name="InsigniaSoloLectura" Texto="Solo lectura" Variante="Neutro" VerticalAlignment="Center"
+                                         IsVisible="{Binding SoloLectura}" />
+                        </StackPanel>
+                    </v2:EncabezadoPagina>
+                </Grid>
 
-                    <c:CampoFormulario Etiqueta="Proveedor">
-                        <ComboBox ItemsSource="{Binding ProveedoresDisponibles}"
-                                  SelectedItem="{Binding ProveedorSeleccionado}"
-                                  PlaceholderText="Elegí el proveedor"
-                                  HorizontalAlignment="Stretch">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding Nombre}" />
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                    </c:CampoFormulario>
+                <v2:EstadoVacio x:Name="EstadoSinPermiso" UseLayoutRounding="False"
+                                Titulo="Sin permiso" Mensaje="{Binding MensajeSinPermiso}" EsError="True"
+                                IsVisible="{Binding SinPermiso}" />
 
-                    <Grid ColumnDefinitions="*,12,*">
-                        <c:CampoFormulario Grid.Column="0" Etiqueta="Número de factura (opcional)">
-                            <TextBox Text="{Binding NumeroFactura}" Watermark="Ej.: A-0001234" />
-                        </c:CampoFormulario>
-                        <c:CampoFormulario Grid.Column="2" Etiqueta="Orden de compra (opcional)">
-                            <TextBox Text="{Binding NumeroOrden}" Watermark="Ej.: OC-77" />
-                        </c:CampoFormulario>
-                    </Grid>
+                <!-- Columna * con MaxWidth 760: la card mide 760 a la izquierda. UseLayoutRounding False en la grilla: con el
+                     redondeo Avalonia infla en 1 px una columna acotada por MaxWidth; la card lo recupera. -->
+                <Grid x:Name="ColumnaFormulario" UseLayoutRounding="False" IsVisible="{Binding !SinPermiso}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" MaxWidth="{StaticResource V2AnchoFormularioMax}" />
+                    </Grid.ColumnDefinitions>
 
-                    <c:CampoFormulario Etiqueta="Detalle">
-                        <TextBox Text="{Binding Detalle}" Watermark="Ej.: Materiales para la rambla" />
-                    </c:CampoFormulario>
+                    <v2:TarjetaContenido x:Name="Tarjeta" Padding="24" UseLayoutRounding="True">
+                        <StackPanel>
+                            <StackPanel x:Name="ErrorCarga" Margin="0,0,0,16" Spacing="8" IsVisible="{Binding SinConexion}">
+                                <v2:Alerta x:Name="AlertaSinConexion" Variante="Error"
+                                           Texto="No se pudo conectar con el servidor. Verificá que el servidor esté encendido y accesible en la red, y volvé a intentar." />
+                                <Button x:Name="BotonReintentar" Classes="secundario" HorizontalAlignment="Left"
+                                        Content="Reintentar" Command="{Binding ReintentarCargaCommand}" />
+                            </StackPanel>
 
-                    <c:CampoFormulario Etiqueta="Destino (opcional)">
-                        <TextBox Text="{Binding Destino}" Watermark="Ej.: Corralón municipal" />
-                    </c:CampoFormulario>
+                            <v2:Alerta x:Name="AlertaAnulado" Margin="0,0,0,16" Variante="Info"
+                                       Texto="Este gasto está anulado: se puede consultar, pero no modificar."
+                                       IsVisible="{Binding EsAnulado}" />
 
-                    <Grid ColumnDefinitions="*,12,*">
-                        <c:CampoFormulario Grid.Column="0" Etiqueta="Fecha">
-                            <CalendarDatePicker SelectedDate="{Binding FechaSeleccionada}"
-                                                PlaceholderText="dd/mm/aaaa"
-                                                SelectedDateFormat="Custom"
-                                                CustomDateFormatString="dd/MM/yyyy"
-                                                beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
-                        </c:CampoFormulario>
-                        <c:CampoFormulario Grid.Column="2" Etiqueta="Monto total">
-                            <TextBox Text="{Binding MontoTexto}" Watermark="Ej.: 1.500,50" />
-                        </c:CampoFormulario>
-                    </Grid>
+                            <!-- Los campos se deshabilitan juntos en solo lectura; Adjuntos queda afuera para que Ver siga. El
+                                 16 entre filas va en el Margin superior de cada campo: el vencimiento aparece y desaparece
+                                 sin dejar hueco. -->
+                            <StackPanel x:Name="Campos" IsEnabled="{Binding !SoloLectura}">
+                                <TextBlock Classes="subtitulo-formulario" Text="Factura" Margin="0,0,0,12" />
+                                <Grid ColumnDefinitions="*,16,*" RowDefinitions="Auto,Auto">
+                                    <v2:CampoFormulario x:Name="CampoProveedor" Grid.Row="0" Grid.Column="0" Etiqueta="Proveedor" Requerido="True">
+                                        <ComboBox x:Name="ComboProveedor" HorizontalAlignment="Stretch" PlaceholderText="Elegí el proveedor"
+                                                  ItemsSource="{Binding ProveedoresDisponibles}" SelectedItem="{Binding ProveedorSeleccionado}">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="e:Proveedor"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </v2:CampoFormulario>
+                                    <v2:CampoFormulario x:Name="CampoNumeroFactura" Grid.Row="0" Grid.Column="2" Etiqueta="N.º de factura">
+                                        <TextBox x:Name="CajaNumeroFactura" Text="{Binding NumeroFactura}" PlaceholderText="Ej.: A-0001234" />
+                                    </v2:CampoFormulario>
+                                    <v2:CampoFormulario x:Name="CampoOrdenCompra" Grid.Row="1" Grid.Column="0" Margin="0,16,0,0" Etiqueta="Orden de compra">
+                                        <TextBox x:Name="CajaOrdenCompra" Text="{Binding NumeroOrden}" PlaceholderText="Ej.: OC-77" />
+                                    </v2:CampoFormulario>
+                                    <v2:CampoFormulario x:Name="CampoFecha" Grid.Row="1" Grid.Column="2" Margin="0,16,0,0" Etiqueta="Fecha" Requerido="True">
+                                        <CalendarDatePicker x:Name="SelectorFecha" HorizontalAlignment="Stretch"
+                                                            SelectedDate="{Binding FechaSeleccionada}"
+                                                            PlaceholderText="dd/mm/aaaa" SelectedDateFormat="Custom"
+                                                            CustomDateFormatString="dd/MM/yyyy"
+                                                            beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
+                                    </v2:CampoFormulario>
+                                </Grid>
 
-                    <c:CampoFormulario Etiqueta="Fuente de financiamiento">
-                        <ComboBox ItemsSource="{Binding FuentesDisponibles}"
-                                  SelectedItem="{Binding FuenteSeleccionada}"
-                                  PlaceholderText="Elegí la fuente"
-                                  HorizontalAlignment="Stretch">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding Nombre}" />
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                    </c:CampoFormulario>
+                                <Border Height="1" Margin="0,20" Background="{DynamicResource V2SeparadorGrillaBrush}" />
+                                <TextBlock Classes="subtitulo-formulario" Text="Detalle" Margin="0,0,0,12" />
+                                <v2:CampoFormulario x:Name="CampoDetalle" Etiqueta="Detalle" Requerido="True">
+                                    <TextBox x:Name="CajaDetalle" Text="{Binding Detalle}" PlaceholderText="Ej.: Materiales para la rambla" />
+                                </v2:CampoFormulario>
+                                <v2:CampoFormulario x:Name="CampoDestino" Margin="0,16,0,0" Etiqueta="Destino">
+                                    <TextBox x:Name="CajaDestino" Text="{Binding Destino}" PlaceholderText="Ej.: Corralón municipal" />
+                                </v2:CampoFormulario>
 
-                    <c:CampoFormulario Etiqueta="Rubro">
-                        <ComboBox ItemsSource="{Binding RubrosDisponibles}"
-                                  SelectedItem="{Binding RubroSeleccionado}"
-                                  PlaceholderText="Elegí el rubro"
-                                  HorizontalAlignment="Stretch">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding Nombre}" />
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                    </c:CampoFormulario>
+                                <Border Height="1" Margin="0,20" Background="{DynamicResource V2SeparadorGrillaBrush}" />
+                                <TextBlock Classes="subtitulo-formulario" Text="Importe e imputación" Margin="0,0,0,12" />
+                                <Grid ColumnDefinitions="*,16,*" RowDefinitions="Auto,Auto">
+                                    <v2:CampoFormulario x:Name="CampoMonto" Grid.Row="0" Grid.Column="0" Etiqueta="Monto total" Requerido="True">
+                                        <TextBox x:Name="CajaMonto" Text="{Binding MontoTexto}" PlaceholderText="0,00" TextAlignment="Right" />
+                                    </v2:CampoFormulario>
+                                    <v2:CampoFormulario x:Name="CampoFuente" Grid.Row="0" Grid.Column="2" Etiqueta="Fuente de financiamiento" Requerido="True">
+                                        <ComboBox x:Name="ComboFuente" HorizontalAlignment="Stretch" PlaceholderText="Elegí la fuente"
+                                                  ItemsSource="{Binding FuentesDisponibles}" SelectedItem="{Binding FuenteSeleccionada}">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="e:FuenteFinanciamiento"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </v2:CampoFormulario>
+                                    <v2:CampoFormulario x:Name="CampoRubro" Grid.Row="1" Grid.Column="0" Margin="0,16,0,0" Etiqueta="Rubro" Requerido="True">
+                                        <ComboBox x:Name="ComboRubro" HorizontalAlignment="Stretch" PlaceholderText="Elegí el rubro"
+                                                  ItemsSource="{Binding RubrosDisponibles}" SelectedItem="{Binding RubroSeleccionado}">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="e:RubroGasto"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </v2:CampoFormulario>
+                                    <v2:CampoFormulario x:Name="CampoLineaPoa" Grid.Row="1" Grid.Column="2" Margin="0,16,0,0" Etiqueta="Línea POA">
+                                        <ComboBox x:Name="ComboLineaPoa" HorizontalAlignment="Stretch" PlaceholderText="Sin línea POA"
+                                                  ItemsSource="{Binding LineasPoaDisponibles}" SelectedItem="{Binding LineaPoaSeleccionada}">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="e:LineaPoa"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </v2:CampoFormulario>
+                                </Grid>
 
-                    <c:CampoFormulario Etiqueta="Línea POA (opcional)">
-                        <ComboBox ItemsSource="{Binding LineasPoaDisponibles}"
-                                  SelectedItem="{Binding LineaPoaSeleccionada}"
-                                  PlaceholderText="Sin línea POA"
-                                  HorizontalAlignment="Stretch">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding Nombre}" />
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                    </c:CampoFormulario>
+                                <Border Height="1" Margin="0,20" Background="{DynamicResource V2SeparadorGrillaBrush}" />
+                                <TextBlock Classes="subtitulo-formulario" Text="Condición de pago" Margin="0,0,0,12" />
+                                <Grid ColumnDefinitions="*,16,*" RowDefinitions="Auto,Auto">
+                                    <CheckBox x:Name="CheckCredito" Grid.Row="0" Grid.Column="0" VerticalAlignment="Bottom"
+                                              Content="A crédito" IsChecked="{Binding EsCredito}"
+                                              IsEnabled="{Binding PuedeCambiarCondicionPago}" />
+                                    <v2:CampoFormulario x:Name="CampoVencimiento" Grid.Row="0" Grid.Column="2" Etiqueta="Fecha de vencimiento"
+                                                        Requerido="True" IsVisible="{Binding EsCredito}">
+                                        <CalendarDatePicker x:Name="SelectorVencimiento" HorizontalAlignment="Stretch"
+                                                            SelectedDate="{Binding FechaVencimientoSeleccionada}"
+                                                            PlaceholderText="dd/mm/aaaa" SelectedDateFormat="Custom"
+                                                            CustomDateFormatString="dd/MM/yyyy"
+                                                            beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
+                                    </v2:CampoFormulario>
+                                    <TextBlock x:Name="TextoCondicionFija" Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,8,0,0"
+                                               Classes="texto-secundario" TextWrapping="Wrap"
+                                               Text="{x:Static vm:GastoFormViewModel.TextoCondicionPagoFija}"
+                                               IsVisible="{Binding EsEdicion}" />
+                                </Grid>
+                            </StackPanel>
 
-                    <CheckBox IsChecked="{Binding EsCredito}" Content="Compra a crédito" />
-                    <c:CampoFormulario Etiqueta="Fecha de vencimiento" IsVisible="{Binding EsCredito}">
-                        <CalendarDatePicker SelectedDate="{Binding FechaVencimientoSeleccionada}"
-                                            PlaceholderText="dd/mm/aaaa"
-                                            SelectedDateFormat="Custom"
-                                            CustomDateFormatString="dd/MM/yyyy"
-                                            beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
-                    </c:CampoFormulario>
+                            <!-- Con el gasto anulado la sección entera se oculta. En alta no hay gasto al que adjuntar todavía. -->
+                            <StackPanel x:Name="SeccionAdjuntos" IsVisible="{Binding MostrarSeccionAdjuntos}">
+                                <Border Height="1" Margin="0,20" Background="{DynamicResource V2SeparadorGrillaBrush}" />
+                                <ContentControl x:Name="PanelAdjuntos" Content="{Binding AdjuntosPanel}" IsVisible="{Binding EsEdicion}" />
+                                <StackPanel x:Name="AdjuntosTrasGuardar" IsVisible="{Binding !EsEdicion}">
+                                    <TextBlock Classes="titulo-seccion" Text="Adjuntos" Margin="0,0,0,8" />
+                                    <TextBlock x:Name="TextoGuardarParaAdjuntar" Classes="texto-secundario"
+                                               Text="Guardá el gasto para poder adjuntar." />
+                                </StackPanel>
+                            </StackPanel>
+                        </StackPanel>
+                    </v2:TarjetaContenido>
+                </Grid>
+            </StackPanel>
+        </ScrollViewer>
 
-                    <ContentControl Content="{Binding AdjuntosPanel}"
-                                     IsVisible="{Binding EsEdicion}"
-                                     Margin="0,16,0,0" />
+        <!-- Error general fuera del scroll, con el ancho de la card: se ve aunque el formulario esté scrolleado. -->
+        <Grid x:Name="FilaAlertaError" Grid.Row="1" Margin="28,0,28,12" UseLayoutRounding="False"
+              IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MaxWidth="{StaticResource V2AnchoFormularioMax}" />
+            </Grid.ColumnDefinitions>
+            <v2:Alerta x:Name="AlertaError" Variante="Error" Texto="{Binding MensajeError}" />
+        </Grid>
 
-                    <TextBlock Text="{Binding MensajeError}"
-                               Foreground="{DynamicResource DangerBrush}"
-                               TextWrapping="Wrap"
-                               IsVisible="{Binding MensajeError, Converter={x:Static ObjectConverters.IsNotNull}}" />
-
-                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
-                        <!-- Guardar: gateado por PuedeRegistrarGastos (bugfix 2026-08-15) - se llega
-                             a este formulario desde GastosView, que solo exige VerFinanzas, pero
-                             GastoService.AltaAsync/ModificarAsync exigen Permisos.RegistrarGastos
-                             sin condicion. -->
-                        <Button Classes="primary" Content="Guardar" Command="{Binding GuardarCommand}"
-                                IsVisible="{Binding PuedeRegistrarGastos}" />
-                        <Button Classes="secondary" Content="Cancelar" Command="{Binding CancelarCommand}" />
-                    </StackPanel>
-
+        <Border x:Name="Pie" Grid.Row="2"
+                Background="{DynamicResource V2SuperficieBrush}"
+                BorderBrush="{DynamicResource V2BordeBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="28,16">
+            <Grid UseLayoutRounding="False">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" MaxWidth="{StaticResource V2AnchoFormularioMax}" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                    <Button x:Name="BotonCancelar" Classes="secundario" Content="Cancelar" Command="{Binding CancelarCommand}" />
+                    <Button x:Name="BotonGuardar" Classes="primario" Content="Guardar" Command="{Binding GuardarCommand}">
+                        <Button.IsVisible>
+                            <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                <Binding Path="SoloLectura" Converter="{x:Static BoolConverters.Not}" />
+                                <Binding Path="SinPermiso" Converter="{x:Static BoolConverters.Not}" />
+                            </MultiBinding>
+                        </Button.IsVisible>
+                    </Button>
                 </StackPanel>
-            </Border>
+            </Grid>
+        </Border>
 
-        </DockPanel>
-    </ScrollViewer>
+    </Grid>
 
 </UserControl>
