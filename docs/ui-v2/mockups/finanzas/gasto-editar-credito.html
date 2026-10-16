@@ -15,6 +15,9 @@
   .pagina { padding: 24px 28px; }
   /* Grid con una columna * de MaxWidth 760: la card mide 760 a la izquierda. Padding de formulario 24. */
   .formulario { max-width: var(--v2-ancho-formulario-max); padding: 24px; }
+  /* Encabezado del formulario (breadcrumb, título e insignias) dentro de la misma columna * de MaxWidth 760 que la card
+     (Grid ColumnaEncabezado): las insignias terminan en el borde derecho de la card, alineadas con el pie (D11). */
+  .pagina > .v2-encabezado { max-width: var(--v2-ancho-formulario-max); }
   .subtitulo { margin-bottom: 12px; }
   /* Separador entre secciones (convención 12): Border Height 1 Margin 0,20 en V2SeparadorGrillaBrush. */
   .separador { height: 1px; margin: 20px 0; background: var(--v2-color-separador-grilla); }
@@ -44,7 +47,7 @@
   .adjunto-fecha { flex: 0 0 80px; }
   .adjunto-tamano > span, .adjunto-fecha > span { width: calc-size(fit-content, round(up, size, 1px)); }
   .adjunto-ver { margin-left: 8px; }
-  /* Insignias del encabezado (Anulado, Solo lectura): StackPanel con 8 de separación en las acciones del EncabezadoPagina,
+  /* Insignias del encabezado (Anulado, Solo lectura): StackPanel con 8 de separación en las acciones del EncabezadoPagina (limitado a la columna de 760),
      alineadas arriba (el StackPanel mide lo que la insignia, 19, y las acciones van con VerticalAlignment Top). */
   .insignias { display: flex; gap: 8px; align-items: flex-start; }
   .alerta-anulado { margin-bottom: 16px; }

@@ -78,12 +78,12 @@ La spec pide cosas que el código, tal como queda, resuelve de una forma que la 
 Lo que la spec no fija lo propone el mockup y lo decide el usuario en el GATE 1 (criterio de la 3a a la 4c). El plan está escrito con estos valores; si el usuario cambia uno, se aplica en los mockups, en los tests de VM que lo fijan (con su rojo y su verde) y en las Tasks 14 y 15.
 
 - **D1. Encabezado del listado:** `EncabezadoPagina` sin breadcrumb (pantalla del sidebar), `Titulo="Gastos y facturas"`, `Subtitulo="Facturas y compromisos de pago de la caja municipal."`. Acciones de izquierda a derecha: `Insignia` "Solo lectura" (neutra, solo sin `finanzas.gastos`), "Editar", "Pagos", "Anular", "Exportar PDF" (los cuatro `secundario`) y "Nuevo gasto" (`primario`, el último), como Ingresos (4b).
-- **D2. Filtros:** `BarraFiltros MostrarBusqueda="False"` con dos filas de `CampoFormulario` (los siete no entran en una a 1040): fila 1 Desde (`CalendarDatePicker` 140) · Hasta (140) · Proveedor (`ComboBox` 220, "Todos") · Fuente (200, "Todas"); fila 2, a 12 de la primera, Rubro (200, "Todos") · Línea POA (220, "Todas") · Estado (140, con "Todos") · "Limpiar" (`secundario`, alineado abajo). Los anchos se confirman con la medición (Task 12 Step 1); si cambian, el valor del ledger reemplaza al de esta lista en el mockup y en la vista. Alternativa: un `WrapPanel` que reparte solo (pierde el orden fijo por fila).
-- **D3. Grilla (DECIDIDO por el usuario el 2026-10-16):** 11 columnas en un orden NUEVO que reemplaza "el orden de la v1" (FECHA · PROVEEDOR · FACTURA · DETALLE · FUENTE · RUBRO · LÍNEA POA · MONTO · PAGADO · SALDO · ESTADO), con los montos y el estado a la vista: FECHA (`ColumnaAuto`, `NoCede`, `FechaCortaConverter`) · PROVEEDOR · DETALLE (`*`, `MinWidth` 200, elipsis + tooltip si se corta) · MONTO · PAGADO · SALDO (`ColumnaAuto`, `num`, `MonedaConverter`) · ESTADO (ancho fijo 96 = insignia "Pendiente" medida + 16, conjunto cerrado, convención 14) · FACTURA (`ColumnaAuto` + `TooltipSiSeCorta`) · FUENTE · RUBRO · LÍNEA POA (`ColumnaAuto` + `TooltipSiSeCorta`). Orden por click en las once. Con DETALLE en su piso no entran, scroll horizontal (precedente: Historial, 3c-2): hasta ESTADO suman 866 con los anchos medidos (ESTADO 90), así que entran en la vista inicial a 1280 (interior 948) y a 1366 (interior 1034); a 1280 se corta FACTURA y a 1366 se corta FUENTE. Una FACTURA o LÍNEA POA vacía queda vacía (paridad v1).
+- **D2. Filtros:** `BarraFiltros MostrarBusqueda="False"` con dos filas de `CampoFormulario` (los siete no entran en una a 1040): fila 1 Desde (`CalendarDatePicker` 140) · Hasta (140) · Proveedor (`ComboBox` 220, "Todos") · Fuente (200, "Todas"); fila 2, a 12 de la primera, Rubro (228, "Todos"; DECIDIDO por el usuario el 2026-10-16: con 200 "Materiales de construcción" se cortaba, 167 en 142) · Línea POA (220, "Todas") · Estado (140, con "Todos") · "Limpiar" (`secundario`, alineado abajo). Los anchos son los medidos en la Task 12 y aprobados en el GATE 1 (filas de 724 y 693 en el interior de 950 / 1036; el 665 de la medición era con Rubro 200). Alternativa: un `WrapPanel` que reparte solo (pierde el orden fijo por fila).
+- **D3. Grilla (DECIDIDO por el usuario el 2026-10-16):** 11 columnas en un orden NUEVO que reemplaza "el orden de la v1" (FECHA · PROVEEDOR · FACTURA · DETALLE · FUENTE · RUBRO · LÍNEA POA · MONTO · PAGADO · SALDO · ESTADO), con los montos y el estado a la vista: FECHA (`ColumnaAuto`, `NoCede`, `FechaCortaConverter`) · PROVEEDOR · DETALLE (`*`, `MinWidth` 200, elipsis + tooltip si se corta) · MONTO · PAGADO · SALDO (`ColumnaAuto`, `num`, `MonedaConverter`) · ESTADO (ancho fijo 90 = insignia "Pendiente" medida 74 + 16, conjunto cerrado, convención 14; DECIDIDO por el usuario el 2026-10-16, reemplaza el 96 anterior) · FACTURA (`ColumnaAuto` + `TooltipSiSeCorta`) · FUENTE · RUBRO · LÍNEA POA (`ColumnaAuto` + `TooltipSiSeCorta`). Orden por click en las once. Con DETALLE en su piso no entran, scroll horizontal (precedente: Historial, 3c-2): hasta ESTADO suman 866 con los anchos medidos (ESTADO 90), así que entran en la vista inicial a 1280 (interior 948) y a 1366 (interior 1034); a 1280 se corta FACTURA y a 1366 se corta FUENTE. Una FACTURA o LÍNEA POA vacía queda vacía (paridad v1).
 - **D4. Fila anulada:** todas sus celdas de texto en terciario por token (`Classes.inactivo`), y en ESTADO la `Insignia` "Anulada" neutra (P2). Sin `Opacity`.
 - **D5. Estados del listado** (dentro de la card, con los filtros a mano): "Cargando gastos…" (`EstadoCargando`); sin servidor, `EstadoVacio` de error con los textos de la convención 18 y "Reintentar"; tras un 403, `EstadoVacio` "Sin permiso" / "No tenés permiso para ver los gastos." EN LUGAR de la card; vacío sin datos "Todavía no hay gastos" / "Cuando se registre una factura o un compromiso, va a aparecer acá." con "Nuevo gasto" `secundario` (solo con `finanzas.gastos`); sin resultados "Ningún gasto coincide con los filtros" / "Probá con otro período o tocá Limpiar.".
 - **D6. Pie:** "N gastos" (`ConteoConverter`, `'gasto|gastos'`) sobre `CantidadVisible`, oculto sin filas visibles o sin conexión.
-- **D7. Formulario:** breadcrumb "Gastos y facturas / {Titulo}" (separador " / ", como en la 4b y en los mockups; decidido el 2026-10-16); card de 760 a la izquierda (convención 12); cuatro secciones con `subtitulo-formulario` y separador: **Factura** (Proveedor · N.º de factura; Orden de compra · Fecha), **Detalle** (Detalle y, debajo, Destino, los dos a todo el ancho), **Importe e imputación** (Monto · Fuente; Rubro · Línea POA), **Condición de pago** ("A crédito" · Fecha de vencimiento; debajo, el texto de P4 en edición). Requeridos con asterisco: Proveedor, Fecha, Detalle, Monto, Fuente, Rubro y Vencimiento.
+- **D7. Formulario:** breadcrumb "Gastos y facturas / {Titulo}" (separador " / ", como en la 4b y en los mockups; decidido el 2026-10-16); card de 760 a la izquierda (convención 12); cuatro secciones con `subtitulo-formulario` y separador: **Factura** (Proveedor · N.º de factura; Orden de compra · Fecha), **Detalle** (Detalle y, debajo, Destino, los dos a todo el ancho), **Importe e imputación** (Monto · Fuente; Rubro · Línea POA), **Condición de pago** ("A crédito" · Fecha de vencimiento; debajo, el texto de P4 en edición). Requeridos con asterisco: Proveedor, Fecha, Detalle, Monto, Fuente, Rubro y Vencimiento. **Encabezado limitado a la columna de 760** (DECIDIDO por el usuario el 2026-10-16): breadcrumb, título y las insignias "Anulado" y "Solo lectura" quedan dentro de la misma columna `*` con `MaxWidth` `V2AnchoFormularioMax` que la card y el pie (D11), así que las insignias terminan en el borde derecho de la card (x 788 de la vista), no en el de la ventana. Mismo mecanismo que el pie: un `Grid` de una columna `*` con `MaxWidth` y `UseLayoutRounding="False"` (`ColumnaEncabezado`).
 - **D8. Textos de error por campo** (constantes del VM, Task 9): "Elegí el proveedor.", "La fecha del gasto es obligatoria.", "El detalle es obligatorio.", "El monto total es obligatorio.", monto inválido con `MensajeNumeroInvalido.Armar("El monto total no es un número válido.", …)` (el de hoy, p. ej. "… Usá coma para los decimales: 5,4"), "Elegí la fuente de financiamiento.", "Elegí el rubro.", "Un gasto a crédito exige fecha de vencimiento." (el de hoy).
 - **D9. Condición de pago:** el tilde dice "A crédito" (la v1 decía "Compra a crédito"); el texto de P4 en `texto-secundario` debajo de la fila, sin punto final (literal de la spec).
 - **D10. Adjuntos:** sin `subtitulo-formulario` propio (el panel v2 trae su título "Adjuntos" en `titulo-seccion`): separador y el panel. En alta y "desde entrada", el mismo título "Adjuntos" y "Guardá el gasto para poder adjuntar." en `texto-secundario`. Con el gasto anulado, la sección entera (separador incluido) se oculta.
@@ -3761,7 +3761,7 @@ Expected: la gran mayoría FAIL contra la vista v1 (`InvalidOperationException: 
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,12,0,0">
                             <v2:CampoFormulario x:Name="CampoRubro" Etiqueta="Rubro">
-                                <ComboBox x:Name="ComboRubro" Width="200" PlaceholderText="Todos"
+                                <ComboBox x:Name="ComboRubro" Width="228" PlaceholderText="Todos"
                                           ItemsSource="{Binding RubrosDisponibles}" SelectedItem="{Binding RubroSeleccionado}">
                                     <ComboBox.ItemTemplate>
                                         <DataTemplate x:DataType="e:RubroGasto"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
@@ -3913,7 +3913,7 @@ Expected: la gran mayoría FAIL contra la vista v1 (`InvalidOperationException: 
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="ESTADO" Width="96" SortMemberPath="Estado">
+                        <DataGridTemplateColumn Header="ESTADO" Width="90" SortMemberPath="Estado">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="vm:GastoFila">
                                     <v2:Insignia Texto="{Binding Estado}" HorizontalAlignment="Left" VerticalAlignment="Center"
@@ -4114,7 +4114,7 @@ git commit -m "feat(ui-v2): gastos y facturas v2 con filtros que recargan solos,
 
 **Interfaces:**
 - Consumes: `GastoFormViewModel` (`Titulo`, `CancelarCommand`, `GuardarCommand`, `ProveedoresDisponibles`, `FuentesDisponibles`, `RubrosDisponibles`, `LineasPoaDisponibles`, `ProveedorSeleccionado`, `NumeroFactura`, `NumeroOrden`, `FechaSeleccionada`, `Detalle`, `Destino`, `MontoTexto`, `FuenteSeleccionada`, `RubroSeleccionado`, `LineaPoaSeleccionada`, `EsCredito`, `FechaVencimientoSeleccionada`, `EsEdicion`, `EsAnulado`, `SoloLectura`, `MostrarSeccionAdjuntos`, `PuedeCambiarCondicionPago`, `TextoCondicionPagoFija`, `MensajeError`, `AdjuntosPanel`, `SinPermiso`, `MensajeSinPermiso`, `SinConexion`, `ReintentarCargaCommand`, `MarcarTocado`, `MensajeSinPermisoFormulario`, `MensajeDetalleObligatorio`); `AdjuntosPanelView` v2 (4a, sin cambios); `CalendarDatePickerFechaBehavior`; fakes de la Task 14 y de UiTests (`AdjuntoServiceFake`, `ServicioSeleccionArchivoFake`, `ServicioAperturaArchivoFake`, `FuenteFinanciamientoServiceFake`, `RubroGastoServiceFake`, `LineaPoaServiceFake`, `SesionFake`, `NavigationRecorderFake`, `NavigationServiceFake`, `ConfirmacionServiceFake`, `InfoAppFake`, `AuthServiceFake`, `PreferenciasSidebarFake`).
-- Produces: en la vista, `x:Name` `Raiz`, `Desplazamiento`, `Encabezado`, `InsigniaAnulado`, `InsigniaSoloLectura`, `EstadoSinPermiso`, `ColumnaFormulario`, `Tarjeta`, `ErrorCarga`, `AlertaSinConexion`, `BotonReintentar`, `AlertaAnulado`, `Campos`, `CampoProveedor`, `ComboProveedor`, `CampoNumeroFactura`, `CajaNumeroFactura`, `CampoOrdenCompra`, `CajaOrdenCompra`, `CampoFecha`, `SelectorFecha`, `CampoDetalle`, `CajaDetalle`, `CampoDestino`, `CajaDestino`, `CampoMonto`, `CajaMonto`, `CampoFuente`, `ComboFuente`, `CampoRubro`, `ComboRubro`, `CampoLineaPoa`, `ComboLineaPoa`, `CheckCredito`, `CampoVencimiento`, `SelectorVencimiento`, `TextoCondicionFija`, `SeccionAdjuntos`, `PanelAdjuntos`, `AdjuntosTrasGuardar`, `TextoGuardarParaAdjuntar`, `FilaAlertaError`, `AlertaError`, `Pie`, `BotonCancelar`, `BotonGuardar`.
+- Produces: en la vista, `x:Name` `Raiz`, `Desplazamiento`, `ColumnaEncabezado`, `Encabezado`, `InsigniaAnulado`, `InsigniaSoloLectura`, `EstadoSinPermiso`, `ColumnaFormulario`, `Tarjeta`, `ErrorCarga`, `AlertaSinConexion`, `BotonReintentar`, `AlertaAnulado`, `Campos`, `CampoProveedor`, `ComboProveedor`, `CampoNumeroFactura`, `CajaNumeroFactura`, `CampoOrdenCompra`, `CajaOrdenCompra`, `CampoFecha`, `SelectorFecha`, `CampoDetalle`, `CajaDetalle`, `CampoDestino`, `CajaDestino`, `CampoMonto`, `CajaMonto`, `CampoFuente`, `ComboFuente`, `CampoRubro`, `ComboRubro`, `CampoLineaPoa`, `ComboLineaPoa`, `CheckCredito`, `CampoVencimiento`, `SelectorVencimiento`, `TextoCondicionFija`, `SeccionAdjuntos`, `PanelAdjuntos`, `AdjuntosTrasGuardar`, `TextoGuardarParaAdjuntar`, `FilaAlertaError`, `AlertaError`, `Pie`, `BotonCancelar`, `BotonGuardar`.
 
 - [ ] **Step 1: Tests de la vista (rojo)**
 
@@ -4277,6 +4277,20 @@ public class GastoFormViewV2Tests
 
         Assert.Equal(760, tarjeta.Width);
         Assert.Equal(28, tarjeta.X);
+    }
+
+    [AvaloniaTheory]
+    [InlineData(1040.0)]
+    [InlineData(1126.0)]
+    public void Encabezado_SeLimitaALaColumnaDeLaCard_LasInsigniasTerminanEnSuBorde(double ancho)
+    {
+        var m = Montar(vm => vm.CargarParaEditar(Existente(activo: false)), ancho: ancho);
+        var tarjeta = EnVentana(m.Ventana, Parte<TarjetaContenido>(m, "Tarjeta"));
+        var encabezado = EnVentana(m.Ventana, Parte<EncabezadoPagina>(m, "Encabezado"));
+        var insignia = EnVentana(m.Ventana, Parte<Insignia>(m, "InsigniaSoloLectura"));
+
+        Assert.Equal(tarjeta.Right, encabezado.Right, 1);
+        Assert.Equal(tarjeta.Right, insignia.Right, 1);
     }
 
     [AvaloniaFact]
@@ -4599,18 +4613,24 @@ Expected: la gran mayoría FAIL contra la vista v1 (`Sequence contains no matchi
         <ScrollViewer x:Name="Desplazamiento" Grid.Row="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
             <StackPanel Margin="28,24">
 
-                <v2:EncabezadoPagina x:Name="Encabezado"
-                                     Titulo="{Binding Titulo}"
-                                     BreadcrumbOrigen="Gastos y facturas"
-                                     BreadcrumbComando="{Binding CancelarCommand}"
-                                     BreadcrumbActual="{Binding Titulo}">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <v2:Insignia x:Name="InsigniaAnulado" Texto="Anulado" Variante="Neutro" VerticalAlignment="Center"
-                                     IsVisible="{Binding EsAnulado}" />
-                        <v2:Insignia x:Name="InsigniaSoloLectura" Texto="Solo lectura" Variante="Neutro" VerticalAlignment="Center"
-                                     IsVisible="{Binding SoloLectura}" />
-                    </StackPanel>
-                </v2:EncabezadoPagina>
+                <!-- Encabezado en la misma columna de 760 que la card y el pie: las insignias terminan en el borde de la card. -->
+                <Grid x:Name="ColumnaEncabezado" UseLayoutRounding="False">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" MaxWidth="{StaticResource V2AnchoFormularioMax}" />
+                    </Grid.ColumnDefinitions>
+                    <v2:EncabezadoPagina x:Name="Encabezado"
+                                         Titulo="{Binding Titulo}"
+                                         BreadcrumbOrigen="Gastos y facturas"
+                                         BreadcrumbComando="{Binding CancelarCommand}"
+                                         BreadcrumbActual="{Binding Titulo}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <v2:Insignia x:Name="InsigniaAnulado" Texto="Anulado" Variante="Neutro" VerticalAlignment="Center"
+                                         IsVisible="{Binding EsAnulado}" />
+                            <v2:Insignia x:Name="InsigniaSoloLectura" Texto="Solo lectura" Variante="Neutro" VerticalAlignment="Center"
+                                         IsVisible="{Binding SoloLectura}" />
+                        </StackPanel>
+                    </v2:EncabezadoPagina>
+                </Grid>
 
                 <v2:EstadoVacio x:Name="EstadoSinPermiso" UseLayoutRounding="False"
                                 Titulo="Sin permiso" Mensaje="{Binding MensajeSinPermiso}" EsError="True"
@@ -4943,6 +4963,7 @@ Run: `scripts/ui-v2/comparar.sh Gasto`. Expected: las 20 filas del formulario y 
 - (15e) Quitar `IsEnabled="{Binding PuedeCambiarCondicionPago}"` de `CheckCredito` → rojo `Edicion_TildeACreditoDeshabilitado_…`. (Spec: P4.)
 - (15f) Quitar `IsVisible="{Binding EsCredito}"` de `CampoVencimiento` → rojo `Vencimiento_SoloACredito`.
 - (15g) En el `MultiBinding` de `BotonGuardar`, quitar `<Binding Path="SoloLectura" Converter="{x:Static BoolConverters.Not}" />` → rojo `SinRegistrarGastos_…` y `GastoAnulado_…`.
+- (15h) Quitar el `MaxWidth="{StaticResource V2AnchoFormularioMax}"` de la columna de `ColumnaEncabezado` → rojo `Encabezado_SeLimitaALaColumnaDeLaCard_LasInsigniasTerminanEnSuBorde` (las dos filas: las insignias quedan en el borde de la vista). (Decisión Q-INSIGNIAS, 2026-10-16.)
 - (15h) Quitar `IsVisible="{Binding SoloLectura}"` de `InsigniaSoloLectura` → rojo `Edicion_ConElPanelDeAdjuntos` (la insignia aparece con permiso). (Spec: "el `IsVisible` de cada gate (… Insignia)".)
 - (15i) Quitar `IsVisible="{Binding EsAnulado}"` de `InsigniaAnulado` → rojo `SinRegistrarGastos_CamposDeshabilitados_…` ("Anulado" sin estar anulado).
 - (15j) En el code-behind, quitar la línea `TocarAlSalir(CajaDetalle, nameof(GastoFormViewModel.Detalle));` → rojo `SalirDeDetalleSinEscribir_MuestraSuError`.
