@@ -79,17 +79,17 @@ Lo que la spec no fija lo propone el mockup y lo decide el usuario en el GATE 1 
 
 - **D1. Encabezado del listado:** `EncabezadoPagina` sin breadcrumb (pantalla del sidebar), `Titulo="Gastos y facturas"`, `Subtitulo="Facturas y compromisos de pago de la caja municipal."`. Acciones de izquierda a derecha: `Insignia` "Solo lectura" (neutra, solo sin `finanzas.gastos`), "Editar", "Pagos", "Anular", "Exportar PDF" (los cuatro `secundario`) y "Nuevo gasto" (`primario`, el último), como Ingresos (4b).
 - **D2. Filtros:** `BarraFiltros MostrarBusqueda="False"` con dos filas de `CampoFormulario` (los siete no entran en una a 1040): fila 1 Desde (`CalendarDatePicker` 140) · Hasta (140) · Proveedor (`ComboBox` 220, "Todos") · Fuente (200, "Todas"); fila 2, a 12 de la primera, Rubro (200, "Todos") · Línea POA (220, "Todas") · Estado (140, con "Todos") · "Limpiar" (`secundario`, alineado abajo). Los anchos se confirman con la medición (Task 12 Step 1); si cambian, el valor del ledger reemplaza al de esta lista en el mockup y en la vista. Alternativa: un `WrapPanel` que reparte solo (pierde el orden fijo por fila).
-- **D3. Grilla:** 11 columnas en el orden de hoy: FECHA (`ColumnaAuto`, `NoCede`, `FechaCortaConverter`) · PROVEEDOR · FACTURA (`ColumnaAuto` + `TooltipSiSeCorta`) · DETALLE (`*`, `MinWidth` 200, elipsis + tooltip si se corta) · FUENTE · RUBRO · LÍNEA POA (`ColumnaAuto` + `TooltipSiSeCorta`) · MONTO · PAGADO · SALDO (`ColumnaAuto`, `num`, `MonedaConverter`) · ESTADO (ancho fijo 96 = insignia "Pendiente" medida + 16, conjunto cerrado, convención 14). Orden por click en las once. Si con DETALLE en su piso no entran, scroll horizontal (precedente: Historial, 3c-2). Una FACTURA o LÍNEA POA vacía queda vacía (paridad v1).
+- **D3. Grilla (DECIDIDO por el usuario el 2026-10-16):** 11 columnas en un orden NUEVO que reemplaza "el orden de la v1" (FECHA · PROVEEDOR · FACTURA · DETALLE · FUENTE · RUBRO · LÍNEA POA · MONTO · PAGADO · SALDO · ESTADO), con los montos y el estado a la vista: FECHA (`ColumnaAuto`, `NoCede`, `FechaCortaConverter`) · PROVEEDOR · DETALLE (`*`, `MinWidth` 200, elipsis + tooltip si se corta) · MONTO · PAGADO · SALDO (`ColumnaAuto`, `num`, `MonedaConverter`) · ESTADO (ancho fijo 96 = insignia "Pendiente" medida + 16, conjunto cerrado, convención 14) · FACTURA (`ColumnaAuto` + `TooltipSiSeCorta`) · FUENTE · RUBRO · LÍNEA POA (`ColumnaAuto` + `TooltipSiSeCorta`). Orden por click en las once. Con DETALLE en su piso no entran, scroll horizontal (precedente: Historial, 3c-2): hasta ESTADO suman 866 con los anchos medidos (ESTADO 90), así que entran en la vista inicial a 1280 (interior 948) y a 1366 (interior 1034); a 1280 se corta FACTURA y a 1366 se corta FUENTE. Una FACTURA o LÍNEA POA vacía queda vacía (paridad v1).
 - **D4. Fila anulada:** todas sus celdas de texto en terciario por token (`Classes.inactivo`), y en ESTADO la `Insignia` "Anulada" neutra (P2). Sin `Opacity`.
 - **D5. Estados del listado** (dentro de la card, con los filtros a mano): "Cargando gastos…" (`EstadoCargando`); sin servidor, `EstadoVacio` de error con los textos de la convención 18 y "Reintentar"; tras un 403, `EstadoVacio` "Sin permiso" / "No tenés permiso para ver los gastos." EN LUGAR de la card; vacío sin datos "Todavía no hay gastos" / "Cuando se registre una factura o un compromiso, va a aparecer acá." con "Nuevo gasto" `secundario` (solo con `finanzas.gastos`); sin resultados "Ningún gasto coincide con los filtros" / "Probá con otro período o tocá Limpiar.".
 - **D6. Pie:** "N gastos" (`ConteoConverter`, `'gasto|gastos'`) sobre `CantidadVisible`, oculto sin filas visibles o sin conexión.
-- **D7. Formulario:** breadcrumb "Gastos y facturas › {Titulo}"; card de 760 a la izquierda (convención 12); cuatro secciones con `subtitulo-formulario` y separador: **Factura** (Proveedor · N.º de factura; Orden de compra · Fecha), **Detalle** (Detalle y, debajo, Destino, los dos a todo el ancho), **Importe e imputación** (Monto · Fuente; Rubro · Línea POA), **Condición de pago** ("A crédito" · Fecha de vencimiento; debajo, el texto de P4 en edición). Requeridos con asterisco: Proveedor, Fecha, Detalle, Monto, Fuente, Rubro y Vencimiento.
+- **D7. Formulario:** breadcrumb "Gastos y facturas / {Titulo}" (separador " / ", como en la 4b y en los mockups; decidido el 2026-10-16); card de 760 a la izquierda (convención 12); cuatro secciones con `subtitulo-formulario` y separador: **Factura** (Proveedor · N.º de factura; Orden de compra · Fecha), **Detalle** (Detalle y, debajo, Destino, los dos a todo el ancho), **Importe e imputación** (Monto · Fuente; Rubro · Línea POA), **Condición de pago** ("A crédito" · Fecha de vencimiento; debajo, el texto de P4 en edición). Requeridos con asterisco: Proveedor, Fecha, Detalle, Monto, Fuente, Rubro y Vencimiento.
 - **D8. Textos de error por campo** (constantes del VM, Task 9): "Elegí el proveedor.", "La fecha del gasto es obligatoria.", "El detalle es obligatorio.", "El monto total es obligatorio.", monto inválido con `MensajeNumeroInvalido.Armar("El monto total no es un número válido.", …)` (el de hoy, p. ej. "… Usá coma para los decimales: 5,4"), "Elegí la fuente de financiamiento.", "Elegí el rubro.", "Un gasto a crédito exige fecha de vencimiento." (el de hoy).
 - **D9. Condición de pago:** el tilde dice "A crédito" (la v1 decía "Compra a crédito"); el texto de P4 en `texto-secundario` debajo de la fila, sin punto final (literal de la spec).
 - **D10. Adjuntos:** sin `subtitulo-formulario` propio (el panel v2 trae su título "Adjuntos" en `titulo-seccion`): separador y el panel. En alta y "desde entrada", el mismo título "Adjuntos" y "Guardá el gasto para poder adjuntar." en `texto-secundario`. Con el gasto anulado, la sección entera (separador incluido) se oculta.
-- **D11. Pie fijo:** `Border` a todo el ancho, fondo superficie y borde superior, padding 28,16; Cancelar (`secundario`) y Guardar (`primario`) alineados al borde derecho de la CARD (columna de 760), no al de la ventana; la `Alerta` del error general arriba del pie con el ancho de la card. Alternativa: los botones al borde derecho de la vista, como Ingreso por factura.
+- **D11. Pie fijo:** `Border` a todo el ancho, fondo superficie y borde superior, padding 28,16; Cancelar (`secundario`) y Guardar (`primario`) alineados al borde derecho de la CARD (columna de 760), no al de la ventana; la `Alerta` del error general arriba del pie con el ancho de la card. DECIDIDO por el usuario el 2026-10-16 (no queda como pregunta abierta; descartada la alternativa de los botones al borde de la vista).
 - **D12. Solo lectura y anulado:** `Insignia` "Solo lectura" (neutra) en el lugar de las acciones del encabezado, campos deshabilitados con los tokens de deshabilitado, Guardar oculto, Cancelar sigue; con el gasto anulado además `Insignia` "Anulado" (neutra) y una `Alerta` Info arriba de la card: "Este gasto está anulado: se puede consultar, pero no modificar." (el texto que la spec deja para el GATE 1).
-- **D13. Carga inicial del formulario:** sin servidor, dentro de la card y arriba de las secciones, `Alerta` Error "No se pudo conectar con el servidor. Verificá que el servidor esté encendido y accesible en la red, y volvé a intentar." y "Reintentar" `secundario` (patrón de `MovimientoFormControl`, convención 22); tras un 403, `EstadoVacio` "Sin permiso" / "No tenés permiso para ver finanzas, así que no se puede abrir el gasto." en lugar de la card, y en el pie solo Cancelar. Sin mockup propio para estos dos estados (precedente D16 de la 4b): los custodian UiTests. Alternativa: mockups `gasto-sin-conexion` y `gasto-sin-permiso` (4 PNG más).
+- **D13. Carga inicial del formulario:** sin servidor, dentro de la card y arriba de las secciones, `Alerta` Error "No se pudo conectar con el servidor. Verificá que el servidor esté encendido y accesible en la red, y volvé a intentar." y "Reintentar" `secundario` (patrón de `MovimientoFormControl`, convención 22); tras un 403, `EstadoVacio` "Sin permiso" / "No tenés permiso para ver finanzas, así que no se puede abrir el gasto." en lugar de la card, y en el pie solo Cancelar. Sin mockup propio para estos dos estados (precedente D16 de la 4b): los custodian UiTests. DECIDIDO por el usuario el 2026-10-16: sin mockups extra, cubierto por UiTests (descartada la alternativa de 4 PNG más).
 - **D14. Doble click en una fila = Editar**, con el mismo gate (NUEVO respecto de la v1; precedente Ingresos 4b). Sobre el encabezado no edita.
 - **D15. Datos fijos** (Task 11): `DatosGastos` con 6 gastos de setiembre y octubre de 2026 (Pendiente, Parcial, dos Pagada, Vencida y otra Pagada) más uno anulado para `gastos-con-anulado`; vencimientos lejos de "hoy" (2030 para los que no vencen, 30/09/2026 para el vencido) porque el estado se calcula con el reloj real (`GastoFila` usa `DateTime.UtcNow`, sin reloj inyectable: no se cambia el VM por esto).
 - **D16. Mockups** (18, 36 PNG): listado `gastos`, `gastos-cargando`, `gastos-sin-conexion`, `gastos-sin-permiso`, `gastos-vacio`, `gastos-sin-resultados`, `gastos-solo-lectura`, `gastos-con-anulado` (la fila anulada seleccionada y Anular deshabilitado); formulario `gasto-nuevo`, `gasto-editar` (contado con un adjunto, tilde deshabilitado con su texto, SCROLLEADO al final), `gasto-editar-credito` (SCROLLEADO al final), `gasto-error-campo`, `gasto-error-servidor`, `gasto-credito`, `gasto-solo-lectura`, `gasto-anulado`; modales `gasto-confirmar-anular` y `gasto-factura-duplicada` (el `ConfirmacionDialog` con el texto que arma el VM). No se mockean tooltips ni desplegables.
@@ -2919,7 +2919,7 @@ Partir de `finanzas/ingresos.html`, `ingresos-cargando.html`, `ingresos-sin-cone
 - `-sin-resultados`: Desde "01/11/2026" y "Ningún gasto coincide con los filtros" / "Probá con otro período o tocá Limpiar.".
 - `-solo-lectura`: operador; en el encabezado solo "Solo lectura" y "Exportar PDF"; grilla y pie como `gastos.html`.
 - `-con-anulado`: las 7 filas de `ConAnuladoLista`; la fila anulada en texto terciario con la insignia "Anulada" neutra, SELECCIONADA (fondo de selección de la grilla v2), con "Anular" deshabilitado (tokens de deshabilitado) y "Editar" habilitado; pie "7 gastos".
-- `gasto-nuevo.html`: breadcrumb "Gastos y facturas › Nuevo gasto", título "Nuevo gasto", card de 760 con las cuatro secciones de D7 vacías salvo Fecha "06/10/2026", tilde "A crédito" sin tildar y sin vencimiento, sección Adjuntos de D10 con "Guardá el gasto para poder adjuntar."; pie fijo de D11 con Cancelar y Guardar (deshabilitado: faltan los obligatorios).
+- `gasto-nuevo.html`: breadcrumb "Gastos y facturas / Nuevo gasto", título "Nuevo gasto", card de 760 con las cuatro secciones de D7 vacías salvo Fecha "06/10/2026", tilde "A crédito" sin tildar y sin vencimiento, sección Adjuntos de D10 con "Guardá el gasto para poder adjuntar."; pie fijo de D11 con Cancelar y Guardar (deshabilitado: faltan los obligatorios).
 - `gasto-editar.html`: `Gastos[3]` (Barraca, A-0004521, sin orden de compra, 03/10/2026, Materiales para bacheo…, 186.540,00, FIGM Literal B, Materiales de construcción, Bacheo y caminería rural), tilde deshabilitado sin tildar con el texto de P4, panel de adjuntos con `factura-A-0004521.pdf` (Agregar, Ver y Quitar); SCROLLEADO al final (mismo recurso que `inventario/ingreso-factura-guardado.html`): se ve el final de la card y el pie pegado al borde.
 - `gasto-editar-credito.html`: `Gastos[0]` (Constructora Oriental, A-0002210, 14/10/2026, 420.000,00, Préstamo BROU, Obras viales, Bacheo y caminería rural), tilde tildado y deshabilitado, vencimiento "31/12/2030", texto de P4, adjuntos sin archivos ("Sin adjuntos. PDF, JPG o PNG hasta 10 MB."); SCROLLEADO al final.
 - `gasto-error-campo.html`: como `gasto-nuevo` con Detalle en rojo ("El detalle es obligatorio.") y Monto "1.5" en rojo ("El monto total no es un número válido. Usá coma para los decimales: 1,5"), Guardar deshabilitado.
@@ -3330,7 +3330,7 @@ public class GastosViewV2Tests
     {
         var grilla = Control<DataGrid>(Montar(Pendiente()), "Grilla");
 
-        Assert.Equal(new object?[] { "FECHA", "PROVEEDOR", "FACTURA", "DETALLE", "FUENTE", "RUBRO", "LÍNEA POA", "MONTO", "PAGADO", "SALDO", "ESTADO" },
+        Assert.Equal(new object?[] { "FECHA", "PROVEEDOR", "DETALLE", "MONTO", "PAGADO", "SALDO", "ESTADO", "FACTURA", "FUENTE", "RUBRO", "LÍNEA POA" },
             grilla.Columns.Select(c => c.Header).ToArray());
         Assert.True(grilla.CanUserSortColumns);
     }
@@ -3877,47 +3877,11 @@ Expected: la gran mayoría FAIL contra la vista v1 (`InvalidOperationException: 
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="FACTURA" Width="Auto" SortMemberPath="NumeroFactura" b:ColumnaAuto.Medir="True">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate x:DataType="vm:GastoFila">
-                                    <TextBlock Text="{Binding NumeroFactura}" Classes.inactivo="{Binding !Gasto.Activo}"
-                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding NumeroFactura}"
-                                               b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
                         <DataGridTemplateColumn Header="DETALLE" Width="*" MinWidth="200" SortMemberPath="Detalle">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="vm:GastoFila">
                                     <TextBlock Text="{Binding Detalle}" Classes.inactivo="{Binding !Gasto.Activo}"
                                                TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Detalle}"
-                                               b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="FUENTE" Width="Auto" SortMemberPath="FuenteNombre" b:ColumnaAuto.Medir="True">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate x:DataType="vm:GastoFila">
-                                    <TextBlock Text="{Binding FuenteNombre}" Classes.inactivo="{Binding !Gasto.Activo}"
-                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding FuenteNombre}"
-                                               b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="RUBRO" Width="Auto" SortMemberPath="RubroNombre" b:ColumnaAuto.Medir="True">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate x:DataType="vm:GastoFila">
-                                    <TextBlock Text="{Binding RubroNombre}" Classes.inactivo="{Binding !Gasto.Activo}"
-                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding RubroNombre}"
-                                               b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="LÍNEA POA" Width="Auto" SortMemberPath="LineaPoaNombre" b:ColumnaAuto.Medir="True">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate x:DataType="vm:GastoFila">
-                                    <TextBlock Text="{Binding LineaPoaNombre}" Classes.inactivo="{Binding !Gasto.Activo}"
-                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding LineaPoaNombre}"
                                                b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
@@ -3954,6 +3918,42 @@ Expected: la gran mayoría FAIL contra la vista v1 (`InvalidOperationException: 
                                 <DataTemplate x:DataType="vm:GastoFila">
                                     <v2:Insignia Texto="{Binding Estado}" HorizontalAlignment="Left" VerticalAlignment="Center"
                                                  Variante="{Binding Estado, Converter={x:Static conv:VarianteEstadoGastoConverter.Instance}}" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="FACTURA" Width="Auto" SortMemberPath="NumeroFactura" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:GastoFila">
+                                    <TextBlock Text="{Binding NumeroFactura}" Classes.inactivo="{Binding !Gasto.Activo}"
+                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding NumeroFactura}"
+                                               b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="FUENTE" Width="Auto" SortMemberPath="FuenteNombre" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:GastoFila">
+                                    <TextBlock Text="{Binding FuenteNombre}" Classes.inactivo="{Binding !Gasto.Activo}"
+                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding FuenteNombre}"
+                                               b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="RUBRO" Width="Auto" SortMemberPath="RubroNombre" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:GastoFila">
+                                    <TextBlock Text="{Binding RubroNombre}" Classes.inactivo="{Binding !Gasto.Activo}"
+                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding RubroNombre}"
+                                               b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="LÍNEA POA" Width="Auto" SortMemberPath="LineaPoaNombre" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:GastoFila">
+                                    <TextBlock Text="{Binding LineaPoaNombre}" Classes.inactivo="{Binding !Gasto.Activo}"
+                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding LineaPoaNombre}"
+                                               b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
