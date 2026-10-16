@@ -257,6 +257,40 @@ public class GastosViewV2Tests
     }
 
     [AvaloniaFact]
+    public async Task SinConexion_TrasUnaRecargaFallida_ConFilasPrevias_OcultaGrillaYPie()
+    {
+        var servicio = new GastosFake { Lista = [Pendiente(), Pagada()] };
+        var m = Montar(servicio);
+        Assert.True(Visible(Control<TextBlock>(m, "PieConteo")));
+
+        servicio.Falla = new ServidorNoDisponibleException();
+        Control<ComboBox>(m, "ComboProveedor").SelectedItem = Barraca;
+        await m.Vm._tareaDebounce;
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(Visible(Control<EstadoVacio>(m, "EstadoSinConexion")));
+        Assert.False(Visible(Control<TextBlock>(m, "PieConteo")));
+        Assert.False(Visible(Control<DataGrid>(m, "Grilla")));
+    }
+
+    /// <summary>El VM vacía las filas al perder la conexión, así que el término SinConexion del pie queda tapado por el
+    /// conteo: por el camino real no se llega a SinConexion con filas. Se fuerza el estado (setter privado de la base)
+    /// para custodiar el binding de la View por sí solo.</summary>
+    [AvaloniaFact]
+    public void SinConexion_ConFilasEnMemoria_ElPieNoSeVe()
+    {
+        var m = Montar(Pendiente(), Pagada());
+        Assert.True(Visible(Control<TextBlock>(m, "PieConteo")));
+
+        typeof(ViewModelBase).GetProperty(nameof(ViewModelBase.SinConexion))!.GetSetMethod(nonPublic: true)!.Invoke(m.Vm, [true]);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(m.Vm.SinConexion);
+        Assert.Equal(2, m.Vm.CantidadVisible);
+        Assert.False(Visible(Control<TextBlock>(m, "PieConteo")));
+    }
+
+    [AvaloniaFact]
     public void Un403_SinPermisoEnLugarDeLaCard_YExportarDeshabilitado()
     {
         var m = Montar(new GastosFake { Falla = new UnauthorizedAccessException("403") });
@@ -282,9 +316,21 @@ public class GastosViewV2Tests
     }
 
     [AvaloniaFact]
-    public void EstadoSinCoincidencias_SinResultados_NoElVacioDeSinGastos()
+    public void ConFilasYSinFiltros_NingunVacioSeVe()
+    {
+        var m = Montar(Pendiente(), Pagada());
+
+        Assert.False(m.Vm.HayFiltrosAplicados);
+        Assert.False(Visible(Control<EstadoVacio>(m, "EstadoSinGastos")));
+        Assert.False(Visible(Control<EstadoVacio>(m, "EstadoSinResultados")));
+        Assert.True(Visible(Control<DataGrid>(m, "Grilla")));
+    }
+
+    [AvaloniaFact]
+    public void EstadoSinCoincidencias_ConFilasCargadas_SinResultados_NoElVacioDeSinGastos()
     {
         var m = Montar(Pagada());
+        Assert.Single(m.Vm.Filas);   // Estado filtra en memoria: las filas siguen cargadas, solo se ocultan
 
         Control<ComboBox>(m, "ComboEstado").SelectedItem = "Vencida";
         Dispatcher.UIThread.RunJobs();
@@ -357,6 +403,25 @@ public class GastosViewV2Tests
         Clickear(m.Ventana, Fila(m, 1));
 
         Assert.True(Control<Button>(m, "BotonAnular").IsEffectivelyEnabled);
+    }
+
+    [AvaloniaFact]
+    public async Task Recargar_SueltaLaSeleccion_YDeshabilitaEditarPagosYAnular()
+    {
+        var m = Montar(Pendiente(), Pagada());
+        Clickear(m.Ventana, Fila(m, 1));
+        Assert.Equal(1, m.Vm.FilaSeleccionada?.Id);
+        foreach (var nombre in new[] { "BotonEditar", "BotonPagos", "BotonAnular" })
+            Assert.True(Control<Button>(m, nombre).IsEffectivelyEnabled, "Precondición: " + nombre);
+
+        Control<ComboBox>(m, "ComboProveedor").SelectedItem = Barraca;
+        await m.Vm._tareaDebounce;
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(2, m.Servicio.Filtros.Count);
+        Assert.Null(m.Vm.FilaSeleccionada);
+        foreach (var nombre in new[] { "BotonEditar", "BotonPagos", "BotonAnular" })
+            Assert.False(Control<Button>(m, nombre).IsEffectivelyEnabled, nombre);
     }
 
     [AvaloniaFact]
