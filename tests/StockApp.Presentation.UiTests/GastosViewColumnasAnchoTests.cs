@@ -131,7 +131,7 @@ public class GastosViewColumnasAnchoTests
         Dispatcher.UIThread.RunJobs();
         Dispatcher.UIThread.RunJobs(); // segunda pasada: deja completar el await CargarAsync() del DataContextChanged
 
-        // FiltrarAsync (disparado por CargarAsync) es async -- una tercera pasada asegura que
+        // El remapeo de la carga (CargarAsync) es async -- una tercera pasada asegura que
         // Filas ya esté poblada y el DataGrid haya medido el layout final con filas reales.
         await Task.Yield();
         Dispatcher.UIThread.RunJobs();
