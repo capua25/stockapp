@@ -27,8 +27,8 @@
   .filas { flex: 1 1 0; min-height: 0; overflow: hidden; }
   .pie { margin-top: 12px; }
   /* Anchos medidos en headless (MedicionTemporal4d) con el tema v2, estos datos (las siete filas, la anulada incluida) y
-     los headers en mayúsculas, iguales a 1280 y a 1366: FECHA, PROVEEDOR, FACTURA, FUENTE, RUBRO, LÍNEA POA, MONTO, PAGADO y
-     SALDO miden su contenido (ColumnaAuto); DETALLE (*) queda en su piso de 200; ESTADO fija 90 (insignia "Pendiente" 74
+     los headers en mayúsculas, iguales a 1280 y a 1366: FECHA, PROVEEDOR, MONTO, PAGADO, SALDO, FACTURA, FUENTE, RUBRO y
+     LÍNEA POA miden su contenido (ColumnaAuto); DETALLE (*) queda en su piso de 200; ESTADO fija 90 (insignia "Pendiente" 74
      + 16 de padding de celda). Orden D3: FECHA · PROVEEDOR · DETALLE · MONTO · PAGADO · SALDO · ESTADO · FACTURA · FUENTE ·
      RUBRO · LÍNEA POA. Suma 1432 contra 948 y 1034 internos: scroll horizontal a los dos tamaños. Hasta ESTADO suman 866:
      entran en la vista inicial a 1280 y a 1366. A 1280 se corta FACTURA (arranca en 866, se ven 82 de 92); a 1366 entra
