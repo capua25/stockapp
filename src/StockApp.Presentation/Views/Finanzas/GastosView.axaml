@@ -1,224 +1,286 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
+             xmlns:e="using:StockApp.Domain.Entities"
              xmlns:conv="using:StockApp.Presentation.Converters"
-             xmlns:beh="using:StockApp.Presentation.Behaviors"
-             xmlns:i="https://github.com/projektanker/icons.avalonia"
-             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
+             xmlns:b="using:StockApp.Presentation.Behaviors"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
              x:Class="StockApp.Presentation.Views.Finanzas.GastosView"
-             x:DataType="vm:GastosViewModel">
+             x:DataType="vm:GastosViewModel"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
 
-    <DockPanel Margin="{DynamicResource MargenVista}">
+    <!-- UI v2 (listado §5.1). Espejo: docs/ui-v2/mockups/finanzas/gastos*.html. Editar, Pagos y Anular actúan sobre la
+         fila seleccionada; Anular no se puede sobre una fila ya anulada. Doble click en una fila equivale a Editar
+         (code-behind). Sin finanzas.gastos se ocultan Nuevo, Editar y Anular y aparece Solo lectura; Pagos depende de
+         finanzas.pagos y Exportar PDF de finanzas.ver. Cambiar un filtro recarga sola tras una espera corta; Estado filtra
+         en memoria, al instante. Cargando, sin servidor y los dos vacíos dentro de la card con los filtros a mano; tras un
+         403, Sin permiso en lugar de la card. La fila anulada va en texto terciario por token, nunca con opacidad. -->
+    <DockPanel Margin="28,24">
 
-        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="FINANZAS" Titulo="Gastos y facturas">
-            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
-                <!-- Nuevo/Editar: gateados por PuedeRegistrarGastos (bugfix 2026-08-15) - antes sin
-                     gating, un Operador con VerFinanzas (alcanza para entrar a esta pantalla) pero sin
-                     RegistrarGastos veia ambos botones habilitados: abria GastoFormView, llenaba el
-                     formulario completo... y no habia boton "Guardar" (ese SI esta gateado por
-                     PuedeRegistrarGastos en GastoFormView), una puerta a una habitacion sin salida. -->
-                <Button Classes="primary" Content="Nuevo gasto" Command="{Binding NuevoCommand}"
+        <v2:EncabezadoPagina x:Name="Encabezado" DockPanel.Dock="Top" Titulo="Gastos y facturas"
+                             Subtitulo="Facturas y compromisos de pago de la caja municipal.">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <v2:Insignia x:Name="InsigniaSoloLectura" Texto="Solo lectura" Variante="Neutro" VerticalAlignment="Center"
+                             IsVisible="{Binding !PuedeRegistrarGastos}" />
+                <Button x:Name="BotonEditar" Classes="secundario" Content="Editar" Command="{Binding EditarCommand}"
                         IsVisible="{Binding PuedeRegistrarGastos}" />
-                <Button Classes="secondary" Content="Editar" Command="{Binding EditarCommand}"
-                        IsVisible="{Binding PuedeRegistrarGastos}" />
-                <!-- Pagos: gateado por PuedeRegistrarPagos (bugfix 2026-08-15) - antes sin gating,
-                     un Operador con VerFinanzas (alcanza para entrar a esta pantalla) pero sin
-                     RegistrarPagos podia abrir el formulario y recien al guardar se comia un 403
-                     (GastoService.RegistrarPagoAsync). -->
-                <Button Classes="secondary" Content="Pagos" Command="{Binding PagosCommand}"
+                <Button x:Name="BotonPagos" Classes="secundario" Content="Pagos" Command="{Binding PagosCommand}"
                         IsVisible="{Binding PuedeRegistrarPagos}" />
-                <!-- Anular: gateado por PuedeRegistrarGastos (bugfix 2026-08-15) - antes solo gateado
-                     por TieneSeleccion(), GastoService.AnularAsync exige Permisos.RegistrarGastos
-                     sin condicion. -->
-                <Button Classes="secondary" Content="Anular" Command="{Binding AnularCommand}"
+                <Button x:Name="BotonAnular" Classes="secundario" Content="Anular" Command="{Binding AnularCommand}"
                         IsVisible="{Binding PuedeRegistrarGastos}" />
-                <Button Classes="secondary" Command="{Binding ExportarPdfCommand}"
-                        IsVisible="{Binding PuedeVerFinanzas}">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <i:Icon Value="mdi-file-pdf-box" />
-                        <TextBlock Text="Exportar PDF" VerticalAlignment="Center" />
-                    </StackPanel>
-                </Button>
+                <Button x:Name="BotonExportarPdf" Classes="secundario" Content="Exportar PDF" Command="{Binding ExportarPdfCommand}"
+                        IsVisible="{Binding PuedeVerFinanzas}" />
+                <Button x:Name="BotonNuevo" Classes="primario" Content="Nuevo gasto" Command="{Binding NuevoCommand}"
+                        IsVisible="{Binding PuedeRegistrarGastos}" />
             </StackPanel>
-        </c:HeaderVista>
+        </v2:EncabezadoPagina>
 
-        <!-- Filtros -->
-        <Border DockPanel.Dock="Top" Classes="card" Margin="0,0,0,12">
-            <StackPanel Spacing="8">
-                <WrapPanel>
-                    <StackPanel Margin="0,0,12,8">
-                        <TextBlock Text="Desde" />
-                        <CalendarDatePicker SelectedDate="{Binding FechaDesde}"
-                                            PlaceholderText="dd/mm/aaaa"
-                                            SelectedDateFormat="Custom"
-                                            CustomDateFormatString="dd/MM/yyyy"
-                                            beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
-                    </StackPanel>
-                    <StackPanel Margin="0,0,12,8">
-                        <TextBlock Text="Hasta" />
-                        <CalendarDatePicker SelectedDate="{Binding FechaHasta}"
-                                            PlaceholderText="dd/mm/aaaa"
-                                            SelectedDateFormat="Custom"
-                                            CustomDateFormatString="dd/MM/yyyy"
-                                            beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
-                    </StackPanel>
-                    <StackPanel Margin="0,0,12,8" MinWidth="180">
-                        <TextBlock Text="Proveedor" />
-                        <ComboBox ItemsSource="{Binding ProveedoresDisponibles}"
-                                  SelectedItem="{Binding ProveedorSeleccionado}"
-                                  PlaceholderText="Todos"
-                                  HorizontalAlignment="Stretch">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding Nombre}" />
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                    </StackPanel>
-                    <StackPanel Margin="0,0,12,8" MinWidth="160">
-                        <TextBlock Text="Fuente" />
-                        <ComboBox ItemsSource="{Binding FuentesDisponibles}"
-                                  SelectedItem="{Binding FuenteSeleccionada}"
-                                  PlaceholderText="Todas"
-                                  HorizontalAlignment="Stretch">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding Nombre}" />
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                    </StackPanel>
-                    <StackPanel Margin="0,0,12,8" MinWidth="160">
-                        <TextBlock Text="Rubro" />
-                        <ComboBox ItemsSource="{Binding RubrosDisponibles}"
-                                  SelectedItem="{Binding RubroSeleccionado}"
-                                  PlaceholderText="Todos"
-                                  HorizontalAlignment="Stretch">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding Nombre}" />
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                    </StackPanel>
-                    <StackPanel Margin="0,0,12,8" MinWidth="160">
-                        <TextBlock Text="Línea POA" />
-                        <ComboBox ItemsSource="{Binding LineasPoaDisponibles}"
-                                  SelectedItem="{Binding LineaPoaSeleccionada}"
-                                  PlaceholderText="Todas"
-                                  HorizontalAlignment="Stretch">
-                            <ComboBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding Nombre}" />
-                                </DataTemplate>
-                            </ComboBox.ItemTemplate>
-                        </ComboBox>
-                    </StackPanel>
-                    <StackPanel Margin="0,0,12,8" MinWidth="130">
-                        <TextBlock Text="Estado" />
-                        <ComboBox ItemsSource="{Binding EstadosDisponibles}"
-                                  SelectedItem="{Binding EstadoSeleccionado}"
-                                  HorizontalAlignment="Stretch" />
-                    </StackPanel>
-                </WrapPanel>
-                <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
-                    <Button Classes="secondary" Content="Limpiar" Command="{Binding LimpiarFiltrosCommand}" />
-                </StackPanel>
-            </StackPanel>
-        </Border>
+        <v2:EstadoVacio x:Name="EstadoSinPermiso" DockPanel.Dock="Top" UseLayoutRounding="False"
+                        Titulo="Sin permiso" Mensaje="{Binding MensajeSinPermiso}" EsError="True"
+                        IsVisible="{Binding SinPermiso}" />
 
-        <!-- Grilla -->
-        <!-- MinWidth por columna + scroll horizontal (fix/grillas-minwidth-scroll): sin esto, al
-             angostar la ventana Avalonia.Controls.DataGrid comprime columnas arbitrarias hasta el
-             piso global MinColumnWidth=40 (Themes/DataGrid.axaml) en vez de scrollear, y a 40px el
-             padding de celda no deja entrar ni un carácter (header y valor desaparecen por
-             clipping duro). Reproducido a mano a 1300px: colapsaban Proveedor/Detalle (con
-             contenido real adentro) y Estado quedaba en una letra suelta. Proveedor/Detalle/
-             Fuente/Rubro/Línea POA pasan a DataGridTemplateColumn (mismo patrón que
-             ProveedorListView.axaml) porque son nombres libres de catálogo sin cota de longitud;
-             Fecha/Factura/Monto/Pagado/Saldo/Estado son valores acotados (fecha corta, código,
-             importe, enum) y no necesitan trimming, solo un piso que entre la palabra más larga. -->
-        <DataGrid ItemsSource="{Binding FilasView}"
-                  SelectedItem="{Binding FilaSeleccionada}"
-                  IsReadOnly="True"
-                  CanUserSortColumns="True"
-                  AutoGenerateColumns="False"
-                  ScrollViewer.HorizontalScrollBarVisibility="Auto">
-            <DataGrid.Columns>
-                <DataGridTextColumn Header="Fecha"
-                                    Binding="{Binding Fecha, StringFormat='dd/MM/yyyy', DataType={x:Type vm:GastoFila}}"
-                                    Width="Auto" MinWidth="100" />
-                <DataGridTemplateColumn Header="Proveedor" Width="*" MinWidth="160" SortMemberPath="ProveedorNombre">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate x:DataType="vm:GastoFila">
-                            <TextBlock Text="{Binding ProveedorNombre}"
-                                       TextTrimming="CharacterEllipsis"
-                                       ToolTip.Tip="{Binding ProveedorNombre}"
-                                       VerticalAlignment="Center" />
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-                <DataGridTextColumn Header="Factura"
-                                    Binding="{Binding NumeroFactura, DataType={x:Type vm:GastoFila}}"
-                                    Width="Auto" MinWidth="90" />
-                <DataGridTemplateColumn Header="Detalle" Width="2*" MinWidth="160" SortMemberPath="Detalle">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate x:DataType="vm:GastoFila">
-                            <TextBlock Text="{Binding Detalle}"
-                                       TextTrimming="CharacterEllipsis"
-                                       ToolTip.Tip="{Binding Detalle}"
-                                       VerticalAlignment="Center" />
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="Fuente" Width="Auto" MinWidth="150" SortMemberPath="FuenteNombre">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate x:DataType="vm:GastoFila">
-                            <TextBlock Text="{Binding FuenteNombre}"
-                                       TextTrimming="CharacterEllipsis"
-                                       ToolTip.Tip="{Binding FuenteNombre}"
-                                       VerticalAlignment="Center" />
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="Rubro" Width="Auto" MinWidth="160" SortMemberPath="RubroNombre">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate x:DataType="vm:GastoFila">
-                            <TextBlock Text="{Binding RubroNombre}"
-                                       TextTrimming="CharacterEllipsis"
-                                       ToolTip.Tip="{Binding RubroNombre}"
-                                       VerticalAlignment="Center" />
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-                <DataGridTemplateColumn Header="Línea POA" Width="Auto" MinWidth="160" SortMemberPath="LineaPoaNombre">
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate x:DataType="vm:GastoFila">
-                            <TextBlock Text="{Binding LineaPoaNombre}"
-                                       TextTrimming="CharacterEllipsis"
-                                       ToolTip.Tip="{Binding LineaPoaNombre}"
-                                       VerticalAlignment="Center" />
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
-                </DataGridTemplateColumn>
-                <DataGridTextColumn Header="Monto"
-                                    Binding="{Binding MontoTotal, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type vm:GastoFila}}"
-                                    Width="Auto" MinWidth="100" />
-                <DataGridTextColumn Header="Pagado"
-                                    Binding="{Binding TotalPagado, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type vm:GastoFila}}"
-                                    Width="Auto" MinWidth="100" />
-                <DataGridTextColumn Header="Saldo"
-                                    Binding="{Binding Saldo, Converter={x:Static conv:MonedaConverter.Instance}, DataType={x:Type vm:GastoFila}}"
-                                    Width="Auto" MinWidth="100" />
-                <DataGridTextColumn Header="Estado"
-                                    Binding="{Binding Estado, DataType={x:Type vm:GastoFila}}"
-                                    Width="Auto" MinWidth="90" />
-            </DataGrid.Columns>
-        </DataGrid>
+        <v2:TarjetaContenido x:Name="Tarjeta" IsVisible="{Binding !SinPermiso}">
+            <DockPanel>
+                <!-- Siete filtros en dos filas: los seis primeros viajan al servidor y recargan con espera; Estado filtra en
+                     memoria. Limpiar repone todo y no consulta por su cuenta. -->
+                <v2:BarraFiltros x:Name="Filtros" DockPanel.Dock="Top" MostrarBusqueda="False">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <v2:CampoFormulario x:Name="CampoDesde" Etiqueta="Desde">
+                                <CalendarDatePicker x:Name="SelectorDesde" Width="140" SelectedDate="{Binding FechaDesde}"
+                                                    PlaceholderText="dd/mm/aaaa" SelectedDateFormat="Custom"
+                                                    CustomDateFormatString="dd/MM/yyyy"
+                                                    b:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario x:Name="CampoHasta" Etiqueta="Hasta">
+                                <CalendarDatePicker x:Name="SelectorHasta" Width="140" SelectedDate="{Binding FechaHasta}"
+                                                    PlaceholderText="dd/mm/aaaa" SelectedDateFormat="Custom"
+                                                    CustomDateFormatString="dd/MM/yyyy"
+                                                    b:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario x:Name="CampoProveedor" Etiqueta="Proveedor">
+                                <ComboBox x:Name="ComboProveedor" Width="220" PlaceholderText="Todos"
+                                          ItemsSource="{Binding ProveedoresDisponibles}" SelectedItem="{Binding ProveedorSeleccionado}">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="e:Proveedor"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario x:Name="CampoFuente" Etiqueta="Fuente">
+                                <ComboBox x:Name="ComboFuente" Width="200" PlaceholderText="Todas"
+                                          ItemsSource="{Binding FuentesDisponibles}" SelectedItem="{Binding FuenteSeleccionada}">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="e:FuenteFinanciamiento"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </v2:CampoFormulario>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,12,0,0">
+                            <v2:CampoFormulario x:Name="CampoRubro" Etiqueta="Rubro">
+                                <ComboBox x:Name="ComboRubro" Width="228" PlaceholderText="Todos"
+                                          ItemsSource="{Binding RubrosDisponibles}" SelectedItem="{Binding RubroSeleccionado}">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="e:RubroGasto"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario x:Name="CampoLineaPoa" Etiqueta="Línea POA">
+                                <ComboBox x:Name="ComboLineaPoa" Width="220" PlaceholderText="Todas"
+                                          ItemsSource="{Binding LineasPoaDisponibles}" SelectedItem="{Binding LineaPoaSeleccionada}">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="e:LineaPoa"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario x:Name="CampoEstado" Etiqueta="Estado">
+                                <ComboBox x:Name="ComboEstado" Width="140"
+                                          ItemsSource="{Binding EstadosDisponibles}" SelectedItem="{Binding EstadoSeleccionado}" />
+                            </v2:CampoFormulario>
+                            <Button x:Name="BotonLimpiar" Classes="secundario" Content="Limpiar" VerticalAlignment="Bottom"
+                                    Command="{Binding LimpiarFiltrosCommand}" />
+                        </StackPanel>
+                    </StackPanel>
+                </v2:BarraFiltros>
 
+                <TextBlock x:Name="PieConteo" DockPanel.Dock="Bottom" Classes="pie-conteo" Margin="0,12,0,0"
+                           Text="{Binding CantidadVisible, Converter={x:Static conv:ConteoConverter.Instance}, ConverterParameter='gasto|gastos'}">
+                    <TextBlock.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="CantidadVisible" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                        </MultiBinding>
+                    </TextBlock.IsVisible>
+                </TextBlock>
+
+                <v2:EstadoCargando x:Name="IndicadorCarga" DockPanel.Dock="Top" Texto="Cargando gastos…">
+                    <v2:EstadoCargando.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Cargando" />
+                            <Binding Path="Filas.Count" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                        </MultiBinding>
+                    </v2:EstadoCargando.IsVisible>
+                </v2:EstadoCargando>
+
+                <v2:EstadoVacio x:Name="EstadoSinConexion" DockPanel.Dock="Top" UseLayoutRounding="False"
+                                Titulo="No se pudo conectar con el servidor"
+                                Mensaje="Verificá que el servidor esté encendido y accesible en la red, y volvé a intentar."
+                                EsError="True" IsVisible="{Binding SinConexion}">
+                    <Button x:Name="BotonReintentar" Classes="secundario" Content="Reintentar" Command="{Binding ReintentarCargaCommand}" />
+                </v2:EstadoVacio>
+
+                <!-- Sin datos y sin ningún filtro: el botón es secundario porque el primario ya está en el encabezado. -->
+                <v2:EstadoVacio x:Name="EstadoSinGastos" DockPanel.Dock="Top" UseLayoutRounding="False"
+                                Titulo="Todavía no hay gastos"
+                                Mensaje="Cuando se registre una factura o un compromiso, va a aparecer acá.">
+                    <v2:EstadoVacio.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Cargando" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinPermiso" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="Filas.Count" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                            <Binding Path="HayFiltrosAplicados" Converter="{x:Static BoolConverters.Not}" />
+                        </MultiBinding>
+                    </v2:EstadoVacio.IsVisible>
+                    <Button x:Name="BotonNuevoVacio" Classes="secundario" Content="Nuevo gasto" Command="{Binding NuevoCommand}"
+                            IsVisible="{Binding PuedeRegistrarGastos}" />
+                </v2:EstadoVacio>
+
+                <!-- Algún filtro (de servidor o Estado) activo y ninguna fila a la vista. -->
+                <v2:EstadoVacio x:Name="EstadoSinResultados" DockPanel.Dock="Top" UseLayoutRounding="False"
+                                Titulo="Ningún gasto coincide con los filtros"
+                                Mensaje="Probá con otro período o tocá Limpiar.">
+                    <v2:EstadoVacio.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Cargando" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinPermiso" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="CantidadVisible" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                            <Binding Path="HayFiltrosAplicados" />
+                        </MultiBinding>
+                    </v2:EstadoVacio.IsVisible>
+                </v2:EstadoVacio>
+
+                <!-- Cada TextBlock de celda lleva Classes.inactivo con el gasto anulado (texto terciario por token, nunca
+                     opacidad). Las de texto libre miden su contenido sobre todas las filas y, si ceden, se cortan con
+                     tooltip; DETALLE es la proporcional. ESTADO es un conjunto cerrado: ancho fijo medido. La fecha es
+                     calendario (DateOnly): FechaCortaConverter no la pasa a hora local. -->
+                <DataGrid x:Name="Grilla" ItemsSource="{Binding FilasView}" SelectedItem="{Binding FilaSeleccionada}"
+                          DoubleTapped="OnFilaDobleClick" IsReadOnly="True" CanUserSortColumns="True" CanUserResizeColumns="True"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                    <DataGrid.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="CantidadVisible" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                        </MultiBinding>
+                    </DataGrid.IsVisible>
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="FECHA" Width="Auto" SortMemberPath="Fecha"
+                                                b:ColumnaAuto.Medir="True" b:ColumnaAuto.NoCede="True"
+                                                b:ColumnaAuto.Conversor="{x:Static conv:FechaCortaConverter.Instance}">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:GastoFila">
+                                    <TextBlock Text="{Binding Fecha, Converter={x:Static conv:FechaCortaConverter.Instance}}"
+                                               Classes.inactivo="{Binding !Gasto.Activo}" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="PROVEEDOR" Width="Auto" SortMemberPath="ProveedorNombre" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:GastoFila">
+                                    <TextBlock Text="{Binding ProveedorNombre}" Classes.inactivo="{Binding !Gasto.Activo}"
+                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ProveedorNombre}"
+                                               b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="DETALLE" Width="*" MinWidth="200" SortMemberPath="Detalle">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:GastoFila">
+                                    <TextBlock Text="{Binding Detalle}" Classes.inactivo="{Binding !Gasto.Activo}"
+                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Detalle}"
+                                               b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="MONTO" Width="Auto" CellStyleClasses="num" SortMemberPath="MontoTotal"
+                                                b:ColumnaAuto.Medir="True" b:ColumnaAuto.Conversor="{x:Static conv:MonedaConverter.Instance}">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:GastoFila">
+                                    <TextBlock Text="{Binding MontoTotal, Converter={x:Static conv:MonedaConverter.Instance}}"
+                                               Classes.inactivo="{Binding !Gasto.Activo}" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="PAGADO" Width="Auto" CellStyleClasses="num" SortMemberPath="TotalPagado"
+                                                b:ColumnaAuto.Medir="True" b:ColumnaAuto.Conversor="{x:Static conv:MonedaConverter.Instance}">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:GastoFila">
+                                    <TextBlock Text="{Binding TotalPagado, Converter={x:Static conv:MonedaConverter.Instance}}"
+                                               Classes.inactivo="{Binding !Gasto.Activo}" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="SALDO" Width="Auto" CellStyleClasses="num" SortMemberPath="Saldo"
+                                                b:ColumnaAuto.Medir="True" b:ColumnaAuto.Conversor="{x:Static conv:MonedaConverter.Instance}">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:GastoFila">
+                                    <TextBlock Text="{Binding Saldo, Converter={x:Static conv:MonedaConverter.Instance}}"
+                                               Classes.inactivo="{Binding !Gasto.Activo}" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="ESTADO" Width="90" SortMemberPath="Estado">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:GastoFila">
+                                    <v2:Insignia Texto="{Binding Estado}" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                                 Variante="{Binding Estado, Converter={x:Static conv:VarianteEstadoGastoConverter.Instance}}" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="FACTURA" Width="Auto" SortMemberPath="NumeroFactura" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:GastoFila">
+                                    <TextBlock Text="{Binding NumeroFactura}" Classes.inactivo="{Binding !Gasto.Activo}"
+                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding NumeroFactura}"
+                                               b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="FUENTE" Width="Auto" SortMemberPath="FuenteNombre" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:GastoFila">
+                                    <TextBlock Text="{Binding FuenteNombre}" Classes.inactivo="{Binding !Gasto.Activo}"
+                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding FuenteNombre}"
+                                               b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="RUBRO" Width="Auto" SortMemberPath="RubroNombre" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:GastoFila">
+                                    <TextBlock Text="{Binding RubroNombre}" Classes.inactivo="{Binding !Gasto.Activo}"
+                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding RubroNombre}"
+                                               b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="LÍNEA POA" Width="Auto" SortMemberPath="LineaPoaNombre" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:GastoFila">
+                                    <TextBlock Text="{Binding LineaPoaNombre}" Classes.inactivo="{Binding !Gasto.Activo}"
+                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding LineaPoaNombre}"
+                                               b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </DockPanel>
+        </v2:TarjetaContenido>
     </DockPanel>
 
 </UserControl>
