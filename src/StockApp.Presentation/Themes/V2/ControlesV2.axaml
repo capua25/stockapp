@@ -44,6 +44,7 @@
     <Style Selector=".ui2 TextBlock.cuerpo">
         <Setter Property="FontSize" Value="{DynamicResource V2FuenteCuerpoTamano}" />
         <Setter Property="FontWeight" Value="{DynamicResource V2FuenteCuerpoPeso}" />
+        <Setter Property="LineHeight" Value="{DynamicResource V2FuenteCuerpoAltoLinea}" />
         <Setter Property="Foreground" Value="{DynamicResource V2TextoPrimarioBrush}" />
     </Style>
     <Style Selector=".ui2 TextBlock.texto-secundario">

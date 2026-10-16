@@ -131,6 +131,7 @@
     <FontWeight x:Key="V2FuenteTituloLoginPeso">600</FontWeight>
     <x:Double x:Key="V2FuenteCuerpoTamano">14</x:Double>
     <FontWeight x:Key="V2FuenteCuerpoPeso">400</FontWeight>
+    <x:Double x:Key="V2FuenteCuerpoAltoLinea">17</x:Double>
     <x:Double x:Key="V2FuenteControlTamano">13</x:Double>
     <FontWeight x:Key="V2FuenteControlPeso">400</FontWeight>
     <x:Double x:Key="V2FuenteControlAltoLinea">16</x:Double>
