@@ -360,6 +360,7 @@ public class GastoFormViewV2Tests
         Assert.True(Visible(Parte<Insignia>(m, "InsigniaAnulado")));
         Assert.True(Visible(Parte<Insignia>(m, "InsigniaSoloLectura")));
         Assert.True(Visible(Parte<Alerta>(m, "AlertaAnulado")));
+        Assert.Equal("Este gasto está anulado: se puede consultar, pero no modificar.", Parte<Alerta>(m, "AlertaAnulado").Texto);
         Assert.False(Visible(Parte<StackPanel>(m, "SeccionAdjuntos")));
         Assert.False(Parte<TextBox>(m, "CajaDetalle").IsEffectivelyEnabled);
         Assert.False(Visible(Parte<Button>(m, "BotonGuardar")));

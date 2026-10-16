@@ -32,6 +32,21 @@ public class ControlesV2Tests
     }
 
     [AvaloniaFact]
+    public void TextoCuerpo_VariasLineas_CadaLineaMide17_NoAlternaConElAltoNaturalDe16Coma94()
+    {
+        // 14 px sin LineHeight da 16,94 de alto natural y en texto envuelto alterna 17 y 16 (3 líneas medían 50).
+        var texto = Buscar<TextBlock>(Montar("""
+            <TextBlock x:Name="T" Classes="cuerpo" Width="200" TextWrapping="Wrap"
+                       Text="Esta anulación va a descontar el stock asociado al gasto y no se puede deshacer después." />
+            """), "T");
+
+        Assert.Equal(17, texto.LineHeight);
+        var lineas = (int)Math.Round(texto.Bounds.Height / 17);
+        Assert.True(lineas >= 3, $"El texto envolvió en {lineas} línea(s): no prueba el alto por línea.");
+        Assert.Equal(17 * lineas, texto.Bounds.Height);
+    }
+
+    [AvaloniaFact]
     public void BotonGhost_NoArrastraNadaDelGhostViejo()
     {
         // Review Focus 1: Button.ghost viejo (Controls.axaml) también matchea dentro de .ui2.

@@ -25,6 +25,8 @@
             <StackPanel Margin="28,24">
 
                 <!-- Encabezado en la misma columna de 760 que la card y el pie: las insignias terminan en el borde de la card. -->
+                <!-- UseLayoutRounding False en la columna (evita el pixel de más de MaxWidth) y True en el encabezado: heredado el False,
+                     el encabezado medía fraccionario y la card entera salía 1 px más arriba que el mockup. -->
                 <Grid x:Name="ColumnaEncabezado" UseLayoutRounding="False">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" MaxWidth="{StaticResource V2AnchoFormularioMax}" />

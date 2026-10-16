@@ -4,8 +4,11 @@ namespace StockApp.UiV2.Herramientas.Tokens;
 public sealed class TokensInvalidosException(string mensaje) : Exception(mensaje);
 
 /// <summary>
-/// Rol tipográfico. AltoLinea null = alto natural de la fuente, que Avalonia redondea hacia arriba:
-/// ceil(Tamano × FactorAltoLinea). El CSS de los mockups emite ese mismo valor.
+/// Rol tipográfico. AltoLinea null = alto natural de la fuente: en una sola línea Avalonia lo redondea hacia arriba,
+/// ceil(Tamano × FactorAltoLinea), y el CSS de los mockups emite ese valor. En texto de varias líneas eso NO vale:
+/// el alto natural fraccionario (p. ej. 16,94 a 14 px) alterna entre dos valores enteros y desalinea las líneas contra
+/// el mockup. Por eso Control y Cuerpo fijan AltoLinea y su estilo asigna LineHeight; los roles que siguen con null
+/// tienen el mismo defecto latente si algún día envuelven en varias líneas.
 /// </summary>
 public sealed record EstiloTipografico(double Tamano, int Peso, double? AltoLinea, double? EspaciadoLetras, bool Mayusculas);
 
