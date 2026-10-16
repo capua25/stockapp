@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Finanzas: Gasto solo lectura (UI v2)</title>
+<link rel="stylesheet" href="../_base/tokens.css">
+<link rel="stylesheet" href="../_base/base.css">
+<style>
+  /* Área de contenido del shell: a la derecha del sidebar de 240 (ShellMainView, Grid 240,*). */
+  .contenido { position: absolute; left: var(--v2-ancho-sidebar); top: 0; right: 0; bottom: 0; overflow: hidden; }
+  /* Grid raíz de la vista (*,Auto,Auto): el ScrollViewer ocupa lo que dejan el pie fijo de 69 (borde 1 + 16 + botón 36 + 16)
+     y, con error del servidor, la Alerta de 42 con 12 abajo. Lo que no entra queda abajo, cortado, como en el ScrollViewer. */
+  .desplazamiento { position: absolute; left: 0; top: 0; right: 0; height: calc(var(--v2-ventana-alto, 760px) - 69px); overflow: hidden; }
+  /* StackPanel Margin 28,24 de la vista. */
+  .pagina { padding: 24px 28px; }
+  /* Grid con una columna * de MaxWidth 760: la card mide 760 a la izquierda. Padding de formulario 24. */
+  .formulario { max-width: var(--v2-ancho-formulario-max); padding: 24px; }
+  .subtitulo { margin-bottom: 12px; }
+  /* Separador entre secciones (convención 12): Border Height 1 Margin 0,20 en V2SeparadorGrillaBrush. */
+  .separador { height: 1px; margin: 20px 0; background: var(--v2-color-separador-grilla); }
+  /* Grid *,16,*: columnas de 347 (interior de la card 710). El 16 entre filas va en el Margin superior del campo. */
+  .campos { display: grid; grid-template-columns: 1fr 1fr; column-gap: 16px; row-gap: 16px; align-items: start; }
+  .campo-completo + .campo-completo { margin-top: 16px; }
+  /* Monto: TextBox alineado a la derecha. */
+  .monto { justify-content: flex-end; }
+  /* Condición de pago: el tilde abajo en su fila (VerticalAlignment Bottom), el vencimiento a la derecha solo a crédito
+     y, en una edición, el texto de la condición fija 8 abajo, a todo el ancho y en una línea (medido: entra en 710). */
+  .condicion { display: grid; grid-template-columns: 1fr 1fr; column-gap: 16px; align-items: end; }
+  .condicion .texto-fijo { grid-column: 1 / 3; margin-top: 8px; }
+  /* Sección Adjuntos en alta: título de sección y la frase, 8 entre los dos. */
+  .adjuntos-titulo { margin-bottom: 8px; }
+  /* Panel de adjuntos (AdjuntosPanelView): encabezado Grid *,Auto con 8 abajo (título centrado en el alto del botón), y una
+     fila de 40 por adjunto con separador arriba: ícono 16 + 8, nombre (*), tamaño (72) y fecha (80) a la derecha en texto
+     secundario, Ver (ghost, 8 a la izquierda) y Quitar (ghost). */
+  .panel-encabezado { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 8px; }
+  /* El título (19 de alto) va centrado en el alto del botón (36): Avalonia redondea el corrimiento de 8,5 a 8. Sin Agregar
+     (sin permiso) la fila mide lo que el título. */
+  .panel-encabezado > .v2-titulo-seccion.con-boton { margin-top: 8px; }
+  .adjunto { display: flex; align-items: center; height: 40px; border-top: 1px solid var(--v2-color-separador-grilla); }
+  .adjunto > .v2-icono { margin-right: 8px; color: var(--v2-color-texto-secundario); }
+  .adjunto-nombre { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .adjunto-tamano, .adjunto-fecha { display: flex; justify-content: flex-end; }
+  .adjunto-tamano { flex: 0 0 72px; }
+  .adjunto-fecha { flex: 0 0 80px; }
+  .adjunto-tamano > span, .adjunto-fecha > span { width: calc-size(fit-content, round(up, size, 1px)); }
+  .adjunto-ver { margin-left: 8px; }
+  /* Insignias del encabezado (Anulado, Solo lectura): StackPanel con 8 de separación en las acciones del EncabezadoPagina,
+     alineadas arriba (el StackPanel mide lo que la insignia, 19, y las acciones van con VerticalAlignment Top). */
+  .insignias { display: flex; gap: 8px; align-items: flex-start; }
+  .alerta-anulado { margin-bottom: 16px; }
+  /* Deshabilitado (solo lectura): el glifo de la fecha en el color de deshabilitado. */
+  .v2-input--deshabilitado .v2-glifo-fecha { color: var(--v2-color-deshabilitado-texto); }
+  /* Alerta del error general: fila propia del Grid raíz (Margin 28,0,28,12), fuera del scroll, con el ancho de la card. */
+  .alerta-error { position: absolute; left: 28px; bottom: 81px; width: var(--v2-ancho-formulario-max); }
+  /* Pie fijo (fuera del scroll): fondo superficie, borde superior, padding 16x28; Cancelar y Guardar alineados al borde
+     derecho de la columna de 760 (el de la card), no al de la ventana. */
+  .pie { position: absolute; left: 0; right: 0; bottom: 0; height: 69px; padding: 16px 28px;
+         background: var(--v2-color-superficie); border-top: 1px solid var(--v2-color-borde); }
+  .pie-botones { max-width: var(--v2-ancho-formulario-max); display: flex; justify-content: flex-end; gap: 8px; }
+  /* Pulgar de la barra vertical del ScrollViewer (Fluent en reposo, sin tema v2): 2 px #7A7A7A a 2 px del borde derecho
+     de la vista. Largo y posición MEDIDOS en headless con este formulario. */
+  .pulgar { position: absolute; right: 2px; width: 2px; background: #7A7A7A; }
+  .pulgar { top: 16px; height: 482px; }
+  @media (min-width: 1366px) { .pulgar { top: 16px; height: 494px; } }
+</style>
+</head>
+<body>
+<!-- Datos: DatosGastos.FormularioSoloLectura(): el gasto 4 para un operador con finanzas.ver y sin finanzas.gastos: insignia Solo lectura, campos deshabilitados con los tokens de deshabilitado, sin Guardar (el pie solo con Cancelar); el panel con Ver y sin Agregar ni Quitar. El sidebar muestra lo que ve ese operador. El pie queda fijo fuera del scroll; a los dos tamaños el contenido scrollea (pulgar medido). El sidebar está para aprobar la pantalla entera; la comparación lo oculta. -->
+<div class="v2-ventana">
+  <aside class="v2-sidebar">
+    <div class="v2-marca">Gestión Municipal</div>
+    <div class="v2-marca-subtitulo">Municipio de Carmelo</div>
+    <nav class="v2-sidebar-nav">
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z"/></svg><span>Inicio</span></div>
+      <div class="v2-header-seccion-sidebar">FINANZAS</div>
+      <div class="v2-item-sidebar v2-item-sidebar--activo"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3,22L4.5,20.5L6,22L7.5,20.5L9,22L10.5,20.5L12,22L13.5,20.5L15,22L16.5,20.5L18,22L19.5,20.5L21,22V2L19.5,3.5L18,2L16.5,3.5L15,2L13.5,3.5L12,2L10.5,3.5L9,2L7.5,3.5L6,2L4.5,3.5L3,2M18,9H6V7H18M18,13H6V11H18M18,17H6V15H18V17Z"/></svg><span>Gastos y facturas</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M15 15V17H18V20H20V17H23V15H20V12H18V15M14.97 11.61C14.85 10.28 13.59 8.97 12 9C10.3 9.03 9 10.3 9 12C9 13.7 10.3 14.94 12 15C12.38 15 12.77 14.92 13.14 14.77C13.41 13.67 13.86 12.63 14.97 11.61M13 16H7C7 14.9 6.11 14 5 14V10C6.11 10 7 9.11 7 8H17C17 9.11 17.9 10 19 10V10.06C19.67 10.06 20.34 10.18 21 10.4V6H3V18H13.32C13.1 17.33 13 16.66 13 16Z"/></svg><span>Ingresos de caja</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 21.5C10.65 20.65 8.2 20 6.5 20C4.85 20 3.15 20.3 1.75 21.05C1.65 21.1 1.6 21.1 1.5 21.1C1.25 21.1 1 20.85 1 20.6V6C1.6 5.55 2.25 5.25 3 5C4.11 4.65 5.33 4.5 6.5 4.5C8.45 4.5 10.55 4.9 12 6C13.45 4.9 15.55 4.5 17.5 4.5C18.67 4.5 19.89 4.65 21 5C21.75 5.25 22.4 5.55 23 6V20.6C23 20.85 22.75 21.1 22.5 21.1C22.4 21.1 22.35 21.1 22.25 21.05C20.85 20.3 19.15 20 17.5 20C15.8 20 13.35 20.65 12 21.5M12 8V19.5C13.35 18.65 15.8 18 17.5 18C18.7 18 19.9 18.15 21 18.5V7C19.9 6.65 18.7 6.5 17.5 6.5C15.8 6.5 13.35 7.15 12 8M13 11.5C14.11 10.82 15.6 10.5 17.5 10.5C18.41 10.5 19.26 10.59 20 10.78V9.23C19.13 9.08 18.29 9 17.5 9C15.73 9 14.23 9.28 13 9.84V11.5M17.5 11.67C15.79 11.67 14.29 11.93 13 12.46V14.15C14.11 13.5 15.6 13.16 17.5 13.16C18.54 13.16 19.38 13.24 20 13.4V11.9C19.13 11.74 18.29 11.67 17.5 11.67M20 14.57C19.13 14.41 18.29 14.33 17.5 14.33C15.67 14.33 14.17 14.6 13 15.13V16.82C14.11 16.16 15.6 15.83 17.5 15.83C18.54 15.83 19.38 15.91 20 16.07V14.57Z"/></svg><span>Libro caja</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13,2.05V5.08C16.39,5.57 19,8.47 19,12C19,12.9 18.82,13.75 18.5,14.54L21.12,16.07C21.68,14.83 22,13.45 22,12C22,6.82 18.05,2.55 13,2.05M12,19A7,7 0 0,1 5,12C5,8.47 7.61,5.57 11,5.08V2.05C5.94,2.55 2,6.81 2,12A10,10 0 0,0 12,22C15.3,22 18.23,20.39 20.05,17.91L17.45,16.38C16.17,18 14.21,19 12,19Z"/></svg><span>Control POA</span></div>
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M15,13H16.5V15.82L18.94,17.23L18.19,18.53L15,16.69V13M19,8H5V19H9.67C9.24,18.09 9,17.07 9,16A7,7 0 0,1 16,9C17.07,9 18.09,9.24 19,9.67V8M5,21C3.89,21 3,20.1 3,19V5C3,3.89 3.89,3 5,3H6V1H8V3H16V1H18V3H19A2,2 0 0,1 21,5V11.1C22.24,12.36 23,14.09 23,16A7,7 0 0,1 16,23C14.09,23 12.36,22.24 11.1,21H5M16,11.15A4.85,4.85 0 0,0 11.15,16C11.15,18.68 13.32,20.85 16,20.85A4.85,4.85 0 0,0 20.85,16C20.85,13.32 18.68,11.15 16,11.15Z"/></svg><span>Calendario de pagos</span></div>
+    </nav>
+    <div class="v2-sidebar-pie">
+      <div class="v2-avatar">JR</div>
+      <div class="v2-usuario">
+        <div class="v2-usuario-nombre">Juan Rodríguez</div>
+        <div class="v2-usuario-rol">Operador</div>
+      </div>
+      <span class="v2-boton v2-boton--ghost v2-boton--icono"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M17 7L15.59 8.41L18.17 11H8V13H18.17L15.59 15.58L17 17L22 12M4 5H12V3H4C2.9 3 2 3.9 2 5V19C2 20.1 2.9 21 4 21H12V19H4V5Z"/></svg></span>
+    </div>
+    <div class="v2-version">v0.4.0</div>
+  </aside>
+  <div class="contenido">
+    <div class="desplazamiento">
+      <div class="pagina">
+        <div class="v2-encabezado">
+          <div class="v2-breadcrumb"><span class="v2-breadcrumb-origen">Gastos y facturas</span><span> / </span><span>Editar gasto</span></div>
+          <div class="v2-encabezado-fila"><div><div class="v2-titulo-pagina">Editar gasto</div></div><div class="insignias"><span class="v2-insignia">Solo lectura</span></div></div>
+        </div>
+        <div class="v2-tarjeta formulario">
+          <div class="v2-subtitulo-formulario subtitulo">Factura</div>
+          <div class="campos">
+            <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Proveedor</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input v2-input--deshabilitado"><span>Barraca Carmelo S.A.</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div></div>
+            <div class="v2-campo"><div class="v2-campo-etiqueta"><span>N.º de factura</span></div><div><div class="v2-input v2-input--deshabilitado"><span>A-0004521</span></div></div></div>
+            <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Orden de compra</span></div><div><div class="v2-input v2-input--deshabilitado"><span class="v2-input-placeholder">Ej.: OC-77</span></div></div></div>
+            <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Fecha</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input v2-input--deshabilitado"><span>03/10/2026</span><svg class="v2-icono v2-glifo-fecha" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19 3H18V1H16V3H8V1H6V3H5C3.89 3 3 3.9 3 5V19C3 20.11 3.9 21 5 21H19C20.11 21 21 20.11 21 19V5C21 3.9 20.11 3 19 3M19 19H5V9H19V19M19 7H5V5H19V7Z"/></svg></div></div></div>
+          </div>
+          <div class="separador"></div>
+          <div class="v2-subtitulo-formulario subtitulo">Detalle</div>
+          <div class="v2-campo campo-completo"><div class="v2-campo-etiqueta"><span>Detalle</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input v2-input--deshabilitado"><span>Materiales para bacheo de calle Zorrilla</span></div></div></div>
+          <div class="v2-campo campo-completo"><div class="v2-campo-etiqueta"><span>Destino</span></div><div><div class="v2-input v2-input--deshabilitado"><span class="v2-input-placeholder">Ej.: Corralón municipal</span></div></div></div>
+          <div class="separador"></div>
+          <div class="v2-subtitulo-formulario subtitulo">Importe e imputación</div>
+          <div class="campos">
+            <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Monto total</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input v2-input--deshabilitado monto"><span>186.540,00</span></div></div></div>
+            <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Fuente de financiamiento</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input v2-input--deshabilitado"><span>FIGM Literal B</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div></div>
+            <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Rubro</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input v2-input--deshabilitado"><span>Materiales de construcción</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div></div>
+            <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Línea POA</span></div><div><div class="v2-input v2-input--deshabilitado"><span>Bacheo y caminería rural</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div></div>
+          </div>
+          <div class="separador"></div>
+          <div class="v2-subtitulo-formulario subtitulo">Condición de pago</div>
+          <div class="condicion">
+            <div class="v2-casilla-fila v2-casilla-fila--deshabilitada"><div class="v2-casilla-caja"><div class="v2-casilla"></div></div><span>A crédito</span></div>
+            <div class="v2-texto-secundario texto-fijo">La condición de pago no se cambia: anulá el gasto y cargalo de nuevo</div>
+          </div>
+          <div class="separador"></div>
+          <div class="panel-encabezado">
+            <div class="v2-titulo-seccion">Adjuntos</div>
+          </div>
+          <div class="adjunto">
+            <svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19 3H5C3.9 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V5C21 3.9 20.1 3 19 3M9.5 11.5C9.5 12.3 8.8 13 8 13H7V15H5.5V9H8C8.8 9 9.5 9.7 9.5 10.5V11.5M14.5 13.5C14.5 14.3 13.8 15 13 15H10.5V9H13C13.8 9 14.5 9.7 14.5 10.5V13.5M18.5 10.5H17V11.5H18.5V13H17V15H15.5V9H18.5V10.5M12 10.5H13V13.5H12V10.5M7 10.5H8V11.5H7V10.5Z"/></svg>
+            <span class="v2-cuerpo adjunto-nombre">factura-A-0004521.pdf</span>
+            <div class="v2-texto-secundario adjunto-tamano"><span>178 KB</span></div>
+            <div class="v2-texto-secundario adjunto-fecha"><span>03/10/2026</span></div>
+            <span class="v2-boton v2-boton--ghost adjunto-ver">Ver</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="pulgar"></div>
+    <div class="pie">
+      <div class="pie-botones">
+        <span class="v2-boton v2-boton--secundario">Cancelar</span>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
