@@ -55,7 +55,7 @@
 </style>
 </head>
 <body>
-<!-- Datos: Admin; Monto "1.5" con el error bajo el campo (Q-4 B, convención 31); el botón Registrar pago sigue arriba, alineado con los inputs. DatosPagos: el gasto DatosGastos.Gastos[1] (Id 6) con los pagos 61 (12/10/2026, $ 100.000,00, Recibo 2231), 62 (13/10/2026, $ 50.000,00, Cargado dos veces, ANULADO) y 63 (14/10/2026, $ 50.000,00, Recibo 2240); Pagado $ 150.000,00, Saldo $ 160.000,00, Parcial. Fecha del formulario: hoy fijado en 17/10/2026. -->
+<!-- Datos: Admin; Monto "1.5" con el error bajo el campo (Q-4 B, convención 31); el botón Registrar pago sigue arriba, alineado con los inputs, y DESHABILITADO (convención 31: con el monto vacío o ilegible no se registra). DatosPagos: el gasto DatosGastos.Gastos[1] (Id 6) con los pagos 61 (12/10/2026, $ 100.000,00, Recibo 2231), 62 (13/10/2026, $ 50.000,00, Cargado dos veces, ANULADO) y 63 (14/10/2026, $ 50.000,00, Recibo 2240); Pagado $ 150.000,00, Saldo $ 160.000,00, Parcial. Fecha del formulario: hoy fijado en 17/10/2026. -->
 <div class="v2-ventana">
   <aside class="v2-sidebar">
     <div class="v2-marca">Gestión Municipal</div>
@@ -123,7 +123,7 @@
               <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Fecha</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input"><span>17/10/2026</span><svg class="v2-icono v2-glifo-fecha" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19 3H18V1H16V3H8V1H6V3H5C3.89 3 3 3.9 3 5V19C3 20.11 3.9 21 5 21H19C20.11 21 21 20.11 21 19V5C21 3.9 20.11 3 19 3M19 19H5V9H19V19M19 7H5V5H19V7Z"/></svg></div></div></div>
               <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Monto</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input v2-input--error monto"><span>1.5</span></div><div class="v2-error-campo">Usá coma para los decimales: 1,5</div></div></div>
               <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Nota (opcional)</span></div><div><div class="v2-input"><span class="v2-input-placeholder">Ej.: recibo 123</span></div></div></div>
-              <span class="v2-boton v2-boton--primario">Registrar pago</span>
+              <span class="v2-boton v2-boton--primario v2-boton--deshabilitado">Registrar pago</span>
             </div>
           </div>
           <div class="v2-tarjeta">
