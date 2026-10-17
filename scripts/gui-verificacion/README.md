@@ -340,6 +340,21 @@ ventana. Pero es un dato empírico de UNA sesión, no una garantía).
   funciona de punta a punta con un login real. El recorrido completo queda
   para otra tarea.
 
+## Gotchas hallados en la verificación orgánica de la Fase 4d (2026-10-17)
+
+- **El título `Municipal` matchea ventanas fantasma.** Aparecen ventanas
+  `GestionMunicipal` del selector de archivos GTK; pasá el título con un
+  espacio delante (`" Municipal"`) para apuntar a la ventana principal.
+- **El selector de archivos GTK necesita ruta absoluta** al tipearla; una
+  relativa no se resuelve.
+- **Serilog en Development no registra los requests** de la API: para
+  contar consultas (p. ej. "una sola recarga tras Limpiar") no alcanza el log
+  de la API; verificalo por el efecto en pantalla o con otra fuente.
+- **`pkill -f` con un patrón presente en el propio comando mata el shell**
+  que lo lanzó. Matá por pid exacto (`kill <pid>`).
+- **"Ver" un adjunto no es verificable en WSLg:** no hay visor de PDF.
+  Verificá que el archivo se descarga y comprobalo por contenido con pypdf.
+
 ## Estado al cierre de la sesión que armó esto
 
 `setup-toolkit.sh` extrae `xdotool` a `/tmp/x11tools` (efímero, se pierde
