@@ -1,92 +1,48 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Threading.Tasks;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Catalogo;
 using StockApp.Domain.Entities;
-using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 
 namespace StockApp.Presentation.ViewModels.Catalogo;
 
-/// <summary>
-/// Listado de dimensiones temáticas con alta y baja lógica. Solo accesible para Admin.
-/// </summary>
-public partial class DimensionTematicaListViewModel : ViewModelBase
+/// <summary>Catálogo de dimensiones temáticas: lo único propio es el servicio, los textos y los valores de las columnas.</summary>
+public class DimensionTematicaListViewModel : CatalogoListadoViewModel<DimensionTematica>
 {
+    private static readonly IReadOnlyList<ColumnaCatalogo> _columnas = Array.Empty<ColumnaCatalogo>();
+
     private readonly IDimensionTematicaService _service;
-    private readonly INavigationService        _navigation;
-    private readonly IConfirmacionService      _confirmacion;
-
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(EditarCommand))]
-    [NotifyCanExecuteChangedFor(nameof(BajaCommand))]
-    private DimensionTematica? _itemSeleccionado;
-
-    public ObservableCollection<DimensionTematica> Items { get; } = new();
 
     public DimensionTematicaListViewModel(
         IDimensionTematicaService service,
         INavigationService navigation,
         IConfirmacionService confirmacion)
+        : base(navigation, confirmacion)
     {
-        _service      = service;
-        _navigation   = navigation;
-        _confirmacion = confirmacion;
+        _service = service;
     }
 
-    public async Task CargarAsync()
-    {
-        try
-        {
-            var resultados = await _service.ListarTodasAsync();
-            Items.Clear();
-            foreach (var d in resultados)
-                Items.Add(d);
-        }
-        catch (UnauthorizedAccessException)
-        {
-        }
-    }
+    public override ClaveCatalogo Clave => ClaveCatalogo.Dimensiones;
+    public override string Titulo => "Dimensiones";
+    public override string TextoNuevo => "Nueva dimensión";
+    public override string TextoInactivo => "Inactiva";
+    public override string TextoSinPermiso => "No tenés permiso para ver las dimensiones.";
+    public override IReadOnlyList<ColumnaCatalogo> Columnas => _columnas;
 
-    [RelayCommand]
-    private async Task NuevoAsync()
-        => await Task.Run(() => _navigation.Navegar<DimensionTematicaFormViewModel>());
+    protected override Task<IReadOnlyList<DimensionTematica>> ListarAsync() => _service.ListarTodasAsync();
 
-    private bool PuedeDarBaja()
-        => ItemSeleccionado is not null && ItemSeleccionado.Activo;
+    protected override Task DarDeBajaAsync(DimensionTematica item) => _service.BajaLogicaAsync(item.Id);
 
-    private bool PuedeEditar() => PuedeDarBaja();
+    protected override string MensajeConfirmarBaja(DimensionTematica item) => $"¿Confirma dar de baja la dimensión \"{item.Nombre}\"?";
 
-    [RelayCommand(CanExecute = nameof(PuedeEditar))]
-    private async Task EditarAsync()
-    {
-        if (ItemSeleccionado is null) return;
-        var seleccionada = ItemSeleccionado;
-        await Task.Run(() =>
-            _navigation.Navegar<DimensionTematicaFormViewModel>(vm => vm.CargarParaEditar(seleccionada)));
-    }
+    protected override bool EsActivo(DimensionTematica item) => item.Activo;
 
-    [RelayCommand(CanExecute = nameof(PuedeDarBaja))]
-    private async Task BajaAsync()
-    {
-        if (ItemSeleccionado is null) return;
+    protected override IReadOnlyList<string?> Valores(DimensionTematica item) => new string?[] { item.Nombre };
 
-        var confirmar = await _confirmacion.PreguntarAsync(
-            $"¿Confirma dar de baja la dimensión \"{ItemSeleccionado.Nombre}\"?");
-        if (!confirmar) return;
+    protected override void NavegarANuevo() => Navigation.Navegar<DimensionTematicaFormViewModel>();
 
-        try
-        {
-            await _service.BajaLogicaAsync(ItemSeleccionado.Id);
-            await CargarAsync();
-        }
-        catch (Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException)
-        {
-            await _confirmacion.InformarAsync(ex.Message);
-        }
-    }
+    protected override void NavegarAEditar(DimensionTematica item)
+        => Navigation.Navegar<DimensionTematicaFormViewModel>(vm => vm.CargarParaEditar(item));
 }

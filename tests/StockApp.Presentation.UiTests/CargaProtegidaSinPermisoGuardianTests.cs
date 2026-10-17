@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -206,6 +207,9 @@ public class CargaProtegidaSinPermisoGuardianTests
         ("BloqueoLicenciaView.axaml.cs", "CargarEstadoAsync"),
     };
 
+    private static string? ArchivoDeLaBaseDeCatalogo()
+        => BuscarArchivoDeViewModel("CatalogoListadoViewModel");
+
     [Fact]
     public void TodoPuntoDeCarga_EstaProtegidoContraUnauthorizedAccessException()
     {
@@ -229,6 +233,18 @@ public class CargaProtegidaSinPermisoGuardianTests
 
             var fuente = SinComentarios(File.ReadAllText(archivoVm));
             var cuerpo = ExtraerCuerpoDeMetodo(fuente, punto.Metodo);
+            if (cuerpo is null && ArchivoDeLaBaseDeCatalogo() is { } archivoBase)
+            {
+                // Los listados de catálogo heredan la carga de CatalogoListadoViewModel<T>: el cuerpo vive en la base.
+                var fuenteBase = SinComentarios(File.ReadAllText(archivoBase));
+                var cuerpoBase = ExtraerCuerpoDeMetodo(fuenteBase, punto.Metodo);
+                if (cuerpoBase is not null && punto.TipoViewModel.EndsWith("ListViewModel", StringComparison.Ordinal)
+                    && fuente.Contains("CatalogoListadoViewModel<"))
+                {
+                    fuente = fuenteBase;
+                    cuerpo = cuerpoBase;
+                }
+            }
             if (cuerpo is null)
             {
                 fallos.Add($"{punto.Vista}: no se pudo extraer el cuerpo de {punto.TipoViewModel}.{punto.Metodo}()");

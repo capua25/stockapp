@@ -1,84 +1,49 @@
-using System;
-using System.Collections.ObjectModel;
+using System.Collections.Generic;
+using System.Globalization;
 using System.Threading.Tasks;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Finanzas;
 using StockApp.Domain.Entities;
-using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
+using StockApp.Presentation.ViewModels.Catalogo;
 
 namespace StockApp.Presentation.ViewModels.Finanzas;
 
-/// <summary>Sub-lista de rubros de gasto dentro de "Maestros de finanzas".</summary>
-public partial class RubroGastoListViewModel : ViewModelBase
+/// <summary>Catálogo de rubros de gasto: lo único propio es el servicio, los textos y los valores de las columnas.</summary>
+public class RubroGastoListViewModel : CatalogoListadoViewModel<RubroGasto>
 {
-    private readonly IRubroGastoService   _service;
-    private readonly INavigationService   _navigation;
-    private readonly IConfirmacionService _confirmacion;
+    private static readonly IReadOnlyList<ColumnaCatalogo> _columnas = [new("CÓDIGO")];
 
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(EditarCommand))]
-    [NotifyCanExecuteChangedFor(nameof(BajaCommand))]
-    private RubroGasto? _itemSeleccionado;
-
-    public ObservableCollection<RubroGasto> Items { get; } = new();
+    private readonly IRubroGastoService _service;
 
     public RubroGastoListViewModel(
         IRubroGastoService service,
         INavigationService navigation,
         IConfirmacionService confirmacion)
+        : base(navigation, confirmacion)
     {
-        _service      = service;
-        _navigation   = navigation;
-        _confirmacion = confirmacion;
+        _service = service;
     }
 
-    public async Task CargarAsync()
-    {
-        await EjecutarCargaProtegidaAsync(async () =>
-        {
-            var resultados = await _service.ListarTodosAsync();
-            Items.Clear();
-            foreach (var r in resultados)
-                Items.Add(r);
-        }, "No tenés permiso para ver los rubros de gasto.");
-    }
+    public override ClaveCatalogo Clave => ClaveCatalogo.RubrosGasto;
+    public override string Titulo => "Rubros de gasto";
+    public override string TextoNuevo => "Nuevo rubro";
+    public override string TextoInactivo => "Inactivo";
+    public override string TextoSinPermiso => "No tenés permiso para ver los rubros de gasto.";
+    public override IReadOnlyList<ColumnaCatalogo> Columnas => _columnas;
 
-    [RelayCommand]
-    private async Task NuevoAsync()
-        => await Task.Run(() => _navigation.Navegar<RubroGastoFormViewModel>());
+    protected override Task<IReadOnlyList<RubroGasto>> ListarAsync() => _service.ListarTodosAsync();
 
-    private bool TieneSeleccionActiva()
-        => ItemSeleccionado is not null && ItemSeleccionado.Activo;
+    protected override Task DarDeBajaAsync(RubroGasto item) => _service.BajaLogicaAsync(item.Id);
 
-    [RelayCommand(CanExecute = nameof(TieneSeleccionActiva))]
-    private async Task EditarAsync()
-    {
-        if (ItemSeleccionado is null) return;
-        var seleccionado = ItemSeleccionado;
-        await Task.Run(() =>
-            _navigation.Navegar<RubroGastoFormViewModel>(vm => vm.CargarParaEditar(seleccionado)));
-    }
+    protected override string MensajeConfirmarBaja(RubroGasto item) => $"¿Confirma dar de baja el rubro \"{item.Nombre}\" (código {item.Codigo})?";
 
-    [RelayCommand(CanExecute = nameof(TieneSeleccionActiva))]
-    private async Task BajaAsync()
-    {
-        if (ItemSeleccionado is null) return;
+    protected override bool EsActivo(RubroGasto item) => item.Activo;
 
-        var confirmar = await _confirmacion.PreguntarAsync(
-            $"¿Confirma dar de baja el rubro \"{ItemSeleccionado.Nombre}\" (código {ItemSeleccionado.Codigo})?");
-        if (!confirmar) return;
+    protected override IReadOnlyList<string?> Valores(RubroGasto item) => new string?[] { item.Nombre, item.Codigo.ToString(CultureInfo.InvariantCulture) };
 
-        try
-        {
-            await _service.BajaLogicaAsync(ItemSeleccionado.Id);
-            await CargarAsync();
-        }
-        catch (Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException)
-        {
-            await _confirmacion.InformarAsync(ex.Message);
-        }
-    }
+    protected override void NavegarANuevo() => Navigation.Navegar<RubroGastoFormViewModel>();
+
+    protected override void NavegarAEditar(RubroGasto item)
+        => Navigation.Navegar<RubroGastoFormViewModel>(vm => vm.CargarParaEditar(item));
 }

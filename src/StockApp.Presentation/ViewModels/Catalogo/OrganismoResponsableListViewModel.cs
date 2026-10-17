@@ -1,92 +1,48 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Threading.Tasks;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Catalogo;
 using StockApp.Domain.Entities;
-using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 
 namespace StockApp.Presentation.ViewModels.Catalogo;
 
-/// <summary>
-/// Listado de organismos responsables con alta y baja lógica. Solo accesible para Admin.
-/// </summary>
-public partial class OrganismoResponsableListViewModel : ViewModelBase
+/// <summary>Catálogo de organismos responsables: lo único propio es el servicio, los textos y los valores de las columnas.</summary>
+public class OrganismoResponsableListViewModel : CatalogoListadoViewModel<OrganismoResponsable>
 {
+    private static readonly IReadOnlyList<ColumnaCatalogo> _columnas = Array.Empty<ColumnaCatalogo>();
+
     private readonly IOrganismoResponsableService _service;
-    private readonly INavigationService           _navigation;
-    private readonly IConfirmacionService         _confirmacion;
-
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(EditarCommand))]
-    [NotifyCanExecuteChangedFor(nameof(BajaCommand))]
-    private OrganismoResponsable? _itemSeleccionado;
-
-    public ObservableCollection<OrganismoResponsable> Items { get; } = new();
 
     public OrganismoResponsableListViewModel(
         IOrganismoResponsableService service,
         INavigationService navigation,
         IConfirmacionService confirmacion)
+        : base(navigation, confirmacion)
     {
-        _service      = service;
-        _navigation   = navigation;
-        _confirmacion = confirmacion;
+        _service = service;
     }
 
-    public async Task CargarAsync()
-    {
-        try
-        {
-            var resultados = await _service.ListarTodasAsync();
-            Items.Clear();
-            foreach (var o in resultados)
-                Items.Add(o);
-        }
-        catch (UnauthorizedAccessException)
-        {
-        }
-    }
+    public override ClaveCatalogo Clave => ClaveCatalogo.Organismos;
+    public override string Titulo => "Organismos responsables";
+    public override string TextoNuevo => "Nuevo organismo";
+    public override string TextoInactivo => "Inactivo";
+    public override string TextoSinPermiso => "No tenés permiso para ver los organismos responsables.";
+    public override IReadOnlyList<ColumnaCatalogo> Columnas => _columnas;
 
-    [RelayCommand]
-    private async Task NuevoAsync()
-        => await Task.Run(() => _navigation.Navegar<OrganismoResponsableFormViewModel>());
+    protected override Task<IReadOnlyList<OrganismoResponsable>> ListarAsync() => _service.ListarTodasAsync();
 
-    private bool PuedeDarBaja()
-        => ItemSeleccionado is not null && ItemSeleccionado.Activo;
+    protected override Task DarDeBajaAsync(OrganismoResponsable item) => _service.BajaLogicaAsync(item.Id);
 
-    private bool PuedeEditar() => PuedeDarBaja();
+    protected override string MensajeConfirmarBaja(OrganismoResponsable item) => $"¿Confirma dar de baja el organismo \"{item.Nombre}\"?";
 
-    [RelayCommand(CanExecute = nameof(PuedeEditar))]
-    private async Task EditarAsync()
-    {
-        if (ItemSeleccionado is null) return;
-        var seleccionada = ItemSeleccionado;
-        await Task.Run(() =>
-            _navigation.Navegar<OrganismoResponsableFormViewModel>(vm => vm.CargarParaEditar(seleccionada)));
-    }
+    protected override bool EsActivo(OrganismoResponsable item) => item.Activo;
 
-    [RelayCommand(CanExecute = nameof(PuedeDarBaja))]
-    private async Task BajaAsync()
-    {
-        if (ItemSeleccionado is null) return;
+    protected override IReadOnlyList<string?> Valores(OrganismoResponsable item) => new string?[] { item.Nombre };
 
-        var confirmar = await _confirmacion.PreguntarAsync(
-            $"¿Confirma dar de baja el organismo \"{ItemSeleccionado.Nombre}\"?");
-        if (!confirmar) return;
+    protected override void NavegarANuevo() => Navigation.Navegar<OrganismoResponsableFormViewModel>();
 
-        try
-        {
-            await _service.BajaLogicaAsync(ItemSeleccionado.Id);
-            await CargarAsync();
-        }
-        catch (Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException)
-        {
-            await _confirmacion.InformarAsync(ex.Message);
-        }
-    }
+    protected override void NavegarAEditar(OrganismoResponsable item)
+        => Navigation.Navegar<OrganismoResponsableFormViewModel>(vm => vm.CargarParaEditar(item));
 }

@@ -1,107 +1,48 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Threading.Tasks;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Catalogo;
 using StockApp.Domain.Entities;
-using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 
 namespace StockApp.Presentation.ViewModels.Catalogo;
 
-/// <summary>
-/// Listado de categorías con alta y baja lógica. Solo accesible para Admin
-/// (el menú filtra por rol; el servicio Application revalida en cada operación).
-/// </summary>
-public partial class CategoriaListViewModel : ViewModelBase
+/// <summary>Catálogo de categorías: lo único propio es el servicio, los textos y los valores de las columnas.</summary>
+public class CategoriaListViewModel : CatalogoListadoViewModel<Categoria>
 {
-    private readonly ICategoriaService    _service;
-    private readonly INavigationService   _navigation;
-    private readonly IConfirmacionService _confirmacion;
+    private static readonly IReadOnlyList<ColumnaCatalogo> _columnas = Array.Empty<ColumnaCatalogo>();
 
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(EditarCommand))]
-    [NotifyCanExecuteChangedFor(nameof(BajaCommand))]
-    private Categoria? _itemSeleccionado;
-
-    public ObservableCollection<Categoria> Items { get; } = new();
+    private readonly ICategoriaService _service;
 
     public CategoriaListViewModel(
         ICategoriaService service,
         INavigationService navigation,
         IConfirmacionService confirmacion)
+        : base(navigation, confirmacion)
     {
-        _service      = service;
-        _navigation   = navigation;
-        _confirmacion = confirmacion;
+        _service = service;
     }
 
-    /// <summary>
-    /// Red de contención (bugfix 2026-08-16, auditoría): mismo hermano y mismo criterio que
-    /// ProductoListViewModel.CargarAsync -- CargarAsync se dispara fire-and-forget desde
-    /// DataContextChanged; un UnauthorizedAccessException se atrapa en silencio porque
-    /// App.axaml.cs ya informa "Tus permisos cambiaron..." apenas ve el 403 en la respuesta HTTP.
-    /// </summary>
-    public async Task CargarAsync()
-    {
-        try
-        {
-            var resultados = await _service.ListarTodasAsync();
-            Items.Clear();
-            foreach (var c in resultados)
-                Items.Add(c);
-        }
-        catch (UnauthorizedAccessException)
-        {
-        }
-    }
+    public override ClaveCatalogo Clave => ClaveCatalogo.Categorias;
+    public override string Titulo => "Categorías";
+    public override string TextoNuevo => "Nueva categoría";
+    public override string TextoInactivo => "Inactiva";
+    public override string TextoSinPermiso => "No tenés permiso para ver las categorías.";
+    public override IReadOnlyList<ColumnaCatalogo> Columnas => _columnas;
 
-    [RelayCommand]
-    private async Task NuevoAsync()
-        => await Task.Run(() => _navigation.Navegar<CategoriaFormViewModel>());
+    protected override Task<IReadOnlyList<Categoria>> ListarAsync() => _service.ListarTodasAsync();
 
-    private bool PuedeDarBaja()
-        => ItemSeleccionado is not null && ItemSeleccionado.Activo;
+    protected override Task DarDeBajaAsync(Categoria item) => _service.BajaLogicaAsync(item.Id);
 
-    // Misma condición que PuedeDarBaja: solo se edita una categoría seleccionada y activa.
-    private bool PuedeEditar() => PuedeDarBaja();
+    protected override string MensajeConfirmarBaja(Categoria item) => $"¿Confirma dar de baja la categoría \"{item.Nombre}\"?";
 
-    [RelayCommand(CanExecute = nameof(PuedeEditar))]
-    private async Task EditarAsync()
-    {
-        if (ItemSeleccionado is null) return;
-        var seleccionada = ItemSeleccionado;
-        await Task.Run(() =>
-            _navigation.Navegar<CategoriaFormViewModel>(vm => vm.CargarParaEditar(seleccionada)));
-    }
+    protected override bool EsActivo(Categoria item) => item.Activo;
 
-    /// <summary>
-    /// Da de baja la categoría seleccionada, previa confirmación del usuario. Las excepciones
-    /// de dominio esperables (ej: ya está inactiva, o fue borrada por otra sesión) NO deben
-    /// propagar y matar el proceso — regresión real reportada: BajaLogicaAsync lanza
-    /// ReglaDeNegocioException/EntidadNoEncontradaException y, al no estar atrapada acá, la
-    /// excepción llegaba sin manejar al dispatcher de Avalonia y crasheaba la app.
-    /// </summary>
-    [RelayCommand(CanExecute = nameof(PuedeDarBaja))]
-    private async Task BajaAsync()
-    {
-        if (ItemSeleccionado is null) return;
+    protected override IReadOnlyList<string?> Valores(Categoria item) => new string?[] { item.Nombre };
 
-        var confirmar = await _confirmacion.PreguntarAsync(
-            $"¿Confirma dar de baja la categoría \"{ItemSeleccionado.Nombre}\"?");
-        if (!confirmar) return;
+    protected override void NavegarANuevo() => Navigation.Navegar<CategoriaFormViewModel>();
 
-        try
-        {
-            await _service.BajaLogicaAsync(ItemSeleccionado.Id);
-            await CargarAsync();
-        }
-        catch (Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException)
-        {
-            await _confirmacion.InformarAsync(ex.Message);
-        }
-    }
+    protected override void NavegarAEditar(Categoria item)
+        => Navigation.Navegar<CategoriaFormViewModel>(vm => vm.CargarParaEditar(item));
 }

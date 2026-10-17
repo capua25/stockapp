@@ -1,93 +1,48 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Threading.Tasks;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Catalogo;
 using StockApp.Domain.Entities;
-using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 
 namespace StockApp.Presentation.ViewModels.Catalogo;
 
-/// <summary>
-/// Listado de zonas con alta y baja lógica. Solo accesible para Admin
-/// (el menú filtra por permiso; el servicio Application revalida en cada operación).
-/// </summary>
-public partial class ZonaListViewModel : ViewModelBase
+/// <summary>Catálogo de zonas: lo único propio es el servicio, los textos y los valores de las columnas.</summary>
+public class ZonaListViewModel : CatalogoListadoViewModel<Zona>
 {
-    private readonly IZonaService         _service;
-    private readonly INavigationService   _navigation;
-    private readonly IConfirmacionService _confirmacion;
+    private static readonly IReadOnlyList<ColumnaCatalogo> _columnas = Array.Empty<ColumnaCatalogo>();
 
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(EditarCommand))]
-    [NotifyCanExecuteChangedFor(nameof(BajaCommand))]
-    private Zona? _itemSeleccionado;
-
-    public ObservableCollection<Zona> Items { get; } = new();
+    private readonly IZonaService _service;
 
     public ZonaListViewModel(
         IZonaService service,
         INavigationService navigation,
         IConfirmacionService confirmacion)
+        : base(navigation, confirmacion)
     {
-        _service      = service;
-        _navigation   = navigation;
-        _confirmacion = confirmacion;
+        _service = service;
     }
 
-    public async Task CargarAsync()
-    {
-        try
-        {
-            var resultados = await _service.ListarTodasAsync();
-            Items.Clear();
-            foreach (var z in resultados)
-                Items.Add(z);
-        }
-        catch (UnauthorizedAccessException)
-        {
-        }
-    }
+    public override ClaveCatalogo Clave => ClaveCatalogo.Zonas;
+    public override string Titulo => "Zonas";
+    public override string TextoNuevo => "Nueva zona";
+    public override string TextoInactivo => "Inactiva";
+    public override string TextoSinPermiso => "No tenés permiso para ver las zonas.";
+    public override IReadOnlyList<ColumnaCatalogo> Columnas => _columnas;
 
-    [RelayCommand]
-    private async Task NuevoAsync()
-        => await Task.Run(() => _navigation.Navegar<ZonaFormViewModel>());
+    protected override Task<IReadOnlyList<Zona>> ListarAsync() => _service.ListarTodasAsync();
 
-    private bool PuedeDarBaja()
-        => ItemSeleccionado is not null && ItemSeleccionado.Activo;
+    protected override Task DarDeBajaAsync(Zona item) => _service.BajaLogicaAsync(item.Id);
 
-    private bool PuedeEditar() => PuedeDarBaja();
+    protected override string MensajeConfirmarBaja(Zona item) => $"¿Confirma dar de baja la zona \"{item.Nombre}\"?";
 
-    [RelayCommand(CanExecute = nameof(PuedeEditar))]
-    private async Task EditarAsync()
-    {
-        if (ItemSeleccionado is null) return;
-        var seleccionada = ItemSeleccionado;
-        await Task.Run(() =>
-            _navigation.Navegar<ZonaFormViewModel>(vm => vm.CargarParaEditar(seleccionada)));
-    }
+    protected override bool EsActivo(Zona item) => item.Activo;
 
-    [RelayCommand(CanExecute = nameof(PuedeDarBaja))]
-    private async Task BajaAsync()
-    {
-        if (ItemSeleccionado is null) return;
+    protected override IReadOnlyList<string?> Valores(Zona item) => new string?[] { item.Nombre };
 
-        var confirmar = await _confirmacion.PreguntarAsync(
-            $"¿Confirma dar de baja la zona \"{ItemSeleccionado.Nombre}\"?");
-        if (!confirmar) return;
+    protected override void NavegarANuevo() => Navigation.Navegar<ZonaFormViewModel>();
 
-        try
-        {
-            await _service.BajaLogicaAsync(ItemSeleccionado.Id);
-            await CargarAsync();
-        }
-        catch (Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException)
-        {
-            await _confirmacion.InformarAsync(ex.Message);
-        }
-    }
+    protected override void NavegarAEditar(Zona item)
+        => Navigation.Navegar<ZonaFormViewModel>(vm => vm.CargarParaEditar(item));
 }

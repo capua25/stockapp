@@ -1,106 +1,47 @@
-using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Threading.Tasks;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Catalogo;
 using StockApp.Domain.Entities;
-using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 
 namespace StockApp.Presentation.ViewModels.Catalogo;
 
-/// <summary>
-/// Listado de unidades de medida con alta y baja lógica. Solo Admin.
-/// </summary>
-public partial class UnidadMedidaListViewModel : ViewModelBase
+/// <summary>Catálogo de unidades de medida: lo único propio es el servicio, los textos y los valores de las columnas.</summary>
+public class UnidadMedidaListViewModel : CatalogoListadoViewModel<UnidadMedida>
 {
+    private static readonly IReadOnlyList<ColumnaCatalogo> _columnas = [new("ABREVIATURA")];
+
     private readonly IUnidadMedidaService _service;
-    private readonly INavigationService   _navigation;
-    private readonly IConfirmacionService _confirmacion;
-
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(EditarCommand))]
-    [NotifyCanExecuteChangedFor(nameof(BajaCommand))]
-    private UnidadMedida? _itemSeleccionado;
-
-    public ObservableCollection<UnidadMedida> Items { get; } = new();
 
     public UnidadMedidaListViewModel(
         IUnidadMedidaService service,
         INavigationService navigation,
         IConfirmacionService confirmacion)
+        : base(navigation, confirmacion)
     {
-        _service      = service;
-        _navigation   = navigation;
-        _confirmacion = confirmacion;
+        _service = service;
     }
 
-    /// <summary>
-    /// Red de contención (bugfix 2026-08-16, auditoría): mismo hermano y mismo criterio que
-    /// ProductoListViewModel.CargarAsync -- CargarAsync se dispara fire-and-forget desde
-    /// DataContextChanged; un UnauthorizedAccessException se atrapa en silencio porque
-    /// App.axaml.cs ya informa "Tus permisos cambiaron..." apenas ve el 403 en la respuesta HTTP.
-    /// </summary>
-    public async Task CargarAsync()
-    {
-        try
-        {
-            var resultados = await _service.ListarTodasAsync();
-            Items.Clear();
-            foreach (var u in resultados)
-                Items.Add(u);
-        }
-        catch (UnauthorizedAccessException)
-        {
-        }
-    }
+    public override ClaveCatalogo Clave => ClaveCatalogo.UnidadesMedida;
+    public override string Titulo => "Unidades de medida";
+    public override string TextoNuevo => "Nueva unidad";
+    public override string TextoInactivo => "Inactiva";
+    public override string TextoSinPermiso => "No tenés permiso para ver las unidades de medida.";
+    public override IReadOnlyList<ColumnaCatalogo> Columnas => _columnas;
 
-    [RelayCommand]
-    private async Task NuevoAsync()
-        => await Task.Run(() => _navigation.Navegar<UnidadMedidaFormViewModel>());
+    protected override Task<IReadOnlyList<UnidadMedida>> ListarAsync() => _service.ListarTodasAsync();
 
-    private bool PuedeDarBaja()
-        => ItemSeleccionado is not null && ItemSeleccionado.Activo;
+    protected override Task DarDeBajaAsync(UnidadMedida item) => _service.BajaLogicaAsync(item.Id);
 
-    // Misma condición que PuedeDarBaja: solo se edita una unidad seleccionada y activa.
-    private bool PuedeEditar() => PuedeDarBaja();
+    protected override string MensajeConfirmarBaja(UnidadMedida item) => $"¿Confirma dar de baja la unidad de medida \"{item.Nombre}\"?";
 
-    [RelayCommand(CanExecute = nameof(PuedeEditar))]
-    private async Task EditarAsync()
-    {
-        if (ItemSeleccionado is null) return;
-        var seleccionada = ItemSeleccionado;
-        await Task.Run(() =>
-            _navigation.Navegar<UnidadMedidaFormViewModel>(vm => vm.CargarParaEditar(seleccionada)));
-    }
+    protected override bool EsActivo(UnidadMedida item) => item.Activo;
 
-    /// <summary>
-    /// Da de baja la unidad seleccionada, previa confirmación del usuario. Las excepciones de
-    /// dominio esperables (ej: ya está inactiva, o fue borrada por otra sesión) NO deben
-    /// propagar y matar el proceso — regresión real reportada: BajaLogicaAsync lanza
-    /// ReglaDeNegocioException/EntidadNoEncontradaException y, al no estar atrapada acá, la
-    /// excepción llegaba sin manejar al dispatcher de Avalonia y crasheaba la app.
-    /// </summary>
-    [RelayCommand(CanExecute = nameof(PuedeDarBaja))]
-    private async Task BajaAsync()
-    {
-        if (ItemSeleccionado is null) return;
+    protected override IReadOnlyList<string?> Valores(UnidadMedida item) => new string?[] { item.Nombre, item.Abreviatura };
 
-        var confirmar = await _confirmacion.PreguntarAsync(
-            $"¿Confirma dar de baja la unidad de medida \"{ItemSeleccionado.Nombre}\"?");
-        if (!confirmar) return;
+    protected override void NavegarANuevo() => Navigation.Navegar<UnidadMedidaFormViewModel>();
 
-        try
-        {
-            await _service.BajaLogicaAsync(ItemSeleccionado.Id);
-            await CargarAsync();
-        }
-        catch (Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException)
-        {
-            await _confirmacion.InformarAsync(ex.Message);
-        }
-    }
+    protected override void NavegarAEditar(UnidadMedida item)
+        => Navigation.Navegar<UnidadMedidaFormViewModel>(vm => vm.CargarParaEditar(item));
 }

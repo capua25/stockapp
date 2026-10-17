@@ -1,84 +1,49 @@
-using System;
-using System.Collections.ObjectModel;
+using System.Collections.Generic;
+using System.Globalization;
 using System.Threading.Tasks;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Finanzas;
 using StockApp.Domain.Entities;
-using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
+using StockApp.Presentation.ViewModels.Catalogo;
 
 namespace StockApp.Presentation.ViewModels.Finanzas;
 
-/// <summary>Sub-lista de líneas POA dentro de "Maestros de finanzas".</summary>
-public partial class LineaPoaListViewModel : ViewModelBase
+/// <summary>Catálogo de Líneas POA: lo único propio es el servicio, los textos y los valores de las columnas.</summary>
+public class LineaPoaListViewModel : CatalogoListadoViewModel<LineaPoa>
 {
-    private readonly ILineaPoaService     _service;
-    private readonly INavigationService   _navigation;
-    private readonly IConfirmacionService _confirmacion;
+    private static readonly IReadOnlyList<ColumnaCatalogo> _columnas = [new("PROGRAMA"), new("EJERCICIO")];
 
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(EditarCommand))]
-    [NotifyCanExecuteChangedFor(nameof(BajaCommand))]
-    private LineaPoa? _itemSeleccionado;
-
-    public ObservableCollection<LineaPoa> Items { get; } = new();
+    private readonly ILineaPoaService _service;
 
     public LineaPoaListViewModel(
         ILineaPoaService service,
         INavigationService navigation,
         IConfirmacionService confirmacion)
+        : base(navigation, confirmacion)
     {
-        _service      = service;
-        _navigation   = navigation;
-        _confirmacion = confirmacion;
+        _service = service;
     }
 
-    public async Task CargarAsync()
-    {
-        await EjecutarCargaProtegidaAsync(async () =>
-        {
-            var resultados = await _service.ListarTodasAsync();
-            Items.Clear();
-            foreach (var l in resultados)
-                Items.Add(l);
-        }, "No tenés permiso para ver las líneas POA.");
-    }
+    public override ClaveCatalogo Clave => ClaveCatalogo.LineasPoa;
+    public override string Titulo => "Líneas POA";
+    public override string TextoNuevo => "Nueva línea POA";
+    public override string TextoInactivo => "Inactiva";
+    public override string TextoSinPermiso => "No tenés permiso para ver las líneas POA.";
+    public override IReadOnlyList<ColumnaCatalogo> Columnas => _columnas;
 
-    [RelayCommand]
-    private async Task NuevoAsync()
-        => await Task.Run(() => _navigation.Navegar<LineaPoaFormViewModel>());
+    protected override Task<IReadOnlyList<LineaPoa>> ListarAsync() => _service.ListarTodasAsync();
 
-    private bool TieneSeleccionActiva()
-        => ItemSeleccionado is not null && ItemSeleccionado.Activo;
+    protected override Task DarDeBajaAsync(LineaPoa item) => _service.BajaLogicaAsync(item.Id);
 
-    [RelayCommand(CanExecute = nameof(TieneSeleccionActiva))]
-    private async Task EditarAsync()
-    {
-        if (ItemSeleccionado is null) return;
-        var seleccionada = ItemSeleccionado;
-        await Task.Run(() =>
-            _navigation.Navegar<LineaPoaFormViewModel>(vm => vm.CargarParaEditar(seleccionada)));
-    }
+    protected override string MensajeConfirmarBaja(LineaPoa item) => $"¿Confirma dar de baja la línea POA \"{item.Nombre}\" ({item.Ejercicio})?";
 
-    [RelayCommand(CanExecute = nameof(TieneSeleccionActiva))]
-    private async Task BajaAsync()
-    {
-        if (ItemSeleccionado is null) return;
+    protected override bool EsActivo(LineaPoa item) => item.Activo;
 
-        var confirmar = await _confirmacion.PreguntarAsync(
-            $"¿Confirma dar de baja la línea POA \"{ItemSeleccionado.Nombre}\" ({ItemSeleccionado.Ejercicio})?");
-        if (!confirmar) return;
+    protected override IReadOnlyList<string?> Valores(LineaPoa item) => new string?[] { item.Nombre, item.Programa, item.Ejercicio.ToString(CultureInfo.InvariantCulture) };
 
-        try
-        {
-            await _service.BajaLogicaAsync(ItemSeleccionado.Id);
-            await CargarAsync();
-        }
-        catch (Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException)
-        {
-            await _confirmacion.InformarAsync(ex.Message);
-        }
-    }
+    protected override void NavegarANuevo() => Navigation.Navegar<LineaPoaFormViewModel>();
+
+    protected override void NavegarAEditar(LineaPoa item)
+        => Navigation.Navegar<LineaPoaFormViewModel>(vm => vm.CargarParaEditar(item));
 }

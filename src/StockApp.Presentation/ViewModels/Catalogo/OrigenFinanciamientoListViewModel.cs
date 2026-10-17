@@ -1,92 +1,48 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Threading.Tasks;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Catalogo;
 using StockApp.Domain.Entities;
-using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 
 namespace StockApp.Presentation.ViewModels.Catalogo;
 
-/// <summary>
-/// Listado de orígenes de financiamiento con alta y baja lógica. Solo accesible para Admin.
-/// </summary>
-public partial class OrigenFinanciamientoListViewModel : ViewModelBase
+/// <summary>Catálogo de orígenes de financiamiento: lo único propio es el servicio, los textos y los valores de las columnas.</summary>
+public class OrigenFinanciamientoListViewModel : CatalogoListadoViewModel<OrigenFinanciamiento>
 {
+    private static readonly IReadOnlyList<ColumnaCatalogo> _columnas = Array.Empty<ColumnaCatalogo>();
+
     private readonly IOrigenFinanciamientoService _service;
-    private readonly INavigationService           _navigation;
-    private readonly IConfirmacionService         _confirmacion;
-
-    [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(EditarCommand))]
-    [NotifyCanExecuteChangedFor(nameof(BajaCommand))]
-    private OrigenFinanciamiento? _itemSeleccionado;
-
-    public ObservableCollection<OrigenFinanciamiento> Items { get; } = new();
 
     public OrigenFinanciamientoListViewModel(
         IOrigenFinanciamientoService service,
         INavigationService navigation,
         IConfirmacionService confirmacion)
+        : base(navigation, confirmacion)
     {
-        _service      = service;
-        _navigation   = navigation;
-        _confirmacion = confirmacion;
+        _service = service;
     }
 
-    public async Task CargarAsync()
-    {
-        try
-        {
-            var resultados = await _service.ListarTodasAsync();
-            Items.Clear();
-            foreach (var o in resultados)
-                Items.Add(o);
-        }
-        catch (UnauthorizedAccessException)
-        {
-        }
-    }
+    public override ClaveCatalogo Clave => ClaveCatalogo.Origenes;
+    public override string Titulo => "Orígenes de financiamiento";
+    public override string TextoNuevo => "Nuevo origen";
+    public override string TextoInactivo => "Inactivo";
+    public override string TextoSinPermiso => "No tenés permiso para ver los orígenes de financiamiento.";
+    public override IReadOnlyList<ColumnaCatalogo> Columnas => _columnas;
 
-    [RelayCommand]
-    private async Task NuevoAsync()
-        => await Task.Run(() => _navigation.Navegar<OrigenFinanciamientoFormViewModel>());
+    protected override Task<IReadOnlyList<OrigenFinanciamiento>> ListarAsync() => _service.ListarTodasAsync();
 
-    private bool PuedeDarBaja()
-        => ItemSeleccionado is not null && ItemSeleccionado.Activo;
+    protected override Task DarDeBajaAsync(OrigenFinanciamiento item) => _service.BajaLogicaAsync(item.Id);
 
-    private bool PuedeEditar() => PuedeDarBaja();
+    protected override string MensajeConfirmarBaja(OrigenFinanciamiento item) => $"¿Confirma dar de baja el origen de financiamiento \"{item.Nombre}\"?";
 
-    [RelayCommand(CanExecute = nameof(PuedeEditar))]
-    private async Task EditarAsync()
-    {
-        if (ItemSeleccionado is null) return;
-        var seleccionada = ItemSeleccionado;
-        await Task.Run(() =>
-            _navigation.Navegar<OrigenFinanciamientoFormViewModel>(vm => vm.CargarParaEditar(seleccionada)));
-    }
+    protected override bool EsActivo(OrigenFinanciamiento item) => item.Activo;
 
-    [RelayCommand(CanExecute = nameof(PuedeDarBaja))]
-    private async Task BajaAsync()
-    {
-        if (ItemSeleccionado is null) return;
+    protected override IReadOnlyList<string?> Valores(OrigenFinanciamiento item) => new string?[] { item.Nombre };
 
-        var confirmar = await _confirmacion.PreguntarAsync(
-            $"¿Confirma dar de baja el origen de financiamiento \"{ItemSeleccionado.Nombre}\"?");
-        if (!confirmar) return;
+    protected override void NavegarANuevo() => Navigation.Navegar<OrigenFinanciamientoFormViewModel>();
 
-        try
-        {
-            await _service.BajaLogicaAsync(ItemSeleccionado.Id);
-            await CargarAsync();
-        }
-        catch (Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException)
-        {
-            await _confirmacion.InformarAsync(ex.Message);
-        }
-    }
+    protected override void NavegarAEditar(OrigenFinanciamiento item)
+        => Navigation.Navegar<OrigenFinanciamientoFormViewModel>(vm => vm.CargarParaEditar(item));
 }
