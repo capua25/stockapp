@@ -28,6 +28,23 @@ public partial class AdjuntosPanelViewModel : ViewModelBase
     private int? _gastoId;
     private int? _pagoGastoId;
 
+    /// <summary>Turnos de <see cref="RecargarAsync"/>: dos cargas pueden superponerse (el host cambia de pago mientras llega
+    /// la lista del anterior) y solo la última decide lo que se ve, o los comprobantes de un pago aparecerían bajo otro.</summary>
+    private readonly ConsultaVigente _consultas = new();
+
+    /// <summary>El host lo fija cuando el dueño del panel está anulado: el panel se consulta (Ver) pero no se modifica
+    /// (Agregar y Quitar ocultos), aunque el usuario tenga el permiso.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PuedeModificar))]
+    private bool _soloLectura;
+
+    /// <summary>Texto que explica el solo lectura, debajo del encabezado del panel. Null: sin aviso.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HayAvisoSoloLectura))]
+    private string? _avisoSoloLectura;
+
+    public bool HayAvisoSoloLectura => !string.IsNullOrEmpty(AvisoSoloLectura);
+
     public ObservableCollection<AdjuntoDto> Items { get; } = new();
 
     /// <summary>Permiso que habilita Agregar y Quitar: el de gastos para el panel de una factura, el de pagos para el
@@ -40,7 +57,8 @@ public partial class AdjuntosPanelViewModel : ViewModelBase
     /// reenvía (el panel no es la pantalla abierta: el shell solo le avisa al host).
     /// </summary>
     public bool PuedeModificar =>
-        _permisoParaModificar is { } permiso
+        !SoloLectura
+        && _permisoParaModificar is { } permiso
         && (_session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(permiso));
 
     public static string MensajeConfirmarQuitar(string nombreArchivo) => $"¿Quitar el adjunto \"{nombreArchivo}\"?";
@@ -72,6 +90,7 @@ public partial class AdjuntosPanelViewModel : ViewModelBase
 
     private async Task RecargarAsync()
     {
+        var turno = _consultas.Empezar();
         try
         {
             Items.Clear();
@@ -81,12 +100,16 @@ public partial class AdjuntosPanelViewModel : ViewModelBase
                     ? await _adjuntos.ListarPorPagoAsync(pagoGastoId)
                     : Array.Empty<AdjuntoDto>();
 
+            if (!turno.EsLaUltima)
+                return;
+
             foreach (var item in lista ?? Array.Empty<AdjuntoDto>())
                 Items.Add(item);
         }
         catch (Exception ex)
         {
-            await _confirmacion.InformarAsync(ex.Message);
+            if (turno.EsLaUltima)
+                await _confirmacion.InformarAsync(ex.Message);
         }
     }
 

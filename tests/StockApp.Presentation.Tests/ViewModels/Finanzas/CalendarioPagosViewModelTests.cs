@@ -123,6 +123,7 @@ public class CalendarioPagosViewModelTests
         await vm.RegistrarPagoCommand.ExecuteAsync(vm.Vencidas[0]);
 
         Assert.NotNull(pagosVm);
+        Assert.Equal("Calendario de pagos", pagosVm!.TextoOrigen);   // el breadcrumb dice de dónde se viene
         pagosVm!.VolverCommand.Execute(null);
 
         // ConfigurarVolver captura la INavigationService del CalendarioPagosViewModel (origen),

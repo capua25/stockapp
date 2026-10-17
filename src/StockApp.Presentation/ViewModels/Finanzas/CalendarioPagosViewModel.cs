@@ -110,7 +110,7 @@ public partial class CalendarioPagosViewModel : ViewModelBase
         _navigation.Navegar<PagosGastoViewModel>(vm =>
         {
             vm.CargarParaGasto(gasto);
-            vm.ConfigurarVolver(() => _navigation.Navegar<CalendarioPagosViewModel>());
+            vm.ConfigurarVolver(() => _navigation.Navegar<CalendarioPagosViewModel>(), "Calendario de pagos");
         });
     }
 }

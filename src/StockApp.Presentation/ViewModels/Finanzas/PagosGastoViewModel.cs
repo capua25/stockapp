@@ -1,5 +1,9 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -22,7 +26,7 @@ namespace StockApp.Presentation.ViewModels.Finanzas;
 /// anular pagos existentes. Refresca el gasto tras cada operación para que saldo y
 /// estado calculado queden al día.
 /// </summary>
-public partial class PagosGastoViewModel : ViewModelBase
+public partial class PagosGastoViewModel : ViewModelBase, INotifyDataErrorInfo
 {
     private readonly IGastoService        _service;
     private readonly ICurrentSession      _session;
@@ -41,6 +45,9 @@ public partial class PagosGastoViewModel : ViewModelBase
     {
         base.NotificarPermisosActualizados();
         _adjuntosPanel.NotificarPermisosActualizados();
+        // Los comandos también: ocultar el botón no alcanza (Enter, un binding viejo): sin el permiso no ejecutan.
+        RegistrarPagoCommand.NotifyCanExecuteChanged();
+        AnularPagoCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>
@@ -61,6 +68,24 @@ public partial class PagosGastoViewModel : ViewModelBase
         _session.RolActual == RolUsuario.Admin ||
         _session.PermisosActuales.Contains(Permisos.RegistrarPagos);
 
+    /// <summary>Solo lectura por permiso (<see cref="PuedeRegistrarPagos"/>) o por estado del registro (gasto anulado):
+    /// con cualquiera de los dos no se registra ni se anula (convención 36). Getter sobre la sesión, no un valor calculado una
+    /// vez: <see cref="NotificarPermisosActualizados"/> lo re-evalúa.</summary>
+    public bool PuedeRegistrar => PuedeRegistrarPagos && !EsAnulado;
+
+    public bool SoloLectura => !PuedeRegistrar;
+
+    public const string MensajeSinPermisoPagos =
+        "No tenés permiso para ver finanzas, así que no se pueden abrir los pagos de la factura.";
+    public const string MensajeFechaObligatoria = "La fecha del pago es obligatoria.";
+    public const string MensajeMontoObligatorio = "El monto del pago es obligatorio.";
+    public const string MensajeMontoInvalido = "El monto del pago no es un número válido.";
+    public const string AvisoPagoAnulado = "Pago anulado: los adjuntos son solo de consulta";
+
+    protected override bool AvisaSinConexionEnLinea => true;
+
+    protected override void AlPerderConexion() => Pagos.Clear();
+
     private int _gastoId;
     private Action _volver;
 
@@ -70,7 +95,19 @@ public partial class PagosGastoViewModel : ViewModelBase
     [ObservableProperty] private decimal _saldoPendiente;
     [ObservableProperty] private string _estado = string.Empty;
 
-    [ObservableProperty] private DateTime? _fechaSeleccionada = DateTime.Today;
+    /// <summary>Gasto anulado: la pantalla se puede consultar pero no registra ni anula pagos.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PuedeRegistrar), nameof(SoloLectura))]
+    [NotifyCanExecuteChangedFor(nameof(RegistrarPagoCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AnularPagoCommand))]
+    private bool _esAnulado;
+
+    /// <summary>De dónde se llegó: lo muestra el breadcrumb y es a donde vuelve <see cref="VolverCommand"/>.</summary>
+    [ObservableProperty] private string _textoOrigen = "Gastos y facturas";
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RegistrarPagoCommand))]
+    private DateTime? _fechaSeleccionada = DateTime.Today;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(RegistrarPagoCommand))]
@@ -79,7 +116,14 @@ public partial class PagosGastoViewModel : ViewModelBase
     [ObservableProperty] private string? _nota;
     [ObservableProperty] private string? _mensajeError;
 
-    [ObservableProperty] private PagoGasto? _pagoSeleccionado;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MostrarAdjuntos), nameof(SinPagoSeleccionado))]
+    private PagoGasto? _pagoSeleccionado;
+
+    /// <summary>Con un pago elegido (activo o anulado) se muestra el panel de adjuntos; el de un pago anulado, en solo lectura.</summary>
+    public bool MostrarAdjuntos => PagoSeleccionado is not null;
+
+    public bool SinPagoSeleccionado => PagoSeleccionado is null;
 
     public ObservableCollection<PagoGasto> Pagos { get; } = new();
 
@@ -102,8 +146,13 @@ public partial class PagosGastoViewModel : ViewModelBase
     // la selección del pago en la lista (mismo patrón que GastoFormViewModel).
     partial void OnPagoSeleccionadoChanged(PagoGasto? value)
     {
-        if (value is not null)
-            _ = _adjuntosPanel.InicializarAsync(null, value.Id);
+        if (value is null)
+            return;
+
+        // Q-2 B: el pago anulado MUESTRA sus adjuntos, solo para consulta (Agregar y Quitar ocultos, con su aviso).
+        _adjuntosPanel.SoloLectura = !value.Activo;
+        _adjuntosPanel.AvisoSoloLectura = value.Activo ? null : AvisoPagoAnulado;
+        _ = _adjuntosPanel.InicializarAsync(null, value.Id);
     }
 
     /// <summary>Recibe el gasto de la grilla. Corre ANTES de InicializarAsync.</summary>
@@ -113,29 +162,26 @@ public partial class PagosGastoViewModel : ViewModelBase
     /// Permite que el ORIGEN de la navegación configure a dónde vuelve <see cref="Volver"/>.
     /// Por defecto (si no se llama) vuelve a <see cref="GastosViewModel"/>.
     /// </summary>
-    public void ConfigurarVolver(Action volver) => _volver = volver;
+    public void ConfigurarVolver(Action volver, string textoOrigen = "Gastos y facturas")
+    {
+        _volver = volver;
+        TextoOrigen = textoOrigen;
+    }
 
-    /// <summary>Trae el gasto fresco del servidor. La dispara la View (DataContextChanged).</summary>
+    /// <summary>
+    /// Trae el gasto fresco del servidor. La dispara la View (DataContextChanged). Va por EjecutarCargaProtegidaAsync: un 403
+    /// deja <c>SinPermiso</c> (el aviso global lo dio AuthTokenHandler) y un servidor caído deja <c>SinConexion</c> con
+    /// Reintentar, sin escalar al modal global.
+    /// </summary>
     public async Task InicializarAsync()
     {
         try
         {
-            await RefrescarAsync();
+            await EjecutarCargaProtegidaAsync(RefrescarAsync, MensajeSinPermisoPagos);
         }
         catch (Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException)
         {
             await _confirmacion.InformarAsync(ex.Message);
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Red de contención (bugfix 2026-08-15): InicializarAsync la dispara la View
-            // (DataContextChanged) fire-and-forget — una excepción no atrapada acá escala a
-            // Dispatcher.UIThread.UnhandledException (App.axaml.cs), que loguea a crash.log y
-            // muestra el genérico "Ocurrió un error inesperado" como si fuera un bug real. Un
-            // 403 ya se avisó ANTES de llegar acá: AuthTokenHandler dispara
-            // ApiSession.AccesoRevocado apenas ve el 403 en la respuesta HTTP, y App.axaml.cs
-            // ya informa "Tus permisos cambiaron...". Mismo criterio que
-            // GastosViewModel.CargarAsync (ec0696c): silencioso, para no duplicar el aviso.
         }
     }
 
@@ -149,43 +195,103 @@ public partial class PagosGastoViewModel : ViewModelBase
         TotalPagado    = gasto.TotalPagado;
         SaldoPendiente = gasto.SaldoPendiente;
         Estado         = gasto.CalcularEstado(DateTime.UtcNow).ToString();
+        EsAnulado      = !gasto.Activo;
 
+        // El pago elegido deja de existir con la lista nueva: se suelta y la card de adjuntos vuelve a pedir uno.
+        PagoSeleccionado = null;
         Pagos.Clear();
         foreach (var pago in gasto.Pagos)
             Pagos.Add(pago);
     }
 
-    private bool PuedeRegistrar() => !string.IsNullOrWhiteSpace(MontoTexto);
+    // ── Errores por campo (Q-4 B, convención 31): Fecha y Monto ─────────────────────────────────────────
 
-    public IAsyncRelayCommand RegistrarPagoCommand => field ??= ComandoDeGuardado(RegistrarPagoAsync, PuedeRegistrar);
+    /// <summary>Propiedades bindeadas que se validan en el cliente: ErrorsChanged se levanta con estos nombres.</summary>
+    private static readonly string[] CamposValidados = [nameof(FechaSeleccionada), nameof(MontoTexto)];
+
+    /// <summary>Campos que el usuario ya tocó (cambió el valor, salió del campo o intentó registrar).</summary>
+    private readonly HashSet<string> _tocados = new();
+
+    public event EventHandler<DataErrorsChangedEventArgs>? ErrorsChanged;
+
+    public bool HasErrors => CamposValidados.Any(c => ErrorDe(c) is not null);
+
+    /// <summary>El error que la vista muestra debajo del campo: el de su regla, solo si el campo está tocado.</summary>
+    public string? ErrorDe(string propiedad) => _tocados.Contains(propiedad) ? ReglaDe(propiedad) : null;
+
+    public IEnumerable GetErrors(string? propertyName)
+        => propertyName is not null && ErrorDe(propertyName) is { } error ? new[] { error } : Array.Empty<string>();
+
+    /// <summary>Marca el campo como tocado sin cambiar su valor (la vista lo llama al salir del campo).</summary>
+    public void MarcarTocado(string propiedad)
+    {
+        if (_tocados.Add(propiedad))
+            ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(propiedad));
+    }
+
+    private void AlCambiarCampo(string propiedad)
+    {
+        _tocados.Add(propiedad);
+        ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(propiedad));
+    }
+
+    partial void OnFechaSeleccionadaChanged(DateTime? value) => AlCambiarCampo(nameof(FechaSeleccionada));
+    partial void OnMontoTextoChanged(string value) => AlCambiarCampo(nameof(MontoTexto));
+
+    private string? ReglaDe(string propiedad) => propiedad switch
+    {
+        nameof(FechaSeleccionada) => FechaSeleccionada is null ? MensajeFechaObligatoria : null,
+        nameof(MontoTexto) => ReglaDelMonto(),
+        _ => null,
+    };
+
+    /// <summary>Vacío es "obligatorio"; ilegible es el detalle de <see cref="FormatoEsUy.TryParseDecimal"/> ("Usá coma para los
+    /// decimales: 1,5"), sin prefijo para que entre en el campo (GATE 1 4e); sin detalle, el mensaje genérico.</summary>
+    private string? ReglaDelMonto()
+    {
+        if (string.IsNullOrWhiteSpace(MontoTexto))
+            return MensajeMontoObligatorio;
+        if (FormatoEsUy.TryParseDecimal(MontoTexto, out _, out var detalle))
+            return null;
+        return string.IsNullOrEmpty(detalle) || detalle == FormatoEsUy.MensajeNoEsNumero ? MensajeMontoInvalido : detalle;
+    }
+
+    /// <summary>Después de registrar el formulario queda vacío y limpio: ningún campo en rojo hasta que el usuario lo toque.</summary>
+    private void SoltarTocados()
+    {
+        _tocados.Clear();
+        foreach (var campo in CamposValidados)
+            ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(campo));
+    }
+
+    private bool PuedeRegistrarPago() => PuedeRegistrar && CamposValidados.All(c => ReglaDe(c) is null);
+
+    public IAsyncRelayCommand RegistrarPagoCommand => field ??= ComandoDeGuardado(RegistrarPagoAsync, PuedeRegistrarPago);
 
     private async Task RegistrarPagoAsync()
     {
         MensajeError = null;
 
-        if (!FormatoEsUy.TryParseDecimal(MontoTexto, out var monto, out var errorMonto))
-        {
-            MensajeError = MensajeNumeroInvalido.Armar("El monto del pago no es un número válido.", errorMonto);
+        foreach (var campo in CamposValidados)
+            MarcarTocado(campo);
+        if (CamposValidados.Any(c => ReglaDe(c) is not null))
             return;
-        }
-        if (FechaSeleccionada is null)
-        {
-            MensajeError = "La fecha del pago es obligatoria.";
-            return;
-        }
+
+        FormatoEsUy.TryParseDecimal(MontoTexto, out var monto, out _);
 
         try
         {
             await _service.RegistrarPagoAsync(new PagoGasto
             {
                 GastoId = _gastoId,
-                Fecha = DateTime.SpecifyKind(FechaSeleccionada.Value.Date, DateTimeKind.Utc),
+                Fecha = DateTime.SpecifyKind(FechaSeleccionada!.Value.Date, DateTimeKind.Utc),
                 Monto = monto,
                 Nota = string.IsNullOrWhiteSpace(Nota) ? null : Nota,
             });
 
             MontoTexto = string.Empty;
             Nota = null;
+            SoltarTocados();
             await RefrescarAsync();
         }
         catch (Exception ex)
@@ -195,11 +301,16 @@ public partial class PagosGastoViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
+    /// <summary>Texto del diálogo de confirmación de anular (lo usan también los datos fijos de la comparación).</summary>
+    public static string MensajeConfirmarAnular(PagoGasto pago) =>
+        $"¿Confirma anular el pago de {FormatoEsUy.Decimal(pago.Monto)} del {pago.Fecha:dd/MM/yyyy}?";
+
+    private bool PuedeAnularPago(PagoGasto? pago) => pago is { Activo: true } && PuedeRegistrar;
+
+    [RelayCommand(CanExecute = nameof(PuedeAnularPago))]
     private async Task AnularPagoAsync(PagoGasto pago)
     {
-        var confirmar = await _confirmacion.PreguntarAsync(
-            $"¿Confirma anular el pago de {FormatoEsUy.Decimal(pago.Monto)} del {pago.Fecha:dd/MM/yyyy}?");
+        var confirmar = await _confirmacion.PreguntarAsync(MensajeConfirmarAnular(pago));
         if (!confirmar) return;
 
         try

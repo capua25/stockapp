@@ -251,4 +251,56 @@ public class AdjuntosPanelViewModelTests
 
         _confirmacion.Verify(c => c.InformarAsync("No se puede adjuntar a un gasto anulado."), Times.Once);
     }
+
+    [Fact]
+    public async Task InicializarAsync_DosSeguidas_LaPrimeraQueTerminaTardeNoPisaLaSegunda()
+    {
+        var primera = new TaskCompletionSource<IReadOnlyList<AdjuntoDto>>();
+        _adjuntos.Setup(a => a.ListarPorPagoAsync(1)).Returns(primera.Task);
+        _adjuntos.Setup(a => a.ListarPorPagoAsync(2)).ReturnsAsync(new List<AdjuntoDto>
+        {
+            new(2, "b.pdf", "application/pdf", 10, null, 2, DateTime.UtcNow),
+        });
+
+        var tarea1 = _vm.InicializarAsync(null, 1);
+        await _vm.InicializarAsync(null, 2);
+        primera.SetResult(new List<AdjuntoDto> { new(1, "a.pdf", "application/pdf", 10, null, 1, DateTime.UtcNow) });
+        await tarea1;
+
+        Assert.Equal(new[] { "b.pdf" }, _vm.Items.Select(i => i.NombreArchivo));
+    }
+
+    [Fact]
+    public async Task SoloLectura_ConPermisoDeAdmin_PuedeModificarEsFalse_YAvisaElCambio()
+    {
+        _session.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
+        _adjuntos.Setup(a => a.ListarPorPagoAsync(8)).ReturnsAsync(new List<AdjuntoDto>());
+        await _vm.InicializarAsync(null, 8);
+        Assert.True(_vm.PuedeModificar);
+        var avisos = new List<string?>();
+        _vm.PropertyChanged += (_, e) => avisos.Add(e.PropertyName);
+
+        _vm.SoloLectura = true;
+
+        Assert.False(_vm.PuedeModificar);
+        Assert.Contains(nameof(AdjuntosPanelViewModel.PuedeModificar), avisos);
+
+        _vm.SoloLectura = false;
+        Assert.True(_vm.PuedeModificar);
+    }
+
+    [Fact]
+    public async Task AvisoSoloLectura_SeMuestraSoloConTexto()
+    {
+        Assert.Null(_vm.AvisoSoloLectura);
+        Assert.False(_vm.HayAvisoSoloLectura);
+        var avisos = new List<string?>();
+        _vm.PropertyChanged += (_, e) => avisos.Add(e.PropertyName);
+
+        _vm.AvisoSoloLectura = "Pago anulado";
+
+        Assert.True(_vm.HayAvisoSoloLectura);
+        Assert.Contains(nameof(AdjuntosPanelViewModel.HayAvisoSoloLectura), avisos);
+        await Task.CompletedTask;
+    }
 }
