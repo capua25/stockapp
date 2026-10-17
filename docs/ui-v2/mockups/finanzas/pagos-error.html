@@ -48,6 +48,8 @@
   .adjunto-fecha { flex: 0 0 80px; }
   .adjunto-tamano > span, .adjunto-fecha > span { width: calc-size(fit-content, round(up, size, 1px)); }
   .adjunto-ver { margin-left: 8px; }
+  /* Aviso del panel de un pago anulado: texto secundario, 8 abajo, entre el encabezado y la lista. */
+  .aviso-panel { margin-bottom: 8px; }
   /* Deshabilitado / solo lectura: el glifo de la fecha en el color de deshabilitado. */
   .v2-input--deshabilitado .v2-glifo-fecha { color: var(--v2-color-deshabilitado-texto); }
 </style>
@@ -119,7 +121,7 @@
             <div class="v2-titulo-seccion titulo-card">Registrar pago</div>
             <div class="registrar">
               <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Fecha</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input"><span>17/10/2026</span><svg class="v2-icono v2-glifo-fecha" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19 3H18V1H16V3H8V1H6V3H5C3.89 3 3 3.9 3 5V19C3 20.11 3.9 21 5 21H19C20.11 21 21 20.11 21 19V5C21 3.9 20.11 3 19 3M19 19H5V9H19V19M19 7H5V5H19V7Z"/></svg></div></div></div>
-              <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Monto</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input v2-input--error monto"><span>1.5</span></div><div class="v2-error-campo">El monto del pago no es un número válido. Usá coma para los decimales: 1,5</div></div></div>
+              <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Monto</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input v2-input--error monto"><span>1.5</span></div><div class="v2-error-campo">Usá coma para los decimales: 1,5</div></div></div>
               <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Nota (opcional)</span></div><div><div class="v2-input"><span class="v2-input-placeholder">Ej.: recibo 123</span></div></div></div>
               <span class="v2-boton v2-boton--primario">Registrar pago</span>
             </div>

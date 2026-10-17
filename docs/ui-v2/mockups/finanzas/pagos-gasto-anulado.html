@@ -48,12 +48,14 @@
   .adjunto-fecha { flex: 0 0 80px; }
   .adjunto-tamano > span, .adjunto-fecha > span { width: calc-size(fit-content, round(up, size, 1px)); }
   .adjunto-ver { margin-left: 8px; }
+  /* Aviso del panel de un pago anulado: texto secundario, 8 abajo, entre el encabezado y la lista. */
+  .aviso-panel { margin-bottom: 8px; }
   /* Deshabilitado / solo lectura: el glifo de la fecha en el color de deshabilitado. */
   .v2-input--deshabilitado .v2-glifo-fecha { color: var(--v2-color-deshabilitado-texto); }
 </style>
 </head>
 <body>
-<!-- Datos: DatosGastos.Anulado (Id 8, Ancap Distribuidora, B-0012901, $ 92.300,00, anulado) con su pago automático anulado (Id 80, 10/10/2026, $ 92.300,00, "Pago contado (automático)"). Resumen como lo calcula el VM: Pagado $ 0,00, Saldo $ 92.300,00 (MontoTotal - TotalPagado), Estado Anulada. -->
+<!-- Datos: DatosGastos.Anulado (Id 8, Ancap Distribuidora, B-0012901, $ 92.300,00, anulado) con su pago automático anulado (Id 80, 10/10/2026, $ 92.300,00, "Pago contado (automático)"). Resumen: Pagado $ 0,00, Saldo "—" (un gasto anulado no tiene saldo, GATE 1), Estado Anulada. -->
 <div class="v2-ventana">
   <aside class="v2-sidebar">
     <div class="v2-marca">Gestión Municipal</div>
@@ -113,7 +115,7 @@
           <div class="v2-tarjeta"><div class="resumen">
             <div><div class="v2-texto-secundario">Monto total</div><div class="v2-titulo-seccion resumen-valor">$ 92.300,00</div></div>
             <div><div class="v2-texto-secundario">Pagado</div><div class="v2-titulo-seccion resumen-valor">$ 0,00</div></div>
-            <div><div class="v2-texto-secundario">Saldo</div><div class="v2-titulo-seccion resumen-valor">$ 92.300,00</div></div>
+            <div><div class="v2-texto-secundario">Saldo</div><div class="v2-titulo-seccion resumen-valor">—</div></div>
             <div><div class="v2-texto-secundario">Estado</div><div><span class="v2-insignia">Anulada</span></div></div>
           </div></div>
           <div class="v2-tarjeta">
