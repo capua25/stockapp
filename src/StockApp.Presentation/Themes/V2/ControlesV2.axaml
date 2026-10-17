@@ -144,9 +144,14 @@
          la herencia sin cambiar el alineado en el resto de la app. Van sin .ui2 porque el popup no cuelga de .ui2.
          Por la misma razón el -calt (decisión del usuario 2026-10-07: calt de Inter apagado en toda la UI v2)
          alcanza a TODO ToolTip y FlyoutPresenter de la app, también los de las vistas viejas. Es inocuo. -->
+    <!-- UseLayoutRounding True en el ToolTip: la propiedad es heredable y el popup la hereda del botón; los
+         formularios (Gasto, Ingreso, Producto, Movimiento) la apagan en su columna, y sin redondeo el popup mide
+         fraccionario (316,74 x 28,52), la ventana nativa lo trunca a 316x28 y el texto de 298,74 px baja de línea
+         y pierde la última palabra (GATE 2 de la 4d: faltaba "continuar."). Con True el tamaño es entero. -->
     <Style Selector="ToolTip">
         <Setter Property="TextBlock.TextAlignment" Value="Start" />
         <Setter Property="TextElement.FontFeatures" Value="-calt" />
+        <Setter Property="UseLayoutRounding" Value="True" />
     </Style>
     <Style Selector="FlyoutPresenter">
         <Setter Property="TextBlock.TextAlignment" Value="Start" />
