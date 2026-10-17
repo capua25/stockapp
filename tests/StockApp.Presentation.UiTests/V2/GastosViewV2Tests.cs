@@ -273,6 +273,82 @@ public class GastosViewV2Tests
         Assert.False(Visible(Control<DataGrid>(m, "Grilla")));
     }
 
+    /// <summary>Espera (con tope) a que la recarga programada por el debounce haya pedido el listado y quede colgada del
+    /// Pendiente del fake: es el momento en que Cargando es true con las filas previas todavía a la vista.</summary>
+    private static async Task EsperarCargando(Montaje m)
+    {
+        for (var i = 0; i < 200 && !m.Vm.Cargando; i++)
+        {
+            await Task.Delay(5);
+            Dispatcher.UIThread.RunJobs();
+        }
+        Assert.True(m.Vm.Cargando);
+    }
+
+    [AvaloniaFact]
+    public async Task Recargando_ConFilasYaCargadas_ElIndicadorDeCargaQuedaOculto()
+    {
+        var servicio = new GastosFake { Lista = [Pendiente(), Pagada()] };
+        var m = Montar(servicio);
+        servicio.Pendiente = new TaskCompletionSource<IReadOnlyList<Gasto>>();
+
+        Control<ComboBox>(m, "ComboProveedor").SelectedItem = Barraca;
+        await EsperarCargando(m);
+
+        Assert.True(m.Vm.Cargando);
+        Assert.Equal(2, m.Vm.Filas.Count);
+        Assert.False(Visible(Control<EstadoCargando>(m, "IndicadorCarga")));
+        Assert.True(Visible(Control<DataGrid>(m, "Grilla")));
+
+        servicio.Pendiente.SetResult([Pendiente(), Pagada()]);
+        await m.Vm._tareaDebounce;
+    }
+
+    [AvaloniaFact]
+    public async Task SinConexion_ConUnaConsultaConFiltroCargada_NoSeMuestraSinResultados()
+    {
+        var servicio = new GastosFake { Lista = [Pendiente(), Pagada()] };
+        var m = Montar(servicio);
+        Control<ComboBox>(m, "ComboProveedor").SelectedItem = Barraca;
+        await m.Vm._tareaDebounce;
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(m.Vm.HayFiltrosAplicados);
+
+        servicio.Falla = new ServidorNoDisponibleException();
+        Control<ComboBox>(m, "ComboFuente").SelectedItem = Figm;
+        await m.Vm._tareaDebounce;
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(m.Vm.SinConexion);
+        Assert.False(m.Vm.Cargando);
+        Assert.Equal(0, m.Vm.CantidadVisible);
+        Assert.True(m.Vm.HayFiltrosAplicados);
+        Assert.True(Visible(Control<EstadoVacio>(m, "EstadoSinConexion")));
+        Assert.False(Visible(Control<EstadoVacio>(m, "EstadoSinResultados")));
+    }
+
+    [AvaloniaFact]
+    public async Task Recargando_ConUnFiltroAplicadoYNingunaFilaVisible_NoSeMuestraSinResultados()
+    {
+        var servicio = new GastosFake { Lista = [Pendiente()] };
+        var m = Montar(servicio);
+        Control<ComboBox>(m, "ComboEstado").SelectedItem = "Pagada";
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(m.Vm.HayFiltrosAplicados);
+        Assert.Equal(0, m.Vm.CantidadVisible);
+        Assert.True(Visible(Control<EstadoVacio>(m, "EstadoSinResultados")));
+
+        servicio.Pendiente = new TaskCompletionSource<IReadOnlyList<Gasto>>();
+        Control<ComboBox>(m, "ComboProveedor").SelectedItem = Barraca;
+        await EsperarCargando(m);
+
+        Assert.True(m.Vm.Cargando);
+        Assert.False(Visible(Control<EstadoVacio>(m, "EstadoSinResultados")));
+
+        servicio.Pendiente.SetResult([Pendiente()]);
+        await m.Vm._tareaDebounce;
+    }
+
     /// <summary>El VM vacía las filas al perder la conexión, así que el término SinConexion del pie queda tapado por el
     /// conteo: por el camino real no se llega a SinConexion con filas. Se fuerza el estado (setter privado de la base)
     /// para custodiar el binding de la View por sí solo.</summary>
