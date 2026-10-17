@@ -87,3 +87,5 @@
 .alerta-error { position: absolute; left: 28px; bottom: 81px; width: var(--v2-ancho-formulario-max); }
 /* Fila seleccionada (DataGridV2.axaml, DataGridRow:selected): fondo acento suave; el texto conserva su token. */
 .fila-seleccionada { background: var(--v2-color-acento-suave); }
+/* Título de sección en los detalles de documento (el mismo que Adjuntos): 8 abajo cuando no lleva botón. */
+.titulo-sec { margin-bottom: 8px; }
