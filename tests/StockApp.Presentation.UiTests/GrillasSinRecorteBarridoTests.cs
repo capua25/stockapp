@@ -22,10 +22,12 @@ using StockApp.Presentation.UiTests.V2;
 using StockApp.Presentation.ViewModels.Catalogo;
 using StockApp.Presentation.ViewModels.Finanzas;
 using StockApp.Presentation.ViewModels.Movimientos;
+using StockApp.Presentation.ViewModels.Tareas;
 using StockApp.Presentation.Views.Catalogo;
 using StockApp.Presentation.Views.Finanzas;
 using StockApp.Presentation.Views.Movimientos;
 using StockApp.Presentation.Views.Reportes;
+using StockApp.Presentation.Views.Tareas;
 using Xunit;
 
 namespace StockApp.Presentation.UiTests;
@@ -137,6 +139,14 @@ public class GrillasSinRecorteBarridoTests
                 98765432.10m, 12345678.90m, -98765432.10m))),
         new("Historial de importaciones", () => new HistorialImportacionesView(), _ => Muchos<object>(i =>
             new ImportacionHistorialDto(Guid.NewGuid(), new DateTime(2026, 9, 30, 15, 0, 0, DateTimeKind.Utc), 2026, "Operador de Depósito Central", i % 2 == 0))),
+        new("Tareas", () => new TareaListView(), _ => Muchos<object>(i => new TareaFila(new Tarea
+            {
+                Id = i, Titulo = "Reparar el bache de la calle Zorrilla frente a la escuela número doce", Estado = i % 2 == 0 ? EstadoTarea.Pendiente : EstadoTarea.EnCurso,
+                Prioridad = PrioridadTarea.Media, FechaLimite = new DateTime(2026, 9, 30, 0, 0, 0, DateTimeKind.Utc),
+                TomadaPor = new Usuario { Id = 2, NombreUsuario = "operador.deposito.central" },
+                Zona = new Zona { Id = 1, Nombre = "Barrio Norte" }, DimensionTematica = new DimensionTematica { Id = 1, Nombre = "Infraestructura" },
+                OrganismoResponsable = new OrganismoResponsable { Id = 1, Nombre = "Dirección de Obras" },
+            }, RolUsuario.Admin))),
     };
 
     // ── Montaje ────────────────────────────────────────────────────────────────────────────────

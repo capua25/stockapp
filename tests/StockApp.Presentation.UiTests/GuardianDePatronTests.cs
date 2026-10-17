@@ -48,8 +48,6 @@ public class GuardianDePatronTests
     [InlineData(typeof(ImportacionView), "Importar planillas", "FINANZAS")]
     [InlineData(typeof(DocumentoListView), "Documentos administrativos", "DOCUMENTOS")]
     [InlineData(typeof(DocumentoFormView), "Nuevo documento", "DOCUMENTOS")]
-    [InlineData(typeof(TareaListView), "Tareas", "TAREAS")]
-    [InlineData(typeof(TareaFormView), "Nueva tarea", "TAREAS")]
     public void Vista_TieneHeaderVistaConElTituloEsperado(Type tipoVista, string? titulo, string? eyebrow)
     {
         var vista = PatronHelpers.Montar(tipoVista);
@@ -69,8 +67,6 @@ public class GuardianDePatronTests
         typeof(ImportacionView),
         typeof(DocumentoListView),
         typeof(DocumentoFormView),
-        typeof(TareaListView),
-        typeof(TareaFormView),
     };
 
     /// <summary>
@@ -86,7 +82,6 @@ public class GuardianDePatronTests
         typeof(HistorialImportacionesView),
         typeof(NuevaImportacionView),
         typeof(AdjuntosDocumentoPanelView),
-        typeof(ClasificacionTareaPanelView),
         typeof(AccesoLimitadoView),
     };
 
@@ -180,6 +175,9 @@ public class GuardianDePatronTests
         typeof(CatalogoListadoView),
         typeof(UsuariosAdminView),
         typeof(MantenimientoView),
+        typeof(TareaListView),
+        typeof(TareaFormView),
+        typeof(ClasificacionTareaPanelView),
     };
 
     /// <summary>
@@ -446,6 +444,7 @@ public class GuardianDePatronTests
         "StockApp.Presentation/Views/Dialogs/RecalcularStockDialog.axaml",
         "StockApp.Presentation/Views/Dialogs/AltaProductoRapidaDialog.axaml",
         "StockApp.Presentation/Views/Dialogs/ConfirmacionPreciosDialog.axaml",
+        "StockApp.Presentation/Views/Tareas/ReclasificarTareaDialog.axaml",
     };
 
     [Theory]

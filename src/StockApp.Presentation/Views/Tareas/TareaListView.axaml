@@ -2,156 +2,193 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Tareas"
              xmlns:conv="using:StockApp.Presentation.Converters"
-             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
+             xmlns:b="using:StockApp.Presentation.Behaviors"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
              x:Class="StockApp.Presentation.Views.Tareas.TareaListView"
-             x:DataType="vm:TareaListViewModel">
+             x:DataType="vm:TareaListViewModel"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
 
-    <DockPanel Margin="{DynamicResource MargenVista}">
+    <!-- UI v2 (listado §5.1). Espejo: docs/ui-v2/mockups/gestion/tareas*.html. Una sola grilla filtrada por Estado en el
+         cliente ("Abiertas" por defecto). Ver, Tomar, Soltar, Terminar y Cancelar tarea actúan sobre la fila seleccionada y
+         se muestran según su estado y el rol; doble click en una fila equivale a Ver. Cargando, sin servidor y los dos
+         vacíos dentro de la card con el filtro a mano; tras un 403, Sin permiso en lugar de la card. La fila cancelada va
+         en texto terciario por token, nunca con opacidad. -->
+    <DockPanel Margin="28,24">
 
-        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="TAREAS" Titulo="Tareas">
-            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio3}">
-                <CheckBox Content="Mostrar canceladas" IsChecked="{Binding MostrarCanceladas}" />
-                <Button Classes="primary" Content="Nueva tarea" Command="{Binding NuevaCommand}" />
+        <v2:EncabezadoPagina x:Name="Encabezado" DockPanel.Dock="Top" Titulo="Tareas"
+                             Subtitulo="Trabajos de la intendencia: quién los toma y cuándo vencen.">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button x:Name="BotonVer" Classes="secundario" Content="Ver" Command="{Binding VerDetalleCommand}"
+                        CommandParameter="{Binding FilaSeleccionada}"
+                        IsEnabled="{Binding FilaSeleccionada, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <Button x:Name="BotonTomar" Classes="secundario" Content="Tomar" Command="{Binding TomarCommand}"
+                        CommandParameter="{Binding FilaSeleccionada}"
+                        IsVisible="{Binding FilaSeleccionada.PuedeTomar, FallbackValue=False}" />
+                <Button x:Name="BotonSoltar" Classes="secundario" Content="Soltar" Command="{Binding SoltarCommand}"
+                        CommandParameter="{Binding FilaSeleccionada}"
+                        IsVisible="{Binding FilaSeleccionada.PuedeSoltar, FallbackValue=False}" />
+                <Button x:Name="BotonTerminar" Classes="secundario" Content="Terminar" Command="{Binding TerminarCommand}"
+                        CommandParameter="{Binding FilaSeleccionada}"
+                        IsVisible="{Binding FilaSeleccionada.PuedeTerminar, FallbackValue=False}" />
+                <Button x:Name="BotonCancelarTarea" Classes="peligro" Content="Cancelar tarea" Command="{Binding CancelarCommand}"
+                        CommandParameter="{Binding FilaSeleccionada}"
+                        IsVisible="{Binding FilaSeleccionada.PuedeCancelar, FallbackValue=False}" />
+                <Button x:Name="BotonNueva" Classes="primario" Content="Nueva tarea" Command="{Binding NuevaCommand}" />
             </StackPanel>
-        </c:HeaderVista>
+        </v2:EncabezadoPagina>
 
-        <ScrollViewer>
-            <StackPanel Spacing="{DynamicResource Espacio5}">
+        <v2:EstadoVacio x:Name="EstadoSinPermiso" DockPanel.Dock="Top" UseLayoutRounding="False"
+                        Titulo="Sin permiso" Mensaje="{Binding MensajeSinPermiso}" EsError="True"
+                        IsVisible="{Binding SinPermiso}" />
 
-                <StackPanel Spacing="{DynamicResource Espacio2}">
-                    <TextBlock Text="Pendientes" Classes="seccion" />
-                    <ItemsControl ItemsSource="{Binding Pendientes}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="vm:TareaFila">
-                                <Border Classes="card" Margin="0,0,0,8">
-                                    <Grid ColumnDefinitions="*,Auto,Auto,Auto">
-                                        <StackPanel Grid.Column="0" Spacing="2">
-                                            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio1}">
-                                                <TextBlock Text="{Binding Titulo}" FontWeight="SemiBold"
-                                                           Foreground="{Binding DiasParaVencer, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}" />
-                                                <c:BadgeEstado Texto="Vencida" Tono="Peligro"
-                                                               IsVisible="{Binding DiasParaVencer, Converter={x:Static conv:EsNegativoConverter.Instance}}" />
-                                            </StackPanel>
-                                            <TextBlock Text="{Binding PrioridadTexto}" Classes="caption" />
-                                            <TextBlock Text="{Binding FechaLimite, StringFormat='Vence: {0:dd/MM/yyyy}'}"
-                                                       Classes="caption"
-                                                       IsVisible="{Binding FechaLimite, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                                            <TextBlock Text="{Binding EtiquetasClasificacion}"
-                                                       Classes="caption" Foreground="{DynamicResource TextoTerciarioBrush}"
-                                                       IsVisible="{Binding EtiquetasClasificacion, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                                        </StackPanel>
-                                        <Button Grid.Column="1" Classes="ghost" Content="Ver"
-                                                Command="{Binding $parent[UserControl].((vm:TareaListViewModel)DataContext).VerDetalleCommand}"
-                                                CommandParameter="{Binding}" />
-                                        <Button Grid.Column="2" Classes="secondary" Content="Tomar"
-                                                IsVisible="{Binding PuedeTomar}"
-                                                Margin="8,0,0,0"
-                                                Command="{Binding $parent[UserControl].((vm:TareaListViewModel)DataContext).TomarCommand}"
-                                                CommandParameter="{Binding}" />
-                                        <Button Grid.Column="3" Classes="danger" Content="Cancelar"
-                                                IsVisible="{Binding PuedeCancelar}"
-                                                Margin="8,0,0,0"
-                                                Command="{Binding $parent[UserControl].((vm:TareaListViewModel)DataContext).CancelarCommand}"
-                                                CommandParameter="{Binding}" />
+        <v2:TarjetaContenido x:Name="Tarjeta" IsVisible="{Binding !SinPermiso}">
+            <DockPanel>
+                <v2:BarraFiltros x:Name="Filtros" DockPanel.Dock="Top" MostrarBusqueda="False">
+                    <v2:CampoFormulario x:Name="CampoEstado" Etiqueta="Estado">
+                        <ComboBox x:Name="ComboEstado" Width="160"
+                                  ItemsSource="{Binding FiltrosEstado}" SelectedItem="{Binding FiltroEstado}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:OpcionEstadoTarea"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </v2:CampoFormulario>
+                </v2:BarraFiltros>
+
+                <TextBlock x:Name="PieConteo" DockPanel.Dock="Bottom" Classes="pie-conteo" Margin="0,12,0,0"
+                           Text="{Binding CantidadVisible, Converter={x:Static conv:ConteoConverter.Instance}, ConverterParameter='tarea|tareas'}">
+                    <TextBlock.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="CantidadVisible" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                        </MultiBinding>
+                    </TextBlock.IsVisible>
+                </TextBlock>
+
+                <v2:EstadoCargando x:Name="IndicadorCarga" DockPanel.Dock="Top" Texto="Cargando tareas…">
+                    <v2:EstadoCargando.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Cargando" />
+                            <Binding Path="Tareas.Count" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                        </MultiBinding>
+                    </v2:EstadoCargando.IsVisible>
+                </v2:EstadoCargando>
+
+                <v2:EstadoVacio x:Name="EstadoSinConexion" DockPanel.Dock="Top" UseLayoutRounding="False"
+                                Titulo="No se pudo conectar con el servidor"
+                                Mensaje="Verificá que el servidor esté encendido y accesible en la red, y volvé a intentar."
+                                EsError="True" IsVisible="{Binding SinConexion}">
+                    <Button x:Name="BotonReintentar" Classes="secundario" Content="Reintentar" Command="{Binding ReintentarCargaCommand}" />
+                </v2:EstadoVacio>
+
+                <!-- Sin ninguna tarea: el botón es secundario porque el primario ya está en el encabezado. -->
+                <v2:EstadoVacio x:Name="EstadoSinTareas" DockPanel.Dock="Top" UseLayoutRounding="False"
+                                Titulo="Todavía no hay tareas"
+                                Mensaje="Cuando se cree una tarea, va a aparecer acá.">
+                    <v2:EstadoVacio.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Cargando" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinPermiso" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="Tareas.Count" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                        </MultiBinding>
+                    </v2:EstadoVacio.IsVisible>
+                    <Button x:Name="BotonNuevaVacio" Classes="secundario" Content="Nueva tarea" Command="{Binding NuevaCommand}" />
+                </v2:EstadoVacio>
+
+                <!-- Hay tareas pero el filtro de Estado no deja ver ninguna. -->
+                <v2:EstadoVacio x:Name="EstadoSinResultados" DockPanel.Dock="Top" UseLayoutRounding="False"
+                                Titulo="No hay tareas en este estado"
+                                Mensaje="Probá con otro estado.">
+                    <v2:EstadoVacio.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Cargando" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinPermiso" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="Tareas.Count" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            <Binding Path="CantidadVisible" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                        </MultiBinding>
+                    </v2:EstadoVacio.IsVisible>
+                </v2:EstadoVacio>
+
+                <!-- Cada TextBlock de celda lleva Classes.inactivo con la tarea cancelada (texto terciario por token, nunca
+                     opacidad). Las de texto libre miden su contenido y, si ceden, se cortan con tooltip; TÍTULO es la
+                     proporcional. ESTADO y VENCE son de ancho fijo medido (conjunto cerrado y celda compuesta). La fecha
+                     es de calendario: FechaCortaConverter no la pasa a hora local. -->
+                <DataGrid x:Name="Grilla" ItemsSource="{Binding TareasView}" SelectedItem="{Binding FilaSeleccionada}"
+                          DoubleTapped="OnFilaDobleClick" IsReadOnly="True" CanUserSortColumns="True" CanUserResizeColumns="True"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                    <DataGrid.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="CantidadVisible" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                        </MultiBinding>
+                    </DataGrid.IsVisible>
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="TÍTULO" Width="*" MinWidth="200" SortMemberPath="Titulo">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:TareaFila">
+                                    <TextBlock Text="{Binding Titulo}" Classes.inactivo="{Binding Tarea.Estado, Converter={x:Static conv:EstadoTareaConverter.Inactivo}}"
+                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Titulo}"
+                                               b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="ESTADO" Width="93" SortMemberPath="Tarea.Estado">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:TareaFila">
+                                    <v2:Insignia Texto="{Binding Tarea.Estado, Converter={x:Static conv:EstadoTareaConverter.Texto}}"
+                                                 Variante="{Binding Tarea.Estado, Converter={x:Static conv:EstadoTareaConverter.Variante}}"
+                                                 HorizontalAlignment="Left" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="PRIORIDAD" Width="Auto" SortMemberPath="PrioridadTexto" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:TareaFila">
+                                    <TextBlock Text="{Binding PrioridadTexto}" Classes.inactivo="{Binding Tarea.Estado, Converter={x:Static conv:EstadoTareaConverter.Inactivo}}"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="VENCE" Width="167" SortMemberPath="FechaLimite">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:TareaFila">
+                                    <Grid ColumnDefinitions="Auto,Auto" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding FechaLimite, Converter={x:Static conv:FechaCortaConverter.Instance}}"
+                                                   Classes.inactivo="{Binding Tarea.Estado, Converter={x:Static conv:EstadoTareaConverter.Inactivo}}"
+                                                   VerticalAlignment="Center" />
+                                        <v2:Insignia Grid.Column="1" Margin="8,0,0,0" Texto="Vencida" Variante="Peligro"
+                                                     VerticalAlignment="Center" IsVisible="{Binding EsVencida}" />
                                     </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
-
-                <StackPanel Spacing="{DynamicResource Espacio2}">
-                    <TextBlock Text="En curso" Classes="seccion" />
-                    <ItemsControl ItemsSource="{Binding EnCurso}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="vm:TareaFila">
-                                <Border Classes="card" Margin="0,0,0,8">
-                                    <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
-                                        <StackPanel Grid.Column="0" Spacing="2">
-                                            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio1}">
-                                                <TextBlock Text="{Binding Titulo}" FontWeight="SemiBold"
-                                                           Foreground="{Binding DiasParaVencer, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}" />
-                                                <c:BadgeEstado Texto="Vencida" Tono="Peligro"
-                                                               IsVisible="{Binding DiasParaVencer, Converter={x:Static conv:EsNegativoConverter.Instance}}" />
-                                            </StackPanel>
-                                            <TextBlock Text="{Binding PrioridadTexto}" Classes="caption" />
-                                            <TextBlock Text="{Binding FechaLimite, StringFormat='Vence: {0:dd/MM/yyyy}'}"
-                                                       Classes="caption"
-                                                       IsVisible="{Binding FechaLimite, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                                            <TextBlock Text="{Binding TomadaPorNombre, StringFormat='Tomada por {0}'}"
-                                                       Classes="caption" />
-                                            <TextBlock Text="{Binding EtiquetasClasificacion}"
-                                                       Classes="caption" Foreground="{DynamicResource TextoTerciarioBrush}"
-                                                       IsVisible="{Binding EtiquetasClasificacion, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                                        </StackPanel>
-                                        <Button Grid.Column="1" Classes="ghost" Content="Ver"
-                                                Command="{Binding $parent[UserControl].((vm:TareaListViewModel)DataContext).VerDetalleCommand}"
-                                                CommandParameter="{Binding}" />
-                                        <Button Grid.Column="2" Classes="secondary" Content="Soltar"
-                                                IsVisible="{Binding PuedeSoltar}"
-                                                Margin="8,0,0,0"
-                                                Command="{Binding $parent[UserControl].((vm:TareaListViewModel)DataContext).SoltarCommand}"
-                                                CommandParameter="{Binding}" />
-                                        <Button Grid.Column="3" Classes="secondary" Content="Terminar"
-                                                IsVisible="{Binding PuedeTerminar}"
-                                                Margin="8,0,0,0"
-                                                Command="{Binding $parent[UserControl].((vm:TareaListViewModel)DataContext).TerminarCommand}"
-                                                CommandParameter="{Binding}" />
-                                        <Button Grid.Column="4" Classes="danger" Content="Cancelar"
-                                                IsVisible="{Binding PuedeCancelar}"
-                                                Margin="8,0,0,0"
-                                                Command="{Binding $parent[UserControl].((vm:TareaListViewModel)DataContext).CancelarCommand}"
-                                                CommandParameter="{Binding}" />
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
-
-                <StackPanel Spacing="{DynamicResource Espacio2}">
-                    <TextBlock Text="Terminadas" Classes="seccion" />
-                    <ItemsControl ItemsSource="{Binding Terminadas}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="vm:TareaFila">
-                                <Border Classes="card" Margin="0,0,0,8">
-                                    <Grid ColumnDefinitions="*,Auto">
-                                        <TextBlock Grid.Column="0" Text="{Binding Titulo}" Foreground="{DynamicResource TextoSecundarioBrush}" />
-                                        <Button Grid.Column="1" Classes="ghost" Content="Ver"
-                                                Command="{Binding $parent[UserControl].((vm:TareaListViewModel)DataContext).VerDetalleCommand}"
-                                                CommandParameter="{Binding}" />
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
-
-                <StackPanel Spacing="{DynamicResource Espacio2}" IsVisible="{Binding MostrarCanceladas}">
-                    <TextBlock Text="Canceladas" Classes="seccion" />
-                    <ItemsControl ItemsSource="{Binding Canceladas}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="vm:TareaFila">
-                                <Border Classes="card" Margin="0,0,0,8">
-                                    <Grid ColumnDefinitions="*,Auto">
-                                        <TextBlock Grid.Column="0" Text="{Binding Titulo}" Foreground="{DynamicResource TextoTerciarioBrush}"
-                                                   TextDecorations="Strikethrough" />
-                                        <Button Grid.Column="1" Classes="ghost" Content="Ver"
-                                                Command="{Binding $parent[UserControl].((vm:TareaListViewModel)DataContext).VerDetalleCommand}"
-                                                CommandParameter="{Binding}" />
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
-
-            </StackPanel>
-        </ScrollViewer>
-
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="TOMADA POR" Width="Auto" SortMemberPath="TomadaPorNombre" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:TareaFila">
+                                    <TextBlock Text="{Binding TomadaPorNombre}" Classes.inactivo="{Binding Tarea.Estado, Converter={x:Static conv:EstadoTareaConverter.Inactivo}}"
+                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding TomadaPorNombre}"
+                                               b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="CLASIFICACIÓN" Width="Auto" SortMemberPath="EtiquetasClasificacion" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:TareaFila">
+                                    <TextBlock Text="{Binding EtiquetasClasificacion}" Classes.inactivo="{Binding Tarea.Estado, Converter={x:Static conv:EstadoTareaConverter.Inactivo}}"
+                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding EtiquetasClasificacion}"
+                                               b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </DockPanel>
+        </v2:TarjetaContenido>
     </DockPanel>
 
 </UserControl>

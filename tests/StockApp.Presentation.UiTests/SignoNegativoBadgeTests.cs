@@ -110,7 +110,7 @@ public class SignoNegativoBadgeTests
         Assert.Single(badges, b => b.IsVisible);
     }
 
-    // ---- Tareas: TareaListView, sitio DiasParaVencer (:33, sección Pendientes) ----
+    // ---- Tareas: TareaListView, sitio DiasParaVencer (columna VENCE) ----
 
     [AvaloniaFact]
     public void Montar_TareaListViewConTareaVencida_MuestraBadgeVencidaSoloEnLaFilaVencida()
@@ -118,23 +118,19 @@ public class SignoNegativoBadgeTests
         var vencida = TareaDe(1, "Con vencimiento", EstadoTarea.Pendiente, DateTime.UtcNow.Date.AddDays(-5));
         var alDia = TareaDe(2, "Al dia", EstadoTarea.Pendiente, DateTime.UtcNow.Date.AddDays(5));
 
-        var vista = new TareaListView();
-        var window = MontarEnVentana(vista);
-
-        var itemsControl = vista.GetVisualDescendants().OfType<ItemsControl>().First();
-        itemsControl.ItemsSource = new[]
-        {
-            new TareaFila(vencida, RolUsuario.Admin),
-            new TareaFila(alDia, RolUsuario.Admin),
-        };
+        // TareaListView es v2: la palabra la pone una Insignia peligro en la columna VENCE (las demás vistas siguen con
+        // BadgeEstado). La vista se monta con su ViewModel real: la grilla solo realiza las filas de lo que carga.
+        var vm = new TareaListViewModel(new TareaServiceFake([vencida, alDia]), new SesionFake(RolUsuario.Admin),
+            new NavigationRecorderFake(), new ConfirmacionServiceFake());
+        var vista = new TareaListView { DataContext = vm };
+        var window = MontarEnVentana(vista, height: 900);
         Dispatcher.UIThread.RunJobs();
 
-        var badges = BadgesConTexto(window, "Vencida");
+        var insignias = window.GetVisualDescendants().OfType<StockApp.Presentation.Controls.V2.Insignia>()
+            .Where(i => i.Texto == "Vencida" && ArbolVisual.EsVisibleEnArbol(i)).ToList();
 
-        Assert.Single(badges, b => b.IsVisible);
-
-        // Mismo criterio que TareaListViewTests: el color sigue viniendo del Foreground del
-        // titulo, no del badge -- esta prueba solo custodia que la PALABRA se agregó.
+        var visible = Assert.Single(insignias);
+        Assert.Equal(StockApp.Presentation.Controls.V2.VarianteInsignia.Peligro, visible.Variante);
     }
 
     private static Tarea TareaDe(int id, string titulo, EstadoTarea estado, DateTime? fechaLimite) => new()

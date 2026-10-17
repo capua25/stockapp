@@ -210,6 +210,9 @@ public class TareaFormViewTests
         Dispatcher.UIThread.RunJobs();
 
         var botonAgregar = BotonVisiblePorTexto(window, "Agregar nota");
+        // El detalle v2 es más alto que la ventana: el botón queda bajo el pliegue del scroll y el click real lo tiene que ver.
+        botonAgregar.BringIntoView();
+        Dispatcher.UIThread.RunJobs();
         Assert.True(botonAgregar.IsEffectivelyEnabled); // ver nota sobre IsEnabled vs IsEffectivelyEnabled mas arriba en este archivo
         Clickear(window, botonAgregar);
         Dispatcher.UIThread.RunJobs();

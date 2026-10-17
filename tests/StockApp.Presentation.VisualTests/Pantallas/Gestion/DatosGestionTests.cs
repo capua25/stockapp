@@ -133,7 +133,7 @@ public class DatosGestionTests
         var sinPermiso = Contenido<TareaListViewModel>(DatosTareas.SinPermiso());
         await sinPermiso.CargarAsync();
         Assert.True(sinPermiso.SinPermiso);
-        Assert.Equal(TareaListViewModel.MensajeSinPermisoTareas, ((StockApp.Presentation.ViewModels.ViewModelBase)sinPermiso).MensajeSinPermiso);
+        Assert.Equal(TareaListViewModel.MensajeSinPermisoTareas, sinPermiso.MensajeSinPermiso);
 
         var sinTareas = Contenido<TareaListViewModel>(DatosTareas.SinTareas());
         await sinTareas.CargarAsync();
@@ -194,7 +194,7 @@ public class DatosGestionTests
         var sinPermiso = Contenido<DocumentoListViewModel>(DatosDocumentos.SinPermiso());
         await sinPermiso.CargarAsync();
         Assert.True(sinPermiso.SinPermiso);
-        Assert.Equal(DocumentoListViewModel.MensajeSinPermisoDocumentos, ((StockApp.Presentation.ViewModels.ViewModelBase)sinPermiso).MensajeSinPermiso);
+        Assert.Equal(DocumentoListViewModel.MensajeSinPermisoDocumentos, sinPermiso.MensajeSinPermiso);
 
         var sinDocumentos = Contenido<DocumentoListViewModel>(DatosDocumentos.SinDocumentos());
         await sinDocumentos.CargarAsync();

@@ -70,35 +70,51 @@ public class TareaListViewTests
         Dispatcher.UIThread.RunJobs();
     }
 
+    /// <summary>Las acciones de fila viven en el encabezado y actúan sobre la fila seleccionada (convención de la v2).</summary>
+    private static void Seleccionar(TareaListViewModel vm, int id)
+    {
+        vm.FilaSeleccionada = vm.Tareas.Single(f => f.Id == id);
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    private static void FiltrarPor(TareaListViewModel vm, string nombre)
+    {
+        vm.FiltroEstado = vm.FiltrosEstado.Single(o => o.Nombre == nombre);
+        Dispatcher.UIThread.RunJobs();
+    }
+
     private static Button BotonPorTexto(Window window, string texto)
         => window.GetVisualDescendants().OfType<Button>().First(b => Equals(b.Content, texto) && b.IsVisible);
 
     [AvaloniaFact]
-    public void Montar_ConTareasEnLosCuatroEstados_LasAgrupaPorSeccionVisualmente()
+    public void Montar_ConTareasEnLosCuatroEstados_ElFiltroDeEstadoMuestraCadaGrupo()
     {
         var tareas = new List<Tarea>
         {
             TareaDe(1, "Pendiente 1", EstadoTarea.Pendiente),
             TareaDe(2, "En curso 1", EstadoTarea.EnCurso),
             TareaDe(3, "Terminada 1", EstadoTarea.Terminada),
+            TareaDe(4, "Cancelada 1", EstadoTarea.Cancelada),
         };
         var (window, vm, _) = Montar(tareas);
 
         Assert.Single(vm.Pendientes);
         Assert.Single(vm.EnCurso);
         Assert.Single(vm.Terminadas);
+        Assert.Single(vm.Canceladas);
 
-        var textos = window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
-        Assert.Contains("Pendiente 1", textos);
-        Assert.Contains("En curso 1", textos);
-        Assert.Contains("Terminada 1", textos);
+        // Por defecto el filtro es "Abiertas": Terminadas y Canceladas no se ven en la grilla (spec: las canceladas
+        // detrás de un filtro).
+        IEnumerable<string?> Textos() => window.GetVisualDescendants().OfType<TextBlock>().Where(t => ArbolVisual.EsVisibleEnArbol(t)).Select(t => t.Text);
+        Assert.Contains("Pendiente 1", Textos());
+        Assert.Contains("En curso 1", Textos());
+        Assert.DoesNotContain("Terminada 1", Textos());
+        Assert.DoesNotContain("Cancelada 1", Textos());
 
-        // Canceladas esta detras del filtro MostrarCanceladas (spec): sin tildar el checkbox,
-        // la seccion completa no debe estar visible en el arbol.
-        var seccionCanceladas = window.GetVisualDescendants().OfType<TextBlock>()
-            .FirstOrDefault(t => t.Text == "Canceladas");
-        Assert.NotNull(seccionCanceladas);
-        Assert.False(ArbolVisual.EsVisibleEnArbol(seccionCanceladas!));
+        FiltrarPor(vm, "Terminadas");
+        Assert.Contains("Terminada 1", Textos());
+        FiltrarPor(vm, "Canceladas");
+        Assert.Contains("Cancelada 1", Textos());
     }
 
     [AvaloniaFact]
@@ -106,6 +122,7 @@ public class TareaListViewTests
     {
         var (window, vm, _) = Montar(new List<Tarea> { TareaDe(1, "x", EstadoTarea.Pendiente) });
         var fila = vm.Pendientes[0];
+        Seleccionar(vm, 1);
 
         Assert.True(fila.PuedeTomar);
         var botonTomar = BotonPorTexto(window, "Tomar");
@@ -126,6 +143,7 @@ public class TareaListViewTests
         {
             TareaDe(1, "x", EstadoTarea.EnCurso, tomadaPor: new Usuario { NombreUsuario = "juan" }),
         });
+        Seleccionar(vm, 1);
 
         Assert.True(BotonPorTexto(window, "Soltar").IsVisible);
         Assert.True(BotonPorTexto(window, "Terminar").IsVisible);
@@ -133,7 +151,7 @@ public class TareaListViewTests
             b => Equals(b.Content, "Tomar") && b.IsVisible);
 
         var textos = window.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text);
-        Assert.Contains("Tomada por juan", textos);
+        Assert.Contains("juan", textos);
     }
 
     /// <summary>
@@ -156,8 +174,12 @@ public class TareaListViewTests
 
         Assert.False(vm.Pendientes[0].PuedeCancelar);
         Assert.False(vm.EnCurso[0].PuedeCancelar);
-        Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(),
-            b => Equals(b.Content, "Cancelar") && b.IsVisible);
+        foreach (var id in new[] { 1, 2 })
+        {
+            Seleccionar(vm, id);
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(),
+                b => Equals(b.Content, "Cancelar tarea") && b.IsVisible);
+        }
     }
 
     [AvaloniaFact]
@@ -166,35 +188,31 @@ public class TareaListViewTests
         var (window, vm, _) = Montar(
             new List<Tarea> { TareaDe(1, "Pendiente", EstadoTarea.Pendiente) }, rol: RolUsuario.Admin);
 
+        Seleccionar(vm, 1);
+
         Assert.True(vm.Pendientes[0].PuedeCancelar);
-        Assert.True(BotonPorTexto(window, "Cancelar").IsVisible);
+        Assert.True(BotonPorTexto(window, "Cancelar tarea").IsVisible);
     }
 
     /// <summary>
-    /// Resaltado de vencidas (spec): DiasParaVencer negativo -> SignoNegativoBrushConverter
-    /// resuelve DangerBrush (#DC2626). Se compara el Foreground EFECTIVO del TextBlock del
-    /// titulo contra el brush real, no solo que DiasParaVencer de negativo -- ese calculo ya
-    /// esta cubierto por TareaFilaTests a nivel de VM; lo que falta cubrir es que la vista
-    /// REALMENTE aplique el color.
+    /// Resaltado de vencidas: en la v2 la fila vencida lleva la insignia "Vencida" (peligro) en la columna VENCE en vez de
+    /// pintar el título de rojo. Se verifica sobre la vista REAL que la insignia sale solo en la fila vencida.
     /// </summary>
     [AvaloniaFact]
-    public void Montar_TareaPendienteVencida_ElTituloQuedaEnRojo()
+    public void Montar_TareaPendienteVencida_MuestraLaInsigniaVencidaSoloEnLaFilaVencida()
     {
         var vencida = TareaDe(1, "Vencida", EstadoTarea.Pendiente, fechaLimite: DateTime.UtcNow.Date.AddDays(-5));
         var alDia = TareaDe(2, "Al dia", EstadoTarea.Pendiente, fechaLimite: DateTime.UtcNow.Date.AddDays(5));
         var (window, vm, _) = Montar(new List<Tarea> { vencida, alDia });
 
-        Assert.True(vm.Pendientes[0].DiasParaVencer < 0);
-        Assert.True(vm.Pendientes[1].DiasParaVencer > 0);
+        Assert.True(vm.Pendientes.Single(f => f.Id == 1).DiasParaVencer < 0);
+        Assert.True(vm.Pendientes.Single(f => f.Id == 2).DiasParaVencer > 0);
 
-        var tituloVencida = window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "Vencida");
-        var tituloAlDia = window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "Al dia");
-
-        var brushVencida = Assert.IsAssignableFrom<ISolidColorBrush>(tituloVencida.Foreground);
-        Assert.Equal(Color.Parse("#DC2626"), brushVencida.Color);
-
-        // La que esta al dia no debe heredar el mismo color rojo explicito.
-        Assert.NotEqual(Color.Parse("#DC2626"), (tituloAlDia.Foreground as ISolidColorBrush)?.Color ?? default);
+        var insignias = window.GetVisualDescendants().OfType<StockApp.Presentation.Controls.V2.Insignia>()
+            .Where(i => i.Texto == "Vencida" && ArbolVisual.EsVisibleEnArbol(i)).ToList();
+        var unica = Assert.Single(insignias);
+        Assert.Equal(StockApp.Presentation.Controls.V2.VarianteInsignia.Peligro, unica.Variante);
+        Assert.Equal(1, ((TareaFila)unica.FindAncestorOfType<DataGridRow>()!.DataContext!).Id);
     }
 
     [AvaloniaFact]
@@ -202,6 +220,7 @@ public class TareaListViewTests
     {
         var (window, vm, servicio) = Montar(new List<Tarea> { TareaDe(1, "x", EstadoTarea.Pendiente) });
 
+        Seleccionar(vm, 1);
         var boton = BotonPorTexto(window, "Tomar");
         Clickear(window, boton);
         Dispatcher.UIThread.RunJobs();
@@ -217,7 +236,8 @@ public class TareaListViewTests
         var (window, vm, servicio) = Montar(
             new List<Tarea> { TareaDe(1, "x", EstadoTarea.Pendiente) }, rol: RolUsuario.Admin);
 
-        var boton = BotonPorTexto(window, "Cancelar");
+        Seleccionar(vm, 1);
+        var boton = BotonPorTexto(window, "Cancelar tarea");
         Clickear(window, boton);
         Dispatcher.UIThread.RunJobs();
 
@@ -242,8 +262,10 @@ public class TareaListViewTests
     public void ClickReal_EnVerDeUnaFilaTerminada_DisparaLaNavegacionATareaFormViewModel()
     {
         var recorder = new NavigationRecorderFake();
-        var (window, _, _) = Montar(
+        var (window, vm, _) = Montar(
             new List<Tarea> { TareaDe(1, "Terminada", EstadoTarea.Terminada) }, navegacion: recorder);
+        FiltrarPor(vm, "Todas");
+        Seleccionar(vm, 1);
 
         var boton = BotonPorTexto(window, "Ver");
         Clickear(window, boton);

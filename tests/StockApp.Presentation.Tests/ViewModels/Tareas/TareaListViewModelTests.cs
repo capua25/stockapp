@@ -138,7 +138,7 @@ public class TareaListViewModelTests
 
         await ctx.Vm.TomarCommand.ExecuteAsync(fila);
 
-        ctx.Confirm.Verify(c => c.InformarAsync(TareaListViewModel.MensajeSinPermiso), Times.Once);
+        ctx.Confirm.Verify(c => c.InformarAsync(TareaListViewModel.MensajeSinPermisoAccion), Times.Once);
     }
 
     // ── Carga protegida, filtro de estado en el cliente y revocación en caliente ──
@@ -265,7 +265,7 @@ public class TareaListViewModelTests
         await ctx.Vm.CargarAsync();
 
         Assert.True(ctx.Vm.SinPermiso);
-        Assert.Equal(TareaListViewModel.MensajeSinPermisoTareas, ((ViewModelBase)ctx.Vm).MensajeSinPermiso);
+        Assert.Equal(TareaListViewModel.MensajeSinPermisoTareas, ctx.Vm.MensajeSinPermiso);
         ctx.Confirm.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Never);
     }
 
@@ -318,7 +318,7 @@ public class TareaListViewModelTests
 
         Assert.Empty(ctx.Vm.Tareas);
         Assert.True(ctx.Vm.SinPermiso);
-        Assert.Equal(TareaListViewModel.MensajeSinPermisoTareas, ((ViewModelBase)ctx.Vm).MensajeSinPermiso);
+        Assert.Equal(TareaListViewModel.MensajeSinPermisoTareas, ctx.Vm.MensajeSinPermiso);
     }
 
     [Fact]

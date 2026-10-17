@@ -2,81 +2,66 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Tareas"
              xmlns:dom="using:StockApp.Domain.Entities"
-             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="600" d:DesignHeight="420"
+             mc:Ignorable="d" d:DesignWidth="710" d:DesignHeight="260"
              x:Class="StockApp.Presentation.Views.Tareas.ClasificacionTareaPanelView"
-             x:DataType="vm:ClasificacionTareaPanelViewModel">
+             x:DataType="vm:ClasificacionTareaPanelViewModel"
+             Classes="ui2">
 
-    <StackPanel Spacing="{DynamicResource Espacio3}">
+    <!-- UI v2. Espejo: docs/ui-v2/mockups/gestion/tarea-nueva.html y reclasificar-tarea.html. Panel embebido en el alta de
+         tarea y en el diálogo de reclasificar: lo inicializa el host (InicializarAsync). Todos los campos son opcionales
+         (sin "*"); el combo tiene la opción "(ninguna)". El 16 entre filas va en el Margin superior de cada campo. -->
+    <Grid ColumnDefinitions="*,16,*" RowDefinitions="Auto,Auto,Auto">
 
-        <c:CampoFormulario Etiqueta="Zona (opcional)">
-            <ComboBox ItemsSource="{Binding ZonasDisponibles}"
-                      SelectedItem="{Binding ZonaSeleccionada}"
-                      PlaceholderText="Elegí la zona"
-                      HorizontalAlignment="Stretch">
+        <v2:CampoFormulario x:Name="CampoZona" Grid.Row="0" Grid.Column="0" Etiqueta="Zona">
+            <ComboBox x:Name="ComboZona" HorizontalAlignment="Stretch" PlaceholderText="Elegí la zona"
+                      ItemsSource="{Binding ZonasDisponibles}" SelectedItem="{Binding ZonaSeleccionada}">
                 <ComboBox.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding Nombre}" />
-                    </DataTemplate>
+                    <DataTemplate x:DataType="vm:OpcionClasificador"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
                 </ComboBox.ItemTemplate>
             </ComboBox>
-        </c:CampoFormulario>
+        </v2:CampoFormulario>
 
-        <c:CampoFormulario Etiqueta="Dimensión (opcional)">
-            <ComboBox ItemsSource="{Binding DimensionesDisponibles}"
-                      SelectedItem="{Binding DimensionSeleccionada}"
-                      PlaceholderText="Elegí la dimensión"
-                      HorizontalAlignment="Stretch">
+        <v2:CampoFormulario x:Name="CampoDimension" Grid.Row="0" Grid.Column="2" Etiqueta="Dimensión">
+            <ComboBox x:Name="ComboDimension" HorizontalAlignment="Stretch" PlaceholderText="Elegí la dimensión"
+                      ItemsSource="{Binding DimensionesDisponibles}" SelectedItem="{Binding DimensionSeleccionada}">
                 <ComboBox.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding Nombre}" />
-                    </DataTemplate>
+                    <DataTemplate x:DataType="vm:OpcionClasificador"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
                 </ComboBox.ItemTemplate>
             </ComboBox>
-        </c:CampoFormulario>
+        </v2:CampoFormulario>
 
-        <c:CampoFormulario Etiqueta="Organismo responsable (opcional)">
-            <ComboBox ItemsSource="{Binding OrganismosDisponibles}"
-                      SelectedItem="{Binding OrganismoSeleccionado}"
-                      PlaceholderText="Elegí el organismo"
-                      HorizontalAlignment="Stretch">
+        <v2:CampoFormulario x:Name="CampoOrganismo" Grid.Row="1" Grid.Column="0" Margin="0,16,0,0" Etiqueta="Organismo responsable">
+            <ComboBox x:Name="ComboOrganismo" HorizontalAlignment="Stretch" PlaceholderText="Elegí el organismo"
+                      ItemsSource="{Binding OrganismosDisponibles}" SelectedItem="{Binding OrganismoSeleccionado}">
                 <ComboBox.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding Nombre}" />
-                    </DataTemplate>
+                    <DataTemplate x:DataType="vm:OpcionClasificador"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
                 </ComboBox.ItemTemplate>
             </ComboBox>
-        </c:CampoFormulario>
+        </v2:CampoFormulario>
 
-        <c:CampoFormulario Etiqueta="Origen de financiamiento (opcional)">
-            <ComboBox ItemsSource="{Binding OrigenesDisponibles}"
-                      SelectedItem="{Binding OrigenSeleccionado}"
-                      PlaceholderText="Elegí el origen"
-                      HorizontalAlignment="Stretch">
+        <v2:CampoFormulario x:Name="CampoOrigen" Grid.Row="1" Grid.Column="2" Margin="0,16,0,0" Etiqueta="Origen de financiamiento">
+            <ComboBox x:Name="ComboOrigen" HorizontalAlignment="Stretch" PlaceholderText="Elegí el origen"
+                      ItemsSource="{Binding OrigenesDisponibles}" SelectedItem="{Binding OrigenSeleccionado}">
                 <ComboBox.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding Nombre}" />
-                    </DataTemplate>
+                    <DataTemplate x:DataType="vm:OpcionClasificador"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
                 </ComboBox.ItemTemplate>
             </ComboBox>
-        </c:CampoFormulario>
+        </v2:CampoFormulario>
 
-        <c:CampoFormulario Etiqueta="Expediente (opcional)">
+        <!-- Numero a secas NO es único, solo lo es (Tipo, Anio, Numero): el texto elegido y cada fila del desplegable llevan
+             Numero/Anio. El mensaje del buscador (sin permiso para buscar, demasiados resultados) va debajo, en texto
+             secundario. -->
+        <v2:CampoFormulario x:Name="CampoExpediente" Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,16,0,0" Etiqueta="Expediente">
             <StackPanel Spacing="4">
-                <!-- Fix (revisión final, Important 1): Numero a secas NO es único, solo lo
-                     es (Tipo, Anio, Numero). Con numeración por año, dos expedientes "45" de
-                     años distintos eran indistinguibles acá (riesgo de vincular el equivocado).
-                     Numero/Anio en los dos lugares donde se muestra un DocumentoAdministrativo
-                     suelto: el texto ya elegido (ValueMemberBinding) y cada fila del desplegable
-                     (ItemTemplate). -->
-                <AutoCompleteBox Watermark="Buscar expediente por número o descripción..."
-                                  AsyncPopulator="{Binding BuscarExpedientesAsync}"
-                                  SelectedItem="{Binding DocumentoSeleccionado}"
-                                  FilterMode="None"
-                                  MinimumPopulateDelay="0:0:0.3"
-                                  HorizontalAlignment="Stretch">
+                <AutoCompleteBox x:Name="BuscadorExpediente" Watermark="Buscar expediente por número o descripción..."
+                                 AsyncPopulator="{Binding BuscarExpedientesAsync}"
+                                 SelectedItem="{Binding DocumentoSeleccionado}"
+                                 FilterMode="None"
+                                 MinimumPopulateDelay="0:0:0.3"
+                                 HorizontalAlignment="Stretch">
                     <AutoCompleteBox.ValueMemberBinding>
                         <MultiBinding StringFormat="{}{0}/{1}">
                             <Binding Path="Numero" DataType="{x:Type dom:DocumentoAdministrativo}" />
@@ -96,13 +81,12 @@
                         </DataTemplate>
                     </AutoCompleteBox.ItemTemplate>
                 </AutoCompleteBox>
-                <TextBlock Text="{Binding MensajeBuscadorExpediente}"
-                           Classes="caption"
-                           Foreground="{DynamicResource TextoTerciarioBrush}"
+                <TextBlock x:Name="MensajeExpediente" Classes="texto-secundario" TextWrapping="Wrap"
+                           Text="{Binding MensajeBuscadorExpediente}"
                            IsVisible="{Binding MensajeBuscadorExpediente, Converter={x:Static ObjectConverters.IsNotNull}}" />
             </StackPanel>
-        </c:CampoFormulario>
+        </v2:CampoFormulario>
 
-    </StackPanel>
+    </Grid>
 
 </UserControl>

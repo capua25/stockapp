@@ -2,129 +2,213 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Tareas"
              xmlns:dom="using:StockApp.Domain.Entities"
-             xmlns:beh="using:StockApp.Presentation.Behaviors"
-             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:conv="using:StockApp.Presentation.Converters"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
+             xmlns:b="using:StockApp.Presentation.Behaviors"
              xmlns:pnl="using:StockApp.Presentation.Views.Tareas"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="700" d:DesignHeight="700"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
              x:Class="StockApp.Presentation.Views.Tareas.TareaFormView"
-             x:DataType="vm:TareaFormViewModel">
+             x:DataType="vm:TareaFormViewModel"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
 
-    <ScrollViewer>
-        <DockPanel Margin="{DynamicResource MargenVista}">
+    <!-- UI v2 (formulario §5.2). Espejo: docs/ui-v2/mockups/gestion/tarea-*.html. Doble uso: alta (campos y panel de
+         clasificación) y detalle (solo lectura, con el hilo de notas; Reclasificar y Prioridad solo para el Admin). El
+         breadcrumb vuelve con VolverCommand. El error del Título lo dibuja el DataValidationErrors del control, solo con el
+         campo tocado; el error del servidor va en la Alerta de arriba del pie, que queda fijo fuera del scroll. El detalle
+         no tiene botón primario. -->
+    <UserControl.Styles>
+    <!-- Con el botón Reclasificar a la derecha el título baja 8 (centrado en el alto del botón, como el mockup). -->
+    <Style Selector="TextBlock.conBoton">
+        <Setter Property="Margin" Value="0,8,0,0" />
+    </Style>
+    <Style Selector="Border.nota">
+        <Setter Property="BorderThickness" Value="0,1,0,0" />
+        <Setter Property="BorderBrush" Value="{DynamicResource V2SeparadorGrillaBrush}" />
+        <Setter Property="Padding" Value="0,8" />
+    </Style>
+    <Style Selector="ItemsControl#ListaNotas > ContentPresenter:nth-child(1) > Border.nota">
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0,0,0,8" />
+    </Style>
+    </UserControl.Styles>
 
-            <Border Classes="card" VerticalAlignment="Top">
-                <StackPanel Spacing="{DynamicResource Espacio3}" MaxWidth="620" HorizontalAlignment="Left">
+    <Grid x:Name="Raiz" RowDefinitions="*,Auto,Auto">
 
-                    <c:HeaderVista Eyebrow="TAREAS" Titulo="Nueva tarea" IsVisible="{Binding EsNuevaTarea}" />
-                    <c:HeaderVista Eyebrow="TAREAS" Titulo="Detalle de la tarea" IsVisible="{Binding !EsNuevaTarea}" />
+        <ScrollViewer x:Name="Scroll" Grid.Row="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="28,24">
 
-                    <!-- Alta: título/descripción/fecha límite editables -->
-                    <StackPanel Spacing="{DynamicResource Espacio3}" IsVisible="{Binding EsNuevaTarea}">
-                        <c:CampoFormulario Etiqueta="Título">
-                            <TextBox Text="{Binding Titulo}" Watermark="Ej.: Reparar bache en calle Rivera" />
-                        </c:CampoFormulario>
+                <Grid x:Name="ColumnaEncabezado" UseLayoutRounding="False">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" MaxWidth="{StaticResource V2AnchoFormularioMax}" />
+                    </Grid.ColumnDefinitions>
+                    <v2:EncabezadoPagina x:Name="EncabezadoAlta" UseLayoutRounding="True" Titulo="Nueva tarea"
+                                         BreadcrumbOrigen="Tareas" BreadcrumbComando="{Binding VolverCommand}"
+                                         BreadcrumbActual="Nueva tarea" IsVisible="{Binding EsNuevaTarea}" />
+                    <v2:EncabezadoPagina x:Name="EncabezadoDetalle" UseLayoutRounding="True" Titulo="Detalle de la tarea"
+                                         BreadcrumbOrigen="Tareas" BreadcrumbComando="{Binding VolverCommand}"
+                                         BreadcrumbActual="Detalle de la tarea" IsVisible="{Binding !EsNuevaTarea}">
+                        <v2:Insignia x:Name="InsigniaEstado" VerticalAlignment="Center"
+                                     Texto="{Binding EstadoTexto, Converter={x:Static conv:EstadoTareaConverter.Texto}}"
+                                     Variante="{Binding EstadoTexto, Converter={x:Static conv:EstadoTareaConverter.Variante}}" />
+                    </v2:EncabezadoPagina>
+                </Grid>
 
-                        <c:CampoFormulario Etiqueta="Descripción (opcional)">
-                            <TextBox Text="{Binding Descripcion}" AcceptsReturn="True" Height="80"
-                                      Watermark="Detalle del trabajo a realizar" />
-                        </c:CampoFormulario>
+                <Grid x:Name="ColumnaFormulario" UseLayoutRounding="False">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" MaxWidth="{StaticResource V2AnchoFormularioMax}" />
+                    </Grid.ColumnDefinitions>
 
-                        <c:CampoFormulario Etiqueta="Fecha límite (opcional)">
-                            <CalendarDatePicker SelectedDate="{Binding FechaLimiteSeleccionada}"
-                                                PlaceholderText="dd/mm/aaaa"
-                                                SelectedDateFormat="Custom"
-                                                CustomDateFormatString="dd/MM/yyyy"
-                                                beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
-                        </c:CampoFormulario>
+                    <v2:TarjetaContenido x:Name="Tarjeta" Padding="24" UseLayoutRounding="True">
+                        <StackPanel>
 
-                        <TextBlock Text="Clasificación (opcional)" Classes="seccion" Margin="0,8,0,0" />
-                        <pnl:ClasificacionTareaPanelView DataContext="{Binding ClasificacionPanel}" />
+                            <!-- ALTA -->
+                            <StackPanel x:Name="SeccionAlta" IsVisible="{Binding EsNuevaTarea}">
+                                <TextBlock Classes="subtitulo-formulario" Text="Datos de la tarea" Margin="0,0,0,12" />
+                                <v2:CampoFormulario x:Name="CampoTitulo" Etiqueta="Título" Requerido="True">
+                                    <TextBox x:Name="CajaTitulo" Text="{Binding Titulo}" PlaceholderText="Ej.: Reparar bache en calle Rivera" />
+                                </v2:CampoFormulario>
+                                <v2:CampoFormulario x:Name="CampoDescripcion" Margin="0,16,0,0" Etiqueta="Descripción">
+                                    <TextBox x:Name="CajaDescripcion" Text="{Binding Descripcion}" AcceptsReturn="True" TextWrapping="Wrap"
+                                             Height="80" PlaceholderText="Detalle del trabajo a realizar" />
+                                </v2:CampoFormulario>
+                                <Grid ColumnDefinitions="*,16,*" Margin="0,16,0,0">
+                                    <v2:CampoFormulario x:Name="CampoFechaLimite" Grid.Column="0" Etiqueta="Fecha límite">
+                                        <CalendarDatePicker x:Name="SelectorFechaLimite" HorizontalAlignment="Stretch"
+                                                            SelectedDate="{Binding FechaLimiteSeleccionada}"
+                                                            PlaceholderText="dd/mm/aaaa" SelectedDateFormat="Custom"
+                                                            CustomDateFormatString="dd/MM/yyyy"
+                                                            b:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
+                                    </v2:CampoFormulario>
+                                </Grid>
+                                <Border Height="1" Margin="0,20" Background="{DynamicResource V2SeparadorGrillaBrush}" />
+                                <StackPanel x:Name="SeccionClasificacionAlta">
+                                    <TextBlock Classes="subtitulo-formulario" Text="Clasificación" Margin="0,0,0,12" />
+                                    <ContentControl x:Name="PanelClasificacion" Content="{Binding ClasificacionPanel}" />
+                                </StackPanel>
+                            </StackPanel>
 
-                        <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
-                            <Button Classes="primary" Content="Guardar" Command="{Binding GuardarCommand}" />
-                            <Button Classes="secondary" Content="Volver" Command="{Binding VolverCommand}" />
+                            <!-- DETALLE -->
+                            <StackPanel x:Name="SeccionDetalle" IsVisible="{Binding !EsNuevaTarea}">
+                                <StackPanel x:Name="SeccionDatos">
+                                    <TextBlock Classes="subtitulo-formulario" Text="Datos de la tarea" Margin="0,0,0,12" />
+                                    <v2:CampoFormulario Etiqueta="Título">
+                                        <TextBlock x:Name="ValorTitulo" Classes="cuerpo" TextWrapping="Wrap" Text="{Binding Titulo}" />
+                                    </v2:CampoFormulario>
+                                    <v2:CampoFormulario Margin="0,16,0,0" Etiqueta="Descripción">
+                                        <TextBlock x:Name="ValorDescripcion" Classes="cuerpo" TextWrapping="Wrap"
+                                                   Text="{Binding Descripcion, TargetNullValue='—'}" />
+                                    </v2:CampoFormulario>
+                                    <Grid ColumnDefinitions="*,16,*" RowDefinitions="Auto,Auto">
+                                        <v2:CampoFormulario Grid.Row="0" Grid.Column="0" Margin="0,16,0,0" Etiqueta="Prioridad">
+                                            <TextBlock x:Name="ValorPrioridad" Classes="cuerpo" Text="{Binding PrioridadSeleccionada}" />
+                                        </v2:CampoFormulario>
+                                        <v2:CampoFormulario Grid.Row="0" Grid.Column="2" Margin="0,16,0,0" Etiqueta="Vence">
+                                            <TextBlock x:Name="ValorVence" Classes="cuerpo"
+                                                       Text="{Binding FechaLimiteSeleccionada, Converter={x:Static conv:FechaCortaConverter.Instance}}" />
+                                        </v2:CampoFormulario>
+                                        <v2:CampoFormulario Grid.Row="1" Grid.Column="0" Margin="0,16,0,0" Etiqueta="Tomada por">
+                                            <TextBlock x:Name="ValorTomadaPor" Classes="cuerpo" Text="{Binding TomadaPorNombre, TargetNullValue='—'}" />
+                                        </v2:CampoFormulario>
+                                    </Grid>
+                                </StackPanel>
+
+                                <Border Height="1" Margin="0,20" Background="{DynamicResource V2SeparadorGrillaBrush}" />
+                                <StackPanel x:Name="SeccionClasificacion">
+                                    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+                                        <TextBlock Classes="subtitulo-formulario" Classes.conBoton="{Binding MuestraReclasificar}" Text="Clasificación" VerticalAlignment="Top" />
+                                        <Button x:Name="BotonReclasificar" Grid.Column="1" Classes="secundario" Content="Reclasificar"
+                                                Command="{Binding ReclasificarCommand}" IsVisible="{Binding MuestraReclasificar}" />
+                                    </Grid>
+                                    <Grid ColumnDefinitions="*,16,*" RowDefinitions="Auto,Auto,Auto">
+                                        <v2:CampoFormulario Grid.Row="0" Grid.Column="0" Etiqueta="Zona">
+                                            <TextBlock x:Name="ValorZona" Classes="cuerpo" Text="{Binding ZonaTexto, TargetNullValue='—'}" />
+                                        </v2:CampoFormulario>
+                                        <v2:CampoFormulario Grid.Row="0" Grid.Column="2" Etiqueta="Dimensión">
+                                            <TextBlock x:Name="ValorDimension" Classes="cuerpo" Text="{Binding DimensionTematicaTexto, TargetNullValue='—'}" />
+                                        </v2:CampoFormulario>
+                                        <v2:CampoFormulario Grid.Row="1" Grid.Column="0" Margin="0,16,0,0" Etiqueta="Organismo responsable">
+                                            <TextBlock x:Name="ValorOrganismo" Classes="cuerpo" Text="{Binding OrganismoResponsableTexto, TargetNullValue='—'}" />
+                                        </v2:CampoFormulario>
+                                        <v2:CampoFormulario Grid.Row="1" Grid.Column="2" Margin="0,16,0,0" Etiqueta="Origen de financiamiento">
+                                            <TextBlock x:Name="ValorOrigen" Classes="cuerpo" Text="{Binding OrigenFinanciamientoTexto, TargetNullValue='—'}" />
+                                        </v2:CampoFormulario>
+                                        <v2:CampoFormulario Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,16,0,0" Etiqueta="Expediente">
+                                            <TextBlock x:Name="ValorExpediente" Classes="cuerpo" Text="{Binding DocumentoAdministrativoTexto, TargetNullValue='—'}" />
+                                        </v2:CampoFormulario>
+                                    </Grid>
+                                </StackPanel>
+
+                                <StackPanel x:Name="SeccionPrioridad" IsVisible="{Binding MuestraCambioPrioridad}">
+                                    <Border Height="1" Margin="0,20" Background="{DynamicResource V2SeparadorGrillaBrush}" />
+                                    <TextBlock Classes="subtitulo-formulario" Text="Prioridad" Margin="0,0,0,12" />
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <ComboBox x:Name="ComboPrioridad" Width="160" AutomationProperties.Name="Prioridad"
+                                                  ItemsSource="{Binding PrioridadesDisponibles}" SelectedItem="{Binding PrioridadSeleccionada}" />
+                                        <Button x:Name="BotonActualizarPrioridad" Classes="secundario" Content="Actualizar prioridad"
+                                                Command="{Binding CambiarPrioridadCommand}" />
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <Border Height="1" Margin="0,20" Background="{DynamicResource V2SeparadorGrillaBrush}" />
+                                <StackPanel x:Name="SeccionNotas">
+                                    <TextBlock Classes="subtitulo-formulario" Text="Notas" Margin="0,0,0,12" />
+                                    <ItemsControl x:Name="ListaNotas" ItemsSource="{Binding Notas}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="dom:NotaTarea">
+                                                <Border Classes="nota">
+                                                    <StackPanel>
+                                                        <TextBlock Classes="cuerpo" TextWrapping="Wrap" Text="{Binding Texto}" />
+                                                        <TextBlock Classes="texto-secundario"
+                                                                   Text="{Binding Fecha, Converter={x:Static conv:FechaHoraLocalConverter.Instance}}" />
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <v2:CampoFormulario Margin="0,16,0,0" Etiqueta="Nueva nota">
+                                        <TextBox x:Name="CajaNuevaNota" Text="{Binding NuevaNotaTexto}" AcceptsReturn="True" TextWrapping="Wrap"
+                                                 Height="60" PlaceholderText="Agregar una nota al hilo" />
+                                    </v2:CampoFormulario>
+                                    <Button x:Name="BotonAgregarNota" Classes="secundario" Content="Agregar nota" Margin="0,8,0,0"
+                                            HorizontalAlignment="Left" Command="{Binding AgregarNotaCommand}" />
+                                </StackPanel>
+                            </StackPanel>
+
                         </StackPanel>
-                    </StackPanel>
+                    </v2:TarjetaContenido>
+                </Grid>
+            </StackPanel>
+        </ScrollViewer>
 
-                    <!-- Detalle de solo lectura: título/descripción/fecha límite/estado/tomada por -->
-                    <StackPanel Spacing="6" IsVisible="{Binding !EsNuevaTarea}">
-                        <TextBlock Text="{Binding Titulo}" Classes="seccion" />
-                        <TextBlock Text="{Binding Descripcion}" TextWrapping="Wrap" Foreground="{DynamicResource TextoSecundarioBrush}"
-                                   IsVisible="{Binding Descripcion, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                        <TextBlock Text="{Binding FechaLimiteSeleccionada, StringFormat='Vence: {0:dd/MM/yyyy}'}"
-                                   Classes="caption"
-                                   IsVisible="{Binding FechaLimiteSeleccionada, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                        <TextBlock Text="{Binding EstadoTexto, StringFormat='Estado: {0}'}" Classes="caption" />
-                        <TextBlock Text="{Binding TomadaPorNombre, StringFormat='Tomada por: {0}'}" Classes="caption"
-                                   IsVisible="{Binding TomadaPorNombre, Converter={x:Static ObjectConverters.IsNotNull}}" />
+        <!-- Error general fuera del scroll, con el ancho de la card: se ve aunque el formulario esté scrolleado. -->
+        <Grid x:Name="FilaAlertaError" Grid.Row="1" Margin="28,0,28,12" UseLayoutRounding="False"
+              IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MaxWidth="{StaticResource V2AnchoFormularioMax}" />
+            </Grid.ColumnDefinitions>
+            <v2:Alerta x:Name="AlertaError" Variante="Error" Texto="{Binding MensajeError}" />
+        </Grid>
 
-                        <!-- Clasificación de solo lectura (spec 2026-09-08): reclasificar es
-                             SIEMPRE vía el modal (Reclasificar más abajo), nunca editando estos
-                             campos in-place. -->
-                        <TextBlock Text="{Binding ZonaTexto, StringFormat='Zona: {0}'}" Classes="caption"
-                                   IsVisible="{Binding ZonaTexto, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                        <TextBlock Text="{Binding DimensionTematicaTexto, StringFormat='Dimensión: {0}'}" Classes="caption"
-                                   IsVisible="{Binding DimensionTematicaTexto, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                        <TextBlock Text="{Binding OrganismoResponsableTexto, StringFormat='Organismo: {0}'}" Classes="caption"
-                                   IsVisible="{Binding OrganismoResponsableTexto, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                        <TextBlock Text="{Binding OrigenFinanciamientoTexto, StringFormat='Origen de financiamiento: {0}'}" Classes="caption"
-                                   IsVisible="{Binding OrigenFinanciamientoTexto, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                        <TextBlock Text="{Binding DocumentoAdministrativoTexto, StringFormat='Expediente: {0}'}" Classes="caption"
-                                   IsVisible="{Binding DocumentoAdministrativoTexto, Converter={x:Static ObjectConverters.IsNotNull}}" />
-
-                        <Button Classes="secondary" Content="Reclasificar" Command="{Binding ReclasificarCommand}"
-                                IsVisible="{Binding MuestraReclasificar}"
-                                HorizontalAlignment="Left" Margin="0,8,0,0" />
-
-                        <Button Classes="secondary" Content="Volver" Command="{Binding VolverCommand}"
-                                HorizontalAlignment="Left" Margin="0,8,0,0" />
-                    </StackPanel>
-
-                    <!-- Cambio de prioridad: solo Admin, solo tarea existente -->
-                    <StackPanel Spacing="6" IsVisible="{Binding MuestraCambioPrioridad}" Margin="0,8,0,0">
-                        <TextBlock Text="Prioridad" Classes="seccion" />
-                        <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
-                            <ComboBox ItemsSource="{Binding PrioridadesDisponibles}"
-                                      SelectedItem="{Binding PrioridadSeleccionada}"
-                                      Width="160" />
-                            <Button Classes="secondary" Content="Actualizar prioridad" Command="{Binding CambiarPrioridadCommand}" />
-                        </StackPanel>
-                    </StackPanel>
-
-                    <!-- Hilo de notas: solo tarea existente -->
-                    <StackPanel Spacing="6" IsVisible="{Binding !EsNuevaTarea}" Margin="0,8,0,0">
-                        <TextBlock Text="Notas" Classes="seccion" />
-                        <ItemsControl ItemsSource="{Binding Notas}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="dom:NotaTarea">
-                                    <Border Classes="card" Margin="0,0,0,6" Padding="{DynamicResource PaddingCompacto}">
-                                        <StackPanel Spacing="2">
-                                            <TextBlock Text="{Binding Texto}" TextWrapping="Wrap" />
-                                            <TextBlock Text="{Binding Fecha, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}"
-                                                       Classes="caption" Foreground="{DynamicResource TextoTerciarioBrush}" />
-                                        </StackPanel>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-
-                        <TextBlock Text="Nueva nota" />
-                        <TextBox Text="{Binding NuevaNotaTexto}" AcceptsReturn="True" Height="60"
-                                  Watermark="Agregar una nota al hilo" />
-                        <Button Classes="secondary" Content="Agregar nota" Command="{Binding AgregarNotaCommand}" />
-                    </StackPanel>
-
-                    <TextBlock Text="{Binding MensajeError}"
-                               Foreground="{DynamicResource DangerBrush}"
-                               TextWrapping="Wrap"
-                               IsVisible="{Binding MensajeError, Converter={x:Static ObjectConverters.IsNotNull}}" />
-
+        <Border x:Name="Pie" Grid.Row="2"
+                Background="{DynamicResource V2SuperficieBrush}"
+                BorderBrush="{DynamicResource V2BordeBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="28,16">
+            <Grid UseLayoutRounding="False">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" MaxWidth="{StaticResource V2AnchoFormularioMax}" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                    <Button x:Name="BotonVolver" Classes="secundario" Content="Volver" Command="{Binding VolverCommand}" />
+                    <Button x:Name="BotonGuardar" Classes="primario" Content="Guardar" Command="{Binding GuardarCommand}"
+                            IsVisible="{Binding EsNuevaTarea}" />
                 </StackPanel>
-            </Border>
+            </Grid>
+        </Border>
 
-        </DockPanel>
-    </ScrollViewer>
+    </Grid>
 
 </UserControl>

@@ -156,7 +156,7 @@ public partial class TareaListViewModel : ViewModelBase
     /// tanto ManejarErrorAsync como los tests, así un test que verifica la rama específica no
     /// pasaría "por accidente" si se la eliminara y el catch-all genérico tomara su lugar.
     /// </summary>
-    public const string MensajeSinPermiso =
+    public const string MensajeSinPermisoAccion =
         "La sesión expiró o no tiene permiso para realizar esta acción. Vuelva a iniciar sesión e intente de nuevo.";
 
     /// <summary>Texto del estado "Sin permiso" cuando el servidor rechaza la carga (403) o se pierde el permiso en caliente.</summary>
@@ -225,18 +225,16 @@ public partial class TareaListViewModel : ViewModelBase
 
     partial void OnFiltroEstadoChanged(OpcionEstadoTarea value)
     {
+        // La selección oculta se suelta ANTES de refrescar: con la fila todavía seleccionada, el DataGrid reubica la
+        // selección por índice en otra tarea y las acciones del encabezado actuarían sobre una fila que el usuario no eligió.
+        if (FilaSeleccionada is { } seleccionada && !EsVisible(seleccionada))
+            FilaSeleccionada = null;
         TareasView.Refresh();
         Recalcular();
     }
 
-    /// <summary>Recuenta el pie y, si el filtro esconde la fila seleccionada, limpia la selección: Tomar, Terminar o
-    /// Cancelar no pueden actuar sobre una tarea que no se ve.</summary>
-    private void Recalcular()
-    {
-        CantidadVisible = Tareas.Count(f => EsVisible(f));
-        if (FilaSeleccionada is { } seleccionada && !EsVisible(seleccionada))
-            FilaSeleccionada = null;
-    }
+    /// <summary>Recuenta el pie con el mismo predicado que la grilla.</summary>
+    private void Recalcular() => CantidadVisible = Tareas.Count(f => EsVisible(f));
 
     /// <summary>La vista muestra "No se pudo conectar con el servidor" con Reintentar dentro de la card.</summary>
     protected override bool AvisaSinConexionEnLinea => true;
@@ -344,7 +342,7 @@ public partial class TareaListViewModel : ViewModelBase
         {
             ReglaDeNegocioException or EntidadNoEncontradaException or ArgumentException
                 or ServidorNoDisponibleException => ex.Message,
-            UnauthorizedAccessException => MensajeSinPermiso,
+            UnauthorizedAccessException => MensajeSinPermisoAccion,
             _ => "Ocurrió un error inesperado. Si el problema persiste, contactá a soporte.",
         };
         await _confirmacion.InformarAsync(mensaje);

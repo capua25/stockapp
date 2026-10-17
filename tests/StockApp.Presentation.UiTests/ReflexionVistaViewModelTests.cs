@@ -65,15 +65,17 @@ public class ReflexionVistaViewModelTests
         var axaml = LeerAxaml("StockApp.Presentation/Views/Tareas/TareaListView.axaml");
         var miembros = PropiedadesPublicasDeclaradas(typeof(TareaListViewModel));
 
-        // Los miembros del filtro de Estado y de la selección que la vista v1 (secciones por estado) no
-        // expone: la vista v2 (grilla filtrada) los bindea y estas exclusiones salen con la migración.
+        // Las cuatro colecciones por estado y el tilde de canceladas se conservan en el VM (sus tests no cambian) pero la
+        // grilla v2 filtra una sola colección con el combo de Estado: sin consumidor en la vista; se borran en la Fase 9.
         var exclusiones = new HashSet<string>
         {
-            nameof(TareaListViewModel.TareasView),
-            nameof(TareaListViewModel.FiltrosEstado),
-            nameof(TareaListViewModel.FiltroEstado),
-            nameof(TareaListViewModel.FilaSeleccionada),
-            nameof(TareaListViewModel.CantidadVisible),
+            nameof(TareaListViewModel.Pendientes),
+            nameof(TareaListViewModel.EnCurso),
+            nameof(TareaListViewModel.Terminadas),
+            nameof(TareaListViewModel.Canceladas),
+            nameof(TareaListViewModel.MostrarCanceladas),
+            // Lo consume NotificarPermisosActualizados del VM (vacía y marca "Sin permiso"); la vista muestra el resultado
+            // por SinPermiso, no lee este gate.
             nameof(TareaListViewModel.PuedeGestionarTareas),
         };
         AssertTodasExpuestas(axaml, miembros, exclusiones);
@@ -90,7 +92,7 @@ public class ReflexionVistaViewModelTests
             // Helper interno consumido por MuestraCambioPrioridad (que SI esta bindeada, IsVisible
             // del panel de cambio de prioridad) -- no necesita un binding propio en el axaml.
             nameof(TareaFormViewModel.EsAdmin),
-            // INotifyDataErrorInfo: lo consume la vista v2 por campo (ErrorDe); la v1 no muestra errores.
+            // INotifyDataErrorInfo: lo consume el DataValidationErrors de cada control, no un binding propio.
             nameof(TareaFormViewModel.HasErrors),
         };
         AssertTodasExpuestas(axaml, miembros, exclusiones);
@@ -202,12 +204,15 @@ public class ReflexionVistaViewModelTests
 
         var validos = PropiedadesPublicasDeclaradas(typeof(TareaListViewModel))
             .Concat(PropiedadesPublicasDeclaradas(typeof(TareaFila)))
+            // Heredadas de ViewModelBase (estados de carga, sin permiso, reintentar) y el ítem del combo de Estado.
+            .Concat(PropiedadesPublicasDeclaradas(typeof(ViewModelBase)))
+            .Concat(PropiedadesPublicasDeclaradas(typeof(OpcionEstadoTarea)))
             .ToHashSet();
 
         var invalidos = candidatos.Where(c => !validos.Contains(c)).ToList();
         Assert.True(invalidos.Count == 0,
-            "Binding(s) en TareaListView.axaml sin propiedad correspondiente ni en TareaListViewModel "
-            + "ni en TareaFila (posible typo silencioso de Avalonia): " + string.Join(", ", invalidos));
+            "Binding(s) en TareaListView.axaml sin propiedad correspondiente ni en TareaListViewModel, "
+            + "TareaFila, ViewModelBase ni OpcionEstadoTarea (posible typo silencioso de Avalonia): " + string.Join(", ", invalidos));
     }
 
     [Fact]
