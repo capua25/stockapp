@@ -2,6 +2,8 @@
 
 **Fecha:** 2026-09-28
 **Estado:** aprobado por el usuario; Fases 0, 1, 2, 3a, 3b, 3c-1, 3c-2, 3c-3, 4a, 4b, 4c y 4d implementadas en feat/ui-v2; Fase 1 APROBADA por el usuario el 2026-10-05; Fase 2 APROBADA por el usuario el 2026-10-06; Fase 3a (Productos) APROBADA por el usuario el 2026-10-07; Fase 3b (Entrada/Salida) APROBADA por el usuario el 2026-10-08, con la verificación orgánica parcial; Fase 3c-1 (patrones comunes + Productos) APROBADA por el usuario el 2026-10-09; Fase 3c-2 (Historial de movimientos) APROBADA por el usuario el 2026-10-10; Fase 3c-3 (Ingreso por factura y patrón de modal v2) APROBADA por el usuario el 2026-10-11 (3c-3 aprobada por el usuario el 2026-10-11; incluye las decisiones del GATE, rulings y UmbralAprobado; ver "Para revisión del usuario" en §7); Fase 4a (Adjuntos, Calendario de pagos y Control POA) APROBADA por el usuario el 2026-10-12; Fase 4b (Ingresos de caja y su formulario) APROBADA por el usuario el 2026-10-12, con la verificación orgánica parcial (el merge a main es por bloques; el primero, al cerrar la 4e; ver §7 Integración); Fase 4c (Libro caja) APROBADA por el usuario el 2026-10-15; Fase 4d (Gastos y facturas) APROBADA por el usuario el 2026-10-17 (diseño aprobado el 2026-10-15; decisiones U1 a U4 y P1 a P8)
+
+**Cronograma aprobado (2026-10-17):** las Fases 5, 6 y 7 corren en paralelo, cada una en su worktree, con un integrador único para el tema compartido, un GATE 1 y un GATE 2 por fase, y plazo comprometido el 2026-10-20. Decisiones de Martin del 2026-10-17: Fase 4e con A en todas las Q-* salvo Q-2 = B (los adjuntos de un pago anulado se muestran en solo lectura) y Q-4 = B (errores de registro por campo); Fases 5, 6 y 7 con A en todas las Q-*. Fase 8 (Importación): fuera del alcance por decisión de Martin; la importación queda en v1.
 **Rama:** `feat/ui-v2` (worktree propio)
 **Alcance:** todas las vistas de `src/StockApp.Presentation/` (shell, ~55 de contenido, pantallas fuera del shell, 4 diálogos, 3 overlays de actualización)
 **Mockups de referencia:** `docs/ui-v2/mockups/referencia/` — `direccion-visual-aprobada.html` (variante `.di-azul`), `navegacion-aprobada.html` (opción A), `patrones-1.html`
@@ -382,8 +384,7 @@ Ciclo de cada fase: mockups de sus pantallas → aprobación del usuario → XAM
 | 4 Finanzas | Gastos + formulario, Pagos, Adjuntos, Ingresos + formulario, Libro caja, Control POA, Calendario de pagos. Se divide en subfases (aprobado por el usuario el 2026-10-11): 4a AdjuntosPanelView + Calendario de pagos + Control POA; 4b Ingresos de caja + formulario; 4c Libro caja; 4d Gastos y facturas + formulario; 4e Pagos del gasto (la 4e depende de la 4a y la 4d). 4a aprobada por el usuario el 2026-10-12; 4b aprobada por el usuario el 2026-10-12; 4c aprobada por el usuario el 2026-10-15 (diseño aprobado el 2026-10-13); 4d aprobada por el usuario el 2026-10-17 (diseño aprobado el 2026-10-15) |
 | 5 Gestión | Tareas (listado, formulario, clasificación, diálogo de reclasificar), Documentos (listado, formulario, adjuntos) |
 | 6 Reportes | hub + los 6 reportes |
-| 7 Administración | Catálogos master-detail con los 11 catálogos, Usuarios, Mantenimiento |
-| 8 Importación | wizard `NuevaImportacionView` + historial; apagada, verificable solo por comparación; unidad de riesgo propia |
+| 7 Administración | Catálogos master-detail con los 10 catálogos, Usuarios, Mantenimiento |
 | 9 Limpieza | borrar estilos y componentes viejos, reemplazar `GuardianDePatronTests` por el guardián del sistema nuevo, auditoría de residuos |
 
 **Estado de la Fase 1 (aprobada el 2026-10-05).** El usuario aprobó la Fase 1 tras probar flujos reales a 1366×768: crear y editar artículo, entrada y salida, anular documento, baja de categoría y cerrar sesión. Arreglos surgidos de esa prueba: placeholder de precio de entrada (`2a5e661`, main), motivo Venta pasa a Uso o consumo (`ff91f33`, main), baja de categoría bloqueada con productos activos (`ee461b8`, main), la salida nunca muestra precio (`d858221`, main), y el hueco a la derecha en celdas y headers de las 22 grillas del tema viejo (`c808334`, feat/ui-v2; el `961dc7e` previo no tenía efecto porque el contenido no está dentro de `.ui2`).
@@ -584,6 +585,7 @@ Revisado y aprobado por el usuario el 2026-10-11 (decisiones del GATE, rulings y
   - Los hosts `GastoFormView` y `PagosGastoView` siguen v1 hasta la 4d y la 4e.
 
 **Deuda abierta tras la Fase 4d:**
+- Los adjuntos de un pago deberían borrarse al anularlo (decisión de Martin 2026-10-17; sin fase asignada). Mientras tanto, por la 4e Q-2 = B, los adjuntos de un pago anulado se muestran en solo lectura.
 - Hallado en el GATE 2: con solo `finanzas.pagos` quitado, ninguna acción de Gastos da 403; el primer click en Pagos refresca los permisos y navega a la pantalla v1 en solo lectura, sin Aviso, y después Pagos desaparece. El escenario del plan ("una acción que pegue al servidor → un solo Aviso global y Pagos desaparece sin navegar") no se puede reproducir tal como está escrito. Decidir si Pagos debe refrescar permisos antes de navegar (con la 4e, que migra `PagosGastoView`).
 - Fuera de la 4d (Control POA, hallado en el GATE 2): la cabecera SALDO no se alinea con su valor.
 - Fuera de la 4d (hallado en el GATE 2): el combo de Proveedor del filtro de Gastos corta los nombres largos.
@@ -900,12 +902,12 @@ Revisado y aprobado por el usuario el 2026-10-11 (decisiones del GATE, rulings y
 - El wrap del comentario (mutación j) quedó custodiado con test de efecto al cierre (`Comentario_Largo_EnvuelveDentroDeLaCajaYNoSeSaleDelAncho`); minors diferidos del ledger de la 3b sin cerrar: `Requeridos_SegunTipoYMotivo` lee la propiedad y no el asterisco pintado, y `Clickear`/`EnVentana` duplicados respecto de `ProductoFormViewV2Tests`.
 
 **Deuda abierta tras la Fase 2:**
-- `EsAdmin` de Importación sin guardián propio mientras `ImportacionHabilitada=false` (Fase 8).
+- `EsAdmin` de Importación sin guardián propio mientras `ImportacionHabilitada=false` (Importación, fuera del rediseño por decisión de Martin 2026-10-17).
 - `capturar.sh` no es fail-closed con WSLg caído: devolvió exit 0 capturando ventanas del escritorio del usuario. Fuera de alcance de esta fase.
 - Minors diferidos del ledger sin cerrar: `TextoAVencer7Dias` sigue en el VM de Inicio (borrar en Fase 9); en OperadorMixto una sola insignia "Vencida" pálida no se detecta (límite de la métrica); umbrales de Inicio sin margen (un cambio de rasterizador los pone en rojo, intencional); `Mensaje_IgualAlMockup_1366x768` sin margen (11 de 11, tono); pulgar del sidebar a re-medir en las Fases 6 y 7; `ContextMenu`/`MenuFlyout` sin corte de la herencia del centrado (hoy no se usan); lista `DialogosV2` manual en `GuardianDePatronTests`; `CargarAsync` de Inicio sin cancelación (preexistente).
 
 **Deuda menor de la Fase 1 (no bloquea):**
-- Sin guardián propio de `EsAdmin` en Importación (hoy lo tapa `ImportacionHabilitada=false`); resolver al reactivarla (Fase 8).
+- Sin guardián propio de `EsAdmin` en Importación (hoy lo tapa `ImportacionHabilitada=false`); resolver al reactivarla (Importación, fuera del rediseño por decisión de Martin 2026-10-17).
 - ~~Las comparaciones de píxeles no custodian el gate `IsVisible=EsVisible` del sidebar ni la ubicación de `ui2`.~~ Cerrada (Fase 2, Task 5): la custodia es de los UiTests, que montan la `ShellMainView` real, y se probó por mutación:
   - (a) Sin el gate del header: rojo en `ShellMainViewV2Tests.OperadorMixto_SeccionesSinItemsVisibles_OcultanSuHeader` y `RevocacionEnCaliente_OcultaElHeaderDeLaSeccionQueSeVacia`. `SidebarOperadorMixto_IgualAlMockup` (y su variante 1366x768) quedan verdes: es un LÍMITE del umbral, no un diseño. Los 2 headers de sección de más agregan píxeles, pero un header (texto chico, gris claro) queda bajo el umbral calibrado (11 teselas densas / 1,68 %). Ningún cambio de umbral o de mockup debe asumir que la comparación custodia headers de sección: el gate del header lo custodian solo esos 2 UiTests.
   - (b) Sin `ui2` en el sidebar: rojo en `Ui2_VaEnElSidebarYNoEnLaRaiz` y en las cuatro comparaciones del shell.
@@ -955,7 +957,7 @@ Revisado y aprobado por el usuario el 2026-10-11 (decisiones del GATE, rulings y
 | `INavigationService` sin back-stack | el breadcrumb usa el evento `Volver` existente |
 | Desuscripción de `Cambiado` | se conserva en cada vista que la tenga |
 | `AdjuntosPanelView` vs `AdjuntosDocumentoPanelView` | **no se unifican**: tienen ViewModels distintos |
-| `NuevaImportacionView` (509 líneas, 4 grillas, `CompileBindings=False` en 2 estilos) | fase propia (8); sin red del compilador en esos estilos |
+| `NuevaImportacionView` (509 líneas, 4 grillas, `CompileBindings=False` en 2 estilos) | Fase 8 (Importación): fuera del alcance por decisión de Martin; la importación queda en v1 (sin red del compilador en esos estilos) |
 | Diálogos `Window` sin bindings | se mantiene el acceso por `x:Name` |
 | `MinWidth` por columna + scroll horizontal en grillas (fix `3548397`) | el tema nuevo de `DataGrid` lo preserva |
 | Decimales y formato es-UY | converters actuales sin cambios |
