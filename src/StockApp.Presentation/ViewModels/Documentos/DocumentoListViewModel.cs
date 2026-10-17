@@ -99,8 +99,6 @@ public partial class DocumentoListViewModel : ViewModelBase
     private readonly IConfirmacionService              _confirmacion;
     private readonly ConsultaVigente                  _consultas = new();
 
-    private bool _historialCargado;
-
     /// <summary>Espera del debounce de los filtros que recargan; los tests la cambian después de construir el VM.</summary>
     internal TimeSpan EsperaDebounce { get; set; } = TimeSpan.FromMilliseconds(300);
 
@@ -120,11 +118,13 @@ public partial class DocumentoListViewModel : ViewModelBase
     };
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(MostrandoHistorial))]
+    [NotifyPropertyChangedFor(nameof(EsVistaHistorial))]
     [NotifyPropertyChangedFor(nameof(FilaSeleccionada))]
+    [NotifyPropertyChangedFor(nameof(CantidadEnVista))]
+    [NotifyPropertyChangedFor(nameof(HayFiltrosEnLaVista))]
     private OpcionVistaDocumentos _vistaSeleccionada;
 
-    public bool MostrandoHistorial => VistaSeleccionada.EsHistorial;
+    public bool EsVistaHistorial => VistaSeleccionada.EsHistorial;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(FilaSeleccionada))]
@@ -135,10 +135,17 @@ public partial class DocumentoListViewModel : ViewModelBase
     private DocumentoFila? _filaSeleccionadaHistorial;
 
     /// <summary>La fila sobre la que actúan las acciones del encabezado: la seleccionada en la vista actual.</summary>
-    public DocumentoFila? FilaSeleccionada => MostrandoHistorial ? FilaSeleccionadaHistorial : FilaSeleccionadaActivos;
+    public DocumentoFila? FilaSeleccionada => EsVistaHistorial ? FilaSeleccionadaHistorial : FilaSeleccionadaActivos;
 
     /// <summary>Activos con tipo o texto elegidos: distingue "no hay documentos" de "ningún documento coincide".</summary>
     public bool HayFiltrosEnActivos => FiltroActivosTipo is not null || !string.IsNullOrWhiteSpace(FiltroActivosTexto);
+
+    /// <summary>Filas de la vista ACTUAL (Activos o Historial): con eso se deciden "Cargando", "Sin documentos" y "Sin resultados".</summary>
+    public int CantidadEnVista => EsVistaHistorial ? Historial.Count : Activos.Count;
+
+    /// <summary>La vista actual tiene algún filtro que pueda explicar que no haya filas: en Historial siempre (el año), en
+    /// Activos solo con Tipo o texto.</summary>
+    public bool HayFiltrosEnLaVista => EsVistaHistorial || HayFiltrosEnActivos;
 
     /// <summary>Gatea la pantalla: Admin o el permiso del módulo. Lo re-lee <see cref="NotificarPermisosActualizados"/>.</summary>
     public bool PuedeGestionarDocumentos =>
@@ -147,10 +154,12 @@ public partial class DocumentoListViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HayFiltrosEnActivos))]
+    [NotifyPropertyChangedFor(nameof(HayFiltrosEnLaVista))]
     private TipoDocumento? _filtroActivosTipo;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HayFiltrosEnActivos))]
+    [NotifyPropertyChangedFor(nameof(HayFiltrosEnLaVista))]
     private string? _filtroActivosTexto;
 
     [ObservableProperty] private TipoDocumento? _filtroHistorialTipo;
@@ -196,6 +205,8 @@ public partial class DocumentoListViewModel : ViewModelBase
         _navigation   = navigation;
         _confirmacion = confirmacion;
 
+        Activos.CollectionChanged += (_, _) => OnPropertyChanged(nameof(CantidadEnVista));
+        Historial.CollectionChanged += (_, _) => OnPropertyChanged(nameof(CantidadEnVista));
         _vistaSeleccionada = Vistas[0];
         _filtroActivosTipoSeleccionado = TiposDisponibles[0];
         _filtroHistorialTipoSeleccionado = TiposDisponibles[0];
@@ -231,7 +242,7 @@ public partial class DocumentoListViewModel : ViewModelBase
     protected override bool AvisaSinConexionEnLinea => true;
 
     /// <summary>Sin servidor la vista actual queda vacía: el reintento no puede mostrar las filas de la consulta anterior.</summary>
-    protected override void AlPerderConexion() => (MostrandoHistorial ? Historial : Activos).Clear();
+    protected override void AlPerderConexion() => (EsVistaHistorial ? Historial : Activos).Clear();
 
     /// <summary>Reintentar consulta con los filtros que están en pantalla, no con los de la consulta que falló.</summary>
     protected override Task ReintentarAsync(Func<Task> cargaFallida) => CargarAsync();
@@ -256,7 +267,7 @@ public partial class DocumentoListViewModel : ViewModelBase
     public async Task CargarAsync()
     {
         _recargaArmada = true;
-        if (MostrandoHistorial)
+        if (EsVistaHistorial)
             await CargarHistorialAsync();
         else
             await CargarActivosAsync();
@@ -299,41 +310,8 @@ public partial class DocumentoListViewModel : ViewModelBase
             foreach (var doc in documentos)
                 Historial.Add(new DocumentoFila(doc, rol));
 
-            _historialCargado = true;
         }, MensajeSinPermisoDocumentos, turno);
     }
-
-    /// <summary>
-    /// D9 (carga perezosa): la vista invoca este comando al seleccionar la solapa Historial.
-    /// Solo consulta al servicio la primera vez -- volver a seleccionar la solapa no repite
-    /// la consulta (usar CargarHistorialAsync() directamente para forzar un refresco).
-    /// </summary>
-    [RelayCommand]
-    private async Task AbrirHistorial()
-    {
-        if (_historialCargado) return;
-        await CargarHistorialAsync();
-    }
-
-    /// <summary>
-    /// Botón "Buscar" del filtro propio del historial (Task 22): a diferencia de
-    /// AbrirHistorialCommand (carga perezosa, una sola vez), este comando envuelve
-    /// CargarHistorialAsync() -- que queda público y sin [RelayCommand] porque también lo
-    /// invocan AbrirHistorialCommand y los tests -- para exponer un ICommand bindeable que
-    /// siempre vuelve a consultar al servidor con el filtro actual.
-    /// </summary>
-    public IAsyncRelayCommand BuscarHistorialCommand => field ??= ComandoDeGuardado(BuscarHistorial);
-
-    private async Task BuscarHistorial() => await CargarHistorialAsync();
-
-    /// <summary>
-    /// Botón "Buscar" de la solapa Activos (I2 del review final): FiltroActivosTexto/Tipo no
-    /// tenían disparador propio -- el único punto de recarga era DataContextChanged, que corre
-    /// una sola vez al entrar a la pantalla. Molde: BuscarHistorialCommand.
-    /// </summary>
-    public IAsyncRelayCommand BuscarActivosCommand => field ??= ComandoDeGuardado(BuscarActivos);
-
-    private async Task BuscarActivos() => await CargarAsync();
 
     [RelayCommand]
     private void Nuevo() => _navigation.Navegar<DocumentoFormViewModel>(vm => vm.CargarParaCrear());
@@ -359,11 +337,8 @@ public partial class DocumentoListViewModel : ViewModelBase
     [RelayCommand]
     private async Task Finalizar(DocumentoFila fila)
     {
-        // M9: Finalizar es la única acción de esta pantalla que cierra un documento (Anular
-        // vive en el formulario, D... ver comentario del botón en el XAML) -- sin invalidar
-        // acá, _historialCargado seguía en true y el documento recién cerrado no aparecía en
-        // Historial hasta apretar "Buscar" a mano.
-        try { await _service.FinalizarAsync(fila.Id); await CargarAsync(); _historialCargado = false; }
+        // Cada cambio de vista consulta de nuevo: el documento recién cerrado aparece en Historial al elegirlo.
+        try { await _service.FinalizarAsync(fila.Id); await CargarAsync(); }
         catch (Exception ex) { await ManejarErrorAsync(ex); }
     }
 

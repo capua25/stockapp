@@ -170,11 +170,11 @@ public class DocumentoFormViewGatesTests
     {
         var (window, _) = MontarParaCrear(RolUsuario.Operador);
 
-        Assert.False(ArbolVisual.EsVisibleEnArbol(BotonPorContenido(window, "Iniciar")));
-        Assert.False(ArbolVisual.EsVisibleEnArbol(BotonPorContenido(window, "Volver a pendiente")));
-        Assert.False(ArbolVisual.EsVisibleEnArbol(BotonPorContenido(window, "Finalizar")));
-        Assert.False(ArbolVisual.EsVisibleEnArbol(BotonPorContenido(window, "Anular")));
-        Assert.False(ArbolVisual.EsVisibleEnArbol(BotonPorContenido(window, "Reabrir")));
+        // Las transiciones viven en el encabezado de detalle, que en el alta no se muestra (ni se realiza): ningún botón
+        // de transición queda visible en el árbol.
+        foreach (var texto in new[] { "Iniciar", "Volver a pendiente", "Finalizar", "Anular", "Reabrir" })
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(),
+                b => b.Content as string == texto && ArbolVisual.EsVisibleEnArbol(b));
         Assert.True(ArbolVisual.EsVisibleEnArbol(BotonPorContenido(window, "Guardar")));
     }
 
@@ -270,7 +270,7 @@ public class DocumentoFormViewGatesTests
         var (window, _) = MontarParaCrear(RolUsuario.Operador);
 
         foreach (var control in CamposDelFormulario(window))
-            Assert.True(control.IsEnabled);
+            Assert.True(control.IsEffectivelyEnabled);
     }
 
     /// <summary>14b: rama derecha del OR (EsNuevoDocumento=false, PuedeEditar=true por documento
@@ -281,7 +281,7 @@ public class DocumentoFormViewGatesTests
         var (window, _) = await MontarParaVerAsync(RolUsuario.Operador, DocumentoDe(1, EstadoDocumento.EnProceso));
 
         foreach (var control in CamposDelFormulario(window))
-            Assert.True(control.IsEnabled);
+            Assert.True(control.IsEffectivelyEnabled);
     }
 
     /// <summary>14c: ninguna rama del OR (EsNuevoDocumento=false, PuedeEditar=false por documento
@@ -292,7 +292,7 @@ public class DocumentoFormViewGatesTests
         var (window, _) = await MontarParaVerAsync(RolUsuario.Operador, DocumentoDe(1, EstadoDocumento.Finalizado));
 
         foreach (var control in CamposDelFormulario(window))
-            Assert.False(control.IsEnabled);
+            Assert.False(control.IsEffectivelyEnabled);
     }
 
     // ---- Hallazgo 3 (revisión final, Important): gate de "Tareas vinculadas" sin custodiar ----

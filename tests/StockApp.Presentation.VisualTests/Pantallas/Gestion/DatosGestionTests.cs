@@ -208,7 +208,7 @@ public class DatosGestionTests
 
         var historial = Contenido<DocumentoListViewModel>(DatosDocumentos.ListadoHistorial());
         await historial.CargarAsync();
-        Assert.True(historial.MostrandoHistorial);
+        Assert.True(historial.EsVistaHistorial);
         Assert.Equal(4, historial.Historial.Count);
         Assert.Empty(historial.Activos);
 

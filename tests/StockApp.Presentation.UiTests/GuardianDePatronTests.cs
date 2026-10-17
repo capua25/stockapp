@@ -46,8 +46,6 @@ public class GuardianDePatronTests
 {
     [AvaloniaTheory]
     [InlineData(typeof(ImportacionView), "Importar planillas", "FINANZAS")]
-    [InlineData(typeof(DocumentoListView), "Documentos administrativos", "DOCUMENTOS")]
-    [InlineData(typeof(DocumentoFormView), "Nuevo documento", "DOCUMENTOS")]
     public void Vista_TieneHeaderVistaConElTituloEsperado(Type tipoVista, string? titulo, string? eyebrow)
     {
         var vista = PatronHelpers.Montar(tipoVista);
@@ -65,8 +63,6 @@ public class GuardianDePatronTests
     public static readonly TheoryData<Type> VistasDeLaTanda = new()
     {
         typeof(ImportacionView),
-        typeof(DocumentoListView),
-        typeof(DocumentoFormView),
     };
 
     /// <summary>
@@ -81,7 +77,6 @@ public class GuardianDePatronTests
     {
         typeof(HistorialImportacionesView),
         typeof(NuevaImportacionView),
-        typeof(AdjuntosDocumentoPanelView),
         typeof(AccesoLimitadoView),
     };
 
@@ -90,8 +85,8 @@ public class GuardianDePatronTests
     /// custodia en su lugar (Task 13.4). Es una lista de EXCLUSION explicita: el test de
     /// cobertura de abajo exige que toda vista del ensamblado este en alguna lista o en esta.
     /// Son CINCO, no tres: la revision de exenciones de la Task 13.4 confirmo que solo hay DOS
-    /// exenciones "vivas" mas arriba (VistasExentasPorEmbeberUnWizardP8 y
-    /// VistasExentasPorPrimariosMutuamenteExcluyentesSinVm) -- el esbozo original de B3 preveia
+    /// exenciones "vivas" mas arriba (VistasExentasPorEmbeberUnWizardP8 y la de los
+    /// primarios mutuamente excluyentes de DocumentoFormView, que se fue con su migracion a v2) -- el esbozo original de B3 preveia
     /// una tercera (VistasExentasPorMarcaDeAguaAprobada, LoginView) para el logo del municipio,
     /// pero el Ruling B-25 quedo SUPERSEDIDO: LoginView usa la variante Ruling B-11
     /// (Style Selector="Image.marca-agua", Priority=Style) en vez de Opacity local, asi que el
@@ -178,6 +173,9 @@ public class GuardianDePatronTests
         typeof(TareaListView),
         typeof(TareaFormView),
         typeof(ClasificacionTareaPanelView),
+        typeof(DocumentoListView),
+        typeof(DocumentoFormView),
+        typeof(AdjuntosDocumentoPanelView),
     };
 
     /// <summary>
@@ -570,32 +568,12 @@ public class GuardianDePatronTests
         typeof(NuevaImportacionView),
     };
 
-    /// <summary>
-    /// GAP DE PLAN encontrado en la Task 9.2 (Fase B, tanda 9): <c>DocumentoFormView</c> tiene dos
-    /// <c>Classes="primary"</c> gateados por estado del ViewModel -- "Guardar" (alta,
-    /// <c>IsVisible="{Binding EsNuevoDocumento}"</c>) y "Guardar cambios" (edicion,
-    /// <c>IsVisible="{Binding PuedeEditar}"</c>). Verificado en <c>DocumentoFormViewModel.cs:88</c>:
-    /// <c>PuedeEditar =&gt; !EsNuevoDocumento &amp;&amp; _documento is { EsActivo: true }</c> -- el
-    /// termino <c>!EsNuevoDocumento</c> hace que los dos NUNCA sean true a la vez en produccion.
-    /// Pero <see cref="PatronHelpers.Montar"/> no asigna DataContext (mismo mecanismo que el
-    /// Ruling B-20 documenta para los dos <c>HeaderVista</c> de esta vista): sin VM real, ambos
-    /// <c>IsVisible</c> caen al default `true` de la propiedad y el guardian ve dos primarios. Los
-    /// 10 casos de <c>DocumentoFormViewGatesTests</c> (Task 9.0) ya ejercitan las dos ramas con un
-    /// VM real via <c>ArbolVisual.EsVisibleEnArbol</c>; no se duplica esa cobertura aca.
-    /// </summary>
-    private static readonly HashSet<Type> VistasExentasPorPrimariosMutuamenteExcluyentesSinVm = new()
-    {
-        typeof(DocumentoFormView),
-    };
-
     [AvaloniaTheory]
     [MemberData(nameof(VistasDeLaTanda))]
     [MemberData(nameof(VistasEmbebidas))]
     public void Vista_NoTieneUnSegundoBotonPrimario(Type tipoVista)
     {
         if (VistasExentasPorEmbeberUnWizardP8.Contains(tipoVista))
-            return;
-        if (VistasExentasPorPrimariosMutuamenteExcluyentesSinVm.Contains(tipoVista))
             return;
 
         var vista = PatronHelpers.Montar(tipoVista);

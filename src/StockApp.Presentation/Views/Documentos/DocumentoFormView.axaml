@@ -2,144 +2,214 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Documentos"
              xmlns:dom="using:StockApp.Domain.Entities"
-             xmlns:beh="using:StockApp.Presentation.Behaviors"
+             xmlns:conv="using:StockApp.Presentation.Converters"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
+             xmlns:b="using:StockApp.Presentation.Behaviors"
              xmlns:adj="using:StockApp.Presentation.Views.Documentos"
-             xmlns:c="using:StockApp.Presentation.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="760" d:DesignHeight="800"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
              x:Class="StockApp.Presentation.Views.Documentos.DocumentoFormView"
-             x:DataType="vm:DocumentoFormViewModel">
+             x:DataType="vm:DocumentoFormViewModel"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
 
-    <ScrollViewer>
-        <DockPanel Margin="{DynamicResource MargenVista}">
+    <!-- UI v2 (formulario §5.2). Espejo: docs/ui-v2/mockups/gestion/documento-*.html. Doble uso: alta y detalle. En el
+         detalle, las transiciones de estado (según estado y rol) van en el encabezado junto a la insignia del estado; los
+         campos se deshabilitan juntos con el documento cerrado; Historial del trámite, Adjuntos y Tareas vinculadas
+         (solo con tareas.gestionar) en secciones con el mismo título. Los errores de Número, Descripción y Fecha los dibuja
+         el DataValidationErrors del control, solo con el campo tocado. El error del servidor va en la Alerta de arriba del
+         pie, que queda fijo fuera del scroll. -->
+    <UserControl.Styles>
+        <!-- Descripción multilínea: el alto mínimo de 80 va en la caja y no en el TextBox, porque el error de campo lo dibuja el
+             DataValidationErrors de la plantilla y con Height en el control entraría en los mismos 80 y aplastaría la caja. -->
+        <Style Selector="TextBox.multilinea /template/ Border#PART_BorderElement">
+            <Setter Property="MinHeight" Value="80" />
+        </Style>
+        <Style Selector="TextBox.multilinea /template/ ScrollViewer#PART_ScrollViewer">
+            <Setter Property="MaxHeight" Value="160" />
+        </Style>
+        <Style Selector="Border.evento">
+            <Setter Property="BorderThickness" Value="0,1,0,0" />
+            <Setter Property="BorderBrush" Value="{DynamicResource V2SeparadorGrillaBrush}" />
+            <Setter Property="Padding" Value="0,8" />
+        </Style>
+        <Style Selector="ItemsControl#ListaEventos > ContentPresenter:nth-child(1) > Border.evento">
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0,0,0,8" />
+        </Style>
+    </UserControl.Styles>
 
-            <Border Classes="card" VerticalAlignment="Top">
-                <StackPanel Spacing="{DynamicResource Espacio3}" MaxWidth="680" HorizontalAlignment="Left">
+    <Grid x:Name="Raiz" RowDefinitions="*,Auto,Auto">
 
-                    <c:HeaderVista Eyebrow="DOCUMENTOS" Titulo="Nuevo documento" IsVisible="{Binding EsNuevoDocumento}" />
-                    <c:HeaderVista Eyebrow="DOCUMENTOS" Titulo="Detalle del documento" IsVisible="{Binding !EsNuevoDocumento}" />
+        <ScrollViewer x:Name="Scroll" Grid.Row="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="28,24">
 
-                    <TextBlock Text="{Binding EstadoTexto, StringFormat='Estado: {0}'}" Classes="caption"
-                               IsVisible="{Binding !EsNuevoDocumento}" />
-                    <TextBlock Text="{Binding RegistradoPorNombre, StringFormat='Registrado por: {0}'}" Classes="caption"
-                               IsVisible="{Binding RegistradoPorNombre, Converter={x:Static ObjectConverters.IsNotNull}}" />
-
-                    <!-- Campos: editables en alta (EsNuevoDocumento) o en detalle solo si PuedeEditar
-                         (D1: documento activo). PuedeEditarCampos unifica las dos condiciones para
-                         no duplicar este bloque completo. -->
-                    <StackPanel Spacing="{DynamicResource Espacio3}">
-                        <c:CampoFormulario Etiqueta="Número">
-                            <TextBox Text="{Binding Numero}" IsEnabled="{Binding PuedeEditarCampos}" />
-                        </c:CampoFormulario>
-
-                        <c:CampoFormulario Etiqueta="Año">
-                            <NumericUpDown Value="{Binding AnioSeleccionado}" Minimum="2000" Maximum="2100"
-                                           FormatString="0" IsEnabled="{Binding PuedeEditarCampos}" HorizontalAlignment="Left" Width="140"
-                                           beh:NumericUpDownValidacionBehavior.Que="año" />
-                        </c:CampoFormulario>
-
-                        <c:CampoFormulario Etiqueta="Tipo">
-                            <ComboBox ItemsSource="{Binding TiposDisponibles}" SelectedItem="{Binding TipoSeleccionado}"
-                                      IsEnabled="{Binding PuedeEditarCampos}" Width="200" HorizontalAlignment="Left" />
-                        </c:CampoFormulario>
-
-                        <c:CampoFormulario Etiqueta="Fecha de emisión">
-                            <CalendarDatePicker SelectedDate="{Binding FechaEmisionSeleccionada}"
-                                                PlaceholderText="dd/mm/aaaa" SelectedDateFormat="Custom"
-                                                CustomDateFormatString="dd/MM/yyyy" IsEnabled="{Binding PuedeEditarCampos}"
-                                                beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
-                        </c:CampoFormulario>
-
-                        <c:CampoFormulario Etiqueta="Descripción">
-                            <TextBox Text="{Binding Descripcion}" AcceptsReturn="True" Height="80"
-                                      IsEnabled="{Binding PuedeEditarCampos}" />
-                        </c:CampoFormulario>
-
-                        <Button Classes="primary" Content="Guardar cambios" Command="{Binding GuardarEdicionCommand}"
-                                IsVisible="{Binding PuedeEditar}" HorizontalAlignment="Left" />
-                    </StackPanel>
-
-                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}" IsVisible="{Binding EsNuevoDocumento}">
-                        <Button Classes="primary" Content="Guardar" Command="{Binding GuardarCommand}" />
-                        <Button Classes="secondary" Content="Volver" Command="{Binding VolverCommand}" />
-                    </StackPanel>
-
-                    <!-- Transiciones de estado: documento existente -->
-                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}" Margin="0,8,0,0" IsVisible="{Binding !EsNuevoDocumento}">
-                        <Button Classes="secondary" Content="Iniciar" Command="{Binding IniciarCommand}" IsVisible="{Binding PuedeIniciar}" />
-                        <Button Classes="secondary" Content="Volver a pendiente" Command="{Binding VolverAPendienteCommand}" IsVisible="{Binding PuedeVolverAPendiente}" />
-                        <Button Classes="secondary" Content="Finalizar" Command="{Binding FinalizarCommand}" IsVisible="{Binding PuedeFinalizar}" />
-                        <Button Classes="danger" Content="Anular" Command="{Binding AnularCommand}" IsVisible="{Binding PuedeAnular}" />
-                        <Button Classes="secondary" Content="Reabrir" Command="{Binding ReabrirCommand}" IsVisible="{Binding PuedeReabrir}" />
-                        <Button Classes="secondary" Content="Volver" Command="{Binding VolverCommand}" />
-                    </StackPanel>
-
-                    <!-- Hilo de eventos: documento existente -->
-                    <StackPanel Spacing="6" IsVisible="{Binding !EsNuevoDocumento}" Margin="0,8,0,0">
-                        <TextBlock Text="Historial del trámite" Classes="seccion" />
-                        <ItemsControl ItemsSource="{Binding Eventos}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="dom:EventoDocumento">
-                                    <Border Classes="card" Margin="0,0,0,6" Padding="{DynamicResource PaddingCompacto}">
-                                        <StackPanel Spacing="2">
-                                            <TextBlock Text="{Binding Texto}" TextWrapping="Wrap" />
-                                            <TextBlock Text="{Binding Fecha, StringFormat='{}{0:dd/MM/yyyy HH:mm}'}"
-                                                       Classes="caption" Foreground="{DynamicResource TextoTerciarioBrush}" />
-                                        </StackPanel>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-
-                        <c:CampoFormulario Etiqueta="Nueva nota">
-                            <TextBox Text="{Binding NuevaNotaTexto}" AcceptsReturn="True" Height="60"
-                                      Watermark="Agregar una nota al hilo" />
-                        </c:CampoFormulario>
-                        <Button Classes="secondary" Content="Agregar nota" Command="{Binding AgregarNotaCommand}" />
-                    </StackPanel>
-
-                    <!-- Adjuntos: solo documento existente (D11a: agregar exige que ya exista).
-                         IsVisible/Margin van en el Panel envolvente, no en AdjuntosDocumentoPanelView:
-                         ese control declara su propio x:DataType (AdjuntosDocumentoPanelViewModel) en
-                         su propio archivo, y compilar un binding de otra propiedad en el MISMO tag que
-                         asigna DataContext hace que el compilador de bindings resuelva esa propiedad
-                         contra el DataType del hijo en vez del de DocumentoFormViewModel (AVLN2000). -->
-                    <Panel IsVisible="{Binding !EsNuevoDocumento}" Margin="0,8,0,0">
-                        <adj:AdjuntosDocumentoPanelView DataContext="{Binding AdjuntosPanel}" />
-                    </Panel>
-
-                    <!-- Tareas vinculadas (spec 2026-09-08, D11/D13): gateada por
-                         PuedeVerTareasVinculadas (tareas.gestionar), ya que un operador puede
-                         tener documentos.gestionar sin tener tareas.gestionar. -->
-                    <StackPanel Spacing="6" Margin="0,8,0,0"
-                                IsVisible="{Binding !EsNuevoDocumento}">
-                        <StackPanel IsVisible="{Binding PuedeVerTareasVinculadas}" Spacing="6">
-                            <TextBlock Text="Tareas vinculadas" Classes="seccion" />
-                            <ItemsControl ItemsSource="{Binding TareasVinculadas}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="dom:Tarea">
-                                        <Border Classes="card" Margin="0,0,0,6" Padding="{DynamicResource PaddingCompacto}">
-                                            <StackPanel Spacing="2">
-                                                <TextBlock Text="{Binding Titulo}" FontWeight="SemiBold" />
-                                                <TextBlock Text="{Binding Estado}" Classes="caption" />
-                                            </StackPanel>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                <Grid x:Name="ColumnaEncabezado" UseLayoutRounding="False">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" MaxWidth="{StaticResource V2AnchoFormularioMax}" />
+                    </Grid.ColumnDefinitions>
+                    <v2:EncabezadoPagina x:Name="EncabezadoAlta" UseLayoutRounding="True" Titulo="Nuevo documento"
+                                         BreadcrumbOrigen="Documentos administrativos" BreadcrumbComando="{Binding VolverCommand}"
+                                         BreadcrumbActual="Nuevo documento" IsVisible="{Binding EsNuevoDocumento}" />
+                    <v2:EncabezadoPagina x:Name="EncabezadoDetalle" UseLayoutRounding="True" Titulo="Detalle del documento"
+                                         BreadcrumbOrigen="Documentos administrativos" BreadcrumbComando="{Binding VolverCommand}"
+                                         BreadcrumbActual="Detalle del documento" IsVisible="{Binding !EsNuevoDocumento}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <v2:Insignia x:Name="InsigniaEstado" VerticalAlignment="Center"
+                                         Texto="{Binding EstadoTexto, Converter={x:Static conv:EstadoDocumentoConverter.Texto}}"
+                                         Variante="{Binding EstadoTexto, Converter={x:Static conv:EstadoDocumentoConverter.Variante}}" />
+                            <Button x:Name="BotonIniciar" Classes="secundario" Content="Iniciar" Command="{Binding IniciarCommand}"
+                                    IsVisible="{Binding PuedeIniciar}" />
+                            <Button x:Name="BotonVolverAPendiente" Classes="secundario" Content="Volver a pendiente"
+                                    Command="{Binding VolverAPendienteCommand}" IsVisible="{Binding PuedeVolverAPendiente}" />
+                            <Button x:Name="BotonFinalizar" Classes="secundario" Content="Finalizar" Command="{Binding FinalizarCommand}"
+                                    IsVisible="{Binding PuedeFinalizar}" />
+                            <Button x:Name="BotonAnular" Classes="peligro" Content="Anular" Command="{Binding AnularCommand}"
+                                    IsVisible="{Binding PuedeAnular}" />
+                            <Button x:Name="BotonReabrir" Classes="secundario" Content="Reabrir" Command="{Binding ReabrirCommand}"
+                                    IsVisible="{Binding PuedeReabrir}" />
                         </StackPanel>
-                    </StackPanel>
+                    </v2:EncabezadoPagina>
+                </Grid>
 
-                    <TextBlock Text="{Binding MensajeError}"
-                               Foreground="{DynamicResource DangerBrush}"
-                               TextWrapping="Wrap"
-                               IsVisible="{Binding MensajeError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <Grid x:Name="ColumnaFormulario" UseLayoutRounding="False">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" MaxWidth="{StaticResource V2AnchoFormularioMax}" />
+                    </Grid.ColumnDefinitions>
 
+                    <v2:TarjetaContenido x:Name="Tarjeta" Padding="24" UseLayoutRounding="True">
+                        <StackPanel>
+
+                            <TextBlock x:Name="TituloAlta" Classes="subtitulo-formulario" Text="Datos del documento" Margin="0,0,0,12"
+                                       IsVisible="{Binding EsNuevoDocumento}" />
+                            <TextBlock x:Name="TituloDatos" Classes="titulo-seccion" Text="Datos del documento" Margin="0,0,0,8"
+                                       IsVisible="{Binding !EsNuevoDocumento}" />
+                            <TextBlock x:Name="RegistradoPor" Classes="texto-secundario" Margin="0,0,0,12"
+                                       Text="{Binding RegistradoPorNombre, StringFormat='Registrado por: {0}'}"
+                                       IsVisible="{Binding RegistradoPorNombre, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+                            <!-- Los campos se deshabilitan juntos (tokens de deshabilitado) con el documento cerrado. -->
+                            <StackPanel x:Name="Campos" IsEnabled="{Binding PuedeEditarCampos}">
+                                <Grid ColumnDefinitions="*,16,*" RowDefinitions="Auto,Auto">
+                                    <v2:CampoFormulario x:Name="CampoTipo" Grid.Row="0" Grid.Column="0" Etiqueta="Tipo">
+                                        <ComboBox x:Name="ComboTipo" HorizontalAlignment="Stretch"
+                                                  ItemsSource="{Binding TiposDisponibles}" SelectedItem="{Binding TipoSeleccionado}" />
+                                    </v2:CampoFormulario>
+                                    <v2:CampoFormulario x:Name="CampoNumero" Grid.Row="0" Grid.Column="2" Etiqueta="Número" Requerido="True">
+                                        <TextBox x:Name="CajaNumero" Text="{Binding Numero}" />
+                                    </v2:CampoFormulario>
+                                    <v2:CampoFormulario x:Name="CampoAnio" Grid.Row="1" Grid.Column="0" Margin="0,16,0,0" Etiqueta="Año">
+                                        <NumericUpDown x:Name="SelectorAnio" HorizontalAlignment="Stretch" Value="{Binding AnioSeleccionado}"
+                                                       Minimum="2000" Maximum="2100" FormatString="0"
+                                                       b:NumericUpDownValidacionBehavior.Que="año" />
+                                    </v2:CampoFormulario>
+                                    <v2:CampoFormulario x:Name="CampoFechaEmision" Grid.Row="1" Grid.Column="2" Margin="0,16,0,0"
+                                                        Etiqueta="Fecha de emisión" Requerido="True">
+                                        <CalendarDatePicker x:Name="SelectorFechaEmision" HorizontalAlignment="Stretch"
+                                                            SelectedDate="{Binding FechaEmisionSeleccionada}"
+                                                            PlaceholderText="dd/mm/aaaa" SelectedDateFormat="Custom"
+                                                            CustomDateFormatString="dd/MM/yyyy"
+                                                            b:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
+                                    </v2:CampoFormulario>
+                                </Grid>
+                                <v2:CampoFormulario x:Name="CampoDescripcion" Margin="0,16,0,0" Etiqueta="Descripción" Requerido="True">
+                                    <TextBox x:Name="CajaDescripcion" Classes="multilinea" Text="{Binding Descripcion}" AcceptsReturn="True" TextWrapping="Wrap" />
+                                </v2:CampoFormulario>
+                            </StackPanel>
+
+                            <!-- DETALLE: historial, adjuntos y tareas vinculadas. -->
+                            <StackPanel x:Name="SeccionDetalle" IsVisible="{Binding !EsNuevoDocumento}">
+
+                                <StackPanel x:Name="SeccionHistorial">
+                                    <Border Height="1" Margin="0,20" Background="{DynamicResource V2SeparadorGrillaBrush}" />
+                                    <TextBlock Classes="titulo-seccion" Text="Historial del trámite" Margin="0,0,0,8" />
+                                    <ItemsControl x:Name="ListaEventos" ItemsSource="{Binding Eventos}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="dom:EventoDocumento">
+                                                <Border Classes="evento">
+                                                    <StackPanel>
+                                                        <TextBlock Classes="cuerpo" TextWrapping="Wrap" Text="{Binding Texto}" />
+                                                        <TextBlock Classes="texto-secundario"
+                                                                   Text="{Binding Fecha, Converter={x:Static conv:FechaHoraLocalConverter.Instance}}" />
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <v2:CampoFormulario Margin="0,16,0,0" Etiqueta="Nueva nota">
+                                        <TextBox x:Name="CajaNuevaNota" Text="{Binding NuevaNotaTexto}" AcceptsReturn="True" TextWrapping="Wrap"
+                                                 Height="60" PlaceholderText="Agregar una nota al hilo" />
+                                    </v2:CampoFormulario>
+                                    <Button x:Name="BotonAgregarNota" Classes="secundario" Content="Agregar nota" Margin="0,8,0,0"
+                                            HorizontalAlignment="Left" Command="{Binding AgregarNotaCommand}" />
+                                </StackPanel>
+
+                                <!-- IsVisible/Margin van en el Panel envolvente, no en AdjuntosDocumentoPanelView: ese control declara su
+                                     propio x:DataType y compilar un binding de otra propiedad en el MISMO tag que asigna DataContext lo
+                                     resolvería contra el DataType del hijo (AVLN2000). -->
+                                <StackPanel x:Name="SeccionAdjuntos">
+                                    <Border Height="1" Margin="0,20" Background="{DynamicResource V2SeparadorGrillaBrush}" />
+                                    <Panel>
+                                        <adj:AdjuntosDocumentoPanelView DataContext="{Binding AdjuntosPanel}" />
+                                    </Panel>
+                                </StackPanel>
+
+                                <StackPanel x:Name="SeccionTareasVinculadas" IsVisible="{Binding PuedeVerTareasVinculadas}">
+                                    <Border Height="1" Margin="0,20" Background="{DynamicResource V2SeparadorGrillaBrush}" />
+                                    <TextBlock Classes="titulo-seccion" Text="Tareas vinculadas" Margin="0,0,0,8" />
+                                    <ItemsControl x:Name="ListaTareasVinculadas" ItemsSource="{Binding TareasVinculadas}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="dom:Tarea">
+                                                <Border Height="40" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource V2SeparadorGrillaBrush}">
+                                                    <Grid ColumnDefinitions="*,Auto">
+                                                        <TextBlock Classes="cuerpo" Text="{Binding Titulo}" TextTrimming="CharacterEllipsis"
+                                                                   ToolTip.Tip="{Binding Titulo}" b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                                        <v2:Insignia Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                                     Texto="{Binding Estado, Converter={x:Static conv:EstadoTareaConverter.Texto}}"
+                                                                     Variante="{Binding Estado, Converter={x:Static conv:EstadoTareaConverter.Variante}}" />
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </StackPanel>
+
+                        </StackPanel>
+                    </v2:TarjetaContenido>
+                </Grid>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Error general fuera del scroll, con el ancho de la card: se ve aunque el formulario esté scrolleado. -->
+        <Grid x:Name="FilaAlertaError" Grid.Row="1" Margin="28,0,28,12" UseLayoutRounding="False"
+              IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MaxWidth="{StaticResource V2AnchoFormularioMax}" />
+            </Grid.ColumnDefinitions>
+            <v2:Alerta x:Name="AlertaError" Variante="Error" Texto="{Binding MensajeError}" />
+        </Grid>
+
+        <Border x:Name="Pie" Grid.Row="2"
+                Background="{DynamicResource V2SuperficieBrush}"
+                BorderBrush="{DynamicResource V2BordeBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="28,16">
+            <Grid UseLayoutRounding="False">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" MaxWidth="{StaticResource V2AnchoFormularioMax}" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                    <Button x:Name="BotonVolver" Classes="secundario" Content="Volver" Command="{Binding VolverCommand}" />
+                    <Button x:Name="BotonGuardar" Classes="primario" Content="Guardar" Command="{Binding GuardarCommand}"
+                            IsVisible="{Binding EsNuevoDocumento}" />
+                    <Button x:Name="BotonGuardarCambios" Classes="primario" Content="Guardar cambios" Command="{Binding GuardarEdicionCommand}"
+                            IsVisible="{Binding PuedeEditar}" />
                 </StackPanel>
-            </Border>
+            </Grid>
+        </Border>
 
-        </DockPanel>
-    </ScrollViewer>
+    </Grid>
 
 </UserControl>

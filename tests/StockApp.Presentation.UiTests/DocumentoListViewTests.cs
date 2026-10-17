@@ -45,7 +45,8 @@ public class DocumentoListViewTests
     {
         var servicio = new DocumentoServiceFake(activos, historial);
         var vm = new DocumentoListViewModel(
-            servicio, new SesionFake(rol), new NavigationRecorderDocumentosFake(), new ConfirmacionServiceFake());
+            servicio, new SesionFake(rol), new NavigationRecorderDocumentosFake(), new ConfirmacionServiceFake())
+        { EsperaDebounce = TimeSpan.Zero };
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
         window.DataContext = vm;
@@ -70,7 +71,7 @@ public class DocumentoListViewTests
     }
 
     [AvaloniaFact]
-    public void Montar_SolapaActivosSeleccionadaPorDefecto_NoCargaElHistorial()
+    public void Montar_VistaActivosPorDefecto_NoCargaElHistorial()
     {
         var (_, vm, servicio) = Montar(historial: new List<DocumentoAdministrativo>
         {
@@ -81,67 +82,66 @@ public class DocumentoListViewTests
         Assert.Equal(0, servicio.LlamadasListarHistorial);
     }
 
-    [AvaloniaFact]
-    public void ClickReal_EnLaSolapaHistorial_DisparaLaCargaPerezosa()
+    private static void EsperarRecarga(DocumentoListViewModel vm)
     {
+        Dispatcher.UIThread.RunJobs();
+        vm._tareaDebounce.GetAwaiter().GetResult();
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    [AvaloniaFact]
+    public void ClickReal_EligiendoHistorialEnElCombo_ConsultaElHistorialCadaVez()
+    {
+        // Ya no hay pestañas ni carga "solo la primera vez": cada elección de la vista consulta (siempre se ve lo último).
         var (window, vm, servicio) = Montar(historial: new List<DocumentoAdministrativo>
         {
             DocumentoDe(9, "0001", EstadoDocumento.Finalizado),
         });
+        var combo = window.GetVisualDescendants().OfType<ComboBox>().First(c => c.Name == "ComboVistaActivos");
 
-        var tabControl = window.GetVisualDescendants().OfType<TabControl>().First();
-        tabControl.SelectedIndex = 1;
-        Dispatcher.UIThread.RunJobs();
-        Dispatcher.UIThread.RunJobs();
+        combo.SelectedItem = vm.Vistas[1];
+        EsperarRecarga(vm);
 
         Assert.Single(vm.Historial);
         Assert.Equal(1, servicio.LlamadasListarHistorial);
 
-        // Volver a Activos y de nuevo a Historial no debe repetir la consulta (carga perezosa
-        // = una sola vez, no "cada vez que se selecciona").
-        tabControl.SelectedIndex = 0;
-        Dispatcher.UIThread.RunJobs();
-        tabControl.SelectedIndex = 1;
-        Dispatcher.UIThread.RunJobs();
+        vm.VistaSeleccionada = vm.Vistas[0];
+        EsperarRecarga(vm);
+        vm.VistaSeleccionada = vm.Vistas[1];
+        EsperarRecarga(vm);
 
-        Assert.Equal(1, servicio.LlamadasListarHistorial);
+        Assert.Equal(2, servicio.LlamadasListarHistorial);
     }
 
     [AvaloniaFact]
-    public void ClickReal_EnBuscarDeActivos_VuelveAConsultarAlServicio()
+    public void ClickReal_TipeandoEnBuscarDeActivos_VuelveAConsultarAlServicio()
     {
-        // I2 del review final: FiltroActivosTexto/Tipo no tenían ningún disparador propio en
-        // la vista real -- el único punto de recarga era DataContextChanged (una sola vez).
-        var (window, _, servicio) = Montar(activos: new List<DocumentoAdministrativo>
+        // I2 del review final: FiltroActivosTexto/Tipo no tenían ningún disparador propio en la vista real; ahora recargan
+        // solos tras una espera corta.
+        var (window, vm, servicio) = Montar(activos: new List<DocumentoAdministrativo>
         {
             DocumentoDe(1, "0087", EstadoDocumento.Pendiente),
         });
         Assert.Equal(1, servicio.LlamadasListarActivos);
 
-        var boton = window.GetVisualDescendants().OfType<Button>().First(b => b.Content as string == "Buscar");
-        boton.Command!.Execute(null);
-        Dispatcher.UIThread.RunJobs();
+        window.GetVisualDescendants().OfType<TextBox>().First(c => c.Name == "CajaBuscarActivos").Text = "0087";
+        EsperarRecarga(vm);
 
         Assert.Equal(2, servicio.LlamadasListarActivos);
+        Assert.Equal("0087", servicio.UltimoFiltroActivos?.Texto);
     }
 
     [AvaloniaFact]
-    public void ClickReal_EligiendoTipoEnElComboDeActivosYBuscando_LlegaAlServicio()
+    public void ClickReal_EligiendoTipoEnElComboDeActivos_LlegaAlServicio()
     {
         var (window, vm, servicio) = Montar(activos: new List<DocumentoAdministrativo>
         {
             DocumentoDe(1, "0087", EstadoDocumento.Pendiente),
         });
 
-        var combo = window.GetVisualDescendants().OfType<ComboBox>()
-            .First(c => (c.ItemsSource as System.Collections.IEnumerable)?
-                .Cast<OpcionTipoDocumento>().Any() == true && c.SelectedItem is OpcionTipoDocumento);
+        var combo = window.GetVisualDescendants().OfType<ComboBox>().First(c => c.Name == "ComboTipoActivos");
         combo.SelectedItem = vm.TiposDisponibles.First(o => o.Valor == TipoDocumento.Oficio);
-        Dispatcher.UIThread.RunJobs();
-
-        var boton = window.GetVisualDescendants().OfType<Button>().First(b => b.Content as string == "Buscar");
-        boton.Command!.Execute(null);
-        Dispatcher.UIThread.RunJobs();
+        EsperarRecarga(vm);
 
         Assert.Equal(TipoDocumento.Oficio, servicio.UltimoFiltroActivos?.Tipo);
     }
@@ -151,13 +151,15 @@ public class DocumentoListViewTests
     {
         // I3: el botón "Anular…" sigue navegando al detalle (motivo obligatorio vive en el
         // formulario) -- este test fija esa decisión de diseño para que no se rompa sin querer.
-        var (window, _, servicio) = Montar(activos: new List<DocumentoAdministrativo>
+        var (window, vm, servicio) = Montar(activos: new List<DocumentoAdministrativo>
         {
             DocumentoDe(1, "0087", EstadoDocumento.Pendiente),
         }, rol: RolUsuario.Admin);
+        vm.FilaSeleccionadaActivos = vm.Activos[0];
+        Dispatcher.UIThread.RunJobs();
 
         var boton = window.GetVisualDescendants().OfType<Button>().First(b => b.Content as string == "Anular…");
-        boton.Command!.Execute(boton.DataContext);
+        boton.Command!.Execute(boton.CommandParameter);
         Dispatcher.UIThread.RunJobs();
 
         Assert.Equal(0, servicio.LlamadasListarHistorial); // no llamó a AnularAsync ni recargó nada del servicio

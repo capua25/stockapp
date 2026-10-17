@@ -160,7 +160,7 @@
                                     <Grid ColumnDefinitions="Auto,Auto" VerticalAlignment="Center">
                                         <TextBlock Text="{Binding FechaLimite, Converter={x:Static conv:FechaCortaConverter.Instance}}"
                                                    Classes.inactivo="{Binding Tarea.Estado, Converter={x:Static conv:EstadoTareaConverter.Inactivo}}"
-                                                   VerticalAlignment="Center" />
+                                                   HorizontalAlignment="Left" VerticalAlignment="Center" />
                                         <v2:Insignia Grid.Column="1" Margin="8,0,0,0" Texto="Vencida" Variante="Peligro"
                                                      VerticalAlignment="Center" IsVisible="{Binding EsVencida}" />
                                     </Grid>

@@ -78,15 +78,18 @@ public class DocumentoListViewModelTests
     }
 
     [Fact]
-    public async Task AbrirHistorialCommand_PrimeraVez_CargaElHistorialConElAnioActual()
+    public async Task ElegirHistorial_ConsultaElHistorial()
     {
         var ctx = Crear(historial: new List<DocumentoAdministrativo>
         {
             DocumentoDe(3, EstadoDocumento.Finalizado),
         });
+        ctx.Vm.EsperaDebounce = TimeSpan.Zero;
         Assert.Equal(DateTime.UtcNow.Year, ctx.Vm.FiltroHistorialAnio);
+        await ctx.Vm.CargarAsync();
 
-        await ctx.Vm.AbrirHistorialCommand.ExecuteAsync(null);
+        ctx.Vm.VistaSeleccionada = ctx.Vm.Vistas[1];
+        await ctx.Vm._tareaDebounce;
 
         Assert.Single(ctx.Vm.Historial);
         ctx.Svc.Verify(s => s.ListarHistorialAsync(
@@ -94,22 +97,27 @@ public class DocumentoListViewModelTests
     }
 
     [Fact]
-    public async Task AbrirHistorialCommand_SegundaVez_NoVuelveALlamarAlServicio()
+    public async Task ElegirHistorialDosVeces_ConsultaCadaVez()
     {
+        // Cambia el contrato de la solapa: cada vez que se elige la vista se consulta (siempre se ve lo último).
         var ctx = Crear();
+        ctx.Vm.EsperaDebounce = TimeSpan.Zero;
+        await ctx.Vm.CargarAsync();
 
-        await ctx.Vm.AbrirHistorialCommand.ExecuteAsync(null);
-        await ctx.Vm.AbrirHistorialCommand.ExecuteAsync(null);
+        ctx.Vm.VistaSeleccionada = ctx.Vm.Vistas[1];
+        await ctx.Vm._tareaDebounce;
+        ctx.Vm.VistaSeleccionada = ctx.Vm.Vistas[0];
+        await ctx.Vm._tareaDebounce;
+        ctx.Vm.VistaSeleccionada = ctx.Vm.Vistas[1];
+        await ctx.Vm._tareaDebounce;
 
-        ctx.Svc.Verify(s => s.ListarHistorialAsync(It.IsAny<FiltroDocumentos>()), Times.Once);
+        ctx.Svc.Verify(s => s.ListarHistorialAsync(It.IsAny<FiltroDocumentos>()), Times.Exactly(2));
     }
 
     [Fact]
     public async Task CargarHistorialAsync_LlamadaDirecta_SiempreVuelveAConsultar()
     {
-        // A diferencia de AbrirHistorialCommand (una sola vez), CargarHistorialAsync() es el
-        // método que dispara el botón "Buscar" del filtro del historial: debe poder recargar
-        // cuantas veces el usuario cambie el filtro.
+        // CargarHistorialAsync() recarga el historial cuantas veces el usuario cambie un filtro.
         var ctx = Crear();
 
         await ctx.Vm.CargarHistorialAsync();
@@ -119,20 +127,23 @@ public class DocumentoListViewModelTests
     }
 
     [Fact]
-    public async Task BuscarHistorialCommand_RecargaLaColeccionHistorial()
+    public async Task CambiarFiltroEnHistorial_RecargaLaColeccionHistorial()
     {
-        // F2: el botón "Buscar" del filtro del historial (Task 22) bindea este comando --
-        // CargarHistorialAsync() es un método plano, no un ICommand, así que hace falta un
-        // [RelayCommand] propio que lo envuelva.
         var ctx = Crear(historial: new List<DocumentoAdministrativo>
         {
             DocumentoDe(3, EstadoDocumento.Finalizado),
         });
+        ctx.Vm.EsperaDebounce = TimeSpan.Zero;
+        await ctx.Vm.CargarAsync();
+        ctx.Vm.VistaSeleccionada = ctx.Vm.Vistas[1];
+        await ctx.Vm._tareaDebounce;
+        Assert.Single(ctx.Vm.Historial);
 
-        await ctx.Vm.BuscarHistorialCommand.ExecuteAsync(null);
+        ctx.Vm.FiltroHistorialTexto = "bacheo";
+        await ctx.Vm._tareaDebounce;
 
         Assert.Single(ctx.Vm.Historial);
-        ctx.Svc.Verify(s => s.ListarHistorialAsync(It.IsAny<FiltroDocumentos>()), Times.Once);
+        ctx.Svc.Verify(s => s.ListarHistorialAsync(It.IsAny<FiltroDocumentos>()), Times.Exactly(2));
     }
 
     [Fact]
@@ -200,75 +211,104 @@ public class DocumentoListViewModelTests
     }
 
     [Fact]
-    public async Task FinalizarCommand_InvalidaElCacheDelHistorial_LaProximaAperturaVuelveAConsultar()
+    public async Task Finalizar_YElegirHistorial_ElCerradoAparece()
     {
-        // M9: _historialCargado quedaba en true después de la primera apertura de la solapa
-        // Historial; finalizar un documento desde Activos no lo invalidaba, así que el
-        // documento recién cerrado no aparecía hasta apretar "Buscar" a mano.
+        // Antes el historial se cacheaba tras abrirlo y había que invalidarlo al finalizar; ahora cada elección consulta.
         var ctx = Crear(activos: new List<DocumentoAdministrativo>
         {
             DocumentoDe(1, EstadoDocumento.Pendiente),
         });
+        ctx.Vm.EsperaDebounce = TimeSpan.Zero;
         await ctx.Vm.CargarAsync();
-        await ctx.Vm.AbrirHistorialCommand.ExecuteAsync(null);
         var fila = ctx.Vm.Activos[0];
-
         await ctx.Vm.FinalizarCommand.ExecuteAsync(fila);
-        await ctx.Vm.AbrirHistorialCommand.ExecuteAsync(null);
+        ctx.Svc.Setup(s => s.ListarHistorialAsync(It.IsAny<FiltroDocumentos>()))
+            .ReturnsAsync(new List<DocumentoAdministrativo> { DocumentoDe(1, EstadoDocumento.Finalizado) });
 
-        ctx.Svc.Verify(s => s.ListarHistorialAsync(It.IsAny<FiltroDocumentos>()), Times.Exactly(2));
+        ctx.Vm.VistaSeleccionada = ctx.Vm.Vistas[1];
+        await ctx.Vm._tareaDebounce;
+
+        Assert.Single(ctx.Vm.Historial);
+        ctx.Svc.Verify(s => s.ListarHistorialAsync(It.IsAny<FiltroDocumentos>()), Times.Once);
     }
 
     [Fact]
-    public async Task BuscarActivosCommand_RecargaLaColeccionActivos()
+    public async Task CambiarTipoEnActivos_RecargaLaColeccionActivos()
     {
-        // I2: FiltroActivosTexto/Tipo no tenían ningún disparador propio -- el único punto de
-        // recarga era DataContextChanged, que corre una sola vez al entrar a la pantalla.
         var ctx = Crear(activos: new List<DocumentoAdministrativo>
         {
             DocumentoDe(1, EstadoDocumento.Pendiente),
         });
+        ctx.Vm.EsperaDebounce = TimeSpan.Zero;
+        await ctx.Vm.CargarAsync();
 
-        await ctx.Vm.BuscarActivosCommand.ExecuteAsync(null);
+        ctx.Vm.FiltroActivosTipoSeleccionado = ctx.Vm.TiposDisponibles[1];
+        await ctx.Vm._tareaDebounce;
 
         Assert.Single(ctx.Vm.Activos);
-        ctx.Svc.Verify(s => s.ListarActivosAsync(It.IsAny<FiltroDocumentos>()), Times.Once);
+        ctx.Svc.Verify(s => s.ListarActivosAsync(It.IsAny<FiltroDocumentos>()), Times.Exactly(2));
     }
 
     [Fact]
-    public async Task BuscarActivosCommand_ConFiltroTipoElegido_LoEnviaAlServicio()
+    public async Task CambiarTipoEnActivos_LoEnviaAlServicio()
     {
         var ctx = Crear();
-        ctx.Vm.FiltroActivosTipo = TipoDocumento.Oficio;
+        ctx.Vm.EsperaDebounce = TimeSpan.Zero;
+        await ctx.Vm.CargarAsync();
 
-        await ctx.Vm.BuscarActivosCommand.ExecuteAsync(null);
+        ctx.Vm.FiltroActivosTipo = TipoDocumento.Oficio;
+        await ctx.Vm._tareaDebounce;
 
         ctx.Svc.Verify(s => s.ListarActivosAsync(
             It.Is<FiltroDocumentos>(f => f.Tipo == TipoDocumento.Oficio)), Times.Once);
     }
 
     [Fact]
-    public async Task BuscarHistorialCommand_ConFiltroTipoElegido_LoEnviaAlServicio()
+    public async Task CambiarFiltroEnHistorial_Tipo_LoEnviaAlServicio()
     {
         var ctx = Crear();
-        ctx.Vm.FiltroHistorialTipo = TipoDocumento.Suministro;
+        ctx.Vm.EsperaDebounce = TimeSpan.Zero;
+        await ctx.Vm.CargarAsync();
+        ctx.Vm.VistaSeleccionada = ctx.Vm.Vistas[1];
+        await ctx.Vm._tareaDebounce;
 
-        await ctx.Vm.BuscarHistorialCommand.ExecuteAsync(null);
+        ctx.Vm.FiltroHistorialTipo = TipoDocumento.Suministro;
+        await ctx.Vm._tareaDebounce;
 
         ctx.Svc.Verify(s => s.ListarHistorialAsync(
             It.Is<FiltroDocumentos>(f => f.Tipo == TipoDocumento.Suministro)), Times.Once);
     }
 
     [Fact]
-    public async Task BuscarHistorialCommand_ConFiltroEstadoElegido_LoEnviaAlServicio()
+    public async Task CambiarFiltroEnHistorial_Estado_LoEnviaAlServicio()
     {
         var ctx = Crear();
-        ctx.Vm.FiltroHistorialEstado = EstadoDocumento.Anulado;
+        ctx.Vm.EsperaDebounce = TimeSpan.Zero;
+        await ctx.Vm.CargarAsync();
+        ctx.Vm.VistaSeleccionada = ctx.Vm.Vistas[1];
+        await ctx.Vm._tareaDebounce;
 
-        await ctx.Vm.BuscarHistorialCommand.ExecuteAsync(null);
+        ctx.Vm.FiltroHistorialEstado = EstadoDocumento.Anulado;
+        await ctx.Vm._tareaDebounce;
 
         ctx.Svc.Verify(s => s.ListarHistorialAsync(
             It.Is<FiltroDocumentos>(f => f.Estado == EstadoDocumento.Anulado)), Times.Once);
+    }
+
+    [Fact]
+    public async Task CantidadEnVista_YHayFiltrosEnLaVista_SiguenALaVistaActual()
+    {
+        var ctx = Crear(activos: new List<DocumentoAdministrativo> { DocumentoDe(1, EstadoDocumento.Pendiente), DocumentoDe(2, EstadoDocumento.EnProceso) });
+        ctx.Vm.EsperaDebounce = TimeSpan.Zero;
+        await ctx.Vm.CargarAsync();
+        Assert.Equal(2, ctx.Vm.CantidadEnVista);
+        Assert.False(ctx.Vm.HayFiltrosEnLaVista);
+
+        ctx.Vm.VistaSeleccionada = ctx.Vm.Vistas[1];
+        await ctx.Vm._tareaDebounce;
+
+        Assert.Equal(0, ctx.Vm.CantidadEnVista);
+        Assert.True(ctx.Vm.HayFiltrosEnLaVista);
     }
 
     [Fact]
@@ -370,7 +410,7 @@ public class DocumentoListViewModelTests
 
         Assert.Equal(1, LlamadasAActivos(ctx.Svc));
         Assert.Equal(0, LlamadasAlHistorial(ctx.Svc));
-        Assert.False(ctx.Vm.MostrandoHistorial);
+        Assert.False(ctx.Vm.EsVistaHistorial);
         Assert.Equal(new[] { "Activos", "Historial" }, ctx.Vm.Vistas.Select(v => v.Nombre));
     }
 
@@ -384,7 +424,7 @@ public class DocumentoListViewModelTests
         ctx.Vm.VistaSeleccionada = ctx.Vm.Vistas[1];
         await ctx.Vm._tareaDebounce;
 
-        Assert.True(ctx.Vm.MostrandoHistorial);
+        Assert.True(ctx.Vm.EsVistaHistorial);
         Assert.Single(ctx.Vm.Historial);
         ctx.Svc.Verify(s => s.ListarHistorialAsync(
             It.Is<FiltroDocumentos>(f => f.Anio == DateTime.UtcNow.Year)), Times.Once);

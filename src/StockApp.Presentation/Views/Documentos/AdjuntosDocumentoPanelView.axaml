@@ -3,60 +3,60 @@
              xmlns:vm="using:StockApp.Presentation.ViewModels.Documentos"
              xmlns:dto="using:StockApp.Application.Documentos"
              xmlns:conv="using:StockApp.Presentation.Converters"
+             xmlns:b="using:StockApp.Presentation.Behaviors"
+             xmlns:i="https://github.com/projektanker/icons.avalonia"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="600" d:DesignHeight="400"
+             mc:Ignorable="d" d:DesignWidth="710" d:DesignHeight="240"
              x:Class="StockApp.Presentation.Views.Documentos.AdjuntosDocumentoPanelView"
-             x:DataType="vm:AdjuntosDocumentoPanelViewModel">
+             x:DataType="vm:AdjuntosDocumentoPanelViewModel"
+             Classes="ui2">
 
-    <DockPanel>
-
-        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
-            <TextBlock Grid.Column="0"
-                       Text="Adjuntos"
-                       Classes="seccion" />
-            <Button Grid.Column="1"
-                    Classes="secondary"
-                    Content="Agregar"
+    <!-- UI v2. Espejo: docs/ui-v2/mockups/gestion/documento-detalle*.html (mismo diseño que AdjuntosPanelView de Finanzas;
+         los dos paneles siguen separados). Panel embebido: lo inicializa el host (InicializarAsync). Agregar se muestra
+         con el documento activo y Quitar con el documento activo y el rol Admin (estructural), ocultos y no deshabilitados;
+         Ver siempre. -->
+    <StackPanel>
+        <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+            <TextBlock x:Name="TituloAdjuntos" Classes="titulo-seccion" Text="Adjuntos" VerticalAlignment="Center" />
+            <Button x:Name="BotonAgregar" Grid.Column="1" Classes="secundario" Content="Agregar"
                     Command="{Binding AgregarCommand}"
-                    IsEnabled="{Binding PuedeAgregar}" />
+                    IsVisible="{Binding PuedeAgregar}" />
         </Grid>
 
-        <ItemsControl ItemsSource="{Binding Items}">
+        <TextBlock x:Name="SinAdjuntos" Classes="texto-secundario"
+                   Text="Sin adjuntos. PDF, JPG o PNG hasta 10 MB."
+                   IsVisible="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.EsCero}}" />
+
+        <ItemsControl x:Name="ListaAdjuntos" ItemsSource="{Binding Items}"
+                      IsVisible="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.HayElementos}}">
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="dto:AdjuntoDocumentoDto">
-                    <Border Classes="card" Margin="0,0,0,8">
-                        <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
-                            <TextBlock Grid.Column="0"
-                                       Text="{Binding NombreArchivo}"
+                    <Border Height="40" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource V2SeparadorGrillaBrush}">
+                        <Grid ColumnDefinitions="Auto,*,72,80,Auto,Auto">
+                            <i:Icon Value="{Binding ContentType, Converter={x:Static conv:IconoAdjuntoConverter.Instance}}"
+                                    FontSize="16" Margin="0,0,8,0" VerticalAlignment="Center"
+                                    Foreground="{DynamicResource V2TextoSecundarioBrush}" />
+                            <TextBlock Grid.Column="1" Classes="cuerpo" Text="{Binding NombreArchivo}"
+                                       TextTrimming="CharacterEllipsis"
+                                       ToolTip.Tip="{Binding NombreArchivo}"
+                                       b:TooltipSiSeCorta.Activo="True"
                                        VerticalAlignment="Center" />
-                            <TextBlock Grid.Column="1"
-                                       Text="{Binding TamanoBytes, StringFormat={}{0:N0} B}"
-                                       Margin="8,0"
-                                       VerticalAlignment="Center" />
-                            <TextBlock Grid.Column="2"
-                                       Text="{Binding FechaAltaUtc, Converter={x:Static conv:FechaUtcALocalConverter.Instance}, StringFormat='dd/MM/yyyy'}"
-                                       Margin="8,0"
-                                       VerticalAlignment="Center" />
-                            <Button Grid.Column="3"
-                                    Classes="secondary"
-                                    Content="Ver"
-                                    Margin="8,0,0,0"
+                            <TextBlock Grid.Column="2" Classes="texto-secundario" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                       Text="{Binding TamanoBytes, Converter={x:Static conv:TamanoLegibleConverter.Instance}}" />
+                            <TextBlock Grid.Column="3" Classes="texto-secundario" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                       Text="{Binding FechaAltaUtc, Converter={x:Static conv:FechaUtcACortaConverter.Instance}}" />
+                            <Button Grid.Column="4" Classes="ghost" Content="Ver" Margin="8,0,0,0" VerticalAlignment="Center"
                                     Command="{Binding $parent[UserControl].((vm:AdjuntosDocumentoPanelViewModel)DataContext).VerCommand}"
                                     CommandParameter="{Binding}" />
-                            <Button Grid.Column="4"
-                                    Classes="secondary"
-                                    Content="Quitar"
-                                    Margin="8,0,0,0"
+                            <Button Grid.Column="5" Classes="ghost" Content="Quitar" Margin="0" VerticalAlignment="Center"
                                     Command="{Binding $parent[UserControl].((vm:AdjuntosDocumentoPanelViewModel)DataContext).QuitarCommand}"
                                     CommandParameter="{Binding}"
-                                    IsEnabled="{Binding $parent[UserControl].((vm:AdjuntosDocumentoPanelViewModel)DataContext).PuedeQuitar}" />
+                                    IsVisible="{Binding $parent[UserControl].((vm:AdjuntosDocumentoPanelViewModel)DataContext).PuedeQuitar}" />
                         </Grid>
                     </Border>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
-
-    </DockPanel>
-
+    </StackPanel>
 </UserControl>

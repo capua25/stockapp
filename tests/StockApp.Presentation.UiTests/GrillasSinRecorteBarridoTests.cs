@@ -20,10 +20,12 @@ using StockApp.Domain.Enums;
 using StockApp.Presentation.Behaviors;
 using StockApp.Presentation.UiTests.V2;
 using StockApp.Presentation.ViewModels.Catalogo;
+using StockApp.Presentation.ViewModels.Documentos;
 using StockApp.Presentation.ViewModels.Finanzas;
 using StockApp.Presentation.ViewModels.Movimientos;
 using StockApp.Presentation.ViewModels.Tareas;
 using StockApp.Presentation.Views.Catalogo;
+using StockApp.Presentation.Views.Documentos;
 using StockApp.Presentation.Views.Finanzas;
 using StockApp.Presentation.Views.Movimientos;
 using StockApp.Presentation.Views.Reportes;
@@ -146,6 +148,14 @@ public class GrillasSinRecorteBarridoTests
                 TomadaPor = new Usuario { Id = 2, NombreUsuario = "operador.deposito.central" },
                 Zona = new Zona { Id = 1, Nombre = "Barrio Norte" }, DimensionTematica = new DimensionTematica { Id = 1, Nombre = "Infraestructura" },
                 OrganismoResponsable = new OrganismoResponsable { Id = 1, Nombre = "Dirección de Obras" },
+            }, RolUsuario.Admin))),
+        new("Documentos", () => new DocumentoListView(), _ => Muchos<object>(i => new DocumentoFila(new DocumentoAdministrativo
+            {
+                Id = i, Numero = "0000123", Anio = 2026, Tipo = TipoDocumento.Suministro,
+                FechaEmision = new DateTime(2026, 9, 30, 0, 0, 0, DateTimeKind.Utc),
+                Descripcion = "Respuesta a la Junta Departamental por el alumbrado de la costanera",
+                Estado = i % 2 == 0 ? EstadoDocumento.Pendiente : EstadoDocumento.EnProceso,
+                RegistradoPor = new Usuario { Id = 2, NombreUsuario = "operador.deposito.central" },
             }, RolUsuario.Admin))),
     };
 

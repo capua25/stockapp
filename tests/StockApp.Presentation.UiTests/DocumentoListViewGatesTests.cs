@@ -31,9 +31,8 @@ namespace StockApp.Presentation.UiTests;
 ///
 /// Los 5 gates viven dentro de ItemsControl.ItemTemplate (Activos: PuedeIniciar/VolverAPendiente/
 /// Finalizar/Anular; Historial: PuedeReabrir), así que hace falta montar con UN documento real en
-/// la colección correspondiente para que el control se realice. PuedeReabrir vive en la solapa
-/// Historial (TabItem no seleccionado no realiza su contenido en headless): los casos 6-8
-/// seleccionan la solapa antes de buscar el botón.
+/// la colección correspondiente para que el control se realice. PuedeReabrir vive en la vista
+/// Historial (el combo "Ver"): los casos 6-8 la eligen y seleccionan la fila antes de buscar el botón.
 /// </summary>
 public class DocumentoListViewGatesTests
 {
@@ -58,7 +57,8 @@ public class DocumentoListViewGatesTests
     {
         var servicio = new DocumentoServiceFake(activos, historial);
         var vm = new DocumentoListViewModel(
-            servicio, new SesionFake(rol), new NavigationRecorderDocumentosFake(), new ConfirmacionServiceFake());
+            servicio, new SesionFake(rol), new NavigationRecorderDocumentosFake(), new ConfirmacionServiceFake())
+        { EsperaDebounce = TimeSpan.Zero };
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
         window.DataContext = vm;
@@ -66,15 +66,25 @@ public class DocumentoListViewGatesTests
         Dispatcher.UIThread.RunJobs();
         Dispatcher.UIThread.RunJobs(); // segunda pasada: deja completar el await CargarAsync() del DataContextChanged
 
+        // Las acciones viven en el encabezado y actúan sobre la fila seleccionada: se selecciona la fila del caso.
+        if (vm.Activos.Count > 0)
+            vm.FilaSeleccionadaActivos = vm.Activos[0];
+        Dispatcher.UIThread.RunJobs();
+
         return (window, vm);
     }
 
-    private static void SeleccionarSolapaHistorial(Window window)
+    /// <summary>Elige "Historial" en el combo "Ver" (ya no hay pestañas), espera la consulta y selecciona la fila del caso.</summary>
+    private static void SeleccionarSolapaHistorial(Window window, DocumentoListViewModel vm)
     {
-        var tabControl = window.GetVisualDescendants().OfType<TabControl>().First();
-        tabControl.SelectedIndex = 1;
+        vm.VistaSeleccionada = vm.Vistas[1];
         Dispatcher.UIThread.RunJobs();
-        Dispatcher.UIThread.RunJobs(); // deja completar el await AbrirHistorialCommand
+        vm._tareaDebounce.GetAwaiter().GetResult();
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
+        if (vm.Historial.Count > 0)
+            vm.FilaSeleccionadaHistorial = vm.Historial[0];
+        Dispatcher.UIThread.RunJobs();
     }
 
     private static Button BotonPorContenido(Window window, string texto)
@@ -157,11 +167,11 @@ public class DocumentoListViewGatesTests
     [AvaloniaFact]
     public void PuedeReabrir_AdminFinalizado_Visible()
     {
-        var (window, _) = Montar(RolUsuario.Admin, historial: new List<DocumentoAdministrativo>
+        var (window, vm) = Montar(RolUsuario.Admin, historial: new List<DocumentoAdministrativo>
         {
             DocumentoDe(1, EstadoDocumento.Finalizado),
         });
-        SeleccionarSolapaHistorial(window);
+        SeleccionarSolapaHistorial(window, vm);
 
         Assert.True(ArbolVisual.EsVisibleEnArbol(BotonPorContenido(window, "Reabrir…")));
     }
@@ -171,11 +181,11 @@ public class DocumentoListViewGatesTests
     [AvaloniaFact]
     public void PuedeReabrir_OperadorFinalizado_Oculto()
     {
-        var (window, _) = Montar(RolUsuario.Operador, historial: new List<DocumentoAdministrativo>
+        var (window, vm) = Montar(RolUsuario.Operador, historial: new List<DocumentoAdministrativo>
         {
             DocumentoDe(1, EstadoDocumento.Finalizado),
         });
-        SeleccionarSolapaHistorial(window);
+        SeleccionarSolapaHistorial(window, vm);
 
         Assert.False(ArbolVisual.EsVisibleEnArbol(BotonPorContenido(window, "Reabrir…")));
     }
@@ -183,11 +193,11 @@ public class DocumentoListViewGatesTests
     [AvaloniaFact]
     public void PuedeReabrir_AdminAnulado_Visible()
     {
-        var (window, _) = Montar(RolUsuario.Admin, historial: new List<DocumentoAdministrativo>
+        var (window, vm) = Montar(RolUsuario.Admin, historial: new List<DocumentoAdministrativo>
         {
             DocumentoDe(1, EstadoDocumento.Anulado),
         });
-        SeleccionarSolapaHistorial(window);
+        SeleccionarSolapaHistorial(window, vm);
 
         Assert.True(ArbolVisual.EsVisibleEnArbol(BotonPorContenido(window, "Reabrir…")));
     }

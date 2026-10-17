@@ -1,4 +1,7 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.VisualTree;
 using StockApp.Presentation.ViewModels.Documentos;
 
 namespace StockApp.Presentation.Views.Documentos;
@@ -18,13 +21,12 @@ public partial class DocumentoListView : UserControl
         };
     }
 
-    /// <summary>
-    /// D9: carga perezosa del historial -- recién al seleccionar la solapa "Historial"
-    /// (índice 1), nunca al cargar la lista de Activos.
-    /// </summary>
-    private async void OnSolapaSeleccionada(object? sender, SelectionChangedEventArgs e)
+    /// <summary>Doble click en una fila = Ver. Solo sobre una fila: un doble click en el encabezado ordena, no navega.</summary>
+    private void OnFilaDobleClick(object? sender, TappedEventArgs e)
     {
-        if (sender is TabControl { SelectedIndex: 1 } && DataContext is DocumentoListViewModel vm)
-            await vm.AbrirHistorialCommand.ExecuteAsync(null);
+        if ((e.Source as Visual)?.FindAncestorOfType<DataGridRow>(includeSelf: true) is null)
+            return;
+        if (DataContext is DocumentoListViewModel { FilaSeleccionada: { } fila } vm && vm.VerDetalleCommand.CanExecute(fila))
+            vm.VerDetalleCommand.Execute(fila);
     }
 }

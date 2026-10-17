@@ -100,7 +100,7 @@ public class NumericUpDownVistasRealesTests
         vm.AnioSeleccionado = 2026;
         Dispatcher.UIThread.RunJobs();
 
-        var anio = window.GetVisualDescendants().OfType<CampoFormulario>().Single(c => c.Etiqueta == "Año")
+        var anio = window.GetVisualDescendants().OfType<StockApp.Presentation.Controls.V2.CampoFormulario>().Single(c => c.Etiqueta == "Año")
             .GetVisualDescendants().OfType<NumericUpDown>().Single();
         return (window, vm, anio);
     }
@@ -137,11 +137,13 @@ public class NumericUpDownVistasRealesTests
     // ── Documento: filtro "Año" del historial -> Buscar ─────────────────────
 
     [AvaloniaFact]
-    public void DocumentoList_FiltroAnio_Invalido_BloqueaBuscar_YVacioSignificaTodos()
+    public void DocumentoList_FiltroAnio_Invalido_ErrorDebajoYSinConsulta_YVacioNoConsulta()
     {
+        var servicio = new DocumentoServiceFake();
         var vm = new DocumentoListViewModel(
-            new DocumentoServiceFake(), new SesionFake(RolUsuario.Admin),
-            new NavigationRecorderDocumentosFake(), new ConfirmacionServiceFake());
+            servicio, new SesionFake(RolUsuario.Admin),
+            new NavigationRecorderDocumentosFake(), new ConfirmacionServiceFake())
+        { EsperaDebounce = TimeSpan.Zero };
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>("""
             <Window xmlns="https://github.com/avaloniaui"
                     xmlns:docs="clr-namespace:StockApp.Presentation.Views.Documentos;assembly=GestionMunicipal"
@@ -152,23 +154,29 @@ public class NumericUpDownVistasRealesTests
         window.DataContext = vm;
         window.Show();
         Dispatcher.UIThread.RunJobs();
-        window.GetVisualDescendants().OfType<TabControl>().First().SelectedIndex = 1;
         Dispatcher.UIThread.RunJobs();
+        // El historial se elige en el combo "Ver" (ya no hay pestañas) y consulta una vez.
+        vm.VistaSeleccionada = vm.Vistas[1];
         Dispatcher.UIThread.RunJobs();
-        var anio = window.GetVisualDescendants().OfType<CampoFormulario>().Single(c => c.Etiqueta == "Año")
+        vm._tareaDebounce.GetAwaiter().GetResult();
+        Dispatcher.UIThread.RunJobs();
+        var anio = window.GetVisualDescendants().OfType<StockApp.Presentation.Controls.V2.CampoFormulario>().Where(c => c.Etiqueta == "Año" && ArbolVisual.EsVisibleEnArbol(c)).Single()
             .GetVisualDescendants().OfType<NumericUpDown>().Single();
-        var buscar = NumericUpDownPrueba.BotonPorCommand(window, vm.BuscarHistorialCommand);
+        var consultas = servicio.LlamadasListarHistorial;
 
         NumericUpDownPrueba.Tipear(anio, "20a5");
+        vm._tareaDebounce.GetAwaiter().GetResult();
 
         NumericUpDownPrueba.AssertErrorVisible(anio, "Ingresá un año válido, entre 2000 y 2100.");
-        NumericUpDownPrueba.AssertBloqueadoConTooltip(buscar);
+        Assert.True(vm.HayErroresDeEntrada);
+        Assert.Equal(consultas, servicio.LlamadasListarHistorial);
 
         NumericUpDownPrueba.Tipear(anio, "");
+        vm._tareaDebounce.GetAwaiter().GetResult();
 
         Assert.False(DataValidationErrors.GetHasErrors(anio));
         Assert.Null(vm.FiltroHistorialAnio);
-        Assert.True(buscar.IsEffectivelyEnabled);
+        Assert.Equal(consultas, servicio.LlamadasListarHistorial);
     }
 
     // ── Importación: "Ejercicio" -> Analizar ───────────────────────────────

@@ -1,196 +1,327 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:beh="using:StockApp.Presentation.Behaviors"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Documentos"
-             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:conv="using:StockApp.Presentation.Converters"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
+             xmlns:b="using:StockApp.Presentation.Behaviors"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
              x:Class="StockApp.Presentation.Views.Documentos.DocumentoListView"
-             x:DataType="vm:DocumentoListViewModel">
+             x:DataType="vm:DocumentoListViewModel"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
 
-    <DockPanel Margin="{DynamicResource MargenVista}">
+    <!-- UI v2 (listado §5.1). Espejo: docs/ui-v2/mockups/gestion/documentos*.html. Dos vistas, Activos e Historial, con el
+         combo "Ver" en la barra de filtros (no hay pestañas v2): cada una con su BarraFiltros, su grilla y su pie; los
+         filtros recargan solos tras una espera corta y cada cambio de vista consulta de nuevo. Las acciones del encabezado
+         actúan sobre la fila seleccionada de la vista actual y se muestran según su estado y el rol (Anular… y Reabrir…
+         abren el detalle, donde piden el motivo); doble click en una fila equivale a Ver. Cargando, sin servidor y los dos
+         vacíos dentro de la card con los filtros a mano; tras un 403, Sin permiso en lugar de la card. La fila anulada va en
+         texto terciario por token, nunca con opacidad. -->
+    <DockPanel Margin="28,24">
 
-        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="DOCUMENTOS" Titulo="Documentos administrativos">
-            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
-                <Button Classes="primary" Content="Nuevo documento" Command="{Binding NuevoCommand}" />
+        <v2:EncabezadoPagina x:Name="Encabezado" DockPanel.Dock="Top" Titulo="Documentos administrativos"
+                             Subtitulo="Expedientes, oficios y suministros, y su estado.">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button x:Name="BotonVer" Classes="secundario" Content="Ver" Command="{Binding VerDetalleCommand}"
+                        CommandParameter="{Binding FilaSeleccionada}"
+                        IsEnabled="{Binding FilaSeleccionada, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <Button x:Name="BotonIniciar" Classes="secundario" Content="Iniciar" Command="{Binding IniciarCommand}"
+                        CommandParameter="{Binding FilaSeleccionada}"
+                        IsVisible="{Binding FilaSeleccionada.PuedeIniciar, FallbackValue=False}" />
+                <Button x:Name="BotonVolverAPendiente" Classes="secundario" Content="Volver a pendiente" Command="{Binding VolverAPendienteCommand}"
+                        CommandParameter="{Binding FilaSeleccionada}"
+                        IsVisible="{Binding FilaSeleccionada.PuedeVolverAPendiente, FallbackValue=False}" />
+                <Button x:Name="BotonFinalizar" Classes="secundario" Content="Finalizar" Command="{Binding FinalizarCommand}"
+                        CommandParameter="{Binding FilaSeleccionada}"
+                        IsVisible="{Binding FilaSeleccionada.PuedeFinalizar, FallbackValue=False}" />
+                <Button x:Name="BotonAnular" Classes="peligro" Content="Anular…" Command="{Binding VerDetalleCommand}"
+                        CommandParameter="{Binding FilaSeleccionada}"
+                        IsVisible="{Binding FilaSeleccionada.PuedeAnular, FallbackValue=False}" />
+                <Button x:Name="BotonReabrir" Classes="secundario" Content="Reabrir…" Command="{Binding VerDetalleCommand}"
+                        CommandParameter="{Binding FilaSeleccionada}"
+                        IsVisible="{Binding FilaSeleccionada.PuedeReabrir, FallbackValue=False}" />
+                <Button x:Name="BotonNuevo" Classes="primario" Content="Nuevo documento" Command="{Binding NuevoCommand}" />
             </StackPanel>
-        </c:HeaderVista>
+        </v2:EncabezadoPagina>
 
-        <TabControl x:Name="Solapas" SelectionChanged="OnSolapaSeleccionada">
+        <v2:EstadoVacio x:Name="EstadoSinPermiso" DockPanel.Dock="Top" UseLayoutRounding="False"
+                        Titulo="Sin permiso" Mensaje="{Binding MensajeSinPermiso}" EsError="True"
+                        IsVisible="{Binding SinPermiso}" />
 
-            <TabItem Header="Activos">
-                <DockPanel Margin="0,12,0,0">
-
-                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="{DynamicResource Espacio3}"
-                                VerticalAlignment="Bottom" Margin="0,0,0,12">
-                        <StackPanel MinWidth="150">
-                            <c:CampoFormulario Etiqueta="Tipo">
-                                <ComboBox ItemsSource="{Binding TiposDisponibles}"
-                                          SelectedItem="{Binding FiltroActivosTipoSeleccionado}"
-                                          HorizontalAlignment="Stretch">
-                                    <ComboBox.ItemTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding Nombre}" />
-                                        </DataTemplate>
-                                    </ComboBox.ItemTemplate>
-                                </ComboBox>
-                            </c:CampoFormulario>
-                        </StackPanel>
-                        <StackPanel MinWidth="280">
-                            <c:CampoFormulario Etiqueta="Buscar">
-                                <TextBox Text="{Binding FiltroActivosTexto}"
-                                         Watermark="Número, descripción..." />
-                            </c:CampoFormulario>
-                        </StackPanel>
-                        <Button Classes="secondary" Content="Buscar" Command="{Binding BuscarActivosCommand}" />
+        <v2:TarjetaContenido x:Name="Tarjeta" IsVisible="{Binding !SinPermiso}">
+            <DockPanel>
+                <!-- Activos: Ver, Tipo y Buscar. Historial: Ver, Año, Tipo, Estado y Buscar. Cada una es una fila única con
+                     campos etiquetados; la que no es de la vista actual no ocupa lugar. -->
+                <v2:BarraFiltros x:Name="FiltrosActivos" DockPanel.Dock="Top" MostrarBusqueda="False" IsVisible="{Binding !EsVistaHistorial}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <v2:CampoFormulario Etiqueta="Ver">
+                            <ComboBox x:Name="ComboVistaActivos" Width="140" ItemsSource="{Binding Vistas}" SelectedItem="{Binding VistaSeleccionada}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:OpcionVistaDocumentos"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </v2:CampoFormulario>
+                        <v2:CampoFormulario Etiqueta="Tipo">
+                            <ComboBox x:Name="ComboTipoActivos" Width="160" ItemsSource="{Binding TiposDisponibles}"
+                                      SelectedItem="{Binding FiltroActivosTipoSeleccionado}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:OpcionTipoDocumento"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </v2:CampoFormulario>
+                        <v2:CampoFormulario Etiqueta="Buscar">
+                            <TextBox x:Name="CajaBuscarActivos" Width="280" Text="{Binding FiltroActivosTexto}" PlaceholderText="Número o descripción" />
+                        </v2:CampoFormulario>
                     </StackPanel>
+                </v2:BarraFiltros>
 
-                    <ScrollViewer>
-                        <ItemsControl ItemsSource="{Binding Activos}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate x:DataType="vm:DocumentoFila">
-                                    <Border Classes="card" Margin="0,0,0,8">
-                                        <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto">
-                                            <StackPanel Grid.Column="0" Spacing="2">
-                                                <TextBlock FontWeight="SemiBold">
-                                                    <TextBlock.Text>
-                                                        <MultiBinding StringFormat="{}{0} {1}/{2}">
-                                                            <Binding Path="TipoTexto" />
-                                                            <Binding Path="Numero" />
-                                                            <Binding Path="Anio" />
-                                                        </MultiBinding>
-                                                    </TextBlock.Text>
-                                                </TextBlock>
-                                                <TextBlock Text="{Binding Descripcion}" Classes="caption" />
-                                                <TextBlock Text="{Binding EstadoTexto}" Classes="caption" Foreground="{DynamicResource TextoTerciarioBrush}" />
-                                            </StackPanel>
-                                            <Button Grid.Column="1" Classes="ghost" Content="Ver"
-                                                    Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).VerDetalleCommand}"
-                                                    CommandParameter="{Binding}" />
-                                            <Button Grid.Column="2" Classes="secondary" Content="Iniciar"
-                                                    IsVisible="{Binding PuedeIniciar}"
-                                                    Margin="8,0,0,0"
-                                                    Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).IniciarCommand}"
-                                                    CommandParameter="{Binding}" />
-                                            <Button Grid.Column="3" Classes="secondary" Content="Volver a pendiente"
-                                                    IsVisible="{Binding PuedeVolverAPendiente}"
-                                                    Margin="8,0,0,0"
-                                                    Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).VolverAPendienteCommand}"
-                                                    CommandParameter="{Binding}" />
-                                            <Button Grid.Column="4" Classes="secondary" Content="Finalizar"
-                                                    IsVisible="{Binding PuedeFinalizar}"
-                                                    Margin="8,0,0,0"
-                                                    Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).FinalizarCommand}"
-                                                    CommandParameter="{Binding}" />
-                                            <!-- I3: "Anular…" navega al detalle (VerDetalleCommand) en vez de ejecutar
-                                                 la acción acá mismo, porque anular exige motivo obligatorio, y ese
-                                                 flujo vive en DocumentoFormViewModel.AnularAsync. Los puntos
-                                                 suspensivos marcan que el botón abre otra pantalla, no que anula
-                                                 en el acto. -->
-                                            <Button Grid.Column="5" Classes="danger" Content="Anular…"
-                                                    IsVisible="{Binding PuedeAnular}"
-                                                    Margin="8,0,0,0"
-                                                    Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).VerDetalleCommand}"
-                                                    CommandParameter="{Binding}" />
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
-                </DockPanel>
-            </TabItem>
-
-            <TabItem Header="Historial">
-                <DockPanel Margin="0,12,0,0">
-
-                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="{DynamicResource Espacio3}"
-                                VerticalAlignment="Bottom" Margin="0,0,0,12">
-                        <StackPanel MinWidth="100">
-                            <c:CampoFormulario Etiqueta="Año">
-                                <NumericUpDown Value="{Binding FiltroHistorialAnio}"
-                                               Minimum="2000" Maximum="2100" FormatString="0"
-                                               beh:NumericUpDownValidacionBehavior.Que="año"
-                                               beh:NumericUpDownValidacionBehavior.PermitirVacio="True" />
-                            </c:CampoFormulario>
-                        </StackPanel>
-                        <StackPanel MinWidth="150">
-                            <c:CampoFormulario Etiqueta="Tipo">
-                                <ComboBox ItemsSource="{Binding TiposDisponibles}"
-                                          SelectedItem="{Binding FiltroHistorialTipoSeleccionado}"
-                                          HorizontalAlignment="Stretch">
-                                    <ComboBox.ItemTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding Nombre}" />
-                                        </DataTemplate>
-                                    </ComboBox.ItemTemplate>
-                                </ComboBox>
-                            </c:CampoFormulario>
-                        </StackPanel>
-                        <StackPanel MinWidth="150">
-                            <c:CampoFormulario Etiqueta="Estado">
-                                <ComboBox ItemsSource="{Binding EstadosDisponibles}"
-                                          SelectedItem="{Binding FiltroHistorialEstadoSeleccionado}"
-                                          HorizontalAlignment="Stretch">
-                                    <ComboBox.ItemTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding Nombre}" />
-                                        </DataTemplate>
-                                    </ComboBox.ItemTemplate>
-                                </ComboBox>
-                            </c:CampoFormulario>
-                        </StackPanel>
-                        <StackPanel MinWidth="240">
-                            <c:CampoFormulario Etiqueta="Buscar">
-                                <TextBox Text="{Binding FiltroHistorialTexto}"
-                                         Watermark="Número, descripción..." />
-                            </c:CampoFormulario>
-                        </StackPanel>
-                        <Button Classes="secondary" Content="Buscar" Command="{Binding BuscarHistorialCommand}" />
+                <v2:BarraFiltros x:Name="FiltrosHistorial" DockPanel.Dock="Top" MostrarBusqueda="False" IsVisible="{Binding EsVistaHistorial}">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <v2:CampoFormulario Etiqueta="Ver">
+                            <ComboBox x:Name="ComboVistaHistorial" Width="140" ItemsSource="{Binding Vistas}" SelectedItem="{Binding VistaSeleccionada}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:OpcionVistaDocumentos"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </v2:CampoFormulario>
+                        <v2:CampoFormulario x:Name="CampoAnio" Etiqueta="Año">
+                            <NumericUpDown x:Name="SelectorAnio" Width="100" Value="{Binding FiltroHistorialAnio}"
+                                           Minimum="2000" Maximum="2100" FormatString="0"
+                                           b:NumericUpDownValidacionBehavior.Que="año"
+                                           b:NumericUpDownValidacionBehavior.PermitirVacio="True" />
+                        </v2:CampoFormulario>
+                        <v2:CampoFormulario Etiqueta="Tipo">
+                            <ComboBox x:Name="ComboTipoHistorial" Width="160" ItemsSource="{Binding TiposDisponibles}"
+                                      SelectedItem="{Binding FiltroHistorialTipoSeleccionado}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:OpcionTipoDocumento"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </v2:CampoFormulario>
+                        <v2:CampoFormulario Etiqueta="Estado">
+                            <ComboBox x:Name="ComboEstadoHistorial" Width="160" ItemsSource="{Binding EstadosDisponibles}"
+                                      SelectedItem="{Binding FiltroHistorialEstadoSeleccionado}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:OpcionEstadoDocumento"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </v2:CampoFormulario>
+                        <v2:CampoFormulario Etiqueta="Buscar">
+                            <TextBox x:Name="CajaBuscarHistorial" Width="280" Text="{Binding FiltroHistorialTexto}" PlaceholderText="Número o descripción" />
+                        </v2:CampoFormulario>
                     </StackPanel>
+                </v2:BarraFiltros>
 
-                    <ScrollViewer>
-                        <ItemsControl ItemsSource="{Binding Historial}">
-                            <ItemsControl.ItemTemplate>
+                <TextBlock x:Name="PieActivos" DockPanel.Dock="Bottom" Classes="pie-conteo" Margin="0,12,0,0"
+                           Text="{Binding Activos.Count, Converter={x:Static conv:ConteoConverter.Instance}, ConverterParameter='documento|documentos'}">
+                    <TextBlock.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="EsVistaHistorial" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="Activos.Count" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                        </MultiBinding>
+                    </TextBlock.IsVisible>
+                </TextBlock>
+
+                <TextBlock x:Name="PieHistorial" DockPanel.Dock="Bottom" Classes="pie-conteo" Margin="0,12,0,0"
+                           Text="{Binding Historial.Count, Converter={x:Static conv:ConteoConverter.Instance}, ConverterParameter='documento|documentos'}">
+                    <TextBlock.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="EsVistaHistorial" />
+                            <Binding Path="Historial.Count" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                        </MultiBinding>
+                    </TextBlock.IsVisible>
+                </TextBlock>
+
+                <v2:EstadoCargando x:Name="IndicadorCarga" DockPanel.Dock="Top" Texto="Cargando documentos…">
+                    <v2:EstadoCargando.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Cargando" />
+                            <Binding Path="CantidadEnVista" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                        </MultiBinding>
+                    </v2:EstadoCargando.IsVisible>
+                </v2:EstadoCargando>
+
+                <v2:EstadoVacio x:Name="EstadoSinConexion" DockPanel.Dock="Top" UseLayoutRounding="False"
+                                Titulo="No se pudo conectar con el servidor"
+                                Mensaje="Verificá que el servidor esté encendido y accesible en la red, y volvé a intentar."
+                                EsError="True" IsVisible="{Binding SinConexion}">
+                    <Button x:Name="BotonReintentar" Classes="secundario" Content="Reintentar" Command="{Binding ReintentarCargaCommand}" />
+                </v2:EstadoVacio>
+
+                <!-- Activos sin datos y sin filtros: el botón es secundario porque el primario ya está en el encabezado. -->
+                <v2:EstadoVacio x:Name="EstadoSinDocumentos" DockPanel.Dock="Top" UseLayoutRounding="False"
+                                Titulo="Todavía no hay documentos en trámite"
+                                Mensaje="Cuando se registre un documento, va a aparecer acá.">
+                    <v2:EstadoVacio.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Cargando" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinPermiso" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="CantidadEnVista" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                            <Binding Path="HayFiltrosEnLaVista" Converter="{x:Static BoolConverters.Not}" />
+                        </MultiBinding>
+                    </v2:EstadoVacio.IsVisible>
+                    <Button x:Name="BotonNuevoVacio" Classes="secundario" Content="Nuevo documento" Command="{Binding NuevoCommand}" />
+                </v2:EstadoVacio>
+
+                <!-- Historial sin filas, o Activos con algún filtro y ninguna fila a la vista. -->
+                <v2:EstadoVacio x:Name="EstadoSinResultados" DockPanel.Dock="Top" UseLayoutRounding="False"
+                                Titulo="Ningún documento coincide con los filtros"
+                                Mensaje="Probá con otro año, tipo o texto.">
+                    <v2:EstadoVacio.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Cargando" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinPermiso" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="CantidadEnVista" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                            <Binding Path="HayFiltrosEnLaVista" />
+                        </MultiBinding>
+                    </v2:EstadoVacio.IsVisible>
+                </v2:EstadoVacio>
+
+                <!-- Cada TextBlock de celda lleva Classes.inactivo con el documento anulado (texto terciario por token,
+                     nunca opacidad). Las de texto libre miden su contenido y, si ceden, se cortan con tooltip; DESCRIPCIÓN
+                     es la proporcional. ESTADO es un conjunto cerrado: ancho fijo medido. La emisión es una fecha de
+                     calendario: FechaCortaConverter no la pasa a hora local. -->
+                <DataGrid x:Name="GrillaActivos" ItemsSource="{Binding Activos}" SelectedItem="{Binding FilaSeleccionadaActivos}"
+                          DoubleTapped="OnFilaDobleClick" IsReadOnly="True" CanUserSortColumns="True" CanUserResizeColumns="True"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                    <DataGrid.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="EsVistaHistorial" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="Activos.Count" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                        </MultiBinding>
+                    </DataGrid.IsVisible>
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="TIPO" Width="Auto" SortMemberPath="TipoTexto" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="vm:DocumentoFila">
-                                    <Border Classes="card" Margin="0,0,0,8">
-                                        <Grid ColumnDefinitions="*,Auto,Auto">
-                                            <StackPanel Grid.Column="0" Spacing="2">
-                                                <TextBlock FontWeight="SemiBold">
-                                                    <TextBlock.Text>
-                                                        <MultiBinding StringFormat="{}{0} {1}/{2}">
-                                                            <Binding Path="TipoTexto" />
-                                                            <Binding Path="Numero" />
-                                                            <Binding Path="Anio" />
-                                                        </MultiBinding>
-                                                    </TextBlock.Text>
-                                                </TextBlock>
-                                                <TextBlock Text="{Binding Descripcion}" Classes="caption" />
-                                                <TextBlock Text="{Binding EstadoTexto}" Classes="caption" Foreground="{DynamicResource TextoTerciarioBrush}" />
-                                            </StackPanel>
-                                            <Button Grid.Column="1" Classes="ghost" Content="Ver"
-                                                    Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).VerDetalleCommand}"
-                                                    CommandParameter="{Binding}" />
-                                            <!-- I3: "Reabrir…" navega al detalle (VerDetalleCommand), mismo motivo
-                                                 que "Anular…" en Activos: reabrir exige motivo obligatorio y ese
-                                                 flujo vive en DocumentoFormViewModel.ReabrirAsync. -->
-                                            <Button Grid.Column="2" Classes="secondary" Content="Reabrir…"
-                                                    IsVisible="{Binding PuedeReabrir}"
-                                                    Margin="8,0,0,0"
-                                                    Command="{Binding $parent[UserControl].((vm:DocumentoListViewModel)DataContext).VerDetalleCommand}"
-                                                    CommandParameter="{Binding}" />
-                                        </Grid>
-                                    </Border>
+                                    <TextBlock Text="{Binding TipoTexto}" Classes.inactivo="{Binding Documento.Estado, Converter={x:Static conv:EstadoDocumentoConverter.Inactivo}}"
+                                               VerticalAlignment="Center" />
                                 </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
-                </DockPanel>
-            </TabItem>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="NÚMERO" Width="Auto" SortMemberPath="NumeroCompleto" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:DocumentoFila">
+                                    <TextBlock Text="{Binding NumeroCompleto}" Classes.inactivo="{Binding Documento.Estado, Converter={x:Static conv:EstadoDocumentoConverter.Inactivo}}"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="DESCRIPCIÓN" Width="*" MinWidth="200" SortMemberPath="Descripcion">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:DocumentoFila">
+                                    <TextBlock Text="{Binding Descripcion}" Classes.inactivo="{Binding Documento.Estado, Converter={x:Static conv:EstadoDocumentoConverter.Inactivo}}"
+                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Descripcion}"
+                                               b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="EMISIÓN" Width="Auto" SortMemberPath="FechaEmision" b:ColumnaAuto.Medir="True" b:ColumnaAuto.NoCede="True"
+                                                b:ColumnaAuto.Conversor="{x:Static conv:FechaCortaConverter.Instance}">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:DocumentoFila">
+                                    <TextBlock Text="{Binding FechaEmision, Converter={x:Static conv:FechaCortaConverter.Instance}}"
+                                               Classes.inactivo="{Binding Documento.Estado, Converter={x:Static conv:EstadoDocumentoConverter.Inactivo}}"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="ESTADO" Width="97" SortMemberPath="EstadoTexto">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:DocumentoFila">
+                                    <v2:Insignia Texto="{Binding Documento.Estado, Converter={x:Static conv:EstadoDocumentoConverter.Texto}}"
+                                                 Variante="{Binding Documento.Estado, Converter={x:Static conv:EstadoDocumentoConverter.Variante}}"
+                                                 HorizontalAlignment="Left" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="REGISTRADO POR" Width="Auto" SortMemberPath="RegistradoPorNombre" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:DocumentoFila">
+                                    <TextBlock Text="{Binding RegistradoPorNombre}" Classes.inactivo="{Binding Documento.Estado, Converter={x:Static conv:EstadoDocumentoConverter.Inactivo}}"
+                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding RegistradoPorNombre}"
+                                               b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
 
-        </TabControl>
-
+                <DataGrid x:Name="GrillaHistorial" ItemsSource="{Binding Historial}" SelectedItem="{Binding FilaSeleccionadaHistorial}"
+                          DoubleTapped="OnFilaDobleClick" IsReadOnly="True" CanUserSortColumns="True" CanUserResizeColumns="True"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                    <DataGrid.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="EsVistaHistorial" />
+                            <Binding Path="Historial.Count" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                        </MultiBinding>
+                    </DataGrid.IsVisible>
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="TIPO" Width="Auto" SortMemberPath="TipoTexto" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:DocumentoFila">
+                                    <TextBlock Text="{Binding TipoTexto}" Classes.inactivo="{Binding Documento.Estado, Converter={x:Static conv:EstadoDocumentoConverter.Inactivo}}"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="NÚMERO" Width="Auto" SortMemberPath="NumeroCompleto" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:DocumentoFila">
+                                    <TextBlock Text="{Binding NumeroCompleto}" Classes.inactivo="{Binding Documento.Estado, Converter={x:Static conv:EstadoDocumentoConverter.Inactivo}}"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="DESCRIPCIÓN" Width="*" MinWidth="200" SortMemberPath="Descripcion">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:DocumentoFila">
+                                    <TextBlock Text="{Binding Descripcion}" Classes.inactivo="{Binding Documento.Estado, Converter={x:Static conv:EstadoDocumentoConverter.Inactivo}}"
+                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Descripcion}"
+                                               b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="EMISIÓN" Width="Auto" SortMemberPath="FechaEmision" b:ColumnaAuto.Medir="True" b:ColumnaAuto.NoCede="True"
+                                                b:ColumnaAuto.Conversor="{x:Static conv:FechaCortaConverter.Instance}">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:DocumentoFila">
+                                    <TextBlock Text="{Binding FechaEmision, Converter={x:Static conv:FechaCortaConverter.Instance}}"
+                                               Classes.inactivo="{Binding Documento.Estado, Converter={x:Static conv:EstadoDocumentoConverter.Inactivo}}"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="ESTADO" Width="97" SortMemberPath="EstadoTexto">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:DocumentoFila">
+                                    <v2:Insignia Texto="{Binding Documento.Estado, Converter={x:Static conv:EstadoDocumentoConverter.Texto}}"
+                                                 Variante="{Binding Documento.Estado, Converter={x:Static conv:EstadoDocumentoConverter.Variante}}"
+                                                 HorizontalAlignment="Left" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="REGISTRADO POR" Width="Auto" SortMemberPath="RegistradoPorNombre" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:DocumentoFila">
+                                    <TextBlock Text="{Binding RegistradoPorNombre}" Classes.inactivo="{Binding Documento.Estado, Converter={x:Static conv:EstadoDocumentoConverter.Inactivo}}"
+                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding RegistradoPorNombre}"
+                                               b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </DockPanel>
+        </v2:TarjetaContenido>
     </DockPanel>
 
 </UserControl>
