@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Finanzas: Pagos de la factura (confirmar anular) (UI v2)</title>
+<link rel="stylesheet" href="../_base/tokens.css">
+<link rel="stylesheet" href="../_base/base.css">
+<style>
+  /* Área cliente del Window (Width=360): Border raíz con padding 24 sobre superficie; el mensaje ajusta línea
+     (TextWrapping Wrap). La barra de título es del sistema operativo y no se compara. */
+  .v2-ventana { display: flex; align-items: center; justify-content: center; }
+  .dialogo { width: 360px; padding: 24px; background: var(--v2-color-superficie); display: flex; flex-direction: column; gap: 24px; }
+  .botones { display: flex; justify-content: flex-end; gap: 8px; }
+</style>
+</head>
+<body>
+<!-- Datos: ConfirmacionDialog con el mensaje que arma PagosGastoViewModel.AnularPagoAsync para el pago 61: "¿Confirma anular el pago de 100.000,00 del 12/10/2026?" -->
+<div class="v2-ventana">
+  <div class="dialogo">
+    <div class="v2-cuerpo">¿Confirma anular el pago de 100.000,00 del 12/10/2026?</div>
+    <div class="botones">
+      <span class="v2-boton v2-boton--secundario">Cancelar</span>
+      <span class="v2-boton v2-boton--primario">Sí, continuar</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>
