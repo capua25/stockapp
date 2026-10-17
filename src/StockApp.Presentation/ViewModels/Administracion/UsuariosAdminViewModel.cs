@@ -66,6 +66,12 @@ public partial class UsuariosAdminViewModel : ViewModelBase
         _session = session;
     }
 
+    /// <summary>La vista muestra "No se pudo conectar con el servidor" con Reintentar en lugar del modal global.</summary>
+    protected override bool AvisaSinConexionEnLinea => true;
+
+    /// <summary>Sin servidor la lista queda vacía: al reintentar no se muestran los usuarios de la consulta anterior.</summary>
+    protected override void AlPerderConexion() => Items.Clear();
+
     public async Task CargarAsync()
     {
         await EjecutarCargaProtegidaAsync(async () =>

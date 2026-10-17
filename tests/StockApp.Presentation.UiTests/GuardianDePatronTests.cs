@@ -50,7 +50,6 @@ public class GuardianDePatronTests
     [InlineData(typeof(DocumentoFormView), "Nuevo documento", "DOCUMENTOS")]
     [InlineData(typeof(TareaListView), "Tareas", "TAREAS")]
     [InlineData(typeof(TareaFormView), "Nueva tarea", "TAREAS")]
-    [InlineData(typeof(UsuariosAdminView), "Administración de usuarios", "ADMINISTRACIÓN")]
     [InlineData(typeof(MantenimientoView), "Mantenimiento", "ADMINISTRACIÓN")]
     public void Vista_TieneHeaderVistaConElTituloEsperado(Type tipoVista, string? titulo, string? eyebrow)
     {
@@ -73,7 +72,6 @@ public class GuardianDePatronTests
         typeof(DocumentoFormView),
         typeof(TareaListView),
         typeof(TareaFormView),
-        typeof(UsuariosAdminView),
         typeof(MantenimientoView),
     };
 
@@ -182,6 +180,7 @@ public class GuardianDePatronTests
         typeof(RubroGastoFormView),
         typeof(LineaPoaFormView),
         typeof(CatalogoListadoView),
+        typeof(UsuariosAdminView),
     };
 
     /// <summary>

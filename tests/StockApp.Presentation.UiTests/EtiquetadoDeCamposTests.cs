@@ -94,8 +94,9 @@ public class EtiquetadoDeCamposTests
     public void UsuariosAdminView_NuevaContrasena_TieneEtiquetaCaption()
     {
         var axaml = LeerAxaml("StockApp.Presentation/Views/Administracion/UsuariosAdminView.axaml");
-        Assert.True(TieneTextBlockCaptionCon(axaml, "Nueva contraseña"),
-            "Falta un TextBlock Classes=\"caption\" con texto \"Nueva contraseña\" arriba del "
+        // v2: la etiqueta la da el v2:CampoFormulario (el caption es del tema viejo); el botón va al lado, abajo.
+        Assert.True(TieneCampoFormularioCon(axaml, "Nueva contraseña"),
+            "Falta un v2:CampoFormulario Etiqueta=\"Nueva contraseña\" alrededor del "
             + "TextBox de NuevaContrasenaParaSeleccionado en UsuariosAdminView.");
     }
 

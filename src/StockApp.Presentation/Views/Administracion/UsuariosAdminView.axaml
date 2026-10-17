@@ -1,175 +1,202 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Administracion"
+             xmlns:app="using:StockApp.Application.Auth"
              xmlns:enums="using:StockApp.Domain.Enums"
              xmlns:conv="using:StockApp.Presentation.Converters"
-             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
+             xmlns:b="using:StockApp.Presentation.Behaviors"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="900" d:DesignHeight="600"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
              x:Class="StockApp.Presentation.Views.Administracion.UsuariosAdminView"
-             x:DataType="vm:UsuariosAdminViewModel">
+             x:DataType="vm:UsuariosAdminViewModel"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
 
-    <Grid>
-    <DockPanel Margin="{DynamicResource MargenVista}">
+    <!-- Usuarios (UI v2). Espejo: docs/ui-v2/mockups/administracion/usuarios*.html. Columna izquierda de 360: la card de alta
+         (en línea) y la grilla de usuarios; a la derecha el detalle del seleccionado: acciones, contraseña y los permisos en un
+         ScrollViewer propio, con el pie FIJO (fuera del scroll) donde vive Guardar permisos: así se alcanza siempre, también a
+         1366x768 con una lista larga. Sin selección, un estado vacío en lugar del panel deshabilitado. Un Admin no edita
+         permisos (acceso total) y un usuario dado de baja queda en solo lectura: eso lo decide PanelPermisosViewModel.PuedeEditar. -->
+    <DockPanel Margin="28,24">
 
-        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="ADMINISTRACIÓN" Titulo="Administración de usuarios" />
+        <v2:EncabezadoPagina x:Name="Encabezado" DockPanel.Dock="Top" Titulo="Usuarios"
+                             Subtitulo="Cuentas y permisos de acceso al sistema." />
 
-        <Grid ColumnDefinitions="360,*">
+        <v2:EstadoVacio x:Name="EstadoSinPermiso" DockPanel.Dock="Top" UseLayoutRounding="False"
+                        Titulo="Sin permiso" Mensaje="{Binding MensajeSinPermiso}" EsError="True"
+                        IsVisible="{Binding SinPermiso}" />
 
-            <!-- Columna izquierda: lista + alta -->
-            <Border Grid.Column="0" Classes="card" Margin="0,0,16,0">
-                <DockPanel>
-                    <StackPanel DockPanel.Dock="Top" Spacing="{DynamicResource Espacio2}" Margin="0,0,0,12">
-                        <TextBlock Text="NUEVO USUARIO" Classes="micro" />
-                        <c:CampoFormulario Etiqueta="Nombre de usuario">
-                            <TextBox Text="{Binding NuevoNombreUsuario}" />
-                        </c:CampoFormulario>
-                        <c:CampoFormulario Etiqueta="Nombre completo (opcional)">
-                            <TextBox Text="{Binding NuevoNombreCompleto}" />
-                        </c:CampoFormulario>
-                        <c:CampoFormulario Etiqueta="Contraseña">
-                            <TextBox PasswordChar="*" Text="{Binding NuevaContrasenaPlan}" />
-                        </c:CampoFormulario>
-                        <c:CampoFormulario Etiqueta="Rol">
-                            <ComboBox ItemsSource="{Binding RolesDisponibles}"
-                                      SelectedItem="{Binding NuevoRol}"
-                                      HorizontalAlignment="Stretch" />
-                        </c:CampoFormulario>
-                        <Button Classes="primary"
-                                Content="Crear usuario"
-                                Command="{Binding AltaCommand}"
-                                HorizontalAlignment="Stretch"
-                                HorizontalContentAlignment="Center" />
-                        <TextBlock Text="{Binding MensajeError}"
-                                   Classes="caption"
-                                   Foreground="{DynamicResource DangerBrush}"
-                                   TextWrapping="Wrap"
+        <v2:EstadoVacio x:Name="EstadoSinConexion" DockPanel.Dock="Top" UseLayoutRounding="False"
+                        Titulo="No se pudo conectar con el servidor"
+                        Mensaje="Verificá que el servidor esté encendido y accesible en la red, y volvé a intentar."
+                        EsError="True" IsVisible="{Binding SinConexion}">
+            <Button x:Name="BotonReintentar" Classes="secundario" Content="Reintentar" Command="{Binding ReintentarCargaCommand}" />
+        </v2:EstadoVacio>
+
+        <Grid ColumnDefinitions="360,16,*">
+            <Grid.IsVisible>
+                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                    <Binding Path="SinPermiso" Converter="{x:Static BoolConverters.Not}" />
+                    <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                </MultiBinding>
+            </Grid.IsVisible>
+
+            <Grid Grid.Column="0" RowDefinitions="Auto,16,*">
+                <v2:TarjetaContenido x:Name="CardNuevoUsuario" Grid.Row="0">
+                    <StackPanel>
+                        <TextBlock Classes="titulo-seccion" Text="Nuevo usuario" Margin="0,0,0,12" />
+                        <Grid ColumnDefinitions="*,8,*" RowDefinitions="Auto,12,Auto,12,Auto">
+                            <v2:CampoFormulario Grid.Row="0" Grid.Column="0" Etiqueta="Nombre de usuario">
+                                <TextBox x:Name="CajaNuevoUsuario" Text="{Binding NuevoNombreUsuario}" />
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario Grid.Row="0" Grid.Column="2" Etiqueta="Rol">
+                                <ComboBox x:Name="ComboRol" ItemsSource="{Binding RolesDisponibles}" SelectedItem="{Binding NuevoRol}"
+                                          HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="enums:RolUsuario">
+                                            <TextBlock Text="{Binding Converter={x:Static conv:RolUsuarioTextoConverter.Instance}}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Etiqueta="Nombre completo (opcional)">
+                                <TextBox x:Name="CajaNuevoNombreCompleto" Text="{Binding NuevoNombreCompleto}" />
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="3" Etiqueta="Contraseña">
+                                <TextBox x:Name="CajaNuevaContrasena" PasswordChar="*" Text="{Binding NuevaContrasenaPlan}" />
+                            </v2:CampoFormulario>
+                        </Grid>
+                        <Button x:Name="BotonCrear" Classes="secundario" Content="Crear usuario" Command="{Binding AltaCommand}"
+                                HorizontalAlignment="Right" Margin="0,12,0,0" />
+                        <v2:Alerta x:Name="AlertaAlta" Margin="0,12,0,0" Variante="Error" Texto="{Binding MensajeError}"
                                    IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                     </StackPanel>
+                </v2:TarjetaContenido>
 
-                    <ListBox ItemsSource="{Binding Items}" SelectedItem="{Binding UsuarioSeleccionado}">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="4">
-                                    <TextBlock Text="{Binding NombreUsuario}"
-                                               Opacity="{Binding Activo, Converter={x:Static conv:ActivoOpacidadConverter.Instance}}" />
-                                    <TextBlock Text="{Binding Rol}" Classes="caption" />
-                                    <c:BadgeEstado Texto="Inactivo" Tono="Neutro" IsVisible="{Binding !Activo}" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                </DockPanel>
-            </Border>
-
-            <!-- Columna derecha: acciones del seleccionado + panel de permisos (Task 13) -->
-            <Border Grid.Column="1"
-                    Classes="card"
-                    IsEnabled="{Binding UsuarioSeleccionado, Converter={x:Static ObjectConverters.IsNotNull}}">
-                <!-- Bugfix 1366x768: el panel de permisos mide mas que el alto util y la
-                     tarjeta lo desbordaba sin scroll, dejando Guardar permisos inalcanzable.
-                     El ScrollViewer va DENTRO de la tarjeta (local a esta vista): el area de
-                     contenido del shell no scrollea y las vistas con grilla propia no cambian. -->
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                <StackPanel Spacing="{DynamicResource Espacio3}">
-                    <TextBlock Text="{Binding UsuarioSeleccionado.NombreUsuario}" Classes="seccion" />
-
-                    <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
-                        <Button Classes="danger" Content="Dar de baja" Command="{Binding BajaCommand}" />
-                        <Button Classes="secondary"
-                                Content="Hacer Admin"
-                                Command="{Binding CambiarRolCommand}"
-                                CommandParameter="{x:Static enums:RolUsuario.Admin}"
-                                IsVisible="{Binding !EsAdminSeleccionado}" />
-                        <Button Classes="secondary"
-                                Content="Hacer Operador"
-                                Command="{Binding CambiarRolCommand}"
-                                CommandParameter="{x:Static enums:RolUsuario.Operador}"
-                                IsVisible="{Binding EsAdminSeleccionado}" />
-                    </StackPanel>
-
-                    <StackPanel Spacing="{DynamicResource Espacio1}">
-                        <TextBlock Text="Nueva contraseña" Classes="caption" />
-                        <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
-                            <TextBox PasswordChar="*"
-                                     Width="220"
-                                     Text="{Binding NuevaContrasenaParaSeleccionado}" />
-                            <Button Classes="secondary" Content="Cambiar contraseña" Command="{Binding CambiarContrasenaCommand}" />
-                        </StackPanel>
-                    </StackPanel>
-
-                    <Border BorderBrush="{DynamicResource BordeBrush}" BorderThickness="1" Padding="12" CornerRadius="{DynamicResource RadioChico}"
-                            DataContext="{Binding PanelPermisos}">
-                        <!-- IsEnabled por PuedeEditar (bugfix 2026-08-16), no solo !EsAdminSeleccionado:
-                             el panel seguía completamente editable para un usuario dado de baja,
-                             se veían y se podían tildar/destildar sus permisos igual que a uno
-                             activo. PuedeEditar cubre los dos casos (Admin y usuario inactivo) sin
-                             ocultar nada: el panel se ve siempre (hace falta para consultar qué
-                             permisos tenía), solo se deshabilita la edición. -->
-                        <StackPanel Spacing="{DynamicResource Espacio2}" IsEnabled="{Binding PuedeEditar}">
-                            <TextBlock Text="Acceso total" FontWeight="Bold" Foreground="{DynamicResource TextoSecundarioBrush}"
-                                       IsVisible="{Binding EsAdminSeleccionado}" />
-                            <!-- Indicador "Solo lectura" (bugfix 2026-08-16): mismo patrón que
-                                 IngresosView.axaml, Classes="caption" ya usa TextoSecundarioBrush
-                                 (Typography.axaml, 4.76:1 sobre blanco, AA); se descartó WarningBrush
-                                 por el mismo motivo que el aviso de dependencia blanda más abajo
-                                 (3.19:1, por debajo del piso AA de 4.5:1). No aplica al caso Admin,
-                                 que ya tiene su propio aviso "Acceso total" arriba. -->
-                            <TextBlock Text="Solo lectura: usuario dado de baja" Classes="caption"
-                                       IsVisible="{Binding MostrarAvisoSoloLectura}" />
-
-                            <!-- Catálogo/grupos generados desde CatalogoPermisosPanel (Task 3/4/6):
-                                 un checkbox independiente por permiso configurable, sin compuestos. -->
-                            <ItemsControl ItemsSource="{Binding Grupos}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="vm:GrupoPermisos">
-                                        <StackPanel Spacing="{DynamicResource Espacio2}">
-                                            <TextBlock Text="{Binding Nombre}" FontWeight="Bold" Margin="0,8,0,0" />
-                                            <ItemsControl ItemsSource="{Binding Items}">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate x:DataType="vm:ItemPermiso">
-                                                        <StackPanel Spacing="2">
-                                                            <CheckBox Content="{Binding Etiqueta}" IsChecked="{Binding Seleccionado}" />
-                                                            <!-- Aviso NO bloqueante de dependencia BLANDA (paso 5 del refactor;
-                                                                 PermisoDependencias.Recomendados). Mismo patrón que el indicador
-                                                                 "Solo lectura" de IngresosView.axaml: Classes="caption" ya usa
-                                                                 TextoSecundarioBrush (Typography.axaml). Se descartó WarningBrush
-                                                                 (Tokens.axaml): sobre el fondo blanco de Border.card da 3.19:1,
-                                                                 por debajo del piso WCAG AA de 4.5:1 (ver ButtonGhostContrasteTests). -->
-                                                            <TextBlock Text="{Binding Advertencia}"
-                                                                       Classes="caption"
-                                                                       Margin="24,0,0,0"
-                                                                       TextWrapping="Wrap"
-                                                                       IsVisible="{Binding Advertencia, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                                                        </StackPanel>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                        </StackPanel>
+                <v2:TarjetaContenido Grid.Row="2">
+                    <DataGrid x:Name="GrillaUsuarios" ItemsSource="{Binding Items}" SelectedItem="{Binding UsuarioSeleccionado}"
+                              IsReadOnly="True" CanUserSortColumns="True" CanUserResizeColumns="True"
+                              ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                        <DataGrid.Columns>
+                            <DataGridTemplateColumn Header="USUARIO" Width="*" MinWidth="100" SortMemberPath="NombreUsuario"
+                                                    b:DataGridColumnasAutoBehavior.PisoProporcional="100">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate x:DataType="app:UsuarioDto">
+                                        <TextBlock Text="{Binding NombreUsuario}" Classes.inactivo="{Binding !Activo}" TextTrimming="CharacterEllipsis"
+                                                   ToolTip.Tip="{Binding NombreUsuario}" b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
                                     </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="ROL" Width="Auto" SortMemberPath="Rol" b:ColumnaAuto.Medir="True"
+                                                    b:ColumnaAuto.Conversor="{x:Static conv:RolUsuarioTextoConverter.Instance}">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate x:DataType="app:UsuarioDto">
+                                        <TextBlock Text="{Binding Rol, Converter={x:Static conv:RolUsuarioTextoConverter.Instance}}"
+                                                   Classes.inactivo="{Binding !Activo}" VerticalAlignment="Center" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTemplateColumn Header="ESTADO" Width="78" SortMemberPath="Activo">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate x:DataType="app:UsuarioDto">
+                                        <v2:Insignia Texto="Inactivo" Variante="Neutro" IsVisible="{Binding !Activo}"
+                                                     VerticalAlignment="Center" HorizontalAlignment="Left" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </v2:TarjetaContenido>
+            </Grid>
 
-                            <TextBlock Text="{Binding MensajeError}"
-                                       Foreground="{DynamicResource DangerBrush}"
-                                       TextWrapping="Wrap"
-                                       IsVisible="{Binding MensajeError, Converter={x:Static ObjectConverters.IsNotNull}}" />
+            <Panel Grid.Column="2">
+                <v2:TarjetaContenido x:Name="DetalleVacio" IsVisible="{Binding UsuarioSeleccionado, Converter={x:Static ObjectConverters.IsNull}}">
+                    <v2:EstadoVacio Titulo="Elegí un usuario" Mensaje="Seleccioná un usuario de la lista para ver sus permisos." />
+                </v2:TarjetaContenido>
 
-                            <Button Content="Guardar permisos" Classes="secondary" Command="{Binding GuardarCommand}" Margin="0,12,0,0" />
+                <v2:TarjetaContenido x:Name="Detalle" IsVisible="{Binding UsuarioSeleccionado, Converter={x:Static ObjectConverters.IsNotNull}}">
+                    <Grid RowDefinitions="Auto,16,Auto,20,Auto,Auto,*,Auto">
+                        <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                                <TextBlock x:Name="TituloUsuario" Classes="titulo-seccion" Text="{Binding UsuarioSeleccionado.NombreUsuario}"
+                                           VerticalAlignment="Center" />
+                                <v2:Insignia x:Name="InsigniaRol" Variante="Neutro" VerticalAlignment="Center"
+                                             Texto="{Binding UsuarioSeleccionado.Rol, Converter={x:Static conv:RolUsuarioTextoConverter.Instance}}" />
+                                <v2:Insignia x:Name="InsigniaInactivo" Texto="Inactivo" Variante="Neutro" VerticalAlignment="Center"
+                                             IsVisible="{Binding !UsuarioSeleccionado.Activo}" />
+                                <v2:Insignia x:Name="InsigniaSoloLectura" Texto="Solo lectura" Variante="Neutro" VerticalAlignment="Center"
+                                             IsVisible="{Binding PanelPermisos.MostrarAvisoSoloLectura}" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                <Button x:Name="BotonHacerAdmin" Classes="secundario" Content="Hacer Admin" Command="{Binding CambiarRolCommand}"
+                                        CommandParameter="{x:Static enums:RolUsuario.Admin}" IsVisible="{Binding !EsAdminSeleccionado}" />
+                                <Button x:Name="BotonHacerOperador" Classes="secundario" Content="Hacer Operador" Command="{Binding CambiarRolCommand}"
+                                        CommandParameter="{x:Static enums:RolUsuario.Operador}" IsVisible="{Binding EsAdminSeleccionado}" />
+                                <Button x:Name="BotonBaja" Classes="peligro" Content="Dar de baja" Command="{Binding BajaCommand}" />
+                            </StackPanel>
+                        </Grid>
+
+                        <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8">
+                            <v2:CampoFormulario x:Name="CampoNuevaContrasena" Etiqueta="Nueva contraseña">
+                                <TextBox x:Name="CajaNuevaContrasenaSeleccionado" PasswordChar="*" Width="220"
+                                         Text="{Binding NuevaContrasenaParaSeleccionado}"
+                                         IsEnabled="{Binding UsuarioSeleccionado.Activo}" />
+                            </v2:CampoFormulario>
+                            <Button x:Name="BotonCambiarContrasena" Classes="secundario" Content="Cambiar contraseña"
+                                    Command="{Binding CambiarContrasenaCommand}" VerticalAlignment="Bottom" />
                         </StackPanel>
-                    </Border>
-                </StackPanel>
-                </ScrollViewer>
-            </Border>
+
+                        <TextBlock Grid.Row="4" Classes="titulo-seccion" Text="Permisos" Margin="0,0,0,4" />
+
+                        <v2:Alerta x:Name="AlertaAccesoTotal" Grid.Row="5" Variante="Info" Margin="0,0,0,12"
+                                   Texto="Acceso total: los administradores tienen todos los permisos."
+                                   IsVisible="{Binding EsAdminSeleccionado}" />
+
+                        <!-- Los permisos scrollean solos; el pie con Guardar queda fuera de este ScrollViewer. -->
+                        <ScrollViewer x:Name="ScrollPermisos" Grid.Row="6" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                                      DataContext="{Binding PanelPermisos}">
+                            <StackPanel IsEnabled="{Binding PuedeEditar}" Margin="0,0,12,0">
+                                <ItemsControl ItemsSource="{Binding Grupos}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:GrupoPermisos">
+                                            <StackPanel Margin="0,0,0,12">
+                                                <TextBlock Classes="subtitulo-formulario" Text="{Binding Nombre}" Margin="0,0,0,2" />
+                                                <ItemsControl ItemsSource="{Binding Items}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate x:DataType="vm:ItemPermiso">
+                                                            <StackPanel>
+                                                                <CheckBox Content="{Binding Etiqueta}" IsChecked="{Binding Seleccionado}" />
+                                                                <!-- Aviso NO bloqueante de una dependencia blanda (PermisoDependencias.Recomendados). -->
+                                                                <TextBlock Classes="texto-secundario" Text="{Binding Advertencia}" Margin="28,-4,0,4"
+                                                                           TextWrapping="Wrap"
+                                                                           IsVisible="{Binding Advertencia, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                                            </StackPanel>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </StackPanel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </ScrollViewer>
+
+                        <!-- Pie fijo de la card: la alerta del panel y el único primario de la pantalla. -->
+                        <Border x:Name="PiePermisos" Grid.Row="7" Margin="0,12,0,0" Padding="0,16,0,0" BorderThickness="0,1,0,0"
+                                BorderBrush="{DynamicResource V2SeparadorGrillaBrush}">
+                            <StackPanel>
+                                <v2:Alerta x:Name="AlertaPermisos" Variante="Error" Margin="0,0,0,12" Texto="{Binding PanelPermisos.MensajeError}"
+                                           IsVisible="{Binding PanelPermisos.MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                <Button x:Name="BotonGuardarPermisos" Classes="primario" Content="Guardar permisos"
+                                        Command="{Binding PanelPermisos.GuardarCommand}" HorizontalAlignment="Right" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </v2:TarjetaContenido>
+            </Panel>
         </Grid>
     </DockPanel>
-
-        <!-- bugfix "pantalla muda ante un 403": ver ViewModelBase.EjecutarCargaProtegidaAsync. -->
-        <c:EstadoVacio Titulo="Sin permiso"
-                       Mensaje="{Binding MensajeSinPermiso}"
-                       EsError="True"
-                       IsVisible="{Binding SinPermiso}" />
-    </Grid>
 
 </UserControl>

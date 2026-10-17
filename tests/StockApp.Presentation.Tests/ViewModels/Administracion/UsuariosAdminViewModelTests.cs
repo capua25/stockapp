@@ -62,6 +62,39 @@ public class UsuariosAdminViewModelTests
     }
 
     [Fact]
+    public async Task Cargar_SinServidor_MarcaSinConexionYVaciaItems()
+    {
+        var (vm, svc, _) = Crear();
+        svc.SetupSequence(s => s.ListarAsync())
+            .ReturnsAsync(new List<UsuarioDto> { Dto(1, RolUsuario.Admin) })
+            .ThrowsAsync(new StockApp.ApiClient.ServidorNoDisponibleException());
+        await vm.CargarAsync();
+        Assert.Single(vm.Items);
+
+        var ex = await Record.ExceptionAsync(() => vm.CargarAsync());
+
+        Assert.Null(ex);
+        Assert.True(vm.SinConexion);
+        Assert.Empty(vm.Items);
+    }
+
+    [Fact]
+    public async Task Reintentar_TrasSinConexion_CargaLosUsuarios()
+    {
+        var (vm, svc, _) = Crear();
+        svc.SetupSequence(s => s.ListarAsync())
+            .ThrowsAsync(new StockApp.ApiClient.ServidorNoDisponibleException())
+            .ReturnsAsync(new List<UsuarioDto> { Dto(1, RolUsuario.Admin), Dto(2, RolUsuario.Operador) });
+        await vm.CargarAsync();
+        Assert.True(vm.SinConexion);
+
+        await vm.ReintentarCargaCommand.ExecuteAsync(null);
+
+        Assert.False(vm.SinConexion);
+        Assert.Equal(2, vm.Items.Count);
+    }
+
+    [Fact]
     public void UsuarioSeleccionado_Admin_EsAdminSeleccionadoEsTrue()
     {
         var (vm, _, _) = Crear();

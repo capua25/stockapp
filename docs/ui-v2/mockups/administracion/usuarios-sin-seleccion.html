@@ -38,11 +38,11 @@
   .permisos-grupo { margin-top: 12px; }
   .permisos-grupo:first-child { margin-top: 0; }
   .permisos-grupo .v2-subtitulo-formulario { margin-bottom: 2px; }
-  .advertencia { margin: -4px 0 4px 28px; }
+  .advertencia { margin: -4px 0 0 28px; padding-bottom: 4px; }
   .pie-fijo { flex: 0 0 auto; margin-top: 12px; padding-top: 16px; border-top: 1px solid var(--v2-color-separador-grilla); display: flex; justify-content: flex-end; }
-  /* Pulgar de la barra vertical del ScrollViewer (Fluent en reposo): 2 px #7A7A7A. Largo y posición aproximados:
-     se miden en headless con la vista real al implementarla. */
-  .pulgar { position: absolute; right: 0; top: 0; width: 2px; height: 56%; background: #7A7A7A; }
+  /* Pulgar de la barra vertical del ScrollViewer (Fluent en reposo): 2 px #7A7A7A a 2 px del borde derecho del scroll, medido en
+     el render de la vista real (arranca 16 debajo del borde superior del scroll). Largo y posición dependen del contenido. */
+  .pulgar { position: absolute; right: 2px; width: 2px; background: #7A7A7A; }
 </style>
 </head>
 <body>

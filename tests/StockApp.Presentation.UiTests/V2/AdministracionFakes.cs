@@ -137,3 +137,33 @@ internal sealed class LineaPoaServicioFake : CatalogoServicioFake<LineaPoa>, ILi
     public Task<IReadOnlyList<LineaPoa>> ListarTodasAsync() => Listar();
     public Task<IReadOnlyList<LineaPoa>> ListarActivasAsync() => Activas();
 }
+
+/// <summary>IUsuarioService para Usuarios: la lista, los permisos por usuario y los fallos que el servidor real produce.</summary>
+internal sealed class UsuarioServicioFake : StockApp.Application.Auth.IUsuarioService
+{
+    public List<StockApp.Application.Auth.UsuarioDto> Lista { get; set; } = new();
+    public Dictionary<int, IReadOnlyList<string>> Permisos { get; } = new();
+    public Exception? Falla { get; set; }
+    public Exception? AltaFalla { get; set; }
+    public List<(int Id, IReadOnlyList<string> Permisos)> PermisosGuardados { get; } = new();
+
+    public Task<int> AltaUsuarioAsync(string nombreUsuario, string? nombreCompleto, string contrasenaPlan, StockApp.Domain.Enums.RolUsuario rol)
+        => AltaFalla is not null ? Task.FromException<int>(AltaFalla) : Task.FromResult(99);
+
+    public Task BajaLogicaAsync(int usuarioId) => Task.CompletedTask;
+    public Task CambiarRolAsync(int usuarioId, StockApp.Domain.Enums.RolUsuario nuevoRol) => Task.CompletedTask;
+    public Task CambiarContrasenaAsync(int usuarioId, string nuevaContrasenaPlan, string? contrasenaActualPlan = null) => Task.CompletedTask;
+
+    public Task<IReadOnlyList<StockApp.Application.Auth.UsuarioDto>> ListarAsync() =>
+        Falla is not null ? Task.FromException<IReadOnlyList<StockApp.Application.Auth.UsuarioDto>>(Falla)
+            : Task.FromResult<IReadOnlyList<StockApp.Application.Auth.UsuarioDto>>(Lista.ToList());
+
+    public Task<IReadOnlyList<string>> ObtenerPermisosAsync(int usuarioId) =>
+        Task.FromResult(Permisos.TryGetValue(usuarioId, out var p) ? p : (IReadOnlyList<string>)new List<string>());
+
+    public Task GuardarPermisosAsync(int usuarioId, IReadOnlyList<string> permisos)
+    {
+        PermisosGuardados.Add((usuarioId, permisos));
+        return Task.CompletedTask;
+    }
+}

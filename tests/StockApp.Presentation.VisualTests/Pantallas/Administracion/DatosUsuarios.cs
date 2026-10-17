@@ -28,11 +28,16 @@ public static class DatosUsuarios
     public static readonly IReadOnlyList<string> PermisosDelOperador =
         [Permisos.RegistrarMovimientos, Permisos.GestionarTablasMaestras, Permisos.VerFinanzas, Permisos.GestionarTareas];
 
+    /// <summary>Permisos del usuario dado de baja: tiene Productos, así que no aparece el aviso de dependencia blanda.</summary>
+    public static readonly IReadOnlyList<string> PermisosDelInactivo =
+        [Permisos.GestionarProductos, Permisos.RegistrarMovimientos, Permisos.VerFinanzas, Permisos.GestionarTareas];
+
     private static UsuariosAdminViewModel Armar(Action<Mock<IUsuarioService>>? configurar = null)
     {
         var servicio = new Mock<IUsuarioService>();
         servicio.Setup(s => s.ListarAsync()).ReturnsAsync(Usuarios);
         servicio.Setup(s => s.ObtenerPermisosAsync(It.IsAny<int>())).ReturnsAsync(PermisosDelOperador);
+        servicio.Setup(s => s.ObtenerPermisosAsync(Inactivo.Id)).ReturnsAsync(PermisosDelInactivo);
         configurar?.Invoke(servicio);
         var confirmacion = Mock.Of<IConfirmacionService>();
         var sesion = new Mock<ICurrentSession>();
