@@ -21,4 +21,31 @@ public class VarianteEstadoGastoConverterTests
 
         Assert.Equal(esperada, variante);
     }
+
+    [Fact]
+    public void UnTextoDesconocido_ComoElValorEsperado_EsNeutro()
+    {
+        var variante = VarianteEstadoGastoConverter.Instance.Convert("Otro", typeof(VarianteInsignia), null, CultureInfo.InvariantCulture);
+
+        Assert.Equal(VarianteInsignia.Neutro, variante);
+    }
+
+    /// <summary>Caracterización: el converter compara el TEXTO del estado (lo que expone GastoFila), no el enum. Un
+    /// EstadoGasto crudo cae en Neutro aunque sea Vencida.</summary>
+    [Fact]
+    public void UnValorQueNoEsTexto_AunqueSeaElEnum_EsNeutro()
+    {
+        var delEnum = VarianteEstadoGastoConverter.Instance.Convert(EstadoGasto.Vencida, typeof(VarianteInsignia), null, CultureInfo.InvariantCulture);
+        var numero = VarianteEstadoGastoConverter.Instance.Convert(3, typeof(VarianteInsignia), null, CultureInfo.InvariantCulture);
+
+        Assert.Equal(VarianteInsignia.Neutro, delEnum);
+        Assert.Equal(VarianteInsignia.Neutro, numero);
+    }
+
+    [Fact]
+    public void ConvertBack_NoEsSoportado()
+    {
+        Assert.Throws<NotSupportedException>(() =>
+            VarianteEstadoGastoConverter.Instance.ConvertBack(VarianteInsignia.Peligro, typeof(string), null, CultureInfo.InvariantCulture));
+    }
 }

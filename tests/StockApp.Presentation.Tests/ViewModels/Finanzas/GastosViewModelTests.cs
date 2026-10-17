@@ -1409,6 +1409,22 @@ public class GastosViewModelTests
         Assert.True(vm.EditarCommand.CanExecute(null));
     }
 
+    [Fact]
+    public async Task Anular_PasandoDeUnaFilaActivaAUnaAnulada_SeDeshabilita_YAvisaDelCambio()
+    {
+        var (vm, _, _, _, _, _, _) = Crear(new List<Gasto> { GastoDe(1, "Activo"), GastoDe(2, "Anulado", activo: false) });
+        await vm.CargarAsync();
+        vm.FilaSeleccionada = vm.Filas.Single(f => f.Id == 1);
+        Assert.True(vm.AnularCommand.CanExecute(null));
+        var avisos = 0;
+        vm.AnularCommand.CanExecuteChanged += (_, _) => avisos++;
+
+        vm.FilaSeleccionada = vm.Filas.Single(f => f.Id == 2);
+
+        Assert.False(vm.AnularCommand.CanExecute(null));
+        Assert.Equal(1, avisos);   // sin el aviso el botón de la vista quedaría habilitado sobre la anulada
+    }
+
     // Caracterización (R4): nace verde y ninguna mutación lo pone en rojo; documenta el comportamiento previo.
     [Fact]
     public async Task Anular_SobreUnaFilaActiva_EstaHabilitado()

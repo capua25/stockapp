@@ -111,4 +111,108 @@ public class DatosGastosTests
         Assert.True(vm.SoloLectura);
         Assert.False(vm.MostrarSeccionAdjuntos);
     }
+
+    [Fact]
+    public async Task Formulario_Nuevo_AltaVaciaDeContado_ConLaFechaFija()
+    {
+        var vm = (GastoFormViewModel)DatosGastos.Nuevo().CurrentContent!;
+
+        await vm.InicializarAsync();
+
+        Assert.False(vm.EsEdicion);
+        Assert.False(vm.EsCredito);
+        Assert.False(vm.SoloLectura);
+        Assert.True(vm.PuedeCambiarCondicionPago);
+        Assert.Equal(new DateTime(2026, 10, 6), vm.FechaSeleccionada);
+        Assert.True(string.IsNullOrEmpty(vm.Detalle));
+        Assert.Null(vm.ProveedorSeleccionado);
+    }
+
+    [Fact]
+    public async Task Formulario_EditarCredito_PrecargaElCreditoConSuVencimiento_YLaCondicionFija()
+    {
+        var vm = (GastoFormViewModel)DatosGastos.EditarCredito().CurrentContent!;
+
+        await vm.InicializarAsync();
+
+        Assert.True(vm.EsEdicion);
+        Assert.True(vm.EsCredito);
+        Assert.Equal(new DateTime(2030, 12, 31), vm.FechaVencimientoSeleccionada?.Date);
+        Assert.Equal("Constructora Oriental S.A.", vm.ProveedorSeleccionado?.Nombre);
+        Assert.Equal("420.000,00", vm.MontoTexto);
+        Assert.False(vm.PuedeCambiarCondicionPago);
+        Assert.Empty(vm.AdjuntosPanel.Items);
+    }
+
+    [Fact]
+    public async Task Formulario_ConErrorDelServidor_FormularioCompleto_YElMensajeDeLaRegla()
+    {
+        var vm = (GastoFormViewModel)DatosGastos.ConErrorDelServidor().CurrentContent!;
+
+        await vm.InicializarAsync();
+
+        Assert.Equal("El monto total del gasto debe ser mayor a cero.", vm.MensajeError);
+        Assert.Equal("Ancap Distribuidora", vm.ProveedorSeleccionado?.Nombre);
+        Assert.Equal("B-0012950", vm.NumeroFactura);
+        Assert.Equal("0,00", vm.MontoTexto);
+        Assert.Equal("Rentas generales", vm.FuenteSeleccionada?.Nombre);
+        Assert.Equal("Combustibles", vm.RubroSeleccionado?.Nombre);
+    }
+
+    [Fact]
+    public async Task Formulario_Credito_AltaACreditoConSuVencimiento()
+    {
+        var vm = (GastoFormViewModel)DatosGastos.Credito().CurrentContent!;
+
+        await vm.InicializarAsync();
+
+        Assert.False(vm.EsEdicion);
+        Assert.True(vm.EsCredito);
+        Assert.True(vm.PuedeCambiarCondicionPago);
+        Assert.Equal(new DateTime(2026, 11, 5), vm.FechaVencimientoSeleccionada?.Date);
+        Assert.Equal("A-0002301", vm.NumeroFactura);
+        Assert.Equal("245.000,00", vm.MontoTexto);
+        Assert.Equal("Constructora Oriental S.A.", vm.ProveedorSeleccionado?.Nombre);
+        Assert.Equal("Préstamo BROU", vm.FuenteSeleccionada?.Nombre);
+        Assert.Equal("Obras viales", vm.RubroSeleccionado?.Nombre);
+    }
+
+    [Fact]
+    public async Task Formulario_SoloLectura_PorPermiso_ConElGastoCargadoYSinAdjuntosNuevos()
+    {
+        var vm = (GastoFormViewModel)DatosGastos.FormularioSoloLectura().CurrentContent!;
+
+        await vm.InicializarAsync();
+
+        Assert.True(vm.SoloLectura);
+        Assert.False(vm.PuedeRegistrarGastos);
+        Assert.True(vm.MostrarSeccionAdjuntos);   // sin permiso se ve; el anulado es el que la oculta
+        Assert.False(vm.PuedeCambiarCondicionPago);
+        Assert.Equal("A-0004521", vm.NumeroFactura);
+        Assert.Equal("factura-A-0004521.pdf", Assert.Single(vm.AdjuntosPanel.Items).NombreArchivo);
+    }
+
+    [Fact]
+    public async Task Listado_SoloLectura_CargaLosSeis_SinPermisoDeRegistrar()
+    {
+        var vm = (GastosViewModel)DatosGastos.SoloLectura().CurrentContent!;
+
+        await vm.CargarAsync();
+
+        Assert.Equal(6, vm.CantidadVisible);
+        Assert.False(vm.PuedeRegistrarGastos);
+    }
+
+    [Fact]
+    public async Task Listado_ConAnulado_CargaLosSiete_ConLaAnuladaEnSuLugar()
+    {
+        var vm = (GastosViewModel)DatosGastos.ConAnulado().CurrentContent!;
+
+        await vm.CargarAsync();
+
+        Assert.Equal(7, vm.CantidadVisible);
+        Assert.Equal(8, vm.Filas[2].Id);
+        Assert.Equal("Anulada", vm.Filas[2].Estado);
+        Assert.Equal(1, vm.Filas.Count(f => f.Estado == "Anulada"));
+    }
 }

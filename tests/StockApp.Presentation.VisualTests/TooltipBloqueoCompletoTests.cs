@@ -28,6 +28,8 @@ public class TooltipBloqueoCompletoTests
         public IAsyncRelayCommand GuardarCommand => field ??= ComandoDeGuardado(() => Task.CompletedTask);
     }
 
+    // redondeo=true es el CONTROL: pasa con o sin el arreglo del estilo global de ToolTip (el redondeo queda encendido
+    // en los dos casos). Quien custodia el arreglo es redondeo=false, que da rojo si se quita el UseLayoutRounding del estilo.
     [AvaloniaTheory]
     [InlineData(false)]
     [InlineData(true)]
