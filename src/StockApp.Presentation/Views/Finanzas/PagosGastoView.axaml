@@ -3,199 +3,209 @@
              xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
              xmlns:e="using:StockApp.Domain.Entities"
              xmlns:conv="using:StockApp.Presentation.Converters"
-             xmlns:convA="using:Avalonia.Data.Converters"
-             xmlns:beh="using:StockApp.Presentation.Behaviors"
-             xmlns:i="https://github.com/projektanker/icons.avalonia"
-             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
+             xmlns:b="using:StockApp.Presentation.Behaviors"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="820" d:DesignHeight="640"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
              x:Class="StockApp.Presentation.Views.Finanzas.PagosGastoView"
-             x:DataType="vm:PagosGastoViewModel">
+             x:DataType="vm:PagosGastoViewModel"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
 
-    <UserControl.Styles>
-        <!-- Fix "botón sin ícono visible en celda de DataGrid" (mismo fix que
-             IngresoPorFacturaView.axaml/NuevaImportacionView.axaml): Themes/DataGrid.axaml fija
-             RowHeight=36 y DataGridCell.Padding=PaddingCelda (12,8) -> 36-16=20px útiles en la
-             celda. El botón "Anular" (Padding propio + ícono mdi-cancel) necesita más alto que
-             eso; sin este fix el ícono queda aplastado a 2px de alto (medido). Esta clase saca
-             el padding VERTICAL de la celda (deja el horizontal) para que el botón tenga los
-             36px enteros y su propio padding se resuelva adentro (medido: el ícono pasa de 2px
-             a 13px de alto). -->
-        <Style Selector="DataGridCell.sin-padding-vertical">
-            <Setter Property="Padding" Value="12,0,4,0" />
-        </Style>
-    </UserControl.Styles>
+    <!-- UI v2. Espejo: docs/ui-v2/mockups/finanzas/pagos*.html. Todo scrollea junto, encabezado incluido. Breadcrumb con el
+         origen (Gastos y facturas o Calendario de pagos) que además es la vuelta: sin botón Volver. Cuatro cards apiladas
+         (Resumen, Registrar pago, Pagos, Adjuntos). Sin finanzas.pagos o con el gasto anulado la pantalla es de solo lectura
+         (sin Registrar ni Anular, insignia "Solo lectura"; anulado además con la insignia y la alerta). El pago elegido en la
+         grilla gobierna el panel de adjuntos: el de un pago anulado se muestra en solo lectura con su aviso. Cargando, sin
+         servidor y tras un 403 reemplazan a las cards. Fecha y Monto muestran su error debajo del campo (convención 31);
+         la Alerta de error es para lo que rechaza el servidor. -->
+    <ScrollViewer x:Name="Desplazamiento" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="28,24">
 
-    <DockPanel Margin="{DynamicResource MargenVista}">
+            <v2:EncabezadoPagina x:Name="Encabezado" Titulo="Pagos de la factura" Subtitulo="{Binding TituloGasto}"
+                                 BreadcrumbOrigen="{Binding TextoOrigen}"
+                                 BreadcrumbComando="{Binding VolverCommand}"
+                                 BreadcrumbActual="Pagos de la factura">
+                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Top">
+                    <v2:Insignia x:Name="InsigniaAnulado" Texto="Anulado" Variante="Neutro" IsVisible="{Binding EsAnulado}" />
+                    <v2:Insignia x:Name="InsigniaSoloLectura" Texto="Solo lectura" Variante="Neutro" IsVisible="{Binding SoloLectura}" />
+                </StackPanel>
+            </v2:EncabezadoPagina>
 
-        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="FINANZAS" Titulo="Pagos de la factura" Resumen="{Binding TituloGasto}" />
+            <v2:EstadoVacio x:Name="EstadoSinPermiso" UseLayoutRounding="False"
+                            Titulo="Sin permiso" Mensaje="{Binding MensajeSinPermiso}" EsError="True"
+                            IsVisible="{Binding SinPermiso}" />
 
-        <!-- Resumen -->
-        <Border DockPanel.Dock="Top" Classes="card" Margin="0,0,0,12">
-            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio6}">
-                <StackPanel>
-                    <TextBlock Text="Monto total" Classes="caption" />
-                    <TextBlock Text="{Binding MontoTotal, Converter={x:Static conv:MonedaConverter.Instance}}"
-                               FontWeight="SemiBold" />
-                </StackPanel>
-                <StackPanel>
-                    <TextBlock Text="Pagado" Classes="caption" />
-                    <TextBlock Text="{Binding TotalPagado, Converter={x:Static conv:MonedaConverter.Instance}}"
-                               FontWeight="SemiBold" />
-                </StackPanel>
-                <StackPanel>
-                    <TextBlock Text="Saldo" Classes="caption" />
-                    <TextBlock Text="{Binding SaldoPendiente, Converter={x:Static conv:MonedaConverter.Instance}}"
-                               FontWeight="SemiBold" />
-                </StackPanel>
-                <StackPanel>
-                    <TextBlock Text="Estado" Classes="caption" />
-                    <TextBlock Text="{Binding Estado}" FontWeight="SemiBold" />
-                </StackPanel>
+            <v2:TarjetaContenido x:Name="TarjetaCargando" IsVisible="{Binding Cargando}">
+                <v2:EstadoCargando x:Name="IndicadorCarga" Texto="Cargando los pagos…" />
+            </v2:TarjetaContenido>
+
+            <v2:TarjetaContenido x:Name="TarjetaSinConexion" IsVisible="{Binding SinConexion}">
+                <v2:EstadoVacio x:Name="EstadoSinConexion" UseLayoutRounding="False"
+                                Titulo="No se pudo conectar con el servidor"
+                                Mensaje="Verificá que el servidor esté encendido y accesible en la red, y volvé a intentar."
+                                EsError="True">
+                    <Button x:Name="BotonReintentar" Classes="secundario" Content="Reintentar" Command="{Binding ReintentarCargaCommand}" />
+                </v2:EstadoVacio>
+            </v2:TarjetaContenido>
+
+            <StackPanel x:Name="Contenido" Spacing="16">
+                <StackPanel.IsVisible>
+                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                        <Binding Path="Cargando" Converter="{x:Static BoolConverters.Not}" />
+                        <Binding Path="SinPermiso" Converter="{x:Static BoolConverters.Not}" />
+                        <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                    </MultiBinding>
+                </StackPanel.IsVisible>
+
+                <v2:Alerta x:Name="AlertaAnulado" Variante="Info" IsVisible="{Binding EsAnulado}"
+                           Texto="Este gasto está anulado: se pueden consultar sus pagos, pero no registrar ni anular." />
+
+                <!-- Resumen: cuatro columnas iguales; el saldo de un gasto anulado es "—". -->
+                <v2:TarjetaContenido x:Name="TarjetaResumen">
+                    <Grid ColumnDefinitions="*,*,*,*">
+                        <StackPanel>
+                            <TextBlock Classes="texto-secundario" Text="Monto total" />
+                            <TextBlock x:Name="ValorMontoTotal" Classes="titulo-seccion" TextElement.FontFeatures="+tnum,-calt"
+                                       Text="{Binding MontoTotal, Converter={x:Static conv:MonedaConverter.Instance}}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Classes="texto-secundario" Text="Pagado" />
+                            <TextBlock x:Name="ValorPagado" Classes="titulo-seccion" TextElement.FontFeatures="+tnum,-calt"
+                                       Text="{Binding TotalPagado, Converter={x:Static conv:MonedaConverter.Instance}}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Classes="texto-secundario" Text="Saldo" />
+                            <TextBlock x:Name="ValorSaldo" Classes="titulo-seccion" TextElement.FontFeatures="+tnum,-calt" Text="{Binding TextoSaldo}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="3">
+                            <TextBlock Classes="texto-secundario" Text="Estado" />
+                            <v2:Insignia x:Name="InsigniaEstado" Texto="{Binding Estado}" HorizontalAlignment="Left"
+                                         Variante="{Binding Estado, Converter={x:Static conv:VarianteEstadoGastoConverter.Instance}}" />
+                        </StackPanel>
+                    </Grid>
+                </v2:TarjetaContenido>
+
+                <!-- Registrar pago: Fecha 140, Monto 160, Nota (*) y el botón, con 8 de separación. El botón queda arriba,
+                     alineado con los inputs (19 = alto de la etiqueta con su separación), para que un error bajo un campo
+                     no lo baje. -->
+                <v2:TarjetaContenido x:Name="TarjetaRegistrar" IsVisible="{Binding PuedeRegistrar}">
+                    <StackPanel>
+                        <TextBlock Classes="titulo-seccion" Text="Registrar pago" Margin="0,0,0,12" />
+                        <Grid ColumnDefinitions="140,8,160,8,*,8,Auto">
+                            <v2:CampoFormulario x:Name="CampoFecha" Etiqueta="Fecha" Requerido="True">
+                                <CalendarDatePicker x:Name="SelectorFecha" SelectedDate="{Binding FechaSeleccionada}"
+                                                    PlaceholderText="dd/mm/aaaa" SelectedDateFormat="Custom"
+                                                    CustomDateFormatString="dd/MM/yyyy" HorizontalAlignment="Stretch"
+                                                    b:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario x:Name="CampoMonto" Grid.Column="2" Etiqueta="Monto" Requerido="True">
+                                <TextBox x:Name="CajaMonto" Text="{Binding MontoTexto}" PlaceholderText="Ej.: 500,00" TextAlignment="Right" />
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario x:Name="CampoNota" Grid.Column="4" Etiqueta="Nota (opcional)">
+                                <TextBox x:Name="CajaNota" Text="{Binding Nota}" PlaceholderText="Ej.: recibo 123" />
+                            </v2:CampoFormulario>
+                            <Button x:Name="BotonRegistrar" Grid.Column="6" Classes="primario" Content="Registrar pago"
+                                    Command="{Binding RegistrarPagoCommand}" VerticalAlignment="Top" Margin="0,19,0,0" />
+                        </Grid>
+                        <v2:Alerta x:Name="AlertaError" Margin="0,12,0,0" Variante="Error" Texto="{Binding MensajeError}"
+                                   IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                    </StackPanel>
+                </v2:TarjetaContenido>
+
+                <!-- Pagos: cada TextBlock de celda lleva Classes.inactivo con el pago anulado (texto terciario por token).
+                     FECHA y MONTO miden su contenido; ESTADO es un conjunto cerrado de ancho fijo medido (insignia
+                     "Anulado" 64 + 16 de padding de celda); NOTA es la proporcional. La fecha es calendario:
+                     FechaCortaConverter no la pasa a hora local (un pago del 12/10 a medianoche UTC no puede verse 11/10).
+                     El orden por click va por PagosView (DataGridCollectionView). -->
+                <v2:TarjetaContenido x:Name="TarjetaPagos">
+                    <StackPanel>
+                        <TextBlock x:Name="TituloPagos" Classes="titulo-seccion" Margin="0,0,0,12"
+                                   Text="{Binding Pagos.Count, StringFormat='Pagos · {0}'}" />
+
+                        <v2:EstadoVacio x:Name="EstadoSinPagos" UseLayoutRounding="False"
+                                        Titulo="Todavía no hay pagos"
+                                        Mensaje="Los pagos que se registren van a aparecer acá."
+                                        IsVisible="{Binding Pagos.Count, Converter={x:Static conv:ConteoConverter.EsCero}}" />
+
+                        <DataGrid x:Name="Grilla" ItemsSource="{Binding PagosView}" SelectedItem="{Binding PagoSeleccionado}"
+                                  IsReadOnly="True" CanUserSortColumns="True" CanUserResizeColumns="True"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                  IsVisible="{Binding Pagos.Count, Converter={x:Static conv:ConteoConverter.HayElementos}}">
+                            <DataGrid.Columns>
+                                <DataGridTemplateColumn Header="FECHA" Width="Auto" SortMemberPath="Fecha"
+                                                        b:ColumnaAuto.Medir="True" b:ColumnaAuto.NoCede="True"
+                                                        b:ColumnaAuto.Conversor="{x:Static conv:FechaCortaConverter.Instance}">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate x:DataType="e:PagoGasto">
+                                            <TextBlock Text="{Binding Fecha, Converter={x:Static conv:FechaCortaConverter.Instance}}"
+                                                       Classes.inactivo="{Binding !Activo}" VerticalAlignment="Center" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="MONTO" Width="Auto" CellStyleClasses="num" SortMemberPath="Monto"
+                                                        b:ColumnaAuto.Medir="True" b:ColumnaAuto.Conversor="{x:Static conv:MonedaConverter.Instance}">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate x:DataType="e:PagoGasto">
+                                            <TextBlock Text="{Binding Monto, Converter={x:Static conv:MonedaConverter.Instance}}"
+                                                       Classes.inactivo="{Binding !Activo}" VerticalAlignment="Center" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="NOTA" Width="*" MinWidth="160" SortMemberPath="Nota">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate x:DataType="e:PagoGasto">
+                                            <TextBlock Text="{Binding Nota}" Classes.inactivo="{Binding !Activo}"
+                                                       TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Nota}"
+                                                       b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="ESTADO" Width="80" CanUserSort="False">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate x:DataType="e:PagoGasto">
+                                            <v2:Insignia Texto="Anulado" Variante="Neutro" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                                         IsVisible="{Binding !Activo}" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <!-- Anular: solo con un pago activo y con permiso (la columna no recibe el DataContext: el
+                                     comando y el gate se resuelven por $parent[UserControl]). -->
+                                <DataGridTemplateColumn Header="" Width="Auto" IsReadOnly="True" CanUserSort="False" CellStyleClasses="sin-padding-vertical">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate x:DataType="e:PagoGasto">
+                                            <Button Classes="secundario" Content="Anular" VerticalAlignment="Center"
+                                                    Command="{Binding $parent[UserControl].((vm:PagosGastoViewModel)DataContext).AnularPagoCommand}"
+                                                    CommandParameter="{Binding}">
+                                                <Button.IsVisible>
+                                                    <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                                        <Binding Path="Activo" />
+                                                        <Binding Path="$parent[UserControl].((vm:PagosGastoViewModel)DataContext).PuedeRegistrar" />
+                                                    </MultiBinding>
+                                                </Button.IsVisible>
+                                            </Button>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </StackPanel>
+                </v2:TarjetaContenido>
+
+                <!-- Adjuntos del pago elegido (con un pago anulado, en solo lectura). Al elegir un pago el panel se trae a la vista (el comportamiento va en el panel y no en la card: la card ya visible
+                     crece al cargar y la pantalla se abriría scrolleada). -->
+                <v2:TarjetaContenido x:Name="TarjetaAdjuntos">
+                    <StackPanel>
+                        <TextBlock x:Name="TextoElegiPago" Classes="texto-secundario"
+                                   Text="Elegí un pago de la lista para ver sus adjuntos."
+                                   IsVisible="{Binding SinPagoSeleccionado}" />
+                        <ContentControl x:Name="PanelAdjuntos" Content="{Binding AdjuntosPanel}" IsVisible="{Binding MostrarAdjuntos}"
+                                        b:TraerALaVista.AlMostrarse="True" />
+                    </StackPanel>
+                </v2:TarjetaContenido>
             </StackPanel>
-        </Border>
-
-        <!-- Registrar pago -->
-        <Border DockPanel.Dock="Top" Classes="card" Margin="0,0,0,12">
-            <StackPanel Spacing="8">
-                <!-- Panel de campos completo (bugfix 2026-08-16): el boton "Registrar pago" ya
-                     estaba gateado por PuedeRegistrarPagos (bugfix 2026-08-15), pero el
-                     formulario se seguia mostrando entero: un Operador sin RegistrarPagos podia
-                     llenarlo y no tenia como guardarlo, el mismo callejon sin salida ya cerrado en
-                     Gasto/Ingreso. Se oculta el panel completo, no solo el boton. -->
-                <StackPanel x:Name="PanelRegistrarPago" Spacing="{DynamicResource Espacio2}"
-                            IsVisible="{Binding PuedeRegistrarPagos}">
-                    <TextBlock Text="Registrar pago" Classes="seccion" />
-                    <WrapPanel>
-                        <StackPanel Margin="0,0,12,8">
-                            <TextBlock Text="Fecha" />
-                            <CalendarDatePicker SelectedDate="{Binding FechaSeleccionada}"
-                                                PlaceholderText="dd/mm/aaaa"
-                                                SelectedDateFormat="Custom"
-                                                CustomDateFormatString="dd/MM/yyyy"
-                                                beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
-                        </StackPanel>
-                        <StackPanel Margin="0,0,12,8" MinWidth="140">
-                            <TextBlock Text="Monto" />
-                            <TextBox Text="{Binding MontoTexto}" Watermark="Ej.: 500,00" />
-                        </StackPanel>
-                        <StackPanel Margin="0,0,12,8" MinWidth="220">
-                            <TextBlock Text="Nota (opcional)" />
-                            <TextBox Text="{Binding Nota}" Watermark="Ej.: recibo 123" />
-                        </StackPanel>
-                    </WrapPanel>
-                    <TextBlock Text="{Binding MensajeError}"
-                               Foreground="{DynamicResource DangerBrush}"
-                               TextWrapping="Wrap"
-                               IsVisible="{Binding MensajeError, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
-                    <!-- Registrar pago: gateado por PuedeRegistrarPagos (bugfix 2026-08-15) - GastoService.
-                         RegistrarPagoAsync exige Permisos.RegistrarPagos sin condicion. -->
-                    <Button Classes="primary" Content="Registrar pago" Command="{Binding RegistrarPagoCommand}"
-                            IsVisible="{Binding PuedeRegistrarPagos}" />
-                    <!-- Volver queda SIEMPRE visible (bugfix 2026-08-16): a diferencia de otras
-                         pantallas de Finanzas, esta siempre tiene un botón de acción disponible
-                         para el usuario de solo lectura, no queda sin salida. -->
-                    <Button Classes="secondary" Content="Volver" Command="{Binding VolverCommand}" />
-                    <!-- Indicador "Solo lectura" (mismo patrón que IngresosView.axaml, commit
-                         2243e23): con el formulario y el botón "Registrar pago" ocultos, el
-                         usuario de solo lectura necesita saber por qué no puede hacer nada. -->
-                    <TextBlock Text="Solo lectura" Classes="caption" VerticalAlignment="Center"
-                               IsVisible="{Binding !PuedeRegistrarPagos}" />
-                </StackPanel>
-            </StackPanel>
-        </Border>
-
-        <!-- Panel de adjuntos del pago seleccionado -->
-        <ContentControl DockPanel.Dock="Top"
-                         Content="{Binding AdjuntosPanel}"
-                         IsVisible="{Binding PagoSeleccionado, Converter={x:Static ObjectConverters.IsNotNull}}"
-                         Margin="0,0,0,12" />
-
-        <!-- Lista de pagos. Migrado de ListBox a DataGrid (2026-08-24): el ListBox no recibía
-             nada del tema global (Themes/DataGrid.axaml — FontSize/RowHeight/resize), quedando
-             visualmente desalineado del resto de la app. Columnas como DataGridTemplateColumn
-             para poder portar el badge "Anulado" y el botón "Anular" tal cual estaban. A
-             diferencia de ProveedorListView/UnidadMedidaListView, el ListBox original NO usaba
-             ActivoOpacidadConverter acá (solo el badge "Anulado" marcaba el estado) — se
-             preserva ese mismo criterio, sin agregar atenuación que no existía. -->
-        <Border Classes="card">
-            <DataGrid ItemsSource="{Binding Pagos}"
-                      SelectedItem="{Binding PagoSeleccionado}"
-                      IsReadOnly="True"
-                      CanUserSortColumns="True"
-                      CanUserResizeColumns="True"
-                      GridLinesVisibility="Horizontal"
-                      ScrollViewer.HorizontalScrollBarVisibility="Auto">
-                <DataGrid.Columns>
-                    <DataGridTemplateColumn Header="Fecha" Width="Auto" MinWidth="100" SortMemberPath="Fecha">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate x:DataType="e:PagoGasto">
-                                <TextBlock Text="{Binding Fecha, StringFormat='dd/MM/yyyy'}"
-                                           VerticalAlignment="Center" />
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                    <DataGridTemplateColumn Header="Monto" Width="Auto" MinWidth="100" SortMemberPath="Monto">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate x:DataType="e:PagoGasto">
-                                <TextBlock Text="{Binding Monto, Converter={x:Static conv:MonedaConverter.Instance}}"
-                                           FontWeight="SemiBold"
-                                           VerticalAlignment="Center" />
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                    <DataGridTemplateColumn Header="Nota" Width="*" MinWidth="160" SortMemberPath="Nota">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate x:DataType="e:PagoGasto">
-                                <TextBlock Text="{Binding Nota}"
-                                           Foreground="{DynamicResource TextoTerciarioBrush}"
-                                           TextTrimming="CharacterEllipsis"
-                                           ToolTip.Tip="{Binding Nota}"
-                                           VerticalAlignment="Center" />
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                    <DataGridTemplateColumn Header="Estado" Width="Auto" CanUserSort="False">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate x:DataType="e:PagoGasto">
-                                <c:BadgeEstado Texto="Anulado" Tono="Neutro" IsVisible="{Binding !Activo}" />
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                    <!-- Anular pago: IsVisible combina la condicion de DATOS (Activo: un pago ya
-                         anulado no se vuelve a anular) con la de PERMISO (PuedeRegistrarPagos,
-                         bugfix 2026-08-15) - GastoService.AnularPagoAsync exige
-                         Permisos.RegistrarPagos sin condicion. $parent[UserControl] resuelve
-                         igual que en un ListBox.ItemTemplate: el patrón ya está probado dentro de
-                         una DataGridTemplateColumn en IngresoPorFacturaView.axaml (botón
-                         "Quitar"), sin necesidad de cambiarlo acá. CellStyleClasses
-                         "sin-padding-vertical" evita que el ícono quede aplastado (ver
-                         UserControl.Styles arriba). -->
-                    <DataGridTemplateColumn Header="" Width="Auto" MinWidth="52" IsReadOnly="True"
-                                             CellStyleClasses="sin-padding-vertical">
-                        <DataGridTemplateColumn.CellTemplate>
-                            <DataTemplate x:DataType="e:PagoGasto">
-                                <Button Classes="secondary"
-                                        Command="{Binding $parent[UserControl].((vm:PagosGastoViewModel)DataContext).AnularPagoCommand}"
-                                        CommandParameter="{Binding}">
-                                    <Button.IsVisible>
-                                        <MultiBinding Converter="{x:Static convA:BoolConverters.And}">
-                                            <Binding Path="Activo" />
-                                            <Binding Path="$parent[UserControl].((vm:PagosGastoViewModel)DataContext).PuedeRegistrarPagos" />
-                                        </MultiBinding>
-                                    </Button.IsVisible>
-                                    <i:Icon Value="mdi-cancel" />
-                                </Button>
-                            </DataTemplate>
-                        </DataGridTemplateColumn.CellTemplate>
-                    </DataGridTemplateColumn>
-                </DataGrid.Columns>
-            </DataGrid>
-        </Border>
-
-    </DockPanel>
+        </StackPanel>
+    </ScrollViewer>
 
 </UserControl>

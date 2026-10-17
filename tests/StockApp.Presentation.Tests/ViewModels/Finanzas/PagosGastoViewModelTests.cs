@@ -609,4 +609,73 @@ public class PagosGastoViewModelTests
 
         Assert.Equal("¿Confirma anular el pago de 100.000,00 del 12/10/2026?", texto);
     }
+
+    // ── Saldo del resumen (GATE 1 4e): un gasto anulado no tiene saldo ──────────────────────────────
+
+    [Fact]
+    public async Task TextoSaldo_GastoActivo_EsElSaldoEnEsUy()
+    {
+        var (vm, _, _, _, _) = Crear();
+        vm.CargarParaGasto(GastoConPago());
+        await vm.InicializarAsync();
+
+        Assert.Equal("$ 600,00", vm.TextoSaldo);
+    }
+
+    [Fact]
+    public async Task TextoSaldo_GastoAnulado_EsUnGuion_YAvisaElCambio()
+    {
+        var anulado = GastoConPago();
+        anulado.Activo = false;
+        var (vm, _, _, _, _) = Crear(gasto: anulado);
+        vm.CargarParaGasto(anulado);
+        // Lo que la vista pinta es lo ÚLTIMO que leyó al enterarse del cambio: tiene que ser el guion, no el saldo de antes.
+        string? ultimoLeido = null;
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PagosGastoViewModel.TextoSaldo)) ultimoLeido = vm.TextoSaldo;
+        };
+
+        await vm.InicializarAsync();
+
+        Assert.Equal("—", vm.TextoSaldo);
+        Assert.Equal("—", ultimoLeido);
+    }
+
+    [Fact]
+    public async Task TextoSaldo_TrasRegistrarUnPago_SeActualizaConElNuevoSaldo()
+    {
+        var antes = GastoConPago();
+        var despues = GastoConPago();
+        despues.Pagos.Add(new PagoGasto { Id = 30, GastoId = 5, Fecha = Hoy, Monto = 100m });
+        var svc = new Mock<IGastoService>();
+        svc.SetupSequence(s => s.ObtenerPorIdAsync(5)).ReturnsAsync(antes).ReturnsAsync(despues);
+        var (vm, _, _, _, _) = Crear(svc: svc);
+        vm.CargarParaGasto(antes);
+        await vm.InicializarAsync();
+        string? ultimoLeido = null;
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(PagosGastoViewModel.TextoSaldo)) ultimoLeido = vm.TextoSaldo;
+        };
+        vm.MontoTexto = "100";
+
+        await vm.RegistrarPagoCommand.ExecuteAsync(null);
+
+        Assert.Equal("$ 500,00", ultimoLeido);
+    }
+
+    // ── Orden por click: la grilla se alimenta de una DataGridCollectionView (una ObservableCollection cruda no ordena) ──
+
+    [Fact]
+    public async Task PagosView_EsLaVistaDeLaListaDePagos_YSeActualizaConElla()
+    {
+        var (vm, _, _, _, _) = Crear(gasto: GastoConPagoAnulado());
+        vm.CargarParaGasto(GastoConPago());
+        await vm.InicializarAsync();
+
+        Assert.Same(vm.Pagos, vm.PagosView.SourceCollection);
+        Assert.Equal(vm.Pagos.Select(p => p.Id), vm.PagosView.Cast<PagoGasto>().Select(p => p.Id));
+        Assert.Equal(2, vm.PagosView.Count);
+    }
 }

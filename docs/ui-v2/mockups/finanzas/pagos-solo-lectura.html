@@ -16,11 +16,14 @@
   /* StackPanel Spacing 16 entre las cards (y la Alerta de gasto anulado, que va primera). */
   .pila { display: flex; flex-direction: column; gap: 16px; }
   .titulo-card { margin-bottom: 12px; }
+  /* El vacío de una card (margen 32 arriba): en Avalonia los 12 del título y los 32 del vacío se suman; en CSS los márgenes de hermanos colapsan, así que se suman a mano. */
+  .titulo-card + .v2-vacio { margin-top: 44px; }
   /* Insignias del encabezado (Anulado, Solo lectura): StackPanel con 8 de separación, alineadas arriba. */
   .insignias { display: flex; gap: 8px; align-items: flex-start; }
-  /* Resumen: cuatro columnas iguales (Grid *,*,*,*); etiqueta en texto secundario y valor en el estilo de título de sección. */
-  .resumen { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; }
-  .resumen-valor { display: block; }
+  /* Resumen: cuatro columnas iguales (Grid *,*,*,*; MEDIDO: Avalonia arranca las columnas en 0, 238, 476 y 713 a 1280, sin fracciones); etiqueta en texto secundario y valor en el estilo de título de sección. */
+  .resumen { display: grid; grid-template-columns: round(nearest, 25%, 1px) round(nearest, 25%, 1px) calc(round(nearest, 75%, 1px) - 2 * round(nearest, 25%, 1px)) minmax(0, 1fr); }
+  /* Los valores del resumen llevan cifras tabulares (+tnum): los importes de una fila de cards alinean y Skia y Chromium coinciden pixel a pixel. */
+  .resumen-valor { display: block; font-variant-numeric: tabular-nums; }
   /* Registrar pago: Grid 140,8,160,8,*,8,Auto. MEDIDO: Fecha 140, Monto 160, Nota * (499 a 1280, 585 a 1366), botón 127. El botón
      queda arriba, alineado con los inputs (margen de 19 = alto de la etiqueta con su separación), para que un error bajo un campo
      no lo baje. */
@@ -31,10 +34,11 @@
      de D8: FECHA 86, MONTO 103; ESTADO fija 80 (insignia "Anulado" 64 + 16 de padding de celda); la acción 92 ("Anular" 76 + 16);
      NOTA (*) el resto: 589 a 1280 y 675 a 1366 (con la acción; sin ella, 92 más). */
   .col-fecha { flex: 0 0 86px; }
-  .col-monto { flex: 0 0 103px; }
+  .col-monto { flex: 0 0 var(--monto-w, 103px); }
   .col-nota { flex: 1 1 0; min-width: 0; }
   .col-estado { flex: 0 0 80px; }
   .col-accion { flex: 0 0 92px; }
+  .col-accion-vacia { flex-basis: 40px; }
   /* Fila seleccionada (DataGridV2.axaml, DataGridRow:selected): fondo acento suave; el texto conserva su token. */
   .fila-seleccionada { background: var(--v2-color-acento-suave); }
   /* Panel de adjuntos (AdjuntosPanelView): encabezado Grid *,Auto con 8 abajo y una fila de 40 por adjunto con separador arriba. */
@@ -115,38 +119,38 @@
             <div><div class="v2-texto-secundario">Monto total</div><div class="v2-titulo-seccion resumen-valor">$ 310.000,00</div></div>
             <div><div class="v2-texto-secundario">Pagado</div><div class="v2-titulo-seccion resumen-valor">$ 150.000,00</div></div>
             <div><div class="v2-texto-secundario">Saldo</div><div class="v2-titulo-seccion resumen-valor">$ 160.000,00</div></div>
-            <div><div class="v2-texto-secundario">Estado</div><div><span class="v2-insignia">Parcial</span></div></div>
+            <div><div class="v2-texto-secundario">Estado</div><div><span class="v2-insignia v2-insignia--advertencia">Parcial</span></div></div>
           </div></div>
           <div class="v2-tarjeta">
             <div class="v2-titulo-seccion titulo-card">Pagos · 3</div>
             <div class="v2-grilla">
               <div class="v2-grilla-header">
                 <div class="v2-grilla-celda col-fecha">FECHA</div>
-                <div class="v2-grilla-celda col-monto v2-num"><span>MONTO</span></div>
+                <div class="v2-grilla-celda col-monto">MONTO</div>
                 <div class="v2-grilla-celda col-nota">NOTA</div>
                 <div class="v2-grilla-celda col-estado">ESTADO</div>
-                
+                <div class="v2-grilla-celda col-accion col-accion-vacia"></div>
               </div>
               <div class="v2-grilla-fila fila-seleccionada">
                 <div class="v2-grilla-celda col-fecha">12/10/2026</div>
                 <div class="v2-grilla-celda col-monto v2-num"><span>$ 100.000,00</span></div>
                 <div class="v2-grilla-celda col-nota"><span class="v2-celda-cortada">Recibo 2231</span></div>
                 <div class="v2-grilla-celda col-estado"></div>
-                
+                <div class="v2-grilla-celda col-accion col-accion-vacia"></div>
               </div>
               <div class="v2-grilla-fila v2-grilla-fila--inactiva">
                 <div class="v2-grilla-celda col-fecha">13/10/2026</div>
                 <div class="v2-grilla-celda col-monto v2-num"><span>$ 50.000,00</span></div>
                 <div class="v2-grilla-celda col-nota"><span class="v2-celda-cortada">Cargado dos veces</span></div>
                 <div class="v2-grilla-celda col-estado"><span class="v2-insignia">Anulado</span></div>
-                
+                <div class="v2-grilla-celda col-accion col-accion-vacia"></div>
               </div>
               <div class="v2-grilla-fila">
                 <div class="v2-grilla-celda col-fecha">14/10/2026</div>
                 <div class="v2-grilla-celda col-monto v2-num"><span>$ 50.000,00</span></div>
                 <div class="v2-grilla-celda col-nota"><span class="v2-celda-cortada">Recibo 2240</span></div>
                 <div class="v2-grilla-celda col-estado"></div>
-                
+                <div class="v2-grilla-celda col-accion col-accion-vacia"></div>
               </div>
             </div>
           </div>

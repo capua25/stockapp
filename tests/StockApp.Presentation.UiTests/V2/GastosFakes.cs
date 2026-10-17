@@ -75,3 +75,58 @@ internal sealed class ProveedoresFake : IProveedorService
     public Task ModificarAsync(Proveedor proveedor) => throw new NotSupportedException();
     public Task BajaLogicaAsync(int id) => throw new NotSupportedException();
 }
+
+/// <summary>IGastoService de la pantalla de pagos con los tipos reales. ObtenerPorIdAsync responde, en este orden: Falla,
+/// Pendiente o Gasto. RegistrarPago graba o lanza FallaAlRegistrar (lo que ApiErrores reconstruye de un 409).</summary>
+internal sealed class PagosFake : IGastoService
+{
+    public Gasto? Gasto { get; set; }
+    public TaskCompletionSource<Gasto>? Pendiente { get; set; }
+    public Exception? Falla { get; set; }
+    public Exception? FallaAlRegistrar { get; set; }
+    public List<PagoGasto> Registrados { get; } = new();
+    public List<(int GastoId, int PagoId)> AnuladosPagos { get; } = new();
+
+    public Task<Gasto> ObtenerPorIdAsync(int id) =>
+        Falla is not null ? Task.FromException<Gasto>(Falla)
+            : Pendiente is not null ? Pendiente.Task
+            : Task.FromResult(Gasto!);
+
+    public Task<int> RegistrarPagoAsync(PagoGasto pago)
+    {
+        if (FallaAlRegistrar is not null)
+            return Task.FromException<int>(FallaAlRegistrar);
+        Registrados.Add(pago);
+        return Task.FromResult(900 + Registrados.Count);
+    }
+
+    public Task AnularPagoAsync(int gastoId, int pagoId)
+    {
+        AnuladosPagos.Add((gastoId, pagoId));
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<Gasto>> ListarAsync(GastoFiltro filtro) => throw new NotSupportedException();
+    public Task AnularAsync(int id, bool confirmarAnulacionDePagoAutomatico = false) => throw new NotSupportedException();
+    public Task<ResultadoGastoDto> AltaAsync(Gasto gasto, IReadOnlyList<int>? movimientoIds = null) => throw new NotSupportedException();
+    public Task<ResultadoGastoDto> ModificarAsync(Gasto gasto) => throw new NotSupportedException();
+    public Task<Gasto?> ObtenerPorProveedorYFacturaAsync(int proveedorId, string numeroFactura, string? numeroOrden) => throw new NotSupportedException();
+    public Task AsociarMovimientosAsync(int gastoId, IReadOnlyList<int> movimientoIds) => throw new NotSupportedException();
+}
+
+/// <summary>IAdjuntoService que lista por pago (cada pago con sus adjuntos) y puede fallar con un 403.</summary>
+internal sealed class AdjuntosPorPagoFake : IAdjuntoService
+{
+    public Dictionary<int, List<AdjuntoDto>> PorPago { get; } = new();
+    public Exception? FallaAlListar { get; set; }
+
+    public Task<IReadOnlyList<AdjuntoDto>> ListarPorPagoAsync(int pagoGastoId) =>
+        FallaAlListar is not null ? Task.FromException<IReadOnlyList<AdjuntoDto>>(FallaAlListar)
+            : Task.FromResult<IReadOnlyList<AdjuntoDto>>(PorPago.TryGetValue(pagoGastoId, out var l) ? l.ToList() : new List<AdjuntoDto>());
+
+    public Task<IReadOnlyList<AdjuntoDto>> ListarPorGastoAsync(int gastoId) => Task.FromResult<IReadOnlyList<AdjuntoDto>>(new List<AdjuntoDto>());
+    public Task<AdjuntoDto> AgregarAGastoAsync(int gastoId, string nombreArchivo, byte[] contenido) => throw new NotSupportedException();
+    public Task<AdjuntoDto> AgregarAPagoAsync(int pagoGastoId, string nombreArchivo, byte[] contenido) => throw new NotSupportedException();
+    public Task<AdjuntoContenidoDto> ObtenerContenidoAsync(int adjuntoId) => throw new NotSupportedException();
+    public Task QuitarAsync(int adjuntoId) => throw new NotSupportedException();
+}

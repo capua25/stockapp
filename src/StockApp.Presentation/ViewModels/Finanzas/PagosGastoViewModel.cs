@@ -5,6 +5,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Authorization;
@@ -92,12 +93,17 @@ public partial class PagosGastoViewModel : ViewModelBase, INotifyDataErrorInfo
     [ObservableProperty] private string _tituloGasto = string.Empty;
     [ObservableProperty] private decimal _montoTotal;
     [ObservableProperty] private decimal _totalPagado;
-    [ObservableProperty] private decimal _saldoPendiente;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TextoSaldo))]
+    private decimal _saldoPendiente;
+
+    /// <summary>El saldo del resumen: un gasto anulado no tiene saldo, se muestra "—" (GATE 1 4e).</summary>
+    public string TextoSaldo => EsAnulado ? "—" : FormatoEsUy.Moneda(SaldoPendiente);
     [ObservableProperty] private string _estado = string.Empty;
 
     /// <summary>Gasto anulado: la pantalla se puede consultar pero no registra ni anula pagos.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PuedeRegistrar), nameof(SoloLectura))]
+    [NotifyPropertyChangedFor(nameof(PuedeRegistrar), nameof(SoloLectura), nameof(TextoSaldo))]
     [NotifyCanExecuteChangedFor(nameof(RegistrarPagoCommand))]
     [NotifyCanExecuteChangedFor(nameof(AnularPagoCommand))]
     private bool _esAnulado;
@@ -127,6 +133,9 @@ public partial class PagosGastoViewModel : ViewModelBase, INotifyDataErrorInfo
 
     public ObservableCollection<PagoGasto> Pagos { get; } = new();
 
+    /// <summary>Lo que bindea la grilla: con una ObservableCollection cruda el orden por click no funciona (Avalonia 12).</summary>
+    public DataGridCollectionView PagosView { get; }
+
     public PagosGastoViewModel(
         IGastoService service,
         ICurrentSession session,
@@ -140,6 +149,7 @@ public partial class PagosGastoViewModel : ViewModelBase, INotifyDataErrorInfo
         _confirmacion  = confirmacion;
         _adjuntosPanel = adjuntosPanel;
         _volver        = () => _navigation.Navegar<GastosViewModel>();
+        PagosView      = new DataGridCollectionView(Pagos);
     }
 
     // Fire-and-forget consciente: el panel de adjuntos se carga async sin bloquear

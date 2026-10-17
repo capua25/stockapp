@@ -24,6 +24,10 @@
                     IsVisible="{Binding PuedeModificar}" />
         </Grid>
 
+        <!-- Aviso de solo lectura (el host lo fija: p. ej. el pago está anulado): explica por qué no hay Agregar ni Quitar. -->
+        <TextBlock x:Name="TextoAvisoSoloLectura" Classes="texto-secundario" Margin="0,0,0,8"
+                   Text="{Binding AvisoSoloLectura}" IsVisible="{Binding HayAvisoSoloLectura}" />
+
         <TextBlock x:Name="SinAdjuntos" Classes="texto-secundario"
                    Text="Sin adjuntos. PDF, JPG o PNG hasta 10 MB."
                    IsVisible="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.EsCero}}" />
