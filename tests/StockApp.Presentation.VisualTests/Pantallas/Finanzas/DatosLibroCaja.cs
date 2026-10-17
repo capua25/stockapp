@@ -84,17 +84,20 @@ public static class DatosLibroCaja
         new("Servicios contratados", 2_772_650m), new("Alumbrado público", 1_840_000m), new("Combustibles", 1_112_300m),
     ]);
 
-    public static LibroCajaViewModel Vm(Func<Task<LibroCajaMesDto>> octubre)
+    public static LibroCajaViewModel Vm(Func<Task<LibroCajaMesDto>> octubre, Func<Task<LibroCajaAnualDto>>? anual = null)
     {
         var servicio = new Mock<IFinanzasVistasService>();
         servicio.Setup(s => s.ObtenerLibroCajaMesAsync(2026, 10)).Returns(octubre);
         servicio.Setup(s => s.ObtenerLibroCajaMesAsync(2026, 1)).ReturnsAsync(Enero2026);
-        servicio.Setup(s => s.ObtenerLibroCajaAnualAsync(2026)).ReturnsAsync(Anio2026);
+        servicio.Setup(s => s.ObtenerLibroCajaAnualAsync(2026)).Returns(anual ?? (() => Task.FromResult(Anio2026)));
         var sesion = new Mock<ICurrentSession>();
         sesion.Setup(s => s.RolActual).Returns(DatosProductos.UsuarioAdmin.Rol);
         sesion.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+        // Debounce en cero: con los 300 ms reales, cambiar el modo dispara una carga diferida que compite por el turno con
+        // la carga explícita y el resultado depende de cuánto tarde la máquina (suite completa con otros builds).
         return new LibroCajaViewModel(servicio.Object, Mock.Of<IServicioGuardadoArchivo>(), Mock.Of<IConfirmacionService>(),
-            Mock.Of<IPdfExporter>(), Mock.Of<IServicioAperturaArchivo>(), sesion.Object, Reloj);
+            Mock.Of<IPdfExporter>(), Mock.Of<IServicioAperturaArchivo>(), sesion.Object, Reloj)
+        { EsperaDebounce = TimeSpan.Zero };
     }
 
     private static ShellMainViewModel EnShell(ViewModelBase vm) =>

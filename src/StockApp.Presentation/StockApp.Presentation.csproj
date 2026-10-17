@@ -40,6 +40,11 @@
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
       <_Parameter1>StockApp.Presentation.UiTests</_Parameter1>
     </AssemblyAttribute>
+    <!-- VisualTests arma los ViewModels con datos fijos y necesita bajar EsperaDebounce a cero: con los 300 ms reales el
+         resultado de un test depende de cuánto tarde la máquina. -->
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>StockApp.Presentation.VisualTests</_Parameter1>
+    </AssemblyAttribute>
   </ItemGroup>
 
   <ItemGroup>

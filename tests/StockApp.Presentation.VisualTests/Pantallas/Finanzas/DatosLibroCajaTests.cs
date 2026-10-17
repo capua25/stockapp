@@ -97,4 +97,20 @@ public class DatosLibroCajaTests
         Assert.Equal("$ 2.639.460,00", FormatoEsUy.Moneda(vm.SaldoFinal));
         Assert.Equal(10, vm.MesesConMovimientos);
     }
+
+    /// <summary>Con el debounce real (300 ms), si el servidor tarda más que eso el reloj de pared decide quién gana: el
+    /// debounce del cambio de modo dispara una carga que le roba el turno a la explícita del test, y esta termina
+    /// descartada con los saldos en cero. Es lo que pasa en una máquina cargada (suite completa con otros builds).</summary>
+    [Fact]
+    public async Task Vm_AnioCompleto_ConServidorLento_NoDependeDelDebounceReal()
+    {
+        var vm = DatosLibroCaja.Vm(() => Task.FromResult(DatosLibroCaja.Octubre),
+            async () => { await Task.Delay(500); return DatosLibroCaja.Anio2026; });
+        vm.ModoSeleccionado = LibroCajaViewModel.ModoAnioCompleto;
+
+        await vm.CargarAsync();
+
+        Assert.Equal("$ 949.350,00", FormatoEsUy.Moneda(vm.SaldoInicial));
+        Assert.Equal(10, vm.MesesConMovimientos);
+    }
 }
