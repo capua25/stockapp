@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Administración: Catálogos, operador (UI v2)</title>
+<link rel="stylesheet" href="../_base/tokens.css">
+<link rel="stylesheet" href="../_base/base.css">
+<style>
+  /* Área de contenido del shell: a la derecha del sidebar de 240 (ShellMainView, Grid 240,*). */
+  .contenido { position: absolute; left: var(--v2-ancho-sidebar); top: 0; right: 0; bottom: 0; overflow: hidden; }
+  /* DockPanel Margin 28,24 de la vista: encabezado arriba y el resto del alto para el cuerpo. */
+  .pagina { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 24px 28px; }
+
+  .cuerpo { flex: 1 1 0; min-height: 0; display: flex; gap: 16px; }
+  /* Master: TarjetaContenido de 240 con padding 8; headers de grupo y un ItemSidebar por catálogo. */
+  .master { flex: 0 0 240px; width: 240px; box-sizing: border-box; padding: 8px; overflow: hidden; }
+  .master .v2-header-seccion-sidebar { margin: 12px 8px 4px; }
+  .master .v2-header-seccion-sidebar:first-child { margin-top: 4px; }
+  /* Detalle: card con encabezado propio (título del catálogo y acciones), buscador, grilla y pie. */
+  .detalle { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
+  .det-encabezado { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .det-encabezado .v2-titulo-seccion { white-space: nowrap; }
+  .detalle .v2-grilla { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+  .v2-grilla-header { flex: 0 0 auto; }
+  .filas { flex: 1 1 0; min-height: 0; overflow: hidden; }
+  .pie { margin-top: 12px; }
+  .col-nombre { flex: 1 1 0; min-width: 0; }
+  .col-estado { flex: 0 0 78px; }
+  .col-0 { }
+  /* Anchos medidos en headless (columnas medidas con el tema v2 y estos datos; ESTADO = insignia 62 + 16). */
+  .col-tel { flex: 0 0 100px; } .col-email { flex: 0 0 104px; } .col-dir { flex: 0 0 104px; } .col-notas { flex: 0 0 104px; }
+  .col-programa { flex: 0 0 105px; } .col-ejercicio { flex: 0 0 100px; }
+  .prov .col-nombre { min-width: 200px; }
+  @media (min-width: 1366px) { .col-email, .col-dir, .col-notas { flex: 0 0 132px; } }
+  .vacio-solo { flex: 1 1 0; }
+</style>
+</head>
+<body>
+<!-- Datos: DatosCatalogos.Operador(): operador con catalogo.maestras; el master muestra INVENTARIO y TAREAS (sin FINANZAS) y Zonas abierto con cinco filas; el sidebar solo tiene Catálogos en ADMINISTRACIÓN. El sidebar está para aprobar la pantalla entera; la comparación lo oculta. -->
+<div class="v2-ventana">
+  <aside class="v2-sidebar">
+    <div class="v2-marca">Gestión Municipal</div>
+    <div class="v2-marca-subtitulo">Municipio de Carmelo</div>
+    <nav class="v2-sidebar-nav">
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z"/></svg><span>Inicio</span></div>
+      <div class="v2-header-seccion-sidebar">ADMINISTRACIÓN</div>
+      <div class="v2-item-sidebar v2-item-sidebar--activo"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5.5,9A1.5,1.5 0 0,0 7,7.5A1.5,1.5 0 0,0 5.5,6A1.5,1.5 0 0,0 4,7.5A1.5,1.5 0 0,0 5.5,9M17.41,11.58C17.77,11.94 18,12.44 18,13C18,13.55 17.78,14.05 17.41,14.41L12.41,19.41C12.05,19.77 11.55,20 11,20C10.45,20 9.95,19.78 9.58,19.41L2.59,12.42C2.22,12.05 2,11.55 2,11V6C2,4.89 2.89,4 4,4H9C9.55,4 10.05,4.22 10.41,4.58L17.41,11.58M13.54,5.71L14.54,4.71L21.41,11.58C21.78,11.94 22,12.45 22,13C22,13.55 21.78,14.05 21.42,14.41L16.04,19.79L15.04,18.79L20.75,13L13.54,5.71Z"/></svg><span>Catálogos</span></div>
+    </nav>
+    <div class="v2-sidebar-pie">
+      <div class="v2-avatar">JR</div>
+      <div class="v2-usuario">
+        <div class="v2-usuario-nombre">Juan Rodríguez</div>
+        <div class="v2-usuario-rol">Operador</div>
+      </div>
+      <span class="v2-boton v2-boton--ghost v2-boton--icono"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M17 7L15.59 8.41L18.17 11H8V13H18.17L15.59 15.58L17 17L22 12M4 5H12V3H4C2.9 3 2 3.9 2 5V19C2 20.1 2.9 21 4 21H12V19H4V5Z"/></svg></span>
+    </div>
+    <div class="v2-version">v0.4.0</div>
+  </aside>
+  <div class="contenido">
+    <div class="pagina">
+      <div class="v2-encabezado"><div class="v2-encabezado-fila"><div><div class="v2-titulo-pagina">Catálogos</div><div class="v2-encabezado-subtitulo">Tablas maestras del sistema.</div></div></div></div>
+      <div class="cuerpo">
+<div class="v2-tarjeta master">
+<div class="v2-header-seccion-sidebar">INVENTARIO</div>
+<div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11,13.5V21.5H3V13.5H11M12,2L17.5,11H6.5L12,2M17.5,13C20,13 22,15 22,17.5C22,20 20,22 17.5,22C15,22 13,20 13,17.5C13,15 15,13 17.5,13Z"/></svg><span>Categorías</span></div>
+<div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18,18.5A1.5,1.5 0 0,1 16.5,17A1.5,1.5 0 0,1 18,15.5A1.5,1.5 0 0,1 19.5,17A1.5,1.5 0 0,1 18,18.5M19.5,9.5L21.46,12H17V9.5M6,18.5A1.5,1.5 0 0,1 4.5,17A1.5,1.5 0 0,1 6,15.5A1.5,1.5 0 0,1 7.5,17A1.5,1.5 0 0,1 6,18.5M20,8H17V4H3C1.89,4 1,4.89 1,6V17H3A3,3 0 0,0 6,20A3,3 0 0,0 9,17H15A3,3 0 0,0 18,20A3,3 0 0,0 21,17H23V12L20,8Z"/></svg><span>Proveedores</span></div>
+<div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M1.39,18.36L3.16,16.6L4.58,18L5.64,16.95L4.22,15.54L5.64,14.12L8.11,16.6L9.17,15.54L6.7,13.06L8.11,11.65L9.53,13.06L10.59,12L9.17,10.59L10.59,9.17L13.06,11.65L14.12,10.59L11.65,8.11L13.06,6.7L14.47,8.11L15.54,7.05L14.12,5.64L15.54,4.22L18,6.7L19.07,5.64L16.6,3.16L18.36,1.39L22.61,5.64L5.64,22.61L1.39,18.36Z"/></svg><span>Unidades de medida</span></div>
+<div class="v2-header-seccion-sidebar">TAREAS</div>
+<div class="v2-item-sidebar v2-item-sidebar--activo"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12,11.5A2.5,2.5 0 0,1 9.5,9A2.5,2.5 0 0,1 12,6.5A2.5,2.5 0 0,1 14.5,9A2.5,2.5 0 0,1 12,11.5M12,2A7,7 0 0,0 5,9C5,14.25 12,22 12,22C12,22 19,14.25 19,9A7,7 0 0,0 12,2Z"/></svg><span>Zonas</span></div>
+<div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M5.5,9A1.5,1.5 0 0,0 7,7.5A1.5,1.5 0 0,0 5.5,6A1.5,1.5 0 0,0 4,7.5A1.5,1.5 0 0,0 5.5,9M17.41,11.58C17.77,11.94 18,12.44 18,13C18,13.55 17.78,14.05 17.41,14.41L12.41,19.41C12.05,19.77 11.55,20 11,20C10.45,20 9.95,19.78 9.58,19.41L2.59,12.42C2.22,12.05 2,11.55 2,11V6C2,4.89 2.89,4 4,4H9C9.55,4 10.05,4.22 10.41,4.58L17.41,11.58M13.54,5.71L14.54,4.71L21.41,11.58C21.78,11.94 22,12.45 22,13C22,13.55 21.78,14.05 21.42,14.41L16.04,19.79L15.04,18.79L20.75,13L13.54,5.71Z"/></svg><span>Dimensiones</span></div>
+<div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M18,15H16V17H18M18,11H16V13H18M20,19H12V17H14V15H12V13H14V11H12V9H20M10,7H8V5H10M10,11H8V9H10M10,15H8V13H10M10,19H8V17H10M6,7H4V5H6M6,11H4V9H6M6,15H4V13H6M6,19H4V17H6M12,7V3H2V21H22V7H12Z"/></svg><span>Organismos responsables</span></div>
+<div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11.5,1L2,6V8H21V6M16,10V17H19V10M2,22H21V19H2M10,10V17H13V10M4,10V17H7V10H4Z"/></svg><span>Orígenes de financiamiento</span></div>
+</div>
+<div class="v2-tarjeta detalle"><div class="det-encabezado"><div class="v2-titulo-seccion">Zonas</div><div class="v2-acciones"><span class="v2-boton v2-boton--secundario v2-boton--deshabilitado">Editar</span><span class="v2-boton v2-boton--secundario v2-boton--deshabilitado">Dar de baja</span><span class="v2-boton v2-boton--primario">Nueva zona</span></div></div><div class="v2-barra-filtros"><div class="v2-input v2-busqueda"><span class="v2-input-placeholder">Buscar…</span></div></div><div class="v2-grilla"><div class="v2-grilla-header"><div class="v2-grilla-celda col-nombre">NOMBRE</div><div class="v2-grilla-celda col-estado">ESTADO</div></div><div class="filas"><div class="v2-grilla-fila"><div class="v2-grilla-celda col-nombre"><span class="v2-celda-cortada">Centro</span></div><div class="v2-grilla-celda col-estado"></div></div><div class="v2-grilla-fila"><div class="v2-grilla-celda col-nombre"><span class="v2-celda-cortada">Rural norte</span></div><div class="v2-grilla-celda col-estado"></div></div><div class="v2-grilla-fila"><div class="v2-grilla-celda col-nombre"><span class="v2-celda-cortada">Playa Fomento</span></div><div class="v2-grilla-celda col-estado"></div></div><div class="v2-grilla-fila"><div class="v2-grilla-celda col-nombre"><span class="v2-celda-cortada">Barrio Sur</span></div><div class="v2-grilla-celda col-estado"></div></div><div class="v2-grilla-fila"><div class="v2-grilla-celda col-nombre"><span class="v2-celda-cortada">Costanera</span></div><div class="v2-grilla-celda col-estado"></div></div></div></div><div class="v2-pie-conteo pie">5 zonas</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
