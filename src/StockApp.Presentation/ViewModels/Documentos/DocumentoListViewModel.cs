@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.ApiClient;
+using StockApp.Application.Authorization;
 using StockApp.Application.Documentos;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
@@ -34,6 +36,10 @@ public sealed class DocumentoFila
     public int Id => Documento.Id;
     public string Numero => Documento.Numero;
     public int Anio => Documento.Anio;
+
+    /// <summary>"45/2026": el texto de la columna NÚMERO (y con el que se mide).</summary>
+    public string NumeroCompleto => $"{Numero}/{Anio}";
+
     public string TipoTexto => Documento.Tipo.ToString();
     public DateTime FechaEmision => Documento.FechaEmision;
     public string Descripcion => Documento.Descripcion;
@@ -72,24 +78,80 @@ public sealed record OpcionTipoDocumento(string Nombre, TipoDocumento? Valor);
 /// </summary>
 public sealed record OpcionEstadoDocumento(string Nombre, EstadoDocumento? Valor);
 
+/// <summary>Opción del combo "Ver" de la pantalla: Activos (Pendiente/EnProceso) o Historial (Finalizado/Anulado).</summary>
+public sealed record OpcionVistaDocumentos(string Nombre, bool EsHistorial);
+
 /// <summary>
-/// Pantalla "Documentos administrativos": dos solapas, Activos (Pendiente/EnProceso) e
-/// Historial (Finalizado/Anulado, D9). El historial se carga perezoso -- recién al abrir la
-/// solapa, no en CargarAsync() inicial -- y exige año (el servidor lo rechaza si viene nulo,
-/// D9); la UI precarga el año actual como valor inicial del filtro.
+/// Pantalla "Documentos administrativos": dos vistas, Activos (Pendiente/EnProceso) e Historial
+/// (Finalizado/Anulado, D9), elegidas con el combo "Ver". Cada cambio de vista o de filtro vuelve a consultar
+/// (recarga automática con debounce); el historial no se consulta al abrir la pantalla y exige año (el servidor lo
+/// rechaza si viene nulo, D9); la UI precarga el año actual como valor inicial del filtro.
 /// La vista dispara CargarAsync() vía DataContextChanged (convención del proyecto).
 /// </summary>
 public partial class DocumentoListViewModel : ViewModelBase
 {
+    /// <summary>Texto del estado "Sin permiso" cuando el servidor rechaza la carga (403) o se pierde el permiso en caliente.</summary>
+    public const string MensajeSinPermisoDocumentos = "No tenés permiso para ver los documentos.";
+
     private readonly IDocumentoAdministrativoService _service;
     private readonly ICurrentSession                 _session;
     private readonly INavigationService               _navigation;
     private readonly IConfirmacionService              _confirmacion;
+    private readonly ConsultaVigente                  _consultas = new();
 
     private bool _historialCargado;
 
-    [ObservableProperty] private TipoDocumento? _filtroActivosTipo;
-    [ObservableProperty] private string? _filtroActivosTexto;
+    /// <summary>Espera del debounce de los filtros que recargan; los tests la cambian después de construir el VM.</summary>
+    internal TimeSpan EsperaDebounce { get; set; } = TimeSpan.FromMilliseconds(300);
+
+    /// <summary>La última recarga programada: los tests la esperan para observar el resultado.</summary>
+    internal Task _tareaDebounce = Task.CompletedTask;
+
+    private RecargaConDebounce Recarga => field ??= new RecargaConDebounce(() => EsperaDebounce);
+
+    /// <summary>Se prende en la primera CargarAsync, ANTES de pedir el listado: lo que se puso antes (filtros que la
+    /// pantalla restaura al construirse) no programa una consulta; un cambio durante la espera del listado gana por turno.</summary>
+    private bool _recargaArmada;
+
+    public IReadOnlyList<OpcionVistaDocumentos> Vistas { get; } = new[]
+    {
+        new OpcionVistaDocumentos("Activos", false),
+        new OpcionVistaDocumentos("Historial", true),
+    };
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MostrandoHistorial))]
+    [NotifyPropertyChangedFor(nameof(FilaSeleccionada))]
+    private OpcionVistaDocumentos _vistaSeleccionada;
+
+    public bool MostrandoHistorial => VistaSeleccionada.EsHistorial;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FilaSeleccionada))]
+    private DocumentoFila? _filaSeleccionadaActivos;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FilaSeleccionada))]
+    private DocumentoFila? _filaSeleccionadaHistorial;
+
+    /// <summary>La fila sobre la que actúan las acciones del encabezado: la seleccionada en la vista actual.</summary>
+    public DocumentoFila? FilaSeleccionada => MostrandoHistorial ? FilaSeleccionadaHistorial : FilaSeleccionadaActivos;
+
+    /// <summary>Activos con tipo o texto elegidos: distingue "no hay documentos" de "ningún documento coincide".</summary>
+    public bool HayFiltrosEnActivos => FiltroActivosTipo is not null || !string.IsNullOrWhiteSpace(FiltroActivosTexto);
+
+    /// <summary>Gatea la pantalla: Admin o el permiso del módulo. Lo re-lee <see cref="NotificarPermisosActualizados"/>.</summary>
+    public bool PuedeGestionarDocumentos =>
+        _session.RolActual == RolUsuario.Admin ||
+        _session.PermisosActuales.Contains(Permisos.GestionarDocumentos);
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HayFiltrosEnActivos))]
+    private TipoDocumento? _filtroActivosTipo;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HayFiltrosEnActivos))]
+    private string? _filtroActivosTexto;
 
     [ObservableProperty] private TipoDocumento? _filtroHistorialTipo;
     [ObservableProperty] private int? _filtroHistorialAnio = DateTime.UtcNow.Year;
@@ -134,6 +196,7 @@ public partial class DocumentoListViewModel : ViewModelBase
         _navigation   = navigation;
         _confirmacion = confirmacion;
 
+        _vistaSeleccionada = Vistas[0];
         _filtroActivosTipoSeleccionado = TiposDisponibles[0];
         _filtroHistorialTipoSeleccionado = TiposDisponibles[0];
         _filtroHistorialEstadoSeleccionado = EstadosDisponibles[0];
@@ -148,37 +211,88 @@ public partial class DocumentoListViewModel : ViewModelBase
     partial void OnFiltroHistorialEstadoSeleccionadoChanged(OpcionEstadoDocumento? value)
         => FiltroHistorialEstado = value?.Valor;
 
+    partial void OnVistaSeleccionadaChanged(OpcionVistaDocumentos value) => ProgramarRecarga();
+    partial void OnFiltroActivosTipoChanged(TipoDocumento? value) => ProgramarRecarga();
+    partial void OnFiltroActivosTextoChanged(string? value) => ProgramarRecarga();
+    partial void OnFiltroHistorialTipoChanged(TipoDocumento? value) => ProgramarRecarga();
+    partial void OnFiltroHistorialAnioChanged(int? value) => ProgramarRecarga();
+    partial void OnFiltroHistorialTextoChanged(string? value) => ProgramarRecarga();
+    partial void OnFiltroHistorialEstadoChanged(EstadoDocumento? value) => ProgramarRecarga();
+
+    private void ProgramarRecarga()
+    {
+        if (_recargaArmada)
+            _tareaDebounce = Recarga.Programar(CargarAsync);
+    }
+
     private RolUsuario RolActualODefault => _session.RolActual ?? RolUsuario.Operador;
 
+    /// <summary>La vista muestra "No se pudo conectar con el servidor" con Reintentar dentro de la card.</summary>
+    protected override bool AvisaSinConexionEnLinea => true;
+
+    /// <summary>Sin servidor la vista actual queda vacía: el reintento no puede mostrar las filas de la consulta anterior.</summary>
+    protected override void AlPerderConexion() => (MostrandoHistorial ? Historial : Activos).Clear();
+
+    /// <summary>Reintentar consulta con los filtros que están en pantalla, no con los de la consulta que falló.</summary>
+    protected override Task ReintentarAsync(Func<Task> cargaFallida) => CargarAsync();
+
+    /// <summary>
+    /// Un 403 refrescó los permisos en caliente (convención 21): además de re-leer los <c>Puede*</c> (base), si ya no hay
+    /// <c>documentos.gestionar</c> se vacían las dos vistas y la pantalla pasa a "Sin permiso" (si no, la grilla vacía
+    /// diría "Todavía no hay documentos").
+    /// </summary>
+    public override void NotificarPermisosActualizados()
+    {
+        if (!PuedeGestionarDocumentos)
+        {
+            Activos.Clear();
+            Historial.Clear();
+            MarcarSinPermiso(MensajeSinPermisoDocumentos);
+        }
+        base.NotificarPermisosActualizados();
+    }
+
+    /// <summary>Carga la vista ACTUAL (Activos o Historial) con los filtros que están en pantalla.</summary>
     public async Task CargarAsync()
     {
-        try
+        _recargaArmada = true;
+        if (MostrandoHistorial)
+            await CargarHistorialAsync();
+        else
+            await CargarActivosAsync();
+    }
+
+    private async Task CargarActivosAsync()
+    {
+        var turno = _consultas.Empezar();
+        await EjecutarCargaProtegidaAsync(async () =>
         {
             var filtro = new FiltroDocumentos(FiltroActivosTipo, null, FiltroActivosTexto, null);
             var documentos = await _service.ListarActivosAsync(filtro);
+            if (!turno.EsLaUltima) return;
             var rol = RolActualODefault;
 
             Activos.Clear();
             foreach (var doc in documentos)
                 Activos.Add(new DocumentoFila(doc, rol));
-        }
-        catch (Exception ex)
-        {
-            await ManejarErrorAsync(ex);
-        }
+        }, MensajeSinPermisoDocumentos, turno);
     }
 
     /// <summary>
-    /// D9: recarga el historial SIEMPRE que se invoca (a diferencia de AbrirHistorialCommand,
-    /// que solo carga la primera vez) -- es lo que dispara el botón "Buscar" del filtro propio
-    /// del historial cuando el usuario cambia año/tipo/texto/estado.
+    /// Recarga el historial SIEMPRE que se invoca. El servidor exige año (D9): sin año, o con un texto inválido en la caja
+    /// (<see cref="ViewModelBase.HayErroresDeEntrada"/>), no consulta.
     /// </summary>
     public async Task CargarHistorialAsync()
     {
-        try
+        if (FiltroHistorialAnio is null || HayErroresDeEntrada)
+            return;
+
+        var turno = _consultas.Empezar();
+        await EjecutarCargaProtegidaAsync(async () =>
         {
             var filtro = new FiltroDocumentos(FiltroHistorialTipo, FiltroHistorialAnio, FiltroHistorialTexto, FiltroHistorialEstado);
             var documentos = await _service.ListarHistorialAsync(filtro);
+            if (!turno.EsLaUltima) return;
             var rol = RolActualODefault;
 
             Historial.Clear();
@@ -186,11 +300,7 @@ public partial class DocumentoListViewModel : ViewModelBase
                 Historial.Add(new DocumentoFila(doc, rol));
 
             _historialCargado = true;
-        }
-        catch (Exception ex)
-        {
-            await ManejarErrorAsync(ex);
-        }
+        }, MensajeSinPermisoDocumentos, turno);
     }
 
     /// <summary>

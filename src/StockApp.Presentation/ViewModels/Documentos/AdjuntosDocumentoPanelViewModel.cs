@@ -109,9 +109,14 @@ public partial class AdjuntosDocumentoPanelViewModel : ViewModelBase
         }
     }
 
+    /// <summary>Texto de la confirmación de Quitar; el mismo que el panel de adjuntos de Finanzas.</summary>
+    public static string MensajeConfirmarQuitar(string nombreArchivo) => $"¿Quitar el adjunto \"{nombreArchivo}\"?";
+
     [RelayCommand]
     private async Task QuitarAsync(AdjuntoDocumentoDto item)
     {
+        if (!await _confirmacion.PreguntarAsync(MensajeConfirmarQuitar(item.NombreArchivo))) return;
+
         try
         {
             await _adjuntos.QuitarAsync(item.Id);

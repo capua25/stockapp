@@ -1,6 +1,8 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -26,7 +28,7 @@ namespace StockApp.Presentation.ViewModels.Documentos;
 /// (Transient, mismo ciclo de vida que este VM) y se inicializa recién en CargarParaVerAsync,
 /// porque agregar adjuntos exige que el documento ya exista (D11a).
 /// </summary>
-public partial class DocumentoFormViewModel : ViewModelBase
+public partial class DocumentoFormViewModel : ViewModelBase, INotifyDataErrorInfo
 {
     /// <summary>
     /// Mensaje para UnauthorizedAccessException. No se usa hoy (el catch de 403 es silencioso,
@@ -34,6 +36,10 @@ public partial class DocumentoFormViewModel : ViewModelBase
     /// </summary>
     public const string MensajeSinPermiso =
         "La sesión expiró o no tiene permiso para realizar esta acción. Vuelva a iniciar sesión e intente de nuevo.";
+
+    public const string MensajeNumeroObligatorio = "El número es obligatorio.";
+    public const string MensajeDescripcionObligatoria = "La descripción es obligatoria.";
+    public const string MensajeFechaEmisionObligatoria = "La fecha de emisión es obligatoria.";
 
     private readonly IDocumentoAdministrativoService _service;
     private readonly ICurrentSession                 _session;
@@ -129,6 +135,55 @@ public partial class DocumentoFormViewModel : ViewModelBase
         _tareas       = tareas;
     }
 
+    /// <summary>Propiedades bindeadas que se validan en el cliente. ErrorsChanged se levanta con estos nombres: son los
+    /// que el binding de cada control le pregunta a GetErrors.</summary>
+    private static readonly string[] CamposValidados =
+        [nameof(Numero), nameof(Descripcion), nameof(FechaEmisionSeleccionada)];
+
+    /// <summary>Campos que el usuario ya tocó (cambió el valor, salió del campo o intentó guardar). Un campo sin tocar no
+    /// muestra su error: el formulario recién abierto no aparece en rojo.</summary>
+    private readonly HashSet<string> _tocados = new();
+
+    public event EventHandler<DataErrorsChangedEventArgs>? ErrorsChanged;
+
+    public bool HasErrors => CamposValidados.Any(c => ErrorDe(c) is not null);
+
+    /// <summary>El error que la vista muestra debajo del campo: el de su regla, solo si el campo está tocado y es
+    /// editable (en un documento cerrado los campos están deshabilitados y no hay nada que corregir).</summary>
+    public string? ErrorDe(string propiedad)
+    {
+        if (!PuedeEditarCampos) return null;
+        return _tocados.Contains(propiedad) ? ReglaDe(propiedad) : null;
+    }
+
+    public IEnumerable GetErrors(string? propertyName)
+        => propertyName is not null && ErrorDe(propertyName) is { } error ? new[] { error } : Array.Empty<string>();
+
+    /// <summary>Marca el campo como tocado sin cambiar su valor (la vista lo llama al salir del campo).</summary>
+    public void MarcarTocado(string propiedad)
+    {
+        if (_tocados.Add(propiedad))
+            ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(propiedad));
+    }
+
+    private void AlCambiarCampo(string propiedad)
+    {
+        _tocados.Add(propiedad);
+        ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(propiedad));
+    }
+
+    partial void OnNumeroChanged(string value) => AlCambiarCampo(nameof(Numero));
+    partial void OnDescripcionChanged(string? value) => AlCambiarCampo(nameof(Descripcion));
+    partial void OnFechaEmisionSeleccionadaChanged(DateTime? value) => AlCambiarCampo(nameof(FechaEmisionSeleccionada));
+
+    private string? ReglaDe(string propiedad) => propiedad switch
+    {
+        nameof(Numero) => string.IsNullOrWhiteSpace(Numero) ? MensajeNumeroObligatorio : null,
+        nameof(Descripcion) => string.IsNullOrWhiteSpace(Descripcion) ? MensajeDescripcionObligatoria : null,
+        nameof(FechaEmisionSeleccionada) => FechaEmisionSeleccionada is null ? MensajeFechaEmisionObligatoria : null,
+        _ => null,
+    };
+
     public void CargarParaCrear()
     {
         _documento = null;
@@ -142,6 +197,8 @@ public partial class DocumentoFormViewModel : ViewModelBase
         RegistradoPorNombre = null;
         MensajeError = null;
         Eventos.Clear();
+        // Al final: asignar los campos arriba los marcaría como tocados y el alta nacería en rojo.
+        _tocados.Clear();
     }
 
     public async Task CargarParaVerAsync(DocumentoAdministrativo documento)
@@ -192,6 +249,9 @@ public partial class DocumentoFormViewModel : ViewModelBase
         Eventos.Clear();
         foreach (var evento in documento.Eventos.OrderBy(e => e.Fecha))
             Eventos.Add(evento);
+
+        // Al final: asignar los campos arriba los marcó como tocados y el detalle recién abierto no debe verse en rojo.
+        _tocados.Clear();
     }
 
     /// <summary>

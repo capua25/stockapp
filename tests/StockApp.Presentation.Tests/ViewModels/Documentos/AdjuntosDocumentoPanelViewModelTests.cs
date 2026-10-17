@@ -28,6 +28,7 @@ public class AdjuntosDocumentoPanelViewModelTests
         var apertura = new Mock<IServicioAperturaArchivo>();
         var confirm = new Mock<IConfirmacionService>();
         confirm.Setup(c => c.InformarAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
+        confirm.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(true);
 
         var session = new Mock<ICurrentSession>();
         session.Setup(s => s.RolActual).Returns(rol);
@@ -145,5 +146,32 @@ public class AdjuntosDocumentoPanelViewModelTests
         await ctx.Vm.QuitarCommand.ExecuteAsync(AdjuntoDe(9));
 
         ctx.Confirm.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Quitar_SinConfirmar_NoLlamaAlServicio()
+    {
+        var ctx = Crear(rol: RolUsuario.Admin);
+        ctx.Confirm.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(false);
+        await ctx.Vm.InicializarAsync(5, documentoActivo: true);
+
+        await ctx.Vm.QuitarCommand.ExecuteAsync(AdjuntoDe(9));
+
+        ctx.Svc.Verify(s => s.QuitarAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Quitar_Confirmado_QuitaYRecarga()
+    {
+        var ctx = Crear(rol: RolUsuario.Admin);
+        var adjunto = new AdjuntoDocumentoDto(9, 5, "oficio.pdf", "application/pdf", 1024, DateTime.UtcNow);
+        await ctx.Vm.InicializarAsync(5, documentoActivo: true);
+
+        await ctx.Vm.QuitarCommand.ExecuteAsync(adjunto);
+
+        Assert.Equal("¿Quitar el adjunto \"oficio.pdf\"?", AdjuntosDocumentoPanelViewModel.MensajeConfirmarQuitar("oficio.pdf"));
+        ctx.Confirm.Verify(c => c.PreguntarAsync("¿Quitar el adjunto \"oficio.pdf\"?"), Times.Once);
+        ctx.Svc.Verify(s => s.QuitarAsync(9), Times.Once);
+        ctx.Svc.Verify(s => s.ListarPorDocumentoAsync(5), Times.Exactly(2));
     }
 }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Moq;
 using StockApp.Application.Authorization;
@@ -277,5 +278,88 @@ public class DocumentoFormViewModelTests
 
         Assert.Empty(ctx.Vm.TareasVinculadas);
         Assert.Equal(EstadoDocumento.Pendiente.ToString(), ctx.Vm.EstadoTexto); // el resto de la carga sí corrió
+    }
+
+    // ── Errores por campo (alta y detalle activo) ────────────────────────────────
+
+    [Fact]
+    public void Alta_CamposSinTocar_SinErrores()
+    {
+        var ctx = Crear();
+        ctx.Vm.CargarParaCrear();
+
+        Assert.Null(ctx.Vm.ErrorDe(nameof(DocumentoFormViewModel.Numero)));
+        Assert.Null(ctx.Vm.ErrorDe(nameof(DocumentoFormViewModel.Descripcion)));
+        Assert.Null(ctx.Vm.ErrorDe(nameof(DocumentoFormViewModel.FechaEmisionSeleccionada)));
+        Assert.False(ctx.Vm.HasErrors);
+    }
+
+    [Fact]
+    public void Alta_TocarNumeroVacio_MuestraSuError()
+    {
+        var ctx = Crear();
+        ctx.Vm.CargarParaCrear();
+
+        ctx.Vm.MarcarTocado(nameof(DocumentoFormViewModel.Numero));
+
+        Assert.Equal(DocumentoFormViewModel.MensajeNumeroObligatorio, ctx.Vm.ErrorDe(nameof(DocumentoFormViewModel.Numero)));
+        Assert.Contains(DocumentoFormViewModel.MensajeNumeroObligatorio,
+            ctx.Vm.GetErrors(nameof(DocumentoFormViewModel.Numero)).Cast<string>());
+        Assert.True(ctx.Vm.HasErrors);
+    }
+
+    [Fact]
+    public void Alta_TocarDescripcionVacia_MuestraSuError()
+    {
+        var ctx = Crear();
+        ctx.Vm.CargarParaCrear();
+
+        ctx.Vm.MarcarTocado(nameof(DocumentoFormViewModel.Descripcion));
+
+        Assert.Equal(DocumentoFormViewModel.MensajeDescripcionObligatoria, ctx.Vm.ErrorDe(nameof(DocumentoFormViewModel.Descripcion)));
+    }
+
+    [Fact]
+    public void Alta_BorrarLaFecha_MuestraSuError()
+    {
+        var ctx = Crear();
+        ctx.Vm.CargarParaCrear();
+        var eventos = new List<string?>();
+        ctx.Vm.ErrorsChanged += (_, e) => eventos.Add(e.PropertyName);
+
+        ctx.Vm.FechaEmisionSeleccionada = null;
+
+        Assert.Equal(DocumentoFormViewModel.MensajeFechaEmisionObligatoria,
+            ctx.Vm.ErrorDe(nameof(DocumentoFormViewModel.FechaEmisionSeleccionada)));
+        Assert.Contains(nameof(DocumentoFormViewModel.FechaEmisionSeleccionada), eventos);
+    }
+
+    [Fact]
+    public async Task DetalleCerrado_NingunError()
+    {
+        var ctx = Crear();
+        await ctx.Vm.CargarParaVerAsync(DocumentoDe(1, EstadoDocumento.Finalizado));
+
+        ctx.Vm.MarcarTocado(nameof(DocumentoFormViewModel.Numero));
+        ctx.Vm.MarcarTocado(nameof(DocumentoFormViewModel.Descripcion));
+        ctx.Vm.MarcarTocado(nameof(DocumentoFormViewModel.FechaEmisionSeleccionada));
+        ctx.Vm.Numero = string.Empty;
+
+        Assert.Null(ctx.Vm.ErrorDe(nameof(DocumentoFormViewModel.Numero)));
+        Assert.Null(ctx.Vm.ErrorDe(nameof(DocumentoFormViewModel.Descripcion)));
+        Assert.Null(ctx.Vm.ErrorDe(nameof(DocumentoFormViewModel.FechaEmisionSeleccionada)));
+        Assert.False(ctx.Vm.HasErrors);
+    }
+
+    [Fact]
+    public async Task DetalleActivo_BorrarNumero_MuestraSuError()
+    {
+        var ctx = Crear();
+        await ctx.Vm.CargarParaVerAsync(DocumentoDe(1, EstadoDocumento.EnProceso));
+        Assert.Null(ctx.Vm.ErrorDe(nameof(DocumentoFormViewModel.Numero)));
+
+        ctx.Vm.Numero = string.Empty;
+
+        Assert.Equal(DocumentoFormViewModel.MensajeNumeroObligatorio, ctx.Vm.ErrorDe(nameof(DocumentoFormViewModel.Numero)));
     }
 }
