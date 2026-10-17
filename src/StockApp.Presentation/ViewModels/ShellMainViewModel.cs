@@ -89,6 +89,9 @@ public partial class ShellMainViewModel : ViewModelBase
     public bool PuedeGestionarTablasMaestras =>
         _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.GestionarTablasMaestras);
 
+    /// <summary>"Catálogos" se ve si hay al menos un grupo visible (spec §4.3): tablas maestras o maestros de finanzas.</summary>
+    public bool PuedeGestionarCatalogos => PuedeGestionarTablasMaestras || PuedeGestionarMaestrosFinanzas;
+
     public bool PuedeVerReportes =>
         _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.VerReportes);
 
@@ -228,8 +231,8 @@ public partial class ShellMainViewModel : ViewModelBase
 
         ItemInicio = new ItemNavegacion("Inicio", "mdi-home", NavInicioCommand, "Inicio", true);
 
-        // Secciones v2 (spec §4.1, Fase 1). P1 (sidebar transitorio): ADMINISTRACIÓN lista los
-        // ítems actuales hasta que Catálogos (Fase 7) los consolide.
+        // Secciones v2 (spec §4.1, Fase 1). P1 (sidebar transitorio): ANÁLISIS tiene un solo ítem, el hub de
+        // Reportes (Fase 6), y ADMINISTRACIÓN ya es el de la Fase 7 (Catálogos, Usuarios y Mantenimiento).
         // Títulos en mayúsculas literales: Avalonia no tiene text-transform. Cada ítem conserva su
         // gate (Seccion, Comando y evaluador sin cambios).
         Grupos = new List<GrupoNavegacion>
@@ -261,11 +264,7 @@ public partial class ShellMainViewModel : ViewModelBase
             }),
             new GrupoNavegacion("ADMINISTRACIÓN", new List<ItemNavegacion>
             {
-                CrearItem("Categorías", "mdi-shape", NavCategoriasCommand, "Categorias", () => PuedeGestionarTablasMaestras),
-                CrearItem("Proveedores", "mdi-truck", NavProveedoresCommand, "Proveedores", () => PuedeGestionarTablasMaestras),
-                CrearItem("Unidades de medida", "mdi-ruler", NavUnidadesMedidaCommand, "UnidadesMedida", () => PuedeGestionarTablasMaestras),
-                CrearItem("Catálogos de tareas", "mdi-tag-multiple", NavCatalogosTareaCommand, "CatalogosTarea", () => PuedeGestionarTablasMaestras),
-                CrearItem("Maestros de finanzas", "mdi-cash-multiple", NavMaestrosFinanzasCommand, "MaestrosFinanzas", () => PuedeGestionarMaestrosFinanzas),
+                CrearItem("Catálogos", "mdi-tag-multiple", NavCatalogosCommand, "Catalogos", () => PuedeGestionarCatalogos),
                 CrearItem("Usuarios", "mdi-account-cog", NavUsuariosCommand, "Usuarios", () => EsAdmin),
                 CrearItem("Mantenimiento", "mdi-database-cog", NavMantenimientoCommand, "Mantenimiento", () => EsAdmin),
                 CrearItem("Importar planillas", "mdi-file-upload", NavImportacionCommand, "Importacion", () => EsAdmin && ImportacionHabilitada),
@@ -351,11 +350,7 @@ public partial class ShellMainViewModel : ViewModelBase
         [typeof(MasMovidosViewModel)] = "Reportes",
         [typeof(AuditoriaLogViewModel)] = "Reportes",
         [typeof(ReporteTareasViewModel)] = "Reportes",
-        [typeof(CategoriaListViewModel)] = "Categorias",
-        [typeof(ProveedorListViewModel)] = "Proveedores",
-        [typeof(UnidadMedidaListViewModel)] = "UnidadesMedida",
-        [typeof(CatalogosTareaViewModel)] = "CatalogosTarea",
-        [typeof(MaestrosFinanzasViewModel)] = "MaestrosFinanzas",
+        [typeof(CatalogosViewModel)] = "Catalogos",
         [typeof(UsuariosAdminViewModel)] = "Usuarios",
         [typeof(MantenimientoViewModel)] = "Mantenimiento",
         [typeof(ImportacionViewModel)] = "Importacion",
@@ -391,6 +386,7 @@ public partial class ShellMainViewModel : ViewModelBase
         OnPropertyChanged(nameof(PuedeVerFinanzas));
         OnPropertyChanged(nameof(PuedeGestionarMaestrosFinanzas));
         OnPropertyChanged(nameof(PuedeGestionarTablasMaestras));
+        OnPropertyChanged(nameof(PuedeGestionarCatalogos));
         OnPropertyChanged(nameof(PuedeVerReportes));
         OnPropertyChanged(nameof(PuedeIngresarPorFactura));
         OnPropertyChanged(nameof(PuedeRegistrarEntradaSalida));
@@ -497,31 +493,10 @@ public partial class ShellMainViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void NavCategorias()
+    private void NavCatalogos()
     {
-        SeccionActiva = "Categorias";
-        _navigation.Navegar<CategoriaListViewModel>();
-    }
-
-    [RelayCommand]
-    private void NavProveedores()
-    {
-        SeccionActiva = "Proveedores";
-        _navigation.Navegar<ProveedorListViewModel>();
-    }
-
-    [RelayCommand]
-    private void NavUnidadesMedida()
-    {
-        SeccionActiva = "UnidadesMedida";
-        _navigation.Navegar<UnidadMedidaListViewModel>();
-    }
-
-    [RelayCommand]
-    private void NavCatalogosTarea()
-    {
-        SeccionActiva = "CatalogosTarea";
-        _navigation.Navegar<CatalogosTareaViewModel>();
+        SeccionActiva = "Catalogos";
+        _navigation.Navegar<CatalogosViewModel>();
     }
 
     // ── Movimientos (Inc 5): Operador + Admin ─────────────────────────────────
@@ -615,13 +590,6 @@ public partial class ShellMainViewModel : ViewModelBase
     {
         SeccionActiva = "Ingresos";
         _navigation.Navegar<IngresosViewModel>();
-    }
-
-    [RelayCommand]
-    private void NavMaestrosFinanzas()
-    {
-        SeccionActiva = "MaestrosFinanzas";
-        _navigation.Navegar<MaestrosFinanzasViewModel>();
     }
 
     [RelayCommand]

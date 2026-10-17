@@ -106,33 +106,67 @@ public class ShellMainViewModelTests
     }
 
     [Fact]
-    public void NavCategoria_Admin_LlamaNavegar_ACategoriaListViewModel()
+    public void NavCatalogos_NavegaACatalogosYMarcaLaSeccion()
     {
         var (vm, _, navMock, _) = Crear(RolUsuario.Admin);
 
-        vm.NavCategoriasCommand.Execute(null);
+        vm.NavCatalogosCommand.Execute(null);
 
-        navMock.Verify(n => n.Navegar<CategoriaListViewModel>(), Times.Once);
+        navMock.Verify(n => n.Navegar<StockApp.Presentation.ViewModels.Administracion.CatalogosViewModel>(), Times.Once);
+        Assert.Equal("Catalogos", vm.SeccionActiva);
     }
 
     [Fact]
-    public void NavProveedores_Admin_LlamaNavegar_AProveedorListViewModel()
+    public void Formulario_DeCatalogo_ConservaLaSeccionCatalogos()
     {
         var (vm, _, navMock, _) = Crear(RolUsuario.Admin);
+        vm.NavCatalogosCommand.Execute(null);
+        var formulario = new StockApp.Presentation.ViewModels.Catalogo.CategoriaFormViewModel(
+            Mock.Of<StockApp.Application.Catalogo.ICategoriaService>(), navMock.Object);
+        navMock.Setup(n => n.Actual).Returns(formulario);
 
-        vm.NavProveedoresCommand.Execute(null);
+        navMock.Raise(n => n.Cambiado += null);
 
-        navMock.Verify(n => n.Navegar<ProveedorListViewModel>(), Times.Once);
+        Assert.Same(formulario, vm.CurrentContent);
+        Assert.Equal("Catalogos", vm.SeccionActiva);
     }
 
     [Fact]
-    public void NavUnidadesMedida_Admin_LlamaNavegar_AUnidadMedidaListViewModel()
+    public void Volver_ACatalogosDesdeOtraSeccion_MarcaCatalogos()
     {
         var (vm, _, navMock, _) = Crear(RolUsuario.Admin);
+        vm.NavProductosCommand.Execute(null);
+        var nav = Mock.Of<INavigationService>();
+        var conf = Mock.Of<StockApp.Presentation.Services.IConfirmacionService>();
+        var sesion = Mock.Of<ICurrentSession>(x => x.RolActual == RolUsuario.Admin && x.PermisosActuales == new HashSet<string>());
+        var catalogos = new StockApp.Presentation.ViewModels.Administracion.CatalogosViewModel(sesion,
+            new StockApp.Presentation.ViewModels.Catalogo.CategoriaListViewModel(Mock.Of<StockApp.Application.Catalogo.ICategoriaService>(), nav, conf),
+            new StockApp.Presentation.ViewModels.Catalogo.ProveedorListViewModel(Mock.Of<StockApp.Application.Catalogo.IProveedorService>(), nav, conf),
+            new StockApp.Presentation.ViewModels.Catalogo.UnidadMedidaListViewModel(Mock.Of<StockApp.Application.Catalogo.IUnidadMedidaService>(), nav, conf),
+            new StockApp.Presentation.ViewModels.Finanzas.FuenteFinanciamientoListViewModel(Mock.Of<StockApp.Application.Finanzas.IFuenteFinanciamientoService>(), nav, conf),
+            new StockApp.Presentation.ViewModels.Finanzas.RubroGastoListViewModel(Mock.Of<StockApp.Application.Finanzas.IRubroGastoService>(), nav, conf),
+            new StockApp.Presentation.ViewModels.Finanzas.LineaPoaListViewModel(Mock.Of<StockApp.Application.Finanzas.ILineaPoaService>(), nav, conf),
+            new StockApp.Presentation.ViewModels.Catalogo.ZonaListViewModel(Mock.Of<StockApp.Application.Catalogo.IZonaService>(), nav, conf),
+            new StockApp.Presentation.ViewModels.Catalogo.DimensionTematicaListViewModel(Mock.Of<StockApp.Application.Catalogo.IDimensionTematicaService>(), nav, conf),
+            new StockApp.Presentation.ViewModels.Catalogo.OrganismoResponsableListViewModel(Mock.Of<StockApp.Application.Catalogo.IOrganismoResponsableService>(), nav, conf),
+            new StockApp.Presentation.ViewModels.Catalogo.OrigenFinanciamientoListViewModel(Mock.Of<StockApp.Application.Catalogo.IOrigenFinanciamientoService>(), nav, conf));
+        navMock.Setup(n => n.Actual).Returns(catalogos);
 
-        vm.NavUnidadesMedidaCommand.Execute(null);
+        navMock.Raise(n => n.Cambiado += null);
 
-        navMock.Verify(n => n.Navegar<UnidadMedidaListViewModel>(), Times.Once);
+        Assert.Equal("Catalogos", vm.SeccionActiva);
+    }
+
+    [Fact]
+    public void NotificarPermisosActualizados_AvisaQueCambioPuedeGestionarCatalogos()
+    {
+        var (vm, _, _, _) = Crear(RolUsuario.Operador);
+        var avisos = new List<string?>();
+        vm.PropertyChanged += (_, e) => avisos.Add(e.PropertyName);
+
+        vm.NotificarPermisosActualizados();
+
+        Assert.Contains(nameof(ShellMainViewModel.PuedeGestionarCatalogos), avisos);
     }
 
     // ── D6 — Navegación a movimientos ────────────────────────────────────────
@@ -197,56 +231,6 @@ public class ShellMainViewModelTests
         vm.NavProductosCommand.Execute(null);
 
         Assert.Equal("Productos", vm.SeccionActiva);
-    }
-
-    [Fact]
-    public void NavCategorias_EstableceSeccionActiva_Categorias()
-    {
-        var (vm, _, _, _) = Crear(RolUsuario.Admin);
-
-        vm.NavCategoriasCommand.Execute(null);
-
-        Assert.Equal("Categorias", vm.SeccionActiva);
-    }
-
-    [Fact]
-    public void NavCatalogosTarea_Admin_LlamaNavegar_ACatalogosTareaViewModel()
-    {
-        var (vm, _, navMock, _) = Crear(RolUsuario.Admin);
-
-        vm.NavCatalogosTareaCommand.Execute(null);
-
-        navMock.Verify(n => n.Navegar<StockApp.Presentation.ViewModels.Catalogo.CatalogosTareaViewModel>(), Times.Once);
-    }
-
-    [Fact]
-    public void NavCatalogosTarea_EstableceSeccionActiva_CatalogosTarea()
-    {
-        var (vm, _, _, _) = Crear(RolUsuario.Admin);
-
-        vm.NavCatalogosTareaCommand.Execute(null);
-
-        Assert.Equal("CatalogosTarea", vm.SeccionActiva);
-    }
-
-    [Fact]
-    public void NavProveedores_EstableceSeccionActiva_Proveedores()
-    {
-        var (vm, _, _, _) = Crear(RolUsuario.Admin);
-
-        vm.NavProveedoresCommand.Execute(null);
-
-        Assert.Equal("Proveedores", vm.SeccionActiva);
-    }
-
-    [Fact]
-    public void NavUnidadesMedida_EstableceSeccionActiva_UnidadesMedida()
-    {
-        var (vm, _, _, _) = Crear(RolUsuario.Admin);
-
-        vm.NavUnidadesMedidaCommand.Execute(null);
-
-        Assert.Equal("UnidadesMedida", vm.SeccionActiva);
     }
 
     [Fact]

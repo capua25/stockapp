@@ -120,7 +120,7 @@ public class ShellMainViewGatesTests
         Assert.False(EsVisible(window, vm.NavProductosCommand));
         Assert.False(EsVisible(window, vm.NavHistorialMovimientosCommand));
         Assert.False(EsVisible(window, vm.NavGastosCommand));
-        Assert.False(EsVisible(window, vm.NavCategoriasCommand));
+        Assert.False(EsVisible(window, vm.NavCatalogosCommand));
         Assert.False(EsVisible(window, vm.NavReportesCommand));
         Assert.False(EsVisible(window, vm.NavMantenimientoCommand));
         Assert.False(EsVisible(window, vm.NavUsuariosCommand));
@@ -135,7 +135,7 @@ public class ShellMainViewGatesTests
 
         Assert.True(EsVisible(window, vm.NavProductosCommand));
         Assert.False(EsVisible(window, vm.NavGastosCommand));
-        Assert.False(EsVisible(window, vm.NavCategoriasCommand));
+        Assert.False(EsVisible(window, vm.NavCatalogosCommand));
     }
 
     [AvaloniaFact]
@@ -149,18 +149,54 @@ public class ShellMainViewGatesTests
         Assert.True(EsVisible(window, vm.NavControlPoaCommand));
         Assert.True(EsVisible(window, vm.NavCalendarioPagosCommand));
 
-        // Maestros de finanzas pide su propio permiso, no alcanza con VerFinanzas.
-        Assert.False(EsVisible(window, vm.NavMaestrosFinanzasCommand));
+        // Catálogos (maestros de finanzas) pide su propio permiso, no alcanza con VerFinanzas.
+        Assert.False(EsVisible(window, vm.NavCatalogosCommand));
     }
 
     [AvaloniaFact]
-    public void OperadorConGestionarTablasMaestras_VeLosTresCatalogos()
+    public void OperadorConGestionarTablasMaestras_VeCatalogos_NoVeUsuariosNiMantenimiento()
     {
-        var (window, vm) = Montar(RolUsuario.Operador, Permisos.GestionarTablasMaestras);
+        // Permisos MIXTOS: el target y uno sin relación (Admin cortocircuita el gate).
+        var (window, vm) = Montar(RolUsuario.Operador, Permisos.GestionarTablasMaestras, Permisos.VerFinanzas);
 
-        Assert.True(EsVisible(window, vm.NavCategoriasCommand));
-        Assert.True(EsVisible(window, vm.NavProveedoresCommand));
-        Assert.True(EsVisible(window, vm.NavUnidadesMedidaCommand));
+        Assert.True(EsVisible(window, vm.NavCatalogosCommand));
+        Assert.False(EsVisible(window, vm.NavUsuariosCommand));
+        Assert.False(EsVisible(window, vm.NavMantenimientoCommand));
+    }
+
+    [AvaloniaFact]
+    public void OperadorSinNingunoDeLosDos_NoVeCatalogos()
+    {
+        var (window, vm) = Montar(RolUsuario.Operador, Permisos.GestionarProductos, Permisos.VerFinanzas);
+
+        Assert.False(EsVisible(window, vm.NavCatalogosCommand));
+    }
+
+    [AvaloniaFact]
+    public void Administracion_TieneCatalogosUsuariosMantenimiento_EnEseOrden()
+    {
+        var (_, vm) = Montar(RolUsuario.Admin);
+
+        var administracion = vm.Grupos.Single(g => g.Titulo == "ADMINISTRACIÓN");
+
+        Assert.Equal(new[] { "Catalogos", "Usuarios", "Mantenimiento" }, administracion.ItemsVisibles.Select(i => i.Seccion).ToArray());
+    }
+
+    [AvaloniaFact]
+    public void RevocarAmbos_EnCaliente_CatalogosDesaparece()
+    {
+        var (window, vm, navegacion) = MontarParaRevocacion(
+            RolUsuario.Operador,
+            new[] { Permisos.GestionarTablasMaestras, Permisos.GestionarMaestrosFinanzas },
+            new HashSet<string> { Permisos.VerFinanzas });
+        Assert.True(EsVisible(window, vm.NavCatalogosCommand), "Precondición: con los dos permisos se ve.");
+
+        navegacion.SimularNavegacion();
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(EsVisible(window, vm.NavCatalogosCommand));
+        Assert.False(vm.Grupos.Single(g => g.Titulo == "ADMINISTRACIÓN").EsVisible);
     }
 
     [AvaloniaFact]
@@ -284,7 +320,7 @@ public class ShellMainViewGatesTests
         Assert.True(EsVisible(window, vm.NavProductosCommand));
         Assert.True(EsVisible(window, vm.NavIngresoPorFacturaCommand));
         Assert.True(EsVisible(window, vm.NavReportesCommand));
-        Assert.True(EsVisible(window, vm.NavMaestrosFinanzasCommand));
+        Assert.True(EsVisible(window, vm.NavCatalogosCommand));
         // Importación: ver Admin_NoVeImportacion_PorqueEstaDeshabilitada. Apagada a propósito
         // por ShellMainViewModel.ImportacionHabilitada (2026-09-04); revertir este assert a
         // True si se reactiva la constante.
@@ -326,17 +362,17 @@ public class ShellMainViewGatesTests
     // ── Task 5.3, Step 4: gates de grupo ──────────────────────────────────────────
 
     [AvaloniaFact]
-    public void OperadorConSoloGestionarMaestrosFinanzas_VeMaestrosYSuSeccionAdministracionCONSuTitulo()
+    public void OperadorConSoloGestionarMaestrosFinanzas_VeCatalogosYSuSeccionAdministracion()
     {
-        // El header de la sección va por "algún ítem visible": este operador, con SOLO este permiso,
-        // ve Maestros de finanzas (ahora en ADMINISTRACIÓN) y su sección, no el botón suelto.
-        var (window, vm) = Montar(RolUsuario.Operador, Permisos.GestionarMaestrosFinanzas);
+        // El header de la sección va por "algún ítem visible": este operador, con SOLO este permiso (y uno sin
+        // relación), ve Catálogos (el grupo FINANZAS del master) y su sección ADMINISTRACIÓN.
+        var (window, vm) = Montar(RolUsuario.Operador, Permisos.GestionarMaestrosFinanzas, Permisos.GestionarProductos);
 
         var administracion = vm.Grupos.Single(g => g.Titulo == "ADMINISTRACIÓN");
 
         Assert.True(administracion.EsVisible);
-        Assert.Equal("MaestrosFinanzas", Assert.Single(administracion.ItemsVisibles).Seccion);
-        Assert.True(EsVisible(window, vm.NavMaestrosFinanzasCommand));
+        Assert.Equal("Catalogos", Assert.Single(administracion.ItemsVisibles).Seccion);
+        Assert.True(EsVisible(window, vm.NavCatalogosCommand));
         Assert.False(EsVisible(window, vm.NavGastosCommand));
         Assert.False(vm.Grupos.Single(g => g.Titulo == "FINANZAS").EsVisible);
     }
@@ -357,8 +393,7 @@ public class ShellMainViewGatesTests
 
         // La sección se ve por los ítems que sí le corresponden por permiso...
         Assert.True(administracion.EsVisible);
-        Assert.Contains(administracion.ItemsVisibles, i => i.Seccion == "Categorias");
-        Assert.Contains(administracion.ItemsVisibles, i => i.Seccion == "MaestrosFinanzas");
+        Assert.Contains(administracion.ItemsVisibles, i => i.Seccion == "Catalogos");
         // ...pero ningún ítem estructuralmente Admin-only.
         Assert.DoesNotContain(administracion.ItemsVisibles, i => i.Seccion is "Usuarios" or "Mantenimiento" or "Importacion");
         Assert.False(EsVisible(window, vm.NavUsuariosCommand));

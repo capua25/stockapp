@@ -101,6 +101,13 @@ public class CatalogosViewV2Tests
 
     private static void DobleClick(Window ventana, Control control)
     {
+        // Un click lejos de la fila reinicia el conteo de clicks del puntero: si el test anterior terminó clickeando en el
+        // mismo lugar hace menos de medio segundo, los dos clicks de abajo contarían 3 y 4 y no se dispararía el doble toque.
+        var lejos = new Point(2, 2);
+        ventana.MouseMove(lejos);
+        ventana.MouseDown(lejos, MouseButton.Left);
+        ventana.MouseUp(lejos, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
         var p = control.TranslatePoint(new Point(control.Bounds.Width / 2, control.Bounds.Height / 2), ventana)!.Value;
         ventana.MouseMove(p);
         Dispatcher.UIThread.RunJobs();
@@ -363,14 +370,20 @@ public class CatalogosViewV2Tests
     }
 
     [AvaloniaFact]
-    public void DobleClickEnFila_ActivaEdita()
+    public async Task DobleClickEnFila_ActivaEdita()
     {
         var s = new Servicios();
         var activa = C(1, "Electricidad");
         s.Categorias.Lista = [activa, C(2, "Vieja", activo: false)];
         var m = Montar(s);
+        // Fila ya seleccionada: el primer click no cambia la selección y los dos entran en el intervalo del doble toque
+        // aunque la máquina esté ocupada (varias fases compilan a la vez).
+        ((CategoriaListViewModel)m.Vm.CatalogoActual!).ItemSeleccionado = activa;
+        Dispatcher.UIThread.RunJobs();
 
         DobleClick(m.Ventana, FilaDe(m, activa));
+        // Editar navega en un hilo del pool (Task.Run): se espera a que termine antes de mirar a dónde fue.
+        await (m.Vm.CatalogoActual!.EditarCommand.ExecutionTask ?? Task.CompletedTask);
 
         Assert.NotNull(m.Nav.UltimoInicializador);
         Assert.Equal(typeof(CategoriaFormViewModel), m.Nav.UltimoTipoNavegado);
@@ -439,5 +452,68 @@ public class CatalogosViewV2Tests
         Assert.False(Visible(MontajeV2.Parte<StackPanel>(vista, "GrupoFinanzas")));
         Assert.Equal("Categorías", MontajeV2.Parte<TextBlock>(vista, "TituloCatalogo").Text);
         Assert.Same(vm, shell.CurrentContent);
+    }
+
+    private static List<string?> TextosDeLaFila(Montaje m, object entidad) =>
+        FilaDe(m, entidad).GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
+
+    [AvaloniaFact]
+    public void Detalle_Proveedor_DireccionYNotas_SeMuestranEnLaGrilla()
+    {
+        var s = new Servicios();
+        var proveedor = new Proveedor { Id = 1, Nombre = "Ferretería Central", Telefono = "099123456", Email = "contacto@ferreteria.com",
+            Direccion = "Av. 18 de Julio 1234", Notas = "Entrega los martes" };
+        s.Proveedores.Lista = [proveedor];
+        var m = Montar(s, abrir: ClaveCatalogo.Proveedores);
+
+        var textos = TextosDeLaFila(m, proveedor);
+
+        Assert.Contains("Av. 18 de Julio 1234", textos);
+        Assert.Contains("Entrega los martes", textos);
+        Assert.Contains("contacto@ferreteria.com", textos);
+    }
+
+    [AvaloniaFact]
+    public void Detalle_Proveedor_SinDireccionNiNotas_NoRompe()
+    {
+        var s = new Servicios();
+        var proveedor = new Proveedor { Id = 2, Nombre = "Distribuidora del Este", Telefono = "099999999", Email = "ventas@distrieste.com" };
+        s.Proveedores.Lista = [proveedor];
+        var m = Montar(s, abrir: ClaveCatalogo.Proveedores);
+
+        var textos = TextosDeLaFila(m, proveedor);
+
+        Assert.Contains("Distribuidora del Este", textos);
+        Assert.Contains("ventas@distrieste.com", textos);
+    }
+
+    [AvaloniaFact]
+    public void Detalle_Unidad_MuestraNombreYAbreviatura()
+    {
+        var s = new Servicios();
+        var unidad = new UnidadMedida { Id = 1, Nombre = "Kilogramo", Abreviatura = "kg" };
+        s.Unidades.Lista = [unidad];
+        var m = Montar(s, abrir: ClaveCatalogo.UnidadesMedida);
+
+        var textos = TextosDeLaFila(m, unidad);
+
+        Assert.Contains("Kilogramo", textos);
+        Assert.Contains("kg", textos);
+        Assert.Equal("ABREVIATURA", Grilla(m).Columns[1].Header);
+    }
+
+    [AvaloniaFact]
+    public void Detalle_SeleccionarFila_ActualizaItemSeleccionado()
+    {
+        var s = new Servicios();
+        var proveedor = new Proveedor { Id = 3, Nombre = "Proveedor X" };
+        s.Proveedores.Lista = [proveedor];
+        var m = Montar(s, abrir: ClaveCatalogo.Proveedores);
+        var listado = (ProveedorListViewModel)m.Vm.CatalogoActual!;
+
+        Clickear(m.Ventana, FilaDe(m, proveedor));
+
+        Assert.Same(proveedor, listado.ItemSeleccionado);
+        Assert.True(listado.EditarCommand.CanExecute(null));
     }
 }

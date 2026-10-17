@@ -377,11 +377,9 @@ public partial class App : AvaloniaApp
         services.AddTransient<OrganismoResponsableFormViewModel>();
         services.AddTransient<OrigenFinanciamientoListViewModel>();
         services.AddTransient<OrigenFinanciamientoFormViewModel>();
-        services.AddTransient<CatalogosTareaViewModel>();
         services.AddTransient<CatalogosViewModel>();
 
         // ── Módulo Finanzas — Fase 1: VMs de maestros ─────────────────────────
-        services.AddTransient<MaestrosFinanzasViewModel>();
         services.AddTransient<FuenteFinanciamientoListViewModel>();
         services.AddTransient<FuenteFinanciamientoFormViewModel>();
         services.AddTransient<RubroGastoListViewModel>();

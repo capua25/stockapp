@@ -18,6 +18,8 @@ using StockApp.Application.Movimientos;
 using StockApp.Application.Reportes;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Behaviors;
+using StockApp.Presentation.UiTests.V2;
+using StockApp.Presentation.ViewModels.Catalogo;
 using StockApp.Presentation.ViewModels.Finanzas;
 using StockApp.Presentation.ViewModels.Movimientos;
 using StockApp.Presentation.Views.Catalogo;
@@ -62,6 +64,16 @@ public class GrillasSinRecorteBarridoTests
         UnidadMedidaNombre: "Metro cuadrado", PrecioCosto: 1234567.89m + id, StockActual: stock,
         StockMinimo: 0m, Activo: true, FechaAlta: DateTime.UtcNow);
 
+    /// <summary>La grilla del detalle se oculta sin filas: una fila de relleno la deja a la vista (el barrido pone sus datos después).</summary>
+    private static Control Catalogo(CatalogoListadoViewModel vm)
+    {
+        vm.Filas.Add(new FilaCatalogo(new object(), true, new string?[] { "relleno" }));
+        return new CatalogoListadoView { DataContext = vm };
+    }
+
+    private static FilaCatalogo FilaDe(string nombre, int i, params string?[] resto) =>
+        new(new object(), i % 2 == 0, new string?[] { nombre }.Concat(resto).ToArray());
+
     private static IEnumerable<T> Muchos<T>(Func<int, T> fabrica, int n = 30) => Enumerable.Range(0, n).Select(fabrica);
 
     internal static readonly Escenario[] Escenarios =
@@ -90,13 +102,17 @@ public class GrillasSinRecorteBarridoTests
                 Producto = Producto(i, 10), Cantidad = 12345.5m + i, PrecioUnitario = 1234567.89m + i,
                 ActualizarPrecioCosto = i % 2 == 0,
             }, 8)),
-        new("Zonas", () => new ZonaListView(), _ => Muchos<object>(i => new Zona { Id = i, Nombre = $"Zona costera número {i}", Activo = i % 2 == 0 })),
-        new("Dimensiones temáticas", () => new DimensionTematicaListView(), _ => Muchos<object>(i => new DimensionTematica { Id = i, Nombre = $"Dimensión temática {i}", Activo = i % 2 == 0 })),
-        new("Orígenes de financiamiento", () => new OrigenFinanciamientoListView(), _ => Muchos<object>(i => new OrigenFinanciamiento { Id = i, Nombre = $"Origen {i}", Activo = i % 2 == 0 })),
-        new("Organismos responsables", () => new OrganismoResponsableListView(), _ => Muchos<object>(i => new OrganismoResponsable { Id = i, Nombre = $"Organismo {i}", Activo = i % 2 == 0 })),
-        new("Unidades de medida", () => new UnidadMedidaListView(), _ => Muchos<object>(i => new UnidadMedida { Id = i, Nombre = $"Metro cuadrado {i}", Abreviatura = "m2", Activo = i % 2 == 0 })),
-        new("Proveedores", () => new ProveedorListView(), _ => Muchos<object>(i => new Proveedor
-            { Id = i, Nombre = $"Distribuidora Municipal del Este SRL {i}", Telefono = "099 123 456", Email = "contacto@distribuidora-este.com.uy", Direccion = "Av. Artigas 1234", Notas = "n", Activo = i % 2 == 0 })),
+        // Catálogos: la vista genérica con el VM de cada catálogo (las columnas medidas salen de lo que el VM declara).
+        new("Catálogo: Zonas", () => Catalogo(new ZonaListViewModel(new ZonaServicioFake(), new NavigationRecorderFake(), new ConfirmacionServiceFake())),
+            _ => Muchos<object>(i => FilaDe($"Zona costera número {i}", i))),
+        new("Catálogo: Unidades de medida", () => Catalogo(new UnidadMedidaListViewModel(new UnidadMedidaServicioFake(), new NavigationRecorderFake(), new ConfirmacionServiceFake())),
+            _ => Muchos<object>(i => FilaDe($"Metro cuadrado {i}", i, "m2"))),
+        new("Catálogo: Proveedores", () => Catalogo(new ProveedorListViewModel(new ProveedorServicioFake(), new NavigationRecorderFake(), new ConfirmacionServiceFake())),
+            _ => Muchos<object>(i => FilaDe($"Distribuidora Municipal del Este SRL {i}", i, "099 123 456", "contacto@distribuidora-este.com.uy", "Av. Artigas 1234", "n"))),
+        new("Catálogo: Rubros de gasto", () => Catalogo(new RubroGastoListViewModel(new RubroGastoServicioFake(), new NavigationRecorderFake(), new ConfirmacionServiceFake())),
+            _ => Muchos<object>(i => FilaDe($"Materiales de construcción {i}", i, "12345"))),
+        new("Catálogo: Líneas POA", () => Catalogo(new LineaPoaListViewModel(new LineaPoaServicioFake(), new NavigationRecorderFake(), new ConfirmacionServiceFake())),
+            _ => Muchos<object>(i => FilaDe($"Obras viales y mantenimiento urbano {i}", i, "Programa de infraestructura", "2026"))),
         new("Ingresos de caja", () => new IngresosView(), _ => Muchos<object>(i => new IngresoCaja
             { Id = i, Fecha = new DateTime(2026, 3, 15, 0, 0, 0, DateTimeKind.Utc), Concepto = "Transferencia de rentas generales", Monto = 98765432.10m + i,
               FuenteFinanciamiento = new FuenteFinanciamiento { Id = 1, Nombre = "Rentas Generales Departamentales", Activo = true }, Activo = i % 2 == 0 })),

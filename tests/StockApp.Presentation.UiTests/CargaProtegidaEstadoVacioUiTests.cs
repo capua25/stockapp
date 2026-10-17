@@ -86,29 +86,33 @@ public class CargaProtegidaEstadoVacioUiTests
     private static EstadoVacio? BuscarEstadoVacio(Window window)
         => window.GetVisualDescendants().OfType<EstadoVacio>().FirstOrDefault();
 
-    // ── FuenteFinanciamientoListView (embebida) ─────────────────────────────
+    // ── CatalogoListadoView (detalle genérico de Catálogos; reemplaza a FuenteFinanciamientoListView) ──
 
-    private const string XamlFuenteFinanciamientoListView = """
+    private const string XamlCatalogoListadoView = """
         <Window xmlns="https://github.com/avaloniaui"
                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                xmlns:v="clr-namespace:StockApp.Presentation.Views.Finanzas;assembly=GestionMunicipal"
+                xmlns:v="clr-namespace:StockApp.Presentation.Views.Catalogo;assembly=GestionMunicipal"
                 Width="800" Height="600">
-            <v:FuenteFinanciamientoListView />
+            <v:CatalogoListadoView />
         </Window>
         """;
 
     [AvaloniaFact]
-    public void FuenteFinanciamientoListView_SiSinPermiso_MuestraEstadoVacioConMensajeYEsError()
+    public async System.Threading.Tasks.Task CatalogoListadoView_SiSinPermiso_MuestraEstadoVacioConMensajeYEsError()
     {
         var vm = new FuenteFinanciamientoListViewModel(
             new FuenteFinanciamientoServiceUnauthorizedFake(), new NavigationServiceFake(), new ConfirmacionServiceFake());
 
-        var window = MontarConDataContext(XamlFuenteFinanciamientoListView, vm);
+        var window = MontarConDataContext(XamlCatalogoListadoView, vm);
+        await vm.CargarAsync(); // el detalle no carga solo: lo dispara CatalogosViewModel
+        Dispatcher.UIThread.RunJobs();
 
         Assert.True(vm.SinPermiso); // el VM sí quedó marcado -- si esto falla, el problema es del VM, no de la vista.
 
-        var estadoVacio = BuscarEstadoVacio(window);
-        Assert.True(estadoVacio is not null, "FuenteFinanciamientoListView no muestra EstadoVacio en su árbol visual.");
+        // Los estados de la vista v2 son StockApp.Presentation.Controls.V2.EstadoVacio (no el control viejo de BuscarEstadoVacio).
+        var estadoVacio = window.GetVisualDescendants().OfType<StockApp.Presentation.Controls.V2.EstadoVacio>()
+            .FirstOrDefault(e => e.Name == "EstadoSinPermiso");
+        Assert.True(estadoVacio is not null, "CatalogoListadoView no muestra EstadoVacio en su árbol visual.");
         Assert.True(estadoVacio!.IsVisible, "EstadoVacio está en el árbol pero IsVisible es false.");
         Assert.True(estadoVacio.EsError);
         Assert.False(string.IsNullOrWhiteSpace(estadoVacio.Mensaje));

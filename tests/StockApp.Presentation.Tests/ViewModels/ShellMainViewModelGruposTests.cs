@@ -58,7 +58,7 @@ public class ShellMainViewModelGruposTests
     [InlineData("FINANZAS", "Gastos y facturas|Ingresos de caja|Libro caja|Control POA|Calendario de pagos")]
     [InlineData("GESTIÓN", "Tareas|Documentos")]
     [InlineData("ANÁLISIS", "Reportes")]
-    [InlineData("ADMINISTRACIÓN", "Categorías|Proveedores|Unidades de medida|Catálogos de tareas|Maestros de finanzas|Usuarios|Mantenimiento|Importar planillas")]
+    [InlineData("ADMINISTRACIÓN", "Catálogos|Usuarios|Mantenimiento|Importar planillas")]
     public void Seccion_TieneSusItemsEnElOrdenDeLaSpec(string seccion, string titulos)
     {
         var (vm, _, _) = Crear(RolUsuario.Admin);
@@ -110,7 +110,7 @@ public class ShellMainViewModelGruposTests
 
         var administracion = vm.Grupos.Single(g => g.Titulo == "ADMINISTRACIÓN");
         Assert.True(administracion.EsVisible);
-        Assert.Equal("MaestrosFinanzas", Assert.Single(administracion.ItemsVisibles).Seccion);
+        Assert.Equal("Catalogos", Assert.Single(administracion.ItemsVisibles).Seccion);
         Assert.False(vm.Grupos.Single(g => g.Titulo == "FINANZAS").EsVisible);
     }
 
@@ -196,32 +196,32 @@ public class ShellMainViewModelGruposTests
     }
 
     [Fact]
-    public void GrupoTablasMaestras_TieneElItemCatalogosTarea()
+    public void GrupoAdministracion_TieneElItemCatalogos()
     {
         var (vm, _, _) = Crear(RolUsuario.Admin);
 
         var tablasMaestras = vm.Grupos.Single(g => g.Titulo == "ADMINISTRACIÓN");
 
-        Assert.Contains(tablasMaestras.ItemsVisibles, i => i.Seccion == "CatalogosTarea");
+        Assert.Contains(tablasMaestras.ItemsVisibles, i => i.Seccion == "Catalogos");
     }
 
     [Fact]
-    public void GrupoTablasMaestras_OperadorSinPermiso_NoVeCatalogosTarea()
+    public void GrupoAdministracion_OperadorSinPermiso_NoVeCatalogos()
     {
         var (vm, _, _) = Crear(RolUsuario.Operador);
 
         var tablasMaestras = vm.Grupos.Single(g => g.Titulo == "ADMINISTRACIÓN");
 
-        Assert.DoesNotContain(tablasMaestras.ItemsVisibles, i => i.Seccion == "CatalogosTarea");
+        Assert.DoesNotContain(tablasMaestras.ItemsVisibles, i => i.Seccion == "Catalogos");
     }
 
     [Fact]
-    public void GrupoTablasMaestras_OperadorConGestionarTablasMaestras_VeCatalogosTarea()
+    public void GrupoAdministracion_OperadorConGestionarTablasMaestras_VeCatalogos()
     {
         var (vm, _, _) = Crear(RolUsuario.Operador, new[] { Permisos.GestionarTablasMaestras });
 
         var tablasMaestras = vm.Grupos.Single(g => g.Titulo == "ADMINISTRACIÓN");
 
-        Assert.Contains(tablasMaestras.ItemsVisibles, i => i.Seccion == "CatalogosTarea");
+        Assert.Contains(tablasMaestras.ItemsVisibles, i => i.Seccion == "Catalogos");
     }
 }

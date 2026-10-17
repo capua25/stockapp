@@ -45,9 +45,6 @@ namespace StockApp.Presentation.UiTests;
 public class GuardianDePatronTests
 {
     [AvaloniaTheory]
-    [InlineData(typeof(CategoriaListView), "Categorías", "CATÁLOGO")]
-    [InlineData(typeof(ProveedorListView), "Proveedores", "CATÁLOGO")]
-    [InlineData(typeof(UnidadMedidaListView), "Unidades de medida", "CATÁLOGO")]
     [InlineData(typeof(CategoriaFormView), null, "CATÁLOGO")]
     [InlineData(typeof(ProveedorFormView), null, null)]
     [InlineData(typeof(UnidadMedidaFormView), null, "CATÁLOGO")]
@@ -55,8 +52,6 @@ public class GuardianDePatronTests
     [InlineData(typeof(DimensionTematicaFormView), null, "TAREAS")]
     [InlineData(typeof(OrganismoResponsableFormView), null, "TAREAS")]
     [InlineData(typeof(OrigenFinanciamientoFormView), null, "TAREAS")]
-    [InlineData(typeof(MaestrosFinanzasView), "Maestros de finanzas", "FINANZAS")]
-    [InlineData(typeof(CatalogosTareaView), "Catálogos de tareas", "TAREAS")]
     [InlineData(typeof(ImportacionView), "Importar planillas", "FINANZAS")]
     [InlineData(typeof(FuenteFinanciamientoFormView), null, "FINANZAS")]
     [InlineData(typeof(RubroGastoFormView), null, "FINANZAS")]
@@ -83,9 +78,6 @@ public class GuardianDePatronTests
 
     public static readonly TheoryData<Type> VistasDeLaTanda = new()
     {
-        typeof(CategoriaListView),
-        typeof(ProveedorListView),
-        typeof(UnidadMedidaListView),
         typeof(CategoriaFormView),
         typeof(ProveedorFormView),
         typeof(UnidadMedidaFormView),
@@ -93,8 +85,6 @@ public class GuardianDePatronTests
         typeof(DimensionTematicaFormView),
         typeof(OrganismoResponsableFormView),
         typeof(OrigenFinanciamientoFormView),
-        typeof(MaestrosFinanzasView),
-        typeof(CatalogosTareaView),
         typeof(ImportacionView),
         typeof(FuenteFinanciamientoFormView),
         typeof(RubroGastoFormView),
@@ -117,13 +107,6 @@ public class GuardianDePatronTests
     /// </summary>
     public static readonly TheoryData<Type> VistasEmbebidas = new()
     {
-        typeof(FuenteFinanciamientoListView),
-        typeof(RubroGastoListView),
-        typeof(LineaPoaListView),
-        typeof(ZonaListView),
-        typeof(DimensionTematicaListView),
-        typeof(OrganismoResponsableListView),
-        typeof(OrigenFinanciamientoListView),
         typeof(HistorialImportacionesView),
         typeof(NuevaImportacionView),
         typeof(AdjuntosDocumentoPanelView),
