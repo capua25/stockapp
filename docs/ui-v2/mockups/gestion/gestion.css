@@ -1,0 +1,89 @@
+/* CSS propio de los mockups de Gestión (Tareas y Documentos). _base/ no se toca: lo que no existe ahí vive acá. */
+
+/* Área de contenido del shell: a la derecha del sidebar de 240 (ShellMainView, Grid 240,*). */
+.contenido { position: absolute; left: var(--v2-ancho-sidebar); top: 0; right: 0; bottom: 0; overflow: hidden; }
+
+/* ---- Listados ---- */
+/* DockPanel Margin 28,24 de la vista: encabezado arriba, card con el resto del alto (o el estado Sin permiso en su lugar). */
+.pagina-lista { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 24px 28px; }
+.pagina-lista > .v2-tarjeta { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+/* BarraFiltros sin buscador: una fila de campos etiquetados con separación 8, abajo 16. */
+.filtros { margin-bottom: 16px; }
+.filtros-fila { display: flex; gap: 8px; align-items: flex-end; }
+.ancho-100 { width: 100px; }
+.ancho-140 { width: 140px; }
+.ancho-160 { width: 160px; }
+.ancho-280 { width: 280px; }
+/* La grilla: header, filas y el pie de conteo debajo. */
+.pagina-lista .v2-grilla { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+.v2-grilla-header { flex: 0 0 auto; }
+.filas { flex: 1 1 0; min-height: 0; overflow: hidden; }
+.pie-conteo { margin-top: 12px; }
+/* Anchos MEDIDOS en headless (Skia, tema v2, interior de grilla 948 a 1280 y 1034 a 1366; iguales a los dos tamaños salvo
+   la columna *, que toma el resto). Tareas: ESTADO 93 (insignia más ancha 77 + 16), PRIORIDAD 101, VENCE 167 (fecha 80 + 8 +
+   insignia Vencida 63 + 16), TOMADA POR 117, CLASIFICACIÓN 240 (tope). Documentos: TIPO 85, NÚMERO 89, EMISIÓN 150,
+   ESTADO 97 (81 + 16), REGISTRADO POR 142. Entran sin scroll horizontal. */
+.col-titulo, .col-desc { flex: 1 1 0; min-width: 200px; }
+.col-estado-t { flex: 0 0 93px; }
+.col-prioridad { flex: 0 0 101px; }
+.col-vence { flex: 0 0 167px; }
+.col-tomada { flex: 0 0 117px; }
+.col-clasif { flex: 0 0 240px; }
+.col-tipo { flex: 0 0 85px; }
+.col-numero { flex: 0 0 89px; }
+.col-emision { flex: 0 0 150px; }
+.col-estado-d { flex: 0 0 97px; }
+.col-reg { flex: 0 0 142px; }
+/* VENCE: fecha y, a la derecha, la insignia Vencida (celda compuesta). */
+.col-vence > .insignia-vencida { margin-left: 8px; }
+
+/* ---- Formularios ---- */
+/* Grid raíz de la vista (*,Auto): el ScrollViewer ocupa lo que deja el pie fijo de 69 (borde 1 + 16 + botón 36 + 16). */
+.desplazamiento { position: absolute; left: 0; top: 0; right: 0; height: calc(var(--v2-ventana-alto, 760px) - 69px); overflow: hidden; }
+/* StackPanel Margin 28,24 de la vista. */
+.pagina { padding: 24px 28px; }
+/* Grid con una columna * de MaxWidth 760: la card mide 760 a la izquierda. Padding de formulario 24. */
+.formulario { max-width: var(--v2-ancho-formulario-max); padding: 24px; }
+.pagina > .v2-encabezado { max-width: var(--v2-ancho-formulario-max); }
+.subtitulo { margin-bottom: 12px; }
+.separador { height: 1px; margin: 20px 0; background: var(--v2-color-separador-grilla); }
+/* Grid *,16,*: columnas de 347 (interior de la card 710). El 16 entre filas va en el Margin superior del campo. */
+.campos { display: grid; grid-template-columns: 1fr 1fr; column-gap: 16px; row-gap: 16px; align-items: start; }
+.campos > .completo { grid-column: 1 / 3; }
+.campo-completo { margin-top: 16px; }
+.subtitulo + .campos, .subtitulo + .campo-completo { margin-top: 0; }
+/* TextBox multilínea: el texto arranca arriba. */
+.multilinea { align-items: flex-start; padding-top: 8px; }
+.registrado { margin-bottom: 12px; }
+/* Encabezado de una sección con un botón a la derecha: el título centrado en el alto del botón. */
+.panel-encabezado { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 8px; }
+.panel-encabezado > .con-boton { margin-top: 8px; }
+/* Prioridad (Admin): combo de 160 y el botón en la misma fila, abajo. */
+.fila-prioridad { display: flex; gap: 8px; align-items: flex-end; }
+/* Hilo de notas / eventos: texto en cuerpo y fecha en secundario, separadas por el separador de grilla. */
+.hilo { margin-bottom: 8px; }
+.nota { padding: 8px 0; border-top: 1px solid var(--v2-color-separador-grilla); }
+.nota:first-child { border-top: 0; padding-top: 0; }
+.agregar-nota { margin-top: 8px; }
+/* Panel de adjuntos del documento: el mismo que Finanzas (fila de 40 con separador arriba). */
+.adjunto { display: flex; align-items: center; height: 40px; border-top: 1px solid var(--v2-color-separador-grilla); }
+.adjunto > .v2-icono { margin-right: 8px; color: var(--v2-color-texto-secundario); }
+.adjunto-nombre { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adjunto-tamano, .adjunto-fecha { display: flex; justify-content: flex-end; }
+.adjunto-tamano { flex: 0 0 72px; }
+.adjunto-fecha { flex: 0 0 80px; }
+.adjunto-ver { margin-left: 8px; }
+/* Tareas vinculadas: título y su insignia de estado, una fila de 40 con separador arriba. */
+.vinculada { display: flex; align-items: center; justify-content: space-between; height: 40px; border-top: 1px solid var(--v2-color-separador-grilla); }
+/* Insignias y acciones del encabezado del formulario de detalle: a la derecha, dentro de la columna de 760. */
+.insignias { display: flex; gap: 8px; align-items: flex-start; }
+.v2-input--deshabilitado .v2-glifo-fecha { color: var(--v2-color-deshabilitado-texto); }
+/* Pie fijo (fuera del scroll): fondo superficie, borde superior, padding 16x28; los botones al borde derecho de la columna de 760. */
+.pie-fijo { position: absolute; left: 0; right: 0; bottom: 0; height: 69px; padding: 16px 28px;
+            background: var(--v2-color-superficie); border-top: 1px solid var(--v2-color-borde); }
+.pie-botones { max-width: var(--v2-ancho-formulario-max); display: flex; justify-content: flex-end; gap: 8px; }
+/* Pulgar de la barra vertical del ScrollViewer (Fluent en reposo): 2 px #7A7A7A a 2 px del borde derecho de la vista. */
+.pulgar { position: absolute; right: 2px; width: 2px; background: #7A7A7A; }
+.alerta-error { position: absolute; left: 28px; bottom: 81px; width: var(--v2-ancho-formulario-max); }
+/* Fila seleccionada (DataGridV2.axaml, DataGridRow:selected): fondo acento suave; el texto conserva su token. */
+.fila-seleccionada { background: var(--v2-color-acento-suave); }
