@@ -1,6 +1,8 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -24,7 +26,7 @@ namespace StockApp.Presentation.ViewModels.Tareas;
 /// Cargar* son síncronos (sin combos que precargar), por eso TareaFormView.axaml.cs no
 /// necesita wiring de DataContextChanged.
 /// </summary>
-public partial class TareaFormViewModel : ViewModelBase
+public partial class TareaFormViewModel : ViewModelBase, INotifyDataErrorInfo
 {
     /// <summary>
     /// Mensaje para UnauthorizedAccessException (const, no literal repetido): lo referencian
@@ -33,6 +35,8 @@ public partial class TareaFormViewModel : ViewModelBase
     /// </summary>
     public const string MensajeSinPermiso =
         "La sesión expiró o no tiene permiso para realizar esta acción. Vuelva a iniciar sesión e intente de nuevo.";
+
+    public const string MensajeTituloObligatorio = "El título es obligatorio.";
 
     private readonly ITareaService        _service;
     private readonly ICurrentSession      _session;
@@ -121,6 +125,41 @@ public partial class TareaFormViewModel : ViewModelBase
         _dialogoClasificacion = dialogoClasificacion;
     }
 
+    /// <summary>Campos que el usuario ya tocó (cambió el valor, salió del campo o intentó guardar). Un campo sin tocar no
+    /// muestra su error: el formulario recién abierto no aparece en rojo.</summary>
+    private readonly HashSet<string> _tocados = new();
+
+    public event EventHandler<DataErrorsChangedEventArgs>? ErrorsChanged;
+
+    public bool HasErrors => ErrorDe(nameof(Titulo)) is not null;
+
+    /// <summary>El error que la vista muestra debajo del campo: el de su regla, solo en el alta y si el campo está tocado.</summary>
+    public string? ErrorDe(string propiedad) => EsNuevaTarea && _tocados.Contains(propiedad) ? ReglaDe(propiedad) : null;
+
+    public IEnumerable GetErrors(string? propertyName)
+        => propertyName is not null && ErrorDe(propertyName) is { } error ? new[] { error } : Array.Empty<string>();
+
+    /// <summary>Marca el campo como tocado sin cambiar su valor (la vista lo llama al salir del campo).</summary>
+    public void MarcarTocado(string propiedad)
+    {
+        if (_tocados.Add(propiedad))
+            ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(propiedad));
+    }
+
+    private void AlCambiarCampo(string propiedad)
+    {
+        _tocados.Add(propiedad);
+        ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(propiedad));
+    }
+
+    partial void OnTituloChanged(string value) => AlCambiarCampo(nameof(Titulo));
+
+    private string? ReglaDe(string propiedad) => propiedad switch
+    {
+        nameof(Titulo) => string.IsNullOrWhiteSpace(Titulo) ? MensajeTituloObligatorio : null,
+        _ => null,
+    };
+
     public void CargarParaCrear()
     {
         _idTarea = 0;
@@ -133,6 +172,8 @@ public partial class TareaFormViewModel : ViewModelBase
         TomadaPorNombre = null;
         MensajeError = null;
         Notas.Clear();
+        // Al final: asignar Titulo arriba lo marcaría como tocado y el alta nacería en rojo.
+        _tocados.Clear();
     }
 
     public void CargarParaVer(Tarea tarea)

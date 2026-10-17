@@ -65,9 +65,18 @@ public class ReflexionVistaViewModelTests
         var axaml = LeerAxaml("StockApp.Presentation/Views/Tareas/TareaListView.axaml");
         var miembros = PropiedadesPublicasDeclaradas(typeof(TareaListViewModel));
 
-        // Sin exclusiones: verificado a mano (lectura completa del axaml) que las 11 propiedades/
-        // comandos declarados en TareaListViewModel tienen control propio.
-        AssertTodasExpuestas(axaml, miembros, new HashSet<string>());
+        // Los miembros del filtro de Estado y de la selección que la vista v1 (secciones por estado) no
+        // expone: la vista v2 (grilla filtrada) los bindea y estas exclusiones salen con la migración.
+        var exclusiones = new HashSet<string>
+        {
+            nameof(TareaListViewModel.TareasView),
+            nameof(TareaListViewModel.FiltrosEstado),
+            nameof(TareaListViewModel.FiltroEstado),
+            nameof(TareaListViewModel.FilaSeleccionada),
+            nameof(TareaListViewModel.CantidadVisible),
+            nameof(TareaListViewModel.PuedeGestionarTareas),
+        };
+        AssertTodasExpuestas(axaml, miembros, exclusiones);
     }
 
     [Fact]
@@ -81,6 +90,8 @@ public class ReflexionVistaViewModelTests
             // Helper interno consumido por MuestraCambioPrioridad (que SI esta bindeada, IsVisible
             // del panel de cambio de prioridad) -- no necesita un binding propio en el axaml.
             nameof(TareaFormViewModel.EsAdmin),
+            // INotifyDataErrorInfo: lo consume la vista v2 por campo (ErrorDe); la v1 no muestra errores.
+            nameof(TareaFormViewModel.HasErrors),
         };
         AssertTodasExpuestas(axaml, miembros, exclusiones);
     }

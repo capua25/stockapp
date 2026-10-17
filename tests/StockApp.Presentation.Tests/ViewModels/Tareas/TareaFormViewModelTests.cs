@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Moq;
 using StockApp.ApiClient;
@@ -294,5 +296,71 @@ public class TareaFormViewModelTests
 
         ctx.Svc.Verify(s => s.ReclasificarAsync(1, nuevaClasificacion), Times.Once);
         Assert.Equal("Centro", ctx.Vm.ZonaTexto);
+    }
+
+    // ── Error por campo del título (alta) ────────────────────────────────────────
+
+    [Fact]
+    public void Alta_TituloSinTocar_SinError()
+    {
+        var ctx = Crear();
+        ctx.Vm.CargarParaCrear();
+
+        Assert.Null(ctx.Vm.ErrorDe(nameof(TareaFormViewModel.Titulo)));
+        Assert.False(ctx.Vm.HasErrors);
+    }
+
+    [Fact]
+    public void Alta_TocarTituloVacio_MuestraElError()
+    {
+        var ctx = Crear();
+        ctx.Vm.CargarParaCrear();
+
+        ctx.Vm.MarcarTocado(nameof(TareaFormViewModel.Titulo));
+
+        Assert.Equal(TareaFormViewModel.MensajeTituloObligatorio, ctx.Vm.ErrorDe(nameof(TareaFormViewModel.Titulo)));
+        Assert.Contains(TareaFormViewModel.MensajeTituloObligatorio, ctx.Vm.GetErrors(nameof(TareaFormViewModel.Titulo)).Cast<string>());
+        Assert.True(ctx.Vm.HasErrors);
+    }
+
+    [Fact]
+    public void Alta_EscribirYBorrarElTitulo_MuestraElErrorYLevantaErrorsChanged()
+    {
+        var ctx = Crear();
+        ctx.Vm.CargarParaCrear();
+        var eventos = new List<string?>();
+        ctx.Vm.ErrorsChanged += (_, e) => eventos.Add(e.PropertyName);
+
+        ctx.Vm.Titulo = "x";
+        ctx.Vm.Titulo = string.Empty;
+
+        Assert.Equal(TareaFormViewModel.MensajeTituloObligatorio, ctx.Vm.ErrorDe(nameof(TareaFormViewModel.Titulo)));
+        Assert.Contains(nameof(TareaFormViewModel.Titulo), eventos);
+    }
+
+    [Fact]
+    public void Alta_TituloCompleto_SinErrorYGuardarHabilitado()
+    {
+        var ctx = Crear();
+        ctx.Vm.CargarParaCrear();
+
+        ctx.Vm.Titulo = "Reparar bache";
+        ctx.Vm.MarcarTocado(nameof(TareaFormViewModel.Titulo));
+
+        Assert.Null(ctx.Vm.ErrorDe(nameof(TareaFormViewModel.Titulo)));
+        Assert.False(ctx.Vm.HasErrors);
+        Assert.True(ctx.Vm.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void Detalle_NuncaMuestraErrorDeTitulo()
+    {
+        var ctx = Crear();
+        ctx.Vm.CargarParaVer(new Tarea { Id = 5, Titulo = string.Empty, Estado = EstadoTarea.Pendiente });
+
+        ctx.Vm.MarcarTocado(nameof(TareaFormViewModel.Titulo));
+
+        Assert.Null(ctx.Vm.ErrorDe(nameof(TareaFormViewModel.Titulo)));
+        Assert.False(ctx.Vm.HasErrors);
     }
 }

@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading.Tasks;
+using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.ApiClient;
+using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
 using StockApp.Application.Tareas;
 using StockApp.Domain.Entities;
@@ -138,9 +141,13 @@ public sealed class TareaFila
         _rol == RolUsuario.Admin && Tarea.PuedeTransicionarA(EstadoTarea.Cancelada);
 }
 
+/// <summary>Opción del combo de Estado del listado: el conjunto de estados que deja ver (filtro en el cliente).</summary>
+public sealed record OpcionEstadoTarea(string Nombre, IReadOnlyList<EstadoTarea> Estados);
+
 /// <summary>
-/// Pantalla "Tareas": lista agrupada por estado, canceladas detrás de un filtro (spec).
-/// La vista dispara CargarAsync() vía DataContextChanged (convención del proyecto).
+/// Pantalla "Tareas": una sola colección filtrada en el cliente por Estado ("Abiertas" por defecto); las cuatro
+/// colecciones por estado de antes se siguen llenando. La vista dispara CargarAsync() vía DataContextChanged
+/// (convención del proyecto).
 /// </summary>
 public partial class TareaListViewModel : ViewModelBase
 {
@@ -152,17 +159,51 @@ public partial class TareaListViewModel : ViewModelBase
     public const string MensajeSinPermiso =
         "La sesión expiró o no tiene permiso para realizar esta acción. Vuelva a iniciar sesión e intente de nuevo.";
 
+    /// <summary>Texto del estado "Sin permiso" cuando el servidor rechaza la carga (403) o se pierde el permiso en caliente.</summary>
+    public const string MensajeSinPermisoTareas = "No tenés permiso para ver las tareas.";
+
     private readonly ITareaService        _service;
     private readonly ICurrentSession      _session;
     private readonly INavigationService   _navigation;
     private readonly IConfirmacionService _confirmacion;
+    private readonly ConsultaVigente      _consultas = new();
 
     [ObservableProperty] private bool _mostrarCanceladas;
 
+    public ObservableCollection<TareaFila> Tareas { get; } = new();
     public ObservableCollection<TareaFila> Pendientes { get; } = new();
     public ObservableCollection<TareaFila> EnCurso { get; } = new();
     public ObservableCollection<TareaFila> Terminadas { get; } = new();
     public ObservableCollection<TareaFila> Canceladas { get; } = new();
+
+    /// <summary>La colección de <see cref="Tareas"/> con el filtro de Estado aplicado: lo que ve la grilla.</summary>
+    public DataGridCollectionView TareasView { get; }
+
+    /// <summary>Opciones del combo de Estado, en el orden en que se muestran.</summary>
+    public IReadOnlyList<OpcionEstadoTarea> FiltrosEstado { get; } = new[]
+    {
+        new OpcionEstadoTarea("Abiertas", new[] { EstadoTarea.Pendiente, EstadoTarea.EnCurso }),
+        new OpcionEstadoTarea("Pendientes", new[] { EstadoTarea.Pendiente }),
+        new OpcionEstadoTarea("En curso", new[] { EstadoTarea.EnCurso }),
+        new OpcionEstadoTarea("Terminadas", new[] { EstadoTarea.Terminada }),
+        new OpcionEstadoTarea("Canceladas", new[] { EstadoTarea.Cancelada }),
+        new OpcionEstadoTarea("Todas", new[] { EstadoTarea.Pendiente, EstadoTarea.EnCurso, EstadoTarea.Terminada, EstadoTarea.Cancelada }),
+    };
+
+    [ObservableProperty] private OpcionEstadoTarea _filtroEstado;
+
+    /// <summary>La fila sobre la que actúan las acciones del encabezado. Se limpia si el filtro la oculta.</summary>
+    [ObservableProperty] private TareaFila? _filaSeleccionada;
+
+    private int _cantidadVisible;
+
+    /// <summary>Filas que deja ver el filtro de Estado (el pie "N tareas").</summary>
+    public int CantidadVisible { get => _cantidadVisible; private set => SetProperty(ref _cantidadVisible, value); }
+
+    /// <summary>Gatea la pantalla: Admin o el permiso del módulo. Lo re-lee <see cref="NotificarPermisosActualizados"/>.</summary>
+    public bool PuedeGestionarTareas =>
+        _session.RolActual == RolUsuario.Admin ||
+        _session.PermisosActuales.Contains(Permisos.GestionarTareas);
 
     public TareaListViewModel(
         ITareaService service, ICurrentSession session,
@@ -172,23 +213,76 @@ public partial class TareaListViewModel : ViewModelBase
         _session      = session;
         _navigation   = navigation;
         _confirmacion = confirmacion;
+
+        _filtroEstado = FiltrosEstado[0];
+        TareasView = new DataGridCollectionView(Tareas) { Filter = EsVisible };
+        Tareas.CollectionChanged += (_, _) => Recalcular();
+    }
+
+    /// <summary>Predicado del filtro: la grilla y el pie usan el mismo, así lo que se cuenta es lo que se ve.</summary>
+    internal bool EsVisible(object item) =>
+        item is TareaFila fila && FiltroEstado.Estados.Contains(fila.Tarea.Estado);
+
+    partial void OnFiltroEstadoChanged(OpcionEstadoTarea value)
+    {
+        TareasView.Refresh();
+        Recalcular();
+    }
+
+    /// <summary>Recuenta el pie y, si el filtro esconde la fila seleccionada, limpia la selección: Tomar, Terminar o
+    /// Cancelar no pueden actuar sobre una tarea que no se ve.</summary>
+    private void Recalcular()
+    {
+        CantidadVisible = Tareas.Count(f => EsVisible(f));
+        if (FilaSeleccionada is { } seleccionada && !EsVisible(seleccionada))
+            FilaSeleccionada = null;
+    }
+
+    /// <summary>La vista muestra "No se pudo conectar con el servidor" con Reintentar dentro de la card.</summary>
+    protected override bool AvisaSinConexionEnLinea => true;
+
+    /// <summary>Sin servidor el listado queda vacío: el reintento no puede mostrar las filas de la consulta anterior.</summary>
+    protected override void AlPerderConexion() => VaciarListas();
+
+    private void VaciarListas()
+    {
+        Tareas.Clear();
+        Pendientes.Clear();
+        EnCurso.Clear();
+        Terminadas.Clear();
+        Canceladas.Clear();
+    }
+
+    /// <summary>
+    /// Un 403 refrescó los permisos en caliente (convención 21): además de re-leer los <c>Puede*</c> (base), si ya no hay
+    /// <c>tareas.gestionar</c> se vacía el listado y la pantalla pasa a "Sin permiso" (si no, la grilla vacía diría
+    /// "Todavía no hay tareas").
+    /// </summary>
+    public override void NotificarPermisosActualizados()
+    {
+        if (!PuedeGestionarTareas)
+        {
+            VaciarListas();
+            MarcarSinPermiso(MensajeSinPermisoTareas);
+        }
+        base.NotificarPermisosActualizados();
     }
 
     public async Task CargarAsync()
     {
-        try
+        var turno = _consultas.Empezar();
+        await EjecutarCargaProtegidaAsync(async () =>
         {
             var tareas = await _service.ListarAsync();
+            if (!turno.EsLaUltima) return;
             var rol = _session.RolActual ?? RolUsuario.Operador;
 
-            Pendientes.Clear();
-            EnCurso.Clear();
-            Terminadas.Clear();
-            Canceladas.Clear();
+            VaciarListas();
 
             foreach (var tarea in tareas)
             {
                 var fila = new TareaFila(tarea, rol);
+                Tareas.Add(fila);
                 switch (tarea.Estado)
                 {
                     case EstadoTarea.Pendiente: Pendientes.Add(fila); break;
@@ -197,11 +291,7 @@ public partial class TareaListViewModel : ViewModelBase
                     case EstadoTarea.Cancelada: Canceladas.Add(fila); break;
                 }
             }
-        }
-        catch (Exception ex)
-        {
-            await ManejarErrorAsync(ex);
-        }
+        }, MensajeSinPermisoTareas, turno);
     }
 
     [RelayCommand]
