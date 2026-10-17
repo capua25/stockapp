@@ -5041,7 +5041,7 @@ git commit -m "test(ui-v2): guardianes de la Fase 4d al día"
 - Consumes: todo lo anterior.
 - Produces: la Fase 4d cerrada en `feat/ui-v2` (sin push ni merge: el merge a `main` es por bloques, al cerrar la 4e).
 
-- [ ] **Step 1: Verificación orgánica (spec §6.4) — la ejecuta un agente con la app real contra la base local, en WSLg a 1280×760 y 1366×768**
+- [x] **Step 1: Verificación orgánica (spec §6.4) — la ejecuta un agente con la app real contra la base local, en WSLg a 1280×760 y 1366×768**
 
 Preparación (en este orden; el backup va ANTES de crear cualquier dato, a diferencia de la 4c):
 1. `docker start stockapp-pg` (queda andando al terminar). **Backup:** `mkdir -p ~/stockapp-backups-local && docker exec stockapp-pg pg_dump -U <usuario> <base> > ~/stockapp-backups-local/pre-4d-$(date +%Y%m%d-%H%M%S).sql` (usuario y base del `.env` local o de `~/.config/GestionMunicipal/conexion.json`); `ls -l` del archivo (no vacío); anotar la ruta en el ledger.
@@ -5066,11 +5066,11 @@ Pasos (capturar cada pantalla; 1, 4, 6 y 8 se repiten a 1366×768):
 
 Si un paso no se puede hacer por el entorno (WSLg caído o congelado, contenedor o API que no arrancan), PARAR y avisar con la evidencia (stderr, `docker ps -a`, md5 de las capturas), sin declarar la fase cerrada. Si el usuario necesita la PC, se pausa. **La limpieza de los datos `PRUEBA-4D` y de `f4dmixto` la decide el usuario:** listar los ids en el ledger y PREGUNTAR (baja por el dominio, borrado físico acotado por ids solo contra `stockapp-pg`, o dejarlos); nunca contra el VPS.
 
-- [ ] **Step 2: GATE 2 — aprobación final del usuario (PARADA)**
+- [x] **Step 2: GATE 2 — aprobación final del usuario (PARADA)**
 
 PARAR. Presentar: `index.html` (las 36 filas de la fase), las capturas de la verificación orgánica junto a los mockups, el PDF verificado por contenido, la salida del 409, los rojos de las mutaciones, los tests heredados adaptados y renombrados, los `UmbralAprobado` si los hubo, la elección de P7 y P8 y los cambios respecto de los mockups aprobados, y la pregunta de la limpieza de datos. No seguir sin "aprobado" explícito. Registrar en el ledger: `Fase 4d: aprobada por <quién> <fecha>`. Lo que el usuario observe se arregla en commits propios con TDD (rojo pegado) o va a la deuda con su OK.
 
-- [ ] **Step 3: `herramientas.md` y spec**
+- [x] **Step 3: `herramientas.md` y spec**
 
 `herramientas.md`, después de la 33: "Convenciones que agrega la Fase 4d (Gastos y facturas)" con la 34, la 35 y la 36 de este plan (como quedaron aprobadas, y la 35 según P8).
 
