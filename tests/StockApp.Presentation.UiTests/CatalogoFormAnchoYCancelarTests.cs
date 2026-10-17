@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Layout;
@@ -132,13 +133,9 @@ public class CatalogoFormAnchoYCancelarTests
         return vista;
     }
 
-    private static Border CardDe(Control vista)
-        => vista.GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("card"));
-
-    /// <summary>El contenedor "correspondiente" del brief: el Child del Border.card, que es donde
-    /// vive MaxWidth/HorizontalAlignment en el patrón de referencia (no en el Border).</summary>
-    private static Control PanelDelFormularioDe(Control vista)
-        => (Control)CardDe(vista).Child!;
+    // Los formularios de catálogo son v2: la card es la TarjetaContenido de 760 (V2AnchoFormularioMax).
+    private static StockApp.Presentation.Controls.V2.TarjetaContenido CardDe(Control vista)
+        => vista.GetVisualDescendants().OfType<StockApp.Presentation.Controls.V2.TarjetaContenido>().First();
 
     // "secondary" en los formularios del tema viejo, "secundario" en los v2 (ProductoFormView).
     private static Button? BotonCancelar(Control vista)
@@ -163,13 +160,14 @@ public class CatalogoFormAnchoYCancelarTests
             var (vistaSinMontar, _) = fabrica();
             var vista = Montar(vistaSinMontar);
 
-            var panel = PanelDelFormularioDe(vista);
+            var tarjeta = CardDe(vista);
+            var inicio = tarjeta.TranslatePoint(new Point(0, 0), vista)!.Value;
 
-            if (panel.HorizontalAlignment != HorizontalAlignment.Left)
-                errores.Add($"{nombre}: el panel del formulario tiene HorizontalAlignment={panel.HorizontalAlignment}, se esperaba Left.");
+            if (inicio.X > 28.5)
+                errores.Add($"{nombre}: la card del formulario arranca en x={inicio.X}, se esperaba a la izquierda (28).");
 
-            if (!(panel.MaxWidth >= 420))
-                errores.Add($"{nombre}: el panel del formulario tiene MaxWidth={panel.MaxWidth}, se esperaba >= 420.");
+            if (!(tarjeta.Bounds.Width >= 420))
+                errores.Add($"{nombre}: la card del formulario mide {tarjeta.Bounds.Width}, se esperaba >= 420.");
 
             var combosViejos = vista.GetVisualDescendants().OfType<Control>()
                 .Where(c => c.HorizontalAlignment == HorizontalAlignment.Center && c.MaxWidth <= 380)

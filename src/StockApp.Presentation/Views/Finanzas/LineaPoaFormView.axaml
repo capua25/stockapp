@@ -2,101 +2,105 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
              xmlns:i="https://github.com/projektanker/icons.avalonia"
-             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:e="using:StockApp.Domain.Entities"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="700" d:DesignHeight="600"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
              x:Class="StockApp.Presentation.Views.Finanzas.LineaPoaFormView"
-             x:DataType="vm:LineaPoaFormViewModel">
+             x:DataType="vm:LineaPoaFormViewModel"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
 
-    <Grid>
-    <DockPanel Margin="{DynamicResource MargenVista}">
+    <!-- UI v2 (formulario §5.2). Espejo: docs/ui-v2/mockups/administracion/. Los diez formularios de catálogo comparten esta
+         estructura: breadcrumb que vuelve a Catálogos con su catálogo, card de 760 con una sola sección, asterisco solo en lo
+         que exige el botón Guardar, error del servidor en una Alerta arriba del pie y un solo primario. -->
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="28,24">
 
-        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="FINANZAS" Titulo="{Binding Titulo}" />
+            <v2:EncabezadoPagina x:Name="Encabezado"
+                                 Titulo="{Binding Titulo}"
+                                 BreadcrumbOrigen="Líneas POA"
+                                 BreadcrumbComando="{Binding CancelarCommand}"
+                                 BreadcrumbActual="{Binding Titulo}" />
 
-        <Border Classes="card" VerticalAlignment="Top">
-            <StackPanel Spacing="{DynamicResource Espacio3}" MaxWidth="560" HorizontalAlignment="Left">
+            <v2:EstadoVacio x:Name="EstadoSinPermiso" UseLayoutRounding="False" Titulo="Sin permiso"
+                            Mensaje="{Binding MensajeSinPermiso}" EsError="True" IsVisible="{Binding SinPermiso}" />
 
-                <c:CampoFormulario Etiqueta="Nombre">
-                    <TextBox Text="{Binding Nombre}" Watermark="Ej.: COMPOSTERAS" />
-                </c:CampoFormulario>
+            <Grid x:Name="ColumnaFormulario" UseLayoutRounding="False">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" MaxWidth="{StaticResource V2AnchoFormularioMax}" />
+                </Grid.ColumnDefinitions>
 
-                <c:CampoFormulario Etiqueta="Programa">
-                    <TextBox Text="{Binding Programa}" Watermark="Ej.: Ambiente" />
-                </c:CampoFormulario>
+                <v2:TarjetaContenido x:Name="Tarjeta" Padding="24" UseLayoutRounding="True" IsVisible="{Binding !SinPermiso}">
+                    <StackPanel>
+                        <TextBlock Classes="subtitulo-formulario" Text="Datos de la línea" Margin="0,0,0,12" />
+                        <Grid ColumnDefinitions="*,16,*" RowDefinitions="Auto,16,Auto">
+                            <v2:CampoFormulario Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3" Etiqueta="Nombre" Requerido="True">
+                                <TextBox x:Name="CajaNombre" Text="{Binding Nombre}" PlaceholderText="Ej.: COMPOSTERAS" />
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario Grid.Row="2" Grid.Column="0" Etiqueta="Programa" Requerido="True">
+                                <TextBox x:Name="CajaPrograma" Text="{Binding Programa}" PlaceholderText="Ej.: Ambiente" />
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario Grid.Row="2" Grid.Column="2" Etiqueta="Ejercicio" Requerido="True">
+                                <TextBox x:Name="CajaEjercicio" Text="{Binding EjercicioTexto}" PlaceholderText="Ej.: 2026" />
+                            </v2:CampoFormulario>
+                        </Grid>
 
-                <c:CampoFormulario Etiqueta="Ejercicio">
-                    <TextBox Text="{Binding EjercicioTexto}" Watermark="Ej.: 2026" MaxWidth="120" HorizontalAlignment="Left" />
-                </c:CampoFormulario>
+                        <Border Height="1" Margin="0,20" Background="{DynamicResource V2SeparadorGrillaBrush}" />
 
-                <!-- Grilla de asignaciones presupuestales por fuente (mixto B+C) -->
-                <TextBlock Text="Asignaciones presupuestales" Classes="seccion" />
+                        <!-- Grilla de asignaciones presupuestales por fuente (financiamiento mixto B+C). Una etiqueta por columna,
+                             una sola vez (una por fila sería ruido); mismas columnas que la fila de abajo para alinear. -->
+                        <TextBlock Classes="subtitulo-formulario" Text="Asignaciones presupuestales" Margin="0,0,0,12" />
+                        <Grid ColumnDefinitions="*,8,200,8,32" Margin="0,0,0,4">
+                            <TextBlock Grid.Column="0" Classes="etiqueta-campo" Text="Fuente de financiamiento" />
+                            <TextBlock Grid.Column="2" Classes="etiqueta-campo" Text="Monto" />
+                        </Grid>
 
-                <!-- Encabezado de columnas: una etiqueta por FILA sería ruido (la fila se repite
-                     por cada asignación), así que se etiqueta la columna una sola vez, igual que
-                     el Header de un DataGrid. Mismas ColumnDefinitions que el Grid del
-                     DataTemplate de abajo para que quede alineado. -->
-                <Grid ColumnDefinitions="*,140,Auto">
-                    <TextBlock Grid.Column="0" Text="Fuente de financiamiento" Classes="caption" />
-                    <TextBlock Grid.Column="1" Text="Monto" Classes="caption" Margin="8,0,0,0" />
-                </Grid>
+                        <ItemsControl x:Name="Asignaciones" ItemsSource="{Binding Asignaciones}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:AsignacionItemViewModel">
+                                    <Grid ColumnDefinitions="*,8,200,8,32" Margin="0,0,0,8">
+                                        <ComboBox Grid.Column="0"
+                                                  ItemsSource="{Binding $parent[UserControl].((vm:LineaPoaFormViewModel)DataContext).FuentesDisponibles}"
+                                                  SelectedItem="{Binding FuenteSeleccionada}"
+                                                  PlaceholderText="Fuente de financiamiento"
+                                                  HorizontalAlignment="Stretch">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="e:FuenteFinanciamiento">
+                                                    <TextBlock Text="{Binding Nombre}" />
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                        <TextBox Grid.Column="2" Text="{Binding MontoTexto}" PlaceholderText="Monto" TextAlignment="Right" />
+                                        <Button Grid.Column="4" Classes="ghost icono"
+                                                Command="{Binding $parent[UserControl].((vm:LineaPoaFormViewModel)DataContext).QuitarAsignacionCommand}"
+                                                CommandParameter="{Binding}">
+                                            <i:Icon Value="mdi-close" />
+                                        </Button>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
 
-                <ItemsControl ItemsSource="{Binding Asignaciones}">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="vm:AsignacionItemViewModel">
-                            <Grid ColumnDefinitions="*,140,Auto" Margin="0,0,0,8">
-                                <ComboBox Grid.Column="0"
-                                          ItemsSource="{Binding $parent[UserControl].((vm:LineaPoaFormViewModel)DataContext).FuentesDisponibles}"
-                                          SelectedItem="{Binding FuenteSeleccionada}"
-                                          PlaceholderText="Fuente de financiamiento"
-                                          HorizontalAlignment="Stretch">
-                                    <ComboBox.ItemTemplate>
-                                        <DataTemplate>
-                                            <TextBlock Text="{Binding Nombre}" />
-                                        </DataTemplate>
-                                    </ComboBox.ItemTemplate>
-                                </ComboBox>
-                                <TextBox Grid.Column="1"
-                                         Text="{Binding MontoTexto}"
-                                         Watermark="Monto"
-                                         Margin="8,0,0,0" />
-                                <Button Grid.Column="2"
-                                        Classes="secondary"
-                                        Margin="8,0,0,0"
-                                        Command="{Binding $parent[UserControl].((vm:LineaPoaFormViewModel)DataContext).QuitarAsignacionCommand}"
-                                        CommandParameter="{Binding}">
-                                    <i:Icon Value="mdi-delete" />
-                                </Button>
-                            </Grid>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                        <Button x:Name="BotonAgregarAsignacion" Classes="secundario" Content="Agregar asignación"
+                                Command="{Binding AgregarAsignacionCommand}" HorizontalAlignment="Left" Margin="0,4,0,0" />
 
-                <Button Classes="secondary"
-                        Content="Agregar asignación"
-                        Command="{Binding AgregarAsignacionCommand}"
-                        HorizontalAlignment="Left" />
+                        <v2:Alerta x:Name="AlertaError" Margin="0,16,0,0" Variante="Error"
+                                   Texto="{Binding MensajeError}"
+                                   IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
-                <TextBlock Text="{Binding MensajeError}"
-                           Foreground="{DynamicResource DangerBrush}"
-                           TextWrapping="Wrap"
-                           IsVisible="{Binding MensajeError, Converter={x:Static ObjectConverters.IsNotNull}}" />
-
-                <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
-                    <Button Classes="primary" Content="Guardar" Command="{Binding GuardarCommand}" />
-                    <Button Classes="secondary" Content="Cancelar" Command="{Binding CancelarCommand}" />
-                </StackPanel>
-
-            </StackPanel>
-        </Border>
-
-    </DockPanel>
-
-        <!-- bugfix "pantalla muda ante un 403": ver ViewModelBase.EjecutarCargaProtegidaAsync. -->
-        <c:EstadoVacio Titulo="Sin permiso"
-                       Mensaje="{Binding MensajeSinPermiso}"
-                       EsError="True"
-                       IsVisible="{Binding SinPermiso}" />
-    </Grid>
+                        <Border x:Name="PieFormulario" Margin="0,20,0,0" Padding="0,16,0,0" BorderThickness="0,1,0,0"
+                                BorderBrush="{DynamicResource V2SeparadorGrillaBrush}">
+                            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                                <Button x:Name="BotonCancelar" Classes="secundario" Content="Cancelar" Command="{Binding CancelarCommand}" />
+                                <Button x:Name="BotonGuardar" Classes="primario" Content="Guardar" Command="{Binding GuardarCommand}" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </v2:TarjetaContenido>
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
 
 </UserControl>

@@ -32,7 +32,8 @@ internal abstract class CatalogoServicioFake<T> where T : class
         return Task.FromResult<IReadOnlyList<T>>(Lista.ToList());
     }
 
-    protected Task<IReadOnlyList<T>> Activas() => Task.FromResult<IReadOnlyList<T>>(Lista.ToList());
+    protected Task<IReadOnlyList<T>> Activas() =>
+        Falla is not null ? Task.FromException<IReadOnlyList<T>>(Falla) : Task.FromResult<IReadOnlyList<T>>(Lista.ToList());
 
     protected Task<int> Alta(T x) { Altas.Add(x); return Task.FromResult(1); }
 

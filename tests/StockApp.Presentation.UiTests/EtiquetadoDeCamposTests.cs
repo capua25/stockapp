@@ -29,10 +29,10 @@ public class EtiquetadoDeCamposTests
     private static bool TieneCampoFormularioCon(string axaml, string etiqueta) =>
         Regex.IsMatch(axaml, $@"<(?:c|v2):CampoFormulario\b[^>]*Etiqueta=""{Regex.Escape(etiqueta)}""");
 
-    private static bool TieneTextBlockCaptionCon(string axaml, string texto) =>
+    private static bool TieneTextBlockCaptionCon(string axaml, string texto, string clase = "caption") =>
         Regex.IsMatch(axaml,
-            $@"<TextBlock\b[^>]*(?:Text=""{Regex.Escape(texto)}""[^>]*Classes=""caption""" +
-            $@"|Classes=""caption""[^>]*Text=""{Regex.Escape(texto)}"")[^>]*/?>",
+            $@"<TextBlock\b[^>]*(?:Text=""{Regex.Escape(texto)}""[^>]*Classes=""{clase}""" +
+            $@"|Classes=""{clase}""[^>]*Text=""{Regex.Escape(texto)}"")[^>]*/?>",
             RegexOptions.Singleline);
 
     /// <summary>
@@ -59,10 +59,11 @@ public class EtiquetadoDeCamposTests
     public void LineaPoaFormView_FilaDeAsignaciones_TieneEncabezadoDeColumnas()
     {
         var axaml = LeerAxaml("StockApp.Presentation/Views/Finanzas/LineaPoaFormView.axaml");
-        Assert.True(TieneTextBlockCaptionCon(axaml, "Fuente de financiamiento"),
+        // v2: el encabezado de columna es el TextBlock "etiqueta-campo" (el "caption" es del tema viejo).
+        Assert.True(TieneTextBlockCaptionCon(axaml, "Fuente de financiamiento", "etiqueta-campo"),
             "Falta el encabezado de columna \"Fuente de financiamiento\" sobre la grilla de "
             + "asignaciones de LineaPoaFormView.");
-        Assert.True(TieneTextBlockCaptionCon(axaml, "Monto"),
+        Assert.True(TieneTextBlockCaptionCon(axaml, "Monto", "etiqueta-campo"),
             "Falta el encabezado de columna \"Monto\" sobre la grilla de asignaciones de "
             + "LineaPoaFormView.");
     }

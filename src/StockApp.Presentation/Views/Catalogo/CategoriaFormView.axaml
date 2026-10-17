@@ -1,38 +1,53 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Catalogo"
-             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="250"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
              x:Class="StockApp.Presentation.Views.Catalogo.CategoriaFormView"
-             x:DataType="vm:CategoriaFormViewModel">
+             x:DataType="vm:CategoriaFormViewModel"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
 
-    <DockPanel Margin="{DynamicResource MargenVista}">
+    <!-- UI v2 (formulario §5.2). Espejo: docs/ui-v2/mockups/administracion/. Los diez formularios de catálogo comparten esta
+         estructura: breadcrumb que vuelve a Catálogos con su catálogo, card de 760 con una sola sección, asterisco solo en lo
+         que exige el botón Guardar, error del servidor en una Alerta arriba del pie y un solo primario. -->
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="28,24">
 
-        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="CATÁLOGO" Titulo="{Binding Titulo}" />
+            <v2:EncabezadoPagina x:Name="Encabezado"
+                                 Titulo="{Binding Titulo}"
+                                 BreadcrumbOrigen="Categorías"
+                                 BreadcrumbComando="{Binding CancelarCommand}"
+                                 BreadcrumbActual="{Binding Titulo}" />
 
-        <Border Classes="card" VerticalAlignment="Top">
-            <StackPanel Spacing="{DynamicResource Espacio3}" MaxWidth="420" HorizontalAlignment="Left">
+            <Grid x:Name="ColumnaFormulario" UseLayoutRounding="False">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" MaxWidth="{StaticResource V2AnchoFormularioMax}" />
+                </Grid.ColumnDefinitions>
 
-                <c:CampoFormulario Etiqueta="Nombre" Requerido="True">
-                    <TextBox Text="{Binding Nombre}"
-                             PlaceholderText="Nombre de la categoría" />
-                </c:CampoFormulario>
+                <v2:TarjetaContenido x:Name="Tarjeta" Padding="24" UseLayoutRounding="True">
+                    <StackPanel>
+                        <v2:CampoFormulario Etiqueta="Nombre" Requerido="True">
+                                <TextBox x:Name="CajaNombre" Text="{Binding Nombre}" PlaceholderText="Nombre de la categoría" />
+                            </v2:CampoFormulario>
 
-                <TextBlock Text="{Binding MensajeError}"
-                           Foreground="{DynamicResource DangerBrush}"
-                           IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                           TextWrapping="Wrap" />
+                        <v2:Alerta x:Name="AlertaError" Margin="0,16,0,0" Variante="Error"
+                                   Texto="{Binding MensajeError}"
+                                   IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
-                <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
-                    <Button Classes="primary" Content="Guardar" Command="{Binding GuardarCommand}" />
-                    <Button Classes="secondary" Content="Cancelar" Command="{Binding CancelarCommand}" />
-                </StackPanel>
-
-            </StackPanel>
-        </Border>
-
-    </DockPanel>
+                        <Border x:Name="PieFormulario" Margin="0,20,0,0" Padding="0,16,0,0" BorderThickness="0,1,0,0"
+                                BorderBrush="{DynamicResource V2SeparadorGrillaBrush}">
+                            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                                <Button x:Name="BotonCancelar" Classes="secundario" Content="Cancelar" Command="{Binding CancelarCommand}" />
+                                <Button x:Name="BotonGuardar" Classes="primario" Content="Guardar" Command="{Binding GuardarCommand}" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </v2:TarjetaContenido>
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
 
 </UserControl>

@@ -45,17 +45,7 @@ namespace StockApp.Presentation.UiTests;
 public class GuardianDePatronTests
 {
     [AvaloniaTheory]
-    [InlineData(typeof(CategoriaFormView), null, "CATÁLOGO")]
-    [InlineData(typeof(ProveedorFormView), null, null)]
-    [InlineData(typeof(UnidadMedidaFormView), null, "CATÁLOGO")]
-    [InlineData(typeof(ZonaFormView), null, "TAREAS")]
-    [InlineData(typeof(DimensionTematicaFormView), null, "TAREAS")]
-    [InlineData(typeof(OrganismoResponsableFormView), null, "TAREAS")]
-    [InlineData(typeof(OrigenFinanciamientoFormView), null, "TAREAS")]
     [InlineData(typeof(ImportacionView), "Importar planillas", "FINANZAS")]
-    [InlineData(typeof(FuenteFinanciamientoFormView), null, "FINANZAS")]
-    [InlineData(typeof(RubroGastoFormView), null, "FINANZAS")]
-    [InlineData(typeof(LineaPoaFormView), null, "FINANZAS")]
     [InlineData(typeof(DocumentoListView), "Documentos administrativos", "DOCUMENTOS")]
     [InlineData(typeof(DocumentoFormView), "Nuevo documento", "DOCUMENTOS")]
     [InlineData(typeof(TareaListView), "Tareas", "TAREAS")]
@@ -78,17 +68,7 @@ public class GuardianDePatronTests
 
     public static readonly TheoryData<Type> VistasDeLaTanda = new()
     {
-        typeof(CategoriaFormView),
-        typeof(ProveedorFormView),
-        typeof(UnidadMedidaFormView),
-        typeof(ZonaFormView),
-        typeof(DimensionTematicaFormView),
-        typeof(OrganismoResponsableFormView),
-        typeof(OrigenFinanciamientoFormView),
         typeof(ImportacionView),
-        typeof(FuenteFinanciamientoFormView),
-        typeof(RubroGastoFormView),
-        typeof(LineaPoaFormView),
         typeof(DocumentoListView),
         typeof(DocumentoFormView),
         typeof(TareaListView),
@@ -191,6 +171,16 @@ public class GuardianDePatronTests
         typeof(AuditoriaLogView),
         typeof(ReporteTareasView),
         typeof(CatalogosView),
+        typeof(CategoriaFormView),
+        typeof(ProveedorFormView),
+        typeof(UnidadMedidaFormView),
+        typeof(ZonaFormView),
+        typeof(DimensionTematicaFormView),
+        typeof(OrganismoResponsableFormView),
+        typeof(OrigenFinanciamientoFormView),
+        typeof(FuenteFinanciamientoFormView),
+        typeof(RubroGastoFormView),
+        typeof(LineaPoaFormView),
         typeof(CatalogoListadoView),
     };
 
