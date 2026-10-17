@@ -4,7 +4,6 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -116,7 +115,6 @@ public partial class LibroCajaViewModel : ViewModelBase
 
     /// <summary>Tarea del último debounce, para que los tests la esperen de forma determinista.</summary>
     internal Task _tareaDebounce = Task.CompletedTask;
-
 
     partial void OnAnioChanged(int value) => ProgramarRecarga();
 
