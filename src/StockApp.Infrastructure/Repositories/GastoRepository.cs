@@ -43,6 +43,10 @@ public class GastoRepository : IGastoRepository
     public Task<Gasto?> ObtenerPorIdAsync(int id)
         => ConFlagDeMovimientosAsync(ConIncludes().Where(g => g.Id == id));
 
+    /// <summary>Un pago por id, activo o anulado, sin includes. Null si no existe.</summary>
+    public Task<PagoGasto?> ObtenerPagoPorIdAsync(int pagoId)
+        => _ctx.PagosGasto.FirstOrDefaultAsync(p => p.Id == pagoId);
+
     public Task<Gasto?> ObtenerPorProveedorYFacturaAsync(int proveedorId, string numeroFactura, string? numeroOrden)
         => ConFlagDeMovimientosAsync(ConIncludes().Where(g =>
             g.Activo && g.ProveedorId == proveedorId && g.NumeroFactura == numeroFactura

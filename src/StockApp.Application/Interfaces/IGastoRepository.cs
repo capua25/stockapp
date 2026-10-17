@@ -8,6 +8,9 @@ public interface IGastoRepository
     /// <summary>Incluye Proveedor, Fuente, Rubro, LineaPoa y TODOS los pagos (activos y anulados).</summary>
     Task<Gasto?> ObtenerPorIdAsync(int id);
 
+    /// <summary>Un pago por id, activo o anulado, sin includes. Null si no existe.</summary>
+    Task<PagoGasto?> ObtenerPagoPorIdAsync(int pagoId);
+
     /// <summary>
     /// Busca un gasto ACTIVO por proveedor + número de factura + número de orden. Espeja
     /// EXACTAMENTE la clave del índice único parcial de la base (AppDbContext.cs, migración

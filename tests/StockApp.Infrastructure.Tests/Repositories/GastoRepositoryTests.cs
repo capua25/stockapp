@@ -238,6 +238,24 @@ public class GastoRepositoryTests : PostgresRepositoryTestBase
         Assert.Equal(0m, releido!.TotalPagado);
     }
 
+    [Fact]
+    public async Task ObtenerPagoPorIdAsync_DevuelveElPagoConSuEstado_ONullSiNoExiste()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var id = await _repo.AgregarAsync(NuevoGasto(proveedorId, fuenteId, rubroId, DateTime.UtcNow));
+        var pago = new PagoGasto { GastoId = id, Fecha = DateTime.UtcNow, Monto = 300m, Activo = false };
+        Context.Add(pago);
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        var leido = await _repo.ObtenerPagoPorIdAsync(pago.Id);
+
+        Assert.NotNull(leido);
+        Assert.Equal(id, leido!.GastoId);
+        Assert.False(leido.Activo);
+        Assert.Null(await _repo.ObtenerPagoPorIdAsync(pago.Id + 1000));
+    }
+
     // ── I2: índice único parcial proveedor+factura+orden (gastos activos) ────
     // F5c (índice ampliado): la planilla real 2026 tiene proveedores que repiten la misma
     // factura en dos renglones con distinto número de orden (una factura imputada en varias

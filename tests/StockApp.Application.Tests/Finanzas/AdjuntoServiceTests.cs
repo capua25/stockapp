@@ -26,6 +26,8 @@ public class AdjuntoServiceTests
         _session.Setup(s => s.UsuarioActual).Returns(new StockApp.Application.Auth.UsuarioSesion(1, "admin", RolUsuario.Admin, null));
         _gastos.Setup(g => g.ObtenerPorIdAsync(It.IsAny<int>()))
             .ReturnsAsync(new Gasto { Id = 1, Activo = true });
+        _gastos.Setup(g => g.ObtenerPagoPorIdAsync(It.IsAny<int>()))
+            .ReturnsAsync((int id) => new PagoGasto { Id = id, GastoId = 1, Activo = true });
 
         _service = new AdjuntoService(_adjuntos.Object, _gastos.Object, _session.Object, _auth.Object, _audit.Object);
     }
@@ -136,6 +138,61 @@ public class AdjuntoServiceTests
     }
 
     [Fact]
+    public async Task AgregarAPagoAsync_PagoInexistente_LanzaEntidadNoEncontrada()
+    {
+        _gastos.Setup(g => g.ObtenerPagoPorIdAsync(5)).ReturnsAsync((PagoGasto?)null);
+
+        var ex = await Assert.ThrowsAsync<EntidadNoEncontradaException>(
+            () => _service.AgregarAPagoAsync(5, "recibo.pdf", BytesPdf));
+
+        Assert.Equal("No existe el pago 5.", ex.Message);
+        _adjuntos.Verify(r => r.AgregarAsync(It.IsAny<Adjunto>(), It.IsAny<byte[]>()), Times.Never);
+        _audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), It.IsAny<AccionAuditada>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task AgregarAPagoAsync_PagoAnulado_LanzaReglaDeNegocio()
+    {
+        _gastos.Setup(g => g.ObtenerPagoPorIdAsync(5)).ReturnsAsync(new PagoGasto { Id = 5, GastoId = 1, Activo = false });
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => _service.AgregarAPagoAsync(5, "recibo.pdf", BytesPdf));
+
+        Assert.Equal("No se puede adjuntar a un pago anulado.", ex.Message);
+        _adjuntos.Verify(r => r.AgregarAsync(It.IsAny<Adjunto>(), It.IsAny<byte[]>()), Times.Never);
+        _audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), It.IsAny<AccionAuditada>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>()),
+            Times.Never);
+    }
+
+    /// <summary>La regla va antes de validar el archivo: a un pago anulado no se le adjunta nada, sea cual sea el archivo.</summary>
+    [Fact]
+    public async Task AgregarAPagoAsync_PagoAnuladoYArchivoInvalido_RechazaPorAnulado()
+    {
+        _gastos.Setup(g => g.ObtenerPagoPorIdAsync(5)).ReturnsAsync(new PagoGasto { Id = 5, GastoId = 1, Activo = false });
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => _service.AgregarAPagoAsync(5, "archivo.exe", new byte[] { 0x00, 0x01, 0x02 }));
+
+        Assert.Equal("No se puede adjuntar a un pago anulado.", ex.Message);
+    }
+
+    /// <summary>El permiso va primero: sin él ni se consulta el pago (no se filtra si existe).</summary>
+    [Fact]
+    public async Task AgregarAPagoAsync_SinPermiso_NoConsultaElPago()
+    {
+        _auth.Setup(a => a.Verificar(_session.Object, Permisos.RegistrarPagos))
+            .Throws<UnauthorizedAccessException>();
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => _service.AgregarAPagoAsync(5, "recibo.pdf", BytesPdf));
+
+        _gastos.Verify(g => g.ObtenerPagoPorIdAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
     public async Task ListarPorGastoAsync_VerificaPermisoVerFinanzas()
     {
         _adjuntos.Setup(r => r.ListarPorGastoAsync(1)).ReturnsAsync(new List<Adjunto>());
@@ -219,5 +276,52 @@ public class AdjuntoServiceTests
         _audit.Verify(a => a.RegistrarAsync(
             It.IsAny<int>(), It.IsAny<AccionAuditada>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>()),
             Times.Never);
+    }
+
+    [Fact]
+    public async Task QuitarAsync_AdjuntoDeUnPagoAnulado_LanzaReglaDeNegocioYNoDaDeBaja()
+    {
+        var adjunto = new Adjunto { Id = 8, PagoGastoId = 5, Activo = true, NombreArchivo = "r.pdf" };
+        _adjuntos.Setup(r => r.ObtenerPorIdAsync(8)).ReturnsAsync(adjunto);
+        _gastos.Setup(g => g.ObtenerPagoPorIdAsync(5)).ReturnsAsync(new PagoGasto { Id = 5, GastoId = 1, Activo = false });
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(() => _service.QuitarAsync(8));
+
+        Assert.Equal("No se puede quitar un adjunto de un pago anulado.", ex.Message);
+        Assert.True(adjunto.Activo);
+        _adjuntos.Verify(r => r.ActualizarAsync(It.IsAny<Adjunto>()), Times.Never);
+        _audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), It.IsAny<AccionAuditada>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task QuitarAsync_AdjuntoDeUnGastoAnulado_LanzaReglaDeNegocioYNoDaDeBaja()
+    {
+        var adjunto = new Adjunto { Id = 7, GastoId = 1, Activo = true, NombreArchivo = "a.pdf" };
+        _adjuntos.Setup(r => r.ObtenerPorIdAsync(7)).ReturnsAsync(adjunto);
+        _gastos.Setup(g => g.ObtenerPorIdAsync(1)).ReturnsAsync(new Gasto { Id = 1, Activo = false });
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(() => _service.QuitarAsync(7));
+
+        Assert.Equal("No se puede quitar un adjunto de un gasto anulado.", ex.Message);
+        Assert.True(adjunto.Activo);
+        _adjuntos.Verify(r => r.ActualizarAsync(It.IsAny<Adjunto>()), Times.Never);
+        _audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), It.IsAny<AccionAuditada>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>()),
+            Times.Never);
+    }
+
+    /// <summary>Sin permiso se da el 403 aunque el dueño esté anulado: el permiso va antes que el estado.</summary>
+    [Fact]
+    public async Task QuitarAsync_DeUnPagoAnulado_SinPermiso_DaElPermisoAntesQueElEstado()
+    {
+        var adjunto = new Adjunto { Id = 9, PagoGastoId = 5, Activo = true, NombreArchivo = "r2.pdf" };
+        _adjuntos.Setup(r => r.ObtenerPorIdAsync(9)).ReturnsAsync(adjunto);
+        _gastos.Setup(g => g.ObtenerPagoPorIdAsync(5)).ReturnsAsync(new PagoGasto { Id = 5, GastoId = 1, Activo = false });
+        _auth.Setup(a => a.Verificar(_session.Object, Permisos.RegistrarPagos))
+            .Throws<UnauthorizedAccessException>();
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => _service.QuitarAsync(9));
     }
 }

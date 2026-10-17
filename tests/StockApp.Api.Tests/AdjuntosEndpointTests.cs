@@ -64,11 +64,11 @@ public class AdjuntosEndpointTests : ApiTestBase
 
     /// <summary>Siembra un gasto + su PagoGasto real: AgregarAPagoAsync inserta un Adjunto
     /// con FK PagoGastoId -> PagosGasto, así que un id de Gasto no alcanza para probarlo.</summary>
-    private async Task<int> SembrarPagoAsync()
+    private async Task<int> SembrarPagoAsync(bool activo = true)
     {
         var gastoId = await SembrarGastoAsync();
         using var ctx = Factory.CrearContexto();
-        var pago = new PagoGasto { GastoId = gastoId, Fecha = DateTime.UtcNow, Monto = 100m, Activo = true };
+        var pago = new PagoGasto { GastoId = gastoId, Fecha = DateTime.UtcNow, Monto = 100m, Activo = activo };
         ctx.Add(pago);
         await ctx.SaveChangesAsync();
         return pago.Id;
@@ -167,6 +167,34 @@ public class AdjuntosEndpointTests : ApiTestBase
     }
 
     [Fact]
+    public async Task PostAdjuntoPago_PagoInexistente_Devuelve404()
+    {
+        await SembrarGastoAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var response = await client.PostAsync(
+            "/finanzas/pagos/999999/adjuntos", ArmarMultipart(BytesPdf, "recibo.pdf"));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("No existe el pago 999999.", doc.RootElement.GetProperty("detail").GetString());
+    }
+
+    [Fact]
+    public async Task PostAdjuntoPago_PagoAnulado_Devuelve409()
+    {
+        var pagoId = await SembrarPagoAsync(activo: false);
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var response = await client.PostAsync(
+            $"/finanzas/pagos/{pagoId}/adjuntos", ArmarMultipart(BytesPdf, "recibo.pdf"));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("No se puede adjuntar a un pago anulado.", doc.RootElement.GetProperty("detail").GetString());
+    }
+
+    [Fact]
     public async Task GetAdjuntosGasto_ListaLosActivos()
     {
         var gastoId = await SembrarGastoAsync();
@@ -248,5 +276,51 @@ public class AdjuntosEndpointTests : ApiTestBase
         var response = await Factory.CreateClient().DeleteAsync($"/finanzas/adjuntos/{dto!.Id}");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteAdjunto_DeUnGastoAnulado_Devuelve409YSigueListado()
+    {
+        var gastoId = await SembrarGastoAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+        var creado = await client.PostAsync($"/finanzas/gastos/{gastoId}/adjuntos", ArmarMultipart(BytesPdf, "factura.pdf"));
+        var dto = await creado.Content.ReadFromJsonAsync<AdjuntoDto>();
+        using (var ctx = Factory.CrearContexto())
+        {
+            var gasto = await ctx.Gastos.FindAsync(gastoId);
+            gasto!.Activo = false;
+            await ctx.SaveChangesAsync();
+        }
+
+        var response = await client.DeleteAsync($"/finanzas/adjuntos/{dto!.Id}");
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("No se puede quitar un adjunto de un gasto anulado.", doc.RootElement.GetProperty("detail").GetString());
+        using var lectura = Factory.CrearContexto();
+        Assert.True((await lectura.Adjuntos.FindAsync(dto.Id))!.Activo);
+    }
+
+    [Fact]
+    public async Task DeleteAdjunto_DeUnPagoAnulado_Devuelve409()
+    {
+        var pagoId = await SembrarPagoAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+        var creado = await client.PostAsync($"/finanzas/pagos/{pagoId}/adjuntos", ArmarMultipart(BytesPdf, "recibo.pdf"));
+        var dto = await creado.Content.ReadFromJsonAsync<AdjuntoDto>();
+        using (var ctx = Factory.CrearContexto())
+        {
+            var pago = await ctx.PagosGasto.FindAsync(pagoId);
+            pago!.Activo = false;
+            await ctx.SaveChangesAsync();
+        }
+
+        var response = await client.DeleteAsync($"/finanzas/adjuntos/{dto!.Id}");
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("No se puede quitar un adjunto de un pago anulado.", doc.RootElement.GetProperty("detail").GetString());
+        using var lectura = Factory.CrearContexto();
+        Assert.True((await lectura.Adjuntos.FindAsync(dto.Id))!.Activo);
     }
 }

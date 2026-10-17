@@ -62,6 +62,12 @@ public class AdjuntoService : IAdjuntoService
     {
         _auth.Verificar(_session, Permisos.RegistrarPagos);
 
+        var pago = await _gastos.ObtenerPagoPorIdAsync(pagoGastoId)
+            ?? throw new EntidadNoEncontradaException($"No existe el pago {pagoGastoId}.");
+
+        if (!pago.Activo)
+            throw new ReglaDeNegocioException("No se puede adjuntar a un pago anulado.");
+
         AdjuntoValidador.Validar(contenido, nombreArchivo);
 
         var adjunto = new Adjunto
@@ -120,6 +126,21 @@ public class AdjuntoService : IAdjuntoService
 
         // El permiso depende de a qué pertenece el adjunto (spec F3, decisión 2).
         _auth.Verificar(_session, adjunto.EsDePago ? Permisos.RegistrarPagos : Permisos.RegistrarGastos);
+
+        if (adjunto.EsDePago)
+        {
+            var pago = await _gastos.ObtenerPagoPorIdAsync(adjunto.PagoGastoId!.Value)
+                ?? throw new EntidadNoEncontradaException($"No existe el adjunto {adjuntoId}.");
+            if (!pago.Activo)
+                throw new ReglaDeNegocioException("No se puede quitar un adjunto de un pago anulado.");
+        }
+        else
+        {
+            var gasto = await _gastos.ObtenerPorIdAsync(adjunto.GastoId!.Value)
+                ?? throw new EntidadNoEncontradaException($"No existe el adjunto {adjuntoId}.");
+            if (!gasto.Activo)
+                throw new ReglaDeNegocioException("No se puede quitar un adjunto de un gasto anulado.");
+        }
 
         adjunto.Activo = false;
         await _repo.ActualizarAsync(adjunto);
