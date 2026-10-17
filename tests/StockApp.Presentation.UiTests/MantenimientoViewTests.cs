@@ -68,7 +68,7 @@ public class MantenimientoViewTests
         <Window xmlns="https://github.com/avaloniaui"
                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                 xmlns:admin="clr-namespace:StockApp.Presentation.Views.Administracion;assembly=GestionMunicipal"
-                Width="700" Height="500">
+                Width="1280" Height="760">
             <admin:MantenimientoView />
         </Window>
         """;
@@ -145,48 +145,6 @@ public class MantenimientoViewTests
     }
 
     /// <summary>
-    /// Reproduce el bug real reportado en el review: sin ScrollViewer, MantenimientoView era un
-    /// DockPanel -> ItemsControl sin nada que scrollee; a los pocos días de retención (~13-16
-    /// corridas exitosas + fallidas) la lista supera el alto de la ventana y el botón "Descargar"
-    /// de las filas más viejas queda fuera del área clickeable. Se monta con 25 filas en la misma
-    /// ventana chica (700x500) que ya usan los demás tests de esta clase para que el contenido
-    /// exceda el viewport de verdad.
-    /// </summary>
-    [AvaloniaFact]
-    public void Montar_ConMuchasCorridas_ElScrollViewerHaceAlcanzableLaUltimaFila()
-    {
-        var corridas = Enumerable.Range(1, 25)
-            .Select(i => new CorridaBackupDto(i, DateTime.UtcNow.AddHours(-i), "Exitosa", $"backup_{i}.dump", 1024, null))
-            .ToList();
-
-        var (window, vm) = Montar(corridas);
-
-        Assert.Equal(25, vm.Corridas.Count);
-
-        var scrollViewer = window.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
-        Assert.NotNull(scrollViewer);
-
-        // 25 cards de ~60px superan largamente el alto de la ventana (500px): el contenido
-        // medido (Extent) tiene que ser mayor que lo visible (Viewport). Sin el ScrollViewer
-        // esta aserción ya falla arriba (NotNull) porque no hay ningún ScrollViewer en el árbol.
-        Assert.True(scrollViewer!.Extent.Height > scrollViewer.Viewport.Height);
-
-        // Escrolleamos hasta el final y confirmamos que el botón "Descargar" de la ÚLTIMA fila
-        // (la corrida más vieja, la que el bug real dejaba inalcanzable) cae dentro del área
-        // visible de la ventana una vez scrolleado — no solo que "existe" en el árbol visual
-        // (GetVisualDescendants encuentra controles fuera de vista igual).
-        scrollViewer.Offset = new Vector(0, scrollViewer.Extent.Height - scrollViewer.Viewport.Height);
-        Dispatcher.UIThread.RunJobs();
-
-        var ultimoBoton = window.GetVisualDescendants().OfType<Button>()
-            .Last(b => b.Content as string == "Descargar");
-        var posicion = ultimoBoton.TranslatePoint(new Point(0, 0), window);
-
-        Assert.NotNull(posicion);
-        Assert.InRange(posicion!.Value.Y, 0, window.Bounds.Height);
-    }
-
-    /// <summary>
     /// Estado vacío (review final E1): sin backups cargados, la pantalla mostraba nada bajo el
     /// subtítulo, indistinguible de "falló algo y no me enteré" — es lo primero que ve el
     /// municipio el día 1 de una instalación nueva.
@@ -212,9 +170,9 @@ public class MantenimientoViewTests
         var (window, vm) = Montar(corridas);
 
         Assert.False(vm.MostrarListaVacia);
-        var texto = window.GetVisualDescendants().OfType<TextBlock>()
-            .First(t => t.Text == "Todavía no hay backups registrados.");
-        Assert.False(texto.IsVisible);
+        // El estado vacío v2 oculto ni siquiera está en el árbol visual: ningún texto visible lo repite.
+        Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(),
+            t => t.Text == "Todavía no hay backups registrados." && ArbolVisual.EsVisibleEnArbol(t));
     }
 
     [AvaloniaFact]
@@ -361,64 +319,6 @@ public class MantenimientoViewTests
     // el alto -- con "Alertas" renderizándose al costado DERECHO en vez de abajo. Ningún test lo
     // detectaba: todos buscaban controles por contenido, y GetVisualDescendants los encuentra
     // estén donde estén.
-
-    /// <summary>
-    /// Guardián de la regresión. Verifica DOS cosas, porque la primera sola no alcanza:
-    ///
-    /// 1. La Y del botón "Guardar" (Alertas) es mayor que la del botón "Descargar logs"
-    ///    (Diagnóstico) — la aserción pedida en el review.
-    /// 2. La tarjeta de Alertas arranca DEBAJO del borde inferior de la de Diagnóstico y con el
-    ///    MISMO borde izquierdo.
-    ///
-    /// La (2) es la que hace de guardián de verdad. Se comprobó por mutación que la (1) sola NO
-    /// detecta el bug: cuando la tarjeta de Diagnóstico se dockea a la izquierda queda estirada a
-    /// todo el alto sobrante y su botón, centrado verticalmente, cae más o menos a la mitad de la
-    /// ventana — o sea con una Y que casualmente sigue siendo MENOR que la del botón Guardar del
-    /// panel de la derecha. "Alertas al costado" y "Alertas abajo" son indistinguibles mirando
-    /// solo la Y de dos botones; hay que mirar la geometría de las tarjetas.
-    /// </summary>
-    [AvaloniaFact]
-    public void Montar_LaSeccionDeAlertasQuedaDebajoDeLaDeDiagnostico()
-    {
-        var (window, _) = Montar(
-            [], new ResumenLogsDto(2, new DateTime(2026, 8, 8), new DateTime(2026, 8, 9), 4096));
-
-        Dispatcher.UIThread.RunJobs();
-
-        var botonLogs = window.GetVisualDescendants().OfType<Button>()
-            .First(b => b.Content as string == "Descargar logs");
-        var botonGuardar = window.GetVisualDescendants().OfType<Button>()
-            .First(b => b.Content as string == "Guardar");
-
-        var yLogs = botonLogs.TranslatePoint(new Point(0, 0), window);
-        var yGuardar = botonGuardar.TranslatePoint(new Point(0, 0), window);
-
-        Assert.NotNull(yLogs);
-        Assert.NotNull(yGuardar);
-        Assert.True(
-            yGuardar!.Value.Y > yLogs!.Value.Y,
-            $"El botón 'Guardar' (Alertas) debe quedar más abajo que 'Descargar logs' "
-            + $"(Diagnóstico). Y de 'Descargar logs' = {yLogs.Value.Y}, Y de 'Guardar' = {yGuardar.Value.Y}.");
-
-        var tarjetaDiagnostico = botonLogs.GetVisualAncestors().OfType<Border>()
-            .First(b => b.Classes.Contains("card"));
-        var tarjetaAlertas = botonGuardar.GetVisualAncestors().OfType<Border>()
-            .First(b => b.Classes.Contains("card"));
-
-        var origenDiagnostico = tarjetaDiagnostico.TranslatePoint(new Point(0, 0), window)!.Value;
-        var origenAlertas = tarjetaAlertas.TranslatePoint(new Point(0, 0), window)!.Value;
-
-        Assert.True(
-            origenAlertas.Y >= origenDiagnostico.Y + tarjetaDiagnostico.Bounds.Height,
-            $"La tarjeta de Alertas debe empezar DEBAJO de la de Diagnóstico, no al costado. "
-            + $"Diagnóstico: y={origenDiagnostico.Y} alto={tarjetaDiagnostico.Bounds.Height}; "
-            + $"Alertas: y={origenAlertas.Y}.");
-
-        Assert.True(
-            Math.Abs(origenAlertas.X - origenDiagnostico.X) < 0.5,
-            $"Las dos tarjetas deben compartir el borde izquierdo (una arriba de la otra). "
-            + $"X de Diagnóstico = {origenDiagnostico.X}, X de Alertas = {origenAlertas.X}.");
-    }
 
     // ── Carga fallida de la sección Alertas (fix IMPORTANTE I1) ─────────────────
 

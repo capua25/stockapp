@@ -2,222 +2,166 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Administracion"
              xmlns:conv="using:StockApp.Presentation.Converters"
-             xmlns:i="https://github.com/projektanker/icons.avalonia"
-             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
+             xmlns:b="using:StockApp.Presentation.Behaviors"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="700" d:DesignHeight="500"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
              x:Class="StockApp.Presentation.Views.Administracion.MantenimientoView"
-             x:DataType="vm:MantenimientoViewModel">
+             x:DataType="vm:MantenimientoViewModel"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
 
-    <ScrollViewer>
-    <!-- LastChildFill="False" explícito (fix de la regresión de layout del review final): con el
-         default (true) el ÚLTIMO hijo ignora su Dock y llena el espacio sobrante. Eso convertía a
-         "ser el último" en una propiedad invisible de la que dependía el layout: la sección
-         Diagnóstico no tenía DockPanel.Dock y funcionaba solo porque era la última; al agregar la
-         sección Alertas debajo pasó a usar su Dock real (Left por default) y se dockeó a la
-         izquierda ocupando todo el alto, con Alertas renderizándose al costado derecho.
-         Con False, TODOS los hijos honran su Dock y agregar una sección al final deja de ser una
-         trampa. De paso, la última tarjeta ya no se estira verticalmente para rellenar la ventana. -->
-    <DockPanel Margin="{DynamicResource MargenVista}" LastChildFill="False">
+    <!-- Mantenimiento (UI v2). Espejo: docs/ui-v2/mockups/administracion/mantenimiento*.html. "Hacer backup ahora" es el único
+         primario y vive en el encabezado. Los backups van en una grilla con una columna de acción (Descargar, o Cancelar mientras
+         esa fila descarga), que ocupa el alto que dejan las dos cards de abajo (Diagnóstico y Alertas, iguales). La vista también
+         la hospeda AccesoLimitadoView cuando la licencia venció, ya con la raíz ui2. -->
+    <DockPanel Margin="28,24">
 
-        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="ADMINISTRACIÓN" Titulo="Mantenimiento" />
-        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
-            <TextBlock Grid.Column="0"
-                       Text="Backups"
-                       Classes="seccion"
-                       VerticalAlignment="Center" />
+        <v2:EncabezadoPagina x:Name="Encabezado" DockPanel.Dock="Top" Titulo="Mantenimiento"
+                             Subtitulo="Backups, diagnóstico y alertas del servidor.">
+            <Panel>
+                <Button x:Name="BotonBackup" Classes="primario" Content="Hacer backup ahora" Command="{Binding IniciarBackupCommand}"
+                        IsVisible="{Binding !IniciandoBackup}" />
+                <Button x:Name="BotonIniciando" Classes="primario" Content="Iniciando…" IsEnabled="False"
+                        IsVisible="{Binding IniciandoBackup}" />
+            </Panel>
+        </v2:EncabezadoPagina>
 
-            <!-- Hacer backup ahora / Iniciando…: mismo patrón de swap que Descargar logs /
-                 Descargando… más abajo en esta vista. IsEnabled no depende de nada más (a
-                 diferencia de "Descargar logs" con HayLogs): disparar un backup manual
-                 siempre está disponible, salvo mientras el propio click está en curso. -->
-            <Button Grid.Column="1"
-                    Classes="secondary"
-                    Content="Hacer backup ahora"
-                    IsVisible="{Binding !IniciandoBackup}"
-                    Command="{Binding IniciarBackupCommand}" />
-            <Button Grid.Column="1"
-                    Classes="secondary"
-                    Content="Iniciando…"
-                    IsVisible="{Binding IniciandoBackup}"
-                    IsEnabled="False" />
-        </Grid>
+        <v2:GrillaUniformeV2 x:Name="FilaInferior" DockPanel.Dock="Bottom" Columnas="2" Espaciado="16" Margin="0,16,0,0">
+            <v2:TarjetaContenido x:Name="CardDiagnostico">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Classes="titulo-seccion" Text="Diagnóstico" Margin="0,0,0,4" />
+                    <Panel DockPanel.Dock="Bottom" HorizontalAlignment="Left" Margin="0,12,0,0">
+                        <Button x:Name="BotonDescargarLogs" Classes="secundario" Content="Descargar logs"
+                                IsVisible="{Binding !DescargandoLogs}" IsEnabled="{Binding HayLogs}" Command="{Binding DescargarLogsCommand}" />
+                        <!-- Señal de progreso: un botón deshabilitado reemplaza al de acción mientras dura la descarga. -->
+                        <Button x:Name="BotonDescargandoLogs" Classes="secundario" Content="Descargando…" IsEnabled="False"
+                                IsVisible="{Binding DescargandoLogs}" />
+                    </Panel>
+                    <TextBlock Classes="texto-secundario" Text="{Binding TextoResumenLogs}" TextWrapping="Wrap" />
+                </DockPanel>
+            </v2:TarjetaContenido>
 
-        <TextBlock DockPanel.Dock="Top"
-                   Text="Cargando backups..."
-                   Classes="caption"
-                   Margin="0,0,0,12"
-                   IsVisible="{Binding Cargando}" />
+            <v2:TarjetaContenido x:Name="CardAlertas">
+                <StackPanel>
+                    <TextBlock Classes="titulo-seccion" Text="Alertas" Margin="0,0,0,4" />
+                    <TextBlock Classes="texto-secundario" TextWrapping="Wrap" Margin="0,0,0,12"
+                               Text="Avisá cuando un backup falle o cuando el sistema deje de reportar." />
 
-        <Grid DockPanel.Dock="Top">
-            <ItemsControl ItemsSource="{Binding Corridas}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="vm:FilaCorridaBackupVm">
-                        <Border Classes="card" Margin="0,0,0,8">
-                            <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
-                                <i:Icon Grid.Column="0"
-                                        Value="mdi-check-circle"
-                                        Foreground="{DynamicResource SuccessBrush}"
-                                        IsVisible="{Binding Resultado, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Exitosa}"
-                                        Margin="0,0,8,0"
-                                        VerticalAlignment="Center" />
-                                <i:Icon Grid.Column="0"
-                                        Value="mdi-close-circle"
-                                        Foreground="{DynamicResource DangerBrush}"
-                                        IsVisible="{Binding Resultado, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Fallida}"
-                                        Margin="0,0,8,0"
-                                        VerticalAlignment="Center" />
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding FinalizadaEn, Converter={x:Static conv:FechaUtcALocalConverter.Instance}, StringFormat='dd/MM/yyyy HH:mm'}" />
-                                    <!-- Fix (IMPORTANT, tercer review final E1): antes esto se
-                                         ataba solo a "MotivoFallo no es null", sin mirar
-                                         Resultado — una fila reconciliada (Exitosa, dump
-                                         huérfano dado de alta tras un restore) también trae
-                                         MotivoFallo y se pintaba en rojo como si fuera un error.
-                                         Ahora el rojo queda exclusivo del fallo real. -->
-                                    <TextBlock Text="{Binding MotivoFallo}"
-                                               Classes="caption"
-                                               Foreground="{DynamicResource DangerBrush}"
-                                               TextWrapping="Wrap"
-                                               IsVisible="{Binding EsFallo}" />
-                                    <!-- Nota informativa (misma corrida, Exitosa): sin
-                                         DangerBrush, mismo tratamiento que el resto de los
-                                         textos "caption" secundarios de esta vista. -->
-                                    <TextBlock Text="{Binding MotivoFallo}"
-                                               Classes="caption"
-                                               TextWrapping="Wrap"
-                                               IsVisible="{Binding EsNotaInformativa}" />
-                                </StackPanel>
-                                <TextBlock Grid.Column="2"
-                                           Text="{Binding TamanioBytes, StringFormat={}{0:N0} B}"
-                                           IsVisible="{Binding TamanioBytes, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                           Margin="8,0"
-                                           VerticalAlignment="Center" />
-                                <!-- Descargar: visible mientras esta fila NO esta descargando. IsEnabled
-                                     sigue atado a NombreArchivo (corridas Fallidas no tienen archivo). -->
-                                <Button Grid.Column="3"
-                                        Classes="secondary"
-                                        Content="Descargar"
-                                        Margin="8,0,0,0"
-                                        IsVisible="{Binding !Descargando}"
-                                        IsEnabled="{Binding NombreArchivo, Converter={x:Static ObjectConverters.IsNotNull}}"
-                                        Command="{Binding $parent[UserControl].((vm:MantenimientoViewModel)DataContext).DescargarCommand}"
-                                        CommandParameter="{Binding}" />
-                                <!-- Cancelar: visible SOLO mientras esta fila puntual esta descargando
-                                     (Descargando es por-fila, Task 9 — no hay comparacion de ids acá). -->
-                                <Button Grid.Column="4"
-                                        Classes="secondary"
-                                        Content="Cancelar"
-                                        Margin="8,0,0,0"
-                                        IsVisible="{Binding Descargando}"
-                                        Command="{Binding $parent[UserControl].((vm:MantenimientoViewModel)DataContext).CancelarCommand}"
-                                        CommandParameter="{Binding}" />
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+                    <!-- Sin esto, un GET fallido (p. ej. 423 con la licencia vencida) dejaba la sección en "sin URL / deshabilitado",
+                         indistinguible de la verdad, y desde ahí un Guardar apagaba el canal: la alerta explica y bloquea. -->
+                    <v2:Alerta x:Name="AlertaErrorAlertas" Variante="Error" Margin="0,0,0,12"
+                               Texto="No se pudo cargar la configuración de alertas. Guardar y Probar quedan deshabilitados para no pisar la configuración del servidor."
+                               IsVisible="{Binding ErrorAlCargarAlertas}" />
 
-            <!-- Estado vacío (review final E1): sin esto una instalación nueva sin backups queda
-                 en blanco bajo el subtítulo, indistinguible de "falló algo y no me enteré". -->
-            <TextBlock Text="Todavía no hay backups registrados."
-                       Classes="caption"
-                       HorizontalAlignment="Center"
-                       VerticalAlignment="Center"
-                       IsVisible="{Binding MostrarListaVacia}" />
+                    <v2:CampoFormulario Etiqueta="URL de webhook (healthchecks.io)" Margin="0,0,0,12">
+                        <TextBox x:Name="CajaUrl" Text="{Binding UrlWebhook}" PlaceholderText="https://hc-ping.com/xxxxxxxx"
+                                 IsEnabled="{Binding !ErrorAlCargarAlertas}" />
+                    </v2:CampoFormulario>
 
-            <!-- Fix (MINOR, re-review final E1): si ListarAsync() falla, no mostrar el mensaje
-                 de "no hay backups" — el diálogo de InformarAsync ya avisó, pero este texto
-                 reemplaza el estado vacío para que no mienta sobre la causa una vez cerrado. -->
-            <TextBlock Text="No se pudieron cargar los backups."
-                       Classes="caption"
-                       Foreground="{DynamicResource DangerBrush}"
-                       HorizontalAlignment="Center"
-                       VerticalAlignment="Center"
-                       IsVisible="{Binding ErrorAlCargar}" />
-        </Grid>
+                    <CheckBox x:Name="CasillaHabilitado" Content="Habilitado" IsChecked="{Binding AlertasHabilitadas}"
+                              IsEnabled="{Binding !ErrorAlCargarAlertas}" Margin="0,0,0,12" />
 
-        <TextBlock DockPanel.Dock="Top"
-                   Text="Diagnóstico"
-                   Classes="seccion"
-                   Margin="0,24,0,12" />
-
-        <Border Classes="card" DockPanel.Dock="Top">
-            <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
-                <TextBlock Grid.Column="0"
-                           Text="{Binding TextoResumenLogs}"
-                           TextWrapping="Wrap"
-                           VerticalAlignment="Center" />
-
-                <Button Grid.Column="1"
-                        Classes="secondary"
-                        Content="Descargar logs"
-                        Margin="12,0,0,0"
-                        IsVisible="{Binding !DescargandoLogs}"
-                        IsEnabled="{Binding HayLogs}"
-                        Command="{Binding DescargarLogsCommand}" />
-
-                <!-- Señal de progreso (fix MINOR, review final E2): DescargandoLogs existía en
-                     el VM pero no estaba bindeada en ningún XAML — con el timeout de 30
-                     minutos del HttpClient "Descargas", si el ZIP pesa la UI quedaba muda.
-                     Mismo patrón de swap Descargar/Cancelar que usa la lista de corridas de
-                     backup más arriba en esta vista: un botón deshabilitado reemplaza al de
-                     acción mientras dura la descarga. -->
-                <Button Grid.Column="1"
-                        Classes="secondary"
-                        Content="Descargando…"
-                        Margin="12,0,0,0"
-                        IsVisible="{Binding DescargandoLogs}"
-                        IsEnabled="False" />
-            </Grid>
-        </Border>
-
-        <TextBlock DockPanel.Dock="Top"
-                   Text="Alertas"
-                   Classes="seccion"
-                   Margin="0,24,0,12" />
-
-        <Border Classes="card" DockPanel.Dock="Top">
-            <StackPanel Spacing="{DynamicResource Espacio3}" MaxWidth="620" HorizontalAlignment="Left">
-                <TextBlock Text="Avisá cuando un backup falle o cuando el sistema deje de reportar."
-                           Classes="body"
-                           TextWrapping="Wrap" />
-
-                <!-- Fix (IMPORTANTE, review final): mismo patrón que "No se pudieron cargar los
-                     backups." más arriba en esta vista. Sin esto, un GET fallido (p.ej. 423 con la
-                     licencia vencida) dejaba la sección mostrando "sin URL / deshabilitado", que
-                     es indistinguible de la verdad, y desde ahí un Guardar apagaba el canal. -->
-                <TextBlock Text="No se pudo cargar la configuración de alertas. Guardar y Probar quedan deshabilitados para no pisar la configuración del servidor."
-                           Classes="caption"
-                           Foreground="{DynamicResource DangerBrush}"
-                           TextWrapping="Wrap"
-                           IsVisible="{Binding ErrorAlCargarAlertas}" />
-
-                <c:CampoFormulario Etiqueta="URL de webhook (healthchecks.io)">
-                    <TextBox Text="{Binding UrlWebhook}"
-                             Watermark="https://hc-ping.com/xxxxxxxx"
-                             IsEnabled="{Binding !ErrorAlCargarAlertas}" />
-                </c:CampoFormulario>
-
-                <CheckBox Content="Habilitado"
-                          IsChecked="{Binding AlertasHabilitadas}"
-                          IsEnabled="{Binding !ErrorAlCargarAlertas}" />
-
-                <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
-                    <Button Classes="primary"
-                            Content="Guardar"
-                            Command="{Binding GuardarAlertasCommand}"
-                            IsEnabled="{Binding PuedeGuardarAlertas}" />
-                    <Button Classes="secondary"
-                            Content="Probar"
-                            Command="{Binding ProbarAlertasCommand}"
-                            IsEnabled="{Binding PuedeProbarAlertas}" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button x:Name="BotonGuardarAlertas" Classes="secundario" Content="Guardar" Command="{Binding GuardarAlertasCommand}"
+                                IsEnabled="{Binding PuedeGuardarAlertas}" />
+                        <Button x:Name="BotonProbarAlertas" Classes="secundario" Content="Probar" Command="{Binding ProbarAlertasCommand}"
+                                IsEnabled="{Binding PuedeProbarAlertas}" />
+                    </StackPanel>
                 </StackPanel>
-            </StackPanel>
-        </Border>
+            </v2:TarjetaContenido>
+        </v2:GrillaUniformeV2>
 
+        <v2:TarjetaContenido x:Name="CardBackups">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Classes="titulo-seccion" Text="Backups" Margin="0,0,0,12" />
+
+                <v2:EstadoCargando x:Name="IndicadorCarga" DockPanel.Dock="Top" Texto="Cargando backups…" IsVisible="{Binding Cargando}" />
+
+                <!-- Error de carga: la Alerta reemplaza al vacío para que no mienta sobre la causa. -->
+                <v2:Alerta x:Name="AlertaErrorBackups" DockPanel.Dock="Top" Variante="Error" Texto="No se pudieron cargar los backups."
+                           IsVisible="{Binding ErrorAlCargar}" />
+
+                <v2:EstadoVacio x:Name="VacioBackups" DockPanel.Dock="Top" UseLayoutRounding="False"
+                                Titulo="Todavía no hay backups registrados." IsVisible="{Binding MostrarListaVacia}" />
+
+                <DataGrid x:Name="GrillaBackups" ItemsSource="{Binding Corridas}" IsReadOnly="True" CanUserSortColumns="True"
+                          CanUserResizeColumns="True" ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                    <DataGrid.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Corridas.Count" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            <Binding Path="ErrorAlCargar" Converter="{x:Static BoolConverters.Not}" />
+                        </MultiBinding>
+                    </DataGrid.IsVisible>
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="FECHA" Width="Auto" SortMemberPath="FinalizadaEn"
+                                                b:ColumnaAuto.Medir="True" b:ColumnaAuto.NoCede="True"
+                                                b:ColumnaAuto.Conversor="{x:Static conv:FechaHoraLocalConverter.Instance}">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:FilaCorridaBackupVm">
+                                    <TextBlock Text="{Binding FinalizadaEn, Converter={x:Static conv:FechaHoraLocalConverter.Instance}}" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <!-- RESULTADO: conjunto cerrado (Exitosa o Fallida); el ancho lo pone el título con su flecha de orden, no la insignia. -->
+                        <DataGridTemplateColumn Header="RESULTADO" Width="Auto" SortMemberPath="Resultado" b:ColumnaAuto.Medir="True" b:ColumnaAuto.NoCede="True"
+                                                b:ColumnaAuto.Ruta="Resultado">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:FilaCorridaBackupVm">
+                                    <Panel VerticalAlignment="Center" HorizontalAlignment="Left">
+                                        <v2:Insignia Texto="Exitosa" Variante="Exito"
+                                                     IsVisible="{Binding Resultado, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Exitosa}" />
+                                        <v2:Insignia Texto="Fallida" Variante="Peligro"
+                                                     IsVisible="{Binding Resultado, Converter={x:Static ObjectConverters.Equal}, ConverterParameter=Fallida}" />
+                                    </Panel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <!-- DETALLE: el motivo del fallo en peligro; la nota de una fila reconciliada (exitosa) en secundario. -->
+                        <DataGridTemplateColumn Header="DETALLE" Width="*" MinWidth="200" SortMemberPath="MotivoFallo">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:FilaCorridaBackupVm">
+                                    <Panel VerticalAlignment="Center">
+                                        <TextBlock Classes="negativo" Text="{Binding MotivoFallo}" TextTrimming="CharacterEllipsis"
+                                                   ToolTip.Tip="{Binding MotivoFallo}" b:TooltipSiSeCorta.Activo="True"
+                                                   IsVisible="{Binding EsFallo}" />
+                                        <TextBlock Text="{Binding MotivoFallo}" TextTrimming="CharacterEllipsis"
+                                                   ToolTip.Tip="{Binding MotivoFallo}" b:TooltipSiSeCorta.Activo="True"
+                                                   IsVisible="{Binding EsNotaInformativa}" />
+                                    </Panel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="TAMAÑO" Width="Auto" CellStyleClasses="num" SortMemberPath="TamanioBytes"
+                                                b:ColumnaAuto.Medir="True" b:ColumnaAuto.Conversor="{x:Static conv:TamanoLegibleConverter.Instance}">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:FilaCorridaBackupVm">
+                                    <TextBlock Text="{Binding TamanioBytes, Converter={x:Static conv:TamanoLegibleConverter.Instance}}" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Width="116" CanUserSort="False" CellStyleClasses="sin-padding-vertical">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:FilaCorridaBackupVm">
+                                    <Panel VerticalAlignment="Center">
+                                        <!-- Descargar: mientras esta fila NO descarga; deshabilitado sin archivo (las corridas fallidas no tienen). -->
+                                        <Button Classes="secundario" Content="Descargar" IsVisible="{Binding !Descargando}"
+                                                IsEnabled="{Binding NombreArchivo, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                                Command="{Binding $parent[UserControl].((vm:MantenimientoViewModel)DataContext).DescargarCommand}"
+                                                CommandParameter="{Binding}" />
+                                        <!-- Cancelar: solo mientras esta fila puntual descarga (Descargando es por fila). -->
+                                        <Button Classes="secundario" Content="Cancelar" IsVisible="{Binding Descargando}"
+                                                Command="{Binding $parent[UserControl].((vm:MantenimientoViewModel)DataContext).CancelarCommand}"
+                                                CommandParameter="{Binding}" />
+                                    </Panel>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </DockPanel>
+        </v2:TarjetaContenido>
     </DockPanel>
-    </ScrollViewer>
 
 </UserControl>

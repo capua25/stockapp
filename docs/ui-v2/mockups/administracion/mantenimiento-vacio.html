@@ -16,9 +16,9 @@
   .backups .v2-grilla { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
   .v2-grilla-header { flex: 0 0 auto; }
   .filas { flex: 1 1 0; min-height: 0; overflow: hidden; }
-  /* Anchos medidos en headless (tema v2, estos datos): FECHA 128 (no cede), RESULTADO 74 (insignia 58 + 16), TAMAÑO 89 y
+  /* Anchos medidos en headless (tema v2, estos datos): FECHA 128 (no cede), RESULTADO 107 (el título con su flecha de orden: 71 + 16 + 20), TAMAÑO 89 y
      la acción 116 (Descargar 99 + 16 + 1). DETALLE (*) el resto, con piso de 200. */
-  .col-fecha { flex: 0 0 128px; } .col-resultado { flex: 0 0 74px; }
+  .col-fecha { flex: 0 0 128px; } .col-resultado { flex: 0 0 107px; }
   .col-detalle { flex: 1 1 0; min-width: 200px; } .col-tamano { flex: 0 0 89px; } .col-accion { flex: 0 0 116px; }
   .fila-inferior { flex: 0 0 auto; margin-top: 16px; }
   .fila-inferior .v2-tarjeta { display: flex; flex-direction: column; }
@@ -28,7 +28,6 @@
   .fila-inferior .v2-campo { margin-bottom: 12px; }
   .fila-inferior .v2-casilla-fila { margin-bottom: 12px; }
   .url { width: 100%; box-sizing: border-box; }
-  .backups .v2-vacio { margin: 48px 0; }
 </style>
 </head>
 <body>
@@ -80,7 +79,7 @@
     <div class="pagina">
       <div class="v2-encabezado"><div class="v2-encabezado-fila"><div><div class="v2-titulo-pagina">Mantenimiento</div><div class="v2-encabezado-subtitulo">Backups, diagnóstico y alertas del servidor.</div></div><div class="v2-acciones"><span class="v2-boton v2-boton--primario">Hacer backup ahora</span></div></div></div>
       <div class="v2-tarjeta backups"><div class="v2-titulo-seccion">Backups</div><div class="v2-vacio"><div class="v2-vacio-titulo">Todavía no hay backups registrados.</div></div></div>
-      <div class="v2-grilla-uniforme v2-grilla-uniforme--2 fila-inferior"><div class="v2-tarjeta"><div class="v2-titulo-seccion">Diagnóstico</div><div class="v2-texto-secundario">No hay archivos de log todavía.</div><div class="acciones"><span class="v2-boton v2-boton--secundario v2-boton--deshabilitado">Descargar logs</span></div></div><div class="v2-tarjeta"><div class="v2-titulo-seccion">Alertas</div><div class="v2-texto-secundario">Avisá cuando un backup falle o cuando el sistema deje de reportar.</div><div class="v2-campo"><div class="v2-campo-etiqueta"><span>URL de webhook (healthchecks.io)</span></div><div><div class="v2-input url"><span class="v2-input-placeholder">https://hc-ping.com/xxxxxxxx</span></div></div></div><div class="v2-casilla-fila"><div class="v2-casilla-caja"><div class="v2-casilla"></div></div><span>Habilitado</span></div><div class="acciones"><span class="v2-boton v2-boton--secundario">Guardar</span><span class="v2-boton v2-boton--secundario">Probar</span></div></div></div>
+      <div class="v2-grilla-uniforme v2-grilla-uniforme--2 fila-inferior" style="--v2-grilla-espaciado: 16px"><div class="v2-tarjeta"><div class="v2-titulo-seccion">Diagnóstico</div><div class="v2-texto-secundario">No hay archivos de log todavía.</div><div class="acciones"><span class="v2-boton v2-boton--secundario v2-boton--deshabilitado">Descargar logs</span></div></div><div class="v2-tarjeta"><div class="v2-titulo-seccion">Alertas</div><div class="v2-texto-secundario">Avisá cuando un backup falle o cuando el sistema deje de reportar.</div><div class="v2-campo"><div class="v2-campo-etiqueta"><span>URL de webhook (healthchecks.io)</span></div><div><div class="v2-input url"><span class="v2-input-placeholder">https://hc-ping.com/xxxxxxxx</span></div></div></div><div class="v2-casilla-fila"><div class="v2-casilla-caja"><div class="v2-casilla"></div></div><span>Habilitado</span></div><div class="acciones"><span class="v2-boton v2-boton--secundario">Guardar</span><span class="v2-boton v2-boton--secundario">Probar</span></div></div></div>
     </div>
   </div>
 </div>

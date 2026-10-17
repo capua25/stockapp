@@ -16,8 +16,8 @@
          Productos/Finanzas/Reportes con la licencia vencida. -->
     <DockPanel>
 
-        <!-- UI v2 (Fase 1, P3): solo el aviso. Classes="ui2" va en este Border y NO en la raíz:
-             MantenimientoView (Fase 7) no puede heredar los estilos v2. -->
+        <!-- UI v2 (Fase 1, P3): solo el aviso. Classes="ui2" va en este Border y NO en la raíz: la raíz sigue con el fondo
+             viejo y MantenimientoView, ya v2, lleva su propia raíz ui2. -->
         <Border x:Name="AvisoAccesoLimitado"
                 DockPanel.Dock="Top"
                 Classes="ui2"

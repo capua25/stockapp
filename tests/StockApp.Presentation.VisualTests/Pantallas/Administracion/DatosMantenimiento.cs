@@ -11,14 +11,18 @@ using StockApp.Presentation.VisualTests.Pantallas.Shell;
 namespace StockApp.Presentation.VisualTests.Pantallas.Administracion;
 
 /// <summary>Datos fijos de docs/ui-v2/mockups/administracion/mantenimiento*.html (textos fijados en DatosAdministracionTests).
-/// Las fechas son UTC y la comparación corre con la zona horaria de la máquina en UTC.</summary>
+/// Las fechas se arman para que la hora local de la máquina sea la del texto del mockup.</summary>
 public static class DatosMantenimiento
 {
+    /// <summary>Instante UTC cuya hora LOCAL (la que pinta la vista) es la indicada: el mockup dice 11:00 en cualquier máquina.</summary>
+    private static DateTime Local(int anio, int mes, int dia, int hora, int minuto, int segundo = 0) =>
+        TimeZoneInfo.ConvertTimeToUtc(new DateTime(anio, mes, dia, hora, minuto, segundo, DateTimeKind.Unspecified), TimeZoneInfo.Local);
+
     public static readonly IReadOnlyList<CorridaBackupDto> Corridas =
     [
-        new(3, new DateTime(2026, 10, 6, 11, 0, 12, DateTimeKind.Utc), "Exitosa", "stockapp-20261006-1100.dump", 48_234_496, null),
-        new(2, new DateTime(2026, 10, 5, 23, 0, 4, DateTimeKind.Utc), "Fallida", null, null, "pg_dump terminó con código 1: no hay espacio en disco."),
-        new(1, new DateTime(2026, 10, 5, 11, 0, 9, DateTimeKind.Utc), "Exitosa", "stockapp-20261005-1100.dump", 47_185_920,
+        new(3, Local(2026, 10, 6, 11, 0, 12), "Exitosa", "stockapp-20261006-1100.dump", 48_234_496, null),
+        new(2, Local(2026, 10, 5, 23, 0, 4), "Fallida", null, null, "pg_dump terminó con código 1: no hay espacio en disco."),
+        new(1, Local(2026, 10, 5, 11, 0, 9), "Exitosa", "stockapp-20261005-1100.dump", 47_185_920,
             "Esta fila no proviene de una corrida real: se dio de alta al reconciliar un dump existente."),
     ];
 

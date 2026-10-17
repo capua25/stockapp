@@ -53,7 +53,7 @@ public class AccesoLimitadoViewTests
         <Window xmlns="https://github.com/avaloniaui"
                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                 xmlns:acc="clr-namespace:StockApp.Presentation.Views;assembly=GestionMunicipal"
-                Width="700" Height="500">
+                Width="1280" Height="760">
             <acc:AccesoLimitadoView />
         </Window>
         """;
@@ -114,7 +114,8 @@ public class AccesoLimitadoViewTests
     {
         var (window, _) = Montar(System.Array.Empty<CorridaBackupDto>());
 
-        var alerta = window.GetVisualDescendants().OfType<Alerta>().Single();
+        var alerta = window.GetVisualDescendants().OfType<Alerta>()
+            .Single(a => a.GetVisualAncestors().OfType<Border>().Any(b => b.Name == "AvisoAccesoLimitado"));
         Assert.Equal(VarianteAlerta.Advertencia, alerta.Variante);
         Assert.Equal(
             "Modo de acceso limitado: la licencia está vencida. Solo podés descargar backups; para operar el sistema, activá la licencia.",
@@ -123,13 +124,23 @@ public class AccesoLimitadoViewTests
     }
 
     [AvaloniaFact]
-    public void MantenimientoHospedado_NoTieneAncestroUi2()
+    public void AccesoLimitado_HospedaMantenimientoV2_ConLaRaizUi2YLaGrillaCargada()
     {
-        // Review Focus 1: MantenimientoView se migra en la Fase 7; hasta entonces no puede tomar
-        // los estilos .ui2 por herencia del contenedor.
-        var (window, _) = Montar(System.Array.Empty<CorridaBackupDto>());
+        // Mantenimiento (Fase 7) ya es v2: lleva su propia raíz ui2 y no depende del contenedor.
+        var corridas = new List<CorridaBackupDto>
+        {
+            new(1, DateTime.UtcNow, "Exitosa", "backup_1.dump", 1024, null),
+            new(2, DateTime.UtcNow.AddHours(-12), "Fallida", null, null, "pg_dump falló"),
+        };
+
+        var (window, vm) = Montar(corridas);
 
         var mantenimiento = window.GetVisualDescendants().OfType<MantenimientoView>().Single();
-        Assert.DoesNotContain(mantenimiento.GetSelfAndVisualAncestors().OfType<StyledElement>(), e => e.Classes.Contains("ui2"));
+        Assert.Contains("ui2", mantenimiento.Classes);
+        Assert.Equal(2, vm.Mantenimiento.Corridas.Count);
+        var grilla = mantenimiento.GetVisualDescendants().OfType<DataGrid>().Single(g => g.Name == "GrillaBackups");
+        Assert.True(ArbolVisual.EsVisibleEnArbol(grilla));
+        Assert.Equal(2, grilla.GetVisualDescendants().OfType<DataGridRow>().Count());
+        Assert.Single(mantenimiento.GetVisualDescendants().OfType<Button>(), b => b.Name == "BotonBackup" && ArbolVisual.EsVisibleEnArbol(b));
     }
 }
