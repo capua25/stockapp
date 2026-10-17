@@ -7,7 +7,7 @@ namespace StockApp.Presentation.Tests.Converters;
 /// <summary>
 /// Verifica el converter usado para atenuar visualmente las filas de entidades de catálogo
 /// dadas de baja (Categoría/Proveedor/UnidadMedida inactivas), Capa C del fix de crash al dar
-/// de baja (ver UnidadMedidaListView/CategoriaListView/ProveedorListView).
+/// de baja (los listados de catálogo v1, ya reemplazados por la vista genérica de Catálogos).
 /// </summary>
 public class ActivoOpacidadConverterTests
 {

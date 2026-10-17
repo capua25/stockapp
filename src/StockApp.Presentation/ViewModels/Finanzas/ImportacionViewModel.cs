@@ -4,7 +4,7 @@ namespace StockApp.Presentation.ViewModels.Finanzas;
 
 /// <summary>
 /// Pantalla "Importar planillas" (F5d): hostea las 2 sub-listas (Nueva importación, Historial)
-/// en tabs, mismo patrón que MaestrosFinanzasViewModel.
+/// en tabs.
 /// </summary>
 public partial class ImportacionViewModel : ViewModelBase
 {

@@ -64,6 +64,8 @@ public class ComandosDeGuardadoGuardianTests
             "reinicia el asistente; descartar lo tipeado no debe bloquearse por un campo en rojo",
         [("ActualizacionBloqueoViewModel", "AplicarYReiniciarCommand")] =
             "aplica una actualización ya descargada; la pantalla no tiene ningún campo tipeado",
+        [("MantenimientoViewModel", "IniciarBackupCommand")] =
+            "dispara el backup en el servidor; ningún campo tipeado de la pantalla (la URL de alertas es texto libre) condiciona el backup",
         [("ActualizacionBannerViewModel", "ActualizarAlReiniciarCommand")] =
             "sin campos tipeados",
         [("ActualizacionModalViewModel", "ActualizarAhoraCommand")] =

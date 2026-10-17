@@ -7,8 +7,8 @@ namespace StockApp.Presentation.Converters;
 /// <summary>
 /// Convierte el flag <c>Activo</c> de una entidad de catálogo (Categoría/Proveedor/
 /// UnidadMedida) en la opacidad de su fila en el listado: entidades dadas de baja se
-/// muestran atenuadas (decisión de UX del fix del crash al dar de baja — ver
-/// UnidadMedidaListView/CategoriaListView/ProveedorListView). Expuesto como instancia
+/// muestran atenuadas (decisión de UX del fix del crash al dar de baja; la usaban los
+/// listados de catálogo v1). Expuesto como instancia
 /// estática, igual que <see cref="DecimalOpcionalConverter"/> y <see cref="ColeccionVaciaConverter"/>.
 /// </summary>
 public sealed class ActivoOpacidadConverter : IValueConverter
