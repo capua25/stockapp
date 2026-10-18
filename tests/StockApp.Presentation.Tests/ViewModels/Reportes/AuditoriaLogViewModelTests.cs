@@ -152,7 +152,7 @@ public class AuditoriaLogViewModelTests
         await vm.BuscarCommand.ExecuteAsync(null);
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<AuditoriaItemDto>>(),
+                It.IsAny<IEnumerable<FilaAuditoriaPdf>>(),
                 It.IsAny<IReadOnlyList<ColumnaPdf>>(),
                 It.IsAny<MetadatosDocumento>()))
             .Returns(new byte[] { 9, 9 });
@@ -164,7 +164,7 @@ public class AuditoriaLogViewModelTests
         await vm.ExportarPdfCommand.ExecuteAsync(null);
 
         pdfExporterMock.Verify(e => e.Exportar(
-            vm.Items,
+            It.Is<IEnumerable<FilaAuditoriaPdf>>(filas => filas.Count() == vm.Items.Count),
             It.Is<IReadOnlyList<ColumnaPdf>>(cols => cols.SequenceEqual(esperado)),
             It.IsAny<MetadatosDocumento>()),
             Times.Once);
@@ -180,7 +180,7 @@ public class AuditoriaLogViewModelTests
         await vm.ExportarPdfCommand.ExecuteAsync(null);
 
         pdfExporterMock.Verify(e => e.Exportar(
-            It.IsAny<IEnumerable<AuditoriaItemDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()),
+            It.IsAny<IEnumerable<FilaAuditoriaPdf>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()),
             Times.Never);
     }
 
@@ -196,7 +196,7 @@ public class AuditoriaLogViewModelTests
 
         confirmMock.Verify(c => c.PreguntarAsync(It.IsAny<string>()), Times.Once);
         pdfExporterMock.Verify(e => e.Exportar(
-            It.IsAny<IEnumerable<AuditoriaItemDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()),
+            It.IsAny<IEnumerable<FilaAuditoriaPdf>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()),
             Times.Never);
     }
 
@@ -208,7 +208,7 @@ public class AuditoriaLogViewModelTests
         await vm.BuscarCommand.ExecuteAsync(null);
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<AuditoriaItemDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<FilaAuditoriaPdf>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
             .Returns(new byte[] { 1 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -229,7 +229,7 @@ public class AuditoriaLogViewModelTests
         var pdfBytes = new byte[] { 9, 9 };
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<AuditoriaItemDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<FilaAuditoriaPdf>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
             .Returns(pdfBytes);
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -251,7 +251,7 @@ public class AuditoriaLogViewModelTests
         await vm.BuscarCommand.ExecuteAsync(null);
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<AuditoriaItemDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<FilaAuditoriaPdf>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
             .Returns(new byte[] { 9, 9 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -276,7 +276,7 @@ public class AuditoriaLogViewModelTests
         sessionMock.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(1, "jperez", RolUsuario.Admin, "Juan Pérez"));
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<AuditoriaItemDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<FilaAuditoriaPdf>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
             .Returns(new byte[] { 9, 9 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -286,7 +286,7 @@ public class AuditoriaLogViewModelTests
         await vm.ExportarPdfCommand.ExecuteAsync(null);
 
         pdfExporterMock.Verify(e => e.Exportar(
-            It.IsAny<IEnumerable<AuditoriaItemDto>>(),
+            It.IsAny<IEnumerable<FilaAuditoriaPdf>>(),
             It.IsAny<IReadOnlyList<ColumnaPdf>>(),
             It.Is<MetadatosDocumento>(m =>
                 m.Titulo == "Log de auditoría" &&
@@ -303,7 +303,7 @@ public class AuditoriaLogViewModelTests
         await vm.BuscarCommand.ExecuteAsync(null);
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<AuditoriaItemDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+                It.IsAny<IEnumerable<FilaAuditoriaPdf>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
             .Returns(new byte[] { 9, 9 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -313,7 +313,7 @@ public class AuditoriaLogViewModelTests
         await vm.ExportarPdfCommand.ExecuteAsync(null);
 
         pdfExporterMock.Verify(e => e.Exportar(
-            It.IsAny<IEnumerable<AuditoriaItemDto>>(),
+            It.IsAny<IEnumerable<FilaAuditoriaPdf>>(),
             It.IsAny<IReadOnlyList<ColumnaPdf>>(),
             It.Is<MetadatosDocumento>(m => m.DescripcionFiltros == "Usuario: Todos. Período: Todo el histórico.")),
             Times.Once);
@@ -336,7 +336,7 @@ public class AuditoriaLogViewModelTests
         var (vm, _, guardadoMock, _, _, pdfExporterMock, _, _) = Crear(items);
         await vm.BuscarCommand.ExecuteAsync(null);
         pdfExporterMock
-            .Setup(e => e.Exportar(It.IsAny<IEnumerable<AuditoriaItemDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaAuditoriaPdf>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>()))
             .Returns(new byte[] { 1 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "auditoria.pdf", It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
@@ -348,7 +348,7 @@ public class AuditoriaLogViewModelTests
         // AuditoriaLogViewModel.ColumnasPdf: comparar la constante contra sí misma sería
         // tautológico -- mutar su valor dejaría este assert igual de verde.
         pdfExporterMock.Verify(e => e.Exportar(
-            It.Is<IEnumerable<AuditoriaItemDto>>(coleccion => coleccion.Single().Detalle == detalleLargo),
+            It.Is<IEnumerable<FilaAuditoriaPdf>>(coleccion => coleccion.Single().Detalle == detalleLargo),
             It.Is<IReadOnlyList<ColumnaPdf>>(cols => cols.Any(c => c.Propiedad == "Detalle")),
             It.IsAny<MetadatosDocumento>()), Times.Once);
     }
@@ -667,7 +667,7 @@ public class AuditoriaLogViewModelTests
         await vm.ExportarPdfCommand.ExecuteAsync(null);
 
         pdf.Verify(e => e.Exportar(
-            It.IsAny<IEnumerable<AuditoriaItemDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
+            It.IsAny<IEnumerable<FilaAuditoriaPdf>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
             It.Is<MetadatosDocumento>(m => m.DescripcionFiltros.Contains("01/09/2026") && !m.DescripcionFiltros.Contains("01/08/2026")),
             It.IsAny<ResumenPdf?>()), Times.Once);
     }
@@ -721,5 +721,22 @@ public class AuditoriaLogViewModelTests
         Assert.False(vm.SinConexion);
         Assert.Same(vm.Usuarios[1], vm.UsuarioFiltroSeleccionado);
         servicio.Verify(s => s.ObtenerLogAsync(2, It.IsAny<DateTime?>(), It.IsAny<DateTime?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ExportarPdf_LaAccionSaleEnTextoLegible_NoConElNombreDelEnum()
+    {
+        var items = new List<AuditoriaItemDto>
+        {
+            new(new DateTime(2026, 10, 7, 14, 35, 0), "mperez", AccionAuditada.RegistroMovimiento, "MovimientoStock", 209, "Entrada de 40 unidades"),
+        };
+        var (vm, _, _, _, _, pdfExporterMock, _, _) = Crear(items);
+        await vm.CargarAsync();
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        pdfExporterMock.Verify(e => e.Exportar(
+            It.Is<IEnumerable<FilaAuditoriaPdf>>(filas => filas.Single().Accion == "Registro de movimiento"),
+            It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf?>()), Times.Once);
     }
 }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -26,6 +27,12 @@ namespace StockApp.Presentation.ViewModels.Reportes;
 public sealed record OpcionUsuario(string Nombre, UsuarioDto? Valor);
 
 /// <summary>
+/// Fila del PDF de auditoría: lo mismo que la grilla, con la acción en texto legible (<see cref="TextoAccionAuditada"/>) en vez
+/// del nombre del enum. Las propiedades se llaman como las del <see cref="AuditoriaItemDto"/>: las columnas no cambian.
+/// </summary>
+public sealed record FilaAuditoriaPdf(DateTime Fecha, string NombreUsuario, string Accion, string Entidad, int EntidadId, string Detalle);
+
+/// <summary>
 /// ViewModel del reporte de Log de Auditoría (Inc 6). Consulta el historial de
 /// acciones auditadas filtrado por usuario y rango de fechas vía
 /// <see cref="IAuditoriaQueryService"/> y permite exportarlo a PDF.
@@ -39,12 +46,12 @@ public partial class AuditoriaLogViewModel : ViewModelBase
     /// </summary>
     public static readonly IReadOnlyList<ColumnaPdf> ColumnasPdf = new[]
     {
-        new ColumnaPdf(nameof(AuditoriaItemDto.Fecha), "Fecha"),
-        new ColumnaPdf(nameof(AuditoriaItemDto.NombreUsuario), "Usuario"),
-        new ColumnaPdf(nameof(AuditoriaItemDto.Accion), "Acción"),
-        new ColumnaPdf(nameof(AuditoriaItemDto.Entidad), "Entidad"),
-        new ColumnaPdf(nameof(AuditoriaItemDto.EntidadId), "Entidad ID"),
-        new ColumnaPdf(nameof(AuditoriaItemDto.Detalle), "Detalle"),
+        new ColumnaPdf(nameof(FilaAuditoriaPdf.Fecha), "Fecha"),
+        new ColumnaPdf(nameof(FilaAuditoriaPdf.NombreUsuario), "Usuario"),
+        new ColumnaPdf(nameof(FilaAuditoriaPdf.Accion), "Acción"),
+        new ColumnaPdf(nameof(FilaAuditoriaPdf.Entidad), "Entidad"),
+        new ColumnaPdf(nameof(FilaAuditoriaPdf.EntidadId), "Entidad ID"),
+        new ColumnaPdf(nameof(FilaAuditoriaPdf.Detalle), "Detalle"),
     };
 
     private readonly IAuditoriaQueryService _servicio;
@@ -275,7 +282,10 @@ public partial class AuditoriaLogViewModel : ViewModelBase
                 DescripcionFiltros: _descripcionCargada ?? ConstruirDescripcionFiltros(),
                 UsuarioEmisor: _session.UsuarioActual?.NombreCompleto ?? _session.UsuarioActual?.NombreUsuario ?? "Sistema");
 
-            var pdf = _pdfExporter.Exportar(Items, ColumnasPdf, metadatos);
+            var filas = Items
+                .Select(i => new FilaAuditoriaPdf(i.Fecha, i.NombreUsuario, TextoAccionAuditada.De(i.Accion), i.Entidad, i.EntidadId, i.Detalle))
+                .ToList();
+            var pdf = _pdfExporter.Exportar(filas, ColumnasPdf, metadatos);
             using var stream = new MemoryStream(pdf);
             var guardado = await _guardado.GuardarBytesAsync(
                 stream, "auditoria.pdf", extension: "pdf", tipoMime: "application/pdf");

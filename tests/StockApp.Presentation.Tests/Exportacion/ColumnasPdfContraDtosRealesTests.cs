@@ -101,8 +101,8 @@ public class ColumnasPdfContraDtosRealesTests
     public void AuditoriaLog_ColumnasPdf_ResuelvenContraElDtoRealYGeneranPdf() =>
         VerificarPantalla(
             AuditoriaLogViewModel.ColumnasPdf,
-            new AuditoriaItemDto(
-                FechaFija, "admin", AccionAuditada.CambioPrecio, "Producto", 1,
+            new FilaAuditoriaPdf(
+                FechaFija, "admin", TextoAccionAuditada.De(AccionAuditada.CambioPrecio), "Producto", 1,
                 "PrecioCosto: 45,50 -> 48,00"));
 
     [Fact]

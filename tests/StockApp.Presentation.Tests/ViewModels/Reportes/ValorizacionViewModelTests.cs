@@ -427,7 +427,7 @@ public class ValorizacionViewModelTests
         var (vm, _, _, _) = Armar();
 
         Assert.Equal("No hay productos para valorizar", vm.TituloVacio);
-        Assert.Equal("Cuando haya productos activos, su valor va a aparecer acá.", vm.MensajeVacio);
+        Assert.Equal("Cuando haya productos activos, su valor aparece acá.", vm.MensajeVacio);
     }
 
     [Fact]

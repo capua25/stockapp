@@ -80,7 +80,7 @@ public partial class ValorizacionViewModel : ViewModelBase
 
     public string TituloVacio => "No hay productos para valorizar";
 
-    public string MensajeVacio => "Cuando haya productos activos, su valor va a aparecer acá.";
+    public string MensajeVacio => "Cuando haya productos activos, su valor aparece acá.";
 
     /// <summary>Sin servidor la grilla queda vacía: el reintento no puede mostrar las filas de la consulta anterior.</summary>
     protected override void AlPerderConexion()
