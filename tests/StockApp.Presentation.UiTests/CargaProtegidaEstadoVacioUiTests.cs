@@ -136,10 +136,11 @@ public class CargaProtegidaEstadoVacioUiTests
 
         Assert.True(vm.SinPermiso);
 
-        var estadoVacio = BuscarEstadoVacio(window);
+        // Reporte v2: el EstadoVacio de "Sin permiso" es del tema v2 (Controls.V2) y lo pone MarcoReporte.
+        var estadoVacio = window.GetVisualDescendants().OfType<StockApp.Presentation.Controls.V2.EstadoVacio>()
+            .FirstOrDefault(e => ArbolVisual.EsVisibleEnArbol(e));
         Assert.True(estadoVacio is not null, "StockCategoriaView no muestra EstadoVacio en su árbol visual.");
-        Assert.True(estadoVacio!.IsVisible, "EstadoVacio está en el árbol pero IsVisible es false.");
-        Assert.True(estadoVacio.EsError);
+        Assert.True(estadoVacio!.EsError);
         Assert.False(string.IsNullOrWhiteSpace(estadoVacio.Mensaje));
     }
 }

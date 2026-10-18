@@ -35,18 +35,20 @@ public class ReportesAlineacionNumericaTests
     [AvaloniaFact]
     public void Montar_StockCategoriaViewConDatos_LasCeldasNumericasQuedanAlineadasADerecha()
     {
-        var vista = new StockCategoriaView();
+        // Reporte v2: la grilla se muestra con filas del ViewModel (MarcoReporte.HayDatos), así que los datos entran por el servicio.
+        var servicio = new V2.ReporteStockFake
+        {
+            Categorias = { new StockCategoriaDto("Ferretería", 12, 340m, 15000m), new StockCategoriaDto("Electricidad", 5, -3m, 8000m) },
+        };
+        var vm = new StockApp.Presentation.ViewModels.Reportes.StockCategoriaViewModel(servicio, new V2.GuardadoSinUsoFake(),
+            new ConfirmacionServiceFake(), new V2.PdfExporterSinUsoFake(), new ServicioAperturaArchivoFake(), new SesionFake(StockApp.Domain.Enums.RolUsuario.Admin));
+        var vista = new StockCategoriaView { DataContext = vm };
         var window = new Window { Width = 1000, Height = 600, Content = vista };
         window.Show();
         Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
 
         var grilla = vista.GetVisualDescendants().OfType<DataGrid>().Single();
-        grilla.ItemsSource = new[]
-        {
-            new StockCategoriaDto("Ferretería", 12, 340m, 15000m),
-            new StockCategoriaDto("Electricidad", 5, -3m, 8000m),
-        };
-        Dispatcher.UIThread.RunJobs();
 
         var celdasNum = window.GetVisualDescendants()
             .OfType<DataGridCell>()
@@ -60,7 +62,8 @@ public class ReportesAlineacionNumericaTests
         // (ver DataGridCeldaNumericaOrdenTests y Themes/DataGrid.axaml), alinea el TextBlock.
         Assert.All(celdasNum, c =>
         {
-            var tb = c.GetVisualDescendants().OfType<TextBlock>().Single();
+            // El número es el último TextBlock de la celda: la de STOCK TOTAL negativa lleva antes el texto de la Insignia.
+            var tb = c.GetVisualDescendants().OfType<TextBlock>().Last();
             var anchoTexto = tb.DesiredSize.Width - tb.Margin.Left - tb.Margin.Right;
             var bordeDerecho = tb.TranslatePoint(new Point(tb.Bounds.Width, 0), c)!.Value.X;
             Assert.True(Math.Abs(tb.Bounds.Width - anchoTexto) < 0.5,

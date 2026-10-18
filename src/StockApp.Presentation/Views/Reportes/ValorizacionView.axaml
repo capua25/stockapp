@@ -3,106 +3,113 @@
              xmlns:vm="using:StockApp.Presentation.ViewModels.Reportes"
              xmlns:dto="using:StockApp.Application.Reportes"
              xmlns:conv="using:StockApp.Presentation.Converters"
-             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:b="using:StockApp.Presentation.Behaviors"
+             xmlns:r="using:StockApp.Presentation.Views.Reportes"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="600"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
              x:Class="StockApp.Presentation.Views.Reportes.ValorizacionView"
-             x:DataType="vm:ValorizacionViewModel">
+             x:DataType="vm:ValorizacionViewModel"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
 
-    <Grid>
-    <DockPanel Margin="{DynamicResource MargenVista}">
+    <!-- UI v2. Espejo: docs/ui-v2/mockups/reportes/. Pantalla de consulta: sin botón primario. La estructura común (breadcrumb al hub,
+         estados de carga, sin conexión, sin permiso y vacío, pie) la da MarcoReporte. -->
+    <DockPanel Margin="28,24">
+        <r:MarcoReporte x:Name="Marco" Titulo="Valorización de inventario"
+                        VolverCommand="{Binding VolverCommand}"
+                        HayDatos="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.HayElementos}}"
+                        TituloVacio="{Binding TituloVacio}"
+                        MensajeVacio="{Binding MensajeVacio}">
 
-        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="REPORTES" Titulo="Valorización de inventario">
-            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
-                <Button Classes="primary" Content="Buscar" Command="{Binding BuscarCommand}" />
-                <Button Classes="secondary" Content="Exportar PDF" Command="{Binding ExportarPdfCommand}" />
-            </StackPanel>
-        </c:HeaderVista>
+            <r:MarcoReporte.Acciones>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="BotonActualizar" Classes="secundario" Content="Actualizar" Command="{Binding BuscarCommand}" />
+                    <Button x:Name="BotonExportarPdf" Classes="secundario" Content="Exportar PDF" Command="{Binding ExportarPdfCommand}" />
+                </StackPanel>
+            </r:MarcoReporte.Acciones>
 
-        <Border Classes="card">
-            <Grid RowDefinitions="*,Auto">
-
-                <!-- Grilla de valorización -->
-                <DataGrid Grid.Row="0"
-                          ItemsSource="{Binding Items}"
-                          IsReadOnly="True"
-                          CanUserResizeColumns="True"
-                          GridLinesVisibility="Horizontal"
+            <r:MarcoReporte.Contenido>
+                <DataGrid x:Name="Grilla" ItemsSource="{Binding Items}" IsReadOnly="True" CanUserSortColumns="True" CanUserResizeColumns="True"
                           ScrollViewer.HorizontalScrollBarVisibility="Auto">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Código" Binding="{Binding Codigo}" Width="Auto" MinWidth="80" />
-                        <DataGridTemplateColumn Header="Nombre" Width="2*" SortMemberPath="Nombre">
+                        <DataGridTemplateColumn Header="CÓDIGO" SortMemberPath="Codigo" Width="Auto" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:ValorizacionItemDto">
+                                    <TextBlock Text="{Binding Codigo}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding Codigo}"
+                                               b:TooltipSiSeCorta.Activo="True"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="NOMBRE" SortMemberPath="Nombre" Width="*">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:ValorizacionItemDto">
                                     <TextBlock Text="{Binding Nombre}"
                                                TextTrimming="CharacterEllipsis"
                                                ToolTip.Tip="{Binding Nombre}"
+                                               b:TooltipSiSeCorta.Activo="True"
                                                VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Categoría" Width="*" SortMemberPath="Categoria">
+                        <DataGridTemplateColumn Header="CATEGORÍA" SortMemberPath="Categoria" Width="Auto" b:ColumnaAuto.Medir="True">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:ValorizacionItemDto">
                                     <TextBlock Text="{Binding Categoria}"
                                                TextTrimming="CharacterEllipsis"
                                                ToolTip.Tip="{Binding Categoria}"
+                                               b:TooltipSiSeCorta.Activo="True"
                                                VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Stock" Width="220" MinWidth="100" SortMemberPath="StockActual">
+                        <DataGridTemplateColumn Header="STOCK" SortMemberPath="StockActual" Width="220" CellStyleClasses="num">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:ValorizacionItemDto">
-                                    <!-- Columna de ANCHO FIJO (220) + badge y número en UNA sola celda de Grid (badge
-                                         a la izquierda, número a la derecha). Con una columna Auto y un StackPanel
-                                         Right, la grilla recicla las celdas al ordenar y una celda que pasa de
-                                         stock negativo (badge visible) a positivo (oculto) conserva el arreglo
-                                         del valor anterior: número corrido o recortado (ver ProductoListView y
-                                         ReportesStockOrdenTests). 220 = peor caso "-99999,5": badge (102) +
-                                         número (62) + margen y padding de celda. -->
                                     <Grid VerticalAlignment="Center">
-                                        <c:BadgeEstado Texto="Stock negativo" Tono="Peligro"
-                                                       HorizontalAlignment="Left"
-                                                       IsVisible="{Binding StockActual, Converter={x:Static conv:EsNegativoConverter.Instance}}" />
+                                        <v2:Insignia Texto="Stock negativo" Variante="Peligro" HorizontalAlignment="Left"
+                                                     IsVisible="{Binding StockActual, Converter={x:Static conv:EsNegativoConverter.Instance}}" />
                                         <TextBlock Text="{Binding StockActual, Converter={x:Static conv:CantidadConverter.Instance}}"
-                                                   Foreground="{Binding StockActual, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}"
+                                                   Classes.negativo="{Binding StockActual, Converter={x:Static conv:EsNegativoConverter.Instance}}"
                                                    HorizontalAlignment="Right" VerticalAlignment="Center" />
                                     </Grid>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn Header="P. Costo"
-                                             Binding="{Binding PrecioCosto, Converter={x:Static conv:MonedaConverter.Instance}}"
-                                             Width="Auto" MinWidth="100" CellStyleClasses="num" />
-                        <DataGridTextColumn Header="Valor Costo"
-                                             Binding="{Binding ValorCosto, Converter={x:Static conv:MonedaConverter.Instance}}"
-                                             Width="Auto" MinWidth="100" CellStyleClasses="num" />
+                        <DataGridTemplateColumn Header="P. COSTO" SortMemberPath="PrecioCosto" Width="Auto" b:ColumnaAuto.Medir="True" b:ColumnaAuto.Conversor="{x:Static conv:MonedaConverter.Instance}" CellStyleClasses="num">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:ValorizacionItemDto">
+                                    <TextBlock Text="{Binding PrecioCosto, Converter={x:Static conv:MonedaConverter.Instance}}"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="VALOR COSTO" SortMemberPath="ValorCosto" Width="Auto" b:ColumnaAuto.Medir="True" b:ColumnaAuto.Conversor="{x:Static conv:MonedaConverter.Instance}" CellStyleClasses="num">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:ValorizacionItemDto">
+                                    <TextBlock Text="{Binding ValorCosto, Converter={x:Static conv:MonedaConverter.Instance}}"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                     </DataGrid.Columns>
                 </DataGrid>
+            </r:MarcoReporte.Contenido>
 
-                <!-- Totales -->
-                <StackPanel Grid.Row="1"
-                            Orientation="Horizontal"
-                            Spacing="24"
-                            Margin="0,12,0,0"
-                            IsVisible="{Binding Totales, Converter={x:Static ObjectConverters.IsNotNull}}">
-                    <TextBlock Text="Total Valor Costo:" Classes="seccion" VerticalAlignment="Center" />
-                    <TextBlock Text="{Binding Totales.TotalValorCosto, Converter={x:Static conv:MonedaConverter.Instance}}"
-                               Classes="body" FontWeight="SemiBold" VerticalAlignment="Center" />
-                </StackPanel>
-
-            </Grid>
-        </Border>
-
+            <r:MarcoReporte.Pie>
+                <Grid>
+                    <TextBlock x:Name="PieConteo" Classes="pie-conteo" VerticalAlignment="Center"
+                               Text="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.Instance}, ConverterParameter='producto|productos'}" />
+                    <StackPanel x:Name="PieTotal" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                        <TextBlock Classes="etiqueta-campo" Text="Total valor costo" VerticalAlignment="Center" />
+                        <TextBlock Classes="titulo-seccion" FontFeatures="+tnum,-calt" Text="{Binding Totales.TotalValorCosto, Converter={x:Static conv:MonedaConverter.Instance}}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Grid>
+            </r:MarcoReporte.Pie>
+        </r:MarcoReporte>
     </DockPanel>
-
-        <!-- bugfix "pantalla muda ante un 403": ver ViewModelBase.EjecutarCargaProtegidaAsync. -->
-        <c:EstadoVacio Titulo="Sin permiso"
-                       Mensaje="{Binding MensajeSinPermiso}"
-                       EsError="True"
-                       IsVisible="{Binding SinPermiso}" />
-    </Grid>
-
 </UserControl>

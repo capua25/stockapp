@@ -91,6 +91,10 @@ public class DataGridColumnasAutoAjusteTests
 
     private static void Cargar(DataGrid grid, System.Collections.IEnumerable items)
     {
+        // Los reportes v2 muestran la grilla solo con filas (MarcoReporte.HayDatos): sin ViewModel hay que mostrarla a mano.
+        if (grid.FindAncestorOfType<StockApp.Presentation.Views.Reportes.MarcoReporte>() is not null)
+            MarcoReporteTest.MostrarContenido(grid);
+
         grid.ItemsSource = new DataGridCollectionView(items);
         Dispatcher.UIThread.RunJobs();
     }
@@ -213,8 +217,8 @@ public class DataGridColumnasAutoAjusteTests
         var (window, grid) = Montar(new ValorizacionView(), ancho);
         Cargar(grid, ValorizacionReal());
 
-        AssertSinRecorte(grid, window, "carga", "P. Costo", "Valor Costo", "Código");
-        Assert.Equal(220, Columna(grid, "Stock").ActualWidth, 1);
+        AssertSinRecorte(grid, window, "carga", "P. COSTO", "VALOR COSTO", "CÓDIGO");
+        Assert.Equal(220, Columna(grid, "STOCK").ActualWidth, 1);
     }
 
     [AvaloniaTheory]
@@ -533,13 +537,20 @@ public class DataGridColumnasAutoAjusteTests
     [AvaloniaFact]
     public void G_ValorizacionEnShellA1366_NombreYCategoriaNoBajanDelPiso()
     {
-        var (window, grid) = MontarEnShell(new ValorizacionView(), 1366, 768);
-        Cargar(grid, ValorizacionReal());
+        var vista = new ValorizacionView();
+        var (window, grid) = MontarEnShell(vista, 1366, 768);
+        // Reporte v2: la grilla se muestra con filas del ViewModel (MarcoReporte.HayDatos): los datos entran por el servicio.
+        var vm = new StockApp.Presentation.ViewModels.Reportes.ValorizacionViewModel(
+            new V2.ReporteStockFake { Valorizacion = ValorizacionReal() }, new V2.GuardadoSinUsoFake(), new ConfirmacionServiceFake(),
+            new V2.PdfExporterSinUsoFake(), new ServicioAperturaArchivoFake(), new SesionFake(RolUsuario.Admin));
+        vista.DataContext = vm;
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
         Reportar("Valorización 1366", window, grid);
 
-        AssertEstrellasEnPiso(grid, "carga", "Nombre", "Categoría");
-        AssertSinRecorte(grid, window, "carga", "Categoría", "P. Costo", "Valor Costo", "Código");
-        Assert.Equal(220, Columna(grid, "Stock").ActualWidth, 1);
+        AssertEstrellasEnPiso(grid, "carga", "NOMBRE");
+        AssertSinRecorte(grid, window, "carga", "CATEGORÍA", "P. COSTO", "VALOR COSTO", "CÓDIGO");
+        Assert.Equal(220, Columna(grid, "STOCK").ActualWidth, 1);
         AssertScrollSiDesborda(grid, "carga");
     }
 

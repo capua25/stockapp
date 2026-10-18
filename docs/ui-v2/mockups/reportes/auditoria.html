@@ -21,10 +21,10 @@
   .celda-stock > .valor { margin-left: auto; width: calc-size(fit-content, round(up, size, 1px)); }
   /* Campos de la barra: una sola fila con 8 de separación (BarraFiltros sin buscador). */
   .campo-corto { width: 140px; }
-  /* Anchos medidos en headless (MedicionTemporal6), iguales a 1280 y a 1366: FECHA (no cede), USUARIO, ACCIÓN (con AccionAuditadaConverter), ENTIDAD y ENTIDAD ID
-     (MinWidth 80) miden su contenido (ColumnaAuto); DETALLE (*) se lleva el resto (305 a 1280, 391 a 1366; el detalle largo se
+  /* Anchos medidos en headless (MedicionTemporal6), iguales a 1280 y a 1366: FECHA 128 (no cede), USUARIO, ACCIÓN (con AccionAuditadaConverter), ENTIDAD y ENTIDAD ID
+     (MinWidth 80) miden su contenido (ColumnaAuto); DETALLE (*) se lleva el resto (327 a 1280, 413 a 1366; el detalle largo se
      corta con elipsis y tooltip). Suma 946 y 1032: entra sin scroll horizontal. */
-  .col-fecha { flex: 0 0 148px; }
+  .col-fecha { flex: 0 0 128px; }
   .col-usuario { flex: 0 0 91px; }
   .col-accion { flex: 0 0 174px; }
   .col-entidad { flex: 0 0 123px; }

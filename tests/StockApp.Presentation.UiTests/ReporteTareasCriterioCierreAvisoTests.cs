@@ -49,7 +49,7 @@ public class ReporteTareasCriterioCierreAvisoTests
     private sealed class ReporteTareasServiceFake : IReporteTareasService
     {
         public Task<ReporteTareasDto> ObtenerAsync(FiltroReporteTareas filtro) =>
-            Task.FromResult(new ReporteTareasDto(new List<FilaReporteTareas>(), 0));
+            Task.FromResult(new ReporteTareasDto(new List<FilaReporteTareas> { new("Zona Centro", 0, 0, 3, 1, 4) }, 4));
     }
 
     // Fakes mínimos no-op para las 6 dependencias nuevas del constructor (spec 2026-09-18):
@@ -105,8 +105,9 @@ public class ReporteTareasCriterioCierreAvisoTests
         return (window, vm);
     }
 
-    private static TextBlock AvisoTextBlock(Window window) =>
-        window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == TextoAviso);
+    // Reporte v2: el aviso es una v2:Alerta Advertencia (va con la grilla: sin filas no hay columnas en cero que explicar).
+    private static StockApp.Presentation.Controls.V2.Alerta AvisoTextBlock(Window window) =>
+        window.GetVisualDescendants().OfType<StockApp.Presentation.Controls.V2.Alerta>().First(t => t.Texto == TextoAviso);
 
     [AvaloniaFact]
     public void AvisoVisible_ConCriterioCierre()

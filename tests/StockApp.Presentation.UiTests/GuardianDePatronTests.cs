@@ -65,12 +65,6 @@ public class GuardianDePatronTests
     [InlineData(typeof(DocumentoFormView), "Nuevo documento", "DOCUMENTOS")]
     [InlineData(typeof(TareaListView), "Tareas", "TAREAS")]
     [InlineData(typeof(TareaFormView), "Nueva tarea", "TAREAS")]
-    [InlineData(typeof(ValorizacionView), "Valorización de inventario", "REPORTES")]
-    [InlineData(typeof(StockCategoriaView), "Stock por categoría", "REPORTES")]
-    [InlineData(typeof(MasMovidosView), "Productos más movidos", "REPORTES")]
-    [InlineData(typeof(HistorialPorProductoView), "Historial por producto", "REPORTES")]
-    [InlineData(typeof(AuditoriaLogView), "Auditoría", "REPORTES")]
-    [InlineData(typeof(ReporteTareasView), "Estadística de tareas", "REPORTES")]
     [InlineData(typeof(UsuariosAdminView), "Administración de usuarios", "ADMINISTRACIÓN")]
     [InlineData(typeof(MantenimientoView), "Mantenimiento", "ADMINISTRACIÓN")]
     public void Vista_TieneHeaderVistaConElTituloEsperado(Type tipoVista, string? titulo, string? eyebrow)
@@ -109,12 +103,6 @@ public class GuardianDePatronTests
         typeof(DocumentoFormView),
         typeof(TareaListView),
         typeof(TareaFormView),
-        typeof(ValorizacionView),
-        typeof(StockCategoriaView),
-        typeof(MasMovidosView),
-        typeof(HistorialPorProductoView),
-        typeof(AuditoriaLogView),
-        typeof(ReporteTareasView),
         typeof(UsuariosAdminView),
         typeof(MantenimientoView),
     };
@@ -211,6 +199,14 @@ public class GuardianDePatronTests
         typeof(GastosView),
         typeof(GastoFormView),
         typeof(PagosGastoView),
+        typeof(ReportesView),
+        typeof(MarcoReporte),
+        typeof(ValorizacionView),
+        typeof(StockCategoriaView),
+        typeof(MasMovidosView),
+        typeof(HistorialPorProductoView),
+        typeof(AuditoriaLogView),
+        typeof(ReporteTareasView),
     };
 
     /// <summary>

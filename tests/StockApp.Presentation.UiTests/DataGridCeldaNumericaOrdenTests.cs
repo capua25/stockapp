@@ -96,11 +96,12 @@ public class DataGridCeldaNumericaOrdenTests
         var vista = new HistorialPorProductoView();
         var window = Montar(vista);
         var grid = vista.GetVisualDescendants().OfType<DataGrid>().Single();
+        MarcoReporteTest.MostrarContenido(grid);
 
         grid.ItemsSource = (IReadOnlyList<MovimientoHistorialDto>)Enumerable.Range(0, Cantidades.Length).Select(MovimientoDe).ToList();
         Dispatcher.UIThread.RunJobs();
 
-        OrdenarYVerificar(window, grid, "Cantidad", "Cantidad", "P. Unitario", "P. Unitario", "Stock Nuevo");
+        OrdenarYVerificar(window, grid, "CANTIDAD", "CANTIDAD", "P. UNITARIO", "P. UNITARIO", "STOCK NUEVO");
     }
 
     [AvaloniaFact]
@@ -109,12 +110,13 @@ public class DataGridCeldaNumericaOrdenTests
         var vista = new ValorizacionView();
         var window = Montar(vista);
         var grid = vista.GetVisualDescendants().OfType<DataGrid>().Single();
+        MarcoReporteTest.MostrarContenido(grid);
 
         grid.ItemsSource = (IReadOnlyList<ValorizacionItemDto>)Enumerable.Range(0, Cantidades.Length)
             .Select(i => new ValorizacionItemDto(i, $"C{i}", $"Producto {i}", "Categoría", Cantidades[i], Precios[i], Cantidades[i] * Precios[i]))
             .ToList();
         Dispatcher.UIThread.RunJobs();
 
-        OrdenarYVerificar(window, grid, "P. Costo", "P. Costo", "Valor Costo", "Valor Costo", "Stock");
+        OrdenarYVerificar(window, grid, "P. COSTO", "P. COSTO", "VALOR COSTO", "VALOR COSTO", "STOCK");
     }
 }

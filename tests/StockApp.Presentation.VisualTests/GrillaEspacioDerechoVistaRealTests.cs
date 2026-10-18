@@ -10,21 +10,16 @@ using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using StockApp.Application.Movimientos;
-using StockApp.Domain.Enums;
-using StockApp.Presentation.Behaviors;
-using StockApp.Presentation.Views.Reportes;
 
 namespace StockApp.Presentation.VisualTests;
 
 /// <summary>
-/// Guardián del hueco a la derecha del texto cortado, medido en una VISTA REAL del tema viejo
-/// montada como la monta el shell: SIN la clase <c>.ui2</c> (la región de contenido no la tiene, ver
-/// ShellMainView.axaml), o sea con Themes/DataGrid.axaml. El bug lo reportó el usuario en Historial
-/// de movimientos; esa vista pasó a v2 y el guardián se mudó a Historial por producto, que sigue en
-/// el tema viejo con la misma clase de grilla. Render Skia: px entre el último píxel de tinta y el
-/// borde derecho del header o la celda, con la columna Comentario angostada a 60 px y "Prueba UI V2",
-/// que no entra.
+/// Guardián del hueco a la derecha del texto cortado, medido sobre un DataGrid SINTÉTICO del tema viejo: SIN la clase
+/// <c>.ui2</c> (como la región de contenido del shell, ver ShellMainView.axaml), o sea con Themes/DataGrid.axaml directamente y
+/// sin depender de ninguna vista de la app (las vistas migran a v2 y se borran: este guardián ya pasó de Historial de
+/// movimientos a Historial por producto y a Zonas, y ahora no se mueve más). El bug lo reportó el usuario en Historial de
+/// movimientos. Render Skia: px entre el último píxel de tinta y el borde derecho del header o la celda, con la columna
+/// "Nombre" angostada a 50 px y "Prueba UI V2", que no entra.
 /// Antes del fix (4ccb347): header "Product" con 45 px de hueco (padding 12 + 32 reservados para
 /// la flecha de orden + separador) y celda "Prueba U…" con 17 (padding 12 + Margin 4 de la vista).
 /// Tope del header 6: padding derecho 4 + separador 1 + 1 de antialiasing del glifo (el header
@@ -34,40 +29,55 @@ namespace StockApp.Presentation.VisualTests;
 public class GrillaEspacioDerechoVistaRealTests
 {
     private const int EspacioMaximoPx = 6;
-    private const double AnchoComentario = 60;
+    private const double AnchoComentario = 50;
 
-    private static (Window Ventana, DataGrid Grilla, DataGridColumn Comentario) Montar()
+    private sealed record Fila(string Nombre, string Estado);
+
+    private static DataGridTemplateColumn Columna(string header, string ruta, DataGridLength ancho) => new()
     {
-        var vista = new HistorialPorProductoView();
-        // Como si el usuario la hubiese angostado: piso propio de 60 (no el de 160 del behavior). Comentario
-        // es la última columna y la única *: se estira hasta el borde de la grilla (a 1000 de ventana mide 139
-        // y nada se corta; por debajo de unos 920 ya no entra y la grilla scrollea, con la columna saliendo
-        // del área visible). A 925 queda en unos 64 px, sin scroll, y el título y la celda se cortan.
-        // Frágil: esos ~64 px son lo que dejan las demás columnas; si cambia el ancho de cualquiera, la precondición
-        // de corte de abajo falla y hay que recalcular la ventana. Cuando HistorialPorProductoView pase a v2 (sin
-        // Themes/DataGrid.axaml), este guardián del tema viejo se tiene que mudar a otra vista que siga en él.
-        var comentario = vista.GetLogicalDescendants().OfType<DataGrid>().First().Columns.First(c => c.Header as string == "Comentario");
-        DataGridColumnasAutoBehavior.SetPisoProporcional(comentario, AnchoComentario);
-        var ventana = new Window { Width = 925, Height = 600, Content = vista };
+        Header = header,
+        Width = ancho,
+        SortMemberPath = ruta,
+        CellTemplate = new Avalonia.Controls.Templates.FuncDataTemplate<Fila>((_, _) => new TextBlock
+        {
+            [!TextBlock.TextProperty] = new Avalonia.Data.Binding(ruta),
+            TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        }),
+    };
+
+    /// <summary>Las dos formas de columna de texto que hay en las grillas del tema viejo: de plantilla ("Nombre") y DataGridTextColumn ("Observaciones").</summary>
+    public static readonly string[] Columnas = ["Nombre", "Observaciones"];
+
+    private static (Window Ventana, DataGrid Grilla, DataGridColumn Comentario) Montar(string columna)
+    {
+        // Misma forma que las grillas del tema viejo: columnas de texto, una * de relleno, orden por click y resize.
+        var nombre = Columna("Nombre", nameof(Fila.Nombre), new DataGridLength(AnchoComentario));
+        nombre.MinWidth = AnchoComentario;
+        var texto = new DataGridTextColumn
+        {
+            Header = "Observaciones", Binding = new Avalonia.Data.Binding(nameof(Fila.Nombre)), Width = new DataGridLength(AnchoComentario), MinWidth = AnchoComentario,
+        };
+        var grilla = new DataGrid { IsReadOnly = true, CanUserSortColumns = true, CanUserResizeColumns = true, Height = 300 };
+        grilla.Columns.Add(nombre);
+        grilla.Columns.Add(texto);
+        grilla.Columns.Add(Columna("Estado", nameof(Fila.Estado), new DataGridLength(1, DataGridLengthUnitType.Star)));
+        var filas = Enumerable.Range(0, 3).Select(_ => new Fila("Prueba UI V2", "Activa")).ToList();
+        grilla.ItemsSource = new DataGridCollectionView(filas);
+        var vista = new UserControl { Content = grilla };   // sin la clase ui2: tema viejo
+        var ventana = new Window { Width = 400, Height = 400, Content = vista };
         ventana.Show();
         Dispatcher.UIThread.RunJobs();
-        var grilla = vista.GetLogicalDescendants().OfType<DataGrid>().First();
-        var filas = Enumerable.Range(0, 3).Select(i => new MovimientoHistorialDto(i, i, "p", TipoMovimiento.Entrada,
-            MotivoMovimiento.Compra, 1, 1, 1, 1, "Prueba UI V2", new DateTime(2026, 9, 30, 15, 0, 0, DateTimeKind.Utc), 1, "admin")).ToList();
-        grilla.ItemsSource = new DataGridCollectionView(filas);
-        Dispatcher.UIThread.RunJobs();
-        comentario.Width = new DataGridLength(AnchoComentario);
-        comentario.MinWidth = AnchoComentario;
         Refrescar(ventana);
         // Precondición: el header y la celda tienen que quedar CORTADOS; si no, no hay hueco que medir.
-        var textoHeader = HeaderComentario(grilla).GetVisualDescendants().OfType<TextBlock>().Single();
-        var textoCelda = CeldaComentario(ventana, grilla).GetVisualDescendants().OfType<TextBlock>().Single();
+        var textoHeader = HeaderComentario(grilla, columna).GetVisualDescendants().OfType<TextBlock>().Single();
+        var textoCelda = CeldaComentario(ventana, grilla, columna).GetVisualDescendants().OfType<TextBlock>().Single();
         foreach (var tb in new[] { textoHeader, textoCelda })
         {
             Assert.True(tb.Bounds.Width < AnchoNatural(tb) - 1,
-                $"'{tb.Text}' entra entero ({tb.Bounds.Width:0.#} de {AnchoNatural(tb):0.#}px, columna de {HeaderComentario(grilla).Bounds.Width:0}): no hay corte que medir.");
+                $"'{tb.Text}' entra entero ({tb.Bounds.Width:0.#} de {AnchoNatural(tb):0.#}px, columna de {HeaderComentario(grilla, columna).Bounds.Width:0}): no hay corte que medir.");
         }
-        return (ventana, grilla, comentario);
+        return (ventana, grilla, columna == "Nombre" ? nombre : texto);
     }
 
     private static double AnchoNatural(TextBlock tb)
@@ -84,12 +94,12 @@ public class GrillaEspacioDerechoVistaRealTests
         Dispatcher.UIThread.RunJobs();
     }
 
-    private static DataGridColumnHeader HeaderComentario(DataGrid grilla) =>
-        grilla.GetVisualDescendants().OfType<DataGridColumnHeader>().Single(h => h.Content as string == "Comentario");
+    private static DataGridColumnHeader HeaderComentario(DataGrid grilla, string columna) =>
+        grilla.GetVisualDescendants().OfType<DataGridColumnHeader>().Single(h => h.Content as string == columna);
 
-    private static DataGridCell CeldaComentario(Window ventana, DataGrid grilla)
+    private static DataGridCell CeldaComentario(Window ventana, DataGrid grilla, string columna)
     {
-        var x = HeaderComentario(grilla).TranslatePoint(new Point(0, 0), ventana)!.Value.X;
+        var x = HeaderComentario(grilla, columna).TranslatePoint(new Point(0, 0), ventana)!.Value.X;
         return grilla.GetVisualDescendants().OfType<DataGridCell>()
             .First(c => Math.Abs(c.TranslatePoint(new Point(0, 0), ventana)!.Value.X - x) < 1);
     }
@@ -112,14 +122,16 @@ public class GrillaEspacioDerechoVistaRealTests
         throw new InvalidOperationException($"Sin tinta en {control.GetType().Name}: la medición no custodia nada.");
     }
 
-    [AvaloniaFact]
-    public void HeaderComentario_TextoCortadoLlegaHastaElBorde_SinReservaParaLaFlechaDeOrden()
+    [AvaloniaTheory]
+    [InlineData("Nombre")]
+    [InlineData("Observaciones")]
+    public void HeaderComentario_TextoCortadoLlegaHastaElBorde_SinReservaParaLaFlechaDeOrden(string columna)
     {
-        var (ventana, grilla, _) = Montar();
-        var header = HeaderComentario(grilla);
+        var (ventana, grilla, _) = Montar(columna);
+        var header = HeaderComentario(grilla, columna);
         var espacio = EspacioDerecho(ventana, header);
         Assert.True(espacio <= EspacioMaximoPx,
-            $"Header 'Comentario' de {header.Bounds.Width:0}px: {espacio}px vacíos a la derecha del texto cortado (Padding={header.Padding}).");
+            $"Header '{columna}' de {header.Bounds.Width:0}px: {espacio}px vacíos a la derecha del texto cortado (Padding={header.Padding}).");
     }
 
     /// <summary>
@@ -128,11 +140,13 @@ public class GrillaEspacioDerechoVistaRealTests
     /// derecho 4 + 1 de antialiasing + el carácter más ancho del texto. Antes del fix el piso era 16
     /// (padding 12 + Margin 4) MÁS esa misma holgura.
     /// </summary>
-    [AvaloniaFact]
-    public void CeldaComentario_TextoConEllipsisLlegaHastaElBorde()
+    [AvaloniaTheory]
+    [InlineData("Nombre")]
+    [InlineData("Observaciones")]
+    public void CeldaComentario_TextoConEllipsisLlegaHastaElBorde(string columna)
     {
-        var (ventana, grilla, _) = Montar();
-        var celda = CeldaComentario(ventana, grilla);
+        var (ventana, grilla, _) = Montar(columna);
+        var celda = CeldaComentario(ventana, grilla, columna);
         var texto = celda.GetVisualDescendants().OfType<TextBlock>().Single();
         var caracterMasAncho = texto.Text!.Select(c => AnchoNatural(new TextBlock
             { Text = c.ToString(), FontSize = texto.FontSize, FontWeight = texto.FontWeight, FontFamily = texto.FontFamily })).Max();
@@ -148,10 +162,10 @@ public class GrillaEspacioDerechoVistaRealTests
     [InlineData(ListSortDirection.Descending)]
     public void ColumnaOrdenada_MuestraLaFlechaSeparadaDelTextoYDentroDelHeader(ListSortDirection direccion)
     {
-        var (ventana, grilla, comentario) = Montar();
+        var (ventana, grilla, comentario) = Montar("Nombre");
         comentario.Sort(direccion);
         Refrescar(ventana);
-        var header = HeaderComentario(grilla);
+        var header = HeaderComentario(grilla, "Nombre");
         var flecha = header.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().Single(p => p.Name == "SortIcon");
         var presentador = header.GetVisualDescendants().OfType<ContentPresenter>().Single(p => p.Name == "PART_ContentPresenter");
         Assert.True(flecha.IsEffectivelyVisible && flecha.Bounds.Width > 0 && flecha.Bounds.Height > 0,

@@ -3,151 +3,141 @@
              xmlns:vm="using:StockApp.Presentation.ViewModels.Reportes"
              xmlns:dto="using:StockApp.Application.Reportes"
              xmlns:conv="using:StockApp.Presentation.Converters"
-             xmlns:beh="using:StockApp.Presentation.Behaviors"
-             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:b="using:StockApp.Presentation.Behaviors"
+             xmlns:r="using:StockApp.Presentation.Views.Reportes"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
              x:Class="StockApp.Presentation.Views.Reportes.ReporteTareasView"
-             x:DataType="vm:ReporteTareasViewModel">
+             x:DataType="vm:ReporteTareasViewModel"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
 
-    <Grid>
-    <DockPanel Margin="{DynamicResource MargenVista}">
+    <!-- UI v2. Espejo: docs/ui-v2/mockups/reportes/. Pantalla de consulta: sin botón primario. La estructura común (breadcrumb al hub,
+         estados de carga, sin conexión, sin permiso y vacío, pie) la da MarcoReporte. -->
+    <DockPanel Margin="28,24">
+        <r:MarcoReporte x:Name="Marco" Titulo="Estadística de tareas"
+                        VolverCommand="{Binding VolverCommand}"
+                        HayDatos="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.HayElementos}}"
+                        TituloVacio="{Binding TituloVacio}"
+                        MensajeVacio="{Binding MensajeVacio}"
+                        MensajeError="{Binding MensajeError}">
 
-        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="REPORTES" Titulo="Estadística de tareas">
-            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
-                <Button Classes="primary" Content="Buscar" Command="{Binding BuscarCommand}" />
-                <Button Classes="secondary" Content="Exportar PDF" Command="{Binding ExportarPdfCommand}" />
-            </StackPanel>
-        </c:HeaderVista>
-
-        <Border Classes="card">
-            <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
-
-                <!-- Filtros: agrupador, criterio de fecha, rango -->
-                <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="{DynamicResource Espacio3}"
-                            VerticalAlignment="Bottom" Margin="0,0,0,12">
-                    <StackPanel MinWidth="220">
-                        <c:CampoFormulario Etiqueta="Agrupar por">
-                            <ComboBox ItemsSource="{Binding AgrupadoresDisponibles}"
-                                      SelectedItem="{Binding AgrupadorSeleccionado}"
-                                      HorizontalAlignment="Stretch">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding Nombre}" />
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
-                        </c:CampoFormulario>
-                    </StackPanel>
-                    <TextBlock Text="Desde:" VerticalAlignment="Center" />
-                    <CalendarDatePicker SelectedDate="{Binding FechaDesde}"
-                                        PlaceholderText="dd/mm/aaaa"
-                                        SelectedDateFormat="Custom"
-                                        CustomDateFormatString="dd/MM/yyyy"
-                                        beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
-                    <TextBlock Text="Hasta:" VerticalAlignment="Center" />
-                    <CalendarDatePicker SelectedDate="{Binding FechaHasta}"
-                                        PlaceholderText="dd/mm/aaaa"
-                                        SelectedDateFormat="Custom"
-                                        CustomDateFormatString="dd/MM/yyyy"
-                                        beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
+            <r:MarcoReporte.Acciones>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="BotonExportarPdf" Classes="secundario" Content="Exportar PDF" Command="{Binding ExportarPdfCommand}" />
                 </StackPanel>
+            </r:MarcoReporte.Acciones>
 
-                <!-- D16: criterio de fecha, radio button de dos opciones -->
-                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="{DynamicResource Espacio3}" Margin="0,0,0,12">
-                    <TextBlock Text="Contar por:" VerticalAlignment="Center" />
-                    <RadioButton GroupName="CriterioFecha" Content="Fecha de creación"
-                                 IsChecked="{Binding EsCriterioCreacion, Mode=TwoWay}" />
-                    <RadioButton GroupName="CriterioFecha" Content="Fecha de cierre"
-                                 IsChecked="{Binding EsCriterioCierre, Mode=TwoWay}" />
+            <r:MarcoReporte.Filtros>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <v2:CampoFormulario Etiqueta="Agrupar por">
+                        <ComboBox x:Name="ComboAgrupador" Width="220" ItemsSource="{Binding AgrupadoresDisponibles}" SelectedItem="{Binding AgrupadorSeleccionado}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:OpcionAgrupador">
+                                    <TextBlock Text="{Binding Nombre}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </v2:CampoFormulario>
+                    <v2:CampoFormulario Etiqueta="Contar por">
+                        <ComboBox x:Name="ComboCriterio" Width="180" ItemsSource="{Binding CriteriosDisponibles}" SelectedItem="{Binding CriterioOpcionSeleccionada}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:OpcionCriterio">
+                                    <TextBlock Text="{Binding Nombre}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </v2:CampoFormulario>
+                    <v2:CampoFormulario Etiqueta="Desde">
+                <CalendarDatePicker Width="140" SelectedDate="{Binding FechaDesde}" PlaceholderText="dd/mm/aaaa"
+                                    SelectedDateFormat="Custom" CustomDateFormatString="dd/MM/yyyy"
+                                    b:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
+            </v2:CampoFormulario>
+                    <v2:CampoFormulario Etiqueta="Hasta">
+                <CalendarDatePicker Width="140" SelectedDate="{Binding FechaHasta}" PlaceholderText="dd/mm/aaaa"
+                                    SelectedDateFormat="Custom" CustomDateFormatString="dd/MM/yyyy"
+                                    b:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
+            </v2:CampoFormulario>
+                    <Button x:Name="BotonBuscar" Classes="secundario" Content="Buscar" Command="{Binding BuscarCommand}" VerticalAlignment="Bottom" />
                 </StackPanel>
+            </r:MarcoReporte.Filtros>
 
-                <!-- D16: aviso explícito. Con criterio Cierre, Pendientes/En curso dan cero -->
-                <TextBlock Grid.Row="2"
-                           Text="Criterio 'Fecha de cierre': solo se cuentan tareas Terminadas o Canceladas. Las columnas 'Pendientes' y 'En curso' muestran 0 a propósito, no faltan datos."
-                           Foreground="{DynamicResource WarningBrush}"
-                           IsVisible="{Binding EsCriterioCierre}"
-                           Margin="0,0,0,12"
-                           TextWrapping="Wrap" />
-
-                <!-- Mensaje de error de rango -->
-                <TextBlock Grid.Row="2"
-                           Text="{Binding MensajeError}"
-                           Foreground="{DynamicResource DangerBrush}"
-                           IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                           Margin="0,0,0,12"
-                           TextWrapping="Wrap" />
-
-                <!-- Grilla del reporte-matriz -->
-                <DataGrid Grid.Row="3"
-                          ItemsSource="{Binding Items}"
-                          IsReadOnly="True"
-                          CanUserResizeColumns="True"
-                          GridLinesVisibility="Horizontal"
+            <r:MarcoReporte.Contenido>
+                <DockPanel>
+                    <v2:Alerta x:Name="AlertaCriterioCierre" DockPanel.Dock="Top" Margin="0,0,0,12" Variante="Advertencia"
+                               Texto="Criterio 'Fecha de cierre': solo se cuentan tareas Terminadas o Canceladas. Las columnas 'Pendientes' y 'En curso' muestran 0 a propósito, no faltan datos."
+                               IsVisible="{Binding EsCriterioCierre}" />
+                <DataGrid x:Name="Grilla" ItemsSource="{Binding Items}" IsReadOnly="True" CanUserSortColumns="True" CanUserResizeColumns="True"
                           ScrollViewer.HorizontalScrollBarVisibility="Auto">
                     <DataGrid.Columns>
-                        <DataGridTemplateColumn Header="Clasificador" Width="*" SortMemberPath="Clasificador">
+                        <DataGridTemplateColumn Header="CLASIFICADOR" SortMemberPath="Clasificador" Width="*">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:FilaReporteTareas">
                                     <TextBlock Text="{Binding Clasificador}"
                                                TextTrimming="CharacterEllipsis"
                                                ToolTip.Tip="{Binding Clasificador}"
+                                               b:TooltipSiSeCorta.Activo="True"
                                                VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTextColumn Binding="{Binding Pendientes, Converter={x:Static conv:CantidadConverter.Instance}}"
-                                            Width="Auto" MinWidth="90" CellStyleClasses="num">
-                            <DataGridTextColumn.Header>
-                                <TextBlock Text="Pendientes" HorizontalAlignment="Right" TextAlignment="Right" />
-                            </DataGridTextColumn.Header>
-                        </DataGridTextColumn>
-                        <DataGridTextColumn Binding="{Binding EnCurso, Converter={x:Static conv:CantidadConverter.Instance}}"
-                                            Width="Auto" MinWidth="90" CellStyleClasses="num">
-                            <DataGridTextColumn.Header>
-                                <TextBlock Text="En curso" HorizontalAlignment="Right" TextAlignment="Right" />
-                            </DataGridTextColumn.Header>
-                        </DataGridTextColumn>
-                        <DataGridTextColumn Binding="{Binding Terminadas, Converter={x:Static conv:CantidadConverter.Instance}}"
-                                            Width="Auto" MinWidth="90" CellStyleClasses="num">
-                            <DataGridTextColumn.Header>
-                                <TextBlock Text="Terminadas" HorizontalAlignment="Right" TextAlignment="Right" />
-                            </DataGridTextColumn.Header>
-                        </DataGridTextColumn>
-                        <DataGridTextColumn Binding="{Binding Canceladas, Converter={x:Static conv:CantidadConverter.Instance}}"
-                                            Width="Auto" MinWidth="90" CellStyleClasses="num">
-                            <DataGridTextColumn.Header>
-                                <TextBlock Text="Canceladas" HorizontalAlignment="Right" TextAlignment="Right" />
-                            </DataGridTextColumn.Header>
-                        </DataGridTextColumn>
-                        <DataGridTextColumn Binding="{Binding Total, Converter={x:Static conv:CantidadConverter.Instance}}"
-                                            Width="Auto" MinWidth="90" CellStyleClasses="num">
-                            <DataGridTextColumn.Header>
-                                <TextBlock Text="Total" HorizontalAlignment="Right" TextAlignment="Right" />
-                            </DataGridTextColumn.Header>
-                        </DataGridTextColumn>
+                        <DataGridTemplateColumn Header="PENDIENTES" SortMemberPath="Pendientes" Width="Auto" b:ColumnaAuto.Medir="True" CellStyleClasses="num">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:FilaReporteTareas">
+                                    <TextBlock Text="{Binding Pendientes}"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="EN CURSO" SortMemberPath="EnCurso" Width="Auto" b:ColumnaAuto.Medir="True" CellStyleClasses="num">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:FilaReporteTareas">
+                                    <TextBlock Text="{Binding EnCurso}"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="TERMINADAS" SortMemberPath="Terminadas" Width="Auto" b:ColumnaAuto.Medir="True" CellStyleClasses="num">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:FilaReporteTareas">
+                                    <TextBlock Text="{Binding Terminadas}"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="CANCELADAS" SortMemberPath="Canceladas" Width="Auto" b:ColumnaAuto.Medir="True" CellStyleClasses="num">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:FilaReporteTareas">
+                                    <TextBlock Text="{Binding Canceladas}"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="TOTAL" SortMemberPath="Total" Width="Auto" b:ColumnaAuto.Medir="True" CellStyleClasses="num">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:FilaReporteTareas">
+                                    <TextBlock Text="{Binding Total}"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                     </DataGrid.Columns>
                 </DataGrid>
+                </DockPanel>
+            </r:MarcoReporte.Contenido>
 
-                <!-- Total general: passthrough directo de ReporteTareasDto.TotalGeneral (D23) -->
-                <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="{DynamicResource Espacio2}"
-                            HorizontalAlignment="Right" Margin="0,12,0,0">
-                    <TextBlock Text="Total general:" FontWeight="Bold" />
-                    <TextBlock Text="{Binding TotalGeneral, Converter={x:Static conv:CantidadConverter.Instance}}"
-                               FontWeight="Bold" />
-                </StackPanel>
-
-            </Grid>
-        </Border>
-
+            <r:MarcoReporte.Pie>
+                <Grid>
+                    <TextBlock x:Name="PieConteo" Classes="pie-conteo" VerticalAlignment="Center"
+                               Text="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.Instance}, ConverterParameter='fila|filas'}" />
+                    <StackPanel x:Name="PieTotalGeneral" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                        <TextBlock Classes="etiqueta-campo" Text="Total general" VerticalAlignment="Center" />
+                        <TextBlock Classes="titulo-seccion" FontFeatures="+tnum,-calt" Text="{Binding TotalGeneral}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Grid>
+            </r:MarcoReporte.Pie>
+        </r:MarcoReporte>
     </DockPanel>
-
-        <!-- bugfix "pantalla muda ante un 403": ver ViewModelBase.EjecutarCargaProtegidaAsync. -->
-        <c:EstadoVacio Titulo="Sin permiso"
-                       Mensaje="{Binding MensajeSinPermiso}"
-                       EsError="True"
-                       IsVisible="{Binding SinPermiso}" />
-    </Grid>
-
 </UserControl>

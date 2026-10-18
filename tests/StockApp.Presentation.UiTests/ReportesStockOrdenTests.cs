@@ -58,13 +58,14 @@ public class ReportesStockOrdenTests
         var vista = new StockCategoriaView();
         var window = Montar(vista);
         var grid = vista.GetVisualDescendants().OfType<DataGrid>().Single();
+        MarcoReporteTest.MostrarContenido(grid);
 
         var valores = new decimal[] { 1, 1200, 350, 900, 500, 500, 250, 800, 600, 1500, 400, 550, 1800, 2500, 300, 450, 123, 700, 1600, 3800, 900, 12, 77 };
         grid.ItemsSource = (IReadOnlyList<StockCategoriaDto>)Stocks
             .Select((s, i) => new StockCategoriaDto($"Categoría {i + 1}", i + 1, s, valores[i])).ToList();
         Dispatcher.UIThread.RunJobs();
 
-        OrdenarYVerificar(window, grid, "Stock Total", "Valor Costo", "Stock Total");
+        OrdenarYVerificar(window, grid, "STOCK TOTAL", "VALOR COSTO", "STOCK TOTAL");
     }
 
     [AvaloniaFact]
@@ -73,13 +74,14 @@ public class ReportesStockOrdenTests
         var vista = new ValorizacionView();
         var window = Montar(vista);
         var grid = vista.GetVisualDescendants().OfType<DataGrid>().Single();
+        MarcoReporteTest.MostrarContenido(grid);
 
         var costos = new decimal[] { 1, 1200, 350, 900, 500, 500, 250, 800, 600, 1500, 400, 550, 1800, 2500, 300, 450, 123, 700, 1600, 3800, 900, 12, 77 };
         grid.ItemsSource = (IReadOnlyList<ValorizacionItemDto>)Stocks
             .Select((s, i) => new ValorizacionItemDto(i + 1, $"C{i + 1}", $"Producto {i + 1}", "Categoría", s, costos[i], s * costos[i])).ToList();
         Dispatcher.UIThread.RunJobs();
 
-        OrdenarYVerificar(window, grid, "Stock", "P. Costo", "Stock");
+        OrdenarYVerificar(window, grid, "STOCK", "P. COSTO", "STOCK");
     }
 
     [AvaloniaFact]
@@ -88,6 +90,7 @@ public class ReportesStockOrdenTests
         var vista = new HistorialPorProductoView();
         var window = Montar(vista);
         var grid = vista.GetVisualDescendants().OfType<DataGrid>().Single();
+        MarcoReporteTest.MostrarContenido(grid);
 
         var cantidades = new decimal[] { 1, 1200, 350, 900, 500, 500, 250, 800, 600, 1500, 400, 550, 1800, 2500, 300, 450, 123, 700, 1600, 3800, 900, 12, 77 };
         grid.ItemsSource = (IReadOnlyList<MovimientoHistorialDto>)Stocks
@@ -99,6 +102,6 @@ public class ReportesStockOrdenTests
                 Comentario: null, Fecha: DateTime.UtcNow, UsuarioId: 1, UsuarioNombre: "admin")).ToList();
         Dispatcher.UIThread.RunJobs();
 
-        OrdenarYVerificar(window, grid, "Stock Nuevo", "Cantidad", "Stock Ant.", "Stock Nuevo");
+        OrdenarYVerificar(window, grid, "STOCK NUEVO", "CANTIDAD", "STOCK ANT.", "STOCK NUEVO");
     }
 }

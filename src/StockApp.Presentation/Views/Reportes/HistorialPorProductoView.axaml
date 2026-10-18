@@ -4,141 +4,162 @@
              xmlns:dto="using:StockApp.Application.Movimientos"
              xmlns:cat="using:StockApp.Application.Catalogo"
              xmlns:conv="using:StockApp.Presentation.Converters"
-             xmlns:beh="using:StockApp.Presentation.Behaviors"
-             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:b="using:StockApp.Presentation.Behaviors"
+             xmlns:r="using:StockApp.Presentation.Views.Reportes"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="600"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
              x:Class="StockApp.Presentation.Views.Reportes.HistorialPorProductoView"
-             x:DataType="vm:HistorialPorProductoViewModel">
+             x:DataType="vm:HistorialPorProductoViewModel"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
 
-    <DockPanel Margin="{DynamicResource MargenVista}">
+    <!-- UI v2. Espejo: docs/ui-v2/mockups/reportes/. Pantalla de consulta: sin botón primario. La estructura común (breadcrumb al hub,
+         estados de carga, sin conexión, sin permiso y vacío, pie) la da MarcoReporte. -->
+    <DockPanel Margin="28,24">
+        <r:MarcoReporte x:Name="Marco" Titulo="Historial por producto"
+                        VolverCommand="{Binding VolverCommand}"
+                        HayDatos="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.HayElementos}}"
+                        TituloVacio="{Binding TituloVacio}"
+                        MensajeVacio="{Binding MensajeVacio}"
+                        MensajeError="{Binding MensajeError}">
 
-        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="REPORTES" Titulo="Historial por producto">
-            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
-                <Button Classes="primary" Content="Buscar" Command="{Binding BuscarCommand}" />
-                <Button Classes="secondary" Content="Exportar PDF" Command="{Binding ExportarPdfCommand}" />
-            </StackPanel>
-        </c:HeaderVista>
-
-        <Border Classes="card">
-            <Grid RowDefinitions="Auto,Auto,*">
-
-                <!-- Filtros -->
-                <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,0,0,12">
-                    <!-- Bugfix 2026-08-19: "Producto ID" era el ÚNICO filtro de esta pantalla
-                         y pedía la PK a mano, vista entera inusable sin mirar la base. Se
-                         reemplaza por búsqueda server-side (AsyncPopulator ->
-                         HistorialPorProductoViewModel.BuscarProductosAsync ->
-                         IProductoService.BuscarPorTextoAsync). FilterMode="None": el servidor
-                         ya matcheo por SKU/código de barras/nombre, no hay que reaplicar un
-                         filtro client-side de "empieza con" sobre esos resultados. -->
-                    <TextBlock Text="Producto:" VerticalAlignment="Center" />
-                    <AutoCompleteBox Width="220"
-                                      PlaceholderText="Buscar producto..."
-                                      AsyncPopulator="{Binding BuscarProductosAsync}"
-                                      SelectedItem="{Binding ProductoSeleccionado}"
-                                      ValueMemberBinding="{Binding Nombre, DataType={x:Type cat:ProductoDto}}"
-                                      FilterMode="None">
-                        <AutoCompleteBox.ItemTemplate>
-                            <DataTemplate x:DataType="cat:ProductoDto">
-                                <TextBlock Text="{Binding Nombre}" />
-                            </DataTemplate>
-                        </AutoCompleteBox.ItemTemplate>
-                    </AutoCompleteBox>
-                    <TextBlock Text="Desde:" VerticalAlignment="Center" />
-                    <CalendarDatePicker SelectedDate="{Binding FechaDesde}"
-                                        PlaceholderText="dd/mm/aaaa"
-                                        SelectedDateFormat="Custom"
-                                        CustomDateFormatString="dd/MM/yyyy"
-                                        beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
-                    <TextBlock Text="Hasta:" VerticalAlignment="Center" />
-                    <CalendarDatePicker SelectedDate="{Binding FechaHasta}"
-                                        PlaceholderText="dd/mm/aaaa"
-                                        SelectedDateFormat="Custom"
-                                        CustomDateFormatString="dd/MM/yyyy"
-                                        beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
+            <r:MarcoReporte.Acciones>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="BotonExportarPdf" Classes="secundario" Content="Exportar PDF" Command="{Binding ExportarPdfCommand}" />
                 </StackPanel>
+            </r:MarcoReporte.Acciones>
 
-                <!-- Mensaje de error -->
-                <TextBlock Grid.Row="1"
-                           Text="{Binding MensajeError}"
-                           Foreground="{DynamicResource DangerBrush}"
-                           IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                           Margin="0,0,0,12"
-                           TextWrapping="Wrap" />
+            <r:MarcoReporte.Filtros>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <v2:CampoFormulario x:Name="CampoProducto" Etiqueta="Producto">
+                        <AutoCompleteBox x:Name="BuscadorProducto" Width="280" PlaceholderText="Buscar producto…"
+                                         AsyncPopulator="{Binding BuscarProductosAsync}"
+                                         SelectedItem="{Binding ProductoSeleccionado}"
+                                         ValueMemberBinding="{Binding Nombre, DataType={x:Type cat:ProductoDto}}"
+                                         FilterMode="None" MinimumPopulateDelay="0:0:0.3">
+                            <AutoCompleteBox.ItemTemplate>
+                                <DataTemplate x:DataType="cat:ProductoDto">
+                                    <TextBlock Text="{Binding Nombre}" />
+                                </DataTemplate>
+                            </AutoCompleteBox.ItemTemplate>
+                        </AutoCompleteBox>
+                    </v2:CampoFormulario>
+                    <v2:CampoFormulario Etiqueta="Desde">
+                <CalendarDatePicker Width="140" SelectedDate="{Binding FechaDesde}" PlaceholderText="dd/mm/aaaa"
+                                    SelectedDateFormat="Custom" CustomDateFormatString="dd/MM/yyyy"
+                                    b:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
+            </v2:CampoFormulario>
+                    <v2:CampoFormulario Etiqueta="Hasta">
+                <CalendarDatePicker Width="140" SelectedDate="{Binding FechaHasta}" PlaceholderText="dd/mm/aaaa"
+                                    SelectedDateFormat="Custom" CustomDateFormatString="dd/MM/yyyy"
+                                    b:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
+            </v2:CampoFormulario>
+                    <Button x:Name="BotonBuscar" Classes="secundario" Content="Buscar" Command="{Binding BuscarCommand}" VerticalAlignment="Bottom" />
+                </StackPanel>
+            </r:MarcoReporte.Filtros>
 
-                <!-- Grilla de historial -->
-                <DataGrid Grid.Row="2"
-                          ItemsSource="{Binding Items}"
-                          IsReadOnly="True"
-                          CanUserResizeColumns="True"
-                          GridLinesVisibility="Horizontal"
+            <r:MarcoReporte.Contenido>
+                <DataGrid x:Name="Grilla" ItemsSource="{Binding Items}" IsReadOnly="True" CanUserSortColumns="True" CanUserResizeColumns="True"
                           ScrollViewer.HorizontalScrollBarVisibility="Auto">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha, Converter={x:Static conv:FechaUtcALocalConverter.Instance}, StringFormat='dd/MM/yyyy HH:mm'}" Width="Auto" />
-                        <DataGridTextColumn Header="Tipo" Binding="{Binding Tipo}" Width="Auto" />
-                        <DataGridTextColumn Header="Motivo" Binding="{Binding MotivoNombre, DataType={x:Type dto:MovimientoHistorialDto}}" Width="Auto" />
-                        <DataGridTextColumn Header="Cantidad"
-                                             Binding="{Binding Cantidad, Converter={x:Static conv:CantidadConverter.Instance}}"
-                                             Width="Auto" MinWidth="100" CellStyleClasses="num" />
-                        <DataGridTextColumn Header="P. Unitario"
-                                             Binding="{Binding PrecioUnitario, Converter={x:Static conv:MonedaConverter.Instance}}"
-                                             Width="Auto" MinWidth="100" CellStyleClasses="num" />
-                        <DataGridTemplateColumn Header="Stock Ant." Width="Auto" MinWidth="100" SortMemberPath="StockAnterior">
+                        <DataGridTemplateColumn Header="FECHA" SortMemberPath="Fecha" Width="Auto" b:ColumnaAuto.Medir="True" b:ColumnaAuto.Conversor="{x:Static conv:FechaHoraLocalConverter.Instance}" b:ColumnaAuto.NoCede="True">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:MovimientoHistorialDto">
-                                    <TextBlock Text="{Binding StockAnterior, Converter={x:Static conv:CantidadConverter.Instance}}"
-                                               Foreground="{Binding StockAnterior, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}"
-                                               VerticalAlignment="Center" HorizontalAlignment="Right" />
+                                    <TextBlock Text="{Binding Fecha, Converter={x:Static conv:FechaHoraLocalConverter.Instance}}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding Fecha, Converter={x:Static conv:FechaHoraLocalConverter.Instance}}"
+                                               b:TooltipSiSeCorta.Activo="True"
+                                               VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Stock Nuevo" Width="220" MinWidth="100" SortMemberPath="StockNuevo">
+                        <DataGridTemplateColumn Header="TIPO" SortMemberPath="TipoNombre" Width="Auto" b:ColumnaAuto.Medir="True">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:MovimientoHistorialDto">
-                                    <!-- Columna de ANCHO FIJO (220) + badge y número en UNA sola celda de Grid (badge
-                                         a la izquierda, número a la derecha). Con una columna Auto y un StackPanel
-                                         Right, la grilla recicla las celdas al ordenar y una celda que pasa de
-                                         stock negativo (badge visible) a positivo (oculto) conserva el arreglo
-                                         del valor anterior: número corrido o recortado (ver ProductoListView y
-                                         ReportesStockOrdenTests). 220 = peor caso "-99999,5": badge (102) +
-                                         número (62) + margen y padding de celda. -->
+                                    <TextBlock Text="{Binding TipoNombre}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding TipoNombre}"
+                                               b:TooltipSiSeCorta.Activo="True"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="MOTIVO" SortMemberPath="MotivoNombre" Width="Auto" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:MovimientoHistorialDto">
+                                    <TextBlock Text="{Binding MotivoNombre}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding MotivoNombre}"
+                                               b:TooltipSiSeCorta.Activo="True"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="CANTIDAD" SortMemberPath="Cantidad" Width="Auto" b:ColumnaAuto.Medir="True" b:ColumnaAuto.Conversor="{x:Static conv:CantidadConverter.Instance}" MinWidth="100" CellStyleClasses="num">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:MovimientoHistorialDto">
+                                    <TextBlock Text="{Binding Cantidad, Converter={x:Static conv:CantidadConverter.Instance}}"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="P. UNITARIO" SortMemberPath="PrecioUnitario" Width="Auto" b:ColumnaAuto.Medir="True" b:ColumnaAuto.Conversor="{x:Static conv:MonedaOGuionConverter.Instance}" MinWidth="100" CellStyleClasses="num">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:MovimientoHistorialDto">
+                                    <TextBlock Text="{Binding PrecioUnitario, Converter={x:Static conv:MonedaOGuionConverter.Instance}}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding PrecioUnitario, Converter={x:Static conv:MonedaOGuionConverter.Instance}}"
+                                               b:TooltipSiSeCorta.Activo="True"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="STOCK ANT." SortMemberPath="StockAnterior" Width="Auto" b:ColumnaAuto.Medir="True" b:ColumnaAuto.Conversor="{x:Static conv:CantidadConverter.Instance}" CellStyleClasses="num">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:MovimientoHistorialDto">
+                                    <TextBlock Text="{Binding StockAnterior, Converter={x:Static conv:CantidadConverter.Instance}}"
+                                               Classes.negativo="{Binding StockAnterior, Converter={x:Static conv:EsNegativoConverter.Instance}}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding StockAnterior, Converter={x:Static conv:CantidadConverter.Instance}}"
+                                               b:TooltipSiSeCorta.Activo="True"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="STOCK NUEVO" SortMemberPath="StockNuevo" Width="220" CellStyleClasses="num">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:MovimientoHistorialDto">
                                     <Grid VerticalAlignment="Center">
-                                        <c:BadgeEstado Texto="Stock negativo" Tono="Peligro"
-                                                       HorizontalAlignment="Left"
-                                                       IsVisible="{Binding StockNuevo, Converter={x:Static conv:EsNegativoConverter.Instance}}" />
+                                        <v2:Insignia Texto="Stock negativo" Variante="Peligro" HorizontalAlignment="Left"
+                                                     IsVisible="{Binding StockNuevo, Converter={x:Static conv:EsNegativoConverter.Instance}}" />
                                         <TextBlock Text="{Binding StockNuevo, Converter={x:Static conv:CantidadConverter.Instance}}"
-                                                   Foreground="{Binding StockNuevo, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}"
+                                                   Classes.negativo="{Binding StockNuevo, Converter={x:Static conv:EsNegativoConverter.Instance}}"
                                                    HorizontalAlignment="Right" VerticalAlignment="Center" />
                                     </Grid>
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="Comentario" Width="*" SortMemberPath="Comentario">
+                        <DataGridTemplateColumn Header="COMENTARIO" SortMemberPath="Comentario" Width="*" b:DataGridColumnasAutoBehavior.PisoProporcional="80">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:MovimientoHistorialDto">
                                     <TextBlock Text="{Binding Comentario}"
                                                TextTrimming="CharacterEllipsis"
                                                ToolTip.Tip="{Binding Comentario}"
+                                               b:TooltipSiSeCorta.Activo="True"
                                                VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
                     </DataGrid.Columns>
                 </DataGrid>
+            </r:MarcoReporte.Contenido>
 
-                <!-- Empty state: solo visible cuando no hay resultados cargados -->
-                <TextBlock Grid.Row="2"
-                           Text="Realizá una búsqueda para ver resultados"
-                           Classes="caption"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center"
-                           IsVisible="{Binding Items, Converter={x:Static conv:ColeccionVaciaConverter.Instance}}" />
-
-            </Grid>
-        </Border>
-
+            <r:MarcoReporte.Pie>
+                <TextBlock x:Name="PieConteo" Classes="pie-conteo"
+                           Text="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.Instance}, ConverterParameter='movimiento|movimientos'}" />
+            </r:MarcoReporte.Pie>
+        </r:MarcoReporte>
     </DockPanel>
-
 </UserControl>

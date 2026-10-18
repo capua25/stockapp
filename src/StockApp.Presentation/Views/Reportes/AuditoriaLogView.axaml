@@ -3,117 +3,133 @@
              xmlns:vm="using:StockApp.Presentation.ViewModels.Reportes"
              xmlns:dto="using:StockApp.Application.Auditoria"
              xmlns:conv="using:StockApp.Presentation.Converters"
-             xmlns:beh="using:StockApp.Presentation.Behaviors"
-             xmlns:c="using:StockApp.Presentation.Controls"
+             xmlns:b="using:StockApp.Presentation.Behaviors"
+             xmlns:r="using:StockApp.Presentation.Views.Reportes"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="600"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
              x:Class="StockApp.Presentation.Views.Reportes.AuditoriaLogView"
-             x:DataType="vm:AuditoriaLogViewModel">
+             x:DataType="vm:AuditoriaLogViewModel"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
 
-    <Grid>
-    <DockPanel Margin="{DynamicResource MargenVista}">
+    <!-- UI v2. Espejo: docs/ui-v2/mockups/reportes/. Pantalla de consulta: sin botón primario. La estructura común (breadcrumb al hub,
+         estados de carga, sin conexión, sin permiso y vacío, pie) la da MarcoReporte. -->
+    <DockPanel Margin="28,24">
+        <r:MarcoReporte x:Name="Marco" Titulo="Log de auditoría"
+                        VolverCommand="{Binding VolverCommand}"
+                        HayDatos="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.HayElementos}}"
+                        TituloVacio="{Binding TituloVacio}"
+                        MensajeVacio="{Binding MensajeVacio}"
+                        MensajeError="{Binding MensajeError}">
 
-        <c:HeaderVista DockPanel.Dock="Top" Eyebrow="REPORTES" Titulo="Auditoría">
-            <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Espacio2}">
-                <Button Classes="primary" Content="Buscar" Command="{Binding BuscarCommand}" />
-                <Button Classes="secondary" Content="Exportar PDF" Command="{Binding ExportarPdfCommand}" />
-            </StackPanel>
-        </c:HeaderVista>
-
-        <Border Classes="card">
-            <Grid RowDefinitions="Auto,Auto,*">
-
-                <!-- Filtros -->
-                <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,0,0,12">
-                    <!-- Bugfix 2026-08-19: "Usuario ID" pedía la PK a mano, sin mostrarse en
-                         ninguna vista de la app. A diferencia de los filtros de Producto
-                         (cientos de filas, búsqueda server-side), acá son ~14 usuarios que no
-                         crecen como el catálogo: se precarga la lista completa
-                         (AuditoriaLogViewModel.InicializarAsync -> IUsuarioService.ListarAsync)
-                         y se usa el filtrado NATIVO del control (FilterMode="Contains" sobre
-                         ValueMemberBinding). MinimumPrefixLength="0" para que "Todos" se pueda
-                         ver de entrada, sin necesidad de tipear. -->
-                    <TextBlock Text="Usuario:" VerticalAlignment="Center" />
-                    <AutoCompleteBox Width="200"
-                                      ItemsSource="{Binding Usuarios}"
-                                      SelectedItem="{Binding UsuarioFiltroSeleccionado}"
-                                      ValueMemberBinding="{Binding Nombre}"
-                                      FilterMode="Contains"
-                                      MinimumPrefixLength="0">
-                        <AutoCompleteBox.ItemTemplate>
-                            <DataTemplate x:DataType="vm:OpcionUsuario">
-                                <TextBlock Text="{Binding Nombre}" />
-                            </DataTemplate>
-                        </AutoCompleteBox.ItemTemplate>
-                    </AutoCompleteBox>
-                    <TextBlock Text="Desde:" VerticalAlignment="Center" />
-                    <CalendarDatePicker SelectedDate="{Binding FechaDesde}"
-                                        PlaceholderText="dd/mm/aaaa"
-                                        SelectedDateFormat="Custom"
-                                        CustomDateFormatString="dd/MM/yyyy"
-                                        beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
-                    <TextBlock Text="Hasta:" VerticalAlignment="Center" />
-                    <CalendarDatePicker SelectedDate="{Binding FechaHasta}"
-                                        PlaceholderText="dd/mm/aaaa"
-                                        SelectedDateFormat="Custom"
-                                        CustomDateFormatString="dd/MM/yyyy"
-                                        beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
+            <r:MarcoReporte.Acciones>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="BotonExportarPdf" Classes="secundario" Content="Exportar PDF" Command="{Binding ExportarPdfCommand}" />
                 </StackPanel>
+            </r:MarcoReporte.Acciones>
 
-                <!-- Mensaje de error -->
-                <TextBlock Grid.Row="1"
-                           Text="{Binding MensajeError}"
-                           Foreground="{DynamicResource DangerBrush}"
-                           IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                           Margin="0,0,0,12"
-                           TextWrapping="Wrap" />
+            <r:MarcoReporte.Filtros>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <v2:CampoFormulario Etiqueta="Usuario">
+                        <ComboBox x:Name="ComboUsuario" Width="200" ItemsSource="{Binding Usuarios}" SelectedItem="{Binding UsuarioFiltroSeleccionado}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:OpcionUsuario">
+                                    <TextBlock Text="{Binding Nombre}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </v2:CampoFormulario>
+                    <v2:CampoFormulario Etiqueta="Desde">
+                <CalendarDatePicker Width="140" SelectedDate="{Binding FechaDesde}" PlaceholderText="dd/mm/aaaa"
+                                    SelectedDateFormat="Custom" CustomDateFormatString="dd/MM/yyyy"
+                                    b:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
+            </v2:CampoFormulario>
+                    <v2:CampoFormulario Etiqueta="Hasta">
+                <CalendarDatePicker Width="140" SelectedDate="{Binding FechaHasta}" PlaceholderText="dd/mm/aaaa"
+                                    SelectedDateFormat="Custom" CustomDateFormatString="dd/MM/yyyy"
+                                    b:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
+            </v2:CampoFormulario>
+                    <Button x:Name="BotonBuscar" Classes="secundario" Content="Buscar" Command="{Binding BuscarCommand}" VerticalAlignment="Bottom" />
+                </StackPanel>
+            </r:MarcoReporte.Filtros>
 
-                <!-- Grilla de auditoría -->
-                <DataGrid Grid.Row="2"
-                          ItemsSource="{Binding Items}"
-                          IsReadOnly="True"
-                          CanUserResizeColumns="True"
-                          GridLinesVisibility="Horizontal"
+            <r:MarcoReporte.Contenido>
+                <DataGrid x:Name="Grilla" ItemsSource="{Binding Items}" IsReadOnly="True" CanUserSortColumns="True" CanUserResizeColumns="True"
                           ScrollViewer.HorizontalScrollBarVisibility="Auto">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Fecha" Binding="{Binding Fecha, Converter={x:Static conv:FechaUtcALocalConverter.Instance}, StringFormat='dd/MM/yyyy HH:mm'}" Width="Auto" />
-                        <DataGridTextColumn Header="Usuario" Binding="{Binding NombreUsuario}" Width="Auto" />
-                        <DataGridTextColumn Header="Acción" Binding="{Binding Accion}" Width="Auto" />
-                        <DataGridTextColumn Header="Entidad" Binding="{Binding Entidad}" Width="Auto" />
-                        <DataGridTextColumn Header="Entidad ID" Binding="{Binding EntidadId}" Width="Auto"
-                                            MinWidth="80" CellStyleClasses="num" />
-                        <DataGridTemplateColumn Header="Detalle" Width="*" SortMemberPath="Detalle">
+                        <DataGridTemplateColumn Header="FECHA" SortMemberPath="Fecha" Width="Auto" b:ColumnaAuto.Medir="True" b:ColumnaAuto.Conversor="{x:Static conv:FechaHoraLocalConverter.Instance}" b:ColumnaAuto.NoCede="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:AuditoriaItemDto">
+                                    <TextBlock Text="{Binding Fecha, Converter={x:Static conv:FechaHoraLocalConverter.Instance}}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding Fecha, Converter={x:Static conv:FechaHoraLocalConverter.Instance}}"
+                                               b:TooltipSiSeCorta.Activo="True"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="USUARIO" SortMemberPath="NombreUsuario" Width="Auto" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:AuditoriaItemDto">
+                                    <TextBlock Text="{Binding NombreUsuario}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding NombreUsuario}"
+                                               b:TooltipSiSeCorta.Activo="True"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="ACCIÓN" SortMemberPath="Accion" Width="Auto" b:ColumnaAuto.Medir="True" b:ColumnaAuto.Conversor="{x:Static r:AccionAuditadaConverter.Instance}">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:AuditoriaItemDto">
+                                    <TextBlock Text="{Binding Accion, Converter={x:Static r:AccionAuditadaConverter.Instance}}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding Accion, Converter={x:Static r:AccionAuditadaConverter.Instance}}"
+                                               b:TooltipSiSeCorta.Activo="True"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="ENTIDAD" SortMemberPath="Entidad" Width="Auto" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:AuditoriaItemDto">
+                                    <TextBlock Text="{Binding Entidad}"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding Entidad}"
+                                               b:TooltipSiSeCorta.Activo="True"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="ENTIDAD ID" SortMemberPath="EntidadId" Width="Auto" b:ColumnaAuto.Medir="True" MinWidth="80" CellStyleClasses="num">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="dto:AuditoriaItemDto">
+                                    <TextBlock Text="{Binding EntidadId}"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="DETALLE" SortMemberPath="Detalle" Width="*">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="dto:AuditoriaItemDto">
                                     <TextBlock Text="{Binding Detalle}"
                                                TextTrimming="CharacterEllipsis"
                                                ToolTip.Tip="{Binding Detalle}"
+                                               b:TooltipSiSeCorta.Activo="True"
                                                VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
                     </DataGrid.Columns>
                 </DataGrid>
+            </r:MarcoReporte.Contenido>
 
-                <!-- Empty state: solo visible cuando no hay resultados cargados -->
-                <TextBlock Grid.Row="2"
-                           Text="Realizá una búsqueda para ver resultados"
-                           Classes="caption"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center"
-                           IsVisible="{Binding Items, Converter={x:Static conv:ColeccionVaciaConverter.Instance}}" />
-
-            </Grid>
-        </Border>
-
+            <r:MarcoReporte.Pie>
+                <TextBlock x:Name="PieConteo" Classes="pie-conteo"
+                           Text="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.Instance}, ConverterParameter='registro|registros'}" />
+            </r:MarcoReporte.Pie>
+        </r:MarcoReporte>
     </DockPanel>
-
-        <!-- bugfix "pantalla muda ante un 403": ver ViewModelBase.EjecutarCargaProtegidaAsync. -->
-        <c:EstadoVacio Titulo="Sin permiso"
-                       Mensaje="{Binding MensajeSinPermiso}"
-                       EsError="True"
-                       IsVisible="{Binding SinPermiso}" />
-    </Grid>
-
 </UserControl>

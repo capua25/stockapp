@@ -50,6 +50,9 @@ public class SignoNegativoBadgeTests
         return window;
     }
 
+    private static IReadOnlyList<StockApp.Presentation.Controls.V2.Insignia> InsigniasConTexto(Window window, string texto)
+        => window.GetVisualDescendants().OfType<StockApp.Presentation.Controls.V2.Insignia>().Where(i => i.Texto == texto).ToList();
+
     private static IReadOnlyList<BadgeEstado> BadgesConTexto(Window window, string texto)
         => window.GetVisualDescendants().OfType<BadgeEstado>().Where(b => b.Texto == texto).ToList();
 
@@ -90,18 +93,19 @@ public class SignoNegativoBadgeTests
     [AvaloniaFact]
     public void Montar_StockCategoriaViewConStockNegativo_MuestraBadgeStockNegativoSoloEnLaFilaNegativa()
     {
-        var vista = new StockCategoriaView();
-        var window = MontarEnVentana(vista);
-
-        var grilla = vista.GetVisualDescendants().OfType<DataGrid>().Single();
-        grilla.ItemsSource = new[]
+        // Reporte v2: la grilla se muestra con filas del ViewModel (MarcoReporte.HayDatos), así que los datos entran por el servicio.
+        var servicio = new V2.ReporteStockFake
         {
-            new StockCategoriaDto("Ferretería", 12, -3m, 15000m),
-            new StockCategoriaDto("Electricidad", 5, 8m, 8000m),
+            Categorias = { new StockCategoriaDto("Ferretería", 12, -3m, 15000m), new StockCategoriaDto("Electricidad", 5, 8m, 8000m) },
         };
+        var vm = new StockApp.Presentation.ViewModels.Reportes.StockCategoriaViewModel(servicio, new V2.GuardadoSinUsoFake(),
+            new ConfirmacionServiceFake(), new V2.PdfExporterSinUsoFake(), new ServicioAperturaArchivoFake(), new SesionFake(RolUsuario.Admin));
+        var vista = new StockCategoriaView { DataContext = vm };
+        var window = MontarEnVentana(vista);
         Dispatcher.UIThread.RunJobs();
 
-        var badges = BadgesConTexto(window, "Stock negativo");
+        // Reporte v2: la palabra la pone una Insignia peligro.
+        var badges = InsigniasConTexto(window, "Stock negativo");
 
         Assert.Single(badges, b => b.IsVisible);
     }
@@ -296,18 +300,15 @@ public class SignoNegativoBadgeTests
     [AvaloniaFact]
     public void Montar_ValorizacionViewConStockNegativo_MuestraBadgeStockNegativoSoloEnLaFilaNegativa()
     {
-        var vista = new ValorizacionView();
+        var servicio = new V2.ReporteStockFake { Valorizacion = { ValorizacionItemDe(1, stockActual: -5m), ValorizacionItemDe(2, stockActual: 20m) } };
+        var vm = new StockApp.Presentation.ViewModels.Reportes.ValorizacionViewModel(servicio, new V2.GuardadoSinUsoFake(),
+            new ConfirmacionServiceFake(), new V2.PdfExporterSinUsoFake(), new ServicioAperturaArchivoFake(), new SesionFake(RolUsuario.Admin));
+        var vista = new ValorizacionView { DataContext = vm };
         var window = MontarEnVentana(vista);
-
-        var grilla = vista.GetVisualDescendants().OfType<DataGrid>().Single();
-        grilla.ItemsSource = new[]
-        {
-            ValorizacionItemDe(1, stockActual: -5m),
-            ValorizacionItemDe(2, stockActual: 20m),
-        };
         Dispatcher.UIThread.RunJobs();
 
-        var badges = BadgesConTexto(window, "Stock negativo");
+        // Reporte v2: la palabra la pone una Insignia peligro.
+        var badges = InsigniasConTexto(window, "Stock negativo");
 
         Assert.Single(badges, b => b.IsVisible);
     }
@@ -322,18 +323,16 @@ public class SignoNegativoBadgeTests
     [AvaloniaFact]
     public void Montar_HistorialPorProductoViewConStockNuevoNegativo_MuestraBadgeStockNegativoSoloEnLaFilaNegativa()
     {
-        var vista = new HistorialPorProductoView();
+        var servicio = new V2.ReporteStockFake { Historial = { MovimientoHistorialDe(1, stockNuevo: -5m), MovimientoHistorialDe(2, stockNuevo: 20m) } };
+        var vm = new StockApp.Presentation.ViewModels.Reportes.HistorialPorProductoViewModel(servicio, new V2.GuardadoSinUsoFake(),
+            new ConfirmacionServiceFake(), new V2.ProductosBusquedaFake(), new V2.PdfExporterSinUsoFake(), new ServicioAperturaArchivoFake(), new SesionFake(RolUsuario.Admin))
+        { ProductoId = 1 };
+        var vista = new HistorialPorProductoView { DataContext = vm };
         var window = MontarEnVentana(vista);
-
-        var grilla = vista.GetVisualDescendants().OfType<DataGrid>().Single();
-        grilla.ItemsSource = new[]
-        {
-            MovimientoHistorialDe(1, stockNuevo: -5m),
-            MovimientoHistorialDe(2, stockNuevo: 20m),
-        };
         Dispatcher.UIThread.RunJobs();
 
-        var badges = BadgesConTexto(window, "Stock negativo");
+        // Reporte v2: la palabra la pone una Insignia peligro.
+        var badges = InsigniasConTexto(window, "Stock negativo");
 
         Assert.Single(badges, b => b.IsVisible);
     }

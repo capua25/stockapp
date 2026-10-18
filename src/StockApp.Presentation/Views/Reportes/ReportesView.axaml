@@ -1,0 +1,42 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels.Reportes"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
+             x:Class="StockApp.Presentation.Views.Reportes.ReportesView"
+             x:DataType="vm:ReportesViewModel"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
+
+    <!-- UI v2 (spec §4.2). Espejo: docs/ui-v2/mockups/reportes/hub*.html. Seis tarjetas sobre el fondo de la app, sin card;
+         cada una con el gate de su reporte (una tarjeta invisible no deja hueco: GrillaUniformeV2 salta los invisibles). La
+         vista no consulta nada. -->
+    <StackPanel Margin="28,24">
+
+        <v2:EncabezadoPagina x:Name="Encabezado" Titulo="Reportes"
+                             Subtitulo="Consultas e informes del inventario, la auditoría y las tareas." />
+
+        <v2:GrillaUniformeV2 x:Name="Tarjetas" Columnas="3" Espaciado="{DynamicResource V2Espacio12}">
+            <v2:TarjetaAcceso x:Name="TarjetaValorizacion" Icono="mdi-currency-usd" Titulo="Valorización de inventario"
+                              Descripcion="Valor del stock a precio de costo, producto por producto."
+                              Command="{Binding AbrirValorizacionCommand}" IsVisible="{Binding PuedeVerReportes}" />
+            <v2:TarjetaAcceso x:Name="TarjetaStockCategoria" Icono="mdi-chart-pie" Titulo="Stock por categoría"
+                              Descripcion="Productos, stock y valor agrupados por categoría."
+                              Command="{Binding AbrirStockCategoriaCommand}" IsVisible="{Binding PuedeVerReportes}" />
+            <v2:TarjetaAcceso x:Name="TarjetaHistorialPorProducto" Icono="mdi-file-document" Titulo="Historial por producto"
+                              Descripcion="Los movimientos de un producto en un período."
+                              Command="{Binding AbrirHistorialPorProductoCommand}" IsVisible="{Binding PuedeVerHistorialPorProducto}" />
+            <v2:TarjetaAcceso x:Name="TarjetaMasMovidos" Icono="mdi-trending-up" Titulo="Productos más movidos"
+                              Descripcion="Los productos con más movimientos en un período."
+                              Command="{Binding AbrirMasMovidosCommand}" IsVisible="{Binding PuedeVerReportes}" />
+            <v2:TarjetaAcceso x:Name="TarjetaAuditoria" Icono="mdi-shield-search" Titulo="Log de auditoría"
+                              Descripcion="Quién hizo qué y cuándo en el sistema."
+                              Command="{Binding AbrirAuditoriaCommand}" IsVisible="{Binding PuedeVerReportes}" />
+            <v2:TarjetaAcceso x:Name="TarjetaEstadisticaTareas" Icono="mdi-chart-bar" Titulo="Estadística de tareas"
+                              Descripcion="Tareas por estado, agrupadas por zona, tema u organismo."
+                              Command="{Binding AbrirEstadisticaTareasCommand}" IsVisible="{Binding PuedeVerReportes}" />
+        </v2:GrillaUniformeV2>
+    </StackPanel>
+</UserControl>
