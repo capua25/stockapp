@@ -7,7 +7,8 @@ using Xunit;
 namespace StockApp.Presentation.UiTests;
 
 /// <summary>
-/// Guardián del contrato de nombres de Themes/Tokens.axaml. Las 58 vistas consumen estos
+/// Guardián del contrato de nombres de Themes/Tokens.axaml (los tokens que siguen vivos: los consumen
+/// los estilos del tema viejo y las vistas de importación, que siguen en v1). Las vistas consumen estos
 /// recursos por clave con DynamicResource: si una clave se renombra o se borra, el binding NO
 /// explota — queda sin resolver y el control se cae a su valor default, en silencio, igual que
 /// un {Binding PuedeXxx} con typo. Este test convierte ese fallo silencioso en un rojo.
@@ -29,8 +30,6 @@ public class TokensDisenioTests
     [InlineData("Espacio3", 12.0)]
     [InlineData("Espacio4", 16.0)]
     [InlineData("Espacio5", 24.0)]
-    [InlineData("Espacio6", 32.0)]
-    [InlineData("Espacio7", 48.0)]
     public void EscalaDeEspaciado_ExisteConElValorDeLaSpec(string clave, double esperado)
     {
         Assert.Equal(esperado, Assert.IsType<double>(Recurso(clave)));
@@ -51,35 +50,12 @@ public class TokensDisenioTests
     }
 
     [AvaloniaFact]
-    public void PaddingCelda_Es12Horizontal8Vertical()
-    {
-        Assert.Equal(new Thickness(12, 8, 12, 8), Assert.IsType<Thickness>(Recurso("PaddingCelda")));
-    }
-
-    [AvaloniaFact]
     public void PaddingCeldaGrilla_Es12Izquierda4Derecha8Vertical()
     {
         Assert.Equal(new Thickness(12, 8, 4, 8), Assert.IsType<Thickness>(Recurso("PaddingCeldaGrilla")));
     }
 
-    [AvaloniaFact]
-    public void PaddingCompacto_Es8EnLosCuatroLados()
-    {
-        // Ruling B-2 de la Fase B: faltaba un Thickness de 8 para las barras de accion de
-        // ~20 vistas; sin el, la tanda 5 se lo comio como Padding="8" literal puntual.
-        Assert.Equal(new Thickness(8), Assert.IsType<Thickness>(Recurso("PaddingCompacto")));
-    }
-
-    [AvaloniaFact]
-    public void PaddingHolgado_Es48EnLosCuatroLados()
-    {
-        // Ruling B-31 de la Fase B (tanda 11): respiro de las 3 cards P6 (Login/ResetAdmin/
-        // BloqueoLicencia). Padding="40" estaba fuera de la escala (32 y 48, no 40).
-        Assert.Equal(new Thickness(48), Assert.IsType<Thickness>(Recurso("PaddingHolgado")));
-    }
-
     [AvaloniaTheory]
-    [InlineData("RadioChico", 4.0)]
     [InlineData("RadioBase", 6.0)]
     [InlineData("RadioCard", 10.0)]
     public void EscalaDeRadios_ExisteConElValorDeLaSpec(string clave, double esperado)
@@ -91,8 +67,6 @@ public class TokensDisenioTests
 
     [AvaloniaTheory]
     [InlineData("SombraCard")]
-    [InlineData("SombraElevada")]
-    [InlineData("SombraModal")]
     public void EscalaDeSombras_ExisteYNoEstaVacia(string clave)
     {
         var sombras = Assert.IsType<BoxShadows>(Recurso(clave));
@@ -108,33 +82,5 @@ public class TokensDisenioTests
         // EscalaTextoContrasteTests para el contrato de contraste y orden de la escala completa.
         var brush = Assert.IsType<SolidColorBrush>(Recurso("TextoTerciarioBrush"));
         Assert.Equal(Color.Parse("#64748B"), brush.Color);
-    }
-
-    [AvaloniaTheory]
-    [InlineData("InfoSuaveBrush", "#E0F2FE")]
-    [InlineData("WarningSuaveBrush", "#FEF3C7")]
-    [InlineData("DangerSuaveBrush", "#FEE2E2")]
-    public void FondosSuavesSemanticos_ExistenConElValorDeLaSpec(string clave, string hex)
-    {
-        // Ruling B-26 (Fase B, tanda 12): el unico "suave" que existia era BrandSuaveBrush
-        // (#DCFCE7). Sin estos tres, BadgeEstado[Tono=Advertencia|Peligro|Info] se caia al gris
-        // DeshabilitadoFondoBrush del selector default (Componentes.axaml:76-78).
-        var brush = Assert.IsType<SolidColorBrush>(Recurso(clave));
-        Assert.Equal(Color.Parse(hex), brush.Color);
-    }
-
-    [AvaloniaTheory]
-    [InlineData("InfoSuaveBrush")]
-    [InlineData("WarningSuaveBrush")]
-    [InlineData("DangerSuaveBrush")]
-    public void FondosSuavesSemanticos_SoportanTextoPrimarioConAA(string clave)
-    {
-        // Ruling B-26: sobre estos fondos el texto va en TextoPrimarioBrush, NUNCA en el color
-        // semantico (que da 2.42-3.95:1 medido con el mismo calculo de Contraste.Ratio). Este
-        // test fija esa regla en el banco de pruebas.
-        var fondo = Assert.IsType<SolidColorBrush>(Recurso(clave)).Color;
-        var texto = Assert.IsType<SolidColorBrush>(Recurso("TextoPrimarioBrush")).Color;
-        Assert.True(Contraste.Ratio(texto, fondo) >= 4.5,
-            $"TextoPrimarioBrush sobre {clave} da {Contraste.Ratio(texto, fondo):F2}:1, por debajo de AA.");
     }
 }

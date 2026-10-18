@@ -99,7 +99,7 @@ public static class PatronHelpers
     /// La otra mitad del problema (literal vs. converter, ambos LocalValue) se resuelve por
     /// COMO <see cref="Montar"/> monta la vista, no por esta API: sin ViewModel real, el
     /// ItemsSource de cualquier DataGrid queda vacio y las DataGridTemplateColumn.CellTemplate
-    /// — donde vive el Opacity con ActivoOpacidadConverter en las 14 vistas P1 — nunca se
+    /// — donde vivía el Opacity de las filas inactivas en las vistas con listado — nunca se
     /// realizan como visual (no hay filas que templatizar). Si una tanda futura montara una
     /// vista CON ViewModel real, este helper dejaria de ser preciso para esa vista puntual.
     /// </summary>

@@ -4,8 +4,7 @@ using Avalonia.Controls.Primitives;
 namespace StockApp.Presentation.Controls.V2;
 
 /// <summary>
-/// Pill de estado: palabra + color (spec §3.3). Reemplaza a Controls.BadgeEstado cuando la
-/// Fase 9 borre el sistema viejo.
+/// Pill de estado: palabra + color (spec §3.3).
 /// </summary>
 public class Insignia : TemplatedControl
 {

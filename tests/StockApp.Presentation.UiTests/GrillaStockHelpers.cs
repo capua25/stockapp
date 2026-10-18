@@ -16,7 +16,7 @@ namespace StockApp.Presentation.UiTests;
 /// Piezas compartidas por los guardianes de "la columna de Stock se dibuja corrida o recortada
 /// al ordenar" (Productos, Historial de movimientos, Stock por categoría, Valorización e
 /// Historial por producto). Ver <see cref="ProductoListViewStockOrdenTests"/> para la causa raíz.
-/// El badge es <c>BadgeEstado</c> en las vistas viejas e <c>Insignia</c> en las v2.
+/// El badge es una <c>Insignia</c>.
 /// El invariante no mira el valor de una celda aislada: TODOS los números de la columna terminan
 /// en el mismo X y ninguno queda recortado, después de cada ordenamiento.
 /// </summary>
@@ -110,9 +110,8 @@ internal static class GrillaStockHelpers
             var x0 = celda.TranslatePoint(new Point(0, 0), window)!.Value.X;
             if (centroX < x0 || centroX > x0 + celda.Bounds.Width) continue;
 
-            // BadgeEstado (vistas del tema viejo) o Insignia (vistas v2): mientras convivan, los dos.
-            var badge = celda.GetVisualDescendants().OfType<Control>()
-                .FirstOrDefault(b => (b is BadgeEstado || b is StockApp.Presentation.Controls.V2.Insignia) && b.IsVisible);
+            var badge = celda.GetVisualDescendants().OfType<StockApp.Presentation.Controls.V2.Insignia>()
+                .FirstOrDefault(b => b.IsVisible);
             var numero = celda.GetVisualDescendants().OfType<TextBlock>().LastOrDefault();
             if (badge is null || numero is null) continue;
             celdasConBadge++;

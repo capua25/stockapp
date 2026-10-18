@@ -15,8 +15,7 @@ namespace StockApp.Presentation.Converters;
 /// por Registrar Entrada y Registrar Salida). Si el texto no es un número válido, en vez de
 /// lanzar se devuelve un <see cref="BindingNotification"/> en estado de error (patrón oficial
 /// de Avalonia para converters: lanzar una excepción real se trata como "excepción de
-/// aplicación" y puede interrumpir el pipeline de binding). Expuesto como instancia estática,
-/// igual que <see cref="ColeccionVaciaConverter"/>.
+/// aplicación" y puede interrumpir el pipeline de binding). Expuesto como instancia estática.
 ///
 /// Formato único es-UY de <see cref="FormatoEsUy"/> (decisión 2026-10-01; NO se usa la
 /// <paramref name="culture"/> que pasa el binding): se muestra "1.500,5" y se parsea con el

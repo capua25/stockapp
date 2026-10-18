@@ -12,8 +12,7 @@ namespace StockApp.Presentation.Converters;
 
 /// <summary>
 /// Colorea la fila de las grillas del Paso 2 del wizard (F5d §5) por EstadoFila: rojo Error,
-/// amarillo Advertencia, sin color (hereda el fondo) para Ok. Mismo criterio de fallback que
-/// SignoNegativoBrushConverter: sin Application.Current (StockApp.Presentation.Tests no tiene
+/// amarillo Advertencia, sin color (hereda el fondo) para Ok. Sin Application.Current (StockApp.Presentation.Tests no tiene
 /// infraestructura Avalonia Headless) se usa el espejo hardcodeado del token.
 /// </summary>
 public sealed class EstadoFilaBrushConverter : IValueConverter

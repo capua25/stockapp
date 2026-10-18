@@ -156,7 +156,6 @@ public class ProductoListViewV2Tests
         Assert.NotNull(MontajeV2.Parte<BarraFiltros>(m.Vista, "Filtros"));
         Assert.NotNull(MontajeV2.Parte<TarjetaContenido>(m.Vista, "Tarjeta"));
         Assert.Empty(m.Vista.GetVisualDescendants().OfType<StockApp.Presentation.Controls.HeaderVista>());
-        Assert.Empty(m.Vista.GetVisualDescendants().OfType<StockApp.Presentation.Controls.BadgeEstado>());
     }
 
     [AvaloniaFact]

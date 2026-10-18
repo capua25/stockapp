@@ -9,52 +9,32 @@
          ════════════════════════════════════════════════════════════════════ -->
 
     <!-- ── Escala de espaciado, base 4 ────────────────────────────────────────
-         Los 9 valores sueltos de Spacing y los 32 de Margin del codigo colapsan
-         a estos 7. Los valores 2, 6 y 20 quedan eliminados: no habia criterio
-         que los distinguiera de sus vecinos.
          Spacing de StackPanel es double; Margin y Padding son Thickness. Por eso
-         hay dos familias: los 7 doubles son la escala canonica, y abajo van los
-         tres Thickness derivados que se repiten en toda la app. Un Thickness
-         asimetrico puntual (p. ej. "0,8,0,0") se sigue escribiendo inline. -->
+         hay dos familias: los doubles son la escala, y abajo van los Thickness
+         derivados que se repiten. Un Thickness asimetrico puntual (p. ej.
+         "0,8,0,0") se sigue escribiendo inline. -->
     <x:Double x:Key="Espacio1">4</x:Double>
     <x:Double x:Key="Espacio2">8</x:Double>
     <x:Double x:Key="Espacio3">12</x:Double>
     <x:Double x:Key="Espacio4">16</x:Double>
     <x:Double x:Key="Espacio5">24</x:Double>
-    <x:Double x:Key="Espacio6">32</x:Double>
-    <x:Double x:Key="Espacio7">48</x:Double>
 
     <!-- Margen exterior estandar de TODA vista (Espacio5). Hoy van de 16 a 40
          segun el archivo y NuevaImportacionView.axaml no tiene ninguno. -->
     <Thickness x:Key="MargenVista">24</Thickness>
     <Thickness x:Key="PaddingCard">16</Thickness>
-    <Thickness x:Key="PaddingCelda">12,8</Thickness>
-    <!-- Padding de celda y header de DataGrid: PaddingCelda con 4 a la derecha (no 12). Con 12, el
+    <!-- Padding de celda y header de DataGrid: 12,8 con 4 a la derecha (no 12). Con 12, el
          texto que no entra en la columna se cortaba 12 px antes del borde y quedaba un hueco
          ("Prueba U…" + espacio vacío). Ver Themes/DataGrid.axaml y GrillasEspacioDerechoBarridoTests. -->
     <Thickness x:Key="PaddingCeldaGrilla">12,8,4,8</Thickness>
-    <!-- Ruling B-2 (Fase B): Padding compacto de barras de accion (~20 vistas). La tanda 5 ya
-         se comio esta deuda con Padding="8" literal en ShellMainView.axaml; sin este token la
-         Fase B la repite 20 veces mas y convierte una deuda puntual en un patron. -->
-    <Thickness x:Key="PaddingCompacto">8</Thickness>
-    <!-- Ruling B-31 (Fase B, tanda 11): respiro de las 3 cards P6 (Login/ResetAdmin/
-         BloqueoLicencia). Su Padding="40" estaba fuera de la escala (que tiene 32 y 48, no 40);
-         Espacio7 (48) es x:Double y en Padding revienta en runtime (Trampa T1), asi que hace
-         falta el Thickness derivado. -->
-    <Thickness x:Key="PaddingHolgado">48</Thickness>
 
     <!-- ── Radios ──────────────────────────────────────────────────────────
-         De 4/6/8/10 sin criterio a tres con significado: chico para badges,
-         base para botones e inputs, card para contenedores. -->
-    <CornerRadius x:Key="RadioChico">4</CornerRadius>
+         Base para botones e inputs, card para contenedores. -->
     <CornerRadius x:Key="RadioBase">6</CornerRadius>
     <CornerRadius x:Key="RadioCard">10</CornerRadius>
 
-    <!-- ── Sombras ─────────────────────────────────────────────────────────
-         De una sola hardcodeada en Controls.axaml a tres niveles de elevacion. -->
+    <!-- ── Sombras ───────────────────────────────────────────────────────── -->
     <BoxShadows x:Key="SombraCard">0 1 3 0 #1A0F172A</BoxShadows>
-    <BoxShadows x:Key="SombraElevada">0 4 12 0 #260F172A</BoxShadows>
-    <BoxShadows x:Key="SombraModal">0 12 32 0 #330F172A</BoxShadows>
 
     <!-- Texto terciario: reemplaza los 60 usos de Opacity="0.5|0.6|0.7".
          El color se DECLARA, no se atenua — asi el contraste es medible y
@@ -81,20 +61,9 @@
     <Color x:Key="ColorTextoPrimario">#0F172A</Color>
     <Color x:Key="ColorTextoSecundario">#475569</Color>
 
-    <Color x:Key="ColorSuccess">#16A34A</Color>
     <Color x:Key="ColorWarning">#D97706</Color>
     <Color x:Key="ColorDanger">#DC2626</Color>
-    <Color x:Key="ColorDangerHover">#B91C1C</Color>
-    <Color x:Key="ColorDangerPressed">#991B1B</Color>
-    <Color x:Key="ColorInfo">#0EA5E9</Color>
 
-    <!-- Ruling B-26 (Fase B, tanda 12): fondos suaves para los 3 semanticos que no lo tenian
-         (solo ColorBrandSuave existia). Escalon 100 de la misma familia de la que sale el
-         escalon 600 de cada semantico. Sobre estos fondos el texto va en TextoPrimarioBrush
-         (14.6-16:1), nunca en el color semantico (2.42-3.95:1, ver ContrasteHelpers). -->
-    <Color x:Key="ColorInfoSuave">#E0F2FE</Color>
-    <Color x:Key="ColorWarningSuave">#FEF3C7</Color>
-    <Color x:Key="ColorDangerSuave">#FEE2E2</Color>
 
     <!-- Estado deshabilitado: derivados neutros, necesarios para los estados
          :disabled de Controls.axaml (Tarea 2). No forman parte de la paleta
@@ -104,30 +73,16 @@
     <Color x:Key="ColorDeshabilitadoTexto">#94A3B8</Color>
     <Color x:Key="ColorDeshabilitadoBorde">#E2E8F0</Color>
 
-    <!-- Sidebar (dashboard shell): pizarra media. El verde de marca #16A34A NO
-         cambia de valor, cambia de ROL: deja de ser fondo y pasa a ser acento de
-         accion (item activo, barra de acento, iconos). Con el sidebar tenido de
-         verde el verde no senalaba nada; con el sidebar neutro, guia.
-         Contrastes: texto #CBD5E1 sobre #1E293B = 9.86:1 (AAA); blanco sobre
-         activo #334155 = 10.36:1 (AAA).
-         RESTRICCION: el acento #16A34A sobre #1E293B da 4.44:1 — pasa el umbral
-         grafico (3:1) y NO el de texto (4.5:1). Prohibido usarlo como color de
-         texto sobre el sidebar. Custodiado por SidebarContrasteTests.cs. -->
+    <!-- ColorSidebar / SidebarBrush: tono oscuro que usa Button.primary:pressed (ver
+         Controls.axaml). El sidebar de la app es v2 y tiene sus propios tokens. -->
     <Color x:Key="ColorSidebar">#1E293B</Color>
-    <Color x:Key="ColorSidebarActivo">#334155</Color>
-    <Color x:Key="ColorSidebarAccent">#16A34A</Color>
-    <Color x:Key="ColorSidebarTexto">#CBD5E1</Color>
     <!-- Overlays translúcidos para hover/pressed de ítems ghost sobre el
          fondo oscuro del sidebar (no hay Deshabilitado*/BrandSuave que sirvan
          sobre fondo oscuro). -->
-    <Color x:Key="ColorSidebarHoverOverlay">#22FFFFFF</Color>
-    <Color x:Key="ColorSidebarPressedOverlay">#33FFFFFF</Color>
 
     <!-- Overlays translúcidos para hover/pressed de Button.ghost sobre fondo
-         CLARO (variante default, fuera del sidebar): mismos escalones de
-         opacidad que ColorSidebarHoverOverlay/PressedOverlay (0x22/0x33) pero
-         con base oscura (ColorTextoPrimario) en vez de blanca, para que el
-         overlay oscurezca en vez de aclarar un fondo blanco/Superficie. -->
+         CLARO: base oscura (ColorTextoPrimario) con opacidad 0x22/0x33, para que
+         el overlay oscurezca un fondo blanco/Superficie. -->
     <Color x:Key="ColorGhostHoverOverlay">#220F172A</Color>
     <Color x:Key="ColorGhostPressedOverlay">#330F172A</Color>
 
@@ -145,26 +100,14 @@
     <SolidColorBrush x:Key="TextoSecundarioBrush" Color="{StaticResource ColorTextoSecundario}" />
     <SolidColorBrush x:Key="TextoTerciarioBrush" Color="{StaticResource ColorTextoTerciario}" />
 
-    <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource ColorSuccess}" />
     <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource ColorWarning}" />
     <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource ColorDanger}" />
-    <SolidColorBrush x:Key="DangerHoverBrush" Color="{StaticResource ColorDangerHover}" />
-    <SolidColorBrush x:Key="DangerPressedBrush" Color="{StaticResource ColorDangerPressed}" />
-    <SolidColorBrush x:Key="InfoBrush" Color="{StaticResource ColorInfo}" />
-    <SolidColorBrush x:Key="InfoSuaveBrush" Color="{StaticResource ColorInfoSuave}" />
-    <SolidColorBrush x:Key="WarningSuaveBrush" Color="{StaticResource ColorWarningSuave}" />
-    <SolidColorBrush x:Key="DangerSuaveBrush" Color="{StaticResource ColorDangerSuave}" />
 
     <SolidColorBrush x:Key="DeshabilitadoFondoBrush" Color="{StaticResource ColorDeshabilitadoFondo}" />
     <SolidColorBrush x:Key="DeshabilitadoTextoBrush" Color="{StaticResource ColorDeshabilitadoTexto}" />
     <SolidColorBrush x:Key="DeshabilitadoBordeBrush" Color="{StaticResource ColorDeshabilitadoBorde}" />
 
     <SolidColorBrush x:Key="SidebarBrush" Color="{StaticResource ColorSidebar}" />
-    <SolidColorBrush x:Key="SidebarActivoBrush" Color="{StaticResource ColorSidebarActivo}" />
-    <SolidColorBrush x:Key="SidebarAccentBrush" Color="{StaticResource ColorSidebarAccent}" />
-    <SolidColorBrush x:Key="SidebarTextoBrush" Color="{StaticResource ColorSidebarTexto}" />
-    <SolidColorBrush x:Key="SidebarHoverOverlayBrush" Color="{StaticResource ColorSidebarHoverOverlay}" />
-    <SolidColorBrush x:Key="SidebarPressedOverlayBrush" Color="{StaticResource ColorSidebarPressedOverlay}" />
 
     <SolidColorBrush x:Key="GhostHoverOverlayBrush" Color="{StaticResource ColorGhostHoverOverlay}" />
     <SolidColorBrush x:Key="GhostPressedOverlayBrush" Color="{StaticResource ColorGhostPressedOverlay}" />

@@ -21,7 +21,7 @@ namespace StockApp.Presentation.ViewModels.Tareas;
 /// <summary>
 /// Fila de solo lectura de la lista de tareas: aplana la entidad y agrega la visibilidad de
 /// acciones según estado de la fila y rol del usuario logueado (spec: "un Operador no ve las
-/// acciones de Admin"). DiasParaVencer alimenta SignoNegativoBrushConverter para el resaltado
+/// acciones de Admin"). DiasParaVencer alimenta el resaltado
 /// de vencidas: negativo cuando la fecha límite pasó y el estado sigue abierto, 0 en cualquier
 /// otro caso (sin fecha límite, o estado terminal).
 /// </summary>

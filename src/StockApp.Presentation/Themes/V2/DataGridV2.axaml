@@ -148,8 +148,8 @@
          hereda al TextBlock de la celda (verificado con render Skia: "1111" pasa de 25 a 34 px).
          La alineación a la derecha la hace SOLO el TextBlock (selector de abajo). NO pongas
          HorizontalContentAlignment=Right acá: ajusta el ContentPresenter al contenido y, al
-         ordenar (celdas recicladas), el número pierde el último carácter. Ver Themes/DataGrid.axaml
-         y DataGridCeldaNumericaOrdenTests. Guardián: DataGridV2ConBehaviorsGlobalesTests.
+         ordenar (celdas recicladas), el número pierde el último carácter (el DesiredSize del presenter
+         cambia durante el measure de la grilla sin invalidar su arrange). Ver DataGridCeldaNumericaOrdenTests. Guardián: DataGridV2ConBehaviorsGlobalesTests.
          TextoDeCeldaReciclada: al cambiar el número de una fila reciclada descarta el TextLayout del
          anterior; sin eso el TextBlock (ajustado a su contenido) podía quedar con el ancho del número
          viejo y cortar el nuevo. Guardián: MovimientoHistorialViewV2Tests

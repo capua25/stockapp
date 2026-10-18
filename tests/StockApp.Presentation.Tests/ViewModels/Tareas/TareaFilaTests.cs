@@ -81,9 +81,9 @@ public class TareaFilaTests
     [Fact]
     public void DiasParaVencer_VenceHoy_Devuelve0_NoNegativo()
     {
-        // Borde no especificado en el spec original: "vence hoy" da 0, NO un valor negativo. Con
-        // el contrato de SignoNegativoBrushConverter (negativo = rojo), esto significa que el día
-        // de vencimiento NO se resalta en rojo -- recién se pinta de rojo al día siguiente.
+        // Borde no especificado en el spec original: "vence hoy" da 0, NO un valor negativo. Como
+        // el resaltado de vencidas es "negativo = vencida", el día de vencimiento NO se resalta:
+        // recién se resalta al día siguiente.
         var hoy = new DateTime(2026, 8, 10, 0, 0, 0, DateTimeKind.Utc);
         var fila = new TareaFila(TareaCon(hoy, EstadoTarea.EnCurso), RolUsuario.Operador, Utc(2026, 8, 10, 12, 0), ZonaUruguay);
 

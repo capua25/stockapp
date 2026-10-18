@@ -5,10 +5,9 @@ using Xunit;
 namespace StockApp.Presentation.Tests.Converters;
 
 /// <summary>
-/// Converter a <c>bool</c> del signo de un <c>decimal</c>, usado para gatear la visibilidad del
-/// <c>BadgeEstado</c> "Stock negativo"/"Sobreejecutado"/"Saldo negativo"/"Déficit"/"Vencida"
-/// (Task B2-T, Ruling B-6, 2026-08-19). <see cref="SignoNegativoBrushConverter"/> devuelve un
-/// <c>IBrush</c>, no sirve para <c>IsVisible</c> -- de ahí este converter hermano.
+/// Converter a <c>bool</c> del signo de un <c>decimal</c>, usado para gatear la visibilidad de la
+/// insignia "Stock negativo"/"Sobreejecutado"/"Saldo negativo"/"Déficit"/"Vencida": un <c>IBrush</c>
+/// no sirve para <c>IsVisible</c>, de ahí este converter.
 /// </summary>
 public class EsNegativoConverterTests
 {

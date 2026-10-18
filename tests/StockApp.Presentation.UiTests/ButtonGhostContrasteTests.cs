@@ -11,16 +11,10 @@ using Xunit;
 namespace StockApp.Presentation.UiTests;
 
 /// <summary>
-/// Cubre el bug de contraste de <c>Button.ghost</c> (Controls.axaml): el estilo fue diseñado
-/// EXCLUSIVAMENTE para el sidebar (fondo verde bosque oscuro, texto blanco, ver comentario
-/// original en Controls.axaml líneas 84-90) pero se reusó sobre fondo CLARO (Border.card,
-/// SuperficieBrush #FFFFFF) en DocumentoListView/TareaListView/InicioView/NuevaImportacionView
-/// -- texto blanco sobre fondo blanco, contraste ~1:1, botones invisibles aunque clickeables.
-///
-/// El fix esperado: Button.ghost pasa a ser la variante NEUTRA (texto oscuro) para fondo claro,
-/// y la variante de sidebar (texto blanco) se aplica solo dentro del contenedor del sidebar via
-/// un selector de descendencia (Border.sidebar Button.ghost), sin tocar los ~26 usos de
-/// ShellMainView.axaml ni los 11 usos rotos uno por uno.
+/// Cubre el bug de contraste de <c>Button.ghost</c> (Themes/Controls.axaml): el estilo nació para un sidebar
+/// oscuro con texto blanco y se reusó sobre fondo CLARO (Border.card, SuperficieBrush #FFFFFF) --
+/// texto blanco sobre fondo blanco, contraste ~1:1, botones invisibles aunque clickeables. Button.ghost es la
+/// variante NEUTRA (texto oscuro) para fondo claro. El sidebar de la app es v2 y no usa esta variante.
 /// </summary>
 public class ButtonGhostContrasteTests
 {
@@ -34,21 +28,6 @@ public class ButtonGhostContrasteTests
                 Width="400" Height="300">
             <Border Name="Card" Classes="card">
                 <Button Name="Boton" Classes="ghost" Content="Ver" />
-            </Border>
-        </Window>
-        """;
-
-    /// <summary>
-    /// Réplica del contenedor del sidebar real (ShellMainView.axaml línea 14-16: Border con
-    /// Background="{DynamicResource SidebarBrush}"), agregándole la clase "sidebar" que el fix
-    /// necesita declarar ahí para que el selector de descendencia matchee.
-    /// </summary>
-    private const string XamlSidebarConGhost = """
-        <Window xmlns="https://github.com/avaloniaui"
-                xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                Width="400" Height="300">
-            <Border Name="Sidebar" Classes="sidebar" Background="{DynamicResource SidebarBrush}">
-                <Button Name="Boton" Classes="ghost" Content="Inicio" />
             </Border>
         </Window>
         """;
@@ -78,17 +57,5 @@ public class ButtonGhostContrasteTests
 
         var ratio = Contraste.Ratio(fondoCard, textoBoton);
         Assert.True(ratio >= 4.5, $"Contraste insuficiente sobre card clara: {ratio:F2}:1 (fondo {fondoCard}, texto {textoBoton}). Se requiere >= 4.5:1 (WCAG AA).");
-    }
-
-    [AvaloniaFact]
-    public void BotonGhost_SobreSidebarOscuro_MantieneTextoClaroConContraste()
-    {
-        var (_, sidebar, boton) = Montar(XamlSidebarConGhost, "Sidebar");
-
-        var fondoSidebar = Assert.IsAssignableFrom<ISolidColorBrush>(sidebar.Background).Color;
-        var textoBoton = Assert.IsAssignableFrom<ISolidColorBrush>(boton.Foreground).Color;
-
-        var ratio = Contraste.Ratio(fondoSidebar, textoBoton);
-        Assert.True(ratio >= 4.5, $"Contraste insuficiente sobre sidebar oscuro: {ratio:F2}:1 (fondo {fondoSidebar}, texto {textoBoton}). Se requiere >= 4.5:1 (WCAG AA).");
     }
 }

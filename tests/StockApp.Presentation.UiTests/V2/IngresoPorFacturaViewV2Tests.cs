@@ -137,7 +137,7 @@ public class IngresoPorFacturaViewV2Tests
         var secciones = m.Vista.GetVisualDescendants().OfType<TextBlock>()
             .Where(t => t.Classes.Contains("subtitulo-formulario") && ArbolVisual.EsVisibleEnArbol(t)).Select(t => t.Text);
         Assert.Equal(new[] { "Datos de la factura", "Cargar artículo", "Artículos cargados" }, secciones);
-        Assert.DoesNotContain(m.Vista.GetVisualDescendants().OfType<Control>(), c => c.GetType().Name is "HeaderVista" or "BadgeEstado");
+        Assert.DoesNotContain(m.Vista.GetVisualDescendants().OfType<Control>(), c => c.GetType().Name is "HeaderVista");
     }
 
     [AvaloniaFact]

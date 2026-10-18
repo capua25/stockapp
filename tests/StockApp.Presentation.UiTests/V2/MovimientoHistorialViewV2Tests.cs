@@ -232,7 +232,6 @@ public class MovimientoHistorialViewV2Tests
         Assert.Equal("Historial de movimientos", MontajeV2.Parte<EncabezadoPagina>(m.Vista, "Encabezado").Titulo);
         Assert.NotNull(MontajeV2.Parte<TarjetaContenido>(m.Vista, "Tarjeta"));
         Assert.False(MontajeV2.Parte<BarraFiltros>(m.Vista, "Filtros").MostrarBusqueda);
-        Assert.Empty(m.Vista.GetVisualDescendants().OfType<StockApp.Presentation.Controls.BadgeEstado>());
         Assert.Empty(m.Vista.GetVisualDescendants().OfType<StockApp.Presentation.Controls.HeaderVista>());
         Assert.Empty(m.Vista.GetLogicalDescendants().OfType<StockApp.Presentation.Controls.EstadoVacio>());
     }

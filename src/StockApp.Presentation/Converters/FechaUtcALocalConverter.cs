@@ -18,7 +18,7 @@ namespace StockApp.Presentation.Converters;
 /// usuario en UTC-3 (Argentina) veía todas las fechas +3 horas adelantadas respecto de la
 /// hora real en que ocurrió el movimiento.
 ///
-/// Expuesto como instancia estática, igual que <see cref="ColeccionVaciaConverter"/> y
+/// Expuesto como instancia estática, igual que
 /// <see cref="DecimalOpcionalConverter"/> — no requiere registrarlo como recurso. Solo de
 /// LECTURA (se usa en bindings OneWay de grillas de solo lectura): <see cref="ConvertBack"/>
 /// lanza.

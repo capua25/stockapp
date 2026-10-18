@@ -17,7 +17,6 @@ using StockApp.Application.Movimientos;
 using StockApp.Application.Reportes;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
-using StockApp.Presentation.Controls;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Finanzas;
 using StockApp.Presentation.ViewModels.Tareas;
@@ -31,11 +30,11 @@ using Xunit;
 namespace StockApp.Presentation.UiTests;
 
 /// <summary>
-/// Guardián de la Task B2-T (Ruling B-6, 2026-08-19): custodia que el color rojo de
-/// <c>SignoNegativoBrushConverter</c> venga ACOMPAÑADO de un <see cref="BadgeEstado"/> con
+/// Guardián de la Task B2-T (Ruling B-6, 2026-08-19): custodia que el rojo de un valor negativo
+/// venga ACOMPAÑADO de una <see cref="StockApp.Presentation.Controls.V2.Insignia"/> con
 /// palabra, en al menos una vista representativa de cada uno de los 4 módulos que tienen sitios
-/// (Catálogo, Finanzas, Tareas, Reportes) -- mínimo exigido por el plan (Step 3). Los 10 sitios
-/// con badge viven mayormente dentro de <c>CellTemplate</c>/<c>ItemTemplate</c>, invisibles para
+/// (Catálogo, Finanzas, Tareas, Reportes). Los sitios con insignia viven mayormente dentro de
+/// <c>CellTemplate</c>/<c>ItemTemplate</c>, invisibles para
 /// <c>GuardianSistemaV2Tests</c> (Ruling B-16): sin <c>ItemsSource</c> asignado no se realiza
 /// ninguna celda, así que estos tests montan la vista real y asignan datos con signos opuestos,
 /// igual que <see cref="ReportesAlineacionNumericaTests"/>.
@@ -52,9 +51,6 @@ public class SignoNegativoBadgeTests
 
     private static IReadOnlyList<StockApp.Presentation.Controls.V2.Insignia> InsigniasConTexto(Window window, string texto)
         => window.GetVisualDescendants().OfType<StockApp.Presentation.Controls.V2.Insignia>().Where(i => i.Texto == texto).ToList();
-
-    private static IReadOnlyList<BadgeEstado> BadgesConTexto(Window window, string texto)
-        => window.GetVisualDescendants().OfType<BadgeEstado>().Where(b => b.Texto == texto).ToList();
 
     // ---- Catálogo: ProductoListView, sitio StockActual (:90) ----
 
@@ -74,7 +70,7 @@ public class SignoNegativoBadgeTests
         };
         Dispatcher.UIThread.RunJobs();
 
-        // Productos es v2: la palabra la pone una Insignia peligro (las demás vistas siguen con BadgeEstado).
+        // La palabra la pone una Insignia peligro.
         var insignias = window.GetVisualDescendants().OfType<StockApp.Presentation.Controls.V2.Insignia>()
             .Where(i => i.Texto == "Stock negativo").ToList();
 
@@ -118,8 +114,7 @@ public class SignoNegativoBadgeTests
         var vencida = TareaDe(1, "Con vencimiento", EstadoTarea.Pendiente, DateTime.UtcNow.Date.AddDays(-5));
         var alDia = TareaDe(2, "Al dia", EstadoTarea.Pendiente, DateTime.UtcNow.Date.AddDays(5));
 
-        // TareaListView es v2: la palabra la pone una Insignia peligro en la columna VENCE (las demás vistas siguen con
-        // BadgeEstado). La vista se monta con su ViewModel real: la grilla solo realiza las filas de lo que carga.
+        // La palabra la pone una Insignia peligro en la columna VENCE. La vista se monta con su ViewModel real: la grilla solo realiza las filas de lo que carga.
         var vm = new TareaListViewModel(new TareaServiceFake([vencida, alDia]), new SesionFake(RolUsuario.Admin),
             new NavigationRecorderFake(), new ConfirmacionServiceFake());
         var vista = new TareaListView { DataContext = vm };
