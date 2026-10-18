@@ -8,7 +8,7 @@
              mc:Ignorable="d" d:DesignWidth="700" d:DesignHeight="500"
              x:Class="StockApp.Presentation.Views.AccesoLimitadoView"
              x:DataType="vm:AccesoLimitadoViewModel"
-             Background="{DynamicResource FondoBrush}">
+             Background="{DynamicResource V2FondoBrush}">
 
     <!-- Modo acotado (FIX 1, re-review final E1): a propósito NO hay sidebar ni ContentControl
          genérico atado a INavigationService acá — a diferencia de ShellMainView, esta vista
@@ -16,8 +16,8 @@
          Productos/Finanzas/Reportes con la licencia vencida. -->
     <DockPanel>
 
-        <!-- UI v2 (Fase 1, P3): solo el aviso. Classes="ui2" va en este Border y NO en la raíz: la raíz sigue con el fondo
-             viejo y MantenimientoView, ya v2, lleva su propia raíz ui2. -->
+        <!-- UI v2 (Fase 1, P3): solo el aviso. Classes="ui2" va en este Border y NO en la raíz: la raíz usa el fondo v2
+             y MantenimientoView, ya v2, lleva su propia raíz ui2. -->
         <Border x:Name="AvisoAccesoLimitado"
                 DockPanel.Dock="Top"
                 Classes="ui2"

@@ -22,78 +22,25 @@ using StockApp.Presentation.Views.Finanzas;
 using StockApp.Presentation.Views.Movimientos;
 using StockApp.Presentation.Views.Reportes;
 using StockApp.Presentation.Views.Tareas;
-using Xunit;
 
 namespace StockApp.Presentation.UiTests;
 
 /// <summary>
-/// Guardian de bloque para el catalogo de patrones P0-P7 (Task 6.0 del plan de Fase B,
-/// 2026-08-19). 42 de las 55 vistas restantes de la Fase B no tienen ni un test de UI propio;
-/// escribir uno por vista seria un plan mas grande que el refactor. El compilador de bindings
-/// (AvaloniaUseCompiledBindingsByDefault=true) ya cubre los bindings — lo que NO ve es "esta
-/// vista tiene un HeaderVista con el titulo correcto", "su margen exterior es el estandar" y
-/// "no quedo ningun Opacity literal decorativo". Eso es lo que este guardian mide, sobre N
-/// vistas de golpe, con un solo [AvaloniaTheory] por invariante.
+/// El guardián del sistema nuevo (spec §8.2): cobertura de todas las vistas del ensamblado, piezas del tema viejo
+/// prohibidas en v2 (convención 11), botón v2 con variante (un <c>Button</c> sin clase dentro de <c>.ui2</c> no recibe
+/// estilo v2), opacidades literales y overlays de modal (convención 25). Lo que sigue en v1 (la importación) lo
+/// custodia <see cref="GuardianImportacionV1Tests"/>.
 ///
-/// Las tandas 7-12 agregan sus propias filas a las mismas InlineData en vez de escribir un
-/// guardian nuevo cada vez.
-///
-/// Titulo/Eyebrow en null: para las vistas cuyo HeaderVista toma el titulo de un binding a VM,
-/// PatronHelpers.Montar no asigna ViewModel, asi que el texto no se puede verificar literal en este
-/// banco de pruebas. Se deja en null y el test solo exige que el HeaderVista exista.
+/// Toda vista nueva entra en <see cref="VistasV2"/> (o, si es v1, en <see cref="GuardianImportacionV1Tests.VistasV1Vivas"/>);
+/// <see cref="Guardian_CubreTodasLasVistasDelEnsamblado"/> exige que no quede ninguna fuera de las tres listas.
 /// </summary>
-public class GuardianDePatronTests
+public class GuardianSistemaV2Tests
 {
-    [AvaloniaTheory]
-    [InlineData(typeof(ImportacionView), "Importar planillas", "FINANZAS")]
-    public void Vista_TieneHeaderVistaConElTituloEsperado(Type tipoVista, string? titulo, string? eyebrow)
-    {
-        var vista = PatronHelpers.Montar(tipoVista);
-        var header = PatronHelpers.HeaderDe(vista);
-
-        Assert.True(header is not null,
-            $"{tipoVista.Name} no tiene un HeaderVista en su arbol visual.");
-
-        if (titulo is not null)
-            Assert.Equal(titulo, header!.Titulo);
-        if (eyebrow is not null)
-            Assert.Equal(eyebrow, header!.Eyebrow);
-    }
-
-    public static readonly TheoryData<Type> VistasDeLaTanda = new()
-    {
-        typeof(ImportacionView),
-    };
-
     /// <summary>
-    /// Vistas que no aportan cromo de vista propio: o estan embebidas en otra (P2-emb, P1-emb, P5,
-    /// Task 8.1 de la Fase B; P5-ovl, Ruling B-34, tanda 12), o hostean a otra que si lo aporta
-    /// (P9, Ruling B-22, tanda 11). No llevan HeaderVista propio ni MargenVista: el contenedor (o
-    /// el hijo, en el caso P9) ya los puso. Corren los invariantes que SI les aplican (opacidad,
-    /// boton primario), mas uno propio e invertido
-    /// (<see cref="VistaEmbebida_NoDuplicaElMargenDeVista"/>).
-    /// </summary>
-    public static readonly TheoryData<Type> VistasEmbebidas = new()
-    {
-        typeof(HistorialImportacionesView),
-        typeof(NuevaImportacionView),
-        typeof(AccesoLimitadoView),
-    };
-
-    /// <summary>
-    /// Vistas que no pueden entrar a ninguna lista del guardian, con su razon y con quien las
-    /// custodia en su lugar (Task 13.4). Es una lista de EXCLUSION explicita: el test de
-    /// cobertura de abajo exige que toda vista del ensamblado este en alguna lista o en esta.
-    /// Son CINCO, no tres: la revision de exenciones de la Task 13.4 confirmo que solo hay DOS
-    /// exenciones "vivas" mas arriba (VistasExentasPorEmbeberUnWizardP8 y la de los
-    /// primarios mutuamente excluyentes de DocumentoFormView, que se fue con su migracion a v2) -- el esbozo original de B3 preveia
-    /// una tercera (VistasExentasPorMarcaDeAguaAprobada, LoginView) para el logo del municipio,
-    /// pero el Ruling B-25 quedo SUPERSEDIDO: LoginView usa la variante Ruling B-11
-    /// (Style Selector="Image.marca-agua", Priority=Style) en vez de Opacity local, asi que el
-    /// guardian generico ya no la ve y no hizo falta ninguna exencion. Esta lista es un
-    /// mecanismo DISTINTO: no exime un invariante, saca la vista de la cobertura por completo
-    /// porque PatronHelpers.Montar no puede montarla (Window) o porque no es "una vista de
-    /// contenido" (chrome de la app).
+    /// Vistas que no pueden entrar a la lista de vistas v2, con su razon y con quien las custodia en su lugar. Es una
+    /// lista de EXCLUSION explicita: el test de cobertura exige que toda vista del ensamblado este en alguna lista o en
+    /// esta. No exime un invariante: saca la vista de la cobertura porque <see cref="PatronHelpers.Montar"/> no puede
+    /// montarla (Window) o porque no es "una vista de contenido" (chrome de la app).
     /// </summary>
     public static readonly HashSet<Type> VistasFueraDelGuardian = new()
     {
@@ -113,17 +60,15 @@ public class GuardianDePatronTests
         // Revisada en la Task 13.1: no tiene ningun literal visual que custodiar.
         typeof(MainWindow),
         // Cromo de la app (sidebar + ContentControl), no una vista de contenido navegable.
-        // La custodian ShellMainViewGatesTests (15 casos) y SidebarContrasteTests.
+        // La custodian ShellMainViewGatesTests (15 casos) y ContrasteV2Tests.
         typeof(ShellMainView),
     };
 
     /// <summary>
-    /// Vistas reescritas con el sistema v2 (spec 2026-09-28): los patrones P0-P9 de este guardián ya
-    /// no les aplican (por ejemplo, P6 exige Border.card con padding 48 y la card v2 es
-    /// TarjetaContenido con 32). Las custodian su comparación contra el mockup (VisualTests) y sus
-    /// tests de UiTests/V2. La Fase 9 reemplaza este guardián entero (spec §8.2).
+    /// Vistas del sistema v2 (spec 2026-09-28). Las custodian su comparación contra el mockup (VisualTests), sus tests
+    /// de UiTests/V2 y este guardián.
     /// </summary>
-    public static readonly HashSet<Type> VistasMigradasAV2 = new()
+    public static readonly HashSet<Type> VistasV2 = new()
     {
         typeof(LoginView),
         typeof(AdjuntosPanelView),
@@ -176,20 +121,17 @@ public class GuardianDePatronTests
         typeof(DocumentoListView),
         typeof(DocumentoFormView),
         typeof(AdjuntosDocumentoPanelView),
+        typeof(AccesoLimitadoView),
     };
 
     /// <summary>
-    /// Con cuatro listas (InlineData, VistasDeLaTanda, VistasEmbebidas y
-    /// VistasMigradasAV2) la trampa que el plan de B2 identifico con dos listas se multiplica: agregar una vista a una
-    /// lista y olvidarla en otra no falla nada, simplemente deja invariantes sin correr. Este test
-    /// enumera por reflexion todos los Control publicos, no abstractos, de los namespaces de
-    /// vistas del ensamblado StockApp.Presentation y exige que cada uno este en alguna de las
-    /// listas del guardian o en VistasFueraDelGuardian.
+    /// Enumera por reflexion todos los Control publicos, no abstractos, de los namespaces de vistas del ensamblado
+    /// StockApp.Presentation y exige que cada uno este en <see cref="VistasV2"/>,
+    /// <see cref="GuardianImportacionV1Tests.VistasV1Vivas"/> o <see cref="VistasFueraDelGuardian"/>: agregar una vista
+    /// y olvidarla en las listas dejaria invariantes sin correr.
     ///
-    /// El predicado de namespace excluye deliberadamente StockApp.Presentation.Controls (los 5
-    /// TemplatedControl del design system: BadgeEstado, CampoFormulario, EstadoVacio, HeaderVista,
-    /// TarjetaMetrica) -- no son vistas, son piezas del catalogo de patrones, y no tienen
-    /// PatronHelpers.Montar ni sentido de "header/margen/opacidad de vista".
+    /// El predicado de namespace excluye deliberadamente StockApp.Presentation.Controls: no son vistas, son piezas del
+    /// catalogo de componentes.
     /// </summary>
     [AvaloniaFact]
     public void Guardian_CubreTodasLasVistasDelEnsamblado()
@@ -201,10 +143,9 @@ public class GuardianDePatronTests
                             || t.Namespace == "StockApp.Presentation.Actualizaciones.Views"))
             .ToList();
 
-        var cubiertas = VistasDeLaTanda.Select(r => r.Data)
-            .Concat(VistasEmbebidas.Select(r => r.Data))
+        var cubiertas = VistasV2
+            .Concat(GuardianImportacionV1Tests.VistasV1Vivas)
             .Concat(VistasFueraDelGuardian)
-            .Concat(VistasMigradasAV2)
             .ToHashSet();
 
         var huerfanas = todas.Where(t => !cubiertas.Contains(t)).ToList();
@@ -213,52 +154,28 @@ public class GuardianDePatronTests
             + string.Join(", ", huerfanas.Select(t => t.Name)));
     }
 
-    [AvaloniaTheory]
-    [MemberData(nameof(VistasDeLaTanda))]
-    public void Vista_TieneMargenExteriorEstandar(Type tipoVista)
+    [Fact]
+    public void Listas_SonDisjuntas()
     {
-        var vista = PatronHelpers.Montar(tipoVista);
-        var margen = PatronHelpers.MargenExteriorDe(vista);
+        var listas = new[]
+        {
+            ("VistasV2", (IEnumerable<Type>)VistasV2),
+            ("VistasV1Vivas", GuardianImportacionV1Tests.VistasV1Vivas),
+            ("VistasFueraDelGuardian", VistasFueraDelGuardian),
+        };
 
-        Assert.True(margen is not null,
-            $"{tipoVista.Name} no tiene ningun panel con Margin distinto de default.");
-        Assert.Equal(new Thickness(24), margen!.Value);
+        var repetidos = listas.SelectMany(l => l.Item2.Select(t => (Lista: l.Item1, Tipo: t)))
+            .GroupBy(x => x.Tipo)
+            .Where(g => g.Count() > 1)
+            .Select(g => $"{g.Key.Name} ({string.Join(" y ", g.Select(x => x.Lista))})")
+            .ToList();
+
+        Assert.True(repetidos.Count == 0, "Vista(s) en más de una lista del guardián: " + string.Join(", ", repetidos));
     }
 
     /// <summary>
-    /// Ruling B-17: las vistas embebidas en un TabControl NO pueden traer MargenVista (24) propio
-    /// -- el contenedor (MaestrosFinanzasView/ImportacionView) ya lo aplico, y duplicarlo da 48px
-    /// de aire (bug C3 del esbozo de B2). Su Margin="0,12,0,0" (separacion visual con el borde de
-    /// la pestaña) se conserva: el invariante es "distinto de Thickness(24)", no "sin margen".
-    /// </summary>
-    [AvaloniaTheory]
-    [MemberData(nameof(VistasEmbebidas))]
-    public void VistaEmbebida_NoDuplicaElMargenDeVista(Type tipoVista)
-    {
-        var vista = PatronHelpers.Montar(tipoVista);
-        var margen = PatronHelpers.MargenExteriorDe(vista);
-
-        Assert.True(margen != new Thickness(24),
-            $"{tipoVista.Name} es embebida y trae MargenVista propio: el contenedor ya lo aplica, "
-            + "queda 48px de aire duplicado.");
-    }
-
-    [AvaloniaTheory]
-    [MemberData(nameof(VistasDeLaTanda))]
-    [MemberData(nameof(VistasEmbebidas))]
-    public void Vista_NoTieneOpacidadesLiterales(Type tipoVista)
-    {
-        var vista = PatronHelpers.Montar(tipoVista);
-        var literales = PatronHelpers.OpacidadesLiteralesDe(vista);
-
-        Assert.True(literales.Count == 0,
-            $"{tipoVista.Name} tiene {literales.Count} control(es) con Opacity literal: "
-            + string.Join(", ", literales.Select(c => c.GetType().Name)));
-    }
-
-    /// <summary>
-    /// Deuda de la Fase 1: una vista que se migra a v2 sale de VistasDeLaTanda y perdía este chequeo. El
-    /// cromo del shell (sidebar v2) también: ShellMainView está fuera del guardián P0-P9, pero se puede montar.
+    /// Opacidades literales en las vistas v2 y en el cromo del shell (sidebar v2): ShellMainView está fuera de
+    /// la lista de vistas, pero se puede montar.
     ///
     /// Cobertura PARCIAL, por diseño: PatronHelpers.Montar no asigna DataContext, así que lo que solo existe con un
     /// ViewModel (plantillas de celda de DataGrid, ItemTemplates, contenido tras bindings) no se realiza y no se
@@ -267,7 +184,7 @@ public class GuardianDePatronTests
     /// queda fuera de este chequeo.
     /// </summary>
     public static TheoryData<Type> VistasV2Montables =>
-        new(VistasMigradasAV2.Append(typeof(ShellMainView)).OrderBy(t => t.Name));
+        new(VistasV2.Append(typeof(ShellMainView)).OrderBy(t => t.Name));
 
     [AvaloniaTheory]
     [MemberData(nameof(VistasV2Montables))]
@@ -463,31 +380,124 @@ public class GuardianDePatronTests
         Assert.DoesNotMatch(OpacidadLiteralEnXaml, """<Setter Property="Opacity" Value="0.28" />""");
     }
 
-    private static readonly Regex PiezaDelTemaViejo =
+    private static readonly Regex ConversorOControlViejo =
         new(@"SignoNegativoBrushConverter|ActivoOpacidadConverter|<c:BadgeEstado\b|<c:HeaderVista\b|<c:EstadoVacio\b", RegexOptions.Compiled);
+
+    private static readonly Regex ClaseDelTemaViejo =
+        new(@"Classes\s*=\s*""[^""]*(?<![\w-])(primary|secondary|card|seccion|caption|micro|body|titulo-vista)(?![\w-])[^""]*""", RegexOptions.Compiled);
+
+    private static readonly Regex ClaveEnLlave = new(@"x:Key=""([^""]+)""", RegexOptions.Compiled);
+
+    private static readonly string[] ArchivosDelTemaViejo =
+    {
+        "StockApp.Presentation/Themes/Tokens.axaml",
+        "StockApp.Presentation/Themes/Typography.axaml",
+        "StockApp.Presentation/Themes/DataGrid.axaml",
+        "StockApp.Presentation/Controls/Componentes.axaml",
+    };
+
+    private static readonly Lazy<string[]> ClavesDelTemaViejo = new(() =>
+        ArchivosDelTemaViejo
+            .SelectMany(a => ClaveEnLlave.Matches(LeerDesdeSrc(a)).Select(m => m.Groups[1].Value))
+            .Where(k => !k.StartsWith("{x:Type", StringComparison.Ordinal))
+            .Distinct()
+            .ToArray());
+
+    /// <summary>
+    /// Cada pieza del tema viejo que aparece en el texto: conversores y controles (<c>SignoNegativoBrushConverter</c>,
+    /// <c>c:BadgeEstado</c>, <c>c:HeaderVista</c>, <c>c:EstadoVacio</c>), recursos con la clave de un token del tema
+    /// viejo (los v2 llevan el prefijo V2 y no coinciden) y clases de estilo del tema viejo (<c>primary</c>,
+    /// <c>card</c>…; <c>ghost</c> no entra: es de los dos temas).
+    /// </summary>
+    private static List<string> PiezasViejasEn(string texto, IEnumerable<string> claves)
+    {
+        var piezas = ConversorOControlViejo.Matches(texto).Select(m => m.Value).ToList();
+        var alternativa = string.Join("|", claves.Select(Regex.Escape));
+        if (alternativa.Length > 0)
+            piezas.AddRange(Regex.Matches(texto, $@"(Dynamic|Static)Resource\s+(?:{alternativa})\b").Select(m => m.Value));
+        piezas.AddRange(ClaseDelTemaViejo.Matches(texto).Select(m => m.Value));
+        return piezas;
+    }
 
     /// <summary>Ruta desde src del .axaml de una vista: el namespace StockApp.Presentation.X.Y es la carpeta X/Y.</summary>
     private static string RutaAxaml(Type vista) =>
         "StockApp.Presentation/" + vista.Namespace!["StockApp.Presentation.".Length..].Replace('.', '/') + "/" + vista.Name + ".axaml";
 
-    public static TheoryData<Type> VistasV2ConAxaml => new(VistasMigradasAV2.OrderBy(t => t.Name));
+    /// <summary>Los .axaml del sistema v2: las vistas, el cromo del shell y los diálogos (que son Window y no se montan).</summary>
+    public static TheoryData<string> AxamlV2 => new(
+        VistasV2.Select(RutaAxaml)
+            .Append("StockApp.Presentation/Views/ShellMainView.axaml")
+            .Concat(DialogosV2.Select(d => d.Data))
+            .OrderBy(r => r, StringComparer.Ordinal));
 
     /// <summary>
-    /// Una vista v2 no usa los conversores ni los controles del tema viejo (convención 11): se lee el TEXTO del
-    /// .axaml, así cuenta también lo que vive en plantillas de celda, que el montaje sin ViewModel no realiza.
+    /// Una vista v2 no usa los conversores, los controles, los tokens ni las clases del tema viejo (convención 11): se
+    /// lee el TEXTO del .axaml, así cuenta también lo que vive en plantillas de celda, que el montaje sin ViewModel no
+    /// realiza.
     /// </summary>
     [Theory]
-    [MemberData(nameof(VistasV2ConAxaml))]
-    public void VistaV2_NoUsaPiezasDelTemaViejo(Type vista) =>
-        Assert.DoesNotMatch(PiezaDelTemaViejo, LeerDesdeSrc(RutaAxaml(vista)));
+    [MemberData(nameof(AxamlV2))]
+    public void VistaV2_NoUsaPiezasDelTemaViejo(string rutaDesdeSrc)
+    {
+        var piezas = PiezasViejasEn(LeerDesdeSrc(rutaDesdeSrc), ClavesDelTemaViejo.Value);
+
+        Assert.True(piezas.Count == 0, $"{rutaDesdeSrc} usa piezas del tema viejo: {string.Join(", ", piezas)}");
+    }
 
     [Fact]
-    public void DetectorDePiezasViejas_VeElConversorYElControl()
+    public void DetectorDePiezasViejas_VeConversorControlTokenYClase()
     {
-        Assert.Matches(PiezaDelTemaViejo, """<TextBlock Foreground="{Binding X, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}" />""");
-        Assert.Matches(PiezaDelTemaViejo, """<c:BadgeEstado Texto="Stock negativo" />""");
-        Assert.DoesNotMatch(PiezaDelTemaViejo, """<v2:Insignia Texto="Stock negativo" />""");
+        string[] claves = { "FondoBrush", "Espacio3" };
+
+        Assert.NotEmpty(PiezasViejasEn("""<TextBlock Foreground="{Binding X, Converter={x:Static conv:SignoNegativoBrushConverter.Instance}}" />""", claves));
+        Assert.NotEmpty(PiezasViejasEn("""<c:BadgeEstado Texto="x" />""", claves));
+        Assert.NotEmpty(PiezasViejasEn("""<Border Background="{DynamicResource FondoBrush}" />""", claves));
+        Assert.NotEmpty(PiezasViejasEn("""<StackPanel Spacing="{StaticResource Espacio3}" />""", claves));
+        Assert.NotEmpty(PiezasViejasEn("""<Button Classes="primary" Content="x" />""", claves));
+        Assert.NotEmpty(PiezasViejasEn("""<Border Classes="card x" />""", claves));
+
+        Assert.Empty(PiezasViejasEn("""<Border Background="{DynamicResource V2FondoBrush}" />""", claves));
+        Assert.Empty(PiezasViejasEn("""<Button Classes="primario" Content="x" />""", claves));
+        Assert.Empty(PiezasViejasEn("""<Button Classes="ghost" Content="x" />""", claves));
+        Assert.Empty(PiezasViejasEn("""<Border Classes="v2-card" />""", claves));
+        Assert.Empty(PiezasViejasEn("""<v2:Insignia Texto="x" />""", claves));
     }
+
+    private static readonly Regex BotonElemento = new(@"<Button\s[^>]*>", RegexOptions.Compiled);
+
+    private static readonly Regex BotonConVariante =
+        new(@"Theme\s*=\s*""|Classes\s*=\s*""[^""]*(?<![\w-])(primario|secundario|ghost|peligro)(?![\w-])", RegexOptions.Compiled);
+
+    /// <summary>Cada <c>&lt;Button …&gt;</c> del texto que no lleva un Theme ni una clase de variante v2.</summary>
+    private static List<string> BotonesSinVarianteEn(string texto) =>
+        BotonElemento.Matches(texto).Select(m => m.Value).Where(b => !BotonConVariante.IsMatch(b)).ToList();
+
+    /// <summary>
+    /// Un <c>Button</c> sin clase dentro de <c>.ui2</c> no recibe ningún estilo v2 y cae al gris de Fluent: todo botón v2
+    /// lleva <c>primario</c>, <c>secundario</c>, <c>ghost</c>, <c>peligro</c> o un <c>Theme</c>.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(AxamlV2))]
+    public void VistaV2_TodoBotonTieneVarianteOTema(string rutaDesdeSrc)
+    {
+        var botones = BotonesSinVarianteEn(LeerDesdeSrc(rutaDesdeSrc));
+
+        Assert.True(botones.Count == 0, $"{rutaDesdeSrc} tiene Button sin variante ni Theme: {string.Join(" | ", botones)}");
+    }
+
+    [Fact]
+    public void DetectorDeBotonSinVariante_VeElBotonDesnudoYNoElElementoDePropiedad()
+    {
+        Assert.Single(BotonesSinVarianteEn("""<Button Content="x" />"""));
+        Assert.Single(BotonesSinVarianteEn("""<Button Classes="primary" Content="x" />"""));
+        Assert.Single(BotonesSinVarianteEn("<Button\n  Content=\"x\" />"));
+
+        Assert.Empty(BotonesSinVarianteEn("""<Button.IsVisible>"""));
+        Assert.Empty(BotonesSinVarianteEn("""<Button Classes="secundario" />"""));
+        Assert.Empty(BotonesSinVarianteEn("""<Button Classes="ghost icono" />"""));
+        Assert.Empty(BotonesSinVarianteEn("""<Button Theme="{StaticResource V2TemaEnlace}" />"""));
+    }
+
 
     /// <summary>
     /// Convención 25: un modal de pantalla es una Window con servicio, nunca una capa semitransparente sobre la vista
@@ -540,49 +550,5 @@ public class GuardianDePatronTests
         var ruta = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(archivoDeEsteTest)!, "..", "..", "src", rutaDesdeSrc));
         Assert.True(File.Exists(ruta), $"No existe {ruta}");
         return File.ReadAllText(ruta);
-    }
-    /// <summary>
-    /// GAP DE PLAN encontrado al ejecutar la Task 8.1 (el plan esperaba "exactamente 2 fallos
-    /// nuevos" en el Step 2 de esa task; hubo un tercero real). <see cref="ImportacionView"/>
-    /// embebe <c>NuevaImportacionView</c> (P8, Ruling B-18 punto 3) como contenido de su primer
-    /// TabItem, y <see cref="PatronHelpers.Montar"/> no asigna ViewModel: los tres
-    /// <c>IsVisible="{Binding PasoActual, Converter=...}"</c> de <c>NuevaImportacionView</c>
-    /// quedan sin resolver y caen al default `true` de la propiedad (mismo comportamiento que
-    /// documenta la Task 6.7 para un <c>IsVisible</c> sin resolver). Eso deja 3 botones primarios
-    /// "visibles" dentro del arbol de <c>ImportacionView</c> sin que <c>ImportacionView</c> tenga
-    /// ninguna culpa: no agrega ningun <c>Classes="primary"</c> propio (verificado: los otros tres
-    /// invariantes -- header, margen, opacidad -- SI le aplican y pasan en verde).
-    ///
-    /// Task 8.4: <c>NuevaImportacionView</c> se agrego a <see cref="VistasEmbebidas"/> (P8) y por
-    /// lo tanto ENTRA a este mismo invariante generico -- y por la misma razon (montada sin VM,
-    /// los 3 IsVisible sin resolver) tambien daria 3 primarios visibles. Se agrega ella misma
-    /// aca, no solo su contenedor. El reemplazo real es
-    /// <see cref="NuevaImportacionJerarquiaBotonesTests"/>: monta la vista CON un ViewModel real
-    /// y verifica, para cada uno de los 3 valores de <c>PasoWizardImportacion</c>, que hay
-    /// EXACTAMENTE un boton primario visible y que es el correcto -- eso custodia mas que este
-    /// invariante generico, no menos.
-    /// </summary>
-    private static readonly HashSet<Type> VistasExentasPorEmbeberUnWizardP8 = new()
-    {
-        typeof(ImportacionView),
-        typeof(NuevaImportacionView),
-    };
-
-    [AvaloniaTheory]
-    [MemberData(nameof(VistasDeLaTanda))]
-    [MemberData(nameof(VistasEmbebidas))]
-    public void Vista_NoTieneUnSegundoBotonPrimario(Type tipoVista)
-    {
-        if (VistasExentasPorEmbeberUnWizardP8.Contains(tipoVista))
-            return;
-
-        var vista = PatronHelpers.Montar(tipoVista);
-        var primarios = vista.GetVisualDescendants()
-            .OfType<Button>()
-            .Where(b => b.Classes.Contains("primary") && ArbolVisual.EsVisibleEnArbol(b))
-            .ToList();
-
-        Assert.True(primarios.Count <= 1,
-            $"{tipoVista.Name} tiene {primarios.Count} botones primarios visibles a la vez.");
     }
 }

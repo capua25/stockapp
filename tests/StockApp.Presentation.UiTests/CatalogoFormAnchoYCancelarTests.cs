@@ -35,7 +35,7 @@ namespace StockApp.Presentation.UiTests;
 /// <see cref="PanelDelFormularioDe"/> mide el Child del Border.card, no el Border en sí -- es el
 /// contenedor "correspondiente" que el brief pide inspeccionar.
 ///
-/// A diferencia de <see cref="GuardianDePatronTests"/>/<see cref="PatronHelpers.Montar"/> (que monta
+/// A diferencia de <see cref="GuardianSistemaV2Tests"/>/<see cref="PatronHelpers.Montar"/> (que monta
 /// sin ViewModel a propósito, porque solo mide estructura), acá hace falta un ViewModel REAL con
 /// Command resuelto -- si no, no hay forma de distinguir "el botón existe pero el binding está
 /// roto" de "el botón no existe". Reusa los fakes de TareaFakes.cs/IngresoPorFacturaFakes.cs

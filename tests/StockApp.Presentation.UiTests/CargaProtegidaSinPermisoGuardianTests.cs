@@ -193,7 +193,7 @@ public class CargaProtegidaSinPermisoGuardianTests
     /// <summary>
     /// Excepciones documentadas, CON razón técnica -- no es "la lista de los 14 disfrazada": es
     /// un mecanismo de exención puntual, mismo patrón que
-    /// <c>GuardianDePatronTests.VistasFueraDelGuardian</c>. Solo UNA entrada real hoy.
+    /// <c>GuardianSistemaV2Tests.VistasFueraDelGuardian</c>. Solo UNA entrada real hoy.
     /// </summary>
     private static readonly HashSet<(string Vista, string Metodo)> PuntosExentosConRazon = new()
     {

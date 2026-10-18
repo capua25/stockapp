@@ -13,7 +13,7 @@ namespace StockApp.Presentation.UiTests;
 ///
 /// Analiza el <c>.axaml</c> crudo como texto (mismo enfoque que
 /// <see cref="EspaciadoBotonesEnFilaDeGridTests"/> y <c>ReflexionVistaViewModelTests</c>), no
-/// monta las vistas: <see cref="GuardianDePatronTests"/> monta sin datos, así que un
+/// monta las vistas: <see cref="GuardianSistemaV2Tests"/> monta sin datos, así que un
 /// <c>ItemsControl</c>/<c>ItemTemplate</c>/<c>CellTemplate</c> nunca realiza sus filas y un
 /// literal ahí adentro pasaría inadvertido (Ruling B-16). Este test sí ve ese contenido porque
 /// nunca necesita montar nada.

@@ -13,7 +13,7 @@ using StockApp.Presentation.Controls;
 namespace StockApp.Presentation.UiTests;
 
 /// <summary>
-/// Helpers compartidos por <see cref="GuardianDePatronTests"/> y por las tandas 6-12, que amplian
+/// Helpers compartidos por <see cref="GuardianSistemaV2Tests"/> y por las tandas 6-12, que amplian
 /// la misma tabla de vistas. 42 de las 55 vistas de la Fase B no tienen ni un test de UI propio;
 /// en vez de escribir uno por vista, el guardian monta N vistas de golpe y mide, sobre cada una,
 /// los tres invariantes de patron que el compilador de bindings (AvaloniaUseCompiledBindingsByDefault)

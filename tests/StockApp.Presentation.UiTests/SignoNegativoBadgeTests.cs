@@ -36,7 +36,7 @@ namespace StockApp.Presentation.UiTests;
 /// palabra, en al menos una vista representativa de cada uno de los 4 módulos que tienen sitios
 /// (Catálogo, Finanzas, Tareas, Reportes) -- mínimo exigido por el plan (Step 3). Los 10 sitios
 /// con badge viven mayormente dentro de <c>CellTemplate</c>/<c>ItemTemplate</c>, invisibles para
-/// <c>GuardianDePatronTests</c> (Ruling B-16): sin <c>ItemsSource</c> asignado no se realiza
+/// <c>GuardianSistemaV2Tests</c> (Ruling B-16): sin <c>ItemsSource</c> asignado no se realiza
 /// ninguna celda, así que estos tests montan la vista real y asignan datos con signos opuestos,
 /// igual que <see cref="ReportesAlineacionNumericaTests"/>.
 /// </summary>

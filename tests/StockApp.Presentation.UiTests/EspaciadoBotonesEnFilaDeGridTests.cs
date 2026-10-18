@@ -16,7 +16,7 @@ namespace StockApp.Presentation.UiTests;
 /// <c>StackPanel</c> — <c>Spacing</c> es propiedad de <c>StackPanel</c>, un <c>Grid</c> no la
 /// tiene, y ningún <c>Button</c> llevaba <c>Margin</c>. 3358 tests en verde no lo detectaron.
 ///
-/// <see cref="GuardianDePatronTests"/> no cubre esto: por diseño (Ruling B-16) no mira dentro de
+/// <see cref="GuardianSistemaV2Tests"/> no cubre esto: por diseño (Ruling B-16) no mira dentro de
 /// <c>ItemTemplate</c>/<c>CellTemplate</c> — monta las vistas sin datos, así que un
 /// <c>ItemsControl</c> nunca realiza sus filas. Este test, en cambio, analiza el <c>.axaml</c>
 /// crudo como texto (mismo enfoque que <see cref="ReflexionVistaViewModelTests"/>), así que SÍ ve
