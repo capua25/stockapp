@@ -16,13 +16,16 @@ namespace StockApp.Presentation.VisualTests.Pantallas.Finanzas;
 [Trait("Categoria", "ComparacionVisual")]
 public class PagosComparacionTests
 {
-    /// <summary>Estas ocho comparaciones NO tienen diferencia de layout (columnas, anchos y posiciones coinciden con el mockup) pero
-    /// superan en 1 a 7 el máximo de 11 teselas densas por antialias de Chromium contra Skia en texto (los importes del resumen,
-    /// el error de Monto, el aviso y el nombre del adjunto, el vacío de la card y el mensaje del modal). Un UmbralAprobado lo da
-    /// solo el usuario: quedan salteadas hasta que Martin apruebe los topes medidos (sin pagos 12 y 15, error 14 y 15, pago
-    /// anulado 17 y 18, confirmar anular 13 y 14, a 1280 y a 1366), con el mismo mecanismo de AprobacionAntialias de
-    /// GastoFormComparacionTests.</summary>
-    private const string Pendiente = "Pendiente de aprobación de Martin: tope de teselas por antialias (ver el resumen de la clase).";
+    // Aprobación puntual (no sube el umbral global) de Martin, 2026-10-17: antialias de Chromium contra Skia en texto (importes del
+    // resumen, error de Monto, aviso y nombre del adjunto, vacío de la card y mensaje del modal). Sin diferencia de layout:
+    // columnas, anchos y posiciones coinciden con el mockup. Tope = medido. Mismo mecanismo que GastoFormComparacionTests.
+    private const string MutacionPalida =
+        "TarjetaContenido con V2FondoBrush en vez de V2SuperficieBrush (relleno pálido equivocado): 977 teselas a 1280 y 1053 a 1366, contra 17 y 18 aprobadas";
+
+    private static UmbralAprobado Aprobacion(int teselas, string detalle, string? mutacionPalida = null) => new(
+        teselas, "Martin", "2026-10-17",
+        $"Antialias Chromium vs Skia en texto ({detalle}); sin corrimiento de layout; teselas solo sobre el texto. Tope = medido.",
+        mutacionPalida);
 
     private static void Comparar(ShellMainViewModel vm, string mockup, TamanoLienzo? tamano = null, Action<Control>? preparar = null,
         UmbralAprobado? aprobado = null) =>
@@ -46,10 +49,10 @@ public class PagosComparacionTests
         Comparar(DatosPagos.ConPagos(), "finanzas/pagos-seleccionado.html", preparar: OcultarSidebarYSeleccionar(61));
     [AvaloniaFact] public void PagosSeleccionado_IgualAlMockup_1366x768() =>
         Comparar(DatosPagos.ConPagos(), "finanzas/pagos-seleccionado.html", TamanoLienzo.Municipio, OcultarSidebarYSeleccionar(61));
-    [AvaloniaFact(Skip = Pendiente)] public void PagosSinPagos_IgualAlMockup() => Comparar(DatosPagos.SinPagos(), "finanzas/pagos-sin-pagos.html");
-    [AvaloniaFact(Skip = Pendiente)] public void PagosSinPagos_IgualAlMockup_1366x768() => Comparar(DatosPagos.SinPagos(), "finanzas/pagos-sin-pagos.html", TamanoLienzo.Municipio);
-    [AvaloniaFact(Skip = Pendiente)] public void PagosError_IgualAlMockup() => Comparar(DatosPagos.ConError(), "finanzas/pagos-error.html");
-    [AvaloniaFact(Skip = Pendiente)] public void PagosError_IgualAlMockup_1366x768() => Comparar(DatosPagos.ConError(), "finanzas/pagos-error.html", TamanoLienzo.Municipio);
+    [AvaloniaFact] public void PagosSinPagos_IgualAlMockup() => Comparar(DatosPagos.SinPagos(), "finanzas/pagos-sin-pagos.html", aprobado: Aprobacion(12, "importes del resumen y vacío de la card"));
+    [AvaloniaFact] public void PagosSinPagos_IgualAlMockup_1366x768() => Comparar(DatosPagos.SinPagos(), "finanzas/pagos-sin-pagos.html", TamanoLienzo.Municipio, aprobado: Aprobacion(15, "importes del resumen y vacío de la card"));
+    [AvaloniaFact] public void PagosError_IgualAlMockup() => Comparar(DatosPagos.ConError(), "finanzas/pagos-error.html", aprobado: Aprobacion(14, "importes del resumen y error de Monto"));
+    [AvaloniaFact] public void PagosError_IgualAlMockup_1366x768() => Comparar(DatosPagos.ConError(), "finanzas/pagos-error.html", TamanoLienzo.Municipio, aprobado: Aprobacion(15, "importes del resumen y error de Monto"));
     [AvaloniaFact] public void PagosSoloLectura_IgualAlMockup() =>
         Comparar(DatosPagos.SoloLectura(), "finanzas/pagos-solo-lectura.html", preparar: OcultarSidebarYSeleccionar(61));
     [AvaloniaFact] public void PagosSoloLectura_IgualAlMockup_1366x768() =>
@@ -57,13 +60,13 @@ public class PagosComparacionTests
     [AvaloniaFact] public void PagosGastoAnulado_IgualAlMockup() => Comparar(DatosPagos.GastoAnuladoPantalla(), "finanzas/pagos-gasto-anulado.html");
     [AvaloniaFact] public void PagosGastoAnulado_IgualAlMockup_1366x768() =>
         Comparar(DatosPagos.GastoAnuladoPantalla(), "finanzas/pagos-gasto-anulado.html", TamanoLienzo.Municipio);
-    [AvaloniaFact(Skip = Pendiente)] public void PagosPagoAnulado_IgualAlMockup() =>
-        Comparar(DatosPagos.PagoAnulado(), "finanzas/pagos-pago-anulado.html", preparar: OcultarSidebarYSeleccionar(62));
-    [AvaloniaFact(Skip = Pendiente)] public void PagosPagoAnulado_IgualAlMockup_1366x768() =>
-        Comparar(DatosPagos.PagoAnulado(), "finanzas/pagos-pago-anulado.html", TamanoLienzo.Municipio, OcultarSidebarYSeleccionar(62));
-    [AvaloniaFact(Skip = Pendiente)] public void PagosConfirmarAnular_IgualAlMockup() =>
-        ComparacionVisual.CompararConMockup(Modal(DatosPagos.MensajeConfirmarAnular()), null, "finanzas/pagos-confirmar-anular.html");
-    [AvaloniaFact(Skip = Pendiente)] public void PagosConfirmarAnular_IgualAlMockup_1366x768() =>
+    [AvaloniaFact] public void PagosPagoAnulado_IgualAlMockup() =>
+        Comparar(DatosPagos.PagoAnulado(), "finanzas/pagos-pago-anulado.html", preparar: OcultarSidebarYSeleccionar(62), aprobado: Aprobacion(17, "importes del resumen, aviso y nombre del adjunto", MutacionPalida));
+    [AvaloniaFact] public void PagosPagoAnulado_IgualAlMockup_1366x768() =>
+        Comparar(DatosPagos.PagoAnulado(), "finanzas/pagos-pago-anulado.html", TamanoLienzo.Municipio, OcultarSidebarYSeleccionar(62), aprobado: Aprobacion(18, "importes del resumen, aviso y nombre del adjunto", MutacionPalida));
+    [AvaloniaFact] public void PagosConfirmarAnular_IgualAlMockup() =>
+        ComparacionVisual.CompararConMockup(Modal(DatosPagos.MensajeConfirmarAnular()), null, "finanzas/pagos-confirmar-anular.html", aprobado: Aprobacion(13, "mensaje del modal"));
+    [AvaloniaFact] public void PagosConfirmarAnular_IgualAlMockup_1366x768() =>
         ComparacionVisual.CompararConMockup(Modal(DatosPagos.MensajeConfirmarAnular()), null, "finanzas/pagos-confirmar-anular.html",
-            tamano: TamanoLienzo.Municipio);
+            tamano: TamanoLienzo.Municipio, aprobado: Aprobacion(14, "mensaje del modal"));
 }
