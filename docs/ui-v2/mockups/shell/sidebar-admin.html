@@ -8,10 +8,10 @@
 <style>
   /* Pulgar de scroll de Fluent (P4, barra Auto): el ScrollViewer de la navegación del Administrador
      desborda y Fluent dibuja un indicador sólido de 2 px. Medido en el render (Fase 2, Task 9): x 223-224
-     del sidebar, desde y 84, 421 px de alto a 760 y 432 px a 768 (crece con el viewport; con ANÁLISIS en un solo ítem la lista es más corta y el pulgar más largo). Color de Fluent,
+     del sidebar, desde y 84, 498 px de alto a 760 y 512 px a 768 (crece con el viewport; re-medido en la app integrada de la Fase 7: con ANÁLISIS en un ítem y ADMINISTRACIÓN en tres la lista es más corta y el pulgar más largo). Color de Fluent,
      no un token: es una compensación medida (spec §6.5), no un valor de diseño. */
-  .v2-sidebar-pulgar { position: absolute; left: 223px; top: 84px; width: 2px; height: 421px; background: #7A7A7A; }
-  @media (min-height: 768px) { .v2-sidebar-pulgar { height: 432px; } }
+  .v2-sidebar-pulgar { position: absolute; left: 223px; top: 84px; width: 2px; height: 498px; background: #7A7A7A; }
+  @media (min-height: 768px) { .v2-sidebar-pulgar { height: 512px; } }
 </style>
 </head>
 <body>
