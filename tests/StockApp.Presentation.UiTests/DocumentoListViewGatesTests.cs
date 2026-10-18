@@ -201,4 +201,30 @@ public class DocumentoListViewGatesTests
 
         Assert.True(ArbolVisual.EsVisibleEnArbol(BotonPorContenido(window, "Reabrir…")));
     }
+
+    /// <summary>Hallazgo del GATE 2: con el estado Sin permiso (403 al listar) las acciones del encabezado seguían a la
+    /// vista. Se prueba con un operador de permisos mixtos (Admin cortocircuita) y con una fila seleccionada de antes, que es
+    /// la que habilita Ver y las transiciones.</summary>
+    [AvaloniaFact]
+    public void SinPermiso_OperadorMixto_OcultaTodasLasAccionesDelEncabezado()
+    {
+        var servicio = new DocumentoServiceFake(new List<DocumentoAdministrativo> { DocumentoDe(1, EstadoDocumento.EnProceso) })
+        { FallaAlListar = new UnauthorizedAccessException() };
+        var vm = new DocumentoListViewModel(
+            servicio, new SesionFake(RolUsuario.Operador, StockApp.Application.Authorization.Permisos.GestionarDocumentos),
+            new NavigationRecorderDocumentosFake(), new ConfirmacionServiceFake())
+        { EsperaDebounce = TimeSpan.Zero };
+        vm.Activos.Add(new DocumentoFila(DocumentoDe(1, EstadoDocumento.EnProceso), RolUsuario.Operador));
+        vm.FilaSeleccionadaActivos = vm.Activos[0];
+
+        var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
+        window.DataContext = vm;
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(vm.SinPermiso);
+        foreach (var texto in new[] { "Ver", "Nuevo documento", "Iniciar", "Volver a pendiente", "Finalizar", "Anular…", "Reabrir…" })
+            Assert.False(ArbolVisual.EsVisibleEnArbol(BotonPorContenido(window, texto)), texto);
+    }
 }
