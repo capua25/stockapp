@@ -65,7 +65,7 @@
                                 <TextBox x:Name="CajaNuevoNombreCompleto" Text="{Binding NuevoNombreCompleto}" />
                             </v2:CampoFormulario>
                             <v2:CampoFormulario Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="3" Etiqueta="Contraseña">
-                                <TextBox x:Name="CajaNuevaContrasena" PasswordChar="*" Text="{Binding NuevaContrasenaPlan}" />
+                                <TextBox x:Name="CajaNuevaContrasena" PasswordChar="●" Text="{Binding NuevaContrasenaPlan}" />
                             </v2:CampoFormulario>
                         </Grid>
                         <Button x:Name="BotonCrear" Classes="secundario" Content="Crear usuario" Command="{Binding AltaCommand}"
@@ -140,7 +140,7 @@
 
                         <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8">
                             <v2:CampoFormulario x:Name="CampoNuevaContrasena" Etiqueta="Nueva contraseña">
-                                <TextBox x:Name="CajaNuevaContrasenaSeleccionado" PasswordChar="*" Width="220"
+                                <TextBox x:Name="CajaNuevaContrasenaSeleccionado" PasswordChar="●" Width="220"
                                          Text="{Binding NuevaContrasenaParaSeleccionado}"
                                          IsEnabled="{Binding UsuarioSeleccionado.Activo}" />
                             </v2:CampoFormulario>

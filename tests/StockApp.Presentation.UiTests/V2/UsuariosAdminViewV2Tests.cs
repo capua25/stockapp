@@ -114,6 +114,7 @@ public class UsuariosAdminViewV2Tests
         Assert.Equal(12, Casillas(m).Count());
         Assert.All(Casillas(m), c => Assert.True(c.IsEffectivelyEnabled));
         Assert.Equal(2, Casillas(m).Count(c => c.IsChecked == true));
+        Assert.Equal("●", Parte<TextBox>(m, "CajaNuevaContrasenaSeleccionado").PasswordChar.ToString());
         Assert.True(Parte<Button>(m, "BotonGuardarPermisos").IsEffectivelyEnabled);
     }
 
@@ -163,7 +164,8 @@ public class UsuariosAdminViewV2Tests
         Assert.True(Visible(alerta));
         Assert.Equal("Ya existe un usuario con ese nombre.", alerta.Texto);
         Assert.True(alerta.GetVisualAncestors().Contains(Parte<TarjetaContenido>(m, "CardNuevoUsuario")));
-        Assert.Equal("*", Parte<TextBox>(m, "CajaNuevaContrasena").PasswordChar.ToString());
+        // Mismo carácter que Login y ResetAdmin ("●"), en las dos contraseñas de la pantalla.
+        Assert.Equal("●", Parte<TextBox>(m, "CajaNuevaContrasena").PasswordChar.ToString());
     }
 
     [AvaloniaFact]
