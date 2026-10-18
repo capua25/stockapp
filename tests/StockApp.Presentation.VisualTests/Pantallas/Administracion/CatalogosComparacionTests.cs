@@ -20,6 +20,17 @@ public class CatalogosComparacionTests
         "Cuenta corriente a 30 días, pedir factura con orden de compra",
     ];
 
+
+    private static UmbralAprobado Aprobacion(int teselas, string motivo, string? mutacionPalida = null) => new(
+        teselas, "Martin", "2026-10-17", motivo, mutacionPalida);
+
+    private const string MutacionVacio =
+        "Un Border de 260 con V2FondoBrush (relleno pálido equivocado) en la card del detalle vacío de Catálogos: 661 teselas a 1280 y 734 a 1366, contra 16 y 14 aprobadas";
+
+    private const string MotivoTexto =
+        "Antialias Skia vs Chromium en el texto (negritas de títulos y centrado de los estados a medio píxel); estructura de bordes y fondos " +
+        "idéntica (cobertura 1,000 con 1 px de tolerancia), tinta sin corrimiento y teselas solo sobre glifos. Tope = medido.";
+
     private static void Comparar(ShellMainViewModel vm, string mockup, TamanoLienzo? tamano = null, UmbralAprobado? aprobado = null,
         IReadOnlyCollection<string>? recortesPermitidos = null) =>
         ComparacionVisual.CompararConMockup(new ShellMainView(), vm, mockup, tamano: tamano, aprobado: aprobado,
@@ -39,8 +50,8 @@ public class CatalogosComparacionTests
     [AvaloniaFact] public void CatalogosSinConexion_IgualAlMockup_1366x768() => Comparar(DatosCatalogos.SinConexion(), "administracion/catalogos-sin-conexion.html", TamanoLienzo.Municipio);
     [AvaloniaFact] public void CatalogosSinPermiso_IgualAlMockup() => Comparar(DatosCatalogos.SinPermiso(), "administracion/catalogos-sin-permiso.html");
     [AvaloniaFact] public void CatalogosSinPermiso_IgualAlMockup_1366x768() => Comparar(DatosCatalogos.SinPermiso(), "administracion/catalogos-sin-permiso.html", TamanoLienzo.Municipio);
-    [AvaloniaFact] public void CatalogosVacio_IgualAlMockup() => Comparar(DatosCatalogos.Vacio(), "administracion/catalogos-vacio.html");
-    [AvaloniaFact] public void CatalogosVacio_IgualAlMockup_1366x768() => Comparar(DatosCatalogos.Vacio(), "administracion/catalogos-vacio.html", TamanoLienzo.Municipio);
-    [AvaloniaFact] public void CatalogosSinResultados_IgualAlMockup() => Comparar(DatosCatalogos.SinResultados(), "administracion/catalogos-sin-resultados.html");
-    [AvaloniaFact] public void CatalogosSinResultados_IgualAlMockup_1366x768() => Comparar(DatosCatalogos.SinResultados(), "administracion/catalogos-sin-resultados.html", TamanoLienzo.Municipio);
+    [AvaloniaFact] public void CatalogosVacio_IgualAlMockup() => Comparar(DatosCatalogos.Vacio(), "administracion/catalogos-vacio.html", aprobado: Aprobacion(16, MotivoTexto, MutacionVacio));
+    [AvaloniaFact] public void CatalogosVacio_IgualAlMockup_1366x768() => Comparar(DatosCatalogos.Vacio(), "administracion/catalogos-vacio.html", TamanoLienzo.Municipio, aprobado: Aprobacion(14, MotivoTexto));
+    [AvaloniaFact] public void CatalogosSinResultados_IgualAlMockup() => Comparar(DatosCatalogos.SinResultados(), "administracion/catalogos-sin-resultados.html", aprobado: Aprobacion(15, MotivoTexto));
+    [AvaloniaFact] public void CatalogosSinResultados_IgualAlMockup_1366x768() => Comparar(DatosCatalogos.SinResultados(), "administracion/catalogos-sin-resultados.html", TamanoLienzo.Municipio, aprobado: Aprobacion(15, MotivoTexto));
 }

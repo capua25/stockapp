@@ -31,6 +31,8 @@
   .der { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
   .det-cab { display: flex; justify-content: space-between; align-items: flex-start; }
   .det-titulo { display: flex; align-items: center; gap: 8px; height: 36px; }
+  /* Título e insignias quedan 1 px más arriba que el centrado CSS (Avalonia redondea el corrimiento al centrar; medido en la app). */
+  .det-titulo > * { position: relative; top: -1px; }
   .pw { display: flex; align-items: flex-end; gap: 8px; margin-top: 16px; }
   .pw .v2-input { width: 220px; box-sizing: border-box; }
   .permisos-titulo { margin: 20px 0 4px; }

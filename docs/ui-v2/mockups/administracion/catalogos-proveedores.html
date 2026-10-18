@@ -19,7 +19,8 @@
   /* Detalle: card con encabezado propio (título del catálogo y acciones), buscador, grilla y pie. */
   .detalle { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
   .det-encabezado { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-  .det-encabezado .v2-titulo-seccion { white-space: nowrap; }
+  /* El título queda 1 px más arriba que el centrado CSS: Avalonia redondea el corrimiento de centrar 19 en 36 (medido en la app). */
+  .det-encabezado .v2-titulo-seccion { white-space: nowrap; position: relative; top: -1px; }
   .detalle .v2-grilla { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
   .v2-grilla-header { flex: 0 0 auto; }
   .filas { flex: 1 1 0; min-height: 0; overflow: hidden; }
