@@ -18,12 +18,15 @@
 
 ## 0. Precondición: la rama tiene que estar integrada (5 min, NO prescindible)
 
-Al escribir este plan (2026-10-17 a la noche), `feat/ui-v2` está en `fc8a53c` y tiene SOLO la 4e: las ramas `feat/ui-v2-fase-5` (`f37c141`), `feat/ui-v2-fase6` (`bcdf5f3`) y `feat/ui-v2-fase-7` (`f7b7863`) todavía NO están integradas, y los worktrees `ui-v2-fase5` y `ui-v2-fase7` tienen cambios sin commitear en tests. El GATE 2 integrado arranca SOLO si la integración ya ocurrió.
+La integración ya está completa en `feat/ui-v2`: 4e, 6 (`86b9b52`), 7 (`2d35ac2`) y 5 (`0277854`, que es el `HEAD` esperado). El GATE 2 integrado arranca SOLO si el log lo confirma.
 
 ```bash
 cd /home/capua25/workspace/stockapp-worktrees/ui-v2
 git status --short                       # limpio salvo .codegraph/
-git log --oneline -1
+git log --oneline -1                     # 0277854 (o un commit posterior solo de docs/tests)
+for h in 86b9b52 2d35ac2 0277854; do
+  printf '%-9s ' "$h"; git merge-base --is-ancestor "$h" HEAD && git log --oneline -1 "$h" || echo "FALTA"
+done
 for s in "tareas en v2 (listado" "documentos en v2" "hub de Reportes y marco común" \
          "Log de auditoría de un Operador con reportes.ver" "catálogos master-detail" \
          "usuarios con panel de permisos de pie fijo" "mantenimiento en v2" \
@@ -33,9 +36,9 @@ done
 grep -n 'PasswordChar' src/StockApp.Presentation/Views/Administracion/UsuariosAdminView.axaml   # tiene que decir "●", no "*"
 ```
 
-- **OK:** ningún `FALTA`, árbol limpio, `PasswordChar="●"`. Anotar el hash de `HEAD` en el ledger: es el commit que se aprueba.
+- **OK:** `86b9b52`, `2d35ac2` y `0277854` son ancestros de `HEAD`, ningún `FALTA`, árbol limpio, `PasswordChar="●"`. Anotar el hash de `HEAD` en el ledger: es el commit que se aprueba.
 - **FALLA:** PARAR. No se verifica una rama a medio integrar: avisar al orquestador con la salida.
-- Además, la suite tras la integración tiene que estar anotada como verde en el ledger de la integración (Task 8 de la 5 y de la 6, Task 12 de la 7). Si no consta, PARAR: no se corre la suite en este bloque.
+- **Datos de referencia ya medidos tras la integración:** la suite integrada da 0 rojos salvo los 16 de `.ods` (fixtures que no existen en el worktree) y `scripts/gui-verificacion/comparar.sh` pasa 341/341. No se corre la suite en este bloque; solo se confirma que consten en el ledger de la integración.
 
 ---
 
@@ -124,7 +127,7 @@ TOKEN=$(curl -s -X POST http://localhost:5043/auth/login -H 'Content-Type: appli
 **Usuarios de prueba (unificados para las 4 fases):** se crean en A2, por la pantalla de Usuarios (así se verifica el alta de la Fase 7):
 - `g2mixto` (Operador, contraseña `Gate2Prueba1`, nombre "PRUEBA-GATE2 mixto"): `finanzas.ver`, `finanzas.pagos`, `tareas.gestionar`, `documentos.gestionar`, `reportes.ver`, `movimientos.registrar`, `catalogo.maestras`, `finanzas.maestros`. SIN `catalogo.productos`, SIN `usuarios.gestionar`. Cubre: 4e (pagos y su revocación), 5 (`f5mixto`), 6 (`f6mixto`; con `catalogo.productos` agregado en C5 hace de `f6historial`), 7 (`f7tablas` + `f7finanzas` sumados).
 - `g2alta` (Operador, contraseña `Gate2Prueba2`, nombre "PRUEBA-GATE2 alta"): solo para los cambios de rol, contraseña y baja de la pantalla de Usuarios.
-- Se descarta: `f4dmixto` (id 30) NO se reusa (se borra en la limpieza).
+- Se descarta: `f4dmixto` (id 30) NO se reusa (se da de baja por la app en la limpieza, D2).
 - Nombres exactos de los permisos: los que muestra el panel de permisos (verificarlos ahí; los de arriba son los del código).
 
 **Datos:** todo lo nuevo lleva `PRUEBA-GATE2` en nombre, título, número, descripción o nota. Cada id se anota en el ledger EN EL MOMENTO (sección "Ids creados", por tabla). Para obtener ids sin buscar en pantalla: `SELECT` de solo lectura por el prefijo.
@@ -135,9 +138,9 @@ TOKEN=$(curl -s -X POST http://localhost:5043/auth/login -H 'Content-Type: appli
 
 ### A1. Navegación integrada (5 min)
 
-1. ★ **Sidebar.** Captura de la ventana completa en Inicio. **OK:** ANÁLISIS tiene UN solo ítem "Reportes" (sin Valorización, Stock por categoría, Historial por producto, Más movidos, Auditoría ni Tareas sueltos); ADMINISTRACIÓN tiene "Catálogos", "Usuarios", "Mantenimiento" (y "Importar planillas" si corresponde) y NINGUNO de "Categorías", "Proveedores", "Unidades de medida", "Catálogos de tareas", "Maestros de finanzas". GESTIÓN con Tareas y Documentos. Comparar a ojo con `docs/ui-v2/mockups/shell/sidebar-admin.html` (PNG en `artifacts/ui-v2/mockups/`). **FALLA:** cualquier ítem viejo, ítem duplicado o grupo vacío con header. Captura: `A1-1-sidebar-1280.png`.
+1. ★ **Sidebar.** Captura de la ventana completa en Inicio. **OK:** ANÁLISIS tiene UN solo ítem "Reportes" (sin Valorización, Stock por categoría, Historial por producto, Más movidos, Auditoría ni Tareas sueltos); Admin ve 17 ítems en total en el sidebar (contarlos). ADMINISTRACIÓN tiene "Catálogos", "Usuarios", "Mantenimiento" (y "Importar planillas" si corresponde) y NINGUNO de "Categorías", "Proveedores", "Unidades de medida", "Catálogos de tareas", "Maestros de finanzas". GESTIÓN con Tareas y Documentos. Comparar a ojo con `docs/ui-v2/mockups/shell/sidebar-admin.html` (PNG en `artifacts/ui-v2/mockups/`). **FALLA:** cualquier ítem viejo, ítem duplicado o grupo vacío con header. Captura: `A1-1-sidebar-1280.png`.
 2. ★ **Sección activa.** Click en Reportes, Catálogos, Tareas, Documentos, Gastos y de vuelta a Inicio, con una captura en cada uno. **OK:** la pastilla marca SOLO el ítem de la pantalla abierta. Además: abrir un reporte desde el hub y un formulario de catálogo desde Catálogos → siguen marcando "Reportes" y "Catálogos" (Q-SECCION de la 6, `Formulario_DeCatalogo_ConservaLaSeccionCatalogos` de la 7). Desde Inicio, el acceso a Valorización (si está) marca "Reportes". **FALLA:** ningún ítem marcado, dos marcados o el ítem de otra sección.
-3. ★ **Pulgar del scroll del sidebar.** Con el mouse sobre el sidebar (si el pulgar solo aparece al pasar), capturar. **OK:** a 1280×760 el sidebar de Admin scrollea, el pulgar se ve a la derecha del sidebar (~2 px, gris `#7A7A7A`), su largo es proporcional (referencia del mockup integrado; la Fase 6 midió 421 px antes de integrar la 7: anotar el valor medido en la captura en vez de exigir ese número) y scrolleando hasta abajo se alcanza el último ítem de ADMINISTRACIÓN sin recorte. **FALLA:** sin pulgar con contenido que no entra, último ítem inalcanzable, o pulgar que no llega al final. Capturas: `A1-3-pulgar-arriba-1280.png`, `A1-3-pulgar-abajo-1280.png`.
+3. ★ **Pulgar del scroll del sidebar.** Con el mouse sobre el sidebar (si el pulgar solo aparece al pasar), capturar. **OK:** a 1280×760 el sidebar de Admin scrollea, el pulgar se ve a la derecha del sidebar (~2 px, gris `#7A7A7A`) y mide 498 px a 1280×760 (valor ya medido con la integración; anotar el valor de esta corrida en la captura y comparar) y scrolleando hasta abajo se alcanza el último ítem de ADMINISTRACIÓN sin recorte. **FALLA:** sin pulgar con contenido que no entra, último ítem inalcanzable, o pulgar que no llega al final. Capturas: `A1-3-pulgar-arriba-1280.png`, `A1-3-pulgar-abajo-1280.png`.
 
 ### A2. Usuarios: alta, contraseña ●, permisos (8 min)
 
@@ -201,7 +204,7 @@ TOKEN=$(curl -s -X POST http://localhost:5043/auth/login -H 'Content-Type: appli
 
 ### B1. Repetición a 1366 (10 min)
 
-1. ★ **Guardar permisos alcanzable a 1366×768.** Usuarios → seleccionar `g2mixto` (operador): "Guardar permisos" visible en el pie fijo SIN scrollear, y el último permiso del panel visible scrolleando SOLO el panel (no lo tapa el pie). Repetir con `admin` seleccionado y (después de B1.2) con `g2alta` dado de baja. Captura de cada uno.
+1. ★ **Guardar permisos alcanzable a 1366×768.** Usuarios → seleccionar `g2mixto` (operador): "Guardar permisos" visible en el pie fijo SIN scrollear, y el último permiso del panel visible scrolleando SOLO el panel (no lo tapa el pie). Medir también el pulgar del sidebar: debe dar 512 px a 1366×768 (valor ya medido). Repetir con `admin` seleccionado y (después de B1.2) con `g2alta` dado de baja. Captura de cada uno.
 2. **Rol, contraseña y baja (con `g2alta`).** Hacer Admin → Hacer Operador; cambiar la contraseña de `g2alta` (confirmación) a `Gate2Prueba3`; campo con ●; dar de baja → insignias "Inactivo" y "Solo lectura", casillas y "Nueva contraseña" deshabilitados. Cambiar la contraseña PROPIA: solo hasta ver el aviso y Cancelar (si no hay Cancelar, poner `Admin1234` de nuevo y verificar el login por `curl`).
 3. **Pantallas clave a 1366:** sidebar + pulgar (A1.3), Pagos del gasto 22 (A4.1), Tareas (A5.1) y Documentos, hub de Reportes, Historial por producto (A6.2: ahora COMENTARIO ~187), Catálogos → Proveedores (columnas a lo medido, elipsis). Una captura de cada.
 4. [P] Error de Monto (A4.3) y pago anulado (A4.6) a 1366.
@@ -252,7 +255,7 @@ Login `g2mixto` / `Gate2Prueba1`. Todas las revocaciones se hacen POR LA API con
 
 Calendario de Fecha límite (Tareas) y de Desde (Más movidos, si sigue con `reportes.ver` devuelto), desplegables de Agrupar por y Contar por: abren, eligen, cierran sin foco atrapado.
 
-Cerrar sesión. Volver a dejar `g2mixto` con sus 8 permisos (no hace falta si se borra en la limpieza).
+Cerrar sesión. Volver a dejar `g2mixto` con sus 8 permisos (no hace falta: se da de baja en la limpieza, D2).
 
 ---
 
@@ -262,17 +265,20 @@ Cerrar sesión. Volver a dejar `g2mixto` con sus 8 permisos (no hace falta si se
 
 Completar la tabla del ledger y mandarle a Martin: el resumen, las FALLAs con sus capturas, los NO VERIFICABLE con su motivo, las salidas de `curl` y de pypdf, y la lista de "Ids creados". Pedir el "aprobado" de cada fase (4e, 5, 6, 7) por separado. Sin "aprobado", ninguna fase se registra como aprobada.
 
-### D2. Limpieza (con la aprobación PREVIA de Martin; NUNCA contra el VPS)
+### D2. Limpieza (NUNCA contra el VPS)
 
-**PARAR y preguntar antes de ejecutar nada de esta sección.** Mostrar el listado del paso 2 y esperar el OK explícito.
+**Decisión de Martin (2026-10-17), opción A, ya tomada (no se vuelve a preguntar):**
+- Los usuarios de prueba `f4dmixto` (id 30), `g2mixto` y `g2alta` se dan de **BAJA por la app** (pantalla Usuarios). NI ellos NI sus filas de auditoría se borran. Esto vale tanto si tienen filas de auditoría como si no (por consistencia).
+- Los datos `PRUEBA-4D` y `PRUEBA-GATE2` (todo menos los usuarios) SÍ se borran físicamente: acotado por ids explícitos, en UNA transacción, con backup previo y "Recalcular stock" después. Martin aprobó ese borrado en general, pero el agente igual tiene que **mostrar la lista de ids (el listado del paso 2) ANTES de ejecutar el paso 3**.
 
 1. **Backup nuevo:** `docker exec stockapp-pg pg_dump -U <usuario> <base> > ~/stockapp-backups-local/pre-limpieza-gate2-$(date +%Y%m%d-%H%M%S).sql`; `ls -l` no vacío; ruta al ledger.
 2. **Listar cada fila a borrar con un `SELECT` acotado por ids**, tabla por tabla. Antes, confirmar nombres de columnas con `\d "Tabla"` (las tablas reales, del `AppDbContextModelSnapshot.cs`: `Adjuntos`, `AdjuntosContenido`, `PagosGasto`, `Gastos`, `MovimientosStock`, `AsignacionesPresupuestales`, `LineasPoa`, `RubrosGasto`, `FuentesFinanciamiento`, `Proveedores`, `Tareas`, `NotasTarea`, `DocumentosAdministrativos`, `EventosDocumento`, `AdjuntosDocumento`, `AdjuntosDocumentoContenido`, `PermisosUsuario`, `Usuarios`, `LogsAuditoria`, `CorridasBackup`). Conjunto:
-   - **PRUEBA-4D** (spec, "Deuda abierta tras la Fase 4d"): adjuntos (y su contenido) de los gastos 19-24 y de sus pagos; `PagosGasto` de los gastos 19-24 (incluye el pago 13 y TODOS los pagos `PRUEBA-GATE2` de A4 y C2, que cuelgan de los gastos 21 y 22); `Gastos` 19-24; `MovimientosStock` 1599, 1600, 1601; `AsignacionesPresupuestales` de la línea POA 4; `LineasPoa` 4; `RubrosGasto` 2; `FuentesFinanciamiento` 2; `Proveedores` 8; `PermisosUsuario` y `Usuarios` del id 30 (`f4dmixto`).
-   - **PRUEBA-GATE2:** los ids anotados en "Ids creados" (rubros, proveedor, línea POA y asignaciones, tareas y sus notas, documento con eventos y adjuntos y su contenido, cualquier otro con el prefijo); usuarios `g2mixto` y `g2alta` con sus `PermisosUsuario`.
-   - **Referencias que impiden borrar un maestro o un usuario:** un `SELECT` por FK (p. ej. gastos o productos que usan el proveedor 8; `LogsAuditoria`, `MovimientosStock`, `Tareas`, `DocumentosAdministrativos`, `CorridasBackup`, `LotesImportacion` que apuntan a los usuarios 30, `g2mixto`, `g2alta`). Si un usuario tiene filas de auditoría propias, listarlas con sus ids y preguntarle a Martin: (a) borrarlas en la misma transacción (son acciones de prueba), o (b) no borrar ese usuario y darlo de baja por la app. Lo mismo con una `CorridasBackup` creada en A7.3 (es un backup real: se conserva salvo que Martin diga lo contrario).
+   - **PRUEBA-4D** (spec, "Deuda abierta tras la Fase 4d"): adjuntos (y su contenido) de los gastos 19-24 y de sus pagos; `PagosGasto` de los gastos 19-24 (incluye el pago 13 y TODOS los pagos `PRUEBA-GATE2` de A4 y C2, que cuelgan de los gastos 21 y 22); `Gastos` 19-24; `MovimientosStock` 1599, 1600, 1601; `AsignacionesPresupuestales` de la línea POA 4; `LineasPoa` 4; `RubrosGasto` 2; `FuentesFinanciamiento` 2; `Proveedores` 8; (los usuarios, incluido el id 30 `f4dmixto`, NO se borran: ver paso 2b).
+   - **PRUEBA-GATE2:** los ids anotados en "Ids creados" (rubros, proveedor, línea POA y asignaciones, tareas y sus notas, documento con eventos y adjuntos y su contenido, cualquier otro con el prefijo); los usuarios `g2mixto` y `g2alta` NO se borran (ver paso 2b).
+   - **Referencias que impiden borrar un maestro o un usuario:** un `SELECT` por FK (p. ej. gastos o productos que usan el proveedor 8; `LogsAuditoria`, `MovimientosStock`, `Tareas`, `DocumentosAdministrativos`, `CorridasBackup`, `LotesImportacion` que apuntan a los usuarios 30, `g2mixto`, `g2alta`). Las filas que apuntan a los usuarios de prueba (auditoría u otras) NO se borran: se conservan y el usuario se da de baja (paso 2b). Si una de esas filas impide borrar algún maestro o dato PRUEBA, listarla y PARAR. Una `CorridasBackup` creada en A7.3 (es un backup real: se conserva salvo que Martin diga lo contrario).
+2b. **Bajas por la app (después del borrado del paso 3):** Usuarios → `f4dmixto`, `g2mixto`, `g2alta` → dar de baja uno por uno (con captura: insignias "Inactivo" y "Solo lectura"). Contar antes (`SELECT count(*)`, solo lectura) las filas de `LogsAuditoria` de cada uno y anotarlo en el ledger; deben quedar igual después. Los usuarios y sus `PermisosUsuario` siguen en la base.
    - Fuera de alcance (solo mencionarlo): otros datos de prueba viejos (`f4bmixto` 28, `f3c1mixto` 23, productos `PRUEBA-3C1`).
-3. **Borrar en UNA transacción**, en orden de FK (hijos primero: contenidos → adjuntos → pagos → gastos → movimientos → asignaciones → líneas → rubros/fuentes/proveedores; notas/eventos → tareas/documentos; permisos → usuarios), cada `DELETE … WHERE "Id" IN (…)` con la lista EXPLÍCITA de ids (nunca por prefijo ni por `LIKE`). Correr con `\set ON_ERROR_STOP on` dentro de `BEGIN;`, comparar el conteo de cada `DELETE` con el listado del paso 2 y, si alguno difiere, `ROLLBACK;` y PARAR. `COMMIT;` solo con todos iguales. Pegar el script y las salidas en el ledger.
+3. **Borrar en UNA transacción**, en orden de FK (hijos primero: contenidos → adjuntos → pagos → gastos → movimientos → asignaciones → líneas → rubros/fuentes/proveedores; notas/eventos → tareas/documentos; los usuarios y sus permisos NO se tocan), cada `DELETE … WHERE "Id" IN (…)` con la lista EXPLÍCITA de ids (nunca por prefijo ni por `LIKE`). Correr con `\set ON_ERROR_STOP on` dentro de `BEGIN;`, comparar el conteo de cada `DELETE` con el listado del paso 2 y, si alguno difiere, `ROLLBACK;` y PARAR. `COMMIT;` solo con todos iguales. Pegar el script y las salidas en el ledger.
 4. **Recalcular stock** en la app (Admin): Historial de movimientos → "Recalcular stock" del producto de los movimientos 1599-1601. **OK:** su stock queda igual al valor previo a la 4d (dato del backup `~/stockapp-backups-local/pre-4d-20261017-110108.sql`: extraerlo con `grep` sobre el `COPY` de `Productos`, sin restaurar nada). Si difiere, PARAR y reportar.
 5. **Verificación final:** `SELECT` de los ids borrados = 0 filas; ningún registro con `PRUEBA-4D` ni `PRUEBA-GATE2` en las tablas listadas; conteos antes/después en el ledger. Dejar `stockapp-pg` andando y la API detenida por pid (o andando, según pida Martin).
 
@@ -283,8 +289,8 @@ Completar la tabla del ledger y mandarle a Martin: el resumen, las FALLAs con su
 - Precondición: 1 · Preparación: 5 (P1-P5)
 - A: 35 (A1 3 · A2 4 · A3 5 · A4 8 · A5 6 · A6 5 · A7 4)
 - B: 7 (B1 4 · B2 3) · C: 14 (C1 4 · C2 3 · C3 2 · C4 2 · C5 2 · C6 1)
-- D: 6 (D1 1 · D2 5)
-- **Total: 68 pasos** (56 de verificación con la app en A, B y C), 9 prescindibles [P] (A3.5, A5.6, A6.5, A7.3, A7.4, B1.4, B2.3, C2.3, C6), 17 obligatorios ★ de los ajustes del GATE 1 y de las reviews.
+- D: 7 (D1 1 · D2 6, con el 2b)
+- **Total: 69 pasos** (56 de verificación con la app en A, B y C), 9 prescindibles [P] (A3.5, A5.6, A6.5, A7.3, A7.4, B1.4, B2.3, C2.3, C6), 17 obligatorios ★ de los ajustes del GATE 1 y de las reviews.
 
 ## Qué queda para la deuda si algo no se puede hacer
 
