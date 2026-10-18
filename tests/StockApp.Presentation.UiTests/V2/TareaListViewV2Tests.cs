@@ -295,6 +295,27 @@ public class TareaListViewV2Tests
         Assert.False(VisibleNombre(m, "Grilla"));
         Assert.False(VisibleNombre(m, "PieConteo"));
         Assert.True(VisibleNombre(m, "Filtros"));
+        Assert.False(VisibleNombre(m, "EstadoSinTareas"), "Cargando no es 'no hay tareas'.");
+        Assert.False(VisibleNombre(m, "EstadoSinResultados"));
+    }
+
+    [AvaloniaFact]
+    public void Recargando_ConElFiltroSinResultados_NoMuestraElVacioDelFiltro()
+    {
+        var m = Montar();
+        m.Vm.FiltroEstado = m.Vm.FiltrosEstado.Single(o => o.Nombre == "Canceladas");
+        m.Servicio.Lista.RemoveAll(t => t.Estado == EstadoTarea.Cancelada);
+        _ = m.Vm.CargarAsync();
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(VisibleNombre(m, "EstadoSinResultados"), "Precondición: con el filtro y sin cancelada se ve el vacío del filtro.");
+
+        m.Servicio.ListarPendiente();
+        _ = m.Vm.CargarAsync();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(m.Vm.Cargando);
+        Assert.False(VisibleNombre(m, "EstadoSinResultados"), "Mientras recarga no se afirma que no hay resultados.");
     }
 
     [AvaloniaFact]
@@ -308,6 +329,8 @@ public class TareaListViewV2Tests
         Assert.False(VisibleNombre(m, "Grilla"));
         Assert.False(VisibleNombre(m, "IndicadorCarga"));
         Assert.Empty(m.Confirmacion.MensajesInformados);
+        Assert.False(VisibleNombre(m, "EstadoSinTareas"), "Sin conexión no es 'no hay tareas'.");
+        Assert.False(VisibleNombre(m, "EstadoSinResultados"));
     }
 
     [AvaloniaFact]

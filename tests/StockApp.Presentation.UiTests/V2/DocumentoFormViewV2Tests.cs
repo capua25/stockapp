@@ -39,7 +39,7 @@ public class DocumentoFormViewV2Tests
         RegistradoPor = new Usuario { Id = 1, NombreUsuario = "mperez" }, FechaRegistro = DateTime.UtcNow,
         Eventos =
         [
-            new EventoDocumento { Id = 1, DocumentoAdministrativoId = 9, Texto = "Se pidió presupuesto.", Fecha = new DateTime(2026, 10, 2, 18, 45, 0, DateTimeKind.Utc) },
+            new EventoDocumento { Id = 1, DocumentoAdministrativoId = 9, Texto = "Se pidió presupuesto.", Fecha = new DateTime(2026, 10, 15, 13, 0, 0, DateTimeKind.Utc) },
         ],
     };
 
@@ -292,18 +292,27 @@ public class DocumentoFormViewV2Tests
         Assert.False(ArbolVisual.EsVisibleEnArbol(Seccion()));
     }
 
+    /// <summary>Un evento de las 13:00 UTC se lee 10:00 (Uruguay, UTC-3, sin horario de verano): la zona se fija para que el
+    /// resultado no dependa de la máquina que corre la suite.</summary>
     [AvaloniaFact]
     public async Task Evento_FechaEnHoraLocal()
     {
-        var m = await MontarAsync(Documento(), Mixto());
-        var evento = m.Vm.Eventos.Single();
-        var esperado = (string)FechaHoraLocalConverter.Instance.Convert(evento.Fecha, typeof(string), null, CultureInfo.InvariantCulture)!;
+        var zonaAntes = FechaHoraLocalConverter.Zona;
+        FechaHoraLocalConverter.Zona = TimeZoneInfo.FindSystemTimeZoneById("America/Montevideo");
+        try
+        {
+            var m = await MontarAsync(Documento(), Mixto());
+            Assert.Equal(new DateTime(2026, 10, 15, 13, 0, 0, DateTimeKind.Utc), m.Vm.Eventos.Single().Fecha);
 
-        var textos = Parte<ItemsControl>(m, "ListaEventos").GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
+            var textos = Parte<ItemsControl>(m, "ListaEventos").GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
 
-        Assert.Contains(esperado, textos);
-        if (TimeZoneInfo.Local.BaseUtcOffset != TimeSpan.Zero)
-            Assert.DoesNotContain(evento.Fecha.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture), textos);
+            Assert.Contains("15/10/2026 10:00", textos);
+            Assert.DoesNotContain("15/10/2026 13:00", textos);
+        }
+        finally
+        {
+            FechaHoraLocalConverter.Zona = zonaAntes;
+        }
     }
 
     [AvaloniaFact]

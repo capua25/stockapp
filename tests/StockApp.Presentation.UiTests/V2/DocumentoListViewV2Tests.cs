@@ -381,6 +381,29 @@ public class DocumentoListViewV2Tests
         Assert.False(VisibleNombre(m, "GrillaActivos"));
         Assert.False(VisibleNombre(m, "PieActivos"));
         Assert.True(VisibleNombre(m, "FiltrosActivos"));
+        Assert.False(VisibleNombre(m, "EstadoSinDocumentos"), "Cargando no es 'no hay documentos'.");
+        Assert.False(VisibleNombre(m, "EstadoSinResultados"));
+    }
+
+    [AvaloniaFact]
+    public void Recargando_ConFiltrosSinResultados_NoMuestraElVacioDelFiltro()
+    {
+        var m = Montar(new DocumentosFake());
+        Control<TextBox>(m, "CajaBuscarActivos").Text = "licitación";
+        Esperar(m);
+        Assert.True(VisibleNombre(m, "EstadoSinResultados"), "Precondición: con filtro y sin filas se ve el vacío del filtro.");
+
+        m.Servicio.Pendiente = new TaskCompletionSource<IReadOnlyList<DocumentoAdministrativo>>();
+        Control<TextBox>(m, "CajaBuscarActivos").Text = "licitaciones";
+        Dispatcher.UIThread.RunJobs();
+        for (var i = 0; i < 100 && !m.Vm.Cargando; i++)
+        {
+            System.Threading.Thread.Sleep(20);
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        Assert.True(m.Vm.Cargando);
+        Assert.False(VisibleNombre(m, "EstadoSinResultados"), "Mientras recarga no se afirma que no hay resultados.");
     }
 
     [AvaloniaFact]
@@ -396,6 +419,8 @@ public class DocumentoListViewV2Tests
         Assert.False(VisibleNombre(m, "GrillaActivos"));
         Assert.False(VisibleNombre(m, "IndicadorCarga"));
         Assert.Empty(m.Confirmacion.MensajesInformados);
+        Assert.False(VisibleNombre(m, "EstadoSinDocumentos"), "Sin conexión no es 'no hay documentos'.");
+        Assert.False(VisibleNombre(m, "EstadoSinResultados"));
     }
 
     [AvaloniaFact]

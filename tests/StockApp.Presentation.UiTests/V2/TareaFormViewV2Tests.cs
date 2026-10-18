@@ -64,7 +64,7 @@ public class TareaFormViewV2Tests
         Id = 7, Titulo = "Poda de plátanos", Descripcion = "Podar los secos.", Estado = estado, Prioridad = PrioridadTarea.Alta,
         CreadaPorUsuarioId = 1, FechaCreacion = new DateTime(2026, 10, 1, 8, 0, 0, DateTimeKind.Utc),
         FechaLimite = new DateTime(2030, 2, 1, 0, 0, 0, DateTimeKind.Utc), TomadaPor = new Usuario { Id = 2, NombreUsuario = "mperez" },
-        Notas = [new NotaTarea { Id = 1, TareaId = 7, Texto = "Se podó el lado norte.", Fecha = new DateTime(2026, 10, 13, 14, 40, 0, DateTimeKind.Utc) }],
+        Notas = [new NotaTarea { Id = 1, TareaId = 7, Texto = "Se podó el lado norte.", Fecha = new DateTime(2026, 10, 15, 13, 0, 0, DateTimeKind.Utc) }],
     };
 
     private static Montaje Detalle(ICurrentSession? sesion = null, Tarea? tarea = null, double ancho = 1040, double alto = 760)
@@ -245,18 +245,27 @@ public class TareaFormViewV2Tests
             Assert.Equal("—", Parte<TextBlock>(m, nombre).Text);
     }
 
+    /// <summary>Una nota de las 13:00 UTC se lee 10:00 (Uruguay, UTC-3, sin horario de verano): la zona se fija para que el
+    /// resultado no dependa de la máquina que corre la suite.</summary>
     [AvaloniaFact]
     public void Nota_FechaEnHoraLocal()
     {
-        var m = Detalle();
-        var nota = m.Vm.Notas.Single();
-        var esperado = (string)FechaHoraLocalConverter.Instance.Convert(nota.Fecha, typeof(string), null, CultureInfo.InvariantCulture)!;
+        var zonaAntes = FechaHoraLocalConverter.Zona;
+        FechaHoraLocalConverter.Zona = TimeZoneInfo.FindSystemTimeZoneById("America/Montevideo");
+        try
+        {
+            var m = Detalle();
+            Assert.Equal(new DateTime(2026, 10, 15, 13, 0, 0, DateTimeKind.Utc), m.Vm.Notas.Single().Fecha);
 
-        var textos = Parte<ItemsControl>(m, "ListaNotas").GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
+            var textos = Parte<ItemsControl>(m, "ListaNotas").GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
 
-        Assert.Contains(esperado, textos);
-        if (TimeZoneInfo.Local.BaseUtcOffset != TimeSpan.Zero)
-            Assert.DoesNotContain(nota.Fecha.ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture), textos);
+            Assert.Contains("15/10/2026 10:00", textos);
+            Assert.DoesNotContain("15/10/2026 13:00", textos);
+        }
+        finally
+        {
+            FechaHoraLocalConverter.Zona = zonaAntes;
+        }
     }
 
     // ── Pie fijo ────────────────────────────────────────────────────────────────

@@ -16,9 +16,13 @@ public sealed class FechaHoraLocalConverter : IValueConverter
 {
     public static readonly FechaHoraLocalConverter Instance = new();
 
+    /// <summary>Zona a la que se pasa el instante: la de la máquina. Solo las pruebas de vista la fijan (Uruguay) para que el
+    /// texto esperado no dependa de dónde corra la suite.</summary>
+    internal static TimeZoneInfo Zona { get; set; } = TimeZoneInfo.Local;
+
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         => value is DateTime fecha
-            ? DateTime.SpecifyKind(fecha, DateTimeKind.Utc).ToLocalTime().ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)
+            ? TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(fecha, DateTimeKind.Utc), Zona).ToString("dd/MM/yyyy HH:mm", CultureInfo.InvariantCulture)
             : string.Empty;
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
