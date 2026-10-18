@@ -74,8 +74,9 @@ public class ReporteStockService : IReporteStockService
         // sin RegistrarMovimientos entraba a "Historial por producto" y cada búsqueda le tiraba
         // 403. Decisión: NO se relaja este servicio ni el delegado -- ambos guards siguen
         // vigentes y son correctos (cada capa exige lo que le corresponde). Lo que se corrigió es
-        // el GATE DE NAVEGACIÓN de la pantalla (ShellMainViewModel.PuedeVerHistorialPorProducto),
-        // que ahora exige VerReportes + RegistrarMovimientos para que la pantalla sea alcanzable
+        // el GATE DE NAVEGACIÓN de la pantalla (ReportesViewModel.PuedeVerHistorialPorProducto, la
+        // tarjeta del hub de Reportes), que ahora exige VerReportes + RegistrarMovimientos + GestionarProductos
+        // (el buscador de producto pega a GET /productos) para que la pantalla sea alcanzable
         // -- el gate de entrada exige el MÁXIMO de los permisos de las capas de abajo, nunca el
         // mínimo. Este doble-guard queda como defensa en profundidad, no como el único control.
 
