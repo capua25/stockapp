@@ -5,6 +5,8 @@ using StockApp.Application.Finanzas;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
+using StockApp.Presentation.ViewModels.Administracion;
+using StockApp.Presentation.ViewModels.Catalogo;
 
 namespace StockApp.Presentation.ViewModels.Finanzas;
 
@@ -65,7 +67,7 @@ public partial class RubroGastoFormViewModel : ViewModelBase
             else
                 await _service.AltaAsync(new RubroGasto { Codigo = codigo, Nombre = Nombre });
 
-            _navigation.Navegar<MaestrosFinanzasViewModel>();
+            _navigation.Navegar<CatalogosViewModel>(vm => vm.Seleccionar(ClaveCatalogo.RubrosGasto));
         }
         catch (System.Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException or System.ArgumentException)
         {
@@ -74,5 +76,5 @@ public partial class RubroGastoFormViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void Cancelar() => _navigation.Navegar<MaestrosFinanzasViewModel>();
+    private void Cancelar() => _navigation.Navegar<CatalogosViewModel>(vm => vm.Seleccionar(ClaveCatalogo.RubrosGasto));
 }

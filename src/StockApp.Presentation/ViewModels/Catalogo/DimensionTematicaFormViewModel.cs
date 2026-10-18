@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Catalogo;
 using StockApp.Domain.Entities;
 using StockApp.Presentation.Navigation;
+using StockApp.Presentation.ViewModels.Administracion;
 
 namespace StockApp.Presentation.ViewModels.Catalogo;
 
@@ -57,7 +58,7 @@ public partial class DimensionTematicaFormViewModel : ViewModelBase
             else
                 await _service.AltaAsync(new DimensionTematica { Nombre = Nombre });
 
-            _navigation.Navegar<CatalogosTareaViewModel>();
+            _navigation.Navegar<CatalogosViewModel>(vm => vm.Seleccionar(ClaveCatalogo.Dimensiones));
         }
         catch (System.Exception ex)
         {
@@ -66,5 +67,5 @@ public partial class DimensionTematicaFormViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void Cancelar() => _navigation.Navegar<CatalogosTareaViewModel>();
+    private void Cancelar() => _navigation.Navegar<CatalogosViewModel>(vm => vm.Seleccionar(ClaveCatalogo.Dimensiones));
 }

@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Catalogo;
 using StockApp.Domain.Entities;
 using StockApp.Presentation.Navigation;
+using StockApp.Presentation.ViewModels.Administracion;
 
 namespace StockApp.Presentation.ViewModels.Catalogo;
 
@@ -89,7 +90,7 @@ public partial class ProveedorFormViewModel : ViewModelBase
                     Notas     = Notas,
                 });
 
-            _navigation.Navegar<ProveedorListViewModel>();
+            _navigation.Navegar<CatalogosViewModel>(vm => vm.Seleccionar(ClaveCatalogo.Proveedores));
         }
         catch (System.Exception ex)
         {
@@ -98,5 +99,5 @@ public partial class ProveedorFormViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void Cancelar() => _navigation.Navegar<ProveedorListViewModel>();
+    private void Cancelar() => _navigation.Navegar<CatalogosViewModel>(vm => vm.Seleccionar(ClaveCatalogo.Proveedores));
 }

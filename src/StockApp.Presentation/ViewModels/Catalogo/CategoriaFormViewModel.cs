@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Catalogo;
 using StockApp.Domain.Entities;
 using StockApp.Presentation.Navigation;
+using StockApp.Presentation.ViewModels.Administracion;
 
 namespace StockApp.Presentation.ViewModels.Catalogo;
 
@@ -58,7 +59,7 @@ public partial class CategoriaFormViewModel : ViewModelBase
             else
                 await _service.AltaAsync(new Categoria { Nombre = Nombre });
 
-            _navigation.Navegar<CategoriaListViewModel>();
+            _navigation.Navegar<CatalogosViewModel>(vm => vm.Seleccionar(ClaveCatalogo.Categorias));
         }
         catch (System.Exception ex)
         {
@@ -67,5 +68,5 @@ public partial class CategoriaFormViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void Cancelar() => _navigation.Navegar<CategoriaListViewModel>();
+    private void Cancelar() => _navigation.Navegar<CatalogosViewModel>(vm => vm.Seleccionar(ClaveCatalogo.Categorias));
 }

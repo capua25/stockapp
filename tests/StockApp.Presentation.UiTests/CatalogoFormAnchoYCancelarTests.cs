@@ -7,6 +7,7 @@ using Avalonia.Layout;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using StockApp.Domain.Entities;
+using StockApp.Presentation.ViewModels.Administracion;
 using StockApp.Presentation.ViewModels.Catalogo;
 using StockApp.Presentation.Views.Catalogo;
 using Xunit;
@@ -54,42 +55,42 @@ public class CatalogoFormAnchoYCancelarTests
             var recorder = new NavigationRecorderFake();
             var vm = new ZonaFormViewModel(new ZonaServiceFake(), recorder);
             return ((Control)new ZonaFormView { DataContext = vm }, recorder);
-        }, typeof(CatalogosTareaViewModel)),
+        }, typeof(CatalogosViewModel)),
 
         ("DimensionTematicaFormView", () =>
         {
             var recorder = new NavigationRecorderFake();
             var vm = new DimensionTematicaFormViewModel(new DimensionTematicaServiceFake(), recorder);
             return ((Control)new DimensionTematicaFormView { DataContext = vm }, recorder);
-        }, typeof(CatalogosTareaViewModel)),
+        }, typeof(CatalogosViewModel)),
 
         ("OrganismoResponsableFormView", () =>
         {
             var recorder = new NavigationRecorderFake();
             var vm = new OrganismoResponsableFormViewModel(new OrganismoResponsableServiceFake(), recorder);
             return ((Control)new OrganismoResponsableFormView { DataContext = vm }, recorder);
-        }, typeof(CatalogosTareaViewModel)),
+        }, typeof(CatalogosViewModel)),
 
         ("OrigenFinanciamientoFormView", () =>
         {
             var recorder = new NavigationRecorderFake();
             var vm = new OrigenFinanciamientoFormViewModel(new OrigenFinanciamientoServiceFake(), recorder);
             return ((Control)new OrigenFinanciamientoFormView { DataContext = vm }, recorder);
-        }, typeof(CatalogosTareaViewModel)),
+        }, typeof(CatalogosViewModel)),
 
         ("CategoriaFormView", () =>
         {
             var recorder = new NavigationRecorderFake();
             var vm = new CategoriaFormViewModel(new CategoriaServiceFake(new List<Categoria>()), recorder);
             return ((Control)new CategoriaFormView { DataContext = vm }, recorder);
-        }, typeof(CategoriaListViewModel)),
+        }, typeof(CatalogosViewModel)),
 
         ("UnidadMedidaFormView", () =>
         {
             var recorder = new NavigationRecorderFake();
             var vm = new UnidadMedidaFormViewModel(new UnidadMedidaServiceFake(new List<UnidadMedida>()), recorder);
             return ((Control)new UnidadMedidaFormView { DataContext = vm }, recorder);
-        }, typeof(UnidadMedidaListViewModel)),
+        }, typeof(CatalogosViewModel)),
     };
 
     /// <summary>
@@ -120,7 +121,7 @@ public class CatalogoFormAnchoYCancelarTests
             var recorder = new NavigationRecorderFake();
             var vm = new ProveedorFormViewModel(new ProveedorServiceFake(new List<Proveedor>()), recorder);
             return ((Control)new ProveedorFormView { DataContext = vm }, recorder);
-        }, typeof(ProveedorListViewModel)),
+        }, typeof(CatalogosViewModel)),
     };
 
     private static Control Montar(Control vista)

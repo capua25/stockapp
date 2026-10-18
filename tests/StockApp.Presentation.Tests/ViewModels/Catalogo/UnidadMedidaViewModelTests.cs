@@ -8,6 +8,7 @@ using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Catalogo;
+using StockApp.Presentation.ViewModels.Administracion;
 using Xunit;
 
 namespace StockApp.Presentation.Tests.ViewModels.Catalogo;
@@ -249,7 +250,7 @@ public class UnidadMedidaFormViewModelTests
 
         await vm.GuardarCommand.ExecuteAsync(null);
 
-        navMock.Verify(n => n.Navegar<UnidadMedidaListViewModel>(), Times.Once);
+        navMock.Verify(n => n.Navegar<CatalogosViewModel>(It.IsAny<System.Action<CatalogosViewModel>>()), Times.Once);
     }
 
     [Fact]
@@ -296,6 +297,6 @@ public class UnidadMedidaFormViewModelTests
         await vm.GuardarCommand.ExecuteAsync(null);
 
         Assert.Equal("Ya existe una unidad de medida con el nombre 'Metro'.", vm.MensajeError);
-        navMock.Verify(n => n.Navegar<UnidadMedidaListViewModel>(), Times.Never);
+        navMock.Verify(n => n.Navegar<CatalogosViewModel>(It.IsAny<System.Action<CatalogosViewModel>>()), Times.Never);
     }
 }

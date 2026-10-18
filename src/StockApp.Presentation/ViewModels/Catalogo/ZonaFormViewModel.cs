@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Catalogo;
 using StockApp.Domain.Entities;
 using StockApp.Presentation.Navigation;
+using StockApp.Presentation.ViewModels.Administracion;
 
 namespace StockApp.Presentation.ViewModels.Catalogo;
 
@@ -58,7 +59,7 @@ public partial class ZonaFormViewModel : ViewModelBase
             else
                 await _service.AltaAsync(new Zona { Nombre = Nombre });
 
-            _navigation.Navegar<CatalogosTareaViewModel>();
+            _navigation.Navegar<CatalogosViewModel>(vm => vm.Seleccionar(ClaveCatalogo.Zonas));
         }
         catch (System.Exception ex)
         {
@@ -67,5 +68,5 @@ public partial class ZonaFormViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void Cancelar() => _navigation.Navegar<CatalogosTareaViewModel>();
+    private void Cancelar() => _navigation.Navegar<CatalogosViewModel>(vm => vm.Seleccionar(ClaveCatalogo.Zonas));
 }

@@ -29,6 +29,8 @@ public class CategoriaListViewModel : CatalogoListadoViewModel<Categoria>
     public override string TextoNuevo => "Nueva categoría";
     public override string TextoInactivo => "Inactiva";
     public override string TextoSinPermiso => "No tenés permiso para ver las categorías.";
+    public override string PieSingular => "categoría";
+    public override string PiePlural => "categorías";
     public override IReadOnlyList<ColumnaCatalogo> Columnas => _columnas;
 
     protected override Task<IReadOnlyList<Categoria>> ListarAsync() => _service.ListarTodasAsync();

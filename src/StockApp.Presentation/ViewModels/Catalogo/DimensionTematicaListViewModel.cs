@@ -29,6 +29,8 @@ public class DimensionTematicaListViewModel : CatalogoListadoViewModel<Dimension
     public override string TextoNuevo => "Nueva dimensión";
     public override string TextoInactivo => "Inactiva";
     public override string TextoSinPermiso => "No tenés permiso para ver las dimensiones.";
+    public override string PieSingular => "dimensión";
+    public override string PiePlural => "dimensiones";
     public override IReadOnlyList<ColumnaCatalogo> Columnas => _columnas;
 
     protected override Task<IReadOnlyList<DimensionTematica>> ListarAsync() => _service.ListarTodasAsync();

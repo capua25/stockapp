@@ -9,6 +9,8 @@ using StockApp.Application.Finanzas;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
+using StockApp.Presentation.ViewModels.Administracion;
+using StockApp.Presentation.ViewModels.Catalogo;
 using StockApp.Domain.Formato;
 using StockApp.Presentation.Helpers;
 
@@ -178,7 +180,7 @@ public partial class LineaPoaFormViewModel : ViewModelBase
             else
                 await _service.AltaAsync(linea);
 
-            _navigation.Navegar<MaestrosFinanzasViewModel>();
+            _navigation.Navegar<CatalogosViewModel>(vm => vm.Seleccionar(ClaveCatalogo.LineasPoa));
         }
         catch (System.Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException or System.ArgumentException)
         {
@@ -187,5 +189,5 @@ public partial class LineaPoaFormViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void Cancelar() => _navigation.Navegar<MaestrosFinanzasViewModel>();
+    private void Cancelar() => _navigation.Navegar<CatalogosViewModel>(vm => vm.Seleccionar(ClaveCatalogo.LineasPoa));
 }

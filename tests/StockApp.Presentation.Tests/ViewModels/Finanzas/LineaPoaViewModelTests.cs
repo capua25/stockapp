@@ -6,6 +6,7 @@ using StockApp.Domain.Entities;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Finanzas;
+using StockApp.Presentation.ViewModels.Administracion;
 using Xunit;
 
 namespace StockApp.Presentation.Tests.ViewModels.Finanzas;
@@ -129,7 +130,7 @@ public class LineaPoaFormViewModelTests
             && l.Asignaciones.Count == 1
             && l.Asignaciones[0].FuenteFinanciamientoId == 1
             && l.Asignaciones[0].Monto == 100000m)), Times.Once);
-        navMock.Verify(n => n.Navegar<MaestrosFinanzasViewModel>(), Times.Once);
+        navMock.Verify(n => n.Navegar<CatalogosViewModel>(It.IsAny<System.Action<CatalogosViewModel>>()), Times.Once);
     }
 
     [Fact]

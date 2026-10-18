@@ -1,0 +1,153 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels.Catalogo"
+             xmlns:conv="using:StockApp.Presentation.Converters"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
+             xmlns:b="using:StockApp.Presentation.Behaviors"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="728" d:DesignHeight="672"
+             x:Class="StockApp.Presentation.Views.Catalogo.CatalogoListadoView"
+             x:DataType="vm:CatalogoListadoViewModel"
+             Classes="ui2">
+
+    <!-- Detalle genérico de Catálogos: la misma vista para los diez catálogos. Espejo: docs/ui-v2/mockups/administracion/catalogos*.html.
+         La grilla tiene en XAML las columnas máximas (NOMBRE, hasta cuatro medidas y ESTADO) con bindings compilados a la fila
+         uniforme; el code-behind le pone el encabezado y la visibilidad a las medidas según lo que declara el catálogo. La carga no
+         se dispara acá: la dispara CatalogosViewModel (si no, cada cambio de catálogo consultaría dos veces). Tras un 403, Sin
+         permiso reemplaza a la card; sin servidor, cargando y los dos vacíos van dentro de la card con el buscador a mano. -->
+    <Panel>
+        <v2:EstadoVacio x:Name="EstadoSinPermiso" VerticalAlignment="Top" UseLayoutRounding="False"
+                        Titulo="Sin permiso" Mensaje="{Binding MensajeSinPermiso}" EsError="True"
+                        IsVisible="{Binding SinPermiso}" />
+
+        <v2:TarjetaContenido x:Name="Tarjeta" IsVisible="{Binding !SinPermiso}">
+            <DockPanel>
+                <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
+                    <TextBlock x:Name="TituloCatalogo" Grid.Column="0" Classes="titulo-seccion" Text="{Binding Titulo}"
+                               VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                        <Button x:Name="BotonEditar" Classes="secundario" Content="Editar" Command="{Binding EditarCommand}" />
+                        <Button x:Name="BotonBaja" Classes="secundario" Content="Dar de baja" Command="{Binding BajaCommand}" />
+                        <Button x:Name="BotonNuevo" Classes="primario" Content="{Binding TextoNuevo}" Command="{Binding NuevoCommand}" />
+                    </StackPanel>
+                </Grid>
+
+                <v2:BarraFiltros x:Name="Filtros" DockPanel.Dock="Top" TextoBusqueda="{Binding Busqueda}" MarcaAguaBusqueda="Buscar…" />
+
+                <TextBlock x:Name="PieConteo" DockPanel.Dock="Bottom" Classes="pie-conteo" Margin="0,12,0,0" Text="{Binding TextoPie}">
+                    <TextBlock.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="CantidadVisible" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                        </MultiBinding>
+                    </TextBlock.IsVisible>
+                </TextBlock>
+
+                <v2:EstadoCargando x:Name="IndicadorCarga" DockPanel.Dock="Top" Texto="{Binding TextoCargando}">
+                    <v2:EstadoCargando.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Cargando" />
+                            <Binding Path="Filas.Count" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                        </MultiBinding>
+                    </v2:EstadoCargando.IsVisible>
+                </v2:EstadoCargando>
+
+                <v2:EstadoVacio x:Name="EstadoSinConexion" DockPanel.Dock="Top" UseLayoutRounding="False"
+                                Titulo="No se pudo conectar con el servidor"
+                                Mensaje="Verificá que el servidor esté encendido y accesible en la red, y volvé a intentar."
+                                EsError="True" IsVisible="{Binding SinConexion}">
+                    <Button x:Name="BotonReintentar" Classes="secundario" Content="Reintentar" Command="{Binding ReintentarCargaCommand}" />
+                </v2:EstadoVacio>
+
+                <!-- Sin datos: el botón es secundario porque el primario de la vista ya está arriba. -->
+                <v2:EstadoVacio x:Name="EstadoSinDatos" DockPanel.Dock="Top" UseLayoutRounding="False"
+                                Titulo="{Binding TituloSinDatos}" Mensaje="{Binding MensajeSinDatos}">
+                    <v2:EstadoVacio.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Cargando" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="Filas.Count" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                        </MultiBinding>
+                    </v2:EstadoVacio.IsVisible>
+                    <Button x:Name="BotonNuevoVacio" Classes="secundario" Content="{Binding TextoNuevo}" Command="{Binding NuevoCommand}" />
+                </v2:EstadoVacio>
+
+                <!-- Hay filas pero la búsqueda no deja ver ninguna. -->
+                <v2:EstadoVacio x:Name="EstadoSinResultados" DockPanel.Dock="Top" UseLayoutRounding="False"
+                                Titulo="Nada coincide con la búsqueda" Mensaje="Probá con otro texto.">
+                    <v2:EstadoVacio.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Cargando" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="Filas.Count" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            <Binding Path="CantidadVisible" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                        </MultiBinding>
+                    </v2:EstadoVacio.IsVisible>
+                </v2:EstadoVacio>
+
+                <DataGrid x:Name="Grilla" ItemsSource="{Binding FilasView}" SelectedItem="{Binding FilaSeleccionada}"
+                          DoubleTapped="OnFilaDobleClick" IsReadOnly="True" CanUserSortColumns="True" CanUserResizeColumns="True"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                    <DataGrid.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="CantidadVisible" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                        </MultiBinding>
+                    </DataGrid.IsVisible>
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="NOMBRE" Width="*" MinWidth="200" SortMemberPath="Valor0">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:FilaCatalogo">
+                                    <TextBlock Text="{Binding Valor0}" Classes.inactivo="{Binding !Activo}" TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding Valor0}" b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="" Width="Auto" SortMemberPath="Valor1" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:FilaCatalogo">
+                                    <TextBlock Text="{Binding Valor1}" Classes.inactivo="{Binding !Activo}" TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding Valor1}" b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="" Width="Auto" SortMemberPath="Valor2" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:FilaCatalogo">
+                                    <TextBlock Text="{Binding Valor2}" Classes.inactivo="{Binding !Activo}" TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding Valor2}" b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="" Width="Auto" SortMemberPath="Valor3" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:FilaCatalogo">
+                                    <TextBlock Text="{Binding Valor3}" Classes.inactivo="{Binding !Activo}" TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding Valor3}" b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="" Width="Auto" SortMemberPath="Valor4" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:FilaCatalogo">
+                                    <TextBlock Text="{Binding Valor4}" Classes.inactivo="{Binding !Activo}" TextTrimming="CharacterEllipsis"
+                                               ToolTip.Tip="{Binding Valor4}" b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <!-- ESTADO: conjunto cerrado (la insignia Inactivo o Inactiva), ancho fijo = insignia más 16. -->
+                        <DataGridTemplateColumn Header="ESTADO" Width="78" SortMemberPath="Activo">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:FilaCatalogo">
+                                    <v2:Insignia Texto="{Binding $parent[UserControl].((vm:CatalogoListadoViewModel)DataContext).TextoInactivo}"
+                                                 Variante="Neutro" IsVisible="{Binding !Activo}" VerticalAlignment="Center" HorizontalAlignment="Left" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </DockPanel>
+        </v2:TarjetaContenido>
+    </Panel>
+</UserControl>

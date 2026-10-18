@@ -5,6 +5,8 @@ using StockApp.Application.Finanzas;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
+using StockApp.Presentation.ViewModels.Administracion;
+using StockApp.Presentation.ViewModels.Catalogo;
 
 namespace StockApp.Presentation.ViewModels.Finanzas;
 
@@ -57,7 +59,7 @@ public partial class FuenteFinanciamientoFormViewModel : ViewModelBase
             else
                 await _service.AltaAsync(new FuenteFinanciamiento { Nombre = Nombre });
 
-            _navigation.Navegar<MaestrosFinanzasViewModel>();
+            _navigation.Navegar<CatalogosViewModel>(vm => vm.Seleccionar(ClaveCatalogo.FuentesFinanciamiento));
         }
         catch (System.Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException or System.ArgumentException)
         {
@@ -66,5 +68,5 @@ public partial class FuenteFinanciamientoFormViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void Cancelar() => _navigation.Navegar<MaestrosFinanzasViewModel>();
+    private void Cancelar() => _navigation.Navegar<CatalogosViewModel>(vm => vm.Seleccionar(ClaveCatalogo.FuentesFinanciamiento));
 }

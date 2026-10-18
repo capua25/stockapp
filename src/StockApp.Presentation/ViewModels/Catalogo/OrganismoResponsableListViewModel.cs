@@ -29,6 +29,8 @@ public class OrganismoResponsableListViewModel : CatalogoListadoViewModel<Organi
     public override string TextoNuevo => "Nuevo organismo";
     public override string TextoInactivo => "Inactivo";
     public override string TextoSinPermiso => "No tenés permiso para ver los organismos responsables.";
+    public override string PieSingular => "organismo";
+    public override string PiePlural => "organismos";
     public override IReadOnlyList<ColumnaCatalogo> Columnas => _columnas;
 
     protected override Task<IReadOnlyList<OrganismoResponsable>> ListarAsync() => _service.ListarTodasAsync();

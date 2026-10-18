@@ -30,6 +30,9 @@ public class RubroGastoListViewModel : CatalogoListadoViewModel<RubroGasto>
     public override string TextoNuevo => "Nuevo rubro";
     public override string TextoInactivo => "Inactivo";
     public override string TextoSinPermiso => "No tenés permiso para ver los rubros de gasto.";
+    public override string PieSingular => "rubro";
+    public override string PiePlural => "rubros";
+    public override int PosicionNombre => 1;
     public override IReadOnlyList<ColumnaCatalogo> Columnas => _columnas;
 
     protected override Task<IReadOnlyList<RubroGasto>> ListarAsync() => _service.ListarTodosAsync();

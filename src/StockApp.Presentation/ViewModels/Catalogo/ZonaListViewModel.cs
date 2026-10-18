@@ -29,6 +29,8 @@ public class ZonaListViewModel : CatalogoListadoViewModel<Zona>
     public override string TextoNuevo => "Nueva zona";
     public override string TextoInactivo => "Inactiva";
     public override string TextoSinPermiso => "No tenés permiso para ver las zonas.";
+    public override string PieSingular => "zona";
+    public override string PiePlural => "zonas";
     public override IReadOnlyList<ColumnaCatalogo> Columnas => _columnas;
 
     protected override Task<IReadOnlyList<Zona>> ListarAsync() => _service.ListarTodasAsync();

@@ -207,6 +207,8 @@ public class GuardianDePatronTests
         typeof(HistorialPorProductoView),
         typeof(AuditoriaLogView),
         typeof(ReporteTareasView),
+        typeof(CatalogosView),
+        typeof(CatalogoListadoView),
     };
 
     /// <summary>

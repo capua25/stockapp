@@ -32,6 +32,7 @@ using StockApp.Presentation.Actualizaciones;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels;
+using StockApp.Presentation.ViewModels.Administracion;
 using StockApp.Presentation.ViewModels.Catalogo;
 using StockApp.Presentation.ViewModels.Documentos;
 using StockApp.Presentation.ViewModels.Finanzas;
@@ -377,6 +378,7 @@ public partial class App : AvaloniaApp
         services.AddTransient<OrigenFinanciamientoListViewModel>();
         services.AddTransient<OrigenFinanciamientoFormViewModel>();
         services.AddTransient<CatalogosTareaViewModel>();
+        services.AddTransient<CatalogosViewModel>();
 
         // ── Módulo Finanzas — Fase 1: VMs de maestros ─────────────────────────
         services.AddTransient<MaestrosFinanzasViewModel>();

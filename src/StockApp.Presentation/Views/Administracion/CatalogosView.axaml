@@ -1,0 +1,53 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels.Administracion"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
+             xmlns:cat="using:StockApp.Presentation.Views.Catalogo"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
+             x:Class="StockApp.Presentation.Views.Administracion.CatalogosView"
+             x:DataType="vm:CatalogosViewModel"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
+
+    <UserControl.Resources>
+        <!-- Un ítem del master: la pastilla activa es EstaSeleccionada y el click elige el catálogo. -->
+        <DataTemplate x:Key="EntradaDelMaster" x:DataType="vm:EntradaCatalogo">
+            <v2:ItemSidebar Icono="{Binding Icono}" Titulo="{Binding Titulo}" EstaActivo="{Binding EstaSeleccionada}"
+                            Command="{Binding $parent[UserControl].((vm:CatalogosViewModel)DataContext).SeleccionarCommand}"
+                            CommandParameter="{Binding}" />
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <!-- Catálogos: master a la izquierda (tres grupos, cada uno visible solo con su permiso) y el detalle genérico a la derecha.
+         Espejo: docs/ui-v2/mockups/administracion/catalogos*.html. Sin ningún grupo visible, Sin permiso reemplaza a todo. -->
+    <DockPanel Margin="28,24">
+        <v2:EncabezadoPagina x:Name="Encabezado" DockPanel.Dock="Top" Titulo="Catálogos" Subtitulo="Tablas maestras del sistema." />
+
+        <v2:EstadoVacio x:Name="EstadoSinPermiso" DockPanel.Dock="Top" UseLayoutRounding="False"
+                        Titulo="Sin permiso" Mensaje="{Binding MensajeSinPermiso}" EsError="True"
+                        IsVisible="{Binding SinPermiso}" />
+
+        <Grid ColumnDefinitions="240,16,*" IsVisible="{Binding !SinPermiso}">
+            <v2:TarjetaContenido x:Name="Master" Grid.Column="0" Padding="8">
+                <StackPanel>
+                    <StackPanel x:Name="GrupoInventario" IsVisible="{Binding Grupos[0].EsVisible}">
+                        <TextBlock Classes="header-seccion-sidebar" Text="{Binding Grupos[0].Titulo}" Margin="8,4,8,4" />
+                        <ItemsControl ItemsSource="{Binding Grupos[0].Entradas}" ItemTemplate="{StaticResource EntradaDelMaster}" />
+                    </StackPanel>
+                    <StackPanel x:Name="GrupoFinanzas" IsVisible="{Binding Grupos[1].EsVisible}">
+                        <TextBlock Classes="header-seccion-sidebar" Text="{Binding Grupos[1].Titulo}" Margin="8,12,8,4" />
+                        <ItemsControl ItemsSource="{Binding Grupos[1].Entradas}" ItemTemplate="{StaticResource EntradaDelMaster}" />
+                    </StackPanel>
+                    <StackPanel x:Name="GrupoTareas" IsVisible="{Binding Grupos[2].EsVisible}">
+                        <TextBlock Classes="header-seccion-sidebar" Text="{Binding Grupos[2].Titulo}" Margin="8,12,8,4" />
+                        <ItemsControl ItemsSource="{Binding Grupos[2].Entradas}" ItemTemplate="{StaticResource EntradaDelMaster}" />
+                    </StackPanel>
+                </StackPanel>
+            </v2:TarjetaContenido>
+
+            <cat:CatalogoListadoView x:Name="Detalle" Grid.Column="2" DataContext="{Binding CatalogoActual}" />
+        </Grid>
+    </DockPanel>
+</UserControl>

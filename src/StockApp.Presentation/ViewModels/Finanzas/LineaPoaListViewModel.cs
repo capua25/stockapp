@@ -30,6 +30,8 @@ public class LineaPoaListViewModel : CatalogoListadoViewModel<LineaPoa>
     public override string TextoNuevo => "Nueva línea POA";
     public override string TextoInactivo => "Inactiva";
     public override string TextoSinPermiso => "No tenés permiso para ver las líneas POA.";
+    public override string PieSingular => "línea POA";
+    public override string PiePlural => "líneas POA";
     public override IReadOnlyList<ColumnaCatalogo> Columnas => _columnas;
 
     protected override Task<IReadOnlyList<LineaPoa>> ListarAsync() => _service.ListarTodasAsync();

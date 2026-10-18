@@ -28,6 +28,8 @@ public class ProveedorListViewModel : CatalogoListadoViewModel<Proveedor>
     public override string TextoNuevo => "Nuevo proveedor";
     public override string TextoInactivo => "Inactivo";
     public override string TextoSinPermiso => "No tenés permiso para ver los proveedores.";
+    public override string PieSingular => "proveedor";
+    public override string PiePlural => "proveedores";
     public override IReadOnlyList<ColumnaCatalogo> Columnas => _columnas;
 
     protected override Task<IReadOnlyList<Proveedor>> ListarAsync() => _service.ListarTodosAsync();

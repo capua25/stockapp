@@ -29,6 +29,8 @@ public class OrigenFinanciamientoListViewModel : CatalogoListadoViewModel<Origen
     public override string TextoNuevo => "Nuevo origen";
     public override string TextoInactivo => "Inactivo";
     public override string TextoSinPermiso => "No tenés permiso para ver los orígenes de financiamiento.";
+    public override string PieSingular => "origen";
+    public override string PiePlural => "orígenes";
     public override IReadOnlyList<ColumnaCatalogo> Columnas => _columnas;
 
     protected override Task<IReadOnlyList<OrigenFinanciamiento>> ListarAsync() => _service.ListarTodasAsync();

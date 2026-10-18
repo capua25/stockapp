@@ -293,4 +293,30 @@ public class CatalogoListadoViewModelTests
 
         Assert.Equal("B", Assert.Single(vm.Filas).Valor0);
     }
+
+    [Fact]
+    public async Task Frases_DeLosEstados_YPieConSingularYPlural()
+    {
+        var (vm, _) = CrearCategorias("Electricidad", "Plomería");
+        Assert.Equal("Cargando categorías…", vm.TextoCargando);
+        Assert.Equal("Todavía no hay categorías", vm.TituloSinDatos);
+        Assert.Equal("Tocá Nueva categoría para cargar el primero.", vm.MensajeSinDatos);
+
+        await vm.CargarAsync();
+        Assert.Equal("2 categorías", vm.TextoPie);
+        vm.Busqueda = "elec";
+        Assert.Equal("1 categoría", vm.TextoPie);
+
+        var lineas = CrearDeClave(ClaveCatalogo.LineasPoa);
+        Assert.Equal("Cargando líneas POA…", lineas.TextoCargando);
+        Assert.Equal("Todavía no hay unidades de medida", CrearDeClave(ClaveCatalogo.UnidadesMedida).TituloSinDatos);
+    }
+
+    [Fact]
+    public void Rubros_MuestraElCodigoAntesQueElNombre_LosDemasNo()
+    {
+        Assert.Equal(1, CrearDeClave(ClaveCatalogo.RubrosGasto).PosicionNombre);
+        foreach (var clave in Enum.GetValues<ClaveCatalogo>().Where(c => c != ClaveCatalogo.RubrosGasto))
+            Assert.Equal(0, CrearDeClave(clave).PosicionNombre);
+    }
 }

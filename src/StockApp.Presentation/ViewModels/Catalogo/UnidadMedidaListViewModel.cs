@@ -28,6 +28,8 @@ public class UnidadMedidaListViewModel : CatalogoListadoViewModel<UnidadMedida>
     public override string TextoNuevo => "Nueva unidad";
     public override string TextoInactivo => "Inactiva";
     public override string TextoSinPermiso => "No tenés permiso para ver las unidades de medida.";
+    public override string PieSingular => "unidad de medida";
+    public override string PiePlural => "unidades de medida";
     public override IReadOnlyList<ColumnaCatalogo> Columnas => _columnas;
 
     protected override Task<IReadOnlyList<UnidadMedida>> ListarAsync() => _service.ListarTodasAsync();

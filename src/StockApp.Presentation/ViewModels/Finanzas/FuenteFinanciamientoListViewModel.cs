@@ -30,6 +30,8 @@ public class FuenteFinanciamientoListViewModel : CatalogoListadoViewModel<Fuente
     public override string TextoNuevo => "Nueva fuente";
     public override string TextoInactivo => "Inactiva";
     public override string TextoSinPermiso => "No tenés permiso para ver las fuentes de financiamiento.";
+    public override string PieSingular => "fuente";
+    public override string PiePlural => "fuentes";
     public override IReadOnlyList<ColumnaCatalogo> Columnas => _columnas;
 
     protected override Task<IReadOnlyList<FuenteFinanciamiento>> ListarAsync() => _service.ListarTodasAsync();

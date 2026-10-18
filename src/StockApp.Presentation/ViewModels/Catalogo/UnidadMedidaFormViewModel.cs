@@ -4,6 +4,7 @@ using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Catalogo;
 using StockApp.Domain.Entities;
 using StockApp.Presentation.Navigation;
+using StockApp.Presentation.ViewModels.Administracion;
 
 namespace StockApp.Presentation.ViewModels.Catalogo;
 
@@ -74,7 +75,7 @@ public partial class UnidadMedidaFormViewModel : ViewModelBase
                     Abreviatura = Abreviatura,
                 });
 
-            _navigation.Navegar<UnidadMedidaListViewModel>();
+            _navigation.Navegar<CatalogosViewModel>(vm => vm.Seleccionar(ClaveCatalogo.UnidadesMedida));
         }
         catch (System.Exception ex)
         {
@@ -83,5 +84,5 @@ public partial class UnidadMedidaFormViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void Cancelar() => _navigation.Navegar<UnidadMedidaListViewModel>();
+    private void Cancelar() => _navigation.Navegar<CatalogosViewModel>(vm => vm.Seleccionar(ClaveCatalogo.UnidadesMedida));
 }

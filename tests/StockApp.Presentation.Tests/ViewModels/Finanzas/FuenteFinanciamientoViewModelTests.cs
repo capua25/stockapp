@@ -7,6 +7,7 @@ using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Finanzas;
+using StockApp.Presentation.ViewModels.Administracion;
 using Xunit;
 
 namespace StockApp.Presentation.Tests.ViewModels.Finanzas;
@@ -164,7 +165,7 @@ public class FuenteFinanciamientoFormViewModelTests
         await vm.GuardarCommand.ExecuteAsync(null);
 
         svcMock.Verify(s => s.AltaAsync(It.Is<FuenteFinanciamiento>(f => f.Nombre == "Literal B")), Times.Once);
-        navMock.Verify(n => n.Navegar<MaestrosFinanzasViewModel>(), Times.Once);
+        navMock.Verify(n => n.Navegar<CatalogosViewModel>(It.IsAny<System.Action<CatalogosViewModel>>()), Times.Once);
     }
 
     [Fact]
@@ -192,7 +193,7 @@ public class FuenteFinanciamientoFormViewModelTests
         await vm.GuardarCommand.ExecuteAsync(null);
 
         Assert.Equal("Ya existe una fuente de financiamiento con el nombre 'Multas'.", vm.MensajeError);
-        navMock.Verify(n => n.Navegar<MaestrosFinanzasViewModel>(), Times.Never);
+        navMock.Verify(n => n.Navegar<CatalogosViewModel>(It.IsAny<System.Action<CatalogosViewModel>>()), Times.Never);
     }
 
     [Fact]

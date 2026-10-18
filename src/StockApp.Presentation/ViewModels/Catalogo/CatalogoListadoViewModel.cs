@@ -41,6 +41,26 @@ public abstract partial class CatalogoListadoViewModel : ViewModelBase
     /// <summary>Texto que se muestra cuando el servidor rechaza la carga (403). Queda en <see cref="ViewModelBase.MensajeSinPermiso"/>.</summary>
     public abstract string TextoSinPermiso { get; }
 
+    /// <summary>Cómo se llama un elemento del catálogo en el pie de conteo ("categoría"); el plural va en <see cref="PiePlural"/>.</summary>
+    public abstract string PieSingular { get; }
+
+    public abstract string PiePlural { get; }
+
+    /// <summary>Lugar de NOMBRE entre las columnas de la grilla (0 = primera). Rubros de gasto muestra CÓDIGO antes.</summary>
+    public virtual int PosicionNombre => 0;
+
+    /// <summary>Título en minúscula para las frases de los estados ("unidades de medida", "líneas POA").</summary>
+    public string TituloMinuscula => string.IsNullOrEmpty(Titulo) ? Titulo : char.ToLowerInvariant(Titulo[0]) + Titulo[1..];
+
+    public string TextoCargando => $"Cargando {TituloMinuscula}…";
+
+    public string TituloSinDatos => $"Todavía no hay {TituloMinuscula}";
+
+    public string MensajeSinDatos => $"Tocá {TextoNuevo} para cargar el primero.";
+
+    /// <summary>"6 categorías": lo visible, con singular y plural propios del catálogo.</summary>
+    public string TextoPie => $"{CantidadVisible} {(CantidadVisible == 1 ? PieSingular : PiePlural)}";
+
     /// <summary>Columnas además de NOMBRE (0 a 4), en el orden en que se muestran.</summary>
     public abstract IReadOnlyList<ColumnaCatalogo> Columnas { get; }
 
@@ -58,7 +78,11 @@ public abstract partial class CatalogoListadoViewModel : ViewModelBase
     public int CantidadVisible
     {
         get => _cantidadVisible;
-        private set => SetProperty(ref _cantidadVisible, value);
+        private set
+        {
+            if (SetProperty(ref _cantidadVisible, value))
+                OnPropertyChanged(nameof(TextoPie));
+        }
     }
 
     /// <summary>Hay filas pero la búsqueda las oculta todas (distinto de "todavía no hay nada").</summary>

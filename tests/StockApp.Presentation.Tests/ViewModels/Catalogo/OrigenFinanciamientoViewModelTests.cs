@@ -8,6 +8,7 @@ using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Catalogo;
+using StockApp.Presentation.ViewModels.Administracion;
 using Xunit;
 
 namespace StockApp.Presentation.Tests.ViewModels.Catalogo;
@@ -237,7 +238,7 @@ public class OrigenFinanciamientoFormViewModelTests
 
         await vm.GuardarCommand.ExecuteAsync(null);
 
-        navMock.Verify(n => n.Navegar<CatalogosTareaViewModel>(), Times.Once);
+        navMock.Verify(n => n.Navegar<CatalogosViewModel>(It.IsAny<System.Action<CatalogosViewModel>>()), Times.Once);
     }
 
     [Fact]
@@ -274,6 +275,6 @@ public class OrigenFinanciamientoFormViewModelTests
         await vm.GuardarCommand.ExecuteAsync(null);
 
         Assert.Equal("Ya existe un origen de financiamiento con el nombre 'Fondo nacional'.", vm.MensajeError);
-        navMock.Verify(n => n.Navegar<CatalogosTareaViewModel>(), Times.Never);
+        navMock.Verify(n => n.Navegar<CatalogosViewModel>(It.IsAny<System.Action<CatalogosViewModel>>()), Times.Never);
     }
 }
