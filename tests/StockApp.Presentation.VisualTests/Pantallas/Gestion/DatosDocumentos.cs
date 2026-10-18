@@ -109,7 +109,11 @@ public static class DatosDocumentos
         servicio.Setup(s => s.ListarActivosAsync(It.IsAny<FiltroDocumentos>())).Returns(activos);
         servicio.Setup(s => s.ListarHistorialAsync(It.IsAny<FiltroDocumentos>()))
             .Returns(historial ?? (() => Task.FromResult(Historial)));
-        return new DocumentoListViewModel(servicio.Object, Sesion(operador), Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>());
+        // Sin espera: la comparación no depende de los 300 ms del debounce de los filtros.
+        return new DocumentoListViewModel(servicio.Object, Sesion(operador), Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>())
+        {
+            EsperaDebounce = TimeSpan.Zero,
+        };
     }
 
     public static DocumentoFormViewModel Formulario(bool operador = false)
