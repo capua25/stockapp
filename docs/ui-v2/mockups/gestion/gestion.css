@@ -72,6 +72,8 @@
 .adjunto-tamano, .adjunto-fecha { display: flex; justify-content: flex-end; }
 .adjunto-tamano { flex: 0 0 72px; }
 .adjunto-fecha { flex: 0 0 80px; }
+/* El texto alineado a la derecha mide su ancho redondeado hacia arriba: Chromium lo coloca en fracciones y Avalonia en píxeles enteros. */
+.adjunto-tamano > span, .adjunto-fecha > span { width: calc-size(fit-content, round(up, size, 1px)); }
 .adjunto-ver { margin-left: 8px; }
 /* Tareas vinculadas: título y su insignia de estado, una fila de 40 con separador arriba. */
 .vinculada { display: flex; align-items: center; justify-content: space-between; height: 40px; border-top: 1px solid var(--v2-color-separador-grilla); }
