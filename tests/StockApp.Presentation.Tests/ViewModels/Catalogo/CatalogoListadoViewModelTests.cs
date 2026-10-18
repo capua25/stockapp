@@ -319,4 +319,27 @@ public class CatalogoListadoViewModelTests
         foreach (var clave in Enum.GetValues<ClaveCatalogo>().Where(c => c != ClaveCatalogo.RubrosGasto))
             Assert.Equal(0, CrearDeClave(clave).PosicionNombre);
     }
+
+    [Fact]
+    public async Task Orden_DelCodigoYDelEjercicio_EsNumericoYElRestoOrdenaPorTexto()
+    {
+        var rubros = new Mock<IRubroGastoService>();
+        rubros.Setup(s => s.ListarTodosAsync()).ReturnsAsync(new List<RubroGasto> { new() { Id = 1, Codigo = 10, Nombre = "A" } });
+        var rubro = new RubroGastoListViewModel(rubros.Object, Nav(), Confirma());
+        var lineas = new Mock<ILineaPoaService>();
+        lineas.Setup(s => s.ListarTodasAsync()).ReturnsAsync(new List<LineaPoa> { new() { Id = 1, Nombre = "L", Programa = "Obras", Ejercicio = 2026 } });
+        var linea = new LineaPoaListViewModel(lineas.Object, Nav(), Confirma());
+        var prov = new Mock<IProveedorService>();
+        prov.Setup(s => s.ListarTodosAsync()).ReturnsAsync(new List<Proveedor> { new() { Id = 1, Nombre = "P", Telefono = "4542 2210" } });
+        var proveedor = new ProveedorListViewModel(prov.Object, Nav(), Confirma());
+
+        await rubro.CargarAsync();
+        await linea.CargarAsync();
+        await proveedor.CargarAsync();
+
+        Assert.Equal(10, Assert.IsType<int>(rubro.Filas[0].Orden1));
+        Assert.Equal("Obras", linea.Filas[0].Orden1);
+        Assert.Equal(2026, Assert.IsType<int>(linea.Filas[0].Orden2));
+        Assert.Equal("4542 2210", proveedor.Filas[0].Orden1);
+    }
 }

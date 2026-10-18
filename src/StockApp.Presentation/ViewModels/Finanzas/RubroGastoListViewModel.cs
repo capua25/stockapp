@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Threading.Tasks;
@@ -44,6 +45,8 @@ public class RubroGastoListViewModel : CatalogoListadoViewModel<RubroGasto>
     protected override bool EsActivo(RubroGasto item) => item.Activo;
 
     protected override IReadOnlyList<string?> Valores(RubroGasto item) => new string?[] { item.Nombre, item.Codigo.ToString(CultureInfo.InvariantCulture) };
+
+    protected override IReadOnlyList<IComparable?>? Ordenes(RubroGasto item) => new IComparable?[] { null, item.Codigo };
 
     protected override void NavegarANuevo() => Navigation.Navegar<RubroGastoFormViewModel>();
 

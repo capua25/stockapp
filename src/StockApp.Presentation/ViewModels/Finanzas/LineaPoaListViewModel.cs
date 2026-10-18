@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Threading.Tasks;
@@ -43,6 +44,8 @@ public class LineaPoaListViewModel : CatalogoListadoViewModel<LineaPoa>
     protected override bool EsActivo(LineaPoa item) => item.Activo;
 
     protected override IReadOnlyList<string?> Valores(LineaPoa item) => new string?[] { item.Nombre, item.Programa, item.Ejercicio.ToString(CultureInfo.InvariantCulture) };
+
+    protected override IReadOnlyList<IComparable?>? Ordenes(LineaPoa item) => new IComparable?[] { null, null, item.Ejercicio };
 
     protected override void NavegarANuevo() => Navigation.Navegar<LineaPoaFormViewModel>();
 

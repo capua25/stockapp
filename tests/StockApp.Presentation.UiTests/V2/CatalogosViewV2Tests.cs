@@ -516,4 +516,48 @@ public class CatalogosViewV2Tests
         Assert.Same(proveedor, listado.ItemSeleccionado);
         Assert.True(listado.EditarCommand.CanExecute(null));
     }
+
+    private static string[] NombresEnPantalla(Montaje m) =>
+        Grilla(m).GetVisualDescendants().OfType<DataGridRow>().Where(Visible)
+            .OrderBy(r => r.TranslatePoint(new Point(0, 0), m.Ventana)!.Value.Y)
+            .Select(r => ((FilaCatalogo)r.DataContext!).Valor0).ToArray();
+
+    /// <summary>El código presupuestal es un número: 1, 3, 10, 12, 231, 999 (como texto saldría 1, 10, 12, 231, 3, 999).</summary>
+    [AvaloniaFact]
+    public void Detalle_Rubros_OrdenarPorCodigo_OrdenaPorNumeroNoPorTexto()
+    {
+        var s = new Servicios();
+        s.Rubros.Lista =
+        [
+            new RubroGasto { Id = 1, Codigo = 231, Nombre = "R231" }, new RubroGasto { Id = 2, Codigo = 3, Nombre = "R3" },
+            new RubroGasto { Id = 3, Codigo = 999, Nombre = "R999" }, new RubroGasto { Id = 4, Codigo = 10, Nombre = "R10" },
+            new RubroGasto { Id = 5, Codigo = 1, Nombre = "R1" }, new RubroGasto { Id = 6, Codigo = 12, Nombre = "R12" },
+        ];
+        var m = Montar(s, abrir: ClaveCatalogo.RubrosGasto);
+
+        GrillaStockHelpers.ClickearHeader(m.Ventana, Grilla(m), "CÓDIGO");
+
+        Assert.Equal(new[] { "R1", "R3", "R10", "R12", "R231", "R999" }, NombresEnPantalla(m));
+
+        GrillaStockHelpers.ClickearHeader(m.Ventana, Grilla(m), "CÓDIGO");
+
+        Assert.Equal(new[] { "R999", "R231", "R12", "R10", "R3", "R1" }, NombresEnPantalla(m));
+    }
+
+    /// <summary>EJERCICIO de Línea POA también es un número (987 va antes que 2026).</summary>
+    [AvaloniaFact]
+    public void Detalle_LineasPoa_OrdenarPorEjercicio_OrdenaPorNumeroNoPorTexto()
+    {
+        var s = new Servicios();
+        s.Lineas.Lista =
+        [
+            new LineaPoa { Id = 1, Nombre = "A2026", Programa = "P", Ejercicio = 2026 }, new LineaPoa { Id = 2, Nombre = "A987", Programa = "P", Ejercicio = 987 },
+            new LineaPoa { Id = 3, Nombre = "A10000", Programa = "P", Ejercicio = 10000 },
+        ];
+        var m = Montar(s, abrir: ClaveCatalogo.LineasPoa);
+
+        GrillaStockHelpers.ClickearHeader(m.Ventana, Grilla(m), "EJERCICIO");
+
+        Assert.Equal(new[] { "A987", "A2026", "A10000" }, NombresEnPantalla(m));
+    }
 }

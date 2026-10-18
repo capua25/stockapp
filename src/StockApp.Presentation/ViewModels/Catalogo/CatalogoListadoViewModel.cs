@@ -184,6 +184,10 @@ public abstract partial class CatalogoListadoViewModel<T> : CatalogoListadoViewM
     /// <summary>Nombre primero, después un valor por cada columna declarada.</summary>
     protected abstract IReadOnlyList<string?> Valores(T item);
 
+    /// <summary>Claves de orden por columna (el mismo índice que <see cref="Valores"/>) cuando el texto no ordena bien (números).
+    /// Null = se ordena por el texto.</summary>
+    protected virtual IReadOnlyList<IComparable?>? Ordenes(T item) => null;
+
     protected abstract void NavegarANuevo();
     protected abstract void NavegarAEditar(T item);
 
@@ -244,7 +248,7 @@ public abstract partial class CatalogoListadoViewModel<T> : CatalogoListadoViewM
             foreach (var item in resultados)
             {
                 Items.Add(item);
-                Filas.Add(new FilaCatalogo(item, EsActivo(item), Valores(item)));
+                Filas.Add(new FilaCatalogo(item, EsActivo(item), Valores(item), Ordenes(item)));
             }
         }, TextoSinPermiso, turno);
     }

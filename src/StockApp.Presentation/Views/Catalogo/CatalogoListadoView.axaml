@@ -104,7 +104,7 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="" Width="Auto" SortMemberPath="Valor1" b:ColumnaAuto.Medir="True">
+                        <DataGridTemplateColumn Header="" Width="Auto" SortMemberPath="Orden1" b:ColumnaAuto.Medir="True">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="vm:FilaCatalogo">
                                     <TextBlock Text="{Binding Valor1}" Classes.inactivo="{Binding !Activo}" TextTrimming="CharacterEllipsis"
@@ -112,7 +112,7 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="" Width="Auto" SortMemberPath="Valor2" b:ColumnaAuto.Medir="True">
+                        <DataGridTemplateColumn Header="" Width="Auto" SortMemberPath="Orden2" b:ColumnaAuto.Medir="True">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="vm:FilaCatalogo">
                                     <TextBlock Text="{Binding Valor2}" Classes.inactivo="{Binding !Activo}" TextTrimming="CharacterEllipsis"
@@ -120,7 +120,7 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="" Width="Auto" SortMemberPath="Valor3" b:ColumnaAuto.Medir="True">
+                        <DataGridTemplateColumn Header="" Width="Auto" SortMemberPath="Orden3" b:ColumnaAuto.Medir="True">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="vm:FilaCatalogo">
                                     <TextBlock Text="{Binding Valor3}" Classes.inactivo="{Binding !Activo}" TextTrimming="CharacterEllipsis"
@@ -128,7 +128,7 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="" Width="Auto" SortMemberPath="Valor4" b:ColumnaAuto.Medir="True">
+                        <DataGridTemplateColumn Header="" Width="Auto" SortMemberPath="Orden4" b:ColumnaAuto.Medir="True">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="vm:FilaCatalogo">
                                     <TextBlock Text="{Binding Valor4}" Classes.inactivo="{Binding !Activo}" TextTrimming="CharacterEllipsis"
