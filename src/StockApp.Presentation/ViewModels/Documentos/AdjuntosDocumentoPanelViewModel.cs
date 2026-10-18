@@ -70,6 +70,10 @@ public partial class AdjuntosDocumentoPanelViewModel : ViewModelBase
     /// <summary>Sin conexión no hay lista que mostrar: al reintentar no deben verse los adjuntos de la consulta anterior.</summary>
     protected override void AlPerderConexion() => Items.Clear();
 
+    /// <summary>Reintentar vuelve a pasar por <see cref="RecargarAsync"/>, que es donde está el catch del panel: si el
+    /// listado falla ahora por negocio, el error va al modal y no se escapa del comando. Además pide un turno nuevo.</summary>
+    protected override Task ReintentarAsync(Func<Task> cargaFallida) => RecargarAsync();
+
     /// <summary>Turnos de <see cref="RecargarAsync"/>: solo la última carga decide lo que se ve.</summary>
     private readonly ConsultaVigente _consultas = new();
 

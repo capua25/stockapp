@@ -72,6 +72,24 @@ public class AdjuntosDocumentoPanelViewModelTests
         Assert.Single(ctx.Vm.Items);
     }
 
+    /// <summary>Reintentar tras un servidor caído pasa por el mismo catch que la carga inicial: si ahora el listado falla
+    /// por negocio (404/500) el error va al modal y no se escapa del comando hacia el UnhandledException.</summary>
+    [Fact]
+    public async Task Reintentar_TrasServidorCaido_ConErrorDeNegocio_VaAlModalSinEscaparse()
+    {
+        var ctx = Crear();
+        ctx.Svc.SetupSequence(s => s.ListarPorDocumentoAsync(5))
+            .ThrowsAsync(new ServidorNoDisponibleException())
+            .ThrowsAsync(new ArgumentException("boom"));
+        await ctx.Vm.InicializarAsync(5, documentoActivo: true);
+        Assert.True(ctx.Vm.SinConexion);
+
+        await ctx.Vm.ReintentarCargaCommand.ExecuteAsync(null);
+
+        ctx.Confirm.Verify(c => c.InformarAsync("boom"), Times.Once);
+        Assert.False(ctx.Vm.SinConexion);
+    }
+
     [Fact]
     public async Task InicializarAsync_Prohibido403_MarcaSinPermisoSinModal()
     {
