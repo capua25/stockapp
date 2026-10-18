@@ -188,6 +188,25 @@ public class CatalogosViewModelTests
     }
 
     [Fact]
+    public async Task RevocarTodo_YReotorgar_AbreElPrimerVisibleYLimpiaSinPermiso()
+    {
+        var sesion = Sesion(RolUsuario.Operador, Permisos.GestionarTablasMaestras, Permisos.GestionarMaestrosFinanzas);
+        var (vm, _) = Crear(sesion);
+        await vm.CargarAsync();
+        sesion.Setup(x => x.PermisosActuales).Returns(new HashSet<string>());
+        vm.NotificarPermisosActualizados();
+        Assert.True(vm.SinPermiso);
+
+        sesion.Setup(x => x.PermisosActuales).Returns(new HashSet<string> { Permisos.GestionarMaestrosFinanzas });
+        vm.NotificarPermisosActualizados();
+
+        Assert.False(vm.SinPermiso);
+        Assert.Null(vm.MensajeSinPermiso);
+        Assert.Equal(ClaveCatalogo.FuentesFinanciamiento, vm.CatalogoActual!.Clave);
+        Assert.True(vm.Grupos[1].Entradas[0].EstaSeleccionada);
+    }
+
+    [Fact]
     public async Task NotificarPermisosActualizados_ReenviaAlListadoAbierto()
     {
         var (vm, _) = Crear(Sesion(RolUsuario.Admin));
