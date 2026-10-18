@@ -17,13 +17,13 @@
          filtros recargan solos tras una espera corta y cada cambio de vista consulta de nuevo. Las acciones del encabezado
          actúan sobre la fila seleccionada de la vista actual y se muestran según su estado y el rol (Anular… y Reabrir…
          abren el detalle, donde piden el motivo); doble click en una fila equivale a Ver. Cargando, sin servidor y los dos
-         vacíos dentro de la card con los filtros a mano; tras un 403, Sin permiso en lugar de la card y sin acciones en el encabezado. La fila anulada va en
+         vacíos dentro de la card con los filtros a mano; tras un 403, Sin permiso en lugar de la card. La fila anulada va en
          texto terciario por token, nunca con opacidad. -->
     <DockPanel Margin="28,24">
 
         <v2:EncabezadoPagina x:Name="Encabezado" DockPanel.Dock="Top" Titulo="Documentos administrativos"
                              Subtitulo="Expedientes, oficios y suministros, y su estado.">
-            <StackPanel x:Name="Acciones" Orientation="Horizontal" Spacing="8" IsVisible="{Binding !SinPermiso}">
+            <StackPanel Orientation="Horizontal" Spacing="8">
                 <Button x:Name="BotonVer" Classes="secundario" Content="Ver" Command="{Binding VerDetalleCommand}"
                         CommandParameter="{Binding FilaSeleccionada}"
                         IsEnabled="{Binding FilaSeleccionada, Converter={x:Static ObjectConverters.IsNotNull}}" />

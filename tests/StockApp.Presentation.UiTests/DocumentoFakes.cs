@@ -25,9 +25,6 @@ internal sealed class DocumentoServiceFake : IDocumentoAdministrativoService
         _historial = historial ?? new List<DocumentoAdministrativo>();
     }
 
-    /// <summary>Si no es null, los listados lanzan esta excepción (p. ej. UnauthorizedAccessException = 403).</summary>
-    public Exception? FallaAlListar { get; set; }
-
     public int LlamadasListarHistorial { get; private set; }
     public int LlamadasListarActivos { get; private set; }
     public FiltroDocumentos? UltimoFiltroActivos { get; private set; }
@@ -45,7 +42,6 @@ internal sealed class DocumentoServiceFake : IDocumentoAdministrativoService
     {
         LlamadasListarActivos++;
         UltimoFiltroActivos = filtro;
-        if (FallaAlListar is { } falla) throw falla;
         return Task.FromResult<IReadOnlyList<DocumentoAdministrativo>>(_activos.ToList());
     }
 
