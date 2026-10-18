@@ -88,23 +88,36 @@ public partial class AdjuntosPanelViewModel : ViewModelBase
         await RecargarAsync();
     }
 
+    /// <summary>Texto del estado "Sin permiso" del panel cuando el servidor rechaza el listado (403).</summary>
+    public const string MensajeSinPermisoAdjuntos = "No tenés permiso para ver los adjuntos.";
+
+    /// <summary>Un servidor caído al listar se muestra en línea con "Reintentar" (<see cref="ViewModelBase.SinConexion"/>), no
+    /// con el modal global: la lista vacía diría "Sin adjuntos" cuando en realidad no se pudo consultar.</summary>
+    protected override bool AvisaSinConexionEnLinea => true;
+
+    /// <summary>Sin conexión no hay lista que mostrar: al reintentar no deben verse los adjuntos de la consulta anterior.</summary>
+    protected override void AlPerderConexion() => Items.Clear();
+
     private async Task RecargarAsync()
     {
         var turno = _consultas.Empezar();
         try
         {
-            Items.Clear();
-            IReadOnlyList<AdjuntoDto>? lista = _gastoId is int gastoId
-                ? await _adjuntos.ListarPorGastoAsync(gastoId)
-                : _pagoGastoId is int pagoGastoId
-                    ? await _adjuntos.ListarPorPagoAsync(pagoGastoId)
-                    : Array.Empty<AdjuntoDto>();
+            await EjecutarCargaProtegidaAsync(async () =>
+            {
+                Items.Clear();
+                IReadOnlyList<AdjuntoDto>? lista = _gastoId is int gastoId
+                    ? await _adjuntos.ListarPorGastoAsync(gastoId)
+                    : _pagoGastoId is int pagoGastoId
+                        ? await _adjuntos.ListarPorPagoAsync(pagoGastoId)
+                        : Array.Empty<AdjuntoDto>();
 
-            if (!turno.EsLaUltima)
-                return;
+                if (!turno.EsLaUltima)
+                    return;
 
-            foreach (var item in lista ?? Array.Empty<AdjuntoDto>())
-                Items.Add(item);
+                foreach (var item in lista ?? Array.Empty<AdjuntoDto>())
+                    Items.Add(item);
+            }, MensajeSinPermisoAdjuntos, turno);
         }
         catch (Exception ex)
         {

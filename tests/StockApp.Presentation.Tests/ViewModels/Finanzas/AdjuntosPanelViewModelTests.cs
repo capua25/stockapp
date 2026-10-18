@@ -1,4 +1,5 @@
 using Moq;
+using StockApp.ApiClient;
 using StockApp.Application.Authorization;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
@@ -234,6 +235,27 @@ public class AdjuntosPanelViewModelTests
 
         _confirmacion.Verify(c => c.InformarAsync("error de red"), Times.Once);
         Assert.Empty(_vm.Items);
+    }
+
+    /// <summary>Servidor caído al listar: queda en SinConexion (la vista muestra el error con Reintentar), sin modal global,
+    /// y Reintentar vuelve a consultar. No es lo mismo que "no hay adjuntos".</summary>
+    [Fact]
+    public async Task InicializarAsync_ServidorCaido_MarcaSinConexionSinModal_YReintentarRecarga()
+    {
+        _adjuntos.SetupSequence(a => a.ListarPorGastoAsync(5))
+            .ThrowsAsync(new ServidorNoDisponibleException())
+            .ReturnsAsync(new List<AdjuntoDto> { new(1, "a.pdf", "application/pdf", 10, 5, null, DateTime.UtcNow) });
+
+        await _vm.InicializarAsync(gastoId: 5, pagoGastoId: null);
+
+        Assert.True(_vm.SinConexion);
+        Assert.Empty(_vm.Items);
+        _confirmacion.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Never);
+
+        await _vm.ReintentarCargaCommand.ExecuteAsync(null);
+
+        Assert.False(_vm.SinConexion);
+        Assert.Single(_vm.Items);
     }
 
     /// <summary>El 409 de adjuntar a un gasto anulado llega como ReglaDeNegocioException con el detail del servidor

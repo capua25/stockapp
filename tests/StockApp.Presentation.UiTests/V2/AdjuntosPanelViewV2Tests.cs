@@ -8,9 +8,11 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Optris.Icons.Avalonia;
+using StockApp.ApiClient;
 using StockApp.Application.Authorization;
 using StockApp.Application.Finanzas;
 using StockApp.Domain.Enums;
+using StockApp.Presentation.Controls.V2;
 using StockApp.Presentation.ViewModels.Finanzas;
 using StockApp.Presentation.Views.Finanzas;
 using Xunit;
@@ -109,6 +111,35 @@ public class AdjuntosPanelViewV2Tests
 
         Assert.True(ArbolVisual.EsVisibleEnArbol(m.Vista.FindControl<Button>("BotonAgregar")!));
         Assert.True(ArbolVisual.EsVisibleEnArbol(Boton(m.Vista, "Quitar")));
+    }
+
+    /// <summary>Hallazgo B2.1b del GATE 2: con la API caída el panel decía "Sin adjuntos" (mentira: no pudo consultar) y
+    /// además abría el modal global. Ahora: error en línea con Reintentar, sin modal, y sin el texto del vacío.</summary>
+    [AvaloniaFact]
+    public async Task ApiCaida_ErrorEnLineaConReintentar_SinModalNiSinAdjuntos()
+    {
+        var servicio = new AdjuntoServiceFake { FallaAlListar = new ServidorNoDisponibleException() };
+        servicio.Items.Add(Pdf);
+        var confirmacion = new ConfirmacionServiceFake();
+        var vm = new AdjuntosPanelViewModel(servicio, new ServicioSeleccionArchivoFake(), new ServicioAperturaArchivoFake(),
+            confirmacion, Mixto(Permisos.RegistrarGastos));
+        await vm.InicializarAsync(42, null);
+        var vista = new AdjuntosPanelView { DataContext = vm };
+        var ventana = new Window { Width = 760, Height = 400, Content = vista };
+        ventana.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(ArbolVisual.EsVisibleEnArbol(vista.FindControl<EstadoVacio>("EstadoSinConexion")!));
+        Assert.False(ArbolVisual.EsVisibleEnArbol(vista.FindControl<TextBlock>("SinAdjuntos")!));
+        Assert.Empty(confirmacion.MensajesInformados);
+
+        servicio.FallaAlListar = null;
+        MontajeV2.Clic(ventana, vista.FindControl<Button>("BotonReintentar")!);
+        await (vm.ReintentarCargaCommand.ExecutionTask ?? Task.CompletedTask);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(ArbolVisual.EsVisibleEnArbol(vista.FindControl<EstadoVacio>("EstadoSinConexion")!));
+        Assert.True(ArbolVisual.EsVisibleEnArbol(vista.FindControl<ItemsControl>("ListaAdjuntos")!));
     }
 
     [AvaloniaFact]

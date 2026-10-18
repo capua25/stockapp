@@ -4,6 +4,7 @@
              xmlns:dto="using:StockApp.Application.Finanzas"
              xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:b="using:StockApp.Presentation.Behaviors"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
              xmlns:i="https://github.com/projektanker/icons.avalonia"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -28,9 +29,29 @@
         <TextBlock x:Name="TextoAvisoSoloLectura" Classes="texto-secundario" Margin="0,0,0,8"
                    Text="{Binding AvisoSoloLectura}" IsVisible="{Binding HayAvisoSoloLectura}" />
 
+        <!-- No pude consultar no es lo mismo que no hay: servidor caído o 403 reemplazan al texto del vacío. Sin servidor, el
+             error va en línea con Reintentar y sin modal global (igual que el resto de las pantallas v2). -->
+        <v2:EstadoVacio x:Name="EstadoSinConexion" UseLayoutRounding="False"
+                        Titulo="No se pudo conectar con el servidor"
+                        Mensaje="Verificá que el servidor esté encendido y accesible en la red, y volvé a intentar."
+                        EsError="True" IsVisible="{Binding SinConexion}">
+            <Button x:Name="BotonReintentar" Classes="secundario" Content="Reintentar" Command="{Binding ReintentarCargaCommand}" />
+        </v2:EstadoVacio>
+
+        <v2:EstadoVacio x:Name="EstadoSinPermiso" UseLayoutRounding="False"
+                        Titulo="Sin permiso" Mensaje="{Binding MensajeSinPermiso}" EsError="True"
+                        IsVisible="{Binding SinPermiso}" />
+
         <TextBlock x:Name="SinAdjuntos" Classes="texto-secundario"
-                   Text="Sin adjuntos. PDF, JPG o PNG hasta 10 MB."
-                   IsVisible="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.EsCero}}" />
+                   Text="Sin adjuntos. PDF, JPG o PNG hasta 10 MB.">
+            <TextBlock.IsVisible>
+                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                    <Binding Path="Items.Count" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                    <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                    <Binding Path="SinPermiso" Converter="{x:Static BoolConverters.Not}" />
+                </MultiBinding>
+            </TextBlock.IsVisible>
+        </TextBlock>
 
         <ItemsControl x:Name="ListaAdjuntos" ItemsSource="{Binding Items}"
                       IsVisible="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.HayElementos}}">

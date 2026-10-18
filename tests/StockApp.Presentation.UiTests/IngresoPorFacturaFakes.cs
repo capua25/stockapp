@@ -110,10 +110,13 @@ internal sealed class AdjuntoServiceFake : IAdjuntoService
     public List<AdjuntoDto> Items { get; } = new();
     public List<int> Quitados { get; } = new();
 
+    /// <summary>Si no es null, los listados lanzan esta excepción (p. ej. servidor caído).</summary>
+    public Exception? FallaAlListar { get; set; }
+
     public Task<AdjuntoDto> AgregarAGastoAsync(int gastoId, string nombreArchivo, byte[] contenido) => throw new NotSupportedException("No usado en este banco de pruebas.");
     public Task<AdjuntoDto> AgregarAPagoAsync(int pagoGastoId, string nombreArchivo, byte[] contenido) => throw new NotSupportedException("No usado en este banco de pruebas.");
-    public Task<IReadOnlyList<AdjuntoDto>> ListarPorGastoAsync(int gastoId) => Task.FromResult<IReadOnlyList<AdjuntoDto>>(Items.ToList());
-    public Task<IReadOnlyList<AdjuntoDto>> ListarPorPagoAsync(int pagoGastoId) => Task.FromResult<IReadOnlyList<AdjuntoDto>>(Items.ToList());
+    public Task<IReadOnlyList<AdjuntoDto>> ListarPorGastoAsync(int gastoId) => FallaAlListar is { } f ? Task.FromException<IReadOnlyList<AdjuntoDto>>(f) : Task.FromResult<IReadOnlyList<AdjuntoDto>>(Items.ToList());
+    public Task<IReadOnlyList<AdjuntoDto>> ListarPorPagoAsync(int pagoGastoId) => FallaAlListar is { } f ? Task.FromException<IReadOnlyList<AdjuntoDto>>(f) : Task.FromResult<IReadOnlyList<AdjuntoDto>>(Items.ToList());
     public Task<AdjuntoContenidoDto> ObtenerContenidoAsync(int adjuntoId) => throw new NotSupportedException("No usado en este banco de pruebas.");
 
     public Task QuitarAsync(int adjuntoId)
