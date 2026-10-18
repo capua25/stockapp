@@ -234,6 +234,44 @@ public class PagosGastoViewV2Tests
         Assert.Equal(inputsY, EnVentana(m.Ventana, Parte<Button>(m, "BotonRegistrar")).Y, 1);
     }
 
+    // ── Salir de un campo lo marca como tocado (TocarAlSalir del code-behind) ──────────────────
+
+    [AvaloniaFact]
+    public void SalirDeMontoSinEscribir_MuestraElObligatorio()
+    {
+        var m = Montar();
+        Parte<TextBox>(m, "CajaMonto").Focus();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Empty(Errores(Parte<TextBox>(m, "CajaMonto")));
+
+        Parte<TextBox>(m, "CajaNota").Focus();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(new[] { PagosGastoViewModel.MensajeMontoObligatorio }, Errores(Parte<TextBox>(m, "CajaMonto")));
+    }
+
+    [AvaloniaFact]
+    public void FechaVaciada_MuestraSuErrorDebajoDelSelector_AlSalirDeEl()
+    {
+        var m = Montar();
+        var selector = Parte<CalendarDatePicker>(m, "SelectorFecha");
+        selector.Focus();
+        Dispatcher.UIThread.RunJobs();
+
+        selector.SelectedDate = null;
+        Parte<TextBox>(m, "CajaNota").Focus();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(new[] { PagosGastoViewModel.MensajeFechaObligatoria }, Errores(selector));
+        var mensaje = m.Vista.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == PagosGastoViewModel.MensajeFechaObligatoria);
+        Assert.True(Visible(mensaje));
+        // El DataValidationErrors vive dentro del control: sus Bounds incluyen el mensaje, así que "debajo" se mide contra la caja de 36.
+        var caja = EnVentana(m.Ventana, selector);
+        Assert.True(EnVentana(m.Ventana, mensaje).Y >= caja.Y + 36 - 1,
+            $"el error de Fecha tiene que verse DEBAJO de la caja del selector: mensaje {EnVentana(m.Ventana, mensaje)} selector {caja}");
+        Assert.False(Parte<Button>(m, "BotonRegistrar").IsEffectivelyEnabled);
+    }
+
     // ── Grilla ──────────────────────────────────────────────────────────────────
 
     [AvaloniaFact]
