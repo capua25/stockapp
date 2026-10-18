@@ -121,7 +121,7 @@ public class ShellMainViewGatesTests
         Assert.False(EsVisible(window, vm.NavHistorialMovimientosCommand));
         Assert.False(EsVisible(window, vm.NavGastosCommand));
         Assert.False(EsVisible(window, vm.NavCategoriasCommand));
-        Assert.False(EsVisible(window, vm.NavValorizacionCommand));
+        Assert.False(EsVisible(window, vm.NavReportesCommand));
         Assert.False(EsVisible(window, vm.NavMantenimientoCommand));
         Assert.False(EsVisible(window, vm.NavUsuariosCommand));
     }
@@ -251,17 +251,13 @@ public class ShellMainViewGatesTests
     }
 
     [AvaloniaFact]
-    public void OperadorConSoloVerReportes_VeLosReportesPeroNO_HistorialPorProducto()
+    public void OperadorConSoloVerReportes_VeElItemReportes()
     {
-        // Historial por producto exige VerReportes + RegistrarMovimientos.
+        // El hub de Reportes es visible con reportes.ver; la tarjeta de Historial por producto (que exige
+        // además movimientos.registrar y catalogo.productos) la custodia ReportesViewV2Tests.
         var (window, vm) = Montar(RolUsuario.Operador, Permisos.VerReportes);
 
-        Assert.True(EsVisible(window, vm.NavValorizacionCommand));
-        Assert.True(EsVisible(window, vm.NavStockCategoriaCommand));
-        Assert.True(EsVisible(window, vm.NavMasMovidosCommand));
-        Assert.True(EsVisible(window, vm.NavAuditoriaLogCommand));
-
-        Assert.False(EsVisible(window, vm.NavHistorialPorProductoCommand));
+        Assert.True(EsVisible(window, vm.NavReportesCommand));
     }
 
     // ── Lo estructural: no se puede simular con permisos ────────────────────────
@@ -287,7 +283,7 @@ public class ShellMainViewGatesTests
         Assert.True(EsVisible(window, vm.NavInicioCommand));
         Assert.True(EsVisible(window, vm.NavProductosCommand));
         Assert.True(EsVisible(window, vm.NavIngresoPorFacturaCommand));
-        Assert.True(EsVisible(window, vm.NavHistorialPorProductoCommand));
+        Assert.True(EsVisible(window, vm.NavReportesCommand));
         Assert.True(EsVisible(window, vm.NavMaestrosFinanzasCommand));
         // Importación: ver Admin_NoVeImportacion_PorqueEstaDeshabilitada. Apagada a propósito
         // por ShellMainViewModel.ImportacionHabilitada (2026-09-04); revertir este assert a

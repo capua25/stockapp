@@ -136,23 +136,6 @@ public partial class ShellMainViewModel : ViewModelBase
          _session.PermisosActuales.Contains(Permisos.GestionarProductos));
 
     /// <summary>
-    /// Historial por producto (fix bug de coherencia de permisos, 2026-08-16, auditoría):
-    /// ReporteStockService.ObtenerHistorialPorProductoAsync verifica VerReportes pero DELEGA en
-    /// MovimientoStockService.ObtenerHistorialAsync, que exige RegistrarMovimientos -- un permiso
-    /// independiente. El comentario "DOBLE-GUARD" original asumía que VerReportes era Admin-only
-    /// (premisa que dejó de ser cierta cuando pasó a ser configurable por usuario). Se endurece
-    /// el gate de ENTRADA a esta pantalla en vez de relajar el servicio delegado: mismo criterio
-    /// que PuedeRegistrarEntradaSalida/PuedeIngresarPorFactura -- el gate exige el MÁXIMO de los
-    /// permisos que piden las capas de abajo, nunca el mínimo. A diferencia de las otras 4
-    /// pantallas de Reportes (Valorización/StockCategoria/MasMovidos/AuditoriaLog), que solo
-    /// verifican VerReportes sin delegar a otro servicio con otro permiso.
-    /// </summary>
-    public bool PuedeVerHistorialPorProducto =>
-        _session.RolActual == RolUsuario.Admin ||
-        (_session.PermisosActuales.Contains(Permisos.VerReportes) &&
-         _session.PermisosActuales.Contains(Permisos.RegistrarMovimientos));
-
-    /// <summary>
     /// Número de versión de la app para mostrar al pie del menú lateral (ej. "v0.1.1").
     /// </summary>
     public string VersionTexto => $"v{_infoApp.Version}";
@@ -245,8 +228,8 @@ public partial class ShellMainViewModel : ViewModelBase
 
         ItemInicio = new ItemNavegacion("Inicio", "mdi-home", NavInicioCommand, "Inicio", true);
 
-        // Secciones v2 (spec §4.1, Fase 1). P1 (sidebar transitorio): ANÁLISIS y ADMINISTRACIÓN listan los
-        // ítems actuales hasta que el hub de Reportes (Fase 6) y Catálogos (Fase 7) los consoliden.
+        // Secciones v2 (spec §4.1, Fase 1). P1 (sidebar transitorio): ADMINISTRACIÓN lista los
+        // ítems actuales hasta que Catálogos (Fase 7) los consolide.
         // Títulos en mayúsculas literales: Avalonia no tiene text-transform. Cada ítem conserva su
         // gate (Seccion, Comando y evaluador sin cambios).
         Grupos = new List<GrupoNavegacion>
@@ -274,12 +257,7 @@ public partial class ShellMainViewModel : ViewModelBase
             }),
             new GrupoNavegacion("ANÁLISIS", new List<ItemNavegacion>
             {
-                CrearItem("Valorización de inventario", "mdi-currency-usd", NavValorizacionCommand, "Valorizacion", () => PuedeVerReportes),
-                CrearItem("Stock por categoría", "mdi-chart-pie", NavStockCategoriaCommand, "StockCategoria", () => PuedeVerReportes),
-                CrearItem("Historial por producto", "mdi-file-document", NavHistorialPorProductoCommand, "HistorialPorProducto", () => PuedeVerHistorialPorProducto),
-                CrearItem("Productos más movidos", "mdi-trending-up", NavMasMovidosCommand, "MasMovidos", () => PuedeVerReportes),
-                CrearItem("Log de auditoría", "mdi-shield-search", NavAuditoriaLogCommand, "AuditoriaLog", () => PuedeVerReportes),
-                CrearItem("Estadística de tareas", "mdi-chart-bar", NavReporteTareasCommand, "ReporteTareas", () => PuedeVerReportes),
+                CrearItem("Reportes", "mdi-chart-box-outline", NavReportesCommand, "Reportes", () => PuedeVerReportes),
             }),
             new GrupoNavegacion("ADMINISTRACIÓN", new List<ItemNavegacion>
             {
@@ -366,12 +344,13 @@ public partial class ShellMainViewModel : ViewModelBase
         [typeof(TareaListViewModel)] = "Tareas",
         [typeof(TareaFormViewModel)] = "Tareas",
         [typeof(DocumentoListViewModel)] = "Documentos",
-        [typeof(ValorizacionViewModel)] = "Valorizacion",
-        [typeof(StockCategoriaViewModel)] = "StockCategoria",
-        [typeof(HistorialPorProductoViewModel)] = "HistorialPorProducto",
-        [typeof(MasMovidosViewModel)] = "MasMovidos",
-        [typeof(AuditoriaLogViewModel)] = "AuditoriaLog",
-        [typeof(ReporteTareasViewModel)] = "ReporteTareas",
+        [typeof(ReportesViewModel)] = "Reportes",
+        [typeof(ValorizacionViewModel)] = "Reportes",
+        [typeof(StockCategoriaViewModel)] = "Reportes",
+        [typeof(HistorialPorProductoViewModel)] = "Reportes",
+        [typeof(MasMovidosViewModel)] = "Reportes",
+        [typeof(AuditoriaLogViewModel)] = "Reportes",
+        [typeof(ReporteTareasViewModel)] = "Reportes",
         [typeof(CategoriaListViewModel)] = "Categorias",
         [typeof(ProveedorListViewModel)] = "Proveedores",
         [typeof(UnidadMedidaListViewModel)] = "UnidadesMedida",
@@ -415,7 +394,6 @@ public partial class ShellMainViewModel : ViewModelBase
         OnPropertyChanged(nameof(PuedeVerReportes));
         OnPropertyChanged(nameof(PuedeIngresarPorFactura));
         OnPropertyChanged(nameof(PuedeRegistrarEntradaSalida));
-        OnPropertyChanged(nameof(PuedeVerHistorialPorProducto));
         RecalcularVisibilidad();
     }
 
@@ -594,48 +572,13 @@ public partial class ShellMainViewModel : ViewModelBase
         _navigation.Navegar<DocumentoListViewModel>();
     }
 
-    // ── Reportes (Inc 6): solo Admin ──────────────────────────────────────────
+    // ── Reportes: el hub consolida los seis reportes ──────────────────────────
 
     [RelayCommand]
-    private void NavValorizacion()
+    private void NavReportes()
     {
-        SeccionActiva = "Valorizacion";
-        _navigation.Navegar<ValorizacionViewModel>();
-    }
-
-    [RelayCommand]
-    private void NavStockCategoria()
-    {
-        SeccionActiva = "StockCategoria";
-        _navigation.Navegar<StockCategoriaViewModel>();
-    }
-
-    [RelayCommand]
-    private void NavHistorialPorProducto()
-    {
-        SeccionActiva = "HistorialPorProducto";
-        _navigation.Navegar<HistorialPorProductoViewModel>();
-    }
-
-    [RelayCommand]
-    private void NavMasMovidos()
-    {
-        SeccionActiva = "MasMovidos";
-        _navigation.Navegar<MasMovidosViewModel>();
-    }
-
-    [RelayCommand]
-    private void NavAuditoriaLog()
-    {
-        SeccionActiva = "AuditoriaLog";
-        _navigation.Navegar<AuditoriaLogViewModel>();
-    }
-
-    [RelayCommand]
-    private void NavReporteTareas()
-    {
-        SeccionActiva = "ReporteTareas";
-        _navigation.Navegar<ReporteTareasViewModel>();
+        SeccionActiva = "Reportes";
+        _navigation.Navegar<ReportesViewModel>();
     }
 
     // ── Administracion (Entrega 1 Backups): solo Admin ────────────────────────

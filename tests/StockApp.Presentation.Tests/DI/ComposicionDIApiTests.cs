@@ -125,6 +125,7 @@ public class ComposicionDIApiTests
         services.AddTransient<SalidaRegistroViewModel>();
         services.AddTransient<MovimientoHistorialViewModel>();
         services.AddTransient<ValorizacionViewModel>();
+        services.AddTransient<ReportesViewModel>();
 
         return services.BuildServiceProvider();
     }
@@ -214,6 +215,7 @@ public class ComposicionDIApiTests
     [InlineData(typeof(SalidaRegistroViewModel))]
     [InlineData(typeof(MovimientoHistorialViewModel))]
     [InlineData(typeof(ValorizacionViewModel))]
+    [InlineData(typeof(ReportesViewModel))]
     public void Contenedor_Resuelve_CadaViewModel(Type tipoVm)
     {
         var sp = CrearContenedor();

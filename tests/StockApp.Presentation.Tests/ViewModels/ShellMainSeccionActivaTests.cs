@@ -63,8 +63,13 @@ public class ShellMainSeccionActivaTests
         { typeof(EntradaRegistroViewModel), "RegistrarEntrada" },
         { typeof(SalidaRegistroViewModel), "RegistrarSalida" },
         { typeof(MovimientoHistorialViewModel), "HistorialMovimientos" },
-        { typeof(ValorizacionViewModel), "Valorizacion" },
-        { typeof(AuditoriaLogViewModel), "AuditoriaLog" },
+        { typeof(ReportesViewModel), "Reportes" },
+        { typeof(ValorizacionViewModel), "Reportes" },
+        { typeof(StockCategoriaViewModel), "Reportes" },
+        { typeof(HistorialPorProductoViewModel), "Reportes" },
+        { typeof(MasMovidosViewModel), "Reportes" },
+        { typeof(AuditoriaLogViewModel), "Reportes" },
+        { typeof(ReporteTareasViewModel), "Reportes" },
         { typeof(CalendarioPagosViewModel), "CalendarioPagos" },
         { typeof(TareaListViewModel), "Tareas" },
         { typeof(TareaFormViewModel), "Tareas" },
@@ -195,7 +200,7 @@ public class ShellMainSeccionActivaTests
 
         navegacion.Navegar<ValorizacionViewModel>();
 
-        Assert.Equal("Valorizacion", vm.SeccionActiva);
+        Assert.Equal("Reportes", vm.SeccionActiva);
         Assert.False(vm.ItemInicio.EstaActivo);
         Assert.DoesNotContain(vm.Grupos.SelectMany(g => g.Items), i => i.EsVisible && i.EstaActivo);
     }

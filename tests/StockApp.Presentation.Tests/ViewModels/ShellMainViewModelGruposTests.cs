@@ -57,7 +57,7 @@ public class ShellMainViewModelGruposTests
     [InlineData("INVENTARIO", "Productos|Registrar entrada|Registrar salida|Ingreso por factura|Historial de movimientos")]
     [InlineData("FINANZAS", "Gastos y facturas|Ingresos de caja|Libro caja|Control POA|Calendario de pagos")]
     [InlineData("GESTIÓN", "Tareas|Documentos")]
-    [InlineData("ANÁLISIS", "Valorización de inventario|Stock por categoría|Historial por producto|Productos más movidos|Log de auditoría|Estadística de tareas")]
+    [InlineData("ANÁLISIS", "Reportes")]
     [InlineData("ADMINISTRACIÓN", "Categorías|Proveedores|Unidades de medida|Catálogos de tareas|Maestros de finanzas|Usuarios|Mantenimiento|Importar planillas")]
     public void Seccion_TieneSusItemsEnElOrdenDeLaSpec(string seccion, string titulos)
     {

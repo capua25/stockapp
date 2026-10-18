@@ -9,6 +9,7 @@ using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels;
 using StockApp.Presentation.ViewModels.Catalogo;
 using StockApp.Presentation.ViewModels.Movimientos;
+using StockApp.Presentation.ViewModels.Reportes;
 using Xunit;
 
 namespace StockApp.Presentation.Tests.ViewModels;
@@ -279,53 +280,14 @@ public class ShellMainViewModelTests
     }
 
     [Fact]
-    public void NavValorizacion_EstableceSeccionActiva_Valorizacion()
+    public void NavReportes_EstableceSeccionActiva_Reportes_YNavegaAlHub()
     {
-        var (vm, _, _, _) = Crear(RolUsuario.Admin);
+        var (vm, _, navMock, _) = Crear(RolUsuario.Admin);
 
-        vm.NavValorizacionCommand.Execute(null);
+        vm.NavReportesCommand.Execute(null);
 
-        Assert.Equal("Valorizacion", vm.SeccionActiva);
-    }
-
-    [Fact]
-    public void NavStockCategoria_EstableceSeccionActiva_StockCategoria()
-    {
-        var (vm, _, _, _) = Crear(RolUsuario.Admin);
-
-        vm.NavStockCategoriaCommand.Execute(null);
-
-        Assert.Equal("StockCategoria", vm.SeccionActiva);
-    }
-
-    [Fact]
-    public void NavHistorialPorProducto_EstableceSeccionActiva_HistorialPorProducto()
-    {
-        var (vm, _, _, _) = Crear(RolUsuario.Admin);
-
-        vm.NavHistorialPorProductoCommand.Execute(null);
-
-        Assert.Equal("HistorialPorProducto", vm.SeccionActiva);
-    }
-
-    [Fact]
-    public void NavMasMovidos_EstableceSeccionActiva_MasMovidos()
-    {
-        var (vm, _, _, _) = Crear(RolUsuario.Admin);
-
-        vm.NavMasMovidosCommand.Execute(null);
-
-        Assert.Equal("MasMovidos", vm.SeccionActiva);
-    }
-
-    [Fact]
-    public void NavAuditoriaLog_EstableceSeccionActiva_AuditoriaLog()
-    {
-        var (vm, _, _, _) = Crear(RolUsuario.Admin);
-
-        vm.NavAuditoriaLogCommand.Execute(null);
-
-        Assert.Equal("AuditoriaLog", vm.SeccionActiva);
+        Assert.Equal("Reportes", vm.SeccionActiva);
+        navMock.Verify(n => n.Navegar<ReportesViewModel>(), Times.Once);
     }
 
     // ── Cerrar sesión ─────────────────────────────────────────────────────────
@@ -795,103 +757,5 @@ public class ShellMainViewModelTests
 
         Assert.Contains(nameof(ShellMainViewModel.PuedeRegistrarEntradaSalida), propiedadesNotificadas);
         Assert.True(vm.PuedeRegistrarEntradaSalida);
-    }
-
-    // ── PuedeVerHistorialPorProducto (fix bug de coherencia de permisos, 2026-08-16) ───────────
-    // Auditoría: ReporteStockService.ObtenerHistorialPorProductoAsync verifica VerReportes, pero
-    // DELEGA en MovimientoStockService.ObtenerHistorialAsync, que exige RegistrarMovimientos --
-    // un permiso independiente. El comentario "DOBLE-GUARD" original asumía que VerReportes era
-    // Admin-only, premisa que dejó de ser cierta cuando pasó a ser configurable por usuario. En
-    // vez de relajar el servicio delegado, se endurece el gate de ENTRADA de la pantalla: el
-    // gate exige el MÁXIMO de los permisos de las capas de abajo, nunca el mínimo. Un Operador
-    // con VerReportes pero sin RegistrarMovimientos ya NO ve "Historial por producto" en el
-    // sidebar (antes lo veía y cada búsqueda le tiraba 403).
-
-    [Fact]
-    public void PuedeVerHistorialPorProducto_Admin_EsTrue()
-    {
-        var sessionMock = new Mock<ICurrentSession>();
-        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
-        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
-        var vm = new ShellMainViewModel(
-            sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
-            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>(), Mock.Of<IServicioPreferenciasSidebar>());
-
-        Assert.True(vm.PuedeVerHistorialPorProducto);
-    }
-
-    [Fact]
-    public void Operador_ConSoloVerReportes_PuedeVerHistorialPorProducto_EsFalse()
-    {
-        var sessionMock = new Mock<ICurrentSession>();
-        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Operador);
-        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string> { Permisos.VerReportes });
-        var vm = new ShellMainViewModel(
-            sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
-            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>(), Mock.Of<IServicioPreferenciasSidebar>());
-
-        Assert.False(vm.PuedeVerHistorialPorProducto);
-    }
-
-    [Fact]
-    public void Operador_ConSoloRegistrarMovimientos_PuedeVerHistorialPorProducto_EsFalse()
-    {
-        var sessionMock = new Mock<ICurrentSession>();
-        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Operador);
-        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string> { Permisos.RegistrarMovimientos });
-        var vm = new ShellMainViewModel(
-            sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
-            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>(), Mock.Of<IServicioPreferenciasSidebar>());
-
-        Assert.False(vm.PuedeVerHistorialPorProducto);
-    }
-
-    [Fact]
-    public void Operador_ConVerReportesYRegistrarMovimientos_PuedeVerHistorialPorProducto_EsTrue()
-    {
-        var sessionMock = new Mock<ICurrentSession>();
-        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Operador);
-        sessionMock.Setup(s => s.PermisosActuales).Returns(new HashSet<string>
-        {
-            Permisos.VerReportes, Permisos.RegistrarMovimientos,
-        });
-        var vm = new ShellMainViewModel(
-            sessionMock.Object, Mock.Of<INavigationService>(), Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
-            Mock.Of<IConfirmacionService>(), Mock.Of<IAuthService>(), Mock.Of<IServicioPreferenciasSidebar>());
-
-        Assert.True(vm.PuedeVerHistorialPorProducto);
-    }
-
-    [Fact]
-    public async Task Navegacion_RefrescaPermisos_NotificaPuedeVerHistorialPorProducto()
-    {
-        var permisos = new HashSet<string>();
-        var sessionMock = new Mock<ICurrentSession>();
-        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Operador);
-        sessionMock.Setup(s => s.PermisosActuales).Returns(() => permisos);
-
-        var authMock = new Mock<IAuthService>();
-        authMock.Setup(a => a.ObtenerPermisosPropiosAsync()).ReturnsAsync(() =>
-        {
-            permisos.Add(Permisos.VerReportes);
-            permisos.Add(Permisos.RegistrarMovimientos);
-            return (IReadOnlySet<string>)permisos;
-        });
-
-        var navMock = new Mock<INavigationService>();
-        var vm = new ShellMainViewModel(
-            sessionMock.Object, navMock.Object, Mock.Of<IInfoApp>(x => x.Version == "0.0.0"),
-            Mock.Of<IConfirmacionService>(), authMock.Object, Mock.Of<IServicioPreferenciasSidebar>());
-
-        Assert.False(vm.PuedeVerHistorialPorProducto);
-
-        var propiedadesNotificadas = new List<string?>();
-        vm.PropertyChanged += (_, e) => propiedadesNotificadas.Add(e.PropertyName);
-
-        navMock.Raise(n => n.Cambiado += null);
-        await vm._tareaRefrescoPermisos;
-
-        Assert.Contains(nameof(ShellMainViewModel.PuedeVerHistorialPorProducto), propiedadesNotificadas);
-        Assert.True(vm.PuedeVerHistorialPorProducto);
     }
 }

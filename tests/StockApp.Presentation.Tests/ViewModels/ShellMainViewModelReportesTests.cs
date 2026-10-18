@@ -39,25 +39,15 @@ public class ShellMainViewModelReportesTests
         return (vm, sessionMock, navMock);
     }
 
-    // ── E1 — Navegación a los 5 reportes ──────────────────────────────────────
+    // ── E1 — Navegación al hub de Reportes ────────────────────────────────────
 
     [Fact]
-    public void NavReportes_LlamaNavegar_ConViewModelCorrecto()
+    public void NavReportes_NavegaAlHub()
     {
         var (vm, _, navMock) = Crear(RolUsuario.Admin);
 
-        vm.NavValorizacionCommand.Execute(null);
-        vm.NavStockCategoriaCommand.Execute(null);
-        vm.NavHistorialPorProductoCommand.Execute(null);
-        vm.NavMasMovidosCommand.Execute(null);
-        vm.NavAuditoriaLogCommand.Execute(null);
-        vm.NavReporteTareasCommand.Execute(null);
+        vm.NavReportesCommand.Execute(null);
 
-        navMock.Verify(n => n.Navegar<ValorizacionViewModel>(),        Times.Once);
-        navMock.Verify(n => n.Navegar<StockCategoriaViewModel>(),      Times.Once);
-        navMock.Verify(n => n.Navegar<HistorialPorProductoViewModel>(), Times.Once);
-        navMock.Verify(n => n.Navegar<MasMovidosViewModel>(),          Times.Once);
-        navMock.Verify(n => n.Navegar<AuditoriaLogViewModel>(),        Times.Once);
-        navMock.Verify(n => n.Navegar<ReporteTareasViewModel>(),       Times.Once);
+        navMock.Verify(n => n.Navegar<ReportesViewModel>(), Times.Once);
     }
 }
