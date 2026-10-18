@@ -60,14 +60,35 @@ public partial class AdjuntosDocumentoPanelViewModel : ViewModelBase
         await RecargarAsync();
     }
 
+    /// <summary>Texto del estado "Sin permiso" del panel cuando el servidor rechaza el listado (403).</summary>
+    public const string MensajeSinPermisoAdjuntos = "No tenés permiso para ver los adjuntos.";
+
+    /// <summary>Un servidor caído al listar se muestra en línea con "Reintentar" (<see cref="ViewModelBase.SinConexion"/>), no
+    /// con el modal global: la lista vacía diría "Sin adjuntos" cuando en realidad no se pudo consultar.</summary>
+    protected override bool AvisaSinConexionEnLinea => true;
+
+    /// <summary>Sin conexión no hay lista que mostrar: al reintentar no deben verse los adjuntos de la consulta anterior.</summary>
+    protected override void AlPerderConexion() => Items.Clear();
+
+    /// <summary>Turnos de <see cref="RecargarAsync"/>: solo la última carga decide lo que se ve.</summary>
+    private readonly ConsultaVigente _consultas = new();
+
     private async Task RecargarAsync()
     {
+        var turno = _consultas.Empezar();
         try
         {
-            Items.Clear();
-            var lista = await _adjuntos.ListarPorDocumentoAsync(_documentoId);
-            foreach (var item in lista ?? Array.Empty<AdjuntoDocumentoDto>())
-                Items.Add(item);
+            await EjecutarCargaProtegidaAsync(async () =>
+            {
+                Items.Clear();
+                var lista = await _adjuntos.ListarPorDocumentoAsync(_documentoId);
+
+                if (!turno.EsLaUltima)
+                    return;
+
+                foreach (var item in lista ?? Array.Empty<AdjuntoDocumentoDto>())
+                    Items.Add(item);
+            }, MensajeSinPermisoAdjuntos, turno);
         }
         catch (Exception ex)
         {

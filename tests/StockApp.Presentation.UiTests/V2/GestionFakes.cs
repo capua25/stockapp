@@ -204,11 +204,16 @@ internal sealed class AdjuntosDocumentoFake : IAdjuntoDocumentoService
     public List<AdjuntoDocumentoDto> Lista { get; set; } = new();
     public List<int> Quitados { get; } = new();
 
+    /// <summary>Si no es null, el listado lanza esta excepción (p. ej. servidor caído).</summary>
+    public Exception? FallaAlListar { get; set; }
+
     public Task<AdjuntoDocumentoDto> AgregarAsync(int documentoId, string nombreArchivo, byte[] contenido) =>
         throw new NotSupportedException();
 
     public Task<IReadOnlyList<AdjuntoDocumentoDto>> ListarPorDocumentoAsync(int documentoId) =>
-        Task.FromResult<IReadOnlyList<AdjuntoDocumentoDto>>(Lista.ToList());
+        FallaAlListar is { } f
+            ? Task.FromException<IReadOnlyList<AdjuntoDocumentoDto>>(f)
+            : Task.FromResult<IReadOnlyList<AdjuntoDocumentoDto>>(Lista.ToList());
 
     public Task<AdjuntoDocumentoContenidoDto> ObtenerContenidoAsync(int adjuntoId) => throw new NotSupportedException();
 

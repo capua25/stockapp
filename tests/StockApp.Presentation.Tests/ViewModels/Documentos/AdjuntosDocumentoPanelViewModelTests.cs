@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Moq;
+using StockApp.ApiClient;
 using StockApp.Application.Documentos;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Enums;
@@ -47,6 +48,53 @@ public class AdjuntosDocumentoPanelViewModelTests
         await ctx.Vm.InicializarAsync(5, documentoActivo: true);
 
         Assert.Equal(2, ctx.Vm.Items.Count);
+    }
+
+    /// <summary>Servidor caído al listar: queda en SinConexion (la vista muestra el error con Reintentar), sin modal global,
+    /// y Reintentar vuelve a consultar. No es lo mismo que "no hay adjuntos".</summary>
+    [Fact]
+    public async Task InicializarAsync_ServidorCaido_MarcaSinConexionSinModal_YReintentarRecarga()
+    {
+        var ctx = Crear();
+        ctx.Svc.SetupSequence(s => s.ListarPorDocumentoAsync(5))
+            .ThrowsAsync(new ServidorNoDisponibleException())
+            .ReturnsAsync(new List<AdjuntoDocumentoDto> { AdjuntoDe(1) });
+
+        await ctx.Vm.InicializarAsync(5, documentoActivo: true);
+
+        Assert.True(ctx.Vm.SinConexion);
+        Assert.Empty(ctx.Vm.Items);
+        ctx.Confirm.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Never);
+
+        await ctx.Vm.ReintentarCargaCommand.ExecuteAsync(null);
+
+        Assert.False(ctx.Vm.SinConexion);
+        Assert.Single(ctx.Vm.Items);
+    }
+
+    [Fact]
+    public async Task InicializarAsync_Prohibido403_MarcaSinPermisoSinModal()
+    {
+        var ctx = Crear();
+        ctx.Svc.Setup(s => s.ListarPorDocumentoAsync(5)).ThrowsAsync(new UnauthorizedAccessException());
+
+        await ctx.Vm.InicializarAsync(5, documentoActivo: true);
+
+        Assert.True(ctx.Vm.SinPermiso);
+        Assert.Equal("No tenés permiso para ver los adjuntos.", ctx.Vm.MensajeSinPermiso);
+        ctx.Confirm.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task InicializarAsync_ErrorDeNegocio_SigueYendoAlModal_YNoMarcaSinConexion()
+    {
+        var ctx = Crear();
+        ctx.Svc.Setup(s => s.ListarPorDocumentoAsync(5)).ThrowsAsync(new ArgumentException("boom"));
+
+        await ctx.Vm.InicializarAsync(5, documentoActivo: true);
+
+        Assert.False(ctx.Vm.SinConexion);
+        ctx.Confirm.Verify(c => c.InformarAsync("boom"), Times.Once);
     }
 
     [Fact]
