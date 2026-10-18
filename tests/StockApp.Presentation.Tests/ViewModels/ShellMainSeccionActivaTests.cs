@@ -216,7 +216,8 @@ public class ShellMainSeccionActivaTests
             // Importar planillas está deshabilitado (ImportacionHabilitada): su comando no navega.
             .Where(i => i.Seccion != "Importacion" || ShellMainViewModel.ImportacionHabilitada)
             .ToList();
-        Assert.True(items.Count > 20);
+        // Con el hub de Reportes y Catálogos consolidados el sidebar de Admin tiene 17 ítems (Inicio + 16).
+        Assert.True(items.Count >= 17);
 
         foreach (var item in items)
         {
