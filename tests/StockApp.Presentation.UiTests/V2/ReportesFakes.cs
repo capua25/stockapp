@@ -98,9 +98,16 @@ internal sealed class UsuariosListaFake : IUsuarioService
     public Exception? Falla { get; set; }
     public int Llamadas { get; private set; }
 
+    /// <summary>Sesión que "llama": con ella el fake respeta el contrato real de <c>GET /usuarios</c>, que exige <c>usuarios.gestionar</c>
+    /// (estructural de Admin) y da 403 a cualquier Operador.</summary>
+    public StockApp.Application.Interfaces.ICurrentSession? Sesion { get; set; }
+
     public Task<IReadOnlyList<UsuarioDto>> ListarAsync()
     {
         Llamadas++;
+        if (Sesion is { } sesion && sesion.RolActual != RolUsuario.Admin
+            && !sesion.PermisosActuales.Contains(StockApp.Application.Authorization.Permisos.GestionarUsuarios))
+            return Task.FromException<IReadOnlyList<UsuarioDto>>(new UnauthorizedAccessException());
         return Falla is not null ? Task.FromException<IReadOnlyList<UsuarioDto>>(Falla)
             : Task.FromResult<IReadOnlyList<UsuarioDto>>(Lista.ToList());
     }

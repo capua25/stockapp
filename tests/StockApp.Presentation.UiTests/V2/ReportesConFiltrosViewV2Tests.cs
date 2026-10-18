@@ -268,4 +268,31 @@ public class ReportesConFiltrosViewV2Tests
         Assert.Empty(m.Vista.GetVisualDescendants().OfType<RadioButton>());
         Assert.NotEmpty(Parte<ComboBox>(m.Vista, "ComboAgrupador").Items);
     }
+
+    [AvaloniaFact]
+    public void Auditoria_OperadorConReportesVer_VeElLog_SinPermisoDeUsuarios_YSinElComboUsuario()
+    {
+        // GET /usuarios exige usuarios.gestionar (estructural de Admin): el fake da 403 a un Operador, como el servidor.
+        var usuarios = new UsuariosListaFake { Lista = { Usuario(2, "mlopez") } };
+        var servicio = new AuditoriaQueryFake { Registros = { new(new DateTime(2026, 10, 7, 14, 35, 0, DateTimeKind.Utc), "mperez", AccionAuditada.CambioPrecio, "Producto", 1, "5 -> 8") } };
+
+        var m = MontajeReportes.Auditoria(servicio, usuarios, sesion: new SesionFake(RolUsuario.Operador, StockApp.Application.Authorization.Permisos.VerReportes));
+
+        Assert.False(m.Vm.SinPermiso);
+        Assert.False(Visible(Parte<EstadoVacio>(m.Vista, "EstadoSinConexion")));
+        Assert.Equal(0, usuarios.Llamadas);
+        Assert.Single(m.Vm.Items);
+        Assert.True(Visible(Parte<DataGrid>(m.Vista, "Grilla")));
+        Assert.False(Visible(Parte<CampoFormulario>(m.Vista, "CampoUsuario")));
+        Assert.True(Visible(Parte<Button>(m.Vista, "BotonBuscar")));
+        Assert.True(Visible(Parte<Button>(m.Vista, "BotonExportarPdf")));
+    }
+
+    [AvaloniaFact]
+    public void Auditoria_Admin_VeElComboUsuario()
+    {
+        var m = MontajeReportes.Auditoria(new AuditoriaQueryFake(), new UsuariosListaFake { Lista = { Usuario(2, "mlopez") } });
+
+        Assert.True(Visible(Parte<CampoFormulario>(m.Vista, "CampoUsuario")));
+    }
 }

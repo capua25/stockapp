@@ -56,6 +56,7 @@ public class AuditoriaLogViewModelTests
         var sessionMock = new Mock<ICurrentSession>();
         confirmMock.Setup(c => c.InformarAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
         sessionMock.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(1, "admin", RolUsuario.Admin, null));
+        sessionMock.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
 
         servicioMock
             .Setup(s => s.ObtenerLogAsync(
@@ -487,13 +488,15 @@ public class AuditoriaLogViewModelTests
     // ── Fase 6: estados v2, consulta vigente, PDF de lo cargado y vuelta al hub ─────────────
 
     private static (AuditoriaLogViewModel vm, Mock<IAuditoriaQueryService> servicio, Mock<IPdfExporter> pdf, Mock<INavigationService> nav)
-        Armar(bool conNavegacion = true, Mock<IUsuarioService>? usuarios = null)
+        Armar(bool conNavegacion = true, Mock<IUsuarioService>? usuarios = null, RolUsuario rol = RolUsuario.Admin)
     {
         var servicio = new Mock<IAuditoriaQueryService>();
         var pdf = new Mock<IPdfExporter>();
         var nav = new Mock<INavigationService>();
         var session = new Mock<ICurrentSession>();
-        session.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(1, "admin", RolUsuario.Admin, null));
+        session.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(1, "admin", rol, null));
+        session.Setup(s => s.RolActual).Returns(rol);
+        session.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
         servicio.Setup(s => s.ObtenerLogAsync(It.IsAny<int?>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>()))
             .ReturnsAsync(new List<AuditoriaItemDto> { CrearItem(1) });
         if (usuarios is null)
@@ -738,5 +741,48 @@ public class AuditoriaLogViewModelTests
         pdfExporterMock.Verify(e => e.Exportar(
             It.Is<IEnumerable<FilaAuditoriaPdf>>(filas => filas.Single().Accion == "Registro de movimiento"),
             It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf?>()), Times.Once);
+    }
+
+    // ── El listado de usuarios (GET /usuarios) exige usuarios.gestionar, estructural de Admin: un Operador con reportes.ver no lo tiene ──
+
+    [Fact]
+    public async Task OperadorSinGestionarUsuarios_NoPideLaListaDeUsuarios_ConsultaElLogIgual()
+    {
+        var usuarios = new Mock<IUsuarioService>();
+        usuarios.Setup(u => u.ListarAsync()).ThrowsAsync(new UnauthorizedAccessException());
+        var (vm, servicio, _, _) = Armar(usuarios: usuarios, rol: RolUsuario.Operador);
+
+        await vm.InicializarAsync();
+
+        usuarios.Verify(u => u.ListarAsync(), Times.Never);
+        Assert.False(vm.SinPermiso);
+        Assert.False(vm.PuedeFiltrarPorUsuario);
+        Assert.Equal(new[] { "Todos" }, vm.Usuarios.Select(o => o.Nombre));
+        Assert.Same(vm.Usuarios[0], vm.UsuarioFiltroSeleccionado);
+        Assert.Single(vm.Items);
+        servicio.Verify(s => s.ObtenerLogAsync(null, It.IsAny<DateTime?>(), It.IsAny<DateTime?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Admin_PideLaListaDeUsuarios_YPuedeFiltrarPorUsuario()
+    {
+        var (vm, _, _, _) = Armar();
+
+        await vm.InicializarAsync();
+
+        Assert.True(vm.PuedeFiltrarPorUsuario);
+        Assert.Equal(2, vm.Usuarios.Count);
+    }
+
+    [Fact]
+    public async Task OperadorSinGestionarUsuarios_ElPdfRotulaTodos_SinDependerDeLaLista()
+    {
+        var (vm, _, pdf, _) = Armar(rol: RolUsuario.Operador);
+        await vm.InicializarAsync();
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        pdf.Verify(e => e.Exportar(It.IsAny<IEnumerable<FilaAuditoriaPdf>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
+            It.Is<MetadatosDocumento>(m => m.DescripcionFiltros.StartsWith("Usuario: Todos.")), It.IsAny<ResumenPdf?>()), Times.Once);
     }
 }

@@ -59,12 +59,14 @@ internal static class MontajeReportes
         return Mostrar(new HistorialPorProductoView(), vm, nav, conf, ancho);
     }
 
-    public static Montaje<AuditoriaLogView, AuditoriaLogViewModel> Auditoria(AuditoriaQueryFake servicio, UsuariosListaFake usuarios, double ancho = 1040)
+    public static Montaje<AuditoriaLogView, AuditoriaLogViewModel> Auditoria(AuditoriaQueryFake servicio, UsuariosListaFake usuarios, double ancho = 1040, SesionFake? sesion = null)
     {
         var nav = new NavigationServiceFake();
         var conf = new ConfirmacionServiceFake();
+        sesion ??= new SesionFake(RolUsuario.Admin);
+        usuarios.Sesion = sesion;
         var vm = new AuditoriaLogViewModel(servicio, new GuardadoSinUsoFake(), conf, usuarios, new PdfExporterSinUsoFake(), new ServicioAperturaArchivoFake(),
-            new SesionFake(RolUsuario.Admin), nav);
+            sesion, nav);
         return Mostrar(new AuditoriaLogView(), vm, nav, conf, ancho);
     }
 

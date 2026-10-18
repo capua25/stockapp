@@ -9,8 +9,10 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Auditoria;
 using StockApp.Application.Auth;
+using StockApp.Application.Authorization;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Interfaces;
+using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 
@@ -126,6 +128,13 @@ public partial class AuditoriaLogViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// El filtro por usuario necesita la lista de usuarios (<c>GET /usuarios</c>, que exige <c>usuarios.gestionar</c>: un permiso
+    /// estructural de Admin). Un Operador con <c>reportes.ver</c> no lo tiene: sin esto el 403 dejaba el reporte entero en "Sin permiso".
+    /// </summary>
+    public bool PuedeFiltrarPorUsuario =>
+        _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.GestionarUsuarios);
+
     public string TituloVacio => "No hay registros para estos filtros";
 
     public string MensajeVacio => "Probá con otro usuario o período.";
@@ -181,7 +190,8 @@ public partial class AuditoriaLogViewModel : ViewModelBase
         var turno = _consultas.Empezar();
         await EjecutarCargaProtegidaAsync(async () =>
         {
-            var usuarios = await _usuarioService.ListarAsync();
+            // Sin usuarios.gestionar no hay lista: "Todos" solo y el combo queda oculto (PuedeFiltrarPorUsuario).
+            var usuarios = PuedeFiltrarPorUsuario ? await _usuarioService.ListarAsync() : Array.Empty<UsuarioDto>();
             if (!turno.EsLaUltima)
                 return;
             Usuarios.Clear();

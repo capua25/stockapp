@@ -32,7 +32,7 @@
 
             <r:MarcoReporte.Filtros>
                 <StackPanel Orientation="Horizontal" Spacing="8">
-                    <v2:CampoFormulario Etiqueta="Usuario">
+                    <v2:CampoFormulario x:Name="CampoUsuario" Etiqueta="Usuario" IsVisible="{Binding PuedeFiltrarPorUsuario}">
                         <ComboBox x:Name="ComboUsuario" Width="200" ItemsSource="{Binding Usuarios}" SelectedItem="{Binding UsuarioFiltroSeleccionado}">
                             <ComboBox.ItemTemplate>
                                 <DataTemplate x:DataType="vm:OpcionUsuario">
