@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Reportes: Hub de operador (UI v2)</title>
+<link rel="stylesheet" href="../_base/tokens.css">
+<link rel="stylesheet" href="../_base/base.css">
+<style>
+  /* Área de contenido del shell: a la derecha del sidebar de 240 (ShellMainView, Grid 240,*). */
+  .contenido { position: absolute; left: var(--v2-ancho-sidebar); top: 0; right: 0; bottom: 0; overflow: hidden; }
+  /* DockPanel Margin 28,24 de la vista: encabezado arriba, card con el resto del alto. */
+  .pagina { position: absolute; inset: 0; display: flex; flex-direction: column; padding: 24px 28px; }
+  .pagina > .v2-tarjeta { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+  .pagina .v2-grilla { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+  .v2-grilla-header { flex: 0 0 auto; }
+  .filas { flex: 1 1 0; min-height: 0; overflow: hidden; }
+  .pie { margin-top: 12px; }
+  /* Celda de STOCK: insignia a la izquierda y número a la derecha (como STOCK de productos.html); cifras tabulares y ancho del
+     número redondeado hacia arriba como un TextBlock. */
+  .celda-stock { font-variant-numeric: tabular-nums; }
+  .celda-stock > .valor { margin-left: auto; width: calc-size(fit-content, round(up, size, 1px)); }
+  /* Campos de la barra: una sola fila con 8 de separación (BarraFiltros sin buscador). */
+  .campo-corto { width: 140px; }
+  /* StackPanel Margin 28,24 de ReportesView.axaml: encabezado y grilla de tarjetas sobre el fondo de la app, sin card. */
+  .pagina { position: relative; inset: auto; display: block; }
+  .pagina > .v2-encabezado { margin-bottom: 16px; }
+  /* GrillaUniformeV2 Columnas 3, Espaciado 12 (compensación B, spec §6.5: .v2-grilla-uniforme--3 de base.css). */
+  .accesos { --v2-grilla-espaciado: 12px; }
+</style>
+</head>
+<body>
+<!-- Datos: DatosReportes.HubOperador(): operador con reportes.ver solo (sin movimientos.registrar ni catalogo.productos): cinco tarjetas, sin Historial por producto, y la 4.ª ocupa la columna 1 de la fila 2. El sidebar está para aprobar la pantalla entera; la comparación lo oculta (tiene la suya). -->
+<div class="v2-ventana">
+  <aside class="v2-sidebar">
+    <div class="v2-marca">Gestión Municipal</div>
+    <div class="v2-marca-subtitulo">Municipio de Carmelo</div>
+    <nav class="v2-sidebar-nav">
+      <div class="v2-item-sidebar"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10,20V14H14V20H19V12H22L12,3L2,12H5V20H10Z"/></svg><span>Inicio</span></div>
+      <div class="v2-header-seccion-sidebar">ANÁLISIS</div>
+      <div class="v2-item-sidebar v2-item-sidebar--activo"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9 17H7V10H9V17M13 17H11V7H13V17M17 17H15V13H17V17M19 19H5V5H19V19.1M19 3H5C3.9 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V5C21 3.9 20.1 3 19 3Z"/></svg><span>Reportes</span></div>
+    </nav>
+    <div class="v2-sidebar-pie">
+      <div class="v2-avatar">JR</div>
+      <div class="v2-usuario">
+        <div class="v2-usuario-nombre">Juan Rodríguez</div>
+        <div class="v2-usuario-rol">Operador</div>
+      </div>
+      <span class="v2-boton v2-boton--ghost v2-boton--icono"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M17 7L15.59 8.41L18.17 11H8V13H18.17L15.59 15.58L17 17L22 12M4 5H12V3H4C2.9 3 2 3.9 2 5V19C2 20.1 2.9 21 4 21H12V19H4V5Z"/></svg></span>
+    </div>
+    <div class="v2-version">v0.4.0</div>
+  </aside>
+  <div class="contenido">
+    <div class="pagina">
+      <div class="v2-encabezado">
+        <div class="v2-encabezado-fila">
+          <div>
+            <div class="v2-titulo-pagina">Reportes</div>
+            <div class="v2-encabezado-subtitulo">Consultas e informes del inventario, la auditoría y las tareas.</div>
+          </div>
+        </div>
+      </div>
+      <div class="v2-grilla-uniforme v2-grilla-uniforme--3 accesos">
+        <div class="v2-acceso"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7,15H9C9,16.08 10.37,17 12,17C13.63,17 15,16.08 15,15C15,13.9 13.96,13.5 11.76,12.97C9.64,12.44 7,11.78 7,9C7,7.21 8.47,5.69 10.5,5.18V3H13.5V5.18C15.53,5.69 17,7.21 17,9H15C15,7.92 13.63,7 12,7C10.37,7 9,7.92 9,9C9,10.1 10.04,10.5 12.24,11.03C14.36,11.56 17,12.22 17,15C17,16.79 15.53,18.31 13.5,18.82V21H10.5V18.82C8.47,18.31 7,16.79 7,15Z"/></svg><div><div class="v2-acceso-titulo">Valorización de inventario</div><div class="v2-acceso-descripcion">Valor del stock a precio de costo, producto por producto.</div></div></div>
+        <div class="v2-acceso"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M11,2V22C5.9,21.5 2,17.2 2,12C2,6.8 5.9,2.5 11,2M13,2V11H22C21.5,6.2 17.8,2.5 13,2M13,13V22C17.7,21.5 21.5,17.8 22,13H13Z"/></svg><div><div class="v2-acceso-titulo">Stock por categoría</div><div class="v2-acceso-descripcion">Productos, stock y valor agrupados por categoría.</div></div></div>
+        <div class="v2-acceso"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16,6L18.29,8.29L13.41,13.17L9.41,9.17L2,16.59L3.41,18L9.41,12L13.41,16L19.71,9.71L22,12V6H16Z"/></svg><div><div class="v2-acceso-titulo">Productos más movidos</div><div class="v2-acceso-descripcion">Los productos con más movimientos en un período.</div></div></div>
+        <div class="v2-acceso"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12,9A3,3 0 0,1 15,12A3,3 0 0,1 12,15A3,3 0 0,1 9,12A3,3 0 0,1 12,9M17.86,19.31C16.23,21.22 14.28,22.45 12,23C9.44,22.39 7.3,20.93 5.58,18.63C3.86,16.34 3,13.8 3,11V5L12,1L21,5V11C21,13.39 20.36,15.61 19.08,17.67L16.17,14.76C16.69,13.97 17,13 17,12A5,5 0 0,0 12,7A5,5 0 0,0 7,12A5,5 0 0,0 12,17C13,17 13.97,16.69 14.76,16.17L17.86,19.31Z"/></svg><div><div class="v2-acceso-titulo">Log de auditoría</div><div class="v2-acceso-descripcion">Quién hizo qué y cuándo en el sistema.</div></div></div>
+        <div class="v2-acceso"><svg class="v2-icono" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M22,21H2V3H4V19H6V10H10V19H12V6H16V19H18V14H22V21Z"/></svg><div><div class="v2-acceso-titulo">Estadística de tareas</div><div class="v2-acceso-descripcion">Tareas por estado, agrupadas por zona, tema u organismo.</div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
