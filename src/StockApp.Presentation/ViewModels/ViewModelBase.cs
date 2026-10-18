@@ -21,6 +21,9 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
     private Func<Task>? _cargaParaReintentar;
     private int _cargasEnCurso;
     private readonly List<ConsultaVigente.Turno> _cargasConTurnoEnCurso = new();
+    // La lista la tocan, en la práctica, dos hilos: el que dispara la carga y el continuation del debounce
+    // (Task.Delay vuelve en el pool cuando no hay SynchronizationContext). List<T> no es thread-safe.
+    private readonly object _cargasConTurnoLock = new();
 
     /// <summary>
     /// True mientras algún campo de la vista tiene un error de entrada que vive SOLO en la View
@@ -163,7 +166,13 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
     /// decide", así que una vieja colgada no mantiene prendido el "Cargando…" cuando la vigente ya terminó
     /// (ver <see cref="EmpezarCargaConTurno"/>).
     /// </summary>
-    public bool Cargando => _cargasEnCurso > 0 || _cargasConTurnoEnCurso.Exists(t => t.EsLaUltima);
+    public bool Cargando => _cargasEnCurso > 0 || HayCargaConTurnoVigente();
+
+    private bool HayCargaConTurnoVigente()
+    {
+        lock (_cargasConTurnoLock)
+            return _cargasConTurnoEnCurso.Exists(t => t.EsLaUltima);
+    }
 
     /// <summary>Marca el inicio de una carga (ver <see cref="Cargando"/>). Cada llamada pide su <see cref="TerminarCarga"/>.</summary>
     protected void EmpezarCarga()
@@ -179,7 +188,8 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
     private void EmpezarCargaConTurno(ConsultaVigente.Turno turno)
     {
         var antes = Cargando;
-        _cargasConTurnoEnCurso.Add(turno);
+        lock (_cargasConTurnoLock)
+            _cargasConTurnoEnCurso.Add(turno);
         if (antes != Cargando) OnPropertyChanged(nameof(Cargando));
     }
 
@@ -187,7 +197,8 @@ public abstract class ViewModelBase : ObservableObject, IConErroresDeEntrada
     private void TerminarCargaConTurno(ConsultaVigente.Turno turno)
     {
         var antes = Cargando;
-        _cargasConTurnoEnCurso.Remove(turno);
+        lock (_cargasConTurnoLock)
+            _cargasConTurnoEnCurso.Remove(turno);
         if (antes != Cargando) OnPropertyChanged(nameof(Cargando));
     }
 

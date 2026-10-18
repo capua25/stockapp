@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using StockApp.ApiClient;
 using StockApp.Presentation.ViewModels;
@@ -438,5 +440,38 @@ public class ViewModelBaseCargaProtegidaTests
 
         await vm.EjecutarAsync(() => throw SinServidor(), consultas.Empezar());
         Assert.Equal(1, vm.ConexionPerdida);
+    }
+
+    /// <summary>
+    /// La lista de cargas con turno no es thread-safe, y en la práctica la tocan dos hilos: el del debounce
+    /// (Task.Delay continúa en el pool) y el que dispara la carga explícita. Mismo escenario que
+    /// DatosLibroCajaTests.Vm_AnioCompleto_ConServidorLento_NoDependeDelDebounceReal, que fallaba a veces con
+    /// ArgumentOutOfRangeException en List.Remove. Acá se fuerza la carrera con muchos hilos y un lector de Cargando.
+    /// </summary>
+    [Fact]
+    public async Task CargasConTurnoDesdeVariosHilos_NoCorrompenElEstado_YCargandoVuelveAFalse()
+    {
+        var vm = new VmDePrueba();
+        var consultas = new ConsultaVigente();
+        var leyendo = true;
+
+        var lector = Task.Run(() =>
+        {
+            while (Volatile.Read(ref leyendo)) _ = vm.Cargando;
+        });
+
+        var escritores = Enumerable.Range(0, 8).Select(_ => Task.Run(async () =>
+        {
+            for (var i = 0; i < 3000; i++)
+                await vm.EjecutarAsync(async () => await Task.Yield(), "x", consultas.Empezar());
+        })).ToArray();
+
+        var ex = await Record.ExceptionAsync(() => Task.WhenAll(escritores));
+        Volatile.Write(ref leyendo, false);
+        var exLector = await Record.ExceptionAsync(() => lector);
+
+        Assert.Null(ex);
+        Assert.Null(exLector);
+        Assert.False(vm.Cargando);
     }
 }
