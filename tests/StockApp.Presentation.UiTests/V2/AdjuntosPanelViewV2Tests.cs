@@ -143,6 +143,26 @@ public class AdjuntosPanelViewV2Tests
     }
 
     [AvaloniaFact]
+    public void SinPermiso403_MuestraSinPermisoYOcultaElVacio_SinModal()
+    {
+        var servicio = new AdjuntoServiceFake { FallaAlListar = new UnauthorizedAccessException() };
+        servicio.Items.Add(Pdf);
+        var confirmacion = new ConfirmacionServiceFake();
+        var vm = new AdjuntosPanelViewModel(servicio, new ServicioSeleccionArchivoFake(), new ServicioAperturaArchivoFake(),
+            confirmacion, Mixto(Permisos.RegistrarGastos));
+        vm.InicializarAsync(42, null).GetAwaiter().GetResult();
+        var vista = new AdjuntosPanelView { DataContext = vm };
+        var ventana = new Window { Width = 760, Height = 400, Content = vista };
+        ventana.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(ArbolVisual.EsVisibleEnArbol(vista.FindControl<EstadoVacio>("EstadoSinPermiso")!));
+        Assert.False(ArbolVisual.EsVisibleEnArbol(vista.FindControl<EstadoVacio>("EstadoSinConexion")!));
+        Assert.False(ArbolVisual.EsVisibleEnArbol(vista.FindControl<TextBlock>("SinAdjuntos")!));
+        Assert.Empty(confirmacion.MensajesInformados);
+    }
+
+    [AvaloniaFact]
     public async Task Quitar_ConClickReal_PreguntaConElNombreYQuita()
     {
         var m = Montar(Mixto(Permisos.RegistrarGastos), adjuntos: [Pdf]);

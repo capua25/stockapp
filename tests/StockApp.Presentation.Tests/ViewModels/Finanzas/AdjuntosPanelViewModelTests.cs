@@ -343,4 +343,28 @@ public class AdjuntosPanelViewModelTests
         _confirmacion.Verify(c => c.InformarAsync("boom"), Times.Once);
         Assert.False(_vm.SinConexion);
     }
+
+    [Fact]
+    public async Task InicializarAsync_Prohibido403_MarcaSinPermisoSinModal()
+    {
+        _adjuntos.Setup(a => a.ListarPorGastoAsync(5)).ThrowsAsync(new UnauthorizedAccessException());
+
+        await _vm.InicializarAsync(5, null);
+
+        Assert.True(_vm.SinPermiso);
+        Assert.Equal("No tenés permiso para ver los adjuntos.", _vm.MensajeSinPermiso);
+        _confirmacion.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task InicializarAsync_ErrorDeNegocio_SigueYendoAlModal_YNoMarcaSinConexion()
+    {
+        _confirmacion.Setup(c => c.InformarAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
+        _adjuntos.Setup(a => a.ListarPorGastoAsync(5)).ThrowsAsync(new ArgumentException("boom"));
+
+        await _vm.InicializarAsync(5, null);
+
+        Assert.False(_vm.SinConexion);
+        _confirmacion.Verify(c => c.InformarAsync("boom"), Times.Once);
+    }
 }
