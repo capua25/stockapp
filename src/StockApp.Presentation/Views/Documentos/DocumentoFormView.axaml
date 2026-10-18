@@ -129,7 +129,7 @@
                                             <DataTemplate x:DataType="dom:EventoDocumento">
                                                 <Border Classes="evento">
                                                     <StackPanel>
-                                                        <TextBlock Classes="cuerpo" TextWrapping="Wrap" Text="{Binding Texto}" />
+                                                        <TextBlock Classes="cuerpo" TextWrapping="Wrap" Text="{Binding ., Converter={x:Static conv:TextoEventoDocumentoConverter.Instance}}" />
                                                         <TextBlock Classes="texto-secundario"
                                                                    Text="{Binding Fecha, Converter={x:Static conv:FechaHoraLocalConverter.Instance}}" />
                                                     </StackPanel>

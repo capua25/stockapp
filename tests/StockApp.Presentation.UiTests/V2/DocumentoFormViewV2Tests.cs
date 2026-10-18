@@ -315,6 +315,28 @@ public class DocumentoFormViewV2Tests
         }
     }
 
+    /// <summary>Hallazgo del GATE 2: el evento automático de cambio de estado traía el enum crudo ("Pendiente → EnProceso").
+    /// El historial lo muestra con el texto que la app ya usa para el estado ("En proceso"); lo demás del texto (el motivo) y
+    /// las notas manuales quedan como están.</summary>
+    [AvaloniaFact]
+    public async Task Evento_CambioDeEstado_MuestraElTextoLegibleDelEstado()
+    {
+        var doc = Documento();
+        doc.Eventos =
+        [
+            new EventoDocumento { Id = 2, DocumentoAdministrativoId = 9, Texto = "Pendiente → EnProceso", EstadoAnterior = EstadoDocumento.Pendiente,
+                EstadoNuevo = EstadoDocumento.EnProceso, EsAutomatico = true, Fecha = new DateTime(2026, 10, 15, 13, 0, 0, DateTimeKind.Utc) },
+            new EventoDocumento { Id = 3, DocumentoAdministrativoId = 9, Texto = "Se pidió presupuesto a EnProceso SA.", Fecha = new DateTime(2026, 10, 16, 13, 0, 0, DateTimeKind.Utc) },
+        ];
+        var m = await MontarAsync(doc, Mixto());
+
+        var textos = Parte<ItemsControl>(m, "ListaEventos").GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
+
+        Assert.Contains("Pendiente → En proceso", textos);
+        Assert.DoesNotContain("Pendiente → EnProceso", textos);
+        Assert.Contains("Se pidió presupuesto a EnProceso SA.", textos);
+    }
+
     [AvaloniaFact]
     public async Task Anular_PideElMotivoConPedirTexto()
     {
