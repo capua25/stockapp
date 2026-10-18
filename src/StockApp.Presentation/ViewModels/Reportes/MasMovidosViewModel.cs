@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -7,6 +8,7 @@ using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Interfaces;
 using StockApp.Application.Reportes;
+using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 
 namespace StockApp.Presentation.ViewModels.Reportes;
@@ -52,13 +54,62 @@ public partial class MasMovidosViewModel : ViewModelBase
     [ObservableProperty]
     private string? _mensajeError;
 
+    private readonly INavigationService? _navegacion;
+    private readonly ConsultaVigente _consultas = new();
+
+    /// <summary>Descripción de filtros de la consulta CARGADA: el PDF rotula lo que muestra la grilla, no lo que hoy dicen los filtros.</summary>
+    private string? _descripcionCargada;
+
+    /// <summary>Vuelve al hub de Reportes (primer tramo del breadcrumb). Sin navegación no hay a dónde volver.</summary>
+    public IRelayCommand VolverCommand => field ??= new RelayCommand(
+        () => _navegacion?.Navegar<ReportesViewModel>(), () => _navegacion is not null);
+
+    protected override bool AvisaSinConexionEnLinea => true;
+
+    /// <summary>
+    /// El export serializa las filas ya cargadas: sin filas, tras un 403, sin conexión o con una carga en curso
+    /// (las filas pueden ser de otra consulta) no se puede exportar.
+    /// </summary>
+    public bool PuedeExportar => Items.Count > 0 && !SinPermiso && !SinConexion && !Cargando;
+
+    partial void OnItemsChanged(IReadOnlyList<MasMovidoDto> value)
+    {
+        OnPropertyChanged(nameof(PuedeExportar));
+        ExportarPdfCommand.NotifyCanExecuteChanged();
+    }
+
+    protected override void OnPropertyChanged(PropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+        if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName is nameof(SinPermiso) or nameof(SinConexion) or nameof(Cargando))
+        {
+            OnPropertyChanged(nameof(PuedeExportar));
+            ExportarPdfCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    public string TituloVacio => "No hubo movimientos en el período";
+
+    public string MensajeVacio => "Probá con otro período.";
+
+    /// <summary>Sin servidor la grilla queda vacía: el reintento no puede mostrar las filas de la consulta anterior.</summary>
+    protected override void AlPerderConexion()
+    {
+        Items = new List<MasMovidoDto>();
+        _descripcionCargada = null;
+    }
+
+    /// <summary>Reintentar consulta con los filtros que están en pantalla, no con los de la consulta que falló.</summary>
+    protected override Task ReintentarAsync(Func<Task> cargaFallida) => CargarAsync();
+
     public MasMovidosViewModel(
         IReporteStockService servicio,
         IServicioGuardadoArchivo guardado,
         IConfirmacionService confirmacion,
         IPdfExporter pdfExporter,
         IServicioAperturaArchivo apertura,
-        ICurrentSession session)
+        ICurrentSession session,
+        INavigationService? navegacion = null)
     {
         _servicio = servicio;
         _guardado = guardado;
@@ -66,6 +117,7 @@ public partial class MasMovidosViewModel : ViewModelBase
         _pdfExporter = pdfExporter;
         _apertura = apertura;
         _session = session;
+        _navegacion = navegacion;
     }
 
     /// <summary>Consulta los productos más movidos del período y puebla <see cref="Items"/>.</summary>
@@ -87,10 +139,19 @@ public partial class MasMovidosViewModel : ViewModelBase
         }
 
         MensajeError = null;
+        var turno = _consultas.Empezar();
+        var desde = ALocalAUtc(FechaDesde);
+        var hasta = ALocalAUtc(FechaHasta);
+        var topN = TopN;
+        var descripcion = ConstruirDescripcionFiltros();
         await EjecutarCargaProtegidaAsync(async () =>
         {
-            Items = await _servicio.ObtenerMasMovidosAsync(ALocalAUtc(FechaDesde), ALocalAUtc(FechaHasta), TopN);
-        }, "No tenés permiso para ver el reporte de productos más movidos.");
+            var items = await _servicio.ObtenerMasMovidosAsync(desde, hasta, topN);
+            if (!turno.EsLaUltima)
+                return;
+            Items = items;
+            _descripcionCargada = descripcion;
+        }, "No tenés permiso para ver el reporte de productos más movidos.", turno);
     }
 
     /// <summary>
@@ -126,7 +187,7 @@ public partial class MasMovidosViewModel : ViewModelBase
     /// y aviso de volumen si supera 500 filas (spec 2026-09-18). No hace nada si no hay datos
     /// cargados. Ofrece abrir el PDF con el visor del sistema tras guardarlo.
     /// </summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(PuedeExportar))]
     private async Task ExportarPdfAsync()
     {
         if (Items.Count == 0)
@@ -139,7 +200,7 @@ public partial class MasMovidosViewModel : ViewModelBase
         {
             var metadatos = new MetadatosDocumento(
                 Titulo: "Productos más movidos",
-                DescripcionFiltros: ConstruirDescripcionFiltros(),
+                DescripcionFiltros: _descripcionCargada ?? ConstruirDescripcionFiltros(),
                 UsuarioEmisor: _session.UsuarioActual?.NombreCompleto ?? _session.UsuarioActual?.NombreUsuario ?? "Sistema");
 
             var pdf = _pdfExporter.Exportar(Items, ColumnasPdf, metadatos);

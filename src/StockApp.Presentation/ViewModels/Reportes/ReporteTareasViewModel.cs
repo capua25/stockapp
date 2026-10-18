@@ -1,12 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Interfaces;
 using StockApp.Application.Reportes;
+using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 
 namespace StockApp.Presentation.ViewModels.Reportes;
@@ -14,6 +17,9 @@ namespace StockApp.Presentation.ViewModels.Reportes;
 /// <summary>Opción del combo de agrupador (mismo patrón que OpcionTipoDocumento en
 /// DocumentoListViewModel: un Nombre legible junto al valor real del enum).</summary>
 public sealed record OpcionAgrupador(string Nombre, AgrupadorTareas Valor);
+
+/// <summary>Opción del combo "Contar por" (criterio de fecha): un Nombre legible junto al valor real del enum.</summary>
+public sealed record OpcionCriterio(string Nombre, CriterioFechaTareas Valor);
 
 /// <summary>
 /// ViewModel del reporte-matriz de Tareas (spec 2026-09-08). Consulta
@@ -40,8 +46,18 @@ public partial class ReporteTareasViewModel : ViewModelBase
         new OpcionAgrupador("Expediente", AgrupadorTareas.Expediente),
     };
 
+    public IReadOnlyList<OpcionCriterio> CriteriosDisponibles { get; } = new[]
+    {
+        new OpcionCriterio("Fecha de creación", CriterioFechaTareas.Creacion),
+        new OpcionCriterio("Fecha de cierre", CriterioFechaTareas.Cierre),
+    };
+
     [ObservableProperty]
     private OpcionAgrupador _agrupadorSeleccionado;
+
+    /// <summary>Opción elegida en el combo "Contar por"; se sincroniza en los dos sentidos con <see cref="CriterioSeleccionado"/>.</summary>
+    [ObservableProperty]
+    private OpcionCriterio _criterioOpcionSeleccionada;
 
     [ObservableProperty]
     private CriterioFechaTareas _criterioSeleccionado;
@@ -64,7 +80,7 @@ public partial class ReporteTareasViewModel : ViewModelBase
     [ObservableProperty]
     private string? _mensajeError;
 
-    /// <summary>Binding de los dos RadioButton (decisión 16): getter/setter propios, no
+    /// <summary>Estado derivado del criterio (decisión 16): getter/setter propios, no
     /// [ObservableProperty], porque derivan de/mutan CriterioSeleccionado en vez de tener
     /// backing field propio.</summary>
     public bool EsCriterioCreacion
@@ -85,7 +101,8 @@ public partial class ReporteTareasViewModel : ViewModelBase
         IServicioGuardadoArchivo guardado,
         IServicioAperturaArchivo apertura,
         IConfirmacionService confirmacion,
-        ICurrentSession session)
+        ICurrentSession session,
+        INavigationService? navegacion = null)
     {
         _servicio = servicio;
         _pdfExporter = pdfExporter;
@@ -93,8 +110,10 @@ public partial class ReporteTareasViewModel : ViewModelBase
         _apertura = apertura;
         _confirmacion = confirmacion;
         _session = session;
+        _navegacion = navegacion;
         _agrupadorSeleccionado = AgrupadoresDisponibles[0];
         _criterioSeleccionado = CriterioFechaTareas.Creacion;
+        _criterioOpcionSeleccionada = CriteriosDisponibles[0];
 
         // D18: default del año en curso -- el rango sigue siendo obligatorio y se revalida
         // en el servicio, esto es solo la comodidad inicial de la UI.
@@ -107,6 +126,64 @@ public partial class ReporteTareasViewModel : ViewModelBase
     {
         OnPropertyChanged(nameof(EsCriterioCreacion));
         OnPropertyChanged(nameof(EsCriterioCierre));
+        var opcion = CriteriosDisponibles.First(o => o.Valor == value);
+        if (!ReferenceEquals(CriterioOpcionSeleccionada, opcion))
+            CriterioOpcionSeleccionada = opcion;
+    }
+
+    partial void OnCriterioOpcionSeleccionadaChanged(OpcionCriterio value)
+    {
+        if (value is not null && CriterioSeleccionado != value.Valor)
+            CriterioSeleccionado = value.Valor;
+    }
+
+    private readonly INavigationService? _navegacion;
+    private readonly ConsultaVigente _consultas = new();
+
+    /// <summary>Descripción de filtros de la consulta CARGADA: el PDF rotula lo que muestra la grilla, no lo que hoy dicen los filtros.</summary>
+    private string? _descripcionCargada;
+
+    /// <summary>Vuelve al hub de Reportes (primer tramo del breadcrumb). Sin navegación no hay a dónde volver.</summary>
+    public IRelayCommand VolverCommand => field ??= new RelayCommand(
+        () => _navegacion?.Navegar<ReportesViewModel>(), () => _navegacion is not null);
+
+    public string TituloVacio => "No hay tareas en el período";
+
+    public string MensajeVacio => "Probá con otro período o criterio.";
+
+    protected override bool AvisaSinConexionEnLinea => true;
+
+    /// <summary>Sin servidor la grilla queda vacía: el reintento no puede mostrar las filas de la consulta anterior.</summary>
+    protected override void AlPerderConexion()
+    {
+        Items = new List<FilaReporteTareas>();
+        TotalGeneral = 0;
+        _descripcionCargada = null;
+    }
+
+    /// <summary>Reintentar consulta con los filtros que están en pantalla, no con los de la consulta que falló.</summary>
+    protected override Task ReintentarAsync(Func<Task> cargaFallida) => CargarAsync();
+
+    /// <summary>
+    /// El export serializa las filas ya cargadas: sin filas, tras un 403, sin conexión o con una carga en curso
+    /// (las filas pueden ser de otra consulta) no se puede exportar.
+    /// </summary>
+    public bool PuedeExportar => Items.Count > 0 && !SinPermiso && !SinConexion && !Cargando;
+
+    partial void OnItemsChanged(IReadOnlyList<FilaReporteTareas> value)
+    {
+        OnPropertyChanged(nameof(PuedeExportar));
+        ExportarPdfCommand.NotifyCanExecuteChanged();
+    }
+
+    protected override void OnPropertyChanged(PropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+        if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName is nameof(SinPermiso) or nameof(SinConexion) or nameof(Cargando))
+        {
+            OnPropertyChanged(nameof(PuedeExportar));
+            ExportarPdfCommand.NotifyCanExecuteChanged();
+        }
     }
 
     /// <summary>Dispara la búsqueda del reporte y puebla <see cref="Items"/>/<see cref="TotalGeneral"/>.</summary>
@@ -136,20 +213,24 @@ public partial class ReporteTareasViewModel : ViewModelBase
         }
 
         MensajeError = null;
+        var turno = _consultas.Empezar();
+        var filtro = new FiltroReporteTareas(
+            AgrupadorSeleccionado.Valor,
+            CriterioSeleccionado,
+            ALocalAUtc(FechaDesde.Value),
+            ALocalAUtc(FechaHasta.Value));
+        var descripcion = ConstruirDescripcionFiltros();
         await EjecutarCargaProtegidaAsync(async () =>
         {
-            var filtro = new FiltroReporteTareas(
-                AgrupadorSeleccionado.Valor,
-                CriterioSeleccionado,
-                ALocalAUtc(FechaDesde.Value),
-                ALocalAUtc(FechaHasta.Value));
-
             var reporte = await _servicio.ObtenerAsync(filtro);
+            if (!turno.EsLaUltima)
+                return;
 
             // D23: passthrough exacto -- ni Sum, ni Count, ni Select acá.
             Items = reporte.Filas;
             TotalGeneral = reporte.TotalGeneral;
-        }, "No tenés permiso para ver el reporte de tareas.");
+            _descripcionCargada = descripcion;
+        }, "No tenés permiso para ver el reporte de tareas.", turno);
     }
 
     /// <summary>Convierte una fecha LOCAL (la que produce el CalendarDatePicker bindeado a
@@ -188,7 +269,7 @@ public partial class ReporteTareasViewModel : ViewModelBase
         $"Criterio: {(EsCriterioCreacion ? "Fecha de creación" : "Fecha de cierre")}. " +
         $"Período: {FechaDesde:dd/MM/yyyy} a {FechaHasta:dd/MM/yyyy}.";
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(PuedeExportar))]
     private async Task ExportarPdfAsync()
     {
         if (Items.Count == 0)
@@ -201,7 +282,7 @@ public partial class ReporteTareasViewModel : ViewModelBase
         {
             var metadatos = new MetadatosDocumento(
                 Titulo: "Estadística de tareas",
-                DescripcionFiltros: ConstruirDescripcionFiltros(),
+                DescripcionFiltros: _descripcionCargada ?? ConstruirDescripcionFiltros(),
                 UsuarioEmisor: _session.UsuarioActual?.NombreCompleto ?? _session.UsuarioActual?.NombreUsuario ?? "Sistema");
 
             var resumen = new ResumenPdf(new[] { new TotalPdf("Total general", TotalGeneral) });

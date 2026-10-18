@@ -5,6 +5,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Moq;
+using StockApp.Presentation.Navigation;
+using StockApp.ApiClient;
 using StockApp.Application.Auditoria;
 using StockApp.Application.Auth;
 using StockApp.Application.Exportacion;
@@ -480,5 +482,244 @@ public class AuditoriaLogViewModelTests
         vm.UsuarioFiltroSeleccionado = null;
 
         Assert.Null(vm.UsuarioId);
+    }
+
+    // ── Fase 6: estados v2, consulta vigente, PDF de lo cargado y vuelta al hub ─────────────
+
+    private static (AuditoriaLogViewModel vm, Mock<IAuditoriaQueryService> servicio, Mock<IPdfExporter> pdf, Mock<INavigationService> nav)
+        Armar(bool conNavegacion = true, Mock<IUsuarioService>? usuarios = null)
+    {
+        var servicio = new Mock<IAuditoriaQueryService>();
+        var pdf = new Mock<IPdfExporter>();
+        var nav = new Mock<INavigationService>();
+        var session = new Mock<ICurrentSession>();
+        session.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(1, "admin", RolUsuario.Admin, null));
+        servicio.Setup(s => s.ObtenerLogAsync(It.IsAny<int?>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>()))
+            .ReturnsAsync(new List<AuditoriaItemDto> { CrearItem(1) });
+        if (usuarios is null)
+        {
+            usuarios = new Mock<IUsuarioService>();
+            usuarios.Setup(u => u.ListarAsync()).ReturnsAsync(new List<UsuarioDto> { CrearUsuario(2, "mlopez") });
+        }
+        var vm = new AuditoriaLogViewModel(
+            servicio.Object, Mock.Of<IServicioGuardadoArchivo>(), Mock.Of<IConfirmacionService>(), usuarios.Object,
+            pdf.Object, Mock.Of<IServicioAperturaArchivo>(), session.Object, conNavegacion ? nav.Object : null);
+        return (vm, servicio, pdf, nav);
+    }
+
+    private static void PonerFalla(Mock<IAuditoriaQueryService> servicio, Exception ex)
+        => servicio.Setup(s => s.ObtenerLogAsync(It.IsAny<int?>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>()))
+            .ThrowsAsync(ex);
+
+    [Fact]
+    public async Task SinConexion_MarcaSinConexion_VaciaLasFilas_YNoPropaga()
+    {
+        var (vm, servicio, _, _) = Armar();
+        await vm.CargarAsync();
+        Assert.Single(vm.Items);
+        PonerFalla(servicio, new ServidorNoDisponibleException());
+
+        var ex = await Record.ExceptionAsync(() => vm.CargarAsync());
+
+        Assert.Null(ex);
+        Assert.True(vm.SinConexion);
+        Assert.Empty(vm.Items);
+    }
+
+    [Fact]
+    public async Task Un403_MarcaSinPermiso_YNoPropaga()
+    {
+        var (vm, servicio, _, _) = Armar();
+        PonerFalla(servicio, new UnauthorizedAccessException());
+
+        var ex = await Record.ExceptionAsync(() => vm.CargarAsync());
+
+        Assert.Null(ex);
+        Assert.True(vm.SinPermiso);
+    }
+
+    [Fact]
+    public async Task ExportarPdf_SinFilas_EstaDeshabilitado()
+    {
+        var (vm, _, _, _) = Armar();
+
+        Assert.False(vm.ExportarPdfCommand.CanExecute(null));
+        await vm.CargarAsync();
+        vm.Items = new List<AuditoriaItemDto>();
+        Assert.False(vm.ExportarPdfCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task ExportarPdf_ConFilas_SeHabilita_YSeAvisaElCambio()
+    {
+        var (vm, _, _, _) = Armar();
+        var avisos = 0;
+        vm.ExportarPdfCommand.CanExecuteChanged += (_, _) => avisos++;
+        Assert.False(vm.ExportarPdfCommand.CanExecute(null));
+
+        await vm.CargarAsync();
+
+        Assert.True(vm.ExportarPdfCommand.CanExecute(null));
+        Assert.True(avisos > 0);
+    }
+
+    [Fact]
+    public async Task ExportarPdf_TrasUn403_EstaDeshabilitado()
+    {
+        var (vm, servicio, _, _) = Armar();
+        await vm.CargarAsync();
+        PonerFalla(servicio, new UnauthorizedAccessException());
+        await vm.CargarAsync();
+
+        Assert.False(vm.ExportarPdfCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void VolverCommand_NavegaAlHub()
+    {
+        var (vm, _, _, nav) = Armar();
+
+        vm.VolverCommand.Execute(null);
+
+        nav.Verify(n => n.Navegar<ReportesViewModel>(), Times.Once);
+    }
+
+    [Fact]
+    public void VolverCommand_SinNavegacion_EstaDeshabilitado()
+    {
+        var (vm, _, _, _) = Armar(conNavegacion: false);
+
+        Assert.False(vm.VolverCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void TextosDelVacio_SonLosAprobados()
+    {
+        var (vm, _, _, _) = Armar();
+
+        Assert.Equal("No hay registros para estos filtros", vm.TituloVacio);
+        Assert.Equal("Probá con otro usuario o período.", vm.MensajeVacio);
+    }
+
+    [Fact]
+    public async Task Un403EnBuscar_MarcaSinPermiso_YNoPropaga()
+    {
+        var (vm, servicio, _, _) = Armar();
+        await vm.InicializarAsync();
+        PonerFalla(servicio, new UnauthorizedAccessException());
+
+        var ex = await Record.ExceptionAsync(() => vm.BuscarCommand.ExecuteAsync(null));
+
+        Assert.Null(ex);
+        Assert.True(vm.SinPermiso);
+    }
+
+    [Fact]
+    public async Task SinConexionAlCargarUsuarios_Reintentar_CargaUsuariosYLog()
+    {
+        var usuarios = new Mock<IUsuarioService>();
+        usuarios.Setup(u => u.ListarAsync()).ThrowsAsync(new ServidorNoDisponibleException());
+        var (vm, servicio, _, _) = Armar(usuarios: usuarios);
+        await vm.InicializarAsync();
+        Assert.True(vm.SinConexion);
+        Assert.Empty(vm.Usuarios);
+        usuarios.Setup(u => u.ListarAsync()).ReturnsAsync(new List<UsuarioDto> { CrearUsuario(2, "mlopez") });
+
+        await vm.ReintentarCargaCommand.ExecuteAsync(null);
+
+        Assert.False(vm.SinConexion);
+        Assert.Equal(2, vm.Usuarios.Count);
+        Assert.Single(vm.Items);
+        servicio.Verify(s => s.ObtenerLogAsync(It.IsAny<int?>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task DosBusquedas_LaPrimeraTerminaTarde_NoPisaLaSegunda()
+    {
+        var (vm, servicio, _, _) = Armar();
+        await vm.InicializarAsync();
+        var primera = new TaskCompletionSource<IReadOnlyList<AuditoriaItemDto>>();
+        var segunda = new TaskCompletionSource<IReadOnlyList<AuditoriaItemDto>>();
+        servicio.Reset();
+        servicio.SetupSequence(s => s.ObtenerLogAsync(It.IsAny<int?>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>()))
+            .Returns(primera.Task).Returns(segunda.Task);
+
+        var busquedaVieja = vm.CargarAsync();
+        var busquedaNueva = vm.CargarAsync();
+        var filasNuevas = new List<AuditoriaItemDto> { CrearItem(2) };
+        segunda.SetResult(filasNuevas);
+        await busquedaNueva;
+        primera.SetResult(new List<AuditoriaItemDto> { CrearItem(1), CrearItem(3) });
+        await busquedaVieja;
+
+        Assert.Same(filasNuevas, vm.Items);
+    }
+
+    [Fact]
+    public async Task ExportarPdf_ConFechasCambiadasSinBuscar_RotulaElPeriodoCargado()
+    {
+        var (vm, _, pdf, _) = Armar();
+        vm.FechaDesde = new DateTime(2026, 9, 1);
+        vm.FechaHasta = new DateTime(2026, 9, 30);
+        await vm.CargarAsync();
+        vm.FechaDesde = new DateTime(2026, 8, 1);
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        pdf.Verify(e => e.Exportar(
+            It.IsAny<IEnumerable<AuditoriaItemDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
+            It.Is<MetadatosDocumento>(m => m.DescripcionFiltros.Contains("01/09/2026") && !m.DescripcionFiltros.Contains("01/08/2026")),
+            It.IsAny<ResumenPdf?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task SinConexion_Reintentar_ConsultaConLosFiltrosDePantalla()
+    {
+        var (vm, servicio, _, _) = Armar();
+        await vm.InicializarAsync();
+        PonerFalla(servicio, new ServidorNoDisponibleException());
+        await vm.CargarAsync();
+        Assert.True(vm.SinConexion);
+        servicio.Setup(s => s.ObtenerLogAsync(It.IsAny<int?>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>()))
+            .ReturnsAsync(new List<AuditoriaItemDto> { CrearItem(1) });
+        vm.UsuarioId = 2;
+
+        await vm.ReintentarCargaCommand.ExecuteAsync(null);
+
+        Assert.False(vm.SinConexion);
+        servicio.Verify(s => s.ObtenerLogAsync(2, It.IsAny<DateTime?>(), It.IsAny<DateTime?>()), Times.Once);
+    }
+
+    [Fact]
+    public void ExportarPdf_AlAsignarFilas_SeHabilitaYAvisaElCambio()
+    {
+        var (vm, _, _, _) = Armar();
+        var avisos = 0;
+        vm.ExportarPdfCommand.CanExecuteChanged += (_, _) => avisos++;
+        Assert.False(vm.ExportarPdfCommand.CanExecute(null));
+
+        vm.Items = new List<AuditoriaItemDto> { CrearItem() };
+
+        Assert.True(vm.ExportarPdfCommand.CanExecute(null));
+        Assert.True(avisos > 0);
+    }
+
+    [Fact]
+    public async Task SinConexionEnElLogDeInicializar_Reintentar_ConservaElUsuarioElegido()
+    {
+        var (vm, servicio, _, _) = Armar();
+        PonerFalla(servicio, new ServidorNoDisponibleException());
+        await vm.InicializarAsync();
+        Assert.True(vm.SinConexion);
+        Assert.Equal(2, vm.Usuarios.Count);
+        vm.UsuarioFiltroSeleccionado = vm.Usuarios[1];
+        servicio.Setup(s => s.ObtenerLogAsync(It.IsAny<int?>(), It.IsAny<DateTime?>(), It.IsAny<DateTime?>()))
+            .ReturnsAsync(new List<AuditoriaItemDto> { CrearItem(1) });
+
+        await vm.ReintentarCargaCommand.ExecuteAsync(null);
+
+        Assert.False(vm.SinConexion);
+        Assert.Same(vm.Usuarios[1], vm.UsuarioFiltroSeleccionado);
+        servicio.Verify(s => s.ObtenerLogAsync(2, It.IsAny<DateTime?>(), It.IsAny<DateTime?>()), Times.Once);
     }
 }

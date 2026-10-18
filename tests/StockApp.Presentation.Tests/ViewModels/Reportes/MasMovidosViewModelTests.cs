@@ -5,6 +5,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Moq;
+using StockApp.Presentation.Navigation;
+using StockApp.ApiClient;
 using StockApp.Application.Auth;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Interfaces;
@@ -377,5 +379,186 @@ public class MasMovidosViewModelTests
                 m.Titulo == "Productos más movidos" &&
                 m.UsuarioEmisor == "Juan Pérez")),
             Times.Once);
+    }
+
+    // ── Fase 6: estados v2, consulta vigente, PDF de lo cargado y vuelta al hub ─────────────
+
+    private static (MasMovidosViewModel vm, Mock<IReporteStockService> servicio, Mock<IPdfExporter> pdf, Mock<INavigationService> nav)
+        Armar(bool conNavegacion = true)
+    {
+        var servicio = new Mock<IReporteStockService>();
+        var pdf = new Mock<IPdfExporter>();
+        var nav = new Mock<INavigationService>();
+        var session = new Mock<ICurrentSession>();
+        session.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(1, "admin", RolUsuario.Admin, null));
+        servicio.Setup(s => s.ObtenerMasMovidosAsync(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<MasMovidoDto> { CrearItem(1) });
+        var vm = new MasMovidosViewModel(
+            servicio.Object, Mock.Of<IServicioGuardadoArchivo>(), Mock.Of<IConfirmacionService>(), pdf.Object,
+            Mock.Of<IServicioAperturaArchivo>(), session.Object, conNavegacion ? nav.Object : null);
+        return (vm, servicio, pdf, nav);
+    }
+
+    [Fact]
+    public async Task SinConexion_MarcaSinConexion_VaciaLasFilas_YNoPropaga()
+    {
+        var (vm, servicio, _, _) = Armar();
+        await vm.CargarAsync();
+        Assert.Single(vm.Items);
+        servicio.Setup(s => s.ObtenerMasMovidosAsync(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<int>()))
+            .ThrowsAsync(new ServidorNoDisponibleException());
+
+        var ex = await Record.ExceptionAsync(() => vm.CargarAsync());
+
+        Assert.Null(ex);
+        Assert.True(vm.SinConexion);
+        Assert.Empty(vm.Items);
+    }
+
+    [Fact]
+    public async Task Un403_MarcaSinPermiso_YNoPropaga()
+    {
+        var (vm, servicio, _, _) = Armar();
+        servicio.Setup(s => s.ObtenerMasMovidosAsync(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<int>()))
+            .ThrowsAsync(new UnauthorizedAccessException());
+
+        var ex = await Record.ExceptionAsync(() => vm.CargarAsync());
+
+        Assert.Null(ex);
+        Assert.True(vm.SinPermiso);
+    }
+
+    [Fact]
+    public async Task ExportarPdf_SinFilas_EstaDeshabilitado()
+    {
+        var (vm, servicio, _, _) = Armar();
+        servicio.Setup(s => s.ObtenerMasMovidosAsync(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<MasMovidoDto>());
+        await vm.CargarAsync();
+
+        Assert.False(vm.ExportarPdfCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task ExportarPdf_ConFilas_SeHabilita_YSeAvisaElCambio()
+    {
+        var (vm, _, _, _) = Armar();
+        var avisos = 0;
+        vm.ExportarPdfCommand.CanExecuteChanged += (_, _) => avisos++;
+        Assert.False(vm.ExportarPdfCommand.CanExecute(null));
+
+        await vm.CargarAsync();
+
+        Assert.True(vm.ExportarPdfCommand.CanExecute(null));
+        Assert.True(avisos > 0);
+    }
+
+    [Fact]
+    public async Task ExportarPdf_TrasUn403_EstaDeshabilitado()
+    {
+        var (vm, servicio, _, _) = Armar();
+        await vm.CargarAsync();
+        servicio.Setup(s => s.ObtenerMasMovidosAsync(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<int>()))
+            .ThrowsAsync(new UnauthorizedAccessException());
+        await vm.CargarAsync();
+
+        Assert.False(vm.ExportarPdfCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void VolverCommand_NavegaAlHub()
+    {
+        var (vm, _, _, nav) = Armar();
+
+        vm.VolverCommand.Execute(null);
+
+        nav.Verify(n => n.Navegar<ReportesViewModel>(), Times.Once);
+    }
+
+    [Fact]
+    public void VolverCommand_SinNavegacion_EstaDeshabilitado()
+    {
+        var (vm, _, _, _) = Armar(conNavegacion: false);
+
+        Assert.False(vm.VolverCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void TextosDelVacio_SonLosAprobados()
+    {
+        var (vm, _, _, _) = Armar();
+
+        Assert.Equal("No hubo movimientos en el período", vm.TituloVacio);
+        Assert.Equal("Probá con otro período.", vm.MensajeVacio);
+    }
+
+    [Fact]
+    public async Task DosBusquedas_LaPrimeraTerminaTarde_NoPisaLaSegunda()
+    {
+        var (vm, servicio, _, _) = Armar();
+        var primera = new TaskCompletionSource<IReadOnlyList<MasMovidoDto>>();
+        var segunda = new TaskCompletionSource<IReadOnlyList<MasMovidoDto>>();
+        servicio.SetupSequence(s => s.ObtenerMasMovidosAsync(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<int>()))
+            .Returns(primera.Task).Returns(segunda.Task);
+
+        var busquedaVieja = vm.CargarAsync();
+        var busquedaNueva = vm.CargarAsync();
+        var filasNuevas = new List<MasMovidoDto> { CrearItem(2) };
+        segunda.SetResult(filasNuevas);
+        await busquedaNueva;
+        primera.SetResult(new List<MasMovidoDto> { CrearItem(1), CrearItem(3) });
+        await busquedaVieja;
+
+        Assert.Same(filasNuevas, vm.Items);
+    }
+
+    [Fact]
+    public async Task ExportarPdf_ConFechasCambiadasSinBuscar_RotulaElPeriodoCargado()
+    {
+        var (vm, _, pdf, _) = Armar();
+        vm.FechaDesde = new DateTime(2026, 9, 1);
+        vm.FechaHasta = new DateTime(2026, 9, 30);
+        await vm.CargarAsync();
+        vm.FechaDesde = new DateTime(2026, 8, 1);
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        pdf.Verify(e => e.Exportar(
+            It.IsAny<IEnumerable<MasMovidoDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
+            It.Is<MetadatosDocumento>(m => m.DescripcionFiltros.Contains("01/09/2026") && !m.DescripcionFiltros.Contains("01/08/2026")),
+            It.IsAny<ResumenPdf?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task SinConexion_Reintentar_ConsultaConLosFiltrosDePantalla()
+    {
+        var (vm, servicio, _, _) = Armar();
+        vm.TopN = 20;
+        servicio.Setup(s => s.ObtenerMasMovidosAsync(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<int>()))
+            .ThrowsAsync(new ServidorNoDisponibleException());
+        await vm.CargarAsync();
+        Assert.True(vm.SinConexion);
+        servicio.Setup(s => s.ObtenerMasMovidosAsync(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), It.IsAny<int>()))
+            .ReturnsAsync(new List<MasMovidoDto> { CrearItem(1) });
+        vm.TopN = 5;
+
+        await vm.ReintentarCargaCommand.ExecuteAsync(null);
+
+        Assert.False(vm.SinConexion);
+        servicio.Verify(s => s.ObtenerMasMovidosAsync(It.IsAny<DateTime?>(), It.IsAny<DateTime?>(), 5), Times.Once);
+    }
+
+    [Fact]
+    public void ExportarPdf_AlAsignarFilas_SeHabilitaYAvisaElCambio()
+    {
+        var (vm, _, _, _) = Armar();
+        var avisos = 0;
+        vm.ExportarPdfCommand.CanExecuteChanged += (_, _) => avisos++;
+        Assert.False(vm.ExportarPdfCommand.CanExecute(null));
+
+        vm.Items = new List<MasMovidoDto> { CrearItem() };
+
+        Assert.True(vm.ExportarPdfCommand.CanExecute(null));
+        Assert.True(avisos > 0);
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -9,6 +10,7 @@ using StockApp.Application.Auditoria;
 using StockApp.Application.Auth;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Interfaces;
+using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 
 namespace StockApp.Presentation.ViewModels.Reportes;
@@ -83,6 +85,57 @@ public partial class AuditoriaLogViewModel : ViewModelBase
     [ObservableProperty]
     private string? _mensajeError;
 
+    private readonly INavigationService? _navegacion;
+    private readonly ConsultaVigente _consultas = new();
+
+    /// <summary>Descripción de filtros de la consulta CARGADA: el PDF rotula lo que muestra la grilla, no lo que hoy dicen los filtros.</summary>
+    private string? _descripcionCargada;
+
+    /// <summary>Vuelve al hub de Reportes (primer tramo del breadcrumb). Sin navegación no hay a dónde volver.</summary>
+    public IRelayCommand VolverCommand => field ??= new RelayCommand(
+        () => _navegacion?.Navegar<ReportesViewModel>(), () => _navegacion is not null);
+
+    protected override bool AvisaSinConexionEnLinea => true;
+
+    /// <summary>
+    /// El export serializa las filas ya cargadas: sin filas, tras un 403, sin conexión o con una carga en curso
+    /// (las filas pueden ser de otra consulta) no se puede exportar.
+    /// </summary>
+    public bool PuedeExportar => Items.Count > 0 && !SinPermiso && !SinConexion && !Cargando;
+
+    partial void OnItemsChanged(IReadOnlyList<AuditoriaItemDto> value)
+    {
+        OnPropertyChanged(nameof(PuedeExportar));
+        ExportarPdfCommand.NotifyCanExecuteChanged();
+    }
+
+    protected override void OnPropertyChanged(PropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+        if (string.IsNullOrEmpty(e.PropertyName) || e.PropertyName is nameof(SinPermiso) or nameof(SinConexion) or nameof(Cargando))
+        {
+            OnPropertyChanged(nameof(PuedeExportar));
+            ExportarPdfCommand.NotifyCanExecuteChanged();
+        }
+    }
+
+    public string TituloVacio => "No hay registros para estos filtros";
+
+    public string MensajeVacio => "Probá con otro usuario o período.";
+
+    /// <summary>Sin servidor la grilla queda vacía: el reintento no puede mostrar las filas de la consulta anterior.</summary>
+    protected override void AlPerderConexion()
+    {
+        Items = new List<AuditoriaItemDto>();
+        _descripcionCargada = null;
+    }
+
+    /// <summary>
+    /// Reintentar repite lo que falló con los filtros de pantalla: si todavía no hay lista de usuarios (la carga que
+    /// falló fue la inicial) vuelve a inicializar; si no, solo consulta el log.
+    /// </summary>
+    protected override Task ReintentarAsync(Func<Task> cargaFallida) => Usuarios.Count == 0 ? InicializarAsync() : CargarAsync();
+
     public AuditoriaLogViewModel(
         IAuditoriaQueryService servicio,
         IServicioGuardadoArchivo guardado,
@@ -90,7 +143,8 @@ public partial class AuditoriaLogViewModel : ViewModelBase
         IUsuarioService usuarioService,
         IPdfExporter pdfExporter,
         IServicioAperturaArchivo apertura,
-        ICurrentSession session)
+        ICurrentSession session,
+        INavigationService? navegacion = null)
     {
         _servicio = servicio;
         _guardado = guardado;
@@ -99,6 +153,7 @@ public partial class AuditoriaLogViewModel : ViewModelBase
         _pdfExporter = pdfExporter;
         _apertura = apertura;
         _session = session;
+        _navegacion = navegacion;
     }
 
     partial void OnUsuarioFiltroSeleccionadoChanged(OpcionUsuario? value)
@@ -116,9 +171,12 @@ public partial class AuditoriaLogViewModel : ViewModelBase
     /// </summary>
     public async Task InicializarAsync()
     {
+        var turno = _consultas.Empezar();
         await EjecutarCargaProtegidaAsync(async () =>
         {
             var usuarios = await _usuarioService.ListarAsync();
+            if (!turno.EsLaUltima)
+                return;
             Usuarios.Clear();
             Usuarios.Add(new OpcionUsuario("Todos", null));
             foreach (var u in usuarios)
@@ -126,9 +184,11 @@ public partial class AuditoriaLogViewModel : ViewModelBase
 
             UsuarioFiltroSeleccionado = Usuarios[0];
 
-            await CargarAsync();
-        }, "No tenés permiso para ver el registro de auditoría.");
+            await ConsultarLogAsync(turno);
+        }, MensajeSinPermisoAuditoria, turno);
     }
+
+    private const string MensajeSinPermisoAuditoria = "No tenés permiso para ver el registro de auditoría.";
 
     /// <summary>Consulta el log de auditoría filtrado y puebla <see cref="Items"/>.</summary>
     public IAsyncRelayCommand BuscarCommand => field ??= ComandoDeGuardado(BuscarAsync);
@@ -149,7 +209,22 @@ public partial class AuditoriaLogViewModel : ViewModelBase
         }
 
         MensajeError = null;
-        Items = await _servicio.ObtenerLogAsync(UsuarioId, ALocalAUtc(FechaDesde), ALocalAUtc(FechaHasta));
+        var turno = _consultas.Empezar();
+        await EjecutarCargaProtegidaAsync(() => ConsultarLogAsync(turno), MensajeSinPermisoAuditoria, turno);
+    }
+
+    /// <summary>Consulta el log con los filtros de pantalla de este momento y aplica el resultado solo si sigue siendo la última consulta.</summary>
+    private async Task ConsultarLogAsync(ConsultaVigente.Turno turno)
+    {
+        var usuarioId = UsuarioId;
+        var desde = ALocalAUtc(FechaDesde);
+        var hasta = ALocalAUtc(FechaHasta);
+        var descripcion = ConstruirDescripcionFiltros();
+        var items = await _servicio.ObtenerLogAsync(usuarioId, desde, hasta);
+        if (!turno.EsLaUltima)
+            return;
+        Items = items;
+        _descripcionCargada = descripcion;
     }
 
     /// <summary>
@@ -184,7 +259,7 @@ public partial class AuditoriaLogViewModel : ViewModelBase
     /// y aviso de volumen si supera 500 filas (spec 2026-09-18). No hace nada si no hay datos
     /// cargados. Ofrece abrir el PDF con el visor del sistema tras guardarlo.
     /// </summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(PuedeExportar))]
     private async Task ExportarPdfAsync()
     {
         if (Items.Count == 0)
@@ -197,7 +272,7 @@ public partial class AuditoriaLogViewModel : ViewModelBase
         {
             var metadatos = new MetadatosDocumento(
                 Titulo: "Log de auditoría",
-                DescripcionFiltros: ConstruirDescripcionFiltros(),
+                DescripcionFiltros: _descripcionCargada ?? ConstruirDescripcionFiltros(),
                 UsuarioEmisor: _session.UsuarioActual?.NombreCompleto ?? _session.UsuarioActual?.NombreUsuario ?? "Sistema");
 
             var pdf = _pdfExporter.Exportar(Items, ColumnasPdf, metadatos);
